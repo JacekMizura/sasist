@@ -246,7 +246,13 @@ export function RoutingGraphLayer({
         const kind = nodeKind(n, accessPoints);
         const tip = nodeDisplayName(n, accessPoints, [], nodes);
         const showLabel = kind === "operational" && (active || hovered);
-        const r = active || hovered ? (kind === "operational" ? 9 : 7) : kind === "operational" ? 8 : kind === "access" ? 6 : 4.5;
+        // Slight diamond for auto-intersections / high-degree junctions
+  const isJunctionMark =
+    kind === "junction" &&
+    (Boolean((n.meta as { auto_intersection?: boolean } | null)?.auto_intersection) ||
+      (n.label ?? "").trim() === "Skrzyżowanie");
+  const r = active || hovered ? (kind === "operational" ? 9 : 7) : kind === "operational" ? 8 : kind === "access" ? 6 : isJunctionMark ? 5.5 : 4.5;
+
         const fill =
           active ? "#0284c7" : kind === "operational" ? "#d97706" : kind === "access" ? "#059669" : "#475569";
         const hitR = NODE_HIT_RADIUS_PX;

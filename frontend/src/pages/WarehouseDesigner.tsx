@@ -3978,10 +3978,13 @@ export default function WarehouseDesigner() {
                   }}
                   onNodeClick={(uuid) => {
                     if (routingTool === "draw_edge") {
-                      const step = routing.appendDrawClick(routingEdgeDraftFrom, {
-                        kind: "node",
-                        uuid,
-                      });
+                      const node = routing.nodes.find((n) => n.uuid === uuid);
+                      const step = routing.drawAtCm(
+                        routingEdgeDraftFrom,
+                        node?.x ?? 0,
+                        node?.y ?? 0,
+                        { preferNodeUuid: uuid }
+                      );
                       setRoutingEdgeDraftFrom(step.draftFromUuid);
                       setRoutingSelectedNode(step.draftFromUuid);
                       setRoutingSelectedEdge(null);
@@ -4010,13 +4013,9 @@ export default function WarehouseDesigner() {
                   onEdgeClick={(uuid, cm) => {
                     if (routingTool === "draw_edge") {
                       if (!cm) return;
-                      const step = routing.splitEdgeAndContinueDraw(
-                        routingEdgeDraftFrom,
-                        uuid,
-                        cm.x,
-                        cm.y
-                      );
-                      if (!step) return;
+                      const step = routing.drawAtCm(routingEdgeDraftFrom, cm.x, cm.y, {
+                        preferEdgeUuid: uuid,
+                      });
                       setRoutingEdgeDraftFrom(step.draftFromUuid);
                       setRoutingSelectedNode(step.draftFromUuid);
                       setRoutingSelectedEdge(null);
@@ -4034,11 +4033,7 @@ export default function WarehouseDesigner() {
                   }}
                   onCanvasClickCm={(x, y) => {
                     if (routingTool === "draw_edge") {
-                      const step = routing.appendDrawClick(routingEdgeDraftFrom, {
-                        kind: "empty",
-                        x,
-                        y,
-                      });
+                      const step = routing.drawAtCm(routingEdgeDraftFrom, x, y);
                       setRoutingEdgeDraftFrom(step.draftFromUuid);
                       setRoutingSelectedNode(step.draftFromUuid);
                       setRoutingSelectedEdge(null);

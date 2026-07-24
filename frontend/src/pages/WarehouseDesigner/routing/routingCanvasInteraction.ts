@@ -3,6 +3,8 @@
  * Keeps polyline drawing / selection logic testable without React state races.
  */
 
+import { normalizeDrawnGraph } from "./routingDrawNormalize";
+
 export type InteractionNode = {
   uuid: string;
   x: number;
@@ -35,6 +37,10 @@ export type InteractionGraph = {
   nodes: InteractionNode[];
   edges: InteractionEdge[];
 };
+
+/** Magnetic snap radii in warehouse cm (draw mode). */
+export const DRAW_NODE_SNAP_CM = 28;
+export const DRAW_EDGE_SNAP_CM = 36;
 
 function distM(a: { x: number; y: number }, b: { x: number; y: number }): number {
   const dx = b.x - a.x;
@@ -81,7 +87,7 @@ export function projectOntoSegment(
   ay: number,
   bx: number,
   by: number,
-  maxDistCm = 40
+  maxDistCm = DRAW_EDGE_SNAP_CM
 ): { x: number; y: number; t: number } | null {
   const abx = bx - ax;
   const aby = by - ay;
@@ -105,14 +111,15 @@ export function splitEdgeAtCm(
   y: number,
   newUuid: () => string,
   warehouseId = 0,
-  layoutId: number | null = null
+  layoutId: number | null = null,
+  maxDistCm = DRAW_EDGE_SNAP_CM
 ): { graph: InteractionGraph; junctionUuid: string } | null {
   const edge = graph.edges.find((e) => e.uuid === edgeUuid);
   if (!edge) return null;
   const a = graph.nodes.find((n) => n.uuid === edge.from_node_uuid);
   const b = graph.nodes.find((n) => n.uuid === edge.to_node_uuid);
   if (!a || !b) return null;
-  const proj = projectOntoSegment(x, y, a.x, a.y, b.x, b.y);
+  const proj = projectOntoSegment(x, y, a.x, a.y, b.x, b.y, maxDistCm);
   if (!proj) return null;
 
   const junction: InteractionNode = {
@@ -123,7 +130,8 @@ export function splitEdgeAtCm(
     y: proj.y,
     node_type: "junction",
     operational_type: null,
-    label: null,
+    label: "Skrzyżowanie",
+    meta: { auto_intersection: true },
   };
   const e1 = makeEdge(a, junction, newUuid, warehouseId, layoutId);
   e1.direction = edge.direction;
@@ -145,6 +153,79 @@ export function splitEdgeAtCm(
       edges: [...graph.edges.filter((e) => e.uuid !== edgeUuid), e1, e2],
     },
   };
+}
+
+export type DrawSnapTarget =
+  | { kind: "node"; uuid: string }
+  | { kind: "edge"; uuid: string; x: number; y: number }
+  | { kind: "empty"; x: number; y: number };
+
+/**
+ * Magnetic draw snap: EXISTING POINT > EXISTING EDGE > EMPTY CANVAS.
+ */
+export function resolveDrawSnap(
+  graph: InteractionGraph,
+  x: number,
+  y: number,
+  opts?: {
+    nodeSnapCm?: number;
+    edgeSnapCm?: number;
+    preferEdgeUuid?: string;
+    preferNodeUuid?: string;
+  }
+): DrawSnapTarget {
+  const nodeSnap = opts?.nodeSnapCm ?? DRAW_NODE_SNAP_CM;
+  const edgeSnap = opts?.edgeSnapCm ?? DRAW_EDGE_SNAP_CM;
+
+  if (opts?.preferNodeUuid) {
+    const n = graph.nodes.find((p) => p.uuid === opts.preferNodeUuid);
+    if (n) return { kind: "node", uuid: n.uuid };
+  }
+
+  let bestNode: { uuid: string; d: number } | null = null;
+  for (const n of graph.nodes) {
+    const d = Math.hypot(n.x - x, n.y - y);
+    if (d <= nodeSnap && (!bestNode || d < bestNode.d)) {
+      bestNode = { uuid: n.uuid, d };
+    }
+  }
+  if (bestNode) return { kind: "node", uuid: bestNode.uuid };
+
+  if (opts?.preferEdgeUuid) {
+    const e = graph.edges.find((ed) => ed.uuid === opts.preferEdgeUuid);
+    if (e) {
+      const a = graph.nodes.find((n) => n.uuid === e.from_node_uuid);
+      const b = graph.nodes.find((n) => n.uuid === e.to_node_uuid);
+      if (a && b) {
+        const proj = projectOntoSegment(x, y, a.x, a.y, b.x, b.y, edgeSnap * 2);
+        if (proj) return { kind: "edge", uuid: e.uuid, x: proj.x, y: proj.y };
+        const dA = Math.hypot(a.x - x, a.y - y);
+        const dB = Math.hypot(b.x - x, b.y - y);
+        if (dA <= Math.max(nodeSnap, edgeSnap) && dA <= dB) {
+          return { kind: "node", uuid: a.uuid };
+        }
+        if (dB <= Math.max(nodeSnap, edgeSnap)) {
+          return { kind: "node", uuid: b.uuid };
+        }
+      }
+    }
+  }
+
+  let bestEdge: { uuid: string; x: number; y: number; d: number } | null = null;
+  for (const e of graph.edges) {
+    const a = graph.nodes.find((n) => n.uuid === e.from_node_uuid);
+    const b = graph.nodes.find((n) => n.uuid === e.to_node_uuid);
+    if (!a || !b) continue;
+    const proj = projectOntoSegment(x, y, a.x, a.y, b.x, b.y, edgeSnap);
+    if (!proj) continue;
+    const d = Math.hypot(proj.x - x, proj.y - y);
+    if (!bestEdge || d < bestEdge.d) {
+      bestEdge = { uuid: e.uuid, x: proj.x, y: proj.y, d };
+    }
+  }
+  if (bestEdge) return { kind: "edge", uuid: bestEdge.uuid, x: bestEdge.x, y: bestEdge.y };
+
+  return { kind: "empty", x, y };
 }
 
 /**
@@ -173,7 +254,12 @@ export function applyDrawClick(
   if (click.kind === "node") {
     const existing = nodes.find((n) => n.uuid === click.uuid);
     if (!existing) {
-      return { graph, draftFromUuid: draftFromUuid ?? click.uuid, createdNodeUuid: null, createdEdgeUuid: null };
+      return {
+        graph,
+        draftFromUuid: draftFromUuid ?? click.uuid,
+        createdNodeUuid: null,
+        createdEdgeUuid: null,
+      };
     }
     target = existing;
   } else {
@@ -209,6 +295,119 @@ export function applyDrawClick(
   };
 }
 
+/**
+ * Full draw step with magnetic snap + topology normalization
+ * (crossings, T-junctions, collinear overlaps).
+ */
+export function applyDrawStep(
+  graph: InteractionGraph,
+  draftFromUuid: string | null,
+  raw: {
+    x: number;
+    y: number;
+    preferEdgeUuid?: string;
+    preferNodeUuid?: string;
+  },
+  newUuid: () => string,
+  warehouseId = 0,
+  layoutId: number | null = null
+): {
+  graph: InteractionGraph;
+  draftFromUuid: string;
+  createdNodeUuid: string | null;
+  createdEdgeUuid: string | null;
+  snap: DrawSnapTarget;
+} {
+  const snap = resolveDrawSnap(graph, raw.x, raw.y, {
+    preferEdgeUuid: raw.preferEdgeUuid,
+    preferNodeUuid: raw.preferNodeUuid,
+  });
+
+  let g = graph;
+  let draft = draftFromUuid;
+  let createdNodeUuid: string | null = null;
+  let createdEdgeUuid: string | null = null;
+
+  if (snap.kind === "edge") {
+    const split = splitEdgeAtCm(g, snap.uuid, snap.x, snap.y, newUuid, warehouseId, layoutId);
+    if (split) {
+      g = split.graph;
+      const continued = applyDrawClick(
+        g,
+        draft,
+        { kind: "node", uuid: split.junctionUuid },
+        newUuid,
+        warehouseId,
+        layoutId
+      );
+      g = continued.graph;
+      draft = continued.draftFromUuid;
+      createdNodeUuid = continued.createdNodeUuid ?? split.junctionUuid;
+      createdEdgeUuid = continued.createdEdgeUuid;
+    } else {
+      const edge = g.edges.find((e) => e.uuid === snap.uuid);
+      const a = edge && g.nodes.find((n) => n.uuid === edge.from_node_uuid);
+      const b = edge && g.nodes.find((n) => n.uuid === edge.to_node_uuid);
+      if (a && b) {
+        const useA = Math.hypot(a.x - raw.x, a.y - raw.y) <= Math.hypot(b.x - raw.x, b.y - raw.y);
+        const continued = applyDrawClick(
+          g,
+          draft,
+          { kind: "node", uuid: useA ? a.uuid : b.uuid },
+          newUuid,
+          warehouseId,
+          layoutId
+        );
+        g = continued.graph;
+        draft = continued.draftFromUuid;
+        createdEdgeUuid = continued.createdEdgeUuid;
+      }
+    }
+  } else if (snap.kind === "node") {
+    const continued = applyDrawClick(
+      g,
+      draft,
+      { kind: "node", uuid: snap.uuid },
+      newUuid,
+      warehouseId,
+      layoutId
+    );
+    g = continued.graph;
+    draft = continued.draftFromUuid;
+    createdEdgeUuid = continued.createdEdgeUuid;
+  } else {
+    const continued = applyDrawClick(
+      g,
+      draft,
+      { kind: "empty", x: snap.x, y: snap.y },
+      newUuid,
+      warehouseId,
+      layoutId
+    );
+    g = continued.graph;
+    draft = continued.draftFromUuid;
+    createdNodeUuid = continued.createdNodeUuid;
+    createdEdgeUuid = continued.createdEdgeUuid;
+  }
+
+  g = normalizeDrawnGraph(g, newUuid, warehouseId, layoutId) as InteractionGraph;
+
+  if (!g.nodes.some((n) => n.uuid === draft)) {
+    draft =
+      createdNodeUuid && g.nodes.some((n) => n.uuid === createdNodeUuid)
+        ? createdNodeUuid
+        : (g.nodes[g.nodes.length - 1]?.uuid ?? draft);
+  }
+
+  return {
+    graph: g,
+    draftFromUuid: draft,
+    createdNodeUuid,
+    createdEdgeUuid,
+    snap,
+  };
+}
+
 export function humanizeRouteTestMessage(
   result: { ok: boolean; message?: string | null; error_code?: string | null },
   edgeCount: number
@@ -231,10 +430,12 @@ export function humanizeRouteTestMessage(
   if (code.includes("NODE_NOT_FOUND")) {
     return "Nie znaleziono wybranego punktu na sieci tras.";
   }
-  const raw = (result.message || "").trim();
-  if (!raw) return "Nie udało się wyznaczyć trasy.";
-  // Never leak technical jargon to operators.
-  return raw
+  if (code.includes("OVERLAPPING")) {
+    return "Drogi nakładały się — spróbuj narysować je ponownie; system zwykle łączy je automatycznie.";
+  }
+  const rawMsg = (result.message || "").trim();
+  if (!rawMsg) return "Nie udało się wyznaczyć trasy.";
+  return rawMsg
     .replace(/\bedges?\b/gi, "odcinki")
     .replace(/\bnodes?\b/gi, "punkty")
     .replace(/\bUUID\b/gi, "punkt")

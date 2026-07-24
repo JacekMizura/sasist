@@ -37,14 +37,15 @@ function edge(from: string, to: string, uuid = "e1"): RoutingEdge {
 }
 
 describe("routingDisplay", () => {
-  it("uses Punkt N for unlabeled junctions (never UUID / Węzeł)", () => {
+  it("uses Punkt trasy / Skrzyżowanie — never UUID / Punkt N / Węzeł", () => {
     const a = node({ uuid: "a", label: "Punkt trasy" });
     const b = node({ uuid: "b", label: null });
     const all = [a, b];
-    expect(nodeDisplayName(a, [], [], all)).toBe("Punkt 1");
-    expect(nodeDisplayName(b, [], [], all)).toBe("Punkt 2");
+    expect(nodeDisplayName(a, [], [], all)).toBe("Punkt trasy");
+    expect(nodeDisplayName(b, [], [], all)).toBe("Punkt trasy");
     expect(nodeDisplayName(a)).not.toMatch(/[0-9a-f]{8}/i);
     expect(nodeDisplayName(a)).not.toMatch(/węzeł/i);
+    expect(nodeDisplayName(a)).not.toMatch(/Punkt \d/);
   });
 
   it("shows operational type without redundant Label: Label", () => {
@@ -74,7 +75,7 @@ describe("routingDisplay", () => {
       { uuid: "ap1", warehouse_id: 1, location_id: 9, node_uuid: "a", label: "A1" },
     ];
     expect(nodeKind(n, aps)).toBe("access");
-    expect(nodeDisplayName(n, aps, [{ id: 9, name: "A1" }], [n])).toBe("Punkt 1");
+    expect(nodeDisplayName(n, aps, [{ id: 9, name: "A1" }], [n])).toBe("Punkt trasy");
   });
 
   it("lists connected edges and delete confirm for connected point", () => {

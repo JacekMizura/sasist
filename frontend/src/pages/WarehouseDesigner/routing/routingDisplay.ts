@@ -10,36 +10,42 @@ export function opTypeLabel(op: string | null | undefined): string | null {
 
 function isGenericLabel(label: string | null | undefined): boolean {
   const t = (label ?? "").trim();
-  return !t || t === "Punkt trasy" || t === "Węzeł sieci";
+  return !t || t === "Punkt trasy" || t === "Węzeł sieci" || t === "Skrzyżowanie";
 }
 
-/** Stable “Punkt N” for unlabeled junctions (order in list). */
-export function pointNumber(n: RoutingNode, allNodes: RoutingNode[]): number {
-  const junctions = allNodes.filter((x) => !x.operational_type);
-  const idx = junctions.findIndex((x) => x.uuid === n.uuid);
-  if (idx >= 0) return idx + 1;
-  const allIdx = allNodes.findIndex((x) => x.uuid === n.uuid);
-  return allIdx >= 0 ? allIdx + 1 : 0;
+/** True when node is a junction with 3+ connections or auto-created intersection. */
+export function isCrossroads(
+  n: RoutingNode,
+  edges: RoutingEdge[] = []
+): boolean {
+  if (n.meta && (n.meta as { auto_intersection?: boolean }).auto_intersection) return true;
+  if ((n.label ?? "").trim() === "Skrzyżowanie") {
+    const deg = edgesConnectedTo(n.uuid, edges).length;
+    return deg >= 3;
+  }
+  return edgesConnectedTo(n.uuid, edges).length >= 3;
 }
 
-/** Short UI title — never UUID, never force “Punkt trasy” / “Węzeł”. */
+/** Short UI title — never UUID, never „Punkt N”. */
 export function nodeDisplayName(
   n: RoutingNode,
   accessPoints: RoutingAccessPoint[] = [],
   locations: { id: number; name: string }[] = [],
-  allNodes: RoutingNode[] = []
+  allNodes: RoutingNode[] = [],
+  edges: RoutingEdge[] = []
 ): string {
   const op = opTypeLabel(n.operational_type);
   if (op) {
     const lab = n.label?.trim();
     if (!lab || isGenericLabel(lab) || lab === op) return op;
-    // Avoid “Pakowanie: Pakowanie”
     if (lab.toLowerCase() === op.toLowerCase()) return op;
     return lab;
   }
-  if (!isGenericLabel(n.label)) return n.label!.trim();
-  const num = allNodes.length ? pointNumber(n, allNodes) : 0;
-  return num > 0 ? `Punkt ${num}` : "Punkt trasy";
+  if (!isGenericLabel(n.label) && (n.label ?? "").trim() !== "Skrzyżowanie") {
+    return n.label!.trim();
+  }
+  if (isCrossroads(n, edges)) return "Skrzyżowanie";
+  return "Punkt trasy";
 }
 
 export function nodeKind(

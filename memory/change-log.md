@@ -1,3 +1,10 @@
+## 2026-07-24 — TRASY: draw-time skrzyżowania + prostszy panel odcinka
+
+- ROOT: przecięcia dopiero na BE save (`materialize_intersections`); FE tylko split po kliknięciu w odcinek → wizualny X bez topologii.
+- FIX: `applyDrawStep` + `routingDrawNormalize` (cross / T / collinear) przy rysowaniu; snap POINT>EDGE>empty.
+- UI: ukryty mnożnik kosztu; panel odcinka uproszczony; „Punkt trasy”/„Skrzyżowanie” zamiast Punkt N.
+- Tests: routingDrawNormalize 10 + routing suite 32 PASS. **No push. Bez Etapu 3.**
+
 ## 2026-07-24 — HOTFIX: Railway /healthz 503 (dangling Stage2 import)
 
 - ROOT: `slotting_service` → `from ..domain.simulation import get_special_locations_xy, distance_point_to_point_cm` po usunięciu `warehouse_graph_service` w 0ae9e47d.

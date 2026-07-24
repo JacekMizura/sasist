@@ -13,8 +13,8 @@ import {
 } from "../../../api/warehouseRoutingApi";
 import {
   applyDrawClick,
+  applyDrawStep,
   humanizeRouteTestMessage,
-  splitEdgeAtCm,
 } from "./routingCanvasInteraction";
 
 function newUuid(): string {
@@ -203,6 +203,7 @@ export function useRoutingGraph(warehouseId: number | null, layoutId: number | n
   /**
    * Polyline draw step: empty click creates point (+ edge from draft);
    * click existing point reuses it and connects. Avoids React stale-state race.
+   * Prefer {@link drawAtCm} for magnetic snap + draw-time topology.
    */
   const appendDrawClick = useCallback(
     (
@@ -229,39 +230,48 @@ export function useRoutingGraph(warehouseId: number | null, layoutId: number | n
     [warehouseId, layoutId]
   );
 
-  /** Split edge under click during draw, then connect from draft. */
-  const splitEdgeAndContinueDraw = useCallback(
-    (draftFromUuid: string | null, edgeUuid: string, x: number, y: number) => {
-      const split = splitEdgeAtCm(
-        { nodes: nodesRef.current, edges: edgesRef.current },
-        edgeUuid,
-        x,
-        y,
-        newUuid,
-        warehouseId ?? 0,
-        layoutId
-      );
-      if (!split) return null;
-      nodesRef.current = split.graph.nodes as RoutingNode[];
-      edgesRef.current = split.graph.edges as RoutingEdge[];
-      const continued = applyDrawClick(
+  /**
+   * Magnetic draw at warehouse cm: snap POINT > EDGE > empty, then
+   * normalize crossings / T-junctions / collinear overlaps.
+   */
+  const drawAtCm = useCallback(
+    (
+      draftFromUuid: string | null,
+      x: number,
+      y: number,
+      opts?: { preferEdgeUuid?: string; preferNodeUuid?: string }
+    ) => {
+      const result = applyDrawStep(
         { nodes: nodesRef.current, edges: edgesRef.current },
         draftFromUuid,
-        { kind: "node", uuid: split.junctionUuid },
+        {
+          x,
+          y,
+          preferEdgeUuid: opts?.preferEdgeUuid,
+          preferNodeUuid: opts?.preferNodeUuid,
+        },
         newUuid,
         warehouseId ?? 0,
         layoutId
       );
-      nodesRef.current = continued.graph.nodes as RoutingNode[];
-      edgesRef.current = continued.graph.edges as RoutingEdge[];
+      nodesRef.current = result.graph.nodes as RoutingNode[];
+      edgesRef.current = result.graph.edges as RoutingEdge[];
       setNodes(nodesRef.current);
       setEdges(edgesRef.current);
       setValidation(null);
       setTestResult(null);
       setDirty(true);
-      return continued;
+      return result;
     },
     [warehouseId, layoutId]
+  );
+
+  /** Split edge under click during draw, then connect from draft. */
+  const splitEdgeAndContinueDraw = useCallback(
+    (draftFromUuid: string | null, edgeUuid: string, x: number, y: number) => {
+      return drawAtCm(draftFromUuid, x, y, { preferEdgeUuid: edgeUuid });
+    },
+    [drawAtCm]
   );
 
   const updateNode = useCallback((uuid: string, patch: Partial<RoutingNode>) => {
@@ -473,6 +483,7 @@ export function useRoutingGraph(warehouseId: number | null, layoutId: number | n
     save,
     addNodeAtCm,
     appendDrawClick,
+    drawAtCm,
     splitEdgeAndContinueDraw,
     updateNode,
     removeNode,

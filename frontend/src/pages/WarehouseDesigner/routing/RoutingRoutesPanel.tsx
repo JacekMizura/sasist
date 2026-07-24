@@ -3,6 +3,7 @@ import type { RoutingEdge, RoutingNode } from "../../../api/warehouseRoutingApi"
 import {
   confirmDeleteNodeMessage,
   edgesConnectedTo,
+  isCrossroads,
   nodeDisplayName,
   orphanNodeUuids,
 } from "./routingDisplay";
@@ -104,7 +105,7 @@ export function RoutingRoutesPanel({
   const showIdle = !editingPoint && !editingEdge && tool !== "test_route";
 
   const nameOf = (n: RoutingNode) =>
-    nodeDisplayName(n, routing.accessPoints, locations, routing.nodes);
+    nodeDisplayName(n, routing.accessPoints, locations, routing.nodes, routing.edges);
 
   const removeOrphansAction = () => {
     const n = orphans.length;
@@ -157,8 +158,8 @@ export function RoutingRoutesPanel({
 
       {tool === "draw_edge" && (
         <p className="text-[11px] text-sky-900">
-          Klikaj kolejne miejsca na mapie — odcinki powstają automatycznie. Enter lub Esc kończy
-          rysowanie bieżącej drogi.
+          Klikaj kolejne miejsca — odcinki i skrzyżowania powstają automatycznie, gdy drogi się
+          przecinają lub łączą. Enter / Esc kończy bieżącą drogę.
         </p>
       )}
 
@@ -451,8 +452,12 @@ export function RoutingRoutesPanel({
         <div className="space-y-2 rounded-lg border border-slate-200 p-2">
           <div className="flex items-start justify-between gap-2">
             <div>
-              <div className="font-semibold">Punkt trasy</div>
-              <div className="text-[10px] text-slate-500">{nameOf(selectedNode)}</div>
+              <div className="font-semibold">
+                {isCrossroads(selectedNode, routing.edges) ? "Skrzyżowanie" : "Punkt trasy"}
+              </div>
+              {selectedNode.operational_type && (
+                <div className="text-[10px] text-slate-500">{nameOf(selectedNode)}</div>
+              )}
             </div>
           </div>
 
@@ -655,22 +660,7 @@ export function RoutingRoutesPanel({
               checked={selectedEdge.enabled}
               onChange={(e) => routing.updateEdge(selectedEdge.uuid, { enabled: e.target.checked })}
             />
-            Aktywny odcinek
-          </label>
-          <label className="block">
-            Mnożnik kosztu
-            <input
-              type="number"
-              step="0.1"
-              min="0.1"
-              className="mt-0.5 w-full rounded border border-slate-200 px-1 py-1"
-              value={selectedEdge.cost_multiplier}
-              onChange={(e) =>
-                routing.updateEdge(selectedEdge.uuid, {
-                  cost_multiplier: Number(e.target.value) || 1,
-                })
-              }
-            />
+            Droga aktywna
           </label>
 
           <div className="rounded border border-slate-100 bg-slate-50/80 p-2">

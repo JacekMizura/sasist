@@ -3,8 +3,8 @@
  * POINT > EDGE > empty — nodes must win over wide edge strokes at endpoints.
  */
 
-export const NODE_HIT_RADIUS_PX = 13; // ~26px diameter interactive target
-export const EDGE_HIT_HALF_PX = 6; // invisible stroke ~12px
+export const NODE_HIT_RADIUS_PX = 16; // ~32px interactive target
+export const EDGE_HIT_HALF_PX = 10; // invisible stroke ~20px
 
 export type HitNode = { uuid: string; x: number; y: number };
 export type HitEdge = {

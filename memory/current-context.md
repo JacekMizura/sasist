@@ -2,7 +2,7 @@
 
 ## Active
 
-**HOTFIX Railway ImportError (startup)** — `slotting_service` importował usunięte Stage2 symbole z `domain.simulation`. Helpery przeniesione do `domain/layout_geometry.py` (czysta geometria Location, bez legacy grafu). Smoke: `import backend.main` + `run_server` `/healthz` 200. Regression: `test_backend_startup_import.py`. **Lokalny commit; no push. Bez Etapu 3.**
+**TRASY draw-time junctions** — skrzyżowania/T-junction/collinear normalizacja już przy rysowaniu (`applyDrawStep` + `routingDrawNormalize`). Bez „Mnożnik kosztu” w UI. Lokalny commit; **no push. Bez Etapu 3.**
 
 ## Preferencja commitów (user)
 
