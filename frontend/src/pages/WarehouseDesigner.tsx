@@ -79,6 +79,7 @@ import { useDesignerKeyboard } from "./WarehouseDesigner/DesignerKeyboard";
 import { DesignerToolbar } from "./WarehouseDesigner/DesignerToolbar";
 import { RoutingGraphLayer } from "./WarehouseDesigner/routing/RoutingGraphLayer";
 import { RoutingRoutesPanel } from "./WarehouseDesigner/routing/RoutingRoutesPanel";
+import { buildAccessProblemItems, type AccessProblemItem } from "./WarehouseDesigner/routing/locationAccessProblems";
 import { useRoutingGraph } from "./WarehouseDesigner/routing/useRoutingGraph";
 import { normalizeRotation } from "./WarehouseDesigner/rackServiceFace";
 import { preferOrthogonalCm } from "./WarehouseDesigner/routing/routingCanvasInteraction";
@@ -526,6 +527,15 @@ export default function WarehouseDesigner() {
   const [highlightOrphanUuids, setHighlightOrphanUuids] = useState<string[]>([]);
   const [highlightInvalidEdgeUuids, setHighlightInvalidEdgeUuids] = useState<string[]>([]);
   const [routingDraftOrthoGuide, setRoutingDraftOrthoGuide] = useState<"none" | "h" | "v" | null>(null);
+  const [selectedAccessLocationId, setSelectedAccessLocationId] = useState<number | null>(null);
+  const [showAllAccessProblems, setShowAllAccessProblems] = useState(false);
+  const [canvasFocusCm, setCanvasFocusCm] = useState<{
+    x: number;
+    y: number;
+    zoom?: number;
+    seq: number;
+  } | null>(null);
+  const canvasFocusSeqRef = useRef(0);
 
   const setRoutingToolSafe = useCallback((tool: RoutingTool) => {
     setRoutingTool(tool);
@@ -533,6 +543,65 @@ export default function WarehouseDesigner() {
       setRoutingEdgeDraftFrom(null);
       setRoutingDraftCursorCm(null);
     }
+  }, []);
+
+  const accessProblemItems = useMemo(
+    () => buildAccessProblemItems(routing.locationAccess, routingLocations, layout.racks),
+    [routing.locationAccess, routingLocations, layout.racks]
+  );
+  const problemRackUuids = useMemo(
+    () =>
+      [
+        ...new Set(
+          accessProblemItems
+            .map((p) => p.rackUuid)
+            .filter((u): u is string => typeof u === "string" && u.length > 0)
+        ),
+      ],
+    [accessProblemItems]
+  );
+
+  const handleSelectAccessProblem = useCallback(
+    (item: AccessProblemItem) => {
+      setSelectedAccessLocationId(item.locationId);
+      routing.setShowAccessDiagnostics(true);
+      canvasFocusSeqRef.current += 1;
+      const seq = canvasFocusSeqRef.current;
+
+      if (item.rackUuid) {
+        const rack = layout.racks.find((r) => String(r.uuid || "") === item.rackUuid);
+        if (rack) {
+          const rid = rack.id ?? rack.uuid ?? rack.rack_index;
+          setSelectedRackId(rid);
+          setSelectedRackIds([rid]);
+          setSelectedRackIdOnMap(String(rid));
+          const cx = (Number(rack.x) + Number(rack.width) / 2) * GRID_UNIT_CM;
+          const cy = (Number(rack.y) + Number(rack.height) / 2) * GRID_UNIT_CM;
+          setCanvasFocusCm({ x: cx, y: cy, zoom: 1.35, seq });
+          return;
+        }
+      }
+
+      const bind = routing.locationAccess.find((a) => a.location_id === item.locationId);
+      if (bind?.service_point_x_cm != null && bind?.service_point_y_cm != null) {
+        setCanvasFocusCm({
+          x: bind.service_point_x_cm,
+          y: bind.service_point_y_cm,
+          zoom: 1.35,
+          seq,
+        });
+        return;
+      }
+      if (bind?.entry_x_cm != null && bind?.entry_y_cm != null) {
+        setCanvasFocusCm({ x: bind.entry_x_cm, y: bind.entry_y_cm, zoom: 1.35, seq });
+      }
+    },
+    [layout.racks, routing]
+  );
+
+  const handleClearAccessProblemSelection = useCallback(() => {
+    setSelectedAccessLocationId(null);
+    setShowAllAccessProblems(false);
   }, []);
 
   /** Delete/Backspace removes selected routing node; Enter/Escape finishes drawing stroke. */
@@ -1504,6 +1573,13 @@ export default function WarehouseDesigner() {
                       ? null
                       : Number(p.clearance_height_cm),
                   enabled: p.enabled !== false,
+                  corridor_uuid:
+                    typeof p.corridor_uuid === "string" && p.corridor_uuid.trim()
+                      ? p.corridor_uuid.trim()
+                      : typeof (p as { corridorUuid?: unknown }).corridorUuid === "string" &&
+                          String((p as { corridorUuid?: unknown }).corridorUuid).trim()
+                        ? String((p as { corridorUuid?: unknown }).corridorUuid).trim()
+                        : null,
                 }))
             : [],
         };
@@ -2091,6 +2167,7 @@ export default function WarehouseDesigner() {
             width_cm: p.width_cm,
             clearance_height_cm: p.clearance_height_cm ?? null,
             enabled: p.enabled !== false,
+            corridor_uuid: p.corridor_uuid ?? null,
           })),
         })),
         aisles: layout.aisles.map((a) => ({
@@ -3984,6 +4061,7 @@ export default function WarehouseDesigner() {
               setSelectedPassage,
               onPassageDragStart: (rackUuid, passageUuid, grabOffsetCm) =>
                 setDraggingPassage({ rackUuid, passageUuid, grabOffsetCm }),
+              canvasFocusCm,
               routesWorkspace: routesMode,
               setRowToolTemplate,
               rowToolTemplate,
@@ -4069,7 +4147,9 @@ export default function WarehouseDesigner() {
                   selectedRackUuids={selectedRacks
                     .map((r) => (typeof r.uuid === "string" ? r.uuid : ""))
                     .filter(Boolean)}
-                  selectedLocationId={null}
+                  selectedLocationId={selectedAccessLocationId}
+                  showAllAccessProblems={showAllAccessProblems}
+                  problemRackUuids={problemRackUuids}
                   cellPx={cellPx}
                   selectedNodeUuid={routingSelectedNode}
                   selectedEdgeUuid={routingSelectedEdge}
@@ -4220,10 +4300,16 @@ export default function WarehouseDesigner() {
               setTestStartUuid={setTestStartUuid}
               setTestDestUuid={setTestDestUuid}
               locations={routingLocations}
+              racks={layout.racks}
               highlightOrphanUuids={highlightOrphanUuids}
               setHighlightOrphanUuids={setHighlightOrphanUuids}
               highlightInvalidEdgeUuids={highlightInvalidEdgeUuids}
               setHighlightInvalidEdgeUuids={setHighlightInvalidEdgeUuids}
+              selectedAccessLocationId={selectedAccessLocationId}
+              showAllAccessProblems={showAllAccessProblems}
+              onSelectAccessProblem={handleSelectAccessProblem}
+              onToggleShowAllAccessProblems={() => setShowAllAccessProblems((v) => !v)}
+              onClearAccessProblemSelection={handleClearAccessProblemSelection}
             />
           )}
           </div>

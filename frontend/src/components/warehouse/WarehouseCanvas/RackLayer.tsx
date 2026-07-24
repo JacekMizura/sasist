@@ -137,6 +137,8 @@ export type RackLayerProps = {
   passageInteractive?: boolean;
   passageSubtle?: boolean;
   selectedPassage?: SelectedPassage | null;
+  /** When set, all passages in a logical corridor are highlighted together. */
+  selectedPassageUuids?: Set<string> | null;
   onPassageSelect?: (rackUuid: string, passageUuid: string) => void;
   onPassageDragStart?: (rackUuid: string, passageUuid: string, grabOffsetCm: number) => void;
 };
@@ -171,6 +173,7 @@ export function RackLayer({
   passageInteractive = false,
   passageSubtle = false,
   selectedPassage = null,
+  selectedPassageUuids = null,
   onPassageSelect,
   onPassageDragStart,
 }: RackLayerProps) {
@@ -545,9 +548,10 @@ export function RackLayer({
                 if (!pr || pr.w < 1 || pr.h < 1) return null;
                 const on = p.enabled !== false;
                 const isPassageSelected =
-                  selectedPassage != null &&
-                  selectedPassage.rackUuid === rackUuid(r) &&
-                  selectedPassage.passageUuid === p.uuid;
+                  (selectedPassageUuids != null && selectedPassageUuids.has(p.uuid)) ||
+                  (selectedPassage != null &&
+                    selectedPassage.rackUuid === rackUuid(r) &&
+                    selectedPassage.passageUuid === p.uuid);
                 const subtle = passageSubtle && !passageInteractive;
                 return (
                   <rect

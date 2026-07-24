@@ -15,6 +15,14 @@ export function newPassageUuid(): string {
   return `passage-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
 
+/** Shared id for one logical multi-rack corridor (UX group; not a routing edge). */
+export function newCorridorUuid(): string {
+  if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
+    return crypto.randomUUID();
+  }
+  return `corridor-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
 export function rackAlongIsX(rack: Pick<RackState, "orientation">): boolean {
   return (rack.orientation || "vertical").toLowerCase() === "horizontal";
 }
@@ -68,6 +76,7 @@ export function defaultPassageForRack(rack: RackState): RackPassageState {
     width_cm: width,
     clearance_height_cm: null,
     enabled: true,
+    corridor_uuid: newCorridorUuid(),
   };
 }
 
@@ -274,7 +283,8 @@ function findRackByUuid(racks: RackState[], uuid: string): RackState | undefined
 function upsertPassageOnRack(
   rack: RackState,
   placement: RackPassagePlacement,
-  existingPassageUuid?: string
+  existingPassageUuid?: string,
+  corridorUuid?: string | null
 ): RackPassageState[] {
   const list = [...(rack.passages ?? [])];
   const idx = existingPassageUuid ? list.findIndex((p) => p.uuid === existingPassageUuid) : -1;
@@ -284,6 +294,12 @@ function upsertPassageOnRack(
     width_cm: placement.width_cm,
     clearance_height_cm: idx >= 0 ? list[idx].clearance_height_cm ?? null : null,
     enabled: idx >= 0 ? list[idx].enabled !== false : true,
+    corridor_uuid:
+      corridorUuid !== undefined
+        ? corridorUuid
+        : idx >= 0
+          ? list[idx].corridor_uuid ?? null
+          : null,
     ...(idx >= 0 && list[idx].id != null ? { id: list[idx].id } : {}),
   };
   if (idx >= 0) {
@@ -297,9 +313,22 @@ function upsertPassageOnRack(
 export function applyPassagePlacements(
   layout: LayoutState,
   placements: RackPassagePlacement[],
-  opts?: { replacePassageUuidByRack?: Record<string, string> }
+  opts?: {
+    replacePassageUuidByRack?: Record<string, string>;
+    /** Shared corridor id for this gesture (auto-generated when omitted and placements nonempty). */
+    corridorUuid?: string | null;
+    assignCorridor?: boolean;
+  }
 ): LayoutState {
   const byRack = new Map(placements.map((p) => [p.rackUuid, p]));
+  const corridorUuid =
+    opts?.corridorUuid !== undefined
+      ? opts.corridorUuid
+      : opts?.assignCorridor === false
+        ? null
+        : placements.length > 0
+          ? newCorridorUuid()
+          : null;
   return {
     ...layout,
     racks: layout.racks.map((rack) => {
@@ -308,9 +337,122 @@ export function applyPassagePlacements(
       const replaceUuid = opts?.replacePassageUuidByRack?.[rackUuid(rack)];
       return {
         ...rack,
-        passages: upsertPassageOnRack(rack, placement, replaceUuid),
+        passages: upsertPassageOnRack(rack, placement, replaceUuid, corridorUuid),
       };
     }),
+  };
+}
+
+export type CorridorMember = { rack: RackState; passage: RackPassageState };
+
+/** All passages sharing a corridor_uuid (logical multi-rack opening). */
+export function findCorridorMembers(layout: LayoutState, corridorUuid: string | null | undefined): CorridorMember[] {
+  if (!corridorUuid) return [];
+  const out: CorridorMember[] = [];
+  for (const rack of layout.racks) {
+    for (const passage of rack.passages ?? []) {
+      if (passage.corridor_uuid === corridorUuid) out.push({ rack, passage });
+    }
+  }
+  return out;
+}
+
+/** Members of the logical corridor containing this passage (or just itself). */
+export function findPassageGroup(
+  layout: LayoutState,
+  rackUuidKey: string,
+  passageUuid: string
+): CorridorMember[] {
+  const hit = findRackPassage(layout, rackUuidKey, passageUuid);
+  if (!hit) return [];
+  if (hit.passage.corridor_uuid) {
+    const members = findCorridorMembers(layout, hit.passage.corridor_uuid);
+    if (members.length > 0) return members;
+  }
+  return [hit];
+}
+
+export function selectedPassageUuidSet(
+  layout: LayoutState,
+  selected: { rackUuid: string; passageUuid: string } | null
+): Set<string> {
+  if (!selected) return new Set();
+  return new Set(findPassageGroup(layout, selected.rackUuid, selected.passageUuid).map((m) => m.passage.uuid));
+}
+
+/** Move every member of a corridor by the same along-axis delta (cm). */
+export function moveCorridorByDelta(
+  layout: LayoutState,
+  corridorUuid: string | null | undefined,
+  deltaAlongCm: number,
+  fallback?: { rackUuid: string; passageUuid: string }
+): LayoutState {
+  if (!Number.isFinite(deltaAlongCm) || deltaAlongCm === 0) return layout;
+  const members =
+    corridorUuid && findCorridorMembers(layout, corridorUuid).length > 0
+      ? findCorridorMembers(layout, corridorUuid)
+      : fallback
+        ? findPassageGroup(layout, fallback.rackUuid, fallback.passageUuid)
+        : [];
+  if (members.length === 0) return layout;
+  const byPassage = new Map(members.map((m) => [m.passage.uuid, m]));
+  return {
+    ...layout,
+    racks: layout.racks.map((rack) => {
+      const passages = (rack.passages ?? []).map((p) => {
+        if (!byPassage.has(p.uuid)) return p;
+        return {
+          ...p,
+          ...clampPassageOffset(rack, p.offset_along_cm + deltaAlongCm, p.width_cm),
+        };
+      });
+      return { ...rack, passages };
+    }),
+  };
+}
+
+/** Set width on every corridor member (re-clamped per rack). */
+export function resizeCorridorWidth(
+  layout: LayoutState,
+  corridorUuid: string | null | undefined,
+  width_cm: number,
+  fallback?: { rackUuid: string; passageUuid: string }
+): LayoutState {
+  const members =
+    corridorUuid && findCorridorMembers(layout, corridorUuid).length > 0
+      ? findCorridorMembers(layout, corridorUuid)
+      : fallback
+        ? findPassageGroup(layout, fallback.rackUuid, fallback.passageUuid)
+        : [];
+  if (members.length === 0) return layout;
+  const ids = new Set(members.map((m) => m.passage.uuid));
+  return {
+    ...layout,
+    racks: layout.racks.map((rack) => {
+      const passages = (rack.passages ?? []).map((p) => {
+        if (!ids.has(p.uuid)) return p;
+        return { ...p, ...clampPassageOffset(rack, p.offset_along_cm, width_cm) };
+      });
+      return { ...rack, passages };
+    }),
+  };
+}
+
+/** Delete every passage in the logical corridor (or the single passage). */
+export function deletePassageGroup(
+  layout: LayoutState,
+  rackUuidKey: string,
+  passageUuid: string
+): LayoutState {
+  const members = findPassageGroup(layout, rackUuidKey, passageUuid);
+  const ids = new Set(members.map((m) => m.passage.uuid));
+  if (ids.size === 0) return layout;
+  return {
+    ...layout,
+    racks: layout.racks.map((rack) => ({
+      ...rack,
+      passages: (rack.passages ?? []).filter((p) => !ids.has(p.uuid)),
+    })),
   };
 }
 

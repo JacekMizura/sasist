@@ -150,6 +150,11 @@ export type RackPassageState = {
   width_cm: number;
   clearance_height_cm?: number | null;
   enabled: boolean;
+  /**
+   * Optional UX group for multi-rack corridor (one gesture = one logical passage).
+   * Physical SSOT remains per-rack; shared id keeps move/resize/delete coherent.
+   */
+  corridor_uuid?: string | null;
 };
 
 export type RackState = {

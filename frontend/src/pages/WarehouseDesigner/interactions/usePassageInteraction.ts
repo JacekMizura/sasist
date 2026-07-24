@@ -4,10 +4,11 @@ import { getCellFromWarehouseLayoutSvg } from "../utils/designerMouseUtils";
 import {
   applyPassagePlacements,
   corridorSpecFromDrag,
+  findRackPassage,
   layoutCellCenterCm,
+  moveCorridorByDelta,
   rackFootprintCm,
   rackUuid,
-  updateRackPassage,
   worldCorridorToPassagesFromSpec,
 } from "../passages/rackPassageGeometry";
 
@@ -94,19 +95,21 @@ export function usePassageInteraction(params: UsePassageInteractionParams) {
         }
       }
       if (draggingPassage && cell) {
-        const rack = layout.racks.find((r) => rackUuid(r) === draggingPassage.rackUuid);
-        const passage = rack?.passages?.find((p) => p.uuid === draggingPassage.passageUuid);
-        if (!rack || !passage) return;
+        const hit = findRackPassage(layout, draggingPassage.rackUuid, draggingPassage.passageUuid);
+        if (!hit) return;
+        const { rack, passage } = hit;
         const center = layoutCellCenterCm(cell);
         const fp = rackFootprintCm(rack);
         const alongIsX = (rack.orientation || "vertical").toLowerCase() === "horizontal";
         const cursorAlong = alongIsX ? center.x : center.y;
         const fpOrigin = alongIsX ? fp.minX : fp.minY;
-        const offset = Math.max(0, cursorAlong - draggingPassage.grabOffsetCm - fpOrigin);
+        const nextOffset = Math.max(0, cursorAlong - draggingPassage.grabOffsetCm - fpOrigin);
+        const delta = nextOffset - passage.offset_along_cm;
+        if (Math.abs(delta) < 0.01) return;
         setLayout((prev) =>
-          updateRackPassage(prev, draggingPassage.rackUuid, draggingPassage.passageUuid, {
-            offset_along_cm: offset,
-            width_cm: passage.width_cm,
+          moveCorridorByDelta(prev, passage.corridor_uuid, delta, {
+            rackUuid: draggingPassage.rackUuid,
+            passageUuid: draggingPassage.passageUuid,
           })
         );
       }
@@ -115,7 +118,7 @@ export function usePassageInteraction(params: UsePassageInteractionParams) {
       passageToolActive,
       passageDrawStart,
       draggingPassage,
-      layout.racks,
+      layout,
       passageDrawEndPendingRef,
       passageDrawEndRafRef,
       setPassageDrawEnd,
@@ -145,15 +148,16 @@ export function usePassageInteraction(params: UsePassageInteractionParams) {
           if (placements.length > 0) {
             setLayout((prev) => {
               const next = applyPassagePlacements(prev, placements);
-              if (placements.length === 1) {
-                const p = placements[0];
-                const rack = next.racks.find((r) => rackUuid(r) === p.rackUuid);
-                const lastPassage = rack?.passages?.[rack.passages.length - 1];
-                if (lastPassage) {
-                  setSelectedPassage({ rackUuid: p.rackUuid, passageUuid: lastPassage.uuid });
-                }
-              } else {
-                setSelectedPassage(null);
+              // Select first member — group edit treats corridor as one.
+              const p = placements[0];
+              const rack = next.racks.find((r) => rackUuid(r) === p.rackUuid);
+              const created = (rack?.passages ?? []).find(
+                (x) =>
+                  Math.abs(x.offset_along_cm - p.offset_along_cm) < 0.5 &&
+                  Math.abs(x.width_cm - p.width_cm) < 0.5
+              ) ?? rack?.passages?.[rack.passages.length - 1];
+              if (created) {
+                setSelectedPassage({ rackUuid: p.rackUuid, passageUuid: created.uuid });
               }
               return next;
             });

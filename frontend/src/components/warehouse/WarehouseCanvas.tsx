@@ -23,6 +23,7 @@ import { WallElementsLayer } from "./WarehouseCanvas/WallElementsLayer";
 import { PathLayer } from "./WarehouseCanvas/PathLayer";
 import { PassageDrawPreview } from "../../pages/WarehouseDesigner/passages/PassageDrawPreview";
 import { PassageQuickEditor } from "../../pages/WarehouseDesigner/passages/PassageQuickEditor";
+import { selectedPassageUuidSet } from "../../pages/WarehouseDesigner/passages/rackPassageGeometry";
 
 const RACK_RADIUS_PX = parseFloat(radius.small) || 6;
 
@@ -213,6 +214,11 @@ export type WarehouseCanvasProps = {
   selectedPassage?: { rackUuid: string; passageUuid: string } | null;
   setSelectedPassage?: React.Dispatch<React.SetStateAction<{ rackUuid: string; passageUuid: string } | null>>;
   onPassageDragStart?: (rackUuid: string, passageUuid: string, grabOffsetCm: number) => void;
+  /**
+   * Scroll/zoom viewport to layout cm point (e.g. problem location / rack center).
+   * Change identity (seq) to re-trigger focus.
+   */
+  canvasFocusCm?: { x: number; y: number; zoom?: number; seq: number } | null;
   /** TRASY workspace: passages visible but non-interactive. */
   routesWorkspace?: boolean;
   /** When provided, activating "Rysuj Rząd" will clear the selected template so user can draw empty rows. */
@@ -403,6 +409,7 @@ function WarehouseCanvasInner({
   selectedPassage = null,
   setSelectedPassage,
   onPassageDragStart,
+  canvasFocusCm = null,
   routesWorkspace = false,
   setRowToolTemplate,
   rowToolTemplate,
@@ -642,6 +649,25 @@ function WarehouseCanvasInner({
     setTimeout(() => setEnableTransition(false), VIEWPORT_TRANSITION_MS);
   }, [setZoom, setPan]);
 
+  /** Focus a layout-cm point inside the scrollable viewport (problem locate). */
+  React.useEffect(() => {
+    if (!canvasFocusCm) return;
+    const el = viewportRef.current;
+    if (!el) return;
+    if (canvasFocusCm.zoom != null && Number.isFinite(canvasFocusCm.zoom)) {
+      setZoom(() => canvasFocusCm.zoom as number);
+    }
+    const z = canvasFocusCm.zoom ?? zoom;
+    const px = (canvasFocusCm.x / GRID_UNIT_CM) * cellPx * z;
+    const py = (canvasFocusCm.y / GRID_UNIT_CM) * cellPx * z;
+    requestAnimationFrame(() => {
+      const vp = viewportRef.current;
+      if (!vp) return;
+      vp.scrollLeft = Math.max(0, px - vp.clientWidth / 2);
+      vp.scrollTop = Math.max(0, py - vp.clientHeight / 2);
+    });
+  }, [canvasFocusCm, cellPx, setZoom, zoom]);
+
   const gridOpacity = React.useMemo(
     () => ({
       minor: "rgba(60,90,110,0.011)",
@@ -738,7 +764,7 @@ function WarehouseCanvasInner({
                     type="button"
                     onClick={() => setPassageToolActive((a) => !a)}
                     className={`h-8 rounded-md px-2.5 text-[11px] font-medium transition-all duration-150 ${passageToolActive ? "bg-white text-indigo-900 shadow-sm ring-1 ring-indigo-200/80" : "text-slate-600 hover:bg-white/80 hover:text-slate-900"}`}
-                    title="Narysuj przejazd przez regały (przeciągnij linię). Shift = dowolny kąt. Skrót: J"
+                    title="Utwórz przejazd pod regałem (przeciągnij pas przez regały). Shift = dowolny kąt. Skrót: J"
                   >
                     Dodaj przejazd
                   </button>
@@ -1241,6 +1267,9 @@ function WarehouseCanvasInner({
                     passageInteractive={isEditMode && !routesWorkspace && !isExportMode}
                     passageSubtle={routesWorkspace}
                     selectedPassage={selectedPassage}
+                    selectedPassageUuids={
+                      selectedPassage ? selectedPassageUuidSet(layout, selectedPassage) : null
+                    }
                     onPassageSelect={
                       setSelectedPassage
                         ? (rackUuid, passageUuid) => {
