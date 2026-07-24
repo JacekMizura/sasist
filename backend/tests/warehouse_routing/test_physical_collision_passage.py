@@ -760,3 +760,195 @@ def _road_pair(db, warehouse_id: int, ax, ay, bx, by) -> str:
     )
     db.flush()
     return eu
+
+def test_touching_rack_seam_approach_blocked():
+    """[B1][B2] touching — approach along shared edge is BLOCK for Location Access."""
+    from backend.services.warehouse_routing.physical_collision import (
+        build_rack_obstacle,
+        segment_is_physically_clear,
+        segment_travels_touching_rack_seam,
+    )
+
+    b1 = Rack(
+        layout_id=1,
+        uuid="u1",
+        name="B1",
+        x=1,
+        y=21,
+        width=15,
+        height=8,
+        orientation="vertical",
+        levels=1,
+        bins_per_level=1,
+        length_cm=80,
+        width_cm=100,
+        height_cm=200,
+        aisle_letter="B",
+        rack_index=1,
+    )
+    b1.id = 1
+    b2 = Rack(
+        layout_id=1,
+        uuid="u2",
+        name="B2",
+        x=16,
+        y=21,
+        width=15,
+        height=8,
+        orientation="vertical",
+        levels=1,
+        bins_per_level=1,
+        length_cm=80,
+        width_cm=100,
+        height_cm=200,
+        aisle_letter="B",
+        rack_index=2,
+    )
+    b2.id = 2
+    obs = [build_rack_obstacle(b1, []), build_rack_obstacle(b2, [])]
+    seam_x = 160.0  # 16*10
+    assert segment_travels_touching_rack_seam(seam_x, 235, seam_x, 200, obs)
+    assert not segment_is_physically_clear(
+        seam_x, 235, seam_x, 200, obs, block_touching_seams=True
+    )
+
+
+def test_real_gap_between_racks_not_seam_block():
+    from backend.services.warehouse_routing.physical_collision import (
+        build_rack_obstacle,
+        segment_is_physically_clear,
+        segment_travels_touching_rack_seam,
+    )
+
+    b1 = Rack(
+        layout_id=1,
+        uuid="u1",
+        name="B1",
+        x=1,
+        y=21,
+        width=15,
+        height=8,
+        orientation="vertical",
+        levels=1,
+        bins_per_level=1,
+        length_cm=80,
+        width_cm=100,
+        height_cm=200,
+        aisle_letter="B",
+        rack_index=1,
+    )
+    b1.id = 1
+    b2 = Rack(
+        layout_id=1,
+        uuid="u2",
+        name="B2",
+        x=19,
+        y=21,
+        width=15,
+        height=8,
+        orientation="vertical",
+        levels=1,
+        bins_per_level=1,
+        length_cm=80,
+        width_cm=100,
+        height_cm=200,
+        aisle_letter="B",
+        rack_index=2,
+    )
+    b2.id = 2
+    obs = [build_rack_obstacle(b1, []), build_rack_obstacle(b2, [])]
+    mid_x = ((1 + 15) * 10 + 19 * 10) / 2
+    assert not segment_travels_touching_rack_seam(mid_x, 235, mid_x, 200, obs)
+    assert segment_is_physically_clear(mid_x, 235, mid_x, 200, obs, block_touching_seams=True)
+
+
+def test_external_boundary_graze_still_pass_with_seam_flag():
+    from backend.services.warehouse_routing.physical_collision import (
+        build_rack_obstacle,
+        segment_is_physically_clear,
+    )
+
+    rack = Rack(
+        layout_id=1,
+        uuid="u",
+        name="R",
+        x=10,
+        y=10,
+        width=20,
+        height=10,
+        orientation="horizontal",
+        levels=1,
+        bins_per_level=1,
+        length_cm=100,
+        width_cm=200,
+        height_cm=200,
+        aisle_letter="A",
+        rack_index=1,
+    )
+    rack.id = 1
+    obs = [build_rack_obstacle(rack, [])]
+    fp = obs[0].footprint
+    assert segment_is_physically_clear(
+        fp.min_x, fp.min_y, fp.max_x, fp.min_y, obs, block_touching_seams=True
+    )
+
+
+def test_passage_keeps_seam_clear():
+    """Enabled RackPassage on either touching rack → seam approach PASS."""
+    from backend.services.warehouse_routing.physical_collision import (
+        build_rack_obstacle,
+        segment_is_physically_clear,
+        segment_travels_touching_rack_seam,
+    )
+
+    b1 = Rack(
+        layout_id=1,
+        uuid="u1",
+        name="B1",
+        x=1,
+        y=21,
+        width=15,
+        height=8,
+        orientation="vertical",
+        levels=1,
+        bins_per_level=1,
+        length_cm=80,
+        width_cm=100,
+        height_cm=200,
+        aisle_letter="B",
+        rack_index=1,
+    )
+    b1.id = 1
+    b2 = Rack(
+        layout_id=1,
+        uuid="u2",
+        name="B2",
+        x=16,
+        y=21,
+        width=15,
+        height=8,
+        orientation="vertical",
+        levels=1,
+        bins_per_level=1,
+        length_cm=80,
+        width_cm=100,
+        height_cm=200,
+        aisle_letter="B",
+        rack_index=2,
+    )
+    b2.id = 2
+    p = WarehouseRackPassage(
+        uuid=str(uuid.uuid4()),
+        warehouse_id=1,
+        rack_id=2,
+        rack_uuid="u2",
+        offset_along_cm=0,
+        width_cm=80,
+        enabled=True,
+    )
+    obs = [build_rack_obstacle(b1, []), build_rack_obstacle(b2, [p])]
+    seam_x = 160.0
+    assert not segment_travels_touching_rack_seam(seam_x, 235, seam_x, 200, obs)
+    assert segment_is_physically_clear(
+        seam_x, 235, seam_x, 200, obs, block_touching_seams=True
+    )

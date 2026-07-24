@@ -144,7 +144,7 @@ def set_manual_override(
     )
     blocked = set(edge_uuids_blocked_by_obstacles(edge_rows, nodes, obstacles))
     if edge_uuid in blocked or not segment_is_physically_clear(
-        sx, sy, entry_x, entry_y, obstacles
+        sx, sy, entry_x, entry_y, obstacles, block_touching_seams=True
     ):
         status = STATUS_OVERRIDE_BROKEN
 

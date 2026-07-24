@@ -342,10 +342,156 @@ def segment_is_physically_clear(
     *,
     eps: float = COLLISION_EPS_CM,
     exclude_rack_ids: Optional[set[int]] = None,
+    block_touching_seams: bool = False,
 ) -> bool:
-    return not segment_collides_obstacles(
+    """
+    True if segment does not enter solid rack interiors.
+
+    When ``block_touching_seams`` is True (Location Access approaches), travel
+    exactly along a shared edge of two touching footprints is BLOCK — that seam
+    is not an aisle. External boundary graze of a single rack remains PASS.
+    """
+    if segment_collides_obstacles(
         ax, ay, bx, by, obstacles, eps=eps, exclude_rack_ids=exclude_rack_ids
-    ).blocked
+    ).blocked:
+        return False
+    if block_touching_seams and segment_travels_touching_rack_seam(
+        ax, ay, bx, by, obstacles, eps=eps, exclude_rack_ids=exclude_rack_ids
+    ):
+        return False
+    return True
+
+
+def _footprints_touch_vertically(a: Aabb, b: Aabb, *, eps: float) -> bool:
+    """Share a vertical edge (left/right) with Y overlap; gap ≤ eps."""
+    y_overlap = min(a.max_y, b.max_y) - max(a.min_y, b.min_y)
+    if y_overlap <= eps:
+        return False
+    return abs(a.max_x - b.min_x) <= eps or abs(b.max_x - a.min_x) <= eps
+
+
+def _footprints_touch_horizontally(a: Aabb, b: Aabb, *, eps: float) -> bool:
+    """Share a horizontal edge (top/bottom) with X overlap; gap ≤ eps."""
+    x_overlap = min(a.max_x, b.max_x) - max(a.min_x, b.min_x)
+    if x_overlap <= eps:
+        return False
+    return abs(a.max_y - b.min_y) <= eps or abs(b.max_y - a.min_y) <= eps
+
+
+def _point_near_vertical_seam(x: float, y: float, left: Aabb, right: Aabb, *, eps: float) -> bool:
+    seam_x = (left.max_x + right.min_x) * 0.5
+    if abs(x - seam_x) > eps:
+        return False
+    y0 = max(left.min_y, right.min_y)
+    y1 = min(left.max_y, right.max_y)
+    return y0 - eps <= y <= y1 + eps
+
+
+def _point_near_horizontal_seam(x: float, y: float, top: Aabb, bottom: Aabb, *, eps: float) -> bool:
+    seam_y = (top.max_y + bottom.min_y) * 0.5
+    if abs(y - seam_y) > eps:
+        return False
+    x0 = max(top.min_x, bottom.min_x)
+    x1 = min(top.max_x, bottom.max_x)
+    return x0 - eps <= x <= x1 + eps
+
+
+def _both_sides_occupied_vertical(
+    x: float, y: float, left: RackObstacle, right: RackObstacle, *, eps: float
+) -> bool:
+    """Probe just left/right of seam — both must lie in the respective footprints."""
+    probe = max(eps * 0.75, 0.5)
+    return left.footprint.contains_inclusive(x - probe, y, eps=eps) and right.footprint.contains_inclusive(
+        x + probe, y, eps=eps
+    )
+
+
+def _both_sides_occupied_horizontal(
+    x: float, y: float, top: RackObstacle, bottom: RackObstacle, *, eps: float
+) -> bool:
+    probe = max(eps * 0.75, 0.5)
+    return top.footprint.contains_inclusive(x, y - probe, eps=eps) and bottom.footprint.contains_inclusive(
+        x, y + probe, eps=eps
+    )
+
+
+def _segment_samples_in_passage(
+    ax: float, ay: float, bx: float, by: float, obs: RackObstacle, *, eps: float
+) -> bool:
+    for t in _sample_params(32):
+        x = ax + (bx - ax) * t
+        y = ay + (by - ay) * t
+        if not obs.footprint.contains_inclusive(x, y, eps=eps):
+            continue
+        for op in obs.openings:
+            if op.enabled and op.rect.contains_inclusive(x, y, eps=eps * 0.25):
+                return True
+    return False
+
+
+def segment_travels_touching_rack_seam(
+    ax: float,
+    ay: float,
+    bx: float,
+    by: float,
+    obstacles: Sequence[RackObstacle],
+    *,
+    eps: float = COLLISION_EPS_CM,
+    exclude_rack_ids: Optional[set[int]] = None,
+) -> bool:
+    """
+    True when the segment runs along a shared edge of two touching rack footprints
+    with solids on both sides of the seam (not a real aisle gap).
+
+    Legal RackPassage openings on either rack suppress the block (PASS).
+    Real gap > eps between footprints → False (not touching).
+    """
+    exclude = exclude_rack_ids or set()
+    obs_list = [o for o in obstacles if o.rack_id not in exclude]
+    if len(obs_list) < 2:
+        return False
+    length = math.hypot(bx - ax, by - ay)
+    if length < eps:
+        return False
+    samples = _sample_params(24)
+    for i, a in enumerate(obs_list):
+        for b in obs_list[i + 1 :]:
+            fa, fb = a.footprint, b.footprint
+            # Vertical seam (side-by-side)
+            if _footprints_touch_vertically(fa, fb, eps=eps):
+                left, right = (a, b) if fa.max_x <= fb.max_x else (b, a)
+                if _segment_samples_in_passage(ax, ay, bx, by, left, eps=eps) or _segment_samples_in_passage(
+                    ax, ay, bx, by, right, eps=eps
+                ):
+                    continue
+                hits = 0
+                for t in samples:
+                    x = ax + (bx - ax) * t
+                    y = ay + (by - ay) * t
+                    if not _point_near_vertical_seam(x, y, left.footprint, right.footprint, eps=eps):
+                        continue
+                    if _both_sides_occupied_vertical(x, y, left, right, eps=eps):
+                        hits += 1
+                if hits >= 3:
+                    return True
+            # Horizontal seam (stacked)
+            if _footprints_touch_horizontally(fa, fb, eps=eps):
+                top, bottom = (a, b) if fa.max_y <= fb.max_y else (b, a)
+                if _segment_samples_in_passage(ax, ay, bx, by, top, eps=eps) or _segment_samples_in_passage(
+                    ax, ay, bx, by, bottom, eps=eps
+                ):
+                    continue
+                hits = 0
+                for t in samples:
+                    x = ax + (bx - ax) * t
+                    y = ay + (by - ay) * t
+                    if not _point_near_horizontal_seam(x, y, top.footprint, bottom.footprint, eps=eps):
+                        continue
+                    if _both_sides_occupied_horizontal(x, y, top, bottom, eps=eps):
+                        hits += 1
+                if hits >= 3:
+                    return True
+    return False
 
 
 def load_warehouse_rack_obstacles(db, warehouse_id: int) -> list[RackObstacle]:

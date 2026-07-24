@@ -262,7 +262,12 @@ def select_best_edge_for_service_point(
             continue
         if obstacles is not None:
             clear = segment_is_physically_clear(
-                service.x, service.y, entry.x, entry.y, obstacles  # type: ignore[arg-type]
+                service.x,
+                service.y,
+                entry.x,
+                entry.y,
+                obstacles,  # type: ignore[arg-type]
+                block_touching_seams=True,
             )
             if not clear:
                 in_reach_wrong_or_pierce += 1
