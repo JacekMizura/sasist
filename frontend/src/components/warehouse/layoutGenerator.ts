@@ -343,7 +343,7 @@ export function buildRackFromTemplate(
   indexInRow: number,
   orientation: "horizontal" | "vertical",
   /** When 180, back-to-back: rack faces opposite aisle (second row in a pair). */
-  rotationDegrees?: 0 | 90 | 180,
+  rotationDegrees?: 0 | 90 | 180 | 270,
   /** When set, grid footprint uses these cell counts (building-based grid); else legacy cm→cells. */
   footprintCells?: { widthCells: number; heightCells: number }
 ): RackState {

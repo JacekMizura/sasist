@@ -80,6 +80,7 @@ import { DesignerToolbar } from "./WarehouseDesigner/DesignerToolbar";
 import { RoutingGraphLayer } from "./WarehouseDesigner/routing/RoutingGraphLayer";
 import { RoutingRoutesPanel } from "./WarehouseDesigner/routing/RoutingRoutesPanel";
 import { useRoutingGraph } from "./WarehouseDesigner/routing/useRoutingGraph";
+import { normalizeRotation } from "./WarehouseDesigner/rackServiceFace";
 import { preferOrthogonalCm } from "./WarehouseDesigner/routing/routingCanvasInteraction";
 import type { RoutingTool } from "./WarehouseDesigner/routing/routingLabels";
 import { confirmDeleteNodeMessage } from "./WarehouseDesigner/routing/routingDisplay";
@@ -1478,13 +1479,11 @@ export default function WarehouseDesigner() {
           show_label: typeof r.show_label === "boolean" ? r.show_label : undefined,
           rowPrefix: typeof (r as { row_prefix?: string }).row_prefix === "string" ? (r as { row_prefix: string }).row_prefix.trim() || undefined : typeof (r as { rowPrefix?: string }).rowPrefix === "string" ? (r as { rowPrefix: string }).rowPrefix.trim() || undefined : undefined,
           indexInRow: typeof (r as { index_in_row?: number }).index_in_row === "number" ? (r as { index_in_row: number }).index_in_row : typeof (r as { indexInRow?: number }).indexInRow === "number" ? (r as { indexInRow: number }).indexInRow : undefined,
-          rotationDegrees: (() => {
-            const raw = (r as { rotation_degrees?: unknown; rotationDegrees?: unknown }).rotation_degrees
+          rotationDegrees: normalizeRotation(
+            (r as { rotation_degrees?: unknown; rotationDegrees?: unknown }).rotation_degrees
               ?? (r as { rotationDegrees?: unknown }).rotationDegrees
-              ?? 0;
-            const n = Number(raw);
-            return n === 90 || n === 180 ? (n as 90 | 180) : 0;
-          })(),
+              ?? 0
+          ),
           serviceSide: String(
             (r as { service_side?: unknown; serviceSide?: unknown }).service_side
               ?? (r as { serviceSide?: unknown }).serviceSide
@@ -4066,6 +4065,11 @@ export default function WarehouseDesigner() {
                   accessPoints={routing.accessPoints}
                   locationAccess={routing.locationAccess}
                   showAccessDiagnostics={routing.showAccessDiagnostics}
+                  racks={layout.racks}
+                  selectedRackUuids={selectedRacks
+                    .map((r) => (typeof r.uuid === "string" ? r.uuid : ""))
+                    .filter(Boolean)}
+                  selectedLocationId={null}
                   cellPx={cellPx}
                   selectedNodeUuid={routingSelectedNode}
                   selectedEdgeUuid={routingSelectedEdge}

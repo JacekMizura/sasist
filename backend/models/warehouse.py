@@ -150,7 +150,7 @@ class Rack(Base, BaseModelMixin):
     template_id = Column(String(64), nullable=True)  # custom template UUID from frontend
     #: Local service face relative to unrotated rack frame: FRONT | BACK (never a world axis).
     service_side = Column(String(16), nullable=False, default="FRONT", server_default="FRONT")
-    #: Authoring rotation hint persisted across save/reload: 0 | 90 | 180.
+    #: Authoring rotation hint persisted across save/reload: 0 | 90 | 180 | 270 (CCW).
     rotation_degrees = Column(Integer, nullable=False, default=0, server_default="0")
 
     layout = relationship("WarehouseLayout", back_populates="racks")
