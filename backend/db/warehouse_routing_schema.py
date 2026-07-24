@@ -14,7 +14,7 @@ from .schema_introspection import ensure_model_table_from_orm, sync_model_schema
 
 logger = logging.getLogger(__name__)
 
-WAREHOUSE_ROUTING_SCHEMA_VERSION = "2026.07.23.routing.3"
+WAREHOUSE_ROUTING_SCHEMA_VERSION = "2026.07.24.location_access.1"
 
 
 def ensure_warehouse_routing_schema(engine: Engine) -> None:
@@ -22,6 +22,7 @@ def ensure_warehouse_routing_schema(engine: Engine) -> None:
         WarehouseRoutingAccessPoint,
         WarehouseRoutingEdge,
         WarehouseRoutingGraphMeta,
+        WarehouseRoutingLocationAccess,
         WarehouseRoutingNode,
     )
 
@@ -29,6 +30,7 @@ def ensure_warehouse_routing_schema(engine: Engine) -> None:
         WarehouseRoutingNode,
         WarehouseRoutingEdge,
         WarehouseRoutingAccessPoint,
+        WarehouseRoutingLocationAccess,
         WarehouseRoutingGraphMeta,
     ):
         ensure_model_table_from_orm(engine, model, log_prefix="schema.warehouse_routing")

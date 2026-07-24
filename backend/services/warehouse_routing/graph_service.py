@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 import json
+import logging
 from datetime import datetime
 from typing import Any, Optional
 from uuid import uuid4
 
 from sqlalchemy.orm import Session
+
+logger = logging.getLogger(__name__)
 
 from ...models.location import Location
 from ...models.warehouse_routing import (
@@ -333,5 +336,16 @@ def replace_graph(
     except Exception:
         db.rollback()
         raise
+
+    # After graph change: recompute AUTO location access (preserves MANUAL_OVERRIDE).
+    try:
+        from .location_access_resolver import recompute_location_access
+
+        recompute_location_access(db, wid, migrate_aps=True)
+        db.commit()
+    except Exception:
+        db.rollback()
+        # Graph save already succeeded; access recompute is best-effort
+        logger.exception("location_access recompute after replace_graph failed warehouse_id=%s", wid)
 
     return get_graph(db, wid)

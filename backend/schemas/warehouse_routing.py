@@ -148,3 +148,50 @@ class RoutingValidationResult(BaseModel):
     ok: bool
     operational_ready: bool = False
     issues: list[ValidationIssue] = Field(default_factory=list)
+
+
+class LocationAccessOut(BaseModel):
+    uuid: str
+    warehouse_id: int
+    location_id: int
+    binding_mode: str
+    status: str
+    edge_uuid: Optional[str] = None
+    t: Optional[float] = None
+    service_point_x_cm: Optional[float] = None
+    service_point_y_cm: Optional[float] = None
+    entry_x_cm: Optional[float] = None
+    entry_y_cm: Optional[float] = None
+    access_approach_m: Optional[float] = None
+    rack_id: Optional[int] = None
+    rack_uuid: Optional[str] = None
+    legacy_node_uuid: Optional[str] = None
+    graph_revision: Optional[int] = None
+
+
+class LocationAccessSummaryOut(BaseModel):
+    warehouse_id: int
+    total: int
+    by_status: dict[str, int] = Field(default_factory=dict)
+    by_mode: dict[str, int] = Field(default_factory=dict)
+
+
+class LocationAccessRecomputeOut(BaseModel):
+    warehouse_id: int
+    locations_total: int
+    graph_revision: int
+    layout_fingerprint: str
+    counts: dict[str, int] = Field(default_factory=dict)
+
+
+class LocationAccessOverrideRequest(BaseModel):
+    edge_uuid: Optional[str] = None
+    t: Optional[float] = None
+    node_uuid: Optional[str] = None
+
+
+class LocationRouteRequest(BaseModel):
+    start_location_id: int
+    destination_location_id: int
+    process_type: Optional[str] = None
+    transport_type: Optional[str] = None

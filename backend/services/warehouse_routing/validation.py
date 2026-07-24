@@ -27,6 +27,8 @@ _OPERATIONAL_ISSUE_CODES = frozenset(
         "MISSING_PICKING_START",
         "MISSING_PACKING",
         "LOCATIONS_WITHOUT_ACCESS",
+        "LOCATIONS_ACCESS_UNREACHABLE",
+        "LOCATIONS_ACCESS_REVIEW",
         "START_CANNOT_REACH_PACKING",
     }
 )
@@ -247,22 +249,81 @@ def validate_graph(db: Session, warehouse_id: int) -> RoutingValidationResult:
                 )
             )
 
-    loc_ids_with_ap = {int(a.location_id) for a in aps}
+    # Location Access Foundation — AUTO/OVERRIDE bindings (not mass Access Point assignment)
     locs = (
         db.query(Location.id, Location.name)
         .filter(Location.warehouse_id == wid, Location.is_active.is_(True))
         .limit(5000)
         .all()
     )
-    missing = [loc for loc in locs if int(loc.id) not in loc_ids_with_ap]
-    if missing:
-        issues.append(
-            ValidationIssue(
-                code="LOCATIONS_WITHOUT_ACCESS",
-                severity="info",
-                message=f"Lokalizacje — {len(missing)} wymaga przypisania",
-            )
+    try:
+        from ...models.warehouse_routing import WarehouseRoutingLocationAccess
+        from .location_access_resolver import (
+            STATUS_OK,
+            STATUS_REVIEW,
+            STATUS_UNREACHABLE,
+            STATUS_NO_RACK,
+            STATUS_NO_GRAPH,
+            STATUS_LEGACY_NODE,
         )
+
+        access_rows = (
+            db.query(WarehouseRoutingLocationAccess)
+            .filter(WarehouseRoutingLocationAccess.warehouse_id == wid)
+            .all()
+        )
+
+        ok_n = sum(1 for r in access_rows if r.status in (STATUS_OK, STATUS_LEGACY_NODE))
+        review_n = sum(1 for r in access_rows if r.status == STATUS_REVIEW)
+        bad_n = sum(
+            1
+            for r in access_rows
+            if r.status in (STATUS_UNREACHABLE, STATUS_NO_RACK, STATUS_NO_GRAPH)
+        )
+        if access_rows:
+            issues.append(
+                ValidationIssue(
+                    code="LOCATIONS_ACCESS_OK",
+                    severity="info",
+                    message=f"Lokalizacje z dostępem do trasy: {ok_n}",
+                )
+            )
+        if review_n:
+            issues.append(
+                ValidationIssue(
+                    code="LOCATIONS_ACCESS_REVIEW",
+                    severity="info",
+                    message=f"Lokalizacje do sprawdzenia: {review_n}",
+                )
+            )
+        if bad_n:
+            issues.append(
+                ValidationIssue(
+                    code="LOCATIONS_ACCESS_UNREACHABLE",
+                    severity="info",
+                    message=f"Lokalizacje bez drogi w zasięgu: {bad_n}",
+                )
+            )
+        elif not access_rows and locs:
+            issues.append(
+                ValidationIssue(
+                    code="LOCATIONS_WITHOUT_ACCESS",
+                    severity="info",
+                    message="Narysuj trasy przy regałach — dostęp lokalizacji wyliczy się automatycznie.",
+                )
+            )
+    except Exception:
+        # Keep validation resilient if access table not yet migrated
+        loc_ids_with_ap = {int(a.location_id) for a in aps}
+        missing = [loc for loc in locs if int(loc.id) not in loc_ids_with_ap]
+        if missing:
+            issues.append(
+                ValidationIssue(
+                    code="LOCATIONS_WITHOUT_ACCESS",
+                    severity="info",
+                    message="Narysuj trasy przy regałach — dostęp lokalizacji wyliczy się automatycznie.",
+                )
+            )
 
     errors = [i for i in issues if i.severity == "error"]
     structural_ok = len(errors) == 0

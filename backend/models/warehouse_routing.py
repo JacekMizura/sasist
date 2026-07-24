@@ -128,6 +128,61 @@ class WarehouseRoutingAccessPoint(Base, BaseModelMixin):
     location = relationship("Location", foreign_keys=[location_id])
 
 
+class WarehouseRoutingLocationAccess(Base, BaseModelMixin):
+    """
+    AUTO or MANUAL_OVERRIDE binding: Location → virtual entry on a road edge (edge_uuid + t).
+
+    Location→Rack is NOT stored as SSOT here — resolve via Bin.location_uuid → Rack.
+    ``rack_id`` / ``rack_uuid`` are diagnostics snapshots from last resolve.
+    """
+
+    __tablename__ = "warehouse_routing_location_access"
+    __table_args__ = (
+        UniqueConstraint("uuid", name="uq_warehouse_routing_location_access_uuid"),
+        UniqueConstraint(
+            "warehouse_id",
+            "location_id",
+            name="uq_warehouse_routing_location_access_wh_loc",
+        ),
+    )
+
+    uuid = Column(String(36), nullable=False, index=True)
+    warehouse_id = Column(
+        Integer,
+        ForeignKey("warehouses.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    location_id = Column(
+        Integer,
+        ForeignKey("locations.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    # AUTO | MANUAL_OVERRIDE
+    binding_mode = Column(String(32), nullable=False, default="AUTO")
+    # OK | REVIEW | UNREACHABLE | NO_RACK | NO_GRAPH | LEGACY_NODE
+    status = Column(String(32), nullable=False, default="UNREACHABLE")
+    edge_uuid = Column(String(36), nullable=True, index=True)
+    t = Column(Float, nullable=True)  # 0..1 along edge
+    service_point_x_cm = Column(Float, nullable=True)
+    service_point_y_cm = Column(Float, nullable=True)
+    entry_x_cm = Column(Float, nullable=True)
+    entry_y_cm = Column(Float, nullable=True)
+    access_approach_m = Column(Float, nullable=True)
+    # Snapshot only — SSOT remains Bin.location_uuid → Rack
+    rack_id = Column(Integer, nullable=True, index=True)
+    rack_uuid = Column(String(64), nullable=True, index=True)
+    # For MANUAL_OVERRIDE migrated from WarehouseRoutingAccessPoint
+    legacy_node_uuid = Column(String(36), nullable=True, index=True)
+    graph_revision = Column(Integer, nullable=True)
+    layout_fingerprint = Column(String(64), nullable=True)
+    meta_json = Column(Text, nullable=True)
+
+    warehouse = relationship("Warehouse", foreign_keys=[warehouse_id])
+    location = relationship("Location", foreign_keys=[location_id])
+
+
 class WarehouseRoutingGraphMeta(Base):
     """Optimistic concurrency token for authored routing graph (per warehouse)."""
 
