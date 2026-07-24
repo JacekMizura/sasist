@@ -1209,6 +1209,9 @@ try:
     ensure_stock_disposition_stage2_columns(engine)
     ensure_product_sales_offers_schema(engine)
     ensure_warehouse_routing_schema(engine)
+    from .db.warehouse_rack_passage_schema import ensure_warehouse_rack_passage_schema
+
+    ensure_warehouse_rack_passage_schema(engine)
     from .db.offer_stock_pool_schema import ensure_offer_stock_pool_schema
 
     ensure_offer_stock_pool_schema(engine)
@@ -1674,6 +1677,9 @@ def _upgrade_schema_background() -> None:
         ensure_stock_disposition_stage2_columns(engine)
         ensure_product_sales_offers_schema(engine)
         ensure_warehouse_routing_schema(engine)
+        from .db.warehouse_rack_passage_schema import ensure_warehouse_rack_passage_schema
+
+        ensure_warehouse_rack_passage_schema(engine)
         from .db.offer_stock_pool_schema import ensure_offer_stock_pool_schema
 
         ensure_offer_stock_pool_schema(engine)

@@ -8,6 +8,7 @@ from .warehouse import (  # noqa: F401 - layout rack/bin/aisle tables required f
     Warehouse,
     WarehouseLayout,
     Rack,
+    WarehouseRackPassage,
     Aisle,
     Bin,
     StorageLocation,

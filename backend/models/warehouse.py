@@ -7,7 +7,7 @@ Rack: linked to layout, X/Y coordinates, orientation, number of levels.
 Bin: smallest unit (location); label (e.g. A-01-01), volume, current load.
 """
 
-from sqlalchemy import Column, String, ForeignKey, Integer, Float, Text, Boolean
+from sqlalchemy import Boolean, Column, Float, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import relationship
 from ..database import Base
 from .base import BaseModelMixin
@@ -155,6 +155,50 @@ class Rack(Base, BaseModelMixin):
 
     layout = relationship("WarehouseLayout", back_populates="racks")
     bins = relationship("Bin", back_populates="rack", cascade="all, delete-orphan")
+    passages = relationship(
+        "WarehouseRackPassage",
+        back_populates="rack",
+        cascade="all, delete-orphan",
+    )
+
+
+class WarehouseRackPassage(Base, BaseModelMixin):
+    """
+    Physical opening through a rack footprint (drive/walk-under).
+
+    Geometry is local to the rack: offset_along_cm + width_cm along the rack
+    segment axis; opening spans the full depth. Move/rotate of the rack moves
+    the world-space hole via the rack footprint — no duplicated world coords.
+    """
+
+    __tablename__ = "warehouse_rack_passages"
+    __table_args__ = (
+        UniqueConstraint("uuid", name="uq_warehouse_rack_passages_uuid"),
+    )
+
+    uuid = Column(String(36), nullable=False, index=True)
+    warehouse_id = Column(
+        Integer,
+        ForeignKey("warehouses.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    rack_id = Column(
+        Integer,
+        ForeignKey("warehouse_layout_racks.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    #: Denormalized snapshot of Rack.uuid for stable identity across saves.
+    rack_uuid = Column(String(64), nullable=True, index=True)
+    offset_along_cm = Column(Float, nullable=False, default=0.0)
+    width_cm = Column(Float, nullable=False, default=100.0)
+    #: Optional SSOT clearance; NULL = derive or UNKNOWN (never invent).
+    clearance_height_cm = Column(Float, nullable=True)
+    enabled = Column(Boolean, nullable=False, default=True)
+
+    rack = relationship("Rack", back_populates="passages")
+    warehouse = relationship("Warehouse", foreign_keys=[warehouse_id])
 
 
 class Aisle(Base, BaseModelMixin):
