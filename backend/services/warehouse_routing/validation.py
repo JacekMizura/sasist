@@ -31,6 +31,7 @@ _OPERATIONAL_ISSUE_CODES = frozenset(
         "LOCATIONS_ACCESS_REVIEW",
         "LOCATIONS_ACCESS_OVERRIDE_BROKEN",
         "START_CANNOT_REACH_PACKING",
+        "EDGES_THROUGH_OBSTACLES",
     }
 )
 
@@ -249,6 +250,35 @@ def validate_graph(db: Session, warehouse_id: int) -> RoutingValidationResult:
                     ref_uuid=ap.uuid,
                 )
             )
+
+    # Soft physical collision — detect only; never blocks save (ok stays structural).
+    try:
+        from .physical_collision import (
+            edge_uuids_blocked_by_obstacles,
+            load_warehouse_rack_obstacles,
+        )
+
+        obstacles = load_warehouse_rack_obstacles(db, wid)
+        if obstacles and edges:
+            nodes_by_uuid = {n.uuid: n for n in nodes}
+            blocked = edge_uuids_blocked_by_obstacles(edges, nodes_by_uuid, obstacles)
+            if blocked:
+                n = len(blocked)
+                msg = (
+                    "1 odcinek prowadzi przez regał lub inną przeszkodę."
+                    if n == 1
+                    else f"{n} odcinków prowadzi przez regały lub inne przeszkody."
+                )
+                issues.append(
+                    ValidationIssue(
+                        code="EDGES_THROUGH_OBSTACLES",
+                        severity="warning",
+                        message=msg,
+                        ref_uuids=blocked,
+                    )
+                )
+    except Exception:
+        pass
 
     # Location Access Foundation — AUTO/OVERRIDE bindings (not mass Access Point assignment)
     locs = (

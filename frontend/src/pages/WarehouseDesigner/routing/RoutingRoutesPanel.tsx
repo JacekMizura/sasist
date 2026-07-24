@@ -32,6 +32,8 @@ type Props = {
   locations: { id: number; name: string }[];
   highlightOrphanUuids: string[];
   setHighlightOrphanUuids: (ids: string[]) => void;
+  highlightInvalidEdgeUuids?: string[];
+  setHighlightInvalidEdgeUuids?: (ids: string[]) => void;
 };
 
 export function deleteSelectedNode(
@@ -68,6 +70,8 @@ export function RoutingRoutesPanel({
   locations,
   highlightOrphanUuids,
   setHighlightOrphanUuids,
+  highlightInvalidEdgeUuids = [],
+  setHighlightInvalidEdgeUuids,
 }: Props) {
   const [processType, setProcessType] = useState("");
   const [transportType, setTransportType] = useState("");
@@ -255,6 +259,23 @@ export function RoutingRoutesPanel({
                             </button>
                           </div>
                         )}
+                      {i.code === "EDGES_THROUGH_OBSTACLES" &&
+                        (i.ref_uuids?.length ?? 0) > 0 &&
+                        setHighlightInvalidEdgeUuids && (
+                          <div className="mt-1 flex flex-wrap gap-2">
+                            <button
+                              type="button"
+                              className="rounded border border-rose-200 bg-rose-50 px-2 py-0.5 text-[10px] font-semibold text-rose-800"
+                              onClick={() => {
+                                setHighlightInvalidEdgeUuids(i.ref_uuids ?? []);
+                                const first = i.ref_uuids?.[0];
+                                if (first) setSelectedEdgeUuid(first);
+                              }}
+                            >
+                              Pokaż na mapie
+                            </button>
+                          </div>
+                        )}
                     </li>
                   ))}
                 </ul>
@@ -265,6 +286,15 @@ export function RoutingRoutesPanel({
                     onClick={() => setHighlightOrphanUuids([])}
                   >
                     Wyłącz podświetlenie
+                  </button>
+                )}
+                {highlightInvalidEdgeUuids.length > 0 && setHighlightInvalidEdgeUuids && (
+                  <button
+                    type="button"
+                    className="ml-2 text-[10px] underline"
+                    onClick={() => setHighlightInvalidEdgeUuids([])}
+                  >
+                    Wyłącz podświetlenie odcinków
                   </button>
                 )}
               </div>

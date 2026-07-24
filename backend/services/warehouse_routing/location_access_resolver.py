@@ -153,6 +153,8 @@ def resolve_auto_for_location(
     rack: Optional[Rack] = None,
     edges: Optional[list[tuple[str, tuple[float, float], tuple[float, float]]]] = None,
     max_reach_m: float = DEFAULT_MAX_ACCESS_REACH_M,
+    obstacles: Optional[list] = None,
+    blocked_edge_uuids: Optional[set[str]] = None,
 ) -> ResolveResult:
     lid = int(location.id)
     link = resolve_location_rack_link(db, location)
@@ -184,10 +186,44 @@ def resolve_auto_for_location(
             rack_uuid=getattr(rack, "uuid", None),
         )
 
+    from .physical_collision import (
+        edge_uuids_blocked_by_obstacles,
+        load_warehouse_rack_obstacles,
+    )
+    from ...models.warehouse_routing import WarehouseRoutingEdge, WarehouseRoutingNode
+
+    obs = obstacles
+    if obs is None:
+        obs = load_warehouse_rack_obstacles(db, warehouse_id)
+    blocked = blocked_edge_uuids
+    if blocked is None and obs:
+        nodes = {
+            n.uuid: n
+            for n in db.query(WarehouseRoutingNode)
+            .filter(WarehouseRoutingNode.warehouse_id == int(warehouse_id))
+            .all()
+        }
+        edge_rows = (
+            db.query(WarehouseRoutingEdge)
+            .filter(WarehouseRoutingEdge.warehouse_id == int(warehouse_id))
+            .all()
+        )
+        blocked = set(edge_uuids_blocked_by_obstacles(edge_rows, nodes, obs))
+    elif blocked is None:
+        blocked = set()
+
     S = service_edge_point_cm(rack, float(cx), float(cy))
     n = world_service_normal(rack)
     fp = rack_footprint_cm(rack)
-    best, reason = select_best_edge_for_service_point(S, n, fp, edge_list, max_reach_m=max_reach_m)
+    best, reason = select_best_edge_for_service_point(
+        S,
+        n,
+        fp,
+        edge_list,
+        max_reach_m=max_reach_m,
+        obstacles=obs,
+        blocked_edge_uuids=blocked,
+    )
     if best is None:
         status = STATUS_BLOCKED if reason == "BLOCKED" else STATUS_UNREACHABLE
         return ResolveResult(
@@ -399,6 +435,24 @@ def recompute_location_access(
         .filter(WarehouseRoutingNode.warehouse_id == wid)
         .all()
     }
+    from .physical_collision import (
+        edge_uuids_blocked_by_obstacles,
+        load_warehouse_rack_obstacles,
+    )
+
+    obstacles = load_warehouse_rack_obstacles(db, wid)
+    nodes_for_block = {
+        n.uuid: n
+        for n in db.query(WarehouseRoutingNode)
+        .filter(WarehouseRoutingNode.warehouse_id == wid)
+        .all()
+    }
+    edge_rows = (
+        db.query(WarehouseRoutingEdge)
+        .filter(WarehouseRoutingEdge.warehouse_id == wid)
+        .all()
+    )
+    blocked_edge_uuids = set(edge_uuids_blocked_by_obstacles(edge_rows, nodes_for_block, obstacles))
     fp = _layout_fingerprint(db, wid)
     rev = _graph_revision(db, wid)
 
@@ -437,7 +491,14 @@ def recompute_location_access(
         link = links.get(lid)
         rack = racks.get(link.rack_id) if link else None
         result = resolve_auto_for_location(
-            db, wid, loc, rack=rack, edges=edges, max_reach_m=max_reach_m
+            db,
+            wid,
+            loc,
+            rack=rack,
+            edges=edges,
+            max_reach_m=max_reach_m,
+            obstacles=obstacles,
+            blocked_edge_uuids=blocked_edge_uuids,
         )
         _upsert_row(db, wid, result, graph_revision=rev, layout_fingerprint=fp, existing=existing)
         counts["AUTO"] += 1

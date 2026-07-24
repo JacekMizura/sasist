@@ -20,14 +20,18 @@ type Props = {
   selectedEdgeUuid?: string | null;
   highlightNodeUuids?: string[];
   highlightEdgeUuids?: string[];
+  /** Soft physical-collision diagnostics (rose dashed) — does not block save. */
+  diagnosticEdgeUuids?: string[];
   draftFromUuid?: string | null;
   draftCursorCm?: { x: number; y: number } | null;
+  /** Orthogonal guide while drafting (prefer 0/90). */
+  draftOrthoGuide?: "none" | "h" | "v" | null;
   /** When true (select tool), nodes can be dragged. */
   allowNodeDrag?: boolean;
   onNodeClick?: (uuid: string) => void;
   onEdgeClick?: (uuid: string, cm?: { x: number; y: number }) => void;
-  onCanvasClickCm?: (x: number, y: number) => void;
-  onCanvasMoveCm?: (x: number, y: number) => void;
+  onCanvasClickCm?: (x: number, y: number, opts?: { freeAngle?: boolean }) => void;
+  onCanvasMoveCm?: (x: number, y: number, opts?: { freeAngle?: boolean }) => void;
   onNodeDrag?: (uuid: string, xCm: number, yCm: number) => void;
   onNodeDragEnd?: (uuid: string, xCm: number, yCm: number) => void;
   interactive?: boolean;
@@ -82,8 +86,10 @@ export function RoutingGraphLayer({
   selectedEdgeUuid,
   highlightNodeUuids = [],
   highlightEdgeUuids = [],
+  diagnosticEdgeUuids = [],
   draftFromUuid,
   draftCursorCm,
+  draftOrthoGuide = null,
   allowNodeDrag = false,
   onNodeClick,
   onEdgeClick,
@@ -96,6 +102,7 @@ export function RoutingGraphLayer({
   const byUuid = new Map(nodes.map((n) => [n.uuid, n]));
   const hiNodes = new Set(highlightNodeUuids);
   const hiEdges = new Set(highlightEdgeUuids);
+  const diagEdges = new Set(diagnosticEdgeUuids);
   const scale = cellPx / GRID_UNIT_CM;
   const draftFrom = draftFromUuid ? byUuid.get(draftFromUuid) : null;
 
@@ -152,7 +159,7 @@ export function RoutingGraphLayer({
             const svg = resolveSvg(e.currentTarget);
             if (!svg) return;
             const cm = clientToCm(svg, e.clientX, e.clientY, scale);
-            onCanvasMoveCm?.(cm.x, cm.y);
+            onCanvasMoveCm?.(cm.x, cm.y, { freeAngle: e.shiftKey });
           }}
           onClick={(e) => {
             if (dragRef.current?.moved) return;
@@ -162,7 +169,7 @@ export function RoutingGraphLayer({
             if (hit.kind !== "empty") return;
             const raw = clientToCm(svg, e.clientX, e.clientY, scale);
             const snapped = snapRoutingCm(raw.x, raw.y);
-            onCanvasClickCm(snapped.x, snapped.y);
+            onCanvasClickCm(snapped.x, snapped.y, { freeAngle: e.shiftKey });
           }}
         />
       )}
@@ -177,6 +184,7 @@ export function RoutingGraphLayer({
         const b =
           dragPreview?.uuid === b0.uuid ? { ...b0, x: dragPreview.x, y: dragPreview.y } : b0;
         const active = selectedEdgeUuid === e.uuid || hiEdges.has(e.uuid);
+        const diagnostic = diagEdges.has(e.uuid);
         const hovered = hoverEdgeUuid === e.uuid && !hoverNodeUuid;
         return (
           <g key={e.uuid}>
@@ -213,9 +221,17 @@ export function RoutingGraphLayer({
               y1={a.y * scale}
               x2={b.x * scale}
               y2={b.y * scale}
-              stroke={active || hovered ? "#0ea5e9" : e.enabled ? "#64748b" : "#cbd5e1"}
-              strokeWidth={active || hovered ? 4 : 2.5}
-              strokeDasharray={e.enabled ? undefined : "6 4"}
+              stroke={
+                diagnostic
+                  ? "#e11d48"
+                  : active || hovered
+                    ? "#0ea5e9"
+                    : e.enabled
+                      ? "#64748b"
+                      : "#cbd5e1"
+              }
+              strokeWidth={diagnostic || active || hovered ? 4 : 2.5}
+              strokeDasharray={diagnostic ? "7 4" : e.enabled ? undefined : "6 4"}
               opacity={0.9}
               style={{ pointerEvents: "none" }}
             />
@@ -233,16 +249,47 @@ export function RoutingGraphLayer({
       })}
 
       {draftFrom && draftCursorCm && (
-        <line
-          x1={draftFrom.x * scale}
-          y1={draftFrom.y * scale}
-          x2={draftCursorCm.x * scale}
-          y2={draftCursorCm.y * scale}
-          stroke="#38bdf8"
-          strokeWidth={2}
-          strokeDasharray="4 3"
-          style={{ pointerEvents: "none" }}
-        />
+        <>
+          {draftOrthoGuide === "h" || draftOrthoGuide === "v" ? (
+            <line
+              x1={
+                draftOrthoGuide === "h"
+                  ? Math.min(draftFrom.x, draftCursorCm.x) * scale - 40
+                  : draftFrom.x * scale
+              }
+              y1={
+                draftOrthoGuide === "v"
+                  ? Math.min(draftFrom.y, draftCursorCm.y) * scale - 40
+                  : draftFrom.y * scale
+              }
+              x2={
+                draftOrthoGuide === "h"
+                  ? Math.max(draftFrom.x, draftCursorCm.x) * scale + 40
+                  : draftFrom.x * scale
+              }
+              y2={
+                draftOrthoGuide === "v"
+                  ? Math.max(draftFrom.y, draftCursorCm.y) * scale + 40
+                  : draftFrom.y * scale
+              }
+              stroke="#94a3b8"
+              strokeWidth={1}
+              strokeDasharray="2 4"
+              opacity={0.7}
+              style={{ pointerEvents: "none" }}
+            />
+          ) : null}
+          <line
+            x1={draftFrom.x * scale}
+            y1={draftFrom.y * scale}
+            x2={draftCursorCm.x * scale}
+            y2={draftCursorCm.y * scale}
+            stroke="#38bdf8"
+            strokeWidth={2}
+            strokeDasharray="4 3"
+            style={{ pointerEvents: "none" }}
+          />
+        </>
       )}
 
       {showAccessDiagnostics &&

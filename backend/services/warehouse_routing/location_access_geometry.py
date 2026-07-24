@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
-from typing import Optional
+from typing import Optional, Sequence
 
 from ...models.warehouse import GRID_UNIT_CM, Rack
 from .geometry import distance_m_between_cm
@@ -239,6 +239,8 @@ def select_best_edge_for_service_point(
     edges: list[tuple[str, tuple[float, float], tuple[float, float]]],
     *,
     max_reach_m: float = DEFAULT_MAX_ACCESS_REACH_M,
+    obstacles: Optional[Sequence[object]] = None,
+    blocked_edge_uuids: Optional[set[str]] = None,
 ) -> tuple[Optional[EdgeCandidate], str]:
     """
     Pick best road edge for access.
@@ -246,18 +248,34 @@ def select_best_edge_for_service_point(
     Returns (candidate_or_None, reason) where reason is:
     OK | UNREACHABLE | BLOCKED
     - UNREACHABLE: nothing within reach on service half-plane
-    - BLOCKED: in-reach candidates exist but all pierce footprint (or only wrong-side beyond)
+    - BLOCKED: in-reach candidates exist but all pierce solid obstacles (or only wrong-side beyond)
+
+    When ``obstacles`` is provided, approach S→P uses physical_collision SSOT
+    (footprint minus enabled RackPassage). Otherwise falls back to AABB interior pierce.
+    Edges in ``blocked_edge_uuids`` are never AUTO candidates (invalid physical roads).
     """
+    from .physical_collision import segment_is_physically_clear
+
+    blocked_edges = blocked_edge_uuids or set()
     in_reach_wrong_or_pierce = 0
     candidates: list[EdgeCandidate] = []
     for edge_uuid, a, b in edges:
+        if edge_uuid in blocked_edges:
+            continue
         t, entry, approach = project_point_to_segment(service.x, service.y, a[0], a[1], b[0], b[1])
         if approach > max_reach_m:
             continue
         if not half_plane_ok(service, normal, entry):
             in_reach_wrong_or_pierce += 1
             continue
-        if footprint.segment_crosses_interior(service.x, service.y, entry.x, entry.y):
+        if obstacles is not None:
+            clear = segment_is_physically_clear(
+                service.x, service.y, entry.x, entry.y, obstacles  # type: ignore[arg-type]
+            )
+            if not clear:
+                in_reach_wrong_or_pierce += 1
+                continue
+        elif footprint.segment_crosses_interior(service.x, service.y, entry.x, entry.y):
             in_reach_wrong_or_pierce += 1
             continue
         ortho = orthogonality_score(service, entry, normal)
