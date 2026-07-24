@@ -17,7 +17,7 @@ from ..models.product import Product
 from ..models.inventory import Inventory
 from ..models.location import Location
 from ..models.warehouse import Warehouse
-from ..domain.simulation import get_special_locations_xy, distance_point_to_point_cm
+from ..domain.layout_geometry import get_special_locations_xy, distance_point_to_point_cm
 
 
 def _product_ids_for_filters(

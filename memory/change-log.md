@@ -1,3 +1,18 @@
+## 2026-07-24 — HOTFIX: Railway /healthz 503 (dangling Stage2 import)
+
+- ROOT: `slotting_service` → `from ..domain.simulation import get_special_locations_xy, distance_point_to_point_cm` po usunięciu `warehouse_graph_service` w 0ae9e47d.
+- FIX: helpery w `backend/domain/layout_geometry.py` (Location + Euclidean; zero WarehouseNode/Edge).
+- Audit dangling Stage2: tylko te 2 symbole żyły w runtime; FE deleted modules bez dangling imports.
+- Smoke: `import backend.main` OK; `run_server.py` → GET /healthz HTTP 200; 130/130 router modules import OK.
+- Regression: `backend/tests/test_backend_startup_import.py`. **No push. Bez Etapu 3.**
+
+## 2026-07-23 — Routing Graph: fix rysowania odcinków + sticky Wybierz (audit)
+
+- ROOT draw: stale React state w addEdge → `appendDrawClick` atomowo.
+- engine.py: **wycofane** (tylko FE humanize wystarczy; bez zmiany logiki routingu).
+- Sticky Wybierz, split przecięcia, test map-first, orphan cleanup.
+- FINAL AUDIT tests PASS. Lokalny commit; **no push. Bez Etapu 3.**
+
 ## 2026-07-23 — Routing Graph: UX polish + delete bugfix (bez Etapu 3)
 
 - Delete punktu: widoczny CTA „Usuń punkt”, Delete/Backspace, dirty+save+reload persistence test.
