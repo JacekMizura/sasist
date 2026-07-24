@@ -412,7 +412,9 @@ export function buildRackFromTemplate(
     binNamingType: template.binNamingType,
     templateId: template.templateId,
     ...(template.level_max_load_kg != null ? { level_max_load_kg: template.level_max_load_kg } : {}),
-    ...(rotationDegrees != null ? { rotationDegrees } : {}),
+    ...(rotationDegrees != null
+      ? { rotationDegrees, serviceSide: "FRONT" as const }
+      : { rotationDegrees: 0 as const, serviceSide: "FRONT" as const }),
   } as RackState;
 }
 

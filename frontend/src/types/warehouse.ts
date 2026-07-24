@@ -195,8 +195,8 @@ export type RackState = {
   /** Dynamic row label: prefix (e.g. "G") and index in that row (1,2,3…). Display label = rowPrefix.indexInRow (e.g. G.1). */
   rowPrefix?: string;
   indexInRow?: number;
-  /** When 90, rack is placed in a vertical row and should be drawn rotated 90° (footprint already swapped in width/height). When 180, back-to-back row: face opposite aisle. */
-  rotationDegrees?: 0 | 90 | 180;
+  /** When 90/270, rack faces ±Y aisle; with serviceSide FRONT/BACK. Local SSOT for Location Access. */
+  rotationDegrees?: 0 | 90 | 180 | 270;
   /** Local service face: FRONT | BACK (world normal derived with orientation + rotationDegrees). */
   serviceSide?: "FRONT" | "BACK";
   /** Physical openings through rack footprint (drive/walk-under). Local to rack. */

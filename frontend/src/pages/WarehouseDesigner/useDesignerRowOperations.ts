@@ -34,6 +34,72 @@ import {
 } from "../../components/warehouse/warehouseUtils";
 import { layoutCmToCellsX, layoutCmToCellsY } from "../../utils/warehouseGridMetrics";
 import type { Dispatch, SetStateAction } from "react";
+import {
+  backToBackHorizontalFaces,
+  defaultHorizontalRowFace,
+  faceForCardinal,
+  type ServiceFace,
+} from "./rackServiceFace";
+
+/** Infer service face for a new horizontal row from existing row bands in layout. */
+function inferHorizontalRowFace(
+  prev: LayoutState,
+  newMinY: number,
+  newMaxY: number,
+  newMinX: number,
+  newMaxX: number
+): ServiceFace {
+  type Band = { minY: number; maxY: number; minX: number; maxX: number; cy: number };
+  const bands: Band[] = [];
+  for (const rc of prev.row_containers ?? []) {
+    const slots = rc.slots ?? [];
+    if (!slots.length) continue;
+    let minX = Infinity,
+      maxX = -Infinity,
+      minY = Infinity,
+      maxY = -Infinity;
+    for (const s of slots) {
+      minX = Math.min(minX, s.x);
+      maxX = Math.max(maxX, s.x + s.w);
+      minY = Math.min(minY, s.y);
+      maxY = Math.max(maxY, s.y + s.h);
+    }
+    if (!Number.isFinite(minX)) continue;
+    const overlap = Math.max(0, Math.min(newMaxX, maxX) - Math.max(newMinX, minX));
+    const span = Math.min(Math.max(1, newMaxX - newMinX), Math.max(1, maxX - minX));
+    if (overlap / span >= 0.25) {
+      bands.push({ minY, maxY, minX, maxX, cy: (minY + maxY) / 2 });
+    }
+  }
+  const newCy = (newMinY + newMaxY) / 2;
+  for (const b of bands) {
+    if (b.maxY <= newMinY + 1 && newMinY - b.maxY <= 1) {
+      return faceForCardinal("SOUTH", "vertical");
+    }
+    if (newMaxY <= b.minY + 1 && b.minY - newMaxY <= 1) {
+      return faceForCardinal("NORTH", "vertical");
+    }
+  }
+  if (!bands.length) return defaultHorizontalRowFace();
+  const north = bands.filter((b) => b.cy < newCy).sort((a, b) => b.cy - a.cy)[0];
+  const south = bands.filter((b) => b.cy > newCy).sort((a, b) => a.cy - b.cy)[0];
+  if (north && !south) return faceForCardinal("NORTH", "vertical");
+  if (south && !north) return faceForCardinal("SOUTH", "vertical");
+  if (north && south) {
+    const gapN = newMinY - north.maxY;
+    const gapS = south.minY - newMaxY;
+    return gapS <= gapN ? faceForCardinal("SOUTH", "vertical") : faceForCardinal("NORTH", "vertical");
+  }
+  return defaultHorizontalRowFace();
+}
+
+function applyFaceToRack(rack: RackState, face: ServiceFace): RackState {
+  return {
+    ...rack,
+    rotationDegrees: face.rotationDegrees,
+    serviceSide: face.serviceSide,
+  };
+}
 
 /** Horizontal template row: same cursor+step model as preview / empty row / catalog stamp (not span/greedy). */
 function appendHorizontalRowWithTemplateFromCursor(
@@ -46,7 +112,8 @@ function appendHorizontalRowWithTemplateFromCursor(
   bin_direction: "LTR" | "RTL",
   defaultRackType: RackType,
   idSuffix: string,
-  rowGapCm: number
+  rowGapCm: number,
+  serviceFace?: ServiceFace
 ): LayoutState | null {
   const spec = getCatalogItemSpec(item);
   const cellW = layoutCmToCellsX(prev, spec.width_cm);
@@ -65,6 +132,11 @@ function appendHorizontalRowWithTemplateFromCursor(
       rc.slots.some((s) => rectsOverlap(rect, { x: s.x, y: s.y, width: s.w, height: s.h }))
     )) return null;
   }
+  const alongMin = Math.min(...along);
+  const alongMax = Math.max(...along) + cellW;
+  const face =
+    serviceFace ??
+    inferHorizontalRowFace(prev, yAnchor, yAnchor + cellH, alongMin, alongMax);
   const id = `row-${Date.now()}-${Math.random().toString(36).slice(2, 9)}${idSuffix}`;
   const prefix = normalizeRowPrefixLetters(rowPrefix);
   const orientation: "horizontal" = "horizontal";
@@ -112,34 +184,39 @@ function appendHorizontalRowWithTemplateFromCursor(
       spec.indexPadding,
       spec.startIndex
     );
-    newRacks.push({
-      uuid: rackUuid,
-      rack_type: resolvedRackType,
-      x,
-      y: yAnchor,
-      width: cellW,
-      height: cellH,
-      orientation: "vertical",
-      levels: lc.length,
-      bins_per_level: lc[0]?.locations ?? spec.bins_per_level,
-      levelConfig: lc,
-      length_cm: spec.depth_cm,
-      width_cm: spec.width_cm,
-      height_cm: spec.height_cm,
-      aisle_letter: spec.aisle_letter,
-      rack_index: nextRackIndex,
-      bins,
-      rackLevels: binsToLevels(bins),
-      color: rackColor,
-      name: rackLabel,
-      rowPrefix: prefix,
-      indexInRow,
-      ...(spec.addressPattern != null ? { addressPattern: spec.addressPattern } : {}),
-      ...(spec.sectionStartIndex != null ? { sectionStartIndex: spec.sectionStartIndex } : {}),
-      ...(spec.binNamingType != null ? { binNamingType: spec.binNamingType } : {}),
-      ...(item.type === "custom" ? { templateId: item.template.id } : {}),
-      ...(spec.level_max_load_kg != null ? { level_max_load_kg: spec.level_max_load_kg } : {}),
-    } as RackState);
+    newRacks.push(
+      applyFaceToRack(
+        {
+          uuid: rackUuid,
+          rack_type: resolvedRackType,
+          x,
+          y: yAnchor,
+          width: cellW,
+          height: cellH,
+          orientation: "vertical",
+          levels: lc.length,
+          bins_per_level: lc[0]?.locations ?? spec.bins_per_level,
+          levelConfig: lc,
+          length_cm: spec.depth_cm,
+          width_cm: spec.width_cm,
+          height_cm: spec.height_cm,
+          aisle_letter: spec.aisle_letter,
+          rack_index: nextRackIndex,
+          bins,
+          rackLevels: binsToLevels(bins),
+          color: rackColor,
+          name: rackLabel,
+          rowPrefix: prefix,
+          indexInRow,
+          ...(spec.addressPattern != null ? { addressPattern: spec.addressPattern } : {}),
+          ...(spec.sectionStartIndex != null ? { sectionStartIndex: spec.sectionStartIndex } : {}),
+          ...(spec.binNamingType != null ? { binNamingType: spec.binNamingType } : {}),
+          ...(item.type === "custom" ? { templateId: item.template.id } : {}),
+          ...(spec.level_max_load_kg != null ? { level_max_load_kg: spec.level_max_load_kg } : {}),
+        } as RackState,
+        face
+      )
+    );
     nextRackIndex += 1;
     indexInRow += 1;
   }
@@ -173,7 +250,8 @@ function appendRowWithTemplateToLayoutState(
   bin_direction: "LTR" | "RTL",
   defaultRackType: RackType,
   idSuffix: string,
-  rowGapCm: number
+  rowGapCm: number,
+  serviceFace?: ServiceFace
 ): LayoutState | null {
   const { minY, extentY, isHorizontal } = rowDrawSegmentExtents(start, end);
   if (isHorizontal) {
@@ -187,7 +265,8 @@ function appendRowWithTemplateToLayoutState(
       bin_direction,
       defaultRackType,
       idSuffix,
-      rowGapCm
+      rowGapCm,
+      serviceFace
     );
   }
   const x0 = start.x;
@@ -682,6 +761,13 @@ export function useDesignerRowOperations(params: UseDesignerRowOperationsParams)
       setLayout((prev) => {
         const rc = (prev.row_containers ?? []).find((r) => r.id === selectedRowContainerId);
         if (!rc) return prev;
+        const rowMinY = Math.min(...rc.slots.map((s) => s.y));
+        const rowMaxY = Math.max(...rc.slots.map((s) => s.y + s.h));
+        const rowMinX = Math.min(...rc.slots.map((s) => s.x));
+        const rowMaxX = Math.max(...rc.slots.map((s) => s.x + s.w));
+        const fillFace = isVertical
+          ? ({ serviceSide: "FRONT" as const, rotationDegrees: 90 as const } satisfies ServiceFace)
+          : inferHorizontalRowFace(prev, rowMinY, rowMaxY, rowMinX, rowMaxX);
         const newSlotsRaw: EmptyRowSlot[] = [];
         const newRacks: RackState[] = [];
         let nextRackIndex = getNextRackIndex(prev.racks);
@@ -724,34 +810,38 @@ export function useDesignerRowOperations(params: UseDesignerRowOperationsParams)
             spec.indexPadding,
             spec.startIndex
           );
-          newRacks.push({
-            uuid: rackUuid,
-            rack_type: resolvedRackType,
-            x: 0,
-            y: startY,
-            width: isVertical ? h : w,
-            height: isVertical ? w : h,
-            orientation: "vertical",
-            levels: lc.length,
-            bins_per_level: lc[0]?.locations ?? spec.bins_per_level,
-            levelConfig: lc,
-            length_cm: spec.depth_cm,
-            width_cm: spec.width_cm,
-            height_cm: spec.height_cm,
-            aisle_letter: spec.aisle_letter,
-            rack_index: nextRackIndex,
-            bins,
-            color: rackColor,
-            name: rackLabel,
-            rowPrefix: prefix,
-            indexInRow,
-            ...(spec.addressPattern != null ? { addressPattern: spec.addressPattern } : {}),
-            ...(spec.sectionStartIndex != null ? { sectionStartIndex: spec.sectionStartIndex } : {}),
-            ...(spec.binNamingType != null ? { binNamingType: spec.binNamingType } : {}),
-            ...(isVertical ? { rotationDegrees: 90 as const } : {}),
-            ...(item.type === "custom" ? { templateId: item.template.id } : {}),
-            ...(spec.level_max_load_kg != null ? { level_max_load_kg: spec.level_max_load_kg } : {}),
-          } as RackState);
+          newRacks.push(
+            applyFaceToRack(
+              {
+                uuid: rackUuid,
+                rack_type: resolvedRackType,
+                x: 0,
+                y: startY,
+                width: isVertical ? h : w,
+                height: isVertical ? w : h,
+                orientation: "vertical",
+                levels: lc.length,
+                bins_per_level: lc[0]?.locations ?? spec.bins_per_level,
+                levelConfig: lc,
+                length_cm: spec.depth_cm,
+                width_cm: spec.width_cm,
+                height_cm: spec.height_cm,
+                aisle_letter: spec.aisle_letter,
+                rack_index: nextRackIndex,
+                bins,
+                color: rackColor,
+                name: rackLabel,
+                rowPrefix: prefix,
+                indexInRow,
+                ...(spec.addressPattern != null ? { addressPattern: spec.addressPattern } : {}),
+                ...(spec.sectionStartIndex != null ? { sectionStartIndex: spec.sectionStartIndex } : {}),
+                ...(spec.binNamingType != null ? { binNamingType: spec.binNamingType } : {}),
+                ...(item.type === "custom" ? { templateId: item.template.id } : {}),
+                ...(spec.level_max_load_kg != null ? { level_max_load_kg: spec.level_max_load_kg } : {}),
+              } as RackState,
+              fillFace
+            )
+          );
           nextRackIndex += 1;
           indexInRow += 1;
           if (isVertical ? (s.h > w) : s.w > w) newSlotsRaw.push(remainderSlot(s));
@@ -1027,25 +1117,30 @@ export function useDesignerRowOperations(params: UseDesignerRowOperationsParams)
       const offsetCells = pairedAisleOffsetCells(pairedOffsetDepthCm(spec1), rowGapCm, layout, isHorizontal ? "y" : "x");
       const s2 = shiftRowDrawForPairedRow(start, end, offsetCells, isHorizontal);
       setLayout((prev) => {
+        const faces = isHorizontal ? backToBackHorizontalFaces() : null;
+        const firstIsNorth = isHorizontal && s2.start.y >= start.y;
         const applyOne = (
           state: LayoutState,
           s: { x: number; y: number },
           e: { x: number; y: number },
           spec: PairedRowPlacementSpec,
-          idSuffix: string
+          idSuffix: string,
+          face?: ServiceFace
         ): LayoutState | null => {
           const p = normalizeRowPrefixLetters(spec.prefix);
           const { rack_direction: rd, bin_direction: bd } = spec;
           if (spec.item && spec.autoFill) {
-            return appendRowWithTemplateToLayoutState(state, s, e, spec.item, p, rd, bd, defaultRackType, idSuffix, rowGapCm);
+            return appendRowWithTemplateToLayoutState(
+              state, s, e, spec.item, p, rd, bd, defaultRackType, idSuffix, rowGapCm, face
+            );
           }
           const tid =
             spec.item && !spec.autoFill ? rowContainerTemplateIdFromCatalogItem(spec.item) : undefined;
           return appendEmptyRowToLayoutState(state, s, e, p, rd, bd, rowGapCm, idSuffix, tid);
         };
-        const n1 = applyOne(prev, start, end, spec1, "");
+        const n1 = applyOne(prev, start, end, spec1, "", firstIsNorth ? faces?.north : faces?.south);
         if (!n1) return prev;
-        const n2 = applyOne(n1, s2.start, s2.end, spec2, "-p2");
+        const n2 = applyOne(n1, s2.start, s2.end, spec2, "-p2", firstIsNorth ? faces?.south : faces?.north);
         return n2 ?? prev;
       });
       setRowDrawStart(null);
@@ -1113,6 +1208,11 @@ export function useDesignerRowOperations(params: UseDesignerRowOperationsParams)
       const offsetCells = pairedAisleOffsetCells(spec1.depth_cm, rowGapCm, layout);
       const s2 = shiftRowDrawForPairedRow(start, end, offsetCells, isHorizontal);
       setLayout((prev) => {
+        const faces = isHorizontal ? backToBackHorizontalFaces() : null;
+        // First drawn row is north (smaller Y) when paired offset goes south (+Y).
+        const northFace = faces?.north;
+        const southFace = faces?.south;
+        const firstIsNorth = isHorizontal && s2.start.y >= start.y;
         const n1 = appendRowWithTemplateToLayoutState(
           prev,
           start,
@@ -1123,7 +1223,8 @@ export function useDesignerRowOperations(params: UseDesignerRowOperationsParams)
           row1.bin_direction,
           defaultRackType,
           "",
-          rowGapCm
+          rowGapCm,
+          firstIsNorth ? northFace : southFace
         );
         if (!n1) return prev;
         const n2 = appendRowWithTemplateToLayoutState(
@@ -1136,7 +1237,8 @@ export function useDesignerRowOperations(params: UseDesignerRowOperationsParams)
           row2.bin_direction,
           defaultRackType,
           "-p2",
-          rowGapCm
+          rowGapCm,
+          firstIsNorth ? southFace : northFace
         );
         return n2 ?? prev;
       });

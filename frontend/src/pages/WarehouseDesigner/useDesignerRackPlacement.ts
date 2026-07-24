@@ -269,7 +269,9 @@ export function useDesignerRackPlacement(params: UseDesignerRackPlacementParams)
         ...(spec.addressPattern != null ? { addressPattern: spec.addressPattern } : {}),
         ...(spec.sectionStartIndex != null ? { sectionStartIndex: spec.sectionStartIndex } : {}),
         ...(spec.binNamingType != null ? { binNamingType: spec.binNamingType } : {}),
-        ...(isVertical ? { rotationDegrees: 90 as const } : {}),
+        ...(isVertical
+          ? { rotationDegrees: 90 as const, serviceSide: "FRONT" as const }
+          : { rotationDegrees: 270 as const, serviceSide: "FRONT" as const }),
         ...(item.type === "custom" ? { templateId: item.template.id } : {}),
         ...(spec.level_max_load_kg != null ? { level_max_load_kg: spec.level_max_load_kg } : {}),
       };

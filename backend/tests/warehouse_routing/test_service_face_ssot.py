@@ -1,0 +1,269 @@
+"""Service-face SSOT + deterministic row_containers repair."""
+
+from __future__ import annotations
+
+import json
+import uuid
+
+import pytest
+from sqlalchemy import create_engine, text
+from sqlalchemy.orm import sessionmaker
+
+from backend.models.warehouse import Bin, Rack, Warehouse, WarehouseLayout
+from backend.services.warehouse_routing.rack_service_face import (
+    encode_face_for_world_normal,
+    face_for_cardinal,
+    normals_are_opposite,
+    world_service_normal,
+)
+from backend.services.warehouse_routing.service_face_repair import repair_layout_service_faces
+
+
+@pytest.fixture()
+def db():
+    engine = create_engine("sqlite:///:memory:")
+    with engine.begin() as conn:
+        conn.execute(text("CREATE TABLE IF NOT EXISTS tenants (id INTEGER PRIMARY KEY)"))
+        conn.execute(text("INSERT INTO tenants (id) VALUES (1)"))
+    Warehouse.__table__.create(engine, checkfirst=True)
+    WarehouseLayout.__table__.create(engine, checkfirst=True)
+    Rack.__table__.create(engine, checkfirst=True)
+    Bin.__table__.create(engine, checkfirst=True)
+    Session = sessionmaker(bind=engine)
+    session = Session()
+    yield session
+    session.close()
+
+
+def test_world_normals_cardinals_vertical():
+    assert world_service_normal(orientation="vertical", rotation_degrees=0, service_side="FRONT").x == pytest.approx(-1)
+    n = world_service_normal(orientation="vertical", rotation_degrees=90, service_side="FRONT")
+    assert n.x == pytest.approx(0) and n.y == pytest.approx(-1)
+    n = world_service_normal(orientation="vertical", rotation_degrees=270, service_side="FRONT")
+    assert n.x == pytest.approx(0) and n.y == pytest.approx(1)
+    n = world_service_normal(orientation="vertical", rotation_degrees=90, service_side="BACK")
+    assert n.x == pytest.approx(0) and n.y == pytest.approx(1)
+
+
+def test_world_normals_horizontal_front_back():
+    n = world_service_normal(orientation="horizontal", rotation_degrees=0, service_side="FRONT")
+    assert n.x == pytest.approx(0) and n.y == pytest.approx(1)
+    n = world_service_normal(orientation="horizontal", rotation_degrees=0, service_side="BACK")
+    assert n.x == pytest.approx(0) and n.y == pytest.approx(-1)
+    n = world_service_normal(orientation="horizontal", rotation_degrees=180, service_side="FRONT")
+    assert n.x == pytest.approx(0) and n.y == pytest.approx(-1)
+
+
+def test_encode_roundtrip_0_90_180_270():
+    for orient in ("vertical", "horizontal"):
+        for nx, ny in ((-1, 0), (1, 0), (0, -1), (0, 1)):
+            face = encode_face_for_world_normal(nx, ny, orientation=orient)
+            got = world_service_normal(
+                orientation=orient,
+                rotation_degrees=face.rotation_degrees,
+                service_side=face.service_side,
+            )
+            assert got.x == pytest.approx(nx)
+            assert got.y == pytest.approx(ny)
+
+
+def test_back_to_back_faces_opposite():
+    north = face_for_cardinal("NORTH", orientation="vertical")
+    south = face_for_cardinal("SOUTH", orientation="vertical")
+    a = world_service_normal(
+        orientation="vertical",
+        rotation_degrees=north.rotation_degrees,
+        service_side=north.service_side,
+    )
+    b = world_service_normal(
+        orientation="vertical",
+        rotation_degrees=south.rotation_degrees,
+        service_side=south.service_side,
+    )
+    assert normals_are_opposite(a, b)
+
+
+def _rack(db, layout, *, name, uuid_s, x, y, w, h, rack_type="warehouse"):
+    r = Rack(
+        layout_id=layout.id,
+        uuid=uuid_s,
+        name=name,
+        x=x,
+        y=y,
+        width=w,
+        height=h,
+        orientation="vertical",
+        levels=1,
+        bins_per_level=1,
+        length_cm=80,
+        width_cm=100,
+        height_cm=200,
+        aisle_letter="A",
+        rack_index=1,
+        is_active=True,
+        service_side="FRONT",
+        rotation_degrees=0,
+        rack_type=rack_type,
+    )
+    db.add(r)
+    db.flush()
+    return r
+
+
+def test_repair_abc_layout_like_prod(db):
+    wh = Warehouse(name="W", tenant_id=1)
+    db.add(wh)
+    db.flush()
+    a_uuid = str(uuid.uuid4())
+    b_uuid = str(uuid.uuid4())
+    c_uuid = str(uuid.uuid4())
+    s_uuid = str(uuid.uuid4())
+    containers = [
+        {
+            "id": "row-A",
+            "rowPrefix": "A",
+            "orientation": "horizontal",
+            "slots": [{"x": 0, "y": 1, "w": 12, "h": 6, "rackId": a_uuid}],
+        },
+        {
+            "id": "row-B",
+            "rowPrefix": "B",
+            "orientation": "horizontal",
+            "slots": [{"x": 1, "y": 21, "w": 15, "h": 8, "rackId": b_uuid}],
+        },
+        {
+            "id": "row-C",
+            "rowPrefix": "C",
+            "orientation": "horizontal",
+            "bin_direction": "RTL",
+            "slots": [{"x": 1, "y": 29, "w": 15, "h": 8, "rackId": c_uuid}],
+        },
+    ]
+    layout = WarehouseLayout(
+        warehouse_id=wh.id,
+        name="L1",
+        grid_cols=120,
+        grid_rows=80,
+        row_containers_json=json.dumps(containers),
+    )
+    db.add(layout)
+    db.flush()
+    a = _rack(db, layout, name="A1", uuid_s=a_uuid, x=0, y=1, w=12, h=6)
+    b = _rack(db, layout, name="B1", uuid_s=b_uuid, x=1, y=21, w=15, h=8)
+    c = _rack(db, layout, name="C1", uuid_s=c_uuid, x=1, y=29, w=15, h=8)
+    s = _rack(db, layout, name="S1", uuid_s=s_uuid, x=0, y=50, w=12, h=8, rack_type="store")
+    db.commit()
+
+    report = repair_layout_service_faces(db, wh.id, layout=layout)
+    db.flush()
+
+    assert a.rotation_degrees in (90, 270)
+    na = world_service_normal(
+        orientation=a.orientation, rotation_degrees=a.rotation_degrees, service_side=a.service_side
+    )
+    nb = world_service_normal(
+        orientation=b.orientation, rotation_degrees=b.rotation_degrees, service_side=b.service_side
+    )
+    nc = world_service_normal(
+        orientation=c.orientation, rotation_degrees=c.rotation_degrees, service_side=c.service_side
+    )
+    # A faces south (toward B aisle), B north, C south — opposite B/C
+    assert na.y == pytest.approx(1.0)  # SOUTH
+    assert nb.y == pytest.approx(-1.0)  # NORTH
+    assert nc.y == pytest.approx(1.0)  # SOUTH
+    assert normals_are_opposite(nb, nc)
+    assert s.service_side == "FRONT" and int(s.rotation_degrees or 0) == 0
+    assert any(x.get("reason") == "store" for x in report.skipped_store)
+    assert report.deterministic_count >= 3
+
+
+def test_repair_does_not_override_explicit_face(db):
+    wh = Warehouse(name="X", tenant_id=1)
+    db.add(wh)
+    db.flush()
+    u1, u2 = str(uuid.uuid4()), str(uuid.uuid4())
+    containers = [
+        {"id": "b", "orientation": "horizontal", "slots": [{"x": 0, "y": 10, "w": 10, "h": 8, "rackId": u1}]},
+        {"id": "c", "orientation": "horizontal", "slots": [{"x": 0, "y": 18, "w": 10, "h": 8, "rackId": u2}]},
+    ]
+    layout = WarehouseLayout(
+        warehouse_id=wh.id, name="L", grid_cols=40, grid_rows=40,
+        row_containers_json=json.dumps(containers),
+    )
+    db.add(layout)
+    db.flush()
+    b = _rack(db, layout, name="B", uuid_s=u1, x=0, y=10, w=10, h=8)
+    c = _rack(db, layout, name="C", uuid_s=u2, x=0, y=18, w=10, h=8)
+    b.service_side = "BACK"
+    b.rotation_degrees = 90
+    db.commit()
+    report = repair_layout_service_faces(db, wh.id, layout=layout)
+    db.flush()
+    assert b.service_side == "BACK" and int(b.rotation_degrees) == 90
+    assert any(x.get("reason") == "explicit_ssot_preserved" for x in report.skipped_explicit)
+    assert any(r.get("name") == "C" and r.get("changed") for r in report.repaired)
+
+
+def test_fe_be_world_normal_matrix_contract():
+    """Every orientation × side × rotation must match FE rackServiceFace.ts formulas."""
+
+    def fe_local(orientation: str):
+        return (0.0, 1.0) if orientation == "horizontal" else (-1.0, 0.0)
+
+    def fe_rot(v, deg):
+        d = deg % 360
+        x, y = v
+        if d == 0:
+            return x, y
+        if d == 90:
+            return -y, x
+        if d == 180:
+            return -x, -y
+        if d == 270:
+            return y, -x
+        return x, y
+
+    def fe_world(orientation, rot, side):
+        n = fe_rot(fe_local(orientation), rot)
+        if side == "BACK":
+            n = (-n[0], -n[1])
+        mag = (n[0] ** 2 + n[1] ** 2) ** 0.5 or 1.0
+        return n[0] / mag, n[1] / mag
+
+    for orient in ("vertical", "horizontal"):
+        for side in ("FRONT", "BACK"):
+            for rot in (0, 90, 180, 270):
+                be = world_service_normal(orientation=orient, rotation_degrees=rot, service_side=side)
+                fx, fy = fe_world(orient, rot, side)
+                assert be.x == pytest.approx(fx), (orient, side, rot)
+                assert be.y == pytest.approx(fy), (orient, side, rot)
+
+
+def test_repair_idempotent(db):
+    wh = Warehouse(name="W2", tenant_id=1)
+    db.add(wh)
+    db.flush()
+    u1, u2 = str(uuid.uuid4()), str(uuid.uuid4())
+    containers = [
+        {"id": "b", "orientation": "horizontal", "slots": [{"x": 0, "y": 10, "w": 10, "h": 8, "rackId": u1}]},
+        {"id": "c", "orientation": "horizontal", "slots": [{"x": 0, "y": 18, "w": 10, "h": 8, "rackId": u2}]},
+    ]
+    layout = WarehouseLayout(
+        warehouse_id=wh.id,
+        name="L",
+        grid_cols=40,
+        grid_rows=40,
+        row_containers_json=json.dumps(containers),
+    )
+    db.add(layout)
+    db.flush()
+    _rack(db, layout, name="B", uuid_s=u1, x=0, y=10, w=10, h=8)
+    _rack(db, layout, name="C", uuid_s=u2, x=0, y=18, w=10, h=8)
+    db.commit()
+    r1 = repair_layout_service_faces(db, wh.id, layout=layout)
+    db.flush()
+    r2 = repair_layout_service_faces(db, wh.id, layout=layout)
+    assert r1.deterministic_count >= 2
+    assert r2.deterministic_count == 0
+    assert r2.repaired == []
+    assert len(r2.skipped_explicit) >= 2

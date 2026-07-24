@@ -407,7 +407,7 @@ class WarehouseLayoutService:
             rot = int(rot_raw if rot_raw is not None else getattr(rack, "rotation_degrees", 0) or 0)
         except (TypeError, ValueError):
             rot = 0
-        if rot not in (0, 90, 180):
+        if rot not in (0, 90, 180, 270):
             rot = 0
         rack.rotation_degrees = rot
         return True
@@ -1640,7 +1640,17 @@ class WarehouseLayoutService:
             self.db.commit()
             self.db.refresh(layout)
             # Authored Routing Graph is SSOT — layout save must NOT rebuild legacy WarehouseNode graph.
-            # Recompute AUTO location access after geometry/rack face changes.
+            # Deterministic service-face repair from row_containers, then AUTO location access recompute.
+            try:
+                from .warehouse_routing.service_face_repair import repair_layout_service_faces
+
+                repair_layout_service_faces(self.db, warehouse_id, layout=layout)
+                self.db.flush()
+            except Exception:
+                logger.exception(
+                    "service_face_repair failed (warehouse_id=%s); continuing with layout save",
+                    warehouse_id,
+                )
             try:
                 from .warehouse_routing.location_access_resolver import recompute_location_access
 

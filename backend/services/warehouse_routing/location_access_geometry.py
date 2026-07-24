@@ -8,10 +8,17 @@ from typing import Optional, Sequence
 
 from ...models.warehouse import GRID_UNIT_CM, Rack
 from .geometry import distance_m_between_cm
+from .rack_service_face import (
+    SERVICE_SIDE_BACK,
+    SERVICE_SIDE_FRONT,
+    Vec2 as _SsotVec2,
+    local_front_normal as _ssot_local_front_normal,
+    normalize_rotation as _ssot_normalize_rotation,
+    normalize_service_side as _ssot_normalize_service_side,
+    rotate_vec_ccw,
+    world_service_normal as _ssot_world_service_normal,
+)
 
-
-SERVICE_SIDE_FRONT = "FRONT"
-SERVICE_SIDE_BACK = "BACK"
 DEFAULT_MAX_ACCESS_REACH_M = 8.0
 
 
@@ -117,47 +124,32 @@ def rack_footprint_cm(rack: Rack) -> RackFootprint:
 
 
 def _normalize_service_side(raw: object) -> str:
-    s = str(raw or SERVICE_SIDE_FRONT).strip().upper()
-    return SERVICE_SIDE_BACK if s == SERVICE_SIDE_BACK else SERVICE_SIDE_FRONT
+    return _ssot_normalize_service_side(raw)
 
 
 def _normalize_rotation(raw: object) -> int:
-    try:
-        r = int(raw if raw is not None else 0)
-    except (TypeError, ValueError):
-        return 0
-    return r if r in (0, 90, 180) else 0
+    return _ssot_normalize_rotation(raw)
 
 
 def local_front_normal(orientation: str) -> Vec2:
     """Unrotated local FRONT normal (matches FE getRackPickPointCell)."""
-    o = (orientation or "vertical").lower()
-    if o == "horizontal":
-        return Vec2(0.0, 1.0)
-    return Vec2(-1.0, 0.0)
+    n = _ssot_local_front_normal(orientation)
+    return Vec2(n.x, n.y)
 
 
 def _rotate_vec(v: Vec2, degrees: int) -> Vec2:
-    if degrees == 0:
-        return v
-    if degrees == 180:
-        return Vec2(-v.x, -v.y)
-    if degrees == 90:
-        # CCW 90°
-        return Vec2(-v.y, v.x)
-    return v
+    n = rotate_vec_ccw(_SsotVec2(v.x, v.y), degrees)
+    return Vec2(n.x, n.y)
 
 
 def world_service_normal(rack: Rack) -> Vec2:
     """World-space unit normal pointing into the service aisle."""
-    orient = str(getattr(rack, "orientation", None) or "vertical")
-    rot = _normalize_rotation(getattr(rack, "rotation_degrees", 0))
-    side = _normalize_service_side(getattr(rack, "service_side", SERVICE_SIDE_FRONT))
-    n = _rotate_vec(local_front_normal(orient), rot)
-    if side == SERVICE_SIDE_BACK:
-        n = Vec2(-n.x, -n.y)
-    mag = math.hypot(n.x, n.y) or 1.0
-    return Vec2(n.x / mag, n.y / mag)
+    n = _ssot_world_service_normal(
+        orientation=str(getattr(rack, "orientation", None) or "vertical"),
+        rotation_degrees=getattr(rack, "rotation_degrees", 0),
+        service_side=getattr(rack, "service_side", SERVICE_SIDE_FRONT),
+    )
+    return Vec2(n.x, n.y)
 
 
 def service_edge_point_cm(rack: Rack, bin_center_x: float, bin_center_y: float) -> Vec2:

@@ -1,3 +1,22 @@
+## 2026-07-24 — Stage B passage canvas UX (FE, uncommitted)
+
+- `LayoutMode.DRAW_PASSAGE` + toolbar „Dodaj przejazd” (J); drag corridor → `worldCorridorToPassages` multi-rack.
+- Passage preview ghost; PROJEKTOWANIE: select/drag/width/delete overlay; TRASY: subtle non-interactive.
+- Save payload passages array unchanged; vitest `rackPassageGeometry.test.ts`.
+
+## 2026-07-24 — Etap A+B Physical Routing fixes (no commit/push)
+
+- **A:** SSOT `rack_service_face` (0/90/180/270); FE horizontal rows set face; `service_face_repair` from row_containers on layout save; store skipped.
+- **B:** `DRAW_PASSAGE` multi-rack corridor UX; canvas select/move/width/delete; TRASY subtle.
+- Tests: service_face_ssot, abc_faces_passage_regression; FE passage geometry 7; warehouse_routing 110; tsc+build OK.
+- Bez Etapu 3. Bez push.
+
+## 2026-07-24 — MANUAL UX+FUNCTIONAL AUDIT (Passage / Access) — no code
+
+- Prod WH1: passage UI PARTIAL (sidebar only); B4+C4 need **two** passages; Test BEFORE 43.10 m / AFTER ~32.48 m.
+- Access: 49 RESOLVED / 217 AMBIGUOUS / 11 BLOCKED / 2 NO_RACK; root cause FRONT+rot0 (normal left) vs ±Y aisles.
+- Bez implementacji / commit / push / Etapu 3.
+
 ## 2026-07-24 — Physical Routing / Rack Passage Foundation
 
 - Model `WarehouseRackPassage` (osobna tabela, UUID); geometria lokalna względem Rack.
