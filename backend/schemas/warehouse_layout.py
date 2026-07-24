@@ -51,6 +51,14 @@ class RackSchema(BaseModel):
     color: Optional[str] = None  # hex e.g. #eab308 for editor display; must be in schema or Pydantic strips it
     templateId: Optional[str] = None  # custom template UUID; frontend sends camelCase
     show_label: Optional[bool] = None
+    service_side: Optional[str] = Field(
+        default="FRONT",
+        validation_alias=AliasChoices("service_side", "serviceSide"),
+    )
+    rotation_degrees: Optional[int] = Field(
+        default=0,
+        validation_alias=AliasChoices("rotation_degrees", "rotationDegrees"),
+    )
 
 
 class AisleSchema(BaseModel):

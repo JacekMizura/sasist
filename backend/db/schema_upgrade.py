@@ -135,6 +135,18 @@ def ensure_warehouse_layout_identity_columns(engine: Engine) -> None:
             conn.execute(text("ALTER TABLE warehouse_layout_racks ADD COLUMN is_active INTEGER NOT NULL DEFAULT 1"))
         if "rack_type" not in rack_columns:
             conn.execute(text("ALTER TABLE warehouse_layout_racks ADD COLUMN rack_type VARCHAR(32) NOT NULL DEFAULT 'warehouse'"))
+        if "service_side" not in rack_columns:
+            conn.execute(
+                text(
+                    "ALTER TABLE warehouse_layout_racks ADD COLUMN service_side VARCHAR(16) NOT NULL DEFAULT 'FRONT'"
+                )
+            )
+        if "rotation_degrees" not in rack_columns:
+            conn.execute(
+                text(
+                    "ALTER TABLE warehouse_layout_racks ADD COLUMN rotation_degrees INTEGER NOT NULL DEFAULT 0"
+                )
+            )
 
         bin_columns = _table_column_names(conn, "warehouse_bins")
         if "location_uuid" not in bin_columns:

@@ -148,6 +148,10 @@ class Rack(Base, BaseModelMixin):
     max_weight_kg = Column(Float, nullable=True)
     color = Column(String(32), nullable=True)  # e.g. "#3b82f6" for editor display
     template_id = Column(String(64), nullable=True)  # custom template UUID from frontend
+    #: Local service face relative to unrotated rack frame: FRONT | BACK (never a world axis).
+    service_side = Column(String(16), nullable=False, default="FRONT", server_default="FRONT")
+    #: Authoring rotation hint persisted across save/reload: 0 | 90 | 180.
+    rotation_degrees = Column(Integer, nullable=False, default=0, server_default="0")
 
     layout = relationship("WarehouseLayout", back_populates="racks")
     bins = relationship("Bin", back_populates="rack", cascade="all, delete-orphan")

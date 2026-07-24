@@ -386,6 +386,21 @@ class WarehouseLayoutService:
         rack.internal_structure = json.dumps(internal_structure_raw) if internal_structure_raw is not None else None
         rack.color = r_data.get("color") if isinstance(r_data.get("color"), str) else None
         rack.template_id = r_data.get("templateId") if isinstance(r_data.get("templateId"), str) else None
+        side_raw = r_data.get("service_side")
+        if side_raw is None:
+            side_raw = r_data.get("serviceSide")
+        side = str(side_raw or getattr(rack, "service_side", None) or "FRONT").strip().upper()
+        rack.service_side = "BACK" if side == "BACK" else "FRONT"
+        rot_raw = r_data.get("rotation_degrees")
+        if rot_raw is None:
+            rot_raw = r_data.get("rotationDegrees")
+        try:
+            rot = int(rot_raw if rot_raw is not None else getattr(rack, "rotation_degrees", 0) or 0)
+        except (TypeError, ValueError):
+            rot = 0
+        if rot not in (0, 90, 180):
+            rot = 0
+        rack.rotation_degrees = rot
         return True
 
     def _build_default_bin_rows_for_new_rack(self, rack: Rack, r_data: dict) -> list[tuple[Bin, int, int]]:
@@ -1194,6 +1209,10 @@ class WarehouseLayoutService:
                 "color": getattr(r, "color", None),
                 "templateId": getattr(r, "template_id", None),
                 "show_label": getattr(r, "show_label", None),
+                "service_side": getattr(r, "service_side", None) or "FRONT",
+                "rotation_degrees": int(getattr(r, "rotation_degrees", None) or 0),
+                "rotationDegrees": int(getattr(r, "rotation_degrees", None) or 0),
+                "serviceSide": getattr(r, "service_side", None) or "FRONT",
             })
         aisles_out = [
             {
@@ -1522,6 +1541,18 @@ class WarehouseLayoutService:
             self.db.commit()
             self.db.refresh(layout)
             # Authored Routing Graph is SSOT — layout save must NOT rebuild legacy WarehouseNode graph.
+            # Recompute AUTO location access after geometry/rack face changes.
+            try:
+                from .warehouse_routing.location_access_resolver import recompute_location_access
+
+                recompute_location_access(self.db, warehouse_id, migrate_aps=True)
+                self.db.commit()
+            except Exception:
+                self.db.rollback()
+                logger.exception(
+                    "location_access recompute after layout save failed warehouse_id=%s",
+                    warehouse_id,
+                )
             return self.get_layout(tenant_id, warehouse_id)
         except HTTPException:
             self.db.rollback()

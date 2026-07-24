@@ -187,6 +187,8 @@ export type RackState = {
   indexInRow?: number;
   /** When 90, rack is placed in a vertical row and should be drawn rotated 90° (footprint already swapped in width/height). When 180, back-to-back row: face opposite aisle. */
   rotationDegrees?: 0 | 90 | 180;
+  /** Local service face: FRONT | BACK (world normal derived with orientation + rotationDegrees). */
+  serviceSide?: "FRONT" | "BACK";
 };
 
 export type AisleState = {

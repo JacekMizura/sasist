@@ -1437,6 +1437,20 @@ export default function WarehouseDesigner() {
           show_label: typeof r.show_label === "boolean" ? r.show_label : undefined,
           rowPrefix: typeof (r as { row_prefix?: string }).row_prefix === "string" ? (r as { row_prefix: string }).row_prefix.trim() || undefined : typeof (r as { rowPrefix?: string }).rowPrefix === "string" ? (r as { rowPrefix: string }).rowPrefix.trim() || undefined : undefined,
           indexInRow: typeof (r as { index_in_row?: number }).index_in_row === "number" ? (r as { index_in_row: number }).index_in_row : typeof (r as { indexInRow?: number }).indexInRow === "number" ? (r as { indexInRow: number }).indexInRow : undefined,
+          rotationDegrees: (() => {
+            const raw = (r as { rotation_degrees?: unknown; rotationDegrees?: unknown }).rotation_degrees
+              ?? (r as { rotationDegrees?: unknown }).rotationDegrees
+              ?? 0;
+            const n = Number(raw);
+            return n === 90 || n === 180 ? (n as 90 | 180) : 0;
+          })(),
+          serviceSide: String(
+            (r as { service_side?: unknown; serviceSide?: unknown }).service_side
+              ?? (r as { serviceSide?: unknown }).serviceSide
+              ?? "FRONT"
+          ).toUpperCase() === "BACK"
+            ? "BACK"
+            : "FRONT",
         };
         }),
         aisles: (d.aisles || []).map((a: Record<string, unknown>) => ({
@@ -2011,6 +2025,10 @@ export default function WarehouseDesigner() {
           show_label: r.show_label,
           row_prefix: r.rowPrefix,
           index_in_row: r.indexInRow,
+          rotation_degrees: r.rotationDegrees ?? 0,
+          rotationDegrees: r.rotationDegrees ?? 0,
+          service_side: r.serviceSide ?? "FRONT",
+          serviceSide: r.serviceSide ?? "FRONT",
         })),
         aisles: layout.aisles.map((a) => ({
           id: a.id,
@@ -3949,6 +3967,8 @@ export default function WarehouseDesigner() {
                   nodes={routing.nodes}
                   edges={routing.edges}
                   accessPoints={routing.accessPoints}
+                  locationAccess={routing.locationAccess}
+                  showAccessDiagnostics={routing.showAccessDiagnostics}
                   cellPx={cellPx}
                   selectedNodeUuid={routingSelectedNode}
                   selectedEdgeUuid={routingSelectedEdge}
