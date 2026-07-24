@@ -5,6 +5,7 @@
 export const LayoutMode = {
   SELECT: "SELECT",
   DRAW_ROW: "DRAW_ROW",
+  DRAW_PASSAGE: "DRAW_PASSAGE",
   DRAW_AISLE: "DRAW_AISLE",
   PATH_TOOL: "PATH_TOOL",
   ADD_START: "ADD_START",
@@ -19,6 +20,7 @@ export type LayoutMode = (typeof LayoutMode)[keyof typeof LayoutMode];
 export const LAYOUT_MODE_LABELS: Record<LayoutMode, string> = {
   [LayoutMode.SELECT]: "Select",
   [LayoutMode.DRAW_ROW]: "Draw Row",
+  [LayoutMode.DRAW_PASSAGE]: "Dodaj przejazd",
   [LayoutMode.DRAW_AISLE]: "Rysuj strefę",
   [LayoutMode.PATH_TOOL]: "Path Tool",
   [LayoutMode.ADD_START]: "Punkt startowy",
@@ -32,6 +34,7 @@ export const LAYOUT_MODE_LABELS: Record<LayoutMode, string> = {
 export const LAYOUT_MODE_COLORS: Record<LayoutMode, string> = {
   [LayoutMode.SELECT]: "#64748b",
   [LayoutMode.DRAW_ROW]: "#0891b2",
+  [LayoutMode.DRAW_PASSAGE]: "#6366f1",
   [LayoutMode.DRAW_AISLE]: "#0d9488",
   [LayoutMode.PATH_TOOL]: "#7c3aed",
   [LayoutMode.ADD_START]: "#22c55e",
@@ -44,6 +47,7 @@ export const LAYOUT_MODE_COLORS: Record<LayoutMode, string> = {
 export const LAYOUT_MODE_SHORTCUTS: Record<LayoutMode, string> = {
   [LayoutMode.SELECT]: "S",
   [LayoutMode.DRAW_ROW]: "R",
+  [LayoutMode.DRAW_PASSAGE]: "J",
   [LayoutMode.DRAW_AISLE]: "A",
   [LayoutMode.PATH_TOOL]: "P",
   [LayoutMode.ADD_START]: "1",
@@ -57,6 +61,7 @@ export const LAYOUT_MODE_SHORTCUTS: Record<LayoutMode, string> = {
 export const LAYOUT_MODE_CURSORS: Record<LayoutMode, string> = {
   [LayoutMode.SELECT]: "default",
   [LayoutMode.DRAW_ROW]: "crosshair",
+  [LayoutMode.DRAW_PASSAGE]: "crosshair",
   [LayoutMode.DRAW_AISLE]: "col-resize",
   [LayoutMode.PATH_TOOL]: "pointer",
   [LayoutMode.ADD_START]: "crosshair",

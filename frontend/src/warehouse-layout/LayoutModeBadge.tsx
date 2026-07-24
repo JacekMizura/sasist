@@ -32,7 +32,7 @@ function ModeIcon({ mode }: { mode: LayoutMode | null | undefined }) {
       </span>
     );
   }
-  if (mode === "DRAW_ROW" || mode === "DRAW_AISLE") {
+  if (mode === "DRAW_ROW" || mode === "DRAW_PASSAGE" || mode === "DRAW_AISLE") {
     return (
       <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-600" aria-hidden>
         <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">

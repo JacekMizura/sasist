@@ -35,6 +35,10 @@ export function useLayoutModeShortcuts(
           e.preventDefault();
           setMode(LayoutMode.DRAW_ROW);
           break;
+        case "J":
+          e.preventDefault();
+          setMode(LayoutMode.DRAW_PASSAGE);
+          break;
         case "A":
           e.preventDefault();
           setMode(LayoutMode.DRAW_AISLE);
@@ -65,6 +69,7 @@ export function useLayoutModeDisplay(mode: LayoutMode): LayoutModeDisplay {
     () => ({
       cursorStyle:
         mode === LayoutMode.DRAW_ROW ||
+        mode === LayoutMode.DRAW_PASSAGE ||
         mode === LayoutMode.DRAW_AISLE ||
         mode === LayoutMode.ADD_START ||
         mode === LayoutMode.ADD_PACK

@@ -28,6 +28,7 @@ import { useRowInteraction } from "./interactions/useRowInteraction";
 import { useVisualInteraction } from "./interactions/useVisualInteraction";
 import { useRackInteraction } from "./interactions/useRackInteraction";
 import { useSelectionInteraction } from "./interactions/useSelectionInteraction";
+import { usePassageInteraction } from "./interactions/usePassageInteraction";
 
 export interface UseDesignerMouseHandlersRefs {
   svgRef: React.RefObject<SVGSVGElement | null>;
@@ -40,6 +41,9 @@ export interface UseDesignerMouseHandlersRefs {
   rowDragPreviewStartRef: React.MutableRefObject<{ x: number; y: number } | null>;
   rowDrawEndPendingRef: React.MutableRefObject<{ x: number; y: number } | null>;
   rowDrawEndRafRef: React.MutableRefObject<number | null>;
+  passageDrawEndPendingRef: React.MutableRefObject<{ x: number; y: number } | null>;
+  passageDrawEndRafRef: React.MutableRefObject<number | null>;
+  passageShiftKeyRef: React.MutableRefObject<boolean>;
   rowDrawTemplateRef: React.MutableRefObject<CatalogItem | null>;
   placeRowWithTemplateRef: React.MutableRefObject<((start: { x: number; y: number }, end: { x: number; y: number }, item: CatalogItem) => void) | null>;
   placeEmptyRowRef: React.MutableRefObject<((start: { x: number; y: number }, end: { x: number; y: number }) => void) | null>;
@@ -60,6 +64,11 @@ export interface UseDesignerMouseHandlersState {
   marqueeStart: { x: number; y: number } | null;
   marqueeEnd: { x: number; y: number } | null;
   rowToolActive: boolean;
+  passageToolActive: boolean;
+  passageDrawStart: { x: number; y: number } | null;
+  passageDrawEnd: { x: number; y: number } | null;
+  passageWidthCm: number;
+  draggingPassage: { rackUuid: string; passageUuid: string; grabOffsetCm: number } | null;
   rowDrawStart: { x: number; y: number } | null;
   rowDrawEnd: { x: number; y: number } | null;
   rowToolTemplate: CatalogItem | null;
@@ -119,6 +128,12 @@ export interface UseDesignerMouseHandlersSetters {
   setShowAllProductsInSidebar: (v: boolean) => void;
   setRowToolTemplate: Dispatch<SetStateAction<CatalogItem | null>>;
   setSelectedWallElementId?: Dispatch<SetStateAction<string | null>>;
+  setPassageDrawStart: Dispatch<SetStateAction<{ x: number; y: number } | null>>;
+  setPassageDrawEnd: Dispatch<SetStateAction<{ x: number; y: number } | null>>;
+  setSelectedPassage: Dispatch<SetStateAction<{ rackUuid: string; passageUuid: string } | null>>;
+  setDraggingPassage: Dispatch<
+    SetStateAction<{ rackUuid: string; passageUuid: string; grabOffsetCm: number } | null>
+  >;
 }
 
 export interface UseDesignerMouseHandlersCallbacks {
@@ -177,6 +192,9 @@ export function useDesignerMouseHandlers(params: UseDesignerMouseHandlersParams)
     rowDragPreviewStartRef,
     rowDrawEndPendingRef,
     rowDrawEndRafRef,
+    passageDrawEndPendingRef,
+    passageDrawEndRafRef,
+    passageShiftKeyRef,
     rowDrawTemplateRef,
   } = refs;
   const {
@@ -190,6 +208,11 @@ export function useDesignerMouseHandlers(params: UseDesignerMouseHandlersParams)
     marqueeStart,
     marqueeEnd,
     rowToolActive,
+    passageToolActive,
+    passageDrawStart,
+    passageDrawEnd,
+    passageWidthCm,
+    draggingPassage,
     rowDrawStart,
     rowDrawEnd,
     rowToolTemplate,
@@ -244,6 +267,10 @@ export function useDesignerMouseHandlers(params: UseDesignerMouseHandlersParams)
     setShowAllProductsInSidebar,
   setRowToolTemplate,
   setSelectedWallElementId,
+  setPassageDrawStart,
+  setPassageDrawEnd,
+  setSelectedPassage,
+  setDraggingPassage,
   } = setters;
   const { stampRackAt, addSpecialLocation } = callbacks;
   const { placeRowWithTemplateRef, placeEmptyRowRef, canMoveRowToRef, moveRowToPositionRef, moveRackWithinRowRef } = refs;
@@ -305,6 +332,29 @@ export function useDesignerMouseHandlers(params: UseDesignerMouseHandlersParams)
     copyPlacementMode,
     copiedRack,
     placeCopiedRack,
+  });
+
+  const passage = usePassageInteraction({
+    passageToolActive,
+    passageDrawStart,
+    passageDrawEnd,
+    passageWidthCm,
+    layout,
+    draggingPassage,
+    refs: {
+      passageDrawEndPendingRef,
+      passageDrawEndRafRef,
+      passageShiftKeyRef,
+      lastMouseRef,
+      svgRef,
+    },
+    getCellFromEvent,
+    setPassageDrawStart,
+    setPassageDrawEnd,
+    setLayout,
+    setSelectedPassage,
+    setDraggingPassage,
+    clearAllSelections,
   });
 
   const row = useRowInteraction({
@@ -401,6 +451,7 @@ export function useDesignerMouseHandlers(params: UseDesignerMouseHandlersParams)
     draggingRackId,
     draggingRowId,
     rowToolActive,
+    passageToolActive,
     placementMode,
     refs: { lastMouseRef, svgRef },
     findEmptySlotAt: helpers.findEmptySlotAt,
@@ -420,6 +471,7 @@ export function useDesignerMouseHandlers(params: UseDesignerMouseHandlersParams)
   const handleCanvasMouseMove = useCallback(
     (e: React.MouseEvent<SVGSVGElement>) => {
       lastMouseRef.current = { clientX: e.clientX, clientY: e.clientY };
+      passageShiftKeyRef.current = e.shiftKey;
       const cell = getCellFromEvent(e);
       function handleCursorUpdate() {
         if (!cell) return;
@@ -437,12 +489,13 @@ export function useDesignerMouseHandlers(params: UseDesignerMouseHandlersParams)
       handleCursorUpdate();
       pan.handlePanMove(e, cell);
       placement.handleMouseMove(e, cell);
+      passage.handleMouseMove(e, cell);
       row.handleMouseMove(e, cell);
       selection.handleMouseMove(e, cell);
       rack.handleMouseMove(e, cell);
       visual.handleMouseMove(e, cell);
     },
-    [getCellFromEvent, pan, placement, row, selection, rack, visual, rowToolActive, rowDrawStart, layout.grid_cols]
+    [getCellFromEvent, pan, placement, passage, row, selection, rack, visual, rowToolActive, rowDrawStart, layout.grid_cols]
   );
 
   const handleCanvasMouseDown = useCallback(
@@ -486,22 +539,24 @@ export function useDesignerMouseHandlers(params: UseDesignerMouseHandlersParams)
         }
       }
       if (placement.handleMouseDown(e, cell)) return;
+      if (passage.handleMouseDown(e, cell)) return;
       if (row.handleMouseDown(e, cell)) return;
       if (selection.handleAislePart(e, cell)) return;
       if (visual.handleMouseDown(e, cell)) return;
       if (rack.handleMouseDown(e, cell)) return;
       selection.handleMarqueePart(e, cell);
     },
-    [getCellFromEvent, clearAllSelections, pan, placement, row, selection, visual, rack, wallElementTool, onAddWallElement, onRequestGatePlacement, layout.grid_cols, layout.grid_rows, canvasWidthPx, canvasHeightPx, gridUnitCm, routeMode, addRackToRoute]
+    [getCellFromEvent, clearAllSelections, pan, placement, passage, row, selection, visual, rack, wallElementTool, onAddWallElement, onRequestGatePlacement, layout.grid_cols, layout.grid_rows, canvasWidthPx, canvasHeightPx, gridUnitCm, routeMode, addRackToRoute]
   );
 
   const handleCanvasMouseUp = useCallback(() => {
     row.handleMouseUp();
+    passage.handleMouseUp();
     selection.handleMouseUp();
     pan.handlePanEnd();
     rack.handleMouseUp();
     visual.handleMouseUpCleanup();
-  }, [row, selection, pan, rack, visual]);
+  }, [row, passage, selection, pan, rack, visual]);
 
   const handleCanvasMouseLeave = useCallback(() => {
     setCursorCm(null);
@@ -511,7 +566,8 @@ export function useDesignerMouseHandlers(params: UseDesignerMouseHandlersParams)
     setDraggingVisualId(null);
     setDragOffsetVisual(null);
     setRowDrawEnd(null);
-  }, []);
+    setPassageDrawEnd(null);
+  }, [setCursorCm, setGhostPosition, setDraggingRackId, setDragOffset, setDraggingVisualId, setDragOffsetVisual, setRowDrawEnd, setPassageDrawEnd]);
 
   return {
     getCellFromEvent,

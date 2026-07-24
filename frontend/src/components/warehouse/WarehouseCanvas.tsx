@@ -21,7 +21,8 @@ import { VisualLayer } from "./WarehouseCanvas/VisualLayer";
 import { SelectionOverlay } from "./WarehouseCanvas/SelectionOverlay";
 import { WallElementsLayer } from "./WarehouseCanvas/WallElementsLayer";
 import { PathLayer } from "./WarehouseCanvas/PathLayer";
-import { RouteStopLayer } from "./WarehouseCanvas/RouteStopLayer";
+import { PassageDrawPreview } from "../../pages/WarehouseDesigner/passages/PassageDrawPreview";
+import { PassageQuickEditor } from "../../pages/WarehouseDesigner/passages/PassageQuickEditor";
 
 const RACK_RADIUS_PX = parseFloat(radius.small) || 6;
 
@@ -201,6 +202,19 @@ export type WarehouseCanvasProps = {
   setAisleToolActive: (fn: (a: boolean) => boolean) => void;
   rowToolActive: boolean;
   setRowToolActive: (fn: (a: boolean) => boolean) => void;
+  /** Multi-rack passage draw tool (Projektowanie). */
+  passageToolActive?: boolean;
+  setPassageToolActive?: (fn: (a: boolean) => boolean) => void;
+  passageDrawStart?: { x: number; y: number } | null;
+  passageDrawEnd?: { x: number; y: number } | null;
+  passageWidthCm?: number;
+  setPassageWidthCm?: (v: number) => void;
+  passageShiftKey?: boolean;
+  selectedPassage?: { rackUuid: string; passageUuid: string } | null;
+  setSelectedPassage?: React.Dispatch<React.SetStateAction<{ rackUuid: string; passageUuid: string } | null>>;
+  onPassageDragStart?: (rackUuid: string, passageUuid: string, grabOffsetCm: number) => void;
+  /** TRASY workspace: passages visible but non-interactive. */
+  routesWorkspace?: boolean;
   /** When provided, activating "Rysuj Rząd" will clear the selected template so user can draw empty rows. */
   setRowToolTemplate?: (item: CatalogItem | null) => void;
   rowToolTemplate: CatalogItem | null;
@@ -379,6 +393,17 @@ function WarehouseCanvasInner({
   setAisleToolActive,
   rowToolActive,
   setRowToolActive,
+  passageToolActive = false,
+  setPassageToolActive,
+  passageDrawStart = null,
+  passageDrawEnd = null,
+  passageWidthCm = 90,
+  setPassageWidthCm,
+  passageShiftKey = false,
+  selectedPassage = null,
+  setSelectedPassage,
+  onPassageDragStart,
+  routesWorkspace = false,
   setRowToolTemplate,
   rowToolTemplate,
   rowDrawStart,
@@ -708,6 +733,16 @@ function WarehouseCanvasInner({
                 aria-label="Narzędzia rysowania i lokalizacji"
               >
                 <button type="button" onClick={() => { const next = !rowToolActive; if (next) setRowToolTemplate?.(null); setRowToolActive((a) => !a); }} className={`h-8 rounded-md px-2.5 text-[11px] font-medium transition-all duration-150 ${rowToolActive ? "bg-white text-sky-900 shadow-sm ring-1 ring-sky-200/80" : "text-slate-600 hover:bg-white/80 hover:text-slate-900"}`} title="Narysuj rząd pustych slotów (bez szablonu). Później przeciągnij szablon do slotu.">Rysuj Rząd</button>
+                {setPassageToolActive && (
+                  <button
+                    type="button"
+                    onClick={() => setPassageToolActive((a) => !a)}
+                    className={`h-8 rounded-md px-2.5 text-[11px] font-medium transition-all duration-150 ${passageToolActive ? "bg-white text-indigo-900 shadow-sm ring-1 ring-indigo-200/80" : "text-slate-600 hover:bg-white/80 hover:text-slate-900"}`}
+                    title="Narysuj przejazd przez regały (przeciągnij linię). Shift = dowolny kąt. Skrót: J"
+                  >
+                    Dodaj przejazd
+                  </button>
+                )}
                 {setLayoutMode && (
                   <>
                     <button type="button" onClick={() => setLayoutMode(LayoutMode.ADD_START)} className={`h-8 rounded-md px-2.5 text-[11px] font-medium transition-all duration-150 ${layoutMode === LayoutMode.ADD_START ? "bg-white text-emerald-900 shadow-sm ring-1 ring-emerald-200/80" : "text-slate-600 hover:bg-white/80 hover:text-slate-900"}`} title="Punkt startowy kompletacji">Start</button>
@@ -740,6 +775,21 @@ function WarehouseCanvasInner({
               <span className="w-px self-stretch bg-slate-200/70" aria-hidden />
               <button type="button" onClick={() => setShowLabels((v) => !v)} className={`h-8 rounded-md px-3 text-[11px] font-semibold transition-all duration-150 ${showLabels ? "bg-white text-slate-900 shadow-sm ring-1 ring-slate-200/90" : "text-slate-600 hover:bg-white/80 hover:text-slate-900"}`} title="Nazwy regałów i etykiety elementów">Etykiety</button>
             </div>
+            {passageToolActive && setPassageWidthCm && (
+              <span className="ml-1 flex items-center gap-1.5">
+                <label className="whitespace-nowrap text-[9px] font-medium uppercase tracking-wide text-slate-400">Szer. (cm)</label>
+                <input
+                  type="number"
+                  min={40}
+                  max={200}
+                  step={5}
+                  value={passageWidthCm}
+                  onChange={(e) => setPassageWidthCm(Number(e.target.value) || 90)}
+                  className="h-8 w-14 rounded-lg border border-slate-200/70 bg-white px-2 text-[11px] text-slate-800 shadow-sm"
+                  title="Domyślna szerokość przejazdu"
+                />
+              </span>
+            )}
             {rowToolActive && rowGhostPositions.length > 0 && (
               <span className="text-[10px] font-mono text-slate-500">
                 → {rowGhostPositions.length} {rowToolTemplate ? "regałów" : "slotów"} · {rowPreviewLengthMeters.toFixed(1)} m
@@ -857,7 +907,7 @@ function WarehouseCanvasInner({
                   ? "copy"
                   : draggingRowId
                     ? "grabbing"
-                    : rowToolActive || aisleToolActive
+                    : rowToolActive || passageToolActive || aisleToolActive
                       ? "crosshair"
                       : rowToolTemplate
                         ? "cell"
@@ -930,6 +980,17 @@ function WarehouseCanvasInner({
           >
             {isEditMode && !isLiveView && layoutModeLabel != null && layoutModeColor != null && (
               <LayoutModeBadge modeLabel={layoutModeLabel} modeColor={layoutModeColor} layoutMode={layoutMode} />
+            )}
+            {isEditMode && selectedPassage && setSelectedPassage && !routesWorkspace && (
+              <div className="absolute bottom-4 right-4 z-30 max-w-[14rem]">
+                <PassageQuickEditor
+                  layout={layout}
+                  selectedPassage={selectedPassage}
+                  setLayout={setLayout}
+                  setSelectedPassage={setSelectedPassage}
+                  onClose={() => setSelectedPassage(null)}
+                />
+              </div>
             )}
             <RowPreviewOverlay
               visible={showRowPreview}
@@ -1177,7 +1238,30 @@ function WarehouseCanvasInner({
                     routeStops={isExportMode ? null : routeStops ?? null}
                     isRoutePlanningMode={isExportMode ? false : isRoutePlanningMode}
                     neutralRackStyle={isExportMode}
+                    passageInteractive={isEditMode && !routesWorkspace && !isExportMode}
+                    passageSubtle={routesWorkspace}
+                    selectedPassage={selectedPassage}
+                    onPassageSelect={
+                      setSelectedPassage
+                        ? (rackUuid, passageUuid) => {
+                            setSelectedPassage({ rackUuid, passageUuid });
+                            setSelectedRackId(null);
+                            setSelectedRackIds([]);
+                          }
+                        : undefined
+                    }
+                    onPassageDragStart={onPassageDragStart}
                   />
+                  {isEditMode && passageToolActive && passageDrawStart && passageDrawEnd && (
+                    <PassageDrawPreview
+                      racks={layout.racks}
+                      passageDrawStart={passageDrawStart}
+                      passageDrawEnd={passageDrawEnd}
+                      passageWidthCm={passageWidthCm}
+                      cellPx={cellPx}
+                      shiftKey={passageShiftKey}
+                    />
+                  )}
                   {/* START / PACK only — visit order on rack badges */}
                   {!isExportMode &&
                     showRoute &&

@@ -11,6 +11,7 @@ export interface UseSelectionInteractionParams {
   draggingRackId: number | string | null;
   draggingRowId: string | null;
   rowToolActive: boolean;
+  passageToolActive: boolean;
   placementMode: boolean;
   refs: {
     lastMouseRef: React.MutableRefObject<{ clientX: number; clientY: number } | null>;
@@ -41,6 +42,7 @@ export function useSelectionInteraction(params: UseSelectionInteractionParams) {
     draggingRackId,
     draggingRowId,
     rowToolActive,
+    passageToolActive,
     placementMode,
     refs,
     findEmptySlotAt,
@@ -111,10 +113,10 @@ export function useSelectionInteraction(params: UseSelectionInteractionParams) {
 
   const handleMouseMove = useCallback(
     (_e: React.MouseEvent<SVGSVGElement>, cell: { x: number; y: number } | null) => {
-      if (marqueeStart == null || !cell || draggingRackId != null || draggingRowId != null || rowToolActive || aisleDrawStart || placementMode) return;
+      if (marqueeStart == null || !cell || draggingRackId != null || draggingRowId != null || rowToolActive || passageToolActive || aisleDrawStart || placementMode) return;
       setMarqueeEnd((prev) => (prev?.x === cell.x && prev?.y === cell.y ? prev : cell));
     },
-    [marqueeStart, draggingRackId, draggingRowId, rowToolActive, aisleDrawStart, placementMode, setMarqueeEnd]
+    [marqueeStart, draggingRackId, draggingRowId, rowToolActive, passageToolActive, aisleDrawStart, placementMode, setMarqueeEnd]
   );
 
   const handleMouseUp = useCallback(() => {

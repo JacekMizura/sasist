@@ -459,9 +459,13 @@ export default function WarehouseDesigner() {
   const [marqueeEnd, setMarqueeEnd] = useState<{ x: number; y: number } | null>(null);
   const [layoutMode, setLayoutMode] = useState<LayoutMode>(LayoutMode.SELECT);
   const rowToolActive = layoutMode === LayoutMode.DRAW_ROW;
+  const passageToolActive = layoutMode === LayoutMode.DRAW_PASSAGE;
   const aisleToolActive = layoutMode === LayoutMode.DRAW_AISLE;
   const setRowToolActive = useCallback((v: boolean | ((prev: boolean) => boolean)) => {
     setLayoutMode((prev) => (typeof v === "function" ? v(prev === LayoutMode.DRAW_ROW) : v) ? LayoutMode.DRAW_ROW : LayoutMode.SELECT);
+  }, []);
+  const setPassageToolActive = useCallback((v: boolean | ((prev: boolean) => boolean)) => {
+    setLayoutMode((prev) => (typeof v === "function" ? v(prev === LayoutMode.DRAW_PASSAGE) : v) ? LayoutMode.DRAW_PASSAGE : LayoutMode.SELECT);
   }, []);
   const setAisleToolActive = useCallback((v: boolean | ((prev: boolean) => boolean)) => {
     setLayoutMode((prev) => (typeof v === "function" ? v(prev === LayoutMode.DRAW_AISLE) : v) ? LayoutMode.DRAW_AISLE : LayoutMode.SELECT);
@@ -778,6 +782,19 @@ export default function WarehouseDesigner() {
   const rowDrawTemplateRef = useRef<CatalogItem | null>(null);
   const rowDrawEndPendingRef = useRef<{ x: number; y: number } | null>(null);
   const rowDrawEndRafRef = useRef<number | null>(null);
+  const passageDrawEndPendingRef = useRef<{ x: number; y: number } | null>(null);
+  const passageDrawEndRafRef = useRef<number | null>(null);
+  const passageShiftKeyRef = useRef(false);
+  const [passageDrawStart, setPassageDrawStart] = useState<{ x: number; y: number } | null>(null);
+  const [passageDrawEnd, setPassageDrawEnd] = useState<{ x: number; y: number } | null>(null);
+  const [passageWidthCm, setPassageWidthCm] = useState(90);
+  const [selectedPassage, setSelectedPassage] = useState<{ rackUuid: string; passageUuid: string } | null>(null);
+  const [draggingPassage, setDraggingPassage] = useState<{
+    rackUuid: string;
+    passageUuid: string;
+    grabOffsetCm: number;
+  } | null>(null);
+  const [passageShiftKey, setPassageShiftKey] = useState(false);
   const cursorPendingRef = useRef<{ x: number; y: number } | null>(null);
   const cursorRafRef = useRef<number | null>(null);
   const placeRowWithTemplateRef = useRef<((start: { x: number; y: number }, end: { x: number; y: number }, item: CatalogItem) => void) | null>(null);
@@ -817,6 +834,25 @@ export default function WarehouseDesigner() {
       rowDrawEndRafRef.current = null;
     }
   }, [rowToolActive]);
+
+  useEffect(() => {
+    if (passageToolActive) return;
+    setPassageDrawStart(null);
+    setPassageDrawEnd(null);
+    passageDrawEndPendingRef.current = null;
+    if (passageDrawEndRafRef.current != null) {
+      cancelAnimationFrame(passageDrawEndRafRef.current);
+      passageDrawEndRafRef.current = null;
+    }
+  }, [passageToolActive]);
+
+  useEffect(() => {
+    if (!routesMode) return;
+    setSelectedPassage(null);
+    setPassageDrawStart(null);
+    setPassageDrawEnd(null);
+    setDraggingPassage(null);
+  }, [routesMode]);
 
   useEffect(() => {
     const v = searchParams.get("view") === "layout" ? "layout" : "magazyn";
@@ -2212,6 +2248,9 @@ export default function WarehouseDesigner() {
       rowDragPreviewStartRef,
       rowDrawEndPendingRef,
       rowDrawEndRafRef,
+      passageDrawEndPendingRef,
+      passageDrawEndRafRef,
+      passageShiftKeyRef,
       rowDrawTemplateRef,
       placeRowWithTemplateRef,
       placeEmptyRowRef,
@@ -2231,6 +2270,11 @@ export default function WarehouseDesigner() {
       marqueeStart,
       marqueeEnd,
       rowToolActive,
+      passageToolActive,
+      passageDrawStart,
+      passageDrawEnd,
+      passageWidthCm,
+      draggingPassage,
       rowDrawStart,
       rowDrawEnd,
       rowToolTemplate,
@@ -2286,6 +2330,10 @@ export default function WarehouseDesigner() {
       setShowAllProductsInSidebar,
       setRowToolTemplate,
       setSelectedWallElementId,
+      setPassageDrawStart,
+      setPassageDrawEnd,
+      setSelectedPassage,
+      setDraggingPassage,
     },
     callbacks: {
       stampRackAt,
@@ -2320,6 +2368,15 @@ export default function WarehouseDesigner() {
       wallElementTool,
     },
   });
+
+  const handleCanvasMouseMoveWithPassage = useCallback(
+    (e: React.MouseEvent<SVGSVGElement>) => {
+      passageShiftKeyRef.current = e.shiftKey;
+      setPassageShiftKey(e.shiftKey);
+      handleCanvasMouseMove(e);
+    },
+    [handleCanvasMouseMove]
+  );
 
   const {
     deleteSelectedRow,
@@ -3873,7 +3930,7 @@ export default function WarehouseDesigner() {
               height,
               svgRef,
               canvasContainerRef,
-              onMouseMove: handleCanvasMouseMove,
+              onMouseMove: handleCanvasMouseMoveWithPassage,
               onMouseDown: handleCanvasMouseDown,
               onMouseUp: handleCanvasMouseUp,
               onMouseLeave: handleCanvasMouseLeave,
@@ -3917,6 +3974,18 @@ export default function WarehouseDesigner() {
               setAisleToolActive,
               rowToolActive,
               setRowToolActive,
+              passageToolActive,
+              setPassageToolActive,
+              passageDrawStart,
+              passageDrawEnd,
+              passageWidthCm,
+              setPassageWidthCm,
+              passageShiftKey,
+              selectedPassage,
+              setSelectedPassage,
+              onPassageDragStart: (rackUuid, passageUuid, grabOffsetCm) =>
+                setDraggingPassage({ rackUuid, passageUuid, grabOffsetCm }),
+              routesWorkspace: routesMode,
               setRowToolTemplate,
               rowToolTemplate,
               rowDrawStart,

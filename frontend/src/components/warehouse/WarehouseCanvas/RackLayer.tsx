@@ -17,7 +17,10 @@ import {
 import { RACK_LABEL_MEDIUM_STRIDE, type RackLabelLodLevel } from "../../../utils/rackLabelLod";
 import { clampRackRectLayout } from "../../../utils/rackMapVisual";
 import { colors, radius } from "../../../layout/designTokens";
-import { passageRectInRackPx } from "../../../pages/WarehouseDesigner/passages/rackPassageGeometry";
+import { passageRectInRackPx, rackFootprintCm, rackUuid } from "../../../pages/WarehouseDesigner/passages/rackPassageGeometry";
+import { GRID_UNIT_CM } from "../../../types/warehouse";
+
+import type { SelectedPassage } from "../../../pages/WarehouseDesigner/interactions/usePassageInteraction";
 
 const RACK_RADIUS_PX = parseFloat(radius.small) || 6;
 const DEFAULT_RACK_FILL = "#3b82f6";
@@ -130,6 +133,12 @@ export type RackLayerProps = {
   zoom?: number;
   /** PDF/export: uniform neutral fill — no template color or occupancy styling on rack body. */
   neutralRackStyle?: boolean;
+  /** Projektowanie: passages clickable/draggable. TRASY: subtle, non-interactive. */
+  passageInteractive?: boolean;
+  passageSubtle?: boolean;
+  selectedPassage?: SelectedPassage | null;
+  onPassageSelect?: (rackUuid: string, passageUuid: string) => void;
+  onPassageDragStart?: (rackUuid: string, passageUuid: string, grabOffsetCm: number) => void;
 };
 
 export function RackLayer({
@@ -159,6 +168,11 @@ export function RackLayer({
   layout = null,
   zoom: zoomProp = 1,
   neutralRackStyle = false,
+  passageInteractive = false,
+  passageSubtle = false,
+  selectedPassage = null,
+  onPassageSelect,
+  onPassageDragStart,
 }: RackLayerProps) {
   const mapZoom = zoomProp;
   const labelsReadable = mapZoom >= LABEL_ZOOM_MIN_VISIBLE;
@@ -530,6 +544,11 @@ export function RackLayer({
                 const pr = passageRectInRackPx(r, p, layoutRect);
                 if (!pr || pr.w < 1 || pr.h < 1) return null;
                 const on = p.enabled !== false;
+                const isPassageSelected =
+                  selectedPassage != null &&
+                  selectedPassage.rackUuid === rackUuid(r) &&
+                  selectedPassage.passageUuid === p.uuid;
+                const subtle = passageSubtle && !passageInteractive;
                 return (
                   <rect
                     key={`${reactKey}-passage-${p.uuid}`}
@@ -537,11 +556,52 @@ export function RackLayer({
                     y={pr.y}
                     width={pr.w}
                     height={pr.h}
-                    fill={on ? "rgba(248,250,252,0.92)" : "rgba(148,163,184,0.35)"}
-                    stroke={on ? "#94a3b8" : "#64748b"}
-                    strokeWidth={1}
+                    fill={
+                      subtle
+                        ? on
+                          ? "rgba(248,250,252,0.45)"
+                          : "rgba(148,163,184,0.2)"
+                        : on
+                          ? "rgba(248,250,252,0.92)"
+                          : "rgba(148,163,184,0.35)"
+                    }
+                    stroke={isPassageSelected ? "#6366f1" : on ? (subtle ? "#cbd5e1" : "#94a3b8") : "#64748b"}
+                    strokeWidth={isPassageSelected ? 2.5 : 1}
                     strokeDasharray={on ? "3 2" : "2 3"}
-                    pointerEvents="none"
+                    pointerEvents={passageInteractive ? "auto" : "none"}
+                    style={passageInteractive ? { cursor: "grab" } : undefined}
+                    onMouseDown={
+                      passageInteractive && onPassageDragStart
+                        ? (ev) => {
+                            ev.stopPropagation();
+                            onPassageSelect?.(rackUuid(r), p.uuid);
+                            const svg = (ev.target as Element).ownerSVGElement;
+                            if (!svg) return;
+                            const pt = svg.createSVGPoint();
+                            pt.x = ev.clientX;
+                            pt.y = ev.clientY;
+                            const ctm = svg.getScreenCTM();
+                            if (!ctm) return;
+                            const loc = pt.matrixTransform(ctm.inverse());
+                            const fp = rackFootprintCm(r);
+                            const alongIsX = (r.orientation || "vertical").toLowerCase() === "horizontal";
+                            const cursorCmX = (loc.x / cellPx) * GRID_UNIT_CM;
+                            const cursorCmY = (loc.y / cellPx) * GRID_UNIT_CM;
+                            const cursorAlong = alongIsX ? cursorCmX : cursorCmY;
+                            const fpOrigin = alongIsX ? fp.minX : fp.minY;
+                            const grabOffsetCm = cursorAlong - fpOrigin - p.offset_along_cm;
+                            onPassageDragStart(rackUuid(r), p.uuid, grabOffsetCm);
+                          }
+                        : undefined
+                    }
+                    onClick={
+                      passageInteractive && onPassageSelect
+                        ? (ev) => {
+                            ev.stopPropagation();
+                            onPassageSelect(rackUuid(r), p.uuid);
+                          }
+                        : undefined
+                    }
                   />
                 );
               })}
