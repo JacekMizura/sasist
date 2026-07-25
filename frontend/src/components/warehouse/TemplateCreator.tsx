@@ -9,7 +9,7 @@ import {
   SINGLE_ENABLED_PASSAGE_ERROR,
   storageLevelConfigAfterVoid,
 } from "./passageStorage";
-import { TemplatePassageOverlay } from "./TemplatePassageOverlay";
+import { TemplatePassageOverlay, isPassageGeometryValid } from "./TemplatePassageOverlay";
 import { PASSAGE_FIELD_HINTS, passageFieldLabel } from "./passageFieldCopy";
 import { getStorageTypeStyle, normalizeBinTypeMap, normalizeStorageType, TEMPLATE_STORAGE_TYPE_OPTIONS } from "../../utils/storageTypes";
 import { StorageTypeIcon } from "../../utils/storageTypeIcons";
@@ -108,43 +108,57 @@ export function RackPreview({
     structuralRows.length,
     getPassageVoidHeightCm(passages)
   );
-  const levelRows = storageLevelConfigAfterVoid(structuralRows, voidCount);
-  const L = levelRows.length;
-  const pattern = (addressPattern || DEFAULT_ADDRESS_PATTERN).trim() || DEFAULT_ADDRESS_PATTERN;
-  const rackIdForPreview = (rowId || "A").replace(/\./g, "") + "1";
   const structuralHeights = levelHeightsForRack(height_cm, structuralRows.length);
-  const levelHeights = levelRows.map((_, lev) => structuralHeights[lev + voidCount] ?? height_cm / Math.max(1, structuralRows.length));
-  const voidHeightCm = structuralHeights.slice(0, voidCount).reduce((s, h) => s + h, 0);
-  const cells: { level: number; bin: number; label: string; storageType: StorageType; locationsOnLevel: number; volPerBin: number; levelHeightCm: number }[] = [];
-  for (let lev = 0; lev < L; lev++) {
-    const locs = Math.max(1, levelRows[lev].locations);
-    const structuralLev = lev + voidCount;
-    const levelHeightCm = levelHeights[lev] ?? height_cm / Math.max(1, structuralRows.length);
+  const rackIdForPreview = (rowId || "A").replace(/\./g, "") + "1";
+  const pattern = (addressPattern || DEFAULT_ADDRESS_PATTERN).trim() || DEFAULT_ADDRESS_PATTERN;
+  /** All construction levels (bottom → top index). Labels use construction index — never renumber after void. */
+  type PreviewBand =
+    | {
+        kind: "storage";
+        structuralLev: number;
+        locations: number;
+        levelHeightCm: number;
+        cells: { bin: number; label: string; storageType: StorageType; volPerBin: number }[];
+      }
+    | { kind: "void"; structuralLev: number; levelHeightCm: number };
+  const bands: PreviewBand[] = [];
+  for (let structuralLev = 0; structuralLev < structuralRows.length; structuralLev++) {
+    const levelHeightCm = structuralHeights[structuralLev] ?? height_cm / Math.max(1, structuralRows.length);
+    if (structuralLev < voidCount) {
+      bands.push({ kind: "void", structuralLev, levelHeightCm });
+      continue;
+    }
+    const locs = Math.max(1, structuralRows[structuralLev]!.locations);
     const volPerBinLev = volumePerBinForLevelHeightDm3(width_cm, depth_cm, levelHeightCm, locs);
-    for (let bin = 0; bin < locs; bin++) {
+    const cells = Array.from({ length: locs }, (_, bin) => {
       const nameLabel = generateLocationLabel({
-        levelIndex: lev,
+        levelIndex: structuralLev,
         segmentIndex: bin,
-        levelRows,
+        levelRows: structuralRows,
         labelOptions: labelOptions ? { ...labelOptions, rackId: rackIdForPreview } : null,
         addressPattern: pattern,
         rowId,
         sectionStartIndex,
         binNamingType,
       });
-      cells.push({
-        level: lev,
+      return {
         bin,
         label: nameLabel,
         storageType: normalizeStorageType(
-          binTypeMap[cellKey(lev, bin)] ?? binTypeMap[cellKey(structuralLev, bin)]
+          binTypeMap[cellKey(structuralLev, bin)] ?? binTypeMap[cellKey(structuralLev - voidCount, bin)]
         ),
-        locationsOnLevel: locs,
         volPerBin: volPerBinLev,
-        levelHeightCm,
-      });
-    }
+      };
+    });
+    bands.push({
+      kind: "storage",
+      structuralLev,
+      locations: locs,
+      levelHeightCm,
+      cells,
+    });
   }
+  const L = bands.length;
   const containerRef = useRef<HTMLDivElement>(null);
   const [containerSize, setContainerSize] = useState({ w: 500, h: 400 });
   const [hoverBin, setHoverBin] = useState<{ level: number; bin: number } | null>(null);
@@ -171,29 +185,29 @@ export function RackPreview({
   const viewBoxH = Math.max(280, Math.round(viewBoxW * (containerSize.h / Math.max(containerSize.w, 1))));
   const contentW = viewBoxW - 2 * margin - 2 * beamW;
   const contentAreaH = viewBoxH - 2 * margin;
-  const totalLevelHeightCm = Math.max(1, levelHeights.reduce((sum, v) => sum + Math.max(1, v), 0) + Math.max(0, voidHeightCm));
+  const totalLevelHeightCm = Math.max(
+    1,
+    bands.reduce((sum, b) => sum + Math.max(1, b.levelHeightCm), 0)
+  );
   const ox = margin + beamW;
   const contentAreaY = margin;
   const pad = 2;
-  const textPadding = 5;
-  const levelPixelHeight = (level: number) => {
-    const levelHeightCm = Math.max(1, levelHeights[level] ?? 1);
+  const levelPixelHeight = (bandIndex: number) => {
+    const levelHeightCm = Math.max(1, bands[bandIndex]?.levelHeightCm ?? 1);
     return (levelHeightCm / totalLevelHeightCm) * contentAreaH;
   };
-  const voidPixelHeight = voidHeightCm > 0 ? (voidHeightCm / totalLevelHeightCm) * contentAreaH : 0;
-  const levelToY = (level: number) => {
+  const levelToY = (bandIndex: number) => {
     let y = contentAreaY + pad;
-    for (let lev = L - 1; lev > level; lev--) y += levelPixelHeight(lev);
+    for (let lev = L - 1; lev > bandIndex; lev--) y += levelPixelHeight(lev);
     return y;
   };
-  const cellInsetH = (level: number) => Math.max(0, levelPixelHeight(level) - pad * 2);
+  const cellInsetH = (bandIndex: number) => Math.max(0, levelPixelHeight(bandIndex) - pad * 2);
 
-  const floorY = (L > 0 ? levelToY(0) + cellInsetH(0) : contentAreaY) + voidPixelHeight;
+  const floorY = L > 0 ? levelToY(0) + cellInsetH(0) : contentAreaY;
   const topLevelRowBottomY = L > 0 ? levelToY(L - 1) + cellInsetH(L - 1) : contentAreaY;
   const uprightTopY = topLevelRowBottomY;
   const uprightHeight = Math.max(0, floorY - topLevelRowBottomY);
   const internalShelfYs = L > 1 ? Array.from({ length: L - 1 }, (_, i) => levelToY(L - 2 - i)) : [];
-  const voidBandY = L > 0 ? levelToY(0) + cellInsetH(0) : contentAreaY;
 
   return (
     <div className={`flex flex-col flex-1 min-h-0 rounded-2xl border border-slate-200/40 bg-white/90 shadow-sm overflow-hidden ${className}`}>
@@ -237,146 +251,180 @@ export function RackPreview({
                   strokeLinecap="butt"
                 />
               ))}
-              {voidPixelHeight > 0 && (
-                <g aria-label="Przejazd pod regałem">
-                  {(() => {
-                    const bandH = Math.max(1, voidPixelHeight - pad);
-                    const beam = Math.max(1.5, Math.min(4, bandH * 0.08));
+              <g clipPath="url(#rack-content-clip)">
+                {bands.map((band, bandIdx) => {
+                  const yStart = levelToY(bandIdx);
+                  const hBand = cellInsetH(bandIdx);
+                  if (band.kind === "void") {
+                    const beam = Math.max(1.5, Math.min(4, hBand * 0.08));
                     return (
-                      <>
-                        <rect x={ox} y={voidBandY} width={contentW} height={bandH} fill="url(#template-passage-hatch)" />
-                        <rect x={ox} y={voidBandY} width={contentW} height={beam} fill="#334155" />
-                        <rect x={ox} y={voidBandY + bandH - beam} width={contentW} height={beam} fill="#334155" />
+                      <g key={`void-${band.structuralLev}`} aria-label={`Przejazd — poziom konstrukcyjny ${band.structuralLev + 1}`}>
+                        <rect x={ox} y={yStart} width={contentW} height={hBand} fill="url(#template-passage-hatch)" />
+                        <rect x={ox} y={yStart} width={contentW} height={beam} fill="#334155" />
+                        <rect x={ox} y={yStart + hBand - beam} width={contentW} height={beam} fill="#334155" />
                         <text
                           x={ox + contentW / 2}
-                          y={voidBandY + bandH / 2}
+                          y={yStart + hBand / 2}
                           textAnchor="middle"
                           dominantBaseline="middle"
-                          fontSize={Math.min(18, Math.max(10, bandH * 0.28))}
+                          fontSize={Math.min(16, Math.max(9, hBand * 0.35))}
                           fontWeight={700}
                           fill="#475569"
                           letterSpacing="0.18em"
                         >
                           PRZEJAZD
                         </text>
-                      </>
+                      </g>
                     );
-                  })()}
-                </g>
-              )}
-              <g clipPath="url(#rack-content-clip)">
-                {/* Vertical dividers: per level, within level band only */}
-                {levelRows.map((row, lev) => {
-                  const locs = Math.max(1, row.locations);
-                  if (locs <= 1) return null;
-                  const yStart = levelToY(lev);
-                  const yEnd = yStart + cellInsetH(lev);
-                  return Array.from({ length: locs - 1 }, (_, i) => (
-                    <line
-                      key={`div-${lev}-${i}`}
-                      x1={ox + ((i + 1) / locs) * contentW}
-                      y1={yStart}
-                      x2={ox + ((i + 1) / locs) * contentW}
-                      y2={yEnd}
-                      stroke={SHELF_GREY}
-                      strokeWidth={1}
-                      opacity={0.9}
-                    />
-                  ));
-                })}
-                {/* Bins: Line1 ID 16px bold, Line2/3 12px; 5px padding; flex-like vertical center; scale down to min 10px when narrow. */}
-                {cells.map(({ level, bin, label, storageType, locationsOnLevel, volPerBin: cellVol, levelHeightCm }) => {
-                  const levelTotalWidthCm = Math.max(1, width_cm);
-                  const locationWidthsCm = Array.from({ length: Math.max(1, locationsOnLevel) }, () => levelTotalWidthCm / Math.max(1, locationsOnLevel));
-                  const totalWidthThisLevel = locationWidthsCm.reduce((sum, value) => sum + value, 0) || 1;
-                  const widthPct = (locationWidthsCm[bin] ?? 0) / totalWidthThisLevel;
-                  const offsetPct = locationWidthsCm.slice(0, bin).reduce((sum, value) => sum + value, 0) / totalWidthThisLevel;
-                  const cellWLev = contentW * widthPct;
-                  const x = ox + contentW * offsetPct + pad;
-                  const y = levelToY(level);
-                  const w = cellWLev - pad * 2;
-                  const h = cellInsetH(level);
-                  const tunedTypeStyle = storageType === "reserve"
-                    ? { bg: "#fef9c3", border: "#fde68a" } // light yellow
-                    : storageType === "damaged"
-                      ? { bg: "#fee2e2", border: "#fecaca" } // light red
-                      : { bg: "#eff6ff", border: "#bfdbfe" }; // primary light blue
-                  const fill = tunedTypeStyle.bg;
-                  const stroke = tunedTypeStyle.border;
-                  const volStr = `${Number(cellVol).toFixed(2)} dm³`;
-                  const locationWidthCm = locationWidthsCm[bin] ?? 0;
-                  const title = `${label}\nSZ:${Math.round(locationWidthCm)} × GŁ:${Math.round(depth_cm)} × WYS:${Math.round(levelHeightCm)}\n${volStr}`;
-                  const textColor = "#020617";
-                  const subColor = "#475569";
-                  const isFocused = focusedBin != null && focusedBin.level === level && focusedBin.bin === bin;
-                  const isHovered = hoverBin != null && hoverBin.level === level && hoverBin.bin === bin;
-                  const isCompact = w < 90 || h < 52;
-                  const dimsLine = `SZ ${Math.round(locationWidthCm)} · GŁ ${Math.round(depth_cm)} · WYS ${Math.round(levelHeightCm)}`;
-                  const labelText = label.length > 14 ? `${label.slice(0, 12)}…` : label;
-                  const cx = x + w / 2;
-                  const cy = y + h / 2;
-                  const nameFont = Math.max(10, Math.min(22, w * 0.22));
-                  const dimsFont = Math.max(8, Math.min(13, w * 0.12));
-                  const capFont = Math.max(7, Math.min(11, w * 0.1));
-                  const lineGap = 4;
-                  const dimsOpacity = 0.88;
-                  const capOpacity = 0.76;
-                  const cellStroke = isFocused ? "#0284c7" : stroke;
-                  const cellStrokeW = isFocused ? 2.75 : isHovered ? 1.65 : 1;
-                  const nameBaselineY = isCompact
-                    ? cy + nameFont * 0.35
-                    : cy - (dimsFont + capFont + lineGap * 2) / 2 + nameFont * 0.35;
-                  const dimsY = nameBaselineY + lineGap + dimsFont;
-                  const capY = dimsY + lineGap + capFont;
+                  }
+                  const locs = band.locations;
                   return (
-                    <g
-                      key={`${level}-${bin}`}
-                      onClick={() => {
-                        if (onLabelEdit) onLabelEdit(level, bin, label);
-                        else onBinClick?.(level, bin);
-                      }}
-                      onMouseEnter={() => setHoverBin({ level, bin })}
-                      onMouseLeave={() => setHoverBin((h) => (h?.level === level && h?.bin === bin ? null : h))}
-                      style={{ cursor: onLabelEdit || onBinClick ? "pointer" : undefined }}
-                    >
-                      <rect
-                        x={x}
-                        y={y}
-                        width={w}
-                        height={h}
-                        fill={fill}
-                        stroke={cellStroke}
-                        strokeWidth={cellStrokeW}
-                        rx={3}
-                        style={{ transition: "stroke 150ms ease, stroke-width 150ms ease" }}
-                      />
-                      {isHovered && !isFocused ? (
-                        <rect
-                          x={x}
-                          y={y}
-                          width={w}
-                          height={h}
-                          fill="#0f172a"
-                          opacity={0.05}
-                          rx={3}
-                          pointerEvents="none"
-                          style={{ transition: "opacity 150ms ease" }}
-                        />
-                      ) : null}
-                      <title>{title}</title>
-                      <text x={cx} y={nameBaselineY} textAnchor="middle" fontSize={nameFont} fill={textColor} fontFamily="system-ui, sans-serif" fontWeight="800">
-                        {labelText}
-                      </text>
-                      {!isCompact && (
-                        <>
-                          <text x={cx} y={dimsY} textAnchor="middle" fontSize={dimsFont} fill={subColor} opacity={dimsOpacity} fontFamily="system-ui, sans-serif">
-                            {dimsLine}
-                          </text>
-                          <text x={cx} y={capY} textAnchor="middle" fontSize={capFont} fill={subColor} opacity={capOpacity} fontFamily="system-ui, sans-serif">
-                            {volStr}
-                          </text>
-                        </>
-                      )}
+                    <g key={`storage-${band.structuralLev}`}>
+                      {locs > 1
+                        ? Array.from({ length: locs - 1 }, (_, i) => (
+                            <line
+                              key={`div-${band.structuralLev}-${i}`}
+                              x1={ox + ((i + 1) / locs) * contentW}
+                              y1={yStart}
+                              x2={ox + ((i + 1) / locs) * contentW}
+                              y2={yStart + hBand}
+                              stroke={SHELF_GREY}
+                              strokeWidth={1}
+                              opacity={0.9}
+                            />
+                          ))
+                        : null}
+                      {band.cells.map(({ bin, label, storageType, volPerBin: cellVol }) => {
+                        const levelTotalWidthCm = Math.max(1, width_cm);
+                        const locationWidthsCm = Array.from(
+                          { length: locs },
+                          () => levelTotalWidthCm / locs
+                        );
+                        const totalWidthThisLevel = locationWidthsCm.reduce((sum, value) => sum + value, 0) || 1;
+                        const widthPct = (locationWidthsCm[bin] ?? 0) / totalWidthThisLevel;
+                        const offsetPct =
+                          locationWidthsCm.slice(0, bin).reduce((sum, value) => sum + value, 0) / totalWidthThisLevel;
+                        const cellWLev = contentW * widthPct;
+                        const x = ox + contentW * offsetPct + pad;
+                        const y = yStart;
+                        const w = cellWLev - pad * 2;
+                        const h = hBand;
+                        const tunedTypeStyle =
+                          storageType === "reserve"
+                            ? { bg: "#fef9c3", border: "#fde68a" }
+                            : storageType === "damaged"
+                              ? { bg: "#fee2e2", border: "#fecaca" }
+                              : { bg: "#eff6ff", border: "#bfdbfe" };
+                        const fill = tunedTypeStyle.bg;
+                        const stroke = tunedTypeStyle.border;
+                        const volStr = `${Number(cellVol).toFixed(2)} dm³`;
+                        const locationWidthCm = locationWidthsCm[bin] ?? 0;
+                        const title = `${label}\nSZ:${Math.round(locationWidthCm)} × WYS:${Math.round(band.levelHeightCm)}\n${volStr}`;
+                        const textColor = "#020617";
+                        const subColor = "#475569";
+                        const structuralLev = band.structuralLev;
+                        const isFocused =
+                          focusedBin != null && focusedBin.level === structuralLev && focusedBin.bin === bin;
+                        const isHovered =
+                          hoverBin != null && hoverBin.level === structuralLev && hoverBin.bin === bin;
+                        const isCompact = w < 90 || h < 52;
+                        const dimsLine = `SZ ${Math.round(locationWidthCm)} · WYS ${Math.round(band.levelHeightCm)}`;
+                        const labelText = label.length > 14 ? `${label.slice(0, 12)}…` : label;
+                        const cx = x + w / 2;
+                        const cy = y + h / 2;
+                        const nameFont = Math.max(10, Math.min(22, w * 0.22));
+                        const dimsFont = Math.max(8, Math.min(13, w * 0.12));
+                        const capFont = Math.max(7, Math.min(11, w * 0.1));
+                        const lineGap = 4;
+                        const dimsOpacity = 0.88;
+                        const capOpacity = 0.76;
+                        const cellStroke = isFocused ? "#0284c7" : stroke;
+                        const cellStrokeW = isFocused ? 2.75 : isHovered ? 1.65 : 1;
+                        const nameBaselineY = isCompact
+                          ? cy + nameFont * 0.35
+                          : cy - (dimsFont + capFont + lineGap * 2) / 2 + nameFont * 0.35;
+                        const dimsY = nameBaselineY + lineGap + dimsFont;
+                        const capY = dimsY + lineGap + capFont;
+                        return (
+                          <g
+                            key={`${structuralLev}-${bin}`}
+                            onClick={() => {
+                              if (onLabelEdit) onLabelEdit(structuralLev, bin, label);
+                              else onBinClick?.(structuralLev, bin);
+                            }}
+                            onMouseEnter={() => setHoverBin({ level: structuralLev, bin })}
+                            onMouseLeave={() =>
+                              setHoverBin((h) =>
+                                h?.level === structuralLev && h?.bin === bin ? null : h
+                              )
+                            }
+                            style={{ cursor: onLabelEdit || onBinClick ? "pointer" : undefined }}
+                          >
+                            <rect
+                              x={x}
+                              y={y}
+                              width={w}
+                              height={h}
+                              fill={fill}
+                              stroke={cellStroke}
+                              strokeWidth={cellStrokeW}
+                              rx={3}
+                              style={{ transition: "stroke 150ms ease, stroke-width 150ms ease" }}
+                            />
+                            {isHovered && !isFocused ? (
+                              <rect
+                                x={x}
+                                y={y}
+                                width={w}
+                                height={h}
+                                fill="#0f172a"
+                                opacity={0.05}
+                                rx={3}
+                                pointerEvents="none"
+                                style={{ transition: "opacity 150ms ease" }}
+                              />
+                            ) : null}
+                            <title>{title}</title>
+                            <text
+                              x={cx}
+                              y={nameBaselineY}
+                              textAnchor="middle"
+                              fontSize={nameFont}
+                              fill={textColor}
+                              fontFamily="system-ui, sans-serif"
+                              fontWeight="800"
+                            >
+                              {labelText}
+                            </text>
+                            {!isCompact && (
+                              <>
+                                <text
+                                  x={cx}
+                                  y={dimsY}
+                                  textAnchor="middle"
+                                  fontSize={dimsFont}
+                                  fill={subColor}
+                                  opacity={dimsOpacity}
+                                  fontFamily="system-ui, sans-serif"
+                                >
+                                  {dimsLine}
+                                </text>
+                                <text
+                                  x={cx}
+                                  y={capY}
+                                  textAnchor="middle"
+                                  fontSize={capFont}
+                                  fill={subColor}
+                                  opacity={capOpacity}
+                                  fontFamily="system-ui, sans-serif"
+                                >
+                                  {volStr}
+                                </text>
+                              </>
+                            )}
+                          </g>
+                        );
+                      })}
                     </g>
                   );
                 })}
@@ -1099,13 +1147,12 @@ export function TemplateCreator({ onSave, initialTemplate, onCancelEdit, onSaveE
       <DesignerAccordion title="PRZEJAZDY" open={accordionOpen.przejazdy} onToggle={() => toggleAccordion("przejazdy")}>
         <div className="space-y-3">
           <p className="text-slate-500 text-xs leading-snug">
-            Jeden przejazd na regał. Wysokość wolnej przestrzeni od posadzki wyznacza strefę bez
-            lokalizacji magazynowych. Edytuj tutaj lub na widoku z góry (po prawej).
+            Jeden przejazd na regał. Przechodzi przez całą głębokość — konfigurujesz tylko położenie
+            wzdłuż szerokości i wysokość wolnej przestrzeni od posadzki.
           </p>
           {defaultPassages.map((p, idx) => {
-            const along = Math.max(1, snapCm(depth_cm));
-            const endCm = Number(p.offset_along_cm) + Number(p.width_cm);
-            const geometryInvalid = endCm > along + 0.01 || Number(p.width_cm) < 1 || Number(p.offset_along_cm) < 0;
+            const rackW = Math.max(1, snapCm(width_cm));
+            const geometryInvalid = !isPassageGeometryValid(rackW, Number(p.offset_along_cm), Number(p.width_cm));
             return (
             <div
               key={idx}
@@ -1114,7 +1161,18 @@ export function TemplateCreator({ onSave, initialTemplate, onCancelEdit, onSaveE
               } ${geometryInvalid ? "border-red-400 ring-1 ring-red-300" : ""}`}
               onClick={() => setSelectedPassageIndex(idx)}
             >
-              <label className={`text-xs ${geometryInvalid && endCm > along ? "text-red-700" : "text-slate-500"}`}>
+              <label className="flex items-center gap-1.5 text-xs text-slate-700 pb-1 self-center min-w-[7rem]">
+                <input
+                  type="checkbox"
+                  checked={p.enabled !== false}
+                  onChange={(e) => {
+                    const checked = e.target.checked;
+                    setDefaultPassages((prev) => prev.map((x, i) => (i === idx ? { ...x, enabled: checked } : x)));
+                  }}
+                />
+                Włącz przejazd
+              </label>
+              <label className={`text-xs ${geometryInvalid ? "text-red-700" : "text-slate-500"}`}>
                 {passageFieldLabel("offset")}
                 <input
                   type="number"
@@ -1167,17 +1225,6 @@ export function TemplateCreator({ onSave, initialTemplate, onCancelEdit, onSaveE
                 />
                 <span className="mt-0.5 block text-[10px] text-slate-400 leading-snug max-w-[14rem]">{PASSAGE_FIELD_HINTS.clearance}</span>
               </label>
-              <label className="flex items-center gap-1 text-xs text-slate-500 pb-1 self-end">
-                <input
-                  type="checkbox"
-                  checked={p.enabled !== false}
-                  onChange={(e) => {
-                    const checked = e.target.checked;
-                    setDefaultPassages((prev) => prev.map((x, i) => (i === idx ? { ...x, enabled: checked } : x)));
-                  }}
-                />
-                Włączony
-              </label>
               <button
                 type="button"
                 className="text-xs text-red-600 hover:underline pb-1 self-end"
@@ -1191,7 +1238,7 @@ export function TemplateCreator({ onSave, initialTemplate, onCancelEdit, onSaveE
               </button>
               {geometryInvalid ? (
                 <p className="w-full text-[11px] font-semibold text-red-700">
-                  Przejazd wychodzi poza głębokość regału ({along} cm). Popraw początek lub szerokość.
+                  Przejazd wychodzi poza szerokość regału ({rackW} cm). Popraw początek lub szerokość.
                 </p>
               ) : null}
             </div>
@@ -1202,7 +1249,7 @@ export function TemplateCreator({ onSave, initialTemplate, onCancelEdit, onSaveE
               type="button"
               className="text-sm text-cyan-700 hover:underline"
               onClick={() => {
-                const along = Math.max(1, snapCm(depth_cm));
+                const along = Math.max(1, snapCm(width_cm));
                 const width = Math.min(100, Math.max(40, along * 0.25));
                 const offset = Math.max(0, (along - width) / 2);
                 setDefaultPassages([
@@ -1291,7 +1338,9 @@ export function TemplateCreator({ onSave, initialTemplate, onCancelEdit, onSaveE
             />
             <TemplatePassageOverlay
               width_cm={width_cm}
-              depth_cm={depth_cm}
+              height_cm={height_cm}
+              levels={levels}
+              levelConfig={levelConfigForSave}
               passages={defaultPassages}
               selectedIndex={selectedPassageIndex}
               onSelectIndex={setSelectedPassageIndex}

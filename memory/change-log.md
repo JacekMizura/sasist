@@ -1,3 +1,10 @@
+## 2026-07-25 — Template editor: front passage + width axis (no push)
+
+- TemplatePassageOverlay: widok od przodu (nie z góry); along = `width_cm`
+- Walidacja: start/szerokość względem szerokości regału (nie głębokości)
+- Podgląd: etykiety po poziomie konstrukcyjnym (bez renumeracji); void = PRZEJAZD per poziom
+- Bez push.
+
 ## 2026-07-25 — Hard: one enabled passage per rack (no push)
 
 - Shared message: `Regał może posiadać tylko jeden przejazd pod regałem.`
