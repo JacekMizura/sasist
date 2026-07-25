@@ -1,4 +1,5 @@
 import type { LayoutState } from "../../../types/warehouse";
+import { normalizePassageSource, PassageSource as PassageSourceEnum } from "../../../types/warehouse";
 import {
   deletePassageGroup,
   findPassageGroup,
@@ -12,15 +13,17 @@ type Props = {
   setLayout: React.Dispatch<React.SetStateAction<LayoutState>>;
   setSelectedPassage: React.Dispatch<React.SetStateAction<SelectedPassage | null>>;
   onClose?: () => void;
+  onOpenTemplate?: () => void;
 };
 
 /** Compact corridor editor — multi-rack passages edit as one logical opening. */
-export function PassageQuickEditor({ layout, selectedPassage, setLayout, setSelectedPassage, onClose }: Props) {
+export function PassageQuickEditor({ layout, selectedPassage, setLayout, setSelectedPassage, onClose, onOpenTemplate }: Props) {
   const members = findPassageGroup(layout, selectedPassage.rackUuid, selectedPassage.passageUuid);
   if (members.length === 0) return null;
 
   const primary = members.find((m) => m.passage.uuid === selectedPassage.passageUuid) ?? members[0];
   const { passage } = primary;
+  const inherited = normalizePassageSource(passage.passage_source) === PassageSourceEnum.INHERITED;
   const corridorUuid = passage.corridor_uuid ?? null;
   const rackNames = members
     .map((m) => m.rack.name || m.rack.aisle_letter || "?")
@@ -31,6 +34,39 @@ export function PassageQuickEditor({ layout, selectedPassage, setLayout, setSele
     .find((v) => v != null && Number(v) > 0);
   const allEnabled = members.every((m) => m.passage.enabled !== false);
   const statusLabel = allEnabled ? "Drożny" : "Wyłączony";
+
+  if (inherited) {
+    return (
+      <div className="rounded-lg border border-amber-200/90 bg-amber-50/95 p-2.5 shadow-lg shadow-slate-900/10 ring-1 ring-amber-100">
+        <div className="mb-1.5 flex items-center justify-between gap-2">
+          <p className="text-[10px] font-bold uppercase tracking-wide text-amber-800">
+            Przejazd z szablonu (INHERITED)
+          </p>
+          {onClose && (
+            <button
+              type="button"
+              className="text-[10px] font-semibold text-slate-500 hover:text-slate-800"
+              onClick={onClose}
+            >
+              ✕
+            </button>
+          )}
+        </div>
+        <p className="mb-2 text-[10px] text-amber-950">
+          Lokalna edycja CAD jest wyłączona. Zmieniaj przejazd w szablonie, potem „Aktualizuj instancje”.
+        </p>
+        {onOpenTemplate && (
+          <button
+            type="button"
+            className="w-full rounded-md border border-amber-300 bg-white px-2 py-1.5 text-[11px] font-semibold text-amber-950 hover:bg-amber-100"
+            onClick={onOpenTemplate}
+          >
+            Otwórz szablon
+          </button>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className="rounded-lg border border-indigo-200/90 bg-white/95 p-2.5 shadow-lg shadow-slate-900/10 ring-1 ring-indigo-100">

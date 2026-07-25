@@ -316,6 +316,8 @@ export type WarehouseCanvasProps = {
   showRouteEndpointMarkers?: boolean;
   /** Extra SVG layer (e.g. authored Routing Graph overlay in Routes workspace). */
   svgOverlay?: React.ReactNode;
+  /** Extra HTML overlay sibling to SVG (e.g. SelectionQuickToolbar). */
+  htmlOverlay?: React.ReactNode;
 };
 
 function WarehouseCanvasInner({
@@ -469,6 +471,7 @@ function WarehouseCanvasInner({
   /** When false, START/PACK markers are hidden (step-by-step uses rack badges only). */
   showRouteEndpointMarkers = true,
   svgOverlay = null,
+  htmlOverlay = null,
 }: WarehouseCanvasProps) {
   void _cellPxProp;
   const isExportMode = mode === "export";
@@ -1527,6 +1530,11 @@ function WarehouseCanvasInner({
                   )}
                   {svgOverlay}
                 </svg>
+                {htmlOverlay ? (
+                  <div className="absolute left-0 top-0 pointer-events-none" style={{ width, height, zIndex: 55 }}>
+                    <div className="pointer-events-auto relative w-full h-full">{htmlOverlay}</div>
+                  </div>
+                ) : null}
                 {/* HTML drop zones over empty slots. When rowToolActive, do not capture so SVG receives draw events. */}
                 {isEditMode && (
                 <div className="absolute left-0 top-0 pointer-events-none" style={{ width, height, zIndex: 10 }}>

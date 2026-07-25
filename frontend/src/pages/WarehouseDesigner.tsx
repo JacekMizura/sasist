@@ -6,6 +6,10 @@ import { warn } from "../utils/logger";
 import type { RackState, BinState, InternalStructure, LayoutState, RackTemplate, CustomRackTemplate, LevelConfigItem, CatalogItem, VisualElementType, VisualElementState, ColumnShape, DoorStyle, ZoneType, WarehouseProduct, RowContainer, EmptyRowSlot, WallElement, WallSide, RackType, StorageType } from "../types/warehouse";
 import { GRID_UNIT_CM, normalizePassageSource } from "../types/warehouse";
 import { rematerializeInheritedPassages } from "./WarehouseDesigner/passages/rackPassageGeometry";
+import { SelectionQuickToolbar } from "./WarehouseDesigner/SelectionQuickToolbar";
+import type { DesignerSelection } from "./WarehouseDesigner/designerSelection";
+import { createCommandBus } from "./WarehouseDesigner/commands";
+import { deleteSelectedNode } from "./WarehouseDesigner/routing/RoutingRoutesPanel";
 import { activeBinsForRack, formatVolume, createBinsForRack, binsToLevels, volumePerBin, volumePerBinFromTotal, cmToCells, cellsToCm, getCatalogItemSpec, getLevelConfig, getTotalLocations, getNextIndexInRow, getNextRackIndex, ROW_LABEL_ADDRESS_PATTERN, reindexGeometricRow, findSnapToRowPosition, getDragSlotHighlights, binUsedVolumeDm3, binVolumeDm3, getRackDisplayId, getAllPositionsFromRacks, clampGridToBuilding, metersToCells, duplicateRacksAtPosition, generateRackUuid, assignUniqueRackNamesToNewRacks, validateAllRackNamesInLayout, validateLayoutEntityIntegrity, getProposedFirstRackLabelForStampFromCatalog, normalizeRowPrefixLetters, generateRackNames, validateGeneratedRackNames, countPlaceRowWithTemplateRacks, countEmptyRowSlotsInDraw, catalogItemTemplateKey, catalogItemFromTemplateKey, rowContainerTemplateIdFromCatalogItem, rackMatchesSlotRackId } from "../components/warehouse/warehouseUtils";
 import {
   logLayoutRackHydrate,
@@ -539,6 +543,7 @@ export default function WarehouseDesigner() {
     seq: number;
   } | null>(null);
   const canvasFocusSeqRef = useRef(0);
+  const commandBusRef = useRef(createCommandBus());
 
   const setRoutingToolSafe = useCallback((tool: RoutingTool) => {
     setRoutingTool(tool);
@@ -624,18 +629,22 @@ export default function WarehouseDesigner() {
         setRoutingSelectedEdge(null);
         return;
       }
-      if ((e.key === "Delete" || e.key === "Backspace") && routingTool === "select" && routingSelectedNode) {
+      if ((e.key === "Delete" || e.key === "Backspace") && (routingTool === "select" || routingTool === "edit") && routingSelectedNode) {
         e.preventDefault();
         const node = routing.nodes.find((n) => n.uuid === routingSelectedNode);
         if (!node) return;
-        if (!window.confirm(confirmDeleteNodeMessage(node, routing.edges, routing.accessPoints, routing.nodes, routingLocations))) return;
-        routing.removeNode(node.uuid);
-        setRoutingSelectedNode(null);
+        if (routingTool === "edit") {
+          deleteSelectedNode(routing, node, setRoutingSelectedNode, routingLocations);
+        } else {
+          if (!window.confirm(confirmDeleteNodeMessage(node, routing.edges, routing.accessPoints, routing.nodes, routingLocations))) return;
+          routing.removeNode(node.uuid);
+          setRoutingSelectedNode(null);
+        }
         setHighlightOrphanUuids([]);
         setHighlightInvalidEdgeUuids([]);
         setRoutingDraftOrthoGuide(null);
       }
-      if ((e.key === "Delete" || e.key === "Backspace") && routingTool === "select" && routingSelectedEdge && !routingSelectedNode) {
+      if ((e.key === "Delete" || e.key === "Backspace") && (routingTool === "select" || routingTool === "edit") && routingSelectedEdge && !routingSelectedNode) {
         e.preventDefault();
         if (!window.confirm("Usunąć ten odcinek trasy?")) return;
         routing.removeEdge(routingSelectedEdge);
@@ -866,6 +875,42 @@ export default function WarehouseDesigner() {
   const [passageDrawEnd, setPassageDrawEnd] = useState<{ x: number; y: number } | null>(null);
   const [passageWidthCm, setPassageWidthCm] = useState(90);
   const [selectedPassage, setSelectedPassage] = useState<{ rackUuid: string; passageUuid: string } | null>(null);
+
+  const designerSelection: DesignerSelection = useMemo(() => {
+    if (routesMode) {
+      if (routingSelectedNode) return { kind: "node", nodeUuid: routingSelectedNode };
+      if (routingSelectedEdge) return { kind: "edge", edgeUuid: routingSelectedEdge };
+      return { kind: null };
+    }
+    if (selectedPassage) {
+      return {
+        kind: "passage",
+        rackUuid: selectedPassage.rackUuid,
+        passageUuid: selectedPassage.passageUuid,
+      };
+    }
+    if (selectedRackId != null) return { kind: "rack", rackId: selectedRackId };
+    return { kind: null };
+  }, [routesMode, routingSelectedNode, routingSelectedEdge, selectedPassage, selectedRackId]);
+
+  const selectionToolbarAnchor = useMemo(() => {
+    if (!routesMode) return null;
+    const scale = BASE_PX_PER_CELL / GRID_UNIT_CM;
+    if (routingSelectedNode) {
+      const n = routing.nodes.find((x) => x.uuid === routingSelectedNode);
+      if (!n) return null;
+      return { left: n.x * scale - 40, top: n.y * scale - 36 };
+    }
+    if (routingSelectedEdge) {
+      const e = routing.edges.find((x) => x.uuid === routingSelectedEdge);
+      if (!e) return null;
+      const a = routing.nodes.find((x) => x.uuid === e.from_node_uuid);
+      const b = routing.nodes.find((x) => x.uuid === e.to_node_uuid);
+      if (!a || !b) return null;
+      return { left: ((a.x + b.x) / 2) * scale - 40, top: ((a.y + b.y) / 2) * scale - 36 };
+    }
+    return null;
+  }, [routesMode, routingSelectedNode, routingSelectedEdge, routing.nodes, routing.edges]);
   const [draggingPassage, setDraggingPassage] = useState<{
     rackUuid: string;
     passageUuid: string;
@@ -3415,6 +3460,11 @@ export default function WarehouseDesigner() {
                 if (layoutWorkspace === "routes" && routing.dirty) {
                   void routing.load();
                 }
+                // Selection SSOT: leaving Routing clears node/edge.
+                setRoutingSelectedNode(null);
+                setRoutingSelectedEdge(null);
+                setRoutingEdgeDraftFrom(null);
+                setRoutingDraftCursorCm(null);
                 setLayoutWorkspace("designing");
               }}
               className={`rounded-md border px-3 py-1 text-[11px] font-semibold ${
@@ -3430,6 +3480,10 @@ export default function WarehouseDesigner() {
               role="tab"
               aria-selected={layoutWorkspace === "routes"}
               onClick={() => {
+                // Selection SSOT: entering Routing clears rack/passage.
+                setSelectedRackId(null);
+                setSelectedRackIds([]);
+                setSelectedPassage(null);
                 setLayoutWorkspace("routes");
                 setRoutingTool("draw_edge");
               }}
@@ -4199,14 +4253,29 @@ export default function WarehouseDesigner() {
                   draftFromUuid={routingEdgeDraftFrom}
                   draftCursorCm={routingDraftCursorCm}
                   draftOrthoGuide={routingDraftOrthoGuide}
-                  allowNodeDrag={routingTool === "select"}
+                  allowNodeDrag={routingTool === "edit"}
                   interactive
                   onNodeDrag={(uuid, x, y) => {
                     routing.updateNode(uuid, { x, y });
                   }}
                   onNodeDragEnd={(uuid, x, y) => {
-                    routing.updateNode(uuid, { x, y });
-                    routing.normalizeAfterEdit();
+                    const prev = routing.nodes.find((n) => n.uuid === uuid);
+                    const prevX = prev?.x ?? x;
+                    const prevY = prev?.y ?? y;
+                    commandBusRef.current.execute({
+                      id: "dragNode",
+                      label: "Przesuń punkt",
+                      execute: () => {
+                        routing.updateNode(uuid, { x, y });
+                        routing.normalizeAfterEdit();
+                        return { ok: true };
+                      },
+                      undo: () => {
+                        routing.updateNode(uuid, { x: prevX, y: prevY });
+                        routing.normalizeAfterEdit();
+                        return { ok: true };
+                      },
+                    });
                     setRoutingSelectedNode(uuid);
                     setRoutingSelectedEdge(null);
                   }}
@@ -4281,11 +4350,38 @@ export default function WarehouseDesigner() {
                       setRoutingDraftOrthoGuide(step.orthoGuide ?? null);
                       return;
                     }
-                    if (routingTool === "select") {
-                      // Click empty map clears selection but keeps Wybierz active
+                    if (routingTool === "select" || routingTool === "edit") {
+                      // Click empty map clears selection but keeps tool active
                       setRoutingSelectedNode(null);
                       setRoutingSelectedEdge(null);
                     }
+                  }}
+                />
+              ) : null,
+              htmlOverlay: routesMode ? (
+                <SelectionQuickToolbar
+                  selection={designerSelection}
+                  workspace="routes"
+                  anchor={selectionToolbarAnchor}
+                  onEditRouting={() => setRoutingToolSafe("edit")}
+                  onDelete={() => {
+                    if (designerSelection.kind === "node") {
+                      const node = routing.nodes.find((n) => n.uuid === designerSelection.nodeUuid);
+                      if (node) deleteSelectedNode(routing, node, setRoutingSelectedNode, routingLocations);
+                    } else if (designerSelection.kind === "edge") {
+                      if (!window.confirm("Usunąć ten odcinek trasy?")) return;
+                      routing.removeEdge(designerSelection.edgeUuid);
+                      setRoutingSelectedEdge(null);
+                    }
+                  }}
+                  onFlipEdgeDirection={() => {
+                    if (designerSelection.kind !== "edge") return;
+                    const edge = routing.edges.find((e) => e.uuid === designerSelection.edgeUuid);
+                    if (!edge) return;
+                    routing.updateEdge(edge.uuid, {
+                      from_node_uuid: edge.to_node_uuid,
+                      to_node_uuid: edge.from_node_uuid,
+                    });
                   }}
                 />
               ) : null,
@@ -4311,7 +4407,7 @@ export default function WarehouseDesigner() {
                   setRoutingSelectedNode(null);
                   setRoutingSelectedEdge(null);
                 }
-                if (t === "select") {
+                if (t === "select" || t === "edit") {
                   setRoutingEdgeDraftFrom(null);
                   setRoutingDraftCursorCm(null);
                 }

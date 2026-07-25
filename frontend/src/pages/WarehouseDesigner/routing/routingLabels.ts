@@ -35,7 +35,7 @@ export const ROUTING_TRANSPORT_OPTIONS = [
   { value: "forklift", label: "Wózek widłowy" },
 ];
 
-export type RoutingTool = "select" | "add_node" | "draw_edge" | "test_route";
+export type RoutingTool = "select" | "edit" | "add_node" | "draw_edge" | "test_route";
 
 export function isUiOperationalType(value: string | null | undefined): boolean {
   if (!value) return false;

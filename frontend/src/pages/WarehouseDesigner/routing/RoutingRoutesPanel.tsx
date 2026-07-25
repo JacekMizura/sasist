@@ -52,6 +52,35 @@ export function deleteSelectedNode(
   setSelectedNodeUuid: (u: string | null) => void,
   locations: { id: number; name: string; location_type?: string | null }[] = []
 ) {
+  const connected = edgesConnectedTo(selectedNode.uuid, routing.edges);
+  const deg = connected.length;
+
+  if (deg === 2 && typeof routing.previewMergeDegree2 === "function") {
+    const preview = routing.previewMergeDegree2(selectedNode.uuid);
+    if (preview) {
+      const ok = window.confirm(
+        `Usunięcie punktu połączy sąsiadów w jeden odcinek (≈ ${preview.lengthM.toFixed(1)} m).\n\nScalić?`
+      );
+      if (!ok) return false;
+      if (routing.mergeDegree2(selectedNode.uuid)) {
+        setSelectedNodeUuid(null);
+        routing.normalizeAfterEdit?.();
+        return true;
+      }
+      return false;
+    }
+  }
+
+  if (deg > 2) {
+    const ok = window.confirm(
+      `Ten punkt ma ${deg} połączenia. Usunięcie usunie też wszystkie połączone odcinki. Kontynuować?`
+    );
+    if (!ok) return false;
+    routing.removeNode(selectedNode.uuid);
+    setSelectedNodeUuid(null);
+    return true;
+  }
+
   const msg = confirmDeleteNodeMessage(
     selectedNode,
     routing.edges,
@@ -120,8 +149,8 @@ export function RoutingRoutesPanel({
     return locations.filter((l) => l.name.toLowerCase().includes(q)).slice(0, 40);
   }, [locations, apSearch]);
 
-  const editingPoint = Boolean(selectedNode && tool === "select");
-  const editingEdge = Boolean(selectedEdge && tool === "select" && !selectedNode);
+  const editingPoint = Boolean(selectedNode && (tool === "select" || tool === "edit"));
+  const editingEdge = Boolean(selectedEdge && (tool === "select" || tool === "edit") && !selectedNode);
   const showIdle = !editingPoint && !editingEdge && tool !== "test_route";
 
   const nameOf = (n: RoutingNode) =>
@@ -154,9 +183,10 @@ export function RoutingRoutesPanel({
       <div className="flex flex-wrap gap-1">
         {(
           [
-            ["draw_edge", "Rysuj trasę"],
+            ["draw_edge", "Rysuj"],
             ["select", "Wybierz"],
-            ["test_route", "Testuj trasę"],
+            ["edit", "Edytuj"],
+            ["test_route", "Testuj"],
           ] as const
         ).map(([id, label]) => (
           <button
@@ -164,8 +194,6 @@ export function RoutingRoutesPanel({
             type="button"
             onClick={() => {
               setTool(id);
-              // Selection clearing is owned by parent setTool wrapper for draw/test.
-              // Wybierz must stay sticky and keep current selection.
             }}
             className={`rounded-md border px-2 py-1 text-[11px] font-semibold ${
               tool === id ? "border-sky-700 bg-sky-700 text-white" : "border-slate-200 bg-slate-50"
@@ -180,6 +208,17 @@ export function RoutingRoutesPanel({
         <p className="text-[11px] text-sky-900">
           Klikaj kolejne miejsca — odcinki i skrzyżowania powstają automatycznie, gdy drogi się
           przecinają lub łączą. Enter / Esc kończy bieżącą drogę.
+        </p>
+      )}
+      {tool === "select" && (
+        <p className="text-[11px] text-slate-600">
+          Tylko zaznaczanie i podgląd — bez przesuwania punktów.
+        </p>
+      )}
+      {tool === "edit" && (
+        <p className="text-[11px] text-amber-900">
+          Edycja grafu: przeciągaj punkty, scalaj / usuwaj, przepinaj końce odcinków. Bez edycji
+          przejazdów (Layout).
         </p>
       )}
 
@@ -747,6 +786,47 @@ export function RoutingRoutesPanel({
               <option value="BACKWARD">Jednokierunkowy (przeciwnie)</option>
             </select>
           </label>
+          {tool === "edit" && (
+            <div className="space-y-1 rounded border border-amber-100 bg-amber-50/60 p-2">
+              <div className="text-[10px] font-semibold text-amber-900">Przepnij końce</div>
+              <label className="block text-[10px]">
+                Od
+                <select
+                  className="mt-0.5 w-full rounded border border-slate-200 px-1 py-1"
+                  value={selectedEdge.from_node_uuid}
+                  onChange={(e) => {
+                    const ok = routing.rewireEdgeEndpoint(selectedEdge.uuid, "from", e.target.value);
+                    if (ok) routing.normalizeAfterEdit();
+                    else window.alert("Nie można przepiąć — pętla lub duplikat odcinka.");
+                  }}
+                >
+                  {routing.nodes.map((n) => (
+                    <option key={n.uuid} value={n.uuid}>
+                      {nameOf(n)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="block text-[10px]">
+                Do
+                <select
+                  className="mt-0.5 w-full rounded border border-slate-200 px-1 py-1"
+                  value={selectedEdge.to_node_uuid}
+                  onChange={(e) => {
+                    const ok = routing.rewireEdgeEndpoint(selectedEdge.uuid, "to", e.target.value);
+                    if (ok) routing.normalizeAfterEdit();
+                    else window.alert("Nie można przepiąć — pętla lub duplikat odcinka.");
+                  }}
+                >
+                  {routing.nodes.map((n) => (
+                    <option key={n.uuid} value={n.uuid}>
+                      {nameOf(n)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+          )}
           <label className="inline-flex items-center gap-2">
             <input
               type="checkbox"

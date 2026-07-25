@@ -403,6 +403,114 @@ export function useRoutingGraph(warehouseId: number | null, layoutId: number | n
     setDirty(true);
   }, []);
 
+  /**
+   * Degree-2 merge: remove junction node and connect its two neighbors with one edge.
+   * Returns preview info or null if not degree 2.
+   */
+  const previewMergeDegree2 = useCallback((nodeUuid: string) => {
+    const connected = edgesRef.current.filter(
+      (e) => e.from_node_uuid === nodeUuid || e.to_node_uuid === nodeUuid
+    );
+    if (connected.length !== 2) return null;
+    const neighbors = connected.map((e) =>
+      e.from_node_uuid === nodeUuid ? e.to_node_uuid : e.from_node_uuid
+    );
+    if (neighbors[0] === neighbors[1]) return null;
+    const a = nodesRef.current.find((n) => n.uuid === neighbors[0]);
+    const b = nodesRef.current.find((n) => n.uuid === neighbors[1]);
+    if (!a || !b) return null;
+    const lengthM = physicalDistanceM(a, b);
+    return {
+      nodeUuid,
+      fromUuid: neighbors[0],
+      toUuid: neighbors[1],
+      lengthM,
+    };
+  }, []);
+
+  const mergeDegree2 = useCallback(
+    (nodeUuid: string): boolean => {
+      const preview = previewMergeDegree2(nodeUuid);
+      if (!preview) return false;
+      const { fromUuid, toUuid } = preview;
+      edgesRef.current = edgesRef.current.filter(
+        (e) => e.from_node_uuid !== nodeUuid && e.to_node_uuid !== nodeUuid
+      );
+      nodesRef.current = nodesRef.current.filter((n) => n.uuid !== nodeUuid);
+      setAccessPoints((prev) => prev.filter((a) => a.node_uuid !== nodeUuid));
+      const dup = edgesRef.current.some(
+        (e) =>
+          (e.from_node_uuid === fromUuid && e.to_node_uuid === toUuid) ||
+          (e.from_node_uuid === toUuid && e.to_node_uuid === fromUuid)
+      );
+      if (!dup) {
+        const from = nodesRef.current.find((n) => n.uuid === fromUuid);
+        const to = nodesRef.current.find((n) => n.uuid === toUuid);
+        if (from && to) {
+          edgesRef.current = [
+            ...edgesRef.current,
+            {
+              uuid: newUuid(),
+              warehouse_id: warehouseId ?? 0,
+              layout_id: layoutId,
+              from_node_uuid: fromUuid,
+              to_node_uuid: toUuid,
+              distance_m: physicalDistanceM(from, to),
+              direction: "BOTH",
+              enabled: true,
+              allowed_processes: [],
+              allowed_transport_types: [],
+              cost_multiplier: 1,
+              label: null,
+            },
+          ];
+        }
+      }
+      setNodes(nodesRef.current);
+      setEdges(edgesRef.current);
+      setValidation(null);
+      setTestResult(null);
+      setDirty(true);
+      return true;
+    },
+    [layoutId, previewMergeDegree2, warehouseId]
+  );
+
+  /** Rewire one endpoint of an edge; rejects self-loop and undirected duplicate. */
+  const rewireEdgeEndpoint = useCallback(
+    (edgeUuid: string, end: "from" | "to", newNodeUuid: string): boolean => {
+      const edge = edgesRef.current.find((e) => e.uuid === edgeUuid);
+      if (!edge) return false;
+      const from = end === "from" ? newNodeUuid : edge.from_node_uuid;
+      const to = end === "to" ? newNodeUuid : edge.to_node_uuid;
+      if (from === to) return false;
+      const dup = edgesRef.current.some(
+        (e) =>
+          e.uuid !== edgeUuid &&
+          ((e.from_node_uuid === from && e.to_node_uuid === to) ||
+            (e.from_node_uuid === to && e.to_node_uuid === from))
+      );
+      if (dup) return false;
+      const a = nodesRef.current.find((n) => n.uuid === from);
+      const b = nodesRef.current.find((n) => n.uuid === to);
+      if (!a || !b) return false;
+      edgesRef.current = edgesRef.current.map((e) =>
+        e.uuid === edgeUuid
+          ? {
+              ...e,
+              from_node_uuid: from,
+              to_node_uuid: to,
+              distance_m: physicalDistanceM(a, b),
+            }
+          : e
+      );
+      setEdges(edgesRef.current);
+      setDirty(true);
+      return true;
+    },
+    []
+  );
+
   const upsertAccessPoint = useCallback(
     (locationId: number, nodeUuid: string, label?: string) => {
       setAccessPoints((prev) => {
@@ -538,6 +646,9 @@ export function useRoutingGraph(warehouseId: number | null, layoutId: number | n
     addEdge,
     updateEdge,
     removeEdge,
+    previewMergeDegree2,
+    mergeDegree2,
+    rewireEdgeEndpoint,
     upsertAccessPoint,
     removeAccessPoint,
     clearGraph,
