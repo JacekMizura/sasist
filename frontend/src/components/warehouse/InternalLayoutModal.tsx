@@ -21,13 +21,21 @@ import {
   getPassageVoidHeightCm,
   sumVoidLevelHeightsCm,
 } from "./passageStorage";
-import { PassageVoidBand } from "./PassageVoidBand";
+
+export type InternalLayoutSaveOptions = {
+  /** Clear under-rack passage and restore void construction levels as storage. */
+  clearPassages?: boolean;
+};
 
 export type InternalLayoutModalProps = {
   layout?: LayoutState | null;
   rack: RackState;
   warehouseLabel?: string;
-  onSave: (internal_structure: InternalStructure, bins?: BinState[]) => void;
+  onSave: (
+    internal_structure: InternalStructure,
+    bins?: BinState[],
+    options?: InternalLayoutSaveOptions
+  ) => void;
   onClose: () => void;
 };
 
@@ -185,19 +193,40 @@ export function InternalLayoutModal({ layout = null, rack, warehouseLabel, onSav
   /** Same predicate / mapping as `RackSideViewGrid` (`isBinDirectionRtl` + `segmentIndexForVisualSlot`). */
   const binDirectionRtl = useMemo(() => isBinDirectionRtl(layout, rackFromLayout), [layout, rackFromLayout]);
 
-  const voidLevelCount = useMemo(() => countPassageVoidLevelsForRack(rackFromLayout), [rackFromLayout]);
-  const voidHeightCm = useMemo(() => {
+  const rackVoidLevelCount = useMemo(() => countPassageVoidLevelsForRack(rackFromLayout), [rackFromLayout]);
+  const structuralRows = useMemo(() => getLevelConfig(rackFromLayout), [rackFromLayout]);
+  const structuralCount = Math.max(1, structuralRows.length);
+  const structuralHeights = useMemo(
+    () =>
+      rackFromLayout.height_cm && structuralCount > 0
+        ? levelHeightsForRack(Number(rackFromLayout.height_cm), structuralCount)
+        : Array.from({ length: structuralCount }, () => DEFAULT_BIN_HEIGHT_CM),
+    [rackFromLayout.height_cm, structuralCount]
+  );
+  const voidLevelHeights = useMemo(
+    () => structuralHeights.slice(0, rackVoidLevelCount),
+    [structuralHeights, rackVoidLevelCount]
+  );
+  const rackVoidHeightCm = useMemo(() => {
     const clearance = getPassageVoidHeightCm(rackFromLayout.passages);
-    const structural = getLevelConfig(rackFromLayout).length;
-    const fromLevels = sumVoidLevelHeightsCm(Number(rackFromLayout.height_cm ?? 0), structural, voidLevelCount);
+    const fromLevels = sumVoidLevelHeightsCm(
+      Number(rackFromLayout.height_cm ?? 0),
+      structuralCount,
+      rackVoidLevelCount
+    );
     return fromLevels > 0 ? fromLevels : clearance;
-  }, [rackFromLayout, voidLevelCount]);
+  }, [rackFromLayout, structuralCount, rackVoidLevelCount]);
 
   const initialLevelsRaw = useMemo(() => getInitialLevels(rack), [rack]);
   const initialLevels = useMemo(
     () => normalizeInternalLevelsToCanonicalSegmentOrder(initialLevelsRaw, rackFromLayout, binDirectionRtl),
     [initialLevelsRaw, rackFromLayout, binDirectionRtl]
   );
+
+  /** Local: user removed passage in this editor session (restored void floors as storage). */
+  const [passageCleared, setPassageCleared] = useState(false);
+  const voidLevelCount = passageCleared ? 0 : rackVoidLevelCount;
+  const voidHeightCm = passageCleared ? 0 : rackVoidHeightCm;
 
   const [levels, setLevels] = useState<Array<InternalLevel>>(() => initialLevels);
   const [editingDimensionsKey, setEditingDimensionsKey] = useState<string | null>(null);
@@ -223,7 +252,7 @@ export function InternalLayoutModal({ layout = null, rack, warehouseLabel, onSav
   });
   const initialStructureSig = useMemo(() => structureSignature(initialLevels), [initialLevels]);
   const currentStructureSig = useMemo(() => structureSignature(levels), [levels]);
-  const isVariantMode = currentStructureSig !== initialStructureSig;
+  const isVariantMode = passageCleared || currentStructureSig !== initialStructureSig;
 
   const levelWidthSum = (lev: InternalLevel) => lev.locations.reduce((sum, loc) => sum + Number(loc.width_cm ?? 0), 0);
   const rackWidthLimit = typeof rackWidthCm === "number" && Number.isFinite(rackWidthCm) ? rackWidthCm : Number.POSITIVE_INFINITY;
@@ -237,6 +266,28 @@ export function InternalLayoutModal({ layout = null, rack, warehouseLabel, onSav
   void maxLocsPerLevel;
   const addLevel = () => setLevels((prev) => [...prev, { height_cm: DEFAULT_BIN_HEIGHT_CM, locations: [{ width_cm: rackWidthCm ?? DEFAULT_BIN_WIDTH_CM, depth_cm: rack.length_cm ?? DEFAULT_BIN_DEPTH_CM, height_cm: DEFAULT_BIN_HEIGHT_CM }] }]);
   const removeLevel = (i: number) => setLevels((prev) => prev.filter((_, idx) => idx !== i));
+  const removePassage = () => {
+    if (passageCleared || rackVoidLevelCount <= 0) return;
+    const restored: InternalLevel[] = [];
+    for (let i = 0; i < rackVoidLevelCount; i++) {
+      const h = voidLevelHeights[i] ?? structuralHeights[i] ?? DEFAULT_BIN_HEIGHT_CM;
+      const locs = Math.max(1, structuralRows[i]?.locations ?? rack.bins_per_level ?? 1);
+      const w =
+        typeof rackWidthCm === "number" && Number.isFinite(rackWidthCm) && rackWidthCm > 0
+          ? snapCm(rackWidthCm / locs)
+          : DEFAULT_BIN_WIDTH_CM;
+      restored.push({
+        height_cm: h,
+        locations: Array.from({ length: locs }, () => ({
+          width_cm: w,
+          depth_cm: rack.length_cm ?? DEFAULT_BIN_DEPTH_CM,
+          height_cm: h,
+        })),
+      });
+    }
+    setLevels((prev) => [...restored, ...prev]);
+    setPassageCleared(true);
+  };
   const setLevelHeight = (i: number, h: number) => setLevels((prev) => prev.map((l, idx) => (idx === i ? { ...l, height_cm: snapCm(h) } : l)));
   const setLocationWidth = (levIdx: number, locIdx: number, w: number) =>
     setLevels((prev) =>
@@ -341,7 +392,7 @@ export function InternalLayoutModal({ layout = null, rack, warehouseLabel, onSav
       console.error("BIN SYNC ERROR", { totalLocations, bins: newBins.length });
     }
 
-    onSave({ levels }, newBins);
+    onSave({ levels }, newBins, passageCleared ? { clearPassages: true } : undefined);
   };
 
   return createPortal(
@@ -705,14 +756,71 @@ export function InternalLayoutModal({ layout = null, rack, warehouseLabel, onSav
                 </div>
               );
             })}
-            {voidHeightCm > 0 && (
-              <PassageVoidBand
-                heightCm={voidHeightCm}
-                constructionLevelFrom={1}
-                constructionLevelTo={Math.max(1, voidLevelCount)}
-                className="w-full"
-              />
-            )}
+            {!passageCleared &&
+              rackVoidLevelCount > 0 &&
+              Array.from({ length: rackVoidLevelCount }, (_, revIdx) => {
+                const structuralIdx = rackVoidLevelCount - 1 - revIdx;
+                const constructionLevelNumber = structuralIdx + 1;
+                const heightCm = voidLevelHeights[structuralIdx] ?? DEFAULT_BIN_HEIGHT_CM;
+                const locCount = Math.max(
+                  1,
+                  structuralRows[structuralIdx]?.locations ?? rack.bins_per_level ?? 1
+                );
+                return (
+                  <div
+                    key={`void-level-${structuralIdx}`}
+                    className="flex min-h-[160px] w-full min-w-0 flex-1 flex-col border-b-2 border-b-slate-400 bg-slate-100/80 first:border-t-2 first:border-t-slate-300"
+                    dir="ltr"
+                    style={{ direction: "ltr" }}
+                  >
+                    <div className="flex shrink-0 flex-wrap items-center gap-3 border-b border-slate-300 bg-slate-200/70 px-3 py-2">
+                      <span className="text-xs font-bold text-slate-700">
+                        Poziom konstrukcyjny {constructionLevelNumber}
+                      </span>
+                      <span className="rounded border border-slate-400 bg-white/80 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-600">
+                        Przejazd
+                      </span>
+                      <span className="text-[10px] text-slate-600">Wys. poziomu: {Math.round(heightCm)} cm</span>
+                      <button
+                        type="button"
+                        onClick={removePassage}
+                        className="text-xs font-semibold text-red-600 hover:underline"
+                      >
+                        Usuń przejazd
+                      </button>
+                    </div>
+                    <div
+                      className="flex min-h-0 w-full min-w-0 flex-1 flex-row flex-nowrap items-stretch justify-start gap-2 overflow-x-auto p-2"
+                      dir="ltr"
+                      style={{ direction: "ltr", unicodeBidi: "isolate" }}
+                    >
+                      {Array.from({ length: locCount }, (_, binIndex) => (
+                        <div
+                          key={`void-slot-${structuralIdx}-${binIndex}`}
+                          className="relative flex min-h-[120px] min-w-[160px] flex-1 flex-col items-center justify-center overflow-hidden rounded-xl border border-dashed border-slate-400 bg-[repeating-linear-gradient(-45deg,transparent,transparent_6px,rgba(148,163,184,0.22)_6px,rgba(148,163,184,0.22)_7px)] p-2.5 shadow-sm"
+                          style={{ flexBasis: `${100 / locCount}%`, flexGrow: 1, boxSizing: "border-box" }}
+                          aria-label={`Przejazd — lokalizacja ${getColumnLetter(binIndex)}-${constructionLevelNumber}`}
+                        >
+                          <span className="text-xs font-bold uppercase tracking-[0.18em] text-slate-600">
+                            Przejazd
+                          </span>
+                          <span className="mt-1 text-[11px] font-semibold text-slate-700">
+                            {getColumnLetter(binIndex)}-{constructionLevelNumber}
+                          </span>
+                          <span className="mt-0.5 text-[10px] text-slate-500">bez lokalizacji</span>
+                          <span className="mt-2 text-[10px] text-slate-500">
+                            SZ {Math.round((Number(rackWidthCm) || 0) / locCount) || "—"} · WYS {Math.round(heightCm)}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                    <p className="px-3 py-1 text-[10px] text-slate-500">
+                      Przejazd zajął ten poziom konstrukcyjny — lokalizacje niedostępne, dopóki przejazd nie zostanie
+                      usunięty.
+                    </p>
+                  </div>
+                );
+              })}
             </div>
         </div>
         <div className="sticky bottom-0 flex shrink-0 gap-2 border-t border-slate-200 bg-white/95 px-4 py-3 backdrop-blur-sm">

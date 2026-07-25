@@ -232,6 +232,7 @@ type PendingVariantSave = {
   baseTemplate: CustomRackTemplate;
   internalStructure: InternalStructure;
   bins?: BinState[];
+  clearPassages?: boolean;
 };
 
 function templateSlotDimensions(template: CustomRackTemplate, levelIndex: number): { width_cm: number; depth_cm: number; height_cm: number } {
@@ -3555,7 +3556,13 @@ export default function WarehouseDesigner() {
   }, [outsideRackIds.length]);
 
   const applyInternalLayoutSave = useCallback(
-    (rackId: number | string, internal_structure: InternalStructure, bins: BinState[] | undefined, variant?: CustomRackTemplate | null) => {
+    (
+      rackId: number | string,
+      internal_structure: InternalStructure,
+      bins: BinState[] | undefined,
+      variant?: CustomRackTemplate | null,
+      options?: { clearPassages?: boolean }
+    ) => {
       setLayout((prev) => {
         const next = {
           ...prev,
@@ -3563,11 +3570,12 @@ export default function WarehouseDesigner() {
             if ((r.id ?? r.rack_index) !== rackId) return r;
             const storageLc = levelConfigFromInternalStructure(internal_structure);
             const prevLc = getLevelConfig(r);
-            const voidN = countPassageVoidLevelsForRack(r);
+            const clearPassages = options?.clearPassages === true;
+            const voidN = clearPassages ? 0 : countPassageVoidLevelsForRack(r);
             // Keep full construction levelConfig when passage voids bottom levels;
-            // internal_structure from the modal is storage-only.
+            // internal_structure from the modal is storage-only (unless passage was cleared).
             const levelConfig =
-              voidN > 0 && prevLc.length > storageLc.length
+              !clearPassages && voidN > 0 && prevLc.length > storageLc.length
                 ? [
                     ...prevLc.slice(0, voidN).map((row, i) => ({
                       level: i + 1,
@@ -3579,6 +3587,9 @@ export default function WarehouseDesigner() {
                     })),
                   ]
                 : storageLc;
+            const nextPassages = clearPassages
+              ? (r.passages ?? []).map((p) => ({ ...p, enabled: false }))
+              : r.passages;
             return {
               ...r,
               templateId: variant?.id ?? r.templateId,
@@ -3588,6 +3599,7 @@ export default function WarehouseDesigner() {
               internal_structure,
               layoutVariant: { levels: levelConfig, internal_structure },
               ...(bins ? { bins } : {}),
+              ...(clearPassages ? { passages: nextPassages } : {}),
             };
           }),
         };
@@ -3600,17 +3612,34 @@ export default function WarehouseDesigner() {
   );
 
   const onSaveInternalLayout = useCallback(
-    (internal_structure: InternalStructure, bins: BinState[] | undefined) => {
+    (
+      internal_structure: InternalStructure,
+      bins: BinState[] | undefined,
+      options?: { clearPassages?: boolean }
+    ) => {
       const rackId = internalLayoutRackId;
       if (rackId == null) return;
       const currentRack = layout.racks.find((r) => (r.id ?? r.rack_index) === rackId) ?? null;
       const baseTemplate = currentRack?.templateId ? customTemplates.find((t) => t.id === currentRack.templateId) ?? null : null;
-      if (baseTemplate && structureDiffersFromTemplate(baseTemplate, internal_structure, currentRack)) {
-        setPendingVariantSave({ rackId, baseTemplate, internalStructure: internal_structure, bins });
+      const rackForCompare =
+        options?.clearPassages && currentRack
+          ? {
+              ...currentRack,
+              passages: (currentRack.passages ?? []).map((p) => ({ ...p, enabled: false })),
+            }
+          : currentRack;
+      if (baseTemplate && structureDiffersFromTemplate(baseTemplate, internal_structure, rackForCompare)) {
+        setPendingVariantSave({
+          rackId,
+          baseTemplate,
+          internalStructure: internal_structure,
+          bins,
+          clearPassages: options?.clearPassages,
+        });
         setVariantNameInput(`${baseTemplate.name} [Wariant]`);
         return;
       }
-      applyInternalLayoutSave(rackId, internal_structure, bins, null);
+      applyInternalLayoutSave(rackId, internal_structure, bins, null, options);
     },
     [internalLayoutRackId, layout.racks, customTemplates, applyInternalLayoutSave]
   );
@@ -3816,7 +3845,8 @@ export default function WarehouseDesigner() {
                     pendingVariantSave.rackId,
                     pendingVariantSave.internalStructure,
                     pendingVariantSave.bins,
-                    variant
+                    variant,
+                    pendingVariantSave.clearPassages ? { clearPassages: true } : undefined
                   );
                   setPendingVariantSave(null);
                 }}

@@ -1,7 +1,7 @@
 import { warn } from "../../utils/logger";
 import type { LayoutState } from "../../types/warehouse";
 import type { InternalStructure, BinState } from "./warehouseTypes";
-import { InternalLayoutModal } from "./InternalLayoutModal";
+import { InternalLayoutModal, type InternalLayoutSaveOptions } from "./InternalLayoutModal";
 import { EditProductModal, type EditProductModalProps } from "./EditProductModal";
 import { findRackForInternalLayoutModal } from "./warehouseUtils";
 import { UI_STRINGS } from "../../constants/uiStrings";
@@ -19,7 +19,11 @@ export type WarehouseModalsProps = {
 
   /** InternalLayoutModal */
   internalLayoutRackId: number | string | null;
-  onSaveInternalLayout: (internal_structure: InternalStructure, bins?: BinState[]) => void;
+  onSaveInternalLayout: (
+    internal_structure: InternalStructure,
+    bins?: BinState[],
+    options?: InternalLayoutSaveOptions
+  ) => void;
   onCloseInternalLayout: () => void;
 
   /** EditProductModal – when non-null, modal is visible and these are the props for EditProductModal */
