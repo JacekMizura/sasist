@@ -742,7 +742,10 @@ function WarehouseCanvasInner({
       className={`m-0 flex min-h-0 min-w-0 max-w-full flex-1 basis-0 flex-col items-stretch justify-start overflow-hidden ${
         isLiveView ? "p-0" : "pl-3.5 pt-3.5"
       }`}
-      style={{ backgroundColor: colors.background, ...(isLiveView ? { overscrollBehavior: "contain" as const } : {}) }}
+      style={{
+        backgroundColor: isLiveView ? "#d9dee6" : colors.background,
+        ...(isLiveView ? { overscrollBehavior: "contain" as const } : {}),
+      }}
     >
       {selectedWarehouseId == null ? (
         <div className="flex flex-1 items-start justify-start p-3" style={{ color: colors.textSecondary }}>Wybierz magazyn lub utwórz nowy.</div>
@@ -1163,14 +1166,19 @@ function WarehouseCanvasInner({
                     overflow: "visible",
                   }}
                 >
+                  <defs>
+                    <pattern id="magazynAisleHatch" patternUnits="userSpaceOnUse" width="8" height="8" patternTransform="rotate(35)">
+                      <line x1="0" y1="0" x2="0" y2="8" stroke="rgba(255,255,255,0.28)" strokeWidth="1.5" />
+                    </pattern>
+                  </defs>
                   <rect
                     x={0}
                     y={0}
                     width={width}
                     height={height}
-                    fill="none"
-                    stroke={isExportMode ? "#e2e8f0" : "rgba(71, 85, 105, 0.35)"}
-                    strokeWidth={isExportMode ? 1 : 1.5}
+                    fill={isLiveView ? "rgba(232, 236, 242, 0.55)" : "none"}
+                    stroke={isExportMode ? "#e2e8f0" : isLiveView ? "rgba(148, 163, 184, 0.25)" : "rgba(71, 85, 105, 0.35)"}
+                    strokeWidth={isExportMode ? 1 : isLiveView ? 1 : 1.5}
                     pointerEvents="none"
                   />
                   {!isExportMode && wallElements.length > 0 && (
@@ -1234,14 +1242,21 @@ function WarehouseCanvasInner({
                   )}
                   {!isExportMode && layout.aisles.map((a, i) => {
                     const isSelected = selectedAisleIndex === i;
-                    const ax = a.x * cellPx + 1;
-                    const ay = a.y * cellPx + 1;
-                    const aw = a.width * cellPx - 2;
-                    const ah = a.height * cellPx - 2;
+                    const ax = a.x * cellPx;
+                    const ay = a.y * cellPx;
+                    const aw = a.width * cellPx;
+                    const ah = a.height * cellPx;
                     const alongX = aw >= ah;
                     const midX = ax + aw / 2;
                     const midY = ay + ah / 2;
-                    const dash = Math.max(6, Math.min(14, (alongX ? aw : ah) * 0.06));
+                    const dash = Math.max(8, Math.min(16, (alongX ? aw : ah) * 0.07));
+                    const roadFill = isLiveView
+                      ? isSelected
+                        ? "#c5ccd6"
+                        : "#bcc4cf"
+                      : isSelected
+                        ? "#cbd5e1"
+                        : "#dce3eb";
                     return (
                       <g key={a.id ?? `a-${a.x}-${a.y}-${i}`} pointerEvents="auto">
                         <rect
@@ -1250,24 +1265,46 @@ function WarehouseCanvasInner({
                           y={ay}
                           width={aw}
                           height={ah}
-                          fill={isSelected ? "#cbd5e1" : "#dce3eb"}
+                          fill={roadFill}
                           fillOpacity={1}
-                          stroke={isSelected ? "#94a3b8" : "#c5ced9"}
-                          strokeOpacity={1}
-                          strokeWidth={isSelected ? 1.25 : 0.75}
-                          rx={RACK_RADIUS_PX}
+                          stroke={isLiveView ? "none" : isSelected ? "#94a3b8" : "#c5ced9"}
+                          strokeOpacity={isLiveView ? 0 : 1}
+                          strokeWidth={isLiveView ? 0 : isSelected ? 1.25 : 0.75}
+                          rx={isLiveView ? 0 : RACK_RADIUS_PX}
                         />
+                        {isLiveView && (
+                          <rect
+                            x={ax}
+                            y={ay}
+                            width={aw}
+                            height={ah}
+                            fill="url(#magazynAisleHatch)"
+                            opacity={0.35}
+                            pointerEvents="none"
+                          />
+                        )}
                         <line
-                          x1={alongX ? ax + 4 : midX}
-                          y1={alongX ? midY : ay + 4}
-                          x2={alongX ? ax + aw - 4 : midX}
-                          y2={alongX ? midY : ay + ah - 4}
-                          stroke={isSelected ? "rgba(255,255,255,0.95)" : "rgba(255,255,255,0.8)"}
-                          strokeWidth={1.25}
-                          strokeDasharray={`${dash} ${dash * 0.65}`}
+                          x1={alongX ? ax + 6 : midX}
+                          y1={alongX ? midY : ay + 6}
+                          x2={alongX ? ax + aw - 6 : midX}
+                          y2={alongX ? midY : ay + ah - 6}
+                          stroke={isLiveView ? "rgba(255,255,255,0.55)" : isSelected ? "rgba(255,255,255,0.95)" : "rgba(255,255,255,0.8)"}
+                          strokeWidth={isLiveView ? 1 : 1.25}
+                          strokeDasharray={`${dash} ${dash * 0.7}`}
                           strokeLinecap="round"
                           pointerEvents="none"
                         />
+                        {isLiveView && (
+                          <polygon
+                            points={
+                              alongX
+                                ? `${ax + aw - 5},${midY} ${ax + aw - 10},${midY - 2.4} ${ax + aw - 10},${midY + 2.4}`
+                                : `${midX},${ay + ah - 5} ${midX - 2.4},${ay + ah - 10} ${midX + 2.4},${ay + ah - 10}`
+                            }
+                            fill="rgba(148,163,184,0.4)"
+                            pointerEvents="none"
+                          />
+                        )}
                       </g>
                     );
                   })}

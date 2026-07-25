@@ -2,11 +2,13 @@
 
 ## Active
 
-**Etap 3.3 — Routing Graph Architecture Cleanup** — local.
+**Magazyn operational preview — full UI redesign** (local, uncommitted).
 
-- Runtime Graph Reader = jedyny silnik routingu (distance / hop / visit order)
-- `Location.pick_sequence` = legacy DB column only (nie usuwać)
-- Usunięto martwy `route_engine.py` (Euclidean visit order) oraz nieużywane `LocationCapacityProfile.pick_sequence`
+- Map as hero: hall floor (`.warehouse-magazyn-hall`), not white canvas
+- Left rail: one cohesive `MagazynDashboardPanel` (no card stack)
+- Right rails: light modern product cards (`TopProductsSidebar`, `MagazynProductsSidebar`, `ProductLocatorSidebar`)
+- Aisles/passages as roads (texture + subtle direction), no PRZEJAZD labels
+- Geometry / logic / API unchanged
 
 ### Constraints
-Bez push (dopóki user nie poprosi). Bez deploy.
+Bez commit/push (dopóki user nie poprosi).

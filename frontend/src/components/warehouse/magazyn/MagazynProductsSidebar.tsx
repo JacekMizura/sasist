@@ -246,23 +246,23 @@ export function MagazynProductsSidebar({
         role="presentation"
         onMouseEnter={() => onHoverLocationUUIDChange?.(loc.locationUUID)}
         onMouseLeave={() => onHoverLocationUUIDChange?.(null)}
-        className={`group flex w-full cursor-default items-center justify-between gap-2 rounded-xl border px-3 py-2.5 text-left text-xs transition-all duration-150 ${
+        className={`group flex w-full cursor-default items-center justify-between gap-2 rounded-xl px-3 py-2.5 text-left text-xs transition-all duration-150 ${
           isSlotSelected
-            ? "border-cyan-400/70 bg-cyan-950/35 text-slate-50 shadow-[0_0_0_1px_rgba(34,211,238,0.35),0_6px_16px_rgba(15,23,42,0.35)]"
+            ? "bg-orange-50 text-slate-900 ring-1 ring-orange-300/70"
             : typeBadge != null
-              ? "border-amber-500/25 bg-slate-800/50 text-amber-100 hover:border-amber-400/40 hover:bg-slate-700/70 hover:shadow-md"
-              : "border-slate-600/40 bg-slate-800/35 text-slate-200 hover:border-slate-500/60 hover:bg-slate-700/65 hover:shadow-md"
+              ? "bg-amber-50/80 text-amber-950 ring-1 ring-amber-200/70 hover:bg-amber-50"
+              : "bg-slate-50 text-slate-700 ring-1 ring-slate-200/70 hover:bg-white hover:shadow-sm"
         }`}
       >
         <span className="flex min-w-0 flex-1 items-center gap-2">
-          <span className="flex h-8 w-1 shrink-0 rounded-full bg-slate-500/80 transition-colors duration-150 group-hover:bg-cyan-400/70" aria-hidden />
+          <span className="flex h-8 w-1 shrink-0 rounded-full bg-slate-300 transition-colors duration-150 group-hover:bg-orange-400" aria-hidden />
           <span className="min-w-0 truncate">
             {typeBadge?.icon ? <span className="mr-1">{typeBadge.icon}</span> : null}
             <span className="font-medium">{loc.locationLabel}</span>
           </span>
         </span>
         <span className="flex shrink-0 items-center gap-1.5">
-          <span className="rounded-md bg-slate-900/40 px-2 py-0.5 font-mono text-[11px] font-semibold tabular-nums text-slate-100 ring-1 ring-slate-600/50">
+          <span className="rounded-full bg-white px-2 py-0.5 text-[11px] font-semibold tabular-nums text-slate-800 ring-1 ring-slate-200/80">
             {loc.quantity} szt.
           </span>
           {showRemove && (
@@ -280,7 +280,7 @@ export function MagazynProductsSidebar({
                   productName: product.name,
                 });
               }}
-              className="rounded-lg p-1.5 text-slate-400 transition-colors duration-150 hover:bg-slate-900/60 hover:text-red-300 disabled:opacity-40"
+              className="rounded-lg p-1.5 text-slate-400 transition-colors duration-150 hover:bg-rose-50 hover:text-rose-600 disabled:opacity-40"
             >
               <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
@@ -512,25 +512,28 @@ export function MagazynProductsSidebar({
   );
 
   return (
-    <aside className="flex h-full min-h-0 w-[380px] flex-none flex-col self-stretch overflow-x-hidden overflow-y-auto overscroll-y-contain rounded-r-xl border-l border-slate-700/90 bg-slate-800 designer-rail-scroll">
-      <div className="flex shrink-0 flex-col gap-2 border-b border-slate-600/80 px-4 py-3.5">
+    <aside className="flex h-full min-h-0 w-[360px] flex-none flex-col self-stretch overflow-x-hidden overflow-y-auto overscroll-y-contain bg-[#f7f8fa] shadow-[-4px_0_24px_rgba(15,23,42,0.04)] designer-rail-scroll">
+      <div className="flex shrink-0 flex-col gap-3 px-5 pb-4 pt-5">
         {selectedRackForMagazyn && onRequestClearRack && hasAssignedProductsOnRack && (
           <button
             type="button"
             onClick={onRequestClearRack}
             disabled={clearRackBusy}
-            className="w-full rounded-md border border-red-500/50 bg-slate-900/30 px-2 py-1 text-[11px] font-medium text-red-200 hover:border-red-400/70 hover:bg-red-950/30 disabled:cursor-not-allowed disabled:opacity-40"
+            className="w-full rounded-xl bg-rose-50 px-3 py-2 text-[11px] font-semibold text-rose-700 transition hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-40"
           >
             Opróżnij regał
           </button>
         )}
-        <h2 className="text-[9px] font-bold uppercase tracking-wider text-slate-500">Produkty w regale</h2>
+        <div>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-400">Regał</p>
+          <h2 className="mt-1 text-lg font-semibold tracking-tight text-slate-900">Produkty</h2>
+        </div>
         <input
           type="text"
           value={productSearchQuery}
           onChange={(e) => setProductSearchQuery(e.target.value)}
-          placeholder="Szukaj (nazwa, SKU...)"
-          className="w-full rounded-md border border-slate-600/80 bg-slate-700/40 px-2.5 py-1.5 text-xs text-slate-100 placeholder:text-slate-500 focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500"
+          placeholder="Szukaj nazwy lub SKU…"
+          className="w-full rounded-xl border-0 bg-white px-3 py-2.5 text-sm text-slate-900 shadow-sm ring-1 ring-slate-200/80 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-orange-400/40"
         />
         {selectedRackForMagazyn && (
           <p className="text-[11px] leading-snug text-slate-500">
@@ -540,20 +543,19 @@ export function MagazynProductsSidebar({
           </p>
         )}
       </div>
-      <div className="flex flex-none flex-col gap-2 p-3.5">
+      <div className="flex flex-none flex-col gap-3 px-4 pb-6">
         {selectedLocationForProducts != null && selectedRackForMagazyn && (
-          <label className="flex items-center gap-2 text-slate-400 text-xs">
+          <label className="flex items-center gap-2 text-xs text-slate-500">
             <input
               type="checkbox"
               checked={showAllProductsInSidebar}
               onChange={(e) => setShowAllProductsInSidebar(e.target.checked)}
-              className="rounded border-slate-500"
+              className="rounded border-slate-300 text-orange-500 focus:ring-orange-400/40"
             />
             Pokaż wszystkie produkty
           </label>
         )}
-        <div className="min-h-0 flex-none space-y-2">
-          {filterToSingleBin && selectedLocationBadge != null && (
+        <div className="min-h-0 flex-none space-y-3">          {filterToSingleBin && selectedLocationBadge != null && (
             <div className={`flex items-center gap-1.5 rounded-md px-2 py-1 text-[11px] ${selectedLocationBadge.className}`}>
               <span aria-label={selectedLocationBadge.label}>{selectedLocationBadge.icon}</span>
               <span>{selectedLocationBadge.label}</span>
@@ -803,20 +805,22 @@ export function MagazynProductsSidebar({
                   }}
                   onMouseEnter={() => onHoverProductIdChange?.(p.id)}
                   onMouseLeave={() => onHoverProductIdChange?.(null)}
-                  className={`block cursor-pointer rounded-xl border p-3 shadow-sm transition-all duration-150 hover:border-slate-500 focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:ring-offset-2 focus:ring-offset-slate-800 ${
-                    isReserveLocation ? "border-amber-400/70 bg-slate-700/70 ring-1 ring-amber-400/40 hover:bg-slate-600/80" : "border-slate-600/80 bg-slate-700/60 hover:border-slate-500 hover:bg-slate-600/70"
+                  className={`block cursor-pointer rounded-2xl bg-white p-4 shadow-sm transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-orange-400/40 ${
+                    isReserveLocation
+                      ? "ring-1 ring-amber-300/70 hover:shadow-md"
+                      : "ring-1 ring-slate-200/60 hover:shadow-md hover:ring-slate-300/80"
                   } ${
-                    selectedProductId === p.id && onToggleProductMapHighlight ? "ring-2 ring-cyan-400 ring-offset-1 ring-offset-slate-800" : ""
+                    selectedProductId === p.id && onToggleProductMapHighlight ? "ring-2 ring-orange-400/50" : ""
                   }`}
                 >
                   {currentLocation && (
                     <div
-                      className="mb-1.5 flex items-center justify-between gap-1.5 rounded border border-blue-500/40 bg-blue-950/30 px-1.5 py-1 text-[10px] font-medium text-blue-200"
+                      className="mb-3 flex items-center justify-between gap-1.5 rounded-xl bg-sky-50 px-2.5 py-1.5 text-[11px] font-medium text-sky-800"
                       onMouseEnter={() => onHoverLocationUUIDChange?.(currentLocation.locationUUID)}
                       onMouseLeave={() => onHoverLocationUUIDChange?.(null)}
                     >
                       <span className="min-w-0">
-                        Aktualna lokalizacja: {currentLocationLabel} — {safeQuantity(currentLocation.quantity)} szt.
+                        {currentLocationLabel} — {safeQuantity(currentLocation.quantity)} szt.
                       </span>
                       {normalizeStorageType(currentLocation.storageType) === "damaged" && onCreateDamageReportPrefill ? (
                         <button
@@ -833,7 +837,7 @@ export function MagazynProductsSidebar({
                               quantity: Math.max(1, Math.floor(safeQuantity(currentLocation.quantity))),
                             });
                           }}
-                          className="rounded border border-rose-300 bg-rose-100 px-2 py-0.5 text-[10px] font-semibold text-rose-700 hover:bg-rose-200"
+                          className="rounded-lg bg-rose-100 px-2 py-0.5 text-[10px] font-semibold text-rose-700 hover:bg-rose-200"
                         >
                           Utwórz protokół szkody
                         </button>
@@ -855,7 +859,7 @@ export function MagazynProductsSidebar({
                                 productName: p.name,
                               });
                             }}
-                            className="p-0.5 rounded shrink-0 text-blue-200 hover:text-red-400 hover:bg-slate-800/80 disabled:opacity-40"
+                            className="shrink-0 rounded-lg p-0.5 text-slate-400 hover:bg-rose-50 hover:text-rose-600 disabled:opacity-40"
                           >
                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
@@ -864,34 +868,48 @@ export function MagazynProductsSidebar({
                         )}
                     </div>
                   )}
-                  <div className="flex items-start gap-2">
-                    <div className="relative h-10 w-10 shrink-0 overflow-hidden rounded-md bg-slate-700/70">
+                  <div className="flex items-start gap-3.5">
+                    <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-xl bg-slate-100">
                       <div className="absolute inset-0 flex items-center justify-center">
-                        <svg className="h-5 w-5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+                        <svg className="h-6 w-6 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
                       </div>
                       {imageUrl && (
                         <img
                           src={imageUrl}
                           alt=""
-                          className="absolute inset-0 w-full h-full object-cover z-10"
+                          className="absolute inset-0 z-10 h-full w-full object-cover"
                           onError={(e) => { e.currentTarget.style.display = "none"; }}
                         />
                       )}
                     </div>
                     <div className="min-w-0 flex-1">
-                      <div className="line-clamp-2 break-words text-xs font-semibold leading-snug text-slate-50">
+                      <div className="line-clamp-2 break-words text-[15px] font-semibold leading-snug tracking-tight text-slate-900">
                         {highlightQueryInText(p.name ?? "", productSearchQuery, p.id)}
                       </div>
-                      <div className="mt-0.5 truncate font-mono text-[10px] text-slate-500">SKU {p.sku ?? "—"} · EAN {p.ean ?? "—"}</div>
+                      <div className="mt-1 truncate text-[11px] tracking-wide text-slate-400">{p.sku ?? "—"}</div>
                       {hasQuantityBreakdown ? (
                         <>
-                          <div className="mt-1 text-[11px] text-slate-400">Łącznie <span className="font-mono font-semibold text-slate-200">{enriched.totalQuantity}</span></div>
-                          <div className="text-[10px] text-slate-500">Podst. <span className="font-mono text-slate-300">{enriched.primaryQuantity ?? 0}</span> · Rez. <span className="font-mono text-amber-300/90">{enriched.reserveQuantity ?? 0}</span></div>
+                          <div className="mt-3 text-base font-semibold tabular-nums text-slate-900">
+                            {enriched.totalQuantity}
+                            <span className="ml-1 text-[12px] font-medium text-slate-400">szt.</span>
+                          </div>
+                          <div className="mt-0.5 text-[11px] text-slate-400">
+                            Podst. <span className="font-medium text-slate-600">{enriched.primaryQuantity ?? 0}</span>
+                            {" · "}
+                            Rez. <span className="font-medium text-amber-700">{enriched.reserveQuantity ?? 0}</span>
+                          </div>
                         </>
                       ) : (
-                        <div className="mt-1 text-[11px] text-slate-400">Szt. <span className="font-mono font-semibold text-slate-200">{quantityAtLocation}</span></div>
+                        <div className="mt-3 text-base font-semibold tabular-nums text-slate-900">
+                          {quantityAtLocation}
+                          <span className="ml-1 text-[12px] font-medium text-slate-400">szt.</span>
+                        </div>
                       )}
-                      <div className="text-[10px] text-slate-500">Obj. <span className="font-mono text-cyan-300/90">{formatVolume(volumeAtLocation)} dm³</span></div>
+                      <div className="mt-2">
+                        <span className="rounded-full bg-sky-50 px-2.5 py-0.5 text-[11px] font-semibold tabular-nums text-sky-700">
+                          {formatVolume(volumeAtLocation)} dm³
+                        </span>
+                      </div>
                       {otherLocations.length > 0 && (
                         <button
                           type="button"
@@ -905,7 +923,7 @@ export function MagazynProductsSidebar({
                               setExpandedProductId(p.id);
                             }
                           }}
-                          className="mt-1.5 text-[10px] text-cyan-400/90 hover:text-cyan-300"
+                          className="mt-2 text-[11px] font-medium text-orange-600 hover:text-orange-700"
                         >
                           Inne lokalizacje
                         </button>
@@ -913,7 +931,7 @@ export function MagazynProductsSidebar({
                     </div>
                   </div>
                   {isExpanded && otherLocations.length > 0 && (
-                    <div className="mt-1.5 border-t border-slate-600/60 pt-1.5">
+                    <div className="mt-3 border-t border-slate-100 pt-3">
                       {locationCount > 20 && (
                         <input
                           type="text"
@@ -922,7 +940,7 @@ export function MagazynProductsSidebar({
                           onChange={(e) => setLocationSearchQuery(e.target.value)}
                           onClick={(e) => e.stopPropagation()}
                           onKeyDown={(e) => e.stopPropagation()}
-                          className="w-full mb-2 px-2 py-1 text-sm rounded bg-slate-700 border border-slate-600 text-white placeholder-slate-400 focus:ring-1 focus:ring-cyan-500 focus:border-cyan-500"
+                          className="mb-2 w-full rounded-xl border-0 bg-slate-50 px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-200/80 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-orange-400/40"
                         />
                       )}
                       {locationCount <= 5 ? (

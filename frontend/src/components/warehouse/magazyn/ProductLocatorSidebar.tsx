@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import type { LayoutState, WarehouseProduct } from "../../../types/warehouse";
-import { activeBinsForRack, compareLocationUuidsByLayoutOrder } from "../warehouseUtils";
+import { compareLocationUuidsByLayoutOrder } from "../warehouseUtils";
 import { normalizeInventoryLocationUuid, type InventoryMaps } from "../../../pages/WarehouseDesigner/inventoryMaps";
 import { buildUuidToResolvedLocation } from "../../../utils/resolvedWarehouseLocation";
 
@@ -79,72 +79,83 @@ export function ProductLocatorSidebar({
   const imageUrl = getProductImageUrl(product);
 
   return (
-    <aside className="flex h-full min-h-0 w-[380px] flex-none flex-col self-stretch overflow-hidden rounded-r-xl border-l border-slate-700 bg-slate-800">
-      <div className="flex items-center justify-between gap-2 px-4 py-3.5 border-b border-slate-600 shrink-0">
-        <h2 className="text-[10px] font-black uppercase tracking-[0.12em] text-slate-300">Lokalizacja produktu</h2>
-      </div>
-      <div className="flex-1 min-h-0 overflow-y-auto p-4 flex flex-col gap-4">
-        <div className="flex items-start gap-3 rounded-xl border border-slate-600 bg-slate-700/80 p-3">
-          <div className="relative w-12 h-12 shrink-0 rounded-lg overflow-hidden bg-slate-700/80">
-            <div className="absolute inset-0 flex items-center justify-center">
-              <svg className="w-6 h-6 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-              </svg>
+    <aside
+      className="flex h-full min-h-0 w-[360px] flex-none flex-col self-stretch overflow-hidden bg-[#f7f8fa] shadow-[-4px_0_24px_rgba(15,23,42,0.04)]"
+      aria-label="Lokalizacja produktu"
+    >
+      <header className="shrink-0 px-5 pb-4 pt-5">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-400">Lokalizacja</p>
+        <h2 className="mt-1 text-lg font-semibold tracking-tight text-slate-900">Produkt</h2>
+      </header>
+
+      <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-6">
+        <div className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200/60">
+          <div className="flex items-start gap-3.5">
+            <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-xl bg-slate-100">
+              <div className="absolute inset-0 flex items-center justify-center">
+                <svg className="h-6 w-6 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={1.5}
+                    d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
+                  />
+                </svg>
+              </div>
+              {imageUrl && (
+                <img
+                  src={imageUrl}
+                  alt=""
+                  className="absolute inset-0 z-10 h-full w-full object-cover"
+                  onError={(e) => {
+                    e.currentTarget.style.display = "none";
+                  }}
+                />
+              )}
             </div>
-            {imageUrl && (
-              <img
-                src={imageUrl}
-                alt=""
-                className="absolute inset-0 w-full h-full object-cover z-10"
-                onError={(e) => {
-                  e.currentTarget.style.display = "none";
-                }}
-              />
-            )}
-          </div>
-          <div className="min-w-0 flex-1">
-            <div className="text-sm font-semibold text-slate-100 break-words line-clamp-2">{product.name}</div>
-            <div className="text-xs text-slate-400 mt-1 truncate">SKU: {product.sku ?? "—"} · EAN: {product.ean ?? "—"}</div>
-            <div className="text-xs text-slate-300 mt-1">
-              Sztuki łącznie: <span className="font-mono font-semibold text-slate-100">{totalQuantity}</span>
-            </div>
-            <div className="text-xs text-slate-400 mt-0.5">
-              Podst. <span className="font-mono text-slate-300">{primaryQuantity}</span> · Rez.{" "}
-              <span className="font-mono text-amber-300">{reserveQuantity}</span>
+            <div className="min-w-0 flex-1">
+              <div className="line-clamp-2 text-[15px] font-semibold leading-snug tracking-tight text-slate-900">
+                {product.name}
+              </div>
+              <div className="mt-1 truncate text-[11px] tracking-wide text-slate-400">{product.sku ?? "—"}</div>
+              <div className="mt-3 text-base font-semibold tabular-nums text-slate-900">
+                {totalQuantity}
+                <span className="ml-1 text-[12px] font-medium text-slate-400">szt.</span>
+              </div>
+              <div className="mt-0.5 text-[11px] text-slate-400">
+                Podst. <span className="font-medium text-slate-600">{primaryQuantity}</span>
+                {" · "}
+                Rez. <span className="font-medium text-amber-700">{reserveQuantity}</span>
+              </div>
             </div>
           </div>
         </div>
-        <div>
-          <h3 className="text-xs font-semibold text-slate-400 uppercase mb-2">Wszystkie lokalizacje</h3>
-          <div className="space-y-2 max-h-[min(60vh,24rem)] overflow-y-auto pr-0.5">
-            {locations.length === 0 ? (
-              <p className="text-slate-500 text-sm py-3">Brak przypisanych lokalizacji</p>
-            ) : (
-              locations.map((loc) => (
-                <button
-                  key={loc.locationUUID}
-                  type="button"
-                  onClick={() => onSelectLocation(loc.locationUUID)}
-                  className={`group flex w-full flex-col gap-1 rounded-xl border px-3 py-3 text-left shadow-sm transition-all duration-150 hover:shadow-md active:scale-[0.99] ${
-                    loc.isReserve
-                      ? "border-amber-500/35 bg-slate-700/50 hover:border-amber-400/50 hover:bg-slate-600/50"
-                      : "border-slate-600/50 bg-slate-700/40 hover:border-slate-500 hover:bg-slate-600/55"
-                  }`}
-                >
-                  <span className="flex items-center gap-2">
-                    <span className="h-8 w-1 shrink-0 rounded-full bg-slate-500/80 transition-colors group-hover:bg-cyan-400/60" aria-hidden />
-                    <span className={`min-w-0 flex-1 truncate text-sm font-semibold leading-snug ${loc.isReserve ? "text-amber-100" : "text-slate-100"}`}>
-                      {loc.isReserve ? <span className="mr-1" aria-hidden>🔒</span> : null}
-                      {loc.locationLabel}
-                    </span>
-                  </span>
-                  <span className="pl-3 font-mono text-xs tabular-nums text-slate-400">
-                    {loc.quantity} szt. w tej lokalizacji
-                  </span>
-                </button>
-              ))
-            )}
-          </div>
+
+        <h3 className="mb-3 mt-6 text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-400">
+          Wszystkie lokalizacje
+        </h3>
+        <div className="max-h-[min(60vh,24rem)] space-y-2 overflow-y-auto pr-0.5">
+          {locations.length === 0 ? (
+            <p className="py-6 text-center text-sm text-slate-400">Brak lokalizacji</p>
+          ) : (
+            locations.map((loc) => (
+              <button
+                key={loc.locationUUID}
+                type="button"
+                onClick={() => onSelectLocation(loc.locationUUID)}
+                className={`flex w-full items-center justify-between gap-3 rounded-xl px-3.5 py-3 text-left transition-all duration-150 ${
+                  loc.isReserve
+                    ? "bg-amber-50/90 ring-1 ring-amber-200/80 hover:bg-amber-50"
+                    : "bg-white shadow-sm ring-1 ring-slate-200/60 hover:shadow-md hover:ring-slate-300/80"
+                }`}
+              >
+                <span className="min-w-0 truncate text-[13px] font-medium text-slate-800">{loc.locationLabel}</span>
+                <span className="shrink-0 rounded-full bg-slate-100 px-2.5 py-0.5 text-[11px] font-semibold tabular-nums text-slate-700">
+                  {loc.quantity} szt.
+                </span>
+              </button>
+            ))
+          )}
         </div>
       </div>
     </aside>

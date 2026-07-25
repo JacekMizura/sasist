@@ -3894,7 +3894,7 @@ export default function WarehouseDesigner() {
         className="min-h-0 flex-1"
         left={
           mainView === "magazyn" ? (
-          <div className={`flex h-full min-h-0 w-[300px] shrink-0 flex-none flex-col gap-2 overflow-x-hidden overflow-y-auto overscroll-y-contain border-r ${appLayoutTokens.appBorder} pr-3`}>
+          <div className="flex h-full min-h-0 w-[300px] shrink-0 flex-none flex-col overflow-x-hidden overflow-y-auto overscroll-y-contain bg-white px-6 py-6 shadow-[4px_0_24px_rgba(15,23,42,0.04)]">
             <MagazynDashboardPanel
               layout={layout}
               customTemplates={customTemplates}
@@ -3974,7 +3974,7 @@ export default function WarehouseDesigner() {
       >
         {mainView === "magazyn" ? (
           <>
-            <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-lg border border-slate-200/80">
+            <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-[#dfe4ea]">
               {layout.racks.length === 0 ? (
                 <div className="flex min-h-0 min-w-0 max-w-full flex-1 basis-0 flex-col items-center justify-center p-8 text-slate-500">
                   <p className="text-sm">Brak regałów. Przejdź do Projektu Layoutu, aby dodać regały i zobaczyć widok z boku.</p>
@@ -3984,10 +3984,10 @@ export default function WarehouseDesigner() {
                   <div className="flex min-h-0 min-w-0 max-w-full flex-1 basis-0 flex-col overflow-hidden">
                     {selectedRackIdForSideView == null ? (
                       <div className="flex min-h-0 min-w-0 max-w-full flex-1 basis-0 flex-row items-stretch overflow-hidden">
-                        <div className="flex min-h-0 min-w-0 max-w-full flex-1 basis-0 flex-col overflow-hidden">
+                        <div className="relative flex min-h-0 min-w-0 max-w-full flex-1 basis-0 flex-col overflow-hidden">
                           <div
                             ref={magazynMapScrollRef}
-                            className="flex min-h-0 min-w-0 max-w-full w-full flex-1 flex-col overflow-auto overscroll-y-contain"
+                            className="warehouse-magazyn-hall flex min-h-0 min-w-0 max-w-full w-full flex-1 flex-col overflow-auto overscroll-y-contain"
                             style={{ overscrollBehavior: "contain" }}
                           >
                           <WarehouseLayoutRenderer

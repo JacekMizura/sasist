@@ -1,3 +1,10 @@
+## 2026-07-25 — Magazyn UI: pełny redesign widoku operacyjnego (no push)
+
+- Kompozycja: mapa jako bohater (powierzchnia hali), lewy pulpit jako jeden rail, prawa lista produktów light/nowoczesna
+- Przejazdy/alejki jak drogi (hatch + kierunek), bez napisów/ramek „PRZEJAZD”
+- Geometria regałów, logika i API bez zmian
+- **No push.**
+
 ## 2026-07-25 — Etap 3.3 Routing Graph Architecture Cleanup
 
 - Usunięto martwy `domain/simulation/route_engine.py` (Euclidean visit order)

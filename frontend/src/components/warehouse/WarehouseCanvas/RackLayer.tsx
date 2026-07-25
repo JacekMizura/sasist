@@ -573,35 +573,34 @@ export function RackLayer({
                             y={pr.y}
                             width={pr.w}
                             height={pr.h}
-                            fill="#d8dee6"
-                            stroke="#c0c7d1"
-                            strokeWidth={0.75}
+                            fill="#c8d0db"
+                            stroke="none"
                           />
                           <rect
-                            x={pr.x + 0.5}
-                            y={pr.y + 0.5}
-                            width={Math.max(0, pr.w - 1)}
-                            height={Math.max(0, pr.h - 1)}
+                            x={pr.x}
+                            y={pr.y}
+                            width={pr.w}
+                            height={pr.h}
                             fill={`url(#${passageHatchId})`}
-                            opacity={0.55}
+                            opacity={0.4}
                           />
                           <line
                             x1={alongX ? pr.x + 2 : midX}
                             y1={alongX ? midY : pr.y + 2}
                             x2={alongX ? pr.x + pr.w - 2 : midX}
                             y2={alongX ? midY : pr.y + pr.h - 2}
-                            stroke="rgba(255,255,255,0.85)"
-                            strokeWidth={1.15}
+                            stroke="rgba(255,255,255,0.5)"
+                            strokeWidth={0.9}
                             strokeDasharray={`${dash} ${gap}`}
                             strokeLinecap="round"
                           />
                           <polygon
                             points={
                               alongX
-                                ? `${pr.x + pr.w - 3.5},${midY} ${pr.x + pr.w - 7.5},${midY - 2.2} ${pr.x + pr.w - 7.5},${midY + 2.2}`
-                                : `${midX},${pr.y + pr.h - 3.5} ${midX - 2.2},${pr.y + pr.h - 7.5} ${midX + 2.2},${pr.y + pr.h - 7.5}`
+                                ? `${pr.x + pr.w - 3},${midY} ${pr.x + pr.w - 6.5},${midY - 1.8} ${pr.x + pr.w - 6.5},${midY + 1.8}`
+                                : `${midX},${pr.y + pr.h - 3} ${midX - 1.8},${pr.y + pr.h - 6.5} ${midX + 1.8},${pr.y + pr.h - 6.5}`
                             }
-                            fill="rgba(100,116,139,0.55)"
+                            fill="rgba(148,163,184,0.45)"
                           />
                         </g>
                       );
