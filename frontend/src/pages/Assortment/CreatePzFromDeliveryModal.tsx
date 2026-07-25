@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
 import { getDelivery, createPzFromDelivery, type DeliveryRead } from "../../api/inboundDeliveriesApi";
 import { PrimaryButton } from "../../design-system/PrimaryButton";
+import { AppOverlayPortal } from "../../components/overlay";
 
 type Props = {
   open: boolean;
@@ -76,7 +77,8 @@ export function CreatePzFromDeliveryModal({ open, tenantId, deliveryId, onClose,
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-[270] flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
+    <AppOverlayPortal>
+    <div className="fixed inset-0 z-[280] flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
       <div
         className="flex max-h-[min(92vh,calc(100dvh-2rem))] w-full max-w-xl flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl"
         onClick={(e) => e.stopPropagation()}
@@ -140,5 +142,6 @@ export function CreatePzFromDeliveryModal({ open, tenantId, deliveryId, onClose,
         </form>
       </div>
     </div>
+    </AppOverlayPortal>
   );
 }

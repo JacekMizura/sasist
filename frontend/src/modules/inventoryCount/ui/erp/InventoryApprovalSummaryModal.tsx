@@ -1,6 +1,7 @@
 import type { InventoryPostingPreview } from "@/api/inventoryCountApi";
 import { CarrierBadge } from "@/components/warehouse/carriers/CarrierBadge";
 import { PrimaryButton } from "@/design-system/PrimaryButton";
+import { AppOverlayPortal } from "../../../../components/overlay";
 
 type Props = {
   open: boolean;
@@ -43,8 +44,9 @@ export default function InventoryApprovalSummaryModal({
         : "Potwierdź";
 
   return (
+        <AppOverlayPortal>
     <div
-      className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-4 sm:items-center"
+      className="fixed inset-0 z-[280] flex items-end justify-center bg-black/40 p-4 sm:items-center"
       aria-busy={busy}
     >
       <div className="max-h-[90vh] w-full max-w-lg overflow-auto rounded-lg border border-slate-200 bg-white shadow-xl">
@@ -118,6 +120,7 @@ export default function InventoryApprovalSummaryModal({
         </div>
       </div>
     </div>
+    </AppOverlayPortal>
   );
 }
 

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { AlertCircle, X } from "lucide-react";
 
 import { createWmsUnknownProduct } from "@/api/inventoryCountApi";
+import { AppOverlayPortal } from "@/components/overlay";
 import { WMS_INV } from "./theme";
 
 type Props = {
@@ -75,7 +76,8 @@ export default function WmsInventoryUnknownProductModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#1e3a5f]/40 p-4">
+    <AppOverlayPortal>
+    <div className="fixed inset-0 z-[250] flex items-center justify-center bg-[#1e3a5f]/40 p-4">
       <div className={`w-full max-w-md rounded-xl border-2 ${WMS_INV.borderStrong} ${WMS_INV.surface} shadow-2xl`}>
         <div className={`flex items-center justify-between border-b ${WMS_INV.border} px-4 py-3`}>
           <div>
@@ -127,5 +129,6 @@ export default function WmsInventoryUnknownProductModal({
         </div>
       </div>
     </div>
+    </AppOverlayPortal>
   );
 }

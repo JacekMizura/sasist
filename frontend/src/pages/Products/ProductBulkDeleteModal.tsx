@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { postProductsBulkDelete, type ProductsBulkDeleteResult } from "../../api/productsBulkApi";
 import type { ProductBulkModalSelection } from "./ProductBulkActionModal";
+import { AppOverlayPortal } from "../../components/overlay";
 
 type Props = {
   open: boolean;
@@ -56,7 +57,8 @@ export function ProductBulkDeleteModal({ open, tenantId, selection, onClose, onS
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-[270] flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
+        <AppOverlayPortal>
+    <div className="fixed inset-0 z-[280] flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
       <div
         className="w-full max-w-md rounded-2xl border border-red-200 bg-white p-6 shadow-xl"
         onClick={(e) => e.stopPropagation()}
@@ -91,5 +93,6 @@ export function ProductBulkDeleteModal({ open, tenantId, selection, onClose, onS
         </div>
       </div>
     </div>
+    </AppOverlayPortal>
   );
 }

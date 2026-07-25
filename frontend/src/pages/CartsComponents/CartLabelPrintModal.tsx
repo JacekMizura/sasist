@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import api from "../../api/axios";
 import { openPdfBlobInPrintViewer } from "../../utils/openPdfForBrowserPrint";
 import { PrimaryButton } from "../../design-system/PrimaryButton";
+import { AppOverlayPortal } from "../../components/overlay";
 
 export type CartForLabel = { id: number; name: string };
 
@@ -79,7 +80,8 @@ export function CartLabelPrintModal({ open, cart, onClose }: Props) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={onClose}>
+    <AppOverlayPortal>
+    <div className="fixed inset-0 z-[280] flex items-center justify-center bg-black/40" onClick={onClose}>
       <div
         className="bg-white rounded-xl shadow-xl max-w-md w-full mx-4"
         onClick={(e) => e.stopPropagation()}
@@ -148,5 +150,6 @@ export function CartLabelPrintModal({ open, cart, onClose }: Props) {
         </div>
       </div>
     </div>
+    </AppOverlayPortal>
   );
 }

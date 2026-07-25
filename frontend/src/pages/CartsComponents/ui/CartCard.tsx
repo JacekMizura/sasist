@@ -31,6 +31,7 @@ import SimulationResultModal from "./SimulationResultModal";
 import CartCapacitySection from "./CartCapacitySection";
 import StatusPill from "./StatusPill";
 import { cartStatsFromWms } from "../cartStats";
+import { AppOverlayPortal } from "../../../components/overlay";
 
 type SimulationResult = {
   assigned_orders_count: number;
@@ -415,8 +416,9 @@ export default function CartCard(props: CartCardProps) {
       />
 
       {confirmWholeCartClearOpen ? (
+        <AppOverlayPortal>
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+          className="fixed inset-0 z-[280] flex items-center justify-center bg-black/50 p-4"
           onClick={() => setConfirmWholeCartClearOpen(false)}
         >
           <div className="w-full max-w-md rounded-xl bg-white p-5 shadow-xl" onClick={(e) => e.stopPropagation()}>
@@ -441,6 +443,7 @@ export default function CartCard(props: CartCardProps) {
             </div>
           </div>
         </div>
+        </AppOverlayPortal>
       ) : null}
     </div>
   );

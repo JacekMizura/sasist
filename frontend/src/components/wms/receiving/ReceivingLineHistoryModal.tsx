@@ -1,5 +1,6 @@
 import type { ReceivingScanLogRead, StockDocumentItemRead } from "../../../api/stockDocumentsApi";
 import { formatWmsListDate } from "../../../pages/wms/wmsListFormatters";
+import { AppOverlayPortal } from "../../overlay";
 
 type Props = {
   line: StockDocumentItemRead;
@@ -23,6 +24,7 @@ export function ReceivingLineHistoryModal({ line, onClose }: Props) {
   const title = (line.product_name || "").trim() || `Pozycja #${line.id}`;
 
   return (
+    <AppOverlayPortal>
     <div
       className="fixed inset-0 z-[1700] flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm"
       onClick={onClose}
@@ -83,5 +85,6 @@ export function ReceivingLineHistoryModal({ line, onClose }: Props) {
         </div>
       </div>
     </div>
+    </AppOverlayPortal>
   );
 }

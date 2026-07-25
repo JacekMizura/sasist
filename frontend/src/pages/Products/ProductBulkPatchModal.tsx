@@ -11,6 +11,7 @@ import {
   type BulkPatchFieldDef,
   type ProductBulkPatchPreset,
 } from "./productBulkLogisticsFields";
+import { AppOverlayPortal } from "../../components/overlay";
 
 type FieldState = {
   enabled: boolean;
@@ -163,8 +164,9 @@ export function ProductBulkPatchModal({ open, preset, tenantId, selection, onClo
     "w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 focus:border-violet-400 focus:ring-2 focus:ring-violet-500";
 
   return (
+        <AppOverlayPortal>
     <div
-      className="fixed inset-0 z-[270] flex items-center justify-center bg-black/50 p-4"
+      className="fixed inset-0 z-[280] flex items-center justify-center bg-black/50 p-4"
       onClick={onClose}
     >
       <div
@@ -321,6 +323,7 @@ export function ProductBulkPatchModal({ open, preset, tenantId, selection, onClo
         </div>
       </div>
     </div>
+    </AppOverlayPortal>
   );
 }
 

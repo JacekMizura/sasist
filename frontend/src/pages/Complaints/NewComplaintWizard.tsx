@@ -6,6 +6,7 @@ import { createComplaintFromOrder } from "../../api/complaintsApi";
 import { COMPLAINT_DEFECT_TAG_OPTIONS } from "../../constants/complaintDefectTags";
 import { DAMAGE_TENANT_ID } from "../../constants/panelTenant";
 import { PrimaryButton } from "../../design-system/PrimaryButton";
+import { AppOverlayPortal } from "../../components/overlay";
 
 type OrderLite = {
   id: number;
@@ -411,7 +412,8 @@ export default function NewComplaintWizard({
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/45 p-4" role="dialog" aria-modal="true">
+        <AppOverlayPortal>
+    <div className="fixed inset-0 z-[280] flex items-center justify-center bg-black/45 p-4" role="dialog" aria-modal="true">
       <div className="flex max-h-[92vh] w-full max-w-lg flex-col overflow-hidden rounded-xl border border-gray-200 bg-white shadow-xl">
         <div className="flex items-center justify-between border-b border-gray-100 px-4 py-3">
           <div>
@@ -665,5 +667,6 @@ export default function NewComplaintWizard({
         </div>
       </div>
     </div>
+    </AppOverlayPortal>
   );
 }

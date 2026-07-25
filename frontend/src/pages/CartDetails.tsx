@@ -8,6 +8,7 @@ import {
 } from "../api/wmsCartStatsApi";
 import { BarcodeIcon, ChevronIcon } from "./CartsComponents/ui/Icons";
 import { PrimaryButton } from "../design-system/PrimaryButton";
+import { AppOverlayPortal } from "../components/overlay";
 
 type Basket = {
   id: number;
@@ -215,7 +216,8 @@ export default function CartDetails() {
 
       {/* MODAL */}
       {editing && (
-        <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center">
+                <AppOverlayPortal>
+        <div className="fixed inset-0 z-[280] bg-black bg-opacity-40 flex items-center justify-center">
           <div className="bg-white p-6 rounded-xl space-y-4 w-80">
             <div className="text-lg font-semibold">
               Edycja koszyka
@@ -265,6 +267,7 @@ export default function CartDetails() {
             </div>
           </div>
         </div>
+        </AppOverlayPortal>
       )}
 
     </div>

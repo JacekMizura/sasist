@@ -4,6 +4,7 @@ import { useWarehouse } from "../../context/WarehouseContext";
 import type { Printer } from "../../types/printer";
 import type { PrinterProfile } from "../../types/printerProfiles";
 import { brandPrimaryButtonClass } from "../../design-system/brandUi";
+import { AppOverlayPortal } from "../../components/overlay";
 
 const TENANT_ID = 1;
 
@@ -197,7 +198,8 @@ export default function PrintersPage() {
       </div>
 
       {formOpen && (
-        <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50 p-4" onClick={closeForm}>
+                <AppOverlayPortal>
+        <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-[280] p-4" onClick={closeForm}>
           <div
             className="rounded-xl border border-slate-200 bg-white p-6 shadow-xl w-full max-w-md space-y-4"
             onClick={(e) => e.stopPropagation()}
@@ -302,6 +304,7 @@ export default function PrintersPage() {
             </div>
           </div>
         </div>
+        </AppOverlayPortal>
       )}
     </div>
   );

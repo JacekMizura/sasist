@@ -30,6 +30,7 @@ import {
   productionPageTitleClass,
 } from "./productionLayoutTokens";
 import { ProductionEmptyState } from "./components/ProductionEmptyState";
+import { AppOverlayPortal } from "../../components/overlay";
 
 const DEFAULT_TENANT = 1;
 
@@ -329,7 +330,8 @@ export default function ProductionShortagesPage() {
       </section>
 
       {poPickerFor ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4">
+                <AppOverlayPortal>
+        <div className="fixed inset-0 z-[280] flex items-center justify-center bg-slate-950/40 p-4">
           <div className="w-full max-w-md rounded-2xl bg-white p-5 shadow-xl">
             <h3 className="flex items-center gap-2 text-base font-bold text-slate-900">
               <AlertTriangle className="h-5 w-5 text-amber-600" aria-hidden />
@@ -367,6 +369,7 @@ export default function ProductionShortagesPage() {
             </button>
           </div>
         </div>
+        </AppOverlayPortal>
       ) : null}
 
       <p className="text-xs text-slate-500">

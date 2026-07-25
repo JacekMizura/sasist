@@ -7,6 +7,7 @@ import {
   type SegmentDimensionDefaults,
 } from "./rackLayoutUtils";
 import type { SegmentModalData, SegmentSavePayload, SegmentSaveResult } from "./consolidationRackTypes";
+import { AppOverlayPortal } from "../../components/overlay";
 
 const MAX_DIMENSION_MM = 10_000;
 
@@ -180,8 +181,9 @@ export default function ConsolidationRackSegmentModal({
       : null;
 
   return (
+    <AppOverlayPortal>
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+      className="fixed inset-0 z-[280] flex items-center justify-center bg-black/40 p-4"
       onClick={onClose}
       role="dialog"
       aria-modal="true"
@@ -396,5 +398,6 @@ export default function ConsolidationRackSegmentModal({
         )}
       </div>
     </div>
+    </AppOverlayPortal>
   );
 }

@@ -24,6 +24,7 @@ import {
   API_KEY_TYPE_LABELS,
   DEFAULT_SCOPES_BY_TYPE,
 } from "../../../types/apiKeys";
+import { AppOverlayPortal } from "../../../components/overlay";
 
 const TENANT_ID = DAMAGE_TENANT_ID;
 const KEY_TYPES: ApiKeyType[] = ["printer_agent", "integration", "public_api", "webhook"];
@@ -328,7 +329,8 @@ export default function ApiKeysSettingsPage() {
       )}
 
       {modalOpen ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+        <AppOverlayPortal>
+        <div className="fixed inset-0 z-[280] flex items-center justify-center bg-black/40 p-4">
           <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-xl bg-white p-5 shadow-xl">
             {createdKey ? (
               <>
@@ -435,6 +437,7 @@ export default function ApiKeysSettingsPage() {
             )}
           </div>
         </div>
+        </AppOverlayPortal>
       ) : null}
     </PageLayout>
   );

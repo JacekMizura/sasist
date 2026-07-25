@@ -1,6 +1,7 @@
 import { useRef } from "react";
 import type { PackagingSuggestionApi, WmsPackingRecommendedCartonApi } from "../../../api/wmsPackingApi";
 import { ShippingMethodLogo } from "../../shipping/ShippingMethodLogo";
+import { AppOverlayPortal } from "../../overlay";
 
 function Thumb({ url, compact }: { url?: string | null; compact: boolean }) {
   const box = compact
@@ -87,6 +88,7 @@ export function PackingCartonGateModal({
   const nameById = (id: string) => compatible.find((c) => c.id === id)?.name?.trim() || id;
 
   return (
+    <AppOverlayPortal>
     <div
       className="fixed inset-0 z-[300] flex flex-col bg-[#eef2f6]"
       role="dialog"
@@ -223,5 +225,6 @@ export function PackingCartonGateModal({
         </div>
       </div>
     </div>
+    </AppOverlayPortal>
   );
 }

@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { generateRackNames, normalizeRowPrefixLetters, nextRowPrefixLetters } from "./warehouseUtils";
 import { PrimaryButton } from "../../design-system/PrimaryButton";
+import { AppOverlayPortal } from "../../components/overlay";
 
 export type RowCountDirection = "LTR" | "RTL";
 
@@ -243,8 +244,9 @@ export function RowPrefixModal({
   );
 
   return (
+    <AppOverlayPortal>
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+      className="fixed inset-0 z-[280] flex items-center justify-center bg-black/40 p-4"
       role="dialog"
       aria-modal="true"
       aria-labelledby="row-prefix-modal-title"
@@ -442,5 +444,6 @@ export function RowPrefixModal({
         </div>
       </div>
     </div>
+    </AppOverlayPortal>
   );
 }

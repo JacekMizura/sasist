@@ -4,6 +4,7 @@ import {
   productLikeFieldLabelClass,
   productLikeInputClass,
 } from "../../components/catalog/productLikeTokens";
+import { AppOverlayPortal } from "../../components/overlay";
 import type { BasketModel } from "./CartSectionGrid";
 import { basketVolume } from "./CartSectionGrid";
 import { PrimaryButton } from "../../design-system/PrimaryButton";
@@ -43,8 +44,9 @@ export function CartBasketEditDrawer({
   const invalid = !basket.name.trim() || basket.length <= 0 || basket.width <= 0 || basket.height <= 0;
 
   return (
+    <AppOverlayPortal>
     <div
-      className="fixed inset-0 z-[280] flex justify-end bg-slate-900/30 backdrop-blur-[1px]"
+      className="fixed inset-0 z-[250] flex justify-end bg-slate-900/30 backdrop-blur-[1px]"
       role="presentation"
       onClick={onClose}
     >
@@ -127,5 +129,6 @@ export function CartBasketEditDrawer({
         </div>
       </div>
     </div>
+    </AppOverlayPortal>
   );
 }

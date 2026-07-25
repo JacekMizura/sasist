@@ -30,6 +30,7 @@ import {
   opsResolutionStatusLabel,
   opsSeverityLabel,
 } from "../../utils/replenishmentUiLabels";
+import { AppOverlayPortal } from "../../components/overlay";
 
 const DEFAULT_TENANT_ID = 1;
 const CONFIG_STORAGE_KEY = "analytics.warehouseOperations.thresholds";
@@ -416,7 +417,8 @@ function DispatchTaskModal({
   const title = String(payload["title"] || draft.alert.title || draft.alert.message || "Zadanie kierownika");
   const description = String(payload["description"] || draft.alert.recommended_action || draft.alert.description || "");
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 p-4">
+        <AppOverlayPortal>
+    <div className="fixed inset-0 z-[280] flex items-center justify-center bg-slate-950/45 p-4">
       <div className="w-full max-w-lg overflow-hidden rounded-2xl bg-white shadow-2xl">
         <div className="flex items-start justify-between gap-4 border-b border-slate-200 p-4">
           <div>
@@ -495,6 +497,7 @@ function DispatchTaskModal({
         </div>
       </div>
     </div>
+    </AppOverlayPortal>
   );
 }
 
@@ -551,7 +554,8 @@ function DetailModal({
   const progress =
     operator.main_mode === "PAKOWANIE" ? operator.packing_progress_percent : operator.progress_percent;
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 p-4">
+        <AppOverlayPortal>
+    <div className="fixed inset-0 z-[280] flex items-center justify-center bg-slate-950/45 p-4">
       <div className="max-h-[88vh] w-full max-w-4xl overflow-hidden rounded-2xl bg-white shadow-2xl">
         <div className="flex items-start justify-between gap-4 border-b border-slate-200 p-4">
           <div>
@@ -692,6 +696,7 @@ function DetailModal({
         </div>
       </div>
     </div>
+    </AppOverlayPortal>
   );
 }
 

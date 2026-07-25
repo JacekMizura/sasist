@@ -5,6 +5,7 @@ import {
   replenishmentStepHint,
 } from "./ReplenishmentExecutionSteps";
 import { PrimaryButton } from "../../../design-system/PrimaryButton";
+import { AppOverlayPortal } from "../../../components/overlay";
 
 type Props = {
   row: ReplenishmentRow | null;
@@ -34,7 +35,8 @@ export function ReplenishmentExecutionModal({
   if (!row) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-2 sm:items-center">
+    <AppOverlayPortal>
+    <div className="fixed inset-0 z-[280] flex items-end justify-center bg-black/40 p-2 sm:items-center">
       <div className="w-full max-w-lg rounded-xl border border-slate-200 bg-white shadow-xl">
         <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
           <h2 className="text-base font-semibold text-slate-900">Wykonanie uzupełnienia</h2>
@@ -92,5 +94,6 @@ export function ReplenishmentExecutionModal({
         </div>
       </div>
     </div>
+    </AppOverlayPortal>
   );
 }

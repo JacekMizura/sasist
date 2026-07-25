@@ -14,6 +14,7 @@ import {
   listSellasistToolbarToggleBtn,
 } from "../../components/listPage/listSellasistTokens";
 import PageLayout from "../../components/layout/PageLayout";
+import { AppOverlayPortal } from "../../components/overlay";
 import {
   PRODUCT_PROFITABILITY_COLUMN_CATALOG,
   PRODUCT_PROFITABILITY_COLUMN_IDS,
@@ -59,7 +60,8 @@ function ProfitabilityDetailDrawer({
   onClose: () => void;
 }) {
   return (
-    <div className="fixed inset-0 z-50 flex justify-end bg-slate-900/40 backdrop-blur-[1px]">
+    <AppOverlayPortal>
+    <div className="fixed inset-0 z-[250] flex justify-end bg-slate-900/40 backdrop-blur-[1px]">
       <div className="h-full w-full max-w-xl overflow-y-auto border-l border-slate-200 bg-white p-5 shadow-2xl md:rounded-l-2xl">
         <div className="mb-4 flex items-start justify-between gap-3">
           <h3 className="text-lg font-semibold text-slate-900">Szczegóły rentowności</h3>
@@ -145,6 +147,7 @@ function ProfitabilityDetailDrawer({
         </div>
       </div>
     </div>
+    </AppOverlayPortal>
   );
 }
 

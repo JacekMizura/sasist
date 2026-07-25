@@ -3,6 +3,7 @@ import toast from "react-hot-toast";
 import { useLocation } from "react-router-dom";
 
 import { changePassword } from "../../api/authApi";
+import { AppOverlayPortal } from "../overlay";
 import { useAuth } from "../../context/AuthContext";
 import { PrimaryButton } from "../../design-system/PrimaryButton";
 
@@ -62,8 +63,9 @@ export default function PasswordChangeGate() {
         </div>
       )}
       {mustChange && (
+        <AppOverlayPortal>
         <div
-          className={`fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-4 ${devWarn ? "pt-14" : ""}`}
+          className={`fixed inset-0 z-[280] flex items-center justify-center bg-black/60 p-4 ${devWarn ? "pt-14" : ""}`}
         >
           <div className="w-full max-w-md rounded-xl border border-slate-200 bg-white p-6 shadow-xl">
             <h2 className="text-lg font-semibold text-slate-900">Wymagana zmiana hasła</h2>
@@ -112,6 +114,7 @@ export default function PasswordChangeGate() {
             </form>
           </div>
         </div>
+        </AppOverlayPortal>
       )}
     </>
   );

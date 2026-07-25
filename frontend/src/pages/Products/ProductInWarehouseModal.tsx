@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useWarehouse } from "../../context/WarehouseContext";
 import { layoutService } from "../../services/layoutService";
+import { AppOverlayPortal } from "../../components/overlay";
 const DEFAULT_TENANT_ID = 1;
 
 /** First segment before the dash. "A3-2-1" → "A3" */
@@ -115,7 +116,8 @@ export function ProductInWarehouseModal({ product, onClose }: Props) {
   const hasWarehouseInfo = warehouseIds.length > 0;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={onClose}>
+        <AppOverlayPortal>
+    <div className="fixed inset-0 z-[280] flex items-center justify-center bg-black/40" onClick={onClose}>
       <div className="mx-4 flex max-h-[90vh] w-full min-w-0 flex-col rounded-xl bg-white shadow-lg" onClick={(e) => e.stopPropagation()}>
         <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between">
           <h3 className="text-lg font-semibold text-slate-800">Show product in warehouse</h3>
@@ -152,6 +154,7 @@ export function ProductInWarehouseModal({ product, onClose }: Props) {
         </div>
       </div>
     </div>
+    </AppOverlayPortal>
   );
 }
 

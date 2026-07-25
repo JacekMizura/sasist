@@ -12,6 +12,7 @@ import { LocationPreviewInfoPanel } from "./LocationPreviewInfoPanel";
 import { findRackInLayout, LocationPreviewLayoutMap } from "./LocationPreviewLayoutMap";
 import { LocationPreviewRackFrontView } from "./LocationPreviewRackFrontView";
 import { storageTypeLabelPl } from "./locationPreviewVisual";
+import { AppOverlayPortal } from "../../../components/overlay";
 
 type Props = {
   open: boolean;
@@ -137,7 +138,8 @@ export function LocationPreviewModal({
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/50 p-3 sm:p-5 lg:p-6">
+    <AppOverlayPortal>
+    <div className="fixed inset-0 z-[280] flex items-center justify-center bg-black/50 p-3 sm:p-5 lg:p-6">
       <div
         role="dialog"
         aria-modal="true"
@@ -260,5 +262,6 @@ export function LocationPreviewModal({
         </footer>
       </div>
     </div>
+    </AppOverlayPortal>
   );
 }

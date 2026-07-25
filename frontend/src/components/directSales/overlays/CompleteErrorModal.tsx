@@ -1,5 +1,6 @@
 import type { DirectSaleCompleteError } from "../../../types/directSalesCompletion";
 import { resolveCompleteOperatorMessage } from "../../../modules/directSales/errors/completeErrorMessages";
+import { AppOverlayPortal } from "../../../components/overlay";
 
 type Props = {
   error: DirectSaleCompleteError;
@@ -12,7 +13,8 @@ export function CompleteErrorModal({ error, onRetry, onNewSale, onDismiss }: Pro
   const copy = resolveCompleteOperatorMessage(error);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/45 p-4">
+        <AppOverlayPortal>
+    <div className="fixed inset-0 z-[280] flex items-center justify-center bg-slate-900/45 p-4">
       <div
         role="alertdialog"
         aria-labelledby="ds-complete-error-title"
@@ -56,5 +58,6 @@ export function CompleteErrorModal({ error, onRetry, onNewSale, onDismiss }: Pro
         </div>
       </div>
     </div>
+    </AppOverlayPortal>
   );
 }

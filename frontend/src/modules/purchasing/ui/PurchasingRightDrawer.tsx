@@ -1,6 +1,8 @@
 import { memo, useEffect, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 
+import { APP_OVERLAY_Z } from "../../../components/overlay";
+
 export type PurchasingRightDrawerProps = {
   open: boolean;
   onClose: () => void;
@@ -33,13 +35,15 @@ function PurchasingRightDrawerInner({
   return createPortal(
     <>
       <div
-        className="fixed inset-0 z-[69] bg-black/30"
+        className="fixed inset-0 z-[250] bg-black/30"
+        style={{ zIndex: APP_OVERLAY_Z.drawer }}
         role="presentation"
         aria-hidden
         onClick={onClose}
       />
       <aside
-        className="fixed inset-0 z-[70] flex flex-col bg-white lg:inset-y-0 lg:left-auto lg:right-0 lg:h-screen lg:w-[420px] lg:shadow-2xl"
+        className="fixed inset-0 z-[251] flex flex-col bg-white lg:inset-y-0 lg:left-auto lg:right-0 lg:h-screen lg:w-[420px] lg:shadow-2xl"
+        style={{ zIndex: APP_OVERLAY_Z.drawer + 1 }}
         role="dialog"
         aria-modal="true"
         aria-label={ariaLabel}

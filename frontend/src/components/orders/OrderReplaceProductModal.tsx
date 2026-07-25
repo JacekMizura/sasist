@@ -9,6 +9,7 @@ import {
   type ReplacementSuggestionsResponse,
 } from "../../api/replacementApi";
 import { PrimaryButton } from "../../design-system/PrimaryButton";
+import { AppOverlayPortal } from "../../components/overlay";
 
 const inp =
   "h-10 w-full rounded-lg bg-slate-100/80 px-10 text-sm text-slate-900 outline-none transition focus:bg-white focus-visible:ring-2 focus-visible:ring-slate-300";
@@ -198,8 +199,9 @@ export default function OrderReplaceProductModal({
   if (!open) return null;
 
   return (
+        <AppOverlayPortal>
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+      className="fixed inset-0 z-[280] flex items-center justify-center bg-black/40 p-4"
       role="dialog"
       aria-modal="true"
       onClick={onClose}
@@ -386,5 +388,6 @@ export default function OrderReplaceProductModal({
         </div>
       </div>
     </div>
+    </AppOverlayPortal>
   );
 }

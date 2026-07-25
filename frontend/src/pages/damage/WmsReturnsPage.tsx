@@ -38,6 +38,7 @@ import type {
 } from "../../types/wmsReturn";
 import type { WmsReturnModuleConfigDto } from "../../types/returnModuleConfig";
 import { panelStatusRichPreviewStyle } from "../../utils/panelStatusColor";
+import { AppOverlayPortal } from "../../components/overlay";
 
 type WmsReturnReadWithStatusAlias = WmsReturnRead & { return_status?: ReturnStatusBrief };
 
@@ -835,6 +836,7 @@ function OrderDetailsModal({
   const totalOrderDisplay = orderValueFromDb ?? computedGrand;
 
   return (
+        <AppOverlayPortal>
     <div
       className="fixed inset-0 z-[125] flex items-center justify-center bg-black/45 p-4"
       role="dialog"
@@ -959,6 +961,7 @@ function OrderDetailsModal({
         </div>
       </div>
     </div>
+    </AppOverlayPortal>
   );
 }
 
@@ -3969,6 +3972,7 @@ export default function WmsReturnsPage() {
         </div>
       ) : null}
       {shippingPartialConfirmOpen ? (
+                <AppOverlayPortal>
         <div
           className="fixed inset-0 z-[135] flex items-center justify-center bg-black/45 p-4"
           role="dialog"
@@ -4008,6 +4012,7 @@ export default function WmsReturnsPage() {
             </div>
           </div>
         </div>
+        </AppOverlayPortal>
       ) : null}
       <canvas ref={canvasRef} className="hidden" aria-hidden />
       <div className="w-full max-w-none shrink-0 border-b border-slate-200 bg-white px-3 py-3 shadow-sm lg:px-4">
@@ -5409,8 +5414,9 @@ export default function WmsReturnsPage() {
       
 
       {phoneUploadSession && (
+                <AppOverlayPortal>
         <div
-          className="fixed inset-0 z-[110] flex items-center justify-center bg-black/50 p-4"
+          className="fixed inset-0 z-[280] flex items-center justify-center bg-black/50 p-4"
           onClick={() => setPhoneUploadSession(null)}
         >
           <div
@@ -5444,12 +5450,14 @@ export default function WmsReturnsPage() {
             </div>
           </div>
         </div>
+        </AppOverlayPortal>
       )}
 
       {damageLine && !isFinished && (
 
+                <AppOverlayPortal>
         <div
-          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4"
+          className="fixed inset-0 z-[280] flex items-center justify-center bg-black/50 p-4"
           onClick={() => {
             if (!damageSaving && !isUploadingPhotos) closeDamageModal();
           }}
@@ -5762,6 +5770,7 @@ export default function WmsReturnsPage() {
           </div>
 
         </div>
+        </AppOverlayPortal>
 
       )}
 
@@ -5778,6 +5787,7 @@ export default function WmsReturnsPage() {
       />
 
       {customerInsightsModalOpen ? (
+                <AppOverlayPortal>
         <div
           className="fixed inset-0 z-[128] flex items-center justify-center bg-black/45 p-4"
           role="dialog"
@@ -5843,9 +5853,11 @@ export default function WmsReturnsPage() {
             ) : null}
           </div>
         </div>
+        </AppOverlayPortal>
       ) : null}
 
       {correspondenceModalOpen ? (
+                <AppOverlayPortal>
         <div
           className="fixed inset-0 z-[128] flex items-center justify-center bg-black/45 p-4"
           role="dialog"
@@ -5939,11 +5951,13 @@ export default function WmsReturnsPage() {
             </div>
           </div>
         </div>
+        </AppOverlayPortal>
       ) : null}
 
       {sellasistCallModalOpen ? (
+                <AppOverlayPortal>
         <div
-          className="fixed inset-0 z-[120] flex items-center justify-center bg-black/45 p-4"
+          className="fixed inset-0 z-[280] flex items-center justify-center bg-black/45 p-4"
           role="dialog"
           aria-modal="true"
           aria-labelledby="sellasist-call-info-title"
@@ -5967,6 +5981,7 @@ export default function WmsReturnsPage() {
             </div>
           </div>
         </div>
+        </AppOverlayPortal>
       ) : null}
 
     </div>

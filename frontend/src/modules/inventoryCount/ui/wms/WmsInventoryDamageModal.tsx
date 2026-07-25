@@ -3,6 +3,7 @@ import { AlertTriangle, Camera, X } from "lucide-react";
 
 import { createDamageEntry } from "@/api/damageReportsApi";
 import { uploadDamageImageFile } from "@/api/damageUploadApi";
+import { AppOverlayPortal } from "@/components/overlay";
 import { useAuth } from "@/context/AuthContext";
 import { DAMAGE_TENANT_ID } from "@/pages/damage/damageShared";
 import type { DamageType } from "@/types/damageReport";
@@ -99,7 +100,8 @@ export default function WmsInventoryDamageModal({
   };
 
   return (
-    <div className="fixed inset-0 z-[10070] flex items-center justify-center bg-slate-900/50 p-4">
+    <AppOverlayPortal>
+    <div className="fixed inset-0 z-[250] flex items-center justify-center bg-slate-900/50 p-4">
       <div className={`w-full max-w-md ${WMS_INV.card} shadow-2xl`}>
         <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
           <div>
@@ -181,5 +183,6 @@ export default function WmsInventoryDamageModal({
         </div>
       </div>
     </div>
+    </AppOverlayPortal>
   );
 }

@@ -3,6 +3,7 @@ import { ArrowLeft, ChevronRight, X } from "lucide-react";
 
 import type { AutomationCategoryStep } from "./AutomationCategoryStepMenu";
 import { oaBtn } from "./orderAutomationUiTokens";
+import { AppOverlayPortal } from "../../../components/overlay";
 
 type Props = {
   open: boolean;
@@ -36,6 +37,7 @@ export function AutomationCategoryPickerModal({ open, title, categories, onClose
   if (!open) return null;
 
   return (
+        <AppOverlayPortal>
     <div
       className="fixed inset-0 z-[140] flex items-center justify-center bg-slate-900/40 p-4 backdrop-blur-sm"
       role="dialog"
@@ -116,5 +118,6 @@ export function AutomationCategoryPickerModal({ open, title, categories, onClose
         </div>
       </div>
     </div>
+    </AppOverlayPortal>
   );
 }

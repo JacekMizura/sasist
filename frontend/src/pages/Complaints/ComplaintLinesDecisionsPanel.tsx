@@ -47,6 +47,7 @@ import {
   lineSettlementSectionVisible,
   type LineSettlementKind,
 } from "./complaintLineSettlement";
+import { AppOverlayPortal } from "../../components/overlay";
 
 function complaintDocumentAbsoluteUrl(raw: string): string {
   return resolveDamageMediaUrl(String(raw ?? "").trim());
@@ -1431,7 +1432,8 @@ export default function ComplaintLinesDecisionsPanel({
       </div>
 
       {photoModalLineId != null ? (
-        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/50 p-4" onClick={() => { setPhotoModalLineId(null); setPhoneUploadSession(null); stopCamera(); }}>
+        <AppOverlayPortal>
+        <div className="fixed inset-0 z-[280] flex items-center justify-center bg-black/50 p-4" onClick={() => { setPhotoModalLineId(null); setPhoneUploadSession(null); stopCamera(); }}>
           <div className="w-full max-w-sm rounded-xl border border-slate-200 bg-white p-4 shadow-xl" onClick={(e) => e.stopPropagation()}>
             <div className="mb-3 flex items-center justify-between">
               <h3 className="text-base font-semibold text-slate-900">Dodaj zdjęcie</h3>
@@ -1516,11 +1518,13 @@ export default function ComplaintLinesDecisionsPanel({
             ) : null}
           </div>
         </div>
+        </AppOverlayPortal>
       ) : null}
 
       {saveComplaintConfirmOpen ? (
+        <AppOverlayPortal>
         <div
-          className="fixed inset-0 z-[122] flex items-center justify-center bg-black/50 p-4"
+          className="fixed inset-0 z-[280] flex items-center justify-center bg-black/50 p-4"
           role="presentation"
           onClick={() => !globalSaveBusy && setSaveComplaintConfirmOpen(false)}
         >
@@ -1568,11 +1572,13 @@ export default function ComplaintLinesDecisionsPanel({
             </div>
           </div>
         </div>
+        </AppOverlayPortal>
       ) : null}
 
       {rejectChoiceLineId != null ? (
+        <AppOverlayPortal>
         <div
-          className="fixed inset-0 z-[121] flex items-center justify-center bg-black/50 p-4"
+          className="fixed inset-0 z-[280] flex items-center justify-center bg-black/50 p-4"
           role="presentation"
           onClick={() => setRejectChoiceLineId(null)}
         >
@@ -1626,6 +1632,7 @@ export default function ComplaintLinesDecisionsPanel({
             </div>
           </div>
         </div>
+        </AppOverlayPortal>
       ) : null}
 
       <ComplaintLinePhotoLightbox

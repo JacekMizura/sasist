@@ -2,6 +2,7 @@ import { Loader2, X } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { AppButton } from "../../../components/app-shell";
+import { AppOverlayPortal } from "../../../components/overlay";
 import { companyInputClass, CompanyFormField } from "./CompanyFormField";
 import { purchasingBtnSecondary } from "../../purchasing/ui";
 import type { Warehouse } from "../../../services/warehouseService";
@@ -55,7 +56,8 @@ export function WarehouseEditDrawer({ warehouse, onClose }: Props) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex justify-end bg-black/30" role="presentation" onClick={onClose}>
+    <AppOverlayPortal>
+    <div className="fixed inset-0 z-[250] flex justify-end bg-black/30" role="presentation" onClick={onClose}>
       <aside
         className="flex h-full w-full max-w-md flex-col border-l border-slate-200 bg-white shadow-xl"
         role="dialog"
@@ -120,6 +122,7 @@ export function WarehouseEditDrawer({ warehouse, onClose }: Props) {
         </div>
       </aside>
     </div>
+    </AppOverlayPortal>
   );
 }
 
@@ -152,7 +155,8 @@ export function WarehouseCreateDrawer({ open, onClose }: CreateProps) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex justify-end bg-black/30" role="presentation" onClick={onClose}>
+    <AppOverlayPortal>
+    <div className="fixed inset-0 z-[250] flex justify-end bg-black/30" role="presentation" onClick={onClose}>
       <aside className="flex h-full w-full max-w-md flex-col border-l border-slate-200 bg-white shadow-xl" role="dialog" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
           <h2 className="text-sm font-semibold text-slate-900">Nowy magazyn</h2>
@@ -176,13 +180,16 @@ export function WarehouseCreateDrawer({ open, onClose }: CreateProps) {
         </div>
       </aside>
     </div>
+    </AppOverlayPortal>
   );
 }
 
 export function WarehouseEditDrawerLoading() {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/20">
+    <AppOverlayPortal>
+    <div className="fixed inset-0 z-[280] flex items-center justify-center bg-black/20">
       <Loader2 className="h-8 w-8 animate-spin text-slate-600" />
     </div>
+    </AppOverlayPortal>
   );
 }

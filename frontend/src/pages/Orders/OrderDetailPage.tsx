@@ -124,6 +124,7 @@ import { ConfirmModal } from "../../components/ui/ConfirmModal";
 import type { PanelConfigurableUiStatusBrief } from "../../utils/panelListStatusBriefMappers";
 import { WMS_ROUTES, WMS_SHORTAGES_UPDATED_EVENT } from "../wms/wmsRoutes";
 import { dispatchWmsShortagesUpdated } from "../../utils/wmsRefresh";
+import { AppOverlayPortal } from "../../components/overlay";
 
 type SourceBundleBrief = { id: number; name: string; sku?: string | null };
 
@@ -2541,17 +2542,20 @@ export default function OrderDetailPage() {
 
       {/* MODALS */}
       {orderDocPreviewModal != null && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm" onClick={() => setOrderDocPreviewModal(null)}>
+        <AppOverlayPortal>
+        <div className="fixed inset-0 z-[280] flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm" onClick={() => setOrderDocPreviewModal(null)}>
           <div className="max-w-md w-full rounded-xl border border-slate-200 bg-white p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
             <p className="text-lg font-bold text-slate-900 mb-2">Podgląd</p>
             <p className="text-sm text-slate-600 mb-6 break-all">{orderDocPreviewModal}</p>
             <div className="flex justify-end"><button className="rounded-md border border-slate-300 bg-white px-5 py-2.5 text-sm font-bold text-slate-700 hover:bg-slate-50 transition-colors" onClick={() => setOrderDocPreviewModal(null)}>Zamknij</button></div>
           </div>
         </div>
+        </AppOverlayPortal>
       )}
 
       {docTypeModalFile && (
-        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm" onClick={() => !docUploadBusy && setDocTypeModalFile(null)}>
+        <AppOverlayPortal>
+        <div className="fixed inset-0 z-[280] flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm" onClick={() => !docUploadBusy && setDocTypeModalFile(null)}>
           <div className="w-full max-w-md rounded-xl border border-slate-200 bg-white p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
             <p className="text-lg font-bold text-slate-900 mb-1">Typ dokumentu</p>
             <p className="text-sm text-slate-500 mb-6 truncate">{docTypeModalFile.name}</p>
@@ -2565,6 +2569,7 @@ export default function OrderDetailPage() {
             </div>
           </div>
         </div>
+        </AppOverlayPortal>
       )}
 
       <OrderAddProductModal open={addProductOpen} onClose={() => setAddProductOpen(false)} tenantId={DAMAGE_TENANT_ID} orderId={order.id} currency={(order.currency ?? "PLN").trim() || "PLN"} onAdded={() => { void reloadOrderById(order.id); void loadWmsFulfillment(); dispatchWmsShortagesUpdated(); }}/>

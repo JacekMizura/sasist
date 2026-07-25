@@ -17,6 +17,7 @@ import type {
   DamageReport,
   DamageType,
 } from "../../../types/damageReport";
+import { AppOverlayPortal } from "../../../components/overlay";
 
 export type DamagePrefill = {
   productId: number;
@@ -102,7 +103,8 @@ export function DamageReportsPanel({
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
+    <AppOverlayPortal>
+    <div className="fixed inset-0 z-[280] flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
       <div className="w-full rounded-xl border border-slate-200 bg-white shadow-xl" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
           <h3 className="text-base font-semibold text-slate-900">Szkody</h3>
@@ -377,5 +379,6 @@ export function DamageReportsPanel({
         )}
       </div>
     </div>
+    </AppOverlayPortal>
   );
 }

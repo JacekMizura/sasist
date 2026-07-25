@@ -28,6 +28,7 @@ import type { OrderUiPanelSubgroupRead, OrderUiStatusPanelSummary } from "../../
 import { DAMAGE_TENANT_ID } from "../damage/damageShared";
 import type { ComplaintExchangePrefillState } from "../Complaints/complaintExchangePrefill";
 import { brandPrimaryButtonClass } from "../../design-system/brandUi";
+import { AppOverlayPortal } from "../../components/overlay";
 
 const DEFAULT_TENANT_ID = 1;
 
@@ -1356,7 +1357,8 @@ export default function CreateOrderPage() {
         </div>
       </form>
       {offerPicker ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+                <AppOverlayPortal>
+        <div className="fixed inset-0 z-[280] flex items-center justify-center bg-black/40 p-4">
           <div className="w-full max-w-md rounded-xl bg-white p-5 shadow-xl">
             <h3 className="text-lg font-bold text-slate-900">Wybierz ofertę</h3>
             <p className="mt-1 text-sm text-slate-600">{offerPicker.product.name}</p>
@@ -1391,6 +1393,7 @@ export default function CreateOrderPage() {
             </button>
           </div>
         </div>
+        </AppOverlayPortal>
       ) : null}
       </div>
     </div>

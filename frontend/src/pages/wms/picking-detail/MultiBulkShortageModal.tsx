@@ -4,6 +4,7 @@
  */
 import { Minus, Plus, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import { AppOverlayPortal } from "../../../components/overlay";
 import {
   allocationUnresolved,
   unresolvedAllocations,
@@ -117,6 +118,7 @@ export function MultiBulkShortageModal({
 
   if (!lines.length) {
     return (
+      <AppOverlayPortal>
       <div className="fixed inset-0 z-[1700] flex items-end sm:items-center justify-center bg-slate-950/55 p-0 sm:p-4">
         <div className="w-full max-w-lg rounded-t-2xl sm:rounded-2xl border border-slate-200 bg-white p-5 shadow-xl">
           <p className="text-sm font-semibold text-slate-700">Brak nierozliczonych alokacji.</p>
@@ -125,10 +127,12 @@ export function MultiBulkShortageModal({
           </button>
         </div>
       </div>
+      </AppOverlayPortal>
     );
   }
 
   return (
+    <AppOverlayPortal>
     <div className="fixed inset-0 z-[1700] flex items-end sm:items-center justify-center bg-slate-950/55 p-0 sm:p-3">
       <div className="flex max-h-[min(94vh,820px)] w-full max-w-xl flex-col overflow-hidden rounded-t-2xl sm:rounded-2xl border border-slate-200 bg-white shadow-2xl">
         <div className="sticky top-0 z-10 border-b border-slate-100 bg-white px-4 py-3">
@@ -289,5 +293,6 @@ export function MultiBulkShortageModal({
         </div>
       </div>
     </div>
+    </AppOverlayPortal>
   );
 }

@@ -45,6 +45,7 @@ import {
   purchasingSelectClass,
   purchasingTableTdClass,
 } from "../../modules/purchasing/ui";
+import { AppOverlayPortal } from "../../components/overlay";
 
 const PO_TOAST_KEY = "purchasing_po_toast";
 const PURCHASE_GENERATOR_PAGE_SIZE_KEY = "purchase_generator.pageSize";
@@ -1032,8 +1033,9 @@ export default function PurchasingReplenishmentPage({ variant = "standalone" }: 
       ) : null}
 
       {supplierBlockModalOpen ? (
+        <AppOverlayPortal>
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+          className="fixed inset-0 z-[280] flex items-center justify-center bg-black/40 p-4"
           role="presentation"
           onClick={() => setSupplierBlockModalOpen(false)}
         >
@@ -1053,6 +1055,7 @@ export default function PurchasingReplenishmentPage({ variant = "standalone" }: 
             </PrimaryButton>
           </div>
         </div>
+        </AppOverlayPortal>
       ) : null}
     </PurchasingContentArea>
   );

@@ -2,6 +2,7 @@ import { Link } from "react-router-dom";
 
 import type { TemplateAssignmentItem } from "../../../../api/documentTemplatesApi";
 import { PrimaryButton } from "../../../../design-system/PrimaryButton";
+import { AppOverlayPortal } from "../../../../components/overlay";
 
 type Props = {
   label: string;
@@ -12,7 +13,8 @@ type Props = {
 
 export function AssignmentConfigModal({ label, items, onClose, onOpenAssignmentsTab }: Props) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
+    <AppOverlayPortal>
+    <div className="fixed inset-0 z-[280] flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
       <div
         className="max-h-[80vh] w-full max-w-md overflow-auto rounded-xl border border-slate-200 bg-white shadow-xl"
         onClick={(e) => e.stopPropagation()}
@@ -59,5 +61,6 @@ export function AssignmentConfigModal({ label, items, onClose, onOpenAssignments
         </div>
       </div>
     </div>
+    </AppOverlayPortal>
   );
 }

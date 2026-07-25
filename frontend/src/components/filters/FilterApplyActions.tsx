@@ -13,6 +13,7 @@ import {
   filterToolbarBtnApply,
   filterToolbarBtnSecondary,
 } from "./filterUiTokens";
+import { AppOverlayPortal } from "../../components/overlay";
 
 const splitApplyLeftClass =
   "inline-flex h-[2.375rem] items-center justify-center rounded-l-md rounded-r-none bg-amber-600 px-3.5 text-[13px] font-semibold text-white shadow-sm transition hover:bg-amber-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500/50 focus-visible:ring-offset-1 border-r border-amber-700/80";
@@ -316,7 +317,8 @@ function ListViewSavePresetModal({
   }, [isAdmin, isDefault, isPublic, onClose, onSave, overwriteId, presetName]);
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/40 p-4">
+    <AppOverlayPortal>
+    <div className="fixed inset-0 z-[280] flex items-center justify-center bg-slate-900/40 p-4">
       <div className="w-full max-w-md rounded-xl border border-slate-200 bg-white p-5 shadow-xl">
         <h3 className="text-lg font-semibold text-slate-900">Zapisz bieżący widok</h3>
         <p className="mt-1 text-sm text-slate-500">Filtry, sortowanie, kolumny i pola filtrów — bez numeru strony.</p>
@@ -377,6 +379,7 @@ function ListViewSavePresetModal({
         </div>
       </div>
     </div>
+    </AppOverlayPortal>
   );
 }
 
@@ -399,7 +402,8 @@ function ListViewManagePresetsModal({
   const publicPresets = useMemo(() => presets.filter((p) => p.is_public), [presets]);
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/40 p-4">
+    <AppOverlayPortal>
+    <div className="fixed inset-0 z-[280] flex items-center justify-center bg-slate-900/40 p-4">
       <div className="flex max-h-[min(85vh,32rem)] w-full max-w-lg flex-col rounded-xl border border-slate-200 bg-white shadow-xl">
         <div className="border-b border-slate-100 px-5 py-4">
           <h3 className="text-lg font-semibold text-slate-900">Zarządzaj widokami</h3>
@@ -444,6 +448,7 @@ function ListViewManagePresetsModal({
         </div>
       </div>
     </div>
+    </AppOverlayPortal>
   );
 }
 

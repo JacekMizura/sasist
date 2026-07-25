@@ -249,6 +249,7 @@ import type { ReturnModuleConfigDto } from "../../types/returnModuleConfig";
 import type { ReturnDetailSectionId } from "../../constants/returnModuleDetailSections";
 import { normalizeReturnDetailLayout } from "../../utils/returnDetailLayout";
 import { PanelDetailEntityHeader } from "../../components/panelDetail/PanelDetailEntityHeader";
+import { AppOverlayPortal } from "../../components/overlay";
 import {
   panelDetailAsideColClass,
   panelDetailMainColClass,
@@ -1052,8 +1053,9 @@ export default function ReturnsReturnDetailPage() {
       </div>
 
       {refundOpen ? (
+        <AppOverlayPortal>
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+          className="fixed inset-0 z-[280] flex items-center justify-center bg-black/40 p-4"
           role="dialog"
           aria-modal
         >
@@ -1176,6 +1178,7 @@ export default function ReturnsReturnDetailPage() {
             </div>
           </div>
         </div>
+        </AppOverlayPortal>
       ) : null}
     </>
   );
@@ -1888,8 +1891,9 @@ function LineOperationsCard({
         ) : null}
       </div>
       {sheet ? (
+        <AppOverlayPortal>
         <div
-          className="fixed inset-0 z-[80] flex justify-end bg-black/40"
+          className="fixed inset-0 z-[250] flex justify-end bg-black/40"
           onMouseDown={(e) => {
             if (e.target === e.currentTarget && !sheetSaving) closeSheet();
           }}
@@ -2059,6 +2063,7 @@ function LineOperationsCard({
             </div>
           </div>
         </div>
+        </AppOverlayPortal>
       ) : null}
     </div>
   );

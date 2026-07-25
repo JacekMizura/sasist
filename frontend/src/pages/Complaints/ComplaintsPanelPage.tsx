@@ -31,6 +31,7 @@ import {
   readComplaintListPanelFilter,
   useListViewState,
 } from "../../preferences/listView";
+import { AppOverlayPortal } from "../../components/overlay";
 
 const ROWS_PER_PAGE = 25;
 
@@ -420,8 +421,9 @@ export default function ComplaintsPanelPage() {
       )}
 
       {deleteTarget ? (
+                <AppOverlayPortal>
         <div
-          className="fixed inset-0 z-[70] flex items-center justify-center bg-black/45 p-4"
+          className="fixed inset-0 z-[280] flex items-center justify-center bg-black/45 p-4"
           role="presentation"
           onClick={() => (deletingId == null ? setDeleteTarget(null) : null)}
         >
@@ -461,6 +463,7 @@ export default function ComplaintsPanelPage() {
             </div>
           </div>
         </div>
+        </AppOverlayPortal>
       ) : null}
 
       {actionToast ? (

@@ -15,6 +15,7 @@ import { wmsReceiptLineImageUrl } from "../../utils/wmsReceiptLineMedia";
 import { normalizeScanEan } from "../../utils/wmsScanNormalize";
 import { playScanBeep } from "../../utils/playScanBeep";
 import { fmtQty } from "./putawayFormat";
+import { AppOverlayPortal } from "../../components/overlay";
 import {
   fetchWmsRelocationHubDocument,
   isWmsMmRelocationPath,
@@ -529,6 +530,7 @@ export default function WmsPutawayItemDetailPage() {
 
         {/* MODAL: RĘCZNE ROZLOKOWANIE */}
         {isManualLocateOpen && (
+          <AppOverlayPortal>
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
             <div className="absolute inset-0 bg-slate-900/10 backdrop-blur-sm" onClick={() => setIsManualLocateOpen(false)}></div>
             
@@ -561,6 +563,7 @@ export default function WmsPutawayItemDetailPage() {
               </form>
             </div>
           </div>
+          </AppOverlayPortal>
         )}
       </>
     );

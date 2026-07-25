@@ -6,6 +6,7 @@ import { EditProductModal, type EditProductModalProps } from "./EditProductModal
 import { findRackForInternalLayoutModal } from "./warehouseUtils";
 import { UI_STRINGS } from "../../constants/uiStrings";
 import { PrimaryButton } from "../../design-system/PrimaryButton";
+import { AppOverlayPortal } from "../../components/overlay";
 
 export type WarehouseModalsProps = {
   /** CreateWarehouseModal */
@@ -55,7 +56,8 @@ export function WarehouseModals(props: WarehouseModalsProps) {
   return (
     <>
       {showCreateWarehouse && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onCloseCreateWarehouse}>
+        <AppOverlayPortal>
+        <div className="fixed inset-0 z-[280] flex items-center justify-center bg-black/40 p-4" onClick={onCloseCreateWarehouse}>
           <div className="bg-white rounded-xl shadow-xl p-6 max-w-sm w-full border border-[#E2E8F0]" onClick={(e) => e.stopPropagation()}>
             <h3 className="font-bold text-[#1E293B] mb-2">{UI_STRINGS.warehouse.modal.newWarehouse}</h3>
             <input
@@ -73,6 +75,7 @@ export function WarehouseModals(props: WarehouseModalsProps) {
             </div>
           </div>
         </div>
+        </AppOverlayPortal>
       )}
 
       {(mainView === "magazyn" || mainView === "layout") && internalLayoutRackId != null && (() => {

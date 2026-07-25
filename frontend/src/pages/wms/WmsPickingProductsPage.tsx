@@ -27,6 +27,7 @@ import type { PickingFlowMode } from "../../api/wmsPickingEntryApi";
 import { useMergedPickingSession, useWmsPickingCart } from "../../context/WmsPickingCartContext";
 import { useWarehouse } from "../../context/WarehouseContext";
 import { WmsOperationalPageBody, WmsOperationalPageShell } from "../../components/wms/execution/WmsOperationalPageShell";
+import { AppOverlayPortal } from "../../components/overlay";
 import { useWmsScanner } from "../../context/WmsScannerContext";
 import { playScanBeep } from "../../utils/playScanBeep";
 import { normalizeScanEan } from "../../utils/wmsScanNormalize";
@@ -1985,6 +1986,7 @@ export default function WmsPickingProductsPage() {
       </WmsOperationalPageBody>
 
       {finalizeShortageModal ? (
+        <AppOverlayPortal>
         <div
           className="fixed inset-0 z-[70] flex items-end justify-center bg-black/45 p-0 sm:items-center sm:p-4"
           role="dialog"
@@ -2052,8 +2054,10 @@ export default function WmsPickingProductsPage() {
             </div>
           </div>
         </div>
+        </AppOverlayPortal>
       ) : null}
       {rejectOpen ? (
+        <AppOverlayPortal>
         <div className="fixed inset-0 z-[75] flex items-center justify-center bg-slate-900/30 px-4">
           <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-5 shadow-xl">
             <div className="text-sm font-black text-slate-900">Powód odrzucenia</div>
@@ -2086,8 +2090,10 @@ export default function WmsPickingProductsPage() {
             </div>
           </div>
         </div>
+        </AppOverlayPortal>
       ) : null}
       {exitModalOpen ? (
+        <AppOverlayPortal>
         <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-900/40 px-4">
           <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-5 shadow-xl">
             <div className="text-base font-black text-slate-900">Anulować zbieranie?</div>
@@ -2156,6 +2162,7 @@ export default function WmsPickingProductsPage() {
             </div>
           </div>
         </div>
+        </AppOverlayPortal>
       ) : null}
     </WmsOperationalPageShell>
   );

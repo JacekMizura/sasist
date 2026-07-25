@@ -3,6 +3,7 @@ import { ChevronRight, X } from "lucide-react";
 import { Link } from "react-router-dom";
 
 import { getRecipeDetail, type RecipeCardRead, type RecipeDetailRead } from "../../../api/productionApi";
+import { AppOverlayPortal } from "../../../components/overlay";
 import { getProductDetailsPath } from "../../Products/productPaths";
 import { ProductThumb } from "./ProductThumb";
 
@@ -61,7 +62,8 @@ export function RecipeIngredientsDrawer({ open, recipe, tenantId, warehouseId, o
   const count = detail?.components.length ?? recipe.component_count;
 
   return (
-    <div className="fixed inset-0 z-50 flex justify-end bg-black/30" role="presentation" onClick={onClose}>
+    <AppOverlayPortal>
+    <div className="fixed inset-0 z-[250] flex justify-end bg-black/30" role="presentation" onClick={onClose}>
       <aside
         className="flex h-full w-full max-w-md flex-col border-l border-slate-200 bg-white shadow-xl"
         role="dialog"
@@ -131,5 +133,6 @@ export function RecipeIngredientsDrawer({ open, recipe, tenantId, warehouseId, o
         </div>
       </aside>
     </div>
+    </AppOverlayPortal>
   );
 }

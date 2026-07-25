@@ -1,5 +1,6 @@
 import { BULK_ACTION_GROUPS } from "./ProductBulkActionModal";
 import type { ProductBulkHubChoice } from "./productBulkHubTypes";
+import { AppOverlayPortal } from "../../components/overlay";
 
 type Props = {
   open: boolean;
@@ -17,8 +18,9 @@ export function ProductBulkHubModal({ open, affectedCount, onClose, onSelectActi
   if (!open) return null;
 
   return (
+        <AppOverlayPortal>
     <div
-      className="fixed inset-0 z-[260] flex items-center justify-center bg-black/45 p-4 sm:p-6"
+      className="fixed inset-0 z-[280] flex items-center justify-center bg-black/45 p-4 sm:p-6"
       role="dialog"
       aria-modal="true"
       aria-labelledby="product-bulk-hub-title"
@@ -85,5 +87,6 @@ export function ProductBulkHubModal({ open, affectedCount, onClose, onSelectActi
         </div>
       </div>
     </div>
+    </AppOverlayPortal>
   );
 }

@@ -4,6 +4,7 @@
  */
 import { Minus, Plus, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import { AppOverlayPortal } from "../../overlay";
 
 export type BasketPutQuantityDraft = {
   basketScan: string;
@@ -67,6 +68,7 @@ export function BasketPutQuantityModal({ draft, busy, onCancel, onConfirm }: Pro
   };
 
   return (
+    <AppOverlayPortal>
     <div className="fixed inset-0 z-[1700] flex items-end sm:items-center justify-center bg-slate-950/55 p-3 backdrop-blur-[2px]">
       <div
         role="dialog"
@@ -214,5 +216,6 @@ export function BasketPutQuantityModal({ draft, busy, onCancel, onConfirm }: Pro
         </div>
       </div>
     </div>
+    </AppOverlayPortal>
   );
 }

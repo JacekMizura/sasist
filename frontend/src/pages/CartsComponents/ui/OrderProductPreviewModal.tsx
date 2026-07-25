@@ -4,6 +4,7 @@ import { Link } from "react-router-dom";
 
 import api from "../../../api/axios";
 import { getProductDetailsPath } from "../../Products/productPaths";
+import { AppOverlayPortal } from "../../../components/overlay";
 
 type ProductInOrder = {
   id: number;
@@ -87,8 +88,9 @@ export default function OrderProductPreviewModal({
   const slot = (basketCode ?? "").trim();
 
   return (
+    <AppOverlayPortal>
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4 backdrop-blur-[2px]"
+      className="fixed inset-0 z-[280] flex items-center justify-center bg-slate-900/40 p-4 backdrop-blur-[2px]"
       onClick={onClose}
       role="presentation"
     >
@@ -187,5 +189,6 @@ export default function OrderProductPreviewModal({
         </div>
       </div>
     </div>
+    </AppOverlayPortal>
   );
 }

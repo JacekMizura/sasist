@@ -132,6 +132,7 @@ import {
   resetDesignerLoadPerf,
 } from "./WarehouseDesigner/designerLoadPerf";
 import { useDesignerDataLoading } from "./WarehouseDesigner/useDesignerDataLoading";
+import { AppOverlayPortal } from "../components/overlay";
 
 /** Resolve slot UUID from an assigned_locations entry (API JSON may use location_uuid). */
 function assignedLocationEntryUuid(a: {
@@ -3873,8 +3874,9 @@ export default function WarehouseDesigner() {
         setSnackbar={setSnackbar}
       />
       {pendingVariantSave != null && (
+        <AppOverlayPortal>
         <div
-          className="fixed inset-0 z-[70] flex items-center justify-center bg-black/40 p-4"
+          className="fixed inset-0 z-[280] flex items-center justify-center bg-black/40 p-4"
           role="dialog"
           aria-modal="true"
           onClick={() => setPendingVariantSave(null)}
@@ -3938,6 +3940,7 @@ export default function WarehouseDesigner() {
             </div>
           </div>
         </div>
+        </AppOverlayPortal>
       )}
 
       <RowPrefixModal
@@ -4853,7 +4856,8 @@ export default function WarehouseDesigner() {
       </div>
 
       {showGateTypeModal && pendingGatePlacement && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" role="dialog" aria-modal="true" aria-labelledby="gate-type-title">
+        <AppOverlayPortal>
+        <div className="fixed inset-0 z-[280] flex items-center justify-center bg-black/40 p-4" role="dialog" aria-modal="true" aria-labelledby="gate-type-title">
           <div className="bg-white rounded-xl shadow-xl p-4 min-w-[200px]" onClick={(e) => e.stopPropagation()}>
             <h3 id="gate-type-title" className="text-sm font-semibold text-slate-800 mb-3">Typ bramy</h3>
             <div className="flex flex-col gap-2">
@@ -4875,6 +4879,7 @@ export default function WarehouseDesigner() {
             <button type="button" onClick={() => { setShowGateTypeModal(false); setPendingGatePlacement(null); setWallElementTool(null); }} className="mt-3 text-xs text-slate-500 hover:underline">Anuluj</button>
           </div>
         </div>
+        </AppOverlayPortal>
       )}
 
       {showRackLabelDownload && mainView === "magazyn" && selectedRackIdForSideView != null && (

@@ -6,6 +6,7 @@ import api from "../../api/axios";
 import { extractApiErrorMessage } from "../../api/apiErrorMessage";
 import { useAuth } from "../../context/AuthContext";
 import { isSuperRole } from "../../auth/isSuperRole";
+import { AppOverlayPortal } from "../../components/overlay";
 
 export const ADMIN_RELEASE_CART_PERMISSION = "warehouse.carts.admin_release";
 const ADMIN_RELEASE_ALT_PERMISSION = "warehouse.picking.override";
@@ -116,8 +117,9 @@ export function AdminReleaseCartButton({
       </button>
 
       {open ? (
+        <AppOverlayPortal>
         <div
-          className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-900/50 p-4"
+          className="fixed inset-0 z-[280] flex items-center justify-center bg-slate-900/50 p-4"
           onClick={close}
           role="presentation"
         >
@@ -185,6 +187,7 @@ export function AdminReleaseCartButton({
             </div>
           </div>
         </div>
+        </AppOverlayPortal>
       ) : null}
     </>
   );

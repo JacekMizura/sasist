@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { patchOrder } from "../../api/ordersApi";
 import { PrimaryButton } from "../../design-system/PrimaryButton";
+import { AppOverlayPortal } from "../../components/overlay";
 
 const inp =
   "mt-1 w-full rounded-md border border-slate-200 bg-white px-2 py-1.5 text-sm text-slate-900 outline-none focus-visible:ring-2 focus-visible:ring-blue-500/30";
@@ -46,8 +47,9 @@ export function EditBuyerModal({
   if (!open) return null;
 
   return (
+    <AppOverlayPortal>
     <div
-      className="fixed inset-0 z-[220] flex items-center justify-center bg-black/50 p-4"
+      className="fixed inset-0 z-[280] flex items-center justify-center bg-black/50 p-4"
       role="presentation"
       onClick={() => {
         if (!saving) onClose();
@@ -130,5 +132,6 @@ export function EditBuyerModal({
         </div>
       </div>
     </div>
+    </AppOverlayPortal>
   );
 }

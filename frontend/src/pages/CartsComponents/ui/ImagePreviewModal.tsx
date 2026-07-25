@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { useTranslation } from "../../../locales";
+import { AppOverlayPortal } from "../../../components/overlay";
 
 /** Modal podglądu zdjęcia wózka – tytuł, obraz lub „Brak zdjęcia”, zamykanie Escape/klik. */
 
@@ -24,8 +25,9 @@ export default function ImagePreviewModal({ open, imageUrl, title, onClose }: Im
   if (!open) return null;
 
   return (
+    <AppOverlayPortal>
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-6"
+      className="fixed inset-0 z-[280] flex items-center justify-center bg-black/50 p-6"
       onMouseDown={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
@@ -52,6 +54,7 @@ export default function ImagePreviewModal({ open, imageUrl, title, onClose }: Im
         </div>
       </div>
     </div>
+    </AppOverlayPortal>
   );
 }
 

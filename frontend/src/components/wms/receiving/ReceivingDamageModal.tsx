@@ -7,6 +7,7 @@ import { useAuth } from "../../../context/AuthContext";
 import { DAMAGE_TENANT_ID } from "../../../pages/damage/damageShared";
 import type { DamageType } from "../../../types/damageReport";
 import type { StockDocumentItemRead } from "../../../api/stockDocumentsApi";
+import { AppOverlayPortal } from "../../overlay";
 
 const DAMAGE_TYPES: { id: DamageType; label: string }[] = [
   { id: "mechanical", label: "Uszkodzenie mechaniczne" },
@@ -123,6 +124,7 @@ export function ReceivingDamageModal({
   const title = (line.product_name || "").trim() || `Produkt #${productId}`;
 
   return (
+    <AppOverlayPortal>
     <div
       className="fixed inset-0 z-[1750] flex flex-col bg-slate-900/70 sm:items-center sm:justify-center sm:p-4"
       role="presentation"
@@ -256,5 +258,6 @@ export function ReceivingDamageModal({
         </div>
       </div>
     </div>
+    </AppOverlayPortal>
   );
 }

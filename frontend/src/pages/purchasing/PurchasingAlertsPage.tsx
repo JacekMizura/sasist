@@ -43,6 +43,7 @@ import {
 import { listSuppliers, type SupplierRead } from "../../api/inboundSuppliersApi";
 import { useWarehouse } from "../../context/WarehouseContext";
 import { formatApiError } from "../../utils/apiErrorMessage";
+import { AppOverlayPortal } from "../../components/overlay";
 
 type Tenant = { id: number; name: string };
 
@@ -777,7 +778,8 @@ export default function PurchasingAlertsPage({ variant = "page" }: { variant?: "
       />
 
       {modalOpen ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+                <AppOverlayPortal>
+        <div className="fixed inset-0 z-[280] flex items-center justify-center bg-black/40 p-4">
           <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl bg-white p-6 shadow-xl">
             <h3 className="text-lg font-semibold text-slate-900">Nowa reguła wykrywania</h3>
             <p className="mt-1 text-xs text-slate-500">Ustal próg liczbami — system zapisze konfigurację po swojej stronie.</p>
@@ -834,6 +836,7 @@ export default function PurchasingAlertsPage({ variant = "page" }: { variant?: "
             </div>
           </div>
         </div>
+        </AppOverlayPortal>
       ) : null}
     </PurchasingContentArea>
   );

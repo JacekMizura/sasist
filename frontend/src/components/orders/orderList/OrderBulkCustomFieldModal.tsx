@@ -9,6 +9,7 @@ import {
   type OrderCustomFieldValueStorePayload,
 } from "../../../api/orderCustomFieldsApi";
 import { DAMAGE_TENANT_ID } from "../../../pages/damage/damageShared";
+import { AppOverlayPortal } from "../../../components/overlay";
 
 const inp =
   "mt-1 w-full rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-sm text-slate-900 shadow-sm focus:border-blue-400 focus:outline-none focus:ring-1 focus:ring-blue-300";
@@ -148,8 +149,9 @@ export function OrderBulkCustomFieldModal({
   const disableInputs = saving || loadingDefs;
 
   return (
+        <AppOverlayPortal>
     <div
-      className="fixed inset-0 z-[87] flex items-center justify-center bg-black/45 p-4"
+      className="fixed inset-0 z-[280] flex items-center justify-center bg-black/45 p-4"
       role="presentation"
       onClick={() => {
         if (!saving) onClose();
@@ -306,5 +308,6 @@ export function OrderBulkCustomFieldModal({
         </div>
       </div>
     </div>
+    </AppOverlayPortal>
   );
 }

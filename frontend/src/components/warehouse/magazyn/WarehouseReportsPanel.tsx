@@ -1,5 +1,6 @@
 import type { WarehouseReportVariant } from "../reports/shared/types";
 import { PrimaryButton } from "../../../design-system/PrimaryButton";
+import { AppOverlayPortal } from "../../../components/overlay";
 
 type ReportItem = {
   id: WarehouseReportVariant | "warehouse_value" | "top_volume";
@@ -57,8 +58,9 @@ export function WarehouseReportsPanel({
 }: WarehouseReportsPanelProps) {
   if (!open) return null;
   return (
+    <AppOverlayPortal>
     <div
-      className="fixed inset-0 z-[70] flex items-center justify-center bg-black/40 p-4"
+      className="fixed inset-0 z-[280] flex items-center justify-center bg-black/40 p-4"
       role="dialog"
       aria-modal="true"
       aria-labelledby="warehouse-reports-title"
@@ -103,5 +105,6 @@ export function WarehouseReportsPanel({
         </div>
       </div>
     </div>
+    </AppOverlayPortal>
   );
 }

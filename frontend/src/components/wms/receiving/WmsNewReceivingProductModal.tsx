@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Loader2, X } from "lucide-react";
 import { createWmsReceivingProduct } from "../../../api/wmsReceivingApi";
 import type { StockDocumentRead } from "../../../api/stockDocumentsApi";
+import { AppOverlayPortal } from "../../overlay";
 
 type Props = {
   open: boolean;
@@ -71,6 +72,7 @@ export function WmsNewReceivingProductModal({ open, tenantId, pzId, ean, onClose
   if (!open) return null;
 
   return (
+    <AppOverlayPortal>
     <div className="fixed inset-0 z-[1650] flex items-end sm:items-center justify-center p-0 sm:p-4">
       <button
         type="button"
@@ -149,5 +151,6 @@ export function WmsNewReceivingProductModal({ open, tenantId, pzId, ean, onClose
         </div>
       </div>
     </div>
+    </AppOverlayPortal>
   );
 }

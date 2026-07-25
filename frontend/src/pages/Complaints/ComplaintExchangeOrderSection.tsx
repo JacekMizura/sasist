@@ -12,6 +12,7 @@ import {
   complaintCustomerBillingPrefill,
   type ComplaintOrderKind,
 } from "./complaintExchangePrefill";
+import { AppOverlayPortal } from "../../components/overlay";
 
 const SESSION_KEY_PREFIX = "complaint_exchange_created_";
 
@@ -391,8 +392,9 @@ export default function ComplaintExchangeOrderSection({
 
   const wrapModal = (node: ReactNode) =>
     modal ? (
+            <AppOverlayPortal>
       <div
-        className="fixed inset-0 z-[100] flex items-start justify-center overflow-y-auto bg-black/50 p-4 sm:items-center sm:p-8"
+        className="fixed inset-0 z-[280] flex items-start justify-center overflow-y-auto bg-black/50 p-4 sm:items-center sm:p-8"
         role="dialog"
         aria-modal="true"
         aria-labelledby="replacement-order-modal-title"
@@ -412,6 +414,7 @@ export default function ComplaintExchangeOrderSection({
           <div className="max-h-[min(90vh,900px)] overflow-y-auto p-4 pt-14">{node}</div>
         </div>
       </div>
+      </AppOverlayPortal>
     ) : (
       node
     );

@@ -4,6 +4,7 @@ import toast from "react-hot-toast";
 
 import { postManualStockCorrection } from "../../api/inventoryManagementPolicyApi";
 import type { MagazynInvRowDisplay } from "./MagazynInventoryLine";
+import { AppOverlayPortal } from "../../components/overlay";
 
 type Props = {
   open: boolean;
@@ -98,7 +99,8 @@ export function ProductStockCorrectionModal({
   };
 
   return (
-    <div className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-900/40 p-4">
+    <AppOverlayPortal>
+    <div className="fixed inset-0 z-[280] flex items-center justify-center bg-slate-900/40 p-4">
       <div
         className="w-full max-w-md rounded-xl border border-slate-200 bg-white p-5 shadow-xl"
         role="dialog"
@@ -173,5 +175,6 @@ export function ProductStockCorrectionModal({
         </div>
       </div>
     </div>
+    </AppOverlayPortal>
   );
 }

@@ -1,3 +1,4 @@
+import { AppOverlayPortal } from "../../components/overlay";
 /**
  * Lazy-loaded: product location on warehouse map (read-only `WarehouseLayoutRenderer`).
  */
@@ -138,7 +139,8 @@ export default function ProductLocationMapModal({
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
+    <AppOverlayPortal>
+    <div className="fixed inset-0 z-[280] flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
       <div
         className="flex max-h-[min(92vh,900px)] w-full min-w-0 flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl"
         onClick={(e) => e.stopPropagation()}
@@ -262,5 +264,6 @@ export default function ProductLocationMapModal({
         </div>
       </div>
     </div>
+    </AppOverlayPortal>
   );
 }

@@ -61,6 +61,7 @@ import {
   humanizeModule,
 } from "../../utils/workforceUiLabels";
 import { computeOperationalEmployerCosts, OPERATIONAL_COST_DISCLAIMER_PL } from "../../utils/operationalEmployerCosts";
+import { AppOverlayPortal } from "../../components/overlay";
 
 type TabId = "permissions" | "wms" | "panel_statuses" | "activity" | "workforce";
 
@@ -1111,6 +1112,7 @@ export default function AdministratorEditPage() {
                           </div>
                         )}
                         {auditDetail && (
+                                                    <AppOverlayPortal>
                           <div className="fixed inset-0 z-[200] flex items-center justify-center bg-slate-900/40 p-4" role="presentation" onClick={() => setAuditDetail(null)}>
                             <div
                               className="max-h-[80vh] w-full max-w-lg overflow-auto rounded-2xl bg-white p-6 shadow-2xl"
@@ -1126,6 +1128,7 @@ export default function AdministratorEditPage() {
                               </PrimaryButton>
                             </div>
                           </div>
+                          </AppOverlayPortal>
                         )}
                       </div>
                     )}

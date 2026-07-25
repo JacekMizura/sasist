@@ -8,6 +8,7 @@ import { isSuperRole } from "../../auth/isSuperRole";
 import { listSellasistInputClass, listSellasistToolbarSquareBtn } from "../../components/listPage/listSellasistTokens";
 import type { ListViewPresetRecord } from "./listViewStateTypes";
 import type { SavePresetInput } from "./listViewStateTypes";
+import { AppOverlayPortal } from "../../components/overlay";
 
 type Props = {
   presets: ListViewPresetRecord[];
@@ -161,7 +162,8 @@ export function ListViewPresetsMenu({
       </div>
 
       {saveOpen ? (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/40 p-4">
+                <AppOverlayPortal>
+        <div className="fixed inset-0 z-[280] flex items-center justify-center bg-slate-900/40 p-4">
           <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-5 shadow-xl">
             <h3 className="text-lg font-bold text-slate-900">Zapisz szablon widoku</h3>
             <p className="mt-1 text-sm text-slate-500">Filtry, sortowanie, kolumny i pola filtrów — bez numeru strony.</p>
@@ -216,6 +218,7 @@ export function ListViewPresetsMenu({
             </div>
           </div>
         </div>
+        </AppOverlayPortal>
       ) : null}
     </div>
   );

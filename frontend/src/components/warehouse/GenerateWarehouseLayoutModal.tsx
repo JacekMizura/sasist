@@ -22,6 +22,7 @@ import {
   type LayoutGeneratorResult,
 } from "./layoutGenerator";
 import { PrimaryButton } from "../../design-system/PrimaryButton";
+import { AppOverlayPortal } from "../../components/overlay";
 
 export type GenerateLayoutMode = "append" | "replace";
 
@@ -300,7 +301,8 @@ export function GenerateWarehouseLayoutModal({
     previewMaxDim > 10 ? "text-[8px] px-0.5 py-0.5" : previewMaxDim > 6 ? "text-[9px] px-1 py-0.5" : "text-[10px] px-1 py-1";
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
+    <AppOverlayPortal>
+    <div className="fixed inset-0 z-[280] flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
       <div
         className="bg-white rounded-2xl shadow-2xl border border-slate-200/60 w-full max-w-5xl max-h-[92vh] overflow-hidden flex flex-col"
         onClick={(e) => e.stopPropagation()}
@@ -631,5 +633,6 @@ export function GenerateWarehouseLayoutModal({
         </div>
       </div>
     </div>
+    </AppOverlayPortal>
   );
 }

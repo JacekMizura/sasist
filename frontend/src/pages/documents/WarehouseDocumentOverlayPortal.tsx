@@ -1,6 +1,6 @@
-import { createPortal } from "react-dom";
 import type { ReactNode } from "react";
 
+import { AppOverlayPortal, APP_OVERLAY_Z } from "../../components/overlay/AppOverlayPortal";
 import { Z_WAREHOUSE_DOC_OVERLAY } from "./warehouseDocumentOverlayLayers";
 
 type Props = {
@@ -13,6 +13,7 @@ type Props = {
 
 /**
  * Full-viewport overlay on document.body — escapes DocumentsLayout stacking context.
+ * Thin alias over {@link AppOverlayPortal} (shared AppShell overlay layer).
  */
 export function WarehouseDocumentOverlayPortal({
   children,
@@ -21,16 +22,14 @@ export function WarehouseDocumentOverlayPortal({
   role = "presentation",
   onBackdropClick,
 }: Props) {
-  return createPortal(
-    <div
+  return (
+    <AppOverlayPortal
+      zIndex={zIndex ?? APP_OVERLAY_Z.sheet}
       className={className}
-      style={{ zIndex }}
       role={role}
-      data-wh-doc-nested-overlay="true"
-      onClick={onBackdropClick}
+      onBackdropClick={onBackdropClick}
     >
       {children}
-    </div>,
-    document.body,
+    </AppOverlayPortal>
   );
 }

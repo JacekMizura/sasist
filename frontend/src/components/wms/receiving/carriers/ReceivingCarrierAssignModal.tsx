@@ -9,6 +9,7 @@ import {
 } from "../../../../api/wmsCarrierApi";
 import { postReceivingPzCarriers } from "../../../../api/wmsReceivingApi";
 import { useWmsScanner } from "../../../../context/WmsScannerContext";
+import { AppOverlayPortal } from "../../../overlay";
 import { ReceivingCarrierBadge } from "./ReceivingCarrierBadge";
 
 type AllowedPrefix = "PAL" | "BOX" | "BIN" | "CRT" | "MIX";
@@ -164,6 +165,7 @@ export function ReceivingCarrierAssignModal({ tenantId, pzId, open, onClose, onA
   if (!open) return null;
 
   return (
+    <AppOverlayPortal>
     <div className="fixed inset-0 z-[1700] flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm font-sans text-slate-800">
       <div className="flex w-full max-w-lg max-h-[90vh] flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
         
@@ -391,5 +393,6 @@ export function ReceivingCarrierAssignModal({ tenantId, pzId, open, onClose, onA
 
       </div>
     </div>
+    </AppOverlayPortal>
   );
 }

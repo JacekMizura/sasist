@@ -5,6 +5,7 @@ import { listSuppliers, type SupplierRead } from "../../../api/inboundSuppliersA
 import { createWmsReceivingPz } from "../../../api/wmsReceivingApi";
 import { useAutocompleteDropdown } from "../../../hooks/useAutocompleteDropdown";
 import { AutocompleteDropdownPanel } from "../AutocompleteDropdownPanel";
+import { AppOverlayPortal } from "../../overlay";
 
 type Props = {
   open: boolean;
@@ -180,6 +181,7 @@ export function WmsNewDeliveryModal({ open, tenantId, warehouseId, onClose, onCr
   if (!open) return null;
 
   return (
+    <AppOverlayPortal>
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
       <button
         type="button"
@@ -322,6 +324,7 @@ export function WmsNewDeliveryModal({ open, tenantId, warehouseId, onClose, onCr
         </button>
       </NewDeliveryPanel>
     </div>
+    </AppOverlayPortal>
   );
 }
 

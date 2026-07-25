@@ -7,6 +7,7 @@ import { renderAutomationEffectConfigEditor } from "./effects/orderAutomationEff
 import { AutomationCategoryPickerModal } from "./AutomationCategoryPickerModal";
 import { AutomationEffectDisplay } from "./AutomationRuleDisplay";
 import { oaBtn, oaBtnPri, oaInp, oaWorkflowBlockBodyClass } from "./orderAutomationUiTokens";
+import { AppOverlayPortal } from "../../../components/overlay";
 
 type Props = {
   open: boolean;
@@ -45,6 +46,7 @@ export function AutomationEffectEditModal({
 
   return (
     <>
+            <AppOverlayPortal>
       <div
         className="fixed inset-0 z-[140] flex items-center justify-center bg-slate-900/40 p-4 backdrop-blur-sm"
         role="dialog"
@@ -103,6 +105,7 @@ export function AutomationEffectEditModal({
           </div>
         </div>
       </div>
+      </AppOverlayPortal>
 
       <AutomationCategoryPickerModal
         open={kindPickerOpen}

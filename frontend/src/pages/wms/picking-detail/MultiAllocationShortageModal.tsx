@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { AppOverlayPortal } from "../../../components/overlay";
 import {
   allocationUnresolved,
   unresolvedAllocations,
@@ -65,6 +66,7 @@ export function MultiAllocationShortageModal({
 
   if (!lines.length) {
     return (
+      <AppOverlayPortal>
       <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center bg-black/45 p-0 sm:p-4">
         <div className="w-full max-w-lg rounded-t-2xl sm:rounded-2xl border border-slate-200 bg-white p-5 shadow-xl">
           <p className="text-sm font-semibold text-slate-700">Brak nierozliczonych alokacji dla tego SKU.</p>
@@ -77,12 +79,14 @@ export function MultiAllocationShortageModal({
           </button>
         </div>
       </div>
+      </AppOverlayPortal>
     );
   }
 
   const valid = selectedId > 0 && qty >= 1 && qty <= maxQty + 1e-9;
 
   return (
+    <AppOverlayPortal>
     <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center bg-black/45 p-0 sm:p-4">
       <div className="max-h-[min(92vh,720px)] w-full max-w-lg overflow-y-auto rounded-t-2xl sm:rounded-2xl border border-slate-200 bg-white shadow-xl">
         <div className="sticky top-0 flex items-center justify-between border-b border-slate-100 bg-white px-4 py-3">
@@ -149,5 +153,6 @@ export function MultiAllocationShortageModal({
         </div>
       </div>
     </div>
+    </AppOverlayPortal>
   );
 }

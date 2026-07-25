@@ -1,3 +1,4 @@
+import { AppOverlayPortal } from "../../components/overlay";
 /**
  * Auto-uzupełnianie: szkice zamówień na podstawie braków — bez wysyłki do dostawcy.
  * Konfiguracja techniczna jest składana w tle; użytkownik widzi tylko decyzje biznesowe.
@@ -560,7 +561,8 @@ export default function PurchasingAutoReorderPage() {
       </div>
 
       {wizardOpen ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setWizardOpen(false)} role="presentation">
+                <AppOverlayPortal>
+        <div className="fixed inset-0 z-[280] flex items-center justify-center bg-black/40 p-4" onClick={() => setWizardOpen(false)} role="presentation">
           <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl bg-white p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
             <h3 className="text-lg font-semibold text-slate-900">Nowa automatyzacja</h3>
             <p className="mt-1 text-xs text-slate-500">
@@ -665,10 +667,12 @@ export default function PurchasingAutoReorderPage() {
             </div>
           </div>
         </div>
+        </AppOverlayPortal>
       ) : null}
 
       {previewOpen ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setPreviewOpen(false)} role="presentation">
+                <AppOverlayPortal>
+        <div className="fixed inset-0 z-[280] flex items-center justify-center bg-black/40 p-4" onClick={() => setPreviewOpen(false)} role="presentation">
           <div className="max-h-[90vh] w-full min-w-0 overflow-y-auto rounded-2xl bg-white p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
             <h3 className="text-lg font-semibold text-slate-900">
               Lista produktów{previewRuleId != null ? ` — reguła #${previewRuleId}` : ""}
@@ -715,6 +719,7 @@ export default function PurchasingAutoReorderPage() {
             </div>
           </div>
         </div>
+        </AppOverlayPortal>
       ) : null}
     </PurchasingContentArea>
   );

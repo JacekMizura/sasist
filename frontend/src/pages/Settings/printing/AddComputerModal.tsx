@@ -18,6 +18,7 @@ import { useWarehouse } from "../../../context/WarehouseContext";
 import type { PrinterAgentDownloadInfo } from "../../../types/printing";
 import { DAMAGE_TENANT_ID } from "../../damage/damageShared";
 import { brandPrimaryButtonClass } from "../../../design-system/brandUi";
+import { AppOverlayPortal } from "../../../components/overlay";
 
 type Props = {
   open: boolean;
@@ -177,8 +178,9 @@ export default function AddComputerModal({ open, onClose }: Props) {
 
   return (
     <>
+      <AppOverlayPortal>
       <div
-        className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4"
+        className="fixed inset-0 z-[280] flex items-center justify-center bg-black/45 p-4"
         role="presentation"
         onClick={() => {
           if (!busy && !rotateBusy) handleClose();
@@ -324,6 +326,7 @@ export default function AddComputerModal({ open, onClose }: Props) {
           </div>
         </div>
       </div>
+      </AppOverlayPortal>
 
       <PanelBulkStatusConfirmModal
         open={confirmRotateOpen}

@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import type { PackagingSuggestionApi, WmsPackingOrderDetailApi, WmsPackingRecommendedCartonApi } from "../../../api/wmsPackingApi";
+import { AppOverlayPortal } from "../../overlay";
 
 type Props = {
   detail: WmsPackingOrderDetailApi;
@@ -204,34 +205,36 @@ function PackingFitRecommendationPanel({ detail, busy, onUseCarton }: Props) {
       ) : null}
 
       {overrideFor ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-slate-900/30" onClick={() => setOverrideFor(null)} />
-          <div className="relative z-10 w-full max-w-md rounded-2xl border border-slate-100 bg-white p-6 shadow-2xl">
-            <h4 className="text-lg font-black text-slate-900">Wybrane opakowanie może być za małe</h4>
-            <p className="mt-2 text-sm text-slate-700">{overrideFor.warning}</p>
-            <div className="mt-5 flex justify-end gap-2">
-              <button
-                type="button"
-                className="rounded-xl border border-slate-200 px-4 py-2 text-xs font-black uppercase tracking-wider"
-                onClick={() => setOverrideFor(null)}
-              >
-                Wróć
-              </button>
-              <button
-                type="button"
-                disabled={busy}
-                className="rounded-xl bg-amber-600 px-4 py-2 text-xs font-black uppercase tracking-wider text-white disabled:opacity-50"
-                onClick={() => {
-                  const id = overrideFor.id;
-                  setOverrideFor(null);
-                  void onUseCarton(id, { confirmOverride: true });
-                }}
-              >
-                Użyj mimo to
-              </button>
+        <AppOverlayPortal>
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <div className="absolute inset-0 bg-slate-900/30" onClick={() => setOverrideFor(null)} />
+            <div className="relative z-10 w-full max-w-md rounded-2xl border border-slate-100 bg-white p-6 shadow-2xl">
+              <h4 className="text-lg font-black text-slate-900">Wybrane opakowanie może być za małe</h4>
+              <p className="mt-2 text-sm text-slate-700">{overrideFor.warning}</p>
+              <div className="mt-5 flex justify-end gap-2">
+                <button
+                  type="button"
+                  className="rounded-xl border border-slate-200 px-4 py-2 text-xs font-black uppercase tracking-wider"
+                  onClick={() => setOverrideFor(null)}
+                >
+                  Wróć
+                </button>
+                <button
+                  type="button"
+                  disabled={busy}
+                  className="rounded-xl bg-amber-600 px-4 py-2 text-xs font-black uppercase tracking-wider text-white disabled:opacity-50"
+                  onClick={() => {
+                    const id = overrideFor.id;
+                    setOverrideFor(null);
+                    void onUseCarton(id, { confirmOverride: true });
+                  }}
+                >
+                  Użyj mimo to
+                </button>
+              </div>
             </div>
           </div>
-        </div>
+        </AppOverlayPortal>
       ) : null}
     </div>
   );

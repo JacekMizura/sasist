@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { AlertTriangle, ChevronRight, Loader2, Pencil, X } from "lucide-react";
 import { listIncompleteReceivingProducts, type WmsProductIncompleteRow } from "../../../api/wmsProductApi";
 import { WMS_ROUTES } from "../../../pages/wms/wmsRoutes";
+import { AppOverlayPortal } from "../../overlay";
 import { ProductDataCompletionModal } from "./ProductDataCompletionModal";
 
 const TENANT_STORAGE_KEY = "wms.receiving.tenantId";
@@ -107,6 +108,7 @@ export function WmsIncompleteProductsModal({
 
   return (
     <>
+      <AppOverlayPortal>
       <div className="fixed inset-0 z-[70] flex items-end justify-center bg-slate-900/50 p-0 sm:items-center sm:p-4">
         <div className="flex max-h-[92vh] w-full max-w-2xl flex-col overflow-hidden rounded-t-[28px] bg-white shadow-2xl sm:rounded-[28px]">
           <div className="flex items-start justify-between gap-3 border-b border-slate-100 px-5 py-4">
@@ -205,6 +207,7 @@ export function WmsIncompleteProductsModal({
           </div>
         </div>
       </div>
+      </AppOverlayPortal>
 
       {quickEdit ? (
         <ProductDataCompletionModal

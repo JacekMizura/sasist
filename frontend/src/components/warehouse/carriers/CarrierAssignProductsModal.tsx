@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { listWmsCarriers, scanWmsCarrierByBarcode, type WarehouseCarrierRead } from "../../../api/wmsCarrierApi";
 import { normalizeCarrierBarcode } from "../../../utils/carrierBarcode";
+import { AppOverlayPortal } from "../../../components/overlay";
 
 type Props = {
   tenantId: number;
@@ -61,6 +62,7 @@ export function CarrierAssignProductsModal({ tenantId, open, onClose, onPick }: 
   };
 
   return (
+    <AppOverlayPortal>
     <div className="fixed inset-0 z-[2000] flex items-center justify-center bg-slate-900/50 p-4">
       <div className="flex max-h-[90vh] w-full max-w-lg flex-col rounded-2xl border border-slate-200 bg-white shadow-xl">
         <div className="border-b border-slate-100 p-4">
@@ -108,5 +110,6 @@ export function CarrierAssignProductsModal({ tenantId, open, onClose, onPick }: 
         </div>
       </div>
     </div>
+    </AppOverlayPortal>
   );
 }

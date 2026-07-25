@@ -12,6 +12,7 @@ import {
   type OfferStockPoolRead,
 } from "../../api/offerStockPoolApi";
 import { PrimaryButton } from "../../design-system/PrimaryButton";
+import { AppOverlayPortal } from "../../components/overlay";
 
 const TENANT_ID = DAMAGE_TENANT_ID;
 
@@ -169,7 +170,8 @@ export default function OfferStockPoolsSettingsPage() {
       )}
 
       {modalOpen ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+                <AppOverlayPortal>
+        <div className="fixed inset-0 z-[280] flex items-center justify-center bg-black/40 p-4">
           <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl">
             <h2 className="mb-4 text-lg font-bold text-slate-900">
               {editing ? "Edytuj pulę" : "Nowa pula stanów"}
@@ -227,6 +229,7 @@ export default function OfferStockPoolsSettingsPage() {
             </div>
           </div>
         </div>
+        </AppOverlayPortal>
       ) : null}
     </PageLayout>
   );

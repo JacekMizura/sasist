@@ -20,6 +20,10 @@ function isWarehouseDesignerRoute(pathname: string): boolean {
 
 /**
  * Wspólny szkielet ERP: lewy sidebar + fly-out + top bar + treść.
+ *
+ * Sidebar (`z-30`) and content (`relative z-0`) are sibling stacking contexts —
+ * page `fixed` overlays inside content cannot cover the sidebar. Use
+ * `AppOverlayPortal` (document.body) for Drawer / Sheet / Modal sheets.
  */
 export default function ErpShellLayout({ children, headerMode }: ErpShellLayoutProps) {
   const { pathname } = useLocation();

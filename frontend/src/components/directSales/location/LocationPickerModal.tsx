@@ -3,6 +3,7 @@ import type { LocationStockRow } from "../../../api/locationStockApi";
 import { sortDirectSalesLocationRows } from "../../../modules/directSales/settings/sortLocationRows";
 import { useResolvedDirectSalesSettings } from "../../../modules/directSales/settings/resolvedDirectSalesSettings";
 import { resolveLocationZoneKind, ZONE_BADGE_CLASS } from "../stock/stockZoneStyles";
+import { AppOverlayPortal } from "../../../components/overlay";
 
 type Props = {
   open: boolean;
@@ -37,7 +38,8 @@ export function LocationPickerModal({
   const sorted = sortDirectSalesLocationRows(rows, resolvedDirectSalesSettings);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/20 backdrop-blur-sm p-4">
+        <AppOverlayPortal>
+    <div className="fixed inset-0 z-[280] flex items-center justify-center bg-slate-900/20 backdrop-blur-sm p-4">
       {/* Kontener Modala */}
       <div className="flex max-h-[70vh] w-full max-w-md flex-col rounded-[2rem] border border-blue-50 bg-white shadow-[0_20px_60px_-15px_rgba(0,0,0,0.1)] overflow-hidden">
         
@@ -110,5 +112,6 @@ export function LocationPickerModal({
 
       </div>
     </div>
+    </AppOverlayPortal>
   );
 }

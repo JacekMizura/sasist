@@ -16,6 +16,7 @@ import {
   receivingQuantityDifference,
 } from "../../../utils/receivingDocumentQtyPresentation";
 import { useWmsScanner } from "../../../context/WmsScannerContext";
+import { AppOverlayPortal } from "../../overlay";
 import { CarrierBadge } from "../../warehouse/carriers/CarrierBadge";
 import { carrierVisualClasses } from "../../warehouse/carriers/carrierConstants";
 
@@ -392,6 +393,7 @@ export function ReceivingExecutionModal({
   });
 
   return (
+    <AppOverlayPortal>
     <div
       className="fixed inset-0 z-[1600] flex items-center justify-center bg-slate-900/20 backdrop-blur-sm p-4 sm:p-6 font-sans text-slate-900 overflow-y-auto"
       data-receiving-execution-modal=""
@@ -998,5 +1000,6 @@ export function ReceivingExecutionModal({
 
       </div>
     </div>
+    </AppOverlayPortal>
   );
 }

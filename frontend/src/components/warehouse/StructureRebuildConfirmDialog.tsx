@@ -1,6 +1,7 @@
 import type { StructureRemovalImpact } from "./passageStorage";
 import { brandPrimaryButtonClass } from "../../design-system/brandUi";
 import { useEffect } from "react";
+import { AppOverlayPortal } from "../../components/overlay";
 
 export type StructureRebuildConfirmDialogProps = {
   impacts: StructureRemovalImpact[];
@@ -45,8 +46,9 @@ export function StructureRebuildConfirmDialog({
   }, [onCancel]);
 
   return (
+    <AppOverlayPortal>
     <div
-      className="fixed inset-0 z-[80] flex items-center justify-center bg-black/50 p-4"
+      className="fixed inset-0 z-[280] flex items-center justify-center bg-black/50 p-4"
       role="dialog"
       aria-modal="true"
       aria-labelledby="structure-rebuild-title"
@@ -210,5 +212,6 @@ export function StructureRebuildConfirmDialog({
         </div>
       </div>
     </div>
+    </AppOverlayPortal>
   );
 }

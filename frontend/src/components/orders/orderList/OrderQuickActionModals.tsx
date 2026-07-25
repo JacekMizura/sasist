@@ -4,6 +4,7 @@ import { X } from "lucide-react";
 import { PanelStatusHierarchyPicker } from "../../panel/PanelStatusHierarchyPicker";
 import type { OrderUiPanelSubgroupRead, OrderUiStatusPanelSummary } from "../../../types/orderUiStatus";
 import type { OrderQuickToolbarActionKind } from "./orderQuickActionKinds";
+import { AppOverlayPortal } from "../../../components/overlay";
 
 const inp =
   "mt-1 w-full rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-sm text-slate-900 shadow-sm focus:border-blue-400 focus:outline-none focus:ring-1 focus:ring-blue-300";
@@ -20,6 +21,7 @@ type ShellProps = {
 
 function ModalShell({ title, subtitle, busy, onClose, children, footer }: ShellProps) {
   return (
+        <AppOverlayPortal>
     <div
       className="fixed inset-0 z-[86] flex items-center justify-center bg-black/45 p-4"
       role="presentation"
@@ -55,6 +57,7 @@ function ModalShell({ title, subtitle, busy, onClose, children, footer }: ShellP
         <div className="flex flex-wrap justify-end gap-2 border-t border-slate-100 px-5 py-4">{footer}</div>
       </div>
     </div>
+    </AppOverlayPortal>
   );
 }
 

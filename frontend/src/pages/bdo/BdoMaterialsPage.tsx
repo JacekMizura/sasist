@@ -13,6 +13,7 @@ import {
 } from "../../modules/purchasing/ui";
 import { BdoFilterBar } from "./components/BdoFilterBar";
 import { useBdoTenant } from "./hooks/useBdoTenant";
+import { AppOverlayPortal } from "../../components/overlay";
 
 type BdoForm = {
   plastic_kg_per_unit: number;
@@ -197,6 +198,7 @@ export default function BdoMaterialsPage() {
       ) : null}
 
       {modalOpen && editRow ? (
+                <AppOverlayPortal>
         <div className="fixed inset-0 z-[400] flex items-center justify-center bg-slate-900/50 p-4" role="dialog">
           <AppCard className="max-h-[90vh] w-full max-w-lg overflow-y-auto p-6 shadow-xl">
             <h2 className="text-lg font-semibold text-slate-900">Pola BDO</h2>
@@ -253,6 +255,7 @@ export default function BdoMaterialsPage() {
             </div>
           </AppCard>
         </div>
+        </AppOverlayPortal>
       ) : null}
     </div>
   );

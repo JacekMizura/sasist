@@ -3,6 +3,7 @@ import { brandPrimaryButtonClass } from "../../design-system/brandUi";
 import { Link } from "react-router-dom";
 import api from "../../api/axios";
 import { entityTypeLabelPl } from "../../utils/exportImportLabelsPl";
+import { AppOverlayPortal } from "../../components/overlay";
 
 export type ImportLogRow = {
   id: number;
@@ -191,8 +192,9 @@ export default function ImportHistoryPage({
         )}
 
         {selectedMessage !== null && (
+          <AppOverlayPortal>
           <div
-            className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4"
+            className="fixed inset-0 bg-black/40 flex items-center justify-center z-[280] p-4"
             onClick={() => setSelectedMessage(null)}
           >
             <div
@@ -210,6 +212,7 @@ export default function ImportHistoryPage({
               </button>
             </div>
           </div>
+          </AppOverlayPortal>
         )}
       </div>
     </div>

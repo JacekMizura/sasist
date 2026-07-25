@@ -6,6 +6,7 @@ import { resolveDamageMediaUrl } from "../../utils/resolveDamageMediaUrl";
 import type { DamageDecision, DamageEntry, DamageType } from "../../types/damageReport";
 import { useWarehouse } from "../../context/WarehouseContext";
 import { DAMAGE_TENANT_ID } from "./damageShared";
+import { AppOverlayPortal } from "../../components/overlay";
 
 const DECISIONS: DamageDecision[] = ["SELLABLE", "REPAIR", "RETURN_TO_SUPPLIER", "DISPOSE"];
 const TYPES: DamageType[] = ["mechanical", "missing_parts", "flood", "other"];
@@ -84,6 +85,7 @@ export default function OfficeDamagesPage() {
       </div>
 
       {selected && (
+                <AppOverlayPortal>
         <div className="fixed inset-0 z-[90] bg-black/30" onClick={() => setSelected(null)}>
           <aside
             className="absolute right-0 top-0 h-full w-full max-w-xl overflow-y-auto border-l border-slate-200 bg-white p-5 shadow-2xl"
@@ -155,6 +157,7 @@ export default function OfficeDamagesPage() {
             </div>
           </aside>
         </div>
+        </AppOverlayPortal>
       )}
     </PageLayout>
   );

@@ -45,6 +45,7 @@ import {
   oaInp,
   oaLbl,
 } from "../../components/orders/automation/orderAutomationUiTokens";
+import { AppOverlayPortal } from "../../components/overlay";
 
 function defaultRule(): OrderAutomationRule {
   return {
@@ -607,6 +608,7 @@ export default function OrderAutomationEditorPage() {
 
       {/* MODAL TESTOWY */}
       {testOpen ? (
+                <AppOverlayPortal>
         <div className="fixed inset-0 z-[140] flex items-center justify-center bg-slate-900/40 p-4 backdrop-blur-sm" role="dialog" aria-modal>
           <div className="w-full max-w-lg rounded-xl border border-slate-200 bg-white p-6 shadow-xl">
             <h2 className="text-lg font-semibold text-slate-900">Test akcji</h2>
@@ -627,6 +629,7 @@ export default function OrderAutomationEditorPage() {
             </div>
           </div>
         </div>
+        </AppOverlayPortal>
       ) : null}
 
     </div>

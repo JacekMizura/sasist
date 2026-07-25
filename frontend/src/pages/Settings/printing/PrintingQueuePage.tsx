@@ -36,6 +36,7 @@ import {
   PrintingTableHeadCell,
   PrintingTableRow,
 } from "./components/printingUi";
+import { AppOverlayPortal } from "../../../components/overlay";
 
 function formatDate(value: string | null | undefined): string {
   if (!value) return "—";
@@ -68,7 +69,8 @@ function JobDetailModal({ job, onClose }: DetailModalProps) {
     typeof job.payload_json === "string" ? job.payload_json : JSON.stringify(job.payload_json, null, 2);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4">
+        <AppOverlayPortal>
+    <div className="fixed inset-0 z-[280] flex items-center justify-center bg-black/45 p-4">
       <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-xl border border-slate-200 bg-white p-5 shadow-2xl">
         <div className="mb-4 flex items-start justify-between gap-3">
           <div>
@@ -167,6 +169,7 @@ function JobDetailModal({ job, onClose }: DetailModalProps) {
         </div>
       </div>
     </div>
+    </AppOverlayPortal>
   );
 }
 

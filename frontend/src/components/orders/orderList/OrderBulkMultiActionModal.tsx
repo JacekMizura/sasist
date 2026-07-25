@@ -11,6 +11,7 @@ import {
   type BulkActionKind,
   type BulkActionRow,
 } from "./bulkMultiActionTypes";
+import { AppOverlayPortal } from "../../../components/overlay";
 
 const inp =
   "mt-1 w-full rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-sm text-slate-900 shadow-sm focus:border-blue-400 focus:outline-none focus:ring-1 focus:ring-blue-300";
@@ -118,8 +119,9 @@ export function OrderBulkMultiActionModal({
   if (!open) return null;
 
   return (
+    <AppOverlayPortal>
     <div
-      className="fixed inset-0 z-[85] flex items-center justify-center bg-black/45 p-4"
+      className="fixed inset-0 z-[280] flex items-center justify-center bg-black/45 p-4"
       role="presentation"
       onClick={() => {
         if (!busy) onClose();
@@ -365,5 +367,6 @@ export function OrderBulkMultiActionModal({
         </div>
       </div>
     </div>
+    </AppOverlayPortal>
   );
 }

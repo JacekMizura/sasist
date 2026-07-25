@@ -2,6 +2,7 @@ import { useState } from "react";
 import { createWmsCarrierGroup } from "../../../api/wmsCarrierApi";
 import axios from "axios";
 import { PrimaryButton } from "../../../design-system/PrimaryButton";
+import { AppOverlayPortal } from "../../../components/overlay";
 
 function apiErrMessage(e: unknown): string {
   if (axios.isAxiosError(e)) {
@@ -50,6 +51,7 @@ export function CreateCarrierGroupModal({ tenantId, open, onClose, onCreated }: 
   };
 
   return (
+    <AppOverlayPortal>
     <div className="fixed inset-0 z-[2000] flex items-center justify-center bg-slate-900/50 p-4">
       <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-xl">
         <h2 className="text-lg font-black text-slate-900">Nowa grupa nośników</h2>
@@ -79,5 +81,6 @@ export function CreateCarrierGroupModal({ tenantId, open, onClose, onCreated }: 
         </div>
       </div>
     </div>
+    </AppOverlayPortal>
   );
 }

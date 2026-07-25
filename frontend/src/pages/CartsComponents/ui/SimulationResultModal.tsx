@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { useTranslation } from "../../../locales";
 import ProgressBar from "./ProgressBar";
+import { AppOverlayPortal } from "../../../components/overlay";
 
 /** Modal wyniku symulacji przypisania: przypisane/nieprzypisane zamówienia, wykorzystanie wózka (%). */
 
@@ -33,8 +34,9 @@ export default function SimulationResultModal({
   if (!open) return null;
 
   return (
+    <AppOverlayPortal>
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-6"
+      className="fixed inset-0 z-[280] flex items-center justify-center bg-black/50 p-6"
       onMouseDown={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
@@ -82,5 +84,6 @@ export default function SimulationResultModal({
         </div>
       </div>
     </div>
+    </AppOverlayPortal>
   );
 }

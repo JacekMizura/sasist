@@ -3,6 +3,7 @@ import { Loader2, X } from "lucide-react";
 import type { PublishedTemplateOptionDto } from "@/api/documentTemplatesApi";
 import type { DocumentPrintRequest } from "@/utils/documentTemplatePrint";
 import { DocumentTemplatePreviewThumbnail } from "./DocumentTemplatePreviewThumbnail";
+import { AppOverlayPortal } from "../../components/overlay";
 
 type Props = {
   open: boolean;
@@ -26,7 +27,8 @@ export function DocumentTemplatePickerModal({
   if (!open || !request) return null;
 
   return (
-    <div className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-900/50 p-4" role="dialog" aria-modal="true">
+        <AppOverlayPortal>
+    <div className="fixed inset-0 z-[280] flex items-center justify-center bg-slate-900/50 p-4" role="dialog" aria-modal="true">
       <div className="max-h-[90vh] w-full max-w-3xl overflow-hidden rounded-xl bg-white shadow-xl">
         <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
           <div>
@@ -84,5 +86,6 @@ export function DocumentTemplatePickerModal({
         </div>
       </div>
     </div>
+    </AppOverlayPortal>
   );
 }

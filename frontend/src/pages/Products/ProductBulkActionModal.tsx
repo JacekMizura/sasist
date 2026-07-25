@@ -6,6 +6,7 @@ import { PrimaryButton } from "../../design-system/PrimaryButton";
 import type { ProductBulkListFiltersPayload } from "../../utils/productListBulkFilters";
 
 import type { ProductBulkHubChoice } from "./productBulkHubTypes";
+import { AppOverlayPortal } from "../../components/overlay";
 
 export const BULK_ACTION_GROUPS: {
   label: string;
@@ -267,7 +268,8 @@ export function ProductBulkActionModal({ open, tenantId, selection, action, onCl
   const lbl = "mb-1 block text-sm font-medium text-slate-700";
 
   return (
-    <div className="fixed inset-0 z-[270] flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
+        <AppOverlayPortal>
+    <div className="fixed inset-0 z-[280] flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
       <div
         className="w-full max-w-lg rounded-2xl border border-slate-200 bg-white p-6 shadow-xl"
         onClick={(e) => e.stopPropagation()}
@@ -419,5 +421,6 @@ export function ProductBulkActionModal({ open, tenantId, selection, action, onCl
         </div>
       </div>
     </div>
+    </AppOverlayPortal>
   );
 }

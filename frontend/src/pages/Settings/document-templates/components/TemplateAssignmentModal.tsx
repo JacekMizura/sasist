@@ -11,6 +11,7 @@ import { extractApiErrorMessage } from "../../../../api/apiErrorMessage";
 import { brandPrimaryButtonClass } from "../../../../design-system/brandUi";
 import { DEFAULT_TENANT_ID } from "../constants";
 import { allAssignableKinds, kindLabel } from "../utils/assignableDocumentKinds";
+import { AppOverlayPortal } from "../../../../components/overlay";
 
 type Props = {
   templateId: number;
@@ -108,7 +109,8 @@ export function TemplateAssignmentModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
+    <AppOverlayPortal>
+    <div className="fixed inset-0 z-[280] flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
       <div
         className="flex max-h-[85vh] w-full max-w-xl flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl"
         onClick={(e) => e.stopPropagation()}
@@ -157,6 +159,7 @@ export function TemplateAssignmentModal({
         </div>
       </div>
     </div>
+    </AppOverlayPortal>
   );
 }
 

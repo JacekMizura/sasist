@@ -6,6 +6,7 @@ import { fetchAgentDiagnostics } from "../../../api/printingApi";
 import { extractApiErrorMessage } from "../../../api/apiErrorMessage";
 import type { PrinterAgentDiagnosticsRead, PrinterAgentRead } from "../../../types/printing";
 import { PrintingLinkButton } from "./components/printingUi";
+import { AppOverlayPortal } from "../../../components/overlay";
 
 type Props = {
   open: boolean;
@@ -72,8 +73,9 @@ export default function AgentDiagnosticsModal({ open, agent, tenantId, onClose }
   if (!open || !agent) return null;
 
   return (
+    <AppOverlayPortal>
     <div
-      className="fixed inset-0 z-[80] flex items-center justify-center bg-black/45 p-4"
+      className="fixed inset-0 z-[280] flex items-center justify-center bg-black/45 p-4"
       role="presentation"
       onClick={onClose}
     >
@@ -151,6 +153,7 @@ export default function AgentDiagnosticsModal({ open, agent, tenantId, onClose }
         </p>
       </div>
     </div>
+    </AppOverlayPortal>
   );
 }
 

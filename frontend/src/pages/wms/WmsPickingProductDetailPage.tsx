@@ -29,6 +29,7 @@ import {
   BasketPutQuantityModal,
   type BasketPutQuantityDraft,
 } from "../../components/wms/picking/BasketPutQuantityModal";
+import { AppOverlayPortal } from "../../components/overlay";
 import { MultiBasketAllocationPanel } from "./picking-detail/MultiBasketAllocationPanel";
 import { MultiAllocationShortageModal } from "./picking-detail/MultiAllocationShortageModal";
 import { MultiBulkShortageModal } from "./picking-detail/MultiBulkShortageModal";
@@ -126,6 +127,7 @@ function ModalShell({
     onClose();
   };
   return (
+    <AppOverlayPortal>
     <div
       className="fixed inset-0 z-[60] flex items-end justify-center bg-black/45 p-0 sm:items-center sm:p-4"
       role="dialog"
@@ -143,6 +145,7 @@ function ModalShell({
         <div className="px-4 py-4">{children}</div>
       </div>
     </div>
+    </AppOverlayPortal>
   );
 }
 

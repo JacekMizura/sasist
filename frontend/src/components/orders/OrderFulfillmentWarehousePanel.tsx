@@ -10,6 +10,7 @@ import {
 } from "../../api/orderFulfillmentApi";
 import { PrimaryButton } from "../../design-system/PrimaryButton";
 import { warehouseService, type TenantWarehouseAssignment } from "../../services/warehouseService";
+import { AppOverlayPortal } from "../../components/overlay";
 
 type Props = {
   orderId: number;
@@ -167,7 +168,8 @@ export default function OrderFulfillmentWarehousePanel({
       </div>
 
       {modalOpen ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" role="dialog">
+                <AppOverlayPortal>
+        <div className="fixed inset-0 z-[280] flex items-center justify-center bg-black/40 p-4" role="dialog">
           <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-xl">
             <h3 className="text-lg font-bold text-slate-900">Przypisz magazyn realizacji</h3>
             <p className="mt-1 text-sm text-slate-500">Wybierz magazyn i podaj uzasadnienie decyzji.</p>
@@ -212,6 +214,7 @@ export default function OrderFulfillmentWarehousePanel({
             </div>
           </div>
         </div>
+        </AppOverlayPortal>
       ) : null}
     </>
   );

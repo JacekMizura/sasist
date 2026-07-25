@@ -1,6 +1,7 @@
 import type { TemplateMeta } from "../LabelTemplateDesigner";
 import { brandPrimaryButtonClass } from "../../../design-system/brandUi";
 import { LabelDesignerToolbarSelect } from "./LabelDesignerToolbarSelect";
+import { AppOverlayPortal } from "../../../components/overlay";
 
 type Props = {
   open: boolean;
@@ -30,6 +31,7 @@ export function LabelDesignerProjectSettingsModal({
   if (!open) return null;
 
   return (
+        <AppOverlayPortal>
     <div
       className="fixed inset-0 z-[8500] flex items-center justify-center bg-slate-900/40 p-4 backdrop-blur-[2px]"
       onClick={onClose}
@@ -96,5 +98,6 @@ export function LabelDesignerProjectSettingsModal({
         </div>
       </div>
     </div>
+    </AppOverlayPortal>
   );
 }

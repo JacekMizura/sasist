@@ -11,6 +11,7 @@ import {
   parseExpiryInputPlToIso,
 } from "../../pages/wms/putawayFormat";
 import type { MagazynInvRowDisplay } from "./MagazynInventoryLine";
+import { AppOverlayPortal } from "../../components/overlay";
 
 type Props = {
   open: boolean;
@@ -146,6 +147,7 @@ export function EditInventoryTraceabilityModal({
   if (!open || !row) return null;
 
   return (
+    <AppOverlayPortal>
     <div className="fixed inset-0 z-[2000] flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-sm">
       <div
         className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl"
@@ -229,5 +231,6 @@ export function EditInventoryTraceabilityModal({
         </div>
       </div>
     </div>
+    </AppOverlayPortal>
   );
 }

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import api from "../../api/axios";
 import { PrimaryButton } from "../../design-system/PrimaryButton";
 import { openPdfBlobInPrintViewer } from "../../utils/openPdfForBrowserPrint";
+import { AppOverlayPortal } from "../../components/overlay";
 
 type Props = {
   bundleId: number | null;
@@ -77,7 +78,8 @@ export function BundleLabelPrintModal({ bundleId, tenantId, onClose }: Props) {
   };
 
   return (
-    <div className="fixed inset-0 z-[260] flex items-center justify-center bg-black/40" onClick={onClose}>
+    <AppOverlayPortal>
+    <div className="fixed inset-0 z-[280] flex items-center justify-center bg-black/40" onClick={onClose}>
       <div className="mx-4 w-full max-w-md rounded-xl bg-white shadow-xl" onClick={(e) => e.stopPropagation()}>
         <h3 className="border-b border-slate-100 px-6 py-4 text-lg font-bold text-slate-800">Drukuj etykietę zestawu</h3>
         <div className="space-y-4 p-6">
@@ -141,5 +143,6 @@ export function BundleLabelPrintModal({ bundleId, tenantId, onClose }: Props) {
         </div>
       </div>
     </div>
+    </AppOverlayPortal>
   );
 }

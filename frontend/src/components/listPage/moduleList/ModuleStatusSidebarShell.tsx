@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { PANEL_STATUS_SIDEBAR_PAGE_SHELL_CLASS } from "../../panel/panelStatusTreeStyles";
 import { flatListSidebarDividerClass } from "../../layout/flatSectionTokens";
+import { AppOverlayPortal } from "../../../components/overlay";
 
 type ModuleStatusSidebarShellProps = {
   collapsed: boolean;
@@ -38,6 +39,7 @@ export function ModuleStatusSidebarShell({
         {sidebar}
       </aside>
       {statusDrawerOpen ? (
+                <AppOverlayPortal>
         <div className="fixed inset-0 z-[420] flex lg:hidden">
           <button
             type="button"
@@ -49,6 +51,7 @@ export function ModuleStatusSidebarShell({
             {mobileDrawerSidebar}
           </div>
         </div>
+        </AppOverlayPortal>
       ) : null}
     </>
   );

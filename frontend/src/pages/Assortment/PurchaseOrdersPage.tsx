@@ -32,6 +32,7 @@ import {
   purchasingInputClass,
   purchasingSelectClass,
 } from "../../modules/purchasing/ui";
+import { AppOverlayPortal } from "../../components/overlay";
 
 type Tenant = { id: number; name: string };
 
@@ -554,6 +555,7 @@ export default function PurchaseOrdersPage() {
       ) : null}
 
       {deleteConfirmId != null ? (
+                <AppOverlayPortal>
         <div
           className="fixed inset-0 z-[500] flex items-center justify-center bg-slate-900/50 p-4"
           role="dialog"
@@ -587,6 +589,7 @@ export default function PurchaseOrdersPage() {
             </div>
           </div>
         </div>
+        </AppOverlayPortal>
       ) : null}
       {supplierOrderPickerModal}
     </>

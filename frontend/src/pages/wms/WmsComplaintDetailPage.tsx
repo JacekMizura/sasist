@@ -16,6 +16,7 @@ import {
 } from "../../api/complaintsApi";
 import { useActiveWarehouseContext } from "../../hooks/useActiveWarehouseContext";
 import { ActiveWarehouseRequiredBanner } from "../../components/layout/ActiveWarehouseRequiredBanner";
+import { AppOverlayPortal } from "../../components/overlay";
 import {
   complaintRowStatusPresentation,
   normalizeComplaintStatus,
@@ -591,6 +592,7 @@ export default function WmsComplaintDetailPage() {
       </div>
 
       {saveComplaintConfirmOpen ? (
+        <AppOverlayPortal>
         <div
           className="fixed inset-0 z-[125] flex items-center justify-center bg-black/50 p-4"
           role="presentation"
@@ -638,6 +640,7 @@ export default function WmsComplaintDetailPage() {
             </div>
           </div>
         </div>
+        </AppOverlayPortal>
       ) : null}
 
       {toastText ? (

@@ -3,6 +3,7 @@ import { log } from "../../utils/logger";
 import type { LayoutState } from "../../types/warehouse";
 import { metersToCells } from "../../components/warehouse/warehouseUtils";
 import { PrimaryButton } from "../../design-system/PrimaryButton";
+import { AppOverlayPortal } from "../../components/overlay";
 
 export type EditBuildingModalProps = {
   onClose: () => void;
@@ -87,7 +88,8 @@ export function EditBuildingModal({ onClose, onSave, layout }: EditBuildingModal
 
   if (showShrinkWarning && racksOutsideCount > 0) {
     return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={handleCancelWarning}>
+      <AppOverlayPortal>
+      <div className="fixed inset-0 z-[280] flex items-center justify-center bg-black/40 p-4" onClick={handleCancelWarning}>
         <div
           className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-sm overflow-hidden"
           onClick={(e) => e.stopPropagation()}
@@ -114,11 +116,13 @@ export function EditBuildingModal({ onClose, onSave, layout }: EditBuildingModal
           </div>
         </div>
       </div>
+      </AppOverlayPortal>
     );
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
+    <AppOverlayPortal>
+    <div className="fixed inset-0 z-[280] flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
       <div
         className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-sm overflow-hidden"
         onClick={(e) => e.stopPropagation()}
@@ -183,5 +187,6 @@ export function EditBuildingModal({ onClose, onSave, layout }: EditBuildingModal
         </div>
       </div>
     </div>
+    </AppOverlayPortal>
   );
 }

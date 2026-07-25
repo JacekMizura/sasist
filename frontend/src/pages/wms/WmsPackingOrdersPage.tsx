@@ -15,6 +15,7 @@ import {
 } from "../../api/wmsPackingApi";
 import { getWmsPickingResolveCart } from "../../api/wmsPickingProductsApi";
 import { OrdersListView } from "../../components/wms/packing/ordersList/OrdersListView";
+import { AppOverlayPortal } from "../../components/overlay";
 import { useWarehouse } from "../../context/WarehouseContext";
 import { useWmsScanner } from "../../context/WmsScannerContext";
 import type { OrderUiMainGroup } from "../../types/orderUiStatus";
@@ -489,6 +490,7 @@ export default function WmsPackingOrdersPage() {
         statusBadgeStyle={statusBadgeStyle}
       />
       {rejectOpen ? (
+        <AppOverlayPortal>
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/30 px-4">
           <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-5 shadow-xl">
             <div className="text-sm font-black text-slate-900">Powód odrzucenia</div>
@@ -521,6 +523,7 @@ export default function WmsPackingOrdersPage() {
             </div>
           </div>
         </div>
+        </AppOverlayPortal>
       ) : null}
     </div>
   );

@@ -9,6 +9,7 @@ import {
 import { rememberDocumentsSeriesListContext } from "../../pages/documents/documentSeriesContext";
 import { documentSeriesSubtypeLabelPl, documentSeriesTypeLabelPl } from "../../pages/documents/documentSeriesUiLabels";
 import { PrimaryButton } from "../../design-system/PrimaryButton";
+import { AppOverlayPortal } from "../../components/overlay";
 
 const inp = "mt-1 w-full rounded-md border border-slate-200 bg-white px-2 py-1.5 text-sm text-slate-900";
 
@@ -88,8 +89,9 @@ export default function DocumentSeriesQuickCreateModal({
   if (!open) return null;
 
   return (
+    <AppOverlayPortal>
     <div
-      className="fixed inset-0 z-[80] flex items-center justify-center bg-black/40 p-4"
+      className="fixed inset-0 z-[280] flex items-center justify-center bg-black/40 p-4"
       role="dialog"
       aria-modal="true"
       onClick={onClose}
@@ -161,5 +163,6 @@ export default function DocumentSeriesQuickCreateModal({
         </div>
       </div>
     </div>
+    </AppOverlayPortal>
   );
 }

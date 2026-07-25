@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { postOrderLine } from "../../api/ordersApi";
 import { listBundles, type BundleRead } from "../../api/bundlesApi";
 import { PrimaryButton } from "../../design-system/PrimaryButton";
+import { AppOverlayPortal } from "../../components/overlay";
 
 const inp =
   "mt-1 w-full rounded-md border border-slate-200 bg-white px-2 py-1.5 text-sm text-slate-900 outline-none focus-visible:ring-2 focus-visible:ring-blue-500/30";
@@ -127,8 +128,9 @@ export default function OrderAddBundleModal({ open, onClose, tenantId, orderId, 
   if (!open) return null;
 
   return (
+    <AppOverlayPortal>
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+      className="fixed inset-0 z-[280] flex items-center justify-center bg-black/40 p-4"
       role="dialog"
       aria-modal="true"
       onClick={onClose}
@@ -232,5 +234,6 @@ export default function OrderAddBundleModal({ open, onClose, tenantId, orderId, 
         </div>
       </div>
     </div>
+    </AppOverlayPortal>
   );
 }

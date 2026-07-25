@@ -5,6 +5,7 @@ import { useWarehouse } from "../../context/WarehouseContext";
 import { ShippingMethodLogo } from "../../components/shipping/ShippingMethodLogo";
 import { DAMAGE_TENANT_ID } from "../damage/damageShared";
 import { brandPrimaryButtonClass } from "../../design-system/brandUi";
+import { AppOverlayPortal } from "../../components/overlay";
 
 /** Must match backend ``allowed_shipping_method_codes`` (fixed dictionary). */
 const DICTIONARY_CODES = new Set([
@@ -212,8 +213,9 @@ export default function ShippingMethodsSettingsPage() {
       ) : null}
 
       {modalOpen && editing ? (
+        <AppOverlayPortal>
         <div
-          className="fixed inset-0 z-[120] flex items-end justify-center bg-black/50 p-0 sm:items-center sm:p-4"
+          className="fixed inset-0 z-[280] flex items-end justify-center bg-black/50 p-0 sm:items-center sm:p-4"
           role="dialog"
           aria-modal="true"
           onClick={closeModal}
@@ -300,6 +302,7 @@ export default function ShippingMethodsSettingsPage() {
             </div>
           </div>
         </div>
+        </AppOverlayPortal>
       ) : null}
     </div>
   );

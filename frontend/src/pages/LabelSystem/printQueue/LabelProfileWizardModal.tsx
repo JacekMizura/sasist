@@ -6,6 +6,7 @@ import {
   type LabelProfilePresetId,
 } from "./labelProfileWizardApi";
 import { PrintQueueGhostButton, PrintQueuePrimaryButton } from "./printQueueUi";
+import { AppOverlayPortal } from "../../../components/overlay";
 
 type Props = {
   open: boolean;
@@ -77,7 +78,8 @@ export function LabelProfileWizardModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4" onClick={onClose}>
+        <AppOverlayPortal>
+    <div className="fixed inset-0 z-[280] flex items-center justify-center bg-black/30 p-4" onClick={onClose}>
       <div
         className="w-full max-w-lg rounded-xl border border-slate-200 bg-white p-5 shadow-xl"
         onClick={(event) => event.stopPropagation()}
@@ -217,5 +219,6 @@ export function LabelProfileWizardModal({
         </div>
       </div>
     </div>
+    </AppOverlayPortal>
   );
 }

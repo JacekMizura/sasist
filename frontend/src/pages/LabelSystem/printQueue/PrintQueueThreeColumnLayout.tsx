@@ -1,6 +1,8 @@
 import { PanelLeftClose, PanelLeftOpen, X } from "lucide-react";
 import type { ReactNode } from "react";
 
+import { AppOverlayPortal } from "../../../components/overlay";
+
 type Props = {
   left: ReactNode;
   center: ReactNode;
@@ -61,28 +63,30 @@ export default function PrintQueueThreeColumnLayout({
       </div>
 
       {rightDrawerOpen ? (
-        <div className="fixed inset-0 z-50 xl:hidden">
-          <button
-            type="button"
-            className="absolute inset-0 bg-slate-900/30"
-            aria-label="Zamknij podsumowanie"
-            onClick={onCloseRightDrawer}
-          />
-          <aside className="absolute inset-y-0 right-0 flex w-[min(100%,360px)] flex-col border-l border-gray-200 bg-white p-5 shadow-md">
-            <div className="mb-4 flex items-center justify-between gap-2">
-              <h2 className="text-sm font-semibold text-slate-900">Podsumowanie</h2>
-              <button
-                type="button"
-                onClick={onCloseRightDrawer}
-                className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-gray-200 text-slate-600 hover:bg-white hover:shadow-sm"
-                aria-label="Zamknij"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-            <div className="min-h-0 flex-1 space-y-3 overflow-y-auto">{right}</div>
-          </aside>
-        </div>
+        <AppOverlayPortal>
+          <div className="fixed inset-0 z-[250] xl:hidden">
+            <button
+              type="button"
+              className="absolute inset-0 bg-slate-900/30"
+              aria-label="Zamknij podsumowanie"
+              onClick={onCloseRightDrawer}
+            />
+            <aside className="absolute inset-y-0 right-0 flex w-[min(100%,360px)] flex-col border-l border-gray-200 bg-white p-5 shadow-md">
+              <div className="mb-4 flex items-center justify-between gap-2">
+                <h2 className="text-sm font-semibold text-slate-900">Podsumowanie</h2>
+                <button
+                  type="button"
+                  onClick={onCloseRightDrawer}
+                  className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-gray-200 text-slate-600 hover:bg-white hover:shadow-sm"
+                  aria-label="Zamknij"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+              <div className="min-h-0 flex-1 space-y-3 overflow-y-auto">{right}</div>
+            </aside>
+          </div>
+        </AppOverlayPortal>
       ) : null}
     </div>
   );

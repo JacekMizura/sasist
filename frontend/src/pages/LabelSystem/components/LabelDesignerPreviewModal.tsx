@@ -1,5 +1,6 @@
 import { useEffect, useMemo } from "react";
 import { X } from "lucide-react";
+import { AppOverlayPortal } from "../../../components/overlay";
 
 export type LabelDesignerPreviewModalProps = {
   open: boolean;
@@ -45,6 +46,7 @@ export function LabelDesignerPreviewModal({
   if (!open) return null;
 
   return (
+        <AppOverlayPortal>
     <div className="fixed inset-0 z-[6000] flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-labelledby="label-preview-title">
       <button type="button" className="absolute inset-0 bg-slate-900/55 backdrop-blur-[2px]" aria-label="Zamknij podgląd" onClick={onClose} />
       <div className="relative z-[1] flex max-h-[min(92vh,900px)] w-full max-w-4xl flex-col overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-2xl shadow-slate-900/20">
@@ -77,5 +79,6 @@ export function LabelDesignerPreviewModal({
         </div>
       </div>
     </div>
+    </AppOverlayPortal>
   );
 }

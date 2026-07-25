@@ -1,4 +1,21 @@
+## 2026-07-26 — AppOverlayPortal migration (ErpShell overlays)
+
+- Migrated inline `fixed inset-0` drawers/sheets/modals under ErpShell → `AppOverlayPortal` (Pattern A)
+- z-index bumped to ≥250 (drawers) / ≥280 (center sheets) so overlays sit above NavFlyout (z-200)
+- PurchasingRightDrawer: already `createPortal`; z bumped to 250/251 + `APP_OVERLAY_Z`
+- Skipped: ConfirmModal / other already-portaled, WMS terminal intentional shells, tiny menu catchers
+- `npx tsc --noEmit` OK · **No push.**
+
+## 2026-07-26 — AppOverlayPortal: Drawers/Sheets nad sidebarem
+
+- Przyczyna: ErpShell content `z-0` vs sidebar `z-30` (stacking context)
+- SSOT: `components/overlay/AppOverlayPortal.tsx` → `document.body`
+- Zmigrowano ~146 overlayów (m.in. Raporty/Szkody Magazyn, drawers ERP, modale designer, WMS)
+- `WarehouseDocumentOverlayPortal` = alias AppOverlayPortal
+- tsc + build OK · **No push.**
+
 ## 2026-07-26 — Projektant Magazynu: cleanup nagłówków UI
+
 
 - Usunięty tytuł „Projektowanie magazynu” (breadcrumb + actions w jednym rzędzie)
 - Usunięte „Dopasuj do ekranu” z zoomu mapy (zostaje − / % / +)

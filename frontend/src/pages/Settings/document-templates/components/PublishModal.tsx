@@ -1,6 +1,7 @@
 import { useState } from "react";
 
 import { brandPrimaryButtonClass } from "../../../../design-system/brandUi";
+import { AppOverlayPortal } from "../../../../components/overlay";
 
 type Props = {
   open: boolean;
@@ -15,7 +16,8 @@ export function PublishModal({ open, onClose, onConfirm, publishing }: Props) {
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+    <AppOverlayPortal>
+    <div className="fixed inset-0 z-[280] flex items-center justify-center bg-black/40 p-4">
       <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl">
         <h2 className="text-lg font-semibold text-slate-900">Publikacja szablonu</h2>
         <p className="mt-1 text-sm text-slate-500">
@@ -46,5 +48,6 @@ export function PublishModal({ open, onClose, onConfirm, publishing }: Props) {
         </div>
       </div>
     </div>
+    </AppOverlayPortal>
   );
 }

@@ -21,6 +21,7 @@ import { AdminReleaseCartButton } from "../../../components/carts/AdminReleaseCa
 import { AssignedOrdersSection, type AssignedOrderRow } from "./AssignedOrdersSection";
 import { CapacityAnalyticsSection } from "./CapacityAnalyticsSection";
 import { CartSummaryKpis } from "./CartSummaryKpis";
+import { AppOverlayPortal } from "../../../components/overlay";
 
 type CartFleetDetailPanelProps = {
   open: boolean;
@@ -458,6 +459,7 @@ export function CartFleetDetailPanel({
       />
 
       {confirmWholeCartClearOpen ? (
+                <AppOverlayPortal>
         <div
           className="fixed inset-0 z-[290] flex items-center justify-center bg-black/50 p-4"
           onClick={() => setConfirmWholeCartClearOpen(false)}
@@ -484,9 +486,11 @@ export function CartFleetDetailPanel({
             </div>
           </div>
         </div>
+        </AppOverlayPortal>
       ) : null}
 
       {basketToConfirmClear ? (
+                <AppOverlayPortal>
         <div
           className="fixed inset-0 z-[290] flex items-center justify-center bg-black/50 p-4"
           onClick={() => setBasketToConfirmClear(null)}
@@ -517,6 +521,7 @@ export function CartFleetDetailPanel({
             </div>
           </div>
         </div>
+        </AppOverlayPortal>
       ) : null}
     </>
   );

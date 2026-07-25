@@ -15,6 +15,7 @@ import { listSellasistToolbarToggleBtn } from "../../../components/listPage/list
 import { tabsNavSegmentedItemClassName } from "../../../components/layout/TabsNav";
 import { labelDesignerToolbarPrimaryBtnClass } from "../labelDesignerToolbarTokens";
 import { LabelGalleryThumbnail } from "./LabelGalleryThumbnail";
+import { AppOverlayPortal } from "../../../components/overlay";
 
 const STORAGE_KEY = "label-system-templates";
 
@@ -233,8 +234,9 @@ export function TemplateLibrary({
       </div>
 
       {presetModalOpen && (
+                <AppOverlayPortal>
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4 backdrop-blur-[2px]"
+          className="fixed inset-0 z-[280] flex items-center justify-center bg-slate-900/40 p-4 backdrop-blur-[2px]"
           onClick={closeModal}
           role="presentation"
         >
@@ -365,6 +367,7 @@ export function TemplateLibrary({
             </footer>
           </div>
         </div>
+        </AppOverlayPortal>
       )}
     </>
   );

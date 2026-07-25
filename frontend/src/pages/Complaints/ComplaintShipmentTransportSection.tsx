@@ -17,6 +17,7 @@ import type {
   ComplaintShipmentStatus,
 } from "../../types/complaintShipment";
 import { CARRIER_OPTIONS, CarrierWithLogo, carrierLabel } from "./complaintShipmentBranding";
+import { AppOverlayPortal } from "../../components/overlay";
 
 const STATUS_PL: Record<string, string> = {
   ORDERED: "Oczekiwanie na kuriera",
@@ -465,7 +466,8 @@ const ComplaintShipmentTransportSection = forwardRef<ComplaintShipmentTransportS
       </div>
 
       {modalOpen ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" role="dialog" aria-modal="true">
+                <AppOverlayPortal>
+        <div className="fixed inset-0 z-[280] flex items-center justify-center bg-black/40 p-4" role="dialog" aria-modal="true">
           <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-xl border border-gray-200 bg-white shadow-xl">
             <div className="flex items-center justify-between border-b border-gray-100 px-4 py-3">
               <h3 className="text-base font-semibold text-gray-900">Odbiór od klienta — kurier</h3>
@@ -576,6 +578,7 @@ const ComplaintShipmentTransportSection = forwardRef<ComplaintShipmentTransportS
             </div>
           </div>
         </div>
+        </AppOverlayPortal>
       ) : null}
     </>
   );

@@ -1,3 +1,4 @@
+import { AppOverlayPortal } from "../../components/overlay";
 /**
  * CSV export/import for product–location mapping.
  * Export: all locations (including empty) with columns Location_Name, Location_UUID, Current_Product_SKU, Current_Product_Name, Quantity.
@@ -441,7 +442,8 @@ function LocationMappingImportModal({
   }, [mode, rows, warehouseId, onSuccess]);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
+        <AppOverlayPortal>
+    <div className="fixed inset-0 z-[280] flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
       <div className="bg-white rounded-2xl shadow-xl border border-slate-200 w-full max-w-lg max-h-[90vh] overflow-hidden flex flex-col" onClick={(e) => e.stopPropagation()}>
         <h3 className="text-lg font-bold text-slate-800 px-6 py-4 border-b border-slate-100 shrink-0">Importuj CSV</h3>
         <div className="p-6 overflow-y-auto flex-1">
@@ -498,5 +500,6 @@ function LocationMappingImportModal({
         </div>
       </div>
     </div>
+    </AppOverlayPortal>
   );
 }

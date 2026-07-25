@@ -35,6 +35,7 @@ import {
   WmsOperationalPageShell,
 } from "../../components/wms/execution/WmsOperationalPageShell";
 import { WMS_Z } from "../../components/wms/execution/wmsLayoutTokens";
+import { AppOverlayPortal } from "../../components/overlay";
 import { CarrierBadge } from "../../components/warehouse/carriers/CarrierBadge";
 function fmtQty(n: number): string {
   return new Intl.NumberFormat("pl-PL", { maximumFractionDigits: 2 }).format(n);
@@ -328,6 +329,7 @@ export default function WmsRelocationDetailPage() {
       </WmsOperationalPageHeader>
 
       {sessionLock ? (
+        <AppOverlayPortal>
         <div
           className="fixed inset-0 flex items-center justify-center bg-slate-900/50 p-4"
           style={{ zIndex: WMS_Z.modal }}
@@ -361,9 +363,11 @@ export default function WmsRelocationDetailPage() {
             </div>
           </div>
         </div>
+        </AppOverlayPortal>
       ) : null}
 
       {bulkConfirmOpen ? (
+        <AppOverlayPortal>
         <div
           className="fixed inset-0 flex items-end justify-center bg-slate-900/40 p-4 sm:items-center"
           style={{ zIndex: WMS_Z.modal }}
@@ -392,6 +396,7 @@ export default function WmsRelocationDetailPage() {
             </div>
           </div>
         </div>
+        </AppOverlayPortal>
       ) : null}
 
       <WmsOperationalPageBody className="space-y-4">

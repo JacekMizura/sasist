@@ -17,6 +17,7 @@ import {
   productLikeTabPanelPaddingClass,
   productLikeTabsNavClass,
 } from "./productLikeTokens";
+import { AppOverlayPortal } from "../../components/overlay";
 
 export type ProductLikeMetaChip = {
   label: string;
@@ -388,8 +389,9 @@ export function ProductLikePageLayout<T extends string>({
   }
 
   return (
+    <AppOverlayPortal>
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4 backdrop-blur-sm"
+      className="fixed inset-0 z-[280] flex items-center justify-center bg-slate-900/40 p-4 backdrop-blur-sm"
       onClick={onModalClose}
     >
       <div
@@ -399,5 +401,6 @@ export function ProductLikePageLayout<T extends string>({
         {shell}
       </div>
     </div>
+    </AppOverlayPortal>
   );
 }

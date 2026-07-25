@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight, X } from "lucide-react";
 
+import { AppOverlayPortal } from "../../components/overlay";
 import { resolveDamageMediaUrl } from "../../utils/resolveDamageMediaUrl";
 
 export type ComplaintLinePhotoKind = "customer" | "warehouse";
@@ -191,11 +192,12 @@ export default function ComplaintLinePhotoLightbox({ open, items, index, onIndex
   const kindLabel = current ? KIND_LABEL[current.kind] : "";
 
   return (
+    <AppOverlayPortal>
     <div
       role="dialog"
       aria-modal="true"
       aria-label="Image preview"
-      className={`fixed inset-0 z-[130] flex flex-col overscroll-none bg-black/90 transition-opacity duration-200 ease-out ${
+      className={`fixed inset-0 z-[250] flex flex-col overscroll-none bg-black/90 transition-opacity duration-200 ease-out ${
         mountedVisible ? "opacity-100" : "opacity-0"
       }`}
       onClick={onClose}
@@ -319,5 +321,6 @@ export default function ComplaintLinePhotoLightbox({ open, items, index, onIndex
         ) : null}
       </div>
     </div>
+    </AppOverlayPortal>
   );
 }

@@ -4,6 +4,7 @@ import { ProductSearchAutocomplete } from "./ProductSearchAutocomplete";
 import { LocationPicker } from "./LocationPicker";
 import type { SelectablePosition } from "./warehouseUtils";
 import { PrimaryButton } from "../../design-system/PrimaryButton";
+import { AppOverlayPortal } from "../../components/overlay";
 
 export type ProductKey = { name: string; sku: string; ean: string };
 
@@ -166,8 +167,9 @@ export function EditProductModal({
   };
 
   return (
+    <AppOverlayPortal>
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+      className="fixed inset-0 z-[280] flex items-center justify-center bg-black/50 p-4"
       onMouseDown={delayedClose}
       style={{
         pointerEvents: closing ? "none" : "auto",
@@ -346,5 +348,6 @@ export function EditProductModal({
         </div>
       </div>
     </div>
+    </AppOverlayPortal>
   );
 }

@@ -2,6 +2,7 @@ import { AlertTriangle, CheckCircle2, Loader2, X } from "lucide-react";
 
 import type { ProductionPlanSimulation } from "@/api/productionPlanningApi";
 import { PrimaryButton } from "@/design-system/PrimaryButton";
+import { AppOverlayPortal } from "../../../components/overlay";
 
 type Props = {
   open: boolean;
@@ -27,7 +28,8 @@ export function ProductionSimulationModal({
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/50 p-0 sm:items-center sm:p-4">
+    <AppOverlayPortal>
+    <div className="fixed inset-0 z-[280] flex items-end justify-center bg-slate-950/50 p-0 sm:items-center sm:p-4">
       <div className="flex max-h-[92vh] w-full max-w-3xl flex-col overflow-hidden rounded-t-2xl bg-white shadow-2xl sm:rounded-2xl">
         <div className="flex items-start justify-between border-b border-slate-100 px-5 py-4">
           <div>
@@ -111,6 +113,7 @@ export function ProductionSimulationModal({
         </div>
       </div>
     </div>
+    </AppOverlayPortal>
   );
 }
 

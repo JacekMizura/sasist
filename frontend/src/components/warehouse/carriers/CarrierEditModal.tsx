@@ -10,6 +10,7 @@ import {
   wmsSectionTitle,
   wmsSelectClass,
 } from "../../../modules/carts/wmsOperationalUi";
+import { AppOverlayPortal } from "../../../components/overlay";
 
 function apiErrMessage(e: unknown): string {
   if (axios.isAxiosError(e)) {
@@ -70,6 +71,7 @@ export function CarrierEditModal({ tenantId, open, carrier, groups, onClose, onS
   };
 
   return (
+        <AppOverlayPortal>
     <div className="fixed inset-0 z-[2000] flex items-end justify-center bg-slate-900/50 p-3 sm:items-center sm:p-4">
       <div className="w-full max-w-md rounded-xl border border-slate-200 bg-white p-4 shadow-xl sm:p-5">
         <h2 className="text-[17px] font-black text-slate-900">Edytuj nośnik</h2>
@@ -129,5 +131,6 @@ export function CarrierEditModal({ tenantId, open, carrier, groups, onClose, onS
         </div>
       </div>
     </div>
+    </AppOverlayPortal>
   );
 }

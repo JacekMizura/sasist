@@ -24,6 +24,7 @@ import { WMS_ROUTES } from "./wmsRoutes";
 import { normalizeScanEan } from "../../utils/wmsScanNormalize";
 import { sortTasksByPriority } from "./brakiPriority";
 import { WMS_Z } from "../../components/wms/execution/wmsLayoutTokens";
+import { AppOverlayPortal } from "../../components/overlay";
 import { mergeQueueCards, type NormalizedShortageQueueCard } from "./brakiQueueMerge";
 import { readBrakiQueueStage } from "./readBrakiOperationalState";
 import { BrakiOrderIssueCard } from "./BrakiOrderIssueCard";
@@ -333,6 +334,7 @@ export default function WmsOrderIssuesHub() {
       </div>
 
       {isFilterModalOpen && (
+        <AppOverlayPortal>
         <div
           className="fixed inset-0 flex items-end justify-center sm:items-center"
           style={{ zIndex: WMS_Z.modal }}
@@ -380,6 +382,7 @@ export default function WmsOrderIssuesHub() {
             </div>
           </div>
         </div>
+        </AppOverlayPortal>
       )}
     </div>
   );

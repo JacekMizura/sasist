@@ -8,6 +8,7 @@ import {
 } from "../../api/exportsApi";
 import { brandPrimaryButtonClass } from "../../design-system/brandUi";
 import { csvFieldLabelPl, entityTypeLabelPl } from "../../utils/exportImportLabelsPl";
+import { AppOverlayPortal } from "../../components/overlay";
 
 export type ExportModalProps = {
   open: boolean;
@@ -66,7 +67,8 @@ export default function ExportModal({ open, onClose, tenantId, entityType, selec
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
+    <AppOverlayPortal>
+    <div className="fixed inset-0 z-[280] flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
       <div
         className="w-full max-w-md rounded-xl border border-slate-200 bg-white p-5 shadow-xl"
         onClick={(e) => e.stopPropagation()}
@@ -128,5 +130,6 @@ export default function ExportModal({ open, onClose, tenantId, entityType, selec
         </div>
       </div>
     </div>
+    </AppOverlayPortal>
   );
 }

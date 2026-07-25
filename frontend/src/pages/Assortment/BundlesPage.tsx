@@ -39,6 +39,7 @@ import {
 } from "../../components/listPage/listSellasistTokens";
 import type { PanelBulkSelectionMode } from "../../hooks/usePanelListBulkSelection";
 import PageLayout from "../../components/layout/PageLayout";
+import { AppOverlayPortal } from "../../components/overlay";
 
 const DEFAULT_TENANT_ID = 1;
 const ROWS_PER_PAGE_OPTIONS = [25, 50, 100, 200] as const;
@@ -513,6 +514,7 @@ export default function BundlesPage() {
       />
 
       {previewBundle != null ? (
+                <AppOverlayPortal>
         <div
           className="fixed inset-0 z-[255] flex items-center justify-center bg-black/50 p-4"
           onClick={() => setPreviewBundle(null)}
@@ -552,6 +554,7 @@ export default function BundlesPage() {
             </button>
           </div>
         </div>
+        </AppOverlayPortal>
       ) : null}
 
       <ExportModal

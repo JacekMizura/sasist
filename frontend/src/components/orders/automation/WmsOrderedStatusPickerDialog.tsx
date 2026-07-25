@@ -5,6 +5,7 @@ import { getOrderPanelSubgroups, getOrderUiStatusSummary } from "../../../api/or
 import type { OrderUiPanelSubgroupRead, OrderUiStatusPanelSummary } from "../../../types/orderUiStatus";
 import { getStatusClass } from "../orderList/OrderListPanelStatusBadge";
 import { buildWmsOrderedStatusPickerRows, filterWmsStatusPickerRows } from "../../../utils/wmsOrderStatusPickerRows";
+import { AppOverlayPortal } from "../../../components/overlay";
 
 type Props = {
   open: boolean;
@@ -68,7 +69,8 @@ export function WmsOrderedStatusPickerDialog({
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-[120] flex items-start justify-center bg-slate-900/40 p-4 pt-[min(8vh,5rem)] backdrop-blur-[2px]">
+        <AppOverlayPortal>
+    <div className="fixed inset-0 z-[280] flex items-start justify-center bg-slate-900/40 p-4 pt-[min(8vh,5rem)] backdrop-blur-[2px]">
       <div className="flex max-h-[min(78vh,40rem)] w-full max-w-lg flex-col overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-2xl ring-1 ring-slate-900/10">
         <div className="flex items-center gap-2 border-b border-slate-200 px-3 py-2.5">
           <Search className="h-4 w-4 shrink-0 text-slate-400" strokeWidth={2} aria-hidden />
@@ -148,5 +150,6 @@ export function WmsOrderedStatusPickerDialog({
         </div>
       </div>
     </div>
+    </AppOverlayPortal>
   );
 }

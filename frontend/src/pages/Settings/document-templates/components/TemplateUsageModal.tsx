@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 
 import type { TemplateAssignmentItem, TemplateUsageBadge } from "@/api/documentTemplatesApi";
+import { AppOverlayPortal } from "../../../../components/overlay";
 
 type Props = {
   templateName: string;
@@ -11,7 +12,8 @@ type Props = {
 
 export function TemplateUsageModal({ templateName, badges, items, onClose }: Props) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
+    <AppOverlayPortal>
+    <div className="fixed inset-0 z-[280] flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
       <div
         className="max-h-[85vh] w-full max-w-2xl overflow-auto rounded-2xl bg-white p-6 shadow-xl"
         onClick={(e) => e.stopPropagation()}
@@ -55,5 +57,6 @@ export function TemplateUsageModal({ templateName, badges, items, onClose }: Pro
         </ul>
       </div>
     </div>
+    </AppOverlayPortal>
   );
 }

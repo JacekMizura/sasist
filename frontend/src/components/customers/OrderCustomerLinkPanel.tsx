@@ -13,6 +13,7 @@ import { listCustomers, type CustomerListRow } from "../../api/customersApi";
 import { PanelBulkStatusConfirmModal } from "../orders/panelList/PanelBulkStatusConfirmModal";
 import { getCustomerDisplayName } from "../../utils/getCustomerDisplayName";
 import { PrimaryButton } from "../../design-system/PrimaryButton";
+import { AppOverlayPortal } from "../../components/overlay";
 
 type Props = {
   orderId: number;
@@ -167,8 +168,9 @@ export function OrderCustomerLinkPanel({
       />
 
       {linkModalOpen ? (
+                <AppOverlayPortal>
         <div
-          className="fixed inset-0 z-[80] flex items-center justify-center bg-black/40 p-4"
+          className="fixed inset-0 z-[280] flex items-center justify-center bg-black/40 p-4"
           role="presentation"
           onClick={() => {
             if (!busy) setLinkModalOpen(false);
@@ -238,6 +240,7 @@ export function OrderCustomerLinkPanel({
             </div>
           </div>
         </div>
+        </AppOverlayPortal>
       ) : null}
     </>
   );

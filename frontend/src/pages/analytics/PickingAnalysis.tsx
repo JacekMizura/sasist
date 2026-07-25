@@ -21,6 +21,7 @@ import {
 import { PageHeader } from "../../components/layout/PageHeader";
 import { FilterDateRange } from "../../components/filters";
 import { useWarehouse } from "../../context/WarehouseContext";
+import { AppOverlayPortal } from "../../components/overlay";
 
 const DEFAULT_TENANT_ID = 1;
 const SVG_WIDTH = 900;
@@ -214,7 +215,8 @@ export default function PickingAnalysis() {
             <span className="text-sm text-slate-600">{generateMessage}</span>
           )}
           {showClearConfirm && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30">
+            <AppOverlayPortal>
+            <div className="fixed inset-0 z-[280] flex items-center justify-center bg-black/30">
               <div className="bg-white rounded-lg shadow-lg p-4 max-w-sm mx-4 border border-slate-200">
                 <p className="text-slate-800 font-medium mb-2">Wyczyścić symulowane piki?</p>
                 <p className="text-sm text-slate-600 mb-4">
@@ -238,6 +240,7 @@ export default function PickingAnalysis() {
                 </div>
               </div>
             </div>
+            </AppOverlayPortal>
           )}
         </div>
       }

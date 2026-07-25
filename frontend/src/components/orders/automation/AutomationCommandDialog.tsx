@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Search, X } from "lucide-react";
+import { AppOverlayPortal } from "../../../components/overlay";
 
 export type CommandDialogGroup<T extends string = string> = {
   title: string;
@@ -60,7 +61,8 @@ export function AutomationCommandDialog<T extends string = string>({
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-[120] flex items-start justify-center bg-slate-900/40 p-4 pt-[min(8vh,5rem)] backdrop-blur-[2px]">
+        <AppOverlayPortal>
+    <div className="fixed inset-0 z-[280] flex items-start justify-center bg-slate-900/40 p-4 pt-[min(8vh,5rem)] backdrop-blur-[2px]">
       <div
         role="dialog"
         aria-modal="true"
@@ -118,5 +120,6 @@ export function AutomationCommandDialog<T extends string = string>({
         </div>
       </div>
     </div>
+    </AppOverlayPortal>
   );
 }

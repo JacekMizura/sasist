@@ -6,6 +6,7 @@ import type { LabelTemplate, TemplateElement, RepeaterElement } from "../../type
 import { renderLabel } from "../../labelRenderer";
 import { exportLabelsPdf } from "../../utils/labels/exportLabelsPdf";
 import { PrimaryButton } from "../../design-system/PrimaryButton";
+import { AppOverlayPortal } from "../../components/overlay";
 
 type RackLocationItem = {
   label: string;
@@ -189,7 +190,8 @@ export function RackLabelDownloadModal({ rack, locations, onClose }: Props) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={onClose}>
+    <AppOverlayPortal>
+    <div className="fixed inset-0 z-[280] flex items-center justify-center bg-black/40" onClick={onClose}>
       <div
         className="bg-white rounded-xl shadow-xl max-w-md w-full mx-4"
         onClick={(e) => e.stopPropagation()}
@@ -253,6 +255,7 @@ export function RackLabelDownloadModal({ rack, locations, onClose }: Props) {
         </div>
       </div>
     </div>
+    </AppOverlayPortal>
   );
 }
 

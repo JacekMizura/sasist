@@ -3,6 +3,7 @@ import { Loader2, X, Package, Barcode, Tag, AlertCircle } from "lucide-react";
 import { createWmsMinimalProduct } from "../../api/wmsProductApi";
 import { createWmsReceivingProduct } from "../../api/wmsReceivingApi";
 import type { StockDocumentRead } from "../../api/stockDocumentsApi";
+import { AppOverlayPortal } from "../overlay";
 
 type BaseProps = {
   open: boolean;
@@ -128,6 +129,7 @@ export function WmsManualProductModal(props: WmsManualProductModalProps) {
   if (!open) return null;
 
   return (
+    <AppOverlayPortal>
     <div className="fixed inset-0 z-[1650] flex items-end sm:items-center justify-center p-0 sm:p-4 font-sans text-slate-800">
       <button
         type="button"
@@ -268,5 +270,6 @@ export function WmsManualProductModal(props: WmsManualProductModalProps) {
         </div>
       </div>
     </div>
+    </AppOverlayPortal>
   );
 }

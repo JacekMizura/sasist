@@ -2,6 +2,7 @@ import { Building2, Plus, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
 import { AppButton } from "../../../components/app-shell";
+import { AppOverlayPortal } from "../../../components/overlay";
 import {
   PurchasingTableHeader,
   purchasingBtnSecondary,
@@ -68,7 +69,8 @@ export function TenantDetailDrawer({ tenant, onClose }: Props) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex justify-end bg-black/30" role="presentation" onClick={onClose}>
+    <AppOverlayPortal>
+    <div className="fixed inset-0 z-[250] flex justify-end bg-black/30" role="presentation" onClick={onClose}>
       <aside
         className="flex h-full w-full max-w-lg flex-col border-l border-slate-200 bg-white shadow-xl"
         role="dialog"
@@ -167,6 +169,7 @@ export function TenantDetailDrawer({ tenant, onClose }: Props) {
         </div>
       </aside>
     </div>
+    </AppOverlayPortal>
   );
 }
 
@@ -183,7 +186,8 @@ export function TenantCreateDrawer({ open, onClose }: CreateTenantDrawerProps) {
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex justify-end bg-black/30" role="presentation" onClick={onClose}>
+    <AppOverlayPortal>
+    <div className="fixed inset-0 z-[250] flex justify-end bg-black/30" role="presentation" onClick={onClose}>
       <aside className="flex h-full w-full max-w-md flex-col border-l border-slate-200 bg-white shadow-xl" role="dialog" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
           <h2 className="text-sm font-semibold text-slate-900">Nowa firma</h2>
@@ -215,5 +219,6 @@ export function TenantCreateDrawer({ open, onClose }: CreateTenantDrawerProps) {
         </div>
       </aside>
     </div>
+    </AppOverlayPortal>
   );
 }

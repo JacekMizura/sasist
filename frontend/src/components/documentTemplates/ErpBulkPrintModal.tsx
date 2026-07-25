@@ -12,6 +12,7 @@ import {
   type DocumentPrintRequest,
 } from "@/utils/documentTemplatePrint";
 import { openPdfBlobInPrintViewer } from "@/utils/openPdfForBrowserPrint";
+import { AppOverlayPortal } from "../../components/overlay";
 
 export type BulkDocumentTypeOption = {
   id: string;
@@ -160,6 +161,7 @@ export function ErpBulkPrintModal({
   if (!open) return null;
 
   return (
+        <AppOverlayPortal>
     <div className="fixed inset-0 z-[130] flex items-center justify-center bg-slate-900/50 p-4" role="dialog" aria-modal="true">
       <div className="w-full max-w-lg overflow-hidden rounded-xl bg-white shadow-xl">
         <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
@@ -234,6 +236,7 @@ export function ErpBulkPrintModal({
         )}
       </div>
     </div>
+    </AppOverlayPortal>
   );
 }
 

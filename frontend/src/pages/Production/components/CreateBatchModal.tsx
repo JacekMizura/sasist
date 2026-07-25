@@ -24,6 +24,7 @@ import type { DemandBatchLineDraft } from "../../../api/productionPlanningApi";
 import { formatDurationMinutes } from "../productionTheme";
 import { formatProductionMoney, stockTone, STOCK_TONE_CLASS } from "../productionUi";
 import { ProductThumb } from "./ProductThumb";
+import { AppOverlayPortal } from "../../../components/overlay";
 
 type LineDraft = {
   key: string;
@@ -179,7 +180,8 @@ export function CreateBatchModal({ open, tenantId, warehouseId, initialLines, on
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/50 p-0 sm:items-center sm:p-4">
+    <AppOverlayPortal>
+    <div className="fixed inset-0 z-[280] flex items-end justify-center bg-slate-950/50 p-0 sm:items-center sm:p-4">
       <div className="flex h-[94vh] w-full max-w-5xl flex-col overflow-hidden rounded-t-3xl bg-white shadow-2xl sm:h-auto sm:max-h-[92vh] sm:rounded-3xl">
         <div className="shrink-0 border-b border-violet-100 bg-gradient-to-r from-violet-950 to-indigo-900 px-6 py-5 text-white">
           <div className="flex items-start justify-between gap-4">
@@ -429,5 +431,6 @@ export function CreateBatchModal({ open, tenantId, warehouseId, initialLines, on
         </div>
       </div>
     </div>
+    </AppOverlayPortal>
   );
 }

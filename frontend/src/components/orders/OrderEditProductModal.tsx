@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { patchOrderItemLine } from "../../api/ordersApi";
 import { formatMoney, moneyInputStringFromNumber, roundMoney2 } from "../../utils/formatOrderMoney";
 import { PrimaryButton } from "../../design-system/PrimaryButton";
+import { AppOverlayPortal } from "../../components/overlay";
 
 const inp =
   "mt-1 w-full rounded-md border border-slate-200 bg-white px-2 py-1.5 text-sm text-slate-900 outline-none focus-visible:ring-2 focus-visible:ring-blue-500/30";
@@ -357,8 +358,9 @@ export default function OrderEditProductModal({
         }`;
 
   return (
+    <AppOverlayPortal>
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+      className="fixed inset-0 z-[280] flex items-center justify-center bg-black/40 p-4"
       role="dialog"
       aria-modal="true"
       onClick={onClose}
@@ -571,5 +573,6 @@ export default function OrderEditProductModal({
         </div>
       </div>
     </div>
+    </AppOverlayPortal>
   );
 }

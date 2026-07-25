@@ -5,6 +5,7 @@ import {
   parseTemplateJson,
   type TemplateWithMeta,
 } from "./templatesListTypes";
+import { AppOverlayPortal } from "../../../components/overlay";
 
 type Props = {
   template: TemplateWithMeta;
@@ -15,6 +16,7 @@ export default function TemplatePreviewModal({ template, onClose }: Props) {
   const size = getModalPreviewSize(template.widthMm, template.heightMm);
 
   return (
+        <AppOverlayPortal>
     <div
       className="fixed inset-0 z-[140] flex items-center justify-center bg-slate-900/35 p-4"
       onClick={onClose}
@@ -48,5 +50,6 @@ export default function TemplatePreviewModal({ template, onClose }: Props) {
         </div>
       </div>
     </div>
+    </AppOverlayPortal>
   );
 }
