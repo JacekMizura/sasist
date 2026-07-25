@@ -46,10 +46,11 @@ import { TopProductsSidebar } from "../components/warehouse/magazyn/TopProductsS
 import { WarehouseReportsPanel } from "../components/warehouse/magazyn/WarehouseReportsPanel";
 import { DamageReportsPanel, type DamagePrefill } from "../components/warehouse/magazyn/DamageReportsPanel";
 import { UI_STRINGS } from "../constants/uiStrings";
-import { AppContentLayout, AppPageLayout, AppSectionCard, AppSplitView } from "../components/layout/app";
-import { appLayoutTokens } from "../layout/appLayoutTokens";
-import { TabsContainer } from "../components/layout/TabsContainer";
+import { AppSplitView } from "../components/layout/app";
+import PageLayout from "../components/layout/PageLayout";
+import { PageHeader } from "../components/layout/PageHeader";
 import { tabsNavItemClassName } from "../components/layout/TabsNav";
+import { pageShellDividerClass } from "../design-system/pageLayout";
 import { ConfirmModal } from "../components/ui/ConfirmModal";
 import { LayoutMode } from "../warehouse-layout";
 import { useLayoutModeShortcuts, useLayoutModeDisplay } from "../warehouse-layout";
@@ -3692,19 +3693,18 @@ export default function WarehouseDesigner() {
   });
 
   return (
-    <AppPageLayout fillHeight>
-      <AppContentLayout className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden">
-      <div className="flex shrink-0 flex-col gap-0">
-        <div className="mb-3 flex flex-wrap items-start justify-between gap-2.5">
-          <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:gap-4">
-            <h1 className="m-0 text-lg font-semibold tracking-tight text-slate-900 sm:text-xl">{UI_STRINGS.warehouse.title}</h1>
-            <DesignerWarehouseSelect
-              warehouseId={selectedWarehouseId}
-              warehouses={warehouses}
-              loading={warehousesLoading}
-              onSelect={handleDesignerWarehouseSelect}
-            />
-          </div>
+    <PageLayout
+      fullBleed
+      fillHeight
+      cardClassName="relative flex min-h-0 flex-1 flex-col overflow-hidden !space-y-0"
+    >
+      <PageHeader
+        breadcrumbs={[
+          { label: UI_STRINGS.navigation.groups.warehouse },
+          { label: UI_STRINGS.warehouse.title },
+        ]}
+        title={UI_STRINGS.warehouse.title}
+        actions={
           <DesignerToolbar
             mainView={mainView}
             lastSavedAt={lastSavedAt}
@@ -3725,88 +3725,102 @@ export default function WarehouseDesigner() {
             showEditBuilding={showEditBuilding}
             setShowEditBuilding={setShowEditBuilding}
           />
-        </div>
-        {mainView === "layout" && (
-          <div className="mb-2 flex gap-1" role="tablist" aria-label="Workspace projektanta">
-            <button
-              type="button"
-              role="tab"
-              aria-selected={layoutWorkspace === "designing"}
-              onClick={() => {
-                if (layoutWorkspace === "routes" && !confirmLeaveRoutingDirty()) return;
-                if (layoutWorkspace === "routes" && routing.dirty) {
-                  void routing.load();
-                }
-                // Selection SSOT: leaving Routing clears node/edge.
-                setRoutingSelectedNode(null);
-                setRoutingSelectedEdge(null);
-                setRoutingEdgeDraftFrom(null);
-                setRoutingDraftCursorCm(null);
-                setLayoutWorkspace("designing");
-              }}
-              className={`rounded-md border px-3 py-1 text-[11px] font-semibold ${
-                layoutWorkspace === "designing"
-                  ? "border-slate-800 bg-slate-800 text-white"
-                  : "border-slate-200 bg-white text-slate-700"
-              }`}
-            >
-              {UI_STRINGS.warehouse.designerSubTabs.designing}
-            </button>
-            <button
-              type="button"
-              role="tab"
-              aria-selected={layoutWorkspace === "routes"}
-              onClick={() => {
-                // Selection SSOT: entering Routing clears rack/passage.
-                setSelectedRackId(null);
-                setSelectedRackIds([]);
-                setSelectedPassage(null);
-                setLayoutWorkspace("routes");
-                setRoutingTool("draw_edge");
-              }}
-              className={`rounded-md border px-3 py-1 text-[11px] font-semibold ${
-                layoutWorkspace === "routes"
-                  ? "border-sky-700 bg-sky-700 text-white"
-                  : "border-slate-200 bg-white text-slate-700"
-              }`}
-            >
-              {UI_STRINGS.warehouse.designerSubTabs.routes}
-            </button>
-          </div>
-        )}
-        <TabsContainer className="w-full [-webkit-overflow-scrolling:touch]">
-          <nav
-            className="flex w-full flex-nowrap gap-6 overflow-x-auto border-b border-slate-200 sm:justify-start"
-            aria-label="Widok projektanta magazynu"
-            role="tablist"
-          >
-            <button
-              type="button"
-              role="tab"
-              id="warehouse-designer-tab-magazyn"
-              aria-selected={mainView === "magazyn"}
-              aria-controls="warehouse-designer-panel"
-              tabIndex={mainView === "magazyn" ? 0 : -1}
-              onClick={() => selectDesignerView("magazyn")}
-              className={tabsNavItemClassName(mainView === "magazyn")}
-            >
-              {UI_STRINGS.warehouse.designerSubTabs.magazyn}
-            </button>
-            <button
-              type="button"
-              role="tab"
-              id="warehouse-designer-tab-layout"
-              aria-selected={mainView === "layout"}
-              aria-controls="warehouse-designer-panel"
-              tabIndex={mainView === "layout" ? 0 : -1}
-              onClick={() => selectDesignerView("layout")}
-              className={tabsNavItemClassName(mainView === "layout")}
-            >
-              {UI_STRINGS.warehouse.designerSubTabs.layoutDesigner}
-            </button>
-          </nav>
-        </TabsContainer>
+        }
+        className="shrink-0 space-y-2"
+      />
+
+      <div className="mt-2 shrink-0">
+        <DesignerWarehouseSelect
+          warehouseId={selectedWarehouseId}
+          warehouses={warehouses}
+          loading={warehousesLoading}
+          onSelect={handleDesignerWarehouseSelect}
+        />
       </div>
+
+      {mainView === "layout" ? (
+        <div className="mt-2 flex shrink-0 gap-1" role="tablist" aria-label="Workspace projektanta">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={layoutWorkspace === "designing"}
+            onClick={() => {
+              if (layoutWorkspace === "routes" && !confirmLeaveRoutingDirty()) return;
+              if (layoutWorkspace === "routes" && routing.dirty) {
+                void routing.load();
+              }
+              // Selection SSOT: leaving Routing clears node/edge.
+              setRoutingSelectedNode(null);
+              setRoutingSelectedEdge(null);
+              setRoutingEdgeDraftFrom(null);
+              setRoutingDraftCursorCm(null);
+              setLayoutWorkspace("designing");
+            }}
+            className={`rounded-md border px-3 py-1 text-[11px] font-semibold ${
+              layoutWorkspace === "designing"
+                ? "border-slate-800 bg-slate-800 text-white"
+                : "border-slate-200 bg-white text-slate-700"
+            }`}
+          >
+            {UI_STRINGS.warehouse.designerSubTabs.designing}
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={layoutWorkspace === "routes"}
+            onClick={() => {
+              // Selection SSOT: entering Routing clears rack/passage.
+              setSelectedRackId(null);
+              setSelectedRackIds([]);
+              setSelectedPassage(null);
+              setLayoutWorkspace("routes");
+              setRoutingTool("draw_edge");
+            }}
+            className={`rounded-md border px-3 py-1 text-[11px] font-semibold ${
+              layoutWorkspace === "routes"
+                ? "border-sky-700 bg-sky-700 text-white"
+                : "border-slate-200 bg-white text-slate-700"
+            }`}
+          >
+            {UI_STRINGS.warehouse.designerSubTabs.routes}
+          </button>
+        </div>
+      ) : null}
+
+      {/* Layout 2.0: bare tabs inside PageContainer — same chrome as Użytkownicy */}
+      <div className={`mt-3 shrink-0 ${pageShellDividerClass} [-webkit-overflow-scrolling:touch]`}>
+        <nav
+          className="flex w-full flex-nowrap gap-6 overflow-x-auto sm:justify-start"
+          aria-label="Widok projektanta magazynu"
+          role="tablist"
+        >
+          <button
+            type="button"
+            role="tab"
+            id="warehouse-designer-tab-magazyn"
+            aria-selected={mainView === "magazyn"}
+            aria-controls="warehouse-designer-panel"
+            tabIndex={mainView === "magazyn" ? 0 : -1}
+            onClick={() => selectDesignerView("magazyn")}
+            className={tabsNavItemClassName(mainView === "magazyn")}
+          >
+            {UI_STRINGS.warehouse.designerSubTabs.magazyn}
+          </button>
+          <button
+            type="button"
+            role="tab"
+            id="warehouse-designer-tab-layout"
+            aria-selected={mainView === "layout"}
+            aria-controls="warehouse-designer-panel"
+            tabIndex={mainView === "layout" ? 0 : -1}
+            onClick={() => selectDesignerView("layout")}
+            className={tabsNavItemClassName(mainView === "layout")}
+          >
+            {UI_STRINGS.warehouse.designerSubTabs.layoutDesigner}
+          </button>
+        </nav>
+      </div>
+
       <WarehouseModals
         showCreateWarehouse={showCreateWarehouse}
         onCloseCreateWarehouse={() => setShowCreateWarehouse(false)}
@@ -3922,11 +3936,12 @@ export default function WarehouseDesigner() {
         getTemplatePreviewRackCount={getTemplatePreviewRackCount}
       />
 
+      <div className="mt-4 flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
       <AppSplitView
         className="min-h-0 flex-1"
         left={
           mainView === "magazyn" ? (
-          <div className="flex h-full min-h-0 w-[300px] shrink-0 flex-none flex-col overflow-x-hidden overflow-y-auto overscroll-y-contain bg-white px-6 py-6 shadow-[4px_0_24px_rgba(15,23,42,0.04)]">
+          <div className="flex h-full min-h-0 w-[300px] shrink-0 flex-none flex-col overflow-x-hidden overflow-y-auto overscroll-y-contain border-r border-slate-200 px-4 py-4">
             <MagazynDashboardPanel
               layout={layout}
               customTemplates={customTemplates}
@@ -4792,6 +4807,7 @@ export default function WarehouseDesigner() {
         ) : null}
       </div>
       </AppSplitView>
+      </div>
 
       {showGateTypeModal && pendingGatePlacement && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" role="dialog" aria-modal="true" aria-labelledby="gate-type-title">
@@ -4887,7 +4903,6 @@ export default function WarehouseDesigner() {
         candidates={damageCandidates}
         prefill={damagePrefill}
       />
-    </AppContentLayout>
-    </AppPageLayout>
+    </PageLayout>
   );
 }

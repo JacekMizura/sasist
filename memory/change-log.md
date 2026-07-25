@@ -1,3 +1,12 @@
+## 2026-07-25 — Projektant Magazynu → Layout System 2.0 (no push)
+
+- Usunięto `AppPageLayout` + `AppContentLayout` + osobny `TabsContainer` card-stack
+- Shell: `PageLayout` (= `PageContainer`) + `PageHeader` + bare tabs (`pageShellDividerClass`)
+- Lewy panel Magazyn: bez osobnego `bg-white` + shadow (border-r w tej samej karcie)
+- Logika / mapa / panele biznesowe bez zmian
+- `tsc` + `build` OK
+- **No push.**
+
 ## 2026-07-25 — GLOBAL LAYOUT SYSTEM 2.0 (no push)
 
 - SSOT: `PageContainer`/`PageLayout` + `design-system/pageLayout.ts` (jeden border, `p-6`)
