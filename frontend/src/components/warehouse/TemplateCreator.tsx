@@ -111,23 +111,20 @@ export function RackPreview({
   const structuralHeights = levelHeightsForRack(height_cm, structuralRows.length);
   const rackIdForPreview = (rowId || "A").replace(/\./g, "") + "1";
   const pattern = (addressPattern || DEFAULT_ADDRESS_PATTERN).trim() || DEFAULT_ADDRESS_PATTERN;
-  /** All construction levels (bottom → top index). Labels use construction index — never renumber after void. */
-  type PreviewBand =
-    | {
-        kind: "storage";
-        structuralLev: number;
-        locations: number;
-        levelHeightCm: number;
-        cells: { bin: number; label: string; storageType: StorageType; volPerBin: number }[];
-      }
-    | { kind: "void"; structuralLev: number; levelHeightCm: number };
-  const bands: PreviewBand[] = [];
-  for (let structuralLev = 0; structuralLev < structuralRows.length; structuralLev++) {
+  const enabledPassage = (passages ?? []).find((p) => p.enabled !== false) ?? null;
+  const passageClearanceCm = getPassageVoidHeightCm(passages);
+  const passageWidthCm = enabledPassage ? Math.max(0, Number(enabledPassage.width_cm) || 0) : 0;
+  const voidHeightCm = structuralHeights.slice(0, voidCount).reduce((s, h) => s + h, 0);
+
+  type StorageBand = {
+    structuralLev: number;
+    locations: number;
+    levelHeightCm: number;
+    cells: { bin: number; label: string; storageType: StorageType; volPerBin: number }[];
+  };
+  const storageBands: StorageBand[] = [];
+  for (let structuralLev = voidCount; structuralLev < structuralRows.length; structuralLev++) {
     const levelHeightCm = structuralHeights[structuralLev] ?? height_cm / Math.max(1, structuralRows.length);
-    if (structuralLev < voidCount) {
-      bands.push({ kind: "void", structuralLev, levelHeightCm });
-      continue;
-    }
     const locs = Math.max(1, structuralRows[structuralLev]!.locations);
     const volPerBinLev = volumePerBinForLevelHeightDm3(width_cm, depth_cm, levelHeightCm, locs);
     const cells = Array.from({ length: locs }, (_, bin) => {
@@ -150,15 +147,14 @@ export function RackPreview({
         volPerBin: volPerBinLev,
       };
     });
-    bands.push({
-      kind: "storage",
+    storageBands.push({
       structuralLev,
       locations: locs,
       levelHeightCm,
       cells,
     });
   }
-  const L = bands.length;
+  const L = storageBands.length;
   const containerRef = useRef<HTMLDivElement>(null);
   const [containerSize, setContainerSize] = useState({ w: 500, h: 400 });
   const [hoverBin, setHoverBin] = useState<{ level: number; bin: number } | null>(null);
@@ -187,15 +183,16 @@ export function RackPreview({
   const contentAreaH = viewBoxH - 2 * margin;
   const totalLevelHeightCm = Math.max(
     1,
-    bands.reduce((sum, b) => sum + Math.max(1, b.levelHeightCm), 0)
+    storageBands.reduce((sum, b) => sum + Math.max(1, b.levelHeightCm), 0) + Math.max(0, voidHeightCm)
   );
   const ox = margin + beamW;
   const contentAreaY = margin;
   const pad = 2;
   const levelPixelHeight = (bandIndex: number) => {
-    const levelHeightCm = Math.max(1, bands[bandIndex]?.levelHeightCm ?? 1);
+    const levelHeightCm = Math.max(1, storageBands[bandIndex]?.levelHeightCm ?? 1);
     return (levelHeightCm / totalLevelHeightCm) * contentAreaH;
   };
+  const voidPixelHeight = voidHeightCm > 0 ? (voidHeightCm / totalLevelHeightCm) * contentAreaH : 0;
   const levelToY = (bandIndex: number) => {
     let y = contentAreaY + pad;
     for (let lev = L - 1; lev > bandIndex; lev--) y += levelPixelHeight(lev);
@@ -203,11 +200,12 @@ export function RackPreview({
   };
   const cellInsetH = (bandIndex: number) => Math.max(0, levelPixelHeight(bandIndex) - pad * 2);
 
-  const floorY = L > 0 ? levelToY(0) + cellInsetH(0) : contentAreaY;
+  const floorY = (L > 0 ? levelToY(0) + cellInsetH(0) : contentAreaY) + voidPixelHeight;
   const topLevelRowBottomY = L > 0 ? levelToY(L - 1) + cellInsetH(L - 1) : contentAreaY;
   const uprightTopY = topLevelRowBottomY;
   const uprightHeight = Math.max(0, floorY - topLevelRowBottomY);
   const internalShelfYs = L > 1 ? Array.from({ length: L - 1 }, (_, i) => levelToY(L - 2 - i)) : [];
+  const voidBandY = L > 0 ? levelToY(0) + cellInsetH(0) : contentAreaY;
 
   return (
     <div className={`flex flex-col flex-1 min-h-0 rounded-2xl border border-slate-200/40 bg-white/90 shadow-sm overflow-hidden ${className}`}>
@@ -252,31 +250,61 @@ export function RackPreview({
                 />
               ))}
               <g clipPath="url(#rack-content-clip)">
-                {bands.map((band, bandIdx) => {
+                {voidPixelHeight > 0 && (
+                  <g aria-label="Przejazd pod regałem">
+                    {(() => {
+                      const bandH = Math.max(1, voidPixelHeight - pad);
+                      const beam = Math.max(1.5, Math.min(4, bandH * 0.06));
+                      const cx = ox + contentW / 2;
+                      const cy = voidBandY + bandH / 2;
+                      const titleSize = Math.min(22, Math.max(12, bandH * 0.18));
+                      const lineSize = Math.min(14, Math.max(9, bandH * 0.1));
+                      const gap = Math.max(4, lineSize * 0.45);
+                      return (
+                        <>
+                          <rect x={ox} y={voidBandY} width={contentW} height={bandH} fill="url(#template-passage-hatch)" />
+                          <rect x={ox} y={voidBandY} width={contentW} height={beam} fill="#334155" />
+                          <rect x={ox} y={voidBandY + bandH - beam} width={contentW} height={beam} fill="#334155" />
+                          <text
+                            x={cx}
+                            y={cy - lineSize - gap}
+                            textAnchor="middle"
+                            dominantBaseline="middle"
+                            fontSize={titleSize}
+                            fontWeight={800}
+                            fill="#334155"
+                            letterSpacing="0.14em"
+                          >
+                            PRZEJAZD
+                          </text>
+                          <text
+                            x={cx}
+                            y={cy}
+                            textAnchor="middle"
+                            dominantBaseline="middle"
+                            fontSize={lineSize}
+                            fill="#475569"
+                          >
+                            {`Wysokość wolnej przestrzeni: ${Math.round(passageClearanceCm)} cm`}
+                          </text>
+                          <text
+                            x={cx}
+                            y={cy + lineSize + gap}
+                            textAnchor="middle"
+                            dominantBaseline="middle"
+                            fontSize={lineSize}
+                            fill="#475569"
+                          >
+                            {`Szerokość: ${Math.round(passageWidthCm)} cm`}
+                          </text>
+                        </>
+                      );
+                    })()}
+                  </g>
+                )}
+                {storageBands.map((band, bandIdx) => {
                   const yStart = levelToY(bandIdx);
                   const hBand = cellInsetH(bandIdx);
-                  if (band.kind === "void") {
-                    const beam = Math.max(1.5, Math.min(4, hBand * 0.08));
-                    return (
-                      <g key={`void-${band.structuralLev}`} aria-label={`Przejazd — poziom konstrukcyjny ${band.structuralLev + 1}`}>
-                        <rect x={ox} y={yStart} width={contentW} height={hBand} fill="url(#template-passage-hatch)" />
-                        <rect x={ox} y={yStart} width={contentW} height={beam} fill="#334155" />
-                        <rect x={ox} y={yStart + hBand - beam} width={contentW} height={beam} fill="#334155" />
-                        <text
-                          x={ox + contentW / 2}
-                          y={yStart + hBand / 2}
-                          textAnchor="middle"
-                          dominantBaseline="middle"
-                          fontSize={Math.min(16, Math.max(9, hBand * 0.35))}
-                          fontWeight={700}
-                          fill="#475569"
-                          letterSpacing="0.18em"
-                        >
-                          PRZEJAZD
-                        </text>
-                      </g>
-                    );
-                  }
                   const locs = band.locations;
                   return (
                     <g key={`storage-${band.structuralLev}`}>
@@ -1147,8 +1175,9 @@ export function TemplateCreator({ onSave, initialTemplate, onCancelEdit, onSaveE
       <DesignerAccordion title="PRZEJAZDY" open={accordionOpen.przejazdy} onToggle={() => toggleAccordion("przejazdy")}>
         <div className="space-y-3">
           <p className="text-slate-500 text-xs leading-snug">
-            Jeden przejazd na regał. Przechodzi przez całą głębokość — konfigurujesz tylko położenie
-            wzdłuż szerokości i wysokość wolnej przestrzeni od posadzki.
+            Jeden przejazd na regał. Przechodzi przez całą głębokość — ustaw początek i szerokość
+            wzdłuż szerokości regału oraz wysokość wolnej przestrzeni. Podgląd po prawej pokazuje
+            przejazd jako jedną wolną przestrzeń.
           </p>
           {defaultPassages.map((p, idx) => {
             const rackW = Math.max(1, snapCm(width_cm));
@@ -1308,7 +1337,7 @@ export function TemplateCreator({ onSave, initialTemplate, onCancelEdit, onSaveE
               </span>
             </div>
           </div>
-          <div className="flex-1 min-h-0 min-w-0 grid grid-rows-[minmax(0,1.35fr)_minmax(120px,0.35fr)] gap-3 overflow-hidden">
+          <div className="flex-1 min-h-0 min-w-0 grid grid-rows-[minmax(0,1fr)_auto] gap-3 overflow-hidden">
             <RackPreview
               width_cm={width_cm}
               depth_cm={depth_cm}
@@ -1338,14 +1367,11 @@ export function TemplateCreator({ onSave, initialTemplate, onCancelEdit, onSaveE
             />
             <TemplatePassageOverlay
               width_cm={width_cm}
-              height_cm={height_cm}
-              levels={levels}
-              levelConfig={levelConfigForSave}
               passages={defaultPassages}
               selectedIndex={selectedPassageIndex}
               onSelectIndex={setSelectedPassageIndex}
               onChangePassages={setDefaultPassages}
-              className="min-h-0 min-w-0 h-full max-w-full"
+              className="shrink-0 w-full max-w-full"
             />
           </div>
         </div>
