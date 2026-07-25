@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 /** Must stay aligned with `WarehouseCanvas` MIN/MAX zoom. */
 const ZOOM_MIN = 0.2;
-const ZOOM_MAX = 2;
+const ZOOM_MAX = 4;
 const ZOOM_DEFAULT = 1;
 
 const ZOOM_STORAGE_PREFIX = "warehouse_zoom_";

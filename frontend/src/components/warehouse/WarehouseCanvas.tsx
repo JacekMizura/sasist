@@ -31,7 +31,7 @@ const GRID_STRONG_CELLS = 50;
 
 /** Ctrl/Cmd + wheel zoom (Figma-like); aligned with `useDesignerCanvas` persistence clamp. */
 const MIN_ZOOM = 0.2;
-const MAX_ZOOM = 2;
+const MAX_ZOOM = 4;
 
 const VIEWPORT_TRANSITION_MS = 200;
 
@@ -653,6 +653,56 @@ function WarehouseCanvasInner({
     setTimeout(() => setEnableTransition(false), VIEWPORT_TRANSITION_MS);
   }, [setZoom, setPan]);
 
+  /** Magazyn operational map: scale content to fill available viewport (large monitors). */
+  const liveFitKeyRef = React.useRef<string | null>(null);
+  const applyLiveFit = React.useCallback(() => {
+    if (!isLiveView || selectedWarehouseId == null || loading) return;
+    const el = viewportRef.current;
+    if (!el) return;
+    if (width <= 0 || height <= 0 || el.clientWidth <= 0 || el.clientHeight <= 0) return;
+    const key = `${selectedWarehouseId}:${layout.layout_id ?? "null"}:${layout.grid_cols}x${layout.grid_rows}`;
+    if (liveFitKeyRef.current === key) return;
+    liveFitKeyRef.current = key;
+    const pad = 24;
+    const fitZ = Math.min((el.clientWidth - pad) / width, (el.clientHeight - pad) / height);
+    const nextZ = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, fitZ));
+    setEnableTransition(false);
+    setZoom(() => nextZ);
+    setPan(() => ({ x: 0, y: 0 }));
+    el.scrollLeft = 0;
+    el.scrollTop = 0;
+  }, [
+    isLiveView,
+    selectedWarehouseId,
+    loading,
+    layout.layout_id,
+    layout.grid_cols,
+    layout.grid_rows,
+    width,
+    height,
+    setZoom,
+    setPan,
+  ]);
+
+  React.useLayoutEffect(() => {
+    if (!isLiveView) {
+      liveFitKeyRef.current = null;
+      return;
+    }
+    const id = requestAnimationFrame(() => applyLiveFit());
+    return () => cancelAnimationFrame(id);
+  }, [isLiveView, applyLiveFit]);
+
+  React.useEffect(() => {
+    if (!isLiveView) return;
+    const onResize = () => {
+      liveFitKeyRef.current = null;
+      applyLiveFit();
+    };
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, [isLiveView, applyLiveFit]);
+
   /** Focus a layout-cm point inside the scrollable viewport (problem locate). */
   React.useEffect(() => {
     if (!canvasFocusCm) return;
@@ -681,7 +731,7 @@ function WarehouseCanvasInner({
     []
   );
 
-  const effectiveShowGrid = isExportMode ? false : showGrid;
+  const effectiveShowGrid = isExportMode || isLiveView ? false : showGrid;
   const effectiveShowLabels = isExportMode ? true : showLabels;
   const noopHoverRack = React.useCallback(() => {}, []);
   const exportEmptySelection = React.useMemo(() => [] as Array<number | string>, []);
@@ -689,7 +739,9 @@ function WarehouseCanvasInner({
   return (
     <main
       ref={canvasContainerRef}
-      className="m-0 flex min-h-0 min-w-0 max-w-full flex-1 basis-0 flex-col items-stretch justify-start overflow-hidden pl-3.5 pt-3.5"
+      className={`m-0 flex min-h-0 min-w-0 max-w-full flex-1 basis-0 flex-col items-stretch justify-start overflow-hidden ${
+        isLiveView ? "p-0" : "pl-3.5 pt-3.5"
+      }`}
       style={{ backgroundColor: colors.background, ...(isLiveView ? { overscrollBehavior: "contain" as const } : {}) }}
     >
       {selectedWarehouseId == null ? (
@@ -1182,22 +1234,41 @@ function WarehouseCanvasInner({
                   )}
                   {!isExportMode && layout.aisles.map((a, i) => {
                     const isSelected = selectedAisleIndex === i;
+                    const ax = a.x * cellPx + 1;
+                    const ay = a.y * cellPx + 1;
+                    const aw = a.width * cellPx - 2;
+                    const ah = a.height * cellPx - 2;
+                    const alongX = aw >= ah;
+                    const midX = ax + aw / 2;
+                    const midY = ay + ah / 2;
+                    const dash = Math.max(6, Math.min(14, (alongX ? aw : ah) * 0.06));
                     return (
-                      <rect
-                        key={a.id ?? `a-${a.x}-${a.y}-${i}`}
-                        data-visual-zone-cell=""
-                        x={a.x * cellPx + 1}
-                        y={a.y * cellPx + 1}
-                        width={a.width * cellPx - 2}
-                        height={a.height * cellPx - 2}
-                        fill={isSelected ? "#0ea5e9" : "#94a3b8"}
-                        fillOpacity={isSelected ? 0.55 : 0.38}
-                        stroke={isSelected ? "#e0f2fe" : "#64748b"}
-                        strokeOpacity={isSelected ? 1 : 0.85}
-                        strokeWidth={isSelected ? 2 : 0.5}
-                        rx={RACK_RADIUS_PX}
-                        pointerEvents="auto"
-                      />
+                      <g key={a.id ?? `a-${a.x}-${a.y}-${i}`} pointerEvents="auto">
+                        <rect
+                          data-visual-zone-cell=""
+                          x={ax}
+                          y={ay}
+                          width={aw}
+                          height={ah}
+                          fill={isSelected ? "#cbd5e1" : "#dce3eb"}
+                          fillOpacity={1}
+                          stroke={isSelected ? "#94a3b8" : "#c5ced9"}
+                          strokeOpacity={1}
+                          strokeWidth={isSelected ? 1.25 : 0.75}
+                          rx={RACK_RADIUS_PX}
+                        />
+                        <line
+                          x1={alongX ? ax + 4 : midX}
+                          y1={alongX ? midY : ay + 4}
+                          x2={alongX ? ax + aw - 4 : midX}
+                          y2={alongX ? midY : ay + ah - 4}
+                          stroke={isSelected ? "rgba(255,255,255,0.95)" : "rgba(255,255,255,0.8)"}
+                          strokeWidth={1.25}
+                          strokeDasharray={`${dash} ${dash * 0.65}`}
+                          strokeLinecap="round"
+                          pointerEvents="none"
+                        />
+                      </g>
                     );
                   })}
                   {/* Route path under rack tiles (no line through rack bodies) */}

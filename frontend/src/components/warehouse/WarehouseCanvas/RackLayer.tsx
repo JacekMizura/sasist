@@ -17,6 +17,7 @@ import {
 import { RACK_LABEL_MEDIUM_STRIDE, type RackLabelLodLevel } from "../../../utils/rackLabelLod";
 import { clampRackRectLayout } from "../../../utils/rackMapVisual";
 import { colors, radius } from "../../../layout/designTokens";
+import { passageRectInRackPx } from "../../../pages/WarehouseDesigner/passages/rackPassageGeometry";
 
 import type { SelectedPassage } from "../../../pages/WarehouseDesigner/interactions/usePassageInteraction";
 
@@ -186,6 +187,7 @@ export function RackLayer({
   const filterUid = useId().replace(/:/g, "");
   const filterSurface = `wh-rack-surf-${filterUid}`;
   const filterHover = `wh-rack-hover-${filterUid}`;
+  const passageHatchId = `wh-passage-hatch-${filterUid}`;
 
   /** Stable map: full label detail, no zoom-based LOD. */
   const lodLevel: RackLabelLodLevel = "high";
@@ -311,6 +313,9 @@ export function RackLayer({
         <filter id={filterHover} x="-12%" y="-12%" width="124%" height="124%">
           <feDropShadow dx="0" dy="2" stdDeviation="2.5" floodColor="#2563eb" floodOpacity="0.14" />
         </filter>
+        <pattern id={passageHatchId} patternUnits="userSpaceOnUse" width="6" height="6" patternTransform="rotate(45)">
+          <line x1="0" y1="0" x2="0" y2="6" stroke="rgba(148,163,184,0.35)" strokeWidth="1.25" />
+        </pattern>
       </defs>
       {racks.map((r) => {
         const rid = r.id ?? r.rack_index;
@@ -550,38 +555,57 @@ export function RackLayer({
               (() => {
                 const enabledPassages = (r.passages ?? []).filter((p) => p.enabled !== false);
                 if (enabledPassages.length === 0) return null;
-                // Subtle corner badge — passage is a rack attribute, not a separate map object.
-                const badgePad = 3;
-                const badgeH = Math.min(16, Math.max(11, rectH * 0.22));
-                const badgeW = Math.min(52, Math.max(36, rectW * 0.42));
-                const bx = rectX + rectW - badgeW - badgePad;
-                const by = rectY + badgePad;
-                const fontSize = Math.max(7, Math.min(9, badgeH * 0.62));
+                // Under-rack passage as a road cut (no "PRZEJAZD" label).
                 return (
-                  <g pointerEvents="none" aria-label="Regał z przejazdem">
-                    <rect
-                      x={bx}
-                      y={by}
-                      width={badgeW}
-                      height={badgeH}
-                      rx={3}
-                      fill="rgba(15,23,42,0.72)"
-                      stroke="rgba(255,255,255,0.35)"
-                      strokeWidth={0.75}
-                    />
-                    <text
-                      x={bx + badgeW / 2}
-                      y={by + badgeH / 2 + 0.5}
-                      textAnchor="middle"
-                      dominantBaseline="middle"
-                      fontSize={fontSize}
-                      fontWeight={700}
-                      fill="#f8fafc"
-                      letterSpacing="0.04em"
-                      style={{ userSelect: "none" }}
-                    >
-                      PRZEJAZD
-                    </text>
+                  <g pointerEvents="none" aria-label="Przejazd pod regałem">
+                    {enabledPassages.map((passage, pi) => {
+                      const pr = passageRectInRackPx(r, passage, { rectX, rectY, rectW, rectH });
+                      if (!pr || pr.w < 2 || pr.h < 2) return null;
+                      const alongX = pr.w >= pr.h;
+                      const midX = pr.x + pr.w / 2;
+                      const midY = pr.y + pr.h / 2;
+                      const dash = Math.max(4, Math.min(10, (alongX ? pr.w : pr.h) * 0.08));
+                      const gap = dash * 0.7;
+                      return (
+                        <g key={`${ridStr}-passage-${passage.uuid ?? pi}`}>
+                          <rect
+                            x={pr.x}
+                            y={pr.y}
+                            width={pr.w}
+                            height={pr.h}
+                            fill="#d8dee6"
+                            stroke="#c0c7d1"
+                            strokeWidth={0.75}
+                          />
+                          <rect
+                            x={pr.x + 0.5}
+                            y={pr.y + 0.5}
+                            width={Math.max(0, pr.w - 1)}
+                            height={Math.max(0, pr.h - 1)}
+                            fill={`url(#${passageHatchId})`}
+                            opacity={0.55}
+                          />
+                          <line
+                            x1={alongX ? pr.x + 2 : midX}
+                            y1={alongX ? midY : pr.y + 2}
+                            x2={alongX ? pr.x + pr.w - 2 : midX}
+                            y2={alongX ? midY : pr.y + pr.h - 2}
+                            stroke="rgba(255,255,255,0.85)"
+                            strokeWidth={1.15}
+                            strokeDasharray={`${dash} ${gap}`}
+                            strokeLinecap="round"
+                          />
+                          <polygon
+                            points={
+                              alongX
+                                ? `${pr.x + pr.w - 3.5},${midY} ${pr.x + pr.w - 7.5},${midY - 2.2} ${pr.x + pr.w - 7.5},${midY + 2.2}`
+                                : `${midX},${pr.y + pr.h - 3.5} ${midX - 2.2},${pr.y + pr.h - 7.5} ${midX + 2.2},${pr.y + pr.h - 7.5}`
+                            }
+                            fill="rgba(100,116,139,0.55)"
+                          />
+                        </g>
+                      );
+                    })}
                   </g>
                 );
               })()}

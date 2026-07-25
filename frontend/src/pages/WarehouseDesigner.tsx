@@ -49,7 +49,6 @@ import { UI_STRINGS } from "../constants/uiStrings";
 import { AppContentLayout, AppPageLayout, AppSectionCard, AppSplitView } from "../components/layout/app";
 import { appLayoutTokens } from "../layout/appLayoutTokens";
 import { TabsContainer } from "../components/layout/TabsContainer";
-import { tabsNavItemClassName } from "../components/layout/TabsNav";
 import { ConfirmModal } from "../components/ui/ConfirmModal";
 import { LayoutMode } from "../warehouse-layout";
 import { useLayoutModeShortcuts, useLayoutModeDisplay } from "../warehouse-layout";
@@ -3756,7 +3755,11 @@ export default function WarehouseDesigner() {
               aria-controls="warehouse-designer-panel"
               tabIndex={mainView === "magazyn" ? 0 : -1}
               onClick={() => selectDesignerView("magazyn")}
-              className={`shrink-0 whitespace-nowrap ${tabsNavItemClassName(mainView === "magazyn")}`}
+              className={`shrink-0 whitespace-nowrap pb-2.5 text-sm font-medium border-b-2 -mb-px transition-colors ${
+                mainView === "magazyn"
+                  ? "border-orange-500 text-orange-600"
+                  : "border-transparent text-slate-500 hover:text-slate-800"
+              }`}
             >
               {UI_STRINGS.warehouse.designerSubTabs.magazyn}
             </button>
@@ -3768,7 +3771,11 @@ export default function WarehouseDesigner() {
               aria-controls="warehouse-designer-panel"
               tabIndex={mainView === "layout" ? 0 : -1}
               onClick={() => selectDesignerView("layout")}
-              className={`shrink-0 whitespace-nowrap ${tabsNavItemClassName(mainView === "layout")}`}
+              className={`shrink-0 whitespace-nowrap pb-2.5 text-sm font-medium border-b-2 -mb-px transition-colors ${
+                mainView === "layout"
+                  ? "border-orange-500 text-orange-600"
+                  : "border-transparent text-slate-500 hover:text-slate-800"
+              }`}
             >
               {UI_STRINGS.warehouse.designerSubTabs.layoutDesigner}
             </button>
