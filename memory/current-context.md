@@ -2,15 +2,17 @@
 
 ## Active
 
-**App overlay architecture** — Drawers/Sheets/Modals portalują na `document.body` przez `AppOverlayPortal`, żeby malować się NAD ErpSidebar (`z-30`), nie wewnątrz content `z-0`.
+**Magazyn product↔location SSOT** — Projektant Magazynu czyta lokalizacje produktów z jednego indeksu.
 
 ### SSOT
-- `frontend/src/components/overlay/AppOverlayPortal.tsx`
-- Z-bands: drawer 250, sheet 280, dialog 500 (ConfirmModal)
-- `WarehouseDocumentOverlayPortal` = thin alias
+- `frontend/src/pages/WarehouseDesigner/productLocationIndex.ts`
+- Reguła: inventory qty>0 wygrywa; `assigned_locations` uzupełnia braki; tylko UUID z layoutu
+- Konsumenci: wyszukiwarka, highlight mapy, MagazynProductsSidebar, ProductLocatorSidebar, rack click, occupancy bar/tooltip, useDesignerMagazynState
 
-### Cause (fixed)
-Content column `relative z-0` + sidebar sibling `z-30` → page-level `fixed` never covered sidebar.
+### Occupancy UI
+- Cienki pasek na dole regału (zielony / pomarańczowy / czerwony)
+- Hover: mały tooltip (nazwa, lokalizacje, produkty, %, pojemność)
 
 ### Constraints
 Bez commit/push (dopóki user nie poprosi).
+Raport: `memory/magazyn-product-location-ssot.md`

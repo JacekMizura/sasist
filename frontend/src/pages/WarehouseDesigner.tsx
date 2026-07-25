@@ -113,6 +113,15 @@ import { useDesignerCanvas } from "./WarehouseDesigner/useDesignerCanvas";
 import { useMapVisualizationMode } from "../components/warehouse/magazyn/mapVisualization";
 import { useDesignerProductModal } from "./WarehouseDesigner/useDesignerProductModal";
 import { useDesignerMagazynState } from "./WarehouseDesigner/useDesignerMagazynState";
+import {
+  buildProductLocationIndex,
+  buildRackOccupancyStats,
+  locationUuidsForProduct,
+  productHasAnyLocation,
+  productQuantityInLayout,
+  quantityByRackForProduct,
+  rackIdsForProduct,
+} from "./WarehouseDesigner/productLocationIndex";
 import { useDesignerRowState } from "./WarehouseDesigner/useDesignerRowState";
 import { RowPrefixModal, type RowPrefixModalResult, type RowPrefixRowConfig } from "../components/warehouse/RowPrefixModal";
 import { getPositionCmAlongWall, getSvgLayoutSizePx } from "./WarehouseDesigner/utils/designerMouseUtils";
@@ -148,59 +157,6 @@ function assignedLocationEntryUuid(a: {
 function binLocationUuidFromBin(bin: { locationUUID?: string; location_uuid?: string }): string {
   const u = bin.locationUUID ?? bin.location_uuid;
   return typeof u === "string" ? u.trim() : "";
-}
-
-/**
- * Total pieces of product `p` in this layout: one sum per storage location (UUID), never multiplied by rack/bin joins.
- * Per UUID: Stock (inventory) wins; else assigned_locations quantity.
- */
-function quantityAssignedInLayoutBins(
-  p: WarehouseProduct,
-  validLayoutLocationUUIDs: Set<string>,
-  inventoryMaps: InventoryMaps | null,
-  hasInventoryRows: boolean,
-  layoutRacks: RackState[]
-): number {
-  let total = 0;
-  const seenUuid = new Set<string>();
-  for (const rack of layoutRacks) {
-    for (const bin of activeBinsForRack(rack)) {
-      const uuid = normalizeInventoryLocationUuid(binLocationUuidFromBin(bin));
-      if (uuid) {
-        if (!validLayoutLocationUUIDs.has(uuid)) continue;
-        if (seenUuid.has(uuid)) continue;
-        seenUuid.add(uuid);
-
-        let invQty = 0;
-        if (hasInventoryRows && inventoryMaps) {
-          for (const inv of inventoryMaps.byLocationUuid.get(uuid) ?? []) {
-            if (String(inv.product_id) !== p.id) continue;
-            invQty += safeQuantity(inv.quantity);
-          }
-        }
-        if (invQty > 0) {
-          total += invQty;
-          continue;
-        }
-        if (p.assignedLocations?.length) {
-          const ent = p.assignedLocations.find((x) => assignedLocationEntryUuid(x) === uuid);
-          if (ent) total += safeQuantity(ent.quantity);
-        }
-        continue;
-      }
-    }
-  }
-  return total;
-}
-
-function productHasAssignmentOrInventoryInLayout(
-  p: WarehouseProduct,
-  validLayoutLocationUUIDs: Set<string>,
-  inventoryMaps: InventoryMaps | null,
-  hasInventoryRows: boolean,
-  layoutRacks: RackState[]
-): boolean {
-  return quantityAssignedInLayoutBins(p, validLayoutLocationUUIDs, inventoryMaps, hasInventoryRows, layoutRacks) > 0;
 }
 
 type PendingRowCreation =
@@ -503,6 +459,7 @@ export default function WarehouseDesigner() {
   const [hoveredProductIdOnMap, setHoveredProductIdOnMap] = useState<string | null>(null);
   /** Magazyn: sidebar location row hover → highlight bin on top-down map (location UUID). */
   const [hoveredLocationUUID, setHoveredLocationUUID] = useState<string | null>(null);
+  const [focusedBinUUID, setFocusedBinUUID] = useState<string | null>(null);
   /** Magazyn tab: selected template for type-based rack highlighting. */
   const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
   /** Magazyn tab: selected location (level_index, segment_index) for inventory filter and highlight. */
@@ -1152,6 +1109,29 @@ export default function WarehouseDesigner() {
     );
   }, [inventoryRows]);
 
+  /** Magazyn SSOT: inventory qty>0 wins; assigned fills gaps; layout UUIDs only. */
+  const productLocationIndex = useMemo(() => {
+    return measureDesignerMemo(designerPerf, "React: productLocationIndex", () =>
+      buildProductLocationIndex({ layout, products, inventoryRows })
+    );
+  }, [designerPerf, layout, products, inventoryRows]);
+
+  const productsByIdForOccupancy = useMemo(() => {
+    const map = new Map(products.map((p) => [p.id, p] as const));
+    return map;
+  }, [products]);
+
+  const rackOccupancyStats = useMemo(() => {
+    return measureDesignerMemo(designerPerf, "React: rackOccupancyStats", () =>
+      buildRackOccupancyStats({
+        layout,
+        index: productLocationIndex,
+        productsById: productsByIdForOccupancy,
+        binVolumeDm3,
+      })
+    );
+  }, [designerPerf, layout, productLocationIndex, productsByIdForOccupancy]);
+
   const {
     selectedRackForMagazyn,
     selectedRackBinUUIDs,
@@ -1171,6 +1151,7 @@ export default function WarehouseDesigner() {
     selectedRackIdForSideView,
     inventoryRows,
     inventoryMaps,
+    productLocationIndex,
   });
   const usedStorageTypesForLegend = useMemo<StorageType[]>(() => {
     const rackForLegend = displayRack ?? selectedRackForMagazyn;
@@ -1182,7 +1163,7 @@ export default function WarehouseDesigner() {
     }
     return order.filter((t) => used.has(t));
   }, [displayRack, selectedRackForMagazyn]);
-  /** Fallback: occupied locations (qty > 0), not product rows — when API metrics unavailable. */
+  /** Fallback: occupied locations (qty > 0) from Magazyn SSOT — when API metrics unavailable. */
   const binOccupancyLocationStats = useMemo(() => {
     let primary = 0;
     let reserve = 0;
@@ -1191,11 +1172,10 @@ export default function WarehouseDesigner() {
     for (const rack of layout.racks) {
       const rid = String(rack.id ?? rack.rack_index);
       for (const bin of activeBinsForRack(rack)) {
-        if (!isBinOccupiedByQuantity(bin)) continue;
-        const uuid = binLocationUuidFromBin(bin);
-        const key = uuid || `${rid}-${bin.level_index}-${bin.segment_index}`;
-        if (seen.has(key)) continue;
-        seen.add(key);
+        const uuid = normalizeInventoryLocationUuid(binLocationUuidFromBin(bin));
+        if (!uuid || !productLocationIndex.byLocation.has(uuid)) continue;
+        if (seen.has(uuid)) continue;
+        seen.add(uuid);
         const type = normalizeStorageType(bin.storage_type);
         if (type === "reserve") reserve += 1;
         else if (type === "damaged") damaged += 1;
@@ -1208,7 +1188,7 @@ export default function WarehouseDesigner() {
       damaged,
       total: primary + reserve + damaged,
     };
-  }, [layout.racks, isBinOccupiedByQuantity]);
+  }, [layout.racks, productLocationIndex]);
 
   const globalLocationStatsForLegend = useMemo(() => {
     if (occupancyMetrics) {
@@ -1251,18 +1231,10 @@ export default function WarehouseDesigner() {
     return { occupied, free: Math.max(0, total - occupied) };
   }, [occupancyMetrics, binOccupancyLocationStats, layout.racks]);
 
-  /** O(1) occupied UUID set for map visualization — locations with qty > 0 (not volume/product rows). */
+  /** O(1) occupied UUID set for map visualization — SSOT locations with qty > 0. */
   const occupiedLocationUuids = useMemo(() => {
-    const set = new Set<string>();
-    for (const rack of layout.racks) {
-      for (const bin of activeBinsForRack(rack)) {
-        if (!isBinOccupiedByQuantity(bin)) continue;
-        const u = (bin.locationUUID ?? "").trim();
-        if (u) set.add(u);
-      }
-    }
-    return set;
-  }, [layout.racks, isBinOccupiedByQuantity]);
+    return new Set(productLocationIndex.byLocation.keys());
+  }, [productLocationIndex]);
 
   /** Map locationUUID → bin (for storage_type and primary/reserve split). Declared before mapRackState and occupancy useMemos. */
   const uuidToBin = useMemo(() => {
@@ -1301,37 +1273,16 @@ export default function WarehouseDesigner() {
     return out;
   }, [layout.racks]);
 
-  /** Map product id → Set of rack ids that contain that product. Merges Stock (inventoryMaps) and assigned_locations (uuidToRackId). */
+  /** Map product id → Set of rack ids (SSOT). */
   const productToRackIds = useMemo(() => {
     return measureDesignerMemo(designerPerf, "React: productToRackIds", () => {
       const map = new Map<string, Set<string>>();
-      products.forEach((p) => {
-        map.set(p.id, new Set<string>());
-      });
-      if (inventoryMaps && inventoryRows.length > 0) {
-        for (const [rackId, rows] of inventoryMaps.byRackId.entries()) {
-          for (const inv of rows) {
-            const qty = safeQuantity(inv.quantity);
-            if (qty <= 0) continue;
-            const pid = String(inv.product_id);
-            if (!map.has(pid)) map.set(pid, new Set<string>());
-            map.get(pid)!.add(rackId);
-          }
-        }
+      for (const p of products) {
+        map.set(p.id, rackIdsForProduct(productLocationIndex, p.id));
       }
-      products.forEach((p) => {
-        const racks = map.get(p.id);
-        if (!racks) return;
-        p.assignedLocations?.forEach((a) => {
-          const locUuid = assignedLocationEntryUuid(a);
-          if (!locUuid) return;
-          const rackId = uuidToRackId.get(locUuid);
-          if (rackId) racks.add(rackId);
-        });
-      });
       return map;
     });
-  }, [designerPerf, inventoryMaps, inventoryRows.length, products, uuidToRackId]);
+  }, [designerPerf, products, productLocationIndex]);
 
   /** Rack ids to highlight when a product is selected on the map (global locator). */
   const activeProductIdOnMap = hoveredProductIdOnMap ?? selectedProductIdOnMap;
@@ -1339,40 +1290,9 @@ export default function WarehouseDesigner() {
     activeProductIdOnMap != null ? productToRackIds.get(activeProductIdOnMap) ?? null : null;
   const productRackQuantities = useMemo(() => {
     if (activeProductIdOnMap == null) return null;
-    const product = products.find((x) => x.id === activeProductIdOnMap);
-    const quantities = new Map<string, number>();
-    /** Avoid double-count when Stock row already covers the same bin UUID as an assigned entry on that rack. */
-    const invRackUuidKeys = new Set<string>();
-
-    if (inventoryMaps && inventoryRows.length > 0) {
-      const invRows = inventoryMaps.byProduct.get(activeProductIdOnMap) ?? [];
-      for (const inv of invRows) {
-        const locUuid = normalizeInventoryLocationUuid(inv.location_uuid);
-        if (!locUuid) continue;
-        const rackId = uuidToRackId.get(locUuid);
-        if (!rackId) continue;
-        const quantity = safeQuantity(inv.quantity);
-        if (quantity <= 0) continue;
-        quantities.set(rackId, (quantities.get(rackId) ?? 0) + quantity);
-        invRackUuidKeys.add(`${rackId}|${locUuid}`);
-      }
-    }
-
-    if (product?.assignedLocations?.length) {
-      for (const assigned of product.assignedLocations) {
-        const locUuid = assignedLocationEntryUuid(assigned);
-        if (!locUuid) continue;
-        const rackId = uuidToRackId.get(locUuid);
-        if (!rackId) continue;
-        const quantity = safeQuantity(assigned.quantity);
-        if (quantity <= 0) continue;
-        if (invRackUuidKeys.has(`${rackId}|${locUuid}`)) continue;
-        quantities.set(rackId, (quantities.get(rackId) ?? 0) + quantity);
-      }
-    }
-
+    const quantities = quantityByRackForProduct(productLocationIndex, activeProductIdOnMap);
     return quantities.size > 0 ? quantities : null;
-  }, [activeProductIdOnMap, products, uuidToRackId, uuidToBin, inventoryMaps, inventoryRows.length]);
+  }, [activeProductIdOnMap, productLocationIndex]);
 
   /** Rack ids to highlight when a template is selected in Magazyn dashboard. */
   const rackIdsForSelectedTemplate = useMemo(() => {
@@ -1384,29 +1304,12 @@ export default function WarehouseDesigner() {
     );
   }, [layout.racks, selectedTemplateId]);
 
-  /** Bin UUIDs to draw on map when a product is selected in Magazyn sidebar (inventory + assigned_locations). */
+  /** Bin UUIDs to draw on map when a product is selected in Magazyn sidebar (SSOT). */
   const highlightedBinUUIDsForSidebarProduct = useMemo(() => {
     if (selectedProductId == null) return null;
-    const product = products.find((p) => p.id === selectedProductId);
-    const set = new Set<string>();
-    if (inventoryMaps && inventoryRows.length > 0) {
-      const rows = inventoryMaps.byProduct.get(selectedProductId) ?? [];
-      for (const inv of rows) {
-        if (safeQuantity(inv.quantity) <= 0) continue;
-        const u = normalizeInventoryLocationUuid(inv.location_uuid);
-        if (u && validLayoutLocationUUIDs.has(u)) set.add(u);
-      }
-    }
-    if (product?.assignedLocations?.length) {
-      for (const a of product.assignedLocations) {
-        const u = assignedLocationEntryUuid(a);
-        if (!u) continue;
-        if (safeQuantity(a.quantity) <= 0) continue;
-        if (validLayoutLocationUUIDs.has(u)) set.add(u);
-      }
-    }
+    const set = locationUuidsForProduct(productLocationIndex, selectedProductId);
     return set.size > 0 ? set : null;
-  }, [selectedProductId, products, inventoryMaps, inventoryRows.length, validLayoutLocationUUIDs]);
+  }, [selectedProductId, productLocationIndex]);
 
   const toggleProductMapHighlight = useCallback((productId: string) => {
     setSelectedProductId((prev) => (prev === productId ? null : productId));
@@ -1436,26 +1339,13 @@ export default function WarehouseDesigner() {
     let totalQuantity = 0;
     let primaryQuantity = 0;
     let reserveQuantity = 0;
-
-    if (inventoryMaps && inventoryRows.length > 0) {
-      const invRows = inventoryMaps.byProduct.get(selectedProductIdOnMap) ?? [];
-      for (const inv of invRows) {
-        const locUuid = normalizeInventoryLocationUuid(inv.location_uuid);
-        if (!locUuid) continue;
-        const type = uuidToBin.get(locUuid)?.storage_type ?? "primary";
-        const q = safeQuantity(inv.quantity);
-        if (q <= 0) continue;
-        totalQuantity += q;
-        if (type === "reserve") reserveQuantity += q;
-        else primaryQuantity += q;
-      }
-    } else if (p.assignedLocations?.length) {
-      for (const a of p.assignedLocations) {
-        const type = a.storageType ?? uuidToBin.get(a.locationUUID)?.storage_type ?? "primary";
-        const q = safeQuantity(a.quantity);
-        totalQuantity += q;
-        if (type === "reserve") reserveQuantity += q;
-        else primaryQuantity += q;
+    const entries = productLocationIndex.byProduct.get(selectedProductIdOnMap) ?? [];
+    if (entries.length > 0) {
+      for (const e of entries) {
+        const type = uuidToBin.get(e.locationUUID)?.storage_type ?? "primary";
+        totalQuantity += e.quantity;
+        if (type === "reserve") reserveQuantity += e.quantity;
+        else primaryQuantity += e.quantity;
       }
     } else {
       totalQuantity = safeQuantity(p.quantity);
@@ -1463,25 +1353,24 @@ export default function WarehouseDesigner() {
     }
 
     return { product: p, totalQuantity, primaryQuantity, reserveQuantity };
-  }, [selectedProductIdOnMap, products, uuidToBin, inventoryMaps, inventoryRows.length]);
+  }, [selectedProductIdOnMap, products, uuidToBin, productLocationIndex]);
 
-  /** Map sidebar: products with stock or assignments on this layout only; qty/volume from locations (not global product.quantity). */
+  /** Map sidebar: products with stock or assignments on this layout only; qty/volume from SSOT. */
   const sortedProductsByVolume = useMemo(() => {
     return measureDesignerMemo(designerPerf, "React: sortedProductsByVolume", () => {
-      const hasInv = inventoryMaps != null && inventoryRows.length > 0;
       const out: { product: WarehouseProduct; quantityAssigned: number; volumeAssignedDm3: number }[] = [];
       for (const p of products) {
-        if (!productHasAssignmentOrInventoryInLayout(p, validLayoutLocationUUIDs, inventoryMaps, hasInv, layout.racks)) continue;
-        const quantityAssigned = quantityAssignedInLayoutBins(p, validLayoutLocationUUIDs, inventoryMaps, hasInv, layout.racks);
+        if (!productHasAnyLocation(productLocationIndex, p.id)) continue;
+        const quantityAssigned = productQuantityInLayout(productLocationIndex, p.id);
         if (quantityAssigned <= 0) continue;
         const vol = safeVolumeDm3(p.volume_dm3);
         out.push({ product: p, quantityAssigned, volumeAssignedDm3: quantityAssigned * vol });
       }
       return out.sort((a, b) => b.volumeAssignedDm3 - a.volumeAssignedDm3);
     });
-  }, [designerPerf, products, inventoryMaps, inventoryRows.length, validLayoutLocationUUIDs, layout.racks]);
+  }, [designerPerf, products, productLocationIndex]);
 
-  /** When a rack is selected on the full map (single click): rack ref and products in that rack (sorted, with quantity breakdown). */
+  /** When a rack is selected on the full map (single click): rack ref and products in that rack (SSOT). */
   const mapRackState = useMemo(() => {
     if (selectedRackIdOnMap == null)
       return {
@@ -1496,66 +1385,31 @@ export default function WarehouseDesigner() {
         mapRackBinUUIDs: new Set<string>(),
         rackProductsForMap: [] as (WarehouseProduct & { totalQuantity: number; primaryQuantity: number; reserveQuantity: number })[],
       };
-    const mapRackBinUUIDs = new Set<string>(selectedRackForMap.bins.map((b) => b.locationUUID).filter((u): u is string => Boolean(u)));
+    const mapRackBinUUIDs = new Set<string>();
+    for (const b of selectedRackForMap.bins) {
+      const u = normalizeInventoryLocationUuid(binLocationUuidFromBin(b));
+      if (u) mapRackBinUUIDs.add(u);
+    }
     const rackKey = String(selectedRackForMap.id ?? selectedRackForMap.rack_index);
     const productsById = new Map(products.map((p) => [p.id, p] as const));
     const totals = new Map<string, { product: WarehouseProduct; totalQuantity: number; primaryQuantity: number; reserveQuantity: number }>();
-    const stockProductInventoryKeys = new Set<string>();
 
-    if (inventoryMaps && inventoryRows.length > 0) {
-      const rackInvRows = inventoryMaps.byRackId.get(rackKey) ?? [];
-      for (const inv of rackInvRows) {
-        const qty = safeQuantity(inv.quantity);
-        if (qty <= 0) continue;
-        const pid = String(inv.product_id);
-        const product = productsById.get(pid);
-        if (!product) continue;
-        const locUuid = normalizeInventoryLocationUuid(inv.location_uuid);
-        if (locUuid) stockProductInventoryKeys.add(`${pid}|${locUuid}`);
-        const type = locUuid ? uuidToBin.get(locUuid)?.storage_type ?? "primary" : "primary";
-        const existing = totals.get(pid);
-        if (existing) {
-          existing.totalQuantity += qty;
-          if (type === "reserve") existing.reserveQuantity += qty;
-          else existing.primaryQuantity += qty;
-        } else {
-          totals.set(pid, {
-            product,
-            totalQuantity: qty,
-            primaryQuantity: type === "reserve" ? 0 : qty,
-            reserveQuantity: type === "reserve" ? qty : 0,
-          });
-        }
-      }
-    }
-
-    const mergeAssignedQtyIntoTotals = (p: WarehouseProduct, q: number, locUuid: string, storageType?: StorageType) => {
-      if (q <= 0) return;
-      const type = storageType ?? uuidToBin.get(locUuid)?.storage_type ?? "primary";
-      if (inventoryMaps && inventoryRows.length > 0 && stockProductInventoryKeys.has(`${p.id}|${locUuid}`)) {
-        return;
-      }
-      const existing = totals.get(p.id);
+    for (const e of productLocationIndex.byRack.get(rackKey) ?? []) {
+      const product = productsById.get(e.productId);
+      if (!product) continue;
+      const type = uuidToBin.get(e.locationUUID)?.storage_type ?? "primary";
+      const existing = totals.get(e.productId);
       if (existing) {
-        existing.totalQuantity += q;
-        if (type === "reserve") existing.reserveQuantity += q;
-        else existing.primaryQuantity += q;
+        existing.totalQuantity += e.quantity;
+        if (type === "reserve") existing.reserveQuantity += e.quantity;
+        else existing.primaryQuantity += e.quantity;
       } else {
-        totals.set(p.id, {
-          product: p,
-          totalQuantity: q,
-          primaryQuantity: type === "reserve" ? 0 : q,
-          reserveQuantity: type === "reserve" ? q : 0,
+        totals.set(e.productId, {
+          product,
+          totalQuantity: e.quantity,
+          primaryQuantity: type === "reserve" ? 0 : e.quantity,
+          reserveQuantity: type === "reserve" ? e.quantity : 0,
         });
-      }
-    };
-
-    for (const p of products) {
-      if (!p.assignedLocations?.length) continue;
-      for (const a of p.assignedLocations) {
-        const locUuid = assignedLocationEntryUuid(a);
-        if (!locUuid || !mapRackBinUUIDs.has(locUuid)) continue;
-        mergeAssignedQtyIntoTotals(p, safeQuantity(a.quantity), locUuid, a.storageType);
       }
     }
 
@@ -1568,8 +1422,7 @@ export default function WarehouseDesigner() {
       }))
       .sort((a, b) => b.totalQuantity - a.totalQuantity);
     return { selectedRackForMap, mapRackBinUUIDs, rackProductsForMap };
-  }, [selectedRackIdOnMap, products, layout.racks, uuidToBin, inventoryMaps, inventoryRows.length]);
-
+  }, [selectedRackIdOnMap, products, layout.racks, uuidToBin, productLocationIndex]);
 
   const { selectedRackForMap, mapRackBinUUIDs, rackProductsForMap } = mapRackState;
 
@@ -4218,11 +4071,14 @@ export default function WarehouseDesigner() {
                             onStartWallElementDrag={(el) => setDraggingWallElementId(el.id)}
                             highlightedRackIds={canvasHighlightedRackIds}
                             highlightedBinUUIDs={highlightedBinUUIDsForSidebarProduct ?? undefined}
+                            focusedBinUUID={focusedBinUUID}
+                            rackOccupancyStats={rackOccupancyStats}
                             hoveredLocationUUID={hoveredLocationUUID}
                             onRackClick={(id) => {
                               setSelectedProductId(null);
                               setHoveredProductIdOnMap(null);
                               setSelectedProductIdOnMap(null);
+                              setFocusedBinUUID(null);
                               setSelectedRackIdOnMap(String(id));
                               setSelectedRackId(id);
                               setSelectedRackIds([id]);
@@ -4253,6 +4109,7 @@ export default function WarehouseDesigner() {
                           <MagazynProductsSidebar
                             layout={layout}
                             products={rackProductsForMap}
+                            productLocationIndex={productLocationIndex}
                             inventoryMaps={inventoryMaps}
                             productSearchQuery={productSearchQuery}
                             setProductSearchQuery={setProductSearchQuery}
@@ -4286,11 +4143,19 @@ export default function WarehouseDesigner() {
                             primaryQuantity={selectedProductQuantityBreakdown.primaryQuantity}
                             reserveQuantity={selectedProductQuantityBreakdown.reserveQuantity}
                             layout={layout}
-                            inventoryMaps={inventoryMaps}
+                            productLocationIndex={productLocationIndex}
                             getProductImageUrl={getProductImageUrl}
                             onSelectLocation={(locationUUID) => {
                               const rackId = uuidToRackId.get(locationUUID);
                               setSelectedRackIdOnMap(rackId ?? null);
+                              setFocusedBinUUID(locationUUID);
+                              const bin = uuidToBin.get(locationUUID);
+                              if (bin) {
+                                setSelectedLocationForProducts({
+                                  level_index: bin.level_index,
+                                  segment_index: bin.segment_index,
+                                });
+                              }
                             }}
                           />
                         ) : (
@@ -4306,6 +4171,7 @@ export default function WarehouseDesigner() {
                               setSelectedProductId(null);
                               setHoveredProductIdOnMap(null);
                               setSelectedProductIdOnMap(null);
+                              setFocusedBinUUID(null);
                             }}
                             getProductImageUrl={getProductImageUrl}
                             formatVolume={formatVolume}
@@ -4384,6 +4250,7 @@ export default function WarehouseDesigner() {
               <MagazynProductsSidebar
                 layout={layout}
                 products={products}
+                productLocationIndex={productLocationIndex}
                 inventoryMaps={inventoryMaps}
                 productSearchQuery={productSearchQuery}
                 setProductSearchQuery={setProductSearchQuery}

@@ -1,3 +1,10 @@
+## 2026-07-26 — Magazyn: SSOT lokalizacji produktów + zajętość regału
+
+- Nowy indeks: `productLocationIndex.ts` (inventory ∪ assigned, layout UUID only)
+- Ujednolicono: search, map highlight, sidebary, klik regału, side-view occupancy
+- Pasek zajętości na regale + hover tooltip (bez dużych kart)
+- tsc + build OK · **No push.**
+
 ## 2026-07-26 — AppOverlayPortal migration (ErpShell overlays)
 
 - Migrated inline `fixed inset-0` drawers/sheets/modals under ErpShell → `AppOverlayPortal` (Pattern A)

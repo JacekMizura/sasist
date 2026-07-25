@@ -324,6 +324,8 @@ export type WarehouseCanvasProps = {
   focusedBinUUID?: string | null;
   /** Magazyn: single bin highlight from sidebar location row hover (does not affect selection). */
   hoveredLocationUUID?: string | null;
+  /** Magazyn SSOT: per-rack occupancy for bottom bars + hover tooltips. */
+  rackOccupancyStats?: Map<string, import("../../pages/WarehouseDesigner/productLocationIndex").RackOccupancyStats>;
   getRackDisplayId?: (r: RackState) => string;
   /** Stop index highlighted from sidebar click (highlight marker + rack). */
   highlightedStopIndex?: number | null;
@@ -497,6 +499,7 @@ function WarehouseCanvasInner({
   highlightedBinUUIDs,
   focusedBinUUID = null,
   hoveredLocationUUID = null,
+  rackOccupancyStats,
   getRackDisplayId,
   highlightedStopIndex = null,
   currentStopIndex = null,
@@ -1470,6 +1473,7 @@ function WarehouseCanvasInner({
                     highlightedBinUUIDs={isExportMode ? undefined : highlightedBinUUIDs}
                     focusedBinUUID={isExportMode ? null : focusedBinUUID}
                     hoveredLocationUUID={isExportMode ? null : hoveredLocationUUID}
+                    rackOccupancyStats={isExportMode ? undefined : rackOccupancyStats}
                     onRackClick={onRackClick}
                     onRackClickPassthrough={onRackClickPassthrough}
                     onRackDoubleClick={onRackDoubleClick}

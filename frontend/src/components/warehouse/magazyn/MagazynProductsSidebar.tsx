@@ -1,13 +1,18 @@
 import { useMemo, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { brandLinkTextClass } from "../../../design-system/brandUi";
-import { warn } from "../../../utils/logger";
 import type { LayoutState, NormalizedStorageType, RackState, WarehouseProduct } from "../../../types/warehouse";
 import { getProductDetailsPath } from "../../../pages/Products/productPaths";
 import { ConfirmModal } from "../../ui/ConfirmModal";
 import { activeBinsForRack, compareLocationUuidsByLayoutOrder } from "../warehouseUtils";
 import { resolveWarehouseLocation } from "../../../utils/resolvedWarehouseLocation";
-import { normalizeInventoryLocationUuid, type InventoryMaps, type InventoryRow } from "../../../pages/WarehouseDesigner/inventoryMaps";
+import { normalizeInventoryLocationUuid, type InventoryMaps } from "../../../pages/WarehouseDesigner/inventoryMaps";
+import {
+  binLocationUuid,
+  productIdsAtLocation,
+  productIdsOnRack,
+  type ProductLocationIndex,
+} from "../../../pages/WarehouseDesigner/productLocationIndex";
 import { normalizeStorageType } from "../../../utils/storageTypes";
 
 function assignedLocationEntryUuid(a: {
@@ -23,28 +28,6 @@ function productHasAssignmentAt(p: WarehouseProduct, locationUUID: string): bool
   const u = locationUUID.trim();
   if (!u || !p.assignedLocations?.length) return false;
   return p.assignedLocations.some((a) => assignedLocationEntryUuid(a) === u);
-}
-
-/** Display-only: collapse whitespace in location labels (not used for matching). */
-function normDisplayLabel(s: string): string {
-  return s.trim().replace(/\s+/g, " ");
-}
-
-/** Match stock row to a bin by inventory.location_uuid ↔ bin.locationUUID. */
-function invRowMatchesBin(inv: InventoryRow, binUuid: string): boolean {
-  const iu = normalizeInventoryLocationUuid(inv.location_uuid);
-  return iu !== "" && iu === binUuid;
-}
-
-function invRowIsFocusedBin(inv: InventoryRow, focusUuid: string | null): boolean {
-  if (!focusUuid) return false;
-  const iu = normalizeInventoryLocationUuid(inv.location_uuid);
-  return iu !== "" && iu === focusUuid;
-}
-
-/** Canonical key for aggregating stock by location (UUID only). */
-function inventoryRowCanonicalLocKey(inv: InventoryRow): string {
-  return normalizeInventoryLocationUuid(inv.location_uuid);
 }
 
 type LocationRowSortable = {
@@ -137,6 +120,8 @@ function formatProduktCount(n: number): string {
 export interface MagazynProductsSidebarProps {
   layout: LayoutState;
   products: WarehouseProduct[];
+  /** Magazyn SSOT — inventory ∪ assigned (layout-scoped). Required for consistent lists. */
+  productLocationIndex: ProductLocationIndex;
   inventoryMaps: InventoryMaps | null;
   productSearchQuery: string;
   setProductSearchQuery: (v: string) => void;
@@ -174,7 +159,8 @@ export interface MagazynProductsSidebarProps {
 export function MagazynProductsSidebar({
   layout,
   products,
-  inventoryMaps,
+  productLocationIndex,
+  inventoryMaps: _inventoryMaps,
   productSearchQuery,
   setProductSearchQuery,
   selectedLocationForProducts,
@@ -299,7 +285,7 @@ export function MagazynProductsSidebar({
     const types = new Map<string, NormalizedStorageType>();
     for (const rack of layout.racks) {
       for (const bin of activeBinsForRack(rack)) {
-        const u = (bin.locationUUID ?? "").trim();
+        const u = binLocationUuid(bin);
         if (!u) continue;
         const resolved = resolveWarehouseLocation(rack, bin, layout);
         labels[u] = resolved.label;
@@ -317,114 +303,79 @@ export function MagazynProductsSidebar({
     selectedBin && selectedRackForMagazyn
       ? resolveWarehouseLocation(selectedRackForMagazyn, selectedBin, layout).label
       : null;
-  const selectedBinUUID = selectedBin?.locationUUID ?? null;
+  const selectedBinUUID = selectedBin ? binLocationUuid(selectedBin) || null : null;
   const filterToSingleBin = selectedBinLabel != null && !showAllProductsInSidebar;
-  const usingInventory = inventoryMaps != null;
   const rackKey = selectedRackForMagazyn ? String(selectedRackForMagazyn.id ?? selectedRackForMagazyn.rack_index) : null;
 
   const uuidToStorageType = useMemo(() => {
     const map = new Map<string, NormalizedStorageType>(uuidToResolved.types);
     for (const rack of layout.racks) {
       for (const bin of activeBinsForRack(rack)) {
-        const u = (bin.locationUUID ?? "").trim();
+        const u = binLocationUuid(bin);
         if (!u || map.has(u)) continue;
         map.set(u, resolveWarehouseLocation(rack, bin, layout).storageType);
       }
     }
     return map;
-  }, [layout.racks]);
+  }, [layout.racks, layout, uuidToResolved.types]);
 
   const productsCheckedForRackAssignments = productsForRackAssignmentCheck ?? products;
   const hasAssignedProductsOnRack = useMemo(() => {
-    if (!selectedRackForMagazyn || selectedRackBinUUIDs.size === 0) return false;
+    if (!selectedRackForMagazyn || !rackKey) return false;
+    if ((productLocationIndex.byRack.get(rackKey)?.length ?? 0) > 0) return true;
+    if (selectedRackBinUUIDs.size === 0) return false;
     return productsCheckedForRackAssignments.some((p) =>
       p.assignedLocations?.some((a) => {
         const u = assignedLocationEntryUuid(a);
         return u != null && selectedRackBinUUIDs.has(u);
       })
     );
-  }, [productsCheckedForRackAssignments, selectedRackBinUUIDs, selectedRackForMagazyn]);
+  }, [
+    productsCheckedForRackAssignments,
+    selectedRackBinUUIDs,
+    selectedRackForMagazyn,
+    rackKey,
+    productLocationIndex,
+  ]);
 
-  const baseList = selectedRackForMagazyn
-    ? rackProductMode
-      ? products
-      : usingInventory
-        ? (() => {
-            const productIdsInScope = new Set<string>();
-            if (filterToSingleBin && selectedBinLabel) {
-              const su = normalizeInventoryLocationUuid(selectedBinUUID);
-              if (su) {
-                const invByUuid = inventoryMaps!.byLocationUuid.get(su) ?? [];
-                for (const inv of invByUuid) {
-                  if (safeQuantity(inv.quantity) <= 0) continue;
-                  productIdsInScope.add(String(inv.product_id));
-                }
-              }
-            } else if (rackKey) {
-              const invRows = inventoryMaps!.byRackId.get(rackKey) ?? [];
-              for (const inv of invRows) {
-                if (safeQuantity(inv.quantity) <= 0) continue;
-                productIdsInScope.add(String(inv.product_id));
-              }
-            }
-            return products.filter((p) => productIdsInScope.has(p.id));
-          })()
-        : products.filter((p) => {
-            if (filterToSingleBin) {
-              if (p.assignedLocations?.length && selectedBinUUID) {
-                return p.assignedLocations.some((a) => assignedLocationEntryUuid(a) === selectedBinUUID);
-              }
-              return false;
-            }
-            if (p.assignedLocations?.length) {
-              return p.assignedLocations.some((a) => {
-                const u = assignedLocationEntryUuid(a);
-                return u != null && selectedRackBinUUIDs.has(u);
-              });
-            }
-            return false;
-          })
-    : [];
-
-  /**
-   * Full-rack product list for summary: map mode uses `products` (parent's `rackProductsForMap`);
-   * otherwise reuse `baseList` when it is already rack-wide (`!filterToSingleBin`), else same rack-wide rules as `baseList` without bin filter.
-   */
-  const rackWideBaseList = useMemo(() => {
-    if (!selectedRackForMagazyn) return [];
+  /** Products on selected rack / bin — SSOT index only (inventory ∪ assigned). */
+  const baseList = useMemo(() => {
+    if (!selectedRackForMagazyn || !rackKey) return [];
     if (rackProductMode) return products;
-    if (!filterToSingleBin) return baseList;
-    if (usingInventory) {
-      const productIdsInScope = new Set<string>();
-      if (rackKey) {
-        const invRows = inventoryMaps!.byRackId.get(rackKey) ?? [];
-        for (const inv of invRows) {
-          if (safeQuantity(inv.quantity) <= 0) continue;
-          productIdsInScope.add(String(inv.product_id));
-        }
-      }
-      return products.filter((p) => productIdsInScope.has(p.id));
-    }
-    return products.filter((p) => {
-      if (p.assignedLocations?.length) {
-        return p.assignedLocations.some((a) => {
-          const u = assignedLocationEntryUuid(a);
-          return u != null && selectedRackBinUUIDs.has(u);
-        });
-      }
-      return false;
-    });
+    const ids =
+      filterToSingleBin && selectedBinUUID
+        ? productIdsAtLocation(productLocationIndex, selectedBinUUID)
+        : productIdsOnRack(productLocationIndex, rackKey);
+    return products.filter((p) => ids.has(p.id));
   }, [
     selectedRackForMagazyn,
+    rackKey,
+    rackProductMode,
+    products,
+    filterToSingleBin,
+    selectedBinUUID,
+    productLocationIndex,
+  ]);
+
+  /**
+   * Full-rack product list for summary: map mode uses products (parent's 
+ackProductsForMap);
+   * otherwise rack-wide ids from SSOT (never inventory-only).
+   */
+  const rackWideBaseList = useMemo(() => {
+    if (!selectedRackForMagazyn || !rackKey) return [];
+    if (rackProductMode) return products;
+    if (!filterToSingleBin) return baseList;
+    const ids = productIdsOnRack(productLocationIndex, rackKey);
+    return products.filter((p) => ids.has(p.id));
+  }, [
+    selectedRackForMagazyn,
+    rackKey,
     rackProductMode,
     products,
     filterToSingleBin,
     baseList,
-    usingInventory,
-    inventoryMaps,
-    rackKey,
-    selectedRackBinUUIDs,
-    selectedRackForMagazyn,
+    productLocationIndex,
   ]);
 
   const rackSummaryStats = useMemo(() => {
@@ -440,48 +391,13 @@ export function MagazynProductsSidebar({
       return { uniqueProductsCount, totalQuantity };
     }
 
-    if (usingInventory && inventoryMaps) {
-      let totalQuantity = 0;
-      for (const p of rackWideBaseList) {
-        const invRowsForProduct = inventoryMaps.byProduct.get(p.id) ?? [];
-        let rackTotalQty = 0;
-        for (const u of selectedRackBinUUIDs) {
-          let invQ = 0;
-          for (const inv of invRowsForProduct) {
-            if (invRowMatchesBin(inv, u)) invQ += safeQuantity(inv.quantity);
-          }
-          let assignQ = 0;
-          if (p.assignedLocations?.length) {
-            for (const a of p.assignedLocations) {
-              if (assignedLocationEntryUuid(a) === u) assignQ += safeQuantity(a.quantity);
-            }
-          }
-          if (invQ > 0) rackTotalQty += invQ;
-          else rackTotalQty += assignQ;
-        }
-        totalQuantity += rackTotalQty;
-      }
-      return { uniqueProductsCount, totalQuantity };
-    }
-
+    if (!rackKey) return { uniqueProductsCount, totalQuantity: 0 };
     let totalQuantity = 0;
-    for (const p of rackWideBaseList) {
-      if (p.assignedLocations?.length) {
-        for (const a of p.assignedLocations) {
-          const u = assignedLocationEntryUuid(a);
-          if (u && selectedRackBinUUIDs.has(u)) totalQuantity += safeQuantity(a.quantity);
-        }
-      }
+    for (const e of productLocationIndex.byRack.get(rackKey) ?? []) {
+      totalQuantity += e.quantity;
     }
     return { uniqueProductsCount, totalQuantity };
-  }, [
-    rackWideBaseList,
-    rackProductMode,
-    usingInventory,
-    inventoryMaps,
-    selectedRackBinUUIDs,
-    selectedRackForMagazyn,
-  ]);
+  }, [rackWideBaseList, rackProductMode, rackKey, productLocationIndex, safeQuantity]);
 
   /**
    * Single derivation: whitespace-only query counts as empty → always default view (map: top 5 when >5 items, else full baseList).
@@ -579,202 +495,62 @@ export function MagazynProductsSidebar({
             </div>
           ) : (
             list.map((p) => {
-              const invRowsForProduct = usingInventory && inventoryMaps ? inventoryMaps.byProduct.get(p.id) ?? [] : [];
               let currentLocation: LocationRow | null = null;
               let otherLocations: LocationRow[] = [];
               let quantityAtLocation = 0;
 
-              if (usingInventory && inventoryMaps) {
-                if (filterToSingleBin && selectedBinLabel) {
-                  const su = normalizeInventoryLocationUuid(selectedBinUUID);
-                  const qtyAtSelected = su
-                    ? invRowsForProduct
-                        .filter((inv) => invRowMatchesBin(inv, su))
-                        .reduce((s, inv) => s + safeQuantity(inv.quantity), 0)
-                    : 0;
+              const productEntries = productLocationIndex.byProduct.get(p.id) ?? [];
+              const qtyByLoc = new Map<string, number>();
+              for (const e of productEntries) {
+                if (e.quantity <= 0) continue;
+                qtyByLoc.set(e.locationUUID, (qtyByLoc.get(e.locationUUID) ?? 0) + e.quantity);
+              }
 
-                  let assignedQtyAtSelected = 0;
-                  if (selectedBinUUID && p.assignedLocations?.length) {
-                    for (const a of p.assignedLocations) {
-                      if (assignedLocationEntryUuid(a) === selectedBinUUID) {
-                        assignedQtyAtSelected += safeQuantity(a.quantity);
-                      }
-                    }
-                  }
-
-                  if (qtyAtSelected > 0 && su) {
-                    currentLocation = {
-                      locationUUID: su,
-                      locationLabel: (su && uuidToDisplayLabel[su]) || selectedBinLabel || su,
-                      quantity: qtyAtSelected,
-                      storageType: uuidToStorageType.get(su),
-                    };
-                  } else if (assignedQtyAtSelected > 0 && selectedBinUUID) {
-                    currentLocation = {
-                      locationUUID: selectedBinUUID,
-                      locationLabel: (selectedBinUUID && uuidToDisplayLabel[selectedBinUUID]) || selectedBinLabel || selectedBinUUID,
-                      quantity: assignedQtyAtSelected,
-                      storageType: uuidToStorageType.get(selectedBinUUID),
-                    };
-                  }
-
-                  const invDisplayByCanonical = new Map<string, string>();
-                  const qtyByLoc = new Map<string, number>();
-                  for (const inv of invRowsForProduct) {
-                    if (invRowIsFocusedBin(inv, selectedBinUUID)) continue;
-                    const ck = inventoryRowCanonicalLocKey(inv);
-                    if (!ck) continue;
-                    const q = safeQuantity(inv.quantity);
-                    if (q <= 0) continue;
-                    const raw = uuidToDisplayLabel[ck] ?? "";
-                    if (!invDisplayByCanonical.has(ck) && raw) {
-                      invDisplayByCanonical.set(ck, raw.replace(/\s+/g, " ").trim());
-                    }
-                    qtyByLoc.set(ck, (qtyByLoc.get(ck) ?? 0) + q);
-                  }
-                  if (p.assignedLocations?.length) {
-                    const assignAdd = new Map<string, number>();
-                    for (const a of p.assignedLocations) {
-                      const u = assignedLocationEntryUuid(a);
-                      if (!u || u === selectedBinUUID) continue;
-                      if (!uuidToDisplayLabel[u]) {
-                        warn("[MagazynProductsSidebar] assigned_locations UUID not in layout", u);
-                        continue;
-                      }
-                      if (qtyByLoc.has(u)) continue;
-                      const qAssign = safeQuantity(a.quantity);
-                      if (qAssign <= 0) continue;
-                      assignAdd.set(u, (assignAdd.get(u) ?? 0) + qAssign);
-                    }
-                    for (const [locKey, qv] of assignAdd) {
-                      if (qtyByLoc.has(locKey)) continue;
-                      qtyByLoc.set(locKey, qv);
-                    }
-                  }
-                  otherLocations = sortOtherLocationsForDisplay(
-                    Array.from(qtyByLoc.entries()).map(([ck, qty]) => {
-                      const binOnly = invDisplayByCanonical.get(ck) ?? uuidToDisplayLabel[ck] ?? ck;
-                      return {
-                        locationUUID: ck,
-                        locationLabel: uuidToDisplayLabel[ck] ?? binOnly,
-                        quantity: qty,
-                        storageType: uuidToStorageType.get(ck),
-                      };
-                    }),
-                    layout
-                  );
-                  quantityAtLocation = qtyAtSelected > 0 ? qtyAtSelected : assignedQtyAtSelected;
-                } else {
-                  // Rack-wide: total qty on this rack (per bin: inventory wins over assigned). "Inne lokalizacje" = all except optionally the focused bin, including other bins on this rack.
-                  const excludeBinUuid =
-                    selectedBinUUID != null && selectedLocationForProducts != null ? normalizeInventoryLocationUuid(selectedBinUUID) : null;
-
-                  let rackTotalQty = 0;
-                  for (const u of selectedRackBinUUIDs) {
-                    let invQ = 0;
-                    for (const inv of invRowsForProduct) {
-                      if (invRowMatchesBin(inv, u)) invQ += safeQuantity(inv.quantity);
-                    }
-                    let assignQ = 0;
-                    if (p.assignedLocations?.length) {
-                      for (const a of p.assignedLocations) {
-                        if (assignedLocationEntryUuid(a) === u) assignQ += safeQuantity(a.quantity);
-                      }
-                    }
-                    if (invQ > 0) rackTotalQty += invQ;
-                    else rackTotalQty += assignQ;
-                  }
-                  quantityAtLocation = rackTotalQty;
-
-                  const invDisplayByCanonicalRack = new Map<string, string>();
-                  const qtyByLoc = new Map<string, number>();
-                  for (const inv of invRowsForProduct) {
-                    if (excludeBinUuid && invRowIsFocusedBin(inv, selectedBinUUID)) continue;
-                    const ck = inventoryRowCanonicalLocKey(inv);
-                    if (!ck) continue;
-                    const q = safeQuantity(inv.quantity);
-                    if (q <= 0) continue;
-                    const raw = uuidToDisplayLabel[ck] || ck;
-                    if (!invDisplayByCanonicalRack.has(ck)) {
-                      invDisplayByCanonicalRack.set(ck, raw.replace(/\s+/g, " ").trim());
-                    }
-                    qtyByLoc.set(ck, (qtyByLoc.get(ck) ?? 0) + q);
-                  }
-                  if (p.assignedLocations?.length) {
-                    const assignAdd = new Map<string, number>();
-                    for (const a of p.assignedLocations) {
-                      const u = assignedLocationEntryUuid(a);
-                      if (!u) continue;
-                      if (selectedBinUUID && u === selectedBinUUID) continue;
-                      if (!uuidToDisplayLabel[u]) {
-                        warn("[MagazynProductsSidebar] assigned_locations UUID not in layout", u);
-                        continue;
-                      }
-                      if (excludeBinUuid && u === excludeBinUuid) continue;
-                      if (qtyByLoc.has(u)) continue;
-                      const qAssign = safeQuantity(a.quantity);
-                      if (qAssign <= 0) continue;
-                      assignAdd.set(u, (assignAdd.get(u) ?? 0) + qAssign);
-                    }
-                    for (const [locKey, qv] of assignAdd) {
-                      if (qtyByLoc.has(locKey)) continue;
-                      qtyByLoc.set(locKey, qv);
-                    }
-                  }
-                  otherLocations = sortOtherLocationsForDisplay(
-                    Array.from(qtyByLoc.entries()).map(([ck, qty]) => {
-                      const binOnly = invDisplayByCanonicalRack.get(ck) ?? uuidToDisplayLabel[ck] ?? ck;
-                      return {
-                        locationUUID: ck,
-                        locationLabel: uuidToDisplayLabel[ck] ?? binOnly,
-                        quantity: qty,
-                        storageType: uuidToStorageType.get(ck),
-                      };
-                    }),
-                    layout
-                  );
-                }
-              } else {
-                // Legacy assigned_locations-based UI fallback (only used when inventoryMaps is absent).
-                const currentLocationLegacy = p.assignedLocations?.find((a) => a.locationUUID === selectedBinUUID) ?? null;
-                if (currentLocationLegacy) {
-                  const uu = currentLocationLegacy.locationUUID;
-                  const binOnly =
-                    (uu && uuidToDisplayLabel[uu]) || currentLocationLegacy.locationAddress || uu || "";
+              const selectedSu = selectedBinUUID ? normalizeInventoryLocationUuid(selectedBinUUID) : '';
+              if (filterToSingleBin && selectedBinLabel && selectedSu) {
+                const qtyAtSelected = qtyByLoc.get(selectedSu) ?? 0;
+                if (qtyAtSelected > 0) {
                   currentLocation = {
-                    locationUUID: currentLocationLegacy.locationUUID,
-                    locationLabel: uu ? (uuidToDisplayLabel[uu] ?? binOnly) : binOnly,
-                    quantity: safeQuantity(currentLocationLegacy.quantity),
-                    storageType: currentLocationLegacy.storageType,
+                    locationUUID: selectedSu,
+                    locationLabel: uuidToDisplayLabel[selectedSu] || selectedBinLabel || selectedSu,
+                    quantity: qtyAtSelected,
+                    storageType: uuidToStorageType.get(selectedSu),
                   };
                 }
-
-                const otherLocationsRaw =
-                  selectedBinUUID != null
-                    ? (p.assignedLocations ?? []).filter((a) => a.locationUUID !== selectedBinUUID)
-                    : (p.assignedLocations ?? []).filter((a) => !selectedRackBinUUIDs.has(a.locationUUID));
-
+                quantityAtLocation = qtyAtSelected;
                 otherLocations = sortOtherLocationsForDisplay(
-                  otherLocationsRaw.map((loc) => {
-                    const u = loc.locationUUID;
-                    const binOnly =
-                      (u && uuidToDisplayLabel[u]) || loc.locationAddress || u || "";
-                    return {
-                      locationUUID: loc.locationUUID,
-                      locationLabel: u ? (uuidToDisplayLabel[u] ?? binOnly) : binOnly,
-                      quantity: safeQuantity(loc.quantity),
-                      storageType: loc.storageType,
-                    };
-                  }),
+                  Array.from(qtyByLoc.entries())
+                    .filter(([u]) => u !== selectedSu)
+                    .map(([ck, qty]) => ({
+                      locationUUID: ck,
+                      locationLabel: uuidToDisplayLabel[ck] ?? ck,
+                      quantity: qty,
+                      storageType: uuidToStorageType.get(ck),
+                    })),
                   layout
                 );
-
-                quantityAtLocation = currentLocationLegacy
-                  ? safeQuantity(currentLocationLegacy.quantity)
-                  : filterToSingleBin && selectedBinUUID && p.assignedLocations?.length
-                    ? safeQuantity(p.assignedLocations.find((a) => a.locationUUID === selectedBinUUID)?.quantity ?? p.quantity)
-                    : safeQuantity(p.quantity);
+              } else {
+                let rackTotalQty = 0;
+                for (const e of productEntries) {
+                  if (rackKey && e.rackId === rackKey) rackTotalQty += e.quantity;
+                }
+                if (rackProductMode) {
+                  const enrichedQty = (p as WarehouseProduct & { totalQuantity?: number }).totalQuantity;
+                  quantityAtLocation = enrichedQty != null ? safeQuantity(enrichedQty) : rackTotalQty;
+                } else {
+                  quantityAtLocation = rackTotalQty;
+                }
+                otherLocations = sortOtherLocationsForDisplay(
+                  Array.from(qtyByLoc.entries()).map(([ck, qty]) => ({
+                    locationUUID: ck,
+                    locationLabel: uuidToDisplayLabel[ck] ?? ck,
+                    quantity: qty,
+                    storageType: uuidToStorageType.get(ck),
+                  })),
+                  layout
+                );
               }
+
               const enriched = p as WarehouseProduct & { totalQuantity?: number; primaryQuantity?: number; reserveQuantity?: number };
               const hasQuantityBreakdown = rackProductMode && enriched.totalQuantity != null;
               const volumeAtLocation = (hasQuantityBreakdown ? enriched.totalQuantity! : quantityAtLocation) * safeVolumeDm3(p.volume_dm3);

@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import type { LayoutState, WarehouseProduct } from "../../../types/warehouse";
 import { compareLocationUuidsByLayoutOrder } from "../warehouseUtils";
-import { normalizeInventoryLocationUuid, type InventoryMaps } from "../../../pages/WarehouseDesigner/inventoryMaps";
+import type { ProductLocationIndex } from "../../../pages/WarehouseDesigner/productLocationIndex";
 import { buildUuidToResolvedLocation } from "../../../utils/resolvedWarehouseLocation";
 
 export interface ProductLocatorSidebarProps {
@@ -10,7 +10,8 @@ export interface ProductLocatorSidebarProps {
   primaryQuantity: number;
   reserveQuantity: number;
   layout: LayoutState;
-  inventoryMaps: InventoryMaps | null;
+  /** Magazyn SSOT — inventory ∪ assigned for this layout only. */
+  productLocationIndex: ProductLocationIndex;
   getProductImageUrl: (p: WarehouseProduct) => string | null;
   onSelectLocation: (locationUUID: string) => void;
 }
@@ -21,7 +22,7 @@ export function ProductLocatorSidebar({
   primaryQuantity,
   reserveQuantity,
   layout,
-  inventoryMaps,
+  productLocationIndex,
   getProductImageUrl,
   onSelectLocation,
 }: ProductLocatorSidebarProps) {
@@ -29,52 +30,29 @@ export function ProductLocatorSidebar({
 
   type LocationRow = { locationUUID: string; locationLabel: string; quantity: number; isReserve: boolean };
 
-  const locations: LocationRow[] = (() => {
-    if (inventoryMaps && inventoryMaps.byProduct) {
-      const invRowsForProduct = inventoryMaps.byProduct.get(product.id) ?? [];
-      const qtyByUuid = new Map<string, number>();
-      for (const inv of invRowsForProduct) {
-        const u = normalizeInventoryLocationUuid(inv.location_uuid);
-        if (!u) continue;
-        const q = Number(inv.quantity) || 0;
-        if (q <= 0) continue;
-        qtyByUuid.set(u, (qtyByUuid.get(u) ?? 0) + q);
-      }
-
-      return Array.from(qtyByUuid.entries())
-        .map(([locUuid, qty]) => {
-          const resolved = uuidToResolved.get(locUuid);
-          return {
-            locationUUID: locUuid,
-            locationLabel: resolved?.label ?? locUuid,
-            quantity: qty,
-            isReserve: resolved?.storageType === "reserve",
-          };
-        })
-        .filter((row) => row.locationLabel !== row.locationUUID || uuidToResolved.has(row.locationUUID))
-        .sort((a, b) => {
-          const q = b.quantity - a.quantity;
-          if (q !== 0) return q;
-          return compareLocationUuidsByLayoutOrder(layout, a.locationUUID, b.locationUUID);
-        });
+  const locations: LocationRow[] = useMemo(() => {
+    const qtyByUuid = new Map<string, number>();
+    for (const e of productLocationIndex.byProduct.get(product.id) ?? []) {
+      if (e.quantity <= 0) continue;
+      qtyByUuid.set(e.locationUUID, (qtyByUuid.get(e.locationUUID) ?? 0) + e.quantity);
     }
-
-    return (product.assignedLocations ?? [])
-      .map((a) => {
-        const resolved = uuidToResolved.get(a.locationUUID);
+    return Array.from(qtyByUuid.entries())
+      .map(([locUuid, qty]) => {
+        const resolved = uuidToResolved.get(locUuid);
         return {
-          locationUUID: a.locationUUID,
-          locationLabel: resolved?.label ?? a.locationUUID,
-          quantity: a.quantity,
+          locationUUID: locUuid,
+          locationLabel: resolved?.label ?? locUuid,
+          quantity: qty,
           isReserve: resolved?.storageType === "reserve",
         };
       })
+      .filter((row) => row.locationLabel !== row.locationUUID || uuidToResolved.has(row.locationUUID))
       .sort((a, b) => {
         const q = b.quantity - a.quantity;
         if (q !== 0) return q;
         return compareLocationUuidsByLayoutOrder(layout, a.locationUUID, b.locationUUID);
       });
-  })();
+  }, [product.id, productLocationIndex, uuidToResolved, layout]);
 
   const imageUrl = getProductImageUrl(product);
 

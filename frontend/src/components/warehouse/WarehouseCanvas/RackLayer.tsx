@@ -18,11 +18,19 @@ import { RACK_LABEL_MEDIUM_STRIDE, type RackLabelLodLevel } from "../../../utils
 import { clampRackRectLayout } from "../../../utils/rackMapVisual";
 import { colors, radius } from "../../../layout/designTokens";
 import { passageRectInRackPx } from "../../../pages/WarehouseDesigner/passages/rackPassageGeometry";
+import type { RackOccupancyStats } from "../../../pages/WarehouseDesigner/productLocationIndex";
+import { binLocationUuid } from "../../../pages/WarehouseDesigner/productLocationIndex";
 
 import type { SelectedPassage } from "../../../pages/WarehouseDesigner/interactions/usePassageInteraction";
 
 const RACK_RADIUS_PX = parseFloat(radius.small) || 6;
 const DEFAULT_RACK_FILL = "#3b82f6";
+
+function occupancyBarColor(pct: number): string {
+  if (pct >= 80) return "#ef4444";
+  if (pct >= 50) return "#f97316";
+  return "#22c55e";
+}
 
 /** Below this canvas zoom, hide rack text/badges (optional clutter reduction). */
 const LABEL_ZOOM_MIN_VISIBLE = 0.4;
@@ -109,6 +117,8 @@ export type RackLayerProps = {
   focusedBinUUID?: string | null;
   /** Sidebar location row hover: emphasize this bin only (temporary; UUID match). */
   hoveredLocationUUID?: string | null;
+  /** Magazyn SSOT occupancy for bottom bar + hover tooltip. */
+  rackOccupancyStats?: Map<string, RackOccupancyStats>;
   /** Optional rack click handler (used for read-only map). */
   onRackClick?: (rackId: number | string) => void;
   /** Optional rack click handler that does NOT stop propagation (keeps canvas click behavior). */
@@ -160,6 +170,7 @@ export function RackLayer({
   highlightedBinUUIDs,
   focusedBinUUID = null,
   hoveredLocationUUID = null,
+  rackOccupancyStats,
   onRackClick,
   onRackClickPassthrough,
   onRackDoubleClick,
@@ -329,7 +340,7 @@ export function RackLayer({
         const rackHasHighlightedBin =
           binHighlightActive &&
           activeBinsForRack(r).some((b) => {
-            const u = (b.locationUUID ?? "").trim();
+            const u = binLocationUuid(b);
             return u !== "" && highlightedBinUUIDs!.has(u);
           });
         const isHighlighted =
@@ -345,10 +356,37 @@ export function RackLayer({
         const displayColor = neutralRackStyle ? "#e2e8f0" : rackFillColor(r);
         const showLabel = showLabels && (r.show_label !== false);
         const label = getRackDisplayId(r, layout ?? undefined);
-        const used = r.used_dm3 ?? activeBinsForRack(r).reduce((s, b) => s + binUsedVolumeDm3(b), 0);
-        const total = r.total_capacity_dm3 ?? activeBinsForRack(r).reduce((s, b) => s + binVolumeDm3(b, r), 0);
-        const pct = total > 0 ? Math.min(100, (used / total) * 100) : 0;
-        const tooltip = `${label} · Zajętość: ${formatVolume(used)} / ${formatVolume(total)} dm³ (${pct.toFixed(0)}%)`;
+        const occ = rackOccupancyStats?.get(ridStr);
+        const used = occ?.volumeUsedDm3 ?? r.used_dm3 ?? activeBinsForRack(r).reduce((s, b) => s + binUsedVolumeDm3(b), 0);
+        const total = occ?.volumeCapacityDm3 ?? r.total_capacity_dm3 ?? activeBinsForRack(r).reduce((s, b) => s + binVolumeDm3(b, r), 0);
+        const occupancyPct = occ?.occupancyPct ?? (total > 0 ? Math.min(100, (used / total) * 100) : 0);
+        const barPct = Math.max(0, Math.min(100, occupancyPct));
+        const barColor = occupancyBarColor(barPct);
+        const tooltipLines = occ
+          ? [
+              label,
+              `Lokalizacje: ${occ.locationCount}`,
+              `Produkty: ${occ.productCount}`,
+              `Zajętość: ${Math.round(occ.occupancyPct)}%`,
+              `Objętość: ${Math.round(occ.volumePct)}%`,
+              occ.weightPct != null ? `Waga: ${Math.round(occ.weightPct)}%` : null,
+            ].filter(Boolean)
+          : [`${label} · Zajętość: ${formatVolume(used)} / ${formatVolume(total)} dm³ (${occupancyPct.toFixed(0)}%)`];
+        const tooltip = tooltipLines.join(" · ");
+        const hoverDetail =
+          occ != null
+            ? {
+                name: label,
+                locations: occ.locationCount,
+                products: occ.productCount,
+                occupancy: Math.round(occ.occupancyPct),
+                volume: Math.round(occ.volumePct),
+                weight: occ.weightPct != null ? Math.round(occ.weightPct) : null,
+                capacity: occ.locationCount,
+                occupied: occ.occupiedLocations,
+                free: occ.freeLocations,
+              }
+            : null;
         const layoutRect = clampRackRectLayout(drawAt, r, cellPx);
         const { rectX, rectY, rectW, rectH, cx, cy } = layoutRect;
         const showLabelHere =
@@ -551,6 +589,61 @@ export function RackLayer({
                 {...(tooltip ? { "aria-label": tooltip } : {})}
               />
             )}
+            {!neutralRackStyle && visualLod !== "line" && rectW >= 10 && rectH >= 8 && (
+              <g pointerEvents="none" aria-hidden>
+                <rect
+                  x={rectX + 2}
+                  y={rectY + rectH - 5}
+                  width={Math.max(0, rectW - 4)}
+                  height={3}
+                  rx={1.5}
+                  fill="rgba(15,23,42,0.18)"
+                />
+                <rect
+                  x={rectX + 2}
+                  y={rectY + rectH - 5}
+                  width={Math.max(0, (rectW - 4) * (barPct / 100))}
+                  height={3}
+                  rx={1.5}
+                  fill={barColor}
+                />
+              </g>
+            )}
+            {!neutralRackStyle && isHovered && hoverDetail != null && visualLod === "full" && (
+              <foreignObject
+                x={rectX + rectW + 6}
+                y={Math.max(0, rectY - 4)}
+                width={168}
+                height={118}
+                pointerEvents="none"
+                style={{ overflow: "visible" }}
+              >
+                <div
+                  xmlns="http://www.w3.org/1999/xhtml"
+                  style={{
+                    background: "rgba(15,23,42,0.92)",
+                    color: "#f8fafc",
+                    borderRadius: 8,
+                    padding: "8px 10px",
+                    fontFamily: "ui-sans-serif, system-ui, sans-serif",
+                    fontSize: 11,
+                    lineHeight: 1.35,
+                    boxShadow: "0 8px 20px rgba(15,23,42,0.28)",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  <div style={{ fontWeight: 600, marginBottom: 4 }}>{hoverDetail.name}</div>
+                  <div>Lokalizacje: {hoverDetail.locations}</div>
+                  <div>Produkty: {hoverDetail.products}</div>
+                  <div>Zajętość: {hoverDetail.occupancy}%</div>
+                  <div>Objętość: {hoverDetail.volume}%</div>
+                  {hoverDetail.weight != null ? <div>Waga: {hoverDetail.weight}%</div> : null}
+                  <div style={{ marginTop: 4, opacity: 0.85, fontSize: 10 }}>
+                    Pojemność {hoverDetail.capacity} · zajęte {hoverDetail.occupied} · wolne {hoverDetail.free}
+                  </div>
+                </div>
+              </foreignObject>
+            )}
             {visualLod !== "line" &&
               (() => {
                 const enabledPassages = (r.passages ?? []).filter((p) => p.enabled !== false);
@@ -612,7 +705,7 @@ export function RackLayer({
               binHighlightActive &&
               rackHasHighlightedBin &&
               activeBinsForRack(r).map((bin) => {
-                const u = (bin.locationUUID ?? "").trim();
+                const u = binLocationUuid(bin);
                 if (!u) return null;
                 const dims = binHighlightRectPx(r, bin, drawAt, cellPx, layoutRect);
                 if (!dims) return null;
@@ -645,7 +738,7 @@ export function RackLayer({
             {visualLod === "full" &&
               hoveredBinUuidNorm !== "" &&
               activeBinsForRack(r).map((bin) => {
-                const u = (bin.locationUUID ?? "").trim();
+                const u = binLocationUuid(bin);
                 if (u !== hoveredBinUuidNorm) return null;
                 const dims = binHighlightRectPx(r, bin, drawAt, cellPx, layoutRect);
                 if (!dims) return null;
