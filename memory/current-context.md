@@ -2,12 +2,9 @@
 
 ## Active
 
-**InternalLayoutModal clip fix** (uncommitted) — FitToContainer scales full rack bbox, centered.
+**Passage → storage model (variant A)** — local implementation, no push.
 
-Previous push: `b07b3156` (UX P0 + Projektowanie magazynu).
-
-### Note
-Układ wewnętrzny was clipped by % widths + shrink-0 + overflow-hidden — not TemplateCreator SVG.
+SSOT: Rack + Internal Structure + Passages. Generator skips bottom structural levels intersecting void clearance (full-width). Numbering = storage only. Save shows removal preview before rebuild.
 
 ### Constraints
-Bez push until user accepts.
+Bez push. Bez deploy.

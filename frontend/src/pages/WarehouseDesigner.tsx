@@ -6,6 +6,15 @@ import { warn } from "../utils/logger";
 import type { RackState, BinState, InternalStructure, LayoutState, RackTemplate, CustomRackTemplate, LevelConfigItem, CatalogItem, VisualElementType, VisualElementState, ColumnShape, DoorStyle, ZoneType, WarehouseProduct, RowContainer, EmptyRowSlot, WallElement, WallSide, RackType, StorageType } from "../types/warehouse";
 import { GRID_UNIT_CM, normalizePassageSource } from "../types/warehouse";
 import { rematerializeInheritedPassages } from "./WarehouseDesigner/passages/rackPassageGeometry";
+import {
+  countPassageVoidLevels,
+  getPassageVoidHeightCm,
+  passagesFromTemplateDefaults,
+  planBinRebuild,
+  type StructureRemovalImpact,
+} from "../components/warehouse/passageStorage";
+import { prepareLayoutBinsForSave } from "../components/warehouse/prepareLayoutBinsForSave";
+import { StructureRebuildConfirmDialog } from "../components/warehouse/StructureRebuildConfirmDialog";
 import { SelectionQuickToolbar } from "./WarehouseDesigner/SelectionQuickToolbar";
 import type { DesignerSelection } from "./WarehouseDesigner/designerSelection";
 import { createCommandBus } from "./WarehouseDesigner/commands";
@@ -42,7 +51,6 @@ import { LayoutMode } from "../warehouse-layout";
 import { useLayoutModeShortcuts, useLayoutModeDisplay } from "../warehouse-layout";
 import { normalizeBinTypeMap, normalizeStorageType } from "../utils/storageTypes";
 import {
-  mergeRegeneratedBins,
   resolveLocationLabelByUuid,
   resolveWarehouseLocation,
   syncLayoutDisplayFields,
@@ -456,6 +464,10 @@ export default function WarehouseDesigner() {
   const [showAllProductsInSidebar, setShowAllProductsInSidebar] = useState(false);
   const [productSearchQuery, setProductSearchQuery] = useState("");
   const [saving, setSaving] = useState(false);
+  const [structureRebuildPending, setStructureRebuildPending] = useState<{
+    impacts: StructureRemovalImpact[];
+    layout: LayoutState;
+  } | null>(null);
   const [loading, setLoading] = useState(true);
   const [lastSavedAt, setLastSavedAt] = useState<number | null>(null);
   const [rackPanelDismissed, setRackPanelDismissed] = useState(false);
@@ -2141,10 +2153,11 @@ export default function WarehouseDesigner() {
     }
   }, [newWarehouseName, refreshWarehouses, setWarehouse]);
 
-  const saveLayout = useCallback(async () => {
-    const whId = selectedWarehouseId ?? layout.warehouse_id;
+  const saveLayout = useCallback(async (overrideLayout?: LayoutState) => {
+    const baseLayout = overrideLayout ?? layout;
+    const whId = selectedWarehouseId ?? baseLayout.warehouse_id;
     if (whId == null) return;
-    const { valid: integrityValid, errors: integrityErrors } = validateLayoutEntityIntegrity(layout);
+    const { valid: integrityValid, errors: integrityErrors } = validateLayoutEntityIntegrity(baseLayout);
     if (!integrityValid) {
       const msg =
         integrityErrors.length === 1
@@ -2153,7 +2166,7 @@ export default function WarehouseDesigner() {
       setSnackbar({ message: msg });
       return;
     }
-    const { valid: layoutNamesValid, errors: layoutNameErrors } = validateAllRackNamesInLayout(layout);
+    const { valid: layoutNamesValid, errors: layoutNameErrors } = validateAllRackNamesInLayout(baseLayout);
     if (!layoutNamesValid) {
       const msg =
         layoutNameErrors.length === 1
@@ -2164,25 +2177,50 @@ export default function WarehouseDesigner() {
     }
     setSaving(true);
     const saveStarted = performance.now();
-    const layoutToSave = syncLayoutDisplayFields(layout);
-    logLayoutSaveStart({ warehouse_id: whId, rack_count: layoutToSave.racks.length });
-    const rackNamesForPersistLog = layoutToSave.racks.map((r) => ({
-      rack_id: r.id ?? r.rack_index,
-      name: (r.name ?? "").trim() || null,
-    }));
     try {
+      let workingLayout = baseLayout;
+      if (overrideLayout == null) {
+        let stockByUuid: Map<string, number> | undefined;
+        try {
+          const inventoryRes = await api.get<Array<{ location_uuid?: string | null; quantity?: number }>>("/inventory/", {
+            params: { tenant_id: TENANT_ID, warehouse_id: whId, hide_empty: false },
+          });
+          stockByUuid = new Map();
+          for (const row of inventoryRes.data ?? []) {
+            const u = String(row.location_uuid ?? "").trim();
+            if (!u) continue;
+            stockByUuid.set(u, (stockByUuid.get(u) ?? 0) + Number(row.quantity ?? 0));
+          }
+        } catch {
+          stockByUuid = undefined;
+        }
+        const prepared = prepareLayoutBinsForSave(baseLayout, stockByUuid);
+        if (prepared.impacts.some((i) => i.removedCount > 0)) {
+          setStructureRebuildPending({ impacts: prepared.impacts, layout: prepared.layout });
+          return;
+        }
+        workingLayout = prepared.layout;
+        if (prepared.changed) setLayout(prepared.layout);
+      }
+
+      const layoutToSave = syncLayoutDisplayFields(workingLayout);
+      logLayoutSaveStart({ warehouse_id: whId, rack_count: layoutToSave.racks.length });
+      const rackNamesForPersistLog = layoutToSave.racks.map((r) => ({
+        rack_id: r.id ?? r.rack_index,
+        name: (r.name ?? "").trim() || null,
+      }));
       const payload: Record<string, unknown> = {
-        ...(layout.layout_id != null ? { layout_id: layout.layout_id } : {}),
-        name: layout.name,
-        grid_cols: layout.grid_cols,
-        grid_rows: layout.grid_rows,
-        width_m: layout.grid_cols / CELLS_PER_METER,
-        length_m: layout.grid_rows / CELLS_PER_METER,
-        ...(layout.building_width_m != null && (layout.building_depth_m != null || layout.building_height_m != null)
+        ...(baseLayout.layout_id != null ? { layout_id: baseLayout.layout_id } : {}),
+        name: baseLayout.name,
+        grid_cols: baseLayout.grid_cols,
+        grid_rows: baseLayout.grid_rows,
+        width_m: baseLayout.grid_cols / CELLS_PER_METER,
+        length_m: baseLayout.grid_rows / CELLS_PER_METER,
+        ...(baseLayout.building_width_m != null && (baseLayout.building_depth_m != null || baseLayout.building_height_m != null)
           ? {
-              building_width_m: layout.building_width_m,
-              building_depth_m: layout.building_depth_m ?? layout.building_height_m,
-              ...(layout.building_height_m != null ? { building_height_m: layout.building_height_m } : {}),
+              building_width_m: baseLayout.building_width_m,
+              building_depth_m: baseLayout.building_depth_m ?? baseLayout.building_height_m,
+              ...(baseLayout.building_height_m != null ? { building_height_m: baseLayout.building_height_m } : {}),
             }
           : {}),
         racks: layoutToSave.racks.map((r) => ({
@@ -2238,7 +2276,7 @@ export default function WarehouseDesigner() {
             passageSource: normalizePassageSource(p.passage_source),
           })),
         })),
-        aisles: layout.aisles.map((a) => ({
+        aisles: baseLayout.aisles.map((a) => ({
           id: a.id,
           name: a.name,
           x: a.x,
@@ -2247,10 +2285,10 @@ export default function WarehouseDesigner() {
           height: a.height,
           two_way: a.two_way,
         })),
-        visual_elements: layout.visual_elements ?? [],
-        picking_path: layout.picking_path ?? undefined,
-        row_containers: layout.row_containers ?? [],
-        wall_elements: layout.wall_elements ?? [],
+        visual_elements: baseLayout.visual_elements ?? [],
+        picking_path: baseLayout.picking_path ?? undefined,
+        row_containers: baseLayout.row_containers ?? [],
+        wall_elements: baseLayout.wall_elements ?? [],
       };
 
       const validated = validateAndSanitizeLayoutPayload(payload);
@@ -2293,7 +2331,13 @@ export default function WarehouseDesigner() {
           : data?.detail != null
             ? JSON.stringify(data.detail)
             : null;
-      if (status === 400) {
+      if (status === 409) {
+        setSnackbar({
+          message: detailStr
+            ? detailStr
+            : "Zapis zablokowany — lokalizacje do usunięcia mają stan magazynowy.",
+        });
+      } else if (status === 400) {
         setSnackbar({ message: detailStr ? `Zapis nie powiódł się: ${detailStr}` : "Zapis nie powiódł się — duplikat nazwy regału" });
       } else if (status === 422) {
         setSnackbar({ message: detailStr ? `Walidacja: ${detailStr}` : "Zapis nie powiódł się — błąd walidacji danych." });
@@ -2307,7 +2351,15 @@ export default function WarehouseDesigner() {
     } finally {
       setSaving(false);
     }
-  }, [layout, selectedWarehouseId, loadLayout]);
+  }, [layout, selectedWarehouseId, loadLayout, getRackDisplayIdWithLayout]);
+
+  const confirmStructureRebuildAndSave = useCallback(() => {
+    const pending = structureRebuildPending;
+    setStructureRebuildPending(null);
+    if (!pending) return;
+    setLayout(pending.layout);
+    void saveLayout(pending.layout);
+  }, [structureRebuildPending, saveLayout]);
 
   const {
     ghostW,
@@ -2917,8 +2969,16 @@ export default function WarehouseDesigner() {
             template.overrides,
             template.indexPadding,
             template.startIndex,
+            passagesFromTemplateDefaults(template.default_passages)
           );
-          const mergedBins = mergeRegeneratedBins(r.bins ?? [], freshBins).map((b) => {
+          const structuralCount = lcEdit.length;
+          const voidLevels = countPassageVoidLevels(
+            template.height_cm,
+            structuralCount,
+            getPassageVoidHeightCm(passagesFromTemplateDefaults(template.default_passages))
+          );
+          const plan = planBinRebuild(r.bins ?? [], freshBins, structuralCount, voidLevels);
+          const mergedBins = plan.merged.map((b) => {
             const st = normalizeStorageType(b.storage_type);
             if ((template.rack_type ?? r.rack_type) === "store" && (st === "primary" || st === "unknown")) {
               return { ...b, storage_type: "pick" as const };
@@ -4533,6 +4593,14 @@ export default function WarehouseDesigner() {
             />
           );
         })()
+      )}
+
+      {structureRebuildPending && (
+        <StructureRebuildConfirmDialog
+          impacts={structureRebuildPending.impacts}
+          onCancel={() => setStructureRebuildPending(null)}
+          onConfirm={confirmStructureRebuildAndSave}
+        />
       )}
 
       {clearRackConfirmOpen &&

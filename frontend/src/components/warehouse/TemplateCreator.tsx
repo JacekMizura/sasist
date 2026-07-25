@@ -2,6 +2,11 @@ import { useState, useEffect, useMemo, useRef, type ReactNode } from "react";
 import { log } from "../../utils/logger";
 import type { CustomRackTemplate, LevelConfigItem, LayoutState, StorageType, RackType, TemplatePassageDefault } from "../../types/warehouse";
 import { snapCm, generateLocationLabel, levelHeightsForRack, type RackTemplateLabelOptions } from "./warehouseUtils";
+import {
+  countPassageVoidLevels,
+  getPassageVoidHeightCm,
+  storageLevelConfigAfterVoid,
+} from "./passageStorage";
 import { TemplatePassageOverlay } from "./TemplatePassageOverlay";
 import { getStorageTypeStyle, normalizeBinTypeMap, normalizeStorageType, TEMPLATE_STORAGE_TYPE_OPTIONS } from "../../utils/storageTypes";
 import { StorageTypeIcon } from "../../utils/storageTypeIcons";
@@ -65,6 +70,7 @@ export function RackPreview({
   onLabelEdit,
   /** Stronger outline on this cell (e.g. last clicked in designer). */
   focusedBin,
+  passages,
 }: {
   width_cm: number;
   depth_cm: number;
@@ -88,18 +94,29 @@ export function RackPreview({
   /** When set, cells in names view are clickable to edit label (manual or override). */
   onLabelEdit?: (levelIndex: number, binIndex: number, currentValue: string) => void;
   focusedBin?: { level: number; bin: number } | null;
+  /** Template default passages — void height skips bottom structural levels. */
+  passages?: TemplatePassageDefault[];
 }) {
-  const levelRows = (Array.isArray(levelConfig) && levelConfig.length > 0)
+  const structuralRows = (Array.isArray(levelConfig) && levelConfig.length > 0)
     ? levelConfig
     : Array.from({ length: Math.max(1, levels) }, (_, i) => ({ level: i + 1, locations: Math.max(1, bins_per_level) }));
+  const voidCount = countPassageVoidLevels(
+    height_cm,
+    structuralRows.length,
+    getPassageVoidHeightCm(passages)
+  );
+  const levelRows = storageLevelConfigAfterVoid(structuralRows, voidCount);
   const L = levelRows.length;
   const pattern = (addressPattern || DEFAULT_ADDRESS_PATTERN).trim() || DEFAULT_ADDRESS_PATTERN;
   const rackIdForPreview = (rowId || "A").replace(/\./g, "") + "1";
-  const levelHeights = levelHeightsForRack(height_cm, L);
+  const structuralHeights = levelHeightsForRack(height_cm, structuralRows.length);
+  const levelHeights = levelRows.map((_, lev) => structuralHeights[lev + voidCount] ?? height_cm / Math.max(1, structuralRows.length));
+  const voidHeightCm = structuralHeights.slice(0, voidCount).reduce((s, h) => s + h, 0);
   const cells: { level: number; bin: number; label: string; storageType: StorageType; locationsOnLevel: number; volPerBin: number; levelHeightCm: number }[] = [];
   for (let lev = 0; lev < L; lev++) {
     const locs = Math.max(1, levelRows[lev].locations);
-    const levelHeightCm = levelHeights[lev] ?? height_cm / L;
+    const structuralLev = lev + voidCount;
+    const levelHeightCm = levelHeights[lev] ?? height_cm / Math.max(1, structuralRows.length);
     const volPerBinLev = volumePerBinForLevelHeightDm3(width_cm, depth_cm, levelHeightCm, locs);
     for (let bin = 0; bin < locs; bin++) {
       const nameLabel = generateLocationLabel({
@@ -112,7 +129,17 @@ export function RackPreview({
         sectionStartIndex,
         binNamingType,
       });
-      cells.push({ level: lev, bin, label: nameLabel, storageType: normalizeStorageType(binTypeMap[cellKey(lev, bin)]), locationsOnLevel: locs, volPerBin: volPerBinLev, levelHeightCm });
+      cells.push({
+        level: lev,
+        bin,
+        label: nameLabel,
+        storageType: normalizeStorageType(
+          binTypeMap[cellKey(lev, bin)] ?? binTypeMap[cellKey(structuralLev, bin)]
+        ),
+        locationsOnLevel: locs,
+        volPerBin: volPerBinLev,
+        levelHeightCm,
+      });
     }
   }
   const containerRef = useRef<HTMLDivElement>(null);
@@ -141,7 +168,7 @@ export function RackPreview({
   const viewBoxH = Math.max(280, Math.round(viewBoxW * (containerSize.h / Math.max(containerSize.w, 1))));
   const contentW = viewBoxW - 2 * margin - 2 * beamW;
   const contentAreaH = viewBoxH - 2 * margin;
-  const totalLevelHeightCm = Math.max(1, levelHeights.reduce((sum, v) => sum + Math.max(1, v), 0));
+  const totalLevelHeightCm = Math.max(1, levelHeights.reduce((sum, v) => sum + Math.max(1, v), 0) + Math.max(0, voidHeightCm));
   const ox = margin + beamW;
   const contentAreaY = margin;
   const pad = 2;
@@ -150,6 +177,7 @@ export function RackPreview({
     const levelHeightCm = Math.max(1, levelHeights[level] ?? 1);
     return (levelHeightCm / totalLevelHeightCm) * contentAreaH;
   };
+  const voidPixelHeight = voidHeightCm > 0 ? (voidHeightCm / totalLevelHeightCm) * contentAreaH : 0;
   const levelToY = (level: number) => {
     let y = contentAreaY + pad;
     for (let lev = L - 1; lev > level; lev--) y += levelPixelHeight(lev);
@@ -157,11 +185,12 @@ export function RackPreview({
   };
   const cellInsetH = (level: number) => Math.max(0, levelPixelHeight(level) - pad * 2);
 
-  const floorY = levelToY(0) + cellInsetH(0);
-  const topLevelRowBottomY = levelToY(L - 1) + cellInsetH(L - 1);
+  const floorY = (L > 0 ? levelToY(0) + cellInsetH(0) : contentAreaY) + voidPixelHeight;
+  const topLevelRowBottomY = L > 0 ? levelToY(L - 1) + cellInsetH(L - 1) : contentAreaY;
   const uprightTopY = topLevelRowBottomY;
-  const uprightHeight = floorY - topLevelRowBottomY;
-  const internalShelfYs = Array.from({ length: L - 1 }, (_, i) => levelToY(L - 2 - i));
+  const uprightHeight = Math.max(0, floorY - topLevelRowBottomY);
+  const internalShelfYs = L > 1 ? Array.from({ length: L - 1 }, (_, i) => levelToY(L - 2 - i)) : [];
+  const voidBandY = L > 0 ? levelToY(0) + cellInsetH(0) : contentAreaY;
 
   return (
     <div className={`flex flex-col flex-1 min-h-0 rounded-2xl border border-slate-200/40 bg-white/90 shadow-sm overflow-hidden ${className}`}>
@@ -202,6 +231,31 @@ export function RackPreview({
                   strokeLinecap="butt"
                 />
               ))}
+              {voidPixelHeight > 0 && (
+                <g aria-label="Przejazd pod regałem">
+                  <rect
+                    x={ox}
+                    y={voidBandY}
+                    width={contentW}
+                    height={Math.max(1, voidPixelHeight - pad)}
+                    fill="#cbd5e1"
+                    stroke="#64748b"
+                    strokeWidth={2}
+                    strokeDasharray="6 4"
+                  />
+                  <text
+                    x={ox + contentW / 2}
+                    y={voidBandY + Math.max(1, voidPixelHeight - pad) / 2}
+                    textAnchor="middle"
+                    dominantBaseline="middle"
+                    fontSize={Math.min(20, Math.max(11, voidPixelHeight * 0.35))}
+                    fontWeight={700}
+                    fill="#334155"
+                  >
+                    PRZEJAZD
+                  </text>
+                </g>
+              )}
               <g clipPath="url(#rack-content-clip)">
                 {/* Vertical dividers: per level, within level band only */}
                 {levelRows.map((row, lev) => {
@@ -555,10 +609,18 @@ export function TemplateCreator({ onSave, initialTemplate, onCancelEdit, onSaveE
   }, [isDirty, saving]);
 
   const summaryStats = useMemo(() => {
-    const totalBins = levelConfigForSave.reduce((s, r) => s + r.locations, 0);
-    const totalVolumeDm3 = (width_cm * depth_cm * height_cm) / 1000;
-    return { totalBins, totalVolumeDm3: Number(totalVolumeDm3.toFixed(2)) };
-  }, [levels, levelConfigForSave, width_cm, depth_cm, height_cm]);
+    const voidN = countPassageVoidLevels(
+      height_cm,
+      levelConfigForSave.length,
+      getPassageVoidHeightCm(defaultPassages)
+    );
+    const storageCfg = storageLevelConfigAfterVoid(levelConfigForSave, voidN);
+    const totalBins = storageCfg.reduce((s, r) => s + r.locations, 0);
+    const structuralHeights = levelHeightsForRack(height_cm, levelConfigForSave.length);
+    const storageHeight = structuralHeights.slice(voidN).reduce((s, h) => s + h, 0);
+    const totalVolumeDm3 = (width_cm * depth_cm * Math.max(0, storageHeight)) / 1000;
+    return { totalBins, totalVolumeDm3: Number(totalVolumeDm3.toFixed(2)), voidLevels: voidN };
+  }, [levels, levelConfigForSave, width_cm, depth_cm, height_cm, defaultPassages]);
 
   const handleSave = async () => {
     const trimmed = name.trim() || "Własny regał";
@@ -991,8 +1053,8 @@ export function TemplateCreator({ onSave, initialTemplate, onCancelEdit, onSaveE
       <DesignerAccordion title="PRZEJAZDY" open={accordionOpen.przejazdy} onToggle={() => toggleAccordion("przejazdy")}>
         <div className="space-y-3">
           <p className="text-slate-500 text-xs leading-snug">
-            Domyślne otwory szablonu. Edytuj listę tutaj lub przeciągaj na widoku z góry (po prawej).
-            Przy umieszczaniu regału powstają przejazdy dziedziczone ze szablonu.
+            Jeden przejazd strukturalny na regał. Wysokość od posadzki wyznacza strefę bez
+            lokalizacji magazynowych. Edytuj tutaj lub na widoku z góry (po prawej).
           </p>
           {defaultPassages.map((p, idx) => (
             <div
@@ -1028,6 +1090,24 @@ export function TemplateCreator({ onSave, initialTemplate, onCancelEdit, onSaveE
                   className="mt-0.5 block w-24 rounded border border-slate-200 px-2 py-1 text-sm"
                 />
               </label>
+              <label className="text-xs text-slate-500">
+                Wysokość przejazdu (cm)
+                <input
+                  type="number"
+                  min={0}
+                  step={10}
+                  value={p.clearance_height_cm ?? ""}
+                  placeholder="np. 80"
+                  onChange={(e) => {
+                    const raw = e.target.value.trim();
+                    const v = raw === "" ? null : Math.max(0, Number(raw) || 0);
+                    setDefaultPassages((prev) =>
+                      prev.map((x, i) => (i === idx ? { ...x, clearance_height_cm: v } : x))
+                    );
+                  }}
+                  className="mt-0.5 block w-28 rounded border border-slate-200 px-2 py-1 text-sm"
+                />
+              </label>
               <label className="flex items-center gap-1 text-xs text-slate-500 pb-1">
                 <input
                   type="checkbox"
@@ -1052,25 +1132,27 @@ export function TemplateCreator({ onSave, initialTemplate, onCancelEdit, onSaveE
               </button>
             </div>
           ))}
-          <button
-            type="button"
-            className="text-sm text-cyan-700 hover:underline"
-            onClick={() => {
-              const along = Math.max(1, snapCm(depth_cm));
-              const width = Math.min(100, Math.max(40, along * 0.25));
-              const offset = Math.max(0, (along - width) / 2);
-              setDefaultPassages((prev) => {
-                const next = [
-                  ...prev,
+          {defaultPassages.length === 0 ? (
+            <button
+              type="button"
+              className="text-sm text-cyan-700 hover:underline"
+              onClick={() => {
+                const along = Math.max(1, snapCm(depth_cm));
+                const width = Math.min(100, Math.max(40, along * 0.25));
+                const offset = Math.max(0, (along - width) / 2);
+                setDefaultPassages([
                   { offset_along_cm: offset, width_cm: width, clearance_height_cm: null, enabled: true },
-                ];
-                setSelectedPassageIndex(next.length - 1);
-                return next;
-              });
-            }}
-          >
-            + Dodaj przejazd
-          </button>
+                ]);
+                setSelectedPassageIndex(0);
+              }}
+            >
+              + Dodaj przejazd pod regałem
+            </button>
+          ) : (
+            <p className="text-xs text-slate-500">
+              Limit: jeden przejazd strukturalny na regał. Usuń istniejący, aby dodać inny.
+            </p>
+          )}
         </div>
       </DesignerAccordion>
 
@@ -1130,6 +1212,7 @@ export function TemplateCreator({ onSave, initialTemplate, onCancelEdit, onSaveE
               color={color}
               labelOptions={labelOptionsForPreview}
               focusedBin={previewFocusedBin}
+              passages={defaultPassages}
               onLabelEdit={(namingStrategy === "manual" || allowOverrides) ? handleLabelEdit : undefined}
               onBinClick={(levelIndex, binIndex) => {
                 setPreviewFocusedBin({ level: levelIndex, bin: binIndex });

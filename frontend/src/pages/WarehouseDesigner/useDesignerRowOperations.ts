@@ -2,6 +2,7 @@ import { useCallback } from "react";
 import type { RackState, LayoutState, CatalogItem, EmptyRowSlot, RowContainer, StorageType, RackType } from "../../types/warehouse";
 import { ServiceFaceOrigin } from "../../types/warehouse";
 import { passagesSpreadFromDefaults } from "./passages/rackPassageGeometry";
+import { passagesFromTemplateDefaults } from "../../components/warehouse/passageStorage";
 import {
   getRowStart,
   computeRowSlotPositions,
@@ -185,7 +186,8 @@ function appendHorizontalRowWithTemplateFromCursor(
       spec.manualLabels,
       spec.overrides,
       spec.indexPadding,
-      spec.startIndex
+      spec.startIndex,
+      passagesFromTemplateDefaults(spec.default_passages)
     );
     newRacks.push(
       applyFaceToRack(
@@ -349,7 +351,8 @@ function appendRowWithTemplateToLayoutState(
       spec.manualLabels,
       spec.overrides,
       spec.indexPadding,
-      spec.startIndex
+      spec.startIndex,
+      passagesFromTemplateDefaults(spec.default_passages)
     );
     newRacks.push({
       uuid: rackUuid,
@@ -815,7 +818,8 @@ export function useDesignerRowOperations(params: UseDesignerRowOperationsParams)
             spec.manualLabels,
             spec.overrides,
             spec.indexPadding,
-            spec.startIndex
+            spec.startIndex,
+            passagesFromTemplateDefaults(spec.default_passages)
           );
           newRacks.push(
             applyFaceToRack(
@@ -1031,7 +1035,8 @@ export function useDesignerRowOperations(params: UseDesignerRowOperationsParams)
               templateToApply.manualLabels,
               templateToApply.overrides,
               templateToApply.indexPadding,
-              templateToApply.startIndex
+              templateToApply.startIndex,
+              passagesFromTemplateDefaults(templateToApply.default_passages)
             );
             newRacks.push({
               uuid: generateRackUuid(),

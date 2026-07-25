@@ -29,6 +29,7 @@ import {
 import { logLayoutRackCreate } from "../../components/warehouse/layoutRackLog";
 import type { LevelConfigItem, StorageType } from "../../types/warehouse";
 import { passagesSpreadFromDefaults } from "./passages/rackPassageGeometry";
+import { passagesFromTemplateDefaults } from "../../components/warehouse/passageStorage";
 import type { Dispatch, SetStateAction } from "react";
 import { layoutCmToCellsX, layoutCmToCellsY } from "../../utils/warehouseGridMetrics";
 
@@ -110,7 +111,8 @@ export function useDesignerRackPlacement(params: UseDesignerRackPlacementParams)
         t.manualLabels,
         t.overrides,
         t.indexPadding,
-        t.startIndex
+        t.startIndex,
+        passagesFromTemplateDefaults(template.default_passages)
       );
       const newRack = {
             uuid: generateRackUuid(),
@@ -136,6 +138,7 @@ export function useDesignerRackPlacement(params: UseDesignerRackPlacementParams)
             ...(t.sectionStartIndex != null ? { sectionStartIndex: t.sectionStartIndex } : {}),
             ...(t.binNamingType != null ? { binNamingType: t.binNamingType } : {}),
             ...(typeof t.templateId === "string" && t.templateId.trim() !== "" ? { templateId: t.templateId } : {}),
+            ...passagesSpreadFromDefaults(template.default_passages),
           } as RackState;
       logLayoutRackCreate(newRack);
       return { ...prev, racks: [...prev.racks, newRack] };
@@ -208,9 +211,10 @@ export function useDesignerRackPlacement(params: UseDesignerRackPlacementParams)
         spec.manualLabels,
         spec.overrides,
         spec.indexPadding,
-        spec.startIndex
-      );
-      const templateColor = item.type === "custom" ? item.template.color : spec.color;
+      spec.startIndex,
+      passagesFromTemplateDefaults(spec.default_passages)
+    );
+    const templateColor = item.type === "custom" ? item.template.color : spec.color;
       const rackColor = (typeof templateColor === "string" && templateColor.trim() !== "") ? templateColor.trim() : "#3b82f6";
       const resolvedRackType: RackType = item.type === "custom" ? (item.template.rack_type ?? "warehouse") : rackType;
       const { x: startX, y: startY } = getRowStart(row);
@@ -354,7 +358,8 @@ export function useDesignerRackPlacement(params: UseDesignerRackPlacementParams)
       spec.manualLabels,
       spec.overrides,
       spec.indexPadding,
-      spec.startIndex
+      spec.startIndex,
+      passagesFromTemplateDefaults(spec.default_passages)
     );
     const templateColor = item.type === "custom" ? item.template.color : spec.color;
     const rackColor = (typeof templateColor === "string" && templateColor.trim() !== "") ? templateColor.trim() : "#3b82f6";

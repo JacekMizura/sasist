@@ -27,7 +27,7 @@ type Props = {
 function patchPassageGroup(
   layout: LayoutState,
   selected: SelectedPassage,
-  patch: Partial<Pick<RackPassageState, "offset_along_cm" | "width_cm" | "enabled">>
+  patch: Partial<Pick<RackPassageState, "offset_along_cm" | "width_cm" | "enabled" | "clearance_height_cm">>
 ): LayoutState {
   const members = findPassageGroup(layout, selected.rackUuid, selected.passageUuid);
   if (members.length === 0) return layout;
@@ -67,8 +67,8 @@ export function PassageInspector({
   const source = normalizePassageSource(passage.passage_source);
   const corridorUuid = passage.corridor_uuid ?? null;
   const rackNames = [...new Set(members.map((m) => m.rack.name || m.rack.aisle_letter || "?").filter(Boolean))];
-  const clearance = members.map((m) => m.passage.clearance_height_cm).find((v) => v != null && Number(v) > 0);
   const allEnabled = members.every((m) => m.passage.enabled !== false);
+  const clearanceDisplay = members.map((m) => m.passage.clearance_height_cm).find((v) => v != null && Number(v) > 0);
 
   return (
     <div
@@ -108,6 +108,10 @@ export function PassageInspector({
         <div className="rounded-md border border-amber-200 bg-amber-50 p-2 text-[11px] text-amber-950">
           Ten przejazd pochodzi z szablonu — lokalna edycja CAD jest wyłączona. Zmieniaj przejazd w
           szablonie, potem „Aktualizuj instancje”.
+          <p className="mt-1 text-[10px] text-amber-900/90">
+            Wysokość przejazdu:{" "}
+            {clearanceDisplay != null ? `${Math.round(Number(clearanceDisplay))} cm` : "— (brak wpływu na lokalizacje)"}
+          </p>
           {onOpenTemplate ? (
             <button
               type="button"
@@ -130,11 +134,6 @@ export function PassageInspector({
             <span className={allEnabled ? "font-semibold text-emerald-700" : "font-semibold text-amber-700"}>
               {allEnabled ? "Drożny" : "Wyłączony"}
             </span>
-            {clearance != null ? (
-              <span className="ml-2">Prześwit: {Math.round(Number(clearance))} cm</span>
-            ) : (
-              <span className="ml-2 text-slate-400">Prześwit: —</span>
-            )}
           </p>
           <p className="text-[10px] text-slate-500">
             Przeciągnij na canvasie — przesuwa cały korytarz naraz.
@@ -175,6 +174,25 @@ export function PassageInspector({
             />
             <span className="mt-0.5 block text-right font-mono text-[11px] text-slate-800">
               {Math.round(passage.width_cm)} cm
+            </span>
+          </label>
+          <label className="block text-[11px]">
+            Wysokość przejazdu (cm)
+            <input
+              type="number"
+              min={0}
+              step={10}
+              className="mt-0.5 w-full rounded border border-slate-200 px-2 py-1"
+              value={passage.clearance_height_cm ?? ""}
+              placeholder="np. 80"
+              onChange={(e) => {
+                const raw = e.target.value.trim();
+                const clearance_height_cm = raw === "" ? null : Math.max(0, Number(raw) || 0);
+                setLayout((prev) => patchPassageGroup(prev, selectedPassage, { clearance_height_cm }));
+              }}
+            />
+            <span className="mt-0.5 block text-[10px] text-slate-500">
+              Od posadzki do tej wysokości nie powstają lokalizacje. Puste = bez wpływu na strukturę.
             </span>
           </label>
           <label className="inline-flex items-center gap-2 text-[11px]">

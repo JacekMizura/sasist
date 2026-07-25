@@ -1,3 +1,19 @@
+## 2026-07-25 — Passage storage: one structural + stock block (no push)
+
+- Void height = first enabled passage only (no max); UI limit 1 passage/rack
+- Rebuild with stock: FE dialog blocks confirm; BE save → 409
+- Business vitest: 5→5, +80→3, +120→2, numbering, capacity, active-only WMS filter
+- **No push.**
+
+## 2026-07-25 — Passage under rack → storage model (variant A, no push)
+
+- Generator: `createBinsForRack` + `passageStorage` skip void levels; labels 1..N storage-only
+- Capacity from existing bins; Internal Layout / side view / template preview show PRZEJAZD
+- Save: `prepareLayoutBinsForSave` + confirm dialog (addresses + stock) before soft-remove
+- Clearance height editable in TemplateCreator + PassageInspector (LOCAL); required for void
+- No `affects_storage`, no materialization table, no separate Apply action
+- Tests: passageStorage vitest PASS; tsc OK. **No push.**
+
 ## 2026-07-25 — Pre-push UX: P0 regressions + „Projektowanie magazynu”
 
 - Template preview scale-to-fit; ElevationSidePanel uuid match; routing htmlOverlay pointer trap

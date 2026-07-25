@@ -15,6 +15,7 @@ import {
   ROW_LABEL_ADDRESS_PATTERN,
   generateRackUuid,
 } from "./warehouseUtils";
+import { passagesFromTemplateDefaults } from "./passageStorage";
 import { passagesSpreadFromDefaults } from "../../pages/WarehouseDesigner/passages/rackPassageGeometry";
 
 /** Template spec passed to the generator (same shape as getCatalogItemSpec result + templateId). */
@@ -380,7 +381,8 @@ export function buildRackFromTemplate(
     template.manualLabels,
     template.overrides,
     template.indexPadding,
-    template.startIndex
+    template.startIndex,
+    passagesFromTemplateDefaults(template.default_passages)
   );
 
   const rackW = footprintCells?.widthCells ?? cmToCells(template.width_cm);

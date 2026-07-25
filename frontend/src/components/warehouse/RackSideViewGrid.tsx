@@ -4,10 +4,15 @@ import {
   getLevelConfig,
   binUsedVolumeDm3,
   binVolumeDm3,
+  isBinActive,
   isBinDirectionRtl,
   segmentIndexForVisualSlot,
   type PackingLayoutResult,
 } from "./warehouseUtils";
+import {
+  countPassageVoidLevelsForRack,
+  storageLevelConfigAfterVoid,
+} from "./passageStorage";
 import { getStorageTypeStyle, getStorageTypeLabel, normalizeStorageType } from "../../utils/storageTypes";
 import { resolveWarehouseLocation } from "../../utils/resolvedWarehouseLocation";
 import { StorageTypeIcon } from "../../utils/storageTypeIcons";
@@ -26,7 +31,9 @@ const BIN_BG = "#f4f4f4";
 const BIN_BORDER = "#ddd";
 
 function getBinAt(rack: RackState, levelIndex: number, segmentIndex: number): BinState | undefined {
-  return rack.bins.find((b) => b.level_index === levelIndex && b.segment_index === segmentIndex);
+  return rack.bins.find(
+    (b) => isBinActive(b) && b.level_index === levelIndex && b.segment_index === segmentIndex
+  );
 }
 
 export type SelectedLocation = { level_index: number; segment_index: number } | null;
@@ -122,7 +129,12 @@ export function RackSideViewGrid({
     return () => ro.disconnect();
   }, []);
 
-  const levelConfig = useMemo(() => getLevelConfig(rack), [rack]);
+  const structuralConfig = useMemo(() => getLevelConfig(rack), [rack]);
+  const voidLevelCount = useMemo(() => countPassageVoidLevelsForRack(rack), [rack]);
+  const levelConfig = useMemo(
+    () => storageLevelConfigAfterVoid(structuralConfig, voidLevelCount),
+    [structuralConfig, voidLevelCount]
+  );
   const L = levelConfig.length;
 
   /** Visual order of slots (left→right): RTL mirrors segment_index without changing data. */
@@ -139,9 +151,16 @@ export function RackSideViewGrid({
   const ox = margin + UPRIGHT_WIDTH;
   const contentAreaY = margin;
 
+  const structuralCount = Math.max(1, structuralConfig.length);
+  const voidBandH =
+    voidLevelCount > 0
+      ? Math.max(28, (contentAreaH * voidLevelCount) / structuralCount)
+      : 0;
+  const storageAreaH = Math.max(80, contentAreaH - voidBandH);
+
   // Level then beam; lowest level has base beam (grey). Total = L bin rows + L beams.
   const beamHeight = embeddedPreview ? 28 : BEAM_HEIGHT_VIEWBOX;
-  const binRowHeight = Math.max(embeddedPreview ? 52 : 20, (contentAreaH - L * beamHeight) / L);
+  const binRowHeight = Math.max(embeddedPreview ? 52 : 20, L > 0 ? (storageAreaH - L * beamHeight) / L : storageAreaH);
   // Top of bin row for level (level L-1 at top, level 0 at bottom)
   const levelToBinRowY = (level: number) => contentAreaY + (L - 1 - level) * (binRowHeight + beamHeight);
   // Top of beam (below bins); one beam per level (orange above floor, grey base at bottom)
@@ -149,9 +168,12 @@ export function RackSideViewGrid({
 
   // Posts stop exactly at lowest beam (base beam). Height = levels container height.
   const structureHeight = L > 0 ? L * (binRowHeight + beamHeight) : 0;
-  const uprightTopY = levelToBinRowY(L - 1);
+  const uprightTopY = L > 0 ? levelToBinRowY(L - 1) : contentAreaY;
   const uprightBottomY = L > 0 ? levelToBeamY(0) + beamHeight : contentAreaY;
   const uprightHeight = structureHeight;
+  const voidBandY = uprightBottomY;
+  void uprightTopY;
+  void uprightHeight;
 
   return (
     <div ref={containerRef} className={`w-full overflow-visible ${className}`} style={{ height: "100%", minHeight: 0, position: "relative" }}>
@@ -334,6 +356,32 @@ export function RackSideViewGrid({
               })}
             </g>
           </g>
+          {voidBandH > 0 && (
+            <g aria-label="Przejazd pod regałem">
+              <rect
+                x={margin}
+                y={voidBandY}
+                width={viewBoxW - 2 * margin}
+                height={voidBandH}
+                fill="#cbd5e1"
+                stroke="#64748b"
+                strokeWidth={2}
+                strokeDasharray="6 4"
+              />
+              <text
+                x={viewBoxW / 2}
+                y={voidBandY + voidBandH / 2}
+                textAnchor="middle"
+                dominantBaseline="middle"
+                fontSize={Math.min(22, Math.max(12, voidBandH * 0.35))}
+                fontWeight={700}
+                fill="#334155"
+                fontFamily="system-ui, sans-serif"
+              >
+                PRZEJAZD
+              </text>
+            </g>
+          )}
           {/* Bin area: LevelRow content (boxes with location labels + occupancy) */}
           <g clipPath="url(#rack-sideview-clip)" aria-label="BinRows">
             {levelConfig.map((row, lev) => {

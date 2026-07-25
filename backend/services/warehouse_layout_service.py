@@ -973,22 +973,41 @@ class WarehouseLayoutService:
                 removed_bin_rows.append((bin_row, loc_uuid))
 
             inventory_ref_uuids: set[str] = set()
+            stocked_removal_labels: list[str] = []
             if removed_bin_rows:
                 removed_uuids = [u for _b, u in removed_bin_rows]
-                inventory_ref_rows = (
-                    self.db.query(Inventory.location_uuid)
+                inventory_qty_rows = (
+                    self.db.query(Inventory.location_uuid, Inventory.quantity)
                     .filter(
                         Inventory.warehouse_id == warehouse_id,
                         Inventory.location_uuid.in_(removed_uuids),
                     )
-                    .distinct()
                     .all()
                 )
-                inventory_ref_uuids = {
-                    uu
-                    for uu in (_normalize_uuid(getattr(r, "location_uuid", None)) for r in inventory_ref_rows)
-                    if uu is not None
-                }
+                stocked_uuids: set[str] = set()
+                for row in inventory_qty_rows:
+                    uu = _normalize_uuid(getattr(row, "location_uuid", None))
+                    qty = float(getattr(row, "quantity", 0) or 0)
+                    if uu is None:
+                        continue
+                    inventory_ref_uuids.add(uu)
+                    if qty > 0:
+                        stocked_uuids.add(uu)
+                if stocked_uuids:
+                    for bin_row, loc_uuid in removed_bin_rows:
+                        if loc_uuid not in stocked_uuids:
+                            continue
+                        label = (getattr(bin_row, "label", None) or loc_uuid or "?").strip()
+                        stocked_removal_labels.append(label)
+                    raise HTTPException(
+                        status_code=409,
+                        detail=(
+                            "Nie można przebudować regału — lokalizacje do usunięcia mają stan magazynowy: "
+                            + ", ".join(stocked_removal_labels[:20])
+                            + ("…" if len(stocked_removal_labels) > 20 else "")
+                            + ". Opróżnij je przed zapisem."
+                        ),
+                    )
 
             for bin_row, loc_uuid in removed_bin_rows:
                 bin_row.is_active = False

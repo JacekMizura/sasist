@@ -18,6 +18,12 @@ import type {
 } from "../../types/warehouse";
 import { buildBinTypeMapFromBins, normalizeBinTypeMap, normalizeStorageType } from "../../utils/storageTypes";
 import { getLayoutMetersPerCell, layoutCmToCellsX, layoutCmToCellsY } from "../../utils/warehouseGridMetrics";
+import {
+  countPassageVoidLevels,
+  getPassageVoidHeightCm,
+  storageLevelConfigAfterVoid,
+  type PassageClearanceLike,
+} from "./passageStorage";
 
 export function generateRackUuid(): string {
   return typeof crypto !== "undefined" && crypto.randomUUID
@@ -1157,7 +1163,15 @@ export function duplicateRacksAtPosition(
       rAny(r).rowId ?? r.name,
       rAny(r).sectionStartIndex ?? 1,
       rAny(r).binNamingType ?? "numeric",
-      lc
+      lc,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      r.passages
     );
     return {
       ...r,
@@ -1624,13 +1638,22 @@ export function createBinsForRack(
   manualLabels?: Record<string, string>,
   overrides?: Record<string, string>,
   indexPadding?: number,
-  startIndex?: number
+  startIndex?: number,
+  /** Enabled passages: max clearance skips bottom structural levels (variant A). */
+  passages?: PassageClearanceLike[] | null
 ): BinState[] {
-  const levelRows = Array.isArray(levelConfig) && levelConfig.length > 0
+  const structuralRows = Array.isArray(levelConfig) && levelConfig.length > 0
     ? levelConfig
     : Array.from({ length: Math.max(1, levels) }, (_, i) => ({ level: i + 1, locations: Math.max(1, binsPerLevel) }));
-  const levelCount = levelRows.length;
-  const levelHeights = rackHeightCm != null && rackHeightCm > 0 ? levelHeightsForRack(rackHeightCm, levelCount) : [];
+  const structuralCount = structuralRows.length;
+  const voidLevelCount = countPassageVoidLevels(
+    rackHeightCm ?? 0,
+    structuralCount,
+    getPassageVoidHeightCm(passages)
+  );
+  const levelRows = storageLevelConfigAfterVoid(structuralRows, voidLevelCount);
+  const structuralHeights =
+    rackHeightCm != null && rackHeightCm > 0 ? levelHeightsForRack(rackHeightCm, structuralCount) : [];
   const depth_cm = rackDepthCm ?? undefined;
   const normalizedBinTypeMap = normalizeBinTypeMap(binTypeMap);
   const row = (rowId ?? aisleLetter).toString().replace(/\./g, "");
@@ -1669,12 +1692,16 @@ export function createBinsForRack(
 
   const out: BinState[] = [];
   for (let lev = 0; lev < levelRows.length; lev++) {
+    const structuralLev = lev + voidLevelCount;
     const locs = Math.max(1, levelRows[lev].locations);
     const widthList = rackWidthCm != null ? distributedWidthsCm(rackWidthCm, locs) : [];
-    const height_cm = levelHeights[lev] ?? undefined;
+    const height_cm = structuralHeights[structuralLev] ?? undefined;
     for (let seg = 0; seg < locs; seg++) {
-      const key = `${lev}-${seg}`;
-      const type = normalizedBinTypeMap[key] ?? "primary";
+      // Prefer storage key for types; fall back to structural key (legacy maps).
+      const type =
+        normalizedBinTypeMap[`${lev}-${seg}`] ??
+        normalizedBinTypeMap[`${structuralLev}-${seg}`] ??
+        "primary";
       const generatedLabel = generateLocationLabel({
         levelIndex: lev,
         segmentIndex: seg,
@@ -1710,10 +1737,83 @@ export function createBinsForRack(
         locationUUID,
         barcode_data: locId,
         storage_type: type,
+        is_active: true,
       });
     }
   }
   return out;
+}
+
+/** Deterministic bins from rack SSOT (structure + passages). */
+export function createBinsForRackState(rack: RackState): BinState[] {
+  const lc = getLevelConfig(rack);
+  const voidLevels = countPassageVoidLevels(
+    Number(rack.height_cm ?? 0),
+    lc.length,
+    getPassageVoidHeightCm(rack.passages)
+  );
+  const storageLc = storageLevelConfigAfterVoid(lc, voidLevels);
+  const total = getTotalLocations(storageLc);
+  const storageHeightCm = Math.max(
+    0,
+    Number(rack.height_cm ?? 0) -
+      sumVoidLevelHeightsCmLocal(Number(rack.height_cm ?? 0), lc.length, voidLevels)
+  );
+  const volPerBin =
+    total > 0 && storageHeightCm > 0
+      ? volumePerBinFromTotal(rack.width_cm, rack.length_cm, storageHeightCm, total)
+      : volumePerBin(rack.width_cm, rack.length_cm, rack.height_cm, Math.max(1, storageLc.length), rack.bins_per_level);
+  const rAny = rack as RackState & {
+    addressPattern?: string;
+    rowId?: string;
+    sectionStartIndex?: number;
+    binNamingType?: "numeric" | "alpha";
+    namingStrategy?: "pattern" | "rack-index" | "custom" | "manual";
+    namingOrientation?: "column-first" | "row-first";
+    namingPattern?: string;
+    naming_pattern?: string;
+    manualLabels?: Record<string, string>;
+    overrides?: Record<string, string>;
+    indexPadding?: number;
+    startIndex?: number;
+    bin_type_map?: Record<string, NormalizedStorageType>;
+  };
+  return createBinsForRack(
+    rack.aisle_letter,
+    rack.rack_index,
+    rack.levels,
+    rack.bins_per_level,
+    volPerBin,
+    "M1",
+    rAny.naming_pattern ?? rAny.namingPattern,
+    rack.width_cm,
+    rack.length_cm,
+    rack.height_cm,
+    rAny.bin_type_map ?? buildBinTypeMapFromBins(rack.bins),
+    rAny.addressPattern ?? ROW_LABEL_ADDRESS_PATTERN,
+    rAny.rowId ?? rack.name,
+    rAny.sectionStartIndex ?? 1,
+    rAny.binNamingType ?? "numeric",
+    lc,
+    rAny.namingStrategy,
+    rAny.namingOrientation,
+    rAny.namingPattern ?? rAny.addressPattern,
+    rAny.manualLabels,
+    rAny.overrides,
+    rAny.indexPadding,
+    rAny.startIndex,
+    rack.passages
+  );
+}
+
+function sumVoidLevelHeightsCmLocal(
+  rackHeightCm: number,
+  structuralLevelCount: number,
+  voidLevelCount: number
+): number {
+  if (voidLevelCount <= 0 || structuralLevelCount <= 0 || !(rackHeightCm > 0)) return 0;
+  const heights = levelHeightsForRack(rackHeightCm, structuralLevelCount);
+  return heights.slice(0, voidLevelCount).reduce((s, h) => s + h, 0);
 }
 
 /**

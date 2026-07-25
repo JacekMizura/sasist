@@ -4,9 +4,12 @@ import {
   formatVolume,
   binUsedVolumeDm3,
   binVolumeDm3,
+  getLevelConfig,
   getRackDisplayId,
+  isBinActive,
   isBinDirectionRtl,
 } from "./warehouseUtils";
+import { countPassageVoidLevelsForRack, storageLevelConfigAfterVoid } from "./passageStorage";
 import { resolveWarehouseLocation } from "../../utils/resolvedWarehouseLocation";
 
 /** Slide-over panel content for elevation (side) view + inventory list. Used only in Layout tab; onAddProduct/onEditProduct allow adding/editing products. */
@@ -28,17 +31,25 @@ export function ElevationPanel({
   onEditProduct?: (productId: string) => void;
 }) {
   const binDirectionRtl = useMemo(() => isBinDirectionRtl(layout, rack), [layout, rack]);
+  const storageLevels = useMemo(() => {
+    const structural = getLevelConfig(rack);
+    const voidN = countPassageVoidLevelsForRack(rack);
+    return storageLevelConfigAfterVoid(structural, voidN);
+  }, [rack]);
+  const voidLevelCount = useMemo(() => countPassageVoidLevelsForRack(rack), [rack]);
 
   const binsByLevel = new Map<number, BinState[]>();
   for (const b of rack.bins) {
+    if (!isBinActive(b)) continue;
     if (!binsByLevel.has(b.level_index)) binsByLevel.set(b.level_index, []);
     binsByLevel.get(b.level_index)!.push(b);
   }
-  for (let lev = 0; lev < rack.levels; lev++) {
+  for (let lev = 0; lev < storageLevels.length; lev++) {
     if (!binsByLevel.has(lev)) binsByLevel.set(lev, []);
   }
-  const used = rack.used_dm3 ?? rack.bins.reduce((s, b) => s + binUsedVolumeDm3(b), 0);
-  const total = rack.total_capacity_dm3 ?? rack.bins.reduce((s, b) => s + binVolumeDm3(b, rack), 0);
+  const activeBins = rack.bins.filter(isBinActive);
+  const used = rack.used_dm3 ?? activeBins.reduce((s, b) => s + binUsedVolumeDm3(b), 0);
+  const total = rack.total_capacity_dm3 ?? activeBins.reduce((s, b) => s + binVolumeDm3(b, rack), 0);
   const filteredBin = selectedBinForFilter
     ? rack.bins.find((b) => b.level_index === selectedBinForFilter.level_index && b.segment_index === selectedBinForFilter.segment_index)
     : null;
@@ -77,7 +88,7 @@ export function ElevationPanel({
       </div>
       <p className="text-[10px] text-slate-400 mb-2">Kliknij lokalizację, aby filtrować produkty.</p>
       <div className="space-y-3">
-        {Array.from({ length: rack.levels }, (_, lev) => lev)
+        {Array.from({ length: storageLevels.length }, (_, lev) => lev)
           .reverse()
           .map((lev) => (
           <div key={lev} className="border border-[#E2E8F0] rounded-lg p-2 bg-slate-50">
@@ -125,6 +136,12 @@ export function ElevationPanel({
             </div>
           </div>
         ))}
+        {voidLevelCount > 0 && (
+          <div className="rounded-lg border border-dashed border-slate-400 bg-slate-200/80 px-3 py-4 text-center">
+            <div className="text-xs font-bold uppercase tracking-wide text-slate-700">Przejazd pod regałem</div>
+            <div className="text-[10px] text-slate-600">bez lokalizacji</div>
+          </div>
+        )}
       </div>
       <div className="mt-4 pt-4 border-t border-[#E2E8F0]">
         <h4 className="text-xs font-bold text-slate-600 uppercase mb-2">

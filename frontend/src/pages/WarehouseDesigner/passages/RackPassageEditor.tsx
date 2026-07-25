@@ -31,15 +31,19 @@ export function RackPassageEditor({ selectedRack, setLayout }: Props) {
     <div className="mt-3 border-t border-slate-100 pt-2">
       <p className="mb-1 text-[10px] font-bold uppercase text-slate-500">Przejazd pod regałem</p>
       <p className="mb-2 text-[10px] text-slate-500">
-        Fizyczna przerwa w regale (pełna głębokość). Przesuwa się razem z regałem.
+        Jeden przejazd strukturalny na regał (pełna głębokość). Przesuwa się razem z regałem.
       </p>
-      <button
-        type="button"
-        className="mb-2 w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-[11px] font-semibold text-slate-800 hover:bg-slate-50"
-        onClick={() => updatePassages(setLayout, selectedRack, [...passages, defaultPassageForRack(selectedRack)])}
-      >
-        Dodaj przejazd pod regałem
-      </button>
+      {passages.length === 0 ? (
+        <button
+          type="button"
+          className="mb-2 w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-[11px] font-semibold text-slate-800 hover:bg-slate-50"
+          onClick={() => updatePassages(setLayout, selectedRack, [defaultPassageForRack(selectedRack)])}
+        >
+          Dodaj przejazd pod regałem
+        </button>
+      ) : (
+        <p className="mb-2 text-[10px] text-slate-500">Limit: jeden przejazd. Usuń istniejący, aby dodać inny.</p>
+      )}
       <ul className="space-y-2">
         {passages.map((p) => (
           <li key={p.uuid} className="rounded-lg border border-slate-200 bg-slate-50/80 p-2">

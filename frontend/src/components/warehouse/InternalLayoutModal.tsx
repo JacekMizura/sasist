@@ -6,6 +6,7 @@ import {
   binVolumeFromDimensions,
   effectiveRackDisplayName,
   getRackDisplayId,
+  getLevelConfig,
   isBinDirectionRtl,
   levelHeightsForRack,
   normalizeInternalLevelsToCanonicalSegmentOrder,
@@ -15,6 +16,11 @@ import { getStorageTypeStyle, normalizeStorageType, STORAGE_TYPE_OPTIONS } from 
 import { resolveWarehouseLocation } from "../../utils/resolvedWarehouseLocation";
 import { StorageTypeIcon } from "../../utils/storageTypeIcons";
 import { FitToContainer } from "./FitToContainer";
+import {
+  countPassageVoidLevelsForRack,
+  getPassageVoidHeightCm,
+  sumVoidLevelHeightsCm,
+} from "./passageStorage";
 
 export type InternalLayoutModalProps = {
   layout?: LayoutState | null;
@@ -139,6 +145,14 @@ export function InternalLayoutModal({ layout = null, rack, warehouseLabel, onSav
   /** Same predicate / mapping as `RackSideViewGrid` (`isBinDirectionRtl` + `segmentIndexForVisualSlot`). */
   const binDirectionRtl = useMemo(() => isBinDirectionRtl(layout, rackFromLayout), [layout, rackFromLayout]);
 
+  const voidLevelCount = useMemo(() => countPassageVoidLevelsForRack(rackFromLayout), [rackFromLayout]);
+  const voidHeightCm = useMemo(() => {
+    const clearance = getPassageVoidHeightCm(rackFromLayout.passages);
+    const structural = getLevelConfig(rackFromLayout).length;
+    const fromLevels = sumVoidLevelHeightsCm(Number(rackFromLayout.height_cm ?? 0), structural, voidLevelCount);
+    return fromLevels > 0 ? fromLevels : clearance;
+  }, [rackFromLayout, voidLevelCount]);
+
   const initialLevelsRaw = useMemo(() => getInitialLevels(rack), [rack]);
   const initialLevels = useMemo(
     () => normalizeInternalLevelsToCanonicalSegmentOrder(initialLevelsRaw, rackFromLayout, binDirectionRtl),
@@ -172,7 +186,7 @@ export function InternalLayoutModal({ layout = null, rack, warehouseLabel, onSav
 
   const levelWidthSum = (lev: InternalLevel) => lev.locations.reduce((sum, loc) => sum + Number(loc.width_cm ?? 0), 0);
   const rackWidthLimit = typeof rackWidthCm === "number" && Number.isFinite(rackWidthCm) ? rackWidthCm : Number.POSITIVE_INFINITY;
-  const totalHeightCm = levels.reduce((s, lev) => s + lev.height_cm, 0);
+  const totalHeightCm = levels.reduce((s, lev) => s + lev.height_cm, 0) + (voidHeightCm > 0 ? voidHeightCm : 0);
   const heightExceeded = totalHeightCm > rack.height_cm;
   const hasAnyLevelWidthExceeded = levels.some((lev) => levelWidthSum(lev) > rackWidthLimit + 0.01);
   const valid = !heightExceeded && !hasAnyLevelWidthExceeded;
@@ -639,6 +653,16 @@ export function InternalLayoutModal({ layout = null, rack, warehouseLabel, onSav
                 </div>
               );
             })}
+            {voidHeightCm > 0 && (
+              <div
+                className="flex min-h-[72px] flex-col items-center justify-center border-b-2 border-t-2 border-dashed border-slate-400 bg-slate-200/80"
+                style={{ width: rackNaturalWidthPx, minHeight: Math.max(72, Math.round(voidHeightCm * 0.6)) }}
+                aria-label="Przejazd pod regałem"
+              >
+                <span className="text-sm font-bold uppercase tracking-wide text-slate-700">Przejazd pod regałem</span>
+                <span className="text-[11px] text-slate-600">{Math.round(voidHeightCm)} cm · bez lokalizacji</span>
+              </div>
+            )}
             </div>
           </FitToContainer>
         </div>

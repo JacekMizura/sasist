@@ -87,24 +87,27 @@ export function defaultPassageForRack(rack: RackState): RackPassageState {
   };
 }
 
-/** Materialize template defaults as new INHERITED instance passages (fresh UUIDs). */
+/** Materialize template defaults as new INHERITED instance passages (fresh UUIDs).
+ * At most one structural passage per rack — only the first enabled default is kept. */
 export function materializeInheritedPassages(
   defaults: TemplatePassageDefault[] | null | undefined
 ): RackPassageState[] {
   if (!Array.isArray(defaults) || defaults.length === 0) return [];
-  return defaults.map((d) => {
-    const width = Math.max(1, Number(d.width_cm) || 100);
-    const offset = Math.max(0, Number(d.offset_along_cm) || 0);
-    return {
+  const first = defaults.find((d) => d.enabled !== false) ?? defaults[0];
+  if (!first) return [];
+  const width = Math.max(1, Number(first.width_cm) || 100);
+  const offset = Math.max(0, Number(first.offset_along_cm) || 0);
+  return [
+    {
       uuid: newPassageUuid(),
       offset_along_cm: offset,
       width_cm: width,
-      clearance_height_cm: d.clearance_height_cm == null ? null : Number(d.clearance_height_cm),
-      enabled: d.enabled !== false,
+      clearance_height_cm: first.clearance_height_cm == null ? null : Number(first.clearance_height_cm),
+      enabled: first.enabled !== false,
       corridor_uuid: newCorridorUuid(),
       passage_source: PassageSourceEnum.INHERITED,
-    };
-  });
+    },
+  ];
 }
 
 /**

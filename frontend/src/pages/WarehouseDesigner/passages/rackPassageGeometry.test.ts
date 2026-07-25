@@ -114,12 +114,13 @@ describe("passage source materialize", () => {
     expect(p.passage_source).toBe(PassageSource.LOCAL);
   });
 
-  it("materializeInheritedPassages creates fresh INHERITED uuids", () => {
-    const a = materializeInheritedPassages([{ offset_along_cm: 10, width_cm: 40 }]);
-    const b = materializeInheritedPassages([{ offset_along_cm: 10, width_cm: 40 }]);
-    expect(a).toHaveLength(1);
-    expect(a[0].passage_source).toBe(PassageSource.INHERITED);
-    expect(a[0].uuid).not.toBe(b[0].uuid);
+  it("materializeInheritedPassages keeps only one structural passage", () => {
+    const many = materializeInheritedPassages([
+      { offset_along_cm: 10, width_cm: 40, clearance_height_cm: 80 },
+      { offset_along_cm: 50, width_cm: 40, clearance_height_cm: 120 },
+    ]);
+    expect(many).toHaveLength(1);
+    expect(many[0].clearance_height_cm).toBe(80);
   });
 
   it("rematerializeInheritedPassages keeps LOCAL and replaces INHERITED", () => {
