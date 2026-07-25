@@ -63,13 +63,10 @@
     background-color: rgb(100 116 139 / 0.55);
   }
 
-  /* Magazyn operational map — warehouse hall floor (no grid). */
+  /* Magazyn operational map — white floor + soft container shadow. */
   .warehouse-magazyn-hall {
-    background-color: #d4dae3;
-    background-image:
-      radial-gradient(ellipse 90% 70% at 18% 12%, rgba(255, 255, 255, 0.35), transparent 52%),
-      radial-gradient(ellipse 80% 60% at 82% 88%, rgba(148, 163, 184, 0.12), transparent 50%),
-      linear-gradient(165deg, #e8ecf2 0%, #d7dde6 42%, #cfd5df 100%);
+    background-color: #ffffff;
+    box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.04), 0 1px 3px rgba(15, 23, 42, 0.06);
   }
 
   .input-focus {

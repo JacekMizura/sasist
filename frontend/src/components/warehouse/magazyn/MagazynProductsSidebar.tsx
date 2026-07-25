@@ -870,7 +870,7 @@ export function MagazynProductsSidebar({
                     </div>
                   )}
                   <div className="flex items-start gap-3.5">
-                    <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-xl bg-slate-100">
+                    <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-xl bg-neutral-100">
                       <div className="absolute inset-0 flex items-center justify-center">
                         <svg className="h-6 w-6 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
                       </div>
@@ -878,7 +878,7 @@ export function MagazynProductsSidebar({
                         <img
                           src={imageUrl}
                           alt=""
-                          className="absolute inset-0 z-10 h-full w-full object-cover"
+                          className="absolute inset-0 z-10 h-full w-full object-contain p-1"
                           onError={(e) => { e.currentTarget.style.display = "none"; }}
                         />
                       )}
@@ -888,6 +888,9 @@ export function MagazynProductsSidebar({
                         {highlightQueryInText(p.name ?? "", productSearchQuery, p.id)}
                       </div>
                       <div className="mt-1 truncate text-[11px] tracking-wide text-slate-400">{p.sku ?? "—"}</div>
+                      <div className="mt-0.5 truncate text-[11px] tracking-wide text-slate-400">
+                        EAN: {p.ean?.trim() ? p.ean : "—"}
+                      </div>
                       {hasQuantityBreakdown ? (
                         <>
                           <div className="mt-3 text-base font-semibold tabular-nums text-slate-900">

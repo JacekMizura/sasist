@@ -21,6 +21,7 @@ import { VisualLayer } from "./WarehouseCanvas/VisualLayer";
 import { SelectionOverlay } from "./WarehouseCanvas/SelectionOverlay";
 import { WallElementsLayer } from "./WarehouseCanvas/WallElementsLayer";
 import { PathLayer } from "./WarehouseCanvas/PathLayer";
+import { MagazynPreviewPathLayer } from "./WarehouseCanvas/MagazynPreviewPathLayer";
 import { PassageDrawPreview } from "../../pages/WarehouseDesigner/passages/PassageDrawPreview";
 
 const RACK_RADIUS_PX = parseFloat(radius.small) || 6;
@@ -743,7 +744,7 @@ function WarehouseCanvasInner({
         isLiveView ? "p-0" : "pl-3.5 pt-3.5"
       }`}
       style={{
-        backgroundColor: isLiveView ? "#d9dee6" : colors.background,
+        backgroundColor: isLiveView ? "#ffffff" : colors.background,
         ...(isLiveView ? { overscrollBehavior: "contain" as const } : {}),
       }}
     >
@@ -1176,8 +1177,8 @@ function WarehouseCanvasInner({
                     y={0}
                     width={width}
                     height={height}
-                    fill={isLiveView ? "rgba(232, 236, 242, 0.55)" : "none"}
-                    stroke={isExportMode ? "#e2e8f0" : isLiveView ? "rgba(148, 163, 184, 0.25)" : "rgba(71, 85, 105, 0.35)"}
+                    fill={isLiveView ? "#ffffff" : "none"}
+                    stroke={isExportMode ? "#e2e8f0" : isLiveView ? "rgba(148, 163, 184, 0.2)" : "rgba(71, 85, 105, 0.35)"}
                     strokeWidth={isExportMode ? 1 : isLiveView ? 1 : 1.5}
                     pointerEvents="none"
                   />
@@ -1308,6 +1309,20 @@ function WarehouseCanvasInner({
                       </g>
                     );
                   })}
+                  {isLiveView && !isExportMode && layout.aisles.length > 0 && (
+                    <MagazynPreviewPathLayer
+                      aisles={layout.aisles}
+                      cellPx={cellPx}
+                      startCell={
+                        specialLocations.pick_start
+                          ? {
+                              x: specialLocations.pick_start.x / GRID_UNIT_CM,
+                              y: specialLocations.pick_start.y / GRID_UNIT_CM,
+                            }
+                          : null
+                      }
+                    />
+                  )}
                   {/* Route path under rack tiles (no line through rack bodies) */}
                   {!isExportMode &&
                     showRoute &&

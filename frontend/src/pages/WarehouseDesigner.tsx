@@ -1192,6 +1192,38 @@ export default function WarehouseDesigner() {
     return binOccupancyLocationStats;
   }, [occupancyMetrics, binOccupancyLocationStats]);
 
+  /** Occupied vs free location slots for Magazyn pulpit (does not replace type counts). */
+  const locationFillCounts = useMemo(() => {
+    let total = 0;
+    let occupied = 0;
+    if (occupancyMetrics) {
+      total =
+        occupancyMetrics.primary_location_count +
+        occupancyMetrics.reserve_location_count +
+        occupancyMetrics.damaged_location_count;
+      const hasStockFields =
+        occupancyMetrics.primary_slots_with_stock != null ||
+        occupancyMetrics.reserve_slots_with_stock != null ||
+        occupancyMetrics.damaged_slots_with_stock != null;
+      if (hasStockFields) {
+        occupied =
+          (occupancyMetrics.primary_slots_with_stock ?? 0) +
+          (occupancyMetrics.reserve_slots_with_stock ?? 0) +
+          (occupancyMetrics.damaged_slots_with_stock ?? 0);
+      } else {
+        occupied = binOccupancyLocationStats.total;
+      }
+    } else {
+      for (const rack of layout.racks) {
+        for (const bin of activeBinsForRack(rack)) {
+          total += 1;
+          if (usedVolumeAtBin(bin) > 0) occupied += 1;
+        }
+      }
+    }
+    return { occupied, free: Math.max(0, total - occupied) };
+  }, [occupancyMetrics, binOccupancyLocationStats, layout.racks, usedVolumeAtBin]);
+
   /** Map locationUUID → bin (for storage_type and primary/reserve split). Declared before mapRackState and occupancy useMemos. */
   const uuidToBin = useMemo(() => {
     const map = new Map<string, BinState>();
@@ -3915,6 +3947,7 @@ export default function WarehouseDesigner() {
                 reserve: globalLocationStatsForLegend.reserve,
                 damaged: globalLocationStatsForLegend.damaged,
               }}
+              locationFill={locationFillCounts}
               formatVolume={formatVolume}
               onOpenReports={() => setShowWarehouseReportsPanel(true)}
               onOpenDamageReports={() => {
@@ -3974,7 +4007,7 @@ export default function WarehouseDesigner() {
       >
         {mainView === "magazyn" ? (
           <>
-            <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-[#dfe4ea]">
+            <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-slate-100/80">
               {layout.racks.length === 0 ? (
                 <div className="flex min-h-0 min-w-0 max-w-full flex-1 basis-0 flex-col items-center justify-center p-8 text-slate-500">
                   <p className="text-sm">Brak regałów. Przejdź do Projektu Layoutu, aby dodać regały i zobaczyć widok z boku.</p>

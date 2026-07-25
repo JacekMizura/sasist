@@ -1,3 +1,11 @@
+## 2026-07-25 — Magazyn UX polish (bez zmiany geometrii) (no push)
+
+- Białe tło mapy + delikatny cień kontenera
+- Nakładka zielonej trasy preview wzdłuż istniejących alejek (bez nowej geometrii)
+- Miniatury: object-contain + bg-neutral-100; EAN pod SKU
+- Raporty = zielony; sekcja Lokalizacje Zajęte/Wolne
+- **No push.**
+
 ## 2026-07-25 — Design System: brand sidebar nav (no push)
 
 - Tokeny: `brandSidebarNavItemClassName`, `brandSidebarNavActiveBarClassName`, icon/chevron

@@ -91,7 +91,7 @@ export function ProductLocatorSidebar({
       <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-6">
         <div className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200/60">
           <div className="flex items-start gap-3.5">
-            <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-xl bg-slate-100">
+            <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-xl bg-neutral-100">
               <div className="absolute inset-0 flex items-center justify-center">
                 <svg className="h-6 w-6 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
                   <path
@@ -106,7 +106,7 @@ export function ProductLocatorSidebar({
                 <img
                   src={imageUrl}
                   alt=""
-                  className="absolute inset-0 z-10 h-full w-full object-cover"
+                  className="absolute inset-0 z-10 h-full w-full object-contain p-1"
                   onError={(e) => {
                     e.currentTarget.style.display = "none";
                   }}
@@ -118,6 +118,9 @@ export function ProductLocatorSidebar({
                 {product.name}
               </div>
               <div className="mt-1 truncate text-[11px] tracking-wide text-slate-400">{product.sku ?? "—"}</div>
+              <div className="mt-0.5 truncate text-[11px] tracking-wide text-slate-400">
+                EAN: {product.ean?.trim() ? product.ean : "—"}
+              </div>
               <div className="mt-3 text-base font-semibold tabular-nums text-slate-900">
                 {totalQuantity}
                 <span className="ml-1 text-[12px] font-medium text-slate-400">szt.</span>

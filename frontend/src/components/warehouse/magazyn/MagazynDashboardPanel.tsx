@@ -19,6 +19,11 @@ export interface MagazynDashboardPanelProps {
     reserve: number;
     damaged: number;
   };
+  /** Occupied / free location slot counts (additional to type breakdown). */
+  locationFill?: {
+    occupied: number;
+    free: number;
+  };
   formatVolume: (n: number) => string;
   onOpenReports?: () => void;
   onOpenDamageReports?: () => void;
@@ -46,6 +51,7 @@ export function MagazynDashboardPanel({
   reserveUsedDm3,
   damagedUsedDm3,
   locationStats,
+  locationFill,
   formatVolume,
   onOpenReports,
   onOpenDamageReports,
@@ -98,7 +104,7 @@ export function MagazynDashboardPanel({
                 e.stopPropagation();
                 onOpenReports();
               }}
-              className="group flex items-center justify-center gap-2 rounded-xl bg-slate-900/90 px-3 py-2.5 text-xs font-semibold text-white transition hover:bg-slate-800"
+              className="group flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-3 py-2.5 text-xs font-semibold text-white transition hover:bg-emerald-700"
             >
               <svg className="h-3.5 w-3.5 opacity-80 group-hover:opacity-100" viewBox="0 0 24 24" fill="none" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 19h16M7 15v-5m5 5V7m5 8V4" />
@@ -161,6 +167,31 @@ export function MagazynDashboardPanel({
           ))}
         </ul>
       </section>
+
+      {locationFill != null && (
+        <>
+          <div className="mx-1 my-7 h-px bg-slate-200/70" aria-hidden />
+          <section className="px-1">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-400">Lokalizacje</p>
+            <ul className="mt-4 space-y-3.5">
+              <li className="flex items-baseline justify-between gap-3">
+                <span className="flex min-w-0 items-center gap-2.5">
+                  <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-slate-700" aria-hidden />
+                  <span className="truncate text-[13px] text-slate-600">Zajęte</span>
+                </span>
+                <span className="text-base font-semibold tabular-nums text-slate-900">{locationFill.occupied}</span>
+              </li>
+              <li className="flex items-baseline justify-between gap-3">
+                <span className="flex min-w-0 items-center gap-2.5">
+                  <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-500" aria-hidden />
+                  <span className="truncate text-[13px] text-slate-600">Wolne</span>
+                </span>
+                <span className="text-base font-semibold tabular-nums text-emerald-700">{locationFill.free}</span>
+              </li>
+            </ul>
+          </section>
+        </>
+      )}
 
       <div className="mx-1 my-7 h-px bg-slate-200/70" aria-hidden />
 
