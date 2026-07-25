@@ -9,6 +9,7 @@ import pytest
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 
+from backend.models.service_face_origin import ServiceFaceOrigin
 from backend.models.warehouse import Bin, Rack, Warehouse, WarehouseLayout
 from backend.services.warehouse_routing.rack_service_face import (
     encode_face_for_world_normal,
@@ -200,11 +201,12 @@ def test_repair_does_not_override_explicit_face(db):
     c = _rack(db, layout, name="C", uuid_s=u2, x=0, y=18, w=10, h=8)
     b.service_side = "BACK"
     b.rotation_degrees = 90
+    b.service_face_origin = ServiceFaceOrigin.EXPLICIT
     db.commit()
     report = repair_layout_service_faces(db, wh.id, layout=layout)
     db.flush()
     assert b.service_side == "BACK" and int(b.rotation_degrees) == 90
-    assert any(x.get("reason") == "explicit_ssot_preserved" for x in report.skipped_explicit)
+    assert any(x.get("reason") == "explicit_or_legal_ssot_preserved" for x in report.skipped_explicit)
     assert any(r.get("name") == "C" and r.get("changed") for r in report.repaired)
 
 
@@ -373,11 +375,12 @@ def test_explicit_non_default_not_changed(db):
     _rack(db, layout, name="C", uuid_s=u2, x=0, y=18, w=10, h=8)
     b.service_side = "BACK"
     b.rotation_degrees = 90
+    b.service_face_origin = ServiceFaceOrigin.EXPLICIT
     db.commit()
     report = repair_layout_service_faces(db, wh.id, layout=layout)
     db.flush()
     assert b.service_side == "BACK" and int(b.rotation_degrees) == 90
-    assert any(x.get("reason") == "explicit_ssot_preserved" for x in report.skipped_explicit)
+    assert any(x.get("reason") == "explicit_or_legal_ssot_preserved" for x in report.skipped_explicit)
 
 
 def test_unknown_not_in_row_container_not_guessed(db):
@@ -409,16 +412,39 @@ def test_unknown_not_in_row_container_not_guessed(db):
 def test_should_repair_gate_unit():
     from types import SimpleNamespace
 
+    from backend.models.service_face_origin import ServiceFaceOrigin
     from backend.services.warehouse_routing.service_face_repair import should_repair_legacy_mismatch
 
     west = face_for_cardinal("WEST", orientation="vertical")
     south = face_for_cardinal("SOUTH", orientation="vertical")
-    legal = SimpleNamespace(service_side="FRONT", rotation_degrees=0, rack_type="warehouse")
+    legal = SimpleNamespace(
+        service_side="FRONT",
+        rotation_degrees=0,
+        rack_type="warehouse",
+        service_face_origin=ServiceFaceOrigin.LEGACY_DEFAULT,
+    )
     assert should_repair_legacy_mismatch(legal, west, orientation="vertical") is False
     assert should_repair_legacy_mismatch(legal, south, orientation="vertical") is True
-    explicit = SimpleNamespace(service_side="BACK", rotation_degrees=90, rack_type="warehouse")
+    explicit = SimpleNamespace(
+        service_side="FRONT",
+        rotation_degrees=90,
+        rack_type="warehouse",
+        service_face_origin=ServiceFaceOrigin.EXPLICIT,
+    )
     assert should_repair_legacy_mismatch(explicit, south, orientation="vertical") is False
-    store = SimpleNamespace(service_side="FRONT", rotation_degrees=0, rack_type="store")
+    auto = SimpleNamespace(
+        service_side="FRONT",
+        rotation_degrees=90,
+        rack_type="warehouse",
+        service_face_origin=ServiceFaceOrigin.AUTO_REPAIR,
+    )
+    assert should_repair_legacy_mismatch(auto, south, orientation="vertical") is True
+    store = SimpleNamespace(
+        service_side="FRONT",
+        rotation_degrees=0,
+        rack_type="store",
+        service_face_origin=ServiceFaceOrigin.LEGACY_DEFAULT,
+    )
     # Row-band gate still skips store; store uses dedicated _apply_store_face path.
     assert should_repair_legacy_mismatch(store, south, orientation="vertical") is False
 

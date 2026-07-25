@@ -4,6 +4,7 @@
  */
 
 import type { RackState, RowContainer, LevelConfigItem, StorageType, RackType } from "../../types/warehouse";
+import { ServiceFaceOrigin } from "../../types/warehouse";
 import {
   createBinsForRack,
   getLevelConfig,
@@ -413,8 +414,16 @@ export function buildRackFromTemplate(
     templateId: template.templateId,
     ...(template.level_max_load_kg != null ? { level_max_load_kg: template.level_max_load_kg } : {}),
     ...(rotationDegrees != null
-      ? { rotationDegrees, serviceSide: "FRONT" as const }
-      : { rotationDegrees: 0 as const, serviceSide: "FRONT" as const }),
+      ? {
+          rotationDegrees,
+          serviceSide: "FRONT" as const,
+          serviceFaceOrigin: ServiceFaceOrigin.EXPLICIT,
+        }
+      : {
+          rotationDegrees: 0 as const,
+          serviceSide: "FRONT" as const,
+          serviceFaceOrigin: ServiceFaceOrigin.LEGACY_DEFAULT,
+        }),
   } as RackState;
 }
 

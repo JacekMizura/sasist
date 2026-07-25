@@ -9,6 +9,7 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 
 from backend.models.location import Location
+from backend.models.service_face_origin import ServiceFaceOrigin
 from backend.models.warehouse import Bin, Rack, Warehouse, WarehouseLayout
 from backend.models.warehouse_routing import (
     WarehouseRoutingAccessPoint,
@@ -160,6 +161,7 @@ def test_store_s1_face_from_north_aisle_neighbor_and_access(db):
     db.refresh(s1)
     assert int(s1.rotation_degrees or 0) == expected.rotation_degrees
     assert str(s1.service_side).upper() == expected.service_side
+    assert s1.service_face_origin == ServiceFaceOrigin.AUTO_REPAIR
 
     # Locations on S1 (world cm = cells * 10)
     locs = []

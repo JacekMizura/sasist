@@ -8,35 +8,36 @@ Rules:
   never nearest routing edge.
 - Store racks: same service_side/rotation SSOT as warehouse racks; infer face from
   nearest aisle-like gap to neighboring racks with REAL transverse footprint overlap
-  (N/S require X-overlap; E/W require Y-overlap). No lateral_slack. Default FRONT+0
-  and unjustified faces from a prior buggy inference may be repaired when expected
-  is geometrically justified; justified explicit faces are preserved.
+  (N/S require X-overlap; E/W require Y-overlap). No lateral_slack.
+- Provenance (service_face_origin):
+  EXPLICIT → never auto-repaired (neighbor move/delete cannot change face).
+  AUTO_REPAIR → may recompute when geometry yields a different deterministic face.
+  LEGACY_DEFAULT → FRONT+0 mismatch repair, plus a narrow fingerprint of the
+  pre-provenance diagonal-slack EAST bug (never invent EXPLICIT for NULL/legacy).
 - Racks that cannot be decided → reported UNRESOLVED (unchanged).
 
-Legacy mutation gate (CRITICAL):
-  FRONT+0 is a *legitimate* SSOT (vertical rack facing WEST encodes as FRONT+0).
-  Repair mutates a rack ONLY when ALL of:
-    1) deterministic expected face exists from row_containers,
-    2) current world normal ≠ expected world normal,
-    3) current fingerprint is the old generator default FRONT+0
-       (explicit non-default faces are never overwritten).
-  FRONT+0 alone is NEVER sufficient to overwrite.
+Warehouse row-band mutation gate:
+  EXPLICIT never; AUTO_REPAIR on mismatch; LEGACY only FRONT+0 + mismatch.
+  FRONT+0 alone is NEVER sufficient (legal WEST uses FRONT+0).
 """
 
 from __future__ import annotations
 
 import json
 import logging
+import math
 from dataclasses import dataclass, field
 from typing import Optional
 
 from ...models.warehouse import Rack, WarehouseLayout
 from .rack_service_face import (
     ServiceFace,
+    ServiceFaceOrigin,
     apply_face_to_rack_obj,
     face_for_cardinal,
     is_store_rack,
     normalize_rotation,
+    normalize_service_face_origin,
     normalize_service_side,
     world_service_normal,
 )
@@ -120,18 +121,26 @@ def rack_matches_expected_face(rack: object, expected: ServiceFace, *, orientati
     return abs(cur.x - exp.x) <= _NORMAL_EPS and abs(cur.y - exp.y) <= _NORMAL_EPS
 
 
+def rack_service_face_origin(rack: object) -> ServiceFaceOrigin:
+    return normalize_service_face_origin(getattr(rack, "service_face_origin", None))
+
+
 def should_repair_legacy_mismatch(rack: object, expected: ServiceFace, *, orientation: str) -> bool:
     """
-    Mutate only when deterministic expected disagrees with FRONT+0 default fingerprint.
+    Warehouse row-band mutation gate.
 
-    LEGAL FRONT+0 (matches expected) → False
-    EXPLICIT non-default → False
-    LEGACY wrong FRONT+0 (mismatch) → True
+    EXPLICIT → never. AUTO_REPAIR → recompute on mismatch.
+    LEGACY_DEFAULT → only FRONT+0 fingerprint + mismatch (legal WEST preserved).
+    Store racks use should_repair_store_face instead.
     """
     if is_store_rack(rack):
         return False
+    if rack_service_face_origin(rack) == ServiceFaceOrigin.EXPLICIT:
+        return False
     if rack_matches_expected_face(rack, expected, orientation=orientation):
         return False
+    if rack_service_face_origin(rack) == ServiceFaceOrigin.AUTO_REPAIR:
+        return True
     return is_default_face_fingerprint(rack)
 
 
@@ -289,29 +298,37 @@ def _apply_face(
             "name": getattr(rack, "name", None),
             "service_side": getattr(rack, "service_side", None),
             "rotation_degrees": int(getattr(rack, "rotation_degrees", 0) or 0),
+            "service_face_origin": rack_service_face_origin(rack).value,
         }
         # 1) Already matches deterministic expected (includes LEGAL FRONT+0 = WEST).
         if rack_matches_expected_face(rack, target_face, orientation=orient):
             report.skipped_matching.append({**base_meta, "reason": "matches_deterministic_expected"})
             continue
-        # 2) Explicit non-default SSOT — never overwrite by geometry heuristic.
-        if not is_default_face_fingerprint(rack):
-            report.skipped_explicit.append({**base_meta, "reason": "explicit_ssot_preserved"})
+        # 2–3) Provenance gate: EXPLICIT never; AUTO on mismatch; LEGACY only FRONT+0 mismatch.
+        if not should_repair_legacy_mismatch(rack, target_face, orientation=orient):
+            report.skipped_explicit.append({**base_meta, "reason": "explicit_or_legal_ssot_preserved"})
             continue
-        # 3) FRONT+0 AND mismatch vs deterministic expected → legacy repair.
         before = (
             getattr(rack, "service_side", None),
             int(getattr(rack, "rotation_degrees", 0) or 0),
+            rack_service_face_origin(rack),
         )
-        changed = apply_face_to_rack_obj(rack, target_face)
+        changed = apply_face_to_rack_obj(rack, target_face, origin=ServiceFaceOrigin.AUTO_REPAIR)
         report.repaired.append(
             {
                 "rack_uuid": getattr(rack, "uuid", None),
                 "rack_id": getattr(rack, "id", None),
                 "name": getattr(rack, "name", None),
-                "before": {"service_side": before[0], "rotation_degrees": before[1]},
-                "after": target_face.as_dict(),
-                "reason": f"{reason}:legacy_mismatch",
+                "before": {
+                    "service_side": before[0],
+                    "rotation_degrees": before[1],
+                    "service_face_origin": before[2].value,
+                },
+                "after": {
+                    **target_face.as_dict(),
+                    "service_face_origin": ServiceFaceOrigin.AUTO_REPAIR.value,
+                },
+                "reason": f"{reason}:legacy_or_auto_recompute",
                 "changed": changed,
             }
         )
@@ -358,8 +375,14 @@ def _infer_unpaired_horizontal_face(
 # Aisle-like gap between store and neighboring rack (grid cells).
 _STORE_AISLE_GAP_MIN = 1.5
 _STORE_AISLE_GAP_MAX = 40.0
+# Old buggy store inference used lateral_slack≈20 (cells) — fingerprint only.
+_LEGACY_DIAGONAL_SLACK_CELLS = 20.0
+# No obstacle along the face ray = open/unbounded (never treat as clearance 0).
+STORE_OPEN_CLEARANCE_UNBOUNDED = float("inf")
 # Numeric / near-touch only — NEVER expand footprints into diagonal "neighbors".
 _STORE_OVERLAP_EPS = 1e-6
+# Deterministic remis among equal clearances / gaps.
+_CARDINAL_TIE_ORDER = {"NORTH": 0, "SOUTH": 1, "EAST": 2, "WEST": 3}
 
 
 def _rack_aabb_cells(rack: object) -> tuple[float, float, float, float]:
@@ -439,6 +462,7 @@ def _store_open_clearance(rack: object, others: list, direction: str) -> float:
     Distance from rack face midpoint outward until another rack AABB.
 
     Transverse containment uses the face midpoint only (no footprint expansion).
+    No obstacle on the ray → STORE_OPEN_CLEARANCE_UNBOUNDED (never 0).
     """
     ax0, ay0, ax1, ay1 = _rack_aabb_cells(rack)
     cx, cy = (ax0 + ax1) * 0.5, (ay0 + ay1) * 0.5
@@ -450,7 +474,8 @@ def _store_open_clearance(rack: object, others: list, direction: str) -> float:
         ox, oy, dx, dy = ax0, cy, -1.0, 0.0
     else:
         ox, oy, dx, dy = ax1, cy, 1.0, 0.0
-    best = 1e9
+    best = STORE_OPEN_CLEARANCE_UNBOUNDED
+    found = False
     for o in others:
         if o is rack:
             continue
@@ -458,43 +483,66 @@ def _store_open_clearance(rack: object, others: list, direction: str) -> float:
             if int(o.id) == int(rack.id):
                 continue
         bx0, by0, bx1, by1 = _rack_aabb_cells(o)
+        hit: Optional[float] = None
         if abs(dx) < 1e-9:
             if not (bx0 - _STORE_OVERLAP_EPS <= ox <= bx1 + _STORE_OVERLAP_EPS):
                 continue
             if dy < 0 and by1 <= oy + _STORE_OVERLAP_EPS:
-                best = min(best, oy - by1)
+                hit = oy - by1
             elif dy > 0 and by0 >= oy - _STORE_OVERLAP_EPS:
-                best = min(best, by0 - oy)
+                hit = by0 - oy
         else:
             if not (by0 - _STORE_OVERLAP_EPS <= oy <= by1 + _STORE_OVERLAP_EPS):
                 continue
             if dx < 0 and bx1 <= ox + _STORE_OVERLAP_EPS:
-                best = min(best, ox - bx1)
+                hit = ox - bx1
             elif dx > 0 and bx0 >= ox - _STORE_OVERLAP_EPS:
-                best = min(best, bx0 - ox)
-    return float(best if best < 1e9 else 0.0)
+                hit = bx0 - ox
+        if hit is None or hit < 0:
+            continue
+        found = True
+        best = min(best, float(hit))
+    if not found:
+        return STORE_OPEN_CLEARANCE_UNBOUNDED
+    return float(best)
+
+
+def _clearance_sort_key_min(t: tuple[float, str]) -> tuple[float, int]:
+    c, d = t
+    return (c if math.isfinite(c) else 1e18, _CARDINAL_TIE_ORDER.get(d, 9))
+
+
+def _clearance_sort_key_max(t: tuple[float, str]) -> tuple[float, int]:
+    """Prefer larger clearance; remis → NORTH, SOUTH, EAST, WEST."""
+    c, d = t
+    return (c if math.isfinite(c) else 1e18, -_CARDINAL_TIE_ORDER.get(d, 9))
 
 
 def _infer_store_face_from_open_space(rack: object, others: list) -> Optional[ServiceFace]:
     """
     Fallback when no real-overlap aisle neighbor: face the nearest open clearance
     that still looks like a service corridor (not a sealed wall).
-    Deterministic; never invents diagonal neighbors.
+    Unbounded open space ranks as best open (never as clearance 0).
+    Deterministic remis; never invents diagonal neighbors.
     """
     scored: list[tuple[float, str]] = []
     for d in ("NORTH", "SOUTH", "EAST", "WEST"):
         c = _store_open_clearance(rack, others, d)
-        if _STORE_AISLE_GAP_MIN <= c <= _STORE_AISLE_GAP_MAX * 2.5:
+        if math.isinf(c) or _STORE_AISLE_GAP_MIN <= c <= _STORE_AISLE_GAP_MAX * 2.5:
             scored.append((c, d))
     if not scored:
         for d in ("NORTH", "SOUTH", "EAST", "WEST"):
             c = _store_open_clearance(rack, others, d)
-            if c >= _STORE_AISLE_GAP_MIN:
+            if math.isinf(c) or c >= _STORE_AISLE_GAP_MIN:
                 scored.append((c, d))
     if not scored:
         return None
-    aisle_like = [s for s in scored if s[0] <= _STORE_AISLE_GAP_MAX]
-    pick = min(aisle_like, key=lambda t: t[0]) if aisle_like else max(scored, key=lambda t: t[0])
+    aisle_like = [s for s in scored if math.isfinite(s[0]) and s[0] <= _STORE_AISLE_GAP_MAX]
+    pick = (
+        min(aisle_like, key=_clearance_sort_key_min)
+        if aisle_like
+        else max(scored, key=_clearance_sort_key_max)
+    )
     orient = str(getattr(rack, "orientation", None) or "vertical")
     return face_for_cardinal(pick[1], orientation=orient)
 
@@ -508,23 +556,95 @@ def _infer_store_face_from_neighbors(rack: object, others: list) -> Optional[Ser
     """
     candidates = _store_neighbor_gap_candidates(rack, others)
     if candidates:
-        candidates.sort(key=lambda t: t[0])
+        candidates.sort(key=_clearance_sort_key_min)
         orient = str(getattr(rack, "orientation", None) or "vertical")
         return face_for_cardinal(candidates[0][1], orientation=orient)
     return _infer_store_face_from_open_space(rack, others)
+
+
+def _store_face_justified_by_neighbor_gap(rack: object, others: list, face: ServiceFace) -> bool:
+    """True only when a real-overlap aisle neighbor supports `face` (not open-space)."""
+    cardinal = _store_cardinal_from_face(rack, face)
+    return any(d == cardinal for _gap, d in _store_neighbor_gap_candidates(rack, others))
 
 
 def _store_face_justified_by_geometry(rack: object, others: list, face: ServiceFace) -> bool:
     """
     True when `face` is supported by real-overlap neighbor gaps or by open-space clearance
     along that cardinal (same rules as inference — no diagonal slack).
+    Unbounded open clearance justifies that cardinal for expected-face checks.
     """
+    if _store_face_justified_by_neighbor_gap(rack, others, face):
+        return True
     cardinal = _store_cardinal_from_face(rack, face)
-    for _gap, d in _store_neighbor_gap_candidates(rack, others):
-        if d == cardinal:
-            return True
     c = _store_open_clearance(rack, others, cardinal)
-    return c >= _STORE_AISLE_GAP_MIN
+    return math.isinf(c) or c >= _STORE_AISLE_GAP_MIN
+
+
+def _y_separation_cells(ay0: float, ay1: float, by0: float, by1: float) -> float:
+    if _has_real_axis_overlap(ay0, ay1, by0, by1):
+        return 0.0
+    if by0 >= ay1:
+        return by0 - ay1
+    return ay0 - by1
+
+
+def _has_legacy_diagonal_pseudo_east_neighbor(rack: object, others: list) -> bool:
+    """
+    Fingerprint of the pre-provenance bug: a rack east of the store with an
+    aisle-like X gap but NO real Y overlap, within old lateral_slack (~20 cells).
+    """
+    ax0, ay0, ax1, ay1 = _rack_aabb_cells(rack)
+    for o in others:
+        if o is rack:
+            continue
+        if getattr(o, "id", None) is not None and getattr(rack, "id", None) is not None:
+            if int(o.id) == int(rack.id):
+                continue
+        bx0, by0, bx1, by1 = _rack_aabb_cells(o)
+        if bx0 < ax1 - _STORE_OVERLAP_EPS:
+            continue
+        gap = bx0 - ax1
+        if not (_STORE_AISLE_GAP_MIN <= gap <= _STORE_AISLE_GAP_MAX):
+            continue
+        if _has_real_axis_overlap(ay0, ay1, by0, by1):
+            continue
+        if _y_separation_cells(ay0, ay1, by0, by1) <= _LEGACY_DIAGONAL_SLACK_CELLS + _STORE_OVERLAP_EPS:
+            return True
+    return False
+
+
+def matches_legacy_buggy_store_diagonal_east(
+    rack: object,
+    others: list,
+    expected: ServiceFace,
+    *,
+    orientation: str,
+) -> bool:
+    """
+    Narrow, evidence-based qualification of the old diagonal-slack EAST mis-inference.
+
+    Does NOT treat all FRONT+180 as AUTO_REPAIR. Requires:
+    - current world face EAST, expected ≠ EAST (mismatch)
+    - expected justified by real-overlap neighbor (primary aisle evidence)
+    - current EAST NOT justified by real-overlap neighbor (open space alone ≠ evidence)
+    - a diagonal pseudo-EAST neighbor matching old lateral_slack footprint
+    """
+    if rack_matches_expected_face(rack, expected, orientation=orientation):
+        return False
+    current = ServiceFace(
+        service_side=normalize_service_side(getattr(rack, "service_side", None)),
+        rotation_degrees=normalize_rotation(getattr(rack, "rotation_degrees", 0)),
+    )
+    if _store_cardinal_from_face(rack, current) != "EAST":
+        return False
+    if _store_cardinal_from_face(rack, expected) == "EAST":
+        return False
+    if not _store_face_justified_by_neighbor_gap(rack, others, expected):
+        return False
+    if _store_face_justified_by_neighbor_gap(rack, others, current):
+        return False
+    return _has_legacy_diagonal_pseudo_east_neighbor(rack, others)
 
 
 def should_repair_store_face(
@@ -535,28 +655,24 @@ def should_repair_store_face(
     orientation: str,
 ) -> bool:
     """
-    Store mutation gate (narrow):
+    Store mutation gate (provenance-based).
 
-    1) FRONT+0 legacy mismatch vs deterministic expected → repair
-    2) Current face mismatches expected AND is NOT justified by real-overlap /
-       open-space geometry, while expected IS justified → self-heal buggy
-       prior inference (e.g. diagonal slack → false EAST). Explicit faces that
-       remain geometrically justified are preserved.
+    Repair is allowed only for LEGACY_DEFAULT and AUTO_REPAIR.
+    EXPLICIT represents intentional service face and must never be modified by automatic geometry inference.
     """
     if rack_matches_expected_face(rack, expected, orientation=orientation):
         return False
+    origin = rack_service_face_origin(rack)
+    if origin == ServiceFaceOrigin.EXPLICIT:
+        return False
+    if origin == ServiceFaceOrigin.AUTO_REPAIR:
+        return True
+    # LEGACY_DEFAULT
     if is_default_face_fingerprint(rack):
         return True
-    if _store_face_justified_by_geometry(rack, others, expected) and not _store_face_justified_by_geometry(
-        rack,
-        others,
-        ServiceFace(
-            service_side=normalize_service_side(getattr(rack, "service_side", None)),
-            rotation_degrees=normalize_rotation(getattr(rack, "rotation_degrees", 0)),
-        ),
-    ):
-        return True
-    return False
+    return matches_legacy_buggy_store_diagonal_east(
+        rack, others, expected, orientation=orientation
+    )
 
 
 def _apply_store_face(
@@ -567,7 +683,7 @@ def _apply_store_face(
     report: FaceRepairReport,
     others: list[Rack],
 ) -> None:
-    """Apply deterministic store face with narrow legacy / self-heal gate."""
+    """Apply deterministic store face gated by service_face_origin."""
     orient = str(getattr(rack, "orientation", None) or "vertical")
     base_meta = {
         "rack_uuid": getattr(rack, "uuid", None),
@@ -575,30 +691,41 @@ def _apply_store_face(
         "name": getattr(rack, "name", None),
         "service_side": getattr(rack, "service_side", None),
         "rotation_degrees": int(getattr(rack, "rotation_degrees", 0) or 0),
+        "service_face_origin": rack_service_face_origin(rack).value,
         "rack_type": getattr(rack, "rack_type", None),
     }
     if rack_matches_expected_face(rack, face, orientation=orient):
         report.skipped_matching.append({**base_meta, "reason": "store_matches_deterministic_expected"})
         return
     if not should_repair_store_face(rack, face, others, orientation=orient):
-        report.skipped_explicit.append({**base_meta, "reason": "store_explicit_ssot_preserved"})
+        report.skipped_explicit.append({**base_meta, "reason": "store_explicit_or_unqualified_preserved"})
         return
+    before_origin = rack_service_face_origin(rack)
     before = (
         getattr(rack, "service_side", None),
         int(getattr(rack, "rotation_degrees", 0) or 0),
+        before_origin,
     )
-    heal = not is_default_face_fingerprint(rack)
-    changed = apply_face_to_rack_obj(rack, face)
+    fingerprint = matches_legacy_buggy_store_diagonal_east(
+        rack, others, face, orientation=orient
+    )
+    changed = apply_face_to_rack_obj(rack, face, origin=ServiceFaceOrigin.AUTO_REPAIR)
+    if fingerprint:
+        detail = "store_legacy_diagonal_east_fingerprint"
+    elif before_origin == ServiceFaceOrigin.AUTO_REPAIR:
+        detail = "store_auto_recompute"
+    else:
+        detail = "store_legacy_mismatch"
     report.repaired.append(
         {
             **base_meta,
-            "before": {"service_side": before[0], "rotation_degrees": before[1]},
-            "after": face.as_dict(),
-            "reason": (
-                f"{reason}:store_unjustified_face_self_heal"
-                if heal
-                else f"{reason}:store_legacy_mismatch"
-            ),
+            "before": {
+                "service_side": before[0],
+                "rotation_degrees": before[1],
+                "service_face_origin": before[2].value,
+            },
+            "after": {**face.as_dict(), "service_face_origin": ServiceFaceOrigin.AUTO_REPAIR.value},
+            "reason": f"{reason}:{detail}",
             "changed": changed,
         }
     )

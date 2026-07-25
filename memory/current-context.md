@@ -2,17 +2,19 @@
 
 ## Active
 
-**Routing Designer UX + S1 store face — lokalne commity, bez push, bez Etapu 3.**
+**Service Face Provenance** — committed lokalnie (na `9292c0d2`), **bez push**, bez PROD, bez Etapu 3.
 
-### S1 / store
-- ROOT: legacy FRONT+0 (WEST) na store S1; korytarz obsługi jest NORTH (packing y=490).
-- FIX: `service_face_repair` inferuje face store z aisle gap / open clearance (ten sam SSOT FRONT+rot).
-- Po deploy + save layout: A23-A-1..3 → RESOLVED (udowodnione unit testem).
+### Enum
+- BE: `backend/models/service_face_origin.py` → `ServiceFaceOrigin`
+- FE: `ServiceFaceOrigin` w `frontend/src/types/warehouse.ts`
+- Wartości: LEGACY_DEFAULT | AUTO_REPAIR | EXPLICIT
 
-### UX
-- Usunięty box „Konfiguracja sieci”; ostrzeżenia Start/Pakowanie jako warning.
-- Typy punktów UI: Trasa / Start / Pakowanie / Przyjęcia / Strefa buforowa (+ ikony SVG).
-- „Pokaż bez dostępu”; START/DOCK wyłączone z licznika NO_RACK.
+### Gates
+- EXPLICIT: never repair / never reinterpret on save_layout
+- AUTO_REPAIR: may recompute
+- LEGACY_DEFAULT: FRONT+0 mismatch + narrow diagonal-EAST fingerprint → AUTO
 
-### Preferencja
-Bez push. Bez Etapu 3.
+### Next (tylko po OK usera)
+1. Push
+2. Deploy
+3. Kontrolowany save WH1 (nie one-shot UUID)

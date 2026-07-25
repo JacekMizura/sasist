@@ -11,6 +11,7 @@ from sqlalchemy.orm import sessionmaker
 
 from backend.models.location import Location
 from backend.models.tenant_warehouse import TenantWarehouse
+from backend.models.service_face_origin import ServiceFaceOrigin
 from backend.models.warehouse import (
     Aisle,
     Bin,
@@ -215,6 +216,10 @@ def test_save_layout_persists_repair_across_new_session(db, quiet_save):
         assert int(racks["A1"].rotation_degrees or 0) == 270
         assert int(racks["B1"].rotation_degrees or 0) == 90
         assert int(racks["C1"].rotation_degrees or 0) == 270
+        # Conscious repair → AUTO_REPAIR provenance
+        assert racks["A1"].service_face_origin == ServiceFaceOrigin.AUTO_REPAIR
+        assert racks["B1"].service_face_origin == ServiceFaceOrigin.AUTO_REPAIR
+        assert racks["C1"].service_face_origin == ServiceFaceOrigin.AUTO_REPAIR
 
         # Second save with repaired faces — idempotent, no regress to FRONT+0
         layout2 = db2.query(WarehouseLayout).filter(WarehouseLayout.warehouse_id == 1).one()
@@ -246,6 +251,7 @@ def test_save_layout_persists_repair_across_new_session(db, quiet_save):
                     "rack_type": "warehouse",
                     "service_side": r.service_side,
                     "rotation_degrees": int(r.rotation_degrees or 0),
+                    "service_face_origin": r.service_face_origin,
                     "bins": [
                         {
                             "uuid": str(uuid.uuid4()),
@@ -263,6 +269,9 @@ def test_save_layout_persists_repair_across_new_session(db, quiet_save):
         db2.expire_all()
         racks_b = {r.name: r for r in db2.query(Rack).all()}
         assert int(racks_b["A1"].rotation_degrees or 0) == 270
+        assert racks_b["A1"].service_face_origin == ServiceFaceOrigin.AUTO_REPAIR
+        assert racks_b["B1"].service_face_origin == ServiceFaceOrigin.AUTO_REPAIR
+        assert racks_b["C1"].service_face_origin == ServiceFaceOrigin.AUTO_REPAIR
         assert int(racks_b["B1"].rotation_degrees or 0) == 90
         assert int(racks_b["C1"].rotation_degrees or 0) == 270
         report = repair_layout_service_faces(db2, 1, layout=layout2)

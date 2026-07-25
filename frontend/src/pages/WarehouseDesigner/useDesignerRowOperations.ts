@@ -1,5 +1,6 @@
 import { useCallback } from "react";
 import type { RackState, LayoutState, CatalogItem, EmptyRowSlot, RowContainer, StorageType, RackType } from "../../types/warehouse";
+import { ServiceFaceOrigin } from "../../types/warehouse";
 import {
   getRowStart,
   computeRowSlotPositions,
@@ -98,6 +99,7 @@ function applyFaceToRack(rack: RackState, face: ServiceFace): RackState {
     ...rack,
     rotationDegrees: face.rotationDegrees,
     serviceSide: face.serviceSide,
+    serviceFaceOrigin: ServiceFaceOrigin.EXPLICIT,
   };
 }
 
@@ -373,6 +375,8 @@ function appendRowWithTemplateToLayoutState(
       ...(spec.sectionStartIndex != null ? { sectionStartIndex: spec.sectionStartIndex } : {}),
       ...(spec.binNamingType != null ? { binNamingType: spec.binNamingType } : {}),
       rotationDegrees: 90 as const,
+      serviceSide: "FRONT" as const,
+      serviceFaceOrigin: ServiceFaceOrigin.EXPLICIT,
       ...(item.type === "custom" ? { templateId: item.template.id } : {}),
       ...(spec.level_max_load_kg != null ? { level_max_load_kg: spec.level_max_load_kg } : {}),
     } as RackState);

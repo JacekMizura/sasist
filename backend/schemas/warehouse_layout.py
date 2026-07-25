@@ -1,6 +1,8 @@
 from pydantic import AliasChoices, BaseModel, Field
 from typing import List, Optional, Any, Literal
 
+from ..models.service_face_origin import ServiceFaceOrigin
+
 
 class BinSchema(BaseModel):
     id: Optional[int] = None
@@ -73,6 +75,11 @@ class RackSchema(BaseModel):
     rotation_degrees: Optional[int] = Field(
         default=0,
         validation_alias=AliasChoices("rotation_degrees", "rotationDegrees"),
+    )
+    service_face_origin: Optional[ServiceFaceOrigin] = Field(
+        default=None,
+        validation_alias=AliasChoices("service_face_origin", "serviceFaceOrigin"),
+        description="ServiceFaceOrigin: LEGACY_DEFAULT | AUTO_REPAIR | EXPLICIT",
     )
     passages: Optional[List[RackPassageSchema]] = None
 

@@ -1,3 +1,17 @@
+## 2026-07-25 — Service Face Provenance finalization (committed, no push)
+
+- `ServiceFaceOrigin` str Enum (BE model + FE const); repair gates EXPLICIT immutable.
+- Schema ensure DEFAULT LEGACY_DEFAULT; FE/BE round-trip; warehouse_routing 150 PASS.
+- Commit on top of `9292c0d2`. **No push / PROD / Etap 3.**
+
+## 2026-07-24 — SERVICE FACE PROVENANCE (no push)
+
+- Model: `Rack.service_face_origin` LEGACY_DEFAULT | AUTO_REPAIR | EXPLICIT; schema ensure DEFAULT LEGACY.
+- Gates: EXPLICIT never repaired; AUTO recomputes; LEGACY FRONT+0 + narrow diagonal-EAST fingerprint.
+- Open clearance: unbounded ≠ 0; deterministic remis.
+- FE/BE round-trip origin; generators conscious face → EXPLICIT.
+- Tests A–H + warehouse_routing 150 PASS; tsc/build/startup OK. **No push. Bez PROD. Bez Etapu 3.**
+
 ## 2026-07-24 — Routing Designer UX + S1 store face (no push)
 
 - Store S1: repair face z aisle geometry (FRONT+90 NORTH); bez `if store => RESOLVED`.

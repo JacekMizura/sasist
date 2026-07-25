@@ -13,6 +13,27 @@ export type StorageTypeUnknown = "unknown";
 export type NormalizedStorageType = StorageType | StorageTypeUnknown;
 export type RackType = "warehouse" | "store";
 
+/** Provenance of rack service face (mirrors backend ServiceFaceOrigin enum). */
+export const ServiceFaceOrigin = {
+  LEGACY_DEFAULT: "LEGACY_DEFAULT",
+  AUTO_REPAIR: "AUTO_REPAIR",
+  EXPLICIT: "EXPLICIT",
+} as const;
+
+export type ServiceFaceOrigin = (typeof ServiceFaceOrigin)[keyof typeof ServiceFaceOrigin];
+
+export function normalizeServiceFaceOrigin(raw: unknown): ServiceFaceOrigin {
+  const s = String(raw ?? ServiceFaceOrigin.LEGACY_DEFAULT).trim().toUpperCase();
+  if (
+    s === ServiceFaceOrigin.EXPLICIT ||
+    s === ServiceFaceOrigin.AUTO_REPAIR ||
+    s === ServiceFaceOrigin.LEGACY_DEFAULT
+  ) {
+    return s;
+  }
+  return ServiceFaceOrigin.LEGACY_DEFAULT;
+}
+
 export type BinState = {
   id?: number;
   /** Soft-delete flag from backend; undefined means active for legacy payloads. */
@@ -204,6 +225,11 @@ export type RackState = {
   rotationDegrees?: 0 | 90 | 180 | 270;
   /** Local service face: FRONT | BACK (world normal derived with orientation + rotationDegrees). */
   serviceSide?: "FRONT" | "BACK";
+  /**
+   * Provenance of serviceSide/rotationDegrees.
+   * EXPLICIT is never auto-repaired on save.
+   */
+  serviceFaceOrigin?: ServiceFaceOrigin;
   /** Physical openings through rack footprint (drive/walk-under). Local to rack. */
   passages?: RackPassageState[];
 };

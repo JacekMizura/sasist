@@ -147,6 +147,16 @@ def ensure_warehouse_layout_identity_columns(engine: Engine) -> None:
                     "ALTER TABLE warehouse_layout_racks ADD COLUMN rotation_degrees INTEGER NOT NULL DEFAULT 0"
                 )
             )
+        if "service_face_origin" not in rack_columns:
+            # Existing rows: LEGACY_DEFAULT (never invent EXPLICIT for historical data).
+            from ..models.service_face_origin import ServiceFaceOrigin
+
+            conn.execute(
+                text(
+                    "ALTER TABLE warehouse_layout_racks ADD COLUMN service_face_origin "
+                    f"VARCHAR(32) NOT NULL DEFAULT '{ServiceFaceOrigin.LEGACY_DEFAULT.value}'"
+                )
+            )
 
         bin_columns = _table_column_names(conn, "warehouse_bins")
         if "location_uuid" not in bin_columns:

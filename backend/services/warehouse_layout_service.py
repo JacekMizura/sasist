@@ -28,6 +28,7 @@ from .label_pdf_generation_log import log_label_pdf_stage
 from .label_render_service import render_label_template
 from .location_display_sync_service import sync_location_display_fields
 from .location_label_filters import apply_label_filters
+from .warehouse_routing.rack_service_face import normalize_service_face_origin
 
 logger = logging.getLogger(__name__)
 RACK_IDENTITY_SAVE_ENABLED = True
@@ -398,6 +399,20 @@ class WarehouseLayoutService:
         side_raw = r_data.get("service_side")
         if side_raw is None:
             side_raw = r_data.get("serviceSide")
+        from .warehouse_routing.rack_service_face import (
+            ServiceFaceOrigin,
+            normalize_rotation,
+            normalize_service_face_origin,
+            normalize_service_side,
+        )
+
+        prev_side = normalize_service_side(getattr(rack, "service_side", None)) if not is_new else None
+        prev_rot = normalize_rotation(getattr(rack, "rotation_degrees", 0)) if not is_new else None
+        prev_origin = (
+            normalize_service_face_origin(getattr(rack, "service_face_origin", None))
+            if not is_new
+            else None
+        )
         side = str(side_raw or getattr(rack, "service_side", None) or "FRONT").strip().upper()
         rack.service_side = "BACK" if side == "BACK" else "FRONT"
         rot_raw = r_data.get("rotation_degrees")
@@ -410,6 +425,31 @@ class WarehouseLayoutService:
         if rot not in (0, 90, 180, 270):
             rot = 0
         rack.rotation_degrees = rot
+
+        # service_face_origin: never invent EXPLICIT for historical NULLs (schema default
+        # LEGACY_DEFAULT). Manual face change on save → EXPLICIT. Generators send EXPLICIT
+        # when they consciously set face. Move/resize without face change keeps origin.
+        origin_raw = r_data.get("service_face_origin")
+        if origin_raw is None:
+            origin_raw = r_data.get("serviceFaceOrigin")
+
+        if is_new:
+            if origin_raw is not None:
+                rack.service_face_origin = normalize_service_face_origin(origin_raw)
+            else:
+                # Conscious non-default face without origin marker → EXPLICIT; FRONT+0 → LEGACY.
+                if rack.service_side == "FRONT" and rot == 0:
+                    rack.service_face_origin = ServiceFaceOrigin.LEGACY_DEFAULT
+                else:
+                    rack.service_face_origin = ServiceFaceOrigin.EXPLICIT
+        else:
+            face_changed = prev_side != normalize_service_side(rack.service_side) or prev_rot != rot
+            if face_changed:
+                rack.service_face_origin = ServiceFaceOrigin.EXPLICIT
+            elif origin_raw is not None:
+                rack.service_face_origin = normalize_service_face_origin(origin_raw)
+            else:
+                rack.service_face_origin = prev_origin or ServiceFaceOrigin.LEGACY_DEFAULT
         return True
 
     def _build_default_bin_rows_for_new_rack(self, rack: Rack, r_data: dict) -> list[tuple[Bin, int, int]]:
@@ -1318,6 +1358,12 @@ class WarehouseLayoutService:
                 "rotation_degrees": int(getattr(r, "rotation_degrees", None) or 0),
                 "rotationDegrees": int(getattr(r, "rotation_degrees", None) or 0),
                 "serviceSide": getattr(r, "service_side", None) or "FRONT",
+                "service_face_origin": (
+                    normalize_service_face_origin(getattr(r, "service_face_origin", None)).value
+                ),
+                "serviceFaceOrigin": (
+                    normalize_service_face_origin(getattr(r, "service_face_origin", None)).value
+                ),
                 "passages": self._serialize_rack_passages(r),
             })
         aisles_out = [

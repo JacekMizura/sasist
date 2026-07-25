@@ -9,6 +9,7 @@ import pytest
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 
+from backend.models.service_face_origin import ServiceFaceOrigin
 from backend.models.warehouse import Rack, Warehouse, WarehouseLayout
 from backend.services.warehouse_routing.rack_service_face import (
     ServiceFace,
@@ -153,7 +154,7 @@ def test_e_no_neighbors_deterministic_no_diagonal_guess():
 
 
 def test_self_heal_unjustified_front180_east_to_north(db):
-    """PROD state after buggy repair: FRONT+180 EAST must self-heal to NORTH when C1 present."""
+    """PROD-like LEGACY FRONT+180 EAST (diagonal-slack fingerprint) → NORTH + AUTO_REPAIR."""
     wh = Warehouse(name="W", tenant_id=1)
     db.add(wh)
     db.flush()
@@ -179,6 +180,7 @@ def test_self_heal_unjustified_front180_east_to_north(db):
         height_cm=200,
         service_side="FRONT",
         rotation_degrees=270,
+        service_face_origin=ServiceFaceOrigin.EXPLICIT,
         is_active=True,
     )
     c2 = Rack(
@@ -198,6 +200,7 @@ def test_self_heal_unjustified_front180_east_to_north(db):
         height_cm=200,
         service_side="FRONT",
         rotation_degrees=270,
+        service_face_origin=ServiceFaceOrigin.EXPLICIT,
         is_active=True,
     )
     s1 = Rack(
@@ -217,6 +220,7 @@ def test_self_heal_unjustified_front180_east_to_north(db):
         height_cm=200,
         service_side="FRONT",
         rotation_degrees=180,  # buggy prior repair (EAST)
+        service_face_origin=ServiceFaceOrigin.LEGACY_DEFAULT,
         is_active=True,
     )
     db.add_all([c1, c2, s1])
@@ -225,25 +229,28 @@ def test_self_heal_unjustified_front180_east_to_north(db):
     expected = face_for_cardinal("NORTH", orientation="vertical")
     assert should_repair_store_face(s1, expected, [c1, c2, s1], orientation="vertical") is True
 
-    # Justified explicit NORTH must NOT be overwritten toward something else if already matching
+    # EXPLICIT NORTH must NOT be overwritten
     s1.rotation_degrees = 90
+    s1.service_face_origin = ServiceFaceOrigin.EXPLICIT
     assert should_repair_store_face(s1, expected, [c1, c2, s1], orientation="vertical") is False
 
-    # Reset buggy state and run full repair
+    # Reset buggy LEGACY state and run full repair
     s1.service_side = "FRONT"
     s1.rotation_degrees = 180
+    s1.service_face_origin = ServiceFaceOrigin.LEGACY_DEFAULT
     report = repair_layout_service_faces(db, wh.id, layout=layout)
     db.flush()
     db.refresh(s1)
     assert int(s1.rotation_degrees or 0) == 90
     assert str(s1.service_side).upper() == "FRONT"
+    assert s1.service_face_origin == ServiceFaceOrigin.AUTO_REPAIR
     assert any(
-        r.get("name") == "S1" and "self_heal" in str(r.get("reason", "")) for r in report.repaired
+        r.get("name") == "S1" and "fingerprint" in str(r.get("reason", "")) for r in report.repaired
     )
 
 
 def test_justified_explicit_east_preserved(db):
-    """True EAST neighbor: FRONT+180 is geometrically justified → do not overwrite to NORTH."""
+    """True EAST neighbor + EXPLICIT FRONT+180 → do not overwrite."""
     wh = Warehouse(name="W2", tenant_id=1)
     db.add(wh)
     db.flush()
@@ -269,6 +276,7 @@ def test_justified_explicit_east_preserved(db):
         height_cm=200,
         service_side="FRONT",
         rotation_degrees=0,
+        service_face_origin=ServiceFaceOrigin.EXPLICIT,
         is_active=True,
     )
     store = Rack(
@@ -287,7 +295,8 @@ def test_justified_explicit_east_preserved(db):
         width_cm=120,
         height_cm=200,
         service_side="FRONT",
-        rotation_degrees=180,  # EAST — justified by real Y-overlap neighbor
+        rotation_degrees=180,  # EAST — EXPLICIT
+        service_face_origin=ServiceFaceOrigin.EXPLICIT,
         is_active=True,
     )
     db.add_all([east, store])
@@ -295,6 +304,71 @@ def test_justified_explicit_east_preserved(db):
     report = repair_layout_service_faces(db, wh.id, layout=layout)
     db.flush()
     db.refresh(store)
-    # Expected inference is EAST (gap 4); already matches → no change
     assert int(store.rotation_degrees or 0) == 180
+    assert store.service_face_origin == ServiceFaceOrigin.EXPLICIT
+    assert not any(r.get("name") == "ST" and r.get("changed") for r in report.repaired)
+
+
+def test_p0_explicit_east_survives_neighbor_delete(db):
+    """P0: EXPLICIT EAST + delete EAST neighbor + repair → still EAST + EXPLICIT."""
+    wh = Warehouse(name="W3", tenant_id=1)
+    db.add(wh)
+    db.flush()
+    layout = WarehouseLayout(
+        warehouse_id=wh.id, name="L", grid_cols=40, grid_rows=40, width_m=4, length_m=4
+    )
+    db.add(layout)
+    db.flush()
+    east = Rack(
+        layout_id=layout.id,
+        uuid=str(uuid.uuid4()),
+        name="E1",
+        rack_type="warehouse",
+        x=16,
+        y=50,
+        width=10,
+        height=8,
+        orientation="vertical",
+        levels=1,
+        bins_per_level=1,
+        length_cm=80,
+        width_cm=100,
+        height_cm=200,
+        service_side="FRONT",
+        rotation_degrees=0,
+        service_face_origin=ServiceFaceOrigin.EXPLICIT,
+        is_active=True,
+    )
+    store = Rack(
+        layout_id=layout.id,
+        uuid=str(uuid.uuid4()),
+        name="ST",
+        rack_type="store",
+        x=0,
+        y=50,
+        width=12,
+        height=8,
+        orientation="vertical",
+        levels=1,
+        bins_per_level=1,
+        length_cm=80,
+        width_cm=120,
+        height_cm=200,
+        service_side="FRONT",
+        rotation_degrees=180,
+        service_face_origin=ServiceFaceOrigin.EXPLICIT,
+        is_active=True,
+    )
+    db.add_all([east, store])
+    db.flush()
+    # Move neighbor away (delete cascades need bins table in this fixture)
+    east.x = 90
+    east.y = 90
+    east.is_active = False
+    db.flush()
+    report = repair_layout_service_faces(db, wh.id, layout=layout)
+    db.flush()
+    db.refresh(store)
+    assert int(store.rotation_degrees or 0) == 180
+    assert store.service_face_origin == ServiceFaceOrigin.EXPLICIT
     assert not any(r.get("name") == "ST" and r.get("changed") for r in report.repaired)

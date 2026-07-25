@@ -7,10 +7,11 @@ Rack: linked to layout, X/Y coordinates, orientation, number of levels.
 Bin: smallest unit (location); label (e.g. A-01-01), volume, current load.
 """
 
-from sqlalchemy import Boolean, Column, Float, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy import Boolean, Column, Enum as SAEnum, Float, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import relationship
 from ..database import Base
 from .base import BaseModelMixin
+from .service_face_origin import ServiceFaceOrigin
 
 
 # Grid: 1 unit = 10 cm. x, y on Rack are in 10cm units.
@@ -152,6 +153,18 @@ class Rack(Base, BaseModelMixin):
     service_side = Column(String(16), nullable=False, default="FRONT", server_default="FRONT")
     #: Authoring rotation hint persisted across save/reload: 0 | 90 | 180 | 270 (CCW).
     rotation_degrees = Column(Integer, nullable=False, default=0, server_default="0")
+    #: Provenance of service_side/rotation (ServiceFaceOrigin). Stored as VARCHAR.
+    service_face_origin = Column(
+        SAEnum(
+            ServiceFaceOrigin,
+            values_callable=lambda enum_cls: [e.value for e in enum_cls],
+            native_enum=False,
+            validate_strings=True,
+        ),
+        nullable=False,
+        default=ServiceFaceOrigin.LEGACY_DEFAULT,
+        server_default=ServiceFaceOrigin.LEGACY_DEFAULT.value,
+    )
 
     layout = relationship("WarehouseLayout", back_populates="racks")
     bins = relationship("Bin", back_populates="rack", cascade="all, delete-orphan")

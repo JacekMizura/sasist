@@ -81,7 +81,7 @@ import { RoutingGraphLayer } from "./WarehouseDesigner/routing/RoutingGraphLayer
 import { RoutingRoutesPanel } from "./WarehouseDesigner/routing/RoutingRoutesPanel";
 import { buildAccessProblemItems, type AccessProblemItem } from "./WarehouseDesigner/routing/locationAccessProblems";
 import { useRoutingGraph } from "./WarehouseDesigner/routing/useRoutingGraph";
-import { normalizeRotation } from "./WarehouseDesigner/rackServiceFace";
+import { normalizeRotation, normalizeServiceFaceOrigin } from "./WarehouseDesigner/rackServiceFace";
 import { preferOrthogonalCm } from "./WarehouseDesigner/routing/routingCanvasInteraction";
 import type { RoutingTool } from "./WarehouseDesigner/routing/routingLabels";
 import { confirmDeleteNodeMessage } from "./WarehouseDesigner/routing/routingDisplay";
@@ -1566,6 +1566,10 @@ export default function WarehouseDesigner() {
           ).toUpperCase() === "BACK"
             ? "BACK"
             : "FRONT",
+          serviceFaceOrigin: normalizeServiceFaceOrigin(
+            (r as { service_face_origin?: unknown; serviceFaceOrigin?: unknown }).service_face_origin
+              ?? (r as { serviceFaceOrigin?: unknown }).serviceFaceOrigin
+          ),
           passages: Array.isArray((r as { passages?: unknown }).passages)
             ? ((r as { passages: Array<Record<string, unknown>> }).passages)
                 .filter((p) => p && typeof p === "object")
@@ -2166,6 +2170,8 @@ export default function WarehouseDesigner() {
           rotationDegrees: r.rotationDegrees ?? 0,
           service_side: r.serviceSide ?? "FRONT",
           serviceSide: r.serviceSide ?? "FRONT",
+          service_face_origin: normalizeServiceFaceOrigin(r.serviceFaceOrigin),
+          serviceFaceOrigin: normalizeServiceFaceOrigin(r.serviceFaceOrigin),
           passages: (r.passages ?? []).map((p) => ({
             id: p.id,
             uuid: p.uuid,

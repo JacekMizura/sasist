@@ -8,6 +8,12 @@
 export type ServiceSide = "FRONT" | "BACK";
 export type RotationDegrees = 0 | 90 | 180 | 270;
 
+export {
+  ServiceFaceOrigin,
+  normalizeServiceFaceOrigin,
+  type ServiceFaceOrigin,
+} from "../../types/warehouse";
+
 export type ServiceFace = {
   serviceSide: ServiceSide;
   rotationDegrees: RotationDegrees;

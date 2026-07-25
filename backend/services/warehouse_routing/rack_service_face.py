@@ -16,9 +16,25 @@ import math
 from dataclasses import dataclass
 from typing import Iterable, Optional
 
+from ...models.service_face_origin import SERVICE_FACE_ORIGIN_VALUES, ServiceFaceOrigin
+
 SERVICE_SIDE_FRONT = "FRONT"
 SERVICE_SIDE_BACK = "BACK"
 SUPPORTED_ROTATIONS = (0, 90, 180, 270)
+
+# Prefer ServiceFaceOrigin.* — do not hardcode provenance strings.
+ORIGIN_LEGACY_DEFAULT = ServiceFaceOrigin.LEGACY_DEFAULT
+ORIGIN_AUTO_REPAIR = ServiceFaceOrigin.AUTO_REPAIR
+ORIGIN_EXPLICIT = ServiceFaceOrigin.EXPLICIT
+
+
+def normalize_service_face_origin(raw: object) -> ServiceFaceOrigin:
+    if isinstance(raw, ServiceFaceOrigin):
+        return raw
+    s = str(raw or ServiceFaceOrigin.LEGACY_DEFAULT.value).strip().upper()
+    if s in SERVICE_FACE_ORIGIN_VALUES:
+        return ServiceFaceOrigin(s)
+    return ServiceFaceOrigin.LEGACY_DEFAULT
 
 
 @dataclass(frozen=True)
@@ -164,8 +180,13 @@ def normals_are_opposite(a: Vec2, b: Vec2, *, eps: float = 1e-6) -> bool:
     return abs(a.x + b.x) <= eps and abs(a.y + b.y) <= eps
 
 
-def apply_face_to_rack_obj(rack: object, face: ServiceFace) -> bool:
-    """Set ORM/plain rack service fields. Returns True if changed."""
+def apply_face_to_rack_obj(
+    rack: object,
+    face: ServiceFace,
+    *,
+    origin: Optional[ServiceFaceOrigin | str] = None,
+) -> bool:
+    """Set ORM/plain rack service fields. Returns True if side/rot/origin changed."""
     changed = False
     side = face.service_side
     rot = face.rotation_degrees
@@ -175,6 +196,11 @@ def apply_face_to_rack_obj(rack: object, face: ServiceFace) -> bool:
     if int(getattr(rack, "rotation_degrees", 0) or 0) != rot:
         setattr(rack, "rotation_degrees", rot)
         changed = True
+    if origin is not None:
+        o = normalize_service_face_origin(origin)
+        if normalize_service_face_origin(getattr(rack, "service_face_origin", None)) != o:
+            setattr(rack, "service_face_origin", o.value)
+            changed = True
     return changed
 
 
