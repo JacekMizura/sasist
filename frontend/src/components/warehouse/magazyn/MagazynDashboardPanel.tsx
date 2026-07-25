@@ -99,11 +99,6 @@ export function MagazynDashboardPanel({
 
   return (
     <div className="flex h-full min-h-0 flex-col" onClick={() => onClearTemplateSelection?.()}>
-      <header className="shrink-0 px-1 pb-5">
-        <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-400">Pulpit</p>
-        <h2 className="mt-1 text-lg font-semibold tracking-tight text-slate-900">Magazyn</h2>
-      </header>
-
       {(onOpenReports || onOpenDamageReports) && (
         <div className="mb-6 grid grid-cols-2 gap-2 px-1">
           {onOpenReports && (

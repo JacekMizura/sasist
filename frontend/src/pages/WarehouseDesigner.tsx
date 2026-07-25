@@ -3741,7 +3741,6 @@ export default function WarehouseDesigner() {
           { label: UI_STRINGS.navigation.groups.warehouse },
           { label: UI_STRINGS.warehouse.designerSubTabs.layoutDesigner },
         ]}
-        title={UI_STRINGS.warehouse.designerSubTabs.layoutDesigner}
         actions={
           <>
             <DesignerWarehouseSelect
@@ -3772,7 +3771,7 @@ export default function WarehouseDesigner() {
             />
           </>
         }
-        className="shrink-0 space-y-2"
+        className="shrink-0"
       />
 
       {mainView === "layout" ? (

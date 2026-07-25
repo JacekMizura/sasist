@@ -2,14 +2,12 @@
 
 ## Active
 
-**Projektant Magazynu UX polish** — bez przebudowy widoku / bez zmian geometrii / API / WMS.
+**Projektant Magazynu UI cleanup** — mniej nagłówków, skupienie na mapie.
 
-### Fixes
-- Usunięte szare kafelki lokalizacji (side view + viz overlay)
-- Panel Produkty: białe karty/miniatury
-- Nagłówek: bez „Projektant Magazynu”; dropdown magazynu po prawej (bez labela „Magazyn:”)
-- Zajęte/Wolne: liczenie lokalizacji (qty > 0), nie produktów
-- Tryby Zajęte/Wolne: podświetlenie całych lokalizacji (tint), bez szarego dimmingu
+### Done
+- Brak tytułu „Projektowanie magazynu”
+- Zoom mapy: tylko − / % / +
+- Lewy panel bez Pulpit/Magazyn
 
 ### Constraints
 Bez commit/push (dopóki user nie poprosi).

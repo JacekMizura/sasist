@@ -850,30 +850,22 @@ function WarehouseCanvasInner({
               <div className="pointer-events-auto flex items-center gap-0.5 rounded-lg border border-slate-200/80 bg-white/95 p-0.5 shadow-sm backdrop-blur-sm">
                 <button
                   type="button"
-                  onClick={() => setZoom((z) => Math.min(MAX_ZOOM, z + 0.1))}
-                  className="flex h-8 w-8 items-center justify-center rounded-md text-xs font-semibold text-slate-600 transition hover:bg-slate-50"
-                  title="Powiększ"
-                >
-                  +
-                </button>
-                <span className="min-w-[2.75rem] text-center font-mono text-[11px] tabular-nums text-slate-500">
-                  {Math.round(zoom * 100)}%
-                </span>
-                <button
-                  type="button"
                   onClick={() => setZoom((z) => Math.max(MIN_ZOOM, z - 0.1))}
                   className="flex h-8 w-8 items-center justify-center rounded-md text-xs font-semibold text-slate-600 transition hover:bg-slate-50"
                   title="Pomniejsz"
                 >
                   −
                 </button>
+                <span className="min-w-[2.75rem] text-center font-mono text-[11px] tabular-nums text-slate-500">
+                  {Math.round(zoom * 100)}%
+                </span>
                 <button
                   type="button"
-                  onClick={() => applyLiveFit()}
-                  className="h-8 rounded-md px-2.5 text-[11px] font-medium text-slate-700 transition hover:bg-slate-50"
-                  title="Dopasuj mapę do ekranu"
+                  onClick={() => setZoom((z) => Math.min(MAX_ZOOM, z + 0.1))}
+                  className="flex h-8 w-8 items-center justify-center rounded-md text-xs font-semibold text-slate-600 transition hover:bg-slate-50"
+                  title="Powiększ"
                 >
-                  Dopasuj do ekranu
+                  +
                 </button>
               </div>
             </div>
@@ -904,17 +896,7 @@ function WarehouseCanvasInner({
               >
                 −
               </button>
-              {isLiveView ? (
-                <button
-                  type="button"
-                  onClick={() => applyLiveFit()}
-                  className="h-8 rounded-md px-2.5 text-[11px] font-medium text-slate-600 transition-all duration-150 hover:bg-white hover:text-slate-900 hover:shadow-sm"
-                  style={{ color: colors.textSecondary }}
-                  title="Dopasuj mapę do ekranu"
-                >
-                  Dopasuj do ekranu
-                </button>
-              ) : (
+              {isLiveView ? null : (
                 <button
                   type="button"
                   onClick={fitViewport}

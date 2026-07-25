@@ -1,3 +1,11 @@
+## 2026-07-26 — Projektant Magazynu: cleanup nagłówków UI
+
+- Usunięty tytuł „Projektowanie magazynu” (breadcrumb + actions w jednym rzędzie)
+- Usunięte „Dopasuj do ekranu” z zoomu mapy (zostaje − / % / +)
+- Lewy panel: bez „Pulpit” / „Magazyn” — od razu Raporty / Szkody
+- Bez zmian logiki / geometrii / paneli
+- **No push.**
+
 ## 2026-07-26 — Projektant Magazynu: UX polish (bez geometrii)
 
 - Usunięte szare placeholdery lokalizacji (RackSideViewGrid + MapLocationVisualizationLayer)
