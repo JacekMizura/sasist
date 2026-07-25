@@ -2,13 +2,15 @@
 
 ## Active
 
-**Layout + Routing Designer UX Refactor (rev. 3.1)** — implementacja lokalna, bez push/deploy/Etapu 3.
+**Layout + Routing Designer UX Refactor (rev. 3.1)** — C1–C3 accepted; C4 report next. Local only, no push/deploy.
 
-### Progress
-- Commit 1 in progress → done next: `default_passages` + `passage_source` INHERITED|LOCAL + dialog aktualizacji instancji.
+### Commits (local main)
+1. `ed5dba18` Passage defaults + INHERITED/LOCAL + update dialog
+2. `d325862b` TemplateCreator responsive + mini-CAD overlay
+3. `ee6c7cef` Routing Edit mode + inspectors + quick toolbar
+4. `fe156c43` Command layer foundation for future Undo
+5. *(pending)* C3 gap-fix: Node/Edge inspectors extract + canvas endpoint drag
 
-### Constraints
-- Bez WMS / Service Face / Location Access / Etapu 3
-- Passage runtime SSOT = WarehouseRackPassage only
-- Routing Edit ≠ Passage
-- Selection clear on Projektowanie ↔ Trasy
+### Constraints still
+- Bez push / deploy / PROD / Etapu 3
+- Bez zmian algorytmów Service Face / Location Access / WMS

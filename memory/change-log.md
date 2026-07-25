@@ -1,3 +1,25 @@
+## 2026-07-25 — C3 gap-fix commit (inspectors + endpoint drag)
+
+- Extract `NodeInspector` / `EdgeInspector`; panel is container only
+- Canvas endpoint drag: handles, snap, ghost, rewire + normalizeAfterEdit via command
+- Select rewire = fallback; vitest/tsc/build OK
+- **No amend** of `ee6c7cef`. No push. Bez Etapu 3.
+
+## 2026-07-25 — C3 gap-fix (inspectors + endpoint drag, uncommitted)
+
+- Extract `NodeInspector` / `EdgeInspector`; `RoutingRoutesPanel` composes only
+- Canvas endpoint drag in Edit: handles, node snap highlight, ghost, rewire + normalizeAfterEdit; select = fallback
+- `routingEndpointDrag` + tests; vitest routing 53, tsc, build OK
+- **No commit yet** — awaiting C3 acceptance. No push. Bez Etapu 3.
+
+## 2026-07-25 — Layout+Routing UX rev. 3.1 (4 local commits, no push)
+
+- C1: template `default_passages` + passage `INHERITED|LOCAL` + update dialog
+- C2: TemplateCreator responsive + top-down passage mini-CAD
+- C3: Routing Edit vs Select; selection clear on workspace switch; quick toolbar; merge/rewire
+- C4: command bus foundation (no Undo UI)
+- tsc+build OK; targeted vitest/pytest PASS. **No push. Bez Etapu 3.**
+
 ## 2026-07-25 — Layout UX C1: template passages + INHERITED/LOCAL
 
 - `default_passages` on WarehouseTemplate; `passage_source` on WarehouseRackPassage

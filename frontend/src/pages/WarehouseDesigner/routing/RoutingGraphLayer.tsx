@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import type {
   LocationAccessBinding,
   RoutingAccessPoint,
@@ -10,6 +10,13 @@ import { worldServiceNormal } from "../rackServiceFace";
 import { nodeDisplayName, nodeKind, opTypeLabel } from "./routingDisplay";
 import { EDGE_HIT_HALF_PX, NODE_HIT_RADIUS_PX, resolveSelectHit } from "./routingHitTest";
 import { RoutingPointIcon, routingPointIconKind } from "./routingPointIcons";
+import {
+  endpointSnapToDropTarget,
+  resolveEndpointRewireSnap,
+  type EndpointDragEnd,
+  type EndpointRewireDropTarget,
+  type EndpointSnapPreview,
+} from "./routingEndpointDrag";
 
 type Props = {
   nodes: RoutingNode[];
@@ -38,16 +45,26 @@ type Props = {
   draftCursorCm?: { x: number; y: number } | null;
   /** Orthogonal guide while drafting (prefer 0/90). */
   draftOrthoGuide?: "none" | "h" | "v" | null;
-  /** When true (select tool), nodes can be dragged. */
+  /** When true (Edit tool), nodes can be dragged. */
   allowNodeDrag?: boolean;
+  /** When true (Edit tool), selected edge shows endpoint handles for rewire. */
+  allowEndpointDrag?: boolean;
   onNodeClick?: (uuid: string) => void;
   onEdgeClick?: (uuid: string, cm?: { x: number; y: number }) => void;
   onCanvasClickCm?: (x: number, y: number, opts?: { freeAngle?: boolean }) => void;
   onCanvasMoveCm?: (x: number, y: number, opts?: { freeAngle?: boolean }) => void;
   onNodeDrag?: (uuid: string, xCm: number, yCm: number) => void;
   onNodeDragEnd?: (uuid: string, xCm: number, yCm: number) => void;
+  /** Drop result after dragging an edge endpoint (snap to node or new ghost). */
+  onEndpointRewireDrop?: (payload: {
+    edgeUuid: string;
+    end: EndpointDragEnd;
+    target: EndpointRewireDropTarget;
+  }) => void;
   interactive?: boolean;
 };
+
+const ENDPOINT_HANDLE_R_PX = 8;
 
 type RackAccessAgg = {
   rackUuid: string;
@@ -131,12 +148,14 @@ export function RoutingGraphLayer({
   draftCursorCm,
   draftOrthoGuide = null,
   allowNodeDrag = false,
+  allowEndpointDrag = false,
   onNodeClick,
   onEdgeClick,
   onCanvasClickCm,
   onCanvasMoveCm,
   onNodeDrag,
   onNodeDragEnd,
+  onEndpointRewireDrop,
   interactive = true,
 }: Props) {
   const byUuid = new Map(nodes.map((n) => [n.uuid, n]));
@@ -198,6 +217,21 @@ export function RoutingGraphLayer({
   const [dragPreview, setDragPreview] = useState<{ uuid: string; x: number; y: number } | null>(null);
   const [hoverNodeUuid, setHoverNodeUuid] = useState<string | null>(null);
   const [hoverEdgeUuid, setHoverEdgeUuid] = useState<string | null>(null);
+  const endpointDragRef = useRef<{
+    edgeUuid: string;
+    end: EndpointDragEnd;
+    pointerId: number;
+    moved: boolean;
+    fixedNodeUuid: string;
+    currentNodeUuid: string;
+  } | null>(null);
+  const endpointSnapRef = useRef<EndpointSnapPreview | null>(null);
+  const [endpointDragPreview, setEndpointDragPreview] = useState<{
+    edgeUuid: string;
+    end: EndpointDragEnd;
+    snap: EndpointSnapPreview;
+    fixedCm: { x: number; y: number };
+  } | null>(null);
 
   const resolveSvg = useCallback((el: Element): SVGSVGElement | null => {
     return (el.ownerSVGElement ?? (el as SVGSVGElement)) as SVGSVGElement;
@@ -245,6 +279,7 @@ export function RoutingGraphLayer({
           }}
           onClick={(e) => {
             if (dragRef.current?.moved) return;
+            if (endpointDragRef.current?.moved) return;
             const svg = resolveSvg(e.currentTarget);
             if (!svg || !onCanvasClickCm) return;
             const hit = pickAtClient(svg, e.clientX, e.clientY);
@@ -261,13 +296,23 @@ export function RoutingGraphLayer({
         const a0 = byUuid.get(e.from_node_uuid);
         const b0 = byUuid.get(e.to_node_uuid);
         if (!a0 || !b0) return null;
-        const a =
+        let a =
           dragPreview?.uuid === a0.uuid ? { ...a0, x: dragPreview.x, y: dragPreview.y } : a0;
-        const b =
+        let b =
           dragPreview?.uuid === b0.uuid ? { ...b0, x: dragPreview.x, y: dragPreview.y } : b0;
+        // Live rewire preview: moving endpoint follows snap target
+        if (endpointDragPreview?.edgeUuid === e.uuid) {
+          const snap = endpointDragPreview.snap;
+          if (endpointDragPreview.end === "from") {
+            a = { ...a, x: snap.x, y: snap.y };
+          } else {
+            b = { ...b, x: snap.x, y: snap.y };
+          }
+        }
         const active = selectedEdgeUuid === e.uuid || hiEdges.has(e.uuid);
         const diagnostic = diagEdges.has(e.uuid);
         const hovered = hoverEdgeUuid === e.uuid && !hoverNodeUuid;
+        const rewiring = endpointDragPreview?.edgeUuid === e.uuid;
         return (
           <g key={e.uuid}>
             <line
@@ -284,6 +329,7 @@ export function RoutingGraphLayer({
               onPointerLeave={() => setHoverEdgeUuid((u) => (u === e.uuid ? null : u))}
               onClick={(ev) => {
                 ev.stopPropagation();
+                if (endpointDragRef.current?.moved) return;
                 const svg = resolveSvg(ev.currentTarget);
                 if (!svg) return;
                 // POINT wins even if edge stroke received the DOM event at an endpoint.
@@ -306,14 +352,16 @@ export function RoutingGraphLayer({
               stroke={
                 diagnostic
                   ? "#e11d48"
-                  : active || hovered
+                  : rewiring || active || hovered
                     ? "#0ea5e9"
                     : e.enabled
                       ? "#64748b"
                       : "#cbd5e1"
               }
-              strokeWidth={diagnostic || active || hovered ? 4 : 2.5}
-              strokeDasharray={diagnostic ? "7 4" : e.enabled ? undefined : "6 4"}
+              strokeWidth={diagnostic || rewiring || active || hovered ? 4 : 2.5}
+              strokeDasharray={
+                diagnostic ? "7 4" : rewiring ? "6 3" : e.enabled ? undefined : "6 4"
+              }
               opacity={0.9}
               style={{ pointerEvents: "none" }}
             />
@@ -452,7 +500,11 @@ export function RoutingGraphLayer({
         const preview = dragPreview?.uuid === n.uuid ? dragPreview : null;
         const nx = preview?.x ?? n.x;
         const ny = preview?.y ?? n.y;
-        const active = selectedNodeUuid === n.uuid || hiNodes.has(n.uuid);
+        const active =
+          selectedNodeUuid === n.uuid ||
+          hiNodes.has(n.uuid) ||
+          (endpointDragPreview?.snap.kind === "node" &&
+            endpointDragPreview.snap.uuid === n.uuid);
         const hovered = hoverNodeUuid === n.uuid;
         const kind = nodeKind(n, accessPoints);
         const tip = nodeDisplayName(n, accessPoints, [], nodes);
@@ -484,6 +536,7 @@ export function RoutingGraphLayer({
             onPointerDown={(ev) => {
               if (!interactive) return;
               if (ev.button !== 0) return;
+              if (endpointDragRef.current) return;
               ev.stopPropagation();
               // Always arm selection/drag from node hitbox (select + draw reuse).
               dragRef.current = {
@@ -641,6 +694,186 @@ export function RoutingGraphLayer({
           </g>
         );
       })}
+
+      {/* 4) Endpoint handles + snap ghost (Edit mode, selected edge) — above nodes */}
+      {allowEndpointDrag &&
+        interactive &&
+        selectedEdgeUuid &&
+        (() => {
+          const edge = edges.find((e) => e.uuid === selectedEdgeUuid);
+          if (!edge) return null;
+          const fromN = byUuid.get(edge.from_node_uuid);
+          const toN = byUuid.get(edge.to_node_uuid);
+          if (!fromN || !toN) return null;
+
+          const startEndpointDrag = (
+            end: EndpointDragEnd,
+            ev: ReactPointerEvent<SVGGElement>
+          ) => {
+            if (ev.button !== 0) return;
+            ev.stopPropagation();
+            ev.preventDefault();
+            dragRef.current = null;
+            const fixedUuid = end === "from" ? edge.to_node_uuid : edge.from_node_uuid;
+            const currentUuid = end === "from" ? edge.from_node_uuid : edge.to_node_uuid;
+            const fixed = byUuid.get(fixedUuid);
+            if (!fixed) return;
+            endpointDragRef.current = {
+              edgeUuid: edge.uuid,
+              end,
+              pointerId: ev.pointerId,
+              moved: false,
+              fixedNodeUuid: fixedUuid,
+              currentNodeUuid: currentUuid,
+            };
+            const snap: EndpointSnapPreview = {
+              kind: "node",
+              uuid: currentUuid,
+              x: end === "from" ? fromN.x : toN.x,
+              y: end === "from" ? fromN.y : toN.y,
+            };
+            endpointSnapRef.current = snap;
+            setEndpointDragPreview({
+              edgeUuid: edge.uuid,
+              end,
+              snap,
+              fixedCm: { x: fixed.x, y: fixed.y },
+            });
+            try {
+              (ev.currentTarget as SVGGElement).setPointerCapture(ev.pointerId);
+            } catch {
+              /* ignore */
+            }
+          };
+
+          const moveEndpointDrag = (ev: ReactPointerEvent<SVGGElement>) => {
+            const drag = endpointDragRef.current;
+            if (!drag || drag.edgeUuid !== edge.uuid) return;
+            ev.stopPropagation();
+            const svg = resolveSvg(ev.currentTarget);
+            if (!svg) return;
+            if (!drag.moved) {
+              drag.moved = true;
+            }
+            const raw = clientToCm(svg, ev.clientX, ev.clientY, scale);
+            const snap = resolveEndpointRewireSnap(nodes, raw, {
+              excludeNodeUuid: drag.fixedNodeUuid,
+              gridSnap: snapRoutingCm,
+            });
+            endpointSnapRef.current = snap;
+            const fixed = byUuid.get(drag.fixedNodeUuid);
+            setEndpointDragPreview({
+              edgeUuid: drag.edgeUuid,
+              end: drag.end,
+              snap,
+              fixedCm: fixed ? { x: fixed.x, y: fixed.y } : { x: 0, y: 0 },
+            });
+          };
+
+          const endEndpointDrag = (ev: ReactPointerEvent<SVGGElement>) => {
+            const drag = endpointDragRef.current;
+            if (!drag || drag.edgeUuid !== edge.uuid) return;
+            ev.stopPropagation();
+            try {
+              (ev.currentTarget as SVGGElement).releasePointerCapture(ev.pointerId);
+            } catch {
+              /* ignore */
+            }
+            const moved = drag.moved;
+            const snap = endpointSnapRef.current;
+            endpointDragRef.current = null;
+            endpointSnapRef.current = null;
+            setEndpointDragPreview(null);
+            if (!moved || !snap) return;
+            const target = endpointSnapToDropTarget(snap);
+            if (target.kind === "node" && target.uuid === drag.currentNodeUuid) return;
+            onEndpointRewireDrop?.({
+              edgeUuid: drag.edgeUuid,
+              end: drag.end,
+              target,
+            });
+          };
+
+          const renderHandle = (end: EndpointDragEnd, n: RoutingNode) => {
+            const dragging =
+              endpointDragPreview?.edgeUuid === edge.uuid && endpointDragPreview.end === end;
+            const cx = dragging ? endpointDragPreview.snap.x * scale : n.x * scale;
+            const cy = dragging ? endpointDragPreview.snap.y * scale : n.y * scale;
+            return (
+              <g
+                key={`ep-${edge.uuid}-${end}`}
+                data-testid={`routing-endpoint-handle-${end}`}
+                style={{ cursor: "grab", touchAction: "none" }}
+                onPointerDown={(ev) => startEndpointDrag(end, ev)}
+                onPointerMove={moveEndpointDrag}
+                onPointerUp={endEndpointDrag}
+                onPointerCancel={endEndpointDrag}
+              >
+                <circle
+                  cx={cx}
+                  cy={cy}
+                  r={ENDPOINT_HANDLE_R_PX + 4}
+                  fill="rgba(0,0,0,0.001)"
+                  style={{ pointerEvents: "all" }}
+                />
+                <rect
+                  x={cx - ENDPOINT_HANDLE_R_PX}
+                  y={cy - ENDPOINT_HANDLE_R_PX}
+                  width={ENDPOINT_HANDLE_R_PX * 2}
+                  height={ENDPOINT_HANDLE_R_PX * 2}
+                  rx={2}
+                  fill={dragging ? "#f59e0b" : "#fff"}
+                  stroke="#f59e0b"
+                  strokeWidth={2}
+                  style={{ pointerEvents: "none" }}
+                />
+              </g>
+            );
+          };
+
+          return (
+            <g className="routing-endpoint-handles" style={{ pointerEvents: "all" }}>
+              {endpointDragPreview?.edgeUuid === edge.uuid &&
+                endpointDragPreview.snap.kind === "ghost" && (
+                  <g style={{ pointerEvents: "none" }} data-testid="routing-endpoint-ghost">
+                    <circle
+                      cx={endpointDragPreview.snap.x * scale}
+                      cy={endpointDragPreview.snap.y * scale}
+                      r={10}
+                      fill="none"
+                      stroke="#f59e0b"
+                      strokeWidth={2}
+                      strokeDasharray="4 3"
+                      opacity={0.95}
+                    />
+                    <circle
+                      cx={endpointDragPreview.snap.x * scale}
+                      cy={endpointDragPreview.snap.y * scale}
+                      r={3.5}
+                      fill="#f59e0b"
+                      opacity={0.85}
+                    />
+                  </g>
+                )}
+              {endpointDragPreview?.edgeUuid === edge.uuid &&
+                endpointDragPreview.snap.kind === "node" && (
+                  <circle
+                    data-testid="routing-endpoint-snap-node"
+                    cx={endpointDragPreview.snap.x * scale}
+                    cy={endpointDragPreview.snap.y * scale}
+                    r={NODE_HIT_RADIUS_PX + 2}
+                    fill="none"
+                    stroke="#22c55e"
+                    strokeWidth={2.5}
+                    opacity={0.95}
+                    style={{ pointerEvents: "none" }}
+                  />
+                )}
+              {renderHandle("from", fromN)}
+              {renderHandle("to", toN)}
+            </g>
+          );
+        })()}
     </g>
   );
 }

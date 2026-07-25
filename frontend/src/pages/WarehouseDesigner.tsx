@@ -9,7 +9,7 @@ import { rematerializeInheritedPassages } from "./WarehouseDesigner/passages/rac
 import { SelectionQuickToolbar } from "./WarehouseDesigner/SelectionQuickToolbar";
 import type { DesignerSelection } from "./WarehouseDesigner/designerSelection";
 import { createCommandBus } from "./WarehouseDesigner/commands";
-import { deleteSelectedNode } from "./WarehouseDesigner/routing/RoutingRoutesPanel";
+import { deleteSelectedNode } from "./WarehouseDesigner/routing/routingNodeActions";
 import { activeBinsForRack, formatVolume, createBinsForRack, binsToLevels, volumePerBin, volumePerBinFromTotal, cmToCells, cellsToCm, getCatalogItemSpec, getLevelConfig, getTotalLocations, getNextIndexInRow, getNextRackIndex, ROW_LABEL_ADDRESS_PATTERN, reindexGeometricRow, findSnapToRowPosition, getDragSlotHighlights, binUsedVolumeDm3, binVolumeDm3, getRackDisplayId, getAllPositionsFromRacks, clampGridToBuilding, metersToCells, duplicateRacksAtPosition, generateRackUuid, assignUniqueRackNamesToNewRacks, validateAllRackNamesInLayout, validateLayoutEntityIntegrity, getProposedFirstRackLabelForStampFromCatalog, normalizeRowPrefixLetters, generateRackNames, validateGeneratedRackNames, countPlaceRowWithTemplateRacks, countEmptyRowSlotsInDraw, catalogItemTemplateKey, catalogItemFromTemplateKey, rowContainerTemplateIdFromCatalogItem, rackMatchesSlotRackId } from "../components/warehouse/warehouseUtils";
 import {
   logLayoutRackHydrate,
@@ -4254,6 +4254,7 @@ export default function WarehouseDesigner() {
                   draftCursorCm={routingDraftCursorCm}
                   draftOrthoGuide={routingDraftOrthoGuide}
                   allowNodeDrag={routingTool === "edit"}
+                  allowEndpointDrag={routingTool === "edit"}
                   interactive
                   onNodeDrag={(uuid, x, y) => {
                     routing.updateNode(uuid, { x, y });
@@ -4278,6 +4279,49 @@ export default function WarehouseDesigner() {
                     });
                     setRoutingSelectedNode(uuid);
                     setRoutingSelectedEdge(null);
+                  }}
+                  onEndpointRewireDrop={({ edgeUuid, end, target }) => {
+                    const edge = routing.edges.find((e) => e.uuid === edgeUuid);
+                    if (!edge) return;
+                    const prevEndpoint =
+                      end === "from" ? edge.from_node_uuid : edge.to_node_uuid;
+                    if (target.kind === "node" && target.uuid === prevEndpoint) return;
+                    let createdNodeUuid: string | null = null;
+                    commandBusRef.current.execute({
+                      id: "endpointRewire",
+                      label: "Przepnij koniec odcinka",
+                      execute: () => {
+                        let nextUuid: string;
+                        if (target.kind === "node") {
+                          nextUuid = target.uuid;
+                        } else {
+                          nextUuid = routing.addNodeAtCm(target.x, target.y);
+                          createdNodeUuid = nextUuid;
+                        }
+                        const ok = routing.rewireEdgeEndpoint(edgeUuid, end, nextUuid);
+                        if (!ok) {
+                          if (createdNodeUuid) {
+                            routing.removeNode(createdNodeUuid);
+                            createdNodeUuid = null;
+                          }
+                          window.alert("Nie można przepiąć — pętla lub duplikat odcinka.");
+                          return { ok: false };
+                        }
+                        routing.normalizeAfterEdit();
+                        setRoutingSelectedEdge(edgeUuid);
+                        setRoutingSelectedNode(null);
+                        return { ok: true };
+                      },
+                      undo: () => {
+                        routing.rewireEdgeEndpoint(edgeUuid, end, prevEndpoint);
+                        if (createdNodeUuid) {
+                          routing.removeNode(createdNodeUuid);
+                          createdNodeUuid = null;
+                        }
+                        routing.normalizeAfterEdit();
+                        return { ok: true };
+                      },
+                    });
                   }}
                   onNodeClick={(uuid) => {
                     if (routingTool === "draw_edge") {

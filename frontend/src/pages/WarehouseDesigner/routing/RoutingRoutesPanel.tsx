@@ -1,16 +1,8 @@
 import { useMemo, useState } from "react";
-import type { RoutingEdge, RoutingNode } from "../../../api/warehouseRoutingApi";
+import type { RoutingNode } from "../../../api/warehouseRoutingApi";
 import type { RackState } from "../../../types/warehouse";
+import { nodeDisplayName, orphanNodeUuids } from "./routingDisplay";
 import {
-  confirmDeleteNodeMessage,
-  edgesConnectedTo,
-  isCrossroads,
-  nodeDisplayName,
-  opTypeLabel,
-  orphanNodeUuids,
-} from "./routingDisplay";
-import {
-  ROUTING_OP_OPTIONS,
   ROUTING_PROCESS_OPTIONS,
   ROUTING_TRANSPORT_OPTIONS,
   type RoutingTool,
@@ -18,6 +10,10 @@ import {
 import type { useRoutingGraph } from "./useRoutingGraph";
 import { LocationAccessProblemsPanel } from "./LocationAccessProblemsPanel";
 import type { AccessProblemItem } from "./locationAccessProblems";
+import { NodeInspector } from "./NodeInspector";
+import { EdgeInspector } from "./EdgeInspector";
+
+export { deleteSelectedNode } from "./routingNodeActions";
 
 type Hook = ReturnType<typeof useRoutingGraph>;
 
@@ -46,54 +42,6 @@ type Props = {
   onClearAccessProblemSelection?: () => void;
 };
 
-export function deleteSelectedNode(
-  routing: Hook,
-  selectedNode: RoutingNode,
-  setSelectedNodeUuid: (u: string | null) => void,
-  locations: { id: number; name: string; location_type?: string | null }[] = []
-) {
-  const connected = edgesConnectedTo(selectedNode.uuid, routing.edges);
-  const deg = connected.length;
-
-  if (deg === 2 && typeof routing.previewMergeDegree2 === "function") {
-    const preview = routing.previewMergeDegree2(selectedNode.uuid);
-    if (preview) {
-      const ok = window.confirm(
-        `Usunięcie punktu połączy sąsiadów w jeden odcinek (≈ ${preview.lengthM.toFixed(1)} m).\n\nScalić?`
-      );
-      if (!ok) return false;
-      if (routing.mergeDegree2(selectedNode.uuid)) {
-        setSelectedNodeUuid(null);
-        routing.normalizeAfterEdit?.();
-        return true;
-      }
-      return false;
-    }
-  }
-
-  if (deg > 2) {
-    const ok = window.confirm(
-      `Ten punkt ma ${deg} połączenia. Usunięcie usunie też wszystkie połączone odcinki. Kontynuować?`
-    );
-    if (!ok) return false;
-    routing.removeNode(selectedNode.uuid);
-    setSelectedNodeUuid(null);
-    return true;
-  }
-
-  const msg = confirmDeleteNodeMessage(
-    selectedNode,
-    routing.edges,
-    routing.accessPoints,
-    routing.nodes,
-    locations
-  );
-  if (!window.confirm(msg)) return false;
-  routing.removeNode(selectedNode.uuid);
-  setSelectedNodeUuid(null);
-  return true;
-}
-
 export function RoutingRoutesPanel({
   routing,
   tool,
@@ -120,10 +68,7 @@ export function RoutingRoutesPanel({
 }: Props) {
   const [processType, setProcessType] = useState("");
   const [transportType, setTransportType] = useState("");
-  const [apSearch, setApSearch] = useState("");
   const [testAdvanced, setTestAdvanced] = useState(false);
-  const [edgeRestrictionsOpen, setEdgeRestrictionsOpen] = useState(false);
-  const [locPickerOpen, setLocPickerOpen] = useState(false);
 
   const selectedNode = useMemo(
     () => routing.nodes.find((n) => n.uuid === selectedNodeUuid) ?? null,
@@ -133,21 +78,11 @@ export function RoutingRoutesPanel({
     () => routing.edges.find((e) => e.uuid === selectedEdgeUuid) ?? null,
     [routing.edges, selectedEdgeUuid]
   );
-  const connectedEdges = useMemo(
-    () => (selectedNode ? edgesConnectedTo(selectedNode.uuid, routing.edges) : []),
-    [selectedNode, routing.edges]
-  );
   const orphans = useMemo(
     () => orphanNodeUuids(routing.nodes, routing.edges),
     [routing.nodes, routing.edges]
   );
   const opCount = routing.nodes.filter((n) => n.operational_type).length;
-
-  const filteredLocations = useMemo(() => {
-    const q = apSearch.trim().toLowerCase();
-    if (!q) return locations.slice(0, 40);
-    return locations.filter((l) => l.name.toLowerCase().includes(q)).slice(0, 40);
-  }, [locations, apSearch]);
 
   const editingPoint = Boolean(selectedNode && (tool === "select" || tool === "edit"));
   const editingEdge = Boolean(selectedEdge && (tool === "select" || tool === "edit") && !selectedNode);
@@ -538,394 +473,26 @@ export function RoutingRoutesPanel({
         </div>
       )}
 
-      {/* SELECTED POINT */}
       {editingPoint && selectedNode && (
-        <div className="space-y-2 rounded-lg border border-slate-200 p-2">
-          <div className="flex items-start justify-between gap-2">
-            <div>
-              <div className="font-semibold">
-                {isCrossroads(selectedNode, routing.edges) ? "Skrzyżowanie" : "Punkt trasy"}
-              </div>
-              {selectedNode.operational_type && (
-                <div className="text-[10px] text-slate-500">{nameOf(selectedNode)}</div>
-              )}
-            </div>
-          </div>
-
-          <button
-            type="button"
-            data-testid="routing-delete-node"
-            className="w-full rounded-md border border-rose-300 bg-rose-600 py-2 text-[12px] font-semibold text-white hover:bg-rose-700"
-            onClick={() => {
-              if (deleteSelectedNode(routing, selectedNode, setSelectedNodeUuid, locations)) {
-                setHighlightOrphanUuids([]);
-              }
-            }}
-          >
-            Usuń punkt
-          </button>
-
-          <label className="block">
-            Nazwa
-            <input
-              className="mt-0.5 w-full rounded border border-slate-200 px-1 py-1"
-              value={
-                isGenericDisplayLabel(selectedNode.label) ? "" : (selectedNode.label ?? "")
-              }
-              placeholder="opcjonalnie"
-              onChange={(e) =>
-                routing.updateNode(selectedNode.uuid, { label: e.target.value.trim() || null })
-              }
-            />
-          </label>
-
-          <label className="block">
-            Typ punktu
-            <select
-              className="mt-0.5 w-full rounded border border-slate-200 px-1 py-1"
-              value={
-                selectedNode.operational_type &&
-                !ROUTING_OP_OPTIONS.some((o) => o.value === selectedNode.operational_type)
-                  ? selectedNode.operational_type
-                  : (selectedNode.operational_type ?? "")
-              }
-              onChange={(e) => {
-                const v = e.target.value || null;
-                const opLab = v
-                  ? ROUTING_OP_OPTIONS.find((o) => o.value === v)?.label ?? null
-                  : null;
-                routing.updateNode(selectedNode.uuid, {
-                  operational_type: v,
-                  node_type: v ? "operational" : "junction",
-                  label:
-                    v && isGenericDisplayLabel(selectedNode.label) ? opLab ?? null : selectedNode.label,
-                });
-              }}
-            >
-              <option value="">Trasa</option>
-              {ROUTING_OP_OPTIONS.map((o) => (
-                <option key={o.value} value={o.value}>
-                  {o.label}
-                </option>
-              ))}
-              {selectedNode.operational_type &&
-                !ROUTING_OP_OPTIONS.some((o) => o.value === selectedNode.operational_type) && (
-                  <option value={selectedNode.operational_type}>
-                    {opTypeLabel(selectedNode.operational_type) || selectedNode.operational_type}
-                  </option>
-                )}
-            </select>
-          </label>
-
-          <div>
-            <div className="mb-0.5 font-semibold">
-              Połączone odcinki ({connectedEdges.length})
-            </div>
-            {connectedEdges.length === 0 ? (
-              <div className="text-[10px] text-slate-400">Brak — punkt nie jest częścią trasy</div>
-            ) : (
-              <ul className="max-h-20 space-y-0.5 overflow-auto text-[11px]">
-                {connectedEdges.map((e) => {
-                  const other =
-                    e.from_node_uuid === selectedNode.uuid ? e.to_node_uuid : e.from_node_uuid;
-                  const otherNode = routing.nodes.find((n) => n.uuid === other);
-                  return (
-                    <li key={e.uuid}>
-                      <button
-                        type="button"
-                        className="text-left text-sky-800 underline"
-                        onClick={() => {
-                          setSelectedEdgeUuid(e.uuid);
-                          setSelectedNodeUuid(null);
-                          setTool("select");
-                        }}
-                      >
-                        → {otherNode ? nameOf(otherNode) : "punkt"} ({e.distance_m.toFixed(1)} m)
-                      </button>
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
-          </div>
-
-          <div className="border-t border-slate-100 pt-2">
-            <div className="mb-1 font-semibold">Dostęp lokalizacji</div>
-            <p className="mb-1 text-[10px] text-slate-500">
-              Dostęp do trasy wylicza się automatycznie po stronie regału. Ręczne przypisanie to wyjątek
-              (nadpisanie).
-            </p>
-            <div className="mb-2 flex flex-wrap gap-1">
-              <button
-                type="button"
-                className="h-7 flex-1 rounded border border-slate-200 text-[10px] font-semibold"
-                onClick={() => void routing.recomputeAccess()}
-              >
-                Przelicz dostęp AUTO
-              </button>
-              <button
-                type="button"
-                className={`h-7 flex-1 rounded border text-[10px] font-semibold ${
-                  routing.showAccessDiagnostics
-                    ? "border-sky-300 bg-sky-50 text-sky-900"
-                    : "border-slate-200"
-                }`}
-                onClick={() => routing.setShowAccessDiagnostics((v) => !v)}
-              >
-                {routing.showAccessDiagnostics ? "Ukryj diagnostykę" : "Diagnostyka dostępu"}
-              </button>
-            </div>
-            {routing.showAccessDiagnostics && (
-              <p className="mb-2 text-[10px] text-slate-500">
-                Domyślnie: marker strony obsługi per regał (OK / do sprawdzenia / brak). Kliknij regał, aby zobaczyć
-                podejścia S→P.
-              </p>
-            )}
-            <ul className="mb-2 flex max-h-24 flex-wrap gap-1 overflow-auto">
-              {routing.accessPoints
-                .filter((a) => a.node_uuid === selectedNode.uuid)
-                .map((a) => {
-                  const locName =
-                    locations.find((l) => l.id === a.location_id)?.name ?? `Lokalizacja ${a.location_id}`;
-                  return (
-                    <li
-                      key={a.uuid}
-                      className="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] text-amber-900"
-                      title="Ręczne nadpisanie (wyjątek)"
-                    >
-                      {locName}
-                      <button
-                        type="button"
-                        className="font-bold text-amber-800"
-                        title="Odłącz nadpisanie"
-                        onClick={() => routing.removeAccessPoint(a.uuid)}
-                      >
-                        ×
-                      </button>
-                    </li>
-                  );
-                })}
-              {routing.accessPoints.filter((a) => a.node_uuid === selectedNode.uuid).length === 0 && (
-                <li className="text-[10px] text-slate-400">Brak ręcznych nadpisań na tym punkcie.</li>
-              )}
-            </ul>
-            {!locPickerOpen ? (
-              <button
-                type="button"
-                className="h-7 w-full rounded border border-dashed border-slate-300 text-[10px] font-semibold text-slate-600"
-                onClick={() => setLocPickerOpen(true)}
-              >
-                Nadpisz ręcznie (wyjątek)…
-              </button>
-            ) : (
-              <div className="space-y-1 rounded border border-slate-200 p-1.5">
-                <input
-                  className="w-full rounded border border-slate-200 px-1 py-1"
-                  placeholder="Szukaj: A1, RK-01…"
-                  value={apSearch}
-                  onChange={(e) => setApSearch(e.target.value)}
-                  autoFocus
-                />
-                <ul className="max-h-28 overflow-auto">
-                  {filteredLocations.map((l) => (
-                    <li key={l.id}>
-                      <button
-                        type="button"
-                        className="w-full rounded px-1 py-0.5 text-left hover:bg-slate-100"
-                        onClick={() => {
-                          routing.upsertAccessPoint(l.id, selectedNode.uuid, l.name);
-                          setLocPickerOpen(false);
-                          setApSearch("");
-                        }}
-                      >
-                        {l.name}
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-                <button
-                  type="button"
-                  className="text-[10px] underline"
-                  onClick={() => setLocPickerOpen(false)}
-                >
-                  Anuluj
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
+        <NodeInspector
+          routing={routing}
+          selectedNode={selectedNode}
+          locations={locations}
+          setSelectedNodeUuid={setSelectedNodeUuid}
+          setSelectedEdgeUuid={setSelectedEdgeUuid}
+          setTool={setTool}
+          setHighlightOrphanUuids={setHighlightOrphanUuids}
+        />
       )}
 
-      {/* SELECTED EDGE */}
       {editingEdge && selectedEdge && (
-        <div className="space-y-2 rounded-lg border border-slate-200 p-2">
-          <div className="font-semibold">Odcinek trasy</div>
-          <div className="text-[10px] text-slate-500">
-            {nameOf(
-              routing.nodes.find((n) => n.uuid === selectedEdge.from_node_uuid) ??
-                ({ uuid: "x", warehouse_id: 0, x: 0, y: 0, node_type: "junction" } as RoutingNode)
-            )}
-            {" → "}
-            {nameOf(
-              routing.nodes.find((n) => n.uuid === selectedEdge.to_node_uuid) ??
-                ({ uuid: "y", warehouse_id: 0, x: 0, y: 0, node_type: "junction" } as RoutingNode)
-            )}
-          </div>
-          <div className="text-[10px] text-slate-500">
-            Długość: {selectedEdge.distance_m.toFixed(2)} m
-          </div>
-          <label className="block">
-            Kierunek
-            <select
-              className="mt-0.5 w-full rounded border border-slate-200 px-1 py-1"
-              value={selectedEdge.direction}
-              onChange={(e) => routing.updateEdge(selectedEdge.uuid, { direction: e.target.value })}
-            >
-              <option value="BOTH">Dwukierunkowy</option>
-              <option value="FORWARD">Jednokierunkowy (zgodnie z odcinkiem)</option>
-              <option value="BACKWARD">Jednokierunkowy (przeciwnie)</option>
-            </select>
-          </label>
-          {tool === "edit" && (
-            <div className="space-y-1 rounded border border-amber-100 bg-amber-50/60 p-2">
-              <div className="text-[10px] font-semibold text-amber-900">Przepnij końce</div>
-              <label className="block text-[10px]">
-                Od
-                <select
-                  className="mt-0.5 w-full rounded border border-slate-200 px-1 py-1"
-                  value={selectedEdge.from_node_uuid}
-                  onChange={(e) => {
-                    const ok = routing.rewireEdgeEndpoint(selectedEdge.uuid, "from", e.target.value);
-                    if (ok) routing.normalizeAfterEdit();
-                    else window.alert("Nie można przepiąć — pętla lub duplikat odcinka.");
-                  }}
-                >
-                  {routing.nodes.map((n) => (
-                    <option key={n.uuid} value={n.uuid}>
-                      {nameOf(n)}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="block text-[10px]">
-                Do
-                <select
-                  className="mt-0.5 w-full rounded border border-slate-200 px-1 py-1"
-                  value={selectedEdge.to_node_uuid}
-                  onChange={(e) => {
-                    const ok = routing.rewireEdgeEndpoint(selectedEdge.uuid, "to", e.target.value);
-                    if (ok) routing.normalizeAfterEdit();
-                    else window.alert("Nie można przepiąć — pętla lub duplikat odcinka.");
-                  }}
-                >
-                  {routing.nodes.map((n) => (
-                    <option key={n.uuid} value={n.uuid}>
-                      {nameOf(n)}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            </div>
-          )}
-          <label className="inline-flex items-center gap-2">
-            <input
-              type="checkbox"
-              checked={selectedEdge.enabled}
-              onChange={(e) => routing.updateEdge(selectedEdge.uuid, { enabled: e.target.checked })}
-            />
-            Droga aktywna
-          </label>
-
-          <div className="rounded border border-slate-100 bg-slate-50/80 p-2">
-            <button
-              type="button"
-              className="flex w-full items-center justify-between font-semibold"
-              onClick={() => setEdgeRestrictionsOpen((v) => !v)}
-            >
-              Opcjonalne ograniczenia
-              <span className="text-[10px] font-normal text-slate-500">
-                {edgeRestrictionsOpen ? "ukryj" : "rozwiń"}
-              </span>
-            </button>
-            {!edgeRestrictionsOpen && (
-              <p className="mt-1 text-[10px] text-slate-500">
-                {!selectedEdge.allowed_processes?.length &&
-                !selectedEdge.allowed_transport_types?.length
-                  ? "Dostępny dla wszystkich procesów i środków transportu"
-                  : "Ustawiono ograniczenia"}
-              </p>
-            )}
-            {edgeRestrictionsOpen && (
-              <div className="mt-2 space-y-2">
-                <p className="text-[10px] text-slate-500">Puste = bez ograniczenia.</p>
-                <label className="block">
-                  Procesy
-                  <select
-                    multiple
-                    className="mt-0.5 h-16 w-full rounded border border-slate-200 px-1 py-1"
-                    value={selectedEdge.allowed_processes}
-                    onChange={(e) => {
-                      const vals = Array.from(e.target.selectedOptions).map((o) => o.value);
-                      routing.updateEdge(selectedEdge.uuid, { allowed_processes: vals });
-                    }}
-                  >
-                    {ROUTING_PROCESS_OPTIONS.map((o) => (
-                      <option key={o.value} value={o.value}>
-                        {o.label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <button
-                  type="button"
-                  className="text-[10px] underline"
-                  onClick={() => routing.updateEdge(selectedEdge.uuid, { allowed_processes: [] })}
-                >
-                  Wszystkie procesy
-                </button>
-                <label className="block">
-                  Transport
-                  <select
-                    multiple
-                    className="mt-0.5 h-16 w-full rounded border border-slate-200 px-1 py-1"
-                    value={selectedEdge.allowed_transport_types}
-                    onChange={(e) => {
-                      const vals = Array.from(e.target.selectedOptions).map((o) => o.value);
-                      routing.updateEdge(selectedEdge.uuid, { allowed_transport_types: vals });
-                    }}
-                  >
-                    {ROUTING_TRANSPORT_OPTIONS.map((o) => (
-                      <option key={o.value} value={o.value}>
-                        {o.label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <button
-                  type="button"
-                  className="text-[10px] underline"
-                  onClick={() =>
-                    routing.updateEdge(selectedEdge.uuid, { allowed_transport_types: [] })
-                  }
-                >
-                  Wszystkie środki transportu
-                </button>
-              </div>
-            )}
-          </div>
-
-          <button
-            type="button"
-            className="w-full rounded-md border border-rose-200 bg-rose-50 py-1.5 font-semibold text-rose-800"
-            onClick={() => {
-              if (!window.confirm("Usunąć ten odcinek trasy?")) return;
-              routing.removeEdge(selectedEdge.uuid);
-              setSelectedEdgeUuid(null);
-            }}
-          >
-            Usuń odcinek
-          </button>
-        </div>
+        <EdgeInspector
+          routing={routing}
+          selectedEdge={selectedEdge}
+          tool={tool}
+          locations={locations}
+          setSelectedEdgeUuid={setSelectedEdgeUuid}
+        />
       )}
 
       {showIdle && routing.nodes.length > 0 && (
@@ -961,9 +528,4 @@ export function RoutingRoutesPanel({
       )}
     </aside>
   );
-}
-
-function isGenericDisplayLabel(label: string | null | undefined): boolean {
-  const t = (label ?? "").trim();
-  return !t || t === "Punkt trasy" || t === "Węzeł sieci";
 }
