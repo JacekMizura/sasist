@@ -2,19 +2,13 @@
 
 ## Active
 
-**Service Face Provenance** — committed lokalnie (na `9292c0d2`), **bez push**, bez PROD, bez Etapu 3.
+**Layout + Routing Designer UX Refactor (rev. 3.1)** — implementacja lokalna, bez push/deploy/Etapu 3.
 
-### Enum
-- BE: `backend/models/service_face_origin.py` → `ServiceFaceOrigin`
-- FE: `ServiceFaceOrigin` w `frontend/src/types/warehouse.ts`
-- Wartości: LEGACY_DEFAULT | AUTO_REPAIR | EXPLICIT
+### Progress
+- Commit 1 in progress → done next: `default_passages` + `passage_source` INHERITED|LOCAL + dialog aktualizacji instancji.
 
-### Gates
-- EXPLICIT: never repair / never reinterpret on save_layout
-- AUTO_REPAIR: may recompute
-- LEGACY_DEFAULT: FRONT+0 mismatch + narrow diagonal-EAST fingerprint → AUTO
-
-### Next (tylko po OK usera)
-1. Push
-2. Deploy
-3. Kontrolowany save WH1 (nie one-shot UUID)
+### Constraints
+- Bez WMS / Service Face / Location Access / Etapu 3
+- Passage runtime SSOT = WarehouseRackPassage only
+- Routing Edit ≠ Passage
+- Selection clear on Projektowanie ↔ Trasy

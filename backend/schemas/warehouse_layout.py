@@ -44,6 +44,11 @@ class RackPassageSchema(BaseModel):
         default=None,
         validation_alias=AliasChoices("corridor_uuid", "corridorUuid", "passage_group_uuid"),
     )
+    passage_source: Optional[str] = Field(
+        default=None,
+        validation_alias=AliasChoices("passage_source", "passageSource"),
+        description="PassageSource: INHERITED | LOCAL (missing → LOCAL on persist)",
+    )
 
 
 class RackSchema(BaseModel):

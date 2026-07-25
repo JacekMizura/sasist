@@ -1,3 +1,24 @@
+## 2026-07-25 — Layout UX C1: template passages + INHERITED/LOCAL
+
+- `default_passages` on WarehouseTemplate; `passage_source` on WarehouseRackPassage
+- Place/stamp/generate materialize INHERITED; legacy missing → LOCAL
+- Template save: dialog Aktualizuj instancje vs Tylko zapisz (rematerialize INHERITED only)
+- Tests: template_passage_defaults + FE rematerialize; no push
+
+## 2026-07-25 — ETAP 2 controlled save WH1 (S1 provenance repair)
+
+- 1× save_layout WH1 → S1 FRONT+180 LEGACY → FRONT+90 AUTO_REPAIR (NORTH only)
+- A23×3: approach 4.56→0.1 m; P on packing edge y=490; collision clear
+- Other racks unchanged; graph/passages/rev unchanged; 2nd save idempotent
+- Bez Etapu 3
+
+## 2026-07-25 — ETAP 1 deploy provenance (no WH1 save)
+
+- Push `9292c0d2` + `32993af7` → origin/main `32993af7`
+- Railway + Vercel success; healthz/readyz OK
+- PROD read: all racks `LEGACY_DEFAULT`; S1 still FRONT+180; A23 RESOLVED ~4.56 m (stary zły face); Graph 14/14 rev18; passages 0
+- **STOP przed Etapem 2** (controlled save)
+
 ## 2026-07-25 — Service Face Provenance finalization (committed, no push)
 
 - `ServiceFaceOrigin` str Enum (BE model + FE const); repair gates EXPLICIT immutable.

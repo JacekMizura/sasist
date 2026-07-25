@@ -1,8 +1,12 @@
 import { describe, expect, it } from "vitest";
 import type { RackState } from "../../../types/warehouse";
+import { PassageSource } from "../../../types/warehouse";
 import {
   corridorSpecFromDrag,
+  defaultPassageForRack,
   layoutCellCenterCm,
+  materializeInheritedPassages,
+  rematerializeInheritedPassages,
   worldCorridorToPassages,
   worldCorridorToPassagesFromSpec,
 } from "./rackPassageGeometry";
@@ -101,5 +105,58 @@ describe("worldCorridorToPassagesFromSpec", () => {
       spec.extentMaxCm
     );
     expect(worldCorridorToPassagesFromSpec([rack], spec)).toEqual(direct);
+  });
+});
+
+describe("passage source materialize", () => {
+  it("defaultPassageForRack is LOCAL", () => {
+    const p = defaultPassageForRack(verticalRack());
+    expect(p.passage_source).toBe(PassageSource.LOCAL);
+  });
+
+  it("materializeInheritedPassages creates fresh INHERITED uuids", () => {
+    const a = materializeInheritedPassages([{ offset_along_cm: 10, width_cm: 40 }]);
+    const b = materializeInheritedPassages([{ offset_along_cm: 10, width_cm: 40 }]);
+    expect(a).toHaveLength(1);
+    expect(a[0].passage_source).toBe(PassageSource.INHERITED);
+    expect(a[0].uuid).not.toBe(b[0].uuid);
+  });
+
+  it("rematerializeInheritedPassages keeps LOCAL and replaces INHERITED", () => {
+    const existing = [
+      {
+        uuid: "local-1",
+        offset_along_cm: 5,
+        width_cm: 20,
+        enabled: true,
+        passage_source: PassageSource.LOCAL,
+      },
+      {
+        uuid: "inh-old",
+        offset_along_cm: 50,
+        width_cm: 30,
+        enabled: true,
+        passage_source: PassageSource.INHERITED,
+      },
+      {
+        uuid: "legacy-no-source",
+        offset_along_cm: 90,
+        width_cm: 25,
+        enabled: true,
+      },
+    ];
+    const next = rematerializeInheritedPassages(existing, [
+      { offset_along_cm: 100, width_cm: 60 },
+    ]);
+    expect(next).toHaveLength(3);
+    expect(next.filter((p) => p.passage_source === PassageSource.LOCAL).map((p) => p.uuid).sort()).toEqual([
+      "legacy-no-source",
+      "local-1",
+    ]);
+    const inherited = next.filter((p) => p.passage_source === PassageSource.INHERITED);
+    expect(inherited).toHaveLength(1);
+    expect(inherited[0].uuid).not.toBe("inh-old");
+    expect(inherited[0].offset_along_cm).toBe(100);
+    expect(inherited[0].width_cm).toBe(60);
   });
 });

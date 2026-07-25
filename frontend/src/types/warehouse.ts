@@ -34,6 +34,28 @@ export function normalizeServiceFaceOrigin(raw: unknown): ServiceFaceOrigin {
   return ServiceFaceOrigin.LEGACY_DEFAULT;
 }
 
+/** Provenance of rack passage relative to template defaults. */
+export const PassageSource = {
+  INHERITED: "INHERITED",
+  LOCAL: "LOCAL",
+} as const;
+
+export type PassageSource = (typeof PassageSource)[keyof typeof PassageSource];
+
+/** Missing / unknown → LOCAL (legacy layouts never invent INHERITED). */
+export function normalizePassageSource(raw: unknown): PassageSource {
+  const s = String(raw ?? PassageSource.LOCAL).trim().toUpperCase();
+  return s === PassageSource.INHERITED ? PassageSource.INHERITED : PassageSource.LOCAL;
+}
+
+/** Config-only passage default on a rack template (not runtime SSOT). */
+export type TemplatePassageDefault = {
+  offset_along_cm: number;
+  width_cm: number;
+  clearance_height_cm?: number | null;
+  enabled?: boolean;
+};
+
 export type BinState = {
   id?: number;
   /** Soft-delete flag from backend; undefined means active for legacy payloads. */
@@ -176,6 +198,11 @@ export type RackPassageState = {
    * Physical SSOT remains per-rack; shared id keeps move/resize/delete coherent.
    */
   corridor_uuid?: string | null;
+  /**
+   * INHERITED = from template defaults (no local CAD edit).
+   * LOCAL = independent / legacy / manual (default when missing).
+   */
+  passage_source?: PassageSource;
 };
 
 export type RackState = {
@@ -430,6 +457,8 @@ export type CustomRackTemplate = {
   startIndex?: number;
   /** Max allowed load per level in kg. Default 500. Used for level load capacity visualization. */
   level_max_load_kg?: number;
+  /** Config-only default openings; materialized onto instances as INHERITED on place/update. */
+  default_passages?: TemplatePassageDefault[];
 };
 
 /** Catalog item: built-in preset or custom template */

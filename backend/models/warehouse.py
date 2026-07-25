@@ -212,6 +212,8 @@ class WarehouseRackPassage(Base, BaseModelMixin):
     #: Optional UX group for multi-rack corridor (one gesture = one logical passage).
     #: Physical SSOT remains per-rack; this UUID only keeps move/resize/delete coherent.
     corridor_uuid = Column(String(36), nullable=True, index=True)
+    #: INHERITED (from template defaults) | LOCAL (independent / legacy). Default LOCAL.
+    passage_source = Column(String(32), nullable=False, default="LOCAL")
 
     rack = relationship("Rack", back_populates="passages")
     warehouse = relationship("Warehouse", foreign_keys=[warehouse_id])

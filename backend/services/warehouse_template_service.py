@@ -76,6 +76,67 @@ def _reserve_keys_from_bin_type_map(mapping: dict[str, str] | None) -> list[str]
     return keys or None
 
 
+def _default_passages_to_json(passages: list | None) -> str | None:
+    if passages is None:
+        return None
+    if not isinstance(passages, list) or len(passages) == 0:
+        return None
+    out: list[dict] = []
+    for raw in passages:
+        if isinstance(raw, dict):
+            item = raw
+        else:
+            item = {
+                "offset_along_cm": getattr(raw, "offset_along_cm", 0),
+                "width_cm": getattr(raw, "width_cm", 100),
+                "clearance_height_cm": getattr(raw, "clearance_height_cm", None),
+                "enabled": getattr(raw, "enabled", True),
+            }
+        try:
+            offset = float(item.get("offset_along_cm", 0) or 0)
+        except (TypeError, ValueError):
+            offset = 0.0
+        try:
+            width = float(item.get("width_cm", 100) or 100)
+        except (TypeError, ValueError):
+            width = 100.0
+        clr = item.get("clearance_height_cm", None)
+        clearance = None
+        if clr is not None and clr != "":
+            try:
+                v = float(clr)
+                clearance = v if v > 0 else None
+            except (TypeError, ValueError):
+                clearance = None
+        out.append(
+            {
+                "offset_along_cm": max(0.0, offset),
+                "width_cm": max(1.0, width),
+                "clearance_height_cm": clearance,
+                "enabled": bool(item.get("enabled", True)),
+            }
+        )
+    return json.dumps(out) if out else None
+
+
+def _default_passages_from_json(raw: str | None) -> list[dict] | None:
+    if not raw:
+        return None
+    try:
+        payload = json.loads(raw)
+    except Exception:
+        return None
+    if not isinstance(payload, list) or len(payload) == 0:
+        return None
+    serialized = _default_passages_to_json(payload)
+    if not serialized:
+        return None
+    try:
+        return json.loads(serialized)
+    except Exception:
+        return None
+
+
 def _effective_bin_type_map(payload: dict | None = None, row: WarehouseTemplate | None = None) -> dict[str, str] | None:
     payload = payload or {}
     if "bin_type_map" in payload:
@@ -119,6 +180,7 @@ class WarehouseTemplateService:
                 "bin_type_map": _effective_bin_type_map(row=r),
                 "reserve_bin_keys": _reserve_bin_keys_from_json(r.reserve_bin_keys),
                 "level_max_load_kg": float(r.level_max_load_kg) if r.level_max_load_kg is not None else None,
+                "default_passages": _default_passages_from_json(getattr(r, "default_passages_json", None)),
             }
             for r in rows
         ]
@@ -162,6 +224,7 @@ class WarehouseTemplateService:
                 else _reserve_keys_from_bin_type_map(effective_bin_type_map)
             ),
             level_max_load_kg=float(payload["level_max_load_kg"]) if payload.get("level_max_load_kg") is not None else 500.0,
+            default_passages_json=_default_passages_to_json(payload.get("default_passages")),
         )
         self.db.add(t)
         self.db.commit()
@@ -194,6 +257,8 @@ class WarehouseTemplateService:
             )
         if "level_max_load_kg" in payload:
             row.level_max_load_kg = float(payload["level_max_load_kg"]) if payload.get("level_max_load_kg") is not None else None
+        if "default_passages" in payload:
+            row.default_passages_json = _default_passages_to_json(payload.get("default_passages"))
 
     def _row_to_dict(self, r: WarehouseTemplate) -> dict:
         return {
@@ -216,6 +281,7 @@ class WarehouseTemplateService:
             "bin_type_map": _effective_bin_type_map(row=r),
             "reserve_bin_keys": _reserve_bin_keys_from_json(r.reserve_bin_keys),
             "level_max_load_kg": float(r.level_max_load_kg) if r.level_max_load_kg is not None else None,
+            "default_passages": _default_passages_from_json(getattr(r, "default_passages_json", None)),
         }
 
     def delete(self, tenant_id: int, template_uid: str) -> None:

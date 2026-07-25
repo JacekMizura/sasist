@@ -927,6 +927,7 @@ export function RackSidebar({
                     const savedWithType: CustomRackTemplate = {
                       ...saved,
                       rack_type: t.rack_type ?? saved.rack_type ?? "warehouse",
+                      default_passages: t.default_passages ?? saved.default_passages,
                     };
                     setCustomTemplates((prev) => [...prev, savedWithType]);
                     setShowTemplateModal(false);
@@ -945,20 +946,25 @@ export function RackSidebar({
               initialTemplate={editingTemplate}
               onCancelEdit={() => { setShowTemplateModal(false); setEditingTemplateId(null); }}
               onSaveEdit={editingTemplateId && onSaveNewTemplate ? async (templateId, template, updateExistingRacks) => {
-                const saved = await onSaveNewTemplate(template);
-                if (saved == null) throw new Error("Nie udało się zapisać szablonu.");
-                const savedWithType: CustomRackTemplate = {
-                  ...saved,
-                  rack_type: template.rack_type ?? saved.rack_type ?? "warehouse",
-                };
-                setCustomTemplates((prev) => prev.map((t) => (t.id === templateId ? savedWithType : t)));
-                onSaveEditTemplate(templateId, template, updateExistingRacks);
+                if (!updateExistingRacks) {
+                  const saved = await onSaveNewTemplate(template);
+                  if (saved == null) throw new Error("Nie udało się zapisać szablonu.");
+                  const savedWithType: CustomRackTemplate = {
+                    ...saved,
+                    rack_type: template.rack_type ?? saved.rack_type ?? "warehouse",
+                    default_passages: template.default_passages ?? saved.default_passages,
+                  };
+                  setCustomTemplates((prev) => prev.map((t) => (t.id === templateId ? savedWithType : t)));
+                  return;
+                }
+                onSaveEditTemplate(templateId, template, true);
                 // Modal is closed by TemplateCreator via onCancelEdit after success message
               } : editingTemplateId ? (templateId, template, updateExistingRacks) => {
-                setCustomTemplates((prev) => prev.map((t) => (t.id === templateId ? template : t)));
-                onSaveEditTemplate(templateId, template, updateExistingRacks);
-                setShowTemplateModal(false);
-                setEditingTemplateId(null);
+                if (!updateExistingRacks) {
+                  setCustomTemplates((prev) => prev.map((t) => (t.id === templateId ? template : t)));
+                  return;
+                }
+                onSaveEditTemplate(templateId, template, true);
               } : undefined}
             />
           </div>

@@ -3,7 +3,7 @@
  * Reuses createBinsForRack and the same RackState shape as drag-and-drop placement.
  */
 
-import type { RackState, RowContainer, LevelConfigItem, StorageType, RackType } from "../../types/warehouse";
+import type { RackState, RowContainer, LevelConfigItem, StorageType, RackType, TemplatePassageDefault } from "../../types/warehouse";
 import { ServiceFaceOrigin } from "../../types/warehouse";
 import {
   createBinsForRack,
@@ -15,6 +15,7 @@ import {
   ROW_LABEL_ADDRESS_PATTERN,
   generateRackUuid,
 } from "./warehouseUtils";
+import { passagesSpreadFromDefaults } from "../../pages/WarehouseDesigner/passages/rackPassageGeometry";
 
 /** Template spec passed to the generator (same shape as getCatalogItemSpec result + templateId). */
 export type LayoutGeneratorTemplate = {
@@ -43,6 +44,7 @@ export type LayoutGeneratorTemplate = {
   startIndex?: number;
   templateId?: string;
   level_max_load_kg?: number;
+  default_passages?: TemplatePassageDefault[];
 };
 
 export type LayoutGeneratorConfig = {
@@ -413,6 +415,7 @@ export function buildRackFromTemplate(
     binNamingType: template.binNamingType,
     templateId: template.templateId,
     ...(template.level_max_load_kg != null ? { level_max_load_kg: template.level_max_load_kg } : {}),
+    ...passagesSpreadFromDefaults(template.default_passages),
     ...(rotationDegrees != null
       ? {
           rotationDegrees,

@@ -37,3 +37,5 @@ class WarehouseTemplate(Base, BaseModelMixin):
     reserve_bin_keys = Column(Text, nullable=True)
     """Maximum allowed load per rack level (kg). Used for level beam capacity visualization. Default 500."""
     level_max_load_kg = Column(Float, nullable=True, default=500)
+    """JSON list of default physical openings (offset/width/clearance/enabled). Config only — not runtime SSOT."""
+    default_passages_json = Column(Text, nullable=True)

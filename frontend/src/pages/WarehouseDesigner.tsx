@@ -4,7 +4,8 @@ import api from "../api/axios";
 import { putProductWarehouseSlotting } from "../api/productSlottingApi";
 import { warn } from "../utils/logger";
 import type { RackState, BinState, InternalStructure, LayoutState, RackTemplate, CustomRackTemplate, LevelConfigItem, CatalogItem, VisualElementType, VisualElementState, ColumnShape, DoorStyle, ZoneType, WarehouseProduct, RowContainer, EmptyRowSlot, WallElement, WallSide, RackType, StorageType } from "../types/warehouse";
-import { GRID_UNIT_CM } from "../types/warehouse";
+import { GRID_UNIT_CM, normalizePassageSource } from "../types/warehouse";
+import { rematerializeInheritedPassages } from "./WarehouseDesigner/passages/rackPassageGeometry";
 import { activeBinsForRack, formatVolume, createBinsForRack, binsToLevels, volumePerBin, volumePerBinFromTotal, cmToCells, cellsToCm, getCatalogItemSpec, getLevelConfig, getTotalLocations, getNextIndexInRow, getNextRackIndex, ROW_LABEL_ADDRESS_PATTERN, reindexGeometricRow, findSnapToRowPosition, getDragSlotHighlights, binUsedVolumeDm3, binVolumeDm3, getRackDisplayId, getAllPositionsFromRacks, clampGridToBuilding, metersToCells, duplicateRacksAtPosition, generateRackUuid, assignUniqueRackNamesToNewRacks, validateAllRackNamesInLayout, validateLayoutEntityIntegrity, getProposedFirstRackLabelForStampFromCatalog, normalizeRowPrefixLetters, generateRackNames, validateGeneratedRackNames, countPlaceRowWithTemplateRacks, countEmptyRowSlotsInDraw, catalogItemTemplateKey, catalogItemFromTemplateKey, rowContainerTemplateIdFromCatalogItem, rackMatchesSlotRackId } from "../components/warehouse/warehouseUtils";
 import {
   logLayoutRackHydrate,
@@ -1590,6 +1591,10 @@ export default function WarehouseDesigner() {
                           String((p as { corridorUuid?: unknown }).corridorUuid).trim()
                         ? String((p as { corridorUuid?: unknown }).corridorUuid).trim()
                         : null,
+                  passage_source: normalizePassageSource(
+                    (p as { passage_source?: unknown; passageSource?: unknown }).passage_source
+                      ?? (p as { passageSource?: unknown }).passageSource
+                  ),
                 }))
             : [],
         };
@@ -1967,6 +1972,7 @@ export default function WarehouseDesigner() {
             rack_type: (t.rack_type ?? "warehouse") === "store" ? "store" : "warehouse",
             bin_type_map: normalizeBinTypeMap(t.bin_type_map, t.reserve_bin_keys),
             color: (typeof t.color === "string" && t.color.trim() !== "") ? t.color.trim() : "#3b82f6",
+            default_passages: Array.isArray(t.default_passages) ? t.default_passages : undefined,
           })));
         }
       } catch {
@@ -2045,6 +2051,9 @@ export default function WarehouseDesigner() {
         ...data,
         rack_type: (payload.rack_type ?? data.rack_type ?? "warehouse") === "store" ? "store" : "warehouse",
         bin_type_map: normalizeBinTypeMap(data.bin_type_map, data.reserve_bin_keys),
+        default_passages: Array.isArray(data.default_passages)
+          ? data.default_passages
+          : payload.default_passages,
       } : null;
     } catch (e) {
       console.error("Save template:", e);
@@ -2180,6 +2189,8 @@ export default function WarehouseDesigner() {
             clearance_height_cm: p.clearance_height_cm ?? null,
             enabled: p.enabled !== false,
             corridor_uuid: p.corridor_uuid ?? null,
+            passage_source: normalizePassageSource(p.passage_source),
+            passageSource: normalizePassageSource(p.passage_source),
           })),
         })),
         aisles: layout.aisles.map((a) => ({
@@ -2883,6 +2894,8 @@ export default function WarehouseDesigner() {
             aisle_letter: template.aisle_letter,
             color: template.color,
             bins: mergedBins,
+            passages: rematerializeInheritedPassages(r.passages, template.default_passages),
+            ...(template.level_max_load_kg != null ? { level_max_load_kg: template.level_max_load_kg } : {}),
           };
         });
         const layoutDraft: LayoutState = { ...prev, racks: mergedRacks };

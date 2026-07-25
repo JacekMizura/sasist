@@ -3,8 +3,14 @@
  * Passages are local to the rack footprint — move/rotate of rack moves the hole.
  */
 
-import type { LayoutState, RackPassageState, RackState } from "../../../types/warehouse";
-import { GRID_UNIT_CM } from "../../../types/warehouse";
+import type {
+  LayoutState,
+  PassageSource,
+  RackPassageState,
+  RackState,
+  TemplatePassageDefault,
+} from "../../../types/warehouse";
+import { GRID_UNIT_CM, normalizePassageSource, PassageSource as PassageSourceEnum } from "../../../types/warehouse";
 
 export const DEFAULT_PASSAGE_WIDTH_CM = 90;
 
@@ -77,8 +83,61 @@ export function defaultPassageForRack(rack: RackState): RackPassageState {
     clearance_height_cm: null,
     enabled: true,
     corridor_uuid: newCorridorUuid(),
+    passage_source: PassageSourceEnum.LOCAL,
   };
 }
+
+/** Materialize template defaults as new INHERITED instance passages (fresh UUIDs). */
+export function materializeInheritedPassages(
+  defaults: TemplatePassageDefault[] | null | undefined
+): RackPassageState[] {
+  if (!Array.isArray(defaults) || defaults.length === 0) return [];
+  return defaults.map((d) => {
+    const width = Math.max(1, Number(d.width_cm) || 100);
+    const offset = Math.max(0, Number(d.offset_along_cm) || 0);
+    return {
+      uuid: newPassageUuid(),
+      offset_along_cm: offset,
+      width_cm: width,
+      clearance_height_cm: d.clearance_height_cm == null ? null : Number(d.clearance_height_cm),
+      enabled: d.enabled !== false,
+      corridor_uuid: newCorridorUuid(),
+      passage_source: PassageSourceEnum.INHERITED,
+    };
+  });
+}
+
+/**
+ * Rematerialize INHERITED passages from template defaults; keep LOCAL untouched.
+ * Used by "Aktualizuj instancje" after template save.
+ */
+export function rematerializeInheritedPassages(
+  existing: RackPassageState[] | null | undefined,
+  defaults: TemplatePassageDefault[] | null | undefined
+): RackPassageState[] {
+  const local = (existing ?? [])
+    .filter((p) => normalizePassageSource(p.passage_source) === PassageSourceEnum.LOCAL)
+    .map((p) => ({
+      ...p,
+      // Persist migration: unmarked legacy passages become explicit LOCAL.
+      passage_source: PassageSourceEnum.LOCAL,
+    }));
+  return [...local, ...materializeInheritedPassages(defaults)];
+}
+
+/** Spread onto new RackState when placing from a catalog/template spec. */
+export function passagesSpreadFromDefaults(
+  defaults: TemplatePassageDefault[] | null | undefined
+): { passages: RackPassageState[] } | Record<string, never> {
+  const passages = materializeInheritedPassages(defaults);
+  return passages.length > 0 ? { passages } : {};
+}
+
+export function isInheritedPassage(passage: Pick<RackPassageState, "passage_source">): boolean {
+  return normalizePassageSource(passage.passage_source) === PassageSourceEnum.INHERITED;
+}
+
+export type { PassageSource };
 
 /** Passage rect in layout px within clamped rack rect. */
 export function passageRectInRackPx(
@@ -300,6 +359,8 @@ function upsertPassageOnRack(
         : idx >= 0
           ? list[idx].corridor_uuid ?? null
           : null,
+    // Local CAD write always LOCAL (INHERITED is edited only via template rematerialize).
+    passage_source: PassageSourceEnum.LOCAL,
     ...(idx >= 0 && list[idx].id != null ? { id: list[idx].id } : {}),
   };
   if (idx >= 0) {

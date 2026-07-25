@@ -14,6 +14,7 @@ import type {
   RowContainer,
   InternalLevel,
   EmptyRowSlot,
+  TemplatePassageDefault,
 } from "../../types/warehouse";
 import { buildBinTypeMapFromBins, normalizeBinTypeMap, normalizeStorageType } from "../../utils/storageTypes";
 import { getLayoutMetersPerCell, layoutCmToCellsX, layoutCmToCellsY } from "../../utils/warehouseGridMetrics";
@@ -59,6 +60,7 @@ export function getCatalogItemSpec(item: CatalogItem): {
   indexPadding?: number;
   startIndex?: number;
   level_max_load_kg?: number;
+  default_passages?: TemplatePassageDefault[];
 } {
   if (item.type === "preset") {
     const p = CATALOG_PRESETS.find((x) => x.id === item.id);
@@ -98,6 +100,7 @@ export function getCatalogItemSpec(item: CatalogItem): {
     indexPadding: t.indexPadding,
     startIndex: t.startIndex,
     level_max_load_kg: t.level_max_load_kg,
+    default_passages: t.default_passages,
   };
 }
 

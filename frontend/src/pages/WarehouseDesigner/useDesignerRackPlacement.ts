@@ -28,6 +28,7 @@ import {
 } from "../../components/warehouse/warehouseUtils";
 import { logLayoutRackCreate } from "../../components/warehouse/layoutRackLog";
 import type { LevelConfigItem, StorageType } from "../../types/warehouse";
+import { passagesSpreadFromDefaults } from "./passages/rackPassageGeometry";
 import type { Dispatch, SetStateAction } from "react";
 import { layoutCmToCellsX, layoutCmToCellsY } from "../../utils/warehouseGridMetrics";
 
@@ -283,6 +284,7 @@ export function useDesignerRackPlacement(params: UseDesignerRackPlacementParams)
             }),
         ...(item.type === "custom" ? { templateId: item.template.id } : {}),
         ...(spec.level_max_load_kg != null ? { level_max_load_kg: spec.level_max_load_kg } : {}),
+        ...passagesSpreadFromDefaults(spec.default_passages),
       };
       setLayout((prev) => {
         const updatedRacks = prev.racks.map((r) => {
@@ -383,6 +385,7 @@ export function useDesignerRackPlacement(params: UseDesignerRackPlacementParams)
       ...(spec.binNamingType != null ? { binNamingType: spec.binNamingType } : {}),
       ...(item.type === "custom" ? { templateId: item.template.id } : {}),
       ...(spec.level_max_load_kg != null ? { level_max_load_kg: spec.level_max_load_kg } : {}),
+      ...passagesSpreadFromDefaults(spec.default_passages),
     };
     logLayoutRackCreate(newRack);
     setLayout((prev) => ({

@@ -936,6 +936,10 @@ def _ensure_warehouse_template_level_max_load_kg():
                 conn.execute(text(
                     "ALTER TABLE warehouse_templates ADD COLUMN bin_type_map_json TEXT"
                 ))
+            if "default_passages_json" not in cols:
+                conn.execute(text(
+                    "ALTER TABLE warehouse_templates ADD COLUMN default_passages_json TEXT"
+                ))
             conn.execute(text(
                 "UPDATE warehouse_templates SET level_max_load_kg = 500 WHERE level_max_load_kg IS NULL"
             ))

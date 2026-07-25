@@ -1020,6 +1020,7 @@ class WarehouseLayoutService:
                     "clearance_height_cm": getattr(p, "clearance_height_cm", None),
                     "enabled": bool(getattr(p, "enabled", True)),
                     "corridor_uuid": getattr(p, "corridor_uuid", None),
+                    "passage_source": getattr(p, "passage_source", None) or "LOCAL",
                 }
             )
         return out
@@ -1095,6 +1096,11 @@ class WarehouseLayoutService:
                 row.corridor_uuid = None
             else:
                 row.corridor_uuid = str(cu).strip() or None
+            from ..models.passage_source import normalize_passage_source
+
+            row.passage_source = normalize_passage_source(
+                raw.get("passage_source") if "passage_source" in raw else raw.get("passageSource")
+            ).value
             self.db.add(row)
 
         for pu, row in existing.items():

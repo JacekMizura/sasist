@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useRef, type ReactNode } from "react";
 import { log } from "../../utils/logger";
-import type { CustomRackTemplate, LevelConfigItem, LayoutState, StorageType, RackType } from "../../types/warehouse";
+import type { CustomRackTemplate, LevelConfigItem, LayoutState, StorageType, RackType, TemplatePassageDefault } from "../../types/warehouse";
 import { snapCm, generateLocationLabel, levelHeightsForRack, type RackTemplateLabelOptions } from "./warehouseUtils";
 import { getStorageTypeStyle, normalizeBinTypeMap, normalizeStorageType, TEMPLATE_STORAGE_TYPE_OPTIONS } from "../../utils/storageTypes";
 import { StorageTypeIcon } from "../../utils/storageTypeIcons";
@@ -369,9 +369,14 @@ export function TemplateCreator({ onSave, initialTemplate, onCancelEdit, onSaveE
   const [color, setColor] = useState(DEFAULT_COLORS[0]);
   const [rackType, setRackType] = useState<RackType>("warehouse");
   const [binTypeMap, setBinTypeMap] = useState<Record<string, StorageType>>({});
-  const [updateExistingRacks, setUpdateExistingRacks] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
+  const [defaultPassages, setDefaultPassages] = useState<TemplatePassageDefault[]>([]);
+  const [instanceUpdateDialog, setInstanceUpdateDialog] = useState<{
+    templateId: string;
+    template: CustomRackTemplate;
+    instanceCount: number;
+  } | null>(null);
   const isEdit = Boolean(initialTemplate?.id);
 
   const [accordionOpen, setAccordionOpen] = useState({
@@ -436,6 +441,16 @@ export function TemplateCreator({ onSave, initialTemplate, onCancelEdit, onSaveE
       setManualLabels(initialTemplate.manualLabels ?? {});
       setOverrides(initialTemplate.overrides ?? {});
       setAllowOverrides(Object.keys(initialTemplate.overrides ?? {}).length > 0);
+      setDefaultPassages(
+        Array.isArray(initialTemplate.default_passages)
+          ? initialTemplate.default_passages.map((p) => ({
+              offset_along_cm: Number(p.offset_along_cm) || 0,
+              width_cm: Math.max(1, Number(p.width_cm) || 100),
+              clearance_height_cm: p.clearance_height_cm ?? null,
+              enabled: p.enabled !== false,
+            }))
+          : []
+      );
     } else {
       setName("");
       setWidthCm(120);
@@ -459,6 +474,7 @@ export function TemplateCreator({ onSave, initialTemplate, onCancelEdit, onSaveE
       setManualLabels({});
       setOverrides({});
       setAllowOverrides(false);
+      setDefaultPassages([]);
     }
   }, [initialTemplate]);
 
@@ -570,12 +586,24 @@ export function TemplateCreator({ onSave, initialTemplate, onCancelEdit, onSaveE
       indexPadding,
       startIndex,
       level_max_load_kg: Math.max(1, levelMaxLoadKg),
+      default_passages: defaultPassages,
     };
     setSaving(true);
     setSaveSuccess(false);
     try {
       if (isEdit && initialTemplate && onSaveEdit) {
-        await Promise.resolve(onSaveEdit(initialTemplate.id, payload, updateExistingRacks));
+        // Always persist template first without touching instances.
+        await Promise.resolve(onSaveEdit(initialTemplate.id, payload, false));
+        const instanceCount = (layout?.racks ?? []).filter((r) => r.templateId === initialTemplate.id).length;
+        if (instanceCount > 0) {
+          setInstanceUpdateDialog({
+            templateId: initialTemplate.id,
+            template: payload,
+            instanceCount,
+          });
+          setSaveSuccess(true);
+          return;
+        }
         setSaveSuccess(true);
         setTimeout(() => {
           onCancelEdit?.();
@@ -591,6 +619,27 @@ export function TemplateCreator({ onSave, initialTemplate, onCancelEdit, onSaveE
     } finally {
       setSaving(false);
     }
+  };
+
+  const confirmUpdateInstances = async () => {
+    if (!instanceUpdateDialog || !onSaveEdit) return;
+    setSaving(true);
+    try {
+      await Promise.resolve(
+        onSaveEdit(instanceUpdateDialog.templateId, instanceUpdateDialog.template, true)
+      );
+      setInstanceUpdateDialog(null);
+      onCancelEdit?.();
+    } catch (e) {
+      console.error("Update template instances failed:", e);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const dismissUpdateInstances = () => {
+    setInstanceUpdateDialog(null);
+    onCancelEdit?.();
   };
 
   const labelOptionsForPreview: RackTemplateLabelOptions = useMemo(() => ({
@@ -928,19 +977,80 @@ export function TemplateCreator({ onSave, initialTemplate, onCancelEdit, onSaveE
       </DesignerAccordion>
 
       <DesignerAccordion title="ZAAWANSOWANE" open={accordionOpen.zaawansowane} onToggle={() => toggleAccordion("zaawansowane")}>
-        {isEdit && (
-          <label className="flex items-center gap-2 text-slate-600 text-sm">
-            <input type="checkbox" checked={updateExistingRacks} onChange={(e) => setUpdateExistingRacks(e.target.checked)} className="rounded" />
-            Zaktualizuj istniejące regały na planie
-          </label>
-        )}
-        {!isEdit && <p className="text-slate-500 text-sm">Brak dodatkowych opcji dla nowego szablonu.</p>}
+        <div className="space-y-3">
+          <div>
+            <p className="text-slate-600 text-sm font-medium mb-2">Domyślne przejazdy (szablon)</p>
+            <p className="text-slate-500 text-xs mb-2 leading-snug">
+              Konfiguracja szablonu — materializowane na regałach przy umieszczaniu. Edycja wizualna w kolejnym kroku.
+            </p>
+            {defaultPassages.map((p, idx) => (
+              <div key={idx} className="flex flex-wrap items-end gap-2 mb-2 rounded-lg border border-slate-200/70 bg-white px-2 py-2">
+                <label className="text-xs text-slate-500">
+                  Offset (cm)
+                  <input
+                    type="number"
+                    min={0}
+                    value={p.offset_along_cm}
+                    onChange={(e) => {
+                      const v = Math.max(0, Number(e.target.value) || 0);
+                      setDefaultPassages((prev) => prev.map((x, i) => (i === idx ? { ...x, offset_along_cm: v } : x)));
+                    }}
+                    className="mt-0.5 block w-24 rounded border border-slate-200 px-2 py-1 text-sm"
+                  />
+                </label>
+                <label className="text-xs text-slate-500">
+                  Szerokość (cm)
+                  <input
+                    type="number"
+                    min={1}
+                    value={p.width_cm}
+                    onChange={(e) => {
+                      const v = Math.max(1, Number(e.target.value) || 100);
+                      setDefaultPassages((prev) => prev.map((x, i) => (i === idx ? { ...x, width_cm: v } : x)));
+                    }}
+                    className="mt-0.5 block w-24 rounded border border-slate-200 px-2 py-1 text-sm"
+                  />
+                </label>
+                <button
+                  type="button"
+                  className="text-xs text-red-600 hover:underline pb-1"
+                  onClick={() => setDefaultPassages((prev) => prev.filter((_, i) => i !== idx))}
+                >
+                  Usuń
+                </button>
+              </div>
+            ))}
+            <button
+              type="button"
+              className="text-sm text-cyan-700 hover:underline"
+              onClick={() => {
+                const along = Math.max(1, snapCm(width_cm));
+                const width = Math.min(100, Math.max(40, along * 0.25));
+                const offset = Math.max(0, (along - width) / 2);
+                setDefaultPassages((prev) => [
+                  ...prev,
+                  { offset_along_cm: offset, width_cm: width, clearance_height_cm: null, enabled: true },
+                ]);
+              }}
+            >
+              + Dodaj przejazd
+            </button>
+          </div>
+          {isEdit ? (
+            <p className="text-slate-500 text-sm leading-snug">
+              Po zapisie, jeśli na planie są regały z tym szablonem, pojawi się pytanie o aktualizację instancji
+              (tylko przejazdy <span className="font-medium">INHERITED</span>; lokalne pozostaną bez zmian).
+            </p>
+          ) : (
+            <p className="text-slate-500 text-sm">Brak dodatkowych opcji dla nowego szablonu.</p>
+          )}
+        </div>
       </DesignerAccordion>
     </div>
   );
 
   return (
-    <div className="flex flex-col h-full min-h-0 bg-white rounded-2xl overflow-hidden w-full border border-slate-200/40 shadow-sm">
+    <div className="relative flex flex-col h-full min-h-0 bg-white rounded-2xl overflow-hidden w-full border border-slate-200/40 shadow-sm">
       <h3 className="text-sm font-bold uppercase tracking-wide text-slate-600 px-5 py-3.5 border-b border-slate-200/50 shrink-0 bg-slate-50/40">
         {isEdit ? "Edytuj szablon" : "Twórca szablonu"}
       </h3>
@@ -1036,6 +1146,36 @@ export function TemplateCreator({ onSave, initialTemplate, onCancelEdit, onSaveE
           </button>
         </div>
       </footer>
+      {instanceUpdateDialog ? (
+        <div className="absolute inset-0 z-20 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-md rounded-2xl bg-white shadow-2xl border border-slate-200 p-5 space-y-4">
+            <h4 className="text-base font-semibold text-slate-800">Szablon został zmieniony</h4>
+            <p className="text-sm text-slate-600 leading-relaxed">
+              Zaktualizować wszystkie regały korzystające z tego szablonu?
+              Na planie: <span className="font-semibold tabular-nums">{instanceUpdateDialog.instanceCount}</span>.
+              Zaktualizowane zostaną tylko przejazdy dziedziczone (INHERITED); lokalne (LOCAL) pozostaną bez zmian.
+            </p>
+            <div className="flex flex-col sm:flex-row gap-2 sm:justify-end">
+              <button
+                type="button"
+                disabled={saving}
+                onClick={dismissUpdateInstances}
+                className="px-4 py-2.5 rounded-xl bg-slate-100 text-slate-700 font-semibold hover:bg-slate-200 border border-slate-200 disabled:opacity-50"
+              >
+                Tylko zapisz szablon
+              </button>
+              <button
+                type="button"
+                disabled={saving}
+                onClick={() => void confirmUpdateInstances()}
+                className="px-4 py-2.5 rounded-xl bg-cyan-600 text-white font-semibold hover:bg-cyan-500 disabled:opacity-50"
+              >
+                Aktualizuj instancje
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

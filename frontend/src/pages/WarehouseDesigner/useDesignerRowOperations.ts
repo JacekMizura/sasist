@@ -1,6 +1,7 @@
 import { useCallback } from "react";
 import type { RackState, LayoutState, CatalogItem, EmptyRowSlot, RowContainer, StorageType, RackType } from "../../types/warehouse";
 import { ServiceFaceOrigin } from "../../types/warehouse";
+import { passagesSpreadFromDefaults } from "./passages/rackPassageGeometry";
 import {
   getRowStart,
   computeRowSlotPositions,
@@ -215,6 +216,7 @@ function appendHorizontalRowWithTemplateFromCursor(
           ...(spec.binNamingType != null ? { binNamingType: spec.binNamingType } : {}),
           ...(item.type === "custom" ? { templateId: item.template.id } : {}),
           ...(spec.level_max_load_kg != null ? { level_max_load_kg: spec.level_max_load_kg } : {}),
+          ...passagesSpreadFromDefaults(spec.default_passages),
         } as RackState,
         face
       )
@@ -379,6 +381,7 @@ function appendRowWithTemplateToLayoutState(
       serviceFaceOrigin: ServiceFaceOrigin.EXPLICIT,
       ...(item.type === "custom" ? { templateId: item.template.id } : {}),
       ...(spec.level_max_load_kg != null ? { level_max_load_kg: spec.level_max_load_kg } : {}),
+      ...passagesSpreadFromDefaults(spec.default_passages),
     } as RackState);
     nextRackIndex += 1;
     indexInRow += 1;
@@ -842,6 +845,7 @@ export function useDesignerRowOperations(params: UseDesignerRowOperationsParams)
                 ...(spec.binNamingType != null ? { binNamingType: spec.binNamingType } : {}),
                 ...(item.type === "custom" ? { templateId: item.template.id } : {}),
                 ...(spec.level_max_load_kg != null ? { level_max_load_kg: spec.level_max_load_kg } : {}),
+                ...passagesSpreadFromDefaults(spec.default_passages),
               } as RackState,
               fillFace
             )
@@ -904,6 +908,7 @@ export function useDesignerRowOperations(params: UseDesignerRowOperationsParams)
         indexPadding?: number;
         startIndex?: number;
         level_max_load_kg?: number;
+        default_passages?: import("../../types/warehouse").TemplatePassageDefault[];
       } = item.type === "custom"
         ? (JSON.parse(JSON.stringify({
           color: item.template.color ?? spec.color ?? "#3b82f6",
@@ -913,6 +918,7 @@ export function useDesignerRowOperations(params: UseDesignerRowOperationsParams)
           nextSectionIndex: item.template.nextSectionIndex ?? item.template.sectionStartIndex ?? 1,
           templateId: item.template.id,
           level_max_load_kg: item.template.level_max_load_kg,
+          default_passages: item.template.default_passages,
           levels: item.template.levels,
           bins_per_level: item.template.bins_per_level,
           levelConfig: item.template.levelConfig,
@@ -1053,6 +1059,7 @@ export function useDesignerRowOperations(params: UseDesignerRowOperationsParams)
               ...(templateToApply.binNamingType != null ? { binNamingType: templateToApply.binNamingType } : {}),
               ...(templateToApply.templateId != null ? { templateId: templateToApply.templateId } : {}),
               ...(templateToApply.level_max_load_kg != null ? { level_max_load_kg: templateToApply.level_max_load_kg } : {}),
+              ...passagesSpreadFromDefaults(templateToApply.default_passages),
             } as RackState);
           }
           return { ...prev, racks: [...prev.racks, ...newRacks] };
