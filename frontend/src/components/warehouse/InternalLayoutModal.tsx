@@ -14,6 +14,7 @@ import {
 import { getStorageTypeStyle, normalizeStorageType, STORAGE_TYPE_OPTIONS } from "../../utils/storageTypes";
 import { resolveWarehouseLocation } from "../../utils/resolvedWarehouseLocation";
 import { StorageTypeIcon } from "../../utils/storageTypeIcons";
+import { FitToContainer } from "./FitToContainer";
 
 export type InternalLayoutModalProps = {
   layout?: LayoutState | null;
@@ -172,16 +173,19 @@ export function InternalLayoutModal({ layout = null, rack, warehouseLabel, onSav
   const levelWidthSum = (lev: InternalLevel) => lev.locations.reduce((sum, loc) => sum + Number(loc.width_cm ?? 0), 0);
   const rackWidthLimit = typeof rackWidthCm === "number" && Number.isFinite(rackWidthCm) ? rackWidthCm : Number.POSITIVE_INFINITY;
   const totalHeightCm = levels.reduce((s, lev) => s + lev.height_cm, 0);
-  const totalStructureHeightCm = Math.max(
-    1,
-    levels.reduce((sum, lev) => sum + Math.max(0, Number(lev.height_cm ?? 0)), 0)
-  );
   const heightExceeded = totalHeightCm > rack.height_cm;
   const hasAnyLevelWidthExceeded = levels.some((lev) => levelWidthSum(lev) > rackWidthLimit + 0.01);
   const valid = !heightExceeded && !hasAnyLevelWidthExceeded;
-  const maxLocsPerLevel = levels.length ? Math.max(...levels.map((l) => l.locations.length)) : 0;
-  const fitsWithoutVerticalScroll = levels.length <= 8;
-  const fitsWithoutHorizontalScroll = maxLocsPerLevel <= 10;
+  const rackPreviewMeasureKey = useMemo(
+    () =>
+      levels
+        .map((l) => `${l.locations.length}:${Math.round(l.height_cm)}:${l.locations.map((x) => Math.round(Number(x.width_cm ?? 0))).join(",")}`)
+        .join("|"),
+    [levels]
+  );
+  const maxLocsPerLevel = levels.length ? Math.max(...levels.map((l) => l.locations.length)) : 1;
+  /** Shared natural width for every level so the rack bbox is a clean rectangle. */
+  const rackNaturalWidthPx = Math.max(640, maxLocsPerLevel * 220);
   const addLevel = () => setLevels((prev) => [...prev, { height_cm: DEFAULT_BIN_HEIGHT_CM, locations: [{ width_cm: rackWidthCm ?? DEFAULT_BIN_WIDTH_CM, depth_cm: rack.length_cm ?? DEFAULT_BIN_DEPTH_CM, height_cm: DEFAULT_BIN_HEIGHT_CM }] }]);
   const removeLevel = (i: number) => setLevels((prev) => prev.filter((_, idx) => idx !== i));
   const setLevelHeight = (i: number, h: number) => setLevels((prev) => prev.map((l, idx) => (idx === i ? { ...l, height_cm: snapCm(h) } : l)));
@@ -336,51 +340,71 @@ export function InternalLayoutModal({ layout = null, rack, warehouseLabel, onSav
         )}
         <div
           ref={contentScrollRef}
-          className={`flex min-h-0 flex-1 flex-col p-4 ${fitsWithoutVerticalScroll ? "overflow-hidden" : "overflow-y-auto"}`}
+          className="flex min-h-0 flex-1 flex-col overflow-hidden p-4"
           dir="ltr"
           style={{ direction: "ltr" }}
         >
-          <div
-            className={`flex flex-col gap-0 flex-1 min-h-0 ${fitsWithoutVerticalScroll ? "flex" : ""}`}
-            dir="ltr"
-            style={{ direction: "ltr" }}
+          <button
+            type="button"
+            onClick={addLevel}
+            className="mb-2 w-full shrink-0 rounded-lg border-2 border-dashed border-slate-300 py-2 text-sm text-slate-500 hover:bg-slate-50"
           >
-            <button type="button" onClick={addLevel} className="w-full py-2 rounded-lg border-2 border-dashed border-slate-300 text-slate-500 text-sm mb-2 hover:bg-slate-50 shrink-0">
-              + Dodaj poziom
-            </button>
+            + Dodaj poziom
+          </button>
+          <FitToContainer measureKey={rackPreviewMeasureKey}>
+            <div
+              className="flex flex-col gap-0"
+              dir="ltr"
+              style={{ direction: "ltr", width: rackNaturalWidthPx }}
+            >
             {/* Levels rendered top-to-bottom: highest level (Poziom L) at top, Poziom 1 at bottom */}
             {[...levels].reverse().map((lev, revIdx) => {
               const levIdx = levels.length - 1 - revIdx;
               const levelNumber = levIdx + 1;
-              const levelHeightPercent = (Math.max(0, Number(lev.height_cm ?? 0)) / totalStructureHeightCm) * 100;
               const levelTotalWidth = levelWidthSum(lev);
               const levelWidthExceeded = levelTotalWidth > rackWidthLimit + 0.01;
+              const count = Math.max(1, lev.locations.length);
+              const rowNaturalW = rackNaturalWidthPx;
               return (
                 <div
                   key={levIdx}
-                  className={`border-b-2 first:border-t-2 first:border-t-slate-300 flex flex-col min-h-0 ${
+                  className={`flex min-h-0 flex-col border-b-2 first:border-t-2 first:border-t-slate-300 ${
                     levelWidthExceeded
-                      ? "bg-red-50/60 border-b-red-400"
+                      ? "border-b-red-400 bg-red-50/60"
                       : `bg-slate-50/50 ${revIdx < levels.length - 1 ? "border-b-orange-500" : "border-b-slate-300"}`
                   }`}
                   dir="ltr"
                   style={{
                     direction: "ltr",
-                    height: `${levelHeightPercent}%`,
-                    minHeight: "60px",
-                    transition: "height 0.2s ease",
+                    width: rowNaturalW,
                   }}
                 >
-                  <div className="flex items-center gap-3 px-3 py-2 border-b border-slate-200 bg-white/80 shrink-0">
+                  <div className="flex shrink-0 items-center gap-3 border-b border-slate-200 bg-white/80 px-3 py-2">
                     <span className="text-xs font-bold text-slate-700">Poziom {levelNumber}</span>
-                    <label className="text-[10px] text-slate-500 flex items-center gap-1">Wys. (cm): <input type="number" min={10} step={10} value={lev.height_cm} onChange={(e) => setLevelHeight(levIdx, Number(e.target.value))} className="w-14 rounded border border-slate-200 px-1 py-0.5 text-xs bg-white" /></label>
-                    <button type="button" onClick={() => removeLevel(levIdx)} className="text-red-600 text-xs font-semibold hover:underline">Usuń poziom</button>
+                    <label className="flex items-center gap-1 text-[10px] text-slate-500">
+                      Wys. (cm):{" "}
+                      <input
+                        type="number"
+                        min={10}
+                        step={10}
+                        value={lev.height_cm}
+                        onChange={(e) => setLevelHeight(levIdx, Number(e.target.value))}
+                        className="w-14 rounded border border-slate-200 bg-white px-1 py-0.5 text-xs"
+                      />
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => removeLevel(levIdx)}
+                      className="text-xs font-semibold text-red-600 hover:underline"
+                    >
+                      Usuń poziom
+                    </button>
                   </div>
                   {/* vis = left→right; binIndex = data. direction + unicode-bidi isolate so flex main-start stays left (no RTL flex reversal). */}
                   <div
-                    className="flex flex-row flex-nowrap justify-start items-start min-h-0 gap-2 p-2"
+                    className="flex flex-row flex-nowrap items-stretch justify-start gap-2 p-2"
                     dir="ltr"
-                    style={{ direction: "ltr", unicodeBidi: "isolate" }}
+                    style={{ direction: "ltr", unicodeBidi: "isolate", width: rowNaturalW }}
                   >
                     {Array.from({ length: lev.locations.length }, (_, vis) => {
                       const locs = lev.locations.length;
@@ -408,10 +432,12 @@ export function InternalLayoutModal({ layout = null, rack, warehouseLabel, onSav
                         finitePositiveOrNull(rackWidthCm) != null ? (finitePositiveOrNull(rackWidthCm)! / slotsInLevel) : null;
                       const widthCm = finitePositiveOrNull(loc.width_cm) ?? equalWidthFallback;
                       const totalWidth = lev.locations.reduce((sum, l) => sum + Math.max(0, Number(l.width_cm ?? 0)), 0);
-                      const count = Math.max(1, lev.locations.length);
                       const widthPct = totalWidth > 0 ? (Math.max(0, Number(widthCm ?? 0)) / totalWidth) * 100 : 100 / count;
                       const gapPx = 8;
-                      const widthCss = `calc(${widthPct}% - ${(gapPx * (count - 1)) / count}px)`;
+                      const cellW = Math.max(
+                        180,
+                        (widthPct / 100) * rowNaturalW - (gapPx * (count - 1)) / count
+                      );
                       const depthCm = finitePositiveOrNull(loc.depth_cm) ?? finitePositiveOrNull(rack.length_cm) ?? null;
                       const heightCm = finitePositiveOrNull(loc.height_cm) ?? finitePositiveOrNull(lev.height_cm) ?? null;
                       const volDm3 = widthCm != null && depthCm != null && heightCm != null
@@ -428,10 +454,9 @@ export function InternalLayoutModal({ layout = null, rack, warehouseLabel, onSav
                       return (
                         <div
                           key={`${levIdx}-${binIndex}`}
-                          className="relative flex flex-col rounded-xl border shadow-sm min-w-0 overflow-hidden p-2.5 h-[170px] shrink-0"
+                          className="relative flex h-[170px] shrink-0 flex-col overflow-hidden rounded-xl border p-2.5 shadow-sm"
                           style={{
-                            width: widthCss,
-                            transition: "width 0.2s ease",
+                            width: cellW,
                             boxSizing: "border-box",
                             backgroundColor: storageStyle.bg,
                             borderColor: storageStyle.border,
@@ -607,13 +632,15 @@ export function InternalLayoutModal({ layout = null, rack, warehouseLabel, onSav
                       );
                     })}
                   </div>
-                  <p className={`text-[10px] px-3 py-1 ${levelWidthExceeded ? "text-red-700 font-semibold" : "text-slate-500"}`}>
-                    Szerokość lokacji (szablon): {Number((lev.locations[0]?.width_cm ?? 0).toFixed(2))} cm · Suma szerokości: {levelTotalWidth.toFixed(2)} cm {levelWidthExceeded ? "(przekroczono)" : ""}
+                  <p className={`px-3 py-1 text-[10px] ${levelWidthExceeded ? "font-semibold text-red-700" : "text-slate-500"}`}>
+                    Szerokość lokacji (szablon): {Number((lev.locations[0]?.width_cm ?? 0).toFixed(2))} cm · Suma
+                    szerokości: {levelTotalWidth.toFixed(2)} cm {levelWidthExceeded ? "(przekroczono)" : ""}
                   </p>
                 </div>
               );
             })}
-          </div>
+            </div>
+          </FitToContainer>
         </div>
         <div className="sticky bottom-0 flex shrink-0 gap-2 border-t border-slate-200 bg-white/95 px-4 py-3 backdrop-blur-sm">
           <button type="button" onClick={onClose} className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">
