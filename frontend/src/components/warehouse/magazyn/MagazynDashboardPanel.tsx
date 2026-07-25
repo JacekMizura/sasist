@@ -1,5 +1,9 @@
 import type { CustomRackTemplate, LayoutState, RackType } from "../../../types/warehouse";
 import { buildTemplateUsageData } from "../templateUsage";
+import {
+  listPanelMapVisualizationModes,
+  type MapVisualizationModeId,
+} from "./mapVisualization";
 
 export interface MagazynDashboardPanelProps {
   layout: LayoutState;
@@ -24,6 +28,9 @@ export interface MagazynDashboardPanelProps {
     occupied: number;
     free: number;
   };
+  /** Active map visualization mode (Lokalizacje radio). */
+  visualizationMode?: MapVisualizationModeId;
+  onVisualizationModeChange?: (mode: MapVisualizationModeId) => void;
   formatVolume: (n: number) => string;
   onOpenReports?: () => void;
   onOpenDamageReports?: () => void;
@@ -52,6 +59,8 @@ export function MagazynDashboardPanel({
   damagedUsedDm3,
   locationStats,
   locationFill,
+  visualizationMode = "all",
+  onVisualizationModeChange,
   formatVolume,
   onOpenReports,
   onOpenDamageReports,
@@ -171,23 +180,57 @@ export function MagazynDashboardPanel({
       {locationFill != null && (
         <>
           <div className="mx-1 my-7 h-px bg-slate-200/70" aria-hidden />
-          <section className="px-1">
+          <section className="px-1" aria-label="Tryby wizualizacji lokalizacji">
             <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-400">Lokalizacje</p>
-            <ul className="mt-4 space-y-3.5">
-              <li className="flex items-baseline justify-between gap-3">
-                <span className="flex min-w-0 items-center gap-2.5">
-                  <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-slate-700" aria-hidden />
-                  <span className="truncate text-[13px] text-slate-600">Zajęte</span>
-                </span>
-                <span className="text-base font-semibold tabular-nums text-slate-900">{locationFill.occupied}</span>
-              </li>
-              <li className="flex items-baseline justify-between gap-3">
-                <span className="flex min-w-0 items-center gap-2.5">
-                  <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-500" aria-hidden />
-                  <span className="truncate text-[13px] text-slate-600">Wolne</span>
-                </span>
-                <span className="text-base font-semibold tabular-nums text-emerald-700">{locationFill.free}</span>
-              </li>
+            <ul className="mt-4 space-y-1" role="radiogroup" aria-label="Tryb wizualizacji mapy">
+              {listPanelMapVisualizationModes().map((m) => {
+                const count =
+                  m.countKey === "occupied"
+                    ? locationFill.occupied
+                    : m.countKey === "free"
+                      ? locationFill.free
+                      : locationFill.occupied + locationFill.free;
+                const selected = visualizationMode === m.id;
+                return (
+                  <li key={m.id}>
+                    <button
+                      type="button"
+                      role="radio"
+                      aria-checked={selected}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onVisualizationModeChange?.(m.id);
+                      }}
+                      className={`flex w-full items-center justify-between gap-3 rounded-lg px-1.5 py-2 text-left transition-colors ${
+                        selected ? "bg-slate-900/5" : "hover:bg-slate-100/70"
+                      }`}
+                    >
+                      <span className="flex min-w-0 items-center gap-2.5">
+                        <span
+                          className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-full border ${
+                            selected ? "border-slate-800" : "border-slate-300"
+                          }`}
+                          aria-hidden
+                        >
+                          {selected ? <span className="h-2 w-2 rounded-full bg-slate-800" /> : null}
+                        </span>
+                        <span className={`truncate text-[13px] ${selected ? "font-medium text-slate-900" : "text-slate-600"}`}>
+                          {m.label}
+                        </span>
+                      </span>
+                      {m.id !== "all" ? (
+                        <span
+                          className={`text-base font-semibold tabular-nums ${
+                            m.id === "free" ? "text-emerald-700" : "text-slate-900"
+                          }`}
+                        >
+                          {count}
+                        </span>
+                      ) : null}
+                    </button>
+                  </li>
+                );
+              })}
             </ul>
           </section>
         </>

@@ -1,3 +1,10 @@
+## 2026-07-25 — Magazyn: kamery per-warehouse + tryby wizualizacji (no push)
+
+- Camera: `warehouse_map_camera_v1_{warehouseId}` (zoom, panX/Y, scroll); auto-fit tylko przy pierwszym wejściu; „Dopasuj do ekranu”
+- Visualization: `mapVisualization/` registry (all/occupied/free + przyszłe); overlay opacity, bez filtrowania danych
+- `tsc` + `build` OK
+- **No push.**
+
 ## 2026-07-25 — Projektant Magazynu → Layout System 2.0 (no push)
 
 - Usunięto `AppPageLayout` + `AppContentLayout` + osobny `TabsContainer` card-stack

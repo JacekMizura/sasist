@@ -23,8 +23,14 @@ import { WallElementsLayer } from "./WarehouseCanvas/WallElementsLayer";
 import { PathLayer } from "./WarehouseCanvas/PathLayer";
 import { MagazynPreviewPathLayer } from "./WarehouseCanvas/MagazynPreviewPathLayer";
 import { PassageDrawPreview } from "../../pages/WarehouseDesigner/passages/PassageDrawPreview";
+import {
+  MapLocationVisualizationLayer,
+  type MapVisualizationModeId,
+} from "./magazyn/mapVisualization";
 
 const RACK_RADIUS_PX = parseFloat(radius.small) || 6;
+
+const EMPTY_OCCUPIED_SET: ReadonlySet<string> = new Set();
 
 /** Major / strong grid lines in cell counts (grid space only; not meters). */
 const GRID_MAJOR_CELLS = 10;
@@ -249,6 +255,27 @@ export type WarehouseCanvasProps = {
   onExportPdf?: () => void | Promise<void>;
   selectedVisualIds?: string[];
   isLiveView?: boolean;
+  /**
+   * When true, Magazyn skips auto-fit on open (restored camera exists for this warehouse).
+   * Explicit „Dopasuj do ekranu” still runs fit.
+   */
+  skipInitialLiveFit?: boolean;
+  /** Restored scroll after camera hydrate (viewport scrollLeft/Top). */
+  restoredScroll?: { left: number; top: number } | null;
+  /** Persist viewport scroll (debounced upstream). */
+  onViewportScroll?: (scroll: { left: number; top: number }) => void;
+  /** Called after fit-to-screen so parent can persist the new camera. */
+  onCameraFitApplied?: (camera: {
+    zoom: number;
+    panX: number;
+    panY: number;
+    scrollLeft: number;
+    scrollTop: number;
+  }) => void;
+  /** Magazyn map visualization mode (opacity overlay only). */
+  mapVisualizationMode?: MapVisualizationModeId;
+  /** Occupied location UUIDs for visualization modes (O(1) lookup). */
+  occupiedLocationUuids?: ReadonlySet<string>;
   /** Layout mode badge (top-right of canvas) */
   layoutModeLabel?: string;
   layoutModeColor?: string;
@@ -439,6 +466,12 @@ function WarehouseCanvasInner({
   onExportPdf: _onExportPdf,
   selectedVisualIds = [],
   isLiveView,
+  skipInitialLiveFit = false,
+  restoredScroll = null,
+  onViewportScroll,
+  onCameraFitApplied,
+  mapVisualizationMode = "all",
+  occupiedLocationUuids,
   layoutModeLabel,
   layoutModeColor,
   layoutMode,
@@ -614,19 +647,36 @@ function WarehouseCanvasInner({
   const scaledCanvasH = height * zoom;
 
   const viewResetKeyRef = React.useRef<string | null>(null);
-  /** Warehouse or layout document identity change: pan 0, scroll reset (zoom stays — persisted in designer). */
+  /** Warehouse or layout document identity change: only reset pan/scroll when there is no stored camera. */
   React.useLayoutEffect(() => {
     if (selectedWarehouseId == null) return;
     const key = `${selectedWarehouseId}:${layout.layout_id ?? "null"}`;
     if (viewResetKeyRef.current === key) return;
     viewResetKeyRef.current = key;
+    if (skipInitialLiveFit) {
+      const el = viewportRef.current;
+      if (el && restoredScroll) {
+        el.scrollLeft = restoredScroll.left;
+        el.scrollTop = restoredScroll.top;
+      }
+      return;
+    }
     setPan(() => ({ x: 0, y: 0 }));
     const el = viewportRef.current;
     if (el) {
       el.scrollLeft = 0;
       el.scrollTop = 0;
     }
-  }, [selectedWarehouseId, layout.layout_id, setPan]);
+  }, [selectedWarehouseId, layout.layout_id, setPan, skipInitialLiveFit, restoredScroll]);
+
+  /** Apply restored scroll after hydrate (cameraEpoch changes via restoredScroll identity). */
+  React.useLayoutEffect(() => {
+    if (!skipInitialLiveFit || !restoredScroll) return;
+    const el = viewportRef.current;
+    if (!el) return;
+    el.scrollLeft = restoredScroll.left;
+    el.scrollTop = restoredScroll.top;
+  }, [skipInitialLiveFit, restoredScroll]);
 
   /** Ctrl/Cmd + wheel: zoom. Plain wheel: native scroll on viewport. */
   React.useLayoutEffect(() => {
@@ -641,7 +691,24 @@ function WarehouseCanvasInner({
     return () => el.removeEventListener("wheel", onWheel);
   }, [setZoom]);
 
-  /** Reset zoom to 100%, pan, scroll top-left. */
+  React.useEffect(() => {
+    const el = viewportRef.current;
+    if (!el || !onViewportScroll) return;
+    let t: ReturnType<typeof setTimeout> | null = null;
+    const onScroll = () => {
+      if (t != null) clearTimeout(t);
+      t = setTimeout(() => {
+        onViewportScroll({ left: el.scrollLeft, top: el.scrollTop });
+      }, 120);
+    };
+    el.addEventListener("scroll", onScroll, { passive: true });
+    return () => {
+      el.removeEventListener("scroll", onScroll);
+      if (t != null) clearTimeout(t);
+    };
+  }, [onViewportScroll, selectedWarehouseId]);
+
+  /** Reset zoom to 100%, pan, scroll top-left (layout editor). */
   const fitViewport = React.useCallback(() => {
     setEnableTransition(true);
     setZoom(() => 1);
@@ -651,19 +718,16 @@ function WarehouseCanvasInner({
       el.scrollLeft = 0;
       el.scrollTop = 0;
     }
+    onCameraFitApplied?.({ zoom: 1, panX: 0, panY: 0, scrollLeft: 0, scrollTop: 0 });
     setTimeout(() => setEnableTransition(false), VIEWPORT_TRANSITION_MS);
-  }, [setZoom, setPan]);
+  }, [setZoom, setPan, onCameraFitApplied]);
 
-  /** Magazyn operational map: scale content to fill available viewport (large monitors). */
-  const liveFitKeyRef = React.useRef<string | null>(null);
+  /** Magazyn: scale content to fill viewport (first visit or explicit „Dopasuj do ekranu”). */
   const applyLiveFit = React.useCallback(() => {
     if (!isLiveView || selectedWarehouseId == null || loading) return;
     const el = viewportRef.current;
     if (!el) return;
     if (width <= 0 || height <= 0 || el.clientWidth <= 0 || el.clientHeight <= 0) return;
-    const key = `${selectedWarehouseId}:${layout.layout_id ?? "null"}:${layout.grid_cols}x${layout.grid_rows}`;
-    if (liveFitKeyRef.current === key) return;
-    liveFitKeyRef.current = key;
     const pad = 24;
     const fitZ = Math.min((el.clientWidth - pad) / width, (el.clientHeight - pad) / height);
     const nextZ = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, fitZ));
@@ -672,37 +736,45 @@ function WarehouseCanvasInner({
     setPan(() => ({ x: 0, y: 0 }));
     el.scrollLeft = 0;
     el.scrollTop = 0;
+    onCameraFitApplied?.({
+      zoom: nextZ,
+      panX: 0,
+      panY: 0,
+      scrollLeft: 0,
+      scrollTop: 0,
+    });
   }, [
     isLiveView,
     selectedWarehouseId,
     loading,
-    layout.layout_id,
-    layout.grid_cols,
-    layout.grid_rows,
     width,
     height,
     setZoom,
     setPan,
+    onCameraFitApplied,
   ]);
 
+  const liveFitKeyRef = React.useRef<string | null>(null);
   React.useLayoutEffect(() => {
     if (!isLiveView) {
       liveFitKeyRef.current = null;
       return;
     }
+    if (skipInitialLiveFit) return;
+    const key = `${selectedWarehouseId}:${layout.layout_id ?? "null"}:${layout.grid_cols}x${layout.grid_rows}`;
+    if (liveFitKeyRef.current === key) return;
+    liveFitKeyRef.current = key;
     const id = requestAnimationFrame(() => applyLiveFit());
     return () => cancelAnimationFrame(id);
-  }, [isLiveView, applyLiveFit]);
-
-  React.useEffect(() => {
-    if (!isLiveView) return;
-    const onResize = () => {
-      liveFitKeyRef.current = null;
-      applyLiveFit();
-    };
-    window.addEventListener("resize", onResize);
-    return () => window.removeEventListener("resize", onResize);
-  }, [isLiveView, applyLiveFit]);
+  }, [
+    isLiveView,
+    skipInitialLiveFit,
+    applyLiveFit,
+    selectedWarehouseId,
+    layout.layout_id,
+    layout.grid_cols,
+    layout.grid_rows,
+  ]);
 
   /** Focus a layout-cm point inside the scrollable viewport (problem locate). */
   React.useEffect(() => {
@@ -740,7 +812,7 @@ function WarehouseCanvasInner({
   return (
     <main
       ref={canvasContainerRef}
-      className={`m-0 flex min-h-0 min-w-0 max-w-full flex-1 basis-0 flex-col items-stretch justify-start overflow-hidden ${
+      className={`relative m-0 flex min-h-0 min-w-0 max-w-full flex-1 basis-0 flex-col items-stretch justify-start overflow-hidden ${
         isLiveView ? "p-0" : "pl-3.5 pt-3.5"
       }`}
       style={{
@@ -773,6 +845,39 @@ function WarehouseCanvasInner({
               </button>
             </div>
           )}
+          {isLiveView ? (
+            <div className="pointer-events-none absolute right-3 top-3 z-20 flex items-center gap-1">
+              <div className="pointer-events-auto flex items-center gap-0.5 rounded-lg border border-slate-200/80 bg-white/95 p-0.5 shadow-sm backdrop-blur-sm">
+                <button
+                  type="button"
+                  onClick={() => setZoom((z) => Math.min(MAX_ZOOM, z + 0.1))}
+                  className="flex h-8 w-8 items-center justify-center rounded-md text-xs font-semibold text-slate-600 transition hover:bg-slate-50"
+                  title="Powiększ"
+                >
+                  +
+                </button>
+                <span className="min-w-[2.75rem] text-center font-mono text-[11px] tabular-nums text-slate-500">
+                  {Math.round(zoom * 100)}%
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setZoom((z) => Math.max(MIN_ZOOM, z - 0.1))}
+                  className="flex h-8 w-8 items-center justify-center rounded-md text-xs font-semibold text-slate-600 transition hover:bg-slate-50"
+                  title="Pomniejsz"
+                >
+                  −
+                </button>
+                <button
+                  type="button"
+                  onClick={() => applyLiveFit()}
+                  className="h-8 rounded-md px-2.5 text-[11px] font-medium text-slate-700 transition hover:bg-slate-50"
+                  title="Dopasuj mapę do ekranu"
+                >
+                  Dopasuj do ekranu
+                </button>
+              </div>
+            </div>
+          ) : null}
           {isEditMode && (
           <div
             className="flex min-h-0 min-w-0 shrink-0 flex-wrap items-center gap-x-2.5 gap-y-2 border-b border-slate-200/55 bg-gradient-to-b from-slate-50/98 to-white/95 px-3 py-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.75)] backdrop-blur-[4px]"
@@ -799,7 +904,17 @@ function WarehouseCanvasInner({
               >
                 −
               </button>
-              {!isLiveView && (
+              {isLiveView ? (
+                <button
+                  type="button"
+                  onClick={() => applyLiveFit()}
+                  className="h-8 rounded-md px-2.5 text-[11px] font-medium text-slate-600 transition-all duration-150 hover:bg-white hover:text-slate-900 hover:shadow-sm"
+                  style={{ color: colors.textSecondary }}
+                  title="Dopasuj mapę do ekranu"
+                >
+                  Dopasuj do ekranu
+                </button>
+              ) : (
                 <button
                   type="button"
                   onClick={fitViewport}
@@ -1387,6 +1502,14 @@ function WarehouseCanvasInner({
                     onPassageSelect={undefined}
                     onPassageDragStart={undefined}
                   />
+                  {isLiveView && !isExportMode ? (
+                    <MapLocationVisualizationLayer
+                      mode={mapVisualizationMode}
+                      racks={layout.racks}
+                      cellPx={cellPx}
+                      occupiedLocationUuids={occupiedLocationUuids ?? EMPTY_OCCUPIED_SET}
+                    />
+                  ) : null}
                   {isEditMode && passageToolActive && passageDrawStart && passageDrawEnd && (
                     <PassageDrawPreview
                       racks={layout.racks}

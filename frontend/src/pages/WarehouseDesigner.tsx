@@ -109,6 +109,7 @@ import { useDesignerMouseHandlers } from "./WarehouseDesigner/useDesignerMouseHa
 import { useDesignerRowOperations } from "./WarehouseDesigner/useDesignerRowOperations";
 import { useDesignerRackPlacement } from "./WarehouseDesigner/useDesignerRackPlacement";
 import { useDesignerCanvas } from "./WarehouseDesigner/useDesignerCanvas";
+import { useMapVisualizationMode } from "../components/warehouse/magazyn/mapVisualization";
 import { useDesignerProductModal } from "./WarehouseDesigner/useDesignerProductModal";
 import { useDesignerMagazynState } from "./WarehouseDesigner/useDesignerMagazynState";
 import { useDesignerRowState } from "./WarehouseDesigner/useDesignerRowState";
@@ -443,11 +444,34 @@ export default function WarehouseDesigner() {
     setZoom,
     pan,
     setPan,
+    scroll,
+    setScrollPosition,
+    hasStoredCamera,
+    cameraEpoch,
+    commitCameraNow,
     cursorCm,
     setCursorCm,
     isPanning,
     setIsPanning,
-  } = useDesignerCanvas(layout.layout_id ?? null);
+  } = useDesignerCanvas(selectedWarehouseId, layout.layout_id ?? null);
+  const { mode: mapVisualizationMode, setMode: setMapVisualizationMode } =
+    useMapVisualizationMode(selectedWarehouseId);
+  const restoredScroll = useMemo(
+    () => ({ left: scroll.left, top: scroll.top, _epoch: cameraEpoch }),
+    [scroll.left, scroll.top, cameraEpoch]
+  );
+  const handleCameraFitApplied = useCallback(
+    (camera: { zoom: number; panX: number; panY: number; scrollLeft: number; scrollTop: number }) => {
+      commitCameraNow(camera);
+    },
+    [commitCameraNow]
+  );
+  const handleViewportScroll = useCallback(
+    (next: { left: number; top: number }) => {
+      setScrollPosition(next);
+    },
+    [setScrollPosition]
+  );
   const lastCursorCmRef = useRef<{ x: number; y: number } | null>(null);
   useEffect(() => {
     if (cursorCm != null) lastCursorCmRef.current = cursorCm;
@@ -1224,6 +1248,19 @@ export default function WarehouseDesigner() {
     }
     return { occupied, free: Math.max(0, total - occupied) };
   }, [occupancyMetrics, binOccupancyLocationStats, layout.racks, usedVolumeAtBin]);
+
+  /** O(1) occupied UUID set for map visualization overlays (stable across pan/zoom). */
+  const occupiedLocationUuids = useMemo(() => {
+    const set = new Set<string>();
+    for (const rack of layout.racks) {
+      for (const bin of activeBinsForRack(rack)) {
+        if (usedVolumeAtBin(bin) <= 0) continue;
+        const u = (bin.locationUUID ?? "").trim();
+        if (u) set.add(u);
+      }
+    }
+    return set;
+  }, [layout.racks, usedVolumeAtBin]);
 
   /** Map locationUUID → bin (for storage_type and primary/reserve split). Declared before mapRackState and occupancy useMemos. */
   const uuidToBin = useMemo(() => {
@@ -3963,6 +4000,8 @@ export default function WarehouseDesigner() {
                 damaged: globalLocationStatsForLegend.damaged,
               }}
               locationFill={locationFillCounts}
+              visualizationMode={mapVisualizationMode}
+              onVisualizationModeChange={setMapVisualizationMode}
               formatVolume={formatVolume}
               onOpenReports={() => setShowWarehouseReportsPanel(true)}
               onOpenDamageReports={() => {
@@ -4157,6 +4196,12 @@ export default function WarehouseDesigner() {
                             selectedVisualIds={selectedVisualIds}
                             outsideRackIds={outsideRackIds}
                             isLiveView={isLiveView}
+                            skipInitialLiveFit={hasStoredCamera}
+                            restoredScroll={restoredScroll}
+                            onViewportScroll={handleViewportScroll}
+                            onCameraFitApplied={handleCameraFitApplied}
+                            mapVisualizationMode={mapVisualizationMode}
+                            occupiedLocationUuids={occupiedLocationUuids}
                             setSelectedVisualId={setSelectedVisualId}
                             setSelectedVisualIds={setSelectedVisualIds}
                             setSelectedAisleIndex={setSelectedAisleIndex}
