@@ -91,6 +91,8 @@ import { getShippingMethods } from "../../api/shippingMethodsApi";
 import { getOrderPanelSubgroups, getOrderUiStatusSummary, patchOrderUiStatus } from "../../api/orderUiStatusApi";
 import type { OrderUiPanelSubgroupRead, OrderUiStatusBrief, OrderUiStatusPanelSummary } from "../../types/orderUiStatus";
 import { DAMAGE_TENANT_ID } from "../damage/damageShared";
+import { tabsNavItemClassName } from "../../components/layout/TabsNav";
+import { brandPrimaryButtonClass } from "../../design-system/brandUi";
 import { OrderCustomerLinkPanel } from "../../components/customers/OrderCustomerLinkPanel";
 import { getCustomerDisplayName } from "../../utils/getCustomerDisplayName";
 import { ShippingMethodLogo } from "../../components/shipping/ShippingMethodLogo";
@@ -2094,7 +2096,7 @@ export default function OrderDetailPage() {
                 <div className="border-b border-slate-200 mt-2">
                   <div className="flex gap-6 overflow-x-auto">
                     {DETAIL_TABS.map((t) => (
-                      <button key={t.id} onClick={() => setActiveTab(t.id)} className={`pb-3 text-sm font-bold uppercase tracking-wider transition-colors border-b-2 -mb-px ${ activeTab === t.id ? "border-orange-500 text-orange-600" : "border-transparent text-slate-500 hover:text-slate-800" }`}>
+                      <button key={t.id} type="button" onClick={() => setActiveTab(t.id)} className={tabsNavItemClassName(activeTab === t.id)}>
                         {t.label}
                       </button>
                     ))}
@@ -2296,7 +2298,7 @@ export default function OrderDetailPage() {
                       <textarea value={noteDraft} onChange={(e) => setNoteDraft(e.target.value)} rows={4} placeholder="Wpisz treść..." className="w-full resize-y rounded-md border border-slate-200 bg-white px-3 py-2 text-sm focus:border-orange-500 outline-none mb-4 transition-colors" />
                       <div className="flex justify-between items-center">
                         <button className="text-sm font-bold border border-slate-300 px-4 py-2 rounded-md text-slate-700 hover:bg-slate-50 shadow-sm flex items-center transition-colors"><Plus size={16} className="mr-2"/> Dodaj załącznik</button>
-                        <button className="bg-orange-500 text-white px-8 py-2 rounded-md text-sm font-bold shadow-sm hover:bg-orange-600 transition-colors flex items-center">Wyślij <Send size={16} className="ml-2"/></button>
+                        <button type="button" className={`${brandPrimaryButtonClass} px-8`}>Wyślij <Send size={16} className="ml-2"/></button>
                       </div>
                     </SummaryDashboardCard>
                   </div>
@@ -2495,7 +2497,7 @@ export default function OrderDetailPage() {
                     <h3 className="text-[11px] font-bold uppercase tracking-widest text-slate-500 mb-4">Wiadomość do klienta</h3>
                     <textarea id="order-comms-note" value={noteDraft} onChange={(e) => setNoteDraft(e.target.value)} rows={4} placeholder="Wpisz treść..." className="w-full bg-white border border-slate-300 rounded-md p-3 text-sm focus:border-orange-500 outline-none mb-4 transition-colors"/>
                     <div className="flex justify-end">
-                      <button className="bg-orange-500 text-white font-bold text-sm px-8 py-2 rounded-md hover:bg-orange-600 transition-colors shadow-sm">Wyślij</button>
+                      <button type="button" className={`${brandPrimaryButtonClass} px-8`}>Wyślij</button>
                     </div>
                   </section>
                 </main>

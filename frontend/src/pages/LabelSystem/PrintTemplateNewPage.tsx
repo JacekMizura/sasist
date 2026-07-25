@@ -3,6 +3,7 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import PageLayout from "../../components/layout/PageLayout";
 import { PageHeader } from "../../components/layout/PageHeader";
 import { labelModuleBasePath } from "./labelModuleBasePath";
+import { brandPrimaryButtonClass } from "../../design-system/brandUi";
 import {
   DOCUMENT_PRINT_MODULE_TYPE_LABELS,
   DOCUMENT_PRINT_MODULE_TYPE_ORDER,
@@ -84,7 +85,7 @@ export function PrintTemplateNewPage() {
         <div className="flex flex-wrap items-center gap-3">
           <button
             type="button"
-            className="rounded-lg bg-orange-500 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-orange-600"
+            className={brandPrimaryButtonClass}
             onClick={() =>
               navigate(`${labelBase}/designer/new`, {
                 state: { initialTemplateType: selectedType },

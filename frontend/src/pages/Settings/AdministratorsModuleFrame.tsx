@@ -2,6 +2,7 @@ import { Plus } from "lucide-react";
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
 
 import { SettingsModuleStack } from "../../components/layout/SettingsModuleStack";
+import { brandPrimaryButtonClass } from "../../design-system/brandUi";
 import { ADMINISTRATORS_TABS } from "./administratorsTabs";
 
 /**
@@ -20,7 +21,7 @@ export default function AdministratorsModuleFrame() {
     <button
       type="button"
       onClick={() => navigate("/settings/administrators/new")}
-      className="inline-flex shrink-0 items-center justify-center gap-1.5 rounded-lg bg-orange-500 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-orange-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-400 focus-visible:ring-offset-2"
+      className={brandPrimaryButtonClass}
     >
       <Plus className="h-4 w-4" strokeWidth={2.5} aria-hidden />
       Dodaj użytkownika

@@ -1,5 +1,7 @@
 /** Shared form tokens — must match ProductEditModal (catalog entity pages). */
 
+import { brandTabsNavItemClassName } from "../../design-system/brandUi";
+
 export const productLikeFieldLabelClass = "mb-1.5 block text-sm font-medium text-slate-700";
 
 export const productLikeInputClass =
@@ -74,12 +76,8 @@ export function productLikeRailBtnClass(active: boolean): string {
 }
 
 export function productLikeTabBtnClass(active: boolean, withIcon = false): string {
-  const layout = withIcon ? "inline-flex items-center gap-2" : "";
-  return `${layout} shrink-0 whitespace-nowrap rounded-t-lg border-b-2 px-3 py-2.5 text-sm font-medium transition-colors -mb-px ${
-    active
-      ? "border-blue-600 bg-blue-50/40 text-blue-700"
-      : "border-transparent text-slate-500 hover:border-slate-300 hover:bg-slate-50 hover:text-slate-800"
-  }`;
+  const layout = withIcon ? "inline-flex items-center gap-2 " : "";
+  return `${layout}${brandTabsNavItemClassName(active)}`;
 }
 
 export function productLikeStatCardClass(variant: "slate" | "blue" | "green" | "orange" = "slate"): string {

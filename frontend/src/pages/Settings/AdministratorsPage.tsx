@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import toast from "react-hot-toast";
 
+import { brandPrimaryButtonClass } from "../../design-system/brandUi";
 import {
   deleteUser,
   fetchUsers,
@@ -488,7 +489,7 @@ export default function AdministratorsPage() {
           <button
             type="button"
             onClick={goToNewUser}
-            className="mt-6 inline-flex cursor-pointer items-center justify-center gap-2 rounded-lg bg-orange-500 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-orange-600"
+            className={`${brandPrimaryButtonClass} mt-6 cursor-pointer`}
           >
             <Plus className="h-4 w-4" strokeWidth={2} aria-hidden />
             Dodaj użytkownika

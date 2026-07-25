@@ -3,6 +3,7 @@ import api from "../../api/axios";
 import { useWarehouse } from "../../context/WarehouseContext";
 import type { Printer } from "../../types/printer";
 import type { PrinterProfile } from "../../types/printerProfiles";
+import { brandPrimaryButtonClass } from "../../design-system/brandUi";
 
 const TENANT_ID = 1;
 
@@ -136,7 +137,7 @@ export default function PrintersPage() {
         <button
           type="button"
           onClick={openCreate}
-          className="rounded-lg bg-orange-500 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-orange-600"
+          className={brandPrimaryButtonClass}
         >
           Dodaj drukarkę
         </button>
@@ -287,7 +288,7 @@ export default function PrintersPage() {
                 type="button"
                 onClick={saveForm}
                 disabled={!form.name.trim()}
-                className="rounded-lg bg-orange-500 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                className={brandPrimaryButtonClass}
               >
                 Zapisz
               </button>

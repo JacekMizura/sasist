@@ -3,6 +3,7 @@ import { Link, Routes, Route } from "react-router-dom";
 
 import PageLayout from "../../components/layout/PageLayout";
 import { PageHeader } from "../../components/layout/PageHeader";
+import { brandPrimaryButtonClass } from "../../design-system/brandUi";
 
 const BASE = "/admin/message-templates";
 
@@ -33,7 +34,7 @@ function MessageTemplatesListPage() {
       actions={
         <Link
           to={`${BASE}/new`}
-          className="rounded-lg bg-orange-500 px-3 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-orange-600"
+          className={brandPrimaryButtonClass}
         >
           Dodaj szablon
         </Link>

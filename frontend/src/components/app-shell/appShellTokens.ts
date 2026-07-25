@@ -15,7 +15,7 @@ export const appInputClass =
 export const appFieldLabelClass = "mb-0.5 block text-[11px] font-medium leading-tight text-slate-500";
 
 export const appTabActiveClass =
-  "border-b-2 border-slate-900 px-3 py-2 text-[13px] font-semibold text-slate-900";
+  "border-b-2 -mb-px border-orange-500 pb-2.5 text-sm font-semibold text-orange-600";
 
 export const appTabInactiveClass =
-  "border-b-2 border-transparent px-3 py-2 text-[13px] font-medium text-slate-600 hover:border-slate-200 hover:text-slate-900";
+  "border-b-2 -mb-px border-transparent pb-2.5 text-sm font-medium text-slate-500 hover:text-slate-800";

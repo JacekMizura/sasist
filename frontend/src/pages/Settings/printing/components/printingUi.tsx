@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { AppButton } from "../../../../components/app-shell/AppButton";
 
 /** Sasist printing module — orange brand tokens (UI only). */
 export const printingTheme = {
@@ -8,19 +9,17 @@ export const printingTheme = {
   primaryRing: "focus-visible:ring-orange-500/40",
 } as const;
 
+/** Thin alias of AppButton primary (Design System). */
 export function PrintingPrimaryButton({
   children,
   className = "",
+  type = "button",
   ...props
 }: React.ButtonHTMLAttributes<HTMLButtonElement>) {
   return (
-    <button
-      type="button"
-      className={`inline-flex items-center justify-center gap-2 rounded-lg bg-orange-500 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-50 ${className}`.trim()}
-      {...props}
-    >
+    <AppButton type={type} variant="primary" className={className} {...props}>
       {children}
-    </button>
+    </AppButton>
   );
 }
 

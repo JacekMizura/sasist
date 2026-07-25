@@ -21,6 +21,8 @@ import PermissionTreePanel from "../../components/admin/PermissionTreePanel";
 import AvatarUploadField from "../../components/admin/AvatarUploadField";
 import { builtinPresetLabel } from "../../components/admin/permissionPresetLabels";
 import LoginCodeLabelControls from "./administrators/LoginCodeLabelControls";
+import { tabsNavItemClassName } from "../../components/layout/TabsNav";
+import { brandPrimaryButtonClass } from "../../design-system/brandUi";
 import {
   createCustomPermissionPreset,
   createUser,
@@ -713,11 +715,7 @@ export default function AdministratorEditPage() {
                         key={item.id}
                         type="button"
                         onClick={() => goTab(item.id)}
-                        className={`inline-flex items-center gap-2 border-b-2 pb-2.5 text-sm font-medium transition-colors ${
-                          active
-                            ? "border-orange-500 text-orange-600"
-                            : "border-transparent text-slate-500 hover:text-slate-800"
-                        }`}
+                        className={`inline-flex items-center gap-2 ${tabsNavItemClassName(active)}`}
                       >
                         <item.icon className={`h-4 w-4 ${active ? "text-orange-500" : ""}`} aria-hidden />
                         {item.label}
@@ -1190,7 +1188,7 @@ export default function AdministratorEditPage() {
                                         }
                                       })();
                                     }}
-                                    className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-orange-500 px-4 py-3 text-sm font-black text-white shadow-sm hover:bg-orange-600 disabled:opacity-40"
+                                    className={`${brandPrimaryButtonClass} w-full rounded-xl py-3 font-black`}
                                   >
                                     + Utwórz
                                   </button>
@@ -1303,7 +1301,7 @@ export default function AdministratorEditPage() {
               type="button"
               onClick={() => void onSave()}
               disabled={saving}
-              className="inline-flex items-center gap-2 rounded-lg bg-orange-500 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-orange-600 disabled:opacity-50"
+              className={brandPrimaryButtonClass}
             >
               {saving ? (
                 <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />

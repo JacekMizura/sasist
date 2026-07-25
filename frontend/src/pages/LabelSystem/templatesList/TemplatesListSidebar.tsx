@@ -5,6 +5,7 @@ import {
   LABEL_PRINT_MODULE_TYPE_ORDER,
 } from "../labelPrintModuleTypes";
 import { getTypeIcon, UNGROUPED_ID, type GroupRow } from "./templatesListTypes";
+import { brandPrimaryButtonClass } from "../../../design-system/brandUi";
 
 type Props = {
   selectedType: string;
@@ -119,7 +120,7 @@ export default function TemplatesListSidebar({
               type="button"
               onClick={onCreateGroup}
               disabled={!newGroupName.trim() || creatingGroup}
-              className="rounded-xl bg-orange-500 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-orange-600 disabled:opacity-50"
+              className={brandPrimaryButtonClass}
               aria-label="Dodaj grupę"
             >
               +

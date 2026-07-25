@@ -23,6 +23,7 @@ import { replenishmentPendingSegmentRemaining } from "../../components/wms/reple
 import { useWarehouse } from "../../context/WarehouseContext";
 import { useWmsScanner } from "../../context/WmsScannerContext";
 import { playScanBeep } from "../../utils/playScanBeep";
+import { brandPrimaryButtonClass } from "../../design-system/brandUi";
 import { normalizeScanEan } from "../../utils/wmsScanNormalize";
 import { WMS_MM_UPDATED_EVENT, WMS_ROUTES } from "./wmsRoutes";
 
@@ -1136,7 +1137,7 @@ export default function WmsMmTransferPage() {
                       clearDevScannerInput();
                       refocusScannerInput();
                     }}
-                    className="flex-[1.5] bg-orange-500 hover:bg-orange-600 text-white font-black py-5 rounded-2xl text-[13px] tracking-widest uppercase transition-all active:scale-95 shadow-lg shadow-orange-500/20 disabled:opacity-50 disabled:shadow-none"
+                    className={`${brandPrimaryButtonClass} flex-[1.5] rounded-2xl py-5 text-[13px] font-black uppercase tracking-widest shadow-lg shadow-orange-500/20 active:scale-95 disabled:shadow-none`}
                   >
                     Dalej — skan lokacji PICK
                   </button>

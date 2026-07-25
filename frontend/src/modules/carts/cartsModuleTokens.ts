@@ -16,12 +16,11 @@ export {
   appSectionTitleClass as cartsSectionTitleClass,
 } from "../../components/app-shell/appShellTokens";
 
-/** Screenshot-parity primary CTA (orange) for Magazyn module. */
-export const cartsOrangeCtaClass =
-  "inline-flex shrink-0 items-center justify-center gap-1.5 rounded-lg bg-orange-500 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-orange-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-400 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50";
+/** Screenshot-parity primary CTA (orange) for Magazyn module — Design System Primary. */
+export { brandPrimaryButtonClass as cartsOrangeCtaClass } from "../../design-system/brandUi";
 
 export const cartsOutlineCtaClass =
-  "inline-flex shrink-0 items-center justify-center gap-1.5 rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-400 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50";
+  "inline-flex h-10 shrink-0 items-center justify-center gap-1.5 rounded-lg border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-400 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50";
 
 /** Dark primary CTA (e.g. Zapisz regał on Regały editor). */
 export const cartsDarkCtaClass =

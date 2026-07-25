@@ -1,5 +1,6 @@
 import { LayoutGrid, List, Plus } from "lucide-react";
 import { Link } from "react-router-dom";
+import { brandPrimaryButtonClass } from "../../../design-system/brandUi";
 
 import { SORT_OPTIONS, type SortValue, type ViewMode } from "./templatesListTypes";
 
@@ -67,7 +68,7 @@ export default function TemplatesListToolbar({
           <button
             type="button"
             onClick={onNew}
-            className="inline-flex items-center gap-1.5 rounded-xl bg-orange-500 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-orange-600"
+            className={brandPrimaryButtonClass}
           >
             <Plus className="h-4 w-4" strokeWidth={2.5} />
             Nowy szablon

@@ -1,5 +1,6 @@
 import { memo, useMemo } from "react";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
+import { tabsNavItemClassName } from "../../../components/layout/TabsNav";
 import { PURCHASING_SUPPLIERS_TABS } from "../purchasingSuppliersTabs";
 
 function tabHref(path: string, tabLinkSearch: string): string {
@@ -18,7 +19,7 @@ function PurchasingSuppliersTabLayoutInner() {
     <div className="w-full">
       <div className="border-b border-slate-200 bg-white px-2 md:px-4 2xl:px-6">
         <nav
-          className="no-scrollbar flex items-center gap-1 overflow-x-auto"
+          className="no-scrollbar flex items-center gap-6 overflow-x-auto"
           aria-label="Dostawcy — podzakładki"
           role="tablist"
         >
@@ -28,13 +29,7 @@ function PurchasingSuppliersTabLayoutInner() {
               to={tabHref(tab.path, tabLinkSearch)}
               end={tab.end ?? false}
               role="tab"
-              className={({ isActive }) =>
-                `relative whitespace-nowrap border-b-2 px-4 py-3 text-sm font-medium transition-all ${
-                  isActive
-                    ? "border-orange-500 text-orange-600"
-                    : "border-transparent text-slate-500 hover:text-slate-800"
-                }`
-              }
+              className={({ isActive }) => tabsNavItemClassName(isActive)}
             >
               {tab.label}
             </NavLink>

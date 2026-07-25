@@ -18,6 +18,7 @@ import {
   resolveTemplateAvailableVariables,
   resolveTemplateUsedVariables,
 } from "./labelCsvMappingFields";
+import { brandPrimaryButtonClass } from "../../../design-system/brandUi";
 
 type Props = {
   open: boolean;
@@ -321,7 +322,7 @@ export default function CsvMappingModal({
             <button
               type="button"
               onClick={() => onSave(draft)}
-              className="rounded-xl bg-orange-500 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-orange-600"
+              className={brandPrimaryButtonClass}
             >
               Zapisz i przejdź dalej
             </button>

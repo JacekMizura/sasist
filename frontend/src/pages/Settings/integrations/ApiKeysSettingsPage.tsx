@@ -17,6 +17,7 @@ import {
 } from "../../../api/apiKeysApi";
 import { useWarehouse } from "../../../context/WarehouseContext";
 import type { ApiKeyRead, ApiKeyScope, ApiKeyType } from "../../../types/apiKeys";
+import { brandPrimaryButtonClass } from "../../../design-system/brandUi";
 import {
   API_KEY_SCOPE_LABELS,
   API_KEY_STATUS_LABELS,
@@ -341,7 +342,7 @@ export default function ApiKeysSettingsPage() {
                   </pre>
                   <button
                     type="button"
-                    className="shrink-0 self-center rounded-lg bg-orange-500 px-3 py-2 text-sm font-semibold text-white hover:bg-orange-600"
+                    className={`${brandPrimaryButtonClass} shrink-0 self-center`}
                     onClick={() => void copyCreatedKey()}
                   >
                     {copiedKey ? "Skopiowano" : "Kopiuj"}

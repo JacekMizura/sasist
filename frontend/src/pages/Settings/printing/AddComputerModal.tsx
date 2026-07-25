@@ -17,6 +17,7 @@ import {
 import { useWarehouse } from "../../../context/WarehouseContext";
 import type { PrinterAgentDownloadInfo } from "../../../types/printing";
 import { DAMAGE_TENANT_ID } from "../../damage/damageShared";
+import { brandPrimaryButtonClass } from "../../../design-system/brandUi";
 
 type Props = {
   open: boolean;
@@ -206,7 +207,7 @@ export default function AddComputerModal({ open, onClose }: Props) {
             <StepCard step={1} title="Pobierz instalator">
               <button
                 type="button"
-                className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-orange-500 px-5 py-3.5 text-base font-semibold text-white shadow-sm hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
+                className={`${brandPrimaryButtonClass} w-full rounded-xl px-5 py-3.5 text-base sm:w-auto`}
                 disabled={!resolvedDownload.downloadUrl}
                 onClick={handleDownloadInstaller}
               >
@@ -226,7 +227,7 @@ export default function AddComputerModal({ open, onClose }: Props) {
               </p>
               <button
                 type="button"
-                className="mt-3 inline-flex items-center gap-2 rounded-xl bg-orange-500 px-4 py-2.5 text-sm font-semibold text-white hover:bg-orange-600 disabled:opacity-50"
+                className={`${brandPrimaryButtonClass} mt-3 rounded-xl`}
                 disabled={busy || !!plainKey}
                 onClick={() => void issueKey()}
               >
@@ -249,7 +250,7 @@ export default function AddComputerModal({ open, onClose }: Props) {
                   <div className="flex flex-wrap gap-2">
                     <button
                       type="button"
-                      className="inline-flex items-center gap-2 rounded-lg bg-orange-500 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-600"
+                      className={brandPrimaryButtonClass}
                       onClick={() => void handleCopyKey()}
                     >
                       <Copy className="h-4 w-4" aria-hidden />

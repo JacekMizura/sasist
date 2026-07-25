@@ -138,7 +138,7 @@ export default function WmsSettingsPage() {
                     onClick={() => {
                       setActiveTab(tab.id);
                     }}
-                    className={`shrink-0 whitespace-nowrap pb-3 ${tabsNavItemClassName(selected)} ${selected ? "border-b-2 border-blue-600 font-medium text-blue-600" : "text-slate-500 hover:text-slate-800"}`}
+                    className={tabsNavItemClassName(selected)}
                   >
                     {tab.label}
                   </button>

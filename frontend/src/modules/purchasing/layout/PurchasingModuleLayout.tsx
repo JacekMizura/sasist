@@ -1,6 +1,7 @@
 import { ChevronDown, RefreshCw } from "lucide-react";
 import { memo, useMemo, useState } from "react";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
+import { tabsNavItemClassName } from "../../../components/layout/TabsNav";
 import { PurchasingModuleProvider, usePurchasingModuleContext } from "../context/PurchasingModuleContext";
 import { PURCHASING_TABS } from "../purchasingTabs";
 
@@ -29,7 +30,7 @@ function PurchasingTabBar() {
     <div className="sticky top-0 z-20 bg-white/90 pb-2 pt-4 backdrop-blur-md md:px-4 2xl:px-6">
       <div className="flex items-center justify-between overflow-hidden rounded-xl border border-slate-200 bg-white px-2 shadow-sm">
         <nav
-          className="no-scrollbar flex flex-1 items-center space-x-1 overflow-x-auto"
+          className="no-scrollbar flex flex-1 items-center gap-6 overflow-x-auto px-2"
           aria-label="Zakupy i planowanie"
           role="tablist"
         >
@@ -39,13 +40,7 @@ function PurchasingTabBar() {
               to={tabHref(tab.path, tabLinkSearch)}
               end={tab.end ?? false}
               role="tab"
-              className={({ isActive }) =>
-                `relative whitespace-nowrap border-b-2 px-4 py-3.5 text-sm font-medium transition-all sm:px-5 sm:py-4 ${
-                  isActive
-                    ? "border-orange-500 bg-orange-50/50 text-orange-600"
-                    : "border-transparent text-slate-500 hover:bg-slate-50 hover:text-slate-800"
-                }`
-              }
+              className={({ isActive }) => tabsNavItemClassName(isActive)}
             >
               {tab.label}
             </NavLink>
