@@ -1712,11 +1712,11 @@ export function createBinsForRack(
         normalizedBinTypeMap[`${lev}-${seg}`] ??
         normalizedBinTypeMap[`${structuralLev}-${seg}`] ??
         "primary";
-      // Address Level token = storage sequence 1..N (not construction level).
+      // Address Level token = construction level (same as template preview).
       const generatedLabel = generateLocationLabel({
-        levelIndex: lev,
+        levelIndex: structuralLev,
         segmentIndex: seg,
-        levelRows,
+        levelRows: structuralRows,
         labelOptions,
         addressPattern: useAddressPattern ? addrPattern : undefined,
         rowId: useAddressPattern ? row : undefined,
@@ -1726,7 +1726,7 @@ export function createBinsForRack(
         rackIndex,
         aisleLetter,
       });
-      const visibleCode = buildVisibleLocationCode(`${aisleLetter}${rackIndex}`, lev, seg);
+      const visibleCode = buildVisibleLocationCode(`${aisleLetter}${rackIndex}`, structuralLev, seg);
       const displayLabel = (generatedLabel || visibleCode).trim() || visibleCode;
       const locId = displayLabel;
       const locationUUID = typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : `loc-${Date.now()}-${lev}-${seg}-${Math.random().toString(36).slice(2, 9)}`;

@@ -217,7 +217,7 @@ export type BinRebuildPlan = {
 
 /**
  * Merge next generator bins with existing identity (UUID/id/load).
- * Next bins use construction level_index; addresses use storage sequence 1..N.
+ * Next bins use construction level_index; addresses use construction level numbers (same as template).
  */
 export function planBinRebuild(
   existingBins: BinState[],

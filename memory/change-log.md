@@ -1,3 +1,11 @@
+## 2026-07-25 — Internal Layout sync with template + passage (no push)
+
+- `getInitialLevels`: storageCount = structural − void; ignore stale full/mismatched `internal_structure`
+- Labels: construction level (createBins + modal save); no storage renumber in UI
+- `applyInternalLayoutSave`: merge storage into full construction `levelConfig` when void > 0
+- `structureDiffersFromTemplate`: compare storage levels vs template after void
+- Tests: passageStorage (+ business) PASS. **No push.**
+
 ## 2026-07-25 — Template editor: front passage + width axis (no push)
 
 - TemplatePassageOverlay: widok od przodu (nie z góry); along = `width_cm`

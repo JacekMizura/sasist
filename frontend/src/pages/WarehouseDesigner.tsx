@@ -7,6 +7,10 @@ import type { RackState, BinState, InternalStructure, LayoutState, RackTemplate,
 import { GRID_UNIT_CM, normalizePassageSource } from "../types/warehouse";
 import {
   type StructureRemovalImpact,
+  countPassageVoidLevelsForRack,
+  storageLevelConfigAfterVoid,
+  getPassageVoidHeightCm,
+  countPassageVoidLevels,
 } from "../components/warehouse/passageStorage";
 import {
   analyzeLayoutStructureRebuild,
@@ -252,14 +256,31 @@ function levelConfigFromInternalStructure(internalStructure: InternalStructure):
   }));
 }
 
-function structureDiffersFromTemplate(template: CustomRackTemplate, internalStructure: InternalStructure): boolean {
+/** Compare storage levels only when template/rack has under-rack passage void. */
+function structureDiffersFromTemplate(
+  template: CustomRackTemplate,
+  internalStructure: InternalStructure,
+  rack?: Pick<RackState, "height_cm" | "levels" | "levelConfig" | "layoutVariant" | "passages"> | null
+): boolean {
   const variantCfg = levelConfigFromInternalStructure(internalStructure);
-  const baseCfg = Array.isArray(template.levelConfig) && template.levelConfig.length > 0
-    ? template.levelConfig
-    : Array.from({ length: Math.max(1, template.levels) }, (_, i) => ({ level: i + 1, locations: Math.max(1, template.bins_per_level) }));
-  if (variantCfg.length !== baseCfg.length) return true;
+  const baseCfg =
+    Array.isArray(template.levelConfig) && template.levelConfig.length > 0
+      ? template.levelConfig
+      : Array.from({ length: Math.max(1, template.levels) }, (_, i) => ({
+          level: i + 1,
+          locations: Math.max(1, template.bins_per_level),
+        }));
+  const voidN = rack
+    ? countPassageVoidLevelsForRack(rack)
+    : countPassageVoidLevels(
+        Number(template.height_cm ?? 0),
+        baseCfg.length,
+        getPassageVoidHeightCm(template.default_passages)
+      );
+  const expectedStorage = voidN > 0 ? storageLevelConfigAfterVoid(baseCfg, voidN) : baseCfg;
+  if (variantCfg.length !== expectedStorage.length) return true;
   for (let i = 0; i < variantCfg.length; i++) {
-    if ((variantCfg[i]?.locations ?? 1) !== (baseCfg[i]?.locations ?? 1)) return true;
+    if ((variantCfg[i]?.locations ?? 1) !== (expectedStorage[i]?.locations ?? 1)) return true;
   }
   return false;
 }
@@ -3540,12 +3561,29 @@ export default function WarehouseDesigner() {
           ...prev,
           racks: prev.racks.map((r) => {
             if ((r.id ?? r.rack_index) !== rackId) return r;
-            const levelConfig = levelConfigFromInternalStructure(internal_structure);
+            const storageLc = levelConfigFromInternalStructure(internal_structure);
+            const prevLc = getLevelConfig(r);
+            const voidN = countPassageVoidLevelsForRack(r);
+            // Keep full construction levelConfig when passage voids bottom levels;
+            // internal_structure from the modal is storage-only.
+            const levelConfig =
+              voidN > 0 && prevLc.length > storageLc.length
+                ? [
+                    ...prevLc.slice(0, voidN).map((row, i) => ({
+                      level: i + 1,
+                      locations: Math.max(1, row.locations ?? 1),
+                    })),
+                    ...storageLc.map((row, i) => ({
+                      level: voidN + i + 1,
+                      locations: Math.max(1, row.locations ?? 1),
+                    })),
+                  ]
+                : storageLc;
             return {
               ...r,
               templateId: variant?.id ?? r.templateId,
               levels: Math.max(1, levelConfig.length),
-              bins_per_level: levelConfig[0]?.locations ?? r.bins_per_level,
+              bins_per_level: levelConfig[voidN]?.locations ?? levelConfig[0]?.locations ?? r.bins_per_level,
               levelConfig,
               internal_structure,
               layoutVariant: { levels: levelConfig, internal_structure },
@@ -3567,7 +3605,7 @@ export default function WarehouseDesigner() {
       if (rackId == null) return;
       const currentRack = layout.racks.find((r) => (r.id ?? r.rack_index) === rackId) ?? null;
       const baseTemplate = currentRack?.templateId ? customTemplates.find((t) => t.id === currentRack.templateId) ?? null : null;
-      if (baseTemplate && structureDiffersFromTemplate(baseTemplate, internal_structure)) {
+      if (baseTemplate && structureDiffersFromTemplate(baseTemplate, internal_structure, currentRack)) {
         setPendingVariantSave({ rackId, baseTemplate, internalStructure: internal_structure, bins });
         setVariantNameInput(`${baseTemplate.name} [Wariant]`);
         return;

@@ -36,6 +36,10 @@ const DEFAULT_BIN_WIDTH_CM = 100;
 const DEFAULT_BIN_DEPTH_CM = 120;
 const DEFAULT_BIN_HEIGHT_CM = 150;
 
+/**
+ * Storage levels only (void is a separate band).
+ * Must match template: structuralCount − voidOffset rows, heights from construction split.
+ */
 function getInitialLevels(rack: RackState): InternalLevel[] {
   const defaultDepthCm = rack.length_cm ?? DEFAULT_BIN_DEPTH_CM;
   const fallbackBinWidth = (() => {
@@ -43,37 +47,68 @@ function getInitialLevels(rack: RackState): InternalLevel[] {
     return withWidth?.width_cm;
   })();
   const defaultWidthCm = fallbackBinWidth;
+  const structuralRows = getLevelConfig(rack);
+  const structuralCount = Math.max(1, structuralRows.length || Number(rack.levels) || 1);
   const voidOffset = countPassageVoidLevelsForRack(rack);
-  if (rack.internal_structure?.levels?.length) {
-    const defaultHeightCm = rack.height_cm ? Math.floor(rack.height_cm / rack.levels) : DEFAULT_BIN_HEIGHT_CM;
-    return rack.internal_structure.levels.map((l, levelIndex) => ({
-      height_cm: l.height_cm,
-      locations: l.locations.map((loc, segmentIndex) => {
-        const structuralLevelIndex = levelIndex + voidOffset;
-        const bin =
-          rack.bins.find((b) => b.level_index === structuralLevelIndex && b.segment_index === segmentIndex) ??
-          rack.bins.find((b) => b.level_index === levelIndex && b.segment_index === segmentIndex);
-        return {
-        // Prefer rack bin width (template-propagated) during initialization.
-        width_cm: bin?.width_cm ?? defaultWidthCm ?? loc.width_cm ?? DEFAULT_BIN_WIDTH_CM,
-        depth_cm: loc.depth_cm ?? defaultDepthCm,
-        height_cm: loc.height_cm ?? l.height_cm ?? defaultHeightCm,
-      };}),
-    }));
+  const storageCount = Math.max(0, structuralCount - voidOffset);
+  const structuralHeights =
+    rack.height_cm && structuralCount > 0
+      ? levelHeightsForRack(rack.height_cm, structuralCount)
+      : Array.from({ length: structuralCount }, () => DEFAULT_BIN_HEIGHT_CM);
+
+  const mapStructureLevels = (src: InternalLevel[], startStructuralIndex: number): InternalLevel[] =>
+    src.map((l, levelIndex) => {
+      const structuralLevelIndex = startStructuralIndex + levelIndex;
+      const defaultHeightCm =
+        structuralHeights[structuralLevelIndex] ??
+        (rack.height_cm ? Math.floor(rack.height_cm / structuralCount) : DEFAULT_BIN_HEIGHT_CM);
+      return {
+        height_cm: l.height_cm ?? defaultHeightCm,
+        locations: (l.locations ?? []).map((loc, segmentIndex) => {
+          const bin =
+            rack.bins.find((b) => b.level_index === structuralLevelIndex && b.segment_index === segmentIndex) ??
+            rack.bins.find((b) => b.level_index === levelIndex && b.segment_index === segmentIndex);
+          return {
+            width_cm: bin?.width_cm ?? defaultWidthCm ?? loc.width_cm ?? DEFAULT_BIN_WIDTH_CM,
+            depth_cm: loc.depth_cm ?? defaultDepthCm,
+            height_cm: loc.height_cm ?? l.height_cm ?? defaultHeightCm,
+          };
+        }),
+      };
+    });
+
+  const structureLevels = rack.internal_structure?.levels;
+  if (structureLevels?.length) {
+    if (structureLevels.length === storageCount) {
+      return mapStructureLevels(structureLevels, voidOffset);
+    }
+    if (voidOffset > 0 && structureLevels.length === structuralCount) {
+      return mapStructureLevels(structureLevels.slice(voidOffset), voidOffset);
+    }
   }
-  const levelHeights = rack.height_cm && rack.levels > 0
-    ? levelHeightsForRack(rack.height_cm, rack.levels)
-    : Array.from({ length: rack.levels }, () => DEFAULT_BIN_HEIGHT_CM);
-  const locationWidthCm = defaultWidthCm;
-  return Array.from({ length: rack.levels }, (_, i) => {
-    const levelHeightCm = levelHeights[i] ?? DEFAULT_BIN_HEIGHT_CM;
+
+  return Array.from({ length: storageCount }, (_, i) => {
+    const structuralLevelIndex = i + voidOffset;
+    const levelHeightCm = structuralHeights[structuralLevelIndex] ?? DEFAULT_BIN_HEIGHT_CM;
+    const locs = Math.max(
+      1,
+      structuralRows[structuralLevelIndex]?.locations ?? rack.bins_per_level ?? 1
+    );
+    const locationWidthCm =
+      defaultWidthCm ??
+      (typeof rack.width_cm === "number" && rack.width_cm > 0 ? rack.width_cm / locs : DEFAULT_BIN_WIDTH_CM);
     return {
       height_cm: levelHeightCm,
-      locations: Array.from({ length: rack.bins_per_level }, () => ({
-        width_cm: locationWidthCm,
-        depth_cm: defaultDepthCm,
-        height_cm: levelHeightCm,
-      })),
+      locations: Array.from({ length: locs }, (_, segmentIndex) => {
+        const bin = rack.bins.find(
+          (b) => b.level_index === structuralLevelIndex && b.segment_index === segmentIndex
+        );
+        return {
+          width_cm: bin?.width_cm ?? locationWidthCm,
+          depth_cm: bin?.depth_cm ?? defaultDepthCm,
+          height_cm: bin?.height_cm ?? levelHeightCm,
+        };
+      }),
     };
   });
 }
@@ -170,6 +205,7 @@ export function InternalLayoutModal({ layout = null, rack, warehouseLabel, onSav
     const out: Record<string, string> = {};
     (rack.bins ?? []).forEach((b) => {
       const key = binKey(b.level_index, b.segment_index);
+      // Default short code uses construction level (level_index is construction).
       const code = `${getColumnLetter(b.segment_index)}-${b.level_index + 1}`;
       const candidate = String(b.label ?? "").trim();
       if (candidate && candidate !== code) out[key] = candidate;
@@ -258,11 +294,11 @@ export function InternalLayoutModal({ layout = null, rack, warehouseLabel, onSav
     levels.forEach((lev, levelIndex) => {
       const structuralLevelIndex = levelIndex + constructionOffset;
       const constructionLevelNumber = structuralLevelIndex + 1;
-      const storageAddressLevel = levelIndex + 1;
       lev.locations.forEach((loc, segmentIndex) => {
         const key = binKey(structuralLevelIndex, segmentIndex);
         const existing = existingByKey.get(key) ?? existingByKey.get(binKey(levelIndex, segmentIndex));
-        const generatedLabel = `${getColumnLetter(segmentIndex)}-${storageAddressLevel}`;
+        // Construction level in address — same as template / createBinsForRack.
+        const generatedLabel = `${getColumnLetter(segmentIndex)}-${constructionLevelNumber}`;
         const customName = String(customNames[key] ?? customNames[binKey(levelIndex, segmentIndex)] ?? "").trim();
         const width_cm = loc?.width_cm ?? existing?.width_cm ?? DEFAULT_BIN_WIDTH_CM;
         const depth_cm = loc?.depth_cm ?? existing?.depth_cm ?? rack.length_cm ?? DEFAULT_BIN_DEPTH_CM;
@@ -275,10 +311,11 @@ export function InternalLayoutModal({ layout = null, rack, warehouseLabel, onSav
             existing?.storage_type ??
             "primary"
         );
+        const label = customName || existing?.label?.trim() || generatedLabel;
 
         newBins.push({
           id: existing?.id,
-          label: customName || generatedLabel,
+          label,
           level_index: structuralLevelIndex,
           segment_index: segmentIndex,
           volume_dm3,
@@ -287,16 +324,15 @@ export function InternalLayoutModal({ layout = null, rack, warehouseLabel, onSav
           width_cm,
           depth_cm,
           height_cm,
-          location_id: customName || generatedLabel,
+          location_id: label,
           locationUUID:
             existing?.locationUUID ??
             (typeof crypto !== "undefined" && crypto.randomUUID
               ? crypto.randomUUID()
               : `loc-${Date.now()}-${structuralLevelIndex}-${segmentIndex}-${Math.random().toString(36).slice(2, 9)}`),
-          barcode_data: customName || generatedLabel,
+          barcode_data: label,
           storage_type: storageType,
         });
-        void constructionLevelNumber;
       });
     });
 
@@ -387,7 +423,6 @@ export function InternalLayoutModal({ layout = null, rack, warehouseLabel, onSav
               const levIdx = levels.length - 1 - revIdx;
               const structuralLevelIndex = levIdx + voidLevelCount;
               const constructionLevelNumber = structuralLevelIndex + 1;
-              const storageAddressLevel = levIdx + 1;
               const levelTotalWidth = levelWidthSum(lev);
               const levelWidthExceeded = levelTotalWidth > rackWidthLimit + 0.01;
               const count = Math.max(1, lev.locations.length);
@@ -404,9 +439,6 @@ export function InternalLayoutModal({ layout = null, rack, warehouseLabel, onSav
                 >
                   <div className="flex shrink-0 flex-wrap items-center gap-3 border-b border-slate-200 bg-white/80 px-3 py-2">
                     <span className="text-xs font-bold text-slate-700">Poziom konstrukcyjny {constructionLevelNumber}</span>
-                    <span className="text-[10px] text-slate-500">
-                      Adres magazynowy: poziom {storageAddressLevel}
-                    </span>
                     <label className={`flex items-center gap-1 text-[10px] ${heightExceeded ? "text-red-700 font-semibold" : "text-slate-500"}`}>
                       Wys. poziomu (cm):{" "}
                       <input
@@ -454,7 +486,7 @@ export function InternalLayoutModal({ layout = null, rack, warehouseLabel, onSav
                         layout && binState
                           ? resolveWarehouseLocation(rackFromLayout, binState, layout)
                           : {
-                              label: `${getColumnLetter(binIndex)}-${storageAddressLevel}`,
+                              label: `${getColumnLetter(binIndex)}-${constructionLevelNumber}`,
                               storageType: normalizeStorageType(getBinStorageType(levIdx, binIndex)),
                             };
                       const displayLocationLabel = resolved.label;

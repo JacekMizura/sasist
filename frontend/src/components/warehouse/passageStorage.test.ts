@@ -11,15 +11,21 @@ import { createBinsForRack } from "./warehouseUtils";
 import type { BinState } from "../../types/warehouse";
 
 describe("passageStorage void → levels (variant A)", () => {
-  it("takes clearance from the single structural (first enabled) passage", () => {
-    expect(
+  it("rejects multiple enabled passages for void height", () => {
+    expect(() =>
       getPassageVoidHeightCm([
         { enabled: true, clearance_height_cm: 40 },
         { enabled: true, clearance_height_cm: 80 },
         { enabled: false, clearance_height_cm: 200 },
       ])
-    ).toBe(40);
+    ).toThrow("Regał może posiadać tylko jeden przejazd pod regałem.");
     expect(getPassageVoidHeightCm([{ enabled: true, clearance_height_cm: null }])).toBe(0);
+    expect(
+      getPassageVoidHeightCm([
+        { enabled: false, clearance_height_cm: 200 },
+        { enabled: true, clearance_height_cm: 40 },
+      ])
+    ).toBe(40);
   });
 
   it("skips bottom levels intersecting void height", () => {
@@ -43,7 +49,7 @@ describe("passageStorage void → levels (variant A)", () => {
 });
 
 describe("createBinsForRack with passages", () => {
-  it("does not create locations in void; numbers storage from 1", () => {
+  it("does not create locations in void; addresses use construction levels", () => {
     const bins = createBinsForRack(
       "A",
       1,
@@ -72,8 +78,8 @@ describe("createBinsForRack with passages", () => {
     );
     expect(bins).toHaveLength(3);
     expect(bins.map((b) => b.level_index)).toEqual([2, 3, 4]);
-    // address pattern Level is 1-based storage index
-    expect(bins.map((b) => b.label)).toEqual(["A11-A-1", "A11-A-2", "A11-A-3"]);
+    // address pattern Level is 1-based construction index
+    expect(bins.map((b) => b.label)).toEqual(["A11-A-3", "A11-A-4", "A11-A-5"]);
   });
 
   it("without clearance keeps full structural grid", () => {

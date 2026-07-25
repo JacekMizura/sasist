@@ -59,22 +59,22 @@ describe("passage storage — business scenarios", () => {
     expect(bins.map((b) => b.label.replace(/^.*-/, ""))).toEqual(["1", "2", "3", "4", "5"]);
   });
 
-  it("5 poziomów + 80 cm → 3 lokalizacje, numeracja od …-1", () => {
+  it("5 poziomów + 80 cm → 3 lokalizacje, numeracja konstrukcyjna 3..5", () => {
     // równy podział 40 cm; void 80 → 2 poziomy void
     expect(countPassageVoidLevels(H, L, 80)).toBe(2);
     const bins = gen(80);
     expect(bins).toHaveLength(3);
-    expect(bins.map((b) => b.label.replace(/^.*-/, ""))).toEqual(["1", "2", "3"]);
+    expect(bins.map((b) => b.label.replace(/^.*-/, ""))).toEqual(["3", "4", "5"]);
     // construction level_index (void = 2 → first storage at 2)
     expect(bins.map((b) => b.level_index)).toEqual([2, 3, 4]);
     expect(bins[0]!.level_index).toBe(2);
   });
 
-  it("5 poziomów + 120 cm → 2 lokalizacje, numeracja od …-1", () => {
+  it("5 poziomów + 120 cm → 2 lokalizacje, numeracja konstrukcyjna 4..5", () => {
     expect(countPassageVoidLevels(H, L, 120)).toBe(3);
     const bins = gen(120);
     expect(bins).toHaveLength(2);
-    expect(bins.map((b) => b.label.replace(/^.*-/, ""))).toEqual(["1", "2"]);
+    expect(bins.map((b) => b.label.replace(/^.*-/, ""))).toEqual(["4", "5"]);
     expect(bins.map((b) => b.level_index)).toEqual([3, 4]);
   });
 
@@ -102,7 +102,7 @@ describe("passage storage — business scenarios", () => {
     const visible = activeBinsForRack({ bins: afterSave });
     expect(visible).toHaveLength(3);
     expect(visible.every(isBinActive)).toBe(true);
-    expect(visible.map((b) => b.label.replace(/^.*-/, ""))).toEqual(["1", "2", "3"]);
+    expect(visible.map((b) => b.label.replace(/^.*-/, ""))).toEqual(["3", "4", "5"]);
     // usunięte locationUUID nie są w puli aktywnej (etykiety mogą się pokrywać po renumeracji)
     const removedUuids = new Set(plan.removed.map((b) => b.locationUUID).filter(Boolean));
     expect(visible.some((b) => b.locationUUID && removedUuids.has(b.locationUUID))).toBe(false);
