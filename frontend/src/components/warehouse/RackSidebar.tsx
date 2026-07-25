@@ -916,8 +916,8 @@ export function RackSidebar({
       )}
 
       {showTemplateCreator && !showOnlyCatalog && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 overflow-hidden" onClick={() => { setShowTemplateModal(false); setEditingTemplateId(null); }}>
-          <div className="bg-white rounded-2xl shadow-2xl overflow-hidden flex flex-col border border-slate-100 w-[95vw] h-[92vh] max-h-[92vh]" onClick={(e) => e.stopPropagation()}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-2 sm:p-4 overflow-hidden" onClick={() => { setShowTemplateModal(false); setEditingTemplateId(null); }}>
+          <div className="bg-white rounded-2xl shadow-2xl overflow-hidden flex flex-col border border-slate-100 w-[min(95vw,1400px)] h-[min(96dvh,920px)] max-h-[96dvh]" onClick={(e) => e.stopPropagation()}>
             <TemplateCreator
               layout={layout}
               onSave={async (t) => {

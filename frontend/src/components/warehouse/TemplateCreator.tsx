@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, useRef, type ReactNode } from "react";
 import { log } from "../../utils/logger";
 import type { CustomRackTemplate, LevelConfigItem, LayoutState, StorageType, RackType, TemplatePassageDefault } from "../../types/warehouse";
 import { snapCm, generateLocationLabel, levelHeightsForRack, type RackTemplateLabelOptions } from "./warehouseUtils";
+import { TemplatePassageOverlay } from "./TemplatePassageOverlay";
 import { getStorageTypeStyle, normalizeBinTypeMap, normalizeStorageType, TEMPLATE_STORAGE_TYPE_OPTIONS } from "../../utils/storageTypes";
 import { StorageTypeIcon } from "../../utils/storageTypeIcons";
 
@@ -384,9 +385,11 @@ export function TemplateCreator({ onSave, initialTemplate, onCancelEdit, onSaveE
     poziomy: true,
     nazewnictwo: true,
     kolory: true,
+    przejazdy: true,
     zaawansowane: false,
   });
   const [previewFocusedBin, setPreviewFocusedBin] = useState<{ level: number; bin: number } | null>(null);
+  const [selectedPassageIndex, setSelectedPassageIndex] = useState<number | null>(null);
 
   const toggleAccordion = (key: keyof typeof accordionOpen) => {
     setAccordionOpen((prev) => ({ ...prev, [key]: !prev[key] }));
@@ -976,89 +979,115 @@ export function TemplateCreator({ onSave, initialTemplate, onCancelEdit, onSaveE
         </div>
       </DesignerAccordion>
 
-      <DesignerAccordion title="ZAAWANSOWANE" open={accordionOpen.zaawansowane} onToggle={() => toggleAccordion("zaawansowane")}>
+      <DesignerAccordion title="PRZEJAZDY" open={accordionOpen.przejazdy} onToggle={() => toggleAccordion("przejazdy")}>
         <div className="space-y-3">
-          <div>
-            <p className="text-slate-600 text-sm font-medium mb-2">Domyślne przejazdy (szablon)</p>
-            <p className="text-slate-500 text-xs mb-2 leading-snug">
-              Konfiguracja szablonu — materializowane na regałach przy umieszczaniu. Edycja wizualna w kolejnym kroku.
-            </p>
-            {defaultPassages.map((p, idx) => (
-              <div key={idx} className="flex flex-wrap items-end gap-2 mb-2 rounded-lg border border-slate-200/70 bg-white px-2 py-2">
-                <label className="text-xs text-slate-500">
-                  Offset (cm)
-                  <input
-                    type="number"
-                    min={0}
-                    value={p.offset_along_cm}
-                    onChange={(e) => {
-                      const v = Math.max(0, Number(e.target.value) || 0);
-                      setDefaultPassages((prev) => prev.map((x, i) => (i === idx ? { ...x, offset_along_cm: v } : x)));
-                    }}
-                    className="mt-0.5 block w-24 rounded border border-slate-200 px-2 py-1 text-sm"
-                  />
-                </label>
-                <label className="text-xs text-slate-500">
-                  Szerokość (cm)
-                  <input
-                    type="number"
-                    min={1}
-                    value={p.width_cm}
-                    onChange={(e) => {
-                      const v = Math.max(1, Number(e.target.value) || 100);
-                      setDefaultPassages((prev) => prev.map((x, i) => (i === idx ? { ...x, width_cm: v } : x)));
-                    }}
-                    className="mt-0.5 block w-24 rounded border border-slate-200 px-2 py-1 text-sm"
-                  />
-                </label>
-                <button
-                  type="button"
-                  className="text-xs text-red-600 hover:underline pb-1"
-                  onClick={() => setDefaultPassages((prev) => prev.filter((_, i) => i !== idx))}
-                >
-                  Usuń
-                </button>
-              </div>
-            ))}
-            <button
-              type="button"
-              className="text-sm text-cyan-700 hover:underline"
-              onClick={() => {
-                const along = Math.max(1, snapCm(width_cm));
-                const width = Math.min(100, Math.max(40, along * 0.25));
-                const offset = Math.max(0, (along - width) / 2);
-                setDefaultPassages((prev) => [
+          <p className="text-slate-500 text-xs leading-snug">
+            Domyślne otwory szablonu. Edytuj listę tutaj lub przeciągaj na widoku z góry (po prawej).
+            Przy umieszczaniu regału powstają przejazdy INHERITED.
+          </p>
+          {defaultPassages.map((p, idx) => (
+            <div
+              key={idx}
+              className={`flex flex-wrap items-end gap-2 rounded-lg border bg-white px-2 py-2 cursor-pointer ${
+                selectedPassageIndex === idx ? "border-cyan-500 ring-1 ring-cyan-500/30" : "border-slate-200/70"
+              }`}
+              onClick={() => setSelectedPassageIndex(idx)}
+            >
+              <label className="text-xs text-slate-500">
+                Offset (cm)
+                <input
+                  type="number"
+                  min={0}
+                  value={p.offset_along_cm}
+                  onChange={(e) => {
+                    const v = Math.max(0, Number(e.target.value) || 0);
+                    setDefaultPassages((prev) => prev.map((x, i) => (i === idx ? { ...x, offset_along_cm: v } : x)));
+                  }}
+                  className="mt-0.5 block w-24 rounded border border-slate-200 px-2 py-1 text-sm"
+                />
+              </label>
+              <label className="text-xs text-slate-500">
+                Szerokość (cm)
+                <input
+                  type="number"
+                  min={1}
+                  value={p.width_cm}
+                  onChange={(e) => {
+                    const v = Math.max(1, Number(e.target.value) || 100);
+                    setDefaultPassages((prev) => prev.map((x, i) => (i === idx ? { ...x, width_cm: v } : x)));
+                  }}
+                  className="mt-0.5 block w-24 rounded border border-slate-200 px-2 py-1 text-sm"
+                />
+              </label>
+              <label className="flex items-center gap-1 text-xs text-slate-500 pb-1">
+                <input
+                  type="checkbox"
+                  checked={p.enabled !== false}
+                  onChange={(e) => {
+                    const checked = e.target.checked;
+                    setDefaultPassages((prev) => prev.map((x, i) => (i === idx ? { ...x, enabled: checked } : x)));
+                  }}
+                />
+                Włączony
+              </label>
+              <button
+                type="button"
+                className="text-xs text-red-600 hover:underline pb-1"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setDefaultPassages((prev) => prev.filter((_, i) => i !== idx));
+                  setSelectedPassageIndex((cur) => (cur === idx ? null : cur != null && cur > idx ? cur - 1 : cur));
+                }}
+              >
+                Usuń
+              </button>
+            </div>
+          ))}
+          <button
+            type="button"
+            className="text-sm text-cyan-700 hover:underline"
+            onClick={() => {
+              const along = Math.max(1, snapCm(depth_cm));
+              const width = Math.min(100, Math.max(40, along * 0.25));
+              const offset = Math.max(0, (along - width) / 2);
+              setDefaultPassages((prev) => {
+                const next = [
                   ...prev,
                   { offset_along_cm: offset, width_cm: width, clearance_height_cm: null, enabled: true },
-                ]);
-              }}
-            >
-              + Dodaj przejazd
-            </button>
-          </div>
-          {isEdit ? (
-            <p className="text-slate-500 text-sm leading-snug">
-              Po zapisie, jeśli na planie są regały z tym szablonem, pojawi się pytanie o aktualizację instancji
-              (tylko przejazdy <span className="font-medium">INHERITED</span>; lokalne pozostaną bez zmian).
-            </p>
-          ) : (
-            <p className="text-slate-500 text-sm">Brak dodatkowych opcji dla nowego szablonu.</p>
-          )}
+                ];
+                setSelectedPassageIndex(next.length - 1);
+                return next;
+              });
+            }}
+          >
+            + Dodaj przejazd
+          </button>
         </div>
+      </DesignerAccordion>
+
+      <DesignerAccordion title="ZAAWANSOWANE" open={accordionOpen.zaawansowane} onToggle={() => toggleAccordion("zaawansowane")}>
+        {isEdit ? (
+          <p className="text-slate-500 text-sm leading-snug">
+            Po zapisie, jeśli na planie są regały z tym szablonem, pojawi się pytanie o aktualizację instancji
+            (tylko przejazdy <span className="font-medium">INHERITED</span>; lokalne pozostaną bez zmian).
+          </p>
+        ) : (
+          <p className="text-slate-500 text-sm">Brak dodatkowych opcji dla nowego szablonu.</p>
+        )}
       </DesignerAccordion>
     </div>
   );
 
   return (
-    <div className="relative flex flex-col h-full min-h-0 bg-white rounded-2xl overflow-hidden w-full border border-slate-200/40 shadow-sm">
+    <div className="relative flex flex-col h-full min-h-0 max-h-[100dvh] bg-white rounded-2xl overflow-hidden w-full border border-slate-200/40 shadow-sm">
       <h3 className="text-sm font-bold uppercase tracking-wide text-slate-600 px-5 py-3.5 border-b border-slate-200/50 shrink-0 bg-slate-50/40">
         {isEdit ? "Edytuj szablon" : "Twórca szablonu"}
       </h3>
-      <div className="flex flex-1 min-h-0 gap-0 overflow-hidden">
-        <div className="template-modal-sidebar w-[40%] min-w-[300px] shrink-0 overflow-y-auto border-r border-slate-200/45 px-4 py-4 bg-slate-50/25">
+      <div className="flex flex-1 min-h-0 gap-0 overflow-hidden flex-col lg:flex-row">
+        <div className="template-modal-sidebar w-full lg:w-[40%] lg:min-w-[300px] max-h-[42vh] lg:max-h-none shrink-0 overflow-y-auto border-b lg:border-b-0 lg:border-r border-slate-200/45 px-4 py-4 bg-slate-50/25">
           {formSection}
         </div>
-        <div className="flex-1 min-w-0 flex flex-col gap-3 px-4 py-4 bg-white overflow-hidden min-h-0">
+        <div className="flex-1 min-w-0 min-h-0 flex flex-col gap-3 px-4 py-4 bg-white overflow-hidden">
           <div className="shrink-0 rounded-xl border border-slate-200/55 bg-slate-50/40 px-3 py-2.5 text-sm text-slate-700 shadow-sm shadow-slate-900/[0.02]">
             <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
               <span className="font-semibold text-slate-800 tabular-nums">{summaryStats.totalBins} lokalizacji</span>
@@ -1076,32 +1105,43 @@ export function TemplateCreator({ onSave, initialTemplate, onCancelEdit, onSaveE
               </span>
             </div>
           </div>
-          <RackPreview
-            width_cm={width_cm}
-            depth_cm={depth_cm}
-            height_cm={height_cm}
-            levels={levels}
-            bins_per_level={locationsPerLevel[0] ?? 4}
-            levelConfig={levelConfigForSave}
-            addressPattern={namingPattern.trim() || DEFAULT_ADDRESS_PATTERN}
-            rowId={rowId.trim() || "A"}
-            sectionStartIndex={sectionStartIndex}
-            binNamingType={binNamingType}
-            binTypeMap={binTypeMap}
-            color={color}
-            labelOptions={labelOptionsForPreview}
-            focusedBin={previewFocusedBin}
-            onLabelEdit={(namingStrategy === "manual" || allowOverrides) ? handleLabelEdit : undefined}
-            onBinClick={(levelIndex, binIndex) => {
-              setPreviewFocusedBin({ level: levelIndex, bin: binIndex });
-              setBinTypeMap((prev) => {
-                const key = cellKey(levelIndex, binIndex);
-                const current = normalizeStorageType(prev[key]);
-                return { ...prev, [key]: cycleTemplateStorageType(current) };
-              });
-            }}
-            className="flex-1 min-h-0"
-          />
+          <div className="flex-1 min-h-0 grid grid-rows-[minmax(0,1fr)_minmax(140px,0.45fr)] gap-3 overflow-hidden">
+            <RackPreview
+              width_cm={width_cm}
+              depth_cm={depth_cm}
+              height_cm={height_cm}
+              levels={levels}
+              bins_per_level={locationsPerLevel[0] ?? 4}
+              levelConfig={levelConfigForSave}
+              addressPattern={namingPattern.trim() || DEFAULT_ADDRESS_PATTERN}
+              rowId={rowId.trim() || "A"}
+              sectionStartIndex={sectionStartIndex}
+              binNamingType={binNamingType}
+              binTypeMap={binTypeMap}
+              color={color}
+              labelOptions={labelOptionsForPreview}
+              focusedBin={previewFocusedBin}
+              onLabelEdit={(namingStrategy === "manual" || allowOverrides) ? handleLabelEdit : undefined}
+              onBinClick={(levelIndex, binIndex) => {
+                setPreviewFocusedBin({ level: levelIndex, bin: binIndex });
+                setBinTypeMap((prev) => {
+                  const key = cellKey(levelIndex, binIndex);
+                  const current = normalizeStorageType(prev[key]);
+                  return { ...prev, [key]: cycleTemplateStorageType(current) };
+                });
+              }}
+              className="min-h-0 h-full"
+            />
+            <TemplatePassageOverlay
+              width_cm={width_cm}
+              depth_cm={depth_cm}
+              passages={defaultPassages}
+              selectedIndex={selectedPassageIndex}
+              onSelectIndex={setSelectedPassageIndex}
+              onChangePassages={setDefaultPassages}
+              className="min-h-0 h-full"
+            />
+          </div>
         </div>
       </div>
       {/* Sticky footer: always visible Save button */}
