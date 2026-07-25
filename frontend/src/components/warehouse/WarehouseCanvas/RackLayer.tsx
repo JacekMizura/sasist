@@ -4,9 +4,6 @@ import { cellToPx } from "../renderUtils";
 import { isRackPickHorizontal } from "../rackAccessPoint";
 import {
   activeBinsForRack,
-  formatVolume,
-  binVolumeDm3,
-  binUsedVolumeDm3,
   getRackDisplayId,
   getRackLabelStyle,
   canShowRackLabel,
@@ -25,12 +22,8 @@ import type { SelectedPassage } from "../../../pages/WarehouseDesigner/interacti
 
 const RACK_RADIUS_PX = parseFloat(radius.small) || 6;
 const DEFAULT_RACK_FILL = "#3b82f6";
-
-function occupancyBarColor(pct: number): string {
-  if (pct >= 80) return "#ef4444";
-  if (pct >= 50) return "#f97316";
-  return "#22c55e";
-}
+/** Occupancy fill bar height (px) — inside rack, readable at a glance. */
+const OCCUPANCY_BAR_H = 5;
 
 /** Below this canvas zoom, hide rack text/badges (optional clutter reduction). */
 const LABEL_ZOOM_MIN_VISIBLE = 0.4;
@@ -356,39 +349,38 @@ export function RackLayer({
         const displayColor = neutralRackStyle ? "#e2e8f0" : rackFillColor(r);
         const showLabel = showLabels && (r.show_label !== false);
         const label = getRackDisplayId(r, layout ?? undefined);
-        const occ = rackOccupancyStats?.get(ridStr);
-        const used = occ?.volumeUsedDm3 ?? r.used_dm3 ?? activeBinsForRack(r).reduce((s, b) => s + binUsedVolumeDm3(b), 0);
-        const total = occ?.volumeCapacityDm3 ?? r.total_capacity_dm3 ?? activeBinsForRack(r).reduce((s, b) => s + binVolumeDm3(b, r), 0);
-        const occupancyPct = occ?.occupancyPct ?? (total > 0 ? Math.min(100, (used / total) * 100) : 0);
-        const barPct = Math.max(0, Math.min(100, occupancyPct));
-        const barColor = occupancyBarColor(barPct);
-        const tooltipLines = occ
-          ? [
-              label,
-              `Lokalizacje: ${occ.locationCount}`,
-              `Produkty: ${occ.productCount}`,
-              `Zajętość: ${Math.round(occ.occupancyPct)}%`,
-              `Objętość: ${Math.round(occ.volumePct)}%`,
-              occ.weightPct != null ? `Waga: ${Math.round(occ.weightPct)}%` : null,
-            ].filter(Boolean)
-          : [`${label} · Zajętość: ${formatVolume(used)} / ${formatVolume(total)} dm³ (${occupancyPct.toFixed(0)}%)`];
-        const tooltip = tooltipLines.join(" · ");
+        const occ = rackOccupancyStats?.get(ridStr) ?? null;
+        const barPct = occ != null ? Math.max(0, Math.min(100, occ.occupancyPct)) : 0;
+        const barColor = occ?.barColor ?? "#22c55e";
+        const occupancyRounded = occ != null ? Math.round(occ.occupancyPct) : 0;
+        const ariaLabel = occ
+          ? `${label}: zajętość ${occupancyRounded}%, zajęte ${occ.occupiedLocations}, wolne ${occ.freeLocations}, łącznie ${occ.locationCount}`
+          : label;
         const hoverDetail =
           occ != null
             ? {
                 name: label,
-                locations: occ.locationCount,
-                products: occ.productCount,
-                occupancy: Math.round(occ.occupancyPct),
-                volume: Math.round(occ.volumePct),
-                weight: occ.weightPct != null ? Math.round(occ.weightPct) : null,
-                capacity: occ.locationCount,
+                occupancy: occupancyRounded,
                 occupied: occ.occupiedLocations,
                 free: occ.freeLocations,
+                total: occ.locationCount,
+                volumePct: occ.volumePct != null ? Math.round(occ.volumePct) : null,
               }
             : null;
         const layoutRect = clampRackRectLayout(drawAt, r, cellPx);
         const { rectX, rectY, rectW, rectH, cx, cy } = layoutRect;
+        /** Bar fully inside rack body (accounts for stroke). */
+        const barInset = Math.max(1.5, (neutralRackStyle ? 1 : 1.5));
+        const barTrackX = rectX + barInset;
+        const barTrackW = Math.max(0, rectW - barInset * 2);
+        const barY = rectY + rectH - barInset - OCCUPANCY_BAR_H;
+        const barFillW = barTrackW * (barPct / 100);
+        const showOccupancyBar =
+          !neutralRackStyle &&
+          occ != null &&
+          visualLod !== "line" &&
+          rectW >= 12 &&
+          rectH >= OCCUPANCY_BAR_H + barInset * 2 + 4;
         const showLabelHere =
           labelsReadable &&
           visualLod === "full" &&
@@ -552,7 +544,7 @@ export function RackLayer({
                   height={rectH}
                   fill="transparent"
                   pointerEvents="auto"
-                  {...(tooltip ? { "aria-label": tooltip } : {})}
+                  {...(ariaLabel ? { "aria-label": ariaLabel } : {})}
                 />
                 <line
                   x1={rectW >= rectH ? rectX : rectX + rectW / 2}
@@ -586,61 +578,62 @@ export function RackLayer({
                       : `url(#${filterSurface})`
                 }
                 style={{ transition: "fill 150ms ease, stroke 150ms ease, stroke-width 150ms ease, filter 150ms ease" }}
-                {...(tooltip ? { "aria-label": tooltip } : {})}
+                {...(ariaLabel ? { "aria-label": ariaLabel } : {})}
               />
             )}
-            {!neutralRackStyle && visualLod !== "line" && rectW >= 10 && rectH >= 8 && (
+            {showOccupancyBar && (
               <g pointerEvents="none" aria-hidden>
                 <rect
-                  x={rectX + 2}
-                  y={rectY + rectH - 5}
-                  width={Math.max(0, rectW - 4)}
-                  height={3}
-                  rx={1.5}
-                  fill="rgba(15,23,42,0.18)"
+                  x={barTrackX}
+                  y={barY}
+                  width={barTrackW}
+                  height={OCCUPANCY_BAR_H}
+                  rx={OCCUPANCY_BAR_H / 2}
+                  fill="rgba(15,23,42,0.22)"
                 />
-                <rect
-                  x={rectX + 2}
-                  y={rectY + rectH - 5}
-                  width={Math.max(0, (rectW - 4) * (barPct / 100))}
-                  height={3}
-                  rx={1.5}
-                  fill={barColor}
-                />
+                {barFillW > 0.5 ? (
+                  <rect
+                    x={barTrackX}
+                    y={barY}
+                    width={barFillW}
+                    height={OCCUPANCY_BAR_H}
+                    rx={OCCUPANCY_BAR_H / 2}
+                    fill={barColor}
+                  />
+                ) : null}
               </g>
             )}
             {!neutralRackStyle && isHovered && hoverDetail != null && visualLod === "full" && (
               <foreignObject
                 x={rectX + rectW + 6}
                 y={Math.max(0, rectY - 4)}
-                width={168}
-                height={118}
+                width={176}
+                height={hoverDetail.volumePct != null ? 108 : 92}
                 pointerEvents="none"
                 style={{ overflow: "visible" }}
               >
                 <div
                   xmlns="http://www.w3.org/1999/xhtml"
                   style={{
-                    background: "rgba(15,23,42,0.92)",
+                    background: "rgba(15,23,42,0.94)",
                     color: "#f8fafc",
                     borderRadius: 8,
                     padding: "8px 10px",
                     fontFamily: "ui-sans-serif, system-ui, sans-serif",
                     fontSize: 11,
-                    lineHeight: 1.35,
+                    lineHeight: 1.4,
                     boxShadow: "0 8px 20px rgba(15,23,42,0.28)",
                     whiteSpace: "nowrap",
                   }}
                 >
                   <div style={{ fontWeight: 600, marginBottom: 4 }}>{hoverDetail.name}</div>
-                  <div>Lokalizacje: {hoverDetail.locations}</div>
-                  <div>Produkty: {hoverDetail.products}</div>
                   <div>Zajętość: {hoverDetail.occupancy}%</div>
-                  <div>Objętość: {hoverDetail.volume}%</div>
-                  {hoverDetail.weight != null ? <div>Waga: {hoverDetail.weight}%</div> : null}
-                  <div style={{ marginTop: 4, opacity: 0.85, fontSize: 10 }}>
-                    Pojemność {hoverDetail.capacity} · zajęte {hoverDetail.occupied} · wolne {hoverDetail.free}
-                  </div>
+                  <div>Zajęte: {hoverDetail.occupied}</div>
+                  <div>Wolne: {hoverDetail.free}</div>
+                  <div>Razem: {hoverDetail.total}</div>
+                  {hoverDetail.volumePct != null ? (
+                    <div style={{ marginTop: 4, opacity: 0.9 }}>Objętość: {hoverDetail.volumePct}%</div>
+                  ) : null}
                 </div>
               </foreignObject>
             )}

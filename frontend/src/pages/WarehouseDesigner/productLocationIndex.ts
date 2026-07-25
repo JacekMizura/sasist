@@ -215,23 +215,33 @@ export function quantityAtLocationForProduct(
 
 export type RackOccupancyStats = {
   rackId: string;
+  /** All storage locations on the rack (unique UUIDs / slots). */
   locationCount: number;
+  /** Locations with qty > 0 (SSOT index). */
   occupiedLocations: number;
   freeLocations: number;
-  productCount: number;
+  /** occupied / locationCount × 100 (0–100). */
   occupancyPct: number;
+  /** Precomputed fill color for the occupancy bar (threshold bands). */
+  barColor: string;
   volumeUsedDm3: number;
   volumeCapacityDm3: number;
-  volumePct: number;
-  weightUsedKg: number;
-  weightCapacityKg: number | null;
-  weightPct: number | null;
+  /** null when capacity unknown / zero. */
+  volumePct: number | null;
 };
 
+/** Occupancy bar colors: 0–60 green, 60–85 yellow, 85–95 orange, >95 red. */
+export function occupancyBarColor(pct: number): string {
+  if (pct > 95) return "#ef4444";
+  if (pct >= 85) return "#f97316";
+  if (pct >= 60) return "#eab308";
+  return "#22c55e";
+}
+
 /**
- * Per-rack occupancy for map bars/tooltips.
- * Occupancy % = occupied location slots / total slots (locations, not products).
- * Volume/weight from product catalog × qty at locations on the rack.
+ * Per-rack occupancy for map bars/tooltips — computed once (memo upstream).
+ * Occupancy % = occupied location slots / all location slots (never product counts).
+ * Volume is optional metadata for tooltips when capacity is known.
  */
 export function buildRackOccupancyStats(params: {
   layout: LayoutState;
@@ -245,62 +255,46 @@ export function buildRackOccupancyStats(params: {
   for (const rack of layout.racks) {
     const rid = rackKey(rack);
     const bins = activeBinsForRack(rack);
-    const locationCount = bins.length;
+    let locationCount = 0;
     let occupiedLocations = 0;
     let volumeCapacityDm3 = 0;
     const seenLoc = new Set<string>();
 
     for (const bin of bins) {
-      const u = normalizeInventoryLocationUuid(binLocationUuid(bin));
       volumeCapacityDm3 += binVolumeDm3(bin, rack);
-      if (!u) continue;
-      if (seenLoc.has(u)) continue;
-      seenLoc.add(u);
-      const entries = index.byLocation.get(u);
-      if (entries && entries.some((e) => e.quantity > 0)) occupiedLocations += 1;
-    }
-
-    const entries = index.byRack.get(rid) ?? [];
-    const productIds = new Set(entries.map((e) => e.productId));
-    let volumeUsedDm3 = 0;
-    let weightUsedKg = 0;
-    for (const e of entries) {
-      const p = productsById.get(e.productId);
-      if (!p) continue;
-      volumeUsedDm3 += e.quantity * safeVolumeDm3(p.volume_dm3);
-      const w = p.weight_kg ?? p.weight;
-      if (typeof w === "number" && Number.isFinite(w) && w > 0) {
-        weightUsedKg += e.quantity * w;
+      const u = normalizeInventoryLocationUuid(binLocationUuid(bin));
+      if (u) {
+        if (seenLoc.has(u)) continue;
+        seenLoc.add(u);
+        locationCount += 1;
+        const entries = index.byLocation.get(u);
+        if (entries && entries.some((e) => e.quantity > 0)) occupiedLocations += 1;
+      } else {
+        locationCount += 1;
       }
     }
 
-    const levels = Math.max(1, rack.levels ?? bins.reduce((m, b) => Math.max(m, (b.level_index ?? 0) + 1), 1));
-    const maxPerLevel = rack.max_level_load_kg;
-    const weightCapacityKg =
-      typeof maxPerLevel === "number" && Number.isFinite(maxPerLevel) && maxPerLevel > 0
-        ? maxPerLevel * levels
-        : null;
+    let volumeUsedDm3 = 0;
+    for (const e of index.byRack.get(rid) ?? []) {
+      const p = productsById.get(e.productId);
+      if (!p) continue;
+      volumeUsedDm3 += e.quantity * safeVolumeDm3(p.volume_dm3);
+    }
 
     const occupancyPct = locationCount > 0 ? Math.min(100, (occupiedLocations / locationCount) * 100) : 0;
-    const volumePct = volumeCapacityDm3 > 0 ? Math.min(100, (volumeUsedDm3 / volumeCapacityDm3) * 100) : 0;
-    const weightPct =
-      weightCapacityKg != null && weightCapacityKg > 0
-        ? Math.min(100, (weightUsedKg / weightCapacityKg) * 100)
-        : null;
+    const volumePct =
+      volumeCapacityDm3 > 0 ? Math.min(100, (volumeUsedDm3 / volumeCapacityDm3) * 100) : null;
 
     out.set(rid, {
       rackId: rid,
       locationCount,
       occupiedLocations,
       freeLocations: Math.max(0, locationCount - occupiedLocations),
-      productCount: productIds.size,
       occupancyPct,
+      barColor: occupancyBarColor(occupancyPct),
       volumeUsedDm3,
       volumeCapacityDm3,
       volumePct,
-      weightUsedKg,
-      weightCapacityKg,
-      weightPct,
     });
   }
 

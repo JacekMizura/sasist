@@ -2,15 +2,13 @@
 
 ## Active
 
-**ERP page layout alignment** — Projektant Magazynu na `SettingsModuleStack` (ten sam rytm co Użytkownicy/Firma).
+**Rack occupancy bar** — czytelny pasek % w dolnej części regału (lokalizacje, nie produkty).
 
-### SSOT spacing
-- `pageModuleTabsOffsetClass` (`mt-3`) — breadcrumb → tabs
-- `pageModuleContentOffsetClass` (`pt-4`) — tabs → content
-- `SettingsModuleStack` + opcjonalny `tabsSlot` dla controlled tabs
-
-### Audit
-`memory/erp-page-layout-audit.md`
+### Occupancy
+- SSOT: `buildRackOccupancyStats` (memo w WarehouseDesigner)
+- `occupancy = zajęte / wszystkie lokalizacje × 100`
+- Kolory: 0–60 zieleń · 60–85 żółty · 85–95 pomarańcz · >95 czerwień
+- Pasek 5px, pełna szerokość wewnątrz regału; tooltip bez liczenia produktów
 
 ### Constraints
 Bez commit/push (dopóki user nie poprosi).
