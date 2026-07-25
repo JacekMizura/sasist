@@ -22,7 +22,7 @@ import { SelectionOverlay } from "./WarehouseCanvas/SelectionOverlay";
 import { WallElementsLayer } from "./WarehouseCanvas/WallElementsLayer";
 import { PathLayer } from "./WarehouseCanvas/PathLayer";
 import { PassageDrawPreview } from "../../pages/WarehouseDesigner/passages/PassageDrawPreview";
-import { PassageQuickEditor } from "../../pages/WarehouseDesigner/passages/PassageQuickEditor";
+import { PassageInspector } from "../../pages/WarehouseDesigner/PassageInspector";
 import { selectedPassageUuidSet } from "../../pages/WarehouseDesigner/passages/rackPassageGeometry";
 
 const RACK_RADIUS_PX = parseFloat(radius.small) || 6;
@@ -214,6 +214,8 @@ export type WarehouseCanvasProps = {
   selectedPassage?: { rackUuid: string; passageUuid: string } | null;
   setSelectedPassage?: React.Dispatch<React.SetStateAction<{ rackUuid: string; passageUuid: string } | null>>;
   onPassageDragStart?: (rackUuid: string, passageUuid: string, grabOffsetCm: number) => void;
+  /** Open rack template editor (INHERITED passage → TemplateCreator). */
+  onOpenPassageTemplate?: () => void;
   /**
    * Scroll/zoom viewport to layout cm point (e.g. problem location / rack center).
    * Change identity (seq) to re-trigger focus.
@@ -411,6 +413,7 @@ function WarehouseCanvasInner({
   selectedPassage = null,
   setSelectedPassage,
   onPassageDragStart,
+  onOpenPassageTemplate,
   canvasFocusCm = null,
   routesWorkspace = false,
   setRowToolTemplate,
@@ -1011,13 +1014,14 @@ function WarehouseCanvasInner({
               <LayoutModeBadge modeLabel={layoutModeLabel} modeColor={layoutModeColor} layoutMode={layoutMode} />
             )}
             {isEditMode && selectedPassage && setSelectedPassage && !routesWorkspace && (
-              <div className="absolute bottom-4 right-4 z-30 max-w-[14rem]">
-                <PassageQuickEditor
+              <div className="absolute bottom-4 right-4 z-30 max-w-[16rem]">
+                <PassageInspector
                   layout={layout}
                   selectedPassage={selectedPassage}
                   setLayout={setLayout}
                   setSelectedPassage={setSelectedPassage}
                   onClose={() => setSelectedPassage(null)}
+                  onOpenTemplate={onOpenPassageTemplate}
                 />
               </div>
             )}

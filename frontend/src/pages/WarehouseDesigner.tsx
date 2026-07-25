@@ -4140,6 +4140,20 @@ export default function WarehouseDesigner() {
               setSelectedPassage,
               onPassageDragStart: (rackUuid, passageUuid, grabOffsetCm) =>
                 setDraggingPassage({ rackUuid, passageUuid, grabOffsetCm }),
+              onOpenPassageTemplate: () => {
+                if (!selectedPassage) return;
+                const rack = layout.racks.find(
+                  (r) => String(r.uuid || "") === String(selectedPassage.rackUuid)
+                );
+                const tid = rack?.templateId;
+                if (!tid) {
+                  window.alert(
+                    "Ten regał nie ma powiązanego szablonu. Otwórz szablon z katalogu w panelu bocznym."
+                  );
+                  return;
+                }
+                setEditingTemplateId(tid);
+              },
               canvasFocusCm,
               routesWorkspace: routesMode,
               setRowToolTemplate,

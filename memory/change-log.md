@@ -1,3 +1,10 @@
+## 2026-07-25 — PassageInspector wired (pre-push fix, uncommitted)
+
+- `PassageInspector` replaces `PassageQuickEditor` on Layout canvas
+- INHERITED: banner + „Otwórz szablon” → `setEditingTemplateId(rack.templateId)`
+- LOCAL: corridor width/delete/enabled; QuickEditor = thin alias
+- tsc + designer vitest 78 + build OK. No push.
+
 ## 2026-07-25 — C3 gap-fix commit (inspectors + endpoint drag)
 
 - Extract `NodeInspector` / `EdgeInspector`; panel is container only
