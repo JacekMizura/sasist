@@ -2,18 +2,14 @@
 
 ## Active
 
-**Primary Button Design System** — egzekwowanie jednego standardu Primary CTA (wzorzec: Ustawienia → Użytkownicy → „Dodaj użytkownika”).
+**Projektant Magazynu UX polish** — bez przebudowy widoku / bez zmian geometrii / API / WMS.
 
-### SSOT
-- Komponent: `frontend/src/design-system/PrimaryButton.tsx`
-- Token: `brandPrimaryButtonClass` w `frontend/src/design-system/brandUi.ts` (pomarańczowy `h-10 rounded-lg bg-orange-500 …`)
-- Referencja UI: `AdministratorsModuleFrame.tsx`
-- `AppButton variant="primary"` → deleguje do `PrimaryButton`
-
-### Wyjątki (celowo poza DS Primary)
-- `pages/wms/**`, `components/wms/**`, operator touch (`damage/WmsReturnsPage`, WmsProductionExecute*)
-- Login (branding indigo)
-- Destructive red, overlays, badge/tab/chip/segmented, Filtruj amber (`filterToolbarBtnApply`)
+### Fixes
+- Usunięte szare kafelki lokalizacji (side view + viz overlay)
+- Panel Produkty: białe karty/miniatury
+- Nagłówek: bez „Projektant Magazynu”; dropdown magazynu po prawej (bez labela „Magazyn:”)
+- Zajęte/Wolne: liczenie lokalizacji (qty > 0), nie produktów
+- Tryby Zajęte/Wolne: podświetlenie całych lokalizacji (tint), bez szarego dimmingu
 
 ### Constraints
 Bez commit/push (dopóki user nie poprosi).

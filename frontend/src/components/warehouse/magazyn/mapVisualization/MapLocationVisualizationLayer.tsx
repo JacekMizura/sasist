@@ -4,12 +4,25 @@ import { clampRackRectLayout } from "../../../../utils/rackMapVisual";
 import { activeBinsForRack, getLevelConfig } from "../../warehouseUtils";
 import {
   isMapVisualizationActive,
-  locationDimOpacity,
+  locationMatchesMode,
   type MapVisualizationModeId,
 } from "./MapVisualizationMode";
 
 function rackDrawAt(rack: RackState): { x: number; y: number } {
   return { x: rack.x, y: rack.y };
+}
+
+/** Soft tint for focused (matching) locations — whole bin, no gray placeholder tiles. */
+function focusFill(mode: MapVisualizationModeId): string {
+  if (mode === "free") return "rgba(16, 185, 129, 0.38)";
+  if (mode === "occupied") return "rgba(249, 115, 22, 0.36)";
+  return "rgba(249, 115, 22, 0.3)";
+}
+
+function focusStroke(mode: MapVisualizationModeId): string {
+  if (mode === "free") return "rgba(5, 150, 105, 0.75)";
+  if (mode === "occupied") return "rgba(234, 88, 12, 0.8)";
+  return "rgba(234, 88, 12, 0.7)";
 }
 
 /** Same geometry as RackLayer bin highlights — kept local to avoid coupling. */
@@ -46,8 +59,9 @@ export type MapLocationVisualizationLayerProps = {
 };
 
 /**
- * Visualization overlay: dims non-matching locations via SVG opacity.
- * Renders nothing for mode `all` (zero extra DOM). Does not filter racks/products.
+ * Visualization overlay: highlights matching whole locations (soft tint).
+ * Non-matching bins stay as rack chrome — no gray placeholder tiles.
+ * Renders nothing for mode `all`.
  */
 function MapLocationVisualizationLayerInner({
   mode,
@@ -59,17 +73,18 @@ function MapLocationVisualizationLayerInner({
 
   const nodes = useMemo(() => {
     if (!active) return null;
+    const fill = focusFill(mode);
+    const stroke = focusStroke(mode);
     const out: ReactNode[] = [];
     for (const rack of racks) {
       const rid = String(rack.uuid ?? rack.id ?? rack.rack_index);
       for (const bin of activeBinsForRack(rack)) {
         const uuid = (bin.locationUUID ?? "").trim();
         if (!uuid) continue;
+        const occupied = occupiedLocationUuids.has(uuid);
+        if (!locationMatchesMode(mode, { occupied })) continue;
         const dims = binRectPx(rack, bin, cellPx);
         if (!dims || dims.width <= 0 || dims.height <= 0) continue;
-        const occupied = occupiedLocationUuids.has(uuid);
-        const opacity = locationDimOpacity(mode, { occupied });
-        if (opacity >= 0.999) continue;
         out.push(
           <rect
             key={`${rid}-${bin.level_index}-${bin.segment_index}-${uuid}`}
@@ -77,8 +92,9 @@ function MapLocationVisualizationLayerInner({
             y={dims.y}
             width={dims.width}
             height={dims.height}
-            fill="rgb(248, 250, 252)"
-            fillOpacity={1 - opacity}
+            fill={fill}
+            stroke={stroke}
+            strokeWidth={1.25}
             rx={2}
             pointerEvents="none"
           />

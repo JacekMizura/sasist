@@ -269,6 +269,26 @@ export function useDesignerMagazynState(params: UseDesignerMagazynStateParams) {
     },
     [products, productsById, getInventoryRowsForBin]
   );
+
+  /**
+   * Location occupancy for Zajęte/Wolne (counts locations, not products).
+   * Occupied = any inventory qty > 0 or assigned qty > 0 at this bin UUID (volume may be 0).
+   */
+  const isBinOccupiedByQuantity = useCallback(
+    (bin: BinState) => {
+      const uuid = binLocationUuid(bin);
+      const stockByPid = stockQtyByProductIdAtBin(getInventoryRowsForBin(uuid));
+      for (const q of stockByPid.values()) {
+        if (q > 0) return true;
+      }
+      for (const p of products) {
+        const aQty = quantityFromAssignedForBin(p, uuid);
+        if (aQty > 0 && !stockByPid.has(p.id)) return true;
+      }
+      return false;
+    },
+    [products, getInventoryRowsForBin]
+  );
   /** Rack with bins' used_volume_dm3 derived from products (for occupancy bar). */
   const displayRack = useMemo(() => {
     if (!selectedRackForMagazyn) return null;
@@ -577,5 +597,6 @@ export function useDesignerMagazynState(params: UseDesignerMagazynStateParams) {
     binCapacityDetails,
     binPackingPreview,
     usedVolumeAtBin,
+    isBinOccupiedByQuantity,
   };
 }

@@ -1,3 +1,12 @@
+## 2026-07-26 — Projektant Magazynu: UX polish (bez geometrii)
+
+- Usunięte szare placeholdery lokalizacji (RackSideViewGrid + MapLocationVisualizationLayer)
+- Panel Produkty: białe karty/miniatury (object-contain)
+- Nagłówek: „Projektowanie magazynu”; dropdown magazynu po prawej bez „Magazyn:”
+- Zajęte/Wolne: lokalizacje z qty>0 (`isBinOccupiedByQuantity`); total z API `*_location_count`
+- Viz Zajęte/Wolne: tint całych lokalizacji, bez szarego dimmingu
+- tsc + build OK · **No push.**
+
 ## 2026-07-26 — Primary Button Design System (enforcement complete)
 
 - Jeden Primary: `PrimaryButton` + `brandPrimaryButtonClass` (wzorzec „Dodaj użytkownika”)

@@ -252,7 +252,7 @@ export function MagazynProductsSidebar({
             ? "bg-orange-50 text-slate-900 ring-1 ring-orange-300/70"
             : typeBadge != null
               ? "bg-amber-50/80 text-amber-950 ring-1 ring-amber-200/70 hover:bg-amber-50"
-              : "bg-slate-50 text-slate-700 ring-1 ring-slate-200/70 hover:bg-white hover:shadow-sm"
+            : "bg-white text-slate-700 ring-1 ring-slate-200/70 hover:shadow-sm"
         }`}
       >
         <span className="flex min-w-0 flex-1 items-center gap-2">
@@ -870,18 +870,15 @@ export function MagazynProductsSidebar({
                     </div>
                   )}
                   <div className="flex items-start gap-3.5">
-                    <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-xl bg-neutral-100">
-                      <div className="absolute inset-0 flex items-center justify-center">
-                        <svg className="h-6 w-6 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
-                      </div>
-                      {imageUrl && (
+                    <div className="relative h-14 w-14 shrink-0 overflow-hidden bg-white">
+                      {imageUrl ? (
                         <img
                           src={imageUrl}
                           alt=""
-                          className="absolute inset-0 z-10 h-full w-full object-contain p-1"
+                          className="absolute inset-0 h-full w-full object-contain"
                           onError={(e) => { e.currentTarget.style.display = "none"; }}
                         />
-                      )}
+                      ) : null}
                     </div>
                     <div className="min-w-0 flex-1">
                       <div className="line-clamp-2 break-words text-[15px] font-semibold leading-snug tracking-tight text-slate-900">
@@ -944,7 +941,7 @@ export function MagazynProductsSidebar({
                           onChange={(e) => setLocationSearchQuery(e.target.value)}
                           onClick={(e) => e.stopPropagation()}
                           onKeyDown={(e) => e.stopPropagation()}
-                          className="mb-2 w-full rounded-xl border-0 bg-slate-50 px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-200/80 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-orange-400/40"
+                          className="mb-2 w-full rounded-xl border-0 bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-200/80 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-orange-400/40"
                         />
                       )}
                       {locationCount <= 5 ? (

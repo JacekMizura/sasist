@@ -28,8 +28,11 @@ const BEAM_ORANGE = "#f97316";
 const BEAM_BASE_GREY = "#94a3b8";
 const UPRIGHT_WIDTH = 8;
 const BEAM_HEIGHT_VIEWBOX = 22;
-const BIN_BG = "#f4f4f4";
-const BIN_BORDER = "#ddd";
+const BIN_BG = "#ffffff";
+const BIN_BORDER = "#e2e8f0";
+/** Soft occupancy wash — whole location, not product placeholder tiles. */
+const BIN_OCCUPIED_BG = "#fff7ed";
+const BIN_OCCUPIED_BORDER = "#fdba74";
 
 function getBinAt(rack: RackState, levelIndex: number, segmentIndex: number): BinState | undefined {
   return rack.bins.find(
@@ -453,8 +456,25 @@ export function RackSideViewGrid({
                 const h = contentH;
                 const cx = x + w / 2;
                 const style = getStorageTypeStyle(storageType);
-                const fill = isSelected ? "#eff6ff" : storageType === "primary" ? (embeddedPreview ? "#ffffff" : BIN_BG) : style.bg;
-                const stroke = isSelected ? "#2563eb" : storageType === "primary" ? (embeddedPreview ? "#cbd5e1" : BIN_BORDER) : style.border;
+                const hasStock = quantity > 0;
+                const fill = isSelected
+                  ? "#eff6ff"
+                  : storageType === "primary"
+                    ? hasStock
+                      ? BIN_OCCUPIED_BG
+                      : embeddedPreview
+                        ? "#ffffff"
+                        : BIN_BG
+                    : style.bg;
+                const stroke = isSelected
+                  ? "#2563eb"
+                  : storageType === "primary"
+                    ? hasStock
+                      ? BIN_OCCUPIED_BORDER
+                      : embeddedPreview
+                        ? "#cbd5e1"
+                        : BIN_BORDER
+                    : style.border;
                 const strokeWidth = isSelected ? (embeddedPreview ? 2.5 : 4) : 1;
                 const line1Y = y + textPadding + startOff;
                 const line2Y = line1Y + linePx + gapPx;

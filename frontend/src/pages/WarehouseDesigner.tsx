@@ -1163,6 +1163,7 @@ export default function WarehouseDesigner() {
     binCapacityDetails,
     binPackingPreview,
     usedVolumeAtBin,
+    isBinOccupiedByQuantity,
   } = useDesignerMagazynState({
     layout,
     products,
@@ -1180,7 +1181,7 @@ export default function WarehouseDesigner() {
     }
     return order.filter((t) => used.has(t));
   }, [displayRack, selectedRackForMagazyn]);
-  /** Fallback: occupied bins from layout (usedVolumeAtBin) when API metrics unavailable. */
+  /** Fallback: occupied locations (qty > 0), not product rows — when API metrics unavailable. */
   const binOccupancyLocationStats = useMemo(() => {
     let primary = 0;
     let reserve = 0;
@@ -1189,7 +1190,7 @@ export default function WarehouseDesigner() {
     for (const rack of layout.racks) {
       const rid = String(rack.id ?? rack.rack_index);
       for (const bin of activeBinsForRack(rack)) {
-        if (usedVolumeAtBin(bin) <= 0) continue;
+        if (!isBinOccupiedByQuantity(bin)) continue;
         const uuid = binLocationUuidFromBin(bin);
         const key = uuid || `${rid}-${bin.level_index}-${bin.segment_index}`;
         if (seen.has(key)) continue;
@@ -1206,7 +1207,7 @@ export default function WarehouseDesigner() {
       damaged,
       total: primary + reserve + damaged,
     };
-  }, [layout.racks, usedVolumeAtBin]);
+  }, [layout.racks, isBinOccupiedByQuantity]);
 
   const globalLocationStatsForLegend = useMemo(() => {
     if (occupancyMetrics) {
@@ -1218,50 +1219,49 @@ export default function WarehouseDesigner() {
     return binOccupancyLocationStats;
   }, [occupancyMetrics, binOccupancyLocationStats]);
 
-  /** Occupied vs free location slots for Magazyn pulpit (does not replace type counts). */
+  /**
+   * Occupied vs free **locations** for Magazyn pulpit (never product/row counts).
+   * Total slots: API `*_location_count` (layout bin UUIDs) when available, else walk layout.
+   * Occupied: FE distinct locations with qty > 0 (`isBinOccupiedByQuantity`) — aligns with map viz
+   * and WMS rule „wolna = brak produktów / qty = 0”. Backend `*_slots_with_stock` is the same
+   * unit (location UUIDs) but volume-gated; FE qty-based keeps panel and overlay consistent.
+   */
   const locationFillCounts = useMemo(() => {
     let total = 0;
-    let occupied = 0;
     if (occupancyMetrics) {
       total =
         occupancyMetrics.primary_location_count +
         occupancyMetrics.reserve_location_count +
         occupancyMetrics.damaged_location_count;
-      const hasStockFields =
-        occupancyMetrics.primary_slots_with_stock != null ||
-        occupancyMetrics.reserve_slots_with_stock != null ||
-        occupancyMetrics.damaged_slots_with_stock != null;
-      if (hasStockFields) {
-        occupied =
-          (occupancyMetrics.primary_slots_with_stock ?? 0) +
-          (occupancyMetrics.reserve_slots_with_stock ?? 0) +
-          (occupancyMetrics.damaged_slots_with_stock ?? 0);
-      } else {
-        occupied = binOccupancyLocationStats.total;
-      }
     } else {
+      const seen = new Set<string>();
       for (const rack of layout.racks) {
+        const rid = String(rack.id ?? rack.rack_index);
         for (const bin of activeBinsForRack(rack)) {
+          const uuid = binLocationUuidFromBin(bin);
+          const key = uuid || `${rid}-${bin.level_index}-${bin.segment_index}`;
+          if (seen.has(key)) continue;
+          seen.add(key);
           total += 1;
-          if (usedVolumeAtBin(bin) > 0) occupied += 1;
         }
       }
     }
+    const occupied = binOccupancyLocationStats.total;
     return { occupied, free: Math.max(0, total - occupied) };
-  }, [occupancyMetrics, binOccupancyLocationStats, layout.racks, usedVolumeAtBin]);
+  }, [occupancyMetrics, binOccupancyLocationStats, layout.racks]);
 
-  /** O(1) occupied UUID set for map visualization overlays (stable across pan/zoom). */
+  /** O(1) occupied UUID set for map visualization — locations with qty > 0 (not volume/product rows). */
   const occupiedLocationUuids = useMemo(() => {
     const set = new Set<string>();
     for (const rack of layout.racks) {
       for (const bin of activeBinsForRack(rack)) {
-        if (usedVolumeAtBin(bin) <= 0) continue;
+        if (!isBinOccupiedByQuantity(bin)) continue;
         const u = (bin.locationUUID ?? "").trim();
         if (u) set.add(u);
       }
     }
     return set;
-  }, [layout.racks, usedVolumeAtBin]);
+  }, [layout.racks, isBinOccupiedByQuantity]);
 
   /** Map locationUUID → bin (for storage_type and primary/reserve split). Declared before mapRackState and occupancy useMemos. */
   const uuidToBin = useMemo(() => {
@@ -3739,42 +3739,41 @@ export default function WarehouseDesigner() {
       <PageHeader
         breadcrumbs={[
           { label: UI_STRINGS.navigation.groups.warehouse },
-          { label: UI_STRINGS.warehouse.title },
+          { label: UI_STRINGS.warehouse.designerSubTabs.layoutDesigner },
         ]}
-        title={UI_STRINGS.warehouse.title}
+        title={UI_STRINGS.warehouse.designerSubTabs.layoutDesigner}
         actions={
-          <DesignerToolbar
-            mainView={mainView}
-            lastSavedAt={lastSavedAt}
-            saveLayout={saveLayout}
-            saving={saving}
-            saveLayoutBlockedReason={rackNameDuplicateMessage}
-            layout={layout}
-            setLayout={setLayout}
-            warehouseUsagePct={(() => {
-              const bw = layout.building_width_m;
-              const depth = layout.building_depth_m ?? layout.building_height_m;
-              if (bw == null || depth == null || bw <= 0 || depth <= 0) return null;
-              const buildingAreaM2 = bw * depth;
-              const totalRackCells = layout.racks.reduce((s, r) => s + r.width * r.height, 0);
-              const rackAreaM2 = totalRackCells * 0.01;
-              return buildingAreaM2 > 0 ? (rackAreaM2 / buildingAreaM2) * 100 : null;
-            })()}
-            showEditBuilding={showEditBuilding}
-            setShowEditBuilding={setShowEditBuilding}
-          />
+          <>
+            <DesignerWarehouseSelect
+              warehouseId={selectedWarehouseId}
+              warehouses={warehouses}
+              loading={warehousesLoading}
+              onSelect={handleDesignerWarehouseSelect}
+            />
+            <DesignerToolbar
+              mainView={mainView}
+              lastSavedAt={lastSavedAt}
+              saveLayout={saveLayout}
+              saving={saving}
+              saveLayoutBlockedReason={rackNameDuplicateMessage}
+              layout={layout}
+              setLayout={setLayout}
+              warehouseUsagePct={(() => {
+                const bw = layout.building_width_m;
+                const depth = layout.building_depth_m ?? layout.building_height_m;
+                if (bw == null || depth == null || bw <= 0 || depth <= 0) return null;
+                const buildingAreaM2 = bw * depth;
+                const totalRackCells = layout.racks.reduce((s, r) => s + r.width * r.height, 0);
+                const rackAreaM2 = totalRackCells * 0.01;
+                return buildingAreaM2 > 0 ? (rackAreaM2 / buildingAreaM2) * 100 : null;
+              })()}
+              showEditBuilding={showEditBuilding}
+              setShowEditBuilding={setShowEditBuilding}
+            />
+          </>
         }
         className="shrink-0 space-y-2"
       />
-
-      <div className="mt-2 shrink-0">
-        <DesignerWarehouseSelect
-          warehouseId={selectedWarehouseId}
-          warehouses={warehouses}
-          loading={warehousesLoading}
-          onSelect={handleDesignerWarehouseSelect}
-        />
-      </div>
 
       {mainView === "layout" ? (
         <div className="mt-2 flex shrink-0 gap-1" role="tablist" aria-label="Workspace projektanta">
