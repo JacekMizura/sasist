@@ -38,6 +38,8 @@ export type RackPropertiesSidebarProps = {
   saving?: boolean;
   lastSavedAt?: number | null;
   warehouseLabel?: string;
+  /** Opens rack template editor (for inherited passages). */
+  onOpenRackTemplate?: (templateId: string) => void;
 };
 
 function racksMatchIdentity(a: RackState, b: RackState): boolean {
@@ -63,6 +65,7 @@ export function RackPropertiesSidebar({
   saving = false,
   lastSavedAt = null,
   warehouseLabel,
+  onOpenRackTemplate,
 }: RackPropertiesSidebarProps) {
   const asideScrollRef = useRef<HTMLDivElement>(null);
   const scrollKey = `${selectedRack?.id ?? selectedRack?.rack_index ?? ""}-${selectedRackIds.join(",")}`;
@@ -349,7 +352,13 @@ export function RackPropertiesSidebar({
                   />
                   Pokaż etykietę na mapie
                 </label>
-                {!isMultiSelect && <RackPassageEditor selectedRack={selectedRack} setLayout={setLayout} />}
+                {!isMultiSelect && (
+                  <RackPassageEditor
+                    selectedRack={selectedRack}
+                    setLayout={setLayout}
+                    onOpenTemplate={onOpenRackTemplate}
+                  />
+                )}
                 {(() => {
                   const levels =
                     selectedRack.rackLevels ?? (selectedRack.bins?.length ? binsToLevels(selectedRack.bins) : []);

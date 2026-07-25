@@ -41,6 +41,8 @@ export type WarehouseMainViewProps = WarehouseCanvasProps & {
   onCloseElevation?: () => void;
   onAddProduct?: () => void;
   onEditProduct?: (id: string) => void;
+  /** Opens TemplateCreator for the rack's template. */
+  onOpenRackTemplate?: (templateId: string) => void;
 };
 
 export function WarehouseMainView(props: WarehouseMainViewProps) {
@@ -69,6 +71,7 @@ export function WarehouseMainView(props: WarehouseMainViewProps) {
     onCloseElevation,
     onAddProduct,
     onEditProduct,
+    onOpenRackTemplate,
     isMultiSelect,
     selectedRackIds,
     setShowElevationForRackId,
@@ -392,6 +395,7 @@ export function WarehouseMainView(props: WarehouseMainViewProps) {
           saving={saving}
           lastSavedAt={lastSavedAt}
           warehouseLabel={warehouseLabel}
+          onOpenRackTemplate={onOpenRackTemplate}
         />
       </AppRightPanel>
     );

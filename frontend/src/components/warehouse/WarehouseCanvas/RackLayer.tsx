@@ -17,8 +17,6 @@ import {
 import { RACK_LABEL_MEDIUM_STRIDE, type RackLabelLodLevel } from "../../../utils/rackLabelLod";
 import { clampRackRectLayout } from "../../../utils/rackMapVisual";
 import { colors, radius } from "../../../layout/designTokens";
-import { passageRectInRackPx, rackFootprintCm, rackUuid } from "../../../pages/WarehouseDesigner/passages/rackPassageGeometry";
-import { GRID_UNIT_CM } from "../../../types/warehouse";
 
 import type { SelectedPassage } from "../../../pages/WarehouseDesigner/interactions/usePassageInteraction";
 
@@ -177,6 +175,12 @@ export function RackLayer({
   onPassageSelect,
   onPassageDragStart,
 }: RackLayerProps) {
+  void passageInteractive;
+  void passageSubtle;
+  void selectedPassage;
+  void selectedPassageUuids;
+  void onPassageSelect;
+  void onPassageDragStart;
   const mapZoom = zoomProp;
   const labelsReadable = mapZoom >= LABEL_ZOOM_MIN_VISIBLE;
   const filterUid = useId().replace(/:/g, "");
@@ -543,72 +547,44 @@ export function RackLayer({
               />
             )}
             {visualLod !== "line" &&
-              (r.passages ?? []).map((p) => {
-                const pr = passageRectInRackPx(r, p, layoutRect);
-                if (!pr || pr.w < 1 || pr.h < 1) return null;
-                const on = p.enabled !== false;
-                const isPassageSelected =
-                  (selectedPassageUuids != null && selectedPassageUuids.has(p.uuid)) ||
-                  (selectedPassage != null &&
-                    selectedPassage.rackUuid === rackUuid(r) &&
-                    selectedPassage.passageUuid === p.uuid);
-                const subtle = passageSubtle && !passageInteractive;
+              (() => {
+                const enabledPassages = (r.passages ?? []).filter((p) => p.enabled !== false);
+                if (enabledPassages.length === 0) return null;
+                // Subtle corner badge — passage is a rack attribute, not a separate map object.
+                const badgePad = 3;
+                const badgeH = Math.min(16, Math.max(11, rectH * 0.22));
+                const badgeW = Math.min(52, Math.max(36, rectW * 0.42));
+                const bx = rectX + rectW - badgeW - badgePad;
+                const by = rectY + badgePad;
+                const fontSize = Math.max(7, Math.min(9, badgeH * 0.62));
                 return (
-                  <rect
-                    key={`${reactKey}-passage-${p.uuid}`}
-                    x={pr.x}
-                    y={pr.y}
-                    width={pr.w}
-                    height={pr.h}
-                    fill={
-                      subtle
-                        ? on
-                          ? "rgba(248,250,252,0.45)"
-                          : "rgba(148,163,184,0.2)"
-                        : on
-                          ? "rgba(248,250,252,0.92)"
-                          : "rgba(148,163,184,0.35)"
-                    }
-                    stroke={isPassageSelected ? "#6366f1" : on ? (subtle ? "#cbd5e1" : "#94a3b8") : "#64748b"}
-                    strokeWidth={isPassageSelected ? 2.5 : 1}
-                    strokeDasharray={on ? "3 2" : "2 3"}
-                    pointerEvents={passageInteractive ? "auto" : "none"}
-                    style={passageInteractive ? { cursor: "grab" } : undefined}
-                    onMouseDown={
-                      passageInteractive && onPassageDragStart
-                        ? (ev) => {
-                            ev.stopPropagation();
-                            onPassageSelect?.(rackUuid(r), p.uuid);
-                            const svg = (ev.target as Element).ownerSVGElement;
-                            if (!svg) return;
-                            const pt = svg.createSVGPoint();
-                            pt.x = ev.clientX;
-                            pt.y = ev.clientY;
-                            const ctm = svg.getScreenCTM();
-                            if (!ctm) return;
-                            const loc = pt.matrixTransform(ctm.inverse());
-                            const fp = rackFootprintCm(r);
-                            const alongIsX = (r.orientation || "vertical").toLowerCase() === "horizontal";
-                            const cursorCmX = (loc.x / cellPx) * GRID_UNIT_CM;
-                            const cursorCmY = (loc.y / cellPx) * GRID_UNIT_CM;
-                            const cursorAlong = alongIsX ? cursorCmX : cursorCmY;
-                            const fpOrigin = alongIsX ? fp.minX : fp.minY;
-                            const grabOffsetCm = cursorAlong - fpOrigin - p.offset_along_cm;
-                            onPassageDragStart(rackUuid(r), p.uuid, grabOffsetCm);
-                          }
-                        : undefined
-                    }
-                    onClick={
-                      passageInteractive && onPassageSelect
-                        ? (ev) => {
-                            ev.stopPropagation();
-                            onPassageSelect(rackUuid(r), p.uuid);
-                          }
-                        : undefined
-                    }
-                  />
+                  <g pointerEvents="none" aria-label="Regał z przejazdem">
+                    <rect
+                      x={bx}
+                      y={by}
+                      width={badgeW}
+                      height={badgeH}
+                      rx={3}
+                      fill="rgba(15,23,42,0.72)"
+                      stroke="rgba(255,255,255,0.35)"
+                      strokeWidth={0.75}
+                    />
+                    <text
+                      x={bx + badgeW / 2}
+                      y={by + badgeH / 2 + 0.5}
+                      textAnchor="middle"
+                      dominantBaseline="middle"
+                      fontSize={fontSize}
+                      fontWeight={700}
+                      fill="#f8fafc"
+                      letterSpacing="0.04em"
+                      style={{ userSelect: "none" }}
+                    >
+                      PRZEJAZD
+                    </text>
+                  </g>
                 );
-              })}
+              })()}
             {visualLod === "full" &&
               binHighlightActive &&
               rackHasHighlightedBin &&

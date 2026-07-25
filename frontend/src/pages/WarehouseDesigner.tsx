@@ -4427,6 +4427,9 @@ export default function WarehouseDesigner() {
               },
               onAddProduct: () => setEditingProductId("new"),
               onEditProduct: setEditingProductId,
+              onOpenRackTemplate: (templateId: string) => {
+                setEditingTemplateId(templateId);
+              },
               svgOverlay: routesMode ? (
                 <RoutingGraphLayer
                   nodes={routing.nodes}

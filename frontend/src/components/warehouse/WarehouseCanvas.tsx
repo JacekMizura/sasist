@@ -22,8 +22,6 @@ import { SelectionOverlay } from "./WarehouseCanvas/SelectionOverlay";
 import { WallElementsLayer } from "./WarehouseCanvas/WallElementsLayer";
 import { PathLayer } from "./WarehouseCanvas/PathLayer";
 import { PassageDrawPreview } from "../../pages/WarehouseDesigner/passages/PassageDrawPreview";
-import { PassageInspector } from "../../pages/WarehouseDesigner/PassageInspector";
-import { selectedPassageUuidSet } from "../../pages/WarehouseDesigner/passages/rackPassageGeometry";
 
 const RACK_RADIUS_PX = parseFloat(radius.small) || 6;
 
@@ -1013,18 +1011,6 @@ function WarehouseCanvasInner({
             {isEditMode && !isLiveView && layoutModeLabel != null && layoutModeColor != null && (
               <LayoutModeBadge modeLabel={layoutModeLabel} modeColor={layoutModeColor} layoutMode={layoutMode} />
             )}
-            {isEditMode && selectedPassage && setSelectedPassage && !routesWorkspace && (
-              <div className="absolute bottom-4 right-4 z-30 max-w-[16rem]">
-                <PassageInspector
-                  layout={layout}
-                  selectedPassage={selectedPassage}
-                  setLayout={setLayout}
-                  setSelectedPassage={setSelectedPassage}
-                  onClose={() => setSelectedPassage(null)}
-                  onOpenTemplate={onOpenPassageTemplate}
-                />
-              </div>
-            )}
             <RowPreviewOverlay
               visible={showRowPreview}
               x={rowPreviewCursor?.x ?? 0}
@@ -1271,22 +1257,12 @@ function WarehouseCanvasInner({
                     routeStops={isExportMode ? null : routeStops ?? null}
                     isRoutePlanningMode={isExportMode ? false : isRoutePlanningMode}
                     neutralRackStyle={isExportMode}
-                    passageInteractive={isEditMode && !routesWorkspace && !isExportMode}
+                    passageInteractive={false}
                     passageSubtle={routesWorkspace}
-                    selectedPassage={selectedPassage}
-                    selectedPassageUuids={
-                      selectedPassage ? selectedPassageUuidSet(layout, selectedPassage) : null
-                    }
-                    onPassageSelect={
-                      setSelectedPassage
-                        ? (rackUuid, passageUuid) => {
-                            setSelectedPassage({ rackUuid, passageUuid });
-                            setSelectedRackId(null);
-                            setSelectedRackIds([]);
-                          }
-                        : undefined
-                    }
-                    onPassageDragStart={onPassageDragStart}
+                    selectedPassage={null}
+                    selectedPassageUuids={null}
+                    onPassageSelect={undefined}
+                    onPassageDragStart={undefined}
                   />
                   {isEditMode && passageToolActive && passageDrawStart && passageDrawEnd && (
                     <PassageDrawPreview
