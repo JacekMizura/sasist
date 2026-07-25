@@ -296,7 +296,6 @@ class TestPutawaySuggestions(unittest.TestCase):
             max_fit=20,
             remaining_pct=40,
             same_sku=True,
-            pick_sequence=10,
             picking_priority=50,
             strategy=STRATEGY_CONSOLIDATE_SKU,
             zone_match=False,
@@ -306,13 +305,39 @@ class TestPutawaySuggestions(unittest.TestCase):
             max_fit=20,
             remaining_pct=40,
             same_sku=False,
-            pick_sequence=10,
             picking_priority=50,
             strategy=STRATEGY_CONSOLIDATE_SKU,
             zone_match=False,
         )
         self.assertGreater(score_same, score_empty)
         self.assertIn("same_sku_present", tags_same)
+
+    def test_nearest_uses_hop_cost_not_pick_sequence(self):
+        from backend.services.slotting.putaway_strategy_service import _score_location
+        from backend.services.slotting.slotting_models import STRATEGY_NEAREST_AVAILABLE
+
+        near, tags = _score_location(
+            capacity_fits=True,
+            max_fit=10,
+            remaining_pct=50,
+            same_sku=False,
+            picking_priority=100,
+            strategy=STRATEGY_NEAREST_AVAILABLE,
+            zone_match=False,
+            hop_cost_m=5.0,
+        )
+        far, _ = _score_location(
+            capacity_fits=True,
+            max_fit=10,
+            remaining_pct=50,
+            same_sku=False,
+            picking_priority=100,
+            strategy=STRATEGY_NEAREST_AVAILABLE,
+            zone_match=False,
+            hop_cost_m=100.0,
+        )
+        self.assertGreater(near, far)
+        self.assertIn("nearest", tags)
 
     def test_validate_putaway_assignment_warnings(self):
         loc = _loc(max_weight_kg=1.0)

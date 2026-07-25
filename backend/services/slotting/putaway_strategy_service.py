@@ -1,4 +1,8 @@
-"""Intelligent putaway location suggestions — heuristic scoring."""
+"""Intelligent putaway location suggestions — heuristic scoring.
+
+Etap 3.2: „nearest” / candidate proximity = Runtime Graph Reader only
+(``hop_cost_m`` / ``cost_from_node_to_location``). ``pick_sequence`` is not used.
+"""
 
 from __future__ import annotations
 
@@ -12,7 +16,6 @@ from ...models.product import Product
 from .capacity_service import calculate_location_capacity, product_footprint_from_orm
 from .errors import ProductNotFoundError
 from .slotting_models import (
-    PACKAGING_CARTON,
     PACKAGING_UNIT,
     STRATEGY_BALANCED_UTILIZATION,
     STRATEGY_CONSOLIDATE_SKU,
@@ -22,6 +25,75 @@ from .slotting_models import (
     PutawaySuggestion,
 )
 
+# Score scale for nearest: closer (lower hop cost m) → higher bonus, same ballpark as legacy 500 - seq.
+_NEAREST_COST_CAP_M = 500.0
+
+
+def resolve_putaway_start_location_id(
+    db: Session,
+    warehouse_id: int,
+    *,
+    preferred_location_id: int | None = None,
+) -> int | None:
+    """Dock / receiving location used as putaway walk origin (not pick_sequence)."""
+    if preferred_location_id is not None and int(preferred_location_id) > 0:
+        return int(preferred_location_id)
+    row = (
+        db.query(Location.id)
+        .filter(
+            Location.warehouse_id == int(warehouse_id),
+            Location.is_active.is_(True),
+            Location.location_type == "DOCK",
+        )
+        .order_by(Location.id.asc())
+        .first()
+    )
+    return int(row[0]) if row else None
+
+
+def putaway_hop_cost_m(
+    db: Session,
+    warehouse_id: int,
+    to_location_id: int,
+    *,
+    start_location_id: int | None = None,
+) -> float | None:
+    """
+    Walk cost (m) from putaway origin → candidate.
+    Prefer hop between locations; else operational receiving_dock / picking_start node.
+    """
+    from ..warehouse_routing.access_resolution import operational_node_uuid
+    from ..warehouse_routing.constants import OP_PICKING_START, OP_RECEIVING_DOCK
+    from ..warehouse_routing.runtime_graph_reader import (
+        cost_from_node_to_location,
+        graph_ready,
+        hop_cost_m,
+    )
+
+    wid = int(warehouse_id)
+    tid = int(to_location_id)
+    if not graph_ready(db, wid):
+        return None
+
+    start_id = resolve_putaway_start_location_id(
+        db, wid, preferred_location_id=start_location_id
+    )
+    if start_id is not None:
+        if int(start_id) == tid:
+            return 0.0
+        dist, _err = hop_cost_m(db, wid, int(start_id), tid)
+        if dist is not None:
+            return float(dist)
+
+    for op in (OP_RECEIVING_DOCK, OP_PICKING_START):
+        node = operational_node_uuid(db, wid, op)
+        if not node:
+            continue
+        dist, _err = cost_from_node_to_location(db, wid, str(node), tid)
+        if dist is not None:
+            return float(dist)
+    return None
+
 
 def _score_location(
     *,
@@ -29,17 +101,16 @@ def _score_location(
     max_fit: float,
     remaining_pct: float,
     same_sku: bool,
-    pick_sequence: int | None,
     picking_priority: int,
     strategy: str,
     zone_match: bool,
     capacity_numeric_trusted: bool = True,
+    hop_cost_m: float | None = None,
 ) -> tuple[float, list[str]]:
     """
     Putaway scoring heuristic.
 
-    ``pick_sequence`` here is warehouse storage / picking-priority metadata for
-    putaway suggestions only — NOT walk-routing SSOT (use Runtime Graph Reader for routes).
+    NEAREST_AVAILABLE uses Runtime Graph hop cost (meters), not pick_sequence.
     """
     tags: list[str] = []
     if not capacity_fits:
@@ -82,9 +153,8 @@ def _score_location(
         score += max(0.0, 120 - float(picking_priority))
         tags.append("picking_priority")
     elif strat == STRATEGY_NEAREST_AVAILABLE:
-        # pick_sequence = authored storage priority for putaway — NOT Runtime Graph walk cost.
-        if pick_sequence is not None:
-            score += max(0.0, 500.0 - float(pick_sequence))
+        if hop_cost_m is not None:
+            score += max(0.0, _NEAREST_COST_CAP_M - float(hop_cost_m))
         tags.append("nearest")
     elif strat == STRATEGY_BALANCED_UTILIZATION and capacity_numeric_trusted:
         ideal = abs(remaining_pct - 50.0)
@@ -108,6 +178,7 @@ def suggest_putaway_locations(
     strategy: str = STRATEGY_CONSOLIDATE_SKU,
     limit: int = 15,
     exclude_location_ids: set[int] | None = None,
+    start_location_id: int | None = None,
 ) -> list[PutawaySuggestion]:
     product = db.query(Product).filter(Product.id == int(product_id), Product.tenant_id == int(tenant_id)).first()
     if product is None:
@@ -138,10 +209,34 @@ def suggest_putaway_locations(
     locs = (
         db.query(Location)
         .filter(Location.warehouse_id == int(warehouse_id), Location.is_active.is_(True))
-        .order_by(Location.pick_sequence.is_(None), Location.pick_sequence.asc(), Location.id.asc())
-        # pick_sequence = storage/putaway candidate order only — NOT walk-routing SSOT.
+        .order_by(Location.id.asc())
         .all()
     )
+
+    # Candidate order: hop from putaway origin when NEAREST; else Location.id (deterministic).
+    origin = resolve_putaway_start_location_id(
+        db, int(warehouse_id), preferred_location_id=start_location_id
+    )
+    hop_by_lid: dict[int, float] = {}
+    strat_u = str(strategy or STRATEGY_CONSOLIDATE_SKU).upper()
+    if strat_u == STRATEGY_NEAREST_AVAILABLE:
+        for loc in locs:
+            lid = int(loc.id)
+            if lid in exclude:
+                continue
+            cost = putaway_hop_cost_m(
+                db,
+                int(warehouse_id),
+                lid,
+                start_location_id=origin,
+            )
+            if cost is not None:
+                hop_by_lid[lid] = float(cost)
+        if hop_by_lid:
+            locs = sorted(
+                locs,
+                key=lambda loc: (hop_by_lid.get(int(loc.id), 1e18), int(loc.id)),
+            )
 
     suggestions: list[PutawaySuggestion] = []
     for loc in locs:
@@ -179,16 +274,22 @@ def suggest_putaway_locations(
         elif not numeric_trusted:
             capacity_fits = True
 
+        hop = hop_by_lid.get(lid)
+        if hop is None and str(strategy or "").upper() == STRATEGY_NEAREST_AVAILABLE:
+            hop = putaway_hop_cost_m(
+                db, int(warehouse_id), lid, start_location_id=origin
+            )
+
         score, tags = _score_location(
             capacity_fits=capacity_fits,
             max_fit=max_fit_for_score,
             remaining_pct=remaining_pct if numeric_trusted else float(getattr(loc, "capacity_utilization_percent", 0) or 0),
             same_sku=same_sku,
-            pick_sequence=getattr(loc, "pick_sequence", None),
             picking_priority=int(getattr(loc, "picking_priority", 100) or 100),
             strategy=strategy,
             zone_match=zone_match,
             capacity_numeric_trusted=numeric_trusted,
+            hop_cost_m=hop,
         )
         if score <= 0:
             continue
@@ -205,7 +306,8 @@ def suggest_putaway_locations(
             )
         )
 
-    suggestions.sort(key=lambda s: (-s.score, s.location_code))
+    # Stable tie-break: location_id (not location_code as distance surrogate).
+    suggestions.sort(key=lambda s: (-s.score, int(s.location_id)))
     return suggestions[: max(1, min(limit, 50))]
 
 

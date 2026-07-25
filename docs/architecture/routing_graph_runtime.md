@@ -125,6 +125,7 @@ Runtime czyta opublikowany stan z DB — bez regeneracji grafu „w locie” prz
 | `analytics_service.walking_cost` | `order_location_ids_by_graph` → `chain_distance_m` |
 | `braki_order_state_service.nearest_pick_location_for_product` | przez `PickingRoutingService` |
 | `wms_product_view` / incomplete / recovery groups | `visit_index_map` dla kolejności UI |
+| Putaway (`NEAREST` + WMS fallback ranking) | `hop_cost_m` / `cost_from_node_to_location` od DOCK (Etap 3.2) |
 
 ---
 

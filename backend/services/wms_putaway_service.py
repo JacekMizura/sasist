@@ -956,6 +956,7 @@ def suggest_putaway_locations(db: Session, tenant_id: int, item_id: int) -> WmsP
             strategy=STRATEGY_CONSOLIDATE_SKU,
             limit=30,
             exclude_location_ids=mm_skip_source,
+            start_location_id=int(dock_id) if dock_id is not None else None,
         )
         slotting_by_lid = {int(s.location_id): s for s in slotting_rows}
     except Exception:
@@ -1034,7 +1035,7 @@ def suggest_putaway_locations(db: Session, tenant_id: int, item_id: int) -> WmsP
     overflow_candidates: list[WmsPutawayLocationSuggestionRow] = []
 
     if slotting_by_lid:
-        for slot in sorted(slotting_by_lid.values(), key=lambda s: (-s.score, s.location_code)):
+        for slot in sorted(slotting_by_lid.values(), key=lambda s: (-s.score, int(s.location_id))):
             loc = loc_by_id.get(int(slot.location_id))
             if loc is None:
                 continue
@@ -1060,6 +1061,8 @@ def suggest_putaway_locations(db: Session, tenant_id: int, item_id: int) -> WmsP
             else:
                 primary_candidates.append(sug)
     else:
+        from .slotting.putaway_strategy_service import putaway_hop_cost_m
+
         stocked_lids = set(qty_by_lid.keys())
         for loc in active_locs:
             lid = int(loc.id)
@@ -1069,10 +1072,17 @@ def suggest_putaway_locations(db: Session, tenant_id: int, item_id: int) -> WmsP
                 continue
             if lid in stocked_lids:
                 continue
-            # pick_sequence = putaway / storage priority metadata only — NOT walk-routing SSOT.
-            ps = getattr(loc, "pick_sequence", None)
-            seq_score = float(ps) if ps is not None else 1_000_000.0
-            priority = max(0.0, 10_000.0 - seq_score)
+            # Proximity = Runtime Graph hop from DOCK (not pick_sequence).
+            hop = putaway_hop_cost_m(
+                db,
+                int(wh_id),
+                lid,
+                start_location_id=int(dock_id) if dock_id is not None else None,
+            )
+            if hop is not None:
+                priority = max(0.0, 10_000.0 - float(hop))
+            else:
+                priority = max(0.0, 1_000.0 - float(lid) % 1000)
             st = st_by_lid.get(lid, "unknown")
             pc = _product_capacity_card(db, loc, product)
             sug = _suggestion_row_from_location(
@@ -1087,8 +1097,8 @@ def suggest_putaway_locations(db: Session, tenant_id: int, item_id: int) -> WmsP
             else:
                 primary_candidates.append(sug)
 
-    primary_candidates.sort(key=lambda r: (-r.priority_score, r.code))
-    overflow_candidates.sort(key=lambda r: (-r.priority_score, r.code))
+    primary_candidates.sort(key=lambda r: (-r.priority_score, int(r.location_id)))
+    overflow_candidates.sort(key=lambda r: (-r.priority_score, int(r.location_id)))
 
     distribution_plan = None
     if remaining_qty > 1e-9 and product is not None:
