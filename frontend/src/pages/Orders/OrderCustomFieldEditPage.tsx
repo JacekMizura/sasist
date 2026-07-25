@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { brandPrimaryButtonClass } from "../../design-system/brandUi";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { ChevronDown, ImagePlus, Trash2 } from "lucide-react";
 
@@ -654,7 +655,7 @@ export default function OrderCustomFieldEditPage() {
             type="submit"
             form="ocf-edit-form"
             disabled={saving}
-            className="rounded-lg bg-slate-900 px-5 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-50"
+            className={brandPrimaryButtonClass}
           >
             {saving ? "Zapisywanie…" : isCreate ? "Utwórz pole" : "Zapisz pole"}
           </button>

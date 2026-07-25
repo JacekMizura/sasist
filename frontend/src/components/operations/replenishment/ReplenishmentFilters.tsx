@@ -1,3 +1,5 @@
+import { PrimaryButton } from "../../../design-system/PrimaryButton";
+
 type Props = {
   statusFilter: string;
   onStatusChange: (v: string) => void;
@@ -25,14 +27,9 @@ export function ReplenishmentFilters({
         <option value="active">Aktywne</option>
         <option value="blocked">Zablokowane</option>
       </select>
-      <button
-        type="button"
-        disabled={!runtimeAvailable || scanning}
-        onClick={onScanRules}
-        className="rounded bg-slate-800 px-2 py-1 text-xs font-medium text-white disabled:opacity-50"
-      >
+      <PrimaryButton type="button" disabled={!runtimeAvailable || scanning} onClick={onScanRules}>
         {scanning ? "Szukam…" : "Wykryj uzupełnienia"}
-      </button>
+      </PrimaryButton>
     </div>
   );
 }

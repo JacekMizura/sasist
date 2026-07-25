@@ -1,5 +1,7 @@
 /** Shared chrome for Warehouse Materials (lists + detail) — aligned with Suppliers / WMS lists. */
 
+import { brandPrimaryButtonClass } from "../../design-system/brandUi";
+
 export const wmPageSectionTitleClass = "text-xs font-semibold uppercase tracking-wide text-slate-500";
 
 export const wmCardClass =
@@ -8,8 +10,7 @@ export const wmCardClass =
 export const wmCardRowClass =
   "flex w-full flex-col gap-3 border-b border-slate-100 p-4 text-left last:border-b-0 sm:flex-row sm:items-stretch sm:gap-4 sm:p-5";
 
-export const wmPrimaryBtnClass =
-  "inline-flex items-center justify-center rounded-lg border border-slate-900 bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400/50 disabled:pointer-events-none disabled:opacity-40";
+export const wmPrimaryBtnClass = brandPrimaryButtonClass;
 
 export const wmSecondaryBtnClass =
   "inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-800 shadow-sm transition hover:border-slate-300 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-300/60";

@@ -1,4 +1,5 @@
 import { Link } from "react-router-dom";
+import { brandPrimaryButtonClass } from "../../design-system/brandUi";
 import { Construction } from "lucide-react";
 
 import DocumentsEmptyState from "./DocumentsEmptyState";
@@ -27,7 +28,7 @@ export default function DocumentsPlaceholderPage({ title, hintLabel, hintTo }: P
             hintLabel && hintTo ? (
               <Link
                 to={hintTo}
-                className="inline-flex min-h-[40px] items-center justify-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-blue-700"
+                className={brandPrimaryButtonClass}
               >
                 {hintLabel}
               </Link>

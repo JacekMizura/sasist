@@ -10,6 +10,7 @@ import {
   type BundleReplenishmentRow,
   type BundleSlottingPair,
 } from "../../api/bundleIntelligenceApi";
+import { PrimaryButton } from "../../design-system/PrimaryButton";
 
 const DEFAULT_TENANT_ID = 1;
 
@@ -159,14 +160,9 @@ export default function BundleIntelligencePage() {
               ))}
             </select>
           </label>
-          <button
-            type="button"
-            onClick={() => void loadTab()}
-            disabled={loading}
-            className="px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 disabled:opacity-50"
-          >
+          <PrimaryButton type="button" onClick={() => void loadTab()} disabled={loading}>
             Odśwież
-          </button>
+          </PrimaryButton>
         </div>
       )}
 

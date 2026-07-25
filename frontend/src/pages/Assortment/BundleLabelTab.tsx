@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 
 import api from "../../api/axios";
 import { productLikeFieldLabelClass, productLikeInputClass, ProductLikeSection } from "../../components/catalog";
+import { PrimaryButton } from "../../design-system/PrimaryButton";
 import { openPdfBlobInPrintViewer } from "../../utils/openPdfForBrowserPrint";
 
 type Props = {
@@ -110,14 +111,13 @@ export function BundleLabelTab({ bundleId, tenantId, isNew }: Props) {
               )}
             </div>
           </div>
-          <button
+          <PrimaryButton
             type="button"
             disabled={templateId == null || generating}
             onClick={() => void handleGenerate()}
-            className="rounded-lg bg-violet-600 px-5 py-2.5 text-sm font-medium text-white hover:bg-violet-500 disabled:opacity-50"
           >
             {generating ? "Generowanie…" : "Generuj PDF etykiety"}
-          </button>
+          </PrimaryButton>
         </div>
       </ProductLikeSection>
     </div>

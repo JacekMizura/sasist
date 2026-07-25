@@ -1,5 +1,7 @@
 import { useState } from "react";
 
+import { brandPrimaryButtonClass } from "../../../../design-system/brandUi";
+
 type Props = {
   open: boolean;
   onClose: () => void;
@@ -36,7 +38,7 @@ export function PublishModal({ open, onClose, onConfirm, publishing }: Props) {
           <button
             type="button"
             disabled={publishing || !summary.trim()}
-            className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+            className={brandPrimaryButtonClass}
             onClick={() => onConfirm(summary.trim())}
           >
             Opublikuj

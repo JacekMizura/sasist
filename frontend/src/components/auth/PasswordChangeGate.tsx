@@ -4,6 +4,7 @@ import { useLocation } from "react-router-dom";
 
 import { changePassword } from "../../api/authApi";
 import { useAuth } from "../../context/AuthContext";
+import { PrimaryButton } from "../../design-system/PrimaryButton";
 
 /** Blocks the shell until the seeded superadmin sets a new password; optional loud dev warning. */
 export default function PasswordChangeGate() {
@@ -105,13 +106,9 @@ export default function PasswordChangeGate() {
                   minLength={6}
                 />
               </label>
-              <button
-                type="submit"
-                disabled={busy}
-                className="mt-2 w-full rounded-lg bg-slate-900 py-2.5 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-60"
-              >
+              <PrimaryButton type="submit" disabled={busy} className="mt-2 w-full">
                 {busy ? "Zapisywanie…" : "Zmień hasło"}
-              </button>
+              </PrimaryButton>
             </form>
           </div>
         </div>

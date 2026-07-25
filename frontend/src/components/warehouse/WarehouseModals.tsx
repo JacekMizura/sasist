@@ -5,6 +5,7 @@ import { InternalLayoutModal, type InternalLayoutSaveOptions } from "./InternalL
 import { EditProductModal, type EditProductModalProps } from "./EditProductModal";
 import { findRackForInternalLayoutModal } from "./warehouseUtils";
 import { UI_STRINGS } from "../../constants/uiStrings";
+import { PrimaryButton } from "../../design-system/PrimaryButton";
 
 export type WarehouseModalsProps = {
   /** CreateWarehouseModal */
@@ -66,7 +67,9 @@ export function WarehouseModals(props: WarehouseModalsProps) {
             />
             <div className="flex gap-2 justify-end">
               <button type="button" onClick={onCloseCreateWarehouse} className="px-3 py-2 rounded-lg bg-slate-100 text-[#1E293B] hover:bg-slate-200">{UI_STRINGS.warehouse.modal.cancel}</button>
-              <button type="button" onClick={onCreateWarehouse} className="px-3 py-2 rounded-lg bg-cyan-600 text-white hover:bg-cyan-500">{UI_STRINGS.warehouse.modal.create}</button>
+              <PrimaryButton type="button" onClick={onCreateWarehouse}>
+                {UI_STRINGS.warehouse.modal.create}
+              </PrimaryButton>
             </div>
           </div>
         </div>
@@ -100,9 +103,9 @@ export function WarehouseModals(props: WarehouseModalsProps) {
         <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 px-4 py-3 rounded-lg bg-white border border-[#E2E8F0] shadow-xl text-[#1E293B] text-sm">
           <span>{snackbar.message}</span>
           {snackbar.undo && (
-            <button type="button" onClick={snackbar.undo} className="px-3 py-1 rounded bg-cyan-600 hover:bg-cyan-500 text-white font-medium">
+            <PrimaryButton type="button" onClick={snackbar.undo}>
               {snackbar.undoLabel ?? "Cofnij"}
-            </button>
+            </PrimaryButton>
           )}
           <button type="button" onClick={() => setSnackbar(null)} className="text-slate-500 hover:text-slate-700">✕</button>
         </div>

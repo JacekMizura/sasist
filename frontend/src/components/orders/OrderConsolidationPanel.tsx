@@ -10,6 +10,7 @@ import {
   generateOrderConsolidationPlan,
   type ConsolidationPlanDto,
 } from "../../api/orderConsolidationApi";
+import { PrimaryButton } from "../../design-system/PrimaryButton";
 import {
   consolidationPlanStatusClass,
 } from "../../pages/wms/consolidation/consolidationStatusUi";
@@ -117,15 +118,10 @@ export default function OrderConsolidationPanel({ orderId, onChanged }: Props) {
             Analizuj / utwórz plan
           </button>
           {showMmButton ? (
-            <button
-              type="button"
-              onClick={() => void handleGenerateMm()}
-              disabled={mmGenerating}
-              className="inline-flex items-center gap-2 rounded-lg bg-cyan-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-cyan-700 disabled:opacity-50"
-            >
+            <PrimaryButton type="button" onClick={() => void handleGenerateMm()} disabled={mmGenerating}>
               {mmGenerating ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Truck className="h-4 w-4" aria-hidden />}
               Utwórz robocze MM
-            </button>
+            </PrimaryButton>
           ) : null}
         </div>
       </div>
@@ -148,7 +144,7 @@ export default function OrderConsolidationPanel({ orderId, onChanged }: Props) {
               <dt className="text-xs font-medium uppercase tracking-wide text-slate-500">Status</dt>
               <dd className="mt-0.5">
                 <span
-                  className={`inline-flex rounded-full border px-2.5 py-0.5 text-xs font-semibold ${wmsPlanStatusClass(plan.status)}`}
+                  className={`inline-flex rounded-full border px-2.5 py-0.5 text-xs font-semibold ${consolidationPlanStatusClass(plan.status)}`}
                 >
                   {consolidationPlanStatusLabel(plan.status)}
                 </span>

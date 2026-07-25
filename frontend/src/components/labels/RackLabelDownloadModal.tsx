@@ -5,6 +5,7 @@ import type { RackState, BinState } from "../../types/warehouse";
 import type { LabelTemplate, TemplateElement, RepeaterElement } from "../../types/labelSystem";
 import { renderLabel } from "../../labelRenderer";
 import { exportLabelsPdf } from "../../utils/labels/exportLabelsPdf";
+import { PrimaryButton } from "../../design-system/PrimaryButton";
 
 type RackLocationItem = {
   label: string;
@@ -242,14 +243,13 @@ export function RackLabelDownloadModal({ rack, locations, onClose }: Props) {
           >
             Anuluj
           </button>
-          <button
+          <PrimaryButton
             type="button"
             disabled={generating || !selectedTemplateId || !effectiveLocations.length}
             onClick={handleDownload}
-            className="px-4 py-2 rounded-lg bg-cyan-600 text-white hover:bg-cyan-500 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {generating ? "Generowanie…" : "Pobierz PDF"}
-          </button>
+          </PrimaryButton>
         </div>
       </div>
     </div>

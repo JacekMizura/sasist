@@ -3,6 +3,7 @@ import { Building2, Loader2, Search, User, X } from "lucide-react";
 
 import { lookupDirectSaleNip, postInvoiceCustomer } from "../../api/directSalesApi";
 import { DAMAGE_TENANT_ID } from "../../constants/panelTenant";
+import { PrimaryButton } from "../../design-system/PrimaryButton";
 import type { DirectSalesCustomerState } from "../../hooks/directSales/useDirectSalesCustomer";
 import type { DirectSaleSession } from "../../utils/normalizeDirectSales";
 import { useResolvedDirectSalesSettings } from "../../modules/directSales/settings/resolvedDirectSalesSettings";
@@ -158,7 +159,7 @@ export function CustomerPanel({
             placeholder="NIP"
             className="flex-1 p-2 text-xs border border-blue-100 rounded-lg"
           />
-          <button
+          <PrimaryButton
             type="button"
             disabled={disabled || nipLoading}
             onClick={async () => {
@@ -192,10 +193,9 @@ export function CustomerPanel({
                 setNipLoading(false);
               }
             }}
-            className="bg-slate-800 text-white px-3 py-1 rounded-lg text-[10px] font-bold"
           >
             {nipLoading ? <Loader2 className="animate-spin" size={12} /> : "Pobierz z MF"}
-          </button>
+          </PrimaryButton>
         </div>
         {nipError ? <p className="text-[10px] text-red-600 font-medium">{nipError}</p> : null}
         <input
@@ -214,7 +214,7 @@ export function CustomerPanel({
           <input value={postal} onChange={(e) => setPostal(e.target.value)} placeholder="Kod" className="p-2 text-xs border border-blue-100 rounded-lg" />
           <input value={city} onChange={(e) => setCity(e.target.value)} placeholder="Miasto" className="p-2 text-xs border border-blue-100 rounded-lg" />
         </div>
-        <button
+        <PrimaryButton
           type="button"
           disabled={disabled || saving || !sessionId || !safeTrim(company) || safeTrim(nip).length < 10}
           onClick={async () => {
@@ -240,11 +240,11 @@ export function CustomerPanel({
               setSaving(false);
             }
           }}
-          className="w-full flex items-center justify-center gap-2 bg-blue-600 text-white py-2.5 rounded-xl text-xs font-bold disabled:opacity-40"
+          className="w-full"
         >
           <Building2 size={14} />
           {saving ? "Zapisywanie…" : "Zapisz klienta i przypisz do FV"}
-        </button>
+        </PrimaryButton>
       </div>
 
       {customer.error ? <p className="text-xs text-red-600">{customer.error}</p> : null}

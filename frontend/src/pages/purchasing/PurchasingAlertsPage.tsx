@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { brandPrimaryButtonClass } from "../../design-system/brandUi";
 import { Bell, CheckCircle2, FileText, Settings2, TriangleAlert } from "lucide-react";
 import { Link, useSearchParams } from "react-router-dom";
 import { fetchTenantsList } from "../../api/tenantsApi";
@@ -825,7 +826,7 @@ export default function PurchasingAlertsPage({ variant = "page" }: { variant?: "
               <button
                 type="button"
                 disabled={actionBusy}
-                className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+                className={brandPrimaryButtonClass}
                 onClick={() => void addRule()}
               >
                 Zapisz

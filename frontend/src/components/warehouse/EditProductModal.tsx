@@ -3,6 +3,7 @@ import type { WarehouseProduct, AssignedLocation } from "../../types/warehouse";
 import { ProductSearchAutocomplete } from "./ProductSearchAutocomplete";
 import { LocationPicker } from "./LocationPicker";
 import type { SelectablePosition } from "./warehouseUtils";
+import { PrimaryButton } from "../../design-system/PrimaryButton";
 
 export type ProductKey = { name: string; sku: string; ean: string };
 
@@ -334,14 +335,13 @@ export function EditProductModal({
             >
               Anuluj
             </button>
-            <button
+            <PrimaryButton
               type="button"
               onClick={handleSubmit}
               disabled={saving || capacityExceeded || stockValidationBlocked}
-              className="px-4 py-2 rounded-lg bg-cyan-600 text-white hover:bg-cyan-500 active:scale-100 active:translate-y-0 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isNew ? "Dodaj" : "Zapisz"}
-            </button>
+            </PrimaryButton>
           </div>
         </div>
       </div>

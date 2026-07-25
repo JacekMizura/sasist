@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { brandPrimaryButtonClass } from "../../design-system/brandUi";
 import { Link, useNavigate } from "react-router-dom";
 import { ChevronDown, Columns3, Download, Package } from "lucide-react";
 
@@ -391,7 +392,7 @@ export default function BundlesPage() {
               action={
                 <Link
                   to="/bundles/new"
-                  className="inline-flex items-center justify-center rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-slate-800"
+                  className={brandPrimaryButtonClass}
                 >
                   Dodaj pierwszy zestaw
                 </Link>

@@ -1,4 +1,5 @@
 import type { BinState, RackState } from "../../../types/warehouse";
+import { PrimaryButton } from "../../../design-system/PrimaryButton";
 
 export interface MagazynRackDetailHeaderProps {
   rack: RackState | null | undefined;
@@ -44,13 +45,9 @@ export function MagazynRackDetailHeader({
           <span aria-hidden>←</span> Powrót do mapy
         </button>
         {rack && onShowLabelDownload && (
-          <button
-            type="button"
-            onClick={onShowLabelDownload}
-            className="px-3 py-1.5 rounded-lg text-xs font-medium bg-cyan-600 text-white hover:bg-cyan-500"
-          >
+          <PrimaryButton type="button" onClick={onShowLabelDownload}>
             Pobierz etykiety
-          </button>
+          </PrimaryButton>
         )}
         {rack && onEmptyRack && !hideEmptyRackButton && (
           <button

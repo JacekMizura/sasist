@@ -4,6 +4,7 @@ import QRCode from "qrcode";
 import { jsPDF } from "jspdf";
 import api from "../api/axios";
 import { useWarehouse } from "../context/WarehouseContext";
+import { PrimaryButton } from "../design-system/PrimaryButton";
 
 type BarcodeFormat = "Code128" | "QR" | "DataMatrix";
 
@@ -116,14 +117,9 @@ export default function BarcodeManagement() {
       <h1 className="text-2xl font-bold text-slate-800 mb-6">Zarządzanie kodami kreskowymi</h1>
 
       <div className="space-y-4 mb-6">
-        <button
-          type="button"
-          onClick={loadLayout}
-          disabled={selectedWarehouseId == null || loading}
-          className="px-4 py-2 rounded-lg bg-cyan-600 text-white disabled:opacity-50"
-        >
+        <PrimaryButton type="button" onClick={loadLayout} disabled={selectedWarehouseId == null || loading}>
           {loading ? "Ładowanie…" : "Załaduj układ"}
-        </button>
+        </PrimaryButton>
 
         {layout && (
           <>

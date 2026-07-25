@@ -17,6 +17,7 @@ import { listPurchaseOrders, type PurchaseOrderListRow } from "@/api/purchasingO
 import { extractApiErrorMessage } from "@/api/apiErrorMessage";
 import { LocationBadge } from "@/components/warehouse/LocationBadge";
 import { useWarehouse } from "@/context/WarehouseContext";
+import { PrimaryButton } from "@/design-system/PrimaryButton";
 import { ProductThumb } from "./components/ProductThumb";
 import { MaterialSubstitutesFormPanel } from "./components/MaterialSubstitutesFormPanel";
 import { MaterialNeedsPanel } from "./components/MaterialNeedsPanel";
@@ -257,14 +258,10 @@ export default function ProductionShortagesPage() {
                   </td>
                   <td className={productionModuleListTdClass}>
                     <div className="flex flex-col gap-1.5">
-                      <button
-                        type="button"
-                        onClick={() => void createRequisition(r)}
-                        className="inline-flex items-center gap-1 rounded-lg bg-violet-600 px-2 py-1.5 text-xs font-bold text-white hover:bg-violet-700"
-                      >
+                      <PrimaryButton type="button" onClick={() => void createRequisition(r)}>
                         <ShoppingCart className="h-3.5 w-3.5" aria-hidden />
                         Zapotrzebowanie
-                      </button>
+                      </PrimaryButton>
                       <button
                         type="button"
                         onClick={() => void openPoPicker(r)}

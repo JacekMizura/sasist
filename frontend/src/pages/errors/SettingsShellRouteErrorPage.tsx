@@ -1,6 +1,7 @@
 import { isRouteErrorResponse, Link, useNavigate, useRouteError } from "react-router-dom";
 
 import ErpShellLayout from "../../layout/ErpShellLayout";
+import { brandPrimaryButtonClass } from "../../design-system/brandUi";
 
 /**
  * Błąd trasy w obrębie ustawień / dokumentów / admin — pełny szkielet ERP (sidebar + nagłówek),
@@ -33,10 +34,7 @@ export default function SettingsShellRouteErrorPage() {
           >
             Powrót
           </button>
-          <Link
-            to="/settings/company"
-            className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700"
-          >
+          <Link to="/settings/company" className={brandPrimaryButtonClass}>
             Ustawienia — firma
           </Link>
         </div>

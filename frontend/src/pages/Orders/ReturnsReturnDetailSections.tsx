@@ -8,6 +8,7 @@ import { getReturnUiStatusSummary, patchReturnRmzUiStatus } from "../../api/retu
 import { DAMAGE_TENANT_ID } from "../damage/damageShared";
 import { WMS_ROUTES } from "../wms/wmsRoutes";
 import { listSellasistInputClass } from "../../components/listPage/listSellasistTokens";
+import { PrimaryButton, primaryButtonClassName } from "../../design-system/PrimaryButton";
 
 type FiBreakdown = {
   total: number;
@@ -246,7 +247,7 @@ export function renderRmzDetailSection(id: ReturnDetailSectionId, ctx: RmzDetail
             className="w-full resize-y border-0 border-b border-slate-200 bg-transparent px-0 py-2 text-sm text-slate-900 placeholder:text-slate-300 focus:border-slate-900 focus:ring-0"
           />
           <div className="mt-4 flex items-center gap-4">
-            <button
+            <PrimaryButton
               type="button"
               onClick={() => {
                 try {
@@ -256,10 +257,9 @@ export function renderRmzDetailSection(id: ReturnDetailSectionId, ctx: RmzDetail
                   setErr("Nie udało się zapisać notatek.");
                 }
               }}
-              className="bg-slate-900 px-5 py-2 text-xs font-semibold tracking-wide text-white transition-colors hover:bg-slate-800"
             >
               Zapisz
-            </button>
+            </PrimaryButton>
             {notesSavedAt != null ? (
               <span className="text-[10px] text-slate-400">Zapisano: {formatWhen(new Date(notesSavedAt).toISOString())}</span>
             ) : null}
@@ -301,8 +301,9 @@ export function renderRmzDetailSection(id: ReturnDetailSectionId, ctx: RmzDetail
                 className="w-full resize-none border-0 border-b border-slate-200 bg-transparent px-0 py-2 text-sm text-slate-900 focus:border-slate-900 focus:ring-0"
               />
             </label>
-            <button
+            <PrimaryButton
               type="button"
+              className="shrink-0"
               disabled={!commDraft.trim()}
               onClick={() => {
                 const body = commDraft.trim();
@@ -316,10 +317,9 @@ export function renderRmzDetailSection(id: ReturnDetailSectionId, ctx: RmzDetail
                   setErr("Nie udało się zapisać wiadomości.");
                 }
               }}
-              className="shrink-0 bg-slate-900 px-5 py-2 text-xs font-semibold tracking-wide text-white transition-colors hover:bg-slate-800 disabled:opacity-30"
             >
               Dodaj
-            </button>
+            </PrimaryButton>
           </div>
         </div>
       );
@@ -360,7 +360,7 @@ export function renderRmzDetailSection(id: ReturnDetailSectionId, ctx: RmzDetail
               <div className="flex gap-2">
                 <Link
                   to={`/orders/${data.order_id}`}
-                  className="bg-slate-900 px-4 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-slate-800"
+                  className={primaryButtonClassName()}
                 >
                   Utwórz
                 </Link>
@@ -457,14 +457,14 @@ export function renderRmzDetailSection(id: ReturnDetailSectionId, ctx: RmzDetail
                 <p className="mb-4 text-[10px] text-slate-400">Brak zapisanego zwrotu.</p>
               )}
 
-              <button
+              <PrimaryButton
                 type="button"
+                className="w-full"
                 disabled={terminal}
                 onClick={() => openRefundModal()}
-                className="w-full bg-slate-900 py-3 text-xs font-semibold tracking-wide text-white transition-colors hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-30"
               >
                 ZAPISZ ZWROT
-              </button>
+              </PrimaryButton>
             </div>
           )}
         </div>

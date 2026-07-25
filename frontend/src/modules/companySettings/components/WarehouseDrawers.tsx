@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 
 import { AppButton } from "../../../components/app-shell";
 import { companyInputClass, CompanyFormField } from "./CompanyFormField";
-import { purchasingBtnPrimary, purchasingBtnSecondary } from "../../purchasing/ui";
+import { purchasingBtnSecondary } from "../../purchasing/ui";
 import type { Warehouse } from "../../../services/warehouseService";
 import { useCompanySettings } from "../context/CompanySettingsContext";
 
@@ -114,7 +114,7 @@ export function WarehouseEditDrawer({ warehouse, onClose }: Props) {
           <AppButton variant="secondary" className={purchasingBtnSecondary} disabled={saving} onClick={onClose}>
             Anuluj
           </AppButton>
-          <AppButton variant="primary" className={purchasingBtnPrimary} disabled={saving} onClick={() => void handleSave()}>
+          <AppButton variant="primary" disabled={saving} onClick={() => void handleSave()}>
             {saving ? "Zapisywanie…" : "Zapisz"}
           </AppButton>
         </div>
@@ -170,7 +170,7 @@ export function WarehouseCreateDrawer({ open, onClose }: CreateProps) {
           <AppButton variant="secondary" className={purchasingBtnSecondary} onClick={onClose}>
             Anuluj
           </AppButton>
-          <AppButton variant="primary" className={purchasingBtnPrimary} disabled={!name.trim() || saving} onClick={() => void handleCreate()}>
+          <AppButton variant="primary" disabled={!name.trim() || saving} onClick={() => void handleCreate()}>
             {saving ? "Tworzenie…" : "Utwórz magazyn"}
           </AppButton>
         </div>

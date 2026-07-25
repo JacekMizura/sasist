@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Loader2, X } from "lucide-react";
 
+import { PrimaryButton } from "../../design-system/PrimaryButton";
 import {
   computeCapacityDm3,
   type SegmentDimensionDefaults,
@@ -364,15 +365,15 @@ export default function ConsolidationRackSegmentModal({
 
         {canEdit ? (
           <div className="flex shrink-0 gap-2 border-t border-slate-200 bg-white px-4 py-3">
-            <button
+            <PrimaryButton
               type="button"
               disabled={saving}
               onClick={() => void handleSave()}
-              className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-violet-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-violet-800 disabled:opacity-60"
+              className="flex-1"
             >
               {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
               Zapisz
-            </button>
+            </PrimaryButton>
             <button
               type="button"
               disabled={saving}

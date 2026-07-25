@@ -1,6 +1,9 @@
 /**
  * Flat ERP tokens for automation module — white-first, minimal gray fills.
  */
+
+import { brandPrimaryButtonClass } from "../../../design-system/brandUi";
+
 export const oaInp =
   "h-9 w-full min-w-0 rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-slate-400 focus:ring-2 focus:ring-slate-300/35";
 /** Pole wyszukiwania z ikoną lupy po lewej — bez px-3, żeby pl-10 nie kolidowało. */
@@ -14,8 +17,7 @@ export const oaLbl = "block text-xs font-medium text-slate-600";
 
 export const oaBtn =
   "inline-flex h-9 shrink-0 items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-4 text-sm font-medium text-slate-800 transition hover:border-slate-300";
-export const oaBtnPri =
-  "inline-flex h-9 shrink-0 items-center justify-center gap-2 rounded-lg bg-slate-900 px-4 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:opacity-50";
+export const oaBtnPri = brandPrimaryButtonClass;
 export const oaBtnGhost =
   "inline-flex h-9 w-full items-center justify-center gap-2 rounded-lg border border-dashed border-slate-300 bg-white text-sm font-medium text-slate-600 transition hover:border-slate-400 hover:text-slate-900";
 export const oaBtnDanger =

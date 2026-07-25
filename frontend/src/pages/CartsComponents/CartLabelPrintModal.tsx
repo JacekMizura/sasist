@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import api from "../../api/axios";
 import { openPdfBlobInPrintViewer } from "../../utils/openPdfForBrowserPrint";
+import { PrimaryButton } from "../../design-system/PrimaryButton";
 
 export type CartForLabel = { id: number; name: string };
 
@@ -141,14 +142,9 @@ export function CartLabelPrintModal({ open, cart, onClose }: Props) {
           >
             Anuluj
           </button>
-          <button
-            type="button"
-            disabled={generating || templateId == null}
-            onClick={handleGenerate}
-            className="px-4 py-2 rounded-lg bg-cyan-600 text-white hover:bg-cyan-500 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
+          <PrimaryButton type="button" disabled={generating || templateId == null} onClick={handleGenerate}>
             {generating ? "Generowanie…" : "Generuj PDF"}
-          </button>
+          </PrimaryButton>
         </div>
       </div>
     </div>

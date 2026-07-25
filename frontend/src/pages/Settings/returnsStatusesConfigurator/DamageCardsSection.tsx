@@ -1,4 +1,5 @@
 import { useMemo, useState, type Dispatch, type SetStateAction } from "react";
+import { brandPrimaryButtonClass } from "../../../design-system/brandUi";
 import { Pencil, Plus } from "lucide-react";
 
 import type {
@@ -297,7 +298,7 @@ function DamageClassModal({
           <button
             type="button"
             disabled={!draft.label.trim()}
-            className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-45"
+            className={brandPrimaryButtonClass}
             onClick={() => onSave({ ...draft, label: draft.label.trim() }, mode, row)}
           >
             Zapisz
@@ -394,7 +395,7 @@ function DamageReasonModal({
           <button
             type="button"
             disabled={!draft.label.trim()}
-            className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-45"
+            className={brandPrimaryButtonClass}
             onClick={() => onSave({ ...draft, label: draft.label.trim() }, mode, row)}
           >
             Zapisz

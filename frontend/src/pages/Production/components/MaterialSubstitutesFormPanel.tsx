@@ -8,6 +8,7 @@ import {
   type MaterialSubstitute,
 } from "@/api/productionShortageApi";
 import { extractApiErrorMessage } from "@/api/apiErrorMessage";
+import { PrimaryButton } from "@/design-system/PrimaryButton";
 import { ProductThumb } from "./ProductThumb";
 import { ErpProductPicker, type ErpProductOption } from "./ErpProductPicker";
 
@@ -127,15 +128,10 @@ export function MaterialSubstitutesFormPanel({ tenantId, rows, onChanged }: Prop
             placeholder="Np. dopuszczalny tylko przy produkcji serii testowej…"
           />
         </div>
-        <button
-          type="button"
-          disabled={busy}
-          onClick={() => void add()}
-          className="mt-4 inline-flex items-center gap-2 rounded-lg bg-violet-700 px-4 py-2 text-sm font-bold text-white hover:bg-violet-800 disabled:opacity-50"
-        >
-          <Plus className="h-4 w-4" aria-hidden />
+        <PrimaryButton type="button" disabled={busy} onClick={() => void add()} className="mt-4">
+          <Plus className="h-4 w-4" strokeWidth={2.5} aria-hidden />
           Dodaj zamiennik
-        </button>
+        </PrimaryButton>
       </div>
 
       {rows.length === 0 ? (

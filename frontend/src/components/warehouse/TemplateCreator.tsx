@@ -13,6 +13,7 @@ import { TemplatePassageOverlay, isPassageGeometryValid } from "./TemplatePassag
 import { PASSAGE_FIELD_HINTS, passageFieldLabel } from "./passageFieldCopy";
 import { getStorageTypeStyle, normalizeBinTypeMap, normalizeStorageType, TEMPLATE_STORAGE_TYPE_OPTIONS } from "../../utils/storageTypes";
 import { StorageTypeIcon } from "../../utils/storageTypeIcons";
+import { PrimaryButton } from "../../design-system/PrimaryButton";
 
 const DEFAULT_ADDRESS_PATTERN = "{Row}{Section}-{Bin}-{Level}";
 
@@ -1396,11 +1397,11 @@ export function TemplateCreator({ onSave, initialTemplate, onCancelEdit, onSaveE
               Anuluj
             </button>
           )}
-          <button
+          <PrimaryButton
             type="button"
             onClick={handleSave}
             disabled={saving || !name.trim()}
-            className="px-7 py-3 rounded-xl bg-cyan-600 text-white font-semibold text-[15px] hover:bg-cyan-500 shadow-md shadow-cyan-900/20 hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none flex items-center gap-2 min-w-[180px] justify-center transition-all duration-150"
+            className="min-w-[180px]"
           >
             {saving ? (
               <>
@@ -1415,7 +1416,7 @@ export function TemplateCreator({ onSave, initialTemplate, onCancelEdit, onSaveE
             ) : (
               isEdit ? "Zapisz zmiany" : "Zapisz szablon"
             )}
-          </button>
+          </PrimaryButton>
         </div>
       </footer>
       {instanceUpdateDialog ? (
@@ -1465,14 +1466,9 @@ export function TemplateCreator({ onSave, initialTemplate, onCancelEdit, onSaveE
               >
                 Tylko zapisz szablon
               </button>
-              <button
-                type="button"
-                disabled={saving}
-                onClick={() => void confirmUpdateInstances()}
-                className="px-4 py-2.5 rounded-xl bg-cyan-600 text-white font-semibold hover:bg-cyan-500 disabled:opacity-50"
-              >
+              <PrimaryButton type="button" disabled={saving} onClick={() => void confirmUpdateInstances()}>
                 Aktualizuj instancje
-              </button>
+              </PrimaryButton>
             </div>
           </div>
         </div>

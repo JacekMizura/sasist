@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { brandPrimaryButtonClass } from "../../../design-system/brandUi";
 import { ArrowDown, ArrowUp, ChevronDown, X } from "lucide-react";
 import { PanelStatusHierarchyPicker } from "../../panel/PanelStatusHierarchyPicker";
 import type { OrderUiPanelSubgroupRead, OrderUiStatusPanelSummary } from "../../../types/orderUiStatus";
@@ -356,7 +357,7 @@ export function OrderBulkMultiActionModal({
           <button
             type="button"
             disabled={!canRun}
-            className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-50"
+            className={brandPrimaryButtonClass}
             onClick={() => void run()}
           >
             {busy ? "Wykonywanie…" : "Uruchom"}

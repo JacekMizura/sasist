@@ -2041,7 +2041,7 @@ export default function OrderDetailPage() {
                         compact
                       />
                       {!isStationarySale ? (
-                        <Link to={WMS_ROUTES.packingOrder(order.id)} className="ml-2 inline-flex items-center justify-center rounded-md bg-blue-600 px-5 py-2 text-sm font-bold text-white shadow-sm transition-colors hover:bg-blue-700">Spakuj</Link>
+                        <Link to={WMS_ROUTES.packingOrder(order.id)} className={brandPrimaryButtonClass}>Spakuj</Link>
                       ) : null}
                   </div>
                 </div>
@@ -2137,7 +2137,7 @@ export default function OrderDetailPage() {
                       {orderFulfillmentWhId != null && (
                         <div className="mt-3 flex justify-end gap-2">
                           <button type="button" className="rounded-md border border-slate-300 bg-white px-4 py-1.5 text-xs font-bold text-slate-700 transition-colors hover:bg-slate-50" onClick={() => { setShipDraft(order.shipping_method_id?.trim() ?? ""); setPayMethodDraft((order.panel_payment_method ?? "").trim()); setPayStatusDraft((order.panel_payment_status ?? "").trim()); }}>Anuluj</button>
-                          <button type="button" disabled={shipPaySaving} onClick={() => { setShipPaySaving(true); void patchOrder(order.id, { shipping_method_id: shipDraft.trim() || null, payment_method: payMethodDraft.trim() || null, payment_status: payStatusDraft.trim() || null }).then(() => reloadOrderById(order.id)).finally(() => setShipPaySaving(false)); }} className="rounded-md bg-slate-800 px-4 py-1.5 text-xs font-bold text-white transition-colors hover:bg-slate-900 disabled:opacity-50">{shipPaySaving ? "..." : "Zapisz"}</button>
+                          <button type="button" disabled={shipPaySaving} onClick={() => { setShipPaySaving(true); void patchOrder(order.id, { shipping_method_id: shipDraft.trim() || null, payment_method: payMethodDraft.trim() || null, payment_status: payStatusDraft.trim() || null }).then(() => reloadOrderById(order.id)).finally(() => setShipPaySaving(false)); }} className={brandPrimaryButtonClass}>{shipPaySaving ? "..." : "Zapisz"}</button>
                         </div>
                       )}
                     </SummaryDashboardCard>
@@ -2158,7 +2158,7 @@ export default function OrderDetailPage() {
                           <label className="flex flex-col text-slate-600">Kraj<input className={inpSm} value={addrDraft.country} onChange={(e) => setAddrDraft((d) => ({ ...d, country: e.target.value }))} /></label>
                           <div className="flex justify-end gap-2 pt-3">
                             <button className="rounded-md border border-slate-300 bg-white px-4 py-1.5 text-xs font-bold text-slate-700 transition-colors hover:bg-slate-50" onClick={() => { setAddrDraft(shippingFromOrderJson(order.addresses_json)); setAddressEditing(false); }}>Anuluj</button>
-                            <button disabled={addressSaving || orderFulfillmentWhId == null} className="rounded-md bg-slate-800 px-4 py-1.5 text-xs font-bold text-white transition-colors hover:bg-slate-900 disabled:opacity-50" onClick={() => { setAddressSaving(true); void patchOrder(order.id, { shipping_name: addrDraft.name.trim() || null, shipping_street: addrDraft.street.trim() || null, shipping_city: addrDraft.city.trim() || null, shipping_postal_code: addrDraft.postal.trim() || null, shipping_country: addrDraft.country.trim() || null }).then(() => reloadOrderById(order.id)).finally(() => { setAddressSaving(false); setAddressEditing(false); }); }}>{addressSaving ? "..." : "Zapisz"}</button>
+                            <button disabled={addressSaving || orderFulfillmentWhId == null} className={brandPrimaryButtonClass} onClick={() => { setAddressSaving(true); void patchOrder(order.id, { shipping_name: addrDraft.name.trim() || null, shipping_street: addrDraft.street.trim() || null, shipping_city: addrDraft.city.trim() || null, shipping_postal_code: addrDraft.postal.trim() || null, shipping_country: addrDraft.country.trim() || null }).then(() => reloadOrderById(order.id)).finally(() => { setAddressSaving(false); setAddressEditing(false); }); }}>{addressSaving ? "..." : "Zapisz"}</button>
                           </div>
                         </div>
                       ) : (
@@ -2194,7 +2194,7 @@ export default function OrderDetailPage() {
                           )}
                           <div className="flex justify-end gap-2 pt-3">
                             <button className="rounded-md border border-slate-300 bg-white px-4 py-1.5 text-xs font-bold text-slate-700 transition-colors hover:bg-slate-50" onClick={() => { const inv = parseBillingInvoice(order.addresses_json); const t = (order.panel_document_type ?? "").trim().toUpperCase(); setDocDraft({ document_type: t === "INVOICE" ? "INVOICE" : "PARAGON", sales_document_number: (order.sales_document_number ?? "").trim(), company_name: inv.companyName, nip: inv.nip, billing_email: inv.email }); setSummaryDocEditing(false); }}>Anuluj</button>
-                            <button disabled={docSaving || orderFulfillmentWhId == null} className="rounded-md bg-slate-800 px-4 py-1.5 text-xs font-bold text-white transition-colors hover:bg-slate-900 disabled:opacity-50" onClick={() => { setDocSaving(true); const isInv = docDraft.document_type === "INVOICE"; void patchOrder(order.id, { document_type: docDraft.document_type, sales_document_number: docDraft.sales_document_number.trim() || null, company_name: isInv ? docDraft.company_name.trim() || null : null, nip: isInv ? docDraft.nip.trim() || null : null, email: isInv ? docDraft.billing_email.trim() || null : null }).then(() => reloadOrderById(order.id)).finally(() => { setDocSaving(false); setSummaryDocEditing(false); }); }}>{docSaving ? "..." : "Zapisz"}</button>
+                            <button disabled={docSaving || orderFulfillmentWhId == null} className={brandPrimaryButtonClass} onClick={() => { setDocSaving(true); const isInv = docDraft.document_type === "INVOICE"; void patchOrder(order.id, { document_type: docDraft.document_type, sales_document_number: docDraft.sales_document_number.trim() || null, company_name: isInv ? docDraft.company_name.trim() || null : null, nip: isInv ? docDraft.nip.trim() || null : null, email: isInv ? docDraft.billing_email.trim() || null : null }).then(() => reloadOrderById(order.id)).finally(() => { setDocSaving(false); setSummaryDocEditing(false); }); }}>{docSaving ? "..." : "Zapisz"}</button>
                           </div>
                         </div>
                       ) : (
@@ -2285,7 +2285,7 @@ export default function OrderDetailPage() {
                             <label className="flex items-center"><input type="checkbox" className="mr-2 rounded border-slate-300 w-4 h-4 text-blue-600 focus:ring-blue-500" checked={opVisPick} onChange={(e) => setOpVisPick(e.target.checked)}/> Zbieranie</label>
                             <label className="flex items-center"><input type="checkbox" className="mr-2 rounded border-slate-300 w-4 h-4 text-blue-600 focus:ring-blue-500" checked={opVisPack} onChange={(e) => setOpVisPack(e.target.checked)}/> Pakowanie</label>
                           </div>
-                          <button disabled={opSaving || !opDraft.trim()} onClick={() => void saveOperationalNote()} className="rounded-md bg-slate-800 px-5 py-2 text-sm font-bold text-white transition-colors hover:bg-slate-900 disabled:opacity-50">Zapisz</button>
+                          <button disabled={opSaving || !opDraft.trim()} onClick={() => void saveOperationalNote()} className={brandPrimaryButtonClass}>Zapisz</button>
                         </div>
                       </div>
                     </section>
@@ -2298,7 +2298,7 @@ export default function OrderDetailPage() {
                       <textarea value={noteDraft} onChange={(e) => setNoteDraft(e.target.value)} rows={4} placeholder="Wpisz treść..." className="w-full resize-y rounded-md border border-slate-200 bg-white px-3 py-2 text-sm focus:border-orange-500 outline-none mb-4 transition-colors" />
                       <div className="flex justify-between items-center">
                         <button className="text-sm font-bold border border-slate-300 px-4 py-2 rounded-md text-slate-700 hover:bg-slate-50 shadow-sm flex items-center transition-colors"><Plus size={16} className="mr-2"/> Dodaj załącznik</button>
-                        <button type="button" className={`${brandPrimaryButtonClass} px-8`}>Wyślij <Send size={16} className="ml-2"/></button>
+                        <button type="button" className={brandPrimaryButtonClass}>Wyślij <Send size={16} className="ml-2"/></button>
                       </div>
                     </SummaryDashboardCard>
                   </div>
@@ -2416,7 +2416,7 @@ export default function OrderDetailPage() {
                         <button className={`px-4 py-1.5 rounded text-xs font-bold transition-colors ${orderRabatMode === "pct" ? "bg-slate-900 text-white shadow-sm" : "text-slate-600 hover:text-slate-900"}`} onClick={() => setOrderRabatMode("pct")}>%</button>
                       </div>
                       <input className="min-w-0 flex-1 rounded-md border border-slate-200 px-3 py-1.5 text-sm outline-none focus:border-orange-500 transition-colors" value={orderRabatDraft} onChange={e => setOrderRabatDraft(e.target.value)} placeholder="Rabat"/>
-                      <button disabled={orderRabatSaving} onClick={() => void saveOrderDiscount()} className="bg-slate-800 text-white px-4 py-1.5 rounded-md text-sm font-bold ml-1 hover:bg-slate-900 transition-colors disabled:opacity-50">{orderRabatSaving ? "..." : "Zapisz"}</button>
+                      <button disabled={orderRabatSaving} onClick={() => void saveOrderDiscount()} className={brandPrimaryButtonClass}>{orderRabatSaving ? "..." : "Zapisz"}</button>
                     </div>
                     <div className="space-y-2 text-sm text-slate-600">
                       <div className="flex justify-between"><span>Po rabacie</span><span className="font-medium text-slate-900">{formatMoney(productsAfterDiscount, order.currency)}</span></div>
@@ -2442,7 +2442,7 @@ export default function OrderDetailPage() {
                       <div className="flex gap-2">
                         <button onClick={() => setAddProductOpen(true)} className="border border-slate-300 rounded-md bg-white px-4 py-2 text-sm font-bold shadow-sm hover:bg-slate-50 transition-colors">Dodaj produkt</button>
                         <button onClick={() => setAddBundleOpen(true)} className="border border-slate-300 rounded-md bg-white px-4 py-2 text-sm font-bold shadow-sm hover:bg-slate-50 transition-colors">Dodaj zestaw</button>
-                        <Link to={WMS_ROUTES.packingOrder(order.id)} className="bg-blue-600 text-white rounded-md px-6 py-2 text-sm font-bold shadow-sm hover:bg-blue-700 transition-colors">Spakuj</Link>
+                        <Link to={WMS_ROUTES.packingOrder(order.id)} className={brandPrimaryButtonClass}>Spakuj</Link>
                       </div>
                     </div>
 
@@ -2490,14 +2490,14 @@ export default function OrderDetailPage() {
                         <label className="flex items-center"><input type="checkbox" className="mr-2 rounded border-slate-300 w-4 h-4 text-blue-600 focus:ring-blue-500" checked={opVisPick} onChange={e => setOpVisPick(e.target.checked)}/> Zbieranie</label>
                         <label className="flex items-center"><input type="checkbox" className="mr-2 rounded border-slate-300 w-4 h-4 text-blue-600 focus:ring-blue-500" checked={opVisPack} onChange={e => setOpVisPack(e.target.checked)}/> Pakowanie</label>
                       </div>
-                      <button disabled={opSaving || !opDraft.trim()} onClick={() => void saveOperationalNote()} className="bg-slate-800 text-white font-bold text-sm px-6 py-2 rounded-md hover:bg-slate-900 transition-colors disabled:opacity-50">Zapisz</button>
+                      <button disabled={opSaving || !opDraft.trim()} onClick={() => void saveOperationalNote()} className={brandPrimaryButtonClass}>Zapisz</button>
                     </div>
                   </section>
                   <section className="bg-white rounded-md shadow-sm border border-slate-200 p-6">
                     <h3 className="text-[11px] font-bold uppercase tracking-widest text-slate-500 mb-4">Wiadomość do klienta</h3>
                     <textarea id="order-comms-note" value={noteDraft} onChange={(e) => setNoteDraft(e.target.value)} rows={4} placeholder="Wpisz treść..." className="w-full bg-white border border-slate-300 rounded-md p-3 text-sm focus:border-orange-500 outline-none mb-4 transition-colors"/>
                     <div className="flex justify-end">
-                      <button type="button" className={`${brandPrimaryButtonClass} px-8`}>Wyślij</button>
+                      <button type="button" className={brandPrimaryButtonClass}>Wyślij</button>
                     </div>
                   </section>
                 </main>
@@ -2561,7 +2561,7 @@ export default function OrderDetailPage() {
             </select>
             <div className="flex justify-end gap-3">
               <button className="rounded-md border border-slate-300 bg-white px-5 py-2.5 text-sm font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-50 transition-colors" disabled={docUploadBusy} onClick={() => setDocTypeModalFile(null)}>Anuluj</button>
-              <button className="rounded-md bg-blue-600 px-6 py-2.5 text-sm font-bold text-white hover:bg-blue-700 disabled:opacity-50 transition-colors" disabled={docUploadBusy} onClick={handleConfirmDocTypeModal}>{docUploadBusy ? "Wgrywanie…" : "Wgraj plik"}</button>
+              <button className={brandPrimaryButtonClass} disabled={docUploadBusy} onClick={handleConfirmDocTypeModal}>{docUploadBusy ? "Wgrywanie…" : "Wgraj plik"}</button>
             </div>
           </div>
         </div>

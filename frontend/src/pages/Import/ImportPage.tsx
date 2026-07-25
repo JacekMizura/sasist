@@ -5,6 +5,7 @@ import api from "../../api/axios";
 import { useWarehouse } from "../../context/WarehouseContext";
 import { useTranslation } from "../../locales";
 import type { Translations } from "../../locales";
+import { brandPrimaryButtonClass } from "../../design-system/brandUi";
 import {
   PRODUCT_FIELDS,
   ORDER_ORDER_FIELDS,
@@ -740,7 +741,7 @@ export default function ImportPage({ settingsKind, embedded = false }: ImportPag
                   type="button"
                   onClick={handlePreview}
                   disabled={!file || loading}
-                  className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
+                  className={brandPrimaryButtonClass}
                 >
                   {t.import_preview}
                 </button>

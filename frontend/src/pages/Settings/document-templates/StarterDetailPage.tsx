@@ -11,6 +11,7 @@ import {
 import { extractApiErrorMessage } from "@/api/apiErrorMessage";
 import { DEFAULT_TENANT_ID, LIST_BASE } from "./constants";
 import { StarterThumbnailImage } from "./components/StarterThumbnailImage";
+import { brandPrimaryButtonClass } from "@/design-system/brandUi";
 
 export function StarterDetailPage() {
   const { starterId } = useParams<{ starterId: string }>();
@@ -135,7 +136,7 @@ export function StarterDetailPage() {
             <button type="button" className="rounded-lg border border-slate-200 px-4 py-2 text-sm" onClick={() => void handlePdfPreview()}>
               Podgląd PDF
             </button>
-            <button type="button" className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white" onClick={() => void createTemplate()}>
+            <button type="button" className={brandPrimaryButtonClass} onClick={() => void createTemplate()}>
               Utwórz szablon
             </button>
           </div>

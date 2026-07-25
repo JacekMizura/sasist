@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { brandPrimaryButtonClass } from "../../design-system/brandUi";
+import { PrimaryButton } from "../../design-system/PrimaryButton";
 import { AlertTriangle, ChevronDown, Download, RefreshCw, Settings2, X } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
@@ -306,10 +308,10 @@ function AlertCard({
         : "border-slate-200 border-l-blue-400 bg-white text-slate-950";
   const iconTone = alert.level === "critical" ? "text-red-600" : alert.level === "warning" ? "text-amber-600" : "text-blue-600";
   const actionTone: Record<WarehouseOperationsAlert["actions"][number]["tone"], string> = {
-    primary: "bg-slate-900 text-white hover:bg-slate-700",
-    secondary: "border border-slate-300 bg-white text-slate-700 hover:bg-slate-50",
-    warning: "bg-amber-600 text-white hover:bg-amber-500",
-    danger: "bg-red-600 text-white hover:bg-red-500",
+    primary: brandPrimaryButtonClass,
+    secondary: "rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-bold text-slate-700 transition hover:bg-slate-50",
+    warning: "rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-bold text-white transition hover:bg-amber-500",
+    danger: "rounded-lg bg-red-600 px-3 py-1.5 text-xs font-bold text-white transition hover:bg-red-500",
   };
   return (
     <article className={`rounded-2xl border border-l-4 ${featured ? "p-4 shadow-sm" : "p-3"} ${tone}`}>
@@ -374,7 +376,11 @@ function AlertCard({
                   key={`${action.label}-${idx}`}
                   type="button"
                   onClick={() => onAction(action)}
-                  className={`rounded-lg px-3 py-1.5 text-xs font-bold transition ${actionTone[action.tone]}`}
+                  className={
+                    action.tone === "primary"
+                      ? brandPrimaryButtonClass
+                      : actionTone[action.tone]
+                  }
                 >
                   {action.label}
                 </button>
@@ -483,14 +489,9 @@ function DispatchTaskModal({
           <button type="button" onClick={onClose} className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-bold text-slate-700">
             Anuluj
           </button>
-          <button
-            type="button"
-            onClick={onConfirm}
-            disabled={submitting}
-            className="rounded-lg bg-slate-900 px-3 py-2 text-sm font-bold text-white disabled:opacity-50"
-          >
+          <PrimaryButton type="button" onClick={onConfirm} disabled={submitting}>
             {submitting ? "Tworzenie…" : "Utwórz zadanie"}
-          </button>
+          </PrimaryButton>
         </div>
       </div>
     </div>
@@ -1092,9 +1093,9 @@ export default function WarehouseOperationsPage() {
         </label>
       </div>
       <div className="mt-3 flex gap-2">
-        <button type="button" onClick={() => void handleExport("csv")} disabled={exporting != null || warehouseId == null} className="rounded-lg bg-slate-900 px-3 py-1.5 text-sm font-bold text-white disabled:opacity-50">
+        <PrimaryButton type="button" onClick={() => void handleExport("csv")} disabled={exporting != null || warehouseId == null}>
           {exporting === "csv" ? "Eksport…" : "CSV"}
-        </button>
+        </PrimaryButton>
         <button type="button" onClick={() => void handleExport("xlsx")} disabled={exporting != null || warehouseId == null} className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-bold text-slate-700 disabled:opacity-50">
           {exporting === "xlsx" ? "Eksport…" : "XLSX"}
         </button>
@@ -1249,9 +1250,9 @@ export default function WarehouseOperationsPage() {
                   <div>SLA: <b>{task.sla_countdown_minutes == null ? "—" : formatOperationalDuration(task.sla_countdown_minutes)}</b></div>
                 </div>
                 {task.status === "ODRZUCONE" ? (
-                  <button type="button" onClick={() => void reassignTask(task)} className="mt-3 rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-bold text-white">
+                  <PrimaryButton type="button" onClick={() => void reassignTask(task)} className="mt-3">
                     Przypisz ponownie
-                  </button>
+                  </PrimaryButton>
                 ) : null}
               </article>
             ))}
@@ -1360,14 +1361,14 @@ export default function WarehouseOperationsPage() {
                     )}
                   </div>
                   {canCreate ? (
-                    <button
+                    <PrimaryButton
                       type="button"
                       onClick={() => void handleCreateRelocation(row)}
                       disabled={creatingRelocationFor === row.product_id}
-                      className="mt-3 rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-bold text-white hover:bg-slate-700 disabled:opacity-50"
+                      className="mt-3"
                     >
                       {creatingRelocationFor === row.product_id ? "Tworzenie…" : row.action_label || "Utwórz przesunięcie"}
-                    </button>
+                    </PrimaryButton>
                   ) : (
                     <p className="mt-3 text-xs font-semibold text-slate-600">{row.action_label || "W toku"}</p>
                   )}
@@ -1543,15 +1544,14 @@ export default function WarehouseOperationsPage() {
               <Settings2 className="h-4 w-4" />
               Progi
             </button>
-            <button
+            <PrimaryButton
               type="button"
               onClick={() => fetchSnapshot(true)}
               disabled={refreshing || warehouseId == null}
-              className="inline-flex items-center gap-2 rounded-lg bg-slate-900 px-3 py-1.5 text-sm font-semibold text-white hover:bg-slate-700 disabled:opacity-50"
             >
               <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />
               Odśwież
-            </button>
+            </PrimaryButton>
           </div>
         }
       />
@@ -1584,7 +1584,7 @@ export default function WarehouseOperationsPage() {
                 className="mt-1 block w-32 rounded-lg border border-slate-300 px-3 py-1.5 text-sm"
               />
             </label>
-            <button type="button" onClick={handleSaveConfig} className="rounded-lg bg-blue-600 px-3 py-1.5 text-sm font-bold text-white hover:bg-blue-500">
+            <button type="button" onClick={handleSaveConfig} className={brandPrimaryButtonClass}>
               Zastosuj
             </button>
             <span className="text-xs text-slate-500">Domyślnie: 5 min / 10 min. Zapis lokalny dla stanowiska.</span>

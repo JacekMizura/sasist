@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { patchOrder } from "../../api/ordersApi";
+import { PrimaryButton } from "../../design-system/PrimaryButton";
 
 const inp =
   "mt-1 w-full rounded-md border border-slate-200 bg-white px-2 py-1.5 text-sm text-slate-900 outline-none focus-visible:ring-2 focus-visible:ring-blue-500/30";
@@ -105,10 +106,9 @@ export function EditBuyerModal({
           >
             Anuluj
           </button>
-          <button
+          <PrimaryButton
             type="button"
             disabled={saving || !canSave}
-            className="rounded-lg border border-slate-800 bg-slate-900 px-4 py-1.5 text-sm font-semibold text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
             onClick={() => {
               if (!canSave) return;
               setSaving(true);
@@ -126,7 +126,7 @@ export function EditBuyerModal({
             }}
           >
             {saving ? "…" : "Zapisz"}
-          </button>
+          </PrimaryButton>
         </div>
       </div>
     </div>

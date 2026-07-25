@@ -8,6 +8,7 @@ import { useState, useCallback } from "react";
 import api from "../../api/axios";
 import { putProductWarehouseSlotting } from "../../api/productSlottingApi";
 import { useWarehouse } from "../../context/WarehouseContext";
+import { PrimaryButton } from "../../design-system/PrimaryButton";
 import type { AssignedLocation, LayoutState, StorageType } from "../../types/warehouse";
 import {
   activeBinsForRack,
@@ -490,14 +491,9 @@ function LocationMappingImportModal({
             Anuluj
           </button>
           {step === "preview" && (
-            <button
-              type="button"
-              onClick={runImport}
-              disabled={importing}
-              className="px-4 py-2 rounded-lg bg-cyan-600 text-white hover:bg-cyan-500 disabled:opacity-50"
-            >
+            <PrimaryButton type="button" onClick={runImport} disabled={importing}>
               {importing ? "Importowanie…" : "Importuj"}
-            </button>
+            </PrimaryButton>
           )}
         </div>
       </div>

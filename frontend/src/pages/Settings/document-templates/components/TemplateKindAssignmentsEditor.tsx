@@ -7,6 +7,7 @@ import {
   type TemplateKindAssignmentItem,
 } from "../../../../api/documentTemplatesApi";
 import { extractApiErrorMessage } from "../../../../api/apiErrorMessage";
+import { brandPrimaryButtonClass } from "../../../../design-system/brandUi";
 import { DEFAULT_TENANT_ID } from "../constants";
 
 type Props = {
@@ -117,7 +118,7 @@ export function TemplateKindAssignmentsEditor({ templateId, publishedVersionId, 
         type="button"
         disabled={saving || !publishedVersionId}
         onClick={() => void handleSave()}
-        className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-50"
+        className={brandPrimaryButtonClass}
       >
         {saving ? "Zapisywanie…" : "Zapisz przypisania"}
       </button>

@@ -15,6 +15,7 @@ import { WmsSettingsLayout } from "./WmsSettingsLayout";
 import { WmsSettingsSection } from "./WmsSettingsSection";
 import { DocumentTemplateScopeSection } from "./document-templates/components/DocumentTemplateScopeSection";
 import { PRODUCTION_SCOPE_KINDS } from "./document-templates/documentTemplateScopeKinds";
+import { brandPrimaryButtonClass } from "../../design-system/brandUi";
 
 const SECTION_FORECAST = "wms-production-forecast";
 const SECTION_RESERVATION = "wms-production-reservation";
@@ -317,7 +318,7 @@ export default function WmsProductionSettingsPanel({ warehouseId }: Props) {
           type="button"
           disabled={!dirty || saving}
           onClick={() => void save()}
-          className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-40"
+          className={brandPrimaryButtonClass}
         >
           {saving ? "Zapisywanie…" : "Zapisz"}
         </button>

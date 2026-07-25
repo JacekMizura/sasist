@@ -7,6 +7,7 @@ import {
   type WarehouseGraphNode,
   type WarehouseGraphEdge,
 } from "../../api/warehouseGraphApi";
+import { PrimaryButton } from "../../design-system/PrimaryButton";
 
 const DEFAULT_TENANT_ID = 1;
 const ORDERS_PAGE_SIZE = 100;
@@ -331,14 +332,13 @@ export default function PickPathSimulation() {
             >
               Zaznacz wszystkie na stronie
             </button>
-            <button
+            <PrimaryButton
               type="button"
               onClick={runBatchSimulation}
               disabled={selectedIds.size === 0 || loadingBatch || !hasStartAndPacking}
-              className="px-4 py-1.5 rounded bg-blue-600 text-white text-sm font-medium disabled:opacity-50"
             >
               {loadingBatch ? "Symulowanie…" : "Symuluj wybrane zamówienia"}
-            </button>
+            </PrimaryButton>
           </div>
           <div className="max-h-[320px] overflow-y-auto">
             {loading ? (

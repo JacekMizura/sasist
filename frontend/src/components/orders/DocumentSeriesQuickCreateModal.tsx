@@ -8,6 +8,7 @@ import {
 } from "../../api/documentSeriesApi";
 import { rememberDocumentsSeriesListContext } from "../../pages/documents/documentSeriesContext";
 import { documentSeriesSubtypeLabelPl, documentSeriesTypeLabelPl } from "../../pages/documents/documentSeriesUiLabels";
+import { PrimaryButton } from "../../design-system/PrimaryButton";
 
 const inp = "mt-1 w-full rounded-md border border-slate-200 bg-white px-2 py-1.5 text-sm text-slate-900";
 
@@ -154,14 +155,9 @@ export default function DocumentSeriesQuickCreateModal({
           >
             Anuluj
           </button>
-          <button
-            type="button"
-            disabled={saving}
-            onClick={() => void save()}
-            className="rounded-lg border border-slate-800 bg-slate-900 px-4 py-1.5 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-50"
-          >
+          <PrimaryButton type="button" disabled={saving} onClick={() => void save()}>
             {saving ? "…" : "Utwórz serię"}
-          </button>
+          </PrimaryButton>
         </div>
       </div>
     </div>

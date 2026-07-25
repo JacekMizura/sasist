@@ -1,4 +1,6 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type Dispatch, type ReactNode, type SetStateAction } from "react";
+import { PrimaryButton, primaryButtonClassName } from "../../design-system/PrimaryButton";
+import { brandPrimaryButtonClass } from "../../design-system/brandUi";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { ChevronRight, Home, List } from "lucide-react";
 
@@ -819,7 +821,7 @@ export default function ReturnsReturnDetailPage() {
             </p>
           </div>
           {!terminal && allLinesReady ? (
-            <button
+            <PrimaryButton
               type="button"
               disabled={finalizeSaving}
               onClick={() => {
@@ -829,10 +831,9 @@ export default function ReturnsReturnDetailPage() {
                   void runFinalizeReturn();
                 }
               }}
-              className="rounded-md bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-blue-700 disabled:opacity-50"
             >
               {finalizeSaving ? "Zapisywanie…" : "Zapisz zwrot"}
-            </button>
+            </PrimaryButton>
           ) : null}
         </div>
       </header>
@@ -1020,7 +1021,7 @@ export default function ReturnsReturnDetailPage() {
               </Link>
               <Link
                 to={WMS_ROUTES.returnsProcess(data.id)}
-                className="inline-flex h-10 shrink-0 items-center rounded-md border border-slate-800 bg-slate-900 px-3 text-sm font-semibold text-white shadow-sm hover:bg-slate-800"
+                className={primaryButtonClassName()}
               >
                 Terminal WMS
               </Link>
@@ -1151,7 +1152,7 @@ export default function ReturnsReturnDetailPage() {
               <button
                 type="button"
                 disabled={refundSubmitting || refundProposal.unresolvedDamagedBlocks > 0}
-                className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+                className={brandPrimaryButtonClass}
                 onClick={() => {
                   void (async () => {
                     setRefundSubmitting(true);

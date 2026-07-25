@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { listManufacturers, type ManufacturerRead } from "../../api/manufacturersApi";
 import { listSuppliers, type SupplierRead } from "../../api/inboundSuppliersApi";
 import { bulkUpdateProducts, type BulkUpdateAction } from "../../api/productsBulkApi";
+import { PrimaryButton } from "../../design-system/PrimaryButton";
 import type { ProductBulkListFiltersPayload } from "../../utils/productListBulkFilters";
 
 import type { ProductBulkHubChoice } from "./productBulkHubTypes";
@@ -412,14 +413,9 @@ export function ProductBulkActionModal({ open, tenantId, selection, action, onCl
           <button type="button" onClick={onClose} className="rounded-lg border border-slate-200 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50">
             Anuluj
           </button>
-          <button
-            type="button"
-            disabled={submitting || loadingMeta}
-            onClick={() => void submit()}
-            className="rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white hover:bg-violet-500 disabled:opacity-50"
-          >
+          <PrimaryButton type="button" disabled={submitting || loadingMeta} onClick={() => void submit()}>
             {submitting ? "Zapisywanie…" : `Zastosuj do ${n} produktów`}
-          </button>
+          </PrimaryButton>
         </div>
       </div>
     </div>

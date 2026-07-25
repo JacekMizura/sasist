@@ -11,6 +11,7 @@ import {
 import { isSuperRole } from "../../auth/isSuperRole";
 import { useAuth } from "../../context/AuthContext";
 import { humanizeActivityAction, humanizeModule } from "../../utils/workforceUiLabels";
+import { brandPrimaryButtonClass } from "../../design-system/brandUi";
 
 const DEFAULT_TENANT = 1;
 
@@ -267,7 +268,7 @@ export default function WorkforceActivityPage() {
         <button
           type="button"
           onClick={applyFilters}
-          className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800"
+          className={brandPrimaryButtonClass}
         >
           Zastosuj
         </button>

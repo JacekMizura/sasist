@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { brandPrimaryButtonClass } from "../../design-system/brandUi";
 import { ChevronDown, ChevronRight, RotateCcw, Star } from "lucide-react";
 import toast from "react-hot-toast";
 
@@ -368,7 +369,7 @@ function ListViewSavePresetModal({
           <button
             type="button"
             disabled={busy}
-            className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50"
+            className={brandPrimaryButtonClass}
             onClick={() => void handleSave()}
           >
             Zapisz

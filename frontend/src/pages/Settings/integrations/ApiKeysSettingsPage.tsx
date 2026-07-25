@@ -245,7 +245,7 @@ export default function ApiKeysSettingsPage() {
       <div className="mb-4 flex flex-wrap items-center justify-end gap-3">
         <button
           type="button"
-          className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+          className={brandPrimaryButtonClass}
           disabled={busy}
           onClick={openCreate}
         >
@@ -351,7 +351,7 @@ export default function ApiKeysSettingsPage() {
                 <div className="mt-4 flex justify-end">
                   <button
                     type="button"
-                    className="rounded-lg bg-blue-600 px-3 py-2 text-sm text-white"
+                    className={brandPrimaryButtonClass}
                     onClick={() => {
                       setModalOpen(false);
                       setCreatedKey(null);
@@ -427,7 +427,7 @@ export default function ApiKeysSettingsPage() {
                   <button type="button" className="rounded-lg border px-3 py-2 text-sm" onClick={() => setModalOpen(false)}>
                     Anuluj
                   </button>
-                  <button type="button" className="rounded-lg bg-blue-600 px-3 py-2 text-sm text-white disabled:opacity-50" disabled={busy} onClick={() => void save()}>
+                  <button type="button" className={brandPrimaryButtonClass} disabled={busy} onClick={() => void save()}>
                     Zapisz
                   </button>
                 </div>

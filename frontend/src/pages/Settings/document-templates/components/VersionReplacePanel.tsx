@@ -10,6 +10,7 @@ import {
   type TemplateAssignmentItem,
 } from "@/api/documentTemplatesApi";
 import { extractApiErrorMessage } from "@/api/apiErrorMessage";
+import { brandPrimaryButtonClass } from "@/design-system/brandUi";
 import { DEFAULT_TENANT_ID } from "../constants";
 
 type Props = {
@@ -85,7 +86,7 @@ export function VersionReplacePanel({ tenantId = DEFAULT_TENANT_ID, kindCode, fr
       <button
         type="button"
         disabled={busy}
-        className="rounded-lg bg-slate-900 px-3 py-2 text-xs font-medium text-white disabled:opacity-50"
+        className={brandPrimaryButtonClass}
         onClick={() => void handleReplace()}
       >
         Podmień przypisania

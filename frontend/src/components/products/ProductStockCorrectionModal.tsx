@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { brandPrimaryButtonClass } from "../../design-system/brandUi";
 import toast from "react-hot-toast";
 
 import { postManualStockCorrection } from "../../api/inventoryManagementPolicyApi";
@@ -163,7 +164,7 @@ export function ProductStockCorrectionModal({
           </button>
           <button
             type="button"
-            className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50"
+            className={brandPrimaryButtonClass}
             onClick={() => void submit()}
             disabled={saving || locationOptions.length === 0}
           >

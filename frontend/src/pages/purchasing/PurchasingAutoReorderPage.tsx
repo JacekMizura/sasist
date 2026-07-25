@@ -39,6 +39,7 @@ import {
   purchasingSelectClass,
 } from "../../modules/purchasing/ui";
 import { formatApiError } from "../../utils/apiErrorMessage";
+import { brandPrimaryButtonClass } from "../../design-system/brandUi";
 
 type Tenant = { id: number; name: string };
 
@@ -651,13 +652,13 @@ export default function PurchasingAutoReorderPage() {
               {wizardStep < 3 ? (
                 <button
                   type="button"
-                  className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white"
+                  className={brandPrimaryButtonClass}
                   onClick={() => setWizardStep((s) => s + 1)}
                 >
                   Dalej
                 </button>
               ) : (
-                <button type="button" disabled={busy} className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white" onClick={() => void zapiszAutomatyzacje()}>
+                <button type="button" disabled={busy} className={brandPrimaryButtonClass} onClick={() => void zapiszAutomatyzacje()}>
                   Zapisz automatyzację
                 </button>
               )}
@@ -708,7 +709,7 @@ export default function PurchasingAutoReorderPage() {
               </div>
             ) : null}
             <div className="mt-4 flex justify-end">
-              <button type="button" className="rounded-lg bg-slate-900 px-4 py-2 text-sm text-white" onClick={() => setPreviewOpen(false)}>
+              <button type="button" className={brandPrimaryButtonClass} onClick={() => setPreviewOpen(false)}>
                 Zamknij
               </button>
             </div>

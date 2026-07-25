@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { brandPrimaryButtonClass } from "../../design-system/brandUi";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Download, FileText, Plus, Printer, Upload } from "lucide-react";
 
@@ -40,8 +41,7 @@ type SalesRow = {
   detailPath: string;
 };
 
-const btnPrimary =
-  "inline-flex min-h-[40px] items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-blue-700";
+const btnPrimary = brandPrimaryButtonClass;
 const btnSecondary =
   "inline-flex min-h-[40px] items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-800 shadow-sm transition-colors hover:bg-slate-50";
 

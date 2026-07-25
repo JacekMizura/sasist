@@ -10,6 +10,7 @@ import {
 } from "../../api/productSalesOffersApi";
 import { listOfferStockPools, type OfferStockPoolRead } from "../../api/offerStockPoolApi";
 import { extractApiErrorMessage } from "../../api/apiErrorMessage";
+import { PrimaryButton } from "../../design-system/PrimaryButton";
 
 type Props = {
   productId: number;
@@ -132,14 +133,9 @@ export function ProductSalesOffersSection({ productId, tenantId }: Props) {
       <section>
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 pb-2">
           <h3 className="text-lg font-bold text-slate-900">Oferty sprzedażowe</h3>
-          <button
-            type="button"
-            disabled={busyId !== null}
-            onClick={() => void onCreateOutlet()}
-            className="rounded-lg bg-sky-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-sky-700 disabled:opacity-50"
-          >
+          <PrimaryButton type="button" disabled={busyId !== null} onClick={() => void onCreateOutlet()}>
             + Oferta outlet (B)
-          </button>
+          </PrimaryButton>
         </div>
         <p className="mb-4 text-sm text-slate-500">
           Każda oferta wiąże pulę magazynową (disposition) i źródło stanu (stock pool). Cena pusta =

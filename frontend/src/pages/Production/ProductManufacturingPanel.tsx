@@ -17,6 +17,7 @@ import {
   type RecipeDetailRead,
 } from "../../api/productionApi";
 import { CompositionVisualEditor } from "./CompositionVisualEditor";
+import { PrimaryButton } from "../../design-system/PrimaryButton";
 import { erpProductionPaths } from "./productionPaths";
 import { warehouseStockDocumentPath } from "../../utils/stockDocumentPaths";
 import {
@@ -183,14 +184,10 @@ export function ProductManufacturingPanel({ tenantId, productId, productName, on
                 Zdefiniuj BOM (składniki, wydajność, koszt), aby móc planować i wykonywać produkcję z dokumentami RW/PW.
               </p>
               <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
-                <button
-                  type="button"
-                  onClick={() => setRequestNewRecipe(true)}
-                  className="inline-flex items-center gap-2 rounded-lg bg-slate-800 px-4 py-2.5 text-sm font-medium text-white hover:bg-slate-900"
-                >
-                  <Plus className="h-4 w-4" aria-hidden />
+                <PrimaryButton type="button" onClick={() => setRequestNewRecipe(true)}>
+                  <Plus className="h-4 w-4" strokeWidth={2.5} aria-hidden />
                   Utwórz recepturę
-                </button>
+                </PrimaryButton>
                 <Link
                   to={erpProductionPaths.orders}
                   className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium text-slate-800 hover:bg-slate-50"

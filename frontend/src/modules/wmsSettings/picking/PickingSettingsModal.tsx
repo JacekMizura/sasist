@@ -1,4 +1,5 @@
 import { createPortal } from "react-dom";
+import { brandPrimaryButtonClass } from "../../../design-system/brandUi";
 import { useEffect, type ReactNode } from "react";
 import { X } from "lucide-react";
 
@@ -114,7 +115,7 @@ export function PickingSettingsModal({
             </button>
             <button
               type="button"
-              className="inline-flex h-10 items-center justify-center rounded-lg bg-slate-900 px-4 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-50"
+              className={brandPrimaryButtonClass}
               disabled={saving}
               onClick={() => void onSave()}
             >

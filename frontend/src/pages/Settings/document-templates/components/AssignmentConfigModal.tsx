@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 
 import type { TemplateAssignmentItem } from "../../../../api/documentTemplatesApi";
+import { PrimaryButton } from "../../../../design-system/PrimaryButton";
 
 type Props = {
   label: string;
@@ -52,9 +53,9 @@ export function AssignmentConfigModal({ label, items, onClose, onOpenAssignments
               Wszystkie przypisania
             </button>
           ) : null}
-          <button type="button" className="ml-auto rounded-lg bg-slate-900 px-3 py-1.5 text-xs text-white" onClick={onClose}>
+          <PrimaryButton type="button" className="ml-auto" onClick={onClose}>
             Zamknij
-          </button>
+          </PrimaryButton>
         </div>
       </div>
     </div>

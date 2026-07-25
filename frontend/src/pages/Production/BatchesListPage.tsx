@@ -6,6 +6,7 @@ import toast from "react-hot-toast";
 import { useWarehouse } from "../../context/WarehouseContext";
 import { listProductionBatches, openBulkProductionCardsPdf, fetchProductionBatchListSummary, type ProductionBatchRead, type ProductionBatchListSummaryRead } from "../../api/productionApi";
 import { AppEmptyState } from "../../components/app-shell";
+import { PrimaryButton } from "../../design-system/PrimaryButton";
 import {
   productsListActionsCellClass,
   productsListActionsInnerClass,
@@ -123,15 +124,10 @@ export default function BatchesListPage({ embedded = false }: Props) {
           <p className="text-sm text-slate-600">
             Zaznaczono: <strong>{selected.size}</strong>
           </p>
-          <button
-            type="button"
-            disabled={printBusy}
-            onClick={() => void printSelectedCards()}
-            className="inline-flex items-center gap-2 rounded-lg bg-slate-800 px-3 py-2 text-sm font-semibold text-white hover:bg-slate-900 disabled:opacity-50"
-          >
+          <PrimaryButton type="button" disabled={printBusy} onClick={() => void printSelectedCards()}>
             <FileText className="h-4 w-4" aria-hidden />
             {printBusy ? "Generowanie PDF…" : "Drukuj karty produkcyjne"}
-          </button>
+          </PrimaryButton>
         </div>
       ) : null}
       <div className={moduleListTableScrollClass}>

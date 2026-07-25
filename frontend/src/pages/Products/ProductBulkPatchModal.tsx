@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { bulkUpdateProducts } from "../../api/productsBulkApi";
+import { PrimaryButton } from "../../design-system/PrimaryButton";
 import type { ProductBulkModalSelection } from "./ProductBulkActionModal";
 import {
   ORIENTATION_OPTIONS,
@@ -314,14 +315,9 @@ export function ProductBulkPatchModal({ open, preset, tenantId, selection, onClo
           >
             Anuluj
           </button>
-          <button
-            type="button"
-            disabled={submitting}
-            onClick={() => void submit()}
-            className="rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white hover:bg-violet-500 disabled:opacity-50"
-          >
+          <PrimaryButton type="button" disabled={submitting} onClick={() => void submit()}>
             {submitting ? "Zapisywanie…" : `Zastosuj (${n})`}
-          </button>
+          </PrimaryButton>
         </div>
       </div>
     </div>

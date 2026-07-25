@@ -22,6 +22,7 @@ import {
   SUPPLIER_CURRENCIES,
   type SupplierCurrencyCode,
 } from "../../constants/supplierTaxonomy";
+import { PrimaryButton } from "../../design-system/PrimaryButton";
 import {
   parseSupplierEditTab,
   supplierDetailTabs,
@@ -557,14 +558,9 @@ export default function SupplierEditPage() {
         Anuluj
       </button>
       {tab !== "products" && tab !== "stats" && tab !== "history" ? (
-        <button
-          type="submit"
-          form="supplier-edit-form"
-          disabled={saving || !!loadErr}
-          className="rounded-lg bg-violet-600 px-4 py-2 font-medium text-white hover:bg-violet-500 disabled:opacity-50"
-        >
+        <PrimaryButton type="submit" form="supplier-edit-form" disabled={saving || !!loadErr}>
           {saving ? "Zapisywanie…" : isNew ? "Utwórz" : "Zapisz"}
-        </button>
+        </PrimaryButton>
       ) : null}
     </div>
   );
@@ -665,14 +661,13 @@ export default function SupplierEditPage() {
                 inputMode="decimal"
               />
             </div>
-            <button
+            <PrimaryButton
               type="button"
               disabled={busyLink || selectedCount === 0}
               onClick={() => void applyBulkEdits()}
-              className="rounded-lg bg-violet-600 px-3 py-2 text-sm font-medium text-white hover:bg-violet-500 disabled:opacity-50"
             >
               Zastosuj
-            </button>
+            </PrimaryButton>
           </div>
         ) : null}
         <div className="overflow-x-auto rounded-lg border border-slate-200">

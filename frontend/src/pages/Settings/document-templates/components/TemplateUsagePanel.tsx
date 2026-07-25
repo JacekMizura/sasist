@@ -7,6 +7,7 @@ import {
 import { DEFAULT_TENANT_ID } from "../constants";
 import { kindLabel } from "../utils/assignableDocumentKinds";
 import { TemplateAssignmentModal } from "./TemplateAssignmentModal";
+import { brandPrimaryButtonClass } from "../../../../design-system/brandUi";
 
 type Props = {
   templateId: number;
@@ -57,7 +58,7 @@ export function TemplateUsagePanel({
           <p className="text-sm text-slate-700">Ten szablon nie jest jeszcze używany.</p>
           <button
             type="button"
-            className="mt-4 rounded-lg bg-slate-900 px-5 py-2.5 text-sm font-medium text-white hover:bg-slate-800"
+            className={`${brandPrimaryButtonClass} mt-4`}
             onClick={() => setModalOpen(true)}
           >
             Przypisz do dokumentów

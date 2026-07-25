@@ -4,6 +4,7 @@ import type { LayoutState } from "../../types/warehouse";
 import { UI_STRINGS } from "../../constants/uiStrings";
 import { clampGridToBuilding } from "../../components/warehouse/warehouseUtils";
 import { useWarehouse } from "../../context/WarehouseContext";
+import { PrimaryButton } from "../../design-system/PrimaryButton";
 import { EditBuildingModal } from "./EditBuildingModal";
 
 export interface DesignerToolbarProps {
@@ -66,31 +67,38 @@ export function DesignerToolbar({
         <span className={`inline-flex items-center rounded-md border border-slate-200/60 px-2 py-0.5 font-mono text-[10px] font-medium transition-colors duration-150 ${lastSavedAt != null ? "bg-emerald-50 text-emerald-800" : "bg-amber-50 text-amber-900"}`} title={lastSavedAt != null ? UI_STRINGS.warehouse.selector.savedToDb : UI_STRINGS.warehouse.selector.unsavedChanges}>
           {lastSavedAt != null ? UI_STRINGS.warehouse.selector.syncSaved : UI_STRINGS.warehouse.selector.notSaved}
         </span>
-        {mainView === "layout" && (
-          <button
-            type="button"
-            onClick={() => {
-              if (selectedWarehouseId == null) {
-                console.warn("No warehouse selected");
-                return;
-              }
-              saveLayout();
-            }}
-            title={
-              saveLayoutBlockedReason
-                ? "Zapis zablokowany: zduplikowana nazwa regału (wyświetlimy komunikat po kliknięciu)."
-                : undefined
-            }
-            disabled={saving || selectedWarehouseId == null}
-            className={`h-8 rounded-lg px-3.5 text-[11px] font-semibold text-white shadow-sm transition-all duration-150 ${
-              saveLayoutBlockedReason
-                ? "bg-amber-600 hover:bg-amber-500 ring-1 ring-amber-400/80"
-                : "bg-cyan-600 shadow-cyan-900/15 hover:bg-cyan-500 hover:shadow-md"
-            } disabled:opacity-50 disabled:shadow-none`}
-          >
-            {saving ? UI_STRINGS.warehouse.rackSidebar.saving : UI_STRINGS.warehouse.rackSidebar.saveLayout}
-          </button>
-        )}
+        {mainView === "layout" &&
+          (saveLayoutBlockedReason ? (
+            <button
+              type="button"
+              onClick={() => {
+                if (selectedWarehouseId == null) {
+                  console.warn("No warehouse selected");
+                  return;
+                }
+                saveLayout();
+              }}
+              title="Zapis zablokowany: zduplikowana nazwa regału (wyświetlimy komunikat po kliknięciu)."
+              disabled={saving || selectedWarehouseId == null}
+              className="h-8 rounded-lg px-3.5 text-[11px] font-semibold text-white shadow-sm transition-all duration-150 bg-amber-600 hover:bg-amber-500 ring-1 ring-amber-400/80 disabled:opacity-50 disabled:shadow-none"
+            >
+              {saving ? UI_STRINGS.warehouse.rackSidebar.saving : UI_STRINGS.warehouse.rackSidebar.saveLayout}
+            </button>
+          ) : (
+            <PrimaryButton
+              type="button"
+              onClick={() => {
+                if (selectedWarehouseId == null) {
+                  console.warn("No warehouse selected");
+                  return;
+                }
+                saveLayout();
+              }}
+              disabled={saving || selectedWarehouseId == null}
+            >
+              {saving ? UI_STRINGS.warehouse.rackSidebar.saving : UI_STRINGS.warehouse.rackSidebar.saveLayout}
+            </PrimaryButton>
+          ))}
       </div>
       {showEditBuilding && (
         <EditBuildingModal

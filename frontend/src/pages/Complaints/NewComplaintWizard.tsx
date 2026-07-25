@@ -5,6 +5,7 @@ import api from "../../api/axios";
 import { createComplaintFromOrder } from "../../api/complaintsApi";
 import { COMPLAINT_DEFECT_TAG_OPTIONS } from "../../constants/complaintDefectTags";
 import { DAMAGE_TENANT_ID } from "../../constants/panelTenant";
+import { PrimaryButton } from "../../design-system/PrimaryButton";
 
 type OrderLite = {
   id: number;
@@ -642,14 +643,13 @@ export default function NewComplaintWizard({
           </button>
           <div className="flex gap-2">
             {step === 2 && order && (
-              <button
+              <PrimaryButton
                 type="button"
                 disabled={selectedLinesPayload.length === 0}
-                className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
                 onClick={() => setStep(3)}
               >
                 Dalej
-              </button>
+              </PrimaryButton>
             )}
             {step === 3 && (
               <button

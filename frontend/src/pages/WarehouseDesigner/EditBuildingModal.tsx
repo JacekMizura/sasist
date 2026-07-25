@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from "react";
 import { log } from "../../utils/logger";
 import type { LayoutState } from "../../types/warehouse";
 import { metersToCells } from "../../components/warehouse/warehouseUtils";
+import { PrimaryButton } from "../../design-system/PrimaryButton";
 
 export type EditBuildingModalProps = {
   onClose: () => void;
@@ -172,14 +173,13 @@ export function EditBuildingModal({ onClose, onSave, layout }: EditBuildingModal
           <button type="button" onClick={onClose} className="px-4 py-2 rounded-lg border border-slate-300 text-slate-700 hover:bg-slate-100">
             Anuluj
           </button>
-          <button
+          <PrimaryButton
             type="button"
             onClick={handleSave}
             disabled={Number(widthM) <= 0 || Number(depthM) <= 0}
-            className="px-4 py-2 rounded-lg bg-cyan-600 text-white font-medium hover:bg-cyan-500 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             Zapisz
-          </button>
+          </PrimaryButton>
         </div>
       </div>
     </div>

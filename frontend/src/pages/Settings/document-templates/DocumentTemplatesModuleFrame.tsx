@@ -8,6 +8,7 @@ import { extractApiErrorMessage } from "../../../api/apiErrorMessage";
 import { SettingsModuleStack } from "../../../components/layout/SettingsModuleStack";
 import { DEFAULT_TENANT_ID, LIST_BASE } from "./constants";
 import { DOCUMENT_TEMPLATES_TABS } from "./documentTemplatesTabs";
+import { brandPrimaryButtonClass } from "../../../design-system/brandUi";
 
 async function downloadBlob(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob);
@@ -98,7 +99,7 @@ export default function DocumentTemplatesModuleFrame() {
             <button
               type="button"
               onClick={() => navigate(`${LIST_BASE}/new`)}
-              className="inline-flex items-center gap-2 rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-slate-800"
+              className={brandPrimaryButtonClass}
             >
               <Plus className="h-4 w-4" aria-hidden />
               Nowy szablon

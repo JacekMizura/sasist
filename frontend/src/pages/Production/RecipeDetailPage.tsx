@@ -12,6 +12,7 @@ import {
   type RecipeDetailRead,
 } from "../../api/productionApi";
 import { assignRecipeVariant, fetchRecipeVariants, type RecipeVariant } from "../../api/productionShortageApi";
+import { PrimaryButton, primaryButtonClassName } from "../../design-system/PrimaryButton";
 import { formatProductionMoney, stockTone, STOCK_TONE_CLASS, PRODUCTION_NUMBER_INPUT } from "./productionUi";
 import { erpProductionPaths } from "./productionPaths";
 import { ProductThumb } from "./components/ProductThumb";
@@ -126,10 +127,7 @@ export default function RecipeDetailPage() {
           <p className="mt-2 text-sm text-slate-600">
             Rekord mógł zostać usunięty lub nie jest już dostępny w tym magazynie.
           </p>
-          <Link
-            to={erpProductionPaths.recipes}
-            className="mt-5 inline-flex items-center gap-2 rounded-lg bg-slate-800 px-4 py-2 text-sm font-medium text-white hover:bg-slate-900"
-          >
+          <Link to={erpProductionPaths.recipes} className={primaryButtonClassName("mt-5")}>
             <ArrowLeft className="h-4 w-4" aria-hidden />
             Wróć do listy receptur
           </Link>
@@ -218,15 +216,10 @@ export default function RecipeDetailPage() {
                 />
                 Zarezerwuj materiały
               </label>
-              <button
-                type="button"
-                disabled={busy || !warehouseId}
-                onClick={() => void createBatch()}
-                className="inline-flex items-center gap-2 rounded-xl bg-slate-800 px-4 py-2.5 text-sm font-medium text-white hover:bg-slate-900 disabled:opacity-50"
-              >
-                <Plus className="h-4 w-4" aria-hidden />
+              <PrimaryButton type="button" disabled={busy || !warehouseId} onClick={() => void createBatch()}>
+                <Plus className="h-4 w-4" strokeWidth={2.5} aria-hidden />
                 Utwórz batch
-              </button>
+              </PrimaryButton>
             </div>
           </div>
         </div>

@@ -6,6 +6,7 @@ import { duplicateProduct } from "../../api/productsApi";
 import { extractApiErrorMessage } from "../../api/authApi";
 import { quickPurchaseOrderFromProduct } from "../../api/inboundDeliveriesApi";
 import { useActiveWarehouseContext, ACTIVE_WAREHOUSE_REQUIRED_MESSAGE } from "../../hooks/useActiveWarehouseContext";
+import { PrimaryButton } from "../../design-system/PrimaryButton";
 import { getProductDetailsPath, productDetailsNavState } from "./productPaths";
 import {
   Building2,
@@ -2323,9 +2324,13 @@ export function ProductEditModal({
                                   ))}
                                 </select>
                               </div>
-                              <button type="button" disabled={supplierLinksBusy || !addSupplierPick} onClick={() => void onAddSupplierLink()} className="rounded bg-blue-600 px-5 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50">
+                              <PrimaryButton
+                                type="button"
+                                disabled={supplierLinksBusy || !addSupplierPick}
+                                onClick={() => void onAddSupplierLink()}
+                              >
                                 Dodaj
-                              </button>
+                              </PrimaryButton>
                             </div>
                           </div>
                         )}
@@ -2840,14 +2845,9 @@ export function ProductEditModal({
                               placeholder="https://... lub /uploads/..."
                             />
                           </div>
-                          <button
-                            type="button"
-                            onClick={addGalleryFromUrl}
-                            disabled={!newGalleryUrl.trim()}
-                            className="rounded bg-slate-500 px-6 py-2.5 text-sm font-medium text-white hover:bg-slate-600 disabled:opacity-50 transition-colors"
-                          >
+                          <PrimaryButton type="button" onClick={addGalleryFromUrl} disabled={!newGalleryUrl.trim()}>
                             Dodaj URL
-                          </button>
+                          </PrimaryButton>
                           <label className="inline-flex cursor-pointer items-center justify-center rounded border border-slate-300 bg-white px-6 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors shadow-sm">
                             <input type="file" accept="image/*" className="sr-only" onChange={onGalleryFileSelected} disabled={galleryUploadBusy} />
                             {galleryUploadBusy ? "Wgrywanie…" : "Wgraj z pliku"}

@@ -11,6 +11,7 @@ import {
 } from "../../api/workforceGroupsApi";
 import { useAuth } from "../../context/AuthContext";
 import { isSuperRole } from "../../auth/isSuperRole";
+import { brandPrimaryButtonClass } from "../../design-system/brandUi";
 
 const inputCls =
   "h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-900 shadow-sm placeholder:text-slate-400 focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500";
@@ -180,7 +181,7 @@ export default function WorkforceUserGroupsPage() {
             type="button"
             disabled={busy}
             onClick={() => void onCreate()}
-            className="inline-flex h-10 w-full sm:w-auto items-center justify-center gap-2 rounded-lg bg-slate-900 px-5 text-sm font-semibold text-white shadow-sm hover:bg-slate-800 disabled:opacity-50"
+            className={`${brandPrimaryButtonClass} w-full sm:w-auto`}
           >
             <Plus className="h-4 w-4 shrink-0" strokeWidth={2} aria-hidden />
             Dodaj grupę

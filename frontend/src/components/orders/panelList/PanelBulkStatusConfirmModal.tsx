@@ -1,3 +1,5 @@
+import { brandPrimaryButtonClass } from "../../../design-system/brandUi";
+
 export type PanelBulkStatusConfirmModalProps = {
   open: boolean;
   title: string;
@@ -29,7 +31,7 @@ export function PanelBulkStatusConfirmModal({
   const confirmClass =
     variant === "danger"
       ? "rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-50"
-      : "rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-50";
+      : brandPrimaryButtonClass;
   return (
     <div
       className="fixed inset-0 z-[80] flex items-center justify-center bg-black/45 p-4"

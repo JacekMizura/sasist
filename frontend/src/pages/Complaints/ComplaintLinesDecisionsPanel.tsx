@@ -13,6 +13,7 @@ import {
   uploadComplaintPanelPhotos,
   wmsUpdateComplaintItems,
 } from "../../api/complaintsApi";
+import { PrimaryButton } from "../../design-system/PrimaryButton";
 import { wmsPhotoUploadClient } from "../../api/wmsPhotoUploadClient";
 import { getPublicBaseUrl } from "../../config/publicUrl";
 import type { ComplaintDetail, ComplaintLineDetail, ComplaintStatusCode } from "../../types/complaint";
@@ -1416,14 +1417,14 @@ export default function ComplaintLinesDecisionsPanel({
             ) : null}
 
             <div className="border-t border-gray-200 pt-4">
-              <button
+              <PrimaryButton
                 type="button"
-                className="h-12 w-full rounded-lg bg-blue-600 px-4 text-base font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+                className="w-full"
                 disabled={disabled || globalSaveBusy || savingLineId != null}
                 onClick={() => setSaveComplaintConfirmOpen(true)}
               >
                 {globalSaveBusy ? "Zapisywanie…" : "Zapisz reklamację"}
-              </button>
+              </PrimaryButton>
             </div>
           </div>
         </div>
@@ -1439,7 +1440,7 @@ export default function ComplaintLinesDecisionsPanel({
               </button>
             </div>
             <div className="space-y-2">
-              <button type="button" className="flex h-11 w-full items-center justify-center rounded-xl bg-slate-900 px-4 text-sm font-medium text-white shadow-md hover:bg-slate-800" onClick={async () => {
+              <PrimaryButton type="button" className="w-full" onClick={async () => {
                 setCameraError(null);
                 try {
                   const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: "environment" } }, audio: false });
@@ -1453,10 +1454,14 @@ export default function ComplaintLinesDecisionsPanel({
                 }
               }}>
                 📷 Kamera (desktop/laptop)
-              </button>
-              <button type="button" className="flex h-11 w-full items-center justify-center rounded-xl bg-indigo-700 px-4 text-sm font-medium text-white shadow-md hover:bg-indigo-600" onClick={() => void openPhoneUploadSession(photoModalLineId)}>
+              </PrimaryButton>
+              <PrimaryButton
+                type="button"
+                className="w-full"
+                onClick={() => void openPhoneUploadSession(photoModalLineId)}
+              >
                 📱 Telefon (QR)
-              </button>
+              </PrimaryButton>
               <button type="button" className="flex h-11 w-full items-center justify-center rounded-xl bg-[#41546a] px-4 text-sm font-medium text-white shadow-md hover:bg-[#36444d]" onClick={() => collectorInputRef.current?.click()}>
                 📦 Kolektor / urządzenie mobilne
               </button>
@@ -1553,14 +1558,13 @@ export default function ComplaintLinesDecisionsPanel({
               >
                 Anuluj
               </button>
-              <button
+              <PrimaryButton
                 type="button"
                 disabled={globalSaveBusy || disabled || savingLineId != null}
-                className="rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
                 onClick={() => void saveAllLinesWarehouseData()}
               >
                 {globalSaveBusy ? "Zapisywanie…" : "Tak, zapisz"}
-              </button>
+              </PrimaryButton>
             </div>
           </div>
         </div>

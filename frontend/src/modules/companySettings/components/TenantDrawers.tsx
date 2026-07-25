@@ -4,7 +4,6 @@ import { useEffect, useMemo, useState } from "react";
 import { AppButton } from "../../../components/app-shell";
 import {
   PurchasingTableHeader,
-  purchasingBtnPrimary,
   purchasingBtnSecondary,
   purchasingSelectClass,
   purchasingTableTdClass,
@@ -158,7 +157,7 @@ export function TenantDetailDrawer({ tenant, onClose }: Props) {
             </label>
             <AppButton
               variant="primary"
-              className={`${purchasingBtnPrimary} mt-4`}
+              className="mt-4"
               disabled={assignWarehouseId === "" || saving}
               onClick={() => void handleAssign()}
             >
@@ -203,7 +202,6 @@ export function TenantCreateDrawer({ open, onClose }: CreateTenantDrawerProps) {
           </AppButton>
           <AppButton
             variant="primary"
-            className={purchasingBtnPrimary}
             disabled={!name.trim() || saving}
             onClick={() => {
               setSaving(true);

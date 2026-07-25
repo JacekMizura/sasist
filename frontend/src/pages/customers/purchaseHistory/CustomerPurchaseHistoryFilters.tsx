@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { brandPrimaryButtonClass } from "../../../design-system/brandUi";
 
 import type { PurchaseHistoryQueryFilters } from "../../../api/customerPurchaseHistoryApi";
 
@@ -123,7 +124,7 @@ export function CustomerPurchaseHistoryFilters({ draft, onChange, onApply, onCle
         <button
           type="button"
           onClick={onApply}
-          className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800"
+          className={brandPrimaryButtonClass}
         >
           Filtruj
         </button>

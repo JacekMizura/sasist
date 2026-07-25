@@ -1,4 +1,5 @@
 import { Link } from "react-router-dom";
+import { brandPrimaryButtonClass } from "../../design-system/brandUi";
 import { FolderOutput } from "lucide-react";
 
 import { DocumentsSectionShell } from "./DocumentsSectionShell";
@@ -10,9 +11,7 @@ import {
   documentsFilterInputCls,
 } from "./documentsDashboardPrimitives";
 
-const btnPrimary =
-  "inline-flex min-h-[40px] items-center justify-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-blue-700";
-
+const btnPrimary = brandPrimaryButtonClass;
 export default function DocumentsExportsHubPage() {
   return (
     <DocumentsSectionShell

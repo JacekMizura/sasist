@@ -9,6 +9,7 @@ import { useAuth } from "../../context/AuthContext";
 import { isSuperRole } from "../../auth/isSuperRole";
 import { PLATFORM_ROLE_OPTIONS } from "../../settings/platformRoles";
 import { translateMainGroup } from "../../utils/workforceUiLabels";
+import { brandPrimaryButtonClass } from "../../design-system/brandUi";
 
 const TENANT = 1;
 const WAREHOUSE = 1;
@@ -169,7 +170,7 @@ export default function WorkforceStatusMatrixPage() {
             type="button"
             disabled={saving || loading}
             onClick={() => void save()}
-            className="rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-slate-800 disabled:opacity-50"
+            className={brandPrimaryButtonClass}
           >
             {saving ? "Zapisywanie…" : "Zapisz"}
           </button>

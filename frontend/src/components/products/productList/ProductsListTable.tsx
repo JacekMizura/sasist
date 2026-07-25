@@ -1,4 +1,5 @@
 import { memo, type RefObject, type ReactNode } from "react";
+import { brandPrimaryButtonClass } from "../../../design-system/brandUi";
 import { Copy, Pencil, Trash2 } from "lucide-react";
 import { Link } from "react-router-dom";
 
@@ -437,7 +438,7 @@ export function ProductsListTable({
                 <p>Brak produktów do wyświetlenia.</p>
                 <Link
                   to="/products/new"
-                  className="mt-4 inline-flex items-center justify-center rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-slate-800"
+                  className={`${brandPrimaryButtonClass} mt-4`}
                 >
                   Dodaj produkt
                 </Link>

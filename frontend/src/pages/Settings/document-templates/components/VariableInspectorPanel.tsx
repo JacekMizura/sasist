@@ -1,6 +1,7 @@
 import toast from "react-hot-toast";
 
 import type { VariableFieldDto } from "../../../../api/documentTemplatesApi";
+import { PrimaryButton } from "../../../../design-system/PrimaryButton";
 
 const TYPE_LABELS: Record<string, string> = {
   string: "Tekst",
@@ -57,13 +58,9 @@ export function VariableInspectorPanel({ field, onInsert, onSearchUsage }: Props
         <Row label="Do pętli" value={field.loop_usable ? `Tak (${field.loop_var || "row"})` : "Nie"} />
       </dl>
       <div className="mt-3 flex flex-wrap gap-2">
-        <button
-          type="button"
-          className="rounded-md bg-slate-900 px-2.5 py-1 text-[11px] font-medium text-white"
-          onClick={copyVariable}
-        >
+        <PrimaryButton type="button" onClick={copyVariable}>
           Kopiuj zmienną
-        </button>
+        </PrimaryButton>
         <button
           type="button"
           className="rounded-md border border-slate-200 px-2.5 py-1 text-[11px]"

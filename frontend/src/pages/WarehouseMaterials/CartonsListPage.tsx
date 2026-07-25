@@ -31,6 +31,8 @@ import {
 } from "../../preferences/listView";
 import { DAMAGE_TENANT_ID } from "../../constants/panelTenant";
 import { useWarehouse } from "../../context/WarehouseContext";
+import { brandPrimaryButtonClass } from "../../design-system/brandUi";
+import { PrimaryButton } from "../../design-system/PrimaryButton";
 
 const ROWS_PER_PAGE_OPTIONS = [25, 50, 100] as const;
 
@@ -289,7 +291,7 @@ export default function CartonsListPage() {
               onClick={(e) => {
                 if (warehouseId == null) e.preventDefault();
               }}
-              className={`inline-flex items-center justify-center rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-slate-800 ${warehouseId == null ? "pointer-events-none opacity-40" : ""}`}
+              className={`${brandPrimaryButtonClass}${warehouseId == null ? " pointer-events-none opacity-40" : ""}`}
             >
               Dodaj karton
             </Link>
@@ -328,14 +330,9 @@ export default function CartonsListPage() {
               </option>
             ))}
           </select>
-          <button
-            type="button"
-            disabled={bulkBusy}
-            onClick={() => void applyBulkSupplier()}
-            className="rounded-lg bg-violet-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-violet-600 disabled:opacity-50"
-          >
+          <PrimaryButton type="button" disabled={bulkBusy} onClick={() => void applyBulkSupplier()}>
             Ustaw dostawcę dla zaznaczonych
-          </button>
+          </PrimaryButton>
           <button type="button" className="text-xs font-medium text-slate-600 underline" onClick={() => setSelected(new Set())}>
             Wyczyść zaznaczenie
           </button>

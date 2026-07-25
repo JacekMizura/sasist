@@ -8,6 +8,7 @@ import {
   type PublishedTemplateOptionDto,
 } from "../../../../api/documentTemplatesApi";
 import { extractApiErrorMessage } from "../../../../api/apiErrorMessage";
+import { brandPrimaryButtonClass } from "../../../../design-system/brandUi";
 import { DEFAULT_TENANT_ID } from "../constants";
 import { allAssignableKinds, kindLabel } from "../utils/assignableDocumentKinds";
 
@@ -222,7 +223,7 @@ function DocumentKindCard({
               <button
                 type="button"
                 disabled={saving || !publishedVersionId}
-                className="rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-slate-800 disabled:opacity-50"
+                className={brandPrimaryButtonClass}
                 onClick={onAssign}
               >
                 Zastąp

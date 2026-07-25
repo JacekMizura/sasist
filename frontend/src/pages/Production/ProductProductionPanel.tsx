@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Factory, History, Plus, Trash2 } from "lucide-react";
 import api from "../../api/axios";
+import { PrimaryButton } from "../../design-system/PrimaryButton";
 import {
   activateRecipe,
   createProductionOrder,
@@ -320,14 +321,10 @@ export function ProductProductionPanel({ tenantId, productId, productName, onRec
           <h3 className="text-lg font-bold text-slate-900 border-b border-slate-200 pb-2 flex-1">
             Receptury produkcji
           </h3>
-          <button
-            type="button"
-            onClick={openNewRecipe}
-            className="inline-flex items-center gap-2 rounded-lg bg-violet-600 px-3 py-2 text-sm font-medium text-white hover:bg-violet-700"
-          >
-            <Plus className="h-4 w-4" aria-hidden />
+          <PrimaryButton type="button" onClick={openNewRecipe}>
+            <Plus className="h-4 w-4" strokeWidth={2.5} aria-hidden />
             Dodaj recepturę
-          </button>
+          </PrimaryButton>
         </div>
 
         {recipes.length === 0 && !editorOpen ? (
@@ -404,14 +401,13 @@ export function ProductProductionPanel({ tenantId, productId, productName, onRec
                 onChange={(e) => setOrderQty(Number(e.target.value) || 1)}
               />
             </div>
-            <button
+            <PrimaryButton
               type="button"
               disabled={orderBusy || !warehouse?.id}
               onClick={() => void handleCreateOrder()}
-              className="rounded-lg bg-slate-800 px-4 py-2 text-sm font-medium text-white hover:bg-slate-900 disabled:opacity-50"
             >
               {orderBusy ? "Tworzenie…" : "Utwórz zlecenie"}
-            </button>
+            </PrimaryButton>
           </div>
         </section>
       ) : null}
@@ -592,14 +588,9 @@ export function ProductProductionPanel({ tenantId, productId, productName, onRec
             >
               Anuluj
             </button>
-            <button
-              type="button"
-              disabled={saving}
-              onClick={() => void handleSave()}
-              className="rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white hover:bg-violet-700 disabled:opacity-50"
-            >
+            <PrimaryButton type="button" disabled={saving} onClick={() => void handleSave()}>
               {saving ? "Zapisywanie…" : "Zapisz recepturę"}
-            </button>
+            </PrimaryButton>
           </div>
         </div>
       ) : null}

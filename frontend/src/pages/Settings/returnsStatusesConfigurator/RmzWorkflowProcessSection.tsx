@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { brandPrimaryButtonClass } from "../../../design-system/brandUi";
 import { ArrowDown, Plus } from "lucide-react";
 
 import type { ReturnStatusCreatePayload, ReturnStatusRead, ReturnStatusType, ReturnStatusUpdatePayload } from "../../../types/wmsReturn";
@@ -227,7 +228,7 @@ function ReturnRmzStatusModal({
           <button
             type="button"
             disabled={busy || !name.trim()}
-            className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-45"
+            className={brandPrimaryButtonClass}
             onClick={() => void handleSave()}
           >
             {busy ? "Zapisywanie…" : "Zapisz"}

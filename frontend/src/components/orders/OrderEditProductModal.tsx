@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { patchOrderItemLine } from "../../api/ordersApi";
 import { formatMoney, moneyInputStringFromNumber, roundMoney2 } from "../../utils/formatOrderMoney";
+import { PrimaryButton } from "../../design-system/PrimaryButton";
 
 const inp =
   "mt-1 w-full rounded-md border border-slate-200 bg-white px-2 py-1.5 text-sm text-slate-900 outline-none focus-visible:ring-2 focus-visible:ring-blue-500/30";
@@ -560,14 +561,13 @@ export default function OrderEditProductModal({
           <button type="button" onClick={onClose} className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-800 hover:bg-slate-50">
             Anuluj
           </button>
-          <button
+          <PrimaryButton
             type="button"
             disabled={saving}
             onClick={() => void (focusSection === "rabat" ? saveRabat() : saveMain())}
-            className="rounded-lg border border-slate-800 bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-50"
           >
             {saving ? "…" : "Zapisz"}
-          </button>
+          </PrimaryButton>
         </div>
       </div>
     </div>

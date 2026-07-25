@@ -4,6 +4,7 @@ import { cloneExportTemplate, deleteExportTemplate, listExportTemplates, type Ex
 import { entityTypeLabelPl } from "../../utils/exportImportLabelsPl";
 import PageLayout from "../../components/layout/PageLayout";
 import { PageHeader } from "../../components/layout/PageHeader";
+import { brandPrimaryButtonClass } from "../../design-system/brandUi";
 
 const TENANT_ID = 1;
 
@@ -45,7 +46,7 @@ export default function ExportsPage() {
           actions={
             <Link
               to="/settings/exports/new"
-              className="rounded-lg bg-cyan-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-cyan-700"
+              className={brandPrimaryButtonClass}
             >
               Nowy szablon eksportu
             </Link>

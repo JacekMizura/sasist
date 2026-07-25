@@ -1,4 +1,5 @@
 import type { StructureRemovalImpact } from "./passageStorage";
+import { brandPrimaryButtonClass } from "../../design-system/brandUi";
 import { useEffect } from "react";
 
 export type StructureRebuildConfirmDialogProps = {
@@ -200,7 +201,7 @@ export function StructureRebuildConfirmDialog({
           {!blocked && (
             <button
               type="button"
-              className="rounded-lg bg-slate-900 px-3 py-2 text-sm font-semibold text-white hover:bg-slate-800"
+              className={brandPrimaryButtonClass}
               onClick={onConfirm}
             >
               Przebuduj i zapisz

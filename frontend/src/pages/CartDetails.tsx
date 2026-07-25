@@ -7,6 +7,7 @@ import {
   type WmsCartStats,
 } from "../api/wmsCartStatsApi";
 import { BarcodeIcon, ChevronIcon } from "./CartsComponents/ui/Icons";
+import { PrimaryButton } from "../design-system/PrimaryButton";
 
 type Basket = {
   id: number;
@@ -258,12 +259,9 @@ export default function CartDetails() {
                 Anuluj
               </button>
 
-              <button
-                onClick={saveBasket}
-                className="bg-blue-600 text-white px-4 py-2 rounded"
-              >
+              <PrimaryButton type="button" onClick={saveBasket}>
                 Zapisz
-              </button>
+              </PrimaryButton>
             </div>
           </div>
         </div>

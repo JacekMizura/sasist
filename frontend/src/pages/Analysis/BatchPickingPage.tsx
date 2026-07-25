@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { getBatchPicking, type BatchPickingItem } from "../../api/analysisApi";
+import { PrimaryButton } from "../../design-system/PrimaryButton";
 
 const DEFAULT_TENANT_ID = 1;
 const ROWS_PER_PAGE_OPTIONS = [10, 25, 50, 100, 500] as const;
@@ -103,14 +104,9 @@ export default function BatchPickingPage() {
             </select>
           </label>
         </div>
-        <button
-          type="button"
-          onClick={runSearch}
-          disabled={loading}
-          className="px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 disabled:opacity-50"
-        >
+        <PrimaryButton type="button" onClick={runSearch} disabled={loading}>
           {loading ? "Ładowanie…" : "Szukaj"}
-        </button>
+        </PrimaryButton>
       </div>
 
       {error && <div className="mb-4 rounded-lg bg-red-50 border border-red-200 p-3 text-red-800 text-sm">{error}</div>}

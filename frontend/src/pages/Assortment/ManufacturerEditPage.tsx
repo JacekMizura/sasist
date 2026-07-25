@@ -10,6 +10,7 @@ import {
 } from "../../api/manufacturersApi";
 import { AssortmentEntityPageShell } from "../../components/assortment/AssortmentEntityPageShell";
 import { SUPPLIER_COUNTRIES, SUPPLIER_COUNTRY_VALUES } from "../../constants/supplierTaxonomy";
+import { PrimaryButton } from "../../design-system/PrimaryButton";
 import {
   manufacturerDetailTabs,
   parseManufacturerEditTab,
@@ -240,14 +241,9 @@ export default function ManufacturerEditPage() {
       >
         Anuluj
       </button>
-      <button
-        type="submit"
-        form="manufacturer-edit-form"
-        disabled={saving || !!loadErr}
-        className="rounded-lg bg-violet-600 px-4 py-2 font-medium text-white hover:bg-violet-500 disabled:opacity-50"
-      >
+      <PrimaryButton type="submit" form="manufacturer-edit-form" disabled={saving || !!loadErr}>
         {saving ? "Zapisywanie…" : isNew ? "Utwórz" : "Zapisz"}
-      </button>
+      </PrimaryButton>
     </div>
   );
 

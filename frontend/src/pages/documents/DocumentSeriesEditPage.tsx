@@ -35,6 +35,7 @@ import {
 import DocumentsEmptyState from "./DocumentsEmptyState";
 import { DocumentsSectionShell } from "./DocumentsSectionShell";
 import { DocumentTemplateSelect } from "@/pages/Settings/document-templates/components/DocumentTemplateSelect";
+import { brandPrimaryButtonClass } from "../../design-system/brandUi";
 
 const SUBTYPE_TO_KIND: Record<string, string> = {
   INVOICE: "invoice",
@@ -951,7 +952,7 @@ export default function DocumentSeriesEditPage() {
             type="button"
             disabled={saving}
             onClick={() => void onSave()}
-            className="rounded-lg bg-slate-900 px-6 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-slate-800 disabled:opacity-50"
+            className={brandPrimaryButtonClass}
           >
             {saving ? "Zapisywanie…" : "Zapisz"}
           </button>

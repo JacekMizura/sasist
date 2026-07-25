@@ -15,6 +15,7 @@ import {
   WarehouseDocSummarySeparator,
   warehouseDocDetailScrollClass,
 } from "./warehouseDocumentDetailUi";
+import { PrimaryButton } from "../../design-system/PrimaryButton";
 import {
   DeliveryDifferenceAcceptedBadge,
   deliveryShortageQty,
@@ -571,13 +572,9 @@ function DeliveryDiffConfirmDialog({
           >
             Anuluj
           </button>
-          <button
-            type="button"
-            onClick={onConfirm}
-            className="rounded-lg bg-violet-600 px-4 py-2 text-sm font-semibold text-white hover:bg-violet-500"
-          >
+          <PrimaryButton type="button" onClick={onConfirm}>
             Potwierdź
-          </button>
+          </PrimaryButton>
         </div>
       </div>
     </WarehouseDocumentOverlayPortal>

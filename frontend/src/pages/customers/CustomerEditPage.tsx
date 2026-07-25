@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { brandPrimaryButtonClass } from "../../design-system/brandUi";
 import { useNavigate, useParams } from "react-router-dom";
 import { Loader2 } from "lucide-react";
 import { PanelBulkStatusConfirmModal } from "../../components/orders/panelList/PanelBulkStatusConfirmModal";
@@ -770,7 +771,7 @@ export default function CustomerEditPage() {
                   type="button"
                   disabled={saving}
                   onClick={() => void onSave()}
-                  className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-50"
+                  className={brandPrimaryButtonClass}
                 >
                   {saving ? "Zapisywanie…" : "Zapisz"}
                 </button>

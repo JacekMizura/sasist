@@ -23,6 +23,7 @@ import { builtinPresetLabel } from "../../components/admin/permissionPresetLabel
 import LoginCodeLabelControls from "./administrators/LoginCodeLabelControls";
 import { tabsNavItemClassName } from "../../components/layout/TabsNav";
 import { brandPrimaryButtonClass } from "../../design-system/brandUi";
+import { PrimaryButton } from "../../design-system/PrimaryButton";
 import {
   createCustomPermissionPreset,
   createUser,
@@ -1120,9 +1121,9 @@ export default function AdministratorEditPage() {
                               <pre className="mt-4 whitespace-pre-wrap rounded-xl bg-slate-50 p-4 text-xs text-slate-700">
                                 {auditDetailLines(auditDetail.detail).join("\n")}
                               </pre>
-                              <button type="button" className="mt-6 rounded-xl bg-slate-900 px-4 py-2 text-sm font-bold text-white" onClick={() => setAuditDetail(null)}>
+                              <PrimaryButton type="button" className="mt-6" onClick={() => setAuditDetail(null)}>
                                 Zamknij
-                              </button>
+                              </PrimaryButton>
                             </div>
                           </div>
                         )}
@@ -1188,7 +1189,7 @@ export default function AdministratorEditPage() {
                                         }
                                       })();
                                     }}
-                                    className={`${brandPrimaryButtonClass} w-full rounded-xl py-3 font-black`}
+                                    className={`${brandPrimaryButtonClass} w-full`}
                                   >
                                     + Utwórz
                                   </button>

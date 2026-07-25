@@ -1,3 +1,38 @@
+## 2026-07-26 — Primary Button Design System (enforcement complete)
+
+- Jeden Primary: `PrimaryButton` + `brandPrimaryButtonClass` (wzorzec „Dodaj użytkownika”)
+- Migracja ERP CTA (Settings/Orders/Documents/Assortment/Production/Analysis/Warehouse/Complaints/Carts/…) z blue/slate/cyan/violet → orange DS
+- Shared: `ProductLikePageLayout`, `ListPageCreateLink`, `cartsDarkCtaClass`, tokeny purchasing/filter/printQueue → alias do SSOT
+- `npx tsc --noEmit` OK · `npm run build` OK
+- **No push.**
+
+## 2026-07-26 — PrimaryButton DS wave (slate-900/800 CTAs)
+
+- Migrated remaining ERP solid slate Primary CTAs → `PrimaryButton` / `primaryButtonClassName`
+- Confirmed list + scan extras (orders modals, purchasing, ops filters/alerts, auth, ErrorBoundary, labels color apply)
+- Left: WMS/damage, nav pills, badges/toasts/pagination, icon boxes
+- **No push.**
+
+## 2026-07-26 — PrimaryButton DS wave (remaining CTAs)
+
+- Migrated remaining solid blue/violet/cyan/indigo Primary CTAs → `PrimaryButton` / `brandPrimaryButtonClass` / `primaryButtonClassName`
+- Includes: consolidation segment modal, customers notes/GUS, inventory traceability, complaints ops/wizard/shipments, direct sales customer+discount, production shortages/composition/monitoring, assortment labels, LocationPicker, fulfillment warehouse, Products filter, label import/print, WarehouseModals undo, ProductLikePageLayout header save, GenerateWarehouseLayout Generuj
+- Skipped: WMS/damage, tabs/chips/toggles/badges/charts as listed
+- **No push.**
+
+## 2026-07-26 — ERP Primary CTAs → design-system orange (clusters)
+
+- Migrated listed Assortment / Products / Production / Analysis / Warehouse / Settings / Orders / Customers / Complaints / WarehouseMaterials / Carts / documents / System / analytics / errors primary CTAs → `PrimaryButton` / `brandPrimaryButtonClass`
+- Skipped: WMS terminal, Login, destructive, toggles/tabs/badges, filterToolbarBtnApply, non-CTA segmented controls
+- No `"brandPrimaryButtonClass"` string-literal bugs
+- **No push.**
+
+## 2026-07-26 — ERP Primary CTAs → design-system orange (no push)
+
+- High-priority Settings/exports/returns/import/orders/documents pages: `bg-blue/cyan/sky/slate-900` primary fills → `brandPrimaryButtonClass`
+- WarehouseDrawers: removed unused `purchasingBtnPrimary` import (primary AppButton already uses DS)
+- Skipped: ApiKeys `<pre>`, Import segmented tabs, WMS operator buttons
+
 ## 2026-07-25 — Magazyn: kamery per-warehouse + tryby wizualizacji (no push)
 
 - Camera: `warehouse_map_camera_v1_{warehouseId}` (zoom, panX/Y, scroll); auto-fit tylko przy pierwszym wejściu; „Dopasuj do ekranu”

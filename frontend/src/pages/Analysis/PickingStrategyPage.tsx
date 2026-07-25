@@ -10,6 +10,7 @@ import {
   Cell,
 } from "recharts";
 import api from "../../api/axios";
+import { PrimaryButton } from "../../design-system/PrimaryButton";
 import {
   getPickingStrategy,
   type PickingStrategyResult,
@@ -218,7 +219,7 @@ export default function PickingStrategyPage() {
           </label>
         </div>
         <div className="mt-4">
-          <button
+          <PrimaryButton
             type="button"
             onClick={runSimulation}
             disabled={
@@ -226,10 +227,9 @@ export default function PickingStrategyPage() {
               warehouseId == null ||
               (useDateRange && (!startDate || !endDate))
             }
-            className="px-6 py-2.5 rounded-lg bg-blue-600 text-white font-medium text-sm hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {loading ? "Symulacja…" : "Uruchom symulację"}
-          </button>
+          </PrimaryButton>
         </div>
       </div>
 

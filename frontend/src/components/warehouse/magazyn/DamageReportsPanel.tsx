@@ -8,6 +8,7 @@ import {
   listDamageReports,
   reviewDamageEntry,
 } from "../../../api/damageReportsApi";
+import { PrimaryButton } from "../../../design-system/PrimaryButton";
 import { generateDamageReportPDF } from "../../../pdf/generateDamageReportPDF";
 import type {
   DamageCandidate,
@@ -148,7 +149,7 @@ export function DamageReportsPanel({
                     <input value={createdBy} onChange={(e) => setCreatedBy(e.target.value)} className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm" />
                   </div>
                 </div>
-                <button
+                <PrimaryButton
                   type="button"
                   onClick={async () => {
                     if (warehouseId == null) return;
@@ -167,10 +168,9 @@ export function DamageReportsPanel({
                     setEntries(officeRows);
                     setTab("office");
                   }}
-                  className="rounded-md bg-slate-900 px-3 py-2 text-xs font-semibold text-white hover:bg-slate-700"
                 >
                   Zapisz DamageEntry (NEW)
-                </button>
+                </PrimaryButton>
               </div>
             )}
 
@@ -252,8 +252,9 @@ export function DamageReportsPanel({
                       </label>
                     ))}
                   </div>
-                  <button
+                  <PrimaryButton
                     type="button"
+                    className="mt-3"
                     onClick={async () => {
                       if (warehouseId == null) return;
                       if (selectedReviewedEntryIds.length === 0) return alert("Wybierz REVIEWED entries.");
@@ -273,10 +274,9 @@ export function DamageReportsPanel({
                       setEntries(officeRows);
                       setSelectedReviewedEntryIds([]);
                     }}
-                    className="mt-3 rounded-md bg-slate-900 px-3 py-2 text-xs font-semibold text-white hover:bg-slate-700"
                   >
                     Utwórz protokół szkody
-                  </button>
+                  </PrimaryButton>
                 </div>
 
                 <div className="overflow-auto rounded-lg border border-slate-200">

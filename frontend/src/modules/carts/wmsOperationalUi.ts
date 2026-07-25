@@ -1,13 +1,14 @@
 /** Typography + control sizes for WMS operational screens (wózki, nośniki). */
 
+import { brandPrimaryButtonClass } from "../../design-system/brandUi";
+
 export const wmsTextBase = "text-[15px] leading-relaxed text-slate-800";
 export const wmsTextMeta = "text-[13px] leading-snug text-slate-600";
 export const wmsTextLabel = "text-[12px] font-semibold uppercase tracking-wide text-slate-500";
 export const wmsTextCode = "font-mono text-[15px] font-bold tabular-nums text-slate-900";
 export const wmsTextCodeLg = "font-mono text-lg font-black tabular-nums tracking-tight text-slate-900";
 
-export const wmsBtnPrimary =
-  "inline-flex h-10 items-center justify-center rounded-md bg-slate-900 px-4 text-[14px] font-semibold text-white transition hover:bg-slate-800 disabled:opacity-50";
+export const wmsBtnPrimary = brandPrimaryButtonClass;
 
 export const wmsBtnSecondary =
   "inline-flex h-10 items-center justify-center rounded-md border border-slate-300 bg-white px-4 text-[14px] font-semibold text-slate-800 transition hover:bg-slate-50 disabled:opacity-50";

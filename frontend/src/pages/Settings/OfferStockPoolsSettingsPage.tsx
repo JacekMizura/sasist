@@ -11,6 +11,7 @@ import {
   patchOfferStockPool,
   type OfferStockPoolRead,
 } from "../../api/offerStockPoolApi";
+import { PrimaryButton } from "../../design-system/PrimaryButton";
 
 const TENANT_ID = DAMAGE_TENANT_ID;
 
@@ -119,14 +120,9 @@ export default function OfferStockPoolsSettingsPage() {
         <p className="text-sm text-slate-600">
           Ustawienia → Sprzedaż → Pule stanów. Oferta bez przypisanej puli korzysta z puli domyślnej.
         </p>
-        <button
-          type="button"
-          onClick={openCreate}
-          disabled={busy}
-          className="rounded-lg bg-sky-600 px-4 py-2 text-sm font-medium text-white hover:bg-sky-700 disabled:opacity-50"
-        >
+        <PrimaryButton type="button" onClick={openCreate} disabled={busy}>
           + Nowa pula
-        </button>
+        </PrimaryButton>
       </div>
 
       {error ? <p className="mb-4 text-sm text-red-600">{error}</p> : null}
@@ -225,14 +221,9 @@ export default function OfferStockPoolsSettingsPage() {
               >
                 Anuluj
               </button>
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() => void save()}
-                className="rounded-lg bg-sky-600 px-4 py-2 text-sm font-medium text-white hover:bg-sky-700 disabled:opacity-50"
-              >
+              <PrimaryButton type="button" disabled={busy} onClick={() => void save()}>
                 {busy ? "Zapisywanie…" : "Zapisz"}
-              </button>
+              </PrimaryButton>
             </div>
           </div>
         </div>

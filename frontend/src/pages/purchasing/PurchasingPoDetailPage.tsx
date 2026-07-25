@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { brandPrimaryButtonClass } from "../../design-system/brandUi";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import {
   createInboundDeliveryFromPurchaseOrder,
@@ -589,7 +590,7 @@ export default function PurchasingPoDetailPage() {
                   <button
                     type="button"
                     disabled={saving || detail.status === "Closed" || detail.status === "Cancelled"}
-                    className="rounded-lg bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-40"
+                    className={brandPrimaryButtonClass}
                     onClick={() => void saveLines()}
                   >
                     Zapisz pozycje

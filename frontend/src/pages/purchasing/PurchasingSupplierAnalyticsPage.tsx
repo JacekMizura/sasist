@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { brandPrimaryButtonClass } from "../../design-system/brandUi";
 import { Link, useLocation, useSearchParams } from "react-router-dom";
 import { AlertTriangle, Award, Star, TrendingDown, X } from "lucide-react";
 import {
@@ -406,7 +407,7 @@ export default function PurchasingSupplierAnalyticsPage() {
 
           <div className="flex flex-wrap gap-2">
             <Link
-              className="rounded-lg bg-slate-900 px-3 py-2 text-sm font-medium text-white"
+              className={brandPrimaryButtonClass}
               to={supplierEditHref(drawerSid)}
             >
               Otwórz dostawcę

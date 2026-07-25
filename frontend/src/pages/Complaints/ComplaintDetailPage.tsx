@@ -18,6 +18,7 @@ import {
 } from "../../types/complaint";
 import type { ComplaintShipmentDetail } from "../../types/complaintShipment";
 import type { ComplaintShipmentTransportSectionHandle } from "./ComplaintShipmentTransportSection";
+import { PrimaryButton } from "../../design-system/PrimaryButton";
 import ComplaintTimeline from "./ComplaintTimeline";
 import ComplaintResponseDeadlineBanner from "./ComplaintResponseDeadlineBanner";
 import ComplaintAutoAcceptBadge from "./ComplaintAutoAcceptBadge";
@@ -513,15 +514,10 @@ export default function ComplaintDetailPage() {
         placeholder="Treść wiadomości…"
         className="w-full resize-y rounded-md border border-gray-200 px-2 py-1.5 text-xs text-gray-900 placeholder:text-gray-400"
       />
-      <button
-        type="button"
-        onClick={sendCorrespondence}
-        disabled={!correspondenceDraft.trim()}
-        className="inline-flex shrink-0 items-center gap-1.5 self-start rounded-md bg-blue-600 px-2.5 py-1.5 text-xs font-medium text-white shadow-sm hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
-      >
-        <Send className="h-3.5 w-3.5" aria-hidden />
+      <PrimaryButton type="button" onClick={sendCorrespondence} disabled={!correspondenceDraft.trim()}>
+        <Send className="h-4 w-4" aria-hidden />
         Wyślij
-      </button>
+      </PrimaryButton>
     </>
   );
 

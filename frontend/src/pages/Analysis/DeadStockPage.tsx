@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { getDeadStock, type DeadStockResponse } from "../../api/analysisApi";
+import { PrimaryButton } from "../../design-system/PrimaryButton";
 
 const DEFAULT_TENANT_ID = 1;
 const DEFAULT_DAYS = 90;
@@ -161,14 +162,9 @@ export default function DeadStockPage() {
             </select>
           </label>
         </div>
-        <button
-          type="button"
-          onClick={runSearch}
-          disabled={loading}
-          className="px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 disabled:opacity-50"
-        >
+        <PrimaryButton type="button" onClick={runSearch} disabled={loading}>
           {loading ? "Ładowanie…" : "Szukaj"}
-        </button>
+        </PrimaryButton>
       </div>
 
       <div className="mb-4 flex items-center gap-4">

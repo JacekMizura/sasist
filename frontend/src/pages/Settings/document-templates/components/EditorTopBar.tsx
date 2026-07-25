@@ -1,4 +1,5 @@
 import type { EditorContextDto } from "../../../../api/documentTemplatesApi";
+import { brandPrimaryButtonClass } from "../../../../design-system/brandUi";
 import { EditableTemplateName } from "./EditableTemplateName";
 import { EditorOverflowMenu } from "./EditorOverflowMenu";
 import { TemplateAssignmentsStrip } from "./TemplateAssignmentsStrip";
@@ -80,7 +81,7 @@ export function EditorTopBar({
           </button>
           <button
             type="button"
-            className="rounded-lg bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800"
+            className={brandPrimaryButtonClass}
             onClick={onPublish}
           >
             Opublikuj

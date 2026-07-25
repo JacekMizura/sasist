@@ -2,6 +2,7 @@ import { useNavigate } from "react-router-dom";
 
 import type { ActionFeedItem } from "../../../hooks/operations/useOperationsDashboard";
 import { WMS_ROUTES } from "../../../pages/wms/wmsRoutes";
+import { PrimaryButton } from "../../../design-system/PrimaryButton";
 
 const SEV_BORDER: Record<ActionFeedItem["severity"], string> = {
   critical: "border-l-red-500",
@@ -61,17 +62,16 @@ export function ActionFeedPanel({ items, onAckAlert }: Props) {
                 </div>
                 <div className="flex shrink-0 flex-col gap-1">
                   {it.ctaPrimary ? (
-                    <button
+                    <PrimaryButton
                       type="button"
                       onClick={() => {
                         const to = routeForAction(it.ctaPrimary!.action);
                         if (to) navigate(to);
                         else if (it.alertId && onAckAlert) onAckAlert(it.alertId);
                       }}
-                      className="rounded bg-slate-800 px-2 py-1 text-[10px] font-medium text-white"
                     >
                       {it.ctaPrimary.label}
-                    </button>
+                    </PrimaryButton>
                   ) : null}
                   {it.ctaSecondary ? (
                     <button

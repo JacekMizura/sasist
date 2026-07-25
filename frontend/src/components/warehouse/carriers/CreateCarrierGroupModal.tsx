@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { createWmsCarrierGroup } from "../../../api/wmsCarrierApi";
 import axios from "axios";
+import { PrimaryButton } from "../../../design-system/PrimaryButton";
 
 function apiErrMessage(e: unknown): string {
   if (axios.isAxiosError(e)) {
@@ -72,14 +73,9 @@ export function CreateCarrierGroupModal({ tenantId, open, onClose, onCreated }: 
           <button type="button" onClick={onClose} className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-bold text-slate-700">
             Anuluj
           </button>
-          <button
-            type="button"
-            disabled={busy}
-            onClick={() => void submit()}
-            className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-black uppercase text-white hover:bg-blue-700 disabled:opacity-50"
-          >
+          <PrimaryButton type="button" disabled={busy} onClick={() => void submit()}>
             {busy ? "Tworzenie…" : "Utwórz grupę"}
-          </button>
+          </PrimaryButton>
         </div>
       </div>
     </div>

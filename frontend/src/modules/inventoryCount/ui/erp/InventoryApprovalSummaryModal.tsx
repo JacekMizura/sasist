@@ -1,5 +1,6 @@
 import type { InventoryPostingPreview } from "@/api/inventoryCountApi";
 import { CarrierBadge } from "@/components/warehouse/carriers/CarrierBadge";
+import { PrimaryButton } from "@/design-system/PrimaryButton";
 
 type Props = {
   open: boolean;
@@ -106,15 +107,14 @@ export default function InventoryApprovalSummaryModal({
           <button type="button" disabled={busy} onClick={onCancel} className="rounded border border-slate-200 px-3 py-1.5 text-xs font-semibold">
             Anuluj
           </button>
-          <button
+          <PrimaryButton
             type="button"
             disabled={busy || loading || !preview}
             aria-disabled={busy || loading || !preview}
             onClick={onConfirm}
-            className="rounded bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
           >
             {confirmLabel}
-          </button>
+          </PrimaryButton>
         </div>
       </div>
     </div>

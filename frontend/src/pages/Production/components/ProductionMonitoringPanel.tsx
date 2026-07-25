@@ -5,6 +5,7 @@ import type { ProductionBatchRead, ProductionOrderRead } from "@/api/productionA
 import type { TimelinePwDocument } from "@/modules/production/productionExecutionTimeline";
 import { currentExecutionPhaseLabel } from "@/modules/production/productionExecutionTimeline";
 import { PRODUCTION_KIND_LABEL, type ProductionExecutionKind } from "@/modules/production/productionExecutionTypes";
+import { primaryButtonClassName } from "@/design-system/PrimaryButton";
 import { wmsProductionPaths } from "../productionPaths";
 import { ProgressBar } from "./ProgressBar";
 import { ProductionExecutionTimeline } from "./ProductionExecutionTimeline";
@@ -181,7 +182,7 @@ export function ProductionMonitoringPanel({ kind, source, actions }: Props) {
             to={wmsTerminalHref(kind, source.id, status)}
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center gap-2 rounded-xl bg-violet-600 px-4 py-2 text-sm font-semibold text-white hover:bg-violet-700"
+            className={primaryButtonClassName()}
           >
             <Monitor className="h-4 w-4" aria-hidden />
             Otwórz w terminalu WMS

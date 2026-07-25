@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { brandPrimaryButtonClass } from "../../design-system/brandUi";
 import { Link } from "react-router-dom";
 import api from "../../api/axios";
 import { entityTypeLabelPl } from "../../utils/exportImportLabelsPl";
@@ -100,7 +101,7 @@ export default function ImportHistoryPage({
               <h1 className="text-xl font-bold text-slate-800">Historia importów</h1>
               <p className="mt-1 text-sm text-slate-500">Ostatnie importy CSV (wszystkie typy encji)</p>
             </div>
-            <Link to={backTo} className="rounded-lg bg-slate-900 px-3 py-2 text-sm font-semibold text-white hover:bg-slate-800">
+            <Link to={backTo} className={brandPrimaryButtonClass}>
               {backLabel}
             </Link>
           </div>

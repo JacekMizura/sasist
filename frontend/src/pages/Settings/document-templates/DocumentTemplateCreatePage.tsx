@@ -12,6 +12,7 @@ import {
 } from "../../../api/documentTemplatesApi";
 import { extractApiErrorMessage } from "../../../api/apiErrorMessage";
 import { DEFAULT_TENANT_ID, LIST_BASE } from "./constants";
+import { brandPrimaryButtonClass } from "../../../design-system/brandUi";
 
 export function DocumentTemplateCreatePage() {
   const navigate = useNavigate();
@@ -203,7 +204,7 @@ export function DocumentTemplateCreatePage() {
           type="button"
           disabled={creating}
           onClick={handleCreate}
-          className="rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-50"
+          className={brandPrimaryButtonClass}
         >
           Utwórz i otwórz edytor
         </button>

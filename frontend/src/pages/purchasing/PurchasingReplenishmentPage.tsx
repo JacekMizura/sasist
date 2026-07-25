@@ -2,6 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useState } from "reac
 import { AlertTriangle, Banknote, Download, List, PackageSearch, Save, ShoppingCart } from "lucide-react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { AppEmptyState } from "../../components/app-shell";
+import { PrimaryButton } from "../../design-system/PrimaryButton";
 import { listSuppliers, type SupplierRead } from "../../api/inboundSuppliersApi";
 import {
   downloadReplenishmentCsv,
@@ -994,10 +995,9 @@ export default function PurchasingReplenishmentPage({ variant = "standalone" }: 
               >
                 {creatingPo ? "Tworzenie…" : "Utwórz zamówienie do dostawcy"}
               </button>
-              <button
+              <PrimaryButton
                 type="button"
                 disabled={exporting}
-                className="rounded-lg border border-slate-800 bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50"
                 onClick={async () => {
                   setExporting(true);
                   try {
@@ -1013,7 +1013,7 @@ export default function PurchasingReplenishmentPage({ variant = "standalone" }: 
                 }}
               >
                 Export zaznaczone
-              </button>
+              </PrimaryButton>
             </div>
           </div>
         </div>
@@ -1048,13 +1048,9 @@ export default function PurchasingReplenishmentPage({ variant = "standalone" }: 
               Część produktów nie ma dostawcy. Uzupełnij domyślnego dostawcę lub powiązanie w katalogu dostawcy, potem
               spróbuj ponownie.
             </p>
-            <button
-              type="button"
-              className="mt-6 w-full rounded-lg border border-slate-200 bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800"
-              onClick={() => setSupplierBlockModalOpen(false)}
-            >
+            <PrimaryButton type="button" className="mt-6 w-full" onClick={() => setSupplierBlockModalOpen(false)}>
               Zamknij
-            </button>
+            </PrimaryButton>
           </div>
         </div>
       ) : null}

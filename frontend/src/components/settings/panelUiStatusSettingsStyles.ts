@@ -1,11 +1,12 @@
 /** Wspólne klasy — statusy panelu (zamówienia / zwroty). */
 
+import { brandPrimaryButtonClass } from "../../design-system/brandUi";
+
 export const stFieldLabel = "mb-1 block text-[11px] font-semibold uppercase tracking-wide text-slate-500";
 export const stInput =
   "h-9 w-full rounded-lg border border-slate-200 bg-white px-2.5 text-sm text-slate-900 shadow-sm placeholder:text-slate-400 focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-200/80";
 export const stSelect = stInput;
-export const stBtnPrimary =
-  "inline-flex h-9 shrink-0 items-center justify-center rounded-lg bg-slate-900 px-4 text-sm font-semibold text-white shadow-sm hover:bg-slate-800 disabled:opacity-50";
+export const stBtnPrimary = brandPrimaryButtonClass;
 export const stBtnGhost =
   "inline-flex h-9 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white px-4 text-sm font-medium text-slate-800 shadow-sm hover:bg-slate-50";
 export const stBtnDanger =

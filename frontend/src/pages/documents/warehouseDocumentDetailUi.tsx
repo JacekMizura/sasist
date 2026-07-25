@@ -4,12 +4,12 @@ import {
   listSellasistToolbarSquareBtn,
   listSellasistToolbarToggleBtn,
 } from "../../components/listPage/listSellasistTokens";
+import { brandPrimaryButtonClass } from "../../design-system/brandUi";
 
 export const warehouseDocInfoCardClass =
   "rounded-lg border border-slate-200/90 bg-white p-3 shadow-sm";
 
-export const warehouseDocPrimaryBtnClass =
-  "inline-flex h-9 items-center justify-center rounded-lg bg-slate-900 px-3.5 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400/50 focus-visible:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-50";
+export const warehouseDocPrimaryBtnClass = brandPrimaryButtonClass;
 
 export const warehouseDocDetailScrollClass = "min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden";
 

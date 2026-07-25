@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { log } from "../../utils/logger";
 import api from "../../api/axios";
+import { PrimaryButton } from "../../design-system/PrimaryButton";
 
 interface CartFormProps {
   groupId?: number;
@@ -141,12 +142,9 @@ export default function CartForm({ groupId, editId, initialType = 'BULK', onClos
           </div>
         )}
 
-        <button 
-          disabled={loading}
-          className="w-full bg-blue-600 text-white py-5 rounded-[2rem] font-black uppercase tracking-widest text-[11px] hover:bg-blue-700 disabled:opacity-50 shadow-lg shadow-blue-100"
-        >
-          {loading ? 'Tworzenie...' : 'Zapisz w systemie'}
-        </button>
+        <PrimaryButton type="submit" disabled={loading} className="w-full">
+          {loading ? "Tworzenie..." : "Zapisz w systemie"}
+        </PrimaryButton>
       </form>
     </div>
   );

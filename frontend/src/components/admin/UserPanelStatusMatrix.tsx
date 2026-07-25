@@ -21,6 +21,7 @@ import {
 } from "../../utils/panelSidebarHierarchy";
 import type { OrderUiMainGroup, OrderUiPanelSubgroupRead, OrderUiStatusPanelSummary } from "../../types/orderUiStatus";
 import { StatusAccessCheckbox } from "./statusAccessCheckbox";
+import { PrimaryButton } from "../../design-system/PrimaryButton";
 
 type FlagKey = "can_visible" | "can_edit" | "can_transition" | "can_process" | "can_print" | "can_complete";
 
@@ -446,14 +447,9 @@ export default function UserPanelStatusMatrix({ tenantId, warehouseId, targetUse
             >
               Przywróć jak dla roli
             </button>
-            <button
-              type="button"
-              disabled={saving || loading}
-              onClick={() => void save()}
-              className="rounded-lg bg-slate-900 px-4 py-2 text-xs font-semibold text-white shadow-sm hover:bg-slate-800 disabled:opacity-50"
-            >
+            <PrimaryButton type="button" disabled={saving || loading} onClick={() => void save()}>
               {saving ? "Zapisywanie…" : "Zapisz"}
-            </button>
+            </PrimaryButton>
           </>
         ) : null}
       </div>

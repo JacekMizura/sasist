@@ -1,4 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react";
+import { brandPrimaryButtonClass } from "../../../design-system/brandUi";
 import { X } from "lucide-react";
 import { PanelStatusHierarchyPicker } from "../../panel/PanelStatusHierarchyPicker";
 import type { OrderUiPanelSubgroupRead, OrderUiStatusPanelSummary } from "../../../types/orderUiStatus";
@@ -130,7 +131,7 @@ export function OrderQuickActionModals({
             <button
               type="button"
               disabled={busy || statusId.trim() === ""}
-              className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-50"
+              className={brandPrimaryButtonClass}
               onClick={() => void onApplyChangeStatus(statusId)}
             >
               {busy ? "Zapisywanie…" : "Zastosuj"}
@@ -176,7 +177,7 @@ export function OrderQuickActionModals({
             <button
               type="button"
               disabled={busy}
-              className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-50"
+              className={brandPrimaryButtonClass}
               onClick={() => void onApplyIssueDocument(documentType)}
             >
               {busy ? "Zapisywanie…" : "Zapisz"}
@@ -226,7 +227,7 @@ export function OrderQuickActionModals({
             <button
               type="button"
               disabled={busy}
-              className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-50"
+              className={brandPrimaryButtonClass}
               onClick={() => void onApplySetPriority(priorityColor || null)}
             >
               {busy ? "Zapisywanie…" : "Zastosuj"}
@@ -263,7 +264,7 @@ export function OrderQuickActionModals({
             <button
               type="button"
               disabled={busy}
-              className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-50"
+              className={brandPrimaryButtonClass}
               onClick={() =>
                 void onApplyPaymentStatus(paymentStatusQuick.trim() === "" ? null : paymentStatusQuick.trim())
               }
@@ -306,7 +307,7 @@ export function OrderQuickActionModals({
             <button
               type="button"
               disabled={busy || !noteText.trim()}
-              className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-50"
+              className={brandPrimaryButtonClass}
               onClick={() => void onApplyAddNote(noteText)}
             >
               {busy ? "Zapisywanie…" : "Dopisz"}
@@ -338,7 +339,7 @@ export function OrderQuickActionModals({
         footer={
           <button
             type="button"
-            className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800"
+            className={brandPrimaryButtonClass}
             onClick={() => onAcknowledgeStub("Generowanie etykiety — funkcja w przygotowaniu.")}
           >
             Rozumiem
@@ -360,7 +361,7 @@ export function OrderQuickActionModals({
         footer={
           <button
             type="button"
-            className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800"
+            className={brandPrimaryButtonClass}
             onClick={() => onAcknowledgeStub("Wysyłka wiadomości — funkcja w przygotowaniu.")}
           >
             Rozumiem

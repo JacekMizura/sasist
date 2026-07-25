@@ -1,4 +1,5 @@
 import type { TemplateMeta } from "../LabelTemplateDesigner";
+import { brandPrimaryButtonClass } from "../../../design-system/brandUi";
 import { LabelDesignerToolbarSelect } from "./LabelDesignerToolbarSelect";
 
 type Props = {
@@ -88,7 +89,7 @@ export function LabelDesignerProjectSettingsModal({
           <button
             type="button"
             onClick={onClose}
-            className="inline-flex h-10 items-center rounded-lg bg-slate-900 px-4 text-sm font-semibold text-white shadow-sm hover:bg-slate-800"
+            className={brandPrimaryButtonClass}
           >
             Zamknij
           </button>

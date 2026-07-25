@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { brandPrimaryButtonClass } from "../../../design-system/brandUi";
 import { X } from "lucide-react";
 import {
   listOrderCustomFields,
@@ -297,7 +298,7 @@ export function OrderBulkCustomFieldModal({
           <button
             type="button"
             disabled={saving || !canSubmit}
-            className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-50"
+            className={brandPrimaryButtonClass}
             onClick={() => void run()}
           >
             {saving ? "Zapisywanie…" : "Zapisz dla zaznaczonych"}

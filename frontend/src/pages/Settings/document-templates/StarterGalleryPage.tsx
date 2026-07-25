@@ -10,6 +10,7 @@ import {
 import { extractApiErrorMessage } from "@/api/apiErrorMessage";
 import { DEFAULT_TENANT_ID, LIST_BASE } from "./constants";
 import { StarterThumbnailImage } from "./components/StarterThumbnailImage";
+import { brandPrimaryButtonClass } from "@/design-system/brandUi";
 
 const CATEGORY_LABELS: Record<string, string> = {
   featured: "Polecane",
@@ -156,7 +157,7 @@ export function StarterGalleryPage() {
                 </Link>
                 <button
                   type="button"
-                  className="flex-1 rounded-lg bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800"
+                  className={`${brandPrimaryButtonClass} flex-1`}
                   onClick={() => void createFromStarter(item)}
                 >
                   Użyj szablonu

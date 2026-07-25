@@ -11,6 +11,7 @@ import {
 import { isSuperRole } from "../../auth/isSuperRole";
 import { useAuth } from "../../context/AuthContext";
 import { getLabel, useLabels } from "../../labels";
+import { PrimaryButton } from "../../design-system/PrimaryButton";
 
 const CATEGORY_LABELS: Record<string, string> = {
   app: "Aplikacja",
@@ -211,14 +212,9 @@ export default function SystemAppDictionaryPage() {
                       </p>
                     </div>
                     <div className="flex items-center gap-2 self-center">
-                      <button
-                        type="button"
-                        disabled={savingId === row.id}
-                        onClick={() => void saveRow(row)}
-                        className="rounded-md bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700 disabled:opacity-50"
-                      >
+                      <PrimaryButton type="button" disabled={savingId === row.id} onClick={() => void saveRow(row)}>
                         {getLabel("system.labels.save", "Zapisz")}
-                      </button>
+                      </PrimaryButton>
                       <button
                         type="button"
                         disabled={savingId === row.id || !(row.custom_value || drafts[row.id])}

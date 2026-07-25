@@ -1,4 +1,5 @@
 import { Download, FileSpreadsheet, Loader2, Pencil, ShieldCheck } from "lucide-react";
+import { brandPrimaryButtonClass } from "../../../../design-system/brandUi";
 
 import { downloadInventoryAuditPackageBlob, downloadInventoryReportBlob } from "@/api/inventoryCountApi";
 import { filterInputClass } from "@/components/filters";
@@ -143,7 +144,7 @@ export default function InventoryDocumentDetailView({ state, warehouseName }: Pr
                   type="button"
                   disabled={busy}
                   onClick={() => void saveTitle()}
-                  className="rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-50"
+                  className={brandPrimaryButtonClass}
                 >
                   Zapisz
                 </button>
@@ -221,7 +222,7 @@ export default function InventoryDocumentDetailView({ state, warehouseName }: Pr
               type="button"
               disabled={busy}
               onClick={() => void openApprovalModal("post")}
-              className="rounded-lg bg-slate-900 px-3 py-2 text-sm font-semibold text-white hover:bg-slate-800"
+              className={brandPrimaryButtonClass}
             >
               {updatesStock ? "Księguj RW/PW" : "Zakończ bez korekt stanów"}
             </button>

@@ -17,6 +17,8 @@ export {
   brandSidebarNavChevronClassName,
 } from "./brandUi";
 
+export { PrimaryButton, primaryButtonClassName, type PrimaryButtonProps } from "./PrimaryButton";
+
 export {
   pageShellGutterClass,
   pageShellSurfaceClass,

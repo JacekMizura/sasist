@@ -1,4 +1,5 @@
 import type { ProductionBatchSummaryRead } from "../../../api/productionApi";
+import { PrimaryButton } from "../../../design-system/PrimaryButton";
 import type { QueueSectionConfig } from "../productionTheme";
 import { BatchCard } from "./BatchCard";
 import { ProductionEmptyState } from "./ProductionEmptyState";
@@ -49,13 +50,9 @@ export function ProductionQueueSection({
             description={config.emptyDescription}
             action={
               config.emptyCta && onCreateBatch ? (
-                <button
-                  type="button"
-                  onClick={onCreateBatch}
-                  className="rounded-xl bg-violet-600 px-5 py-2.5 text-sm font-semibold text-white shadow-md hover:bg-violet-700"
-                >
+                <PrimaryButton type="button" onClick={onCreateBatch}>
                   {config.emptyCta}
-                </button>
+                </PrimaryButton>
               ) : undefined
             }
           />

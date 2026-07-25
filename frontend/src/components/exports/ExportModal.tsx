@@ -6,6 +6,7 @@ import {
   runExportDownload,
   type ExportTemplateDto,
 } from "../../api/exportsApi";
+import { brandPrimaryButtonClass } from "../../design-system/brandUi";
 import { csvFieldLabelPl, entityTypeLabelPl } from "../../utils/exportImportLabelsPl";
 
 export type ExportModalProps = {
@@ -119,7 +120,7 @@ export default function ExportModal({ open, onClose, tenantId, entityType, selec
           <button
             type="button"
             disabled={busy || templateId === "" || ids.length === 0}
-            className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+            className={brandPrimaryButtonClass}
             onClick={run}
           >
             {busy ? "Generowanie…" : "Pobierz CSV"}

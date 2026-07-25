@@ -3,6 +3,7 @@ import type { AssignedLocation } from "../../types/warehouse";
 import type { SelectablePosition, ProductDimensionsCm } from "./warehouseUtils";
 import { positionFitsDimensions } from "./warehouseUtils";
 import { normalizeStorageType } from "../../utils/storageTypes";
+import { PrimaryButton } from "../../design-system/PrimaryButton";
 import { LocationTypeBadge } from "./LocationTypeBadge";
 
 export type LocationPickerProps = {
@@ -247,14 +248,14 @@ export function LocationPicker({
                         <div className="min-w-0 flex-1">
                           <LocationTypeBadge locationText={p.locationAddress} storageType={storageType} />
                         </div>
-                        <button
+                        <PrimaryButton
                           type="button"
                           onClick={() => fits && addLocation(p.locationUUID)}
                           disabled={!fits || disabled}
-                          className="shrink-0 rounded bg-cyan-600 px-2 py-0.5 text-xs text-white hover:bg-cyan-500 disabled:cursor-not-allowed disabled:opacity-50"
+                          className="shrink-0"
                         >
                           Dodaj
-                        </button>
+                        </PrimaryButton>
                       </li>
                     );
                   })}

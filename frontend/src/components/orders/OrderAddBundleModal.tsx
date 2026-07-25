@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { postOrderLine } from "../../api/ordersApi";
 import { listBundles, type BundleRead } from "../../api/bundlesApi";
+import { PrimaryButton } from "../../design-system/PrimaryButton";
 
 const inp =
   "mt-1 w-full rounded-md border border-slate-200 bg-white px-2 py-1.5 text-sm text-slate-900 outline-none focus-visible:ring-2 focus-visible:ring-blue-500/30";
@@ -225,14 +226,9 @@ export default function OrderAddBundleModal({ open, onClose, tenantId, orderId, 
           >
             Anuluj
           </button>
-          <button
-            type="button"
-            disabled={saving || !selected}
-            onClick={() => void save()}
-            className="rounded-lg border border-slate-800 bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-50"
-          >
+          <PrimaryButton type="button" disabled={saving || !selected} onClick={() => void save()}>
             {saving ? "…" : "Dodaj do zamówienia"}
-          </button>
+          </PrimaryButton>
         </div>
       </div>
     </div>

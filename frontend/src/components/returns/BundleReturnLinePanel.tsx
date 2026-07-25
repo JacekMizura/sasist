@@ -10,6 +10,7 @@ import type {
   WmsReturnBundleComponentRead,
   WmsReturnBundleTreeNodeRead,
 } from "../../types/wmsReturn";
+import { PrimaryButton } from "../../design-system/PrimaryButton";
 
 type Props = {
   tenantId: number;
@@ -215,14 +216,9 @@ export function BundleReturnLinePanel({
             <span className="text-xs font-semibold tabular-nums text-violet-900">
               Refund (snapshot): {refundPreview.toFixed(2)} zł
             </span>
-            <button
-              type="button"
-              disabled={disabled || saving}
-              onClick={() => void save()}
-              className="rounded-lg bg-violet-700 px-3 py-1.5 text-xs font-bold text-white hover:bg-violet-800 disabled:opacity-50"
-            >
+            <PrimaryButton type="button" disabled={disabled || saving} onClick={() => void save()}>
               {saving ? "Zapis…" : "Zapisz składniki"}
-            </button>
+            </PrimaryButton>
           </div>
         </div>
       ) : null}

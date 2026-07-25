@@ -1,5 +1,6 @@
 import type { OperationalUnavailableReason } from "../../../services/operational/operationalUnavailableCopy";
 import { directSalesUnavailableMessage } from "../../../services/operational/operationalUnavailableCopy";
+import { PrimaryButton } from "../../../design-system/PrimaryButton";
 
 type Props = {
   reason: OperationalUnavailableReason;
@@ -14,13 +15,9 @@ export function DirectSalesUnavailable({ reason, onRefresh }: Props) {
         <p className="text-lg font-semibold text-slate-900">{copy.title}</p>
         <p className="mt-2 text-sm text-slate-600">{copy.body}</p>
         <div className="mt-5 flex flex-wrap justify-center gap-2">
-          <button
-            type="button"
-            onClick={onRefresh}
-            className="rounded-lg bg-slate-800 px-4 py-2 text-sm font-medium text-white"
-          >
+          <PrimaryButton type="button" onClick={onRefresh}>
             Odśwież
-          </button>
+          </PrimaryButton>
           <button
             type="button"
             onClick={() => window.location.reload()}

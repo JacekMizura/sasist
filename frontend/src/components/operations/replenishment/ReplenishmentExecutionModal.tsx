@@ -4,6 +4,7 @@ import {
   ReplenishmentExecutionSteps,
   replenishmentStepHint,
 } from "./ReplenishmentExecutionSteps";
+import { PrimaryButton } from "../../../design-system/PrimaryButton";
 
 type Props = {
   row: ReplenishmentRow | null;
@@ -74,14 +75,9 @@ export function ReplenishmentExecutionModal({
             <p className="text-sm font-medium text-emerald-700">Krok zatwierdzony ✓</p>
           ) : null}
           <div className="flex gap-2 pt-1">
-            <button
-              type="button"
-              disabled={busy}
-              onClick={onSubmit}
-              className="flex-1 rounded-lg bg-slate-900 py-3 text-sm font-semibold text-white disabled:opacity-50"
-            >
+            <PrimaryButton type="button" disabled={busy} onClick={onSubmit} className="flex-1">
               {step === "complete" ? "Potwierdź wykonanie" : "Dalej"}
-            </button>
+            </PrimaryButton>
             {step === "complete" ? (
               <button
                 type="button"

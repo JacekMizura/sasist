@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { brandPrimaryButtonClass } from "../../design-system/brandUi";
 import { Link } from "react-router-dom";
 import { ChevronDown, Columns3, Download, TableProperties } from "lucide-react";
 
@@ -372,7 +373,7 @@ export default function CustomersListPage() {
             <p className="mt-1 text-sm text-slate-500">Zmień filtry lub dodaj pierwszego klienta.</p>
             <Link
               to="/customers/new"
-              className="mt-6 inline-flex items-center justify-center rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-slate-800"
+              className={`${brandPrimaryButtonClass} mt-6`}
             >
               {UI_STRINGS.navigation.addCustomer}
             </Link>

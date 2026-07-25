@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode, type RefObject } from "react";
 import { Check, ChevronDown, ChevronRight, Circle } from "lucide-react";
 
+import { brandPrimaryButtonClass } from "../../design-system/brandUi";
 import type { ComplaintDetail, ComplaintLineDetail } from "../../types/complaint";
 import type { ComplaintShipmentDetail, ComplaintShipmentGetResponse } from "../../types/complaintShipment";
 import {
@@ -390,7 +391,7 @@ function RepairUnifiedFlow({
                   type="button"
                   disabled={disabled || busy}
                   onClick={() => onOperationAction(line.id, lineOpKeyToApiAction("service_sent"))}
-                  className="w-full rounded-lg bg-blue-600 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+                  className={`${brandPrimaryButtonClass} w-full`}
                 >
                   {LINE_OP_BUTTON_LABEL_PL.service_sent}
                 </button>
@@ -402,7 +403,7 @@ function RepairUnifiedFlow({
               disabled={disabled || busy || !shipment}
               title={!shipment ? "Najpierw zamów odbiór kuriera powyżej." : undefined}
               onClick={() => onOperationAction(line.id, lineOpKeyToApiAction("pickup"))}
-              className="w-full rounded-lg bg-blue-600 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+              className={`${brandPrimaryButtonClass} w-full`}
             >
               {LINE_OP_BUTTON_LABEL_PL.pickup}
             </button>
@@ -411,7 +412,7 @@ function RepairUnifiedFlow({
               type="button"
               disabled={disabled || busy}
               onClick={() => onOperationAction(line.id, lineOpKeyToApiAction("repair_done"))}
-              className="w-full rounded-lg bg-blue-600 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+              className={`${brandPrimaryButtonClass} w-full`}
             >
               {LINE_OP_BUTTON_LABEL_PL.repair_done}
             </button>
@@ -420,7 +421,7 @@ function RepairUnifiedFlow({
               type="button"
               disabled={disabled || busy}
               onClick={() => onOperationAction(line.id, lineOpKeyToApiAction("shipped_customer"))}
-              className="w-full rounded-lg bg-blue-600 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+              className={`${brandPrimaryButtonClass} w-full`}
             >
               Wyślij do klienta — potwierdź etap
             </button>
@@ -429,7 +430,7 @@ function RepairUnifiedFlow({
               type="button"
               disabled={disabled || busy}
               onClick={() => onOperationAction(line.id, lineOpKeyToApiAction(nextKey))}
-              className="w-full rounded-lg bg-blue-600 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+              className={`${brandPrimaryButtonClass} w-full`}
             >
               {LINE_OP_BUTTON_LABEL_PL[nextKey]}
             </button>
@@ -543,7 +544,7 @@ function RejectUnifiedFlow({
               disabled={disabled || busy || !shipment}
               title={!shipment ? "Najpierw zamów odbiór." : undefined}
               onClick={() => onOperationAction(line.id, lineOpKeyToApiAction("pickup"))}
-              className="w-full rounded-lg bg-blue-600 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+              className={`${brandPrimaryButtonClass} w-full`}
             >
               {LINE_OP_BUTTON_LABEL_PL.pickup}
             </button>
@@ -552,7 +553,7 @@ function RejectUnifiedFlow({
               type="button"
               disabled={disabled || busy}
               onClick={() => onOperationAction(line.id, lineOpKeyToApiAction(nextKey))}
-              className="w-full rounded-lg bg-blue-600 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+              className={`${brandPrimaryButtonClass} w-full`}
             >
               {LINE_OP_BUTTON_LABEL_PL[nextKey]}
             </button>
@@ -688,7 +689,7 @@ function RefundUnifiedFlow({
               disabled={disabled || busy || !shipment}
               title={!shipment ? "Najpierw zamów odbiór." : undefined}
               onClick={() => onOperationAction(line.id, lineOpKeyToApiAction("pickup"))}
-              className="w-full rounded-lg bg-blue-600 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+              className={`${brandPrimaryButtonClass} w-full`}
             >
               {LINE_OP_BUTTON_LABEL_PL.pickup}
             </button>
@@ -697,7 +698,7 @@ function RefundUnifiedFlow({
               type="button"
               disabled={disabled || busy}
               onClick={() => onOperationAction(line.id, lineOpKeyToApiAction(nextKey))}
-              className="w-full rounded-lg bg-blue-600 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+              className={`${brandPrimaryButtonClass} w-full`}
             >
               {LINE_OP_BUTTON_LABEL_PL[nextKey]}
             </button>
@@ -886,7 +887,7 @@ export default function ComplaintLineOperationsBlock({
             type="button"
             disabled={disabled || busy}
             onClick={() => onOperationAction(line.id, lineOpKeyToApiAction(nextKey))}
-            className="w-full rounded-lg bg-blue-600 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+            className={`${brandPrimaryButtonClass} w-full`}
           >
             {LINE_OP_BUTTON_LABEL_PL[nextKey]}
           </button>
@@ -1084,7 +1085,7 @@ function ExchangeOperationsBody({
               disabled={disabled || busy || !logistics?.shipment}
               title={!logistics?.shipment ? "Najpierw zamów odbiór w kroku powyżej (lub u pierwszej pozycji)." : undefined}
               onClick={() => onOperationAction(line.id, lineOpKeyToApiAction("pickup"))}
-              className="w-full rounded-lg bg-blue-600 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+              className={`${brandPrimaryButtonClass} w-full`}
             >
               {LINE_OP_BUTTON_LABEL_PL.pickup}
             </button>
@@ -1093,7 +1094,7 @@ function ExchangeOperationsBody({
               type="button"
               disabled={disabled || busy}
               onClick={() => onOperationAction(line.id, lineOpKeyToApiAction(nextKey))}
-              className="w-full rounded-lg bg-blue-600 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+              className={`${brandPrimaryButtonClass} w-full`}
             >
               {LINE_OP_BUTTON_LABEL_PL[nextKey]}
             </button>

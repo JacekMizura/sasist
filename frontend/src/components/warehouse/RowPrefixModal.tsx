@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { generateRackNames, normalizeRowPrefixLetters, nextRowPrefixLetters } from "./warehouseUtils";
+import { PrimaryButton } from "../../design-system/PrimaryButton";
 
 export type RowCountDirection = "LTR" | "RTL";
 
@@ -435,14 +436,9 @@ export function RowPrefixModal({
           >
             Anuluj
           </button>
-          <button
-            type="button"
-            onClick={handleConfirm}
-            disabled={confirmDisabled}
-            className="px-3 py-1.5 text-sm font-medium rounded-lg bg-cyan-600 text-white hover:bg-cyan-500 disabled:opacity-50 disabled:pointer-events-none"
-          >
+          <PrimaryButton type="button" onClick={handleConfirm} disabled={confirmDisabled}>
             OK
-          </button>
+          </PrimaryButton>
         </div>
       </div>
     </div>

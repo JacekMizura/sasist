@@ -14,6 +14,7 @@ import type {
   ProductionDemandPlanning,
   ProductionDemandProductRow,
 } from "@/api/productionPlanningApi";
+import { PrimaryButton } from "@/design-system/PrimaryButton";
 import { ProductThumb } from "./ProductThumb";
 import { ProductionTimelineChart } from "./ProductionTimelineChart";
 import { MaterialProductionStatusBadge } from "./MaterialProductionStatusBadge";
@@ -274,7 +275,7 @@ export function ProductionDemandPlanningPanel({
                   </td>
                   <td className="px-2.5 py-1.5">
                     {row.composition_id && row.recommended_quantity > 0 ? (
-                      <button
+                      <PrimaryButton
                         type="button"
                         onClick={() =>
                           onCreateBatch(
@@ -288,11 +289,10 @@ export function ProductionDemandPlanningPanel({
                             row.product_name,
                           )
                         }
-                        className="inline-flex items-center gap-1 rounded-lg bg-violet-600 px-2 py-1.5 text-xs font-bold text-white hover:bg-violet-700"
                       >
-                        <Factory className="h-3.5 w-3.5" aria-hidden />
+                        <Factory className="h-4 w-4" aria-hidden />
                         Partia
-                      </button>
+                      </PrimaryButton>
                     ) : (
                       "—"
                     )}
@@ -364,14 +364,14 @@ function DemandCard({
         {loading ? "…" : fmtQty(value)}
         <span className="ml-1 text-xs font-semibold text-slate-500">{unit}</span>
       </p>
-      <button
+      <PrimaryButton
         type="button"
         disabled={loading || value <= 0}
         onClick={onCreate}
-        className="mt-2.5 w-full rounded-lg bg-slate-900 py-1.5 text-xs font-bold text-white hover:bg-slate-800 disabled:opacity-40"
+        className="mt-2.5 w-full"
       >
         Utwórz partię
-      </button>
+      </PrimaryButton>
     </div>
   );
 }

@@ -207,7 +207,7 @@ export default function AddComputerModal({ open, onClose }: Props) {
             <StepCard step={1} title="Pobierz instalator">
               <button
                 type="button"
-                className={`${brandPrimaryButtonClass} w-full rounded-xl px-5 py-3.5 text-base sm:w-auto`}
+                className={`${brandPrimaryButtonClass} w-full sm:w-auto`}
                 disabled={!resolvedDownload.downloadUrl}
                 onClick={handleDownloadInstaller}
               >
@@ -227,7 +227,7 @@ export default function AddComputerModal({ open, onClose }: Props) {
               </p>
               <button
                 type="button"
-                className={`${brandPrimaryButtonClass} mt-3 rounded-xl`}
+                className={`${brandPrimaryButtonClass} mt-3`}
                 disabled={busy || !!plainKey}
                 onClick={() => void issueKey()}
               >

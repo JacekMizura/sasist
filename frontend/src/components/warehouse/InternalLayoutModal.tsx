@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { brandPrimaryButtonClass } from "../../design-system/brandUi";
+import { PrimaryButton } from "../../design-system/PrimaryButton";
 import { createPortal } from "react-dom";
 import type { LayoutState } from "../../types/warehouse";
 import type { RackState, InternalStructure, InternalLevel, BinState, StorageType } from "./warehouseTypes";
@@ -735,13 +737,13 @@ export function InternalLayoutModal({ layout = null, rack, warehouseLabel, onSav
 
                                 <div className="flex items-center justify-between gap-2">
                                   <p className="text-[12px] text-slate-800 font-semibold whitespace-nowrap">Pojemność: {volDm3.toFixed(0)} dm³</p>
-                                  <button
+                                  <PrimaryButton
                                     type="button"
                                     onClick={() => addLocation(levIdx, binIndex)}
-                                    className="text-[10px] bg-blue-600 text-white rounded-md px-2 py-1 hover:bg-blue-700 shrink-0 mt-3"
+                                    className="shrink-0 mt-3"
                                   >
                                     + Lokalizacja
-                                  </button>
+                                  </PrimaryButton>
                                 </div>
                               </div>
                           </>
@@ -831,7 +833,7 @@ export function InternalLayoutModal({ layout = null, rack, warehouseLabel, onSav
             type="button"
             onClick={handleSave}
             disabled={!valid}
-            className="ml-auto rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-500 disabled:opacity-50"
+            className={`${brandPrimaryButtonClass} ml-auto`}
           >
             Zapisz
           </button>

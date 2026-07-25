@@ -1,5 +1,6 @@
 import { Loader2 } from "lucide-react";
 import type { GusLookupResult } from "../../api/customersGusApi";
+import { PrimaryButton } from "../../design-system/PrimaryButton";
 import { CustomerGusBadges } from "./CustomerGusBadges";
 
 function FieldRow({ label, value }: { label: string; value: string | null | undefined }) {
@@ -59,13 +60,9 @@ export function CustomerGusLookupPanel({
           {error ? <p className="text-xs text-amber-800">{error}</p> : null}
         </div>
         <div className="flex flex-wrap gap-2">
-          <button
-            type="button"
-            onClick={onApply}
-            className="rounded-lg bg-blue-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-blue-700"
-          >
+          <PrimaryButton type="button" onClick={onApply}>
             Uzupełnij dane
-          </button>
+          </PrimaryButton>
           {canOverwrite && onApplyOverwrite ? (
             <button
               type="button"

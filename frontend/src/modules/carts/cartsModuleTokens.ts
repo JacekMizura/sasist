@@ -16,7 +16,7 @@ export {
   appSectionTitleClass as cartsSectionTitleClass,
 } from "../../components/app-shell/appShellTokens";
 
-import { brandFocusRingClass } from "../../design-system/brandUi";
+import { brandFocusRingClass, brandPrimaryButtonClass } from "../../design-system/brandUi";
 
 /** Screenshot-parity outline CTA for Magazyn module — neutral chrome + brand focus. */
 export const cartsOutlineCtaClass = [
@@ -24,9 +24,8 @@ export const cartsOutlineCtaClass = [
   brandFocusRingClass,
 ].join(" ");
 
-/** Dark primary CTA (e.g. Zapisz regał on Regały editor). */
-export const cartsDarkCtaClass =
-  "inline-flex shrink-0 items-center justify-center gap-1.5 rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50";
+/** Primary CTA — Design System (jak „Dodaj użytkownika”). */
+export const cartsDarkCtaClass = brandPrimaryButtonClass;
 
 export const cartsPageShellClass = "space-y-4 text-[15px] leading-relaxed";
 

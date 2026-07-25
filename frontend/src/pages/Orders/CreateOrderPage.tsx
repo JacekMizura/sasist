@@ -27,6 +27,7 @@ import { useActiveWarehouseContext, ACTIVE_WAREHOUSE_REQUIRED_MESSAGE } from "..
 import type { OrderUiPanelSubgroupRead, OrderUiStatusPanelSummary } from "../../types/orderUiStatus";
 import { DAMAGE_TENANT_ID } from "../damage/damageShared";
 import type { ComplaintExchangePrefillState } from "../Complaints/complaintExchangePrefill";
+import { brandPrimaryButtonClass } from "../../design-system/brandUi";
 
 const DEFAULT_TENANT_ID = 1;
 
@@ -1342,7 +1343,7 @@ export default function CreateOrderPage() {
           <button
             type="submit"
             disabled={submitting || lines.length === 0}
-            className="rounded-lg bg-blue-600 px-6 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+            className={brandPrimaryButtonClass}
           >
             {submitting ? "Zapisywanie…" : "Utwórz zamówienie"}
           </button>

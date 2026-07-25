@@ -1,5 +1,7 @@
 /** ERP inventory admin panel — dense WMS-aligned tokens. */
 
+import { brandPrimaryButtonClass } from "../../../../design-system/brandUi";
+
 export const erpSurfaceCard = "rounded-lg border border-slate-200/90 bg-white";
 
 export const erpPageShell = "flex w-full flex-col gap-4";
@@ -64,8 +66,7 @@ export const erpWizardStepItem = (active: boolean) =>
 
 export const erpWizardFooter = "mt-8 flex items-center justify-between border-t border-slate-200/90 pt-4";
 
-export const erpBtnPrimary =
-  "inline-flex items-center gap-2 rounded-lg bg-slate-900 px-4 py-1.5 text-sm font-medium text-white transition-colors hover:bg-slate-800 disabled:opacity-50";
+export const erpBtnPrimary = brandPrimaryButtonClass;
 
 export const erpBtnGhost =
   "rounded-lg px-3 py-1.5 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-100 disabled:cursor-not-allowed disabled:text-slate-300";

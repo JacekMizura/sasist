@@ -1,11 +1,11 @@
+import { brandPrimaryButtonClass } from "../../../design-system/brandUi";
 import {
-  filterToolbarBtnApply,
   filterToolbarBtnGhost,
   filterToolbarBtnSecondary,
 } from "../../../components/filters/filterUiTokens";
 
-/** Główna akcja strony (CTA) — amber, jak Produkcja / Magazyn. */
-export const purchasingBtnPrimary = filterToolbarBtnApply;
+/** Główna akcja strony (CTA) — Design System Primary (jak „Dodaj użytkownika”). */
+export const purchasingBtnPrimary = brandPrimaryButtonClass;
 
 /** Akcje pomocnicze w pasku nagłówka lub filtrów. */
 export const purchasingBtnSecondary = filterToolbarBtnSecondary;

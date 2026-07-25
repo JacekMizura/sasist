@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback } from "react";
 import { log } from "../utils/logger";
 import api from "../api/axios";
 import { useTranslation } from "../locales";
+import { filterToolbarBtnApply } from "../components/filters/filterUiTokens";
 
 type Product = {
   id: number;
@@ -196,11 +197,7 @@ export default function Products() {
           </label>
         </div>
         <div className="mt-3 flex gap-2">
-          <button
-            type="button"
-            onClick={applyFilters}
-            className="px-3 py-1.5 bg-blue-600 text-white text-sm rounded hover:bg-blue-700"
-          >
+          <button type="button" onClick={applyFilters} className={filterToolbarBtnApply}>
             Filtruj
           </button>
           <button

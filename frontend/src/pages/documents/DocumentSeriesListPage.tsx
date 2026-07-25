@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { brandPrimaryButtonClass } from "../../design-system/brandUi";
 import { useNavigate, useLocation } from "react-router-dom";
 import { Layers, Plus } from "lucide-react";
 import {
@@ -176,7 +177,7 @@ export default function DocumentSeriesListPage() {
           <button
             type="button"
             onClick={() => navigate("/documents/series/new")}
-            className="inline-flex min-h-[40px] items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-blue-700"
+            className={brandPrimaryButtonClass}
           >
             <Plus className="h-4 w-4 shrink-0" aria-hidden />
             Utwórz serię
@@ -241,7 +242,7 @@ export default function DocumentSeriesListPage() {
                         <button
                           type="button"
                           onClick={() => navigate("/documents/series/new")}
-                          className="inline-flex min-h-[40px] items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-blue-700"
+                          className={brandPrimaryButtonClass}
                         >
                           <Plus className="h-4 w-4 shrink-0" aria-hidden />
                           Utwórz serię

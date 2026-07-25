@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { brandPrimaryButtonClass } from "../../../design-system/brandUi";
 
 import { createReturnPanelSubgroup } from "../../../api/returnUiStatusApi";
 import type { ReturnUiMainGroup } from "../../../types/wmsReturn";
@@ -62,7 +63,7 @@ export function ReturnPanelSubgroupModal({ open, initialMainGroup = "NEW", wareh
           <button
             type="button"
             disabled={busy || !name.trim()}
-            className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-45"
+            className={brandPrimaryButtonClass}
             onClick={() => void onSubmit()}
           >
             {busy ? "Dodawanie…" : "Dodaj podgrupę"}

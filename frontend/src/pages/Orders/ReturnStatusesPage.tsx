@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { brandPrimaryButtonClass } from "../../design-system/brandUi";
 
 import {
   createReturnStatus,
@@ -239,7 +240,7 @@ export default function ReturnStatusesPage() {
               type="button"
               disabled={creating || !newName.trim()}
               onClick={() => void onCreate()}
-              className="mt-4 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-500 disabled:opacity-50"
+              className={`${brandPrimaryButtonClass} mt-4`}
             >
               Dodaj
             </button>

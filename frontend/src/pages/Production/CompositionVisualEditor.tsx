@@ -11,6 +11,8 @@ import {
   type CompositionCostEstimateRead,
   type ProductCompositionRead,
 } from "../../api/compositionApi";
+import { brandPrimaryButtonClass } from "../../design-system/brandUi";
+import { PrimaryButton } from "../../design-system/PrimaryButton";
 import { formatProductionMoney, PRODUCTION_NUMBER_INPUT } from "./productionUi";
 
 type CatalogProduct = {
@@ -91,7 +93,7 @@ function modeCopy(mode: CompositionMode) {
       activeLabel: "Aktywna receptura",
       addLabel: "Utwórz recepturę",
       defaultName: "Receptura produkcyjna",
-      accentBtn: "bg-slate-800 hover:bg-slate-900",
+      accentBtn: brandPrimaryButtonClass,
       accentRing: "focus:ring-slate-500 focus:border-slate-400",
       cardBorder: "hover:border-slate-300",
       outputBorder: "border-slate-300 bg-slate-50 text-slate-900",
@@ -106,7 +108,7 @@ function modeCopy(mode: CompositionMode) {
     activeLabel: "Aktywny zestaw",
     addLabel: "Dodaj zestaw",
     defaultName: "Zestaw",
-    accentBtn: "bg-violet-600 hover:bg-violet-700",
+    accentBtn: brandPrimaryButtonClass,
     accentRing: "focus:ring-violet-500 focus:border-violet-400",
     cardBorder: "hover:border-violet-200",
     outputBorder: "border-violet-200 bg-violet-50 text-violet-900",
@@ -334,7 +336,7 @@ export function CompositionVisualEditor({
         <button
           type="button"
           onClick={openNew}
-          className={`inline-flex shrink-0 items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-white ${copy.accentBtn}`}
+          className={`${copy.accentBtn} shrink-0`}
         >
           <Plus className="h-4 w-4" aria-hidden />
           {copy.addLabel}
@@ -589,14 +591,9 @@ export function CompositionVisualEditor({
             >
               Anuluj
             </button>
-            <button
-              type="button"
-              disabled={saving}
-              onClick={() => void handleSave()}
-              className="rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white hover:bg-violet-700 disabled:opacity-50"
-            >
+            <PrimaryButton type="button" disabled={saving} onClick={() => void handleSave()}>
               {saving ? "Zapisywanie…" : "Zapisz"}
-            </button>
+            </PrimaryButton>
           </div>
         </div>
       ) : null}

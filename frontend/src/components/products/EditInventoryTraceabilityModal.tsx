@@ -4,6 +4,7 @@ import {
   isInventoryIdentityConflict,
   patchProductInventoryTraceability,
 } from "../../api/productInventoryApi";
+import { PrimaryButton } from "../../design-system/PrimaryButton";
 import {
   formatExpiryDatePl,
   formatExpiryInputWhileTyping,
@@ -217,14 +218,14 @@ export function EditInventoryTraceabilityModal({
               Scal z istniejącą pozycją
             </button>
           ) : null}
-          <button
+          <PrimaryButton
             type="button"
             onClick={() => void submit(false)}
             disabled={busy}
-            className="flex-[2] rounded-xl bg-indigo-600 py-2.5 text-sm font-black uppercase text-white hover:bg-indigo-700 disabled:opacity-50"
+            className="flex-[2]"
           >
             {busy ? "Zapis…" : "Zapisz"}
-          </button>
+          </PrimaryButton>
         </div>
       </div>
     </div>

@@ -11,6 +11,7 @@ import { DAMAGE_TENANT_ID } from "../damage/damageShared";
 import { WmsSettingsLayout } from "./WmsSettingsLayout";
 import { WmsSettingsSection } from "./WmsSettingsSection";
 import { WMS_SETTINGS_CANONICAL_SECTION, wmsSettingsTokens } from "./wmsSettingsTokens";
+import { brandPrimaryButtonClass } from "../../design-system/brandUi";
 
 const SCREEN_TITLE = "Sposób aktualizacji stanów magazynowych";
 const SCREEN_LEAD =
@@ -240,7 +241,7 @@ export default function WmsInventoryManagementSettingsPanel({ warehouseId }: Pro
               type="button"
               disabled={!canSave}
               onClick={() => void save()}
-              className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
+              className={brandPrimaryButtonClass}
             >
               {saving ? "Zapisywanie…" : "Zapisz zmiany"}
             </button>

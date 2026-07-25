@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { brandPrimaryButtonClass } from "../../../design-system/brandUi";
 import toast from "react-hot-toast";
 
 import { uploadReturnOrderSourceLogo } from "../../../api/returnModuleConfigApi";
@@ -43,7 +44,7 @@ export function ReturnTypeEntryModal({ open, mode, row, onClose, onSave }: Retur
           <button
             type="button"
             disabled={!label.trim()}
-            className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-45"
+            className={brandPrimaryButtonClass}
             onClick={() => row && onSave({ ...row, label: label.trim() })}
           >
             Zapisz
@@ -152,7 +153,7 @@ export function OrderSourceEntryModal({
           <button
             type="button"
             disabled={!draft.label.trim() || uploading}
-            className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-45"
+            className={brandPrimaryButtonClass}
             onClick={() => void handleSave()}
           >
             {uploading ? "Zapisywanie…" : "Zapisz"}

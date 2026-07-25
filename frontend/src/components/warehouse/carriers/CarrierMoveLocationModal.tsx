@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import axios from "axios";
 import { moveWmsCarrier, patchWmsCarrier, type WarehouseCarrierRead } from "../../../api/wmsCarrierApi";
+import { PrimaryButton } from "../../../design-system/PrimaryButton";
 
 function apiErrMessage(e: unknown): string {
   if (axios.isAxiosError(e)) {
@@ -80,14 +81,9 @@ export function CarrierMoveLocationModal({ tenantId, open, carrier, onClose, onS
           <button type="button" onClick={onClose} className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-bold text-slate-700">
             Anuluj
           </button>
-          <button
-            type="button"
-            disabled={busy}
-            onClick={() => void submit()}
-            className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-black uppercase text-white hover:bg-indigo-700 disabled:opacity-50"
-          >
+          <PrimaryButton type="button" disabled={busy} onClick={() => void submit()}>
             {busy ? "Zapis…" : "Przenieś"}
-          </button>
+          </PrimaryButton>
         </div>
       </div>
     </div>

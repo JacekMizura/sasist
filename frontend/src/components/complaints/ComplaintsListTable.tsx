@@ -1,4 +1,5 @@
 import { memo } from "react";
+import { brandPrimaryButtonClass } from "../../design-system/brandUi";
 import { useNavigate } from "react-router-dom";
 import { Eye, Mail, Phone, Trash2 } from "lucide-react";
 
@@ -92,7 +93,7 @@ function ComplaintsListTableInner({
         <button
           type="button"
           onClick={onNewComplaint}
-          className="mt-4 inline-flex items-center justify-center rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-slate-800"
+          className={`${brandPrimaryButtonClass} mt-4`}
         >
           Nowa reklamacja
         </button>

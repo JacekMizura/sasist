@@ -8,6 +8,7 @@ import {
   assignOrderFulfillmentWarehouse,
   type FulfillmentAssignmentPhase,
 } from "../../api/orderFulfillmentApi";
+import { PrimaryButton } from "../../design-system/PrimaryButton";
 import { warehouseService, type TenantWarehouseAssignment } from "../../services/warehouseService";
 
 type Props = {
@@ -138,13 +139,9 @@ export default function OrderFulfillmentWarehousePanel({
           <span className="text-sm font-medium text-slate-900">{whLabel}</span>
           <span className={`rounded-full border px-2.5 py-0.5 text-xs font-bold ${phaseClass}`}>{phaseLabel}</span>
           {normalizedPhase === "UNASSIGNED" && !locked ? (
-            <button
-              type="button"
-              onClick={openAssign}
-              className="ml-auto rounded-lg bg-cyan-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-cyan-700"
-            >
+            <PrimaryButton type="button" onClick={openAssign} className="ml-auto">
               Przypisz magazyn
-            </button>
+            </PrimaryButton>
           ) : null}
           {loadingWh ? <Loader2 className="h-4 w-4 animate-spin text-slate-400" aria-hidden /> : null}
         </div>
@@ -208,15 +205,10 @@ export default function OrderFulfillmentWarehousePanel({
               >
                 Anuluj
               </button>
-              <button
-                type="button"
-                disabled={saving}
-                onClick={() => void submitAssign()}
-                className="inline-flex items-center gap-2 rounded-lg bg-cyan-600 px-4 py-2 text-sm font-semibold text-white hover:bg-cyan-700 disabled:opacity-50"
-              >
+              <PrimaryButton type="button" disabled={saving} onClick={() => void submitAssign()}>
                 {saving ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : null}
                 Zapisz
-              </button>
+              </PrimaryButton>
             </div>
           </div>
         </div>

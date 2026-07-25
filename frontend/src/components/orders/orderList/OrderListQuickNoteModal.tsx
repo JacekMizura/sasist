@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { brandPrimaryButtonClass } from "../../../design-system/brandUi";
 import { X } from "lucide-react";
 
 const inp =
@@ -138,7 +139,7 @@ export function OrderListQuickNoteModal({
           <button
             type="button"
             disabled={busy || orderCount < 1 || !text.trim()}
-            className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-50"
+            className={brandPrimaryButtonClass}
             onClick={() => void submit()}
           >
             {busy ? "Zapisywanie…" : "Dodaj"}

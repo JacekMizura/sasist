@@ -8,6 +8,7 @@ import { DAMAGE_TENANT_ID } from "../damage/damageShared";
 import { ReturnDetailLayoutEditor } from "./ReturnDetailLayoutEditor";
 import { ReturnsDictionariesConfigurator } from "./returnsDictionariesConfigurator/ReturnsDictionariesConfigurator";
 import { ReturnsStatusesConfigurator } from "./returnsStatusesConfigurator/ReturnsStatusesConfigurator";
+import { brandPrimaryButtonClass } from "../../design-system/brandUi";
 
 export type ReturnsModuleSettingsTabId = "statusy" | "slowniki" | "konfigurator";
 
@@ -82,7 +83,7 @@ export default function ReturnsModuleSettingsPanel({ warehouseId, activeTab }: P
         <button
           type="button"
           disabled={!dirty || saving || loading || draft == null}
-          className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-45"
+          className={brandPrimaryButtonClass}
           onClick={() => void saveCfg()}
         >
           {saving ? "Zapisywanie…" : "Zapisz konfigurację zwrotów"}

@@ -25,6 +25,7 @@ import {
 } from "../../api/supplierProductsApi";
 import { fetchPurchasingSupplierAnalytics, type SupplierAnalyticsRow } from "../../api/purchasingSupplierAnalyticsApi";
 import { AssortmentEntityPageShell } from "../../components/assortment/AssortmentEntityPageShell";
+import { PrimaryButton } from "../../design-system/PrimaryButton";
 import {
   parsePurchaseOrderEditTab,
   purchaseOrderDetailTabs,
@@ -1025,14 +1026,13 @@ export default function PurchaseOrderEditPage() {
                 </button>
 
                 {order.status === "draft" ? (
-                  <button
+                  <PrimaryButton
                     type="button"
                     disabled={savingHeader}
                     onClick={() => void handlePlaceOrder()}
-                    className="rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white hover:bg-violet-500 disabled:opacity-50"
                   >
                     Zamów u dostawcy
-                  </button>
+                  </PrimaryButton>
                 ) : null}
 
                 {order.status === "ordered" || order.status === "in_transit" ? (
@@ -1648,16 +1648,20 @@ function CatalogOfferAddRow({
       <td className="px-1 py-2 text-right text-xs font-medium tabular-nums text-slate-800">{fmtMoney(lineValNet)}</td>
       <td className="px-1 py-2 text-right text-xs font-medium tabular-nums text-slate-900">{fmtMoney(lineValGross)}</td>
       <td className="px-1 py-2 pr-2 text-right">
-        <button
-          type="button"
-          disabled={busyItem}
-          onClick={onAdd}
-          className={`w-full min-w-[7.5rem] rounded-lg px-2 py-1.5 text-xs font-semibold text-white transition-colors ${
-            addFlash ? "bg-emerald-600" : "bg-slate-800 hover:bg-slate-900"
-          } disabled:opacity-50`}
-        >
-          {addFlash ? "✓ Dodano" : orderQtyInDoc > 0 ? "Dodaj kolejne" : "Dodaj"}
-        </button>
+        {addFlash ? (
+          <button
+            type="button"
+            disabled={busyItem}
+            onClick={onAdd}
+            className="inline-flex h-10 w-full min-w-[7.5rem] shrink-0 items-center justify-center rounded-lg bg-emerald-600 px-2 text-xs font-semibold text-white transition-colors disabled:opacity-50"
+          >
+            ✓ Dodano
+          </button>
+        ) : (
+          <PrimaryButton type="button" disabled={busyItem} onClick={onAdd} className="w-full min-w-[7.5rem]">
+            {orderQtyInDoc > 0 ? "Dodaj kolejne" : "Dodaj"}
+          </PrimaryButton>
+        )}
       </td>
     </tr>
   );

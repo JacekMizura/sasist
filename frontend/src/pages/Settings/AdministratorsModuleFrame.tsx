@@ -2,15 +2,14 @@ import { Plus } from "lucide-react";
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
 
 import { SettingsModuleStack } from "../../components/layout/SettingsModuleStack";
-import { brandPrimaryButtonClass } from "../../design-system/brandUi";
+import { PrimaryButton } from "../../design-system/PrimaryButton";
 import { ADMINISTRATORS_TABS } from "./administratorsTabs";
 
 /**
  * Shared chrome for all tabbed routes under `/settings/administrators/*`
  * (edit/create routes stay outside this layout in {@link AdministratorsLayout}).
  *
- * Pixel-parity with Ustawienia → Użytkownicy screenshots:
- * Home > Ustawienia > Użytkownicy → bare underline tabs (+ orange CTA on list tab).
+ * Reference Primary CTA for the whole app: „Dodaj użytkownika” via {@link PrimaryButton}.
  */
 export default function AdministratorsModuleFrame() {
   const { pathname } = useLocation();
@@ -18,14 +17,10 @@ export default function AdministratorsModuleFrame() {
   const isUserListTab = pathname === "/settings/administrators" || pathname === "/settings/administrators/";
 
   const addUserCta = isUserListTab ? (
-    <button
-      type="button"
-      onClick={() => navigate("/settings/administrators/new")}
-      className={brandPrimaryButtonClass}
-    >
+    <PrimaryButton onClick={() => navigate("/settings/administrators/new")}>
       <Plus className="h-4 w-4" strokeWidth={2.5} aria-hidden />
       Dodaj użytkownika
-    </button>
+    </PrimaryButton>
   ) : null;
 
   return (

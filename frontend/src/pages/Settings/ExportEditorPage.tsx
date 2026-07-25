@@ -12,6 +12,7 @@ import { csvFieldLabelPl, entityTypeLabelPl } from "../../utils/exportImportLabe
 import { EXPORT_FIELD_SECTIONS } from "../../utils/exportFieldSections";
 import PageLayout from "../../components/layout/PageLayout";
 import { PageHeader } from "../../components/layout/PageHeader";
+import { brandPrimaryButtonClass } from "../../design-system/brandUi";
 
 const TENANT_ID = 1;
 
@@ -332,7 +333,7 @@ export default function ExportEditorPage() {
             type="button"
             disabled={saving}
             onClick={save}
-            className="rounded-lg bg-cyan-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-cyan-700 disabled:opacity-50"
+            className={brandPrimaryButtonClass}
           >
             {saving ? "Zapisywanie…" : isNew ? "Utwórz" : "Zapisz"}
           </button>

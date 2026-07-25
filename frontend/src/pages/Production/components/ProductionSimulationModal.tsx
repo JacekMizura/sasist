@@ -1,6 +1,7 @@
 import { AlertTriangle, CheckCircle2, Loader2, X } from "lucide-react";
 
 import type { ProductionPlanSimulation } from "@/api/productionPlanningApi";
+import { PrimaryButton } from "@/design-system/PrimaryButton";
 
 type Props = {
   open: boolean;
@@ -97,14 +98,13 @@ export function ProductionSimulationModal({
         </div>
 
         <div className="flex flex-wrap gap-3 border-t border-slate-100 px-5 py-4">
-          <button
+          <PrimaryButton
             type="button"
             disabled={creating || !simulation?.lines.length}
             onClick={onConfirmCreate}
-            className="rounded-xl bg-violet-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-violet-700 disabled:opacity-40"
           >
             {creating ? "Tworzenie…" : "Utwórz wszystkie partie"}
-          </button>
+          </PrimaryButton>
           <button type="button" onClick={onClose} className="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-700">
             Anuluj
           </button>

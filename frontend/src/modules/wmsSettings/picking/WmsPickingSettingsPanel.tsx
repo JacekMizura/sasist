@@ -50,6 +50,7 @@ import {
   pickingStatusBadgeColor,
   type PickingStatusSelectOption,
 } from "./PickingStatusSelect";
+import { brandPrimaryButtonClass } from "../../../design-system/brandUi";
 
 const PANEL_STATUS_GROUP_ORDER: OrderUiMainGroup[] = ["NEW", "IN_PROGRESS", "DONE"];
 
@@ -1619,7 +1620,7 @@ function WmsPickingStatusConfig({
       <div className="flex flex-wrap items-start justify-end gap-2">
         <button
           type="button"
-          className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-sm font-semibold text-white shadow-sm hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+          className={brandPrimaryButtonClass}
           onClick={() => {
             setSaveFormError(null);
             setPickingPersistOk(null);

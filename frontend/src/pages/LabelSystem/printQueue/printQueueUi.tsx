@@ -1,5 +1,7 @@
 import type { ReactNode } from "react";
 
+import { brandPrimaryButtonClass } from "../../../design-system/brandUi";
+
 export type PrintQueueMode =
   | "location"
   | "cart_basket"
@@ -130,7 +132,7 @@ export function PrintQueuePrimaryButton(props: React.ButtonHTMLAttributes<HTMLBu
   return (
     <button
       type="button"
-      className={`inline-flex w-full items-center justify-center rounded-lg bg-cyan-600 px-3 py-2.5 text-[14px] font-semibold text-white shadow-sm transition hover:bg-cyan-500 disabled:cursor-not-allowed disabled:opacity-45 ${className}`.trim()}
+      className={`${brandPrimaryButtonClass}${className ? ` ${className}` : ""}`.trim()}
       {...rest}
     />
   );

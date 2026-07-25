@@ -12,6 +12,7 @@ import { LocationAccessProblemsPanel } from "./LocationAccessProblemsPanel";
 import type { AccessProblemItem } from "./locationAccessProblems";
 import { NodeInspector } from "./NodeInspector";
 import { EdgeInspector } from "./EdgeInspector";
+import { PrimaryButton } from "../../../design-system/PrimaryButton";
 
 export { deleteSelectedNode } from "./routingNodeActions";
 
@@ -158,14 +159,14 @@ export function RoutingRoutesPanel({
       )}
 
       <div className="flex gap-2">
-        <button
+        <PrimaryButton
           type="button"
           disabled={routing.saving || !routing.dirty}
           onClick={() => void routing.save()}
-          className="h-8 flex-1 rounded-lg bg-cyan-600 text-[11px] font-semibold text-white disabled:opacity-50"
+          className="flex-1"
         >
           {routing.saving ? "Zapisywanie…" : "Zapisz sieć"}
-        </button>
+        </PrimaryButton>
         <button
           type="button"
           onClick={() => void routing.runValidate()}
@@ -441,9 +442,9 @@ export function RoutingRoutesPanel({
                   ))}
                 </select>
               </label>
-              <button
+              <PrimaryButton
                 type="button"
-                className="h-8 w-full rounded-lg bg-sky-700 text-[11px] font-semibold text-white"
+                className="w-full"
                 onClick={() => {
                   if (!testStartUuid || !testDestUuid) return;
                   void routing.runTestRoute(
@@ -455,7 +456,7 @@ export function RoutingRoutesPanel({
                 }}
               >
                 Przelicz z ograniczeniami
-              </button>
+              </PrimaryButton>
             </div>
           )}
           {routing.testResult && (

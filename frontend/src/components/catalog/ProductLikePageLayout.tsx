@@ -2,6 +2,7 @@ import type { FormEvent, ReactNode } from "react";
 import type { LucideIcon } from "lucide-react";
 import { Save } from "lucide-react";
 
+import { PrimaryButton } from "../../design-system/PrimaryButton";
 import {
   productLikeFormNumberReset,
   productLikeMetaChipClass,
@@ -193,14 +194,10 @@ export function ProductLikePageLayout<T extends string>({
     ) : null;
 
   const saveButton = showSaveButton ? (
-    <button
-      type="submit"
-      disabled={saving || saveDisabled}
-      className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-blue-700 disabled:opacity-50"
-    >
+    <PrimaryButton type="submit" disabled={saving || saveDisabled}>
       <Save className="h-4 w-4" strokeWidth={2} aria-hidden />
       {saving ? "Zapisywanie…" : saveLabel}
-    </button>
+    </PrimaryButton>
   ) : null;
 
   const headerActionCluster =
@@ -378,15 +375,7 @@ export function ProductLikePageLayout<T extends string>({
       {!saveInHeader && (footerExtra || showSaveButton) ? (
         <div className={footerClass}>
           {footerExtra}
-          {showSaveButton ? (
-            <button
-              type="submit"
-              disabled={saving || saveDisabled}
-              className="rounded bg-slate-900 px-8 py-2.5 text-sm font-medium text-white shadow-sm transition-colors hover:bg-slate-800 disabled:opacity-50"
-            >
-              {saving ? "Zapisywanie…" : saveLabel}
-            </button>
-          ) : null}
+          {showSaveButton ? saveButton : null}
         </div>
       ) : null}
 

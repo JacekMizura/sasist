@@ -5,6 +5,7 @@ import { Trash2 } from "lucide-react";
 import api from "../../api/axios";
 import { getComplaint, patchComplaintLine, updateLineOperation } from "../../api/complaintsApi";
 import { createOrder } from "../../api/ordersApi";
+import { PrimaryButton } from "../../design-system/PrimaryButton";
 import type { ComplaintDetail } from "../../types/complaint";
 import {
   buildComplaintExchangePrefill,
@@ -690,13 +691,9 @@ export default function ComplaintExchangeOrderSection({
           </p>
         ) : null}
 
-        <button
-          type="submit"
-          disabled={submitting || lines.length === 0}
-          className="rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
-        >
+        <PrimaryButton type="submit" disabled={submitting || lines.length === 0}>
           {submitting ? "Tworzenie…" : "Utwórz zamówienie reklamacyjne"}
-        </button>
+        </PrimaryButton>
       </form>
     </div>,
   );

@@ -4,6 +4,7 @@ import api from "../../api/axios";
 import { useWarehouse } from "../../context/WarehouseContext";
 import { ShippingMethodLogo } from "../../components/shipping/ShippingMethodLogo";
 import { DAMAGE_TENANT_ID } from "../damage/damageShared";
+import { brandPrimaryButtonClass } from "../../design-system/brandUi";
 
 /** Must match backend ``allowed_shipping_method_codes`` (fixed dictionary). */
 const DICTIONARY_CODES = new Set([
@@ -292,7 +293,7 @@ export default function ShippingMethodsSettingsPage() {
                 type="button"
                 onClick={() => void save()}
                 disabled={saving}
-                className="border-2 border-slate-900 bg-slate-900 px-4 py-2 text-sm font-bold text-white hover:bg-slate-800 disabled:opacity-50"
+                className={brandPrimaryButtonClass}
               >
                 {saving ? "Zapisywanie…" : "Zapisz"}
               </button>

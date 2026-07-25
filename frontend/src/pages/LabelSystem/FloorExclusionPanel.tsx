@@ -1,4 +1,5 @@
 import { useCallback, useMemo, useRef, useState, type ReactNode } from "react";
+import { PrimaryButton } from "../../design-system/PrimaryButton";
 
 const FLOOR_LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
 const STORAGE_KEY = "label_print_saved_floor_filters_v1";
@@ -281,13 +282,9 @@ export function FloorExclusionPanel({ value, onChange, summaryFooter }: Props) {
             placeholder="np. W, Y, Z"
             className="min-w-[12rem] flex-1 rounded border border-[#E2E8F0] bg-white px-2 py-1.5 text-sm text-[#1E293B]"
           />
-          <button
-            type="button"
-            onClick={applyParsedDraft}
-            className="rounded-md bg-cyan-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-cyan-700"
-          >
+          <PrimaryButton type="button" onClick={applyParsedDraft}>
             Dodaj
-          </button>
+          </PrimaryButton>
         </div>
       </div>
 

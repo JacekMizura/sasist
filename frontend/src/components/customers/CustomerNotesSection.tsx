@@ -8,6 +8,8 @@ import {
 } from "../../api/customerCrmApi";
 import { Pin, Trash2 } from "lucide-react";
 
+import { PrimaryButton } from "../../design-system/PrimaryButton";
+
 const inp =
   "mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus-visible:ring-2 focus-visible:ring-blue-500/30";
 
@@ -65,14 +67,13 @@ export function CustomerNotesSection({ customerId, tenantId }: Props) {
             placeholder="Np. klient VIP, preferuje telefon…"
           />
         </label>
-        <button
+        <PrimaryButton
           type="button"
           disabled={busy || !body.trim()}
           onClick={() => void addNote()}
-          className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
         >
           Dodaj
-        </button>
+        </PrimaryButton>
       </div>
 
       {loading ? (

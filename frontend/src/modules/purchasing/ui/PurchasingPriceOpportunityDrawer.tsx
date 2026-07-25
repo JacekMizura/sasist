@@ -11,6 +11,7 @@ import {
   type ProductDisplayMeta,
 } from "./purchasingProductDisplayMeta";
 import { getProductImage } from "./getProductImage";
+import { primaryButtonClassName } from "../../../design-system/PrimaryButton";
 
 type Props = {
   open: boolean;
@@ -111,7 +112,7 @@ function PurchasingPriceOpportunityDrawerInner({
         <div className="p-4 pb-safe">
           <div className="flex flex-col gap-2">
             <Link
-              className="rounded-lg bg-slate-900 px-3 py-2.5 text-center text-sm font-medium text-white hover:bg-slate-800"
+              className={primaryButtonClassName("text-center")}
               to={`/purchasing/plan?tenant_id=${tenantId}&supplier_id=${row.supplier_id}${
                 row.product_id != null ? `&search=${encodeURIComponent(row.product_name)}` : ""
               }`}

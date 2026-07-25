@@ -51,6 +51,7 @@ import PageLayout from "../components/layout/PageLayout";
 import { PageHeader } from "../components/layout/PageHeader";
 import { tabsNavItemClassName } from "../components/layout/TabsNav";
 import { pageShellDividerClass } from "../design-system/pageLayout";
+import { PrimaryButton } from "../design-system/PrimaryButton";
 import { ConfirmModal } from "../components/ui/ConfirmModal";
 import { LayoutMode } from "../warehouse-layout";
 import { useLayoutModeShortcuts, useLayoutModeDisplay } from "../warehouse-layout";
@@ -3914,7 +3915,7 @@ export default function WarehouseDesigner() {
               >
                 Anuluj
               </button>
-              <button
+              <PrimaryButton
                 type="button"
                 onClick={() => {
                   if (!pendingVariantSave) return;
@@ -3933,10 +3934,9 @@ export default function WarehouseDesigner() {
                   );
                   setPendingVariantSave(null);
                 }}
-                className="px-3 py-2 rounded-lg bg-cyan-600 text-white hover:bg-cyan-500"
               >
                 Potwierdź
-              </button>
+              </PrimaryButton>
             </div>
           </div>
         </div>

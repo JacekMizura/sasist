@@ -7,6 +7,7 @@ import {
   taskTypeLabel,
 } from "../../../services/operations/operationsTerminology";
 import { safeIncludes, safeUpper } from "../../../utils/safeStrings";
+import { PrimaryButton } from "../../../design-system/PrimaryButton";
 
 type Props = {
   alerts: OperationalAlert[];
@@ -73,13 +74,9 @@ export function AlertsFeed({ alerts, onAck, onCreateReplenishment, onEscalate }:
                   ) : null}
                 </div>
                 <div className="flex shrink-0 flex-col gap-1">
-                  <button
-                    type="button"
-                    onClick={() => navigate(WMS_ROUTES.operationsReplenishment)}
-                    className="rounded bg-slate-800 px-2 py-1 text-[10px] font-medium text-white"
-                  >
+                  <PrimaryButton type="button" onClick={() => navigate(WMS_ROUTES.operationsReplenishment)}>
                     Otwórz
-                  </button>
+                  </PrimaryButton>
                   {isReplenish && onCreateReplenishment ? (
                     <button
                       type="button"

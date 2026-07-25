@@ -1,5 +1,7 @@
 /** Shared Tailwind tokens — dense admin list filters (Sellasist-style benchmark). */
 
+import { brandPrimaryButtonClass } from "../../design-system/brandUi";
+
 /** 36px — aligned with module list filter spec (h-9) */
 export const filterControlHeightClass = "h-9";
 
@@ -12,9 +14,8 @@ export const filterLabelClass = "mb-0.5 block text-[11px] font-medium leading-ti
 
 export const filterPanelTitleClass = "text-sm font-semibold text-slate-800";
 
-/** Primary toolbar action — slate (non-filter contexts). */
-export const filterToolbarBtnPrimary =
-  "inline-flex h-[2.375rem] items-center justify-center rounded-md bg-slate-800 px-3.5 text-[13px] font-semibold text-white shadow-sm transition hover:bg-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400/50 focus-visible:ring-offset-1";
+/** Primary toolbar action — Design System Primary (orange). */
+export const filterToolbarBtnPrimary = brandPrimaryButtonClass;
 
 /** Apply / „Filtruj” — warm accent (Sellasist-style). */
 export const filterToolbarBtnApply =

@@ -1,4 +1,5 @@
 import { useMemo, type Dispatch, type SetStateAction, type ReactNode } from "react";
+import { brandPrimaryButtonClass } from "../../design-system/brandUi";
 import { Link } from "react-router-dom";
 import {
   DndContext,
@@ -133,7 +134,7 @@ export function ReturnsPanelStatusesOverview({
           Aktywnych etykiet: <span className="font-semibold tabular-nums text-slate-900">{count}</span>
         </p>
         <Link
-          className="inline-flex shrink-0 items-center justify-center rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800"
+          className={`${brandPrimaryButtonClass} shrink-0`}
           to="/orders/returns/panel-statuses"
         >
           Edytuj statusy i kolory

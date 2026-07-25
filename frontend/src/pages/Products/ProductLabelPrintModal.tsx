@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import api from "../../api/axios";
+import { PrimaryButton } from "../../design-system/PrimaryButton";
 import { openPdfBlobInPrintViewer } from "../../utils/openPdfForBrowserPrint";
 
 export type ProductForLabel = {
@@ -146,14 +147,13 @@ export function ProductLabelPrintModal({ product, onClose }: Props) {
           >
             Anuluj
           </button>
-          <button
+          <PrimaryButton
             type="button"
             disabled={generating || templateId == null}
             onClick={handleGenerate}
-            className="px-4 py-2 rounded-lg bg-cyan-600 text-white hover:bg-cyan-500 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {generating ? "Generowanie…" : "Generuj PDF"}
-          </button>
+          </PrimaryButton>
         </div>
       </div>
     </div>

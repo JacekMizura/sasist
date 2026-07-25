@@ -8,6 +8,7 @@ import {
   patchComplaintShipmentStatus,
 } from "../../api/complaintShipmentApi";
 import { COMPLAINT_STATUS_STYLES } from "../../constants/complaintStatusStyles";
+import { PrimaryButton } from "../../design-system/PrimaryButton";
 import type { ComplaintDetail } from "../../types/complaint";
 import type {
   ComplaintShipmentCarrier,
@@ -565,14 +566,13 @@ const ComplaintShipmentTransportSection = forwardRef<ComplaintShipmentTransportS
               >
                 Anuluj
               </button>
-              <button
+              <PrimaryButton
                 type="button"
-                className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
                 onClick={() => void submitCreate()}
                 disabled={actionBusy}
               >
                 Złóż zamówienie
-              </button>
+              </PrimaryButton>
             </div>
           </div>
         </div>

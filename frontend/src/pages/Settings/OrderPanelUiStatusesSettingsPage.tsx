@@ -31,6 +31,7 @@ import PageLayout from "../../components/layout/PageLayout";
 import { OrderPanelSubgroupsManager } from "./OrderPanelSubgroupsManager";
 import { partitionStatusesBySubgroupForSettings, subgroupSectionTitle } from "../../utils/panelUiStatusSettingsTree";
 import { DAMAGE_TENANT_ID } from "../damage/damageShared";
+import { PrimaryButton } from "../../design-system/PrimaryButton";
 
 const GROUP_ORDER: OrderUiMainGroup[] = ["NEW", "IN_PROGRESS", "DONE"];
 
@@ -520,9 +521,9 @@ export default function OrderPanelUiStatusesSettingsPage() {
           <button type="button" className="px-4 py-2 text-sm font-medium text-slate-600 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors" onClick={cancelEdit}>
             Anuluj
           </button>
-          <button type="button" className="px-5 py-2 text-sm font-bold text-white bg-slate-800 rounded-lg hover:bg-slate-900 transition-colors shadow-sm" onClick={() => void saveEdit(r.id)}>
+          <PrimaryButton type="button" onClick={() => void saveEdit(r.id)}>
             Zapisz zmiany
-          </button>
+          </PrimaryButton>
         </div>
       </div>
     );
@@ -716,10 +717,10 @@ export default function OrderPanelUiStatusesSettingsPage() {
             </div>
             
             <div className="px-6 py-4 bg-slate-50 border-t border-slate-100 flex justify-end gap-3">
-              <button type="button" className="flex items-center gap-2 px-5 py-2 text-sm font-bold text-white bg-slate-800 rounded-lg hover:bg-slate-900 transition-colors shadow-sm disabled:opacity-50" disabled={creating || !newName.trim()} onClick={() => void onCreate()}>
-                <Plus size={16} />
+              <PrimaryButton type="button" disabled={creating || !newName.trim()} onClick={() => void onCreate()}>
+                <Plus className="h-4 w-4" strokeWidth={2.5} aria-hidden />
                 Dodaj status
-              </button>
+              </PrimaryButton>
             </div>
           </div>
 

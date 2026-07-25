@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Percent, Tag } from "lucide-react";
 
+import { PrimaryButton } from "../../design-system/PrimaryButton";
 import { useResolvedDirectSalesSettings } from "../../modules/directSales/settings/resolvedDirectSalesSettings";
 
 type Props = {
@@ -103,7 +104,7 @@ export function LineDiscountPopover({
             ))}
           </div>
           <div className="flex gap-1">
-            <button
+            <PrimaryButton
               type="button"
               onClick={() => {
                 const v = Number(draft);
@@ -112,10 +113,10 @@ export function LineDiscountPopover({
                 if (mode === "percent" && v > max) return;
                 apply(mode, v);
               }}
-              className="flex-1 rounded-lg bg-blue-600 py-1.5 text-[10px] font-bold text-white"
+              className="flex-1"
             >
               Zastosuj
-            </button>
+            </PrimaryButton>
             <button
               type="button"
               onClick={() => apply(null, 0)}

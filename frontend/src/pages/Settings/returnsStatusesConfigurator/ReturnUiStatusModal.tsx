@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { brandPrimaryButtonClass } from "../../../design-system/brandUi";
 
 import { CompactLabelColorPicker } from "../../../components/label/CompactLabelColorPicker";
 import { PanelStatusConfiguratorAside } from "../../../components/settings/PanelStatusConfiguratorAside";
@@ -184,7 +185,7 @@ export function ReturnUiStatusModal({
           <button
             type="button"
             disabled={busy || !name.trim()}
-            className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-45"
+            className={brandPrimaryButtonClass}
             onClick={() => void handleSave()}
           >
             {busy ? "Zapisywanie…" : "Zapisz"}

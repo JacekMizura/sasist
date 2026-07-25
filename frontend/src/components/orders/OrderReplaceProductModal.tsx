@@ -8,6 +8,7 @@ import {
   type ReplacementSuggestionProduct,
   type ReplacementSuggestionsResponse,
 } from "../../api/replacementApi";
+import { PrimaryButton } from "../../design-system/PrimaryButton";
 
 const inp =
   "h-10 w-full rounded-lg bg-slate-100/80 px-10 text-sm text-slate-900 outline-none transition focus:bg-white focus-visible:ring-2 focus-visible:ring-slate-300";
@@ -310,13 +311,9 @@ export default function OrderReplaceProductModal({
                     <>
                       <p>Brak dobrych zamienników w tej kategorii.</p>
                       {!showAllProducts ? (
-                        <button
-                          type="button"
-                          onClick={() => setShowAllProducts(true)}
-                          className="mt-3 inline-flex h-8 items-center rounded-md bg-slate-900 px-3 text-xs font-medium text-white"
-                        >
+                        <PrimaryButton type="button" onClick={() => setShowAllProducts(true)} className="mt-3">
                           Pokaż wszystkie produkty
-                        </button>
+                        </PrimaryButton>
                       ) : null}
                     </>
                   )}
@@ -382,14 +379,9 @@ export default function OrderReplaceProductModal({
             <button type="button" onClick={onClose} className="h-9 rounded-md px-3 text-sm font-medium text-slate-700 hover:bg-slate-100">
               Anuluj
             </button>
-            <button
-              type="button"
-              disabled={saving || !selected}
-              onClick={() => void save()}
-              className="h-9 rounded-md bg-slate-900 px-4 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-50"
-            >
+            <PrimaryButton type="button" disabled={saving || !selected} onClick={() => void save()}>
               {saving ? "Zapisywanie..." : "Zamień produkt"}
-            </button>
+            </PrimaryButton>
           </div>
         </div>
       </div>

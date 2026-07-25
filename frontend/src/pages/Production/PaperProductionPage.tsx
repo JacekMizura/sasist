@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { ArrowLeft } from "lucide-react";
 import toast from "react-hot-toast";
+import { PrimaryButton } from "../../design-system/PrimaryButton";
 
 import {
   fetchCollectionState,
@@ -315,14 +316,13 @@ export default function PaperProductionPage() {
                     </div>
                   </div>
                   <div className="mt-4 flex flex-wrap gap-2">
-                    <button
+                    <PrimaryButton
                       type="button"
                       disabled={busy || remaining <= 0}
                       onClick={() => void addProductionQty(ln.lineKey, 1)}
-                      className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-bold text-white disabled:opacity-40"
                     >
                       +1
-                    </button>
+                    </PrimaryButton>
                     <button
                       type="button"
                       disabled={busy || remaining <= 0}
@@ -337,14 +337,9 @@ export default function PaperProductionPage() {
             })}
           </div>
           {allProduced ? (
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() => void finishProduction()}
-              className="w-full rounded-xl bg-blue-600 py-3 text-sm font-bold text-white hover:bg-blue-700 disabled:opacity-40"
-            >
+            <PrimaryButton type="button" disabled={busy} onClick={() => void finishProduction()} className="w-full">
               Zakończ produkcję → PW → rozlokowanie
-            </button>
+            </PrimaryButton>
           ) : null}
         </>
       ) : null}

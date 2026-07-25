@@ -9,6 +9,7 @@ import {
   type ProductionOrderSummaryRead,
 } from "../../../api/productionApi";
 import { ProductLikeSection, productLikeFieldLabelClass, productLikeInputClass } from "../../../components/catalog";
+import { PrimaryButton } from "../../../design-system/PrimaryButton";
 import { useActiveWarehouseContext, ACTIVE_WAREHOUSE_REQUIRED_MESSAGE } from "../../../hooks/useActiveWarehouseContext";
 import {
   formatProductionMoney,
@@ -167,15 +168,14 @@ export function BundleProductionPanel({
                   onChange={(e) => setOrderQty(Number(e.target.value) || 1)}
                 />
               </div>
-              <button
+              <PrimaryButton
                 type="button"
                 disabled={orderBusy || !hasActiveWarehouse}
                 onClick={() => void handleCreateOrder()}
-                className="inline-flex items-center gap-2 rounded-lg bg-slate-800 px-4 py-2.5 text-sm font-medium text-white hover:bg-slate-900 disabled:opacity-50"
               >
-                <Plus className="h-4 w-4" aria-hidden />
+                <Plus className="h-4 w-4" strokeWidth={2.5} aria-hidden />
                 {orderBusy ? "Tworzenie…" : "Utwórz zlecenie produkcyjne"}
-              </button>
+              </PrimaryButton>
             </div>
             {!hasActiveWarehouse ? (
               <p className="text-xs text-amber-700">{ACTIVE_WAREHOUSE_REQUIRED_MESSAGE}</p>

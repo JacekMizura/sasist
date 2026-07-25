@@ -5,6 +5,7 @@ import {
   type LabelImportMode,
   type LabelTemplateImportPreview,
 } from "../../api/labelTemplatesPortabilityApi";
+import { PrimaryButton } from "../../design-system/PrimaryButton";
 
 const TENANT_ID = 1;
 
@@ -134,13 +135,9 @@ export function LabelTemplatesImportWizard({ embedded }: { embedded?: boolean })
             </div>
 
             {step === 2 && preview.valid_count > 0 && (
-              <button
-                type="button"
-                className="rounded-lg bg-cyan-600 px-4 py-2 text-sm font-semibold text-white hover:bg-cyan-700"
-                onClick={() => setStep(3)}
-              >
+              <PrimaryButton type="button" onClick={() => setStep(3)}>
                 Dalej — wybór strategii
-              </button>
+              </PrimaryButton>
             )}
           </div>
         )}
@@ -166,14 +163,9 @@ export function LabelTemplatesImportWizard({ embedded }: { embedded?: boolean })
               <button type="button" className="rounded-lg border border-slate-200 px-3 py-2 text-sm" onClick={() => setStep(2)}>
                 Wstecz
               </button>
-              <button
-                type="button"
-                disabled={busy}
-                className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
-                onClick={() => void runImport()}
-              >
+              <PrimaryButton type="button" disabled={busy} onClick={() => void runImport()}>
                 {busy ? "Import…" : "Importuj"}
-              </button>
+              </PrimaryButton>
             </div>
           </div>
         )}

@@ -10,6 +10,7 @@ import {
   type MaterialReservationRead,
 } from "@/api/productionApi";
 import { LocationBadge } from "@/components/warehouse/LocationBadge";
+import { PrimaryButton } from "@/design-system/PrimaryButton";
 import { erpProductionPaths } from "../productionPaths";
 import { productionModuleListTdClass, productionModuleListThClass } from "../productionLayoutTokens";
 import { ProductionEmptyState } from "./ProductionEmptyState";
@@ -98,14 +99,9 @@ export function DocumentMaterialReservationsPanel({
         </div>
         <div className="flex gap-2">
           {canReserve ? (
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() => void reserve()}
-              className="rounded-lg bg-violet-600 px-3 py-2 text-sm font-semibold text-white hover:bg-violet-700 disabled:opacity-50"
-            >
+            <PrimaryButton type="button" disabled={busy} onClick={() => void reserve()}>
               {busy ? "Rezerwowanie…" : "Zarezerwuj materiały"}
-            </button>
+            </PrimaryButton>
           ) : null}
           <Link
             to={erpProductionPaths.materialReservations}

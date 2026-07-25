@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import { Link } from "react-router-dom";
 import type { WmsPackingOrderLineApi } from "../../api/wmsPackingApi";
 import { WMS_ROUTES } from "../../pages/wms/wmsRoutes";
+import { primaryButtonClassName } from "../../design-system/PrimaryButton";
 
 function fmtQty(n: number): string {
   return new Intl.NumberFormat("pl-PL", { maximumFractionDigits: 2 }).format(n);
@@ -71,10 +72,7 @@ export default function OrderMissingProductsSection({
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Link
-            to={WMS_ROUTES.braki(orderId)}
-            className="inline-flex items-center justify-center rounded-lg border border-slate-800 bg-slate-900 px-3 py-2 text-xs font-semibold text-white hover:bg-slate-800"
-          >
+          <Link to={WMS_ROUTES.braki(orderId)} className={primaryButtonClassName()}>
             Przejdź do WMS
           </Link>
         </div>

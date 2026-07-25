@@ -11,6 +11,7 @@ import { ProductReceivingRequirementsSection } from "../../components/wms/receiv
 import { DAMAGE_TENANT_ID } from "../damage/damageShared";
 import { WmsSettingsLayout } from "./WmsSettingsLayout";
 import { WmsSettingsSection } from "./WmsSettingsSection";
+import { PrimaryButton } from "../../design-system/PrimaryButton";
 
 const SECTION_ID = "wms-receiving-product-validation";
 
@@ -144,14 +145,9 @@ export default function WmsProductValidationSettingsPanel({ warehouseId }: Props
           >
             Cofnij
           </button>
-          <button
-            type="button"
-            disabled={!dirty || saving}
-            onClick={() => void save()}
-            className="rounded-lg bg-slate-800 px-4 py-2 text-sm font-medium text-white hover:bg-slate-900 disabled:opacity-50"
-          >
+          <PrimaryButton type="button" disabled={!dirty || saving} onClick={() => void save()}>
             {saving ? "Zapisywanie…" : "Zapisz"}
-          </button>
+          </PrimaryButton>
         </div>
       </SectionCard>
     </WmsSettingsLayout>
