@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import type { LayoutState } from "../../types/warehouse";
 import type { RackState, InternalStructure, InternalLevel, BinState, StorageType } from "./warehouseTypes";
 import {
@@ -307,17 +308,21 @@ export function InternalLayoutModal({ layout = null, rack, warehouseLabel, onSav
     onSave({ levels }, newBins);
   };
 
-  return (
+  return createPortal(
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+      className="fixed inset-0 z-[500] flex items-center justify-center bg-black/50 p-4"
       dir="ltr"
       style={{ direction: "ltr" }}
       onClick={onClose}
+      role="presentation"
     >
       <div
         className="bg-white rounded-2xl shadow-xl w-full max-w-[95vw] max-h-[90vh] h-[90vh] overflow-hidden flex flex-col"
         dir="ltr"
         style={{ direction: "ltr" }}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Układ wewnętrzny"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex shrink-0 items-start justify-between gap-3 border-b border-slate-200 px-4 py-3">
@@ -692,6 +697,7 @@ export function InternalLayoutModal({ layout = null, rack, warehouseLabel, onSav
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
