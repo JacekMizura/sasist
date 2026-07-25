@@ -1,3 +1,12 @@
+## 2026-07-25 — GLOBAL LAYOUT SYSTEM 2.0 (no push)
+
+- SSOT: `PageContainer`/`PageLayout` + `design-system/pageLayout.ts` (jeden border, `p-6`)
+- Tabs: `TabsContainer` divider-only; `TopTabsNavigation` default `bare`
+- Migracja: Purchasing, Carts, Assortment shells, Company `companyCardClass`, PrintingDataTable, listy (Asortyment/Klienci/Materiały/Użytkownicy/Workforce/…), WmsSettings, Catalog/Warehouse entity shells
+- Wyjątki: Login, Designer, WMS terminal, błędy, modale
+- `npx tsc --noEmit` + `npm run build` OK
+- **No push.**
+
 ## 2026-07-25 — Magazyn UX polish (bez zmiany geometrii) (no push)
 
 - Białe tło mapy + delikatny cień kontenera

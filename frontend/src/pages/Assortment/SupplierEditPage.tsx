@@ -31,7 +31,7 @@ import { taxIdValidationMessage } from "../../utils/taxIdOptional";
 
 function Card({ title, children, className = "" }: { title: string; children: React.ReactNode; className?: string }) {
   return (
-    <div className={`rounded-xl border border-slate-200 bg-white p-4 shadow-sm ${className}`}>
+    <div className={`border-t border-slate-100 pt-4 ${className}`}>
       <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-500">{title}</h4>
       <div className="mt-3 space-y-3">{children}</div>
     </div>
@@ -740,10 +740,10 @@ export default function SupplierEditPage() {
       {loadErr ? <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">{loadErr}</div> : null}
 
       {tab === "products" ? (
-        <div className="rounded-xl border border-slate-200 bg-white p-4 md:p-6">{productsPanel}</div>
+        <div className="min-w-0">{productsPanel}</div>
       ) : (
         <form id="supplier-edit-form" className="space-y-4" onSubmit={handleSubmit}>
-          <div className="rounded-xl border border-slate-200 bg-white p-4 md:p-6">
+          <div className="min-w-0">
             {tab === "basic" && (
               <div className="space-y-6">
                 <Card title="Dane podstawowe">

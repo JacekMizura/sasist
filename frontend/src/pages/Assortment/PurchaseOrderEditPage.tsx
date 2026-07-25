@@ -872,7 +872,7 @@ export default function PurchaseOrderEditPage() {
       ) : null}
 
       {order ? (
-        <div className="mb-4 rounded-xl border border-slate-200 bg-white p-4 shadow-sm md:p-5">
+        <div className="mb-4 border-b border-slate-100 pb-4">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
             <div className="min-w-0 flex-1 space-y-2">
               <div className="flex flex-wrap items-center gap-2 text-sm text-slate-800">
@@ -962,7 +962,7 @@ export default function PurchaseOrderEditPage() {
         </div>
       ) : null}
 
-      <div className="rounded-xl border border-slate-200 bg-white p-4 md:p-6">
+      <div className="min-w-0">
           {tab === "basic" && order && (
             <div className="space-y-4">
               <div>

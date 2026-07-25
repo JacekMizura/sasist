@@ -346,7 +346,7 @@ export default function ProductProfitabilityPage() {
         />
 
         <div className={`${moduleTableCardClass} min-w-0`}>
-          <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+          <div className="min-w-0 overflow-hidden">
             <ProductProfitabilityListTable
               rows={rows}
               columnOrder={columnOrder}

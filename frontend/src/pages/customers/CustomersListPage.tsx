@@ -367,7 +367,7 @@ export default function CustomersListPage() {
             </button>
           </div>
         ) : rows.length === 0 ? (
-          <div className="rounded-xl border border-slate-200 bg-white px-6 py-16 text-center">
+          <div className="rounded-lg border border-dashed border-slate-200 px-6 py-16 text-center">
             <p className="text-sm font-medium text-slate-800">Brak klientów</p>
             <p className="mt-1 text-sm text-slate-500">Zmień filtry lub dodaj pierwszego klienta.</p>
             <Link
@@ -379,7 +379,7 @@ export default function CustomersListPage() {
           </div>
         ) : (
           <div className={`${moduleTableCardClass} min-w-0`}>
-            <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+            <div className="min-w-0 overflow-hidden">
               <CustomersListTable
                 rows={paginatedRows}
                 columnOrder={columnOrder}

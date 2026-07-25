@@ -282,7 +282,7 @@ export function CartsFleetList({ cartType, refreshTrigger = 0, onAddNew, onEdit 
                 summaryText={summaryText}
                 headerActions={headerActions}
               >
-                <div className="overflow-hidden rounded-xl border border-slate-200 bg-white divide-y divide-slate-100">
+                <div className="min-w-0 overflow-hidden divide-y divide-slate-100">
                   {count === 0 ? (
                     <div className="px-6 py-10 text-center text-sm text-slate-500">{t.noCartsInGroup}</div>
                   ) : (

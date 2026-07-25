@@ -149,7 +149,7 @@ export default function WorkforceStatusMatrixPage() {
         </p>
       </div>
 
-      <div className="flex flex-wrap items-end gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm ring-1 ring-slate-900/5">
+      <div className="flex flex-wrap items-end gap-3 border-b border-slate-100 pb-4">
         <div className="min-w-[14rem] flex-1">
           <label className="text-xs font-semibold uppercase tracking-wide text-slate-500">Rola w systemie</label>
           <select
@@ -183,7 +183,7 @@ export default function WorkforceStatusMatrixPage() {
       ) : null}
 
       {!loading ? (
-        <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm ring-1 ring-slate-900/5">
+        <div className="min-w-0 overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full min-w-[28rem] text-sm">
               <thead>

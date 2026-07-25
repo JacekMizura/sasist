@@ -465,7 +465,7 @@ export default function PurchaseOrdersPage() {
             </div>
           ) : (
             <div className={`${moduleTableCardClass} min-w-0`}>
-              <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+              <div className="min-w-0 overflow-hidden">
                 <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5 border-b border-slate-100 px-4 py-2">
                   <label className="flex items-center gap-2 text-sm font-medium text-slate-600">
                     <span className="whitespace-nowrap">Wyników na stronę:</span>

@@ -145,7 +145,7 @@ export function DocumentTemplatesListPage() {
       />
 
       <div className={`${moduleTableCardClass} min-w-0`}>
-        <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+        <div className="min-w-0 overflow-hidden">
           <DocumentTemplatesListTable
             rows={filtered}
             columnOrder={effectiveColumnOrder}

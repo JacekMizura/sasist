@@ -19,7 +19,7 @@ function PurchasingDataPanelInner({
   className = "",
 }: Props) {
   return (
-    <div className={`flex flex-col overflow-hidden rounded-xl border border-slate-200 bg-white ${className}`.trim()}>
+    <div className={`flex flex-col min-w-0 overflow-hidden ${className}`.trim()}>
       <PurchasingSectionHeader
         title={title}
         subtitle={subtitle}

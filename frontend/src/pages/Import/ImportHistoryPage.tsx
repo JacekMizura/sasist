@@ -126,7 +126,7 @@ export default function ImportHistoryPage({
           </div>
         )}
         {!loading && !error && (
-          <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm ring-1 ring-slate-900/5">
+          <div className="min-w-0 overflow-hidden">
             <div className="border-b border-slate-100 bg-slate-50/90 px-4 py-3">
               <h2 className="text-sm font-semibold text-slate-800">Dziennik importów</h2>
               <p className="mt-0.5 text-xs text-slate-500">Kliknij wiersz, aby zobaczyć komunikat operacji.</p>

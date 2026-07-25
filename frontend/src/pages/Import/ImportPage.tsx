@@ -632,7 +632,7 @@ export default function ImportPage({ settingsKind, embedded = false }: ImportPag
         <div
           className={
             embedded
-              ? "overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-md ring-1 ring-slate-900/5"
+              ? "min-w-0 overflow-hidden"
               : "overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm"
           }
         >

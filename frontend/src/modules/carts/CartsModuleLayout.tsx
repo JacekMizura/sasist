@@ -27,8 +27,6 @@ function resolveActiveCartsTab(pathname: string) {
   return CARTS_TABS[0];
 }
 
-const CARTS_PAGE_SHELL = "flex min-h-0 flex-1 flex-col bg-white p-4 md:p-6";
-
 function CartsModuleChrome() {
   const { pathname } = useLocation();
   const fullPageContent = useMemo(() => FULL_PAGE_CONTENT.test(pathname), [pathname]);
@@ -37,14 +35,14 @@ function CartsModuleChrome() {
 
   if (fullPageContent) {
     return (
-      <PageLayout fullBleed omitCard className={CARTS_PAGE_SHELL}>
+      <PageLayout fullBleed fillHeight cardClassName="flex min-h-0 flex-1 flex-col">
         <Outlet />
       </PageLayout>
     );
   }
 
   return (
-    <PageLayout fullBleed omitCard className={CARTS_PAGE_SHELL}>
+    <PageLayout fullBleed fillHeight cardClassName="flex min-h-0 flex-1 flex-col">
       <SettingsModuleStack
         breadcrumbs={[{ label: "Magazyn", to: "/carts/bulk" }, { label: activeTab.label }]}
         hideTitle
@@ -61,8 +59,7 @@ function CartsModuleChrome() {
 }
 
 /**
- * Shell modułu Magazyn — breadcrumb → bare tabs (+ trailing CTA) → treść.
- * Pixel-parity with Magazyn screenshots (Home > Magazyn > tab).
+ * Shell modułu Magazyn — Layout 2.0: jeden PageContainer (breadcrumb → tabs → treść).
  */
 export default function CartsModuleLayout() {
   return (

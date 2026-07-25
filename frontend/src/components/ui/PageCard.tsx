@@ -8,6 +8,6 @@ export default function PageCard({
   className?: string;
 }) {
   return (
-    <div className={`rounded-xl border border-slate-200 bg-white p-5 ${className}`.trim()}>{children}</div>
+    <div className={`rounded-xl border border-slate-200 bg-white p-6 ${className}`.trim()}>{children}</div>
   );
 }

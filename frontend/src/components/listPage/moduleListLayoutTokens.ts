@@ -28,7 +28,7 @@ export const moduleListFilterPanelBareClass =
 /** Fields block below FilterToolbar (toolbar sits flush top of card). */
 export const moduleListFilterBodyClass = "space-y-3 border-t border-slate-100 pt-4";
 
-/** Primary table block — inherits outer PageCard; no nested card chrome. */
+/** Primary table block — inherits outer PageContainer; no nested card chrome. */
 export const moduleListDataCardClass = "min-w-0 overflow-hidden";
 
 /** Table block inside unified {@link ../ui/PageCard} — no nested card chrome. */

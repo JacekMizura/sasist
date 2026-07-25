@@ -164,7 +164,7 @@ export default function ConsolidationRacksListPage() {
           </button>
         </div>
       ) : rows.length === 0 ? (
-        <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+        <div className="min-w-0 overflow-hidden">
           <AppEmptyState
             icon={Layers}
             title="Brak regałów"
@@ -179,7 +179,7 @@ export default function ConsolidationRacksListPage() {
         </div>
       ) : (
         <div className={`${moduleTableCardClass} min-w-0`}>
-          <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+          <div className="min-w-0 overflow-hidden">
             <ConsolidationRacksListTable
               rows={rows}
               deleteBusyId={deletingId}

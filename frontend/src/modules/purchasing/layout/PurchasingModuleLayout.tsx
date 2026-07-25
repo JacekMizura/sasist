@@ -1,7 +1,10 @@
 import { ChevronDown, RefreshCw } from "lucide-react";
 import { memo, useMemo, useState } from "react";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
+
+import PageLayout from "../../../components/layout/PageLayout";
 import { tabsNavItemClassName } from "../../../components/layout/TabsNav";
+import { pageShellDividerClass } from "../../../design-system/pageLayout";
 import { PurchasingModuleProvider, usePurchasingModuleContext } from "../context/PurchasingModuleContext";
 import { PURCHASING_TABS } from "../purchasingTabs";
 
@@ -27,10 +30,10 @@ function PurchasingTabBar() {
   };
 
   return (
-    <div className="sticky top-0 z-20 bg-white/90 pb-2 pt-4 backdrop-blur-md md:px-4 2xl:px-6">
-      <div className="flex items-center justify-between overflow-hidden rounded-xl border border-slate-200 bg-white px-2 shadow-sm">
+    <div className={`sticky top-0 z-20 -mx-6 bg-white px-6 ${pageShellDividerClass}`}>
+      <div className="flex items-center justify-between gap-3 pb-0">
         <nav
-          className="no-scrollbar flex flex-1 items-center gap-6 overflow-x-auto px-2"
+          className="no-scrollbar flex flex-1 items-center gap-6 overflow-x-auto"
           aria-label="Zakupy i planowanie"
           role="tablist"
         >
@@ -47,7 +50,7 @@ function PurchasingTabBar() {
           ))}
         </nav>
 
-        <div className="hidden shrink-0 items-center space-x-4 border-l border-slate-100 px-4 lg:flex">
+        <div className="hidden shrink-0 items-center space-x-4 border-l border-slate-100 pl-4 lg:flex">
           <div className="flex items-center space-x-2">
             <span className="text-xs font-medium text-slate-400">Podmiot</span>
             <div className="relative">
@@ -87,10 +90,12 @@ function PurchasingTabBar() {
 
 function PurchasingModuleLayoutInner() {
   return (
-    <div className="w-full bg-white text-slate-800">
+    <PageLayout fullBleed className="min-w-0">
       <PurchasingTabBar />
-      <Outlet />
-    </div>
+      <div className="min-w-0 pt-4">
+        <Outlet />
+      </div>
+    </PageLayout>
   );
 }
 

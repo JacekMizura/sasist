@@ -143,7 +143,7 @@ export default function PrintersPage() {
         </button>
       </div>
 
-      <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+      <div className="min-w-0 overflow-hidden">
         <div className="overflow-x-auto">
           <table className="min-w-full text-sm">
             <thead className="sticky top-0 border-b border-slate-200 bg-slate-50/95 text-left text-slate-600">

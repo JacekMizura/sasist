@@ -158,7 +158,7 @@ export default function SystemAppDictionaryPage() {
         <p className="text-sm text-slate-500">{getLabel("system.labels.empty", "Brak etykiet")}</p>
       ) : (
         grouped.map(([category, items]) => (
-          <section key={category} className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+          <section key={category} className="min-w-0 overflow-hidden">
             <header className="border-b border-slate-100 bg-slate-50 px-4 py-2.5">
               <h3 className="text-sm font-semibold text-slate-900">
                 {CATEGORY_LABELS[category] ?? category}

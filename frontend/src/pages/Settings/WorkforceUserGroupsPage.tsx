@@ -196,7 +196,7 @@ export default function WorkforceUserGroupsPage() {
           <p className="text-sm text-slate-600">Brak utworzonych grup operacyjnych.</p>
         </div>
       ) : (
-        <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+        <div className="min-w-0 overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full min-w-[600px] text-left text-sm">
               <thead className="border-b border-slate-200 bg-slate-50 text-xs font-semibold text-slate-600">

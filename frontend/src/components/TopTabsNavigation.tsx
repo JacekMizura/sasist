@@ -15,8 +15,8 @@ type TopTabsNavigationProps = {
   /** Optional accessible name for the tablist (e.g. module name). */
   "aria-label"?: string;
   /**
-   * `card` — white shell (default WMS modules).
-   * `bare` — underline tabs flush with page (Ustawienia → Użytkownicy screenshots).
+   * `bare` — underline tabs flush with page shell (Layout System 2.0 default).
+   * `card` — legacy; still renders without a nested card (TabsContainer is divider-only).
    */
   chrome?: "card" | "bare";
   /** Optional trailing control aligned to the right of the tab row (e.g. primary CTA). */
@@ -24,8 +24,8 @@ type TopTabsNavigationProps = {
 };
 
 /**
- * Reusable horizontal tab navigation for WMS modules.
- * Use under page title: PageHeader → TopTabsNavigation → PageContent.
+ * Reusable horizontal tab navigation for ERP modules.
+ * Layout 2.0: sits inside {@link PageContainer} — not a separate card.
  */
 export default function TopTabsNavigation({
   tabs,
@@ -33,7 +33,7 @@ export default function TopTabsNavigation({
   exact = false,
   className = "",
   "aria-label": ariaLabel,
-  chrome = "card",
+  chrome = "bare",
   trailing,
 }: TopTabsNavigationProps) {
   const nav = (

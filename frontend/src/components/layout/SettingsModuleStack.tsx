@@ -16,7 +16,7 @@ export type SettingsModuleStackProps = {
   tabsAriaLabel?: string;
   /** When true, skip H1 title row (screenshot chrome: breadcrumb → tabs). */
   hideTitle?: boolean;
-  /** Tab row chrome: card shell vs bare underline (Użytkownicy module). */
+  /** Tab row chrome: Layout 2.0 default is bare (inside PageContainer). */
   tabsChrome?: "card" | "bare";
   /** CTA on the right of the tab row (e.g. + Dodaj użytkownika). */
   tabsTrailing?: ReactNode;
@@ -28,6 +28,7 @@ export type SettingsModuleStackProps = {
 /**
  * Standard order for settings / administration modules with top tabs:
  * breadcrumbs → title + description + primary actions → tab row → page body.
+ * Must sit inside a single {@link PageContainer} — do not wrap this stack in extra cards.
  */
 export function SettingsModuleStack({
   breadcrumbs = [],
@@ -39,7 +40,7 @@ export function SettingsModuleStack({
   tabsExact,
   tabsAriaLabel,
   hideTitle = false,
-  tabsChrome = "card",
+  tabsChrome = "bare",
   tabsTrailing,
   children,
   className = "",

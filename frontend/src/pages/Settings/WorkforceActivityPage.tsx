@@ -302,7 +302,7 @@ export default function WorkforceActivityPage() {
               return (
                 <div
                   key={card.userId}
-                  className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm"
+                  className="min-w-0 overflow-hidden"
                 >
                   <button
                     type="button"

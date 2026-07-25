@@ -1,9 +1,10 @@
 import type { ReactNode } from "react";
 
 import PageLayout from "../layout/PageLayout";
+import { pageShellSurfaceClass } from "../../design-system/pageLayout";
 
-const CARD_SHELL =
-  "overflow-hidden rounded-xl border border-slate-200/90 bg-white shadow-[0_1px_3px_rgba(15,23,42,0.06),0_12px_40px_-12px_rgba(15,23,42,0.07)]";
+/** @deprecated Prefer PageContainer / pageShellSurfaceClass — kept for callers that only need the class. */
+const CARD_SHELL = `${pageShellSurfaceClass} overflow-hidden`;
 
 type CatalogEntityPageShellProps = {
   children: ReactNode;
@@ -12,7 +13,7 @@ type CatalogEntityPageShellProps = {
   loadingLabel?: string;
 };
 
-/** Outer page chrome shared by product / bundle / future catalog entities. */
+/** Outer page chrome shared by product / bundle / future catalog entities — Layout 2.0 one shell. */
 export function CatalogEntityPageShell({
   children,
   loading = false,
@@ -20,18 +21,16 @@ export function CatalogEntityPageShell({
   loadingLabel = "Ładowanie…",
 }: CatalogEntityPageShellProps) {
   return (
-    <PageLayout omitCard fullBleed>
+    <PageLayout fullBleed cardClassName="overflow-hidden p-0 space-y-0">
       {loading ? (
-        <div className={CARD_SHELL}>
-          <div className="flex min-h-[40vh] items-center justify-center gap-2 px-4 py-16 text-slate-500">
-            <span className="h-5 w-5 animate-spin rounded-full border-2 border-slate-300 border-t-blue-600" />
-            {loadingLabel}
-          </div>
+        <div className="flex min-h-[40vh] items-center justify-center gap-2 px-4 py-16 text-slate-500">
+          <span className="h-5 w-5 animate-spin rounded-full border-2 border-slate-300 border-t-blue-600" />
+          {loadingLabel}
         </div>
       ) : error ? (
-        <div className={`${CARD_SHELL} p-4 sm:p-6`}>{error}</div>
+        <div className="p-4 sm:p-6">{error}</div>
       ) : (
-        <div className={CARD_SHELL}>{children}</div>
+        children
       )}
     </PageLayout>
   );

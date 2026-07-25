@@ -150,7 +150,7 @@ export default function EmployeeCostsOverviewPage() {
       ) : null}
 
       {loading ? (
-        <div className="rounded-xl border border-slate-200 bg-white px-6 py-12 text-center shadow-sm">
+        <div className="rounded-lg border border-dashed border-slate-200 px-6 py-12 text-center">
           <p className="text-sm font-medium text-slate-700">Wczytywanie danych…</p>
           <p className="mt-1 text-xs text-slate-500">Pobieranie profili kosztów z serwera.</p>
         </div>
@@ -250,7 +250,7 @@ export default function EmployeeCostsOverviewPage() {
           ) : null}
 
           {/* 2. TABELA SZCZEGÓŁÓW (Dół) */}
-          <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+          <div className="min-w-0 overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full min-w-[1000px] text-left text-sm">
                 <thead className="border-b border-slate-200 bg-slate-50 text-xs font-semibold uppercase tracking-wider text-slate-600">

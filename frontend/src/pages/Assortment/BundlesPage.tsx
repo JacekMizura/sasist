@@ -383,7 +383,7 @@ export default function BundlesPage() {
             </button>
           </div>
         ) : bundles.length === 0 ? (
-          <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+          <div className="min-w-0 overflow-hidden">
             <AppEmptyState
               icon={Package}
               title="Brak zestawów"
@@ -400,7 +400,7 @@ export default function BundlesPage() {
           </div>
         ) : (
           <div className={`${moduleTableCardClass} min-w-0`}>
-            <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+            <div className="min-w-0 overflow-hidden">
               <BundlesListBulkBar
                 bulkSelectMenuKey={bulkSelectKey}
                 bulkToolbarDisabled={bulkToolbarDisabled}

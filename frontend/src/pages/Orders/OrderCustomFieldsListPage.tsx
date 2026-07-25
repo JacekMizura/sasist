@@ -356,7 +356,7 @@ export default function OrderCustomFieldsListPage() {
           </button>
         </div>
       ) : displayRows.length === 0 ? (
-        <div className="rounded-xl border border-slate-200 bg-white px-6 py-12 text-center">
+        <div className="rounded-lg border border-dashed border-slate-200 px-6 py-12 text-center">
           <p className="text-sm font-medium text-slate-800">Brak wyników wyszukiwania</p>
           <p className="mt-1 text-sm text-slate-500">Zmień frazę lub wyczyść pole wyszukiwania.</p>
         </div>

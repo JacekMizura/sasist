@@ -5,6 +5,7 @@ import { ChevronLeft, ChevronRight, Home } from "lucide-react";
 import PageLayout from "../layout/PageLayout";
 import { TabsNav, type TabsNavItem } from "../layout/TabsNav";
 import { listSellasistToolbarSquareBtn } from "../listPage/listSellasistTokens";
+import { pageShellDividerClass } from "../../design-system/pageLayout";
 
 export type AssortmentBreadcrumb = {
   label: string;
@@ -23,7 +24,7 @@ type Props = {
   children: ReactNode;
 };
 
-/** Shell edycji encji asortymentu (producent, dostawca) — wzorzec Klienci. */
+/** Shell edycji encji asortymentu (producent, dostawca) — Layout 2.0: jeden PageContainer. */
 export function AssortmentEntityPageShell({
   breadcrumbs,
   title,
@@ -59,36 +60,36 @@ export function AssortmentEntityPageShell({
         ))}
       </nav>
 
-      <div className="rounded-xl border border-slate-200/90 bg-white px-4 py-3 shadow-none">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-          <div className="flex min-w-0 flex-1 items-start gap-2.5">
-            <Link
-              to={backTo}
-              className={`${listSellasistToolbarSquareBtn} mt-0.5 shrink-0`}
-              title={backLabel}
-              aria-label={backLabel}
-            >
-              <ChevronLeft className="h-4 w-4" strokeWidth={2} aria-hidden />
-            </Link>
-            <div className="min-w-0 flex-1">
-              <h1 className="truncate text-lg font-bold leading-tight text-slate-900 sm:text-xl">{title}</h1>
-              {subtitle ? <p className="mt-1 text-sm text-slate-500">{subtitle}</p> : null}
-            </div>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="flex min-w-0 flex-1 items-start gap-2.5">
+          <Link
+            to={backTo}
+            className={`${listSellasistToolbarSquareBtn} mt-0.5 shrink-0`}
+            title={backLabel}
+            aria-label={backLabel}
+          >
+            <ChevronLeft className="h-4 w-4" strokeWidth={2} aria-hidden />
+          </Link>
+          <div className="min-w-0 flex-1">
+            <h1 className="truncate text-lg font-bold leading-tight text-slate-900 sm:text-xl">{title}</h1>
+            {subtitle ? <p className="mt-1 text-sm text-slate-500">{subtitle}</p> : null}
           </div>
-          {headerExtra ? <div className="flex shrink-0 flex-wrap items-center gap-2">{headerExtra}</div> : null}
         </div>
-
-        {tabs && tabs.length > 0 ? (
-          <div className="mt-4 border-t border-slate-100 pt-3">
-            <TabsNav items={tabs} aria-label="Sekcje formularza" className="gap-6" />
-          </div>
-        ) : null}
+        {headerExtra ? <div className="flex shrink-0 flex-wrap items-center gap-2">{headerExtra}</div> : null}
       </div>
 
-      <div className="mt-4">{children}</div>
+      {tabs && tabs.length > 0 ? (
+        <div className={`mt-4 ${pageShellDividerClass} pt-3`}>
+          <TabsNav items={tabs} aria-label="Sekcje formularza" className="gap-6" />
+        </div>
+      ) : null}
+
+      <div className="mt-4 min-w-0">{children}</div>
 
       {footer ? (
-        <div className="sticky bottom-0 z-10 mt-4 rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm">{footer}</div>
+        <div className="sticky bottom-0 z-10 -mx-6 mt-4 border-t border-slate-200 bg-white px-6 py-3">
+          {footer}
+        </div>
       ) : null}
     </PageLayout>
   );

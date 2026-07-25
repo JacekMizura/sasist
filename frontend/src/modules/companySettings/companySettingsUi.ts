@@ -5,7 +5,8 @@ import { brandFocusRingClass } from "../../design-system/brandUi";
 export const companySectionTitleClass =
   "flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-500";
 
-export const companyCardClass = "overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm";
+/** Layout 2.0: section inside PageContainer — no nested white card. */
+export const companyCardClass = "min-w-0 overflow-hidden border-t border-slate-100 pt-4 first:border-t-0 first:pt-0";
 
 /** Neutral secondary CTA with brand focus ring (not Primary). */
 export const companySecondaryCtaClass = [

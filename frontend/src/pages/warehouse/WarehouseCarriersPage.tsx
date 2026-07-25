@@ -241,7 +241,7 @@ export default function WarehouseCarriersPage() {
           </button>
         </div>
       ) : groups.length === 0 ? (
-        <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+        <div className="min-w-0 overflow-hidden">
           <AppEmptyState
             icon={Package}
             title="Brak grup nośników"

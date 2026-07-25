@@ -80,7 +80,7 @@ type PrintingDataTableProps = {
 export function PrintingDataTable({ children, className = "" }: PrintingDataTableProps) {
   return (
     <div
-      className={`overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm ${className}`.trim()}
+      className={`min-w-0 overflow-hidden border-t border-slate-100 pt-4 ${className}`.trim()}
     >
       <div className="overflow-x-auto">
         <table className="min-w-full text-sm">{children}</table>

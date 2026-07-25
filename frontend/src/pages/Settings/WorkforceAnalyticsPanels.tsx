@@ -88,7 +88,7 @@ export function WorkforceDailyActivity({ days }: { days: WorkforceAnalyticsRespo
 export function WorkforceSessionsTable({ sessions }: { sessions: WorkforceAnalyticsResponse["sessions"] }) {
   const rows = sessions ?? [];
   return (
-    <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+    <div className="min-w-0 overflow-hidden">
       <div className="border-b border-slate-200 px-5 py-4">
         <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-700">Sesje pracy</h3>
         <p className="mt-1 text-xs text-slate-500">Przerwa powyżej 15 min bez aktywności zamyka sesję.</p>
@@ -146,7 +146,7 @@ export function WorkforceActivityTimeline({
 }) {
   const rows = timeline ?? [];
   return (
-    <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+    <div className="min-w-0 overflow-hidden">
       <div className="border-b border-slate-200 px-5 py-4">
         <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-700">Ostatnie działania</h3>
       </div>

@@ -16,3 +16,20 @@ export {
   brandSidebarNavIconClassName,
   brandSidebarNavChevronClassName,
 } from "./brandUi";
+
+export {
+  pageShellGutterClass,
+  pageShellSurfaceClass,
+  pageShellPaddingClass,
+  pageShellDividerClass,
+  pageShellListBlockClass,
+  pageShellEmptyStateClass,
+} from "./pageLayout";
+
+export {
+  PageContainer,
+  PageContainer as PageLayout,
+  PageGutter,
+  pageContainerWidthAlignClass,
+  type PageContainerProps,
+} from "../components/layout/PageContainer";

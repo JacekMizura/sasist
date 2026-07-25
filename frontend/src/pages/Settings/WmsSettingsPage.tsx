@@ -113,14 +113,13 @@ export default function WmsSettingsPage() {
   const activeLabel = WMS_SETTINGS_TABS.find((t) => t.id === activeTab)?.label ?? "";
 
   return (
-    <PageLayout omitCard className="min-w-0 overflow-visible">
-      <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
-        <PageHeader title="Ustawienia WMS" />
+    <PageLayout className="min-w-0 overflow-visible">
+      <PageHeader title="Ustawienia WMS" />
 
-        <div className="mt-4 space-y-6">
+        <div className="mt-2 space-y-6">
           <TabsContainer className="w-full [-webkit-overflow-scrolling:touch]">
             <nav
-              className="flex w-full flex-nowrap gap-6 overflow-x-auto border-b border-slate-200 sm:justify-start"
+              className="flex w-full flex-nowrap gap-6 overflow-x-auto sm:justify-start"
               aria-label="Sekcje ustawień WMS"
               role="tablist"
             >
@@ -212,13 +211,12 @@ export default function WmsSettingsPage() {
           </div>
         </div>
         <WmsSettingsFooter
-          className="-mx-4 sm:-mx-5"
+          className="-mx-6"
           visible={isDirty}
           saving={globalSaving}
           onCancel={() => void handleReset()}
           onSave={() => void handleSave()}
         />
-      </div>
     </PageLayout>
   );
 }

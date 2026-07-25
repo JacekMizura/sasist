@@ -383,8 +383,8 @@ export default function AdministratorsPage() {
     <div className="min-w-0 space-y-4">
       {err && <p className="text-sm text-red-600">{err}</p>}
 
-      {/* Search + filter bar */}
-      <div className="rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
+      {/* Search + filter bar — inside PageContainer, no nested card */}
+      <div className="border-b border-slate-100 pb-4">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="relative w-full sm:max-w-md">
             <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
@@ -524,7 +524,7 @@ export default function AdministratorsPage() {
             return (
               <div
                 key={r.id}
-                className="grid grid-cols-1 items-center gap-4 rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition-shadow hover:shadow-md md:grid-cols-[minmax(200px,2.5fr)_1fr_1fr_minmax(150px,2fr)_1fr_minmax(180px,1.5fr)_auto]"
+                className="grid grid-cols-1 items-center gap-4 border-b border-slate-100 py-4 transition-colors hover:bg-slate-50/80 md:grid-cols-[minmax(200px,2.5fr)_1fr_1fr_minmax(150px,2fr)_1fr_minmax(180px,1.5fr)_auto]"
               >
                 {/* 1. Użytkownik */}
                 <div className="flex min-w-0 items-center gap-4">

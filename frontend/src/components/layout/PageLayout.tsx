@@ -1,6 +1,9 @@
 /**
  * Default export = unified page shell ({@link ./PageContainer}).
  * Secondary panels: {@link PageSurfaceCard} only when **not** already inside the default shell.
+ *
+ * Layout System 2.0: prefer `PageContainer` / `PageLayout` from design-system or this module.
+ * Do not nest TabsContainer / extra white cards inside the shell.
  */
 
 import type { ReactNode } from "react";
@@ -11,6 +14,7 @@ export type { PageContainerProps } from "./PageContainer";
 export {
   PageContainer,
   PageContainer as default,
+  PageContainer as PageLayout,
   PageGutter,
   pageContainerWidthAlignClass,
 } from "./PageContainer";
