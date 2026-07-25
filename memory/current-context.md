@@ -2,11 +2,11 @@
 
 ## Active
 
-**Etap 3.1 — Finalizacja SSOT Routing Graph** — local, no push.
+**Etap 3.3 — Routing Graph Architecture Cleanup** — local.
 
-- Surrogates usunięte z WMS runtime (analytics, product list, allocation, zones, …)
-- Doc: `docs/architecture/routing_graph_runtime.md` (+ Routing Surrogates)
-- Werdykt: Runtime Graph Reader = jedyny SSOT routingu WMS
+- Runtime Graph Reader = jedyny silnik routingu (distance / hop / visit order)
+- `Location.pick_sequence` = legacy DB column only (nie usuwać)
+- Usunięto martwy `route_engine.py` (Euclidean visit order) oraz nieużywane `LocationCapacityProfile.pick_sequence`
 
 ### Constraints
-Bez push. Bez deploy.
+Bez push (dopóki user nie poprosi). Bez deploy.

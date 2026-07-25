@@ -196,15 +196,12 @@ Each node is returned with **id**, **warehouse_id**, **x**, **y**, **type**, **l
 
 ### How distance is calculated today
 
-**Service:** `backend/services/analytics_service.py` — pick route and related logic.
+**SSOT:** `backend/services/warehouse_routing/runtime_graph_reader.py` — Authored Warehouse Routing Graph.
 
-- **Pick route (get_pick_route):**
-  - Locations are mapped to graph nodes via **location_nodes** / **Location.graph_node_id** to get (node_id, x, y).
-  - Visit order is built by **nearest-neighbor in Euclidean distance** between nodes (start → pick nodes → end).
-  - **Total distance** is the **sum of Euclidean segments** between consecutive nodes in that visit order (in meters; coordinates converted from cm to m in `_euclidean_m`).
-- **Walking cost (other analytics):** Uses graph edges and **Dijkstra** on **warehouse_edges** (distance_m) for path length when needed.
+- **Pick route / walking cost / putaway nearest:** visit order and hop/chain distance via Runtime Graph Reader (`order_location_ids_by_graph`, `hop_cost_m`, `chain_distance_m`).
+- Geometry (Euclidean between node coordinates) may be used when **building** edge lengths in the Designer; it is **not** a runtime visit-order surrogate.
 
-**Conclusion:** In the **pick-route** simulation, distance is **Euclidean** (straight-line) between consecutive nodes along the route, not graph-based (Dijkstra) along edges. So slotting that uses “distance to packing” can use either Euclidean from node (x,y) to packing (x,y) or the same graph/Euclidean convention for consistency.
+See `docs/architecture/routing_graph_runtime.md`.
 
 ---
 
@@ -323,7 +320,7 @@ So per-slot capacity is **not** on the main Location used for inventory.
 - **Locations:** id, name, x, y, z, width, depth, height, type, location_type. Coordinates and dimensions available where set.
 - **Warehouse graph:** nodes (id, x, y, type) and **location_ids** per node (via Location.graph_node_id / location_nodes). Enough to compute distance from any storage location to start/packing.
 - **Packing / start:** PICK_START, PACKING, DOCK stored as Location with x, y. Clear reference points for “distance to packing” or “distance to start”.
-- **Distance:** Pick route uses Euclidean distance between nodes; same convention can be used for slotting (e.g. distance from location/node to packing node).
+- **Distance:** Use Runtime Graph Reader hop/chain distance (SSOT); geometry Euclidean only when authoring edge lengths.
 - **Sales vs location:** Join products → order_items/orders (sales) and products → inventory → locations gives product-level sales and current location(s) for a “sales vs location” dataset.
 
 ### What is missing or weak

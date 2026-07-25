@@ -1,6 +1,6 @@
--- Migration: pick_sequence on locations
--- Order in which locations are visited along the warehouse picking path.
--- Used by PickTask generation to select location by path order instead of nearest.
+-- Migration: pick_sequence on locations (legacy metadata column).
+-- Historical: once used for path-order heuristics. Runtime routing SSOT is Authored Warehouse Routing Graph
+-- (runtime_graph_reader). Do not use this column for distance, hop cost, or visit order.
 
 -- SQLite:
 ALTER TABLE locations ADD COLUMN pick_sequence INTEGER NULL;

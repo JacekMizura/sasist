@@ -65,7 +65,7 @@ class Location(Base, BaseModelMixin):
         index=True,
     )
 
-    # Order along the warehouse picking path. Used to select pick location by path order (not nearest).
+    # Legacy warehouse metadata only. Not used for routing — Runtime Graph Reader is SSOT.
     pick_sequence = Column(Integer, nullable=True, index=True)
 
     # Slotting / capacity engine (Phase 4)

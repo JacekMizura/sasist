@@ -1072,7 +1072,7 @@ def suggest_putaway_locations(db: Session, tenant_id: int, item_id: int) -> WmsP
                 continue
             if lid in stocked_lids:
                 continue
-            # Proximity = Runtime Graph hop from DOCK (not pick_sequence).
+            # Proximity = Runtime Graph hop from DOCK.
             hop = putaway_hop_cost_m(
                 db,
                 int(wh_id),

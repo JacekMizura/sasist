@@ -6,7 +6,8 @@ import { computeInventoryValue } from "./computeInventoryValue";
 import { computeSpaceUtilization } from "./computeSpaceUtilization";
 
 /**
- * Optional picking stats from `layout.picking_path` (grid cells, Manhattan length).
+ * Optional Designer layout stats from `layout.picking_path` (grid cells, Manhattan length).
+ * Not WMS Runtime Graph routing — that SSOT lives in backend runtime_graph_reader.
  */
 export function computePickingMetrics(layout: LayoutState): PickingMetrics | undefined {
   const path = layout.picking_path;

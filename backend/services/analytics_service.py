@@ -810,7 +810,7 @@ def generate_simulated_picks(
     for order in orders:
         items = db.query(OrderItem).filter(OrderItem.order_id == order.id).all()
         for item in items:
-            # Storage type = business priority; visit order = Graph Reader (not pick_sequence).
+            # Storage type = business priority; visit order = Graph Reader.
             inv_rows = (
                 db.query(Inventory, Bin.storage_type)
                 .join(Location, Inventory.location_id == Location.id)
@@ -1015,7 +1015,7 @@ def walking_cost(
     """
     Walking-cost via authored Warehouse Routing Graph (SSOT).
     Location set → order_location_ids_by_graph → chain_distance_m.
-    No Euclidean / pick_sequence visit order; missing graph → ROUTING_GRAPH_NOT_CONFIGURED.
+    Missing graph → ROUTING_GRAPH_NOT_CONFIGURED.
     """
     order_filter = [Order.tenant_id == tenant_id]
     if warehouse_id is not None:
@@ -1059,7 +1059,7 @@ def walking_cost(
         )
         .all()
     )
-    # Storage type = business; visit tie-break = Graph Reader (not pick_sequence).
+    # Storage type = business; visit tie-break = Graph Reader.
     candidates: dict[tuple[int, int], list[tuple[int, int]]] = {}
     for r in inv_rows:
         k = (r.warehouse_id, r.product_id)

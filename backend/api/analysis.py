@@ -247,7 +247,7 @@ def post_generate_simulated_picks(
     """
     Generate simulated Pick records from orders and inventory (no inventory change).
     Loads orders for the warehouse; for each order_item allocates quantity across inventory
-    locations (ordered by pick_sequence) and creates Pick records. Refreshes analytics data.
+    locations (storage priority, then Runtime Graph visit order) and creates Pick records.
     """
     return generate_simulated_picks(db, tenant_id, warehouse_id, replace_existing=replace_existing)
 

@@ -71,7 +71,6 @@ class LocationCapacityProfile:
     utilization_percent: float = 0.0
     operational_zone: str | None = None
     picking_priority: int = 100
-    pick_sequence: int | None = None
     location_type: str = "pick"
     length_cm: float = 0.0
     width_cm: float = 0.0

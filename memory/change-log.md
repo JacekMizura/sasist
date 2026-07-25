@@ -1,3 +1,17 @@
+## 2026-07-25 — Etap 3.3 Routing Graph Architecture Cleanup
+
+- Usunięto martwy `domain/simulation/route_engine.py` (Euclidean visit order)
+- Usunięto nieużywane `LocationCapacityProfile.pick_sequence` (+ copy w capacity_service)
+- Komentarze/docstringi/docs: Runtime Graph jako SSOT; bez „pick_sequence wyznacza trasę”
+- Zachowano: kolumna DB `pick_sequence`, migracja `006`, model Location, bootstrap ALTER
+- **No push.**
+
+## 2026-07-25 — Etap 3.2 Putaway Graph Adoption
+
+- NEAREST_AVAILABLE + WMS fallback: `putaway_hop_cost_m` (Reader), nie `pick_sequence`
+- Candidate order: hop (NEAREST) lub `Location.id`
+- Tests: `test_stage3_2_putaway_graph.py` + slotting/putaway PASS
+
 ## 2026-07-25 — Etap 3.1 Finalizacja SSOT Routing Graph (no push)
 
 - Analytics: `order_location_ids_by_graph` → `chain_distance_m`

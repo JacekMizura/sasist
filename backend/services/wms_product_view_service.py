@@ -119,7 +119,7 @@ def build_wms_product_view(
             )
         )
 
-    # Display order along pick route = Runtime Graph Reader (pick_sequence ≠ routing).
+    # Display order along pick route = Runtime Graph Reader.
     from .warehouse_routing.runtime_graph_reader import visit_index_map
 
     vmap = visit_index_map(db, int(warehouse_id), [x.location_id for x in loc_items])

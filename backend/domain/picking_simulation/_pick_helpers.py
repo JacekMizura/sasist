@@ -40,7 +40,7 @@ def resolve_product_to_location(
     """
     Resolve product_id -> location_id using inventory.
     Prefer pickable locations only.
-    Priority: storage type (business), then Runtime Graph visit index (not pick_sequence).
+    Priority: storage type (business), then Runtime Graph visit index.
     """
     if not product_ids:
         return {}

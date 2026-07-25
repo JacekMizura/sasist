@@ -1,6 +1,6 @@
 # Authored Warehouse Routing Graph — Runtime SSOT
 
-Dokument architektury po **Etapie 3** + **Etapie 3.1** (finalizacja SSOT).  
+Dokument architektury po **Etapie 3** + **3.1** (SSOT) + **3.2** (Putaway) + **3.3** (cleanup).  
 Cel: jeden model trasy w runtime WMS — bez ukrytych heurystyk i surrogate’ów.
 
 ---
@@ -34,11 +34,9 @@ Konsumenci WMS **nie** wywołują `access_resolution.chain_distance_*` / `route_
 
 ### `pick_sequence` ≠ routing
 
-`Location.pick_sequence` to legacy / biznesowy atrybut magazynowy:
+`Location.pick_sequence` is a **legacy metadata column** kept for DB / migration compatibility.
 
-- priorytet składowania / putaway scoring,
-- FEFO-adjacent metadata w slottingu,
-- kolejność biznesowa produktu w lokalizacji.
+It is **not** used by any active WMS routing, visit-order, putaway-nearest, or analytics path algorithm.
 
 **Nie wolno** używać go jako:
 
@@ -176,5 +174,5 @@ W **runtime WMS** (kolejność zbierania, koszt przejścia, path cost listy pick
 
 ## 10. Powiązane dokumenty / pamięć
 
-- Etap 1–3.1: `memory/change-log.md`, `memory/current-context.md`
+- Etap 1–3.3: `memory/change-log.md`, `memory/current-context.md`
 - Stabilizacja WMS (braki / recovery): `memory/wms-stabilization.md` — osobny SSOT lifecycle; routing grafu go nie zastępuje.

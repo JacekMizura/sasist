@@ -27,12 +27,12 @@ Pick route simulation uses:
 1. **START** (PICK_START) – the graph node nearest to this location is the **route start**.
 2. **PACK** (PACKING) – the graph node nearest to this location is the **route end**.
 
-The computed path is: **START → pick locations (nearest neighbor) → PACKING**.
+The computed path is: **START → pick locations (Runtime Graph visit order) → PACKING**.
 
 - If **PICK_START** is missing, the API returns: *"No picking start location defined"*.
 - If **PACKING** is missing, the API returns: *"No packing location defined"*.
 
-Walking speed is **1.4 m/s** for estimated time. See `docs/PICK_ROUTE_SYSTEM.md` for full route logic.
+Walking speed is **1.4 m/s** for estimated time. Distance and visit order come from the **Runtime Graph Reader** (SSOT). See `docs/PICK_ROUTE_SYSTEM.md` and `docs/architecture/routing_graph_runtime.md`.
 
 ## Validation
 

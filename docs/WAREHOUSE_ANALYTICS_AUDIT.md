@@ -280,7 +280,7 @@ So: **Pick** (or pick_events) with **order_id, location_id, (sequence or timesta
 | **Pick/visit sequence** | Pick with location_id (existing but empty) or pick_events (order_id, location_id, sequence/timestamp) | Visit order and “stops” for the route. |
 | **Start position** | Warehouse.depot_location_id or Location.is_depot or Cart.start_location_id | Start point for walking simulation. |
 
-With **Location (x, y)** (or equivalent), **inventory**, **order_items**, and a **depot**, we can simulate a route: start at depot → visit each location (from order_items + inventory) in some order → return to depot. Distance = sum of segment lengths (e.g. Euclidean or Manhattan). Without coordinates on Location (or a linked position table), only heuristic metrics (e.g. “number of distinct locations”) are possible, as in the current walking-cost endpoint.
+With **authored routing graph** + **inventory** + **order_items** + START/PACKING, walking-cost and pick-route use the **Runtime Graph Reader** (SSOT). Historical Euclidean/Manhattan visit-order ideas in this audit are superseded — see `docs/architecture/routing_graph_runtime.md`.
 
 ---
 

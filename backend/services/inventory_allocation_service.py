@@ -1,7 +1,6 @@
 """
 Inventory allocation — FEFO + storage priority + Graph Reader visit order.
 
-``pick_sequence`` is NOT used here (not routing SSOT).
 FEFO / stock_disposition = business; visit order = Runtime Graph Reader.
 """
 

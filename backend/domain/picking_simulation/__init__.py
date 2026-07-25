@@ -2,7 +2,7 @@
 Picking strategy simulation — analytics module.
 
 Simulates CART, BASKET, ZONE, and HYBRID picking strategies for a set of orders
-using real warehouse data (orders, order_items, inventory, warehouse graph, pick_sequence).
+using real warehouse data (orders, order_items, inventory, Runtime Graph Reader).
 Returns metrics for comparison; does not modify execution logic.
 """
 

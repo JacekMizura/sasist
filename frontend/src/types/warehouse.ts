@@ -144,7 +144,7 @@ export interface InternalLevel {
   locations: InternalLocation[];
 }
 
-/** Single node of the picking path (for ordered path with id) */
+/** Designer layout waypoint (grid cell); not WMS Runtime Graph visit order. */
 export interface PathNode {
   id: string;
   x: number;
@@ -376,7 +376,7 @@ export type LayoutState = {
   racks: RackState[];
   aisles: AisleState[];
   visual_elements: VisualElementState[];
-  /** Saved manual picking path waypoints (cell coords) */
+  /** Optional Designer layout waypoints (grid cells) for layout metrics — not Runtime Graph routing. */
   picking_path?: PickingPathState;
   /** Empty row containers (slots). Racks can be placed into slots by dragging from catalog. */
   row_containers?: RowContainer[];

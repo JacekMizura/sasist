@@ -194,7 +194,7 @@ Implemented analysis features:
 | **Batch picking** | GET /analysis/batch-picking | Total picks per product from order_items. |
 | **Walking cost** | GET /analysis/walking-cost | Estimated travel per order (graph-based distance, distinct locations, total items). |
 | **Sales forecast** | GET /analysis/sales-forecast/{warehouse_id}, /analysis/product-forecast/{product_id} | History + forecast (e.g. 14-day MA, weekday seasonality). |
-| **Pick route simulation** | GET /analysis/pick-route/{order_number} | Shortest route for one order: START → pick locations → PACKING; uses inventory locations and graph nodes; distance = Euclidean between consecutive nodes. |
+| **Pick route simulation** | GET /analysis/pick-route/{order_number} | Route for one order: START → pick locations → PACKING; visit order and distance via **Runtime Graph Reader** (authored graph). |
 | **Batch pick route** | POST /analysis/pick-route/batch/, POST /analysis/pick-route/batch | Batch simulation (by order numbers or order_ids); returns debug/counts. |
 | **Slotting** | GET /analysis/slotting | Products ranked by velocity / (distance_to_packing + 1); identifies products to move closer to packing. |
 | **Warehouse map** | Warehouse graph + locations | Visualization of nodes, edges, locations (frontend). |
@@ -209,22 +209,22 @@ How it works:
 
 1. **Load order** — By external `order_number` (orders.number).
 2. **Load order_items** — For that order (product_id, quantity).
-3. **Find product locations** — From **inventory** only (warehouse + tenant + product_ids, quantity > 0). Build product_id → location_id. No use of product.assigned_locations.
-4. **Map locations to graph nodes** — Via location_nodes / Location.graph_node_id; get (node_id, x, y) per location.
-5. **Get START and PACKING** — From special locations (PICK_START, PACKING); coordinates for start/end.
-6. **Calculate route** — Visit order: START → pick nodes (nearest-neighbor by Euclidean distance) → PACKING.
-7. **Distance** — Sum of **Euclidean** distances between consecutive nodes (in meters; coordinates in cm converted to m). Not graph pathfinding (Dijkstra) along edges for this route.
-8. **Response** — route, pick_locations, total_distance, estimated_time, order_number, order_id, order_found, inventory_locations, mapped_nodes_count, warnings (e.g. "product {id} has assigned location but no inventory record").
+3. **Find product locations** — From **inventory** only (warehouse + tenant + product_ids, quantity > 0).
+4. **Get START and PACKING** — From special locations (PICK_START, PACKING).
+5. **Calculate route** — **Runtime Graph Reader** SSOT: visit order (`order_location_ids_by_graph`) and chain distance (`chain_distance_m`) on the authored Warehouse Routing Graph.
+6. **Response** — route, pick_locations, total_distance, estimated_time, diagnostics / errors (e.g. missing START/PACKING or graph not configured).
+
+See `docs/architecture/routing_graph_runtime.md`.
 
 ---
 
 ## SECTION 11 — CURRENT KNOWN LIMITATIONS
 
 - **assigned_locations vs inventory** — Resolved: analytics use only inventory; product update can sync assigned_locations to inventory. If a product has assigned_locations but no inventory, pick route returns a warning.
-- **Capacity** — Location table has no max_volume, max_weight, or bin_capacity. Capacity exists on PickingZone, StorageBin (map), Cart; not on the main Location used for inventory.
-- **Distance** — Pick route uses **Euclidean** distance between nodes, not shortest path along graph edges (Dijkstra). Walking-cost uses graph edges.
-- **Stock moves** — Putaway and internal moves (e.g. location-to-location) are not fully implemented as a dedicated workflow; import and product sync update inventory.
-- **Batch pick route** — POST /analysis/pick-route/batch/ returns debug (orders_found, order_items, order_numbers); full route aggregation per order can be extended.
+- **Capacity** — Location capacity fields evolved with slotting; see current Location / Bin models.
+- **Routing graph required** — Pick route and walking-cost need a ready authored graph; there is no Euclidean / `pick_sequence` routing fallback in runtime WMS.
+- **Stock moves** — Putaway and internal moves continue to evolve as dedicated workflows.
+- **Batch pick route** — Batch endpoints exist; aggregation features can be extended.
 
 ---
 
@@ -233,8 +233,7 @@ How it works:
 - **Slotting optimization** — Algorithm to suggest or apply product moves (already have slotting analysis; automation/apply moves is future).
 - **Batch picking simulation** — Full multi-order route and timing (batch endpoint exists; extend with routes and distance).
 - **Warehouse heatmap** — Visual heatmap of pick frequency by location (data exists: hot locations).
-- **Distance optimization** — Use graph pathfinding (Dijkstra) for pick route instead of Euclidean, or hybrid.
-- **Putaway recommendations** — Use assigned_locations and slotting to suggest putaway location on receive.
+- **Putaway recommendations** — Use slotting + Runtime Graph hop cost from DOCK to suggest putaway locations.
 
 ---
 
@@ -349,6 +348,6 @@ How it works:
 - **Backend:** FastAPI + SQLAlchemy + SQLite; routers per domain; services for business logic; analytics use only inventory + location (no assigned_locations).
 - **Frontend:** React + TypeScript + Vite; pages for analysis, warehouse map, products, orders, carts, waves; Axios to backend.
 - **Data:** Tenant → Warehouses, Products, Locations, Inventory (actual stock), Orders/OrderItems; warehouse graph (nodes, edges, location_nodes) for routes; carts/waves/pick tasks for execution.
-- **Conventions:** assigned_locations = configuration; inventory = actual stock position. All analytics read from inventory joined with location. Pick route: order by number → inventory locations → graph nodes → Euclidean route START → picks → PACKING.
+- **Conventions:** assigned_locations = configuration; inventory = actual stock position. All analytics read from inventory joined with location. Pick route: order by number → inventory locations → Runtime Graph Reader (visit order + chain distance) START → picks → PACKING.
 
 This context should be enough for another AI or developer to continue feature work, fix bugs, or add new analytics without re-reading the entire repo.

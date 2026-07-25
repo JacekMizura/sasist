@@ -30,10 +30,7 @@ def _assign_locations_to_zones(
     warehouse_id: int,
     location_ids: list[int],
 ) -> dict[int, int]:
-    """
-    Assign location_id -> zone_index (0..NUM_ZONES-1) by Runtime Graph visit order.
-    pick_sequence is NOT routing SSOT.
-    """
+    """Assign location_id -> zone_index (0..NUM_ZONES-1) by Runtime Graph visit order."""
     if not location_ids:
         return {}
     from ...services.warehouse_routing.runtime_graph_reader import order_location_ids_by_graph

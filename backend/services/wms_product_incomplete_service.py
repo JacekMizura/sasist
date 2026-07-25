@@ -79,7 +79,7 @@ def _location_route_sort_key(
     *,
     fallback_code: str = "",
 ) -> Tuple[Any, ...]:
-    """Sort like picking route: Runtime Graph visit index (not pick_sequence / name)."""
+    """Sort like picking route: Runtime Graph visit index."""
     if loc_id is None:
         code = (fallback_code or "").strip().lower()
         return (1, EFFECTIVE_UNSEQUENCED, code, 0)

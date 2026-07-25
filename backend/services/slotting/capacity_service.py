@@ -124,7 +124,6 @@ def location_profile_from_orm(loc: Location) -> LocationCapacityProfile:
         utilization_percent=util,
         operational_zone=getattr(loc, "operational_zone_type", None),
         picking_priority=int(getattr(loc, "picking_priority", 100) or 100),
-        pick_sequence=getattr(loc, "pick_sequence", None),
         location_type=str(getattr(loc, "type", "pick") or "pick"),
         length_cm=float(getattr(loc, "depth", None) or 0),
         width_cm=float(getattr(loc, "width", None) or 0),

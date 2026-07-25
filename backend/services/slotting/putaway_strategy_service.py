@@ -1,7 +1,7 @@
 """Intelligent putaway location suggestions — heuristic scoring.
 
-Etap 3.2: „nearest” / candidate proximity = Runtime Graph Reader only
-(``hop_cost_m`` / ``cost_from_node_to_location``). ``pick_sequence`` is not used.
+„Nearest” / candidate proximity = Runtime Graph Reader
+(``hop_cost_m`` / ``cost_from_node_to_location``).
 """
 
 from __future__ import annotations
@@ -35,7 +35,7 @@ def resolve_putaway_start_location_id(
     *,
     preferred_location_id: int | None = None,
 ) -> int | None:
-    """Dock / receiving location used as putaway walk origin (not pick_sequence)."""
+    """Dock / receiving location used as putaway walk origin."""
     if preferred_location_id is not None and int(preferred_location_id) > 0:
         return int(preferred_location_id)
     row = (
@@ -110,7 +110,7 @@ def _score_location(
     """
     Putaway scoring heuristic.
 
-    NEAREST_AVAILABLE uses Runtime Graph hop cost (meters), not pick_sequence.
+    NEAREST_AVAILABLE uses Runtime Graph hop cost (meters).
     """
     tags: list[str] = []
     if not capacity_fits:
