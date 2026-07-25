@@ -2,6 +2,10 @@ import type { ReactNode } from "react";
 
 import TopTabsNavigation from "../TopTabsNavigation";
 import type { TabItem } from "../TopTabsNavigation";
+import {
+  pageModuleContentOffsetClass,
+  pageModuleTabsOffsetClass,
+} from "../../design-system/pageLayout";
 import { PageHeader } from "./PageHeader";
 import type { PageHeaderBreadcrumb } from "./PageHeader";
 
@@ -9,8 +13,18 @@ export type SettingsModuleStackProps = {
   breadcrumbs?: PageHeaderBreadcrumb[];
   title?: ReactNode;
   description?: ReactNode;
+  /**
+   * Header actions. With {@link hideTitle}, sit on the breadcrumb row
+   * (e.g. warehouse select / toolbar in Projektant Magazynu).
+   */
   actions?: ReactNode;
-  tabs: TabItem[];
+  /** Route-based tabs (Użytkownicy, Firma, …). Ignored when {@link tabsSlot} is set. */
+  tabs?: TabItem[];
+  /**
+   * Custom tab row (controlled buttons, etc.). Uses the same breadcrumb→tabs→content
+   * offsets as route tabs — do not wrap in extra mt/pt.
+   */
+  tabsSlot?: ReactNode;
   tabLinkSearch?: string;
   tabsExact?: boolean;
   tabsAriaLabel?: string;
@@ -23,19 +37,25 @@ export type SettingsModuleStackProps = {
   children: ReactNode;
   /** Extra classes on the outer wrapper. */
   className?: string;
+  /** Extra classes on the content body (under tabs). Default: pageModuleContentOffsetClass. */
+  contentClassName?: string;
 };
 
 /**
  * Standard order for settings / administration modules with top tabs:
  * breadcrumbs → title + description + primary actions → tab row → page body.
  * Must sit inside a single {@link PageContainer} — do not wrap this stack in extra cards.
+ *
+ * Vertical rhythm is SSOT via {@link pageModuleTabsOffsetClass} /
+ * {@link pageModuleContentOffsetClass} — feature pages must not redefine these gaps.
  */
 export function SettingsModuleStack({
   breadcrumbs = [],
   title,
   description,
   actions,
-  tabs,
+  tabs = [],
+  tabsSlot,
   tabLinkSearch,
   tabsExact,
   tabsAriaLabel,
@@ -44,31 +64,47 @@ export function SettingsModuleStack({
   tabsTrailing,
   children,
   className = "",
+  contentClassName = "",
 }: SettingsModuleStackProps) {
   const showTitleRow = !hideTitle && (title || actions);
+  const tabRow =
+    tabsSlot ??
+    (tabs.length > 0 ? (
+      <TopTabsNavigation
+        tabs={tabs}
+        tabLinkSearch={tabLinkSearch}
+        exact={tabsExact}
+        aria-label={tabsAriaLabel}
+        chrome={tabsChrome}
+        trailing={tabsTrailing}
+      />
+    ) : null);
 
   return (
     <div className={`min-w-0${className ? ` ${className}` : ""}`.trim()}>
       <PageHeader
         title={showTitleRow ? title : null}
         subtitle={description}
-        actions={showTitleRow ? actions : undefined}
+        actions={actions}
         breadcrumbs={breadcrumbs}
-        className={showTitleRow ? "space-y-2" : "space-y-1"}
+        className={`shrink-0 ${showTitleRow ? "space-y-2" : "space-y-1"}`}
       />
-      {tabs.length > 0 ? (
-        <div className={hideTitle ? "mt-3" : "mt-3 border-t border-slate-100 pt-2"}>
-          <TopTabsNavigation
-            tabs={tabs}
-            tabLinkSearch={tabLinkSearch}
-            exact={tabsExact}
-            aria-label={tabsAriaLabel}
-            chrome={tabsChrome}
-            trailing={tabsTrailing}
-          />
+      {tabRow != null ? (
+        <div
+          className={`shrink-0 ${
+            hideTitle
+              ? pageModuleTabsOffsetClass
+              : `${pageModuleTabsOffsetClass} border-t border-slate-100 pt-2`
+          }`}
+        >
+          {tabRow}
         </div>
       ) : null}
-      <div className="min-w-0 pt-4">{children}</div>
+      <div
+        className={`min-w-0 ${pageModuleContentOffsetClass}${contentClassName ? ` ${contentClassName}` : ""}`.trim()}
+      >
+        {children}
+      </div>
     </div>
   );
 }

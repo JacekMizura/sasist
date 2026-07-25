@@ -2,17 +2,15 @@
 
 ## Active
 
-**Magazyn product↔location SSOT** — Projektant Magazynu czyta lokalizacje produktów z jednego indeksu.
+**ERP page layout alignment** — Projektant Magazynu na `SettingsModuleStack` (ten sam rytm co Użytkownicy/Firma).
 
-### SSOT
-- `frontend/src/pages/WarehouseDesigner/productLocationIndex.ts`
-- Reguła: inventory qty>0 wygrywa; `assigned_locations` uzupełnia braki; tylko UUID z layoutu
-- Konsumenci: wyszukiwarka, highlight mapy, MagazynProductsSidebar, ProductLocatorSidebar, rack click, occupancy bar/tooltip, useDesignerMagazynState
+### SSOT spacing
+- `pageModuleTabsOffsetClass` (`mt-3`) — breadcrumb → tabs
+- `pageModuleContentOffsetClass` (`pt-4`) — tabs → content
+- `SettingsModuleStack` + opcjonalny `tabsSlot` dla controlled tabs
 
-### Occupancy UI
-- Cienki pasek na dole regału (zielony / pomarańczowy / czerwony)
-- Hover: mały tooltip (nazwa, lokalizacje, produkty, %, pojemność)
+### Audit
+`memory/erp-page-layout-audit.md`
 
 ### Constraints
 Bez commit/push (dopóki user nie poprosi).
-Raport: `memory/magazyn-product-location-ssot.md`

@@ -16,6 +16,16 @@ export const pageShellPaddingClass = "p-6";
 export const pageShellDividerClass = "border-b border-slate-200";
 
 /**
+ * Layout System 2.0 — vertical rhythm inside the page card
+ * (SettingsModuleStack / every ERP module with breadcrumb → tabs → content).
+ * Do not reinvent these as local mt-* / pt-* on feature pages.
+ */
+/** Breadcrumb (or title) → tab row. */
+export const pageModuleTabsOffsetClass = "mt-3";
+/** Tab row → page body. */
+export const pageModuleContentOffsetClass = "pt-4";
+
+/**
  * Table / list block inside the page shell — no nested card chrome.
  * Prefer this over `rounded-xl border … bg-white` wrappers.
  */

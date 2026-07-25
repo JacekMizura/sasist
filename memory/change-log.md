@@ -1,3 +1,11 @@
+## 2026-07-26 — Projektant Magazynu: globalny spacing Layout 2.0
+
+- `SettingsModuleStack` + tokeny `pageModuleTabsOffsetClass` / `pageModuleContentOffsetClass`
+- Usunięte lokalne mt-2/mt-3/mt-4 między breadcrumb → tabs → content
+- Workspace pills (Projektowanie/Trasy) przeniesione pod główne taby
+- Audyt: `memory/erp-page-layout-audit.md`
+- tsc OK · **No push.**
+
 ## 2026-07-26 — Magazyn: SSOT lokalizacji produktów + zajętość regału
 
 - Nowy indeks: `productLocationIndex.ts` (inventory ∪ assigned, layout UUID only)

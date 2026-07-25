@@ -26,6 +26,8 @@ export {
   pageShellDividerClass,
   pageShellListBlockClass,
   pageShellEmptyStateClass,
+  pageModuleTabsOffsetClass,
+  pageModuleContentOffsetClass,
 } from "./pageLayout";
 
 export {

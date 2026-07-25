@@ -48,9 +48,9 @@ import { DamageReportsPanel, type DamagePrefill } from "../components/warehouse/
 import { UI_STRINGS } from "../constants/uiStrings";
 import { AppSplitView } from "../components/layout/app";
 import PageLayout from "../components/layout/PageLayout";
-import { PageHeader } from "../components/layout/PageHeader";
+import { SettingsModuleStack } from "../components/layout/SettingsModuleStack";
 import { tabsNavItemClassName } from "../components/layout/TabsNav";
-import { pageShellDividerClass } from "../design-system/pageLayout";
+import { brandTabsNavRowClassName } from "../design-system/brandUi";
 import { PrimaryButton } from "../design-system/PrimaryButton";
 import { ConfirmModal } from "../components/ui/ConfirmModal";
 import { LayoutMode } from "../warehouse-layout";
@@ -3590,7 +3590,10 @@ export default function WarehouseDesigner() {
       fillHeight
       cardClassName="relative flex min-h-0 flex-1 flex-col overflow-hidden !space-y-0"
     >
-      <PageHeader
+      <SettingsModuleStack
+        className="flex min-h-0 flex-1 flex-col overflow-hidden"
+        contentClassName="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden"
+        hideTitle
         breadcrumbs={[
           { label: UI_STRINGS.navigation.groups.warehouse },
           { label: UI_STRINGS.warehouse.designerSubTabs.layoutDesigner },
@@ -3625,11 +3628,42 @@ export default function WarehouseDesigner() {
             />
           </>
         }
-        className="shrink-0"
-      />
-
+        tabsAriaLabel="Widok projektanta magazynu"
+        tabsSlot={
+          <nav
+            className={`${brandTabsNavRowClassName} w-full flex-nowrap overflow-x-auto sm:justify-start [-webkit-overflow-scrolling:touch]`}
+            aria-label="Widok projektanta magazynu"
+            role="tablist"
+          >
+            <button
+              type="button"
+              role="tab"
+              id="warehouse-designer-tab-magazyn"
+              aria-selected={mainView === "magazyn"}
+              aria-controls="warehouse-designer-panel"
+              tabIndex={mainView === "magazyn" ? 0 : -1}
+              onClick={() => selectDesignerView("magazyn")}
+              className={tabsNavItemClassName(mainView === "magazyn")}
+            >
+              {UI_STRINGS.warehouse.designerSubTabs.magazyn}
+            </button>
+            <button
+              type="button"
+              role="tab"
+              id="warehouse-designer-tab-layout"
+              aria-selected={mainView === "layout"}
+              aria-controls="warehouse-designer-panel"
+              tabIndex={mainView === "layout" ? 0 : -1}
+              onClick={() => selectDesignerView("layout")}
+              className={tabsNavItemClassName(mainView === "layout")}
+            >
+              {UI_STRINGS.warehouse.designerSubTabs.layoutDesigner}
+            </button>
+          </nav>
+        }
+      >
       {mainView === "layout" ? (
-        <div className="mt-2 flex shrink-0 gap-1" role="tablist" aria-label="Workspace projektanta">
+        <div className="mb-3 flex shrink-0 gap-1" role="tablist" aria-label="Workspace projektanta">
           <button
             type="button"
             role="tab"
@@ -3677,157 +3711,7 @@ export default function WarehouseDesigner() {
         </div>
       ) : null}
 
-      {/* Layout 2.0: bare tabs inside PageContainer — same chrome as Użytkownicy */}
-      <div className={`mt-3 shrink-0 ${pageShellDividerClass} [-webkit-overflow-scrolling:touch]`}>
-        <nav
-          className="flex w-full flex-nowrap gap-6 overflow-x-auto sm:justify-start"
-          aria-label="Widok projektanta magazynu"
-          role="tablist"
-        >
-          <button
-            type="button"
-            role="tab"
-            id="warehouse-designer-tab-magazyn"
-            aria-selected={mainView === "magazyn"}
-            aria-controls="warehouse-designer-panel"
-            tabIndex={mainView === "magazyn" ? 0 : -1}
-            onClick={() => selectDesignerView("magazyn")}
-            className={tabsNavItemClassName(mainView === "magazyn")}
-          >
-            {UI_STRINGS.warehouse.designerSubTabs.magazyn}
-          </button>
-          <button
-            type="button"
-            role="tab"
-            id="warehouse-designer-tab-layout"
-            aria-selected={mainView === "layout"}
-            aria-controls="warehouse-designer-panel"
-            tabIndex={mainView === "layout" ? 0 : -1}
-            onClick={() => selectDesignerView("layout")}
-            className={tabsNavItemClassName(mainView === "layout")}
-          >
-            {UI_STRINGS.warehouse.designerSubTabs.layoutDesigner}
-          </button>
-        </nav>
-      </div>
-
-      <WarehouseModals
-        showCreateWarehouse={showCreateWarehouse}
-        onCloseCreateWarehouse={() => setShowCreateWarehouse(false)}
-        newWarehouseName={newWarehouseName}
-        onNewWarehouseNameChange={setNewWarehouseName}
-        onCreateWarehouse={createWarehouse}
-        mainView={mainView}
-        layout={layout}
-        internalLayoutRackId={internalLayoutRackId}
-        onSaveInternalLayout={onSaveInternalLayout}
-        onCloseInternalLayout={() => setInternalLayoutRackId(null)}
-        editProductModalProps={editProductModalProps}
-        snackbar={snackbar}
-        setSnackbar={setSnackbar}
-      />
-      {pendingVariantSave != null && (
-        <AppOverlayPortal>
-        <div
-          className="fixed inset-0 z-[280] flex items-center justify-center bg-black/40 p-4"
-          role="dialog"
-          aria-modal="true"
-          onClick={() => setPendingVariantSave(null)}
-        >
-          <div
-            className="w-full max-w-md rounded-2xl bg-white border border-slate-200 shadow-2xl p-5"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-start justify-between gap-2">
-              <h3 className="text-base font-bold text-slate-800">Zapisz jako nowy wariant</h3>
-              <button
-                type="button"
-                aria-label="Zamknij"
-                className="rounded-lg p-1.5 text-slate-500 hover:bg-slate-100"
-                onClick={() => setPendingVariantSave(null)}
-              >
-                ✕
-              </button>
-            </div>
-            <p className="mt-2 text-sm text-slate-600">
-              Układ różni się od szablonu bazowego. Zapisz jako nowy wariant? Nic nie zostanie zapisane bez Twojej decyzji.
-            </p>
-            <label className="block mt-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Nazwa wariantu</label>
-            <input
-              type="text"
-              value={variantNameInput}
-              onChange={(e) => setVariantNameInput(e.target.value)}
-              className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-800 focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500"
-              placeholder="Np. Regał A - Wariant 2"
-            />
-            <div className="mt-4 flex items-center justify-end gap-2">
-              <button
-                type="button"
-                onClick={() => setPendingVariantSave(null)}
-                className="px-3 py-2 rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-50"
-              >
-                Anuluj
-              </button>
-              <PrimaryButton
-                type="button"
-                onClick={() => {
-                  if (!pendingVariantSave) return;
-                  const variant = buildVariantTemplate(
-                    pendingVariantSave.baseTemplate,
-                    pendingVariantSave.internalStructure,
-                    pendingVariantSave.bins,
-                    variantNameInput
-                  );
-                  applyInternalLayoutSave(
-                    pendingVariantSave.rackId,
-                    pendingVariantSave.internalStructure,
-                    pendingVariantSave.bins,
-                    variant,
-                    pendingVariantSave.clearPassages ? { clearPassages: true } : undefined
-                  );
-                  setPendingVariantSave(null);
-                }}
-              >
-                Potwierdź
-              </PrimaryButton>
-            </div>
-          </div>
-        </div>
-        </AppOverlayPortal>
-      )}
-
-      <RowPrefixModal
-        open={rowPrefixModalOpen}
-        onClose={() => {
-          setRowPrefixModalOpen(false);
-          setPendingRowCreation(null);
-        }}
-        onConfirm={handleRowPrefixConfirm}
-        validateBeforeConfirm={validateRowPrefixForModal}
-        defaultPrefix="A"
-        showDirection={
-          pendingRowCreation?.type === "emptyRow" || pendingRowCreation?.type === "rowWithTemplate"
-        }
-        allowPaired={
-          pendingRowCreation?.type === "emptyRow" || pendingRowCreation?.type === "rowWithTemplate"
-        }
-        previewRackCount={rowPrefixModalPreviewCount}
-        templateOptions={
-          pendingRowCreation?.type === "emptyRow" || pendingRowCreation?.type === "rowWithTemplate"
-            ? rowModalTemplateOptions
-            : undefined
-        }
-        defaultTemplateKey={
-          pendingRowCreation?.type === "rowWithTemplate"
-            ? catalogItemTemplateKey(pendingRowCreation.item)
-            : undefined
-        }
-        defaultAutoFill={pendingRowCreation?.type === "rowWithTemplate"}
-        allowAutoFillWithoutTemplateSelection={pendingRowCreation?.type === "rowWithTemplate"}
-        getTemplatePreviewRackCount={getTemplatePreviewRackCount}
-      />
-
-      <div className="mt-4 flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
       <AppSplitView
         className="min-h-0 flex-1"
         left={
@@ -4721,6 +4605,123 @@ export default function WarehouseDesigner() {
       </div>
       </AppSplitView>
       </div>
+      </SettingsModuleStack>
+
+      <WarehouseModals
+        showCreateWarehouse={showCreateWarehouse}
+        onCloseCreateWarehouse={() => setShowCreateWarehouse(false)}
+        newWarehouseName={newWarehouseName}
+        onNewWarehouseNameChange={setNewWarehouseName}
+        onCreateWarehouse={createWarehouse}
+        mainView={mainView}
+        layout={layout}
+        internalLayoutRackId={internalLayoutRackId}
+        onSaveInternalLayout={onSaveInternalLayout}
+        onCloseInternalLayout={() => setInternalLayoutRackId(null)}
+        editProductModalProps={editProductModalProps}
+        snackbar={snackbar}
+        setSnackbar={setSnackbar}
+      />
+      {pendingVariantSave != null && (
+        <AppOverlayPortal>
+        <div
+          className="fixed inset-0 z-[280] flex items-center justify-center bg-black/40 p-4"
+          role="dialog"
+          aria-modal="true"
+          onClick={() => setPendingVariantSave(null)}
+        >
+          <div
+            className="w-full max-w-md rounded-2xl bg-white border border-slate-200 shadow-2xl p-5"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-2">
+              <h3 className="text-base font-bold text-slate-800">Zapisz jako nowy wariant</h3>
+              <button
+                type="button"
+                aria-label="Zamknij"
+                className="rounded-lg p-1.5 text-slate-500 hover:bg-slate-100"
+                onClick={() => setPendingVariantSave(null)}
+              >
+                ✕
+              </button>
+            </div>
+            <p className="mt-2 text-sm text-slate-600">
+              Układ różni się od szablonu bazowego. Zapisz jako nowy wariant? Nic nie zostanie zapisane bez Twojej decyzji.
+            </p>
+            <label className="block mt-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Nazwa wariantu</label>
+            <input
+              type="text"
+              value={variantNameInput}
+              onChange={(e) => setVariantNameInput(e.target.value)}
+              className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-800 focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500"
+              placeholder="Np. Regał A - Wariant 2"
+            />
+            <div className="mt-4 flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setPendingVariantSave(null)}
+                className="px-3 py-2 rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-50"
+              >
+                Anuluj
+              </button>
+              <PrimaryButton
+                type="button"
+                onClick={() => {
+                  if (!pendingVariantSave) return;
+                  const variant = buildVariantTemplate(
+                    pendingVariantSave.baseTemplate,
+                    pendingVariantSave.internalStructure,
+                    pendingVariantSave.bins,
+                    variantNameInput
+                  );
+                  applyInternalLayoutSave(
+                    pendingVariantSave.rackId,
+                    pendingVariantSave.internalStructure,
+                    pendingVariantSave.bins,
+                    variant,
+                    pendingVariantSave.clearPassages ? { clearPassages: true } : undefined
+                  );
+                  setPendingVariantSave(null);
+                }}
+              >
+                Potwierdź
+              </PrimaryButton>
+            </div>
+          </div>
+        </div>
+        </AppOverlayPortal>
+      )}
+
+      <RowPrefixModal
+        open={rowPrefixModalOpen}
+        onClose={() => {
+          setRowPrefixModalOpen(false);
+          setPendingRowCreation(null);
+        }}
+        onConfirm={handleRowPrefixConfirm}
+        validateBeforeConfirm={validateRowPrefixForModal}
+        defaultPrefix="A"
+        showDirection={
+          pendingRowCreation?.type === "emptyRow" || pendingRowCreation?.type === "rowWithTemplate"
+        }
+        allowPaired={
+          pendingRowCreation?.type === "emptyRow" || pendingRowCreation?.type === "rowWithTemplate"
+        }
+        previewRackCount={rowPrefixModalPreviewCount}
+        templateOptions={
+          pendingRowCreation?.type === "emptyRow" || pendingRowCreation?.type === "rowWithTemplate"
+            ? rowModalTemplateOptions
+            : undefined
+        }
+        defaultTemplateKey={
+          pendingRowCreation?.type === "rowWithTemplate"
+            ? catalogItemTemplateKey(pendingRowCreation.item)
+            : undefined
+        }
+        defaultAutoFill={pendingRowCreation?.type === "rowWithTemplate"}
+        allowAutoFillWithoutTemplateSelection={pendingRowCreation?.type === "rowWithTemplate"}
+        getTemplatePreviewRackCount={getTemplatePreviewRackCount}
+      />
 
       {showGateTypeModal && pendingGatePlacement && (
         <AppOverlayPortal>
