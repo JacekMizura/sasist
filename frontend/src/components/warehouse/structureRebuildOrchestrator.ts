@@ -16,7 +16,6 @@ import {
   getTotalLocations,
   isBinActive,
   rackEntityKey,
-  syncRackBinsDisplayFields,
   volumePerBin,
   volumePerBinFromTotal,
 } from "./warehouseUtils";
@@ -34,6 +33,7 @@ import {
   type StructureRebuildSource,
 } from "./prepareLayoutBinsForSave";
 import { normalizeStorageType } from "../../utils/storageTypes";
+import { syncRackBinsDisplayFields } from "../../utils/resolvedWarehouseLocation";
 
 export type { StructureRebuildSource } from "./prepareLayoutBinsForSave";
 
