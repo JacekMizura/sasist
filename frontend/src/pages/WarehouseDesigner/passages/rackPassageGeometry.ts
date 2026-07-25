@@ -11,6 +11,9 @@ import type {
   TemplatePassageDefault,
 } from "../../../types/warehouse";
 import { GRID_UNIT_CM, normalizePassageSource, PassageSource as PassageSourceEnum } from "../../../types/warehouse";
+import {
+  assertAtMostOneEnabledPassage,
+} from "../../../components/warehouse/passageStorage";
 
 export const DEFAULT_PASSAGE_WIDTH_CM = 90;
 
@@ -88,12 +91,13 @@ export function defaultPassageForRack(rack: RackState): RackPassageState {
 }
 
 /** Materialize template defaults as new INHERITED instance passages (fresh UUIDs).
- * At most one structural passage per rack — only the first enabled default is kept. */
+ * Hard rule: at most one enabled default — reject otherwise (no silent first-pick). */
 export function materializeInheritedPassages(
   defaults: TemplatePassageDefault[] | null | undefined
 ): RackPassageState[] {
   if (!Array.isArray(defaults) || defaults.length === 0) return [];
-  const first = defaults.find((d) => d.enabled !== false) ?? defaults[0];
+  assertAtMostOneEnabledPassage(defaults);
+  const first = defaults.find((d) => d.enabled !== false);
   if (!first) return [];
   const width = Math.max(1, Number(first.width_cm) || 100);
   const offset = Math.max(0, Number(first.offset_along_cm) || 0);
@@ -113,6 +117,7 @@ export function materializeInheritedPassages(
 /**
  * Rematerialize INHERITED passages from template defaults; keep LOCAL untouched.
  * Used by "Aktualizuj instancje" after template save.
+ * Rejects if the combined result would have more than one enabled passage.
  */
 export function rematerializeInheritedPassages(
   existing: RackPassageState[] | null | undefined,
@@ -125,7 +130,9 @@ export function rematerializeInheritedPassages(
       // Persist migration: unmarked legacy passages become explicit LOCAL.
       passage_source: PassageSourceEnum.LOCAL,
     }));
-  return [...local, ...materializeInheritedPassages(defaults)];
+  const next = [...local, ...materializeInheritedPassages(defaults)];
+  assertAtMostOneEnabledPassage(next);
+  return next;
 }
 
 /** Spread onto new RackState when placing from a catalog/template spec. */
@@ -366,11 +373,12 @@ function upsertPassageOnRack(
     passage_source: PassageSourceEnum.LOCAL,
     ...(idx >= 0 && list[idx].id != null ? { id: list[idx].id } : {}),
   };
-  if (idx >= 0) {
-    list[idx] = next;
-    return list;
-  }
-  return [...list, next];
+  const proposed =
+    idx >= 0
+      ? list.map((p, i) => (i === idx ? next : p))
+      : [...list, next];
+  assertAtMostOneEnabledPassage(proposed);
+  return proposed;
 }
 
 /** Apply corridor placements to layout (creates/updates one passage per affected rack). */

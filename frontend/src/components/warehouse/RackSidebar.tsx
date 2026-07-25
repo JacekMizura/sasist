@@ -55,7 +55,11 @@ export type RackSidebarProps = {
   setCustomTemplates: (t: CustomRackTemplate[] | ((prev: CustomRackTemplate[]) => CustomRackTemplate[])) => void;
   editingTemplateId: string | null;
   setEditingTemplateId: React.Dispatch<React.SetStateAction<string | null>>;
-  onSaveEditTemplate: (templateId: string, template: CustomRackTemplate, updateExistingRacks: boolean) => void;
+  onSaveEditTemplate: (
+    templateId: string,
+    template: CustomRackTemplate,
+    updateExistingRacks: boolean
+  ) => void | Promise<void>;
   onSaveNewTemplate?: (payload: CustomRackTemplate) => Promise<CustomRackTemplate | null>;
   /** Called when user confirms delete of a template. Parent should remove from state and optionally call API. */
   onDeleteTemplate?: (template: CustomRackTemplate) => void | Promise<void>;
@@ -946,25 +950,23 @@ export function RackSidebar({
               initialTemplate={editingTemplate}
               onCancelEdit={() => { setShowTemplateModal(false); setEditingTemplateId(null); }}
               onSaveEdit={editingTemplateId && onSaveNewTemplate ? async (templateId, template, updateExistingRacks) => {
-                if (!updateExistingRacks) {
-                  const saved = await onSaveNewTemplate(template);
-                  if (saved == null) throw new Error("Nie udało się zapisać szablonu.");
-                  const savedWithType: CustomRackTemplate = {
-                    ...saved,
-                    rack_type: template.rack_type ?? saved.rack_type ?? "warehouse",
-                    default_passages: template.default_passages ?? saved.default_passages,
-                  };
-                  setCustomTemplates((prev) => prev.map((t) => (t.id === templateId ? savedWithType : t)));
-                  return;
+                // Always persist template first — one write path for template metadata.
+                const saved = await onSaveNewTemplate(template);
+                if (saved == null) throw new Error("Nie udało się zapisać szablonu.");
+                const savedWithType: CustomRackTemplate = {
+                  ...saved,
+                  rack_type: template.rack_type ?? saved.rack_type ?? "warehouse",
+                  default_passages: template.default_passages ?? saved.default_passages,
+                };
+                setCustomTemplates((prev) => prev.map((t) => (t.id === templateId ? savedWithType : t)));
+                if (updateExistingRacks) {
+                  await Promise.resolve(onSaveEditTemplate(templateId, savedWithType, true));
                 }
-                onSaveEditTemplate(templateId, template, true);
-                // Modal is closed by TemplateCreator via onCancelEdit after success message
-              } : editingTemplateId ? (templateId, template, updateExistingRacks) => {
-                if (!updateExistingRacks) {
-                  setCustomTemplates((prev) => prev.map((t) => (t.id === templateId ? template : t)));
-                  return;
+              } : editingTemplateId ? async (templateId, template, updateExistingRacks) => {
+                setCustomTemplates((prev) => prev.map((t) => (t.id === templateId ? template : t)));
+                if (updateExistingRacks) {
+                  await Promise.resolve(onSaveEditTemplate(templateId, template, true));
                 }
-                onSaveEditTemplate(templateId, template, true);
               } : undefined}
             />
           </div>

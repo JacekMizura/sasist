@@ -160,6 +160,35 @@ def save_layout(
     return service.save_layout(tenant_id, warehouse_id, data.model_dump())
 
 
+class RebuildPreflightRequest(BaseModel):
+    location_uuids: list[str] = []
+
+
+@router.post("/layout/rebuild-preflight")
+def rebuild_preflight(
+    tenant_id: int,
+    warehouse_id: int,
+    body: RebuildPreflightRequest,
+    db: Session = Depends(get_db),
+):
+    """
+    Gates for structure rebuild preview (stock is resolved on FE from inventory;
+    this endpoint returns active WMS operations on candidate removals).
+    """
+    from ..services.warehouse_layout.structure_rebuild_gates import find_active_ops_for_location_uuids
+
+    ops = find_active_ops_for_location_uuids(
+        db,
+        tenant_id=int(tenant_id),
+        warehouse_id=int(warehouse_id),
+        location_uuids=list(body.location_uuids or []),
+    )
+    return {
+        "blocked": len(ops) > 0,
+        "active_operations": [op.as_dict() for op in ops],
+    }
+
+
 @router.put("/{warehouse_id}/layout")
 def put_layout(
     warehouse_id: int,

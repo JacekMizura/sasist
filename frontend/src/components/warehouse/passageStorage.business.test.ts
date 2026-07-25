@@ -65,7 +65,9 @@ describe("passage storage — business scenarios", () => {
     const bins = gen(80);
     expect(bins).toHaveLength(3);
     expect(bins.map((b) => b.label.replace(/^.*-/, ""))).toEqual(["1", "2", "3"]);
-    expect(bins[0]!.level_index).toBe(0);
+    // construction level_index (void = 2 → first storage at 2)
+    expect(bins.map((b) => b.level_index)).toEqual([2, 3, 4]);
+    expect(bins[0]!.level_index).toBe(2);
   });
 
   it("5 poziomów + 120 cm → 2 lokalizacje, numeracja od …-1", () => {
@@ -73,6 +75,7 @@ describe("passage storage — business scenarios", () => {
     const bins = gen(120);
     expect(bins).toHaveLength(2);
     expect(bins.map((b) => b.label.replace(/^.*-/, ""))).toEqual(["1", "2"]);
+    expect(bins.map((b) => b.level_index)).toEqual([3, 4]);
   });
 
   it("pojemność zgodna z liczbą lokalizacji (nie z void)", () => {
@@ -106,13 +109,13 @@ describe("passage storage — business scenarios", () => {
     expect(plan.removed).toHaveLength(2);
   });
 
-  it("jeden przejazd strukturalny — nie max z wielu clearance", () => {
-    expect(
+  it("jeden przejazd strukturalny — odrzuca wiele aktywnych", () => {
+    expect(() =>
       getPassageVoidHeightCm([
         { enabled: true, clearance_height_cm: 80 },
         { enabled: true, clearance_height_cm: 160 },
       ])
-    ).toBe(80);
+    ).toThrow("Regał może posiadać tylko jeden przejazd pod regałem.");
     expect(
       getStructuralPassage([
         { enabled: false, clearance_height_cm: 200 },
@@ -143,9 +146,9 @@ describe("passage storage — business scenarios", () => {
     expect(impact.removed[0]!.hasStock).toBe(true);
   });
 
-  it("storageLevelConfigAfterVoid renumbers 1..N", () => {
+  it("storageLevelConfigAfterVoid keeps construction level numbers", () => {
     const structural = Array.from({ length: 5 }, (_, i) => ({ level: i + 1, locations: 1 }));
-    expect(storageLevelConfigAfterVoid(structural, 2).map((r) => r.level)).toEqual([1, 2, 3]);
+    expect(storageLevelConfigAfterVoid(structural, 2).map((r) => r.level)).toEqual([3, 4, 5]);
   });
 
   it("rackBinPositionsDiffer detects void application", () => {

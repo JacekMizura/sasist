@@ -114,16 +114,25 @@ describe("passage source materialize", () => {
     expect(p.passage_source).toBe(PassageSource.LOCAL);
   });
 
-  it("materializeInheritedPassages keeps only one structural passage", () => {
+  it("materializeInheritedPassages rejects multiple enabled defaults", () => {
+    expect(() =>
+      materializeInheritedPassages([
+        { offset_along_cm: 10, width_cm: 40, clearance_height_cm: 80 },
+        { offset_along_cm: 50, width_cm: 40, clearance_height_cm: 120 },
+      ])
+    ).toThrow("Regał może posiadać tylko jeden przejazd pod regałem.");
+  });
+
+  it("materializeInheritedPassages keeps single enabled default", () => {
     const many = materializeInheritedPassages([
-      { offset_along_cm: 10, width_cm: 40, clearance_height_cm: 80 },
-      { offset_along_cm: 50, width_cm: 40, clearance_height_cm: 120 },
+      { offset_along_cm: 10, width_cm: 40, clearance_height_cm: 80, enabled: true },
+      { offset_along_cm: 50, width_cm: 40, clearance_height_cm: 120, enabled: false },
     ]);
     expect(many).toHaveLength(1);
     expect(many[0].clearance_height_cm).toBe(80);
   });
 
-  it("rematerializeInheritedPassages keeps LOCAL and replaces INHERITED", () => {
+  it("rematerializeInheritedPassages rejects LOCAL + new INHERITED both enabled", () => {
     const existing = [
       {
         uuid: "local-1",
@@ -139,11 +148,33 @@ describe("passage source materialize", () => {
         enabled: true,
         passage_source: PassageSource.INHERITED,
       },
+    ];
+    expect(() =>
+      rematerializeInheritedPassages(existing, [{ offset_along_cm: 100, width_cm: 60 }])
+    ).toThrow("Regał może posiadać tylko jeden przejazd pod regałem.");
+  });
+
+  it("rematerializeInheritedPassages keeps LOCAL and replaces INHERITED when LOCAL disabled", () => {
+    const existing = [
+      {
+        uuid: "local-1",
+        offset_along_cm: 5,
+        width_cm: 20,
+        enabled: false,
+        passage_source: PassageSource.LOCAL,
+      },
+      {
+        uuid: "inh-old",
+        offset_along_cm: 50,
+        width_cm: 30,
+        enabled: true,
+        passage_source: PassageSource.INHERITED,
+      },
       {
         uuid: "legacy-no-source",
         offset_along_cm: 90,
         width_cm: 25,
-        enabled: true,
+        enabled: false,
       },
     ];
     const next = rematerializeInheritedPassages(existing, [

@@ -9,4 +9,19 @@ export const layoutService = {
   saveLayout(warehouseId: number, data: Record<string, unknown>, params?: { tenant_id: number }) {
     return api.put(`/warehouse/${warehouseId}/layout`, data, { params });
   },
+
+  rebuildPreflight(
+    params: { tenant_id: number; warehouse_id: number },
+    body: { location_uuids: string[] }
+  ) {
+    return api.post<{
+      blocked: boolean;
+      active_operations: Array<{
+        location_uuid: string;
+        location_label: string;
+        operation_type: string;
+        document_number: string;
+      }>;
+    }>("/warehouse/layout/rebuild-preflight", body, { params });
+  },
 };

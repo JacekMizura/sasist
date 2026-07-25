@@ -1,3 +1,37 @@
+## 2026-07-25 — Hard: one enabled passage per rack (no push)
+
+- Shared message: `Regał może posiadać tylko jeden przejazd pod regałem.`
+- BE: `single_passage.assert_at_most_one_enabled_passage` — sync, void, template JSON, Pydantic RackSchema + WarehouseTemplatePayload
+- FE: `assertAtMostOneEnabledPassage` — storage/void, materialize/rematerialize, upsert, layout save payload, entity integrity, TemplateCreator
+- No first-pick / ignore / auto-repair. Tests: BE single_enabled + void + template; FE passageStorage + rackPassageGeometry. **No push.**
+
+## 2026-07-25 — Passage architecture P0 closeout (no push)
+
+- BE: `warehouse_layout/passage_void.py` void validation → 409; active ops gate; audit hook no-op
+- FE: single `structureRebuildOrchestrator` for layout save + template instances; no `trimInternalStructureForVoid`
+- Z: `_bin_coords_cm` uses full construction heights
+- Preflight: `POST /warehouse/layout/rebuild-preflight`
+- Tests: passage_void_gates 8 PASS; FE passage 17 PASS; tsc OK. **No push.**
+
+## 2026-07-25 — Passage UX polish (no push)
+
+- Labels: „Poziom konstrukcyjny” vs „Lokalizacja / Adres magazynowy”
+- Void viz: double beams + hatch (PassageVoidBand), not solid gray
+- Fields: Początek / Szerokość / Wysokość wolnej przestrzeni + hints
+- Miniature: start/width/end numeric readout + dimension lines
+- Rebuild dialog: Stare/Nowe counts+capacity, +/− lists, stock product/qty/unit/value
+- Validation: red highlight on offending height/width/passage geometry fields
+- PL copy cleanup (no qty=, Level load, CAD jargon). Tests 19 PASS. **No push.**
+
+## 2026-07-25 — P0 Układ wewnętrzny / numeracja / dialogi (no push)
+
+- Internal Layout: pełna szerokość + scroll (bez FitToContainer / miniatury)
+- Numeracja: poziom konstrukcyjny vs adres magazynowy (level_index strukturalny; etykieta 1..N)
+- Pole: „Początek przejazdu od lewej krawędzi (cm)”
+- Miniatura przejazdu: start / szerokość / koniec
+- Dialogi: X + Anuluj + ESC; zapis dopiero po decyzji (template instances + rebuild)
+- Tests: passageStorage + business PASS. **No push.**
+
 ## 2026-07-25 — Passage storage: one structural + stock block (no push)
 
 - Void height = first enabled passage only (no max); UI limit 1 passage/rack

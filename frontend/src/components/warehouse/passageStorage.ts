@@ -13,6 +13,10 @@ export type PassageClearanceLike = {
   clearance_height_cm?: number | null;
 };
 
+/** Hard product rule — never silently pick first / ignore extras. */
+export const SINGLE_ENABLED_PASSAGE_ERROR =
+  "Regał może posiadać tylko jeden przejazd pod regałem.";
+
 function isBinActive(bin: Pick<BinState, "is_active">): boolean {
   return bin.is_active !== false;
 }
@@ -26,14 +30,36 @@ function levelHeightsForRack(rackHeightCm: number, levelCount: number): number[]
   return heights;
 }
 
+/** True when more than one enabled passage exists (model allows only one structural). */
+export function hasMultipleEnabledPassages(
+  passages?: PassageClearanceLike[] | null
+): boolean {
+  let n = 0;
+  for (const p of passages ?? []) {
+    if (p.enabled === false) continue;
+    n += 1;
+    if (n > 1) return true;
+  }
+  return false;
+}
+
+/** Reject when more than one enabled passage is present. */
+export function assertAtMostOneEnabledPassage(
+  passages?: PassageClearanceLike[] | null
+): void {
+  if (hasMultipleEnabledPassages(passages)) {
+    throw new Error(SINGLE_ENABLED_PASSAGE_ERROR);
+  }
+}
+
 /**
  * Exactly one structural under-rack passage per rack.
- * Canonical = first enabled passage in list order (extras ignored for storage void).
- * XY routing may still see other openings historically; storage uses only this one.
+ * Returns the single enabled passage; throws if more than one is enabled.
  */
 export function getStructuralPassage(
   passages?: PassageClearanceLike[] | null
 ): PassageClearanceLike | null {
+  assertAtMostOneEnabledPassage(passages);
   for (const p of passages ?? []) {
     if (p.enabled === false) continue;
     return p;
@@ -49,19 +75,6 @@ export function getPassageVoidHeightCm(
   if (!p) return 0;
   const c = Number(p.clearance_height_cm);
   return Number.isFinite(c) && c > 0 ? c : 0;
-}
-
-/** True when more than one enabled passage exists (model allows only one structural). */
-export function hasMultipleEnabledPassages(
-  passages?: PassageClearanceLike[] | null
-): boolean {
-  let n = 0;
-  for (const p of passages ?? []) {
-    if (p.enabled === false) continue;
-    n += 1;
-    if (n > 1) return true;
-  }
-  return false;
 }
 
 /**
@@ -86,6 +99,10 @@ export function countPassageVoidLevels(
   return Math.min(skip, L);
 }
 
+export function isBinInVoid(levelIndex: number, voidLevelCount: number): boolean {
+  return Number(levelIndex) < Math.max(0, Number(voidLevelCount) || 0);
+}
+
 export function countPassageVoidLevelsForRack(
   rack: Pick<RackState, "height_cm" | "levels" | "levelConfig" | "layoutVariant" | "passages">
 ): number {
@@ -104,7 +121,7 @@ export function countPassageVoidLevelsForRack(
   );
 }
 
-/** Drop void levels; renumber remaining to 1..N (storage only). */
+/** Drop void levels; keep construction `level` numbers (skip+1 .. N). */
 export function storageLevelConfigAfterVoid(
   structuralLevels: LevelConfigItem[],
   voidLevelCount: number
@@ -112,7 +129,7 @@ export function storageLevelConfigAfterVoid(
   const skip = Math.max(0, Math.min(voidLevelCount, structuralLevels.length));
   return structuralLevels.slice(skip).map((row, i) => ({
     ...row,
-    level: i + 1,
+    level: skip + i + 1,
   }));
 }
 
@@ -148,7 +165,17 @@ export function inferExistingStorageIndexing(
   const nextStorageCount = Math.max(0, structuralLevelCount - nextVoidLevels);
   const packedFromZero = minL === 0 && maxL === active.length - 1;
 
-  // Already storage-numbered for this (or prior) void: contiguous 0..n-1 with n <= storage slots.
+  // Contiguous from void floor with storage count ⇒ already construction indices (void skipped).
+  if (
+    nextVoidLevels > 0 &&
+    minL === nextVoidLevels &&
+    maxL === structuralLevelCount - 1 &&
+    active.length === nextStorageCount
+  ) {
+    return { storageIndexed: false, previousVoidLevels: 0 };
+  }
+
+  // Already remapped to 0..n-1 storage indices (legacy passage model).
   if (packedFromZero && active.length <= nextStorageCount && active.length < structuralLevelCount) {
     return {
       storageIndexed: true,
@@ -163,7 +190,7 @@ export function inferExistingStorageIndexing(
 
   // Structural leftovers after void bins were dropped (indices start above floor).
   if (minL > 0) {
-    return { storageIndexed: false, previousVoidLevels: minL };
+    return { storageIndexed: false, previousVoidLevels: 0 };
   }
 
   // Bins in the void index range AND more bins than storage ⇒ still structural.
@@ -190,7 +217,7 @@ export type BinRebuildPlan = {
 
 /**
  * Merge next generator bins with existing identity (UUID/id/load).
- * Physical column match: storageIndex + voidLevels.
+ * Next bins use construction level_index; addresses use storage sequence 1..N.
  */
 export function planBinRebuild(
   existingBins: BinState[],
@@ -213,7 +240,8 @@ export function planBinRebuild(
 
   const usedUuids = new Set<string>();
   const merged = nextBins.map((nb) => {
-    const physical = nb.level_index + nextVoidLevels;
+    // Next bins already carry construction level_index.
+    const physical = nb.level_index;
     const ex = byPhysical.get(binPosKey(physical, nb.segment_index));
     if (!ex) return nb;
     if (ex.locationUUID) usedUuids.add(ex.locationUUID);
@@ -237,11 +265,10 @@ export function planBinRebuild(
   const removed = active.filter((b) => {
     const uuid = b.locationUUID;
     if (uuid && usedUuids.has(uuid)) return false;
-    // Also treat positional reuse without uuid as kept
     const physical = storageIndexed ? b.level_index + previousVoidLevels : b.level_index;
     const kept = merged.some(
       (nb) =>
-        nb.level_index + nextVoidLevels === physical &&
+        nb.level_index === physical &&
         nb.segment_index === b.segment_index &&
         (nb.locationUUID === b.locationUUID || (!b.locationUUID && nb.id === b.id))
     );
@@ -256,19 +283,48 @@ export function planBinRebuild(
   };
 }
 
+export type StructureStockLine = {
+  productName: string;
+  quantity: number;
+  unit: string;
+  valuePln: number | null;
+};
+
+export type StructureLocationChange = {
+  label: string;
+  locationUUID?: string;
+  level_index: number;
+  segment_index: number;
+  /** Construction level number (1-based) for display. */
+  constructionLevel: number;
+};
+
+export type StructureActiveOperation = {
+  locationUuid: string;
+  locationLabel: string;
+  operationType: string;
+  documentNumber: string;
+};
+
 export type StructureRemovalImpact = {
   rackKey: string;
   rackLabel: string;
+  beforeLocationCount: number;
+  afterLocationCount: number;
+  beforeCapacityDm3: number;
+  afterCapacityDm3: number;
+  created: StructureLocationChange[];
   removedCount: number;
-  removed: Array<{
-    label: string;
-    locationUUID?: string;
-    level_index: number;
-    segment_index: number;
-    hasStock: boolean;
-    stockHint: string;
-  }>;
+  removed: Array<
+    StructureLocationChange & {
+      hasStock: boolean;
+      stockHint: string;
+      stockLines: StructureStockLine[];
+    }
+  >;
   hasStock: boolean;
+  activeOperations: StructureActiveOperation[];
+  hasActiveOperations: boolean;
 };
 
 export function binHasStockHint(bin: BinState): boolean {
@@ -276,35 +332,84 @@ export function binHasStockHint(bin: BinState): boolean {
   return Number.isFinite(load) && load > 0;
 }
 
+function binCapacitySum(bins: BinState[]): number {
+  return bins.reduce((s, b) => s + (Number(b.volume_dm3) || 0), 0);
+}
+
+function toLocationChange(b: BinState): StructureLocationChange {
+  return {
+    label: String(b.label ?? b.location_id ?? `${b.level_index}-${b.segment_index}`).trim(),
+    locationUUID: b.locationUUID,
+    level_index: b.level_index,
+    segment_index: b.segment_index,
+    constructionLevel: b.level_index + 1,
+  };
+}
+
+export type StockDetailByUuid = Map<
+  string,
+  Array<{ productName: string; quantity: number; unit?: string; valuePln?: number | null }>
+>;
+
 export function buildRemovalImpact(
   rackLabel: string,
   rackKey: string,
   removed: BinState[],
-  stockByUuid?: Map<string, number>
+  opts?: {
+    stockByUuid?: Map<string, number>;
+    stockDetailsByUuid?: StockDetailByUuid;
+    beforeBins?: BinState[];
+    afterBins?: BinState[];
+    created?: BinState[];
+  }
 ): StructureRemovalImpact {
+  const stockByUuid = opts?.stockByUuid;
+  const stockDetailsByUuid = opts?.stockDetailsByUuid;
+  const beforeBins = (opts?.beforeBins ?? []).filter(isBinActive);
+  const afterBins = opts?.afterBins ?? [];
+  const created = (opts?.created ?? []).map(toLocationChange);
+
   const rows = removed.map((b) => {
     const uuid = (b.locationUUID ?? "").trim();
     const qty = uuid && stockByUuid ? Number(stockByUuid.get(uuid) ?? 0) : 0;
-    const hasStock = (Number.isFinite(qty) && qty > 0) || binHasStockHint(b);
+    const detailLines = uuid && stockDetailsByUuid ? stockDetailsByUuid.get(uuid) ?? [] : [];
+    const stockLines: StructureStockLine[] = detailLines
+      .filter((d) => d.quantity > 0)
+      .map((d) => ({
+        productName: d.productName.trim() || "Nieznany produkt",
+        quantity: d.quantity,
+        unit: (d.unit ?? "szt.").trim() || "szt.",
+        valuePln: d.valuePln ?? null,
+      }));
+    const hasStock = (Number.isFinite(qty) && qty > 0) || stockLines.length > 0 || binHasStockHint(b);
+    const stockHint = !hasStock
+      ? "brak stanu"
+      : stockLines.length > 0
+        ? stockLines.map((l) => `${l.productName}: ${l.quantity} ${l.unit}`).join("; ")
+        : qty > 0
+          ? `ilość: ${qty} szt.`
+          : "zajętość objętościowa > 0";
     return {
-      label: String(b.label ?? b.location_id ?? `${b.level_index}-${b.segment_index}`).trim(),
-      locationUUID: b.locationUUID,
-      level_index: b.level_index,
-      segment_index: b.segment_index,
+      ...toLocationChange(b),
       hasStock,
-      stockHint: hasStock
-        ? qty > 0
-          ? `stan qty=${qty}`
-          : "zajętość objętościowa > 0"
-        : "brak stanu",
+      stockHint,
+      stockLines,
     };
   });
+
   return {
     rackKey,
     rackLabel,
+    beforeLocationCount: beforeBins.length > 0 ? beforeBins.length : removed.length + afterBins.length,
+    afterLocationCount: afterBins.length,
+    beforeCapacityDm3: beforeBins.length > 0 ? binCapacitySum(beforeBins) : binCapacitySum(removed) + binCapacitySum(afterBins),
+    afterCapacityDm3: binCapacitySum(afterBins),
+    created,
     removedCount: rows.length,
     removed: rows,
     hasStock: rows.some((r) => r.hasStock),
+    activeOperations: [],
+    hasActiveOperations: false,
   };
 }
 
@@ -335,6 +440,7 @@ export function passagesForGenerator(
   passages?: RackPassageState[] | null
 ): PassageClearanceLike[] | undefined {
   if (!passages?.length) return undefined;
+  assertAtMostOneEnabledPassage(passages);
   return passages.map((p) => ({
     enabled: p.enabled !== false,
     clearance_height_cm: p.clearance_height_cm,
@@ -349,6 +455,7 @@ export function passagesFromTemplateDefaults(
   }> | null
 ): PassageClearanceLike[] | undefined {
   if (!defaults?.length) return undefined;
+  assertAtMostOneEnabledPassage(defaults);
   return defaults.map((p) => ({
     enabled: p.enabled !== false,
     clearance_height_cm: p.clearance_height_cm,

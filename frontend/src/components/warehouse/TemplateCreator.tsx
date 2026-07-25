@@ -3,11 +3,14 @@ import { log } from "../../utils/logger";
 import type { CustomRackTemplate, LevelConfigItem, LayoutState, StorageType, RackType, TemplatePassageDefault } from "../../types/warehouse";
 import { snapCm, generateLocationLabel, levelHeightsForRack, type RackTemplateLabelOptions } from "./warehouseUtils";
 import {
+  assertAtMostOneEnabledPassage,
   countPassageVoidLevels,
   getPassageVoidHeightCm,
+  SINGLE_ENABLED_PASSAGE_ERROR,
   storageLevelConfigAfterVoid,
 } from "./passageStorage";
 import { TemplatePassageOverlay } from "./TemplatePassageOverlay";
+import { PASSAGE_FIELD_HINTS, passageFieldLabel } from "./passageFieldCopy";
 import { getStorageTypeStyle, normalizeBinTypeMap, normalizeStorageType, TEMPLATE_STORAGE_TYPE_OPTIONS } from "../../utils/storageTypes";
 import { StorageTypeIcon } from "../../utils/storageTypeIcons";
 
@@ -212,6 +215,9 @@ export function RackPreview({
               <clipPath id="rack-content-clip">
                 <rect x={ox} y={contentAreaY} width={contentW} height={contentAreaH} />
               </clipPath>
+              <pattern id="template-passage-hatch" width="8" height="8" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+                <line x1="0" y1="0" x2="0" y2="8" stroke="#cbd5e1" strokeWidth="2" />
+              </pattern>
             </defs>
             <g filter="url(#rack-shadow)">
               {/* Uprights: from floor up to bottom of top-level row only; top level stays open on the sides */}
@@ -233,27 +239,29 @@ export function RackPreview({
               ))}
               {voidPixelHeight > 0 && (
                 <g aria-label="Przejazd pod regałem">
-                  <rect
-                    x={ox}
-                    y={voidBandY}
-                    width={contentW}
-                    height={Math.max(1, voidPixelHeight - pad)}
-                    fill="#cbd5e1"
-                    stroke="#64748b"
-                    strokeWidth={2}
-                    strokeDasharray="6 4"
-                  />
-                  <text
-                    x={ox + contentW / 2}
-                    y={voidBandY + Math.max(1, voidPixelHeight - pad) / 2}
-                    textAnchor="middle"
-                    dominantBaseline="middle"
-                    fontSize={Math.min(20, Math.max(11, voidPixelHeight * 0.35))}
-                    fontWeight={700}
-                    fill="#334155"
-                  >
-                    PRZEJAZD
-                  </text>
+                  {(() => {
+                    const bandH = Math.max(1, voidPixelHeight - pad);
+                    const beam = Math.max(1.5, Math.min(4, bandH * 0.08));
+                    return (
+                      <>
+                        <rect x={ox} y={voidBandY} width={contentW} height={bandH} fill="url(#template-passage-hatch)" />
+                        <rect x={ox} y={voidBandY} width={contentW} height={beam} fill="#334155" />
+                        <rect x={ox} y={voidBandY + bandH - beam} width={contentW} height={beam} fill="#334155" />
+                        <text
+                          x={ox + contentW / 2}
+                          y={voidBandY + bandH / 2}
+                          textAnchor="middle"
+                          dominantBaseline="middle"
+                          fontSize={Math.min(18, Math.max(10, bandH * 0.28))}
+                          fontWeight={700}
+                          fill="#475569"
+                          letterSpacing="0.18em"
+                        >
+                          PRZEJAZD
+                        </text>
+                      </>
+                    );
+                  })()}
                 </g>
               )}
               <g clipPath="url(#rack-content-clip)">
@@ -623,6 +631,13 @@ export function TemplateCreator({ onSave, initialTemplate, onCancelEdit, onSaveE
   }, [levels, levelConfigForSave, width_cm, depth_cm, height_cm, defaultPassages]);
 
   const handleSave = async () => {
+    try {
+      assertAtMostOneEnabledPassage(defaultPassages);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : SINGLE_ENABLED_PASSAGE_ERROR;
+      window.alert(msg);
+      return;
+    }
     const trimmed = name.trim() || "Własny regał";
     const rowIdVal = rowId.trim() || "A";
     const L = Math.max(1, Math.min(20, levels));
@@ -666,18 +681,17 @@ export function TemplateCreator({ onSave, initialTemplate, onCancelEdit, onSaveE
     setSaveSuccess(false);
     try {
       if (isEdit && initialTemplate && onSaveEdit) {
-        // Always persist template first without touching instances.
-        await Promise.resolve(onSaveEdit(initialTemplate.id, payload, false));
         const instanceCount = (layout?.racks ?? []).filter((r) => r.templateId === initialTemplate.id).length;
         if (instanceCount > 0) {
+          // Dialog first — persist only after user chooses.
           setInstanceUpdateDialog({
             templateId: initialTemplate.id,
             template: payload,
             instanceCount,
           });
-          setSaveSuccess(true);
           return;
         }
+        await Promise.resolve(onSaveEdit(initialTemplate.id, payload, false));
         setSaveSuccess(true);
         setTimeout(() => {
           onCancelEdit?.();
@@ -703,6 +717,7 @@ export function TemplateCreator({ onSave, initialTemplate, onCancelEdit, onSaveE
         onSaveEdit(instanceUpdateDialog.templateId, instanceUpdateDialog.template, true)
       );
       setInstanceUpdateDialog(null);
+      setSaveSuccess(true);
       onCancelEdit?.();
     } catch (e) {
       console.error("Update template instances failed:", e);
@@ -711,10 +726,41 @@ export function TemplateCreator({ onSave, initialTemplate, onCancelEdit, onSaveE
     }
   };
 
-  const dismissUpdateInstances = () => {
-    setInstanceUpdateDialog(null);
-    onCancelEdit?.();
+  const dismissUpdateInstances = async () => {
+    if (!instanceUpdateDialog || !onSaveEdit) {
+      setInstanceUpdateDialog(null);
+      return;
+    }
+    setSaving(true);
+    try {
+      await Promise.resolve(
+        onSaveEdit(instanceUpdateDialog.templateId, instanceUpdateDialog.template, false)
+      );
+      setInstanceUpdateDialog(null);
+      setSaveSuccess(true);
+      onCancelEdit?.();
+    } catch (e) {
+      console.error("Save template only failed:", e);
+    } finally {
+      setSaving(false);
+    }
   };
+
+  const cancelInstanceUpdateDialog = () => {
+    setInstanceUpdateDialog(null);
+  };
+
+  useEffect(() => {
+    if (!instanceUpdateDialog) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        setInstanceUpdateDialog(null);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [instanceUpdateDialog]);
 
   const labelOptionsForPreview: RackTemplateLabelOptions = useMemo(() => ({
     namingStrategy: namingStrategy === "manual" ? "manual" : namingStrategy === "rack-index" ? "rack-index" : namingStrategy === "custom" ? "custom" : "pattern",
@@ -854,7 +900,7 @@ export function TemplateCreator({ onSave, initialTemplate, onCancelEdit, onSaveE
               const val = locationsPerLevel[levelIndex] ?? 1;
               return (
                 <div key={levelNumber} className="flex items-center gap-2">
-                  <span className="text-slate-600 font-medium w-[4.5rem] shrink-0 text-sm">Poziom {levelNumber}</span>
+                  <span className="text-slate-600 font-medium min-w-[9.5rem] shrink-0 text-sm">Poziom konstrukcyjny {levelNumber}</span>
                   <input
                     type="number"
                     min={1}
@@ -1053,19 +1099,23 @@ export function TemplateCreator({ onSave, initialTemplate, onCancelEdit, onSaveE
       <DesignerAccordion title="PRZEJAZDY" open={accordionOpen.przejazdy} onToggle={() => toggleAccordion("przejazdy")}>
         <div className="space-y-3">
           <p className="text-slate-500 text-xs leading-snug">
-            Jeden przejazd strukturalny na regał. Wysokość od posadzki wyznacza strefę bez
+            Jeden przejazd na regał. Wysokość wolnej przestrzeni od posadzki wyznacza strefę bez
             lokalizacji magazynowych. Edytuj tutaj lub na widoku z góry (po prawej).
           </p>
-          {defaultPassages.map((p, idx) => (
+          {defaultPassages.map((p, idx) => {
+            const along = Math.max(1, snapCm(depth_cm));
+            const endCm = Number(p.offset_along_cm) + Number(p.width_cm);
+            const geometryInvalid = endCm > along + 0.01 || Number(p.width_cm) < 1 || Number(p.offset_along_cm) < 0;
+            return (
             <div
               key={idx}
-              className={`flex flex-wrap items-end gap-2 rounded-lg border bg-white px-2 py-2 cursor-pointer ${
+              className={`flex flex-wrap items-start gap-3 rounded-lg border bg-white px-2 py-2 cursor-pointer ${
                 selectedPassageIndex === idx ? "border-cyan-500 ring-1 ring-cyan-500/30" : "border-slate-200/70"
-              }`}
+              } ${geometryInvalid ? "border-red-400 ring-1 ring-red-300" : ""}`}
               onClick={() => setSelectedPassageIndex(idx)}
             >
-              <label className="text-xs text-slate-500">
-                Położenie (cm)
+              <label className={`text-xs ${geometryInvalid && endCm > along ? "text-red-700" : "text-slate-500"}`}>
+                {passageFieldLabel("offset")}
                 <input
                   type="number"
                   min={0}
@@ -1074,11 +1124,15 @@ export function TemplateCreator({ onSave, initialTemplate, onCancelEdit, onSaveE
                     const v = Math.max(0, Number(e.target.value) || 0);
                     setDefaultPassages((prev) => prev.map((x, i) => (i === idx ? { ...x, offset_along_cm: v } : x)));
                   }}
-                  className="mt-0.5 block w-24 rounded border border-slate-200 px-2 py-1 text-sm"
+                  className={`mt-0.5 block w-36 rounded border px-2 py-1 text-sm ${
+                    geometryInvalid ? "border-red-400 bg-red-50" : "border-slate-200"
+                  }`}
+                  aria-invalid={geometryInvalid}
                 />
+                <span className="mt-0.5 block text-[10px] text-slate-400 leading-snug">{PASSAGE_FIELD_HINTS.offset}</span>
               </label>
-              <label className="text-xs text-slate-500">
-                Szerokość (cm)
+              <label className={`text-xs ${geometryInvalid ? "text-red-700" : "text-slate-500"}`}>
+                {passageFieldLabel("width")}
                 <input
                   type="number"
                   min={1}
@@ -1087,11 +1141,15 @@ export function TemplateCreator({ onSave, initialTemplate, onCancelEdit, onSaveE
                     const v = Math.max(1, Number(e.target.value) || 100);
                     setDefaultPassages((prev) => prev.map((x, i) => (i === idx ? { ...x, width_cm: v } : x)));
                   }}
-                  className="mt-0.5 block w-24 rounded border border-slate-200 px-2 py-1 text-sm"
+                  className={`mt-0.5 block w-28 rounded border px-2 py-1 text-sm ${
+                    geometryInvalid ? "border-red-400 bg-red-50" : "border-slate-200"
+                  }`}
+                  aria-invalid={geometryInvalid}
                 />
+                <span className="mt-0.5 block text-[10px] text-slate-400 leading-snug">{PASSAGE_FIELD_HINTS.width}</span>
               </label>
               <label className="text-xs text-slate-500">
-                Wysokość przejazdu (cm)
+                {passageFieldLabel("clearance")}
                 <input
                   type="number"
                   min={0}
@@ -1105,10 +1163,11 @@ export function TemplateCreator({ onSave, initialTemplate, onCancelEdit, onSaveE
                       prev.map((x, i) => (i === idx ? { ...x, clearance_height_cm: v } : x))
                     );
                   }}
-                  className="mt-0.5 block w-28 rounded border border-slate-200 px-2 py-1 text-sm"
+                  className="mt-0.5 block w-32 rounded border border-slate-200 px-2 py-1 text-sm"
                 />
+                <span className="mt-0.5 block text-[10px] text-slate-400 leading-snug max-w-[14rem]">{PASSAGE_FIELD_HINTS.clearance}</span>
               </label>
-              <label className="flex items-center gap-1 text-xs text-slate-500 pb-1">
+              <label className="flex items-center gap-1 text-xs text-slate-500 pb-1 self-end">
                 <input
                   type="checkbox"
                   checked={p.enabled !== false}
@@ -1121,7 +1180,7 @@ export function TemplateCreator({ onSave, initialTemplate, onCancelEdit, onSaveE
               </label>
               <button
                 type="button"
-                className="text-xs text-red-600 hover:underline pb-1"
+                className="text-xs text-red-600 hover:underline pb-1 self-end"
                 onClick={(e) => {
                   e.stopPropagation();
                   setDefaultPassages((prev) => prev.filter((_, i) => i !== idx));
@@ -1130,8 +1189,14 @@ export function TemplateCreator({ onSave, initialTemplate, onCancelEdit, onSaveE
               >
                 Usuń
               </button>
+              {geometryInvalid ? (
+                <p className="w-full text-[11px] font-semibold text-red-700">
+                  Przejazd wychodzi poza głębokość regału ({along} cm). Popraw początek lub szerokość.
+                </p>
+              ) : null}
             </div>
-          ))}
+            );
+          })}
           {defaultPassages.length === 0 ? (
             <button
               type="button"
@@ -1150,7 +1215,7 @@ export function TemplateCreator({ onSave, initialTemplate, onCancelEdit, onSaveE
             </button>
           ) : (
             <p className="text-xs text-slate-500">
-              Limit: jeden przejazd strukturalny na regał. Usuń istniejący, aby dodać inny.
+              Limit: jeden przejazd na regał. Usuń istniejący, aby dodać inny.
             </p>
           )}
         </div>
@@ -1279,9 +1344,30 @@ export function TemplateCreator({ onSave, initialTemplate, onCancelEdit, onSaveE
         </div>
       </footer>
       {instanceUpdateDialog ? (
-        <div className="absolute inset-0 z-20 flex items-center justify-center bg-black/40 p-4">
-          <div className="w-full max-w-md rounded-2xl bg-white shadow-2xl border border-slate-200 p-5 space-y-4">
-            <h4 className="text-base font-semibold text-slate-800">Szablon został zmieniony</h4>
+        <div
+          className="absolute inset-0 z-20 flex items-center justify-center bg-black/40 p-4"
+          role="dialog"
+          aria-modal="true"
+          onClick={cancelInstanceUpdateDialog}
+          onKeyDown={(e) => {
+            if (e.key === "Escape") cancelInstanceUpdateDialog();
+          }}
+        >
+          <div
+            className="w-full max-w-md rounded-2xl bg-white shadow-2xl border border-slate-200 p-5 space-y-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-2">
+              <h4 className="text-base font-semibold text-slate-800">Zapisać zmiany szablonu?</h4>
+              <button
+                type="button"
+                aria-label="Zamknij"
+                className="rounded-lg p-1.5 text-slate-500 hover:bg-slate-100"
+                onClick={cancelInstanceUpdateDialog}
+              >
+                ✕
+              </button>
+            </div>
             <p className="text-sm text-slate-600 leading-relaxed">
               Zaktualizować wszystkie regały korzystające z tego szablonu?
               Na planie: <span className="font-semibold tabular-nums">{instanceUpdateDialog.instanceCount}</span>.
@@ -1291,7 +1377,15 @@ export function TemplateCreator({ onSave, initialTemplate, onCancelEdit, onSaveE
               <button
                 type="button"
                 disabled={saving}
-                onClick={dismissUpdateInstances}
+                onClick={cancelInstanceUpdateDialog}
+                className="px-4 py-2.5 rounded-xl bg-white text-slate-700 font-semibold hover:bg-slate-50 border border-slate-200 disabled:opacity-50"
+              >
+                Anuluj
+              </button>
+              <button
+                type="button"
+                disabled={saving}
+                onClick={() => void dismissUpdateInstances()}
                 className="px-4 py-2.5 rounded-xl bg-slate-100 text-slate-700 font-semibold hover:bg-slate-200 border border-slate-200 disabled:opacity-50"
               >
                 Tylko zapisz szablon

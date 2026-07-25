@@ -13,6 +13,7 @@ import {
   countPassageVoidLevelsForRack,
   storageLevelConfigAfterVoid,
 } from "./passageStorage";
+import { passageVoidSvgProps } from "./PassageVoidBand";
 import { getStorageTypeStyle, getStorageTypeLabel, normalizeStorageType } from "../../utils/storageTypes";
 import { resolveWarehouseLocation } from "../../utils/resolvedWarehouseLocation";
 import { StorageTypeIcon } from "../../utils/storageTypeIcons";
@@ -161,10 +162,11 @@ export function RackSideViewGrid({
   // Level then beam; lowest level has base beam (grey). Total = L bin rows + L beams.
   const beamHeight = embeddedPreview ? 28 : BEAM_HEIGHT_VIEWBOX;
   const binRowHeight = Math.max(embeddedPreview ? 52 : 20, L > 0 ? (storageAreaH - L * beamHeight) / L : storageAreaH);
-  // Top of bin row for level (level L-1 at top, level 0 at bottom)
-  const levelToBinRowY = (level: number) => contentAreaY + (L - 1 - level) * (binRowHeight + beamHeight);
-  // Top of beam (below bins); one beam per level (orange above floor, grey base at bottom)
-  const levelToBeamY = (level: number) => levelToBinRowY(level) + binRowHeight;
+  // Top of bin row for level (level L-1 at top, level 0 at bottom) — array index in storage config
+  const levelToBinRowY = (storageIdx: number) => contentAreaY + (L - 1 - storageIdx) * (binRowHeight + beamHeight);
+  const levelToBeamY = (storageIdx: number) => levelToBinRowY(storageIdx) + binRowHeight;
+  const structuralLevelIndex = (storageIdx: number) => storageIdx + voidLevelCount;
+  const constructionLevelNumber = (storageIdx: number) => structuralLevelIndex(storageIdx) + 1;
 
   // Posts stop exactly at lowest beam (base beam). Height = levels container height.
   const structureHeight = L > 0 ? L * (binRowHeight + beamHeight) : 0;
@@ -190,6 +192,9 @@ export function RackSideViewGrid({
           <filter id="rack-beam-badge-shadow" x="-10%" y="-10%" width="120%" height="120%">
             <feDropShadow dx="0" dy="1" stdDeviation="1" floodColor="#000" floodOpacity="0.15" />
           </filter>
+          <pattern id="passage-hatch" width="8" height="8" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+            <line x1="0" y1="0" x2="0" y2="8" stroke="#cbd5e1" strokeWidth="2" />
+          </pattern>
           <clipPath id="rack-sideview-clip">
             <rect x={ox} y={contentAreaY} width={contentW} height={contentAreaH} />
           </clipPath>
@@ -224,15 +229,15 @@ export function RackSideViewGrid({
               const beamY = levelToBeamY(lev);
               const isBaseBeam = lev === 0;
               const beamFill = isBaseBeam ? BEAM_BASE_GREY : BEAM_ORANGE;
-              const rawLoadKg = levelLoadKg[lev] ?? 0;
+              const rawLoadKg = levelLoadKg[structuralLevelIndex(lev)] ?? levelLoadKg[lev] ?? 0;
               const loadKg = Number.isFinite(rawLoadKg) ? rawLoadKg : 0;
               const maxKg = effectiveMaxKg;
               const loadColor = hasLevelMaxLoad ? levelLoadColor(loadKg, maxKg) : "#64748b";
               const exceeded = hasLevelMaxLoad && loadKg > maxKg;
               const addresses = Array.from({ length: locs }, (_, seg) => {
-                const b = getBinAt(rack, lev, seg);
-                if (!b) return `L${lev + 1}-${seg + 1}`;
-                return resolveWarehouseLocation(rack, b, layout ?? null).label || `L${lev + 1}-${seg + 1}`;
+                const b = getBinAt(rack, structuralLevelIndex(lev), seg);
+                if (!b) return `L${constructionLevelNumber(lev)}-${seg + 1}`;
+                return resolveWarehouseLocation(rack, b, layout ?? null).label || `L${constructionLevelNumber(lev)}-${seg + 1}`;
               });
               const weightText = hasLevelMaxLoad
                 ? `${Math.round(loadKg)} / ${maxKg} kg${exceeded ? " ⚠" : ""}`
@@ -265,7 +270,7 @@ export function RackSideViewGrid({
                         const rectX = slotCenterX - labelW / 2;
                         const rectY = beamCenterY - labelH / 2;
                         const isSelectedAddr =
-                          selectedLocation?.level_index === lev && selectedLocation?.segment_index === seg;
+                          selectedLocation?.level_index === structuralLevelIndex(lev) && selectedLocation?.segment_index === seg;
                         return (
                           <g key={`beam-${lev}-${seg}`} filter="url(#rack-beam-badge-shadow)">
                             <rect
@@ -330,7 +335,7 @@ export function RackSideViewGrid({
                       fill="#fff"
                       fontFamily="system-ui, sans-serif"
                     >
-                      Level load exceeded
+                      Przekroczono obciążenie poziomu
                     </text>
                   )}
                 </g>
@@ -358,28 +363,50 @@ export function RackSideViewGrid({
           </g>
           {voidBandH > 0 && (
             <g aria-label="Przejazd pod regałem">
-              <rect
-                x={margin}
-                y={voidBandY}
-                width={viewBoxW - 2 * margin}
-                height={voidBandH}
-                fill="#cbd5e1"
-                stroke="#64748b"
-                strokeWidth={2}
-                strokeDasharray="6 4"
-              />
-              <text
-                x={viewBoxW / 2}
-                y={voidBandY + voidBandH / 2}
-                textAnchor="middle"
-                dominantBaseline="middle"
-                fontSize={Math.min(22, Math.max(12, voidBandH * 0.35))}
-                fontWeight={700}
-                fill="#334155"
-                fontFamily="system-ui, sans-serif"
-              >
-                PRZEJAZD
-              </text>
+              {(() => {
+                const v = passageVoidSvgProps({
+                  x: margin,
+                  y: voidBandY,
+                  width: viewBoxW - 2 * margin,
+                  height: voidBandH,
+                });
+                return (
+                  <>
+                    <rect {...v.outer} fill="url(#passage-hatch)" stroke="none" />
+                    <rect {...v.topBeam} fill="#334155" />
+                    <rect {...v.bottomBeam} fill="#334155" />
+                    <line
+                      x1={v.outer.x}
+                      y1={v.outer.y + v.topBeam.height + 1}
+                      x2={v.outer.x + v.outer.width}
+                      y2={v.outer.y + v.topBeam.height + 1}
+                      stroke="#94a3b8"
+                      strokeWidth={1}
+                    />
+                    <line
+                      x1={v.outer.x}
+                      y1={v.outer.y + v.outer.height - v.bottomBeam.height - 1}
+                      x2={v.outer.x + v.outer.width}
+                      y2={v.outer.y + v.outer.height - v.bottomBeam.height - 1}
+                      stroke="#94a3b8"
+                      strokeWidth={1}
+                    />
+                    <text
+                      x={v.label.x}
+                      y={v.label.y}
+                      textAnchor="middle"
+                      dominantBaseline="middle"
+                      fontSize={v.label.fontSize}
+                      fontWeight={700}
+                      fill="#475569"
+                      letterSpacing="0.18em"
+                      fontFamily="system-ui, sans-serif"
+                    >
+                      PRZEJAZD
+                    </text>
+                  </>
+                );
+              })()}
             </g>
           )}
           {/* Bin area: LevelRow content (boxes with location labels + occupancy) */}
@@ -405,18 +432,19 @@ export function RackSideViewGrid({
 
               return Array.from({ length: locs }, (_, vis) => {
                 const bin = segmentIndexForVisualSlot(vis, locs, binDirectionRtl);
-                const binState = getBinAt(rack, lev, bin);
+                const structuralLev = structuralLevelIndex(lev);
+                const binState = getBinAt(rack, structuralLev, bin);
                 const vol = binState ? binVolumeDm3(binState, rack) : 0;
                 const used = binState ? binUsedVolumeDm3(binState) : 0;
                 const pct = vol > 0 ? (used / vol) * 100 : 0;
-                const quantity = binItemCounts?.[`${lev}-${bin}`] ?? 0;
-                const uniqueCount = binUniqueProductCounts?.[`${lev}-${bin}`] ?? 0;
+                const quantity = binItemCounts?.[`${structuralLev}-${bin}`] ?? binItemCounts?.[`${lev}-${bin}`] ?? 0;
+                const uniqueCount = binUniqueProductCounts?.[`${structuralLev}-${bin}`] ?? binUniqueProductCounts?.[`${lev}-${bin}`] ?? 0;
                 const storageType =
                   binState != null && layout
                     ? resolveWarehouseLocation(rack, binState, layout).storageType
                     : normalizeStorageType(binState?.storage_type);
                 const storageTypeLabel = getStorageTypeLabel(storageType);
-                const isSelected = selectedLocation?.level_index === lev && selectedLocation?.segment_index === bin;
+                const isSelected = selectedLocation?.level_index === structuralLev && selectedLocation?.segment_index === bin;
                 const typeHighlightActive = highlightedStorageType != null;
                 const isSameTypeHighlighted = highlightedStorageType === storageType;
                 const x = ox + vis * cellWLev + pad;
@@ -441,11 +469,11 @@ export function RackSideViewGrid({
                   : Math.max(8, Math.min(14, w * 0.26, (h - 24) * 0.2) * scale);
                 const fontSizeSub = embeddedPreview ? Math.max(11, fontSize - 2) : Math.max(7, fontSize - 2);
                 const showCompactPreview =
-                  embeddedPreview && (binItemCounts?.[`${lev}-${bin}`] ?? quantity) === 0;
+                  embeddedPreview && (binItemCounts?.[`${structuralLev}-${bin}`] ?? binItemCounts?.[`${lev}-${bin}`] ?? quantity) === 0;
                 const binLabel =
                   binState != null
-                    ? resolveWarehouseLocation(rack, binState, layout ?? null).label || `L${lev + 1}-${bin + 1}`
-                    : `L${lev + 1}-${bin + 1}`;
+                    ? resolveWarehouseLocation(rack, binState, layout ?? null).label || `L${constructionLevelNumber(lev)}-${bin + 1}`
+                    : `L${constructionLevelNumber(lev)}-${bin + 1}`;
                 const binUuidNorm = (
                   (binState as { locationUUID?: string; location_uuid?: string } | undefined)?.locationUUID ??
                   (binState as { location_uuid?: string } | undefined)?.location_uuid ??
@@ -462,7 +490,7 @@ export function RackSideViewGrid({
                 return (
                   <g
                     key={`${lev}-${bin}`}
-                    onClick={() => onBinClick?.(lev, bin)}
+                    onClick={() => onBinClick?.(structuralLev, bin)}
                     style={{ cursor: onBinClick ? "pointer" : undefined }}
                     aria-label={`Bin ${binLabel}`}
                   >

@@ -76,11 +76,22 @@ def _reserve_keys_from_bin_type_map(mapping: dict[str, str] | None) -> list[str]
     return keys or None
 
 
-def _default_passages_to_json(passages: list | None) -> str | None:
+def _default_passages_to_json(passages: list | None, *, enforce_single_enabled: bool = True) -> str | None:
     if passages is None:
         return None
     if not isinstance(passages, list) or len(passages) == 0:
         return None
+    if enforce_single_enabled:
+        from .warehouse_layout.single_passage import (
+            SINGLE_ENABLED_PASSAGE_ERROR,
+            MultipleEnabledPassagesError,
+            assert_at_most_one_enabled_passage,
+        )
+
+        try:
+            assert_at_most_one_enabled_passage(passages)
+        except MultipleEnabledPassagesError:
+            raise HTTPException(status_code=400, detail=SINGLE_ENABLED_PASSAGE_ERROR)
     out: list[dict] = []
     for raw in passages:
         if isinstance(raw, dict):
@@ -128,7 +139,7 @@ def _default_passages_from_json(raw: str | None) -> list[dict] | None:
         return None
     if not isinstance(payload, list) or len(payload) == 0:
         return None
-    serialized = _default_passages_to_json(payload)
+    serialized = _default_passages_to_json(payload, enforce_single_enabled=False)
     if not serialized:
         return None
     try:

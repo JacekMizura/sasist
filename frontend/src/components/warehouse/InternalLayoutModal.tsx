@@ -15,12 +15,12 @@ import {
 import { getStorageTypeStyle, normalizeStorageType, STORAGE_TYPE_OPTIONS } from "../../utils/storageTypes";
 import { resolveWarehouseLocation } from "../../utils/resolvedWarehouseLocation";
 import { StorageTypeIcon } from "../../utils/storageTypeIcons";
-import { FitToContainer } from "./FitToContainer";
 import {
   countPassageVoidLevelsForRack,
   getPassageVoidHeightCm,
   sumVoidLevelHeightsCm,
 } from "./passageStorage";
+import { PassageVoidBand } from "./PassageVoidBand";
 
 export type InternalLayoutModalProps = {
   layout?: LayoutState | null;
@@ -42,12 +42,16 @@ function getInitialLevels(rack: RackState): InternalLevel[] {
     return withWidth?.width_cm;
   })();
   const defaultWidthCm = fallbackBinWidth;
+  const voidOffset = countPassageVoidLevelsForRack(rack);
   if (rack.internal_structure?.levels?.length) {
     const defaultHeightCm = rack.height_cm ? Math.floor(rack.height_cm / rack.levels) : DEFAULT_BIN_HEIGHT_CM;
     return rack.internal_structure.levels.map((l, levelIndex) => ({
       height_cm: l.height_cm,
       locations: l.locations.map((loc, segmentIndex) => {
-        const bin = rack.bins.find((b) => b.level_index === levelIndex && b.segment_index === segmentIndex);
+        const structuralLevelIndex = levelIndex + voidOffset;
+        const bin =
+          rack.bins.find((b) => b.level_index === structuralLevelIndex && b.segment_index === segmentIndex) ??
+          rack.bins.find((b) => b.level_index === levelIndex && b.segment_index === segmentIndex);
         return {
         // Prefer rack bin width (template-propagated) during initialization.
         width_cm: bin?.width_cm ?? defaultWidthCm ?? loc.width_cm ?? DEFAULT_BIN_WIDTH_CM,
@@ -190,16 +194,10 @@ export function InternalLayoutModal({ layout = null, rack, warehouseLabel, onSav
   const heightExceeded = totalHeightCm > rack.height_cm;
   const hasAnyLevelWidthExceeded = levels.some((lev) => levelWidthSum(lev) > rackWidthLimit + 0.01);
   const valid = !heightExceeded && !hasAnyLevelWidthExceeded;
-  const rackPreviewMeasureKey = useMemo(
-    () =>
-      levels
-        .map((l) => `${l.locations.length}:${Math.round(l.height_cm)}:${l.locations.map((x) => Math.round(Number(x.width_cm ?? 0))).join(",")}`)
-        .join("|"),
-    [levels]
-  );
   const maxLocsPerLevel = levels.length ? Math.max(...levels.map((l) => l.locations.length)) : 1;
-  /** Shared natural width for every level so the rack bbox is a clean rectangle. */
-  const rackNaturalWidthPx = Math.max(640, maxLocsPerLevel * 220);
+  /** Editor fills available width — no miniaturization. */
+  const rackEditorWidthClass = "w-full min-w-0";
+  void maxLocsPerLevel;
   const addLevel = () => setLevels((prev) => [...prev, { height_cm: DEFAULT_BIN_HEIGHT_CM, locations: [{ width_cm: rackWidthCm ?? DEFAULT_BIN_WIDTH_CM, depth_cm: rack.length_cm ?? DEFAULT_BIN_DEPTH_CM, height_cm: DEFAULT_BIN_HEIGHT_CM }] }]);
   const removeLevel = (i: number) => setLevels((prev) => prev.filter((_, idx) => idx !== i));
   const setLevelHeight = (i: number, h: number) => setLevels((prev) => prev.map((l, idx) => (idx === i ? { ...l, height_cm: snapCm(h) } : l)));
@@ -254,25 +252,33 @@ export function InternalLayoutModal({ layout = null, rack, warehouseLabel, onSav
     });
 
     const newBins: BinState[] = [];
+    const constructionOffset = voidLevelCount;
 
     levels.forEach((lev, levelIndex) => {
-      const levelNumber = levelIndex + 1;
+      const structuralLevelIndex = levelIndex + constructionOffset;
+      const constructionLevelNumber = structuralLevelIndex + 1;
+      const storageAddressLevel = levelIndex + 1;
       lev.locations.forEach((loc, segmentIndex) => {
-        const key = binKey(levelIndex, segmentIndex);
-        const existing = existingByKey.get(key);
-        const generatedLabel = `${getColumnLetter(segmentIndex)}-${levelNumber}`;
-        const customName = String(customNames[key] ?? "").trim();
+        const key = binKey(structuralLevelIndex, segmentIndex);
+        const existing = existingByKey.get(key) ?? existingByKey.get(binKey(levelIndex, segmentIndex));
+        const generatedLabel = `${getColumnLetter(segmentIndex)}-${storageAddressLevel}`;
+        const customName = String(customNames[key] ?? customNames[binKey(levelIndex, segmentIndex)] ?? "").trim();
         const width_cm = loc?.width_cm ?? existing?.width_cm ?? DEFAULT_BIN_WIDTH_CM;
         const depth_cm = loc?.depth_cm ?? existing?.depth_cm ?? rack.length_cm ?? DEFAULT_BIN_DEPTH_CM;
         const height_cm = loc?.height_cm ?? existing?.height_cm ?? lev.height_cm ?? DEFAULT_BIN_HEIGHT_CM;
         const volume_dm3 = binVolumeFromDimensions(width_cm, depth_cm, height_cm);
         const used = existing?.used_volume_dm3 ?? existing?.current_load_dm3 ?? 0;
-        const storageType = normalizeStorageType(storageTypeOverrides[key] ?? existing?.storage_type ?? "primary");
+        const storageType = normalizeStorageType(
+          storageTypeOverrides[key] ??
+            storageTypeOverrides[binKey(levelIndex, segmentIndex)] ??
+            existing?.storage_type ??
+            "primary"
+        );
 
         newBins.push({
           id: existing?.id,
           label: customName || generatedLabel,
-          level_index: levelIndex,
+          level_index: structuralLevelIndex,
           segment_index: segmentIndex,
           volume_dm3,
           current_load_dm3: used,
@@ -280,15 +286,16 @@ export function InternalLayoutModal({ layout = null, rack, warehouseLabel, onSav
           width_cm,
           depth_cm,
           height_cm,
-          location_id: generatedLabel,
+          location_id: customName || generatedLabel,
           locationUUID:
             existing?.locationUUID ??
             (typeof crypto !== "undefined" && crypto.randomUUID
               ? crypto.randomUUID()
-              : `loc-${Date.now()}-${levelIndex}-${segmentIndex}-${Math.random().toString(36).slice(2, 9)}`),
-          barcode_data: generatedLabel,
+              : `loc-${Date.now()}-${structuralLevelIndex}-${segmentIndex}-${Math.random().toString(36).slice(2, 9)}`),
+          barcode_data: customName || generatedLabel,
           storage_type: storageType,
         });
+        void constructionLevelNumber;
       });
     });
 
@@ -354,7 +361,7 @@ export function InternalLayoutModal({ layout = null, rack, warehouseLabel, onSav
         )}
         <div
           ref={contentScrollRef}
-          className="flex min-h-0 flex-1 flex-col overflow-hidden p-4"
+          className="flex min-h-0 flex-1 flex-col overflow-auto p-4"
           dir="ltr"
           style={{ direction: "ltr" }}
         >
@@ -365,45 +372,50 @@ export function InternalLayoutModal({ layout = null, rack, warehouseLabel, onSav
           >
             + Dodaj poziom
           </button>
-          <FitToContainer measureKey={rackPreviewMeasureKey}>
             <div
-              className="flex flex-col gap-0"
+              className={`flex min-w-full flex-col gap-0 ${rackEditorWidthClass}`}
               dir="ltr"
-              style={{ direction: "ltr", width: rackNaturalWidthPx }}
+              style={{ direction: "ltr" }}
             >
-            {/* Levels rendered top-to-bottom: highest level (Poziom L) at top, Poziom 1 at bottom */}
+            {/* Levels: highest construction level at top — full width, scroll when overflow */}
             {[...levels].reverse().map((lev, revIdx) => {
               const levIdx = levels.length - 1 - revIdx;
-              const levelNumber = levIdx + 1;
+              const structuralLevelIndex = levIdx + voidLevelCount;
+              const constructionLevelNumber = structuralLevelIndex + 1;
+              const storageAddressLevel = levIdx + 1;
               const levelTotalWidth = levelWidthSum(lev);
               const levelWidthExceeded = levelTotalWidth > rackWidthLimit + 0.01;
               const count = Math.max(1, lev.locations.length);
-              const rowNaturalW = rackNaturalWidthPx;
               return (
                 <div
                   key={levIdx}
-                  className={`flex min-h-0 flex-col border-b-2 first:border-t-2 first:border-t-slate-300 ${
+                  className={`flex min-h-[200px] w-full min-w-0 flex-1 flex-col border-b-2 first:border-t-2 first:border-t-slate-300 ${
                     levelWidthExceeded
                       ? "border-b-red-400 bg-red-50/60"
                       : `bg-slate-50/50 ${revIdx < levels.length - 1 ? "border-b-orange-500" : "border-b-slate-300"}`
                   }`}
                   dir="ltr"
-                  style={{
-                    direction: "ltr",
-                    width: rowNaturalW,
-                  }}
+                  style={{ direction: "ltr" }}
                 >
-                  <div className="flex shrink-0 items-center gap-3 border-b border-slate-200 bg-white/80 px-3 py-2">
-                    <span className="text-xs font-bold text-slate-700">Poziom {levelNumber}</span>
-                    <label className="flex items-center gap-1 text-[10px] text-slate-500">
-                      Wys. (cm):{" "}
+                  <div className="flex shrink-0 flex-wrap items-center gap-3 border-b border-slate-200 bg-white/80 px-3 py-2">
+                    <span className="text-xs font-bold text-slate-700">Poziom konstrukcyjny {constructionLevelNumber}</span>
+                    <span className="text-[10px] text-slate-500">
+                      Adres magazynowy: poziom {storageAddressLevel}
+                    </span>
+                    <label className={`flex items-center gap-1 text-[10px] ${heightExceeded ? "text-red-700 font-semibold" : "text-slate-500"}`}>
+                      Wys. poziomu (cm):{" "}
                       <input
                         type="number"
                         min={10}
                         step={10}
                         value={lev.height_cm}
                         onChange={(e) => setLevelHeight(levIdx, Number(e.target.value))}
-                        className="w-14 rounded border border-slate-200 bg-white px-1 py-0.5 text-xs"
+                        className={`w-14 rounded border px-1 py-0.5 text-xs ${
+                          heightExceeded
+                            ? "border-red-400 bg-red-50 ring-1 ring-red-300"
+                            : "border-slate-200 bg-white"
+                        }`}
+                        aria-invalid={heightExceeded}
                       />
                     </label>
                     <button
@@ -414,24 +426,30 @@ export function InternalLayoutModal({ layout = null, rack, warehouseLabel, onSav
                       Usuń poziom
                     </button>
                   </div>
-                  {/* vis = left→right; binIndex = data. direction + unicode-bidi isolate so flex main-start stays left (no RTL flex reversal). */}
                   <div
-                    className="flex flex-row flex-nowrap items-stretch justify-start gap-2 p-2"
+                    className="flex min-h-0 w-full min-w-0 flex-1 flex-row flex-nowrap items-stretch justify-start gap-2 overflow-x-auto p-2"
                     dir="ltr"
-                    style={{ direction: "ltr", unicodeBidi: "isolate", width: rowNaturalW }}
+                    style={{ direction: "ltr", unicodeBidi: "isolate" }}
                   >
                     {Array.from({ length: lev.locations.length }, (_, vis) => {
                       const locs = lev.locations.length;
                       const binIndex = segmentIndexForVisualSlot(vis, locs, binDirectionRtl);
                       const loc = lev.locations[binIndex]!;
-                      const binState = rackFromLayout.bins.find((b) => b.level_index === levIdx && b.segment_index === binIndex);
-                      const cellKey = binKey(levIdx, binIndex);
-                      const customName = customNames[cellKey]?.trim() ?? "";
+                      const binState =
+                        rackFromLayout.bins.find(
+                          (b) => b.level_index === structuralLevelIndex && b.segment_index === binIndex
+                        ) ??
+                        rackFromLayout.bins.find(
+                          (b) => b.level_index === levIdx && b.segment_index === binIndex
+                        );
+                      const cellKey = binKey(structuralLevelIndex, binIndex);
+                      const legacyKey = binKey(levIdx, binIndex);
+                      const customName = customNames[cellKey]?.trim() ?? customNames[legacyKey]?.trim() ?? "";
                       const resolved =
                         layout && binState
                           ? resolveWarehouseLocation(rackFromLayout, binState, layout)
                           : {
-                              label: `${getColumnLetter(binIndex)}-${levelNumber}`,
+                              label: `${getColumnLetter(binIndex)}-${storageAddressLevel}`,
                               storageType: normalizeStorageType(getBinStorageType(levIdx, binIndex)),
                             };
                       const displayLocationLabel = resolved.label;
@@ -447,11 +465,6 @@ export function InternalLayoutModal({ layout = null, rack, warehouseLabel, onSav
                       const widthCm = finitePositiveOrNull(loc.width_cm) ?? equalWidthFallback;
                       const totalWidth = lev.locations.reduce((sum, l) => sum + Math.max(0, Number(l.width_cm ?? 0)), 0);
                       const widthPct = totalWidth > 0 ? (Math.max(0, Number(widthCm ?? 0)) / totalWidth) * 100 : 100 / count;
-                      const gapPx = 8;
-                      const cellW = Math.max(
-                        180,
-                        (widthPct / 100) * rowNaturalW - (gapPx * (count - 1)) / count
-                      );
                       const depthCm = finitePositiveOrNull(loc.depth_cm) ?? finitePositiveOrNull(rack.length_cm) ?? null;
                       const heightCm = finitePositiveOrNull(loc.height_cm) ?? finitePositiveOrNull(lev.height_cm) ?? null;
                       const volDm3 = widthCm != null && depthCm != null && heightCm != null
@@ -467,10 +480,11 @@ export function InternalLayoutModal({ layout = null, rack, warehouseLabel, onSav
                       };
                       return (
                         <div
-                          key={`${levIdx}-${binIndex}`}
-                          className="relative flex h-[170px] shrink-0 flex-col overflow-hidden rounded-xl border p-2.5 shadow-sm"
+                          key={`${structuralLevelIndex}-${binIndex}`}
+                          className="relative flex min-h-[170px] min-w-[200px] flex-1 flex-col overflow-hidden rounded-xl border p-2.5 shadow-sm"
                           style={{
-                            width: cellW,
+                            flexBasis: `${widthPct}%`,
+                            flexGrow: 1,
                             boxSizing: "border-box",
                             backgroundColor: storageStyle.bg,
                             borderColor: storageStyle.border,
@@ -517,11 +531,9 @@ export function InternalLayoutModal({ layout = null, rack, warehouseLabel, onSav
                                       <span className="inline-flex items-center rounded-md bg-white/80 border border-slate-200 px-2 py-0.5 text-[16px] font-bold text-slate-800 max-w-full truncate leading-tight">
                                         {showPrimaryName}
                                       </span>
-                                      {customName && customName !== displayLocationLabel ? (
-                                        <span className="block mt-0.5 text-[10px] text-slate-500 font-mono">
-                                          {displayLocationLabel}
-                                        </span>
-                                      ) : null}
+                                      <span className="block mt-0.5 text-[10px] text-slate-500">
+                                        Lokalizacja: <span className="font-mono">{displayLocationLabel}</span>
+                                      </span>
                                     </button>
                                   )}
                                 </div>
@@ -535,8 +547,11 @@ export function InternalLayoutModal({ layout = null, rack, warehouseLabel, onSav
                                           inputMode="decimal"
                                           value={widthCm ?? ""}
                                           onChange={(e) => handleDimChange(setLocationWidth, e.target.value)}
-                                          className="w-[44px] rounded border border-slate-200 px-1 py-0.5 text-[10px] text-right bg-white"
+                                          className={`w-[44px] rounded border px-1 py-0.5 text-[10px] text-right bg-white ${
+                                            levelWidthExceeded ? "border-red-400 bg-red-50 ring-1 ring-red-300" : "border-slate-200"
+                                          }`}
                                           title="Szerokość (cm)"
+                                          aria-invalid={levelWidthExceeded}
                                         />
                                       ) : (
                                         <span className="inline-flex items-center rounded border border-slate-200 bg-slate-50 px-1 py-0.5 text-[10px] text-right text-slate-700 min-w-[44px] justify-end" title="Szerokość (cm), tylko do odczytu w trybie szablonu">
@@ -654,17 +669,14 @@ export function InternalLayoutModal({ layout = null, rack, warehouseLabel, onSav
               );
             })}
             {voidHeightCm > 0 && (
-              <div
-                className="flex min-h-[72px] flex-col items-center justify-center border-b-2 border-t-2 border-dashed border-slate-400 bg-slate-200/80"
-                style={{ width: rackNaturalWidthPx, minHeight: Math.max(72, Math.round(voidHeightCm * 0.6)) }}
-                aria-label="Przejazd pod regałem"
-              >
-                <span className="text-sm font-bold uppercase tracking-wide text-slate-700">Przejazd pod regałem</span>
-                <span className="text-[11px] text-slate-600">{Math.round(voidHeightCm)} cm · bez lokalizacji</span>
-              </div>
+              <PassageVoidBand
+                heightCm={voidHeightCm}
+                constructionLevelFrom={1}
+                constructionLevelTo={Math.max(1, voidLevelCount)}
+                className="w-full"
+              />
             )}
             </div>
-          </FitToContainer>
         </div>
         <div className="sticky bottom-0 flex shrink-0 gap-2 border-t border-slate-200 bg-white/95 px-4 py-3 backdrop-blur-sm">
           <button type="button" onClick={onClose} className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">

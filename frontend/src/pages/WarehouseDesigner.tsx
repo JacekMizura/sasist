@@ -5,16 +5,16 @@ import { putProductWarehouseSlotting } from "../api/productSlottingApi";
 import { warn } from "../utils/logger";
 import type { RackState, BinState, InternalStructure, LayoutState, RackTemplate, CustomRackTemplate, LevelConfigItem, CatalogItem, VisualElementType, VisualElementState, ColumnShape, DoorStyle, ZoneType, WarehouseProduct, RowContainer, EmptyRowSlot, WallElement, WallSide, RackType, StorageType } from "../types/warehouse";
 import { GRID_UNIT_CM, normalizePassageSource } from "../types/warehouse";
-import { rematerializeInheritedPassages } from "./WarehouseDesigner/passages/rackPassageGeometry";
 import {
-  countPassageVoidLevels,
-  getPassageVoidHeightCm,
-  passagesFromTemplateDefaults,
-  planBinRebuild,
   type StructureRemovalImpact,
 } from "../components/warehouse/passageStorage";
-import { prepareLayoutBinsForSave } from "../components/warehouse/prepareLayoutBinsForSave";
+import {
+  analyzeLayoutStructureRebuild,
+  analyzeTemplateInstanceRebuild,
+  recordStructureRebuild,
+} from "../components/warehouse/structureRebuildOrchestrator";
 import { StructureRebuildConfirmDialog } from "../components/warehouse/StructureRebuildConfirmDialog";
+import { layoutService } from "../services/layoutService";
 import { SelectionQuickToolbar } from "./WarehouseDesigner/SelectionQuickToolbar";
 import type { DesignerSelection } from "./WarehouseDesigner/designerSelection";
 import { createCommandBus } from "./WarehouseDesigner/commands";
@@ -467,6 +467,7 @@ export default function WarehouseDesigner() {
   const [structureRebuildPending, setStructureRebuildPending] = useState<{
     impacts: StructureRemovalImpact[];
     layout: LayoutState;
+    source: "layout_save" | "template_instances" | "api";
   } | null>(null);
   const [loading, setLoading] = useState(true);
   const [lastSavedAt, setLastSavedAt] = useState<number | null>(null);
@@ -948,6 +949,18 @@ export default function WarehouseDesigner() {
   const [pendingGatePlacement, setPendingGatePlacement] = useState<{ wall: WallSide; position_cm: number } | null>(null);
   const [pendingVariantSave, setPendingVariantSave] = useState<PendingVariantSave | null>(null);
   const [variantNameInput, setVariantNameInput] = useState("");
+
+  useEffect(() => {
+    if (pendingVariantSave == null) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        setPendingVariantSave(null);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [pendingVariantSave]);
 
   useEffect(() => {
     if (selectedRackIdForSideView == null) {
@@ -2181,22 +2194,104 @@ export default function WarehouseDesigner() {
       let workingLayout = baseLayout;
       if (overrideLayout == null) {
         let stockByUuid: Map<string, number> | undefined;
+        let stockDetailsByUuid: import("../components/warehouse/passageStorage").StockDetailByUuid | undefined;
         try {
-          const inventoryRes = await api.get<Array<{ location_uuid?: string | null; quantity?: number }>>("/inventory/", {
-            params: { tenant_id: TENANT_ID, warehouse_id: whId, hide_empty: false },
-          });
-          stockByUuid = new Map();
-          for (const row of inventoryRes.data ?? []) {
-            const u = String(row.location_uuid ?? "").trim();
-            if (!u) continue;
-            stockByUuid.set(u, (stockByUuid.get(u) ?? 0) + Number(row.quantity ?? 0));
+          // Prefer already-loaded inventory + product catalog for operator-facing stock details.
+          if (inventoryRows.length > 0) {
+            stockByUuid = new Map();
+            stockDetailsByUuid = new Map();
+            const productsById = new Map(products.map((p) => [String(p.id), p]));
+            for (const row of inventoryRows) {
+              const u = String(row.location_uuid ?? "").trim();
+              if (!u) continue;
+              const qty = Number(row.quantity ?? 0);
+              if (!(qty > 0)) continue;
+              stockByUuid.set(u, (stockByUuid.get(u) ?? 0) + qty);
+              const product = productsById.get(String(row.product_id));
+              const productName = String(row.product_name ?? product?.name ?? "").trim() || `Produkt #${row.product_id}`;
+              const unitPrice = product?.purchase_price;
+              const valuePln =
+                unitPrice != null && Number.isFinite(unitPrice) ? Number(unitPrice) * qty : null;
+              const list = stockDetailsByUuid.get(u) ?? [];
+              list.push({
+                productName,
+                quantity: qty,
+                unit: "szt.",
+                valuePln,
+              });
+              stockDetailsByUuid.set(u, list);
+            }
+          } else {
+            const inventoryRes = await api.get<
+              Array<{ location_uuid?: string | null; quantity?: number; product_id?: number; product_name?: string | null }>
+            >("/inventory/", {
+              params: { tenant_id: TENANT_ID, warehouse_id: whId, hide_empty: false },
+            });
+            stockByUuid = new Map();
+            stockDetailsByUuid = new Map();
+            const productsById = new Map(products.map((p) => [String(p.id), p]));
+            for (const row of inventoryRes.data ?? []) {
+              const u = String(row.location_uuid ?? "").trim();
+              if (!u) continue;
+              const qty = Number(row.quantity ?? 0);
+              if (!(qty > 0)) continue;
+              stockByUuid.set(u, (stockByUuid.get(u) ?? 0) + qty);
+              const product = row.product_id != null ? productsById.get(String(row.product_id)) : undefined;
+              const productName =
+                String(row.product_name ?? product?.name ?? "").trim() ||
+                (row.product_id != null ? `Produkt #${row.product_id}` : "Nieznany produkt");
+              const unitPrice = product?.purchase_price;
+              const valuePln =
+                unitPrice != null && Number.isFinite(unitPrice) ? Number(unitPrice) * qty : null;
+              const list = stockDetailsByUuid.get(u) ?? [];
+              list.push({ productName, quantity: qty, unit: "szt.", valuePln });
+              stockDetailsByUuid.set(u, list);
+            }
           }
         } catch {
           stockByUuid = undefined;
+          stockDetailsByUuid = undefined;
         }
-        const prepared = prepareLayoutBinsForSave(baseLayout, stockByUuid);
-        if (prepared.impacts.some((i) => i.removedCount > 0)) {
-          setStructureRebuildPending({ impacts: prepared.impacts, layout: prepared.layout });
+        const prepared = analyzeLayoutStructureRebuild(
+          baseLayout,
+          stockByUuid,
+          stockDetailsByUuid,
+          "layout_save"
+        );
+        if (prepared.impacts.length > 0) {
+          const removedUuids = prepared.impacts.flatMap((i) =>
+            i.removed.map((r) => String(r.locationUUID ?? "").trim()).filter(Boolean)
+          );
+          let impacts = prepared.impacts;
+          if (removedUuids.length > 0) {
+            try {
+              const pre = await layoutService.rebuildPreflight(
+                { tenant_id: TENANT_ID, warehouse_id: whId },
+                { location_uuids: removedUuids }
+              );
+              const ops = pre.data?.active_operations ?? [];
+              if (ops.length > 0) {
+                impacts = prepared.impacts.map((impact) => {
+                  const rackOps = ops.filter((op) =>
+                    impact.removed.some((r) => String(r.locationUUID ?? "").trim() === op.location_uuid)
+                  );
+                  return {
+                    ...impact,
+                    activeOperations: rackOps.map((op) => ({
+                      locationUuid: op.location_uuid,
+                      locationLabel: op.location_label,
+                      operationType: op.operation_type,
+                      documentNumber: op.document_number,
+                    })),
+                    hasActiveOperations: rackOps.length > 0,
+                  };
+                });
+              }
+            } catch {
+              // BE save still enforces active-ops; preview may be incomplete.
+            }
+          }
+          setStructureRebuildPending({ impacts, layout: prepared.layout, source: prepared.source });
           return;
         }
         workingLayout = prepared.layout;
@@ -2351,15 +2446,26 @@ export default function WarehouseDesigner() {
     } finally {
       setSaving(false);
     }
-  }, [layout, selectedWarehouseId, loadLayout, getRackDisplayIdWithLayout]);
+  }, [layout, selectedWarehouseId, loadLayout, getRackDisplayIdWithLayout, inventoryRows, products]);
 
   const confirmStructureRebuildAndSave = useCallback(() => {
     const pending = structureRebuildPending;
     setStructureRebuildPending(null);
     if (!pending) return;
+    recordStructureRebuild({
+      source: pending.source,
+      warehouseId: selectedWarehouseId,
+      removedLocationUuids: pending.impacts.flatMap((i) =>
+        i.removed.map((r) => String(r.locationUUID ?? "").trim()).filter(Boolean)
+      ),
+      createdLocationUuids: pending.impacts.flatMap((i) =>
+        i.created.map((r) => String(r.locationUUID ?? "").trim()).filter(Boolean)
+      ),
+      rackKeys: pending.impacts.map((i) => i.rackKey),
+    });
     setLayout(pending.layout);
     void saveLayout(pending.layout);
-  }, [structureRebuildPending, saveLayout]);
+  }, [structureRebuildPending, saveLayout, selectedWarehouseId]);
 
   const {
     ghostW,
@@ -2933,84 +3039,96 @@ export default function WarehouseDesigner() {
   }, [selectedWallElementId]);
 
   const onSaveEditTemplate = useCallback(
-    (templateId: string, template: CustomRackTemplate, updateExistingRacks: boolean) => {
+    async (templateId: string, template: CustomRackTemplate, updateExistingRacks: boolean) => {
       if (!updateExistingRacks) return;
-      const w = cmToCells(template.width_cm);
-      const h = cmToCells(template.depth_cm);
-      const lcEdit = getLevelConfig(template);
-      const totalEdit = getTotalLocations(lcEdit);
-      const volPerBin = totalEdit > 0
-        ? volumePerBinFromTotal(template.width_cm, template.depth_cm, template.height_cm, totalEdit)
-        : volumePerBin(template.width_cm, template.depth_cm, template.height_cm, template.levels, template.bins_per_level);
-      setLayout((prev) => {
-        const mergedRacks = prev.racks.map((r) => {
-          if (r.templateId !== templateId) return r;
-          const freshBins = createBinsForRack(
-            template.aisle_letter,
-            r.rack_index,
-            template.levels,
-            template.bins_per_level,
-            volPerBin,
-            "M1",
-            template.naming_pattern,
-            template.width_cm,
-            template.depth_cm,
-            template.height_cm,
-            template.bin_type_map,
-            template.addressPattern,
-            template.rowId,
-            template.sectionStartIndex,
-            template.binNamingType,
-            lcEdit,
-            template.namingStrategy,
-            template.namingOrientation,
-            template.namingPattern ?? template.addressPattern,
-            template.manualLabels,
-            template.overrides,
-            template.indexPadding,
-            template.startIndex,
-            passagesFromTemplateDefaults(template.default_passages)
-          );
-          const structuralCount = lcEdit.length;
-          const voidLevels = countPassageVoidLevels(
-            template.height_cm,
-            structuralCount,
-            getPassageVoidHeightCm(passagesFromTemplateDefaults(template.default_passages))
-          );
-          const plan = planBinRebuild(r.bins ?? [], freshBins, structuralCount, voidLevels);
-          const mergedBins = plan.merged.map((b) => {
-            const st = normalizeStorageType(b.storage_type);
-            if ((template.rack_type ?? r.rack_type) === "store" && (st === "primary" || st === "unknown")) {
-              return { ...b, storage_type: "pick" as const };
-            }
-            return b;
-          });
-          return {
-            ...r,
-            rack_type: template.rack_type ?? "warehouse",
-            width: w,
-            height: h,
-            width_cm: template.width_cm,
-            length_cm: template.depth_cm,
-            height_cm: template.height_cm,
-            levels: lcEdit.length,
-            bins_per_level: lcEdit[0]?.locations ?? template.bins_per_level,
-            levelConfig: lcEdit,
-            aisle_letter: template.aisle_letter,
-            color: template.color,
-            bins: mergedBins,
-            passages: rematerializeInheritedPassages(r.passages, template.default_passages),
-            ...(template.level_max_load_kg != null ? { level_max_load_kg: template.level_max_load_kg } : {}),
-          };
-        });
-        const layoutDraft: LayoutState = { ...prev, racks: mergedRacks };
-        const nextRacks = mergedRacks.map((r) =>
-          r.templateId === templateId ? { ...r, bins: syncRackBinsDisplayFields(r, layoutDraft) } : r,
+      // Build stock maps (same gate as layout save) before proposing rebuild.
+      let stockByUuid: Map<string, number> | undefined;
+      let stockDetailsByUuid: import("../components/warehouse/passageStorage").StockDetailByUuid | undefined;
+      if (inventoryRows.length > 0) {
+        stockByUuid = new Map();
+        stockDetailsByUuid = new Map();
+        const productsById = new Map(products.map((p) => [String(p.id), p]));
+        for (const row of inventoryRows) {
+          const u = String(row.location_uuid ?? "").trim();
+          if (!u) continue;
+          const qty = Number(row.quantity ?? 0);
+          if (!(qty > 0)) continue;
+          stockByUuid.set(u, (stockByUuid.get(u) ?? 0) + qty);
+          const product = productsById.get(String(row.product_id));
+          const productName = String(row.product_name ?? product?.name ?? "").trim() || `Produkt #${row.product_id}`;
+          const unitPrice = product?.purchase_price;
+          const valuePln =
+            unitPrice != null && Number.isFinite(unitPrice) ? Number(unitPrice) * qty : null;
+          const list = stockDetailsByUuid.get(u) ?? [];
+          list.push({ productName, quantity: qty, unit: "szt.", valuePln });
+          stockDetailsByUuid.set(u, list);
+        }
+      }
+      let prepared;
+      try {
+        prepared = analyzeTemplateInstanceRebuild(
+          layout,
+          templateId,
+          template,
+          stockByUuid,
+          stockDetailsByUuid
         );
-        return { ...prev, racks: nextRacks };
-      });
+      } catch (e) {
+        const msg =
+          e instanceof Error && e.message
+            ? e.message
+            : "Regał może posiadać tylko jeden przejazd pod regałem.";
+        setSnackbar({ message: msg });
+        throw e;
+      }
+      if (!prepared.changed && prepared.impacts.length === 0) {
+        // Still apply passage rematerialize / dim updates from analyzer layout.
+        setLayout(prepared.layout);
+        return;
+      }
+      let impacts = prepared.impacts;
+      const removedUuids = impacts.flatMap((i) =>
+        i.removed.map((r) => String(r.locationUUID ?? "").trim()).filter(Boolean)
+      );
+      if (removedUuids.length > 0 && selectedWarehouseId != null) {
+        try {
+          const pre = await layoutService.rebuildPreflight(
+            { tenant_id: TENANT_ID, warehouse_id: Number(selectedWarehouseId) },
+            { location_uuids: removedUuids }
+          );
+          const ops = pre.data?.active_operations ?? [];
+          if (ops.length > 0) {
+            impacts = impacts.map((impact) => {
+              const rackOps = ops.filter((op) =>
+                impact.removed.some((r) => String(r.locationUUID ?? "").trim() === op.location_uuid)
+              );
+              return {
+                ...impact,
+                activeOperations: rackOps.map((op) => ({
+                  locationUuid: op.location_uuid,
+                  locationLabel: op.location_label,
+                  operationType: op.operation_type,
+                  documentNumber: op.document_number,
+                })),
+                hasActiveOperations: rackOps.length > 0,
+              };
+            });
+          }
+        } catch {
+          // ignore — BE still gates on layout save
+        }
+      }
+      if (impacts.length > 0 || prepared.changed) {
+        setStructureRebuildPending({
+          impacts: impacts.length > 0 ? impacts : prepared.impacts,
+          layout: prepared.layout,
+          source: "template_instances",
+        });
+        return;
+      }
+      setLayout(prepared.layout);
     },
-    []
+    [layout, inventoryRows, products, selectedWarehouseId]
   );
 
   const handleExportCsv = useCallback(() => {
@@ -3606,10 +3724,30 @@ export default function WarehouseDesigner() {
         setSnackbar={setSnackbar}
       />
       {pendingVariantSave != null && (
-        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/40 p-4">
-          <div className="w-full max-w-md rounded-2xl bg-white border border-slate-200 shadow-2xl p-5">
-            <h3 className="text-base font-bold text-slate-800">Save as new variant</h3>
-            <p className="mt-2 text-sm text-slate-600">Układ różni się od szablonu bazowego. Zapisz jako nowy wariant?</p>
+        <div
+          className="fixed inset-0 z-[70] flex items-center justify-center bg-black/40 p-4"
+          role="dialog"
+          aria-modal="true"
+          onClick={() => setPendingVariantSave(null)}
+        >
+          <div
+            className="w-full max-w-md rounded-2xl bg-white border border-slate-200 shadow-2xl p-5"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-2">
+              <h3 className="text-base font-bold text-slate-800">Zapisz jako nowy wariant</h3>
+              <button
+                type="button"
+                aria-label="Zamknij"
+                className="rounded-lg p-1.5 text-slate-500 hover:bg-slate-100"
+                onClick={() => setPendingVariantSave(null)}
+              >
+                ✕
+              </button>
+            </div>
+            <p className="mt-2 text-sm text-slate-600">
+              Układ różni się od szablonu bazowego. Zapisz jako nowy wariant? Nic nie zostanie zapisane bez Twojej decyzji.
+            </p>
             <label className="block mt-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Nazwa wariantu</label>
             <input
               type="text"

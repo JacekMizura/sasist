@@ -347,6 +347,16 @@ export function validateLayoutEntityIntegrity(layout: LayoutState): LayoutEntity
     if (!Number.isFinite(r.x) || !Number.isFinite(r.y) || !Number.isFinite(r.width) || !Number.isFinite(r.height)) {
       errors.push(`Nieprawidłowe współrzędne regału ${key}`);
     }
+
+    let enabledPassages = 0;
+    for (const p of r.passages ?? []) {
+      if (p.enabled === false) continue;
+      enabledPassages += 1;
+      if (enabledPassages > 1) {
+        errors.push("Regał może posiadać tylko jeden przejazd pod regałem.");
+        break;
+      }
+    }
   }
 
   return { valid: errors.length === 0, errors };
@@ -1639,7 +1649,7 @@ export function createBinsForRack(
   overrides?: Record<string, string>,
   indexPadding?: number,
   startIndex?: number,
-  /** Enabled passages: max clearance skips bottom structural levels (variant A). */
+  /** Enabled passages: first enabled clearance skips bottom structural levels (variant A). */
   passages?: PassageClearanceLike[] | null
 ): BinState[] {
   const structuralRows = Array.isArray(levelConfig) && levelConfig.length > 0
@@ -1702,6 +1712,7 @@ export function createBinsForRack(
         normalizedBinTypeMap[`${lev}-${seg}`] ??
         normalizedBinTypeMap[`${structuralLev}-${seg}`] ??
         "primary";
+      // Address Level token = storage sequence 1..N (not construction level).
       const generatedLabel = generateLocationLabel({
         levelIndex: lev,
         segmentIndex: seg,
@@ -1725,7 +1736,8 @@ export function createBinsForRack(
         : volumePerBinDm3;
       out.push({
         label: displayLabel,
-        level_index: lev,
+        // Construction index: void slots have no bins; first storage keeps physical level_index.
+        level_index: structuralLev,
         segment_index: seg,
         volume_dm3: vol,
         current_load_dm3: 0,

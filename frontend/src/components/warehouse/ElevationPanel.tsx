@@ -10,6 +10,7 @@ import {
   isBinDirectionRtl,
 } from "./warehouseUtils";
 import { countPassageVoidLevelsForRack, storageLevelConfigAfterVoid } from "./passageStorage";
+import { PassageVoidBand } from "./PassageVoidBand";
 import { resolveWarehouseLocation } from "../../utils/resolvedWarehouseLocation";
 
 /** Slide-over panel content for elevation (side) view + inventory list. Used only in Layout tab; onAddProduct/onEditProduct allow adding/editing products. */
@@ -44,8 +45,10 @@ export function ElevationPanel({
     if (!binsByLevel.has(b.level_index)) binsByLevel.set(b.level_index, []);
     binsByLevel.get(b.level_index)!.push(b);
   }
-  for (let lev = 0; lev < storageLevels.length; lev++) {
-    if (!binsByLevel.has(lev)) binsByLevel.set(lev, []);
+  const voidN = voidLevelCount;
+  for (let storageIdx = 0; storageIdx < storageLevels.length; storageIdx++) {
+    const structural = storageIdx + voidN;
+    if (!binsByLevel.has(structural)) binsByLevel.set(structural, []);
   }
   const activeBins = rack.bins.filter(isBinActive);
   const used = rack.used_dm3 ?? activeBins.reduce((s, b) => s + binUsedVolumeDm3(b), 0);
@@ -88,14 +91,22 @@ export function ElevationPanel({
       </div>
       <p className="text-[10px] text-slate-400 mb-2">Kliknij lokalizację, aby filtrować produkty.</p>
       <div className="space-y-3">
-        {Array.from({ length: storageLevels.length }, (_, lev) => lev)
+        {Array.from({ length: storageLevels.length }, (_, storageIdx) => storageIdx)
           .reverse()
-          .map((lev) => (
-          <div key={lev} className="border border-[#E2E8F0] rounded-lg p-2 bg-slate-50">
-            <div className="text-[10px] font-bold text-slate-600 uppercase mb-2">Poziom {lev + 1}</div>
+          .map((storageIdx) => {
+          const structural = storageIdx + voidLevelCount;
+          const constructionNumber = structural + 1;
+          return (
+          <div key={structural} className="border border-[#E2E8F0] rounded-lg p-2 bg-slate-50">
+            <div className="text-[10px] font-bold text-slate-600 uppercase mb-2">
+              Poziom konstrukcyjny {constructionNumber}
+              <span className="ml-2 font-normal normal-case text-slate-400">
+                Adres magazynowy: poziom {storageIdx + 1}
+              </span>
+            </div>
             <div className="flex flex-wrap gap-1">
               {(() => {
-                const binsSorted = [...(binsByLevel.get(lev) ?? [])].sort((a, b) => a.segment_index - b.segment_index);
+                const binsSorted = [...(binsByLevel.get(structural) ?? [])].sort((a, b) => a.segment_index - b.segment_index);
                 const binsForDisplay = binDirectionRtl ? [...binsSorted].reverse() : binsSorted;
                 return binsForDisplay.map((b) => {
                 const vol = binVolumeDm3(b, rack);
@@ -135,12 +146,16 @@ export function ElevationPanel({
               })()}
             </div>
           </div>
-        ))}
+          );
+        })}
         {voidLevelCount > 0 && (
-          <div className="rounded-lg border border-dashed border-slate-400 bg-slate-200/80 px-3 py-4 text-center">
-            <div className="text-xs font-bold uppercase tracking-wide text-slate-700">Przejazd pod regałem</div>
-            <div className="text-[10px] text-slate-600">bez lokalizacji</div>
-          </div>
+          <PassageVoidBand
+            heightCm={40 * voidLevelCount}
+            constructionLevelFrom={1}
+            constructionLevelTo={voidLevelCount}
+            compact
+            className="rounded-lg overflow-hidden"
+          />
         )}
       </div>
       <div className="mt-4 pt-4 border-t border-[#E2E8F0]">

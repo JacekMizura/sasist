@@ -29,12 +29,137 @@ from .label_render_service import render_label_template
 from .location_display_sync_service import sync_location_display_fields
 from .location_label_filters import apply_label_filters
 from .warehouse_routing.rack_service_face import normalize_service_face_origin
+from .warehouse_layout.passage_void import (
+    construction_z_cm,
+    count_passage_void_levels,
+    find_bins_in_void,
+    get_passage_void_height_cm,
+    level_heights_for_rack,
+    passages_from_payload,
+    structural_level_count_from_payload,
+)
+from .warehouse_layout.single_passage import (
+    SINGLE_ENABLED_PASSAGE_ERROR,
+    MultipleEnabledPassagesError,
+    assert_at_most_one_enabled_passage,
+)
+from .warehouse_layout.structure_rebuild_audit import (
+    StructureRebuildAuditEvent,
+    record_structure_rebuild,
+)
+from .warehouse_layout.structure_rebuild_gates import find_active_ops_for_location_uuids
 
 logger = logging.getLogger(__name__)
 RACK_IDENTITY_SAVE_ENABLED = True
 BIN_IDENTITY_SAVE_ENABLED = True
 # SQLite bind limit (~999); batch IN (...) for Location.location_uuid lookups.
 _LOCATION_UUID_IN_BATCH = 500
+
+
+def _construction_level_heights(rack, internal_structure: dict | None, level_index: int) -> tuple[list[float], int]:
+    """
+    Full construction heights for Z. Prefer internal_structure when it covers the
+    construction index; otherwise equal-split of rack.height_cm.
+    Never treat a trimmed storage-only structure as the full tower when
+    level_index exceeds its length — fall back to equal-split of rack.levels.
+    """
+    levels_data = (internal_structure or {}).get("levels") if isinstance(internal_structure, dict) else []
+    H = float(getattr(rack, "height_cm", 0) or 0)
+    rack_levels = max(1, int(getattr(rack, "levels", 1) or 1))
+    structural = max(rack_levels, int(level_index) + 1)
+    if levels_data and len(levels_data) >= structural:
+        heights = [float(l.get("height_cm", 0) or 0) for l in levels_data[:structural]]
+        if all(h > 0 for h in heights):
+            return heights, structural
+    return level_heights_for_rack(H, structural), structural
+
+
+def _bin_coords_cm(rack, level_index: int, segment_index: int, internal_structure: dict) -> tuple:
+    """Return (x_cm, y_cm, z_cm) for a bin in warehouse space. Rack x,y are in 10cm units."""
+    base_x = rack.x * GRID_UNIT_CM
+    base_y = rack.y * GRID_UNIT_CM
+    levels_data = (internal_structure or {}).get("levels") if isinstance(internal_structure, dict) else []
+    heights, structural = _construction_level_heights(rack, internal_structure, level_index)
+    z_cm = construction_z_cm(
+        rack_height_cm=float(getattr(rack, "height_cm", 0) or 0),
+        structural_level_count=structural,
+        level_index=int(level_index),
+        level_heights_cm=heights,
+    )
+    # XY: use structure row when present; map construction index into storage row if trimmed.
+    row_idx = int(level_index)
+    if levels_data and row_idx >= len(levels_data):
+        # Trimmed storage-only structure: map construction → storage index via void offset.
+        void_n = max(0, structural - len(levels_data))
+        row_idx = max(0, int(level_index) - void_n)
+    if levels_data and row_idx < len(levels_data):
+        locs = levels_data[row_idx].get("locations") or []
+        if segment_index < len(locs):
+            width_cm = float(locs[segment_index].get("width_cm", 0))
+        else:
+            width_cm = rack.width_cm / max(1, rack.bins_per_level)
+        offset_along = sum(float(locs[i].get("width_cm", 0)) for i in range(segment_index)) if segment_index < len(locs) else (rack.width_cm / max(1, rack.bins_per_level)) * segment_index
+    else:
+        offset_along = (rack.width_cm / max(1, rack.bins_per_level)) * segment_index
+    if rack.orientation == "horizontal":
+        x_cm = base_x + offset_along
+        y_cm = base_y
+    else:
+        x_cm = base_x
+        y_cm = base_y + offset_along
+    return (round(x_cm, 2), round(y_cm, 2), round(z_cm, 2))
+
+
+def _bin_center_and_dimensions_cm(rack, level_index: int, segment_index: int, internal_structure: dict) -> tuple:
+    """
+    Return (center_x_cm, center_y_cm, z_cm, width_cm, depth_cm, height_cm) for a storage slot.
+    Center point is used for walking-cost, route simulation, heatmaps, slotting.
+    Rack x,y are in 10cm units; dimensions come from internal_structure or rack defaults.
+    Z always uses full construction heights (void levels keep physical elevation).
+    """
+    base_x = rack.x * GRID_UNIT_CM
+    base_y = rack.y * GRID_UNIT_CM
+    levels_data = (internal_structure or {}).get("levels") if isinstance(internal_structure, dict) else []
+    heights, structural = _construction_level_heights(rack, internal_structure, level_index)
+    z_cm = construction_z_cm(
+        rack_height_cm=float(getattr(rack, "height_cm", 0) or 0),
+        structural_level_count=structural,
+        level_index=int(level_index),
+        level_heights_cm=heights,
+    )
+    lev = int(level_index)
+    if 0 <= lev < len(heights):
+        level_height_cm = float(heights[lev])
+    else:
+        level_height_cm = float(getattr(rack, "height_cm", 0) or 0) / max(1, structural)
+    row_idx = lev
+    if levels_data and row_idx >= len(levels_data):
+        void_n = max(0, structural - len(levels_data))
+        row_idx = max(0, lev - void_n)
+    if levels_data and row_idx < len(levels_data):
+        locs = levels_data[row_idx].get("locations") or []
+        if segment_index < len(locs):
+            width_cm = float(locs[segment_index].get("width_cm", 0))
+        else:
+            width_cm = rack.width_cm / max(1, rack.bins_per_level)
+        offset_along = sum(float(locs[i].get("width_cm", 0)) for i in range(segment_index)) if segment_index < len(locs) else (rack.width_cm / max(1, rack.bins_per_level)) * segment_index
+        row_h = float(levels_data[row_idx].get("height_cm", 0) or 0)
+        if row_h > 0 and lev < len(levels_data):
+            level_height_cm = row_h
+    else:
+        width_cm = rack.width_cm / max(1, rack.bins_per_level)
+        offset_along = width_cm * segment_index
+    depth_cm = float(rack.length_cm) if getattr(rack, "length_cm", None) is not None else (rack.width_cm or 80.0)
+    if rack.orientation == "horizontal":
+        center_x = base_x + offset_along + (width_cm / 2)
+        center_y = base_y + (depth_cm / 2)
+    else:
+        center_x = base_x + (depth_cm / 2)
+        center_y = base_y + offset_along + (width_cm / 2)
+    return (
+        round(center_x, 2), round(center_y, 2), round(z_cm, 2),
+        round(width_cm, 2), round(depth_cm, 2), round(level_height_cm, 2),
+    )
 
 
 def _validate_unique_rack_names_in_payload(rack_payloads: list) -> None:
@@ -201,77 +326,6 @@ def _bin_volume_dm3(length_cm: float, width_cm: float, height_cm: float, levels:
     if count <= 0:
         return 0
     return round((total_cm3 / count) / 1000.0, 2)
-
-
-def _bin_coords_cm(rack, level_index: int, segment_index: int, internal_structure: dict) -> tuple:
-    """Return (x_cm, y_cm, z_cm) for a bin in warehouse space. Rack x,y are in 10cm units."""
-    base_x = rack.x * GRID_UNIT_CM
-    base_y = rack.y * GRID_UNIT_CM
-    levels_data = (internal_structure or {}).get("levels") if isinstance(internal_structure, dict) else []
-    # z_cm: sum of level heights below this level
-    if levels_data and level_index < len(levels_data):
-        z_cm = sum(float(l.get("height_cm", 0)) for l in levels_data[:level_index])
-    else:
-        z_cm = (rack.height_cm / max(1, rack.levels)) * level_index
-    # x,y offset within rack from segment
-    if levels_data and level_index < len(levels_data):
-        locs = levels_data[level_index].get("locations") or []
-        if segment_index < len(locs):
-            width_cm = float(locs[segment_index].get("width_cm", 0))
-        else:
-            width_cm = rack.width_cm / max(1, rack.bins_per_level)
-        offset_along = sum(float(locs[i].get("width_cm", 0)) for i in range(segment_index)) if segment_index < len(locs) else (rack.width_cm / max(1, rack.bins_per_level)) * segment_index
-    else:
-        offset_along = (rack.width_cm / max(1, rack.bins_per_level)) * segment_index
-    if rack.orientation == "horizontal":
-        x_cm = base_x + offset_along
-        y_cm = base_y
-    else:
-        x_cm = base_x
-        y_cm = base_y + offset_along
-    return (round(x_cm, 2), round(y_cm, 2), round(z_cm, 2))
-
-
-def _bin_center_and_dimensions_cm(rack, level_index: int, segment_index: int, internal_structure: dict) -> tuple:
-    """
-    Return (center_x_cm, center_y_cm, z_cm, width_cm, depth_cm, height_cm) for a storage slot.
-    Center point is used for walking-cost, route simulation, heatmaps, slotting.
-    Rack x,y are in 10cm units; dimensions come from internal_structure or rack defaults.
-    """
-    base_x = rack.x * GRID_UNIT_CM
-    base_y = rack.y * GRID_UNIT_CM
-    levels_data = (internal_structure or {}).get("levels") if isinstance(internal_structure, dict) else []
-    # z_cm (floor of bin) and level height
-    if levels_data and level_index < len(levels_data):
-        z_cm = sum(float(l.get("height_cm", 0)) for l in levels_data[:level_index])
-        level_height_cm = float(levels_data[level_index].get("height_cm", 0)) if level_index < len(levels_data) else (rack.height_cm / max(1, rack.levels))
-    else:
-        z_cm = (rack.height_cm / max(1, rack.levels)) * level_index
-        level_height_cm = rack.height_cm / max(1, rack.levels)
-    # segment width and offset along rack
-    if levels_data and level_index < len(levels_data):
-        locs = levels_data[level_index].get("locations") or []
-        if segment_index < len(locs):
-            width_cm = float(locs[segment_index].get("width_cm", 0))
-        else:
-            width_cm = rack.width_cm / max(1, rack.bins_per_level)
-        offset_along = sum(float(locs[i].get("width_cm", 0)) for i in range(segment_index)) if segment_index < len(locs) else (rack.width_cm / max(1, rack.bins_per_level)) * segment_index
-    else:
-        width_cm = rack.width_cm / max(1, rack.bins_per_level)
-        offset_along = width_cm * segment_index
-    # depth = rack extent perpendicular to segment direction (length_cm)
-    depth_cm = float(rack.length_cm) if getattr(rack, "length_cm", None) is not None else (rack.width_cm or 80.0)
-    # center = base + segment_offset + (width/2) along segment, and (depth/2) along the other axis
-    if rack.orientation == "horizontal":
-        center_x = base_x + offset_along + (width_cm / 2)
-        center_y = base_y + (depth_cm / 2)
-    else:
-        center_x = base_x + (depth_cm / 2)
-        center_y = base_y + offset_along + (width_cm / 2)
-    return (
-        round(center_x, 2), round(center_y, 2), round(z_cm, 2),
-        round(width_cm, 2), round(depth_cm, 2), round(level_height_cm, 2),
-    )
 
 
 def _bin_dimensions_cm(rack, level_index: int, segment_index: int, internal_structure: dict) -> tuple[float, float, float]:
@@ -778,7 +832,9 @@ class WarehouseLayoutService:
             )
         return created, still_missing
 
-    def _save_layout_racks_by_identity(self, layout: WarehouseLayout, data: dict, warehouse_id: int) -> None:
+    def _save_layout_racks_by_identity(
+        self, layout: WarehouseLayout, data: dict, warehouse_id: int, tenant_id: int | None = None
+    ) -> None:
         existing_racks = (
             self.db.query(Rack)
             .options(joinedload(Rack.bins), joinedload(Rack.passages))
@@ -863,6 +919,46 @@ class WarehouseLayoutService:
                 self.db.add(rack)
                 self.db.flush()
                 self._sync_rack_passages(rack, warehouse_id, r_data.get("passages"))
+
+                # Backend void gate — never trust FE to omit void bins.
+                payload_bins_preview = r_data.get("bins") or []
+                passages_like = passages_from_payload(r_data.get("passages"))
+                if not passages_like and getattr(rack, "passages", None):
+                    passages_like = passages_from_payload(
+                        [
+                            {
+                                "enabled": getattr(p, "enabled", True),
+                                "clearance_height_cm": getattr(p, "clearance_height_cm", None),
+                            }
+                            for p in (rack.passages or [])
+                        ]
+                    )
+                structural_n = structural_level_count_from_payload(
+                    r_data, fallback_levels=getattr(rack, "levels", None)
+                )
+                try:
+                    void_h = get_passage_void_height_cm(passages_like)
+                except MultipleEnabledPassagesError:
+                    raise HTTPException(status_code=400, detail=SINGLE_ENABLED_PASSAGE_ERROR)
+                void_n = count_passage_void_levels(
+                    float(getattr(rack, "height_cm", 0) or 0),
+                    structural_n,
+                    void_h,
+                )
+                void_bins = find_bins_in_void(payload_bins_preview, void_level_count=void_n)
+                if void_bins:
+                    labels = [str(b.get("label") or "?") for b in void_bins[:20]]
+                    raise HTTPException(
+                        status_code=409,
+                        detail=(
+                            "Nie można zapisać układu — lokalizacje w strefie przejazdu: "
+                            + ", ".join(labels)
+                            + ("…" if len(void_bins) > 20 else "")
+                            + f". Przejazd zajmuje dolne poziomy konstrukcyjne 1"
+                            + (f"–{void_n}" if void_n > 1 else "")
+                            + " (bez lokalizacji magazynowych)."
+                        ),
+                    )
 
                 if not BIN_IDENTITY_SAVE_ENABLED:
                     if is_new_rack:
@@ -1009,7 +1105,37 @@ class WarehouseLayoutService:
                         ),
                     )
 
+                # Active WMS operations gate (picks, putaway, MM, inventory, production, …).
+                if tenant_id is not None:
+                    labels_by_uuid = {
+                        loc_uuid: (getattr(bin_row, "label", None) or loc_uuid or "?").strip()
+                        for bin_row, loc_uuid in removed_bin_rows
+                    }
+                    active_ops = find_active_ops_for_location_uuids(
+                        self.db,
+                        tenant_id=int(tenant_id),
+                        warehouse_id=int(warehouse_id),
+                        location_uuids=removed_uuids,
+                        location_labels=labels_by_uuid,
+                    )
+                    if active_ops:
+                        lines = [
+                            f"{op.location_label}: {op.operation_type} ({op.document_number})"
+                            for op in active_ops[:20]
+                        ]
+                        raise HTTPException(
+                            status_code=409,
+                            detail=(
+                                "Nie można przebudować regału. "
+                                "Usuwane lokalizacje są wykorzystywane przez aktywne operacje magazynowe: "
+                                + "; ".join(lines)
+                                + ("…" if len(active_ops) > 20 else "")
+                            ),
+                        )
+
+            removed_uuids_for_audit: list[str] = []
             for bin_row, loc_uuid in removed_bin_rows:
+                removed_uuids_for_audit.append(loc_uuid)
                 bin_row.is_active = False
                 self.db.add(bin_row)
                 if loc_uuid in inventory_ref_uuids:
@@ -1025,6 +1151,16 @@ class WarehouseLayoutService:
                     Location.warehouse_id == warehouse_id,
                     Location.location_uuid == loc_uuid,
                 ).update({"is_active": False}, synchronize_session=False)
+
+            if removed_uuids_for_audit:
+                record_structure_rebuild(
+                    StructureRebuildAuditEvent(
+                        tenant_id=int(tenant_id or 0),
+                        warehouse_id=int(warehouse_id),
+                        source="layout_save",
+                        removed_location_uuids=removed_uuids_for_audit,
+                    )
+                )
 
     def _serialize_rack_passages(self, rack: Rack) -> list[dict]:
         out: list[dict] = []
@@ -1051,6 +1187,11 @@ class WarehouseLayoutService:
             return
         if not isinstance(passages_payload, list):
             return
+
+        try:
+            assert_at_most_one_enabled_passage(passages_payload)
+        except MultipleEnabledPassagesError:
+            raise HTTPException(status_code=400, detail=SINGLE_ENABLED_PASSAGE_ERROR)
 
         existing = {
             str(p.uuid): p
@@ -1689,7 +1830,7 @@ class WarehouseLayoutService:
             if skip_rack_updates:
                 logger.warning("Skipping all rack persistence for warehouse_id=%s due to incomplete rack payload", warehouse_id)
             elif RACK_IDENTITY_SAVE_ENABLED:
-                self._save_layout_racks_by_identity(layout, data, warehouse_id)
+                self._save_layout_racks_by_identity(layout, data, warehouse_id, tenant_id=tenant_id)
             else:
                 self._replace_layout_racks_legacy(layout, data, warehouse_id)
             # Flush so pending Bin/Location rows are visible; then ensure Location per bin before StorageLocation sync.

@@ -2,9 +2,11 @@
 
 ## Active
 
-**Passage → storage model (variant A)** — local implementation, no push.
+**Hard validation: one enabled under-rack passage** — local, no push.
 
-SSOT: Rack + Internal Structure + Passages. Generator skips bottom structural levels intersecting void clearance (full-width). Numbering = storage only. Save shows removal preview before rebuild.
+- Reject if >1 `enabled` passage (message PL fixed).
+- No soft first-pick / ignore / auto-fix.
+- Enforced: FE, BE, API schemas, template write, materialize, layout save/import (generator).
 
 ### Constraints
 Bez push. Bez deploy.

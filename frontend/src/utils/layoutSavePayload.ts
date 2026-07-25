@@ -204,6 +204,21 @@ export function validateAndSanitizeLayoutPayload(payload: Record<string, unknown
     if (r.rack_type !== "warehouse" && r.rack_type !== "store") {
       rackIntegrityErrors.push(`nieprawidłowy rack_type: ${String(r.rack_type)}`);
     }
+    const passages = r.passages;
+    if (Array.isArray(passages)) {
+      let enabled = 0;
+      for (const p of passages) {
+        if (!p || typeof p !== "object") continue;
+        if ((p as { enabled?: boolean }).enabled === false) continue;
+        enabled += 1;
+        if (enabled > 1) {
+          rackIntegrityErrors.push(
+            "Regał może posiadać tylko jeden przejazd pod regałem."
+          );
+          break;
+        }
+      }
+    }
   }
   if (rackIntegrityErrors.length) {
     return { ok: false, errors: rackIntegrityErrors };

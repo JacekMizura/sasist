@@ -1,5 +1,10 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 from typing import Dict, List, Optional
+
+from ..services.warehouse_layout.single_passage import (
+    SINGLE_ENABLED_PASSAGE_ERROR,
+    assert_at_most_one_enabled_passage,
+)
 
 
 class TemplatePassageDefaultSchema(BaseModel):
@@ -32,6 +37,17 @@ class WarehouseTemplatePayload(BaseModel):
     reserve_bin_keys: Optional[List[str]] = None
     level_max_load_kg: Optional[float] = None
     default_passages: Optional[List[TemplatePassageDefaultSchema]] = Field(default=None)
+
+    @model_validator(mode="after")
+    def _at_most_one_enabled_default_passage(self):
+        if self.default_passages:
+            try:
+                assert_at_most_one_enabled_passage(
+                    [p.model_dump() for p in self.default_passages]
+                )
+            except ValueError as e:
+                raise ValueError(SINGLE_ENABLED_PASSAGE_ERROR) from e
+        return self
 
 
 class WarehouseTemplateResponse(BaseModel):

@@ -30,7 +30,7 @@ describe("passageStorage void → levels (variant A)", () => {
     expect(countPassageVoidLevels(200, 5, 200)).toBe(5);
   });
 
-  it("renumbers storage levels 1..N only", () => {
+  it("keeps construction level numbers after void", () => {
     const structural = [
       { level: 1, locations: 1 },
       { level: 2, locations: 1 },
@@ -38,7 +38,7 @@ describe("passageStorage void → levels (variant A)", () => {
       { level: 4, locations: 1 },
       { level: 5, locations: 1 },
     ];
-    expect(storageLevelConfigAfterVoid(structural, 2).map((r) => r.level)).toEqual([1, 2, 3]);
+    expect(storageLevelConfigAfterVoid(structural, 2).map((r) => r.level)).toEqual([3, 4, 5]);
   });
 });
 
@@ -71,7 +71,7 @@ describe("createBinsForRack with passages", () => {
       [{ enabled: true, clearance_height_cm: 80 }]
     );
     expect(bins).toHaveLength(3);
-    expect(bins.map((b) => b.level_index)).toEqual([0, 1, 2]);
+    expect(bins.map((b) => b.level_index)).toEqual([2, 3, 4]);
     // address pattern Level is 1-based storage index
     expect(bins.map((b) => b.label)).toEqual(["A11-A-1", "A11-A-2", "A11-A-3"]);
   });
@@ -101,9 +101,9 @@ describe("planBinRebuild identity", () => {
       mk(4, 0, "u4", "A1-A-5"),
     ];
     const next = [
-      mk(0, 0, "n0", "A1-A-1"),
-      mk(1, 0, "n1", "A1-A-2"),
-      mk(2, 0, "n2", "A1-A-3"),
+      mk(2, 0, "n0", "A1-A-1"),
+      mk(3, 0, "n1", "A1-A-2"),
+      mk(4, 0, "n2", "A1-A-3"),
     ];
     const plan = planBinRebuild(existing, next, 5, 2);
     expect(plan.merged.map((b) => b.locationUUID)).toEqual(["u2", "u3", "u4"]);
@@ -113,11 +113,12 @@ describe("planBinRebuild identity", () => {
 
   it("no removals when already storage-indexed for same void", () => {
     const existing = [mk(0, 0, "u2", "A1-A-1"), mk(1, 0, "u3", "A1-A-2"), mk(2, 0, "u4", "A1-A-3")];
-    const next = [mk(0, 0, "n0", "A1-A-1"), mk(1, 0, "n1", "A1-A-2"), mk(2, 0, "n2", "A1-A-3")];
+    const next = [mk(2, 0, "n0", "A1-A-1"), mk(3, 0, "n1", "A1-A-2"), mk(4, 0, "n2", "A1-A-3")];
     const plan = planBinRebuild(existing, next, 5, 2);
     expect(plan.removed).toHaveLength(0);
     expect(plan.merged.map((b) => b.locationUUID)).toEqual(["u2", "u3", "u4"]);
-    expect(rackStructureDiffers(existing, plan.merged)).toBe(false);
+    expect(plan.merged.map((b) => b.level_index)).toEqual([2, 3, 4]);
+    expect(rackStructureDiffers(existing, plan.merged)).toBe(true);
   });
 
   it("buildRemovalImpact flags stock from load", () => {

@@ -1,7 +1,11 @@
-from pydantic import AliasChoices, BaseModel, Field
+from pydantic import AliasChoices, BaseModel, Field, model_validator
 from typing import List, Optional, Any, Literal
 
 from ..models.service_face_origin import ServiceFaceOrigin
+from ..services.warehouse_layout.single_passage import (
+    SINGLE_ENABLED_PASSAGE_ERROR,
+    assert_at_most_one_enabled_passage,
+)
 
 
 class BinSchema(BaseModel):
@@ -87,6 +91,17 @@ class RackSchema(BaseModel):
         description="ServiceFaceOrigin: LEGACY_DEFAULT | AUTO_REPAIR | EXPLICIT",
     )
     passages: Optional[List[RackPassageSchema]] = None
+
+    @model_validator(mode="after")
+    def _at_most_one_enabled_passage(self):
+        if self.passages:
+            try:
+                assert_at_most_one_enabled_passage(
+                    [p.model_dump() for p in self.passages]
+                )
+            except ValueError as e:
+                raise ValueError(SINGLE_ENABLED_PASSAGE_ERROR) from e
+        return self
 
 
 class AisleSchema(BaseModel):
