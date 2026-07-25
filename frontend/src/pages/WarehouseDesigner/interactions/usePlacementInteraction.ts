@@ -11,7 +11,7 @@ export interface UsePlacementInteractionParams {
   ghostH: number;
   selectedWarehouseId: number | null;
   layoutMode: string;
-  /** True only for the Magazyn live map canvas (not Projektant Layoutu). Uses URL + mainView so a stale mainView cannot run map click semantics on the layout canvas. */
+  /** True only for the Magazyn live map canvas (not Projektowanie magazynu). Uses URL + mainView so a stale mainView cannot run map click semantics on the layout canvas. */
   magazynMapInteractions: boolean;
   refs: {
     lastMouseRef: React.MutableRefObject<{ clientX: number; clientY: number } | null>;

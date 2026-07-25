@@ -96,7 +96,7 @@ const UI_STRINGS_DEFAULTS = {
     /** Sub-tabs in Projektant Magazynu: only Magazyn and Layout (no Label Designer here). */
     designerSubTabs: {
       magazyn: "Magazyn",
-      layoutDesigner: "Projektant Layoutu",
+      layoutDesigner: "Projektowanie magazynu",
       designing: "Projektowanie",
       routes: "Trasy",
     },

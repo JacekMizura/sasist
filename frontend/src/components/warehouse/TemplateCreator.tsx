@@ -116,14 +116,18 @@ export function RackPreview({
     }
   }
   const containerRef = useRef<HTMLDivElement>(null);
-  const [containerHeight, setContainerHeight] = useState(500);
+  const [containerSize, setContainerSize] = useState({ w: 500, h: 400 });
   const [hoverBin, setHoverBin] = useState<{ level: number; bin: number } | null>(null);
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
     const ro = new ResizeObserver((entries) => {
-      const h = entries[0]?.contentRect.height ?? 500;
-      setContainerHeight(Math.max(200, h));
+      const cr = entries[0]?.contentRect;
+      if (!cr) return;
+      setContainerSize({
+        w: Math.max(1, cr.width),
+        h: Math.max(1, cr.height),
+      });
     });
     ro.observe(el);
     return () => ro.disconnect();
@@ -131,8 +135,10 @@ export function RackPreview({
 
   const margin = 8;
   const beamW = 8;
+  /** Fixed logical width — scale-to-fit via meet, independent of column count. */
   const viewBoxW = 1000;
-  const viewBoxH = containerHeight;
+  /** Keep a stable aspect so the full rack fits the container (no right-edge clip). */
+  const viewBoxH = Math.max(280, Math.round(viewBoxW * (containerSize.h / Math.max(containerSize.w, 1))));
   const contentW = viewBoxW - 2 * margin - 2 * beamW;
   const contentAreaH = viewBoxH - 2 * margin;
   const totalLevelHeightCm = Math.max(1, levelHeights.reduce((sum, v) => sum + Math.max(1, v), 0));
@@ -160,15 +166,18 @@ export function RackPreview({
   return (
     <div className={`flex flex-col flex-1 min-h-0 rounded-2xl border border-slate-200/40 bg-white/90 shadow-sm overflow-hidden ${className}`}>
       <h4 className="text-sm font-bold text-slate-600 px-2 pb-2 shrink-0">{titleProp ?? "Podgląd regału"}</h4>
-      <div ref={containerRef} className="flex-1 min-h-0 min-h-[200px] rounded-xl border border-slate-200/35 bg-slate-50/20 overflow-hidden flex items-stretch">
+      <div
+        ref={containerRef}
+        className="flex-1 min-h-0 min-w-0 rounded-xl border border-slate-200/35 bg-slate-50/20 overflow-hidden flex items-stretch justify-center"
+      >
         <svg
             viewBox={`0 0 ${viewBoxW} ${viewBoxH}`}
             preserveAspectRatio="xMidYMid meet"
-            className="w-full h-full rounded-xl"
+            className="max-h-full max-w-full w-full h-full rounded-xl"
             style={{ display: "block" }}
           >
             <defs>
-              <filter id="rack-shadow" x="-20%" y="-20%" width="140%" height="140%">
+              <filter id="rack-shadow" x="-5%" y="-5%" width="110%" height="110%">
                 <feDropShadow dx="0" dy="2" stdDeviation="2" floodOpacity="0.15" />
               </filter>
               <clipPath id="rack-content-clip">
@@ -244,9 +253,9 @@ export function RackPreview({
                   const labelText = label.length > 14 ? `${label.slice(0, 12)}…` : label;
                   const cx = x + w / 2;
                   const cy = y + h / 2;
-                  const nameFont = w < 120 ? 18 : 22;
-                  const dimsFont = 13;
-                  const capFont = 11;
+                  const nameFont = Math.max(10, Math.min(22, w * 0.22));
+                  const dimsFont = Math.max(8, Math.min(13, w * 0.12));
+                  const capFont = Math.max(7, Math.min(11, w * 0.1));
                   const lineGap = 4;
                   const dimsOpacity = 0.88;
                   const capOpacity = 0.76;
@@ -983,7 +992,7 @@ export function TemplateCreator({ onSave, initialTemplate, onCancelEdit, onSaveE
         <div className="space-y-3">
           <p className="text-slate-500 text-xs leading-snug">
             Domyślne otwory szablonu. Edytuj listę tutaj lub przeciągaj na widoku z góry (po prawej).
-            Przy umieszczaniu regału powstają przejazdy INHERITED.
+            Przy umieszczaniu regału powstają przejazdy dziedziczone ze szablonu.
           </p>
           {defaultPassages.map((p, idx) => (
             <div
@@ -994,7 +1003,7 @@ export function TemplateCreator({ onSave, initialTemplate, onCancelEdit, onSaveE
               onClick={() => setSelectedPassageIndex(idx)}
             >
               <label className="text-xs text-slate-500">
-                Offset (cm)
+                Położenie (cm)
                 <input
                   type="number"
                   min={0}
@@ -1069,7 +1078,7 @@ export function TemplateCreator({ onSave, initialTemplate, onCancelEdit, onSaveE
         {isEdit ? (
           <p className="text-slate-500 text-sm leading-snug">
             Po zapisie, jeśli na planie są regały z tym szablonem, pojawi się pytanie o aktualizację instancji
-            (tylko przejazdy <span className="font-medium">INHERITED</span>; lokalne pozostaną bez zmian).
+            (tylko przejazdy <span className="font-medium">dziedziczone ze szablonu</span>; lokalne pozostaną bez zmian).
           </p>
         ) : (
           <p className="text-slate-500 text-sm">Brak dodatkowych opcji dla nowego szablonu.</p>
@@ -1105,7 +1114,7 @@ export function TemplateCreator({ onSave, initialTemplate, onCancelEdit, onSaveE
               </span>
             </div>
           </div>
-          <div className="flex-1 min-h-0 grid grid-rows-[minmax(0,1fr)_minmax(140px,0.45fr)] gap-3 overflow-hidden">
+          <div className="flex-1 min-h-0 min-w-0 grid grid-rows-[minmax(0,1.35fr)_minmax(120px,0.35fr)] gap-3 overflow-hidden">
             <RackPreview
               width_cm={width_cm}
               depth_cm={depth_cm}
@@ -1130,7 +1139,7 @@ export function TemplateCreator({ onSave, initialTemplate, onCancelEdit, onSaveE
                   return { ...prev, [key]: cycleTemplateStorageType(current) };
                 });
               }}
-              className="min-h-0 h-full"
+              className="min-h-0 min-w-0 h-full max-w-full"
             />
             <TemplatePassageOverlay
               width_cm={width_cm}
@@ -1139,7 +1148,7 @@ export function TemplateCreator({ onSave, initialTemplate, onCancelEdit, onSaveE
               selectedIndex={selectedPassageIndex}
               onSelectIndex={setSelectedPassageIndex}
               onChangePassages={setDefaultPassages}
-              className="min-h-0 h-full"
+              className="min-h-0 min-w-0 h-full max-w-full"
             />
           </div>
         </div>
@@ -1193,7 +1202,7 @@ export function TemplateCreator({ onSave, initialTemplate, onCancelEdit, onSaveE
             <p className="text-sm text-slate-600 leading-relaxed">
               Zaktualizować wszystkie regały korzystające z tego szablonu?
               Na planie: <span className="font-semibold tabular-nums">{instanceUpdateDialog.instanceCount}</span>.
-              Zaktualizowane zostaną tylko przejazdy dziedziczone (INHERITED); lokalne (LOCAL) pozostaną bez zmian.
+              Zaktualizowane zostaną tylko przejazdy dziedziczone ze szablonu; przejazdy lokalne pozostaną bez zmian.
             </p>
             <div className="flex flex-col sm:flex-row gap-2 sm:justify-end">
               <button

@@ -88,7 +88,7 @@ export function PassageInspector({
           <p className="text-[10px] text-slate-500">
             Źródło:{" "}
             <span className="font-semibold">
-              {source === PassageSource.INHERITED ? "INHERITED (szablon)" : "LOCAL"}
+              {source === PassageSource.INHERITED ? "Dziedziczony (szablon)" : "Lokalny"}
             </span>
           </p>
         </div>
@@ -141,7 +141,7 @@ export function PassageInspector({
           </p>
           {members.length === 1 && (
             <label className="block text-[11px]">
-              Offset (cm)
+              Położenie (cm)
               <input
                 type="number"
                 min={0}

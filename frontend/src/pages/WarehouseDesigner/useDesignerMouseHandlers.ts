@@ -76,7 +76,7 @@ export interface UseDesignerMouseHandlersState {
   draggingRowId: string | null;
   rowDragPreviewStart: { x: number; y: number } | null;
   rackDragPreviewPosition: { x: number; y: number } | null;
-  /** True only when mouse handlers are used on the Magazyn live map (not Projektant Layoutu). */
+  /** True only when mouse handlers are used on the Magazyn live map (not Projektowanie magazynu). */
   magazynMapInteractions: boolean;
   mainView: "magazyn" | "layout";
   layoutMode: LayoutMode;

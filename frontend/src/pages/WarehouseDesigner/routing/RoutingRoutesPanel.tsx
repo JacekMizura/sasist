@@ -153,7 +153,7 @@ export function RoutingRoutesPanel({
       {tool === "edit" && (
         <p className="text-[11px] text-amber-900">
           Edycja grafu: przeciągaj punkty, scalaj / usuwaj, przepinaj końce odcinków. Bez edycji
-          przejazdów (Layout).
+          przejazdów (Projektowanie).
         </p>
       )}
 

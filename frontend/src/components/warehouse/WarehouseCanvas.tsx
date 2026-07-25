@@ -1536,7 +1536,7 @@ function WarehouseCanvasInner({
                 </svg>
                 {htmlOverlay ? (
                   <div className="absolute left-0 top-0 pointer-events-none" style={{ width, height, zIndex: 55 }}>
-                    <div className="pointer-events-auto relative w-full h-full">{htmlOverlay}</div>
+                    {htmlOverlay}
                   </div>
                 ) : null}
                 {/* HTML drop zones over empty slots. When rowToolActive, do not capture so SVG receives draw events. */}

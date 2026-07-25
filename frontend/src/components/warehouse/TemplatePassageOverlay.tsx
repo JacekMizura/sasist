@@ -146,7 +146,7 @@ export function TemplatePassageOverlay({
       </div>
       <div
         ref={containerRef}
-        className="relative flex-1 min-h-[120px] rounded-xl border border-slate-200/70 bg-slate-50/80 overflow-hidden touch-none"
+        className="relative flex-1 min-h-0 min-w-0 rounded-xl border border-slate-200/70 bg-slate-50/80 overflow-hidden touch-none"
         onPointerDown={() => onSelectIndex(null)}
       >
         <svg width={box.w} height={box.h} className="block w-full h-full">

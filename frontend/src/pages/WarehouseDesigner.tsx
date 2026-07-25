@@ -510,7 +510,7 @@ export default function WarehouseDesigner() {
   const deletedForUndoRef = useRef<{ racks?: RackState[]; visuals?: VisualElementState[]; row_containers?: LayoutState["row_containers"] } | null>(null);
   const [draggingWallEnd, setDraggingWallEnd] = useState<{ visualId: string; end: 0 | 1 } | null>(null);
   const [searchParams, setSearchParams] = useSearchParams();
-  /** Single view mode: Magazyn (live) | Projektant Layoutu (kept in sync with `?view=`). */
+  /** Single view mode: Magazyn (live) | Projektowanie magazynu (kept in sync with `?view=`). */
   const [mainView, setMainView] = useState<"magazyn" | "layout">(() =>
     searchParams.get("view") === "layout" ? "layout" : "magazyn"
   );

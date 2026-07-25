@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import type { LayoutState, WarehouseProduct } from "../../types/warehouse";
 import { ElevationPanel } from "./ElevationPanel";
-import { getRackDisplayId } from "./warehouseUtils";
+import { getRackDisplayId, rackMatchesSlotRackId } from "./warehouseUtils";
 import { AppRightPanel } from "../layout/app";
 
 export type ElevationSidePanelProps = {
@@ -26,7 +26,7 @@ export function ElevationSidePanel({
   onAddProduct,
   onEditProduct,
 }: ElevationSidePanelProps) {
-  const rack = layout.racks.find((r) => (r.id ?? r.rack_index) === rackId);
+  const rack = layout.racks.find((r) => rackMatchesSlotRackId(r, rackId));
   if (!rack) return null;
 
   return (

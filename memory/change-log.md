@@ -1,3 +1,10 @@
+## 2026-07-25 — Pre-push UX: P0 regressions + „Projektowanie magazynu”
+
+- Template preview scale-to-fit; ElevationSidePanel uuid match; routing htmlOverlay pointer trap
+- PL passage labels; tab rename Projektant Layoutu → Projektowanie magazynu
+- Passage/locations generator: deferred (no change this round)
+- Local commit only. No push.
+
 ## 2026-07-25 — PassageInspector wired (pre-push fix, uncommitted)
 
 - `PassageInspector` replaces `PassageQuickEditor` on Layout canvas
