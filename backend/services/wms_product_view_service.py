@@ -83,13 +83,12 @@ def build_wms_product_view(
             Location.warehouse_id == int(warehouse_id),
             Location.is_active.is_(True),
         )
-        .order_by(Location.pick_sequence.asc(), Location.name.asc(), Inventory.id.asc())
+        .order_by(Inventory.id.asc())
         .all()
     )
 
     loc_items: list[WmsProductViewLocation] = []
     total = 0.0
-    seq_map: dict[int, int | None] = {}
     for inv, loc in inv_rows:
         if should_hide_legacy_csv_import_inventory_location(
             loc_name=str(loc.name or ""),
@@ -101,7 +100,6 @@ def build_wms_product_view(
         q = float(inv.quantity or 0)
         total += q
         lid = int(loc.id)
-        seq_map[lid] = loc.pick_sequence
         code = (loc.name or "").strip() or f"LOC-{lid}"
         trace = inventory_damage_trace_out(db, inv)
         loc_items.append(
@@ -121,10 +119,13 @@ def build_wms_product_view(
             )
         )
 
+    # Display order along pick route = Runtime Graph Reader (pick_sequence ≠ routing).
+    from .warehouse_routing.runtime_graph_reader import visit_index_map
+
+    vmap = visit_index_map(db, int(warehouse_id), [x.location_id for x in loc_items])
     loc_items.sort(
         key=lambda x: (
-            1 if seq_map.get(x.location_id) is None else 0,
-            seq_map.get(x.location_id) if seq_map.get(x.location_id) is not None else 10**9,
+            vmap.get(x.location_id, 10**9),
             x.code.lower(),
             str(x.stock_disposition or ""),
         )

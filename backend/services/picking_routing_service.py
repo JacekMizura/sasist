@@ -1,10 +1,10 @@
 """
 PickingRoutingService — trasa zbiórki „Po lokalizacjach”.
 
-- Tylko logika odczytu: zamówienia, pozycje, stany ``Inventory`` + ``Location``.
+- Alokacja ze stanów Inventory + Location (pick-eligible).
+- Kolejność lokalizacji na liście: Authored Warehouse Routing Graph
+  (`warehouse_routing.runtime_graph_reader`) — bez heurystyk geometrycznych / etykiet.
 - Nie tworzy PickTask w DB, nie zmienia stocku ani MM.
-
-Używaj wyłącznie gdy strategia zbierania = po lokalizacjach (wywołanie po stronie klienta / fali).
 """
 
 from __future__ import annotations
@@ -62,8 +62,8 @@ class PickingRoutingService:
         """
         Buduje ``pick_list`` pogrupowane po (lokalizacja, produkt), z rozbiciem na koszyki.
 
-        Alokacja ilości z magazynu: agregacja stanów po lokalizacji, sortowanie lokalizacji po ``name``,
-        zasilanie „greedy” do pokrycia ilości z linii zamówienia.
+        Alokacja ilości z magazynu: agregacja stanów po lokalizacji (preferencja typu pick),
+        zasilanie greedy. Kolejność ``pick_list`` = Runtime Graph Reader (authored graph).
         """
         uniq: list[int] = []
         for oid in order_ids:
@@ -206,7 +206,19 @@ class PickingRoutingService:
                 )
             )
 
-        pick_rows.sort(key=lambda r: (r.location_code or "", r.product_id))
+        # Etap 3: kolejność trasy z Authored Routing Graph (Runtime Graph Reader).
+        warehouse_ids = {int(o.warehouse_id) for o in orders}
+        if len(warehouse_ids) == 1:
+            from .warehouse_routing.runtime_graph_reader import visit_index_map
+
+            wid = next(iter(warehouse_ids))
+            loc_ids = [r.location_id for r in pick_rows]
+            idx = visit_index_map(self.db, wid, loc_ids)
+            pick_rows.sort(
+                key=lambda r: (idx.get(int(r.location_id), 10**9), int(r.location_id), int(r.product_id))
+            )
+        else:
+            pick_rows.sort(key=lambda r: (int(r.location_id), int(r.product_id)))
 
         return PickingRoutingResult(pick_list=pick_rows, shortfalls=shortfalls, warnings=warnings)
 
@@ -273,7 +285,9 @@ class PickingRoutingService:
             raw[pair].append((int(loc_id), float(qty_sum or 0), str(loc_name or ""), lt))
 
         for pair, lst in raw.items():
-            lst.sort(key=lambda t: (0 if t[3] == "pick" else 1, t[2], t[0]))
+            # Prefer pick-type; among same type order by location_id (stable).
+            # Graph visit order is applied to the final pick_list, not per-SKU greedy.
+            lst.sort(key=lambda t: (0 if t[3] == "pick" else 1, t[0]))
             out[pair] = [(a, b, c) for a, b, c, _ in lst]
 
         for pair in pairs:

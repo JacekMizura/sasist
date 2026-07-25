@@ -35,6 +35,12 @@ def _score_location(
     zone_match: bool,
     capacity_numeric_trusted: bool = True,
 ) -> tuple[float, list[str]]:
+    """
+    Putaway scoring heuristic.
+
+    ``pick_sequence`` here is warehouse storage / picking-priority metadata for
+    putaway suggestions only — NOT walk-routing SSOT (use Runtime Graph Reader for routes).
+    """
     tags: list[str] = []
     if not capacity_fits:
         return 0.0, ["capacity_exceeded"]
@@ -76,6 +82,7 @@ def _score_location(
         score += max(0.0, 120 - float(picking_priority))
         tags.append("picking_priority")
     elif strat == STRATEGY_NEAREST_AVAILABLE:
+        # pick_sequence = authored storage priority for putaway — NOT Runtime Graph walk cost.
         if pick_sequence is not None:
             score += max(0.0, 500.0 - float(pick_sequence))
         tags.append("nearest")
@@ -132,6 +139,7 @@ def suggest_putaway_locations(
         db.query(Location)
         .filter(Location.warehouse_id == int(warehouse_id), Location.is_active.is_(True))
         .order_by(Location.pick_sequence.is_(None), Location.pick_sequence.asc(), Location.id.asc())
+        # pick_sequence = storage/putaway candidate order only — NOT walk-routing SSOT.
         .all()
     )
 

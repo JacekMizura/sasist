@@ -73,17 +73,17 @@ def _warehouse_qty(
         return 0.0
 
 
-def _effective_pick_sequence(pick_sequence: int | None) -> int:
-    return int(pick_sequence) if pick_sequence is not None else EFFECTIVE_UNSEQUENCED
-
-
-def _location_route_sort_key(loc: Location | None, *, fallback_code: str = "") -> Tuple[Any, ...]:
-    """Sort like picking route: sequenced locations first, then code."""
-    if loc is None:
+def _location_route_sort_key(
+    loc_id: Optional[int],
+    visit_idx: Dict[int, int],
+    *,
+    fallback_code: str = "",
+) -> Tuple[Any, ...]:
+    """Sort like picking route: Runtime Graph visit index (not pick_sequence / name)."""
+    if loc_id is None:
         code = (fallback_code or "").strip().lower()
         return (1, EFFECTIVE_UNSEQUENCED, code, 0)
-    code = (loc.name or "").strip().lower()
-    return (0, _effective_pick_sequence(getattr(loc, "pick_sequence", None)), code, int(loc.id))
+    return (0, visit_idx.get(int(loc_id), EFFECTIVE_UNSEQUENCED), "", int(loc_id))
 
 
 def _zone_label_for_location(loc: Location | None, *, fallback_code: str = "") -> Optional[str]:
@@ -111,7 +111,6 @@ def _batch_primary_location_context(
             Inventory.product_id,
             Location.id,
             Location.name,
-            Location.pick_sequence,
             Location.rack_name,
             Inventory.quantity,
         )
@@ -126,31 +125,30 @@ def _batch_primary_location_context(
         .all()
     )
 
-    best: Dict[int, Tuple[float, int, str, Any, Any]] = {}
-    for pid, loc_id, name, pick_seq, rack_name, qty in rows:
+    best: Dict[int, Tuple[float, int, str, Any]] = {}
+    for pid, loc_id, name, rack_name, qty in rows:
         pid_i = int(pid)
         q = float(qty or 0)
         prev = best.get(pid_i)
         if prev is None or q > prev[0]:
-            best[pid_i] = (q, int(loc_id), str(name or ""), pick_seq, rack_name)
+            best[pid_i] = (q, int(loc_id), str(name or ""), rack_name)
+
+    from .warehouse_routing.runtime_graph_reader import visit_index_map
+
+    lids = [int(t[1]) for t in best.values()]
+    visit_idx = visit_index_map(db, int(warehouse_id), lids) if lids else {}
 
     out: Dict[int, _PrimaryLocCtx] = {}
-    for pid_i, (_q, loc_id, name, pick_seq, rack_name) in best.items():
+    for pid_i, (_q, loc_id, name, rack_name) in best.items():
         label = name.strip() or None
         code = label or ""
         rack_s = (rack_name or "").strip() if rack_name is not None else ""
         zone = rack_s or code or None
-        sort_key = (
-            0,
-            _effective_pick_sequence(int(pick_seq) if pick_seq is not None else None),
-            code.lower(),
-            int(loc_id),
-        )
         out[pid_i] = _PrimaryLocCtx(
             label=label,
             location_id=int(loc_id),
             zone=zone,
-            sort_key=sort_key,
+            sort_key=_location_route_sort_key(int(loc_id), visit_idx, fallback_code=code),
         )
     return out
 
@@ -172,7 +170,9 @@ def _primary_loc_ctx_for_product(
         )
         label_s = (label or "").strip() or None
         if not label_s:
-            return _PrimaryLocCtx(label=None, location_id=None, zone=None, sort_key=_location_route_sort_key(None))
+            return _PrimaryLocCtx(
+                label=None, location_id=None, zone=None, sort_key=_location_route_sort_key(None, {})
+            )
         loc_row = (
             db.query(Location)
             .filter(
@@ -181,14 +181,23 @@ def _primary_loc_ctx_for_product(
             )
             .first()
         )
+        from .warehouse_routing.runtime_graph_reader import visit_index_map
+
+        lids = [int(loc_row.id)] if loc_row else []
+        visit_idx = visit_index_map(db, int(warehouse_id), lids) if lids else {}
         return _PrimaryLocCtx(
             label=label_s,
             location_id=int(loc_row.id) if loc_row else None,
             zone=_zone_label_for_location(loc_row, fallback_code=label_s),
-            sort_key=_location_route_sort_key(loc_row, fallback_code=label_s),
+            sort_key=_location_route_sort_key(
+                int(loc_row.id) if loc_row else None,
+                visit_idx,
+                fallback_code=label_s,
+            ),
         )
-    return _PrimaryLocCtx(label=None, location_id=None, zone=None, sort_key=_location_route_sort_key(None))
-
+    return _PrimaryLocCtx(
+        label=None, location_id=None, zone=None, sort_key=_location_route_sort_key(None, {})
+    )
 
 def _missing_field_labels_from_validation(product: Product, wms_settings=None) -> Tuple[List[str], List[str]]:
     v = validate_required_product_data(product, wms_settings)

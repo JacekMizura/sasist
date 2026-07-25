@@ -515,7 +515,7 @@ def nearest_pick_location_for_product(
     product_id: int,
 ) -> tuple[Optional[int], str, float]:
     """
-    Najbliższa lokalizacja wg trasy zbierania (PickingRoutingService), fallback: stan magazynowy.
+    Najbliższa lokalizacja wg trasy zbierania (PickingRoutingService + Runtime Graph Reader).
     """
     from .picking_routing_service import PickingRoutingService
     from .wms_packing_service import _primary_location_for_product

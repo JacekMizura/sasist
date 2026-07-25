@@ -7,7 +7,6 @@ Wave Service
 """
 
 import logging
-import re
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 
@@ -19,7 +18,6 @@ from ..models.pick_wave import PickWave, PickWaveTask
 from ..models.pick_task import PickTask
 from ..models.inventory import Inventory
 from ..models.stock_reservation import StockReservation
-from ..models.location import Location
 from .fulfillment_assignment.phase_constants import CONSOLIDATION_WAVE_BLOCKED_PHASES
 from .wms_queue_eligibility import wms_queue_consolidation_plan_clauses
 from .inventory_lot_keys import NO_EXPIRY_SENTINEL
@@ -58,79 +56,6 @@ def _get_order_locations_sets(
     )
 
 
-def _rack_str_to_num(rack_str: str) -> int:
-    """Convert rack string (e.g. A1, B) to numeric for ordering."""
-    if not rack_str:
-        return 0
-    s = str(rack_str).strip().upper()
-    first = s[0] if s else ""
-    rest = s[1:].strip() or "0"
-    return (ord(first) - ord("A")) * 100 + (int(rest) if rest.isdigit() else 0)
-
-
-def _location_label_to_coords(location: str | dict) -> tuple[int, int, int] | None:
-    """Parse location to (rack_num, level, position). Accepts string label or dict with level/position/rack_name."""
-    if isinstance(location, dict):
-        if "level" in location and "position" in location:
-            try:
-                level = int(location.get("level", 0))
-                pos = int(location.get("position", 0))
-                rack_str = (
-                    location.get("rack_name")
-                    or location.get("rack_id")
-                    or location.get("rack")
-                    or ""
-                )
-                rack_num = _rack_str_to_num(str(rack_str))
-                return (rack_num, level, pos)
-            except (TypeError, ValueError):
-                pass
-        label = location.get("loc_name") or location.get("location_name") or location.get("name") or ""
-        if not label:
-            return None
-        location = str(label)
-    if not location or not isinstance(location, str):
-        return None
-    s = str(location).strip()
-    parts = re.split(r"[-_\s]+", s)
-    if len(parts) >= 3:
-        try:
-            rack_str = parts[0].upper()
-            level = int(parts[1])
-            pos = int(parts[2])
-            rack_num = _rack_str_to_num(rack_str)
-            return (rack_num, level, pos)
-        except (ValueError, IndexError):
-            pass
-    if len(parts) == 2:
-        try:
-            rack_str = parts[0].upper()
-            level = int(parts[1])
-            rack_num = _rack_str_to_num(rack_str)
-            return (rack_num, level, 0)
-        except (ValueError, IndexError):
-            pass
-    return None
-
-
-def _distance_between(coords_a: tuple[int, int, int] | None, coords_b: tuple[int, int, int] | None) -> float:
-    """Distance = abs(rack_diff)*10 + abs(level_diff)*3 + abs(position_diff)."""
-    if coords_a is None or coords_b is None:
-        return 0.0
-    ra, la, pa = coords_a
-    rb, lb, pb = coords_b
-    return abs(ra - rb) * 10 + abs(la - lb) * 3 + abs(pa - pb)
-
-
-# Used when location has no pick_sequence set (unsequenced locations come last on path).
-EFFECTIVE_SEQ_UNSEQUENCED = 999999
-
-
-def _effective_pick_sequence(pick_sequence: int | None) -> int:
-    """Return effective sequence for ordering; unsequenced locations sort after all sequenced."""
-    return pick_sequence if pick_sequence is not None else EFFECTIVE_SEQ_UNSEQUENCED
-
-
 def _build_wave_order_ids_clustering(
     order_ids: list[int],
     order_locations: dict[int, set[str]],
@@ -167,13 +92,20 @@ def compute_wave_metrics(
     wave_id: int,
 ) -> dict:
     """
-    For a wave's PickWave: get all PickTasks (via PickWaveTask), collect location_ids,
-    resolve to labels, sort by warehouse layout order, compute path distance and picking time.
+    For a wave's PickWave: collect location_ids from PickTasks,
+    order + distance via Runtime Graph Reader (authored Routing Graph).
     Returns locations_count, estimated_distance, estimated_picking_time.
     """
+    from .warehouse_routing.runtime_graph_reader import (
+        chain_distance_m,
+        order_location_ids_by_graph,
+    )
+
     pick_wave = db.query(PickWave).filter(PickWave.wave_id == wave_id).first()
     if not pick_wave:
         return {"locations_count": 0, "estimated_distance": 0.0, "estimated_picking_time": 0.0}
+    wave = db.query(Wave).filter(Wave.id == wave_id).first()
+    warehouse_id = int(wave.warehouse_id) if wave is not None else None
     tasks = (
         db.query(PickTask)
         .join(PickWaveTask, PickWaveTask.pick_task_id == PickTask.id)
@@ -182,24 +114,21 @@ def compute_wave_metrics(
     )
     if not tasks:
         return {"locations_count": 0, "estimated_distance": 0.0, "estimated_picking_time": 0.0}
-    location_ids = list({t.location_id for t in tasks})
-    locations = {loc.id: loc for loc in db.query(Location).filter(Location.id.in_(location_ids)).all()}
-    labels_with_coords: list[tuple[tuple[int, int, int], str]] = []
-    for loc_id in location_ids:
-        loc = locations.get(loc_id)
-        name = (loc.name or "").strip() if loc else ""
-        if name:
-            coords = _location_label_to_coords(name)
-            if coords:
-                labels_with_coords.append((coords, name))
-    labels_with_coords.sort(key=lambda x: x[0])
-    path_labels = [name for _, name in labels_with_coords]
-    locations_count = len(path_labels)
+    location_ids = list({int(t.location_id) for t in tasks if t.location_id is not None})
+    locations_count = len(location_ids)
     total_distance = 0.0
-    for i in range(len(path_labels) - 1):
-        c1 = _location_label_to_coords(path_labels[i])
-        c2 = _location_label_to_coords(path_labels[i + 1])
-        total_distance += _distance_between(c1, c2)
+    if warehouse_id is not None and location_ids:
+        ordered, _ = order_location_ids_by_graph(db, warehouse_id, location_ids)
+        dist, err, _path = chain_distance_m(
+            db,
+            warehouse_id,
+            ordered,
+            include_start=True,
+            include_packing=True,
+        )
+        if err is None and dist is not None:
+            total_distance = float(dist)
+        # Brak grafu / brak ścieżki → 0.0 (bez heurystyki label/Manhattan)
     picking_time_sec = (total_distance / WALKING_SPEED_M_PER_S) + (len(tasks) * PICK_TIME_PER_ITEM_SEC)
     return {
         "locations_count": locations_count,
@@ -299,8 +228,7 @@ def create_wave(
         )
         .all()
     )
-    # Virtual picker position along the warehouse pick path (pick_sequence). Advances as we assign picks.
-    current_pick_sequence = 0
+    # Allocate from Inventory: FEFO + storage priority + Runtime Graph visit order.
     commercial_remaining: dict[int, float] = {}
     for oi in order_items:
         need = float(oi.quantity)
@@ -323,13 +251,12 @@ def create_wave(
                     commercial_remaining[pid],
                 )
                 continue
-        slices, next_sequence = allocate_inventory_slices_fefo_pick_path(
+        slices = allocate_inventory_slices_fefo_pick_path(
             db,
             tenant_id,
             oi.product_id,
             warehouse_id,
             need,
-            current_pick_sequence,
             stock_disposition=req_disp,
         )
         if not slices or sum(s[1] for s in slices) + 1e-9 < need:
@@ -338,7 +265,6 @@ def create_wave(
                 oi.order_id, oi.product_id, need,
             )
             continue
-        current_pick_sequence = next_sequence
         for chosen, slice_qty in slices:
             bn = getattr(chosen, "batch_number", "") or ""
             ed = getattr(chosen, "expiry_date", None) or NO_EXPIRY_SENTINEL

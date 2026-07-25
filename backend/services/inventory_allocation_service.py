@@ -1,7 +1,8 @@
 """
-Inventory allocation — FEFO pick path, FIFO consume, reservation qty per lot+disposition.
+Inventory allocation — FEFO + storage priority + Graph Reader visit order.
 
-Etap 2 SSOT for matching ``OrderItem.required_stock_disposition`` to ``inventory.stock_disposition``.
+``pick_sequence`` is NOT used here (not routing SSOT).
+FEFO / stock_disposition = business; visit order = Runtime Graph Reader.
 """
 
 from __future__ import annotations
@@ -24,12 +25,9 @@ from .stock_disposition import (
     normalize_stock_disposition,
     resolve_order_item_required_disposition,
 )
+from .warehouse_routing.runtime_graph_reader import visit_index_map
 
 EFFECTIVE_SEQ_UNSEQUENCED = 999999
-
-
-def _effective_pick_sequence(pick_sequence: int | None) -> int:
-    return pick_sequence if pick_sequence is not None else EFFECTIVE_SEQ_UNSEQUENCED
 
 
 def reserved_qty_at_lot(
@@ -64,19 +62,19 @@ def allocate_inventory_slices_fefo_pick_path(
     product_id: int,
     warehouse_id: int,
     need: float,
-    current_pick_sequence: int,
     *,
     stock_disposition: str = DEFAULT_STOCK_DISPOSITION,
-) -> tuple[list[tuple[Inventory, float]], int]:
+) -> list[tuple[Inventory, float]]:
     """
-    Allocate ``need`` across inventory rows: FEFO + pick path, filtered by ``stock_disposition``.
+    Allocate ``need`` across inventory rows: FEFO + storage priority + graph visit order.
+    Filtered by ``stock_disposition``.
     """
     if need <= 0:
-        return ([], current_pick_sequence)
+        return []
     sd = normalize_stock_disposition(stock_disposition)
     requires_putaway = resolve_requires_putaway_for_warehouse(db, warehouse_id)
     stock_rows = (
-        db.query(Inventory, Location, Location.pick_sequence, Bin.storage_type)
+        db.query(Inventory, Location, Bin.storage_type)
         .join(Location, Inventory.location_id == Location.id)
         .outerjoin(Bin, Bin.location_uuid == Location.location_uuid)
         .filter(
@@ -93,8 +91,8 @@ def allocate_inventory_slices_fefo_pick_path(
         )
         .all()
     )
-    candidates: list[tuple[Inventory, int | None, str | None]] = []
-    for inv, loc, pick_sequence, storage_type in stock_rows:
+    candidates: list[tuple[Inventory, str | None]] = []
+    for inv, loc, storage_type in stock_rows:
         if not is_pick_eligible_location_row(loc, requires_putaway=requires_putaway):
             continue
         bn = getattr(inv, "batch_number", "") or ""
@@ -104,23 +102,29 @@ def allocate_inventory_slices_fefo_pick_path(
         )
         if float(inv.quantity) - reserved <= 0:
             continue
-        candidates.append((inv, pick_sequence, storage_type))
+        candidates.append((inv, storage_type))
     if not candidates:
-        return ([], current_pick_sequence)
-    best_priority = min(get_storage_priority(item[2]) or EFFECTIVE_SEQ_UNSEQUENCED for item in candidates)
-    candidates = [c for c in candidates if (get_storage_priority(c[2]) or EFFECTIVE_SEQ_UNSEQUENCED) == best_priority]
+        return []
+    best_priority = min(
+        get_storage_priority(item[1]) or EFFECTIVE_SEQ_UNSEQUENCED for item in candidates
+    )
+    candidates = [
+        c
+        for c in candidates
+        if (get_storage_priority(c[1]) or EFFECTIVE_SEQ_UNSEQUENCED) == best_priority
+    ]
+    vmap = visit_index_map(db, int(warehouse_id), [int(c[0].location_id) for c in candidates])
     candidates.sort(
         key=lambda item: (
             getattr(item[0], "expiry_date", None) or NO_EXPIRY_SENTINEL,
-            _effective_pick_sequence(item[1]),
+            vmap.get(int(item[0].location_id), 10**9),
             item[0].location_id,
             item[0].id,
         )
     )
     remaining = float(need)
     slices: list[tuple[Inventory, float]] = []
-    next_seq_out = current_pick_sequence
-    for row, pick_sequence, _storage_type in candidates:
+    for row, _storage_type in candidates:
         if remaining <= 1e-9:
             break
         bn = getattr(row, "batch_number", "") or ""
@@ -134,9 +138,7 @@ def allocate_inventory_slices_fefo_pick_path(
         take = min(remaining, avail)
         slices.append((row, take))
         remaining -= take
-        if pick_sequence is not None:
-            next_seq_out = pick_sequence
-    return (slices, next_seq_out)
+    return slices
 
 
 def required_disposition_for_order_item(db: Session, order_item_id: int | None) -> str:

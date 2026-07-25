@@ -1,28 +1,36 @@
-"""Authored Warehouse Routing Graph package — NEW SSOT (not legacy warehouse_graph)."""
+"""Authored Warehouse Routing Graph package — NEW SSOT (not legacy warehouse_graph).
 
-from .access_resolution import (
-    access_node_uuids_for_location,
-    chain_distance_through_location_ids,
-    is_routing_graph_configured,
-    route_between_locations,
-    route_between_points_cm,
-    route_best_among_candidates,
-)
+Public WMS contract for routing = Runtime Graph Reader only
+(``graph_ready``, ``hop_cost_m``, ``order_location_ids_by_graph``, ``chain_distance_m`` /
+``runtime_chain_distance_m``, ``visit_index_map``).
+
+``access_resolution`` distance helpers (``route_between_*``, ``chain_distance_*``) are INTERNAL —
+import them from ``access_resolution`` only inside this package, Designer adapters, or tests.
+"""
+
 from .engine import route_a_to_b
 from .graph_service import get_graph, replace_graph
 from .intersection import materialize_intersections
+from .runtime_graph_reader import (
+    chain_distance_m as runtime_chain_distance_m,
+    graph_ready,
+    hop_cost_m,
+    order_location_ids_by_graph,
+    visit_index_map,
+)
 from .validation import validate_graph
 
+# Authoring / Designer graph CRUD (not WMS walk routing).
 __all__ = [
     "route_a_to_b",
     "get_graph",
     "replace_graph",
     "validate_graph",
     "materialize_intersections",
-    "is_routing_graph_configured",
-    "access_node_uuids_for_location",
-    "route_best_among_candidates",
-    "route_between_locations",
-    "route_between_points_cm",
-    "chain_distance_through_location_ids",
+    # Etap 3 / 3.1 — Runtime Graph Reader (WMS SSOT)
+    "graph_ready",
+    "hop_cost_m",
+    "order_location_ids_by_graph",
+    "visit_index_map",
+    "runtime_chain_distance_m",
 ]

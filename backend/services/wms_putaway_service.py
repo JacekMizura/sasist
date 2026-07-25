@@ -1069,6 +1069,7 @@ def suggest_putaway_locations(db: Session, tenant_id: int, item_id: int) -> WmsP
                 continue
             if lid in stocked_lids:
                 continue
+            # pick_sequence = putaway / storage priority metadata only — NOT walk-routing SSOT.
             ps = getattr(loc, "pick_sequence", None)
             seq_score = float(ps) if ps is not None else 1_000_000.0
             priority = max(0.0, 10_000.0 - seq_score)

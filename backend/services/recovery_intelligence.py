@@ -287,8 +287,9 @@ def build_recovery_batch_route_groups(
     warehouse_id: int,
     line_rows: list[dict[str, Any]],
 ) -> list[dict[str, Any]]:
-    """Grupowanie linii dogrywki po lokalizacji (strefa / alejka / bliskość)."""
+    """Grupowanie linii dogrywki po lokalizacji; kolejność grup = Runtime Graph visit order."""
     from .braki_order_state_service import enrich_shortage_line_location_fields
+    from .warehouse_routing.runtime_graph_reader import visit_index_map
 
     by_loc: dict[str, list[dict[str, Any]]] = {}
     for raw in line_rows:
@@ -305,8 +306,24 @@ def build_recovery_batch_route_groups(
         row["location_code"] = loc
         by_loc.setdefault(loc, []).append(row)
 
+    lid_for_code: dict[str, int] = {}
+    for loc, items in by_loc.items():
+        for i in items:
+            nid = i.get("nearest_location_id")
+            if nid is not None and int(nid) > 0:
+                lid_for_code[loc] = int(nid)
+                break
+    vmap = visit_index_map(db, int(warehouse_id), list(lid_for_code.values())) if lid_for_code else {}
+
+    def _group_order(loc: str) -> tuple:
+        lid = lid_for_code.get(loc)
+        if lid is not None:
+            return (0, vmap.get(lid, 10**9), loc)
+        # No graph id — stable fallback by structured code (display only, not walk cost).
+        return (1, 10**9, _location_sort_key(loc))
+
     groups: list[dict[str, Any]] = []
-    for loc in sorted(by_loc.keys(), key=_location_sort_key):
+    for loc in sorted(by_loc.keys(), key=_group_order):
         items = by_loc[loc]
         order_ids = sorted({int(i.get("order_id") or 0) for i in items if int(i.get("order_id") or 0) > 0})
         groups.append(

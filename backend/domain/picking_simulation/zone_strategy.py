@@ -11,20 +11,18 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
-from ...models.location import Location
-
-from .metrics import StrategySimulationResult
 from ._pick_helpers import (
     get_order_pick_locations,
     compute_route_for_pick_nodes,
     WALKING_SPEED_M_S,
 )
+from .metrics import StrategySimulationResult
 
 # Time constants (seconds)
 PICK_TIME_PER_ITEM_ZONE = 4.0
 PACK_TIME_PER_ORDER_ZONE = 30.0   # consolidation
 CONSOLIDATION_TIME_PER_ORDER = 15.0  # extra time at consolidation
-NUM_ZONES_DEFAULT = 3  # divide locations by pick_sequence into this many zones
+NUM_ZONES_DEFAULT = 3  # divide locations by graph visit order into this many zones
 
 
 def _assign_locations_to_zones(
@@ -33,23 +31,23 @@ def _assign_locations_to_zones(
     location_ids: list[int],
 ) -> dict[int, int]:
     """
-    Assign location_id -> zone_index (0..NUM_ZONES-1) by pick_sequence terciles.
-    Locations without pick_sequence go to zone 0.
+    Assign location_id -> zone_index (0..NUM_ZONES-1) by Runtime Graph visit order.
+    pick_sequence is NOT routing SSOT.
     """
     if not location_ids:
         return {}
-    rows = (
-        db.query(Location.id, Location.pick_sequence)
-        .filter(Location.id.in_(location_ids), Location.warehouse_id == warehouse_id)
-        .all()
-    )
-    seqs = [(r.id, r.pick_sequence if r.pick_sequence is not None else -1) for r in rows]
-    seqs.sort(key=lambda x: x[1])
+    from ...services.warehouse_routing.runtime_graph_reader import order_location_ids_by_graph
+
+    ordered, _ = order_location_ids_by_graph(db, warehouse_id, list(location_ids))
+    # Include any locations missing from graph order at the end (stable by id).
+    seen = set(ordered)
+    rest = sorted(lid for lid in location_ids if lid not in seen)
+    seqs = list(ordered) + rest
     n = len(seqs)
     zone_size = max(1, (n + NUM_ZONES_DEFAULT - 1) // NUM_ZONES_DEFAULT)
     result: dict[int, int] = {}
-    for i, (loc_id, _) in enumerate(seqs):
-        result[loc_id] = min(i // zone_size, NUM_ZONES_DEFAULT - 1)
+    for i, loc_id in enumerate(seqs):
+        result[int(loc_id)] = min(i // zone_size, NUM_ZONES_DEFAULT - 1)
     return result
 
 

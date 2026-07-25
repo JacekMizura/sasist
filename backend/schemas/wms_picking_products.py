@@ -100,7 +100,7 @@ class WmsPickingProductLine(BaseModel):
             "SHORTAGE (remaining≈0 i missing>0 — zakończone problemowo, NIE mylić z ZEBRANO)"
         ),
     )
-    primary_location_code: str = Field("", description="Pierwsza lokalizacja na trasie (lex wg nazwy)")
+    primary_location_code: str = Field("", description="Pierwsza lokalizacja na trasie grafowej (PickingRoutingService)")
     primary_location_stock: float = Field(
         0,
         ge=0,
@@ -111,7 +111,10 @@ class WmsPickingProductLine(BaseModel):
         ge=0,
         description="Liczba pozostałych lokalizacji (pierwsza już w primary) — do podpowiedzi +N",
     )
-    route_sort_key: str = Field("", description="Klucz sortowania listy = primary_location_code")
+    route_sort_key: str = Field(
+        "",
+        description="Klucz sortowania listy = zero-padded visit index z Runtime Graph Reader (nie location_code)",
+    )
     scanner_active: bool = Field(
         True,
         description="Czy skan EAN może otworzyć ten SKU: linia z ilością do pobrania z magazynu **lub** linia ze statusem braku (``missing``) z jawnym ``missing_quantity`` — SKU nie znika z aktywnej sesji po samym zgłoszeniu braku",

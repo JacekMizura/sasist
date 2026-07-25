@@ -2,12 +2,11 @@
 
 ## Active
 
-**Internal Layout ↔ template sync (passage)** — local, no push.
+**Etap 3.1 — Finalizacja SSOT Routing Graph** — local, no push.
 
-- Układ wewnętrzny: tylko poziomy magazynowe (`structural − void`), nie pełne `rack.levels`.
-- Etykiety = poziom konstrukcyjny (jak podgląd szablonu).
-- Zapis układu: zachowuje pełny `levelConfig` konstrukcyjny przy przejeździe.
-- Bez push / deploy.
+- Surrogates usunięte z WMS runtime (analytics, product list, allocation, zones, …)
+- Doc: `docs/architecture/routing_graph_runtime.md` (+ Routing Surrogates)
+- Werdykt: Runtime Graph Reader = jedyny SSOT routingu WMS
 
 ### Constraints
 Bez push. Bez deploy.

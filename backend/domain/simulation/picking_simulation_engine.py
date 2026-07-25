@@ -1,8 +1,8 @@
 """
 Picking simulation engine — simulate picking for a single order.
 
-Uses authored Warehouse Routing Graph via access_resolution (no WarehouseNode).
-Visit order: Euclidean NN heuristic; distance: Routing Engine + best Access Points.
+Uses authored Warehouse Routing Graph via Runtime Graph Reader
+(``compute_route_for_pick_nodes`` → order_location_ids_by_graph / chain_distance_m).
 """
 
 from datetime import datetime
@@ -18,11 +18,11 @@ from ...models.location import Location
 from ...models.warehouse_routing import WarehouseRoutingNode
 from ...services.warehouse_routing.access_resolution import (
     access_node_uuids_for_locations,
-    is_routing_graph_configured,
     packing_node_uuid,
     picking_start_node_uuid,
 )
 from ...services.warehouse_routing.constants import ERROR_ROUTING_GRAPH_NOT_CONFIGURED
+from ...services.warehouse_routing.runtime_graph_reader import graph_ready
 from ..picking_simulation._pick_helpers import (
     WALKING_SPEED_M_S,
     compute_route_for_pick_nodes,
@@ -68,7 +68,7 @@ def simulate_single_order(
     """
     warehouse_id = order.warehouse_id
 
-    if not is_routing_graph_configured(db, warehouse_id):
+    if not graph_ready(db, warehouse_id):
         return {
             "warehouse_id": warehouse_id,
             "start_xy": None,

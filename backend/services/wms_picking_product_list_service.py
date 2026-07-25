@@ -1865,18 +1865,30 @@ def build_wms_picking_product_lines(
             db, tenant_id=tenant_id, warehouse_id=warehouse_id, order_ids=order_ids, cart_id=cart_id
         )
 
-    # Z alokacji (routing): pierwsza lokalizacja na trasie per produkt — tylko do sortu i wyświetlenia „głównej” lokalizacji
+    # Z alokacji (routing): pierwsza lokalizacja na trasie grafowej per produkt (pick_list już posortowany).
     by_product_first_loc: dict[int, str] = {}
+    by_product_first_lid: dict[int, int] = {}
     prod_lid_qty: dict[int, dict[int, float]] = defaultdict(lambda: defaultdict(float))
     prod_lid_code: dict[int, dict[int, str]] = defaultdict(dict)
     for row in pick_list:
         pid = int(row.product_id)
         code = row.location_code or ""
-        if pid not in by_product_first_loc or code < by_product_first_loc[pid]:
-            by_product_first_loc[pid] = code
         lid = int(row.location_id)
+        if pid not in by_product_first_loc:
+            by_product_first_loc[pid] = code
+            by_product_first_lid[pid] = lid
         prod_lid_qty[pid][lid] += float(row.total_quantity or 0)
         prod_lid_code[pid][lid] = row.location_code or ""
+
+    from .warehouse_routing.runtime_graph_reader import visit_index_map
+
+    all_route_lids = list({int(r.location_id) for r in pick_list})
+    visit_idx = visit_index_map(db, int(warehouse_id), all_route_lids) if all_route_lids else {}
+
+    def _route_sort_key_for_lid(lid: int | None) -> str:
+        if lid is None:
+            return "\uffff"
+        return f"{visit_idx.get(int(lid), 10**9):010d}"
 
     # Lista produktów = WSZYSTKIE product_id występujące w liniach zamówień (nie tylko te z pick_list)
     product_ids = sorted(demand_by_product.keys())
@@ -1935,13 +1947,15 @@ def build_wms_picking_product_lines(
     lines: list[WmsPickingProductLine] = []
     for pid in sorted(
         product_ids,
-        key=lambda p: (by_product_first_loc.get(p) if by_product_first_loc.get(p) else "\uffff", p),
+        key=lambda p: (_route_sort_key_for_lid(by_product_first_lid.get(p)), p),
     ):
         pr = pmap.get(pid)
         name = pr.name if pr and pr.name else f"Produkt #{pid}"
         ean = pr.ean if pr else None
         img = pr.image_url if pr else None
         loc = by_product_first_loc.get(pid, "")
+        primary_lid = by_product_first_lid.get(pid)
+        route_key = _route_sort_key_for_lid(primary_lid)
         tq = float(demand_by_product[pid])
         pq = round(picked_map.get(pid, 0.0), 6)
         primary_stock = 0.0
@@ -1989,7 +2003,7 @@ def build_wms_picking_product_lines(
                 primary_location_code=loc,
                 primary_location_stock=primary_stock,
                 extra_locations_count=extra_locs,
-                route_sort_key=loc if loc else "\uffff",
+                route_sort_key=route_key,
                 scanner_active=scanner_active,
                 consolidation_pick=shelf_label is not None,
                 consolidation_shelf_label=shelf_label,
@@ -2031,7 +2045,7 @@ def build_wms_picking_product_lines(
                             ln.model_copy(
                                 update={
                                     "primary_location_code": code,
-                                    "route_sort_key": code,
+                                    # Keep graph visit route_sort_key — never location_code.
                                 }
                             )
                         )

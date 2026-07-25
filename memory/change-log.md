@@ -1,3 +1,37 @@
+## 2026-07-25 — Etap 3.1 Finalizacja SSOT Routing Graph (no push)
+
+- Analytics: `order_location_ids_by_graph` → `chain_distance_m`
+- Product list: `route_sort_key` = `visit_index_map`
+- Allocation / zone / product_view / incomplete / recovery groups → Graph Reader
+- Public `__init__`: tylko Runtime Graph Reader (+ CRUD Designer); Euclidean eksport usunięty
+- Doc: Routing Surrogates. Tests: `test_stage3_1_ssot_finalization.py`. **No push.**
+
+## 2026-07-25 — Architecture Review Etap 3 Routing Graph (no push)
+
+- Audyt backendu pod SSOT; doc `docs/architecture/routing_graph_runtime.md`
+- Werdykt: reader **nie** jest jeszcze jedynym SSOT (luki w raporcie sesji)
+- **No push.**
+
+## 2026-07-25 — Routing Graph Etap 3: runtime WMS → Authored Graph (no push)
+
+- `runtime_graph_reader.py` — jedyny reader WMS (order/hop/chain)
+- PickingRoutingService: kolejność `pick_list` z grafu
+- wave `compute_wave_metrics`: bez `_distance_between` / label coords
+- `_pick_helpers.compute_route_for_pick_nodes`: NN z grafu (bez Euclidean)
+- Tests: `test_stage3_runtime_wms.py` 12 PASS. **No push.**
+
+## 2026-07-25 — Projektant: jeden panel właściwości (no push)
+
+- Usunięto panel/przycisk „Widok z boku”; karty lokalizacji w `RackPropertiesSidebar`
+- Sekcje: Informacje / Przejazd / Statystyki / Lokalizacje; akcje: Układ / Zapisz / Usuń
+- Bez „Dodaj produkt” w Projektancie (WMS only). **No push.**
+
+## 2026-07-25 — Internal Layout: przejazd jako piętra + Usuń przejazd (no push)
+
+- Void: N osobnych poziomów konstrukcyjnych z slotami-duchami (ile lokacji zabrał)
+- „Usuń przejazd”: przywraca poziomy magazynowe; zapis `clearPassages` → `enabled: false`
+- **No push.**
+
 ## 2026-07-25 — Internal Layout sync with template + passage (no push)
 
 - `getInitialLevels`: storageCount = structural − void; ignore stale full/mismatched `internal_structure`

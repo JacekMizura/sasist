@@ -29,16 +29,14 @@ from ..domain.simulation import (
     simulate_single_order,
     simulate_batch_orders,
 )
-from .warehouse_routing.access_resolution import (
-    chain_distance_through_location_ids,
-    is_routing_graph_configured,
-    packing_node_uuid,
-    picking_start_node_uuid,
+from .warehouse_routing.runtime_graph_reader import (
+    chain_distance_m as runtime_chain_distance_m,
+    graph_ready,
+    order_location_ids_by_graph,
+    visit_index_map,
 )
 from .warehouse_routing.constants import (
     ERROR_ROUTING_GRAPH_NOT_CONFIGURED,
-    PROCESS_PICKING,
-    TRANSPORT_FOOT,
 )
 
 logger = logging.getLogger(__name__)
@@ -792,7 +790,7 @@ def generate_simulated_picks(
     """
     Generate simulated Pick records from orders and inventory. Does NOT modify inventory.
     For each order in the warehouse, for each order_item: find inventory locations for the product
-    (ordered by location.pick_sequence), allocate quantity across locations, create Pick records.
+    (storage priority, then Runtime Graph Reader visit order), allocate quantity, create Pick records.
     If replace_existing=True, deletes existing picks for this tenant+warehouse first.
     Returns { created, orders_processed }.
     """
@@ -812,9 +810,9 @@ def generate_simulated_picks(
     for order in orders:
         items = db.query(OrderItem).filter(OrderItem.order_id == order.id).all()
         for item in items:
-            # Inventory rows for this product in this warehouse, with location pick_sequence
+            # Storage type = business priority; visit order = Graph Reader (not pick_sequence).
             inv_rows = (
-                db.query(Inventory, Location.pick_sequence, Bin.storage_type)
+                db.query(Inventory, Bin.storage_type)
                 .join(Location, Inventory.location_id == Location.id)
                 .outerjoin(Bin, Bin.location_uuid == Location.location_uuid)
                 .filter(
@@ -830,16 +828,18 @@ def generate_simulated_picks(
                 )
                 .all()
             )
+            loc_ids = [int(inv.location_id) for inv, _st in inv_rows]
+            vmap = visit_index_map(db, warehouse_id, loc_ids)
             inv_rows = sorted(
                 inv_rows,
                 key=lambda row: (
-                    get_storage_priority(row[2]) or 999999,
-                    row[1] if row[1] is not None else 999999,
+                    get_storage_priority(row[1]) or 999999,
+                    vmap.get(int(row[0].location_id), 10**9),
                     row[0].location_id,
                 ),
             )
             remaining = float(item.quantity)
-            for inv, _pick_seq, _storage_type in inv_rows:
+            for inv, _storage_type in inv_rows:
                 if remaining <= 0:
                     break
                 qty = min(remaining, float(inv.quantity))
@@ -1014,9 +1014,8 @@ def walking_cost(
 ) -> list[dict[str, Any]]:
     """
     Walking-cost via authored Warehouse Routing Graph (SSOT).
-    orders → items → inventory → location → Access Points → Routing Engine.
-    Context: process=picking, transport=foot.
-    No Euclidean fallback; missing graph → total_distance null + ROUTING_GRAPH_NOT_CONFIGURED.
+    Location set → order_location_ids_by_graph → chain_distance_m.
+    No Euclidean / pick_sequence visit order; missing graph → ROUTING_GRAPH_NOT_CONFIGURED.
     """
     order_filter = [Order.tenant_id == tenant_id]
     if warehouse_id is not None:
@@ -1046,7 +1045,6 @@ def walking_cost(
             Inventory.warehouse_id,
             Inventory.product_id,
             Inventory.location_id,
-            Location.pick_sequence,
             Bin.storage_type,
         )
         .join(Location, Inventory.location_id == Location.id)
@@ -1061,35 +1059,39 @@ def walking_cost(
         )
         .all()
     )
-    key_to_loc: dict[tuple[int, int], tuple[int, int, int]] = {}
+    # Storage type = business; visit tie-break = Graph Reader (not pick_sequence).
+    candidates: dict[tuple[int, int], list[tuple[int, int]]] = {}
     for r in inv_rows:
         k = (r.warehouse_id, r.product_id)
         priority = get_storage_priority(r.storage_type) or 999999
-        effective_seq = r.pick_sequence if r.pick_sequence is not None else 999999
-        candidate = (r.location_id, priority, effective_seq)
-        if k not in key_to_loc or (priority, effective_seq, r.location_id) < (
-            key_to_loc[k][1],
-            key_to_loc[k][2],
-            key_to_loc[k][0],
-        ):
-            key_to_loc[k] = candidate
+        candidates.setdefault(k, []).append((int(r.location_id), priority))
 
-    wh_configured = {wid: is_routing_graph_configured(db, wid) for wid in wh_ids}
-    wh_start = {wid: picking_start_node_uuid(db, wid) for wid in wh_ids}
-    wh_pack = {wid: packing_node_uuid(db, wid) for wid in wh_ids}
+    key_to_loc: dict[tuple[int, int], int] = {}
+    for wid in wh_ids:
+        wh_keys = [k for k in candidates if k[0] == wid]
+        all_lids = list({lid for k in wh_keys for lid, _ in candidates[k]})
+        vmap = visit_index_map(db, wid, all_lids) if all_lids else {}
+        for k in wh_keys:
+            rows = candidates[k]
+            best_pri = min(p for _, p in rows)
+            same = [lid for lid, p in rows if p == best_pri]
+            same.sort(key=lambda lid: (vmap.get(lid, 10**9), lid))
+            key_to_loc[k] = same[0]
+
+    wh_configured = {wid: graph_ready(db, wid) for wid in wh_ids}
 
     result = []
     for o in orders:
         wh_id = o.warehouse_id
         total_items = 0
-        loc_seq: list[int] = []
+        loc_ids_raw: list[int] = []
         seen_loc: set[int] = set()
         for product_id, qty in items_by_order.get(o.id) or []:
             total_items += qty
-            loc_id = key_to_loc.get((wh_id, product_id), (None, 0, 0))[0]
+            loc_id = key_to_loc.get((wh_id, product_id))
             if loc_id is not None and loc_id not in seen_loc:
                 seen_loc.add(loc_id)
-                loc_seq.append(loc_id)
+                loc_ids_raw.append(loc_id)
 
         if not wh_configured.get(wh_id):
             result.append({
@@ -1098,40 +1100,25 @@ def walking_cost(
                 "total_distance": None,
                 "distance_available": False,
                 "routing_status": ERROR_ROUTING_GRAPH_NOT_CONFIGURED,
-                "distinct_locations_count": len(loc_seq),
+                "distinct_locations_count": len(loc_ids_raw),
                 "total_items": total_items,
             })
             continue
 
-        start_uuid = wh_start.get(wh_id)
-        end_uuid = wh_pack.get(wh_id)
-        if not start_uuid:
-            result.append({
-                "order_id": o.id,
-                "order_number": o.number,
-                "total_distance": None,
-                "distance_available": False,
-                "routing_status": ERROR_ROUTING_GRAPH_NOT_CONFIGURED,
-                "distinct_locations_count": len(loc_seq),
-                "total_items": total_items,
-            })
-            continue
-
-        dist, err, _path = chain_distance_through_location_ids(
+        loc_seq, order_err = order_location_ids_by_graph(db, wh_id, loc_ids_raw)
+        dist, err, _path = runtime_chain_distance_m(
             db,
             wh_id,
             loc_seq,
-            start_node_uuid=start_uuid,
-            end_node_uuid=end_uuid,
-            process_type=PROCESS_PICKING,
-            transport_type=TRANSPORT_FOOT,
+            include_start=True,
+            include_packing=True,
         )
         result.append({
             "order_id": o.id,
             "order_number": o.number,
             "total_distance": round(dist, 2) if dist is not None else None,
             "distance_available": dist is not None,
-            "routing_status": err,
+            "routing_status": err or order_err,
             "distinct_locations_count": len(loc_seq),
             "total_items": total_items,
         })
@@ -1143,6 +1130,7 @@ def walking_cost(
         )
     )
     return result
+
 
 
 def get_pick_route(db: Session, order_number: str, record_picks: bool = False) -> dict[str, Any]:
