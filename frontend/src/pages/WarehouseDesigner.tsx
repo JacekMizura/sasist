@@ -4484,17 +4484,12 @@ export default function WarehouseDesigner() {
               saving,
               lastSavedAt,
               warehouseLabel: layout.warehouse_name || activeWarehouse?.name || undefined,
-              showElevationForRackId: routesMode ? null : showElevationForRackId,
-              products,
-              selectedBinForFilter,
-              setSelectedBinForFilter,
-              onCloseElevation: () => {
-                setShowElevationForRackId(null);
-                setSelectedBinForFilter(null);
-                focusWarehouseCanvasScroll();
-              },
-              onAddProduct: () => setEditingProductId("new"),
-              onEditProduct: setEditingProductId,
+              templateName: (() => {
+                const rid = previewRack ?? selectedRack;
+                const tid = rid?.templateId?.trim();
+                if (!tid) return null;
+                return customTemplates.find((t) => t.id === tid)?.name ?? tid;
+              })(),
               onOpenRackTemplate: (templateId: string) => {
                 setEditingTemplateId(templateId);
               },

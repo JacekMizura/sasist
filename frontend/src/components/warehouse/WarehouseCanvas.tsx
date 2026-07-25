@@ -1590,7 +1590,6 @@ function WarehouseCanvasInner({
                     editingRackId={editingRackId}
                     cellPx={cellPx}
                     setInternalLayoutRackId={setInternalLayoutRackId}
-                    setShowElevationForRackId={setShowElevationForRackId}
                     setLayout={setLayout}
                     setSelectedRackId={setSelectedRackId}
                     setSelectedRackIds={setSelectedRackIds}

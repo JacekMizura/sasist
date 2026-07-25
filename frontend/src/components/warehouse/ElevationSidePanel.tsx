@@ -7,24 +7,21 @@ import { AppRightPanel } from "../layout/app";
 export type ElevationSidePanelProps = {
   layout: LayoutState;
   rackId: number | string;
-  products: WarehouseProduct[];
+  products?: WarehouseProduct[];
   selectedBinForFilter: { level_index: number; segment_index: number } | null;
   setSelectedBinForFilter: (v: { level_index: number; segment_index: number } | null) => void;
   onClose: () => void;
-  onAddProduct: () => void;
-  onEditProduct: (id: string) => void;
+  onAddProduct?: () => void;
+  onEditProduct?: (id: string) => void;
 };
 
-/** In-flow elevation panel (replaces fixed overlay in WarehouseModals). */
+/** In-flow elevation panel (legacy). Prefer unified RackPropertiesSidebar. */
 export function ElevationSidePanel({
   layout,
   rackId,
-  products,
   selectedBinForFilter,
   setSelectedBinForFilter,
   onClose,
-  onAddProduct,
-  onEditProduct,
 }: ElevationSidePanelProps) {
   const rack = layout.racks.find((r) => rackMatchesSlotRackId(r, rackId));
   if (!rack) return null;
@@ -33,18 +30,15 @@ export function ElevationSidePanel({
     <AppRightPanel
       open
       onClose={onClose}
-      title={`Widok z boku – ${getRackDisplayId(rack, layout)}`}
-      aria-label="Widok z boku regału"
+      title={`Właściwości – ${getRackDisplayId(rack, layout)}`}
+      aria-label="Właściwości regału"
     >
       <div className="p-4">
         <ElevationPanel
           layout={layout}
           rack={rack}
-          products={products}
           selectedBinForFilter={selectedBinForFilter}
           setSelectedBinForFilter={setSelectedBinForFilter}
-          onAddProduct={onAddProduct}
-          onEditProduct={onEditProduct}
         />
       </div>
     </AppRightPanel>

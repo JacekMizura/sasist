@@ -45,7 +45,7 @@ export function RackPassageEditor({ selectedRack, setLayout, onOpenTemplate }: P
           className="mb-2 w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-[11px] font-semibold text-slate-800 hover:bg-slate-50"
           onClick={() => updatePassages(setLayout, selectedRack, [defaultPassageForRack(selectedRack)])}
         >
-          Dodaj przejazd pod regałem
+          Dodaj przejazd
         </button>
       ) : (
         <p className="mb-2 text-[10px] text-slate-500">Limit: jeden przejazd. Usuń istniejący, aby dodać inny.</p>

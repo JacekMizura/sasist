@@ -50,13 +50,14 @@ export function usePlacementInteraction(params: UsePlacementInteractionParams) {
     setSelectedVisualId,
     setSelectedVisualIds,
     setSelectedAisleIndex,
-    setShowElevationForRackId,
+    setShowElevationForRackId: _setShowElevationForRackId,
     stampRackAt,
     addSpecialLocation,
     copyPlacementMode = false,
     copiedRack = null,
     placeCopiedRack,
   } = params;
+  void _setShowElevationForRackId;
   const { lastMouseRef, svgRef, rafIdRef } = refs;
   const copyGhostW = copiedRack?.width ?? ghostW;
   const copyGhostH = copiedRack?.height ?? ghostH;
@@ -79,7 +80,6 @@ export function usePlacementInteraction(params: UsePlacementInteractionParams) {
           if (rid != null) {
             setSelectedRackId(rid);
             setSelectedRackIds([rid]);
-            setShowElevationForRackId(rid);
           }
           setSelectedVisualId(null);
           setSelectedVisualIds([]);
@@ -90,12 +90,10 @@ export function usePlacementInteraction(params: UsePlacementInteractionParams) {
             setSelectedAisleIndex(aisleIndex);
             setSelectedRackId(null);
             setSelectedRackIds([]);
-            setShowElevationForRackId(null);
           } else {
             setSelectedRackId(null);
             setSelectedRackIds([]);
             setSelectedAisleIndex(null);
-            setShowElevationForRackId(null);
           }
         }
         return true;
@@ -117,7 +115,6 @@ export function usePlacementInteraction(params: UsePlacementInteractionParams) {
       placeCopiedRack,
       setSelectedRackId,
       setSelectedRackIds,
-      setShowElevationForRackId,
       setSelectedVisualId,
       setSelectedVisualIds,
       setSelectedAisleIndex,

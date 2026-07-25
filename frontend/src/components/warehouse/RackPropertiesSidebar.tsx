@@ -1,24 +1,26 @@
-import type { Dispatch, SetStateAction } from "react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import type { Dispatch, SetStateAction, ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useWheelScrollBoundaryContain } from "../../hooks/useWheelScrollBoundaryContain";
 import type { RackState, LayoutState } from "./warehouseTypes";
 import {
   getLevelConfig,
   getTotalLocations,
   getRackDisplayId,
-  binsToLevels,
   validateRackName,
   effectiveRackDisplayName,
   rackMatchesSlotRackId,
   rackPrimaryId,
+  binUsedVolumeDm3,
+  binVolumeDm3,
+  formatVolume,
+  isBinActive,
 } from "./warehouseUtils";
-import { resolveWarehouseLocation } from "../../utils/resolvedWarehouseLocation";
 import { UI_STRINGS } from "../../constants/uiStrings";
 import { logRackRename } from "./rackRenameLog";
 import { syncRackBinsDisplayFields } from "../../utils/resolvedWarehouseLocation";
-
 import { appLayoutTokens } from "../../layout/appLayoutTokens";
 import { RackPassageEditor } from "../../pages/WarehouseDesigner/passages/RackPassageEditor";
+import { RackLocationsSection } from "./RackLocationsSection";
 
 export type RackPropertiesSidebarProps = {
   layout: LayoutState;
@@ -27,7 +29,6 @@ export type RackPropertiesSidebarProps = {
   isMultiSelect: boolean;
   selectedRackIds: Array<number | string>;
   setLayout: Dispatch<SetStateAction<LayoutState>>;
-  setShowElevationForRackId: (id: number | string | null) => void;
   setInternalLayoutRackId: (id: number | string | null) => void;
   setSelectedRackId: (id: number | string | null) => void;
   setSelectedRackIds: (ids: Array<number | string>) => void;
@@ -38,6 +39,8 @@ export type RackPropertiesSidebarProps = {
   saving?: boolean;
   lastSavedAt?: number | null;
   warehouseLabel?: string;
+  /** Display name of the rack template (if any). */
+  templateName?: string | null;
   /** Opens rack template editor (for inherited passages). */
   onOpenRackTemplate?: (templateId: string) => void;
 };
@@ -47,6 +50,12 @@ function racksMatchIdentity(a: RackState, b: RackState): boolean {
   return String(a.id ?? a.rack_index) === String(b.id ?? b.rack_index);
 }
 
+function SectionTitle({ children }: { children: ReactNode }) {
+  return (
+    <p className="mb-1.5 text-[10px] font-bold uppercase tracking-wide text-slate-500">{children}</p>
+  );
+}
+
 export function RackPropertiesSidebar({
   layout,
   selectedRack,
@@ -54,7 +63,6 @@ export function RackPropertiesSidebar({
   isMultiSelect,
   selectedRackIds,
   setLayout,
-  setShowElevationForRackId,
   setInternalLayoutRackId,
   setSelectedRackId,
   setSelectedRackIds,
@@ -65,8 +73,11 @@ export function RackPropertiesSidebar({
   saving = false,
   lastSavedAt = null,
   warehouseLabel,
+  templateName = null,
   onOpenRackTemplate,
 }: RackPropertiesSidebarProps) {
+  void editingRackId;
+  void setSelectedRackId;
   const asideScrollRef = useRef<HTMLDivElement>(null);
   const scrollKey = `${selectedRack?.id ?? selectedRack?.rack_index ?? ""}-${selectedRackIds.join(",")}`;
   useWheelScrollBoundaryContain(asideScrollRef, true, scrollKey);
@@ -120,7 +131,7 @@ export function RackPropertiesSidebar({
       setNameError(null);
       setLayout((prev) => {
         const renamedRacks = prev.racks.map((rack) =>
-          racksMatchIdentity(rack, selectedRack) ? { ...rack, name: nextName } : rack,
+          racksMatchIdentity(rack, selectedRack) ? { ...rack, name: nextName } : rack
         );
         const layoutDraft = { ...prev, racks: renamedRacks };
         return {
@@ -128,7 +139,7 @@ export function RackPropertiesSidebar({
           racks: renamedRacks.map((rack) =>
             racksMatchIdentity(rack, selectedRack)
               ? { ...rack, bins: syncRackBinsDisplayFields(rack, layoutDraft) }
-              : rack,
+              : rack
           ),
         };
       });
@@ -151,7 +162,10 @@ export function RackPropertiesSidebar({
   );
 
   const requestClose = useCallback(() => {
-    if (nameSaveHint === "dirty" && !window.confirm("Masz niezapisane zmiany nazwy regału. Zamknąć panel bez zapisu układu?")) {
+    if (
+      nameSaveHint === "dirty" &&
+      !window.confirm("Masz niezapisane zmiany nazwy regału. Zamknąć panel bez zapisu układu?")
+    ) {
       return;
     }
     onEditingRackIdChange?.(null);
@@ -179,6 +193,30 @@ export function RackPropertiesSidebar({
         : lastSavedAt != null
           ? "Zapisano"
           : null;
+
+  const stats = useMemo(() => {
+    if (!selectedRack) return null;
+    const activeBins = (selectedRack.bins ?? []).filter(isBinActive);
+    const used =
+      selectedRack.used_dm3 ?? activeBins.reduce((s, b) => s + binUsedVolumeDm3(b), 0);
+    const total =
+      selectedRack.total_capacity_dm3 ??
+      activeBins.reduce((s, b) => s + binVolumeDm3(b, selectedRack), 0);
+    const occupied = activeBins.filter((b) => binUsedVolumeDm3(b) > 0.001).length;
+    const lc = getLevelConfig(selectedRack);
+    return {
+      used,
+      total,
+      occupancyPct: total > 0 ? (used / total) * 100 : 0,
+      locations: activeBins.length || getTotalLocations(lc),
+      activeLocations: activeBins.length,
+      occupied,
+      levels: lc.length,
+      locsPerLevel: lc.every((r) => r.locations === lc[0]?.locations)
+        ? (lc[0]?.locations ?? selectedRack.bins_per_level)
+        : null,
+    };
+  }, [selectedRack]);
 
   return (
     <div
@@ -246,56 +284,64 @@ export function RackPropertiesSidebar({
               </p>
             </div>
           </>
+        ) : !selectedRack ? (
+          <p className="text-sm font-medium text-slate-600">Wybierz regał na planie lub zamknij panel.</p>
         ) : (
-          <>
-            {selectedRack ? (
-              <div className="space-y-1">
-                <label className="block text-[10px] font-semibold uppercase text-slate-500">Nazwa regału</label>
-                <input
-                  type="text"
-                  value={nameDraft}
-                  onFocus={() => {
-                    if (selectedRack) onEditingRackIdChange?.(rackPrimaryId(selectedRack));
-                  }}
-                  onChange={(e) => {
-                    setNameDraft(e.target.value);
-                    setNameSaveHint("dirty");
-                    const v = e.target.value;
-                    if (!selectedRack) return;
-                    const id = { id: selectedRack.id, rack_index: selectedRack.rack_index, uuid: selectedRack.uuid };
-                    const vr = validateRackName(v, layout, id);
-                    setNameError(vr.valid ? null : vr.error ?? "Nieprawidłowa nazwa");
-                    const nextName = v.trim() === "" ? undefined : v.trim();
-                    setLayout((prev) => ({
-                      ...prev,
-                      racks: prev.racks.map((rack) =>
-                        racksMatchIdentity(rack, selectedRack) ? { ...rack, name: nextName } : rack
-                      ),
-                    }));
-                  }}
-                  onBlur={() => {
-                    void commitRackName(nameDraft, "blur");
-                    onEditingRackIdChange?.(null);
-                  }}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") {
-                      e.preventDefault();
-                      commitRackName(nameDraft, "enter");
-                      (e.target as HTMLInputElement).blur();
-                    }
-                    if (e.key === "Escape") {
-                      e.preventDefault();
-                      requestClose();
-                    }
-                  }}
-                  placeholder={getRackDisplayId(selectedRack, layout)}
-                  className={`w-full rounded-lg border px-2 py-1.5 text-sm text-slate-800 ${
-                    nameError ? "border-red-400 ring-1 ring-red-200" : "border-slate-200"
-                  }`}
-                />
-                {nameError ? <p className="text-[11px] text-red-600">{nameError}</p> : null}
-                <div className="mt-2">
-                  <label className="block text-[10px] font-semibold uppercase text-slate-500">Typ regału</label>
+          <div className="space-y-4">
+            {/* —— Informacje —— */}
+            <section>
+              <SectionTitle>Informacje</SectionTitle>
+              <label className="block text-[10px] font-semibold text-slate-500">Nazwa</label>
+              <input
+                type="text"
+                value={nameDraft}
+                onFocus={() => {
+                  onEditingRackIdChange?.(rackPrimaryId(selectedRack));
+                }}
+                onChange={(e) => {
+                  setNameDraft(e.target.value);
+                  setNameSaveHint("dirty");
+                  const v = e.target.value;
+                  const id = {
+                    id: selectedRack.id,
+                    rack_index: selectedRack.rack_index,
+                    uuid: selectedRack.uuid,
+                  };
+                  const vr = validateRackName(v, layout, id);
+                  setNameError(vr.valid ? null : vr.error ?? "Nieprawidłowa nazwa");
+                  const nextName = v.trim() === "" ? undefined : v.trim();
+                  setLayout((prev) => ({
+                    ...prev,
+                    racks: prev.racks.map((rack) =>
+                      racksMatchIdentity(rack, selectedRack) ? { ...rack, name: nextName } : rack
+                    ),
+                  }));
+                }}
+                onBlur={() => {
+                  void commitRackName(nameDraft, "blur");
+                  onEditingRackIdChange?.(null);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    commitRackName(nameDraft, "enter");
+                    (e.target as HTMLInputElement).blur();
+                  }
+                  if (e.key === "Escape") {
+                    e.preventDefault();
+                    requestClose();
+                  }
+                }}
+                placeholder={getRackDisplayId(selectedRack, layout)}
+                className={`mt-0.5 w-full rounded-lg border px-2 py-1.5 text-sm text-slate-800 ${
+                  nameError ? "border-red-400 ring-1 ring-red-200" : "border-slate-200"
+                }`}
+              />
+              {nameError ? <p className="mt-0.5 text-[11px] text-red-600">{nameError}</p> : null}
+
+              <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-[11px]">
+                <dt className="text-slate-500">Typ</dt>
+                <dd>
                   <select
                     value={selectedRack.rack_type === "store" ? "store" : "warehouse"}
                     onChange={(e) => {
@@ -307,152 +353,158 @@ export function RackPropertiesSidebar({
                         ),
                       }));
                     }}
-                    className="mt-0.5 w-full rounded-lg border border-slate-200 px-2 py-1.5 text-sm text-slate-800"
+                    className="w-full rounded border border-slate-200 px-1.5 py-0.5 text-[11px] text-slate-800"
                   >
                     <option value="warehouse">Magazyn</option>
                     <option value="store">Sklep</option>
                   </select>
-                </div>
-              </div>
-            ) : (
-              <p className="text-sm font-medium text-slate-600">Wybierz regał na planie lub zamknij panel.</p>
-            )}
-            {selectedRack && (
-              <>
-                <dl className="mt-2 space-y-0.5 text-[11px] text-slate-500">
-                  <dt>Wymiary</dt>
-                  <dd className="text-slate-700">
-                    {selectedRack.width_cm} × {selectedRack.length_cm} × {selectedRack.height_cm} cm
-                  </dd>
-                  <dt>{UI_STRINGS.warehouse.rackProperties.levelsBins}</dt>
-                  <dd className="text-slate-700">
-                    {(() => {
-                      const lc = getLevelConfig(selectedRack);
-                      const total = getTotalLocations(lc);
-                      return lc.every((r) => r.locations === lc[0].locations)
-                        ? `${lc.length} / ${lc[0]?.locations ?? 0}`
-                        : `${lc.length} poz., Suma: ${total} lok.`;
-                    })()}
-                  </dd>
-                </dl>
-                <label className="mt-2 flex items-center gap-2 text-[11px] text-slate-600">
-                  <input
-                    type="checkbox"
-                    checked={selectedRack.show_label !== false}
-                    onChange={(e) => {
-                      const v = e.target.checked;
-                      setLayout((prev) => ({
-                        ...prev,
-                        racks: prev.racks.map((rack) =>
-                          racksMatchIdentity(rack, selectedRack) ? { ...rack, show_label: v } : rack
-                        ),
-                      }));
-                    }}
-                    className="rounded"
-                  />
-                  Pokaż etykietę na mapie
-                </label>
-                {!isMultiSelect && (
-                  <RackPassageEditor
-                    selectedRack={selectedRack}
-                    setLayout={setLayout}
-                    onOpenTemplate={onOpenRackTemplate}
-                  />
-                )}
-                {(() => {
-                  const levels =
-                    selectedRack.rackLevels ?? (selectedRack.bins?.length ? binsToLevels(selectedRack.bins) : []);
-                  if (levels.length === 0) return null;
-                  return (
-                    <div className="mt-2 border-t border-slate-100 pt-2">
-                      <p className="mb-1 text-[10px] font-bold uppercase text-slate-500">Lokalizacje</p>
-                      <div className="max-h-36 space-y-1.5 overflow-y-auto">
-                        {levels.map((lev) => (
-                          <div key={lev.levelIndex} className="text-[10px]">
-                            <p className="font-semibold text-slate-600">Poziom {lev.levelIndex}</p>
-                            <div className="space-y-0.5 pl-2">
-                              {lev.positions.map((pos, posIndex) => {
-                                const bin = selectedRack.bins?.find(
-                                  (b) => (b.locationUUID ?? "").trim() === (pos.locationUUID ?? "").trim()
-                                );
-                                const line =
-                                  bin != null
-                                    ? resolveWarehouseLocation(selectedRack, bin, layout).label
-                                    : pos.locationAddress || pos.locationUUID || `Pozycja ${posIndex + 1}`;
-                                return (
-                                  <div key={pos.locationUUID} className="truncate font-mono text-slate-700" title={pos.locationUUID}>
-                                    {line}
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
+                </dd>
+                <dt className="text-slate-500">Szablon</dt>
+                <dd className="text-slate-800">
+                  {templateName?.trim() ||
+                    (selectedRack.templateId ? String(selectedRack.templateId) : "—")}
+                </dd>
+                <dt className="text-slate-500">Wymiary</dt>
+                <dd className="text-slate-800">
+                  {selectedRack.width_cm} × {selectedRack.length_cm} × {selectedRack.height_cm} cm
+                </dd>
+                <dt className="text-slate-500">Liczba poziomów</dt>
+                <dd className="text-slate-800">{stats?.levels ?? selectedRack.levels}</dd>
+                <dt className="text-slate-500">Lokalizacji na poziom</dt>
+                <dd className="text-slate-800">
+                  {stats?.locsPerLevel != null
+                    ? stats.locsPerLevel
+                    : (() => {
+                        const lc = getLevelConfig(selectedRack);
+                        return lc.map((r) => r.locations).join(", ");
+                      })()}
+                </dd>
+              </dl>
+              <label className="mt-2 flex items-center gap-2 text-[11px] text-slate-600">
+                <input
+                  type="checkbox"
+                  checked={selectedRack.show_label !== false}
+                  onChange={(e) => {
+                    const v = e.target.checked;
+                    setLayout((prev) => ({
+                      ...prev,
+                      racks: prev.racks.map((rack) =>
+                        racksMatchIdentity(rack, selectedRack) ? { ...rack, show_label: v } : rack
+                      ),
+                    }));
+                  }}
+                  className="rounded"
+                />
+                Pokaż etykietę na mapie
+              </label>
+            </section>
+
+            {/* —— Przejazd —— */}
+            <section className="border-t border-slate-100 pt-3">
+              <RackPassageEditor
+                selectedRack={selectedRack}
+                setLayout={setLayout}
+                onOpenTemplate={onOpenRackTemplate}
+              />
+            </section>
+
+            {/* —— Statystyki —— */}
+            {stats ? (
+              <section className="border-t border-slate-100 pt-3">
+                <SectionTitle>Statystyki</SectionTitle>
+                <div className="rounded-lg border border-slate-200 bg-slate-50 p-2">
+                  <p className="text-[10px] uppercase text-slate-500">Pojemność / zajętość</p>
+                  <p className="font-mono text-sm text-slate-800">
+                    {formatVolume(stats.used)} / {formatVolume(stats.total)} dm³
+                  </p>
+                  <div className="mt-1 h-2 overflow-hidden rounded-full bg-slate-200">
+                    <div
+                      className={`h-full rounded-full transition-all ${
+                        stats.occupancyPct <= 50
+                          ? "bg-emerald-500"
+                          : stats.occupancyPct <= 80
+                            ? "bg-amber-500"
+                            : "bg-red-500"
+                      }`}
+                      style={{ width: `${Math.min(100, stats.occupancyPct)}%` }}
+                    />
+                  </div>
+                  <dl className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-[11px]">
+                    <div>
+                      <dt className="text-slate-500">Lokalizacji</dt>
+                      <dd className="font-semibold text-slate-800">{stats.locations}</dd>
                     </div>
-                  );
-                })()}
-              </>
-            )}
-          </>
+                    <div>
+                      <dt className="text-slate-500">Aktywnych</dt>
+                      <dd className="font-semibold text-slate-800">{stats.activeLocations}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-slate-500">Zajętych</dt>
+                      <dd className="font-semibold text-slate-800">{stats.occupied}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-slate-500">Wolnych</dt>
+                      <dd className="font-semibold text-slate-800">
+                        {Math.max(0, stats.activeLocations - stats.occupied)}
+                      </dd>
+                    </div>
+                  </dl>
+                </div>
+              </section>
+            ) : null}
+
+            {/* —— Lokalizacje (karty z widoku z boku) —— */}
+            <section className="border-t border-slate-100 pt-3">
+              <SectionTitle>Lokalizacje</SectionTitle>
+              <RackLocationsSection layout={layout} rack={selectedRack} />
+            </section>
+          </div>
         )}
       </div>
 
-      <footer className="flex shrink-0 gap-2 border-t border-slate-100 bg-slate-50/90 px-3 py-2">
-        {selectedRack && (
-          <>
-            <button
-              type="button"
-              onClick={() => setShowElevationForRackId(selectedRack.id ?? selectedRack.rack_index)}
-              className="flex-1 rounded-lg bg-cyan-600 px-2 py-1.5 text-[11px] font-semibold text-white hover:bg-cyan-500"
-            >
-              Widok z boku
-            </button>
+      <footer className="flex shrink-0 flex-col gap-1.5 border-t border-slate-100 bg-slate-50/90 px-3 py-2">
+        {selectedRack ? (
+          <div className="flex gap-2">
             <button
               type="button"
               onClick={() => setInternalLayoutRackId(selectedRack.id ?? selectedRack.rack_index)}
               className="flex-1 rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-[11px] font-semibold text-slate-800 hover:bg-slate-50"
             >
-              Układ wewn.
+              Układ wewnętrzny
             </button>
-          </>
-        )}
-        {onSaveLayout ? (
-          <button
-            type="button"
-            disabled={saving || Boolean(nameError)}
-            onClick={() => {
-              if (selectedRack) commitRackName(nameDraft, "save");
-              onSaveLayout();
-            }}
-            className="flex-1 rounded-lg bg-emerald-600 px-2 py-1.5 text-[11px] font-semibold text-white hover:bg-emerald-500 disabled:opacity-50"
-          >
-            {saving ? "Zapisywanie…" : "Zapisz"}
-          </button>
+            {onSaveLayout ? (
+              <button
+                type="button"
+                disabled={saving || Boolean(nameError)}
+                onClick={() => {
+                  commitRackName(nameDraft, "save");
+                  onSaveLayout();
+                }}
+                className="flex-1 rounded-lg bg-emerald-600 px-2 py-1.5 text-[11px] font-semibold text-white hover:bg-emerald-500 disabled:opacity-50"
+              >
+                {saving ? "Zapisywanie…" : "Zapisz"}
+              </button>
+            ) : null}
+          </div>
         ) : null}
-        <button
-          type="button"
-          onClick={onClose}
-          className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[11px] font-semibold text-slate-700 hover:bg-slate-50"
-        >
-          Zamknij
-        </button>
-      </footer>
-      {selectedRack && !isMultiSelect && (
-        <div className="border-t border-slate-100 px-3 py-1.5">
+        {selectedRack && !isMultiSelect ? (
           <button
             type="button"
             onClick={() => {
               const ids = new Set(selectedRackIds);
-              setLayout((prev) => ({ ...prev, racks: prev.racks.filter((r) => !ids.has(r.id ?? r.rack_index)) }));
+              setLayout((prev) => ({
+                ...prev,
+                racks: prev.racks.filter((r) => !ids.has(r.id ?? r.rack_index)),
+              }));
+              setSelectedRackIds([]);
               onClose();
             }}
-            className="w-full rounded-lg border border-red-200 bg-red-50 px-2 py-1 text-[11px] font-semibold text-red-700 hover:bg-red-100"
+            className="w-full rounded-lg border border-red-200 bg-red-50 px-2 py-1.5 text-[11px] font-semibold text-red-700 hover:bg-red-100"
           >
-            Usuń wybrane
+            Usuń
           </button>
-        </div>
-      )}
+        ) : null}
+      </footer>
     </div>
   );
 }

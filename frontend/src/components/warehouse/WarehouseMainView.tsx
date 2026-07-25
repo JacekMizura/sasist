@@ -5,10 +5,9 @@ import { GRID_UNIT_CM } from "../../types/warehouse";
 import { useWheelScrollBoundaryContain } from "../../hooks/useWheelScrollBoundaryContain";
 import { WarehouseCanvas, type WarehouseCanvasProps } from "./WarehouseCanvas";
 import { RackPropertiesSidebar } from "./RackPropertiesSidebar";
-import { ElevationSidePanel, VisualElementPanelShell } from "./ElevationSidePanel";
+import { VisualElementPanelShell } from "./ElevationSidePanel";
 import { AppRightPanel, AppSplitView } from "../layout/app";
 import { UI_STRINGS } from "../../constants/uiStrings";
-import type { WarehouseProduct } from "../../types/warehouse";
 
 /** Return keyboard focus to the layout canvas after closing a side panel. */
 export function focusWarehouseCanvasScroll() {
@@ -33,14 +32,8 @@ export type WarehouseMainViewProps = WarehouseCanvasProps & {
   saving?: boolean;
   lastSavedAt?: number | null;
   warehouseLabel?: string;
-  /** Elevation (side view) panel — layout designer only. */
-  showElevationForRackId?: number | string | null;
-  products?: WarehouseProduct[];
-  selectedBinForFilter?: { level_index: number; segment_index: number } | null;
-  setSelectedBinForFilter?: (v: { level_index: number; segment_index: number } | null) => void;
-  onCloseElevation?: () => void;
-  onAddProduct?: () => void;
-  onEditProduct?: (id: string) => void;
+  /** Optional template display name for the selected rack. */
+  templateName?: string | null;
   /** Opens TemplateCreator for the rack's template. */
   onOpenRackTemplate?: (templateId: string) => void;
 };
@@ -64,21 +57,13 @@ export function WarehouseMainView(props: WarehouseMainViewProps) {
     saving,
     lastSavedAt,
     warehouseLabel,
-    showElevationForRackId = null,
-    products = [],
-    selectedBinForFilter = null,
-    setSelectedBinForFilter,
-    onCloseElevation,
-    onAddProduct,
-    onEditProduct,
+    templateName = null,
     onOpenRackTemplate,
     isMultiSelect,
     selectedRackIds,
-    setShowElevationForRackId,
     setInternalLayoutRackId,
     setSelectedRackId,
     setSelectedRackIds,
-    cursorCm,
   } = props;
 
   const visualAsideRef = useRef<HTMLElement>(null);
@@ -95,25 +80,11 @@ export function WarehouseMainView(props: WarehouseMainViewProps) {
     rackPanelOpen &&
     (propertiesRack ?? selectedRack) != null &&
     selectedAisleIndex == null &&
-    selectedVisualIds.length === 0 &&
-    showElevationForRackId == null;
+    selectedVisualIds.length === 0;
 
   let rightPanel: React.ReactNode = null;
 
-  if (showElevationForRackId != null && onCloseElevation && setSelectedBinForFilter) {
-    rightPanel = (
-      <ElevationSidePanel
-        layout={layout}
-        rackId={showElevationForRackId}
-        products={products}
-        selectedBinForFilter={selectedBinForFilter}
-        setSelectedBinForFilter={setSelectedBinForFilter}
-        onClose={onCloseElevation}
-        onAddProduct={onAddProduct ?? (() => {})}
-        onEditProduct={onEditProduct ?? (() => {})}
-      />
-    );
-  } else if (selectedVisualIds.length > 0) {
+  if (selectedVisualIds.length > 0) {
     const ve = (layout.visual_elements ?? []).find((v) => v.id === selectedVisualIds[0]);
     if (ve) {
           const typeLabels: Record<VisualElementType, string> = {
@@ -386,7 +357,6 @@ export function WarehouseMainView(props: WarehouseMainViewProps) {
           isMultiSelect={isMultiSelect}
           selectedRackIds={selectedRackIds}
           setLayout={setLayout}
-          setShowElevationForRackId={setShowElevationForRackId}
           setInternalLayoutRackId={setInternalLayoutRackId}
           setSelectedRackId={setSelectedRackId}
           setSelectedRackIds={setSelectedRackIds}
@@ -395,6 +365,7 @@ export function WarehouseMainView(props: WarehouseMainViewProps) {
           saving={saving}
           lastSavedAt={lastSavedAt}
           warehouseLabel={warehouseLabel}
+          templateName={templateName}
           onOpenRackTemplate={onOpenRackTemplate}
         />
       </AppRightPanel>
