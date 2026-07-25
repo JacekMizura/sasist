@@ -3,12 +3,12 @@ import { useCallback, useEffect, useState } from "react";
 import { fetchPrintingAutoPrint, updatePrintingAutoPrint } from "../../../api/printingApi";
 import { extractApiErrorMessage } from "../../../api/apiErrorMessage";
 import type { PrintingAutoPrintRead } from "../../../types/printing";
+import { AppButton } from "../../../components/app-shell/AppButton";
 import { DAMAGE_TENANT_ID } from "../../damage/damageShared";
 import {
   PrintingAlert,
   PrintingLoadingState,
   PrintingPageBody,
-  PrintingPrimaryButton,
 } from "./components/printingUi";
 
 const FIELDS: { key: keyof PrintingAutoPrintRead; label: string; hint: string }[] = [
@@ -105,9 +105,9 @@ export default function PrintingAutoPrintPage() {
         </label>
       ))}
 
-      <PrintingPrimaryButton disabled={saving} onClick={() => void save()}>
+      <AppButton variant="primary" disabled={saving} onClick={() => void save()}>
         {saving ? "Zapisywanie…" : "Zapisz"}
-      </PrintingPrimaryButton>
+      </AppButton>
     </PrintingPageBody>
   );
 }

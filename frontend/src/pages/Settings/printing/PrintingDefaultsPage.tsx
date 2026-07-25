@@ -10,14 +10,14 @@ import {
 import { extractApiErrorMessage } from "../../../api/apiErrorMessage";
 import { useWarehouse } from "../../../context/WarehouseContext";
 import type { AgentPrinterRead } from "../../../types/printing";
+import { AppButton } from "../../../components/app-shell/AppButton";
 import { DAMAGE_TENANT_ID } from "../../damage/damageShared";
 import { agentHealthLabel } from "./printingQueuePresentation";
 import {
   PrintingAlert,
   PrintingLoadingState,
   PrintingPageBody,
-  PrintingPrimaryButton,
-  printingTheme,
+  printingOutlineButtonClass,
 } from "./components/printingUi";
 
 type DefaultField = "a4_printer_id" | "label_printer_id" | "receipt_printer_id";
@@ -157,7 +157,7 @@ export default function PrintingDefaultsPage() {
           type="button"
           disabled={repairing || saving}
           onClick={() => void repair()}
-          className={`inline-flex items-center justify-center rounded-lg border px-4 py-2 text-sm font-semibold disabled:opacity-50 ${printingTheme.primaryOutline}`}
+          className={printingOutlineButtonClass}
         >
           {repairing ? "Naprawianie…" : "Napraw przypisania drukarek"}
         </button>
@@ -203,9 +203,9 @@ export default function PrintingDefaultsPage() {
         );
       })}
 
-      <PrintingPrimaryButton disabled={saving || repairing} onClick={() => void save()}>
+      <AppButton variant="primary" disabled={saving || repairing} onClick={() => void save()}>
         {saving ? "Zapisywanie…" : "Zapisz"}
-      </PrintingPrimaryButton>
+      </AppButton>
     </PrintingPageBody>
   );
 }

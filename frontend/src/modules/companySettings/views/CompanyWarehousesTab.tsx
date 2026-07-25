@@ -8,7 +8,8 @@ import { FULFILLMENT_ASSIGNMENT_MODE_OPTIONS } from "../../../api/fulfillmentCon
 import { WarehouseCreateDrawer, WarehouseEditDrawer } from "../components/WarehouseDrawers";
 import { useCompanySettings } from "../context/CompanySettingsContext";
 import { fmtDateTime, warehouseProfileLabel, warehouseTypeLabel } from "../companySettingsUtils";
-import { companyCardClass, companyOrangeCtaClass } from "../companySettingsUi";
+import { brandPrimaryButtonClass } from "../../../design-system/brandUi";
+import { companyCardClass } from "../companySettingsUi";
 import type { Warehouse as WarehouseType } from "../../../services/warehouseService";
 
 type MenuState = { warehouseId: number; top: number; left: number } | null;
@@ -135,7 +136,7 @@ export default function CompanyWarehousesTab() {
                 title="Brak magazynów"
                 description="Dodaj pierwszy magazyn, aby rozpocząć konfigurację."
                 action={
-                  <button type="button" className={companyOrangeCtaClass} onClick={openWarehouseCreate}>
+                  <button type="button" className={brandPrimaryButtonClass} onClick={openWarehouseCreate}>
                     + Nowy magazyn
                   </button>
                 }
@@ -272,7 +273,7 @@ export default function CompanyWarehousesTab() {
               <div className="flex justify-end border-t border-slate-100 pt-4">
                 <button
                   type="button"
-                  className={companyOrangeCtaClass}
+                  className={brandPrimaryButtonClass}
                   disabled={!fulfillmentModeDirty || fulfillmentCfgSaving}
                   onClick={() => void saveFulfillmentConfiguration()}
                 >

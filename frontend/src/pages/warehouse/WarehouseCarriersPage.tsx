@@ -15,10 +15,8 @@ import { CreateCarrierGroupModal } from "../../components/warehouse/carriers/Cre
 import { AppEmptyState } from "../../components/app-shell/AppEmptyState";
 import { listSellasistInputClass } from "../../components/listPage/listSellasistTokens";
 import { useCartsTabActions } from "../../modules/carts/CartsTabActionsContext";
-import {
-  cartsOrangeCtaClass,
-  cartsOutlineCtaClass,
-} from "../../modules/carts/cartsModuleTokens";
+import { brandPrimaryButtonClass } from "../../design-system/brandUi";
+import { cartsOutlineCtaClass } from "../../modules/carts/cartsModuleTokens";
 import { PurchasingKpiCard, PurchasingKpiGrid } from "../../modules/purchasing/ui";
 
 import {
@@ -129,7 +127,7 @@ export default function WarehouseCarriersPage() {
       <button
         type="button"
         onClick={() => openCreate(groupId, "bulk")}
-        className={`${cartsOrangeCtaClass} mt-4`}
+        className={`${brandPrimaryButtonClass} mt-4`}
       >
         Dodaj nośnik
       </button>
@@ -167,7 +165,7 @@ export default function WarehouseCarriersPage() {
           type="button"
           onClick={() => openCreate(null, "bulk")}
           disabled={groups.length === 0}
-          className={cartsOrangeCtaClass}
+          className={brandPrimaryButtonClass}
         >
           Dodaj nośniki
         </button>
@@ -249,7 +247,7 @@ export default function WarehouseCarriersPage() {
             title="Brak grup nośników"
             description="Zdefiniuj typy (np. palety euro, kartony). Potem dodasz nośniki z tej zakładki."
             action={
-              <button type="button" onClick={() => setGroupModalOpen(true)} className={cartsOrangeCtaClass}>
+              <button type="button" onClick={() => setGroupModalOpen(true)} className={brandPrimaryButtonClass}>
                 Nowa grupa
               </button>
             }
@@ -267,7 +265,7 @@ export default function WarehouseCarriersPage() {
                 memberCount={list.length}
                 defaultOpen
                 headerActions={
-                  <button type="button" onClick={() => openCreate(g.id, "bulk")} className={cartsOrangeCtaClass}>
+                  <button type="button" onClick={() => openCreate(g.id, "bulk")} className={brandPrimaryButtonClass}>
                     Dodaj nośnik
                   </button>
                 }

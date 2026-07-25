@@ -4,9 +4,9 @@ import { CompanyFormField, companyInputClass } from "../components/CompanyFormFi
 import { useCompanySettings } from "../context/CompanySettingsContext";
 import { DocumentTemplateScopeSection } from "../../../pages/Settings/document-templates/components/DocumentTemplateScopeSection";
 import { COMPANY_SCOPE_KINDS } from "../../../pages/Settings/document-templates/documentTemplateScopeKinds";
+import { brandPrimaryButtonClass } from "../../../design-system/brandUi";
 import {
   companyCardClass,
-  companyOrangeCtaClass,
   companySectionTitleClass,
 } from "../companySettingsUi";
 
@@ -176,7 +176,7 @@ export default function CompanyProfileTab() {
       <div className="flex justify-end pb-2">
         <button
           type="button"
-          className={companyOrangeCtaClass}
+          className={brandPrimaryButtonClass}
           disabled={!profileDirty || profileSaving}
           onClick={() => void saveProfile()}
         >

@@ -1,5 +1,6 @@
 import { listSellasistInputClass } from "../../../components/listPage/listSellasistTokens";
-import { cartsDangerBtnClass, cartsOrangeCtaClass, cartsOutlineCtaClass } from "../cartsModuleTokens";
+import { brandPrimaryButtonClass } from "../../../design-system/brandUi";
+import { cartsDangerBtnClass, cartsOutlineCtaClass } from "../cartsModuleTokens";
 
 type Props = {
   editing: boolean;
@@ -41,7 +42,7 @@ export function CartsFleetGroupActions({
           onChange={(e) => onEditingNameChange(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && onSaveEdit()}
         />
-        <button type="button" onClick={onSaveEdit} className={cartsOrangeCtaClass}>
+        <button type="button" onClick={onSaveEdit} className={brandPrimaryButtonClass}>
           {saveLabel}
         </button>
         <button type="button" onClick={onCancelEdit} className={cartsOutlineCtaClass}>
@@ -59,7 +60,7 @@ export function CartsFleetGroupActions({
       <button type="button" onClick={onDeleteGroup} className={cartsDangerBtnClass}>
         {deleteLabel}
       </button>
-      <button type="button" onClick={onAddCart} className={cartsOrangeCtaClass}>
+      <button type="button" onClick={onAddCart} className={brandPrimaryButtonClass}>
         {addCartLabel.startsWith("+") ? addCartLabel : `+ ${addCartLabel}`}
       </button>
     </div>

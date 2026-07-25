@@ -1,14 +1,19 @@
 /**
- * Global brand UI tokens — Tabs (underline) + Primary (orange) CTA.
- * Single source of truth for app-wide visual consistency.
+ * Global brand UI tokens — Tabs (underline) + Primary (orange) CTA + shared brand accents.
+ * Single source of truth: brand orange class strings live ONLY here.
  */
 
-/** Brand orange (Tailwind orange-500 / hover orange-600). */
+/** Brand orange scale (Tailwind). Change brand color only by editing this object + class strings below. */
 export const brandOrange = {
   base: "orange-500",
   hover: "orange-600",
+  active: "orange-700",
   text: "orange-600",
+  textHover: "orange-700",
   ring: "orange-400",
+  softBorder: "orange-200",
+  softBg: "orange-50",
+  softBgHover: "orange-100",
 } as const;
 
 /**
@@ -17,6 +22,38 @@ export const brandOrange = {
  */
 export const brandPrimaryButtonClass =
   "inline-flex h-10 shrink-0 items-center justify-center gap-1.5 rounded-lg bg-orange-500 px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-orange-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-400 focus-visible:ring-offset-2 active:bg-orange-700 disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50";
+
+/**
+ * Soft brand action (outline / tinted) — secondary brand actions that are not solid Primary.
+ * Same visual as former local orange soft buttons.
+ */
+export const brandSoftButtonClass =
+  "inline-flex items-center justify-center gap-1.5 rounded-lg border border-orange-200 bg-orange-50 px-3 py-2 text-sm font-semibold text-orange-700 transition hover:bg-orange-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-400 focus-visible:ring-offset-2 disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50";
+
+/** Soft brand panel CTA (full-width tinted). */
+export const brandSoftPanelButtonClass =
+  "inline-flex w-full items-center justify-center rounded-xl border border-orange-300 bg-orange-50 px-3 py-2.5 text-sm font-semibold text-orange-900 shadow-sm transition hover:bg-orange-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-400 focus-visible:ring-offset-2 disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50";
+
+/** Brand outline button (border + text, no fill). */
+export const brandOutlineButtonClass =
+  "inline-flex items-center justify-center rounded-lg border border-orange-200 px-4 py-2 text-sm font-semibold text-orange-700 transition hover:bg-orange-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-400 focus-visible:ring-offset-2 disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50";
+
+/** Brand text link / inline action. */
+export const brandLinkTextClass = "font-medium text-orange-600 transition hover:text-orange-700";
+
+/** Compact brand text button (tables / toolbars). */
+export const brandLinkButtonClass =
+  "text-xs font-medium text-orange-600 underline-offset-2 transition hover:text-orange-700 hover:underline disabled:opacity-50";
+
+/** Brand focus ring fragment for secondary / outline chrome. */
+export const brandFocusRingClass =
+  "focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-400 focus-visible:ring-offset-2";
+
+/** Soft brand table row hover (printing / denselists). */
+export const brandSoftRowHoverClass = "hover:bg-orange-50/40";
+
+/** Brand accent text (KPI / emphasis — not a CTA). */
+export const brandTextAccentClass = "text-orange-600";
 
 /**
  * Underline tab item — identical size/weight/spacing everywhere.

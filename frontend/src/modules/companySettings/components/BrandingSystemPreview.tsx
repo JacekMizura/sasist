@@ -1,3 +1,5 @@
+import { brandPrimaryButtonClass } from "../../../design-system/brandUi";
+
 type Props = {
   logoSrc: string | null;
   companyName: string;
@@ -22,7 +24,7 @@ export function BrandingSystemPreview({ logoSrc, companyName }: Props) {
           )}
           <div className="h-9 w-full max-w-[220px] rounded-lg bg-slate-800/90" />
           <div className="mt-2 h-9 w-full max-w-[220px] rounded-lg bg-slate-800/90" />
-          <div className="mt-4 h-10 w-full max-w-[220px] rounded-lg bg-orange-500" />
+          <div className={`mt-4 w-full max-w-[220px] ${brandPrimaryButtonClass} pointer-events-none`} aria-hidden />
         </div>
       </div>
 

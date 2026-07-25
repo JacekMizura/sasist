@@ -2,13 +2,12 @@
 
 ## Active
 
-**Magazyn operational preview — full UI redesign** (local, uncommitted).
+**Brand Enforcement (final Design System cleanup)** — local, uncommitted.
 
-- Map as hero: hall floor (`.warehouse-magazyn-hall`), not white canvas
-- Left rail: one cohesive `MagazynDashboardPanel` (no card stack)
-- Right rails: light modern product cards (`TopProductsSidebar`, `MagazynProductsSidebar`, `ProductLocatorSidebar`)
-- Aisles/passages as roads (texture + subtle direction), no PRZEJAZD labels
-- Geometry / logic / API unchanged
+- Primary CTA: tylko `AppButton variant="primary"` / `brandPrimaryButtonClass`
+- Underline tabs: tylko `TabsNav` / `brandTabsNavItemClassName`
+- Usunięte aliasy: `cartsOrangeCtaClass`, `companyOrangeCtaClass`, `PrintingPrimaryButton`, `printingTheme.primary`, `appTabActiveClass`
+- Soft/outline/link brand: tokeny w `design-system/brandUi.ts`
 
 ### Constraints
 Bez commit/push (dopóki user nie poprosi).

@@ -1,11 +1,11 @@
 import { forwardRef, useImperativeHandle, useRef, useState } from "react";
 
 import api from "../../api/axios";
+import { brandPrimaryButtonClass } from "../../design-system/brandUi";
 import {
   cartsAppInputClass,
   cartsFieldLabelClass,
   cartsGroupShellClass,
-  cartsOrangeCtaClass,
   cartsSectionClass,
   cartsSectionTitleClass,
 } from "../../modules/carts/cartsModuleTokens";
@@ -132,7 +132,7 @@ const ZoneConfigurator = forwardRef<
               </div>
             ))}
           </div>
-          <button type="submit" disabled={submitting || !name.trim()} className={`${cartsOrangeCtaClass} shrink-0`}>
+          <button type="submit" disabled={submitting || !name.trim()} className={`${brandPrimaryButtonClass} shrink-0`}>
             {submitting ? "Zapisywanie…" : "Dodaj strefę"}
           </button>
         </div>

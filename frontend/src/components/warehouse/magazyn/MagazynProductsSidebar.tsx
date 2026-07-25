@@ -1,6 +1,7 @@
 import { useMemo, useState, type ReactNode } from "react";
-import { warn } from "../../../utils/logger";
 import { Link } from "react-router-dom";
+import { brandLinkTextClass } from "../../../design-system/brandUi";
+import { warn } from "../../../utils/logger";
 import type { LayoutState, NormalizedStorageType, RackState, WarehouseProduct } from "../../../types/warehouse";
 import { getProductDetailsPath } from "../../../pages/Products/productPaths";
 import { ConfirmModal } from "../../ui/ConfirmModal";
@@ -923,7 +924,7 @@ export function MagazynProductsSidebar({
                               setExpandedProductId(p.id);
                             }
                           }}
-                          className="mt-2 text-[11px] font-medium text-orange-600 hover:text-orange-700"
+                          className={`mt-2 text-[11px] ${brandLinkTextClass}`}
                         >
                           Inne lokalizacje
                         </button>

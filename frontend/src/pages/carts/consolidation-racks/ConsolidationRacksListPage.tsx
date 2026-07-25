@@ -14,7 +14,7 @@ import { useActiveWarehouseContext, ACTIVE_WAREHOUSE_REQUIRED_MESSAGE } from "..
 import type { ConsolidationRack } from "../../../modules/consolidation-racks/consolidationRackTypes";
 import { rackOccupancyStats } from "../../../modules/consolidation-racks/rackLayoutUtils";
 import { useCartsTabActions } from "../../../modules/carts/CartsTabActionsContext";
-import { cartsOrangeCtaClass } from "../../../modules/carts/cartsModuleTokens";
+import { brandPrimaryButtonClass } from "../../../design-system/brandUi";
 import { PurchasingKpiCard, PurchasingKpiGrid } from "../../../modules/purchasing/ui";
 import { DAMAGE_TENANT_ID } from "../../damage/damageShared";
 
@@ -64,7 +64,7 @@ export default function ConsolidationRacksListPage() {
       <button
         type="button"
         disabled={!hasActiveWarehouse}
-        className={cartsOrangeCtaClass}
+        className={brandPrimaryButtonClass}
         onClick={() => navigate("/carts/racks/new")}
       >
         <Plus className="h-4 w-4" strokeWidth={2.5} aria-hidden />
@@ -170,7 +170,7 @@ export default function ConsolidationRacksListPage() {
             title="Brak regałów"
             description="Utwórz pierwszy regał kompletacyjny dla aktywnego magazynu."
             action={
-              <button type="button" className={cartsOrangeCtaClass} onClick={() => navigate("/carts/racks/new")}>
+              <button type="button" className={brandPrimaryButtonClass} onClick={() => navigate("/carts/racks/new")}>
                 <Plus className="h-4 w-4" strokeWidth={2.5} aria-hidden />
                 Nowy regał kompletacyjny
               </button>

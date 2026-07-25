@@ -5,8 +5,8 @@ import { useTranslation } from "../locales";
 import { useActiveWarehouseContext, ACTIVE_WAREHOUSE_REQUIRED_MESSAGE } from "../hooks/useActiveWarehouseContext";
 import { useCartsRefresh } from "../context/CartsRefreshContext";
 import api from "../api/axios";
+import { brandPrimaryButtonClass } from "../design-system/brandUi";
 import {
-  cartsOrangeCtaClass,
   cartsOutlineCtaClass,
   cartsPageShellClass,
   cartsSectionClass,
@@ -153,7 +153,7 @@ export default function FleetPlanner() {
             type="button"
             onClick={() => void handleAnalyze()}
             disabled={loading || !hasActiveWarehouse}
-            className={cartsOrangeCtaClass}
+            className={brandPrimaryButtonClass}
           >
             {loading ? t.loading : (t.optimizer_analyze_button ?? "Oblicz zapotrzebowanie na wózki")}
           </button>

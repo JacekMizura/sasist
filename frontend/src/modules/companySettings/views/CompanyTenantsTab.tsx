@@ -5,7 +5,8 @@ import { AppEmptyState } from "../../../components/app-shell";
 import { TenantCreateDrawer, TenantDetailDrawer } from "../components/TenantDrawers";
 import { useCompanySettings } from "../context/CompanySettingsContext";
 import { fmtDateTime } from "../companySettingsUtils";
-import { companyCardClass, companyOrangeCtaClass } from "../companySettingsUi";
+import { brandPrimaryButtonClass } from "../../../design-system/brandUi";
+import { companyCardClass } from "../companySettingsUi";
 import type { TenantDto } from "../../../services/warehouseService";
 
 export default function CompanyTenantsTab() {
@@ -52,7 +53,7 @@ export default function CompanyTenantsTab() {
               title="Brak firm"
               description="Dodaj pierwszą firmę, aby przypisać magazyny."
               action={
-                <button type="button" className={companyOrangeCtaClass} onClick={openTenantCreate}>
+                <button type="button" className={brandPrimaryButtonClass} onClick={openTenantCreate}>
                   + Nowa firma
                 </button>
               }

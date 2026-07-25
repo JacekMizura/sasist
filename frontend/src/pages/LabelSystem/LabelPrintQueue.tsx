@@ -1,5 +1,6 @@
 ﻿import { useState, useCallback, useEffect, useMemo } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
+import { brandSoftPanelButtonClass } from "../../design-system/brandUi";
 import { warn } from "../../utils/logger";
 import { jsPDF } from "jspdf";
 import api from "../../api/axios";
@@ -1445,7 +1446,7 @@ export function LabelPrintQueue({ template }: Props) {
               <button
                 type="button"
                 onClick={() => setCsvMappingModalOpen(true)}
-                className="w-full rounded-xl border border-orange-300 bg-orange-50 px-3 py-2.5 text-sm font-semibold text-orange-900 shadow-sm hover:bg-orange-100"
+                className={brandSoftPanelButtonClass}
               >
                 Otwórz mapowanie kolumn
               </button>

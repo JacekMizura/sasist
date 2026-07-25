@@ -3,6 +3,7 @@ import toast from "react-hot-toast";
 import { Printer, RefreshCw } from "lucide-react";
 
 import api from "../../../api/axios";
+import { brandSoftButtonClass } from "../../../design-system/brandUi";
 import { DAMAGE_TENANT_ID } from "../../../constants/panelTenant";
 import {
   downloadPdfBlob,
@@ -159,7 +160,7 @@ export default function LoginCodeLabelControls({
           type="button"
           disabled={busy}
           onClick={() => void onPreviewOrPrint("print")}
-          className="inline-flex items-center gap-1.5 rounded-lg border border-orange-200 bg-orange-50 px-3 py-2 text-sm font-semibold text-orange-700 hover:bg-orange-100 disabled:opacity-50"
+          className={brandSoftButtonClass}
         >
           <Printer className="h-4 w-4" aria-hidden />
           Drukuj

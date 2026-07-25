@@ -6,8 +6,8 @@ import PageLayout from "../../../components/layout/PageLayout";
 import { SettingsModuleStack } from "../../../components/layout/SettingsModuleStack";
 import { isSuperRole } from "../../../auth/isSuperRole";
 import { useAuth } from "../../../context/AuthContext";
+import { brandPrimaryButtonClass } from "../../../design-system/brandUi";
 import { COMPANY_SETTINGS_TABS } from "../companySettingsTabs";
-import { companyOrangeCtaClass } from "../companySettingsUi";
 import { CompanySettingsProvider, useCompanySettings } from "../context/CompanySettingsContext";
 
 const LEGACY_TAB_ROUTES: Record<string, string> = {
@@ -50,12 +50,12 @@ function CompanySettingsChrome() {
   const isTenants = location.pathname.includes("/tenants");
 
   const tabsTrailing = isWarehouses ? (
-    <button type="button" className={companyOrangeCtaClass} onClick={openWarehouseCreate}>
+    <button type="button" className={brandPrimaryButtonClass} onClick={openWarehouseCreate}>
       <Plus className="h-4 w-4" strokeWidth={2.5} aria-hidden />
       Nowy magazyn
     </button>
   ) : isTenants ? (
-    <button type="button" className={companyOrangeCtaClass} onClick={openTenantCreate}>
+    <button type="button" className={brandPrimaryButtonClass} onClick={openTenantCreate}>
       <Plus className="h-4 w-4" strokeWidth={2.5} aria-hidden />
       Nowa firma
     </button>

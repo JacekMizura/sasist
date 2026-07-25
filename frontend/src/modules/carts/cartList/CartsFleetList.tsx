@@ -9,7 +9,8 @@ import CartCard from "../../../pages/CartsComponents/ui/CartCard";
 import { CartLabelPrintModal } from "../../../pages/CartsComponents/CartLabelPrintModal";
 import { CartsInlineGroupForm } from "../CartsInlineGroupForm";
 import { useCartsTabActions } from "../CartsTabActionsContext";
-import { cartsOrangeCtaClass, cartsOutlineCtaClass } from "../cartsModuleTokens";
+import { brandPrimaryButtonClass } from "../../../design-system/brandUi";
+import { cartsOutlineCtaClass } from "../cartsModuleTokens";
 import { CartsFleetGroupActions } from "./CartsFleetGroupActions";
 import { CartsFleetGroupSection } from "./CartsFleetGroupSection";
 import { CartsFleetSummaryKpi } from "./CartsFleetSummaryKpi";
@@ -246,7 +247,7 @@ export function CartsFleetList({ cartType, refreshTrigger = 0, onAddNew, onEdit 
             const isUnassigned = group.id === 999;
 
             const headerActions = isUnassigned ? (
-              <button type="button" onClick={() => onAddNew()} className={cartsOrangeCtaClass}>
+              <button type="button" onClick={() => onAddNew()} className={brandPrimaryButtonClass}>
                 {cartType === "BULK" ? t.addBulkCart : t.addMultiCart}
               </button>
             ) : (

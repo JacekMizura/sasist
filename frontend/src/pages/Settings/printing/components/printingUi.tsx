@@ -1,27 +1,14 @@
 import type { ReactNode } from "react";
-import { AppButton } from "../../../../components/app-shell/AppButton";
 
-/** Sasist printing module — orange brand tokens (UI only). */
-export const printingTheme = {
-  primary: "bg-orange-500 hover:bg-orange-600 text-white",
-  primaryOutline: "border-orange-200 text-orange-700 hover:bg-orange-50",
-  primaryText: "text-orange-600 hover:text-orange-700",
-  primaryRing: "focus-visible:ring-orange-500/40",
-} as const;
+import {
+  brandLinkButtonClass,
+  brandOutlineButtonClass,
+  brandSoftRowHoverClass,
+  brandTextAccentClass,
+} from "../../../../design-system/brandUi";
 
-/** Thin alias of AppButton primary (Design System). */
-export function PrintingPrimaryButton({
-  children,
-  className = "",
-  type = "button",
-  ...props
-}: React.ButtonHTMLAttributes<HTMLButtonElement>) {
-  return (
-    <AppButton type={type} variant="primary" className={className} {...props}>
-      {children}
-    </AppButton>
-  );
-}
+/** Soft brand chrome for printing module tables (hover). */
+export const printingTableRowHoverClass = brandSoftRowHoverClass;
 
 export function PrintingPageBody({ children, className = "" }: { children: ReactNode; className?: string }) {
   return <div className={`min-w-0 space-y-4 ${className}`.trim()}>{children}</div>;
@@ -38,7 +25,7 @@ const kpiToneClass: Record<NonNullable<KpiItem["tone"]>, string> = {
   success: "text-green-600",
   danger: "text-red-600",
   warning: "text-amber-600",
-  primary: "text-orange-600",
+  primary: brandTextAccentClass,
 };
 
 export function PrintingKpiGrid({ items }: { items: KpiItem[] }) {
@@ -119,7 +106,7 @@ export function PrintingTableBody({ children }: { children: ReactNode }) {
 }
 
 export function PrintingTableRow({ children }: { children: ReactNode }) {
-  return <tr className="align-top transition-colors even:bg-slate-50/40 hover:bg-orange-50/40">{children}</tr>;
+  return <tr className={`align-top transition-colors even:bg-slate-50/40 ${printingTableRowHoverClass}`}>{children}</tr>;
 }
 
 export function PrintingTableCell({ children, className = "" }: { children: ReactNode; className?: string }) {
@@ -132,18 +119,18 @@ export function PrintingStatusBadge({ className, children }: { className: string
   );
 }
 
+/** Brand text action in printing tables — uses Design System link token. */
 export function PrintingLinkButton({
   children,
   className = "",
   ...props
 }: React.ButtonHTMLAttributes<HTMLButtonElement>) {
   return (
-    <button
-      type="button"
-      className={`text-xs font-medium text-orange-600 underline-offset-2 hover:text-orange-700 hover:underline disabled:opacity-50 ${className}`.trim()}
-      {...props}
-    >
+    <button type="button" className={`${brandLinkButtonClass} ${className}`.trim()} {...props}>
       {children}
     </button>
   );
 }
+
+/** Brand outline for secondary printing actions. */
+export const printingOutlineButtonClass = brandOutlineButtonClass;

@@ -16,6 +16,7 @@ import {
 } from "../../../config/printerAgent";
 import { useWarehouse } from "../../../context/WarehouseContext";
 import type { PrinterAgentDownloadInfo, PrinterAgentRead } from "../../../types/printing";
+import { AppButton } from "../../../components/app-shell/AppButton";
 import { DAMAGE_TENANT_ID } from "../../damage/damageShared";
 import { agentHealthClass, agentHealthLabel } from "./printingQueuePresentation";
 import {
@@ -25,6 +26,7 @@ import {
 } from "./agentVersionPresentation";
 import AddComputerModal from "./AddComputerModal";
 import AgentDiagnosticsModal, { AgentActionsCell } from "./AgentDiagnosticsModal";
+import { brandLinkTextClass } from "../../../design-system/brandUi";
 import {
   PrintingAlert,
   PrintingDataTable,
@@ -33,7 +35,6 @@ import {
   PrintingLinkButton,
   PrintingLoadingState,
   PrintingPageBody,
-  PrintingPrimaryButton,
   PrintingStatusBadge,
   PrintingTableBody,
   PrintingTableCell,
@@ -163,7 +164,7 @@ export default function PrintingAgentsPage() {
   return (
     <PrintingPageBody>
       <div className="flex justify-end">
-        <PrintingPrimaryButton onClick={() => setAddComputerOpen(true)}>Dodaj komputer</PrintingPrimaryButton>
+        <AppButton variant="primary" onClick={() => setAddComputerOpen(true)}>Dodaj komputer</AppButton>
       </div>
 
       <PrintingKpiGrid
@@ -222,7 +223,7 @@ export default function PrintingAgentsPage() {
                     {versionState === "update" ? (
                       <button
                         type="button"
-                        className="ml-2 text-xs font-semibold text-orange-600 hover:text-orange-700"
+                        className={`ml-2 text-xs font-semibold ${brandLinkTextClass}`}
                         onClick={handleUpdateAgent}
                       >
                         Zaktualizuj agenta

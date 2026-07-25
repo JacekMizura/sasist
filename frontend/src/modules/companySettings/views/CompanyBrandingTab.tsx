@@ -4,7 +4,8 @@ import { CheckCircle2, Loader2, Trash2, Upload } from "lucide-react";
 import { resolvePublicUploadUrl } from "../../../components/admin/AvatarUploadField";
 import { BrandingSystemPreview } from "../components/BrandingSystemPreview";
 import { useCompanySettings } from "../context/CompanySettingsContext";
-import { companyCardClass, companyOrangeCtaClass } from "../companySettingsUi";
+import { brandPrimaryButtonClass } from "../../../design-system/brandUi";
+import { companyCardClass } from "../companySettingsUi";
 
 export default function CompanyBrandingTab() {
   const { profile, form, profileLoading, profileErr, logoBusy, onLogoFiles, removeLogo } = useCompanySettings();
@@ -96,7 +97,7 @@ export default function CompanyBrandingTab() {
                   PNG, JPG lub SVG • max 6 MB
                 </p>
                 <div className="mt-6 flex flex-wrap items-center justify-center gap-2">
-                  <label htmlFor={logoInputId} className={`${companyOrangeCtaClass} cursor-pointer`}>
+                  <label htmlFor={logoInputId} className={`${brandPrimaryButtonClass} cursor-pointer`}>
                     <Upload className="h-4 w-4" aria-hidden />
                     Wybierz plik
                   </label>

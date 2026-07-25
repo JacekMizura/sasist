@@ -16,11 +16,13 @@ export {
   appSectionTitleClass as cartsSectionTitleClass,
 } from "../../components/app-shell/appShellTokens";
 
-/** Screenshot-parity primary CTA (orange) for Magazyn module — Design System Primary. */
-export { brandPrimaryButtonClass as cartsOrangeCtaClass } from "../../design-system/brandUi";
+import { brandFocusRingClass } from "../../design-system/brandUi";
 
-export const cartsOutlineCtaClass =
-  "inline-flex h-10 shrink-0 items-center justify-center gap-1.5 rounded-lg border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-400 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50";
+/** Screenshot-parity outline CTA for Magazyn module — neutral chrome + brand focus. */
+export const cartsOutlineCtaClass = [
+  "inline-flex h-10 shrink-0 items-center justify-center gap-1.5 rounded-lg border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50",
+  brandFocusRingClass,
+].join(" ");
 
 /** Dark primary CTA (e.g. Zapisz regał on Regały editor). */
 export const cartsDarkCtaClass =

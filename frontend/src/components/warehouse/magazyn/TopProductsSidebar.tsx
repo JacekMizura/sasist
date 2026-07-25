@@ -1,4 +1,5 @@
 import { Link } from "react-router-dom";
+import { brandLinkTextClass } from "../../../design-system/brandUi";
 import type { WarehouseProduct } from "../../../types/warehouse";
 import { getProductDetailsPath } from "../../../pages/Products/productPaths";
 
@@ -112,7 +113,7 @@ export function TopProductsSidebar({
             <button
               type="button"
               onClick={onClearMapProductSelection}
-              className="mt-2 self-start text-xs font-medium text-orange-600 hover:text-orange-700"
+              className={`mt-2 self-start text-xs ${brandLinkTextClass}`}
             >
               Wyczyść wybór
             </button>

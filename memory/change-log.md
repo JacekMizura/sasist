@@ -1,3 +1,11 @@
+## 2026-07-25 — Brand Enforcement: final Design System cleanup (no push)
+
+- Usunięto aliasy Primary CTA (`cartsOrangeCtaClass`, `companyOrangeCtaClass`, `PrintingPrimaryButton`)
+- Usunięto martwe `appTabActiveClass` / `printingTheme.primary`
+- Soft/outline/link brand → tokeny w `brandUi.ts`; look bez zmian
+- Badge / status / severity / segmented / heatmap — bez zmian (wyjątki)
+- **No push.**
+
 ## 2026-07-25 — Magazyn UI: pełny redesign widoku operacyjnego (no push)
 
 - Kompozycja: mapa jako bohater (powierzchnia hali), lewy pulpit jako jeden rail, prawa lista produktów light/nowoczesna

@@ -13,9 +13,3 @@ export const appInputClass =
   "h-9 w-full rounded-md border border-slate-200/90 bg-white px-2.5 text-[13px] leading-tight text-slate-900 shadow-none placeholder:text-slate-400 focus:border-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-400/35";
 
 export const appFieldLabelClass = "mb-0.5 block text-[11px] font-medium leading-tight text-slate-500";
-
-export const appTabActiveClass =
-  "border-b-2 -mb-px border-orange-500 pb-2.5 text-sm font-semibold text-orange-600";
-
-export const appTabInactiveClass =
-  "border-b-2 -mb-px border-transparent pb-2.5 text-sm font-medium text-slate-500 hover:text-slate-800";
