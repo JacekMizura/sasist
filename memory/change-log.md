@@ -1,3 +1,11 @@
+## 2026-07-25 — Design System: brand sidebar nav (no push)
+
+- Tokeny: `brandSidebarNavItemClassName`, `brandSidebarNavActiveBarClassName`, icon/chevron
+- ErpSidebar + NavFlyoutPanel: aktywny = orange text/icon + lewy pasek (bez niebieskiego)
+- Też: TemplatesListSidebar, OperationsSidebar, PickingSettingsSectionNav
+- Status sidebary zamówień (BRAKI itd.) bez zmian
+- **No push.**
+
 ## 2026-07-25 — Brand Enforcement: final Design System cleanup (no push)
 
 - Usunięto aliasy Primary CTA (`cartsOrangeCtaClass`, `companyOrangeCtaClass`, `PrintingPrimaryButton`)

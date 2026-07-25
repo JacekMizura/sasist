@@ -18,14 +18,14 @@ import {
   ERP_SIDEBAR_COLLAPSED_WIDTH_PX,
   ERP_SIDEBAR_ICON_CLASS,
   ERP_SIDEBAR_ICON_COLLAPSED_CLASS,
-  ERP_SIDEBAR_ITEM_ACTIVE,
-  ERP_SIDEBAR_ITEM_BASE,
-  ERP_SIDEBAR_ITEM_HOVER,
   ERP_SIDEBAR_NAV_SCROLL,
   ERP_SIDEBAR_SECTION_LABEL,
   ERP_SIDEBAR_SURFACE,
   ERP_SIDEBAR_WIDTH_CLASS,
   ERP_SIDEBAR_WIDTH_PX,
+  erpSidebarNavChevronClassName,
+  erpSidebarNavIconClassName,
+  erpSidebarNavItemClassName,
 } from "./erpSidebarStyles";
 import { useErpSidebarUi } from "./ErpSidebarUiContext";
 import { useNavFlyout } from "./useNavFlyout";
@@ -60,6 +60,7 @@ function SidebarNavButton({
   onMouseLeave,
   onClick,
 }: SidebarNavButtonProps) {
+  const highlighted = active || Boolean(flyoutOpen);
   return (
     <button
       type="button"
@@ -69,8 +70,7 @@ function SidebarNavButton({
       aria-expanded={showChevron ? flyoutOpen : undefined}
       data-erp-nav-trigger
       className={[
-        ERP_SIDEBAR_ITEM_BASE,
-        active || flyoutOpen ? ERP_SIDEBAR_ITEM_ACTIVE : ERP_SIDEBAR_ITEM_HOVER,
+        erpSidebarNavItemClassName(highlighted),
         collapsed ? "justify-center px-0" : "",
       ]
         .filter(Boolean)
@@ -79,13 +79,13 @@ function SidebarNavButton({
       onMouseLeave={onMouseLeave}
       onClick={onClick}
     >
-      {active || flyoutOpen ? <span className={ERP_SIDEBAR_ACTIVE_BAR} aria-hidden /> : null}
+      {highlighted ? <span className={ERP_SIDEBAR_ACTIVE_BAR} aria-hidden /> : null}
       <Icon
         className={[
           collapsed ? ERP_SIDEBAR_ICON_COLLAPSED_CLASS : ERP_SIDEBAR_ICON_CLASS,
-          active || flyoutOpen ? "text-blue-600" : "text-slate-600 group-hover:text-slate-900",
+          erpSidebarNavIconClassName(highlighted),
         ].join(" ")}
-        strokeWidth={active || flyoutOpen ? 2.25 : 1.75}
+        strokeWidth={highlighted ? 2.25 : 1.75}
         aria-hidden
       />
       {!collapsed ? (
@@ -93,7 +93,7 @@ function SidebarNavButton({
           <span className="min-w-0 flex-1 truncate leading-tight">{label}</span>
           {showChevron ? (
             <ChevronRight
-              className={`h-4 w-4 shrink-0 transition-transform duration-200 ${flyoutOpen ? "translate-x-0.5 text-blue-600" : "text-slate-400"}`}
+              className={`h-4 w-4 shrink-0 transition-transform duration-200 ${flyoutOpen ? "translate-x-0.5" : ""} ${erpSidebarNavChevronClassName(highlighted)}`}
               aria-hidden
             />
           ) : null}
@@ -145,8 +145,7 @@ function SectionBlock({
                 aria-label={cat.label}
                 aria-current={active ? "page" : undefined}
                 className={[
-                  ERP_SIDEBAR_ITEM_BASE,
-                  active ? ERP_SIDEBAR_ITEM_ACTIVE : ERP_SIDEBAR_ITEM_HOVER,
+                  erpSidebarNavItemClassName(active),
                   collapsed ? "justify-center px-0" : "",
                 ]
                   .filter(Boolean)
@@ -156,7 +155,7 @@ function SectionBlock({
                 <Icon
                   className={[
                     collapsed ? ERP_SIDEBAR_ICON_COLLAPSED_CLASS : ERP_SIDEBAR_ICON_CLASS,
-                    active ? "text-blue-600" : "text-slate-600 group-hover:text-slate-900",
+                    erpSidebarNavIconClassName(active),
                   ].join(" ")}
                   strokeWidth={active ? 2.25 : 1.75}
                   aria-hidden

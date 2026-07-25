@@ -1,7 +1,14 @@
 /**
- * ERP left sidebar tokens — Linear / Notion / Stripe style (white + blue active).
- * Shared with {@link NavFlyoutPanel} for left offset.
+ * ERP left sidebar layout tokens.
+ * Active / hover / indicator colors come from Design System.
  */
+
+import {
+  brandSidebarNavActiveBarClassName,
+  brandSidebarNavChevronClassName,
+  brandSidebarNavIconClassName,
+  brandSidebarNavItemClassName,
+} from "../design-system/brandUi";
 
 export const ERP_SIDEBAR_WIDTH_PX = 260;
 export const ERP_SIDEBAR_COLLAPSED_WIDTH_PX = 76;
@@ -20,21 +27,11 @@ export const ERP_SIDEBAR_NAV_SCROLL =
 export const ERP_SIDEBAR_SECTION_LABEL =
   "px-4 pb-2 pt-6 text-xs font-bold uppercase tracking-wider text-slate-400 first:pt-3";
 
-export const ERP_SIDEBAR_ITEM_BASE =
-  "group relative flex w-full items-center gap-3.5 rounded-xl px-4 py-3.5 text-left text-[15px] font-medium text-slate-700 transition-colors duration-150 ease-out focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2563EB]";
-
-export const ERP_SIDEBAR_ITEM_HOVER = "hover:bg-[#EFF6FF] hover:text-slate-900";
-
-export const ERP_SIDEBAR_ITEM_ACTIVE = "bg-blue-50 font-semibold text-blue-600";
-
-export const ERP_SIDEBAR_ITEM_INACTIVE = "";
-
 export const ERP_SIDEBAR_ICON_CLASS = "h-6 w-6 shrink-0";
 export const ERP_SIDEBAR_ICON_COLLAPSED_CLASS = "h-6 w-6 shrink-0";
 
-/** Absolute left indicator bar on active item. */
-export const ERP_SIDEBAR_ACTIVE_BAR =
-  "absolute left-0 top-1/2 h-6 w-1 -translate-y-1/2 rounded-r bg-blue-600";
+/** Absolute left indicator bar on active item (Design System). */
+export const ERP_SIDEBAR_ACTIVE_BAR = brandSidebarNavActiveBarClassName;
 
 export const ERP_SIDEBAR_COLLAPSE_STORAGE_KEY = "erp-sidebar-collapsed";
 
@@ -46,16 +43,32 @@ export type NavCategoryAccent = {
   hoverBgClass: string;
 };
 
-const BLUE_ACCENT: NavCategoryAccent = {
-  barClass: "bg-blue-600",
-  activeBgClass: "bg-blue-50",
-  activeTextClass: "text-blue-600",
-  activeIconClass: "text-blue-600",
-  hoverBgClass: "hover:bg-[#EFF6FF]",
+const BRAND_ACCENT: NavCategoryAccent = {
+  barClass: "bg-orange-500",
+  activeBgClass: "bg-orange-50/70",
+  activeTextClass: "text-orange-600",
+  activeIconClass: "text-orange-600",
+  hoverBgClass: "hover:bg-slate-100",
 };
 
 export function getNavCategoryAccent(_categoryId?: string): NavCategoryAccent {
-  return BLUE_ACCENT;
+  return BRAND_ACCENT;
 }
 
-export const WMS_NAV_ACCENT = BLUE_ACCENT;
+export const WMS_NAV_ACCENT = BRAND_ACCENT;
+
+export function erpSidebarNavItemClassName(isActive: boolean): string {
+  return brandSidebarNavItemClassName(isActive);
+}
+
+export function erpSidebarNavIconClassName(isActive: boolean): string {
+  return brandSidebarNavIconClassName(isActive);
+}
+
+export function erpSidebarNavChevronClassName(isActive: boolean): string {
+  return brandSidebarNavChevronClassName(isActive);
+}
+
+export function erpSidebarFlyoutRowClassName(isActive: boolean): string {
+  return brandSidebarNavItemClassName(isActive, { density: "flyout" });
+}

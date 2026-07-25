@@ -22,9 +22,9 @@ export const erpDensityClasses = {
   sidebarItemBase:
     "group relative flex h-9 min-h-9 w-full items-center gap-2 rounded-lg px-3 py-1.5 text-left transition-colors duration-150",
   sidebarItemFocus:
-    "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500",
+    "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-400",
   sidebarLabel: "min-w-0 flex-1 truncate text-[13px] leading-tight",
-  sidebarActiveBar: "absolute left-0 top-1/2 h-5 w-1 -translate-y-1/2 rounded-r-full",
+  sidebarActiveBar: "absolute left-0 top-0 bottom-0 w-[3px] rounded-r-full bg-orange-500",
   sidebarIcon: "shrink-0 transition-colors",
   /** Prefer ERP sidebar `h-6 w-6` tokens; kept for legacy callers. */
   sidebarIconSize: 24,

@@ -6,13 +6,21 @@ import { isNavPathActive } from "./navActive";
 import { isSuperRole } from "../auth/isSuperRole";
 import { useAuth } from "../context/AuthContext";
 import { useLabels } from "../labels";
-import { ERP_FLYOUT_WIDTH_PX, ERP_SIDEBAR_WIDTH_PX } from "./erpSidebarStyles";
+import {
+  brandSidebarNavActiveBarClassName,
+  brandSidebarNavIconClassName,
+} from "../design-system/brandUi";
+import {
+  ERP_FLYOUT_WIDTH_PX,
+  ERP_SIDEBAR_WIDTH_PX,
+  erpSidebarFlyoutRowClassName,
+} from "./erpSidebarStyles";
 
 const FLYOUT_ICON = 20;
 const VIEWPORT_MARGIN = 8;
 
 const plusBtnClass =
-  "relative z-[210] flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 transition-colors duration-150 hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700";
+  "relative z-[210] flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 transition-colors duration-150 hover:border-slate-300 hover:bg-slate-50 hover:text-slate-800";
 
 function FlyoutRow({
   item,
@@ -38,19 +46,18 @@ function FlyoutRow({
   const plusTarget = item.plusLinkTo?.trim();
   const rowActive =
     active || (plusTarget != null && plusTarget !== "" && isNavPathActive(pathname, plusTarget));
-  const linkPartClass = `flex min-h-10 min-w-0 flex-1 items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors duration-150 [&_svg]:shrink-0 ${
-    rowActive ? "bg-blue-50 text-blue-700" : "text-slate-700 hover:bg-slate-50 hover:text-slate-900"
-  }`;
+  const linkPartClass = erpSidebarFlyoutRowClassName(rowActive);
 
   const iconWrap = (
-    <span className={rowActive ? "text-blue-600" : "text-slate-500"}>
-      <Icon size={FLYOUT_ICON} strokeWidth={1.75} />
+    <span className={brandSidebarNavIconClassName(rowActive)}>
+      <Icon size={FLYOUT_ICON} strokeWidth={rowActive ? 2.25 : 1.75} />
     </span>
   );
 
   if (item.openInNewTab) {
     return (
       <a href={item.path} target="_blank" rel="noopener noreferrer" className={linkPartClass}>
+        {rowActive ? <span className={brandSidebarNavActiveBarClassName} aria-hidden /> : null}
         {iconWrap}
         {item.label}
       </a>
@@ -60,11 +67,12 @@ function FlyoutRow({
   if (plusTarget) {
     return (
       <div
-        className={`flex min-h-10 items-center gap-1 rounded-xl py-0.5 pr-1 pl-0.5 transition-colors duration-150 ${
-          rowActive ? "bg-blue-50/80" : "hover:bg-slate-50"
+        className={`relative flex min-h-10 items-center gap-1 rounded-xl py-0.5 pr-1 pl-0.5 transition-colors duration-150 ${
+          rowActive ? "bg-orange-50/50" : "hover:bg-slate-100"
         }`}
       >
-        <Link to={item.path} className={linkPartClass}>
+        {rowActive ? <span className={brandSidebarNavActiveBarClassName} aria-hidden /> : null}
+        <Link to={item.path} className={`${linkPartClass} bg-transparent`}>
           {iconWrap}
           <span className="min-w-0 truncate">{item.label}</span>
         </Link>
@@ -77,6 +85,7 @@ function FlyoutRow({
 
   return (
     <Link to={item.path} className={linkPartClass}>
+      {rowActive ? <span className={brandSidebarNavActiveBarClassName} aria-hidden /> : null}
       {iconWrap}
       <span className="min-w-0 truncate">{item.label}</span>
     </Link>

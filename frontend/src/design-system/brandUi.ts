@@ -71,3 +71,39 @@ export function brandTabsNavItemClassName(isActive: boolean): string {
 
 /** Nav row for underline tabs (shared shell). */
 export const brandTabsNavRowClassName = "flex gap-6 border-b border-slate-200";
+
+/**
+ * App sidebar / vertical nav — same brand active language as Tabs, adapted to a rail.
+ * Active: orange text + orange icon + left indicator + semibold + soft orange tint.
+ * Hover (inactive): neutral slate background (never blue / never orange).
+ */
+export function brandSidebarNavItemClassName(
+  isActive: boolean,
+  options?: { compact?: boolean; density?: "rail" | "flyout" },
+): string {
+  const density = options?.density ?? (options?.compact ? "flyout" : "rail");
+  const size =
+    density === "flyout"
+      ? "min-h-10 gap-3 rounded-xl px-3 py-2.5 text-sm"
+      : "gap-3.5 rounded-xl px-4 py-3.5 text-[15px]";
+  return [
+    "group relative flex w-full items-center text-left transition-colors duration-150 ease-out",
+    size,
+    "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-400",
+    isActive
+      ? "bg-orange-50/70 font-semibold text-orange-600"
+      : "font-medium text-slate-700 hover:bg-slate-100 hover:text-slate-900",
+  ].join(" ");
+}
+
+/** Left activity indicator (vertical counterpart of Tabs underline). Full item height, ~3–4px. */
+export const brandSidebarNavActiveBarClassName =
+  "absolute left-0 top-0 bottom-0 w-[3px] rounded-r-full bg-orange-500";
+
+export function brandSidebarNavIconClassName(isActive: boolean): string {
+  return isActive ? "text-orange-600" : "text-slate-600 group-hover:text-slate-900";
+}
+
+export function brandSidebarNavChevronClassName(isActive: boolean): string {
+  return isActive ? "text-orange-600" : "text-slate-400";
+}

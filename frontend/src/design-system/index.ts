@@ -11,4 +11,8 @@ export {
   brandSoftRowHoverClass,
   brandTabsNavItemClassName,
   brandTabsNavRowClassName,
+  brandSidebarNavItemClassName,
+  brandSidebarNavActiveBarClassName,
+  brandSidebarNavIconClassName,
+  brandSidebarNavChevronClassName,
 } from "./brandUi";

@@ -2,12 +2,11 @@
 
 ## Active
 
-**Brand Enforcement (final Design System cleanup)** — local, uncommitted.
+**Design System — brand sidebar nav** (local, uncommitted).
 
-- Primary CTA: tylko `AppButton variant="primary"` / `brandPrimaryButtonClass`
-- Underline tabs: tylko `TabsNav` / `brandTabsNavItemClassName`
-- Usunięte aliasy: `cartsOrangeCtaClass`, `companyOrangeCtaClass`, `PrintingPrimaryButton`, `printingTheme.primary`, `appTabActiveClass`
-- Soft/outline/link brand: tokeny w `design-system/brandUi.ts`
+- Active rail item: orange text + icon + left bar + soft tint + semibold
+- Hover: neutral slate (not blue / not orange)
+- SSOT: `brandSidebarNavItemClassName` (+ bar / icon / chevron)
 
 ### Constraints
 Bez commit/push (dopóki user nie poprosi).

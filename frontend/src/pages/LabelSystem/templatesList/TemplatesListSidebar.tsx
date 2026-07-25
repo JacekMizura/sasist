@@ -5,7 +5,12 @@ import {
   LABEL_PRINT_MODULE_TYPE_ORDER,
 } from "../labelPrintModuleTypes";
 import { getTypeIcon, UNGROUPED_ID, type GroupRow } from "./templatesListTypes";
-import { brandPrimaryButtonClass } from "../../../design-system/brandUi";
+import {
+  brandPrimaryButtonClass,
+  brandSidebarNavActiveBarClassName,
+  brandSidebarNavIconClassName,
+  brandSidebarNavItemClassName,
+} from "../../../design-system/brandUi";
 
 type Props = {
   selectedType: string;
@@ -41,16 +46,10 @@ export default function TemplatesListSidebar({
         key={type}
         type="button"
         onClick={() => onSelectType(type)}
-        className={[
-          "group flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-left text-sm font-medium transition",
-          active
-            ? "bg-orange-50 text-orange-950 ring-1 ring-orange-300"
-            : "text-slate-700 hover:bg-slate-50",
-        ].join(" ")}
+        className={brandSidebarNavItemClassName(active, { compact: true })}
       >
-        <span className={active ? "text-orange-700" : "text-slate-500 group-hover:text-slate-700"}>
-          {getTypeIcon(type)}
-        </span>
+        {active ? <span className={brandSidebarNavActiveBarClassName} aria-hidden /> : null}
+        <span className={brandSidebarNavIconClassName(active)}>{getTypeIcon(type)}</span>
         {label}
       </button>
     );
@@ -81,13 +80,11 @@ export default function TemplatesListSidebar({
           <button
             type="button"
             onClick={() => onSelectGroup(UNGROUPED_ID)}
-            className={[
-              "w-full rounded-xl px-3 py-2 text-left text-sm transition",
-              selectedGroupId === UNGROUPED_ID
-                ? "bg-slate-100 font-semibold text-slate-900"
-                : "text-slate-600 hover:bg-slate-50",
-            ].join(" ")}
+            className={brandSidebarNavItemClassName(selectedGroupId === UNGROUPED_ID, { compact: true })}
           >
+            {selectedGroupId === UNGROUPED_ID ? (
+              <span className={brandSidebarNavActiveBarClassName} aria-hidden />
+            ) : null}
             Bez grupy
           </button>
           {groups.map((g) => (
@@ -95,14 +92,12 @@ export default function TemplatesListSidebar({
               key={g.id}
               type="button"
               onClick={() => onSelectGroup(g.id)}
-              className={[
-                "w-full truncate rounded-xl px-3 py-2 text-left text-sm transition",
-                selectedGroupId === g.id
-                  ? "bg-slate-100 font-semibold text-slate-900"
-                  : "text-slate-600 hover:bg-slate-50",
-              ].join(" ")}
+              className={brandSidebarNavItemClassName(selectedGroupId === g.id, { compact: true })}
             >
-              {g.name}
+              {selectedGroupId === g.id ? (
+                <span className={brandSidebarNavActiveBarClassName} aria-hidden />
+              ) : null}
+              <span className="min-w-0 truncate">{g.name}</span>
             </button>
           ))}
         </div>
