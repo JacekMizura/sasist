@@ -2,28 +2,28 @@ import logging
 from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-
-from fastapi import Depends
-from ..auth.warehouse_deps import (
-    require_operable_warehouse,
-    require_active_operable_warehouse,
-    require_active_or_query_operable_warehouse,
-    assert_stock_document_warehouse,
-    enforce_warehouse_access,
-)
 from fastapi.responses import Response
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
+from ..auth.warehouse_deps import require_operable_warehouse
 from ..database import get_db
-from ..models.location import Location
+from ..schemas.structure_report_pdf import StructureReportPdfRequest
+from ..schemas.warehouse_layout import WarehouseLayoutPayload
+from ..services.special_placement_service import (
+    delete_special_placement,
+    list_special_placements_payload,
+    placement_to_dict,
+    update_special_placement_coords,
+    upsert_special_placement,
+)
+from ..services.structure_report_pdf_service import generate_structure_report_pdf_bytes
 from ..services.warehouse_layout_service import WarehouseLayoutService
 from ..services.warehouse_occupancy_service import get_occupancy_metrics
-from ..schemas.warehouse_layout import WarehouseLayoutPayload
-from ..schemas.structure_report_pdf import StructureReportPdfRequest
-from ..services.structure_report_pdf_service import generate_structure_report_pdf_bytes
 
 router = APIRouter(prefix="/warehouse", tags=["Warehouse Layout"])
+
+logger = logging.getLogger(__name__)
 
 
 class SpecialLocationCreate(BaseModel):
@@ -31,11 +31,13 @@ class SpecialLocationCreate(BaseModel):
     x: float
     y: float
     type: Literal["PICK_START", "PACKING", "DOCK"]
+    rotation: float = 0.0
 
 
 class SpecialLocationUpdate(BaseModel):
     x: float
     y: float
+    rotation: float | None = None
 
 
 def _pdf_response(pdf_bytes: bytes, filename: str) -> Response:
@@ -47,26 +49,8 @@ def _pdf_response(pdf_bytes: bytes, filename: str) -> Response:
 
 
 def _get_special_locations_payload(db: Session, warehouse_id: int) -> dict:
-    rows = (
-        db.query(Location)
-        .filter(
-            Location.warehouse_id == warehouse_id,
-            Location.location_type.in_(["PICK_START", "PACKING", "DOCK"]),
-        )
-        .all()
-    )
-    pick_start = None
-    packing = None
-    dock = None
-    for loc in rows:
-        d = {"id": loc.id, "x": float(loc.x or 0), "y": float(loc.y or 0)}
-        if loc.location_type == "PICK_START":
-            pick_start = d
-        elif loc.location_type == "PACKING":
-            packing = d
-        elif loc.location_type == "DOCK":
-            dock = d
-    return {"pick_start": pick_start, "packing": packing, "dock": dock}
+    """Map markers from warehouse_special_placements (not locations)."""
+    return list_special_placements_payload(db, warehouse_id)
 
 
 @router.get("/layout")
@@ -123,15 +107,14 @@ def warehouse_occupancy_metrics_rebuild(
     return get_occupancy_metrics(db, tenant_id=tenant_id, warehouse_id=warehouse_id)
 
 
-logger = logging.getLogger(__name__)
-
-
 @router.get("/layout/labels")
 def get_location_labels(
     tenant_id: int,
     warehouse_id: int,
     template_id: int | None = None,
-    exclude_floors: list[str] | None = Query(None, description="Exclude locations on these floors (repeat param)"),
+    exclude_floors: list[str] | None = Query(
+        None, description="Exclude locations on these floors (repeat param)"
+    ),
     db: Session = Depends(get_db),
 ):
     """Generate location labels PDF using the label template system. Use default location template if template_id not provided."""
@@ -207,32 +190,18 @@ def create_special_location(
     db: Session = Depends(get_db),
 ):
     """
-    Create a special location (PICK_START, PACKING, or DOCK) for a warehouse.
-    Only one PICK_START per warehouse; creating a new one replaces the previous.
+    Upsert map placement (PICK_START | PACKING | DOCK).
+    Creates/links operational ``locations`` row but never deletes locations.
     """
-    if body.type == "PICK_START":
-        existing = (
-            db.query(Location)
-            .filter(Location.warehouse_id == body.warehouse_id, Location.location_type == "PICK_START")
-            .all()
-        )
-        for loc in existing:
-            db.delete(loc)
-        db.flush()
-    names = {"PICK_START": "START", "PACKING": "PACK", "DOCK": "DOCK"}
-    name = names.get(body.type, body.type)
-    loc = Location(
+    placement = upsert_special_placement(
+        db,
         warehouse_id=body.warehouse_id,
-        name=name,
-        type="pick",
-        location_type=body.type,
-        x=body.x,
-        y=body.y,
+        role=body.type,
+        x_cm=body.x,
+        y_cm=body.y,
+        rotation=body.rotation,
     )
-    db.add(loc)
-    db.commit()
-    db.refresh(loc)
-    return {"id": loc.id, "x": float(loc.x or 0), "y": float(loc.y or 0), "location_type": loc.location_type}
+    return placement_to_dict(placement)
 
 
 @router.get("/{warehouse_id}/special-locations")
@@ -240,42 +209,37 @@ def get_special_locations(
     warehouse_id: int,
     db: Session = Depends(get_db),
 ):
-    """Return pick_start, packing, and dock locations for the warehouse (id, x, y)."""
+    """Return pick_start, packing, and dock map placements (id = placement id, x/y in cm)."""
     return _get_special_locations_payload(db, warehouse_id)
 
 
-@router.patch("/special-location/{location_id}")
+@router.put("/special-location/{placement_id}")
+@router.patch("/special-location/{placement_id}")
 def update_special_location(
-    location_id: int,
+    placement_id: int,
     body: SpecialLocationUpdate,
     db: Session = Depends(get_db),
 ):
-    """Update special location position by id."""
-    loc = db.query(Location).filter(
-        Location.id == location_id,
-        Location.location_type.in_(["PICK_START", "PACKING", "DOCK"]),
-    ).first()
-    if not loc:
-        raise HTTPException(status_code=404, detail="Special location not found")
-    loc.x = body.x
-    loc.y = body.y
-    db.commit()
-    db.refresh(loc)
-    return {"id": loc.id, "x": float(loc.x or 0), "y": float(loc.y or 0), "location_type": loc.location_type}
+    """Update placement coordinates only — does not touch locations."""
+    placement = update_special_placement_coords(
+        db,
+        placement_id,
+        x_cm=body.x,
+        y_cm=body.y,
+        rotation=body.rotation,
+    )
+    if not placement:
+        raise HTTPException(status_code=404, detail="Special placement not found")
+    return placement_to_dict(placement)
 
 
-@router.delete("/special-location/{location_id}")
+@router.delete("/special-location/{placement_id}")
 def delete_special_location(
-    location_id: int,
+    placement_id: int,
     db: Session = Depends(get_db),
 ):
-    """Delete a special location by id."""
-    loc = db.query(Location).filter(
-        Location.id == location_id,
-        Location.location_type.in_(["PICK_START", "PACKING", "DOCK"]),
-    ).first()
-    if not loc:
-        raise HTTPException(status_code=404, detail="Special location not found")
-    db.delete(loc)
-    db.commit()
+    """Remove map placement only. Never deletes the linked locations row or document history."""
+    ok = delete_special_placement(db, placement_id)
+    if not ok:
+        raise HTTPException(status_code=404, detail="Special placement not found")
     return {"ok": True}

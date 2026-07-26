@@ -1987,6 +1987,7 @@ export default function WarehouseDesigner() {
         setSpecialLocations(data ?? { pick_start: null, packing: null, dock: null });
       } catch (err) {
         console.error("Delete special location:", err);
+        setSnackbar({ message: "Nie udało się usunąć punktu z mapy." });
         try {
           const { data } = await api.get<SpecialLocationsState>(`/warehouse/${selectedWarehouseId}/special-locations`);
           setSpecialLocations(data ?? { pick_start: null, packing: null, dock: null });

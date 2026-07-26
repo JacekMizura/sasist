@@ -1,3 +1,34 @@
+## 2026-07-26 — Domain: warehouse_special_placements
+
+- Nowa tabela map markers (role + x/y); `locations` = tożsamość operacyjna
+- Migracja START/PACK/DOCK z locations → placements; clear special geometry
+- DELETE/POST/PUT special-location → placements only; dokumenty nienaruszone
+- `get_special_locations_xy` z placements · **No push.**
+
+## 2026-07-26 — DELETE special-location: 409 zamiast RestrictViolation 500
+
+- Pre-check `stock_documents.location_id`; używane → rollback + HTTP 409 (PL msg)
+- `IntegrityError` / `RestrictViolation` → 409 (nigdy 500); to samo przy replace PICK_START
+- FE: snackbar przy 409; testy jednostkowe delete
+- Architektura: preferowane odpięcie od layoutu zamiast hard DELETE gdy rekord jest w historii · **No push.**
+
+## 2026-07-26 — Skin: Projektowanie UI = Magazyn chrome
+
+- Wspólne `warehouseUiSkin.ts`; rails `#f7f8fa`, search ring/orange, karty `rounded-xl/2xl`
+- Hall mapy + surround w layout mode; tool groups white+ring
+- Bez zmian narzędzi / workflow / occupancy Magazynu w Projektowaniu · **No push.**
+
+## 2026-07-26 — UX regału: karta KPI (scanability)
+
+- Inline detail: duży % zajętości + „N z M lokalizacji zajętych”; bez wierszy Wolne/Razem
+- Objętość jako osobna sekcja meta; tylko prezentacja · **No push.**
+
+## 2026-07-26 — UX regału: szczegóły in-place zamiast tooltipa
+
+- Usunięty ciemny hover popup obok regału
+- Zaznaczony regał pokazuje dane wewnątrz kafelka (occupancy SSOT); hover tylko rozjaśnia
+- Pasek zajętości bez zmian; tsc OK · **No push.**
+
 ## 2026-07-24 — Unify Magazyn ↔ Projektowanie UI (v1)
 
 - Shared: `WarehouseModeContext`, `WarehouseShell`, `WarehouseZoomControls`, `warehouseMapHall`, `features/registry`

@@ -1,51 +1,51 @@
 # Warehouse special nodes (START, PACK, DOCK)
 
-Special nodes define the start of picking, the packing station, and optional shipping docks. They are used in **route simulation** and **warehouse layout** design.
+Special nodes define the start of picking, the packing station, and optional shipping docks.
+They appear on the **warehouse map** and feed geometry consumers (slotting distance, designer).
+
+## Domain split
+
+| Concern | Table | Responsibility |
+|---------|-------|----------------|
+| **Map marker** | `warehouse_special_placements` | Role + `x_cm` / `y_cm` on the floor plan |
+| **Operational identity** | `locations` | Documents, inventory, ATP, receiving (`location_type`) |
+
+Deleting a marker removes the **placement** only. It never deletes `locations` and cannot break `stock_documents` history.
+
+UNIQUE `(warehouse_id, role)` — one active map marker per role per warehouse.
 
 ## Node types
 
-| Type        | Purpose                    | Usage in route simulation   |
-|------------|----------------------------|-----------------------------|
-| **PICK_START** | Picking start point        | Start of the picker route   |
-| **PACKING**    | Packing station            | End of the picker route     |
-| **DOCK**       | Shipping dock (optional)   | Reserved for future use     |
+| Type | Purpose | Usage |
+|------|---------|--------|
+| **PICK_START** | Picking start point | Map + geometry for start |
+| **PACKING** | Packing station | Map + distance-to-packing |
+| **DOCK** | Shipping / inbound dock marker | Map; linked Location may hold DOCK stock |
 
 ## Warehouse Designer
 
-In the **Projektant Magazynu** (Warehouse Designer) toolbar you will find:
+Toolbar: Add Start / Packing / Dock → click canvas → `POST /warehouse/special-location`.
 
-- **Add Start Point** – place the picking start (green circle, label **START**). Only one per warehouse; placing a new one replaces the previous.
-- **Add Packing Station** – place the packing station (blue square, label **PACK**).
-- **Add Dock** – place a shipping dock (gray diamond, label **DOCK**).
+- Move → `PUT`/`PATCH /warehouse/special-location/{placement_id}` (coords only)
+- Delete → `DELETE /warehouse/special-location/{placement_id}` (placement only)
 
-**Interaction:** select a tool, then click on the canvas. The app sends a request to create the special location (POST `/warehouse/special-location` with `warehouse_id`, `x`, `y`, `type`). Coordinates are stored in **centimeters**. Markers are drawn **above shelves** on the map.
+Coordinates are stored in **centimeters** on the placement row.
 
 ## Route simulation
 
-Pick route simulation uses:
-
-1. **START** (PICK_START) – the graph node nearest to this location is the **route start**.
-2. **PACK** (PACKING) – the graph node nearest to this location is the **route end**.
-
-The computed path is: **START → pick locations (Runtime Graph visit order) → PACKING**.
-
-- If **PICK_START** is missing, the API returns: *"No picking start location defined"*.
-- If **PACKING** is missing, the API returns: *"No packing location defined"*.
-
-Walking speed is **1.4 m/s** for estimated time. Distance and visit order come from the **Runtime Graph Reader** (SSOT). See `docs/PICK_ROUTE_SYSTEM.md` and `docs/architecture/routing_graph_runtime.md`.
-
-## Validation
-
-- **Only one PICK_START per warehouse.** Creating a new PICK_START removes the previous one (backend enforces this).
-- PACKING and DOCK can each exist once per warehouse in the current UI; the backend allows multiple PACKING/DOCK locations if needed later.
+Pick-path **Runtime Graph** still uses operational routing nodes (`picking_start`, `packing`).  
+Map/slotting geometry for START/PACK/DOCK is read from **`warehouse_special_placements`** via `get_special_locations_xy` / `get_special_placements_xy` — **not** from `locations.x/y`.
 
 ## API
 
 - **POST** `/warehouse/special-location`  
-  Body: `{ "warehouse_id": int, "x": float, "y": float, "type": "PICK_START" | "PACKING" | "DOCK" }`  
-  Creates the special location; for `PICK_START`, any existing one for that warehouse is removed first.
+  Body: `{ "warehouse_id", "x", "y", "type": "PICK_START"|"PACKING"|"DOCK", "rotation"? }`  
+  Upserts placement; ensures/links operational `locations` row (`location_id`).
 
 - **GET** `/warehouse/{warehouse_id}/special-locations`  
-  Returns: `{ "pick_start": { "id", "x", "y" } | null, "packing": { "id", "x", "y" } | null, "dock": { "id", "x", "y" } | null }`.
+  `{ "pick_start"|"packing"|"dock": { "id", "x", "y", "location_id" } | null }`  
+  `id` = **placement** id.
 
-Coordinates `x`, `y` are in **centimeters** and are used to find the nearest graph node for routing.
+- **PUT/PATCH** `/warehouse/special-location/{placement_id}` — coords only.
+
+- **DELETE** `/warehouse/special-location/{placement_id}` — placement only.

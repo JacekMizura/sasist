@@ -2,6 +2,7 @@
 Neutral layout/geometry helpers.
 
 Pure Location / Euclidean utilities — independent of routing graph models.
+Special map markers (START / PACKING / DOCK) come from warehouse_special_placements.
 """
 
 from __future__ import annotations
@@ -10,8 +11,6 @@ import math
 
 from sqlalchemy.orm import Session
 
-from ..models.location import Location
-
 
 def get_special_locations_xy(
     db: Session, warehouse_id: int
@@ -19,20 +18,11 @@ def get_special_locations_xy(
     """
     Return (pick_start_xy, packing_xy) in cm. Each is (x, y) or None.
 
-    Uses Location.location_type PICK_START and PACKING only — no graph nodes.
+    Reads warehouse_special_placements — not locations.x/y.
     """
-    rows = (
-        db.query(Location)
-        .filter(
-            Location.warehouse_id == warehouse_id,
-            Location.location_type.in_(["PICK_START", "PACKING"]),
-        )
-        .all()
-    )
-    pick_start = next((l for l in rows if l.location_type == "PICK_START"), None)
-    packing = next((l for l in rows if l.location_type == "PACKING"), None)
-    start_xy = (float(pick_start.x or 0), float(pick_start.y or 0)) if pick_start else None
-    pack_xy = (float(packing.x or 0), float(packing.y or 0)) if packing else None
+    from ..services.special_placement_service import get_special_placements_xy
+
+    start_xy, pack_xy, _dock = get_special_placements_xy(db, warehouse_id)
     return start_xy, pack_xy
 
 

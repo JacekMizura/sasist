@@ -116,4 +116,8 @@ def test_layout_geometry_helpers_exist_and_are_graph_free():
                 imported_modules.add(alias.name)
     assert not any("warehouse_graph" in m for m in imported_modules)
     assert not any("warehouse_routing" in m for m in imported_modules)
-    assert any(m.endswith("models.location") for m in imported_modules)
+    # Map geometry from placements (lazy import inside helpers), not graph / Location.x/y
+    assert "def get_special_locations_xy" in src
+    assert "special_placement" in src or "get_special_placements_xy" in src
+    assert "Location" not in src or "models.location" not in src
+

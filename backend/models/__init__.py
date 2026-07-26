@@ -118,6 +118,7 @@ from .printer_profile import PrinterProfile  # noqa: F401
 from .printer import Printer  # noqa: F401
 from .warehouse_template import WarehouseTemplate  # noqa: F401
 from .location import Location
+from .warehouse_special_placement import WarehouseSpecialPlacement  # noqa: F401
 from .inventory import Inventory  # noqa: F401 - register for relationships
 from .inventory_serial import InventorySerial  # noqa: F401
 from .stock import Stock  # noqa: F401 - register for relationships

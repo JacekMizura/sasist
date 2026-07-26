@@ -40,11 +40,13 @@ class Location(Base, BaseModelMixin):
     height = Column(Float, nullable=True)
 
     # Physical position in warehouse (for walking-cost, route simulation, heatmaps). Stored in centimeters.
+    # Special roles (PICK_START/PACKING/DOCK): map geometry lives on warehouse_special_placements — keep x/y NULL.
     x = Column(Float, nullable=True)
     y = Column(Float, nullable=True)
     z = Column(Float, nullable=True)
 
-    # location_type: NORMAL | PICK_START | PACKING | DOCK (standard storage, route start, packing station, shipping dock)
+    # Operational role: NORMAL | PICK_START | PACKING | DOCK.
+    # Map geometry for specials lives on warehouse_special_placements — not locations.x/y.
     location_type = Column(
         String(20),
         nullable=False,

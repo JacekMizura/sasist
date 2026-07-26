@@ -31,6 +31,7 @@ from .db.document_template_schema import ensure_document_template_schema
 from .db.stock_reservations_schema import ensure_stock_reservations_universal_schema
 from .db.wms_production_settings_schema import ensure_wms_production_settings_schema
 from .db.warehouse_routing_schema import ensure_warehouse_routing_schema
+from .db.warehouse_special_placements_schema import ensure_warehouse_special_placements_schema
 from .db.schema_upgrade import (
     ensure_locations_columns,
     ensure_warehouse_layout_identity_columns,
@@ -1213,6 +1214,7 @@ try:
     ensure_stock_disposition_stage2_columns(engine)
     ensure_product_sales_offers_schema(engine)
     ensure_warehouse_routing_schema(engine)
+    ensure_warehouse_special_placements_schema(engine)
     from .db.warehouse_rack_passage_schema import ensure_warehouse_rack_passage_schema
 
     ensure_warehouse_rack_passage_schema(engine)
@@ -1681,6 +1683,7 @@ def _upgrade_schema_background() -> None:
         ensure_stock_disposition_stage2_columns(engine)
         ensure_product_sales_offers_schema(engine)
         ensure_warehouse_routing_schema(engine)
+        ensure_warehouse_special_placements_schema(engine)
         from .db.warehouse_rack_passage_schema import ensure_warehouse_rack_passage_schema
 
         ensure_warehouse_rack_passage_schema(engine)
