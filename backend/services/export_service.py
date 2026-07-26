@@ -486,7 +486,7 @@ class ExportService:
             if not int_ids:
                 int_ids = [int(str(x).strip()) for x in fields if str(x).strip().isdigit()]
             if not int_ids:
-                raise ValueError("Dla eksportu „System etykiet” wybierz szablony (id) w konfiguracji lub podaj ids w żądaniu")
+                raise ValueError("Dla eksportu „Szablony etykiet” wybierz szablony (id) w konfiguracji lub podaj ids w żądaniu")
             return self.build_label_templates_json(tenant_id, int_ids, download_basename=tpl.name)
         fields = _normalize_fields(tpl.type, [str(x) for x in fields])
         field_keys = fields

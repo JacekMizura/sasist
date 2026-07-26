@@ -9,7 +9,7 @@ export const ENTITY_TYPE_LABEL_PL: Record<ExportEntityType, string> = {
   suppliers: "Dostawcy",
   manufacturers: "Producenci",
   customers: "Klienci",
-  label_templates: "System etykiet",
+  label_templates: "Szablony etykiet",
 };
 
 export function entityTypeLabelPl(type: string): string {

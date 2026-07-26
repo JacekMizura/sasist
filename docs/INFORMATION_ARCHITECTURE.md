@@ -150,7 +150,7 @@ Nowe aliasy wymagają uzasadnienia (bookmarki zewnętrzne, migracja URL) — nie
 | Route / obszar | Status | Dlaczego nadal istnieje |
 |----------------|--------|-------------------------|
 | `/inventory` | LEGACY (lista stanów) | Diagnostyka / bookmarki; **nie** jest Inwentaryzacją (`/inventory-count`). Poza menu. API `GET /inventory/` pozostaje SSOT dla Designera. |
-| `/barcode-management` | DELETE_CANDIDATE | Zastąpiony Systemem Etykiet; poza menu; plik do osobnego PR cleanup. |
+| `/barcode-management` | DELETE_CANDIDATE | Zastąpiony Szablonami etykiet; poza menu; plik do osobnego PR cleanup. |
 | `/waves` | Redirect → `/wms/picking` | UI stub ukryty; backend waves bez zmian. |
 | `/planning/deliveries`, `/planning/list` | Redirect → `/purchasing/dashboard` | Placeholdery usunięte z UX. |
 | `/documents/custom-fields`, `/documents/field-templates` | Redirect → `/orders/custom-fields` | Jedna kanoniczna ścieżka pól zamówień. |

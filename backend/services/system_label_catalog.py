@@ -35,7 +35,7 @@ SYSTEM_LABEL_SEED: list[tuple[str, str, str, str]] = [
     ("navigation.pickingWaves", "Fale kompletacji", "navigation", "Fale"),
     ("navigation.warehouseDesigner", "Projektant Magazynu", "navigation", "Designer"),
     ("navigation.barcodeManagement", "Etykiety / Kody kreskowe", "navigation", "Kody"),
-    ("navigation.labelSystem", "System Etykiet", "navigation", "System etykiet"),
+    ("navigation.labelSystem", "Szablony etykiet", "navigation", "Szablony etykiet"),
     ("navigation.setup", "Setup", "navigation", "Setup"),
     ("navigation.settingsCategory", "Ustawienia", "navigation", "Ustawienia"),
     ("navigation.administratorsNav", "Administratorzy", "navigation", "Administratorzy"),

@@ -1,5 +1,5 @@
 /**
- * Label System (System Etykiet) – template and print queue types.
+ * Label templates module (Szablony etykiet) – template and print queue types.
  */
 
 import type { NormalizedStorageType } from "./warehouse";

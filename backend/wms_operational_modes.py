@@ -26,7 +26,7 @@ WMS_OPERATIONAL_MODES: tuple[tuple[str, str], ...] = (
     ("documents", "Dokumenty"),
     ("analytics", "Analiza"),
     ("purchasing", "Zakupy"),
-    ("labels", "System etykiet"),
+    ("labels", "Szablony etykiet"),
 )
 
 

@@ -66,7 +66,7 @@ export default function LoginCodeLabelControls({
       return;
     }
     if (templateId === "" && templates.length === 0) {
-      toast.error("Brak szablonu typu „Kod logowania użytkownika”. Utwórz go w Systemie etykiet.");
+      toast.error("Brak szablonu typu „Kod logowania użytkownika”. Utwórz go w Szablonach etykiet.");
       return;
     }
     setBusy(true);
@@ -141,7 +141,7 @@ export default function LoginCodeLabelControls({
         </select>
         {templates.length === 0 ? (
           <p className="mt-1 text-[11px] text-amber-700">
-            Brak szablonów typu „Kod logowania użytkownika”. Dodaj szablon w Systemie etykiet i użyj zmiennej
+            Brak szablonów typu „Kod logowania użytkownika”. Dodaj szablon w Szablonach etykiet i użyj zmiennej
             „Kod logowania”.
           </p>
         ) : null}
