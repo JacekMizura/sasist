@@ -97,6 +97,27 @@ export default function ProductionPlanningPage() {
     }
   }, [warehouseId, tenantId, planning.coverageDays, navigate]);
 
+  const refreshPlanFromSimulation = useCallback(async () => {
+    await planning.reload();
+    if (warehouseId == null) return;
+    setSimLoading(true);
+    setSimulation(null);
+    try {
+      // No request lines — backend rebuilds recommendations from a fresh snapshot.
+      const result = await simulateProductionPlan({
+        tenant_id: tenantId,
+        warehouse_id: warehouseId,
+        coverage_days: planning.coverageDays,
+      });
+      setSimulation(result);
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : "Symulacja nie powiodła się.");
+      setSimOpen(false);
+    } finally {
+      setSimLoading(false);
+    }
+  }, [planning, warehouseId, tenantId]);
+
   if (!hasActiveWarehouse) {
     return <ActiveWarehouseRequiredBanner />;
   }
@@ -191,6 +212,9 @@ export default function ProductionPlanningPage() {
         onClose={() => setSimOpen(false)}
         onConfirmCreate={() => void confirmCreateFromSimulation()}
         creating={simCreating}
+        onRefreshPlan={() => void refreshPlanFromSimulation()}
+        onChangeHorizon={() => setSimOpen(false)}
+        onChangeStrategy={() => setSimOpen(false)}
       />
 
       {warehouseId != null ? (

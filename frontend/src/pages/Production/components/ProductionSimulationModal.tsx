@@ -1,8 +1,10 @@
 import { AlertTriangle, CheckCircle2, Loader2, X } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 
 import type { ProductionPlanSimulation } from "@/api/productionPlanningApi";
-import { PrimaryButton } from "@/design-system/PrimaryButton";
+import { EmptyState, PrimaryButton, SecondaryButton } from "@/design-system";
 import { AppOverlayPortal } from "../../../components/overlay";
+import { erpProductionPaths } from "../productionPaths";
 
 type Props = {
   open: boolean;
@@ -11,7 +13,56 @@ type Props = {
   onClose: () => void;
   onConfirmCreate: () => void;
   creating: boolean;
+  /** Reload planning snapshot (and optionally re-run simulation from parent). */
+  onRefreshPlan?: () => void;
+  /** Close modal so the user can change coverage days on the planning page. */
+  onChangeHorizon?: () => void;
+  /** Close modal so the user can review forecast settings on the planning page. */
+  onChangeStrategy?: () => void;
 };
+
+type EmptyCopy = {
+  title: string;
+  description: string;
+  actions: Array<"refresh" | "horizon" | "strategy" | "recipes">;
+};
+
+function resolveEmptyCopy(code: string | null | undefined): EmptyCopy {
+  switch (code) {
+    case "NO_ACTIVE_RECIPES":
+    case "NO_ACTIVE_RECIPE_ON_RECOMMENDATIONS":
+      return {
+        title: "Żaden produkt nie posiada aktywnej receptury.",
+        description: "Produkty nie mogą zostać uwzględnione w planowaniu.",
+        actions: ["recipes"],
+      };
+    case "NO_POSITIVE_RECOMMENDATION":
+      return {
+        title: "Brak produktów wymagających produkcji.",
+        description: "Stan magazynowy pokrywa aktualne zapotrzebowanie.",
+        actions: ["refresh", "horizon"],
+      };
+    case "NO_REQUEST_LINES":
+    case "NO_CANDIDATES":
+      return {
+        title: "Brak dodatnich rekomendacji.",
+        description: "MRP nie wyliczyło żadnej partii do utworzenia.",
+        actions: ["refresh", "strategy"],
+      };
+    case "ALL_CANDIDATES_SKIPPED":
+      return {
+        title: "Brak dodatnich rekomendacji.",
+        description: "MRP nie wyliczyło żadnej partii do utworzenia.",
+        actions: ["refresh", "strategy"],
+      };
+    default:
+      return {
+        title: "Brak dodatnich rekomendacji.",
+        description: "MRP nie wyliczyło żadnej partii do utworzenia.",
+        actions: ["refresh", "horizon"],
+      };
+  }
+}
 
 function fmt(n: number): string {
   return Number.isInteger(n) ? String(n) : n.toFixed(1);
@@ -24,14 +75,25 @@ export function ProductionSimulationModal({
   onClose,
   onConfirmCreate,
   creating,
+  onRefreshPlan,
+  onChangeHorizon,
+  onChangeStrategy,
 }: Props) {
+  const navigate = useNavigate();
   if (!open) return null;
 
   const productCount = simulation?.lines.length ?? 0;
   const hasProducts = productCount > 0;
-  const canCreate = !loading && !creating && hasProducts;
   const hasMaterialShortage =
     hasProducts && (simulation?.materials.some((m) => m.shortage > 0) ?? false);
+  const emptyCopy = !loading && simulation && !hasProducts
+    ? resolveEmptyCopy(simulation.diagnostics?.empty_reason_code)
+    : null;
+
+  const goToRecipes = () => {
+    onClose();
+    navigate(erpProductionPaths.recipes);
+  };
 
   return (
     <AppOverlayPortal>
@@ -54,37 +116,53 @@ export function ProductionSimulationModal({
               <p>Wykonywanie symulacji…</p>
             </div>
           ) : simulation == null ? (
-            <p className="py-10 text-center text-sm text-slate-500">Brak wyniku symulacji.</p>
-          ) : !hasProducts ? (
-            <div className="flex flex-col items-center justify-center gap-3 py-12 text-center">
-              <p className="text-base font-semibold text-slate-800">
-                {simulation.diagnostics?.empty_reason_message
-                  ?? "Nie znaleziono produktów z dodatnią rekomendacją produkcji."}
-              </p>
-              {(simulation.diagnostics?.empty_reason_details?.length ?? 0) > 0 ? (
-                <ul className="max-w-md space-y-1 text-left text-sm text-slate-600">
-                  {simulation.diagnostics!.empty_reason_details!.map((line) => (
-                    <li key={line} className="flex gap-2">
-                      <span className="shrink-0 text-slate-400">•</span>
-                      <span>{line}</span>
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p className="max-w-sm text-sm text-slate-500">
-                  Symulacja nie zwróciła żadnych produktów.
-                </p>
-              )}
-              {simulation.diagnostics ? (
-                <p className="mt-2 max-w-md text-xs text-slate-400">
-                  tenant={simulation.diagnostics.tenant_id} · warehouse=
-                  {simulation.diagnostics.warehouse_id} · coverage=
-                  {simulation.diagnostics.coverage_days}d · strategy=
-                  {simulation.diagnostics.forecast_strategy} · źródło=
-                  {simulation.diagnostics.input_source}
-                </p>
-              ) : null}
-            </div>
+            <EmptyState
+              className="py-10 text-center"
+              title="Brak wyniku symulacji."
+              description="Spróbuj uruchomić symulację ponownie."
+            />
+          ) : emptyCopy ? (
+            <EmptyState
+              className="py-8 text-center"
+              title={emptyCopy.title}
+              description={emptyCopy.description}
+              action={
+                <div className="flex flex-wrap items-center justify-center gap-2">
+                  {emptyCopy.actions.includes("refresh") ? (
+                    <SecondaryButton type="button" onClick={() => onRefreshPlan?.()}>
+                      {emptyCopy.actions.includes("strategy") ? "Odśwież plan" : "Odśwież"}
+                    </SecondaryButton>
+                  ) : null}
+                  {emptyCopy.actions.includes("horizon") ? (
+                    <SecondaryButton
+                      type="button"
+                      onClick={() => {
+                        onChangeHorizon?.();
+                        onClose();
+                      }}
+                    >
+                      Zmień horyzont planowania
+                    </SecondaryButton>
+                  ) : null}
+                  {emptyCopy.actions.includes("strategy") ? (
+                    <SecondaryButton
+                      type="button"
+                      onClick={() => {
+                        onChangeStrategy?.();
+                        onClose();
+                      }}
+                    >
+                      Zmień strategię
+                    </SecondaryButton>
+                  ) : null}
+                  {emptyCopy.actions.includes("recipes") ? (
+                    <PrimaryButton type="button" onClick={goToRecipes}>
+                      Przejdź do receptur
+                    </PrimaryButton>
+                  ) : null}
+                </div>
+              }
+            />
           ) : (
             <div className="space-y-5">
               <div className="grid gap-3 sm:grid-cols-3">
@@ -136,16 +214,24 @@ export function ProductionSimulationModal({
         </div>
 
         <div className="flex flex-wrap gap-3 border-t border-slate-100 px-5 py-4">
-          <PrimaryButton
-            type="button"
-            disabled={!canCreate}
-            onClick={onConfirmCreate}
-          >
-            {creating ? "Tworzenie…" : "Utwórz wszystkie partie"}
-          </PrimaryButton>
-          <button type="button" onClick={onClose} className="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-700">
-            Anuluj
-          </button>
+          {hasProducts ? (
+            <>
+              <PrimaryButton
+                type="button"
+                disabled={creating || loading}
+                onClick={onConfirmCreate}
+              >
+                {creating ? "Tworzenie…" : "Utwórz wszystkie partie"}
+              </PrimaryButton>
+              <SecondaryButton type="button" onClick={onClose}>
+                Anuluj
+              </SecondaryButton>
+            </>
+          ) : (
+            <SecondaryButton type="button" onClick={onClose}>
+              Zamknij
+            </SecondaryButton>
+          )}
         </div>
       </div>
     </div>

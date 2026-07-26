@@ -2,9 +2,9 @@
 
 ## Active
 
-**Symulacja planu — diagnostyka pustego wyniku** (bez zmiany MRP).
+**Symulacja planu — UX empty state** (frontend only).
 
-- API `diagnostics` + `empty_reason_message` / details przy `lines=[]`
-- Logi: INPUT (tenant/warehouse/strategy/coverage/lines) + SKIP/ACCEPT per produkt
-- Modal pokazuje konkretny powód z backendu
-- Filtry simulate bez zmian
+- Empty: tytuł + opis + CTA (Odśwież / horyzont / strategia / receptury)
+- Bez KPI zerowych; bez disabled „Utwórz”; zielony alert tylko przy lines>0
+- Backend / MRP bez zmian
+

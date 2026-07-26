@@ -1,3 +1,8 @@
+## 2026-07-26 — Symulacja planu: UX empty state
+
+- EmptyState z CTA; ukryte KPI/Create przy lines=0; zielony tylko przy produktach
+- Bez zmian backend/MRP · tsc OK · **No push.**
+
 ## 2026-07-26 — Symulacja planu: diagnostyka pustego wyniku
 
 - `diagnostics` w odpowiedzi simulate (codes, skip_counts, empty_reason_*)
