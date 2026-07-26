@@ -139,6 +139,18 @@ export function isNavPathActive(pathname: string, path: string): boolean {
   if (path === "/settings/import") {
     return pathname === "/settings/import";
   }
+  if (path === "/settings/document-templates") {
+    return (
+      pathname === "/settings/document-templates" ||
+      pathname.startsWith("/settings/document-templates/")
+    );
+  }
+  if (path === "/settings/sales/stock-pools") {
+    return (
+      pathname === "/settings/sales/stock-pools" ||
+      pathname.startsWith("/settings/sales/stock-pools/")
+    );
+  }
   if (path === "/admin/message-templates") {
     return pathname === "/admin/message-templates" || pathname.startsWith("/admin/message-templates/");
   }

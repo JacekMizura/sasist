@@ -29,6 +29,9 @@ import {
   Plug,
   Download,
   Printer,
+  Upload,
+  MessageSquare,
+  FileText,
 } from "lucide-react";
 
 import { UI_STRINGS } from "../constants/uiStrings";
@@ -345,6 +348,12 @@ export function buildNavFlyoutCategories(): NavCategoryConfig[] {
             permissionsAny: ["settings.users"],
           },
           {
+            path: "/settings/import",
+            label: "Import",
+            Icon: Upload,
+            permissionsAny: ["settings.users"],
+          },
+          {
             path: "/settings/exports",
             label: "Eksport",
             Icon: Download,
@@ -357,9 +366,33 @@ export function buildNavFlyoutCategories(): NavCategoryConfig[] {
             permissionsAny: ["settings.users", "settings.company"],
           },
           {
-            path: "/admin/print-templates",
-            label: "Szablony wydruków",
+            path: "/settings/sales/stock-pools",
+            label: "Pule stanów",
+            Icon: Layers,
+            permissionsAny: ["settings.users", "settings.company"],
+          },
+          {
+            path: "/settings/printers",
+            label: UI_STRINGS.navigation.printersNav,
             Icon: Printer,
+            permissionsAny: ["settings.users", "settings.company"],
+          },
+          {
+            path: "/admin/print-templates",
+            label: "Szablony etykiet",
+            Icon: Tag,
+            permissionsAny: ["settings.users", "settings.company"],
+          },
+          {
+            path: "/settings/document-templates",
+            label: "Szablony dokumentów",
+            Icon: FileText,
+            permissionsAny: ["settings.users", "settings.company"],
+          },
+          {
+            path: "/admin/message-templates",
+            label: "Szablony wiadomości",
+            Icon: MessageSquare,
             permissionsAny: ["settings.users", "settings.company"],
           },
           {

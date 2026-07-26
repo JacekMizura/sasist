@@ -1,3 +1,15 @@
+## 2026-07-26 — IA Faza A: Ustawienia menu
+
+- Przywrócono: Import, Pule stanów, Drukarki, Szablony etykiet/dokumentów/wiadomości
+- Rename: „Szablony wydruków” → „Szablony etykiet” (print-templates)
+- Tylko mainNavConfig + navActive + test · **No push.**
+
+## 2026-07-26 — Audyt IA / nawigacji (raport)
+
+- Pełny przegląd App.tsx + mainNavConfig + pages; bez zmian kodu
+- Główne luki Ustawień po redesignie sidebara: drukarki, document-templates, import, message-templates, stock-pools
+- Canvas raportu: `ia-navigation-audit.canvas.tsx`
+
 ## 2026-07-26 — Ustawienia: Szablony wydruków w menu
 
 - Przywrócono pozycję w flyoucie Ustawienia → `/admin/print-templates`

@@ -2,9 +2,10 @@
 
 ## Active
 
-**Menu Ustawienia — przywrócone „Szablony wydruków”**.
+**Faza A IA — Ustawienia flyout przywrócony**.
 
-- Flyout: `/admin/print-templates` po „Metody dostawy”
-- Bez nowego routingu / logiki LabelSystem
+- Import, Pule stanów, Drukarki, Szablony etykiet/dokumentów/wiadomości
+- Nazwy rozróżnione (etykiety ≠ dokumenty PDF)
+- Bez zmian logiki / API · czekamy na B/C lub commit
 
 
