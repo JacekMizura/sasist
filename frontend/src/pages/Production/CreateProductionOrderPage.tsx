@@ -184,7 +184,7 @@ export default function CreateProductionOrderPage() {
       : 0;
 
   return (
-    <div className={`${productionPageStackClass} !space-y-4`}>
+    <div className={productionPageStackClass}>
       <PageHeader
         title={<h1 className={productionPageTitleClass}>Nowe zlecenie produkcyjne</h1>}
         actions={
@@ -192,8 +192,8 @@ export default function CreateProductionOrderPage() {
             Anuluj
           </Link>
         }
-      />
-
+      >
+        <div className="space-y-4">
       <Card variant="section" density="comfortable">
         <Stepper steps={[...STEPS]} activeIndex={activeStep} />
       </Card>
@@ -446,6 +446,8 @@ export default function CreateProductionOrderPage() {
           </p>
         </div>
       </div>
+        </div>
+      </PageHeader>
     </div>
   );
 }

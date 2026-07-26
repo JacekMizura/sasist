@@ -189,8 +189,8 @@ export default function ProductionDashboardPage() {
             }
           />
         }
-      />
-
+      >
+        <div className="space-y-4">
       {loading ? (
         <p className="text-sm text-slate-500">Wczytywanie danych…</p>
       ) : data ? (
@@ -413,6 +413,8 @@ export default function ProductionDashboardPage() {
       ) : (
         <p className="text-sm text-rose-600">Nie udało się wczytać pulpitu produkcji.</p>
       )}
+        </div>
+      </PageHeader>
     </div>
   );
 }

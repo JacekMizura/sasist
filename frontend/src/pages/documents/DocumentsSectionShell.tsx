@@ -1,5 +1,7 @@
 import type { ReactNode } from "react";
 
+import { PageHeader, typography } from "@/design-system";
+
 type Props = {
   title: string;
   subtitle?: string;
@@ -13,24 +15,30 @@ type Props = {
 };
 
 /**
- * Section header + optional KPI + toolbar — same hierarchy as Wózki (BulkCartList),
- * without nesting a second full-page white card (main card comes from DocumentsLayout).
+ * Documents section chrome — same vertical rhythm as Design System {@link PageHeader}:
+ * Title + Actions → Separator → KPI / Toolbar → Content.
  */
 export function DocumentsSectionShell({ title, subtitle, actions, kpi, toolbar, children }: Props) {
-  return (
-    <div className="space-y-0">
-      <div className="flex flex-col gap-2 border-b border-slate-200 pb-4 sm:flex-row sm:items-start sm:justify-between">
-        <div className="flex min-w-0 flex-col gap-1">
-          <h2 className="text-lg font-semibold tracking-tight text-slate-900">{title}</h2>
-          {subtitle ? <p className="max-w-3xl text-sm leading-relaxed text-slate-600">{subtitle}</p> : null}
-        </div>
-        {actions ? <div className="flex shrink-0 flex-wrap items-center gap-2">{actions}</div> : null}
+  const belowSeparator =
+    kpi || toolbar ? (
+      <div className={kpi && toolbar ? "space-y-4" : undefined}>
+        {kpi}
+        {toolbar}
       </div>
+    ) : null;
 
-      {kpi ? <div className="mt-4">{kpi}</div> : null}
-      {toolbar ? <div className="mt-4">{toolbar}</div> : null}
-
-      <div className={kpi || toolbar ? "mt-5" : "mt-4"}>{children}</div>
-    </div>
+  return (
+    <PageHeader
+      title={
+        <div className="min-w-0">
+          <h2 className={typography.h1}>{title}</h2>
+          {subtitle ? <p className={`mt-1 ${typography.pageDesc}`}>{subtitle}</p> : null}
+        </div>
+      }
+      actions={actions}
+      toolbar={belowSeparator}
+    >
+      {children}
+    </PageHeader>
   );
 }

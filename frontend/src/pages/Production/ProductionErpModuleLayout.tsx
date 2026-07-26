@@ -38,7 +38,7 @@ export default function ProductionErpModuleLayout() {
         aria-label="Zarządzanie produkcją — zakładki"
         className="gap-6"
       />
-      <div className={`${flatSectionDividerClass} mt-2`} aria-hidden />
+      <div className={`${flatSectionDividerClass}`} aria-hidden />
       <div className="pt-4">
         <Outlet />
       </div>

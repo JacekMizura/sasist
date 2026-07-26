@@ -157,8 +157,8 @@ export default function ProductionAnalyticsPage() {
             />
           </SecondaryButton>
         }
-      />
-
+      >
+        <div className="space-y-4">
       {!loading ? (
         <div className="space-y-3">
           <div>
@@ -315,6 +315,8 @@ export default function ProductionAnalyticsPage() {
           </div>
         </div>
       )}
+        </div>
+      </PageHeader>
     </div>
   );
 }

@@ -116,8 +116,8 @@ export default function ProductionPlanningPage() {
             </SecondaryButton>
           </>
         }
-      />
-
+      >
+        <div className="space-y-4">
       {warehouseId != null ? (
         <ProductionDemandPlanningPanel
           data={planning.data}
@@ -141,6 +141,8 @@ export default function ProductionPlanningPage() {
           <BatchesListPage embedded />
         </div>
       </div>
+        </div>
+      </PageHeader>
 
       <ProductionSimulationModal
         open={simOpen}

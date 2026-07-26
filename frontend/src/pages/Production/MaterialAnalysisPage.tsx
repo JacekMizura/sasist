@@ -48,8 +48,8 @@ export default function MaterialAnalysisPage() {
             Odśwież
           </SecondaryButton>
         }
-      />
-
+      >
+        <div className="space-y-4">
       {loading ? (
         <p className="text-sm text-slate-500">Wczytywanie…</p>
       ) : rows.length === 0 ? (
@@ -98,6 +98,8 @@ export default function MaterialAnalysisPage() {
           </table>
         </div>
       )}
+        </div>
+      </PageHeader>
     </div>
   );
 }

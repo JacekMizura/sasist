@@ -225,8 +225,9 @@ export default function BatchesListPage({ embedded = false }: Props) {
 
   return (
     <div className={productionPageStackClass}>
-      <PageHeader title={<h1 className={productionPageTitleClass}>Partie produkcyjne</h1>} />
-      {table}
+      <PageHeader title={<h1 className={productionPageTitleClass}>Partie produkcyjne</h1>}>
+        <div className="space-y-4">{table}</div>
+      </PageHeader>
     </div>
   );
 }

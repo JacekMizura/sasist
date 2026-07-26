@@ -100,15 +100,11 @@ export function SettingsModuleStack({
         subtitle={description}
         actions={actions}
         breadcrumbs={breadcrumbs}
-        className={`shrink-0 ${showTitleRow ? "space-y-2" : "space-y-1"}`}
+        className="shrink-0"
       />
       {tabRow != null ? (
         <div
-          className={`shrink-0 ${
-            hideTitle
-              ? pageModuleTabsOffsetClass
-              : `${pageModuleTabsOffsetClass} border-t border-slate-100 pt-2`
-          }`}
+          className={`shrink-0 ${pageModuleTabsOffsetClass}`}
         >
           {tabRow}
         </div>

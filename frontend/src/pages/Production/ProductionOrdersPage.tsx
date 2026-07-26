@@ -335,7 +335,7 @@ export default function ProductionOrdersPage() {
   }
 
   return (
-    <div className={`${productionPageStackClass} !space-y-3`}>
+    <div className={productionPageStackClass}>
       <PageHeader
         title={
           <h1 className={productionPageTitleClass}>
@@ -439,8 +439,8 @@ export default function ProductionOrdersPage() {
             }
           />
         }
-      />
-
+      >
+        <div className="space-y-4">
       <ProductionOrdersFiltersPanel
         expanded={filtersExpanded}
         draft={draftFilters}
@@ -483,6 +483,8 @@ export default function ProductionOrdersPage() {
           })}
         </ul>
       )}
+        </div>
+      </PageHeader>
     </div>
   );
 }

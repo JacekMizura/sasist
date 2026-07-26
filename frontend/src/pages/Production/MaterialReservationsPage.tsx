@@ -49,8 +49,8 @@ export default function MaterialReservationsPage() {
             Odśwież
           </SecondaryButton>
         }
-      />
-
+      >
+        <div className="space-y-4">
       {loading ? (
         <p className="text-sm text-slate-500">Wczytywanie…</p>
       ) : rows.length === 0 ? (
@@ -101,6 +101,8 @@ export default function MaterialReservationsPage() {
           </table>
         </div>
       )}
+        </div>
+      </PageHeader>
     </div>
   );
 }

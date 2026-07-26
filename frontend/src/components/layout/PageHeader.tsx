@@ -2,6 +2,8 @@ import { ChevronRight, Home } from "lucide-react";
 import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
 
+import { pageShellDividerClass, typography } from "../../design-system";
+
 type PageHeaderBreadcrumb = {
   label: string;
   to?: string;
@@ -18,8 +20,13 @@ type PageHeaderProps = {
   className?: string;
 };
 
+/**
+ * Layout PageHeader — same vertical rhythm as Design System PageHeader:
+ * Breadcrumbs → Title + Actions → Separator → (optional subtitle inside chrome) → tabs.
+ */
 export function PageHeader({ title, actions, subtitle, breadcrumbs = [], tabs, className }: PageHeaderProps) {
   const hasTitle = title != null && title !== false && title !== "";
+  const hasTitleRow = hasTitle || Boolean(actions);
 
   const breadcrumbNav =
     breadcrumbs.length > 0 ? (
@@ -47,25 +54,20 @@ export function PageHeader({ title, actions, subtitle, breadcrumbs = [], tabs, c
     ) : null;
 
   return (
-    <section className={className?.trim() ? className : "space-y-3"}>
-      {hasTitle ? (
-        <>
-          {breadcrumbNav}
-          <div className="flex items-center justify-between gap-3">
-            <h1 className="m-0 text-xl font-semibold text-slate-900 sm:text-2xl">{title}</h1>
-            {actions ? <div className="flex items-center gap-2">{actions}</div> : null}
+    <section className={className?.trim() ? className : undefined}>
+      {breadcrumbNav}
+
+      {hasTitleRow ? (
+        <div className={`${pageShellDividerClass} pb-4${breadcrumbNav ? " mt-3" : ""}`.trim()}>
+          <div className="flex min-w-0 flex-wrap items-center justify-between gap-3">
+            {hasTitle ? <h1 className={`m-0 min-w-0 flex-1 ${typography.h1}`}>{title}</h1> : <span className="flex-1" />}
+            {actions ? <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">{actions}</div> : null}
           </div>
-        </>
-      ) : (
-        <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
-          {breadcrumbNav ?? <span />}
-          {actions ? <div className="flex shrink-0 items-center gap-2">{actions}</div> : null}
+          {subtitle ? <p className={`mt-1 ${typography.pageDesc}`}>{subtitle}</p> : null}
         </div>
-      )}
+      ) : null}
 
-      {subtitle ? <p className="mt-1.5 text-sm leading-relaxed text-slate-500">{subtitle}</p> : null}
-
-      {tabs ? <div className="mt-2">{tabs}</div> : null}
+      {tabs ? <div className="mt-3">{tabs}</div> : null}
     </section>
   );
 }

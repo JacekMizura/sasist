@@ -1,4 +1,5 @@
 import type { HTMLAttributes, ReactNode } from "react";
+import { pageShellDividerClass } from "../pageLayout";
 import { spacing } from "../tokens";
 
 export type ToolbarProps = HTMLAttributes<HTMLDivElement> & {
@@ -35,8 +36,11 @@ export type PageHeaderProps = HTMLAttributes<HTMLElement> & {
 };
 
 /**
- * Canonical page header structure:
- * Breadcrumb → Title → Tabs → Toolbar (status + actions)
+ * Canonical page header vertical rhythm:
+ * Breadcrumbs → Title + Actions → Separator → Toolbar → Content (children)
+ *
+ * No empty toolbar slot — omit `toolbar` when there are no filters/search.
+ * Actions are always right-aligned and vertically centered with the title.
  */
 export function PageHeader({
   breadcrumbs,
@@ -49,21 +53,34 @@ export function PageHeader({
   children,
   ...props
 }: PageHeaderProps) {
+  const hasTitleRow = Boolean(title || status || actions);
+  const hasChrome = hasTitleRow || Boolean(tabs);
+
   return (
     <header className={`min-w-0${className ? ` ${className}` : ""}`.trim()} {...props}>
       {breadcrumbs ? <div className="min-w-0">{breadcrumbs}</div> : null}
-      {(title || status || actions) && (
-        <div className={`flex min-w-0 flex-wrap items-start justify-between gap-3 ${breadcrumbs ? "mt-2" : ""}`}>
-          {title ? <div className="min-w-0 flex-1">{title}</div> : <div className="flex-1" />}
-          <div className={`flex shrink-0 flex-wrap items-center justify-end ${spacing.gap2}`}>
-            {status}
-            {actions}
-          </div>
+
+      {hasChrome ? (
+        <div
+          className={`${pageShellDividerClass} pb-4${breadcrumbs ? ` ${spacing.mt3}` : ""}`.trim()}
+        >
+          {hasTitleRow ? (
+            <div className={`flex min-w-0 flex-wrap items-center justify-between ${spacing.gap3}`}>
+              {title ? <div className="min-w-0 flex-1">{title}</div> : <div className="flex-1" />}
+              {status || actions ? (
+                <div className={`flex shrink-0 flex-wrap items-center justify-end ${spacing.gap2}`}>
+                  {status}
+                  {actions}
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+          {tabs ? <div className={hasTitleRow ? spacing.mt3 : undefined}>{tabs}</div> : null}
         </div>
-      )}
-      {tabs ? <div className="mt-3">{tabs}</div> : null}
-      {toolbar ? <div className="mt-3">{toolbar}</div> : null}
-      {children}
+      ) : null}
+
+      {toolbar ? <div className="mt-4">{toolbar}</div> : null}
+      {children ? <div className={toolbar ? "mt-5" : "mt-4"}>{children}</div> : null}
     </header>
   );
 }

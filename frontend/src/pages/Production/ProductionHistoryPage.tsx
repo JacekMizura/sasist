@@ -197,8 +197,8 @@ export default function ProductionHistoryPage() {
             />
           </SecondaryButton>
         }
-      />
-
+      >
+        <div className="space-y-4">
       <ListFilterEmbeddedShell expanded={filtersExpanded}>
         <div className={filterGridColsClass}>
           <label className="block min-w-0">
@@ -336,6 +336,8 @@ export default function ProductionHistoryPage() {
           </div>
         </div>
       )}
+        </div>
+      </PageHeader>
     </div>
   );
 }

@@ -1,8 +1,9 @@
-/** Wspólne odstępy i typografia UI modułu Produkcja (ERP) — standard Dokumentów. */
+/** Wspólne odstępy i typografia UI modułu Produkcja (ERP) — standard Dokumentów / DS PageHeader. */
 
-export const productionPageStackClass = "space-y-4 pb-6";
+/** Optional outer pad under page — prefer PageHeader children for body gap. */
+export const productionPageStackClass = "pb-6";
 
-/** DocumentsSectionShell title. */
+/** Page title — mirrors `typography.h1`. */
 export const productionPageTitleClass = "text-lg font-semibold tracking-tight text-slate-900";
 
 /** Documents content section label. */

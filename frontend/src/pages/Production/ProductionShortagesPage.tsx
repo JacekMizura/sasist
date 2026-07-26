@@ -144,8 +144,8 @@ export default function ProductionShortagesPage() {
             Odśwież
           </SecondaryButton>
         }
-      />
-
+      >
+        <div className="space-y-4">
       {loading ? (
         <p className="text-sm text-slate-500">Wczytywanie…</p>
       ) : rows.length === 0 ? (
@@ -325,49 +325,6 @@ export default function ProductionShortagesPage() {
         ) : null}
       </section>
 
-      {poPickerFor ? (
-                <AppOverlayPortal>
-        <div className="fixed inset-0 z-[280] flex items-center justify-center bg-slate-950/40 p-4">
-          <div className="w-full max-w-md rounded-2xl bg-white p-5 shadow-xl">
-            <h3 className="flex items-center gap-2 text-base font-bold text-slate-900">
-              <AlertTriangle className="h-5 w-5 text-amber-600" aria-hidden />
-              Dodaj do zamówienia zakupu
-            </h3>
-            <p className="mt-2 text-sm text-slate-600">
-              {poPickerFor.product_name} · brak {poPickerFor.missing_qty}
-            </p>
-            {poLoading ? (
-              <p className="mt-4 text-sm text-slate-500">Wczytywanie zamówień…</p>
-            ) : openPos.length === 0 ? (
-              <p className="mt-4 text-sm text-slate-500">Brak otwartych zamówień (Draft). Utwórz zapotrzebowanie.</p>
-            ) : (
-              <ul className="mt-4 max-h-60 space-y-2 overflow-y-auto">
-                {openPos.map((po) => (
-                  <li key={po.id}>
-                    <button
-                      type="button"
-                      onClick={() => void addToPo(po.id)}
-                      className="w-full rounded-lg border border-slate-200 px-3 py-2 text-left text-sm hover:border-violet-300 hover:bg-violet-50"
-                    >
-                      <span className="font-mono font-semibold">{po.order_number}</span>
-                      <span className="ml-2 text-slate-500">{po.supplier_name}</span>
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
-            <button
-              type="button"
-              onClick={() => setPoPickerFor(null)}
-              className="mt-4 w-full rounded-lg border border-slate-200 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
-            >
-              Anuluj
-            </button>
-          </div>
-        </div>
-        </AppOverlayPortal>
-      ) : null}
-
       <p className="text-xs text-slate-500">
         Powiązane partie:{" "}
         <Link to={erpProductionPaths.planning} className="font-semibold text-violet-700 hover:underline">
@@ -378,6 +335,51 @@ export default function ProductionShortagesPage() {
           Zlecenia
         </Link>
       </p>
+        </div>
+      </PageHeader>
+
+      {poPickerFor ? (
+        <AppOverlayPortal>
+          <div className="fixed inset-0 z-[280] flex items-center justify-center bg-slate-950/40 p-4">
+            <div className="w-full max-w-md rounded-2xl bg-white p-5 shadow-xl">
+              <h3 className="flex items-center gap-2 text-base font-bold text-slate-900">
+                <AlertTriangle className="h-5 w-5 text-amber-600" aria-hidden />
+                Dodaj do zamówienia zakupu
+              </h3>
+              <p className="mt-2 text-sm text-slate-600">
+                {poPickerFor.product_name} · brak {poPickerFor.missing_qty}
+              </p>
+              {poLoading ? (
+                <p className="mt-4 text-sm text-slate-500">Wczytywanie zamówień…</p>
+              ) : openPos.length === 0 ? (
+                <p className="mt-4 text-sm text-slate-500">Brak otwartych zamówień (Draft). Utwórz zapotrzebowanie.</p>
+              ) : (
+                <ul className="mt-4 max-h-60 space-y-2 overflow-y-auto">
+                  {openPos.map((po) => (
+                    <li key={po.id}>
+                      <button
+                        type="button"
+                        onClick={() => void addToPo(po.id)}
+                        className="w-full rounded-lg border border-slate-200 px-3 py-2 text-left text-sm hover:border-violet-300 hover:bg-violet-50"
+                      >
+                        <span className="font-mono font-semibold">{po.order_number}</span>
+                        <span className="ml-2 text-slate-500">{po.supplier_name}</span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              <button
+                type="button"
+                onClick={() => setPoPickerFor(null)}
+                className="mt-4 w-full rounded-lg border border-slate-200 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+              >
+                Anuluj
+              </button>
+            </div>
+          </div>
+        </AppOverlayPortal>
+      ) : null}
     </div>
   );
 }

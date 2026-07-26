@@ -151,8 +151,8 @@ export default function RecipesListPage() {
             </Link>
           </>
         }
-      />
-
+      >
+        <div className="space-y-4">
       <ListFilterEmbeddedShell expanded={filtersExpanded}>
         <div className={filterGridColsClass}>
           <label className="block min-w-0 sm:col-span-2">
@@ -294,6 +294,8 @@ export default function RecipesListPage() {
           </table>
         </PurchasingTableSection>
       )}
+        </div>
+      </PageHeader>
 
       <RecipeIngredientsDrawer
         open={ingredientsDrawerRecipe != null}
