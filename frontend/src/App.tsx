@@ -393,11 +393,27 @@ function LegacyAdministrationMessageTemplatesRedirect() {
   return <Navigate to={`${to}${loc.search}`} replace />
 }
 
-/** Legacy `/administration/templates/prints/*` → `/admin/print-templates/*`. */
+/** Legacy `/administration/templates/prints/*` → canonical `/labels/*`. */
 function LegacyAdministrationPrintTemplatesRedirect() {
   const loc = useLocation()
   const tail = loc.pathname.replace(/^\/administration\/templates\/prints\/?/, "")
-  const to = tail ? `/admin/print-templates/${tail}` : "/admin/print-templates"
+  const to = tail ? `/labels/${tail}` : "/labels"
+  return <Navigate to={`${to}${loc.search}`} replace />
+}
+
+/** Alias `/admin/print-templates/*` → canonical `/labels/*`. */
+function RedirectAdminPrintTemplatesToLabels() {
+  const loc = useLocation()
+  const tail = loc.pathname.replace(/^\/admin\/print-templates\/?/, "")
+  const to = tail ? `/labels/${tail}` : "/labels"
+  return <Navigate to={`${to}${loc.search}`} replace />
+}
+
+/** Alias `/system-etykiet/*` → canonical `/labels/*`. */
+function RedirectSystemEtykietToLabels() {
+  const loc = useLocation()
+  const tail = loc.pathname.replace(/^\/system-etykiet\/?/, "")
+  const to = tail ? `/labels/${tail}` : "/labels"
   return <Navigate to={`${to}${loc.search}`} replace />
 }
 
@@ -613,7 +629,7 @@ export const router = createBrowserRouter(
                   element={<LegacyAdministrationPrintTemplatesRedirect />}
                 />
                 <Route path="admin/message-templates/*" element={<MessageTemplatesModule />} />
-                <Route path="admin/print-templates/*" element={<LabelSystem />} />
+                <Route path="admin/print-templates/*" element={<RedirectAdminPrintTemplatesToLabels />} />
                 <Route path="settings/document-templates" element={<DocumentTemplatesLayout />}>
                   <Route element={<DocumentTemplatesModuleFrame />}>
                     <Route index element={<DocumentTemplatesListPage />} />
@@ -980,7 +996,7 @@ export const router = createBrowserRouter(
                   <Route path="labels" element={<SystemAppDictionaryPage />} />
                 </Route>
                 <Route path="labels/*" element={<LabelSystem />} />
-                <Route path="system-etykiet/*" element={<LabelSystem />} />
+                <Route path="system-etykiet/*" element={<RedirectSystemEtykietToLabels />} />
                 <Route path="planning/deliveries" element={<PlanningPlaceholder />} />
                 <Route path="planning/list" element={<PlanningPlaceholder />} />
                 <Route path="*" element={<RouteNotFoundThrow />} />

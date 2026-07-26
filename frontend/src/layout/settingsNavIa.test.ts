@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { buildNavFlyoutCategories } from "./mainNavConfig";
+import { buildNavFlyoutCategories, isCategoryActive } from "./mainNavConfig";
 import { isNavPathActive } from "./navActive";
 
 describe("settings flyout IA", () => {
-  it("lists Phase A settings items in order with distinct paths", () => {
+  it("lists settings items without duplicate LabelSystem entry", () => {
     const settings = buildNavFlyoutCategories().find((c) => c.id === "settings");
     expect(settings).toBeTruthy();
     const labels = settings!.flyoutSections.flatMap((s) => s.items.map((i) => i.label));
@@ -18,27 +18,39 @@ describe("settings flyout IA", () => {
     expect(labels[6]).toBe("Metody dostawy");
     expect(labels[7]).toBe("Pule stanów");
     expect(labels[8]).toBe("Drukarki");
-    expect(labels[9]).toBe("Szablony etykiet");
-    expect(labels[10]).toBe("Szablony dokumentów");
-    expect(labels[11]).toBe("Szablony wiadomości");
-    expect(labels[12]).toBe("System");
+    expect(labels[9]).toBe("Szablony dokumentów");
+    expect(labels[10]).toBe("Szablony wiadomości");
+    expect(labels[11]).toBe("System");
     expect(labels).toContain("Słownik aplikacji");
+    expect(labels).not.toContain("Szablony etykiet");
+    expect(labels).not.toContain("Szablony wydruków");
 
     const byLabel = Object.fromEntries(
       settings!.flyoutSections.flatMap((s) => s.items.map((i) => [i.label, i.path])),
     );
-    expect(byLabel["Integracje"]).toBe("/settings/integrations");
-    expect(byLabel["Klucze API"]).toBe("/settings/api-keys");
     expect(byLabel["Import"]).toBe("/settings/import");
     expect(byLabel["Eksport"]).toBe("/settings/exports");
-    expect(byLabel["Metody dostawy"]).toBe("/settings/shipping-methods");
-    expect(byLabel["Pule stanów"]).toBe("/settings/sales/stock-pools");
     expect(byLabel["Drukarki"]).toBe("/settings/printers");
-    expect(byLabel["Szablony etykiet"]).toBe("/admin/print-templates");
     expect(byLabel["Szablony dokumentów"]).toBe("/settings/document-templates");
     expect(byLabel["Szablony wiadomości"]).toBe("/admin/message-templates");
-    expect(byLabel["Integracje"]).not.toBe(byLabel["Klucze API"]);
-    expect(byLabel["Szablony etykiet"]).not.toBe(byLabel["Szablony dokumentów"]);
+    expect(byLabel["Szablony etykiet"]).toBeUndefined();
+  });
+
+  it("exposes System Etykiet only under Operacje → /labels", () => {
+    const cats = buildNavFlyoutCategories();
+    const labelEntries = cats.flatMap((c) =>
+      c.flyoutSections.flatMap((s) =>
+        s.items
+          .filter(
+            (i) =>
+              i.path === "/labels" ||
+              i.path === "/admin/print-templates" ||
+              i.path.startsWith("/system-etykiet"),
+          )
+          .map((i) => ({ categoryId: c.id, path: i.path, label: i.label })),
+      ),
+    );
+    expect(labelEntries).toEqual([{ categoryId: "labels", path: "/labels", label: "System Etykiet" }]);
   });
 });
 
@@ -59,12 +71,22 @@ describe("settings nav active states", () => {
     expect(isNavPathActive("/settings/api-keys", "/settings/exports")).toBe(false);
   });
 
-  it("highlights Phase A restored settings paths", () => {
-    expect(isNavPathActive("/settings/import", "/settings/import")).toBe(true);
-    expect(isNavPathActive("/settings/printers/agents", "/settings/printers")).toBe(true);
-    expect(isNavPathActive("/settings/document-templates/12", "/settings/document-templates")).toBe(true);
-    expect(isNavPathActive("/admin/message-templates/new", "/admin/message-templates")).toBe(true);
-    expect(isNavPathActive("/admin/print-templates/designer", "/admin/print-templates")).toBe(true);
-    expect(isNavPathActive("/settings/sales/stock-pools", "/settings/sales/stock-pools")).toBe(true);
+  it("treats label aliases as active for canonical /labels menu path", () => {
+    expect(isNavPathActive("/labels", "/labels")).toBe(true);
+    expect(isNavPathActive("/labels/designer/1", "/labels")).toBe(true);
+    expect(isNavPathActive("/admin/print-templates", "/labels")).toBe(true);
+    expect(isNavPathActive("/admin/print-templates/ready", "/labels")).toBe(true);
+    expect(isNavPathActive("/system-etykiet/queue", "/labels")).toBe(true);
+  });
+});
+
+describe("settings category vs labels category", () => {
+  it("does not treat print-templates as settings flyout membership after IA cleanup", () => {
+    const settings = buildNavFlyoutCategories().find((c) => c.id === "settings")!;
+    expect(isCategoryActive(settings, "/admin/print-templates")).toBe(false);
+    expect(isCategoryActive(settings, "/labels")).toBe(false);
+    const labelsCat = buildNavFlyoutCategories().find((c) => c.id === "labels")!;
+    expect(isCategoryActive(labelsCat, "/labels")).toBe(true);
+    expect(isCategoryActive(labelsCat, "/admin/print-templates")).toBe(true);
   });
 });

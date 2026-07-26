@@ -11,7 +11,11 @@ export function isNavPathActive(pathname: string, path: string): boolean {
     return pathname === path || pathname.startsWith(`${path}/`);
   }
   if (path === "/labels") {
-    return pathname.startsWith("/labels") || pathname.startsWith("/system-etykiet");
+    return (
+      pathname.startsWith("/labels") ||
+      pathname.startsWith("/system-etykiet") ||
+      pathname.startsWith("/admin/print-templates")
+    );
   }
   if (path === "/designer") {
     return pathname.startsWith("/designer") || pathname.startsWith("/warehouse-designer");

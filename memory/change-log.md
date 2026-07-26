@@ -1,3 +1,9 @@
+## 2026-07-26 — IA: jeden System Etykiet (/labels)
+
+- Usunięto Ustawienia → Szablony etykiet (duplikat)
+- Redirect: `/admin/print-templates/*`, `/system-etykiet/*` (+ legacy prints) → `/labels/*`
+- Bez zmian LabelSystem / API · testy settingsNavIa OK
+
 ## 2026-07-26 — IA Faza A: Ustawienia menu
 
 - Przywrócono: Import, Pule stanów, Drukarki, Szablony etykiet/dokumentów/wiadomości

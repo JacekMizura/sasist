@@ -378,12 +378,6 @@ export function buildNavFlyoutCategories(): NavCategoryConfig[] {
             permissionsAny: ["settings.users", "settings.company"],
           },
           {
-            path: "/admin/print-templates",
-            label: "Szablony etykiet",
-            Icon: Tag,
-            permissionsAny: ["settings.users", "settings.company"],
-          },
-          {
             path: "/settings/document-templates",
             label: "Szablony dokumentów",
             Icon: FileText,
@@ -454,7 +448,6 @@ export function isCategoryActive(category: NavCategoryConfig, pathname: string):
     if (pathname.startsWith("/settings")) return true;
     if (pathname === "/system" || pathname.startsWith("/system/")) return true;
     if (pathname.startsWith("/admin/message-templates")) return true;
-    if (pathname.startsWith("/admin/print-templates")) return true;
   }
   if (category.id === "wms-settings") {
     return pathname === "/settings/wms" || pathname.startsWith("/settings/wms/");
