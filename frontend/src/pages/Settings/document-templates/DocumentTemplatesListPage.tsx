@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Download, FileText, LayoutGrid, List, Plus } from "lucide-react";
+import { FileText, LayoutGrid, List, Plus } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
 
@@ -11,7 +11,7 @@ import {
   type DocumentTemplateListItemDto,
 } from "../../../api/documentTemplatesApi";
 import { extractApiErrorMessage } from "../../../api/apiErrorMessage";
-import { PrimaryButton, SuccessButton } from "../../../design-system";
+import { PrimaryButton } from "../../../design-system";
 import TemplateListRow from "../../LabelSystem/templatesList/TemplateListRow";
 import TemplatesListToolbarShell from "../../LabelSystem/templatesList/TemplatesListToolbarShell";
 import {
@@ -19,6 +19,7 @@ import {
   TEMPLATES_LIST_CONTENT_STACK_CLASS,
   TEMPLATES_LIST_COUNT_CLASS,
   TEMPLATES_LIST_EMPTY_CLASS,
+  TEMPLATES_LIST_GHOST_BTN_CLASS,
   TEMPLATES_LIST_GRID_CARD_BASE_CLASS,
   TEMPLATES_LIST_GRID_CARD_BODY_CLASS,
   TEMPLATES_LIST_GRID_CARD_IDLE_CLASS,
@@ -33,7 +34,7 @@ import {
   TEMPLATES_LIST_VIEW_TOGGLE_BTN_CLASS,
   TEMPLATES_LIST_VIEW_TOGGLE_SHELL_CLASS,
 } from "../../LabelSystem/templatesList/templatesListLayout";
-import { DEFAULT_TENANT_ID, DOC_TEMPLATE_STATUS_LABELS, LIST_BASE } from "./constants";
+import { DEFAULT_TENANT_ID, LIST_BASE } from "./constants";
 import DocumentTemplatesListSidebar, { DOC_LIST_ALL } from "./DocumentTemplatesListSidebar";
 import {
   documentTemplateKindSubtitle,
@@ -71,9 +72,9 @@ export function DocumentTemplatesListPage() {
   const [selectedKindCode, setSelectedKindCode] = useState(DOC_LIST_ALL);
   const [searchQuery, setSearchQuery] = useState("");
   const [sortBy, setSortBy] = useState<SortValue>("updated_at_desc");
-  const [statusFilter, setStatusFilter] = useState("");
   const [viewMode, setViewMode] = useState<ViewMode>("list");
   const [exportBusy, setExportBusy] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [usageModal, setUsageModal] = useState<{
     name: string;
     badges: DocumentTemplateListItemDto["usage_summary"];
@@ -106,7 +107,6 @@ export function DocumentTemplatesListPage() {
         fetchDocumentTemplatesList(DEFAULT_TENANT_ID, {
           family_code: selectedFamilyCode === DOC_LIST_ALL ? undefined : selectedFamilyCode,
           kind_code: selectedKindCode === DOC_LIST_ALL ? undefined : selectedKindCode,
-          status: statusFilter || undefined,
           template_role: "DOCUMENT",
         }),
       ]);
@@ -121,8 +121,8 @@ export function DocumentTemplatesListPage() {
 
   useEffect(() => {
     void reload();
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- reload on rail / status filters
-  }, [selectedFamilyCode, selectedKindCode, statusFilter]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reload on rail filters
+  }, [selectedFamilyCode, selectedKindCode]);
 
   const filtered = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
@@ -223,10 +223,14 @@ export function DocumentTemplatesListPage() {
             subtitle="Szablony wydruków dla wybranej rodziny"
             actions={
               <>
-                <SuccessButton type="button" density="compact" disabled={exportBusy} onClick={onExportPackage}>
-                  <Download className="h-3.5 w-3.5" aria-hidden />
+                <button
+                  type="button"
+                  disabled={exportBusy}
+                  onClick={onExportPackage}
+                  className={TEMPLATES_LIST_GHOST_BTN_CLASS}
+                >
                   {exportBusy ? "Eksport…" : "Eksportuj"}
-                </SuccessButton>
+                </button>
                 <PrimaryButton type="button" density="compact" onClick={() => navigate(`${LIST_BASE}/new`)}>
                   <Plus className="h-4 w-4" strokeWidth={2.5} aria-hidden />
                   Nowy szablon
@@ -251,19 +255,6 @@ export function DocumentTemplatesListPage() {
                   {SORT_OPTIONS.map((opt) => (
                     <option key={opt.value} value={opt.value}>
                       {opt.label}
-                    </option>
-                  ))}
-                </select>
-                <select
-                  value={statusFilter}
-                  onChange={(e) => setStatusFilter(e.target.value)}
-                  className={TEMPLATES_LIST_SELECT_CLASS}
-                  aria-label="Status"
-                >
-                  <option value="">Wszystkie statusy</option>
-                  {Object.entries(DOC_TEMPLATE_STATUS_LABELS).map(([code, label]) => (
-                    <option key={code} value={code}>
-                      {label}
                     </option>
                   ))}
                 </select>
@@ -315,6 +306,16 @@ export function DocumentTemplatesListPage() {
                       name={row.name}
                       metaLine={rowMeta(row)}
                       thumbnail={rowThumbnail(row)}
+                      selected={selectedIds.has(row.id)}
+                      showCheckbox
+                      onToggleSelect={() => {
+                        setSelectedIds((prev) => {
+                          const next = new Set(prev);
+                          if (next.has(row.id)) next.delete(row.id);
+                          else next.add(row.id);
+                          return next;
+                        });
+                      }}
                       onEdit={() => navigate(`${LIST_BASE}/${row.id}`)}
                       onDuplicate={() =>
                         navigate(`${LIST_BASE}/new`, {

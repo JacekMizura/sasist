@@ -157,8 +157,6 @@ export function StarterGalleryPage() {
                         />
                       }
                       isSystem={Boolean(item.is_system)}
-                      primaryActionLabel="Szczegóły"
-                      secondaryActionLabel="Użyj szablonu"
                       onEdit={() => navigate(`${LIST_BASE}/starters/${item.id}`)}
                       onUse={() => void createFromStarter(item)}
                       onDuplicate={() => void createFromStarter(item)}

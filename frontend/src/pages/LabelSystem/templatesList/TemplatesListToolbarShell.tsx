@@ -27,9 +27,9 @@ export default function TemplatesListToolbarShell({
   return (
     <div className={TEMPLATES_LIST_TOOLBAR_CLASS}>
       <div className={TEMPLATES_LIST_TOOLBAR_TITLE_ROW_CLASS}>
-        <div className="min-w-0">
+        <div className="min-w-0 truncate">
           <h1 className={TEMPLATES_LIST_TOOLBAR_TITLE_CLASS}>{title}</h1>
-          <p className={TEMPLATES_LIST_TOOLBAR_SUBTITLE_CLASS}>{subtitle}</p>
+          <p className={`${TEMPLATES_LIST_TOOLBAR_SUBTITLE_CLASS} truncate`}>{subtitle}</p>
         </div>
         {actions ? <div className={TEMPLATES_LIST_TOOLBAR_ACTIONS_CLASS}>{actions}</div> : null}
       </div>

@@ -30,14 +30,15 @@ export const TEMPLATES_LIST_MAIN_COLUMN_CLASS =
 export const TEMPLATES_LIST_TOOLBAR_CLASS = "space-y-4";
 
 export const TEMPLATES_LIST_TOOLBAR_TITLE_ROW_CLASS =
-  "flex flex-wrap items-center justify-between gap-3";
+  "flex flex-nowrap items-center justify-between gap-3";
 
 export const TEMPLATES_LIST_TOOLBAR_TITLE_CLASS =
   "text-xl font-semibold tracking-tight text-slate-900";
 
 export const TEMPLATES_LIST_TOOLBAR_SUBTITLE_CLASS = "mt-0.5 text-sm text-slate-500";
 
-export const TEMPLATES_LIST_TOOLBAR_ACTIONS_CLASS = "flex flex-wrap items-center gap-2";
+export const TEMPLATES_LIST_TOOLBAR_ACTIONS_CLASS =
+  "flex shrink-0 flex-nowrap items-center gap-2";
 
 export const TEMPLATES_LIST_TOOLBAR_FILTERS_ROW_CLASS = "flex flex-wrap items-center gap-3";
 
