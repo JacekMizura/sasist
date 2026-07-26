@@ -34,7 +34,18 @@ function formatMeters(value: number | undefined): number | null {
 import { TemplateCreator, RackPreview } from "./TemplateCreator";
 import { GenerateWarehouseLayoutModal } from "./GenerateWarehouseLayoutModal";
 import { UI_STRINGS } from "../../constants/uiStrings";
-import { appLayoutTokens } from "../../layout/appLayoutTokens";
+import {
+  warehouseFieldClass,
+  warehouseLeftRailClass,
+  warehouseListTileClass,
+  warehouseListTileSelectedClass,
+  warehousePrimaryActionClass,
+  warehouseSearchInputClass,
+  warehouseSecondaryActionClass,
+  warehouseSectionLabelClass,
+  warehouseSegmentBtnClass,
+  warehouseSegmentShellClass,
+} from "./warehouseUiSkin";
 import { normalizeBinTypeMap } from "../../utils/storageTypes";
 import { buildTemplateUsageData } from "./templateUsage";
 
@@ -169,7 +180,7 @@ export function RackSidebar({
     { type: "zone", label: UI_STRINGS.warehouse.visuals.zone, size: "8×6" },
   ];
   const sectionTitleClass =
-    "text-left text-[10px] font-semibold uppercase tracking-wider text-slate-400 hover:text-slate-600";
+    `${warehouseSectionLabelClass} hover:text-slate-600`;
   const { templatesForSidebar, usageCountById: templateUsageCounts, usedTemplates, availableTemplates } = buildTemplateUsageData(
     layout,
     customTemplates,
@@ -185,18 +196,16 @@ export function RackSidebar({
   );
 
   return (
-    <aside
-      className={`flex h-full min-h-0 w-[300px] flex-none flex-col self-stretch overflow-hidden overscroll-y-contain border-r ${appLayoutTokens.appBorder} ${appLayoutTokens.appPanelBackground} px-3.5 py-3`}
-    >
+    <aside className={warehouseLeftRailClass}>
       {!showOnlyCatalog && (
-      <div className="mb-2.5 flex shrink-0 rounded-md bg-slate-100/80 p-0.5">
-        <button type="button" onClick={() => setActiveTab("catalog")} className={`flex-1 rounded py-1 text-[10px] font-medium transition-colors ${activeTab === "catalog" ? "bg-white text-sky-800 shadow-sm ring-1 ring-slate-200/60" : "text-slate-600 hover:text-slate-800"}`}>{UI_STRINGS.warehouse.rackSidebar.catalog}</button>
-        <button type="button" onClick={() => setActiveTab("visuals")} className={`flex-1 rounded py-1 text-[10px] font-medium transition-colors ${activeTab === "visuals" ? "bg-white text-sky-800 shadow-sm ring-1 ring-slate-200/60" : "text-slate-600 hover:text-slate-800"}`}>{UI_STRINGS.warehouse.rackSidebar.visualElements}</button>
+      <div className={warehouseSegmentShellClass}>
+        <button type="button" onClick={() => setActiveTab("catalog")} className={warehouseSegmentBtnClass(activeTab === "catalog")}>{UI_STRINGS.warehouse.rackSidebar.catalog}</button>
+        <button type="button" onClick={() => setActiveTab("visuals")} className={warehouseSegmentBtnClass(activeTab === "visuals")}>{UI_STRINGS.warehouse.rackSidebar.visualElements}</button>
       </div>
       )}
       {!showOnlyCatalog && selectedRowContainerId && (
-        <div className="mb-2.5 shrink-0 border-b border-slate-100 pb-2.5">
-          <div className="mb-1.5 text-[9px] font-semibold uppercase tracking-wider text-slate-400">Zaznaczony rząd</div>
+        <div className="mb-3 shrink-0 border-b border-slate-200/70 pb-3">
+          <div className={`mb-1.5 ${warehouseSectionLabelClass}`}>Zaznaczony rząd</div>
           {(["rack", "bin"] as const).map((kind) => {
             const rcSel = (layout.row_containers ?? []).find((rc) => rc.id === selectedRowContainerId);
             const current =
@@ -212,7 +221,7 @@ export function RackSidebar({
             const name = kind === "rack" ? "rack-sidebar-rack-direction" : "rack-sidebar-bin-direction";
             return (
               <fieldset key={kind} className="m-0 border-0 p-0 mb-2 last:mb-0">
-                <legend className="mb-1 text-[9px] font-semibold uppercase tracking-wider text-slate-400">{label}</legend>
+                <legend className={`mb-1 ${warehouseSectionLabelClass}`}>{label}</legend>
                 <div className="flex flex-col gap-1" role="radiogroup" aria-label={label}>
                   {(["LTR", "RTL"] as const).map((dir) => {
                     const checked = current === dir;
@@ -256,7 +265,7 @@ export function RackSidebar({
             <button
               type="button"
               onClick={() => setExportOpen(!exportOpen)}
-              className="flex w-full items-center justify-center gap-1.5 rounded-md border border-emerald-600/90 bg-emerald-600 px-2.5 py-1.5 text-[11px] font-semibold text-white shadow-sm hover:bg-emerald-500"
+              className={warehousePrimaryActionClass}
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
               {UI_STRINGS.warehouse.export.button}
@@ -292,7 +301,7 @@ export function RackSidebar({
       )}
       {onOpenEditBuilding != null && (
         <div className="mb-2.5 border-b border-slate-100 pb-2.5">
-          <div className="mb-1 text-[9px] font-semibold uppercase tracking-wider text-slate-400">Budynek</div>
+          <div className={`mb-1 ${warehouseSectionLabelClass}`}>Budynek</div>
           {hasBuilding ? (
             <>
               <div className="flex items-center justify-between gap-2">
@@ -330,13 +339,13 @@ export function RackSidebar({
         <div className="shrink-0">
         {!isReadMode && !showOnlyCatalog && (
           <div className="mb-2">
-            <div className="mb-1 text-[9px] font-semibold uppercase tracking-wider text-slate-400">Typ regału</div>
+            <div className={`mb-1 ${warehouseSectionLabelClass}`}>Typ regału</div>
             <div className="flex gap-1.5">
               <button
                 type="button"
                 onClick={() => setManualRackType("warehouse")}
-                className={`flex-1 rounded-md border px-2 py-1 text-[11px] font-medium transition-colors ${
-                  manualRackType === "warehouse" ? "border-sky-600 bg-sky-600 text-white" : "border-slate-200/90 bg-white text-slate-700 hover:bg-slate-50"
+                className={`flex-1 rounded-xl px-2 py-1.5 text-[11px] font-medium transition-colors ${
+                  manualRackType === "warehouse" ? "bg-slate-900 text-white shadow-sm" : "bg-white text-slate-700 shadow-sm ring-1 ring-slate-200/80 hover:bg-slate-50"
                 }`}
               >
                 Magazyn
@@ -344,8 +353,8 @@ export function RackSidebar({
               <button
                 type="button"
                 onClick={() => setManualRackType("store")}
-                className={`flex-1 rounded-md border px-2 py-1 text-[11px] font-medium transition-colors ${
-                  manualRackType === "store" ? "border-sky-600 bg-sky-600 text-white" : "border-slate-200/90 bg-white text-slate-700 hover:bg-slate-50"
+                className={`flex-1 rounded-xl px-2 py-1.5 text-[11px] font-medium transition-colors ${
+                  manualRackType === "store" ? "bg-slate-900 text-white shadow-sm" : "bg-white text-slate-700 shadow-sm ring-1 ring-slate-200/80 hover:bg-slate-50"
                 }`}
               >
                 Sklep
@@ -369,7 +378,7 @@ export function RackSidebar({
         <button
           type="button"
           onClick={() => setShowGenerateLayoutModal(true)}
-          className="flex w-full items-center justify-center gap-1.5 rounded-md border border-emerald-700/90 bg-emerald-600 px-2.5 py-1.5 text-[11px] font-semibold text-white shadow-sm hover:bg-emerald-500"
+          className={warehousePrimaryActionClass}
         >
           <Wand2 size={13} strokeWidth={2} />
           Generuj układ
@@ -377,7 +386,7 @@ export function RackSidebar({
         <button
           type="button"
           onClick={() => setShowTemplateModal(true)}
-          className="flex w-full items-center justify-center gap-1.5 rounded-md border border-slate-200/90 bg-white px-2.5 py-1.5 text-[11px] font-medium text-slate-800 shadow-sm hover:bg-slate-50"
+          className={warehouseSecondaryActionClass}
         >
           <Plus size={13} strokeWidth={2} />
           {UI_STRINGS.warehouse.rackSidebar.newTemplate}
@@ -386,14 +395,14 @@ export function RackSidebar({
       )}
       {!showOnlyCatalog && rowToolActive && (
         <div className="mb-1.5 flex items-center gap-2">
-          <label className="text-[9px] font-medium uppercase tracking-wide text-slate-400">{UI_STRINGS.warehouse.rackSidebar.gapCm}</label>
+          <label className={warehouseSectionLabelClass}>{UI_STRINGS.warehouse.rackSidebar.gapCm}</label>
           <input
             type="number"
             min={0}
             step={5}
             value={rowGapCm}
             onChange={(e) => setRowGapCm(Number(e.target.value) || 0)}
-            className="w-12 rounded-md border border-slate-200/90 bg-white px-1 py-0.5 text-[11px] text-slate-800 input-focus"
+            className={`w-14 ${warehouseFieldClass}`}
           />
         </div>
       )}
@@ -421,7 +430,7 @@ export function RackSidebar({
 
         {usedTemplates.length > 0 && (
             <div className="mt-0.5">
-            <div className="mb-1 text-[9px] font-semibold uppercase tracking-wider text-slate-400">Użyte w układzie</div>
+            <div className={`mb-1 ${warehouseSectionLabelClass}`}>Użyte w układzie</div>
             <div className="space-y-1.5">
               {usedTemplates.map((t) => {
                 const count = templateUsageCounts.get(t.id) ?? 0;
@@ -452,8 +461,7 @@ export function RackSidebar({
                       }
                       setRowToolTemplate(item);
                     } : () => setPreviewTemplateId(t.id)}
-                    className={`rounded-lg border px-2 py-1.5 shadow-sm transition-all duration-150 ${showOnlyCatalog ? "cursor-default" : `cursor-pointer hover:shadow-md ${isRowSelected ? "" : "cursor-grab active:cursor-grabbing"}`}`}
-                    style={showOnlyCatalog ? { borderColor: "rgb(226 232 240 / 0.95)", backgroundColor: "#fff" } : { borderColor: isRowSelected ? "rgb(14 165 233 / 0.55)" : "rgb(226 232 240 / 0.9)", backgroundColor: isRowSelected ? "rgb(240 249 255)" : "#fff" }}
+                    className={`${isRowSelected ? warehouseListTileSelectedClass : warehouseListTileClass} ${showOnlyCatalog ? "cursor-default" : `cursor-pointer ${isRowSelected ? "" : "cursor-grab active:cursor-grabbing"}`}`}
                   >
                     <div className="flex items-start justify-between gap-2">
                       <div className="flex min-w-0 flex-1 gap-2">
@@ -519,7 +527,7 @@ export function RackSidebar({
 
         {availableTemplates.length > 0 && (
           <div className="mt-2 border-t border-slate-100 pt-2">
-            <div className="mb-1 text-[9px] font-semibold uppercase tracking-wider text-slate-400">Dostępne szablony</div>
+            <div className={`mb-1 ${warehouseSectionLabelClass}`}>Dostępne szablony</div>
             <div className="space-y-1.5">
               {availableTemplates.map((t) => {
                 const item: CatalogItem = { type: "custom", template: t };
@@ -549,8 +557,7 @@ export function RackSidebar({
                       }
                       setRowToolTemplate(item);
                     } : () => setPreviewTemplateId(t.id)}
-                    className={`rounded-lg border px-2 py-1.5 shadow-sm transition-all duration-150 ${showOnlyCatalog ? "cursor-default" : `cursor-pointer hover:shadow-md ${isRowSelected ? "" : "cursor-grab active:cursor-grabbing"}`}`}
-                    style={showOnlyCatalog ? { borderColor: "rgb(226 232 240 / 0.95)", backgroundColor: "#fff" } : { borderColor: isRowSelected ? "rgb(14 165 233 / 0.55)" : "rgb(226 232 240 / 0.9)", backgroundColor: isRowSelected ? "rgb(240 249 255)" : "#fff" }}
+                    className={`${isRowSelected ? warehouseListTileSelectedClass : warehouseListTileClass} ${showOnlyCatalog ? "cursor-default" : `cursor-pointer ${isRowSelected ? "" : "cursor-grab active:cursor-grabbing"}`}`}
                   >
                     <div className="flex items-start justify-between gap-2">
                       <div className="flex min-w-0 flex-1 gap-2">
@@ -713,14 +720,14 @@ export function RackSidebar({
                 <button
                   type="button"
                   onClick={() => setWallElementTool(wallElementTool === "door" ? null : "door")}
-                  className={`flex-1 rounded-md border px-2 py-1 text-[11px] font-medium ${wallElementTool === "door" ? "border-sky-500 bg-sky-50 text-sky-900" : "border-slate-200/90 bg-white text-slate-700 hover:bg-slate-50"}`}
+                  className={`flex-1 rounded-xl px-2 py-1.5 text-[11px] font-medium ${wallElementTool === "door" ? "bg-slate-900 text-white shadow-sm" : "bg-white text-slate-700 shadow-sm ring-1 ring-slate-200/80 hover:bg-slate-50"}`}
                 >
                   Drzwi
                 </button>
                 <button
                   type="button"
                   onClick={() => setWallElementTool(wallElementTool === "gate" ? null : "gate")}
-                  className={`flex-1 rounded-md border px-2 py-1 text-[11px] font-medium ${wallElementTool === "gate" ? "border-sky-500 bg-sky-50 text-sky-900" : "border-slate-200/90 bg-white text-slate-700 hover:bg-slate-50"}`}
+                  className={`flex-1 rounded-xl px-2 py-1.5 text-[11px] font-medium ${wallElementTool === "gate" ? "bg-slate-900 text-white shadow-sm" : "bg-white text-slate-700 shadow-sm ring-1 ring-slate-200/80 hover:bg-slate-50"}`}
                 >
                   Brama
                 </button>
@@ -734,7 +741,7 @@ export function RackSidebar({
               draggable
               onDragStart={() => setDraggingVisualType(type)}
               onDragEnd={() => { setDraggingVisualType(null); setVisualGhostPosition(null); }}
-              className="cursor-grab rounded-md border border-amber-200/80 bg-amber-50/50 px-2 py-1.5 active:cursor-grabbing hover:bg-amber-50"
+              className="cursor-grab rounded-xl bg-amber-50/80 px-2.5 py-2 shadow-sm ring-1 ring-amber-200/70 active:cursor-grabbing hover:bg-amber-50"
             >
               <div className="text-xs font-semibold text-slate-800">{label}</div>
               <div className="text-[10px] text-slate-500">{size} kom.</div>
@@ -759,7 +766,7 @@ export function RackSidebar({
         value={rackSearch}
         onChange={(e) => setRackSearch(e.target.value)}
         placeholder={UI_STRINGS.warehouse.rackSidebar.rackSearchPlaceholder}
-        className="mt-1.5 w-full rounded-md border border-slate-200/90 bg-white px-2 py-1 text-[11px] text-slate-800 placeholder:text-slate-400"
+        className={`mt-1.5 ${warehouseSearchInputClass}`}
         aria-label="Szukaj w liście regałów"
       />
       <div className="designer-rail-scroll mt-1.5 max-h-36 min-h-0 flex-1 space-y-1 overflow-y-auto">
@@ -787,11 +794,7 @@ export function RackSidebar({
                     setSelectedRackIds([rid]);
                   }
                 }}
-                className={`group w-full rounded-xl border px-3 py-2.5 text-left text-[11px] shadow-sm transition-all duration-150 ${
-                  isSel
-                    ? "border-sky-400/90 bg-gradient-to-br from-sky-50 to-sky-100/80 text-slate-900 shadow-md ring-2 ring-sky-300/40"
-                    : "border-slate-200/70 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50/90 hover:shadow-md"
-                }`}
+                className={`group w-full text-left text-[11px] ${isSel ? warehouseListTileSelectedClass : warehouseListTileClass} ${isSel ? "text-slate-900" : "text-slate-700"}`}
               >
                 <div className="flex flex-col items-start gap-1">
                   <div className="flex w-full items-start justify-between gap-2">

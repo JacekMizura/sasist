@@ -3,6 +3,7 @@ import type { LayoutState, WarehouseProduct } from "../../types/warehouse";
 import { ElevationPanel } from "./ElevationPanel";
 import { getRackDisplayId, rackMatchesSlotRackId } from "./warehouseUtils";
 import { AppRightPanel } from "../layout/app";
+import { warehouseRightRailShellClass } from "./warehouseUiSkin";
 
 export type ElevationSidePanelProps = {
   layout: LayoutState;
@@ -54,7 +55,7 @@ export function VisualElementPanelShell({
   className?: string;
 }) {
   return (
-    <AppRightPanel open bare aria-label="Element wizualny">
+    <AppRightPanel open bare aria-label="Element wizualny" className={warehouseRightRailShellClass}>
       <div
         className={["min-h-0 flex-1 overflow-y-auto overscroll-y-contain p-4", className ?? ""]
           .filter(Boolean)

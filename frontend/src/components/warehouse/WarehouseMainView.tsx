@@ -8,6 +8,8 @@ import { RackPropertiesSidebar } from "./RackPropertiesSidebar";
 import { VisualElementPanelShell } from "./ElevationSidePanel";
 import { AppRightPanel, AppSplitView } from "../layout/app";
 import { UI_STRINGS } from "../../constants/uiStrings";
+import { warehouseMapHallClassName } from "./warehouseMapHall";
+import { warehouseMapSurroundClass, warehouseRightRailShellClass } from "./warehouseUiSkin";
 
 /** Return keyboard focus to the layout canvas after closing a side panel. */
 export function focusWarehouseCanvasScroll() {
@@ -114,28 +116,28 @@ export function WarehouseMainView(props: WarehouseMainViewProps) {
               <p className="text-[10px] text-slate-400 mt-1">{ve.width}×{ve.height} kom.</p>
               <div className="mt-4">
                 <label className="block text-[11px] font-medium uppercase tracking-[0.08em] text-[#6b7280] mb-1">Etykieta (na mapie)</label>
-                <input type="text" value={ve.label ?? ve.name ?? ""} onChange={(e) => updateSingleVe({ label: e.target.value || undefined, name: e.target.value || undefined })} placeholder="np. Brama Północna" className="w-full rounded border border-[#E2E8F0] bg-slate-50 text-[#1E293B] px-2 py-1 text-xs" />
+                <input type="text" value={ve.label ?? ve.name ?? ""} onChange={(e) => updateSingleVe({ label: e.target.value || undefined, name: e.target.value || undefined })} placeholder="np. Brama Północna" className="w-full rounded-xl border-0 bg-white px-2.5 py-1.5 text-xs text-slate-800 shadow-sm ring-1 ring-slate-200/80 focus:outline-none focus:ring-2 focus:ring-orange-400/40" />
               </div>
               <div className="mt-2">
                 <label className="block text-[10px] text-slate-400 uppercase mb-0.5">Kolor</label>
                 <div className="flex items-center gap-2">
-                  <input type="color" value={hex6} onChange={(e) => updateVe({ color: ve.type === "zone" ? e.target.value + "40" : e.target.value })} className="w-10 h-8 rounded border border-[#E2E8F0] bg-slate-50 cursor-pointer" />
-                  <input type="text" value={fillColor} readOnly className="flex-1 rounded border border-[#E2E8F0] bg-slate-50 text-[#1E293B] px-2 py-1 text-[10px] font-mono" title="Kolor wypełnienia" />
+                  <input type="color" value={hex6} onChange={(e) => updateVe({ color: ve.type === "zone" ? e.target.value + "40" : e.target.value })} className="h-8 w-10 cursor-pointer rounded-xl bg-white shadow-sm ring-1 ring-slate-200/80" />
+                  <input type="text" value={fillColor} readOnly className="flex-1 rounded-xl border-0 bg-white px-2 py-1 font-mono text-[10px] text-slate-800 shadow-sm ring-1 ring-slate-200/80" title="Kolor wypełnienia" />
                 </div>
               </div>
               <div className="mt-2 grid grid-cols-2 gap-2">
                 <div>
                   <label className="block text-[10px] text-slate-400 uppercase mb-0.5">Szer. (kom.)</label>
-                  <input type="number" min={1} value={ve.width} onChange={(e) => updateVe({ width: Math.max(1, Number(e.target.value) || 1) })} className="w-full rounded border border-[#E2E8F0] bg-slate-50 text-[#1E293B] px-2 py-1 text-xs" />
+                  <input type="number" min={1} value={ve.width} onChange={(e) => updateVe({ width: Math.max(1, Number(e.target.value) || 1) })} className="w-full rounded-xl border-0 bg-white px-2.5 py-1.5 text-xs text-slate-800 shadow-sm ring-1 ring-slate-200/80 focus:outline-none focus:ring-2 focus:ring-orange-400/40" />
                 </div>
                 <div>
                   <label className="block text-[10px] text-slate-400 uppercase mb-0.5">Wys. (kom.)</label>
-                  <input type="number" min={1} value={ve.height} onChange={(e) => updateVe({ height: Math.max(1, Number(e.target.value) || 1) })} className="w-full rounded border border-[#E2E8F0] bg-slate-50 text-[#1E293B] px-2 py-1 text-xs" />
+                  <input type="number" min={1} value={ve.height} onChange={(e) => updateVe({ height: Math.max(1, Number(e.target.value) || 1) })} className="w-full rounded-xl border-0 bg-white px-2.5 py-1.5 text-xs text-slate-800 shadow-sm ring-1 ring-slate-200/80 focus:outline-none focus:ring-2 focus:ring-orange-400/40" />
                 </div>
               </div>
               <div className="mt-2">
                 <label className="block text-[10px] text-slate-400 uppercase mb-0.5">Obrót (°)</label>
-                <input type="number" min={0} max={360} step={15} value={ve.rotation ?? 0} onChange={(e) => updateVe({ rotation: Math.max(0, Math.min(360, Number(e.target.value) || 0)) })} className="w-full rounded border border-[#E2E8F0] bg-slate-50 text-[#1E293B] px-2 py-1 text-xs" />
+                <input type="number" min={0} max={360} step={15} value={ve.rotation ?? 0} onChange={(e) => updateVe({ rotation: Math.max(0, Math.min(360, Number(e.target.value) || 0)) })} className="w-full rounded-xl border-0 bg-white px-2.5 py-1.5 text-xs text-slate-800 shadow-sm ring-1 ring-slate-200/80 focus:outline-none focus:ring-2 focus:ring-orange-400/40" />
               </div>
               {ve.type === "column" && (
                 <div className="mt-3 space-y-2">
@@ -144,7 +146,7 @@ export function WarehouseMainView(props: WarehouseMainViewProps) {
                     <select
                       value={ve.columnShape ?? "square"}
                       onChange={(e) => updateVe({ columnShape: e.target.value as ColumnShape, ...(e.target.value === "circle" && ve.diameter == null ? { diameter: 2 } : {}) })}
-                      className="w-full rounded border border-[#E2E8F0] bg-slate-50 text-[#1E293B] px-2 py-1 text-xs"
+                      className="w-full rounded-xl border-0 bg-white px-2.5 py-1.5 text-xs text-slate-800 shadow-sm ring-1 ring-slate-200/80 focus:outline-none focus:ring-2 focus:ring-orange-400/40"
                     >
                       <option value="square">Kwadrat</option>
                       <option value="rectangle">Prostokąt</option>
@@ -155,18 +157,18 @@ export function WarehouseMainView(props: WarehouseMainViewProps) {
                     <div className="grid grid-cols-2 gap-2">
                       <div>
                         <label className="block text-[10px] text-slate-400 uppercase mb-0.5">Szer. (kom.)</label>
-                        <input type="number" min={1} value={ve.width} onChange={(e) => updateVe({ width: Math.max(1, Number(e.target.value) || 1) })} className="w-full rounded border border-[#E2E8F0] bg-slate-50 text-[#1E293B] px-2 py-1 text-xs" />
+                        <input type="number" min={1} value={ve.width} onChange={(e) => updateVe({ width: Math.max(1, Number(e.target.value) || 1) })} className="w-full rounded-xl border-0 bg-white px-2.5 py-1.5 text-xs text-slate-800 shadow-sm ring-1 ring-slate-200/80 focus:outline-none focus:ring-2 focus:ring-orange-400/40" />
                       </div>
                       <div>
                         <label className="block text-[10px] text-slate-400 uppercase mb-0.5">Gł. (kom.)</label>
-                        <input type="number" min={1} value={ve.height} onChange={(e) => updateVe({ height: Math.max(1, Number(e.target.value) || 1) })} className="w-full rounded border border-[#E2E8F0] bg-slate-50 text-[#1E293B] px-2 py-1 text-xs" />
+                        <input type="number" min={1} value={ve.height} onChange={(e) => updateVe({ height: Math.max(1, Number(e.target.value) || 1) })} className="w-full rounded-xl border-0 bg-white px-2.5 py-1.5 text-xs text-slate-800 shadow-sm ring-1 ring-slate-200/80 focus:outline-none focus:ring-2 focus:ring-orange-400/40" />
                       </div>
                     </div>
                   )}
                   {ve.columnShape === "circle" && (
                     <div>
                       <label className="block text-[10px] text-slate-400 uppercase mb-0.5">Średnica (kom.)</label>
-                      <input type="number" min={1} value={ve.diameter ?? 2} onChange={(e) => updateVe({ diameter: Math.max(1, Number(e.target.value) || 1), width: Math.max(1, Number(e.target.value) || 1), height: Math.max(1, Number(e.target.value) || 1) })} className="w-full rounded border border-[#E2E8F0] bg-slate-50 text-[#1E293B] px-2 py-1 text-xs" />
+                      <input type="number" min={1} value={ve.diameter ?? 2} onChange={(e) => updateVe({ diameter: Math.max(1, Number(e.target.value) || 1), width: Math.max(1, Number(e.target.value) || 1), height: Math.max(1, Number(e.target.value) || 1) })} className="w-full rounded-xl border-0 bg-white px-2.5 py-1.5 text-xs text-slate-800 shadow-sm ring-1 ring-slate-200/80 focus:outline-none focus:ring-2 focus:ring-orange-400/40" />
                     </div>
                   )}
                 </div>
@@ -175,18 +177,18 @@ export function WarehouseMainView(props: WarehouseMainViewProps) {
                 <div className="mt-2 grid grid-cols-2 gap-2">
                   <div>
                     <label className="block text-[10px] text-slate-400 uppercase mb-0.5">Długość (kom.)</label>
-                    <input type="number" min={1} value={ve.length ?? ve.width} onChange={(e) => updateVe({ length: Math.max(1, Number(e.target.value) || 1), width: Math.max(1, Number(e.target.value) || 1) })} className="w-full rounded border border-[#E2E8F0] bg-slate-50 text-[#1E293B] px-2 py-1 text-xs" />
+                    <input type="number" min={1} value={ve.length ?? ve.width} onChange={(e) => updateVe({ length: Math.max(1, Number(e.target.value) || 1), width: Math.max(1, Number(e.target.value) || 1) })} className="w-full rounded-xl border-0 bg-white px-2.5 py-1.5 text-xs text-slate-800 shadow-sm ring-1 ring-slate-200/80 focus:outline-none focus:ring-2 focus:ring-orange-400/40" />
                   </div>
                   <div>
                     <label className="block text-[10px] text-slate-400 uppercase mb-0.5">Grubość (kom.)</label>
-                    <input type="number" min={1} value={ve.thickness ?? ve.height} onChange={(e) => updateVe({ thickness: Math.max(1, Number(e.target.value) || 1), height: Math.max(1, Number(e.target.value) || 1) })} className="w-full rounded border border-[#E2E8F0] bg-slate-50 text-[#1E293B] px-2 py-1 text-xs" />
+                    <input type="number" min={1} value={ve.thickness ?? ve.height} onChange={(e) => updateVe({ thickness: Math.max(1, Number(e.target.value) || 1), height: Math.max(1, Number(e.target.value) || 1) })} className="w-full rounded-xl border-0 bg-white px-2.5 py-1.5 text-xs text-slate-800 shadow-sm ring-1 ring-slate-200/80 focus:outline-none focus:ring-2 focus:ring-orange-400/40" />
                   </div>
                 </div>
               )}
               {ve.type === "door" && (
                 <div className="mt-2">
                   <label className="block text-[10px] text-slate-400 uppercase mb-0.5">Typ drzwi</label>
-                  <select value={ve.doorStyle ?? "hinged"} onChange={(e) => updateVe({ doorStyle: e.target.value as DoorStyle })} className="w-full rounded border border-[#E2E8F0] bg-slate-50 text-[#1E293B] px-2 py-1 text-xs">
+                  <select value={ve.doorStyle ?? "hinged"} onChange={(e) => updateVe({ doorStyle: e.target.value as DoorStyle })} className="w-full rounded-xl border-0 bg-white px-2.5 py-1.5 text-xs text-slate-800 shadow-sm ring-1 ring-slate-200/80 focus:outline-none focus:ring-2 focus:ring-orange-400/40">
                     <option value="hinged">Skrzydłowe</option>
                     <option value="sliding">Przesuwane</option>
                   </select>
@@ -194,14 +196,14 @@ export function WarehouseMainView(props: WarehouseMainViewProps) {
               )}
               {ve.type === "zone" && (
                 <div className="mt-2 space-y-2">
-                  <div className="rounded bg-slate-50 p-2 border border-[#E2E8F0]">
+                  <div className="rounded-xl bg-white p-2 shadow-sm ring-1 ring-slate-200/60">
                     <p className="text-[10px] text-slate-500 uppercase mb-0.5">Objętość 3D</p>
                     <p className="text-xs font-mono text-[#1E293B]">W × D × H: {(ve.width_cm ?? ve.width * GRID_UNIT_CM)} × {(ve.depth_cm ?? 100)} × {(ve.height_cm ?? 50)} cm</p>
                     <p className="text-xs font-mono text-slate-600 mt-0.5">Całkowita objętość: {(((ve.width_cm ?? ve.width * GRID_UNIT_CM) * (ve.depth_cm ?? 100) * (ve.height_cm ?? 50)) / 1000).toFixed(0)} dm³</p>
                   </div>
                   <div>
                     <label className="block text-[10px] text-slate-400 uppercase mb-0.5">Typ strefy</label>
-                    <select value={ve.zoneType ?? "reception"} onChange={(e) => updateVe({ zoneType: e.target.value as ZoneType, color: e.target.value === "shipping" ? "#0ea5e940" : "#3b82f640" })} className="w-full rounded border border-[#E2E8F0] bg-slate-50 text-[#1E293B] px-2 py-1 text-xs">
+                    <select value={ve.zoneType ?? "reception"} onChange={(e) => updateVe({ zoneType: e.target.value as ZoneType, color: e.target.value === "shipping" ? "#0ea5e940" : "#3b82f640" })} className="w-full rounded-xl border-0 bg-white px-2.5 py-1.5 text-xs text-slate-800 shadow-sm ring-1 ring-slate-200/80 focus:outline-none focus:ring-2 focus:ring-orange-400/40">
                       <option value="reception">Przyjęcia</option>
                       <option value="shipping">Wysyłka</option>
                     </select>
@@ -209,21 +211,21 @@ export function WarehouseMainView(props: WarehouseMainViewProps) {
                   <div className="grid grid-cols-3 gap-1">
                     <div>
                       <label className="block text-[10px] text-slate-500 uppercase mb-0.5">Szer. (cm) <span className="text-red-500">*</span></label>
-                      <input type="number" min={10} required value={ve.width_cm ?? ve.width * GRID_UNIT_CM} onChange={(e) => { const v = Number(e.target.value) || 10; const w = v; const d = ve.depth_cm ?? 100; const h = ve.height_cm ?? 50; updateVe({ width_cm: w, total_volume_dm3: (w * d * h) / 1000 }); }} className="w-full rounded border border-[#E2E8F0] bg-slate-50 text-[#1E293B] px-2 py-1 text-xs" />
+                      <input type="number" min={10} required value={ve.width_cm ?? ve.width * GRID_UNIT_CM} onChange={(e) => { const v = Number(e.target.value) || 10; const w = v; const d = ve.depth_cm ?? 100; const h = ve.height_cm ?? 50; updateVe({ width_cm: w, total_volume_dm3: (w * d * h) / 1000 }); }} className="w-full rounded-xl border-0 bg-white px-2.5 py-1.5 text-xs text-slate-800 shadow-sm ring-1 ring-slate-200/80 focus:outline-none focus:ring-2 focus:ring-orange-400/40" />
                     </div>
                     <div>
                       <label className="block text-[10px] text-slate-500 uppercase mb-0.5">Gł. (cm) <span className="text-red-500">*</span></label>
-                      <input type="number" min={10} required value={ve.depth_cm ?? 100} onChange={(e) => { const v = Number(e.target.value) || 10; const w = ve.width_cm ?? ve.width * GRID_UNIT_CM; const d = v; const h = ve.height_cm ?? 50; updateVe({ depth_cm: d, total_volume_dm3: (w * d * h) / 1000 }); }} className="w-full rounded border border-[#E2E8F0] bg-slate-50 text-[#1E293B] px-2 py-1 text-xs" />
+                      <input type="number" min={10} required value={ve.depth_cm ?? 100} onChange={(e) => { const v = Number(e.target.value) || 10; const w = ve.width_cm ?? ve.width * GRID_UNIT_CM; const d = v; const h = ve.height_cm ?? 50; updateVe({ depth_cm: d, total_volume_dm3: (w * d * h) / 1000 }); }} className="w-full rounded-xl border-0 bg-white px-2.5 py-1.5 text-xs text-slate-800 shadow-sm ring-1 ring-slate-200/80 focus:outline-none focus:ring-2 focus:ring-orange-400/40" />
                     </div>
                     <div>
                       <label className="block text-[10px] text-slate-500 uppercase mb-0.5">Wys. (cm) <span className="text-red-500">*</span></label>
-                      <input type="number" min={10} required value={ve.height_cm ?? ve.height * GRID_UNIT_CM} onChange={(e) => { const v = Number(e.target.value) || 10; const w = ve.width_cm ?? ve.width * GRID_UNIT_CM; const d = ve.depth_cm ?? 100; const h = v; updateVe({ height_cm: h, total_volume_dm3: (w * d * h) / 1000 }); }} className="w-full rounded border border-[#E2E8F0] bg-slate-50 text-[#1E293B] px-2 py-1 text-xs" />
+                      <input type="number" min={10} required value={ve.height_cm ?? ve.height * GRID_UNIT_CM} onChange={(e) => { const v = Number(e.target.value) || 10; const w = ve.width_cm ?? ve.width * GRID_UNIT_CM; const d = ve.depth_cm ?? 100; const h = v; updateVe({ height_cm: h, total_volume_dm3: (w * d * h) / 1000 }); }} className="w-full rounded-xl border-0 bg-white px-2.5 py-1.5 text-xs text-slate-800 shadow-sm ring-1 ring-slate-200/80 focus:outline-none focus:ring-2 focus:ring-orange-400/40" />
                     </div>
                   </div>
                   <p className="text-[10px] text-slate-600 font-medium">Objętość: {(((ve.width_cm ?? ve.width * GRID_UNIT_CM) * (ve.depth_cm ?? 100) * (ve.height_cm ?? 50)) / 1000).toFixed(0)} dm³</p>
                   <div>
                     <label className="block text-[10px] text-slate-400 uppercase mb-0.5">{UI_STRINGS.warehouse.columns.occupancyDm3}</label>
-                    <input type="number" min={0} value={ve.current_occupancy_dm3 ?? 0} onChange={(e) => updateVe({ current_occupancy_dm3: Math.max(0, Number(e.target.value) || 0) })} className="w-full rounded border border-[#E2E8F0] bg-slate-50 text-[#1E293B] px-2 py-1 text-xs" />
+                    <input type="number" min={0} value={ve.current_occupancy_dm3 ?? 0} onChange={(e) => updateVe({ current_occupancy_dm3: Math.max(0, Number(e.target.value) || 0) })} className="w-full rounded-xl border-0 bg-white px-2.5 py-1.5 text-xs text-slate-800 shadow-sm ring-1 ring-slate-200/80 focus:outline-none focus:ring-2 focus:ring-orange-400/40" />
                     <p className="text-[9px] text-slate-500 mt-0.5">{(ve.total_volume_dm3 ?? 0) > 0 ? `${Math.min(100, Math.round(((ve.current_occupancy_dm3 ?? 0) / (ve.total_volume_dm3 ?? 1)) * 100))}%` : "0%"} zajęte</p>
                   </div>
                 </div>
@@ -258,7 +260,7 @@ export function WarehouseMainView(props: WarehouseMainViewProps) {
                       }))
                     }
                     placeholder="np. Główna 1"
-                    className="w-full rounded border border-[#E2E8F0] bg-slate-50 text-[#1E293B] px-2 py-1"
+                    className="w-full rounded-xl border-0 bg-white px-2.5 py-1.5 text-xs text-slate-800 shadow-sm ring-1 ring-slate-200/80 focus:outline-none focus:ring-2 focus:ring-orange-400/40"
                   />
                 </div>
                 <div className="grid grid-cols-2 gap-2">
@@ -274,7 +276,7 @@ export function WarehouseMainView(props: WarehouseMainViewProps) {
                           aisles: prev.aisles.map((a, i) => (i === selectedAisleIndex ? { ...a, x: Number(e.target.value) || 0 } : a)),
                         }))
                       }
-                      className="w-full rounded border border-[#E2E8F0] bg-slate-50 text-[#1E293B] px-2 py-1"
+                      className="w-full rounded-xl border-0 bg-white px-2.5 py-1.5 text-xs text-slate-800 shadow-sm ring-1 ring-slate-200/80 focus:outline-none focus:ring-2 focus:ring-orange-400/40"
                     />
                   </div>
                   <div>
@@ -289,7 +291,7 @@ export function WarehouseMainView(props: WarehouseMainViewProps) {
                           aisles: prev.aisles.map((a, i) => (i === selectedAisleIndex ? { ...a, y: Number(e.target.value) || 0 } : a)),
                         }))
                       }
-                      className="w-full rounded border border-[#E2E8F0] bg-slate-50 text-[#1E293B] px-2 py-1"
+                      className="w-full rounded-xl border-0 bg-white px-2.5 py-1.5 text-xs text-slate-800 shadow-sm ring-1 ring-slate-200/80 focus:outline-none focus:ring-2 focus:ring-orange-400/40"
                     />
                   </div>
                 </div>
@@ -306,7 +308,7 @@ export function WarehouseMainView(props: WarehouseMainViewProps) {
                           aisles: prev.aisles.map((a, i) => (i === selectedAisleIndex ? { ...a, width: Math.max(1, Number(e.target.value) || 1) } : a)),
                         }))
                       }
-                      className="w-full rounded border border-[#E2E8F0] bg-slate-50 text-[#1E293B] px-2 py-1"
+                      className="w-full rounded-xl border-0 bg-white px-2.5 py-1.5 text-xs text-slate-800 shadow-sm ring-1 ring-slate-200/80 focus:outline-none focus:ring-2 focus:ring-orange-400/40"
                     />
                   </div>
                   <div>
@@ -321,7 +323,7 @@ export function WarehouseMainView(props: WarehouseMainViewProps) {
                           aisles: prev.aisles.map((a, i) => (i === selectedAisleIndex ? { ...a, height: Math.max(1, Number(e.target.value) || 1) } : a)),
                         }))
                       }
-                      className="w-full rounded border border-[#E2E8F0] bg-slate-50 text-[#1E293B] px-2 py-1"
+                      className="w-full rounded-xl border-0 bg-white px-2.5 py-1.5 text-xs text-slate-800 shadow-sm ring-1 ring-slate-200/80 focus:outline-none focus:ring-2 focus:ring-orange-400/40"
                     />
                   </div>
                 </div>
@@ -347,6 +349,7 @@ export function WarehouseMainView(props: WarehouseMainViewProps) {
         resizable
         widthStorageKey="wms.rackPropertiesSidebarWidth"
         aria-label="Właściwości regału"
+        className={warehouseRightRailShellClass}
       >
         <RackPropertiesSidebar
           layout={layout}
@@ -374,11 +377,12 @@ export function WarehouseMainView(props: WarehouseMainViewProps) {
 
   return (
     <AppSplitView right={rightPanel ?? undefined}>
-      <div className="m-0 flex min-h-0 min-w-0 max-w-full flex-1 basis-0 flex-col overflow-hidden p-0">
+      <div className={`m-0 p-0 ${warehouseMapSurroundClass}`}>
         <div
           data-warehouse-canvas-scroll
           tabIndex={-1}
-          className="flex min-h-0 min-w-0 max-w-full w-full flex-1 flex-col overflow-auto outline-none"
+          className={`${warehouseMapHallClassName} outline-none`}
+          style={{ overscrollBehavior: "contain" }}
         >
           <WarehouseCanvas {...canvasProps} />
         </div>

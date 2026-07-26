@@ -13,6 +13,10 @@ import type { AccessProblemItem } from "./locationAccessProblems";
 import { NodeInspector } from "./NodeInspector";
 import { EdgeInspector } from "./EdgeInspector";
 import { PrimaryButton } from "../../../design-system/PrimaryButton";
+import {
+  warehouseRailBgClass,
+  warehouseSectionLabelClass,
+} from "../../../components/warehouse/warehouseUiSkin";
 
 export { deleteSelectedNode } from "./routingNodeActions";
 
@@ -108,9 +112,11 @@ export function RoutingRoutesPanel({
   };
 
   return (
-    <aside className="flex h-full min-h-0 w-[320px] shrink-0 flex-col gap-3 overflow-auto border-l border-slate-200 bg-white p-3 text-[12px] text-slate-700">
+    <aside
+      className={`flex h-full min-h-0 w-[320px] shrink-0 flex-col gap-3 overflow-auto border-l border-slate-200 ${warehouseRailBgClass} p-4 text-[12px] text-slate-700 shadow-[-4px_0_24px_rgba(15,23,42,0.04)]`}
+    >
       <div>
-        <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Sieć tras</div>
+        <div className={warehouseSectionLabelClass}>Sieć tras</div>
         <p className="mt-1 text-[11px] text-slate-500">
           Rysuj drogi magazynowe. Jedna wspólna sieć dla wszystkich procesów.
         </p>
@@ -131,8 +137,10 @@ export function RoutingRoutesPanel({
             onClick={() => {
               setTool(id);
             }}
-            className={`rounded-md border px-2 py-1 text-[11px] font-semibold ${
-              tool === id ? "border-sky-700 bg-sky-700 text-white" : "border-slate-200 bg-slate-50"
+            className={`rounded-xl px-2.5 py-1.5 text-[11px] font-semibold shadow-sm ${
+              tool === id
+                ? "bg-slate-900 text-white"
+                : "bg-white text-slate-700 ring-1 ring-slate-200/80 hover:bg-slate-50"
             }`}
           >
             {label}

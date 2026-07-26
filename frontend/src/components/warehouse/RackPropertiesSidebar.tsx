@@ -18,9 +18,16 @@ import {
 import { UI_STRINGS } from "../../constants/uiStrings";
 import { logRackRename } from "./rackRenameLog";
 import { syncRackBinsDisplayFields } from "../../utils/resolvedWarehouseLocation";
-import { appLayoutTokens } from "../../layout/appLayoutTokens";
 import { RackPassageEditor } from "../../pages/WarehouseDesigner/passages/RackPassageEditor";
 import { RackLocationsSection } from "./RackLocationsSection";
+import {
+  warehouseCardClass,
+  warehouseFieldClass,
+  warehousePrimaryActionClass,
+  warehouseRailBgClass,
+  warehouseSecondaryActionClass,
+  warehouseSectionLabelClass,
+} from "./warehouseUiSkin";
 
 export type RackPropertiesSidebarProps = {
   layout: LayoutState;
@@ -51,9 +58,7 @@ function racksMatchIdentity(a: RackState, b: RackState): boolean {
 }
 
 function SectionTitle({ children }: { children: ReactNode }) {
-  return (
-    <p className="mb-1.5 text-[10px] font-bold uppercase tracking-wide text-slate-500">{children}</p>
-  );
+  return <p className={`mb-2 ${warehouseSectionLabelClass}`}>{children}</p>;
 }
 
 export function RackPropertiesSidebar({
@@ -221,16 +226,16 @@ export function RackPropertiesSidebar({
   return (
     <div
       ref={asideScrollRef}
-      className={`flex h-full min-h-0 w-full flex-col overflow-hidden ${appLayoutTokens.appPanelBackground} ${
+      className={`flex h-full min-h-0 w-full flex-col overflow-hidden ${warehouseRailBgClass} ${
         compact ? "text-[11px]" : ""
       }`}
     >
-      <header className={`flex shrink-0 items-start justify-between gap-2 border-b ${appLayoutTokens.appBorder} px-3 py-2`}>
-        <div className="min-w-0 pl-1">
-          <p className="text-[10px] font-medium uppercase tracking-wide text-slate-400">
+      <header className="flex shrink-0 items-start justify-between gap-2 border-b border-slate-200/70 px-4 py-3">
+        <div className="min-w-0 pl-0.5">
+          <p className={warehouseSectionLabelClass}>
             {warehouseLabel ? `Magazyn / ${warehouseLabel}` : "Magazyn"} / {rackTitle}
           </p>
-          <h2 className="truncate text-xs font-bold uppercase text-slate-700">
+          <h2 className="mt-1 truncate text-lg font-semibold tracking-tight text-slate-900">
             {UI_STRINGS.warehouse.rackProperties.title}
           </h2>
           {saveStatusLabel ? (
@@ -248,7 +253,7 @@ export function RackPropertiesSidebar({
             type="button"
             title={compact ? "Tryb normalny" : "Tryb kompaktowy"}
             onClick={() => setCompact((v) => !v)}
-            className="rounded-md border border-slate-200 px-1.5 py-1 text-[10px] text-slate-600 hover:bg-slate-50"
+            className="rounded-xl bg-white px-2 py-1.5 text-[10px] text-slate-600 shadow-sm ring-1 ring-slate-200/80 hover:bg-slate-50"
           >
             {compact ? "▣" : "▢"}
           </button>
@@ -256,14 +261,14 @@ export function RackPropertiesSidebar({
             type="button"
             aria-label="Zamknij panel"
             onClick={requestClose}
-            className="rounded-md p-1.5 text-slate-500 hover:bg-slate-100 hover:text-slate-800"
+            className="rounded-xl p-1.5 text-slate-500 hover:bg-white hover:text-slate-800"
           >
             ✕
           </button>
         </div>
       </header>
 
-      <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-3 py-2">
+      <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-4 py-3">
         {selectedRack && isMultiSelect ? (
           <>
             <p className="text-sm font-semibold text-slate-800">Wybrano: {selectedRacks.length} regałów</p>
@@ -333,8 +338,8 @@ export function RackPropertiesSidebar({
                   }
                 }}
                 placeholder={getRackDisplayId(selectedRack, layout)}
-                className={`mt-0.5 w-full rounded-lg border px-2 py-1.5 text-sm text-slate-800 ${
-                  nameError ? "border-red-400 ring-1 ring-red-200" : "border-slate-200"
+                className={`mt-0.5 ${warehouseFieldClass} ${
+                  nameError ? "!ring-red-300 focus:!ring-red-400/50" : ""
                 }`}
               />
               {nameError ? <p className="mt-0.5 text-[11px] text-red-600">{nameError}</p> : null}
@@ -353,7 +358,7 @@ export function RackPropertiesSidebar({
                         ),
                       }));
                     }}
-                    className="w-full rounded border border-slate-200 px-1.5 py-0.5 text-[11px] text-slate-800"
+                    className={warehouseFieldClass}
                   >
                     <option value="warehouse">Magazyn</option>
                     <option value="store">Sklep</option>
@@ -412,9 +417,9 @@ export function RackPropertiesSidebar({
             {stats ? (
               <section className="border-t border-slate-100 pt-3">
                 <SectionTitle>Statystyki</SectionTitle>
-                <div className="rounded-lg border border-slate-200 bg-slate-50 p-2">
-                  <p className="text-[10px] uppercase text-slate-500">Pojemność / zajętość</p>
-                  <p className="font-mono text-sm text-slate-800">
+                <div className={warehouseCardClass}>
+                  <p className={warehouseSectionLabelClass}>Pojemność / zajętość</p>
+                  <p className="mt-1 font-mono text-sm text-slate-800">
                     {formatVolume(stats.used)} / {formatVolume(stats.total)} dm³
                   </p>
                   <div className="mt-1 h-2 overflow-hidden rounded-full bg-slate-200">
@@ -462,13 +467,13 @@ export function RackPropertiesSidebar({
         )}
       </div>
 
-      <footer className="flex shrink-0 flex-col gap-1.5 border-t border-slate-100 bg-slate-50/90 px-3 py-2">
+      <footer className="flex shrink-0 flex-col gap-1.5 border-t border-slate-200/70 px-4 py-3">
         {selectedRack ? (
           <div className="flex gap-2">
             <button
               type="button"
               onClick={() => setInternalLayoutRackId(selectedRack.id ?? selectedRack.rack_index)}
-              className="flex-1 rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-[11px] font-semibold text-slate-800 hover:bg-slate-50"
+              className={`flex-1 ${warehouseSecondaryActionClass}`}
             >
               Układ wewnętrzny
             </button>
@@ -480,7 +485,7 @@ export function RackPropertiesSidebar({
                   commitRackName(nameDraft, "save");
                   onSaveLayout();
                 }}
-                className="flex-1 rounded-lg bg-emerald-600 px-2 py-1.5 text-[11px] font-semibold text-white hover:bg-emerald-500 disabled:opacity-50"
+                className={`flex-1 disabled:opacity-50 ${warehousePrimaryActionClass}`}
               >
                 {saving ? "Zapisywanie…" : "Zapisz"}
               </button>

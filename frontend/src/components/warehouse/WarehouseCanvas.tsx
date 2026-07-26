@@ -25,6 +25,7 @@ import { MagazynPreviewPathLayer } from "./WarehouseCanvas/MagazynPreviewPathLay
 import { PassageDrawPreview } from "../../pages/WarehouseDesigner/passages/PassageDrawPreview";
 import { useWarehouseModeOptional } from "./WarehouseModeContext";
 import { WarehouseZoomControls } from "./WarehouseZoomControls";
+import { warehouseToolGroupClass } from "./warehouseUiSkin";
 import {
   MapLocationVisualizationLayer,
   type MapVisualizationModeId,
@@ -856,11 +857,11 @@ function WarehouseCanvasInner({
           <div
             className="flex min-h-0 min-w-0 shrink-0 flex-wrap items-center gap-x-2.5 gap-y-2 border-b border-slate-200/55 bg-gradient-to-b from-slate-50/98 to-white/95 px-3 py-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.75)] backdrop-blur-[4px]"
           >
-            <div className="flex shrink-0 items-center gap-0.5 rounded-lg border border-slate-200/60 bg-slate-100/50 p-0.5">
+            <div className={`flex shrink-0 ${warehouseToolGroupClass}`}>
               <button
                 type="button"
                 onClick={fitViewport}
-                className="h-8 rounded-md px-2.5 text-[11px] font-medium text-slate-600 transition-all duration-150 hover:bg-white hover:text-slate-900 hover:shadow-sm"
+                className="h-8 rounded-lg px-2.5 text-[11px] font-medium text-slate-600 transition-all duration-150 hover:bg-slate-50 hover:text-slate-900"
                 style={{ color: colors.textSecondary }}
                 title="Zoom 100%, przewijanie lewy górny róg, pan wyzerowany"
               >
@@ -870,7 +871,7 @@ function WarehouseCanvasInner({
             <span className="hidden h-6 w-px shrink-0 bg-slate-200/80 sm:block" aria-hidden />
             {!isLiveView && (
               <div
-                className="flex items-center gap-1 rounded-lg border border-slate-200/55 bg-slate-100/40 p-0.5"
+                className={warehouseToolGroupClass}
                 role="group"
                 aria-label="Narzędzia rysowania i lokalizacji"
               >
@@ -898,7 +899,7 @@ function WarehouseCanvasInner({
                 <span className="hidden h-6 w-px shrink-0 bg-slate-200/80 sm:block" aria-hidden />
                 <div className="flex shrink-0 flex-col gap-0.5 sm:flex-row sm:items-center sm:gap-2" role="group" aria-label="Elementy pomocnicze">
                   <span className="whitespace-nowrap pl-0.5 text-[9px] font-bold uppercase tracking-[0.14em] text-slate-400">Pomocnicze</span>
-                  <div className="flex items-center rounded-lg border border-slate-200/55 bg-slate-100/40 p-0.5">
+                  <div className={warehouseToolGroupClass}>
                     <button
                       type="button"
                       onClick={() => setAisleToolActive((a) => !a)}
@@ -912,7 +913,7 @@ function WarehouseCanvasInner({
               </>
             )}
             <span className="hidden h-6 w-px shrink-0 bg-slate-200/80 md:block" aria-hidden />
-            <div className="flex items-center rounded-lg border border-slate-200/55 bg-slate-100/40 p-0.5" role="group" aria-label="Widok siatki i etykiet">
+            <div className={warehouseToolGroupClass} role="group" aria-label="Widok siatki i etykiet">
               <button type="button" onClick={() => setShowGrid((g) => !g)} className={`h-8 rounded-md px-3 text-[11px] font-semibold transition-all duration-150 ${showGrid ? "bg-white text-slate-900 shadow-sm ring-1 ring-slate-200/90" : "text-slate-600 hover:bg-white/80 hover:text-slate-900"}`} title="Widoczna siatka">Siatka</button>
               <span className="w-px self-stretch bg-slate-200/70" aria-hidden />
               <button type="button" onClick={() => setShowLabels((v) => !v)} className={`h-8 rounded-md px-3 text-[11px] font-semibold transition-all duration-150 ${showLabels ? "bg-white text-slate-900 shadow-sm ring-1 ring-slate-200/90" : "text-slate-600 hover:bg-white/80 hover:text-slate-900"}`} title="Nazwy regałów i etykiety elementów">Etykiety</button>
