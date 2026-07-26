@@ -421,7 +421,7 @@ export function RackSidebar({
         {!catalogCollapsed && (
       <div
         ref={templateListScrollRef}
-        className="designer-rail-scroll flex min-h-28 min-w-0 flex-1 flex-col overflow-y-auto overscroll-y-contain pr-0.5"
+        className="designer-rail-scroll flex min-h-28 min-w-0 flex-1 flex-col overflow-y-auto overscroll-y-contain px-1"
       >
       <div className="mb-3 space-y-1.5">
         {templatesForSidebar.length === 0 && (

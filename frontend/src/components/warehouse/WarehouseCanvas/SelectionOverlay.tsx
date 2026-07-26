@@ -104,12 +104,13 @@ export function SelectionOverlay(props: SelectionOverlayProps) {
   if (draggingRackId != null) return null;
   if (editingRackId != null && rackMatchesSlotRackId(selectedRack, editingRackId)) return null;
   const rackKey = rackPrimaryId(selectedRack);
+  const toolbarTop = Math.max(4, cellToPx(selectedRack.y, cellPx) - 32);
   return (
     <div
       className="absolute z-[50] flex gap-0.5 shadow-lg rounded overflow-hidden border border-cyan-500/50 bg-slate-800"
       style={{
         left: cellToPx(selectedRack.x, cellPx),
-        top: cellToPx(selectedRack.y, cellPx) - 32,
+        top: toolbarTop,
         pointerEvents: "auto",
       }}
       onClick={(e) => e.stopPropagation()}

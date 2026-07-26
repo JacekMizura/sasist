@@ -545,6 +545,7 @@ function WarehouseCanvasInner({
   type SpecialKey = "pick_start" | "packing" | "dock";
   const [draggingSpecial, setDraggingSpecial] = useState<{ key: SpecialKey; id: number } | null>(null);
   const [dragPreviewCell, setDragPreviewCell] = useState<{ x: number; y: number } | null>(null);
+  const [selectedSpecialKey, setSelectedSpecialKey] = useState<SpecialKey | null>(null);
   const [contextMenu, setContextMenu] = useState<{ id: number; key: SpecialKey; x: number; y: number } | null>(null);
   const contextMenuRef = useRef<HTMLDivElement | null>(null);
 
@@ -559,10 +560,30 @@ function WarehouseCanvasInner({
     return () => document.removeEventListener("click", onDocClick);
   }, [contextMenu]);
 
+  useEffect(() => {
+    if (!selectedSpecialKey || !onDeleteSpecialLocation || !isEditMode) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Delete" && e.key !== "Backspace") return;
+      const t = e.target as HTMLElement | null;
+      if (t?.closest?.("input, textarea, select, [contenteditable=true]")) return;
+      const loc = specialLocations[selectedSpecialKey];
+      if (!loc) return;
+      e.preventDefault();
+      onDeleteSpecialLocation(loc.id);
+      setSelectedSpecialKey(null);
+      setContextMenu(null);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [selectedSpecialKey, onDeleteSpecialLocation, isEditMode, specialLocations]);
+
   const handleSpecialPointerDown = useCallback(
     (e: React.PointerEvent, key: SpecialKey, id: number) => {
       e.stopPropagation();
       if (!isEditMode) return;
+      setSelectedSpecialKey(key);
+      // Only primary button starts drag — right-click must reach contextmenu for Usuń.
+      if (e.button !== 0) return;
       if (onUpdateSpecialLocation) setDraggingSpecial({ key, id });
     },
     [isEditMode, onUpdateSpecialLocation]
@@ -572,6 +593,7 @@ function WarehouseCanvasInner({
     (e: React.MouseEvent, key: SpecialKey, id: number) => {
       e.preventDefault();
       e.stopPropagation();
+      setSelectedSpecialKey(key);
       if (onDeleteSpecialLocation) setContextMenu({ id, key, x: e.clientX, y: e.clientY });
     },
     [onDeleteSpecialLocation]
@@ -593,6 +615,10 @@ function WarehouseCanvasInner({
     (e: React.MouseEvent<HTMLElement>) => {
       if (!isEditMode) return;
       if (draggingSpecial) return;
+      const el = e.target as Element | null;
+      if (!el?.closest?.("[data-special-location]")) {
+        setSelectedSpecialKey(null);
+      }
       onMouseDown(e as unknown as React.MouseEvent<SVGSVGElement>);
     },
     [isEditMode, draggingSpecial, onMouseDown]
@@ -654,6 +680,8 @@ function WarehouseCanvasInner({
   const height = gridRows * cellPx;
   const scaledCanvasW = width * zoom;
   const scaledCanvasH = height * zoom;
+  /** Room above first rack row for selection chrome (Copy / Grid / Delete). */
+  const mapContentSafeTopPx = isExportMode ? 0 : 40;
 
   const viewResetKeyRef = React.useRef<string | null>(null);
   /** Warehouse or layout document identity change: only reset pan/scroll when there is no stored camera. */
@@ -852,7 +880,6 @@ function WarehouseCanvasInner({
               </button>
             </div>
           )}
-          {!isExportMode ? <WarehouseZoomControls zoom={zoom} setZoom={setZoom} /> : null}
           {isEditMode && (
           <div
             className="flex min-h-0 min-w-0 shrink-0 flex-wrap items-center gap-x-2.5 gap-y-2 border-b border-slate-200/55 bg-gradient-to-b from-slate-50/98 to-white/95 px-3 py-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.75)] backdrop-blur-[4px]"
@@ -1035,7 +1062,9 @@ function WarehouseCanvasInner({
             )}
           </div>
           )}
-          <div
+          <div className="relative m-0 flex min-h-0 min-w-0 max-w-full flex-1 basis-0 flex-col overflow-hidden p-0">
+            {!isExportMode ? <WarehouseZoomControls zoom={zoom} setZoom={setZoom} /> : null}
+            <div
             ref={viewportRef}
             className="warehouse-map-viewport relative m-0 h-full min-h-0 w-full min-w-0 max-w-full flex-1 basis-0 overflow-auto p-0"
             style={{
@@ -1141,7 +1170,8 @@ function WarehouseCanvasInner({
                 minWidth: scaledCanvasW,
                 minHeight: scaledCanvasH,
                 position: "relative",
-                boxSizing: "border-box",
+                boxSizing: "content-box",
+                paddingTop: mapContentSafeTopPx,
                 backgroundColor: isExportMode ? "#ffffff" : undefined,
               }}
             >
@@ -1510,7 +1540,14 @@ function WarehouseCanvasInner({
                         onPointerDown={(e) => handleSpecialPointerDown(e, "pick_start", specialLocations.pick_start!.id)}
                         onContextMenu={(e) => handleSpecialContextMenu(e, "pick_start", specialLocations.pick_start!.id)}
                       >
-                        <circle cx={half} cy={half} r={half + 2} fill="#dcfce7" stroke="#166534" strokeWidth={1.5} />
+                        <circle
+                          cx={half}
+                          cy={half}
+                          r={half + 2}
+                          fill="#dcfce7"
+                          stroke={selectedSpecialKey === "pick_start" ? "#14532d" : "#166534"}
+                          strokeWidth={selectedSpecialKey === "pick_start" ? 2.5 : 1.5}
+                        />
                         <MapPin size={iconSize} strokeWidth={2} style={{ overflow: "visible" }} />
                       </g>
                     );
@@ -1539,7 +1576,14 @@ function WarehouseCanvasInner({
                         onPointerDown={(e) => handleSpecialPointerDown(e, "packing", specialLocations.packing!.id)}
                         onContextMenu={(e) => handleSpecialContextMenu(e, "packing", specialLocations.packing!.id)}
                       >
-                        <circle cx={half} cy={half} r={half + 2} fill="#dbeafe" stroke="#1d4ed8" strokeWidth={1.5} />
+                        <circle
+                          cx={half}
+                          cy={half}
+                          r={half + 2}
+                          fill="#dbeafe"
+                          stroke={selectedSpecialKey === "packing" ? "#1e3a8a" : "#1d4ed8"}
+                          strokeWidth={selectedSpecialKey === "packing" ? 2.5 : 1.5}
+                        />
                         <Package size={iconSize} strokeWidth={2} style={{ overflow: "visible" }} />
                       </g>
                     );
@@ -1566,7 +1610,12 @@ function WarehouseCanvasInner({
                         onPointerDown={(e) => handleSpecialPointerDown(e, "dock", specialLocations.dock!.id)}
                         onContextMenu={(e) => handleSpecialContextMenu(e, "dock", specialLocations.dock!.id)}
                       >
-                        <polygon points={points} fill="#6b7280" stroke="#4b5563" strokeWidth={2} />
+                        <polygon
+                          points={points}
+                          fill="#6b7280"
+                          stroke={selectedSpecialKey === "dock" ? "#111827" : "#4b5563"}
+                          strokeWidth={selectedSpecialKey === "dock" ? 3 : 2}
+                        />
                         <text x={px} y={py + 1} textAnchor="middle" fontSize={Math.max(8, cellPx * 0.3)} fill="#fff" fontWeight="bold">DOCK</text>
                       </g>
                     );
@@ -1792,6 +1841,7 @@ function WarehouseCanvasInner({
                 {cursorCm.x} cm × {cursorCm.y} cm
               </p>
             )}
+          </div>
           </div>
         </>
       )}
