@@ -620,7 +620,6 @@ export function RackLayer({
                   name={label}
                   occupancyPct={occupancyRounded}
                   occupied={occ.occupiedLocations}
-                  free={occ.freeLocations}
                   total={occ.locationCount}
                   volumePct={occ.volumePct != null ? Math.round(occ.volumePct) : null}
                   color={labelFill}
@@ -951,7 +950,6 @@ type RackInlineDetailCardProps = {
   name: string;
   occupancyPct: number;
   occupied: number;
-  free: number;
   total: number;
   volumePct: number | null;
   color: string;
@@ -959,36 +957,37 @@ type RackInlineDetailCardProps = {
   height: number;
 };
 
+/**
+ * In-rack KPI card: occupancy % dominates, then locations used, then optional volume.
+ * Presentation only — no separate "free" / "total" rows.
+ */
 function RackInlineDetailCard({
   name,
   occupancyPct,
   occupied,
-  free,
   total,
   volumePct,
   color,
   width,
   height,
 }: RackInlineDetailCardProps) {
-  const full = width >= 56 && height >= 58;
-  const compact = !full && width >= 36 && height >= 28;
-  const fontSize = full
-    ? Math.max(8, Math.min(11, Math.min(width * 0.14, height * 0.13)))
-    : Math.max(7, Math.min(10, Math.min(width * 0.18, height * 0.22)));
-  const titleSize = full ? fontSize + 1 : fontSize;
-  const row = (label: string, value: string | number) => (
-    <div
-      style={{
-        display: "flex",
-        justifyContent: "space-between",
-        gap: 6,
-        opacity: 0.95,
-      }}
-    >
-      <span>{label}</span>
-      <span style={{ fontVariantNumeric: "tabular-nums", fontWeight: 600 }}>{value}</span>
-    </div>
-  );
+  const full = width >= 64 && height >= 62;
+  const compact = !full && width >= 40 && height >= 32;
+  const showVolume = full && volumePct != null && height >= 78;
+
+  const nameSize = full
+    ? Math.max(9, Math.min(12, width * 0.13))
+    : Math.max(8, Math.min(11, width * 0.16));
+  const kpiSize = full
+    ? Math.max(16, Math.min(28, Math.min(width * 0.34, height * 0.32)))
+    : Math.max(12, Math.min(18, Math.min(width * 0.36, height * 0.4)));
+  const bodySize = full
+    ? Math.max(8, Math.min(10.5, width * 0.11))
+    : Math.max(7, Math.min(9, width * 0.12));
+  const metaSize = Math.max(7, Math.min(9, bodySize - 1));
+
+  const locationsLine =
+    total > 0 ? `${occupied} z ${total} lokalizacji zajętych` : "Brak lokalizacji";
 
   return (
     <div
@@ -999,47 +998,110 @@ function RackInlineDetailCard({
         boxSizing: "border-box",
         color,
         fontFamily: "ui-sans-serif, system-ui, sans-serif",
-        fontSize,
-        lineHeight: 1.25,
         display: "flex",
         flexDirection: "column",
         justifyContent: full ? "flex-start" : "center",
-        gap: full ? 2 : 1,
+        gap: full ? 3 : 2,
         overflow: "hidden",
-        opacity: 1,
         animation: `wh-rack-detail-in ${RACK_DETAIL_TRANSITION_MS}ms ease`,
       }}
     >
       <style>{`@keyframes wh-rack-detail-in{from{opacity:0}to{opacity:1}}`}</style>
       <div
         style={{
-          fontWeight: 700,
-          fontSize: titleSize,
-          marginBottom: full ? 2 : 0,
+          fontWeight: 600,
+          fontSize: nameSize,
+          letterSpacing: "0.01em",
+          opacity: 0.92,
           whiteSpace: "nowrap",
           overflow: "hidden",
           textOverflow: "ellipsis",
+          lineHeight: 1.15,
         }}
       >
         {name}
       </div>
-      {full ? (
+      {full || compact ? (
         <>
-          {row("Zajętość", `${occupancyPct}%`)}
-          {row("Zajęte", occupied)}
-          {row("Wolne", free)}
-          {row("Razem", total)}
-          {volumePct != null ? row("Objętość", `${volumePct}%`) : null}
-        </>
-      ) : compact ? (
-        <>
-          <div style={{ fontWeight: 600 }}>{occupancyPct}%</div>
-          <div style={{ opacity: 0.9, fontSize: Math.max(7, fontSize - 1) }}>
-            {occupied}/{total}
+          <div
+            style={{
+              fontWeight: 800,
+              fontSize: kpiSize,
+              lineHeight: 0.95,
+              fontVariantNumeric: "tabular-nums",
+              letterSpacing: "-0.03em",
+            }}
+          >
+            {occupancyPct}%
           </div>
+          <div
+            style={{
+              fontSize: bodySize,
+              fontWeight: 500,
+              lineHeight: 1.2,
+              opacity: 0.9,
+              maxWidth: "100%",
+            }}
+          >
+            {full ? (
+              locationsLine
+            ) : (
+              <>
+                <span style={{ fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>
+                  {occupied}/{total}
+                </span>
+                <span style={{ opacity: 0.85 }}> zajętych</span>
+              </>
+            )}
+          </div>
+          {showVolume ? (
+            <div
+              style={{
+                marginTop: 2,
+                paddingTop: 3,
+                borderTop: `1px solid ${color === "#ffffff" ? "rgba(255,255,255,0.28)" : "rgba(15,23,42,0.18)"}`,
+                display: "flex",
+                flexDirection: "column",
+                gap: 1,
+                minWidth: 0,
+              }}
+            >
+              <span
+                style={{
+                  fontSize: metaSize,
+                  fontWeight: 600,
+                  letterSpacing: "0.04em",
+                  textTransform: "uppercase",
+                  opacity: 0.72,
+                  lineHeight: 1.1,
+                }}
+              >
+                Objętość
+              </span>
+              <span
+                style={{
+                  fontSize: bodySize + 0.5,
+                  fontWeight: 700,
+                  fontVariantNumeric: "tabular-nums",
+                  lineHeight: 1.1,
+                }}
+              >
+                {volumePct}%
+              </span>
+            </div>
+          ) : null}
         </>
       ) : (
-        <div style={{ fontWeight: 700 }}>{occupancyPct}%</div>
+        <div
+          style={{
+            fontWeight: 800,
+            fontSize: kpiSize,
+            lineHeight: 1,
+            fontVariantNumeric: "tabular-nums",
+          }}
+        >
+          {occupancyPct}%
+        </div>
       )}
     </div>
   );
