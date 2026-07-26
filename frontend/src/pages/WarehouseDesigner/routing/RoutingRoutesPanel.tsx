@@ -20,9 +20,9 @@ import {
   PrimaryButton,
   SecondaryButton,
   Select,
-  warehouseRailBgClass,
-  warehouseSectionLabelClass,
+  Toolbar,
 } from "../../../design-system";
+import { WarehouseRailSection } from "../../../components/warehouse/WarehouseLeftRail";
 
 export { deleteSelectedNode } from "./routingNodeActions";
 
@@ -118,89 +118,96 @@ export function RoutingRoutesPanel({
   };
 
   return (
-    <aside
-      className={`flex h-full min-h-0 w-[320px] shrink-0 flex-col gap-3 overflow-auto border-l border-slate-200 ${warehouseRailBgClass} p-4 text-[12px] text-slate-700 shadow-[-4px_0_24px_rgba(15,23,42,0.04)]`}
-    >
-      <div>
-        <div className={warehouseSectionLabelClass}>Sieć tras</div>
-        <p className="mt-1 text-[11px] text-slate-500">
+    <div className="text-[12px] text-slate-700">
+      <WarehouseRailSection title="Sieć tras">
+        <p className="text-[11px] text-slate-500">
           Rysuj drogi magazynowe. Jedna wspólna sieć dla wszystkich procesów.
         </p>
-      </div>
+      </WarehouseRailSection>
 
-      <div className="flex flex-wrap gap-1">
-        {(
-          [
-            ["draw_edge", "Rysuj"],
-            ["select", "Wybierz"],
-            ["edit", "Edytuj"],
-            ["test_route", "Testuj"],
-          ] as const
-        ).map(([id, label]) => (
-          <CardButton
-            key={id}
-            density="compact"
-            active={tool === id}
-            onClick={() => {
-              setTool(id);
-            }}
-          >
-            {label}
-          </CardButton>
-        ))}
-      </div>
+      <WarehouseRailSection title="Narzędzia">
+        <Toolbar
+          start={
+            (
+              [
+                ["draw_edge", "Rysuj"],
+                ["select", "Wybierz"],
+                ["edit", "Edytuj"],
+                ["test_route", "Testuj"],
+              ] as const
+            ).map(([id, label]) => (
+              <CardButton
+                key={id}
+                density="compact"
+                active={tool === id}
+                onClick={() => {
+                  setTool(id);
+                }}
+              >
+                {label}
+              </CardButton>
+            ))
+          }
+        />
+      </WarehouseRailSection>
 
       {tool === "draw_edge" && (
-        <p className="text-[11px] text-sky-900">
+        <p className="mb-3 text-[11px] text-sky-900">
           Klikaj kolejne miejsca — odcinki i skrzyżowania powstają automatycznie, gdy drogi się
           przecinają lub łączą. Enter / Esc kończy bieżącą drogę.
         </p>
       )}
       {tool === "select" && (
-        <p className="text-[11px] text-slate-600">
+        <p className="mb-3 text-[11px] text-slate-600">
           Tylko zaznaczanie i podgląd — bez przesuwania punktów.
         </p>
       )}
       {tool === "edit" && (
-        <p className="text-[11px] text-amber-900">
+        <p className="mb-3 text-[11px] text-amber-900">
           Edycja grafu: przeciągaj punkty, scalaj / usuwaj, przepinaj końce odcinków. Bez edycji
           przejazdów (Projektowanie).
         </p>
       )}
 
-      <div className="flex gap-2">
-        <PrimaryButton
-          type="button"
-          disabled={routing.saving || !routing.dirty}
-          onClick={() => void routing.save()}
-          className="flex-1"
-        >
-          {routing.saving ? "Zapisywanie…" : "Zapisz sieć"}
-        </PrimaryButton>
-        <SecondaryButton
-          density="compact"
-          onClick={() => void routing.runValidate()}
-          className="flex-1"
-        >
-          Sprawdź sieć
-        </SecondaryButton>
-      </div>
+      <WarehouseRailSection>
+        <Toolbar
+          start={
+            <>
+              <PrimaryButton
+                type="button"
+                disabled={routing.saving || !routing.dirty}
+                onClick={() => void routing.save()}
+                className="flex-1"
+              >
+                {routing.saving ? "Zapisywanie…" : "Zapisz sieć"}
+              </PrimaryButton>
+              <SecondaryButton
+                density="compact"
+                onClick={() => void routing.runValidate()}
+                className="flex-1"
+              >
+                Sprawdź sieć
+              </SecondaryButton>
+            </>
+          }
+        />
+      </WarehouseRailSection>
 
       {routing.error && (
-        <div className="rounded-md bg-rose-50 px-2 py-1 text-rose-700">
+        <div className="mb-3 rounded-md bg-rose-50 px-2 py-1 text-rose-700">
           {routing.error}
           <GhostButton density="compact" className="ml-2" onClick={() => void routing.load()}>
             Odśwież
           </GhostButton>
         </div>
       )}
-      {routing.dirty && <div className="text-amber-700">Niezapisane zmiany</div>}
+      {routing.dirty && <div className="mb-3 text-amber-700">Niezapisane zmiany</div>}
 
       {showIdle && (
-        <div className="text-[11px] text-slate-500">
+        <div className="mb-3 text-[11px] text-slate-500">
           {routing.nodes.length} punktów · {routing.edges.length} odcinków
           {orphans.length > 0 && (
-            <div className="mt-2 rounded-md border border-amber-200 bg-amber-50 p-2 text-amber-900">
+            <Card variant="section" density="compact" className="mt-2 space-y-2 border-amber-200 bg-amber-50 text-amber-900">
               {routing.edges.length === 0
                 ? `Sieć zawiera ${orphans.length} niepołączonych punktów. Możesz je usunąć i narysować sieć od nowa.`
                 : orphans.length === 1
@@ -209,12 +216,12 @@ export function RoutingRoutesPanel({
               <PrimaryButton
                 intent="warning"
                 density="compact"
-                className="mt-1 w-full"
+                className="w-full"
                 onClick={removeOrphansAction}
               >
                 Usuń niepołączone punkty
               </PrimaryButton>
-            </div>
+            </Card>
           )}
         </div>
       )}
@@ -234,10 +241,8 @@ export function RoutingRoutesPanel({
         return (
           <>
             {structural.length > 0 && (
+              <WarehouseRailSection title={structuralBad ? "Uwagi do sieci" : "Sieć — ostrzeżenia"}>
               <Card variant="section" density="compact" className="space-y-2">
-                <div className="font-semibold">
-                  {structuralBad ? "Uwagi do sieci" : "Sieć — ostrzeżenia"}
-                </div>
                 <ul className="max-h-40 space-y-2 overflow-auto">
                   {structural.map((i, idx) => (
                     <li
@@ -295,14 +300,15 @@ export function RoutingRoutesPanel({
                   </GhostButton>
                 )}
               </Card>
+              </WarehouseRailSection>
             )}
             {structural.length === 0 && routing.validation.operational_ready && (
-              <div className="rounded-lg border border-emerald-100 bg-emerald-50/50 p-2 font-semibold text-emerald-800">
+              <Card variant="section" density="compact" className="mb-3 border-emerald-100 bg-emerald-50/50 font-semibold text-emerald-800">
                 Sieć w porządku
-              </div>
+              </Card>
             )}
             {structural.length === 0 && !routing.validation.operational_ready && (
-              <div className="text-[10px] text-slate-500">Struktura sieci jest poprawna.</div>
+              <div className="mb-3 text-[10px] text-slate-500">Struktura sieci jest poprawna.</div>
             )}
           </>
         );
@@ -326,8 +332,8 @@ export function RoutingRoutesPanel({
 
       {/* TEST — map-first flow */}
       {tool === "test_route" && (
-        <div className="space-y-2 rounded-lg border border-sky-100 bg-sky-50/60 p-2">
-          <div className="font-semibold text-sky-900">Testuj trasę</div>
+        <WarehouseRailSection title="Testuj trasę">
+        <Card variant="section" density="compact" className="space-y-2 border-sky-100 bg-sky-50/60">
           <p className="text-[11px] text-sky-900">
             {!testStartUuid
               ? "Kliknij punkt początkowy na mapie."
@@ -472,7 +478,8 @@ export function RoutingRoutesPanel({
               )}
             </div>
           )}
-        </div>
+        </Card>
+        </WarehouseRailSection>
       )}
 
       {editingPoint && selectedNode && (
@@ -498,7 +505,7 @@ export function RoutingRoutesPanel({
       )}
 
       {showIdle && routing.nodes.length > 0 && (
-        <div className="mt-auto space-y-2 border-t border-slate-100 pt-2">
+        <WarehouseRailSection separated>
           <DangerButton
             density="compact"
             className="w-full"
@@ -526,8 +533,8 @@ export function RoutingRoutesPanel({
           >
             Wyczyść sieć
           </DangerButton>
-        </div>
+        </WarehouseRailSection>
       )}
-    </aside>
+    </div>
   );
 }

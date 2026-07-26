@@ -10,6 +10,8 @@ export type WarehouseShellProps = {
   topActions?: ReactNode;
   /** Magazyn | Projektowanie (or other) tab row — controlled buttons. */
   tabsSlot: ReactNode;
+  /** CTA on the right of the tab row (preferred via WarehouseModuleLayout). */
+  tabsTrailing?: ReactNode;
   tabsAriaLabel?: string;
   /** Page body under tabs (split + canvas + rails). */
   children: ReactNode;
@@ -17,15 +19,27 @@ export type WarehouseShellProps = {
 
 /**
  * Layout-only shell for warehouse modes (live / designer).
+ * Prefer {@link WarehouseModuleLayout} for the full module chrome.
  * Wraps Layout 2.0 {@link PageLayout} + {@link SettingsModuleStack} — does not own feature logic.
  */
 export function WarehouseShell({
   breadcrumbs,
   topActions,
   tabsSlot,
+  tabsTrailing,
   tabsAriaLabel = "Widok magazynu",
   children,
 }: WarehouseShellProps) {
+  const tabRow =
+    tabsTrailing != null ? (
+      <div className="flex items-end justify-between gap-4">
+        <div className="min-w-0 flex-1">{tabsSlot}</div>
+        <div className="mb-0.5 shrink-0 pb-0.5">{tabsTrailing}</div>
+      </div>
+    ) : (
+      tabsSlot
+    );
+
   return (
     <PageLayout
       fullBleed
@@ -39,7 +53,7 @@ export function WarehouseShell({
         breadcrumbs={breadcrumbs}
         actions={topActions}
         tabsAriaLabel={tabsAriaLabel}
-        tabsSlot={tabsSlot}
+        tabsSlot={tabRow}
       >
         {children}
       </SettingsModuleStack>

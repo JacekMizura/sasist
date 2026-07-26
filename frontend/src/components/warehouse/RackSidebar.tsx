@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useRef, useState, type MouseEvent } from "react";
 import { useWheelScrollBoundaryContain } from "../../hooks/useWheelScrollBoundaryContain";
 import { Plus, Wand2 } from "lucide-react";
 import type { LayoutState, CustomRackTemplate, CatalogItem, VisualElementType, RackType } from "../../types/warehouse";
@@ -41,11 +41,11 @@ import {
   SegmentedItem,
   SearchInput,
   Input,
-  warehouseLeftRailClass,
-  warehouseListTileClass,
-  warehouseListTileSelectedClass,
+  ListTile,
+  Toolbar,
   warehouseSectionLabelClass,
 } from "../../design-system";
+import { WarehouseRailSection } from "./WarehouseLeftRail";
 import { normalizeBinTypeMap } from "../../utils/storageTypes";
 import { buildTemplateUsageData } from "./templateUsage";
 
@@ -198,7 +198,7 @@ export function RackSidebar({
   );
 
   return (
-    <aside className={warehouseLeftRailClass}>
+    <div>
       {!showOnlyCatalog && (
       <SegmentedControl className="mb-3 shrink-0">
         <SegmentedItem
@@ -220,8 +220,7 @@ export function RackSidebar({
       </SegmentedControl>
       )}
       {!showOnlyCatalog && selectedRowContainerId && (
-        <div className="mb-3 shrink-0 border-b border-slate-200/70 pb-3">
-          <div className={`mb-1.5 ${warehouseSectionLabelClass}`}>Zaznaczony rząd</div>
+        <WarehouseRailSection title="Zaznaczony rząd" separated>
           {(["rack", "bin"] as const).map((kind) => {
             const rcSel = (layout.row_containers ?? []).find((rc) => rc.id === selectedRowContainerId);
             const current =
@@ -270,14 +269,13 @@ export function RackSidebar({
               </fieldset>
             );
           })}
-        </div>
+        </WarehouseRailSection>
       )}
-      <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+      <div>
       {(showOnlyCatalog || activeTab === "catalog") && (
         <>
       {onOpenEditBuilding != null && (
-        <div className="mb-2.5 border-b border-slate-100 pb-2.5">
-          <div className={`mb-1 ${warehouseSectionLabelClass}`}>Budynek</div>
+        <WarehouseRailSection title="Budynek">
           {hasBuilding ? (
             <>
               <div className="flex items-center justify-between gap-2">
@@ -309,14 +307,15 @@ export function RackSidebar({
               ? <div className="text-sm text-slate-600">Brak ustawionych wymiarów</div>
               : <button type="button" onClick={onOpenEditBuilding} className="text-sm text-cyan-600 hover:underline">Ustaw wymiary budynku</button>
           )}
-        </div>
+        </WarehouseRailSection>
       )}
-      <div className="mb-0 flex min-h-0 min-w-0 flex-1 flex-col border-t border-slate-100/90 pt-2.5">
-        <div className="shrink-0">
+      <div className="border-t border-slate-100/90 pt-2.5">
+        <div>
         {!isReadMode && !showOnlyCatalog && (
-          <div className="mb-2">
-            <div className={`mb-1 ${warehouseSectionLabelClass}`}>Typ regału</div>
-            <div className="flex min-w-0 gap-1.5">
+          <WarehouseRailSection title="Typ regału">
+            <Toolbar
+              start={
+                <>
               <CardButton
                 className="min-w-0 flex-1"
                 active={manualRackType === "warehouse"}
@@ -331,8 +330,10 @@ export function RackSidebar({
               >
                 Sklepowy
               </CardButton>
-            </div>
-          </div>
+                </>
+              }
+            />
+          </WarehouseRailSection>
         )}
         <div className="mb-1.5 flex items-center justify-between gap-2">
           <button
@@ -392,7 +393,7 @@ export function RackSidebar({
         {!catalogCollapsed && (
       <div
         ref={templateListScrollRef}
-        className="designer-rail-scroll flex min-h-28 min-w-0 flex-1 flex-col overflow-y-auto overscroll-y-contain px-1"
+        className="space-y-1.5"
       >
       <div className="mb-3 space-y-1.5">
         {templatesForSidebar.length === 0 && (
@@ -400,16 +401,16 @@ export function RackSidebar({
         )}
 
         {usedTemplates.length > 0 && (
-            <div className="mt-0.5">
-            <div className={`mb-1 ${warehouseSectionLabelClass}`}>Użyte w układzie</div>
+            <WarehouseRailSection title="Użyte w układzie">
             <div className="space-y-1.5">
               {usedTemplates.map((t) => {
                 const count = templateUsageCounts.get(t.id) ?? 0;
                 const item: CatalogItem = { type: "custom", template: t };
                 const isRowSelected = !showOnlyCatalog && sameCatalogItem(rowToolTemplate, item);
                 return (
-                  <div
+                  <ListTile
                     key={t.id}
+                    selected={isRowSelected}
                     draggable={!showOnlyCatalog}
                     onDragStart={!showOnlyCatalog ? (e) => {
                       if ((e.target as HTMLElement).closest("[data-no-row-select]")) {
@@ -432,7 +433,7 @@ export function RackSidebar({
                       }
                       setRowToolTemplate(item);
                     } : () => setPreviewTemplateId(t.id)}
-                    className={`${isRowSelected ? warehouseListTileSelectedClass : warehouseListTileClass} ${showOnlyCatalog ? "cursor-default" : `cursor-pointer ${isRowSelected ? "" : "cursor-grab active:cursor-grabbing"}`}`}
+                    className={showOnlyCatalog ? "cursor-default" : `cursor-pointer ${isRowSelected ? "" : "cursor-grab active:cursor-grabbing"}`}
                   >
                     <div className="flex items-start justify-between gap-2">
                       <div className="flex min-w-0 flex-1 gap-2">
@@ -489,23 +490,23 @@ export function RackSidebar({
                         </div>
                       )}
                     </div>
-                  </div>
+                  </ListTile>
                 );
               })}
             </div>
-          </div>
+            </WarehouseRailSection>
         )}
 
         {availableTemplates.length > 0 && (
-          <div className="mt-2 border-t border-slate-100 pt-2">
-            <div className={`mb-1 ${warehouseSectionLabelClass}`}>Dostępne szablony</div>
+          <WarehouseRailSection title="Dostępne szablony" separated>
             <div className="space-y-1.5">
               {availableTemplates.map((t) => {
                 const item: CatalogItem = { type: "custom", template: t };
                 const isRowSelected = !showOnlyCatalog && sameCatalogItem(rowToolTemplate, item);
                 return (
-                  <div
+                  <ListTile
                     key={t.id}
+                    selected={isRowSelected}
                     draggable={!showOnlyCatalog}
                     onDragStart={!showOnlyCatalog ? (e) => {
                       if ((e.target as HTMLElement).closest("[data-no-row-select]")) {
@@ -528,7 +529,7 @@ export function RackSidebar({
                       }
                       setRowToolTemplate(item);
                     } : () => setPreviewTemplateId(t.id)}
-                    className={`${isRowSelected ? warehouseListTileSelectedClass : warehouseListTileClass} ${showOnlyCatalog ? "cursor-default" : `cursor-pointer ${isRowSelected ? "" : "cursor-grab active:cursor-grabbing"}`}`}
+                    className={showOnlyCatalog ? "cursor-default" : `cursor-pointer ${isRowSelected ? "" : "cursor-grab active:cursor-grabbing"}`}
                   >
                     <div className="flex items-start justify-between gap-2">
                       <div className="flex min-w-0 flex-1 gap-2">
@@ -580,11 +581,11 @@ export function RackSidebar({
                         </div>
                       )}
                     </div>
-                  </div>
+                  </ListTile>
                 );
               })}
             </div>
-          </div>
+          </WarehouseRailSection>
         )}
 
         {/* If both lists are empty but there are templates, fallback to the original renderer is not needed. */}
@@ -682,12 +683,14 @@ export function RackSidebar({
         </>
       )}
       {!showOnlyCatalog && activeTab === "visuals" && (
-        <div className="mb-2 space-y-1.5 border-t border-slate-100 pt-2.5">
-          <h2 className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">{UI_STRINGS.warehouse.rackSidebar.visualElements}</h2>
+        <WarehouseRailSection title={UI_STRINGS.warehouse.rackSidebar.visualElements} separated>
           {setWallElementTool && (
             <>
-              <p className="text-[10px] leading-snug text-slate-500">Kliknij na krawędź budynku (obwód), aby umieścić.</p>
-              <div className="flex min-w-0 gap-1.5">
+              <p className="mb-1.5 text-[10px] leading-snug text-slate-500">Kliknij na krawędź budynku (obwód), aby umieścić.</p>
+              <Toolbar
+                className="mb-1.5"
+                start={
+                  <>
                 <CardButton
                   className="min-w-0 flex-1"
                   active={wallElementTool === "door"}
@@ -702,23 +705,27 @@ export function RackSidebar({
                 >
                   Brama
                 </CardButton>
-              </div>
+                  </>
+                }
+              />
             </>
           )}
-          <p className="text-[10px] leading-snug text-slate-500">{UI_STRINGS.warehouse.rackSidebar.dragOntoPlan}</p>
+          <p className="mb-1.5 text-[10px] leading-snug text-slate-500">{UI_STRINGS.warehouse.rackSidebar.dragOntoPlan}</p>
+          <div className="space-y-1.5">
           {VISUAL_ITEMS.map(({ type, label, size }) => (
-            <div
+            <ListTile
               key={type}
               draggable
               onDragStart={() => setDraggingVisualType(type)}
               onDragEnd={() => { setDraggingVisualType(null); setVisualGhostPosition(null); }}
-              className="cursor-grab rounded-xl bg-amber-50/80 px-2.5 py-2 shadow-sm ring-1 ring-amber-200/70 active:cursor-grabbing hover:bg-amber-50"
+              className="cursor-grab active:cursor-grabbing"
             >
               <div className="text-xs font-semibold text-slate-800">{label}</div>
               <div className="text-[10px] text-slate-500">{size} kom.</div>
-            </div>
+            </ListTile>
           ))}
-        </div>
+          </div>
+        </WarehouseRailSection>
       )}
       {!showOnlyCatalog && activeTab === "catalog" && (
       <div className="mt-2 flex min-h-0 flex-col border-t border-slate-100 pt-2.5">
@@ -739,7 +746,7 @@ export function RackSidebar({
         className="mt-1.5"
         aria-label="Szukaj w liście regałów"
       />
-      <div className="designer-rail-scroll mt-1.5 max-h-36 min-h-0 flex-1 space-y-1 overflow-y-auto">
+      <div className="mt-1.5 space-y-1.5">
         {filteredRacks.length === 0 ? (
           <p className="text-[10px] text-slate-500">{layout.racks.length === 0 ? UI_STRINGS.warehouse.rackSidebar.noRacks : "Brak wyników wyszukiwania"}</p>
         ) : (
@@ -753,10 +760,12 @@ export function RackSidebar({
             const occPct = cap > 0 ? Math.min(100, (used / cap) * 100) : 0;
             const isSel = selectedRackIds.includes(rid);
             return (
-              <button
+              <ListTile
                 key={rid}
-                type="button"
-                onClick={(e) => {
+                selected={isSel}
+                role="button"
+                tabIndex={0}
+                onClick={(e: MouseEvent<HTMLDivElement>) => {
                   if (e.ctrlKey || e.metaKey) {
                     setSelectedRackIds((prev: (string | number)[]) => (isSel ? prev.filter((id: string | number) => id !== rid) : [...prev, rid]));
                   } else {
@@ -764,7 +773,7 @@ export function RackSidebar({
                     setSelectedRackIds([rid]);
                   }
                 }}
-                className={`group w-full text-left text-[11px] ${isSel ? warehouseListTileSelectedClass : warehouseListTileClass} ${isSel ? "text-slate-900" : "text-slate-700"}`}
+                className="group cursor-pointer text-left text-[11px] text-slate-700"
               >
                 <div className="flex flex-col items-start gap-1">
                   <div className="flex w-full items-start justify-between gap-2">
@@ -787,7 +796,7 @@ export function RackSidebar({
                     />
                   </div>
                 </div>
-              </button>
+              </ListTile>
             );
           })
         )}
@@ -950,6 +959,6 @@ export function RackSidebar({
         </div>
         </AppOverlayPortal>
       )}
-    </aside>
+    </div>
   );
 }

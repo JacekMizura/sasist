@@ -46,16 +46,12 @@ import { TopProductsSidebar } from "../components/warehouse/magazyn/TopProductsS
 import { WarehouseReportsPanel } from "../components/warehouse/magazyn/WarehouseReportsPanel";
 import { DamageReportsPanel, type DamagePrefill } from "../components/warehouse/magazyn/DamageReportsPanel";
 import { UI_STRINGS } from "../constants/uiStrings";
-import { AppSplitView } from "../components/layout/app";
-import { tabsNavItemClassName } from "../components/layout/TabsNav";
-import { brandTabsNavRowClassName } from "../design-system/brandUi";
+import { WarehouseModuleLayout, type WarehouseModuleTabId } from "../components/warehouse/WarehouseModuleLayout";
 import {
   PrimaryButton,
   SecondaryButton,
   SuccessButton,
   GhostButton,
-  SegmentedControl,
-  SegmentedItem,
   CardButton,
   Dialog,
   Input,
@@ -64,7 +60,6 @@ import {
   shadows,
 } from "../design-system";
 import { ConfirmModal } from "../components/ui/ConfirmModal";
-import { WarehouseShell } from "../components/warehouse/WarehouseShell";
 import {
   WarehouseModeProvider,
   mainViewToWarehouseMode,
@@ -731,7 +726,7 @@ export default function WarehouseDesigner() {
   }, [routesMode, selectedWarehouseId]);
 
   const selectDesignerView = useCallback(
-    (view: "magazyn" | "layout") => {
+    (view: WarehouseModuleTabId) => {
       if (view === "magazyn") {
         if (routing.dirty && !confirmLeaveRoutingDirty()) return;
         if (routing.dirty) void routing.load();
@@ -741,15 +736,42 @@ export default function WarehouseDesigner() {
         const next = new URLSearchParams(searchParams);
         next.delete("view");
         setSearchParams(next);
-      } else {
+        return;
+      }
+
+      if (view === "routes") {
         setMainView("layout");
+        setSelectedRackId(null);
+        setSelectedRackIds([]);
+        setSelectedPassage(null);
+        setLayoutWorkspace("routes");
+        setRoutingTool("draw_edge");
         const next = new URLSearchParams(searchParams);
         next.set("view", "layout");
         setSearchParams(next);
+        return;
       }
+
+      // layout / Projektowanie magazynu
+      if (layoutWorkspace === "routes" && !confirmLeaveRoutingDirty()) return;
+      if (layoutWorkspace === "routes" && routing.dirty) {
+        void routing.load();
+      }
+      setRoutingSelectedNode(null);
+      setRoutingSelectedEdge(null);
+      setRoutingEdgeDraftFrom(null);
+      setRoutingDraftCursorCm(null);
+      setMainView("layout");
+      setLayoutWorkspace("designing");
+      const next = new URLSearchParams(searchParams);
+      next.set("view", "layout");
+      setSearchParams(next);
     },
-    [searchParams, setSearchParams, routing, confirmLeaveRoutingDirty],
+    [searchParams, setSearchParams, routing, confirmLeaveRoutingDirty, layoutWorkspace],
   );
+
+  const activeModuleTab: WarehouseModuleTabId =
+    mainView === "magazyn" ? "magazyn" : layoutWorkspace === "routes" ? "routes" : "layout";
 
   useEffect(() => {
     if (!routing.dirty) return;
@@ -3633,7 +3655,7 @@ export default function WarehouseDesigner() {
 
   return (
     <WarehouseModeProvider mode={warehouseMode}>
-    <WarehouseShell
+    <WarehouseModuleLayout
       breadcrumbs={[
         { label: UI_STRINGS.navigation.groups.warehouse },
         { label: UI_STRINGS.warehouse.designerSubTabs.layoutDesigner },
@@ -3671,152 +3693,79 @@ export default function WarehouseDesigner() {
           </>
       }
       tabsAriaLabel="Widok magazynu"
-      tabsSlot={
-          <nav
-            className={`${brandTabsNavRowClassName} w-full flex-nowrap overflow-x-auto sm:justify-start [-webkit-overflow-scrolling:touch]`}
-            aria-label="Widok magazynu"
-            role="tablist"
-            data-warehouse-features={activeWarehouseFeatures.join(" ")}
+      tabs={[
+        { id: "magazyn", label: UI_STRINGS.warehouse.designerSubTabs.magazyn },
+        { id: "layout", label: UI_STRINGS.warehouse.designerSubTabs.layoutDesigner },
+        { id: "routes", label: UI_STRINGS.warehouse.designerSubTabs.routes },
+      ]}
+      activeTab={activeModuleTab}
+      onTabChange={selectDesignerView}
+      featuresDataAttr={activeWarehouseFeatures.join(" ")}
+      tabsTrailing={
+        <div className="relative">
+          <SuccessButton
+            type="button"
+            density="compact"
+            onClick={() => setLayoutExportOpen((v) => !v)}
+            aria-expanded={layoutExportOpen}
+            aria-haspopup="menu"
           >
-            <button
-              type="button"
-              role="tab"
-              id="warehouse-designer-tab-magazyn"
-              aria-selected={mainView === "magazyn"}
-              aria-controls="warehouse-designer-panel"
-              tabIndex={mainView === "magazyn" ? 0 : -1}
-              onClick={() => selectDesignerView("magazyn")}
-              className={tabsNavItemClassName(mainView === "magazyn")}
-            >
-              {UI_STRINGS.warehouse.designerSubTabs.magazyn}
-            </button>
-            <button
-              type="button"
-              role="tab"
-              id="warehouse-designer-tab-layout"
-              aria-selected={mainView === "layout"}
-              aria-controls="warehouse-designer-panel"
-              tabIndex={mainView === "layout" ? 0 : -1}
-              onClick={() => selectDesignerView("layout")}
-              className={tabsNavItemClassName(mainView === "layout")}
-            >
-              {UI_STRINGS.warehouse.designerSubTabs.layoutDesigner}
-            </button>
-          </nav>
-      }
-    >
-      {mainView === "layout" ? (
-        <div className="mb-3 flex w-full min-w-0 shrink-0 items-center gap-2" role="tablist" aria-label="Workspace projektanta">
-          <SegmentedControl className="max-w-full flex-none sm:max-w-none">
-            <SegmentedItem
-              type="button"
-              role="tab"
-              aria-selected={layoutWorkspace === "designing"}
-              active={layoutWorkspace === "designing"}
-              className="!flex-none !basis-auto whitespace-nowrap px-3"
-              onClick={() => {
-              if (layoutWorkspace === "routes" && !confirmLeaveRoutingDirty()) return;
-              if (layoutWorkspace === "routes" && routing.dirty) {
-                void routing.load();
-              }
-              // Selection SSOT: leaving Routing clears node/edge.
-              setRoutingSelectedNode(null);
-              setRoutingSelectedEdge(null);
-              setRoutingEdgeDraftFrom(null);
-              setRoutingDraftCursorCm(null);
-              setLayoutWorkspace("designing");
-            }}
-            >
-              {UI_STRINGS.warehouse.designerSubTabs.designing}
-            </SegmentedItem>
-            <SegmentedItem
-              type="button"
-              role="tab"
-              aria-selected={layoutWorkspace === "routes"}
-              active={layoutWorkspace === "routes"}
-              className="!flex-none !basis-auto whitespace-nowrap px-3"
-              onClick={() => {
-              // Selection SSOT: entering Routing clears rack/passage.
-              setSelectedRackId(null);
-              setSelectedRackIds([]);
-              setSelectedPassage(null);
-              setLayoutWorkspace("routes");
-              setRoutingTool("draw_edge");
-            }}
-            >
-              {UI_STRINGS.warehouse.designerSubTabs.routes}
-            </SegmentedItem>
-          </SegmentedControl>
-          <div className="relative ml-auto">
-            <SuccessButton
-              type="button"
-              density="compact"
-              onClick={() => setLayoutExportOpen((v) => !v)}
-              aria-expanded={layoutExportOpen}
-              aria-haspopup="menu"
-            >
-              <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-              </svg>
-              {UI_STRINGS.warehouse.export.button}
-              <span className="opacity-80">▾</span>
-            </SuccessButton>
-            {layoutExportOpen ? (
-              <>
-                <div
-                  className={`absolute right-0 z-20 mt-1 min-w-[14rem] overflow-hidden ${radius.md} border ${colors.border.soft} ${colors.surface.page} py-1 ${shadows.md}`}
-                  role="menu"
+            <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+            </svg>
+            {UI_STRINGS.warehouse.export.button}
+            <span className="opacity-80">▾</span>
+          </SuccessButton>
+          {layoutExportOpen ? (
+            <>
+              <div
+                className={`absolute right-0 z-20 mt-1 min-w-[14rem] overflow-hidden ${radius.md} border ${colors.border.soft} ${colors.surface.page} py-1 ${shadows.md}`}
+                role="menu"
+              >
+                <GhostButton
+                  type="button"
+                  role="menuitem"
+                  density="compact"
+                  className="!h-auto w-full !justify-start !rounded-none px-3 py-2 text-left"
+                  onClick={() => {
+                    handleExportLocationsMapCsv();
+                    setLayoutExportOpen(false);
+                  }}
                 >
-                  <GhostButton
-                    type="button"
-                    role="menuitem"
-                    density="compact"
-                    className="!h-auto w-full !justify-start !rounded-none px-3 py-2 text-left"
-                    onClick={() => {
-                      handleExportLocationsMapCsv();
-                      setLayoutExportOpen(false);
-                    }}
-                  >
-                    {UI_STRINGS.warehouse.rackSidebar.exportLocationsCsv}
-                  </GhostButton>
-                  <GhostButton
-                    type="button"
-                    role="menuitem"
-                    density="compact"
-                    className="!h-auto w-full !justify-start !rounded-none px-3 py-2 text-left"
-                    onClick={() => {
-                      handleExportCsv();
-                      setLayoutExportOpen(false);
-                    }}
-                  >
-                    {UI_STRINGS.warehouse.export.csv}
-                  </GhostButton>
-                  <GhostButton
-                    type="button"
-                    role="menuitem"
-                    density="compact"
-                    className="!h-auto w-full !justify-start !rounded-none px-3 py-2 text-left"
-                    onClick={() => {
-                      handleExportJson();
-                      setLayoutExportOpen(false);
-                    }}
-                  >
-                    {UI_STRINGS.warehouse.export.json}
-                  </GhostButton>
-                </div>
-                <div className="fixed inset-0 z-10" onClick={() => setLayoutExportOpen(false)} aria-hidden />
-              </>
-            ) : null}
-          </div>
+                  {UI_STRINGS.warehouse.rackSidebar.exportLocationsCsv}
+                </GhostButton>
+                <GhostButton
+                  type="button"
+                  role="menuitem"
+                  density="compact"
+                  className="!h-auto w-full !justify-start !rounded-none px-3 py-2 text-left"
+                  onClick={() => {
+                    handleExportCsv();
+                    setLayoutExportOpen(false);
+                  }}
+                >
+                  {UI_STRINGS.warehouse.export.csv}
+                </GhostButton>
+                <GhostButton
+                  type="button"
+                  role="menuitem"
+                  density="compact"
+                  className="!h-auto w-full !justify-start !rounded-none px-3 py-2 text-left"
+                  onClick={() => {
+                    handleExportJson();
+                    setLayoutExportOpen(false);
+                  }}
+                >
+                  {UI_STRINGS.warehouse.export.json}
+                </GhostButton>
+              </div>
+              <div className="fixed inset-0 z-10" onClick={() => setLayoutExportOpen(false)} aria-hidden />
+            </>
+          ) : null}
         </div>
-      ) : null}
-
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-      <AppSplitView
-        className="min-h-0 flex-1"
-        left={
-          mainView === "magazyn" ? (
-          <div className="flex h-full min-h-0 w-[300px] shrink-0 flex-none flex-col overflow-x-hidden overflow-y-auto overscroll-y-contain border-r border-slate-200 px-4 py-4">
+      }
+      leftRail={
+        mainView === "magazyn" ? (
             <MagazynDashboardPanel
               layout={layout}
               customTemplates={customTemplates}
@@ -3847,8 +3796,51 @@ export default function WarehouseDesigner() {
                 setShowDamageReportsPanel(true);
               }}
             />
-          </div>
-        ) : mainView === "layout" ? (
+        ) : routesMode ? (
+          <RoutingRoutesPanel
+              routing={routing}
+              tool={routingTool}
+              setTool={(t) => {
+                setRoutingToolSafe(t);
+                if (t === "draw_edge") {
+                  setRoutingEdgeDraftFrom(null);
+                  setRoutingDraftCursorCm(null);
+                  setRoutingSelectedNode(null);
+                  setRoutingSelectedEdge(null);
+                }
+                if (t === "test_route") {
+                  setTestStartUuid(null);
+                  setTestDestUuid(null);
+                  routing.setTestResult(null);
+                  setRoutingSelectedNode(null);
+                  setRoutingSelectedEdge(null);
+                }
+                if (t === "select" || t === "edit") {
+                  setRoutingEdgeDraftFrom(null);
+                  setRoutingDraftCursorCm(null);
+                }
+              }}
+              selectedNodeUuid={routingSelectedNode}
+              selectedEdgeUuid={routingSelectedEdge}
+              setSelectedNodeUuid={setRoutingSelectedNode}
+              setSelectedEdgeUuid={setRoutingSelectedEdge}
+              testStartUuid={testStartUuid}
+              testDestUuid={testDestUuid}
+              setTestStartUuid={setTestStartUuid}
+              setTestDestUuid={setTestDestUuid}
+              locations={routingLocations}
+              racks={layout.racks}
+              highlightOrphanUuids={highlightOrphanUuids}
+              setHighlightOrphanUuids={setHighlightOrphanUuids}
+              highlightInvalidEdgeUuids={highlightInvalidEdgeUuids}
+              setHighlightInvalidEdgeUuids={setHighlightInvalidEdgeUuids}
+              selectedAccessLocationId={selectedAccessLocationId}
+              showAllAccessProblems={showAllAccessProblems}
+              onSelectAccessProblem={handleSelectAccessProblem}
+              onToggleShowAllAccessProblems={() => setShowAllAccessProblems((v) => !v)}
+              onClearAccessProblemSelection={handleClearAccessProblemSelection}
+            />
+        ) : (
             <RackSidebar
             mode="edit"
             layout={layout}
@@ -3888,13 +3880,11 @@ export default function WarehouseDesigner() {
             setWallElementTool={setWallElementTool}
             selectedRowContainerId={selectedRowContainerId}
           />
-        ) : null
+        )
       }
     >
       <div
         id="warehouse-designer-panel"
-        role="tabpanel"
-        aria-labelledby={mainView === "magazyn" ? "warehouse-designer-tab-magazyn" : "warehouse-designer-tab-layout"}
         className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden"
       >
         {mainView === "magazyn" ? (
@@ -4676,58 +4666,10 @@ export default function WarehouseDesigner() {
               ) : null,
             }}
           />
-          {routesMode && (
-            <RoutingRoutesPanel
-              routing={routing}
-              tool={routingTool}
-              setTool={(t) => {
-                setRoutingToolSafe(t);
-                if (t === "draw_edge") {
-                  // Explicit re-entry starts a new branch
-                  setRoutingEdgeDraftFrom(null);
-                  setRoutingDraftCursorCm(null);
-                  setRoutingSelectedNode(null);
-                  setRoutingSelectedEdge(null);
-                }
-                if (t === "test_route") {
-                  setTestStartUuid(null);
-                  setTestDestUuid(null);
-                  routing.setTestResult(null);
-                  setRoutingSelectedNode(null);
-                  setRoutingSelectedEdge(null);
-                }
-                if (t === "select" || t === "edit") {
-                  setRoutingEdgeDraftFrom(null);
-                  setRoutingDraftCursorCm(null);
-                }
-              }}
-              selectedNodeUuid={routingSelectedNode}
-              selectedEdgeUuid={routingSelectedEdge}
-              setSelectedNodeUuid={setRoutingSelectedNode}
-              setSelectedEdgeUuid={setRoutingSelectedEdge}
-              testStartUuid={testStartUuid}
-              testDestUuid={testDestUuid}
-              setTestStartUuid={setTestStartUuid}
-              setTestDestUuid={setTestDestUuid}
-              locations={routingLocations}
-              racks={layout.racks}
-              highlightOrphanUuids={highlightOrphanUuids}
-              setHighlightOrphanUuids={setHighlightOrphanUuids}
-              highlightInvalidEdgeUuids={highlightInvalidEdgeUuids}
-              setHighlightInvalidEdgeUuids={setHighlightInvalidEdgeUuids}
-              selectedAccessLocationId={selectedAccessLocationId}
-              showAllAccessProblems={showAllAccessProblems}
-              onSelectAccessProblem={handleSelectAccessProblem}
-              onToggleShowAllAccessProblems={() => setShowAllAccessProblems((v) => !v)}
-              onClearAccessProblemSelection={handleClearAccessProblemSelection}
-            />
-          )}
           </div>
         ) : null}
       </div>
-      </AppSplitView>
-      </div>
-      </WarehouseShell>
+    </WarehouseModuleLayout>
 
       <WarehouseModals
         showCreateWarehouse={showCreateWarehouse}

@@ -67,9 +67,8 @@ export function SettingsModuleStack({
   contentClassName = "",
 }: SettingsModuleStackProps) {
   const showTitleRow = !hideTitle && (title || actions);
-  const tabRow =
-    tabsSlot ??
-    (tabs.length > 0 ? (
+  const routeTabs =
+    tabs.length > 0 ? (
       <TopTabsNavigation
         tabs={tabs}
         tabLinkSearch={tabLinkSearch}
@@ -78,7 +77,21 @@ export function SettingsModuleStack({
         chrome={tabsChrome}
         trailing={tabsTrailing}
       />
-    ) : null);
+    ) : null;
+
+  const customTabs =
+    tabsSlot != null
+      ? tabsTrailing != null
+        ? (
+            <div className="flex items-end justify-between gap-4">
+              <div className="min-w-0 flex-1">{tabsSlot}</div>
+              <div className="mb-0.5 shrink-0 pb-0.5">{tabsTrailing}</div>
+            </div>
+          )
+        : tabsSlot
+      : null;
+
+  const tabRow = customTabs ?? routeTabs;
 
   return (
     <div className={`min-w-0${className ? ` ${className}` : ""}`.trim()}>
