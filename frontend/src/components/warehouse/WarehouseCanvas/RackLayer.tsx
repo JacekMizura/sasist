@@ -24,6 +24,8 @@ const RACK_RADIUS_PX = parseFloat(radius.small) || 6;
 const DEFAULT_RACK_FILL = "#3b82f6";
 /** Occupancy fill bar height (px) — inside rack, readable at a glance. */
 const OCCUPANCY_BAR_H = 5;
+/** Simple ↔ detail content fade (ms). */
+const RACK_DETAIL_TRANSITION_MS = 180;
 
 /** Below this canvas zoom, hide rack text/badges (optional clutter reduction). */
 const LABEL_ZOOM_MIN_VISIBLE = 0.4;
@@ -110,7 +112,7 @@ export type RackLayerProps = {
   focusedBinUUID?: string | null;
   /** Sidebar location row hover: emphasize this bin only (temporary; UUID match). */
   hoveredLocationUUID?: string | null;
-  /** Magazyn SSOT occupancy for bottom bar + hover tooltip. */
+  /** Magazyn SSOT occupancy for bottom bar + selected-rack inline detail. */
   rackOccupancyStats?: Map<string, RackOccupancyStats>;
   /** Optional rack click handler (used for read-only map). */
   onRackClick?: (rackId: number | string) => void;
@@ -191,6 +193,7 @@ export function RackLayer({
   const filterUid = useId().replace(/:/g, "");
   const filterSurface = `wh-rack-surf-${filterUid}`;
   const filterHover = `wh-rack-hover-${filterUid}`;
+  const filterSelected = `wh-rack-sel-${filterUid}`;
   const passageHatchId = `wh-passage-hatch-${filterUid}`;
 
   /** Stable map: full label detail, no zoom-based LOD. */
@@ -315,7 +318,10 @@ export function RackLayer({
           <feDropShadow dx="0" dy="1" stdDeviation="1.25" floodColor="#0f172a" floodOpacity="0.1" />
         </filter>
         <filter id={filterHover} x="-12%" y="-12%" width="124%" height="124%">
-          <feDropShadow dx="0" dy="2" stdDeviation="2.5" floodColor="#2563eb" floodOpacity="0.14" />
+          <feDropShadow dx="0" dy="1.5" stdDeviation="1.75" floodColor="#0f172a" floodOpacity="0.12" />
+        </filter>
+        <filter id={filterSelected} x="-22%" y="-22%" width="144%" height="144%">
+          <feDropShadow dx="0" dy="3" stdDeviation="3.5" floodColor="#0f172a" floodOpacity="0.28" />
         </filter>
         <pattern id={passageHatchId} patternUnits="userSpaceOnUse" width="6" height="6" patternTransform="rotate(45)">
           <line x1="0" y1="0" x2="0" y2="6" stroke="rgba(148,163,184,0.35)" strokeWidth="1.25" />
@@ -356,17 +362,14 @@ export function RackLayer({
         const ariaLabel = occ
           ? `${label}: zajętość ${occupancyRounded}%, zajęte ${occ.occupiedLocations}, wolne ${occ.freeLocations}, łącznie ${occ.locationCount}`
           : label;
-        const hoverDetail =
-          occ != null
-            ? {
-                name: label,
-                occupancy: occupancyRounded,
-                occupied: occ.occupiedLocations,
-                free: occ.freeLocations,
-                total: occ.locationCount,
-                volumePct: occ.volumePct != null ? Math.round(occ.volumePct) : null,
-              }
-            : null;
+        /** Selected rack becomes an in-place info card (no floating tooltip). */
+        const showInlineDetail =
+          !neutralRackStyle &&
+          isSelected &&
+          selectedRackIds.length === 1 &&
+          occ != null &&
+          visualLod === "full" &&
+          !isDragging;
         const layoutRect = clampRackRectLayout(drawAt, r, cellPx);
         const { rectX, rectY, rectW, rectH, cx, cy } = layoutRect;
         /** Bar fully inside rack body (accounts for stroke). */
@@ -381,7 +384,13 @@ export function RackLayer({
           visualLod !== "line" &&
           rectW >= 12 &&
           rectH >= OCCUPANCY_BAR_H + barInset * 2 + 4;
+        const detailPad = Math.max(3, Math.min(6, Math.min(rectW, rectH) * 0.06));
+        const detailX = rectX + detailPad;
+        const detailY = rectY + detailPad;
+        const detailW = Math.max(0, rectW - detailPad * 2);
+        const detailH = Math.max(0, (showOccupancyBar ? barY : rectY + rectH - barInset) - detailY - 2);
         const showLabelHere =
+          !showInlineDetail &&
           labelsReadable &&
           visualLod === "full" &&
           showLabel &&
@@ -401,21 +410,34 @@ export function RackLayer({
           ? "#64748b"
           : isCollision || isOutside
             ? "#ef4444"
-            : isSelected
+            : showInlineDetail || isSelected
               ? "#1d4ed8"
               : isHighlighted
                 ? "#2563eb"
                 : colors.rackBorder;
-        const rackStrokeWidth = neutralRackStyle ? 1 : isOutside ? 2 : isSelected ? 3 : isHighlighted ? 2.5 : 1;
-        const rackBgHex = neutralRackStyle
+        const rackStrokeWidth = neutralRackStyle
+          ? 1
+          : isOutside
+            ? 2
+            : showInlineDetail
+              ? 2.5
+              : isSelected
+                ? 3
+                : isHighlighted
+                  ? 2.5
+                  : 1;
+        const rackFill = neutralRackStyle
           ? "#e2e8f0"
           : isCollision
             ? "#ef4444"
-            : isSelected
-              ? "#0ea5e9"
-              : isHighlighted
-                ? "#60a5fa"
-                : displayColor;
+            : showInlineDetail
+              ? displayColor
+              : isSelected
+                ? "#0ea5e9"
+                : isHighlighted
+                  ? "#60a5fa"
+                  : displayColor;
+        const rackBgHex = rackFill;
         const labelFill = labelColorForBackground(rackBgHex);
         const outlineOffset = 1;
         // In Magazyn we want product highlighting to guide the eye without making the rest of the map hard to read.
@@ -472,7 +494,10 @@ export function RackLayer({
                 ? { pointerEvents: "none" }
                 : {
                     pointerEvents: "auto",
-                    ...(isRoutePlanningMode ? { cursor: "pointer" } : {}),
+                    cursor:
+                      isRoutePlanningMode || onRackClick || onRackDoubleClick || rackOccupancyStats
+                        ? "pointer"
+                        : undefined,
                     transition: "opacity 150ms ease",
                   }
             }
@@ -509,19 +534,6 @@ export function RackLayer({
                 pointerEvents="none"
               />
             )}
-            {isHovered && !isRoutePlanningMode && (
-              <rect
-                x={rectX - outlineOffset}
-                y={rectY - outlineOffset}
-                width={rectW + outlineOffset * 2}
-                height={rectH + outlineOffset * 2}
-                fill="none"
-                stroke="rgba(59,130,246,0.4)"
-                strokeWidth={2}
-                rx={RACK_RADIUS_PX + outlineOffset}
-                pointerEvents="none"
-              />
-            )}
             {isRoutePlanningMode && isHovered && (
               <rect
                 x={rectX - outlineOffset - 4}
@@ -551,7 +563,7 @@ export function RackLayer({
                   y1={rectW >= rectH ? rectY + rectH / 2 : rectY}
                   x2={rectW >= rectH ? rectX + rectW : rectX + rectW / 2}
                   y2={rectW >= rectH ? rectY + rectH / 2 : rectY + rectH}
-                  stroke={isCollision ? "#ef4444" : isSelected ? "#0ea5e9" : isHighlighted ? "#60a5fa" : displayColor}
+                  stroke={isCollision ? "#ef4444" : showInlineDetail || isSelected ? "#0ea5e9" : isHighlighted ? "#60a5fa" : displayColor}
                   strokeWidth={Math.max(1.5, rackStrokeWidth + 0.5)}
                   strokeLinecap="round"
                   pointerEvents="none"
@@ -563,7 +575,7 @@ export function RackLayer({
                 y={rectY}
                 width={rectW}
                 height={rectH}
-                fill={isCollision ? "#ef4444" : isSelected ? "#0ea5e9" : isHighlighted ? "#60a5fa" : displayColor}
+                fill={rackFill}
                 stroke={rackStrokeColor}
                 strokeWidth={rackStrokeWidth}
                 rx={RACK_RADIUS_PX}
@@ -573,13 +585,49 @@ export function RackLayer({
                 filter={
                   neutralRackStyle
                     ? undefined
-                    : isHovered
-                      ? `url(#${filterHover})`
-                      : `url(#${filterSurface})`
+                    : showInlineDetail
+                      ? `url(#${filterSelected})`
+                      : isHovered
+                        ? `url(#${filterHover})`
+                        : `url(#${filterSurface})`
                 }
-                style={{ transition: "fill 150ms ease, stroke 150ms ease, stroke-width 150ms ease, filter 150ms ease" }}
+                style={{ transition: `fill ${RACK_DETAIL_TRANSITION_MS}ms ease, stroke ${RACK_DETAIL_TRANSITION_MS}ms ease, stroke-width ${RACK_DETAIL_TRANSITION_MS}ms ease, filter ${RACK_DETAIL_TRANSITION_MS}ms ease` }}
                 {...(ariaLabel ? { "aria-label": ariaLabel } : {})}
               />
+            )}
+            {isHovered && !isSelected && !isRoutePlanningMode && visualLod !== "line" && (
+              <rect
+                x={rectX}
+                y={rectY}
+                width={rectW}
+                height={rectH}
+                fill="rgba(255,255,255,0.16)"
+                stroke="none"
+                rx={RACK_RADIUS_PX}
+                pointerEvents="none"
+              />
+            )}
+            {showInlineDetail && detailW > 8 && detailH > 12 && occ != null && (
+              <foreignObject
+                x={detailX}
+                y={detailY}
+                width={detailW}
+                height={detailH}
+                pointerEvents="none"
+                style={{ overflow: "hidden" }}
+              >
+                <RackInlineDetailCard
+                  name={label}
+                  occupancyPct={occupancyRounded}
+                  occupied={occ.occupiedLocations}
+                  free={occ.freeLocations}
+                  total={occ.locationCount}
+                  volumePct={occ.volumePct != null ? Math.round(occ.volumePct) : null}
+                  color={labelFill}
+                  width={detailW}
+                  height={detailH}
+                />
+              </foreignObject>
             )}
             {showOccupancyBar && (
               <g pointerEvents="none" aria-hidden>
@@ -602,40 +650,6 @@ export function RackLayer({
                   />
                 ) : null}
               </g>
-            )}
-            {!neutralRackStyle && isHovered && hoverDetail != null && visualLod === "full" && (
-              <foreignObject
-                x={rectX + rectW + 6}
-                y={Math.max(0, rectY - 4)}
-                width={176}
-                height={hoverDetail.volumePct != null ? 108 : 92}
-                pointerEvents="none"
-                style={{ overflow: "visible" }}
-              >
-                <div
-                  xmlns="http://www.w3.org/1999/xhtml"
-                  style={{
-                    background: "rgba(15,23,42,0.94)",
-                    color: "#f8fafc",
-                    borderRadius: 8,
-                    padding: "8px 10px",
-                    fontFamily: "ui-sans-serif, system-ui, sans-serif",
-                    fontSize: 11,
-                    lineHeight: 1.4,
-                    boxShadow: "0 8px 20px rgba(15,23,42,0.28)",
-                    whiteSpace: "nowrap",
-                  }}
-                >
-                  <div style={{ fontWeight: 600, marginBottom: 4 }}>{hoverDetail.name}</div>
-                  <div>Zajętość: {hoverDetail.occupancy}%</div>
-                  <div>Zajęte: {hoverDetail.occupied}</div>
-                  <div>Wolne: {hoverDetail.free}</div>
-                  <div>Razem: {hoverDetail.total}</div>
-                  {hoverDetail.volumePct != null ? (
-                    <div style={{ marginTop: 4, opacity: 0.9 }}>Objętość: {hoverDetail.volumePct}%</div>
-                  ) : null}
-                </div>
-              </foreignObject>
             )}
             {visualLod !== "line" &&
               (() => {
@@ -930,5 +944,103 @@ export function RackLayer({
           </g>
         ))}
     </>
+  );
+}
+
+type RackInlineDetailCardProps = {
+  name: string;
+  occupancyPct: number;
+  occupied: number;
+  free: number;
+  total: number;
+  volumePct: number | null;
+  color: string;
+  width: number;
+  height: number;
+};
+
+function RackInlineDetailCard({
+  name,
+  occupancyPct,
+  occupied,
+  free,
+  total,
+  volumePct,
+  color,
+  width,
+  height,
+}: RackInlineDetailCardProps) {
+  const full = width >= 56 && height >= 58;
+  const compact = !full && width >= 36 && height >= 28;
+  const fontSize = full
+    ? Math.max(8, Math.min(11, Math.min(width * 0.14, height * 0.13)))
+    : Math.max(7, Math.min(10, Math.min(width * 0.18, height * 0.22)));
+  const titleSize = full ? fontSize + 1 : fontSize;
+  const row = (label: string, value: string | number) => (
+    <div
+      style={{
+        display: "flex",
+        justifyContent: "space-between",
+        gap: 6,
+        opacity: 0.95,
+      }}
+    >
+      <span>{label}</span>
+      <span style={{ fontVariantNumeric: "tabular-nums", fontWeight: 600 }}>{value}</span>
+    </div>
+  );
+
+  return (
+    <div
+      xmlns="http://www.w3.org/1999/xhtml"
+      style={{
+        width: "100%",
+        height: "100%",
+        boxSizing: "border-box",
+        color,
+        fontFamily: "ui-sans-serif, system-ui, sans-serif",
+        fontSize,
+        lineHeight: 1.25,
+        display: "flex",
+        flexDirection: "column",
+        justifyContent: full ? "flex-start" : "center",
+        gap: full ? 2 : 1,
+        overflow: "hidden",
+        opacity: 1,
+        animation: `wh-rack-detail-in ${RACK_DETAIL_TRANSITION_MS}ms ease`,
+      }}
+    >
+      <style>{`@keyframes wh-rack-detail-in{from{opacity:0}to{opacity:1}}`}</style>
+      <div
+        style={{
+          fontWeight: 700,
+          fontSize: titleSize,
+          marginBottom: full ? 2 : 0,
+          whiteSpace: "nowrap",
+          overflow: "hidden",
+          textOverflow: "ellipsis",
+        }}
+      >
+        {name}
+      </div>
+      {full ? (
+        <>
+          {row("Zajętość", `${occupancyPct}%`)}
+          {row("Zajęte", occupied)}
+          {row("Wolne", free)}
+          {row("Razem", total)}
+          {volumePct != null ? row("Objętość", `${volumePct}%`) : null}
+        </>
+      ) : compact ? (
+        <>
+          <div style={{ fontWeight: 600 }}>{occupancyPct}%</div>
+          <div style={{ opacity: 0.9, fontSize: Math.max(7, fontSize - 1) }}>
+            {occupied}/{total}
+          </div>
+        </>
+      ) : (
+        <div style={{ fontWeight: 700 }}>{occupancyPct}%</div>
+      )}
+    </div>
   );
 }

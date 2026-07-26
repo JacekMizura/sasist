@@ -239,9 +239,9 @@ export function occupancyBarColor(pct: number): string {
 }
 
 /**
- * Per-rack occupancy for map bars/tooltips — computed once (memo upstream).
+ * Per-rack occupancy for map bars / selected-rack inline detail — computed once (memo upstream).
  * Occupancy % = occupied location slots / all location slots (never product counts).
- * Volume is optional metadata for tooltips when capacity is known.
+ * Volume is optional metadata when capacity is known.
  */
 export function buildRackOccupancyStats(params: {
   layout: LayoutState;

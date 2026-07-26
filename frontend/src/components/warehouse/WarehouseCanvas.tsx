@@ -326,7 +326,7 @@ export type WarehouseCanvasProps = {
   focusedBinUUID?: string | null;
   /** Magazyn: single bin highlight from sidebar location row hover (does not affect selection). */
   hoveredLocationUUID?: string | null;
-  /** Magazyn SSOT: per-rack occupancy for bottom bars + hover tooltips. */
+  /** Magazyn SSOT: per-rack occupancy for bottom bars + selected inline detail. */
   rackOccupancyStats?: Map<string, import("../../pages/WarehouseDesigner/productLocationIndex").RackOccupancyStats>;
   getRackDisplayId?: (r: RackState) => string;
   /** Stop index highlighted from sidebar click (highlight marker + rack). */
