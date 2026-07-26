@@ -6,9 +6,9 @@ import toast from "react-hot-toast";
 import { exportFullPackageZip } from "../../../api/documentTemplatesApi";
 import { extractApiErrorMessage } from "../../../api/apiErrorMessage";
 import { SettingsModuleStack } from "../../../components/layout/SettingsModuleStack";
+import { PrimaryButton, SuccessButton } from "../../../design-system";
 import { DEFAULT_TENANT_ID, LIST_BASE } from "./constants";
 import { DOCUMENT_TEMPLATES_TABS } from "./documentTemplatesTabs";
-import { brandPrimaryButtonClass } from "../../../design-system/brandUi";
 
 async function downloadBlob(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob);
@@ -19,30 +19,6 @@ async function downloadBlob(blob: Blob, filename: string) {
   URL.revokeObjectURL(url);
 }
 
-function ListHeaderMoreMenu() {
-  return (
-    <details className="relative">
-      <summary className="cursor-pointer list-none rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 shadow-sm transition hover:border-orange-300 hover:bg-white [&::-webkit-details-marker]:hidden">
-        Więcej ▾
-      </summary>
-      <div className="absolute right-0 z-20 mt-1 min-w-[220px] overflow-hidden rounded-xl border border-gray-200 bg-white py-1 shadow-lg">
-        <button
-          type="button"
-          className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-slate-700 transition hover:bg-orange-50"
-          onClick={() => {
-            exportFullPackageZip(DEFAULT_TENANT_ID)
-              .then((blob) => downloadBlob(blob, "szablony-pelny-pakiet.zip"))
-              .catch((err) => toast.error(extractApiErrorMessage(err, "Eksport nie powiódł się.")));
-          }}
-        >
-          <Download className="h-4 w-4 shrink-0" aria-hidden />
-          Eksport pakietu
-        </button>
-      </div>
-    </details>
-  );
-}
-
 export default function DocumentTemplatesModuleFrame() {
   const { pathname } = useLocation();
   const { templateId } = useParams<{ templateId?: string }>();
@@ -51,6 +27,7 @@ export default function DocumentTemplatesModuleFrame() {
   const showPrimaryNew = isList || pathname === `${LIST_BASE}/starters`;
   const isEditor = Boolean(templateId && /^\d+$/.test(templateId));
   const [editorTitle, setEditorTitle] = useState("Edycja szablonu");
+  const [exportBusy, setExportBusy] = useState(false);
 
   useEffect(() => {
     if (!isEditor || !templateId) return;
@@ -61,6 +38,14 @@ export default function DocumentTemplatesModuleFrame() {
     window.addEventListener("dte-template-name-changed", onName);
     return () => window.removeEventListener("dte-template-name-changed", onName);
   }, [isEditor, templateId]);
+
+  const onExportPackage = () => {
+    setExportBusy(true);
+    exportFullPackageZip(DEFAULT_TENANT_ID)
+      .then((blob) => downloadBlob(blob, "szablony-pelny-pakiet.zip"))
+      .catch((err) => toast.error(extractApiErrorMessage(err, "Eksport nie powiódł się.")))
+      .finally(() => setExportBusy(false));
+  };
 
   if (isEditor) {
     return (
@@ -95,15 +80,16 @@ export default function DocumentTemplatesModuleFrame() {
       actions={
         showPrimaryNew ? (
           <div className="flex flex-wrap items-center gap-2">
-            {isList ? <ListHeaderMoreMenu /> : null}
-            <button
-              type="button"
-              onClick={() => navigate(`${LIST_BASE}/new`)}
-              className={brandPrimaryButtonClass}
-            >
+            {isList ? (
+              <SuccessButton type="button" density="compact" disabled={exportBusy} onClick={onExportPackage}>
+                <Download className="h-3.5 w-3.5" aria-hidden />
+                {exportBusy ? "Eksport…" : "Eksportuj"}
+              </SuccessButton>
+            ) : null}
+            <PrimaryButton type="button" density="compact" onClick={() => navigate(`${LIST_BASE}/new`)}>
               <Plus className="h-4 w-4" aria-hidden />
               Nowy szablon
-            </button>
+            </PrimaryButton>
           </div>
         ) : null
       }

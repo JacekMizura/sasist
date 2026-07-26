@@ -1,9 +1,9 @@
-import { FileText, MoreVertical } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import { FileText, MoreVertical } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
 import type { DocumentTemplateListItemDto } from "../../../api/documentTemplatesApi";
-import { StatusBadge } from "../../../design-system/components";
+import { ListTile, SecondaryButton, StatusBadge } from "../../../design-system";
 import { LIST_BASE } from "./constants";
 import {
   documentTemplateKindSubtitle,
@@ -13,16 +13,8 @@ import {
   fmtDocumentTemplateLastEdited,
 } from "./documentTemplatesListPresentation";
 
-/** Uniform list thumbnail — identical size/margins across all cards. */
-const THUMB_CLASS =
-  "flex h-16 w-[104px] shrink-0 items-center justify-center overflow-hidden rounded-xl border border-[#E5E7EB] bg-slate-50 text-2xl transition hover:border-orange-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-400 focus-visible:ring-offset-2";
-
-const outlineActionClass =
-  "rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-semibold text-slate-800 shadow-sm transition hover:border-orange-300 hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-400 focus-visible:ring-offset-2";
-
 type Props = {
   row: DocumentTemplateListItemDto;
-  /** Catalog family icon (emoji) — not on list DTO; resolved by parent. */
   familyIcon?: string | null;
   onOpenUsage: (row: DocumentTemplateListItemDto) => void;
   onDuplicate: (row: DocumentTemplateListItemDto) => void;
@@ -32,7 +24,7 @@ type Props = {
 };
 
 /**
- * List card — scan hierarchy + calm actions (primary + overflow).
+ * ERP list row — ListTile + StatusBadge (Produkcja / Zamówienia language).
  */
 export function DocumentTemplateListCard({
   row,
@@ -78,124 +70,125 @@ export function DocumentTemplateListCard({
       : "—";
 
   return (
-    <article
-      className={[
-        "group flex w-full items-start gap-4 border border-[#E5E7EB] bg-white px-4 py-3.5 shadow-sm transition",
-        "hover:-translate-y-0.5 hover:border-gray-300 hover:shadow-md",
-      ].join(" ")}
-      style={{ borderRadius: 16 }}
-    >
-      <button type="button" onClick={openEditor} className={THUMB_CLASS} aria-label={`Otwórz szablon ${row.name}`}>
-        {icon ? <span aria-hidden>{icon}</span> : <FileText className="h-7 w-7 text-slate-400" aria-hidden />}
-      </button>
+    <ListTile density="comfortable" className="w-full">
+      <div className="flex items-start gap-3 sm:gap-4">
+        <button
+          type="button"
+          onClick={openEditor}
+          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-slate-50 text-lg transition hover:border-slate-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-400/40"
+          aria-label={`Otwórz szablon ${row.name}`}
+        >
+          {icon ? <span aria-hidden>{icon}</span> : <FileText className="h-5 w-5 text-slate-400" aria-hidden />}
+        </button>
 
-      <div className="min-w-0 flex-1">
-        <button type="button" onClick={openEditor} className="w-full min-w-0 text-left focus:outline-none">
-          <div className="flex min-w-0 flex-wrap items-center gap-2">
-            <h3 className="truncate text-base font-semibold tracking-tight text-slate-900">{row.name}</h3>
-            <StatusBadge tone={documentTemplateStatusTone(status.primaryStatus)} density="compact">
-              {status.primaryLabel}
-            </StatusBadge>
-            {status.showNewerDraft ? (
-              <StatusBadge tone="warning" density="compact">
-                Nowszy draft
+        <div className="min-w-0 flex-1 space-y-2.5">
+          <button type="button" onClick={openEditor} className="w-full min-w-0 text-left focus:outline-none">
+            <div className="flex min-w-0 flex-wrap items-center gap-2">
+              <h3 className="truncate text-sm font-semibold text-slate-900">{row.name}</h3>
+              <StatusBadge tone={documentTemplateStatusTone(status.primaryStatus)} density="compact">
+                {status.primaryLabel}
               </StatusBadge>
-            ) : null}
-          </div>
-          <p className="mt-1 text-sm text-slate-600">{documentTemplateKindSubtitle(row)}</p>
-        </button>
-
-        <dl className="mt-2.5 space-y-1 text-xs leading-snug text-slate-500">
-          <div className="flex min-w-0 gap-2">
-            <dt className="w-[6.5rem] shrink-0 text-slate-400">Używany jako</dt>
-            <dd className="min-w-0 truncate text-slate-600" title={usedAs.join(", ") || undefined}>
-              {usedAsText}
-            </dd>
-          </div>
-          <div className="flex min-w-0 gap-2">
-            <dt className="w-[6.5rem] shrink-0 text-slate-400">Używane w</dt>
-            <dd className="min-w-0 truncate text-slate-600" title={usedInText !== "—" ? usedInText : undefined}>
-              {usedInText}
-            </dd>
-          </div>
-          <div className="flex min-w-0 gap-2">
-            <dt className="w-[6.5rem] shrink-0 text-slate-400">Ostatnia edycja</dt>
-            <dd className="min-w-0 truncate text-slate-500">{fmtDocumentTemplateLastEdited(editedAt)}</dd>
-          </div>
-        </dl>
-      </div>
-
-      <div className="flex shrink-0 items-center gap-1.5 pt-0.5">
-        <button type="button" onClick={openEditor} className={outlineActionClass}>
-          Edytuj
-        </button>
-        <div className="relative" ref={menuRef}>
-          <button
-            type="button"
-            aria-label={`Więcej akcji: ${row.name}`}
-            aria-expanded={menuOpen}
-            onClick={() => setMenuOpen((v) => !v)}
-            className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-gray-200 bg-white text-slate-600 shadow-sm transition hover:border-orange-300 hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-400 focus-visible:ring-offset-2"
-          >
-            <MoreVertical className="h-4 w-4" strokeWidth={2} />
-          </button>
-          {menuOpen ? (
-            <div
-              role="menu"
-              className="absolute right-0 z-20 mt-1 min-w-[180px] overflow-hidden rounded-xl border border-gray-200 bg-white py-1 shadow-lg"
-            >
-              {row.draft_version ? (
-                <MenuItem
-                  label="Publikuj"
-                  onClick={() => {
-                    setMenuOpen(false);
-                    onPublish(row);
-                  }}
-                />
-              ) : null}
-              <MenuItem
-                label="Duplikuj"
-                onClick={() => {
-                  setMenuOpen(false);
-                  onDuplicate(row);
-                }}
-              />
-              <MenuItem
-                label="Gdzie używany"
-                onClick={() => {
-                  setMenuOpen(false);
-                  onOpenUsage(row);
-                }}
-              />
-              <MenuItem
-                label="Historia wersji"
-                onClick={() => {
-                  setMenuOpen(false);
-                  openHistory();
-                }}
-              />
-              <MenuItem
-                label="Eksport"
-                onClick={() => {
-                  setMenuOpen(false);
-                  onExport(row);
-                }}
-              />
-              {row.can_delete ? (
-                <MenuItem
-                  label="Usuń"
-                  danger
-                  onClick={() => {
-                    setMenuOpen(false);
-                    onDelete(row);
-                  }}
-                />
+              {status.showNewerDraft ? (
+                <StatusBadge tone="warning" density="compact">
+                  Nowszy draft
+                </StatusBadge>
               ) : null}
             </div>
-          ) : null}
+            <p className="mt-0.5 text-sm text-slate-600">{documentTemplateKindSubtitle(row)}</p>
+          </button>
+
+          <div className="flex flex-wrap items-center gap-x-5 gap-y-1.5 text-xs text-slate-500">
+            <span>
+              <span className="text-slate-400">Używany jako:</span>{" "}
+              <span className="font-medium text-slate-700" title={usedAs.join(", ") || undefined}>
+                {usedAsText}
+              </span>
+            </span>
+            <span>
+              <span className="text-slate-400">Używane w:</span>{" "}
+              <span className="font-medium text-slate-700" title={usedInText !== "—" ? usedInText : undefined}>
+                {usedInText}
+              </span>
+            </span>
+            <span>
+              <span className="text-slate-400">Ostatnia edycja:</span>{" "}
+              <span className="font-medium text-slate-700">{fmtDocumentTemplateLastEdited(editedAt)}</span>
+            </span>
+          </div>
+        </div>
+
+        <div className="flex shrink-0 items-center gap-1.5 pt-0.5">
+          <SecondaryButton type="button" density="compact" onClick={openEditor}>
+            Edytuj
+          </SecondaryButton>
+          <div className="relative" ref={menuRef}>
+            <button
+              type="button"
+              aria-label={`Akcje szablonu ${row.name}`}
+              aria-expanded={menuOpen}
+              onClick={() => setMenuOpen((v) => !v)}
+              className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 transition hover:border-slate-300 hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-400/40"
+            >
+              <MoreVertical className="h-4 w-4" strokeWidth={2} />
+            </button>
+            {menuOpen ? (
+              <div
+                role="menu"
+                className="absolute right-0 z-20 mt-1 min-w-[180px] overflow-hidden rounded-xl border border-slate-200 bg-white py-1 shadow-lg"
+              >
+                {row.draft_version ? (
+                  <MenuItem
+                    label="Publikuj"
+                    onClick={() => {
+                      setMenuOpen(false);
+                      onPublish(row);
+                    }}
+                  />
+                ) : null}
+                <MenuItem
+                  label="Duplikuj"
+                  onClick={() => {
+                    setMenuOpen(false);
+                    onDuplicate(row);
+                  }}
+                />
+                <MenuItem
+                  label="Gdzie używany"
+                  onClick={() => {
+                    setMenuOpen(false);
+                    onOpenUsage(row);
+                  }}
+                />
+                <MenuItem
+                  label="Historia wersji"
+                  onClick={() => {
+                    setMenuOpen(false);
+                    openHistory();
+                  }}
+                />
+                <MenuItem
+                  label="Eksport"
+                  onClick={() => {
+                    setMenuOpen(false);
+                    onExport(row);
+                  }}
+                />
+                {row.can_delete ? (
+                  <MenuItem
+                    label="Usuń"
+                    danger
+                    onClick={() => {
+                      setMenuOpen(false);
+                      onDelete(row);
+                    }}
+                  />
+                ) : null}
+              </div>
+            ) : null}
+          </div>
         </div>
       </div>
-    </article>
+    </ListTile>
   );
 }
 

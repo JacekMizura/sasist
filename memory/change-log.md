@@ -1,3 +1,10 @@
+## 2026-07-26 — Szablony wydruków: powrót do ERP Design System
+
+- Filtry: `ListFilterEmbeddedShell` + Filtruj/Wyczyść/Ukryj (jak Produkty) — usunięto LightFilters
+- Toolbar: `SuccessButton` Eksportuj + `PrimaryButton` Nowy szablon (bez „Więcej”)
+- Lista: `ListTile` + `StatusBadge` + `SecondaryButton` (wzorzec Produkcja)
+- Startery: layout Ready Templates (300px, gap-5, max 5 kolumn)
+
 ## 2026-07-26 — Szablony wydruków UX polish (pass 2)
 
 - Karty listy: hierarchia nazwa→typ→status→używany jako/w→edycja; StatusBadge DS; Edytuj + menu Więcej

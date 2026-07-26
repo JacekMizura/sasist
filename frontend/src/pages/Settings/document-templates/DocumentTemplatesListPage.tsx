@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { ChevronDown, Filter } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
 
@@ -11,13 +12,16 @@ import {
   type DocumentTemplateListItemDto,
 } from "../../../api/documentTemplatesApi";
 import { extractApiErrorMessage } from "../../../api/apiErrorMessage";
+import { listSellasistToolbarToggleBtn } from "../../../components/listPage/listSellasistTokens";
 import { DEFAULT_TENANT_ID, LIST_BASE } from "./constants";
 import { DocumentTemplateListCard } from "./DocumentTemplateListCard";
 import {
+  countActiveDocumentTemplateFilters,
+  documentTemplateFiltersToggleLabel,
   EMPTY_DOC_TEMPLATE_LIST_FILTERS,
+  DocumentTemplatesListFiltersPanel,
   type DocumentTemplatesListFilters,
 } from "./DocumentTemplatesListFiltersPanel";
-import { DocumentTemplatesLightFilters } from "./DocumentTemplatesLightFilters";
 import { TemplateUsageModal } from "./components/TemplateUsageModal";
 
 export function DocumentTemplatesListPage() {
@@ -25,7 +29,9 @@ export function DocumentTemplatesListPage() {
   const [families, setFamilies] = useState<Awaited<ReturnType<typeof fetchDocumentTemplateCatalog>>>([]);
   const [items, setItems] = useState<DocumentTemplateListItemDto[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filters, setFilters] = useState<DocumentTemplatesListFilters>(EMPTY_DOC_TEMPLATE_LIST_FILTERS);
+  const [filtersExpanded, setFiltersExpanded] = useState(true);
+  const [draft, setDraft] = useState<DocumentTemplatesListFilters>(EMPTY_DOC_TEMPLATE_LIST_FILTERS);
+  const [applied, setApplied] = useState<DocumentTemplatesListFilters>(EMPTY_DOC_TEMPLATE_LIST_FILTERS);
   const [usageModal, setUsageModal] = useState<{
     name: string;
     badges: DocumentTemplateListItemDto["usage_summary"];
@@ -33,11 +39,11 @@ export function DocumentTemplatesListPage() {
   } | null>(null);
 
   const kinds = useMemo(() => {
-    if (filters.familyCode) {
-      return families.find((f) => f.code === filters.familyCode)?.kinds ?? [];
+    if (draft.familyCode) {
+      return families.find((f) => f.code === draft.familyCode)?.kinds ?? [];
     }
     return families.flatMap((f) => f.kinds);
-  }, [families, filters.familyCode]);
+  }, [families, draft.familyCode]);
 
   const familyIconByCode = useMemo(() => {
     const map: Record<string, string | null> = {};
@@ -45,7 +51,9 @@ export function DocumentTemplatesListPage() {
     return map;
   }, [families]);
 
-  async function reload(next = filters) {
+  const activeFilterCount = countActiveDocumentTemplateFilters(applied);
+
+  async function reload(next = applied) {
     setLoading(true);
     try {
       const [catalog, rows] = await Promise.all([
@@ -69,12 +77,12 @@ export function DocumentTemplatesListPage() {
   }
 
   useEffect(() => {
-    void reload(filters);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- reload on filter identity fields only
-  }, [filters.familyCode, filters.kindCode, filters.variantCode, filters.status, filters.source]);
+    void reload(applied);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reload on applied filter identity
+  }, [applied.familyCode, applied.kindCode, applied.variantCode, applied.status, applied.source]);
 
   const filtered = useMemo(() => {
-    const q = filters.search.trim().toLowerCase();
+    const q = applied.search.trim().toLowerCase();
     if (!q) return items;
     return items.filter(
       (row) =>
@@ -82,17 +90,41 @@ export function DocumentTemplatesListPage() {
         (row.kind?.name_pl ?? "").toLowerCase().includes(q) ||
         (row.binding_summary ?? "").toLowerCase().includes(q),
     );
-  }, [items, filters.search]);
+  }, [items, applied.search]);
 
-  const onFiltersChange = (next: DocumentTemplatesListFilters) => {
-    setFilters(next);
+  const onApply = () => {
+    setApplied({ ...draft });
+  };
+
+  const onClear = () => {
+    setDraft(EMPTY_DOC_TEMPLATE_LIST_FILTERS);
+    setApplied(EMPTY_DOC_TEMPLATE_LIST_FILTERS);
   };
 
   return (
-    <div className="min-w-0 space-y-5 bg-white px-1 pb-8 pt-2">
-      <DocumentTemplatesLightFilters
-        value={filters}
-        onChange={onFiltersChange}
+    <div className="min-w-0 space-y-4 bg-white px-1 pb-8 pt-2">
+      <div className="flex flex-wrap items-center justify-end gap-2">
+        <button
+          type="button"
+          onClick={() => setFiltersExpanded((v) => !v)}
+          className={`${listSellasistToolbarToggleBtn} inline-flex items-center gap-2`}
+          aria-expanded={filtersExpanded}
+        >
+          <Filter className="h-4 w-4 shrink-0" strokeWidth={2} aria-hidden />
+          {filtersExpanded ? "Ukryj filtry" : documentTemplateFiltersToggleLabel(activeFilterCount)}
+          <ChevronDown
+            className={`h-4 w-4 shrink-0 transition-transform ${filtersExpanded ? "rotate-180" : ""}`}
+            aria-hidden
+          />
+        </button>
+      </div>
+
+      <DocumentTemplatesListFiltersPanel
+        expanded={filtersExpanded}
+        draft={draft}
+        onChangeDraft={(patch) => setDraft((prev) => ({ ...prev, ...patch }))}
+        onApply={onApply}
+        onClear={onClear}
         families={families}
         kinds={kinds}
       />
@@ -111,7 +143,7 @@ export function DocumentTemplatesListPage() {
           <p className="text-xs text-slate-500">
             {filtered.length} {filtered.length === 1 ? "szablon" : "szablonów"}
           </p>
-          <div className="flex flex-col gap-2.5">
+          <div className="flex flex-col gap-2">
             {filtered.map((row) => (
               <DocumentTemplateListCard
                 key={row.id}
