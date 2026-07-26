@@ -1,3 +1,44 @@
+## 2026-07-26 — Symulacja planu: diagnostyka pustego wyniku
+
+- `diagnostics` w odpowiedzi simulate (codes, skip_counts, empty_reason_*)
+- Logi INPUT + SKIP/ACCEPT; UI pokazuje powód z API
+- Bez zmiany filtrów MRP · testy OK · **No push.**
+
+## 2026-07-26 — Symulacja planu: empty/success UI
+
+- Bug: pusty `materials[]` → komunikat „Surowce wystarczają” + zera w KPI
+- Empty state przy 0 produktach; Create disabled; loading bez zer
+- Request simulate może dostać `lines` z rekomendacji UI (bez zmiany MRP)
+- **No push.**
+
+## 2026-07-26 — Szczegóły partii: UX jak dokument ERP
+
+- PageHeader, StatusBadge, Card; bez fioletu / „Interfejs ERP” / żółtego boxa
+- Akcje: Rozpocznij produkcję, Przejdź do realizacji, Drukuj kartę, Anuluj
+- Informacje 2-kol, większy ProgressBar (orange), kompaktowy timeline
+- Bez zmian API/routingu/stanów · `npm run build` OK · **No push.**
+
+## 2026-07-26 — Modal „Nowa partia masowa” → Sasist UI Kit
+
+- Dialog (xl, 85vh), Stepper, ListTile, Card, Primary/Secondary; bez fioletu
+- Układ 1-kolumnowy; checkbox w Podsumowaniu; stopka Anuluj | Utwórz partię
+- Bez zmian API/walidacji/kroków · `npm run build` OK · **No push.**
+
+## 2026-07-26 — Planowanie: ekran decyzyjny (UX)
+
+- KPI ×4; rekomendacje = Card/produkt + 1× Utwórz partię; usunięte 3 karty zbiorcze
+- Tabela slim (bez osi czasu / Dlaczego / Rekom. / Można); pod aktywnymi partiami
+- Aktywne partie: bez Operatora, StatusBadge, wyższe wiersze; bez KPI embedded
+- Symuluj/Odśwież w Toolbar; bez zmian API/MRP · `npm run build` OK · **No push.**
+
+## 2026-07-26 — Nagłówki: ujednolicony vertical rhythm
+
+- DS PageHeader: separator + items-center + toolbar mt-4 + children mt-4/5
+- DocumentsSectionShell → DS PageHeader; layout PageHeader → typography.h1
+- Produkcja ERP: treść w children; usunięte `!space-y-*` / lokalne gap-y
+- SettingsModuleStack: bez lokalnego border-t pod tytułem
+- Bez API/logiki/routingu · `npm run build` OK · **No push.**
+
 ## 2026-07-26 — Nagłówki: jeden standard (Produkcja + audit)
 
 - Produkcja ERP tabs: PageHeader Title+Actions; usunięte marketing opisy; CTA `comfortable`

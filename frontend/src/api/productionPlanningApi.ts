@@ -74,6 +74,32 @@ export type ProductionDemandPlanning = {
   products: ProductionDemandProductRow[];
 };
 
+export type ProductionPlanSimulationDiagnostics = {
+  input_source: "request_lines" | "snapshot_recommendations";
+  warehouse_id: number;
+  tenant_id: number;
+  coverage_days: number;
+  forecast_strategy: string;
+  snapshot_product_count: number;
+  request_line_count: number;
+  recommendations_positive_count: number;
+  recommendations_with_recipe_count: number;
+  candidates_count: number;
+  accepted_count: number;
+  skip_counts: Record<string, number>;
+  skips: Array<{
+    product_id: number;
+    product_name?: string | null;
+    recommended_quantity?: number | null;
+    composition_id?: number | null;
+    reason_code: string;
+    reason: string;
+  }>;
+  empty_reason_code?: string | null;
+  empty_reason_message?: string | null;
+  empty_reason_details?: string[];
+};
+
 export type ProductionPlanSimulation = {
   tenant_id: number;
   warehouse_id: number;
@@ -101,6 +127,7 @@ export type ProductionPlanSimulation = {
   products_still_critical: number;
   estimated_completion_date?: string | null;
   total_simulated_quantity: number;
+  diagnostics?: ProductionPlanSimulationDiagnostics | null;
 };
 
 export type DemandBatchLineDraft = {
@@ -128,6 +155,8 @@ export async function simulateProductionPlan(body: {
   tenant_id: number;
   warehouse_id: number;
   coverage_days: number;
+  /** Optional override; when omitted, backend uses recommended qty from snapshot. */
+  lines?: Array<{ product_id: number; quantity: number }>;
 }): Promise<ProductionPlanSimulation> {
   const res = await api.post<ProductionPlanSimulation>("/production/planning/simulate", body);
   return res.data;

@@ -27,6 +27,12 @@ export function ProductionSimulationModal({
 }: Props) {
   if (!open) return null;
 
+  const productCount = simulation?.lines.length ?? 0;
+  const hasProducts = productCount > 0;
+  const canCreate = !loading && !creating && hasProducts;
+  const hasMaterialShortage =
+    hasProducts && (simulation?.materials.some((m) => m.shortage > 0) ?? false);
+
   return (
     <AppOverlayPortal>
     <div className="fixed inset-0 z-[280] flex items-end justify-center bg-slate-950/50 p-0 sm:items-center sm:p-4">
@@ -43,19 +49,51 @@ export function ProductionSimulationModal({
 
         <div className="min-h-0 flex-1 overflow-y-auto p-5">
           {loading ? (
-            <p className="flex items-center gap-2 text-sm text-slate-500">
-              <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
-              Symulacja…
-            </p>
-          ) : simulation ? (
+            <div className="flex flex-col items-center justify-center gap-3 py-16 text-sm text-slate-500">
+              <Loader2 className="h-8 w-8 animate-spin text-slate-400" aria-hidden />
+              <p>Wykonywanie symulacji…</p>
+            </div>
+          ) : simulation == null ? (
+            <p className="py-10 text-center text-sm text-slate-500">Brak wyniku symulacji.</p>
+          ) : !hasProducts ? (
+            <div className="flex flex-col items-center justify-center gap-3 py-12 text-center">
+              <p className="text-base font-semibold text-slate-800">
+                {simulation.diagnostics?.empty_reason_message
+                  ?? "Nie znaleziono produktów z dodatnią rekomendacją produkcji."}
+              </p>
+              {(simulation.diagnostics?.empty_reason_details?.length ?? 0) > 0 ? (
+                <ul className="max-w-md space-y-1 text-left text-sm text-slate-600">
+                  {simulation.diagnostics!.empty_reason_details!.map((line) => (
+                    <li key={line} className="flex gap-2">
+                      <span className="shrink-0 text-slate-400">•</span>
+                      <span>{line}</span>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="max-w-sm text-sm text-slate-500">
+                  Symulacja nie zwróciła żadnych produktów.
+                </p>
+              )}
+              {simulation.diagnostics ? (
+                <p className="mt-2 max-w-md text-xs text-slate-400">
+                  tenant={simulation.diagnostics.tenant_id} · warehouse=
+                  {simulation.diagnostics.warehouse_id} · coverage=
+                  {simulation.diagnostics.coverage_days}d · strategy=
+                  {simulation.diagnostics.forecast_strategy} · źródło=
+                  {simulation.diagnostics.input_source}
+                </p>
+              ) : null}
+            </div>
+          ) : (
             <div className="space-y-5">
               <div className="grid gap-3 sm:grid-cols-3">
-                <Stat label="Produkty" value={String(simulation.lines.length)} />
+                <Stat label="Produkty" value={String(productCount)} />
                 <Stat label="Sztuk łącznie" value={fmt(simulation.total_simulated_quantity)} />
                 <Stat label="Nadal krytyczne" value={String(simulation.products_still_critical)} />
               </div>
 
-              {simulation.materials.some((m) => m.shortage > 0) ? (
+              {hasMaterialShortage ? (
                 <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
                   <p className="flex items-center gap-2 text-sm font-bold text-amber-900">
                     <AlertTriangle className="h-4 w-4" aria-hidden />
@@ -94,15 +132,13 @@ export function ProductionSimulationModal({
                 </ul>
               </div>
             </div>
-          ) : (
-            <p className="text-sm text-slate-500">Brak wyniku symulacji.</p>
           )}
         </div>
 
         <div className="flex flex-wrap gap-3 border-t border-slate-100 px-5 py-4">
           <PrimaryButton
             type="button"
-            disabled={creating || !simulation?.lines.length}
+            disabled={!canCreate}
             onClick={onConfirmCreate}
           >
             {creating ? "Tworzenie…" : "Utwórz wszystkie partie"}

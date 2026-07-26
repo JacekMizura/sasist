@@ -2,9 +2,9 @@
 
 ## Active
 
-**Nagłówki modułów — ujednolicenie UX** (build OK).
+**Symulacja planu — diagnostyka pustego wyniku** (bez zmiany MRP).
 
-- Produkcja ERP: wszystkie zakładki → `PageHeader` + Primary/Secondary (`comfortable`)
-- Usunięte zbędne opisy pod tytułem; jeden rozmiar CTA
-- `SecondaryButton` default density = `comfortable` (= Primary)
-- Bez zmian API / logiki / routingu
+- API `diagnostics` + `empty_reason_message` / details przy `lines=[]`
+- Logi: INPUT (tenant/warehouse/strategy/coverage/lines) + SKIP/ACCEPT per produkt
+- Modal pokazuje konkretny powód z backendu
+- Filtry simulate bez zmian

@@ -60,10 +60,14 @@ export default function ProductionPlanningPage() {
     setSimLoading(true);
     setSimulation(null);
     try {
+      const recommendationLines = (planning.data?.products ?? [])
+        .filter((p) => p.recommended_quantity > 0 && p.composition_id != null)
+        .map((p) => ({ product_id: p.product_id, quantity: p.recommended_quantity }));
       const result = await simulateProductionPlan({
         tenant_id: tenantId,
         warehouse_id: warehouseId,
         coverage_days: planning.coverageDays,
+        ...(recommendationLines.length > 0 ? { lines: recommendationLines } : {}),
       });
       setSimulation(result);
     } catch (e: unknown) {
@@ -72,7 +76,7 @@ export default function ProductionPlanningPage() {
     } finally {
       setSimLoading(false);
     }
-  }, [warehouseId, tenantId, planning.coverageDays]);
+  }, [warehouseId, tenantId, planning.coverageDays, planning.data?.products]);
 
   const confirmCreateFromSimulation = useCallback(async () => {
     if (warehouseId == null) return;

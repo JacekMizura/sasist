@@ -95,6 +95,38 @@ class ProductionPlanSimulationLineRead(BaseModel):
     remains_critical: bool = False
 
 
+class ProductionPlanSimulationSkipDetailRead(BaseModel):
+    """Why a candidate product was not simulated (diagnostics only)."""
+
+    product_id: int
+    product_name: Optional[str] = None
+    recommended_quantity: Optional[float] = None
+    composition_id: Optional[int] = None
+    reason_code: str
+    reason: str
+
+
+class ProductionPlanSimulationDiagnosticsRead(BaseModel):
+    """Explain empty / thin simulation results without changing MRP selection."""
+
+    input_source: Literal["request_lines", "snapshot_recommendations"] = "snapshot_recommendations"
+    warehouse_id: int = 0
+    tenant_id: int = 0
+    coverage_days: int = 0
+    forecast_strategy: str = ""
+    snapshot_product_count: int = 0
+    request_line_count: int = 0
+    recommendations_positive_count: int = 0
+    recommendations_with_recipe_count: int = 0
+    candidates_count: int = 0
+    accepted_count: int = 0
+    skip_counts: dict[str, int] = Field(default_factory=dict)
+    skips: List[ProductionPlanSimulationSkipDetailRead] = Field(default_factory=list)
+    empty_reason_code: Optional[str] = None
+    empty_reason_message: Optional[str] = None
+    empty_reason_details: List[str] = Field(default_factory=list)
+
+
 class ProductionPlanSimulationRead(BaseModel):
     tenant_id: int
     warehouse_id: int
@@ -105,6 +137,7 @@ class ProductionPlanSimulationRead(BaseModel):
     products_still_critical: int = 0
     estimated_completion_date: Optional[str] = None
     total_simulated_quantity: float = 0.0
+    diagnostics: Optional[ProductionPlanSimulationDiagnosticsRead] = None
 
 
 class ProductionPlanSimulateBody(BaseModel):
