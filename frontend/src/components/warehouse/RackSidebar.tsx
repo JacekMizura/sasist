@@ -378,15 +378,12 @@ export function RackSidebar({
           />
         </div>
       )}
-      {!showOnlyCatalog && (
+      {!showOnlyCatalog && UI_STRINGS.warehouse.rackSidebar.dragOntoPlan ? (
       <p className="mb-1.5 text-[10px] leading-snug text-slate-500">{UI_STRINGS.warehouse.rackSidebar.dragOntoPlan}</p>
-      )}
-      {!showOnlyCatalog && rowToolTemplate && (
-        <p className="text-[10px] text-emerald-700 mb-1 font-medium">Kliknij w pusty slot na planie, aby wypełnić szablonem</p>
-      )}
-      {!showOnlyCatalog && rowToolActive && !rowToolTemplate && (
+      ) : null}
+      {!showOnlyCatalog && rowToolActive && !rowToolTemplate && UI_STRINGS.warehouse.rackSidebar.rowToolHint ? (
         <p className="text-[10px] text-amber-700 mb-1">{UI_STRINGS.warehouse.rackSidebar.rowToolHint}</p>
-      )}
+      ) : null}
           </>
         )}
         </div>
@@ -686,7 +683,6 @@ export function RackSidebar({
         <WarehouseRailSection title={UI_STRINGS.warehouse.rackSidebar.visualElements} separated>
           {setWallElementTool && (
             <>
-              <p className="mb-1.5 text-[10px] leading-snug text-slate-500">Kliknij na krawędź budynku (obwód), aby umieścić.</p>
               <Toolbar
                 className="mb-1.5"
                 start={
@@ -710,7 +706,9 @@ export function RackSidebar({
               />
             </>
           )}
+          {UI_STRINGS.warehouse.rackSidebar.dragOntoPlan ? (
           <p className="mb-1.5 text-[10px] leading-snug text-slate-500">{UI_STRINGS.warehouse.rackSidebar.dragOntoPlan}</p>
+          ) : null}
           <div className="space-y-1.5">
           {VISUAL_ITEMS.map(({ type, label, size }) => (
             <ListTile

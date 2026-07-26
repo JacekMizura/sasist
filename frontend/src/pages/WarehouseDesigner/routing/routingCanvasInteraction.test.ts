@@ -350,10 +350,10 @@ describe("FINAL AUDIT routing designer", () => {
 
   it("TECHNICAL UI TERMS: operator-facing copy has no jargon", () => {
     const userFacing = [
-      "Rysuj trasę",
+      "Rysuj",
       "Wybierz",
-      "Testuj trasę",
-      "Zapisz sieć",
+      "Testuj",
+      "Zapisz",
       "Sprawdź sieć",
       "Usuń niepołączone punkty",
       "Usuń punkt",
@@ -361,8 +361,6 @@ describe("FINAL AUDIT routing designer", () => {
       "Obsługiwane lokalizacje",
       "Punkt trasy",
       "Odcinek trasy",
-      "Kliknij punkt początkowy na mapie.",
-      "Kliknij punkt docelowy.",
       "Usunąć ten odcinek trasy?",
       humanizeRouteTestMessage({ ok: false, error_code: "ROUTING_GRAPH_NOT_CONFIGURED" }, 0),
       humanizeRouteTestMessage({ ok: false, message: "Sieć tras nie ma odcinków (edges)." }, 0),
@@ -383,7 +381,7 @@ describe("FINAL AUDIT routing designer", () => {
 
   it("humanize never requires process/transport for empty network", () => {
     const msg = humanizeRouteTestMessage({ ok: false, error_code: "ROUTING_GRAPH_NOT_CONFIGURED" }, 0);
-    expect(msg).toMatch(/Rysuj trasę/);
+    expect(msg).toMatch(/Brak sieci tras/);
     expect(msg.toLowerCase()).not.toContain("proces");
     expect(msg.toLowerCase()).not.toContain("transport");
   });

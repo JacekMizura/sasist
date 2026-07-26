@@ -114,7 +114,7 @@ export function DamageReportsPanel({
           <div className="flex items-center gap-2">
             {view !== "list" && (
               <button type="button" onClick={() => setView("list")} className="rounded-md border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50">
-                Wróć do listy
+                Lista
               </button>
             )}
             <button type="button" onClick={onClose} className="rounded-md px-2 py-1 text-sm text-slate-500 hover:bg-slate-100 hover:text-slate-700">
@@ -132,12 +132,12 @@ export function DamageReportsPanel({
             </div>
             {tab === "wms" && (
               <div className="space-y-3 rounded-lg border border-slate-200 p-4">
-                <p className="text-sm font-semibold text-slate-900">WMS (returns handling)</p>
+                <p className="text-sm font-semibold text-slate-900">WMS</p>
                 <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
                   <div>
-                    <label className="mb-1 block text-xs font-semibold text-slate-600">Produkt (uszkodzona lokalizacja)</label>
+                    <label className="mb-1 block text-xs font-semibold text-slate-600">Produkt</label>
                     <select value={selectedCandidateKey} onChange={(e) => setSelectedCandidateKey(e.target.value)} className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm">
-                      <option value="">Wybierz...</option>
+                      <option value="">Produkt…</option>
                       {candidates.map((x) => <option key={`${x.productId}|${x.locationUUID}`} value={`${x.productId}|${x.locationUUID}`}>{x.productName} ({x.sku || "—"}) • {x.locationLabel}</option>)}
                     </select>
                   </div>
@@ -146,7 +146,7 @@ export function DamageReportsPanel({
                     <input type="number" min={1} value={quantity} onChange={(e) => setQuantity(Math.max(1, Number(e.target.value) || 1))} className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm" />
                   </div>
                   <div>
-                    <label className="mb-1 block text-xs font-semibold text-slate-600">URL zdjęcia (wymagane — pierwsze z listy)</label>
+                    <label className="mb-1 block text-xs font-semibold text-slate-600">URL zdjęcia</label>
                     <input value={photoUrl} onChange={(e) => setPhotoUrl(e.target.value)} className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm" />
                   </div>
                   <div>
@@ -159,8 +159,8 @@ export function DamageReportsPanel({
                   onClick={async () => {
                     if (warehouseId == null) return;
                     const c = byKey.get(selectedCandidateKey);
-                    if (!c) return alert("Wybierz produkt/lokalizację.");
-                    if (!photoUrl.trim()) return alert("Photo URL jest wymagane.");
+                    if (!c) return alert("Wybierz produkt.");
+                    if (!photoUrl.trim()) return alert("Brak URL zdjęcia.");
                     await createDamageEntry({
                       tenant_id: tenantId,
                       warehouse_id: warehouseId,
@@ -174,7 +174,7 @@ export function DamageReportsPanel({
                     setTab("office");
                   }}
                 >
-                  Zapisz DamageEntry (NEW)
+                  Zapisz
                 </PrimaryButton>
               </div>
             )}
@@ -226,7 +226,7 @@ export function DamageReportsPanel({
                               });
                               setEntries((prev) => prev.map((x) => (x.id === reviewed.id ? reviewed : x)));
                             }} className="rounded bg-amber-600 px-2 py-1 text-white">
-                              Oznacz REVIEWED
+                              Oznacz
                             </button>
                           </td>
                         </tr>
@@ -240,7 +240,7 @@ export function DamageReportsPanel({
             {tab === "reports" && (
               <div className="space-y-3">
                 <div className="rounded-lg border border-slate-200 p-3">
-                  <p className="mb-2 text-sm font-semibold text-slate-900">Wybierz pozycje REVIEWED do raportu</p>
+                  <p className="mb-2 text-sm font-semibold text-slate-900">Pozycje REVIEWED</p>
                   <div className="max-h-52 space-y-1 overflow-auto">
                     {entries.filter((e) => e.status === "REVIEWED").map((e) => (
                       <label key={e.id} className="flex items-center gap-2 text-xs">
@@ -262,7 +262,7 @@ export function DamageReportsPanel({
                     className="mt-3"
                     onClick={async () => {
                       if (warehouseId == null) return;
-                      if (selectedReviewedEntryIds.length === 0) return alert("Wybierz REVIEWED entries.");
+                      if (selectedReviewedEntryIds.length === 0) return alert("Brak zaznaczonych pozycji.");
                       const created = await createDamageReport({
                         tenant_id: tenantId,
                         warehouse_id: warehouseId,
@@ -280,7 +280,7 @@ export function DamageReportsPanel({
                       setSelectedReviewedEntryIds([]);
                     }}
                   >
-                    Utwórz protokół szkody
+                    Utwórz protokół
                   </PrimaryButton>
                 </div>
 
@@ -330,7 +330,7 @@ export function DamageReportsPanel({
               </div>
               <div className="flex items-center gap-2">
                 <button type="button" onClick={() => generateDamageReportPDF(selectedReport)} className="rounded-md border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50">
-                  Pobierz PDF
+                  Pobierz
                 </button>
                 {selectedReport.status !== "confirmed" && (
                   <button

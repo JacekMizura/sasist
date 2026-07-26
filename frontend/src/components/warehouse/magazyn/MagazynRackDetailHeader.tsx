@@ -42,7 +42,7 @@ export function MagazynRackDetailHeader({
           onClick={onBackToMap}
           className="flex items-center gap-1.5 text-sm font-medium text-cyan-600 hover:text-cyan-700 hover:underline"
         >
-          <span aria-hidden>←</span> Powrót do mapy
+          Powrót
         </button>
         {rack && onShowLabelDownload && (
           <PrimaryButton type="button" onClick={onShowLabelDownload}>

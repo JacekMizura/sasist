@@ -450,7 +450,7 @@ export function humanizeRouteTestMessage(
 ): string {
   if (result.ok) return result.message?.trim() || "Trasa wyznaczona.";
   if (edgeCount === 0) {
-    return "Najpierw narysuj drogę w trybie «Rysuj trasę».";
+    return "Brak sieci tras.";
   }
   const code = (result.error_code || "").toUpperCase();
   if (
@@ -458,16 +458,16 @@ export function humanizeRouteTestMessage(
     code.includes("NO_EDGES") ||
     /edges/i.test(result.message || "")
   ) {
-    return "Nie można wyznaczyć trasy, ponieważ drogi nie są jeszcze połączone.";
+    return "Brak połączeń.";
   }
   if (code.includes("NO_PATH") || code.includes("DISCONNECTED")) {
-    return "Nie znaleziono połączenia między wybranymi punktami.";
+    return "Brak trasy.";
   }
   if (code.includes("NODE_NOT_FOUND")) {
-    return "Nie znaleziono wybranego punktu na sieci tras.";
+    return "Nie znaleziono punktu.";
   }
   if (code.includes("OVERLAPPING")) {
-    return "Drogi nakładały się — spróbuj narysować je ponownie; system zwykle łączy je automatycznie.";
+    return "Drogi nachodzą na siebie.";
   }
   const rawMsg = (result.message || "").trim();
   if (!rawMsg) return "Nie udało się wyznaczyć trasy.";

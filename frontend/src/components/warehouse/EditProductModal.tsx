@@ -197,7 +197,7 @@ export function EditProductModal({
                     setVolumeDm3(round2(p.volume_dm3));
                     if (p.image_url != null) setImageUrl(p.image_url);
                   }}
-                  placeholder="Wpisz nazwę lub wybierz z bazy..."
+                  placeholder="Szukaj produktu…"
                   required
                 />
               ) : (
@@ -306,7 +306,7 @@ export function EditProductModal({
                   type="text"
                   value={locationSearch}
                   onChange={(e) => setLocationSearch(e.target.value)}
-                  placeholder="Szukaj (np. A.1-1-A)..."
+                  placeholder="Szukaj lokalizacji…"
                   className="w-full rounded-lg border border-slate-200 px-3 py-2 text-slate-800 focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 mb-2"
                 />
                 <select

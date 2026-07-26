@@ -62,7 +62,6 @@ export function RackLocationsSection({
 
   return (
     <div className="space-y-2">
-      <p className="text-[10px] text-slate-400">Kliknij lokalizację, aby ją zaznaczyć.</p>
       {Array.from({ length: storageLevels.length }, (_, storageIdx) => storageIdx)
         .reverse()
         .map((storageIdx) => {

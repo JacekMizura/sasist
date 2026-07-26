@@ -68,9 +68,6 @@ export function WarehouseMiniMap({
           })}
         </svg>
       </div>
-      <p className="text-[10px] text-slate-500 mt-1 px-2">
-        Kliknij regał, aby zobaczyć widok z boku
-      </p>
     </div>
   );
 }

@@ -61,14 +61,14 @@ export function StructureRebuildConfirmDialog({
         <div className="flex items-start justify-between gap-2 border-b border-slate-200 px-4 py-3">
           <div className="min-w-0">
             <h2 id="structure-rebuild-title" className="text-base font-bold text-slate-900">
-              {blocked ? "Przebudowa zablokowana" : "Podgląd przebudowy lokalizacji"}
+              {blocked ? "Przebudowa zablokowana" : "Przebudowa lokalizacji"}
             </h2>
             <p className="mt-1 text-sm text-slate-600">
               {hasActiveOps
-                ? "Nie można przebudować regału. Usuwane lokalizacje są wykorzystywane przez aktywne operacje magazynowe."
+                ? "Lokalizacje w aktywnych operacjach."
                 : hasStock
-                  ? `Nie można zapisać zmian, dopóki na usuwanych lokalizacjach jest towar (${stockedCount}). Przenieś towar, potem zapisz ponownie.`
-                  : "Zmiana struktury (w tym przejazd pod regałem) zmieni lokalizacje. Nic nie zostanie zapisane bez Twojej decyzji."}
+                  ? `Towar na usuwanych lokalizacjach: ${stockedCount}.`
+                  : "Zmiana struktury lokalizacji."}
             </p>
           </div>
           <button
@@ -100,10 +100,7 @@ export function StructureRebuildConfirmDialog({
           )}
           {hasStock && (
             <div className="rounded-lg border-2 border-rose-400 bg-rose-50 px-3 py-3 text-sm text-rose-950">
-              <p className="font-bold">Operacja zablokowana — towar na lokalizacjach do usunięcia</p>
-              <p className="mt-1 text-[13px] text-rose-900/90">
-                Poniżej widać produkt, ilość i wartość. Przenieś te pozycje na inne lokalizacje.
-              </p>
+              <p className="font-bold">Towar na lokalizacjach do usunięcia</p>
             </div>
           )}
 
@@ -206,7 +203,7 @@ export function StructureRebuildConfirmDialog({
               className={brandPrimaryButtonClass}
               onClick={onConfirm}
             >
-              Przebuduj i zapisz
+              Przebuduj
             </button>
           )}
         </div>

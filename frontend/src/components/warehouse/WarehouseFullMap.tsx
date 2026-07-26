@@ -54,9 +54,6 @@ export function WarehouseFullMap({
 
   return (
     <div className={`flex flex-col flex-1 min-h-0 ${className}`}>
-      <div className="shrink-0 px-3 py-2 border-b border-slate-100 bg-slate-50/50 text-sm text-slate-600">
-        Kliknij regał na mapie, aby zobaczyć widok z boku
-      </div>
       <div className="flex-1 min-h-0 w-full overflow-hidden bg-slate-100/50 rounded-b-xl">
         <svg
           viewBox={`0 0 ${viewW} ${viewH}`}

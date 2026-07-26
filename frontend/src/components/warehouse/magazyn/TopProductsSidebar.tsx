@@ -77,7 +77,7 @@ export function TopProductsSidebar({
               type="text"
               value={productSearchQuery}
               onChange={(e) => setProductSearchQuery(e.target.value)}
-              placeholder="Szukaj nazwy lub SKU…"
+              placeholder="Szukaj produktu…"
               className="w-full rounded-xl border-0 bg-white py-2.5 pl-10 pr-3 text-sm text-slate-900 shadow-sm ring-1 ring-slate-200/80 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-orange-400/40"
             />
           </div>

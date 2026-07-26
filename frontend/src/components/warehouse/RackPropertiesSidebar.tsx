@@ -172,7 +172,7 @@ export function RackPropertiesSidebar({
   const requestClose = useCallback(() => {
     if (
       nameSaveHint === "dirty" &&
-      !window.confirm("Masz niezapisane zmiany nazwy regału. Zamknąć panel bez zapisu układu?")
+      !window.confirm("Zamknąć bez zapisu?")
     ) {
       return;
     }
@@ -283,7 +283,7 @@ export function RackPropertiesSidebar({
             </div>
           </>
         ) : !selectedRack ? (
-          <p className="text-sm font-medium text-slate-600">Wybierz regał na planie lub zamknij panel.</p>
+          <p className="text-sm font-medium text-slate-600">Brak wybranego regału.</p>
         ) : (
           <div className="space-y-4">
             {/* —— Informacje —— */}

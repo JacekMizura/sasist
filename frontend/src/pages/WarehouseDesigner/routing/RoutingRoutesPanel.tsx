@@ -107,7 +107,9 @@ export function RoutingRoutesPanel({
     if (!n) return;
     if (
       !window.confirm(
-        `Sieć zawiera ${n} niepołączonych punktów.\nMożesz je usunąć i narysować sieć od nowa.\n\nUsunąć niepołączone punkty?`
+        orphans.length === 1
+          ? "Usunąć 1 niepołączony punkt?"
+          : `Usunąć ${n} niepołączonych punktów?`
       )
     ) {
       return;
@@ -187,10 +189,10 @@ export function RoutingRoutesPanel({
           {orphans.length > 0 && (
             <Card variant="section" density="compact" className="mt-2 space-y-2 border-amber-200 bg-amber-50 text-amber-900">
               {routing.edges.length === 0
-                ? `Sieć zawiera ${orphans.length} niepołączonych punktów. Możesz je usunąć i narysować sieć od nowa.`
+                ? `${orphans.length} niepołączonych punktów.`
                 : orphans.length === 1
-                  ? "1 punkt nie jest połączony z żadną trasą."
-                  : `${orphans.length} punktów nie jest połączonych z żadną trasą.`}
+                  ? "1 punkt niepołączony."
+                  : `${orphans.length} punktów niepołączonych.`}
               <PrimaryButton
                 intent="warning"
                 density="compact"

@@ -46,7 +46,7 @@ export function ProductSearchAutocomplete({
   value,
   onChange,
   onSelectProduct,
-  placeholder = "Wpisz nazwę produktu...",
+  placeholder = "Szukaj produktu...",
   required = false,
   disabled = false,
 }: ProductSearchAutocompleteProps) {

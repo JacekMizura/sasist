@@ -702,9 +702,7 @@ export default function WarehouseDesigner() {
 
   const confirmLeaveRoutingDirty = useCallback(() => {
     if (!routing.dirty) return true;
-    return window.confirm(
-      "Masz niezapisane zmiany sieci tras. Kontynuować bez zapisu? Niezapisane zmiany zostaną utracone."
-    );
+    return window.confirm("Opuścić bez zapisu?");
   }, [routing.dirty]);
 
   useEffect(() => {
@@ -1758,7 +1756,7 @@ export default function WarehouseDesigner() {
       const unsaved = lastSavedAt == null && hasLayoutContent;
       if (
         unsaved &&
-        !window.confirm("Masz niezapisane zmiany układu magazynu. Przełączyć magazyn bez zapisu?")
+        !window.confirm("Przełączyć bez zapisu?")
       ) {
         return;
       }
@@ -1943,7 +1941,7 @@ export default function WarehouseDesigner() {
 
     if (patches.length === 0) {
       setClearRackConfirmOpen(false);
-      alert("Brak przypisań produktów do lokalizacji tego regału.");
+      alert("Brak przypisań.");
       return;
     }
 
@@ -1955,7 +1953,7 @@ export default function WarehouseDesigner() {
       setClearRackConfirmOpen(false);
     } catch (e) {
       console.error(e);
-      alert("Nie udało się opróżnić regału. Spróbuj ponownie.");
+      alert("Nie udało się opróżnić.");
     } finally {
       setClearRackBusy(false);
     }
@@ -2032,7 +2030,7 @@ export default function WarehouseDesigner() {
         setSpecialLocations(data ?? { pick_start: null, packing: null, dock: null });
       } catch (err) {
         console.error("Delete special location:", err);
-        setSnackbar({ message: "Nie udało się usunąć punktu z mapy." });
+        setSnackbar({ message: "Nie udało się usunąć." });
         try {
           const { data } = await api.get<SpecialLocationsState>(`/warehouse/${selectedWarehouseId}/special-locations`);
           setSpecialLocations(data ?? { pick_start: null, packing: null, dock: null });
@@ -2170,7 +2168,7 @@ export default function WarehouseDesigner() {
         });
       } catch (e: unknown) {
         const status = (e as { response?: { status?: number } })?.response?.status;
-        if (status !== 404) setSnackbar({ message: "Nie udało się usunąć szablonu na serwerze." });
+        if (status !== 404) setSnackbar({ message: "Nie udało się usunąć." });
       }
     })();
   }, []);
@@ -2413,7 +2411,7 @@ export default function WarehouseDesigner() {
 
       const validated = validateAndSanitizeLayoutPayload(payload);
       if (!validated.ok) {
-        const msg = `Nie można zapisać — nieprawidłowy układ: ${validated.errors.join(" · ")}`;
+        const msg = `Nie udało się zapisać: ${validated.errors.join(" · ")}`;
         console.error("[saveLayout] validation failed:", validated.errors);
         setSnackbar({ message: msg });
         logLayoutSaveDuration({ warehouse_id: whId, duration_ms: Math.round(performance.now() - saveStarted), success: false });
@@ -2455,18 +2453,18 @@ export default function WarehouseDesigner() {
         setSnackbar({
           message: detailStr
             ? detailStr
-            : "Zapis zablokowany — lokalizacje do usunięcia mają stan magazynowy.",
+            : "Zapis zablokowany — lokalizacje ze stanem.",
         });
       } else if (status === 400) {
-        setSnackbar({ message: detailStr ? `Zapis nie powiódł się: ${detailStr}` : "Zapis nie powiódł się — duplikat nazwy regału" });
+        setSnackbar({ message: detailStr ? `Nie udało się zapisać: ${detailStr}` : "Nie udało się zapisać." });
       } else if (status === 422) {
-        setSnackbar({ message: detailStr ? `Walidacja: ${detailStr}` : "Zapis nie powiódł się — błąd walidacji danych." });
+        setSnackbar({ message: detailStr ? `Nie udało się zapisać: ${detailStr}` : "Nie udało się zapisać." });
       } else if (status === 500) {
         setSnackbar({
-          message: detailStr ? `Błąd serwera (500): ${detailStr}` : "Błąd serwera przy zapisie układu (500). Szczegóły w konsoli.",
+          message: detailStr ? `Nie udało się zapisać: ${detailStr}` : "Nie udało się zapisać.",
         });
       } else {
-        setSnackbar({ message: detailStr ? `Zapis nie powiódł się: ${detailStr}` : "Zapis nie powiódł się." });
+        setSnackbar({ message: detailStr ? `Nie udało się zapisać: ${detailStr}` : "Nie udało się zapisać." });
       }
     } finally {
       setSaving(false);
@@ -2831,10 +2829,10 @@ export default function WarehouseDesigner() {
         const fill1 = effectiveRowAutoFill(r1, pending);
         const fill2 = effectiveRowAutoFill(r2, pending);
         if (fill1 && !item1) {
-          return "Wybierz szablon dla rzędu 1, aby włączyć automatyczne wypełnienie.";
+          return "Wybierz szablon (rząd 1).";
         }
         if (fill2 && !item2) {
-          return "Wybierz szablon dla rzędu 2, aby włączyć automatyczne wypełnienie.";
+          return "Wybierz szablon (rząd 2).";
         }
         const names: string[] = [];
         const p1 = normalizeRowPrefixLetters(r1.rowPrefix);
@@ -2859,7 +2857,7 @@ export default function WarehouseDesigner() {
         const item1 = resolveRowCatalogItemForRowModal(r1, pending, 1, customTemplates);
         const wantFill = effectiveRowAutoFill(r1, pending);
         if (wantFill && !item1) {
-          return "Wybierz szablon, aby włączyć automatyczne wypełnienie.";
+          return "Wybierz szablon.";
         }
         if (wantFill && item1) {
           const cnt = countPlaceRowWithTemplateRacks(layout, pending.start, pending.end, item1, rowGapCm);
@@ -3259,11 +3257,11 @@ export default function WarehouseDesigner() {
         }
         if (variant === "product_locations") {
           if (selectedWarehouseId == null) {
-            alert("Wybierz magazyn, aby wygenerować raport lokalizacji produktów.");
+            alert("Wybierz magazyn.");
             return;
           }
           if (layout.layout_id == null) {
-            alert("Brak aktywnego układu magazynu.");
+            alert("Brak układu.");
             return;
           }
           await downloadProductLocationReportPdf(selectedWarehouseId, layout.layout_id, TENANT_ID);
@@ -3271,11 +3269,11 @@ export default function WarehouseDesigner() {
         }
         if (variant === "technical") {
           if (selectedWarehouseId == null) {
-            alert("Wybierz magazyn, aby wygenerować raport struktury.");
+            alert("Wybierz magazyn.");
             return;
           }
           if (layout.layout_id == null) {
-            alert("Brak aktywnego układu magazynu.");
+            alert("Brak układu.");
             return;
           }
           await downloadStructureReportPdf(selectedWarehouseId, layout.layout_id, TENANT_ID);
@@ -3306,7 +3304,7 @@ export default function WarehouseDesigner() {
         await generateWarehousePDF(data);
       } catch (e) {
         console.error(e);
-        alert("Nie udało się wygenerować raportu PDF");
+        alert("Nie udało się pobrać raportu.");
       }
     },
     [
@@ -3903,7 +3901,7 @@ export default function WarehouseDesigner() {
             <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-slate-100/80">
               {layout.racks.length === 0 ? (
                 <div className="flex min-h-0 min-w-0 max-w-full flex-1 basis-0 flex-col items-center justify-center p-8 text-slate-500">
-                  <p className="text-sm">Brak regałów. Przejdź do Projektu Layoutu, aby dodać regały i zobaczyć widok z boku.</p>
+                  <p className="text-sm">Brak regałów.</p>
                 </div>
               ) : (
                 <>
@@ -4370,9 +4368,7 @@ export default function WarehouseDesigner() {
                 );
                 const tid = rack?.templateId;
                 if (!tid) {
-                  window.alert(
-                    "Ten regał nie ma powiązanego szablonu. Otwórz szablon z katalogu w panelu bocznym."
-                  );
+                  window.alert("Brak szablonu regału.");
                   return;
                 }
                 setEditingTemplateId(tid);
@@ -4702,7 +4698,7 @@ export default function WarehouseDesigner() {
           <Dialog
             open
             onClose={() => setPendingVariantSave(null)}
-            title="Zapisz jako nowy wariant"
+            title="Nowy wariant"
             size="md"
             rootClassName="!z-[280]"
             footer={
@@ -4730,14 +4726,12 @@ export default function WarehouseDesigner() {
                     setPendingVariantSave(null);
                   }}
                 >
-                  Potwierdź
+                  Zapisz
                 </PrimaryButton>
               </>
             }
           >
-            <p className="text-sm text-slate-600">
-              Układ różni się od szablonu bazowego. Zapisz jako nowy wariant? Nic nie zostanie zapisane bez Twojej decyzji.
-            </p>
+            <p className="text-sm text-slate-600">Zapisać układ jako nowy wariant?</p>
             <label className="mt-3 block text-xs font-semibold uppercase tracking-wide text-slate-500">
               Nazwa wariantu
             </label>
@@ -4858,21 +4852,21 @@ export default function WarehouseDesigner() {
         clearRackTargetKey != null &&
         layout.racks.some((r) => String(r.id ?? r.rack_index) === clearRackTargetKey) && (
           <ConfirmModal
-            title="Opróżnij regał"
+            title={`Opróżnić regał ${clearRackConfirmPreview.rackLabel || "—"}?`}
             message={
               <>
-                <p>
-                  Czy na pewno opróżnić regał {clearRackConfirmPreview.rackLabel || "—"}?
-                </p>
-                <p className="mt-2 text-sm text-slate-400">
+                <p className="text-slate-500">Usuniętych zostanie:</p>
+                <p className="mt-1 font-medium text-slate-800">
                   {clearRackConfirmPreview.assignmentCount === 1
-                    ? "Zostanie usunięte 1 przypisanie produktu."
-                    : clearRackConfirmPreview.assignmentCount >= 2 && clearRackConfirmPreview.assignmentCount <= 4
-                      ? `Zostaną usunięte ${clearRackConfirmPreview.assignmentCount} przypisania produktów.`
-                      : `Zostanie usuniętych ${clearRackConfirmPreview.assignmentCount} przypisań produktów.`}
+                    ? "1 przypisanie produktu"
+                    : clearRackConfirmPreview.assignmentCount >= 2 &&
+                        clearRackConfirmPreview.assignmentCount <= 4
+                      ? `${clearRackConfirmPreview.assignmentCount} przypisania produktów`
+                      : `${clearRackConfirmPreview.assignmentCount} przypisań produktów`}
                 </p>
               </>
             }
+            confirmLabel="Opróżnij"
             onCancel={() => {
               if (!clearRackBusy) setClearRackConfirmOpen(false);
             }}

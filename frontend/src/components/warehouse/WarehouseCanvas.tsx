@@ -905,7 +905,7 @@ function WarehouseCanvasInner({
       }}
     >
       {selectedWarehouseId == null ? (
-        <div className="flex flex-1 items-start justify-start p-3" style={{ color: colors.textSecondary }}>Wybierz magazyn lub utwórz nowy.</div>
+        <div className="flex flex-1 items-start justify-start p-3" style={{ color: colors.textSecondary }}>Brak magazynu.</div>
       ) : loading ? (
         <div className="flex flex-1 items-start justify-start p-3" style={{ color: colors.textSecondary }}>Ładowanie…</div>
       ) : (
@@ -1095,7 +1095,7 @@ function WarehouseCanvasInner({
                     density="compact"
                     onMouseDown={(e) => { e.preventDefault(); onStartRowDrag(e); }}
                     className="!cursor-grab active:!cursor-grabbing"
-                    title="Przeciągnij rząd (przesuń cały rząd)"
+                    title="Przesuń rząd"
                   >
                     <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24" aria-hidden><circle cx="9" cy="6" r="1.5"/><circle cx="15" cy="6" r="1.5"/><circle cx="9" cy="12" r="1.5"/><circle cx="15" cy="12" r="1.5"/><circle cx="9" cy="18" r="1.5"/><circle cx="15" cy="18" r="1.5"/></svg>
                     Przenieś rząd

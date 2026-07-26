@@ -445,7 +445,7 @@ ackProductsForMap);
           type="text"
           value={productSearchQuery}
           onChange={(e) => setProductSearchQuery(e.target.value)}
-          placeholder="Szukaj nazwy lub SKU…"
+          placeholder="Szukaj produktu…"
           className="w-full rounded-xl border-0 bg-white px-3 py-2.5 text-sm text-slate-900 shadow-sm ring-1 ring-slate-200/80 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-orange-400/40"
         />
         {selectedRackForMagazyn && (
@@ -747,20 +747,15 @@ ackProductsForMap);
       {/* EditProductModal only openable from Layout (Widok z boku); not rendered in Magazyn */}
       {confirmRemoveAssignment != null && onRemoveProductAssignment && (
         <ConfirmModal
-          title="Usuń przypisanie"
-          message={
-            <>
-              <p>Czy na pewno chcesz usunąć produkt z tej lokalizacji?</p>
-              <p className="mt-2 text-xs text-slate-400 truncate">
-                {confirmRemoveAssignment.label}
-              </p>
-              {confirmRemoveAssignment.productName ? (
-                <p className="mt-1 text-xs text-slate-500 truncate">
-                  {confirmRemoveAssignment.productName}
-                </p>
-              ) : null}
-            </>
+          title={
+            confirmRemoveAssignment.productName
+              ? `Usunąć ${confirmRemoveAssignment.productName}?`
+              : "Usunąć przypisanie?"
           }
+          message={
+            <p className="truncate text-slate-600">{confirmRemoveAssignment.label}</p>
+          }
+          confirmLabel="Usuń"
           onCancel={() => {
             if (assignmentRemovingKey == null) setConfirmRemoveAssignment(null);
           }}
@@ -774,7 +769,7 @@ ackProductsForMap);
               setConfirmRemoveAssignment(null);
             } catch (err) {
               console.error(err);
-              alert("Nie udało się usunąć przypisania. Spróbuj ponownie.");
+              alert("Nie udało się usunąć.");
             } finally {
               setAssignmentRemovingKey(null);
             }

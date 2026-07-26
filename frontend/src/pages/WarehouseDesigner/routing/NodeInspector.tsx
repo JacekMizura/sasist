@@ -199,8 +199,7 @@ export function NodeInspector({
         </div>
         {routing.showAccessDiagnostics && (
           <p className="mb-2 text-[10px] text-slate-500">
-            Domyślnie: marker strony obsługi per regał (OK / do sprawdzenia / brak). Kliknij regał, aby
-            zobaczyć podejścia S→P.
+            Marker strony obsługi: OK / do sprawdzenia / brak.
           </p>
         )}
         <ul className="mb-2 flex max-h-24 flex-wrap gap-1 overflow-auto">

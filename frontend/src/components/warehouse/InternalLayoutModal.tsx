@@ -585,7 +585,7 @@ export function InternalLayoutModal({ layout = null, rack, warehouseLabel, onSav
                                 type="button"
                                 onClick={() => removeLocation(levIdx, binIndex)}
                                 className="absolute top-2 right-2 h-5 w-5 rounded border border-red-200 bg-red-100 text-[11px] font-bold text-red-700 hover:bg-red-200 z-10"
-                                title="Usuń lokalizację"
+                                title="Usuń"
                               >
                                 ✕
                               </button>
@@ -616,7 +616,7 @@ export function InternalLayoutModal({ layout = null, rack, warehouseLabel, onSav
                                       type="button"
                                       onClick={() => setEditingNameKey(cellKey)}
                                       className="text-left w-full"
-                                      title="Kliknij, aby edytować nazwę lokalizacji"
+                                      title="Edytuj nazwę"
                                     >
                                       <span className="inline-flex items-center rounded-md bg-white/80 border border-slate-200 px-2 py-0.5 text-[16px] font-bold text-slate-800 max-w-full truncate leading-tight">
                                         {showPrimaryName}
@@ -679,7 +679,7 @@ export function InternalLayoutModal({ layout = null, rack, warehouseLabel, onSav
                                       type="button"
                                       onClick={() => setEditingDimensionsKey(cellKey)}
                                       className="inline-flex items-center gap-1 text-left"
-                                      title="Kliknij, aby edytować wymiary"
+                                      title="Edytuj wymiary"
                                     >
                                       <span className="inline-flex items-center rounded-md bg-white/80 border border-slate-200 px-1.5 py-0.5 text-[10px] font-semibold text-slate-700">{formatDimBadge("SZ", widthCm)}</span>
                                       <span className="inline-flex items-center rounded-md bg-white/80 border border-slate-200 px-1.5 py-0.5 text-[10px] font-semibold text-slate-700">{formatDimBadge("GŁ", depthCm)}</span>

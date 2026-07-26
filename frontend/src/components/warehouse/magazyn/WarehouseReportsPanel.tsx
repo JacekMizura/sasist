@@ -5,40 +5,15 @@ import { AppOverlayPortal } from "../../../components/overlay";
 type ReportItem = {
   id: WarehouseReportVariant | "warehouse_value" | "top_volume";
   title: string;
-  description: string;
 };
 
 const REPORT_ITEMS: ReportItem[] = [
-  {
-    id: "technical",
-    title: "Raport struktury magazynu",
-    description: "Przegląd struktury lokalizacji, szablonów i układu pojemności.",
-  },
-  {
-    id: "operations",
-    title: "Raport zajętości magazynu",
-    description: "Kluczowe wskaźniki wykorzystania przestrzeni i podział stref.",
-  },
-  {
-    id: "executive",
-    title: "Raport zarządczy",
-    description: "Syntetyczne KPI biznesowe i priorytety decyzyjne dla kierownictwa.",
-  },
-  {
-    id: "product_locations",
-    title: "Raport lokalizacji produktów",
-    description: "Rozkład produktów po lokalizacjach z ilością i typem strefy składowania.",
-  },
-  {
-    id: "warehouse_value",
-    title: "Raport wartości magazynu",
-    description: "Łączna wartość produktów na podstawie cen zakupu i przypisanych lokalizacji.",
-  },
-  {
-    id: "top_volume",
-    title: "Największe produkty (TOP 10)",
-    description: "Produkty zajmujące najwięcej przestrzeni magazynowej (objętość, waga, wartość).",
-  },
+  { id: "technical", title: "Raport struktury magazynu" },
+  { id: "operations", title: "Raport zajętości magazynu" },
+  { id: "executive", title: "Raport zarządczy" },
+  { id: "product_locations", title: "Raport lokalizacji produktów" },
+  { id: "warehouse_value", title: "Raport wartości magazynu" },
+  { id: "top_volume", title: "Największe produkty (TOP 10)" },
 ];
 
 export type WarehouseReportsPanelProps = {
@@ -78,7 +53,6 @@ export function WarehouseReportsPanel({
             <div key={item.id} className="flex flex-col gap-2 rounded-lg border border-slate-200 bg-white p-4 sm:flex-row sm:items-center sm:justify-between">
               <div className="min-w-0">
                 <p className="text-sm font-semibold text-slate-900">{item.title}</p>
-                <p className="mt-1 text-xs text-slate-600">{item.description}</p>
               </div>
               <PrimaryButton
                 type="button"
@@ -98,7 +72,7 @@ export function WarehouseReportsPanel({
                 }}
                 className="shrink-0"
               >
-                Pobierz PDF
+                Pobierz
               </PrimaryButton>
             </div>
           ))}

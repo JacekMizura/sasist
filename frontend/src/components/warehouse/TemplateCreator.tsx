@@ -1124,7 +1124,6 @@ export function TemplateCreator({ onSave, initialTemplate, onCancelEdit, onSaveE
 
         {namingStrategy === "manual" && (
           <>
-            <p className="text-slate-600 text-sm">Kliknij komórki w podglądzie, aby wpisać etykiety. Możesz też wkleić listę (jedna etykieta na linię).</p>
             <button type="button" onClick={handlePasteList} className="rounded-lg border border-slate-200/80 bg-slate-50 text-slate-700 px-3 py-2 text-sm font-medium hover:bg-slate-100 transition-colors duration-150">
               Wklej listę
             </button>
@@ -1134,7 +1133,7 @@ export function TemplateCreator({ onSave, initialTemplate, onCancelEdit, onSaveE
         {namingStrategy !== "manual" && (
           <label className="flex items-center gap-2 text-slate-600 cursor-pointer text-sm">
             <input type="checkbox" checked={allowOverrides} onChange={(e) => setAllowOverrides(e.target.checked)} className="rounded" />
-            Nadpisz pojedyncze etykiety (kliknij komórkę w podglądzie)
+            Nadpisz pojedyncze etykiety
           </label>
         )}
       </DesignerAccordion>
@@ -1155,7 +1154,6 @@ export function TemplateCreator({ onSave, initialTemplate, onCancelEdit, onSaveE
             <input type="color" value={color} onChange={(e) => setColor(e.target.value)} className="w-8 h-8 cursor-pointer rounded-lg border border-slate-200/70 bg-transparent" />
           </div>
         </div>
-        <p className="text-slate-500 text-sm leading-snug">Kliknij komórki w podglądzie, aby przełączać typ magazynowy (podstawowa / zapasowa / uszkodzone).</p>
         <div className="flex flex-wrap items-center gap-2">
           {TEMPLATE_STORAGE_TYPE_OPTIONS.map((option) => {
             const style = getStorageTypeStyle(option.value);
@@ -1176,9 +1174,7 @@ export function TemplateCreator({ onSave, initialTemplate, onCancelEdit, onSaveE
       <DesignerAccordion title="PRZEJAZDY" open={accordionOpen.przejazdy} onToggle={() => toggleAccordion("przejazdy")}>
         <div className="space-y-3">
           <p className="text-slate-500 text-xs leading-snug">
-            Jeden przejazd na regał. Przechodzi przez całą głębokość — ustaw początek i szerokość
-            wzdłuż szerokości regału oraz wysokość wolnej przestrzeni. Podgląd po prawej pokazuje
-            przejazd jako jedną wolną przestrzeń.
+            Jeden przejazd na regał — offset, szerokość i wysokość wolnej przestrzeni.
           </p>
           {defaultPassages.map((p, idx) => {
             const rackW = Math.max(1, snapCm(width_cm));
