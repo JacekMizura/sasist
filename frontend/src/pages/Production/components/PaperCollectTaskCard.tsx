@@ -1,8 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
-import { Check, ChevronDown, ChevronUp } from "lucide-react";
 
 import type { CollectionTaskRead } from "@/api/productionApi";
-import { LocationBadge } from "@/components/warehouse/LocationBadge";
+import { PrimaryButton } from "@/design-system";
 import { ProductThumb } from "./ProductThumb";
 
 type ConfirmPayload = {
@@ -27,6 +26,18 @@ function fmtQty(n: number | null | undefined): string {
   return Number.isInteger(n) ? String(n) : n.toFixed(2);
 }
 
+function formatExpiry(raw?: string | null): string {
+  if (!raw) return "—";
+  const d = String(raw).slice(0, 10);
+  const [y, m, day] = d.split("-");
+  if (!y || !m || !day) return d;
+  return `${day}.${m}.${y}`;
+}
+
+function lotLabel(l: { lot?: string | null; batch_number?: string | null }): string {
+  return (l.lot || l.batch_number || "").trim();
+}
+
 export function PaperCollectTaskCard({ task, expanded, done, busy, onToggle, onConfirm }: Props) {
   const unit = (task.product_unit ?? "szt.").trim() || "szt.";
   const [selectedLocId, setSelectedLocId] = useState<number | null>(
@@ -41,7 +52,14 @@ export function PaperCollectTaskCard({ task, expanded, done, busy, onToggle, onC
     setBatchNumber(task.selected_batch_number ?? "");
     setLot(task.selected_lot ?? "");
     setSerialNumber(task.selected_serial_number ?? "");
-  }, [task.task_key, task.selected_location_id, task.location_id, task.selected_batch_number, task.selected_lot, task.selected_serial_number]);
+  }, [
+    task.task_key,
+    task.selected_location_id,
+    task.location_id,
+    task.selected_batch_number,
+    task.selected_lot,
+    task.selected_serial_number,
+  ]);
 
   const selectedOption = useMemo(
     () => task.location_options.find((o) => o.location_id === selectedLocId) ?? null,
@@ -49,9 +67,6 @@ export function PaperCollectTaskCard({ task, expanded, done, busy, onToggle, onC
   );
 
   const lotOptions = selectedOption?.lots ?? [];
-  const serialOptions = lotOptions.flatMap((l) =>
-    l.serial_number ? [{ serial: l.serial_number, lot: l.lot ?? l.batch_number }] : [],
-  );
 
   const applyLot = (value: string) => {
     const match = lotOptions.find(
@@ -59,102 +74,135 @@ export function PaperCollectTaskCard({ task, expanded, done, busy, onToggle, onC
     );
     setLot(value);
     if (match?.batch_number) setBatchNumber(match.batch_number);
+    else if (match?.lot) setBatchNumber(match.lot);
+  };
+
+  // Single lot → no dropdown; lock values from that lot.
+  useEffect(() => {
+    if (!selectedOption || selectedOption.lots.length !== 1) return;
+    const only = selectedOption.lots[0];
+    const label = lotLabel(only);
+    setLot(label);
+    setBatchNumber(only.batch_number || only.lot || "");
+  }, [selectedOption]);
+
+  const serialOptions = lotOptions.flatMap((l) =>
+    l.serial_number ? [{ serial: l.serial_number, lot: l.lot ?? l.batch_number }] : [],
+  );
+
+  useEffect(() => {
+    if (serialOptions.length === 1) setSerialNumber(serialOptions[0].serial);
+  }, [selectedLocId, serialOptions.length]);
+
+  const selectLocation = (locationId: number) => {
+    setSelectedLocId(locationId);
+    const opt = task.location_options.find((o) => o.location_id === locationId);
+    if (opt && opt.lots.length === 1) {
+      const only = opt.lots[0];
+      setLot(lotLabel(only));
+      setBatchNumber(only.batch_number || only.lot || "");
+    } else if (opt && opt.lots.length === 0) {
+      setLot("");
+      setBatchNumber("");
+    }
   };
 
   return (
-    <div className={`rounded-xl border bg-white ${done ? "border-emerald-200" : "border-slate-200"}`}>
-      <button
-        type="button"
-        onClick={onToggle}
-        className="flex w-full items-center gap-3 px-4 py-3 text-left"
-      >
-        <ProductThumb imageUrl={task.product_image_url} name={task.product_name} size="sm" />
-        <div className="min-w-0 flex-1">
-          <p className="font-semibold text-slate-900">{task.product_name}</p>
-          <p className="text-sm text-slate-500">
+    <div className={`rounded-xl border bg-white shadow-sm ${done ? "border-emerald-200" : "border-slate-200"}`}>
+      <button type="button" onClick={onToggle} className="flex w-full items-start gap-3 px-4 py-4 text-left">
+        <ProductThumb imageUrl={task.product_image_url} name={task.product_name} size="md" />
+        <div className="min-w-0 flex-1 space-y-1">
+          <p className="text-base font-semibold text-slate-900">{task.product_name}</p>
+          <p className="text-lg font-bold tabular-nums text-slate-900">
             {fmtQty(task.collected_qty)} / {fmtQty(task.required_qty)} {unit}
-            {task.location_code ? ` · ${task.location_code}` : ""}
           </p>
+          {task.location_code ? (
+            <p className="text-sm text-slate-600">
+              Lokalizacja: <span className="font-semibold text-slate-800">{task.location_code}</span>
+            </p>
+          ) : null}
+          {(task.product_sku || task.product_ean) && (
+            <p className="text-xs text-slate-400">
+              {[task.product_sku ? `SKU ${task.product_sku}` : null, task.product_ean ? `EAN ${task.product_ean}` : null]
+                .filter(Boolean)
+                .join(" · ")}
+            </p>
+          )}
         </div>
         {done ? (
-          <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-semibold text-emerald-800">OK</span>
+          <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-semibold text-emerald-800">OK</span>
         ) : null}
-        {expanded ? <ChevronUp className="h-4 w-4 text-slate-400" /> : <ChevronDown className="h-4 w-4 text-slate-400" />}
       </button>
 
-      {expanded ? (
-        <div className="space-y-4 border-t border-slate-100 px-4 py-4">
-          <div className="grid gap-2 sm:grid-cols-2">
-            {task.product_sku ? (
-              <div>
-                <p className="text-xs font-bold uppercase tracking-wide text-slate-500">SKU</p>
-                <p className="font-mono text-sm">{task.product_sku}</p>
-              </div>
-            ) : null}
-            {task.product_ean ? (
-              <div>
-                <p className="text-xs font-bold uppercase tracking-wide text-slate-500">EAN</p>
-                <p className="font-mono text-sm">{task.product_ean}</p>
-              </div>
-            ) : null}
-          </div>
-
+      {expanded && !done ? (
+        <div className="space-y-5 border-t border-slate-100 px-4 py-5">
           <div>
-            <p className="mb-2 text-xs font-bold uppercase tracking-wide text-slate-500">Lokalizacja</p>
-            <div className="space-y-2">
-              {task.location_options.map((opt) => (
-                <label
-                  key={opt.location_id}
-                  className={`flex cursor-pointer items-start gap-3 rounded-lg border p-3 ${
-                    selectedLocId === opt.location_id ? "border-violet-400 bg-violet-50/50" : "border-slate-200"
-                  }`}
-                >
-                  <input
-                    type="radio"
-                    name={`loc-${task.task_key}`}
-                    checked={selectedLocId === opt.location_id}
-                    onChange={() => setSelectedLocId(opt.location_id)}
-                    className="mt-1"
-                  />
-                  <div className="min-w-0 flex-1">
-                    <LocationBadge
-                      code={opt.location_code}
-                      type={opt.badge_kind ?? opt.operational_zone_type ?? "PICK"}
-                    />
+            <h3 className="mb-3 text-sm font-semibold text-slate-900">Dostępne lokalizacje</h3>
+            <div className="space-y-2.5">
+              {task.location_options.map((opt) => {
+                const active = selectedLocId === opt.location_id;
+                const primaryLot = opt.lots[0];
+                const lotText = primaryLot ? lotLabel(primaryLot) : "";
+                return (
+                  <button
+                    key={opt.location_id}
+                    type="button"
+                    onClick={() => selectLocation(opt.location_id)}
+                    className={[
+                      "w-full rounded-xl border px-4 py-3.5 text-left transition",
+                      active
+                        ? "border-orange-500 bg-orange-50 shadow-sm"
+                        : "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50",
+                    ].join(" ")}
+                    aria-pressed={active}
+                  >
+                    <p className="font-mono text-base font-bold text-slate-900">{opt.location_code}</p>
                     <p className="mt-1 text-sm text-slate-600">
-                      Dostępne: <strong>{fmtQty(opt.available_qty)}</strong> {unit}
+                      Dostępne{" "}
+                      <span className="font-semibold tabular-nums text-slate-900">
+                        {fmtQty(opt.available_qty)} {unit}
+                      </span>
                     </p>
-                    {opt.lots.length > 0 ? (
-                      <ul className="mt-2 space-y-1 text-xs text-slate-500">
-                        {opt.lots.slice(0, 4).map((l, i) => (
-                          <li key={i}>
-                            Partia: {l.batch_number || "—"} · LOT: {l.lot || "—"} · ważność: {l.expiry_date || "—"} ·{" "}
-                            {fmtQty(l.available_qty)} {unit}
-                            {l.serial_number ? ` · SN: ${l.serial_number}` : ""}
-                          </li>
-                        ))}
-                      </ul>
+                    {lotText ? (
+                      <p className="mt-2 text-sm text-slate-600">
+                        Partia: <span className="font-medium text-slate-800">{lotText}</span>
+                      </p>
                     ) : null}
-                  </div>
-                </label>
-              ))}
+                    {primaryLot?.expiry_date ? (
+                      <p className="mt-0.5 text-sm text-slate-600">
+                        Data ważności:{" "}
+                        <span className="font-medium text-slate-800">{formatExpiry(primaryLot.expiry_date)}</span>
+                      </p>
+                    ) : null}
+                  </button>
+                );
+              })}
             </div>
           </div>
 
-          {lotOptions.length > 0 ? (
+          {lotOptions.length === 1 ? (
             <div>
-              <label className="text-xs font-bold uppercase tracking-wide text-slate-500">Partia / LOT</label>
+              <p className="text-xs font-medium text-slate-500">Partia</p>
+              <p className="mt-0.5 text-sm font-semibold text-slate-900">{lotLabel(lotOptions[0]) || "—"}</p>
+            </div>
+          ) : null}
+
+          {lotOptions.length > 1 ? (
+            <div>
+              <label className="text-xs font-medium text-slate-500">Partia</label>
               <select
                 value={lot || batchNumber}
                 onChange={(e) => applyLot(e.target.value)}
-                className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+                className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm"
               >
                 <option value="">— wybierz —</option>
                 {lotOptions.map((l, i) => {
-                  const val = l.lot ?? l.batch_number ?? "";
+                  const val = lotLabel(l);
                   return (
                     <option key={i} value={val}>
-                      {l.batch_number || "—"} · {l.expiry_date || "—"} · {fmtQty(l.available_qty)} {unit}
+                      {val || "—"}
+                      {l.expiry_date ? ` · ${formatExpiry(l.expiry_date)}` : ""}
+                      {` · ${fmtQty(l.available_qty)} ${unit}`}
                     </option>
                   );
                 })}
@@ -162,13 +210,13 @@ export function PaperCollectTaskCard({ task, expanded, done, busy, onToggle, onC
             </div>
           ) : null}
 
-          {task.track_serial && serialOptions.length > 0 ? (
+          {task.track_serial && serialOptions.length > 1 ? (
             <div>
-              <label className="text-xs font-bold uppercase tracking-wide text-slate-500">Numer seryjny</label>
+              <label className="text-xs font-medium text-slate-500">Numer seryjny</label>
               <select
                 value={serialNumber}
                 onChange={(e) => setSerialNumber(e.target.value)}
-                className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+                className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm"
               >
                 <option value="">— wybierz —</option>
                 {serialOptions.map((s) => (
@@ -178,25 +226,34 @@ export function PaperCollectTaskCard({ task, expanded, done, busy, onToggle, onC
                 ))}
               </select>
             </div>
+          ) : task.track_serial && serialOptions.length === 1 ? (
+            <div>
+              <p className="text-xs font-medium text-slate-500">Numer seryjny</p>
+              <p className="mt-0.5 text-sm font-semibold text-slate-900">{serialOptions[0].serial}</p>
+            </div>
           ) : null}
 
-          <button
+          <PrimaryButton
             type="button"
+            density="comfortable"
+            className="w-full py-3.5 text-base"
             disabled={busy || !selectedLocId || selectedLocId < 1}
-            onClick={() =>
+            onClick={() => {
+              const sn =
+                task.track_serial && serialOptions.length === 1
+                  ? serialOptions[0].serial
+                  : serialNumber || null;
               onConfirm({
                 locationId: selectedLocId!,
                 collectedQty: task.required_qty,
                 batchNumber: batchNumber || null,
                 lot: lot || null,
-                serialNumber: serialNumber || null,
-              })
-            }
-            className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-40"
+                serialNumber: sn,
+              });
+            }}
           >
-            <Check className="h-4 w-4" aria-hidden />
             Potwierdź pobranie ({fmtQty(task.required_qty)} {unit})
-          </button>
+          </PrimaryButton>
         </div>
       ) : null}
     </div>

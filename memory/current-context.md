@@ -2,11 +2,10 @@
 
 ## Active
 
-**Nowe zlecenie — kafelki rekomendacji MRP** (UX only).
+**Ekran realizacji papierowej — UX magazyniera** (bez API).
 
-- Horizonty 1/3/7/14/21/30 + Maksimum z `fetchProductionDemandPlanning` / `max_producible`
-- Klik → qty; ręczna qty czyści aktywny kafelek
-- KPI prawe: Koszt / Czas / Materiały% / Pokrycie (bez hintów)
-- Bez zmian API tworzenia zlecenia
+- Bez „TRYB PAPIEROWY / ERP”; SecondaryButton Powrót
+- Postęp pobierania (gruby pasek + %); lokalizacje jako karty orange active
+- Lot: tekst gdy 1 partia; Primary „Potwierdź pobranie” full-width
 
 

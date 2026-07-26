@@ -48,6 +48,8 @@ export function Switch({ className = "", label, id, ...props }: SwitchProps) {
 export type ProgressBarProps = HTMLAttributes<HTMLDivElement> & {
   value: number;
   tone?: "success" | "warning" | "danger" | "neutral" | "info" | "primary";
+  /** Track thickness. */
+  size?: "sm" | "md" | "lg";
 };
 
 /** Progress fill — token-aligned static classes for Tailwind JIT. */
@@ -60,16 +62,23 @@ const barTone: Record<NonNullable<ProgressBarProps["tone"]>, string> = {
   primary: "bg-orange-500",
 };
 
+const trackSize: Record<NonNullable<ProgressBarProps["size"]>, string> = {
+  sm: "h-1.5",
+  md: "h-2.5",
+  lg: "h-3.5",
+};
+
 export function ProgressBar({
   value,
   tone = "success",
+  size = "sm",
   className = "",
   ...props
 }: ProgressBarProps) {
   const pct = Math.min(100, Math.max(0, value));
   return (
     <div
-      className={`h-1.5 overflow-hidden rounded-full bg-slate-200/80${className ? ` ${className}` : ""}`.trim()}
+      className={`${trackSize[size]} overflow-hidden rounded-full bg-slate-200/80${className ? ` ${className}` : ""}`.trim()}
       role="progressbar"
       aria-valuenow={pct}
       aria-valuemin={0}

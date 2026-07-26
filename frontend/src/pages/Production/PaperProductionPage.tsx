@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { ArrowLeft } from "lucide-react";
 import toast from "react-hot-toast";
-import { PrimaryButton } from "../../design-system/PrimaryButton";
 
 import {
   fetchCollectionState,
@@ -21,11 +20,18 @@ import {
   type OrderCollectionStateRead,
 } from "@/api/productionApi";
 import { useWarehouse } from "@/context/WarehouseContext";
-import { ProgressBar } from "./components/ProgressBar";
+import {
+  PrimaryButton,
+  ProgressBar,
+  SecondaryButton,
+  StatusBadge,
+  secondaryButtonClassName,
+  toneTextClass,
+} from "@/design-system";
 import { PaperCollectTaskCard } from "./components/PaperCollectTaskCard";
 import { ProductThumb } from "./components/ProductThumb";
 import { erpProductionPaths, wmsProductionPaths } from "./productionPaths";
-import { formatStartCollectingError } from "./productionUi";
+import { executionStatusLabel, executionStatusTone, formatStartCollectingError, productionProgressTone } from "./productionUi";
 import {
   ProductionDocumentsSection,
   pwDocumentsFromBatchLines,
@@ -192,7 +198,7 @@ export default function PaperProductionPage() {
       } else {
         await finishCollectingOrder(tenantId, jobId, warehouseId);
       }
-      toast.success("Materiały rozchodowane (RW).");
+      toast.success("Materiały pobrane.");
       await load();
     } catch (e: unknown) {
       toast.error(formatStartCollectingError(e));
@@ -239,39 +245,54 @@ export default function PaperProductionPage() {
   const allCollected = tasks.length > 0 && tasks.every((t) => isTaskDone(t.required_qty, t.collected_qty));
   const allProduced = executionLines.every((ln) => ln.completedQuantity >= ln.plannedQuantity - 1e-6);
 
+  const collectPct =
+    collection != null
+      ? Math.round(
+          Number.isFinite(collection.progress_percent)
+            ? collection.progress_percent
+            : collection.total_count > 0
+              ? (collection.collected_count / collection.total_count) * 100
+              : 0,
+        )
+      : 0;
+  const collectTone = productionProgressTone(collectPct, status);
+
   if (warehouseId == null) {
     return <p className="px-4 py-6 text-sm text-slate-500">Wybierz magazyn.</p>;
   }
 
   return (
-    <div className="mx-auto max-w-4xl space-y-6 px-4 py-6 lg:px-6">
-      <Link to={backHref} className="inline-flex items-center gap-2 text-sm text-violet-600 hover:underline">
+    <div className="mx-auto max-w-3xl space-y-5 px-4 py-6 lg:px-6">
+      <Link to={backHref} className={`${secondaryButtonClassName()} inline-flex items-center gap-1.5`}>
         <ArrowLeft className="h-4 w-4" aria-hidden />
-        Powrót do szczegółów
+        Powrót
       </Link>
 
-      <header className="rounded-2xl border border-amber-200 bg-amber-50/60 p-5">
-        <p className="text-xs font-bold uppercase tracking-wide text-amber-800">Tryb papierowy · ERP</p>
-        <h1 className="mt-1 font-mono text-2xl font-bold text-slate-900">{number || "…"}</h1>
-        <p className="mt-1 text-sm text-slate-600">
-          {status === "collecting"
-            ? "Ręczne pobranie półproduktów — ten sam rozchód co w terminalu WMS."
-            : status === "in_progress"
-              ? "Rejestracja produkcji i zakończenie → PW → rozlokowanie."
-              : status === "awaiting_putaway" || status === "putaway"
-                ? "Produkcja zakończona — rozlokuj wszystkie dokumenty PW w WMS."
-                : `Status: ${status}`}
-        </p>
+      <header className="space-y-3 border-b border-slate-200 pb-5">
+        <div className="flex flex-wrap items-center gap-3">
+          <h1 className="font-mono text-2xl font-bold text-slate-900">{number || "…"}</h1>
+          {status ? (
+            <StatusBadge tone={executionStatusTone(status)} density="comfortable">
+              {executionStatusLabel(status)}
+            </StatusBadge>
+          ) : null}
+        </div>
+
+        {status === "collecting" && collection ? (
+          <div className="space-y-2">
+            <div className="flex items-center justify-between gap-2 text-sm">
+              <span className="font-medium text-slate-600">Postęp pobierania</span>
+              <span className={`tabular-nums font-bold ${toneTextClass[collectTone]}`}>{collectPct}%</span>
+            </div>
+            <ProgressBar value={collectPct} tone={collectTone} size="lg" />
+          </div>
+        ) : status === "in_progress" ? (
+          <p className="text-sm text-slate-600">Postęp produkcji</p>
+        ) : null}
       </header>
 
       {status === "collecting" && collection ? (
         <>
-          <ProgressBar
-            value={collection.collected_count}
-            max={collection.total_count || 1}
-            label={`Zebrane składniki · ${collection.collected_count}/${collection.total_count}`}
-            tone="amber"
-          />
           <div className="space-y-3">
             {tasks.map((t) => (
               <PaperCollectTaskCard
@@ -286,14 +307,15 @@ export default function PaperProductionPage() {
             ))}
           </div>
           {allCollected ? (
-            <button
+            <PrimaryButton
               type="button"
+              density="comfortable"
               disabled={busy}
               onClick={() => void finishCollecting()}
-              className="w-full rounded-xl bg-emerald-600 py-3 text-sm font-bold text-white hover:bg-emerald-700 disabled:opacity-40"
+              className="w-full py-3.5 text-base"
             >
-              Zatwierdź pobrania i utwórz RW
-            </button>
+              Zatwierdź pobrania
+            </PrimaryButton>
           ) : null}
         </>
       ) : null}
@@ -303,42 +325,59 @@ export default function PaperProductionPage() {
           <div className="space-y-4">
             {executionLines.map((ln) => {
               const remaining = Math.max(0, ln.plannedQuantity - ln.completedQuantity);
+              const linePct =
+                ln.plannedQuantity > 0
+                  ? Math.round(Math.min(100, (ln.completedQuantity / ln.plannedQuantity) * 100))
+                  : 0;
+              const lineTone = productionProgressTone(linePct, status);
               return (
-                <div key={ln.lineKey} className="rounded-xl border border-slate-200 bg-white p-5">
+                <div key={ln.lineKey} className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
                   <div className="flex items-center gap-4">
                     <ProductThumb imageUrl={ln.productImageUrl} name={ln.productName} size="md" />
                     <div>
                       <p className="font-semibold text-slate-900">{ln.productName}</p>
-                      <p className="text-2xl font-black tabular-nums text-slate-900">
+                      <p className="text-2xl font-bold tabular-nums text-slate-900">
                         {ln.completedQuantity}
-                        <span className="text-lg font-bold text-slate-400"> / {ln.plannedQuantity}</span>
+                        <span className="text-lg font-semibold text-slate-400"> / {ln.plannedQuantity}</span>
                       </p>
                     </div>
                   </div>
+                  <div className="mt-4 space-y-1.5">
+                    <div className="flex justify-between text-xs text-slate-500">
+                      <span>Postęp</span>
+                      <span className={`tabular-nums font-semibold ${toneTextClass[lineTone]}`}>{linePct}%</span>
+                    </div>
+                    <ProgressBar value={linePct} tone={lineTone} size="lg" />
+                  </div>
                   <div className="mt-4 flex flex-wrap gap-2">
-                    <PrimaryButton
+                    <SecondaryButton
                       type="button"
                       disabled={busy || remaining <= 0}
                       onClick={() => void addProductionQty(ln.lineKey, 1)}
                     >
                       +1
-                    </PrimaryButton>
-                    <button
+                    </SecondaryButton>
+                    <PrimaryButton
                       type="button"
                       disabled={busy || remaining <= 0}
                       onClick={() => void addProductionQty(ln.lineKey, remaining)}
-                      className="rounded-lg border border-emerald-300 bg-emerald-50 px-4 py-2 text-sm font-bold text-emerald-900 disabled:opacity-40"
                     >
                       Uzupełnij plan
-                    </button>
+                    </PrimaryButton>
                   </div>
                 </div>
               );
             })}
           </div>
           {allProduced ? (
-            <PrimaryButton type="button" disabled={busy} onClick={() => void finishProduction()} className="w-full">
-              Zakończ produkcję → PW → rozlokowanie
+            <PrimaryButton
+              type="button"
+              density="comfortable"
+              disabled={busy}
+              onClick={() => void finishProduction()}
+              className="w-full py-3.5 text-base"
+            >
+              Zakończ produkcję
             </PrimaryButton>
           ) : null}
         </>
@@ -361,15 +400,15 @@ export default function PaperProductionPage() {
           ) : null}
           <Link
             to={wmsProductionPaths.putaway(jobKind, jobId)}
-            className="inline-flex rounded-xl bg-emerald-600 px-4 py-3 text-sm font-bold text-white hover:bg-emerald-700"
+            className={`${secondaryButtonClassName()} inline-flex w-full justify-center py-3`}
           >
-            Otwórz kolejkę rozlokowania WMS
+            Otwórz kolejkę rozlokowania
           </Link>
         </>
       ) : null}
 
       {status !== "collecting" && status !== "in_progress" && status !== "awaiting_putaway" && status !== "putaway" ? (
-        <p className="text-sm text-slate-500">To zadanie nie jest w fazie realizacji papierowej.</p>
+        <p className="text-sm text-slate-500">To zadanie nie jest w fazie realizacji.</p>
       ) : null}
     </div>
   );

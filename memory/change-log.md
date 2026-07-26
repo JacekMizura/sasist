@@ -1,3 +1,10 @@
+## 2026-07-26 — Realizacja papierowa: UX magazyniera
+
+- Nagłówek: numer + status + postęp; bez ERP/fioletu
+- Karty lokalizacji (orange active); lot bez dropdown gdy 1
+- Primary full-width Potwierdź pobranie · ProgressBar size lg
+- Bez zmian API · tsc OK · **No push.**
+
 ## 2026-07-26 — Nowe zlecenie: kafelki rekomendacji MRP
 
 - Tiles Dzisiaj…30 dni + Maksimum; qty sync; KPI bez opisów
