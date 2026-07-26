@@ -50,6 +50,7 @@ import { AppSplitView } from "../components/layout/app";
 import { tabsNavItemClassName } from "../components/layout/TabsNav";
 import { brandTabsNavRowClassName } from "../design-system/brandUi";
 import { PrimaryButton } from "../design-system/PrimaryButton";
+import { AppButton } from "../components/app-shell/AppButton";
 import { ConfirmModal } from "../components/ui/ConfirmModal";
 import { WarehouseShell } from "../components/warehouse/WarehouseShell";
 import {
@@ -319,6 +320,8 @@ export default function WarehouseDesigner() {
   const [editingRackId, setEditingRackId] = useState<number | string | null>(null);
   type SpecialLocationsState = { pick_start: { id: number; x: number; y: number } | null; packing: { id: number; x: number; y: number } | null; dock: { id: number; x: number; y: number } | null };
   const [specialLocations, setSpecialLocations] = useState<SpecialLocationsState>({ pick_start: null, packing: null, dock: null });
+  const [selectedSpecialLocationKey, setSelectedSpecialLocationKey] = useState<"pick_start" | "packing" | "dock" | null>(null);
+  const [layoutExportOpen, setLayoutExportOpen] = useState(false);
   const [inventoryRows, setInventoryRows] = useState<InventoryRow[]>([]);
   /** Server-side Σ(qty × product.volume) from inventory rows; overrides bin-based dashboard when loaded. */
   const [occupancyMetrics, setOccupancyMetrics] = useState<WarehouseOccupancyMetrics | null>(null);
@@ -1968,6 +1971,15 @@ export default function WarehouseDesigner() {
 
   const deleteSpecialLocation = useCallback(
     async (locationId: number) => {
+      // Optimistic clear so the icon disappears even if API is slow/fails.
+      setSpecialLocations((prev) => {
+        const next = { ...prev };
+        (["pick_start", "packing", "dock"] as const).forEach((k) => {
+          if (next[k]?.id === locationId) next[k] = null;
+        });
+        return next;
+      });
+      setSelectedSpecialLocationKey(null);
       if (selectedWarehouseId == null) return;
       try {
         await api.delete(`/warehouse/special-location/${locationId}`);
@@ -1975,10 +1987,23 @@ export default function WarehouseDesigner() {
         setSpecialLocations(data ?? { pick_start: null, packing: null, dock: null });
       } catch (err) {
         console.error("Delete special location:", err);
+        try {
+          const { data } = await api.get<SpecialLocationsState>(`/warehouse/${selectedWarehouseId}/special-locations`);
+          setSpecialLocations(data ?? { pick_start: null, packing: null, dock: null });
+        } catch {
+          /* keep optimistic clear */
+        }
       }
     },
     [selectedWarehouseId]
   );
+
+  const deleteSelectedSpecialLocation = useCallback(() => {
+    if (!selectedSpecialLocationKey) return;
+    const loc = specialLocations[selectedSpecialLocationKey];
+    if (!loc) return;
+    void deleteSpecialLocation(loc.id);
+  }, [selectedSpecialLocationKey, specialLocations, deleteSpecialLocation]);
 
   useEffect(() => {
     let cancelled = false;
@@ -3458,6 +3483,8 @@ export default function WarehouseDesigner() {
     setCopiedRack,
     selectedWallElementId,
     deleteSelectedWallElement,
+    selectedSpecialLocationKey,
+    deleteSelectedSpecialLocation,
     internalLayoutRackId,
     onCloseInternalLayout: () => setInternalLayoutRackId(null),
     onCloseRackPanel: closeRackPanel,
@@ -3664,7 +3691,7 @@ export default function WarehouseDesigner() {
       }
     >
       {mainView === "layout" ? (
-        <div className="mb-3 flex shrink-0 gap-1" role="tablist" aria-label="Workspace projektanta">
+        <div className="mb-3 flex shrink-0 items-center gap-2" role="tablist" aria-label="Workspace projektanta">
           <button
             type="button"
             role="tab"
@@ -3709,6 +3736,62 @@ export default function WarehouseDesigner() {
           >
             {UI_STRINGS.warehouse.designerSubTabs.routes}
           </button>
+          <div className="relative ml-auto">
+            <AppButton
+              type="button"
+              variant="success"
+              className="!h-8 !min-h-0 !gap-1.5 !px-3 !text-[11px]"
+              onClick={() => setLayoutExportOpen((v) => !v)}
+              aria-expanded={layoutExportOpen}
+              aria-haspopup="menu"
+            >
+              <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+              </svg>
+              {UI_STRINGS.warehouse.export.button}
+              <span className="opacity-80">▾</span>
+            </AppButton>
+            {layoutExportOpen ? (
+              <>
+                <div className="absolute right-0 z-20 mt-1 min-w-[14rem] overflow-hidden rounded-lg border border-slate-100 bg-white py-1 shadow-lg" role="menu">
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs hover:bg-slate-50"
+                    onClick={() => {
+                      handleExportLocationsMapCsv();
+                      setLayoutExportOpen(false);
+                    }}
+                  >
+                    {UI_STRINGS.warehouse.rackSidebar.exportLocationsCsv}
+                  </button>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs hover:bg-slate-50"
+                    onClick={() => {
+                      handleExportCsv();
+                      setLayoutExportOpen(false);
+                    }}
+                  >
+                    {UI_STRINGS.warehouse.export.csv}
+                  </button>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs hover:bg-slate-50"
+                    onClick={() => {
+                      handleExportJson();
+                      setLayoutExportOpen(false);
+                    }}
+                  >
+                    {UI_STRINGS.warehouse.export.json}
+                  </button>
+                </div>
+                <div className="fixed inset-0 z-10" onClick={() => setLayoutExportOpen(false)} aria-hidden />
+              </>
+            ) : null}
+          </div>
         </div>
       ) : null}
 
@@ -3929,6 +4012,17 @@ export default function WarehouseDesigner() {
                             specialLocations={specialLocations}
                             onUpdateSpecialLocation={updateSpecialLocation}
                             onDeleteSpecialLocation={deleteSpecialLocation}
+                            selectedSpecialLocationKey={selectedSpecialLocationKey}
+                            onSpecialLocationSelect={(key) => {
+                              setSelectedSpecialLocationKey(key);
+                              if (key != null) {
+                                setSelectedRackId(null);
+                                setSelectedRackIds([]);
+                                setSelectedVisualId(null);
+                                setSelectedVisualIds([]);
+                                setSelectedWallElementId(null);
+                              }
+                            }}
                             layoutModeLabel={layoutModeDisplay.modeLabel}
                             layoutModeColor={layoutModeDisplay.modeColor}
                             layoutMode={layoutMode}
@@ -4293,6 +4387,17 @@ export default function WarehouseDesigner() {
               specialLocations,
               onUpdateSpecialLocation: updateSpecialLocation,
               onDeleteSpecialLocation: deleteSpecialLocation,
+              selectedSpecialLocationKey,
+              onSpecialLocationSelect: (key) => {
+                setSelectedSpecialLocationKey(key);
+                if (key != null) {
+                  setSelectedRackId(null);
+                  setSelectedRackIds([]);
+                  setSelectedVisualId(null);
+                  setSelectedVisualIds([]);
+                  setSelectedWallElementId(null);
+                }
+              },
               layoutModeLabel: layoutModeDisplay.modeLabel,
               layoutModeColor: layoutModeDisplay.modeColor,
               layoutMode,

@@ -13,7 +13,7 @@ import {
 } from "./warehouseUtils";
 import { RowPreviewOverlay } from "./RowPreviewOverlay";
 import { WAREHOUSE_CANVAS_CELL_PX } from "./renderUtils";
-import { LayoutModeBadge, LayoutMode, LAYOUT_MODE_CURSORS } from "../warehouse-layout";
+import { LayoutMode, LAYOUT_MODE_CURSORS } from "../warehouse-layout";
 import { colors, radius } from "../../layout/designTokens";
 import { RackLayer } from "./WarehouseCanvas/RackLayer";
 import { RowLayer } from "./WarehouseCanvas/RowLayer";
@@ -296,6 +296,10 @@ export type WarehouseCanvasProps = {
   onUpdateSpecialLocation?: (locationId: number, cell: { x: number; y: number }) => void;
   /** Delete special location by id. */
   onDeleteSpecialLocation?: (locationId: number) => void;
+  /** Notify parent when a special map icon is selected (for Delete wiring). */
+  onSpecialLocationSelect?: (key: "pick_start" | "packing" | "dock" | null) => void;
+  /** Controlled selection from parent (optional). */
+  selectedSpecialLocationKey?: "pick_start" | "packing" | "dock" | null;
   /** Copy rack from toolbar → enter copy placement mode. */
   onCopyRack?: (rack: RackState) => void;
   /** When true, ghost shows copied rack and click places duplicate. */
@@ -484,6 +488,8 @@ function WarehouseCanvasInner({
   specialLocations = { pick_start: null, packing: null, dock: null },
   onUpdateSpecialLocation,
   onDeleteSpecialLocation,
+  onSpecialLocationSelect,
+  selectedSpecialLocationKey = null,
   onCopyRack,
   copyPlacementMode = false,
   copiedRack = null,
@@ -545,9 +551,41 @@ function WarehouseCanvasInner({
   type SpecialKey = "pick_start" | "packing" | "dock";
   const [draggingSpecial, setDraggingSpecial] = useState<{ key: SpecialKey; id: number } | null>(null);
   const [dragPreviewCell, setDragPreviewCell] = useState<{ x: number; y: number } | null>(null);
-  const [selectedSpecialKey, setSelectedSpecialKey] = useState<SpecialKey | null>(null);
+  const [internalSelectedSpecialKey, setInternalSelectedSpecialKey] = useState<SpecialKey | null>(null);
+  /** Prefer controlled key when parent wires selection; else local state. */
+  const effectiveSelectedSpecialKey =
+    onSpecialLocationSelect != null ? (selectedSpecialLocationKey ?? null) : internalSelectedSpecialKey;
+
+  const setSelectedSpecialKey = useCallback(
+    (key: SpecialKey | null) => {
+      if (onSpecialLocationSelect) onSpecialLocationSelect(key);
+      else setInternalSelectedSpecialKey(key);
+    },
+    [onSpecialLocationSelect]
+  );
+
   const [contextMenu, setContextMenu] = useState<{ id: number; key: SpecialKey; x: number; y: number } | null>(null);
   const contextMenuRef = useRef<HTMLDivElement | null>(null);
+  const [mapNavHintVisible, setMapNavHintVisible] = useState(false);
+
+  useEffect(() => {
+    if (isExportMode || isLiveView) return;
+    try {
+      if (sessionStorage.getItem("wh-map-nav-hint-seen") === "1") return;
+    } catch {
+      /* ignore */
+    }
+    setMapNavHintVisible(true);
+    const t = window.setTimeout(() => {
+      setMapNavHintVisible(false);
+      try {
+        sessionStorage.setItem("wh-map-nav-hint-seen", "1");
+      } catch {
+        /* ignore */
+      }
+    }, 4500);
+    return () => window.clearTimeout(t);
+  }, [isExportMode, isLiveView]);
 
   useEffect(() => {
     if (!contextMenu) return;
@@ -561,21 +599,22 @@ function WarehouseCanvasInner({
   }, [contextMenu]);
 
   useEffect(() => {
-    if (!selectedSpecialKey || !onDeleteSpecialLocation || !isEditMode) return;
+    if (!effectiveSelectedSpecialKey || !onDeleteSpecialLocation || !isEditMode) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "Delete" && e.key !== "Backspace") return;
       const t = e.target as HTMLElement | null;
       if (t?.closest?.("input, textarea, select, [contenteditable=true]")) return;
-      const loc = specialLocations[selectedSpecialKey];
+      const loc = specialLocations[effectiveSelectedSpecialKey];
       if (!loc) return;
       e.preventDefault();
+      e.stopPropagation();
       onDeleteSpecialLocation(loc.id);
       setSelectedSpecialKey(null);
       setContextMenu(null);
     };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [selectedSpecialKey, onDeleteSpecialLocation, isEditMode, specialLocations]);
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, [effectiveSelectedSpecialKey, onDeleteSpecialLocation, isEditMode, specialLocations, setSelectedSpecialKey]);
 
   const handleSpecialPointerDown = useCallback(
     (e: React.PointerEvent, key: SpecialKey, id: number) => {
@@ -1063,7 +1102,17 @@ function WarehouseCanvasInner({
           </div>
           )}
           <div className="relative m-0 flex min-h-0 min-w-0 max-w-full flex-1 basis-0 flex-col overflow-hidden p-0">
-            {!isExportMode ? <WarehouseZoomControls zoom={zoom} setZoom={setZoom} /> : null}
+            {!isExportMode ? (
+              <WarehouseZoomControls zoom={zoom} setZoom={setZoom} className="!z-30" />
+            ) : null}
+            {mapNavHintVisible ? (
+              <div
+                className="pointer-events-none absolute bottom-3 left-3 z-30 max-w-[16rem] rounded-lg border border-slate-200/80 bg-white/95 px-3 py-2 text-[11px] leading-snug text-slate-600 shadow-sm backdrop-blur-sm"
+                role="status"
+              >
+                Kółko: przewijanie · Ctrl/⌘ + kółko: zoom
+              </div>
+            ) : null}
             <div
             ref={viewportRef}
             className="warehouse-map-viewport relative m-0 h-full min-h-0 w-full min-w-0 max-w-full flex-1 basis-0 overflow-auto p-0"
@@ -1088,7 +1137,6 @@ function WarehouseCanvasInner({
             tabIndex={0}
             role="application"
             aria-label="Kanwa magazynu"
-            title="Kółko: przewijanie • Ctrl lub ⌘ + kółko: zoom"
             onDragOver={(e) => {
               e.preventDefault();
               if (!isEditMode) return;
@@ -1150,9 +1198,6 @@ function WarehouseCanvasInner({
               }
             }}
           >
-            {isEditMode && !isLiveView && layoutModeLabel != null && layoutModeColor != null && (
-              <LayoutModeBadge modeLabel={layoutModeLabel} modeColor={layoutModeColor} layoutMode={layoutMode} />
-            )}
             <RowPreviewOverlay
               visible={showRowPreview}
               x={rowPreviewCursor?.x ?? 0}
@@ -1545,8 +1590,8 @@ function WarehouseCanvasInner({
                           cy={half}
                           r={half + 2}
                           fill="#dcfce7"
-                          stroke={selectedSpecialKey === "pick_start" ? "#14532d" : "#166534"}
-                          strokeWidth={selectedSpecialKey === "pick_start" ? 2.5 : 1.5}
+                          stroke={effectiveSelectedSpecialKey === "pick_start" ? "#14532d" : "#166534"}
+                          strokeWidth={effectiveSelectedSpecialKey === "pick_start" ? 2.5 : 1.5}
                         />
                         <MapPin size={iconSize} strokeWidth={2} style={{ overflow: "visible" }} />
                       </g>
@@ -1581,8 +1626,8 @@ function WarehouseCanvasInner({
                           cy={half}
                           r={half + 2}
                           fill="#dbeafe"
-                          stroke={selectedSpecialKey === "packing" ? "#1e3a8a" : "#1d4ed8"}
-                          strokeWidth={selectedSpecialKey === "packing" ? 2.5 : 1.5}
+                          stroke={effectiveSelectedSpecialKey === "packing" ? "#1e3a8a" : "#1d4ed8"}
+                          strokeWidth={effectiveSelectedSpecialKey === "packing" ? 2.5 : 1.5}
                         />
                         <Package size={iconSize} strokeWidth={2} style={{ overflow: "visible" }} />
                       </g>
@@ -1613,8 +1658,8 @@ function WarehouseCanvasInner({
                         <polygon
                           points={points}
                           fill="#6b7280"
-                          stroke={selectedSpecialKey === "dock" ? "#111827" : "#4b5563"}
-                          strokeWidth={selectedSpecialKey === "dock" ? 3 : 2}
+                          stroke={effectiveSelectedSpecialKey === "dock" ? "#111827" : "#4b5563"}
+                          strokeWidth={effectiveSelectedSpecialKey === "dock" ? 3 : 2}
                         />
                         <text x={px} y={py + 1} textAnchor="middle" fontSize={Math.max(8, cellPx * 0.3)} fill="#fff" fontWeight="bold">DOCK</text>
                       </g>
@@ -1834,6 +1879,39 @@ function WarehouseCanvasInner({
                     onCopyRack={onCopyRack}
                   />
                 )}
+                {isEditMode &&
+                  effectiveSelectedSpecialKey != null &&
+                  onDeleteSpecialLocation &&
+                  specialLocations[effectiveSelectedSpecialKey] != null &&
+                  (() => {
+                    const loc = specialLocations[effectiveSelectedSpecialKey]!;
+                    const isDragging = draggingSpecial?.key === effectiveSelectedSpecialKey;
+                    const cx =
+                      isDragging && dragPreviewCell
+                        ? dragPreviewCell.x * cellPx + cellPx / 2
+                        : (loc.x / GRID_UNIT_CM) * cellPx + cellPx / 2;
+                    const cy =
+                      isDragging && dragPreviewCell
+                        ? dragPreviewCell.y * cellPx + cellPx / 2
+                        : (loc.y / GRID_UNIT_CM) * cellPx + cellPx / 2;
+                    return (
+                      <button
+                        type="button"
+                        className="absolute z-[50] rounded-md border border-red-200 bg-white px-2 py-1 text-[11px] font-semibold text-red-700 shadow-md hover:bg-red-50"
+                        style={{ left: cx + 16, top: cy - 14, pointerEvents: "auto" }}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onDeleteSpecialLocation(loc.id);
+                          setSelectedSpecialKey(null);
+                          setContextMenu(null);
+                        }}
+                        onMouseDown={(e) => e.stopPropagation()}
+                        onPointerDown={(e) => e.stopPropagation()}
+                      >
+                        Usuń
+                      </button>
+                    );
+                  })()}
               </div>
             </div>
             {!isExportMode && cursorCm != null && (placementMode || copyPlacementMode || draggingRackId != null) && (

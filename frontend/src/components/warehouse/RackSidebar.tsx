@@ -152,7 +152,9 @@ export function RackSidebar({
   const [catalogCollapsed, setCatalogCollapsed] = useState(false);
   const [rackListCollapsed, setRackListCollapsed] = useState(false);
   const [rackSearch, setRackSearch] = useState("");
-  const [exportOpen, setExportOpen] = useState(false);
+  void onExportCsv;
+  void onExportJson;
+  void onExportLocationsMapCsv;
   const filteredRacks = layout.racks.filter(
     (r) =>
       !rackSearch.trim() ||
@@ -259,46 +261,6 @@ export function RackSidebar({
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
       {(showOnlyCatalog || activeTab === "catalog") && (
         <>
-      {!showOnlyCatalog && (onExportCsv || onExportJson || onExportLocationsMapCsv) && (
-        <div className="mb-2.5">
-          <div className="relative">
-            <button
-              type="button"
-              onClick={() => setExportOpen(!exportOpen)}
-              className={warehousePrimaryActionClass}
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
-              {UI_STRINGS.warehouse.export.button}
-              <span className="opacity-80">▾</span>
-            </button>
-            {exportOpen && (
-              <>
-                <div className="absolute z-10 mt-1 w-full rounded-lg border border-slate-100 bg-white shadow-lg py-1 overflow-hidden">
-                  {onExportLocationsMapCsv && (
-                    <button type="button" onClick={() => { onExportLocationsMapCsv(); setExportOpen(false); }} className="w-full text-left px-3 py-2 text-xs hover:bg-slate-50 flex items-center gap-2">
-                      <svg className="w-4 h-4 text-emerald-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
-                      {UI_STRINGS.warehouse.rackSidebar.exportLocationsCsv}
-                    </button>
-                  )}
-                  {onExportCsv && (
-                    <button type="button" onClick={() => { onExportCsv(); setExportOpen(false); }} className="w-full text-left px-3 py-2 text-xs hover:bg-slate-50 flex items-center gap-2">
-                      <svg className="w-4 h-4 text-emerald-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
-                      {UI_STRINGS.warehouse.export.csv}
-                    </button>
-                  )}
-                  {onExportJson && (
-                    <button type="button" onClick={() => { onExportJson(); setExportOpen(false); }} className="w-full text-left px-3 py-2 text-xs hover:bg-slate-50 flex items-center gap-2">
-                      <svg className="w-4 h-4 text-amber-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" /></svg>
-                      {UI_STRINGS.warehouse.export.json}
-                    </button>
-                  )}
-                </div>
-                <div className="fixed inset-0 z-0" onClick={() => setExportOpen(false)} aria-hidden="true" />
-              </>
-            )}
-          </div>
-        </div>
-      )}
       {onOpenEditBuilding != null && (
         <div className="mb-2.5 border-b border-slate-100 pb-2.5">
           <div className={`mb-1 ${warehouseSectionLabelClass}`}>Budynek</div>

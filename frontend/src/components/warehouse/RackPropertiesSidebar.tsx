@@ -90,7 +90,6 @@ export function RackPropertiesSidebar({
   const [nameDraft, setNameDraft] = useState("");
   const [nameError, setNameError] = useState<string | null>(null);
   const [nameSaveHint, setNameSaveHint] = useState<"idle" | "dirty" | "saved" | "error">("idle");
-  const [compact, setCompact] = useState(false);
   const lastCommittedNameRef = useRef<string | null>(null);
 
   const rackSelKey = selectedRack ? `${selectedRack.uuid ?? ""}-${selectedRack.id ?? selectedRack.rack_index}` : "";
@@ -226,9 +225,7 @@ export function RackPropertiesSidebar({
   return (
     <div
       ref={asideScrollRef}
-      className={`flex h-full min-h-0 w-full flex-col overflow-hidden ${warehouseRailBgClass} ${
-        compact ? "text-[11px]" : ""
-      }`}
+      className={`flex h-full min-h-0 w-full flex-col overflow-hidden ${warehouseRailBgClass}`}
     >
       <header className="flex shrink-0 items-start justify-between gap-2 border-b border-slate-200/70 px-4 py-3">
         <div className="min-w-0 pl-0.5">
@@ -249,14 +246,6 @@ export function RackPropertiesSidebar({
           ) : null}
         </div>
         <div className="flex shrink-0 items-center gap-1">
-          <button
-            type="button"
-            title={compact ? "Tryb normalny" : "Tryb kompaktowy"}
-            onClick={() => setCompact((v) => !v)}
-            className="rounded-xl bg-white px-2 py-1.5 text-[10px] text-slate-600 shadow-sm ring-1 ring-slate-200/80 hover:bg-slate-50"
-          >
-            {compact ? "▣" : "▢"}
-          </button>
           <button
             type="button"
             aria-label="Zamknij panel"

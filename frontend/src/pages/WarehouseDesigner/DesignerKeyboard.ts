@@ -39,6 +39,8 @@ export interface UseDesignerKeyboardParams {
   setCopiedRack?: (v: RackState | null) => void;
   selectedWallElementId?: string | null;
   deleteSelectedWallElement?: () => void;
+  selectedSpecialLocationKey?: "pick_start" | "packing" | "dock" | null;
+  deleteSelectedSpecialLocation?: () => void;
   internalLayoutRackId?: number | string | null;
   onCloseInternalLayout?: () => void;
   onCloseRackPanel?: () => void;
@@ -82,6 +84,8 @@ export function useDesignerKeyboard(params: UseDesignerKeyboardParams): void {
   setCopiedRack,
   selectedWallElementId = null,
   deleteSelectedWallElement,
+  selectedSpecialLocationKey = null,
+  deleteSelectedSpecialLocation,
   internalLayoutRackId = null,
   onCloseInternalLayout,
   onCloseRackPanel,
@@ -93,6 +97,11 @@ export function useDesignerKeyboard(params: UseDesignerKeyboardParams): void {
       if (e.key === "Delete" || e.key === "Backspace") {
         const inInput = document.activeElement && (document.activeElement.tagName === "INPUT" || document.activeElement.tagName === "TEXTAREA" || (document.activeElement as HTMLElement).isContentEditable);
         if (inInput) return;
+        if (selectedSpecialLocationKey && deleteSelectedSpecialLocation) {
+          e.preventDefault();
+          deleteSelectedSpecialLocation();
+          return;
+        }
         if (mainView === "layout" && selectedRowContainerId && deleteSelectedRow) {
           e.preventDefault();
           deleteSelectedRow();
@@ -201,5 +210,5 @@ export function useDesignerKeyboard(params: UseDesignerKeyboardParams): void {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [placementMode, selectedObjectId, deleteObject, deleteSelectedRow, clipboard, getPastePosition, layout.racks, layout.visual_elements, mainView, selectedRackIds.length, selectedRowContainerId, selectedVisualIds.length, copyPlacementMode, setCopyPlacementMode, setCopiedRack, selectedWallElementId, deleteSelectedWallElement, internalLayoutRackId, onCloseInternalLayout, onCloseRackPanel, rackPanelOpen]);
+  }, [placementMode, selectedObjectId, deleteObject, deleteSelectedRow, clipboard, getPastePosition, layout.racks, layout.visual_elements, mainView, selectedRackIds.length, selectedRowContainerId, selectedVisualIds.length, copyPlacementMode, setCopyPlacementMode, setCopiedRack, selectedWallElementId, deleteSelectedWallElement, selectedSpecialLocationKey, deleteSelectedSpecialLocation, internalLayoutRackId, onCloseInternalLayout, onCloseRackPanel, rackPanelOpen]);
 }
