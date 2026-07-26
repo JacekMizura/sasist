@@ -1,17 +1,16 @@
 import { MoreVertical, Star } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
-
-import type { LabelTemplate } from "../../../types/labelSystem";
-import { LabelGalleryThumbnail } from "../components/LabelGalleryThumbnail";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 
 type Props = {
   name: string;
   description: string;
   metaLine: string;
-  template: LabelTemplate;
-  cacheKey: string;
+  /** Preview band — same slot for label canvas or document thumbnail. */
+  thumbnail: ReactNode;
   isSystem?: boolean;
   isDefault?: boolean;
+  primaryActionLabel?: string;
+  secondaryActionLabel?: string;
   onEdit: () => void;
   onUse: () => void;
   onDuplicate: () => void;
@@ -21,15 +20,17 @@ type Props = {
 
 /**
  * Library card — preview-first, outline actions, overflow menu.
+ * Shared by Szablony etykiet (Gotowe) and Szablony wydruków (Startery).
  */
 export default function ReadyTemplateCard({
   name,
   description,
   metaLine,
-  template,
-  cacheKey,
+  thumbnail,
   isSystem,
   isDefault,
+  primaryActionLabel = "Edytuj",
+  secondaryActionLabel = "Użyj",
   onEdit,
   onUse,
   onDuplicate,
@@ -54,11 +55,7 @@ export default function ReadyTemplateCard({
       style={{ borderRadius: 16 }}
     >
       <div className="relative h-[48%] shrink-0 bg-white">
-        <LabelGalleryThumbnail
-          template={template}
-          cacheKey={cacheKey}
-          className="h-full border-b border-[#E5E7EB] bg-white"
-        />
+        <div className="h-full border-b border-[#E5E7EB] bg-white">{thumbnail}</div>
         <div className="pointer-events-none absolute left-2.5 top-2.5 flex flex-wrap gap-1.5">
           {isSystem ? (
             <span className="pointer-events-auto rounded-md border border-gray-200 bg-white px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-slate-600 shadow-sm">
@@ -133,14 +130,14 @@ export default function ReadyTemplateCard({
             onClick={onEdit}
             className="flex-1 rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-semibold text-slate-800 shadow-sm transition hover:border-orange-300 hover:shadow-md"
           >
-            Edytuj
+            {primaryActionLabel}
           </button>
           <button
             type="button"
             onClick={onUse}
             className="flex-1 rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-semibold text-slate-800 shadow-sm transition hover:border-orange-300 hover:shadow-md"
           >
-            Użyj
+            {secondaryActionLabel}
           </button>
         </div>
       </div>

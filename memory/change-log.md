@@ -1,3 +1,9 @@
+## 2026-07-26 — Szablony wydruków = te same komponenty co etykiety
+
+- Usunięto lokalne `DocumentStarterCard` / `DocumentTemplateListCard`
+- Import: `ReadyTemplateCard`, `TemplateListRow`, `READY_TEMPLATES_GRID_CLASS` z LabelSystem
+- Uogólnione sloty `thumbnail` (bez drugiej wersji UI)
+
 ## 2026-07-26 — IA hub Szablony
 
 - Menu Operacje → Szablony (`/templates`); sekcje tabs: etykiety / wydruki / wiadomości / eksporty

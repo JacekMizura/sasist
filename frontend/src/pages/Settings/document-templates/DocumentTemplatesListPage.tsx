@@ -1,20 +1,19 @@
 import { useEffect, useMemo, useState } from "react";
-import { ChevronDown, Filter } from "lucide-react";
+import { ChevronDown, FileText, Filter } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
 
 import {
-  exportTemplateZip,
   fetchDocumentTemplateCatalog,
   fetchDocumentTemplatesList,
   fetchTemplateUsage,
-  publishDocumentTemplate,
   type DocumentTemplateListItemDto,
 } from "../../../api/documentTemplatesApi";
 import { extractApiErrorMessage } from "../../../api/apiErrorMessage";
 import { listSellasistToolbarToggleBtn } from "../../../components/listPage/listSellasistTokens";
+import { StatusBadge } from "../../../design-system";
+import TemplateListRow from "../../LabelSystem/templatesList/TemplateListRow";
 import { DEFAULT_TENANT_ID, LIST_BASE } from "./constants";
-import { DocumentTemplateListCard } from "./DocumentTemplateListCard";
 import {
   countActiveDocumentTemplateFilters,
   documentTemplateFiltersToggleLabel,
@@ -22,6 +21,13 @@ import {
   DocumentTemplatesListFiltersPanel,
   type DocumentTemplatesListFilters,
 } from "./DocumentTemplatesListFiltersPanel";
+import {
+  documentTemplateKindSubtitle,
+  documentTemplateListStatusPresentation,
+  documentTemplateStatusTone,
+  documentTemplateUsedAsLabels,
+  fmtDocumentTemplateLastEdited,
+} from "./documentTemplatesListPresentation";
 import { TemplateUsageModal } from "./components/TemplateUsageModal";
 
 export function DocumentTemplatesListPage() {
@@ -92,17 +98,8 @@ export function DocumentTemplatesListPage() {
     );
   }, [items, applied.search]);
 
-  const onApply = () => {
-    setApplied({ ...draft });
-  };
-
-  const onClear = () => {
-    setDraft(EMPTY_DOC_TEMPLATE_LIST_FILTERS);
-    setApplied(EMPTY_DOC_TEMPLATE_LIST_FILTERS);
-  };
-
   return (
-    <div className="min-w-0 space-y-4 bg-white px-1 pb-8 pt-2">
+    <div className="flex min-w-0 flex-1 flex-col gap-5 px-4 py-4 md:px-6 min-[1600px]:px-8">
       <div className="flex flex-wrap items-center justify-end gap-2">
         <button
           type="button"
@@ -123,70 +120,104 @@ export function DocumentTemplatesListPage() {
         expanded={filtersExpanded}
         draft={draft}
         onChangeDraft={(patch) => setDraft((prev) => ({ ...prev, ...patch }))}
-        onApply={onApply}
-        onClear={onClear}
+        onApply={() => setApplied({ ...draft })}
+        onClear={() => {
+          setDraft(EMPTY_DOC_TEMPLATE_LIST_FILTERS);
+          setApplied(EMPTY_DOC_TEMPLATE_LIST_FILTERS);
+        }}
         families={families}
         kinds={kinds}
       />
 
       {loading ? (
-        <p className="py-10 text-center text-sm text-slate-500">Wczytywanie…</p>
-      ) : filtered.length === 0 ? (
-        <div className="flex min-h-[240px] flex-col items-center justify-center rounded-2xl border border-dashed border-gray-200 bg-white px-6 py-12 text-center shadow-sm">
-          <p className="text-base font-semibold text-slate-900">Brak szablonów</p>
-          <p className="mt-1.5 max-w-sm text-sm text-slate-500">
-            Zmień filtry albo utwórz nowy szablon dokumentu.
-          </p>
-        </div>
+        <p className="py-10 text-slate-500">Ładowanie…</p>
       ) : (
-        <div className="space-y-3">
-          <p className="text-xs text-slate-500">
+        <div className="flex min-w-0 flex-col gap-4">
+          <p className="text-sm text-slate-500">
             {filtered.length} {filtered.length === 1 ? "szablon" : "szablonów"}
           </p>
-          <div className="flex flex-col gap-2">
-            {filtered.map((row) => (
-              <DocumentTemplateListCard
-                key={row.id}
-                row={row}
-                familyIcon={row.family?.code ? familyIconByCode[row.family.code] : null}
-                onOpenUsage={(r) => {
-                  void fetchTemplateUsage(DEFAULT_TENANT_ID, r.id).then((data) =>
-                    setUsageModal({ name: r.name, badges: data.badges, items: data.items }),
-                  );
-                }}
-                onDuplicate={(r) => {
-                  navigate(`${LIST_BASE}/new`, {
-                    state: { duplicateFromName: `${r.name} (kopia)`, kindCode: r.kind?.code },
-                  });
-                }}
-                onExport={(r) => {
-                  void exportTemplateZip(DEFAULT_TENANT_ID, r.id)
-                    .then((blob) => {
-                      const url = URL.createObjectURL(blob);
-                      const a = document.createElement("a");
-                      a.href = url;
-                      a.download = `szablon-${r.id}.zip`;
-                      a.click();
-                      URL.revokeObjectURL(url);
-                    })
-                    .catch((err) => toast.error(extractApiErrorMessage(err, "Eksport nie powiódł się.")));
-                }}
-                onDelete={() => {
-                  toast.error("Usuwanie szablonów z listy nie jest jeszcze dostępne.");
-                }}
-                onPublish={(r) => {
-                  const versionId = r.draft_version?.id;
-                  if (!versionId) return;
-                  void publishDocumentTemplate(DEFAULT_TENANT_ID, r.id, versionId)
-                    .then(() => {
-                      toast.success("Opublikowano szablon.");
-                      void reload();
-                    })
-                    .catch((err) => toast.error(extractApiErrorMessage(err, "Publikacja nie powiodła się.")));
-                }}
-              />
-            ))}
-          </div>
+
+          {filtered.length === 0 ? (
+            <p className="py-10 text-slate-500">Brak szablonów.</p>
+          ) : (
+            <div className="flex w-full min-w-0 flex-col gap-3">
+              {filtered.map((row) => {
+                const status = documentTemplateListStatusPresentation(row);
+                const usedAs = documentTemplateUsedAsLabels(row);
+                const usage = row.usage_summary ?? [];
+                const icon = row.family?.code ? familyIconByCode[row.family.code] : null;
+                const editedAt = row.last_edited_at ?? row.updated_at;
+                const usedAsText =
+                  usedAs.length > 0
+                    ? `${usedAs.slice(0, 3).join(", ")}${usedAs.length > 3 ? ` +${usedAs.length - 3}` : ""}`
+                    : "—";
+                const usedInText =
+                  usage.length > 0
+                    ? usage
+                        .slice(0, 3)
+                        .map((b) => `${b.label} (${b.count})`)
+                        .join(", ") + (usage.length > 3 ? ` +${usage.length - 3}` : "")
+                    : "—";
+
+                return (
+                  <TemplateListRow
+                    key={row.id}
+                    name={row.name}
+                    metaLine={
+                      <span className="inline-flex flex-wrap items-center gap-x-2 gap-y-1">
+                        <span>{documentTemplateKindSubtitle(row)}</span>
+                        <StatusBadge
+                          tone={documentTemplateStatusTone(status.primaryStatus)}
+                          density="compact"
+                        >
+                          {status.primaryLabel}
+                        </StatusBadge>
+                        {status.showNewerDraft ? (
+                          <StatusBadge tone="warning" density="compact">
+                            Nowszy draft
+                          </StatusBadge>
+                        ) : null}
+                        <span>
+                          Używany jako: {usedAsText} · Używane w: {usedInText} ·{" "}
+                          {fmtDocumentTemplateLastEdited(editedAt)}
+                        </span>
+                      </span>
+                    }
+                    thumbnail={
+                      icon ? (
+                        <span className="text-2xl" aria-hidden>
+                          {icon}
+                        </span>
+                      ) : (
+                        <FileText className="h-7 w-7 text-slate-400" aria-hidden />
+                      )
+                    }
+                    onEdit={() => navigate(`${LIST_BASE}/${row.id}`)}
+                    onDuplicate={() =>
+                      navigate(`${LIST_BASE}/new`, {
+                        state: {
+                          duplicateFromName: `${row.name} (kopia)`,
+                          kindCode: row.kind?.code,
+                        },
+                      })
+                    }
+                    onDelete={
+                      row.can_delete
+                        ? () => toast.error("Usuwanie szablonów z listy nie jest jeszcze dostępne.")
+                        : undefined
+                    }
+                    showDelete={Boolean(row.can_delete)}
+                    showPreview
+                    onPreview={() => {
+                      void fetchTemplateUsage(DEFAULT_TENANT_ID, row.id).then((data) =>
+                        setUsageModal({ name: row.name, badges: data.badges, items: data.items }),
+                      );
+                    }}
+                  />
+                );
+              })}
+            </div>
+          )}
         </div>
       )}
 

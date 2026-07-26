@@ -3,6 +3,8 @@ import { useLocation, useNavigate } from "react-router-dom";
 
 import api from "../../api/axios";
 import { exportLabelTemplatesJson } from "../../api/labelTemplatesPortabilityApi";
+import { TemplatePreview } from "../../components/labels/TemplatePreview";
+import { formatLabelSizeMm } from "../../utils/formatMm";
 import { labelModuleBasePath } from "./labelModuleBasePath";
 import { LABEL_PRINT_MODULE_TYPE_ORDER, printModuleTypeLabel } from "./labelPrintModuleTypes";
 import TemplateGridCard from "./templatesList/TemplateGridCard";
@@ -14,6 +16,9 @@ import {
   PAGE_SIZE,
   TENANT_ID,
   UNGROUPED_ID,
+  formatEditedMeta,
+  getListRowPreviewSize,
+  parseTemplateJson,
   type GroupRow,
   type SortValue,
   type TemplateRow,
@@ -251,7 +256,60 @@ export function LabelTemplatesList() {
     setSelectedGroupId(UNGROUPED_ID);
   };
 
-  const itemProps = (t: TemplateWithMeta) => ({
+  const itemProps = (t: TemplateWithMeta) => {
+    const listPv = getListRowPreviewSize(t.widthMm, t.heightMm);
+    const typeKey = (t.template_type || "location").toLowerCase();
+    return {
+      name: t.name,
+      metaLine: (
+        <>
+          {printModuleTypeLabel(typeKey)} • {formatLabelSizeMm(t.widthMm, t.heightMm)} •{" "}
+          {formatEditedMeta(t.updated_at)}
+        </>
+      ),
+      thumbnail: (
+        <TemplatePreview
+          templateId={t.id}
+          template={parseTemplateJson(t.template_json)}
+          containerWidthPx={listPv.cw}
+          containerHeightPx={listPv.ch}
+        />
+      ),
+      thumbnailWidth: listPv.boxW,
+      thumbnailHeight: listPv.boxH,
+      selected: selectedIds.has(t.id),
+      showCheckbox: true as const,
+      onToggleSelect: () => toggleSelectId(t.id),
+      isDefault: Boolean(t.is_default),
+      belowMeta:
+        groups.length > 0 ? (
+          <select
+            value={t.group_id ?? ""}
+            onChange={(e) => {
+              const v = e.target.value;
+              void handleMoveToGroup(t, v === "" ? null : Number(v));
+            }}
+            disabled={movingToGroupId === t.id}
+            className="w-full rounded-lg border border-[#E5E7EB] bg-white px-2 py-1 text-xs text-slate-700"
+            aria-label="Przenieś do grupy"
+          >
+            <option value="">Bez grupy</option>
+            {groups.map((g) => (
+              <option key={g.id} value={g.id}>
+                {g.name}
+              </option>
+            ))}
+          </select>
+        ) : undefined,
+      onPreview: () => setPreviewModalTemplate(t),
+      onEdit: () => handleEdit(t.id),
+      onDuplicate: () => void handleDuplicate(t),
+      onDelete: () => void handleDelete(t.id),
+      deleting: deletingId === t.id,
+    };
+  };
+
+  const gridItemProps = (t: TemplateWithMeta) => ({
     template: t,
     selected: selectedIds.has(t.id),
     onToggleSelect: () => toggleSelectId(t.id),
@@ -326,7 +384,7 @@ export function LabelTemplatesList() {
               ) : (
                 <div className="grid w-full grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3 min-[1600px]:grid-cols-4 min-[1920px]:grid-cols-5">
                   {paginated.map((t) => (
-                    <TemplateGridCard key={t.id} {...itemProps(t)} />
+                    <TemplateGridCard key={t.id} {...gridItemProps(t)} />
                   ))}
                 </div>
               )}

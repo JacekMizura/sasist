@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 
 import api from "../../api/axios";
-import { brandPrimaryButtonClass } from "../../design-system/brandUi";
+import { PrimaryButton } from "../../design-system";
 import {
   formatPresetSpecLine,
   generatePreset,
@@ -16,6 +16,7 @@ import { formatLabelSizeMm } from "../../utils/formatMm";
 import { labelModuleBasePath } from "./labelModuleBasePath";
 import { printModuleTypeLabel } from "./labelPrintModuleTypes";
 import ReadyTemplateCard from "./readyTemplates/ReadyTemplateCard";
+import { LabelGalleryThumbnail } from "./components/LabelGalleryThumbnail";
 import {
   PRESET_SECTION,
   presetsForFilter,
@@ -24,6 +25,7 @@ import {
   type ReadyFilterId,
   type ReadySectionId,
 } from "./readyTemplates/readyTemplateCatalog";
+import { READY_TEMPLATES_GRID_CLASS } from "./readyTemplates/readyTemplatesLayout";
 import ReadyTemplatesFilterTabs from "./readyTemplates/ReadyTemplatesFilterTabs";
 
 const TENANT_ID = 1;
@@ -128,8 +130,7 @@ function downloadJson(filename: string, payload: unknown) {
   URL.revokeObjectURL(url);
 }
 
-const GRID_CLASS =
-  "grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 min-[1400px]:grid-cols-5 min-[1600px]:grid-cols-6";
+const GRID_CLASS = READY_TEMPLATES_GRID_CLASS;
 
 /**
  * Gotowe szablony — biblioteka startowych układów (Figma/Canva style).
@@ -232,14 +233,10 @@ export function LabelReadyTemplatesPage() {
   return (
     <div className="min-w-0 space-y-6 bg-white px-1 pb-10 pt-2">
       <div className="flex flex-wrap items-center justify-end gap-3">
-        <button
-          type="button"
-          onClick={() => navigate(`${labelBase}/new`)}
-          className={brandPrimaryButtonClass}
-        >
+        <PrimaryButton type="button" density="compact" onClick={() => navigate(`${labelBase}/new`)}>
           <Plus className="h-4 w-4" strokeWidth={2.25} aria-hidden />
           Nowy szablon
-        </button>
+        </PrimaryButton>
       </div>
 
       <ReadyTemplatesFilterTabs value={filter} onChange={setFilter} />
@@ -286,8 +283,13 @@ export function LabelReadyTemplatesPage() {
                         name={card.name}
                         description={card.description}
                         metaLine={card.metaLine}
-                        template={card.template}
-                        cacheKey={`ready-preset:${card.presetType}`}
+                        thumbnail={
+                          <LabelGalleryThumbnail
+                            template={card.template}
+                            cacheKey={`ready-preset:${card.presetType}`}
+                            className="h-full bg-white"
+                          />
+                        }
                         isSystem
                         onEdit={() => openPreset(card.presetType)}
                         onUse={() => openPreset(card.presetType)}
@@ -305,8 +307,13 @@ export function LabelReadyTemplatesPage() {
                         name={card.name}
                         description={card.description}
                         metaLine={card.metaLine}
-                        template={card.template}
-                        cacheKey={`ready-custom:${card.id}:${card.template.updatedAt ?? ""}`}
+                        thumbnail={
+                          <LabelGalleryThumbnail
+                            template={card.template}
+                            cacheKey={`ready-custom:${card.id}:${card.template.updatedAt ?? ""}`}
+                            className="h-full bg-white"
+                          />
+                        }
                         isDefault={card.isDefault}
                         onEdit={() => openCustomEdit(card.id)}
                         onUse={() => openCustomEdit(card.id)}

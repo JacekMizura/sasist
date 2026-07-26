@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
+import { ChevronDown, Filter } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
 
 import {
@@ -16,19 +18,16 @@ import {
   filterSelectClass,
 } from "@/components/filters";
 import { listSellasistFilterGridClass4, listSellasistToolbarToggleBtn } from "@/components/listPage/listSellasistTokens";
-import { ChevronDown, Filter } from "lucide-react";
+import ReadyTemplateCard from "@/pages/LabelSystem/readyTemplates/ReadyTemplateCard";
+import { READY_TEMPLATES_GRID_CLASS } from "@/pages/LabelSystem/readyTemplates/readyTemplatesLayout";
 import { DEFAULT_TENANT_ID, LIST_BASE } from "./constants";
-import { DocumentStarterCard } from "./DocumentStarterCard";
+import { StarterThumbnailImage } from "./components/StarterThumbnailImage";
 
 const CATEGORY_LABELS: Record<string, string> = {
   featured: "Polecane",
   recent: "Nowe",
   popular: "Najpopularniejsze",
 };
-
-/** Ready Templates rhythm — max 5 cols on ultrawide (not 6–8). */
-const GRID_CLASS =
-  "grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 min-[1600px]:grid-cols-5";
 
 type StarterFilters = {
   search: string;
@@ -41,6 +40,7 @@ type StarterFilters = {
 const EMPTY: StarterFilters = { search: "", kind: "", category: "", family: "", tag: "" };
 
 export function StarterGalleryPage() {
+  const navigate = useNavigate();
   const [gallery, setGallery] = useState<{
     items: StarterGalleryItem[];
     total: number;
@@ -96,7 +96,7 @@ export function StarterGalleryPage() {
   }
 
   return (
-    <div className="min-w-0 space-y-5 bg-white px-1 pb-10 pt-2">
+    <div className="min-w-0 space-y-6 bg-white px-1 pb-10 pt-2">
       <div className="flex flex-wrap items-center justify-end gap-2">
         <button
           type="button"
@@ -194,20 +194,45 @@ export function StarterGalleryPage() {
         </FilterPanelBodyWithActions>
       </ListFilterEmbeddedShell>
 
-      {loading ? <p className="py-10 text-center text-sm text-slate-500">Wczytywanie…</p> : null}
+      {loading ? <p className="text-sm text-slate-500">Ładowanie…</p> : null}
 
       {!loading && filtered.length === 0 ? (
-        <div className="flex min-h-[280px] flex-col items-center justify-center rounded-2xl border border-dashed border-gray-200 px-6 py-12 text-center shadow-sm">
-          <p className="text-base font-semibold text-slate-900">Nie znaleziono szablonów</p>
-          <p className="mt-1.5 max-w-sm text-sm text-slate-500">Zmień filtry albo utwórz własny szablon.</p>
-        </div>
+        <p className="py-10 text-center text-sm text-slate-500">Nie znaleziono szablonów.</p>
       ) : null}
 
       {!loading && filtered.length > 0 ? (
-        <div className={GRID_CLASS}>
-          {filtered.map((item) => (
-            <DocumentStarterCard key={item.id} item={item} onUse={(i) => void createFromStarter(i)} />
-          ))}
+        <div className={READY_TEMPLATES_GRID_CLASS}>
+          {filtered.map((item) => {
+            const tags = [
+              ...(item.categories ?? []).map((c) => CATEGORY_LABELS[c] ?? c),
+              ...(item.tags ?? []).slice(0, 2),
+            ]
+              .filter(Boolean)
+              .join(" · ");
+            const metaLine = [item.kind_name, tags].filter(Boolean).join(" • ");
+            return (
+              <ReadyTemplateCard
+                key={item.id}
+                name={item.name_pl}
+                description={item.description || item.family_name || "Gotowy układ dokumentu"}
+                metaLine={metaLine}
+                thumbnail={
+                  <StarterThumbnailImage
+                    starterId={item.id}
+                    alt={item.name_pl}
+                    className="h-full w-full object-cover object-top"
+                  />
+                }
+                isSystem={Boolean(item.is_system)}
+                primaryActionLabel="Szczegóły"
+                secondaryActionLabel="Użyj szablonu"
+                onEdit={() => navigate(`${LIST_BASE}/starters/${item.id}`)}
+                onUse={() => void createFromStarter(item)}
+                onDuplicate={() => void createFromStarter(item)}
+                onExport={() => navigate(`${LIST_BASE}/starters/${item.id}`)}
+              />
+            );
+          })}
         </div>
       ) : null}
     </div>
