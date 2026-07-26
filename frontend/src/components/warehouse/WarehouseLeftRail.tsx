@@ -29,7 +29,7 @@ export function WarehouseLeftRail({ children, className = "" }: WarehouseLeftRai
 
 export type WarehouseRailSectionProps = {
   title?: ReactNode;
-  children: ReactNode;
+  children?: ReactNode;
   /** Top border separator between sections. */
   separated?: boolean;
   className?: string;

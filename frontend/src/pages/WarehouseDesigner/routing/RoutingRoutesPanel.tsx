@@ -119,11 +119,7 @@ export function RoutingRoutesPanel({
 
   return (
     <div className="text-[12px] text-slate-700">
-      <WarehouseRailSection title="Sieć tras">
-        <p className="text-[11px] text-slate-500">
-          Rysuj drogi magazynowe. Jedna wspólna sieć dla wszystkich procesów.
-        </p>
-      </WarehouseRailSection>
+      <WarehouseRailSection title="Sieć tras" />
 
       <WarehouseRailSection title="Narzędzia">
         <Toolbar
@@ -151,24 +147,6 @@ export function RoutingRoutesPanel({
         />
       </WarehouseRailSection>
 
-      {tool === "draw_edge" && (
-        <p className="mb-3 text-[11px] text-sky-900">
-          Klikaj kolejne miejsca — odcinki i skrzyżowania powstają automatycznie, gdy drogi się
-          przecinają lub łączą. Enter / Esc kończy bieżącą drogę.
-        </p>
-      )}
-      {tool === "select" && (
-        <p className="mb-3 text-[11px] text-slate-600">
-          Tylko zaznaczanie i podgląd — bez przesuwania punktów.
-        </p>
-      )}
-      {tool === "edit" && (
-        <p className="mb-3 text-[11px] text-amber-900">
-          Edycja grafu: przeciągaj punkty, scalaj / usuwaj, przepinaj końce odcinków. Bez edycji
-          przejazdów (Projektowanie).
-        </p>
-      )}
-
       <WarehouseRailSection>
         <Toolbar
           start={
@@ -179,7 +157,7 @@ export function RoutingRoutesPanel({
                 onClick={() => void routing.save()}
                 className="flex-1"
               >
-                {routing.saving ? "Zapisywanie…" : "Zapisz sieć"}
+                {routing.saving ? "Zapisywanie…" : "Zapisz"}
               </PrimaryButton>
               <SecondaryButton
                 density="compact"
@@ -334,13 +312,6 @@ export function RoutingRoutesPanel({
       {tool === "test_route" && (
         <WarehouseRailSection title="Testuj trasę">
         <Card variant="section" density="compact" className="space-y-2 border-sky-100 bg-sky-50/60">
-          <p className="text-[11px] text-sky-900">
-            {!testStartUuid
-              ? "Kliknij punkt początkowy na mapie."
-              : !testDestUuid
-                ? "Kliknij punkt docelowy."
-                : "Trasa obliczona. Kliknij punkt, aby zacząć nowy test."}
-          </p>
           {(testStartUuid || testDestUuid) && (
             <div className="text-[11px] text-slate-600">
               {testStartUuid && (
