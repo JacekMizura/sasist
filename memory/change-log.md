@@ -1,3 +1,10 @@
+## 2026-07-26 — Zlecenia: UX kart + globalne tony statusów
+
+- Filtry: „Wszystkie”; bez Operator w toolbarze
+- Karta bez Operatora; progress niebieski/zielony; Braki = warning
+- `executionStatusTone` / `productionProgressTone` + tone `primary` (orange)
+- Bez API/logiki · tsc OK · **No push.**
+
 ## 2026-07-26 — Symulacja planu: UX empty state
 
 - EmptyState z CTA; ukryte KPI/Create przy lines=0; zielony tylko przy produktach

@@ -9,11 +9,11 @@ import {
   ProgressBar,
   StatusBadge,
   secondaryButtonClassName,
-  type StatusTone,
+  toneTextClass,
 } from "@/design-system";
 
 import { erpProductionPaths } from "../productionPaths";
-import { BATCH_STATUS_LABEL } from "../productionUi";
+import { BATCH_STATUS_LABEL, executionStatusTone, productionProgressTone } from "../productionUi";
 
 type Props = {
   batches: ProductionBatchSummaryRead[];
@@ -37,41 +37,6 @@ function formatPlannedDate(raw?: string | null): string {
   const [y, m, day] = d.split("-");
   if (!y || !m || !day) return d;
   return `${day}.${m}.${y}`;
-}
-
-function statusTone(batch: ProductionBatchSummaryRead): StatusTone {
-  if (batch.has_shortages) return "danger";
-  switch (batch.status) {
-    case "completed":
-    case "awaiting_putaway":
-      return "success";
-    case "in_progress":
-    case "collecting":
-    case "putaway":
-      return "info";
-    case "planned":
-    case "draft":
-      return "neutral";
-    case "cancelled":
-      return "danger";
-    default:
-      return "neutral";
-  }
-}
-
-function progressTone(
-  batch: ProductionBatchSummaryRead
-): "success" | "warning" | "danger" | "neutral" | "info" {
-  if (batch.has_shortages) return "danger";
-  const pct = batch.progress_percent ?? 0;
-  if (pct >= 100 || batch.status === "completed" || batch.status === "awaiting_putaway") {
-    return "success";
-  }
-  if (batch.status === "in_progress" || batch.status === "collecting" || batch.status === "putaway") {
-    return "info";
-  }
-  if (pct > 0 && pct < 40) return "warning";
-  return "neutral";
 }
 
 /** Full-width batch rows for Production dashboard work sections (max `limit`, then „Pokaż wszystkie”). */
@@ -110,6 +75,7 @@ export function ProductionDashboardBatchGrid({
         {visible.map((b) => {
           const pct = Math.max(0, Math.min(100, b.progress_percent ?? 0));
           const href = erpProductionPaths.batch(b.id);
+          const barTone = productionProgressTone(pct, b.status);
           return (
             <li key={b.id} className="w-full">
               <ListTile density="comfortable" className="w-full">
@@ -120,11 +86,11 @@ export function ProductionDashboardBatchGrid({
                   </div>
 
                   <div className="flex shrink-0 flex-wrap items-center gap-2">
-                    <StatusBadge tone={statusTone(b)} density="compact">
+                    <StatusBadge tone={executionStatusTone(b.status)} density="compact">
                       {BATCH_STATUS_LABEL[b.status]}
                     </StatusBadge>
                     {b.has_shortages ? (
-                      <StatusBadge tone="danger" density="compact">
+                      <StatusBadge tone="warning" density="compact">
                         Braki
                         {b.shortage_count != null && b.shortage_count > 0 ? ` (${b.shortage_count})` : ""}
                       </StatusBadge>
@@ -134,9 +100,9 @@ export function ProductionDashboardBatchGrid({
                   <div className="w-full min-w-0 space-y-1 lg:max-w-[14rem] lg:flex-1">
                     <div className="flex items-center justify-between gap-2 text-xs text-slate-500">
                       <span>Postęp</span>
-                      <span className="tabular-nums font-medium text-slate-700">{pct}%</span>
+                      <span className={`tabular-nums font-semibold ${toneTextClass[barTone]}`}>{pct}%</span>
                     </div>
-                    <ProgressBar value={pct} tone={progressTone(b)} />
+                    <ProgressBar value={pct} tone={barTone} />
                   </div>
 
                   <div className="flex shrink-0 flex-col gap-0.5 text-xs text-slate-500 sm:flex-row sm:items-center sm:gap-4 lg:flex-col lg:items-end xl:flex-row xl:items-center">
@@ -145,10 +111,6 @@ export function ProductionDashboardBatchGrid({
                       <span className="tabular-nums font-medium text-slate-800">
                         {formatPlannedDate(b.planned_date)}
                       </span>
-                    </span>
-                    <span className="truncate max-w-[12rem]">
-                      Operator:{" "}
-                      <span className="font-medium text-slate-800">{b.operator_name || "—"}</span>
                     </span>
                   </div>
 

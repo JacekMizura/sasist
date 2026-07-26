@@ -8,10 +8,9 @@ import {
   listProductionBatches,
   openBulkProductionCardsPdf,
   type ProductionBatchRead,
-  type ProductionBatchStatus,
 } from "../../api/productionApi";
 import { AppEmptyState } from "../../components/app-shell";
-import { PageHeader, PrimaryButton, StatusBadge, type StatusTone } from "@/design-system";
+import { PageHeader, PrimaryButton, StatusBadge } from "@/design-system";
 import {
   productsListActionsCellClass,
   productsListActionsInnerClass,
@@ -24,7 +23,7 @@ import {
   moduleListTheadClass,
   moduleTableCardClass,
 } from "../../components/listPage/moduleList";
-import { BATCH_STATUS_LABEL } from "./productionUi";
+import { BATCH_STATUS_LABEL, executionStatusTone } from "./productionUi";
 import { erpProductionPaths } from "./productionPaths";
 import { ProgressBar } from "./components/ProgressBar";
 import { ProductionRowActionsMenu } from "./components/ProductionRowActionsMenu";
@@ -37,24 +36,6 @@ import {
 
 const DEFAULT_TENANT = 1;
 
-function batchStatusTone(status: ProductionBatchStatus): StatusTone {
-  switch (status) {
-    case "completed":
-    case "putaway":
-    case "awaiting_putaway":
-      return "success";
-    case "in_progress":
-    case "collecting":
-      return "info";
-    case "planned":
-      return "neutral";
-    case "cancelled":
-      return "danger";
-    case "draft":
-    default:
-      return "warning";
-  }
-}
 
 type Props = {
   embedded?: boolean;
@@ -187,7 +168,7 @@ export default function BatchesListPage({ embedded = false }: Props) {
                 <td className={rowTd}>{b.products_count ?? b.lines.length}</td>
                 <td className={`${rowTd} text-right tabular-nums`}>{b.total_planned_units ?? 0}</td>
                 <td className={rowTd}>
-                  <StatusBadge tone={batchStatusTone(b.status)} density="comfortable">
+                  <StatusBadge tone={executionStatusTone(b.status)} density="comfortable">
                     {BATCH_STATUS_LABEL[b.status]}
                   </StatusBadge>
                 </td>

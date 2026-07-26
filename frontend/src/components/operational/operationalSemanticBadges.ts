@@ -9,6 +9,9 @@ export const operationalBadgeSuccessClass = `${operationalBadgeBase} border-emer
 
 export const operationalBadgeInfoClass = `${operationalBadgeBase} border-sky-200/90 bg-sky-50 text-sky-900`;
 
+/** Orange — active user work (e.g. „W realizacji”). */
+export const operationalBadgePrimaryClass = `${operationalBadgeBase} border-orange-200/90 bg-orange-50 text-orange-900`;
+
 export const operationalBadgeWarningClass = `${operationalBadgeBase} border-amber-200/90 bg-amber-50 text-amber-950`;
 
 export const operationalBadgeDangerClass = `${operationalBadgeBase} border-red-200/90 bg-red-50 text-red-900`;

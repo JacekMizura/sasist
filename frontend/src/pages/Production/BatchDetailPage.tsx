@@ -13,7 +13,6 @@ import {
   startErpExecutionBatch,
   type ProductionBatchPickPlanRead,
   type ProductionBatchRead,
-  type ProductionBatchStatus,
 } from "../../api/productionApi";
 import {
   Card,
@@ -24,7 +23,6 @@ import {
   primaryButtonClassName,
   secondaryButtonClassName,
   typography,
-  type StatusTone,
 } from "@/design-system";
 import { DocumentMaterialReservationsPanel } from "./components/DocumentMaterialReservationsPanel";
 import {
@@ -35,6 +33,7 @@ import {
   batchHasMaterialShortages,
   START_COLLECTING_BLOCKED_TOOLTIP,
   BATCH_STATUS_LABEL,
+  executionStatusTone,
   stockTone,
   STOCK_TONE_CLASS,
   formatStartCollectingError,
@@ -44,25 +43,6 @@ import { erpProductionPaths, wmsProductionPaths } from "./productionPaths";
 import { productionPageStackClass, productionPageTitleClass } from "./productionLayoutTokens";
 
 const DEFAULT_TENANT = 1;
-
-function batchStatusTone(status: ProductionBatchStatus): StatusTone {
-  switch (status) {
-    case "completed":
-    case "putaway":
-    case "awaiting_putaway":
-      return "success";
-    case "in_progress":
-    case "collecting":
-      return "info";
-    case "planned":
-      return "neutral";
-    case "cancelled":
-      return "danger";
-    case "draft":
-    default:
-      return "warning";
-  }
-}
 
 function wmsTerminalHref(id: number, status: string): string {
   const s = status.toLowerCase();
@@ -213,7 +193,7 @@ export default function BatchDetailPage() {
         }
         status={
           <div className="flex flex-wrap items-center gap-2">
-            <StatusBadge tone={batchStatusTone(batch.status)} density="comfortable">
+            <StatusBadge tone={executionStatusTone(batch.status)} density="comfortable">
               {BATCH_STATUS_LABEL[batch.status]}
             </StatusBadge>
             {batch.is_erp_interface ? (

@@ -33,6 +33,8 @@ import {
 import {
   BATCH_STATUS_LABEL,
   PRODUCTION_STATUS_LABEL,
+  executionStatusTone,
+  productionProgressTone,
   resolveProductionPriority,
   type ProductionPriorityLevel,
 } from "./productionUi";
@@ -50,7 +52,7 @@ import {
   StatusBadge,
   Toolbar,
   primaryButtonClassName,
-  type StatusTone,
+  toneTextClass,
 } from "@/design-system";
 
 const DEFAULT_TENANT = 1;
@@ -76,50 +78,6 @@ function statusLabel(row: ProductionOrderRow): string {
     : PRODUCTION_STATUS_LABEL[row.status as keyof typeof PRODUCTION_STATUS_LABEL] ?? row.status;
 }
 
-function statusTone(row: ProductionOrderRow): StatusTone {
-  if (row.hasShortages) return "danger";
-  switch (row.status) {
-    case "completed":
-    case "awaiting_putaway":
-      return "success";
-    case "in_progress":
-    case "collecting":
-    case "putaway":
-      return "info";
-    case "cancelled":
-      return "danger";
-    case "planned":
-    case "draft":
-      return "neutral";
-    default:
-      return "neutral";
-  }
-}
-
-function priorityTone(level: ProductionPriorityLevel): StatusTone {
-  switch (level) {
-    case "low":
-      return "neutral";
-    case "normal":
-      return "info";
-    case "high":
-      return "warning";
-    case "critical":
-      return "danger";
-  }
-}
-
-function progressTone(
-  row: ProductionOrderRow,
-  pct: number
-): "success" | "warning" | "danger" | "neutral" | "info" {
-  if (row.hasShortages) return "danger";
-  if (pct >= 100) return "success";
-  if (row.status === "in_progress" || row.status === "collecting" || row.status === "putaway") return "info";
-  if (pct > 0 && pct < 40) return "warning";
-  return "neutral";
-}
-
 function OrderWorkCard({
   row,
   selected,
@@ -135,6 +93,7 @@ function OrderWorkCard({
   const pct = row.progressPercent;
   const showProgress = typeof pct === "number" && Number.isFinite(pct);
   const clamped = showProgress ? Math.max(0, Math.min(100, pct)) : 0;
+  const barTone = productionProgressTone(clamped, row.status);
 
   const wmsActions =
     (row.status === "planned" || row.status === "draft")
@@ -150,8 +109,8 @@ function OrderWorkCard({
 
   return (
     <ListTile density="comfortable" selected={selected} className="w-full">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:gap-4">
-        <div className="min-w-0 flex-1 space-y-2.5">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:gap-5">
+        <div className="min-w-0 flex-1 space-y-4">
           <div className="min-w-0">
             <div className="flex flex-wrap items-baseline gap-2">
               <p className="font-mono text-sm font-semibold text-slate-900">{row.number}</p>
@@ -159,48 +118,47 @@ function OrderWorkCard({
                 {row.kind === "batch" ? "partia" : "MO"}
               </span>
             </div>
-            <p className="mt-0.5 line-clamp-2 text-sm text-slate-600">{row.product}</p>
+            <p className="mt-1 line-clamp-2 text-sm text-slate-600">{row.product}</p>
           </div>
 
           {showProgress ? (
-            <div className="max-w-xl space-y-1">
+            <div className="max-w-xl space-y-1.5">
               <div className="flex items-center justify-between gap-2 text-xs text-slate-500">
                 <span>Postęp</span>
-                <span className="tabular-nums font-medium text-slate-700">{clamped}%</span>
+                <span className={`tabular-nums font-semibold ${toneTextClass[barTone]}`}>{clamped}%</span>
               </div>
-              <ProgressBar value={clamped} tone={progressTone(row, clamped)} />
+              <ProgressBar value={clamped} tone={barTone} />
             </div>
           ) : null}
 
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-slate-500">
+          <div className="flex flex-wrap items-center gap-x-5 gap-y-2.5 text-xs text-slate-500">
             <span className="inline-flex items-center gap-1.5">
               <span className="text-slate-400">Status</span>
-              <StatusBadge tone={statusTone(row)} density="compact">
+              <StatusBadge tone={executionStatusTone(row.status)} density="compact">
                 {statusLabel(row)}
               </StatusBadge>
-            </span>
-            <span className="inline-flex items-center gap-1.5">
-              <span className="text-slate-400">Priorytet</span>
-              <StatusBadge tone={priorityTone(level)} density="compact">
-                {PRIORITY_DISPLAY[level]}
-              </StatusBadge>
+              {row.hasShortages ? (
+                <StatusBadge tone="warning" density="compact">
+                  Braki
+                </StatusBadge>
+              ) : null}
             </span>
             <span>
-              <span className="text-slate-400">Operator:</span>{" "}
-              <span className="text-slate-700">{row.operator}</span>
+              <span className="text-slate-400">Priorytet:</span>{" "}
+              <span className="font-medium text-slate-700">{PRIORITY_DISPLAY[level]}</span>
             </span>
             <span>
               <span className="text-slate-400">Termin:</span>{" "}
-              <span className="tabular-nums text-slate-700">{formatPlannedDate(row.date)}</span>
+              <span className="tabular-nums font-medium text-slate-700">{formatPlannedDate(row.date)}</span>
             </span>
             <span>
               <span className="text-slate-400">Ilość:</span>{" "}
-              <span className="tabular-nums text-slate-700">{row.qty}</span>
+              <span className="tabular-nums font-medium text-slate-700">{row.qty}</span>
             </span>
           </div>
         </div>
 
-        <div className="flex shrink-0 justify-end sm:pt-0.5" onClick={(e) => e.stopPropagation()}>
+        <div className="flex shrink-0 justify-end sm:pt-1" onClick={(e) => e.stopPropagation()}>
           <ProductionRowActionsMenu
             align="end"
             ariaLabel={`Akcje ${row.number}`}
@@ -396,14 +354,6 @@ export default function ProductionOrdersPage() {
                     </option>
                   ))}
                 </Select>
-                <SearchInput
-                  density="comfortable"
-                  value={draftFilters.operator}
-                  onChange={(e) => patchQuickFilters({ operator: e.target.value })}
-                  placeholder="Operator"
-                  className="w-full min-w-[8rem] max-w-[10rem]"
-                  aria-label="Operator"
-                />
               </>
             }
             end={
@@ -464,7 +414,7 @@ export default function ProductionOrdersPage() {
           }
         />
       ) : (
-        <ul className="flex w-full flex-col gap-2">
+        <ul className="flex w-full flex-col gap-3">
           {rows.map((r) => {
             const key = `${r.kind}-${r.id}`;
             const selected = highlightKey === key;

@@ -1,13 +1,14 @@
-import type { ProductionBatchStatus, ProductionExecutionStatus, ProductionOrderStatus, StockShortageRead } from "../../api/productionApi";
-import { formatApiError } from "../../utils/apiErrorMessage";
 import {
-  operationalBadgeBase,
   operationalBadgeDangerClass,
   operationalBadgeInfoClass,
   operationalBadgeNeutralClass,
+  operationalBadgePrimaryClass,
   operationalBadgeSuccessClass,
   operationalBadgeWarningClass,
 } from "../../components/operational/operationalSemanticBadges";
+import type { StatusTone } from "@/design-system";
+import type { ProductionBatchStatus, ProductionExecutionStatus, ProductionOrderStatus, StockShortageRead } from "../../api/productionApi";
+import { formatApiError } from "../../utils/apiErrorMessage";
 
 /** Single status label map — batch + MO share backend EXECUTION_STATUS_LABELS. */
 export const EXECUTION_STATUS_LABEL: Record<ProductionExecutionStatus, string> = {
@@ -32,6 +33,36 @@ export function executionStatusLabel(status: string | null | undefined): string 
   return EXECUTION_STATUS_LABEL[key] ?? status ?? "—";
 }
 
+/**
+ * Global execution status → StatusBadge tone.
+ * Blue = rozlokowanie; orange (primary) = „W realizacji”; green = done; red = cancel; gray = new.
+ * Shortages use a separate yellow badge — do not override status color.
+ */
+export function executionStatusTone(status: string | null | undefined): StatusTone {
+  switch (String(status || "").trim().toLowerCase()) {
+    case "completed":
+      return "success";
+    case "in_progress":
+    case "collecting":
+      return "primary";
+    case "putaway":
+    case "awaiting_putaway":
+      return "info";
+    case "cancelled":
+      return "danger";
+    case "planned":
+    case "draft":
+    default:
+      return "neutral";
+  }
+}
+
+/** Process progress bar / % — blue while running, green at 100%. Never red for shortages. */
+export function productionProgressTone(pct: number, status?: string | null): StatusTone {
+  if (pct >= 100 || String(status || "").toLowerCase() === "completed") return "success";
+  return "info";
+}
+
 export const PRODUCTION_NUMBER_INPUT =
   "[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none";
 
@@ -47,22 +78,20 @@ export const STOCK_TONE_CLASS = {
   short: "border-red-200 bg-red-50",
 } as const;
 
-const PURPLE_BADGE = `${operationalBadgeBase} border-violet-200/90 bg-violet-50 text-violet-900`;
-
 export function executionStatusBadgeClass(status: ProductionExecutionStatus | string): string {
-  switch (status) {
-    case "planned":
-      return PURPLE_BADGE;
+  switch (String(status || "").trim().toLowerCase()) {
     case "in_progress":
     case "collecting":
-    case "awaiting_putaway":
-      return operationalBadgeWarningClass;
+      return operationalBadgePrimaryClass;
     case "putaway":
+    case "awaiting_putaway":
       return operationalBadgeInfoClass;
     case "completed":
       return operationalBadgeSuccessClass;
     case "cancelled":
       return operationalBadgeDangerClass;
+    case "planned":
+    case "draft":
     default:
       return operationalBadgeNeutralClass;
   }

@@ -92,7 +92,7 @@ export const colors = {
   },
 } as const;
 
-export type ColorTone = "success" | "warning" | "danger" | "info" | "neutral";
+export type ColorTone = "success" | "warning" | "danger" | "info" | "neutral" | "primary";
 
 export const toneTextClass: Record<ColorTone, string> = {
   success: colors.success.text,
@@ -100,6 +100,7 @@ export const toneTextClass: Record<ColorTone, string> = {
   danger: colors.danger.text,
   info: colors.info.text,
   neutral: colors.neutral.text,
+  primary: colors.primary.text,
 };
 
 export const toneSoftBgClass: Record<ColorTone, string> = {
@@ -108,6 +109,7 @@ export const toneSoftBgClass: Record<ColorTone, string> = {
   danger: colors.danger.softBg,
   info: colors.info.softBg,
   neutral: colors.neutral.softBg,
+  primary: colors.primary.softBg,
 };
 
 export const toneBadgeClass: Record<ColorTone, string> = {
@@ -116,4 +118,5 @@ export const toneBadgeClass: Record<ColorTone, string> = {
   danger: `${colors.danger.softBg} ${colors.danger.textStrong}`,
   info: `${colors.info.softBg} ${colors.info.textStrong}`,
   neutral: `${colors.neutral.softBg} ${colors.neutral.textStrong}`,
+  primary: `${colors.primary.softBg} ${colors.primary.textStrong}`,
 };

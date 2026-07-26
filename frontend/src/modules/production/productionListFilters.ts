@@ -153,7 +153,7 @@ export const PRODUCTION_ORDER_STATUS_OPTIONS = [
 ] as const;
 
 export const PRODUCTION_PRIORITY_OPTIONS = [
-  { value: "", label: "Wszystkie priorytety" },
+  { value: "", label: "Wszystkie" },
   { value: "low", label: "Niski" },
   { value: "normal", label: "Normalny" },
   { value: "high", label: "Wysoki" },
