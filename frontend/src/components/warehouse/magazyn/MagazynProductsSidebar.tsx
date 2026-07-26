@@ -136,6 +136,13 @@ export interface MagazynProductsSidebarProps {
   formatVolume: (n: number) => string;
   /** When true: rack selected on map; show top 5 + search, total/primary/reserve quantity, other locations = outside this rack. */
   rackProductMode?: boolean;
+  /**
+   * `rail` — main Magazyn map panel (360px vertical list, pre-refactor look).
+   * `catalog` — rack content view only (responsive product catalog grid).
+   */
+  presentation?: "rail" | "catalog";
+  /** Display label for catalog header (e.g. B2). Used only when presentation="catalog". */
+  rackDisplayLabel?: string;
   /** Optional: notify parent about product hover (for rack highlight on map). */
   onHoverProductIdChange?: (productId: string | null) => void;
   /** Optional: hover over a location row (inventory / assignment UUID) → highlight that bin on the top-down map. */
@@ -173,6 +180,8 @@ export function MagazynProductsSidebar({
   getProductImageUrl,
   formatVolume,
   rackProductMode = false,
+  presentation = "rail",
+  rackDisplayLabel,
   onHoverProductIdChange,
   onHoverLocationUUIDChange,
   onRemoveProductAssignment,
@@ -183,6 +192,7 @@ export function MagazynProductsSidebar({
   onToggleProductMapHighlight,
   onCreateDamageReportPrefill,
 }: MagazynProductsSidebarProps) {
+  const isCatalog = presentation === "catalog";
   const [expandedProductId, setExpandedProductId] = useState<string | null>(null);
   const [locationSearchQuery, setLocationSearchQuery] = useState("");
   const [confirmRemoveAssignment, setConfirmRemoveAssignment] = useState<{
@@ -428,8 +438,19 @@ ackProductsForMap);
       : undefined,
   );
 
+  const rackSummaryLine =
+    rackSummaryStats.uniqueProductsCount === 0 || rackSummaryStats.totalQuantity === 0
+      ? "Brak produktów"
+      : `${formatProduktCount(rackSummaryStats.uniqueProductsCount)} • ${rackSummaryStats.totalQuantity} szt.`;
+
   return (
-    <aside className="flex h-full min-h-0 w-[min(42vw,44rem)] min-w-[22rem] max-w-[52rem] flex-none flex-col self-stretch overflow-x-hidden overflow-y-auto overscroll-y-contain bg-[#f7f8fa] shadow-[-4px_0_24px_rgba(15,23,42,0.04)] designer-rail-scroll">
+    <aside
+      className={
+        isCatalog
+          ? "flex h-full min-h-0 w-[min(48vw,42rem)] min-w-[26rem] max-w-[48rem] flex-none flex-col self-stretch overflow-x-hidden overflow-y-auto overscroll-y-contain bg-[#f7f8fa] shadow-[-4px_0_24px_rgba(15,23,42,0.04)] designer-rail-scroll"
+          : "flex h-full min-h-0 w-[360px] flex-none flex-col self-stretch overflow-x-hidden overflow-y-auto overscroll-y-contain bg-[#f7f8fa] shadow-[-4px_0_24px_rgba(15,23,42,0.04)] designer-rail-scroll"
+      }
+    >
       <div className="flex shrink-0 flex-col gap-3 px-5 pb-4 pt-5">
         {selectedRackForMagazyn && onRequestClearRack && hasAssignedProductsOnRack && (
           <button
@@ -441,6 +462,21 @@ ackProductsForMap);
             Opróżnij regał
           </button>
         )}
+        {isCatalog ? (
+          <div>
+            <h2 className="text-lg font-semibold tracking-tight text-slate-900">
+              Regał {rackDisplayLabel?.trim() || "—"}
+            </h2>
+            {selectedRackForMagazyn && (
+              <p className="mt-1 text-[13px] leading-snug text-slate-500">{rackSummaryLine}</p>
+            )}
+          </div>
+        ) : (
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-400">Regał</p>
+            <h2 className="mt-1 text-lg font-semibold tracking-tight text-slate-900">Produkty</h2>
+          </div>
+        )}
         <input
           type="text"
           value={productSearchQuery}
@@ -448,12 +484,8 @@ ackProductsForMap);
           placeholder="Szukaj produktu…"
           className="w-full rounded-xl border-0 bg-white px-3 py-2.5 text-sm text-slate-900 shadow-sm ring-1 ring-slate-200/80 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-orange-400/40"
         />
-        {selectedRackForMagazyn && (
-          <p className="text-[11px] leading-snug text-slate-500">
-            {rackSummaryStats.uniqueProductsCount === 0 || rackSummaryStats.totalQuantity === 0
-              ? "Brak produktów"
-              : `${formatProduktCount(rackSummaryStats.uniqueProductsCount)} • ${rackSummaryStats.totalQuantity} szt.`}
-          </p>
+        {!isCatalog && selectedRackForMagazyn && (
+          <p className="text-[11px] leading-snug text-slate-500">{rackSummaryLine}</p>
         )}
       </div>
       <div className="flex flex-none flex-col gap-3 px-4 pb-6">
@@ -468,9 +500,11 @@ ackProductsForMap);
             Pokaż wszystkie produkty
           </label>
         )}
-        <div className="min-h-0 flex-none">
+        <div className={isCatalog ? "min-h-0 flex-none" : "min-h-0 flex-none space-y-3"}>
           {filterToSingleBin && selectedLocationBadge != null && (
-            <div className={`mb-3 flex items-center gap-1.5 rounded-md px-2 py-1 text-[11px] ${selectedLocationBadge.className}`}>
+            <div
+              className={`${isCatalog ? "mb-3 " : ""}flex items-center gap-1.5 rounded-md px-2 py-1 text-[11px] ${selectedLocationBadge.className}`}
+            >
               <span aria-label={selectedLocationBadge.label}>{selectedLocationBadge.icon}</span>
               <span>{selectedLocationBadge.label}</span>
             </div>
@@ -491,7 +525,13 @@ ackProductsForMap);
               ) : null}
             </div>
           ) : (
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+            <div
+              className={
+                isCatalog
+                  ? "grid grid-cols-[repeat(auto-fill,minmax(10.5rem,1fr))] gap-3"
+                  : "flex flex-col gap-3"
+              }
+            >
             {list.map((p) => {
               let currentLocation: LocationRow | null = null;
               let otherLocations: LocationRow[] = [];
@@ -580,21 +620,31 @@ ackProductsForMap);
                   }}
                   onMouseEnter={() => onHoverProductIdChange?.(p.id)}
                   onMouseLeave={() => onHoverProductIdChange?.(null)}
-                  className={`block cursor-pointer rounded-2xl bg-white p-4 shadow-sm transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-orange-400/40 ${
-                    isReserveLocation
-                      ? "ring-1 ring-amber-300/70 hover:shadow-md"
-                      : "ring-1 ring-slate-200/60 hover:shadow-md hover:ring-slate-300/80"
-                  } ${
-                    selectedProductId === p.id && onToggleProductMapHighlight ? "ring-2 ring-orange-400/50" : ""
-                  }`}
+                  className={
+                    isCatalog
+                      ? `flex h-full flex-col rounded-xl bg-white p-3 shadow-sm transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-orange-400/40 ${
+                          isReserveLocation
+                            ? "ring-1 ring-amber-300/70 hover:shadow-md"
+                            : "ring-1 ring-slate-200/60 hover:shadow-md hover:ring-slate-300/80"
+                        } ${
+                          selectedProductId === p.id && onToggleProductMapHighlight ? "ring-2 ring-orange-400/50" : ""
+                        }`
+                      : `block cursor-pointer rounded-2xl bg-white p-4 shadow-sm transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-orange-400/40 ${
+                          isReserveLocation
+                            ? "ring-1 ring-amber-300/70 hover:shadow-md"
+                            : "ring-1 ring-slate-200/60 hover:shadow-md hover:ring-slate-300/80"
+                        } ${
+                          selectedProductId === p.id && onToggleProductMapHighlight ? "ring-2 ring-orange-400/50" : ""
+                        }`
+                  }
                 >
                   {currentLocation && (
                     <div
-                      className="mb-3 flex items-center justify-between gap-1.5 rounded-xl bg-sky-50 px-2.5 py-1.5 text-[11px] font-medium text-sky-800"
+                      className={`${isCatalog ? "mb-2" : "mb-3"} flex items-center justify-between gap-1.5 rounded-xl bg-sky-50 px-2.5 py-1.5 text-[11px] font-medium text-sky-800`}
                       onMouseEnter={() => onHoverLocationUUIDChange?.(currentLocation.locationUUID)}
                       onMouseLeave={() => onHoverLocationUUIDChange?.(null)}
                     >
-                      <span className="min-w-0">
+                      <span className="min-w-0 truncate">
                         {currentLocationLabel} — {safeQuantity(currentLocation.quantity)} szt.
                       </span>
                       {normalizeStorageType(currentLocation.storageType) === "damaged" && onCreateDamageReportPrefill ? (
@@ -643,69 +693,130 @@ ackProductsForMap);
                         )}
                     </div>
                   )}
-                  <div className="flex items-start gap-3.5">
-                    <div className="relative h-14 w-14 shrink-0 overflow-hidden bg-white">
-                      {imageUrl ? (
-                        <img
-                          src={imageUrl}
-                          alt=""
-                          className="absolute inset-0 h-full w-full object-contain"
-                          onError={(e) => { e.currentTarget.style.display = "none"; }}
-                        />
-                      ) : null}
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <div className="line-clamp-2 break-words text-[15px] font-semibold leading-snug tracking-tight text-slate-900">
-                        {highlightQueryInText(p.name ?? "", productSearchQuery, p.id)}
+                  {isCatalog ? (
+                    <>
+                      <div className="relative mx-auto mb-2 h-20 w-full max-w-[7.5rem] shrink-0 overflow-hidden bg-white">
+                        {imageUrl ? (
+                          <img
+                            src={imageUrl}
+                            alt=""
+                            className="absolute inset-0 h-full w-full object-contain"
+                            onError={(e) => {
+                              e.currentTarget.style.display = "none";
+                            }}
+                          />
+                        ) : null}
                       </div>
-                      <div className="mt-1 truncate text-[11px] tracking-wide text-slate-400">{p.sku ?? "—"}</div>
-                      <div className="mt-0.5 truncate text-[11px] tracking-wide text-slate-400">
-                        EAN: {p.ean?.trim() ? p.ean : "—"}
-                      </div>
-                      {hasQuantityBreakdown ? (
-                        <>
-                          <div className="mt-3 text-[13px] tabular-nums text-slate-700">
-                            <span className="font-semibold text-slate-900">{enriched.totalQuantity}</span>
-                            <span className="text-slate-400"> szt.</span>
-                            <span className="mx-1.5 text-slate-300">•</span>
-                            <span className="font-semibold text-sky-700">{formatVolume(volumeAtLocation)}</span>
-                            <span className="text-sky-600/80"> dm³</span>
-                          </div>
-                          <div className="mt-0.5 text-[11px] text-slate-400">
+                      <div className="min-w-0 flex-1">
+                        <div className="line-clamp-2 break-words text-[13px] font-semibold leading-snug tracking-tight text-slate-900">
+                          {highlightQueryInText(p.name ?? "", productSearchQuery, p.id)}
+                        </div>
+                        <div className="mt-1 truncate text-[11px] tracking-wide text-slate-400">{p.sku ?? "—"}</div>
+                        <div className="mt-0.5 truncate text-[11px] tracking-wide text-slate-400">
+                          EAN: {p.ean?.trim() ? p.ean : "—"}
+                        </div>
+                        <div className="mt-2 text-[12px] tabular-nums text-slate-700">
+                          <span className="font-semibold text-slate-900">
+                            {hasQuantityBreakdown ? enriched.totalQuantity : quantityAtLocation}
+                          </span>
+                          <span className="text-slate-400"> szt.</span>
+                          <span className="mx-1 text-slate-300">•</span>
+                          <span className="font-semibold text-sky-700">{formatVolume(volumeAtLocation)}</span>
+                          <span className="text-sky-600/80"> dm³</span>
+                        </div>
+                        {hasQuantityBreakdown ? (
+                          <div className="mt-0.5 text-[10px] text-slate-400">
                             Podst. <span className="font-medium text-slate-600">{enriched.primaryQuantity ?? 0}</span>
                             {" · "}
                             Rez. <span className="font-medium text-amber-700">{enriched.reserveQuantity ?? 0}</span>
                           </div>
-                        </>
-                      ) : (
-                        <div className="mt-3 text-[13px] tabular-nums text-slate-700">
-                          <span className="font-semibold text-slate-900">{quantityAtLocation}</span>
-                          <span className="text-slate-400"> szt.</span>
-                          <span className="mx-1.5 text-slate-300">•</span>
-                          <span className="font-semibold text-sky-700">{formatVolume(volumeAtLocation)}</span>
-                          <span className="text-sky-600/80"> dm³</span>
+                        ) : null}
+                        {otherLocations.length > 0 && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              if (isExpanded) {
+                                setLocationSearchQuery("");
+                                setExpandedProductId(null);
+                              } else {
+                                setExpandedProductId(p.id);
+                              }
+                            }}
+                            className={`mt-1.5 text-[11px] ${brandLinkTextClass}`}
+                          >
+                            Inne lokalizacje
+                          </button>
+                        )}
+                      </div>
+                    </>
+                  ) : (
+                    <div className="flex items-start gap-3.5">
+                      <div className="relative h-14 w-14 shrink-0 overflow-hidden bg-white">
+                        {imageUrl ? (
+                          <img
+                            src={imageUrl}
+                            alt=""
+                            className="absolute inset-0 h-full w-full object-contain"
+                            onError={(e) => {
+                              e.currentTarget.style.display = "none";
+                            }}
+                          />
+                        ) : null}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="line-clamp-2 break-words text-[15px] font-semibold leading-snug tracking-tight text-slate-900">
+                          {highlightQueryInText(p.name ?? "", productSearchQuery, p.id)}
                         </div>
-                      )}
-                      {otherLocations.length > 0 && (
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            if (isExpanded) {
-                              setLocationSearchQuery("");
-                              setExpandedProductId(null);
-                            } else {
-                              setExpandedProductId(p.id);
-                            }
-                          }}
-                          className={`mt-2 text-[11px] ${brandLinkTextClass}`}
-                        >
-                          Inne lokalizacje
-                        </button>
-                      )}
+                        <div className="mt-1 truncate text-[11px] tracking-wide text-slate-400">{p.sku ?? "—"}</div>
+                        <div className="mt-0.5 truncate text-[11px] tracking-wide text-slate-400">
+                          EAN: {p.ean?.trim() ? p.ean : "—"}
+                        </div>
+                        {hasQuantityBreakdown ? (
+                          <>
+                            <div className="mt-3 text-base font-semibold tabular-nums text-slate-900">
+                              {enriched.totalQuantity}
+                              <span className="ml-1 text-[12px] font-medium text-slate-400">szt.</span>
+                            </div>
+                            <div className="mt-0.5 text-[11px] text-slate-400">
+                              Podst. <span className="font-medium text-slate-600">{enriched.primaryQuantity ?? 0}</span>
+                              {" · "}
+                              Rez. <span className="font-medium text-amber-700">{enriched.reserveQuantity ?? 0}</span>
+                            </div>
+                          </>
+                        ) : (
+                          <div className="mt-3 text-base font-semibold tabular-nums text-slate-900">
+                            {quantityAtLocation}
+                            <span className="ml-1 text-[12px] font-medium text-slate-400">szt.</span>
+                          </div>
+                        )}
+                        <div className="mt-2">
+                          <span className="rounded-full bg-sky-50 px-2.5 py-0.5 text-[11px] font-semibold tabular-nums text-sky-700">
+                            {formatVolume(volumeAtLocation)} dm³
+                          </span>
+                        </div>
+                        {otherLocations.length > 0 && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              if (isExpanded) {
+                                setLocationSearchQuery("");
+                                setExpandedProductId(null);
+                              } else {
+                                setExpandedProductId(p.id);
+                              }
+                            }}
+                            className={`mt-2 text-[11px] ${brandLinkTextClass}`}
+                          >
+                            Inne lokalizacje
+                          </button>
+                        )}
+                      </div>
                     </div>
-                  </div>
+                  )}
                   {isExpanded && otherLocations.length > 0 && (
                     <div className="mt-3 border-t border-slate-100 pt-3">
                       {locationCount > 20 && (
@@ -738,8 +849,7 @@ ackProductsForMap);
                   )}
                 </Link>
               );
-            })
-            }
+            })}
             </div>
           )}
         </div>

@@ -4257,6 +4257,12 @@ export default function WarehouseDesigner() {
                 safeVolumeDm3={safeVolumeDm3}
                 getProductImageUrl={getProductImageUrl}
                 formatVolume={formatVolume}
+                presentation="catalog"
+                rackDisplayLabel={
+                  selectedRackForMagazyn
+                    ? getRackDisplayIdWithLayout(selectedRackForMagazyn)
+                    : undefined
+                }
                 onRemoveProductAssignment={removeProductAssignmentAtLocation}
                 onRequestClearRack={() => setClearRackConfirmOpen(true)}
                 clearRackBusy={clearRackBusy}
