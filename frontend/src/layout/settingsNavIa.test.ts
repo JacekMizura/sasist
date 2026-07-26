@@ -4,7 +4,7 @@ import { buildNavFlyoutCategories, isCategoryActive } from "./mainNavConfig";
 import { isNavPathActive } from "./navActive";
 
 describe("settings flyout IA", () => {
-  it("lists settings items without template modules (moved to Szablony hub)", () => {
+  it("lists settings items without template modules (moved to Szablony category)", () => {
     const settings = buildNavFlyoutCategories().find((c) => c.id === "settings");
     expect(settings).toBeTruthy();
     const labels = settings!.flyoutSections.flatMap((s) => s.items.map((i) => i.label));
@@ -26,16 +26,28 @@ describe("settings flyout IA", () => {
     expect(labels).not.toContain("System Etykiet");
   });
 
-  it("exposes Szablony hub under Operacje → /templates", () => {
+  it("exposes Szablony as flyout category with four independent modules", () => {
     const cats = buildNavFlyoutCategories();
-    const templateEntries = cats.flatMap((c) =>
-      c.flyoutSections.flatMap((s) =>
-        s.items
-          .filter((i) => i.path === "/templates" || i.path.startsWith("/templates/"))
-          .map((i) => ({ categoryId: c.id, path: i.path, label: i.label })),
-      ),
+    const templatesCat = cats.find((c) => c.id === "templates");
+    expect(templatesCat).toBeTruthy();
+    expect(templatesCat!.opensSideFlyout).toBe(true);
+    expect(templatesCat!.label).toBe("Szablony");
+
+    const templateEntries = templatesCat!.flyoutSections.flatMap((s) =>
+      s.items.map((i) => ({ path: i.path, label: i.label })),
     );
-    expect(templateEntries).toEqual([{ categoryId: "templates", path: "/templates", label: "Szablony" }]);
+    expect(templateEntries).toEqual([
+      { path: "/templates/labels", label: "Szablony etykiet" },
+      { path: "/templates/print", label: "Szablony wydruków" },
+      { path: "/templates/messages", label: "Szablony wiadomości" },
+      { path: "/templates/exports", label: "Eksporty" },
+    ]);
+
+    // No single hub leaf at /templates
+    const hubLeaf = cats.flatMap((c) =>
+      c.flyoutSections.flatMap((s) => s.items.filter((i) => i.path === "/templates")),
+    );
+    expect(hubLeaf).toEqual([]);
   });
 });
 
@@ -49,20 +61,27 @@ describe("settings nav active states", () => {
     expect(isNavPathActive("/settings/api-keys", "/settings/integrations")).toBe(false);
   });
 
-  it("highlights Szablony hub for all template section routes and legacy aliases", () => {
-    expect(isNavPathActive("/templates", "/templates")).toBe(true);
-    expect(isNavPathActive("/templates/labels", "/templates")).toBe(true);
-    expect(isNavPathActive("/templates/print/starters", "/templates")).toBe(true);
-    expect(isNavPathActive("/templates/messages", "/templates")).toBe(true);
-    expect(isNavPathActive("/templates/exports/new", "/templates")).toBe(true);
-    expect(isNavPathActive("/labels/designer/1", "/templates")).toBe(true);
-    expect(isNavPathActive("/settings/exports", "/templates")).toBe(true);
-    expect(isNavPathActive("/settings/api-keys", "/templates")).toBe(false);
+  it("highlights each template module path independently", () => {
+    expect(isNavPathActive("/templates/labels", "/templates/labels")).toBe(true);
+    expect(isNavPathActive("/templates/labels/queue", "/templates/labels")).toBe(true);
+    expect(isNavPathActive("/labels/designer/1", "/templates/labels")).toBe(true);
+    expect(isNavPathActive("/templates/print", "/templates/labels")).toBe(false);
+
+    expect(isNavPathActive("/templates/print/starters", "/templates/print")).toBe(true);
+    expect(isNavPathActive("/settings/document-templates", "/templates/print")).toBe(true);
+    expect(isNavPathActive("/templates/labels", "/templates/print")).toBe(false);
+
+    expect(isNavPathActive("/templates/messages", "/templates/messages")).toBe(true);
+    expect(isNavPathActive("/admin/message-templates", "/templates/messages")).toBe(true);
+
+    expect(isNavPathActive("/templates/exports/new", "/templates/exports")).toBe(true);
+    expect(isNavPathActive("/settings/exports", "/templates/exports")).toBe(true);
+    expect(isNavPathActive("/settings/api-keys", "/templates/exports")).toBe(false);
   });
 });
 
 describe("settings category vs templates category", () => {
-  it("does not treat templates hub as settings flyout membership", () => {
+  it("does not treat templates routes as settings flyout membership", () => {
     const settings = buildNavFlyoutCategories().find((c) => c.id === "settings")!;
     expect(isCategoryActive(settings, "/templates")).toBe(false);
     expect(isCategoryActive(settings, "/templates/labels")).toBe(false);

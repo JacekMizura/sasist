@@ -5,11 +5,8 @@ import toast from "react-hot-toast";
 
 import { exportFullPackageZip } from "../../../api/documentTemplatesApi";
 import { extractApiErrorMessage } from "../../../api/apiErrorMessage";
-import TopTabsNavigation from "../../../components/TopTabsNavigation";
 import { SettingsModuleStack } from "../../../components/layout/SettingsModuleStack";
-import { pageModuleContentOffsetClass, pageModuleTabsOffsetClass } from "../../../design-system/pageLayout";
 import { PrimaryButton, SuccessButton } from "../../../design-system";
-import { isTemplatesHubPath } from "../../Templates/templatesPaths";
 import { DEFAULT_TENANT_ID, LIST_BASE } from "./constants";
 import { DOCUMENT_TEMPLATES_TABS } from "./documentTemplatesTabs";
 
@@ -26,7 +23,6 @@ export default function DocumentTemplatesModuleFrame() {
   const { pathname } = useLocation();
   const { templateId } = useParams<{ templateId?: string }>();
   const navigate = useNavigate();
-  const inHub = isTemplatesHubPath(pathname);
   const isList = pathname === LIST_BASE || pathname === `${LIST_BASE}/`;
   const showPrimaryNew = isList || pathname === `${LIST_BASE}/starters`;
   const isEditor = Boolean(templateId && /^\d+$/.test(templateId));
@@ -67,17 +63,9 @@ export default function DocumentTemplatesModuleFrame() {
   ) : null;
 
   if (isEditor) {
-    if (inHub) {
-      return (
-        <div className="flex min-h-0 flex-1 flex-col">
-          <Outlet />
-        </div>
-      );
-    }
     return (
       <SettingsModuleStack
         breadcrumbs={[
-          { label: "Ustawienia", to: "/settings/company" },
           { label: "Szablony wydruków", to: LIST_BASE },
           { label: editorTitle },
         ]}
@@ -93,28 +81,8 @@ export default function DocumentTemplatesModuleFrame() {
     );
   }
 
-  if (inHub) {
-    return (
-      <div className="min-w-0">
-        <div className={`flex flex-wrap items-end justify-between gap-3 ${pageModuleTabsOffsetClass}`}>
-          <div className="min-w-0 flex-1">
-            <TopTabsNavigation tabs={DOCUMENT_TEMPLATES_TABS} exact aria-label="Szablony wydruków" />
-          </div>
-          {actions ? <div className="mb-0.5 shrink-0 pb-0.5">{actions}</div> : null}
-        </div>
-        <div className={pageModuleContentOffsetClass}>
-          <Outlet />
-        </div>
-      </div>
-    );
-  }
-
   return (
     <SettingsModuleStack
-      breadcrumbs={[
-        { label: "Ustawienia", to: "/settings/company" },
-        { label: "Szablony wydruków" },
-      ]}
       title="Szablony wydruków"
       tabs={DOCUMENT_TEMPLATES_TABS}
       tabsExact

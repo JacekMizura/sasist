@@ -109,7 +109,6 @@ import WarehouseDesigner from "./pages/WarehouseDesigner"
 /** @deprecated DELETE_CANDIDATE — superseded by LabelSystem (/labels). Keep file until cleanup. */
 import BarcodeManagement from "./pages/BarcodeManagement"
 import LabelSystem from "./pages/LabelSystem"
-import TemplatesHubLayout from "./pages/Templates/TemplatesHubLayout";
 import DocumentTemplatesLayout from "./pages/Settings/document-templates/DocumentTemplatesLayout";
 import DocumentTemplatesModuleFrame from "./pages/Settings/document-templates/DocumentTemplatesModuleFrame";
 import { DocumentTemplateCreatePage } from "./pages/Settings/document-templates/DocumentTemplateCreatePage";
@@ -417,7 +416,7 @@ function RedirectSystemEtykietToLabels() {
 }
 
 /** Alias `/labels/*` → `/templates/labels/*`. */
-function RedirectLabelsToTemplatesHub() {
+function RedirectLabelsToTemplatesLabels() {
   const loc = useLocation()
   const tail = loc.pathname.replace(/^\/labels\/?/, "")
   const to = tail ? `/templates/labels/${tail}` : "/templates/labels"
@@ -425,7 +424,7 @@ function RedirectLabelsToTemplatesHub() {
 }
 
 /** Alias `/settings/document-templates/*` → `/templates/print/*`. */
-function RedirectDocumentTemplatesToHub() {
+function RedirectDocumentTemplatesToPrint() {
   const loc = useLocation()
   const tail = loc.pathname.replace(/^\/settings\/document-templates\/?/, "")
   const to = tail ? `/templates/print/${tail}` : "/templates/print"
@@ -433,7 +432,7 @@ function RedirectDocumentTemplatesToHub() {
 }
 
 /** Alias `/admin/message-templates/*` → `/templates/messages/*`. */
-function RedirectMessageTemplatesToHub() {
+function RedirectMessageTemplatesToMessages() {
   const loc = useLocation()
   const tail = loc.pathname.replace(/^\/admin\/message-templates\/?/, "")
   const to = tail ? `/templates/messages/${tail}` : "/templates/messages"
@@ -441,7 +440,7 @@ function RedirectMessageTemplatesToHub() {
 }
 
 /** Alias `/settings/exports/*` → `/templates/exports/*`. */
-function RedirectExportsToHub() {
+function RedirectExportsToTemplatesExports() {
   const loc = useLocation()
   const tail = loc.pathname.replace(/^\/settings\/exports\/?/, "")
   const to = tail ? `/templates/exports/${tail}` : "/templates/exports"
@@ -637,7 +636,7 @@ export const router = createBrowserRouter(
                   path="settings/integrations/api-keys"
                   element={<Navigate to="/settings/api-keys" replace />}
                 />
-                <Route path="settings/exports/*" element={<RedirectExportsToHub />} />
+                <Route path="settings/exports/*" element={<RedirectExportsToTemplatesExports />} />
                 <Route path="settings/import" element={<SettingsImportPage />} />
                 <Route path="settings" element={<Navigate to="/settings/company" replace />} />
                 <Route path="settings/company" element={<CompanySettingsLayout />}>
@@ -657,9 +656,9 @@ export const router = createBrowserRouter(
                   path="administration/templates/prints/*"
                   element={<LegacyAdministrationPrintTemplatesRedirect />}
                 />
-                <Route path="admin/message-templates/*" element={<RedirectMessageTemplatesToHub />} />
+                <Route path="admin/message-templates/*" element={<RedirectMessageTemplatesToMessages />} />
                 <Route path="admin/print-templates/*" element={<RedirectAdminPrintTemplatesToLabels />} />
-                <Route path="settings/document-templates/*" element={<RedirectDocumentTemplatesToHub />} />
+                <Route path="settings/document-templates/*" element={<RedirectDocumentTemplatesToPrint />} />
                 <Route path="document-templates/*" element={<Navigate to="/templates/print" replace />} />
                 <Route path="dokumenty/sprzedaz/:documentId" element={<RedirectPolishSaleDocumentDetail />} />
                 <Route path="documents" element={<DocumentsLayout />}>
@@ -1002,24 +1001,22 @@ export const router = createBrowserRouter(
                   <Route path="changelog" element={<SystemChangelog />} />
                   <Route path="labels" element={<SystemAppDictionaryPage />} />
                 </Route>
-                <Route path="templates" element={<TemplatesHubLayout />}>
-                  <Route index element={<Navigate to="labels" replace />} />
-                  <Route path="labels/*" element={<LabelSystem />} />
-                  <Route path="print" element={<DocumentTemplatesLayout />}>
-                    <Route element={<DocumentTemplatesModuleFrame />}>
-                      <Route index element={<DocumentTemplatesListPage />} />
-                      <Route path="new" element={<DocumentTemplateCreatePage />} />
-                      <Route path="starters" element={<StarterGalleryPage />} />
-                      <Route path="starters/:starterId" element={<StarterDetailPage />} />
-                      <Route path=":templateId" element={<DocumentTemplateEditorPage />} />
-                    </Route>
+                <Route path="templates" element={<Navigate to="/templates/labels" replace />} />
+                <Route path="templates/labels/*" element={<LabelSystem />} />
+                <Route path="templates/print" element={<DocumentTemplatesLayout />}>
+                  <Route element={<DocumentTemplatesModuleFrame />}>
+                    <Route index element={<DocumentTemplatesListPage />} />
+                    <Route path="new" element={<DocumentTemplateCreatePage />} />
+                    <Route path="starters" element={<StarterGalleryPage />} />
+                    <Route path="starters/:starterId" element={<StarterDetailPage />} />
+                    <Route path=":templateId" element={<DocumentTemplateEditorPage />} />
                   </Route>
-                  <Route path="messages/*" element={<MessageTemplatesModule />} />
-                  <Route path="exports" element={<ExportsPage />} />
-                  <Route path="exports/new" element={<ExportEditorPage />} />
-                  <Route path="exports/:id" element={<ExportEditorPage />} />
                 </Route>
-                <Route path="labels/*" element={<RedirectLabelsToTemplatesHub />} />
+                <Route path="templates/messages/*" element={<MessageTemplatesModule />} />
+                <Route path="templates/exports" element={<ExportsPage />} />
+                <Route path="templates/exports/new" element={<ExportEditorPage />} />
+                <Route path="templates/exports/:id" element={<ExportEditorPage />} />
+                <Route path="labels/*" element={<RedirectLabelsToTemplatesLabels />} />
                 <Route path="system-etykiet/*" element={<RedirectSystemEtykietToLabels />} />
                 {/* Planning placeholders removed — purchasing is the product path. */}
                 <Route path="planning/deliveries" element={<Navigate to="/purchasing/dashboard" replace />} />

@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useState } from "react";
-import { Link, useLocation } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { cloneExportTemplate, deleteExportTemplate, listExportTemplates, type ExportTemplateDto } from "../../api/exportsApi";
 import { entityTypeLabelPl } from "../../utils/exportImportLabelsPl";
 import PageLayout from "../../components/layout/PageLayout";
 import { PageHeader } from "../../components/layout/PageHeader";
-import { brandPrimaryButtonClass } from "../../design-system/brandUi";
-import { isTemplatesHubPath, TEMPLATES_EXPORTS_BASE } from "../Templates/templatesPaths";
+import { PrimaryButton } from "../../design-system";
+import { TEMPLATES_EXPORTS_BASE } from "../Templates/templatesPaths";
 
 const TENANT_ID = 1;
 const BASE = TEMPLATES_EXPORTS_BASE;
@@ -20,8 +20,6 @@ function fmtDate(iso: string | null): string {
 }
 
 export default function ExportsPage() {
-  const { pathname } = useLocation();
-  const inHub = isTemplatesHubPath(pathname);
   const [rows, setRows] = useState<ExportTemplateDto[]>([]);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
@@ -39,15 +37,19 @@ export default function ExportsPage() {
     load();
   }, [load]);
 
-  const actions = (
-    <Link to={`${BASE}/new`} className={brandPrimaryButtonClass}>
-      Nowy szablon eksportu
-    </Link>
-  );
-
-  const body = (
-    <>
-      {!inHub ? <p className="text-sm text-slate-500">Szablony eksportu CSV (tenant #{TENANT_ID})</p> : null}
+  return (
+    <PageLayout>
+      <PageHeader
+        title="Eksporty"
+        actions={
+          <Link to={`${BASE}/new`}>
+            <PrimaryButton type="button" density="compact">
+              Nowy szablon eksportu
+            </PrimaryButton>
+          </Link>
+        }
+      />
+      <p className="text-sm text-slate-500">Szablony eksportu CSV (tenant #{TENANT_ID})</p>
 
       {loading && <div className="py-8 text-center text-slate-500">Ładowanie…</div>}
       {err && <div className="border border-red-200 bg-red-50 p-4 text-sm text-red-800">{err}</div>}
@@ -113,29 +115,6 @@ export default function ExportsPage() {
           </table>
         </div>
       )}
-    </>
-  );
-
-  if (inHub) {
-    return (
-      <div className="min-w-0 space-y-4">
-        <div className="flex flex-wrap items-center justify-end gap-2">{actions}</div>
-        {body}
-      </div>
-    );
-  }
-
-  return (
-    <PageLayout>
-      <PageHeader
-        title="Eksport"
-        breadcrumbs={[
-          { label: "Ustawienia", to: "/settings/company" },
-          { label: "Eksport" },
-        ]}
-        actions={actions}
-      />
-      {body}
     </PageLayout>
   );
 }

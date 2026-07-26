@@ -29,14 +29,19 @@ describe("Phase B IA — Magazyn damages + no stub menu entries", () => {
     expect(paths).not.toContain("/report/warehouse-structure");
   });
 
-  it("keeps a single LabelSystem menu entry at /labels", () => {
+  it("keeps a single LabelSystem menu entry under Szablony → /templates/labels", () => {
     const labelEntries = buildNavFlyoutCategories().flatMap((c) =>
       c.flyoutSections.flatMap((s) =>
         s.items
-          .filter((i) => i.path === "/labels" || i.path === "/admin/print-templates")
+          .filter(
+            (i) =>
+              i.path === "/labels" ||
+              i.path === "/admin/print-templates" ||
+              i.path === "/templates/labels",
+          )
           .map((i) => ({ id: c.id, path: i.path })),
       ),
     );
-    expect(labelEntries).toEqual([{ id: "labels", path: "/labels" }]);
+    expect(labelEntries).toEqual([{ id: "templates", path: "/templates/labels" }]);
   });
 });

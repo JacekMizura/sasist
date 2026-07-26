@@ -1,17 +1,10 @@
 import { Outlet, useLocation } from "react-router-dom";
 
 import PageLayout from "../../../components/layout/PageLayout";
-import { isTemplatesHubPath } from "../../Templates/templatesPaths";
 
 export default function DocumentTemplatesLayout() {
   const { pathname } = useLocation();
-  const inHub = isTemplatesHubPath(pathname);
-  const isEditor =
-    /^\/(?:templates\/print|settings\/document-templates)\/(?!new$|starters$)\d+/.test(pathname);
-
-  if (inHub) {
-    return <Outlet />;
-  }
+  const isEditor = /^\/templates\/print\/(?!new$|starters$)\d+/.test(pathname);
 
   return (
     <PageLayout

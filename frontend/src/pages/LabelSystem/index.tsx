@@ -7,7 +7,7 @@ import { LabelPrintQueue } from "./LabelPrintQueue";
 import api from "../../api/axios";
 import { alertFailedRequest } from "../../utils/apiError";
 import PageLayout from "../../components/layout/PageLayout";
-import TopTabsNavigation from "../../components/TopTabsNavigation";
+import { SettingsModuleStack } from "../../components/layout/SettingsModuleStack";
 import type { TemplateMeta } from "./LabelTemplateDesigner";
 import { labelModuleBasePath } from "./labelModuleBasePath";
 import { labelModuleTabs } from "./labelModuleTabs";
@@ -136,25 +136,17 @@ function LabelListQueueShell() {
   const { pathname } = useLocation();
   const labelBase = labelModuleBasePath(pathname);
   const tabs = useMemo(() => labelModuleTabs(labelBase), [labelBase]);
-  const inHub = pathname.startsWith("/templates/");
-
-  const tabNav = (
-    <TopTabsNavigation tabs={tabs} exact aria-label="Szablony etykiet" />
-  );
-
-  if (inHub) {
-    return (
-      <>
-        {tabNav}
-        <Outlet />
-      </>
-    );
-  }
 
   return (
     <PageLayout fullBleed cardClassName="min-h-[60vh] min-w-0">
-      {tabNav}
-      <Outlet />
+      <SettingsModuleStack
+        title="Szablony etykiet"
+        tabs={tabs}
+        tabsExact
+        tabsAriaLabel="Szablony etykiet"
+      >
+        <Outlet />
+      </SettingsModuleStack>
     </PageLayout>
   );
 }

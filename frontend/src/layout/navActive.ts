@@ -10,14 +10,29 @@ export function isNavPathActive(pathname: string, path: string): boolean {
   if (path.startsWith("/documents/")) {
     return pathname === path || pathname.startsWith(`${path}/`);
   }
-  if (path === "/templates") {
+  if (path === "/templates/labels") {
     return (
-      pathname.startsWith("/templates") ||
+      pathname.startsWith("/templates/labels") ||
       pathname.startsWith("/labels") ||
       pathname.startsWith("/system-etykiet") ||
-      pathname.startsWith("/admin/print-templates") ||
-      pathname.startsWith("/settings/document-templates") ||
-      pathname.startsWith("/admin/message-templates") ||
+      pathname.startsWith("/admin/print-templates")
+    );
+  }
+  if (path === "/templates/print") {
+    return (
+      pathname.startsWith("/templates/print") ||
+      pathname.startsWith("/settings/document-templates")
+    );
+  }
+  if (path === "/templates/messages") {
+    return (
+      pathname.startsWith("/templates/messages") ||
+      pathname.startsWith("/admin/message-templates")
+    );
+  }
+  if (path === "/templates/exports") {
+    return (
+      pathname.startsWith("/templates/exports") ||
       pathname.startsWith("/settings/exports")
     );
   }

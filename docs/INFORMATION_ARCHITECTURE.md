@@ -51,7 +51,7 @@ Sidebar ERP grupuje kategorie w **Sprzedaż** i **Operacje**. Na dole: CTA **Prz
 
 - **Rola:** dokumenty sprzedażowe, korekty, dokumenty magazynowe, serie, eksporty dokumentów.
 - **Wejście:** Sprzedaż → Dokumenty.
-- Szablony PDF dokumentów (Twig/HTML) są w **Ustawieniach**, nie w hubie dokumentów.
+- Szablony PDF dokumentów (Twig/HTML) są w **Szablony → Szablony wydruków**, nie w hubie dokumentów.
 
 ### Zakupy i planowanie
 
@@ -65,9 +65,13 @@ Sidebar ERP grupuje kategorie w **Sprzedaż** i **Operacje**. Na dole: CTA **Prz
 
 ### Szablony
 
-- **Rola:** hub wszystkich szablonów — etykiety, wydruki dokumentów, wiadomości, eksporty.
-- **Wejście:** Operacje → **Szablony** → **`/templates`** (jedyny wpis w menu).
-- **Sekcje (tabs):** `/templates/labels`, `/templates/print`, `/templates/messages`, `/templates/exports`.
+- **Rola:** kategoria nawigacyjna (side flyout), jak Magazyn — grupuje niezależne moduły szablonów. **Nie** jest osobnym ekranem ani hubem z zakładkami.
+- **Wejście:** Operacje → **Szablony** (flyout) → jedna z pozycji:
+  - Szablony etykiet → `/templates/labels`
+  - Szablony wydruków → `/templates/print`
+  - Szablony wiadomości → `/templates/messages`
+  - Eksporty → `/templates/exports`
+- `/templates` przekierowuje na `/templates/labels` (brak dashboardu kategorii).
 
 ### Analiza
 
@@ -106,8 +110,8 @@ Przykłady (kolejność zgodna z flyoutem):
 | System | `/system` |
 | Słownik aplikacji | `/system/labels` (super-role) |
 
-**Nie należy** umieszczać w Ustawieniach pełnych hubów szablonów (etykiety, wydruki, wiadomości, eksporty) — te żyją w **Operacje → Szablony**.  
-**Drukarki** = infrastruktura druku; **Szablony etykiet** = projektowanie etykiet (w hubie Szablony).
+**Nie należy** umieszczać w Ustawieniach pełnych modułów szablonów (etykiety, wydruki, wiadomości, eksporty) — te żyją w **Operacje → Szablony** (flyout).  
+**Drukarki** = infrastruktura druku; **Szablony etykiet** = projektowanie etykiet (moduł w kategorii Szablony).
 
 ---
 
@@ -115,11 +119,11 @@ Przykłady (kolejność zgodna z flyoutem):
 
 | Moduł | Kanoniczny route | Uwagi |
 |-------|------------------|--------|
-| Szablony (hub) | `/templates` | Jedyny wpis menu. Tabs: etykiety / wydruki / wiadomości / eksporty. |
-| Szablony etykiet | `/templates/labels` | Ten sam komponent `LabelSystem`. |
-| Szablony wydruków | `/templates/print` | Dokumenty PDF/Twig. |
-| Szablony wiadomości | `/templates/messages` | Komunikacja. |
-| Eksporty | `/templates/exports` | Szablony eksportu CSV. |
+| Szablony (kategoria) | — | Tylko flyout w sidebarze; brak ekranu `/templates`. |
+| Szablony etykiet | `/templates/labels` | Własny layout + zakładki wewnętrzne (`LabelSystem`). |
+| Szablony wydruków | `/templates/print` | Dokumenty PDF/Twig; własne zakładki. |
+| Szablony wiadomości | `/templates/messages` | Komunikacja; własny layout. |
+| Eksporty | `/templates/exports` | Szablony eksportu CSV; własny layout. |
 | Drukarki | `/settings/printers` | Agenci / urządzenia / kolejka. |
 | Słownik aplikacji | `/system/labels` | **Nie** mylić z `/templates/labels`. |
 

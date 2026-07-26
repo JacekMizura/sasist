@@ -182,7 +182,6 @@ export default function ExportEditorPage() {
         title={isNew ? "Nowy szablon eksportu" : "Edycja szablonu eksportu"}
         subtitle="Wybierz typ danych, pola do wyeksportowania i zapisz szablon. Wygenerowany plik CSV ma nagłówki po polsku."
         breadcrumbs={[
-          { label: "Szablony", to: "/templates" },
           { label: "Eksporty", to: "/templates/exports" },
           { label: isNew ? "Nowy szablon" : "Edycja" },
         ]}

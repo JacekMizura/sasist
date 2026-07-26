@@ -5,6 +5,7 @@ import {
   Warehouse,
   Activity,
   BarChart3,
+  Tag,
   LayoutTemplate,
   Settings,
   Settings2,
@@ -27,8 +28,10 @@ import {
   Key,
   Building2,
   Plug,
+  Download,
   Printer,
   Upload,
+  MessageSquare,
   FileText,
   TriangleAlert,
 } from "lucide-react";
@@ -305,8 +308,33 @@ export function buildNavFlyoutCategories(): NavCategoryConfig[] {
     id: "templates",
     label: UI_STRINGS.navigation.templatesHub,
     Icon: LayoutTemplate,
+    opensSideFlyout: true,
+    activePathPrefix: "/templates",
     flyoutSections: [
-      { items: [{ path: "/templates", label: UI_STRINGS.navigation.templatesHub, Icon: LayoutTemplate }] },
+      {
+        items: [
+          {
+            path: "/templates/labels",
+            label: UI_STRINGS.navigation.labelSystem,
+            Icon: Tag,
+          },
+          {
+            path: "/templates/print",
+            label: "Szablony wydruków",
+            Icon: FileText,
+          },
+          {
+            path: "/templates/messages",
+            label: "Szablony wiadomości",
+            Icon: MessageSquare,
+          },
+          {
+            path: "/templates/exports",
+            label: "Eksporty",
+            Icon: Download,
+          },
+        ],
+      },
     ],
   },
   {
@@ -431,7 +459,7 @@ export function isCategoryActive(category: NavCategoryConfig, pathname: string):
   if (category.id === "settings") {
     // Ustawienia WMS is its own sidebar row — do not highlight Ogólne Ustawienia there.
     if (pathname === "/settings/wms" || pathname.startsWith("/settings/wms/")) return false;
-    // Templates hub owns exports / document templates / message templates.
+    // Templates category owns exports / document templates / message templates.
     if (pathname.startsWith("/templates")) return false;
     if (pathname.startsWith("/settings")) return true;
     if (pathname === "/system" || pathname.startsWith("/system/")) return true;

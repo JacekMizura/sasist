@@ -1,15 +1,20 @@
+## 2026-07-26 — Szablony = kategoria flyout (nie hub)
+
+- Usunięto `TemplatesHubLayout` / tabs między modułami
+- Sidebar: Szablony (`opensSideFlyout`) → etykiety / wydruki / wiadomości / eksporty
+- Każdy moduł: własny PageHeader + własne zakładki; `/templates` → redirect labels
+- Docs IA + testy `settingsNavIa` / `phaseBIa` zaktualizowane
+
 ## 2026-07-26 — Szablony wydruków = te same komponenty co etykiety
 
 - Usunięto lokalne `DocumentStarterCard` / `DocumentTemplateListCard`
 - Import: `ReadyTemplateCard`, `TemplateListRow`, `READY_TEMPLATES_GRID_CLASS` z LabelSystem
 - Uogólnione sloty `thumbnail` (bez drugiej wersji UI)
 
-## 2026-07-26 — IA hub Szablony
+## 2026-07-26 — IA hub Szablony (superseded — flyout category)
 
-- Menu Operacje → Szablony (`/templates`); sekcje tabs: etykiety / wydruki / wiadomości / eksporty
-- Redirecty: `/labels`, document-templates, message-templates, settings/exports → `/templates/*`
-- Usunięte z Ustawień: Eksport, Szablony dokumentów, Szablony wiadomości
-- Bez zmian API/logiki — tylko routing, menu, shell IA
+- Historycznie: jeden wpis `/templates` z tabs między sekcjami
+- Zastąpione: kategoria flyout bez hub screen (patrz wpis powyżej)
 
 ## 2026-07-26 — Szablony wydruków: powrót do ERP Design System
 
