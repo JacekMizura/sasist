@@ -429,7 +429,7 @@ ackProductsForMap);
   );
 
   return (
-    <aside className="flex h-full min-h-0 w-[360px] flex-none flex-col self-stretch overflow-x-hidden overflow-y-auto overscroll-y-contain bg-[#f7f8fa] shadow-[-4px_0_24px_rgba(15,23,42,0.04)] designer-rail-scroll">
+    <aside className="flex h-full min-h-0 w-[min(42vw,44rem)] min-w-[22rem] max-w-[52rem] flex-none flex-col self-stretch overflow-x-hidden overflow-y-auto overscroll-y-contain bg-[#f7f8fa] shadow-[-4px_0_24px_rgba(15,23,42,0.04)] designer-rail-scroll">
       <div className="flex shrink-0 flex-col gap-3 px-5 pb-4 pt-5">
         {selectedRackForMagazyn && onRequestClearRack && hasAssignedProductsOnRack && (
           <button
@@ -441,10 +441,6 @@ ackProductsForMap);
             Opróżnij regał
           </button>
         )}
-        <div>
-          <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-400">Regał</p>
-          <h2 className="mt-1 text-lg font-semibold tracking-tight text-slate-900">Produkty</h2>
-        </div>
         <input
           type="text"
           value={productSearchQuery}
@@ -472,8 +468,9 @@ ackProductsForMap);
             Pokaż wszystkie produkty
           </label>
         )}
-        <div className="min-h-0 flex-none space-y-3">          {filterToSingleBin && selectedLocationBadge != null && (
-            <div className={`flex items-center gap-1.5 rounded-md px-2 py-1 text-[11px] ${selectedLocationBadge.className}`}>
+        <div className="min-h-0 flex-none">
+          {filterToSingleBin && selectedLocationBadge != null && (
+            <div className={`mb-3 flex items-center gap-1.5 rounded-md px-2 py-1 text-[11px] ${selectedLocationBadge.className}`}>
               <span aria-label={selectedLocationBadge.label}>{selectedLocationBadge.icon}</span>
               <span>{selectedLocationBadge.label}</span>
             </div>
@@ -494,7 +491,8 @@ ackProductsForMap);
               ) : null}
             </div>
           ) : (
-            list.map((p) => {
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+            {list.map((p) => {
               let currentLocation: LocationRow | null = null;
               let otherLocations: LocationRow[] = [];
               let quantityAtLocation = 0;
@@ -666,9 +664,12 @@ ackProductsForMap);
                       </div>
                       {hasQuantityBreakdown ? (
                         <>
-                          <div className="mt-3 text-base font-semibold tabular-nums text-slate-900">
-                            {enriched.totalQuantity}
-                            <span className="ml-1 text-[12px] font-medium text-slate-400">szt.</span>
+                          <div className="mt-3 text-[13px] tabular-nums text-slate-700">
+                            <span className="font-semibold text-slate-900">{enriched.totalQuantity}</span>
+                            <span className="text-slate-400"> szt.</span>
+                            <span className="mx-1.5 text-slate-300">•</span>
+                            <span className="font-semibold text-sky-700">{formatVolume(volumeAtLocation)}</span>
+                            <span className="text-sky-600/80"> dm³</span>
                           </div>
                           <div className="mt-0.5 text-[11px] text-slate-400">
                             Podst. <span className="font-medium text-slate-600">{enriched.primaryQuantity ?? 0}</span>
@@ -677,16 +678,14 @@ ackProductsForMap);
                           </div>
                         </>
                       ) : (
-                        <div className="mt-3 text-base font-semibold tabular-nums text-slate-900">
-                          {quantityAtLocation}
-                          <span className="ml-1 text-[12px] font-medium text-slate-400">szt.</span>
+                        <div className="mt-3 text-[13px] tabular-nums text-slate-700">
+                          <span className="font-semibold text-slate-900">{quantityAtLocation}</span>
+                          <span className="text-slate-400"> szt.</span>
+                          <span className="mx-1.5 text-slate-300">•</span>
+                          <span className="font-semibold text-sky-700">{formatVolume(volumeAtLocation)}</span>
+                          <span className="text-sky-600/80"> dm³</span>
                         </div>
                       )}
-                      <div className="mt-2">
-                        <span className="rounded-full bg-sky-50 px-2.5 py-0.5 text-[11px] font-semibold tabular-nums text-sky-700">
-                          {formatVolume(volumeAtLocation)} dm³
-                        </span>
-                      </div>
                       {otherLocations.length > 0 && (
                         <button
                           type="button"
@@ -740,6 +739,8 @@ ackProductsForMap);
                 </Link>
               );
             })
+            }
+            </div>
           )}
         </div>
       </div>

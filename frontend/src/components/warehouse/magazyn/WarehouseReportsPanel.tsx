@@ -66,7 +66,7 @@ export function WarehouseReportsPanel({
       aria-labelledby="warehouse-reports-title"
       onClick={onClose}
     >
-      <div className="w-full rounded-xl border border-slate-200 bg-white shadow-xl" onClick={(e) => e.stopPropagation()}>
+      <div className="w-full max-w-lg rounded-xl border border-slate-200 bg-white shadow-xl" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
           <h3 id="warehouse-reports-title" className="text-base font-semibold text-slate-900">Raporty magazynu</h3>
           <button type="button" onClick={onClose} className="rounded-md px-2 py-1 text-sm text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-700">

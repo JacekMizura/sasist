@@ -105,7 +105,10 @@ export function DamageReportsPanel({
   return (
     <AppOverlayPortal>
     <div className="fixed inset-0 z-[280] flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
-      <div className="w-full rounded-xl border border-slate-200 bg-white shadow-xl" onClick={(e) => e.stopPropagation()}>
+      <div
+        className="flex max-h-[min(90vh,52rem)] w-full max-w-xl flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl"
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
           <h3 className="text-base font-semibold text-slate-900">Szkody</h3>
           <div className="flex items-center gap-2">
@@ -121,7 +124,7 @@ export function DamageReportsPanel({
         </div>
 
         {view === "list" && (
-          <div className="p-5">
+          <div className="min-h-0 flex-1 overflow-y-auto p-5">
             <div className="mb-4 flex items-center gap-2">
               <button type="button" onClick={() => setTab("wms")} className={`rounded-md px-3 py-2 text-xs font-semibold ${tab === "wms" ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-700"}`}>WMS</button>
               <button type="button" onClick={() => setTab("office")} className={`rounded-md px-3 py-2 text-xs font-semibold ${tab === "office" ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-700"}`}>Office</button>

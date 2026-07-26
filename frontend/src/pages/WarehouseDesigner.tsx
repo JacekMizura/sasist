@@ -1870,22 +1870,31 @@ export default function WarehouseDesigner() {
     return null;
   }, [selectedRackIdForSideView, selectedRackIdOnMap]);
 
-  /** Modal copy only: rack label + count of assignment rows that would be removed (same bins as clear action). */
+  /** Modal copy: rack label + count of product↔location rows on this rack (SSOT index). */
   const clearRackConfirmPreview = useMemo(() => {
     if (clearRackTargetKey == null) return { rackLabel: "", assignmentCount: 0 };
     const rack = layout.racks.find((r) => String(r.id ?? r.rack_index) === clearRackTargetKey);
     if (!rack) return { rackLabel: "", assignmentCount: 0 };
-    const binUuids = new Set(activeBinsForRack(rack).map((b) => (b.locationUUID ?? "").trim()).filter(Boolean));
-    let n = 0;
-    for (const p of products) {
-      if (!p.assignedLocations?.length) continue;
-      for (const a of p.assignedLocations) {
-        const u = assignedLocationEntryUuid(a);
-        if (u && binUuids.has(u)) n += 1;
+    const rackKey = String(rack.id ?? rack.rack_index);
+    const indexEntries = productLocationIndex.byRack.get(rackKey) ?? [];
+    let n = indexEntries.filter((e) => e.quantity > 0).length;
+    if (n === 0) {
+      // Fallback: assigned_locations mapped with both locationUUID / location_uuid on bins.
+      const binUuids = new Set(
+        activeBinsForRack(rack)
+          .map((b) => normalizeInventoryLocationUuid(binLocationUuidFromBin(b)))
+          .filter(Boolean)
+      );
+      for (const p of products) {
+        if (!p.assignedLocations?.length) continue;
+        for (const a of p.assignedLocations) {
+          const u = normalizeInventoryLocationUuid(assignedLocationEntryUuid(a));
+          if (u && binUuids.has(u)) n += 1;
+        }
       }
     }
     return { rackLabel: getRackDisplayIdWithLayout(rack), assignmentCount: n };
-  }, [clearRackTargetKey, layout.racks, products]);
+  }, [clearRackTargetKey, layout.racks, products, productLocationIndex]);
 
   /** Remove all assigned_locations entries pointing at bins of the selected rack (Inventory unchanged via skip_inventory_sync). */
   const clearAssignmentsOnSelectedRack = useCallback(async () => {
@@ -1893,7 +1902,9 @@ export default function WarehouseDesigner() {
     const rack = layout.racks.find((r) => String(r.id ?? r.rack_index) === clearRackTargetKey);
     if (!rack) return;
     const binUuids = new Set(
-      activeBinsForRack(rack).map((b) => (b.locationUUID ?? "").trim()).filter(Boolean)
+      activeBinsForRack(rack)
+        .map((b) => normalizeInventoryLocationUuid(binLocationUuidFromBin(b)))
+        .filter(Boolean)
     );
     if (binUuids.size === 0) return;
 
@@ -1906,7 +1917,7 @@ export default function WarehouseDesigner() {
     for (const p of catalog) {
       if (!p.assignedLocations?.length) continue;
       const next = p.assignedLocations.filter((a) => {
-        const u = assignedLocationEntryUuid(a);
+        const u = normalizeInventoryLocationUuid(assignedLocationEntryUuid(a));
         return !u || !binUuids.has(u);
       });
       if (next.length === p.assignedLocations.length) continue;
@@ -1916,7 +1927,7 @@ export default function WarehouseDesigner() {
 
       const enriched = next.map((a) => {
         const u = assignedLocationEntryUuid(a)!;
-        const pos = posByUuid.get(u);
+        const pos = posByUuid.get(u) ?? posByUuid.get(normalizeInventoryLocationUuid(u));
         return {
           locationUUID: u,
           quantity: safeQuantity(a.quantity),
@@ -4851,7 +4862,7 @@ export default function WarehouseDesigner() {
             message={
               <>
                 <p>
-                  Czy na pewno chcesz opróżnić regał {clearRackConfirmPreview.rackLabel || "—"}?
+                  Czy na pewno opróżnić regał {clearRackConfirmPreview.rackLabel || "—"}?
                 </p>
                 <p className="mt-2 text-sm text-slate-400">
                   {clearRackConfirmPreview.assignmentCount === 1
