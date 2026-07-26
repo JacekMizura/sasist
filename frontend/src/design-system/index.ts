@@ -1,3 +1,14 @@
+/**
+ * Sasist Design System / UI Kit — public API.
+ *
+ * New UI must import from here (or `./components`, `./tokens`).
+ * Do not invent local button / card / input recipes in feature modules.
+ */
+
+export * from "./tokens";
+export * from "./components";
+export * from "./warehouseChrome";
+
 export {
   brandOrange,
   brandPrimaryButtonClass,
@@ -16,8 +27,6 @@ export {
   brandSidebarNavIconClassName,
   brandSidebarNavChevronClassName,
 } from "./brandUi";
-
-export { PrimaryButton, primaryButtonClassName, type PrimaryButtonProps } from "./PrimaryButton";
 
 export {
   pageShellGutterClass,

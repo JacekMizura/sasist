@@ -1,6 +1,6 @@
 import type { CustomRackTemplate, LayoutState, RackType } from "../../../types/warehouse";
 import { buildTemplateUsageData } from "../templateUsage";
-import { WarehouseCardButton } from "../WarehouseCardButton";
+import { CardButton } from "../../../design-system";
 import {
   listPanelMapVisualizationModes,
   type MapVisualizationModeId,
@@ -103,7 +103,7 @@ export function MagazynDashboardPanel({
       {(onOpenReports || onOpenDamageReports) && (
         <div className="mb-6 grid grid-cols-2 gap-2 px-1">
           {onOpenReports && (
-            <WarehouseCardButton
+            <CardButton
               fullWidth
               tone="emerald"
               onClick={(e) => {
@@ -115,10 +115,10 @@ export function MagazynDashboardPanel({
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 19h16M7 15v-5m5 5V7m5 8V4" />
               </svg>
               Raporty
-            </WarehouseCardButton>
+            </CardButton>
           )}
           {onOpenDamageReports && (
-            <WarehouseCardButton
+            <CardButton
               fullWidth
               tone="rose"
               onClick={(e) => {
@@ -130,7 +130,7 @@ export function MagazynDashboardPanel({
                 ⚠
               </span>
               Szkody
-            </WarehouseCardButton>
+            </CardButton>
           )}
         </div>
       )}

@@ -1,17 +1,21 @@
-import { brandPrimaryButtonClass } from "../../../design-system/brandUi";
+/**
+ * @deprecated Prefer `PrimaryButton` / `SecondaryButton` / `GhostButton` from `design-system`.
+ * Thin facade — maps purchasing CTA classes onto Sasist UI Kit.
+ */
 import {
-  filterToolbarBtnGhost,
-  filterToolbarBtnSecondary,
-} from "../../../components/filters/filterUiTokens";
+  ghostButtonClass,
+  primaryButtonClass,
+  secondaryButtonClass,
+} from "../../../design-system/components/Button/buttonClasses";
 
-/** Główna akcja strony (CTA) — Design System Primary (jak „Dodaj użytkownika”). */
-export const purchasingBtnPrimary = brandPrimaryButtonClass;
+/** Główna akcja strony (CTA) — Design System Primary. */
+export const purchasingBtnPrimary = primaryButtonClass;
 
 /** Akcje pomocnicze w pasku nagłówka lub filtrów. */
-export const purchasingBtnSecondary = filterToolbarBtnSecondary;
+export const purchasingBtnSecondary = secondaryButtonClass;
 
 /** Akcje drugorzędne / anulowanie / wyłączone. */
-export const purchasingBtnGhost = filterToolbarBtnGhost;
+export const purchasingBtnGhost = ghostButtonClass;
 
 /** Nawigacja do innego widoku (tekstowy link). */
 export const purchasingLinkClass =

@@ -2,13 +2,21 @@
 
 ## Active
 
-**warehouse_special_placements** — poprawny model domenowy specials (mapa ≠ locations).
+**Etap 4 — UI Modernization: Warehouse Designer** (wzorzec migracji).
 
-### Done
-- Tabela + migracja z `locations` (PICK_START/PACKING/DOCK)
-- CRUD API operuje na placementach; DELETE nie kasuje `locations`
-- `get_special_locations_xy` czyta placements
-- Geometria specials wyczyszczona z `locations.x/y/z`
+### Done (Designer)
+- Core chrome → Sasist UI Kit (toolbar, select, modals, routing inspectors, rails, zoom, canvas tools)
+- `warehouseUiSkin` usunięty → `design-system/warehouseChrome`
+- `PrimaryButton intent="warning"`, Dialog size/rootClassName
+- Raport: `memory/ui-kit-designer-migration-report.md`
+- Metryki scope: `node scripts/designer-ui-metrics.mjs`
+
+### Residual in Designer scope
+- `WarehouseMainView` visual editors, `TemplateCreator`, `InternalLayoutModal`, `GenerateWarehouseLayoutModal`, `RowPrefixModal` — nadal magic Tailwind
+
+### Next (kolejność użytkownika)
+1. Dokończyć residual Designera **lub**
+2. **Warehouse View** (moduł 2)
 
 ### Constraints
-Bez commit/push (dopóki user nie poprosi).
+Tylko UI; bez commit/push dopóki user nie poprosi.

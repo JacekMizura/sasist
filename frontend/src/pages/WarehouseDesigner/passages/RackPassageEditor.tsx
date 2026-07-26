@@ -3,6 +3,7 @@ import type { RackPassageState, RackState, LayoutState } from "../../../types/wa
 import { isInheritedPassage, defaultPassageForRack, rackAlongLengthCm } from "./rackPassageGeometry";
 import { PASSAGE_FIELD_HINTS, passageFieldLabel } from "../../../components/warehouse/passageFieldCopy";
 import { isPassageGeometryValid } from "../../../components/warehouse/TemplatePassageOverlay";
+import { DangerButton, Input, SecondaryButton } from "../../../design-system";
 
 type Props = {
   selectedRack: RackState;
@@ -40,13 +41,13 @@ export function RackPassageEditor({ selectedRack, setLayout, onOpenTemplate }: P
         Cecha regału — pełna głębokość. Konfigurujesz początek i szerokość wzdłuż regału.
       </p>
       {passages.length === 0 ? (
-        <button
-          type="button"
-          className="mb-2 w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-[11px] font-semibold text-slate-800 hover:bg-slate-50"
+        <SecondaryButton
+          density="compact"
+          className="mb-2 w-full"
           onClick={() => updatePassages(setLayout, selectedRack, [defaultPassageForRack(selectedRack)])}
         >
           Dodaj przejazd
-        </button>
+        </SecondaryButton>
       ) : (
         <p className="mb-2 text-[10px] text-slate-500">Limit: jeden przejazd. Usuń istniejący, aby dodać inny.</p>
       )}
@@ -65,13 +66,13 @@ export function RackPassageEditor({ selectedRack, setLayout, onOpenTemplate }: P
                 <div className="mb-2 rounded border border-slate-200 bg-white px-2 py-1.5 text-[10px] text-slate-600">
                   Przejazd ze szablonu. Zmiany geometrii zapiszesz lokalnie; domyślne wartości edytuj w szablonie.
                   {templateId && onOpenTemplate ? (
-                    <button
-                      type="button"
-                      className="mt-1.5 block w-full rounded border border-slate-200 bg-slate-50 py-1 text-[11px] font-semibold text-slate-800 hover:bg-slate-100"
+                    <SecondaryButton
+                      density="compact"
+                      className="mt-1.5 w-full"
                       onClick={() => onOpenTemplate(templateId)}
                     >
                       Otwórz szablon
-                    </button>
+                    </SecondaryButton>
                   ) : null}
                 </div>
               ) : null}
@@ -92,11 +93,12 @@ export function RackPassageEditor({ selectedRack, setLayout, onOpenTemplate }: P
               </label>
               <label className={`mt-1 block text-[10px] ${geometryInvalid ? "text-red-700" : "text-slate-500"}`}>
                 {passageFieldLabel("offset")}
-                <input
+                <Input
                   type="number"
                   min={0}
                   max={along}
                   step={5}
+                  density="compact"
                   value={Math.round(p.offset_along_cm)}
                   aria-invalid={geometryInvalid}
                   onChange={(e) => {
@@ -107,19 +109,18 @@ export function RackPassageEditor({ selectedRack, setLayout, onOpenTemplate }: P
                       passages.map((x) => (x.uuid === p.uuid ? { ...x, offset_along_cm } : x))
                     );
                   }}
-                  className={`mt-0.5 w-full rounded border px-1.5 py-1 text-sm ${
-                    geometryInvalid ? "border-red-400 bg-red-50" : "border-slate-200"
-                  }`}
+                  className={`mt-0.5 ${geometryInvalid ? "border-red-400 bg-red-50" : ""}`}
                 />
                 <span className="mt-0.5 block text-[9px] text-slate-400">{PASSAGE_FIELD_HINTS.offset}</span>
               </label>
               <label className={`mt-1 block text-[10px] ${geometryInvalid ? "text-red-700" : "text-slate-500"}`}>
                 {passageFieldLabel("width")}
-                <input
+                <Input
                   type="number"
                   min={1}
                   max={along}
                   step={5}
+                  density="compact"
                   value={Math.round(p.width_cm)}
                   aria-invalid={geometryInvalid}
                   onChange={(e) => {
@@ -130,18 +131,17 @@ export function RackPassageEditor({ selectedRack, setLayout, onOpenTemplate }: P
                       passages.map((x) => (x.uuid === p.uuid ? { ...x, width_cm } : x))
                     );
                   }}
-                  className={`mt-0.5 w-full rounded border px-1.5 py-1 text-sm ${
-                    geometryInvalid ? "border-red-400 bg-red-50" : "border-slate-200"
-                  }`}
+                  className={`mt-0.5 ${geometryInvalid ? "border-red-400 bg-red-50" : ""}`}
                 />
                 <span className="mt-0.5 block text-[9px] text-slate-400">{PASSAGE_FIELD_HINTS.width}</span>
               </label>
               <label className="mt-1 block text-[10px] text-slate-500">
                 {passageFieldLabel("clearance")}
-                <input
+                <Input
                   type="number"
                   min={0}
                   step={10}
+                  density="compact"
                   value={p.clearance_height_cm ?? ""}
                   placeholder="np. 80"
                   onChange={(e) => {
@@ -153,7 +153,7 @@ export function RackPassageEditor({ selectedRack, setLayout, onOpenTemplate }: P
                       passages.map((x) => (x.uuid === p.uuid ? { ...x, clearance_height_cm } : x))
                     );
                   }}
-                  className="mt-0.5 w-full rounded border border-slate-200 px-1.5 py-1 text-sm"
+                  className="mt-0.5"
                 />
                 <span className="mt-0.5 block text-[9px] text-slate-400">{PASSAGE_FIELD_HINTS.clearance}</span>
               </label>
@@ -162,9 +162,9 @@ export function RackPassageEditor({ selectedRack, setLayout, onOpenTemplate }: P
                   Przejazd wychodzi poza długość osi regału ({Math.round(along)} cm).
                 </p>
               ) : null}
-              <button
-                type="button"
-                className="mt-1 text-[10px] font-semibold text-rose-700 underline"
+              <DangerButton
+                density="compact"
+                className="mt-1"
                 onClick={() =>
                   updatePassages(
                     setLayout,
@@ -174,7 +174,7 @@ export function RackPassageEditor({ selectedRack, setLayout, onOpenTemplate }: P
                 }
               >
                 Usuń przejazd
-              </button>
+              </DangerButton>
             </li>
           );
         })}

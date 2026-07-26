@@ -35,16 +35,16 @@ import { TemplateCreator, RackPreview } from "./TemplateCreator";
 import { GenerateWarehouseLayoutModal } from "./GenerateWarehouseLayoutModal";
 import { UI_STRINGS } from "../../constants/uiStrings";
 import {
-  warehouseFieldClass,
+  CardButton,
+  SegmentedControl,
+  SegmentedItem,
+  SearchInput,
+  Input,
   warehouseLeftRailClass,
   warehouseListTileClass,
   warehouseListTileSelectedClass,
-  warehouseSearchInputClass,
   warehouseSectionLabelClass,
-  warehouseSegmentBtnClass,
-  warehouseSegmentShellClass,
-} from "./warehouseUiSkin";
-import { WarehouseCardButton } from "./WarehouseCardButton";
+} from "../../design-system";
 import { normalizeBinTypeMap } from "../../utils/storageTypes";
 import { buildTemplateUsageData } from "./templateUsage";
 
@@ -199,10 +199,22 @@ export function RackSidebar({
   return (
     <aside className={warehouseLeftRailClass}>
       {!showOnlyCatalog && (
-      <div className={warehouseSegmentShellClass}>
-        <button type="button" onClick={() => setActiveTab("catalog")} className={warehouseSegmentBtnClass(activeTab === "catalog")}>{UI_STRINGS.warehouse.rackSidebar.catalog}</button>
-        <button type="button" onClick={() => setActiveTab("visuals")} className={warehouseSegmentBtnClass(activeTab === "visuals")}>{UI_STRINGS.warehouse.rackSidebar.visualElements}</button>
-      </div>
+      <SegmentedControl className="mb-3 shrink-0">
+        <SegmentedItem
+          type="button"
+          active={activeTab === "catalog"}
+          onClick={() => setActiveTab("catalog")}
+        >
+          {UI_STRINGS.warehouse.rackSidebar.catalog}
+        </SegmentedItem>
+        <SegmentedItem
+          type="button"
+          active={activeTab === "visuals"}
+          onClick={() => setActiveTab("visuals")}
+        >
+          {UI_STRINGS.warehouse.rackSidebar.visualElements}
+        </SegmentedItem>
+      </SegmentedControl>
       )}
       {!showOnlyCatalog && selectedRowContainerId && (
         <div className="mb-3 shrink-0 border-b border-slate-200/70 pb-3">
@@ -302,20 +314,20 @@ export function RackSidebar({
           <div className="mb-2">
             <div className={`mb-1 ${warehouseSectionLabelClass}`}>Typ regału</div>
             <div className="flex gap-1.5">
-              <WarehouseCardButton
+              <CardButton
                 fullWidth
                 active={manualRackType === "warehouse"}
                 onClick={() => setManualRackType("warehouse")}
               >
                 Magazyn
-              </WarehouseCardButton>
-              <WarehouseCardButton
+              </CardButton>
+              <CardButton
                 fullWidth
                 active={manualRackType === "store"}
                 onClick={() => setManualRackType("store")}
               >
                 Sklep
-              </WarehouseCardButton>
+              </CardButton>
             </div>
           </div>
         )}
@@ -332,26 +344,28 @@ export function RackSidebar({
           <>
       {!showOnlyCatalog && (
       <div className="mb-2 flex flex-col gap-1.5">
-        <WarehouseCardButton fullWidth onClick={() => setShowGenerateLayoutModal(true)}>
+        <CardButton fullWidth onClick={() => setShowGenerateLayoutModal(true)}>
           <Wand2 size={13} strokeWidth={2} />
           Generuj układ
-        </WarehouseCardButton>
-        <WarehouseCardButton fullWidth onClick={() => setShowTemplateModal(true)}>
+        </CardButton>
+        <CardButton fullWidth onClick={() => setShowTemplateModal(true)}>
           <Plus size={13} strokeWidth={2} />
           {UI_STRINGS.warehouse.rackSidebar.newTemplate}
-        </WarehouseCardButton>
+        </CardButton>
       </div>
       )}
       {!showOnlyCatalog && rowToolActive && (
         <div className="mb-1.5 flex items-center gap-2">
           <label className={warehouseSectionLabelClass}>{UI_STRINGS.warehouse.rackSidebar.gapCm}</label>
-          <input
+          <Input
             type="number"
             min={0}
             step={5}
+            density="compact"
+            focusTone="brand"
             value={rowGapCm}
             onChange={(e) => setRowGapCm(Number(e.target.value) || 0)}
-            className={`w-14 ${warehouseFieldClass}`}
+            className="w-14"
           />
         </div>
       )}
@@ -666,20 +680,20 @@ export function RackSidebar({
             <>
               <p className="text-[10px] leading-snug text-slate-500">Kliknij na krawędź budynku (obwód), aby umieścić.</p>
               <div className="flex gap-1.5">
-                <WarehouseCardButton
+                <CardButton
                   fullWidth
                   active={wallElementTool === "door"}
                   onClick={() => setWallElementTool(wallElementTool === "door" ? null : "door")}
                 >
                   Drzwi
-                </WarehouseCardButton>
-                <WarehouseCardButton
+                </CardButton>
+                <CardButton
                   fullWidth
                   active={wallElementTool === "gate"}
                   onClick={() => setWallElementTool(wallElementTool === "gate" ? null : "gate")}
                 >
                   Brama
-                </WarehouseCardButton>
+                </CardButton>
               </div>
             </>
           )}
@@ -710,12 +724,11 @@ export function RackSidebar({
         </button>
         {!rackListCollapsed && (
           <>
-      <input
-        type="search"
+      <SearchInput
         value={rackSearch}
         onChange={(e) => setRackSearch(e.target.value)}
         placeholder={UI_STRINGS.warehouse.rackSidebar.rackSearchPlaceholder}
-        className={`mt-1.5 ${warehouseSearchInputClass}`}
+        className="mt-1.5"
         aria-label="Szukaj w liście regałów"
       />
       <div className="designer-rail-scroll mt-1.5 max-h-36 min-h-0 flex-1 space-y-1 overflow-y-auto">

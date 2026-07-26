@@ -1,7 +1,9 @@
 /**
  * Global brand UI tokens — Tabs (underline) + Primary (orange) CTA + shared brand accents.
- * Single source of truth: brand orange class strings live ONLY here.
+ * Single source of truth: brand orange class strings live ONLY here (and design-system/tokens).
  */
+
+import { primaryButtonClass } from "./components/Button/buttonClasses";
 
 /** Brand orange scale (Tailwind). Change brand color only by editing this object + class strings below. */
 export const brandOrange = {
@@ -17,12 +19,10 @@ export const brandOrange = {
 } as const;
 
 /**
- * Canonical Primary CTA — Zapisz / Dodaj / Nowy / Importuj / Eksportuj / Drukuj / Wyślij …
- * Height, radius, padding, typography, hover / focus / disabled are fixed here.
+ * Canonical Primary CTA — delegates to UI Kit tokenized class.
  * Prefer the {@link PrimaryButton} component; do not reinvent this class string.
  */
-export const brandPrimaryButtonClass =
-  "inline-flex h-10 shrink-0 items-center justify-center gap-1.5 rounded-lg bg-orange-500 px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-orange-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-400 focus-visible:ring-offset-2 active:bg-orange-700 disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50";
+export const brandPrimaryButtonClass = primaryButtonClass;
 
 /**
  * Soft brand action (outline / tinted) — secondary brand actions that are not solid Primary.

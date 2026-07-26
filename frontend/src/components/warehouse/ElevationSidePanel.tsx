@@ -3,7 +3,7 @@ import type { LayoutState, WarehouseProduct } from "../../types/warehouse";
 import { ElevationPanel } from "./ElevationPanel";
 import { getRackDisplayId, rackMatchesSlotRackId } from "./warehouseUtils";
 import { AppRightPanel } from "../layout/app";
-import { warehouseRightRailShellClass } from "./warehouseUiSkin";
+import { warehouseRightRailShellClass } from "../../design-system";
 
 export type ElevationSidePanelProps = {
   layout: LayoutState;

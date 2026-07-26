@@ -2,7 +2,13 @@ import { useState, useEffect, useMemo } from "react";
 import { log } from "../../utils/logger";
 import type { LayoutState } from "../../types/warehouse";
 import { metersToCells } from "../../components/warehouse/warehouseUtils";
-import { PrimaryButton } from "../../design-system/PrimaryButton";
+import {
+  Dialog,
+  Input,
+  PrimaryButton,
+  SecondaryButton,
+  typography,
+} from "../../design-system";
 import { AppOverlayPortal } from "../../components/overlay";
 
 export type EditBuildingModalProps = {
@@ -89,104 +95,94 @@ export function EditBuildingModal({ onClose, onSave, layout }: EditBuildingModal
   if (showShrinkWarning && racksOutsideCount > 0) {
     return (
       <AppOverlayPortal>
-      <div className="fixed inset-0 z-[280] flex items-center justify-center bg-black/40 p-4" onClick={handleCancelWarning}>
-        <div
-          className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-sm overflow-hidden"
-          onClick={(e) => e.stopPropagation()}
+        <Dialog
+          open
+          onClose={handleCancelWarning}
+          title="Uwaga"
+          size="sm"
+          rootClassName="!z-[280]"
+          footer={
+            <>
+              <SecondaryButton type="button" onClick={handleCancelWarning}>
+                Anuluj
+              </SecondaryButton>
+              <PrimaryButton type="button" intent="warning" onClick={handleSaveAnyway}>
+                Zapisz mimo to
+              </PrimaryButton>
+            </>
+          }
         >
-          <div className="px-6 py-4 border-b border-slate-200">
-            <h2 className="text-lg font-bold text-slate-800">Uwaga</h2>
-          </div>
-          <div className="p-6">
-            <p className="text-sm text-slate-700">
-              {racksOutsideCount} {racksOutsideCount === 1 ? "regał będzie" : "regały będą"} poza granicą budynku.
-            </p>
-          </div>
-          <div className="px-6 py-4 border-t border-slate-200 flex justify-end gap-3">
-            <button type="button" onClick={handleCancelWarning} className="px-4 py-2 rounded-lg border border-slate-300 text-slate-700 hover:bg-slate-100">
-              Anuluj
-            </button>
-            <button
-              type="button"
-              onClick={handleSaveAnyway}
-              className="px-4 py-2 rounded-lg bg-amber-600 text-white font-medium hover:bg-amber-500"
-            >
-              Zapisz mimo to
-            </button>
-          </div>
-        </div>
-      </div>
+          <p className={typography.body}>
+            {racksOutsideCount} {racksOutsideCount === 1 ? "regał będzie" : "regały będą"} poza granicą budynku.
+          </p>
+        </Dialog>
       </AppOverlayPortal>
     );
   }
 
   return (
     <AppOverlayPortal>
-    <div className="fixed inset-0 z-[280] flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
-      <div
-        className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-sm overflow-hidden"
-        onClick={(e) => e.stopPropagation()}
+      <Dialog
+        open
+        onClose={onClose}
+        title="Ustaw wymiary budynku"
+        size="sm"
+        rootClassName="!z-[280]"
+        footer={
+          <>
+            <SecondaryButton type="button" onClick={onClose}>
+              Anuluj
+            </SecondaryButton>
+            <PrimaryButton
+              type="button"
+              onClick={handleSave}
+              disabled={Number(widthM) <= 0 || Number(depthM) <= 0}
+            >
+              Zapisz
+            </PrimaryButton>
+          </>
+        }
       >
-        <div className="px-6 py-4 border-b border-slate-200">
-          <h2 className="text-lg font-bold text-slate-800">Ustaw wymiary budynku</h2>
-        </div>
-        <div className="p-6 space-y-4">
+        <div className="space-y-4">
           <div>
-            <label className="block text-sm font-semibold text-slate-600 mb-1">Szerokość (m)</label>
-            <input
+            <label className={`mb-1 block ${typography.bodyStrong}`}>Szerokość (m)</label>
+            <Input
               type="number"
               min={1}
               step={1}
+              density="comfortable"
               value={widthM}
               onChange={(e) => setWidthM(Number(e.target.value) || 0)}
-              className="w-full rounded-lg border border-slate-300 px-3 py-2"
             />
           </div>
           <div>
-            <label className="block text-sm font-semibold text-slate-600 mb-1">Głębokość (m)</label>
-            <input
+            <label className={`mb-1 block ${typography.bodyStrong}`}>Głębokość (m)</label>
+            <Input
               type="number"
               min={1}
               step={1}
+              density="comfortable"
               value={depthM}
               onChange={(e) => setDepthM(Number(e.target.value) || 0)}
-              className="w-full rounded-lg border border-slate-300 px-3 py-2"
             />
           </div>
           <div>
-            <label className="block text-sm font-semibold text-slate-600 mb-1">Wysokość (m)</label>
-            <input
+            <label className={`mb-1 block ${typography.bodyStrong}`}>Wysokość (m)</label>
+            <Input
               type="number"
               min={0}
               step={1}
+              density="comfortable"
               value={heightM}
               onChange={(e) => setHeightM(Number(e.target.value) || 0)}
-              className="w-full rounded-lg border border-slate-300 px-3 py-2"
               placeholder="Opcjonalnie"
             />
           </div>
-          {areaM2 > 0 && (
-            <p className="text-sm text-slate-600">Powierzchnia: {areaM2} m²</p>
-          )}
-          {volumeM3 > 0 && (
-            <p className="text-sm text-slate-600">Kubatura: {volumeM3} m³</p>
-          )}
-          <p className="text-xs text-slate-500">Siatka i regały będą ograniczone do tego obszaru.</p>
+          {areaM2 > 0 && <p className={typography.body}>Powierzchnia: {areaM2} m²</p>}
+          {volumeM3 > 0 && <p className={typography.body}>Kubatura: {volumeM3} m³</p>}
+          <p className={typography.caption}>Siatka i regały będą ograniczone do tego obszaru.</p>
         </div>
-        <div className="px-6 py-4 border-t border-slate-200 flex justify-end gap-3">
-          <button type="button" onClick={onClose} className="px-4 py-2 rounded-lg border border-slate-300 text-slate-700 hover:bg-slate-100">
-            Anuluj
-          </button>
-          <PrimaryButton
-            type="button"
-            onClick={handleSave}
-            disabled={Number(widthM) <= 0 || Number(depthM) <= 0}
-          >
-            Zapisz
-          </PrimaryButton>
-        </div>
-      </div>
-    </div>
+      </Dialog>
     </AppOverlayPortal>
   );
 }

@@ -1,3 +1,28 @@
+## 2026-07-26 — Etap 4: Warehouse Designer → Sasist UI Kit
+
+- Migracja toolbar/rails/routing/modals/canvas tools na design-system
+- Usunięto `warehouseUiSkin` → `warehouseChrome`; Primary `intent=warning`
+- Residual: MainView editors + TemplateCreator + ciężkie modale
+- Raport: `memory/ui-kit-designer-migration-report.md` · **No push.**
+
+## 2026-07-26 — Sasist UI Kit Etap 3 (hardening)
+
+- ESLint `sasist-ui-kit`: blok magicznych klas / nowych wysp tokenów
+- Density na komponentach; playground `/design-system`; README button rules
+- Usunięto `WarehouseCardButton`; metryki `npm run ui-kit:metrics` · **No push.**
+
+## 2026-07-26 — Sasist UI Kit (Etap 1–2)
+
+- `design-system/tokens/*` + komponenty (Button suite, Card, Input, Status, SegmentedControl, Toolbar, PageHeader, …)
+- Lokalne wyspy → fasady kit; Magazyn `CardButton` z design-system
+- Raport: `memory/ui-kit-migration-report.md` · **No push.**
+
+## 2026-07-26 — UI: ujednolicenie CardButton w Projektowaniu
+
+- `WarehouseCardButton` — wspólny styl card (radius ~11, border, cień)
+- Pasek: status tekstowy → select h-10 → Zapisz; bez badge
+- Podpięte: Generuj/Nowy szablon, Magazyn/Sklep, Drzwi/Brama, Raporty/Szkody · **No push.**
+
 ## 2026-07-26 — Domain: warehouse_special_placements
 
 - Nowa tabela map markers (role + x/y); `locations` = tożsamość operacyjna

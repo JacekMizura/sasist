@@ -14,6 +14,7 @@ import {
   resizeCorridorWidth,
 } from "./passages/rackPassageGeometry";
 import { PASSAGE_FIELD_HINTS, passageFieldLabel } from "../../components/warehouse/passageFieldCopy";
+import { Card, DangerButton, GhostButton, Input, SecondaryButton, StatusText } from "../../design-system";
 
 type Props = {
   layout: LayoutState;
@@ -75,8 +76,10 @@ export function PassageInspector({
   const geometryInvalid = members.length === 1 && endCm > along + 0.01;
 
   return (
-    <div
-      className="space-y-2 rounded-lg border border-slate-200 bg-white p-3 text-[12px] text-slate-700 shadow-lg shadow-slate-900/10"
+    <Card
+      variant="section"
+      density="compact"
+      className="space-y-2 text-[12px] text-slate-700 shadow-lg shadow-slate-900/10"
       data-testid="passage-inspector"
     >
       <div className="flex items-start justify-between gap-2">
@@ -97,14 +100,9 @@ export function PassageInspector({
           </p>
         </div>
         {onClose && (
-          <button
-            type="button"
-            className="text-[10px] font-semibold text-slate-500 hover:text-slate-800"
-            onClick={onClose}
-            aria-label="Zamknij"
-          >
+          <GhostButton density="compact" onClick={onClose} aria-label="Zamknij">
             ✕
-          </button>
+          </GhostButton>
         )}
       </div>
 
@@ -117,14 +115,14 @@ export function PassageInspector({
             {clearanceDisplay != null ? `${Math.round(Number(clearanceDisplay))} cm` : "— (bez wpływu na lokalizacje)"}
           </p>
           {onOpenTemplate ? (
-            <button
-              type="button"
+            <SecondaryButton
               data-testid="passage-open-template"
-              className="mt-2 block w-full rounded border border-amber-300 bg-white py-1.5 font-semibold hover:bg-amber-100"
+              density="compact"
+              className="mt-2 w-full"
               onClick={onOpenTemplate}
             >
               Otwórz szablon
-            </button>
+            </SecondaryButton>
           ) : (
             <p className="mt-2 text-[10px] text-amber-800/80">
               Brak powiązanego szablonu na tym regale — otwórz szablon z katalogu.
@@ -134,10 +132,7 @@ export function PassageInspector({
       ) : (
         <div className="space-y-2">
           <p className="text-[10px] text-slate-500">
-            Status:{" "}
-            <span className={allEnabled ? "font-semibold text-emerald-700" : "font-semibold text-amber-700"}>
-              {allEnabled ? "Włączony" : "Wyłączony"}
-            </span>
+            Status: <StatusText tone={allEnabled ? "success" : "warning"}>{allEnabled ? "Włączony" : "Wyłączony"}</StatusText>
           </p>
           <p className="text-[10px] text-slate-500">
             Przeciągnij na planie — przesuwa cały korytarz naraz.
@@ -145,12 +140,11 @@ export function PassageInspector({
           {members.length === 1 && (
             <label className={`block text-[11px] ${geometryInvalid ? "text-red-700" : ""}`}>
               {passageFieldLabel("offset")}
-              <input
+              <Input
                 type="number"
                 min={0}
-                className={`mt-0.5 w-full rounded border px-2 py-1 ${
-                  geometryInvalid ? "border-red-400 bg-red-50" : "border-slate-200"
-                }`}
+                density="compact"
+                className={`mt-0.5 ${geometryInvalid ? "border-red-400 bg-red-50" : ""}`}
                 value={Math.round(passage.offset_along_cm)}
                 aria-invalid={geometryInvalid}
                 onChange={(e) => {
@@ -187,11 +181,12 @@ export function PassageInspector({
           </label>
           <label className="block text-[11px]">
             {passageFieldLabel("clearance")}
-            <input
+            <Input
               type="number"
               min={0}
               step={10}
-              className="mt-0.5 w-full rounded border border-slate-200 px-2 py-1"
+              density="compact"
+              className="mt-0.5"
               value={passage.clearance_height_cm ?? ""}
               placeholder="np. 80"
               onChange={(e) => {
@@ -217,9 +212,9 @@ export function PassageInspector({
             />
             Włączony
           </label>
-          <button
-            type="button"
-            className="w-full rounded border border-rose-200 bg-rose-50 py-1.5 text-[11px] font-semibold text-rose-800 hover:bg-rose-100"
+          <DangerButton
+            density="compact"
+            className="w-full"
             onClick={() => {
               setLayout((prev) =>
                 deletePassageGroup(prev, selectedPassage.rackUuid, selectedPassage.passageUuid)
@@ -228,10 +223,9 @@ export function PassageInspector({
             }}
           >
             Usuń przejazd
-          </button>
+          </DangerButton>
         </div>
       )}
-    </div>
+    </Card>
   );
-}
-
+}

@@ -1,4 +1,4 @@
-import { AppButton } from "../app-shell/AppButton";
+import { GhostButton, colors, radius, shadows } from "../../design-system";
 
 const MIN_ZOOM = 0.2;
 const MAX_ZOOM = 3;
@@ -17,30 +17,32 @@ export function WarehouseZoomControls({ zoom, setZoom, className = "" }: Warehou
     <div
       className={`pointer-events-none absolute right-3 top-3 z-20 flex items-center gap-1${className ? ` ${className}` : ""}`}
     >
-      <div className="pointer-events-auto flex items-center gap-0.5 rounded-lg border border-slate-200/80 bg-white/95 p-0.5 shadow-sm backdrop-blur-sm">
-        <AppButton
+      <div
+        className={`pointer-events-auto flex items-center gap-0.5 border ${colors.border.soft} ${radius.md} ${colors.surface.page}/95 p-0.5 ${shadows.sm} backdrop-blur-sm`}
+      >
+        <GhostButton
           type="button"
-          variant="ghost"
+          density="compact"
           onClick={() => setZoom((z) => Math.max(MIN_ZOOM, z - 0.1))}
-          className="!h-8 !min-h-0 !w-8 !px-0"
+          className="!w-8 !px-0"
           title="Pomniejsz"
           aria-label="Pomniejsz"
         >
           −
-        </AppButton>
-        <span className="min-w-[2.75rem] text-center font-mono text-[11px] tabular-nums text-slate-500">
+        </GhostButton>
+        <span className={`min-w-[2.75rem] text-center font-mono text-[11px] tabular-nums ${colors.text.muted}`}>
           {Math.round(zoom * 100)}%
         </span>
-        <AppButton
+        <GhostButton
           type="button"
-          variant="ghost"
+          density="compact"
           onClick={() => setZoom((z) => Math.min(MAX_ZOOM, z + 0.1))}
-          className="!h-8 !min-h-0 !w-8 !px-0"
+          className="!w-8 !px-0"
           title="Powiększ"
           aria-label="Powiększ"
         >
           +
-        </AppButton>
+        </GhostButton>
       </div>
     </div>
   );

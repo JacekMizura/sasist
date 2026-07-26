@@ -8,6 +8,7 @@ import type { RoutingEdge, RoutingNode } from "../../../api/warehouseRoutingApi"
 import { nodeDisplayName } from "./routingDisplay";
 import { ROUTING_PROCESS_OPTIONS, ROUTING_TRANSPORT_OPTIONS, type RoutingTool } from "./routingLabels";
 import type { useRoutingGraph } from "./useRoutingGraph";
+import { Card, DangerButton, GhostButton, Select } from "../../../design-system";
 
 type Hook = ReturnType<typeof useRoutingGraph>;
 
@@ -35,7 +36,7 @@ export function EdgeInspector({
   const toNode = routing.nodes.find((n) => n.uuid === selectedEdge.to_node_uuid);
 
   return (
-    <div className="space-y-2 rounded-lg border border-slate-200 p-2">
+    <Card variant="section" density="compact" className="space-y-2">
       <div className="font-semibold">Odcinek trasy</div>
       <div className="text-[10px] text-slate-500">
         {fromNode
@@ -47,15 +48,16 @@ export function EdgeInspector({
       <div className="text-[10px] text-slate-500">Długość: {selectedEdge.distance_m.toFixed(2)} m</div>
       <label className="block">
         Kierunek
-        <select
-          className="mt-0.5 w-full rounded border border-slate-200 px-1 py-1"
+        <Select
+          density="compact"
+          className="mt-0.5"
           value={selectedEdge.direction}
           onChange={(e) => routing.updateEdge(selectedEdge.uuid, { direction: e.target.value })}
         >
           <option value="BOTH">Dwukierunkowy</option>
           <option value="FORWARD">Jednokierunkowy (zgodnie z odcinkiem)</option>
           <option value="BACKWARD">Jednokierunkowy (przeciwnie)</option>
-        </select>
+        </Select>
       </label>
       {tool === "edit" && (
         <div className="space-y-1 rounded border border-amber-100 bg-amber-50/60 p-2">
@@ -65,8 +67,9 @@ export function EdgeInspector({
           </p>
           <label className="block text-[10px]">
             Od
-            <select
-              className="mt-0.5 w-full rounded border border-slate-200 px-1 py-1"
+            <Select
+              density="compact"
+              className="mt-0.5"
               value={selectedEdge.from_node_uuid}
               onChange={(e) => {
                 const ok = routing.rewireEdgeEndpoint(selectedEdge.uuid, "from", e.target.value);
@@ -79,12 +82,13 @@ export function EdgeInspector({
                   {nameOf(n)}
                 </option>
               ))}
-            </select>
+            </Select>
           </label>
           <label className="block text-[10px]">
             Do
-            <select
-              className="mt-0.5 w-full rounded border border-slate-200 px-1 py-1"
+            <Select
+              density="compact"
+              className="mt-0.5"
               value={selectedEdge.to_node_uuid}
               onChange={(e) => {
                 const ok = routing.rewireEdgeEndpoint(selectedEdge.uuid, "to", e.target.value);
@@ -97,7 +101,7 @@ export function EdgeInspector({
                   {nameOf(n)}
                 </option>
               ))}
-            </select>
+            </Select>
           </label>
         </div>
       )}
@@ -111,16 +115,16 @@ export function EdgeInspector({
       </label>
 
       <div className="rounded border border-slate-100 bg-slate-50/80 p-2">
-        <button
-          type="button"
-          className="flex w-full items-center justify-between font-semibold"
+        <GhostButton
+          density="compact"
+          className="w-full justify-between"
           onClick={() => setEdgeRestrictionsOpen((v) => !v)}
         >
           Opcjonalne ograniczenia
           <span className="text-[10px] font-normal text-slate-500">
             {edgeRestrictionsOpen ? "ukryj" : "rozwiń"}
           </span>
-        </button>
+        </GhostButton>
         {!edgeRestrictionsOpen && (
           <p className="mt-1 text-[10px] text-slate-500">
             {!selectedEdge.allowed_processes?.length && !selectedEdge.allowed_transport_types?.length
@@ -133,9 +137,10 @@ export function EdgeInspector({
             <p className="text-[10px] text-slate-500">Puste = bez ograniczenia.</p>
             <label className="block">
               Procesy
-              <select
+              <Select
                 multiple
-                className="mt-0.5 h-16 w-full rounded border border-slate-200 px-1 py-1"
+                density="compact"
+                className="mt-0.5 h-16"
                 value={selectedEdge.allowed_processes}
                 onChange={(e) => {
                   const vals = Array.from(e.target.selectedOptions).map((o) => o.value);
@@ -147,20 +152,20 @@ export function EdgeInspector({
                     {o.label}
                   </option>
                 ))}
-              </select>
+              </Select>
             </label>
-            <button
-              type="button"
-              className="text-[10px] underline"
+            <GhostButton
+              density="compact"
               onClick={() => routing.updateEdge(selectedEdge.uuid, { allowed_processes: [] })}
             >
               Wszystkie procesy
-            </button>
+            </GhostButton>
             <label className="block">
               Transport
-              <select
+              <Select
                 multiple
-                className="mt-0.5 h-16 w-full rounded border border-slate-200 px-1 py-1"
+                density="compact"
+                className="mt-0.5 h-16"
                 value={selectedEdge.allowed_transport_types}
                 onChange={(e) => {
                   const vals = Array.from(e.target.selectedOptions).map((o) => o.value);
@@ -172,22 +177,21 @@ export function EdgeInspector({
                     {o.label}
                   </option>
                 ))}
-              </select>
+              </Select>
             </label>
-            <button
-              type="button"
-              className="text-[10px] underline"
+            <GhostButton
+              density="compact"
               onClick={() => routing.updateEdge(selectedEdge.uuid, { allowed_transport_types: [] })}
             >
               Wszystkie środki transportu
-            </button>
+            </GhostButton>
           </div>
         )}
       </div>
 
-      <button
-        type="button"
-        className="w-full rounded-md border border-rose-200 bg-rose-50 py-1.5 font-semibold text-rose-800"
+      <DangerButton
+        density="compact"
+        className="w-full"
         onClick={() => {
           if (!window.confirm("Usunąć ten odcinek trasy?")) return;
           routing.removeEdge(selectedEdge.uuid);
@@ -195,7 +199,7 @@ export function EdgeInspector({
         }}
       >
         Usuń odcinek
-      </button>
-    </div>
+      </DangerButton>
+    </Card>
   );
 }

@@ -6,6 +6,7 @@ import {
   groupAccessProblemsByRack,
   type AccessProblemItem,
 } from "./locationAccessProblems";
+import { Card, CardButton, GhostButton } from "../../../design-system";
 
 type Props = {
   locationAccess: LocationAccessBinding[];
@@ -51,7 +52,7 @@ export function LocationAccessProblemsPanel({
   if (locationAccess.length === 0 && problems.length === 0) return null;
 
   return (
-    <div className="space-y-2 rounded-lg border border-slate-200 bg-slate-50/80 p-2">
+    <Card variant="section" density="compact" className="space-y-2">
       <div className="font-semibold text-slate-700">Dostęp lokalizacji</div>
       <p className="text-[10px] text-slate-500">
         Lokalizacje z dostępem do trasy: <strong className="text-slate-700">{okCount}</strong>
@@ -61,32 +62,21 @@ export function LocationAccessProblemsPanel({
 
       {problems.length > 0 && (
         <div className="flex flex-wrap gap-1.5">
-          <button
-            type="button"
-            className="rounded border border-slate-200 bg-white px-2 py-0.5 text-[10px] font-semibold text-slate-700 hover:bg-slate-50"
-            onClick={() => setListOpen((v) => !v)}
-          >
+          <CardButton density="compact" active={listOpen} onClick={() => setListOpen((v) => !v)}>
             {listOpen ? "Ukryj bez dostępu" : "Pokaż bez dostępu"}
-          </button>
-          <button
-            type="button"
-            className={`rounded border px-2 py-0.5 text-[10px] font-semibold ${
-              showAllProblems
-                ? "border-rose-300 bg-rose-50 text-rose-900"
-                : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
-            }`}
+          </CardButton>
+          <CardButton
+            density="compact"
+            tone="rose"
+            active={showAllProblems}
             onClick={onToggleShowAll}
           >
             {showAllProblems ? "Wyłącz oznaczenia" : "Pokaż wszystkie problemy"}
-          </button>
+          </CardButton>
           {(selectedLocationId != null || showAllProblems) && (
-            <button
-              type="button"
-              className="rounded border border-transparent px-2 py-0.5 text-[10px] text-slate-500 underline"
-              onClick={onClearSelection}
-            >
+            <GhostButton density="compact" onClick={onClearSelection}>
               Wyczyść wybór
-            </button>
+            </GhostButton>
           )}
         </div>
       )}
@@ -127,6 +117,6 @@ export function LocationAccessProblemsPanel({
           ))}
         </div>
       )}
-    </div>
+    </Card>
   );
 }

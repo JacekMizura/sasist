@@ -12,11 +12,17 @@ import { LocationAccessProblemsPanel } from "./LocationAccessProblemsPanel";
 import type { AccessProblemItem } from "./locationAccessProblems";
 import { NodeInspector } from "./NodeInspector";
 import { EdgeInspector } from "./EdgeInspector";
-import { PrimaryButton } from "../../../design-system/PrimaryButton";
 import {
+  Card,
+  CardButton,
+  DangerButton,
+  GhostButton,
+  PrimaryButton,
+  SecondaryButton,
+  Select,
   warehouseRailBgClass,
   warehouseSectionLabelClass,
-} from "../../../components/warehouse/warehouseUiSkin";
+} from "../../../design-system";
 
 export { deleteSelectedNode } from "./routingNodeActions";
 
@@ -131,20 +137,16 @@ export function RoutingRoutesPanel({
             ["test_route", "Testuj"],
           ] as const
         ).map(([id, label]) => (
-          <button
+          <CardButton
             key={id}
-            type="button"
+            density="compact"
+            active={tool === id}
             onClick={() => {
               setTool(id);
             }}
-            className={`rounded-xl px-2.5 py-1.5 text-[11px] font-semibold shadow-sm ${
-              tool === id
-                ? "bg-slate-900 text-white"
-                : "bg-white text-slate-700 ring-1 ring-slate-200/80 hover:bg-slate-50"
-            }`}
           >
             {label}
-          </button>
+          </CardButton>
         ))}
       </div>
 
@@ -175,21 +177,21 @@ export function RoutingRoutesPanel({
         >
           {routing.saving ? "Zapisywanie…" : "Zapisz sieć"}
         </PrimaryButton>
-        <button
-          type="button"
+        <SecondaryButton
+          density="compact"
           onClick={() => void routing.runValidate()}
-          className="h-8 flex-1 rounded-lg border border-slate-200 bg-white text-[11px] font-semibold"
+          className="flex-1"
         >
           Sprawdź sieć
-        </button>
+        </SecondaryButton>
       </div>
 
       {routing.error && (
         <div className="rounded-md bg-rose-50 px-2 py-1 text-rose-700">
           {routing.error}
-          <button type="button" className="ml-2 underline" onClick={() => void routing.load()}>
+          <GhostButton density="compact" className="ml-2" onClick={() => void routing.load()}>
             Odśwież
-          </button>
+          </GhostButton>
         </div>
       )}
       {routing.dirty && <div className="text-amber-700">Niezapisane zmiany</div>}
@@ -204,13 +206,14 @@ export function RoutingRoutesPanel({
                 : orphans.length === 1
                   ? "1 punkt nie jest połączony z żadną trasą."
                   : `${orphans.length} punktów nie jest połączonych z żadną trasą.`}
-              <button
-                type="button"
-                className="mt-1 block w-full rounded border border-amber-300 bg-white py-1 font-semibold"
+              <PrimaryButton
+                intent="warning"
+                density="compact"
+                className="mt-1 w-full"
                 onClick={removeOrphansAction}
               >
                 Usuń niepołączone punkty
-              </button>
+              </PrimaryButton>
             </div>
           )}
         </div>
@@ -231,7 +234,7 @@ export function RoutingRoutesPanel({
         return (
           <>
             {structural.length > 0 && (
-              <div className="space-y-2 rounded-lg border border-slate-200 p-2">
+              <Card variant="section" density="compact" className="space-y-2">
                 <div className="font-semibold">
                   {structuralBad ? "Uwagi do sieci" : "Sieć — ostrzeżenia"}
                 </div>
@@ -245,31 +248,25 @@ export function RoutingRoutesPanel({
                       {(i.code === "ORPHAN_NODES" || i.code === "NO_EDGES") &&
                         (i.ref_uuids?.length || orphans.length) > 0 && (
                           <div className="mt-1 flex flex-wrap gap-2">
-                            <button
-                              type="button"
-                              className="rounded border border-slate-200 bg-white px-2 py-0.5 text-[10px] font-semibold"
+                            <SecondaryButton
+                              density="compact"
                               onClick={() =>
                                 setHighlightOrphanUuids(i.ref_uuids?.length ? i.ref_uuids : orphans)
                               }
                             >
                               Podświetl na mapie
-                            </button>
-                            <button
-                              type="button"
-                              className="rounded border border-rose-200 bg-rose-50 px-2 py-0.5 text-[10px] font-semibold text-rose-800"
-                              onClick={removeOrphansAction}
-                            >
+                            </SecondaryButton>
+                            <DangerButton density="compact" onClick={removeOrphansAction}>
                               Usuń niepołączone punkty
-                            </button>
+                            </DangerButton>
                           </div>
                         )}
                       {i.code === "EDGES_THROUGH_OBSTACLES" &&
                         (i.ref_uuids?.length ?? 0) > 0 &&
                         setHighlightInvalidEdgeUuids && (
                           <div className="mt-1 flex flex-wrap gap-2">
-                            <button
-                              type="button"
-                              className="rounded border border-rose-200 bg-rose-50 px-2 py-0.5 text-[10px] font-semibold text-rose-800"
+                            <DangerButton
+                              density="compact"
                               onClick={() => {
                                 setHighlightInvalidEdgeUuids(i.ref_uuids ?? []);
                                 const first = i.ref_uuids?.[0];
@@ -277,31 +274,27 @@ export function RoutingRoutesPanel({
                               }}
                             >
                               Pokaż na mapie
-                            </button>
+                            </DangerButton>
                           </div>
                         )}
                     </li>
                   ))}
                 </ul>
                 {highlightOrphanUuids.length > 0 && (
-                  <button
-                    type="button"
-                    className="text-[10px] underline"
-                    onClick={() => setHighlightOrphanUuids([])}
-                  >
+                  <GhostButton density="compact" onClick={() => setHighlightOrphanUuids([])}>
                     Wyłącz podświetlenie
-                  </button>
+                  </GhostButton>
                 )}
                 {highlightInvalidEdgeUuids.length > 0 && setHighlightInvalidEdgeUuids && (
-                  <button
-                    type="button"
-                    className="ml-2 text-[10px] underline"
+                  <GhostButton
+                    density="compact"
+                    className="ml-2"
                     onClick={() => setHighlightInvalidEdgeUuids([])}
                   >
                     Wyłącz podświetlenie odcinków
-                  </button>
+                  </GhostButton>
                 )}
-              </div>
+              </Card>
             )}
             {structural.length === 0 && routing.validation.operational_ready && (
               <div className="rounded-lg border border-emerald-100 bg-emerald-50/50 p-2 font-semibold text-emerald-800">
@@ -373,8 +366,9 @@ export function RoutingRoutesPanel({
             <div className="mt-2 space-y-2">
               <label className="block">
                 Start
-                <select
-                  className="mt-0.5 w-full rounded border border-slate-200 px-1 py-1"
+                <Select
+                  density="compact"
+                  className="mt-0.5"
                   value={testStartUuid ?? ""}
                   onChange={(e) => {
                     const v = e.target.value || null;
@@ -388,12 +382,13 @@ export function RoutingRoutesPanel({
                       {nameOf(n)}
                     </option>
                   ))}
-                </select>
+                </Select>
               </label>
               <label className="block">
                 Cel
-                <select
-                  className="mt-0.5 w-full rounded border border-slate-200 px-1 py-1"
+                <Select
+                  density="compact"
+                  className="mt-0.5"
                   value={testDestUuid ?? ""}
                   onChange={(e) => {
                     const v = e.target.value || null;
@@ -407,23 +402,20 @@ export function RoutingRoutesPanel({
                       {nameOf(n)}
                     </option>
                   ))}
-                </select>
+                </Select>
               </label>
             </div>
           </details>
-          <button
-            type="button"
-            className="text-[11px] text-sky-800 underline"
-            onClick={() => setTestAdvanced((v) => !v)}
-          >
+          <GhostButton density="compact" onClick={() => setTestAdvanced((v) => !v)}>
             {testAdvanced ? "Ukryj zaawansowane" : "Zaawansowane ustawienia"}
-          </button>
+          </GhostButton>
           {testAdvanced && (
             <div className="space-y-2 border-t border-sky-100 pt-2">
               <label className="block">
                 Proces (opcjonalnie)
-                <select
-                  className="mt-0.5 w-full rounded border border-slate-200 px-1 py-1"
+                <Select
+                  density="compact"
+                  className="mt-0.5"
                   value={processType}
                   onChange={(e) => setProcessType(e.target.value)}
                 >
@@ -433,12 +425,13 @@ export function RoutingRoutesPanel({
                       {o.label}
                     </option>
                   ))}
-                </select>
+                </Select>
               </label>
               <label className="block">
                 Transport (opcjonalnie)
-                <select
-                  className="mt-0.5 w-full rounded border border-slate-200 px-1 py-1"
+                <Select
+                  density="compact"
+                  className="mt-0.5"
                   value={transportType}
                   onChange={(e) => setTransportType(e.target.value)}
                 >
@@ -448,7 +441,7 @@ export function RoutingRoutesPanel({
                       {o.label}
                     </option>
                   ))}
-                </select>
+                </Select>
               </label>
               <PrimaryButton
                 type="button"
@@ -506,9 +499,9 @@ export function RoutingRoutesPanel({
 
       {showIdle && routing.nodes.length > 0 && (
         <div className="mt-auto space-y-2 border-t border-slate-100 pt-2">
-          <button
-            type="button"
-            className="w-full rounded-md border border-rose-300 py-1.5 text-[11px] font-semibold text-rose-800"
+          <DangerButton
+            density="compact"
+            className="w-full"
             onClick={() => {
               // Orphan-only network → clean orphans (main QA case).
               if (routing.edges.length === 0) {
@@ -532,7 +525,7 @@ export function RoutingRoutesPanel({
             }}
           >
             Wyczyść sieć
-          </button>
+          </DangerButton>
         </div>
       )}
     </aside>

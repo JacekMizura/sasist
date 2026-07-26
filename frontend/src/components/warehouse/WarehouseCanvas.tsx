@@ -25,7 +25,17 @@ import { MagazynPreviewPathLayer } from "./WarehouseCanvas/MagazynPreviewPathLay
 import { PassageDrawPreview } from "../../pages/WarehouseDesigner/passages/PassageDrawPreview";
 import { useWarehouseModeOptional } from "./WarehouseModeContext";
 import { WarehouseZoomControls } from "./WarehouseZoomControls";
-import { warehouseToolGroupClass } from "./warehouseUiSkin";
+import {
+  CardButton,
+  GhostButton,
+  DangerButton,
+  Input,
+  SecondaryButton,
+  colors as dsColors,
+  radius as dsRadius,
+  shadows as dsShadows,
+  warehouseToolGroupClass,
+} from "../../design-system";
 import {
   MapLocationVisualizationLayer,
   type MapVisualizationModeId,
@@ -903,20 +913,20 @@ function WarehouseCanvasInner({
           {contextMenu && onDeleteSpecialLocation && (
             <div
               ref={contextMenuRef}
-              className="fixed z-[100] min-w-[120px] rounded-lg border border-slate-200 bg-white py-1 shadow-lg"
+              className={`fixed z-[100] min-w-[120px] ${dsRadius.md} border ${dsColors.border.default} ${dsColors.surface.page} py-1 ${dsShadows.md}`}
               style={{ left: contextMenu.x, top: contextMenu.y }}
               role="menu"
             >
-              <button
-                type="button"
-                className="w-full px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-100"
+              <GhostButton
+                density="compact"
+                className="!w-full !justify-start !rounded-none"
                 onClick={() => {
                   onDeleteSpecialLocation(contextMenu.id);
                   setContextMenu(null);
                 }}
               >
                 Usuń
-              </button>
+              </GhostButton>
             </div>
           )}
           {isEditMode && (
@@ -924,15 +934,13 @@ function WarehouseCanvasInner({
             className="flex min-h-0 min-w-0 shrink-0 flex-wrap items-center gap-x-2.5 gap-y-2 border-b border-slate-200/55 bg-gradient-to-b from-slate-50/98 to-white/95 px-3 py-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.75)] backdrop-blur-[4px]"
           >
             <div className={`flex shrink-0 ${warehouseToolGroupClass}`}>
-              <button
-                type="button"
+              <GhostButton
+                density="compact"
                 onClick={fitViewport}
-                className="h-8 rounded-lg px-2.5 text-[11px] font-medium text-slate-600 transition-all duration-150 hover:bg-slate-50 hover:text-slate-900"
-                style={{ color: colors.textSecondary }}
                 title="Zoom 100%, przewijanie lewy górny róg, pan wyzerowany"
               >
                 Reset
-              </button>
+              </GhostButton>
             </div>
             <span className="hidden h-6 w-px shrink-0 bg-slate-200/80 sm:block" aria-hidden />
             {!isLiveView && (
@@ -941,21 +949,42 @@ function WarehouseCanvasInner({
                 role="group"
                 aria-label="Narzędzia rysowania i lokalizacji"
               >
-                <button type="button" onClick={() => { const next = !rowToolActive; if (next) setRowToolTemplate?.(null); setRowToolActive((a) => !a); }} className={`h-8 rounded-md px-2.5 text-[11px] font-medium transition-all duration-150 ${rowToolActive ? "bg-white text-sky-900 shadow-sm ring-1 ring-sky-200/80" : "text-slate-600 hover:bg-white/80 hover:text-slate-900"}`} title="Narysuj rząd pustych slotów (bez szablonu). Później przeciągnij szablon do slotu.">Rysuj Rząd</button>
+                <CardButton
+                  density="compact"
+                  active={rowToolActive}
+                  onClick={() => { const next = !rowToolActive; if (next) setRowToolTemplate?.(null); setRowToolActive((a) => !a); }}
+                  title="Narysuj rząd pustych slotów (bez szablonu). Później przeciągnij szablon do slotu."
+                >
+                  Rysuj Rząd
+                </CardButton>
                 {setPassageToolActive && (
-                  <button
-                    type="button"
+                  <CardButton
+                    density="compact"
+                    active={passageToolActive}
                     onClick={() => setPassageToolActive((a) => !a)}
-                    className={`h-8 rounded-md px-2.5 text-[11px] font-medium transition-all duration-150 ${passageToolActive ? "bg-white text-indigo-900 shadow-sm ring-1 ring-indigo-200/80" : "text-slate-600 hover:bg-white/80 hover:text-slate-900"}`}
                     title="Utwórz przejazd pod regałem (przeciągnij pas przez regały). Shift = dowolny kąt. Skrót: J"
                   >
                     Dodaj przejazd
-                  </button>
+                  </CardButton>
                 )}
                 {setLayoutMode && (
                   <>
-                    <button type="button" onClick={() => setLayoutMode(LayoutMode.ADD_START)} className={`h-8 rounded-md px-2.5 text-[11px] font-medium transition-all duration-150 ${layoutMode === LayoutMode.ADD_START ? "bg-white text-emerald-900 shadow-sm ring-1 ring-emerald-200/80" : "text-slate-600 hover:bg-white/80 hover:text-slate-900"}`} title="Punkt startowy kompletacji">Start</button>
-                    <button type="button" onClick={() => setLayoutMode(LayoutMode.ADD_PACK)} className={`h-8 rounded-md px-2.5 text-[11px] font-medium transition-all duration-150 ${layoutMode === LayoutMode.ADD_PACK ? "bg-white text-sky-900 shadow-sm ring-1 ring-sky-200/80" : "text-slate-600 hover:bg-white/80 hover:text-slate-900"}`} title="Stacja pakowania">Pakowanie</button>
+                    <CardButton
+                      density="compact"
+                      active={layoutMode === LayoutMode.ADD_START}
+                      onClick={() => setLayoutMode(LayoutMode.ADD_START)}
+                      title="Punkt startowy kompletacji"
+                    >
+                      Start
+                    </CardButton>
+                    <CardButton
+                      density="compact"
+                      active={layoutMode === LayoutMode.ADD_PACK}
+                      onClick={() => setLayoutMode(LayoutMode.ADD_PACK)}
+                      title="Stacja pakowania"
+                    >
+                      Pakowanie
+                    </CardButton>
                   </>
                 )}
               </div>
@@ -966,35 +995,40 @@ function WarehouseCanvasInner({
                 <div className="flex shrink-0 flex-col gap-0.5 sm:flex-row sm:items-center sm:gap-2" role="group" aria-label="Elementy pomocnicze">
                   <span className="whitespace-nowrap pl-0.5 text-[9px] font-bold uppercase tracking-[0.14em] text-slate-400">Pomocnicze</span>
                   <div className={warehouseToolGroupClass}>
-                    <button
-                      type="button"
+                    <CardButton
+                      density="compact"
+                      active={aisleToolActive}
                       onClick={() => setAisleToolActive((a) => !a)}
-                      className={`h-8 rounded-md px-3 text-[11px] font-semibold transition-all duration-150 ${aisleToolActive ? "bg-white text-teal-900 shadow-sm ring-1 ring-teal-200/80" : "text-slate-600 hover:bg-white/80 hover:text-slate-900"}`}
                       title="Strefa to element wizualny – nie wpływa na routing ani logistykę"
                     >
                       Strefa
-                    </button>
+                    </CardButton>
                   </div>
                 </div>
               </>
             )}
             <span className="hidden h-6 w-px shrink-0 bg-slate-200/80 md:block" aria-hidden />
             <div className={warehouseToolGroupClass} role="group" aria-label="Widok siatki i etykiet">
-              <button type="button" onClick={() => setShowGrid((g) => !g)} className={`h-8 rounded-md px-3 text-[11px] font-semibold transition-all duration-150 ${showGrid ? "bg-white text-slate-900 shadow-sm ring-1 ring-slate-200/90" : "text-slate-600 hover:bg-white/80 hover:text-slate-900"}`} title="Widoczna siatka">Siatka</button>
+              <CardButton density="compact" active={showGrid} onClick={() => setShowGrid((g) => !g)} title="Widoczna siatka">
+                Siatka
+              </CardButton>
               <span className="w-px self-stretch bg-slate-200/70" aria-hidden />
-              <button type="button" onClick={() => setShowLabels((v) => !v)} className={`h-8 rounded-md px-3 text-[11px] font-semibold transition-all duration-150 ${showLabels ? "bg-white text-slate-900 shadow-sm ring-1 ring-slate-200/90" : "text-slate-600 hover:bg-white/80 hover:text-slate-900"}`} title="Nazwy regałów i etykiety elementów">Etykiety</button>
+              <CardButton density="compact" active={showLabels} onClick={() => setShowLabels((v) => !v)} title="Nazwy regałów i etykiety elementów">
+                Etykiety
+              </CardButton>
             </div>
             {passageToolActive && setPassageWidthCm && (
               <span className="ml-1 flex items-center gap-1.5">
                 <label className="whitespace-nowrap text-[9px] font-medium uppercase tracking-wide text-slate-400">Szer. (cm)</label>
-                <input
+                <Input
                   type="number"
+                  density="compact"
                   min={40}
                   max={200}
                   step={5}
                   value={passageWidthCm}
                   onChange={(e) => setPassageWidthCm(Number(e.target.value) || 90)}
-                  className="h-8 w-14 rounded-lg border border-slate-200/70 bg-white px-2 text-[11px] text-slate-800 shadow-sm"
+                  className="!w-14"
                   title="Domyślna szerokość przejazdu"
                 />
               </span>
@@ -1027,7 +1061,7 @@ function WarehouseCanvasInner({
                       <legend className="sr-only">{aria}</legend>
                       <span className="whitespace-nowrap text-[9px] font-semibold uppercase tracking-wide text-slate-400">{shortLabel}</span>
                       <div
-                        className="flex items-center gap-1.5 rounded-lg border border-slate-200/60 bg-slate-50/80 px-2 py-1"
+                        className={`flex items-center gap-1.5 ${dsRadius.md} border ${dsColors.border.soft} bg-slate-50/80 px-2 py-1`}
                         role="radiogroup"
                         aria-label={aria}
                       >
@@ -1057,46 +1091,55 @@ function WarehouseCanvasInner({
                   );
                 })}
                 {onStartRowDrag && (
-                  <button
-                    type="button"
+                  <SecondaryButton
+                    density="compact"
                     onMouseDown={(e) => { e.preventDefault(); onStartRowDrag(e); }}
-                    className="flex h-8 cursor-grab items-center gap-1 rounded-lg border border-slate-200/70 bg-white px-2.5 text-[11px] font-medium text-slate-700 shadow-sm transition-all duration-150 hover:bg-slate-50 hover:shadow-md active:cursor-grabbing"
+                    className="!cursor-grab active:!cursor-grabbing"
                     title="Przeciągnij rząd (przesuń cały rząd)"
                   >
                     <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24" aria-hidden><circle cx="9" cy="6" r="1.5"/><circle cx="15" cy="6" r="1.5"/><circle cx="9" cy="12" r="1.5"/><circle cx="15" cy="12" r="1.5"/><circle cx="9" cy="18" r="1.5"/><circle cx="15" cy="18" r="1.5"/></svg>
                     Przenieś rząd
-                  </button>
+                  </SecondaryButton>
                 )}
                 {rowToolTemplate && fillSelectedRowWithTemplate && (
-                  <button type="button" onClick={() => fillSelectedRowWithTemplate(rowToolTemplate)} className="flex h-8 items-center gap-1 rounded-lg border border-slate-200/70 bg-white px-2.5 text-[11px] font-medium text-slate-700 shadow-sm transition-all duration-150 hover:bg-slate-50 hover:shadow-md" title="Wypełnij wszystkie puste sloty w zaznaczonym rzędzie wybranym szablonem">
+                  <SecondaryButton density="compact" onClick={() => fillSelectedRowWithTemplate(rowToolTemplate)} title="Wypełnij wszystkie puste sloty w zaznaczonym rzędzie wybranym szablonem">
                     <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
                     Wypełnij rząd
-                  </button>
+                  </SecondaryButton>
                 )}
                 {deleteSelectedRow && (
-                  <button type="button" onClick={deleteSelectedRow} className="flex h-8 items-center gap-1 rounded-lg border border-slate-200/70 bg-white px-2.5 text-[11px] font-medium text-slate-700 shadow-sm transition-all duration-150 hover:bg-slate-50 hover:shadow-md" title="Usuń zaznaczony rząd (puste sloty i regały w tym rzędzie)">
+                  <DangerButton density="compact" onClick={deleteSelectedRow} title="Usuń zaznaczony rząd (puste sloty i regały w tym rzędzie)">
                     <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                     Usuń rząd
-                  </button>
+                  </DangerButton>
                 )}
                 {trimSelectedRowEnd && (
-                  <button type="button" onClick={trimSelectedRowEnd} className="flex h-8 items-center gap-1 rounded-lg border border-slate-200/70 bg-white px-2.5 text-[11px] font-medium text-slate-700 shadow-sm transition-all duration-150 hover:bg-slate-50 hover:shadow-md" title="Usuń puste sloty na końcu rzędu">
+                  <SecondaryButton density="compact" onClick={trimSelectedRowEnd} title="Usuń puste sloty na końcu rzędu">
                     <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h10M4 18h6" /></svg>
                     Skróć rząd
-                  </button>
+                  </SecondaryButton>
                 )}
                 {rotateSelectedRow && (
-                  <button type="button" onClick={rotateSelectedRow} className="flex h-8 items-center gap-1 rounded-lg border border-slate-200/70 bg-white px-2.5 text-[11px] font-medium text-slate-700 shadow-sm transition-all duration-150 hover:bg-slate-50 hover:shadow-md" title="Obróć rząd (poziomo ↔ pionowo)">
+                  <SecondaryButton density="compact" onClick={rotateSelectedRow} title="Obróć rząd (poziomo ↔ pionowo)">
                     <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
                     Obróć rząd
-                  </button>
+                  </SecondaryButton>
                 )}
               </div>
             )}
             {!isLiveView && setAisleWidthCm != null && (
               <span className="ml-auto flex items-center gap-1.5">
                 <label className="whitespace-nowrap text-[9px] font-medium uppercase tracking-wide text-slate-400">Magnes (cm)</label>
-                <input type="number" min={50} step={10} value={aisleWidthCm ?? 250} onChange={(e) => setAisleWidthCm(Number(e.target.value) || 250)} className="h-8 w-16 rounded-lg border border-slate-200/70 bg-white px-2 text-[11px] text-slate-800 shadow-sm transition-colors duration-150 focus:border-cyan-400 focus:outline-none focus:ring-2 focus:ring-cyan-500/20" style={{ color: colors.textPrimary }} title="Odległość magnetycznego przyciągania przy przeciąganiu z katalogu" />
+                <Input
+                  type="number"
+                  density="compact"
+                  min={50}
+                  step={10}
+                  value={aisleWidthCm ?? 250}
+                  onChange={(e) => setAisleWidthCm(Number(e.target.value) || 250)}
+                  className="!w-16"
+                  title="Odległość magnetycznego przyciągania przy przeciąganiu z katalogu"
+                />
               </span>
             )}
           </div>
@@ -1107,7 +1150,7 @@ function WarehouseCanvasInner({
             ) : null}
             {mapNavHintVisible ? (
               <div
-                className="pointer-events-none absolute bottom-3 left-3 z-30 max-w-[16rem] rounded-lg border border-slate-200/80 bg-white/95 px-3 py-2 text-[11px] leading-snug text-slate-600 shadow-sm backdrop-blur-sm"
+                className={`pointer-events-none absolute bottom-3 left-3 z-30 max-w-[16rem] ${dsRadius.md} border ${dsColors.border.soft} bg-white/95 px-3 py-2 text-[11px] leading-snug ${dsColors.text.body} ${dsShadows.sm} backdrop-blur-sm`}
                 role="status"
               >
                 Kółko: przewijanie · Ctrl/⌘ + kółko: zoom
@@ -1895,9 +1938,9 @@ function WarehouseCanvasInner({
                         ? dragPreviewCell.y * cellPx + cellPx / 2
                         : (loc.y / GRID_UNIT_CM) * cellPx + cellPx / 2;
                     return (
-                      <button
-                        type="button"
-                        className="absolute z-[50] rounded-md border border-red-200 bg-white px-2 py-1 text-[11px] font-semibold text-red-700 shadow-md hover:bg-red-50"
+                      <DangerButton
+                        density="compact"
+                        className="absolute z-[50]"
                         style={{ left: cx + 16, top: cy - 14, pointerEvents: "auto" }}
                         onClick={(e) => {
                           e.stopPropagation();
@@ -1909,7 +1952,7 @@ function WarehouseCanvasInner({
                         onPointerDown={(e) => e.stopPropagation()}
                       >
                         Usuń
-                      </button>
+                      </DangerButton>
                     );
                   })()}
               </div>

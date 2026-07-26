@@ -6,6 +6,7 @@
 import type { DesignerSelection } from "./designerSelection";
 import type { PassageSource } from "../../types/warehouse";
 import { normalizePassageSource, PassageSource as PassageSourceEnum } from "../../types/warehouse";
+import { GhostButton, DangerButton, colors, radius, shadows } from "../../design-system";
 
 type Props = {
   selection: DesignerSelection;
@@ -19,6 +20,11 @@ type Props = {
   onFlipEdgeDirection?: () => void;
   onRackProperties?: () => void;
 };
+
+const darkGhost =
+  "!h-auto !rounded-none !border-0 !bg-transparent !px-2 !py-1.5 !text-[10px] !font-semibold !text-cyan-100 hover:!bg-cyan-600 hover:!text-white";
+const darkDanger =
+  "!h-auto !rounded-none !border-0 !bg-transparent !px-2 !py-1.5 !text-[10px] !font-semibold !text-red-200 hover:!bg-red-600 hover:!text-white";
 
 export function SelectionQuickToolbar({
   selection,
@@ -41,7 +47,7 @@ export function SelectionQuickToolbar({
 
   return (
     <div
-      className="absolute z-[55] flex gap-0.5 overflow-hidden rounded border border-cyan-500/50 bg-slate-800 shadow-lg"
+      className={`absolute z-[55] flex gap-0.5 overflow-hidden border border-cyan-500/50 ${radius.sm} ${colors.text.inverse} bg-slate-800 ${shadows.md}`}
       style={{ left: anchor.left, top: anchor.top, pointerEvents: "auto" }}
       onClick={(e) => e.stopPropagation()}
       onMouseDown={(e) => e.stopPropagation()}
@@ -50,67 +56,42 @@ export function SelectionQuickToolbar({
       {selection.kind === "node" && (
         <>
           {onEditRouting && (
-            <button
-              type="button"
-              className="px-2 py-1.5 text-[10px] font-semibold text-cyan-100 hover:bg-cyan-600"
-              onClick={onEditRouting}
-              title="Przełącz tryb Edytuj"
-            >
+            <GhostButton type="button" density="compact" className={darkGhost} onClick={onEditRouting} title="Przełącz tryb Edytuj">
               Edytuj
-            </button>
+            </GhostButton>
           )}
           {onDelete && (
-            <button
-              type="button"
-              className="px-2 py-1.5 text-[10px] font-semibold text-red-200 hover:bg-red-600"
-              onClick={onDelete}
-            >
+            <DangerButton type="button" density="compact" className={darkDanger} onClick={onDelete}>
               Usuń
-            </button>
+            </DangerButton>
           )}
         </>
       )}
       {selection.kind === "edge" && (
         <>
           {onFlipEdgeDirection && (
-            <button
-              type="button"
-              className="px-2 py-1.5 text-[10px] font-semibold text-cyan-100 hover:bg-cyan-600"
-              onClick={onFlipEdgeDirection}
-            >
+            <GhostButton type="button" density="compact" className={darkGhost} onClick={onFlipEdgeDirection}>
               Odwróć
-            </button>
+            </GhostButton>
           )}
           {onDelete && (
-            <button
-              type="button"
-              className="px-2 py-1.5 text-[10px] font-semibold text-red-200 hover:bg-red-600"
-              onClick={onDelete}
-            >
+            <DangerButton type="button" density="compact" className={darkDanger} onClick={onDelete}>
               Usuń
-            </button>
+            </DangerButton>
           )}
         </>
       )}
       {selection.kind === "passage" && (
         <>
           {inherited && onOpenTemplate ? (
-            <button
-              type="button"
-              className="px-2 py-1.5 text-[10px] font-semibold text-cyan-100 hover:bg-cyan-600"
-              onClick={onOpenTemplate}
-            >
+            <GhostButton type="button" density="compact" className={darkGhost} onClick={onOpenTemplate}>
               Otwórz szablon
-            </button>
+            </GhostButton>
           ) : (
             onDelete && (
-              <button
-                type="button"
-                className="px-2 py-1.5 text-[10px] font-semibold text-red-200 hover:bg-red-600"
-                onClick={onDelete}
-              >
+              <DangerButton type="button" density="compact" className={darkDanger} onClick={onDelete}>
                 Usuń
-              </button>
+              </DangerButton>
             )
           )}
         </>
@@ -118,31 +99,19 @@ export function SelectionQuickToolbar({
       {selection.kind === "rack" && (
         <>
           {onRackProperties && (
-            <button
-              type="button"
-              className="px-2 py-1.5 text-[10px] font-semibold text-cyan-100 hover:bg-cyan-600"
-              onClick={onRackProperties}
-            >
+            <GhostButton type="button" density="compact" className={darkGhost} onClick={onRackProperties}>
               Właściwości
-            </button>
+            </GhostButton>
           )}
           {onOpenTemplate && (
-            <button
-              type="button"
-              className="px-2 py-1.5 text-[10px] font-semibold text-cyan-100 hover:bg-cyan-600"
-              onClick={onOpenTemplate}
-            >
+            <GhostButton type="button" density="compact" className={darkGhost} onClick={onOpenTemplate}>
               Otwórz szablon
-            </button>
+            </GhostButton>
           )}
           {onDelete && (
-            <button
-              type="button"
-              className="px-2 py-1.5 text-[10px] font-semibold text-red-200 hover:bg-red-600"
-              onClick={onDelete}
-            >
+            <DangerButton type="button" density="compact" className={darkDanger} onClick={onDelete}>
               Usuń
-            </button>
+            </DangerButton>
           )}
         </>
       )}

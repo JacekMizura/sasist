@@ -9,7 +9,7 @@ import { VisualElementPanelShell } from "./ElevationSidePanel";
 import { AppRightPanel, AppSplitView } from "../layout/app";
 import { UI_STRINGS } from "../../constants/uiStrings";
 import { warehouseMapHallClassName } from "./warehouseMapHall";
-import { warehouseMapSurroundClass, warehouseRightRailShellClass } from "./warehouseUiSkin";
+import { warehouseMapSurroundClass, warehouseRightRailShellClass } from "../../design-system";
 
 /** Return keyboard focus to the layout canvas after closing a side panel. */
 export function focusWarehouseCanvasScroll() {

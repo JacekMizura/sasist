@@ -4,7 +4,7 @@ import type { LayoutState } from "../../types/warehouse";
 import { UI_STRINGS } from "../../constants/uiStrings";
 import { clampGridToBuilding } from "../../components/warehouse/warehouseUtils";
 import { useWarehouse } from "../../context/WarehouseContext";
-import { PrimaryButton } from "../../design-system/PrimaryButton";
+import { Card, PrimaryButton, ProgressBar, StatusText, typography } from "../../design-system";
 import { EditBuildingModal } from "./EditBuildingModal";
 
 export interface DesignerToolbarProps {
@@ -32,14 +32,12 @@ export interface DesignerToolbarProps {
 export function DesignerSaveStatusText({ lastSavedAt }: { lastSavedAt: number | null }) {
   const saved = lastSavedAt != null;
   return (
-    <span
-      className={`shrink-0 text-xs font-medium tabular-nums ${
-        saved ? "text-emerald-600" : "text-amber-600"
-      }`}
+    <StatusText
+      tone={saved ? "success" : "warning"}
       title={saved ? UI_STRINGS.warehouse.selector.savedToDb : UI_STRINGS.warehouse.selector.unsavedChanges}
     >
       {saved ? UI_STRINGS.warehouse.selector.syncSaved : UI_STRINGS.warehouse.selector.notSaved}
-    </span>
+    </StatusText>
   );
 }
 
@@ -65,59 +63,47 @@ export function DesignerToolbar({
   const hasBuilding =
     layout.building_width_m != null && depthM != null && layout.building_width_m > 0 && depthM > 0;
 
+  const runSave = () => {
+    if (selectedWarehouseId == null) {
+      console.warn("No warehouse selected");
+      return;
+    }
+    saveLayout();
+  };
+
   return (
     <>
       <div className="flex min-w-0 max-w-full flex-wrap items-center justify-end gap-2">
         {warehouseUsagePct != null && hasBuilding && (
-          <div
-            className="inline-flex items-center gap-2 rounded-lg border border-slate-200/70 bg-slate-50/95 px-2.5 py-1 shadow-sm shadow-slate-900/[0.03]"
+          <Card
+            variant="section"
+            density="compact"
+            className="!flex !flex-row !items-center gap-2 !p-2"
             title="Zajętość powierzchni (regały / budynek)"
           >
-            <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Zajętość</span>
-            <div className="h-1.5 w-24 overflow-hidden rounded-full bg-slate-200/90">
-              <div
-                className="h-1.5 rounded-full bg-emerald-500 transition-[width] duration-300 ease-out"
-                style={{ width: `${Math.min(100, Math.max(0, Number(warehouseUsagePct)))}%` }}
-              />
-            </div>
-            <span className="min-w-[2.25rem] text-right text-[11px] font-semibold tabular-nums text-slate-700">
+            <span className={typography.label}>Zajętość</span>
+            <ProgressBar value={Number(warehouseUsagePct)} className="w-24" />
+            <span className={`min-w-[2.25rem] text-right tabular-nums ${typography.controlMicro}`}>
               {Number(warehouseUsagePct).toFixed(0)}%
             </span>
-          </div>
+          </Card>
         )}
         {showSaveStatus ? <DesignerSaveStatusText lastSavedAt={lastSavedAt} /> : null}
-        {mainView === "layout" &&
-          (saveLayoutBlockedReason ? (
-            <button
-              type="button"
-              onClick={() => {
-                if (selectedWarehouseId == null) {
-                  console.warn("No warehouse selected");
-                  return;
-                }
-                saveLayout();
-              }}
-              title="Zapis zablokowany: zduplikowana nazwa regału (wyświetlimy komunikat po kliknięciu)."
-              disabled={saving || selectedWarehouseId == null}
-              className="inline-flex h-10 shrink-0 items-center justify-center rounded-lg bg-amber-600 px-4 text-sm font-semibold text-white shadow-sm ring-1 ring-amber-400/80 transition hover:bg-amber-500 disabled:opacity-50 disabled:shadow-none"
-            >
-              {saving ? UI_STRINGS.warehouse.rackSidebar.saving : UI_STRINGS.warehouse.rackSidebar.saveLayout}
-            </button>
-          ) : (
-            <PrimaryButton
-              type="button"
-              onClick={() => {
-                if (selectedWarehouseId == null) {
-                  console.warn("No warehouse selected");
-                  return;
-                }
-                saveLayout();
-              }}
-              disabled={saving || selectedWarehouseId == null}
-            >
-              {saving ? UI_STRINGS.warehouse.rackSidebar.saving : UI_STRINGS.warehouse.rackSidebar.saveLayout}
-            </PrimaryButton>
-          ))}
+        {mainView === "layout" && (
+          <PrimaryButton
+            type="button"
+            intent={saveLayoutBlockedReason ? "warning" : "brand"}
+            onClick={runSave}
+            disabled={saving || selectedWarehouseId == null}
+            title={
+              saveLayoutBlockedReason
+                ? "Zapis zablokowany: zduplikowana nazwa regału (wyświetlimy komunikat po kliknięciu)."
+                : undefined
+            }
+          >
+            {saving ? UI_STRINGS.warehouse.rackSidebar.saving : UI_STRINGS.warehouse.rackSidebar.saveLayout}
+          </PrimaryButton>
+        )}
       </div>
       {showEditBuilding && (
         <EditBuildingModal

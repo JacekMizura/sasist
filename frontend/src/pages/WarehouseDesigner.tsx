@@ -49,8 +49,20 @@ import { UI_STRINGS } from "../constants/uiStrings";
 import { AppSplitView } from "../components/layout/app";
 import { tabsNavItemClassName } from "../components/layout/TabsNav";
 import { brandTabsNavRowClassName } from "../design-system/brandUi";
-import { PrimaryButton } from "../design-system/PrimaryButton";
-import { AppButton } from "../components/app-shell/AppButton";
+import {
+  PrimaryButton,
+  SecondaryButton,
+  SuccessButton,
+  GhostButton,
+  SegmentedControl,
+  SegmentedItem,
+  CardButton,
+  Dialog,
+  Input,
+  colors,
+  radius,
+  shadows,
+} from "../design-system";
 import { ConfirmModal } from "../components/ui/ConfirmModal";
 import { WarehouseShell } from "../components/warehouse/WarehouseShell";
 import {
@@ -3695,11 +3707,13 @@ export default function WarehouseDesigner() {
     >
       {mainView === "layout" ? (
         <div className="mb-3 flex shrink-0 items-center gap-2" role="tablist" aria-label="Workspace projektanta">
-          <button
-            type="button"
-            role="tab"
-            aria-selected={layoutWorkspace === "designing"}
-            onClick={() => {
+          <SegmentedControl>
+            <SegmentedItem
+              type="button"
+              role="tab"
+              aria-selected={layoutWorkspace === "designing"}
+              active={layoutWorkspace === "designing"}
+              onClick={() => {
               if (layoutWorkspace === "routes" && !confirmLeaveRoutingDirty()) return;
               if (layoutWorkspace === "routes" && routing.dirty) {
                 void routing.load();
@@ -3711,19 +3725,15 @@ export default function WarehouseDesigner() {
               setRoutingDraftCursorCm(null);
               setLayoutWorkspace("designing");
             }}
-            className={`rounded-md border px-3 py-1 text-[11px] font-semibold ${
-              layoutWorkspace === "designing"
-                ? "border-slate-800 bg-slate-800 text-white"
-                : "border-slate-200 bg-white text-slate-700"
-            }`}
-          >
-            {UI_STRINGS.warehouse.designerSubTabs.designing}
-          </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={layoutWorkspace === "routes"}
-            onClick={() => {
+            >
+              {UI_STRINGS.warehouse.designerSubTabs.designing}
+            </SegmentedItem>
+            <SegmentedItem
+              type="button"
+              role="tab"
+              aria-selected={layoutWorkspace === "routes"}
+              active={layoutWorkspace === "routes"}
+              onClick={() => {
               // Selection SSOT: entering Routing clears rack/passage.
               setSelectedRackId(null);
               setSelectedRackIds([]);
@@ -3731,19 +3741,14 @@ export default function WarehouseDesigner() {
               setLayoutWorkspace("routes");
               setRoutingTool("draw_edge");
             }}
-            className={`rounded-md border px-3 py-1 text-[11px] font-semibold ${
-              layoutWorkspace === "routes"
-                ? "border-sky-700 bg-sky-700 text-white"
-                : "border-slate-200 bg-white text-slate-700"
-            }`}
-          >
-            {UI_STRINGS.warehouse.designerSubTabs.routes}
-          </button>
+            >
+              {UI_STRINGS.warehouse.designerSubTabs.routes}
+            </SegmentedItem>
+          </SegmentedControl>
           <div className="relative ml-auto">
-            <AppButton
+            <SuccessButton
               type="button"
-              variant="success"
-              className="!h-8 !min-h-0 !gap-1.5 !px-3 !text-[11px]"
+              density="compact"
               onClick={() => setLayoutExportOpen((v) => !v)}
               aria-expanded={layoutExportOpen}
               aria-haspopup="menu"
@@ -3753,43 +3758,49 @@ export default function WarehouseDesigner() {
               </svg>
               {UI_STRINGS.warehouse.export.button}
               <span className="opacity-80">▾</span>
-            </AppButton>
+            </SuccessButton>
             {layoutExportOpen ? (
               <>
-                <div className="absolute right-0 z-20 mt-1 min-w-[14rem] overflow-hidden rounded-lg border border-slate-100 bg-white py-1 shadow-lg" role="menu">
-                  <button
+                <div
+                  className={`absolute right-0 z-20 mt-1 min-w-[14rem] overflow-hidden ${radius.md} border ${colors.border.soft} ${colors.surface.page} py-1 ${shadows.md}`}
+                  role="menu"
+                >
+                  <GhostButton
                     type="button"
                     role="menuitem"
-                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs hover:bg-slate-50"
+                    density="compact"
+                    className="!h-auto w-full !justify-start !rounded-none px-3 py-2 text-left"
                     onClick={() => {
                       handleExportLocationsMapCsv();
                       setLayoutExportOpen(false);
                     }}
                   >
                     {UI_STRINGS.warehouse.rackSidebar.exportLocationsCsv}
-                  </button>
-                  <button
+                  </GhostButton>
+                  <GhostButton
                     type="button"
                     role="menuitem"
-                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs hover:bg-slate-50"
+                    density="compact"
+                    className="!h-auto w-full !justify-start !rounded-none px-3 py-2 text-left"
                     onClick={() => {
                       handleExportCsv();
                       setLayoutExportOpen(false);
                     }}
                   >
                     {UI_STRINGS.warehouse.export.csv}
-                  </button>
-                  <button
+                  </GhostButton>
+                  <GhostButton
                     type="button"
                     role="menuitem"
-                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs hover:bg-slate-50"
+                    density="compact"
+                    className="!h-auto w-full !justify-start !rounded-none px-3 py-2 text-left"
                     onClick={() => {
                       handleExportJson();
                       setLayoutExportOpen(false);
                     }}
                   >
                     {UI_STRINGS.warehouse.export.json}
-                  </button>
+                  </GhostButton>
                 </div>
                 <div className="fixed inset-0 z-10" onClick={() => setLayoutExportOpen(false)} aria-hidden />
               </>
@@ -4733,71 +4744,57 @@ export default function WarehouseDesigner() {
       />
       {pendingVariantSave != null && (
         <AppOverlayPortal>
-        <div
-          className="fixed inset-0 z-[280] flex items-center justify-center bg-black/40 p-4"
-          role="dialog"
-          aria-modal="true"
-          onClick={() => setPendingVariantSave(null)}
-        >
-          <div
-            className="w-full max-w-md rounded-2xl bg-white border border-slate-200 shadow-2xl p-5"
-            onClick={(e) => e.stopPropagation()}
+          <Dialog
+            open
+            onClose={() => setPendingVariantSave(null)}
+            title="Zapisz jako nowy wariant"
+            size="md"
+            rootClassName="!z-[280]"
+            footer={
+              <>
+                <SecondaryButton type="button" onClick={() => setPendingVariantSave(null)}>
+                  Anuluj
+                </SecondaryButton>
+                <PrimaryButton
+                  type="button"
+                  onClick={() => {
+                    if (!pendingVariantSave) return;
+                    const variant = buildVariantTemplate(
+                      pendingVariantSave.baseTemplate,
+                      pendingVariantSave.internalStructure,
+                      pendingVariantSave.bins,
+                      variantNameInput
+                    );
+                    applyInternalLayoutSave(
+                      pendingVariantSave.rackId,
+                      pendingVariantSave.internalStructure,
+                      pendingVariantSave.bins,
+                      variant,
+                      pendingVariantSave.clearPassages ? { clearPassages: true } : undefined
+                    );
+                    setPendingVariantSave(null);
+                  }}
+                >
+                  Potwierdź
+                </PrimaryButton>
+              </>
+            }
           >
-            <div className="flex items-start justify-between gap-2">
-              <h3 className="text-base font-bold text-slate-800">Zapisz jako nowy wariant</h3>
-              <button
-                type="button"
-                aria-label="Zamknij"
-                className="rounded-lg p-1.5 text-slate-500 hover:bg-slate-100"
-                onClick={() => setPendingVariantSave(null)}
-              >
-                ✕
-              </button>
-            </div>
-            <p className="mt-2 text-sm text-slate-600">
+            <p className="text-sm text-slate-600">
               Układ różni się od szablonu bazowego. Zapisz jako nowy wariant? Nic nie zostanie zapisane bez Twojej decyzji.
             </p>
-            <label className="block mt-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Nazwa wariantu</label>
-            <input
+            <label className="mt-3 block text-xs font-semibold uppercase tracking-wide text-slate-500">
+              Nazwa wariantu
+            </label>
+            <Input
               type="text"
+              density="comfortable"
+              className="mt-1"
               value={variantNameInput}
               onChange={(e) => setVariantNameInput(e.target.value)}
-              className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-800 focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500"
               placeholder="Np. Regał A - Wariant 2"
             />
-            <div className="mt-4 flex items-center justify-end gap-2">
-              <button
-                type="button"
-                onClick={() => setPendingVariantSave(null)}
-                className="px-3 py-2 rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-50"
-              >
-                Anuluj
-              </button>
-              <PrimaryButton
-                type="button"
-                onClick={() => {
-                  if (!pendingVariantSave) return;
-                  const variant = buildVariantTemplate(
-                    pendingVariantSave.baseTemplate,
-                    pendingVariantSave.internalStructure,
-                    pendingVariantSave.bins,
-                    variantNameInput
-                  );
-                  applyInternalLayoutSave(
-                    pendingVariantSave.rackId,
-                    pendingVariantSave.internalStructure,
-                    pendingVariantSave.bins,
-                    variant,
-                    pendingVariantSave.clearPassages ? { clearPassages: true } : undefined
-                  );
-                  setPendingVariantSave(null);
-                }}
-              >
-                Potwierdź
-              </PrimaryButton>
-            </div>
-          </div>
-        </div>
+          </Dialog>
         </AppOverlayPortal>
       )}
 
@@ -4834,28 +4831,48 @@ export default function WarehouseDesigner() {
 
       {showGateTypeModal && pendingGatePlacement && (
         <AppOverlayPortal>
-        <div className="fixed inset-0 z-[280] flex items-center justify-center bg-black/40 p-4" role="dialog" aria-modal="true" aria-labelledby="gate-type-title">
-          <div className="bg-white rounded-xl shadow-xl p-4 min-w-[200px]" onClick={(e) => e.stopPropagation()}>
-            <h3 id="gate-type-title" className="text-sm font-semibold text-slate-800 mb-3">Typ bramy</h3>
+          <Dialog
+            open
+            onClose={() => {
+              setShowGateTypeModal(false);
+              setPendingGatePlacement(null);
+              setWallElementTool(null);
+            }}
+            title="Typ bramy"
+            size="sm"
+            rootClassName="!z-[280]"
+            aria-label="Typ bramy"
+            footer={
+              <GhostButton
+                type="button"
+                density="compact"
+                onClick={() => {
+                  setShowGateTypeModal(false);
+                  setPendingGatePlacement(null);
+                  setWallElementTool(null);
+                }}
+              >
+                Anuluj
+              </GhostButton>
+            }
+          >
             <div className="flex flex-col gap-2">
               {(["courier", "supplier", "both"] as const).map((gt) => (
-                <button
+                <CardButton
                   key={gt}
                   type="button"
+                  fullWidth
                   onClick={() => {
                     addWallElement(pendingGatePlacement.wall, pendingGatePlacement.position_cm, "gate", gt);
                     setShowGateTypeModal(false);
                     setPendingGatePlacement(null);
                   }}
-                  className="px-3 py-2 rounded-lg border border-slate-200 hover:bg-slate-50 text-left text-sm"
                 >
                   {gt === "courier" ? "Kurier" : gt === "supplier" ? "Dostawca" : "Oba"}
-                </button>
+                </CardButton>
               ))}
             </div>
-            <button type="button" onClick={() => { setShowGateTypeModal(false); setPendingGatePlacement(null); setWallElementTool(null); }} className="mt-3 text-xs text-slate-500 hover:underline">Anuluj</button>
-          </div>
-        </div>
+          </Dialog>
         </AppOverlayPortal>
       )}
 

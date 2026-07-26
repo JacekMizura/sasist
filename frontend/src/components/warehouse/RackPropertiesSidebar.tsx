@@ -21,13 +21,17 @@ import { syncRackBinsDisplayFields } from "../../utils/resolvedWarehouseLocation
 import { RackPassageEditor } from "../../pages/WarehouseDesigner/passages/RackPassageEditor";
 import { RackLocationsSection } from "./RackLocationsSection";
 import {
+  CardButton,
+  DangerButton,
+  GhostButton,
+  Input,
+  PrimaryButton,
+  ProgressBar,
+  Select,
   warehouseCardClass,
-  warehouseFieldClass,
-  warehousePrimaryActionClass,
   warehouseRailBgClass,
-  warehouseSecondaryActionClass,
   warehouseSectionLabelClass,
-} from "./warehouseUiSkin";
+} from "../../design-system";
 
 export type RackPropertiesSidebarProps = {
   layout: LayoutState;
@@ -246,14 +250,14 @@ export function RackPropertiesSidebar({
           ) : null}
         </div>
         <div className="flex shrink-0 items-center gap-1">
-          <button
+          <GhostButton
             type="button"
+            density="compact"
             aria-label="Zamknij panel"
             onClick={requestClose}
-            className="rounded-xl p-1.5 text-slate-500 hover:bg-white hover:text-slate-800"
           >
             ✕
-          </button>
+          </GhostButton>
         </div>
       </header>
 
@@ -286,8 +290,10 @@ export function RackPropertiesSidebar({
             <section>
               <SectionTitle>Informacje</SectionTitle>
               <label className="block text-[10px] font-semibold text-slate-500">Nazwa</label>
-              <input
+              <Input
                 type="text"
+                density="default"
+                focusTone="brand"
                 value={nameDraft}
                 onFocus={() => {
                   onEditingRackIdChange?.(rackPrimaryId(selectedRack));
@@ -327,17 +333,17 @@ export function RackPropertiesSidebar({
                   }
                 }}
                 placeholder={getRackDisplayId(selectedRack, layout)}
-                className={`mt-0.5 ${warehouseFieldClass} ${
-                  nameError ? "!ring-red-300 focus:!ring-red-400/50" : ""
-                }`}
+                className={`mt-0.5 ${nameError ? "!ring-red-300 focus:!ring-red-400/50" : ""}`}
               />
               {nameError ? <p className="mt-0.5 text-[11px] text-red-600">{nameError}</p> : null}
 
               <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-[11px]">
                 <dt className="text-slate-500">Typ</dt>
                 <dd>
-                  <select
+                  <Select
                     value={selectedRack.rack_type === "store" ? "store" : "warehouse"}
+                    density="default"
+                    focusTone="brand"
                     onChange={(e) => {
                       const rack_type = e.target.value === "store" ? "store" : "warehouse";
                       setLayout((prev) => ({
@@ -347,11 +353,10 @@ export function RackPropertiesSidebar({
                         ),
                       }));
                     }}
-                    className={warehouseFieldClass}
                   >
                     <option value="warehouse">Magazyn</option>
                     <option value="store">Sklep</option>
-                  </select>
+                  </Select>
                 </dd>
                 <dt className="text-slate-500">Szablon</dt>
                 <dd className="text-slate-800">
@@ -406,23 +411,22 @@ export function RackPropertiesSidebar({
             {stats ? (
               <section className="border-t border-slate-100 pt-3">
                 <SectionTitle>Statystyki</SectionTitle>
-                <div className={warehouseCardClass}>
+                  <div className={warehouseCardClass}>
                   <p className={warehouseSectionLabelClass}>Pojemność / zajętość</p>
                   <p className="mt-1 font-mono text-sm text-slate-800">
                     {formatVolume(stats.used)} / {formatVolume(stats.total)} dm³
                   </p>
-                  <div className="mt-1 h-2 overflow-hidden rounded-full bg-slate-200">
-                    <div
-                      className={`h-full rounded-full transition-all ${
-                        stats.occupancyPct <= 50
-                          ? "bg-emerald-500"
-                          : stats.occupancyPct <= 80
-                            ? "bg-amber-500"
-                            : "bg-red-500"
-                      }`}
-                      style={{ width: `${Math.min(100, stats.occupancyPct)}%` }}
-                    />
-                  </div>
+                  <ProgressBar
+                    value={stats.occupancyPct}
+                    tone={
+                      stats.occupancyPct <= 50
+                        ? "success"
+                        : stats.occupancyPct <= 80
+                          ? "warning"
+                          : "danger"
+                    }
+                    className="mt-1"
+                  />
                   <dl className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-[11px]">
                     <div>
                       <dt className="text-slate-500">Lokalizacji</dt>
@@ -459,31 +463,35 @@ export function RackPropertiesSidebar({
       <footer className="flex shrink-0 flex-col gap-1.5 border-t border-slate-200/70 px-4 py-3">
         {selectedRack ? (
           <div className="flex gap-2">
-            <button
+            <CardButton
+              fullWidth
               type="button"
               onClick={() => setInternalLayoutRackId(selectedRack.id ?? selectedRack.rack_index)}
-              className={`flex-1 ${warehouseSecondaryActionClass}`}
+              className="flex-1"
             >
               Układ wewnętrzny
-            </button>
+            </CardButton>
             {onSaveLayout ? (
-              <button
+              <PrimaryButton
                 type="button"
+                density="default"
+                className="flex-1"
                 disabled={saving || Boolean(nameError)}
                 onClick={() => {
                   commitRackName(nameDraft, "save");
                   onSaveLayout();
                 }}
-                className={`flex-1 disabled:opacity-50 ${warehousePrimaryActionClass}`}
               >
                 {saving ? "Zapisywanie…" : "Zapisz"}
-              </button>
+              </PrimaryButton>
             ) : null}
           </div>
         ) : null}
         {selectedRack && !isMultiSelect ? (
-          <button
+          <DangerButton
             type="button"
+            density="compact"
+            className="w-full"
             onClick={() => {
               const ids = new Set(selectedRackIds);
               setLayout((prev) => ({
@@ -493,10 +501,9 @@ export function RackPropertiesSidebar({
               setSelectedRackIds([]);
               onClose();
             }}
-            className="w-full rounded-lg border border-red-200 bg-red-50 px-2 py-1.5 text-[11px] font-semibold text-red-700 hover:bg-red-100"
           >
             Usuń
-          </button>
+          </DangerButton>
         ) : null}
       </footer>
     </div>

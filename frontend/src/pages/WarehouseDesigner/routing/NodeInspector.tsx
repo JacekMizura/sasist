@@ -14,6 +14,15 @@ import {
 import { ROUTING_OP_OPTIONS, type RoutingTool } from "./routingLabels";
 import type { useRoutingGraph } from "./useRoutingGraph";
 import { deleteSelectedNode } from "./routingNodeActions";
+import {
+  Card,
+  CardButton,
+  DangerButton,
+  GhostButton,
+  Input,
+  SecondaryButton,
+  Select,
+} from "../../../design-system";
 
 type Hook = ReturnType<typeof useRoutingGraph>;
 
@@ -59,7 +68,7 @@ export function NodeInspector({
   }, [locations, apSearch]);
 
   return (
-    <div className="space-y-2 rounded-lg border border-slate-200 p-2">
+    <Card variant="section" density="compact" className="space-y-2">
       <div className="flex items-start justify-between gap-2">
         <div>
           <div className="font-semibold">
@@ -71,10 +80,10 @@ export function NodeInspector({
         </div>
       </div>
 
-      <button
-        type="button"
+      <DangerButton
         data-testid="routing-delete-node"
-        className="w-full rounded-md border border-rose-300 bg-rose-600 py-2 text-[12px] font-semibold text-white hover:bg-rose-700"
+        density="default"
+        className="w-full"
         onClick={() => {
           if (deleteSelectedNode(routing, selectedNode, setSelectedNodeUuid, locations)) {
             setHighlightOrphanUuids([]);
@@ -82,12 +91,13 @@ export function NodeInspector({
         }}
       >
         Usuń punkt
-      </button>
+      </DangerButton>
 
       <label className="block">
         Nazwa
-        <input
-          className="mt-0.5 w-full rounded border border-slate-200 px-1 py-1"
+        <Input
+          density="compact"
+          className="mt-0.5"
           value={isGenericDisplayLabel(selectedNode.label) ? "" : (selectedNode.label ?? "")}
           placeholder="opcjonalnie"
           onChange={(e) =>
@@ -98,8 +108,9 @@ export function NodeInspector({
 
       <label className="block">
         Typ punktu
-        <select
-          className="mt-0.5 w-full rounded border border-slate-200 px-1 py-1"
+        <Select
+          density="compact"
+          className="mt-0.5"
           value={
             selectedNode.operational_type &&
             !ROUTING_OP_OPTIONS.some((o) => o.value === selectedNode.operational_type)
@@ -129,7 +140,7 @@ export function NodeInspector({
                 {opTypeLabel(selectedNode.operational_type) || selectedNode.operational_type}
               </option>
             )}
-        </select>
+        </Select>
       </label>
 
       <div>
@@ -144,9 +155,9 @@ export function NodeInspector({
               const otherNode = routing.nodes.find((n) => n.uuid === other);
               return (
                 <li key={e.uuid}>
-                  <button
-                    type="button"
-                    className="text-left text-sky-800 underline"
+                  <GhostButton
+                    density="compact"
+                    className="justify-start text-left"
                     onClick={() => {
                       setSelectedEdgeUuid(e.uuid);
                       setSelectedNodeUuid(null);
@@ -154,7 +165,7 @@ export function NodeInspector({
                     }}
                   >
                     → {otherNode ? nameOf(otherNode) : "punkt"} ({e.distance_m.toFixed(1)} m)
-                  </button>
+                  </GhostButton>
                 </li>
               );
             })}
@@ -169,24 +180,22 @@ export function NodeInspector({
           (nadpisanie).
         </p>
         <div className="mb-2 flex flex-wrap gap-1">
-          <button
-            type="button"
-            className="h-7 flex-1 rounded border border-slate-200 text-[10px] font-semibold"
+          <SecondaryButton
+            density="compact"
+            className="flex-1"
             onClick={() => void routing.recomputeAccess()}
           >
             Przelicz dostęp AUTO
-          </button>
-          <button
-            type="button"
-            className={`h-7 flex-1 rounded border text-[10px] font-semibold ${
-              routing.showAccessDiagnostics
-                ? "border-sky-300 bg-sky-50 text-sky-900"
-                : "border-slate-200"
-            }`}
+          </SecondaryButton>
+          <CardButton
+            density="compact"
+            fullWidth
+            className="flex-1"
+            active={routing.showAccessDiagnostics}
             onClick={() => routing.setShowAccessDiagnostics((v) => !v)}
           >
             {routing.showAccessDiagnostics ? "Ukryj diagnostykę" : "Diagnostyka dostępu"}
-          </button>
+          </CardButton>
         </div>
         {routing.showAccessDiagnostics && (
           <p className="mb-2 text-[10px] text-slate-500">
@@ -223,17 +232,13 @@ export function NodeInspector({
           )}
         </ul>
         {!locPickerOpen ? (
-          <button
-            type="button"
-            className="h-7 w-full rounded border border-dashed border-slate-300 text-[10px] font-semibold text-slate-600"
-            onClick={() => setLocPickerOpen(true)}
-          >
+          <SecondaryButton density="compact" className="w-full" onClick={() => setLocPickerOpen(true)}>
             Nadpisz ręcznie (wyjątek)…
-          </button>
+          </SecondaryButton>
         ) : (
           <div className="space-y-1 rounded border border-slate-200 p-1.5">
-            <input
-              className="w-full rounded border border-slate-200 px-1 py-1"
+            <Input
+              density="compact"
               placeholder="Szukaj: A1, RK-01…"
               value={apSearch}
               onChange={(e) => setApSearch(e.target.value)}
@@ -256,16 +261,12 @@ export function NodeInspector({
                 </li>
               ))}
             </ul>
-            <button
-              type="button"
-              className="text-[10px] underline"
-              onClick={() => setLocPickerOpen(false)}
-            >
+            <GhostButton density="compact" onClick={() => setLocPickerOpen(false)}>
               Anuluj
-            </button>
+            </GhostButton>
           </div>
         )}
       </div>
-    </div>
+    </Card>
   );
 }

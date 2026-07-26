@@ -1,31 +1,34 @@
-/** Shared chrome for Warehouse Materials (lists + detail) — aligned with Suppliers / WMS lists. */
+/**
+ * @deprecated Prefer Sasist UI Kit (`design-system`): Card, Primary/Secondary/Ghost/DangerButton,
+ * Input, StatusBadge. Facade kept for Warehouse Materials lists.
+ */
+import {
+  dangerButtonClass,
+  ghostButtonClass,
+  primaryButtonClass,
+  secondaryButtonClass,
+} from "../../design-system/components/Button/buttonClasses";
+import { cardClassName } from "../../design-system/components/Card";
+import { inputClassName } from "../../design-system/components/Input";
+import { typography } from "../../design-system/tokens";
 
-import { brandPrimaryButtonClass } from "../../design-system/brandUi";
+export const wmPageSectionTitleClass = typography.section;
 
-export const wmPageSectionTitleClass = "text-xs font-semibold uppercase tracking-wide text-slate-500";
-
-export const wmCardClass =
-  "rounded-xl border border-slate-200/90 bg-white shadow-sm transition-shadow hover:shadow-md";
+export const wmCardClass = cardClassName("section");
 
 export const wmCardRowClass =
   "flex w-full flex-col gap-3 border-b border-slate-100 p-4 text-left last:border-b-0 sm:flex-row sm:items-stretch sm:gap-4 sm:p-5";
 
-export const wmPrimaryBtnClass = brandPrimaryButtonClass;
+export const wmPrimaryBtnClass = primaryButtonClass;
+export const wmSecondaryBtnClass = secondaryButtonClass;
+export const wmGhostBtnClass = ghostButtonClass;
+export const wmDangerBtnClass = dangerButtonClass;
 
-export const wmSecondaryBtnClass =
-  "inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-800 shadow-sm transition hover:border-slate-300 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-300/60";
+export const wmInputClass = inputClassName("default", "neutral");
 
-export const wmGhostBtnClass =
-  "inline-flex items-center justify-center rounded-lg border border-transparent px-3 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-100";
+export const wmLabelClass = typography.label;
 
-export const wmDangerBtnClass =
-  "inline-flex items-center justify-center rounded-lg border border-red-200 bg-white px-3 py-2 text-sm font-semibold text-red-700 shadow-sm transition hover:border-red-300 hover:bg-red-50";
-
-export const wmInputClass =
-  "h-9 w-full rounded-[5px] border border-slate-200/95 bg-white px-2.5 text-[13px] font-normal text-slate-900 shadow-none placeholder:text-slate-400 focus:border-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-300/40";
-
-export const wmLabelClass = "mb-1 block text-[10px] font-semibold uppercase tracking-wide text-slate-500";
-
+/** Prefer `StatusBadge` / `StatusText` from design-system. */
 export const wmStatusActiveClass =
   "inline-flex shrink-0 items-center rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-medium text-emerald-900 ring-1 ring-emerald-200/90";
 
