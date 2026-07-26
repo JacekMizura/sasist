@@ -122,10 +122,12 @@ function progressTone(
 
 function OrderWorkCard({
   row,
+  selected,
   onOpen,
   onReleaseToWms,
 }: {
   row: ProductionOrderRow;
+  selected?: boolean;
   onOpen: () => void;
   onReleaseToWms: () => void;
 }) {
@@ -147,7 +149,7 @@ function OrderWorkCard({
       : [];
 
   return (
-    <ListTile density="comfortable" className="w-full">
+    <ListTile density="comfortable" selected={selected} className="w-full">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:gap-4">
         <div className="min-w-0 flex-1 space-y-2.5">
           <div className="min-w-0">
@@ -280,6 +282,7 @@ export default function ProductionOrdersPage() {
   }, [batches, orders, appliedFilters]);
 
   const activeFilterCount = countActiveProductionOrdersFilters(appliedFilters);
+  const highlightKey = searchParams.get("highlight");
 
   const patchQuickFilters = useCallback(
     (patch: Partial<ProductionOrdersListFilters>) => {
@@ -289,6 +292,12 @@ export default function ProductionOrdersPage() {
     },
     [draftFilters, setAppliedFilters, setDraftFilters]
   );
+
+  useEffect(() => {
+    if (!highlightKey || loading) return;
+    const el = document.getElementById("production-order-highlight");
+    el?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, [highlightKey, loading, rows.length]);
 
   const releaseToWms = async (row: ProductionOrderRow) => {
     if (row.hasShortages) {
@@ -342,7 +351,7 @@ export default function ProductionOrdersPage() {
           </div>
         }
         actions={
-          <Link to={erpProductionPaths.planning} className={primaryButtonClassName("", "compact")}>
+          <Link to={erpProductionPaths.createOrder} className={primaryButtonClassName("", "compact")}>
             <span className="inline-flex items-center gap-1.5">
               <Plus className="h-3.5 w-3.5" aria-hidden />
               Utwórz zlecenie
@@ -451,24 +460,29 @@ export default function ProductionOrdersPage() {
           title="Brak zleceń"
           description="Utwórz zlecenie lub partię w planowaniu produkcji."
           action={
-            <Link to={erpProductionPaths.planning} className="text-sm font-semibold text-slate-700 hover:underline">
-              Przejdź do planowania
+            <Link to={erpProductionPaths.createOrder} className="text-sm font-semibold text-slate-700 hover:underline">
+              Przejdź do tworzenia zlecenia
             </Link>
           }
         />
       ) : (
         <ul className="flex w-full flex-col gap-2">
-          {rows.map((r) => (
-            <li key={`${r.kind}-${r.id}`} className="w-full">
-              <OrderWorkCard
-                row={r}
-                onOpen={() =>
-                  navigate(r.kind === "batch" ? erpProductionPaths.batch(r.id) : erpProductionPaths.order(r.id))
-                }
-                onReleaseToWms={() => void releaseToWms(r)}
-              />
-            </li>
-          ))}
+          {rows.map((r) => {
+            const key = `${r.kind}-${r.id}`;
+            const selected = highlightKey === key;
+            return (
+              <li key={key} className="w-full" id={selected ? "production-order-highlight" : undefined}>
+                <OrderWorkCard
+                  row={r}
+                  selected={selected}
+                  onOpen={() =>
+                    navigate(r.kind === "batch" ? erpProductionPaths.batch(r.id) : erpProductionPaths.order(r.id))
+                  }
+                  onReleaseToWms={() => void releaseToWms(r)}
+                />
+              </li>
+            );
+          })}
         </ul>
       )}
     </div>

@@ -1,3 +1,10 @@
+## 2026-07-26 — Kreator zlecenia produkcyjnego (UX)
+
+- `/production/orders/new`: Stepper + 3 sekcje; preview/create batch (istniejące API)
+- Planowanie = Symulacja MRP; create CTA osobno; highlight na liście zleceń
+- UI Kit: Stepper (nowy), Card, SearchInput, MetricCard, ProgressBar, StatusBadge
+- `npm run build` OK · **No push.**
+
 ## 2026-07-26 — Zlecenia produkcyjne: lista robocza (UI)
 
 - `ProductionOrdersPage`: ListTile zamiast tabeli; Toolbar + SearchInput/Select; StatusBadge; ProgressBar gdy dostępny

@@ -222,6 +222,7 @@ import ProductionShortagesPage from "./pages/Production/ProductionShortagesPage"
 import MaterialAnalysisPage from "./pages/Production/MaterialAnalysisPage"
 import PaperProductionPage from "./pages/Production/PaperProductionPage"
 import ProductionOrdersPage from "./pages/Production/ProductionOrdersPage"
+import CreateProductionOrderPage from "./pages/Production/CreateProductionOrderPage"
 import ProductionOrderDetailPage from "./pages/Production/ProductionOrderDetailPage"
 import ProductionPlanningPage from "./pages/Production/ProductionPlanningPage"
 import ProductionHistoryPage from "./pages/Production/ProductionHistoryPage"
@@ -701,6 +702,7 @@ export const router = createBrowserRouter(
                   <Route path="recipes" element={<RecipesListPage />} />
                   <Route path="recipes/:compositionId" element={<RecipeDetailPage />} />
                   <Route path="orders" element={<ProductionOrdersPage />} />
+                  <Route path="orders/new" element={<CreateProductionOrderPage />} />
                   <Route path="orders/:orderId" element={<ProductionOrderDetailPage />} />
                   <Route path="planning" element={<ProductionPlanningPage />} />
                   <Route path="history" element={<ProductionHistoryPage />} />

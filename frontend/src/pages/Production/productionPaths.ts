@@ -8,6 +8,8 @@ export const erpProductionPaths = {
   orders: `${ERP_PRODUCTION_BASE}/orders`,
   order: (id: number | string) => `${ERP_PRODUCTION_BASE}/orders/${id}`,
   planning: `${ERP_PRODUCTION_BASE}/planning`,
+  /** Kreator pojedynczego zlecenia / partii (UX create). */
+  createOrder: `${ERP_PRODUCTION_BASE}/orders/new`,
   history: `${ERP_PRODUCTION_BASE}/history`,
   analytics: `${ERP_PRODUCTION_BASE}/analytics`,
   /** @deprecated Use planning or orders */

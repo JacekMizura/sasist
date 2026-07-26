@@ -47,6 +47,7 @@ export {
   type TabItemProps,
 } from "./SegmentedControl";
 export { Toolbar, PageHeader, type ToolbarProps, type PageHeaderProps } from "./Toolbar";
+export { Stepper, type StepperProps, type StepperStep } from "./Stepper";
 export {
   EmptyState,
   LoadingState,

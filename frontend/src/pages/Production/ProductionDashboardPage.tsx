@@ -190,7 +190,7 @@ export default function ProductionDashboardPage() {
             <Link to={wmsProductionPaths.home} className={secondaryButtonClassName("", "compact")}>
               Terminal WMS
             </Link>
-            <Link to={erpProductionPaths.planning} className={primaryButtonClassName("", "compact")}>
+            <Link to={erpProductionPaths.createOrder} className={primaryButtonClassName("", "compact")}>
               <span className="inline-flex items-center gap-1.5">
                 <Plus className="h-3.5 w-3.5" aria-hidden />
                 Nowe zlecenie produkcyjne
@@ -488,7 +488,7 @@ export default function ProductionDashboardPage() {
             <Card variant="section" density="comfortable" className="flex flex-col gap-3 lg:col-span-2 xl:col-span-1">
               <Toolbar start={<h2 className="text-sm font-semibold text-slate-900">Szybkie akcje</h2>} />
               <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-1">
-                <Link to={erpProductionPaths.planning} className="block">
+                <Link to={erpProductionPaths.createOrder} className="block">
                   <ListTile density="comfortable" className="transition hover:border-slate-300">
                     <div className="flex items-center gap-3">
                       <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-orange-50 text-orange-600">
@@ -531,7 +531,7 @@ export default function ProductionDashboardPage() {
               </div>
               <div className="mt-auto pt-1">
                 <Link
-                  to={erpProductionPaths.planning}
+                  to={erpProductionPaths.createOrder}
                   className={primaryButtonClassName("w-full justify-center", "compact")}
                 >
                   <span className="inline-flex items-center justify-center gap-1.5">

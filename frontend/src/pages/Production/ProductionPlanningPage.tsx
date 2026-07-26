@@ -1,4 +1,4 @@
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { Plus } from "lucide-react";
 import { useCallback, useState } from "react";
 import toast from "react-hot-toast";
@@ -11,14 +11,19 @@ import {
 } from "@/api/productionPlanningApi";
 import { useActiveWarehouseContext } from "../../hooks/useActiveWarehouseContext";
 import { ActiveWarehouseRequiredBanner } from "../../components/layout/ActiveWarehouseRequiredBanner";
-import { filterToolbarBtnApply } from "../../components/filters/filterUiTokens";
 import BatchesListPage from "./BatchesListPage";
 import { CreateBatchModal } from "./components/CreateBatchModal";
 import { ProductionDemandPlanningPanel } from "./components/ProductionDemandPlanningPanel";
 import { ProductionSimulationModal } from "./components/ProductionSimulationModal";
 import { useProductionDemandPlanning } from "./hooks/useProductionDemandPlanning";
 import { erpProductionPaths } from "./productionPaths";
-import { productionPageDescClass, productionPageStackClass, productionPageTitleClass, productionSectionLabelClass } from "./productionLayoutTokens";
+import {
+  productionPageDescClass,
+  productionPageStackClass,
+  productionPageTitleClass,
+  productionSectionLabelClass,
+} from "./productionLayoutTokens";
+import { PageHeader, SecondaryButton, primaryButtonClassName } from "@/design-system";
 
 const DEFAULT_TENANT = 1;
 
@@ -90,24 +95,37 @@ export default function ProductionPlanningPage() {
 
   return (
     <div className={productionPageStackClass}>
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h2 className={productionPageTitleClass}>Planowanie produkcji</h2>
-          <p className={productionPageDescClass}>MRP — prognoza, rekomendacje, symulacja i partie masowe.</p>
-        </div>
-        <button
-          type="button"
-          disabled={warehouseId == null}
-          onClick={() => {
-            setInitialLines(undefined);
-            setModalOpen(true);
-          }}
-          className={filterToolbarBtnApply}
-        >
-          <Plus className="mr-1.5 inline h-4 w-4" strokeWidth={2} aria-hidden />
-          Nowa partia masowa
-        </button>
-      </div>
+      <PageHeader
+        title={
+          <div>
+            <h1 className={productionPageTitleClass}>Planowanie — Symulacja MRP</h1>
+            <p className={productionPageDescClass}>
+              Prognoza zapotrzebowania, rekomendacje i symulacja dla całego magazynu. Proste zlecenie utwórz osobno.
+            </p>
+          </div>
+        }
+        actions={
+          <>
+            <Link to={erpProductionPaths.createOrder} className={primaryButtonClassName("", "compact")}>
+              <span className="inline-flex items-center gap-1.5">
+                <Plus className="h-3.5 w-3.5" aria-hidden />
+                Utwórz zlecenie
+              </span>
+            </Link>
+            <SecondaryButton
+              type="button"
+              density="compact"
+              disabled={warehouseId == null}
+              onClick={() => {
+                setInitialLines(undefined);
+                setModalOpen(true);
+              }}
+            >
+              Partia masowa
+            </SecondaryButton>
+          </>
+        }
+      />
 
       {warehouseId != null ? (
         <ProductionDemandPlanningPanel
@@ -155,7 +173,7 @@ export default function ProductionPlanningPage() {
           onCreated={(id) => {
             setModalOpen(false);
             setInitialLines(undefined);
-            navigate(erpProductionPaths.batch(id));
+            navigate(`${erpProductionPaths.orders}?highlight=batch-${id}`);
           }}
         />
       ) : null}

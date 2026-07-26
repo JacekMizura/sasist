@@ -2,7 +2,9 @@
 
 ## Active
 
-**Zlecenia produkcyjne — UX lista robocza** (build OK).
+**Kreator zlecenia produkcyjnego** (build OK).
 
-`/production/orders`: ListTile zamiast tabeli, Toolbar (szukaj/status/priorytet/operator + Filtry/Odśwież), StatusBadge, ProgressBar gdy `progress_percent`.
-Bez zmian API / routingu / logiki filtrów i WMS.
+`/production/orders/new` — 3 sekcje na jednym ekranie (produkt → ilość → podsumowanie).
+Planowanie = Symulacja MRP (bez mieszania z create).
+Po create → `/production/orders?highlight=batch-{id}`.
+Bez zmian API / obliczeń MRP.
