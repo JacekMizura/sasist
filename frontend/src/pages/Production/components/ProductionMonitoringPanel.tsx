@@ -5,7 +5,14 @@ import type { ProductionBatchRead, ProductionOrderRead } from "@/api/productionA
 import type { TimelinePwDocument } from "@/modules/production/productionExecutionTimeline";
 import { currentExecutionPhaseLabel } from "@/modules/production/productionExecutionTimeline";
 import { PRODUCTION_KIND_LABEL, type ProductionExecutionKind } from "@/modules/production/productionExecutionTypes";
-import { primaryButtonClassName } from "@/design-system/PrimaryButton";
+import {
+  Card,
+  PrimaryButton,
+  SecondaryButton,
+  StatusBadge,
+  primaryButtonClassName,
+  typography,
+} from "@/design-system";
 import { wmsProductionPaths } from "../productionPaths";
 import { ProgressBar } from "./ProgressBar";
 import { ProductionExecutionTimeline } from "./ProductionExecutionTimeline";
@@ -65,6 +72,8 @@ type Props = {
   kind: ProductionExecutionKind;
   source: MonitoringSource;
   actions?: ProductionMonitoringActions;
+  /** When false, omit action toolbar (e.g. actions already in PageHeader). Default true. */
+  showActions?: boolean;
 };
 
 function wmsTerminalHref(kind: ProductionExecutionKind, id: number, status: string): string {
@@ -95,7 +104,17 @@ function batchPwFromLines(batch: ProductionBatchRead): Pick<
   };
 }
 
-export function ProductionMonitoringPanel({ kind, source, actions }: Props) {
+function interfaceLabel(source: MonitoringSource): string {
+  if (source.is_erp_interface) return "Tryb papierowy";
+  if (source.is_released_to_wms) return "WMS";
+  const raw = String(source.execution_interface || "").trim().toLowerCase();
+  if (!raw || raw === "none") return "—";
+  if (raw.includes("erp") || raw.includes("paper")) return "Tryb papierowy";
+  if (raw.includes("wms")) return "WMS";
+  return source.execution_interface ?? "—";
+}
+
+export function ProductionMonitoringPanel({ kind, source, actions, showActions = true }: Props) {
   const status = String(source.status || "draft");
   const planned = source.planned_quantity ?? source.total_planned_units ?? 0;
   const completed = source.produced_quantity ?? source.total_completed_units ?? 0;
@@ -133,123 +152,112 @@ export function ProductionMonitoringPanel({ kind, source, actions }: Props) {
   const unitCost = source.display_unit_cost ?? source.calculated_unit_cost;
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap gap-2">
-        {canPrintCard ? (
-          <button
-            type="button"
-            disabled={actions?.busy}
-            onClick={actions?.onPrintProductionCard}
-            className="inline-flex items-center gap-2 rounded-xl border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
-          >
-            <FileText className="h-4 w-4" aria-hidden />
-            Drukuj kartę
-          </button>
-        ) : null}
-        {canRelease ? (
-          <button
-            type="button"
-            disabled={actions?.busy || actions?.releaseDisabled}
-            title={actions?.releaseDisabled ? actions.releaseDisabledReason : undefined}
-            onClick={actions?.onReleaseToWms}
-            className="inline-flex items-center gap-2 rounded-xl border border-emerald-600 px-4 py-2 text-sm font-semibold text-emerald-700 hover:bg-emerald-50 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            Wydaj do WMS
-          </button>
-        ) : source.is_released_to_wms ? (
-          <span className="inline-flex items-center rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-medium text-emerald-800">
-            Wydane do WMS
-            {source.released_to_wms_at ? ` · ${formatTs(source.released_to_wms_at)}` : ""}
-          </span>
-        ) : source.is_erp_interface ? (
-          <span className="inline-flex items-center rounded-xl border border-amber-200 bg-amber-50 px-4 py-2 text-sm font-medium text-amber-900">
-            Interfejs ERP
-          </span>
-        ) : null}
-        {canStartErp ? (
-          <button
-            type="button"
-            disabled={actions?.busy || actions?.erpDisabled}
-            title={actions?.erpDisabled ? actions.erpDisabledReason : undefined}
-            onClick={actions?.onStartErpExecution}
-            className="inline-flex items-center gap-2 rounded-xl border border-amber-600 px-4 py-2 text-sm font-semibold text-amber-800 hover:bg-amber-50 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            Realizacja w ERP
-          </button>
-        ) : null}
-        {canOpenWms ? (
-          <Link
-            to={wmsTerminalHref(kind, source.id, status)}
-            target="_blank"
-            rel="noopener noreferrer"
-            className={primaryButtonClassName()}
-          >
-            <Monitor className="h-4 w-4" aria-hidden />
-            Otwórz w terminalu WMS
-          </Link>
-        ) : null}
-        {canOpenErp && actions?.onOpenErpExecution ? (
-          <button
-            type="button"
-            disabled={actions?.busy}
-            onClick={actions.onOpenErpExecution}
-            className="inline-flex items-center gap-2 rounded-xl bg-amber-600 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-700 disabled:opacity-50"
-          >
-            Otwórz realizację w ERP
-          </button>
-        ) : null}
-        {canCancel ? (
-          <button
-            type="button"
-            disabled={actions?.busy}
-            onClick={actions?.onCancel}
-            className="inline-flex items-center gap-2 rounded-xl border border-slate-200 px-4 py-2 text-sm text-slate-600 hover:bg-slate-50 disabled:opacity-50"
-          >
-            <XCircle className="h-4 w-4" aria-hidden />
-            Anuluj
-          </button>
-        ) : null}
-      </div>
+    <div className="space-y-4">
+      {showActions ? (
+        <div className="flex flex-wrap gap-2">
+          {canPrintCard ? (
+            <SecondaryButton
+              type="button"
+              disabled={actions?.busy}
+              onClick={actions?.onPrintProductionCard}
+              className="inline-flex items-center gap-1.5"
+            >
+              <FileText className="h-4 w-4" aria-hidden />
+              Drukuj kartę
+            </SecondaryButton>
+          ) : null}
+          {canRelease ? (
+            <SecondaryButton
+              type="button"
+              disabled={actions?.busy || actions?.releaseDisabled}
+              title={actions?.releaseDisabled ? actions.releaseDisabledReason : undefined}
+              onClick={actions?.onReleaseToWms}
+            >
+              Wydaj do WMS
+            </SecondaryButton>
+          ) : null}
+          {canStartErp ? (
+            <PrimaryButton
+              type="button"
+              disabled={actions?.busy || actions?.erpDisabled}
+              title={actions?.erpDisabled ? actions.erpDisabledReason : undefined}
+              onClick={actions?.onStartErpExecution}
+            >
+              Rozpocznij produkcję
+            </PrimaryButton>
+          ) : null}
+          {canOpenWms ? (
+            <Link
+              to={wmsTerminalHref(kind, source.id, status)}
+              target="_blank"
+              rel="noopener noreferrer"
+              className={primaryButtonClassName("inline-flex items-center gap-1.5")}
+            >
+              <Monitor className="h-4 w-4" aria-hidden />
+              Przejdź do realizacji
+            </Link>
+          ) : null}
+          {canOpenErp && actions?.onOpenErpExecution ? (
+            <PrimaryButton type="button" disabled={actions?.busy} onClick={actions.onOpenErpExecution}>
+              Przejdź do realizacji
+            </PrimaryButton>
+          ) : null}
+          {canCancel ? (
+            <SecondaryButton
+              type="button"
+              disabled={actions?.busy}
+              onClick={actions?.onCancel}
+              className="inline-flex items-center gap-1.5"
+            >
+              <XCircle className="h-4 w-4" aria-hidden />
+              Anuluj
+            </SecondaryButton>
+          ) : null}
+        </div>
+      ) : null}
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        <MetaCard label="Aktualna faza" value={currentExecutionPhaseLabel(status)} />
-        <MetaCard label="Typ" value={PRODUCTION_KIND_LABEL[kind]} />
-        <MetaCard label="Interfejs" value={source.execution_interface ?? "—"} />
-        <MetaCard label="Operator" value={source.operator_name ?? "—"} />
-        <MetaCard label="Rozpoczęcie" value={source.started_at ? formatTs(source.started_at) : "—"} />
-        <MetaCard
-          label="Koniec zbierania"
-          value={source.collecting_completed_at ? formatTs(source.collecting_completed_at) : "—"}
-        />
-        <MetaCard
-          label="Koniec produkcji"
-          value={source.production_completed_at ? formatTs(source.production_completed_at) : "—"}
-        />
-        <MetaCard
-          label="Rozlokowanie zakończone"
-          value={source.completed_at ? formatTs(source.completed_at) : "—"}
-        />
-        {unitCost != null ? (
-          <MetaCard label="Koszt jednostkowy" value={formatProductionMoney(unitCost)} />
-        ) : null}
-      </div>
+      <Card variant="section" density="comfortable" className="space-y-3">
+        <h3 className={typography.section}>Informacje</h3>
+        <dl className="grid gap-x-6 gap-y-3 sm:grid-cols-2">
+          <InfoRow label="Status" value={currentExecutionPhaseLabel(status)} />
+          <InfoRow label="Typ" value={PRODUCTION_KIND_LABEL[kind]} />
+          <InfoRow label="Operator" value={source.operator_name ?? "—"} />
+          <InfoRow label="Rozpoczęcie" value={source.started_at ? formatTs(source.started_at) : "—"} />
+          <InfoRow label="Plan zakończenia" value="—" />
+          <InfoRow label="Interfejs" value={interfaceLabel(source)} />
+          {source.production_completed_at ? (
+            <InfoRow label="Koniec produkcji" value={formatTs(source.production_completed_at)} />
+          ) : null}
+          {unitCost != null ? (
+            <InfoRow label="Koszt jednostkowy" value={formatProductionMoney(unitCost)} />
+          ) : null}
+        </dl>
+      </Card>
 
-      <div className="space-y-3">
-        <ProgressBar value={progress} label={`Postęp ogólny · ${Math.round(progress)}%`} tone="violet" />
+      <Card variant="section" density="comfortable" className="space-y-3">
+        <div className="flex flex-wrap items-end justify-between gap-2">
+          <div>
+            <h3 className={typography.section}>Postęp</h3>
+            <p className="mt-1 text-sm text-slate-600">
+              <span className="text-lg font-semibold tabular-nums text-slate-900">{completed}</span>
+              {" / "}
+              <span className="text-lg font-semibold tabular-nums text-slate-900">{planned}</span>
+              {" szt."}
+            </p>
+          </div>
+          <p className="text-2xl font-semibold tabular-nums text-slate-900">{Math.round(progress)}%</p>
+        </div>
+        <ProgressBar value={progress} tone="orange" size="lg" />
         {source.collection_progress_percent != null && status === "collecting" ? (
           <ProgressBar
             value={source.collection_progress_percent}
             max={100}
-            label={`Postęp zbierania · ${Math.round(source.collection_progress_percent)}%`}
+            label={`Zbieranie · ${Math.round(source.collection_progress_percent)}%`}
             tone="amber"
+            size="lg"
           />
         ) : null}
-        <p className="text-sm text-slate-600">
-          Wykonano <strong className="tabular-nums">{completed}</strong>
-          {" / "}
-          <strong className="tabular-nums">{planned}</strong> szt.
-        </p>
-      </div>
+      </Card>
 
       {(source.rw_stock_document_id || pwDocs.length > 0) && (
         <ProductionDocumentsSection
@@ -259,19 +267,19 @@ export function ProductionMonitoringPanel({ kind, source, actions }: Props) {
         />
       )}
 
-      <section>
-        <h3 className="mb-4 text-sm font-bold uppercase tracking-wide text-slate-500">Przebieg produkcji</h3>
+      <Card variant="section" density="comfortable" className="space-y-2">
+        <h3 className={typography.section}>Przebieg produkcji</h3>
         <ProductionExecutionTimeline source={source} />
-      </section>
+      </Card>
     </div>
   );
 }
 
-function MetaCard({ label, value }: { label: string; value: string }) {
+function InfoRow({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-xl border border-slate-100 bg-slate-50/80 px-4 py-3">
-      <p className="text-xs font-bold uppercase tracking-wide text-slate-500">{label}</p>
-      <p className="mt-1 text-sm font-semibold text-slate-900">{value}</p>
+    <div className="min-w-0">
+      <dt className={typography.caption}>{label}</dt>
+      <dd className="mt-0.5 text-sm font-semibold text-slate-900">{value}</dd>
     </div>
   );
 }

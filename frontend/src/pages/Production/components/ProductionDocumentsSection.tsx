@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 import { ExternalLink, MapPin, Package } from "lucide-react";
 
+import { Card, StatusBadge, primaryButtonClassName, typography, type StatusTone } from "@/design-system";
 import { warehouseStockDocumentPath } from "../../../utils/stockDocumentPaths";
 import { WMS_ROUTES } from "../../wms/wmsRoutes";
 
@@ -25,6 +26,14 @@ export function putawayStatusLabel(status?: string | null): string {
   return status ?? "—";
 }
 
+function putawayTone(status?: string | null): StatusTone {
+  const s = String(status || "").trim().toUpperCase();
+  if (s === "DONE") return "success";
+  if (s === "IN_PROGRESS") return "info";
+  return "warning";
+}
+
+/** @deprecated Prefer StatusBadge + putawayTone */
 export function putawayStatusBadgeClass(status?: string | null): string {
   const s = String(status || "").trim().toUpperCase();
   if (s === "DONE") return "bg-emerald-50 text-emerald-800 ring-emerald-200";
@@ -36,65 +45,74 @@ export function ProductionDocumentsSection({ rwDocumentId, rwDocumentNumber, pwD
   if (!rwDocumentId && pwDocuments.length === 0) return null;
 
   return (
-    <section className="rounded-xl border border-slate-200 bg-white p-4">
-      <h3 className="mb-3 text-sm font-bold uppercase tracking-wide text-slate-500">Dokumenty produkcyjne</h3>
+    <Card variant="section" density="comfortable" className="space-y-3">
+      <h3 className={typography.section}>Dokumenty</h3>
 
-      {rwDocumentId ? (
-        <div className="mb-4 flex flex-wrap items-center gap-3 rounded-lg border border-slate-100 bg-slate-50/80 px-3 py-2.5">
-          <span className="text-xs font-bold uppercase tracking-wide text-slate-400">RW</span>
-          <Link
-            to={warehouseStockDocumentPath("RW", rwDocumentId)}
-            className="inline-flex items-center gap-1.5 text-sm font-medium text-slate-800 hover:text-violet-800"
-          >
-            <Package className="h-4 w-4 text-slate-400" aria-hidden />
-            {rwDocumentNumber ?? `#${rwDocumentId}`}
-            <ExternalLink className="h-3 w-3 text-slate-400" aria-hidden />
-          </Link>
-        </div>
-      ) : null}
-
-      {pwDocuments.length > 0 ? (
-        <div className="space-y-3">
-          {pwDocuments.map((pw) => {
-            const done = String(pw.putawayStatus || "").toUpperCase() === "DONE";
-            return (
-              <div
-                key={pw.id}
-                className="flex flex-col gap-3 rounded-lg border border-slate-100 px-3 py-3 sm:flex-row sm:items-center sm:justify-between"
+      <ul className="divide-y divide-slate-100 rounded-lg border border-slate-200">
+        {rwDocumentId ? (
+          <li className="flex flex-wrap items-center justify-between gap-2 px-3 py-2.5">
+            <div className="min-w-0">
+              <p className={typography.caption}>Typ</p>
+              <p className="text-sm font-semibold text-slate-900">RW</p>
+            </div>
+            <div className="min-w-0 flex-1 sm:px-4">
+              <p className={typography.caption}>Numer</p>
+              <Link
+                to={warehouseStockDocumentPath("RW", rwDocumentId)}
+                className="inline-flex items-center gap-1.5 font-mono text-sm font-semibold text-slate-900 hover:text-slate-700"
               >
-                <div className="min-w-0 space-y-1">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="text-xs font-bold uppercase tracking-wide text-slate-400">PW</span>
-                    <Link
-                      to={warehouseStockDocumentPath("PW", pw.id)}
-                      className="inline-flex items-center gap-1.5 font-mono text-sm font-semibold text-slate-900 hover:text-violet-800"
-                    >
-                      {pw.number ?? `#${pw.id}`}
-                      <ExternalLink className="h-3 w-3 text-slate-400" aria-hidden />
-                    </Link>
-                  </div>
-                  {pw.productName ? <p className="text-xs text-slate-500">{pw.productName}</p> : null}
-                  <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-semibold ring-1 ${putawayStatusBadgeClass(pw.putawayStatus)}`}>
-                    {putawayStatusLabel(pw.putawayStatus)}
-                  </span>
-                </div>
+                <Package className="h-3.5 w-3.5 text-slate-400" aria-hidden />
+                {rwDocumentNumber ?? `#${rwDocumentId}`}
+                <ExternalLink className="h-3 w-3 text-slate-400" aria-hidden />
+              </Link>
+            </div>
+            <StatusBadge tone="neutral" density="compact">
+              Wystawiony
+            </StatusBadge>
+          </li>
+        ) : null}
+
+        {pwDocuments.map((pw) => {
+          const done = String(pw.putawayStatus || "").toUpperCase() === "DONE";
+          return (
+            <li
+              key={pw.id}
+              className="flex flex-wrap items-center justify-between gap-2 px-3 py-2.5"
+            >
+              <div className="min-w-0">
+                <p className={typography.caption}>Typ</p>
+                <p className="text-sm font-semibold text-slate-900">PW</p>
+              </div>
+              <div className="min-w-0 flex-1 sm:px-4">
+                <p className={typography.caption}>Numer</p>
+                <Link
+                  to={warehouseStockDocumentPath("PW", pw.id)}
+                  className="inline-flex items-center gap-1.5 font-mono text-sm font-semibold text-slate-900 hover:text-slate-700"
+                >
+                  {pw.number ?? `#${pw.id}`}
+                  <ExternalLink className="h-3 w-3 text-slate-400" aria-hidden />
+                </Link>
+                {pw.productName ? <p className="text-xs text-slate-500">{pw.productName}</p> : null}
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <StatusBadge tone={putawayTone(pw.putawayStatus)} density="compact">
+                  {putawayStatusLabel(pw.putawayStatus)}
+                </StatusBadge>
                 {!done ? (
                   <Link
                     to={WMS_ROUTES.putawayPz(pw.id)}
-                    className="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700"
+                    className={primaryButtonClassName("inline-flex items-center gap-1.5", "compact")}
                   >
-                    <MapPin className="h-4 w-4" aria-hidden />
-                    Rozlokuj w WMS
+                    <MapPin className="h-3.5 w-3.5" aria-hidden />
+                    Rozlokuj
                   </Link>
-                ) : (
-                  <span className="text-xs font-medium text-emerald-700">Rozlokowanie zakończone</span>
-                )}
+                ) : null}
               </div>
-            );
-          })}
-        </div>
-      ) : null}
-    </section>
+            </li>
+          );
+        })}
+      </ul>
+    </Card>
   );
 }
 

@@ -11,6 +11,7 @@ import {
 } from "@/api/productionApi";
 import { LocationBadge } from "@/components/warehouse/LocationBadge";
 import { PrimaryButton } from "@/design-system/PrimaryButton";
+import { Card, SecondaryButton, typography } from "@/design-system";
 import { erpProductionPaths } from "../productionPaths";
 import { productionModuleListTdClass, productionModuleListThClass } from "../productionLayoutTokens";
 import { ProductionEmptyState } from "./ProductionEmptyState";
@@ -85,11 +86,11 @@ export function DocumentMaterialReservationsPanel({
   };
 
   return (
-    <section className="space-y-3">
+    <Card variant="section" density="comfortable" className="space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h2 className="text-lg font-bold text-slate-900">Rezerwacje materiałów</h2>
-          <p className="text-sm text-slate-500">
+          <h2 className={typography.section}>Rezerwacje materiałów</h2>
+          <p className={`mt-1 ${typography.caption}`}>
             {materialsReserved
               ? reservationsLocked
                 ? "Rezerwacje zablokowane — zbieranie w toku."
@@ -103,11 +104,10 @@ export function DocumentMaterialReservationsPanel({
               {busy ? "Rezerwowanie…" : "Zarezerwuj materiały"}
             </PrimaryButton>
           ) : null}
-          <Link
-            to={erpProductionPaths.materialReservations}
-            className="rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
-          >
-            Wszystkie rezerwacje
+          <Link to={erpProductionPaths.materialReservations}>
+            <SecondaryButton type="button" density="comfortable">
+              Wszystkie rezerwacje
+            </SecondaryButton>
           </Link>
         </div>
       </div>
@@ -156,6 +156,6 @@ export function DocumentMaterialReservationsPanel({
           </div>
         )
       ) : null}
-    </section>
+    </Card>
   );
 }
