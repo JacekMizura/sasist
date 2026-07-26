@@ -11,7 +11,14 @@ import {
   brandSidebarNavIconClassName,
   brandSidebarNavItemClassName,
 } from "../../../design-system/brandUi";
-
+import {
+  TEMPLATES_LIST_SIDEBAR_CLASS,
+  TEMPLATES_LIST_SIDEBAR_DIVIDER_CLASS,
+  TEMPLATES_LIST_SIDEBAR_FOOTER_CLASS,
+  TEMPLATES_LIST_SIDEBAR_GROUPS_SCROLL_CLASS,
+  TEMPLATES_LIST_SIDEBAR_LIST_CLASS,
+  TEMPLATES_LIST_SIDEBAR_SECTION_TITLE_CLASS,
+} from "./templatesListLayout";
 type Props = {
   selectedType: string;
   onSelectType: (type: string) => void;
@@ -56,16 +63,14 @@ export default function TemplatesListSidebar({
   };
 
   return (
-    <aside className="flex w-[260px] shrink-0 flex-col gap-6 border-r border-gray-200 bg-white px-3 py-4 min-[1600px]:w-[280px]">
+    <aside className={TEMPLATES_LIST_SIDEBAR_CLASS}>
       <section>
-        <h2 className="mb-2 px-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-          Typ etykiety
-        </h2>
-        <div className="space-y-0.5">
+        <h2 className={TEMPLATES_LIST_SIDEBAR_SECTION_TITLE_CLASS}>Typ etykiety</h2>
+        <div className={TEMPLATES_LIST_SIDEBAR_LIST_CLASS}>
           {LABEL_PRINT_MODULE_TYPE_ORDER.map((type) =>
             typeBtn(type, LABEL_PRINT_MODULE_TYPE_LABELS[type] || type),
           )}
-          <div className="my-2 border-t border-gray-100" />
+          <div className={TEMPLATES_LIST_SIDEBAR_DIVIDER_CLASS} />
           {DOCUMENT_PRINT_MODULE_TYPE_ORDER.map((type) =>
             typeBtn(type, DOCUMENT_PRINT_MODULE_TYPE_LABELS[type] || type),
           )}
@@ -73,11 +78,8 @@ export default function TemplatesListSidebar({
       </section>
 
       <section className="flex min-h-0 flex-1 flex-col">
-        <h2 className="mb-2 px-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-          Grupy
-        </h2>
-        <div className="min-h-0 flex-1 space-y-0.5 overflow-y-auto [scrollbar-width:thin]">
-          <button
+        <h2 className={TEMPLATES_LIST_SIDEBAR_SECTION_TITLE_CLASS}>Grupy</h2>
+        <div className={TEMPLATES_LIST_SIDEBAR_GROUPS_SCROLL_CLASS}>          <button
             type="button"
             onClick={() => onSelectGroup(UNGROUPED_ID)}
             className={brandSidebarNavItemClassName(selectedGroupId === UNGROUPED_ID, { compact: true })}
@@ -101,7 +103,7 @@ export default function TemplatesListSidebar({
             </button>
           ))}
         </div>
-        <div className="mt-3 border-t border-gray-100 pt-3">
+        <div className={TEMPLATES_LIST_SIDEBAR_FOOTER_CLASS}>
           <div className="flex gap-1.5">
             <input
               type="text"

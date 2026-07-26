@@ -25,11 +25,25 @@ import {
   type ReadyFilterId,
   type ReadySectionId,
 } from "./readyTemplates/readyTemplateCatalog";
-import { READY_TEMPLATES_GRID_CLASS } from "./readyTemplates/readyTemplatesLayout";
+import {
+  READY_TEMPLATES_CTA_ROW_CLASS,
+  READY_TEMPLATES_EMPTY_CLASS,
+  READY_TEMPLATES_EMPTY_CTA_CLASS,
+  READY_TEMPLATES_EMPTY_DESC_CLASS,
+  READY_TEMPLATES_EMPTY_ICON_WRAP_CLASS,
+  READY_TEMPLATES_EMPTY_TITLE_CLASS,
+  READY_TEMPLATES_GRID_CLASS,
+  READY_TEMPLATES_PAGE_CLASS,
+  READY_TEMPLATES_SECTION_CLASS,
+  READY_TEMPLATES_SECTION_DESC_CLASS,
+  READY_TEMPLATES_SECTION_RULE_CLASS,
+  READY_TEMPLATES_SECTION_TITLE_CLASS,
+  READY_TEMPLATES_SECTIONS_CLASS,
+  READY_TEMPLATES_THUMB_CLASS,
+} from "./readyTemplates/readyTemplatesLayout";
 import ReadyTemplatesFilterTabs from "./readyTemplates/ReadyTemplatesFilterTabs";
 
 const TENANT_ID = 1;
-
 const PRESET_TEMPLATE_CACHE: Partial<Record<PresetType, LabelTemplate>> = {};
 
 function getPresetTemplate(type: PresetType): LabelTemplate {
@@ -130,8 +144,6 @@ function downloadJson(filename: string, payload: unknown) {
   URL.revokeObjectURL(url);
 }
 
-const GRID_CLASS = READY_TEMPLATES_GRID_CLASS;
-
 /**
  * Gotowe szablony — biblioteka startowych układów (Figma/Canva style).
  * Trasa: `/admin/print-templates/ready` (i odpowiednik w module etykiet).
@@ -231,8 +243,8 @@ export function LabelReadyTemplatesPage() {
   };
 
   return (
-    <div className="min-w-0 space-y-6 bg-white px-1 pb-10 pt-2">
-      <div className="flex flex-wrap items-center justify-end gap-3">
+    <div className={READY_TEMPLATES_PAGE_CLASS}>
+      <div className={READY_TEMPLATES_CTA_ROW_CLASS}>
         <PrimaryButton type="button" density="compact" onClick={() => navigate(`${labelBase}/new`)}>
           <Plus className="h-4 w-4" strokeWidth={2.25} aria-hidden />
           Nowy szablon
@@ -246,36 +258,36 @@ export function LabelReadyTemplatesPage() {
       ) : null}
 
       {totalVisible === 0 ? (
-        <div className="flex min-h-[360px] flex-col items-center justify-center rounded-2xl border border-dashed border-gray-200 bg-white px-6 py-16 text-center shadow-sm">
-          <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl border border-gray-200 bg-white shadow-sm">
+        <div className={READY_TEMPLATES_EMPTY_CLASS}>
+          <div className={READY_TEMPLATES_EMPTY_ICON_WRAP_CLASS}>
             <LayoutTemplate className="h-8 w-8 text-orange-500" strokeWidth={1.5} aria-hidden />
           </div>
-          <p className="text-lg font-semibold text-slate-900">Nie znaleziono szablonów</p>
-          <p className="mt-1.5 max-w-sm text-sm text-slate-500">
+          <p className={READY_TEMPLATES_EMPTY_TITLE_CLASS}>Nie znaleziono szablonów</p>
+          <p className={READY_TEMPLATES_EMPTY_DESC_CLASS}>
             Zmień filtr albo utwórz pierwszy układ w projektancie etykiet.
           </p>
           <button
             type="button"
             onClick={() => navigate(`${labelBase}/new`)}
-            className="mt-6 inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-900 shadow-sm transition hover:border-orange-300 hover:shadow-md"
+            className={READY_TEMPLATES_EMPTY_CTA_CLASS}
           >
             <Plus className="h-4 w-4" aria-hidden />
             Utwórz pierwszy szablon
           </button>
         </div>
       ) : (
-        <div className="space-y-10">
+        <div className={READY_TEMPLATES_SECTIONS_CLASS}>
           {sections.map((section) => {
             if (section.cards.length === 0 && filter !== "all") return null;
             if (section.cards.length === 0) return null;
             return (
-              <section key={section.id} className="space-y-6">
+              <section key={section.id} className={READY_TEMPLATES_SECTION_CLASS}>
                 <div>
-                  <h3 className="text-base font-semibold text-slate-900">{section.title}</h3>
-                  <p className="mt-1 text-sm text-slate-500">{section.description}</p>
-                  <div className="mt-3 h-px w-full bg-gray-200" aria-hidden />
+                  <h3 className={READY_TEMPLATES_SECTION_TITLE_CLASS}>{section.title}</h3>
+                  <p className={READY_TEMPLATES_SECTION_DESC_CLASS}>{section.description}</p>
+                  <div className={READY_TEMPLATES_SECTION_RULE_CLASS} aria-hidden />
                 </div>
-                <div className={GRID_CLASS}>
+                <div className={READY_TEMPLATES_GRID_CLASS}>
                   {section.cards.map((card) =>
                     card.kind === "preset" ? (
                       <ReadyTemplateCard
@@ -287,7 +299,7 @@ export function LabelReadyTemplatesPage() {
                           <LabelGalleryThumbnail
                             template={card.template}
                             cacheKey={`ready-preset:${card.presetType}`}
-                            className="h-full bg-white"
+                            className={READY_TEMPLATES_THUMB_CLASS}
                           />
                         }
                         isSystem
@@ -311,7 +323,7 @@ export function LabelReadyTemplatesPage() {
                           <LabelGalleryThumbnail
                             template={card.template}
                             cacheKey={`ready-custom:${card.id}:${card.template.updatedAt ?? ""}`}
-                            className="h-full bg-white"
+                            className={READY_TEMPLATES_THUMB_CLASS}
                           />
                         }
                         isDefault={card.isDefault}

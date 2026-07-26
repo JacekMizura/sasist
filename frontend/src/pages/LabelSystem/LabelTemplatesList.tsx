@@ -25,7 +25,17 @@ import {
   type TemplateWithMeta,
   type ViewMode,
 } from "./templatesList/templatesListTypes";
-
+import {
+  TEMPLATES_LIST_CARD_GRID_CLASS,
+  TEMPLATES_LIST_CONTENT_STACK_CLASS,
+  TEMPLATES_LIST_COUNT_CLASS,
+  TEMPLATES_LIST_EMPTY_CLASS,
+  TEMPLATES_LIST_MAIN_COLUMN_CLASS,
+  TEMPLATES_LIST_PAGER_BTN_CLASS,
+  TEMPLATES_LIST_PAGER_CLASS,
+  TEMPLATES_LIST_ROOT_CLASS,
+  TEMPLATES_LIST_ROWS_STACK_CLASS,
+} from "./templatesList/templatesListLayout";
 /**
  * Szablony list — inner layout only (types/groups rail + full-width rows).
  * Does not change SASIST sidebar, top navbar, or module tabs.
@@ -325,7 +335,7 @@ export function LabelTemplatesList() {
 
   return (
     <>
-      <div className="flex min-h-0 w-full min-w-0 flex-1 gap-0">
+      <div className={TEMPLATES_LIST_ROOT_CLASS}>
         <TemplatesListSidebar
           selectedType={selectedType}
           onSelectType={handleSelectType}
@@ -338,7 +348,7 @@ export function LabelTemplatesList() {
           creatingGroup={creatingGroup}
         />
 
-        <div className="flex min-w-0 flex-1 flex-col gap-5 px-4 py-4 md:px-6 min-[1600px]:px-8">
+        <div className={TEMPLATES_LIST_MAIN_COLUMN_CLASS}>
           <TemplatesListToolbar
             typeLabel={printModuleTypeLabel(selectedType)}
             searchQuery={searchQuery}
@@ -356,10 +366,10 @@ export function LabelTemplatesList() {
           />
 
           {loading ? (
-            <p className="py-10 text-slate-500">Ładowanie…</p>
+            <p className={TEMPLATES_LIST_EMPTY_CLASS}>Ładowanie…</p>
           ) : (
-            <div className="flex min-w-0 flex-col gap-4">
-              <p className="text-sm text-slate-500">
+            <div className={TEMPLATES_LIST_CONTENT_STACK_CLASS}>
+              <p className={TEMPLATES_LIST_COUNT_CLASS}>
                 {filteredAndSorted.length} szablonów
                 {filteredAndSorted.length > PAGE_SIZE ? (
                   <span>
@@ -370,19 +380,19 @@ export function LabelTemplatesList() {
               </p>
 
               {paginated.length === 0 ? (
-                <p className="py-10 text-slate-500">
+                <p className={TEMPLATES_LIST_EMPTY_CLASS}>
                   {searchQuery.trim()
                     ? "Brak szablonów pasujących do wyszukiwania."
                     : "Brak szablonów."}
                 </p>
               ) : viewMode === "list" ? (
-                <div className="flex w-full min-w-0 flex-col gap-3">
+                <div className={TEMPLATES_LIST_ROWS_STACK_CLASS}>
                   {paginated.map((t) => (
                     <TemplateListRow key={t.id} {...itemProps(t)} />
                   ))}
                 </div>
               ) : (
-                <div className="grid w-full grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3 min-[1600px]:grid-cols-4 min-[1920px]:grid-cols-5">
+                <div className={TEMPLATES_LIST_CARD_GRID_CLASS}>
                   {paginated.map((t) => (
                     <TemplateGridCard key={t.id} {...gridItemProps(t)} />
                   ))}
@@ -390,12 +400,12 @@ export function LabelTemplatesList() {
               )}
 
               {totalPages > 1 ? (
-                <div className="flex items-center justify-center gap-2 pt-2">
+                <div className={TEMPLATES_LIST_PAGER_CLASS}>
                   <button
                     type="button"
                     onClick={() => setPage((p) => Math.max(1, p - 1))}
                     disabled={page <= 1}
-                    className="rounded-xl border border-gray-200 px-3 py-1.5 text-sm disabled:opacity-50"
+                    className={TEMPLATES_LIST_PAGER_BTN_CLASS}
                   >
                     ←
                   </button>
@@ -406,7 +416,7 @@ export function LabelTemplatesList() {
                     type="button"
                     onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
                     disabled={page >= totalPages}
-                    className="rounded-xl border border-gray-200 px-3 py-1.5 text-sm disabled:opacity-50"
+                    className={TEMPLATES_LIST_PAGER_BTN_CLASS}
                   >
                     →
                   </button>

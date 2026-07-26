@@ -8,7 +8,15 @@ import {
   type GroupRow,
   type TemplateWithMeta,
 } from "./templatesListTypes";
-
+import {
+  TEMPLATES_LIST_GRID_CARD_BASE_CLASS,
+  TEMPLATES_LIST_GRID_CARD_BODY_CLASS,
+  TEMPLATES_LIST_GRID_CARD_IDLE_CLASS,
+  TEMPLATES_LIST_GRID_CARD_PREVIEW_BAND_CLASS,
+  TEMPLATES_LIST_GRID_CARD_PREVIEW_WRAP_CLASS,
+  TEMPLATES_LIST_GRID_CARD_RADIUS,
+  TEMPLATES_LIST_GRID_CARD_SELECTED_CLASS,
+} from "./templatesListLayout";
 type Props = {
   template: TemplateWithMeta;
   selected: boolean;
@@ -52,13 +60,10 @@ export default function TemplateGridCard({
         }
       }}
       className={[
-        "flex w-full cursor-pointer flex-col overflow-hidden border bg-white shadow-sm transition",
-        "hover:-translate-y-0.5 hover:shadow-md",
-        selected
-          ? "border-orange-400 ring-2 ring-orange-300/60"
-          : "border-[#E5E7EB] hover:border-gray-300",
+        TEMPLATES_LIST_GRID_CARD_BASE_CLASS,
+        selected ? TEMPLATES_LIST_GRID_CARD_SELECTED_CLASS : TEMPLATES_LIST_GRID_CARD_IDLE_CLASS,
       ].join(" ")}
-      style={{ borderRadius: 16 }}
+      style={{ borderRadius: TEMPLATES_LIST_GRID_CARD_RADIUS }}
     >
       <button
         type="button"
@@ -66,10 +71,10 @@ export default function TemplateGridCard({
           e.stopPropagation();
           onPreview();
         }}
-        className="border-b border-[#E5E7EB] bg-white p-3 text-left"
+        className={TEMPLATES_LIST_GRID_CARD_PREVIEW_WRAP_CLASS}
         aria-label={`Podgląd szablonu ${t.name}`}
       >
-        <div className="flex h-32 w-full items-center justify-center overflow-hidden rounded-xl border border-[#E5E7EB] bg-white p-1">
+        <div className={TEMPLATES_LIST_GRID_CARD_PREVIEW_BAND_CLASS}>
           <TemplatePreview
             templateId={t.id}
             template={parseTemplateJson(t.template_json)}
@@ -79,7 +84,7 @@ export default function TemplateGridCard({
         </div>
       </button>
 
-      <div className="flex flex-col gap-2.5 p-3.5">
+      <div className={TEMPLATES_LIST_GRID_CARD_BODY_CLASS}>
         <div className="flex items-start gap-2">
           <input
             type="checkbox"

@@ -1,33 +1,18 @@
 import { useEffect, useState } from "react";
-import { Download, Plus } from "lucide-react";
-import { Outlet, useLocation, useNavigate, useParams } from "react-router-dom";
-import toast from "react-hot-toast";
+import { Outlet, useParams } from "react-router-dom";
 
-import { exportFullPackageZip } from "../../../api/documentTemplatesApi";
-import { extractApiErrorMessage } from "../../../api/apiErrorMessage";
 import { SettingsModuleStack } from "../../../components/layout/SettingsModuleStack";
-import { PrimaryButton, SuccessButton } from "../../../design-system";
-import { DEFAULT_TENANT_ID, LIST_BASE } from "./constants";
+import { LIST_BASE } from "./constants";
 import { DOCUMENT_TEMPLATES_TABS } from "./documentTemplatesTabs";
 
-async function downloadBlob(blob: Blob, filename: string) {
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  a.click();
-  URL.revokeObjectURL(url);
-}
-
+/**
+ * Module chrome for Szablony wydruków — same SettingsModuleStack pattern as Label System
+ * (title + tabs only; CTAs live in-page like Label Ready / Label list toolbar).
+ */
 export default function DocumentTemplatesModuleFrame() {
-  const { pathname } = useLocation();
   const { templateId } = useParams<{ templateId?: string }>();
-  const navigate = useNavigate();
-  const isList = pathname === LIST_BASE || pathname === `${LIST_BASE}/`;
-  const showPrimaryNew = isList || pathname === `${LIST_BASE}/starters`;
   const isEditor = Boolean(templateId && /^\d+$/.test(templateId));
   const [editorTitle, setEditorTitle] = useState("Edycja szablonu");
-  const [exportBusy, setExportBusy] = useState(false);
 
   useEffect(() => {
     if (!isEditor || !templateId) return;
@@ -38,29 +23,6 @@ export default function DocumentTemplatesModuleFrame() {
     window.addEventListener("dte-template-name-changed", onName);
     return () => window.removeEventListener("dte-template-name-changed", onName);
   }, [isEditor, templateId]);
-
-  const onExportPackage = () => {
-    setExportBusy(true);
-    exportFullPackageZip(DEFAULT_TENANT_ID)
-      .then((blob) => downloadBlob(blob, "szablony-pelny-pakiet.zip"))
-      .catch((err) => toast.error(extractApiErrorMessage(err, "Eksport nie powiódł się.")))
-      .finally(() => setExportBusy(false));
-  };
-
-  const actions = showPrimaryNew ? (
-    <div className="flex flex-wrap items-center gap-2">
-      {isList ? (
-        <SuccessButton type="button" density="compact" disabled={exportBusy} onClick={onExportPackage}>
-          <Download className="h-3.5 w-3.5" aria-hidden />
-          {exportBusy ? "Eksport…" : "Eksportuj"}
-        </SuccessButton>
-      ) : null}
-      <PrimaryButton type="button" density="compact" onClick={() => navigate(`${LIST_BASE}/new`)}>
-        <Plus className="h-4 w-4" aria-hidden />
-        Nowy szablon
-      </PrimaryButton>
-    </div>
-  ) : null;
 
   if (isEditor) {
     return (
@@ -87,7 +49,6 @@ export default function DocumentTemplatesModuleFrame() {
       tabs={DOCUMENT_TEMPLATES_TABS}
       tabsExact
       tabsAriaLabel="Szablony wydruków"
-      actions={actions}
     >
       <Outlet />
     </SettingsModuleStack>

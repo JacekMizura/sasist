@@ -1,17 +1,30 @@
 import { tabsNavItemClassName } from "../../../components/layout/TabsNav";
+import {
+  READY_TEMPLATES_FILTER_TABS_INNER_CLASS,
+  READY_TEMPLATES_FILTER_TABS_ROOT_CLASS,
+} from "./readyTemplatesLayout";
 import { READY_FILTERS, type ReadyFilterId } from "./readyTemplateCatalog";
 
+export type ReadyFilterTab = { id: string; label: string };
+
 type Props = {
-  value: ReadyFilterId;
-  onChange: (id: ReadyFilterId) => void;
+  value: string;
+  onChange: (id: string) => void;
+  tabs?: ReadyFilterTab[];
+  ariaLabel?: string;
 };
 
-/** Brand underline filter tabs — Design System TabsNav item classes. */
-export default function ReadyTemplatesFilterTabs({ value, onChange }: Props) {
+/** Brand underline filter tabs — Design System TabsNav item classes (Label System SSOT). */
+export default function ReadyTemplatesFilterTabs({
+  value,
+  onChange,
+  tabs = READY_FILTERS,
+  ariaLabel = "Filtr szablonów",
+}: Props) {
   return (
-    <div className="relative min-w-0 border-b border-slate-200" role="tablist" aria-label="Filtr szablonów">
-      <div className="-mx-1 flex flex-wrap gap-x-6 gap-y-0 overflow-x-auto px-1 [scrollbar-width:thin]">
-        {READY_FILTERS.map((tab) => {
+    <div className={READY_TEMPLATES_FILTER_TABS_ROOT_CLASS} role="tablist" aria-label={ariaLabel}>
+      <div className={READY_TEMPLATES_FILTER_TABS_INNER_CLASS}>
+        {tabs.map((tab) => {
           const active = value === tab.id;
           return (
             <button
@@ -28,5 +41,22 @@ export default function ReadyTemplatesFilterTabs({ value, onChange }: Props) {
         })}
       </div>
     </div>
+  );
+}
+
+/** Typed helper for Label Ready page (preserves ReadyFilterId). */
+export function LabelReadyTemplatesFilterTabs({
+  value,
+  onChange,
+}: {
+  value: ReadyFilterId;
+  onChange: (id: ReadyFilterId) => void;
+}) {
+  return (
+    <ReadyTemplatesFilterTabs
+      value={value}
+      onChange={(id) => onChange(id as ReadyFilterId)}
+      tabs={READY_FILTERS}
+    />
   );
 }

@@ -11,7 +11,7 @@ import { SettingsModuleStack } from "../../components/layout/SettingsModuleStack
 import type { TemplateMeta } from "./LabelTemplateDesigner";
 import { labelModuleBasePath } from "./labelModuleBasePath";
 import { labelModuleTabs } from "./labelModuleTabs";
-import {
+import { TEMPLATES_MODULE_PAGE_CARD_CLASS } from "./templatesList/templatesListLayout";import {
   DOCUMENT_PRINT_MODULE_TYPE_ORDER,
   LABEL_PRINT_MODULE_TYPE_ORDER,
 } from "./labelPrintModuleTypes";
@@ -138,7 +138,7 @@ function LabelListQueueShell() {
   const tabs = useMemo(() => labelModuleTabs(labelBase), [labelBase]);
 
   return (
-    <PageLayout fullBleed cardClassName="min-h-[60vh] min-w-0">
+    <PageLayout fullBleed cardClassName={TEMPLATES_MODULE_PAGE_CARD_CLASS}>
       <SettingsModuleStack
         title="Szablony etykiet"
         tabs={tabs}
