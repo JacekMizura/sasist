@@ -46,7 +46,8 @@ const UI_STRINGS_DEFAULTS = {
     pickingWaves: "Fale kompletacji",
     warehouseDesigner: "Projektant Magazynu",
     barcodeManagement: "Etykiety / Kody kreskowe",
-    labelSystem: "System Etykiet",
+    labelSystem: "Szablony etykiet",
+    templatesHub: "Szablony",
     setup: "Setup",
     /** Sidebar category + fly-out root (Polish). */
     settingsCategory: "Ustawienia",

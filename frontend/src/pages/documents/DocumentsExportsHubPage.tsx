@@ -37,8 +37,8 @@ export default function DocumentsExportsHubPage() {
           />
           <p className="text-sm text-slate-600">
             Pełny kreator i historia znajdują się w{" "}
-            <Link to="/settings/exports" className="font-semibold text-blue-700 underline-offset-2 hover:underline">
-              Ustawienia → Eksporty
+            <Link to="/templates/exports" className="font-semibold text-blue-700 underline-offset-2 hover:underline">
+              Szablony → Eksporty
             </Link>
             .
           </p>
@@ -51,7 +51,7 @@ export default function DocumentsExportsHubPage() {
           title="Eksporty w centrum ustawień"
           description="Tu przekierujemy Cię do nowego kreatora eksportów: encje, pola, filtry i historia paczek — ten sam styl co import CSV."
           action={
-            <Link to="/settings/exports" className={btnPrimary}>
+            <Link to="/templates/exports" className={btnPrimary}>
               Otwórz eksporty
             </Link>
           }

@@ -2,11 +2,9 @@
 
 ## Active
 
-**Szablony wydruków** — alignment do ERP DS (nie Label System 1:1):
+**IA: hub Szablony** — Operacje → `/templates` (tabs: etykiety / wydruki / wiadomości / eksporty).
 
-- Filtry Sellasist (`ListFilterEmbeddedShell` + Filtruj/Wyczyść/Ukryj)
-- `SuccessButton` Eksportuj + `PrimaryButton` Nowy szablon
-- Lista: `ListTile` / `StatusBadge` (jak Produkcja)
-- Startery: Ready Templates layout, max 5 kolumn
-
-Bez zmian API/logiki.
+- Kanon: `/templates/labels|print|messages|exports`
+- Legacy: `/labels`, `/settings/document-templates`, `/admin/message-templates`, `/settings/exports` → redirect
+- Menu: jedna pozycja „Szablony”; usunięte z Ustawień: Eksport, Szablony dokumentów, Szablony wiadomości
+- Bez zmian API / logiki biznesowej modułów

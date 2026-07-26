@@ -1,3 +1,10 @@
+## 2026-07-26 — IA hub Szablony
+
+- Menu Operacje → Szablony (`/templates`); sekcje tabs: etykiety / wydruki / wiadomości / eksporty
+- Redirecty: `/labels`, document-templates, message-templates, settings/exports → `/templates/*`
+- Usunięte z Ustawień: Eksport, Szablony dokumentów, Szablony wiadomości
+- Bez zmian API/logiki — tylko routing, menu, shell IA
+
 ## 2026-07-26 — Szablony wydruków: powrót do ERP Design System
 
 - Filtry: `ListFilterEmbeddedShell` + Filtruj/Wyczyść/Ukryj (jak Produkty) — usunięto LightFilters

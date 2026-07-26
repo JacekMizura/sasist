@@ -10,8 +10,20 @@ export function isNavPathActive(pathname: string, path: string): boolean {
   if (path.startsWith("/documents/")) {
     return pathname === path || pathname.startsWith(`${path}/`);
   }
+  if (path === "/templates") {
+    return (
+      pathname.startsWith("/templates") ||
+      pathname.startsWith("/labels") ||
+      pathname.startsWith("/system-etykiet") ||
+      pathname.startsWith("/admin/print-templates") ||
+      pathname.startsWith("/settings/document-templates") ||
+      pathname.startsWith("/admin/message-templates") ||
+      pathname.startsWith("/settings/exports")
+    );
+  }
   if (path === "/labels") {
     return (
+      pathname.startsWith("/templates/labels") ||
       pathname.startsWith("/labels") ||
       pathname.startsWith("/system-etykiet") ||
       pathname.startsWith("/admin/print-templates")
@@ -138,7 +150,12 @@ export function isNavPathActive(pathname: string, path: string): boolean {
     return pathname === "/settings/integrations" || pathname.startsWith("/settings/integrations/");
   }
   if (path === "/settings/exports") {
-    return pathname === "/settings/exports" || pathname.startsWith("/settings/exports/");
+    return (
+      pathname === "/settings/exports" ||
+      pathname.startsWith("/settings/exports/") ||
+      pathname === "/templates/exports" ||
+      pathname.startsWith("/templates/exports/")
+    );
   }
   if (path === "/settings/import") {
     return pathname === "/settings/import";
@@ -146,7 +163,9 @@ export function isNavPathActive(pathname: string, path: string): boolean {
   if (path === "/settings/document-templates") {
     return (
       pathname === "/settings/document-templates" ||
-      pathname.startsWith("/settings/document-templates/")
+      pathname.startsWith("/settings/document-templates/") ||
+      pathname === "/templates/print" ||
+      pathname.startsWith("/templates/print/")
     );
   }
   if (path === "/settings/sales/stock-pools") {
@@ -156,7 +175,12 @@ export function isNavPathActive(pathname: string, path: string): boolean {
     );
   }
   if (path === "/admin/message-templates") {
-    return pathname === "/admin/message-templates" || pathname.startsWith("/admin/message-templates/");
+    return (
+      pathname === "/admin/message-templates" ||
+      pathname.startsWith("/admin/message-templates/") ||
+      pathname === "/templates/messages" ||
+      pathname.startsWith("/templates/messages/")
+    );
   }
   if (path === "/admin/print-templates") {
     return pathname === "/admin/print-templates" || pathname.startsWith("/admin/print-templates/");

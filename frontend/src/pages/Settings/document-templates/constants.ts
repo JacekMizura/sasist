@@ -21,4 +21,5 @@ export const DOC_TEMPLATE_ROLE_LABELS: Record<string, string> = {
 
 export const DEFAULT_TENANT_ID = 1;
 
-export const LIST_BASE = "/settings/document-templates";
+/** Canonical print-document templates base (Templates hub). */
+export const LIST_BASE = "/templates/print";

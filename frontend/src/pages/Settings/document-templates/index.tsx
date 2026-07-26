@@ -15,7 +15,7 @@ export default function DocumentTemplatesModule() {
         <Route path="starters" element={<StarterGalleryPage />} />
       </Route>
       <Route path=":templateId" element={<DocumentTemplateEditorPage />} />
-      <Route path="*" element={<Navigate to="/settings/document-templates" replace />} />
+      <Route path="*" element={<Navigate to="/templates/print" replace />} />
     </Routes>
   );
 }

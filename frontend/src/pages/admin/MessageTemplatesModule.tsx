@@ -1,11 +1,13 @@
 import type { ReactNode } from "react";
-import { Link, Routes, Route } from "react-router-dom";
+import { Link, Routes, Route, useLocation } from "react-router-dom";
 
 import PageLayout from "../../components/layout/PageLayout";
 import { PageHeader } from "../../components/layout/PageHeader";
 import { brandPrimaryButtonClass } from "../../design-system/brandUi";
+import { isTemplatesHubPath } from "../Templates/templatesPaths";
+import { TEMPLATES_MESSAGES_BASE } from "../Templates/templatesPaths";
 
-const BASE = "/admin/message-templates";
+const BASE = TEMPLATES_MESSAGES_BASE;
 
 function MessageTemplatesShell({
   title,
@@ -18,10 +20,30 @@ function MessageTemplatesShell({
   actions?: ReactNode;
   children: ReactNode;
 }) {
+  const { pathname } = useLocation();
+  const inHub = isTemplatesHubPath(pathname);
+
+  const body = <div className={`max-w-4xl space-y-4${inHub ? "" : " mt-6"}`}>{children}</div>;
+
+  if (inHub) {
+    return (
+      <div className="min-w-0 space-y-4">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="min-w-0">
+            <h2 className="text-lg font-semibold text-slate-900">{title}</h2>
+            {subtitle ? <p className="mt-1 text-sm text-slate-500">{subtitle}</p> : null}
+          </div>
+          {actions}
+        </div>
+        {body}
+      </div>
+    );
+  }
+
   return (
     <PageLayout>
       <PageHeader title={title} subtitle={subtitle} actions={actions} />
-      <div className="mt-6 max-w-4xl space-y-4">{children}</div>
+      {body}
     </PageLayout>
   );
 }
@@ -32,16 +54,15 @@ function MessageTemplatesListPage() {
       title="Szablony wiadomości"
       subtitle="Lista i zarządzanie szablonami wiadomości (w przygotowaniu — API pod /api/admin/message-templates)."
       actions={
-        <Link
-          to={`${BASE}/new`}
-          className={brandPrimaryButtonClass}
-        >
+        <Link to={`${BASE}/new`} className={brandPrimaryButtonClass}>
           Dodaj szablon
         </Link>
       }
     >
       <div className="rounded-xl border border-slate-200/90 bg-white px-6 py-14 text-center shadow-sm">
-        <p className="text-sm text-slate-500">Sekcja w przygotowaniu — po podłączeniu modułu pojawi się tu lista z filtrami i paginacją.</p>
+        <p className="text-sm text-slate-500">
+          Sekcja w przygotowaniu — po podłączeniu modułu pojawi się tu lista z filtrami i paginacją.
+        </p>
       </div>
     </MessageTemplatesShell>
   );
@@ -77,7 +98,7 @@ function MessageTemplatesEditPage() {
   );
 }
 
-/** Trasy: `/admin/message-templates`, `/new`, `/:id/edit`. */
+/** Trasy: `/templates/messages` (+ legacy aliases). */
 export default function MessageTemplatesModule() {
   return (
     <Routes>

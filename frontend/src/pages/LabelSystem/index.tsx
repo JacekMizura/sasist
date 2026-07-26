@@ -136,10 +136,20 @@ function LabelListQueueShell() {
   const { pathname } = useLocation();
   const labelBase = labelModuleBasePath(pathname);
   const tabs = useMemo(() => labelModuleTabs(labelBase), [labelBase]);
+  const inHub = pathname.startsWith("/templates/");
 
   const tabNav = (
-    <TopTabsNavigation tabs={tabs} exact aria-label="System etykiet" />
+    <TopTabsNavigation tabs={tabs} exact aria-label="Szablony etykiet" />
   );
+
+  if (inHub) {
+    return (
+      <>
+        {tabNav}
+        <Outlet />
+      </>
+    );
+  }
 
   return (
     <PageLayout fullBleed cardClassName="min-h-[60vh] min-w-0">

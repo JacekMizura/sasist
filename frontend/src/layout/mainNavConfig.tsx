@@ -5,7 +5,7 @@ import {
   Warehouse,
   Activity,
   BarChart3,
-  Tag,
+  LayoutTemplate,
   Settings,
   Settings2,
   Cpu,
@@ -27,10 +27,8 @@ import {
   Key,
   Building2,
   Plug,
-  Download,
   Printer,
   Upload,
-  MessageSquare,
   FileText,
   TriangleAlert,
 } from "lucide-react";
@@ -115,7 +113,7 @@ export const NAV_SIDEBAR_SECTIONS: NavSidebarSectionConfig[] = [
   {
     id: "operations",
     label: "Operacje",
-    categoryIds: ["purchasing", "analytics", "labels", "warehouse", "settings", "wms-settings"],
+    categoryIds: ["purchasing", "analytics", "templates", "warehouse", "settings", "wms-settings"],
   },
 ];
 
@@ -304,10 +302,12 @@ export function buildNavFlyoutCategories(): NavCategoryConfig[] {
     ],
   },
   {
-    id: "labels",
-    label: UI_STRINGS.navigation.labelSystem,
-    Icon: Tag,
-    flyoutSections: [{ items: [{ path: "/labels", label: UI_STRINGS.navigation.labelSystem, Icon: Tag }] }],
+    id: "templates",
+    label: UI_STRINGS.navigation.templatesHub,
+    Icon: LayoutTemplate,
+    flyoutSections: [
+      { items: [{ path: "/templates", label: UI_STRINGS.navigation.templatesHub, Icon: LayoutTemplate }] },
+    ],
   },
   {
     id: "documents",
@@ -357,12 +357,6 @@ export function buildNavFlyoutCategories(): NavCategoryConfig[] {
             permissionsAny: ["settings.users"],
           },
           {
-            path: "/settings/exports",
-            label: "Eksport",
-            Icon: Download,
-            permissionsAny: ["settings.users"],
-          },
-          {
             path: "/settings/shipping-methods",
             label: UI_STRINGS.navigation.shippingMethods,
             Icon: Truck,
@@ -378,18 +372,6 @@ export function buildNavFlyoutCategories(): NavCategoryConfig[] {
             path: "/settings/printers",
             label: UI_STRINGS.navigation.printersNav,
             Icon: Printer,
-            permissionsAny: ["settings.users", "settings.company"],
-          },
-          {
-            path: "/settings/document-templates",
-            label: "Szablony dokumentów",
-            Icon: FileText,
-            permissionsAny: ["settings.users", "settings.company"],
-          },
-          {
-            path: "/admin/message-templates",
-            label: "Szablony wiadomości",
-            Icon: MessageSquare,
             permissionsAny: ["settings.users", "settings.company"],
           },
           {
@@ -449,9 +431,18 @@ export function isCategoryActive(category: NavCategoryConfig, pathname: string):
   if (category.id === "settings") {
     // Ustawienia WMS is its own sidebar row — do not highlight Ogólne Ustawienia there.
     if (pathname === "/settings/wms" || pathname.startsWith("/settings/wms/")) return false;
+    // Templates hub owns exports / document templates / message templates.
+    if (pathname.startsWith("/templates")) return false;
     if (pathname.startsWith("/settings")) return true;
     if (pathname === "/system" || pathname.startsWith("/system/")) return true;
+  }
+  if (category.id === "templates") {
+    if (pathname.startsWith("/templates")) return true;
+    if (pathname.startsWith("/labels") || pathname.startsWith("/system-etykiet")) return true;
+    if (pathname.startsWith("/admin/print-templates")) return true;
+    if (pathname.startsWith("/settings/document-templates")) return true;
     if (pathname.startsWith("/admin/message-templates")) return true;
+    if (pathname.startsWith("/settings/exports")) return true;
   }
   if (category.id === "wms-settings") {
     return pathname === "/settings/wms" || pathname.startsWith("/settings/wms/");

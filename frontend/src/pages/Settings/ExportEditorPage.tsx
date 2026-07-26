@@ -145,7 +145,7 @@ export default function ExportEditorPage() {
                 : [...options],
           is_active: isActive,
         });
-        navigate("/settings/exports");
+        navigate("/templates/exports");
       } else {
         await updateExportTemplate(TENANT_ID, Number(id), {
           name: name.trim() || "Bez nazwy",
@@ -158,7 +158,7 @@ export default function ExportEditorPage() {
                 : [...options],
           is_active: isActive,
         });
-        navigate("/settings/exports");
+        navigate("/templates/exports");
       }
     } catch (e: unknown) {
       const m = e as { message?: string };
@@ -182,8 +182,8 @@ export default function ExportEditorPage() {
         title={isNew ? "Nowy szablon eksportu" : "Edycja szablonu eksportu"}
         subtitle="Wybierz typ danych, pola do wyeksportowania i zapisz szablon. Wygenerowany plik CSV ma nagłówki po polsku."
         breadcrumbs={[
-          { label: "Ustawienia", to: "/settings/company" },
-          { label: "Eksport", to: "/settings/exports" },
+          { label: "Szablony", to: "/templates" },
+          { label: "Eksporty", to: "/templates/exports" },
           { label: isNew ? "Nowy szablon" : "Edycja" },
         ]}
       />
@@ -326,7 +326,7 @@ export default function ExportEditorPage() {
         </label>
 
         <div className="flex flex-wrap justify-end gap-2 border-t border-slate-100 pt-4">
-          <Link to="/settings/exports" className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium hover:bg-slate-50">
+          <Link to="/templates/exports" className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium hover:bg-slate-50">
             Anuluj
           </Link>
           <button
