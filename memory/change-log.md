@@ -1,3 +1,9 @@
+## 2026-07-26 — Nowe zlecenie: kafelki rekomendacji MRP
+
+- Tiles Dzisiaj…30 dni + Maksimum; qty sync; KPI bez opisów
+- Dane z istniejącego demand planning + max_producible
+- Bez zmian API create · tsc OK · **No push.**
+
 ## 2026-07-26 — Zlecenia: UX kart + globalne tony statusów
 
 - Filtry: „Wszystkie”; bez Operator w toolbarze

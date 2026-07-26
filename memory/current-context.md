@@ -2,11 +2,11 @@
 
 ## Active
 
-**Zlecenia produkcyjne — UX kart i statusów** (bez API/logiki).
+**Nowe zlecenie — kafelki rekomendacji MRP** (UX only).
 
-- Filtr: „Wszystkie”; usunięty Operator z quick filters
-- Karta: Status / Priorytet / Termin / Ilość; bez Operatora
-- Progress: niebieski (info) / zielony przy 100%; % w tym samym tonie
-- Global: `executionStatusTone` — putaway=info, in_progress=primary (orange), Braki=warning
+- Horizonty 1/3/7/14/21/30 + Maksimum z `fetchProductionDemandPlanning` / `max_producible`
+- Klik → qty; ręczna qty czyści aktywny kafelek
+- KPI prawe: Koszt / Czas / Materiały% / Pokrycie (bez hintów)
+- Bez zmian API tworzenia zlecenia
 
 

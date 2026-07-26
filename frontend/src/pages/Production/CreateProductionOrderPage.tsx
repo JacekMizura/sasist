@@ -1,6 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { CheckCircle2, AlertTriangle } from "lucide-react";
 import toast from "react-hot-toast";
 
 import {
@@ -16,6 +15,13 @@ import { useAuth } from "@/context/AuthContext";
 import { useActiveWarehouseContext } from "@/hooks/useActiveWarehouseContext";
 import { ActiveWarehouseRequiredBanner } from "@/components/layout/ActiveWarehouseRequiredBanner";
 import { ProductThumb } from "./components/ProductThumb";
+import { RecommendedProductionTiles } from "./components/RecommendedProductionTiles";
+import {
+  coverageAfterProductionDays,
+  useProductMrpRecommendations,
+  type HorizonKey,
+  type HorizonTile,
+} from "./hooks/useProductMrpRecommendations";
 import { formatDurationMinutes } from "./productionTheme";
 import { formatProductionMoney, stockTone, STOCK_TONE_CLASS } from "./productionUi";
 import { erpProductionPaths } from "./productionPaths";
@@ -27,7 +33,6 @@ import {
   MetricCard,
   PageHeader,
   PrimaryButton,
-  ProgressBar,
   SearchInput,
   StatusBadge,
   Stepper,
@@ -49,6 +54,12 @@ function todayLabel(): string {
   return `${dd}.${mm}.${d.getFullYear()}`;
 }
 
+function formatCoverageDays(days: number | null): string {
+  if (days == null || !Number.isFinite(days)) return "—";
+  const n = Math.round(days);
+  return `${n} dni`;
+}
+
 export default function CreateProductionOrderPage() {
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -60,12 +71,21 @@ export default function CreateProductionOrderPage() {
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState<RecipeCardRead | null>(null);
   const [qty, setQty] = useState(1);
+  const [activeHorizon, setActiveHorizon] = useState<HorizonKey | null>(null);
   const [preview, setPreview] = useState<ProductionBatchPreviewRead | null>(null);
   const [previewBusy, setPreviewBusy] = useState(false);
   const [busy, setBusy] = useState(false);
   const [reserveMaterials, setReserveMaterials] = useState(false);
+  const autoHorizonForProductRef = useRef<number | null>(null);
 
   const operatorName = [user?.first_name, user?.last_name].filter(Boolean).join(" ") || user?.login || "—";
+
+  const mrp = useProductMrpRecommendations(
+    tenantId,
+    warehouseId,
+    selected?.product_id ?? null,
+    selected?.max_producible ?? null,
+  );
 
   const reloadRecipes = useCallback(async () => {
     if (warehouseId == null) return;
@@ -94,6 +114,20 @@ export default function CreateProductionOrderPage() {
         (r.product_sku ?? "").toLowerCase().includes(q)
     );
   }, [recipes, search]);
+
+  // After MRP tiles load for a newly selected product, prefer 7 dni (else first available).
+  useEffect(() => {
+    if (!selected || mrp.loading || mrp.tiles.length === 0) return;
+    if (autoHorizonForProductRef.current === selected.product_id) return;
+    autoHorizonForProductRef.current = selected.product_id;
+    const preferred =
+      mrp.tiles.find((t) => t.key === "7" && t.quantity != null) ??
+      mrp.tiles.find((t) => t.quantity != null);
+    if (preferred?.quantity != null) {
+      setActiveHorizon(preferred.key);
+      setQty(preferred.quantity);
+    }
+  }, [selected, mrp.loading, mrp.tiles]);
 
   useEffect(() => {
     if (!selected || warehouseId == null || qty <= 0) {
@@ -149,7 +183,20 @@ export default function CreateProductionOrderPage() {
 
   const selectRecipe = (r: RecipeCardRead) => {
     setSelected(r);
-    setQty(Math.max(1, Math.floor(r.max_producible) || 1));
+    setActiveHorizon(null);
+    setQty(1);
+    autoHorizonForProductRef.current = null;
+  };
+
+  const applyHorizonTile = (tile: HorizonTile) => {
+    if (tile.quantity == null) return;
+    setActiveHorizon(tile.key);
+    setQty(tile.quantity);
+  };
+
+  const onQtyManualChange = (raw: string) => {
+    setActiveHorizon(null);
+    setQty(Math.max(1, Number(raw) || 1));
   };
 
   const submit = async () => {
@@ -173,7 +220,6 @@ export default function CreateProductionOrderPage() {
     return <ActiveWarehouseRequiredBanner hint="Wybierz magazyn, aby utworzyć zlecenie produkcyjne." />;
   }
 
-  const materialsOk = preview != null && !preview.has_shortages;
   const materialsPct =
     preview && preview.aggregated_components.length > 0
       ? Math.round(
@@ -181,7 +227,9 @@ export default function CreateProductionOrderPage() {
             preview.aggregated_components.length) *
             100
         )
-      : 0;
+      : null;
+
+  const coverageLabel = formatCoverageDays(coverageAfterProductionDays(mrp.demandRow, qty));
 
   return (
     <div className={productionPageStackClass}>
@@ -194,258 +242,225 @@ export default function CreateProductionOrderPage() {
         }
       >
         <div className="space-y-4">
-      <Card variant="section" density="comfortable">
-        <Stepper steps={[...STEPS]} activeIndex={activeStep} />
-      </Card>
+          <Card variant="section" density="comfortable">
+            <Stepper steps={[...STEPS]} activeIndex={activeStep} />
+          </Card>
 
-      <div className="grid gap-4 xl:grid-cols-5">
-        <div className="space-y-4 xl:col-span-3">
-          <Card variant="section" density="comfortable" className="space-y-3">
-            <div className="flex items-center justify-between gap-2">
-              <h2 className="text-sm font-semibold text-slate-900">1. Co chcemy wyprodukować?</h2>
-              {selected ? <StatusBadge tone="success" density="compact">Wybrano</StatusBadge> : null}
-            </div>
-            <SearchInput
-              density="comfortable"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Szukaj produktu, SKU lub receptury…"
-              aria-label="Szukaj produktu"
-              className="w-full"
-            />
-            {loadingRecipes ? (
-              <p className="text-sm text-slate-500">Wczytywanie receptur…</p>
-            ) : filtered.length === 0 ? (
-              <p className="py-6 text-center text-sm text-slate-500">Brak aktywnych receptur.</p>
-            ) : (
-              <ul className="max-h-64 space-y-2 overflow-y-auto sm:max-h-80">
-                {filtered.map((r) => {
-                  const active = selected?.composition_id === r.composition_id;
-                  return (
-                    <li key={r.composition_id}>
-                      <button type="button" className="w-full text-left" onClick={() => selectRecipe(r)}>
-                        <ListTile selected={active} density="compact" className="transition hover:border-slate-300">
-                          <div className="flex items-center gap-3">
-                            <ProductThumb imageUrl={r.product_image_url} name={r.product_name} size="sm" />
-                            <div className="min-w-0 flex-1">
-                              <p className="truncate text-sm font-semibold text-slate-900">{r.product_name}</p>
-                              <p className="truncate text-xs text-slate-500">
-                                {r.product_sku || "—"} · {r.recipe_name}
-                              </p>
-                            </div>
-                            <span className="shrink-0 tabular-nums text-xs text-slate-500">
-                              stan {r.current_stock}
-                            </span>
-                          </div>
-                        </ListTile>
-                      </button>
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
+          <div className="grid gap-4 xl:grid-cols-5">
+            <div className="space-y-4 xl:col-span-3">
+              <Card variant="section" density="comfortable" className="space-y-3">
+                <div className="flex items-center justify-between gap-2">
+                  <h2 className="text-sm font-semibold text-slate-900">Produkt</h2>
+                  {selected ? (
+                    <StatusBadge tone="success" density="compact">
+                      Wybrano
+                    </StatusBadge>
+                  ) : null}
+                </div>
+                <SearchInput
+                  density="comfortable"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="Szukaj produktu, SKU lub receptury…"
+                  aria-label="Szukaj produktu"
+                  className="w-full"
+                />
+                {loadingRecipes ? (
+                  <p className="text-sm text-slate-500">Wczytywanie receptur…</p>
+                ) : filtered.length === 0 ? (
+                  <p className="py-6 text-center text-sm text-slate-500">Brak aktywnych receptur.</p>
+                ) : (
+                  <ul className="max-h-56 space-y-2 overflow-y-auto sm:max-h-64">
+                    {filtered.map((r) => {
+                      const active = selected?.composition_id === r.composition_id;
+                      return (
+                        <li key={r.composition_id}>
+                          <button type="button" className="w-full text-left" onClick={() => selectRecipe(r)}>
+                            <ListTile selected={active} density="compact" className="transition hover:border-slate-300">
+                              <div className="flex items-center gap-3">
+                                <ProductThumb imageUrl={r.product_image_url} name={r.product_name} size="sm" />
+                                <div className="min-w-0 flex-1">
+                                  <p className="truncate text-sm font-semibold text-slate-900">{r.product_name}</p>
+                                  <p className="truncate text-xs text-slate-500">
+                                    {r.product_sku || "—"} · {r.recipe_name}
+                                  </p>
+                                </div>
+                                <span className="shrink-0 tabular-nums text-xs text-slate-500">
+                                  stan {r.current_stock}
+                                </span>
+                              </div>
+                            </ListTile>
+                          </button>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
 
-            {selected ? (
-              <div className="rounded-lg border border-slate-200 bg-slate-50/80 p-3">
-                <div className="flex gap-3">
-                  <ProductThumb imageUrl={selected.product_image_url} name={selected.product_name} size="md" />
-                  <dl className="grid min-w-0 flex-1 grid-cols-2 gap-x-4 gap-y-1 text-xs sm:grid-cols-3">
-                    <div className="col-span-2 sm:col-span-3">
-                      <dt className="text-slate-400">Nazwa</dt>
-                      <dd className="font-semibold text-slate-900">{selected.product_name}</dd>
+                {selected ? (
+                  <div className="rounded-lg border border-slate-200 bg-slate-50/80 p-3">
+                    <div className="flex gap-3">
+                      <ProductThumb imageUrl={selected.product_image_url} name={selected.product_name} size="md" />
+                      <dl className="grid min-w-0 flex-1 grid-cols-2 gap-x-4 gap-y-1 text-xs sm:grid-cols-3">
+                        <div className="col-span-2 sm:col-span-3">
+                          <dt className="text-slate-400">Nazwa</dt>
+                          <dd className="font-semibold text-slate-900">{selected.product_name}</dd>
+                        </div>
+                        <div>
+                          <dt className="text-slate-400">SKU</dt>
+                          <dd className="text-slate-800">{selected.product_sku || "—"}</dd>
+                        </div>
+                        <div>
+                          <dt className="text-slate-400">Stan</dt>
+                          <dd className="tabular-nums text-slate-800">{selected.current_stock}</dd>
+                        </div>
+                        <div>
+                          <dt className="text-slate-400">Receptura</dt>
+                          <dd className="truncate text-slate-800">
+                            {selected.recipe_name} (v{selected.version})
+                          </dd>
+                        </div>
+                      </dl>
+                    </div>
+                  </div>
+                ) : null}
+              </Card>
+
+              <Card variant="section" density="comfortable" className="space-y-4">
+                {!selected ? (
+                  <p className="text-sm text-slate-500">Wybierz produkt, aby zobaczyć rekomendowaną ilość.</p>
+                ) : (
+                  <>
+                    <RecommendedProductionTiles
+                      tiles={mrp.tiles}
+                      loading={mrp.loading}
+                      activeKey={activeHorizon}
+                      onSelect={applyHorizonTile}
+                    />
+
+                    <div className="border-t border-slate-100 pt-4">
+                      <div className="flex flex-wrap items-end gap-4">
+                        <label className="block min-w-[8rem]">
+                          <span className="mb-1 block text-xs font-medium text-slate-500">Ilość</span>
+                          <Input
+                            density="comfortable"
+                            type="number"
+                            min={1}
+                            step={1}
+                            value={qty}
+                            onChange={(e) => onQtyManualChange(e.target.value)}
+                            aria-label="Ilość do produkcji"
+                          />
+                        </label>
+                        <label className="flex items-center gap-2 pb-2 text-sm text-slate-700">
+                          <input
+                            type="checkbox"
+                            className="h-4 w-4 rounded border-slate-300"
+                            checked={reserveMaterials}
+                            onChange={(e) => setReserveMaterials(e.target.checked)}
+                          />
+                          Zarezerwuj materiały przy utworzeniu
+                        </label>
+                      </div>
+                    </div>
+                  </>
+                )}
+              </Card>
+
+              <Card variant="section" density="comfortable" className="space-y-3">
+                <h2 className="text-sm font-semibold text-slate-900">Podsumowanie</h2>
+                {!selected || !preview ? (
+                  <p className="text-sm text-slate-500">
+                    {selected
+                      ? previewBusy
+                        ? "Obliczanie planu materiałowego…"
+                        : "Ustaw ilość, aby zobaczyć podsumowanie."
+                      : "Wybierz produkt i ilość."}
+                  </p>
+                ) : (
+                  <dl className="grid gap-2 text-sm sm:grid-cols-2">
+                    <div>
+                      <dt className="text-xs text-slate-500">Produkt</dt>
+                      <dd className="font-medium text-slate-900">{selected.product_name}</dd>
                     </div>
                     <div>
-                      <dt className="text-slate-400">SKU</dt>
-                      <dd className="text-slate-800">{selected.product_sku || "—"}</dd>
+                      <dt className="text-xs text-slate-500">Ilość</dt>
+                      <dd className="tabular-nums font-medium text-slate-900">{qty}</dd>
                     </div>
                     <div>
-                      <dt className="text-slate-400">EAN</dt>
-                      <dd className="text-slate-800">—</dd>
+                      <dt className="text-xs text-slate-500">Termin</dt>
+                      <dd className="tabular-nums text-slate-800">{todayLabel()}</dd>
                     </div>
                     <div>
-                      <dt className="text-slate-400">Stan</dt>
-                      <dd className="tabular-nums text-slate-800">{selected.current_stock}</dd>
-                    </div>
-                    <div>
-                      <dt className="text-slate-400">Receptura</dt>
-                      <dd className="truncate text-slate-800">
-                        {selected.recipe_name} (v{selected.version})
-                      </dd>
-                    </div>
-                    <div>
-                      <dt className="text-slate-400">Czas produkcji</dt>
-                      <dd className="text-slate-800">
-                        {preview?.estimated_duration_minutes != null
-                          ? formatDurationMinutes(preview.estimated_duration_minutes)
-                          : "po ustawieniu ilości"}
-                      </dd>
-                    </div>
-                    <div>
-                      <dt className="text-slate-400">Max. możliwa produkcja</dt>
-                      <dd className="tabular-nums text-slate-800">{Math.floor(selected.max_producible)}</dd>
+                      <dt className="text-xs text-slate-500">Operator</dt>
+                      <dd className="text-slate-800">{operatorName}</dd>
                     </div>
                   </dl>
-                </div>
-              </div>
-            ) : null}
-          </Card>
-
-          <Card variant="section" density="comfortable" className="space-y-3">
-            <h2 className="text-sm font-semibold text-slate-900">2. Ile chcemy wyprodukować?</h2>
-            {!selected ? (
-              <p className="text-sm text-slate-500">Najpierw wybierz produkt w kroku 1.</p>
-            ) : (
-              <div className="flex flex-wrap items-end gap-4">
-                <label className="block min-w-[8rem]">
-                  <span className="mb-1 block text-xs font-medium text-slate-500">Ilość</span>
-                  <Input
-                    density="comfortable"
-                    type="number"
-                    min={1}
-                    step={1}
-                    value={qty}
-                    onChange={(e) => setQty(Math.max(1, Number(e.target.value) || 1))}
-                    aria-label="Ilość do produkcji"
-                  />
-                </label>
-                <label className="flex items-center gap-2 pb-2 text-sm text-slate-700">
-                  <input
-                    type="checkbox"
-                    className="h-4 w-4 rounded border-slate-300"
-                    checked={reserveMaterials}
-                    onChange={(e) => setReserveMaterials(e.target.checked)}
-                  />
-                  Zarezerwuj materiały przy utworzeniu
-                </label>
-              </div>
-            )}
-          </Card>
-
-          <Card variant="section" density="comfortable" className="space-y-3">
-            <h2 className="text-sm font-semibold text-slate-900">3. Podsumowanie</h2>
-            {!selected || !preview ? (
-              <p className="text-sm text-slate-500">
-                {selected ? (previewBusy ? "Obliczanie planu materiałowego…" : "Ustaw ilość, aby zobaczyć podsumowanie.") : "Wybierz produkt i ilość."}
-              </p>
-            ) : (
-              <dl className="grid gap-2 text-sm sm:grid-cols-2">
-                <div>
-                  <dt className="text-xs text-slate-500">Produkt</dt>
-                  <dd className="font-medium text-slate-900">{selected.product_name}</dd>
-                </div>
-                <div>
-                  <dt className="text-xs text-slate-500">Ilość</dt>
-                  <dd className="tabular-nums font-medium text-slate-900">{qty}</dd>
-                </div>
-                <div>
-                  <dt className="text-xs text-slate-500">Termin</dt>
-                  <dd className="tabular-nums text-slate-800">{todayLabel()}</dd>
-                </div>
-                <div>
-                  <dt className="text-xs text-slate-500">Operator</dt>
-                  <dd className="text-slate-800">{operatorName}</dd>
-                </div>
-                <div>
-                  <dt className="text-xs text-slate-500">Koszt</dt>
-                  <dd className="font-medium text-slate-900">{formatProductionMoney(preview.estimated_cost_net)}</dd>
-                </div>
-                <div>
-                  <dt className="text-xs text-slate-500">Materiały</dt>
-                  <dd>
-                    {materialsOk ? (
-                      <StatusBadge tone="success" density="compact">Dostępne</StatusBadge>
-                    ) : (
-                      <StatusBadge tone="warning" density="compact">
-                        Braki ({preview.shortages.length})
-                      </StatusBadge>
-                    )}
-                  </dd>
-                </div>
-              </dl>
-            )}
-            <div className="flex flex-wrap gap-2 pt-1">
-              <PrimaryButton type="button" density="comfortable" disabled={!canSubmit} onClick={() => void submit()}>
-                {busy ? "Tworzenie…" : previewBusy ? "Obliczanie…" : "Utwórz zlecenie"}
-              </PrimaryButton>
-              <Link to={erpProductionPaths.orders} className={secondaryButtonClassName("", "comfortable")}>
-                Wróć do listy
-              </Link>
-            </div>
-          </Card>
-        </div>
-
-        <div className="space-y-3 xl:col-span-2">
-          <Card variant="section" density="comfortable" className="space-y-3">
-            <h2 className="text-sm font-semibold text-slate-900">Podgląd materiałów</h2>
-            {!selected ? (
-              <p className="text-sm text-slate-500">Wybierz produkt, aby zobaczyć zapotrzebowanie z receptury.</p>
-            ) : previewBusy && !preview ? (
-              <p className="text-sm text-slate-500">Obliczanie…</p>
-            ) : preview ? (
-              <>
-                <div className="grid grid-cols-2 gap-2">
-                  <MetricCard
-                    density="compact"
-                    label="Koszt"
-                    value={formatProductionMoney(preview.estimated_cost_net)}
-                    hint="szacunek z receptury"
-                  />
-                  <MetricCard
-                    density="compact"
-                    label="Czas"
-                    value={formatDurationMinutes(preview.estimated_duration_minutes ?? 0)}
-                    hint="przewidywany"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <div className="flex items-center justify-between text-xs text-slate-500">
-                    <span>Dostępność materiałów</span>
-                    <span className="tabular-nums font-medium text-slate-700">{materialsPct}%</span>
-                  </div>
-                  <ProgressBar
-                    value={materialsPct}
-                    tone={materialsOk ? "success" : materialsPct > 0 ? "warning" : "danger"}
-                  />
-                </div>
-                {materialsOk ? (
-                  <div className="flex items-start gap-2 text-sm text-emerald-800">
-                    <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
-                    <span>Wszystkie materiały dostępne.</span>
-                  </div>
-                ) : (
-                  <div className="flex items-start gap-2 text-sm text-amber-900">
-                    <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
-                    <span>Wystąpią braki — zlecenie można utworzyć, start będzie zablokowany do uzupełnienia.</span>
-                  </div>
                 )}
-                <ul className="max-h-72 space-y-1.5 overflow-y-auto">
-                  {preview.aggregated_components.map((c) => {
-                    const tone = stockTone(c.required, c.available);
-                    return (
-                      <li key={c.component_product_id} className={`rounded-lg border px-3 py-2 text-xs ${STOCK_TONE_CLASS[tone]}`}>
-                        <p className="font-semibold text-slate-800">{c.product_name}</p>
-                        <p className="text-slate-600">
-                          Wymagane: <strong>{c.required}</strong> · Dostępne: {c.available}
-                          {c.missing > 0 ? <span className="font-bold text-red-700"> · Brak: {c.missing}</span> : null}
-                        </p>
-                      </li>
-                    );
-                  })}
-                </ul>
-              </>
-            ) : (
-              <p className="text-sm text-slate-500">Ustaw ilość, aby przeliczyć materiały.</p>
-            )}
-          </Card>
-          <p className="text-xs text-slate-500">
-            Analiza całego magazynu (MRP) jest w zakładce{" "}
-            <Link to={erpProductionPaths.planning} className="font-semibold text-slate-700 underline">
-              Planowanie
-            </Link>
-            .
-          </p>
-        </div>
-      </div>
+                <div className="flex flex-wrap gap-2 pt-1">
+                  <PrimaryButton type="button" density="comfortable" disabled={!canSubmit} onClick={() => void submit()}>
+                    {busy ? "Tworzenie…" : previewBusy ? "Obliczanie…" : "Utwórz zlecenie"}
+                  </PrimaryButton>
+                  <Link to={erpProductionPaths.orders} className={secondaryButtonClassName("", "comfortable")}>
+                    Wróć do listy
+                  </Link>
+                </div>
+              </Card>
+            </div>
+
+            <div className="space-y-3 xl:col-span-2">
+              <Card variant="section" density="comfortable" className="space-y-3">
+                <h2 className="text-sm font-semibold text-slate-900">Podsumowanie</h2>
+                {!selected ? (
+                  <p className="text-sm text-slate-500">Wybierz produkt, aby zobaczyć podgląd.</p>
+                ) : previewBusy && !preview ? (
+                  <p className="text-sm text-slate-500">Obliczanie…</p>
+                ) : preview ? (
+                  <>
+                    <div className="grid grid-cols-2 gap-2">
+                      <MetricCard
+                        density="compact"
+                        label="Koszt"
+                        value={formatProductionMoney(preview.estimated_cost_net)}
+                      />
+                      <MetricCard
+                        density="compact"
+                        label="Czas"
+                        value={formatDurationMinutes(preview.estimated_duration_minutes ?? 0)}
+                      />
+                      <MetricCard
+                        density="compact"
+                        label="Materiały"
+                        value={materialsPct != null ? `${materialsPct}%` : "—"}
+                      />
+                      <MetricCard density="compact" label="Pokrycie" value={coverageLabel} />
+                    </div>
+                    <ul className="max-h-72 space-y-1.5 overflow-y-auto">
+                      {preview.aggregated_components.map((c) => {
+                        const tone = stockTone(c.required, c.available);
+                        return (
+                          <li
+                            key={c.component_product_id}
+                            className={`rounded-lg border px-3 py-2 text-xs ${STOCK_TONE_CLASS[tone]}`}
+                          >
+                            <p className="font-semibold text-slate-800">{c.product_name}</p>
+                            <p className="text-slate-600">
+                              Wymagane: <strong>{c.required}</strong> · Dostępne: {c.available}
+                              {c.missing > 0 ? (
+                                <span className="font-bold text-red-700"> · Brak: {c.missing}</span>
+                              ) : null}
+                            </p>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </>
+                ) : (
+                  <p className="text-sm text-slate-500">Ustaw ilość, aby przeliczyć materiały.</p>
+                )}
+              </Card>
+            </div>
+          </div>
         </div>
       </PageHeader>
     </div>
