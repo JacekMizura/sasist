@@ -61,7 +61,12 @@ export type PrinterAssignmentRepairRead = {
 };
 
 export type QueuePrintRequest = {
-  document_type: "stock_document" | "sale_document" | "label";
+  document_type:
+    | "stock_document"
+    | "sale_document"
+    | "label"
+    | "production_batch_card"
+    | "production_order_card";
   document_id?: number | null;
   document_id_str?: string | null;
   warehouse_id?: number | null;

@@ -2,16 +2,15 @@
 
 ## Active
 
-**Szablony** = kategoria sidebar (flyout jak Magazyn), nie hub z zakładkami.
+**PrintMethodDialog** — standardowy dialog wyboru sposobu wydruku dla całego Sasist.
 
-- `/templates/labels` — Szablony etykiet
-- `/templates/print` — Szablony wydruków
-- `/templates/messages` — Szablony wiadomości
-- `/templates/exports` — Eksporty
+- Entry: `usePrintMethodFlow().requestPrint(handlers)`
+- UI: `PrintMethodDialog` (DS `Dialog` + `PageHeader` + Primary/Secondary)
+- Skip dialog gdy `hasDefaultCloudPrinter` (`a4_printer_id` / label / receipt)
+- Handlers: `onBrowserPrint` | `onCloudPrint` | `onDownloadPdf`
 
-Każdy moduł ma własny PageHeader i własne zakładki wewnętrzne. Brak `TemplatesHubLayout`.
+Podpięte: produkcja (karty), dokumenty magazynowe. Kolejne moduły: etykiety, raporty, sprzedaż — ten sam flow.
 
-**Szablony wydruków** współdzielą komponenty Label System:
+## Layout Master (wcześniej)
 
-- `ReadyTemplateCard`, `READY_TEMPLATES_GRID_CLASS`, `TemplateListRow`
-- Filtry: `ListFilterEmbeddedShell` / `FilterPanelBodyWithActions`
+SSOT layout tokens Label System dla Szablonów wydruków.

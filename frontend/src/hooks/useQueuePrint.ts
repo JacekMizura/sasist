@@ -76,12 +76,36 @@ export function useQueuePrint({ tenantId, warehouseId }: Options) {
     [queuePrint, warehouseId],
   );
 
+  const queueProductionBatchCard = useCallback(
+    (batchId: number, warehouseIdOverride?: number | null) =>
+      queuePrint({
+        document_type: "production_batch_card",
+        document_id: batchId,
+        warehouse_id: warehouseIdOverride ?? warehouseId ?? null,
+        copies: 1,
+      }),
+    [queuePrint, warehouseId],
+  );
+
+  const queueProductionOrderCard = useCallback(
+    (orderId: number, warehouseIdOverride?: number | null) =>
+      queuePrint({
+        document_type: "production_order_card",
+        document_id: orderId,
+        warehouse_id: warehouseIdOverride ?? warehouseId ?? null,
+        copies: 1,
+      }),
+    [queuePrint, warehouseId],
+  );
+
   return {
     busy,
     queuePrint,
     queueStockDocument,
     queueSaleDocument,
     queueLabelPrint,
+    queueProductionBatchCard,
+    queueProductionOrderCard,
   };
 }
 

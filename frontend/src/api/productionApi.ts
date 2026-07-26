@@ -1,5 +1,8 @@
 import api from "./axios";
 
+import { openPdfBlobInPrintViewer } from "../utils/openPdfForBrowserPrint";
+import { downloadPdfBlob } from "../components/printing/downloadPdfBlob";
+
 function productionQueryParams(tenantId: number, warehouseId?: number) {
   return {
     tenant_id: tenantId,
@@ -1038,16 +1041,43 @@ export async function startErpExecutionBatch(
 /** @deprecated use startErpExecutionBatch */
 export const startPaperExecutionBatch = startErpExecutionBatch;
 
+export async function fetchBatchProductionCardPdf(
+  tenantId: number,
+  batchId: number,
+  warehouseId?: number,
+): Promise<Blob> {
+  return fetchAuthenticatedProductionPdfBlob(
+    `/production/batches/${batchId}/production-card.pdf`,
+    productionQueryParams(tenantId, warehouseId),
+  );
+}
+
 export async function openBatchProductionCardPdf(
   tenantId: number,
   batchId: number,
   warehouseId?: number,
 ): Promise<void> {
-  const blob = await fetchAuthenticatedProductionPdfBlob(
-    `/production/batches/${batchId}/production-card.pdf`,
-    productionQueryParams(tenantId, warehouseId),
-  );
-  openPdfBlobInNativeViewer(blob);
+  openPdfBlobInNativeViewer(await fetchBatchProductionCardPdf(tenantId, batchId, warehouseId));
+}
+
+/** Browser print shell with auto-open print dialog. */
+export async function printBatchProductionCardBrowser(
+  tenantId: number,
+  batchId: number,
+  warehouseId?: number,
+): Promise<void> {
+  const blob = await fetchBatchProductionCardPdf(tenantId, batchId, warehouseId);
+  const w = openPdfBlobInPrintViewer(blob, { autoPrint: true });
+  if (!w) throw new Error("Przeglądarka zablokowała nową kartę. Zezwól na wyskakujące okna.");
+}
+
+export async function downloadBatchProductionCardPdf(
+  tenantId: number,
+  batchId: number,
+  warehouseId?: number,
+  filename = `karta-produkcyjna-partia-${batchId}.pdf`,
+): Promise<void> {
+  downloadPdfBlob(await fetchBatchProductionCardPdf(tenantId, batchId, warehouseId), filename);
 }
 
 export async function printBulkProductionCards(
@@ -1078,6 +1108,25 @@ export async function openBulkProductionCardsPdf(
   warehouseId?: number,
 ): Promise<void> {
   openPdfBlobInNativeViewer(await printBulkProductionCards(tenantId, batchIds, warehouseId));
+}
+
+export async function printBulkProductionCardsBrowser(
+  tenantId: number,
+  batchIds: number[],
+  warehouseId?: number,
+): Promise<void> {
+  const blob = await printBulkProductionCards(tenantId, batchIds, warehouseId);
+  const w = openPdfBlobInPrintViewer(blob, { autoPrint: true });
+  if (!w) throw new Error("Przeglądarka zablokowała nową kartę. Zezwól na wyskakujące okna.");
+}
+
+export async function downloadBulkProductionCardsPdf(
+  tenantId: number,
+  batchIds: number[],
+  warehouseId?: number,
+  filename = "karty-produkcyjne.pdf",
+): Promise<void> {
+  downloadPdfBlob(await printBulkProductionCards(tenantId, batchIds, warehouseId), filename);
 }
 
 export async function startCollectingBatch(
@@ -1232,16 +1281,42 @@ export async function startErpExecutionOrder(
 /** @deprecated use startErpExecutionOrder */
 export const startPaperExecutionOrder = startErpExecutionOrder;
 
+export async function fetchOrderProductionCardPdf(
+  tenantId: number,
+  orderId: number,
+  warehouseId?: number,
+): Promise<Blob> {
+  return fetchAuthenticatedProductionPdfBlob(
+    `/production/orders/${orderId}/production-card.pdf`,
+    productionQueryParams(tenantId, warehouseId),
+  );
+}
+
 export async function openOrderProductionCardPdf(
   tenantId: number,
   orderId: number,
   warehouseId?: number,
 ): Promise<void> {
-  const blob = await fetchAuthenticatedProductionPdfBlob(
-    `/production/orders/${orderId}/production-card.pdf`,
-    productionQueryParams(tenantId, warehouseId),
-  );
-  openPdfBlobInNativeViewer(blob);
+  openPdfBlobInNativeViewer(await fetchOrderProductionCardPdf(tenantId, orderId, warehouseId));
+}
+
+export async function printOrderProductionCardBrowser(
+  tenantId: number,
+  orderId: number,
+  warehouseId?: number,
+): Promise<void> {
+  const blob = await fetchOrderProductionCardPdf(tenantId, orderId, warehouseId);
+  const w = openPdfBlobInPrintViewer(blob, { autoPrint: true });
+  if (!w) throw new Error("Przeglądarka zablokowała nową kartę. Zezwól na wyskakujące okna.");
+}
+
+export async function downloadOrderProductionCardPdf(
+  tenantId: number,
+  orderId: number,
+  warehouseId?: number,
+  filename = `karta-produkcyjna-zlecenie-${orderId}.pdf`,
+): Promise<void> {
+  downloadPdfBlob(await fetchOrderProductionCardPdf(tenantId, orderId, warehouseId), filename);
 }
 
 export type OrderCollectionStateRead = {

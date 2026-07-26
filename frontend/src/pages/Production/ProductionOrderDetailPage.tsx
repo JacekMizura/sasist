@@ -11,13 +11,17 @@ import { useWarehouse } from "../../context/WarehouseContext";
 import {
 
   cancelProductionOrder,
+  downloadOrderProductionCardPdf,
   getProductionOrder,
-  openOrderProductionCardPdf,
+  printOrderProductionCardBrowser,
   releaseOrderToWms,
   startErpExecutionOrder,
   type ProductionOrderRead,
 
 } from "../../api/productionApi";
+
+import { PrintMethodDialog, usePrintMethodFlow } from "../../components/printing";
+import { useQueuePrint } from "../../hooks/useQueuePrint";
 
 import { DocumentMaterialReservationsPanel } from "./components/DocumentMaterialReservationsPanel";
 
@@ -53,8 +57,8 @@ export default function ProductionOrderDetailPage() {
   const [loading, setLoading] = useState(true);
 
   const [busy, setBusy] = useState(false);
-
-
+  const { queueProductionOrderCard } = useQueuePrint({ tenantId, warehouseId });
+  const printFlow = usePrintMethodFlow({ tenantId, warehouseId, printerKind: "a4" });
 
   const load = useCallback(async () => {
 
@@ -141,14 +145,15 @@ export default function ProductionOrderDetailPage() {
     }
   };
 
-  const printCard = async () => {
+  const printCard = () => {
     if (!order || warehouseId == null) return;
-    try {
-      await openOrderProductionCardPdf(tenantId, order.id, warehouseId);
-    } catch (e: unknown) {
-      const message = e instanceof Error ? e.message : "Nie udało się otworzyć karty produkcji.";
-      toast.error(message);
-    }
+    void printFlow.requestPrint({
+      onBrowserPrint: () => printOrderProductionCardBrowser(tenantId, order.id, warehouseId),
+      onCloudPrint: async () => {
+        await queueProductionOrderCard(order.id, warehouseId);
+      },
+      onDownloadPdf: () => downloadOrderProductionCardPdf(tenantId, order.id, warehouseId),
+    });
   };
 
   const openErp = () => {
@@ -427,6 +432,13 @@ export default function ProductionOrderDetailPage() {
           onChanged={() => void load()}
         />
       ) : null}
+
+      <PrintMethodDialog
+        open={printFlow.open}
+        pending={printFlow.pending}
+        onClose={printFlow.close}
+        onConfirm={printFlow.confirmMethod}
+      />
 
     </div>
 

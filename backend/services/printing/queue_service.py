@@ -14,6 +14,7 @@ from ...models.printing.constants import (
     JOB_TYPE_PDF,
     SOURCE_MODULE_DOCUMENTS,
     SOURCE_MODULE_LABELS,
+    SOURCE_MODULE_PRODUCTION,
     SOURCE_MODULE_WAREHOUSE,
 )
 from ...schemas.printing.job import PrintJobCreateRequest, PrintJobPayload
@@ -26,12 +27,22 @@ from .printer_service import get_printing_defaults, resolve_profile_agent_printe
 
 logger = logging.getLogger(__name__)
 
-SUPPORTED_DOCUMENT_TYPES = frozenset({"stock_document", "sale_document", "label"})
+SUPPORTED_DOCUMENT_TYPES = frozenset(
+    {
+        "stock_document",
+        "sale_document",
+        "label",
+        "production_batch_card",
+        "production_order_card",
+    }
+)
 
 _DOCUMENT_META: dict[str, tuple[str, str]] = {
     "stock_document": (SOURCE_MODULE_WAREHOUSE, JOB_TYPE_PDF),
     "sale_document": (SOURCE_MODULE_DOCUMENTS, JOB_TYPE_PDF),
     "label": (SOURCE_MODULE_LABELS, JOB_TYPE_LABEL),
+    "production_batch_card": (SOURCE_MODULE_PRODUCTION, JOB_TYPE_PDF),
+    "production_order_card": (SOURCE_MODULE_PRODUCTION, JOB_TYPE_PDF),
 }
 
 
@@ -259,6 +270,26 @@ def generate_pdf_bytes(db: Session, *, tenant_id: int, payload: QueuePrintReques
         if payload.label is None:
             raise PrintingError("label payload is required", status_code=400)
         return _generate_label_pdf(db, tenant_id=tenant_id, label_payload=payload.label.model_dump())
+    if document_type == "production_batch_card":
+        if payload.document_id is None:
+            raise PrintingError("document_id is required for production_batch_card", status_code=400)
+        from ..production_execution.production_card_pdf_service import (
+            generate_batch_production_card_pdf_bytes,
+        )
+
+        return generate_batch_production_card_pdf_bytes(
+            db, tenant_id=tenant_id, batch_id=int(payload.document_id)
+        )
+    if document_type == "production_order_card":
+        if payload.document_id is None:
+            raise PrintingError("document_id is required for production_order_card", status_code=400)
+        from ..production_execution.production_card_pdf_service import (
+            generate_order_production_card_pdf_bytes,
+        )
+
+        return generate_order_production_card_pdf_bytes(
+            db, tenant_id=tenant_id, order_id=int(payload.document_id)
+        )
     raise PrintingError(f"Unsupported document_type: {document_type}", status_code=400)
 
 
@@ -300,7 +331,11 @@ def queue_print_job(
     copies = max(1, int(payload.copies or 1))
 
     document_id: int | None = None
-    if document_type == "stock_document" and payload.document_id is not None:
+    if document_type in {
+        "stock_document",
+        "production_batch_card",
+        "production_order_card",
+    } and payload.document_id is not None:
         document_id = int(payload.document_id)
     elif document_type == "sale_document" and payload.document_id_str:
         document_id = None

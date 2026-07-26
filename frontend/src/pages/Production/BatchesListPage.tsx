@@ -1,14 +1,16 @@
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { AlertTriangle, FileText, Package } from "lucide-react";
-import toast from "react-hot-toast";
 
 import { useWarehouse } from "../../context/WarehouseContext";
 import {
   listProductionBatches,
-  openBulkProductionCardsPdf,
+  downloadBulkProductionCardsPdf,
+  printBulkProductionCardsBrowser,
   type ProductionBatchRead,
 } from "../../api/productionApi";
+import { PrintMethodDialog, usePrintMethodFlow } from "../../components/printing";
+import { useQueuePrint } from "../../hooks/useQueuePrint";
 import { AppEmptyState } from "../../components/app-shell";
 import { PageHeader, PrimaryButton, StatusBadge } from "@/design-system";
 import {
@@ -50,6 +52,8 @@ export default function BatchesListPage({ embedded = false }: Props) {
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [printBusy, setPrintBusy] = useState(false);
+  const { queueProductionBatchCard } = useQueuePrint({ tenantId, warehouseId });
+  const printFlow = usePrintMethodFlow({ tenantId, warehouseId, printerKind: "a4" });
 
   const reload = useCallback(async () => {
     setLoading(true);
@@ -81,17 +85,37 @@ export default function BatchesListPage({ embedded = false }: Props) {
     else setSelected(new Set(batches.map((b) => b.id)));
   };
 
-  const printSelectedCards = async () => {
+  const printSelectedCards = () => {
     if (warehouseId == null || selected.size === 0) return;
-    setPrintBusy(true);
-    try {
-      await openBulkProductionCardsPdf(tenantId, [...selected], warehouseId);
-    } catch (e: unknown) {
-      const message = e instanceof Error ? e.message : "Nie udało się wygenerować kart produkcyjnych.";
-      toast.error(message);
-    } finally {
-      setPrintBusy(false);
-    }
+    const batchIds = [...selected];
+    void printFlow.requestPrint({
+      onBrowserPrint: async () => {
+        setPrintBusy(true);
+        try {
+          await printBulkProductionCardsBrowser(tenantId, batchIds, warehouseId);
+        } finally {
+          setPrintBusy(false);
+        }
+      },
+      onCloudPrint: async () => {
+        setPrintBusy(true);
+        try {
+          for (const id of batchIds) {
+            await queueProductionBatchCard(id, warehouseId);
+          }
+        } finally {
+          setPrintBusy(false);
+        }
+      },
+      onDownloadPdf: async () => {
+        setPrintBusy(true);
+        try {
+          await downloadBulkProductionCardsPdf(tenantId, batchIds, warehouseId);
+        } finally {
+          setPrintBusy(false);
+        }
+      },
+    });
   };
 
   const rowTd = embedded ? `${productionModuleListTdClass} !py-3.5` : productionModuleListTdClass;
@@ -208,8 +232,22 @@ export default function BatchesListPage({ embedded = false }: Props) {
     </div>
   );
 
+  const dialog = (
+    <PrintMethodDialog
+      open={printFlow.open}
+      pending={printFlow.pending || printBusy}
+      onClose={printFlow.close}
+      onConfirm={printFlow.confirmMethod}
+    />
+  );
+
   if (embedded) {
-    return table;
+    return (
+      <>
+        {table}
+        {dialog}
+      </>
+    );
   }
 
   return (
@@ -217,6 +255,7 @@ export default function BatchesListPage({ embedded = false }: Props) {
       <PageHeader title={<h1 className={productionPageTitleClass}>Partie produkcyjne</h1>}>
         <div className="space-y-4">{table}</div>
       </PageHeader>
+      {dialog}
     </div>
   );
 }

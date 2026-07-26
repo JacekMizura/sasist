@@ -5,15 +5,18 @@ import toast from "react-hot-toast";
 
 import { useWarehouse } from "../../context/WarehouseContext";
 import {
-  openBatchProductionCardPdf,
   cancelProductionBatch,
+  downloadBatchProductionCardPdf,
   fetchBatchPickPlan,
   getProductionBatch,
+  printBatchProductionCardBrowser,
   releaseBatchToWms,
   startErpExecutionBatch,
   type ProductionBatchPickPlanRead,
   type ProductionBatchRead,
 } from "../../api/productionApi";
+import { PrintMethodDialog, usePrintMethodFlow } from "../../components/printing";
+import { useQueuePrint } from "../../hooks/useQueuePrint";
 import {
   Card,
   PageHeader,
@@ -61,6 +64,8 @@ export default function BatchDetailPage() {
   const [batch, setBatch] = useState<ProductionBatchRead | null>(null);
   const [plan, setPlan] = useState<ProductionBatchPickPlanRead | null>(null);
   const [busy, setBusy] = useState(false);
+  const { queueProductionBatchCard } = useQueuePrint({ tenantId, warehouseId });
+  const printFlow = usePrintMethodFlow({ tenantId, warehouseId, printerKind: "a4" });
 
   const load = useCallback(async () => {
     if (!batchId || warehouseId == null) return;
@@ -106,14 +111,16 @@ export default function BatchDetailPage() {
     }
   };
 
-  const printCard = async () => {
+  const printCard = () => {
     if (!batchId || warehouseId == null) return;
-    try {
-      await openBatchProductionCardPdf(tenantId, Number(batchId), warehouseId);
-    } catch (e: unknown) {
-      const message = e instanceof Error ? e.message : "Nie udało się otworzyć karty produkcji.";
-      toast.error(message);
-    }
+    const id = Number(batchId);
+    void printFlow.requestPrint({
+      onBrowserPrint: () => printBatchProductionCardBrowser(tenantId, id, warehouseId),
+      onCloudPrint: async () => {
+        await queueProductionBatchCard(id, warehouseId);
+      },
+      onDownloadPdf: () => downloadBatchProductionCardPdf(tenantId, id, warehouseId),
+    });
   };
 
   const openErp = () => {
@@ -355,6 +362,12 @@ export default function BatchDetailPage() {
           ) : null}
         </div>
       </PageHeader>
+      <PrintMethodDialog
+        open={printFlow.open}
+        pending={printFlow.pending}
+        onClose={printFlow.close}
+        onConfirm={printFlow.confirmMethod}
+      />
     </div>
   );
 }

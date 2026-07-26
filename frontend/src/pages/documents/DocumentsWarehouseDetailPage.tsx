@@ -34,7 +34,7 @@ function WarehouseStockDocumentDetailBody({
   listUrl: string;
 }) {
   const navigate = useNavigate();
-  const { viewProps, actions, state, pickerModal } = useWarehouseStockDocumentDetail({
+  const { viewProps, actions, state, pickerModal, printMethodModal } = useWarehouseStockDocumentDetail({
     documentId,
     tenantId,
     warehouseId,
@@ -85,6 +85,7 @@ function WarehouseStockDocumentDetailBody({
           )
         : null}
       {pickerModal}
+      {printMethodModal}
     </>
   );
 }

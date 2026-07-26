@@ -16,7 +16,12 @@ import {
 } from "../../../components/documents/warehouse/WarehouseStockDocumentDetailView";
 import { useDocumentTemplatePrint } from "../../../hooks/useDocumentTemplatePrint";
 import { useQueuePrint } from "../../../hooks/useQueuePrint";
-import { stockKindFromType } from "../../../utils/documentTemplatePrint";
+import { PrintMethodDialog, usePrintMethodFlow, downloadPdfBlob } from "../../../components/printing";
+import {
+  fetchDocumentPrintPdfBlob,
+  stockKindFromType,
+} from "../../../utils/documentTemplatePrint";
+import { openPdfBlobInPrintViewer } from "../../../utils/openPdfForBrowserPrint";
 import { listValueNet } from "../warehouseDocumentHelpers";
 import {
   detailPath,
@@ -94,6 +99,7 @@ export function useWarehouseStockDocumentDetail({
     autoPrint: false,
   });
   const { queueStockDocument, busy: queuePrintBusy } = useQueuePrint({ tenantId, warehouseId });
+  const printFlow = usePrintMethodFlow({ tenantId, warehouseId, printerKind: "a4" });
 
   const [detail, setDetail] = useState<StockDocumentRead | null>(null);
   const [loading, setLoading] = useState(true);
@@ -311,8 +317,31 @@ export function useWarehouseStockDocumentDetail({
   }, [detail?.document_type, docTypeFallback, documentId, requestStockDocumentPrint]);
 
   const printDocumentPdf = useCallback(() => {
-    void queueStockDocument(documentId, warehouseId);
-  }, [documentId, queueStockDocument, warehouseId]);
+    const kindCode = stockKindFromType(detail?.document_type ?? docTypeFallback);
+    const req = { kind: "stock_document" as const, documentId, kindCode };
+    void printFlow.requestPrint({
+      onBrowserPrint: async () => {
+        const blob = await fetchDocumentPrintPdfBlob(tenantId, req);
+        const w = openPdfBlobInPrintViewer(blob, { autoPrint: true });
+        if (!w) throw new Error("Przeglądarka zablokowała nową kartę. Zezwól na wyskakujące okna.");
+      },
+      onCloudPrint: async () => {
+        await queueStockDocument(documentId, warehouseId);
+      },
+      onDownloadPdf: async () => {
+        const blob = await fetchDocumentPrintPdfBlob(tenantId, req);
+        downloadPdfBlob(blob, `dokument-${documentId}.pdf`);
+      },
+    });
+  }, [
+    detail?.document_type,
+    docTypeFallback,
+    documentId,
+    printFlow,
+    queueStockDocument,
+    tenantId,
+    warehouseId,
+  ]);
 
   const actions: WarehouseStockDocumentDetailActions = useMemo(
     () => ({
@@ -378,7 +407,7 @@ export function useWarehouseStockDocumentDetail({
     canPostAccept: derived.canPostAccept,
     canEditMetadata: derived.canEditMetadata,
     isWmsCompleteDraft: derived.isWmsCompleteDraft,
-    detailBusy: detailBusy || queuePrintBusy,
+    detailBusy: detailBusy || queuePrintBusy || printFlow.pending,
     metaCurrency,
     metaNet,
     metaGross,
@@ -448,5 +477,13 @@ export function useWarehouseStockDocumentDetail({
     actions,
     state,
     pickerModal: stockDocumentPickerModal,
+    printMethodModal: (
+      <PrintMethodDialog
+        open={printFlow.open}
+        pending={printFlow.pending}
+        onClose={printFlow.close}
+        onConfirm={printFlow.confirmMethod}
+      />
+    ),
   };
 }

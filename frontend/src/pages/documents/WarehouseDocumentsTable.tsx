@@ -195,41 +195,15 @@ export default function WarehouseDocumentsTable({
               <button
                 type="button"
                 aria-label="Drukuj"
-                title="Drukuj / PDF"
+                title="Drukuj"
                 onClick={(e) => {
                   e.stopPropagation();
-                  onPrintMenuToggle(printMenuOpenId === r.id ? null : r.id);
+                  onPrint(r.id);
                 }}
                 className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-lg leading-none hover:bg-slate-50"
               >
                 🖨
               </button>
-              {printMenuOpenId === r.id ? (
-                <div className="absolute right-0 z-[320] mt-1 w-44 rounded-lg border border-slate-200 bg-white py-1 text-left shadow-lg">
-                  <button
-                    type="button"
-                    className="block w-full px-3 py-2 text-sm text-slate-800 hover:bg-slate-50"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onPrint(r.id);
-                      onPrintMenuToggle(null);
-                    }}
-                  >
-                    Drukuj
-                  </button>
-                  <button
-                    type="button"
-                    className="block w-full px-3 py-2 text-sm text-slate-800 hover:bg-slate-50"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onDownloadPdf(r.id);
-                      onPrintMenuToggle(null);
-                    }}
-                  >
-                    Pobierz PDF
-                  </button>
-                </div>
-              ) : null}
             </div>
             <button
               type="button"

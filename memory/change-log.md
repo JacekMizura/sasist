@@ -1,3 +1,18 @@
+## 2026-07-26 — PrintMethodDialog (systemowy wybór wydruku)
+
+- Wspólny dialog: `components/printing/PrintMethodDialog` + `usePrintMethodFlow`
+- Gdy jest domyślna drukarka Cloud (`/printing/defaults` A4) → od razu Cloud Print, bez okna
+- W przeciwnym razie kafle: Drukuj / Sasist Cloud Print / Pobierz PDF
+- Podpięte: karty produkcyjne + dokumenty magazynowe (lista/detail)
+- Cloud queue: `production_batch_card`, `production_order_card`
+
+## 2026-07-26 — Layout Master: wydruki = kompozycja Systemu Etykiet
+
+- SSOT: `templatesListLayout.ts`, `readyTemplatesLayout.ts`
+- Lista wydruków: ten sam root/rail/toolbar/rows/grid co etykiety
+- Gotowe/Startery: ten sam page/CTA/filter tabs/sections/grid/empty
+- Usunięto lokalny Sellasist filter panel z wydruków; CTA z PageHeader → in-page
+
 ## 2026-07-26 — Szablony = kategoria flyout (nie hub)
 
 - Usunięto `TemplatesHubLayout` / tabs między modułami

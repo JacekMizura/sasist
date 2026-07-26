@@ -13,7 +13,13 @@ import {
 } from "../../api/stockDocumentsApi";
 import { formatMoneyPl } from "../../utils/formatOrderMoney";
 import { useDocumentTemplatePrint } from "../../hooks/useDocumentTemplatePrint";
-import { stockKindFromType } from "../../utils/documentTemplatePrint";
+import {
+  fetchDocumentPrintPdfBlob,
+  stockKindFromType,
+} from "../../utils/documentTemplatePrint";
+import { openPdfBlobInPrintViewer } from "../../utils/openPdfForBrowserPrint";
+import { PrintMethodDialog, usePrintMethodFlow, downloadPdfBlob } from "../../components/printing";
+import { useQueuePrint } from "../../hooks/useQueuePrint";
 import {
   ErpBulkPrintModal,
   stockBulkDocumentType,
@@ -76,6 +82,12 @@ export default function DocumentsWarehousePage() {
   const resolvedTenantId = tenantId ?? 1;
   const { requestPrint: requestStockDocumentPrint, pickerModal: stockDocumentPickerModal } = useDocumentTemplatePrint({
     tenantId: resolvedTenantId,
+  });
+  const { queueStockDocument } = useQueuePrint({ tenantId: resolvedTenantId, warehouseId });
+  const printFlow = usePrintMethodFlow({
+    tenantId: resolvedTenantId,
+    warehouseId,
+    printerKind: "a4",
   });
   const [docTab, setDocTab] = useState<DocumentTypeFilterTab>(() => routeType ?? "PZ");
   const [rows, setRows] = useState<StockDocumentListRow[]>([]);
@@ -219,7 +231,21 @@ export default function DocumentsWarehousePage() {
 
   const printDocumentPdf = (id: number) => {
     const kindCode = stockKindFromType(docTab);
-    void requestStockDocumentPrint({ kind: "stock_document", documentId: id, kindCode });
+    const req = { kind: "stock_document" as const, documentId: id, kindCode };
+    void printFlow.requestPrint({
+      onBrowserPrint: async () => {
+        const blob = await fetchDocumentPrintPdfBlob(resolvedTenantId, req);
+        const w = openPdfBlobInPrintViewer(blob, { autoPrint: true });
+        if (!w) throw new Error("Przeglądarka zablokowała nową kartę. Zezwól na wyskakujące okna.");
+      },
+      onCloudPrint: async () => {
+        await queueStockDocument(id, warehouseId);
+      },
+      onDownloadPdf: async () => {
+        const blob = await fetchDocumentPrintPdfBlob(resolvedTenantId, req);
+        downloadPdfBlob(blob, `dokument-${id}.pdf`);
+      },
+    });
   };
 
   const totalPages = Math.max(1, Math.ceil(rows.length / pageSize));
@@ -399,8 +425,14 @@ export default function DocumentsWarehousePage() {
                 onOpenDetail={goToDetail}
                 onDelete={setDeleteConfirmId}
                 onPrintMenuToggle={setPrintMenuOpenId}
-                onPrint={printDocumentPdf}
-                onDownloadPdf={openDocumentPdf}
+                onPrint={(id) => {
+                  printDocumentPdf(id);
+                  setPrintMenuOpenId(null);
+                }}
+                onDownloadPdf={(id) => {
+                  openDocumentPdf(id);
+                  setPrintMenuOpenId(null);
+                }}
                 onDuplicate={async (id) => {
                   try {
                     const d = await duplicateStockDocument(resolvedTenantId, id);
@@ -500,6 +532,12 @@ export default function DocumentsWarehousePage() {
           )
         : null}
       {stockDocumentPickerModal}
+      <PrintMethodDialog
+        open={printFlow.open}
+        pending={printFlow.pending}
+        onClose={printFlow.close}
+        onConfirm={printFlow.confirmMethod}
+      />
       <ErpBulkPrintModal
         open={bulkPrintOpen}
         onClose={() => setBulkPrintOpen(false)}
