@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Download, Plus } from "lucide-react";
-import { Link, Outlet, useLocation, useNavigate, useParams } from "react-router-dom";
+import { Outlet, useLocation, useNavigate, useParams } from "react-router-dom";
 import toast from "react-hot-toast";
 
 import { exportFullPackageZip } from "../../../api/documentTemplatesApi";
@@ -22,13 +22,13 @@ async function downloadBlob(blob: Blob, filename: string) {
 function ListHeaderMoreMenu() {
   return (
     <details className="relative">
-      <summary className="cursor-pointer list-none rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 [&::-webkit-details-marker]:hidden">
+      <summary className="cursor-pointer list-none rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 shadow-sm transition hover:border-orange-300 hover:bg-white [&::-webkit-details-marker]:hidden">
         Więcej ▾
       </summary>
-      <div className="absolute right-0 z-20 mt-1 min-w-[220px] rounded-lg border border-slate-200 bg-white py-1 shadow-lg">
+      <div className="absolute right-0 z-20 mt-1 min-w-[220px] overflow-hidden rounded-xl border border-gray-200 bg-white py-1 shadow-lg">
         <button
           type="button"
-          className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-50"
+          className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-slate-700 transition hover:bg-orange-50"
           onClick={() => {
             exportFullPackageZip(DEFAULT_TENANT_ID)
               .then((blob) => downloadBlob(blob, "szablony-pelny-pakiet.zip"))
@@ -48,6 +48,7 @@ export default function DocumentTemplatesModuleFrame() {
   const { templateId } = useParams<{ templateId?: string }>();
   const navigate = useNavigate();
   const isList = pathname === LIST_BASE || pathname === `${LIST_BASE}/`;
+  const showPrimaryNew = isList || pathname === `${LIST_BASE}/starters`;
   const isEditor = Boolean(templateId && /^\d+$/.test(templateId));
   const [editorTitle, setEditorTitle] = useState("Edycja szablonu");
 
@@ -92,9 +93,9 @@ export default function DocumentTemplatesModuleFrame() {
       tabsExact
       tabsAriaLabel="Szablony wydruków"
       actions={
-        isList ? (
+        showPrimaryNew ? (
           <div className="flex flex-wrap items-center gap-2">
-            <ListHeaderMoreMenu />
+            {isList ? <ListHeaderMoreMenu /> : null}
             <button
               type="button"
               onClick={() => navigate(`${LIST_BASE}/new`)}
@@ -104,11 +105,7 @@ export default function DocumentTemplatesModuleFrame() {
               Nowy szablon
             </button>
           </div>
-        ) : (
-          <Link to={LIST_BASE} className="text-sm font-medium text-slate-600 hover:text-slate-900">
-            ← Lista szablonów
-          </Link>
-        )
+        ) : null
       }
     >
       <Outlet />

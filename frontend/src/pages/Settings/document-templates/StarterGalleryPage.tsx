@@ -1,4 +1,4 @@
-import { Link } from "react-router-dom";
+import { ChevronDown } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import toast from "react-hot-toast";
 
@@ -9,8 +9,7 @@ import {
 } from "@/api/documentTemplatesApi";
 import { extractApiErrorMessage } from "@/api/apiErrorMessage";
 import { DEFAULT_TENANT_ID, LIST_BASE } from "./constants";
-import { StarterThumbnailImage } from "./components/StarterThumbnailImage";
-import { brandPrimaryButtonClass } from "@/design-system/brandUi";
+import { DocumentStarterCard } from "./DocumentStarterCard";
 
 const CATEGORY_LABELS: Record<string, string> = {
   featured: "Polecane",
@@ -18,21 +17,11 @@ const CATEGORY_LABELS: Record<string, string> = {
   popular: "Najpopularniejsze",
 };
 
-const BADGE_STYLES: Record<string, string> = {
-  featured: "bg-violet-100 text-violet-800",
-  recent: "bg-sky-100 text-sky-800",
-  popular: "bg-amber-100 text-amber-900",
-  system: "bg-slate-100 text-slate-700",
-};
+const fieldClass =
+  "w-full rounded-lg border border-[#E5E7EB] bg-white px-3 py-2 text-sm text-slate-800 shadow-sm transition focus:border-orange-400 focus:outline-none focus:ring-1 focus:ring-orange-300/40";
 
-function starterBadges(item: StarterGalleryItem): string[] {
-  const out: string[] = [];
-  if (item.is_system) out.push("system");
-  for (const c of item.categories ?? []) {
-    if (c in CATEGORY_LABELS) out.push(c);
-  }
-  return out;
-}
+const GRID_CLASS =
+  "grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 min-[1400px]:grid-cols-5 min-[1600px]:grid-cols-6";
 
 export function StarterGalleryPage() {
   const [gallery, setGallery] = useState<{
@@ -47,6 +36,7 @@ export function StarterGalleryPage() {
   const [kindFilter, setKindFilter] = useState("");
   const [tagFilter, setTagFilter] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("");
+  const [moreOpen, setMoreOpen] = useState(false);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -88,85 +78,115 @@ export function StarterGalleryPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-xl font-semibold text-slate-900">Marketplace szablonów</h1>
-        <p className="mt-1 text-sm text-slate-500">Gotowe układy dokumentów ERP — bez kodu Twig na kartach.</p>
-      </div>
+    <div className="min-w-0 space-y-5 bg-white px-1 pb-10 pt-2">
+      <div className="space-y-3">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <label className="block min-w-0">
+            <span className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-slate-400">Szukaj</span>
+            <input
+              type="search"
+              className={fieldClass}
+              placeholder="Szukaj szablonu…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+          </label>
+          <label className="block min-w-0">
+            <span className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-slate-400">Typ</span>
+            <select className={fieldClass} value={kindFilter} onChange={(e) => setKindFilter(e.target.value)}>
+              <option value="">Wszystkie</option>
+              {(gallery?.kinds || []).map((k) => (
+                <option key={k} value={k}>
+                  {k}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="block min-w-0">
+            <span className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-slate-400">
+              Kategoria
+            </span>
+            <select
+              className={fieldClass}
+              value={categoryFilter}
+              onChange={(e) => setCategoryFilter(e.target.value)}
+            >
+              <option value="">Wszystkie</option>
+              {Object.entries(CATEGORY_LABELS).map(([code, label]) => (
+                <option key={code} value={code}>
+                  {label}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
 
-      <div className="grid gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm md:grid-cols-5">
-        <input
-          className="rounded-lg border border-slate-200 px-3 py-2 text-sm md:col-span-2"
-          placeholder="Szukaj szablonu…"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-        />
-        <select className="rounded-lg border border-slate-200 px-3 py-2 text-sm" value={familyFilter} onChange={(e) => setFamilyFilter(e.target.value)}>
-          <option value="">Wszystkie rodziny</option>
-          {(gallery?.families || []).map((f) => (
-            <option key={f} value={f}>{f}</option>
-          ))}
-        </select>
-        <select className="rounded-lg border border-slate-200 px-3 py-2 text-sm" value={kindFilter} onChange={(e) => setKindFilter(e.target.value)}>
-          <option value="">Wszystkie typy</option>
-          {(gallery?.kinds || []).map((k) => (
-            <option key={k} value={k}>{k}</option>
-          ))}
-        </select>
-        <select className="rounded-lg border border-slate-200 px-3 py-2 text-sm" value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)}>
-          <option value="">Wszystkie kategorie</option>
-          {Object.entries(CATEGORY_LABELS).map(([code, label]) => (
-            <option key={code} value={code}>{label}</option>
-          ))}
-        </select>
-        <select className="rounded-lg border border-slate-200 px-3 py-2 text-sm md:col-span-5 lg:col-span-1" value={tagFilter} onChange={(e) => setTagFilter(e.target.value)}>
-          <option value="">Wszystkie tagi</option>
-          {(gallery?.tags || []).map((t) => (
-            <option key={t} value={t}>{t}</option>
-          ))}
-        </select>
-      </div>
-
-      {loading ? <p className="text-slate-500">Wczytywanie…</p> : null}
-
-      <div className="grid gap-6 sm:grid-cols-2 xl:grid-cols-3">
-        {filtered.map((item) => (
-          <article key={item.id} className="group flex flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition hover:border-slate-400 hover:shadow-md">
-            <Link to={`${LIST_BASE}/starters/${item.id}`} className="block">
-              <div className="relative aspect-[210/297] overflow-hidden bg-gradient-to-b from-slate-50 to-white">
-                <StarterThumbnailImage starterId={item.id} alt={item.name_pl} className="h-full w-full object-cover object-top transition group-hover:scale-[1.02]" />
-                <div className="absolute left-3 top-3 flex flex-wrap gap-1">
-                  {starterBadges(item).map((b) => (
-                    <span key={b} className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase ${BADGE_STYLES[b] ?? "bg-slate-100 text-slate-700"}`}>
-                      {b === "system" ? "System" : CATEGORY_LABELS[b] ?? b}
-                    </span>
+        <div>
+          <button
+            type="button"
+            onClick={() => setMoreOpen((v) => !v)}
+            className="inline-flex items-center gap-1.5 text-sm font-medium text-slate-600 transition hover:text-slate-900"
+            aria-expanded={moreOpen}
+          >
+            Więcej filtrów
+            <ChevronDown
+              className={`h-4 w-4 transition-transform ${moreOpen ? "rotate-180" : ""}`}
+              aria-hidden
+            />
+          </button>
+          {moreOpen ? (
+            <div className="mt-3 grid max-w-xl gap-3 sm:grid-cols-2">
+              <label className="block min-w-0">
+                <span className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-slate-400">
+                  Rodzina
+                </span>
+                <select
+                  className={fieldClass}
+                  value={familyFilter}
+                  onChange={(e) => setFamilyFilter(e.target.value)}
+                >
+                  <option value="">Wszystkie</option>
+                  {(gallery?.families || []).map((f) => (
+                    <option key={f} value={f}>
+                      {f}
+                    </option>
                   ))}
-                </div>
-              </div>
-            </Link>
-            <div className="flex flex-1 flex-col p-5">
-              <p className="text-[11px] font-medium uppercase tracking-wide text-slate-400">{item.kind_name}</p>
-              <h2 className="mt-1 text-lg font-semibold text-slate-900">{item.name_pl}</h2>
-              <p className="mt-2 line-clamp-2 text-sm text-slate-500">{item.description || item.family_name}</p>
-              <div className="mt-auto flex gap-2 pt-5">
-                <Link
-                  to={`${LIST_BASE}/starters/${item.id}`}
-                  className="flex-1 rounded-lg border border-slate-200 px-3 py-2 text-center text-sm font-medium text-slate-700 hover:bg-slate-50"
-                >
-                  Szczegóły
-                </Link>
-                <button
-                  type="button"
-                  className={`${brandPrimaryButtonClass} flex-1`}
-                  onClick={() => void createFromStarter(item)}
-                >
-                  Użyj szablonu
-                </button>
-              </div>
+                </select>
+              </label>
+              <label className="block min-w-0">
+                <span className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-slate-400">
+                  Tag
+                </span>
+                <select className={fieldClass} value={tagFilter} onChange={(e) => setTagFilter(e.target.value)}>
+                  <option value="">Wszystkie</option>
+                  {(gallery?.tags || []).map((t) => (
+                    <option key={t} value={t}>
+                      {t}
+                    </option>
+                  ))}
+                </select>
+              </label>
             </div>
-          </article>
-        ))}
+          ) : null}
+        </div>
       </div>
+
+      {loading ? <p className="py-10 text-center text-sm text-slate-500">Wczytywanie…</p> : null}
+
+      {!loading && filtered.length === 0 ? (
+        <div className="flex min-h-[280px] flex-col items-center justify-center rounded-2xl border border-dashed border-gray-200 px-6 py-12 text-center shadow-sm">
+          <p className="text-base font-semibold text-slate-900">Nie znaleziono szablonów</p>
+          <p className="mt-1.5 max-w-sm text-sm text-slate-500">Zmień filtry albo utwórz własny szablon.</p>
+        </div>
+      ) : null}
+
+      {!loading && filtered.length > 0 ? (
+        <div className={GRID_CLASS}>
+          {filtered.map((item) => (
+            <DocumentStarterCard key={item.id} item={item} onUse={(i) => void createFromStarter(i)} />
+          ))}
+        </div>
+      ) : null}
     </div>
   );
 }

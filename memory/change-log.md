@@ -1,3 +1,16 @@
+## 2026-07-26 — Szablony wydruków UI ≈ System Etykiet
+
+- Lista: karty zamiast tabeli ERP; lekkie filtry (Szukaj/Typ/Kategoria/Status/Źródło + Więcej)
+- Startery: kompaktowe karty (miniatura + Szczegóły/Użyj); usunięte zbędne H1/podtytuły
+- Primary CTA `brandPrimaryButtonClass`; spójność spacing/radius/hover z Label System
+- Bez zmian API / logiki biznesowej
+
+## 2026-07-26 — Dokumentacja IA
+
+- Dodano `docs/INFORMATION_ARCHITECTURE.md` (zasady, menu, kanony, legacy, przyszłość)
+- Audyt IA uznany za zamknięty w dokumentacji
+- Bez zmian kodu aplikacji
+
 ## 2026-07-26 — IA final cleanup audit (bez kasowania)
 
 - IA uznana za zakończoną; menu/routing spójne

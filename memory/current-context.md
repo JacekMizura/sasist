@@ -2,8 +2,11 @@
 
 ## Active
 
-**IA reorganizacja zakończona** (cleanup audit OK).
+**UI Szablony wydruków** przebudowane pod język Systemu Etykiet (tylko UI/UX, bez API).
 
-- Menu/routing spójne; brak dual-entry
-- Cleanup PR później: Barcode, PickingWaves, PlanningPlaceholder, martwy import BatchesListPage
-- Nie proponować dalszych zmian menu bez potrzeby biznesowej
+- Lista = karty (`DocumentTemplateListCard`)
+- Gotowe szablony = zwarte karty (`DocumentStarterCard`) + lekkie filtry
+- CTA `Nowy szablon` = `brandPrimaryButtonClass` (lista + starters)
+- Edytor / API / logika bez zmian
+
+IA: `docs/INFORMATION_ARCHITECTURE.md` — bez dalszych zmian menu bez potrzeby biznesowej.
