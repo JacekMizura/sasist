@@ -16,7 +16,6 @@ export default function DocumentsExportsHubPage() {
   return (
     <DocumentsSectionShell
       title="Eksporty danych"
-      subtitle="Tworzenie szablonów CSV, harmonogramów i pobieranie paczek eksportu odbywa się w module ustawień — spójnie z importem."
       kpi={
         <DocumentsKpiRow
           items={[

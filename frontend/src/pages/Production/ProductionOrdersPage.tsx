@@ -39,7 +39,7 @@ import {
 import { erpProductionPaths, wmsProductionPaths } from "./productionPaths";
 import { ProductionOrdersFiltersPanel } from "./components/ProductionOrdersFiltersPanel";
 import { ProductionRowActionsMenu } from "./components/ProductionRowActionsMenu";
-import { productionPageDescClass, productionPageStackClass, productionPageTitleClass } from "./productionLayoutTokens";
+import { productionPageStackClass, productionPageTitleClass } from "./productionLayoutTokens";
 import {
   ListTile,
   PageHeader,
@@ -338,22 +338,22 @@ export default function ProductionOrdersPage() {
     <div className={`${productionPageStackClass} !space-y-3`}>
       <PageHeader
         title={
-          <div>
-            <h1 className={productionPageTitleClass}>
-              Zlecenia produkcyjne
-              {!loading ? (
-                <span className="ml-2 text-base font-normal text-slate-500">{rows.length} wyników</span>
-              ) : null}
-            </h1>
-            <p className={productionPageDescClass}>
-              Filtr: <span className="font-medium text-slate-700">{productionOrdersFilterLabel(appliedFilters)}</span>
-            </p>
-          </div>
+          <h1 className={productionPageTitleClass}>
+            Zlecenia produkcyjne
+            {!loading ? (
+              <span className="ml-2 text-base font-normal text-slate-500">{rows.length} wyników</span>
+            ) : null}
+          </h1>
+        }
+        status={
+          <StatusBadge tone="neutral" density="comfortable">
+            {productionOrdersFilterLabel(appliedFilters)}
+          </StatusBadge>
         }
         actions={
-          <Link to={erpProductionPaths.createOrder} className={primaryButtonClassName("", "compact")}>
+          <Link to={erpProductionPaths.createOrder} className={primaryButtonClassName()}>
             <span className="inline-flex items-center gap-1.5">
-              <Plus className="h-3.5 w-3.5" aria-hidden />
+              <Plus className="h-4 w-4" aria-hidden />
               Utwórz zlecenie
             </span>
           </Link>
@@ -363,7 +363,7 @@ export default function ProductionOrdersPage() {
             start={
               <>
                 <SearchInput
-                  density="compact"
+                  density="comfortable"
                   value={draftFilters.query}
                   onChange={(e) => patchQuickFilters({ query: e.target.value })}
                   placeholder="Szukaj numeru, produktu…"
@@ -371,7 +371,7 @@ export default function ProductionOrdersPage() {
                   aria-label="Szukaj zleceń"
                 />
                 <Select
-                  density="compact"
+                  density="comfortable"
                   value={draftFilters.status}
                   onChange={(e) => patchQuickFilters({ status: e.target.value })}
                   className="w-full min-w-[9rem] max-w-[11rem]"
@@ -384,7 +384,7 @@ export default function ProductionOrdersPage() {
                   ))}
                 </Select>
                 <Select
-                  density="compact"
+                  density="comfortable"
                   value={draftFilters.priority}
                   onChange={(e) => patchQuickFilters({ priority: e.target.value })}
                   className="w-full min-w-[8rem] max-w-[10rem]"
@@ -397,7 +397,7 @@ export default function ProductionOrdersPage() {
                   ))}
                 </Select>
                 <SearchInput
-                  density="compact"
+                  density="comfortable"
                   value={draftFilters.operator}
                   onChange={(e) => patchQuickFilters({ operator: e.target.value })}
                   placeholder="Operator"
@@ -410,12 +410,11 @@ export default function ProductionOrdersPage() {
               <>
                 <SecondaryButton
                   type="button"
-                  density="compact"
                   onClick={toggleFiltersPanel}
                   aria-expanded={filtersExpanded}
                   className="inline-flex items-center gap-1.5"
                 >
-                  <Filter className="h-3.5 w-3.5" aria-hidden />
+                  <Filter className="h-4 w-4" aria-hidden />
                   Filtry
                   {activeFilterCount > 0 ? (
                     <StatusBadge tone="info" density="compact">
@@ -423,18 +422,17 @@ export default function ProductionOrdersPage() {
                     </StatusBadge>
                   ) : null}
                   <ChevronDown
-                    className={`h-3.5 w-3.5 transition-transform ${filtersExpanded ? "rotate-180" : ""}`}
+                    className={`h-4 w-4 transition-transform ${filtersExpanded ? "rotate-180" : ""}`}
                     aria-hidden
                   />
                 </SecondaryButton>
                 <SecondaryButton
                   type="button"
-                  density="compact"
                   onClick={() => void reload()}
                   disabled={loading}
                   className="inline-flex items-center gap-1.5"
                 >
-                  <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} aria-hidden />
+                  <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} aria-hidden />
                   Odśwież
                 </SecondaryButton>
               </>

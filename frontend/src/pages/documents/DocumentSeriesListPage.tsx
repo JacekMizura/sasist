@@ -149,7 +149,7 @@ export default function DocumentSeriesListPage() {
 
   if (warehouseId == null) {
     return (
-      <DocumentsSectionShell title="Serie dokumentów" subtitle="Numeracja i szablony druku dla faktur, paragonów i dokumentów magazynowych.">
+      <DocumentsSectionShell title="Serie dokumentów">
         <DocumentsEmptyState
           icon={Layers}
           title="Wybierz magazyn"
@@ -172,7 +172,6 @@ export default function DocumentSeriesListPage() {
 
       <DocumentsSectionShell
         title="Serie dokumentów"
-        subtitle="Prefiksy, numeracja, VAT i powiązania z szablonami druku — jeden widok operacyjny."
         actions={
           <button
             type="button"

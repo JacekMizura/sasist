@@ -88,7 +88,6 @@ export default function DocumentTemplatesModuleFrame() {
         { label: "Szablony wydruków" },
       ]}
       title="Szablony wydruków"
-      description="Projektowanie wydruków ERP."
       tabs={DOCUMENT_TEMPLATES_TABS}
       tabsExact
       tabsAriaLabel="Szablony wydruków"

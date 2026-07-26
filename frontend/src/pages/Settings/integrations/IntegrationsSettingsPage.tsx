@@ -13,8 +13,6 @@ export default function IntegrationsSettingsPage() {
     <PageLayout>
       <PageHeader
         title="Integracje"
-        description="Połączenia z zewnętrznymi systemami i usługami (kanały sprzedaży, kurierzy, webhooks)."
-        icon={Plug}
         breadcrumbs={[
           { label: "Ustawienia", to: "/settings/company" },
           { label: "Integracje" },

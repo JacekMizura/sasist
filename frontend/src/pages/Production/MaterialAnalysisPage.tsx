@@ -5,7 +5,9 @@ import toast from "react-hot-toast";
 import { fetchMaterialPortfolio, type MaterialPortfolioRow } from "@/api/productionShortageApi";
 import { extractApiErrorMessage } from "@/api/apiErrorMessage";
 import { useWarehouse } from "@/context/WarehouseContext";
+import { PageHeader, SecondaryButton } from "@/design-system";
 import { ProductThumb } from "./components/ProductThumb";
+import { productionPageStackClass, productionPageTitleClass } from "./productionLayoutTokens";
 
 const DEFAULT_TENANT = 1;
 
@@ -37,23 +39,16 @@ export default function MaterialAnalysisPage() {
   }
 
   return (
-    <div className="space-y-4 px-4 py-6 lg:px-6">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <h1 className="text-xl font-bold text-slate-900">Analiza materiałowa</h1>
-          <p className="text-sm text-slate-500">
-            Półprodukty i surowce z aktywnych receptur — blokady produkcji, stany, rezerwacje, prognoza wyczerpania.
-          </p>
-        </div>
-        <button
-          type="button"
-          onClick={() => void load()}
-          className="inline-flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
-        >
-          <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} aria-hidden />
-          Odśwież
-        </button>
-      </div>
+    <div className={productionPageStackClass}>
+      <PageHeader
+        title={<h1 className={productionPageTitleClass}>Analiza materiałowa</h1>}
+        actions={
+          <SecondaryButton type="button" onClick={() => void load()} className="inline-flex items-center gap-1.5">
+            <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} aria-hidden />
+            Odśwież
+          </SecondaryButton>
+        }
+      />
 
       {loading ? (
         <p className="text-sm text-slate-500">Wczytywanie…</p>

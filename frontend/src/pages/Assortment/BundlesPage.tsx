@@ -311,7 +311,6 @@ export default function BundlesPage() {
       <PageLayout fullBleed>
         <ListPageHeader
           title={`${UI_STRINGS.navigation.bundles}${loading ? "" : ` (${totalCount} wyników)`}`}
-          description="Produkty składające się z wielu komponentów magazynowych."
           breadcrumbs={[
             { label: "Asortyment", to: "/products/list" },
             { label: UI_STRINGS.navigation.bundles },

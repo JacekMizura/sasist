@@ -261,7 +261,6 @@ export default function ManufacturersPage() {
       <PageLayout fullBleed>
         <ListPageHeader
           title={`${UI_STRINGS.navigation.manufacturers}${loading ? "" : ` (${totalCount} wyników)`}`}
-          description="Słownik producentów, logo na listach oraz skrót do produktów przypisanych do marki."
           breadcrumbs={[
             { label: "Asortyment", to: "/products/list" },
             { label: UI_STRINGS.navigation.manufacturers },

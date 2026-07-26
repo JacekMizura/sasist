@@ -32,7 +32,6 @@ import {
   moduleListTheadClass,
   moduleTableCardClass,
 } from "../../components/listPage/moduleList";
-import { listSellasistToolbarToggleBtn } from "../../components/listPage/listSellasistTokens";
 import { ProductionKpiCard } from "./components/ProductionKpiCard";
 import { ProductionKpiGrid } from "./components/ProductionKpiGrid";
 import {
@@ -46,11 +45,11 @@ import { ProductionRowActionsMenu } from "./components/ProductionRowActionsMenu"
 import {
   productionModuleListTdClass,
   productionModuleListThClass,
-  productionPageDescClass,
   productionPageStackClass,
   productionPageTitleClass,
   productionSectionLabelClass,
 } from "./productionLayoutTokens";
+import { PageHeader, SecondaryButton } from "@/design-system";
 
 const DEFAULT_TENANT = 1;
 
@@ -141,10 +140,24 @@ export default function ProductionAnalyticsPage() {
 
   return (
     <div className={productionPageStackClass}>
-      <div>
-        <h2 className={productionPageTitleClass}>Analiza kosztów produkcji</h2>
-        <p className={productionPageDescClass}>Koszty receptur, marże i dostępność składników — widok zarządczy.</p>
-      </div>
+      <PageHeader
+        title={<h1 className={productionPageTitleClass}>Analiza kosztów</h1>}
+        actions={
+          <SecondaryButton
+            type="button"
+            onClick={() => setFiltersExpanded((v) => !v)}
+            aria-expanded={filtersExpanded}
+            className="inline-flex items-center gap-1.5"
+          >
+            <Filter className="h-4 w-4" aria-hidden />
+            Filtry
+            <ChevronDown
+              className={`h-4 w-4 transition-transform ${filtersExpanded ? "rotate-180" : ""}`}
+              aria-hidden
+            />
+          </SecondaryButton>
+        }
+      />
 
       {!loading ? (
         <div className="space-y-3">
@@ -195,22 +208,6 @@ export default function ProductionAnalyticsPage() {
           </div>
         </div>
       ) : null}
-
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <p className="text-sm text-slate-500">
-          Wyniki: <span className="font-medium text-slate-800">{filtered.length}</span>
-        </p>
-        <button
-          type="button"
-          onClick={() => setFiltersExpanded((v) => !v)}
-          className={`${listSellasistToolbarToggleBtn} inline-flex !h-10 items-center gap-2`}
-          aria-expanded={filtersExpanded}
-        >
-          <Filter className="h-4 w-4 shrink-0" strokeWidth={2} aria-hidden />
-          Filtry
-          <ChevronDown className={`h-4 w-4 shrink-0 transition-transform ${filtersExpanded ? "rotate-180" : ""}`} aria-hidden />
-        </button>
-      </div>
 
       <ListFilterEmbeddedShell expanded={filtersExpanded}>
         <div className={filterGridColsClass}>

@@ -5,9 +5,6 @@ export const productionPageStackClass = "space-y-4 pb-6";
 /** DocumentsSectionShell title. */
 export const productionPageTitleClass = "text-lg font-semibold tracking-tight text-slate-900";
 
-/** DocumentsSectionShell subtitle. */
-export const productionPageDescClass = "mt-0.5 text-sm leading-relaxed text-slate-600";
-
 /** Documents content section label. */
 export const productionSectionLabelClass =
   "text-xs font-bold uppercase tracking-wide text-slate-500";

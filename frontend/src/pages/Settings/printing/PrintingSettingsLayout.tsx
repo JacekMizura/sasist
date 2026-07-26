@@ -13,7 +13,6 @@ export default function PrintingSettingsLayout() {
           { label: "Drukarki" },
         ]}
         title="Drukarki"
-        description="Agenci Windows, drukarki podłączone do agentów i domyślne urządzenia do druku z Sasist."
         tabs={PRINTING_SETTINGS_TABS}
         tabsExact={false}
         tabsAriaLabel="Drukarki — sekcje"

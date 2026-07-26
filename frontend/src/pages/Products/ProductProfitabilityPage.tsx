@@ -259,7 +259,6 @@ export default function ProductProfitabilityPage() {
       <PageLayout fullBleed>
         <ListPageHeader
           title={`Rentowność produktów${loading ? "" : ` (${totalCount} wyników)`}`}
-          description="Marże, koszty i zamrożony kapitał w magazynie w wybranym zakresie czasu."
           breadcrumbs={[
             { label: "Asortyment", to: "/products/list" },
             { label: "Produkty", to: "/products/list" },

@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useState } from "react";
-import { Layers } from "lucide-react";
 
 import PageLayout from "../../components/layout/PageLayout";
 import { PageHeader } from "../../components/layout/PageHeader";
@@ -113,8 +112,6 @@ export default function OfferStockPoolsSettingsPage() {
     <PageLayout>
       <PageHeader
         title="Pule stanów"
-        description="Określ, z których magazynów oferty pobierają dostępny stan (tylko magazyny w sieci stanu)."
-        icon={Layers}
       />
 
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">

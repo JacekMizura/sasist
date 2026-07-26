@@ -1,3 +1,10 @@
+## 2026-07-26 — Nagłówki: jeden standard (Produkcja + audit)
+
+- Produkcja ERP tabs: PageHeader Title+Actions; usunięte marketing opisy; CTA `comfortable`
+- SecondaryButton default density → `comfortable` (jak Primary)
+- Strip fluff: Dokumenty, Asortyment (zestawy/producenci), Rentowność, Settings, Analiza placeholders
+- Empty states zostawione; bez API/logiki/routingu · `npm run build` OK · **No push.**
+
 ## 2026-07-26 — Pulpit Produkcji: podgląd, nie hub nawigacji
 
 - Usunięto Terminal WMS / szybkie akcje / linki do terminali; listy pełnej szerokości (max 5)

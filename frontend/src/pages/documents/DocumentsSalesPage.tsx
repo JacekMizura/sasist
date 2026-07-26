@@ -99,9 +99,6 @@ export default function DocumentsSalesPage() {
   const empty = useMemo(() => !loading && rows.length === 0, [loading, rows.length]);
 
   const sectionTitle = isReceipts ? "Paragony" : "Faktury";
-  const sectionSubtitle = isReceipts
-    ? `Paragony z terminala ${STATIONARY_SALE_TITLE.toLowerCase()} i pakowania WMS.`
-    : `Faktury VAT z terminala ${STATIONARY_SALE_TITLE.toLowerCase()} i pakowania WMS.`;
 
   const kpiItems = useMemo(() => {
     const countLabel = isReceipts ? "Liczba paragonów" : "Liczba faktur";
@@ -130,7 +127,6 @@ export default function DocumentsSalesPage() {
   return (
     <DocumentsSectionShell
       title={sectionTitle}
-      subtitle={sectionSubtitle}
       actions={
         <>
           <button type="button" className={btnPrimary}>

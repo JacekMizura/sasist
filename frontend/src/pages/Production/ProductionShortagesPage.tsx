@@ -18,6 +18,7 @@ import { extractApiErrorMessage } from "@/api/apiErrorMessage";
 import { LocationBadge } from "@/components/warehouse/LocationBadge";
 import { useWarehouse } from "@/context/WarehouseContext";
 import { PrimaryButton } from "@/design-system/PrimaryButton";
+import { PageHeader, SecondaryButton } from "@/design-system";
 import { ProductThumb } from "./components/ProductThumb";
 import { MaterialSubstitutesFormPanel } from "./components/MaterialSubstitutesFormPanel";
 import { MaterialNeedsPanel } from "./components/MaterialNeedsPanel";
@@ -25,7 +26,6 @@ import { erpProductionPaths } from "./productionPaths";
 import {
   productionModuleListTdClass,
   productionModuleListThClass,
-  productionPageDescClass,
   productionPageStackClass,
   productionPageTitleClass,
 } from "./productionLayoutTokens";
@@ -132,23 +132,19 @@ export default function ProductionShortagesPage() {
 
   return (
     <div className={productionPageStackClass}>
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className={productionPageTitleClass}>Braki produkcyjne</h1>
-          <p className={productionPageDescClass}>
-            Zablokowane partie i zlecenia z powodu brakujących surowców. Utwórz zapotrzebowanie zakupowe lub dodaj do
-            istniejącego PO.
-          </p>
-        </div>
-        <button
-          type="button"
-          onClick={() => void load()}
-          className="inline-flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
-        >
-          <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} aria-hidden />
-          Odśwież
-        </button>
-      </div>
+      <PageHeader
+        title={<h1 className={productionPageTitleClass}>Braki produkcyjne</h1>}
+        actions={
+          <SecondaryButton
+            type="button"
+            onClick={() => void load()}
+            className="inline-flex items-center gap-1.5"
+          >
+            <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} aria-hidden />
+            Odśwież
+          </SecondaryButton>
+        }
+      />
 
       {loading ? (
         <p className="text-sm text-slate-500">Wczytywanie…</p>

@@ -5,10 +5,10 @@ import { fetchMaterialReservations, type MaterialReservationRead } from "@/api/p
 import { AppEmptyState } from "@/components/app-shell";
 import { LocationBadge } from "@/components/warehouse/LocationBadge";
 import { useWarehouse } from "@/context/WarehouseContext";
+import { PageHeader, SecondaryButton } from "@/design-system";
 import {
   productionModuleListTdClass,
   productionModuleListThClass,
-  productionPageDescClass,
   productionPageStackClass,
   productionPageTitleClass,
 } from "./productionLayoutTokens";
@@ -42,19 +42,14 @@ export default function MaterialReservationsPage() {
 
   return (
     <div className={productionPageStackClass}>
-      <div className="flex items-center justify-between gap-3">
-        <div>
-          <h1 className={productionPageTitleClass}>Rezerwacje materiałów</h1>
-          <p className={productionPageDescClass}>Aktywne rezerwacje produkcji — lokalizacja, partia, ilość.</p>
-        </div>
-        <button
-          type="button"
-          onClick={() => void load()}
-          className="rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
-        >
-          Odśwież
-        </button>
-      </div>
+      <PageHeader
+        title={<h1 className={productionPageTitleClass}>Rezerwacje materiałów</h1>}
+        actions={
+          <SecondaryButton type="button" onClick={() => void load()}>
+            Odśwież
+          </SecondaryButton>
+        }
+      />
 
       {loading ? (
         <p className="text-sm text-slate-500">Wczytywanie…</p>

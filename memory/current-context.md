@@ -2,8 +2,9 @@
 
 ## Active
 
-**Pulpit Produkcji — podgląd (UX)** (build OK).
+**Nagłówki modułów — ujednolicenie UX** (build OK).
 
-Pełnoszerokościowe wiersze (max 5), bez Terminal WMS / szybkich akcji.
-KPI tylko do odczytu; „Pokaż wszystkie” → zlecenia.
-Bez zmian API/logiki/routingu.
+- Produkcja ERP: wszystkie zakładki → `PageHeader` + Primary/Secondary (`comfortable`)
+- Usunięte zbędne opisy pod tytułem; jeden rozmiar CTA
+- `SecondaryButton` default density = `comfortable` (= Primary)
+- Bez zmian API / logiki / routingu

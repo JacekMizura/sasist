@@ -18,7 +18,7 @@ export function SecondaryButton({
 
   type = "button",
 
-  density = "default",
+  density = "comfortable",
 
   ...props
 
@@ -44,7 +44,7 @@ export function SecondaryButton({
 
 }
 
-export function secondaryButtonClassName(layoutClassName = "", density: UiDensity = "default"): string {
+export function secondaryButtonClassName(layoutClassName = "", density: UiDensity = "comfortable"): string {
 
   return `${secondaryButtonClassFor(density)}${layoutClassName ? ` ${layoutClassName}` : ""}`.trim();
 

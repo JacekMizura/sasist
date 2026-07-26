@@ -64,7 +64,6 @@ export default function DocumentsCorrectingPage() {
   return (
     <DocumentsSectionShell
       title="Dokumenty korygujące"
-      subtitle="Korekty do faktur i powiązanych dokumentów sprzedaży — spójny widok z modułem zamówień."
       actions={
         <>
           <button type="button" className={btnPrimary}>

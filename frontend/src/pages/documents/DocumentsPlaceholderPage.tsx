@@ -17,7 +17,6 @@ export default function DocumentsPlaceholderPage({ title, hintLabel, hintTo }: P
   return (
     <DocumentsSectionShell
       title={title}
-      subtitle="Ten obszar zostanie rozbudowany w kolejnych iteracjach — layout jest już zsynchronizowany z resztą WMS."
     >
       <DocumentsTableCard>
         <DocumentsEmptyState

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Key, Plus } from "lucide-react";
+import { Plus } from "lucide-react";
 import toast from "react-hot-toast";
 
 import PageLayout from "../../../components/layout/PageLayout";
@@ -235,8 +235,6 @@ export default function ApiKeysSettingsPage() {
     <PageLayout>
       <PageHeader
         title="Klucze API"
-        description="Klucze do agentów drukowania, integracji, webhooków i przyszłego Public API Sasist."
-        icon={Key}
         breadcrumbs={[
           { label: "Ustawienia", to: "/settings/company" },
           { label: "Klucze API" },

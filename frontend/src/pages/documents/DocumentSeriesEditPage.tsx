@@ -300,7 +300,7 @@ export default function DocumentSeriesEditPage() {
 
   if (warehouseId == null) {
     return (
-      <DocumentsSectionShell title="Seria dokumentów" subtitle="Konfiguracja prefiksów, VAT i szablonów druku dla wybranego magazynu.">
+      <DocumentsSectionShell title="Seria dokumentów">
         <DocumentsEmptyState
           icon={Layers}
           title="Wybierz magazyn"

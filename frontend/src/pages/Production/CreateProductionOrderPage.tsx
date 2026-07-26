@@ -19,7 +19,7 @@ import { ProductThumb } from "./components/ProductThumb";
 import { formatDurationMinutes } from "./productionTheme";
 import { formatProductionMoney, stockTone, STOCK_TONE_CLASS } from "./productionUi";
 import { erpProductionPaths } from "./productionPaths";
-import { productionPageDescClass, productionPageStackClass, productionPageTitleClass } from "./productionLayoutTokens";
+import { productionPageStackClass, productionPageTitleClass } from "./productionLayoutTokens";
 import {
   Card,
   Input,
@@ -186,14 +186,9 @@ export default function CreateProductionOrderPage() {
   return (
     <div className={`${productionPageStackClass} !space-y-4`}>
       <PageHeader
-        title={
-          <div>
-            <h1 className={productionPageTitleClass}>Nowe zlecenie produkcyjne</h1>
-            <p className={productionPageDescClass}>Wybierz produkt, ustaw ilość i utwórz zlecenie — bez analizy całego magazynu.</p>
-          </div>
-        }
+        title={<h1 className={productionPageTitleClass}>Nowe zlecenie produkcyjne</h1>}
         actions={
-          <Link to={erpProductionPaths.orders} className={secondaryButtonClassName("", "compact")}>
+          <Link to={erpProductionPaths.orders} className={secondaryButtonClassName()}>
             Anuluj
           </Link>
         }

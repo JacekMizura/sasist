@@ -33,7 +33,7 @@ import {
 } from "@/design-system";
 import { useActiveWarehouseContext } from "../../hooks/useActiveWarehouseContext";
 import { ProductionDashboardBatchGrid } from "./components/ProductionDashboardBatchGrid";
-import { productionPageDescClass, productionPageStackClass, productionPageTitleClass } from "./productionLayoutTokens";
+import { productionPageStackClass, productionPageTitleClass } from "./productionLayoutTokens";
 import { erpProductionPaths } from "./productionPaths";
 
 const DEFAULT_TENANT = 1;
@@ -161,16 +161,11 @@ export default function ProductionDashboardPage() {
   return (
     <div className={productionPageStackClass}>
       <PageHeader
-        title={
-          <div>
-            <h1 className={productionPageTitleClass}>Pulpit produkcji</h1>
-            <p className={productionPageDescClass}>Bieżący przegląd produkcji i status partii.</p>
-          </div>
-        }
+        title={<h1 className={productionPageTitleClass}>Pulpit produkcji</h1>}
         actions={
-          <Link to={erpProductionPaths.createOrder} className={primaryButtonClassName("", "compact")}>
+          <Link to={erpProductionPaths.createOrder} className={primaryButtonClassName()}>
             <span className="inline-flex items-center gap-1.5">
-              <Plus className="h-3.5 w-3.5" aria-hidden />
+              <Plus className="h-4 w-4" aria-hidden />
               Nowe zlecenie produkcyjne
             </span>
           </Link>
@@ -179,7 +174,7 @@ export default function ProductionDashboardPage() {
           <Toolbar
             start={
               <SearchInput
-                density="compact"
+                density="comfortable"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 placeholder="Szukaj partii, produktu, operatora…"
@@ -188,7 +183,7 @@ export default function ProductionDashboardPage() {
               />
             }
             end={
-              <SecondaryButton type="button" density="compact" onClick={() => void reload()} disabled={loading}>
+              <SecondaryButton type="button" onClick={() => void reload()} disabled={loading}>
                 Odśwież
               </SecondaryButton>
             }

@@ -280,9 +280,6 @@ export default function PickPathSimulation() {
   return (
     <div className="min-w-0">
       <h1 className="text-xl font-semibold text-slate-800">Symulacja trasy</h1>
-      <p className="mt-2 text-slate-600 mb-4">
-        Symulacja tras kompletacji: wybierz magazyn, wyszukaj i zaznacz zamówienia, uruchom symulację wsadową.
-      </p>
 
       <div className="flex flex-wrap items-center gap-4 mb-4">
         <label className="text-sm font-medium text-slate-600">Magazyn</label>

@@ -18,7 +18,6 @@ import { ProductionSimulationModal } from "./components/ProductionSimulationModa
 import { useProductionDemandPlanning } from "./hooks/useProductionDemandPlanning";
 import { erpProductionPaths } from "./productionPaths";
 import {
-  productionPageDescClass,
   productionPageStackClass,
   productionPageTitleClass,
   productionSectionLabelClass,
@@ -96,25 +95,17 @@ export default function ProductionPlanningPage() {
   return (
     <div className={productionPageStackClass}>
       <PageHeader
-        title={
-          <div>
-            <h1 className={productionPageTitleClass}>Planowanie — Symulacja MRP</h1>
-            <p className={productionPageDescClass}>
-              Prognoza zapotrzebowania, rekomendacje i symulacja dla całego magazynu. Proste zlecenie utwórz osobno.
-            </p>
-          </div>
-        }
+        title={<h1 className={productionPageTitleClass}>Planowanie</h1>}
         actions={
           <>
-            <Link to={erpProductionPaths.createOrder} className={primaryButtonClassName("", "compact")}>
+            <Link to={erpProductionPaths.createOrder} className={primaryButtonClassName()}>
               <span className="inline-flex items-center gap-1.5">
-                <Plus className="h-3.5 w-3.5" aria-hidden />
+                <Plus className="h-4 w-4" aria-hidden />
                 Utwórz zlecenie
               </span>
             </Link>
             <SecondaryButton
               type="button"
-              density="compact"
               disabled={warehouseId == null}
               onClick={() => {
                 setInitialLines(undefined);

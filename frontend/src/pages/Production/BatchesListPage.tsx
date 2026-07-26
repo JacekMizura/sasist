@@ -28,10 +28,10 @@ import { ProductionRowActionsMenu } from "./components/ProductionRowActionsMenu"
 import {
   productionModuleListTdClass,
   productionModuleListThClass,
-  productionPageDescClass,
   productionPageStackClass,
   productionPageTitleClass,
 } from "./productionLayoutTokens";
+import { PageHeader } from "@/design-system";
 
 const DEFAULT_TENANT = 1;
 
@@ -225,10 +225,7 @@ export default function BatchesListPage({ embedded = false }: Props) {
 
   return (
     <div className={productionPageStackClass}>
-      <div>
-        <h1 className={productionPageTitleClass}>Partie produkcyjne</h1>
-        <p className={productionPageDescClass}>Fale produkcyjne — wiele produktów, jeden zagregowany pobór surowców.</p>
-      </div>
+      <PageHeader title={<h1 className={productionPageTitleClass}>Partie produkcyjne</h1>} />
       {table}
     </div>
   );

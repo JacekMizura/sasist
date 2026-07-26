@@ -13,7 +13,6 @@ import {
   type RecipeCardRead,
 } from "../../api/productionApi";
 import { AppEmptyState } from "../../components/app-shell";
-import { filterToolbarBtnApply } from "../../components/filters/filterUiTokens";
 import {
   FilterActionsBar,
   ListFilterEmbeddedShell,
@@ -22,7 +21,6 @@ import {
   filterLabelClass,
   filterSelectClass,
 } from "../../components/filters";
-import { listSellasistToolbarToggleBtn } from "../../components/listPage/listSellasistTokens";
 import {
   PurchasingTableHeader,
   PurchasingTableSection,
@@ -40,6 +38,8 @@ import { RecipeIngredientsDrawer } from "./components/RecipeIngredientsDrawer";
 import {
   productionListActionsCellClass,
 } from "./productionRowActionTokens";
+import { productionPageStackClass, productionPageTitleClass } from "./productionLayoutTokens";
+import { PageHeader, SecondaryButton, primaryButtonClassName } from "@/design-system";
 
 const DEFAULT_TENANT = 1;
 
@@ -116,38 +116,42 @@ export default function RecipesListPage() {
   };
 
   return (
-    <div className="space-y-5 pb-10">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <p className="text-sm text-slate-600">
-          {!loading ? (
-            <>
-              <span className="font-semibold tabular-nums text-slate-900">{filtered.length}</span>{" "}
-              {filtered.length === 1 ? "wynik" : filtered.length < 5 ? "wyniki" : "wyników"}
-            </>
-          ) : (
-            "Wczytywanie…"
-          )}
-        </p>
-        <div className="flex flex-wrap items-center gap-2">
-          <button
-            type="button"
-            onClick={() => setFiltersExpanded((v) => !v)}
-            className={`${listSellasistToolbarToggleBtn} inline-flex !h-10 items-center gap-2`}
-            aria-expanded={filtersExpanded}
-          >
-            <Filter className="h-4 w-4 shrink-0" strokeWidth={2} aria-hidden />
-            Filtry
-            <ChevronDown
-              className={`h-4 w-4 shrink-0 transition-transform ${filtersExpanded ? "rotate-180" : ""}`}
-              aria-hidden
-            />
-          </button>
-          <Link to="/products/list" className={filterToolbarBtnApply}>
-            <Plus className="mr-1.5 inline h-4 w-4" strokeWidth={2} aria-hidden />
-            Dodaj recepturę
-          </Link>
-        </div>
-      </div>
+    <div className={productionPageStackClass}>
+      <PageHeader
+        title={
+          <h1 className={productionPageTitleClass}>
+            Receptury
+            {!loading ? (
+              <span className="ml-2 text-base font-normal text-slate-500">
+                {filtered.length} {filtered.length === 1 ? "wynik" : filtered.length < 5 ? "wyniki" : "wyników"}
+              </span>
+            ) : null}
+          </h1>
+        }
+        actions={
+          <>
+            <SecondaryButton
+              type="button"
+              onClick={() => setFiltersExpanded((v) => !v)}
+              aria-expanded={filtersExpanded}
+              className="inline-flex items-center gap-1.5"
+            >
+              <Filter className="h-4 w-4" aria-hidden />
+              Filtry
+              <ChevronDown
+                className={`h-4 w-4 transition-transform ${filtersExpanded ? "rotate-180" : ""}`}
+                aria-hidden
+              />
+            </SecondaryButton>
+            <Link to="/products/list" className={primaryButtonClassName()}>
+              <span className="inline-flex items-center gap-1.5">
+                <Plus className="h-4 w-4" aria-hidden />
+                Dodaj recepturę
+              </span>
+            </Link>
+          </>
+        }
+      />
 
       <ListFilterEmbeddedShell expanded={filtersExpanded}>
         <div className={filterGridColsClass}>

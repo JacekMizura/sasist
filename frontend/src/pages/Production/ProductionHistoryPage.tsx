@@ -31,7 +31,6 @@ import {
   moduleListTheadClass,
   moduleTableCardClass,
 } from "../../components/listPage/moduleList";
-import { listSellasistToolbarToggleBtn } from "../../components/listPage/listSellasistTokens";
 import { ProductionKpiCard } from "./components/ProductionKpiCard";
 import { ProductionKpiGrid } from "./components/ProductionKpiGrid";
 import {
@@ -50,10 +49,10 @@ import { ProductionRowActionsMenu } from "./components/ProductionRowActionsMenu"
 import {
   productionModuleListTdClass,
   productionModuleListThClass,
-  productionPageDescClass,
   productionPageStackClass,
   productionPageTitleClass,
 } from "./productionLayoutTokens";
+import { PageHeader, SecondaryButton } from "@/design-system";
 
 const DEFAULT_TENANT = 1;
 
@@ -174,25 +173,31 @@ export default function ProductionHistoryPage() {
 
   return (
     <div className={productionPageStackClass}>
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h2 className={productionPageTitleClass}>
+      <PageHeader
+        title={
+          <h1 className={productionPageTitleClass}>
             Historia produkcji
-            {!loading ? <span className="ml-2 text-base font-normal text-slate-500">{filtered.length} wyników</span> : null}
-          </h2>
-          <p className={productionPageDescClass}>Zakończone partie masowe i zlecenia produkcyjne (MO).</p>
-        </div>
-        <button
-          type="button"
-          onClick={() => setFiltersExpanded((v) => !v)}
-          className={`${listSellasistToolbarToggleBtn} inline-flex !h-10 items-center gap-2`}
-          aria-expanded={filtersExpanded}
-        >
-          <Filter className="h-4 w-4 shrink-0" strokeWidth={2} aria-hidden />
-          Filtry
-          <ChevronDown className={`h-4 w-4 shrink-0 transition-transform ${filtersExpanded ? "rotate-180" : ""}`} aria-hidden />
-        </button>
-      </div>
+            {!loading ? (
+              <span className="ml-2 text-base font-normal text-slate-500">{filtered.length} wyników</span>
+            ) : null}
+          </h1>
+        }
+        actions={
+          <SecondaryButton
+            type="button"
+            onClick={() => setFiltersExpanded((v) => !v)}
+            aria-expanded={filtersExpanded}
+            className="inline-flex items-center gap-1.5"
+          >
+            <Filter className="h-4 w-4" aria-hidden />
+            Filtry
+            <ChevronDown
+              className={`h-4 w-4 transition-transform ${filtersExpanded ? "rotate-180" : ""}`}
+              aria-hidden
+            />
+          </SecondaryButton>
+        }
+      />
 
       <ListFilterEmbeddedShell expanded={filtersExpanded}>
         <div className={filterGridColsClass}>
