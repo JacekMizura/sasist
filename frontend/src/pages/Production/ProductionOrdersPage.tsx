@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { ChevronDown, ClipboardList, Filter, Plus } from "lucide-react";
+import { ChevronDown, ClipboardList, Filter, Plus, RefreshCw } from "lucide-react";
 import toast from "react-hot-toast";
 
 import { useWarehouse } from "../../context/WarehouseContext";
@@ -18,48 +18,201 @@ import {
   type ProductionOrderRead,
 } from "../../api/productionApi";
 import { AppEmptyState } from "../../components/app-shell";
-import { filterToolbarBtnApply } from "../../components/filters/filterUiTokens";
-import {
-  productsListActionsCellClass,
-  productsListActionsInnerClass,
-  productsListActionsThClass,
-} from "../../components/products/productList/productsListTableTokens";
-import {
-  moduleListTableClass,
-  moduleListTableScrollClass,
-  moduleListTheadClass,
-  moduleTableCardClass,
-} from "../../components/listPage/moduleList";
-import { listSellasistToolbarToggleBtn } from "../../components/listPage/listSellasistTokens";
 import {
   DEFAULT_PRODUCTION_ORDERS_FILTERS,
+  PRODUCTION_ORDER_STATUS_OPTIONS,
+  PRODUCTION_PRIORITY_OPTIONS,
   countActiveProductionOrdersFilters,
   filterProductionOrderRows,
   productionBatchToRow,
   productionOrderToRow,
   productionOrdersFilterLabel,
+  type ProductionOrderRow,
   type ProductionOrdersListFilters,
 } from "../../modules/production/productionListFilters";
 import {
   BATCH_STATUS_LABEL,
   PRODUCTION_STATUS_LABEL,
-  batchStatusBadgeClass,
-  productionPriorityBadgeClass,
-  productionPriorityLabel,
-  productionStatusBadgeClass,
+  resolveProductionPriority,
+  type ProductionPriorityLevel,
 } from "./productionUi";
 import { erpProductionPaths, wmsProductionPaths } from "./productionPaths";
 import { ProductionOrdersFiltersPanel } from "./components/ProductionOrdersFiltersPanel";
 import { ProductionRowActionsMenu } from "./components/ProductionRowActionsMenu";
+import { productionPageDescClass, productionPageStackClass, productionPageTitleClass } from "./productionLayoutTokens";
 import {
-  productionModuleListTdClass,
-  productionModuleListThClass,
-  productionPageDescClass,
-  productionPageStackClass,
-  productionPageTitleClass,
-} from "./productionLayoutTokens";
+  ListTile,
+  PageHeader,
+  ProgressBar,
+  SearchInput,
+  SecondaryButton,
+  Select,
+  StatusBadge,
+  Toolbar,
+  primaryButtonClassName,
+  type StatusTone,
+} from "@/design-system";
 
 const DEFAULT_TENANT = 1;
+
+const PRIORITY_DISPLAY: Record<ProductionPriorityLevel, string> = {
+  low: "Niski",
+  normal: "Średni",
+  high: "Wysoki",
+  critical: "Krytyczny",
+};
+
+function formatPlannedDate(raw: string): string {
+  if (!raw || raw === "—") return "—";
+  const d = raw.slice(0, 10);
+  const [y, m, day] = d.split("-");
+  if (!y || !m || !day) return d;
+  return `${day}.${m}.${y}`;
+}
+
+function statusLabel(row: ProductionOrderRow): string {
+  return row.kind === "batch"
+    ? BATCH_STATUS_LABEL[row.status as keyof typeof BATCH_STATUS_LABEL] ?? row.status
+    : PRODUCTION_STATUS_LABEL[row.status as keyof typeof PRODUCTION_STATUS_LABEL] ?? row.status;
+}
+
+function statusTone(row: ProductionOrderRow): StatusTone {
+  if (row.hasShortages) return "danger";
+  switch (row.status) {
+    case "completed":
+    case "awaiting_putaway":
+      return "success";
+    case "in_progress":
+    case "collecting":
+    case "putaway":
+      return "info";
+    case "cancelled":
+      return "danger";
+    case "planned":
+    case "draft":
+      return "neutral";
+    default:
+      return "neutral";
+  }
+}
+
+function priorityTone(level: ProductionPriorityLevel): StatusTone {
+  switch (level) {
+    case "low":
+      return "neutral";
+    case "normal":
+      return "info";
+    case "high":
+      return "warning";
+    case "critical":
+      return "danger";
+  }
+}
+
+function progressTone(
+  row: ProductionOrderRow,
+  pct: number
+): "success" | "warning" | "danger" | "neutral" | "info" {
+  if (row.hasShortages) return "danger";
+  if (pct >= 100) return "success";
+  if (row.status === "in_progress" || row.status === "collecting" || row.status === "putaway") return "info";
+  if (pct > 0 && pct < 40) return "warning";
+  return "neutral";
+}
+
+function OrderWorkCard({
+  row,
+  onOpen,
+  onReleaseToWms,
+}: {
+  row: ProductionOrderRow;
+  onOpen: () => void;
+  onReleaseToWms: () => void;
+}) {
+  const level = resolveProductionPriority(row.priority, row.hasShortages, row.numericPriority);
+  const pct = row.progressPercent;
+  const showProgress = typeof pct === "number" && Number.isFinite(pct);
+  const clamped = showProgress ? Math.max(0, Math.min(100, pct)) : 0;
+
+  const wmsActions =
+    (row.status === "planned" || row.status === "draft")
+      ? [
+          {
+            id: "wms",
+            label: row.isReleasedToWms ? "Otwórz WMS" : "Wydaj do WMS",
+            onClick: onReleaseToWms,
+            disabled: row.hasShortages,
+          },
+        ]
+      : [];
+
+  return (
+    <ListTile density="comfortable" className="w-full">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:gap-4">
+        <div className="min-w-0 flex-1 space-y-2.5">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-baseline gap-2">
+              <p className="font-mono text-sm font-semibold text-slate-900">{row.number}</p>
+              <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+                {row.kind === "batch" ? "partia" : "MO"}
+              </span>
+            </div>
+            <p className="mt-0.5 line-clamp-2 text-sm text-slate-600">{row.product}</p>
+          </div>
+
+          {showProgress ? (
+            <div className="max-w-xl space-y-1">
+              <div className="flex items-center justify-between gap-2 text-[11px] text-slate-500">
+                <span>Postęp</span>
+                <span className="tabular-nums font-medium text-slate-700">{clamped}%</span>
+              </div>
+              <ProgressBar value={clamped} tone={progressTone(row, clamped)} />
+            </div>
+          ) : null}
+
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-slate-500">
+            <span className="inline-flex items-center gap-1.5">
+              <span className="text-slate-400">Status</span>
+              <StatusBadge tone={statusTone(row)} density="compact">
+                {statusLabel(row)}
+              </StatusBadge>
+            </span>
+            <span className="inline-flex items-center gap-1.5">
+              <span className="text-slate-400">Priorytet</span>
+              <StatusBadge tone={priorityTone(level)} density="compact">
+                {PRIORITY_DISPLAY[level]}
+              </StatusBadge>
+            </span>
+            <span>
+              <span className="text-slate-400">Operator:</span>{" "}
+              <span className="text-slate-700">{row.operator}</span>
+            </span>
+            <span>
+              <span className="text-slate-400">Termin:</span>{" "}
+              <span className="tabular-nums text-slate-700">{formatPlannedDate(row.date)}</span>
+            </span>
+            <span>
+              <span className="text-slate-400">Ilość:</span>{" "}
+              <span className="tabular-nums text-slate-700">{row.qty}</span>
+            </span>
+          </div>
+        </div>
+
+        <div className="flex shrink-0 justify-end sm:pt-0.5" onClick={(e) => e.stopPropagation()}>
+          <ProductionRowActionsMenu
+            align="end"
+            ariaLabel={`Akcje ${row.number}`}
+            actions={[
+              { id: "open", label: "Otwórz", onClick: onOpen },
+              { id: "edit", label: "Edytuj", onClick: onOpen },
+              ...wmsActions,
+            ]}
+          />
+        </div>
+      </div>
+    </ListTile>
+  );
+}
 
 export default function ProductionOrdersPage() {
   const navigate = useNavigate();
@@ -126,7 +279,18 @@ export default function ProductionOrdersPage() {
     return filterProductionOrderRows(all, appliedFilters);
   }, [batches, orders, appliedFilters]);
 
-  const releaseToWms = async (row: (typeof rows)[number]) => {
+  const activeFilterCount = countActiveProductionOrdersFilters(appliedFilters);
+
+  const patchQuickFilters = useCallback(
+    (patch: Partial<ProductionOrdersListFilters>) => {
+      const next = { ...draftFilters, ...patch };
+      setDraftFilters(next);
+      setAppliedFilters(next);
+    },
+    [draftFilters, setAppliedFilters, setDraftFilters]
+  );
+
+  const releaseToWms = async (row: ProductionOrderRow) => {
     if (row.hasShortages) {
       toast.error("Nie można wydać do WMS — braki materiałów.");
       return;
@@ -162,38 +326,113 @@ export default function ProductionOrdersPage() {
   }
 
   return (
-    <div className={productionPageStackClass}>
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h2 className={productionPageTitleClass}>
-            Zlecenia produkcyjne
-            {!loading ? <span className="ml-2 text-base font-normal text-slate-400">{rows.length} wyników</span> : null}
-          </h2>
-          <p className={productionPageDescClass}>
-            Wybrany filtr:{" "}
-            <span className="inline-flex items-center rounded-md border border-slate-200 bg-white px-2.5 py-0.5 text-sm font-medium text-slate-800">
-              {productionOrdersFilterLabel(appliedFilters)}
+    <div className={`${productionPageStackClass} !space-y-3`}>
+      <PageHeader
+        title={
+          <div>
+            <h1 className={productionPageTitleClass}>
+              Zlecenia produkcyjne
+              {!loading ? (
+                <span className="ml-2 text-base font-normal text-slate-400">{rows.length} wyników</span>
+              ) : null}
+            </h1>
+            <p className={productionPageDescClass}>
+              Filtr: <span className="font-medium text-slate-700">{productionOrdersFilterLabel(appliedFilters)}</span>
+            </p>
+          </div>
+        }
+        actions={
+          <Link to={erpProductionPaths.planning} className={primaryButtonClassName("", "compact")}>
+            <span className="inline-flex items-center gap-1.5">
+              <Plus className="h-3.5 w-3.5" aria-hidden />
+              Utwórz zlecenie
             </span>
-          </p>
-        </div>
-        <Link to={erpProductionPaths.planning} className={filterToolbarBtnApply}>
-          <Plus className="mr-1.5 inline h-4 w-4" strokeWidth={2} aria-hidden />
-          Utwórz zlecenie
-        </Link>
-      </div>
-
-      <div className="flex justify-end">
-        <button
-          type="button"
-          onClick={toggleFiltersPanel}
-          className={`${listSellasistToolbarToggleBtn} inline-flex !h-10 items-center gap-2`}
-          aria-expanded={filtersExpanded}
-        >
-          <Filter className="h-4 w-4 shrink-0" strokeWidth={2} aria-hidden />
-          Filtry
-          <ChevronDown className={`h-4 w-4 shrink-0 transition-transform ${filtersExpanded ? "rotate-180" : ""}`} aria-hidden />
-        </button>
-      </div>
+          </Link>
+        }
+        toolbar={
+          <Toolbar
+            start={
+              <>
+                <SearchInput
+                  density="compact"
+                  value={draftFilters.query}
+                  onChange={(e) => patchQuickFilters({ query: e.target.value })}
+                  placeholder="Szukaj numeru, produktu…"
+                  className="w-full min-w-[12rem] max-w-xs"
+                  aria-label="Szukaj zleceń"
+                />
+                <Select
+                  density="compact"
+                  value={draftFilters.status}
+                  onChange={(e) => patchQuickFilters({ status: e.target.value })}
+                  className="w-full min-w-[9rem] max-w-[11rem]"
+                  aria-label="Status"
+                >
+                  {PRODUCTION_ORDER_STATUS_OPTIONS.map((o) => (
+                    <option key={o.value || "all"} value={o.value}>
+                      {o.label}
+                    </option>
+                  ))}
+                </Select>
+                <Select
+                  density="compact"
+                  value={draftFilters.priority}
+                  onChange={(e) => patchQuickFilters({ priority: e.target.value })}
+                  className="w-full min-w-[8rem] max-w-[10rem]"
+                  aria-label="Priorytet"
+                >
+                  {PRODUCTION_PRIORITY_OPTIONS.map((o) => (
+                    <option key={o.value || "all"} value={o.value}>
+                      {o.value === "normal" ? "Średni" : o.label}
+                    </option>
+                  ))}
+                </Select>
+                <SearchInput
+                  density="compact"
+                  value={draftFilters.operator}
+                  onChange={(e) => patchQuickFilters({ operator: e.target.value })}
+                  placeholder="Operator"
+                  className="w-full min-w-[8rem] max-w-[10rem]"
+                  aria-label="Operator"
+                />
+              </>
+            }
+            end={
+              <>
+                <SecondaryButton
+                  type="button"
+                  density="compact"
+                  onClick={toggleFiltersPanel}
+                  aria-expanded={filtersExpanded}
+                  className="inline-flex items-center gap-1.5"
+                >
+                  <Filter className="h-3.5 w-3.5" aria-hidden />
+                  Filtry
+                  {activeFilterCount > 0 ? (
+                    <StatusBadge tone="info" density="compact">
+                      {activeFilterCount}
+                    </StatusBadge>
+                  ) : null}
+                  <ChevronDown
+                    className={`h-3.5 w-3.5 transition-transform ${filtersExpanded ? "rotate-180" : ""}`}
+                    aria-hidden
+                  />
+                </SecondaryButton>
+                <SecondaryButton
+                  type="button"
+                  density="compact"
+                  onClick={() => void reload()}
+                  disabled={loading}
+                  className="inline-flex items-center gap-1.5"
+                >
+                  <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} aria-hidden />
+                  Odśwież
+                </SecondaryButton>
+              </>
+            }
+          />
+        }
+      />
 
       <ProductionOrdersFiltersPanel
         expanded={filtersExpanded}
@@ -212,101 +451,25 @@ export default function ProductionOrdersPage() {
           title="Brak zleceń"
           description="Utwórz zlecenie lub partię w planowaniu produkcji."
           action={
-            <Link to={erpProductionPaths.planning} className="text-sm font-semibold text-amber-700 hover:underline">
+            <Link to={erpProductionPaths.planning} className="text-sm font-semibold text-slate-700 hover:underline">
               Przejdź do planowania
             </Link>
           }
         />
       ) : (
-        <div className={moduleTableCardClass}>
-          <div className={moduleListTableScrollClass}>
-            <table className={moduleListTableClass} style={{ minWidth: 960 }}>
-              <thead className={moduleListTheadClass}>
-                <tr>
-                  <th className={productionModuleListThClass}>Zlecenie</th>
-                  <th className={productionModuleListThClass}>Produkt</th>
-                  <th className={`${productionModuleListThClass} text-right`}>Ilość</th>
-                  <th className={productionModuleListThClass}>Status</th>
-                  <th className={productionModuleListThClass}>Data plan.</th>
-                  <th className={productionModuleListThClass}>Operator</th>
-                  <th className={productionModuleListThClass}>Priorytet</th>
-                  <th className={productsListActionsThClass}>Akcje</th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((r) => (
-                  <tr key={`${r.kind}-${r.id}`} className="group border-b border-slate-100 hover:bg-slate-50/70">
-                    <td className={productionModuleListTdClass}>
-                      <span className="font-mono font-medium text-slate-900">{r.number}</span>
-                      <span className="ml-2 text-[10px] uppercase text-slate-400">{r.kind === "batch" ? "partia" : "MO"}</span>
-                    </td>
-                    <td className={`${productionModuleListTdClass} max-w-[220px] truncate`}>{r.product}</td>
-                    <td className={`${productionModuleListTdClass} text-right tabular-nums`}>{r.qty}</td>
-                    <td className={productionModuleListTdClass}>
-                      <span className={r.kind === "batch" ? batchStatusBadgeClass(r.status as never) : productionStatusBadgeClass(r.status as never)}>
-                        {r.kind === "batch"
-                          ? BATCH_STATUS_LABEL[r.status as keyof typeof BATCH_STATUS_LABEL]
-                          : PRODUCTION_STATUS_LABEL[r.status as keyof typeof PRODUCTION_STATUS_LABEL]}
-                      </span>
-                    </td>
-                    <td className={`${productionModuleListTdClass} text-slate-600`}>{r.date}</td>
-                    <td className={`${productionModuleListTdClass} text-slate-600`}>{r.operator}</td>
-                    <td className={productionModuleListTdClass}>
-                      <span className={productionPriorityBadgeClass(r.priority, r.hasShortages, r.numericPriority)}>
-                        {productionPriorityLabel(r.priority, r.hasShortages, r.numericPriority)}
-                      </span>
-                    </td>
-                    <td className={productsListActionsCellClass} onClick={(e) => e.stopPropagation()}>
-                      <div className={productsListActionsInnerClass}>
-                        <ProductionRowActionsMenu
-                          ariaLabel={`Akcje ${r.number}`}
-                          actions={[
-                            {
-                              id: "open",
-                              label: "Otwórz",
-                              onClick: () =>
-                                navigate(
-                                  r.kind === "batch" ? erpProductionPaths.batch(r.id) : erpProductionPaths.order(r.id),
-                                ),
-                            },
-                            {
-                              id: "edit",
-                              label: "Edytuj",
-                              onClick: () =>
-                                navigate(
-                                  r.kind === "batch" ? erpProductionPaths.batch(r.id) : erpProductionPaths.order(r.id),
-                                ),
-                            },
-                            ...(r.kind === "batch" && (r.status === "planned" || r.status === "draft")
-                              ? [
-                                  {
-                                    id: "wms",
-                                    label: r.isReleasedToWms ? "Otwórz WMS" : "Wydaj do WMS",
-                                    onClick: () => void releaseToWms(r),
-                                    disabled: r.hasShortages,
-                                  },
-                                ]
-                              : []),
-                            ...(r.kind === "order" && (r.status === "planned" || r.status === "draft")
-                              ? [
-                                  {
-                                    id: "wms",
-                                    label: r.isReleasedToWms ? "Otwórz WMS" : "Wydaj do WMS",
-                                    onClick: () => void releaseToWms(r),
-                                    disabled: r.hasShortages,
-                                  },
-                                ]
-                              : []),
-                          ]}
-                        />
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
+        <ul className="flex w-full flex-col gap-2">
+          {rows.map((r) => (
+            <li key={`${r.kind}-${r.id}`} className="w-full">
+              <OrderWorkCard
+                row={r}
+                onOpen={() =>
+                  navigate(r.kind === "batch" ? erpProductionPaths.batch(r.id) : erpProductionPaths.order(r.id))
+                }
+                onReleaseToWms={() => void releaseToWms(r)}
+              />
+            </li>
+          ))}
+        </ul>
       )}
     </div>
   );

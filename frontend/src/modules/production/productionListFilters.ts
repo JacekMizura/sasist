@@ -37,6 +37,8 @@ export type ProductionOrderRow =
       hasShortages: boolean;
       isReleasedToWms?: boolean;
       numericPriority?: number;
+      /** Present when API returns progress; UI may hide the bar when null. */
+      progressPercent?: number | null;
     }
   | {
       kind: "order";
@@ -51,6 +53,7 @@ export type ProductionOrderRow =
       hasShortages: boolean;
       isReleasedToWms?: boolean;
       numericPriority?: number;
+      progressPercent?: number | null;
     };
 
 export function productionBatchToRow(b: ProductionBatchRead): ProductionOrderRow {
@@ -67,6 +70,7 @@ export function productionBatchToRow(b: ProductionBatchRead): ProductionOrderRow
     priority: b.has_shortages ? "blocked" : null,
     hasShortages: b.has_shortages ?? false,
     isReleasedToWms: b.is_released_to_wms ?? false,
+    progressPercent: typeof b.progress_percent === "number" ? b.progress_percent : null,
   };
 }
 
@@ -84,6 +88,7 @@ export function productionOrderToRow(o: ProductionOrderRead): ProductionOrderRow
     hasShortages: o.has_shortages ?? false,
     isReleasedToWms: o.is_released_to_wms ?? false,
     numericPriority: o.priority,
+    progressPercent: typeof o.progress_percent === "number" ? o.progress_percent : null,
   };
 }
 

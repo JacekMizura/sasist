@@ -2,7 +2,7 @@
 
 ## Active
 
-**Pulpit Produkcji — UX rebuild** (build OK).
+**Zlecenia produkcyjne — UX lista robocza** (build OK).
 
-Wyłącznie wygląd `/production` (Pulpit): KPI MetricCard, sekcje robocze Card, karty partii z ProgressBar, dolne ListTile.
-Bez zmian API / routingu / logiki. Zakładki ERP bez zmian.
+`/production/orders`: ListTile zamiast tabeli, Toolbar (szukaj/status/priorytet/operator + Filtry/Odśwież), StatusBadge, ProgressBar gdy `progress_percent`.
+Bez zmian API / routingu / logiki filtrów i WMS.

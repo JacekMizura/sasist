@@ -1,3 +1,9 @@
+## 2026-07-26 — Zlecenia produkcyjne: lista robocza (UI)
+
+- `ProductionOrdersPage`: ListTile zamiast tabeli; Toolbar + SearchInput/Select; StatusBadge; ProgressBar gdy dostępny
+- Mapowanie `progressPercent` z istniejącego `progress_percent`; menu akcji `align=end`
+- Bez zmian API/routingu/logiki · `npm run build` OK · **No push.**
+
 ## 2026-07-26 — Pulpit Produkcji: UX centrum operacyjnego
 
 - `ProductionDashboardPage` + `ProductionDashboardBatchGrid`: białe karty, KPI MetricCard, ProgressBar (+ ton `info`)

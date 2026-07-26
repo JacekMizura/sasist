@@ -19,9 +19,11 @@ export type ProductionRowAction = {
 type Props = {
   ariaLabel: string;
   actions: ProductionRowAction[];
+  /** Default center (legacy tables). Use end for compact work lists. */
+  align?: "center" | "end";
 };
 
-export function ProductionRowActionsMenu({ ariaLabel, actions }: Props) {
+export function ProductionRowActionsMenu({ ariaLabel, actions, align = "center" }: Props) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -107,7 +109,7 @@ export function ProductionRowActionsMenu({ ariaLabel, actions }: Props) {
 
   return (
     <>
-      <div className="flex justify-center" ref={rootRef}>
+      <div className={`flex ${align === "end" ? "justify-end" : "justify-center"}`} ref={rootRef}>
         <button
           ref={triggerRef}
           type="button"
