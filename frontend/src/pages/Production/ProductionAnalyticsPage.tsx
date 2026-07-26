@@ -287,7 +287,7 @@ export default function ProductionAnalyticsPage() {
                         <ProductThumb imageUrl={r.product_image_url} name={r.product_name} size="sm" />
                         <div>
                           <p className="font-medium text-slate-900">{r.product_name}</p>
-                          {r.product_sku ? <p className="text-xs text-slate-400">{r.product_sku}</p> : null}
+                          {r.product_sku ? <p className="text-xs text-slate-500">{r.product_sku}</p> : null}
                         </div>
                       </div>
                     </td>

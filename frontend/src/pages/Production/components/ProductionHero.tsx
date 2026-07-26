@@ -32,12 +32,12 @@ function KpiPill({
 }) {
   return (
     <div className="rounded-xl bg-white/10 px-4 py-3 ring-1 ring-white/15 backdrop-blur-sm">
-      <p className="text-[10px] font-bold uppercase tracking-wider text-violet-200">{label}</p>
+      <p className="text-xs font-bold uppercase tracking-wider text-violet-200">{label}</p>
       <p className={`mt-0.5 text-2xl font-bold tabular-nums text-white`}>
         {loadingValue(value)}
         {suffix ? <span className="ml-0.5 text-base font-semibold text-violet-100">{suffix}</span> : null}
       </p>
-      <p className={`mt-0.5 text-[10px] ${tone}`}>&nbsp;</p>
+      <p className={`mt-0.5 text-xs ${tone}`}>&nbsp;</p>
     </div>
   );
 }
@@ -135,7 +135,7 @@ export function ProductionHero({ data, warehouseName, loading, onCreateBatch }: 
                   >
                     <Icon className="h-4 w-4" aria-hidden />
                     {stage.label}
-                    <span className="rounded-md bg-white/80 px-1.5 py-0.5 text-[10px] font-bold text-slate-800">
+                    <span className="rounded-md bg-white/80 px-1.5 py-0.5 text-xs font-bold text-slate-800">
                       {loading ? "…" : count}
                     </span>
                   </span>

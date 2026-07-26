@@ -116,7 +116,7 @@ export function ProductionWarehouseLocationSearch({
         <div className="absolute z-30 mt-1 max-h-56 w-full overflow-auto rounded-lg border border-slate-200 bg-white shadow-lg">
           {recentRows.length > 0 && !query.trim() ? (
             <div className="border-b border-slate-100 px-3 py-2">
-              <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Ostatnie</p>
+              <p className="text-xs font-bold uppercase tracking-wide text-slate-500">Ostatnie</p>
               <ul className="mt-1 space-y-1">
                 {recentRows.map((r) => (
                   <li key={r.id}>
@@ -147,7 +147,7 @@ export function ProductionWarehouseLocationSearch({
                   >
                     <span>{r.code}</span>
                     {r.operational_zone_type ? (
-                      <span className="text-xs text-slate-400">{r.operational_zone_type}</span>
+                      <span className="text-xs text-slate-500">{r.operational_zone_type}</span>
                     ) : null}
                   </button>
                 </li>

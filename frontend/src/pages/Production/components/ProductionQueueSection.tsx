@@ -32,7 +32,7 @@ export function ProductionQueueSection({
           </span>
           <div>
             <h2 className="text-sm font-semibold text-slate-900">{config.title}</h2>
-            <p className="text-[11px] text-slate-500">{config.subtitle}</p>
+            <p className="text-xs text-slate-500">{config.subtitle}</p>
           </div>
         </div>
         <span

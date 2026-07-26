@@ -218,7 +218,7 @@ export default function ProductionShortagesPage() {
                   </td>
                   <td className={productionModuleListTdClass}>
                     <span
-                      className={`inline-flex rounded-md px-2 py-0.5 text-[10px] font-bold uppercase ${PRIORITY_CLASS[r.priority] ?? PRIORITY_CLASS.MEDIUM}`}
+                      className={`inline-flex rounded-md px-2 py-0.5 text-xs font-bold uppercase ${PRIORITY_CLASS[r.priority] ?? PRIORITY_CLASS.MEDIUM}`}
                     >
                       {r.priority}
                     </span>
@@ -233,7 +233,7 @@ export default function ProductionShortagesPage() {
                           </span>
                         ))
                       ) : (
-                        <span className="text-xs text-slate-400">—</span>
+                        <span className="text-xs text-slate-500">—</span>
                       )}
                     </div>
                   </td>

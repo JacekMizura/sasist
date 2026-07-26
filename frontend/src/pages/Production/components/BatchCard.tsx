@@ -101,7 +101,7 @@ export function BatchCard({ batch, showActions = true }: Props) {
               <span className={batchStatusBadgeClass(status)}>{BATCH_STATUS_LABEL[status]}</span>
             </div>
             {pLabel ? (
-              <span className="mt-1 inline-block rounded-md bg-rose-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-rose-700">
+              <span className="mt-1 inline-block rounded-md bg-rose-50 px-2 py-0.5 text-xs font-bold uppercase tracking-wide text-rose-700">
                 {pLabel}
               </span>
             ) : null}
@@ -144,7 +144,7 @@ export function BatchCard({ batch, showActions = true }: Props) {
             <div className="min-w-0">
               <p className="truncate text-xs font-medium text-slate-700">{batch.operator_name ?? "Nieprzypisany"}</p>
               {plannedDate ? (
-                <p className="flex items-center gap-1 text-[10px] text-slate-400">
+                <p className="flex items-center gap-1 text-xs text-slate-500">
                   <Calendar className="h-3 w-3" aria-hidden />
                   {plannedDate}
                 </p>

@@ -27,7 +27,7 @@ export function WmsProductionCollectJobHeader({ kind, header, collectedCount, to
       <div className="absolute bottom-0 left-0 top-0 w-1 bg-amber-400" aria-hidden />
       <div className="space-y-4 pl-3">
         <div className="flex flex-wrap items-start gap-2">
-          <span className="rounded-md bg-amber-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-amber-900">
+          <span className="rounded-md bg-amber-100 px-2 py-0.5 text-xs font-bold uppercase tracking-wide text-amber-900">
             {PRODUCTION_KIND_LABEL[kind]}
           </span>
           <p className={WMS_TERMINAL_LABEL}>Zbieranie surowców</p>

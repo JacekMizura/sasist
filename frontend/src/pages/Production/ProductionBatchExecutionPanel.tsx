@@ -350,7 +350,7 @@ export function ProductionBatchExecutionPanel({ tenantId, warehouseId, batch, on
             );
           })}
           {!pickPlan?.aggregated_components.length ? (
-            <p className="text-sm text-slate-400">Brak składników.</p>
+            <p className="text-sm text-slate-500">Brak składników.</p>
           ) : null}
         </div>
       </div>

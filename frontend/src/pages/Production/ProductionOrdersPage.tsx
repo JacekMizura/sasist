@@ -155,7 +155,7 @@ function OrderWorkCard({
           <div className="min-w-0">
             <div className="flex flex-wrap items-baseline gap-2">
               <p className="font-mono text-sm font-semibold text-slate-900">{row.number}</p>
-              <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+              <span className="text-xs font-bold uppercase tracking-wide text-slate-500">
                 {row.kind === "batch" ? "partia" : "MO"}
               </span>
             </div>
@@ -164,7 +164,7 @@ function OrderWorkCard({
 
           {showProgress ? (
             <div className="max-w-xl space-y-1">
-              <div className="flex items-center justify-between gap-2 text-[11px] text-slate-500">
+              <div className="flex items-center justify-between gap-2 text-xs text-slate-500">
                 <span>Postęp</span>
                 <span className="tabular-nums font-medium text-slate-700">{clamped}%</span>
               </div>
@@ -342,7 +342,7 @@ export default function ProductionOrdersPage() {
             <h1 className={productionPageTitleClass}>
               Zlecenia produkcyjne
               {!loading ? (
-                <span className="ml-2 text-base font-normal text-slate-400">{rows.length} wyników</span>
+                <span className="ml-2 text-base font-normal text-slate-500">{rows.length} wyników</span>
               ) : null}
             </h1>
             <p className={productionPageDescClass}>

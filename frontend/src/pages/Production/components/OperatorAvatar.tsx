@@ -10,7 +10,7 @@ function initials(name: string): string {
   return `${parts[0][0] ?? ""}${parts[parts.length - 1][0] ?? ""}`.toUpperCase();
 }
 
-const SIZE = { sm: "h-7 w-7 text-[10px]", md: "h-9 w-9 text-xs" };
+const SIZE = { sm: "h-7 w-7 text-xs", md: "h-9 w-9 text-xs" };
 
 export function OperatorAvatar({ name, size = "md" }: Props) {
   const label = name?.trim() || "—";

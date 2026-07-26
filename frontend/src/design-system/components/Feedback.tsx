@@ -12,7 +12,7 @@ export function EmptyState({ title, description, action, className = "", ...prop
   return (
     <Card variant="dashed" className={className} {...props}>
       {title ? <p className={typography.h2}>{title}</p> : null}
-      {description ? <p className={`mt-2 ${typography.body} ${colors.text.muted}`}>{description}</p> : null}
+      {description ? <p className={`mt-2 ${typography.bodyMuted}`}>{description}</p> : null}
       {action ? <div className="mt-4 flex justify-center">{action}</div> : null}
     </Card>
   );

@@ -1,3 +1,9 @@
+## 2026-07-26 — Typografia Produkcji = standard Dokumentów
+
+- UI Kit `typography.ts`: h1/h2/section/label/caption/pageDesc/metric/body/tableHead wg Documents
+- StatusBadge + density compact: floor `text-xs` (bez 10px); Production layout tokens + bump micro type
+- Bez zmian layoutu/funkcji · `npm run build` OK · **No push.**
+
 ## 2026-07-26 — Kreator zlecenia produkcyjnego (UX)
 
 - `/production/orders/new`: Stepper + 3 sekcje; preview/create batch (istniejące API)

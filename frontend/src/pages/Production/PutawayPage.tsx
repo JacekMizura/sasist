@@ -116,7 +116,7 @@ export default function PutawayPage() {
                             PW {ln.pwDocumentNumber ?? ln.pwDocumentId}
                           </p>
                           <span
-                            className={`inline-flex rounded-full px-2 py-0.5 text-[11px] font-semibold ring-1 ${putawayStatusBadgeClass(ln.putawayStatus)}`}
+                            className={`inline-flex rounded-full px-2 py-0.5 text-xs font-semibold ring-1 ${putawayStatusBadgeClass(ln.putawayStatus)}`}
                           >
                             {putawayStatusLabel(ln.putawayStatus)}
                           </span>

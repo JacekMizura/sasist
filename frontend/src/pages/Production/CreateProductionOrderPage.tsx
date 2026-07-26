@@ -335,27 +335,27 @@ export default function CreateProductionOrderPage() {
             ) : (
               <dl className="grid gap-2 text-sm sm:grid-cols-2">
                 <div>
-                  <dt className="text-xs text-slate-400">Produkt</dt>
+                  <dt className="text-xs text-slate-500">Produkt</dt>
                   <dd className="font-medium text-slate-900">{selected.product_name}</dd>
                 </div>
                 <div>
-                  <dt className="text-xs text-slate-400">Ilość</dt>
+                  <dt className="text-xs text-slate-500">Ilość</dt>
                   <dd className="tabular-nums font-medium text-slate-900">{qty}</dd>
                 </div>
                 <div>
-                  <dt className="text-xs text-slate-400">Termin</dt>
+                  <dt className="text-xs text-slate-500">Termin</dt>
                   <dd className="tabular-nums text-slate-800">{todayLabel()}</dd>
                 </div>
                 <div>
-                  <dt className="text-xs text-slate-400">Operator</dt>
+                  <dt className="text-xs text-slate-500">Operator</dt>
                   <dd className="text-slate-800">{operatorName}</dd>
                 </div>
                 <div>
-                  <dt className="text-xs text-slate-400">Koszt</dt>
+                  <dt className="text-xs text-slate-500">Koszt</dt>
                   <dd className="font-medium text-slate-900">{formatProductionMoney(preview.estimated_cost_net)}</dd>
                 </div>
                 <div>
-                  <dt className="text-xs text-slate-400">Materiały</dt>
+                  <dt className="text-xs text-slate-500">Materiały</dt>
                   <dd>
                     {materialsOk ? (
                       <StatusBadge tone="success" density="compact">Dostępne</StatusBadge>
@@ -403,7 +403,7 @@ export default function CreateProductionOrderPage() {
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <div className="flex items-center justify-between text-[11px] text-slate-500">
+                  <div className="flex items-center justify-between text-xs text-slate-500">
                     <span>Dostępność materiałów</span>
                     <span className="tabular-nums font-medium text-slate-700">{materialsPct}%</span>
                   </div>

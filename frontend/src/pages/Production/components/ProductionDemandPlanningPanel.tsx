@@ -262,7 +262,7 @@ export function ProductionDemandPlanningPanel({
                   </td>
                   <td className="px-2.5 py-1.5">
                     <span
-                      className={`inline-flex rounded-md px-2 py-0.5 text-[10px] font-bold uppercase ring-1 ${PRIORITY_CLASS[row.priority] ?? PRIORITY_CLASS.LOW}`}
+                      className={`inline-flex rounded-md px-2 py-0.5 text-xs font-bold uppercase ring-1 ${PRIORITY_CLASS[row.priority] ?? PRIORITY_CLASS.LOW}`}
                     >
                       {PRIORITY_LABEL[row.priority] ?? row.priority}
                     </span>
@@ -322,7 +322,7 @@ function Kpi({
     tone === "rose" ? "border-rose-200 bg-rose-50" : tone === "amber" ? "border-amber-200 bg-amber-50" : "border-slate-200 bg-white";
   return (
     <div className={`rounded-lg border px-3 py-2 ${toneClass}`}>
-      <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">{label}</p>
+      <p className="text-xs font-bold uppercase tracking-wide text-slate-500">{label}</p>
       <p className="mt-0.5 text-xl font-bold tabular-nums text-slate-900">
         {value}
         {suffix ? <span className="ml-1 text-xs font-semibold text-slate-500">{suffix}</span> : null}
@@ -356,7 +356,7 @@ function DemandCard({
         {icon}
         <div>
           <p className="text-sm font-semibold text-slate-900">{title}</p>
-          <p className="text-[11px] text-slate-500">{subtitle}</p>
+          <p className="text-xs text-slate-500">{subtitle}</p>
         </div>
       </div>
       {extra ? <div className="mt-2">{extra}</div> : null}

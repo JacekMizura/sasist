@@ -2,9 +2,8 @@
 
 ## Active
 
-**Kreator zlecenia produkcyjnego** (build OK).
+**Produkcja ↔ Dokumenty typografia** (build OK).
 
-`/production/orders/new` — 3 sekcje na jednym ekranie (produkt → ilość → podsumowanie).
-Planowanie = Symulacja MRP (bez mieszania z create).
-Po create → `/production/orders?highlight=batch-{id}`.
-Bez zmian API / obliczeń MRP.
+UI Kit `typography` + StatusBadge/density floor wyrównane do DocumentsSectionShell / list tables.
+Produkcja: layout tokens + usunięcie `text-[10px]` / słabego `slate-400` w treściach.
+Bez zmian układu / funkcji.

@@ -22,7 +22,7 @@ function StatusBadge({ status }: { status: string }) {
   const cfg = STATUS_UI[status as keyof typeof STATUS_UI] ?? STATUS_UI.OK;
   const Icon = cfg.icon;
   return (
-    <span className={`inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[10px] font-bold uppercase ring-1 ${cfg.className}`}>
+    <span className={`inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-xs font-bold uppercase ring-1 ${cfg.className}`}>
       <Icon className="h-3 w-3" aria-hidden />
       {cfg.label}
     </span>

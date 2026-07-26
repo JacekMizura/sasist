@@ -392,7 +392,7 @@ export function CompositionVisualEditor({
                   </div>
                 ))}
                 {comp.lines.length > 4 ? (
-                  <p className="text-xs text-slate-400">+{comp.lines.length - 4} więcej</p>
+                  <p className="text-xs text-slate-500">+{comp.lines.length - 4} więcej</p>
                 ) : null}
                 <ArrowDown className="h-4 w-4 text-slate-300" aria-hidden />
                 <div className={`w-full max-w-xs rounded-lg border-2 px-3 py-2 text-center text-sm font-semibold ${copy.outputBorder}`}>
@@ -569,7 +569,7 @@ export function CompositionVisualEditor({
                   </p>
                 </div>
               ))}
-              {previewLines.length === 0 ? <p className="text-sm text-slate-400">Dodaj składniki…</p> : null}
+              {previewLines.length === 0 ? <p className="text-sm text-slate-500">Dodaj składniki…</p> : null}
               <ArrowDown className="h-5 w-5 text-violet-400" aria-hidden />
               <div className="w-full max-w-md rounded-lg border-2 border-violet-300 bg-violet-50 px-4 py-3 text-center font-semibold text-violet-900 shadow-sm">
                 {productName}

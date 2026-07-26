@@ -87,13 +87,13 @@ export function PaperCollectTaskCard({ task, expanded, done, busy, onToggle, onC
           <div className="grid gap-2 sm:grid-cols-2">
             {task.product_sku ? (
               <div>
-                <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">SKU</p>
+                <p className="text-xs font-bold uppercase tracking-wide text-slate-500">SKU</p>
                 <p className="font-mono text-sm">{task.product_sku}</p>
               </div>
             ) : null}
             {task.product_ean ? (
               <div>
-                <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">EAN</p>
+                <p className="text-xs font-bold uppercase tracking-wide text-slate-500">EAN</p>
                 <p className="font-mono text-sm">{task.product_ean}</p>
               </div>
             ) : null}

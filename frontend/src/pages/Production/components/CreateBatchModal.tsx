@@ -255,7 +255,7 @@ export function CreateBatchModal({ open, tenantId, warehouseId, initialLines, on
                         <div className="min-w-0 flex-1">
                           <p className="truncate text-sm font-semibold text-slate-900">{r.product_name}</p>
                           <p className="truncate text-xs text-slate-500">{r.recipe_name}</p>
-                          <p className="mt-1 text-[10px] text-slate-400">
+                          <p className="mt-1 text-xs text-slate-500">
                             max {Math.floor(r.max_producible)} · {formatProductionMoney(r.unit_cost_net)}/szt.
                           </p>
                         </div>
@@ -327,15 +327,15 @@ export function CreateBatchModal({ open, tenantId, warehouseId, initialLines, on
                 <>
                   <div className="grid grid-cols-2 gap-2">
                     <div className="rounded-xl border border-slate-200 bg-white p-3">
-                      <p className="text-[10px] font-bold uppercase text-slate-400">Produkty</p>
+                      <p className="text-xs font-bold uppercase text-slate-500">Produkty</p>
                       <p className="text-xl font-bold text-slate-900">{preview.products_count}</p>
                     </div>
                     <div className="rounded-xl border border-slate-200 bg-white p-3">
-                      <p className="text-[10px] font-bold uppercase text-slate-400">Sztuk</p>
+                      <p className="text-xs font-bold uppercase text-slate-500">Sztuk</p>
                       <p className="text-xl font-bold text-slate-900">{preview.total_planned_units}</p>
                     </div>
                     <div className="rounded-xl border border-violet-200 bg-violet-50 p-3">
-                      <p className="flex items-center gap-1 text-[10px] font-bold uppercase text-violet-600">
+                      <p className="flex items-center gap-1 text-xs font-bold uppercase text-violet-600">
                         <Coins className="h-3 w-3" aria-hidden />
                         Koszt szac.
                       </p>
@@ -344,7 +344,7 @@ export function CreateBatchModal({ open, tenantId, warehouseId, initialLines, on
                       </p>
                     </div>
                     <div className="rounded-xl border border-blue-200 bg-blue-50 p-3">
-                      <p className="flex items-center gap-1 text-[10px] font-bold uppercase text-blue-600">
+                      <p className="flex items-center gap-1 text-xs font-bold uppercase text-blue-600">
                         <Clock className="h-3 w-3" aria-hidden />
                         Czas szac.
                       </p>

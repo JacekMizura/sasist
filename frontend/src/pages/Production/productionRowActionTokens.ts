@@ -9,7 +9,7 @@ export const productionListActionsCellClass =
   "sticky right-0 z-[2] box-border w-[168px] min-w-[168px] max-w-[168px] shrink-0 bg-inherit px-1 py-0 align-middle";
 
 export const productionListActionsThClass =
-  "sticky right-0 top-0 z-[3] box-border w-[168px] min-w-[168px] max-w-[168px] shrink-0 bg-white px-1 py-3 text-center text-[11px] font-semibold uppercase tracking-wide text-slate-500 shadow-[inset_0_-1px_0_0_rgb(226,232,240)]";
+  "sticky right-0 top-0 z-[3] box-border w-[168px] min-w-[168px] max-w-[168px] shrink-0 bg-white px-1 py-3 text-center text-xs font-bold uppercase tracking-wide text-slate-500 shadow-[inset_0_-1px_0_0_rgb(226,232,240)]";
 
 export const productionListActionsInnerClass =
   "flex min-h-[3.5rem] flex-row flex-nowrap items-center justify-center gap-1";

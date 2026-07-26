@@ -46,7 +46,7 @@ function NeedRow({ row }: { row: ProductionMaterialNeed }) {
           Potrzeba: <strong>{row.shortage_qty}</strong> · Pokryto: <strong>{row.covered_qty}</strong>
           {remaining > 0 ? <span className="text-rose-700"> · Brakuje {remaining.toFixed(2)}</span> : null}
         </div>
-        <span className={`rounded-md px-2 py-0.5 text-[10px] font-bold uppercase ${cfg.className}`}>{cfg.label}</span>
+        <span className={`rounded-md px-2 py-0.5 text-xs font-bold uppercase ${cfg.className}`}>{cfg.label}</span>
       </button>
       {open && row.history.length > 0 ? (
         <div className="border-t border-slate-100 px-4 py-3">

@@ -428,7 +428,7 @@ export default function ProductionDashboardPage() {
                             <div className="min-w-0 flex-1">
                               <p className="font-mono text-sm font-semibold text-slate-900">{b.number}</p>
                               <p className="truncate text-xs text-slate-500">{productLabel(b)}</p>
-                              <p className="mt-0.5 text-[11px] text-slate-400">
+                              <p className="mt-0.5 text-xs text-slate-500">
                                 Zakończono · plan {formatPlannedDate(b.planned_date)}
                               </p>
                             </div>
@@ -473,7 +473,7 @@ export default function ProductionDashboardPage() {
                                 <p className="tabular-nums text-xs font-medium text-slate-700">
                                   {formatPlannedDate(b.planned_date)}
                                 </p>
-                                <p className="tabular-nums text-[11px] text-slate-400">{pct}%</p>
+                                <p className="tabular-nums text-xs text-slate-500">{pct}%</p>
                               </div>
                             </div>
                           </ListTile>

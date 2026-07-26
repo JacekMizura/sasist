@@ -338,7 +338,7 @@ export function ProductManufacturingPanel({ tenantId, productId, productName, on
                         </p>
                       </div>
                       {r.is_active ? (
-                        <span className="shrink-0 rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-emerald-800">
+                        <span className="shrink-0 rounded bg-emerald-100 px-1.5 py-0.5 text-xs font-semibold uppercase text-emerald-800">
                           Aktywna
                         </span>
                       ) : null}

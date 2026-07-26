@@ -6,15 +6,15 @@ import { DENSITY_DEFAULT, type UiDensity } from "../tokens/density";
 export type StatusTone = ColorTone;
 
 const statusTextSize: Record<UiDensity, string> = {
-  compact: "text-[10px]",
+  compact: "text-xs",
   default: "text-xs",
   comfortable: "text-sm",
 };
 
 const statusBadgePad: Record<UiDensity, string> = {
-  compact: "px-1.5 py-0.5 text-[10px]",
-  default: "px-2 py-0.5 text-[11px]",
-  comfortable: "px-2.5 py-1 text-xs",
+  compact: "px-1.5 py-0.5 text-xs",
+  default: "px-2 py-0.5 text-xs",
+  comfortable: "px-2.5 py-1 text-xs sm:text-sm",
 };
 
 export type StatusTextProps = HTMLAttributes<HTMLSpanElement> & {

@@ -388,7 +388,7 @@ export default function ProductionOrderDetailPage() {
                         <span>
                           <span className="font-medium text-slate-900">{ln.product_name_snapshot}</span>
                           {ln.product_sku_snapshot ? (
-                            <span className="ml-2 text-xs text-slate-400">{ln.product_sku_snapshot}</span>
+                            <span className="ml-2 text-xs text-slate-500">{ln.product_sku_snapshot}</span>
                           ) : null}
                         </span>
                       </div>

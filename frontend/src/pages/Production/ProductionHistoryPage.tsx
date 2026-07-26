@@ -178,7 +178,7 @@ export default function ProductionHistoryPage() {
         <div>
           <h2 className={productionPageTitleClass}>
             Historia produkcji
-            {!loading ? <span className="ml-2 text-base font-normal text-slate-400">{filtered.length} wyników</span> : null}
+            {!loading ? <span className="ml-2 text-base font-normal text-slate-500">{filtered.length} wyników</span> : null}
           </h2>
           <p className={productionPageDescClass}>Zakończone partie masowe i zlecenia produkcyjne (MO).</p>
         </div>
@@ -302,7 +302,7 @@ export default function ProductionHistoryPage() {
                   <tr key={r.key} className="group border-b border-slate-100 hover:bg-slate-50/70">
                     <td className={`${productionModuleListTdClass} font-mono font-medium text-slate-900`}>
                       {r.number}
-                      <span className="ml-2 text-[10px] uppercase text-slate-400">{r.kind === "batch" ? "partia" : "MO"}</span>
+                      <span className="ml-2 text-xs font-semibold uppercase text-slate-500">{r.kind === "batch" ? "partia" : "MO"}</span>
                     </td>
                     <td className={`${productionModuleListTdClass} max-w-[220px] truncate text-slate-700`}>{r.product}</td>
                     <td className={`${productionModuleListTdClass} text-right tabular-nums`}>{r.qty}</td>

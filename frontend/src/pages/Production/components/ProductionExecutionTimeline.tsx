@@ -52,7 +52,7 @@ export function ProductionExecutionTimeline({ source, className = "" }: Props) {
             {step.at ? (
               <p className="mt-0.5 text-xs text-slate-500">{formatTimelineTimestamp(step.at)}</p>
             ) : step.status === "pending" ? (
-              <p className="mt-0.5 text-xs text-slate-400">Oczekuje</p>
+              <p className="mt-0.5 text-xs text-slate-500">Oczekuje</p>
             ) : step.status === "active" ? (
               <p className="mt-0.5 text-xs font-medium text-violet-600">W trakcie</p>
             ) : null}

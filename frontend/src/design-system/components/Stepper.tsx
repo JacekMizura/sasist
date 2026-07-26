@@ -52,7 +52,7 @@ export function Stepper({ steps, activeIndex, className = "", ...props }: Steppe
                   </span>
                 </div>
                 {step.description ? (
-                  <p className={`pl-9 text-xs ${typography.caption} ${colors.text.muted}`}>{step.description}</p>
+                  <p className={`pl-9 ${typography.caption}`}>{step.description}</p>
                 ) : null}
               </div>
               {index < steps.length - 1 ? (

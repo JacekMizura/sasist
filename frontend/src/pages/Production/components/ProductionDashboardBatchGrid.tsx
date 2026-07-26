@@ -119,7 +119,7 @@ export function ProductionDashboardBatchGrid({
             </div>
 
             <div className="space-y-1.5">
-              <div className="flex items-center justify-between gap-2 text-[11px] text-slate-500">
+              <div className="flex items-center justify-between gap-2 text-xs text-slate-500">
                 <span>Postęp</span>
                 <span className="tabular-nums font-medium text-slate-700">{pct}%</span>
               </div>

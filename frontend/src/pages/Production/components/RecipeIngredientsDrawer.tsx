@@ -72,7 +72,7 @@ export function RecipeIngredientsDrawer({ open, recipe, tenantId, warehouseId, o
       >
         <header className="flex shrink-0 items-start justify-between gap-3 border-b border-slate-100 px-5 py-4">
           <div className="min-w-0">
-            <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Składniki receptury</p>
+            <p className="text-xs font-bold uppercase tracking-wide text-slate-500">Składniki receptury</p>
             <h2 id="recipe-ingredients-drawer-title" className="mt-1 text-base font-semibold text-slate-900">
               {recipe.recipe_name}
             </h2>

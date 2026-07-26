@@ -43,7 +43,7 @@ export function WmsProductionActiveBatchBar({
         <ProductThumb imageUrl={productImageUrl} name={productLine ?? number} size="lg" />
         <div className="min-w-0 flex-1">
         {kind ? (
-          <span className={`${operationalBadgeBase} ${operationalBadgeNeutralClass} mb-2 inline-flex text-[10px] uppercase tracking-wide`}>
+          <span className={`${operationalBadgeBase} ${operationalBadgeNeutralClass} mb-2 inline-flex text-xs uppercase tracking-wide`}>
             {PRODUCTION_KIND_LABEL[kind]}
           </span>
         ) : null}

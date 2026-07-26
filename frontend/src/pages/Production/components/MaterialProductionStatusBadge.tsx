@@ -48,21 +48,21 @@ export function MaterialProductionStatusBadge({
   return (
     <div className="max-w-[180px] space-y-1">
       <span
-        className={`inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[10px] font-bold uppercase ring-1 ${cfg.className}`}
+        className={`inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-xs font-bold uppercase ring-1 ${cfg.className}`}
       >
         <Icon className="h-3 w-3" aria-hidden />
         {cfg.label}
       </span>
       {!compact ? (
         <>
-          <p className="text-[10px] leading-snug text-slate-600">{desc}</p>
+          <p className="text-xs leading-snug text-slate-600">{desc}</p>
           {status === "PARTIAL" && producibleNow != null && waitingQty != null ? (
-            <p className="text-[10px] font-semibold text-amber-800">
+            <p className="text-xs font-semibold text-amber-800">
               Teraz: {producibleNow} szt. · oczekuje: {waitingQty} szt.
             </p>
           ) : null}
           {limitingComponentName && status !== "OK" ? (
-            <p className="text-[10px] text-slate-500">Ogranicza: {limitingComponentName}</p>
+            <p className="text-xs text-slate-500">Ogranicza: {limitingComponentName}</p>
           ) : null}
         </>
       ) : null}

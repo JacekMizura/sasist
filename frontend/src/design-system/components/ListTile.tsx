@@ -1,6 +1,6 @@
 import type { HTMLAttributes, ReactNode } from "react";
 import { Card } from "./Card";
-import { colors, typography } from "../tokens";
+import { typography } from "../tokens";
 import { DENSITY_DEFAULT, type UiDensity } from "../tokens/density";
 
 export type ListTileProps = HTMLAttributes<HTMLDivElement> & {
@@ -44,12 +44,12 @@ export function MetricCard({
 }: MetricCardProps) {
   return (
     <Card variant="section" density={density} className={className} {...props}>
-      <div className={typography.section}>{label}</div>
+      <div className={typography.kpiLabel}>{label}</div>
       <div className="mt-3 flex items-end gap-2">
         <span className={typography.metric}>{value}</span>
-        {unit ? <span className={`pb-1 ${typography.metricUnit}`}>{unit}</span> : null}
+        {unit ? <span className={`pb-0.5 ${typography.metricUnit}`}>{unit}</span> : null}
       </div>
-      {hint ? <div className={`mt-2 text-[13px] ${colors.text.muted}`}>{hint}</div> : null}
+      {hint ? <div className={`mt-2 ${typography.caption}`}>{hint}</div> : null}
     </Card>
   );
 }

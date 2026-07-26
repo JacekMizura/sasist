@@ -37,7 +37,7 @@ export default function ProductionModuleLayout() {
               <Factory className="h-7 w-7 text-violet-100" aria-hidden />
             </span>
             <div>
-              <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-violet-300">Manufacturing</p>
+              <p className="text-xs font-bold uppercase tracking-[0.2em] text-violet-300">Manufacturing</p>
               <h1 className="text-xl font-bold tracking-tight lg:text-2xl">Centrum produkcji</h1>
             </div>
           </div>

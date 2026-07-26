@@ -171,7 +171,7 @@ export function ErpProductPicker({
             className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-violet-400 focus:outline-none focus:ring-2 focus:ring-violet-100"
             autoComplete="off"
           />
-          {loading ? <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-400">…</span> : null}
+          {loading ? <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-500">…</span> : null}
           <AutocompleteDropdownPanel mounted={dropdown.canShowDropdown} visible={dropdown.dropdownVisible}>
             <ul className="max-h-72 w-full overflow-y-auto rounded-lg border border-slate-200 bg-white py-1 shadow-xl" role="listbox">
               {options.map((p, i) => (

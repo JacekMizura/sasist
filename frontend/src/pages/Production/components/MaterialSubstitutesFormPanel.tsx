@@ -145,7 +145,7 @@ export function MaterialSubstitutesFormPanel({ tenantId, rows, onChanged }: Prop
             >
               <div className="flex min-w-0 flex-1 flex-wrap items-center gap-4">
                 <div className="flex items-center gap-2">
-                  <span className="text-xs font-bold uppercase text-slate-400">Składnik</span>
+                  <span className="text-xs font-bold uppercase text-slate-500">Składnik</span>
                   <ProductThumb imageUrl={null} name={r.product_name} size="sm" />
                   <div>
                     <p className="text-sm font-semibold">{r.product_name}</p>

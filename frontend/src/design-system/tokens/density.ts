@@ -49,9 +49,9 @@ export const densityCardPad: Record<UiDensity, string> = {
   comfortable: "p-6",
 };
 
-/** Type size for dense controls. */
+/** Type size for dense controls — floor at Documents-readable text-xs. */
 export const densityControlText: Record<UiDensity, string> = {
-  compact: "text-[11px] font-medium leading-none",
+  compact: "text-xs font-medium leading-none",
   default: "text-[13px] font-medium leading-tight",
   comfortable: "text-sm font-semibold",
 };

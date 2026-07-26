@@ -74,7 +74,7 @@ export function ProductionDocumentsSection({ rwDocumentId, rwDocumentNumber, pwD
                     </Link>
                   </div>
                   {pw.productName ? <p className="text-xs text-slate-500">{pw.productName}</p> : null}
-                  <span className={`inline-flex rounded-full px-2 py-0.5 text-[11px] font-semibold ring-1 ${putawayStatusBadgeClass(pw.putawayStatus)}`}>
+                  <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-semibold ring-1 ${putawayStatusBadgeClass(pw.putawayStatus)}`}>
                     {putawayStatusLabel(pw.putawayStatus)}
                   </span>
                 </div>

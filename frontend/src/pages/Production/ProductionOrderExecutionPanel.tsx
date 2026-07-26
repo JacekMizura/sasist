@@ -404,7 +404,7 @@ export function ProductionOrderExecutionPanel({
                               </button>
                               <span className="text-slate-500">{loc.available} szt.</span>
                               {loc.is_suggested ? (
-                                <span className="text-[10px] uppercase text-emerald-600">sugerowane</span>
+                                <span className="text-xs uppercase text-emerald-600">sugerowane</span>
                               ) : null}
                               {picked ? (
                                 <input

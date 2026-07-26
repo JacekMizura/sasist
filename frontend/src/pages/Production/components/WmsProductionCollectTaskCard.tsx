@@ -147,7 +147,7 @@ export function WmsProductionCollectTaskCard({
                     className="max-w-full"
                   />
                   {opt.is_preferred ? (
-                    <span className="inline-flex items-center gap-1 rounded-md bg-violet-100 px-2 py-0.5 text-[10px] font-bold uppercase text-violet-800">
+                    <span className="inline-flex items-center gap-1 rounded-md bg-violet-100 px-2 py-0.5 text-xs font-bold uppercase text-violet-800">
                       <Star className="h-3 w-3" aria-hidden />
                       Preferowana
                     </span>

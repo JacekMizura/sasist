@@ -1,15 +1,20 @@
-/** Wspólne odstępy i gęstość UI modułu Produkcja (ERP). */
+/** Wspólne odstępy i typografia UI modułu Produkcja (ERP) — standard Dokumentów. */
 
 export const productionPageStackClass = "space-y-4 pb-6";
 
-export const productionPageTitleClass = "text-lg font-semibold text-slate-900";
+/** DocumentsSectionShell title. */
+export const productionPageTitleClass = "text-lg font-semibold tracking-tight text-slate-900";
 
-export const productionPageDescClass = "mt-0.5 text-sm text-slate-500";
+/** DocumentsSectionShell subtitle. */
+export const productionPageDescClass = "mt-0.5 text-sm leading-relaxed text-slate-600";
 
+/** Documents content section label. */
 export const productionSectionLabelClass =
-  "text-[11px] font-semibold uppercase tracking-wide text-slate-400";
+  "text-xs font-bold uppercase tracking-wide text-slate-500";
 
-export const productionTableThClass = "px-3 py-2 text-left text-xs font-medium text-slate-400";
+/** Documents list table header. */
+export const productionTableThClass =
+  "px-3 py-2 text-left text-[11px] font-bold uppercase tracking-wide text-slate-500 sm:text-xs";
 
 export const productionTableTdClass = "px-3 py-2.5 align-top text-sm text-slate-800";
 
@@ -17,7 +22,8 @@ export const productionBatchCardGridClass = "grid gap-2 p-3 sm:grid-cols-2 xl:gr
 
 export const productionInlinePanelClass = "rounded-xl border border-slate-200 bg-white";
 
-/** Gęstsze wiersze tabel modułu Produkcja (bez zmiany globalnych tokenów list). */
-export const productionModuleListThClass = "px-4 py-2 text-left text-xs font-medium text-slate-400";
+/** Gęstsze wiersze tabel modułu Produkcja — ta sama hierarchia co Documents list TH. */
+export const productionModuleListThClass =
+  "px-4 py-2 text-left text-[11px] font-bold uppercase tracking-wide text-slate-500 sm:text-xs";
 
 export const productionModuleListTdClass = "px-4 py-2.5 align-top text-sm text-slate-800";
