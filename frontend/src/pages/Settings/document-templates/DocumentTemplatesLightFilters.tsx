@@ -1,5 +1,5 @@
 import { ChevronDown } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import type { DocumentTemplateFamilyDto } from "../../../api/documentTemplatesApi";
 import { DOC_TEMPLATE_SOURCE_LABELS } from "./constants";
@@ -15,19 +15,29 @@ type Props = {
 const fieldClass =
   "w-full rounded-lg border border-[#E5E7EB] bg-white px-3 py-2 text-sm text-slate-800 shadow-sm transition focus:border-orange-400 focus:outline-none focus:ring-1 focus:ring-orange-300/40";
 
+const labelClass = "mb-1 block text-[11px] font-medium uppercase tracking-wide text-slate-400";
+
+function hasAdvancedFilters(value: DocumentTemplatesListFilters): boolean {
+  return Boolean(value.familyCode || value.source || value.variantCode);
+}
+
 /**
- * Lightweight filters — Label System list language (no heavy Sellasist shell).
+ * Lightweight filters — primary: Szukaj / Typ / Status; rest behind „Więcej filtrów”.
  */
 export function DocumentTemplatesLightFilters({ value, onChange, families, kinds }: Props) {
-  const [moreOpen, setMoreOpen] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(() => hasAdvancedFilters(value));
+
+  useEffect(() => {
+    if (hasAdvancedFilters(value)) setMoreOpen(true);
+  }, [value.familyCode, value.source, value.variantCode]);
 
   const patch = (partial: Partial<DocumentTemplatesListFilters>) => onChange({ ...value, ...partial });
 
   return (
     <div className="space-y-3">
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         <label className="block min-w-0 sm:col-span-2 lg:col-span-1">
-          <span className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-slate-400">Szukaj</span>
+          <span className={labelClass}>Szukaj</span>
           <input
             type="search"
             className={fieldClass}
@@ -37,7 +47,7 @@ export function DocumentTemplatesLightFilters({ value, onChange, families, kinds
           />
         </label>
         <label className="block min-w-0">
-          <span className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-slate-400">Typ</span>
+          <span className={labelClass}>Typ dokumentu</span>
           <select
             className={fieldClass}
             value={value.kindCode}
@@ -52,28 +62,7 @@ export function DocumentTemplatesLightFilters({ value, onChange, families, kinds
           </select>
         </label>
         <label className="block min-w-0">
-          <span className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-slate-400">Kategoria</span>
-          <select
-            className={fieldClass}
-            value={value.familyCode}
-            onChange={(e) =>
-              patch({
-                familyCode: e.target.value,
-                kindCode: e.target.value !== value.familyCode ? "" : value.kindCode,
-              })
-            }
-          >
-            <option value="">Wszystkie</option>
-            {families.map((f) => (
-              <option key={f.code} value={f.code}>
-                {f.icon ? `${f.icon} ` : ""}
-                {f.name_pl}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="block min-w-0">
-          <span className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-slate-400">Status</span>
+          <span className={labelClass}>Status</span>
           <select
             className={fieldClass}
             value={value.status}
@@ -85,39 +74,58 @@ export function DocumentTemplatesLightFilters({ value, onChange, families, kinds
             <option value="archived">Archiwalna</option>
           </select>
         </label>
-        <label className="block min-w-0">
-          <span className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-slate-400">Źródło</span>
-          <select
-            className={fieldClass}
-            value={value.source}
-            onChange={(e) => patch({ source: e.target.value })}
-          >
-            <option value="">Wszystkie</option>
-            {Object.entries(DOC_TEMPLATE_SOURCE_LABELS).map(([k, v]) => (
-              <option key={k} value={k}>
-                {v}
-              </option>
-            ))}
-          </select>
-        </label>
       </div>
 
       <div>
         <button
           type="button"
           onClick={() => setMoreOpen((v) => !v)}
-          className="inline-flex items-center gap-1.5 text-sm font-medium text-slate-600 transition hover:text-slate-900"
+          className="inline-flex items-center gap-1.5 rounded-md text-sm font-medium text-slate-600 transition hover:text-slate-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-400 focus-visible:ring-offset-2"
           aria-expanded={moreOpen}
         >
           Więcej filtrów
           <ChevronDown className={`h-4 w-4 transition-transform ${moreOpen ? "rotate-180" : ""}`} aria-hidden />
         </button>
         {moreOpen ? (
-          <div className="mt-3 grid max-w-sm gap-3 sm:grid-cols-2">
+          <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             <label className="block min-w-0">
-              <span className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-slate-400">
-                Wariant
-              </span>
+              <span className={labelClass}>Kategoria</span>
+              <select
+                className={fieldClass}
+                value={value.familyCode}
+                onChange={(e) =>
+                  patch({
+                    familyCode: e.target.value,
+                    kindCode: e.target.value !== value.familyCode ? "" : value.kindCode,
+                  })
+                }
+              >
+                <option value="">Wszystkie</option>
+                {families.map((f) => (
+                  <option key={f.code} value={f.code}>
+                    {f.icon ? `${f.icon} ` : ""}
+                    {f.name_pl}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="block min-w-0">
+              <span className={labelClass}>Źródło</span>
+              <select
+                className={fieldClass}
+                value={value.source}
+                onChange={(e) => patch({ source: e.target.value })}
+              >
+                <option value="">Wszystkie</option>
+                {Object.entries(DOC_TEMPLATE_SOURCE_LABELS).map(([k, v]) => (
+                  <option key={k} value={k}>
+                    {v}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="block min-w-0">
+              <span className={labelClass}>Wariant</span>
               <select
                 className={fieldClass}
                 value={value.variantCode}

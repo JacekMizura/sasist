@@ -20,6 +20,9 @@ const CATEGORY_LABELS: Record<string, string> = {
 const fieldClass =
   "w-full rounded-lg border border-[#E5E7EB] bg-white px-3 py-2 text-sm text-slate-800 shadow-sm transition focus:border-orange-400 focus:outline-none focus:ring-1 focus:ring-orange-300/40";
 
+const labelClass = "mb-1 block text-[11px] font-medium uppercase tracking-wide text-slate-400";
+
+/** Same breakpoints as Label Ready templates — dense at 1366→1920. */
 const GRID_CLASS =
   "grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 min-[1400px]:grid-cols-5 min-[1600px]:grid-cols-6";
 
@@ -45,6 +48,12 @@ export function StarterGalleryPage() {
       .catch((err) => toast.error(extractApiErrorMessage(err, "Nie udało się wczytać starterów.")))
       .finally(() => setLoading(false));
   }, []);
+
+  const advancedActive = Boolean(familyFilter || tagFilter || categoryFilter);
+
+  useEffect(() => {
+    if (advancedActive) setMoreOpen(true);
+  }, [advancedActive]);
 
   const filtered = useMemo(() => {
     const items = gallery?.items ?? [];
@@ -80,9 +89,9 @@ export function StarterGalleryPage() {
   return (
     <div className="min-w-0 space-y-5 bg-white px-1 pb-10 pt-2">
       <div className="space-y-3">
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)] lg:max-w-3xl">
           <label className="block min-w-0">
-            <span className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-slate-400">Szukaj</span>
+            <span className={labelClass}>Szukaj</span>
             <input
               type="search"
               className={fieldClass}
@@ -92,29 +101,12 @@ export function StarterGalleryPage() {
             />
           </label>
           <label className="block min-w-0">
-            <span className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-slate-400">Typ</span>
+            <span className={labelClass}>Typ dokumentu</span>
             <select className={fieldClass} value={kindFilter} onChange={(e) => setKindFilter(e.target.value)}>
               <option value="">Wszystkie</option>
               {(gallery?.kinds || []).map((k) => (
                 <option key={k} value={k}>
                   {k}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="block min-w-0">
-            <span className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-slate-400">
-              Kategoria
-            </span>
-            <select
-              className={fieldClass}
-              value={categoryFilter}
-              onChange={(e) => setCategoryFilter(e.target.value)}
-            >
-              <option value="">Wszystkie</option>
-              {Object.entries(CATEGORY_LABELS).map(([code, label]) => (
-                <option key={code} value={code}>
-                  {label}
                 </option>
               ))}
             </select>
@@ -125,7 +117,7 @@ export function StarterGalleryPage() {
           <button
             type="button"
             onClick={() => setMoreOpen((v) => !v)}
-            className="inline-flex items-center gap-1.5 text-sm font-medium text-slate-600 transition hover:text-slate-900"
+            className="inline-flex items-center gap-1.5 rounded-md text-sm font-medium text-slate-600 transition hover:text-slate-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-400 focus-visible:ring-offset-2"
             aria-expanded={moreOpen}
           >
             Więcej filtrów
@@ -135,11 +127,24 @@ export function StarterGalleryPage() {
             />
           </button>
           {moreOpen ? (
-            <div className="mt-3 grid max-w-xl gap-3 sm:grid-cols-2">
+            <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
               <label className="block min-w-0">
-                <span className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-slate-400">
-                  Rodzina
-                </span>
+                <span className={labelClass}>Kategoria</span>
+                <select
+                  className={fieldClass}
+                  value={categoryFilter}
+                  onChange={(e) => setCategoryFilter(e.target.value)}
+                >
+                  <option value="">Wszystkie</option>
+                  {Object.entries(CATEGORY_LABELS).map(([code, label]) => (
+                    <option key={code} value={code}>
+                      {label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="block min-w-0">
+                <span className={labelClass}>Rodzina</span>
                 <select
                   className={fieldClass}
                   value={familyFilter}
@@ -154,9 +159,7 @@ export function StarterGalleryPage() {
                 </select>
               </label>
               <label className="block min-w-0">
-                <span className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-slate-400">
-                  Tag
-                </span>
+                <span className={labelClass}>Tag</span>
                 <select className={fieldClass} value={tagFilter} onChange={(e) => setTagFilter(e.target.value)}>
                   <option value="">Wszystkie</option>
                   {(gallery?.tags || []).map((t) => (
@@ -174,7 +177,7 @@ export function StarterGalleryPage() {
       {loading ? <p className="py-10 text-center text-sm text-slate-500">Wczytywanie…</p> : null}
 
       {!loading && filtered.length === 0 ? (
-        <div className="flex min-h-[280px] flex-col items-center justify-center rounded-2xl border border-dashed border-gray-200 px-6 py-12 text-center shadow-sm">
+        <div className="flex min-h-[240px] flex-col items-center justify-center rounded-2xl border border-dashed border-gray-200 px-6 py-12 text-center shadow-sm">
           <p className="text-base font-semibold text-slate-900">Nie znaleziono szablonów</p>
           <p className="mt-1.5 max-w-sm text-sm text-slate-500">Zmień filtry albo utwórz własny szablon.</p>
         </div>

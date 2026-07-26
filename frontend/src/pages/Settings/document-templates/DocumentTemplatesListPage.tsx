@@ -100,7 +100,7 @@ export function DocumentTemplatesListPage() {
       {loading ? (
         <p className="py-10 text-center text-sm text-slate-500">Wczytywanie…</p>
       ) : filtered.length === 0 ? (
-        <div className="flex min-h-[280px] flex-col items-center justify-center rounded-2xl border border-dashed border-gray-200 bg-white px-6 py-12 text-center shadow-sm">
+        <div className="flex min-h-[240px] flex-col items-center justify-center rounded-2xl border border-dashed border-gray-200 bg-white px-6 py-12 text-center shadow-sm">
           <p className="text-base font-semibold text-slate-900">Brak szablonów</p>
           <p className="mt-1.5 max-w-sm text-sm text-slate-500">
             Zmień filtry albo utwórz nowy szablon dokumentu.
@@ -111,7 +111,7 @@ export function DocumentTemplatesListPage() {
           <p className="text-xs text-slate-500">
             {filtered.length} {filtered.length === 1 ? "szablon" : "szablonów"}
           </p>
-          <div className="flex flex-col gap-3">
+          <div className="flex flex-col gap-2.5">
             {filtered.map((row) => (
               <DocumentTemplateListCard
                 key={row.id}

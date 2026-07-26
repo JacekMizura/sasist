@@ -1,3 +1,10 @@
+## 2026-07-26 — Szablony wydruków UX polish (pass 2)
+
+- Karty listy: hierarchia nazwa→typ→status→używany jako/w→edycja; StatusBadge DS; Edytuj + menu Więcej
+- Filtry: domyślnie Szukaj/Typ/Status; reszta w „Więcej filtrów”
+- Startery: produktowa hierarchia, stała miniatura 132px, siatka jak Label Ready
+- Bez zmian API/logiki
+
 ## 2026-07-26 — Szablony wydruków UI ≈ System Etykiet
 
 - Lista: karty zamiast tabeli ERP; lekkie filtry (Szukaj/Typ/Kategoria/Status/Źródło + Więcej)

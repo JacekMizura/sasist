@@ -1,4 +1,5 @@
 import type { DocumentTemplateListItemDto } from "../../../api/documentTemplatesApi";
+import type { StatusTone } from "../../../design-system/components";
 import {
   DOC_TEMPLATE_SOURCE_LABELS,
   DOC_TEMPLATE_STATUS_LABELS,
@@ -8,6 +9,16 @@ export function documentTemplateStatusLabel(status: string, fallback?: string): 
   return DOC_TEMPLATE_STATUS_LABELS[status] ?? fallback ?? status;
 }
 
+/** Maps template status → Design System StatusBadge tone (ERP-wide). */
+export function documentTemplateStatusTone(status: string): StatusTone {
+  if (status === "published") return "success";
+  if (status === "draft") return "warning";
+  if (status === "publication_error" || status === "publish_failed") return "danger";
+  if (status === "archived") return "neutral";
+  return "neutral";
+}
+
+/** Legacy class string for older table cells — prefer StatusBadge + tone. */
 export function documentTemplateStatusBadgeClass(status: string): string {
   if (status === "published") return "bg-emerald-50 text-emerald-800 ring-emerald-200";
   if (status === "draft") return "bg-amber-50 text-amber-900 ring-amber-200";
