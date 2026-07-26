@@ -1,14 +1,13 @@
 import { Link } from "react-router-dom";
 import type { LucideIcon } from "lucide-react";
-import type { ReactNode } from "react";
 
 import type { ProductionBatchSummaryRead } from "@/api/productionApi";
 import { AppEmptyState } from "@/components/app-shell";
 import {
-  Card,
+  EmptyState,
+  ListTile,
   ProgressBar,
   StatusBadge,
-  primaryButtonClassName,
   secondaryButtonClassName,
   type StatusTone,
 } from "@/design-system";
@@ -18,17 +17,14 @@ import { BATCH_STATUS_LABEL } from "../productionUi";
 
 type Props = {
   batches: ProductionBatchSummaryRead[];
-  emptyIcon: LucideIcon;
+  emptyIcon?: LucideIcon;
   emptyTitle: string;
-  emptyDescription: string;
-  emptyAction?: ReactNode;
+  emptyDescription?: string;
+  /** When true, render a minimal empty message (no icon / description chrome). */
+  plainEmpty?: boolean;
   limit?: number;
-  /** Primary row action label (default: Otwórz). */
-  actionLabel?: string;
-  /** Optional custom action href per batch (default: batch detail). */
-  actionHref?: (batch: ProductionBatchSummaryRead) => string;
-  /** Visual weight of the action control. */
-  actionVariant?: "primary" | "secondary";
+  seeAllTo?: string;
+  seeAllLabel?: string;
 };
 
 function productLabel(batch: ProductionBatchSummaryRead): string {
@@ -78,86 +74,102 @@ function progressTone(
   return "neutral";
 }
 
+/** Full-width batch rows for Production dashboard work sections (max `limit`, then „Pokaż wszystkie”). */
 export function ProductionDashboardBatchGrid({
   batches,
   emptyIcon,
   emptyTitle,
   emptyDescription,
-  emptyAction,
-  limit = 6,
-  actionLabel = "Otwórz",
-  actionHref,
-  actionVariant = "secondary",
+  plainEmpty = false,
+  limit = 5,
+  seeAllTo = erpProductionPaths.orders,
+  seeAllLabel = "Pokaż wszystkie",
 }: Props) {
   if (batches.length === 0) {
-    return (
-      <AppEmptyState
-        icon={emptyIcon}
-        title={emptyTitle}
-        description={emptyDescription}
-        action={emptyAction}
-        density="inline"
-      />
-    );
+    if (plainEmpty) {
+      return <p className="py-2 text-sm text-slate-600">{emptyTitle}</p>;
+    }
+    if (emptyIcon) {
+      return (
+        <AppEmptyState
+          icon={emptyIcon}
+          title={emptyTitle}
+          description={emptyDescription}
+          density="inline"
+        />
+      );
+    }
+    return <EmptyState title={emptyTitle} description={emptyDescription} />;
   }
 
-  const btnClass =
-    actionVariant === "primary"
-      ? primaryButtonClassName("w-full justify-center", "compact")
-      : secondaryButtonClassName("w-full justify-center", "compact");
+  const visible = batches.slice(0, limit);
 
   return (
-    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
-      {batches.slice(0, limit).map((b) => {
-        const pct = Math.max(0, Math.min(100, b.progress_percent ?? 0));
-        const href = actionHref?.(b) ?? erpProductionPaths.batch(b.id);
-        return (
-          <Card key={b.id} variant="section" density="comfortable" className="flex flex-col gap-3">
-            <div className="min-w-0">
-              <p className="font-mono text-sm font-semibold text-slate-900">{b.number}</p>
-              <p className="mt-0.5 line-clamp-2 text-sm text-slate-600">{productLabel(b)}</p>
-            </div>
+    <div className="flex w-full flex-col gap-2">
+      <ul className="flex w-full flex-col gap-2">
+        {visible.map((b) => {
+          const pct = Math.max(0, Math.min(100, b.progress_percent ?? 0));
+          const href = erpProductionPaths.batch(b.id);
+          return (
+            <li key={b.id} className="w-full">
+              <ListTile density="comfortable" className="w-full">
+                <div className="flex w-full flex-col gap-3 lg:flex-row lg:items-center lg:gap-4">
+                  <div className="min-w-0 flex-1">
+                    <p className="font-mono text-sm font-semibold text-slate-900">{b.number}</p>
+                    <p className="mt-0.5 line-clamp-1 text-sm text-slate-600">{productLabel(b)}</p>
+                  </div>
 
-            <div className="space-y-1.5">
-              <div className="flex items-center justify-between gap-2 text-xs text-slate-500">
-                <span>Postęp</span>
-                <span className="tabular-nums font-medium text-slate-700">{pct}%</span>
-              </div>
-              <ProgressBar value={pct} tone={progressTone(b)} />
-            </div>
+                  <div className="flex shrink-0 flex-wrap items-center gap-2">
+                    <StatusBadge tone={statusTone(b)} density="compact">
+                      {BATCH_STATUS_LABEL[b.status]}
+                    </StatusBadge>
+                    {b.has_shortages ? (
+                      <StatusBadge tone="danger" density="compact">
+                        Braki
+                        {b.shortage_count != null && b.shortage_count > 0 ? ` (${b.shortage_count})` : ""}
+                      </StatusBadge>
+                    ) : null}
+                  </div>
 
-            <div className="flex flex-wrap items-center gap-2">
-              <StatusBadge tone={statusTone(b)} density="compact">
-                {BATCH_STATUS_LABEL[b.status]}
-              </StatusBadge>
-              {b.has_shortages ? (
-                <StatusBadge tone="danger" density="compact">
-                  Braki{b.shortage_count != null && b.shortage_count > 0 ? ` (${b.shortage_count})` : ""}
-                </StatusBadge>
-              ) : null}
-            </div>
+                  <div className="w-full min-w-0 space-y-1 lg:max-w-[14rem] lg:flex-1">
+                    <div className="flex items-center justify-between gap-2 text-xs text-slate-500">
+                      <span>Postęp</span>
+                      <span className="tabular-nums font-medium text-slate-700">{pct}%</span>
+                    </div>
+                    <ProgressBar value={pct} tone={progressTone(b)} />
+                  </div>
 
-            <dl className="space-y-1 text-xs text-slate-500">
-              <div className="flex justify-between gap-2">
-                <dt>Plan zakończenia</dt>
-                <dd className="tabular-nums text-slate-700">{formatPlannedDate(b.planned_date)}</dd>
-              </div>
-              {b.operator_name ? (
-                <div className="flex justify-between gap-2">
-                  <dt>Operator</dt>
-                  <dd className="truncate text-slate-700">{b.operator_name}</dd>
+                  <div className="flex shrink-0 flex-col gap-0.5 text-xs text-slate-500 sm:flex-row sm:items-center sm:gap-4 lg:flex-col lg:items-end xl:flex-row xl:items-center">
+                    <span>
+                      Termin:{" "}
+                      <span className="tabular-nums font-medium text-slate-800">
+                        {formatPlannedDate(b.planned_date)}
+                      </span>
+                    </span>
+                    <span className="truncate max-w-[12rem]">
+                      Operator:{" "}
+                      <span className="font-medium text-slate-800">{b.operator_name || "—"}</span>
+                    </span>
+                  </div>
+
+                  <div className="shrink-0 lg:ml-auto">
+                    <Link to={href} className={secondaryButtonClassName("", "compact")}>
+                      Otwórz
+                    </Link>
+                  </div>
                 </div>
-              ) : null}
-            </dl>
-
-            <div className="mt-auto pt-1">
-              <Link to={href} className={btnClass}>
-                {actionLabel}
-              </Link>
-            </div>
-          </Card>
-        );
-      })}
+              </ListTile>
+            </li>
+          );
+        })}
+      </ul>
+      {batches.length > 0 ? (
+        <div className="pt-1 text-right">
+          <Link to={seeAllTo} className="text-sm font-semibold text-slate-600 hover:text-slate-900">
+            {seeAllLabel}
+          </Link>
+        </div>
+      ) : null}
     </div>
   );
 }

@@ -2,8 +2,8 @@
 
 ## Active
 
-**Produkcja ↔ Dokumenty typografia** (build OK).
+**Pulpit Produkcji — podgląd (UX)** (build OK).
 
-UI Kit `typography` + StatusBadge/density floor wyrównane do DocumentsSectionShell / list tables.
-Produkcja: layout tokens + usunięcie `text-[10px]` / słabego `slate-400` w treściach.
-Bez zmian układu / funkcji.
+Pełnoszerokościowe wiersze (max 5), bez Terminal WMS / szybkich akcji.
+KPI tylko do odczytu; „Pokaż wszystkie” → zlecenia.
+Bez zmian API/logiki/routingu.

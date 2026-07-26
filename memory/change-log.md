@@ -1,3 +1,8 @@
+## 2026-07-26 — Pulpit Produkcji: podgląd, nie hub nawigacji
+
+- Usunięto Terminal WMS / szybkie akcje / linki do terminali; listy pełnej szerokości (max 5)
+- KPI bez linków; empty states uproszczone · `npm run build` OK · **No push.**
+
 ## 2026-07-26 — Typografia Produkcji = standard Dokumentów
 
 - UI Kit `typography.ts`: h1/h2/section/label/caption/pageDesc/metric/body/tableHead wg Documents

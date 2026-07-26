@@ -10,7 +10,6 @@ import {
   Package,
   PackageCheck,
   Plus,
-  Warehouse,
 } from "lucide-react";
 
 import {
@@ -30,14 +29,15 @@ import {
   StatusBadge,
   Toolbar,
   primaryButtonClassName,
-  secondaryButtonClassName,
+  typography,
 } from "@/design-system";
 import { useActiveWarehouseContext } from "../../hooks/useActiveWarehouseContext";
 import { ProductionDashboardBatchGrid } from "./components/ProductionDashboardBatchGrid";
 import { productionPageDescClass, productionPageStackClass, productionPageTitleClass } from "./productionLayoutTokens";
-import { erpProductionPaths, wmsProductionPaths } from "./productionPaths";
+import { erpProductionPaths } from "./productionPaths";
 
 const DEFAULT_TENANT = 1;
+const SECTION_LIMIT = 5;
 
 function productLabel(batch: ProductionBatchSummaryRead): string {
   return batch.product_labels?.slice(0, 2).join(", ") || "—";
@@ -67,36 +67,18 @@ type WorkSectionProps = {
   title: string;
   count: number;
   countTone?: "neutral" | "info" | "success" | "warning" | "danger";
-  seeAllTo: string;
-  seeAllLabel?: string;
   children: ReactNode;
 };
 
-function WorkSection({
-  title,
-  count,
-  countTone = "neutral",
-  seeAllTo,
-  seeAllLabel = "Zobacz wszystkie",
-  children,
-}: WorkSectionProps) {
+function WorkSection({ title, count, countTone = "neutral", children }: WorkSectionProps) {
   return (
-    <Card variant="section" density="comfortable" className="flex min-h-0 flex-col gap-4">
-      <Toolbar
-        start={
-          <div className="flex min-w-0 items-center gap-2">
-            <h2 className="text-sm font-semibold text-slate-900">{title}</h2>
-            <StatusBadge tone={countTone} density="compact">
-              {count}
-            </StatusBadge>
-          </div>
-        }
-        end={
-          <Link to={seeAllTo} className="text-xs font-semibold text-slate-600 hover:text-slate-900">
-            {seeAllLabel}
-          </Link>
-        }
-      />
+    <Card variant="section" density="comfortable" className="flex min-h-0 flex-col gap-3">
+      <div className="flex min-w-0 items-center gap-2">
+        <h2 className={typography.h2}>{title}</h2>
+        <StatusBadge tone={countTone} density="compact">
+          {count}
+        </StatusBadge>
+      </div>
       <div className="min-w-0 flex-1">{children}</div>
     </Card>
   );
@@ -186,17 +168,12 @@ export default function ProductionDashboardPage() {
           </div>
         }
         actions={
-          <>
-            <Link to={wmsProductionPaths.home} className={secondaryButtonClassName("", "compact")}>
-              Terminal WMS
-            </Link>
-            <Link to={erpProductionPaths.createOrder} className={primaryButtonClassName("", "compact")}>
-              <span className="inline-flex items-center gap-1.5">
-                <Plus className="h-3.5 w-3.5" aria-hidden />
-                Nowe zlecenie produkcyjne
-              </span>
-            </Link>
-          </>
+          <Link to={erpProductionPaths.createOrder} className={primaryButtonClassName("", "compact")}>
+            <span className="inline-flex items-center gap-1.5">
+              <Plus className="h-3.5 w-3.5" aria-hidden />
+              Nowe zlecenie produkcyjne
+            </span>
+          </Link>
         }
         toolbar={
           <Toolbar
@@ -224,188 +201,140 @@ export default function ProductionDashboardPage() {
       ) : data ? (
         <>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
-            <Link to={erpProductionPaths.orders} className="block min-w-0">
-              <MetricCard
-                density="comfortable"
-                className="h-full transition hover:border-slate-300"
-                label={
-                  <span className="flex flex-col gap-1">
-                    <KpiIcon className="bg-sky-50 text-sky-600">
-                      <Factory className="h-4 w-4" />
-                    </KpiIcon>
-                    <span>W produkcji</span>
-                  </span>
-                }
-                value={data.active_batches}
-                hint="partie aktywne"
-              />
-            </Link>
-            <Link to={wmsProductionPaths.putaway()} className="block min-w-0">
-              <MetricCard
-                density="comfortable"
-                className="h-full transition hover:border-slate-300"
-                label={
-                  <span className="flex flex-col gap-1">
-                    <KpiIcon className="bg-amber-50 text-amber-700">
-                      <PackageCheck className="h-4 w-4" />
-                    </KpiIcon>
-                    <span>Do rozlokowania</span>
-                  </span>
-                }
-                value={awaitingCount}
-                hint="partie gotowe"
-              />
-            </Link>
-            <Link to={`${erpProductionPaths.orders}?shortages=1`} className="block min-w-0">
-              <MetricCard
-                density="comfortable"
-                className="h-full transition hover:border-slate-300"
-                label={
-                  <span className="flex flex-col gap-1">
-                    <KpiIcon className="bg-rose-50 text-rose-600">
-                      <AlertTriangle className="h-4 w-4" />
-                    </KpiIcon>
-                    <span>Braki materiałów</span>
-                  </span>
-                }
-                value={shortageCount}
-                hint="partii z brakami"
-              />
-            </Link>
-            <Link to={wmsProductionPaths.collecting()} className="block min-w-0">
-              <MetricCard
-                density="comfortable"
-                className="h-full transition hover:border-slate-300"
-                label={
-                  <span className="flex flex-col gap-1">
-                    <KpiIcon className="bg-emerald-50 text-emerald-600">
-                      <CheckCircle2 className="h-4 w-4" />
-                    </KpiIcon>
-                    <span>Gotowe do WMS</span>
-                  </span>
-                }
-                value={data.ready_to_produce?.length ?? ready.length}
-                hint="do przekazania"
-              />
-            </Link>
-            <Link to={erpProductionPaths.analytics} className="block min-w-0">
-              <MetricCard
-                density="comfortable"
-                className="h-full transition hover:border-slate-300"
-                label={
-                  <span className="flex flex-col gap-1">
-                    <KpiIcon className="bg-slate-100 text-slate-600">
-                      <ClipboardList className="h-4 w-4" />
-                    </KpiIcon>
-                    <span>Wartość w toku</span>
-                  </span>
-                }
-                value="—"
-                hint="wycena po kosztach receptur"
-              />
-            </Link>
+            <MetricCard
+              density="comfortable"
+              className="min-w-0"
+              label={
+                <span className="flex flex-col gap-1">
+                  <KpiIcon className="bg-sky-50 text-sky-600">
+                    <Factory className="h-4 w-4" />
+                  </KpiIcon>
+                  <span>W produkcji</span>
+                </span>
+              }
+              value={data.active_batches}
+              hint="partie aktywne"
+            />
+            <MetricCard
+              density="comfortable"
+              className="min-w-0"
+              label={
+                <span className="flex flex-col gap-1">
+                  <KpiIcon className="bg-amber-50 text-amber-700">
+                    <PackageCheck className="h-4 w-4" />
+                  </KpiIcon>
+                  <span>Do rozlokowania</span>
+                </span>
+              }
+              value={awaitingCount}
+              hint="partie gotowe"
+            />
+            <MetricCard
+              density="comfortable"
+              className="min-w-0"
+              label={
+                <span className="flex flex-col gap-1">
+                  <KpiIcon className="bg-rose-50 text-rose-600">
+                    <AlertTriangle className="h-4 w-4" />
+                  </KpiIcon>
+                  <span>Braki materiałów</span>
+                </span>
+              }
+              value={shortageCount}
+              hint="partii z brakami"
+            />
+            <MetricCard
+              density="comfortable"
+              className="min-w-0"
+              label={
+                <span className="flex flex-col gap-1">
+                  <KpiIcon className="bg-emerald-50 text-emerald-600">
+                    <CheckCircle2 className="h-4 w-4" />
+                  </KpiIcon>
+                  <span>Gotowe do WMS</span>
+                </span>
+              }
+              value={data.ready_to_produce?.length ?? ready.length}
+              hint="do przekazania"
+            />
+            <MetricCard
+              density="comfortable"
+              className="min-w-0"
+              label={
+                <span className="flex flex-col gap-1">
+                  <KpiIcon className="bg-slate-100 text-slate-600">
+                    <ClipboardList className="h-4 w-4" />
+                  </KpiIcon>
+                  <span>Wartość w toku</span>
+                </span>
+              }
+              value="—"
+              hint="wycena po kosztach receptur"
+            />
           </div>
 
-          <div className="grid gap-4 xl:grid-cols-2 2xl:grid-cols-4">
-            <WorkSection
-              title="Do rozlokowania"
-              count={awaitingPutaway.length}
-              countTone="warning"
-              seeAllTo={wmsProductionPaths.putaway()}
-              seeAllLabel="Terminal rozlokowania"
-            >
+          <div className="grid gap-4 xl:grid-cols-2">
+            <WorkSection title="Do rozlokowania" count={awaitingPutaway.length} countTone="warning">
               <ProductionDashboardBatchGrid
                 batches={awaitingPutaway}
                 emptyIcon={PackageCheck}
                 emptyTitle="Brak partii do rozlokowania"
-                emptyDescription="Po zakończeniu produkcji partie pojawią się tutaj przed rozlokowaniem w magazynie."
-                emptyAction={
-                  <Link to={wmsProductionPaths.putaway()} className="text-sm font-semibold text-slate-700 hover:underline">
-                    Otwórz terminal rozlokowania
-                  </Link>
-                }
-                actionLabel="Otwórz"
+                emptyDescription="Po zakończeniu produkcji partie pojawią się tutaj."
+                limit={SECTION_LIMIT}
+                seeAllTo={erpProductionPaths.orders}
               />
             </WorkSection>
 
-            <WorkSection
-              title="W produkcji"
-              count={active.length}
-              countTone="info"
-              seeAllTo={erpProductionPaths.orders}
-            >
+            <WorkSection title="W produkcji" count={active.length} countTone="info">
               <ProductionDashboardBatchGrid
                 batches={active}
                 emptyIcon={Factory}
                 emptyTitle="Brak partii w realizacji"
-                emptyDescription="Aktywne zbieranie, produkcja i rozlokowanie pojawią się tutaj."
-                emptyAction={
-                  <Link to={erpProductionPaths.planning} className="text-sm font-semibold text-slate-700 hover:underline">
-                    Planowanie produkcji
-                  </Link>
-                }
+                emptyDescription="Aktywne partie pojawią się tutaj."
+                limit={SECTION_LIMIT}
+                seeAllTo={erpProductionPaths.orders}
               />
             </WorkSection>
 
-            <WorkSection
-              title="Gotowe do WMS"
-              count={ready.length}
-              countTone="success"
-              seeAllTo={wmsProductionPaths.collecting()}
-              seeAllLabel="Terminal zbierania"
-            >
+            <WorkSection title="Gotowe do WMS" count={ready.length} countTone="success">
               <ProductionDashboardBatchGrid
                 batches={ready}
                 emptyIcon={Package}
                 emptyTitle="Brak partii gotowych"
-                emptyDescription="Gdy materiały będą dostępne, partie pojawią się tutaj do przekazania operatorom WMS."
-                emptyAction={
-                  <Link
-                    to={wmsProductionPaths.collecting()}
-                    className="text-sm font-semibold text-slate-700 hover:underline"
-                  >
-                    Otwórz terminal zbierania
-                  </Link>
-                }
-                actionLabel="Przekaż do WMS"
-                actionVariant="primary"
-                actionHref={() => wmsProductionPaths.collecting()}
+                emptyDescription="Gdy materiały będą dostępne, partie pojawią się tutaj."
+                limit={SECTION_LIMIT}
+                seeAllTo={erpProductionPaths.orders}
               />
             </WorkSection>
 
             <WorkSection
               title="Partie wymagające uwagi"
               count={blocked.length}
-              countTone={blocked.length > 0 ? "danger" : "success"}
-              seeAllTo={`${erpProductionPaths.orders}?shortages=1`}
-              seeAllLabel="Przejdź do braków"
+              countTone={blocked.length > 0 ? "danger" : "neutral"}
             >
-              {blocked.length > 0 ? (
-                <ProductionDashboardBatchGrid
-                  batches={blocked}
-                  emptyIcon={AlertTriangle}
-                  emptyTitle="Brak partii wymagających uwagi"
-                  emptyDescription="Wszystkie aktywne partie mają wystarczające materiały."
-                />
-              ) : (
-                <AppEmptyState
-                  icon={CheckCircle2}
-                  title="Brak braków materiałowych"
-                  description="Wszystkie aktywne partie mają wystarczające materiały."
-                  density="inline"
-                />
-              )}
+              <ProductionDashboardBatchGrid
+                batches={blocked}
+                plainEmpty
+                emptyTitle="Brak partii wymagających uwagi"
+                limit={SECTION_LIMIT}
+                seeAllTo={`${erpProductionPaths.orders}?shortages=1`}
+              />
             </WorkSection>
           </div>
 
-          <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
+          <div className="grid gap-4 lg:grid-cols-2">
             <Card variant="section" density="comfortable" className="flex flex-col gap-3">
               <Toolbar
-                start={<h2 className="text-sm font-semibold text-slate-900">Ostatnia aktywność</h2>}
+                start={<h2 className={typography.h2}>Ostatnia aktywność</h2>}
                 end={
-                  <Link to={erpProductionPaths.history} className="text-xs font-semibold text-slate-600 hover:text-slate-900">
-                    Pełna historia
-                  </Link>
+                  recentlyCompleted.length > 0 ? (
+                    <Link
+                      to={erpProductionPaths.history}
+                      className="text-sm font-semibold text-slate-600 hover:text-slate-900"
+                    >
+                      Pokaż wszystkie
+                    </Link>
+                  ) : null
                 }
               />
               {recentlyCompleted.length === 0 ? (
@@ -448,7 +377,7 @@ export default function ProductionDashboardPage() {
             </Card>
 
             <Card variant="section" density="comfortable" className="flex flex-col gap-3">
-              <Toolbar start={<h2 className="text-sm font-semibold text-slate-900">Najbliższe zakończenia</h2>} />
+              <Toolbar start={<h2 className={typography.h2}>Najbliższe zakończenia</h2>} />
               {upcomingCompletions.length === 0 ? (
                 <AppEmptyState
                   icon={Factory}
@@ -483,63 +412,6 @@ export default function ProductionDashboardPage() {
                   })}
                 </ul>
               )}
-            </Card>
-
-            <Card variant="section" density="comfortable" className="flex flex-col gap-3 lg:col-span-2 xl:col-span-1">
-              <Toolbar start={<h2 className="text-sm font-semibold text-slate-900">Szybkie akcje</h2>} />
-              <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-1">
-                <Link to={erpProductionPaths.createOrder} className="block">
-                  <ListTile density="comfortable" className="transition hover:border-slate-300">
-                    <div className="flex items-center gap-3">
-                      <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-orange-50 text-orange-600">
-                        <Plus className="h-4 w-4" aria-hidden />
-                      </span>
-                      <span className="text-sm font-medium text-slate-800">Nowe zlecenie produkcyjne</span>
-                    </div>
-                  </ListTile>
-                </Link>
-                <Link to={wmsProductionPaths.putaway()} className="block">
-                  <ListTile density="comfortable" className="transition hover:border-slate-300">
-                    <div className="flex items-center gap-3">
-                      <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-slate-100 text-slate-600">
-                        <Warehouse className="h-4 w-4" aria-hidden />
-                      </span>
-                      <span className="text-sm font-medium text-slate-800">Rozlokuj do WMS</span>
-                    </div>
-                  </ListTile>
-                </Link>
-                <Link to={erpProductionPaths.materialReservations} className="block">
-                  <ListTile density="comfortable" className="transition hover:border-slate-300">
-                    <div className="flex items-center gap-3">
-                      <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-slate-100 text-slate-600">
-                        <ClipboardList className="h-4 w-4" aria-hidden />
-                      </span>
-                      <span className="text-sm font-medium text-slate-800">Rezerwacje materiałów</span>
-                    </div>
-                  </ListTile>
-                </Link>
-                <Link to={erpProductionPaths.history} className="block">
-                  <ListTile density="comfortable" className="transition hover:border-slate-300">
-                    <div className="flex items-center gap-3">
-                      <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-slate-100 text-slate-600">
-                        <History className="h-4 w-4" aria-hidden />
-                      </span>
-                      <span className="text-sm font-medium text-slate-800">Historia produkcji</span>
-                    </div>
-                  </ListTile>
-                </Link>
-              </div>
-              <div className="mt-auto pt-1">
-                <Link
-                  to={erpProductionPaths.createOrder}
-                  className={primaryButtonClassName("w-full justify-center", "compact")}
-                >
-                  <span className="inline-flex items-center justify-center gap-1.5">
-                    <Plus className="h-3.5 w-3.5" aria-hidden />
-                    Nowe zlecenie
-                  </span>
-                </Link>
-              </div>
             </Card>
           </div>
         </>
