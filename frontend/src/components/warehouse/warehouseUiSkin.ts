@@ -44,13 +44,14 @@ export const warehouseListTileClass =
 export const warehouseListTileSelectedClass =
   "rounded-xl bg-white px-2.5 py-2 shadow-md ring-2 ring-orange-400/50 transition-all duration-150";
 
-/** Primary solid action (Eksportuj / Generuj). */
+/** @deprecated Prefer {@link WarehouseCardButton} — kept for one-off class composition. */
 export const warehousePrimaryActionClass =
-  "flex w-full items-center justify-center gap-1.5 rounded-xl bg-emerald-600 px-3 py-2.5 text-[11px] font-semibold text-white shadow-sm hover:bg-emerald-500";
+  "flex w-full items-center justify-center gap-1.5 rounded-[11px] border border-slate-200/90 bg-white px-3 py-2.5 text-[11px] font-semibold text-slate-800 shadow-sm shadow-slate-900/[0.04] hover:bg-slate-50/90 hover:shadow-md";
 
-/** Secondary outline action. */
+/** @deprecated Prefer {@link WarehouseCardButton}. */
 export const warehouseSecondaryActionClass =
-  "flex w-full items-center justify-center gap-1.5 rounded-xl border-0 bg-white px-3 py-2.5 text-[11px] font-medium text-slate-800 shadow-sm ring-1 ring-slate-200/80 hover:bg-slate-50";
+  "flex w-full items-center justify-center gap-1.5 rounded-[11px] border border-slate-200/90 bg-white px-3 py-2.5 text-[11px] font-medium text-slate-800 shadow-sm shadow-slate-900/[0.04] hover:bg-slate-50/90 hover:shadow-md";
+
 
 /** Segmented control shell (Katalog | Elementy). */
 export const warehouseSegmentShellClass =

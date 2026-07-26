@@ -1,5 +1,6 @@
 import type { CustomRackTemplate, LayoutState, RackType } from "../../../types/warehouse";
 import { buildTemplateUsageData } from "../templateUsage";
+import { WarehouseCardButton } from "../WarehouseCardButton";
 import {
   listPanelMapVisualizationModes,
   type MapVisualizationModeId,
@@ -102,34 +103,34 @@ export function MagazynDashboardPanel({
       {(onOpenReports || onOpenDamageReports) && (
         <div className="mb-6 grid grid-cols-2 gap-2 px-1">
           {onOpenReports && (
-            <button
-              type="button"
+            <WarehouseCardButton
+              fullWidth
+              tone="emerald"
               onClick={(e) => {
                 e.stopPropagation();
                 onOpenReports();
               }}
-              className="group flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-3 py-2.5 text-xs font-semibold text-white transition hover:bg-emerald-700"
             >
-              <svg className="h-3.5 w-3.5 opacity-80 group-hover:opacity-100" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+              <svg className="h-3.5 w-3.5 opacity-80" viewBox="0 0 24 24" fill="none" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 19h16M7 15v-5m5 5V7m5 8V4" />
               </svg>
               Raporty
-            </button>
+            </WarehouseCardButton>
           )}
           {onOpenDamageReports && (
-            <button
-              type="button"
+            <WarehouseCardButton
+              fullWidth
+              tone="rose"
               onClick={(e) => {
                 e.stopPropagation();
                 onOpenDamageReports();
               }}
-              className="flex items-center justify-center gap-2 rounded-xl bg-rose-500/10 px-3 py-2.5 text-xs font-semibold text-rose-700 transition hover:bg-rose-500/15"
             >
               <span aria-hidden className="text-[13px] leading-none">
                 ⚠
               </span>
               Szkody
-            </button>
+            </WarehouseCardButton>
           )}
         </div>
       )}

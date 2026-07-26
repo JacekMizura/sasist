@@ -39,13 +39,12 @@ import {
   warehouseLeftRailClass,
   warehouseListTileClass,
   warehouseListTileSelectedClass,
-  warehousePrimaryActionClass,
   warehouseSearchInputClass,
-  warehouseSecondaryActionClass,
   warehouseSectionLabelClass,
   warehouseSegmentBtnClass,
   warehouseSegmentShellClass,
 } from "./warehouseUiSkin";
+import { WarehouseCardButton } from "./WarehouseCardButton";
 import { normalizeBinTypeMap } from "../../utils/storageTypes";
 import { buildTemplateUsageData } from "./templateUsage";
 
@@ -303,24 +302,20 @@ export function RackSidebar({
           <div className="mb-2">
             <div className={`mb-1 ${warehouseSectionLabelClass}`}>Typ regału</div>
             <div className="flex gap-1.5">
-              <button
-                type="button"
+              <WarehouseCardButton
+                fullWidth
+                active={manualRackType === "warehouse"}
                 onClick={() => setManualRackType("warehouse")}
-                className={`flex-1 rounded-xl px-2 py-1.5 text-[11px] font-medium transition-colors ${
-                  manualRackType === "warehouse" ? "bg-slate-900 text-white shadow-sm" : "bg-white text-slate-700 shadow-sm ring-1 ring-slate-200/80 hover:bg-slate-50"
-                }`}
               >
                 Magazyn
-              </button>
-              <button
-                type="button"
+              </WarehouseCardButton>
+              <WarehouseCardButton
+                fullWidth
+                active={manualRackType === "store"}
                 onClick={() => setManualRackType("store")}
-                className={`flex-1 rounded-xl px-2 py-1.5 text-[11px] font-medium transition-colors ${
-                  manualRackType === "store" ? "bg-slate-900 text-white shadow-sm" : "bg-white text-slate-700 shadow-sm ring-1 ring-slate-200/80 hover:bg-slate-50"
-                }`}
               >
                 Sklep
-              </button>
+              </WarehouseCardButton>
             </div>
           </div>
         )}
@@ -337,22 +332,14 @@ export function RackSidebar({
           <>
       {!showOnlyCatalog && (
       <div className="mb-2 flex flex-col gap-1.5">
-        <button
-          type="button"
-          onClick={() => setShowGenerateLayoutModal(true)}
-          className={warehousePrimaryActionClass}
-        >
+        <WarehouseCardButton fullWidth onClick={() => setShowGenerateLayoutModal(true)}>
           <Wand2 size={13} strokeWidth={2} />
           Generuj układ
-        </button>
-        <button
-          type="button"
-          onClick={() => setShowTemplateModal(true)}
-          className={warehouseSecondaryActionClass}
-        >
+        </WarehouseCardButton>
+        <WarehouseCardButton fullWidth onClick={() => setShowTemplateModal(true)}>
           <Plus size={13} strokeWidth={2} />
           {UI_STRINGS.warehouse.rackSidebar.newTemplate}
-        </button>
+        </WarehouseCardButton>
       </div>
       )}
       {!showOnlyCatalog && rowToolActive && (
@@ -679,20 +666,20 @@ export function RackSidebar({
             <>
               <p className="text-[10px] leading-snug text-slate-500">Kliknij na krawędź budynku (obwód), aby umieścić.</p>
               <div className="flex gap-1.5">
-                <button
-                  type="button"
+                <WarehouseCardButton
+                  fullWidth
+                  active={wallElementTool === "door"}
                   onClick={() => setWallElementTool(wallElementTool === "door" ? null : "door")}
-                  className={`flex-1 rounded-xl px-2 py-1.5 text-[11px] font-medium ${wallElementTool === "door" ? "bg-slate-900 text-white shadow-sm" : "bg-white text-slate-700 shadow-sm ring-1 ring-slate-200/80 hover:bg-slate-50"}`}
                 >
                   Drzwi
-                </button>
-                <button
-                  type="button"
+                </WarehouseCardButton>
+                <WarehouseCardButton
+                  fullWidth
+                  active={wallElementTool === "gate"}
                   onClick={() => setWallElementTool(wallElementTool === "gate" ? null : "gate")}
-                  className={`flex-1 rounded-xl px-2 py-1.5 text-[11px] font-medium ${wallElementTool === "gate" ? "bg-slate-900 text-white shadow-sm" : "bg-white text-slate-700 shadow-sm ring-1 ring-slate-200/80 hover:bg-slate-50"}`}
                 >
                   Brama
-                </button>
+                </WarehouseCardButton>
               </div>
             </>
           )}

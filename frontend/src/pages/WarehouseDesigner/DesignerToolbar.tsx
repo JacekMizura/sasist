@@ -21,6 +21,26 @@ export interface DesignerToolbarProps {
   /** When provided, building modal is controlled by parent (e.g. so RackSidebar can open it). */
   showEditBuilding?: boolean;
   setShowEditBuilding?: (v: boolean) => void;
+  /**
+   * When false, omit save-status text (parent renders it before the warehouse select).
+   * Default true for backward compatibility.
+   */
+  showSaveStatus?: boolean;
+}
+
+/** Subtle plain-text save status (no badge chrome). */
+export function DesignerSaveStatusText({ lastSavedAt }: { lastSavedAt: number | null }) {
+  const saved = lastSavedAt != null;
+  return (
+    <span
+      className={`shrink-0 text-xs font-medium tabular-nums ${
+        saved ? "text-emerald-600" : "text-amber-600"
+      }`}
+      title={saved ? UI_STRINGS.warehouse.selector.savedToDb : UI_STRINGS.warehouse.selector.unsavedChanges}
+    >
+      {saved ? UI_STRINGS.warehouse.selector.syncSaved : UI_STRINGS.warehouse.selector.notSaved}
+    </span>
+  );
 }
 
 export function DesignerToolbar({
@@ -34,6 +54,7 @@ export function DesignerToolbar({
   warehouseUsagePct,
   showEditBuilding: showEditBuildingProp,
   setShowEditBuilding: setShowEditBuildingProp,
+  showSaveStatus = true,
 }: DesignerToolbarProps) {
   const { selectedWarehouseId } = useWarehouse();
   const [showEditBuildingLocal, setShowEditBuildingLocal] = useState(false);
@@ -64,9 +85,7 @@ export function DesignerToolbar({
             </span>
           </div>
         )}
-        <span className={`inline-flex items-center rounded-md border border-slate-200/60 px-2 py-0.5 font-mono text-[10px] font-medium transition-colors duration-150 ${lastSavedAt != null ? "bg-emerald-50 text-emerald-800" : "bg-amber-50 text-amber-900"}`} title={lastSavedAt != null ? UI_STRINGS.warehouse.selector.savedToDb : UI_STRINGS.warehouse.selector.unsavedChanges}>
-          {lastSavedAt != null ? UI_STRINGS.warehouse.selector.syncSaved : UI_STRINGS.warehouse.selector.notSaved}
-        </span>
+        {showSaveStatus ? <DesignerSaveStatusText lastSavedAt={lastSavedAt} /> : null}
         {mainView === "layout" &&
           (saveLayoutBlockedReason ? (
             <button
@@ -80,7 +99,7 @@ export function DesignerToolbar({
               }}
               title="Zapis zablokowany: zduplikowana nazwa regału (wyświetlimy komunikat po kliknięciu)."
               disabled={saving || selectedWarehouseId == null}
-              className="h-8 rounded-lg px-3.5 text-[11px] font-semibold text-white shadow-sm transition-all duration-150 bg-amber-600 hover:bg-amber-500 ring-1 ring-amber-400/80 disabled:opacity-50 disabled:shadow-none"
+              className="inline-flex h-10 shrink-0 items-center justify-center rounded-lg bg-amber-600 px-4 text-sm font-semibold text-white shadow-sm ring-1 ring-amber-400/80 transition hover:bg-amber-500 disabled:opacity-50 disabled:shadow-none"
             >
               {saving ? UI_STRINGS.warehouse.rackSidebar.saving : UI_STRINGS.warehouse.rackSidebar.saveLayout}
             </button>

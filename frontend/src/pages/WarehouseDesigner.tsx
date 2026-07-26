@@ -101,7 +101,8 @@ import { generateWarehouseExecutivePDF } from "../pdf/generateWarehouseExecutive
 import { generateWarehouseValueReportPDF } from "../pdf/generateWarehouseValueReportPDF";
 import { generateTopVolumeReportPDF } from "../pdf/generateTopVolumeReportPDF";
 import { useDesignerKeyboard } from "./WarehouseDesigner/DesignerKeyboard";
-import { DesignerToolbar } from "./WarehouseDesigner/DesignerToolbar";
+import { DesignerToolbar, DesignerSaveStatusText } from "./WarehouseDesigner/DesignerToolbar";
+import { DesignerWarehouseSelect } from "./WarehouseDesigner/DesignerWarehouseSelect";
 import { RoutingGraphLayer } from "./WarehouseDesigner/routing/RoutingGraphLayer";
 import { RoutingRoutesPanel } from "./WarehouseDesigner/routing/RoutingRoutesPanel";
 import { buildAccessProblemItems, type AccessProblemItem } from "./WarehouseDesigner/routing/locationAccessProblems";
@@ -138,7 +139,6 @@ import { getWarehouseLocations } from "../api/warehouseGraphApi";
 import { buildInventoryMaps, normalizeInventoryLocationUuid, type InventoryRow, type InventoryMaps } from "./WarehouseDesigner/inventoryMaps";
 import type { DamageCandidate } from "../types/damageReport";
 import { useWarehouse, type Warehouse } from "../context/WarehouseContext";
-import { DesignerWarehouseSelect } from "./WarehouseDesigner/DesignerWarehouseSelect";
 import {
   getDesignerLoadPerf,
   isDesignerPerfEnabled,
@@ -3628,6 +3628,7 @@ export default function WarehouseDesigner() {
       ]}
       topActions={
           <>
+            <DesignerSaveStatusText lastSavedAt={lastSavedAt} />
             <DesignerWarehouseSelect
               warehouseId={selectedWarehouseId}
               warehouses={warehouses}
@@ -3637,6 +3638,7 @@ export default function WarehouseDesigner() {
             <DesignerToolbar
               mainView={mainView}
               lastSavedAt={lastSavedAt}
+              showSaveStatus={false}
               saveLayout={saveLayout}
               saving={saving}
               saveLayoutBlockedReason={rackNameDuplicateMessage}

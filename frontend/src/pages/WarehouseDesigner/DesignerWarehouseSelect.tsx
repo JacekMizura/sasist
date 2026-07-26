@@ -8,8 +8,9 @@ export type DesignerWarehouseSelectProps = {
   onSelect: (warehouse: Warehouse) => void;
 };
 
+/** Same height as PrimaryButton (Zapisz układ) — h-10. */
 const selectClassName =
-  "h-8 min-w-[9rem] max-w-[14rem] rounded-lg border border-slate-200/90 bg-white px-2.5 text-xs font-semibold text-slate-800 shadow-sm focus:border-orange-400/70 focus:outline-none focus:ring-2 focus:ring-orange-500/20 sm:min-w-[10rem] sm:text-sm";
+  "h-10 min-w-[9rem] max-w-[14rem] rounded-lg border border-slate-200/90 bg-white px-2.5 text-xs font-semibold text-slate-800 shadow-sm focus:border-orange-400/70 focus:outline-none focus:ring-2 focus:ring-orange-500/20 sm:min-w-[10rem] sm:text-sm";
 
 /**
  * Local warehouse picker for Projektant Magazynu (always visible in designer header).
@@ -23,7 +24,7 @@ export function DesignerWarehouseSelect({
 }: DesignerWarehouseSelectProps) {
   if (loading) {
     return (
-      <div className="inline-flex h-8 items-center rounded-lg border border-slate-200/80 bg-slate-50 px-2.5 text-sm text-slate-500" aria-busy="true">
+      <div className="inline-flex h-10 items-center rounded-lg border border-slate-200/80 bg-slate-50 px-2.5 text-sm text-slate-500" aria-busy="true">
         Ładowanie…
       </div>
     );
@@ -31,7 +32,7 @@ export function DesignerWarehouseSelect({
 
   if (warehouses.length === 0) {
     return (
-      <div className="inline-flex h-8 items-center rounded-lg border border-amber-200 bg-amber-50 px-2.5 text-sm text-amber-800">
+      <div className="inline-flex h-10 items-center rounded-lg border border-amber-200 bg-amber-50 px-2.5 text-sm text-amber-800">
         {UI_STRINGS.warehouse.selector.selectWarehouse}
       </div>
     );
@@ -39,7 +40,7 @@ export function DesignerWarehouseSelect({
 
   if (warehouses.length === 1) {
     return (
-      <div className="inline-flex h-8 items-center rounded-lg border border-slate-200/80 bg-white px-2.5 text-sm font-semibold text-slate-800 shadow-sm">
+      <div className="inline-flex h-10 items-center rounded-lg border border-slate-200/80 bg-white px-2.5 text-sm font-semibold text-slate-800 shadow-sm">
         {warehouses[0].name}
       </div>
     );

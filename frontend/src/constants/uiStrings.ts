@@ -130,9 +130,9 @@ const UI_STRINGS_DEFAULTS = {
     selector: {
       selectWarehouse: "— wybierz magazyn —",
       newWarehouse: "+ Nowy magazyn",
-      syncSaved: "Sync z DB",
+      syncSaved: "Zapisano",
       notSaved: "Nie zapisano",
-      savedToDb: "Zapisano w DB",
+      savedToDb: "Zapisano",
       unsavedChanges: "Zmiany niezapisane",
     },
     modal: {
@@ -151,7 +151,7 @@ const UI_STRINGS_DEFAULTS = {
       gapCm: "Odstęp (cm):",
       deleteTemplateConfirm: "Usunąć szablon z katalogu? Regały na planie pozostaną.",
       dm3: "dm³",
-      newTemplate: "+ Nowy Szablon",
+      newTemplate: "Nowy szablon",
       rackList: "Lista regałów",
       noRacks: "Brak regałów",
       dragOntoPlan: "Przeciągnij na plan",
