@@ -6,6 +6,7 @@ import { PageHeader } from "../../components/layout/PageHeader";
 import { PrimaryButton } from "../../design-system";
 import { TEMPLATES_MESSAGES_BASE } from "../Templates/templatesPaths";
 
+/** Future message starters must use `useStarterTemplateFlow` (same copy → editor UX as labels/print). */
 const BASE = TEMPLATES_MESSAGES_BASE;
 
 function MessageTemplatesShell({

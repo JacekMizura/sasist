@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 
 import api from "../../api/axios";
+import { useStarterTemplateFlow } from "../../components/templates/starterFlow";
 import { PrimaryButton } from "../../design-system";
 import {
   formatPresetSpecLine,
@@ -152,6 +153,7 @@ export function LabelReadyTemplatesPage() {
   const navigate = useNavigate();
   const { pathname } = useLocation();
   const labelBase = labelModuleBasePath(pathname);
+  const starterFlow = useStarterTemplateFlow();
   const [filter, setFilter] = useState<ReadyFilterId>("all");
   const [customRows, setCustomRows] = useState<CustomTemplateRow[]>([]);
   const [customLoading, setCustomLoading] = useState(false);
@@ -209,15 +211,23 @@ export function LabelReadyTemplatesPage() {
 
   const totalVisible = cards.length;
 
-  const openPreset = (type: PresetType, asCopy = false) => {
-    const preset = generatePreset(type);
-    if (asCopy) {
-      preset.name = `${preset.name} (kopia)`;
-    }
-    navigate(`${labelBase}/designer/new`, { state: { presetTemplate: preset } });
-  };
-
   const openCustomEdit = (id: number) => navigate(`${labelBase}/${id}/edit`);
+
+  const requestUseLabelStarter = (type: PresetType, starterDisplayName: string) => {
+    starterFlow.requestUseStarter({
+      starterName: starterDisplayName,
+      createCopy: async (name) => {
+        const preset = generatePreset(type);
+        preset.name = name;
+        const res = await api.post<{ id: number }>("/label-templates/", {
+          name,
+          template_json: JSON.stringify(preset),
+          template_type: preset.template_type ?? null,
+        });
+        return { editorPath: `${labelBase}/${res.data.id}/edit` };
+      },
+    });
+  };
 
   const handleDuplicateCustom = async (card: Extract<LibraryCard, { kind: "custom" }>) => {
     try {
@@ -292,6 +302,7 @@ export function LabelReadyTemplatesPage() {
                     card.kind === "preset" ? (
                       <ReadyTemplateCard
                         key={card.key}
+                        mode="starter"
                         name={card.name}
                         description={card.description}
                         metaLine={card.metaLine}
@@ -303,9 +314,7 @@ export function LabelReadyTemplatesPage() {
                           />
                         }
                         isSystem
-                        onEdit={() => openPreset(card.presetType)}
-                        onUse={() => openPreset(card.presetType)}
-                        onDuplicate={() => openPreset(card.presetType, true)}
+                        onUseStarter={() => requestUseLabelStarter(card.presetType, card.name)}
                         onExport={() =>
                           downloadJson(
                             `${card.presetType.toLowerCase()}.json`,
@@ -316,6 +325,7 @@ export function LabelReadyTemplatesPage() {
                     ) : (
                       <ReadyTemplateCard
                         key={card.key}
+                        mode="owned"
                         name={card.name}
                         description={card.description}
                         metaLine={card.metaLine}
@@ -341,6 +351,7 @@ export function LabelReadyTemplatesPage() {
           })}
         </div>
       )}
+      {starterFlow.dialog}
     </div>
   );
 }

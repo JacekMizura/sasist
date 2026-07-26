@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
 import toast from "react-hot-toast";
 
 import {
@@ -9,13 +9,17 @@ import {
   type StarterGalleryDetailDto,
 } from "@/api/documentTemplatesApi";
 import { extractApiErrorMessage } from "@/api/apiErrorMessage";
+import {
+  STARTER_USE_CTA_LABEL,
+  useStarterTemplateFlow,
+} from "@/components/templates/starterFlow";
+import { PrimaryButton, SecondaryButton } from "@/design-system";
 import { DEFAULT_TENANT_ID, LIST_BASE } from "./constants";
 import { StarterThumbnailImage } from "./components/StarterThumbnailImage";
-import { brandPrimaryButtonClass } from "@/design-system/brandUi";
 
 export function StarterDetailPage() {
   const { starterId } = useParams<{ starterId: string }>();
-  const navigate = useNavigate();
+  const starterFlow = useStarterTemplateFlow();
   const [detail, setDetail] = useState<StarterGalleryDetailDto | null>(null);
   const [previewPdfUrl, setPreviewPdfUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -28,23 +32,26 @@ export function StarterDetailPage() {
       .finally(() => setLoading(false));
   }, [starterId]);
 
-  useEffect(() => () => {
-    if (previewPdfUrl) URL.revokeObjectURL(previewPdfUrl);
-  }, [previewPdfUrl]);
+  useEffect(
+    () => () => {
+      if (previewPdfUrl) URL.revokeObjectURL(previewPdfUrl);
+    },
+    [previewPdfUrl],
+  );
 
-  async function createTemplate() {
+  function requestUseStarter() {
     if (!detail) return;
-    try {
-      const created = await createDocumentTemplateFromStarter(DEFAULT_TENANT_ID, {
-        kind_code: detail.kind_code,
-        name: detail.name_pl,
-        starter_code: detail.code,
-      });
-      toast.success("Utworzono szablon.");
-      navigate(`${LIST_BASE}/${created.id}`);
-    } catch (err) {
-      toast.error(extractApiErrorMessage(err, "Nie udało się utworzyć szablonu."));
-    }
+    starterFlow.requestUseStarter({
+      starterName: detail.name_pl,
+      createCopy: async (name) => {
+        const created = await createDocumentTemplateFromStarter(DEFAULT_TENANT_ID, {
+          kind_code: detail.kind_code,
+          name,
+          starter_code: detail.code,
+        });
+        return { editorPath: `${LIST_BASE}/${created.id}` };
+      },
+    });
   }
 
   async function handlePdfPreview() {
@@ -89,7 +96,11 @@ export function StarterDetailPage() {
       <div className="grid gap-8 lg:grid-cols-2">
         <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
           <div className="aspect-[210/297] bg-slate-50">
-            <StarterThumbnailImage starterId={detail.id} alt={detail.name_pl} className="h-full w-full object-cover object-top" />
+            <StarterThumbnailImage
+              starterId={detail.id}
+              alt={detail.name_pl}
+              className="h-full w-full object-cover object-top"
+            />
           </div>
           {detail.preview_html ? (
             <iframe title="Podgląd HTML" className="hidden" srcDoc={detail.preview_html} />
@@ -100,15 +111,29 @@ export function StarterDetailPage() {
             <p className="text-xs uppercase tracking-wide text-slate-400">{detail.family_name}</p>
             <h1 className="mt-1 text-2xl font-semibold text-slate-900">{detail.name_pl}</h1>
             <p className="mt-3 text-sm text-slate-600">{detail.description}</p>
+            <p className="mt-2 text-xs font-medium uppercase tracking-wide text-slate-500">
+              Systemowy · tylko do odczytu
+            </p>
           </div>
           <dl className="grid gap-3 text-sm text-slate-700">
-            <div><dt className="font-medium text-slate-900">Typ dokumentu</dt><dd>{detail.kind_name}</dd></div>
-            <div><dt className="font-medium text-slate-900">Rodzina</dt><dd>{detail.family_name}</dd></div>
-            <div><dt className="font-medium text-slate-900">Autor</dt><dd>{detail.author_label}</dd></div>
+            <div>
+              <dt className="font-medium text-slate-900">Typ dokumentu</dt>
+              <dd>{detail.kind_name}</dd>
+            </div>
+            <div>
+              <dt className="font-medium text-slate-900">Rodzina</dt>
+              <dd>{detail.family_name}</dd>
+            </div>
+            <div>
+              <dt className="font-medium text-slate-900">Autor</dt>
+              <dd>{detail.author_label}</dd>
+            </div>
             {detail.base_template ? (
               <div>
                 <dt className="font-medium text-slate-900">Szablon bazowy</dt>
-                <dd>{detail.base_template.template_name} v{detail.base_template.version_number}</dd>
+                <dd>
+                  {detail.base_template.template_name} v{detail.base_template.version_number}
+                </dd>
               </div>
             ) : null}
           </dl>
@@ -117,7 +142,9 @@ export function StarterDetailPage() {
               <h2 className="text-sm font-semibold text-slate-900">Partiale</h2>
               <ul className="mt-2 list-inside list-disc text-sm text-slate-600">
                 {detail.partials_used.map((p) => (
-                  <li key={p.partial_code}>{p.partial_code}: {p.template_name}</li>
+                  <li key={p.partial_code}>
+                    {p.partial_code}: {p.template_name}
+                  </li>
                 ))}
               </ul>
             </div>
@@ -127,26 +154,37 @@ export function StarterDetailPage() {
               <h2 className="text-sm font-semibold text-slate-900">Zmienne</h2>
               <div className="mt-2 flex flex-wrap gap-1.5">
                 {variables.map((v) => (
-                  <span key={v} className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] text-slate-700">{v}</span>
+                  <span key={v} className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] text-slate-700">
+                    {v}
+                  </span>
                 ))}
               </div>
             </div>
           ) : null}
           <div className="flex flex-wrap gap-3 pt-2">
-            <button type="button" className="rounded-lg border border-slate-200 px-4 py-2 text-sm" onClick={() => void handlePdfPreview()}>
+            <SecondaryButton type="button" onClick={() => void handlePdfPreview()}>
               Podgląd PDF
-            </button>
-            <button type="button" className={brandPrimaryButtonClass} onClick={() => void createTemplate()}>
-              Utwórz szablon
-            </button>
+            </SecondaryButton>
+            <PrimaryButton type="button" onClick={requestUseStarter}>
+              {STARTER_USE_CTA_LABEL}
+            </PrimaryButton>
           </div>
           {previewPdfUrl ? (
-            <iframe title="Podgląd PDF" className="h-[480px] w-full rounded-lg border border-slate-200" src={previewPdfUrl} />
+            <iframe
+              title="Podgląd PDF"
+              className="h-[480px] w-full rounded-lg border border-slate-200"
+              src={previewPdfUrl}
+            />
           ) : detail.preview_html ? (
-            <iframe title="Podgląd" className="h-[480px] w-full rounded-lg border border-slate-200 bg-white" srcDoc={detail.preview_html} />
+            <iframe
+              title="Podgląd"
+              className="h-[480px] w-full rounded-lg border border-slate-200 bg-white"
+              srcDoc={detail.preview_html}
+            />
           ) : null}
         </div>
       </div>
+      {starterFlow.dialog}
     </div>
   );
 }

@@ -1,6 +1,8 @@
 import { MoreVertical, Star } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 
+import { STARTER_USE_CTA_LABEL } from "@/components/templates/starterFlow";
+
 type Props = {
   name: string;
   description: string;
@@ -9,12 +11,19 @@ type Props = {
   thumbnail: ReactNode;
   isSystem?: boolean;
   isDefault?: boolean;
+  /**
+   * `starter` = immutable system template: single „Użyj startera” CTA, no edit/delete.
+   * `owned` = user template: Edytuj / Użyj (+ overflow including Usuń when provided).
+   */
+  mode?: "starter" | "owned";
   primaryActionLabel?: string;
   secondaryActionLabel?: string;
-  onEdit: () => void;
-  onUse: () => void;
-  onDuplicate: () => void;
-  onExport: () => void;
+  onEdit?: () => void;
+  onUse?: () => void;
+  /** Starter mode primary action (create user copy). */
+  onUseStarter?: () => void;
+  onDuplicate?: () => void;
+  onExport?: () => void;
   onDelete?: () => void;
 };
 
@@ -29,16 +38,19 @@ export default function ReadyTemplateCard({
   thumbnail,
   isSystem,
   isDefault,
+  mode = "owned",
   primaryActionLabel = "Edytuj",
   secondaryActionLabel = "Użyj",
   onEdit,
   onUse,
+  onUseStarter,
   onDuplicate,
   onExport,
   onDelete,
 }: Props) {
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+  const isStarter = mode === "starter";
 
   useEffect(() => {
     if (!menuOpen) return;
@@ -49,6 +61,8 @@ export default function ReadyTemplateCard({
     return () => document.removeEventListener("mousedown", onDoc);
   }, [menuOpen]);
 
+  const showOverflow = isStarter ? Boolean(onExport) : Boolean(onDuplicate || onExport || onDelete);
+
   return (
     <article
       className="group relative flex h-[300px] flex-col overflow-hidden rounded-2xl border border-[#E5E7EB] bg-white shadow-sm transition duration-200 hover:-translate-y-1 hover:border-orange-300 hover:shadow-md"
@@ -57,7 +71,7 @@ export default function ReadyTemplateCard({
       <div className="relative h-[48%] shrink-0 bg-white">
         <div className="h-full border-b border-[#E5E7EB] bg-white">{thumbnail}</div>
         <div className="pointer-events-none absolute left-2.5 top-2.5 flex flex-wrap gap-1.5">
-          {isSystem ? (
+          {isSystem || isStarter ? (
             <span className="pointer-events-auto rounded-md border border-gray-200 bg-white px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-slate-600 shadow-sm">
               Systemowy
             </span>
@@ -69,55 +83,63 @@ export default function ReadyTemplateCard({
             </span>
           ) : null}
         </div>
-        <div className="absolute right-2 top-2" ref={menuRef}>
-          <button
-            type="button"
-            aria-label="Więcej akcji"
-            aria-expanded={menuOpen}
-            onClick={() => setMenuOpen((v) => !v)}
-            className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-gray-200 bg-white text-slate-600 shadow-sm opacity-100 transition hover:bg-white hover:shadow-md md:opacity-0 md:group-hover:opacity-100"
-          >
-            <MoreVertical className="h-4 w-4" strokeWidth={2} />
-          </button>
-          {menuOpen ? (
-            <div
-              role="menu"
-              className="absolute right-0 z-20 mt-1 min-w-[168px] overflow-hidden rounded-xl border border-gray-200 bg-white py-1 shadow-lg"
+        {showOverflow ? (
+          <div className="absolute right-2 top-2" ref={menuRef}>
+            <button
+              type="button"
+              aria-label="Więcej akcji"
+              aria-expanded={menuOpen}
+              onClick={() => setMenuOpen((v) => !v)}
+              className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-gray-200 bg-white text-slate-600 shadow-sm opacity-100 transition hover:bg-white hover:shadow-md md:opacity-0 md:group-hover:opacity-100"
             >
-              <MenuItem
-                label="Duplikuj"
-                onClick={() => {
-                  setMenuOpen(false);
-                  onDuplicate();
-                }}
-              />
-              <MenuItem
-                label="Utwórz kopię"
-                onClick={() => {
-                  setMenuOpen(false);
-                  onDuplicate();
-                }}
-              />
-              <MenuItem
-                label="Eksportuj"
-                onClick={() => {
-                  setMenuOpen(false);
-                  onExport();
-                }}
-              />
-              {onDelete ? (
-                <MenuItem
-                  label="Usuń"
-                  danger
-                  onClick={() => {
-                    setMenuOpen(false);
-                    onDelete();
-                  }}
-                />
-              ) : null}
-            </div>
-          ) : null}
-        </div>
+              <MoreVertical className="h-4 w-4" strokeWidth={2} />
+            </button>
+            {menuOpen ? (
+              <div
+                role="menu"
+                className="absolute right-0 z-20 mt-1 min-w-[168px] overflow-hidden rounded-xl border border-gray-200 bg-white py-1 shadow-lg"
+              >
+                {!isStarter && onDuplicate ? (
+                  <>
+                    <MenuItem
+                      label="Duplikuj"
+                      onClick={() => {
+                        setMenuOpen(false);
+                        onDuplicate();
+                      }}
+                    />
+                    <MenuItem
+                      label="Utwórz kopię"
+                      onClick={() => {
+                        setMenuOpen(false);
+                        onDuplicate();
+                      }}
+                    />
+                  </>
+                ) : null}
+                {onExport ? (
+                  <MenuItem
+                    label="Eksportuj"
+                    onClick={() => {
+                      setMenuOpen(false);
+                      onExport();
+                    }}
+                  />
+                ) : null}
+                {!isStarter && onDelete ? (
+                  <MenuItem
+                    label="Usuń"
+                    danger
+                    onClick={() => {
+                      setMenuOpen(false);
+                      onDelete();
+                    }}
+                  />
+                ) : null}
+              </div>
+            ) : null}
+          </div>
+        ) : null}
       </div>
 
       <div className="flex min-h-0 flex-1 flex-col p-5">
@@ -125,20 +147,32 @@ export default function ReadyTemplateCard({
         <p className="mt-1 line-clamp-2 flex-1 text-xs leading-relaxed text-slate-500">{description}</p>
         <p className="mt-2 text-xs text-gray-500">{metaLine}</p>
         <div className="mt-3 flex gap-2">
-          <button
-            type="button"
-            onClick={onEdit}
-            className="flex-1 rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-semibold text-slate-800 shadow-sm transition hover:border-orange-300 hover:shadow-md"
-          >
-            {primaryActionLabel}
-          </button>
-          <button
-            type="button"
-            onClick={onUse}
-            className="flex-1 rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-semibold text-slate-800 shadow-sm transition hover:border-orange-300 hover:shadow-md"
-          >
-            {secondaryActionLabel}
-          </button>
+          {isStarter ? (
+            <button
+              type="button"
+              onClick={onUseStarter}
+              className="flex-1 rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-semibold text-slate-800 shadow-sm transition hover:border-orange-300 hover:shadow-md"
+            >
+              {STARTER_USE_CTA_LABEL}
+            </button>
+          ) : (
+            <>
+              <button
+                type="button"
+                onClick={onEdit}
+                className="flex-1 rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-semibold text-slate-800 shadow-sm transition hover:border-orange-300 hover:shadow-md"
+              >
+                {primaryActionLabel}
+              </button>
+              <button
+                type="button"
+                onClick={onUse}
+                className="flex-1 rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-semibold text-slate-800 shadow-sm transition hover:border-orange-300 hover:shadow-md"
+              >
+                {secondaryActionLabel}
+              </button>
+            </>
+          )}
         </div>
       </div>
     </article>

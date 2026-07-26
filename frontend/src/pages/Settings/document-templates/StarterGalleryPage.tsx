@@ -9,6 +9,7 @@ import {
   type StarterGalleryItem,
 } from "@/api/documentTemplatesApi";
 import { extractApiErrorMessage } from "@/api/apiErrorMessage";
+import { useStarterTemplateFlow } from "@/components/templates/starterFlow";
 import { PrimaryButton } from "@/design-system";
 import ReadyTemplateCard from "@/pages/LabelSystem/readyTemplates/ReadyTemplateCard";
 import ReadyTemplatesFilterTabs from "@/pages/LabelSystem/readyTemplates/ReadyTemplatesFilterTabs";
@@ -46,6 +47,7 @@ const FILTER_TABS = [
 
 export function StarterGalleryPage() {
   const navigate = useNavigate();
+  const starterFlow = useStarterTemplateFlow();
   const [gallery, setGallery] = useState<{
     items: StarterGalleryItem[];
     total: number;
@@ -78,18 +80,18 @@ export function StarterGalleryPage() {
 
   const totalVisible = sections.reduce((n, s) => n + s.items.length, 0);
 
-  async function createFromStarter(item: StarterGalleryItem) {
-    try {
-      const created = await createDocumentTemplateFromStarter(DEFAULT_TENANT_ID, {
-        kind_code: item.kind_code,
-        name: item.name_pl,
-        starter_code: item.code,
-      });
-      toast.success("Utworzono szablon.");
-      window.location.href = `${LIST_BASE}/${created.id}`;
-    } catch (err) {
-      toast.error(extractApiErrorMessage(err, "Nie udało się utworzyć szablonu."));
-    }
+  function requestUseDocumentStarter(item: StarterGalleryItem) {
+    starterFlow.requestUseStarter({
+      starterName: item.name_pl,
+      createCopy: async (name) => {
+        const created = await createDocumentTemplateFromStarter(DEFAULT_TENANT_ID, {
+          kind_code: item.kind_code,
+          name,
+          starter_code: item.code,
+        });
+        return { editorPath: `${LIST_BASE}/${created.id}` };
+      },
+    });
   }
 
   return (
@@ -146,6 +148,7 @@ export function StarterGalleryPage() {
                   return (
                     <ReadyTemplateCard
                       key={item.id}
+                      mode="starter"
                       name={item.name_pl}
                       description={item.description || item.family_name || "Gotowy układ dokumentu"}
                       metaLine={metaLine}
@@ -157,9 +160,7 @@ export function StarterGalleryPage() {
                         />
                       }
                       isSystem={Boolean(item.is_system)}
-                      onEdit={() => navigate(`${LIST_BASE}/starters/${item.id}`)}
-                      onUse={() => void createFromStarter(item)}
-                      onDuplicate={() => void createFromStarter(item)}
+                      onUseStarter={() => requestUseDocumentStarter(item)}
                       onExport={() => navigate(`${LIST_BASE}/starters/${item.id}`)}
                     />
                   );
@@ -169,6 +170,7 @@ export function StarterGalleryPage() {
           ))}
         </div>
       ) : null}
+      {starterFlow.dialog}
     </div>
   );
 }
