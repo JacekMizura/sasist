@@ -47,12 +47,17 @@ import { WarehouseReportsPanel } from "../components/warehouse/magazyn/Warehouse
 import { DamageReportsPanel, type DamagePrefill } from "../components/warehouse/magazyn/DamageReportsPanel";
 import { UI_STRINGS } from "../constants/uiStrings";
 import { AppSplitView } from "../components/layout/app";
-import PageLayout from "../components/layout/PageLayout";
-import { SettingsModuleStack } from "../components/layout/SettingsModuleStack";
 import { tabsNavItemClassName } from "../components/layout/TabsNav";
 import { brandTabsNavRowClassName } from "../design-system/brandUi";
 import { PrimaryButton } from "../design-system/PrimaryButton";
 import { ConfirmModal } from "../components/ui/ConfirmModal";
+import { WarehouseShell } from "../components/warehouse/WarehouseShell";
+import {
+  WarehouseModeProvider,
+  mainViewToWarehouseMode,
+} from "../components/warehouse/WarehouseModeContext";
+import { warehouseMapHallClassName } from "../components/warehouse/warehouseMapHall";
+import { featuresForMode } from "../components/warehouse/features/registry";
 import { LayoutMode } from "../warehouse-layout";
 import { useLayoutModeShortcuts, useLayoutModeDisplay } from "../warehouse-layout";
 import { normalizeBinTypeMap, normalizeStorageType } from "../utils/storageTypes";
@@ -765,7 +770,9 @@ export default function WarehouseDesigner() {
     }
   }, [mainView]);
   const svgRef = useRef<SVGSVGElement>(null);
-  const isLiveView = mainView === "magazyn";
+  const warehouseMode = mainViewToWarehouseMode(mainView);
+  const isLiveView = warehouseMode === "live";
+  const activeWarehouseFeatures = featuresForMode(warehouseMode);
 
   const { refreshMagazynStock, loadDesignerProducts, resetWarehouseDataRefs } = useDesignerDataLoading({
     selectedWarehouseId,
@@ -3585,20 +3592,13 @@ export default function WarehouseDesigner() {
   });
 
   return (
-    <PageLayout
-      fullBleed
-      fillHeight
-      cardClassName="relative flex min-h-0 flex-1 flex-col overflow-hidden !space-y-0"
-    >
-      <SettingsModuleStack
-        className="flex min-h-0 flex-1 flex-col overflow-hidden"
-        contentClassName="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden"
-        hideTitle
-        breadcrumbs={[
-          { label: UI_STRINGS.navigation.groups.warehouse },
-          { label: UI_STRINGS.warehouse.designerSubTabs.layoutDesigner },
-        ]}
-        actions={
+    <WarehouseModeProvider mode={warehouseMode}>
+    <WarehouseShell
+      breadcrumbs={[
+        { label: UI_STRINGS.navigation.groups.warehouse },
+        { label: UI_STRINGS.warehouse.designerSubTabs.layoutDesigner },
+      ]}
+      topActions={
           <>
             <DesignerWarehouseSelect
               warehouseId={selectedWarehouseId}
@@ -3627,13 +3627,14 @@ export default function WarehouseDesigner() {
               setShowEditBuilding={setShowEditBuilding}
             />
           </>
-        }
-        tabsAriaLabel="Widok projektanta magazynu"
-        tabsSlot={
+      }
+      tabsAriaLabel="Widok magazynu"
+      tabsSlot={
           <nav
             className={`${brandTabsNavRowClassName} w-full flex-nowrap overflow-x-auto sm:justify-start [-webkit-overflow-scrolling:touch]`}
-            aria-label="Widok projektanta magazynu"
+            aria-label="Widok magazynu"
             role="tablist"
+            data-warehouse-features={activeWarehouseFeatures.join(" ")}
           >
             <button
               type="button"
@@ -3660,8 +3661,8 @@ export default function WarehouseDesigner() {
               {UI_STRINGS.warehouse.designerSubTabs.layoutDesigner}
             </button>
           </nav>
-        }
-      >
+      }
+    >
       {mainView === "layout" ? (
         <div className="mb-3 flex shrink-0 gap-1" role="tablist" aria-label="Workspace projektanta">
           <button
@@ -3812,7 +3813,7 @@ export default function WarehouseDesigner() {
                         <div className="relative flex min-h-0 min-w-0 max-w-full flex-1 basis-0 flex-col overflow-hidden">
                           <div
                             ref={magazynMapScrollRef}
-                            className="warehouse-magazyn-hall flex min-h-0 min-w-0 max-w-full w-full flex-1 flex-col overflow-auto overscroll-y-contain"
+                            className={warehouseMapHallClassName}
                             style={{ overscrollBehavior: "contain" }}
                           >
                           <WarehouseLayoutRenderer
@@ -4605,7 +4606,7 @@ export default function WarehouseDesigner() {
       </div>
       </AppSplitView>
       </div>
-      </SettingsModuleStack>
+      </WarehouseShell>
 
       <WarehouseModals
         showCreateWarehouse={showCreateWarehouse}
@@ -4819,6 +4820,6 @@ export default function WarehouseDesigner() {
         candidates={damageCandidates}
         prefill={damagePrefill}
       />
-    </PageLayout>
+    </WarehouseModeProvider>
   );
 }

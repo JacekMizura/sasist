@@ -2,13 +2,19 @@
 
 ## Active
 
-**Rack occupancy bar** — czytelny pasek % w dolnej części regału (lokalizacje, nie produkty).
+**Unify Magazyn ↔ Projektowanie UI (v1)** — zakończone (bez commit/push).
 
-### Occupancy
-- SSOT: `buildRackOccupancyStats` (memo w WarehouseDesigner)
-- `occupancy = zajęte / wszystkie lokalizacje × 100`
-- Kolory: 0–60 zieleń · 60–85 żółty · 85–95 pomarańcz · >95 czerwień
-- Pasek 5px, pełna szerokość wewnątrz regału; tooltip bez liczenia produktów
+### Architektura
+- `WarehouseMode` = `live` | `designer` (`mainView` magazyn|layout → `mainViewToWarehouseMode`)
+- `WarehouseModeProvider` + `WarehouseShell` (PageLayout + SettingsModuleStack)
+- Jeden `WarehouseCanvas` + `WarehouseZoomControls` (wspólny chrome: białe tło, `p-0`)
+- Thin registry: `FEATURES_BY_MODE` / `featuresForMode` (ID-y; panele nadal w Designerze)
+- Routing = designer-internal `layoutWorkspace` (nie top-level mode)
+
+### Residual (świadomie poza v1)
+- Product rails Magazyn nie w `Shell.right`
+- Prop `isLiveView` zostaje dla hostów poza Providerem (np. ProductLocationMapModal)
+- Designer nadal ~4.8k linii
 
 ### Constraints
 Bez commit/push (dopóki user nie poprosi).

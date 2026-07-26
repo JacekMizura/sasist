@@ -1,3 +1,10 @@
+## 2026-07-24 — Unify Magazyn ↔ Projektowanie UI (v1)
+
+- Shared: `WarehouseModeContext`, `WarehouseShell`, `WarehouseZoomControls`, `warehouseMapHall`, `features/registry`
+- Designer owinięty w Provider + Shell; Canvas: wspólne białe tło/`p-0`/floating zoom; edit toolbar tylko Reset
+- Bez zmian logiki DnD/zoom physics/API/routing; bez top-level `mode=routing`
+- tsc OK · **No push.**
+
 ## 2026-07-26 — Projektant Magazynu: globalny spacing Layout 2.0
 
 - `SettingsModuleStack` + tokeny `pageModuleTabsOffsetClass` / `pageModuleContentOffsetClass`

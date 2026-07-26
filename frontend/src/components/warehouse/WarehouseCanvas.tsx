@@ -23,6 +23,8 @@ import { WallElementsLayer } from "./WarehouseCanvas/WallElementsLayer";
 import { PathLayer } from "./WarehouseCanvas/PathLayer";
 import { MagazynPreviewPathLayer } from "./WarehouseCanvas/MagazynPreviewPathLayer";
 import { PassageDrawPreview } from "../../pages/WarehouseDesigner/passages/PassageDrawPreview";
+import { useWarehouseModeOptional } from "./WarehouseModeContext";
+import { WarehouseZoomControls } from "./WarehouseZoomControls";
 import {
   MapLocationVisualizationLayer,
   type MapVisualizationModeId,
@@ -467,7 +469,7 @@ function WarehouseCanvasInner({
   selectedVisualId,
   onExportPdf: _onExportPdf,
   selectedVisualIds = [],
-  isLiveView,
+  isLiveView: isLiveViewProp,
   skipInitialLiveFit = false,
   restoredScroll = null,
   onViewportScroll,
@@ -512,6 +514,9 @@ function WarehouseCanvasInner({
   htmlOverlay = null,
 }: WarehouseCanvasProps) {
   void _cellPxProp;
+  const modeCtx = useWarehouseModeOptional();
+  /** Prefer ModeContext; prop kept for ProductLocationMapModal and other hosts outside Provider. */
+  const isLiveView = modeCtx?.isLive ?? Boolean(isLiveViewProp);
   const isExportMode = mode === "export";
   const isReadMode = mode === "read";
   const isEditMode = mode === "edit";
@@ -815,12 +820,10 @@ function WarehouseCanvasInner({
   return (
     <main
       ref={canvasContainerRef}
-      className={`relative m-0 flex min-h-0 min-w-0 max-w-full flex-1 basis-0 flex-col items-stretch justify-start overflow-hidden ${
-        isLiveView ? "p-0" : "pl-3.5 pt-3.5"
-      }`}
+      className="relative m-0 flex min-h-0 min-w-0 max-w-full flex-1 basis-0 flex-col items-stretch justify-start overflow-hidden p-0"
       style={{
-        backgroundColor: isLiveView ? "#ffffff" : colors.background,
-        ...(isLiveView ? { overscrollBehavior: "contain" as const } : {}),
+        backgroundColor: "#ffffff",
+        overscrollBehavior: "contain",
       }}
     >
       {selectedWarehouseId == null ? (
@@ -848,31 +851,7 @@ function WarehouseCanvasInner({
               </button>
             </div>
           )}
-          {isLiveView ? (
-            <div className="pointer-events-none absolute right-3 top-3 z-20 flex items-center gap-1">
-              <div className="pointer-events-auto flex items-center gap-0.5 rounded-lg border border-slate-200/80 bg-white/95 p-0.5 shadow-sm backdrop-blur-sm">
-                <button
-                  type="button"
-                  onClick={() => setZoom((z) => Math.max(MIN_ZOOM, z - 0.1))}
-                  className="flex h-8 w-8 items-center justify-center rounded-md text-xs font-semibold text-slate-600 transition hover:bg-slate-50"
-                  title="Pomniejsz"
-                >
-                  −
-                </button>
-                <span className="min-w-[2.75rem] text-center font-mono text-[11px] tabular-nums text-slate-500">
-                  {Math.round(zoom * 100)}%
-                </span>
-                <button
-                  type="button"
-                  onClick={() => setZoom((z) => Math.min(MAX_ZOOM, z + 0.1))}
-                  className="flex h-8 w-8 items-center justify-center rounded-md text-xs font-semibold text-slate-600 transition hover:bg-slate-50"
-                  title="Powiększ"
-                >
-                  +
-                </button>
-              </div>
-            </div>
-          ) : null}
+          {!isExportMode ? <WarehouseZoomControls zoom={zoom} setZoom={setZoom} /> : null}
           {isEditMode && (
           <div
             className="flex min-h-0 min-w-0 shrink-0 flex-wrap items-center gap-x-2.5 gap-y-2 border-b border-slate-200/55 bg-gradient-to-b from-slate-50/98 to-white/95 px-3 py-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.75)] backdrop-blur-[4px]"
@@ -880,36 +859,13 @@ function WarehouseCanvasInner({
             <div className="flex shrink-0 items-center gap-0.5 rounded-lg border border-slate-200/60 bg-slate-100/50 p-0.5">
               <button
                 type="button"
-                onClick={() => setZoom((z) => Math.min(MAX_ZOOM, z + 0.1))}
-                className="flex h-8 w-8 items-center justify-center rounded-md text-xs font-semibold text-slate-600 transition-all duration-150 hover:bg-white hover:text-slate-900 hover:shadow-sm active:scale-95"
+                onClick={fitViewport}
+                className="h-8 rounded-md px-2.5 text-[11px] font-medium text-slate-600 transition-all duration-150 hover:bg-white hover:text-slate-900 hover:shadow-sm"
                 style={{ color: colors.textSecondary }}
-                title="Powiększ"
+                title="Zoom 100%, przewijanie lewy górny róg, pan wyzerowany"
               >
-                +
+                Reset
               </button>
-              <span className="min-w-[2.75rem] text-center font-mono text-[11px] tabular-nums text-slate-500">
-                {Math.round(zoom * 100)}%
-              </span>
-              <button
-                type="button"
-                onClick={() => setZoom((z) => Math.max(MIN_ZOOM, z - 0.1))}
-                className="flex h-8 w-8 items-center justify-center rounded-md text-xs font-semibold text-slate-600 transition-all duration-150 hover:bg-white hover:text-slate-900 hover:shadow-sm active:scale-95"
-                style={{ color: colors.textSecondary }}
-                title="Pomniejsz"
-              >
-                −
-              </button>
-              {isLiveView ? null : (
-                <button
-                  type="button"
-                  onClick={fitViewport}
-                  className="h-8 rounded-md px-2.5 text-[11px] font-medium text-slate-600 transition-all duration-150 hover:bg-white hover:text-slate-900 hover:shadow-sm"
-                  style={{ color: colors.textSecondary }}
-                  title="Zoom 100%, przewijanie lewy górny róg, pan wyzerowany"
-                >
-                  Reset
-                </button>
-              )}
             </div>
             <span className="hidden h-6 w-px shrink-0 bg-slate-200/80 sm:block" aria-hidden />
             {!isLiveView && (
