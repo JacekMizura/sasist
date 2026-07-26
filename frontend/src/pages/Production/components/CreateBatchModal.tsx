@@ -1,16 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import {
-  AlertTriangle,
-  CheckCircle2,
-  Clock,
-  Coins,
-  Layers,
-  Plus,
-  Search,
-  Trash2,
-  X,
-} from "lucide-react";
+import { AlertTriangle, Trash2 } from "lucide-react";
 import toast from "react-hot-toast";
+
 import { extractApiErrorMessage } from "../../../api/apiErrorMessage";
 import {
   createProductionBatch,
@@ -21,10 +12,22 @@ import {
   type RecipeCardRead,
 } from "../../../api/productionApi";
 import type { DemandBatchLineDraft } from "../../../api/productionPlanningApi";
-import { formatDurationMinutes } from "../productionTheme";
+import { AppOverlayPortal } from "../../../components/overlay";
+import {
+  Card,
+  Checkbox,
+  Dialog,
+  Input,
+  ListTile,
+  PrimaryButton,
+  SearchInput,
+  SecondaryButton,
+  StatusBadge,
+  Stepper,
+  typography,
+} from "@/design-system";
 import { formatProductionMoney, stockTone, STOCK_TONE_CLASS } from "../productionUi";
 import { ProductThumb } from "./ProductThumb";
-import { AppOverlayPortal } from "../../../components/overlay";
 
 type LineDraft = {
   key: string;
@@ -42,7 +45,11 @@ type Props = {
   onCreated: (batchId: number) => void;
 };
 
-const STEPS = ["Produkty", "Materiały", "Plan"] as const;
+const STEPS = [
+  { id: "products", label: "Produkty" },
+  { id: "materials", label: "Materiały" },
+  { id: "summary", label: "Podsumowanie" },
+] as const;
 
 export function CreateBatchModal({ open, tenantId, warehouseId, initialLines, onClose, onCreated }: Props) {
   const [recipes, setRecipes] = useState<RecipeCardRead[]>([]);
@@ -137,6 +144,14 @@ export function CreateBatchModal({ open, tenantId, warehouseId, initialLines, on
     ]);
   };
 
+  const removeLine = (key: string) => {
+    setLines((prev) => prev.filter((x) => x.key !== key));
+  };
+
+  const setLineQuantity = (key: string, quantity: number) => {
+    setLines((prev) => prev.map((x) => (x.key === key ? { ...x, quantity: Math.max(1, quantity) } : x)));
+  };
+
   const stepIndex = lines.length === 0 ? 0 : preview ? 2 : 1;
 
   const payloadValidation = useMemo(() => {
@@ -177,260 +192,212 @@ export function CreateBatchModal({ open, tenantId, warehouseId, initialLines, on
     }
   };
 
-  if (!open) return null;
-
   return (
     <AppOverlayPortal>
-    <div className="fixed inset-0 z-[280] flex items-end justify-center bg-slate-950/50 p-0 sm:items-center sm:p-4">
-      <div className="flex h-[94vh] w-full max-w-5xl flex-col overflow-hidden rounded-t-3xl bg-white shadow-2xl sm:h-auto sm:max-h-[92vh] sm:rounded-3xl">
-        <div className="shrink-0 border-b border-violet-100 bg-gradient-to-r from-violet-950 to-indigo-900 px-6 py-5 text-white">
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <p className="text-xs font-bold uppercase tracking-widest text-violet-300">Planowanie produkcji</p>
-              <h2 className="mt-1 text-xl font-bold">Nowa partia masowa</h2>
-              <p className="mt-1 text-sm text-violet-100/90">
-                Wybierz wiele produktów — system zagreguje materiały, koszt i braki.
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={onClose}
-              className="rounded-xl p-2 text-violet-200 hover:bg-white/10"
-              aria-label="Zamknij"
-            >
-              <X className="h-5 w-5" aria-hidden />
-            </button>
+      <Dialog
+        open={open}
+        onClose={onClose}
+        size="xl"
+        rootClassName="!z-[280]"
+        panelClassName="max-h-[85vh]"
+        title={
+          <span className="block">
+            <span className="block text-lg font-semibold tracking-tight text-slate-900">Nowa partia masowa</span>
+            <span className={`mt-1 block font-normal ${typography.pageDesc}`}>
+              Dodaj produkty, a system automatycznie obliczy materiały, koszty i dostępność.
+            </span>
+          </span>
+        }
+        footer={
+          <div className="flex w-full items-center justify-between gap-3">
+            <SecondaryButton type="button" onClick={onClose}>
+              Anuluj
+            </SecondaryButton>
+            <PrimaryButton type="button" disabled={!canSubmit} onClick={() => void submit()}>
+              {busy ? "Tworzenie partii…" : previewBusy ? "Obliczanie planu…" : "Utwórz partię"}
+            </PrimaryButton>
           </div>
-          <div className="mt-4 flex gap-2">
-            {STEPS.map((label, i) => (
-              <span
-                key={label}
-                className={[
-                  "rounded-full px-3 py-1 text-xs font-semibold",
-                  i <= stepIndex ? "bg-white text-violet-900" : "bg-white/10 text-violet-200",
-                ].join(" ")}
-              >
-                {i + 1}. {label}
-              </span>
-            ))}
-          </div>
-        </div>
+        }
+      >
+        <div className="space-y-5">
+          <Stepper steps={[...STEPS]} activeIndex={stepIndex} />
 
-        <div className="grid min-h-0 flex-1 gap-0 lg:grid-cols-5">
-          <div className="flex min-h-0 flex-col border-b border-slate-100 lg:col-span-3 lg:border-b-0 lg:border-r">
-            <div className="shrink-0 border-b border-slate-100 p-4">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" aria-hidden />
-                <input
-                  type="search"
-                  placeholder="Szukaj produktu lub receptury…"
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  className="w-full rounded-xl border border-slate-200 py-2.5 pl-10 pr-4 text-sm focus:border-violet-400 focus:outline-none focus:ring-2 focus:ring-violet-100"
-                />
-              </div>
-            </div>
+          <section className="space-y-2">
+            <SearchInput
+              density="comfortable"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Szukaj produktu lub receptury…"
+              aria-label="Szukaj produktów"
+              className="w-full"
+            />
+            {filteredRecipes.length === 0 ? (
+              <p className="py-6 text-center text-sm text-slate-500">Brak aktywnych receptur produkcyjnych.</p>
+            ) : (
+              <ul className="max-h-56 space-y-2 overflow-y-auto pr-0.5">
+                {filteredRecipes.map((r) => {
+                  const added = usedCompositionIds.has(r.composition_id);
+                  return (
+                    <li key={r.composition_id}>
+                      <ListTile density="compact" className="w-full">
+                        <div className="flex items-center gap-3">
+                          <ProductThumb imageUrl={r.product_image_url} name={r.product_name} size="sm" />
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-sm font-semibold text-slate-900">{r.product_name}</p>
+                            <p className="truncate font-mono text-xs text-slate-500">{r.product_sku ?? "—"}</p>
+                            <p className={`mt-0.5 ${typography.caption}`}>
+                              {formatProductionMoney(r.unit_cost_net)}/szt. · max {Math.floor(r.max_producible)}
+                            </p>
+                          </div>
+                          {added ? (
+                            <SecondaryButton type="button" density="compact" onClick={() => {
+                              const line = lines.find((l) => l.recipe.composition_id === r.composition_id);
+                              if (line) removeLine(line.key);
+                            }}>
+                              Usuń
+                            </SecondaryButton>
+                          ) : (
+                            <PrimaryButton type="button" density="compact" onClick={() => addLine(r)}>
+                              Dodaj
+                            </PrimaryButton>
+                          )}
+                        </div>
+                      </ListTile>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </section>
 
-            <div className="min-h-0 flex-1 overflow-y-auto p-4">
-              {filteredRecipes.length === 0 ? (
-                <p className="py-8 text-center text-sm text-slate-500">Brak aktywnych receptur produkcyjnych.</p>
-              ) : (
-                <div className="grid gap-2 sm:grid-cols-2">
-                  {filteredRecipes.map((r) => {
-                    const added = usedCompositionIds.has(r.composition_id);
-                    return (
-                      <button
-                        key={r.composition_id}
-                        type="button"
-                        disabled={added}
-                        onClick={() => addLine(r)}
-                        className={[
-                          "flex items-start gap-3 rounded-xl border p-3 text-left transition",
-                          added
-                            ? "border-emerald-200 bg-emerald-50/50 opacity-70"
-                            : "border-slate-200 hover:border-violet-300 hover:bg-violet-50/40",
-                        ].join(" ")}
-                      >
-                        <ProductThumb imageUrl={r.product_image_url} name={r.product_name} size="sm" />
+          <section className="space-y-2">
+            <h3 className={typography.section}>Wybrane produkty</h3>
+            {lines.length === 0 ? (
+              <p className="text-sm text-slate-500">Brak dodanych produktów.</p>
+            ) : (
+              <ul className="space-y-2">
+                {lines.map((ln) => (
+                  <li key={ln.key}>
+                    <Card variant="section" density="compact" className="!p-3">
+                      <div className="flex flex-wrap items-center gap-3">
+                        <ProductThumb imageUrl={ln.recipe.product_image_url} name={ln.recipe.product_name} size="sm" />
                         <div className="min-w-0 flex-1">
-                          <p className="truncate text-sm font-semibold text-slate-900">{r.product_name}</p>
-                          <p className="truncate text-xs text-slate-500">{r.recipe_name}</p>
-                          <p className="mt-1 text-xs text-slate-500">
-                            max {Math.floor(r.max_producible)} · {formatProductionMoney(r.unit_cost_net)}/szt.
+                          <p className="truncate text-sm font-semibold text-slate-900">{ln.recipe.product_name}</p>
+                          <p className={typography.caption}>
+                            {formatProductionMoney(ln.recipe.unit_cost_net)}/szt.
+                            {ln.recipe.unit_cost_net != null
+                              ? ` · łącznie ${formatProductionMoney(ln.recipe.unit_cost_net * ln.quantity)}`
+                              : null}
                           </p>
                         </div>
-                        {added ? (
-                          <CheckCircle2 className="h-5 w-5 shrink-0 text-emerald-600" aria-hidden />
-                        ) : (
-                          <Plus className="h-5 w-5 shrink-0 text-violet-600" aria-hidden />
-                        )}
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-
-            {lines.length > 0 ? (
-              <div className="shrink-0 border-t border-slate-100 bg-slate-50/80 p-4">
-                <p className="mb-2 text-xs font-bold uppercase tracking-wide text-slate-500">Linie partii ({lines.length})</p>
-                <ul className="max-h-40 space-y-2 overflow-y-auto">
-                  {lines.map((ln) => (
-                    <li
-                      key={ln.key}
-                      className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white p-2.5 shadow-sm"
-                    >
-                      <ProductThumb imageUrl={ln.recipe.product_image_url} name={ln.recipe.product_name} size="sm" />
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-medium text-slate-900">{ln.recipe.product_name}</p>
+                        <Input
+                          type="number"
+                          min={1}
+                          density="compact"
+                          className="w-24"
+                          aria-label={`Ilość ${ln.recipe.product_name}`}
+                          value={ln.quantity}
+                          onChange={(e) => setLineQuantity(ln.key, Number(e.target.value) || 1)}
+                        />
+                        <SecondaryButton
+                          type="button"
+                          density="compact"
+                          onClick={() => removeLine(ln.key)}
+                          aria-label={`Usuń ${ln.recipe.product_name}`}
+                          className="inline-flex items-center gap-1.5"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" aria-hidden />
+                          Usuń
+                        </SecondaryButton>
                       </div>
-                      <input
-                        type="number"
-                        min={1}
-                        aria-label={`Ilość ${ln.recipe.product_name}`}
-                        className="w-20 rounded-lg border border-slate-200 px-2 py-1.5 text-sm font-semibold tabular-nums"
-                        value={ln.quantity}
-                        onChange={(e) =>
-                          setLines((prev) =>
-                            prev.map((x) =>
-                              x.key === ln.key ? { ...x, quantity: Math.max(1, Number(e.target.value) || 1) } : x,
-                            ),
-                          )
-                        }
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setLines((prev) => prev.filter((x) => x.key !== ln.key))}
-                        className="rounded-lg p-2 text-slate-400 hover:bg-red-50 hover:text-red-600"
-                        aria-label="Usuń linię"
-                      >
-                        <Trash2 className="h-4 w-4" aria-hidden />
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ) : null}
-          </div>
+                    </Card>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
 
-          <div className="flex min-h-0 flex-col bg-gradient-to-b from-violet-50/50 to-white lg:col-span-2">
-            <div className="flex-1 overflow-y-auto p-5 space-y-4">
-              <h3 className="text-sm font-bold text-slate-900">Podsumowanie planu</h3>
-
+          <section className="space-y-3">
+            <h3 className={typography.section}>Podsumowanie</h3>
+            <Card variant="section" density="comfortable" className="space-y-3">
               {lines.length === 0 ? (
-                <div className="rounded-2xl border border-dashed border-violet-200 bg-white/80 p-6 text-center">
-                  <Layers className="mx-auto h-10 w-10 text-violet-300" aria-hidden />
-                  <p className="mt-3 text-sm font-medium text-slate-700">Dodaj produkty do partii</p>
-                  <p className="mt-1 text-xs text-slate-500">Kliknij kartę produktu po lewej, aby zaplanować ilości.</p>
-                </div>
+                <p className="text-sm text-slate-500">Dodaj produkty, aby zobaczyć podsumowanie materiałów i kosztów.</p>
+              ) : previewBusy && !preview ? (
+                <p className="text-sm text-slate-500">Obliczanie planu materiałowego…</p>
               ) : preview ? (
                 <>
-                  <div className="grid grid-cols-2 gap-2">
-                    <div className="rounded-xl border border-slate-200 bg-white p-3">
-                      <p className="text-xs font-bold uppercase text-slate-500">Produkty</p>
-                      <p className="text-xl font-bold text-slate-900">{preview.products_count}</p>
-                    </div>
-                    <div className="rounded-xl border border-slate-200 bg-white p-3">
-                      <p className="text-xs font-bold uppercase text-slate-500">Sztuk</p>
-                      <p className="text-xl font-bold text-slate-900">{preview.total_planned_units}</p>
-                    </div>
-                    <div className="rounded-xl border border-violet-200 bg-violet-50 p-3">
-                      <p className="flex items-center gap-1 text-xs font-bold uppercase text-violet-600">
-                        <Coins className="h-3 w-3" aria-hidden />
-                        Koszt szac.
-                      </p>
-                      <p className="text-lg font-bold text-violet-900">
-                        {formatProductionMoney(preview.estimated_cost_net)}
-                      </p>
-                    </div>
-                    <div className="rounded-xl border border-blue-200 bg-blue-50 p-3">
-                      <p className="flex items-center gap-1 text-xs font-bold uppercase text-blue-600">
-                        <Clock className="h-3 w-3" aria-hidden />
-                        Czas szac.
-                      </p>
-                      <p className="text-lg font-bold text-blue-900">
-                        {formatDurationMinutes(preview.estimated_duration_minutes ?? 0)}
-                      </p>
-                    </div>
+                  <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                    <SummaryStat label="Produkty" value={preview.products_count} />
+                    <SummaryStat label="Łączna liczba sztuk" value={preview.total_planned_units} />
+                    <SummaryStat label="Szacowany koszt" value={formatProductionMoney(preview.estimated_cost_net)} />
+                    <SummaryStat label="Wymagane materiały" value={preview.aggregated_components.length} />
                   </div>
 
                   {preview.has_shortages ? (
-                    <div className="rounded-xl border border-amber-300 bg-amber-50 p-4">
-                      <p className="flex items-center gap-2 text-sm font-bold text-amber-900">
-                        <AlertTriangle className="h-4 w-4" aria-hidden />
-                        Wykryto braki materiałów ({preview.shortages.length})
+                    <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-sm text-amber-900">
+                      <p className="flex items-center gap-2 font-semibold">
+                        <AlertTriangle className="h-4 w-4 shrink-0" aria-hidden />
+                        Braki materiałów ({preview.shortages.length})
                       </p>
                       <p className="mt-1 text-xs text-amber-800">
                         Partię można utworzyć, ale start produkcji będzie zablokowany do uzupełnienia stanów.
                       </p>
                     </div>
                   ) : (
-                    <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-semibold text-emerald-800">
-                      <CheckCircle2 className="mb-1 inline h-4 w-4" aria-hidden /> Materiały wystarczające — gotowe do
-                      zbierania po utworzeniu.
-                    </div>
+                    <StatusBadge tone="success" density="comfortable">
+                      Materiały wystarczające
+                    </StatusBadge>
                   )}
 
-                  <div>
-                    <p className="mb-2 text-xs font-bold uppercase tracking-wide text-slate-500">Zagregowane materiały</p>
-                    <div className="max-h-52 space-y-1.5 overflow-y-auto">
-                      {preview.aggregated_components.map((c) => {
-                        const tone = stockTone(c.required, c.available);
-                        return (
-                          <div
-                            key={c.component_product_id}
-                            className={`rounded-lg border px-3 py-2 text-xs ${STOCK_TONE_CLASS[tone]}`}
-                          >
-                            <p className="font-semibold text-slate-800">{c.product_name}</p>
-                            <p className="text-slate-600">
-                              Wymagane: <strong>{c.required}</strong> · Dostępne: {c.available}
-                              {c.missing > 0 ? (
-                                <span className="font-bold text-red-700"> · Brak: {c.missing}</span>
-                              ) : null}
-                            </p>
-                          </div>
-                        );
-                      })}
+                  {preview.aggregated_components.length > 0 ? (
+                    <div className="space-y-1.5">
+                      <p className={typography.caption}>Zagregowane materiały</p>
+                      <ul className="max-h-40 space-y-1.5 overflow-y-auto">
+                        {preview.aggregated_components.map((c) => {
+                          const tone = stockTone(c.required, c.available);
+                          return (
+                            <li
+                              key={c.component_product_id}
+                              className={`rounded-md border px-3 py-2 text-xs ${STOCK_TONE_CLASS[tone]}`}
+                            >
+                              <p className="font-semibold text-slate-800">{c.product_name}</p>
+                              <p className="text-slate-600">
+                                Wymagane: <strong>{c.required}</strong> · Dostępne: {c.available}
+                                {c.missing > 0 ? (
+                                  <span className="font-bold text-red-700"> · Brak: {c.missing}</span>
+                                ) : null}
+                              </p>
+                            </li>
+                          );
+                        })}
+                      </ul>
                     </div>
-                  </div>
+                  ) : null}
                 </>
               ) : (
                 <p className="text-sm text-slate-500">Obliczanie planu materiałowego…</p>
               )}
-            </div>
 
-            <div className="shrink-0 flex gap-2 border-t border-slate-200 bg-white p-4">
-              <label className="mb-2 flex w-full items-center gap-2 rounded-lg border border-violet-100 bg-violet-50/60 px-3 py-2 text-sm text-slate-800">
-                <input
-                  type="checkbox"
-                  className="h-4 w-4 rounded border-slate-300"
+              <label className="flex cursor-pointer items-center gap-2 border-t border-slate-100 pt-3 text-sm text-slate-800">
+                <Checkbox
                   checked={reserveMaterials}
                   onChange={(e) => setReserveMaterials(e.target.checked)}
                 />
-                Zarezerwuj materiały przy utworzeniu partii
+                Rezerwuj materiały przy utworzeniu partii
               </label>
-            </div>
-            <div className="shrink-0 flex gap-2 border-t border-slate-200 bg-white p-4">
-              <button
-                type="button"
-                onClick={onClose}
-                className="flex-1 rounded-xl border border-slate-200 px-4 py-3 text-sm font-medium text-slate-700 hover:bg-slate-50"
-              >
-                Anuluj
-              </button>
-              <button
-                type="button"
-                disabled={!canSubmit}
-                onClick={() => void submit()}
-                className="flex-[2] rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 px-4 py-3 text-sm font-bold text-white shadow-md hover:from-violet-700 hover:to-indigo-700 disabled:opacity-50"
-              >
-                {busy ? "Tworzenie partii…" : previewBusy ? "Obliczanie planu…" : "Utwórz partię produkcyjną"}
-              </button>
-            </div>
-          </div>
+            </Card>
+          </section>
         </div>
-      </div>
-    </div>
+      </Dialog>
     </AppOverlayPortal>
+  );
+}
+
+function SummaryStat({ label, value }: { label: string; value: string | number }) {
+  return (
+    <div>
+      <p className={typography.kpiLabel}>{label}</p>
+      <p className={`mt-1 ${typography.metric}`}>{value}</p>
+    </div>
   );
 }

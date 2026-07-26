@@ -34,13 +34,14 @@ export type DialogProps = {
   /** Extra classes on the dialog panel. */
   panelClassName?: string;
   /** Max width utility; default max-w-lg. */
-  size?: "sm" | "md" | "lg";
+  size?: "sm" | "md" | "lg" | "xl";
 };
 
 const dialogSizeClass = {
   sm: "max-w-sm",
   md: "max-w-lg",
   lg: "max-w-2xl",
+  xl: "max-w-6xl",
 } as const;
 
 /** Minimal modal dialog — layout chrome only. */
@@ -72,17 +73,21 @@ export function Dialog({
         aria-modal="true"
         aria-label={ariaLabel}
         aria-labelledby={title ? "sasist-dialog-title" : undefined}
-        className={`relative z-10 w-full ${dialogSizeClass[size]} ${radius.lg} border ${colors.border.default} ${colors.surface.page} ${shadows.md}${panelClassName ? ` ${panelClassName}` : ""}`.trim()}
+        className={`relative z-10 flex w-full flex-col ${dialogSizeClass[size]} ${radius.lg} border ${colors.border.default} ${colors.surface.page} ${shadows.md}${panelClassName ? ` ${panelClassName}` : ""}`.trim()}
       >
         {title ? (
-          <div className="border-b border-slate-200 px-4 py-3">
+          <div className="shrink-0 border-b border-slate-200 px-4 py-3">
             <h2 id="sasist-dialog-title" className="text-base font-semibold text-slate-900">
               {title}
             </h2>
           </div>
         ) : null}
-        <div className="px-4 py-4">{children}</div>
-        {footer ? <div className="flex justify-end gap-2 border-t border-slate-200 px-4 py-3">{footer}</div> : null}
+        <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">{children}</div>
+        {footer ? (
+          <div className="flex shrink-0 items-center justify-end gap-2 border-t border-slate-200 px-4 py-3">
+            {footer}
+          </div>
+        ) : null}
       </div>
     </div>
   );
