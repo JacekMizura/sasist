@@ -28,6 +28,7 @@ import {
   Building2,
   Plug,
   Download,
+  Printer,
 } from "lucide-react";
 
 import { UI_STRINGS } from "../constants/uiStrings";
@@ -353,6 +354,12 @@ export function buildNavFlyoutCategories(): NavCategoryConfig[] {
             path: "/settings/shipping-methods",
             label: UI_STRINGS.navigation.shippingMethods,
             Icon: Truck,
+            permissionsAny: ["settings.users", "settings.company"],
+          },
+          {
+            path: "/admin/print-templates",
+            label: "Szablony wydruków",
+            Icon: Printer,
             permissionsAny: ["settings.users", "settings.company"],
           },
           {

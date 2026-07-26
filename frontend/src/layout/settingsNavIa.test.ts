@@ -14,6 +14,7 @@ describe("settings flyout IA", () => {
     expect(labels[3]).toBe("Klucze API");
     expect(labels[4]).toBe("Eksport");
     expect(labels).toContain("Metody dostawy");
+    expect(labels).toContain("Szablony wydruków");
     expect(labels).toContain("System");
 
     const byLabel = Object.fromEntries(
@@ -22,6 +23,7 @@ describe("settings flyout IA", () => {
     expect(byLabel["Integracje"]).toBe("/settings/integrations");
     expect(byLabel["Klucze API"]).toBe("/settings/api-keys");
     expect(byLabel["Eksport"]).toBe("/settings/exports");
+    expect(byLabel["Szablony wydruków"]).toBe("/admin/print-templates");
     expect(byLabel["Integracje"]).not.toBe(byLabel["Klucze API"]);
   });
 });

@@ -1,3 +1,8 @@
+## 2026-07-26 — Ustawienia: Szablony wydruków w menu
+
+- Przywrócono pozycję w flyoucie Ustawienia → `/admin/print-templates`
+- Tylko nawigacja; test `settingsNavIa` zaktualizowany
+
 ## 2026-07-26 — Realizacja: produkcja + rozlokowanie UX
 
 - Produkuj +1/+5 → Zakończ produkcję; bez „Uzupełnij plan”
