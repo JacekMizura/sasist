@@ -6,6 +6,7 @@ import {
   ghostButtonClass,
   iconButtonClass,
   inputClassName,
+  shadows,
 } from "../../design-system";
 
 /** 36px — aligned with module list filter spec (h-9) */
@@ -47,7 +48,11 @@ export const filterActionsFooterClass =
 
 export const filterActionsFooterMobileOnlyClass = `${filterActionsFooterClass} sm:hidden`;
 
-export const filterEmbeddedSurfaceClass = "shadow-none";
+/**
+ * @deprecated Prefer `<FilterPanel elevation="none" />`.
+ * Kept as thin facade for any remaining className consumers.
+ */
+export const filterEmbeddedPanelClass = shadows.none;
 
 export const filterCheckboxClass =
   "h-3.5 w-3.5 shrink-0 rounded border-slate-300 text-slate-800 focus:ring-1 focus:ring-slate-400/50";

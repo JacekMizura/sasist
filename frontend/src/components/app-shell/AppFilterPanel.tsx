@@ -1,7 +1,6 @@
 import type { ReactNode } from "react";
 
 import { FilterPanel, FilterPanelBodyWithActions, FilterToolbar } from "../filters";
-import { filterEmbeddedPanelClass } from "../filters/filterUiTokens";
 import { moduleListFilterPanelBareClass } from "../listPage/moduleListLayoutTokens";
 
 export type AppFilterPanelProps = {
@@ -40,7 +39,7 @@ export function AppFilterPanel({
   const bodyVisible = expanded === undefined || expanded;
 
   return (
-    <FilterPanel className={className ?? `${moduleListFilterPanelBareClass} ${filterEmbeddedPanelClass}`.trim()}>
+    <FilterPanel elevation="none" className={className ?? moduleListFilterPanelBareClass}>
       <FilterToolbar
         expanded={expanded}
         onToggleExpanded={onToggleExpanded}
