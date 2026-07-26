@@ -105,8 +105,8 @@ import ComplaintDetailPage from "./pages/Complaints/ComplaintDetailPage"
 import Changelog from "./pages/Changelog"
 import CartDetails from "./pages/CartDetails"
 import FleetPlanner from "./pages/FleetPlanner"
-import PickingWaves from "./pages/PickingWaves"
 import WarehouseDesigner from "./pages/WarehouseDesigner"
+/** @deprecated DELETE_CANDIDATE — superseded by LabelSystem (/labels). Keep file until cleanup. */
 import BarcodeManagement from "./pages/BarcodeManagement"
 import LabelSystem from "./pages/LabelSystem"
 import DocumentTemplatesLayout from "./pages/Settings/document-templates/DocumentTemplatesLayout";
@@ -125,7 +125,6 @@ import SystemMetrics from "./pages/System/SystemMetrics"
 import SystemErrorLogs from "./pages/System/SystemErrorLogs"
 import SystemChangelog from "./pages/System/SystemChangelog"
 import SystemAppDictionaryPage from "./pages/System/SystemAppDictionaryPage"
-import PlanningPlaceholder from "./pages/PlanningPlaceholder"
 import AnalyticsDashboardPage from "./pages/analytics/AnalyticsDashboard"
 import InventoryValue from "./pages/analytics/InventoryValue"
 import DeadStock from "./pages/analytics/DeadStock"
@@ -288,7 +287,6 @@ import DocumentsSalesDetailPage from "./pages/documents/DocumentsSalesDetailPage
 import DocumentsCorrectingPage from "./pages/documents/DocumentsCorrectingPage"
 import DocumentsWarehousePage from "./pages/documents/DocumentsWarehousePage"
 import DocumentsWarehouseDetailPage from "./pages/documents/DocumentsWarehouseDetailPage"
-import DocumentsPlaceholderPage from "./pages/documents/DocumentsPlaceholderPage"
 import DocumentsExportsHubPage from "./pages/documents/DocumentsExportsHubPage"
 
 function RedirectLegacySettingsDocumentSeriesId() {
@@ -664,27 +662,10 @@ export const router = createBrowserRouter(
                   <Route path="series/new" element={<DocumentSeriesEditPage />} />
                   <Route path="series/:id" element={<DocumentSeriesEditPage />} />
                   <Route path="templates" element={<Navigate to="/admin/message-templates" replace />} />
-                  <Route
-                    path="custom-fields"
-                    element={
-                      <DocumentsPlaceholderPage
-                        title="Pola własne"
-                        hintLabel="Otwórz pola dodatkowe zamówień"
-                        hintTo="/orders/custom-fields"
-                      />
-                    }
-                  />
-                  <Route path="field-templates" element={<Navigate to="/documents/custom-fields" replace />} />
-                  <Route
-                    path="ksef"
-                    element={
-                      <DocumentsPlaceholderPage
-                        title="Konta KSeF"
-                        hintLabel="Powrót do serii dokumentów"
-                        hintTo="/documents/series"
-                      />
-                    }
-                  />
+                  <Route path="custom-fields" element={<Navigate to="/orders/custom-fields" replace />} />
+                  <Route path="field-templates" element={<Navigate to="/orders/custom-fields" replace />} />
+                  {/* Future: KSeF accounts UI — stub hidden until MF integration exists. */}
+                  <Route path="ksef" element={<Navigate to="/documents/series" replace />} />
                 </Route>
                 <Route path="import" element={<Navigate to="/settings/import" replace />} />
                 <Route path="import/history" element={<Navigate to="/settings/import?panel=history" replace />} />
@@ -923,12 +904,15 @@ export const router = createBrowserRouter(
                 <Route path="changelog" element={<Changelog />} />
                 <Route path="carts/:id" element={<CartDetails />} />
                 <Route path="optimizer" element={<Navigate to="/carts/optimizer" replace />} />
-                <Route path="waves" element={<PickingWaves />} />
+                {/* Waves UI stub hidden — backend /waves remains. Operator flow: WMS picking. */}
+                <Route path="waves" element={<Navigate to="/wms/picking" replace />} />
                 <Route path="designer" element={<WarehouseDesigner />} />
                 <Route path="warehouse-designer" element={<WarehouseDesigner />} />
                 <Route path="office/damages" element={<OfficeDamagesPage />} />
                 <Route path="office/damage-reports" element={<OfficeDamageReportsPage />} />
+                {/* DELETE_CANDIDATE: superseded by /labels — keep until cleanup; not in menu. */}
                 <Route path="barcode-management" element={<BarcodeManagement />} />
+                {/* LEGACY technical stock list — not Magazyn → Inwentaryzacja (/inventory-count). */}
                 <Route path="inventory" element={<InventoryList />} />
                 <Route path="analytics/warehouse-operations" element={<WarehouseOperationsPage />} />
                 <Route path="analytics/live-warehouse" element={<Navigate to="/analytics/warehouse-operations" replace />} />
@@ -997,8 +981,9 @@ export const router = createBrowserRouter(
                 </Route>
                 <Route path="labels/*" element={<LabelSystem />} />
                 <Route path="system-etykiet/*" element={<RedirectSystemEtykietToLabels />} />
-                <Route path="planning/deliveries" element={<PlanningPlaceholder />} />
-                <Route path="planning/list" element={<PlanningPlaceholder />} />
+                {/* Planning placeholders removed — purchasing is the product path. */}
+                <Route path="planning/deliveries" element={<Navigate to="/purchasing/dashboard" replace />} />
+                <Route path="planning/list" element={<Navigate to="/purchasing/dashboard" replace />} />
                 <Route path="*" element={<RouteNotFoundThrow />} />
       </Route>
       </Route>

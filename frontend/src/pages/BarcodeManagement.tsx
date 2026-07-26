@@ -1,3 +1,8 @@
+/**
+ * DELETE_CANDIDATE — orphan UI superseded by System Etykiet (`/labels`).
+ * Not in menu. No other production imports. Safe to remove in a future cleanup pass
+ * together with this file only (no shared module dependents).
+ */
 import { useState, useEffect, useCallback, useRef } from "react";
 import JsBarcode from "jsbarcode";
 import QRCode from "qrcode";

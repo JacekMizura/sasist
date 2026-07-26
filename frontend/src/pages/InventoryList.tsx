@@ -1,3 +1,8 @@
+/**
+ * LEGACY technical route: `/inventory` stock browser.
+ * Not Magazyn → Inwentaryzacja (`/inventory-count`). Not in main menu.
+ * Backend `GET /inventory/` remains production SSOT for Designer and other callers.
+ */
 import { useEffect, useState, useCallback } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import api from "../api/axios";

@@ -88,10 +88,10 @@ export const DOCUMENTS_MAIN_FLYOUT_SECTIONS: DocumentsNavSection[] = [
   DOCUMENTS_SETTINGS_SIDEBAR,
 ];
 
-/** Legacy routes — poza menu, zachowane dla starych linków. */
+/** Legacy routes — poza menu; redirectują do kanonicznych ścieżek (Faza B IA). */
 export const DOCUMENTS_LEGACY_NAV_ITEMS = {
-  customFields: { path: "/documents/custom-fields", label: "Pola własne" },
-  ksef: { path: "/documents/ksef", label: "Konta KSeF" },
+  customFields: { path: "/documents/custom-fields", label: "Pola własne", redirectsTo: "/orders/custom-fields" },
+  ksef: { path: "/documents/ksef", label: "Konta KSeF", redirectsTo: "/documents/series" },
 } as const;
 
 export const DOCUMENTS_ADMIN_NAV_ICONS = {

@@ -1,3 +1,29 @@
+## 2026-07-26 — IA final cleanup audit (bez kasowania)
+
+- IA uznana za zakończoną; menu/routing spójne
+- Kandydaci osobnego PR: BarcodeManagement, PickingWaves, PlanningPlaceholder, App BatchesListPage import, WmsProductionPutawayRedirect
+- Canvas: `ia-final-cleanup.canvas.tsx`
+
+## 2026-07-26 — IA Faza B: orphans / stuby
+
+- Magazyn flyout: Szkody, Protokoły szkód (`/office/damages*`) — bez nowego modułu Office
+- Redirect: `/waves`→`/wms/picking`, `/planning/*`→`/purchasing/dashboard`, doc CF→orders, ksef→series
+- Legacy: `/inventory`; tech: `report/*` bez zmian; Barcode = DELETE_CANDIDATE (plik zostaje)
+- Pliki stubów zachowane z komentarzami; testy phaseBIa + settingsNavIa OK
+
+## 2026-07-26 — Kwalifikacja orphan routes (pre Faza B)
+
+- Office Damages: produkcyjny (scalić/menu); report/*: tech Puppeteer
+- Martwe UI: Barcode, Waves stub, Planning, KSeF, Doc custom-fields
+- Legacy: /inventory; BE waves/inventory nie kasować
+- Bez zmian kodu — decyzja produktowa
+
+## 2026-07-26 — Końcowy audyt IA (pre Faza B)
+
+- Brak nowych dual-entry do tego samego ekranu po kanonie /labels
+- Orphans/stuby: waves, planning, barcode, office, /inventory, /report/*
+- Werdykt: globalne menu zamknięte; Faza B = lokalne Magazyn
+
 ## 2026-07-26 — IA: jeden System Etykiet (/labels)
 
 - Usunięto Ustawienia → Szablony etykiet (duplikat)

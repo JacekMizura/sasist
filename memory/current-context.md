@@ -2,11 +2,8 @@
 
 ## Active
 
-**IA LabelSystem — kanon /labels**.
+**IA reorganizacja zakończona** (cleanup audit OK).
 
-- Usunięto „Szablony etykiet” z Ustawień
-- Aliasy: `/admin/print-templates/*`, `/system-etykiet/*` → `/labels/*`
-- Jedyny wpis menu: OPERACJE → System Etykiet
-- LabelSystem/API bez zmian
-
-
+- Menu/routing spójne; brak dual-entry
+- Cleanup PR później: Barcode, PickingWaves, PlanningPlaceholder, martwy import BatchesListPage
+- Nie proponować dalszych zmian menu bez potrzeby biznesowej

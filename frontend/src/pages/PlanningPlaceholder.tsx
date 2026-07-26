@@ -1,3 +1,7 @@
+/**
+ * UI stub — routes `/planning/*` redirect to `/purchasing/dashboard` (Faza B).
+ * File kept for reference; not mounted in App.tsx.
+ */
 export default function PlanningPlaceholder() {
   return (
     <div className="p-6">

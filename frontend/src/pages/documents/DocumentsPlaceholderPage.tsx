@@ -1,3 +1,8 @@
+/**
+ * FUTURE_FEATURE shell (KSeF / unfinished documents sections).
+ * Not mounted after Faza B — `/documents/ksef` and custom-fields redirect away.
+ * Keep for a future KSeF project; do not delete yet.
+ */
 import { Link } from "react-router-dom";
 import { brandPrimaryButtonClass } from "../../design-system/brandUi";
 import { Construction } from "lucide-react";

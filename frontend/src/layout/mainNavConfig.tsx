@@ -32,6 +32,7 @@ import {
   Upload,
   MessageSquare,
   FileText,
+  TriangleAlert,
 } from "lucide-react";
 
 import { UI_STRINGS } from "../constants/uiStrings";
@@ -259,6 +260,8 @@ export function buildNavFlyoutCategories(): NavCategoryConfig[] {
           { path: "/carts/zones", label: "Strefy", Icon: Layers },
           { path: "/carts/carriers", label: UI_STRINGS.navigation.warehouseCarriers, Icon: Package },
           { path: "/inventory-count/dashboard", label: "Inwentaryzacja", Icon: ClipboardList },
+          { path: "/office/damages", label: "Szkody", Icon: TriangleAlert },
+          { path: "/office/damage-reports", label: "Protokoły szkód", Icon: FileText },
           { path: "/carts/optimizer", label: UI_STRINGS.navigation.fleetPlanner, Icon: Route },
           { path: "/warehouse/bdo", label: UI_STRINGS.navigation.warehouseBdo, Icon: Recycle },
         ],
@@ -430,6 +433,7 @@ export function isCategoryActive(category: NavCategoryConfig, pathname: string):
   if (category.id === "warehouse") {
     if (pathname.startsWith("/warehouse/bdo")) return true;
     if (pathname.startsWith("/carts/carriers")) return true;
+    if (pathname.startsWith("/office/damages") || pathname.startsWith("/office/damage-reports")) return true;
   }
   if (category.id === "orders") {
     if (pathname.startsWith("/orders/automation")) return true;
