@@ -1,9 +1,8 @@
 import { Link } from "react-router-dom";
-import { ExternalLink, MapPin, Package } from "lucide-react";
+import { ExternalLink, Package } from "lucide-react";
 
-import { Card, StatusBadge, primaryButtonClassName, typography, type StatusTone } from "@/design-system";
+import { Card, StatusBadge, typography, type StatusTone } from "@/design-system";
 import { warehouseStockDocumentPath } from "../../../utils/stockDocumentPaths";
-import { WMS_ROUTES } from "../../wms/wmsRoutes";
 
 export type ProductionPwDocumentRow = {
   id: number;
@@ -48,15 +47,11 @@ export function ProductionDocumentsSection({ rwDocumentId, rwDocumentNumber, pwD
     <Card variant="section" density="comfortable" className="space-y-3">
       <h3 className={typography.section}>Dokumenty</h3>
 
-      <ul className="divide-y divide-slate-100 rounded-lg border border-slate-200">
+      <ul className="divide-y divide-slate-100 rounded-xl border border-slate-200">
         {rwDocumentId ? (
-          <li className="flex flex-wrap items-center justify-between gap-2 px-3 py-2.5">
+          <li className="flex flex-wrap items-center justify-between gap-3 px-4 py-3.5">
             <div className="min-w-0">
-              <p className={typography.caption}>Typ</p>
-              <p className="text-sm font-semibold text-slate-900">RW</p>
-            </div>
-            <div className="min-w-0 flex-1 sm:px-4">
-              <p className={typography.caption}>Numer</p>
+              <p className="text-xs font-medium text-slate-500">RW</p>
               <Link
                 to={warehouseStockDocumentPath("RW", rwDocumentId)}
                 className="inline-flex items-center gap-1.5 font-mono text-sm font-semibold text-slate-900 hover:text-slate-700"
@@ -72,45 +67,27 @@ export function ProductionDocumentsSection({ rwDocumentId, rwDocumentNumber, pwD
           </li>
         ) : null}
 
-        {pwDocuments.map((pw) => {
-          const done = String(pw.putawayStatus || "").toUpperCase() === "DONE";
-          return (
-            <li
-              key={pw.id}
-              className="flex flex-wrap items-center justify-between gap-2 px-3 py-2.5"
-            >
-              <div className="min-w-0">
-                <p className={typography.caption}>Typ</p>
-                <p className="text-sm font-semibold text-slate-900">PW</p>
-              </div>
-              <div className="min-w-0 flex-1 sm:px-4">
-                <p className={typography.caption}>Numer</p>
-                <Link
-                  to={warehouseStockDocumentPath("PW", pw.id)}
-                  className="inline-flex items-center gap-1.5 font-mono text-sm font-semibold text-slate-900 hover:text-slate-700"
-                >
-                  {pw.number ?? `#${pw.id}`}
-                  <ExternalLink className="h-3 w-3 text-slate-400" aria-hidden />
-                </Link>
-                {pw.productName ? <p className="text-xs text-slate-500">{pw.productName}</p> : null}
-              </div>
-              <div className="flex flex-wrap items-center gap-2">
-                <StatusBadge tone={putawayTone(pw.putawayStatus)} density="compact">
-                  {putawayStatusLabel(pw.putawayStatus)}
-                </StatusBadge>
-                {!done ? (
-                  <Link
-                    to={WMS_ROUTES.putawayPz(pw.id)}
-                    className={primaryButtonClassName("inline-flex items-center gap-1.5", "compact")}
-                  >
-                    <MapPin className="h-3.5 w-3.5" aria-hidden />
-                    Rozlokuj
-                  </Link>
-                ) : null}
-              </div>
-            </li>
-          );
-        })}
+        {pwDocuments.map((pw) => (
+          <li key={pw.id} className="flex flex-wrap items-center justify-between gap-3 px-4 py-3.5">
+            <div className="min-w-0">
+              <p className="text-xs font-medium text-slate-500">PW</p>
+              <Link
+                to={warehouseStockDocumentPath("PW", pw.id)}
+                className="inline-flex items-center gap-1.5 font-mono text-sm font-semibold text-slate-900 hover:text-slate-700"
+              >
+                {pw.number ?? `#${pw.id}`}
+                <ExternalLink className="h-3 w-3 text-slate-400" aria-hidden />
+              </Link>
+              {pw.productName ? <p className="mt-0.5 text-xs text-slate-500">{pw.productName}</p> : null}
+            </div>
+            <div className="text-right">
+              <p className="mb-1 text-xs font-medium text-slate-500">Status PW</p>
+              <StatusBadge tone={putawayTone(pw.putawayStatus)} density="compact">
+                {putawayStatusLabel(pw.putawayStatus)}
+              </StatusBadge>
+            </div>
+          </li>
+        ))}
       </ul>
     </Card>
   );

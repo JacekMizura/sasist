@@ -1,3 +1,9 @@
+## 2026-07-26 — Realizacja: produkcja + rozlokowanie UX
+
+- Produkuj +1/+5 → Zakończ produkcję; bez „Uzupełnij plan”
+- Rozpocznij rozlokowanie (1 PW direct); usunięte Rozlokuj w wierszu
+- Bez zmian API · tsc OK · **No push.**
+
 ## 2026-07-26 — Realizacja papierowa: UX magazyniera
 
 - Nagłówek: numer + status + postęp; bez ERP/fioletu

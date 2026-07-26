@@ -23,21 +23,23 @@ import { useWarehouse } from "@/context/WarehouseContext";
 import {
   PrimaryButton,
   ProgressBar,
-  SecondaryButton,
   StatusBadge,
+  primaryButtonClassName,
   secondaryButtonClassName,
   toneTextClass,
 } from "@/design-system";
 import { PaperCollectTaskCard } from "./components/PaperCollectTaskCard";
-import { ProductThumb } from "./components/ProductThumb";
+import { PaperProduceLineCard } from "./components/PaperProduceLineCard";
 import { erpProductionPaths, wmsProductionPaths } from "./productionPaths";
 import { executionStatusLabel, executionStatusTone, formatStartCollectingError, productionProgressTone } from "./productionUi";
 import {
   ProductionDocumentsSection,
   pwDocumentsFromBatchLines,
   pwDocumentsFromOrder,
+  type ProductionPwDocumentRow,
 } from "./components/ProductionDocumentsSection";
 import type { ProductionBatchRead, ProductionOrderRead } from "@/api/productionApi";
+import { WMS_ROUTES } from "../wms/wmsRoutes";
 
 const DEFAULT_TENANT = 1;
 
@@ -233,7 +235,7 @@ export default function PaperProductionPage() {
       } else {
         await finishOrderProduction(tenantId, jobId, warehouseId);
       }
-      toast.success("Produkcja zakończona — dokumenty PW oczekują na rozlokowanie.");
+      toast.success("Produkcja zakończona. Dokumenty PW gotowe do rozlokowania.");
       await load();
     } catch (e: unknown) {
       toast.error(formatStartCollectingError(e));
@@ -256,6 +258,35 @@ export default function PaperProductionPage() {
         )
       : 0;
   const collectTone = productionProgressTone(collectPct, status);
+
+  const productionPct = useMemo(() => {
+    if (executionLines.length === 0) return 0;
+    const planned = executionLines.reduce((s, ln) => s + ln.plannedQuantity, 0);
+    const done = executionLines.reduce((s, ln) => s + ln.completedQuantity, 0);
+    if (planned <= 0) return 0;
+    return Math.round(Math.min(100, (done / planned) * 100));
+  }, [executionLines]);
+  const productionTone = productionProgressTone(productionPct, status);
+
+  const pwDocuments: ProductionPwDocumentRow[] = useMemo(() => {
+    if (documentsSource?.kind === "batch") {
+      return pwDocumentsFromBatchLines(documentsSource.batch.lines ?? []);
+    }
+    if (documentsSource?.kind === "order") {
+      return pwDocumentsFromOrder(documentsSource.order);
+    }
+    return [];
+  }, [documentsSource]);
+
+  const pendingPwDocuments = useMemo(
+    () => pwDocuments.filter((pw) => String(pw.putawayStatus || "").toUpperCase() !== "DONE"),
+    [pwDocuments],
+  );
+
+  const startPutawayHref =
+    pendingPwDocuments.length === 1
+      ? WMS_ROUTES.putawayPz(pendingPwDocuments[0].id)
+      : wmsProductionPaths.putaway(jobKind, jobId);
 
   if (warehouseId == null) {
     return <p className="px-4 py-6 text-sm text-slate-500">Wybierz magazyn.</p>;
@@ -287,7 +318,13 @@ export default function PaperProductionPage() {
             <ProgressBar value={collectPct} tone={collectTone} size="lg" />
           </div>
         ) : status === "in_progress" ? (
-          <p className="text-sm text-slate-600">Postęp produkcji</p>
+          <div className="space-y-2">
+            <div className="flex items-center justify-between gap-2 text-sm">
+              <span className="font-medium text-slate-600">Postęp produkcji</span>
+              <span className={`tabular-nums font-bold ${toneTextClass[productionTone]}`}>{productionPct}%</span>
+            </div>
+            <ProgressBar value={productionPct} tone={productionTone} size="lg" />
+          </div>
         ) : null}
       </header>
 
@@ -321,90 +358,54 @@ export default function PaperProductionPage() {
       ) : null}
 
       {status === "in_progress" ? (
-        <>
-          <div className="space-y-4">
-            {executionLines.map((ln) => {
-              const remaining = Math.max(0, ln.plannedQuantity - ln.completedQuantity);
-              const linePct =
-                ln.plannedQuantity > 0
-                  ? Math.round(Math.min(100, (ln.completedQuantity / ln.plannedQuantity) * 100))
-                  : 0;
-              const lineTone = productionProgressTone(linePct, status);
-              return (
-                <div key={ln.lineKey} className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-                  <div className="flex items-center gap-4">
-                    <ProductThumb imageUrl={ln.productImageUrl} name={ln.productName} size="md" />
-                    <div>
-                      <p className="font-semibold text-slate-900">{ln.productName}</p>
-                      <p className="text-2xl font-bold tabular-nums text-slate-900">
-                        {ln.completedQuantity}
-                        <span className="text-lg font-semibold text-slate-400"> / {ln.plannedQuantity}</span>
-                      </p>
-                    </div>
-                  </div>
-                  <div className="mt-4 space-y-1.5">
-                    <div className="flex justify-between text-xs text-slate-500">
-                      <span>Postęp</span>
-                      <span className={`tabular-nums font-semibold ${toneTextClass[lineTone]}`}>{linePct}%</span>
-                    </div>
-                    <ProgressBar value={linePct} tone={lineTone} size="lg" />
-                  </div>
-                  <div className="mt-4 flex flex-wrap gap-2">
-                    <SecondaryButton
-                      type="button"
-                      disabled={busy || remaining <= 0}
-                      onClick={() => void addProductionQty(ln.lineKey, 1)}
-                    >
-                      +1
-                    </SecondaryButton>
-                    <PrimaryButton
-                      type="button"
-                      disabled={busy || remaining <= 0}
-                      onClick={() => void addProductionQty(ln.lineKey, remaining)}
-                    >
-                      Uzupełnij plan
-                    </PrimaryButton>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-          {allProduced ? (
-            <PrimaryButton
-              type="button"
-              density="comfortable"
-              disabled={busy}
-              onClick={() => void finishProduction()}
-              className="w-full py-3.5 text-base"
-            >
-              Zakończ produkcję
-            </PrimaryButton>
-          ) : null}
-        </>
+        <div className="space-y-4">
+          {executionLines.map((ln) => (
+            <PaperProduceLineCard
+              key={ln.lineKey}
+              productName={ln.productName}
+              productImageUrl={ln.productImageUrl}
+              plannedQuantity={ln.plannedQuantity}
+              completedQuantity={ln.completedQuantity}
+              busy={busy}
+              canFinishJob={allProduced}
+              onProduce={(qty) => void addProductionQty(ln.lineKey, qty)}
+              onFinish={() => void finishProduction()}
+            />
+          ))}
+        </div>
       ) : null}
 
       {status === "awaiting_putaway" || status === "putaway" ? (
-        <>
+        <div className="space-y-4">
           {documentsSource?.kind === "batch" ? (
             <ProductionDocumentsSection
               rwDocumentId={documentsSource.batch.rw_stock_document_id}
               rwDocumentNumber={documentsSource.batch.rw_document_number}
-              pwDocuments={pwDocumentsFromBatchLines(documentsSource.batch.lines ?? [])}
+              pwDocuments={pwDocuments}
             />
           ) : documentsSource?.kind === "order" ? (
             <ProductionDocumentsSection
               rwDocumentId={documentsSource.order.rw_stock_document_id}
               rwDocumentNumber={documentsSource.order.rw_document_number}
-              pwDocuments={pwDocumentsFromOrder(documentsSource.order)}
+              pwDocuments={pwDocuments}
             />
-          ) : null}
-          <Link
-            to={wmsProductionPaths.putaway(jobKind, jobId)}
-            className={`${secondaryButtonClassName()} inline-flex w-full justify-center py-3`}
-          >
-            Otwórz kolejkę rozlokowania
-          </Link>
-        </>
+          ) : (
+            <ProductionDocumentsSection pwDocuments={pwDocuments} />
+          )}
+
+          {pendingPwDocuments.length > 0 ? (
+            <Link
+              to={startPutawayHref}
+              className={primaryButtonClassName("flex w-full justify-center py-3.5 text-base")}
+            >
+              Rozpocznij rozlokowanie
+            </Link>
+          ) : (
+            <p className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-center text-sm font-semibold text-emerald-900">
+              Rozlokowanie zakończone.
+            </p>
+          )}
+        </div>
       ) : null}
 
       {status !== "collecting" && status !== "in_progress" && status !== "awaiting_putaway" && status !== "putaway" ? (
