@@ -1,12 +1,17 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { AlertTriangle, CalendarClock, Factory, FileText, Package } from "lucide-react";
+import { AlertTriangle, FileText, Package } from "lucide-react";
 import toast from "react-hot-toast";
 
 import { useWarehouse } from "../../context/WarehouseContext";
-import { listProductionBatches, openBulkProductionCardsPdf, fetchProductionBatchListSummary, type ProductionBatchRead, type ProductionBatchListSummaryRead } from "../../api/productionApi";
+import {
+  listProductionBatches,
+  openBulkProductionCardsPdf,
+  type ProductionBatchRead,
+  type ProductionBatchStatus,
+} from "../../api/productionApi";
 import { AppEmptyState } from "../../components/app-shell";
-import { PrimaryButton } from "../../design-system/PrimaryButton";
+import { PageHeader, PrimaryButton, StatusBadge, type StatusTone } from "@/design-system";
 import {
   productsListActionsCellClass,
   productsListActionsInnerClass,
@@ -19,9 +24,7 @@ import {
   moduleListTheadClass,
   moduleTableCardClass,
 } from "../../components/listPage/moduleList";
-import { ProductionKpiCard } from "./components/ProductionKpiCard";
-import { ProductionKpiGrid } from "./components/ProductionKpiGrid";
-import { BATCH_STATUS_LABEL, batchStatusBadgeClass } from "./productionUi";
+import { BATCH_STATUS_LABEL } from "./productionUi";
 import { erpProductionPaths } from "./productionPaths";
 import { ProgressBar } from "./components/ProgressBar";
 import { ProductionRowActionsMenu } from "./components/ProductionRowActionsMenu";
@@ -31,9 +34,27 @@ import {
   productionPageStackClass,
   productionPageTitleClass,
 } from "./productionLayoutTokens";
-import { PageHeader } from "@/design-system";
 
 const DEFAULT_TENANT = 1;
+
+function batchStatusTone(status: ProductionBatchStatus): StatusTone {
+  switch (status) {
+    case "completed":
+    case "putaway":
+    case "awaiting_putaway":
+      return "success";
+    case "in_progress":
+    case "collecting":
+      return "info";
+    case "planned":
+      return "neutral";
+    case "cancelled":
+      return "danger";
+    case "draft":
+    default:
+      return "warning";
+  }
+}
 
 type Props = {
   embedded?: boolean;
@@ -45,7 +66,6 @@ export default function BatchesListPage({ embedded = false }: Props) {
   const tenantId = warehouse?.tenant_id ?? DEFAULT_TENANT;
   const warehouseId = warehouse?.id;
   const [batches, setBatches] = useState<ProductionBatchRead[]>([]);
-  const [stats, setStats] = useState<ProductionBatchListSummaryRead | null>(null);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [printBusy, setPrintBusy] = useState(false);
@@ -53,15 +73,10 @@ export default function BatchesListPage({ embedded = false }: Props) {
   const reload = useCallback(async () => {
     setLoading(true);
     try {
-      const [rows, summary] = await Promise.all([
-        listProductionBatches(tenantId, { warehouse_id: warehouseId }),
-        warehouseId != null ? fetchProductionBatchListSummary(tenantId, warehouseId) : Promise.resolve(null),
-      ]);
+      const rows = await listProductionBatches(tenantId, { warehouse_id: warehouseId });
       setBatches(rows.filter((b) => b.status !== "completed" && b.status !== "cancelled"));
-      setStats(summary);
     } catch {
       setBatches([]);
-      setStats(null);
     } finally {
       setLoading(false);
     }
@@ -70,8 +85,6 @@ export default function BatchesListPage({ embedded = false }: Props) {
   useEffect(() => {
     void reload();
   }, [reload]);
-
-  const kpi = stats ?? { planned: 0, active: 0, awaiting_putaway: 0, shortages: 0, total_units: 0, units_in_production: 0, total: 0 };
 
   const toggleSelect = (id: number) => {
     setSelected((prev) => {
@@ -99,6 +112,8 @@ export default function BatchesListPage({ embedded = false }: Props) {
       setPrintBusy(false);
     }
   };
+
+  const rowTd = embedded ? `${productionModuleListTdClass} !py-3.5` : productionModuleListTdClass;
 
   const table = loading ? (
     <p className="text-sm text-slate-500">Wczytywanie…</p>
@@ -131,7 +146,7 @@ export default function BatchesListPage({ embedded = false }: Props) {
         </div>
       ) : null}
       <div className={moduleListTableScrollClass}>
-        <table className={moduleListTableClass} style={{ minWidth: 900 }}>
+        <table className={moduleListTableClass} style={{ minWidth: embedded ? 760 : 900 }}>
           <thead className={moduleListTheadClass}>
             <tr>
               {embedded ? (
@@ -150,7 +165,7 @@ export default function BatchesListPage({ embedded = false }: Props) {
               <th className={productionModuleListThClass}>Status</th>
               <th className={productionModuleListThClass}>Postęp</th>
               <th className={productionModuleListThClass}>Materiały</th>
-              <th className={productionModuleListThClass}>Operator</th>
+              {embedded ? null : <th className={productionModuleListThClass}>Operator</th>}
               <th className={productionModuleListThClass}>Termin</th>
               <th className={productsListActionsThClass}>Akcje</th>
             </tr>
@@ -159,7 +174,7 @@ export default function BatchesListPage({ embedded = false }: Props) {
             {batches.map((b) => (
               <tr key={b.id} className="group border-b border-slate-100 hover:bg-slate-50/70">
                 {embedded ? (
-                  <td className={productionModuleListTdClass}>
+                  <td className={rowTd}>
                     <input
                       type="checkbox"
                       aria-label={`Zaznacz partię ${b.number}`}
@@ -168,16 +183,18 @@ export default function BatchesListPage({ embedded = false }: Props) {
                     />
                   </td>
                 ) : null}
-                <td className={`${productionModuleListTdClass} font-mono font-medium text-slate-900`}>{b.number}</td>
-                <td className={productionModuleListTdClass}>{b.products_count ?? b.lines.length}</td>
-                <td className={`${productionModuleListTdClass} text-right tabular-nums`}>{b.total_planned_units ?? 0}</td>
-                <td className={productionModuleListTdClass}>
-                  <span className={batchStatusBadgeClass(b.status)}>{BATCH_STATUS_LABEL[b.status]}</span>
+                <td className={`${rowTd} font-mono font-medium text-slate-900`}>{b.number}</td>
+                <td className={rowTd}>{b.products_count ?? b.lines.length}</td>
+                <td className={`${rowTd} text-right tabular-nums`}>{b.total_planned_units ?? 0}</td>
+                <td className={rowTd}>
+                  <StatusBadge tone={batchStatusTone(b.status)} density="comfortable">
+                    {BATCH_STATUS_LABEL[b.status]}
+                  </StatusBadge>
                 </td>
-                <td className={`${productionModuleListTdClass} min-w-[140px]`}>
+                <td className={`${rowTd} min-w-[140px]`}>
                   <ProgressBar value={b.progress_percent ?? 0} tone={b.has_shortages ? "amber" : "emerald"} />
                 </td>
-                <td className={productionModuleListTdClass}>
+                <td className={rowTd}>
                   {b.has_shortages ? (
                     <span className="inline-flex items-center gap-1 text-xs font-medium text-amber-800">
                       <AlertTriangle className="h-3.5 w-3.5" aria-hidden />
@@ -187,8 +204,10 @@ export default function BatchesListPage({ embedded = false }: Props) {
                     <span className="text-xs text-emerald-700">OK</span>
                   )}
                 </td>
-                <td className={`${productionModuleListTdClass} text-slate-600`}>{b.operator_name ?? "—"}</td>
-                <td className={`${productionModuleListTdClass} text-slate-600`}>{(b.created_at ?? "").slice(0, 10) || "—"}</td>
+                {embedded ? null : (
+                  <td className={`${rowTd} text-slate-600`}>{b.operator_name ?? "—"}</td>
+                )}
+                <td className={`${rowTd} text-slate-600`}>{(b.created_at ?? "").slice(0, 10) || "—"}</td>
                 <td className={productsListActionsCellClass} onClick={(e) => e.stopPropagation()}>
                   <div className={productsListActionsInnerClass}>
                     <ProductionRowActionsMenu
@@ -209,18 +228,7 @@ export default function BatchesListPage({ embedded = false }: Props) {
   );
 
   if (embedded) {
-    return (
-      <div className="space-y-3">
-        <ProductionKpiGrid>
-          <ProductionKpiCard title="Partie aktywne" value={kpi.total} tone="indigo" icon={<Package aria-hidden />} />
-          <ProductionKpiCard title="Zaplanowane" value={kpi.planned} tone="purple" icon={<CalendarClock aria-hidden />} />
-          <ProductionKpiCard title="W realizacji" value={kpi.active} subtitle={`${kpi.units_in_production ?? 0} szt. w toku`} tone="blue" icon={<Factory aria-hidden />} />
-          <ProductionKpiCard title="Oczekuje na rozlokowanie" value={kpi.awaiting_putaway ?? 0} tone="emerald" icon={<Package aria-hidden />} />
-          <ProductionKpiCard title="Z brakami" value={kpi.shortages} tone="amber" icon={<AlertTriangle aria-hidden />} />
-        </ProductionKpiGrid>
-        {table}
-      </div>
-    );
+    return table;
   }
 
   return (

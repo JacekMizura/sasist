@@ -1,5 +1,5 @@
 import { Link, useNavigate } from "react-router-dom";
-import { Plus } from "lucide-react";
+import { FlaskConical, Plus, RefreshCw } from "lucide-react";
 import { useCallback, useState } from "react";
 import toast from "react-hot-toast";
 
@@ -13,7 +13,7 @@ import { useActiveWarehouseContext } from "../../hooks/useActiveWarehouseContext
 import { ActiveWarehouseRequiredBanner } from "../../components/layout/ActiveWarehouseRequiredBanner";
 import BatchesListPage from "./BatchesListPage";
 import { CreateBatchModal } from "./components/CreateBatchModal";
-import { ProductionDemandPlanningPanel } from "./components/ProductionDemandPlanningPanel";
+import { ProductionDemandPlanningPanel, ProductionDemandProductsTable } from "./components/ProductionDemandPlanningPanel";
 import { ProductionSimulationModal } from "./components/ProductionSimulationModal";
 import { useProductionDemandPlanning } from "./hooks/useProductionDemandPlanning";
 import { erpProductionPaths } from "./productionPaths";
@@ -22,7 +22,12 @@ import {
   productionPageTitleClass,
   productionSectionLabelClass,
 } from "./productionLayoutTokens";
-import { PageHeader, SecondaryButton, primaryButtonClassName } from "@/design-system";
+import {
+  PageHeader,
+  SecondaryButton,
+  Toolbar,
+  primaryButtonClassName,
+} from "@/design-system";
 
 const DEFAULT_TENANT = 1;
 
@@ -116,31 +121,62 @@ export default function ProductionPlanningPage() {
             </SecondaryButton>
           </>
         }
+        toolbar={
+          <Toolbar
+            end={
+              <>
+                <SecondaryButton
+                  type="button"
+                  disabled={warehouseId == null || planning.loading || simLoading}
+                  onClick={() => void runSimulation()}
+                  className="inline-flex items-center gap-1.5"
+                >
+                  <FlaskConical className="h-4 w-4" aria-hidden />
+                  Symuluj plan produkcji
+                </SecondaryButton>
+                <SecondaryButton
+                  type="button"
+                  disabled={warehouseId == null || planning.loading}
+                  onClick={() => void planning.reload()}
+                  className="inline-flex items-center gap-1.5"
+                >
+                  <RefreshCw className={`h-4 w-4 ${planning.loading ? "animate-spin" : ""}`} aria-hidden />
+                  Odśwież
+                </SecondaryButton>
+              </>
+            }
+          />
+        }
       >
         <div className="space-y-4">
-      {warehouseId != null ? (
-        <ProductionDemandPlanningPanel
-          data={planning.data}
-          loading={planning.loading}
-          error={planning.error}
-          coverageDays={planning.coverageDays}
-          customCoverageInput={planning.customCoverageInput}
-          onCoverageDaysChange={planning.setCoverageDays}
-          onCustomCoverageInputChange={planning.setCustomCoverageInput}
-          onApplyCustomCoverage={planning.applyCustomCoverage}
-          onReload={() => void planning.reload()}
-          onSimulate={() => void runSimulation()}
-          simulateBusy={simLoading}
-          onCreateBatch={openBatchModal}
-        />
-      ) : null}
+          {warehouseId != null ? (
+            <ProductionDemandPlanningPanel
+              data={planning.data}
+              loading={planning.loading}
+              error={planning.error}
+              coverageDays={planning.coverageDays}
+              customCoverageInput={planning.customCoverageInput}
+              onCoverageDaysChange={planning.setCoverageDays}
+              onCustomCoverageInputChange={planning.setCustomCoverageInput}
+              onApplyCustomCoverage={planning.applyCustomCoverage}
+              onCreateBatch={openBatchModal}
+            />
+          ) : null}
 
-      <div>
-        <h3 className={productionSectionLabelClass}>Aktywne partie</h3>
-        <div className="mt-2">
-          <BatchesListPage embedded />
-        </div>
-      </div>
+          <div>
+            <h3 className={productionSectionLabelClass}>Aktywne partie</h3>
+            <div className="mt-2">
+              <BatchesListPage embedded />
+            </div>
+          </div>
+
+          {warehouseId != null ? (
+            <ProductionDemandProductsTable
+              products={planning.data?.products ?? []}
+              loading={planning.loading}
+              onCreateBatch={openBatchModal}
+            />
+          ) : null}
         </div>
       </PageHeader>
 
