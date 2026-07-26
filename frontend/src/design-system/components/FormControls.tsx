@@ -47,7 +47,7 @@ export function Switch({ className = "", label, id, ...props }: SwitchProps) {
 
 export type ProgressBarProps = HTMLAttributes<HTMLDivElement> & {
   value: number;
-  tone?: "success" | "warning" | "danger" | "neutral";
+  tone?: "success" | "warning" | "danger" | "neutral" | "info";
 };
 
 /** Progress fill — token-aligned static classes for Tailwind JIT. */
@@ -56,6 +56,7 @@ const barTone: Record<NonNullable<ProgressBarProps["tone"]>, string> = {
   warning: "bg-amber-500",
   danger: "bg-rose-500",
   neutral: "bg-slate-400",
+  info: "bg-sky-500",
 };
 
 export function ProgressBar({

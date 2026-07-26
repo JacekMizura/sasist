@@ -25,7 +25,7 @@ export function ListTile({
 }
 
 export type MetricCardProps = HTMLAttributes<HTMLDivElement> & {
-  label: string;
+  label: ReactNode;
   value: ReactNode;
   unit?: string;
   hint?: ReactNode;
@@ -44,7 +44,7 @@ export function MetricCard({
 }: MetricCardProps) {
   return (
     <Card variant="section" density={density} className={className} {...props}>
-      <p className={typography.section}>{label}</p>
+      <div className={typography.section}>{label}</div>
       <div className="mt-3 flex items-end gap-2">
         <span className={typography.metric}>{value}</span>
         {unit ? <span className={`pb-1 ${typography.metricUnit}`}>{unit}</span> : null}

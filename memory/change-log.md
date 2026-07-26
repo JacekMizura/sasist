@@ -1,3 +1,39 @@
+## 2026-07-26 — Pulpit Produkcji: UX centrum operacyjnego
+
+- `ProductionDashboardPage` + `ProductionDashboardBatchGrid`: białe karty, KPI MetricCard, ProgressBar (+ ton `info`)
+- Sekcje: Do rozlokowania / W produkcji / Gotowe do WMS / Uwaga + aktywność / zakończenia / szybkie akcje
+- UI Kit only; bez zmian API/routingu/logiki · `npm run build` OK · **No push.**
+
+## 2026-07-26 — Szkody: lekki polish (bez przebudowy)
+
+- Modal Magazyn uproszczony; Raporty = lista + Pobierz PDF
+- Biuro: tabela + StatusBadge + badge decyzji + szukaj/filtr
+- `npm run build` OK · **No push.**
+
+## 2026-07-26 — UX Polish: Szkody (PL + UI Kit)
+
+- `DamageReportsPanel` + Office damages/reports: pełne spolszczenie UI
+- Wspólne `damageUiLabels.ts`; bez zmian API/logiki
+- `npm run build` OK · **No push.**
+
+## 2026-07-26 — Magazyn: katalog tylko w widoku regału
+
+- Przywrócono rail 360px w głównym Magazynie (przed siatką z 06da2001)
+- `presentation="catalog"` wyłącznie po dwukliku regału
+- `npm run build` OK · **No push.**
+
+## 2026-07-26 — UX Polish: komunikaty Magazyn
+
+- Krótkie dialogi/toasty/placeholdery/przyciski (Magazyn + projektowanie + trasy)
+- Usunięto instrukcje typu „Kliknij… / Możesz…”; bez zmian logiki/API
+- `npm run build` OK · **No push.**
+
+## 2026-07-26 — WarehouseModuleLayout + wspólny LeftRail
+
+- `WarehouseModuleLayout` / `WarehouseLeftRail` / `WarehouseRailSection`
+- Taby Magazyn | Projektowanie | Trasy; Eksport na belce; Trasy content w lewym railu
+- Panele bez własnego chrome; build OK · **No push.**
+
 ## 2026-07-26 — Designer: regresje UI po migracji do UI Kit
 
 - Przywrócono widoczność Magazyn/Sklepowy oraz Drzwi/Brama (flex `min-w-0` zamiast dual `fullWidth`)

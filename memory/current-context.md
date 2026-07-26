@@ -2,14 +2,7 @@
 
 ## Active
 
-**Warehouse Designer — poprawki regresji UI po migracji do UI Kit** (zakończone lokalnie, bez commit).
+**Pulpit Produkcji — UX rebuild** (build OK).
 
-### Naprawione
-- Typ regału Magazyn / **Sklepowy** (widoczność + etykieta)
-- Drzwi / **Brama** w Elementach wizualnych (clip z `fullWidth` + ring)
-- Białe tło raili (`surface.page`), inset ring, SegmentedControl gap
-- **Generuj układ** → `SuccessButton`
-- `npm run build` OK
-
-### Constraints
-Tylko UI; bez commit/push dopóki user nie poprosi.
+Wyłącznie wygląd `/production` (Pulpit): KPI MetricCard, sekcje robocze Card, karty partii z ProgressBar, dolne ListTile.
+Bez zmian API / routingu / logiki. Zakładki ERP bez zmian.
