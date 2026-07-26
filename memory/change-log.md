@@ -1,3 +1,9 @@
+## 2026-07-26 — Designer: regresje UI po migracji do UI Kit
+
+- Przywrócono widoczność Magazyn/Sklepowy oraz Drzwi/Brama (flex `min-w-0` zamiast dual `fullWidth`)
+- Rail: białe `surface.page`; active `ring-inset`; SegmentedControl gap + nowrap
+- Generuj układ → `SuccessButton`; build OK · **No push.**
+
 ## 2026-07-26 — Etap 4: Warehouse Designer → Sasist UI Kit
 
 - Migracja toolbar/rails/routing/modals/canvas tools na design-system

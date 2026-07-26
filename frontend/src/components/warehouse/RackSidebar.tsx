@@ -36,6 +36,7 @@ import { GenerateWarehouseLayoutModal } from "./GenerateWarehouseLayoutModal";
 import { UI_STRINGS } from "../../constants/uiStrings";
 import {
   CardButton,
+  SuccessButton,
   SegmentedControl,
   SegmentedItem,
   SearchInput,
@@ -203,6 +204,7 @@ export function RackSidebar({
         <SegmentedItem
           type="button"
           active={activeTab === "catalog"}
+          className="whitespace-nowrap"
           onClick={() => setActiveTab("catalog")}
         >
           {UI_STRINGS.warehouse.rackSidebar.catalog}
@@ -210,6 +212,7 @@ export function RackSidebar({
         <SegmentedItem
           type="button"
           active={activeTab === "visuals"}
+          className="whitespace-nowrap"
           onClick={() => setActiveTab("visuals")}
         >
           {UI_STRINGS.warehouse.rackSidebar.visualElements}
@@ -313,20 +316,20 @@ export function RackSidebar({
         {!isReadMode && !showOnlyCatalog && (
           <div className="mb-2">
             <div className={`mb-1 ${warehouseSectionLabelClass}`}>Typ regału</div>
-            <div className="flex gap-1.5">
+            <div className="flex min-w-0 gap-1.5">
               <CardButton
-                fullWidth
+                className="min-w-0 flex-1"
                 active={manualRackType === "warehouse"}
                 onClick={() => setManualRackType("warehouse")}
               >
                 Magazyn
               </CardButton>
               <CardButton
-                fullWidth
+                className="min-w-0 flex-1"
                 active={manualRackType === "store"}
                 onClick={() => setManualRackType("store")}
               >
-                Sklep
+                Sklepowy
               </CardButton>
             </div>
           </div>
@@ -344,10 +347,15 @@ export function RackSidebar({
           <>
       {!showOnlyCatalog && (
       <div className="mb-2 flex flex-col gap-1.5">
-        <CardButton fullWidth onClick={() => setShowGenerateLayoutModal(true)}>
+        <SuccessButton
+          type="button"
+          density="default"
+          className="w-full gap-1.5"
+          onClick={() => setShowGenerateLayoutModal(true)}
+        >
           <Wand2 size={13} strokeWidth={2} />
           Generuj układ
-        </CardButton>
+        </SuccessButton>
         <CardButton fullWidth onClick={() => setShowTemplateModal(true)}>
           <Plus size={13} strokeWidth={2} />
           {UI_STRINGS.warehouse.rackSidebar.newTemplate}
@@ -679,16 +687,16 @@ export function RackSidebar({
           {setWallElementTool && (
             <>
               <p className="text-[10px] leading-snug text-slate-500">Kliknij na krawędź budynku (obwód), aby umieścić.</p>
-              <div className="flex gap-1.5">
+              <div className="flex min-w-0 gap-1.5">
                 <CardButton
-                  fullWidth
+                  className="min-w-0 flex-1"
                   active={wallElementTool === "door"}
                   onClick={() => setWallElementTool(wallElementTool === "door" ? null : "door")}
                 >
                   Drzwi
                 </CardButton>
                 <CardButton
-                  fullWidth
+                  className="min-w-0 flex-1"
                   active={wallElementTool === "gate"}
                   onClick={() => setWallElementTool(wallElementTool === "gate" ? null : "gate")}
                 >

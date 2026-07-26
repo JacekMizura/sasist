@@ -24,7 +24,7 @@ function fieldBase(density: UiDensity, focusTone: FieldFocusTone): string {
       : `border ${colors.border.soft} ${focus.neutral}`;
   const shape = density === "comfortable" ? radius.lg : radius.sm;
   return [
-    "w-full",
+    "w-full box-border",
     densityControlHeight[density],
     shape,
     colors.surface.page,

@@ -7,7 +7,7 @@ export type SegmentedControlProps = HTMLAttributes<HTMLDivElement> & {
   density?: UiDensity;
 };
 
-/** Shell for exclusive choice groups (Magazyn/Sklep, Katalog/Elementy). */
+/** Shell for exclusive choice groups (Magazyn/Sklep, Katalog/Elementy, Projektowanie/Trasy). */
 export function SegmentedControl({
   children,
   className = "",
@@ -18,7 +18,17 @@ export function SegmentedControl({
     <div
       role="group"
       data-density={density}
-      className={`flex shrink-0 ${radius.lg} ${colors.surface.page}/80 p-0.5 ${shadows.sm} ring-1 ring-slate-200/60${className ? ` ${className}` : ""}`.trim()}
+      className={[
+        "box-border flex w-full min-w-0 shrink-0 items-stretch gap-1",
+        radius.lg,
+        colors.surface.page,
+        "p-0.5",
+        shadows.sm,
+        "ring-1 ring-slate-200/60",
+        className,
+      ]
+        .filter(Boolean)
+        .join(" ")}
       {...props}
     >
       {children}
@@ -45,12 +55,12 @@ export function SegmentedItem({
       type={type}
       aria-pressed={active}
       className={[
-        "flex-1",
+        "box-border min-w-0 flex-1 basis-0 overflow-hidden text-ellipsis whitespace-nowrap px-2.5 text-center",
         radius.md,
         densitySegmentPy[density],
         "text-[11px] font-medium transition-colors",
         active
-          ? `${colors.surface.page} ${colors.text.primary} ${shadows.sm} ring-1 ring-slate-200/70`
+          ? `${colors.surface.page} ${colors.text.primary} ${shadows.sm} ring-1 ring-inset ring-slate-200/70`
           : `${colors.neutral.text} hover:text-slate-800`,
         className,
       ]
@@ -114,4 +124,3 @@ export function TabItem({
 }
 
 export { spacing as tabsSpacing };
-

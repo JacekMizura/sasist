@@ -2,21 +2,14 @@
 
 ## Active
 
-**Etap 4 — UI Modernization: Warehouse Designer** (wzorzec migracji).
+**Warehouse Designer — poprawki regresji UI po migracji do UI Kit** (zakończone lokalnie, bez commit).
 
-### Done (Designer)
-- Core chrome → Sasist UI Kit (toolbar, select, modals, routing inspectors, rails, zoom, canvas tools)
-- `warehouseUiSkin` usunięty → `design-system/warehouseChrome`
-- `PrimaryButton intent="warning"`, Dialog size/rootClassName
-- Raport: `memory/ui-kit-designer-migration-report.md`
-- Metryki scope: `node scripts/designer-ui-metrics.mjs`
-
-### Residual in Designer scope
-- `WarehouseMainView` visual editors, `TemplateCreator`, `InternalLayoutModal`, `GenerateWarehouseLayoutModal`, `RowPrefixModal` — nadal magic Tailwind
-
-### Next (kolejność użytkownika)
-1. Dokończyć residual Designera **lub**
-2. **Warehouse View** (moduł 2)
+### Naprawione
+- Typ regału Magazyn / **Sklepowy** (widoczność + etykieta)
+- Drzwi / **Brama** w Elementach wizualnych (clip z `fullWidth` + ring)
+- Białe tło raili (`surface.page`), inset ring, SegmentedControl gap
+- **Generuj układ** → `SuccessButton`
+- `npm run build` OK
 
 ### Constraints
 Tylko UI; bez commit/push dopóki user nie poprosi.

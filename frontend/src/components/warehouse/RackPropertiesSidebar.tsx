@@ -355,7 +355,7 @@ export function RackPropertiesSidebar({
                     }}
                   >
                     <option value="warehouse">Magazyn</option>
-                    <option value="store">Sklep</option>
+                    <option value="store">Sklepowy</option>
                   </Select>
                 </dd>
                 <dt className="text-slate-500">Szablon</dt>

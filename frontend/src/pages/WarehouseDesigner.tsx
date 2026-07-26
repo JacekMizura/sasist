@@ -3706,13 +3706,14 @@ export default function WarehouseDesigner() {
       }
     >
       {mainView === "layout" ? (
-        <div className="mb-3 flex shrink-0 items-center gap-2" role="tablist" aria-label="Workspace projektanta">
-          <SegmentedControl>
+        <div className="mb-3 flex w-full min-w-0 shrink-0 items-center gap-2" role="tablist" aria-label="Workspace projektanta">
+          <SegmentedControl className="max-w-full flex-none sm:max-w-none">
             <SegmentedItem
               type="button"
               role="tab"
               aria-selected={layoutWorkspace === "designing"}
               active={layoutWorkspace === "designing"}
+              className="!flex-none !basis-auto whitespace-nowrap px-3"
               onClick={() => {
               if (layoutWorkspace === "routes" && !confirmLeaveRoutingDirty()) return;
               if (layoutWorkspace === "routes" && routing.dirty) {
@@ -3733,6 +3734,7 @@ export default function WarehouseDesigner() {
               role="tab"
               aria-selected={layoutWorkspace === "routes"}
               active={layoutWorkspace === "routes"}
+              className="!flex-none !basis-auto whitespace-nowrap px-3"
               onClick={() => {
               // Selection SSOT: entering Routing clears rack/passage.
               setSelectedRackId(null);

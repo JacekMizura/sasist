@@ -101,10 +101,10 @@ export function MagazynDashboardPanel({
   return (
     <div className="flex h-full min-h-0 flex-col" onClick={() => onClearTemplateSelection?.()}>
       {(onOpenReports || onOpenDamageReports) && (
-        <div className="mb-6 grid grid-cols-2 gap-2 px-1">
+        <div className="mb-6 grid min-w-0 grid-cols-2 gap-2 px-1">
           {onOpenReports && (
             <CardButton
-              fullWidth
+              className="min-w-0 w-full"
               tone="emerald"
               onClick={(e) => {
                 e.stopPropagation();
@@ -119,7 +119,7 @@ export function MagazynDashboardPanel({
           )}
           {onOpenDamageReports && (
             <CardButton
-              fullWidth
+              className="min-w-0 w-full"
               tone="rose"
               onClick={(e) => {
                 e.stopPropagation();
