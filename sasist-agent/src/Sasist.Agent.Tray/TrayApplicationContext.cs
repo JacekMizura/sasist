@@ -14,34 +14,38 @@ internal sealed class TrayApplicationContext : ApplicationContext
     private readonly ToolStripMenuItem _headerItem;
     private readonly ToolStripMenuItem _statusItem;
     private readonly ToolStripMenuItem _orgItem;
-    private readonly ToolStripMenuItem _devicesItem;
     private readonly System.Windows.Forms.Timer _timer;
     private bool _showingPairing;
+    private StatusForm? _statusForm;
+    private DevicesForm? _devicesForm;
+    private DiagnosticsForm? _diagnosticsForm;
 
     public TrayApplicationContext(ConfigStore store)
     {
         _store = store;
 
-        _headerItem = new ToolStripMenuItem("Sasist Agent") { Enabled = false, Font = new Font("Segoe UI Semibold", 9f) };
-        _statusItem = new ToolStripMenuItem("● Offline") { Enabled = false };
+        _headerItem = new ToolStripMenuItem("Sasist Agent")
+        {
+            Enabled = false,
+            Font = new Font("Segoe UI Semibold", 9f),
+        };
+        _statusItem = new ToolStripMenuItem(UiCopy.TrayConnection(false)) { Enabled = false };
         _orgItem = new ToolStripMenuItem("Połączono z: —") { Enabled = false };
-        _devicesItem = new ToolStripMenuItem("Urządzenia: —") { Enabled = false };
 
         _menu = new ContextMenuStrip();
         _menu.Items.Add(_headerItem);
         _menu.Items.Add(_statusItem);
         _menu.Items.Add(_orgItem);
-        _menu.Items.Add(_devicesItem);
         _menu.Items.Add(new ToolStripSeparator());
-        _menu.Items.Add("Otwórz panel urządzeń", null, (_, _) => OpenDevicesPanel());
-        _menu.Items.Add("Diagnostyka", null, async (_, _) => await RunDiagnosticsAsync());
+        _menu.Items.Add("Status", null, (_, _) => ShowStatus());
+        _menu.Items.Add("Urządzenia", null, (_, _) => ShowDevices());
+        _menu.Items.Add("Diagnostyka", null, (_, _) => ShowDiagnostics());
         _menu.Items.Add("Logi", null, (_, _) => OpenLogs());
-        _menu.Items.Add("Restart usługi", null, (_, _) => RestartService());
+        _menu.Items.Add("Sprawdź aktualizacje", null, (_, _) => ShowUpdates());
         _menu.Items.Add("Odłącz urządzenie", null, (_, _) => Unpair());
-        _menu.Items.Add("Sprawdź aktualizacje", null, (_, _) =>
-            MessageBox.Show(UserMessages.UpdatesSoon, "Sasist Agent", MessageBoxButtons.OK, MessageBoxIcon.Information));
+        _menu.Items.Add("Uruchom ponownie usługę", null, (_, _) => RestartService());
         _menu.Items.Add(new ToolStripSeparator());
-        _menu.Items.Add("Zamknij Tray", null, (_, _) => ExitThread());
+        _menu.Items.Add("Zamknij", null, (_, _) => ExitThread());
 
         _icon = new NotifyIcon
         {
@@ -50,7 +54,7 @@ internal sealed class TrayApplicationContext : ApplicationContext
             Visible = true,
             ContextMenuStrip = _menu,
         };
-        _icon.DoubleClick += (_, _) => OpenDevicesPanel();
+        _icon.DoubleClick += (_, _) => ShowStatus();
 
         _timer = new System.Windows.Forms.Timer { Interval = 4000 };
         _timer.Tick += (_, _) => RefreshStatus();
@@ -68,20 +72,17 @@ internal sealed class TrayApplicationContext : ApplicationContext
             return;
         }
 
-        var online = ServiceHelper.IsRunning(ServiceName);
+        var serviceRunning = ServiceHelper.IsRunning(ServiceName);
         var snap = AgentStatusStore.Read();
-        var org = !string.IsNullOrWhiteSpace(snap?.OrganizationName)
-            ? snap!.OrganizationName
-            : (!string.IsNullOrWhiteSpace(cfg.OrganizationName) ? cfg.OrganizationName : "Sasist");
-        var devices = snap?.DeviceCount ?? 0;
-        if (online && snap is not null)
-            online = snap.Online || online;
+        var connected = serviceRunning && (snap?.Online ?? false);
+        var org = UiCopy.CompanyName(cfg, snap);
 
-        _statusItem.Text = online ? "● Online" : "● Offline";
-        _statusItem.ForeColor = online ? Color.FromArgb(30, 140, 60) : Color.FromArgb(160, 60, 60);
+        _statusItem.Text = UiCopy.TrayConnection(connected);
+        _statusItem.ForeColor = connected
+            ? Color.FromArgb(30, 140, 60)
+            : Color.FromArgb(160, 60, 60);
         _orgItem.Text = $"Połączono z: {org}";
-        _devicesItem.Text = $"Urządzenia: {devices}";
-        _icon.Text = online ? $"Sasist Agent — Online ({devices})" : "Sasist Agent — Offline";
+        _icon.Text = connected ? "Sasist Agent — Połączono" : "Sasist Agent — Brak połączenia";
     }
 
     private void BeginPairingFlow()
@@ -94,7 +95,6 @@ internal sealed class TrayApplicationContext : ApplicationContext
             using var form = new PairingForm(_store);
             if (form.ShowDialog() != DialogResult.OK)
             {
-                // User cancelled unpair re-pair — stay in tray offline or exit if never paired
                 var cfg = _store.Load();
                 if (cfg.NeedsSetup)
                     ExitThread();
@@ -107,20 +107,55 @@ internal sealed class TrayApplicationContext : ApplicationContext
         }
     }
 
-    private static void OpenDevicesPanel()
+    private void ShowStatus()
     {
-        try
+        if (_statusForm is { IsDisposed: false })
         {
-            Process.Start(new ProcessStartInfo
-            {
-                FileName = SasistCloud.DevicesPanelUrl,
-                UseShellExecute = true,
-            });
+            _statusForm.BringToFront();
+            _statusForm.Activate();
+            return;
         }
-        catch (Exception ex)
+
+        _statusForm = new StatusForm(_store, ShowDevices);
+        _statusForm.FormClosed += (_, _) => _statusForm = null;
+        _statusForm.Show();
+    }
+
+    private void ShowDevices()
+    {
+        if (_devicesForm is { IsDisposed: false })
         {
-            MessageBox.Show(UserMessages.FromException(ex), "Sasist Agent", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            _devicesForm.BringToFront();
+            _devicesForm.Activate();
+            return;
         }
+
+        _devicesForm = new DevicesForm(_store);
+        _devicesForm.FormClosed += (_, _) => _devicesForm = null;
+        _devicesForm.Show();
+    }
+
+    private void ShowDiagnostics()
+    {
+        if (_diagnosticsForm is { IsDisposed: false })
+        {
+            _diagnosticsForm.BringToFront();
+            _diagnosticsForm.Activate();
+            return;
+        }
+
+        _diagnosticsForm = new DiagnosticsForm(_store);
+        _diagnosticsForm.FormClosed += (_, _) => _diagnosticsForm = null;
+        _diagnosticsForm.Show();
+    }
+
+    private static void ShowUpdates()
+    {
+        MessageBox.Show(
+            UserMessages.UpToDate,
+            "Aktualizacje — Sasist Agent",
+            MessageBoxButtons.OK,
+            MessageBoxIcon.Information);
     }
 
     private static void OpenLogs()
@@ -134,77 +169,6 @@ internal sealed class TrayApplicationContext : ApplicationContext
         });
     }
 
-    private async Task RunDiagnosticsAsync()
-    {
-        try
-        {
-            var hostExe = LocateHostExe();
-            if (hostExe is null)
-            {
-                MessageBox.Show(UserMessages.DiagnosticsFailed, "Sasist Agent", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                return;
-            }
-
-            var psi = new ProcessStartInfo
-            {
-                FileName = hostExe,
-                Arguments = "diagnostics",
-                UseShellExecute = false,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                CreateNoWindow = true,
-            };
-            using var proc = Process.Start(psi);
-            if (proc is null)
-            {
-                MessageBox.Show(UserMessages.DiagnosticsFailed, "Sasist Agent", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                return;
-            }
-
-            var stdout = await proc.StandardOutput.ReadToEndAsync();
-            var stderr = await proc.StandardError.ReadToEndAsync();
-            await proc.WaitForExitAsync();
-
-            // User-facing summary only — strip stack traces / technical noise
-            var lines = (stdout + "\n" + stderr)
-                .Split('\n')
-                .Select(l => l.Trim())
-                .Where(l => l.StartsWith("[pass]", StringComparison.OrdinalIgnoreCase)
-                            || l.StartsWith("[fail]", StringComparison.OrdinalIgnoreCase)
-                            || l.StartsWith("[warn]", StringComparison.OrdinalIgnoreCase)
-                            || l.StartsWith("Ready:", StringComparison.OrdinalIgnoreCase)
-                            || l.StartsWith("Sasist Agent", StringComparison.OrdinalIgnoreCase))
-                .ToList();
-
-            var summary = lines.Count > 0
-                ? string.Join(Environment.NewLine, lines)
-                : (proc.ExitCode == 0
-                    ? "Diagnostyka zakończona pomyślnie."
-                    : "Diagnostyka wykryła problemy. Sprawdź Logi.");
-
-            MessageBox.Show(summary, "Diagnostyka — Sasist Agent", MessageBoxButtons.OK,
-                proc.ExitCode == 0 ? MessageBoxIcon.Information : MessageBoxIcon.Warning);
-        }
-        catch (Exception ex)
-        {
-            MessageBox.Show(UserMessages.FromException(ex), "Sasist Agent", MessageBoxButtons.OK, MessageBoxIcon.Error);
-        }
-    }
-
-    private static string? LocateHostExe()
-    {
-        var beside = Path.Combine(AppContext.BaseDirectory, "Sasist.Agent.Host.exe");
-        if (File.Exists(beside))
-            return beside;
-
-        var pf = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
-            "Sasist",
-            "Agent",
-            "Sasist.Agent.Host.exe");
-        return File.Exists(pf) ? pf : null;
-    }
-
     private void RestartService()
     {
         try
@@ -212,7 +176,7 @@ internal sealed class TrayApplicationContext : ApplicationContext
             ServiceHelper.Restart(ServiceName);
             RefreshStatus();
             MessageBox.Show(
-                "Usługa Sasist Agent została zrestartowana.",
+                UserMessages.ServiceRestarted,
                 "Sasist Agent",
                 MessageBoxButtons.OK,
                 MessageBoxIcon.Information);
@@ -236,8 +200,6 @@ internal sealed class TrayApplicationContext : ApplicationContext
 
         try
         {
-            try { ServiceHelper.Restart(ServiceName); } catch { /* may fail without admin — ok */ }
-            // Stop is better than restart with empty config — Host waits for pairing
             try
             {
                 using var sc = new ServiceController(ServiceName);
@@ -249,10 +211,13 @@ internal sealed class TrayApplicationContext : ApplicationContext
             }
             catch
             {
-                // ignore
+                // ignore — still clear pairing
             }
 
             _store.ClearPairing();
+            _statusForm?.Close();
+            _devicesForm?.Close();
+            _diagnosticsForm?.Close();
             RefreshStatus();
             BeginPairingFlow();
         }
@@ -271,6 +236,9 @@ internal sealed class TrayApplicationContext : ApplicationContext
             _icon.Visible = false;
             _icon.Dispose();
             _menu.Dispose();
+            _statusForm?.Dispose();
+            _devicesForm?.Dispose();
+            _diagnosticsForm?.Dispose();
         }
         base.Dispose(disposing);
     }

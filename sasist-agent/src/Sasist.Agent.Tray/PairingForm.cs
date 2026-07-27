@@ -2,14 +2,13 @@ using Sasist.Agent.Core.Config;
 
 namespace Sasist.Agent.Tray;
 
-/// <summary>First-run pairing — Dropbox/TeamViewer-style. No Server URL.</summary>
+/// <summary>First-run pairing — install → connection code → done. No Server URL.</summary>
 internal sealed class PairingForm : Form
 {
     private readonly ConfigStore _store;
     private readonly TextBox _codeBox;
     private readonly Label _status;
     private readonly Button _connect;
-    private readonly Panel _card;
 
     public PairingForm(ConfigStore store)
     {
@@ -20,64 +19,63 @@ internal sealed class PairingForm : Form
         MaximizeBox = false;
         MinimizeBox = false;
         StartPosition = FormStartPosition.CenterScreen;
-        ClientSize = new Size(480, 420);
+        ClientSize = new Size(460, 400);
         BackColor = Color.FromArgb(250, 250, 252);
         Font = new Font("Segoe UI", 10f);
         Icon = Branding.AppIcon;
+        ControlBox = true;
 
-        _card = new Panel
-        {
-            Left = 24,
-            Top = 24,
-            Width = 432,
-            Height = 372,
-            BackColor = Color.White,
-        };
-        // soft border
-        _card.Paint += (_, e) =>
-        {
-            using var pen = new Pen(Color.FromArgb(230, 230, 235));
-            e.Graphics.DrawRectangle(pen, 0, 0, _card.Width - 1, _card.Height - 1);
-        };
+        var card = TrayUi.CreateCard(20, 20, 420, 360);
 
         var logo = new PictureBox
         {
             Image = Branding.MarkImage,
             SizeMode = PictureBoxSizeMode.Zoom,
             Left = 24,
-            Top = 20,
+            Top = 22,
             Width = 40,
             Height = 40,
         };
 
-        var title = new Label
+        var brand = new Label
         {
             Text = "Sasist Agent",
-            Left = 72,
-            Top = 18,
-            Width = 320,
-            Height = 28,
+            Left = 76,
+            Top = 20,
+            Width = 300,
+            Height = 24,
+            Font = new Font("Segoe UI Semibold", 14f),
+            ForeColor = Color.FromArgb(28, 28, 30),
+        };
+
+        var title = new Label
+        {
+            Text = "Połącz z Sasist",
+            Left = 24,
+            Top = 78,
+            Width = 370,
+            Height = 30,
             Font = new Font("Segoe UI Semibold", 16f),
             ForeColor = Color.FromArgb(28, 28, 30),
         };
 
         var subtitle = new Label
         {
-            Text = "Połącz z kontem Sasist",
+            Text = "Wklej kod połączenia z panelu Sasist, aby zacząć drukować.",
             Left = 24,
-            Top = 72,
-            Width = 384,
-            Height = 24,
-            Font = new Font("Segoe UI", 11f),
+            Top = 114,
+            Width = 370,
+            Height = 40,
+            Font = new Font("Segoe UI", 10f),
             ForeColor = Color.FromArgb(90, 90, 98),
         };
 
         var codeLabel = new Label
         {
-            Text = "Kod parowania",
+            Text = "Kod połączenia",
             Left = 24,
-            Top = 112,
-            Width = 384,
+            Top = 164,
+            Width = 370,
             Height = 22,
             Font = new Font("Segoe UI Semibold", 9.5f),
             ForeColor = Color.FromArgb(40, 40, 45),
@@ -86,11 +84,11 @@ internal sealed class PairingForm : Form
         _codeBox = new TextBox
         {
             Left = 24,
-            Top = 138,
-            Width = 384,
+            Top = 190,
+            Width = 370,
             Height = 36,
-            Font = new Font("Consolas", 11f),
-            PlaceholderText = "spa_…",
+            Font = new Font("Segoe UI", 12f),
+            PlaceholderText = "Wklej kod tutaj",
             BorderStyle = BorderStyle.FixedSingle,
         };
 
@@ -98,9 +96,9 @@ internal sealed class PairingForm : Form
         {
             Text = "Połącz",
             Left = 24,
-            Top = 192,
-            Width = 384,
-            Height = 40,
+            Top = 242,
+            Width = 370,
+            Height = 42,
             FlatStyle = FlatStyle.Flat,
             BackColor = Color.FromArgb(249, 115, 22),
             ForeColor = Color.White,
@@ -113,26 +111,15 @@ internal sealed class PairingForm : Form
         _status = new Label
         {
             Left = 24,
-            Top = 244,
-            Width = 384,
-            Height = 40,
+            Top = 296,
+            Width = 370,
+            Height = 44,
             ForeColor = Color.FromArgb(100, 100, 110),
             Text = "",
         };
 
-        var hint = new Label
-        {
-            Left = 24,
-            Top = 290,
-            Width = 384,
-            Height = 64,
-            ForeColor = Color.FromArgb(120, 120, 130),
-            Font = new Font("Segoe UI", 9f),
-            Text = "Kod znajdziesz w:\nSasist → Ustawienia → Urządzenia → Dodaj Agenta",
-        };
-
-        _card.Controls.AddRange([logo, title, subtitle, codeLabel, _codeBox, _connect, _status, hint]);
-        Controls.Add(_card);
+        card.Controls.AddRange([logo, brand, title, subtitle, codeLabel, _codeBox, _connect, _status]);
+        Controls.Add(card);
         AcceptButton = _connect;
     }
 
@@ -205,7 +192,7 @@ internal sealed class PairingForm : Form
                 _status.ForeColor = Color.FromArgb(160, 100, 20);
                 _status.Text = UserMessages.ServiceStartHint;
                 DialogResult = DialogResult.OK;
-                await Task.Delay(1200);
+                await Task.Delay(1400);
                 Close();
                 return;
             }
@@ -213,7 +200,7 @@ internal sealed class PairingForm : Form
             _status.ForeColor = Color.FromArgb(30, 130, 60);
             _status.Text = UserMessages.Connected;
             DialogResult = DialogResult.OK;
-            await Task.Delay(600);
+            await Task.Delay(700);
             Close();
         }
         catch (Exception ex)

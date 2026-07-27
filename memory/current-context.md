@@ -2,11 +2,11 @@
 
 ## Active
 
-**Stage 5 Final Cutover complete (shipping path)**
+**Sasist Agent — customer UX polish (Tray)**
 
-Official agent: `sasist-agent` / `SasistAgentSetup.exe`  
-Legacy Python: `legacy/sasist-printer-agent` (DO NOT USE)
+Product framing: install → connection code → print. No developer jargon on main UI.
 
-Report: `docs/sasist-agent/STAGE5-CUTOVER-REPORT.md`
+Stage 5 cutover remains complete (`SasistAgentSetup.exe`).  
+Legacy Python: `legacy/sasist-printer-agent` (do not ship).
 
-Next: publish GitHub Release with `SasistAgentSetup.exe`, then optionally delete `legacy/`.
+Next: rebuild installer when ready to redistribute Tray UX; publish GitHub Release with `SasistAgentSetup.exe`.

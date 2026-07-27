@@ -1,5 +1,6 @@
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Net.Sockets;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Sasist.Agent.Core.Config;
@@ -8,24 +9,32 @@ namespace Sasist.Agent.Tray;
 
 internal static class UserMessages
 {
-    public const string NetworkUnavailable = "Połączenie internetowe jest niedostępne.";
-    public const string CannotReachSasist = "Nie udało się połączyć z serwerem Sasist.";
-    public const string InvalidPairingCode = "Kod parowania jest nieprawidłowy.";
-    public const string PairingExpired = "Kod parowania wygasł lub został unieważniony. Wygeneruj nowy w panelu Sasist.";
-    public const string CannotSaveConfig = "Nie można zapisać konfiguracji. Uruchom aplikację jako administrator.";
-    public const string EnterPairingCode = "Wklej kod parowania skopiowany z panelu Sasist.";
+    public const string NetworkUnavailable = "Brak połączenia z Internetem.";
+    public const string CannotReachSasist = "Nie udało się połączyć z Sasist.";
+    public const string InvalidPairingCode = "Kod połączenia jest nieprawidłowy.";
+    public const string PairingExpired = "Kod połączenia wygasł. Wygeneruj nowy w panelu Sasist.";
+    public const string CannotSaveConfig = "Nie można zapisać ustawień. Uruchom Sasist Agent jako administrator.";
+    public const string EnterPairingCode = "Wklej kod połączenia z panelu Sasist.";
     public const string Connecting = "Łączenie z Sasist…";
-    public const string Connected = "Połączono. Sasist Agent działa w tle.";
-    public const string ServiceStartHint = "Połączono. Jeśli status pozostaje Offline, zrestartuj komputer lub uruchom Sasist Agent jako administrator.";
-    public const string RestartFailed = "Nie udało się zrestartować usługi. Uruchom Sasist Agent jako administrator.";
-    public const string DiagnosticsFailed = "Nie udało się uruchomić diagnostyki.";
-    public const string UnpairConfirm = "Odłączyć to urządzenie od konta Sasist?\n\nBędziesz mógł ponownie sparować je kodem z panelu.";
-    public const string UpdatesSoon = "Sprawdzanie aktualizacji będzie dostępne w kolejnej wersji.";
+    public const string Connected = "Połączono. Możesz już drukować z Sasist.";
+    public const string ServiceStartHint =
+        "Połączono. Jeśli drukowanie nie działa od razu, uruchom ponownie komputer.";
+    public const string RestartFailed =
+        "Nie udało się uruchomić ponownie usługi. Uruchom Sasist Agent jako administrator.";
+    public const string ServiceRestarted = "Usługa Sasist Agent została uruchomiona ponownie.";
+    public const string DiagnosticsFailed = "Nie udało się uruchomić diagnostyki. Więcej informacji znajduje się w logach.";
+    public const string UnpairConfirm =
+        "Odłączyć ten komputer od Sasist?\n\nAby drukować ponownie, będziesz potrzebować nowego kodu połączenia.";
+    public const string UpToDate = "Masz zainstalowaną najnowszą wersję.";
+    public const string UpdateAvailable = "Dostępna jest nowa wersja.";
+    public const string PrintFailed = "Nie można wydrukować dokumentu.\nWięcej informacji znajduje się w logach.";
+    public const string GenericFailure = "Coś poszło nie tak.\nWięcej informacji znajduje się w logach.";
 
     public static string FromException(Exception ex)
     {
         try
         {
+            AgentPaths.EnsureDirectories();
             File.AppendAllText(
                 Path.Combine(AgentPaths.LogsDir, "tray-errors.log"),
                 $"[{DateTimeOffset.Now:O}] {ex}\n\n");
@@ -35,16 +44,28 @@ internal static class UserMessages
             // ignore log failures
         }
 
+        while (ex is AggregateException { InnerException: { } inner })
+            ex = inner;
+
         return ex switch
         {
             UnauthorizedAccessException => CannotSaveConfig,
             DirectoryNotFoundException => CannotSaveConfig,
-            IOException when ex.Message.Contains("access", StringComparison.OrdinalIgnoreCase) => CannotSaveConfig,
+            IOException when Contains(ex, "access", "denied", "unauthorized") => CannotSaveConfig,
+            SocketException => NetworkUnavailable,
+            HttpRequestException hre when hre.InnerException is SocketException => NetworkUnavailable,
             HttpRequestException => NetworkUnavailable,
             TaskCanceledException => CannotReachSasist,
+            TimeoutException => CannotReachSasist,
             PairingException pe => pe.UserMessage,
-            _ => CannotReachSasist,
+            _ => GenericFailure,
         };
+    }
+
+    private static bool Contains(Exception ex, params string[] needles)
+    {
+        var msg = ex.Message ?? "";
+        return needles.Any(n => msg.Contains(n, StringComparison.OrdinalIgnoreCase));
     }
 }
 

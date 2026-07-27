@@ -1,3 +1,10 @@
+## 2026-07-27 — Sasist Agent customer UX (Tray)
+
+- Status / Urządzenia / Diagnostyka as separate windows; no tech IDs on main screen
+- Pairing: „Połącz z Sasist” + „Kod połączenia” only; tray menu simplified (Połączono, not Online)
+- Friendly errors; updates copy: „Masz zainstalowaną najnowszą wersję.”
+- INSTALACJA.md rewritten for warehouse owners
+
 ## 2026-07-27 — Stage 5 Final Cutover (Agent product)
 
 - Official path only: `sasist-agent` → `SasistAgentSetup.exe`

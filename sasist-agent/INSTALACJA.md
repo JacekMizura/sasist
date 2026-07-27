@@ -4,54 +4,43 @@
 
 - Windows 10 / 11 (x64) lub Windows Server 2019+
 - Uprawnienia administratora do instalacji
-- Połączenie z internetem
-- Konto Sasist oraz **kod parowania** (Ustawienia → Urządzenia → Dodaj Agenta)
+- Połączenie z Internetem
+- Konto Sasist oraz **kod połączenia** (Ustawienia → Urządzenia → Dodaj Agenta)
 
-**Nie jest wymagany** .NET Runtime — instalator dostarcza build *self-contained*.
+**Nie jest wymagany** .NET Runtime — instalator dostarcza kompletny program.
 
 ## Szybka instalacja
 
 1. Uruchom `SasistAgentSetup.exe` **jako administrator**.
 2. Po instalacji otworzy się **Sasist Agent**.
-3. Wklej **kod parowania** z panelu Sasist.
+3. Wklej **kod połączenia** z panelu Sasist.
 4. Kliknij **Połącz**.
 
-Gotowe — Agent działa w tle (ikona w zasobniku).
+Gotowe — Agent działa w tle (ikona przy zegarze). Możesz drukować z Sasist.
 
-Nie podajesz adresu serwera. Agent łączy się wyłącznie z Sasist (`https://api.sasist.pl`).
+Nie podajesz żadnego adresu serwera. Program łączy się wyłącznie z Sasist.
 
-## Tray (zasobnik)
+## Co zobaczysz po połączeniu
 
-- Status Online / Offline
-- Połączono z: nazwa firmy
-- Liczba urządzeń
-- Otwórz panel urządzeń · Diagnostyka · Logi · Restart usługi
-- **Odłącz urządzenie** — usuwa parowanie i pokazuje ponownie ekran z kodem
-- Sprawdź aktualizacje · Zamknij Tray
+- **Status** — czy jesteś połączony, nazwa firmy, komputer, gotowość do drukowania
+- **Urządzenia** — drukarki gotowe do pracy (oraz przyszłe typy urządzeń)
+- **Diagnostyka** — tylko gdy wsparcie Sasist o to poprosi
+- **Logi** — szczegóły techniczne na wypadek problemów
 
-## Konfiguracja (zaawansowane)
+## Menu przy ikonie
 
-| Co | Ścieżka |
-|----|---------|
-| Instalacja | `%ProgramFiles%\Sasist\Agent\` |
-| Dane | `%ProgramData%\Sasist\Agent\` |
-| Logi | `%ProgramData%\Sasist\Agent\logs\` |
-| Sekrety | `%ProgramData%\Sasist\Agent\secrets\` (DPAPI) |
-
-Dla deweloperów: `SASIST_API_URL` lub `appsettings.Development.json` (tylko Debug).
+Sasist Agent · Połączono · Połączono z: firma · Status · Urządzenia · Diagnostyka · Logi · Sprawdź aktualizacje · Odłącz urządzenie · Uruchom ponownie usługę · Zamknij
 
 ## Odinstalowanie
 
 Ustawienia Windows → Aplikacje → Sasist Agent → Odinstaluj  
 lub skrót w Menu Start.
 
-Dane w `%ProgramData%\Sasist\Agent\` mogą pozostać — usuń ręcznie, jeśli chcesz wyczyścić parowanie lokalne.
-
-## Budowanie instalatora
+## Budowanie instalatora (dla zespołu Sasist)
 
 ```powershell
 cd sasist-agent
 .\scripts\publish-release.ps1
 ```
 
-Wynik: `dist\SasistAgentSetup.exe`, `publish\win-x64\`
+Wynik: `dist\SasistAgentSetup.exe`
