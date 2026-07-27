@@ -12,6 +12,10 @@ import {
 import { colors, radius, shadows, spacing } from "@/design-system/tokens";
 
 import type { PrintMethod } from "./printMethodTypes";
+import {
+  cloudPrintUnavailableMessage,
+  type CloudPrintCapability,
+} from "./hasDefaultCloudPrinter";
 
 const CLOUD_PRINT_INFO =
   "Sasist Cloud Print umożliwia automatyczne drukowanie dokumentów bez otwierania okna drukowania. Po skonfigurowaniu domyślnej drukarki dokument zostanie wysłany bezpośrednio do wydruku.";
@@ -54,6 +58,8 @@ export type PrintMethodDialogProps = {
   pending?: boolean;
   title?: ReactNode;
   description?: ReactNode;
+  /** Cloud Print readiness — disables cloud tile when not ready. */
+  cloudCapability?: CloudPrintCapability | null;
 };
 
 function CloudInfoPopover({ text }: { text: string }) {
@@ -127,12 +133,19 @@ export function PrintMethodDialog({
   pending = false,
   title = "Wybierz sposób wydruku",
   description = "Wybierz sposób wydrukowania dokumentu.",
+  cloudCapability = null,
 }: PrintMethodDialogProps) {
   const [selected, setSelected] = useState<PrintMethod>("browser");
+  const cloudDisabled = cloudCapability != null && !cloudCapability.ready;
+  const cloudHint = cloudDisabled ? cloudPrintUnavailableMessage(cloudCapability) : null;
 
   useEffect(() => {
     if (open) setSelected("browser");
   }, [open]);
+
+  useEffect(() => {
+    if (selected === "cloud" && cloudDisabled) setSelected("browser");
+  }, [cloudDisabled, selected]);
 
   const handleConfirm = useCallback(() => {
     void onConfirm(selected);
@@ -163,22 +176,32 @@ export function PrintMethodDialog({
         title={<h2 className={typography.h1}>{title}</h2>}
       >
         <p className={typography.pageDesc}>{description}</p>
+        {cloudDisabled && cloudHint ? (
+          <p className={`mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 ${typography.bodyMuted} text-amber-950 whitespace-pre-line`}>
+            {cloudHint}
+          </p>
+        ) : null}
         <div className={`mt-4 flex flex-col ${spacing.gap2}`}>
           {OPTIONS.map((opt) => {
             const Icon = opt.icon;
+            const isCloud = opt.id === "cloud";
+            const disabledOption = pending || (isCloud && cloudDisabled);
             const isSelected = selected === opt.id;
             return (
               <button
                 key={opt.id}
                 type="button"
-                disabled={pending}
+                disabled={disabledOption}
                 aria-pressed={isSelected}
-                onClick={() => setSelected(opt.id)}
+                aria-disabled={disabledOption || undefined}
+                onClick={() => {
+                  if (!disabledOption) setSelected(opt.id);
+                }}
                 className={`flex w-full items-start gap-3 border text-left ${radius.lg} px-4 py-3.5 transition ${
                   isSelected
                     ? `border-orange-300 bg-orange-50/80 ring-2 ring-orange-200/80 ${shadows.sm}`
                     : `border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50/80 ${shadows.sm}`
-                } disabled:opacity-50`}
+                } disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:border-slate-200 disabled:hover:bg-white`}
               >
                 <span
                   className={`mt-0.5 inline-flex h-10 w-10 shrink-0 items-center justify-center ${radius.lg} ${
@@ -193,7 +216,11 @@ export function PrintMethodDialog({
                     <span className={typography.bodyStrong}>{opt.title}</span>
                     {opt.info ? <CloudInfoPopover text={opt.info} /> : null}
                   </span>
-                  <span className={`mt-0.5 block ${typography.bodyMuted}`}>{opt.description}</span>
+                  <span className={`mt-0.5 block ${typography.bodyMuted}`}>
+                    {isCloud && cloudDisabled
+                      ? "Niedostępne — brak aktywnego agenta lub domyślnej drukarki."
+                      : opt.description}
+                  </span>
                 </span>
               </button>
             );

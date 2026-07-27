@@ -23,7 +23,20 @@ class PrintingDefaultsUpdate(BaseModel):
 
 
 class PrinterAssignmentRepairRead(BaseModel):
-    defaults_remapped: int
-    jobs_migrated: int
-    primary_agent_id: int
-    primary_machine_id: str
+    success: bool = True
+    reason: str | None = None
+    defaults_remapped: int = 0
+    jobs_migrated: int = 0
+    primary_agent_id: int | None = None
+    primary_machine_id: str | None = None
+
+
+class CloudPrintCapabilityRead(BaseModel):
+    """Whether Sasist Cloud Print can accept a job for the given printer kind."""
+
+    kind: str
+    ready: bool
+    reason: str | None = None
+    printer_id: int | None = None
+    has_online_agent: bool = False
+    message: str | None = None

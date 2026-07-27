@@ -1,6 +1,7 @@
 import api from "./axios";
 import type {
   AgentPrinterRead,
+  CloudPrintCapabilityRead,
   PrintJobDetailRead,
   PrintJobRead,
   PrinterAgentDiagnosticsRead,
@@ -109,6 +110,20 @@ export async function repairPrinterAssignments(
 ): Promise<PrinterAssignmentRepairRead> {
   const { data } = await api.post<PrinterAssignmentRepairRead>("/printing/defaults/repair", null, {
     params: { tenant_id: tenantId, warehouse_id: warehouseId ?? undefined },
+  });
+  return data;
+}
+
+export async function fetchCloudPrintCapability(
+  tenantId: number,
+  opts?: { warehouseId?: number | null; kind?: "a4" | "label" | "receipt" },
+): Promise<CloudPrintCapabilityRead> {
+  const { data } = await api.get<CloudPrintCapabilityRead>("/printing/cloud-capability", {
+    params: {
+      tenant_id: tenantId,
+      warehouse_id: opts?.warehouseId ?? undefined,
+      kind: opts?.kind ?? "a4",
+    },
   });
   return data;
 }

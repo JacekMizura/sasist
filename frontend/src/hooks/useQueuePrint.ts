@@ -2,8 +2,9 @@ import { useCallback, useState } from "react";
 import toast from "react-hot-toast";
 
 import { queuePrintJob } from "../api/printingApi";
-import { extractApiErrorMessage } from "../api/apiErrorMessage";
+import { extractApiErrorMessage, extractApiOperationalErrorDetail } from "../api/apiErrorMessage";
 import type { QueuePrintRequest } from "../types/printing";
+import { NO_ACTIVE_AGENT_USER_MESSAGE } from "../components/printing/hasDefaultCloudPrinter";
 
 const QUEUE_SUCCESS_MSG = "Dokument został wysłany do kolejki drukowania";
 
@@ -11,6 +12,15 @@ type Options = {
   tenantId: number;
   warehouseId?: number | null;
 };
+
+function queueFailureMessage(err: unknown): string {
+  const op = extractApiOperationalErrorDetail(err);
+  if (op?.code === "NO_ACTIVE_AGENT" || op?.code === "AGENT_OFFLINE") {
+    return op.code === "NO_ACTIVE_AGENT" ? NO_ACTIVE_AGENT_USER_MESSAGE : op.message;
+  }
+  if (op?.message) return op.message;
+  return extractApiErrorMessage(err, "Nie udało się wysłać do drukowania.");
+}
 
 export function useQueuePrint({ tenantId, warehouseId }: Options) {
   const [busy, setBusy] = useState(false);
@@ -27,7 +37,7 @@ export function useQueuePrint({ tenantId, warehouseId }: Options) {
         toast.success(QUEUE_SUCCESS_MSG);
         return true;
       } catch (err) {
-        toast.error(extractApiErrorMessage(err, "Nie udało się wysłać do drukowania."));
+        toast.error(queueFailureMessage(err));
         return false;
       } finally {
         setBusy(false);

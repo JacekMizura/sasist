@@ -436,6 +436,7 @@ export default function ProductionOrderDetailPage() {
       <PrintMethodDialog
         open={printFlow.open}
         pending={printFlow.pending}
+        cloudCapability={printFlow.cloudCapability}
         onClose={printFlow.close}
         onConfirm={printFlow.confirmMethod}
       />

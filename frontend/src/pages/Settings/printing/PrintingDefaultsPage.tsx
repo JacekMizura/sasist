@@ -128,6 +128,17 @@ export default function PrintingDefaultsPage() {
     setSaved(false);
     try {
       const result = await repairPrinterAssignments(DAMAGE_TENANT_ID, warehouseId);
+      if (!result.success) {
+        if (result.reason === "NO_ACTIVE_AGENT") {
+          setError(
+            result.message ||
+              "Brak aktywnego komputera z agentem drukowania.\nUruchom Sellasist Print Agent na jednym z komputerów.",
+          );
+        } else {
+          setError(result.message || "Nie udało się naprawić przypisań drukarek.");
+        }
+        return;
+      }
       toast.success(
         `Naprawiono przypisania: ${result.defaults_remapped} domyślnych, ${result.jobs_migrated} zadań oczekujących.`,
       );

@@ -20,6 +20,15 @@ from .printer_service import _get_agent_printer_for_tenant
 logger = logging.getLogger(__name__)
 
 OFFLINE_AGENT_QUEUE_MESSAGE = "Domyślna drukarka jest przypisana do nieaktywnego agenta."
+OFFLINE_AGENT_CODE = "AGENT_OFFLINE"
+INACTIVE_PRINTER_CODE = "PRINTER_INACTIVE"
+NO_ACTIVE_AGENT_CODE = "NO_ACTIVE_AGENT"
+NO_ACTIVE_AGENT_MESSAGE = (
+    "Brak aktywnego komputera z agentem drukowania. "
+    "Uruchom Sellasist Print Agent na jednym z komputerów."
+)
+NO_DEFAULT_PRINTER_CODE = "NO_DEFAULT_PRINTER"
+PRINTER_MISSING_CODE = "PRINTER_MISSING"
 
 
 def _is_agent_online(agent: PrinterAgent) -> bool:
@@ -169,16 +178,107 @@ def ensure_queue_target_agent_online(
     printer = _get_agent_printer_for_tenant(db, tenant_id=tenant_id, printer_id=printer_id)
     agent = printer.agent
     if agent is None:
-        raise PrinterNotFoundError("Printer not found")
+        raise PrinterNotFoundError("Printer not found", code=PRINTER_MISSING_CODE)
     if not printer.is_active:
         raise PrintingError(
             "Domyślna drukarka jest nieaktywna.",
             status_code=409,
+            code=INACTIVE_PRINTER_CODE,
         )
     if not _is_agent_online(agent):
-        raise PrintingError(OFFLINE_AGENT_QUEUE_MESSAGE, status_code=409)
+        raise PrintingError(
+            OFFLINE_AGENT_QUEUE_MESSAGE,
+            status_code=409,
+            code=OFFLINE_AGENT_CODE,
+        )
     return printer, agent
 
+
+def assess_cloud_print_capability(
+    db: Session,
+    *,
+    tenant_id: int,
+    warehouse_id: int | None,
+    kind: str,
+) -> dict[str, Any]:
+    """Business readiness for Cloud Print — never raises for offline / missing agent."""
+    from .constants import PRINTER_TYPE_A4, PRINTER_TYPE_LABEL, PRINTER_TYPE_RECEIPT
+    from .printer_service import get_printing_defaults
+
+    kind_norm = (kind or "a4").strip().lower()
+    if kind_norm in {"label", "labels"}:
+        field = "label_printer_id"
+        printer_type = PRINTER_TYPE_LABEL
+    elif kind_norm in {"receipt", "receipts", "paragon"}:
+        field = "receipt_printer_id"
+        printer_type = PRINTER_TYPE_RECEIPT
+    else:
+        kind_norm = "a4"
+        field = "a4_printer_id"
+        printer_type = PRINTER_TYPE_A4
+
+    has_online = _primary_online_agent(db, tenant_id=tenant_id, warehouse_id=warehouse_id) is not None
+    defaults = get_printing_defaults(db, tenant_id=tenant_id, warehouse_id=warehouse_id)
+    printer_id = defaults.get(field)
+
+    base = {
+        "kind": kind_norm,
+        "printer_id": int(printer_id) if printer_id is not None else None,
+        "has_online_agent": has_online,
+        "message": None,
+    }
+
+    if printer_id is None:
+        return {
+            **base,
+            "ready": False,
+            "reason": NO_DEFAULT_PRINTER_CODE,
+            "message": f"Brak domyślnej drukarki ({printer_type}). Ustaw ją w Ustawienia → Drukarki → Domyślne.",
+        }
+
+    try:
+        printer = _get_agent_printer_for_tenant(db, tenant_id=tenant_id, printer_id=int(printer_id))
+    except PrintingError:
+        return {
+            **base,
+            "ready": False,
+            "reason": PRINTER_MISSING_CODE,
+            "message": "Domyślna drukarka nie istnieje lub została usunięta.",
+        }
+
+    agent = printer.agent
+    if agent is None:
+        return {
+            **base,
+            "ready": False,
+            "reason": PRINTER_MISSING_CODE,
+            "message": "Domyślna drukarka nie ma przypisanego agenta.",
+        }
+    if not printer.is_active:
+        return {
+            **base,
+            "ready": False,
+            "reason": INACTIVE_PRINTER_CODE,
+            "message": "Domyślna drukarka jest nieaktywna.",
+        }
+    if not _is_agent_online(agent):
+        return {
+            **base,
+            "ready": False,
+            "reason": OFFLINE_AGENT_CODE if has_online else NO_ACTIVE_AGENT_CODE,
+            "message": (
+                OFFLINE_AGENT_QUEUE_MESSAGE
+                if has_online
+                else NO_ACTIVE_AGENT_MESSAGE
+            ),
+        }
+
+    return {
+        **base,
+        "ready": True,
+        "reason": None,
+        "message": None,
+    }
 
 def log_print_queue(
     *,
@@ -259,10 +359,22 @@ def repair_warehouse_printer_assignments(
 ) -> dict[str, Any]:
     primary = _primary_online_agent(db, tenant_id=tenant_id, warehouse_id=warehouse_id)
     if primary is None:
-        raise PrintingError(
-            "Brak aktywnego agenta w magazynie — nie można naprawić przypisań.",
-            status_code=400,
+        result = {
+            "success": False,
+            "reason": NO_ACTIVE_AGENT_CODE,
+            "defaults_remapped": 0,
+            "jobs_migrated": 0,
+            "primary_agent_id": None,
+            "primary_machine_id": None,
+            "message": NO_ACTIVE_AGENT_MESSAGE,
+        }
+        logger.info(
+            "[print-assign] repair skipped tenant_id=%s warehouse_id=%s reason=%s",
+            tenant_id,
+            warehouse_id,
+            NO_ACTIVE_AGENT_CODE,
         )
+        return result
 
     defaults_remapped = 0
     defaults_query = db.query(PrintingDefault).filter(PrintingDefault.tenant_id == tenant_id)
@@ -326,10 +438,13 @@ def repair_warehouse_printer_assignments(
 
     db.commit()
     result = {
+        "success": True,
+        "reason": None,
         "defaults_remapped": defaults_remapped,
         "jobs_migrated": jobs_migrated,
         "primary_agent_id": primary.id,
         "primary_machine_id": primary.machine_id,
+        "message": None,
     }
     logger.info("[print-assign] repair tenant_id=%s warehouse_id=%s %s", tenant_id, warehouse_id, result)
     return result

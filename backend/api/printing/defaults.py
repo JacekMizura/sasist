@@ -9,11 +9,15 @@ from ...auth.deps import get_current_user
 from ...database import get_db
 from ...models.app_user import AppUser
 from ...schemas.printing.defaults import (
+    CloudPrintCapabilityRead,
     PrinterAssignmentRepairRead,
     PrintingDefaultsRead,
     PrintingDefaultsUpdate,
 )
-from ...services.printing.assignment_service import repair_warehouse_printer_assignments
+from ...services.printing.assignment_service import (
+    assess_cloud_print_capability,
+    repair_warehouse_printer_assignments,
+)
 from ...services.printing.errors import PrintingError
 from ...services.printing.printer_service import get_printing_defaults, upsert_printing_defaults
 from ._helpers import raise_printing_error
@@ -55,11 +59,25 @@ def repair_printing_defaults(
     _: AppUser = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    try:
-        return repair_warehouse_printer_assignments(
-            db,
-            tenant_id=tenant_id,
-            warehouse_id=warehouse_id,
-        )
-    except PrintingError as exc:
-        raise_printing_error(exc)
+    # Always 200 — business outcomes use success/reason (e.g. NO_ACTIVE_AGENT).
+    return repair_warehouse_printer_assignments(
+        db,
+        tenant_id=tenant_id,
+        warehouse_id=warehouse_id,
+    )
+
+
+@router.get("/cloud-capability", response_model=CloudPrintCapabilityRead)
+def read_cloud_print_capability(
+    tenant_id: int = Query(..., ge=1),
+    warehouse_id: int | None = Query(default=None, ge=1),
+    kind: str = Query(default="a4"),
+    _: AppUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    return assess_cloud_print_capability(
+        db,
+        tenant_id=tenant_id,
+        warehouse_id=warehouse_id,
+        kind=kind,
+    )

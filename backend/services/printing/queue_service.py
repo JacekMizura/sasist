@@ -68,6 +68,7 @@ def resolve_default_printer_id(
         raise PrintingError(
             f"Brak domyślnej drukarki ({kind}). Ustaw ją w Ustawienia → Drukarki → Domyślne.",
             status_code=400,
+            code="NO_DEFAULT_PRINTER",
         )
     return int(printer_id)
 

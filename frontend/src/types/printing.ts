@@ -54,11 +54,30 @@ export type PrintingDefaultsRead = {
 };
 
 export type PrinterAssignmentRepairRead = {
+  success: boolean;
+  reason?: string | null;
   defaults_remapped: number;
   jobs_migrated: number;
-  primary_agent_id: number;
-  primary_machine_id: string;
+  primary_agent_id: number | null;
+  primary_machine_id: string | null;
+  message?: string | null;
 };
+
+export type CloudPrintCapabilityRead = {
+  kind: string;
+  ready: boolean;
+  reason: string | null;
+  printer_id: number | null;
+  has_online_agent: boolean;
+  message: string | null;
+};
+
+export type CloudPrintBlockReason =
+  | "NO_DEFAULT_PRINTER"
+  | "NO_ACTIVE_AGENT"
+  | "AGENT_OFFLINE"
+  | "PRINTER_INACTIVE"
+  | "PRINTER_MISSING";
 
 export type QueuePrintRequest = {
   document_type:

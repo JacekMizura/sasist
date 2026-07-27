@@ -56,6 +56,7 @@ class TestPrinterAssignment(PrintingTestCase):
                 ensure_queue_target_agent_online(db, tenant_id=1, printer_id=printer.id)
             self.assertEqual(ctx.exception.status_code, 409)
             self.assertEqual(ctx.exception.message, OFFLINE_AGENT_QUEUE_MESSAGE)
+            self.assertEqual(ctx.exception.code, "AGENT_OFFLINE")
 
     def test_sync_migrates_pending_jobs_to_replacement_printer(self):
         reg_online = register_agent_via_api(self.client, machine_id="WIN-ONLINE")
@@ -169,6 +170,7 @@ class TestPrinterAssignment(PrintingTestCase):
             assert online_printer is not None
 
             result = repair_warehouse_printer_assignments(db, tenant_id=1, warehouse_id=1)
+            self.assertTrue(result["success"])
             self.assertGreaterEqual(result["defaults_remapped"], 1)
             self.assertGreaterEqual(result["jobs_migrated"], 1)
             self.assertEqual(result["primary_agent_id"], reg_online["agent_id"])
@@ -207,8 +209,56 @@ class TestPrinterAssignment(PrintingTestCase):
         )
         self.assertEqual(response.status_code, 200)
         body = response.json()
+        self.assertTrue(body["success"])
         self.assertEqual(body["primary_agent_id"], reg["agent_id"])
         self.assertGreaterEqual(body["defaults_remapped"], 1)
+
+    def test_repair_no_active_agent_returns_business_response(self):
+        with self.SessionLocal() as db:
+            _agent, offline_printer = self._register_offline_agent(db, machine_id="WIN-REPAIR-NONE")
+            db.add(
+                PrintingDefault(
+                    tenant_id=1,
+                    warehouse_id=1,
+                    printer_type=PRINTER_TYPE_A4,
+                    agent_printer_id=offline_printer.id,
+                )
+            )
+            db.commit()
+
+        response = self.client.post(
+            "/api/printing/defaults/repair",
+            params={"tenant_id": 1, "warehouse_id": 1},
+        )
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        self.assertFalse(body["success"])
+        self.assertEqual(body["reason"], "NO_ACTIVE_AGENT")
+        self.assertIsNone(body["primary_agent_id"])
+        self.assertEqual(body["defaults_remapped"], 0)
+
+    def test_cloud_capability_offline_default(self):
+        with self.SessionLocal() as db:
+            _agent, offline_printer = self._register_offline_agent(db, machine_id="WIN-CAP")
+            db.add(
+                PrintingDefault(
+                    tenant_id=1,
+                    warehouse_id=1,
+                    printer_type=PRINTER_TYPE_A4,
+                    agent_printer_id=offline_printer.id,
+                )
+            )
+            db.commit()
+
+        response = self.client.get(
+            "/api/printing/cloud-capability",
+            params={"tenant_id": 1, "warehouse_id": 1, "kind": "a4"},
+        )
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        self.assertFalse(body["ready"])
+        self.assertEqual(body["reason"], "NO_ACTIVE_AGENT")
+        self.assertFalse(body["has_online_agent"])
 
 
 if __name__ == "__main__":
