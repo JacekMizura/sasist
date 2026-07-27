@@ -5,12 +5,32 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class PrintJobPayload(BaseModel):
-    pdf_url: str = Field(..., min_length=1)
+    """Flexible payload — PDF URL and/or inline ZPL/RAW/HTML."""
+
+    pdf_url: str | None = Field(default=None, min_length=1)
+    payload_uri: str | None = Field(default=None, min_length=1)
+    content_uri: str | None = Field(default=None, min_length=1)
+    format: str | None = Field(default=None, max_length=16)
+    zpl: str | None = None
+    raw: str | None = None
+    html: str | None = None
+    content_inline: str | None = None
+    content_base64: str | None = None
     copies: int = Field(default=1, ge=1, le=99)
+
+    @model_validator(mode="after")
+    def _require_content(self) -> PrintJobPayload:
+        has_uri = any([self.pdf_url, self.payload_uri, self.content_uri])
+        has_inline = any([self.zpl, self.raw, self.html, self.content_inline, self.content_base64])
+        if not has_uri and not has_inline:
+            raise ValueError(
+                "payload must include pdf_url/payload_uri/content_uri or zpl/raw/html/content_inline/content_base64"
+            )
+        return self
 
 
 class PrintJobCreateRequest(BaseModel):
@@ -66,6 +86,8 @@ class PrintJobPendingItem(BaseModel):
     system_name: str
     document_type: str
     document_id: int | None = None
+    job_type: str | None = None
+    format: str | None = None
     payload: dict[str, Any]
 
 

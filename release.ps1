@@ -1,13 +1,15 @@
 #requires -Version 5.1
 <#
 .SYNOPSIS
-  Fully automated Sasist Printer Agent release (version bump → commit → build → GitHub Release → verify).
+  Fully automated Sasist Agent (.NET) release (version bump → commit → build → GitHub Release → verify).
 
   Prerequisites:
     gh auth login
+    .NET 8 SDK
+    Inno Setup 6 (ISCC)
 
   Usage (from repository root):
-    powershell -ExecutionPolicy Bypass -File release.ps1 -Version 1.0.6
+    powershell -ExecutionPolicy Bypass -File release.ps1 -Version 1.0.0
 #>
 param(
     [Parameter(Mandatory = $true)]
@@ -47,11 +49,11 @@ function Invoke-ReleaseStep {
 
 $normalized = $Version.Trim().TrimStart("v")
 if ($normalized -notmatch '^\d+\.\d+\.\d+$') {
-    Write-Host "[release] Version must use semver format x.y.z (example: 1.0.6)" -ForegroundColor Red
+    Write-Host "[release] Version must use semver format x.y.z (example: 1.0.0)" -ForegroundColor Red
     exit 1
 }
 
-Write-ReleaseStep "Starting Printer Agent release v$normalized"
+Write-ReleaseStep "Starting Sasist Agent release v$normalized"
 
 Invoke-ReleaseStep "Bump version" {
     & powershell -ExecutionPolicy Bypass -File (Join-Path $RepoRoot "scripts\bump-version.ps1") $normalized
@@ -65,7 +67,7 @@ Invoke-ReleaseStep "Git commit and push" {
         if ($LASTEXITCODE -eq 0) {
             throw "No staged changes after version bump - nothing to commit."
         }
-        git commit -m "Printer Agent v$normalized"
+        git commit -m "Sasist Agent v$normalized"
         if ($LASTEXITCODE -ne 0) {
             throw "git commit failed (exit $LASTEXITCODE)"
         }
@@ -91,7 +93,7 @@ Invoke-ReleaseStep "Verify release" {
 }
 
 Write-Host ""
-Write-Host "[release] SUCCESS - Sasist Printer Agent v$normalized is published." -ForegroundColor Green
-Write-Host "[release] Installer: Output\SasistPrinterAgent-Setup-$normalized.exe" -ForegroundColor Green
+Write-Host "[release] SUCCESS - Sasist Agent v$normalized is published." -ForegroundColor Green
+Write-Host "[release] Installer: Output\SasistAgentSetup.exe" -ForegroundColor Green
 Write-Host "[release] GitHub Release: v$normalized" -ForegroundColor Green
 exit 0

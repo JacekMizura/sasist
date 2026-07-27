@@ -10,7 +10,7 @@ import httpx
 from backend.services.printing import github_release_service as svc
 
 
-def _github_payload(*, tag: str = "v1.0.2", asset_name: str = "SasistPrinterAgent-Setup-1.0.2.exe") -> dict:
+def _github_payload(*, tag: str = "v1.0.2", asset_name: str = "SasistAgentSetup.exe") -> dict:
     return {
         "tag_name": tag,
         "assets": [
@@ -127,11 +127,45 @@ class GitHubReleaseServiceTestCase(unittest.TestCase):
     def test_find_installer_asset_matches_prefix_pattern(self):
         assets = [
             {"name": "readme.txt"},
-            {"name": "SasistPrinterAgent-Setup-1.0.1.exe"},
-            {"name": "SasistPrinterAgent-Setup-1.0.2.exe"},
+            {"name": "SasistAgentSetup-1.0.1.exe"},
+            {"name": "SasistAgentSetup.exe"},
         ]
-        asset = svc.find_installer_asset(assets, prefix="SasistPrinterAgent-Setup")
-        self.assertEqual(asset["name"], "SasistPrinterAgent-Setup-1.0.1.exe")
+        asset = svc.find_installer_asset(assets, prefix="SasistAgentSetup")
+        self.assertEqual(asset["name"], "SasistAgentSetup-1.0.1.exe")
+
+    def test_parse_prefers_new_asset_then_legacy(self):
+        payload = {
+            "tag_name": "v1.0.9",
+            "assets": [
+                {
+                    "name": "SasistPrinterAgent-Setup-1.0.9.exe",
+                    "browser_download_url": "https://github.com/JacekMizura/sasist/releases/download/v1.0.9/SasistPrinterAgent-Setup-1.0.9.exe",
+                },
+                {
+                    "name": "SasistAgentSetup.exe",
+                    "browser_download_url": "https://github.com/JacekMizura/sasist/releases/download/v1.0.9/SasistAgentSetup.exe",
+                },
+            ],
+        }
+        release = svc._parse_github_release(payload)
+        self.assertIsNotNone(release)
+        assert release is not None
+        self.assertIn("SasistAgentSetup.exe", release.download_url)
+
+    def test_parse_falls_back_to_legacy_asset(self):
+        payload = {
+            "tag_name": "v1.0.2",
+            "assets": [
+                {
+                    "name": "SasistPrinterAgent-Setup-1.0.2.exe",
+                    "browser_download_url": "https://github.com/JacekMizura/sasist/releases/download/v1.0.2/SasistPrinterAgent-Setup-1.0.2.exe",
+                },
+            ],
+        }
+        release = svc._parse_github_release(payload)
+        self.assertIsNotNone(release)
+        assert release is not None
+        self.assertIn("SasistPrinterAgent-Setup", release.download_url)
 
     def test_normalize_release_version_strips_v_prefix(self):
         self.assertEqual(svc.normalize_release_version("v1.1.0"), "1.1.0")
@@ -181,7 +215,7 @@ class GitHubReleaseEndpointTestCase(unittest.TestCase):
         body = response.json()
         self.assertEqual(body["latest_version"], "1.0.5")
         self.assertEqual(body["source"], "github")
-        self.assertIn("SasistPrinterAgent-Setup", body["download_url"])
+        self.assertIn("SasistAgentSetup", body["download_url"])
 
     @patch.object(svc, "_http_get_json")
     @patch("backend.api.printing.release.is_dev_environment", return_value=True)

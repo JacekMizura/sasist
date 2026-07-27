@@ -54,7 +54,7 @@ const UI_STRINGS_DEFAULTS = {
     administratorsNav: "Administratorzy",
     /** Przeniesione do Ustawienia → Firma (zachowany klucz dla tłumaczeń). */
     systemSetupNav: "Firma i konfiguracja",
-    printersNav: "Drukarki",
+    printersNav: "Urządzenia",
     wmsSettings: "Ustawienia WMS",
     /** Panel triage labels for returns list (not WMS workflow statuses). */
     returnPanelStatuses: "Zwroty — statusy panelu",

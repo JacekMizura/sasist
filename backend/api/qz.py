@@ -2,6 +2,11 @@
 QZ Tray signing endpoint for direct-print security.
 Frontend calls setSignaturePromise(fn); fn(toSign) should fetch signature from backend.
 Minimal implementation: returns a placeholder signature. For production, sign with your private key.
+
+TODO(sasist-agent-migration): Remove this router in Etap 5 Cleanup after all FE callers
+stop using /qz/sign. Sasist Agent does not need QZ signatures.
+Stage 5 Cleanup: delete backend/api/qz.py and unregister qz_router from main.
+See docs/sasist-agent/qz-migration-map.md.
 """
 from fastapi import APIRouter
 from pydantic import BaseModel

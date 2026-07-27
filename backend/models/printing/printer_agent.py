@@ -22,6 +22,7 @@ class PrinterAgent(Base, BaseModelMixin):
     token_hash = Column(String(128), nullable=False)
     version = Column(String(32), nullable=True)
     printer_count = Column(Integer, nullable=True)
+    capabilities_json = Column(Text, nullable=True)
     last_seen_at = Column(DateTime, nullable=True)
     last_poll_at = Column(DateTime, nullable=True)
     last_error = Column(Text, nullable=True)

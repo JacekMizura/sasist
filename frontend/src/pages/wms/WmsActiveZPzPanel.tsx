@@ -60,7 +60,12 @@ export function WmsActiveZPzPanel({ warehouseId, refreshKey = 0, onClosed }: Pro
       onClosed?.(res.document_number);
       if (settings.z_pz_print_label_on_close && settings.z_pz_label_template_id != null) {
         try {
-          await printZPzLabel(res.stock_document_id, settings.z_pz_label_template_id, DAMAGE_TENANT_ID);
+          await printZPzLabel(
+            res.stock_document_id,
+            settings.z_pz_label_template_id,
+            DAMAGE_TENANT_ID,
+            warehouseId,
+          );
         } catch {
           setErr("Dokument zamknięty, ale wydruk etykiety nie powiódł się.");
         }

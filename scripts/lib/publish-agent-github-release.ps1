@@ -1,9 +1,7 @@
 #requires -Version 5.1
 <#
 .SYNOPSIS
-  Create or update a GitHub Release for Sasist Printer Agent and upload the installer.
-
-  Used by release.ps1 and GitHub Actions.
+  Create or update a GitHub Release for Sasist Agent and upload SasistAgentSetup.exe.
 #>
 param(
     [Parameter(Mandatory = $true)]
@@ -29,7 +27,15 @@ if ($normalized -notmatch '^\d+\.\d+\.\d+$') {
 
 $tag = "v$normalized"
 if (-not $InstallerPath) {
-    $InstallerPath = Join-Path $RepoRoot "Output\SasistPrinterAgent-Setup-$normalized.exe"
+    $candidate = Join-Path $RepoRoot "Output\SasistAgentSetup.exe"
+    $versioned = Join-Path $RepoRoot "Output\SasistAgentSetup-$normalized.exe"
+    if (Test-Path -LiteralPath $candidate) {
+        $InstallerPath = $candidate
+    } elseif (Test-Path -LiteralPath $versioned) {
+        $InstallerPath = $versioned
+    } else {
+        $InstallerPath = Join-Path $RepoRoot "sasist-agent\dist\SasistAgentSetup.exe"
+    }
 }
 if (-not (Test-Path -LiteralPath $InstallerPath)) {
     throw "Installer not found: $InstallerPath"
@@ -37,6 +43,11 @@ if (-not (Test-Path -LiteralPath $InstallerPath)) {
 if (-not $NotesFile) {
     $NotesFile = Join-Path $RepoRoot "RELEASE_NOTES.md"
 }
+
+# Upload as canonical asset name (backend looks for SasistAgentSetup*)
+$uploadName = "SasistAgentSetup.exe"
+$uploadPath = Join-Path $env:TEMP $uploadName
+Copy-Item -LiteralPath $InstallerPath -Destination $uploadPath -Force
 
 $gh = Get-Command gh -ErrorAction SilentlyContinue
 if (-not $gh) {
@@ -56,12 +67,12 @@ if ($LASTEXITCODE -eq 0) {
 }
 
 if ($releaseExists) {
-    Write-Step "Release $tag exists - uploading installer (--clobber)"
-    gh release upload $tag $InstallerPath --clobber
+    Write-Step "Release $tag exists - uploading $uploadName (--clobber)"
+    gh release upload $tag $uploadPath --clobber
     if ($LASTEXITCODE -ne 0) {
         throw "gh release upload failed (exit $LASTEXITCODE)"
     }
-    Write-Step "Uploaded: $InstallerPath"
+    Write-Step "Uploaded: $uploadName"
     return
 }
 
@@ -71,8 +82,8 @@ if (-not (Test-Path -LiteralPath $NotesFile)) {
 
 Write-Step "Creating release $tag"
 gh release create $tag `
-    $InstallerPath `
-    --title "Sasist Printer Agent v$normalized" `
+    $uploadPath `
+    --title "Sasist Agent v$normalized" `
     --notes-file $NotesFile `
     --latest
 
@@ -80,4 +91,4 @@ if ($LASTEXITCODE -ne 0) {
     throw "gh release create failed (exit $LASTEXITCODE)"
 }
 
-Write-Step "Created release $tag with asset: $InstallerPath"
+Write-Step "Created release $tag with asset: $uploadName"

@@ -1,13 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import toast from "react-hot-toast";
-import { Copy, Download, Key, RefreshCw, Server, ShieldAlert } from "lucide-react";
+import { Copy, Download, Key, RefreshCw, ShieldAlert } from "lucide-react";
 
 import { createApiKey, rotateApiKey } from "../../../api/apiKeysApi";
 import { extractApiErrorMessage } from "../../../api/apiErrorMessage";
 import { fetchPrinterAgentDownloadInfo } from "../../../api/printingApi";
 import { PanelBulkStatusConfirmModal } from "../../../components/orders/panelList/PanelBulkStatusConfirmModal";
 import {
-  getPrinterAgentServerUrl,
   isValidPrinterAgentDownloadUrl,
   logPrinterAgentDownloadDiagnostics,
   openPrinterAgentDownload,
@@ -134,11 +133,11 @@ export default function AddComputerModal({ open, onClose }: Props) {
     if (!plainKey) return;
     const ok = await copyText(plainKey);
     if (ok) {
-      toast.success("Skopiowano klucz API");
+      toast.success("Skopiowano kod parowania");
       setCopiedKey(true);
       window.setTimeout(() => setCopiedKey(false), 2000);
     } else {
-      toast.error("Nie udało się skopiować klucza.");
+      toast.error("Nie udało się skopiować kodu.");
     }
   };
 
@@ -200,7 +199,7 @@ export default function AddComputerModal({ open, onClose }: Props) {
                 Dodaj komputer
               </h2>
               <p className="mt-1 text-sm text-slate-600">
-                Pobierz agenta, wygeneruj klucz API i połącz komputer krok po kroku.
+                Pobierz Sasist Agent, wygeneruj kod parowania i połącz komputer.
               </p>
             </div>
           </header>
@@ -214,7 +213,7 @@ export default function AddComputerModal({ open, onClose }: Props) {
                 onClick={handleDownloadInstaller}
               >
                 <Download className="h-5 w-5" aria-hidden />
-                Pobierz Sasist Printer Agent
+                Pobierz Sasist Agent
               </button>
               {downloadInfo?.latest_version ? (
                 <p className="mt-2 text-xs text-slate-500">Wersja {downloadInfo.latest_version}</p>
@@ -222,9 +221,9 @@ export default function AddComputerModal({ open, onClose }: Props) {
               <p className="mt-3 text-sm text-slate-600">Zainstaluj program na komputerze z drukarkami.</p>
             </StepCard>
 
-            <StepCard step={2} title="Wygeneruj klucz API">
+            <StepCard step={2} title="Wygeneruj kod parowania">
               <p className="text-sm text-slate-600">
-                Klucz jest przypisany do magazynu{" "}
+                Kod jest przypisany do magazynu{" "}
                 <span className="font-medium text-slate-900">{activeWarehouse?.name ?? "—"}</span>.
               </p>
               <button
@@ -234,19 +233,19 @@ export default function AddComputerModal({ open, onClose }: Props) {
                 onClick={() => void issueKey()}
               >
                 <Key className="h-4 w-4" aria-hidden />
-                {busy ? "Generowanie…" : plainKey ? "Klucz wygenerowany" : "Wygeneruj klucz API"}
+                {busy ? "Generowanie…" : plainKey ? "Kod wygenerowany" : "Wygeneruj kod parowania"}
               </button>
               {error && !plainKey ? <p className="mt-2 text-sm text-red-600">{error}</p> : null}
             </StepCard>
 
-            <StepCard step={3} title="Skopiuj klucz — wyświetlimy go tylko raz">
+            <StepCard step={3} title="Skopiuj kod — wyświetlimy go tylko raz">
               {plainKey ? (
                 <div className="space-y-3">
                   <div className="rounded-xl border-2 border-orange-200 bg-white p-4">
-                    <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Klucz API</div>
+                    <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Kod parowania</div>
                     <p className="break-all font-mono text-lg tracking-widest text-slate-900">{maskedKey}</p>
                     <p className="mt-2 text-xs text-slate-500">
-                      Pełny klucz jest ukryty. Użyj „Kopiuj”, aby wkleić go w agencie.
+                      Pełny kod jest ukryty. Użyj „Kopiuj”, aby wkleić go w Sasist Agent.
                     </p>
                   </div>
                   <div className="flex flex-wrap gap-2">
@@ -268,47 +267,27 @@ export default function AddComputerModal({ open, onClose }: Props) {
                       Regeneruj
                     </button>
                   </div>
-                  <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-600">
-                    <div className="mb-1 flex items-center gap-1.5 font-medium text-slate-700">
-                      <Server className="h-4 w-4" aria-hidden />
-                      Adres serwera
-                    </div>
-                    <p className="font-mono text-slate-900">{serverUrl}</p>
-                  </div>
                 </div>
               ) : (
-                <p className="text-sm text-slate-500">Najpierw wygeneruj klucz API w kroku 2.</p>
+                <p className="text-sm text-slate-500">Najpierw wygeneruj kod parowania w kroku 2.</p>
               )}
             </StepCard>
 
-            <StepCard step={4} title="Połącz komputer w agencie">
+            <StepCard step={4} title="Połącz w Sasist Agent">
               <ol className="list-decimal space-y-2 pl-5 text-sm text-slate-700">
-                <li>Uruchom Sasist Printer Agent.</li>
-                <li>Wejdź w <span className="font-medium">Ustawienia</span>.</li>
-                <li>Wklej klucz API (przycisk „Wklej”).</li>
-                <li>Kliknij <span className="font-medium">Test połączenia</span>.</li>
-                <li>Kliknij <span className="font-medium">Zapisz</span>.</li>
+                <li>Uruchom Sasist Agent na komputerze z drukarkami.</li>
+                <li>Wklej kod parowania.</li>
+                <li>
+                  Kliknij <span className="font-medium">Połącz</span>.
+                </li>
               </ol>
-              <div
-                className="mt-4 flex min-h-[140px] flex-col items-center justify-center rounded-xl border-2 border-dashed border-orange-200 bg-[#FFF7ED] p-4 text-center"
-                aria-hidden
-              >
-                <p className="text-sm font-semibold text-slate-800">Podgląd — pole Klucz API w agencie</p>
-                <p className="mt-1 text-xs text-slate-500">Ustawienia → Połączenie → Klucz API</p>
-                <div className="mt-3 w-full max-w-md rounded-lg border border-orange-100 bg-white p-3 text-left shadow-sm">
-                  <div className="text-xs font-medium text-slate-500">Klucz API</div>
-                  <div className="mt-1 h-9 rounded-md border border-slate-200 bg-slate-50 px-2 font-mono text-sm leading-9 text-slate-400">
-                    ••••••••••••••••
-                  </div>
-                </div>
-              </div>
             </StepCard>
 
             <section className="rounded-xl border border-amber-200 bg-amber-50 p-4">
               <div className="flex gap-3">
                 <ShieldAlert className="mt-0.5 h-5 w-5 shrink-0 text-amber-700" aria-hidden />
                 <p className="text-sm text-amber-900">
-                  Klucz API można skopiować tylko teraz. Po zamknięciu okna nie będzie możliwości ponownego podglądu.
+                  Kod parowania można skopiować tylko teraz. Po zamknięciu okna nie będzie możliwości ponownego podglądu.
                 </p>
               </div>
             </section>

@@ -19,6 +19,7 @@ from .print_job import PrintJob
 from .printer_agent import PrinterAgent
 from .printing_auto_setting import PrintingAutoSetting
 from .printing_default import PrintingDefault
+from .printing_warehouse_setting import PrintingWarehouseSetting
 
 __all__ = [
     "AgentPrinter",
@@ -38,4 +39,5 @@ __all__ = [
     "PrinterAgent",
     "PrintingAutoSetting",
     "PrintingDefault",
+    "PrintingWarehouseSetting",
 ]

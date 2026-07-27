@@ -10,6 +10,7 @@ import type {
   PrinterAssignmentRepairRead,
   PrintingAutoPrintRead,
   PrintingDefaultsRead,
+  PrintingWarehouseSettingsRead,
   QueuePrintRequest,
 } from "../types/printing";
 import type { PrintJobStatusFilter } from "../pages/Settings/printing/printingQueuePresentation";
@@ -138,6 +139,30 @@ export async function queuePrintJob(
   return data;
 }
 
+/** Direct job create — used by PrintingRouter for pre-rendered PDF/ZPL payloads. */
+export async function createPrintJobFromPayload(
+  tenantId: number,
+  body: {
+    printer_id: number;
+    document_type: string;
+    document_id?: number | null;
+    warehouse_id?: number | null;
+    payload: {
+      format?: string;
+      pdf_url?: string;
+      content_base64?: string;
+      zpl?: string;
+      raw?: string;
+      copies?: number;
+    };
+  },
+): Promise<PrintJobRead> {
+  const { data } = await api.post<PrintJobRead>("/printing/jobs", body, {
+    params: { tenant_id: tenantId },
+  });
+  return data;
+}
+
 export async function fetchPrintJobs(
   tenantId: number,
   opts?: {
@@ -251,6 +276,27 @@ export async function updatePrintingAutoPrint(
 ): Promise<PrintingAutoPrintRead> {
   const { data } = await api.put<PrintingAutoPrintRead>("/printing/auto-print", body, {
     params: { tenant_id: tenantId },
+  });
+  return data;
+}
+
+export async function fetchPrintingWarehouseSettings(
+  tenantId: number,
+  warehouseId: number,
+): Promise<PrintingWarehouseSettingsRead> {
+  const { data } = await api.get<PrintingWarehouseSettingsRead>("/printing/warehouse-settings", {
+    params: { tenant_id: tenantId, warehouse_id: warehouseId },
+  });
+  return data;
+}
+
+export async function updatePrintingWarehouseSettings(
+  tenantId: number,
+  warehouseId: number,
+  body: { prefer_sasist_agent: boolean },
+): Promise<PrintingWarehouseSettingsRead> {
+  const { data } = await api.put<PrintingWarehouseSettingsRead>("/printing/warehouse-settings", body, {
+    params: { tenant_id: tenantId, warehouse_id: warehouseId },
   });
   return data;
 }

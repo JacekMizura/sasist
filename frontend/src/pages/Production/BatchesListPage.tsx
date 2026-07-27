@@ -237,6 +237,7 @@ export default function BatchesListPage({ embedded = false }: Props) {
       open={printFlow.open}
       pending={printFlow.pending || printBusy}
       cloudCapability={printFlow.cloudCapability}
+      preferSasistAgent={printFlow.preferSasistAgent}
       onClose={printFlow.close}
       onConfirm={printFlow.confirmMethod}
     />

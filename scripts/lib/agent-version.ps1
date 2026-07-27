@@ -1,4 +1,4 @@
-# Shared Printer Agent version helpers (SSOT: sasist-printer-agent/VERSION).
+# Shared Sasist Agent version helpers (SSOT: sasist-agent/VERSION).
 
 . (Join-Path $PSScriptRoot "ps-encoding.ps1")
 
@@ -7,7 +7,7 @@ function Get-AgentVersionFilePath {
         [string]$RepoRoot = $(Split-Path -Parent (Split-Path -Parent $PSScriptRoot))
     )
 
-    return Join-Path $RepoRoot "sasist-printer-agent\VERSION"
+    return Join-Path $RepoRoot "sasist-agent\VERSION"
 }
 
 function Get-AgentVersion {
@@ -48,11 +48,26 @@ function Set-AgentVersion {
     $versionPath = Get-AgentVersionFilePath -RepoRoot $RepoRoot
     ($normalized + [Environment]::NewLine) | Set-Content -LiteralPath $versionPath -Encoding (Get-Utf8Encoding)
 
-    $exampleConfig = Join-Path $RepoRoot "sasist-printer-agent\config\config.example.json"
-    if (Test-Path -LiteralPath $exampleConfig) {
-        $content = Get-Content -LiteralPath $exampleConfig -Raw
-        $updated = [regex]::Replace($content, '"version"\s*:\s*"[^"]*"', """version"": ""$normalized""")
-        Set-Content -LiteralPath $exampleConfig -Value $updated -Encoding (Get-Utf8Encoding) -NoNewline
+    # Keep Inno + Host/Tray Version property in sync when present
+    $iss = Join-Path $RepoRoot "sasist-agent\installer\SasistAgent.iss"
+    if (Test-Path -LiteralPath $iss) {
+        $issText = Get-Content -LiteralPath $iss -Raw
+        $issText = [regex]::Replace($issText, '#define MyAppVersion "[^"]*"', "#define MyAppVersion `"$normalized`"")
+        Set-Content -LiteralPath $iss -Value $issText -Encoding (Get-Utf8Encoding) -NoNewline
+    }
+
+    foreach ($rel in @(
+        "sasist-agent\src\Sasist.Agent.Host\Sasist.Agent.Host.csproj",
+        "sasist-agent\src\Sasist.Agent.Tray\Sasist.Agent.Tray.csproj"
+    )) {
+        $csproj = Join-Path $RepoRoot $rel
+        if (Test-Path -LiteralPath $csproj) {
+            $xml = Get-Content -LiteralPath $csproj -Raw
+            if ($xml -match '<Version>[^<]+</Version>') {
+                $xml = [regex]::Replace($xml, '<Version>[^<]+</Version>', "<Version>$normalized</Version>")
+                Set-Content -LiteralPath $csproj -Value $xml -Encoding (Get-Utf8Encoding) -NoNewline
+            }
+        }
     }
 
     return $normalized

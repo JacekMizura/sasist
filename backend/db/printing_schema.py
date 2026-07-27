@@ -17,7 +17,7 @@ from .schema_introspection import ensure_model_schema_sync, has_table
 
 logger = logging.getLogger(__name__)
 
-PRINTING_SCHEMA_VERSION = "2026.07.12.2"
+PRINTING_SCHEMA_VERSION = "2026.07.27.1"
 
 
 @dataclass(frozen=True)
@@ -28,7 +28,14 @@ class PrintingEntitySpec:
 
 
 def _printing_entity_registry() -> list[PrintingEntitySpec]:
-    from ..models.printing import AgentPrinter, PrintJob, PrinterAgent, PrintingAutoSetting, PrintingDefault
+    from ..models.printing import (
+        AgentPrinter,
+        PrintJob,
+        PrinterAgent,
+        PrintingAutoSetting,
+        PrintingDefault,
+        PrintingWarehouseSetting,
+    )
 
     return [
         PrintingEntitySpec("printer_agents", PrinterAgent, "agent"),
@@ -36,6 +43,11 @@ def _printing_entity_registry() -> list[PrintingEntitySpec]:
         PrintingEntitySpec("print_jobs", PrintJob, "print_job"),
         PrintingEntitySpec("printing_defaults", PrintingDefault, "printing_default"),
         PrintingEntitySpec("printing_auto_settings", PrintingAutoSetting, "printing_auto_setting"),
+        PrintingEntitySpec(
+            "printing_warehouse_settings",
+            PrintingWarehouseSetting,
+            "printing_warehouse_setting",
+        ),
     ]
 
 

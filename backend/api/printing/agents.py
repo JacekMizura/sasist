@@ -47,31 +47,27 @@ logger = logging.getLogger(__name__)
 def register_printing_agent(
     payload: AgentRegisterRequest,
     request: Request,
-    tenant_id: int | None = Query(default=None, ge=1),
     cred: HTTPAuthorizationCredentials | None = Depends(_http_bearer),
     db: Session = Depends(get_db),
 ):
     api_key_raw = extract_raw_api_key(cred)
 
     try:
-        if api_key_raw:
-            api_key = validate_key(
-                db,
-                api_key_raw,
-                expected_type="printer_agent",
-                required_scope="printing.agent",
-                client_ip=client_ip_from_request(request),
-                user_agent=user_agent_from_request(request),
-            )
-            agent, token = register_agent_with_api_key(db, api_key=api_key, payload=payload)
-            db.commit()
-        elif tenant_id is not None:
-            agent, token = register_agent(db, tenant_id=tenant_id, payload=payload)
-        else:
+        if not api_key_raw:
             raise HTTPException(
                 status_code=401,
-                detail="Authorization Bearer API key required (legacy: tenant_id query param)",
+                detail="Authorization Bearer API key required",
             )
+        api_key = validate_key(
+            db,
+            api_key_raw,
+            expected_type="printer_agent",
+            required_scope="printing.agent",
+            client_ip=client_ip_from_request(request),
+            user_agent=user_agent_from_request(request),
+        )
+        agent, token = register_agent_with_api_key(db, api_key=api_key, payload=payload)
+        db.commit()
     except ApiKeyRateLimitError as exc:
         raise HTTPException(status_code=429, detail=str(exc)) from exc
     except ApiKeyValidationError as exc:
@@ -87,6 +83,8 @@ def register_printing_agent(
         machine_id=agent.machine_id,
         tenant_id=agent.tenant_id,
         warehouse_id=agent.warehouse_id,
+        company_name=_resolve_company_name(db, agent.tenant_id),
+        warehouse_name=_resolve_warehouse_name(db, agent.warehouse_id),
     )
 
 
@@ -105,6 +103,8 @@ def agent_heartbeat(
         printer_count=body.printer_count,
         last_poll_at=body.last_poll_at,
         last_error=body.last_error,
+        supported_formats=body.supported_formats,
+        capabilities=body.capabilities,
     )
     return AgentHeartbeatResponse(
         agent_id=updated.id,
@@ -211,3 +211,31 @@ def request_agent_restart(
         status_code=501,
         detail="Zdalny restart agenta będzie dostępny w kolejnej wersji.",
     )
+
+
+def _resolve_company_name(db: Session, tenant_id: int | None) -> str | None:
+    if tenant_id is None:
+        return None
+    try:
+        from ...models.tenant import Tenant
+
+        row = db.query(Tenant).filter(Tenant.id == int(tenant_id)).first()
+        if row is None:
+            return None
+        return (row.company_name or row.name or "").strip() or None
+    except Exception:
+        return None
+
+
+def _resolve_warehouse_name(db: Session, warehouse_id: int | None) -> str | None:
+    if warehouse_id is None:
+        return None
+    try:
+        from ...models.warehouse import Warehouse
+
+        row = db.query(Warehouse).filter(Warehouse.id == int(warehouse_id)).first()
+        if row is None:
+            return None
+        return (row.name or "").strip() or None
+    except Exception:
+        return None

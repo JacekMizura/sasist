@@ -1,7 +1,13 @@
 #requires -Version 5.1
 <#
 .SYNOPSIS
-  Build Sasist Printer Agent installer (PyInstaller + Inno Setup) and write release manifest.
+  Build official Sasist Agent installer (.NET) and write release manifest.
+
+  Single product path — delegates to sasist-agent/scripts/publish-release.ps1.
+  Output:
+    Output\SasistAgentSetup.exe
+    Output\SasistAgentSetup-<version>.exe
+    sasist-agent\dist\SasistAgentSetup.exe
 
   Usage (from repository root):
     powershell -ExecutionPolicy Bypass -File installer\build.ps1
@@ -15,7 +21,6 @@ function Join-SafePath {
         [Parameter(ValueFromRemainingArguments = $true)]
         [string[]]$Segments
     )
-
     $path = $Base
     foreach ($segment in $Segments) {
         if ([string]::IsNullOrWhiteSpace($segment)) { continue }
@@ -25,22 +30,16 @@ function Join-SafePath {
 }
 
 $RepoRoot = Split-Path -Parent $PSScriptRoot
-$AgentRoot = Join-SafePath $RepoRoot "sasist-printer-agent"
-$DistRoot = Join-SafePath $AgentRoot "dist"
-$BuildRoot = Join-SafePath $AgentRoot "build"
-$BuildUiAuditLog = Join-SafePath $AgentRoot "build-ui-audit.log"
+$AgentRoot = Join-SafePath $RepoRoot "sasist-agent"
 $OutputRoot = Join-SafePath $RepoRoot "Output"
 $InstallerDir = Join-SafePath $RepoRoot "installer"
-$installerScript = Join-SafePath $InstallerDir "installer.iss"
 $ManifestPath = Join-SafePath $InstallerDir "build-manifest.json"
 $VersionLib = Join-SafePath $RepoRoot "scripts\lib\agent-version.ps1"
-$VerifyLib = Join-SafePath $RepoRoot "scripts\lib\agent-build-verify.ps1"
 $EncodingLib = Join-SafePath $RepoRoot "scripts\lib\ps-encoding.ps1"
-$GithubRepo = if ($env:GITHUB_REPOSITORY) { $env:GITHUB_REPOSITORY.Trim() } else { "JacekMizura/sasist" }
+$PublishScript = Join-SafePath $AgentRoot "scripts\publish-release.ps1"
 
 . $EncodingLib
 . $VersionLib
-. $VerifyLib
 
 function Write-Step([string]$Message) {
     Write-Host "[build] $Message" -ForegroundColor Cyan
@@ -53,43 +52,14 @@ function Write-FileSha256([string]$Label, [string]$Path) {
     }
     $hash = (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash.ToLowerInvariant()
     Write-Host "[build] SHA256 $Label : $hash" -ForegroundColor Green
-    Write-Host "[build]           path : $Path"
     return $hash
-}
-
-function Get-VersionParts([string]$Version) {
-    $normalized = ($Version -replace '^v', '').Trim()
-    if (-not $normalized) { return @() }
-    return @($normalized.Split('.') | ForEach-Object {
-        if ($_ -match '^\d+$') { [int]$_ } else { 0 }
-    })
-}
-
-function Test-VersionGreater([string]$Candidate, [string]$Baseline) {
-    if (-not $Baseline) { return $true }
-    $left = Get-VersionParts $Candidate
-    $right = Get-VersionParts $Baseline
-    $count = [Math]::Max($left.Count, $right.Count)
-    for ($i = 0; $i -lt $count; $i++) {
-        $lv = if ($i -lt $left.Count) { $left[$i] } else { 0 }
-        $rv = if ($i -lt $right.Count) { $right[$i] } else { 0 }
-        if ($lv -gt $rv) { return $true }
-        if ($lv -lt $rv) { return $false }
-    }
-    return $false
-}
-
-function Read-AgentVersionFromRepo {
-    return Get-AgentVersion -RepoRoot $RepoRoot
 }
 
 function Get-GitCommit {
     try {
         Push-Location $RepoRoot
         $commit = (git rev-parse HEAD 2>$null)
-        if ($LASTEXITCODE -ne 0 -or -not $commit) {
-            return "unknown"
-        }
+        if ($LASTEXITCODE -ne 0 -or -not $commit) { return "unknown" }
         return $commit.Trim()
     } catch {
         return "unknown"
@@ -98,423 +68,53 @@ function Get-GitCommit {
     }
 }
 
-function Get-PreviousReleaseVersion {
-    $versions = @()
-    if (Test-Path -LiteralPath $ManifestPath) {
-        try {
-            $manifest = Get-Content -LiteralPath $ManifestPath -Raw | ConvertFrom-Json
-            if ($manifest.version) { $versions += [string]$manifest.version }
-        } catch {
-            Write-Host "[build] Warning: could not parse existing build-manifest.json" -ForegroundColor Yellow
-        }
-    }
-
-    try {
-        $release = Invoke-RestMethod -Uri "https://api.github.com/repos/$GithubRepo/releases/latest" `
-            -Headers @{ "User-Agent" = "sasist-build"; "Accept" = "application/vnd.github+json" } `
-            -TimeoutSec 20
-        if ($release.tag_name) {
-            $versions += [string]$release.tag_name
-        }
-    } catch {
-        Write-Host "[build] GitHub latest release lookup skipped: $($_.Exception.Message)" -ForegroundColor Yellow
-    }
-
-    $best = $null
-    foreach ($version in $versions) {
-        if (-not $best -or (Test-VersionGreater $version $best)) {
-            $best = $version
-        }
-    }
-    return $best
+if (-not (Test-Path -LiteralPath $PublishScript)) {
+    throw "Missing publish script: $PublishScript"
 }
 
-function Assert-ReleaseVersionBump([string]$CurrentVersion) {
-    $previous = Get-PreviousReleaseVersion
-    if (-not $previous) {
-        Write-Step "No previous release manifest/tag found - version $CurrentVersion accepted."
-        return
-    }
-    if (-not (Test-VersionGreater $CurrentVersion $previous)) {
-        throw "Release version must be greater than previous release ($previous). Current: $CurrentVersion. Run: powershell -File scripts\\bump-version.ps1 x.y.z"
-    }
-    Write-Step "Version bump OK: $CurrentVersion > $previous"
-}
+$version = Get-AgentVersion -RepoRoot $RepoRoot
+Write-Step "Sasist Agent version: $version"
+Write-Step "Building via sasist-agent publish-release.ps1..."
 
-function Write-BuildInfoJson(
-    [string]$Version,
-    [string]$GitCommit,
-    [string]$BuiltAt,
-    [string]$AgentSha,
-    [string]$ServiceSha,
-    [string]$UpdaterSha,
-    [string]$TargetPath
-) {
-    $payload = [ordered]@{
-        version = $Version
-        git_commit = $GitCommit
-        built_at = $BuiltAt
-        agent_sha256 = $AgentSha
-        service_sha256 = $ServiceSha
-        updater_sha256 = $UpdaterSha
-    }
-    ($payload | ConvertTo-Json -Depth 4) + "`n" | Set-Content -LiteralPath $TargetPath -Encoding (Get-Utf8Encoding)
-}
-
-function Assert-PublicationReady(
-    [string]$ManifestPath,
-    [string]$SetupSha,
-    [string]$CurrentVersion
-) {
-    if (-not (Test-Path -LiteralPath $ManifestPath)) {
-        throw "Publication blocked: build-manifest.json was not created at $ManifestPath"
-    }
-    if (-not $SetupSha) {
-        throw "Publication blocked: setup SHA256 was not generated."
-    }
-
-    try {
-        $manifest = Get-Content -LiteralPath $ManifestPath -Raw | ConvertFrom-Json
-    } catch {
-        throw "Publication blocked: build-manifest.json is invalid JSON."
-    }
-
-    if ([string]$manifest.setup_sha256 -ne $SetupSha) {
-        throw "Publication blocked: manifest setup_sha256 does not match computed setup hash."
-    }
-    if ([string]$manifest.version -ne $CurrentVersion) {
-        throw "Publication blocked: manifest version does not match sasist-printer-agent/VERSION."
-    }
-
-    Write-Host "[build] Publication validation passed." -ForegroundColor Green
-}
-
-function Search-IsccOnDrives {
-    foreach ($drive in Get-PSDrive -PSProvider FileSystem) {
-        $driveRoot = [string]$drive.Root
-        if ([string]::IsNullOrWhiteSpace($driveRoot)) { continue }
-
-        $programRoots = @(
-            (Join-SafePath $driveRoot "Program Files (x86)")
-            (Join-SafePath $driveRoot "Program Files")
-        )
-        foreach ($programRoot in $programRoots) {
-            $candidate = Join-SafePath $programRoot "Inno Setup 6" "ISCC.exe"
-            if (Test-Path -LiteralPath $candidate) {
-                return $candidate
-            }
-        }
-    }
-
-    foreach ($drive in Get-PSDrive -PSProvider FileSystem) {
-        $driveRoot = [string]$drive.Root
-        if ([string]::IsNullOrWhiteSpace($driveRoot)) { continue }
-
-        $found = Get-ChildItem -Path $driveRoot -Filter "ISCC.exe" -Recurse -ErrorAction SilentlyContinue |
-            Where-Object { $_.FullName -like "*\Inno Setup 6\ISCC.exe" } |
-            Select-Object -First 1
-        if ($found) {
-            return $found.FullName
-        }
-    }
-
-    return $null
-}
-
-$SasistProcessNames = @(
-    "SasistPrinterAgent"
-    "SasistPrinterService"
-    "SasistPrinterUpdater"
-)
-
-$SasistProcessLockMessage = @"
-Sasist Printer Agent is still running or locked.
-Close the application and try again.
-"@
-
-function Get-SasistRunningProcesses {
-    $result = @()
-    $seen = @{}
-
-    foreach ($proc in @(Get-Process -Name "*Sasist*" -ErrorAction SilentlyContinue)) {
-        if ($seen.ContainsKey($proc.Id)) { continue }
-        $seen[$proc.Id] = $true
-        $result += $proc
-    }
-
-    foreach ($name in $SasistProcessNames) {
-        foreach ($proc in @(Get-Process -Name $name -ErrorAction SilentlyContinue)) {
-            if ($seen.ContainsKey($proc.Id)) { continue }
-            $seen[$proc.Id] = $true
-            $result += $proc
-        }
-    }
-
-    return $result
-}
-
-function Stop-SasistRunningProcesses {
-    Write-Host "[build] Stopping running Sasist processes..." -ForegroundColor Cyan
-
-    try {
-        $service = Get-Service -Name "SasistPrinterService" -ErrorAction SilentlyContinue
-        if ($service -and $service.Status -ne "Stopped") {
-            & sc.exe stop SasistPrinterService 2>$null | Out-Null
-        }
-    } catch {
-        # Service may not be installed on dev machines.
-    }
-
-    foreach ($name in $SasistProcessNames) {
-        & taskkill.exe /F /IM "$name.exe" 2>$null | Out-Null
-    }
-
-    foreach ($proc in @(Get-SasistRunningProcesses)) {
-        try {
-            Stop-Process -Id $proc.Id -Force -ErrorAction Stop
-        } catch {
-            & taskkill.exe /F /PID $proc.Id 2>$null | Out-Null
-        }
-    }
-}
-
-function Wait-SasistProcessesExit {
-    param(
-        [int]$TimeoutSeconds = 10
-    )
-
-    Write-Host "[build] Waiting for processes to exit..." -ForegroundColor Cyan
-    $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
-    while ((Get-Date) -lt $deadline) {
-        if (-not (Get-SasistRunningProcesses)) {
-            return $true
-        }
-        Start-Sleep -Milliseconds 250
-    }
-    return -not (Get-SasistRunningProcesses)
-}
-
-function Remove-AgentBuildDirectory {
-    param(
-        [Parameter(Mandatory = $true)]
-        [string]$Path,
-        [Parameter(Mandatory = $true)]
-        [string]$Label
-    )
-
-    if (-not (Test-Path -LiteralPath $Path)) {
-        return
-    }
-
-    try {
-        Remove-Item -LiteralPath $Path -Recurse -Force -ErrorAction Stop
-    } catch {
-        if (Get-SasistRunningProcesses) {
-            throw $SasistProcessLockMessage
-        }
-        throw "$Label directory could not be removed. Some process is locking files."
-    }
-
-    if (Test-Path -LiteralPath $Path) {
-        if (Get-SasistRunningProcesses) {
-            throw $SasistProcessLockMessage
-        }
-        throw "$Label directory could not be removed. Some process is locking files."
-    }
-}
-
-function Clear-AgentPyInstallerArtifacts {
-    param(
-        [Parameter(Mandatory = $true)]
-        [string]$DistRoot,
-        [Parameter(Mandatory = $true)]
-        [string]$BuildRoot,
-        [Parameter(Mandatory = $true)]
-        [string]$AgentRoot
-    )
-
-    Write-Step "Cleaning stale PyInstaller artifacts..."
-
-    Stop-SasistRunningProcesses
-    if (-not (Wait-SasistProcessesExit -TimeoutSeconds 10)) {
-        throw $SasistProcessLockMessage
-    }
-    if (Get-SasistRunningProcesses) {
-        throw $SasistProcessLockMessage
-    }
-
-    Remove-AgentBuildDirectory -Path $DistRoot -Label "dist"
-    Remove-AgentBuildDirectory -Path $BuildRoot -Label "build"
-
-    Write-Host "[build] Dist cleanup successful." -ForegroundColor Green
-
-    Get-ChildItem -Path $AgentRoot -Filter "*.spec.cache" -File -ErrorAction SilentlyContinue |
-        Remove-Item -Force -ErrorAction SilentlyContinue
-}
-
-Write-Step "Repository: $RepoRoot"
-$version = Read-AgentVersionFromRepo
-Write-Step "Agent version (VERSION): $version"
-Assert-ReleaseVersionBump -CurrentVersion $version
-$gitCommit = Get-GitCommit
-$builtAt = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ss'Z'")
-
-Set-Location $AgentRoot
-
-Clear-AgentPyInstallerArtifacts -DistRoot $DistRoot -BuildRoot $BuildRoot -AgentRoot $AgentRoot
-
-Write-Host ("[build] Building from:")
-Write-Host (Resolve-Path .)
-Write-Host ("[build] main_window exists: {0}" -f (Test-Path -LiteralPath (Join-Path $AgentRoot "agent\ui\main_window.py")))
-Write-Host ("[build] status_window exists: {0}" -f (Test-Path -LiteralPath (Join-Path $AgentRoot "agent\ui\status_window.py")))
-$uiInventory = Get-ChildItem (Join-Path $AgentRoot "agent\ui") -Recurse -File -ErrorAction SilentlyContinue |
-    Select-Object FullName, Length, LastWriteTime
-$uiInventory | Format-Table -AutoSize | Out-String | Set-Content -LiteralPath $BuildUiAuditLog -Encoding (Get-Utf8Encoding)
-Write-Host ("[build] UI inventory log: {0}" -f $BuildUiAuditLog)
-Write-Host ($uiInventory | Format-Table -AutoSize | Out-String)
-
-Write-Step "PyInstaller: agent.spec"
-python -m PyInstaller agent.spec
-Write-Step "PyInstaller: service.spec"
-python -m PyInstaller service.spec
-Write-Step "PyInstaller: updater.spec"
-python -m PyInstaller updater.spec
-
-$agentExe = Join-SafePath $DistRoot "SasistPrinterAgent.exe"
-$serviceExe = Join-SafePath $DistRoot "SasistPrinterService.exe"
-$updaterExe = Join-SafePath $DistRoot "SasistPrinterUpdater.exe"
-
-Write-Step "Validating local dist artifacts (Agent / Service / Updater)..."
-Invoke-LocalDistArtifactValidation `
-    -AgentExePath $agentExe `
-    -ServiceExePath $serviceExe `
-    -UpdaterExePath $updaterExe `
-    -ExpectedVersion $version `
-    -RepoRoot $RepoRoot
-
-Write-Step "Computing SHA256 for PyInstaller artifacts..."
-$agentSha = Write-FileSha256 "SasistPrinterAgent.exe" $agentExe
-$serviceSha = Write-FileSha256 "SasistPrinterService.exe" $serviceExe
-$updaterSha = Write-FileSha256 "SasistPrinterUpdater.exe" $updaterExe
-
-if (-not $agentSha -or -not $serviceSha -or -not $updaterSha) {
-    throw "Failed to compute SHA256 for one or more build artifacts."
-}
-
-$buildInfoPath = Join-SafePath $DistRoot "build_info.json"
-Write-BuildInfoJson -Version $version -GitCommit $gitCommit -BuiltAt $builtAt `
-    -AgentSha $agentSha -ServiceSha $serviceSha -UpdaterSha $updaterSha -TargetPath $buildInfoPath
-Write-Step "Wrote $buildInfoPath"
-
-try {
-    $iscc = (Get-Command ISCC.exe -ErrorAction Stop).Source
-} catch {
-    $iscc = $null
-}
-
-if (-not $iscc -or -not (Test-Path -LiteralPath $iscc)) {
-    $iscc = Search-IsccOnDrives
-}
-
-if (-not $iscc) {
-    throw "Inno Setup 6 (ISCC.exe) not found. Install from https://jrsoftware.org/isinfo.php or add ISCC.exe to PATH."
-}
-
-Write-Step "Using ISCC: $iscc"
-Write-Step "Compiling installer for version $version..."
-Set-Location $RepoRoot
-& $iscc "/DMyAppVersion=$version" $installerScript
+& powershell -NoProfile -ExecutionPolicy Bypass -File $PublishScript
 if ($LASTEXITCODE -ne 0) {
-    throw "ISCC failed with exit code $LASTEXITCODE"
+    throw "sasist-agent publish-release.ps1 failed (exit $LASTEXITCODE)"
 }
 
-$setup = Get-ChildItem -Path $OutputRoot -Filter "SasistPrinterAgent-Setup-*.exe" -ErrorAction SilentlyContinue |
-    Sort-Object LastWriteTime -Descending |
-    Select-Object -First 1
-if (-not $setup) {
-    throw "Installer EXE not created. Expected: $OutputRoot\SasistPrinterAgent-Setup-*.exe"
+$distSetup = Join-SafePath $AgentRoot "dist\SasistAgentSetup.exe"
+if (-not (Test-Path -LiteralPath $distSetup)) {
+    throw "Expected installer missing: $distSetup"
 }
 
-Write-Step "Installer created: $($setup.FullName)"
-$setupPath = $setup.FullName
-Assert-InstallerNameMatchesVersion -InstallerPath $setupPath -ExpectedVersion $version
+New-Item -ItemType Directory -Path $OutputRoot -Force | Out-Null
+$outSetup = Join-SafePath $OutputRoot "SasistAgentSetup.exe"
+$outVersioned = Join-SafePath $OutputRoot "SasistAgentSetup-$version.exe"
+Copy-Item -LiteralPath $distSetup -Destination $outSetup -Force
+Copy-Item -LiteralPath $distSetup -Destination $outVersioned -Force
 
-Invoke-OptionalSetupValidation `
-    -InstallerPath $setupPath `
-    -ExpectedVersion $version `
-    -RepoRoot $RepoRoot `
-    -ExtractDirectory (Join-SafePath $OutputRoot "_build_verify_extracted") | Out-Null
-
-$localSetupHash = (Get-FileHash -LiteralPath $setupPath -Algorithm SHA256).Hash.ToLowerInvariant()
-Write-Host "[build] Local setup hash: $localSetupHash"
-
-try {
-    $release = Invoke-RestMethod -Uri "https://api.github.com/repos/$GithubRepo/releases/latest" `
-        -Headers @{ "User-Agent" = "sasist-build"; "Accept" = "application/vnd.github+json" } `
-        -TimeoutSec 20
-    $asset = $release.assets | Where-Object { $_.name -like "SasistPrinterAgent-Setup*.exe" } | Select-Object -First 1
-    if ($asset) {
-        $githubDir = Join-SafePath $OutputRoot "_github_compare"
-        New-Item -ItemType Directory -Force -Path $githubDir | Out-Null
-        $githubSetupPath = Join-SafePath $githubDir $asset.name
-        Write-Step "Downloading GitHub asset: $($asset.name)"
-        Invoke-WebRequest -Uri $asset.browser_download_url -OutFile $githubSetupPath -TimeoutSec 120
-        $githubSetupHash = (Get-FileHash -LiteralPath $githubSetupPath -Algorithm SHA256).Hash.ToLowerInvariant()
-        Write-Host "[build] GitHub setup hash: $githubSetupHash"
-        if ($localSetupHash -eq $githubSetupHash) {
-            Write-Host "[build] MATCH" -ForegroundColor Green
-        } else {
-            Write-Host "[build] MISMATCH" -ForegroundColor Red
-        }
-    } else {
-        Write-Host "[build] GitHub latest release has no SasistPrinterAgent-Setup*.exe asset." -ForegroundColor Yellow
-    }
-} catch {
-    Write-Host "[build] GitHub setup hash compare skipped: $($_.Exception.Message)" -ForegroundColor Yellow
+$setupSha = Write-FileSha256 "SasistAgentSetup.exe" $outSetup
+$iconPath = Join-SafePath $AgentRoot "assets\sasist-agent.ico"
+$iconSha = $null
+if (Test-Path -LiteralPath $iconPath) {
+    $iconSha = Write-FileSha256 "sasist-agent.ico" $iconPath
 }
-
-$setupSha = $localSetupHash
-
-$iconSha256 = Get-SourceIconSha256 -RepoRoot $RepoRoot
 
 $manifest = [ordered]@{
-    version = $version
-    built_at = $builtAt
-    git_commit = $gitCommit
-    agent_sha256 = $agentSha
-    service_sha256 = $serviceSha
-    updater_sha256 = $updaterSha
-    setup_sha256 = $setupSha
-    icon_sha256 = $iconSha256
+    product           = "Sasist Agent"
+    version           = $version
+    built_at          = (Get-Date).ToUniversalTime().ToString("o")
+    git_commit        = Get-GitCommit
+    setup_path        = $outSetup
+    setup_versioned   = $outVersioned
+    setup_sha256      = $setupSha
+    icon_sha256       = $iconSha
+    agent_root        = $AgentRoot
+    publish_dir       = (Join-SafePath $AgentRoot "publish\win-x64")
 }
-($manifest | ConvertTo-Json -Depth 4) + "`n" | Set-Content -LiteralPath $ManifestPath -Encoding (Get-Utf8Encoding)
-Write-Step "Wrote $ManifestPath"
+($manifest | ConvertTo-Json -Depth 4) | Set-Content -LiteralPath $ManifestPath -Encoding (Get-Utf8Encoding)
 
-Assert-PublicationReady -ManifestPath $ManifestPath -SetupSha $setupSha -CurrentVersion $version
-
-Write-Step "Running agent unit tests..."
-Push-Location $AgentRoot
-try {
-    python -m pytest tests -q --tb=short
-    if ($LASTEXITCODE -ne 0) {
-        throw "Agent tests failed (exit $LASTEXITCODE)"
-    }
-} finally {
-    Pop-Location
-}
-
-Write-Step "Running verify_agent_exe.py on dist artifact..."
-python (Join-SafePath $RepoRoot "scripts\verify_agent_exe.py") $agentExe --expected-version $version
-if ($LASTEXITCODE -ne 0) {
-    throw "verify_agent_exe.py failed (exit $LASTEXITCODE)"
-}
-
-Write-Step "Running verify-release.ps1 (local, -SkipGithub)..."
-powershell -ExecutionPolicy Bypass -File (Join-SafePath $RepoRoot "scripts\verify-release.ps1") -Version $version -SkipGithub
-if ($LASTEXITCODE -ne 0) {
-    throw "verify-release.ps1 failed (exit $LASTEXITCODE)"
-}
-
-Write-Step "Running upgrade verification script..."
-powershell -ExecutionPolicy Bypass -File (Join-SafePath $RepoRoot "scripts\verify_agent_upgrade.ps1")
-Write-Step "Build complete. Release: powershell -ExecutionPolicy Bypass -File release.ps1 -Version $version"
+Write-Step "DONE"
+Write-Host "[build] Installer: $outSetup" -ForegroundColor Green
+Write-Host "[build] Versioned: $outVersioned" -ForegroundColor Green
+Write-Host "[build] Manifest:  $ManifestPath" -ForegroundColor Green
+exit 0

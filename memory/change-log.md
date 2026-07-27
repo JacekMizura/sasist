@@ -1,3 +1,114 @@
+## 2026-07-27 — Stage 5 Final Cutover (Agent product)
+
+- Official path only: `sasist-agent` → `SasistAgentSetup.exe`
+- Root build/release/CI retargeted; Python agent → `legacy/sasist-printer-agent`
+- Backend download default `SasistAgentSetup*` (+ legacy prefix compat)
+- Report: `docs/sasist-agent/STAGE5-CUTOVER-REPORT.md`
+
+## 2026-07-27 — Sasist Agent UX pairing (pre-release)
+
+- Usunięto Server URL z UI; API wbudowane (`https://api.sasist.pl`, Dev: env / appsettings.Development)
+- Ekran „Kod parowania” + Tray: Online, firma, urządzenia, Odłącz, branding (logo/ico)
+- Przyjazne błędy; `company_name` w odpowiedzi register; `status.json` dla Tray
+- Docs: INSTALACJA.md uproszczona pod klienta
+
+## 2026-07-27 — E2E install test + ship fixes
+
+- Full client-path E2E on Windows; report: `sasist-agent/dist/E2E-REPORT.md`
+- Fixes: ProgramData ACL, plugin parameterless ctor, re-register printers, HttpClient BaseAddress, PDF spooler under LocalSystem, Host wait-for-config
+- Final `SasistAgentSetup.exe` rebuilt after fixes
+
+## 2026-07-27 — Sasist Agent Windows installer (ship)
+
+- Tray (`Sasist.Agent.Tray`): Online/Offline, logi, diagnostyka, restart usługi, setup URL+API Key → DPAPI + register
+- `scripts/publish-release.ps1` → `publish/win-x64` + `dist/SasistAgentSetup.exe` (Inno Setup)
+- Instalator: usługa `SasistAgent`, ProgramData, config.default, Menu Start, start usługi
+- Docs: `sasist-agent/INSTALACJA.md`
+
+## 2026-07-27 — Architecture RC v1.0
+
+- Core purged of Printing; `IAgentTransport` + ModuleRegistry + plugin loader
+- Host `CompatPrintingTransport`; DPAPI secrets; ACL/replay/rate-limit; no legacy register
+- Docs: ARCHITECTURE/RC-1.0/security/FREEZE aligned; WS marked Planned
+- Designation: SASIST AGENT ARCHITECTURE v1.0 RELEASE CANDIDATE
+
+## 2026-07-27 — Architecture audit (pre-1.0)
+
+- Read-only validation: Core still holds printing compat + hardcoded job routing → not v1.0 Ready
+- Scores & blockers in session report; docs overclaim WS/`/api/agent/v1`
+- Plugin drop-in false until Host/runtime generic; registry/EventBus OK
+
+## 2026-07-27 — Edge Computing Core: Device Registry + delta sync
+
+- SDK/Core: config, healthScore, DeviceEventBus, differential sync, remote actions (Refresh/Diagnostics/Logs)
+- Backend: `edge_devices*` tables + `/agent/devices/sync|actions|events`
+- FE: `/settings/devices` hierarchy; scaffolds Scanner/Scale/Camera/RFID
+- ADR-007; printing compat retained
+
+## 2026-07-27 — Edge Device Management foundation
+
+- SDK: `EdgeDevice`, `CapabilityDescriptor`, operational status, remote action contracts
+- Core: `DeviceManager` + `RefreshDevices`; Printing uses `WindowsPrinterDeviceProvider`
+- Backend parallel: `/api/agent/devices`, `/device/{id}`, `/modules` (projection from printers)
+- FE: `frontend/src/devices/*`; Settings „Urządzenia” + type filters; `/printing` kept
+- Docs: device.md, ARCHITECTURE, OpenAPI, ADR-006
+
+## 2026-07-27 — Label cutover: PrintingRouter + prefer_sasist_agent
+
+- Central `frontend/src/printing/router` (resolve, execute PDF labels, telemetry)
+- Z-PZ / Return Labels / LabelPrintQueue routed via flag + zpl gate; QZ kept as fallback
+- PrintMethodDialog: Sasist Agent first; QZ Legacy behind „Pokaż metody awaryjne”
+- Smoke: `docs/sasist-agent/smoke-cutover-labels.md`
+
+## 2026-07-27 — Sasist Agent Etap 1: drivers + capabilities + QZ map
+
+- `IPrintDriver` Pdf/Zpl/Raw/Html; RAW spooler; PrintResult + logging
+- Heartbeat `supported_formats` → `capabilities_json`; queue rejects unsupported formats
+- `prefer_sasist_agent` (warehouse settings API + UI); `docs/sasist-agent/qz-migration-map.md` + TODOs (bez przepięcia)
+
+## 2026-07-27 — Sasist Agent Etap 1: scaffold .NET
+
+- `sasist-agent/`: Sdk + Core + Printing + Host (Windows Service worker)
+- Compat `/api/printing` (PDF poll); diagnostics CLI; 4 unit tests
+- Build Release OK; ZPL/RAW + installer + tray = kolejne incrementy
+
+## 2026-07-27 — Sasist Agent: freeze protocol v1
+
+- Decyzja użytkownika: `freeze v1`
+- `docs/sasist-agent/FREEZE-v1.md`; Stage 0 w migration.md zamknięty
+- Etap 1 (.NET Host) odblokowany
+
+## 2026-07-27 — Sasist Agent Etap 0: pełny DoD dokumentów
+
+- Pakiet `docs/sasist-agent/`: ARCHITECTURE, OpenAPI, WS protocol, plugin SDK, device, diagnostics, update, security, versioning, ADR-001..005, migration, README
+- Gate: freeze protocol v1 przed Etapem 1 (.NET Host)
+
+## 2026-07-27 — Sasist Agent: Etap 0 w planie + ARCHITECTURE.md
+
+- Plan zaakceptowany z **Etapem 0 (Architektura)** przed kodem Host
+- SSOT: `docs/sasist-agent/ARCHITECTURE.md` — Core, IAgentModule, agents/devices, protocol v1, API/WS, Module Bus
+- Etapy: 0 Architektura → 1 Agent → 2 Backend → 3 FE → 4 Migracja → 5 Cleanup
+- Tech: **.NET 8**; tabele extend w E2, rename w E5; poll = protocol 0 compat
+
+## 2026-07-27 — Sasist Agent: architektura + plan migracji (analiza)
+
+- Analiza `printing` + `sasist-printer-agent` + QZ; rekomendacja **.NET 8**
+- Cel: uniwersalny edge agent (druk = moduł); rename Sellasist/Cloud Print → Sasist Agent
+- Plan: Agent → Backend → FE → migracja → usunięcie QZ/Sellasist (bez pełnej implementacji w tej sesji)
+
+## 2026-07-27 — Cloud Print: repair/queue bez ślepych 400/409
+
+- `repair`: brak aktywnego agenta → 200 `{ success:false, reason:"NO_ACTIVE_AGENT" }` (bez 400)
+- `GET /printing/cloud-capability` — ready tylko przy default + online agent
+- FE `usePrintMethodFlow`: offline default → dialog, nie auto-queue; Cloud tile disabled
+- Queue 409 z `code` (AGENT_OFFLINE / PRINTER_INACTIVE) jako fallback
+
+## 2026-07-26 — StarterTemplateFlow (wspólny model starterów)
+
+- `components/templates/starterFlow`: dialog + hook + stałe CTA
+- Starter immutable; CTA „Użyj startera”; kreator kopii → edytor użytkownika
+- Etykiety (presety) + wydruki (galeria/detail); ReadyTemplateCard `mode="starter"|"owned"`
+
 ## 2026-07-26 — PrintMethodDialog (systemowy wybór wydruku)
 
 - Wspólny dialog: `components/printing/PrintMethodDialog` + `usePrintMethodFlow`

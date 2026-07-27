@@ -3,7 +3,7 @@ import type { CloudPrintCapabilityRead } from "../../types/printing";
 import type { PrintMethodKind } from "./printMethodTypes";
 
 export const NO_ACTIVE_AGENT_USER_MESSAGE =
-  "Brak aktywnego komputera z agentem drukowania.\nUruchom Sellasist Print Agent na jednym z komputerów.";
+  "Brak aktywnego komputera z Sasist Agent.\nUruchom Sasist Agent na jednym z komputerów.";
 
 export type CloudPrintCapability = CloudPrintCapabilityRead;
 
@@ -49,10 +49,10 @@ export function cloudPrintUnavailableMessage(cap: CloudPrintCapability): string 
     return "Domyślna drukarka jest przypisana do nieaktywnego agenta.";
   }
   if (cap.reason === "NO_DEFAULT_PRINTER") {
-    return "Brak domyślnej drukarki Cloud Print. Ustaw ją w Ustawienia → Drukarki → Domyślne.";
+    return "Brak domyślnej drukarki Sasist Agent. Ustaw ją w Ustawienia → Drukarki → Domyślne.";
   }
   if (cap.reason === "PRINTER_INACTIVE" || cap.reason === "PRINTER_MISSING") {
-    return cap.message || "Domyślna drukarka Cloud Print jest niedostępna.";
+    return cap.message || "Domyślna drukarka Sasist Agent jest niedostępna.";
   }
-  return "Sasist Cloud Print jest teraz niedostępny.";
+  return "Sasist Agent jest teraz niedostępny.";
 }

@@ -12,6 +12,7 @@ from ...models.printing.printer_agent import PrinterAgent
 from ...models.integration_api_key import IntegrationApiKey
 from ...schemas.printing.agent import AgentRegisterRequest
 from .agent_auth_service import generate_agent_token, hash_agent_token
+from .capability_service import formats_to_json, parse_agent_formats
 from .assignment_service import remap_printing_defaults_for_agent
 from .printer_service import sync_agent_printers
 
@@ -132,6 +133,8 @@ def record_agent_heartbeat(
     printer_count: int | None = None,
     last_poll_at: datetime | None = None,
     last_error: str | None = None,
+    supported_formats: list[str] | None = None,
+    capabilities: dict | None = None,
 ) -> PrinterAgent:
     now = datetime.utcnow()
     agent.last_seen_at = now
@@ -151,6 +154,18 @@ def record_agent_heartbeat(
         agent.last_poll_at = last_poll_at
     if last_error is not None:
         agent.last_error = last_error.strip()[:2000] if last_error.strip() else None
+
+    formats: list[str] | None = None
+    if supported_formats is not None:
+        formats = list(supported_formats)
+    elif isinstance(capabilities, dict) and capabilities.get("supported_formats") is not None:
+        raw = capabilities.get("supported_formats")
+        if isinstance(raw, list):
+            formats = [str(x) for x in raw]
+
+    if formats is not None:
+        agent.capabilities_json = formats_to_json(formats)
+
     db.commit()
     db.refresh(agent)
     return agent
@@ -244,6 +259,7 @@ def list_agents(
             "is_online": is_agent_online(row, now=now),
             "health_status": agent_health_status(row, now=now),
             "printer_count": _resolve_printer_count(db, row),
+            "supported_formats": sorted(parse_agent_formats(row)),
             "created_at": row.created_at,
             "updated_at": row.updated_at,
         }

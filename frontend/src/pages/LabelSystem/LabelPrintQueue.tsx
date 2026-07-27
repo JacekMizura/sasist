@@ -60,13 +60,15 @@ import {
 import { FloorExclusionPanel, excludeFloorsFromUiState, type FloorFilterUiState } from "./FloorExclusionPanel";
 import { labelModuleBasePath } from "./labelModuleBasePath";
 import { renderLabel } from "../../labelRenderer";
+import { resolvePrintRoute, trackFallbackReason, trackPrintedVia } from "../../printing/router";
+// Stage 5 Cleanup: LabelPrintQueue QZ connect/list — remove when prefer_sasist_agent fleet-wide.
 import {
   connectQZ,
   listSystemPrinters,
-  printPdf,
   isQzAvailable,
   setQzSecurity,
 } from "../../printing/qzService";
+// Stage 5 Cleanup: drop QZ imports above after cutover; PrintingRouter owns emergency transports.
 import {
   PrintQueueSecondaryButton,
   humanizeCsvSanitizeWarning,
@@ -704,6 +706,15 @@ export function LabelPrintQueue({ template }: Props) {
 
     setPrinting(true);
     try {
+      // PrintingRouter decides Agent cutover vs legacy-identical queue path.
+      const route = await resolvePrintRoute({
+        tenantId: TENANT_ID,
+        warehouseId: selectedWarehouseId,
+        gateFormat: "zpl",
+        jobFormat: "pdf",
+        printerKind: "label",
+      });
+
       const templateId =
         selectedLocationTemplateId ??
         locationTemplates.find((t) => t.is_default)?.id ??
@@ -734,7 +745,7 @@ export function LabelPrintQueue({ template }: Props) {
         legacyPrinters,
       );
 
-      await queueLabelPrint(
+      const ok = await queueLabelPrint(
         {
           template_id: templateId,
           records: recordsToSend,
@@ -746,6 +757,14 @@ export function LabelPrintQueue({ template }: Props) {
         selectedWarehouseId,
         printerSelection,
       );
+      if (ok) {
+        if (route.transport === "agent") trackPrintedVia("agent");
+        else {
+          trackFallbackReason(route.fallbackReason);
+          // Legacy-identical path still queues to printing API (not QZ Tray).
+          trackPrintedVia("agent");
+        }
+      }
     } catch (e) {
       console.error("Label queue print failed:", e);
     } finally {
@@ -1977,7 +1996,9 @@ export function LabelPrintQueue({ template }: Props) {
             ) : null}
             {printMode === "location" && !qzChecking && !qzReady ? (
               <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
-                Zainstaluj i uruchom QZ Tray, aby drukować bezpośrednio.
+                {/* Stage 5 Cleanup: remove QZ Tray hint after Agent cutover. */}
+                Brak QZ Tray (legacy). Przy włączonym Sasist Agent wydruk idzie kolejką agenta — ustaw
+                prefer_sasist_agent i domyślną drukarkę etykiet.
               </p>
             ) : null}
           </>
@@ -2006,7 +2027,7 @@ export function LabelPrintQueue({ template }: Props) {
               </button>
               <ul className="max-h-32 list-inside list-disc overflow-y-auto text-xs text-slate-600">
                 {systemPrinters.length === 0 ? (
-                  <li>Nie wykryto drukarek — sprawdź agenta Sasist Printer lub QZ Tray.</li>
+                  <li>Nie wykryto drukarek — sprawdź Sasist Agent (lub QZ Tray legacy).</li>
                 ) : (
                   systemPrinters.map((name, i) => <li key={i}>{name}</li>)
                 )}

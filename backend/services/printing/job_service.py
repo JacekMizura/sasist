@@ -25,8 +25,15 @@ from ...models.printing.constants import (
 from ...models.printing.print_job import PrintJob
 from ...models.printing.printer_agent import PrinterAgent
 from ...schemas.printing.job import PrintJobCreateRequest
+from .capability_service import agent_supports_format, parse_agent_formats, resolve_job_format
 from .constants import ALLOWED_JOB_TRANSITIONS
-from .errors import JobTransitionConflictError, PrintJobNotFoundError, PrinterNotFoundError, TenantScopeError
+from .errors import (
+    JobTransitionConflictError,
+    PrintJobNotFoundError,
+    PrinterNotFoundError,
+    PrintingError,
+    TenantScopeError,
+)
 from .printer_service import _get_agent_printer_for_tenant
 
 
@@ -63,7 +70,19 @@ def create_print_job(
     if not printer.is_active:
         raise PrinterNotFoundError("Printer is inactive")
 
-    payload_data = payload.payload.model_dump()
+    payload_data = payload.payload.model_dump(exclude_none=True)
+    resolved_job_type = job_type or JOB_TYPE_PDF
+    fmt = resolve_job_format(job_type=resolved_job_type, payload=payload_data)
+    payload_data.setdefault("format", fmt)
+    agent = printer.agent
+    if not agent_supports_format(agent, fmt):
+        supported = sorted(parse_agent_formats(agent))
+        raise PrintingError(
+            f"Agent nie obsługuje formatu '{fmt}'. Obsługiwane: {', '.join(supported) or 'brak'}.",
+            status_code=409,
+            code="UNSUPPORTED_FORMAT",
+        )
+
     resolved_copies = copies if copies is not None else int(payload_data.get("copies") or 1)
 
     job = PrintJob(
@@ -78,7 +97,7 @@ def create_print_job(
         parent_job_id=parent_job_id,
         retry_number=retry_number,
         source_module=source_module or SOURCE_MODULE_WAREHOUSE,
-        job_type=job_type or JOB_TYPE_PDF,
+        job_type=resolved_job_type,
         created_at=datetime.utcnow(),
     )
     db.add(job)
@@ -122,6 +141,11 @@ def list_pending_jobs_for_agent(db: Session, agent: PrinterAgent) -> tuple[list[
             "system_name": job.printer.system_name if job.printer else "",
             "document_type": job.document_type,
             "document_id": job.document_id,
+            "job_type": job.job_type,
+            "format": resolve_job_format(
+                job_type=job.job_type,
+                payload=_parse_payload_json(job.payload_json),
+            ),
             "payload": _parse_payload_json(job.payload_json),
         }
         for job in jobs

@@ -8,6 +8,7 @@ from .defaults import router as defaults_router
 from .jobs import router as jobs_router
 from .printers import router as printers_router
 from .release import router as release_router
+from .warehouse_settings import router as warehouse_settings_router
 
 router = APIRouter(prefix="/printing", tags=["Printing"])
 router.include_router(agents_router)
@@ -16,3 +17,4 @@ router.include_router(jobs_router)
 router.include_router(defaults_router)
 router.include_router(release_router)
 router.include_router(auto_print_router)
+router.include_router(warehouse_settings_router)

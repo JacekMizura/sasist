@@ -3844,7 +3844,12 @@ export default function WmsReturnsPage() {
         return;
       }
       try {
-        await printReturnLabel(rlid, DAMAGE_TENANT_ID);
+        const wh = wmsReturn?.warehouse_id;
+        await printReturnLabel(
+          rlid,
+          DAMAGE_TENANT_ID,
+          wh != null && Number.isFinite(Number(wh)) && Number(wh) > 0 ? Math.floor(Number(wh)) : null,
+        );
       } catch (e) {
         if (axios.isAxiosError(e) && e.response?.status === 404) {
           let msg = "Brak szablonu etykiety typu RETURN.";
@@ -3864,7 +3869,7 @@ export default function WmsReturnsPage() {
         setPrintLabelToast("Nie udało się wydrukować etykiety.");
       }
     },
-    [lineSeedByLineId],
+    [lineSeedByLineId, wmsReturn?.warehouse_id],
   );
 
   useEffect(() => {

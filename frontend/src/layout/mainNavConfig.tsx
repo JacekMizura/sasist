@@ -397,7 +397,7 @@ export function buildNavFlyoutCategories(): NavCategoryConfig[] {
             permissionsAny: ["settings.users", "settings.company"],
           },
           {
-            path: "/settings/printers",
+            path: "/settings/devices",
             label: UI_STRINGS.navigation.printersNav,
             Icon: Printer,
             permissionsAny: ["settings.users", "settings.company"],

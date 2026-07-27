@@ -10,12 +10,12 @@ export default function PrintingSettingsLayout() {
       <SettingsModuleStack
         breadcrumbs={[
           { label: "Ustawienia", to: "/settings/company" },
-          { label: "Drukarki" },
+          { label: "Urządzenia" },
         ]}
-        title="Drukarki"
+        title="Urządzenia"
         tabs={PRINTING_SETTINGS_TABS}
         tabsExact={false}
-        tabsAriaLabel="Drukarki — sekcje"
+        tabsAriaLabel="Urządzenia — sekcje"
       >
         <Outlet />
       </SettingsModuleStack>

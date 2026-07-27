@@ -100,8 +100,8 @@ export function resolvePrinterAgentDownloadUrl(
   return resolvePrinterAgentDownload(downloadInfo).downloadUrl ?? "";
 }
 
-export function buildPrinterAgentConfigClipboardText(serverUrl: string, apiKey: string): string {
-  return `Serwer: ${serverUrl}\nKlucz: ${apiKey}`;
+export function buildPrinterAgentConfigClipboardText(_serverUrl: string, apiKey: string): string {
+  return apiKey;
 }
 
 export function openPrinterAgentDownload(url: string): void {

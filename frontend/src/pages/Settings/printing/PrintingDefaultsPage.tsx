@@ -4,8 +4,10 @@ import toast from "react-hot-toast";
 import {
   fetchAgentPrinters,
   fetchPrintingDefaults,
+  fetchPrintingWarehouseSettings,
   repairPrinterAssignments,
   updatePrintingDefaults,
+  updatePrintingWarehouseSettings,
 } from "../../../api/printingApi";
 import { extractApiErrorMessage } from "../../../api/apiErrorMessage";
 import { useWarehouse } from "../../../context/WarehouseContext";
@@ -67,6 +69,7 @@ export default function PrintingDefaultsPage() {
     label_printer_id: null,
     receipt_printer_id: null,
   });
+  const [preferSasistAgent, setPreferSasistAgent] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [repairing, setRepairing] = useState(false);
@@ -77,9 +80,12 @@ export default function PrintingDefaultsPage() {
     setLoading(true);
     setError(null);
     try {
-      const [defaults, devices] = await Promise.all([
+      const [defaults, devices, warehouseSettings] = await Promise.all([
         fetchPrintingDefaults(DAMAGE_TENANT_ID, warehouseId),
         fetchAgentPrinters(DAMAGE_TENANT_ID, { warehouseId }),
+        warehouseId
+          ? fetchPrintingWarehouseSettings(DAMAGE_TENANT_ID, warehouseId)
+          : Promise.resolve(null),
       ]);
       setPrinters(devices.filter((p) => p.is_active));
       setValues({
@@ -87,6 +93,7 @@ export default function PrintingDefaultsPage() {
         label_printer_id: defaults.label_printer_id,
         receipt_printer_id: defaults.receipt_printer_id,
       });
+      setPreferSasistAgent(Boolean(warehouseSettings?.prefer_sasist_agent));
     } catch (err) {
       setError(extractApiErrorMessage(err, "Nie udało się pobrać domyślnych drukarek."));
     } finally {
@@ -114,6 +121,11 @@ export default function PrintingDefaultsPage() {
     setSaved(false);
     try {
       await updatePrintingDefaults(DAMAGE_TENANT_ID, { warehouse_id: warehouseId, ...values }, warehouseId);
+      if (warehouseId) {
+        await updatePrintingWarehouseSettings(DAMAGE_TENANT_ID, warehouseId, {
+          prefer_sasist_agent: preferSasistAgent,
+        });
+      }
       setSaved(true);
     } catch (err) {
       setError(extractApiErrorMessage(err, "Nie udało się zapisać ustawień."));
@@ -132,7 +144,7 @@ export default function PrintingDefaultsPage() {
         if (result.reason === "NO_ACTIVE_AGENT") {
           setError(
             result.message ||
-              "Brak aktywnego komputera z agentem drukowania.\nUruchom Sellasist Print Agent na jednym z komputerów.",
+              "Brak aktywnego komputera z Sasist Agent.\nUruchom Sasist Agent na jednym z komputerów.",
           );
         } else {
           setError(result.message || "Nie udało się naprawić przypisań drukarek.");
@@ -161,7 +173,33 @@ export default function PrintingDefaultsPage() {
   return (
     <PrintingPageBody className="max-w-2xl">
       {error ? <PrintingAlert tone="error">{error}</PrintingAlert> : null}
-      {saved ? <PrintingAlert tone="success">Zapisano domyślne drukarki.</PrintingAlert> : null}
+      {saved ? <PrintingAlert tone="success">Zapisano ustawienia drukowania.</PrintingAlert> : null}
+
+      <div className="space-y-2 rounded-lg border border-slate-200 bg-white p-4">
+        <label className="flex cursor-pointer items-start gap-3">
+          <input
+            type="checkbox"
+            className="mt-1"
+            checked={preferSasistAgent}
+            disabled={!warehouseId || saving}
+            onChange={(e) => {
+              setPreferSasistAgent(e.target.checked);
+              setSaved(false);
+            }}
+          />
+          <span>
+            <span className="block text-sm font-medium text-slate-800">Preferuj Sasist Agent</span>
+            <span className="block text-xs text-slate-500">
+              Flaga magazynu <code className="text-[11px]">prefer_sasist_agent</code>. Gdy włączona, nowe
+              ścieżki wydruku mogą używać agenta zamiast QZ Tray (migracja etapowa — QZ jeszcze nie
+              wyłączone).
+            </span>
+          </span>
+        </label>
+        {!warehouseId ? (
+          <p className="text-xs text-amber-700">Wybierz magazyn, aby ustawić flagę.</p>
+        ) : null}
+      </div>
 
       <div className="flex flex-wrap gap-2">
         <button

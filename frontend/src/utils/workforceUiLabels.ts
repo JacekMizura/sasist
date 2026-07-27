@@ -110,7 +110,7 @@ const MODULE_LABELS: Record<string, string> = {
   TENANT: "Organizacja",
   SYSTEM: "System",
   LABELS: "Etykiety",
-  PRINTERS: "Drukarki",
+  PRINTERS: "Urządzenia",
   PLANNING: "Planowanie",
   ANALYSIS: "Analizy",
   SLOTTING: "Slotting",

@@ -147,8 +147,13 @@ export function isNavPathActive(pathname: string, path: string): boolean {
   if (path === "/inventory") {
     return pathname === "/inventory";
   }
-  if (path === "/settings/printers") {
-    return pathname === "/settings/printers" || pathname.startsWith("/settings/printers/");
+  if (path === "/settings/devices" || path === "/settings/printers") {
+    return (
+      pathname === "/settings/devices" ||
+      pathname.startsWith("/settings/devices/") ||
+      pathname === "/settings/printers" ||
+      pathname.startsWith("/settings/printers/")
+    );
   }
   if (path === "/settings/api-keys") {
     return (

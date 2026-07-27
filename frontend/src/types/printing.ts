@@ -13,6 +13,8 @@ export type PrinterAgentRead = {
   is_online: boolean;
   health_status: AgentHealthStatus;
   printer_count: number;
+  /** Formats reported by agent heartbeat (pdf, zpl, raw, html). */
+  supported_formats?: string[];
   created_at?: string | null;
   updated_at?: string | null;
 };
@@ -72,12 +74,11 @@ export type CloudPrintCapabilityRead = {
   message: string | null;
 };
 
-export type CloudPrintBlockReason =
-  | "NO_DEFAULT_PRINTER"
-  | "NO_ACTIVE_AGENT"
-  | "AGENT_OFFLINE"
-  | "PRINTER_INACTIVE"
-  | "PRINTER_MISSING";
+export type PrintingWarehouseSettingsRead = {
+  tenant_id: number;
+  warehouse_id: number;
+  prefer_sasist_agent: boolean;
+};
 
 export type QueuePrintRequest = {
   document_type:

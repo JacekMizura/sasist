@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useId, useState, type MouseEvent, type ReactNode } from "react";
+import { useCallback, useEffect, useId, useMemo, useState, type MouseEvent, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { Cloud, Download, Info, Printer } from "lucide-react";
 
@@ -17,8 +17,8 @@ import {
   type CloudPrintCapability,
 } from "./hasDefaultCloudPrinter";
 
-const CLOUD_PRINT_INFO =
-  "Sasist Cloud Print umożliwia automatyczne drukowanie dokumentów bez otwierania okna drukowania. Po skonfigurowaniu domyślnej drukarki dokument zostanie wysłany bezpośrednio do wydruku.";
+const AGENT_INFO =
+  "Sasist Agent drukuje automatycznie na skonfigurowanej drukarce magazynu (kolejka / ZPL / PDF), bez okna przeglądarki.";
 
 type MethodOption = {
   id: PrintMethod;
@@ -26,21 +26,22 @@ type MethodOption = {
   description: string;
   icon: typeof Printer;
   info?: string;
+  legacy?: boolean;
 };
 
-const OPTIONS: MethodOption[] = [
+const PRIMARY_OPTIONS: MethodOption[] = [
   {
-    id: "browser",
-    title: "Drukuj",
-    description: "Wydruk przez okno drukowania przeglądarki.",
-    icon: Printer,
+    id: "agent",
+    title: "Sasist Agent",
+    description: "Automatyczny wydruk przez agenta na drukarce magazynu.",
+    icon: Cloud,
+    info: AGENT_INFO,
   },
   {
-    id: "cloud",
-    title: "Sasist Cloud Print",
-    description: "Automatyczny wydruk na skonfigurowanej drukarce.",
-    icon: Cloud,
-    info: CLOUD_PRINT_INFO,
+    id: "browser",
+    title: "Przeglądarka",
+    description: "Wydruk przez okno drukowania przeglądarki.",
+    icon: Printer,
   },
   {
     id: "download",
@@ -50,19 +51,33 @@ const OPTIONS: MethodOption[] = [
   },
 ];
 
+const LEGACY_OPTIONS: MethodOption[] = [
+  {
+    id: "qz",
+    title: "QZ Tray (Legacy)",
+    description: "Awaryjny wydruk lokalny przez QZ Tray. Stage 5 Cleanup.",
+    icon: Printer,
+    legacy: true,
+  },
+];
+
 export type PrintMethodDialogProps = {
   open: boolean;
   onClose: () => void;
   onConfirm: (method: PrintMethod) => void | Promise<void>;
-  /** Disable confirm while an action runs. */
   pending?: boolean;
   title?: ReactNode;
   description?: ReactNode;
-  /** Cloud Print readiness — disables cloud tile when not ready. */
+  /** Sasist Agent / Cloud readiness — disables agent tile when not ready. */
   cloudCapability?: CloudPrintCapability | null;
+  /**
+   * When true (prefer_sasist_agent), hide QZ unless user expands emergency methods.
+   * When false/null, QZ remains visible as legacy.
+   */
+  preferSasistAgent?: boolean | null;
 };
 
-function CloudInfoPopover({ text }: { text: string }) {
+function InfoPopover({ text, label }: { text: string; label: string }) {
   const [open, setOpen] = useState(false);
   const [anchor, setAnchor] = useState<DOMRect | null>(null);
   const tipId = useId();
@@ -84,7 +99,7 @@ function CloudInfoPopover({ text }: { text: string }) {
       <button
         type="button"
         className={`inline-flex h-7 w-7 shrink-0 items-center justify-center ${radius.md} text-slate-500 hover:bg-slate-100 hover:text-slate-800`}
-        aria-label="Informacja o Sasist Cloud Print"
+        aria-label={label}
         aria-expanded={open}
         aria-controls={open ? tipId : undefined}
         onClick={toggle}
@@ -123,8 +138,7 @@ function CloudInfoPopover({ text }: { text: string }) {
 }
 
 /**
- * Standard Sasist print-method dialog — browser / Cloud Print / PDF download.
- * Use with `usePrintMethodFlow` so a configured default Cloud printer skips this UI.
+ * Standard Sasist print-method dialog — Agent / browser / PDF / QZ legacy.
  */
 export function PrintMethodDialog({
   open,
@@ -134,21 +148,34 @@ export function PrintMethodDialog({
   title = "Wybierz sposób wydruku",
   description = "Wybierz sposób wydrukowania dokumentu.",
   cloudCapability = null,
+  preferSasistAgent = null,
 }: PrintMethodDialogProps) {
-  const [selected, setSelected] = useState<PrintMethod>("browser");
-  const cloudDisabled = cloudCapability != null && !cloudCapability.ready;
-  const cloudHint = cloudDisabled ? cloudPrintUnavailableMessage(cloudCapability) : null;
+  const [selected, setSelected] = useState<PrintMethod>("agent");
+  const [showEmergency, setShowEmergency] = useState(false);
+  const agentDisabled = cloudCapability != null && !cloudCapability.ready;
+  const agentHint = agentDisabled ? cloudPrintUnavailableMessage(cloudCapability) : null;
+  const hideQzByDefault = preferSasistAgent === true;
+
+  const visibleOptions = useMemo(() => {
+    const list = [...PRIMARY_OPTIONS];
+    if (!hideQzByDefault || showEmergency) list.push(...LEGACY_OPTIONS);
+    return list;
+  }, [hideQzByDefault, showEmergency]);
 
   useEffect(() => {
-    if (open) setSelected("browser");
-  }, [open]);
+    if (open) {
+      setSelected(agentDisabled ? "browser" : "agent");
+      setShowEmergency(false);
+    }
+  }, [open, agentDisabled]);
 
   useEffect(() => {
-    if (selected === "cloud" && cloudDisabled) setSelected("browser");
-  }, [cloudDisabled, selected]);
+    if ((selected === "agent" || selected === "cloud") && agentDisabled) setSelected("browser");
+  }, [agentDisabled, selected]);
 
   const handleConfirm = useCallback(() => {
-    void onConfirm(selected);
+    const method = selected === "cloud" ? "agent" : selected;
+    void onConfirm(method);
   }, [onConfirm, selected]);
 
   return (
@@ -176,17 +203,17 @@ export function PrintMethodDialog({
         title={<h2 className={typography.h1}>{title}</h2>}
       >
         <p className={typography.pageDesc}>{description}</p>
-        {cloudDisabled && cloudHint ? (
+        {agentDisabled && agentHint ? (
           <p className={`mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 ${typography.bodyMuted} text-amber-950 whitespace-pre-line`}>
-            {cloudHint}
+            {agentHint}
           </p>
         ) : null}
         <div className={`mt-4 flex flex-col ${spacing.gap2}`}>
-          {OPTIONS.map((opt) => {
+          {visibleOptions.map((opt) => {
             const Icon = opt.icon;
-            const isCloud = opt.id === "cloud";
-            const disabledOption = pending || (isCloud && cloudDisabled);
-            const isSelected = selected === opt.id;
+            const isAgent = opt.id === "agent" || opt.id === "cloud";
+            const disabledOption = pending || (isAgent && agentDisabled);
+            const isSelected = selected === opt.id || (opt.id === "agent" && selected === "cloud");
             return (
               <button
                 key={opt.id}
@@ -213,11 +240,18 @@ export function PrintMethodDialog({
                 </span>
                 <span className="min-w-0 flex-1">
                   <span className="flex items-start justify-between gap-2">
-                    <span className={typography.bodyStrong}>{opt.title}</span>
-                    {opt.info ? <CloudInfoPopover text={opt.info} /> : null}
+                    <span className={typography.bodyStrong}>
+                      {opt.title}
+                      {opt.legacy ? (
+                        <span className="ml-2 rounded bg-slate-200 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-700">
+                          Legacy
+                        </span>
+                      ) : null}
+                    </span>
+                    {opt.info ? <InfoPopover text={opt.info} label="Informacja o Sasist Agent" /> : null}
                   </span>
                   <span className={`mt-0.5 block ${typography.bodyMuted}`}>
-                    {isCloud && cloudDisabled
+                    {isAgent && agentDisabled
                       ? "Niedostępne — brak aktywnego agenta lub domyślnej drukarki."
                       : opt.description}
                   </span>
@@ -226,6 +260,15 @@ export function PrintMethodDialog({
             );
           })}
         </div>
+        {hideQzByDefault && !showEmergency ? (
+          <button
+            type="button"
+            className="mt-3 text-sm font-medium text-slate-600 underline-offset-2 hover:text-slate-900 hover:underline"
+            onClick={() => setShowEmergency(true)}
+          >
+            Pokaż metody awaryjne
+          </button>
+        ) : null}
       </PageHeader>
     </Dialog>
   );

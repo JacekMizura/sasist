@@ -40,6 +40,8 @@ class AgentRegisterResponse(BaseModel):
     machine_id: str
     tenant_id: int | None = None
     warehouse_id: int | None = None
+    company_name: str | None = None
+    warehouse_name: str | None = None
 
 
 class AgentHeartbeatRequest(BaseModel):
@@ -48,6 +50,9 @@ class AgentHeartbeatRequest(BaseModel):
     printer_count: int | None = Field(default=None, ge=0)
     last_poll_at: datetime | None = None
     last_error: str | None = Field(default=None, max_length=2000)
+    protocol_version: int | None = Field(default=None, ge=0)
+    supported_formats: list[str] | None = None
+    capabilities: dict[str, Any] | None = None
 
 
 class AgentHeartbeatResponse(BaseModel):
@@ -81,6 +86,7 @@ class PrinterAgentRead(BaseModel):
     is_online: bool
     health_status: str = "offline"
     printer_count: int = 0
+    supported_formats: list[str] = Field(default_factory=list)
     created_at: datetime | None = None
     updated_at: datetime | None = None
 

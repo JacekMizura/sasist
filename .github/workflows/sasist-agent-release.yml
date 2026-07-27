@@ -1,4 +1,4 @@
-name: Printer Agent Release
+name: Sasist Agent Release
 
 on:
   push:
@@ -23,23 +23,23 @@ jobs:
           if ($version -notmatch '^\d+\.\d+\.\d+$') {
             throw "Tag must be vX.Y.Z semver, got: $tag"
           }
-          $fileVersion = (Get-Content -LiteralPath "sasist-printer-agent/VERSION" -Raw).Trim()
+          $fileVersion = (Get-Content -LiteralPath "sasist-agent/VERSION" -Raw).Trim()
           if ($fileVersion -ne $version) {
-            throw "Git tag v$version does not match sasist-printer-agent/VERSION ($fileVersion). Bump VERSION before tagging."
+            throw "Git tag v$version does not match sasist-agent/VERSION ($fileVersion). Bump VERSION before tagging."
           }
           "version=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
           Write-Host "Release version OK: $version"
 
-      - name: Setup Python
-        uses: actions/setup-python@v5
+      - name: Setup .NET 8
+        uses: actions/setup-dotnet@v4
         with:
-          python-version: "3.12"
+          dotnet-version: "8.0.x"
 
-      - name: Install build dependencies
+      - name: Install Inno Setup
         shell: pwsh
         run: |
-          python -m pip install --upgrade pip
-          pip install pyinstaller pywin32 pystray Pillow requests pytest customtkinter
+          choco install innosetup --no-progress -y
+          & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" /? | Select-Object -First 1
 
       - name: Build installer
         shell: pwsh

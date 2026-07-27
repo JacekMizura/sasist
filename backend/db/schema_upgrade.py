@@ -5007,6 +5007,13 @@ def ensure_printing_schema(engine: Engine) -> None:
     _impl(engine)
 
 
+def ensure_edge_device_schema(engine: Engine) -> None:
+    """Edge Device Registry — Tier 1 (parallel to printing compat)."""
+    from .edge_device_schema import ensure_edge_device_schema as _impl
+
+    _impl(engine)
+
+
 def ensure_integration_api_keys_schema(engine: Engine) -> None:
     """Integration API keys — Tier 1 operational tables."""
     from .integration_api_keys_schema import ensure_integration_api_keys_schema as _impl

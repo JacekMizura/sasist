@@ -437,6 +437,7 @@ export default function ProductionOrderDetailPage() {
         open={printFlow.open}
         pending={printFlow.pending}
         cloudCapability={printFlow.cloudCapability}
+        preferSasistAgent={printFlow.preferSasistAgent}
         onClose={printFlow.close}
         onConfirm={printFlow.confirmMethod}
       />

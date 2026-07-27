@@ -1,0 +1,1390 @@
+openapi: 3.1.0
+info:
+  title: Sasist Agent Protocol API
+  version: "1.0.0"
+  description: |
+    HTTPS surface for Sasist Agent (protocol_version = 1).
+    Primary realtime channel is WebSocket — see ws-protocol-v1.md.
+    Legacy `/api/printing/*` remains as protocol 0 compatibility until Cleanup.
+servers:
+  - url: /api/agent
+    description: Edge Device Management APIs (RC — actual mount)
+  - url: /api/printing
+    description: Compat printing register/jobs/heartbeat (RC adapter)
+  - url: /api/agent/v1
+    description: Planned native agent protocol (not mounted in RC)
+tags:
+  - name: register
+  - name: authenticate
+  - name: heartbeat
+  - name: capabilities
+  - name: diagnostics
+  - name: jobs
+  - name: logs
+  - name: updates
+  - name: config
+  - name: devices
+  - name: remote-actions
+
+paths:
+  /agents/register:
+    post:
+      tags: [register]
+      summary: Register or re-register agent for this machine
+      description: |
+        Exchange integration API key for agent session token.
+        Upserts by (tenant_id, machine_id).
+      security:
+        - ApiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AgentRegisterRequest"
+            example:
+              machine_id: "WIN-DESKTOP-A1B2"
+              name: "Pakowanie 1"
+              agent_version: "1.0.0"
+              protocol_version: 1
+              warehouse_id: 3
+              host_name: "PAK-01"
+              lan_ip: "192.168.10.42"
+              os_version: "Windows 11 24H2"
+              modules:
+                - module_id: printing
+                  module_version: "1.0.0"
+                  capabilities: ["print.pdf", "print.zpl", "print.raw"]
+              devices:
+                - local_id: "Zebra ZD420"
+                  display_name: "Zebra etykiety"
+                  device_kind: printer
+                  module_id: printing
+                  is_default: true
+                  capabilities: ["zpl", "usb"]
+      responses:
+        "200":
+          description: Registered
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AgentRegisterResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+
+  /agents/authenticate:
+    post:
+      tags: [authenticate]
+      summary: Authenticate with existing agent token (session check / soft re-auth)
+      security:
+        - AgentTokenAuth: []
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AgentAuthenticateRequest"
+      responses:
+        "200":
+          description: Session valid
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AgentAuthenticateResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /agents/token/refresh:
+    post:
+      tags: [authenticate]
+      summary: Rotate agent access token using refresh token
+      security:
+        - AgentRefreshAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TokenRefreshRequest"
+      responses:
+        "200":
+          description: New tokens issued
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TokenRefreshResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /agents/heartbeat:
+    post:
+      tags: [heartbeat]
+      summary: Heartbeat (HTTPS fallback when WS is down)
+      security:
+        - AgentTokenAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AgentHeartbeatRequest"
+      responses:
+        "200":
+          description: Accepted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AgentHeartbeatResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "426":
+          description: Protocol version not supported
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProtocolRejected"
+
+  /agents/capabilities:
+    get:
+      tags: [capabilities]
+      summary: Server-advertised feature flags for this agent session
+      security:
+        - AgentTokenAuth: []
+      responses:
+        "200":
+          description: Capability set
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ServerCapabilitiesResponse"
+
+  /agents/me/capabilities:
+    put:
+      tags: [capabilities]
+      summary: Replace agent-reported module/device capabilities snapshot
+      security:
+        - AgentTokenAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AgentCapabilitiesPutRequest"
+      responses:
+        "204":
+          description: Updated
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /agents/diagnostics/run:
+    post:
+      tags: [diagnostics]
+      summary: Request server-side record of a diagnostics run (agent executes locally)
+      security:
+        - AgentTokenAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DiagnosticsReport"
+      responses:
+        "202":
+          description: Report stored
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DiagnosticsReportAck"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /agents/{agent_id}/diagnostics:
+    get:
+      tags: [diagnostics]
+      summary: Latest diagnostics report (ERP user session)
+      security:
+        - UserSessionAuth: []
+      parameters:
+        - $ref: "#/components/parameters/AgentId"
+      responses:
+        "200":
+          description: Latest report
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DiagnosticsReport"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /jobs/pending:
+    get:
+      tags: [jobs]
+      summary: Poll pending jobs (fallback when WebSocket unavailable)
+      security:
+        - AgentTokenAuth: []
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+            default: 10
+      responses:
+        "200":
+          description: Pending jobs for this agent
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JobsPendingResponse"
+
+  /jobs/{job_id}/claim:
+    post:
+      tags: [jobs]
+      summary: Claim job (pending → processing)
+      security:
+        - AgentTokenAuth: []
+      parameters:
+        - $ref: "#/components/parameters/JobId"
+      responses:
+        "200":
+          description: Claimed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JobRead"
+        "409":
+          description: Not claimable
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorBody"
+
+  /jobs/{job_id}/payload:
+    get:
+      tags: [jobs]
+      summary: Download job payload bytes (PDF/ZPL/RAW/HTML)
+      security:
+        - AgentTokenAuth: []
+      parameters:
+        - $ref: "#/components/parameters/JobId"
+      responses:
+        "200":
+          description: Payload
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+            text/plain:
+              schema:
+                type: string
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /jobs/{job_id}/status:
+    post:
+      tags: [jobs]
+      summary: Report job terminal or intermediate status
+      security:
+        - AgentTokenAuth: []
+      parameters:
+        - $ref: "#/components/parameters/JobId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/JobStatusUpdateRequest"
+      responses:
+        "200":
+          description: Accepted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JobRead"
+        "409":
+          description: Invalid transition
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorBody"
+
+  /agents/logs/upload:
+    post:
+      tags: [logs]
+      summary: Upload local agent log bundle
+      security:
+        - AgentTokenAuth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                reason:
+                  type: string
+                  maxLength: 200
+                diagnostics_run_id:
+                  type: string
+                  format: uuid
+      responses:
+        "202":
+          description: Upload accepted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LogUploadAck"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "413":
+          description: Bundle too large
+
+  /agents/{agent_id}/logs:
+    get:
+      tags: [logs]
+      summary: List / download latest uploaded logs (ERP user)
+      security:
+        - UserSessionAuth: []
+      parameters:
+        - $ref: "#/components/parameters/AgentId"
+      responses:
+        "200":
+          description: Log artifacts metadata
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LogArtifactList"
+
+  /agents/updates/check:
+    get:
+      tags: [updates]
+      summary: Check for agent update
+      security:
+        - AgentTokenAuth: []
+      parameters:
+        - name: channel
+          in: query
+          schema:
+            $ref: "#/components/schemas/UpdateChannel"
+        - name: current_version
+          in: query
+          required: true
+          schema:
+            type: string
+            example: "1.0.0"
+      responses:
+        "200":
+          description: Update metadata
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UpdateCheckResponse"
+
+  /agents/updates/download-info:
+    get:
+      tags: [updates]
+      summary: Public/user download info for installer (ERP UI)
+      security:
+        - UserSessionAuth: []
+      parameters:
+        - name: channel
+          in: query
+          schema:
+            $ref: "#/components/schemas/UpdateChannel"
+      responses:
+        "200":
+          description: Download info
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UpdateDownloadInfo"
+
+  /agents/config:
+    get:
+      tags: [config]
+      summary: Fetch agent remote config fragment
+      security:
+        - AgentTokenAuth: []
+      responses:
+        "200":
+          description: Config
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AgentRemoteConfig"
+
+    put:
+      tags: [config]
+      summary: Push local non-secret config snapshot (optional telemetry)
+      security:
+        - AgentTokenAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AgentConfigSnapshot"
+      responses:
+        "204":
+          description: Stored
+
+  /agents/devices:
+    get:
+      tags: [devices]
+      summary: List devices known for this agent session
+      security:
+        - AgentTokenAuth: []
+      responses:
+        "200":
+          description: Devices
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [devices]
+                properties:
+                  devices:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Device"
+
+    put:
+      tags: [devices]
+      summary: Full replace device inventory from agent
+      security:
+        - AgentTokenAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [devices]
+              properties:
+                devices:
+                  type: array
+                  items:
+                    $ref: "#/components/schemas/Device"
+      responses:
+        "204":
+          description: Replaced
+
+  # Parallel ERP operator surface (migration alongside /api/printing/*)
+  /devices:
+    get:
+      tags: [devices]
+      summary: List edge devices for tenant (operator UI) — parallel to /printing/printers
+      description: |
+        Mounted in ERP as `/api/agent/devices`. Type-agnostic projection.
+        Does not replace agent-authenticated `/agents/devices`.
+      parameters:
+        - name: tenant_id
+          in: query
+          required: true
+          schema: { type: integer, minimum: 1 }
+        - name: warehouse_id
+          in: query
+          schema: { type: integer, minimum: 1 }
+        - name: agent_id
+          in: query
+          schema: { type: integer, minimum: 1 }
+        - name: type
+          in: query
+          schema:
+            $ref: "#/components/schemas/DeviceKind"
+      responses:
+        "200":
+          description: Devices
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/EdgeDevice"
+
+  /device/{device_id}:
+    get:
+      tags: [devices]
+      summary: Get one edge device by id / system_name / legacy printer id
+      parameters:
+        - name: device_id
+          in: path
+          required: true
+          schema: { type: string }
+        - name: tenant_id
+          in: query
+          required: true
+          schema: { type: integer, minimum: 1 }
+      responses:
+        "200":
+          description: Device
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EdgeDevice"
+        "404":
+          description: Not found
+
+  /modules:
+    get:
+      tags: [devices]
+      summary: List modules reported by edge agents
+      parameters:
+        - name: tenant_id
+          in: query
+          required: true
+          schema: { type: integer, minimum: 1 }
+        - name: warehouse_id
+          in: query
+          schema: { type: integer, minimum: 1 }
+      responses:
+        "200":
+          description: Modules
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/EdgeModule"
+
+  /remote-actions:
+    post:
+      tags: [devices]
+      summary: Dispatch remote action contract (partial implementation)
+      description: |
+        Contracts: RefreshDevices, RestartModule, RestartAgent, DownloadLogs,
+        RunDiagnostics, ReloadConfiguration, CheckUpdates.
+        Only RefreshDevices is required on agent Core initially.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RemoteActionRequest"
+      responses:
+        "200":
+          description: Result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RemoteActionResult"
+
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: http
+      scheme: bearer
+      description: Integration API key (`spa_` / `sasist_`) with agent scope
+    AgentTokenAuth:
+      type: http
+      scheme: bearer
+      description: Agent access token (`spt_` compat / `sat_` preferred)
+    AgentRefreshAuth:
+      type: http
+      scheme: bearer
+      description: Agent refresh token
+    UserSessionAuth:
+      type: http
+      scheme: bearer
+      description: ERP user session
+
+  parameters:
+    AgentId:
+      name: agent_id
+      in: path
+      required: true
+      schema:
+        type: integer
+    JobId:
+      name: job_id
+      in: path
+      required: true
+      schema:
+        type: integer
+
+  responses:
+    Unauthorized:
+      description: Unauthorized
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorBody"
+    Forbidden:
+      description: Forbidden
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorBody"
+    NotFound:
+      description: Not found
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorBody"
+    ValidationError:
+      description: Validation error
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorBody"
+
+  schemas:
+    ErrorBody:
+      type: object
+      required: [code, message]
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+        details:
+          type: object
+          additionalProperties: true
+
+    ProtocolRejected:
+      type: object
+      required: [accepted, min_protocol_version, max_protocol_version, message]
+      properties:
+        accepted:
+          type: boolean
+          enum: [false]
+        min_protocol_version:
+          type: integer
+        max_protocol_version:
+          type: integer
+        message:
+          type: string
+
+    UpdateChannel:
+      type: string
+      enum: [stable, beta]
+
+    ModuleInfo:
+      type: object
+      required: [module_id, module_version]
+      properties:
+        module_id:
+          type: string
+        module_version:
+          type: string
+        state:
+          type: string
+          enum: [running, degraded, stopped, failed]
+        capabilities:
+          type: array
+          items:
+            type: string
+
+    Device:
+      type: object
+      required: [local_id, display_name, device_kind, module_id]
+      description: |
+        Legacy wire shape (protocol v1). Prefer EdgeDevice for new ERP surfaces.
+        `capabilities` may be flat tokens for compat; structured descriptors live on EdgeDevice.
+      properties:
+        local_id:
+          type: string
+          maxLength: 255
+        display_name:
+          type: string
+          maxLength: 120
+        device_kind:
+          $ref: "#/components/schemas/DeviceKind"
+        module_id:
+          type: string
+        is_active:
+          type: boolean
+          default: true
+        is_default:
+          type: boolean
+          default: false
+        capabilities:
+          type: array
+          items:
+            type: string
+          description: Flattened capability tokens (compat)
+        health:
+          $ref: "#/components/schemas/DeviceHealth"
+        metadata:
+          type: object
+          additionalProperties: true
+
+    EdgeDevice:
+      type: object
+      required: [id, type, status]
+      properties:
+        id:
+          type: string
+        type:
+          $ref: "#/components/schemas/DeviceKind"
+        manufacturer:
+          type: string
+          nullable: true
+        model:
+          type: string
+          nullable: true
+        serial_number:
+          type: string
+          nullable: true
+        driver:
+          type: string
+          nullable: true
+        firmware:
+          type: string
+          nullable: true
+        status:
+          $ref: "#/components/schemas/DeviceOperationalStatus"
+        capabilities:
+          type: array
+          items:
+            $ref: "#/components/schemas/CapabilityDescriptor"
+        last_seen:
+          type: string
+          format: date-time
+          nullable: true
+        metadata:
+          type: object
+          additionalProperties: true
+        agent_id:
+          type: integer
+          nullable: true
+        module_id:
+          type: string
+          nullable: true
+        display_name:
+          type: string
+          nullable: true
+        is_active:
+          type: boolean
+        is_default:
+          type: boolean
+        legacy_printer_id:
+          type: integer
+          nullable: true
+
+    CapabilityDescriptor:
+      type: object
+      required: [name, version, supported_operations]
+      properties:
+        name:
+          type: string
+        version:
+          type: string
+        supported_operations:
+          type: array
+          items:
+            type: string
+        limits:
+          type: object
+          additionalProperties: true
+          nullable: true
+
+    DeviceOperationalStatus:
+      type: string
+      enum: [online, offline, error, warning, busy, idle, unknown]
+
+    EdgeModule:
+      type: object
+      required: [id, agent_id, state, device_count, is_online]
+      properties:
+        id:
+          type: string
+        agent_id:
+          type: integer
+        agent_name:
+          type: string
+          nullable: true
+        machine_id:
+          type: string
+          nullable: true
+        state:
+          type: string
+        version:
+          type: string
+          nullable: true
+        device_count:
+          type: integer
+        capabilities:
+          type: array
+          items:
+            type: string
+        last_seen:
+          type: string
+          format: date-time
+          nullable: true
+        is_online:
+          type: boolean
+        last_error:
+          type: string
+          nullable: true
+        metadata:
+          type: object
+          additionalProperties: true
+
+    RemoteActionRequest:
+      type: object
+      required: [action]
+      properties:
+        action:
+          type: string
+          enum:
+            - RefreshDevices
+            - RestartModule
+            - RestartAgent
+            - DownloadLogs
+            - RunDiagnostics
+            - ReloadConfiguration
+            - CheckUpdates
+        module_id:
+          type: string
+          nullable: true
+        device_id:
+          type: string
+          nullable: true
+        correlation_id:
+          type: string
+          nullable: true
+        parameters:
+          type: object
+          additionalProperties: true
+          nullable: true
+
+    RemoteActionResult:
+      type: object
+      required: [accepted, completed, action]
+      properties:
+        accepted:
+          type: boolean
+        completed:
+          type: boolean
+        action:
+          type: string
+        error_code:
+          type: string
+          nullable: true
+        error_message:
+          type: string
+          nullable: true
+        data:
+          type: object
+          additionalProperties: true
+          nullable: true
+
+    DeviceKind:
+      type: string
+      enum: [printer, scanner, scale, camera, rfid, usb, serial, custom]
+
+    DeviceHealth:
+      type: object
+      properties:
+        online:
+          type: boolean
+        status:
+          type: string
+          description: Prefer DeviceOperationalStatus; legacy ok|warning|error|unknown still accepted
+          enum: [ok, warning, error, unknown, online, offline, busy, idle]
+        paper:
+          type: string
+          enum: [ok, low, empty, unknown]
+        toner:
+          type: string
+          enum: [ok, low, empty, unknown]
+        queue_depth:
+          type: integer
+          minimum: 0
+        message:
+          type: string
+          maxLength: 500
+        checked_at:
+          type: string
+          format: date-time
+
+    AgentRegisterRequest:
+      type: object
+      required: [machine_id, name, protocol_version]
+      properties:
+        machine_id:
+          type: string
+          maxLength: 128
+        name:
+          type: string
+          maxLength: 120
+        agent_version:
+          type: string
+          maxLength: 32
+        protocol_version:
+          type: integer
+          minimum: 1
+        warehouse_id:
+          type: integer
+          nullable: true
+        host_name:
+          type: string
+        lan_ip:
+          type: string
+        os_version:
+          type: string
+        modules:
+          type: array
+          items:
+            $ref: "#/components/schemas/ModuleInfo"
+        devices:
+          type: array
+          items:
+            $ref: "#/components/schemas/Device"
+
+    AgentRegisterResponse:
+      type: object
+      required: [agent_id, access_token, token_type, expires_in, protocol_version, machine_id]
+      properties:
+        agent_id:
+          type: integer
+        access_token:
+          type: string
+        refresh_token:
+          type: string
+          description: Present when rotation is enabled
+        token_type:
+          type: string
+          enum: [Bearer]
+        expires_in:
+          type: integer
+          description: Access token lifetime seconds
+        protocol_version:
+          type: integer
+        machine_id:
+          type: string
+        tenant_id:
+          type: integer
+          nullable: true
+        warehouse_id:
+          type: integer
+          nullable: true
+        server_capabilities:
+          $ref: "#/components/schemas/ServerCapabilities"
+
+    AgentAuthenticateRequest:
+      type: object
+      properties:
+        protocol_version:
+          type: integer
+        agent_version:
+          type: string
+
+    AgentAuthenticateResponse:
+      type: object
+      required: [agent_id, protocol_version, warehouse_id, server_capabilities]
+      properties:
+        agent_id:
+          type: integer
+        protocol_version:
+          type: integer
+        warehouse_id:
+          type: integer
+          nullable: true
+        server_capabilities:
+          $ref: "#/components/schemas/ServerCapabilities"
+
+    TokenRefreshRequest:
+      type: object
+      required: [refresh_token]
+      properties:
+        refresh_token:
+          type: string
+
+    TokenRefreshResponse:
+      type: object
+      required: [access_token, token_type, expires_in]
+      properties:
+        access_token:
+          type: string
+        refresh_token:
+          type: string
+        token_type:
+          type: string
+          enum: [Bearer]
+        expires_in:
+          type: integer
+
+    AgentHeartbeatRequest:
+      type: object
+      required: [protocol_version]
+      properties:
+        protocol_version:
+          type: integer
+        agent_version:
+          type: string
+        name:
+          type: string
+        lan_ip:
+          type: string
+        connection_mode:
+          type: string
+          enum: [ws, poll, mixed]
+        modules:
+          type: array
+          items:
+            $ref: "#/components/schemas/ModuleInfo"
+        device_count:
+          type: integer
+          minimum: 0
+        devices:
+          type: array
+          items:
+            $ref: "#/components/schemas/Device"
+          description: Optional compact or full snapshot
+        last_error:
+          type: string
+          maxLength: 2000
+          nullable: true
+        metrics:
+          type: object
+          additionalProperties: true
+
+    AgentHeartbeatResponse:
+      type: object
+      required: [agent_id, is_online, server_time]
+      properties:
+        agent_id:
+          type: integer
+        is_online:
+          type: boolean
+        server_time:
+          type: string
+          format: date-time
+        last_seen_at:
+          type: string
+          format: date-time
+          nullable: true
+        config_version:
+          type: string
+          nullable: true
+        update:
+          $ref: "#/components/schemas/UpdateHint"
+
+    ServerCapabilities:
+      type: object
+      properties:
+        ws:
+          type: boolean
+        jobs_formats:
+          type: array
+          items:
+            type: string
+            enum: [pdf, html, zpl, raw]
+        log_upload:
+          type: boolean
+        remote_diagnostics:
+          type: boolean
+        update_channels:
+          type: array
+          items:
+            $ref: "#/components/schemas/UpdateChannel"
+
+    ServerCapabilitiesResponse:
+      type: object
+      required: [protocol_version, capabilities]
+      properties:
+        protocol_version:
+          type: integer
+        min_protocol_version:
+          type: integer
+        max_protocol_version:
+          type: integer
+        capabilities:
+          $ref: "#/components/schemas/ServerCapabilities"
+
+    AgentCapabilitiesPutRequest:
+      type: object
+      required: [modules]
+      properties:
+        modules:
+          type: array
+          items:
+            $ref: "#/components/schemas/ModuleInfo"
+        devices:
+          type: array
+          items:
+            $ref: "#/components/schemas/Device"
+
+    DiagnosticsSeverity:
+      type: string
+      enum: [INFO, WARNING, ERROR]
+
+    DiagnosticsCheck:
+      type: object
+      required: [id, title, severity, status]
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        severity:
+          $ref: "#/components/schemas/DiagnosticsSeverity"
+        status:
+          type: string
+          enum: [pass, fail, skip]
+        message:
+          type: string
+        duration_ms:
+          type: integer
+
+    DiagnosticsReport:
+      type: object
+      required: [run_id, started_at, finished_at, overall_status, checks]
+      properties:
+        run_id:
+          type: string
+          format: uuid
+        started_at:
+          type: string
+          format: date-time
+        finished_at:
+          type: string
+          format: date-time
+        overall_status:
+          type: string
+          enum: [pass, fail]
+        checks:
+          type: array
+          items:
+            $ref: "#/components/schemas/DiagnosticsCheck"
+        agent_version:
+          type: string
+        protocol_version:
+          type: integer
+
+    DiagnosticsReportAck:
+      type: object
+      required: [run_id, stored]
+      properties:
+        run_id:
+          type: string
+          format: uuid
+        stored:
+          type: boolean
+
+    JobStatus:
+      type: string
+      enum: [pending, processing, printed, failed, cancelled]
+
+    JobFormat:
+      type: string
+      enum: [pdf, html, zpl, raw]
+
+    JobRead:
+      type: object
+      required: [id, module_id, job_type, status]
+      properties:
+        id:
+          type: integer
+        module_id:
+          type: string
+          default: printing
+        job_type:
+          type: string
+        format:
+          $ref: "#/components/schemas/JobFormat"
+        status:
+          $ref: "#/components/schemas/JobStatus"
+        device_local_id:
+          type: string
+        document_type:
+          type: string
+        document_id:
+          type: integer
+          nullable: true
+        copies:
+          type: integer
+          minimum: 1
+        payload:
+          type: object
+          additionalProperties: true
+        error_code:
+          type: string
+          nullable: true
+        error_message:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+
+    JobsPendingResponse:
+      type: object
+      required: [jobs]
+      properties:
+        jobs:
+          type: array
+          items:
+            $ref: "#/components/schemas/JobRead"
+
+    JobStatusUpdateRequest:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [processing, printed, failed, cancelled]
+        error_code:
+          type: string
+          nullable: true
+        error_message:
+          type: string
+          nullable: true
+        metrics:
+          type: object
+          additionalProperties: true
+
+    LogUploadAck:
+      type: object
+      required: [artifact_id]
+      properties:
+        artifact_id:
+          type: string
+        expires_at:
+          type: string
+          format: date-time
+          nullable: true
+
+    LogArtifactList:
+      type: object
+      required: [artifacts]
+      properties:
+        artifacts:
+          type: array
+          items:
+            type: object
+            required: [id, created_at]
+            properties:
+              id:
+                type: string
+              created_at:
+                type: string
+                format: date-time
+              size_bytes:
+                type: integer
+              download_url:
+                type: string
+                format: uri
+
+    UpdateHint:
+      type: object
+      properties:
+        available:
+          type: boolean
+        version:
+          type: string
+        channel:
+          $ref: "#/components/schemas/UpdateChannel"
+        mandatory:
+          type: boolean
+
+    UpdateCheckResponse:
+      type: object
+      required: [update_available, channel, current_version]
+      properties:
+        update_available:
+          type: boolean
+        channel:
+          $ref: "#/components/schemas/UpdateChannel"
+        current_version:
+          type: string
+        latest_version:
+          type: string
+          nullable: true
+        mandatory:
+          type: boolean
+          default: false
+        release_notes_url:
+          type: string
+          format: uri
+          nullable: true
+        package:
+          $ref: "#/components/schemas/UpdatePackage"
+          nullable: true
+
+    UpdatePackage:
+      type: object
+      required: [url, sha256, signature, size_bytes]
+      properties:
+        url:
+          type: string
+          format: uri
+        sha256:
+          type: string
+        signature:
+          type: string
+          description: Detached signature (see security.md)
+        size_bytes:
+          type: integer
+
+    UpdateDownloadInfo:
+      type: object
+      required: [channel, version, download_url]
+      properties:
+        channel:
+          $ref: "#/components/schemas/UpdateChannel"
+        version:
+          type: string
+        download_url:
+          type: string
+          format: uri
+        sha256:
+          type: string
+          nullable: true
+        release_notes:
+          type: string
+          nullable: true
+
+    AgentRemoteConfig:
+      type: object
+      required: [config_version, channel, heartbeat_interval_seconds]
+      properties:
+        config_version:
+          type: string
+        channel:
+          $ref: "#/components/schemas/UpdateChannel"
+        heartbeat_interval_seconds:
+          type: integer
+          minimum: 5
+          maximum: 300
+        ws_enabled:
+          type: boolean
+          default: true
+        poll_interval_seconds:
+          type: integer
+          minimum: 2
+          maximum: 120
+        modules:
+          type: object
+          additionalProperties: true
+          description: Per-module remote knobs (e.g. printing.max_parallel)
+
+    AgentConfigSnapshot:
+      type: object
+      required: [config_version]
+      properties:
+        config_version:
+          type: string
+        display_name:
+          type: string
+        channel:
+          $ref: "#/components/schemas/UpdateChannel"
+        local:
+          type: object
+          additionalProperties: true

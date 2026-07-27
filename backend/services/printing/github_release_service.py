@@ -93,7 +93,29 @@ def _github_repository() -> str:
 
 
 def _asset_prefix() -> str:
-    return os.getenv("GITHUB_PRINTER_AGENT_ASSET_PREFIX", "SasistPrinterAgent-Setup").strip()
+    """Primary GitHub Release asset name prefix (Stage 5: SasistAgentSetup)."""
+    return os.getenv("GITHUB_AGENT_ASSET_PREFIX", os.getenv("GITHUB_PRINTER_AGENT_ASSET_PREFIX", "SasistAgentSetup")).strip()
+
+
+def _asset_prefixes() -> list[str]:
+    """Primary + legacy prefixes for older GitHub releases / installed updaters."""
+    primary = _asset_prefix() or "SasistAgentSetup"
+    prefixes = [primary]
+    # Compatibility: historical Python agent installer name
+    legacy = "SasistPrinterAgent-Setup"
+    if legacy not in prefixes:
+        prefixes.append(legacy)
+    # Also accept versioned / unversioned SasistAgentSetup*
+    if "SasistAgentSetup" not in prefixes:
+        prefixes.insert(0, "SasistAgentSetup")
+    # Dedupe preserving order
+    seen: set[str] = set()
+    out: list[str] = []
+    for p in prefixes:
+        if p and p not in seen:
+            seen.add(p)
+            out.append(p)
+    return out
 
 
 def _github_token() -> str | None:
@@ -155,7 +177,7 @@ def _static_fallback_release() -> PrinterAgentRelease:
 def _github_request_headers() -> dict[str, str]:
     headers = {
         "Accept": "application/vnd.github+json",
-        "User-Agent": "sasist-backend/printer-agent-release",
+        "User-Agent": "sasist-backend/sasist-agent-release",
         "X-GitHub-Api-Version": "2022-11-28",
     }
     token = _github_token()
@@ -174,7 +196,7 @@ def _http_get_json(url: str) -> dict[str, Any]:
         return payload
 
 
-def _parse_github_release(payload: dict[str, Any], *, prefix: str) -> PrinterAgentRelease | None:
+def _parse_github_release(payload: dict[str, Any], *, prefix: str | None = None) -> PrinterAgentRelease | None:
     tag_name = str(payload.get("tag_name") or "").strip()
     if not tag_name:
         logger.warning("GitHub latest release missing tag_name")
@@ -185,11 +207,21 @@ def _parse_github_release(payload: dict[str, Any], *, prefix: str) -> PrinterAge
         logger.warning("GitHub latest release missing assets array (tag=%s)", tag_name)
         return None
 
-    asset = find_installer_asset(assets, prefix=prefix)
+    prefixes = [prefix] if prefix else _asset_prefixes()
+    asset = None
+    matched_prefix = None
+    for candidate in prefixes:
+        if not candidate:
+            continue
+        asset = find_installer_asset(assets, prefix=candidate)
+        if asset is not None:
+            matched_prefix = candidate
+            break
+
     if asset is None:
         logger.warning(
-            "GitHub latest release has no installer asset matching %s*.exe (tag=%s)",
-            prefix,
+            "GitHub latest release has no installer asset matching any of %s (tag=%s)",
+            prefixes,
             tag_name,
         )
         return None
@@ -198,6 +230,14 @@ def _parse_github_release(payload: dict[str, Any], *, prefix: str) -> PrinterAge
     if not is_valid_download_url(download_url):
         logger.warning("GitHub installer asset has invalid download URL (tag=%s)", tag_name)
         return None
+
+    if matched_prefix and matched_prefix != _asset_prefix():
+        logger.info(
+            "Using compatibility installer asset prefix=%s name=%s (tag=%s)",
+            matched_prefix,
+            asset.get("name"),
+            tag_name,
+        )
 
     return PrinterAgentRelease(
         version=normalize_release_version(tag_name),
@@ -212,7 +252,6 @@ def _try_fetch_from_github() -> PrinterAgentRelease | None:
         logger.info("GITHUB_REPOSITORY is empty — skipping GitHub Releases lookup")
         return None
 
-    prefix = _asset_prefix()
     url = f"{GITHUB_API_BASE}/repos/{repo}/releases/latest"
     try:
         payload = _http_get_json(url)
@@ -234,15 +273,15 @@ def _try_fetch_from_github() -> PrinterAgentRelease | None:
         logger.exception("GitHub Releases returned invalid payload (repo=%s)", repo)
         return None
 
-    release = _parse_github_release(payload, prefix=prefix)
+    release = _parse_github_release(payload)
     if release is None:
         return None
 
     logger.info(
-        "Resolved printer agent release from GitHub (repo=%s, version=%s, asset_prefix=%s)",
+        "Resolved Sasist Agent release from GitHub (repo=%s, version=%s, prefixes=%s)",
         repo,
         release.version,
-        prefix,
+        _asset_prefixes(),
     )
     return release
 

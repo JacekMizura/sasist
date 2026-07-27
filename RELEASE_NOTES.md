@@ -1,13 +1,16 @@
-# Sasist Printer Agent — release notes
+# Sasist Agent — release notes
 
-Edytuj ten plik przed uruchomieniem `release.ps1`. Treść trafi do opisu GitHub Release.
+Edytuj ten plik przed uruchomieniem `release.ps1`. Treść trafia do opisu GitHub Release.
 
 ## Zmiany
 
-- Opisz najważniejsze zmiany w tej wersji.
+- Stage 5 cutover: oficjalny produkt to **Sasist Agent** (.NET).
+- Artefakt: `SasistAgentSetup.exe`
 
 ## Instalacja / aktualizacja
 
-1. Pobierz `SasistPrinterAgent-Setup-x.y.z.exe` z GitHub Releases.
-2. Uruchom instalator (upgrade zachowuje `config.json` w `%ProgramData%\Sasist\PrinterAgent\`).
-3. Po aktualizacji agent zsynchronizuje wersję z backendem przy pierwszym heartbeat.
+1. Pobierz `SasistAgentSetup.exe` z GitHub Releases.
+2. Uruchom instalator jako administrator.
+3. Wklej **kod parowania** z panelu Sasist (Ustawienia → Urządzenia → Dodaj Agenta).
+
+Legacy Python agent (`legacy/sasist-printer-agent`) nie jest już dystrybuowany.

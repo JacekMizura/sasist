@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UseWindowsForms>true</UseWindowsForms>
+    <RootNamespace>Sasist.Agent.Tray</RootNamespace>
+    <AssemblyName>Sasist.Agent.Tray</AssemblyName>
+    <Version>1.0.0</Version>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>..\..\assets\sasist-agent.ico</ApplicationIcon>
+    <Product>Sasist Agent</Product>
+    <AssemblyTitle>Sasist Agent</AssemblyTitle>
+    <Company>Sasist</Company>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="System.ServiceProcess.ServiceController" Version="8.0.1" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Sasist.Agent.Core\Sasist.Agent.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="..\..\assets\sasist-agent.ico" Link="assets\sasist-agent.ico" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\assets\sasist-mark.png" Link="assets\sasist-mark.png" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="appsettings.Development.json" CopyToOutputDirectory="PreserveNewest" Condition="'$(Configuration)' == 'Debug'" />
+  </ItemGroup>
+</Project>

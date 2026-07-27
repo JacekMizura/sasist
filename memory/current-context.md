@@ -2,15 +2,11 @@
 
 ## Active
 
-**PrintMethodDialog** — standardowy dialog wyboru sposobu wydruku dla całego Sasist.
+**Stage 5 Final Cutover complete (shipping path)**
 
-- Entry: `usePrintMethodFlow().requestPrint(handlers)`
-- UI: `PrintMethodDialog` (DS `Dialog` + `PageHeader` + Primary/Secondary)
-- Skip dialog gdy `hasDefaultCloudPrinter` (`a4_printer_id` / label / receipt)
-- Handlers: `onBrowserPrint` | `onCloudPrint` | `onDownloadPdf`
+Official agent: `sasist-agent` / `SasistAgentSetup.exe`  
+Legacy Python: `legacy/sasist-printer-agent` (DO NOT USE)
 
-Podpięte: produkcja (karty), dokumenty magazynowe. Kolejne moduły: etykiety, raporty, sprzedaż — ten sam flow.
+Report: `docs/sasist-agent/STAGE5-CUTOVER-REPORT.md`
 
-## Layout Master (wcześniej)
-
-SSOT layout tokens Label System dla Szablonów wydruków.
+Next: publish GitHub Release with `SasistAgentSetup.exe`, then optionally delete `legacy/`.
