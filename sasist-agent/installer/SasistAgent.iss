@@ -4,7 +4,7 @@
 ; Upgrade-safe: stops service + kills Tray/Host BEFORE file copy (avoids DeleteFile code 5).
 
 #define MyAppName "Sasist Agent"
-#define MyAppVersion "1.1.0"
+#define MyAppVersion "1.1.1"
 #define MyAppPublisher "Sasist"
 #define MyAppExeName "Sasist.Agent.Tray.exe"
 #define MyServiceExe "Sasist.Agent.Host.exe"

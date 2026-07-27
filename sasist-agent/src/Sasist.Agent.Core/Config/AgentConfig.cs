@@ -9,7 +9,7 @@ namespace Sasist.Agent.Core.Config;
 public sealed class AgentConfig
 {
     public const int ProtocolVersion = 1;
-    public const string AgentVersion = "1.1.0";
+    public const string AgentVersion = "1.1.1";
 
     public string ServerUrl { get; set; } = "";
     /// <summary>Non-secret machine identity — stored in config.json.</summary>

@@ -7,7 +7,7 @@
     <UseWindowsForms>true</UseWindowsForms>
     <RootNamespace>Sasist.Agent.Tray</RootNamespace>
     <AssemblyName>Sasist.Agent.Tray</AssemblyName>
-    <Version>1.1.0</Version>
+    <Version>1.1.1</Version>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <ApplicationIcon>..\..\assets\sasist-agent.ico</ApplicationIcon>
     <Product>Sasist Agent</Product>

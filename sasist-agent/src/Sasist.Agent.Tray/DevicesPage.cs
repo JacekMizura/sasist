@@ -2,117 +2,153 @@ using Sasist.Agent.Core.Config;
 
 namespace Sasist.Agent.Tray;
 
-internal sealed class DevicesPage : UserControl
+internal sealed class DevicesPage : UserControl, IRefreshablePage
 {
-    private readonly ListView _list;
+    private readonly FlowLayoutPanel _flow;
     private readonly Label _summary;
 
     public DevicesPage()
     {
         Dock = DockStyle.Fill;
-        BackColor = Color.FromArgb(245, 246, 248);
+        BackColor = Color.Transparent;
 
-        var title = new Label
+        Controls.Add(new PageHeader("Urządzenia", "Drukarki wykryte na tym komputerze"));
+
+        var toolbar = new FlowLayoutPanel
         {
-            Text = "Urządzenia",
             Dock = DockStyle.Top,
-            Height = 40,
-            Font = new Font("Segoe UI Semibold", 18f),
-            ForeColor = Color.FromArgb(28, 28, 30),
+            Height = 48,
+            FlowDirection = FlowDirection.LeftToRight,
+            WrapContents = false,
+            Padding = new Padding(0, 4, 0, 8),
+            BackColor = Color.Transparent,
         };
+        var refresh = new ModernButton { Text = "Odśwież", Width = 110 };
+        refresh.Click += (_, _) => RefreshData();
+        toolbar.Controls.Add(refresh);
 
         _summary = new Label
         {
             Dock = DockStyle.Top,
             Height = 28,
-            ForeColor = Color.FromArgb(90, 90, 98),
+            Font = Theme.FontUi,
+            ForeColor = Theme.TextSecondary,
+            BackColor = Color.Transparent,
         };
 
-        var toolbar = new FlowLayoutPanel
-        {
-            Dock = DockStyle.Top,
-            Height = 44,
-            FlowDirection = FlowDirection.LeftToRight,
-            WrapContents = false,
-            Padding = new Padding(0, 4, 0, 4),
-        };
-
-        var testBtn = new Button
-        {
-            Text = "Druk testowy",
-            Width = 140,
-            Height = 34,
-            FlatStyle = FlatStyle.Flat,
-            BackColor = Color.FromArgb(249, 115, 22),
-            ForeColor = Color.White,
-            Font = new Font("Segoe UI Semibold", 10f),
-            Cursor = Cursors.Hand,
-        };
-        testBtn.FlatAppearance.BorderSize = 0;
-        testBtn.Click += (_, _) => RunTestPrint();
-
-        var refreshBtn = new Button
-        {
-            Text = "Odśwież",
-            Width = 100,
-            Height = 34,
-            FlatStyle = FlatStyle.Flat,
-            BackColor = Color.White,
-            Cursor = Cursors.Hand,
-        };
-        refreshBtn.Click += (_, _) => RefreshData();
-
-        toolbar.Controls.Add(testBtn);
-        toolbar.Controls.Add(refreshBtn);
-
-        _list = new ListView
+        _flow = new FlowLayoutPanel
         {
             Dock = DockStyle.Fill,
-            View = View.Details,
-            FullRowSelect = true,
-            MultiSelect = false,
-            HideSelection = false,
-            Font = new Font("Segoe UI", 10f),
-            BorderStyle = BorderStyle.FixedSingle,
+            AutoScroll = true,
+            WrapContents = true,
+            FlowDirection = FlowDirection.LeftToRight,
+            Padding = new Padding(0, 8, 0, 8),
+            BackColor = Color.Transparent,
         };
-        _list.Columns.Add("Drukarka", 360);
-        _list.Columns.Add("Status", 140);
-        _list.Columns.Add("Uwagi", 180);
 
-        Controls.Add(_list);
+        Controls.Add(_flow);
         Controls.Add(toolbar);
         Controls.Add(_summary);
-        Controls.Add(title);
+        Theme.Changed += () => { _summary.ForeColor = Theme.TextSecondary; RefreshData(); };
     }
 
     public void RefreshData()
     {
         var printers = LocalPrinters.List();
         _summary.Text = UiCopy.DevicesReadySummary(printers.Count(p => p.Status == "Gotowa"));
-        _list.BeginUpdate();
-        _list.Items.Clear();
+        _flow.SuspendLayout();
+        _flow.Controls.Clear();
         foreach (var p in printers)
-        {
-            var item = new ListViewItem(p.Name);
-            item.SubItems.Add(p.Status);
-            item.SubItems.Add(p.IsDefault ? "Domyślna" : "");
-            item.Tag = p.Name;
-            if (p.Status != "Gotowa")
-                item.ForeColor = Color.FromArgb(160, 60, 60);
-            _list.Items.Add(item);
-        }
-        _list.EndUpdate();
+            _flow.Controls.Add(BuildCard(p));
+        _flow.ResumeLayout();
     }
 
-    private void RunTestPrint()
+    private Control BuildCard(LocalPrinterInfo p)
     {
-        if (_list.SelectedItems.Count == 0)
+        var card = new RoundedCard
         {
-            MessageBox.Show("Wybierz drukarkę z listy.", "Druk testowy", MessageBoxButtons.OK, MessageBoxIcon.Information);
-            return;
-        }
+            Width = 320,
+            Height = 168,
+            Margin = new Padding(0, 0, 16, 16),
+        };
 
-        var name = _list.SelectedItems[0].Tag as string ?? _list.SelectedItems[0].Text;
+        var icon = new Label
+        {
+            Text = AppIcons.Printer,
+            Font = Theme.Icon(20f),
+            ForeColor = Theme.Accent,
+            Left = 20,
+            Top = 18,
+            Width = 32,
+            Height = 28,
+            BackColor = Color.Transparent,
+        };
+        var name = new Label
+        {
+            Text = p.Name,
+            Left = 56,
+            Top = 16,
+            Width = 240,
+            Height = 28,
+            Font = new Font("Segoe UI Semibold", 11f),
+            ForeColor = Theme.TextPrimary,
+            BackColor = Color.Transparent,
+        };
+        var badge = new Label
+        {
+            Text = p.IsDefault ? "Domyślna" : "",
+            Left = 56,
+            Top = 42,
+            Width = 120,
+            Height = 18,
+            Font = Theme.FontCaption,
+            ForeColor = Theme.Accent,
+            BackColor = Color.Transparent,
+        };
+        var status = new Label
+        {
+            Text = p.Status == "Gotowa" ? "●  Gotowa" : "●  Niedostępna",
+            Left = 20,
+            Top = 72,
+            Width = 260,
+            Height = 22,
+            Font = Theme.FontUiSemibold,
+            ForeColor = p.Status == "Gotowa" ? Theme.Success : Theme.Danger,
+            BackColor = Color.Transparent,
+        };
+
+        var test = new ModernButton
+        {
+            Text = "Druk testowy",
+            Primary = true,
+            Left = 20,
+            Top = 110,
+            Width = 130,
+            Height = 34,
+        };
+        test.Click += (_, _) => RunTest(p.Name);
+
+        var details = new ModernButton
+        {
+            Text = "Szczegóły",
+            Left = 160,
+            Top = 110,
+            Width = 120,
+            Height = 34,
+        };
+        details.Click += (_, _) =>
+            MessageBox.Show(
+                $"Drukarka: {p.Name}\nStatus: {p.Status}\n{(p.IsDefault ? "Drukarka domyślna systemu Windows" : "Drukarka dodatkowa")}",
+                "Szczegóły drukarki",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Information);
+
+        card.Controls.AddRange([icon, name, badge, status, test, details]);
+        return card;
+    }
+
+    private static void RunTest(string name)
+    {
         try
         {
             LocalPrinters.PrintTestPage(name);
@@ -122,16 +158,10 @@ internal sealed class DevicesPage : UserControl
         catch (Exception ex)
         {
             JobHistoryStore.Append($"test-{DateTime.Now:HHmmss}", name, "Błąd", ex.Message);
-            MessageBox.Show(
-                UserMessages.PrintFailed,
-                "Druk testowy",
-                MessageBoxButtons.OK,
-                MessageBoxIcon.Warning);
+            MessageBox.Show(UserMessages.PrintFailed, "Druk testowy", MessageBoxButtons.OK, MessageBoxIcon.Warning);
             try
             {
-                File.AppendAllText(
-                    Path.Combine(AgentPaths.LogsDir, "tray-errors.log"),
-                    $"[{DateTimeOffset.Now:O}] test print: {ex}\n\n");
+                File.AppendAllText(Path.Combine(AgentPaths.LogsDir, "tray-errors.log"), $"[{DateTimeOffset.Now:O}] {ex}\n\n");
             }
             catch { /* ignore */ }
         }

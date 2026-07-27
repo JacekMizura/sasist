@@ -1,3 +1,9 @@
+## 2026-07-27 — Sasist Agent 1.1.1 modern UI redesign
+
+- Theme system (light/dark), Fluent icons, rounded cards, modern nav
+- Pages: Status cards, Devices cards + test print, Jobs timeline, color Logs, sectioned Diagnostics, Test suite, Settings, Updates
+- No architecture/backend/protocol changes
+
 ## 2026-07-27 — Sasist Agent 1.1.0 desktop product window
 
 - MainForm management center (Status / Devices+test / Jobs / Logs / Diagnostics / pairing)

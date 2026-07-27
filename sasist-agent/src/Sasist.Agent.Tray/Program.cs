@@ -9,11 +9,12 @@ internal static class Program
     {
         ApplicationConfiguration.Initialize();
         AgentPaths.EnsureDirectories();
+        UiPreferences.Load();
+        Theme.LoadFromPreferences();
 
         using var mutex = new Mutex(true, @"Global\Sasist.Agent.Tray", out var created);
         if (!created)
         {
-            // Second instance: try to focus existing window via tray balloon is enough
             MessageBox.Show(
                 "Sasist Agent jest już otwarty.\n\nSpójrz na ikonę przy zegarze i kliknij ją dwukrotnie.",
                 "Sasist Agent",
@@ -25,7 +26,7 @@ internal static class Program
         var store = new ConfigStore();
         var config = store.Load();
         config.EnsureCloudUrl();
-        try { store.Save(config); } catch { /* ACL — UI still works */ }
+        try { store.Save(config); } catch { /* ACL */ }
 
         Application.Run(new MainForm(store));
     }

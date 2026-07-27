@@ -2,12 +2,10 @@
 
 ## Active
 
-**Sasist Agent 1.1.0 — desktop product UI**
+**Sasist Agent 1.1.1 — modern desktop UI**
 
-- Main window (not tray-only): Status, Urządzenia (+ test print), Zadania, Logi, Diagnostyka, pairing overlay
-- Installer upgrade-safe (stop/kill before file copy) — verified silent upgrade 1.0.0 → 1.1.0, no DeleteFile code 5
-- Official setup: `sasist-agent/dist/SasistAgentSetup.exe` (also `Output/`)
+Visual redesign only (WinForms custom chrome): Theme light/dark, Fluent icons, card layouts, Status/Devices/History/Logs/Diagnostics/Test/Settings/Updates.
 
-**Important:** Old **Sasist Printer Agent** (Python) may still be installed separately at `C:\Program Files\Sasist\PrinterAgent\` — uninstall from Windows Apps. New product name is **Sasist Agent**.
+Installer: `sasist-agent/dist/SasistAgentSetup.exe`
 
-Next: publish GitHub Release with `SasistAgentSetup.exe` so ERP download is not the legacy Printer Agent.
+Uninstall legacy **Sasist Printer Agent** if still present. Publish GitHub Release so ERP downloads `SasistAgentSetup.exe`.
