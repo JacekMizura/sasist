@@ -1,4 +1,4 @@
-import api from "../api";
+import api from "../api/axios";
 import type { EdgeDevice, EdgeDeviceAction, EdgeDeviceEvent, EdgeModule } from "./types";
 
 export type ListDevicesParams = {
