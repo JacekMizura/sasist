@@ -355,6 +355,16 @@ public sealed class AgentRuntime
                         job.JobId,
                         job.Payload);
                     var result = await module.HandleCommandAsync(command, ct);
+                    var printer =
+                        GetPayloadString(job.Payload, "printer_name")
+                        ?? GetPayloadString(job.Payload, "device_local_id")
+                        ?? GetPayloadString(job.Payload, "printer")
+                        ?? "—";
+                    JobHistoryStore.Append(
+                        job.JobId,
+                        printer,
+                        result.Ok ? "Wydrukowano" : "Błąd",
+                        result.Ok ? null : result.ErrorMessage);
                     if (!result.Ok)
                         _logger.LogWarning(
                             "Job {JobId} module={Module} failed: {Error}",
@@ -385,5 +395,13 @@ public sealed class AgentRuntime
         {
             return false;
         }
+    }
+
+    private static string? GetPayloadString(IReadOnlyDictionary<string, object?> payload, string key)
+    {
+        if (!payload.TryGetValue(key, out var v) || v is null)
+            return null;
+        var s = v.ToString();
+        return string.IsNullOrWhiteSpace(s) ? null : s;
     }
 }

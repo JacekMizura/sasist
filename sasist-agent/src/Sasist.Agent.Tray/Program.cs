@@ -13,8 +13,9 @@ internal static class Program
         using var mutex = new Mutex(true, @"Global\Sasist.Agent.Tray", out var created);
         if (!created)
         {
+            // Second instance: try to focus existing window via tray balloon is enough
             MessageBox.Show(
-                "Sasist Agent jest już uruchomiony.",
+                "Sasist Agent jest już otwarty.\n\nSpójrz na ikonę przy zegarze i kliknij ją dwukrotnie.",
                 "Sasist Agent",
                 MessageBoxButtons.OK,
                 MessageBoxIcon.Information);
@@ -24,15 +25,8 @@ internal static class Program
         var store = new ConfigStore();
         var config = store.Load();
         config.EnsureCloudUrl();
-        store.Save(config);
+        try { store.Save(config); } catch { /* ACL — UI still works */ }
 
-        if (config.NeedsSetup)
-        {
-            using var pairing = new PairingForm(store);
-            if (pairing.ShowDialog() != DialogResult.OK)
-                return;
-        }
-
-        Application.Run(new TrayApplicationContext(store));
+        Application.Run(new MainForm(store));
     }
 }

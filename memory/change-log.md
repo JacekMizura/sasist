@@ -1,3 +1,9 @@
+## 2026-07-27 — Sasist Agent 1.1.0 desktop product window
+
+- MainForm management center (Status / Devices+test / Jobs / Logs / Diagnostics / pairing)
+- Installer: PrepareToInstall stop+taskkill before copy; version 1.1.0; CloseApplications=force
+- Verified upgrade 1.0.0→1.1.0 silent: exit 0, no DeleteFile code 5; service Auto+Running; Tray MainWindowTitle=Sasist Agent
+
 ## 2026-07-27 — Sasist Agent customer UX (Tray)
 
 - Status / Urządzenia / Diagnostyka as separate windows; no tech IDs on main screen

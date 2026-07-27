@@ -4,39 +4,37 @@
 
 - Windows 10 / 11 (x64) lub Windows Server 2019+
 - Uprawnienia administratora do instalacji
-- Połączenie z Internetem
+- Internet
 - Konto Sasist oraz **kod połączenia** (Ustawienia → Urządzenia → Dodaj Agenta)
 
-**Nie jest wymagany** .NET Runtime — instalator dostarcza kompletny program.
+## Instalacja / aktualizacja
 
-## Szybka instalacja
+1. Pobierz **SasistAgentSetup.exe** (nie „Sasist Printer Agent”).
+2. Uruchom jako administrator.
+3. Instalator zatrzyma starą usługę, zamknie program, podmieni pliki i uruchomi ponownie.
+4. Otworzy się okno **Sasist Agent**.
 
-1. Uruchom `SasistAgentSetup.exe` **jako administrator**.
-2. Po instalacji otworzy się **Sasist Agent**.
-3. Wklej **kod połączenia** z panelu Sasist.
-4. Kliknij **Połącz**.
+Jeśli nadal masz stary **Sasist Printer Agent**, odinstaluj go w Ustawieniach Windows → Aplikacje.
 
-Gotowe — Agent działa w tle (ikona przy zegarze). Możesz drukować z Sasist.
+## Pierwsze uruchomienie
 
-Nie podajesz żadnego adresu serwera. Program łączy się wyłącznie z Sasist.
+1. Wpisz **kod połączenia**.
+2. Kliknij **Połącz**.
+3. Przejdź do **Urządzenia** → wybierz drukarkę → **Druk testowy**.
 
-## Co zobaczysz po połączeniu
+Okno pozostaje otwarte jako panel zarządzania. Zamknięcie (X) chowa program do ikony przy zegarze.
 
-- **Status** — czy jesteś połączony, nazwa firmy, komputer, gotowość do drukowania
-- **Urządzenia** — drukarki gotowe do pracy (oraz przyszłe typy urządzeń)
-- **Diagnostyka** — tylko gdy wsparcie Sasist o to poprosi
-- **Logi** — szczegóły techniczne na wypadek problemów
+## Panele
 
-## Menu przy ikonie
+| Panel | Co robi |
+|-------|---------|
+| Status | Połączenie, firma, komputer, gotowość |
+| Urządzenia | Lista drukarek + druk testowy |
+| Zadania | Ostatnie wydruki i błędy |
+| Logi | Podgląd, kopiuj, wyczyść, zapisz |
+| Diagnostyka | Machine ID, Agent ID, endpoint (dla wsparcia) |
 
-Sasist Agent · Połączono · Połączono z: firma · Status · Urządzenia · Diagnostyka · Logi · Sprawdź aktualizacje · Odłącz urządzenie · Uruchom ponownie usługę · Zamknij
-
-## Odinstalowanie
-
-Ustawienia Windows → Aplikacje → Sasist Agent → Odinstaluj  
-lub skrót w Menu Start.
-
-## Budowanie instalatora (dla zespołu Sasist)
+## Budowanie (zespół Sasist)
 
 ```powershell
 cd sasist-agent
