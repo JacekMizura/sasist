@@ -1,24 +1,25 @@
 namespace Sasist.Agent.Core.Config;
 
-/// <summary>Sasist Cloud endpoints — Agent pairs only with Sasist (not multi-ERP).</summary>
+/// <summary>Sasist Cloud endpoints — Agent pairs with the Sasist API.</summary>
 public static class SasistCloud
 {
-    public const string ProductionApiUrl = "https://api.sasist.pl";
+    /// <summary>Canonical production API host (no trailing /api — Agent appends /api/...).</summary>
+    public const string ProductionApiUrl = "https://sasist-production.up.railway.app";
     public const string ProductionAppUrl = "https://app.sasist.pl";
-    public const string DevicesPanelPath = "/settings/devices";
+    public const string DevicesPanelPath = "/settings/wms/workstations";
 
     /// <summary>
-    /// Resolve API base URL: SASIST_API_URL env → appsettings override file → Production.
+    /// Resolve API base URL: SASIST_API_URL env → appsettings override → Production.
     /// </summary>
     public static string ResolveApiBaseUrl()
     {
         var env = Environment.GetEnvironmentVariable("SASIST_API_URL");
         if (!string.IsNullOrWhiteSpace(env))
-            return env.Trim().TrimEnd('/');
+            return NormalizeApiBase(env);
 
         var fromFile = TryReadDevelopmentOverride();
         if (!string.IsNullOrWhiteSpace(fromFile))
-            return fromFile.Trim().TrimEnd('/');
+            return NormalizeApiBase(fromFile!);
 
         return ProductionApiUrl;
     }
@@ -33,6 +34,39 @@ public static class SasistCloud
 
     public static string DevicesPanelUrl =>
         ResolveAppBaseUrl().TrimEnd('/') + DevicesPanelPath;
+
+    /// <summary>
+    /// True when stored URL is a known dead/legacy endpoint that must be replaced.
+    /// </summary>
+    public static bool IsStaleOrUnreachableHost(string? serverUrl)
+    {
+        if (string.IsNullOrWhiteSpace(serverUrl)) return true;
+        try
+        {
+            var u = new Uri(serverUrl.Trim());
+            var host = u.Host.ToLowerInvariant();
+            if (host is "api.sasist.pl" or "sasist.pl") return true;
+            if (host is "127.0.0.1" or "localhost" or "::1")
+            {
+                // Legacy local ports that are not the current FastAPI default.
+                if (u.Port is 8080 or 80 or 443) return true;
+            }
+            return false;
+        }
+        catch
+        {
+            return true;
+        }
+    }
+
+    /// <summary>Strip trailing /api so Agent can append /api/printing/… safely.</summary>
+    public static string NormalizeApiBase(string url)
+    {
+        var s = url.Trim().TrimEnd('/');
+        if (s.EndsWith("/api", StringComparison.OrdinalIgnoreCase))
+            s = s[..^4].TrimEnd('/');
+        return s;
+    }
 
     private static string? TryReadDevelopmentOverride()
     {

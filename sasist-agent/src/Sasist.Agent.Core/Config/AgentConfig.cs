@@ -52,11 +52,13 @@ public sealed class AgentConfig
         return !string.IsNullOrWhiteSpace(ServerUrl) && (HasToken || HasApiKey);
     }
 
-    /// <summary>Fill ServerUrl from built-in Sasist Cloud when empty.</summary>
+    /// <summary>Fill ServerUrl from built-in Sasist Cloud when empty or stale.</summary>
     public void EnsureCloudUrl()
     {
-        if (string.IsNullOrWhiteSpace(ServerUrl))
+        if (string.IsNullOrWhiteSpace(ServerUrl) || SasistCloud.IsStaleOrUnreachableHost(ServerUrl))
             ServerUrl = SasistCloud.ResolveApiBaseUrl();
+        else
+            ServerUrl = SasistCloud.NormalizeApiBase(ServerUrl);
     }
 }
 
@@ -196,7 +198,10 @@ public sealed class ConfigStore
         cfg.ApiKey = _secrets.Load("agent_api_key") ?? "";
         cfg.Token = _secrets.Load("agent_token") ?? "";
         cfg.RefreshToken = _secrets.Load("refresh_token") ?? "";
+        var beforeUrl = cfg.ServerUrl;
         cfg.EnsureCloudUrl();
+        if (!string.Equals(beforeUrl?.TrimEnd('/'), cfg.ServerUrl.TrimEnd('/'), StringComparison.OrdinalIgnoreCase))
+            Save(cfg);
         return cfg;
     }
 

@@ -7,18 +7,18 @@ using Sasist.Agent.Core.Config;
 namespace Sasist.Agent.Tray;
 
 /// <summary>
-/// Sasist Design System — single visual source of truth.
+/// Sasist Design System — Linear / Arc / Notion-class desktop chrome.
 /// Screens must not invent colors, fonts, or spacing locally.
 /// </summary>
 internal static class Theme
 {
-    // ── Colors (canonical names) ──────────────────────────────────────────
+    // ── Brand (unchanged palette, tuned contrast) ─────────────────────────
     public static readonly Color Primary = Color.FromArgb(0xF9, 0x73, 0x16);
     public static readonly Color PrimaryHover = Color.FromArgb(0xEA, 0x58, 0x0C);
     public static readonly Color PrimaryActive = Color.FromArgb(0xC2, 0x41, 0x0C);
     public static readonly Color PrimarySoft = Color.FromArgb(0xFF, 0xF7, 0xED);
     public static readonly Color PrimarySoftBorder = Color.FromArgb(0xFE, 0xD7, 0xAA);
-    public static readonly Color PrimaryText = Color.FromArgb(0xC2, 0x41, 0x0C);
+    public static readonly Color PrimaryText = Color.FromArgb(0x9A, 0x34, 0x12);
 
     public static readonly Color Success = Color.FromArgb(0x05, 0x96, 0x69);
     public static readonly Color SuccessSoft = Color.FromArgb(0xEC, 0xFD, 0xF5);
@@ -28,21 +28,24 @@ internal static class Theme
     public static readonly Color DangerHover = Color.FromArgb(0xBE, 0x12, 0x3C);
     public static readonly Color DangerSoft = Color.FromArgb(0xFF, 0xF1, 0xF2);
 
-    public static readonly Color Background = Color.FromArgb(0xF1, 0xF5, 0xF9);   // page canvas
-    public static readonly Color Surface = Color.White;                            // cards / chrome
-    public static readonly Color SurfaceMuted = Color.FromArgb(0xF8, 0xFA, 0xFC);
-    public static readonly Color Border = Color.FromArgb(0xE2, 0xE8, 0xF0);
-    public static readonly Color BorderStrong = Color.FromArgb(0xCB, 0xD5, 0xE1);
+    /// <summary>App canvas — soft slate, not gray panel soup.</summary>
+    public static readonly Color Background = Color.FromArgb(0xF8, 0xFA, 0xFC);
+    public static readonly Color Surface = Color.White;
+    public static readonly Color SurfaceMuted = Color.FromArgb(0xF1, 0xF5, 0xF9);
+    public static readonly Color SidebarBg = Color.FromArgb(0xFF, 0xFF, 0xFF);
+    public static readonly Color Border = Color.FromArgb(0xEE, 0xF2, 0xF6);
+    public static readonly Color BorderStrong = Color.FromArgb(0xE2, 0xE8, 0xF0);
 
     public static readonly Color Text = Color.FromArgb(0x0F, 0x17, 0x2A);
     public static readonly Color SecondaryText = Color.FromArgb(0x47, 0x55, 0x69);
     public static readonly Color MutedText = Color.FromArgb(0x64, 0x74, 0x8B);
     public static readonly Color FaintText = Color.FromArgb(0x94, 0xA3, 0xB8);
 
-    public static readonly Color Hover = Color.FromArgb(0xF1, 0xF5, 0xF9);
+    public static readonly Color Hover = Color.FromArgb(0xF8, 0xFA, 0xFC);
     public static readonly Color Selected = Color.FromArgb(0xFF, 0xF7, 0xED);
+    public static readonly Color FocusRing = Color.FromArgb(0xFD, 0xBA, 0x74);
 
-    // Aliases kept for existing call sites (map to canonical)
+    // Aliases
     public static Color Accent => Primary;
     public static Color AccentHover => PrimaryHover;
     public static Color AccentActive => PrimaryActive;
@@ -58,7 +61,6 @@ internal static class Theme
     public static Color Info => Color.FromArgb(0x02, 0x84, 0xC7);
     public static Color InfoSoft => Color.FromArgb(0xF0, 0xF9, 0xFF);
 
-    // ── Spacing scale (only allowed gaps) ─────────────────────────────────
     public static class Space
     {
         public const int Xs = 4;
@@ -70,21 +72,25 @@ internal static class Theme
         public const int Xxxl = 48;
     }
 
-    // ── Radii / chrome ────────────────────────────────────────────────────
-    public const int CardRadius = 12;
-    public const int ControlRadius = 8;
-    public const int NavRadius = 10;
-    public const int BadgeRadius = 6;
-    public const int CardPad = Space.Lg;
-    public const int PagePad = Space.Xl;
+    // Radii — soft SaaS cards
+    public const int CardRadius = 16;
+    public const int ControlRadius = 12;
+    public const int NavRadius = 12;
+    public const int BadgeRadius = 999;
+    public const int InputRadius = 12;
+
+    public const int CardPad = Space.Xl;
+    public const int PagePad = Space.Xxl;
     public const int Gap = Space.Lg;
     public const int SectionGap = Space.Xl;
-    public const int ButtonHeight = 44;
+    public const int ButtonHeight = 48;
+    public const int InputHeight = 48;
     public const int IconButtonSize = 36;
-    public const int SidebarMinWidth = 200;
-    public const int TopBarHeight = 60;
+    public const int SidebarWidth = 232;
+    public const int SidebarMinWidth = 220;
+    public const int TopBarHeight = 56;
+    public const int ContentMaxWidth = 960;
 
-    // ── Typography scale (never Font= locally) ────────────────────────────
     private static FontFamily? _uiFamily;
 
     public static FontFamily UiFamily
@@ -92,7 +98,7 @@ internal static class Theme
         get
         {
             if (_uiFamily is not null) return _uiFamily;
-            foreach (var name in new[] { "Segoe UI Variable Text", "Segoe UI", "Inter" })
+            foreach (var name in new[] { "Segoe UI Variable Text", "Segoe UI Variable Display", "Segoe UI", "Inter" })
             {
                 try
                 {
@@ -106,18 +112,20 @@ internal static class Theme
         }
     }
 
-    public static Font Display => new(UiFamily, 28f, FontStyle.Bold);
-    public static Font Title => new(UiFamily, 20f, FontStyle.Bold);
-    public static Font Heading => new(UiFamily, 16f, FontStyle.Bold);
-    public static Font Body => new(UiFamily, 14f, FontStyle.Regular);
-    public static Font BodySemibold => new(UiFamily, 14f, FontStyle.Bold);
-    public static Font Caption => new(UiFamily, 12f, FontStyle.Regular);
-    public static Font CaptionBold => new(UiFamily, 12f, FontStyle.Bold);
-    public static Font Hint => new(UiFamily, 11f, FontStyle.Regular);
-    public static Font Nav => new(UiFamily, 14f, FontStyle.Bold);
+    // Hierarchy: Display 28–32 · Subtitle 18–20 · Body 14–15 — sparse Bold
+    public static Font Display => new(UiFamily, 30f, FontStyle.Bold);
+    public static Font Title => new(UiFamily, 22f, FontStyle.Bold);
+    public static Font Heading => new(UiFamily, 18f, FontStyle.Regular);
+    public static Font Subtitle => new(UiFamily, 15f, FontStyle.Regular);
+    public static Font Body => new(UiFamily, 14.5f, FontStyle.Regular);
+    public static Font BodySemibold => new(UiFamily, 14.5f, FontStyle.Bold);
+    public static Font Caption => new(UiFamily, 12.5f, FontStyle.Regular);
+    public static Font CaptionBold => new(UiFamily, 12.5f, FontStyle.Bold);
+    public static Font Hint => new(UiFamily, 11.5f, FontStyle.Regular);
+    public static Font Nav => new(UiFamily, 14f, FontStyle.Regular);
+    public static Font NavActive => new(UiFamily, 14f, FontStyle.Bold);
     public static Font Mono => CreateMono();
 
-    // Legacy aliases
     public static Font FontPageTitle => Title;
     public static Font FontSection => Heading;
     public static Font FontBody => Body;
@@ -135,7 +143,7 @@ internal static class Theme
         {
             try
             {
-                var f = new Font(n, 12f);
+                var f = new Font(n, 12.5f);
                 if (string.Equals(f.Name, n, StringComparison.OrdinalIgnoreCase)) return f;
                 f.Dispose();
             }
@@ -164,16 +172,31 @@ internal static class Theme
         r.Inflate(-1, -1);
         if (elevated)
         {
+            // Soft layered shadow (Linear-like), not a hard WinForms drop.
             var sh = r;
-            sh.Offset(0, 3);
+            sh.Offset(0, 4);
             using var sp = RoundRect(sh, CardRadius);
-            using var sb = new SolidBrush(Color.FromArgb(22, 15, 23, 42));
+            using var sb = new SolidBrush(Color.FromArgb(18, 15, 23, 42));
             g.FillPath(sb, sp);
+            sh.Offset(0, 2);
+            using var sp2 = RoundRect(sh, CardRadius);
+            using var sb2 = new SolidBrush(Color.FromArgb(10, 15, 23, 42));
+            g.FillPath(sb2, sp2);
         }
         using var path = RoundRect(r, CardRadius);
         using var fill = new SolidBrush(Surface);
         using var pen = new Pen(selected ? PrimarySoftBorder : Border);
         g.FillPath(fill, path);
+        g.DrawPath(pen, path);
+    }
+
+    public static void DrawFocusRing(Graphics g, Rectangle bounds, int radius)
+    {
+        g.SmoothingMode = SmoothingMode.AntiAlias;
+        var r = bounds;
+        r.Inflate(2, 2);
+        using var path = RoundRect(r, radius + 2);
+        using var pen = new Pen(FocusRing, 2f);
         g.DrawPath(pen, path);
     }
 }
@@ -184,8 +207,8 @@ internal static class AppIcons
     private static Font? _f;
     public static Font Font => _f ??= Create(16f);
     public static Font Sm => Create(14f);
-    public static Font Lg => Create(20f);
-    public static Font Xl => Create(28f);
+    public static Font Lg => Create(18f);
+    public static Font Xl => Create(24f);
     public static Font Empty => Create(40f);
 
     public const string Status = "\uE80F";
@@ -212,6 +235,7 @@ internal static class AppIcons
     public const string Copy = "\uE8C8";
     public const string Folder = "\uE8B7";
     public const string Chevron = "\uE76C";
+    public const string Link = "\uE71B";
 
     public static Font Create(float size)
     {

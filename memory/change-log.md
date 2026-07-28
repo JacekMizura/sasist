@@ -1,4 +1,10 @@
+## 2026-07-29 — Sasist Agent Tray UI/UX (SaaS desktop)
+
+- Visual-only: Theme radii/typography/shadows, header (logo+name+badge+version), sidebar without brand block, PageShell centered max 960, Pairing onboarding card + SasistTextField 48px, soft status pills
+- Build: Tray Release OK
+
 ## 2026-07-28 — Onboarding E2E: pairing code visible + flow
+
 
 - Root cause: naive `expires_at` → FE local parse → immediate expire; poll cleared code; POST /pair then GET refetch race
 - Fix: UTC-aware expires_at; FE parseApiUtcMs + sessionStorage code; no destructive refresh after pair; poll grace; default Agent tab; post-pair → Devices → Printers + test print

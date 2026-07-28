@@ -3,13 +3,13 @@ using System.Drawing.Text;
 
 namespace Sasist.Agent.Tray;
 
-/// <summary>Typography components — never set Font locally on screens.</summary>
+/// <summary>Typography — sparse Bold, clear hierarchy.</summary>
 internal sealed class SasistTitle : Label
 {
     public SasistTitle()
     {
         AutoSize = true;
-        Font = Theme.Title;
+        Font = Theme.Display;
         ForeColor = Theme.Text;
         BackColor = Color.Transparent;
         Margin = new Padding(0, 0, 0, Theme.Space.Sm);
@@ -22,7 +22,7 @@ internal sealed class SasistSubtitle : Label
     public SasistSubtitle()
     {
         AutoSize = true;
-        Font = Theme.Body;
+        Font = Theme.Subtitle;
         ForeColor = Theme.SecondaryText;
         BackColor = Color.Transparent;
         Margin = Padding.Empty;
@@ -84,7 +84,7 @@ internal sealed class SasistMetric : Label
     public SasistMetric()
     {
         AutoSize = true;
-        Font = Theme.Title; // card metrics — Display reserved for rare heroes
+        Font = Theme.Title;
         ForeColor = Theme.Text;
         BackColor = Color.Transparent;
         UseMnemonic = false;
@@ -135,7 +135,7 @@ internal class SasistBadge : Control
     public SasistBadge()
     {
         AutoSize = true;
-        MinimumSize = new Size(48, 24);
+        MinimumSize = new Size(52, 28);
         Margin = new Padding(0, 0, Theme.Space.Sm, 0);
         SetStyle(ControlStyles.AllPaintingInWmPaint | ControlStyles.UserPaint | ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw, true);
     }
@@ -154,8 +154,8 @@ internal class SasistBadge : Control
 
     public override Size GetPreferredSize(Size proposedSize)
     {
-        var sz = TextRenderer.MeasureText(_text, Theme.CaptionBold);
-        return new Size(Math.Max(MinimumSize.Width, sz.Width + Theme.Space.Md * 2), Math.Max(24, MinimumSize.Height));
+        var sz = TextRenderer.MeasureText(_text, Theme.Caption);
+        return new Size(Math.Max(MinimumSize.Width, sz.Width + Theme.Space.Lg), Math.Max(28, MinimumSize.Height));
     }
 
     protected override void SetBoundsCore(int x, int y, int width, int height, BoundsSpecified specified)
@@ -176,7 +176,7 @@ internal class SasistBadge : Control
         using var path = Theme.RoundRect(r, Theme.BadgeRadius);
         using var brush = new SolidBrush(bg);
         e.Graphics.FillPath(brush, path);
-        TextRenderer.DrawText(e.Graphics, _text, Theme.CaptionBold, r, fg,
+        TextRenderer.DrawText(e.Graphics, _text, Theme.Caption, r, fg,
             TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPrefix);
     }
 
@@ -191,12 +191,19 @@ internal class SasistBadge : Control
     };
 }
 
+/// <summary>Connection status as a soft pill — never an error banner.</summary>
 internal sealed class SasistStatusBadge : SasistBadge
 {
     public void SetOnline(bool online)
     {
         Text = online ? "●  Połączono" : "●  Brak połączenia";
         Tone = online ? SasistBadgeTone.Success : SasistBadgeTone.Danger;
+    }
+
+    public void SetPairing()
+    {
+        Text = "●  Parowanie";
+        Tone = SasistBadgeTone.Primary;
     }
 
     public void SetReady(bool ready)

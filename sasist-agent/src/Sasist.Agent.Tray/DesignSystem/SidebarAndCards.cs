@@ -62,22 +62,16 @@ internal sealed class SasistNavItem : Control
         using (var b = new SolidBrush(bg))
             e.Graphics.FillPath(b, path);
 
-        if (_active)
-        {
-            using var accent = new SolidBrush(Theme.Primary);
-            e.Graphics.FillRectangle(accent, new Rectangle(r.X, r.Y + Theme.Space.Sm, 3, r.Height - Theme.Space.Lg));
-        }
-
-        var iconC = _active ? Theme.PrimaryText : Theme.MutedText;
-        var textC = _active ? Theme.PrimaryText : Theme.SecondaryText;
+        var iconC = _active ? Theme.Primary : Theme.FaintText;
+        var textC = _active ? Theme.Text : Theme.SecondaryText;
+        var font = _active ? Theme.NavActive : Theme.Nav;
         TextRenderer.DrawText(e.Graphics, IconGlyph, AppIcons.Lg, new Rectangle(r.X + Theme.Space.Md, r.Y, 28, r.Height), iconC,
             TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding);
-        TextRenderer.DrawText(e.Graphics, Text, Theme.Nav, new Rectangle(r.X + 44, r.Y, Math.Max(40, r.Width - 56), r.Height), textC,
+        TextRenderer.DrawText(e.Graphics, Text, font, new Rectangle(r.X + 44, r.Y, Math.Max(40, r.Width - 56), r.Height), textC,
             TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPrefix | TextFormatFlags.NoPadding);
     }
 }
 
-/// <summary>App sidebar — brand, nav table, footer. Width from longest label.</summary>
 internal sealed class SasistSidebar : Panel
 {
     private readonly TableLayoutPanel _navHost;
@@ -90,22 +84,21 @@ internal sealed class SasistSidebar : Panel
     public SasistSidebar((string Id, string Label, string Icon)[] items)
     {
         Dock = DockStyle.Left;
-        Width = Theme.SidebarMinWidth;
+        Width = Theme.SidebarWidth;
         MinimumSize = new Size(Theme.SidebarMinWidth, 0);
-        BackColor = Theme.Surface;
+        BackColor = Theme.SidebarBg;
         Paint += (_, e) =>
         {
             using var pen = new Pen(Theme.Border);
             e.Graphics.DrawLine(pen, Width - 1, 0, Width - 1, Height);
         };
 
-        var brand = BuildBrand();
         _navHost = new TableLayoutPanel
         {
             Dock = DockStyle.Fill,
             ColumnCount = 1,
             AutoScroll = true,
-            Padding = new Padding(Theme.Space.Md, Theme.Space.Xs, Theme.Space.Md, Theme.Space.Sm),
+            Padding = new Padding(Theme.Space.Md, Theme.Space.Lg, Theme.Space.Md, Theme.Space.Sm),
             BackColor = Color.Transparent,
             GrowStyle = TableLayoutPanelGrowStyle.FixedSize,
         };
@@ -130,11 +123,11 @@ internal sealed class SasistSidebar : Panel
             _nav[it.Id] = btn;
         }
 
-        var footer = new Panel { Dock = DockStyle.Bottom, AutoSize = true, Padding = new Padding(Theme.Space.Lg, Theme.Space.Md, Theme.Space.Md, Theme.Space.Lg) };
-        footer.Paint += (_, e) =>
+        var footer = new Panel
         {
-            using var pen = new Pen(Theme.Border);
-            e.Graphics.DrawLine(pen, Theme.Space.Md, 0, Math.Max(Theme.Space.Md, footer.Width - Theme.Space.Md), 0);
+            Dock = DockStyle.Bottom,
+            AutoSize = true,
+            Padding = new Padding(Theme.Space.Lg, Theme.Space.Md, Theme.Space.Lg, Theme.Space.Lg),
         };
         var footerStack = new FlowLayoutPanel
         {
@@ -145,8 +138,8 @@ internal sealed class SasistSidebar : Panel
             BackColor = Color.Transparent,
             Padding = new Padding(0, Theme.Space.Sm, 0, 0),
         };
-        footerStack.Controls.Add(new SasistHint { Text = "Połączono z:", Margin = new Padding(0, 0, 0, Theme.Space.Xs) });
-        _footerOrg = new SasistCaption { Text = "—", Font = Theme.BodySemibold, ForeColor = Theme.Text, Margin = new Padding(0, 0, 0, Theme.Space.Xs) };
+        footerStack.Controls.Add(new SasistHint { Text = "Połączono z", Margin = new Padding(0, 0, 0, Theme.Space.Xs) });
+        _footerOrg = new SasistCaption { Text = "—", Font = Theme.Body, ForeColor = Theme.Text, Margin = new Padding(0, 0, 0, Theme.Space.Xs) };
         _footerVer = new SasistHint { Text = $"v{AgentConfig.AgentVersion}" };
         footerStack.Controls.Add(_footerOrg);
         footerStack.Controls.Add(_footerVer);
@@ -158,7 +151,6 @@ internal sealed class SasistSidebar : Panel
 
         Controls.Add(_navHost);
         Controls.Add(footer);
-        Controls.Add(brand);
     }
 
     public void FitWidth((string Id, string Label, string Icon)[] items)
@@ -167,7 +159,8 @@ internal sealed class SasistSidebar : Panel
         foreach (var it in items)
             maxLabel = Math.Max(maxLabel, LayoutHelpers.MeasureTextWidth(it.Label, Theme.Nav));
         var itemW = Math.Max(160, Theme.Space.Lg + 28 + Theme.Space.Md + maxLabel + Theme.Space.Lg);
-        var need = _navHost.Padding.Horizontal + itemW;
+        var need = Math.Max(Theme.SidebarWidth, _navHost.Padding.Horizontal + itemW);
+        need = Math.Min(need, 260);
         if (Width != need)
             Width = Math.Max(Theme.SidebarMinWidth, need);
     }
@@ -187,50 +180,8 @@ internal sealed class SasistSidebar : Panel
         if (_footerOrg.Text != company) _footerOrg.Text = company;
         if (_footerVer.Text != version) _footerVer.Text = version;
     }
-
-    private static Panel BuildBrand()
-    {
-        var brand = new Panel { Dock = DockStyle.Top, AutoSize = true, Padding = new Padding(Theme.Space.Lg, Theme.Space.Lg, Theme.Space.Md, Theme.Space.Md) };
-        var brandRow = new TableLayoutPanel
-        {
-            Dock = DockStyle.Top,
-            AutoSize = true,
-            ColumnCount = 2,
-            RowCount = 1,
-            BackColor = Color.Transparent,
-        };
-        brandRow.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-        brandRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
-        brandRow.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-
-        var brandLogo = new PictureBox
-        {
-            Image = Branding.MarkImage,
-            SizeMode = PictureBoxSizeMode.Zoom,
-            Dock = DockStyle.Fill,
-            Margin = new Padding(0, Theme.Space.Xs, 0, Theme.Space.Xs),
-            MinimumSize = new Size(28, 28),
-            MaximumSize = new Size(32, 32),
-        };
-        var brandStack = new FlowLayoutPanel
-        {
-            Dock = DockStyle.Fill,
-            AutoSize = true,
-            FlowDirection = FlowDirection.TopDown,
-            WrapContents = false,
-            Padding = new Padding(Theme.Space.Sm, 0, 0, 0),
-            BackColor = Color.Transparent,
-        };
-        brandStack.Controls.Add(new SasistHeading { Text = "Sasist", Margin = new Padding(0, 0, 0, Theme.Space.Xs) });
-        brandStack.Controls.Add(new SasistHint { Text = "Agent" });
-        brandRow.Controls.Add(brandLogo, 0, 0);
-        brandRow.Controls.Add(brandStack, 1, 0);
-        brand.Controls.Add(brandRow);
-        return brand;
-    }
 }
 
-/// <summary>Device printer card — one implementation for Devices page.</summary>
 internal sealed class SasistPrinterCard : SasistCard
 {
     private readonly SasistBody _name;
@@ -241,11 +192,11 @@ internal sealed class SasistPrinterCard : SasistCard
     public SasistPrinterCard(PrinterRow p)
     {
         _printerName = p.Name;
-            AutoSize = true;
-            AutoSizeMode = AutoSizeMode.GrowAndShrink;
-            MinimumSize = new Size(280, 200);
-            Margin = new Padding(0, 0, Theme.Gap, Theme.Gap);
-            Padding = new Padding(Theme.CardPad, Theme.CardPad, Theme.CardPad, Theme.CardPad + Theme.Space.Sm);
+        AutoSize = true;
+        AutoSizeMode = AutoSizeMode.GrowAndShrink;
+        MinimumSize = new Size(280, 200);
+        Margin = new Padding(0, 0, Theme.Gap, Theme.Gap);
+        Padding = new Padding(Theme.CardPad);
 
         var stack = new FlowLayoutPanel
         {
@@ -315,7 +266,6 @@ internal sealed class SasistPrinterCard : SasistCard
     }
 }
 
-/// <summary>Key/value diagnostic row card.</summary>
 internal sealed class SasistDiagnosticCard : SasistCard
 {
     private readonly Dictionary<string, SasistBody> _values = new();
@@ -371,7 +321,6 @@ internal sealed class SasistDiagnosticCard : SasistCard
     }
 }
 
-/// <summary>Status metric tile on home grid.</summary>
 internal sealed class SasistMetricCard : SasistCard
 {
     public SasistMetric ValueLabel { get; }
@@ -382,7 +331,7 @@ internal sealed class SasistMetricCard : SasistCard
         Dock = DockStyle.Fill;
         AutoSize = true;
         AutoSizeMode = AutoSizeMode.GrowAndShrink;
-        MinimumSize = new Size(200, 100);
+        MinimumSize = new Size(200, 110);
 
         var stack = new FlowLayoutPanel
         {
@@ -404,7 +353,7 @@ internal sealed class SasistMetricCard : SasistCard
         var ic = new SasistIcon();
         ic.Set(icon, Theme.Primary, 16f);
         head.Controls.Add(ic);
-        head.Controls.Add(new SasistCaption { Text = title, Font = Theme.CaptionBold, ForeColor = Theme.MutedText });
+        head.Controls.Add(new SasistCaption { Text = title, ForeColor = Theme.MutedText });
 
         ValueLabel = new SasistMetric { Text = "—", MaximumSize = new Size(280, 0), Margin = new Padding(0, 0, 0, Theme.Space.Sm) };
         HintLabel = new SasistCaption { Text = "", MaximumSize = new Size(280, 0) };

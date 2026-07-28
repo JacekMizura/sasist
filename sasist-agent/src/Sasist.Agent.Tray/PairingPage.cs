@@ -2,13 +2,15 @@ using Sasist.Agent.Core.Config;
 
 namespace Sasist.Agent.Tray;
 
+/// <summary>Full-window onboarding — single card, no nested chrome.</summary>
 internal sealed class PairingPage : UserControl
 {
     private readonly ConfigStore _store;
     private readonly Action _onPaired;
-    private readonly TextBox _code;
+    private readonly SasistTextField _codeField;
     private readonly SasistSubtitle _status;
     private readonly SasistButton _connect;
+    private readonly SasistCard _card;
 
     public PairingPage(ConfigStore store, Action onPaired)
     {
@@ -16,7 +18,7 @@ internal sealed class PairingPage : UserControl
         _onPaired = onPaired;
         Dock = DockStyle.Fill;
         BackColor = Theme.Background;
-        Padding = new Padding(Theme.PagePad);
+        Padding = new Padding(Theme.Space.Xxxl);
 
         var host = new TableLayoutPanel
         {
@@ -28,18 +30,18 @@ internal sealed class PairingPage : UserControl
         host.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50f));
         host.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
         host.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50f));
-        host.RowStyles.Add(new RowStyle(SizeType.Percent, 50f));
+        host.RowStyles.Add(new RowStyle(SizeType.Percent, 45f));
         host.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        host.RowStyles.Add(new RowStyle(SizeType.Percent, 50f));
+        host.RowStyles.Add(new RowStyle(SizeType.Percent, 55f));
 
-        var card = new SasistCard
+        _card = new SasistCard
         {
             AutoSize = true,
             AutoSizeMode = AutoSizeMode.GrowAndShrink,
             Margin = Padding.Empty,
-            Padding = new Padding(Theme.Space.Xxl),
-            MinimumSize = new Size(360, 280),
-            MaximumSize = new Size(520, 0),
+            Padding = new Padding(40, 36, 40, 36),
+            MinimumSize = new Size(420, 0),
+            MaximumSize = new Size(460, 0),
         };
 
         var stack = new FlowLayoutPanel
@@ -51,80 +53,93 @@ internal sealed class PairingPage : UserControl
             BackColor = Color.Transparent,
         };
 
-        var brandRow = new FlowLayoutPanel
-        {
-            AutoSize = true,
-            WrapContents = false,
-            BackColor = Color.Transparent,
-            Margin = new Padding(0, 0, 0, Theme.Space.Lg),
-        };
-        brandRow.Controls.Add(new PictureBox
+        var mark = new PictureBox
         {
             Image = Branding.MarkImage,
             SizeMode = PictureBoxSizeMode.Zoom,
-            MinimumSize = new Size(32, 32),
-            MaximumSize = new Size(32, 32),
-            Margin = new Padding(0, 0, Theme.Space.Md, 0),
-        });
-        brandRow.Controls.Add(new SasistHeading { Text = "Sasist Agent", Margin = Padding.Empty });
+            MinimumSize = new Size(40, 40),
+            MaximumSize = new Size(40, 40),
+            Margin = new Padding(0, 0, 0, Theme.Space.Xl),
+        };
 
-        var title = new SasistTitle { Text = "Połącz z Sasist", MaximumSize = new Size(440, 0) };
+        var title = new SasistTitle
+        {
+            Text = "Połącz z Sasist",
+            MaximumSize = new Size(380, 0),
+            Margin = new Padding(0, 0, 0, Theme.Space.Md),
+        };
         var sub = new SasistSubtitle
         {
-            Text = "Wklej kod połączenia z panelu Sasist, aby zacząć drukować.",
-            MaximumSize = new Size(440, 0),
+            Text = "Wklej kod z panelu Sasist (Stanowiska → Sasist Agent).",
+            MaximumSize = new Size(380, 0),
+            Margin = new Padding(0, 0, 0, Theme.Space.Xxl),
+        };
+        var codeLbl = new SasistCaption
+        {
+            Text = "Kod połączenia",
+            Margin = new Padding(0, 0, 0, Theme.Space.Sm),
+        };
+
+        _codeField = new SasistTextField("np. A8F9-2B4C-X991", AppIcons.Link)
+        {
+            Width = 380,
             Margin = new Padding(0, 0, 0, Theme.Space.Lg),
         };
-        var codeLbl = new SasistCaption { Text = "Kod połączenia", Margin = new Padding(0, 0, 0, Theme.Space.Sm) };
 
-        var inputCard = new SasistCard
+        _connect = new SasistButton
         {
-            AutoSize = true,
-            Elevated = false,
-            Padding = new Padding(Theme.Space.Md, Theme.Space.Md, Theme.Space.Md, Theme.Space.Md),
+            Text = "Połącz urządzenie",
+            Kind = SasistButtonKind.Primary,
+            FullWidth = true,
+            Width = 380,
             Margin = new Padding(0, 0, 0, Theme.Space.Md),
-            MinimumSize = new Size(280, 40),
         };
-        _code = new TextBox
-        {
-            BorderStyle = BorderStyle.None,
-            Font = Theme.Body,
-            PlaceholderText = "Wklej kod tutaj",
-            BackColor = Theme.Surface,
-            Dock = DockStyle.Top,
-            MinimumSize = new Size(240, 22),
-        };
-        inputCard.Controls.Add(_code);
-
-        _connect = new SasistButton { Text = "Połącz", Kind = SasistButtonKind.Primary, Margin = new Padding(0, Theme.Space.Xs, 0, Theme.Space.Md) };
         _connect.Click += async (_, _) => await ConnectAsync();
-        _status = new SasistSubtitle { Text = "", MaximumSize = new Size(440, 0) };
 
-        stack.Controls.Add(brandRow);
+        _status = new SasistSubtitle
+        {
+            Text = "",
+            MaximumSize = new Size(380, 0),
+            Margin = new Padding(0, 0, 0, Theme.Space.Lg),
+        };
+
+        var help = new SasistCaption
+        {
+            Text = "Kod wygenerujesz w panelu: Ustawienia WMS → Stanowiska → zakładka Sasist Agent.",
+            MaximumSize = new Size(380, 0),
+            ForeColor = Theme.MutedText,
+            Margin = new Padding(0, Theme.Space.Sm, 0, 0),
+        };
+
+        stack.Controls.Add(mark);
         stack.Controls.Add(title);
         stack.Controls.Add(sub);
         stack.Controls.Add(codeLbl);
-        stack.Controls.Add(inputCard);
+        stack.Controls.Add(_codeField);
         stack.Controls.Add(_connect);
         stack.Controls.Add(_status);
-        card.Controls.Add(stack);
+        stack.Controls.Add(help);
+        _card.Controls.Add(stack);
 
-        host.Controls.Add(card, 1, 1);
+        host.Controls.Add(_card, 1, 1);
         Controls.Add(host);
-        Resize += (_, _) =>
-        {
-            var max = Math.Min(520, Math.Max(320, ClientSize.Width - Theme.Space.Xxxl));
-            card.MaximumSize = new Size(max, 0);
-            inputCard.MaximumSize = new Size(Math.Max(240, max - 56), 0);
-            title.MaximumSize = new Size(max - 56, 0);
-            sub.MaximumSize = new Size(max - 56, 0);
-            _status.MaximumSize = new Size(max - 56, 0);
-        };
+        Resize += (_, _) => FitCard();
+        HandleCreated += (_, _) => FitCard();
+    }
+
+    private void FitCard()
+    {
+        var max = Math.Min(460, Math.Max(360, ClientSize.Width - Theme.Space.Xxxl * 2));
+        _card.MaximumSize = new Size(max, 0);
+        var inner = Math.Max(280, max - 80);
+        _codeField.Width = inner;
+        _connect.Width = inner;
+        _connect.MinimumSize = new Size(inner, Theme.ButtonHeight);
     }
 
     private async Task ConnectAsync()
     {
-        var code = _code.Text.Trim();
+        var code = _codeField.Value.Trim().Replace(" ", "", StringComparison.Ordinal);
         if (string.IsNullOrWhiteSpace(code))
         {
             _status.ForeColor = Theme.Danger;

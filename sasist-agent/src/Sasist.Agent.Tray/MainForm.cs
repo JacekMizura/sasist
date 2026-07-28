@@ -15,6 +15,7 @@ internal sealed class MainForm : Form, IShellView
     private readonly Panel _content;
     private readonly Panel _pairingOverlay;
     private readonly SasistStatusBadge _connPill;
+    private readonly SasistHint _versionLabel;
     private readonly Dictionary<string, Control> _pages = new();
     private readonly NotifyIcon _tray;
     private readonly ContextMenuStrip _trayMenu;
@@ -63,7 +64,7 @@ internal sealed class MainForm : Form, IShellView
         MinimumSize = new Size(1000, 640);
         ClientSize = new Size(1200, 780);
 
-        var topBar = BuildTopBar(out _connPill);
+        var topBar = BuildTopBar(out _connPill, out _versionLabel);
         _sidebar = new SasistSidebar(NavItems);
         _sidebar.Navigated += Navigate;
         _content = new Panel { Dock = DockStyle.Fill, BackColor = Theme.Background };
@@ -125,8 +126,13 @@ internal sealed class MainForm : Form, IShellView
 
     public void SetChrome(UiState state)
     {
-        _connPill.SetOnline(state.Online);
+        if (state.NeedsSetup)
+            _connPill.SetPairing();
+        else
+            _connPill.SetOnline(state.Online);
         _sidebar.SetFooter(state.Company, state.Version);
+        if (_versionLabel.Text != state.Version)
+            _versionLabel.Text = state.Version;
         if (_tray.Text != state.TrayTip)
             _tray.Text = state.TrayTip;
         _sidebar.SetEnabled(!state.NeedsSetup);
@@ -136,7 +142,13 @@ internal sealed class MainForm : Form, IShellView
     {
         if (_pairingOverlay.Visible == visible) return;
         _pairingOverlay.Visible = visible;
-        if (visible) _pairingOverlay.BringToFront();
+        // Full-screen onboarding — hide shell chrome so it does not look like nested WinForms panels.
+        _sidebar.Visible = !visible;
+        if (visible)
+        {
+            _pairingOverlay.BringToFront();
+            _connPill.SetPairing();
+        }
     }
 
     protected override void OnDpiChanged(DpiChangedEventArgs e)
@@ -153,7 +165,7 @@ internal sealed class MainForm : Form, IShellView
         _sidebarFitted = true;
     }
 
-    private Panel BuildTopBar(out SasistStatusBadge connPill)
+    private Panel BuildTopBar(out SasistStatusBadge connPill, out SasistHint versionLabel)
     {
         var bar = new Panel
         {
@@ -161,8 +173,9 @@ internal sealed class MainForm : Form, IShellView
             MinimumSize = new Size(0, Theme.TopBarHeight),
             Height = Theme.TopBarHeight,
             BackColor = Theme.Surface,
-            Padding = new Padding(Theme.Space.Lg, 0, Theme.Space.Lg, 0),
+            Padding = new Padding(Theme.Space.Xl, 0, Theme.Space.Xl, 0),
         };
+        // Hairline only — no heavy chrome bar.
         bar.Paint += (_, e) =>
         {
             using var pen = new Pen(Theme.Border);
@@ -172,10 +185,11 @@ internal sealed class MainForm : Form, IShellView
         var grid = new TableLayoutPanel
         {
             Dock = DockStyle.Fill,
-            ColumnCount = 3,
+            ColumnCount = 4,
             RowCount = 1,
             BackColor = Color.Transparent,
         };
+        grid.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
         grid.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
         grid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
         grid.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
@@ -185,8 +199,8 @@ internal sealed class MainForm : Form, IShellView
         {
             Image = Branding.MarkImage,
             SizeMode = PictureBoxSizeMode.Zoom,
-            MinimumSize = new Size(28, 28),
-            MaximumSize = new Size(28, 28),
+            MinimumSize = new Size(26, 26),
+            MaximumSize = new Size(26, 26),
             Anchor = AnchorStyles.None,
             Margin = new Padding(0, 0, Theme.Space.Md, 0),
         };
@@ -197,17 +211,37 @@ internal sealed class MainForm : Form, IShellView
             ForeColor = Theme.Text,
             AutoSize = true,
             Anchor = AnchorStyles.Left,
-            Margin = new Padding(0, 0, Theme.Space.Md, 0),
+            Margin = new Padding(0, 0, Theme.Space.Lg, 0),
             AutoEllipsis = true,
         };
         connPill = new SasistStatusBadge();
-        connPill.SetOnline(true);
+        connPill.SetPairing();
         connPill.Anchor = AnchorStyles.None;
-        connPill.Margin = new Padding(Theme.Space.Md, 0, 0, 0);
+        connPill.Margin = new Padding(Theme.Space.Md, 0, Theme.Space.Md, 0);
+
+        versionLabel = new SasistHint
+        {
+            Text = $"v{AgentConfig.AgentVersion}",
+            Anchor = AnchorStyles.None,
+            Margin = new Padding(0),
+        };
+
+        var right = new FlowLayoutPanel
+        {
+            AutoSize = true,
+            WrapContents = false,
+            FlowDirection = FlowDirection.LeftToRight,
+            BackColor = Color.Transparent,
+            Anchor = AnchorStyles.Right,
+            Margin = Padding.Empty,
+        };
+        right.Controls.Add(connPill);
+        right.Controls.Add(versionLabel);
 
         grid.Controls.Add(logo, 0, 0);
         grid.Controls.Add(title, 1, 0);
-        grid.Controls.Add(connPill, 2, 0);
+        grid.Controls.Add(new Panel { Dock = DockStyle.Fill, BackColor = Color.Transparent }, 2, 0);
+        grid.Controls.Add(right, 3, 0);
         bar.Controls.Add(grid);
         return bar;
     }

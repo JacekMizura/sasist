@@ -2,16 +2,15 @@ namespace Sasist.Agent.Tray;
 
 /// <summary>
 /// Single motion library — hover, fade, transition, loading.
-/// No per-screen animation code.
+/// Timings stay in the 150–200 ms band (no flashy effects).
 /// </summary>
 internal static class Motion
 {
-    public const int HoverMs = 120;
+    public const int HoverMs = 150;
     public const int FadeMs = 180;
     public const int TransitionMs = 200;
     public const int LoadingPulseMs = 900;
 
-    /// <summary>Soft opacity pulse on a control while loading (tag-based; stop with StopPulse).</summary>
     public static void StartPulse(Control target)
     {
         StopPulse(target);

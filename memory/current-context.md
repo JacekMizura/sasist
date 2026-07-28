@@ -2,10 +2,9 @@
 
 ## Active
 
-**WMS Stanowiska — onboarding E2E fix (no new features)**
+**Sasist Agent Tray — UI/UX SaaS redesign (no logic changes)**
 
-Critical: pairing code vanished / “expired” immediately after generate.
-Root cause: naive UTC `expires_at` parsed as local time + poll clearing code + refetch race.
+Linear/Arc/Notion-class shell: light header, 232px sidebar, centered content ≤960px, soft cards r16, pairing onboarding field 48px.
 
 ## Agent release
 

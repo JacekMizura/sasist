@@ -10,8 +10,8 @@ namespace Sasist.Agent.Tray;
 internal static class UserMessages
 {
     public const string NetworkUnavailable = "Brak połączenia z Internetem.";
-    public const string CannotReachSasist = "Nie udało się połączyć z Sasist.";
-    public const string InvalidPairingCode = "Kod połączenia jest nieprawidłowy.";
+    public const string CannotReachSasist = "Nie udało się połączyć z Sasist. Sprawdź sieć lub spróbuj ponownie.";
+    public const string InvalidPairingCode = "Kod połączenia jest nieprawidłowy lub został już użyty.";
     public const string PairingExpired = "Kod połączenia wygasł. Wygeneruj nowy w panelu Sasist.";
     public const string CannotSaveConfig = "Nie można zapisać ustawień. Uruchom Sasist Agent jako administrator.";
     public const string EnterPairingCode = "Wklej kod połączenia z panelu Sasist.";
@@ -52,19 +52,26 @@ internal static class UserMessages
             UnauthorizedAccessException => CannotSaveConfig,
             DirectoryNotFoundException => CannotSaveConfig,
             IOException when Contains(ex, "access", "denied", "unauthorized") => CannotSaveConfig,
-            SocketException => NetworkUnavailable,
-            HttpRequestException hre when hre.InnerException is SocketException => NetworkUnavailable,
-            HttpRequestException => NetworkUnavailable,
+            PairingException pe => pe.UserMessage,
+            SocketException => CannotReachSasist,
+            HttpRequestException hre when IsDnsFailure(hre) => CannotReachSasist,
+            HttpRequestException => CannotReachSasist,
             TaskCanceledException => CannotReachSasist,
             TimeoutException => CannotReachSasist,
-            PairingException pe => pe.UserMessage,
             _ => GenericFailure,
         };
     }
 
+    private static bool IsDnsFailure(Exception ex)
+    {
+        var msg = ex.ToString();
+        return Contains(ex, "nodename", "nor servname", "name or service not known", "nie można rozpoznać", "host not found")
+               || msg.Contains("No such host", StringComparison.OrdinalIgnoreCase);
+    }
+
     private static bool Contains(Exception ex, params string[] needles)
     {
-        var msg = ex.Message ?? "";
+        var msg = ex.ToString();
         return needles.Any(n => msg.Contains(n, StringComparison.OrdinalIgnoreCase));
     }
 }
@@ -92,9 +99,11 @@ internal static class PairingClient
     public static async Task<PairingResult> PairAsync(AgentConfig config, string pairingCode, CancellationToken ct)
     {
         config.EnsureCloudUrl();
+
+        var baseUrl = config.ServerUrl.TrimEnd('/') + "/api/printing/";
         using var http = new HttpClient
         {
-            BaseAddress = new Uri(config.ServerUrl.TrimEnd('/') + "/api/printing/"),
+            BaseAddress = new Uri(baseUrl),
             Timeout = TimeSpan.FromSeconds(30),
         };
 
@@ -115,9 +124,17 @@ internal static class PairingClient
         {
             res = await http.SendAsync(req, ct);
         }
-        catch (HttpRequestException)
+        catch (HttpRequestException ex)
         {
-            throw new PairingException(UserMessages.NetworkUnavailable);
+            try
+            {
+                AgentPaths.EnsureDirectories();
+                File.AppendAllText(
+                    Path.Combine(AgentPaths.LogsDir, "tray-errors.log"),
+                    $"[{DateTimeOffset.Now:O}] Pairing HTTP to {baseUrl}: {ex}\n\n");
+            }
+            catch { }
+            throw new PairingException(UserMessages.CannotReachSasist);
         }
         catch (TaskCanceledException)
         {
@@ -130,7 +147,17 @@ internal static class PairingClient
         if ((int)res.StatusCode == 429)
             throw new PairingException(UserMessages.PairingExpired);
         if (!res.IsSuccessStatusCode)
+        {
+            try
+            {
+                AgentPaths.EnsureDirectories();
+                File.AppendAllText(
+                    Path.Combine(AgentPaths.LogsDir, "tray-errors.log"),
+                    $"[{DateTimeOffset.Now:O}] Pairing HTTP {(int)res.StatusCode} {baseUrl}: {json}\n\n");
+            }
+            catch { }
             throw new PairingException(UserMessages.CannotReachSasist);
+        }
 
         var payload = JsonSerializer.Deserialize<RegisterResponse>(json, JsonOptions);
         if (payload is null || string.IsNullOrWhiteSpace(payload.Token))
@@ -154,3 +181,4 @@ internal static class PairingClient
 }
 
 internal readonly record struct PairingResult(int AgentId, string Token, int? WarehouseId, string OrganizationName);
+

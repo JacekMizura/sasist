@@ -1,8 +1,12 @@
 namespace Sasist.Agent.Tray;
 
-/// <summary>Page chrome: title + subtitle + body. Used by every screen.</summary>
+/// <summary>
+/// Page chrome: centered content column (max ~960px), title + subtitle + body.
+/// Avoids left-stuck WinForms panels.
+/// </summary>
 internal sealed class PageShell : Panel
 {
+    private readonly Panel _column;
     private readonly SasistTitle _title;
     private readonly SasistSubtitle _desc;
     public Panel Body { get; }
@@ -13,16 +17,22 @@ internal sealed class PageShell : Panel
         BackColor = Theme.Background;
         Padding = new Padding(Theme.PagePad);
 
+        _column = new Panel
+        {
+            BackColor = Color.Transparent,
+            Anchor = AnchorStyles.Top,
+        };
+
         var header = new Panel
         {
             Dock = DockStyle.Top,
             AutoSize = true,
             AutoSizeMode = AutoSizeMode.GrowAndShrink,
             BackColor = Color.Transparent,
-            Padding = new Padding(0, 0, 0, Theme.Space.Lg),
+            Padding = new Padding(0, 0, 0, Theme.Space.Xl),
         };
         _title = new SasistTitle { Text = title };
-        _desc = new SasistSubtitle { Text = description };
+        _desc = new SasistSubtitle { Text = description, Margin = new Padding(0, Theme.Space.Sm, 0, 0) };
         var stack = new FlowLayoutPanel
         {
             Dock = DockStyle.Top,
@@ -41,19 +51,23 @@ internal sealed class PageShell : Panel
             Dock = DockStyle.Fill,
             AutoScroll = true,
             BackColor = Color.Transparent,
-            Padding = new Padding(0, Theme.Space.Xs, Theme.Space.Sm, 0),
+            Padding = Padding.Empty,
         };
-        Controls.Add(Body);
-        Controls.Add(header);
-        Resize += (_, _) => ApplyWidths();
-        HandleCreated += (_, _) => ApplyWidths();
+        _column.Controls.Add(Body);
+        _column.Controls.Add(header);
+        Controls.Add(_column);
+        Resize += (_, _) => LayoutColumn();
+        HandleCreated += (_, _) => LayoutColumn();
     }
 
-    private void ApplyWidths()
+    private void LayoutColumn()
     {
-        var w = Math.Max(240, ClientSize.Width - Padding.Horizontal - Theme.Space.Xl);
-        _title.MaximumSize = new Size(w, 0);
-        _desc.MaximumSize = new Size(w, 0);
+        var avail = Math.Max(280, ClientSize.Width - Padding.Horizontal);
+        var colW = Math.Min(Theme.ContentMaxWidth, avail);
+        var x = Padding.Left + Math.Max(0, (avail - colW) / 2);
+        _column.SetBounds(x, Padding.Top, colW, Math.Max(100, ClientSize.Height - Padding.Vertical));
+        _title.MaximumSize = new Size(colW, 0);
+        _desc.MaximumSize = new Size(colW, 0);
     }
 }
 
@@ -155,7 +169,7 @@ internal sealed class SasistSearchBox : SasistCard
         AutoSizeMode = AutoSizeMode.GrowAndShrink;
         Padding = new Padding(Theme.Space.Md, Theme.Space.Sm, Theme.Space.Md, Theme.Space.Sm);
         Margin = new Padding(0, 0, Theme.Space.Sm, Theme.Space.Sm);
-        MinimumSize = new Size(220, 36);
+        MinimumSize = new Size(220, 40);
         Elevated = false;
 
         var row = new TableLayoutPanel
