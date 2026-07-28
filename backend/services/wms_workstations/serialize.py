@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 from collections import defaultdict
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 
 from sqlalchemy.orm import Session
@@ -187,7 +187,7 @@ def serialize_workstations_batch(
             ip_by_key[int(key.id)] = key.last_used_ip
 
     device_counts = _device_counts_batch(db, agent_ids)
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
     payloads: list[dict[str, Any]] = []
 
     for workstation in workstations:
@@ -222,15 +222,17 @@ def serialize_workstations_batch(
             "agent": agent_summary,
         }
         if detail:
+            exp = workstation.pairing_expires_at
             pairing_active = bool(
-                workstation.pairing_code_hash
-                and workstation.pairing_expires_at
-                and workstation.pairing_expires_at > now
+                workstation.pairing_code_hash and exp is not None and exp > now
             )
             payload["pairing_active"] = pairing_active
-            payload["pairing_expires_at"] = (
-                workstation.pairing_expires_at if pairing_active else None
-            )
+            if pairing_active and exp is not None:
+                # Always expose UTC with Z so FE TTL matches server.
+                aware = exp.replace(tzinfo=timezone.utc) if exp.tzinfo is None else exp
+                payload["pairing_expires_at"] = aware
+            else:
+                payload["pairing_expires_at"] = None
         payloads.append(payload)
     return payloads
 

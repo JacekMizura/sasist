@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import toast from "react-hot-toast";
 
 import { extractApiErrorMessage } from "../../../api/apiErrorMessage";
+import { sendAgentTestPage } from "../../../api/printingApi";
 import {
   fetchWorkstationDevices,
   fetchWorkstationHistory,
@@ -23,12 +24,17 @@ type BaseProps = {
   detail: WorkstationDetail;
 };
 
+type DevicesTabProps = BaseProps & {
+  onContinue?: () => void;
+};
+
 export function PrintersTab({ workstationId, detail }: BaseProps) {
   const [config, setConfig] = useState<PrintersConfig | null>(null);
   const [draft, setDraft] = useState<Record<string, number | "">>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [testBusy, setTestBusy] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -76,6 +82,19 @@ export function PrintersTab({ workstationId, detail }: BaseProps) {
     }
   };
 
+  const runTestPrint = async () => {
+    if (!detail.agent?.id) return;
+    setTestBusy(true);
+    try {
+      await sendAgentTestPage(WMS_WORKSTATIONS_TENANT_ID, detail.agent.id);
+      toast.success("Wysłano wydruk testowy do Agenta.");
+    } catch (e) {
+      toast.error(extractApiErrorMessage(e, "Nie udało się wysłać wydruku testowego."));
+    } finally {
+      setTestBusy(false);
+    }
+  };
+
   if (!detail.agent) {
     return (
       <WorkstationEmptyState
@@ -108,6 +127,11 @@ export function PrintersTab({ workstationId, detail }: BaseProps) {
     );
   }
 
+  const hasAnyMapping = config.mappings.some((m) => {
+    const v = draft[m.print_type];
+    return v !== "" && v != null;
+  });
+
   return (
     <div className="space-y-4">
       {detail.connection_status === "offline" ? (
@@ -116,7 +140,8 @@ export function PrintersTab({ workstationId, detail }: BaseProps) {
         </p>
       ) : null}
       <p className="text-sm text-slate-600">
-        Mapowanie typów wydruku na urządzenia wykryte na komputerze stanowiska.
+        Wybierz drukarkę dla typów wydruku używanych na tym stanowisku, zapisz, potem wykonaj wydruk
+        testowy.
       </p>
       <div className="overflow-x-auto rounded-lg border border-slate-200">
         <table className="min-w-full text-sm">
@@ -171,9 +196,24 @@ export function PrintersTab({ workstationId, detail }: BaseProps) {
           </tbody>
         </table>
       </div>
-      <button type="button" className={brandPrimaryButtonClass} disabled={busy} onClick={() => void save()}>
-        {busy ? "Zapisywanie…" : "Zapisz mapowanie"}
-      </button>
+      <div className="flex flex-wrap gap-2">
+        <button type="button" className={brandPrimaryButtonClass} disabled={busy} onClick={() => void save()}>
+          {busy ? "Zapisywanie…" : "Zapisz mapowanie"}
+        </button>
+        <button
+          type="button"
+          className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium hover:bg-slate-50 disabled:opacity-50"
+          disabled={testBusy || detail.connection_status === "offline"}
+          onClick={() => void runTestPrint()}
+        >
+          {testBusy ? "Wysyłanie…" : "Wydruk testowy"}
+        </button>
+      </div>
+      {!hasAnyMapping ? (
+        <p className="text-xs text-slate-500">
+          Zalecane: wybierz drukarkę dla etykiet i zapisz mapowanie przed produkcyjnym drukowaniem.
+        </p>
+      ) : null}
     </div>
   );
 }
@@ -219,7 +259,7 @@ function DeviceSection({
   );
 }
 
-export function DevicesTab({ workstationId, detail }: BaseProps) {
+export function DevicesTab({ workstationId, detail, onContinue }: DevicesTabProps) {
   const [devices, setDevices] = useState<DevicesGrouped | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -275,9 +315,16 @@ export function DevicesTab({ workstationId, detail }: BaseProps) {
         title="Brak zgłoszonych urządzeń"
         description="Agent nie zgłosił jeszcze drukarek ani innych urządzeń. Sprawdź połączenie i odśwież."
         action={
-          <button type="button" className="text-sm text-orange-700" onClick={() => void load()}>
-            Odśwież
-          </button>
+          <div className="flex flex-wrap gap-2">
+            <button type="button" className="text-sm text-orange-700" onClick={() => void load()}>
+              Odśwież
+            </button>
+            {onContinue ? (
+              <button type="button" className={brandPrimaryButtonClass} onClick={onContinue}>
+                Dalej: drukarki
+              </button>
+            ) : null}
+          </div>
         }
       />
     );
@@ -287,13 +334,20 @@ export function DevicesTab({ workstationId, detail }: BaseProps) {
 
   return (
     <div className="max-w-2xl space-y-6">
-      <div className="flex items-center justify-between gap-2">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-sm text-slate-600">
           Sprzęt zgłoszony przez komputer przypisany do tego stanowiska.
         </p>
-        <button type="button" className="text-sm text-orange-700" onClick={() => void load()}>
-          Odśwież
-        </button>
+        <div className="flex flex-wrap gap-2">
+          <button type="button" className="text-sm text-orange-700" onClick={() => void load()}>
+            Odśwież
+          </button>
+          {onContinue ? (
+            <button type="button" className={brandPrimaryButtonClass} onClick={onContinue}>
+              Dalej: skonfiguruj drukarki
+            </button>
+          ) : null}
+        </div>
       </div>
       <DeviceSection title="Drukarki" items={devices.printers} emptyHint={empty} />
       <DeviceSection title="Skanery" items={devices.scanners} emptyHint={empty} />

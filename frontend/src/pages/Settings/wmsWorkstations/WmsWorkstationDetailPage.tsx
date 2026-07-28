@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 
 import { extractApiErrorMessage } from "../../../api/apiErrorMessage";
@@ -19,8 +19,8 @@ import {
 const TABS = [
   { id: "info", label: "Informacje" },
   { id: "agent", label: "Sasist Agent" },
-  { id: "printers", label: "Drukarki" },
   { id: "devices", label: "Urządzenia" },
+  { id: "printers", label: "Drukarki" },
   { id: "history", label: "Historia" },
 ] as const;
 
@@ -30,8 +30,9 @@ export default function WmsWorkstationDetailPage() {
   const { id } = useParams<{ id: string }>();
   const workstationId = Number(id);
   const [detail, setDetail] = useState<WorkstationDetail | null>(null);
-  const [tab, setTab] = useState<TabId>("info");
+  const [tab, setTab] = useState<TabId>("agent");
   const [error, setError] = useState<string | null>(null);
+  const defaultedTabRef = useRef(false);
 
   const reload = useCallback(async () => {
     if (!Number.isFinite(workstationId) || workstationId < 1) return;
@@ -53,8 +54,16 @@ export default function WmsWorkstationDetailPage() {
   }, [workstationId]);
 
   useEffect(() => {
+    defaultedTabRef.current = false;
     void reload();
   }, [reload]);
+
+  // Onboarding: unpaired stations open on Agent tab (code + pair).
+  useEffect(() => {
+    if (!detail || defaultedTabRef.current) return;
+    defaultedTabRef.current = true;
+    if (!detail.agent) setTab("agent");
+  }, [detail]);
 
   if (!Number.isFinite(workstationId) || workstationId < 1) {
     return (
@@ -117,10 +126,21 @@ export default function WmsWorkstationDetailPage() {
           <InfoTab workstationId={workstationId} detail={detail} onUpdated={setDetail} />
         ) : null}
         {tab === "agent" ? (
-          <AgentTab workstationId={workstationId} detail={detail} onUpdated={setDetail} />
+          <AgentTab
+            workstationId={workstationId}
+            detail={detail}
+            onUpdated={setDetail}
+            onPaired={() => setTab("devices")}
+          />
+        ) : null}
+        {tab === "devices" ? (
+          <DevicesTab
+            workstationId={workstationId}
+            detail={detail}
+            onContinue={() => setTab("printers")}
+          />
         ) : null}
         {tab === "printers" ? <PrintersTab workstationId={workstationId} detail={detail} /> : null}
-        {tab === "devices" ? <DevicesTab workstationId={workstationId} detail={detail} /> : null}
         {tab === "history" ? <HistoryTab workstationId={workstationId} /> : null}
       </div>
     </PageLayout>

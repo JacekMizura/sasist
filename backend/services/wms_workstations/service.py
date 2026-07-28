@@ -6,7 +6,7 @@ import hashlib
 import logging
 import re
 import secrets
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from sqlalchemy.orm import Session
@@ -313,7 +313,12 @@ def issue_pairing_code(
 
     plain_code = generate_pairing_code()
     row.pairing_code_hash = hash_pairing_code(plain_code)
-    row.pairing_expires_at = datetime.utcnow() + timedelta(minutes=PAIRING_CODE_TTL_MINUTES)
+    # Store naive UTC (DB column); API response uses aware UTC so FE never mis-parses local time.
+    expires_naive_utc = datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(
+        minutes=PAIRING_CODE_TTL_MINUTES
+    )
+    row.pairing_expires_at = expires_naive_utc
+    expires_aware = expires_naive_utc.replace(tzinfo=timezone.utc)
 
     append_event(
         db,
@@ -332,18 +337,18 @@ def issue_pairing_code(
         entity_id=row.id,
         detail={
             "warehouse_id": row.warehouse_id,
-            "expires_at": row.pairing_expires_at.isoformat() if row.pairing_expires_at else None,
+            "expires_at": expires_aware.isoformat(),
         },
     )
     logger.info(
         "workstation.pairing_issued tenant_id=%s workstation_id=%s expires_at=%s",
         tenant_id,
         row.id,
-        row.pairing_expires_at.isoformat() if row.pairing_expires_at else None,
+        expires_aware.isoformat(),
     )
     return {
         "pairing_code": plain_code,
-        "expires_at": row.pairing_expires_at,
+        "expires_at": expires_aware,
         "message": "Wklej kod połączenia w Sasist Agent na komputerze przy tym stanowisku.",
     }
 

@@ -23,22 +23,92 @@ import {
   WorkstationEmptyState,
 } from "./workstationUi";
 
-const PAIRING_POLL_MS = 3500;
+const PAIRING_POLL_MS = 2500;
 
 type Props = {
   workstationId: number;
   detail: WorkstationDetail;
   onUpdated: (row: WorkstationDetail) => void;
+  /** Called once after Agent successfully pairs — parent can advance onboarding tabs. */
+  onPaired?: () => void;
 };
 
-export function AgentTab({ workstationId, detail, onUpdated }: Props) {
-  const [pairingCode, setPairingCode] = useState<string | null>(null);
-  const [expiresAt, setExpiresAt] = useState<string | null>(null);
+type StoredPairing = { code: string; expiresAt: string };
+
+function pairingStorageKey(workstationId: number): string {
+  return `wms-ws-pairing:${workstationId}`;
+}
+
+/** Parse API datetimes as UTC when timezone suffix is missing (naive UTC from backend). */
+function parseApiUtcMs(iso: string | null | undefined): number | null {
+  if (!iso) return null;
+  const raw = String(iso).trim();
+  if (!raw) return null;
+  const hasTz = /(?:Z|[+-]\d{2}:?\d{2})$/i.test(raw);
+  const normalized = hasTz ? raw : `${raw}Z`;
+  const ms = new Date(normalized).getTime();
+  return Number.isNaN(ms) ? null : ms;
+}
+
+function readStoredPairing(workstationId: number): StoredPairing | null {
+  try {
+    const raw = sessionStorage.getItem(pairingStorageKey(workstationId));
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as StoredPairing;
+    if (!parsed?.code || !parsed?.expiresAt) return null;
+    const exp = parseApiUtcMs(parsed.expiresAt);
+    if (exp == null || exp <= Date.now()) {
+      sessionStorage.removeItem(pairingStorageKey(workstationId));
+      return null;
+    }
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+function writeStoredPairing(workstationId: number, code: string, expiresAt: string): void {
+  try {
+    sessionStorage.setItem(
+      pairingStorageKey(workstationId),
+      JSON.stringify({ code, expiresAt } satisfies StoredPairing),
+    );
+  } catch {
+    // ignore quota / private mode
+  }
+}
+
+function clearStoredPairing(workstationId: number): void {
+  try {
+    sessionStorage.removeItem(pairingStorageKey(workstationId));
+  } catch {
+    // ignore
+  }
+}
+
+export function AgentTab({ workstationId, detail, onUpdated, onPaired }: Props) {
+  const stored = readStoredPairing(workstationId);
+  const [pairingCode, setPairingCode] = useState<string | null>(stored?.code ?? null);
+  const [expiresAt, setExpiresAt] = useState<string | null>(stored?.expiresAt ?? null);
   const [codeExpired, setCodeExpired] = useState(false);
   const [busy, setBusy] = useState(false);
   const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
   const pollingRef = useRef(false);
   const toastConnectedRef = useRef(false);
+  const issuedAtRef = useRef<number>(stored ? Date.now() : 0);
+  const onPairedRef = useRef(onPaired);
+  onPairedRef.current = onPaired;
+
+  const clearLocalPairing = useCallback(
+    (markExpired: boolean) => {
+      setPairingCode(null);
+      setExpiresAt(null);
+      setCodeExpired(markExpired);
+      clearStoredPairing(workstationId);
+      pollingRef.current = false;
+    },
+    [workstationId],
+  );
 
   const refreshFull = useCallback(async () => {
     const row = await fetchWorkstation(WMS_WORKSTATIONS_TENANT_ID, workstationId);
@@ -63,12 +133,10 @@ export function AgentTab({ workstationId, detail, onUpdated }: Props) {
 
   useEffect(() => {
     if (detail.agent) {
-      setPairingCode(null);
-      setExpiresAt(null);
-      setCodeExpired(false);
-      pollingRef.current = false;
+      clearLocalPairing(false);
+      toastConnectedRef.current = false;
     }
-  }, [detail.agent]);
+  }, [detail.agent, clearLocalPairing]);
 
   // Poll slim pairing-status while waiting; pause when tab hidden.
   useEffect(() => {
@@ -80,7 +148,6 @@ export function AgentTab({ workstationId, detail, onUpdated }: Props) {
     }
 
     pollingRef.current = true;
-    toastConnectedRef.current = false;
     let cancelled = false;
 
     const tick = async () => {
@@ -91,23 +158,32 @@ export function AgentTab({ workstationId, detail, onUpdated }: Props) {
           WMS_WORKSTATIONS_TENANT_ID,
           workstationId,
         );
+        if (cancelled || !pollingRef.current) return;
+
         if (status.agent) {
           pollingRef.current = false;
-          setPairingCode(null);
-          setExpiresAt(null);
-          setCodeExpired(false);
+          clearLocalPairing(false);
           const full = await refreshFull();
           onUpdated(full);
           if (!toastConnectedRef.current) {
             toastConnectedRef.current = true;
-            toast.success("Komputer połączony ze stanowiskiem.");
+            toast.success("Połączono — komputer przypisany do stanowiska.");
+            onPairedRef.current?.();
           }
           return;
         }
+
+        // Server says inactive: only expire if local TTL also passed (avoid race right after POST /pair).
         if (!status.pairing_active) {
+          const expMs = parseApiUtcMs(expiresAt);
+          const graceMs = 8_000;
+          const recentlyIssued = Date.now() - issuedAtRef.current < graceMs;
+          const locallyValid = expMs != null && expMs > Date.now();
+          if (recentlyIssued || locallyValid) {
+            return;
+          }
           pollingRef.current = false;
-          setCodeExpired(true);
-          setPairingCode(null);
+          clearLocalPairing(true);
           toast.error("Kod połączenia wygasł. Wygeneruj nowy kod.");
         }
       } catch {
@@ -129,43 +205,59 @@ export function AgentTab({ workstationId, detail, onUpdated }: Props) {
     };
   }, [
     pairingCode,
+    expiresAt,
     detail.pairing_active,
     detail.agent,
     codeExpired,
     workstationId,
     refreshFull,
     onUpdated,
+    clearLocalPairing,
   ]);
 
   useEffect(() => {
     if (!expiresAt || detail.agent) return;
-    const expMs = new Date(expiresAt).getTime();
-    if (Number.isNaN(expMs)) return;
+    const expMs = parseApiUtcMs(expiresAt);
+    if (expMs == null) return;
     const remaining = expMs - Date.now();
     if (remaining <= 0) {
-      setCodeExpired(true);
-      setPairingCode(null);
-      pollingRef.current = false;
+      clearLocalPairing(true);
       return;
     }
     const timer = window.setTimeout(() => {
-      setCodeExpired(true);
-      setPairingCode(null);
-      pollingRef.current = false;
+      clearLocalPairing(true);
       toast.error("Kod połączenia wygasł. Wygeneruj nowy kod.");
     }, remaining);
     return () => window.clearTimeout(timer);
-  }, [expiresAt, detail.agent]);
+  }, [expiresAt, detail.agent, clearLocalPairing]);
 
   const handlePair = async () => {
     setBusy(true);
     try {
       const res = await pairWorkstation(WMS_WORKSTATIONS_TENANT_ID, workstationId);
-      setPairingCode(res.pairing_code);
-      setExpiresAt(res.expires_at);
+      const code = String(res.pairing_code || "").trim();
+      const exp = String(res.expires_at || "").trim();
+      if (!code) {
+        toast.error("Serwer nie zwrócił kodu połączenia.");
+        return;
+      }
+      issuedAtRef.current = Date.now();
+      setPairingCode(code);
+      setExpiresAt(exp);
       setCodeExpired(false);
-      toast.success("Wygenerowano kod połączenia.");
-      await refreshFull();
+      writeStoredPairing(workstationId, code, exp);
+      // Optimistic detail — do NOT refetch in a way that races local code display.
+      onUpdated({
+        ...detail,
+        agent: null,
+        computer_name: null,
+        connection_status: "unpaired",
+        pairing_active: true,
+        pairing_expires_at: exp,
+        device_count: 0,
+        last_sync_at: null,
+      });
+      toast.success("Wygenerowano kod połączenia — skopiuj i wklej w Sasist Agent.");
     } catch (e) {
       toast.error(extractApiErrorMessage(e));
     } finally {
@@ -179,7 +271,7 @@ export function AgentTab({ workstationId, detail, onUpdated }: Props) {
       await navigator.clipboard.writeText(pairingCode);
       toast.success("Skopiowano kod połączenia.");
     } catch {
-      toast.error("Nie udało się skopiować.");
+      toast.error("Nie udało się skopiować — zaznacz kod ręcznie.");
     }
   };
 
@@ -196,9 +288,7 @@ export function AgentTab({ workstationId, detail, onUpdated }: Props) {
     setBusy(true);
     try {
       const row = await disconnectWorkstation(WMS_WORKSTATIONS_TENANT_ID, workstationId);
-      setPairingCode(null);
-      setExpiresAt(null);
-      setCodeExpired(false);
+      clearLocalPairing(false);
       onUpdated(row);
       toast.success("Odłączono komputer.");
     } catch (e) {
@@ -210,6 +300,11 @@ export function AgentTab({ workstationId, detail, onUpdated }: Props) {
 
   const agent = detail.agent;
   const showPairingPanel = Boolean(pairingCode) && !agent && !codeExpired;
+  const expiresLabel = (() => {
+    const ms = parseApiUtcMs(expiresAt);
+    if (ms == null) return "15 minut";
+    return new Date(ms).toLocaleTimeString("pl-PL");
+  })();
 
   if (!agent) {
     return (
@@ -217,38 +312,38 @@ export function AgentTab({ workstationId, detail, onUpdated }: Props) {
         <div>
           <h3 className="text-base font-semibold text-slate-900">Sasist Agent</h3>
           <p className="mt-1 text-sm text-slate-600">
-            Ta zakładka dotyczy wyłącznie komputera przypisanego do stanowiska.
+            Połącz komputer przy tym stanowisku, aby drukować etykiety i dokumenty.
           </p>
         </div>
 
-        <WorkstationEmptyState
-          title="Brak połączonego komputera"
-          description="Zainstaluj Sasist Agent na komputerze przy stanowisku, a następnie wygeneruj kod połączenia."
-          action={
-            <>
-              <button
-                type="button"
-                className={brandPrimaryButtonClass}
-                disabled={!downloadUrl}
-                onClick={handleDownload}
-              >
-                Pobierz Sasist Agent
-              </button>
-              {!showPairingPanel ? (
+        {!showPairingPanel ? (
+          <WorkstationEmptyState
+            title="Brak połączonego komputera"
+            description="1) Pobierz i zainstaluj Sasist Agent na komputerze stanowiska. 2) Wygeneruj kod poniżej. 3) Wklej kod w Agencie."
+            action={
+              <>
                 <button
                   type="button"
-                  className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm hover:bg-slate-50"
+                  className={brandPrimaryButtonClass}
+                  disabled={!downloadUrl}
+                  onClick={handleDownload}
+                >
+                  Pobierz Sasist Agent
+                </button>
+                <button
+                  type="button"
+                  className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium hover:bg-slate-50"
                   disabled={busy}
                   onClick={() => void handlePair()}
                 >
-                  {codeExpired ? "Wygeneruj nowy kod" : "Połącz komputer"}
+                  {codeExpired ? "Wygeneruj nowy kod" : "Wygeneruj kod połączenia"}
                 </button>
-              ) : null}
-            </>
-          }
-        />
+              </>
+            }
+          />
+        ) : null}
 
-        {codeExpired ? (
+        {codeExpired && !showPairingPanel ? (
           <p className="text-sm text-amber-800">
             Kod połączenia wygasł. Wygeneruj nowy, a następnie wklej go w Agencie.
           </p>
@@ -259,22 +354,31 @@ export function AgentTab({ workstationId, detail, onUpdated }: Props) {
             <div className="text-xs font-medium uppercase tracking-wide text-slate-500">
               Kod połączenia
             </div>
-            <div className="mt-2 font-mono text-2xl font-semibold tracking-widest text-slate-900">
+            <div
+              className="mt-2 select-all font-mono text-2xl font-semibold tracking-widest text-slate-900"
+              data-testid="pairing-code"
+            >
               {pairingCode}
             </div>
-            <div className="mt-1 text-sm text-slate-500">
-              ważny do {expiresAt ? new Date(expiresAt).toLocaleTimeString("pl-PL") : "15 minut"}
-            </div>
-            <p className="mt-2 text-xs text-slate-500">Oczekiwanie na połączenie…</p>
+            <div className="mt-1 text-sm text-slate-500">ważny do {expiresLabel}</div>
+            <p className="mt-2 text-xs text-slate-500">Oczekiwanie na połączenie z Agentem…</p>
             <button
               type="button"
-              className="mt-3 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm hover:bg-slate-50"
+              className={`${brandPrimaryButtonClass} mt-3`}
               onClick={() => void handleCopy()}
             >
               Kopiuj kod
             </button>
+            <button
+              type="button"
+              className="mt-2 block w-full text-sm text-slate-600 underline"
+              disabled={busy}
+              onClick={() => void handlePair()}
+            >
+              Wygeneruj nowy kod
+            </button>
             <ol className="mt-4 space-y-1 text-left text-sm text-slate-600">
-              <li>1. Zainstaluj i otwórz Sasist Agent na komputerze przy tym stanowisku</li>
+              <li>1. Otwórz Sasist Agent na komputerze przy tym stanowisku</li>
               <li>2. Wklej kod połączenia</li>
               <li>3. Status zmieni się automatycznie na „Połączono”</li>
             </ol>
@@ -287,6 +391,9 @@ export function AgentTab({ workstationId, detail, onUpdated }: Props) {
   return (
     <div className="max-w-lg space-y-4">
       <h3 className="text-base font-semibold text-slate-900">Sasist Agent</h3>
+      <p className="rounded-lg border border-emerald-100 bg-emerald-50 px-3 py-2 text-sm text-emerald-900">
+        Połączono. Sprawdź urządzenia, potem mapowanie drukarek i wykonaj wydruk testowy.
+      </p>
       {detail.connection_status === "offline" ? (
         <p className="rounded-lg border border-amber-100 bg-amber-50 px-3 py-2 text-sm text-amber-900">
           Agent jest offline. Sprawdź, czy aplikacja działa na komputerze stanowiska.

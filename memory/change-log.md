@@ -1,4 +1,11 @@
+## 2026-07-28 — Onboarding E2E: pairing code visible + flow
+
+- Root cause: naive `expires_at` → FE local parse → immediate expire; poll cleared code; POST /pair then GET refetch race
+- Fix: UTC-aware expires_at; FE parseApiUtcMs + sessionStorage code; no destructive refresh after pair; poll grace; default Agent tab; post-pair → Devices → Printers + test print
+- Tests: pairing expires_at timezone assertion
+
 ## 2026-07-28 — WMS Stanowiska RC1 (Red Team blockers)
+
 
 - RC1-1: no auto-pick workstation; `workstation_id` via `useQueuePrint` / session `packing_station_id` / label router; mapping then PrintingDefault
 - RC1-2: removed Restart Agent UI + FE API client (`restartWorkstationAgent`)

@@ -95,7 +95,7 @@ export default function WmsWorkstationsListPage() {
         warehouse_id: Number(warehouseId),
         station_type: stationType,
       });
-      toast.success("Dodano stanowisko.");
+      toast.success("Dodano stanowisko — wygeneruj kod połączenia z Agentem.");
       setModalOpen(false);
       navigate(`/settings/wms/workstations/${created.id}`);
     } catch (e) {

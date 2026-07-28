@@ -644,6 +644,11 @@ class TestWorkstationHighPriority(WorkstationsTestCase):
             params={"tenant_id": 1},
         )
         self.assertEqual(pair.status_code, 200)
+        expires = pair.json()["expires_at"]
+        self.assertTrue(
+            str(expires).endswith("Z") or "+" in str(expires),
+            msg=f"expires_at must be timezone-aware UTC, got {expires!r}",
+        )
         status = self.client.get(
             f"/api/wms/workstations/{ws['id']}/pairing-status",
             params={"tenant_id": 1},
@@ -652,7 +657,7 @@ class TestWorkstationHighPriority(WorkstationsTestCase):
         body = status.json()
         self.assertTrue(body["pairing_active"])
         self.assertEqual(body["connection_status"], "unpaired")
-
+        self.assertTrue(body.get("pairing_expires_at"))
         hist = self.client.get(
             f"/api/wms/workstations/{ws['id']}/history",
             params={"tenant_id": 1, "limit": 1, "offset": 0},
