@@ -6,137 +6,122 @@ internal sealed class PairingPage : UserControl
 {
     private readonly ConfigStore _store;
     private readonly Action _onPaired;
-    private readonly ModernTextBox _codeBox;
+    private readonly TextBox _code;
     private readonly Label _status;
-    private readonly ModernButton _connect;
-    private readonly RoundedCard _card;
+    private readonly SasistButton _connect;
 
     public PairingPage(ConfigStore store, Action onPaired)
     {
         _store = store;
         _onPaired = onPaired;
         Dock = DockStyle.Fill;
-        BackColor = Theme.WindowBg;
+        BackColor = Theme.Canvas;
+        Padding = new Padding(Theme.PagePad);
 
-        _card = new RoundedCard { Width = 460, Height = 420 };
+        var host = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            ColumnCount = 3,
+            RowCount = 3,
+            BackColor = Color.Transparent,
+        };
+        host.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50f));
+        host.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        host.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50f));
+        host.RowStyles.Add(new RowStyle(SizeType.Percent, 50f));
+        host.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        host.RowStyles.Add(new RowStyle(SizeType.Percent, 50f));
 
-        var logo = new PictureBox
+        var card = new SasistCard
+        {
+            AutoSize = true,
+            AutoSizeMode = AutoSizeMode.GrowAndShrink,
+            Margin = Padding.Empty,
+            Padding = new Padding(28),
+            MinimumSize = new Size(360, 280),
+            MaximumSize = new Size(520, 0),
+        };
+
+        var stack = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Top,
+            AutoSize = true,
+            FlowDirection = FlowDirection.TopDown,
+            WrapContents = false,
+            BackColor = Color.Transparent,
+        };
+
+        var brandRow = new FlowLayoutPanel
+        {
+            AutoSize = true,
+            WrapContents = false,
+            BackColor = Color.Transparent,
+            Margin = new Padding(0, 0, 0, 16),
+        };
+        brandRow.Controls.Add(new PictureBox
         {
             Image = Branding.MarkImage,
             SizeMode = PictureBoxSizeMode.Zoom,
-            Left = 28,
-            Top = 28,
-            Width = 40,
-            Height = 40,
-            BackColor = Color.Transparent,
-        };
-        var brand = new Label
+            MinimumSize = new Size(32, 32),
+            MaximumSize = new Size(32, 32),
+            Margin = new Padding(0, 0, 10, 0),
+        });
+        brandRow.Controls.Add(LayoutHelpers.Text("Sasist Agent", Theme.FontSection, Theme.TextPrimary));
+
+        var title = LayoutHelpers.Wrap("Połącz z Sasist", Theme.FontPageTitle, Theme.TextPrimary, 440);
+        title.Margin = new Padding(0, 0, 0, 8);
+        var sub = LayoutHelpers.Wrap("Wklej kod połączenia z panelu Sasist, aby zacząć drukować.", Theme.FontBody, Theme.TextDesc, 440);
+        sub.Margin = new Padding(0, 0, 0, 16);
+        var codeLbl = LayoutHelpers.Muted("Kod połączenia");
+        codeLbl.Margin = new Padding(0, 0, 0, 6);
+
+        var inputCard = new SasistCard
         {
-            Text = "Sasist Agent",
-            Left = 80,
-            Top = 34,
-            Width = 320,
-            Height = 28,
-            Font = new Font("Segoe UI Semibold", 14f),
-            ForeColor = Theme.TextPrimary,
-            BackColor = Color.Transparent,
+            AutoSize = true,
+            Padding = new Padding(12, 10, 12, 10),
+            Margin = new Padding(0, 0, 0, 12),
+            MinimumSize = new Size(280, 40),
         };
-        var title = new Label
+        _code = new TextBox
         {
-            Text = "Połącz z Sasist",
-            Left = 28,
-            Top = 90,
-            Width = 400,
-            Height = 34,
-            Font = new Font("Segoe UI Semibold", 22f),
-            ForeColor = Theme.TextPrimary,
-            BackColor = Color.Transparent,
-        };
-        var subtitle = new Label
-        {
-            Text = "Wklej kod połączenia z panelu Sasist,\naby zacząć drukować na tym komputerze.",
-            Left = 28,
-            Top = 132,
-            Width = 400,
-            Height = 48,
-            Font = Theme.FontUi,
-            ForeColor = Theme.TextSecondary,
-            BackColor = Color.Transparent,
-        };
-        var codeLabel = new Label
-        {
-            Text = "Kod połączenia",
-            Left = 28,
-            Top = 196,
-            Width = 400,
-            Height = 20,
-            Font = Theme.FontUiSemibold,
-            ForeColor = Theme.TextPrimary,
-            BackColor = Color.Transparent,
-        };
-        _codeBox = new ModernTextBox
-        {
-            Left = 28,
-            Top = 220,
-            Width = 400,
-            Height = 44,
+            BorderStyle = BorderStyle.None,
+            Font = Theme.FontBody,
             PlaceholderText = "Wklej kod tutaj",
+            BackColor = Theme.Surface,
+            Dock = DockStyle.Top,
+            MinimumSize = new Size(240, 22),
         };
-        _connect = new ModernButton
-        {
-            Text = "Połącz",
-            Primary = true,
-            Left = 28,
-            Top = 284,
-            Width = 400,
-            Height = 44,
-        };
+        inputCard.Controls.Add(_code);
+
+        _connect = new SasistButton { Text = "Połącz", Primary = true, Margin = new Padding(0, 4, 0, 12) };
         _connect.Click += async (_, _) => await ConnectAsync();
-        _status = new Label
+        _status = LayoutHelpers.Wrap("", Theme.FontBody, Theme.TextMuted, 440);
+
+        stack.Controls.Add(brandRow);
+        stack.Controls.Add(title);
+        stack.Controls.Add(sub);
+        stack.Controls.Add(codeLbl);
+        stack.Controls.Add(inputCard);
+        stack.Controls.Add(_connect);
+        stack.Controls.Add(_status);
+        card.Controls.Add(stack);
+
+        host.Controls.Add(card, 1, 1);
+        Controls.Add(host);
+        Resize += (_, _) =>
         {
-            Left = 28,
-            Top = 344,
-            Width = 400,
-            Height = 48,
-            Font = Theme.FontUi,
-            ForeColor = Theme.TextSecondary,
-            BackColor = Color.Transparent,
+            var max = Math.Min(520, Math.Max(320, ClientSize.Width - 48));
+            card.MaximumSize = new Size(max, 0);
+            inputCard.MaximumSize = new Size(Math.Max(240, max - 56), 0);
+            LayoutHelpers.SetMaxWidth(title, max - 56);
+            LayoutHelpers.SetMaxWidth(sub, max - 56);
+            LayoutHelpers.SetMaxWidth(_status, max - 56);
         };
-
-        _card.Controls.AddRange([logo, brand, title, subtitle, codeLabel, _codeBox, _connect, _status]);
-        Controls.Add(_card);
-        Resize += (_, _) => CenterCard();
-        Theme.Changed += ApplyTheme;
-        ApplyTheme();
-        CenterCard();
-    }
-
-    private void CenterCard()
-    {
-        _card.Left = Math.Max(24, (Width - _card.Width) / 2);
-        _card.Top = Math.Max(24, (Height - _card.Height) / 2 - 12);
-    }
-
-    private void ApplyTheme()
-    {
-        BackColor = Theme.WindowBg;
-        foreach (Control c in _card.Controls)
-        {
-            if (c is Label l)
-            {
-                if (ReferenceEquals(l, _status)) continue;
-                if (l.Font.Size >= 18) l.ForeColor = Theme.TextPrimary;
-                else if (l.Text.Contains('\n') || l.Text.StartsWith("Wklej")) l.ForeColor = Theme.TextSecondary;
-                else l.ForeColor = Theme.TextPrimary;
-            }
-        }
-        _card.Invalidate();
-        _connect.ApplyColors();
     }
 
     private async Task ConnectAsync()
     {
-        var code = _codeBox.Text.Trim();
+        var code = _code.Text.Trim();
         if (string.IsNullOrWhiteSpace(code))
         {
             _status.ForeColor = Theme.Danger;
@@ -145,7 +130,7 @@ internal sealed class PairingPage : UserControl
         }
 
         _connect.Enabled = false;
-        _status.ForeColor = Theme.TextSecondary;
+        _status.ForeColor = Theme.TextMuted;
         _status.Text = UserMessages.Connecting;
 
         try
@@ -200,11 +185,5 @@ internal sealed class PairingPage : UserControl
         {
             _connect.Enabled = true;
         }
-    }
-
-    protected override void Dispose(bool disposing)
-    {
-        if (disposing) Theme.Changed -= ApplyTheme;
-        base.Dispose(disposing);
     }
 }

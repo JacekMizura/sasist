@@ -3,57 +3,53 @@ using System.Security.Cryptography;
 using System.ServiceProcess;
 using System.Text;
 using Sasist.Agent.Core.Config;
+using Sasist.Agent.Tray.Mvp;
 
 namespace Sasist.Agent.Tray;
 
-internal sealed class TestPage : UserControl, IRefreshablePage
+internal sealed class TestPage : UserControl, IPageView
 {
     private readonly ConfigStore _store;
     private readonly FlowLayoutPanel _list;
-    private readonly Label _summary;
-    private readonly ModernButton _run;
-    private readonly List<(Label Icon, Label Text, Label Detail)> _rows = new();
+    private readonly Label _result;
+    private readonly SasistButton _run;
+    private readonly List<(Label Icon, Label Detail)> _rows = new();
+    private PageShell? _shell;
 
-    private static readonly string[] Checks =
+    private static readonly string[] Names =
     [
-        "Internet",
-        "Połączenie z Sasist",
-        "Backend",
-        "Agent",
-        "Usługa Windows",
-        "Drukarki",
-        "Uprawnienia",
-        "Folder logów",
-        "DPAPI",
-        "Synchronizacja",
+        "Internet", "Sasist", "Backend", "Agent", "Usługa",
+        "Drukarki", "Synchronizacja", "Uprawnienia", "Folder logów", "DPAPI",
     ];
 
     public TestPage(ConfigStore store)
     {
         _store = store;
         Dock = DockStyle.Fill;
-        BackColor = Color.Transparent;
-        Controls.Add(new PageHeader("Test", "Automatyczne sprawdzenie gotowości komputera"));
+        UiBuffering.Enable(this);
+        _shell = new PageShell("Test", "Automatyczne sprawdzenie gotowości komputera do pracy z Sasist");
 
-        var toolbar = new FlowLayoutPanel
+        var bar = new FlowLayoutPanel
         {
             Dock = DockStyle.Top,
-            Height = 48,
-            Padding = new Padding(0, 4, 0, 8),
+            AutoSize = true,
+            WrapContents = true,
             BackColor = Color.Transparent,
+            Padding = new Padding(0, 0, 0, 12),
         };
-        _run = new ModernButton { Text = "Uruchom test", Primary = true, Width = 150 };
+        _run = new SasistButton { Text = "Uruchom test", Primary = true };
         _run.Click += async (_, _) => await RunAsync();
-        toolbar.Controls.Add(_run);
+        bar.Controls.Add(_run);
 
-        _summary = new Label
+        _result = new Label
         {
             Dock = DockStyle.Top,
-            Height = 36,
-            Font = new Font("Segoe UI Semibold", 12f),
+            AutoSize = true,
+            Font = Theme.FontSection,
             ForeColor = Theme.TextPrimary,
+            Text = "Uruchom test, aby sprawdzić system.",
             BackColor = Color.Transparent,
-            Text = "Kliknij „Uruchom test”, aby sprawdzić system.",
+            Padding = new Padding(0, 0, 0, 16),
         };
 
         _list = new FlowLayoutPanel
@@ -65,228 +61,187 @@ internal sealed class TestPage : UserControl, IRefreshablePage
             BackColor = Color.Transparent,
         };
 
-        foreach (var name in Checks)
+        foreach (var name in Names)
         {
-            var card = new RoundedCard { Width = 680, Height = 56, Margin = new Padding(0, 0, 0, 8) };
-            var icon = new Label
+            var card = new SasistCard
             {
-                Text = AppIcons.Info,
-                Font = Theme.Icon(14f),
-                ForeColor = Theme.TextMuted,
-                Left = 18,
-                Top = 16,
-                Width = 28,
-                Height = 24,
+                AutoSize = true,
+                AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                Margin = new Padding(0, 0, 0, 10),
+                MinimumSize = new Size(280, 56),
+            };
+            var grid = new TableLayoutPanel
+            {
+                Dock = DockStyle.Top,
+                AutoSize = true,
+                ColumnCount = 2,
+                RowCount = 2,
                 BackColor = Color.Transparent,
             };
-            var title = new Label
-            {
-                Text = name,
-                Left = 52,
-                Top = 10,
-                Width = 400,
-                Height = 20,
-                Font = Theme.FontUiSemibold,
-                ForeColor = Theme.TextPrimary,
-                BackColor = Color.Transparent,
-            };
-            var detail = new Label
-            {
-                Text = "Oczekuje…",
-                Left = 52,
-                Top = 30,
-                Width = 580,
-                Height = 18,
-                Font = Theme.FontCaption,
-                ForeColor = Theme.TextSecondary,
-                BackColor = Color.Transparent,
-            };
-            card.Controls.AddRange([icon, title, detail]);
+            grid.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+            grid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
+            grid.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            grid.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+
+            var icon = LayoutHelpers.Icon(AppIcons.Info, Theme.TextFaint, 14f);
+            icon.Margin = new Padding(0, 4, 10, 4);
+            var title = LayoutHelpers.Wrap(name, Theme.FontBodySemibold, Theme.TextPrimary, 400);
+            var detail = LayoutHelpers.Wrap("Oczekuje…", Theme.FontCaption, Theme.TextMuted, 400);
+            grid.Controls.Add(icon, 0, 0);
+            grid.SetRowSpan(icon, 2);
+            grid.Controls.Add(title, 1, 0);
+            grid.Controls.Add(detail, 1, 1);
+            card.Controls.Add(grid);
             _list.Controls.Add(card);
-            _rows.Add((icon, title, detail));
+            _rows.Add((icon, detail));
         }
 
-        Controls.Add(_list);
-        Controls.Add(_summary);
-        Controls.Add(toolbar);
-        Theme.Changed += () => _summary.ForeColor = Theme.TextPrimary;
+        _shell.Body.Controls.Add(_list);
+        _shell.Body.Controls.Add(_result);
+        _shell.Body.Controls.Add(bar);
+        Controls.Add(_shell);
+        _shell.Body.Resize += (_, _) => Relayout();
     }
 
-    public void RefreshData() { /* static checklist until run */ }
+    private void Relayout()
+    {
+        if (_shell is null) return;
+        var w = Math.Max(280, _shell.Body.ClientSize.Width - 16);
+        foreach (Control c in _list.Controls)
+        {
+            c.MaximumSize = new Size(w, 0);
+            c.MinimumSize = new Size(Math.Min(280, w), 0);
+            foreach (Control inner in c.Controls)
+            {
+                if (inner is TableLayoutPanel grid)
+                {
+                    foreach (Control cell in grid.Controls)
+                        LayoutHelpers.SetMaxWidth(cell, w - 64);
+                }
+            }
+        }
+        _result.MaximumSize = new Size(w, 0);
+    }
+
+    public void ApplyValues(UiState state) { /* test results are user-driven */ }
+    public void ForceSync(UiState state) => Relayout();
+
+    public void RefreshData() { Relayout(); }
 
     private async Task RunAsync()
     {
         _run.Enabled = false;
-        _summary.Text = "Trwa sprawdzanie…";
-        _summary.ForeColor = Theme.TextSecondary;
-        var results = new List<bool>();
-
-        for (var i = 0; i < Checks.Length; i++)
+        _result.Text = "Trwa sprawdzanie…";
+        _result.ForeColor = Theme.TextMuted;
+        var oks = new List<bool>();
+        for (var i = 0; i < Names.Length; i++)
         {
-            SetRow(i, null, "Sprawdzanie…");
-            await Task.Delay(120);
-            var (ok, detail) = await RunCheckAsync(Checks[i]);
-            SetRow(i, ok, detail);
-            results.Add(ok);
+            Set(i, null, "Sprawdzanie…");
+            await Task.Delay(100);
+            var (ok, detail) = await CheckAsync(Names[i]);
+            Set(i, ok, detail);
+            oks.Add(ok);
         }
-
-        var allOk = results.All(x => x);
-        _summary.Text = allOk ? "Wszystko działa poprawnie." : "Wymaga naprawy.";
-        _summary.ForeColor = allOk ? Theme.Success : Theme.Danger;
+        var all = oks.All(x => x);
+        _result.Text = all ? "System gotowy do pracy." : "Wymaga naprawy.";
+        _result.ForeColor = all ? Theme.Success : Theme.Danger;
         _run.Enabled = true;
+        Relayout();
     }
 
-    private void SetRow(int i, bool? ok, string detail)
+    private void Set(int i, bool? ok, string detail)
     {
-        var (icon, _, d) = _rows[i];
-        if (ok is null)
-        {
-            icon.Text = AppIcons.Sync;
-            icon.ForeColor = Theme.Accent;
-        }
-        else if (ok.Value)
-        {
-            icon.Text = AppIcons.Check;
-            icon.ForeColor = Theme.Success;
-        }
-        else
-        {
-            icon.Text = AppIcons.Error;
-            icon.ForeColor = Theme.Danger;
-        }
+        var (icon, d) = _rows[i];
+        if (ok is null) { icon.Text = AppIcons.Sync; icon.ForeColor = Theme.Accent; }
+        else if (ok.Value) { icon.Text = AppIcons.Check; icon.ForeColor = Theme.Success; }
+        else { icon.Text = AppIcons.Error; icon.ForeColor = Theme.Danger; }
         d.Text = detail;
-        d.ForeColor = Theme.TextSecondary;
     }
 
-    private async Task<(bool Ok, string Detail)> RunCheckAsync(string name)
+    private async Task<(bool, string)> CheckAsync(string name) => name switch
     {
-        try
-        {
-            return name switch
-            {
-                "Internet" => (NetworkInterface.GetIsNetworkAvailable(), NetworkInterface.GetIsNetworkAvailable() ? "Sieć dostępna" : "Brak sieci"),
-                "Połączenie z Sasist" => await ProbeHttpAsync(SasistCloud.ResolveApiBaseUrl() + "/health"),
-                "Backend" => await ProbeHttpAsync(SasistCloud.ResolveApiBaseUrl().TrimEnd('/') + "/"),
-                "Agent" => AgentReady(),
-                "Usługa Windows" => ServiceCheck(),
-                "Drukarki" => PrintersCheck(),
-                "Uprawnienia" => PermissionsCheck(),
-                "Folder logów" => LogsFolderCheck(),
-                "DPAPI" => DpapiCheck(),
-                "Synchronizacja" => SyncCheck(),
-                _ => (true, "OK"),
-            };
-        }
-        catch (Exception ex)
-        {
-            return (false, UserMessages.FromException(ex));
-        }
-    }
+        "Internet" => (NetworkInterface.GetIsNetworkAvailable(), NetworkInterface.GetIsNetworkAvailable() ? "Sieć dostępna" : "Brak sieci"),
+        "Sasist" => await Probe(SasistCloud.ResolveApiBaseUrl() + "/health"),
+        "Backend" => await Probe(SasistCloud.ResolveApiBaseUrl().TrimEnd('/') + "/"),
+        "Agent" => Agent(),
+        "Usługa" => Service(),
+        "Drukarki" => Printers(),
+        "Synchronizacja" => Sync(),
+        "Uprawnienia" => Perms(),
+        "Folder logów" => Logs(),
+        "DPAPI" => Dpapi(),
+        _ => (true, "OK"),
+    };
 
-    private static async Task<(bool, string)> ProbeHttpAsync(string url)
+    private static async Task<(bool, string)> Probe(string url)
     {
         try
         {
             using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(8) };
             using var res = await http.GetAsync(url);
-            // any response (even 404) means host reachable
-            return (true, $"Odpowiedź HTTP {(int)res.StatusCode}");
+            return (true, $"HTTP {(int)res.StatusCode}");
         }
-        catch
-        {
-            return (false, "Nie udało się połączyć z Sasist");
-        }
+        catch { return (false, "Brak połączenia z Sasist"); }
     }
 
-    private (bool, string) AgentReady()
+    private (bool, string) Agent()
     {
         var cfg = _store.Load();
-        if (cfg.NeedsSetup) return (false, "Brak połączenia — wpisz kod");
-        return (true, $"Agent ID {cfg.AgentId}");
+        return cfg.NeedsSetup ? (false, "Brak połączenia — wpisz kod") : (true, $"Agent ID {cfg.AgentId}");
     }
 
-    private static (bool, string) ServiceCheck()
+    private static (bool, string) Service()
     {
         try
         {
             using var sc = new ServiceController(TrayApplicationContext.ServiceName);
-            return sc.Status == ServiceControllerStatus.Running
-                ? (true, "Usługa uruchomiona")
-                : (false, $"Stan: {sc.Status}");
+            return sc.Status == ServiceControllerStatus.Running ? (true, "Uruchomiona") : (false, sc.Status.ToString());
         }
-        catch
-        {
-            return (false, "Usługa niedostępna");
-        }
+        catch { return (false, "Niedostępna"); }
     }
 
-    private static (bool, string) PrintersCheck()
+    private static (bool, string) Printers()
     {
         var n = LocalPrinters.List().Count;
         return n > 0 ? (true, $"{n} drukarek") : (false, "Brak drukarek");
     }
 
-    private static (bool, string) PermissionsCheck()
-    {
-        try
-        {
-            AgentPaths.EnsureDirectories();
-            var probe = Path.Combine(AgentPaths.ProgramDataRoot, ".ui-perm-probe");
-            File.WriteAllText(probe, "ok");
-            File.Delete(probe);
-            return (true, "Zapis do ProgramData OK");
-        }
-        catch
-        {
-            return (false, "Brak uprawnień do zapisu");
-        }
-    }
-
-    private static (bool, string) LogsFolderCheck()
-    {
-        try
-        {
-            AgentPaths.EnsureDirectories();
-            return Directory.Exists(AgentPaths.LogsDir)
-                ? (true, AgentPaths.LogsDir)
-                : (false, "Brak folderu logów");
-        }
-        catch
-        {
-            return (false, "Folder logów niedostępny");
-        }
-    }
-
-    private static (bool, string) DpapiCheck()
-    {
-        try
-        {
-            var plain = Encoding.UTF8.GetBytes("sasist-ui-probe");
-            var protectedBytes = ProtectedData.Protect(plain, null, DataProtectionScope.LocalMachine);
-            var round = ProtectedData.Unprotect(protectedBytes, null, DataProtectionScope.LocalMachine);
-            return Encoding.UTF8.GetString(round) == "sasist-ui-probe"
-                ? (true, "Ochrona danych działa")
-                : (false, "DPAPI nie zwróciło danych");
-        }
-        catch
-        {
-            return (false, "DPAPI niedostępne");
-        }
-    }
-
-    private static (bool, string) SyncCheck()
+    private static (bool, string) Sync()
     {
         var snap = AgentStatusStore.Read();
         if (snap is null) return (false, "Brak synchronizacji");
-        var age = DateTimeOffset.UtcNow - snap.UpdatedAt.ToUniversalTime();
-        return age < TimeSpan.FromMinutes(5)
+        return DateTimeOffset.UtcNow - snap.UpdatedAt.ToUniversalTime() < TimeSpan.FromMinutes(5)
             ? (true, UiCopy.RelativeSync(snap.UpdatedAt))
-            : (false, "Ostatnia synchronizacja była dawno");
+            : (false, "Synchronizacja przestarzała");
     }
 
-    public override void Refresh()
+    private static (bool, string) Perms()
     {
-        base.Refresh();
-        RefreshData();
+        try
+        {
+            AgentPaths.EnsureDirectories();
+            var p = Path.Combine(AgentPaths.ProgramDataRoot, ".ui-perm");
+            File.WriteAllText(p, "ok"); File.Delete(p);
+            return (true, "Zapis OK");
+        }
+        catch { return (false, "Brak uprawnień"); }
+    }
+
+    private static (bool, string) Logs()
+    {
+        AgentPaths.EnsureDirectories();
+        return Directory.Exists(AgentPaths.LogsDir) ? (true, "Folder dostępny") : (false, "Brak folderu");
+    }
+
+    private static (bool, string) Dpapi()
+    {
+        try
+        {
+            var plain = Encoding.UTF8.GetBytes("sasist");
+            var enc = ProtectedData.Protect(plain, null, DataProtectionScope.LocalMachine);
+            var dec = ProtectedData.Unprotect(enc, null, DataProtectionScope.LocalMachine);
+            return Encoding.UTF8.GetString(dec) == "sasist" ? (true, "Ochrona działa") : (false, "Błąd DPAPI");
+        }
+        catch { return (false, "DPAPI niedostępne"); }
     }
 }

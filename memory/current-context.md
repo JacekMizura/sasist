@@ -2,10 +2,22 @@
 
 ## Active
 
-**Sasist Agent 1.1.1 — modern desktop UI**
+**Sasist Agent — UI implementation quality (MVP / no flicker)**
 
-Visual redesign only (WinForms custom chrome): Theme light/dark, Fluent icons, card layouts, Status/Devices/History/Logs/Diagnostics/Test/Settings/Updates.
+Cosmetics paused. Goal: stable WinForms like GitHub Desktop (behavior first).
 
-Installer: `sasist-agent/dist/SasistAgentSetup.exe`
+### Rules in force
+- No layout rebuild on heartbeat/polling — values only
+- MVP: `ShellPresenter` + `IPageView.ApplyValues` / `ForceSync`
+- Layout: Table/Flow/Dock/AutoSize/Min/Max — no Location/Anchor-as-primary
+- Cards compute own height; sidebar width from longest nav label; buttons wrap in cards
+- DoubleBuffered via `UiBuffering`
 
-Uninstall legacy **Sasist Printer Agent** if still present. Publish GitHub Release so ERP downloads `SasistAgentSetup.exe`.
+### Verify
+- `--layout-smoke <dir>` → PASS at 100/125/150/175/200%
+- `--stability-test [sec]` → rebuilds=0 during poll ticks (default 60s)
+
+### Paths
+- App: `sasist-agent/src/Sasist.Agent.Tray/`
+- MVP: `.../Mvp/UiState.cs`
+- Smoke shots: `sasist-agent/dist/layout-smoke/`

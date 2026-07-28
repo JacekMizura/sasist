@@ -1,41 +1,41 @@
 using System.Diagnostics;
-using System.ServiceProcess;
 using Sasist.Agent.Core.Config;
+using Sasist.Agent.Tray.Mvp;
 
 namespace Sasist.Agent.Tray;
 
-internal sealed class DiagnosticsPage : UserControl, IRefreshablePage
+internal sealed class DiagnosticsPage : UserControl, IPageView
 {
     private readonly ConfigStore _store;
     private readonly FlowLayoutPanel _flow;
+    private readonly Dictionary<string, Label> _values = new();
+    private bool _built;
 
     public DiagnosticsPage(ConfigStore store)
     {
         _store = store;
         Dock = DockStyle.Fill;
-        BackColor = Color.Transparent;
-        Controls.Add(new PageHeader("Diagnostyka", "Informacje techniczne dla wsparcia Sasist"));
+        UiBuffering.Enable(this);
+        var shell = new PageShell("Diagnostyka", "Informacje techniczne dla wsparcia Sasist — podzielone na sekcje");
 
-        var toolbar = new FlowLayoutPanel
+        var bar = new FlowLayoutPanel
         {
             Dock = DockStyle.Top,
-            Height = 48,
-            Padding = new Padding(0, 4, 0, 8),
+            AutoSize = true,
+            WrapContents = true,
             BackColor = Color.Transparent,
+            Padding = new Padding(0, 0, 0, 12),
         };
-        var refresh = new ModernButton { Text = "Odśwież", Width = 110 };
-        refresh.Click += (_, _) => RefreshData();
-        var copy = new ModernButton { Text = "Kopiuj wszystko", Width = 140 };
-        copy.Click += (_, _) => Clipboard.SetText(BuildPlainText());
-        var folder = new ModernButton { Text = "Folder logów", Width = 130 };
+        var refresh = new SasistButton { Text = "Odśwież", Margin = new Padding(0, 0, 8, 4) };
+        refresh.Click += (_, _) => ForceSync(UiState.Capture(_store));
+        var folder = new SasistButton { Text = "Folder logów", Margin = new Padding(0, 0, 0, 4) };
         folder.Click += (_, _) =>
         {
             AgentPaths.EnsureDirectories();
             Process.Start(new ProcessStartInfo { FileName = "explorer.exe", Arguments = $"\"{AgentPaths.LogsDir}\"", UseShellExecute = true });
         };
-        toolbar.Controls.Add(refresh);
-        toolbar.Controls.Add(copy);
-        toolbar.Controls.Add(folder);
+        bar.Controls.Add(refresh);
+        bar.Controls.Add(folder);
 
         _flow = new FlowLayoutPanel
         {
@@ -45,132 +45,130 @@ internal sealed class DiagnosticsPage : UserControl, IRefreshablePage
             BackColor = Color.Transparent,
         };
 
-        Controls.Add(_flow);
-        Controls.Add(toolbar);
-        Theme.Changed += () => RefreshData();
+        shell.Body.Controls.Add(_flow);
+        shell.Body.Controls.Add(bar);
+        Controls.Add(shell);
+        shell.Body.Resize += (_, _) => FitWidths();
+        UiBuffering.Enable(shell);
     }
 
-    public void RefreshData()
+    public void ApplyValues(UiState state)
     {
-        var cfg = _store.Load();
-        var snap = AgentStatusStore.Read();
-        string service;
-        try
-        {
-            using var sc = new ServiceController(TrayApplicationContext.ServiceName);
-            service = sc.Status switch
-            {
-                ServiceControllerStatus.Running => "Uruchomiona",
-                ServiceControllerStatus.Stopped => "Zatrzymana",
-                _ => sc.Status.ToString(),
-            };
-        }
-        catch { service = "Niedostępna"; }
+        EnsureBuilt();
+        Set("conn.status", state.Online ? "Połączono" : "Brak połączenia");
+        Set("conn.company", state.Company);
+        Set("conn.sync", state.SyncValue);
+        Set("conn.endpoint", state.Endpoint);
+        Set("agent.id", state.AgentId);
+        Set("agent.token", state.TokenMasked);
+        Set("agent.version", AgentConfig.AgentVersion);
+        Set("agent.proto", AgentConfig.ProtocolVersion.ToString());
+        Set("agent.hb", state.Heartbeat);
+        Set("pc.name", state.Computer);
+        Set("pc.mid", state.MachineId);
+        Set("svc.name", TrayApplicationContext.ServiceName);
+        Set("svc.status", state.ServiceStatus);
+        Set("sys.poll", state.PollInterval);
+        Set("sys.channel", state.UpdateChannel);
+        Set("logs.dir", AgentPaths.LogsDir);
+        Set("logs.cfg", AgentPaths.ConfigPath);
+    }
 
+    public void ForceSync(UiState state) => ApplyValues(state);
+
+    private void EnsureBuilt()
+    {
+        if (_built) return;
+        _built = true;
+        UiMetrics.NoteRebuild("DiagnosticsPage.structure-once");
         _flow.SuspendLayout();
-        _flow.Controls.Clear();
-        _flow.Controls.Add(Section("Połączenie", new Dictionary<string, string>
-        {
-            ["Status"] = snap?.Online == true ? "Połączono" : "Brak połączenia",
-            ["Firma"] = UiCopy.CompanyName(cfg, snap),
-            ["Synchronizacja"] = UiCopy.RelativeSync(snap?.UpdatedAt),
-            ["Endpoint"] = cfg.ServerUrl,
-        }));
-        _flow.Controls.Add(Section("Agent", new Dictionary<string, string>
-        {
-            ["Agent ID"] = cfg.AgentId > 0 ? cfg.AgentId.ToString() : "—",
-            ["Token"] = UiCopy.MaskSecret(cfg.Token),
-            ["Wersja"] = AgentConfig.AgentVersion,
-            ["Protokół"] = AgentConfig.ProtocolVersion.ToString(),
-            ["Heartbeat"] = $"co {cfg.HeartbeatIntervalSec} s",
-            ["Odpytywanie"] = $"co {cfg.PollIntervalSec} s",
-        }));
-        _flow.Controls.Add(Section("Komputer", new Dictionary<string, string>
-        {
-            ["Nazwa"] = cfg.ComputerName,
-            ["Machine ID"] = cfg.MachineId,
-        }));
-        _flow.Controls.Add(Section("Usługa", new Dictionary<string, string>
-        {
-            ["Nazwa"] = TrayApplicationContext.ServiceName,
-            ["Stan"] = service,
-        }));
-        _flow.Controls.Add(Section("Logi", new Dictionary<string, string>
-        {
-            ["Folder"] = AgentPaths.LogsDir,
-            ["Konfiguracja"] = AgentPaths.ConfigPath,
-        }));
-        _flow.ResumeLayout();
+        _flow.Controls.Add(Section("Połączenie", [
+            ("conn.status", "Status"),
+            ("conn.company", "Firma"),
+            ("conn.sync", "Synchronizacja"),
+            ("conn.endpoint", "Endpoint"),
+        ]));
+        _flow.Controls.Add(Section("Agent", [
+            ("agent.id", "Agent ID"),
+            ("agent.token", "Token"),
+            ("agent.version", "Wersja"),
+            ("agent.proto", "Protokół"),
+            ("agent.hb", "Heartbeat"),
+        ]));
+        _flow.Controls.Add(Section("Komputer", [
+            ("pc.name", "Nazwa"),
+            ("pc.mid", "Machine ID"),
+        ]));
+        _flow.Controls.Add(Section("Usługa", [
+            ("svc.name", "Nazwa"),
+            ("svc.status", "Stan"),
+        ]));
+        _flow.Controls.Add(Section("System", [
+            ("sys.poll", "Odpytywanie"),
+            ("sys.channel", "Kanał"),
+        ]));
+        _flow.Controls.Add(Section("Logi", [
+            ("logs.dir", "Folder"),
+            ("logs.cfg", "Konfiguracja"),
+        ]));
+        _flow.ResumeLayout(true);
+        FitWidths();
     }
 
-    private static Control Section(string title, Dictionary<string, string> rows)
+    private Control Section(string title, (string Key, string Cap)[] rows)
     {
-        var card = new RoundedCard
+        var inner = new FlowLayoutPanel
         {
-            Width = 340,
-            Height = 56 + rows.Count * 44,
-            Margin = new Padding(0, 0, 16, 16),
-        };
-        var h = new Label
-        {
-            Text = title,
-            Left = 20,
-            Top = 16,
-            Width = 280,
-            Height = 24,
-            Font = Theme.FontSection,
-            ForeColor = Theme.TextPrimary,
+            Dock = DockStyle.Top,
+            AutoSize = true,
+            FlowDirection = FlowDirection.TopDown,
+            WrapContents = false,
             BackColor = Color.Transparent,
         };
-        card.Controls.Add(h);
-        var y = 48;
-        foreach (var (k, v) in rows)
+        inner.Controls.Add(LayoutHelpers.Title(title));
+        foreach (var (key, cap) in rows)
         {
-            var cap = new Label
-            {
-                Text = k,
-                Left = 20,
-                Top = y,
-                Width = 280,
-                Height = 16,
-                Font = Theme.FontCaption,
-                ForeColor = Theme.TextMuted,
-                BackColor = Color.Transparent,
-            };
-            var val = new Label
-            {
-                Text = v,
-                Left = 20,
-                Top = y + 16,
-                Width = 290,
-                Height = 22,
-                Font = Theme.FontUiSemibold,
-                ForeColor = Theme.TextPrimary,
-                BackColor = Color.Transparent,
-            };
-            card.Controls.Add(cap);
-            card.Controls.Add(val);
-            y += 44;
+            var capLbl = LayoutHelpers.Muted(cap);
+            capLbl.Margin = new Padding(0, 12, 0, 2);
+            var val = LayoutHelpers.Wrap("—", Theme.FontBodySemibold, Theme.TextPrimary, 280);
+            inner.Controls.Add(capLbl);
+            inner.Controls.Add(val);
+            _values[key] = val;
         }
+
+        var card = new SasistCard
+        {
+            AutoSize = true,
+            AutoSizeMode = AutoSizeMode.GrowAndShrink,
+            Margin = new Padding(0, 0, Theme.Gap, Theme.Gap),
+            MinimumSize = new Size(260, 80),
+        };
+        card.Controls.Add(inner);
         return card;
     }
 
-    private string BuildPlainText()
+    private void Set(string key, string value)
     {
-        var parts = new List<string>();
-        foreach (Control c in _flow.Controls)
-        {
-            if (c is not RoundedCard card) continue;
-            foreach (Control x in card.Controls)
-                if (x is Label l) parts.Add(l.Text);
-            parts.Add("");
-        }
-        return string.Join(Environment.NewLine, parts);
+        if (_values.TryGetValue(key, out var lbl))
+            UiBuffering.SetTextIfChanged(lbl, value);
     }
 
-    public override void Refresh()
+    private void FitWidths()
     {
-        base.Refresh();
-        RefreshData();
+        var avail = Math.Max(280, _flow.ClientSize.Width - 8);
+        var cardW = avail >= 700 ? Math.Max(280, (avail - Theme.Gap) / 2) : avail - 8;
+        foreach (Control c in _flow.Controls)
+        {
+            c.MaximumSize = new Size(cardW, 0);
+            c.MinimumSize = new Size(Math.Min(260, cardW), 0);
+            foreach (Control inner in c.Controls)
+            {
+                if (inner is FlowLayoutPanel stack)
+                {
+                    foreach (Control x in stack.Controls)
+                        LayoutHelpers.SetMaxWidth(x, cardW - 48);
+                }
+            }
+        }
     }
 }

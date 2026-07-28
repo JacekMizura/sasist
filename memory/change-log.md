@@ -1,3 +1,24 @@
+## 2026-07-28 — Sasist Agent UI quality: MVP + no flicker
+
+- Root cause of flicker: timer called full page rebuild (`Controls.Clear`) every poll
+- Fix: `ShellPresenter` / `IPageView` — structure once; poll updates labels/cards in place only
+- Sidebar: `TableLayoutPanel` AutoSize rows; width from longest nav label
+- Layout smoke PASS 100–200% (incl. 175%); stability 60s: rebuilds=0
+- Cosmetics still frozen until UI stays stable
+
+## 2026-07-27 — Sasist Agent layout foundation (DPI freeze)
+
+- Fixed: PerMonitorV2 + AutoScaleMode.None; removed Absolute/Location layouts; AutoSize labels; card PreferredSize
+- `--layout-smoke` audits clip/overlap at simulated 100/125/150/200% — all PASS
+- Visual redesign paused until layout stays green
+
+## 2026-07-27 — Sasist Agent 1.2.0 UI from scratch (Sasist DS)
+
+- Discarded prior WinForms polish; new shell (top bar + 320px sidebar + pages)
+- Tokens from FE design-system; custom cards/buttons/nav/toggles; PerMonitorV2, AutoScale none
+- Pages: Status 6 cards, Devices printer cards, History list, Logs filters, Diagnostics sections, Test checklist, Settings rows+toggles, Updates card
+- Screenshots: `sasist-agent/dist/ui-shots/`
+
 ## 2026-07-27 — Sasist Agent 1.1.1 modern UI redesign
 
 - Theme system (light/dark), Fluent icons, rounded cards, modern nav

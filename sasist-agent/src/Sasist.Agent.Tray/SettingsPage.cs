@@ -1,172 +1,212 @@
 using Microsoft.Win32;
 using Sasist.Agent.Core.Config;
+using Sasist.Agent.Tray.Mvp;
 
 namespace Sasist.Agent.Tray;
 
-internal sealed class SettingsPage : UserControl, IRefreshablePage
+internal sealed class SettingsPage : UserControl, IPageView
 {
     private readonly ConfigStore _store;
     private readonly Action _unpair;
-    private readonly Action _showMain;
-    private CheckBox _startWin = null!;
-    private CheckBox _background = null!;
-    private CheckBox _notify = null!;
-    private CheckBox _autoUpdate = null!;
+    private readonly FlowLayoutPanel _stack;
+    private PageShell? _shell;
 
-    public SettingsPage(ConfigStore store, Action unpair, Action showMain)
+    public SettingsPage(ConfigStore store, Action unpair)
     {
         _store = store;
         _unpair = unpair;
-        _showMain = showMain;
         Dock = DockStyle.Fill;
-        BackColor = Color.Transparent;
-        Controls.Add(new PageHeader("Ustawienia", "Zachowanie aplikacji na tym komputerze"));
+        UiBuffering.Enable(this);
+        _shell = new PageShell("Ustawienia", "Zachowanie Sasist Agent na tym komputerze");
 
-        var scroll = new Panel { Dock = DockStyle.Fill, AutoScroll = true, BackColor = Color.Transparent };
-        var card = new RoundedCard { Left = 0, Top = 8, Width = 640, Height = 420 };
-
-        _startWin = Toggle(card, "Uruchamiaj z Windows", 24, UiPreferences.Current.StartWithWindows, v =>
+        _stack = new FlowLayoutPanel
         {
-            UiPreferences.Current.StartWithWindows = v;
-            UiPreferences.Save();
-            SetRunKey(v);
-        });
-        _background = Toggle(card, "Uruchamiaj w tle (ikona przy zegarze)", 76, UiPreferences.Current.RunInBackground, v =>
-        {
-            UiPreferences.Current.RunInBackground = v;
-            UiPreferences.Save();
-        });
-        _notify = Toggle(card, "Powiadomienia", 128, UiPreferences.Current.Notifications, v =>
-        {
-            UiPreferences.Current.Notifications = v;
-            UiPreferences.Save();
-        });
-        _autoUpdate = Toggle(card, "Automatyczne aktualizacje", 180, UiPreferences.Current.AutoUpdates, v =>
-        {
-            UiPreferences.Current.AutoUpdates = v;
-            UiPreferences.Save();
-        });
-
-        var logsBtn = new ModernButton { Text = "Otwórz folder logów", Left = 24, Top = 240, Width = 200 };
-        logsBtn.Click += (_, _) =>
-        {
-            AgentPaths.EnsureDirectories();
-            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
-            {
-                FileName = "explorer.exe",
-                Arguments = $"\"{AgentPaths.LogsDir}\"",
-                UseShellExecute = true,
-            });
-        };
-
-        var exportBtn = new ModernButton { Text = "Eksport diagnostyki", Left = 236, Top = 240, Width = 180 };
-        exportBtn.Click += (_, _) => ExportDiagnostics();
-
-        var resetBtn = new ModernButton { Text = "Reset połączenia", Danger = true, Left = 24, Top = 300, Width = 200 };
-        resetBtn.Click += (_, _) =>
-        {
-            _showMain();
-            _unpair();
-        };
-
-        var unpairBtn = new ModernButton { Text = "Odłącz urządzenie", Left = 236, Top = 300, Width = 180 };
-        unpairBtn.Click += (_, _) =>
-        {
-            _showMain();
-            _unpair();
-        };
-
-        var themeBtn = new ModernButton { Text = "Przełącz motyw jasny / ciemny", Left = 24, Top = 360, Width = 280 };
-        themeBtn.Click += (_, _) => Theme.Toggle();
-
-        card.Controls.AddRange([logsBtn, exportBtn, resetBtn, unpairBtn, themeBtn]);
-        scroll.Controls.Add(card);
-        Controls.Add(scroll);
-        Theme.Changed += () => card.Invalidate();
-        Resize += (_, _) => card.Width = Math.Max(520, ClientSize.Width - 8);
-    }
-
-    private static CheckBox Toggle(RoundedCard card, string text, int top, bool initial, Action<bool> onChange)
-    {
-        var cb = new CheckBox
-        {
-            Text = text,
-            Left = 24,
-            Top = top,
-            Width = 560,
-            Height = 28,
-            Checked = initial,
-            Font = Theme.FontUi,
-            ForeColor = Theme.TextPrimary,
+            Dock = DockStyle.Top,
+            AutoSize = true,
+            FlowDirection = FlowDirection.TopDown,
+            WrapContents = false,
             BackColor = Color.Transparent,
-            FlatStyle = FlatStyle.Flat,
-            Cursor = Cursors.Hand,
         };
-        cb.CheckedChanged += (_, _) => onChange(cb.Checked);
-        card.Controls.Add(cb);
-        Theme.Changed += () => cb.ForeColor = Theme.TextPrimary;
-        return cb;
+
+        _stack.Controls.Add(Section("Ogólne", p =>
+        {
+            p.Controls.Add(Row("Uruchamiaj z Windows", UiPreferences.Current.StartWithWindows, v =>
+            {
+                UiPreferences.Current.StartWithWindows = v; UiPreferences.Save(); SetRun(v);
+            }));
+            p.Controls.Add(Row("Uruchamiaj w tle", UiPreferences.Current.RunInBackground, v =>
+            {
+                UiPreferences.Current.RunInBackground = v; UiPreferences.Save();
+            }));
+        }));
+
+        _stack.Controls.Add(Section("Powiadomienia", p =>
+        {
+            p.Controls.Add(Row("Pokazuj powiadomienia", UiPreferences.Current.Notifications, v =>
+            {
+                UiPreferences.Current.Notifications = v; UiPreferences.Save();
+            }));
+        }));
+
+        _stack.Controls.Add(Section("Uruchamianie", p =>
+        {
+            p.Controls.Add(LayoutHelpers.Wrap(
+                "Agent może działać w tle po zamknięciu okna.",
+                Theme.FontCaption, Theme.TextMuted, 640));
+        }));
+
+        _stack.Controls.Add(Section("Aktualizacje", p =>
+        {
+            p.Controls.Add(Row("Automatyczne aktualizacje", UiPreferences.Current.AutoUpdates, v =>
+            {
+                UiPreferences.Current.AutoUpdates = v; UiPreferences.Save();
+            }));
+        }));
+
+        _stack.Controls.Add(Section("Diagnostyka", p =>
+        {
+            var row = new FlowLayoutPanel { AutoSize = true, WrapContents = true, BackColor = Color.Transparent };
+            var logs = new SasistButton { Text = "Otwórz folder logów", Margin = new Padding(0, 8, 8, 4) };
+            logs.Click += (_, _) =>
+            {
+                AgentPaths.EnsureDirectories();
+                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                {
+                    FileName = "explorer.exe",
+                    Arguments = $"\"{AgentPaths.LogsDir}\"",
+                    UseShellExecute = true,
+                });
+            };
+            var export = new SasistButton { Text = "Eksport diagnostyki", Margin = new Padding(0, 8, 8, 4) };
+            export.Click += (_, _) => Export();
+            var reset = new SasistButton { Text = "Reset połączenia", Danger = true, Margin = new Padding(0, 8, 8, 4) };
+            reset.Click += (_, _) => _unpair();
+            var unpairBtn = new SasistButton { Text = "Odłącz urządzenie", Margin = new Padding(0, 8, 0, 4) };
+            unpairBtn.Click += (_, _) => _unpair();
+            row.Controls.AddRange([logs, export, reset, unpairBtn]);
+            p.Controls.Add(row);
+        }));
+
+        _shell.Body.Controls.Add(_stack);
+        Controls.Add(_shell);
+        _shell.Body.Resize += (_, _) => Relayout();
+        Relayout();
     }
 
-    private static void SetRunKey(bool enable)
+    private void Relayout()
+    {
+        if (_shell is null) return;
+        var w = Math.Max(360, _shell.Body.ClientSize.Width - 8);
+        foreach (Control c in _stack.Controls)
+        {
+            c.MaximumSize = new Size(w, 0);
+            c.MinimumSize = new Size(Math.Min(320, w), 0);
+            foreach (Control inner in c.Controls)
+            {
+                if (inner is not FlowLayoutPanel flow) continue;
+                foreach (Control child in flow.Controls)
+                {
+                    if (child is TableLayoutPanel row)
+                    {
+                        row.MaximumSize = new Size(Math.Max(280, w - 56), 0);
+                        row.MinimumSize = new Size(Math.Min(280, w - 56), 44);
+                    }
+                    else
+                        LayoutHelpers.SetMaxWidth(child, w - 56);
+                }
+            }
+        }
+    }
+
+    private static Control Section(string title, Action<FlowLayoutPanel> build)
+    {
+        var inner = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Top,
+            AutoSize = true,
+            FlowDirection = FlowDirection.TopDown,
+            WrapContents = false,
+            BackColor = Color.Transparent,
+        };
+        var h = LayoutHelpers.Title(title);
+        h.Margin = new Padding(0, 0, 0, 12);
+        inner.Controls.Add(h);
+        build(inner);
+
+        var card = new SasistCard
+        {
+            AutoSize = true,
+            AutoSizeMode = AutoSizeMode.GrowAndShrink,
+            MinimumSize = new Size(320, 64),
+            Margin = new Padding(0, 0, 0, Theme.SectionGap),
+        };
+        card.Controls.Add(inner);
+        return card;
+    }
+
+    private static Control Row(string label, bool on, Action<bool> change)
+    {
+        var grid = new TableLayoutPanel
+        {
+            AutoSize = true,
+            AutoSizeMode = AutoSizeMode.GrowAndShrink,
+            ColumnCount = 2,
+            RowCount = 1,
+            Margin = new Padding(0, 6, 0, 6),
+            BackColor = Color.Transparent,
+            MinimumSize = new Size(280, 44),
+            Dock = DockStyle.Top,
+        };
+        grid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
+        grid.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        grid.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+
+        var lbl = LayoutHelpers.Text(label, Theme.FontBody, Theme.TextPrimary);
+        lbl.AutoSize = true;
+        lbl.Anchor = AnchorStyles.Left | AnchorStyles.Top;
+        lbl.Margin = new Padding(0, 8, 8, 8);
+        var toggle = new SasistToggle { On = on, Margin = new Padding(8, 6, 0, 6), Anchor = AnchorStyles.Right };
+        toggle.Toggled += (_, _) => change(toggle.On);
+
+        grid.Controls.Add(lbl, 0, 0);
+        grid.Controls.Add(toggle, 1, 0);
+        return grid;
+    }
+
+    private static void SetRun(bool enable)
     {
         try
         {
             using var key = Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Run", true);
             if (key is null) return;
             const string name = "SasistAgentTray";
-            if (enable)
-            {
-                var exe = Application.ExecutablePath;
-                key.SetValue(name, $"\"{exe}\"");
-            }
-            else
-            {
-                key.DeleteValue(name, false);
-            }
+            if (enable) key.SetValue(name, $"\"{Application.ExecutablePath}\"");
+            else key.DeleteValue(name, false);
         }
-        catch
-        {
-            // ignore
-        }
+        catch { }
     }
 
-    private void ExportDiagnostics()
+    private void Export()
     {
         var cfg = _store.Load();
         var snap = AgentStatusStore.Read();
-        using var dlg = new SaveFileDialog
-        {
-            Filter = "Plik tekstowy (*.txt)|*.txt",
-            FileName = $"sasist-agent-diagnostyka-{DateTime.Now:yyyyMMdd-HHmm}.txt",
-        };
+        using var dlg = new SaveFileDialog { Filter = "Tekst (*.txt)|*.txt", FileName = $"sasist-diagnostyka-{DateTime.Now:yyyyMMdd-HHmm}.txt" };
         if (dlg.ShowDialog(this) != DialogResult.OK) return;
-        var text = string.Join(Environment.NewLine, new[]
+        File.WriteAllText(dlg.FileName, string.Join(Environment.NewLine, new[]
         {
-            "Sasist Agent — eksport diagnostyki",
+            "Sasist Agent — diagnostyka",
             $"Wersja: {AgentConfig.AgentVersion}",
             $"Agent ID: {cfg.AgentId}",
             $"Machine ID: {cfg.MachineId}",
             $"Endpoint: {cfg.ServerUrl}",
             $"Firma: {UiCopy.CompanyName(cfg, snap)}",
             $"Online: {snap?.Online}",
-            $"Sync: {UiCopy.RelativeSync(snap?.UpdatedAt)}",
             $"Logi: {AgentPaths.LogsDir}",
-        });
-        File.WriteAllText(dlg.FileName, text);
+        }));
     }
 
-    public void RefreshData()
-    {
-        _startWin.Checked = UiPreferences.Current.StartWithWindows;
-        _background.Checked = UiPreferences.Current.RunInBackground;
-        _notify.Checked = UiPreferences.Current.Notifications;
-        _autoUpdate.Checked = UiPreferences.Current.AutoUpdates;
-    }
+    public void ApplyValues(UiState state) { /* settings are local prefs — no poll rebuild */ }
+    public void ForceSync(UiState state) => Relayout();
 
-    public override void Refresh()
-    {
-        base.Refresh();
-        RefreshData();
-    }
+    public void RefreshData() => Relayout(); // legacy alias unused
 }

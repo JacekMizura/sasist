@@ -1,309 +1,465 @@
 using Sasist.Agent.Core.Config;
+using Sasist.Agent.Tray.Mvp;
 
 namespace Sasist.Agent.Tray;
 
-internal sealed class MainForm : Form
+/// <summary>
+/// Shell view (MVP). Polling updates values only — never rebuilds page trees.
+/// Navigation uses show/hide of pre-created pages (no Controls.Clear on tick).
+/// </summary>
+internal sealed class MainForm : Form, IShellView
 {
     private readonly ConfigStore _store;
+    private readonly ShellPresenter _presenter;
     private readonly Panel _sidebar;
-    private readonly Panel _contentHost;
     private readonly Panel _content;
     private readonly Panel _pairingOverlay;
-    private readonly Dictionary<string, NavItemButton> _nav = new();
+    private readonly TableLayoutPanel _navHost;
+    private readonly Label _connPill;
+    private readonly Label _footerOrg;
+    private readonly Label _footerVer;
+    private readonly Dictionary<string, SasistNavItem> _nav = new();
+    private readonly Dictionary<string, Control> _pages = new();
     private readonly NotifyIcon _tray;
     private readonly ContextMenuStrip _trayMenu;
-    private readonly ToolStripMenuItem _trayStatus;
-    private readonly ToolStripMenuItem _trayOrg;
     private readonly System.Windows.Forms.Timer _timer;
-    private readonly System.Windows.Forms.Timer _fadeTimer;
-    private string _currentPage = "status";
-    private bool _exitRequested;
-    private int _fadeStep;
+    private readonly bool _smokeMode;
+    private string _pageId = "status";
+    private bool _exit;
+    private bool _sidebarFitted;
 
-    private StatusPage? _statusPage;
-    private DevicesPage? _devicesPage;
-    private JobsPage? _jobsPage;
-    private LogsPage? _logsPage;
-    private DiagnosticsPage? _diagnosticsPage;
-    private TestPage? _testPage;
-    private SettingsPage? _settingsPage;
-    private UpdatesPage? _updatesPage;
-    private PairingPage? _pairingPage;
+    private StatusPage? _status;
+    private DevicesPage? _devices;
+    private JobsPage? _jobs;
+    private LogsPage? _logs;
+    private DiagnosticsPage? _diag;
+    private TestPage? _test;
+    private SettingsPage? _settings;
+    private UpdatesPage? _updates;
+    private PairingPage? _pairing;
 
-    public MainForm(ConfigStore store)
+    private static readonly (string Id, string Label, string Icon)[] NavItems =
+    [
+        ("status", "Status", AppIcons.Status),
+        ("devices", "Urządzenia", AppIcons.Devices),
+        ("jobs", "Historia", AppIcons.History),
+        ("logs", "Logi", AppIcons.Logs),
+        ("diagnostics", "Diagnostyka", AppIcons.Diagnostics),
+        ("test", "Test", AppIcons.Test),
+        ("settings", "Ustawienia", AppIcons.Settings),
+        ("updates", "Aktualizacje", AppIcons.Updates),
+    ];
+
+    public MainForm(ConfigStore store, bool smokeMode = false)
     {
         _store = store;
+        _smokeMode = smokeMode;
+        _presenter = new ShellPresenter(store, this);
         UiPreferences.Load();
-        Theme.LoadFromPreferences();
 
         Text = "Sasist Agent";
-        Width = 1080;
-        Height = 720;
-        MinimumSize = new Size(900, 600);
-        StartPosition = FormStartPosition.CenterScreen;
-        Font = Theme.FontUi;
+        Font = Theme.FontBody;
+        BackColor = Theme.Canvas;
         Icon = Branding.AppIcon;
-        ShowInTaskbar = true;
+        StartPosition = FormStartPosition.CenterScreen;
+        AutoScaleMode = AutoScaleMode.None;
         DoubleBuffered = true;
+        MinimumSize = new Size(1000, 640);
+        ClientSize = new Size(1200, 780);
 
-        _sidebar = new Panel
-        {
-            Dock = DockStyle.Left,
-            Width = 236,
-        };
-        _sidebar.Paint += PaintSidebar;
+        var topBar = BuildTopBar(out _connPill);
+        _sidebar = BuildSidebar(out _navHost, out _footerOrg, out _footerVer);
+        _content = new Panel { Dock = DockStyle.Fill, BackColor = Theme.Canvas };
+        _pairingOverlay = new Panel { Dock = DockStyle.Fill, Visible = false, BackColor = Theme.Canvas };
 
-        BuildSidebar();
+        var body = new Panel { Dock = DockStyle.Fill };
+        body.Controls.Add(_content);
+        body.Controls.Add(_pairingOverlay);
+        body.Controls.Add(_sidebar);
 
-        _contentHost = new Panel { Dock = DockStyle.Fill };
-        _content = new Panel
-        {
-            Dock = DockStyle.Fill,
-            Padding = new Padding(28, 20, 28, 24),
-        };
-        _contentHost.Controls.Add(_content);
+        Controls.Add(body);
+        Controls.Add(topBar);
+        UiBuffering.Enable(this);
 
-        _pairingOverlay = new Panel { Dock = DockStyle.Fill, Visible = false };
-
-        Controls.Add(_contentHost);
-        Controls.Add(_pairingOverlay);
-        Controls.Add(_sidebar);
-
-        _trayStatus = new ToolStripMenuItem(UiCopy.TrayConnection(false)) { Enabled = false };
-        _trayOrg = new ToolStripMenuItem("Połączono z: —") { Enabled = false };
         _trayMenu = new ContextMenuStrip();
-        _trayMenu.Items.Add(new ToolStripMenuItem("Sasist Agent") { Enabled = false, Font = Theme.FontUiSemibold });
-        _trayMenu.Items.Add(_trayStatus);
-        _trayMenu.Items.Add(_trayOrg);
-        _trayMenu.Items.Add(new ToolStripSeparator());
-        _trayMenu.Items.Add("Otwórz Sasist Agent", null, (_, _) => ShowMain());
-        _trayMenu.Items.Add("Sprawdź aktualizacje", null, (_, _) => Navigate("updates"));
+        _trayMenu.Items.Add("Otwórz Sasist Agent", null, (_, _) => Reveal());
+        _trayMenu.Items.Add("Aktualizacje", null, (_, _) => { Reveal(); Navigate("updates"); });
         _trayMenu.Items.Add("Odłącz urządzenie", null, (_, _) => Unpair());
-        _trayMenu.Items.Add("Uruchom ponownie usługę", null, (_, _) => RestartService());
         _trayMenu.Items.Add(new ToolStripSeparator());
-        _trayMenu.Items.Add("Zamknij", null, (_, _) => { _exitRequested = true; Close(); });
-
+        _trayMenu.Items.Add("Zamknij", null, (_, _) => { _exit = true; Close(); });
         _tray = new NotifyIcon
         {
             Text = "Sasist Agent",
             Icon = Branding.AppIcon,
-            Visible = true,
+            Visible = !_smokeMode,
             ContextMenuStrip = _trayMenu,
         };
-        _tray.DoubleClick += (_, _) => ShowMain();
+        _tray.DoubleClick += (_, _) => Reveal();
 
-        _timer = new System.Windows.Forms.Timer { Interval = 2500 };
-        _timer.Tick += (_, _) => RefreshChrome();
-
-        _fadeTimer = new System.Windows.Forms.Timer { Interval = 16 };
-        _fadeTimer.Tick += (_, _) => AnimateFade();
-
-        Theme.Changed += ApplyTheme;
-        ApplyTheme();
-
-        Shown += (_, _) =>
+        // Polling: values only. Interval 2s — never tears down controls.
+        _timer = new System.Windows.Forms.Timer { Interval = 2000 };
+        _timer.Tick += (_, _) =>
         {
-            EnsurePages();
-            RefreshChrome();
-            Navigate("status", animate: false);
-            _timer.Start();
+            PollNavigateRequest();
+            _presenter.Tick();
         };
 
-        FormClosing += OnFormClosing;
+        Load += (_, _) => FitSidebarWidth();
+        Shown += (_, _) =>
+        {
+            FitSidebarWidth();
+            EnsurePages();
+            Navigate("status");
+            _presenter.SyncCurrentPage();
+            if (!_smokeMode) _timer.Start();
+        };
+        FormClosing += (_, e) =>
+        {
+            if (_smokeMode) return;
+            if (_exit || e.CloseReason != CloseReason.UserClosing) return;
+            if (!UiPreferences.Current.RunInBackground) return;
+            e.Cancel = true;
+            Hide();
+            if (UiPreferences.Current.Notifications)
+                _tray.ShowBalloonTip(2000, "Sasist Agent", "Działa w tle.", ToolTipIcon.Info);
+        };
     }
 
-    private void BuildSidebar()
-    {
-        _sidebar.Controls.Clear();
+    public IPageView? CurrentPage =>
+        _pages.TryGetValue(_pageId, out var c) && c is IPageView v ? v : null;
 
-        var brandWrap = new Panel { Left = 0, Top = 0, Width = 236, Height = 72, BackColor = Color.Transparent };
+    public void SetChrome(UiState state)
+    {
+        UiBuffering.SetTextIfChanged(_connPill, state.ConnPill);
+        UiBuffering.SetColorIfChanged(_connPill, state.ConnPillColor);
+        UiBuffering.SetTextIfChanged(_footerOrg, state.Company);
+        UiBuffering.SetTextIfChanged(_footerVer, state.Version);
+        if (_tray.Text != state.TrayTip)
+            _tray.Text = state.TrayTip;
+        foreach (var n in _nav.Values)
+            n.Enabled = !state.NeedsSetup;
+    }
+
+    public void SetPairingVisible(bool visible)
+    {
+        if (_pairingOverlay.Visible == visible) return;
+        _pairingOverlay.Visible = visible;
+        if (visible) _pairingOverlay.BringToFront();
+    }
+
+    protected override void OnDpiChanged(DpiChangedEventArgs e)
+    {
+        base.OnDpiChanged(e);
+        _sidebarFitted = false;
+        FitSidebarWidth();
+        PerformLayout();
+    }
+
+    private void FitSidebarWidth()
+    {
+        // Sidebar width = nav padding + longest item preferred width (icon + label).
+        var maxLabel = 0;
+        foreach (var it in NavItems)
+            maxLabel = Math.Max(maxLabel, LayoutHelpers.MeasureTextWidth(it.Label, Theme.FontNav));
+        var itemW = Math.Max(160, 16 + 28 + 12 + maxLabel + 16);
+        var need = _navHost.Padding.Horizontal + itemW;
+        if (_sidebar.Width != need)
+            _sidebar.Width = Math.Max(Theme.SidebarMinWidth, need);
+        _sidebarFitted = true;
+    }
+
+    private Panel BuildTopBar(out Label connPill)
+    {
+        var bar = new Panel
+        {
+            Dock = DockStyle.Top,
+            MinimumSize = new Size(0, Theme.TopBarHeight),
+            Height = Theme.TopBarHeight,
+            BackColor = Theme.Surface,
+            Padding = new Padding(16, 0, 16, 0),
+        };
+        bar.Paint += (_, e) =>
+        {
+            using var pen = new Pen(Theme.Border);
+            e.Graphics.DrawLine(pen, 0, bar.Height - 1, bar.Width, bar.Height - 1);
+        };
+
         var logo = new PictureBox
         {
             Image = Branding.MarkImage,
             SizeMode = PictureBoxSizeMode.Zoom,
-            Left = 20,
-            Top = 20,
+            Dock = DockStyle.Left,
+            MinimumSize = new Size(28, 28),
+            MaximumSize = new Size(28, 56),
             Width = 28,
-            Height = 28,
+            Padding = new Padding(0, 14, 0, 14),
         };
-        var brand = new Label
+        var title = new Label
         {
             Text = "Sasist Agent",
-            Left = 56,
-            Top = 22,
-            Width = 160,
-            Height = 24,
-            Font = new Font("Segoe UI Semibold", 12.5f),
+            Dock = DockStyle.Fill,
+            TextAlign = ContentAlignment.MiddleLeft,
+            Font = Theme.FontBodySemibold,
             ForeColor = Theme.TextPrimary,
+            Padding = new Padding(12, 0, 12, 0),
+            AutoEllipsis = true,
+        };
+        connPill = new Label
+        {
+            Text = "●  Połączono",
+            AutoSize = true,
+            TextAlign = ContentAlignment.MiddleRight,
+            Font = Theme.FontCaptionBold,
+            ForeColor = Theme.Success,
+            Padding = new Padding(12, 0, 0, 0),
+            Dock = DockStyle.Fill,
+        };
+        var pillHost = new Panel
+        {
+            Dock = DockStyle.Right,
+            AutoSize = true,
+            MinimumSize = new Size(140, Theme.TopBarHeight),
+            Height = Theme.TopBarHeight,
+            Padding = new Padding(8, 0, 0, 0),
+        };
+        pillHost.Controls.Add(connPill);
+
+        bar.Controls.Add(title);
+        bar.Controls.Add(pillHost);
+        bar.Controls.Add(logo);
+        return bar;
+    }
+
+    private Panel BuildSidebar(out TableLayoutPanel navHost, out Label footerOrg, out Label footerVer)
+    {
+        var side = new Panel
+        {
+            Dock = DockStyle.Left,
+            Width = Theme.SidebarMinWidth, // initial; FitSidebarWidth sets from longest label
+            MinimumSize = new Size(Theme.SidebarMinWidth, 0),
+            BackColor = Theme.Surface,
+        };
+        side.Paint += (_, e) =>
+        {
+            using var pen = new Pen(Theme.Border);
+            e.Graphics.DrawLine(pen, side.Width - 1, 0, side.Width - 1, side.Height);
+        };
+
+        var brand = new Panel { Dock = DockStyle.Top, AutoSize = true, Padding = new Padding(16, 16, 12, 12) };
+        var brandRow = new TableLayoutPanel
+        {
+            Dock = DockStyle.Top,
+            AutoSize = true,
+            ColumnCount = 2,
+            RowCount = 1,
             BackColor = Color.Transparent,
         };
-        brandWrap.Controls.Add(logo);
-        brandWrap.Controls.Add(brand);
-        _sidebar.Controls.Add(brandWrap);
+        brandRow.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        brandRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
+        brandRow.RowStyles.Add(new RowStyle(SizeType.AutoSize));
 
-        var items = new (string Id, string Label, string Icon)[]
+        var brandLogo = new PictureBox
         {
-            ("status", "Status", AppIcons.Status),
-            ("devices", "Urządzenia", AppIcons.Devices),
-            ("jobs", "Historia wydruków", AppIcons.History),
-            ("logs", "Logi", AppIcons.Logs),
-            ("diagnostics", "Diagnostyka", AppIcons.Diagnostics),
-            ("test", "Test", AppIcons.Test),
-            ("settings", "Ustawienia", AppIcons.Settings),
-            ("updates", "Aktualizacje", AppIcons.Updates),
+            Image = Branding.MarkImage,
+            SizeMode = PictureBoxSizeMode.Zoom,
+            Dock = DockStyle.Fill,
+            Margin = new Padding(0, 2, 0, 2),
+            MinimumSize = new Size(28, 28),
+            MaximumSize = new Size(32, 32),
         };
-
-        var y = 80;
-        foreach (var item in items)
+        var brandStack = new FlowLayoutPanel
         {
-            var btn = new NavItemButton
+            Dock = DockStyle.Fill,
+            AutoSize = true,
+            FlowDirection = FlowDirection.TopDown,
+            WrapContents = false,
+            Padding = new Padding(8, 0, 0, 0),
+            BackColor = Color.Transparent,
+        };
+        brandStack.Controls.Add(new Label
+        {
+            Text = "Sasist",
+            AutoSize = true,
+            Font = Theme.FontSection,
+            ForeColor = Theme.TextPrimary,
+            BackColor = Color.Transparent,
+            Margin = new Padding(0, 0, 0, 2),
+        });
+        brandStack.Controls.Add(new Label
+        {
+            Text = "Agent",
+            AutoSize = true,
+            Font = Theme.FontCaption,
+            ForeColor = Theme.TextMuted,
+            BackColor = Color.Transparent,
+        });
+        brandRow.Controls.Add(brandLogo, 0, 0);
+        brandRow.Controls.Add(brandStack, 1, 0);
+        brand.Controls.Add(brandRow);
+
+        // TableLayoutPanel: one AutoSize row per nav item — no Flow stacking overlap.
+        navHost = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            ColumnCount = 1,
+            AutoScroll = true,
+            Padding = new Padding(10, 4, 10, 8),
+            BackColor = Color.Transparent,
+            GrowStyle = TableLayoutPanelGrowStyle.FixedSize,
+        };
+        navHost.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
+        navHost.RowCount = NavItems.Length;
+        for (var i = 0; i < NavItems.Length; i++)
+        {
+            var it = NavItems[i];
+            navHost.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            var btn = new SasistNavItem
             {
-                PageId = item.Id,
-                Text = item.Label,
-                IconGlyph = item.Icon,
-                Left = 0,
-                Top = y,
-                Width = 236,
-                Height = 40,
+                PageId = it.Id,
+                Text = it.Label,
+                IconGlyph = it.Icon,
+                AccessibleName = it.Label,
+                Dock = DockStyle.Fill,
+                Margin = new Padding(0, 0, 0, 4),
             };
-            btn.Click += (_, _) => Navigate(item.Id);
-            _sidebar.Controls.Add(btn);
-            _nav[item.Id] = btn;
-            y += 42;
+            btn.Click += (_, _) => Navigate(it.Id);
+            navHost.Controls.Add(btn, 0, i);
+            _nav[it.Id] = btn;
         }
 
-        var themeBtn = new ModernButton
+        var footer = new Panel { Dock = DockStyle.Bottom, AutoSize = true, Padding = new Padding(16, 12, 12, 14) };
+        footer.Paint += (_, e) =>
         {
-            Text = "  Motyw jasny / ciemny",
-            Ghost = true,
-            Left = 16,
-            Width = 204,
-            Height = 36,
-            Anchor = AnchorStyles.Bottom | AnchorStyles.Left,
-            Top = Height > 100 ? Height - 56 : 640,
+            using var pen = new Pen(Theme.Border);
+            e.Graphics.DrawLine(pen, 12, 0, Math.Max(12, footer.Width - 12), 0);
         };
-        themeBtn.Click += (_, _) => Theme.Toggle();
-        _sidebar.Controls.Add(themeBtn);
-        _sidebar.Resize += (_, _) =>
+        var footerStack = new FlowLayoutPanel
         {
-            themeBtn.Top = _sidebar.Height - 52;
-            brand.ForeColor = Theme.TextPrimary;
+            Dock = DockStyle.Top,
+            AutoSize = true,
+            FlowDirection = FlowDirection.TopDown,
+            WrapContents = false,
+            BackColor = Color.Transparent,
+            Padding = new Padding(0, 8, 0, 0),
         };
-        themeBtn.Top = _sidebar.Height - 52;
-    }
-
-    private void PaintSidebar(object? sender, PaintEventArgs e)
-    {
-        e.Graphics.Clear(Theme.SidebarBg);
-        using var pen = new Pen(Theme.SidebarBorder);
-        e.Graphics.DrawLine(pen, _sidebar.Width - 1, 0, _sidebar.Width - 1, _sidebar.Height);
-    }
-
-    private void ApplyTheme()
-    {
-        BackColor = Theme.WindowBg;
-        _content.BackColor = Theme.WindowBg;
-        _contentHost.BackColor = Theme.WindowBg;
-        _pairingOverlay.BackColor = Theme.WindowBg;
-        _sidebar.Invalidate();
-        foreach (Control c in _sidebar.Controls)
+        footerStack.Controls.Add(new Label
         {
-            if (c is Label l) l.ForeColor = Theme.TextPrimary;
-            if (c is ModernButton b) b.ApplyColors();
-        }
-        Invalidate(true);
+            Text = "Połączono z:",
+            AutoSize = true,
+            Font = Theme.FontMeta,
+            ForeColor = Theme.TextMuted,
+            Margin = new Padding(0, 0, 0, 2),
+        });
+        footerOrg = new Label
+        {
+            Text = "—",
+            AutoSize = true,
+            Font = Theme.FontBodySemibold,
+            ForeColor = Theme.TextPrimary,
+            Margin = new Padding(0, 0, 0, 4),
+        };
+        footerVer = new Label
+        {
+            Text = $"v{AgentConfig.AgentVersion}",
+            AutoSize = true,
+            Font = Theme.FontMeta,
+            ForeColor = Theme.TextFaint,
+        };
+        footerStack.Controls.Add(footerOrg);
+        footerStack.Controls.Add(footerVer);
+        footer.Controls.Add(footerStack);
+        var footerOrgLabel = footerOrg;
+        footer.Resize += (_, _) =>
+        {
+            footerOrgLabel.MaximumSize = new Size(Math.Max(80, footer.ClientSize.Width - footer.Padding.Horizontal), 0);
+        };
+
+        side.Controls.Add(navHost);
+        side.Controls.Add(footer);
+        side.Controls.Add(brand);
+        return side;
     }
 
     private void EnsurePages()
     {
-        _statusPage ??= new StatusPage(_store, () => Navigate("devices"));
-        _devicesPage ??= new DevicesPage();
-        _jobsPage ??= new JobsPage();
-        _logsPage ??= new LogsPage();
-        _diagnosticsPage ??= new DiagnosticsPage(_store);
-        _testPage ??= new TestPage(_store);
-        _settingsPage ??= new SettingsPage(_store, Unpair, ShowMain);
-        _updatesPage ??= new UpdatesPage();
-        _pairingPage ??= new PairingPage(_store, OnPaired);
-        if (_pairingOverlay.Controls.Count == 0)
+        if (_pages.Count > 0) return;
+
+        _status = new StatusPage(() => Navigate("devices"));
+        _devices = new DevicesPage();
+        _devices.ForceSyncRequested += () => _presenter.SyncCurrentPage();
+        _jobs = new JobsPage(_store);
+        _logs = new LogsPage();
+        _diag = new DiagnosticsPage(_store);
+        _test = new TestPage(_store);
+        _settings = new SettingsPage(_store, Unpair);
+        _updates = new UpdatesPage();
+        _pairing = new PairingPage(_store, OnPaired);
+
+        void add(string id, Control page)
         {
-            _pairingPage.Dock = DockStyle.Fill;
-            _pairingOverlay.Controls.Add(_pairingPage);
+            page.Dock = DockStyle.Fill;
+            page.Visible = false;
+            _content.Controls.Add(page);
+            _pages[id] = page;
+            UiBuffering.Enable(page);
         }
+
+        add("status", _status);
+        add("devices", _devices);
+        add("jobs", _jobs);
+        add("logs", _logs);
+        add("diagnostics", _diag);
+        add("test", _test);
+        add("settings", _settings);
+        add("updates", _updates);
+
+        _pairing.Dock = DockStyle.Fill;
+        _pairingOverlay.Controls.Add(_pairing);
     }
 
-    private void Navigate(string id, bool animate = true)
+    internal void Navigate(string id)
     {
         EnsurePages();
-        ShowMain();
-        _currentPage = id;
-        foreach (var (key, btn) in _nav)
-            btn.Active = key == id;
+        if (!_smokeMode) Reveal();
+        if (!_pages.ContainsKey(id)) id = "status";
+        _pageId = id;
+        foreach (var (k, v) in _nav) v.Active = k == id;
 
-        Control page = id switch
+        // Show/hide — never Clear() on navigation (avoids flicker & handle churn).
+        foreach (var (k, page) in _pages)
+            page.Visible = k == id;
+        _pages[id].BringToFront();
+
+        if (id == "logs")
+            _logs!.ForceSync(_presenter.Current);
+        else
+            _presenter.SyncCurrentPage();
+
+        if (!_sidebarFitted) FitSidebarWidth();
+    }
+
+    private void PollNavigateRequest()
+    {
+        try
         {
-            "devices" => _devicesPage!,
-            "jobs" => _jobsPage!,
-            "logs" => _logsPage!,
-            "diagnostics" => _diagnosticsPage!,
-            "test" => _testPage!,
-            "settings" => _settingsPage!,
-            "updates" => _updatesPage!,
-            _ => _statusPage!,
-        };
-
-        _content.Controls.Clear();
-        page.Dock = DockStyle.Fill;
-        _content.Controls.Add(page);
-        if (page is IRefreshablePage rp) rp.RefreshData();
-        else page.Refresh();
-
-        if (animate)
-        {
-            _content.OpacitySafeSet(0.35);
-            _fadeStep = 0;
-            _fadeTimer.Start();
+            AgentPaths.EnsureDirectories();
+            var path = Path.Combine(AgentPaths.ProgramDataRoot, "ui-navigate.request");
+            if (!File.Exists(path)) return;
+            var id = File.ReadAllText(path).Trim();
+            File.Delete(path);
+            if (_nav.ContainsKey(id)) Navigate(id);
         }
-    }
-
-    private void AnimateFade()
-    {
-        _fadeStep++;
-        var t = Math.Min(1f, _fadeStep / 8f);
-        _content.OpacitySafeSet(0.35 + 0.65 * t);
-        if (t >= 1f) _fadeTimer.Stop();
-    }
-
-    private void RefreshChrome()
-    {
-        var cfg = _store.Load();
-        var needsSetup = cfg.NeedsSetup;
-        _pairingOverlay.Visible = needsSetup;
-        if (needsSetup) _pairingOverlay.BringToFront();
-        foreach (var btn in _nav.Values)
-            btn.Enabled = !needsSetup;
-
-        var snap = AgentStatusStore.Read();
-        var serviceRunning = ServiceHelper.IsRunning(TrayApplicationContext.ServiceName);
-        var connected = !needsSetup && serviceRunning && (snap?.Online ?? false);
-        var org = UiCopy.CompanyName(cfg, snap);
-        _trayStatus.Text = UiCopy.TrayConnection(connected);
-        _trayOrg.Text = $"Połączono z: {org}";
-        _tray.Text = connected ? "Sasist Agent — Połączono" : "Sasist Agent — Brak połączenia";
-
-        if (!needsSetup && _content.Controls.Count > 0 && _content.Controls[0] is IRefreshablePage rp)
-            rp.RefreshData();
+        catch { }
     }
 
     private void OnPaired()
     {
-        _pairingOverlay.Visible = false;
-        foreach (var btn in _nav.Values) btn.Enabled = true;
+        SetPairingVisible(false);
+        foreach (var n in _nav.Values) n.Enabled = true;
         Navigate("status");
-        RefreshChrome();
     }
 
-    private void ShowMain()
+    private void Reveal()
     {
         Show();
         WindowState = FormWindowState.Normal;
@@ -311,59 +467,25 @@ internal sealed class MainForm : Form
         BringToFront();
     }
 
-    private void OnFormClosing(object? sender, FormClosingEventArgs e)
-    {
-        if (_exitRequested || e.CloseReason != CloseReason.UserClosing)
-            return;
-        if (!UiPreferences.Current.RunInBackground)
-            return;
-        e.Cancel = true;
-        Hide();
-        if (UiPreferences.Current.Notifications)
-            _tray.ShowBalloonTip(2200, "Sasist Agent", "Działa w tle. Kliknij ikonę, aby otworzyć.", ToolTipIcon.Info);
-    }
-
-    private void RestartService()
-    {
-        try
-        {
-            ServiceHelper.Restart(TrayApplicationContext.ServiceName);
-            MessageBox.Show(UserMessages.ServiceRestarted, "Sasist Agent", MessageBoxButtons.OK, MessageBoxIcon.Information);
-            RefreshChrome();
-        }
-        catch
-        {
-            MessageBox.Show(UserMessages.RestartFailed, "Sasist Agent", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-        }
-    }
-
     private void Unpair()
     {
-        var confirm = MessageBox.Show(
-            UserMessages.UnpairConfirm,
-            "Sasist Agent",
-            MessageBoxButtons.YesNo,
-            MessageBoxIcon.Question,
-            MessageBoxDefaultButton.Button2);
-        if (confirm != DialogResult.Yes) return;
-
+        if (MessageBox.Show(UserMessages.UnpairConfirm, "Sasist Agent", MessageBoxButtons.YesNo, MessageBoxIcon.Question, MessageBoxDefaultButton.Button2) != DialogResult.Yes)
+            return;
         try
         {
             try
             {
                 using var sc = new System.ServiceProcess.ServiceController(TrayApplicationContext.ServiceName);
-                if (sc.Status is System.ServiceProcess.ServiceControllerStatus.Running
-                    or System.ServiceProcess.ServiceControllerStatus.StartPending)
+                if (sc.Status is System.ServiceProcess.ServiceControllerStatus.Running or System.ServiceProcess.ServiceControllerStatus.StartPending)
                 {
                     sc.Stop();
                     sc.WaitForStatus(System.ServiceProcess.ServiceControllerStatus.Stopped, TimeSpan.FromSeconds(20));
                 }
             }
-            catch { /* continue */ }
-
+            catch { }
             _store.ClearPairing();
-            ShowMain();
-            RefreshChrome();
+            Reveal();
+            _presenter.SyncCurrentPage();
         }
         catch (Exception ex)
         {
@@ -371,35 +493,20 @@ internal sealed class MainForm : Form
         }
     }
 
+    internal List<LayoutAuditor.Issue> AuditCurrentPage() => LayoutAuditor.Audit(this);
+    internal long RebuildCount => UiMetrics.Rebuilds;
+    internal long ValueUpdateCount => UiMetrics.ValueUpdates;
+
     protected override void Dispose(bool disposing)
     {
         if (disposing)
         {
-            Theme.Changed -= ApplyTheme;
             _timer.Stop();
             _timer.Dispose();
-            _fadeTimer.Stop();
-            _fadeTimer.Dispose();
             _tray.Visible = false;
             _tray.Dispose();
             _trayMenu.Dispose();
         }
         base.Dispose(disposing);
-    }
-}
-
-internal interface IRefreshablePage
-{
-    void RefreshData();
-}
-
-internal static class ControlOpacityExt
-{
-    /// <summary>WinForms has no Opacity on Panel — simulate with subtle BackColor blend.</summary>
-    public static void OpacitySafeSet(this Panel panel, double opacity)
-    {
-        var bg = Theme.WindowBg;
-        var mix = (int)(255 * Math.Clamp(opacity, 0, 1));
-        panel.BackColor = Color.FromArgb(mix, bg.R, bg.G, bg.B);
     }
 }
