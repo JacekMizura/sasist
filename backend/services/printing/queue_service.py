@@ -79,6 +79,7 @@ class QueuePrinterResolution:
     source: str
     requested_profile_id: int | None
     requested_printer_id: int | None
+    workstation_id: int | None = None
 
 
 def _extract_requested_profile_id(payload: QueuePrintRequest) -> int | None:
@@ -97,7 +98,22 @@ def resolve_queue_printer_id(
     document_type: str,
     requested_printer_id: int | None,
     requested_profile_id: int | None,
+    workstation_id: int | None = None,
 ) -> QueuePrinterResolution:
+    """
+    Single entry for printer selection in the print queue.
+
+    Order:
+      1. Explicit printer profile
+      2. Explicit printer_id on the request
+      3. WorkstationPrinterMapping when workstation_id is provided and mapped
+      4. Warehouse PrintingDefault (only when no workstation mapping applies)
+    """
+    from .printer_resolution_service import (
+        resolve_workstation_for_print,
+        resolve_workstation_mapped_printer_id,
+    )
+
     if requested_profile_id is not None:
         profile_printer_id = resolve_profile_agent_printer_id(
             db,
@@ -111,6 +127,7 @@ def resolve_queue_printer_id(
                 source="profile",
                 requested_profile_id=requested_profile_id,
                 requested_printer_id=requested_printer_id,
+                workstation_id=workstation_id,
             )
 
     if requested_printer_id is not None:
@@ -119,7 +136,29 @@ def resolve_queue_printer_id(
             source="request",
             requested_profile_id=requested_profile_id,
             requested_printer_id=requested_printer_id,
+            workstation_id=workstation_id,
         )
+
+    workstation = resolve_workstation_for_print(
+        db,
+        tenant_id=tenant_id,
+        warehouse_id=warehouse_id,
+        workstation_id=workstation_id,
+    )
+    if workstation is not None:
+        mapped_id = resolve_workstation_mapped_printer_id(
+            db,
+            workstation=workstation,
+            document_type=document_type,
+        )
+        if mapped_id is not None:
+            return QueuePrinterResolution(
+                printer_id=mapped_id,
+                source="workstation",
+                requested_profile_id=requested_profile_id,
+                requested_printer_id=requested_printer_id,
+                workstation_id=workstation.id,
+            )
 
     default_printer_id = resolve_default_printer_id(
         db,
@@ -132,16 +171,19 @@ def resolve_queue_printer_id(
         source="default",
         requested_profile_id=requested_profile_id,
         requested_printer_id=requested_printer_id,
+        workstation_id=workstation.id if workstation is not None else None,
     )
 
 
 def log_queue_printer_resolution(resolution: QueuePrinterResolution) -> None:
     logger.info(
-        "[print-queue] requested_profile_id=%s requested_printer_id=%s resolved_printer_id=%s resolution_source=%s",
+        "[print-queue] requested_profile_id=%s requested_printer_id=%s "
+        "resolved_printer_id=%s resolution_source=%s workstation_id=%s",
         resolution.requested_profile_id,
         resolution.requested_printer_id,
         resolution.printer_id,
         resolution.source,
+        resolution.workstation_id,
     )
 
 
@@ -319,6 +361,7 @@ def queue_print_job(
         document_type=document_type,
         requested_printer_id=payload.printer_id,
         requested_profile_id=requested_profile_id,
+        workstation_id=payload.workstation_id,
     )
     log_queue_printer_resolution(resolution)
     printer_id = resolution.printer_id

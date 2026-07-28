@@ -3,6 +3,7 @@ import {
   fetchPrintingDefaults,
   fetchPrintingWarehouseSettings,
 } from "../../api/printingApi";
+import { fetchWorkstationPrinters } from "../../api/wmsWorkstationsApi";
 import { isQzAvailable } from "../qzService";
 import { trackFallbackReason } from "./telemetry";
 import type { PrintFormat, PrintRouteDecision, ResolvePrintRouteInput } from "./types";
@@ -10,6 +11,28 @@ import type { PrintFormat, PrintRouteDecision, ResolvePrintRouteInput } from "./
 function normalizeFormats(list: string[] | undefined | null): string[] {
   if (!Array.isArray(list)) return [];
   return list.map((f) => String(f).trim().toLowerCase()).filter(Boolean);
+}
+
+function printTypeForKind(kind: "a4" | "label" | "receipt"): string {
+  if (kind === "label") return "labels";
+  if (kind === "receipt") return "other";
+  return "invoice";
+}
+
+async function resolveWorkstationMappedPrinterId(
+  tenantId: number,
+  workstationId: number,
+  printerKind: "a4" | "label" | "receipt",
+): Promise<number | null> {
+  try {
+    const config = await fetchWorkstationPrinters(tenantId, workstationId);
+    const printType = printTypeForKind(printerKind);
+    const mapped = config.mappings.find((m) => m.print_type === printType);
+    const id = mapped?.agent_printer_id;
+    return id != null && id >= 1 ? id : null;
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -20,6 +43,10 @@ export async function resolvePrintRoute(input: ResolvePrintRouteInput): Promise<
   const jobFormat: PrintFormat = input.jobFormat ?? "pdf";
   const printerKind = input.printerKind ?? "label";
   const warehouseId = input.warehouseId ?? null;
+  const workstationId =
+    input.workstationId != null && Number(input.workstationId) >= 1
+      ? Math.floor(Number(input.workstationId))
+      : null;
 
   const base = (partial: Partial<PrintRouteDecision>): PrintRouteDecision => ({
     transport: "browser",
@@ -104,13 +131,22 @@ export async function resolvePrintRoute(input: ResolvePrintRouteInput): Promise<
   }
 
   let printerId: number | null = null;
-  try {
-    const defaults = await fetchPrintingDefaults(input.tenantId, warehouseId);
-    if (printerKind === "label") printerId = defaults.label_printer_id;
-    else if (printerKind === "receipt") printerId = defaults.receipt_printer_id;
-    else printerId = defaults.a4_printer_id;
-  } catch {
-    printerId = null;
+  if (workstationId != null) {
+    printerId = await resolveWorkstationMappedPrinterId(
+      input.tenantId,
+      workstationId,
+      printerKind,
+    );
+  }
+  if (printerId == null) {
+    try {
+      const defaults = await fetchPrintingDefaults(input.tenantId, warehouseId);
+      if (printerKind === "label") printerId = defaults.label_printer_id;
+      else if (printerKind === "receipt") printerId = defaults.receipt_printer_id;
+      else printerId = defaults.a4_printer_id;
+    } catch {
+      printerId = null;
+    }
   }
 
   if (printerId == null) {

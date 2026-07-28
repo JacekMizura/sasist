@@ -311,6 +311,7 @@ from .api.label_preview import router as label_preview_router
 from .api.printer_profiles import router as printer_profiles_router
 from .api.printers import router as printers_router
 from .api.printing import router as printing_router
+from .api.wms import router as wms_workstations_router
 from .api.agent import router as agent_devices_router
 from .api.qz import router as qz_router
 from .api.wave import router as wave_router
@@ -2134,6 +2135,7 @@ _API_ROUTERS = (
     printer_profiles_router,
     printers_router,
     printing_router,
+    wms_workstations_router,
     agent_devices_router,
     qz_router,
     wave_router,

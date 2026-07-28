@@ -5,20 +5,16 @@ namespace Sasist.Agent.Tray;
 
 /// <summary>
 /// Shell view (MVP). Polling updates values only — never rebuilds page trees.
-/// Navigation uses show/hide of pre-created pages (no Controls.Clear on tick).
+/// Visual chrome comes exclusively from the Design System.
 /// </summary>
 internal sealed class MainForm : Form, IShellView
 {
     private readonly ConfigStore _store;
     private readonly ShellPresenter _presenter;
-    private readonly Panel _sidebar;
+    private readonly SasistSidebar _sidebar;
     private readonly Panel _content;
     private readonly Panel _pairingOverlay;
-    private readonly TableLayoutPanel _navHost;
-    private readonly Label _connPill;
-    private readonly Label _footerOrg;
-    private readonly Label _footerVer;
-    private readonly Dictionary<string, SasistNavItem> _nav = new();
+    private readonly SasistStatusBadge _connPill;
     private readonly Dictionary<string, Control> _pages = new();
     private readonly NotifyIcon _tray;
     private readonly ContextMenuStrip _trayMenu;
@@ -58,8 +54,8 @@ internal sealed class MainForm : Form, IShellView
         UiPreferences.Load();
 
         Text = "Sasist Agent";
-        Font = Theme.FontBody;
-        BackColor = Theme.Canvas;
+        Font = Theme.Body;
+        BackColor = Theme.Background;
         Icon = Branding.AppIcon;
         StartPosition = FormStartPosition.CenterScreen;
         AutoScaleMode = AutoScaleMode.None;
@@ -68,9 +64,10 @@ internal sealed class MainForm : Form, IShellView
         ClientSize = new Size(1200, 780);
 
         var topBar = BuildTopBar(out _connPill);
-        _sidebar = BuildSidebar(out _navHost, out _footerOrg, out _footerVer);
-        _content = new Panel { Dock = DockStyle.Fill, BackColor = Theme.Canvas };
-        _pairingOverlay = new Panel { Dock = DockStyle.Fill, Visible = false, BackColor = Theme.Canvas };
+        _sidebar = new SasistSidebar(NavItems);
+        _sidebar.Navigated += Navigate;
+        _content = new Panel { Dock = DockStyle.Fill, BackColor = Theme.Background };
+        _pairingOverlay = new Panel { Dock = DockStyle.Fill, Visible = false, BackColor = Theme.Background };
 
         var body = new Panel { Dock = DockStyle.Fill };
         body.Controls.Add(_content);
@@ -96,7 +93,6 @@ internal sealed class MainForm : Form, IShellView
         };
         _tray.DoubleClick += (_, _) => Reveal();
 
-        // Polling: values only. Interval 2s — never tears down controls.
         _timer = new System.Windows.Forms.Timer { Interval = 2000 };
         _timer.Tick += (_, _) =>
         {
@@ -120,8 +116,7 @@ internal sealed class MainForm : Form, IShellView
             if (!UiPreferences.Current.RunInBackground) return;
             e.Cancel = true;
             Hide();
-            if (UiPreferences.Current.Notifications)
-                _tray.ShowBalloonTip(2000, "Sasist Agent", "Działa w tle.", ToolTipIcon.Info);
+            SasistNotification.Balloon(_tray, "Sasist Agent", "Działa w tle.");
         };
     }
 
@@ -130,14 +125,11 @@ internal sealed class MainForm : Form, IShellView
 
     public void SetChrome(UiState state)
     {
-        UiBuffering.SetTextIfChanged(_connPill, state.ConnPill);
-        UiBuffering.SetColorIfChanged(_connPill, state.ConnPillColor);
-        UiBuffering.SetTextIfChanged(_footerOrg, state.Company);
-        UiBuffering.SetTextIfChanged(_footerVer, state.Version);
+        _connPill.SetOnline(state.Online);
+        _sidebar.SetFooter(state.Company, state.Version);
         if (_tray.Text != state.TrayTip)
             _tray.Text = state.TrayTip;
-        foreach (var n in _nav.Values)
-            n.Enabled = !state.NeedsSetup;
+        _sidebar.SetEnabled(!state.NeedsSetup);
     }
 
     public void SetPairingVisible(bool visible)
@@ -157,18 +149,11 @@ internal sealed class MainForm : Form, IShellView
 
     private void FitSidebarWidth()
     {
-        // Sidebar width = nav padding + longest item preferred width (icon + label).
-        var maxLabel = 0;
-        foreach (var it in NavItems)
-            maxLabel = Math.Max(maxLabel, LayoutHelpers.MeasureTextWidth(it.Label, Theme.FontNav));
-        var itemW = Math.Max(160, 16 + 28 + 12 + maxLabel + 16);
-        var need = _navHost.Padding.Horizontal + itemW;
-        if (_sidebar.Width != need)
-            _sidebar.Width = Math.Max(Theme.SidebarMinWidth, need);
+        _sidebar.FitWidth(NavItems);
         _sidebarFitted = true;
     }
 
-    private Panel BuildTopBar(out Label connPill)
+    private Panel BuildTopBar(out SasistStatusBadge connPill)
     {
         var bar = new Panel
         {
@@ -176,7 +161,7 @@ internal sealed class MainForm : Form, IShellView
             MinimumSize = new Size(0, Theme.TopBarHeight),
             Height = Theme.TopBarHeight,
             BackColor = Theme.Surface,
-            Padding = new Padding(16, 0, 16, 0),
+            Padding = new Padding(Theme.Space.Lg, 0, Theme.Space.Lg, 0),
         };
         bar.Paint += (_, e) =>
         {
@@ -184,200 +169,47 @@ internal sealed class MainForm : Form, IShellView
             e.Graphics.DrawLine(pen, 0, bar.Height - 1, bar.Width, bar.Height - 1);
         };
 
+        var grid = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            ColumnCount = 3,
+            RowCount = 1,
+            BackColor = Color.Transparent,
+        };
+        grid.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        grid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
+        grid.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        grid.RowStyles.Add(new RowStyle(SizeType.Percent, 100f));
+
         var logo = new PictureBox
         {
             Image = Branding.MarkImage,
             SizeMode = PictureBoxSizeMode.Zoom,
-            Dock = DockStyle.Left,
             MinimumSize = new Size(28, 28),
-            MaximumSize = new Size(28, 56),
-            Width = 28,
-            Padding = new Padding(0, 14, 0, 14),
+            MaximumSize = new Size(28, 28),
+            Anchor = AnchorStyles.None,
+            Margin = new Padding(0, 0, Theme.Space.Md, 0),
         };
-        var title = new Label
+        var title = new SasistBody
         {
             Text = "Sasist Agent",
-            Dock = DockStyle.Fill,
-            TextAlign = ContentAlignment.MiddleLeft,
-            Font = Theme.FontBodySemibold,
-            ForeColor = Theme.TextPrimary,
-            Padding = new Padding(12, 0, 12, 0),
+            Font = Theme.BodySemibold,
+            ForeColor = Theme.Text,
+            AutoSize = true,
+            Anchor = AnchorStyles.Left,
+            Margin = new Padding(0, 0, Theme.Space.Md, 0),
             AutoEllipsis = true,
         };
-        connPill = new Label
-        {
-            Text = "●  Połączono",
-            AutoSize = true,
-            TextAlign = ContentAlignment.MiddleRight,
-            Font = Theme.FontCaptionBold,
-            ForeColor = Theme.Success,
-            Padding = new Padding(12, 0, 0, 0),
-            Dock = DockStyle.Fill,
-        };
-        var pillHost = new Panel
-        {
-            Dock = DockStyle.Right,
-            AutoSize = true,
-            MinimumSize = new Size(140, Theme.TopBarHeight),
-            Height = Theme.TopBarHeight,
-            Padding = new Padding(8, 0, 0, 0),
-        };
-        pillHost.Controls.Add(connPill);
+        connPill = new SasistStatusBadge();
+        connPill.SetOnline(true);
+        connPill.Anchor = AnchorStyles.None;
+        connPill.Margin = new Padding(Theme.Space.Md, 0, 0, 0);
 
-        bar.Controls.Add(title);
-        bar.Controls.Add(pillHost);
-        bar.Controls.Add(logo);
+        grid.Controls.Add(logo, 0, 0);
+        grid.Controls.Add(title, 1, 0);
+        grid.Controls.Add(connPill, 2, 0);
+        bar.Controls.Add(grid);
         return bar;
-    }
-
-    private Panel BuildSidebar(out TableLayoutPanel navHost, out Label footerOrg, out Label footerVer)
-    {
-        var side = new Panel
-        {
-            Dock = DockStyle.Left,
-            Width = Theme.SidebarMinWidth, // initial; FitSidebarWidth sets from longest label
-            MinimumSize = new Size(Theme.SidebarMinWidth, 0),
-            BackColor = Theme.Surface,
-        };
-        side.Paint += (_, e) =>
-        {
-            using var pen = new Pen(Theme.Border);
-            e.Graphics.DrawLine(pen, side.Width - 1, 0, side.Width - 1, side.Height);
-        };
-
-        var brand = new Panel { Dock = DockStyle.Top, AutoSize = true, Padding = new Padding(16, 16, 12, 12) };
-        var brandRow = new TableLayoutPanel
-        {
-            Dock = DockStyle.Top,
-            AutoSize = true,
-            ColumnCount = 2,
-            RowCount = 1,
-            BackColor = Color.Transparent,
-        };
-        brandRow.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-        brandRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
-        brandRow.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-
-        var brandLogo = new PictureBox
-        {
-            Image = Branding.MarkImage,
-            SizeMode = PictureBoxSizeMode.Zoom,
-            Dock = DockStyle.Fill,
-            Margin = new Padding(0, 2, 0, 2),
-            MinimumSize = new Size(28, 28),
-            MaximumSize = new Size(32, 32),
-        };
-        var brandStack = new FlowLayoutPanel
-        {
-            Dock = DockStyle.Fill,
-            AutoSize = true,
-            FlowDirection = FlowDirection.TopDown,
-            WrapContents = false,
-            Padding = new Padding(8, 0, 0, 0),
-            BackColor = Color.Transparent,
-        };
-        brandStack.Controls.Add(new Label
-        {
-            Text = "Sasist",
-            AutoSize = true,
-            Font = Theme.FontSection,
-            ForeColor = Theme.TextPrimary,
-            BackColor = Color.Transparent,
-            Margin = new Padding(0, 0, 0, 2),
-        });
-        brandStack.Controls.Add(new Label
-        {
-            Text = "Agent",
-            AutoSize = true,
-            Font = Theme.FontCaption,
-            ForeColor = Theme.TextMuted,
-            BackColor = Color.Transparent,
-        });
-        brandRow.Controls.Add(brandLogo, 0, 0);
-        brandRow.Controls.Add(brandStack, 1, 0);
-        brand.Controls.Add(brandRow);
-
-        // TableLayoutPanel: one AutoSize row per nav item — no Flow stacking overlap.
-        navHost = new TableLayoutPanel
-        {
-            Dock = DockStyle.Fill,
-            ColumnCount = 1,
-            AutoScroll = true,
-            Padding = new Padding(10, 4, 10, 8),
-            BackColor = Color.Transparent,
-            GrowStyle = TableLayoutPanelGrowStyle.FixedSize,
-        };
-        navHost.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
-        navHost.RowCount = NavItems.Length;
-        for (var i = 0; i < NavItems.Length; i++)
-        {
-            var it = NavItems[i];
-            navHost.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-            var btn = new SasistNavItem
-            {
-                PageId = it.Id,
-                Text = it.Label,
-                IconGlyph = it.Icon,
-                AccessibleName = it.Label,
-                Dock = DockStyle.Fill,
-                Margin = new Padding(0, 0, 0, 4),
-            };
-            btn.Click += (_, _) => Navigate(it.Id);
-            navHost.Controls.Add(btn, 0, i);
-            _nav[it.Id] = btn;
-        }
-
-        var footer = new Panel { Dock = DockStyle.Bottom, AutoSize = true, Padding = new Padding(16, 12, 12, 14) };
-        footer.Paint += (_, e) =>
-        {
-            using var pen = new Pen(Theme.Border);
-            e.Graphics.DrawLine(pen, 12, 0, Math.Max(12, footer.Width - 12), 0);
-        };
-        var footerStack = new FlowLayoutPanel
-        {
-            Dock = DockStyle.Top,
-            AutoSize = true,
-            FlowDirection = FlowDirection.TopDown,
-            WrapContents = false,
-            BackColor = Color.Transparent,
-            Padding = new Padding(0, 8, 0, 0),
-        };
-        footerStack.Controls.Add(new Label
-        {
-            Text = "Połączono z:",
-            AutoSize = true,
-            Font = Theme.FontMeta,
-            ForeColor = Theme.TextMuted,
-            Margin = new Padding(0, 0, 0, 2),
-        });
-        footerOrg = new Label
-        {
-            Text = "—",
-            AutoSize = true,
-            Font = Theme.FontBodySemibold,
-            ForeColor = Theme.TextPrimary,
-            Margin = new Padding(0, 0, 0, 4),
-        };
-        footerVer = new Label
-        {
-            Text = $"v{AgentConfig.AgentVersion}",
-            AutoSize = true,
-            Font = Theme.FontMeta,
-            ForeColor = Theme.TextFaint,
-        };
-        footerStack.Controls.Add(footerOrg);
-        footerStack.Controls.Add(footerVer);
-        footer.Controls.Add(footerStack);
-        var footerOrgLabel = footerOrg;
-        footer.Resize += (_, _) =>
-        {
-            footerOrgLabel.MaximumSize = new Size(Math.Max(80, footer.ClientSize.Width - footer.Padding.Horizontal), 0);
-        };
-
-        side.Controls.Add(navHost);
-        side.Controls.Add(footer);
-        side.Controls.Add(brand);
-        return side;
     }
 
     private void EnsurePages()
@@ -423,9 +255,8 @@ internal sealed class MainForm : Form, IShellView
         if (!_smokeMode) Reveal();
         if (!_pages.ContainsKey(id)) id = "status";
         _pageId = id;
-        foreach (var (k, v) in _nav) v.Active = k == id;
+        _sidebar.SetActive(id);
 
-        // Show/hide — never Clear() on navigation (avoids flicker & handle churn).
         foreach (var (k, page) in _pages)
             page.Visible = k == id;
         _pages[id].BringToFront();
@@ -447,7 +278,7 @@ internal sealed class MainForm : Form, IShellView
             if (!File.Exists(path)) return;
             var id = File.ReadAllText(path).Trim();
             File.Delete(path);
-            if (_nav.ContainsKey(id)) Navigate(id);
+            if (_sidebar.Items.ContainsKey(id)) Navigate(id);
         }
         catch { }
     }
@@ -455,7 +286,7 @@ internal sealed class MainForm : Form, IShellView
     private void OnPaired()
     {
         SetPairingVisible(false);
-        foreach (var n in _nav.Values) n.Enabled = true;
+        _sidebar.SetEnabled(true);
         Navigate("status");
     }
 
@@ -469,7 +300,7 @@ internal sealed class MainForm : Form, IShellView
 
     private void Unpair()
     {
-        if (MessageBox.Show(UserMessages.UnpairConfirm, "Sasist Agent", MessageBoxButtons.YesNo, MessageBoxIcon.Question, MessageBoxDefaultButton.Button2) != DialogResult.Yes)
+        if (SasistDialog.Confirm(this, UserMessages.UnpairConfirm) != DialogResult.Yes)
             return;
         try
         {
@@ -489,7 +320,7 @@ internal sealed class MainForm : Form, IShellView
         }
         catch (Exception ex)
         {
-            MessageBox.Show(UserMessages.FromException(ex), "Sasist Agent", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            SasistDialog.Warn(this, UserMessages.FromException(ex));
         }
     }
 

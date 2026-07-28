@@ -3,6 +3,7 @@ import toast from "react-hot-toast";
 
 import { queuePrintJob } from "../api/printingApi";
 import { extractApiErrorMessage, extractApiOperationalErrorDetail } from "../api/apiErrorMessage";
+import { useAuth } from "../context/AuthContext";
 import type { QueuePrintRequest } from "../types/printing";
 import { NO_ACTIVE_AGENT_USER_MESSAGE } from "../components/printing/hasDefaultCloudPrinter";
 
@@ -11,6 +12,8 @@ const QUEUE_SUCCESS_MSG = "Dokument został wysłany do kolejki drukowania";
 type Options = {
   tenantId: number;
   warehouseId?: number | null;
+  /** Explicit WMS Stanowisko; overrides session packing_station_id when set. */
+  workstationId?: number | null;
 };
 
 function queueFailureMessage(err: unknown): string {
@@ -22,7 +25,22 @@ function queueFailureMessage(err: unknown): string {
   return extractApiErrorMessage(err, "Nie udało się wysłać do drukowania.");
 }
 
-export function useQueuePrint({ tenantId, warehouseId }: Options) {
+function resolveWorkstationId(
+  explicit: number | null | undefined,
+  fromSession: number | null | undefined,
+  fromBody: number | null | undefined,
+): number | null {
+  for (const value of [fromBody, explicit, fromSession]) {
+    if (value != null && Number.isFinite(Number(value)) && Number(value) >= 1) {
+      return Math.floor(Number(value));
+    }
+  }
+  return null;
+}
+
+export function useQueuePrint({ tenantId, warehouseId, workstationId }: Options) {
+  const { user } = useAuth();
+  const sessionWorkstationId = user?.wms_profile?.packing_station_id ?? null;
   const [busy, setBusy] = useState(false);
 
   const queuePrint = useCallback(
@@ -30,9 +48,15 @@ export function useQueuePrint({ tenantId, warehouseId }: Options) {
       if (busy) return false;
       setBusy(true);
       try {
+        const workstation_id = resolveWorkstationId(
+          workstationId,
+          sessionWorkstationId,
+          body.workstation_id,
+        );
         await queuePrintJob(tenantId, {
           ...body,
           warehouse_id: body.warehouse_id ?? warehouseId ?? null,
+          workstation_id,
         });
         toast.success(QUEUE_SUCCESS_MSG);
         return true;
@@ -43,7 +67,7 @@ export function useQueuePrint({ tenantId, warehouseId }: Options) {
         setBusy(false);
       }
     },
-    [busy, tenantId, warehouseId],
+    [busy, tenantId, warehouseId, workstationId, sessionWorkstationId],
   );
 
   const queueStockDocument = useCallback(

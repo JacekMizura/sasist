@@ -24,6 +24,7 @@ class QueuePrintRequest(BaseModel):
     document_id: int | None = None
     document_id_str: str | None = None
     warehouse_id: int | None = None
+    workstation_id: int | None = None
     template_version_id: int | None = None
     copies: int = Field(default=1, ge=1, le=99)
     printer_id: int | None = None

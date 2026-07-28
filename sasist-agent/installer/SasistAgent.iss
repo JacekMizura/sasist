@@ -1,6 +1,9 @@
 ; Sasist Agent — Inno Setup 6
 ; Build: ISCC.exe installer\SasistAgent.iss  (after scripts\publish-release.ps1)
 ;
+; CRITICAL: Source is ONLY publish\win-x64 (self-contained).
+; Never point Source at bin\Release — that requires installed .NET Runtime.
+;
 ; Upgrade-safe: stops service + kills Tray/Host BEFORE file copy (avoids DeleteFile code 5).
 
 #define MyAppName "Sasist Agent"

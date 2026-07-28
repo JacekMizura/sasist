@@ -1,0 +1,1 @@
+# WMS workstations tests package

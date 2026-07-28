@@ -82,6 +82,10 @@ import WorkforceStatusMatrixPage from "./pages/Settings/WorkforceStatusMatrixPag
 import PrintingSettingsModule from "./pages/Settings/printing"
 import DevicesSettingsModule from "./pages/Settings/devices/DevicesSettingsModule"
 import WmsSettingsPage from "./pages/Settings/WmsSettingsPage"
+import {
+  WmsWorkstationDetailPage,
+  WmsWorkstationsListPage,
+} from "./pages/Settings/wmsWorkstations"
 import ReturnsModuleLayout from "./pages/Orders/ReturnsModuleLayout"
 import ReturnsModuleSettingsTabPage from "./pages/Orders/ReturnsModuleSettingsTabPage"
 import ReturnPanelUiStatusesSettingsPage from "./pages/Settings/ReturnPanelUiStatusesSettingsPage"
@@ -621,10 +625,12 @@ export const router = createBrowserRouter(
                   <Route path=":id/edytuj" element={<AdministratorCreatePage />} />
                   <Route path=":id" element={<AdministratorCreatePage />} />
                 </Route>
-                <Route path="setup/printers/*" element={<Navigate to="/settings/devices/agents" replace />} />
+                <Route path="setup/printers/*" element={<Navigate to="/settings/wms/workstations" replace />} />
                 <Route path="settings/devices/*" element={<DevicesSettingsModule />} />
                 <Route path="settings/printers/*" element={<PrintingSettingsModule />} />
                 <Route path="settings/wms/returns/*" element={<LegacySettingsWmsReturnsRedirect />} />
+                <Route path="settings/wms/workstations/:id" element={<WmsWorkstationDetailPage />} />
+                <Route path="settings/wms/workstations" element={<WmsWorkstationsListPage />} />
                 <Route path="settings/wms" element={<WmsSettingsPage />} />
                 <Route path="settings/returns/*" element={<LegacySettingsReturnsRedirect />} />
                 <Route path="settings/returns" element={<LegacySettingsReturnsRedirect />} />

@@ -33,6 +33,8 @@ export type PrintRouteDecision = {
 export type ResolvePrintRouteInput = {
   tenantId: number;
   warehouseId?: number | null;
+  /** WMS Stanowisko — when set, prefer WorkstationPrinterMapping over warehouse defaults. */
+  workstationId?: number | null;
   /** Capability that must be present on agent for Agent path (default zpl). */
   gateFormat?: PrintFormat;
   /** Format of the job payload (default pdf for Z-PZ / return labels). */

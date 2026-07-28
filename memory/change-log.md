@@ -1,3 +1,63 @@
+## 2026-07-28 — WMS Stanowiska RC1 (Red Team blockers)
+
+- RC1-1: no auto-pick workstation; `workstation_id` via `useQueuePrint` / session `packing_station_id` / label router; mapping then PrintingDefault
+- RC1-2: removed Restart Agent UI + FE API client (`restartWorkstationAgent`)
+- RC1-3: tenant stays panel SSOT (`DAMAGE_TENANT_ID` / `panelTenant`) — FE not inventing tenant truth beyond app pattern
+
+## 2026-07-28 — WMS Stanowiska Medium/Low + Final audit (~92% PR)
+
+
+- M1: batch serialize, history offset, pairing-status poll, visibility pause, event index
+- M2/M3: FE split + Empty/Error states; warehouse filter; no tab double-fetch
+- M4: business logs; no secrets; GET agents DEBUG
+- M5/M6/Low: API cleanup, AddComputerModal removed, ApiKeys dead branches, Agents deprecation
+- Deferred: is_default partial unique, settings.users permission pattern, Agents ops page
+- Canvas final audit updated
+
+## 2026-07-28 — WMS Stanowiska High Priority H1–H7
+
+- H1: AgentTab poll 2.5s + TTL expire + auto „Połączono”
+- H2: `claim_pairing_code` CAS single-use, rate-limit IP, audit issue/claim/fail
+- H3: system keys hidden from API Keys; mutate blocked; workstation revoke/regen with allow flag
+- H4: `assert_tenant_warehouse_scope` + tenant/warehouse checks on attach/claim
+- H5: restart-agent → 501 bez eventu historii
+- H6: re-pair disconnect-first; `pairing_active` z hash+TTL
+- H7: empty state + download + status/PC/OS/version/IP/uptime/sync
+- Tests: 12 passed (`backend.tests.wms_workstations`)
+- Audyt #2: High 7/7 closed; Prod readiness ~75%; Medium/Low open
+
+## 2026-07-28 — WMS Stanowiska C1–C3 production blockers
+
+- C1: `resolve_queue_printer_id` → WorkstationPrinterMapping (SSOT) then PrintingDefault fallback; `workstation_id` on QueuePrintRequest
+- C2: `register_agent_with_api_key` no longer commits; register+attach+events one transaction
+- C3: one-shot `wms_data_migrations`; no key→empty-WS hijack
+- Tests: 15 passed (workstations + print resolution)
+
+## 2026-07-28 — WMS Stanowiska (miejsce pracy ≠ komputer)
+
+- Model: `wms_workstations` + printer_mappings + events; 1 Agent max na stanowisko
+- API: `/api/wms/workstations*` (pair/disconnect/devices/printers/history)
+- Pair: kod `XXXX-XXXX-XXXX` 15 min → register Agenta bez zmian protokołu
+- FE: lista + 5 zakładek; język biznesowy; API Keys bez tworzenia printer_agent
+- Redirect: Devices/agents, AddComputer, setup/printers → Stanowiska
+- Migracja idempotentna agentów/kluczy → stanowiska (Tier1 schema)
+- Testy: `backend/tests/wms_workstations/` — 5 passed
+
+## 2026-07-28 — Release: restore self-contained (no .NET Runtime)
+
+- Root cause: `bin\Release` (FDD) was copied over install; runtimeconfig had `frameworks[]`
+- Pipeline OK: `publish-release.ps1` uses `--self-contained true -r win-x64`; Inno sources `publish\win-x64`
+- Added Assert-SelfContained gate (refuse ship if `frameworks[]` / missing coreclr)
+- Fresh setup: `dist\SasistAgentSetup.exe` (~50 MB); publish ~163 MB; installed Tray has `includedFrameworks`
+
+## 2026-07-28 — Sasist Agent Design System
+
+- Central Theme tokens (colors, Space 4–48, Type scale Display→Hint)
+- Component kit in `DesignSystem/`; all pages wired to DS (no local styles)
+- Empty states on Devices/Jobs/Logs; Motion pulse for loading
+- Layout smoke PASS 100–200%; shots in `dist/ui-shots/`
+- MVP/poll/backend untouched
+
 ## 2026-07-28 — Sasist Agent UI quality: MVP + no flicker
 
 - Root cause of flicker: timer called full page rebuild (`Controls.Clear`) every poll

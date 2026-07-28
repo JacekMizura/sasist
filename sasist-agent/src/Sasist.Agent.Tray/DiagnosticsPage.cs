@@ -8,7 +8,8 @@ internal sealed class DiagnosticsPage : UserControl, IPageView
 {
     private readonly ConfigStore _store;
     private readonly FlowLayoutPanel _flow;
-    private readonly Dictionary<string, Label> _values = new();
+    private readonly List<SasistDiagnosticCard> _cards = new();
+    private readonly Dictionary<string, Action<string>> _setters = new();
     private bool _built;
 
     public DiagnosticsPage(ConfigStore store)
@@ -18,24 +19,13 @@ internal sealed class DiagnosticsPage : UserControl, IPageView
         UiBuffering.Enable(this);
         var shell = new PageShell("Diagnostyka", "Informacje techniczne dla wsparcia Sasist — podzielone na sekcje");
 
-        var bar = new FlowLayoutPanel
-        {
-            Dock = DockStyle.Top,
-            AutoSize = true,
-            WrapContents = true,
-            BackColor = Color.Transparent,
-            Padding = new Padding(0, 0, 0, 12),
-        };
-        var refresh = new SasistButton { Text = "Odśwież", Margin = new Padding(0, 0, 8, 4) };
-        refresh.Click += (_, _) => ForceSync(UiState.Capture(_store));
-        var folder = new SasistButton { Text = "Folder logów", Margin = new Padding(0, 0, 0, 4) };
-        folder.Click += (_, _) =>
+        var bar = new SasistToolbar();
+        bar.AddButton("Odśwież", SasistButtonKind.Secondary, (_, _) => ForceSync(UiState.Capture(_store)));
+        bar.AddButton("Folder logów", SasistButtonKind.Ghost, (_, _) =>
         {
             AgentPaths.EnsureDirectories();
             Process.Start(new ProcessStartInfo { FileName = "explorer.exe", Arguments = $"\"{AgentPaths.LogsDir}\"", UseShellExecute = true });
-        };
-        bar.Controls.Add(refresh);
-        bar.Controls.Add(folder);
+        });
 
         _flow = new FlowLayoutPanel
         {
@@ -82,93 +72,61 @@ internal sealed class DiagnosticsPage : UserControl, IPageView
         _built = true;
         UiMetrics.NoteRebuild("DiagnosticsPage.structure-once");
         _flow.SuspendLayout();
-        _flow.Controls.Add(Section("Połączenie", [
+        AddCard("Połączenie", [
             ("conn.status", "Status"),
             ("conn.company", "Firma"),
             ("conn.sync", "Synchronizacja"),
             ("conn.endpoint", "Endpoint"),
-        ]));
-        _flow.Controls.Add(Section("Agent", [
+        ]);
+        AddCard("Agent", [
             ("agent.id", "Agent ID"),
             ("agent.token", "Token"),
             ("agent.version", "Wersja"),
             ("agent.proto", "Protokół"),
             ("agent.hb", "Heartbeat"),
-        ]));
-        _flow.Controls.Add(Section("Komputer", [
+        ]);
+        AddCard("Komputer", [
             ("pc.name", "Nazwa"),
             ("pc.mid", "Machine ID"),
-        ]));
-        _flow.Controls.Add(Section("Usługa", [
+        ]);
+        AddCard("Usługa", [
             ("svc.name", "Nazwa"),
-            ("svc.status", "Stan"),
-        ]));
-        _flow.Controls.Add(Section("System", [
-            ("sys.poll", "Odpytywanie"),
-            ("sys.channel", "Kanał"),
-        ]));
-        _flow.Controls.Add(Section("Logi", [
-            ("logs.dir", "Folder"),
+            ("svc.status", "Status"),
+        ]);
+        AddCard("System", [
+            ("sys.poll", "Polling"),
+            ("sys.channel", "Kanał aktualizacji"),
+        ]);
+        AddCard("Ścieżki", [
+            ("logs.dir", "Logi"),
             ("logs.cfg", "Konfiguracja"),
-        ]));
+        ]);
         _flow.ResumeLayout(true);
         FitWidths();
     }
 
-    private Control Section(string title, (string Key, string Cap)[] rows)
+    private void AddCard(string title, (string Key, string Label)[] rows)
     {
-        var inner = new FlowLayoutPanel
+        var card = new SasistDiagnosticCard(title, rows);
+        foreach (var (key, _) in rows)
         {
-            Dock = DockStyle.Top,
-            AutoSize = true,
-            FlowDirection = FlowDirection.TopDown,
-            WrapContents = false,
-            BackColor = Color.Transparent,
-        };
-        inner.Controls.Add(LayoutHelpers.Title(title));
-        foreach (var (key, cap) in rows)
-        {
-            var capLbl = LayoutHelpers.Muted(cap);
-            capLbl.Margin = new Padding(0, 12, 0, 2);
-            var val = LayoutHelpers.Wrap("—", Theme.FontBodySemibold, Theme.TextPrimary, 280);
-            inner.Controls.Add(capLbl);
-            inner.Controls.Add(val);
-            _values[key] = val;
+            var k = key;
+            _setters[k] = v => card.Set(k, v);
         }
-
-        var card = new SasistCard
-        {
-            AutoSize = true,
-            AutoSizeMode = AutoSizeMode.GrowAndShrink,
-            Margin = new Padding(0, 0, Theme.Gap, Theme.Gap),
-            MinimumSize = new Size(260, 80),
-        };
-        card.Controls.Add(inner);
-        return card;
+        _cards.Add(card);
+        _flow.Controls.Add(card);
     }
 
     private void Set(string key, string value)
     {
-        if (_values.TryGetValue(key, out var lbl))
-            UiBuffering.SetTextIfChanged(lbl, value);
+        if (_setters.TryGetValue(key, out var set)) set(value);
     }
 
     private void FitWidths()
     {
-        var avail = Math.Max(280, _flow.ClientSize.Width - 8);
-        var cardW = avail >= 700 ? Math.Max(280, (avail - Theme.Gap) / 2) : avail - 8;
-        foreach (Control c in _flow.Controls)
-        {
-            c.MaximumSize = new Size(cardW, 0);
-            c.MinimumSize = new Size(Math.Min(260, cardW), 0);
-            foreach (Control inner in c.Controls)
-            {
-                if (inner is FlowLayoutPanel stack)
-                {
-                    foreach (Control x in stack.Controls)
-                        LayoutHelpers.SetMaxWidth(x, cardW - 48);
-                }
-            }
-        }
+        var avail = Math.Max(280, _flow.ClientSize.Width - Theme.Space.Sm);
+        var cardW = avail >= 720 ? (avail - Theme.Gap) / 2 : avail - Theme.Space.Sm;
+        foreach (var c in _cards)
+            c.FitWidth(Math.Max(260, cardW));
     }
 }

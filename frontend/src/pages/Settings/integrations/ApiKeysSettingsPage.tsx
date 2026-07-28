@@ -15,7 +15,6 @@ import {
   revokeApiKey,
   rotateApiKey,
 } from "../../../api/apiKeysApi";
-import { useWarehouse } from "../../../context/WarehouseContext";
 import type { ApiKeyRead, ApiKeyScope, ApiKeyType } from "../../../types/apiKeys";
 import { brandPrimaryButtonClass } from "../../../design-system/brandUi";
 import {
@@ -27,7 +26,7 @@ import {
 import { AppOverlayPortal } from "../../../components/overlay";
 
 const TENANT_ID = DAMAGE_TENANT_ID;
-const KEY_TYPES: ApiKeyType[] = ["printer_agent", "integration", "public_api", "webhook"];
+const KEY_TYPES: ApiKeyType[] = ["integration", "public_api", "webhook"];
 
 function formatDate(value: string | null | undefined): string {
   if (!value) return "—";
@@ -48,7 +47,6 @@ function parseAllowedIpsInput(value: string): string[] {
 }
 
 export default function ApiKeysSettingsPage() {
-  const { warehouses, warehouse: activeWarehouse } = useWarehouse();
   const [rows, setRows] = useState<ApiKeyRead[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -58,7 +56,6 @@ export default function ApiKeysSettingsPage() {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [keyType, setKeyType] = useState<ApiKeyType>("integration");
-  const [warehouseId, setWarehouseId] = useState<number | "">("");
   const [allowedIpsInput, setAllowedIpsInput] = useState("");
   const [expiresAt, setExpiresAt] = useState("");
 
@@ -88,7 +85,6 @@ export default function ApiKeysSettingsPage() {
     setName("");
     setDescription("");
     setKeyType("integration");
-    setWarehouseId(activeWarehouse?.id ?? warehouses[0]?.id ?? "");
     setAllowedIpsInput("");
     setExpiresAt("");
     setCreatedKey(null);
@@ -96,19 +92,10 @@ export default function ApiKeysSettingsPage() {
     setModalOpen(true);
   };
 
-  const whOptions = useMemo(
-    () => warehouses.map((w) => ({ id: w.id, label: w.name || `Magazyn #${w.id}` })),
-    [warehouses],
-  );
-
   const save = async () => {
     const trimmed = name.trim();
     if (!trimmed) {
       setError("Podaj nazwę klucza.");
-      return;
-    }
-    if (keyType === "printer_agent" && !warehouseId) {
-      setError("Wybierz magazyn dla klucza Printer Agent.");
       return;
     }
     setBusy(true);
@@ -119,7 +106,7 @@ export default function ApiKeysSettingsPage() {
         name: trimmed,
         description: description.trim() || null,
         type: keyType,
-        warehouse_id: keyType === "printer_agent" ? Number(warehouseId) : null,
+        warehouse_id: null,
         scopes: selectedScopes,
         allowed_ips: allowed_ips.length ? allowed_ips : null,
         expires_at: expiresAt ? new Date(expiresAt).toISOString() : null,
@@ -386,24 +373,10 @@ export default function ApiKeysSettingsPage() {
                 <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm">
                   <div className="font-medium text-slate-700">Domyślne scope</div>
                   <div className="mt-1 text-slate-600">{formatScopes(selectedScopes)}</div>
+                  <p className="mt-2 text-xs text-slate-500">
+                    Komputery magazynowe łączysz w Ustawienia WMS → Stanowiska (nie przez klucze API).
+                  </p>
                 </div>
-                {keyType === "printer_agent" ? (
-                  <label className="mt-3 block text-sm font-medium text-slate-700">
-                    Magazyn
-                    <select
-                      className="mt-1 w-full rounded-lg border px-3 py-2 text-sm"
-                      value={warehouseId}
-                      onChange={(e) => setWarehouseId(e.target.value ? Number(e.target.value) : "")}
-                    >
-                      <option value="">— wybierz —</option>
-                      {whOptions.map((w) => (
-                        <option key={w.id} value={w.id}>
-                          {w.label}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                ) : null}
                 <label className="mt-3 block text-sm font-medium text-slate-700">
                   Ograniczenie IP (opcjonalnie, po przecinku lub linii)
                   <textarea

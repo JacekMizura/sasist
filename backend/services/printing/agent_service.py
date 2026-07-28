@@ -23,6 +23,7 @@ def _upsert_registered_agent(
     tenant_id: int,
     warehouse_id: int | None,
     payload: AgentRegisterRequest,
+    commit: bool = False,
 ) -> tuple[PrinterAgent, str]:
     now = datetime.utcnow()
     agent = (
@@ -60,8 +61,10 @@ def _upsert_registered_agent(
 
     sync_agent_printers(db, agent, payload.printers)
     remap_printing_defaults_for_agent(db, agent)
-    db.commit()
-    db.refresh(agent)
+    db.flush()
+    if commit:
+        db.commit()
+        db.refresh(agent)
     return agent, plain_token
 
 
@@ -97,6 +100,7 @@ def register_agent(
         tenant_id=tenant_id,
         warehouse_id=warehouse_id,
         payload=payload,
+        commit=True,
     )
 
 
@@ -106,7 +110,7 @@ def register_agent_with_api_key(
     api_key: IntegrationApiKey,
     payload: AgentRegisterRequest,
 ) -> tuple[PrinterAgent, str]:
-    """Register agent scoped by integration API key (tenant + warehouse from key)."""
+    """Register agent scoped by integration API key. Caller owns the transaction (no commit)."""
     if api_key.type != "printer_agent":
         from .errors import PrintingError
 
@@ -121,6 +125,7 @@ def register_agent_with_api_key(
         tenant_id=int(api_key.tenant_id),
         warehouse_id=int(api_key.warehouse_id),
         payload=payload,
+        commit=False,
     )
 
 

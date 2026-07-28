@@ -1,4 +1,3 @@
-using Sasist.Agent.Core.Config;
 using Sasist.Agent.Tray.Mvp;
 
 namespace Sasist.Agent.Tray;
@@ -6,8 +5,9 @@ namespace Sasist.Agent.Tray;
 internal sealed class DevicesPage : UserControl, IPageView
 {
     private readonly FlowLayoutPanel _flow;
-    private readonly Label _summary;
-    private readonly Dictionary<string, PrinterCard> _cards = new(StringComparer.OrdinalIgnoreCase);
+    private readonly SasistCaption _summary;
+    private readonly SasistEmptyState _empty;
+    private readonly Dictionary<string, SasistPrinterCard> _cards = new(StringComparer.OrdinalIgnoreCase);
     private PageShell? _shell;
     private string? _membershipKey;
 
@@ -19,27 +19,15 @@ internal sealed class DevicesPage : UserControl, IPageView
         UiBuffering.Enable(this);
         _shell = new PageShell("Urządzenia", "Drukarki wykryte na tym komputerze i gotowe do pracy z Sasist");
 
-        var bar = new FlowLayoutPanel
-        {
-            Dock = DockStyle.Top,
-            AutoSize = true,
-            WrapContents = true,
-            BackColor = Color.Transparent,
-            Padding = new Padding(0, 0, 0, 8),
-        };
-        var refresh = new SasistButton { Text = "Odśwież" };
-        refresh.Click += (_, _) => ForceSyncRequested?.Invoke();
-        bar.Controls.Add(refresh);
+        var bar = new SasistToolbar();
+        bar.AddButton("Odśwież", SasistButtonKind.Secondary, (_, _) => ForceSyncRequested?.Invoke());
 
-        _summary = new Label
-        {
-            Dock = DockStyle.Top,
-            AutoSize = true,
-            Font = Theme.FontBody,
-            ForeColor = Theme.TextMuted,
-            BackColor = Color.Transparent,
-            Padding = new Padding(0, 0, 0, 12),
-        };
+        _summary = new SasistCaption { Dock = DockStyle.Top, Padding = new Padding(0, 0, 0, Theme.Space.Md) };
+        _empty = new SasistEmptyState(
+            "Brak drukarek",
+            "Podłącz drukarkę w systemie Windows — pojawi się tutaj automatycznie.",
+            AppIcons.Print)
+        { Visible = false };
 
         _flow = new FlowLayoutPanel
         {
@@ -49,6 +37,7 @@ internal sealed class DevicesPage : UserControl, IPageView
             FlowDirection = FlowDirection.LeftToRight,
             BackColor = Color.Transparent,
         };
+        _flow.Controls.Add(_empty);
 
         _shell.Body.Controls.Add(_flow);
         _shell.Body.Controls.Add(bar);
@@ -90,6 +79,7 @@ internal sealed class DevicesPage : UserControl, IPageView
             _cards.Remove(name);
         }
 
+        _empty.Visible = printers.Count == 0;
         _flow.SuspendLayout();
         foreach (var p in printers)
         {
@@ -98,11 +88,10 @@ internal sealed class DevicesPage : UserControl, IPageView
                 existing.Update(p);
                 continue;
             }
-            var card = new PrinterCard(p);
+            var card = new SasistPrinterCard(p);
             _cards[p.Name] = card;
             _flow.Controls.Add(card);
         }
-        // Keep visual order matching printers list
         for (var i = 0; i < printers.Count; i++)
         {
             if (_cards.TryGetValue(printers[i].Name, out var c))
@@ -115,111 +104,22 @@ internal sealed class DevicesPage : UserControl, IPageView
     private void FitCardWidths()
     {
         if (_shell is null) return;
-        var avail = Math.Max(280, _flow.ClientSize.Width - 8);
-        var cardW = avail >= 720 ? (avail - Theme.Gap) / 2 : avail - 8;
+        var avail = Math.Max(280, _flow.ClientSize.Width - Theme.Space.Sm);
+        var cardW = avail >= 720 ? (avail - Theme.Gap) / 2 : avail - Theme.Space.Sm;
         cardW = Math.Max(280, cardW);
         foreach (Control c in _flow.Controls)
         {
-            c.MaximumSize = new Size(cardW, 0);
-            c.MinimumSize = new Size(Math.Min(280, cardW), 0);
-            if (c is PrinterCard pc) pc.ApplyContentWidth(cardW);
+            if (c is SasistPrinterCard pc)
+            {
+                pc.MaximumSize = new Size(cardW, 0);
+                pc.MinimumSize = new Size(Math.Min(280, cardW), 0);
+                pc.ApplyContentWidth(cardW);
+            }
+            else if (c is SasistEmptyState)
+            {
+                c.MaximumSize = new Size(avail - Theme.Space.Sm, 0);
+            }
         }
         _summary.MaximumSize = new Size(avail, 0);
-    }
-
-    private sealed class PrinterCard : SasistCard
-    {
-        private readonly Label _name;
-        private readonly Label _status;
-        private readonly Label _def;
-        private readonly string _printerName;
-
-        public PrinterCard(PrinterRow p)
-        {
-            _printerName = p.Name;
-            AutoSize = true;
-            AutoSizeMode = AutoSizeMode.GrowAndShrink;
-            MinimumSize = new Size(280, 120);
-            Margin = new Padding(0, 0, Theme.Gap, Theme.Gap);
-
-            var stack = new FlowLayoutPanel
-            {
-                Dock = DockStyle.Top,
-                AutoSize = true,
-                FlowDirection = FlowDirection.TopDown,
-                WrapContents = false,
-                BackColor = Color.Transparent,
-            };
-
-            var titleRow = new FlowLayoutPanel
-            {
-                AutoSize = true,
-                WrapContents = true,
-                BackColor = Color.Transparent,
-                Margin = new Padding(0, 0, 0, 8),
-            };
-            titleRow.Controls.Add(LayoutHelpers.Icon(AppIcons.Print, Theme.Accent, 18f));
-            _name = LayoutHelpers.Wrap(p.Name, Theme.FontBodySemibold, Theme.TextPrimary, 300);
-            titleRow.Controls.Add(_name);
-            stack.Controls.Add(titleRow);
-            stack.Controls.Add(LayoutHelpers.Muted("Drukarka systemowa Windows"));
-
-            _status = LayoutHelpers.Text("", Theme.FontBodySemibold, Theme.Success);
-            _status.Margin = new Padding(0, 8, 0, 4);
-            stack.Controls.Add(_status);
-
-            _def = LayoutHelpers.Text("Domyślna", Theme.FontCaptionBold, Theme.AccentText);
-            _def.Margin = new Padding(0, 0, 0, 8);
-            stack.Controls.Add(_def);
-
-            var actions = new FlowLayoutPanel
-            {
-                AutoSize = true,
-                WrapContents = true, // buttons wrap — never overflow card
-                BackColor = Color.Transparent,
-                Margin = new Padding(0, 12, 0, 0),
-            };
-            var test = new SasistButton { Text = "Druk testowy", Primary = true, Margin = new Padding(0, 0, 8, 4) };
-            test.Click += (_, _) => RunTest(_printerName);
-            var details = new SasistButton { Text = "Szczegóły", Margin = new Padding(0, 0, 0, 4) };
-            details.Click += (_, _) => MessageBox.Show(
-                $"Drukarka: {_printerName}\nStatus: {_status.Text}",
-                "Szczegóły", MessageBoxButtons.OK, MessageBoxIcon.Information);
-            actions.Controls.Add(test);
-            actions.Controls.Add(details);
-            stack.Controls.Add(actions);
-            Controls.Add(stack);
-            Update(p);
-        }
-
-        public void ApplyContentWidth(int cardW)
-        {
-            LayoutHelpers.SetMaxWidth(_name, cardW - 56);
-            MaximumSize = new Size(cardW, 0);
-        }
-
-        public void Update(PrinterRow p)
-        {
-            UiBuffering.SetTextIfChanged(_name, p.Name);
-            var ready = p.Status == "Gotowa";
-            UiBuffering.SetTextIfChanged(_status, ready ? "●  Gotowa" : "●  Niedostępna");
-            UiBuffering.SetColorIfChanged(_status, ready ? Theme.Success : Theme.Danger);
-            _def.Visible = p.IsDefault;
-        }
-
-        private static void RunTest(string name)
-        {
-            try
-            {
-                LocalPrinters.PrintTestPage(name);
-                JobHistoryStore.Append($"test-{DateTime.Now:HHmmss}", name, "Wydrukowano");
-                MessageBox.Show("Wysłano wydruk testowy.", "Druk testowy", MessageBoxButtons.OK, MessageBoxIcon.Information);
-            }
-            catch (Exception ex)
-            {
-                JobHistoryStore.Append($"test-{DateTime.Now:HHmmss}", name, "Błąd", ex.Message);
-                MessageBox.Show(UserMessages.PrintFailed, "Druk testowy", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-            }
-        }
     }
 }

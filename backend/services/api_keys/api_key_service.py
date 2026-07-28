@@ -131,17 +131,69 @@ def _warehouse_names(db: Session, rows: list[IntegrationApiKey]) -> dict[int, st
     return names
 
 
+WORKSTATION_SYSTEM_KEY_DESCRIPTION = "Wewnętrzny klucz parowania stanowiska (system)"
+
+
+def _workstation_managed_key_ids(db: Session, *, tenant_id: int) -> set[int]:
+    """API keys owned by WMS workstations — hidden from admin API Keys UI."""
+    try:
+        from ...models.wms_workstations import WmsWorkstation
+    except Exception:
+        return set()
+    rows = (
+        db.query(WmsWorkstation.integration_api_key_id)
+        .filter(
+            WmsWorkstation.tenant_id == tenant_id,
+            WmsWorkstation.integration_api_key_id.isnot(None),
+        )
+        .all()
+    )
+    return {int(r[0]) for r in rows if r[0] is not None}
+
+
+def _assert_key_not_workstation_managed(
+    db: Session,
+    *,
+    tenant_id: int,
+    key_id: int,
+) -> None:
+    if key_id in _workstation_managed_key_ids(db, tenant_id=tenant_id):
+        raise ApiKeyError(
+            "Ten klucz jest zarządzany przez stanowisko WMS i nie może być "
+            "zmieniany w ustawieniach kluczy API.",
+            code="workstation_system_key",
+        )
+    row = (
+        db.query(IntegrationApiKey)
+        .filter(IntegrationApiKey.id == key_id, IntegrationApiKey.tenant_id == tenant_id)
+        .first()
+    )
+    if row is not None and (row.description or "").strip() == WORKSTATION_SYSTEM_KEY_DESCRIPTION:
+        raise ApiKeyError(
+            "Ten klucz jest zarządzany przez stanowisko WMS i nie może być "
+            "zmieniany w ustawieniach kluczy API.",
+            code="workstation_system_key",
+        )
+
+
 def list_keys(db: Session, *, tenant_id: int) -> list[dict[str, Any]]:
+    hidden = _workstation_managed_key_ids(db, tenant_id=tenant_id)
     rows = (
         db.query(IntegrationApiKey)
         .filter(IntegrationApiKey.tenant_id == tenant_id)
         .order_by(IntegrationApiKey.created_at.desc(), IntegrationApiKey.id.desc())
         .all()
     )
-    wh_names = _warehouse_names(db, rows)
+    visible = [
+        row
+        for row in rows
+        if int(row.id) not in hidden
+        and (row.description or "").strip() != WORKSTATION_SYSTEM_KEY_DESCRIPTION
+    ]
+    wh_names = _warehouse_names(db, visible)
     return [
         _serialize_key(row, warehouse_name=wh_names.get(int(row.warehouse_id)) if row.warehouse_id else None)
-        for row in rows
+        for row in visible
     ]
 
 
@@ -220,7 +272,10 @@ def revoke_key(
     tenant_id: int,
     key_id: int,
     user_id: int | None,
+    allow_workstation_managed: bool = False,
 ) -> IntegrationApiKey:
+    if not allow_workstation_managed:
+        _assert_key_not_workstation_managed(db, tenant_id=tenant_id, key_id=key_id)
     row = get_key_or_404(db, tenant_id=tenant_id, key_id=key_id)
     now = datetime.utcnow()
     row.is_active = False
@@ -242,7 +297,10 @@ def regenerate_key(
     tenant_id: int,
     key_id: int,
     user_id: int | None,
+    allow_workstation_managed: bool = False,
 ) -> tuple[IntegrationApiKey, str]:
+    if not allow_workstation_managed:
+        _assert_key_not_workstation_managed(db, tenant_id=tenant_id, key_id=key_id)
     row = get_key_or_404(db, tenant_id=tenant_id, key_id=key_id)
     if row.revoked_at is not None:
         raise ApiKeyError("Cannot regenerate a revoked key")
@@ -270,6 +328,7 @@ def rotate_key(
     key_id: int,
     user_id: int | None,
 ) -> tuple[IntegrationApiKey, str]:
+    _assert_key_not_workstation_managed(db, tenant_id=tenant_id, key_id=key_id)
     old_row = get_key_or_404(db, tenant_id=tenant_id, key_id=key_id)
     if old_row.revoked_at is not None:
         raise ApiKeyError("Cannot rotate a revoked key")
@@ -315,6 +374,7 @@ def delete_key(
     key_id: int,
     user_id: int | None,
 ) -> None:
+    _assert_key_not_workstation_managed(db, tenant_id=tenant_id, key_id=key_id)
     row = get_key_or_404(db, tenant_id=tenant_id, key_id=key_id)
     log_audit_entry(
         db,
@@ -382,5 +442,6 @@ def validate_key(
 
 
 def get_key_usage(db: Session, *, tenant_id: int, key_id: int) -> dict[str, Any]:
+    _assert_key_not_workstation_managed(db, tenant_id=tenant_id, key_id=key_id)
     row = get_key_or_404(db, tenant_id=tenant_id, key_id=key_id)
     return serialize_key_usage(row)

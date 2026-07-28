@@ -5021,6 +5021,39 @@ def ensure_integration_api_keys_schema(engine: Engine) -> None:
     _impl(engine)
 
 
+def ensure_wms_workstations_schema(engine: Engine) -> None:
+    """WMS workstations (physical workplaces) + printer mappings + events."""
+    from .wms_workstations_schema import ensure_wms_workstations_schema as _impl
+
+    _impl(engine)
+    # One-shot data migration (agents → stanowiska). Skips if already applied.
+    try:
+        from sqlalchemy.orm import sessionmaker
+
+        from ..services.wms_workstations.migration import (
+            ensure_data_migrations_table,
+            migrate_agents_to_workstations,
+        )
+
+        ensure_data_migrations_table(engine)
+        SessionLocal = sessionmaker(bind=engine, autocommit=False, autoflush=False)
+        db = SessionLocal()
+        try:
+            migrate_agents_to_workstations(db)
+            db.commit()
+        except Exception:
+            db.rollback()
+            raise
+        finally:
+            db.close()
+    except Exception:
+        import logging
+
+        logging.getLogger(__name__).exception(
+            "[wms_workstations] migration_failed — schema still available"
+        )
+
+
 def ensure_slotting_schema(engine: Engine) -> None:
     """Warehouse capacity / slotting engine — location occupancy columns."""
     from .slotting_schema import ensure_slotting_schema as _impl

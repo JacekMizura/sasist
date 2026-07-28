@@ -2,22 +2,19 @@
 
 ## Active
 
-**Sasist Agent — UI implementation quality (MVP / no flicker)**
+**WMS Stanowiska — RC1 Ready**
 
-Cosmetics paused. Goal: stable WinForms like GitHub Desktop (behavior first).
+- Red Team blockers RC1-1 / RC1-2 / RC1-3 closed
+- Print: explicit `workstation_id` → mapping → AgentPrinter; PrintingDefault only if no mapping
+- Restart Agent CTA removed (Windows Agent unsupported / 501)
+- Tenant: `WMS_WORKSTATIONS_TENANT_ID` = `DAMAGE_TENANT_ID` (`panelTenant`) — same panel SSOT as rest of settings
 
-### Rules in force
-- No layout rebuild on heartbeat/polling — values only
-- MVP: `ShellPresenter` + `IPageView.ApplyValues` / `ForceSync`
-- Layout: Table/Flow/Dock/AutoSize/Min/Max — no Location/Anchor-as-primary
-- Cards compute own height; sidebar width from longest nav label; buttons wrap in cards
-- DoubleBuffered via `UiBuffering`
+## Deferred (non-blocking)
 
-### Verify
-- `--layout-smoke <dir>` → PASS at 100/125/150/175/200%
-- `--stability-test [sec]` → rebuilds=0 during poll ticks (default 60s)
+- Postgres partial UNIQUE on `is_default`
+- Dedicated `warehouse.admin` permission (platform)
+- PrintingAgentsPage kept for ops diagnostics (pairing deprecated)
 
-### Paths
-- App: `sasist-agent/src/Sasist.Agent.Tray/`
-- MVP: `.../Mvp/UiState.cs`
-- Smoke shots: `sasist-agent/dist/layout-smoke/`
+## Agent release
+
+Ship ONLY via `.\scripts\publish-release.ps1` → `dist\SasistAgentSetup.exe`

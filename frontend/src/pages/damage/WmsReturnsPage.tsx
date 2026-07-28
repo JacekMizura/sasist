@@ -20,6 +20,7 @@ import {
   processWmsReturnLineSplit,
 } from "../../api/wmsReturnsApi";
 import { getWmsReturnModuleConfig } from "../../api/returnModuleConfigApi";
+import { useAuth } from "../../context/AuthContext";
 import { useWmsScanner } from "../../context/WmsScannerContext";
 import type { DamageCandidate } from "../../types/damageReport";
 import type {
@@ -973,6 +974,8 @@ export default function WmsReturnsPage() {
   const { returnId } = useParams<{ returnId: string }>();
   const navigate = useNavigate();
   const rid = Number(returnId);
+  const { user } = useAuth();
+  const sessionWorkstationId = user?.wms_profile?.packing_station_id ?? null;
 
   const [wmsReturn, setWmsReturn] = useState<WmsReturnRead | null>(null);
   const [sessionLoading, setSessionLoading] = useState(true);
@@ -3849,6 +3852,7 @@ export default function WmsReturnsPage() {
           rlid,
           DAMAGE_TENANT_ID,
           wh != null && Number.isFinite(Number(wh)) && Number(wh) > 0 ? Math.floor(Number(wh)) : null,
+          sessionWorkstationId,
         );
       } catch (e) {
         if (axios.isAxiosError(e) && e.response?.status === 404) {
@@ -3869,7 +3873,7 @@ export default function WmsReturnsPage() {
         setPrintLabelToast("Nie udało się wydrukować etykiety.");
       }
     },
-    [lineSeedByLineId, wmsReturn?.warehouse_id],
+    [lineSeedByLineId, wmsReturn?.warehouse_id, sessionWorkstationId],
   );
 
   useEffect(() => {

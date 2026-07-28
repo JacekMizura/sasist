@@ -50,33 +50,94 @@ def register_printing_agent(
     cred: HTTPAuthorizationCredentials | None = Depends(_http_bearer),
     db: Session = Depends(get_db),
 ):
-    api_key_raw = extract_raw_api_key(cred)
+    from ...services.wms_workstations import (
+        WorkstationError,
+        attach_agent_to_workstation,
+        claim_pairing_code,
+        looks_like_pairing_code,
+        try_attach_agent_after_register,
+    )
+    from ...services.api_keys.api_key_service import record_key_usage
 
+    api_key_raw = extract_raw_api_key(cred)
+    pairing_candidate = None
+    if (
+        not api_key_raw
+        and cred is not None
+        and cred.scheme.lower() == "bearer"
+        and cred.credentials
+    ):
+        candidate = cred.credentials.strip()
+        if looks_like_pairing_code(candidate):
+            pairing_candidate = candidate
+
+    agent = None
+    token = None
     try:
-        if not api_key_raw:
+        workstation_for_pair = None
+        if pairing_candidate:
+            api_key, workstation_for_pair = claim_pairing_code(
+                db,
+                pairing_candidate,
+                client_ip=client_ip_from_request(request),
+            )
+            record_key_usage(
+                db,
+                api_key,
+                client_ip=client_ip_from_request(request),
+                user_agent=user_agent_from_request(request),
+            )
+        elif api_key_raw:
+            api_key = validate_key(
+                db,
+                api_key_raw,
+                expected_type="printer_agent",
+                required_scope="printing.agent",
+                client_ip=client_ip_from_request(request),
+                user_agent=user_agent_from_request(request),
+            )
+        else:
             raise HTTPException(
                 status_code=401,
                 detail="Authorization Bearer API key required",
             )
-        api_key = validate_key(
-            db,
-            api_key_raw,
-            expected_type="printer_agent",
-            required_scope="printing.agent",
-            client_ip=client_ip_from_request(request),
-            user_agent=user_agent_from_request(request),
-        )
+
+        # Single transaction: register + attach + invalidate pairing code + events.
         agent, token = register_agent_with_api_key(db, api_key=api_key, payload=payload)
+        if workstation_for_pair is not None:
+            attach_agent_to_workstation(
+                db,
+                workstation=workstation_for_pair,
+                agent=agent,
+                api_key=api_key,
+            )
+        else:
+            try_attach_agent_after_register(db, api_key=api_key, agent=agent)
         db.commit()
+        db.refresh(agent)
+    except WorkstationError as exc:
+        db.rollback()
+        raise HTTPException(status_code=exc.status_code, detail=exc.message) from exc
     except ApiKeyRateLimitError as exc:
+        db.rollback()
         raise HTTPException(status_code=429, detail=str(exc)) from exc
     except ApiKeyValidationError as exc:
+        db.rollback()
         raise HTTPException(status_code=401, detail=str(exc)) from exc
     except ApiKeyError as exc:
+        db.rollback()
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except PrintingError as exc:
+        db.rollback()
         raise_printing_error(exc)
+    except HTTPException:
+        db.rollback()
+        raise
+    except Exception:
+        db.rollback()
+        raise
 
+    assert agent is not None and token is not None
     return AgentRegisterResponse(
         agent_id=agent.id,
         token=token,
@@ -163,7 +224,7 @@ def get_printing_agents(
     rows = list_agents(db, tenant_id=tenant_id, warehouse_id=warehouse_id)
     online_count = sum(1 for row in rows if row.get("is_online"))
     printer_count = sum(int(row.get("printer_count") or 0) for row in rows)
-    logger.info(
+    logger.debug(
         "GET /printing/agents tenant_id=%s warehouse_id=%s -> %s agents (%s online, %s printers)",
         tenant_id,
         warehouse_id,

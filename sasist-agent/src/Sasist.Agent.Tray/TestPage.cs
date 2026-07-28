@@ -11,9 +11,9 @@ internal sealed class TestPage : UserControl, IPageView
 {
     private readonly ConfigStore _store;
     private readonly FlowLayoutPanel _list;
-    private readonly Label _result;
+    private readonly SasistHeading _result;
     private readonly SasistButton _run;
-    private readonly List<(Label Icon, Label Detail)> _rows = new();
+    private readonly List<(SasistIcon Icon, SasistCaption Detail, SasistBody Title)> _rows = new();
     private PageShell? _shell;
 
     private static readonly string[] Names =
@@ -29,27 +29,15 @@ internal sealed class TestPage : UserControl, IPageView
         UiBuffering.Enable(this);
         _shell = new PageShell("Test", "Automatyczne sprawdzenie gotowości komputera do pracy z Sasist");
 
-        var bar = new FlowLayoutPanel
-        {
-            Dock = DockStyle.Top,
-            AutoSize = true,
-            WrapContents = true,
-            BackColor = Color.Transparent,
-            Padding = new Padding(0, 0, 0, 12),
-        };
-        _run = new SasistButton { Text = "Uruchom test", Primary = true };
+        var bar = new SasistToolbar();
+        _run = bar.AddButton("Uruchom test", SasistButtonKind.Primary);
         _run.Click += async (_, _) => await RunAsync();
-        bar.Controls.Add(_run);
 
-        _result = new Label
+        _result = new SasistHeading
         {
             Dock = DockStyle.Top,
-            AutoSize = true,
-            Font = Theme.FontSection,
-            ForeColor = Theme.TextPrimary,
             Text = "Uruchom test, aby sprawdzić system.",
-            BackColor = Color.Transparent,
-            Padding = new Padding(0, 0, 0, 16),
+            Padding = new Padding(0, 0, 0, Theme.Space.Lg),
         };
 
         _list = new FlowLayoutPanel
@@ -67,7 +55,7 @@ internal sealed class TestPage : UserControl, IPageView
             {
                 AutoSize = true,
                 AutoSizeMode = AutoSizeMode.GrowAndShrink,
-                Margin = new Padding(0, 0, 0, 10),
+                Margin = new Padding(0, 0, 0, Theme.Space.Md),
                 MinimumSize = new Size(280, 56),
             };
             var grid = new TableLayoutPanel
@@ -83,17 +71,18 @@ internal sealed class TestPage : UserControl, IPageView
             grid.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             grid.RowStyles.Add(new RowStyle(SizeType.AutoSize));
 
-            var icon = LayoutHelpers.Icon(AppIcons.Info, Theme.TextFaint, 14f);
-            icon.Margin = new Padding(0, 4, 10, 4);
-            var title = LayoutHelpers.Wrap(name, Theme.FontBodySemibold, Theme.TextPrimary, 400);
-            var detail = LayoutHelpers.Wrap("Oczekuje…", Theme.FontCaption, Theme.TextMuted, 400);
+            var icon = new SasistIcon();
+            icon.Set(AppIcons.Info, Theme.FaintText, 14f);
+            icon.Margin = new Padding(0, Theme.Space.Xs, Theme.Space.Md, Theme.Space.Xs);
+            var title = new SasistBody { Text = name, Font = Theme.BodySemibold, MaximumSize = new Size(400, 0) };
+            var detail = new SasistCaption { Text = "Oczekuje…", MaximumSize = new Size(400, 0) };
             grid.Controls.Add(icon, 0, 0);
             grid.SetRowSpan(icon, 2);
             grid.Controls.Add(title, 1, 0);
             grid.Controls.Add(detail, 1, 1);
             card.Controls.Add(grid);
             _list.Controls.Add(card);
-            _rows.Add((icon, detail));
+            _rows.Add((icon, detail, title));
         }
 
         _shell.Body.Controls.Add(_list);
@@ -106,7 +95,7 @@ internal sealed class TestPage : UserControl, IPageView
     private void Relayout()
     {
         if (_shell is null) return;
-        var w = Math.Max(280, _shell.Body.ClientSize.Width - 16);
+        var w = Math.Max(280, _shell.Body.ClientSize.Width - Theme.Space.Lg);
         foreach (Control c in _list.Controls)
         {
             c.MaximumSize = new Size(w, 0);
@@ -123,16 +112,15 @@ internal sealed class TestPage : UserControl, IPageView
         _result.MaximumSize = new Size(w, 0);
     }
 
-    public void ApplyValues(UiState state) { /* test results are user-driven */ }
+    public void ApplyValues(UiState state) { }
     public void ForceSync(UiState state) => Relayout();
-
-    public void RefreshData() { Relayout(); }
 
     private async Task RunAsync()
     {
         _run.Enabled = false;
         _result.Text = "Trwa sprawdzanie…";
-        _result.ForeColor = Theme.TextMuted;
+        _result.ForeColor = Theme.MutedText;
+        Motion.StartPulse(_result);
         var oks = new List<bool>();
         for (var i = 0; i < Names.Length; i++)
         {
@@ -142,6 +130,7 @@ internal sealed class TestPage : UserControl, IPageView
             Set(i, ok, detail);
             oks.Add(ok);
         }
+        Motion.StopPulse(_result);
         var all = oks.All(x => x);
         _result.Text = all ? "System gotowy do pracy." : "Wymaga naprawy.";
         _result.ForeColor = all ? Theme.Success : Theme.Danger;
@@ -151,11 +140,12 @@ internal sealed class TestPage : UserControl, IPageView
 
     private void Set(int i, bool? ok, string detail)
     {
-        var (icon, d) = _rows[i];
-        if (ok is null) { icon.Text = AppIcons.Sync; icon.ForeColor = Theme.Accent; }
-        else if (ok.Value) { icon.Text = AppIcons.Check; icon.ForeColor = Theme.Success; }
-        else { icon.Text = AppIcons.Error; icon.ForeColor = Theme.Danger; }
+        var (icon, d, _) = _rows[i];
+        if (ok is null) icon.Set(AppIcons.Sync, Theme.Primary, 14f);
+        else if (ok.Value) icon.Set(AppIcons.Check, Theme.Success, 14f);
+        else icon.Set(AppIcons.Error, Theme.Danger, 14f);
         d.Text = detail;
+        d.ForeColor = ok is null ? Theme.MutedText : ok.Value ? Theme.Success : Theme.Danger;
     }
 
     private async Task<(bool, string)> CheckAsync(string name) => name switch

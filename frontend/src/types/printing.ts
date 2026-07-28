@@ -90,6 +90,8 @@ export type QueuePrintRequest = {
   document_id?: number | null;
   document_id_str?: string | null;
   warehouse_id?: number | null;
+  /** WMS Stanowisko — required for workstation printer mapping on the queue path. */
+  workstation_id?: number | null;
   template_version_id?: number | null;
   copies?: number;
   printer_id?: number | null;

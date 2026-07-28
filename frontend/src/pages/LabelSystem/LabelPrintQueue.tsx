@@ -5,6 +5,7 @@ import { warn } from "../../utils/logger";
 import { jsPDF } from "jspdf";
 import api from "../../api/axios";
 import { useQueuePrint } from "../../hooks/useQueuePrint";
+import { useAuth } from "../../context/AuthContext";
 import { useWarehouse } from "../../context/WarehouseContext";
 import type {
   LabelTemplate,
@@ -110,6 +111,8 @@ export function LabelPrintQueue({ template }: Props) {
   >("location");
   const { warehouse: activeWarehouse } = useWarehouse();
   const selectedWarehouseId = activeWarehouse?.id ?? null;
+  const { user } = useAuth();
+  const sessionWorkstationId = user?.wms_profile?.packing_station_id ?? null;
   const { queueLabelPrint } = useQueuePrint({ tenantId: TENANT_ID, warehouseId: selectedWarehouseId });
   const [cartList, setCartList] = useState<CartListItem[]>([]);
   const [selectedCartId, setSelectedCartId] = useState<number | null>(null);
@@ -710,6 +713,7 @@ export function LabelPrintQueue({ template }: Props) {
       const route = await resolvePrintRoute({
         tenantId: TENANT_ID,
         warehouseId: selectedWarehouseId,
+        workstationId: sessionWorkstationId,
         gateFormat: "zpl",
         jobFormat: "pdf",
         printerKind: "label",
@@ -789,6 +793,7 @@ export function LabelPrintQueue({ template }: Props) {
     csvPdfRequestUsesGrouping,
     queueLabelPrint,
     selectedWarehouseId,
+    sessionWorkstationId,
   ]);
 
   const handleDetectSystemPrinters = useCallback(async () => {

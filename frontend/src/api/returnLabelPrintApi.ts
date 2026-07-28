@@ -12,6 +12,7 @@ export async function printReturnLabel(
   returnLineId: number,
   tenantId: number,
   warehouseId?: number | null,
+  workstationId?: number | null,
 ): Promise<void> {
   const res = await api.post<ArrayBuffer>(
     "labels/print/return",
@@ -22,6 +23,7 @@ export async function printReturnLabel(
   await executePdfLabelPrint({
     tenantId,
     warehouseId: warehouseId ?? null,
+    workstationId: workstationId ?? null,
     pdf: buf,
     gateFormat: "zpl",
     jobFormat: "pdf",

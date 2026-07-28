@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { Link, useBlocker } from "react-router-dom";
 import { useWarehouse } from "../../context/WarehouseContext";
 import PageLayout from "../../components/layout/PageLayout";
 import { PageHeader } from "../../components/layout/PageHeader";
 import { TabsContainer } from "../../components/layout/TabsContainer";
 import { tabsNavItemClassName } from "../../components/layout/TabsNav";
 import toast from "react-hot-toast";
-import { useBlocker } from "react-router-dom";
+import { MonitorSmartphone } from "lucide-react";
 import {
   DirectSalesSettingsPanel,
   type DirectSalesSettingsPanelHandle,
@@ -114,7 +115,18 @@ export default function WmsSettingsPage() {
 
   return (
     <PageLayout className="min-w-0 overflow-visible">
-      <PageHeader title="Ustawienia WMS" />
+      <PageHeader
+        title="Ustawienia WMS"
+        actions={
+          <Link
+            to="/settings/wms/workstations"
+            className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 shadow-sm hover:border-orange-300 hover:text-orange-700"
+          >
+            <MonitorSmartphone className="h-4 w-4" />
+            Stanowiska
+          </Link>
+        }
+      />
 
         <div className="mt-2 space-y-6">
           <TabsContainer className="w-full [-webkit-overflow-scrolling:touch]">

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
 
 import {
@@ -24,7 +25,6 @@ import {
   agentVersionBadgeLabel,
   compareAgentVersions,
 } from "./agentVersionPresentation";
-import AddComputerModal from "./AddComputerModal";
 import AgentDiagnosticsModal, { AgentActionsCell } from "./AgentDiagnosticsModal";
 import { brandLinkTextClass } from "../../../design-system/brandUi";
 import {
@@ -50,6 +50,7 @@ function formatDate(value: string | null | undefined): string {
 }
 
 export default function PrintingAgentsPage() {
+  const navigate = useNavigate();
   const { warehouse: activeWarehouse, showWarehouseSelector } = useWarehouse();
   const warehouseId = showWarehouseSelector ? activeWarehouse?.id ?? null : activeWarehouse?.id ?? null;
   const [rows, setRows] = useState<PrinterAgentRead[]>([]);
@@ -57,7 +58,6 @@ export default function PrintingAgentsPage() {
   const [error, setError] = useState<string | null>(null);
   const [actionId, setActionId] = useState<number | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
-  const [addComputerOpen, setAddComputerOpen] = useState(false);
   const [pendingJobs, setPendingJobs] = useState(0);
   const [downloadInfo, setDownloadInfo] = useState<PrinterAgentDownloadInfo | null>(null);
   const [diagnosticsAgent, setDiagnosticsAgent] = useState<PrinterAgentRead | null>(null);
@@ -163,8 +163,21 @@ export default function PrintingAgentsPage() {
 
   return (
     <PrintingPageBody>
+      <PrintingAlert tone="warning">
+        Parowanie komputerów odbywa się w{" "}
+        <button
+          type="button"
+          className={brandLinkTextClass}
+          onClick={() => navigate("/settings/wms/workstations")}
+        >
+          Ustawienia WMS → Stanowiska
+        </button>
+        . Ta strona jest utrzymywana tylko do diagnostyki floty (wersje, sync, test page).
+      </PrintingAlert>
       <div className="flex justify-end">
-        <AppButton variant="primary" onClick={() => setAddComputerOpen(true)}>Dodaj komputer</AppButton>
+        <AppButton variant="primary" onClick={() => navigate("/settings/wms/workstations")}>
+          Stanowiska
+        </AppButton>
       </div>
 
       <PrintingKpiGrid
@@ -256,14 +269,6 @@ export default function PrintingAgentsPage() {
           </PrintingTableBody>
         </PrintingDataTable>
       )}
-
-      <AddComputerModal
-        open={addComputerOpen}
-        onClose={() => {
-          setAddComputerOpen(false);
-          void load();
-        }}
-      />
 
       <AgentDiagnosticsModal
         open={diagnosticsAgent != null}

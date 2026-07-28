@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 
 import { closeActiveCollectiveZPz, getActiveCollectiveZPz, getWmsReturnsModeSettings } from "../../api/wmsReturnsApi";
 import { printZPzLabel } from "../../api/zPzLabelPrintApi";
+import { useAuth } from "../../context/AuthContext";
 import type { ActiveZPzRead } from "../../types/wmsReturn";
 import { displayWarehouseDocumentNumber } from "../../utils/warehouseDocumentNumberDisplay";
 import { DAMAGE_TENANT_ID } from "../damage/damageShared";
@@ -14,6 +15,8 @@ type Props = {
 };
 
 export function WmsActiveZPzPanel({ warehouseId, refreshKey = 0, onClosed }: Props) {
+  const { user } = useAuth();
+  const sessionWorkstationId = user?.wms_profile?.packing_station_id ?? null;
   const [doc, setDoc] = useState<ActiveZPzRead | null>(null);
   const [loading, setLoading] = useState(false);
   const [closing, setClosing] = useState(false);
@@ -65,6 +68,7 @@ export function WmsActiveZPzPanel({ warehouseId, refreshKey = 0, onClosed }: Pro
             settings.z_pz_label_template_id,
             DAMAGE_TENANT_ID,
             warehouseId,
+            sessionWorkstationId,
           );
         } catch {
           setErr("Dokument zamknięty, ale wydruk etykiety nie powiódł się.");

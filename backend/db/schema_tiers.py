@@ -344,6 +344,7 @@ def _tier1_ensure_steps() -> list[tuple[str, Callable[[Engine], Any]]]:
         ("printing", su.ensure_printing_schema),
         ("edge_devices", su.ensure_edge_device_schema),
         ("integration_api_keys", su.ensure_integration_api_keys_schema),
+        ("wms_workstations", su.ensure_wms_workstations_schema),
         ("slotting", su.ensure_slotting_schema),
     ]
 

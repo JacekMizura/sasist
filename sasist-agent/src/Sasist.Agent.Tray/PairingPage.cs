@@ -7,7 +7,7 @@ internal sealed class PairingPage : UserControl
     private readonly ConfigStore _store;
     private readonly Action _onPaired;
     private readonly TextBox _code;
-    private readonly Label _status;
+    private readonly SasistSubtitle _status;
     private readonly SasistButton _connect;
 
     public PairingPage(ConfigStore store, Action onPaired)
@@ -15,7 +15,7 @@ internal sealed class PairingPage : UserControl
         _store = store;
         _onPaired = onPaired;
         Dock = DockStyle.Fill;
-        BackColor = Theme.Canvas;
+        BackColor = Theme.Background;
         Padding = new Padding(Theme.PagePad);
 
         var host = new TableLayoutPanel
@@ -37,7 +37,7 @@ internal sealed class PairingPage : UserControl
             AutoSize = true,
             AutoSizeMode = AutoSizeMode.GrowAndShrink,
             Margin = Padding.Empty,
-            Padding = new Padding(28),
+            Padding = new Padding(Theme.Space.Xxl),
             MinimumSize = new Size(360, 280),
             MaximumSize = new Size(520, 0),
         };
@@ -56,7 +56,7 @@ internal sealed class PairingPage : UserControl
             AutoSize = true,
             WrapContents = false,
             BackColor = Color.Transparent,
-            Margin = new Padding(0, 0, 0, 16),
+            Margin = new Padding(0, 0, 0, Theme.Space.Lg),
         };
         brandRow.Controls.Add(new PictureBox
         {
@@ -64,28 +64,31 @@ internal sealed class PairingPage : UserControl
             SizeMode = PictureBoxSizeMode.Zoom,
             MinimumSize = new Size(32, 32),
             MaximumSize = new Size(32, 32),
-            Margin = new Padding(0, 0, 10, 0),
+            Margin = new Padding(0, 0, Theme.Space.Md, 0),
         });
-        brandRow.Controls.Add(LayoutHelpers.Text("Sasist Agent", Theme.FontSection, Theme.TextPrimary));
+        brandRow.Controls.Add(new SasistHeading { Text = "Sasist Agent", Margin = Padding.Empty });
 
-        var title = LayoutHelpers.Wrap("Połącz z Sasist", Theme.FontPageTitle, Theme.TextPrimary, 440);
-        title.Margin = new Padding(0, 0, 0, 8);
-        var sub = LayoutHelpers.Wrap("Wklej kod połączenia z panelu Sasist, aby zacząć drukować.", Theme.FontBody, Theme.TextDesc, 440);
-        sub.Margin = new Padding(0, 0, 0, 16);
-        var codeLbl = LayoutHelpers.Muted("Kod połączenia");
-        codeLbl.Margin = new Padding(0, 0, 0, 6);
+        var title = new SasistTitle { Text = "Połącz z Sasist", MaximumSize = new Size(440, 0) };
+        var sub = new SasistSubtitle
+        {
+            Text = "Wklej kod połączenia z panelu Sasist, aby zacząć drukować.",
+            MaximumSize = new Size(440, 0),
+            Margin = new Padding(0, 0, 0, Theme.Space.Lg),
+        };
+        var codeLbl = new SasistCaption { Text = "Kod połączenia", Margin = new Padding(0, 0, 0, Theme.Space.Sm) };
 
         var inputCard = new SasistCard
         {
             AutoSize = true,
-            Padding = new Padding(12, 10, 12, 10),
-            Margin = new Padding(0, 0, 0, 12),
+            Elevated = false,
+            Padding = new Padding(Theme.Space.Md, Theme.Space.Md, Theme.Space.Md, Theme.Space.Md),
+            Margin = new Padding(0, 0, 0, Theme.Space.Md),
             MinimumSize = new Size(280, 40),
         };
         _code = new TextBox
         {
             BorderStyle = BorderStyle.None,
-            Font = Theme.FontBody,
+            Font = Theme.Body,
             PlaceholderText = "Wklej kod tutaj",
             BackColor = Theme.Surface,
             Dock = DockStyle.Top,
@@ -93,9 +96,9 @@ internal sealed class PairingPage : UserControl
         };
         inputCard.Controls.Add(_code);
 
-        _connect = new SasistButton { Text = "Połącz", Primary = true, Margin = new Padding(0, 4, 0, 12) };
+        _connect = new SasistButton { Text = "Połącz", Kind = SasistButtonKind.Primary, Margin = new Padding(0, Theme.Space.Xs, 0, Theme.Space.Md) };
         _connect.Click += async (_, _) => await ConnectAsync();
-        _status = LayoutHelpers.Wrap("", Theme.FontBody, Theme.TextMuted, 440);
+        _status = new SasistSubtitle { Text = "", MaximumSize = new Size(440, 0) };
 
         stack.Controls.Add(brandRow);
         stack.Controls.Add(title);
@@ -110,12 +113,12 @@ internal sealed class PairingPage : UserControl
         Controls.Add(host);
         Resize += (_, _) =>
         {
-            var max = Math.Min(520, Math.Max(320, ClientSize.Width - 48));
+            var max = Math.Min(520, Math.Max(320, ClientSize.Width - Theme.Space.Xxxl));
             card.MaximumSize = new Size(max, 0);
             inputCard.MaximumSize = new Size(Math.Max(240, max - 56), 0);
-            LayoutHelpers.SetMaxWidth(title, max - 56);
-            LayoutHelpers.SetMaxWidth(sub, max - 56);
-            LayoutHelpers.SetMaxWidth(_status, max - 56);
+            title.MaximumSize = new Size(max - 56, 0);
+            sub.MaximumSize = new Size(max - 56, 0);
+            _status.MaximumSize = new Size(max - 56, 0);
         };
     }
 
@@ -130,7 +133,7 @@ internal sealed class PairingPage : UserControl
         }
 
         _connect.Enabled = false;
-        _status.ForeColor = Theme.TextMuted;
+        _status.ForeColor = Theme.MutedText;
         _status.Text = UserMessages.Connecting;
 
         try

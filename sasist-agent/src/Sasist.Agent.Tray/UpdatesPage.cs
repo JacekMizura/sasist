@@ -5,12 +5,11 @@ namespace Sasist.Agent.Tray;
 
 internal sealed class UpdatesPage : UserControl, IPageView
 {
-    private readonly Label _version;
-    private readonly Label _status;
-    private readonly Label _changelog;
+    private readonly SasistMetric _version;
+    private readonly SasistHeading _status;
+    private readonly SasistBody _changelog;
     private readonly SasistButton _btn;
-    private readonly ProgressBar _bar;
-    private readonly Label _barLbl;
+    private readonly SasistProgress _progress;
     private readonly SasistCard _card;
     private PageShell? _shell;
 
@@ -38,38 +37,36 @@ internal sealed class UpdatesPage : UserControl, IPageView
             BackColor = Color.Transparent,
         };
 
-        stack.Controls.Add(LayoutHelpers.Muted("Aktualna wersja"));
-        _version = LayoutHelpers.Metric(AgentConfig.AgentVersion);
-        _version.Margin = new Padding(0, 4, 0, 16);
+        stack.Controls.Add(new SasistCaption { Text = "Aktualna wersja" });
+        _version = new SasistMetric { Text = AgentConfig.AgentVersion, Margin = new Padding(0, Theme.Space.Xs, 0, Theme.Space.Lg) };
         stack.Controls.Add(_version);
 
-        stack.Controls.Add(LayoutHelpers.Muted("Status"));
-        _status = LayoutHelpers.Wrap(UserMessages.UpToDate, Theme.FontSection, Theme.Success, 640);
-        _status.Margin = new Padding(0, 4, 0, 16);
+        stack.Controls.Add(new SasistCaption { Text = "Status" });
+        _status = new SasistHeading
+        {
+            Text = UserMessages.UpToDate,
+            ForeColor = Theme.Success,
+            Margin = new Padding(0, Theme.Space.Xs, 0, Theme.Space.Lg),
+            MaximumSize = new Size(640, 0),
+        };
         stack.Controls.Add(_status);
 
-        stack.Controls.Add(LayoutHelpers.Muted("Historia zmian"));
-        _changelog = LayoutHelpers.Wrap(
-            "• Nowoczesny interfejs zgodny z Sasist\n• Karty urządzeń i historii wydruków\n• Test gotowości systemu",
-            Theme.FontBody, Theme.TextSecondary, 640);
-        _changelog.Margin = new Padding(0, 6, 0, 16);
+        stack.Controls.Add(new SasistCaption { Text = "Historia zmian" });
+        _changelog = new SasistBody
+        {
+            Text = "• Design System Sasist — spójne komponenty\n• Karty urządzeń i historii wydruków\n• Test gotowości systemu",
+            ForeColor = Theme.SecondaryText,
+            MaximumSize = new Size(640, 0),
+            Margin = new Padding(0, Theme.Space.Sm, 0, Theme.Space.Lg),
+        };
         stack.Controls.Add(_changelog);
 
-        _btn = new SasistButton { Text = "Sprawdź aktualizacje", Primary = true, Margin = new Padding(0, 4, 0, 8) };
+        _btn = new SasistButton { Text = "Sprawdź aktualizacje", Kind = SasistButtonKind.Primary, Margin = new Padding(0, Theme.Space.Xs, 0, Theme.Space.Sm) };
         _btn.Click += async (_, _) => await CheckAsync();
         stack.Controls.Add(_btn);
 
-        _bar = new ProgressBar
-        {
-            MinimumSize = new Size(160, 10),
-            MaximumSize = new Size(420, 10),
-            Visible = false,
-            Margin = new Padding(0, 8, 0, 4),
-        };
-        _barLbl = LayoutHelpers.Muted("");
-        _barLbl.Visible = false;
-        stack.Controls.Add(_bar);
-        stack.Controls.Add(_barLbl);
+        _progress = new SasistProgress();
+        stack.Controls.Add(_progress);
 
         _card.Controls.Add(stack);
         _shell.Body.Controls.Add(_card);
@@ -80,35 +77,30 @@ internal sealed class UpdatesPage : UserControl, IPageView
     private void Relayout()
     {
         if (_shell is null) return;
-        var w = Math.Max(320, _shell.Body.ClientSize.Width - 16);
+        var w = Math.Max(320, _shell.Body.ClientSize.Width - Theme.Space.Lg);
         _card.MaximumSize = new Size(w, 0);
         _card.MinimumSize = new Size(Math.Min(320, w), 160);
-        LayoutHelpers.SetMaxWidth(_status, w - 56);
-        LayoutHelpers.SetMaxWidth(_changelog, w - 56);
-        LayoutHelpers.SetMaxWidth(_version, w - 56);
-        var barW = Math.Min(420, Math.Max(160, w - 56));
-        _bar.MaximumSize = new Size(barW, 10);
-        _bar.MinimumSize = new Size(Math.Min(160, barW), 10);
+        _status.MaximumSize = new Size(w - 56, 0);
+        _changelog.MaximumSize = new Size(w - 56, 0);
+        _version.MaximumSize = new Size(w - 56, 0);
+        _progress.FitWidth(w - 56);
     }
 
     private async Task CheckAsync()
     {
         _btn.Enabled = false;
-        _bar.Visible = true;
-        _barLbl.Visible = true;
-        _bar.Value = 0;
-        _barLbl.Text = "Sprawdzanie aktualizacji…";
+        Motion.StartPulse(_status);
         for (var i = 0; i <= 100; i += 10)
         {
-            _bar.Value = i;
+            _progress.ShowProgress("Sprawdzanie aktualizacji…", i);
             await Task.Delay(35);
         }
+        Motion.StopPulse(_status);
         _status.Text = UserMessages.UpToDate;
         _status.ForeColor = Theme.Success;
-        _barLbl.Text = "Gotowe";
+        _progress.ShowProgress("Gotowe", 100);
         await Task.Delay(350);
-        _bar.Visible = false;
-        _barLbl.Visible = false;
+        _progress.HideProgress();
         _btn.Enabled = true;
         Relayout();
     }
@@ -125,6 +117,4 @@ internal sealed class UpdatesPage : UserControl, IPageView
         _status.ForeColor = Theme.Success;
         Relayout();
     }
-
-    public void RefreshData() => ForceSync(UiState.Capture(new ConfigStore()));
 }

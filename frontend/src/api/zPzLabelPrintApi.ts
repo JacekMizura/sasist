@@ -11,6 +11,7 @@ export async function printZPzLabel(
   templateId: number,
   tenantId: number,
   warehouseId?: number | null,
+  workstationId?: number | null,
 ): Promise<void> {
   const res = await api.post<ArrayBuffer>(
     "labels/print/z-pz",
@@ -21,6 +22,7 @@ export async function printZPzLabel(
   await executePdfLabelPrint({
     tenantId,
     warehouseId: warehouseId ?? null,
+    workstationId: workstationId ?? null,
     pdf: buf,
     gateFormat: "zpl",
     jobFormat: "pdf",

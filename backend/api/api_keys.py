@@ -106,6 +106,8 @@ def get_api_key_usage(
         return ApiKeyUsageRead(**get_key_usage(db, tenant_id=tenant_id, key_id=key_id))
     except ApiKeyNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ApiKeyError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @router.delete("/{key_id}", status_code=204)
@@ -121,6 +123,9 @@ def delete_api_key(
     except ApiKeyNotFoundError as exc:
         db.rollback()
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ApiKeyError as exc:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @router.patch("/{key_id}/revoke", response_model=ApiKeyRead)
@@ -137,6 +142,9 @@ def patch_revoke_api_key(
     except ApiKeyNotFoundError as exc:
         db.rollback()
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ApiKeyError as exc:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     serialized = next(item for item in list_keys(db, tenant_id=tenant_id) if item["id"] == row.id)
     return _to_read(serialized)
 

@@ -6,8 +6,9 @@ namespace Sasist.Agent.Tray;
 internal sealed class LogsPage : UserControl, IPageView
 {
     private readonly ListBox _list;
-    private readonly TextBox _search;
+    private readonly SasistSearchBox _search;
     private readonly List<LogLine> _all = new();
+    private readonly SasistEmptyState _empty;
     private string _filter = "ALL";
     private bool _autoScroll = true;
 
@@ -23,64 +24,82 @@ internal sealed class LogsPage : UserControl, IPageView
         {
             Dock = DockStyle.Top,
             AutoSize = true,
-            WrapContents = true,
+            FlowDirection = FlowDirection.TopDown,
+            WrapContents = false,
             BackColor = Color.Transparent,
-            Padding = new Padding(0, 0, 0, 8),
+            Padding = new Padding(0, 0, 0, Theme.Space.Md),
         };
 
-        var searchHost = new SasistCard
+        _search = new SasistSearchBox();
+        _search.MaximumSize = new Size(480, 0);
+        _search.MinimumSize = new Size(240, 40);
+        _search.Margin = new Padding(0, 0, 0, Theme.Space.Sm);
+        _search.Input.TextChanged += (_, _) => ApplyFilter();
+        bar.Controls.Add(_search);
+
+        var chips = new FlowLayoutPanel
         {
             AutoSize = true,
-            AutoSizeMode = AutoSizeMode.GrowAndShrink,
-            Padding = new Padding(10, 8, 10, 8),
-            Margin = new Padding(0, 0, 8, 8),
-            MinimumSize = new Size(240, 36),
+            WrapContents = false,
+            FlowDirection = FlowDirection.LeftToRight,
+            BackColor = Color.Transparent,
+            Margin = new Padding(0, 0, 0, Theme.Space.Sm),
+            Padding = Padding.Empty,
         };
-        _search = new TextBox
-        {
-            BorderStyle = BorderStyle.None,
-            Font = Theme.FontBody,
-            PlaceholderText = "Szukaj…",
-            BackColor = Theme.Surface,
-            Dock = DockStyle.Top,
-            MinimumSize = new Size(180, 22),
-        };
-        _search.TextChanged += (_, _) => ApplyFilter();
-        searchHost.Controls.Add(_search);
-        bar.Controls.Add(searchHost);
-
         foreach (var f in new[] { "ALL", "INFO", "WARN", "ERROR", "DEBUG" })
         {
             var level = f;
-            var b = new SasistButton { Text = level, Margin = new Padding(0, 0, 6, 8) };
-            b.Click += (_, _) => { _filter = level; ApplyFilter(); };
-            bar.Controls.Add(b);
+            var chip = new SasistButton
+            {
+                Text = level,
+                Kind = SasistButtonKind.Ghost,
+                MinimumSize = new Size(56, 36),
+                Margin = new Padding(0, 0, Theme.Space.Sm, 0),
+                Padding = new Padding(Theme.Space.Md, Theme.Space.Sm, Theme.Space.Md, Theme.Space.Sm),
+            };
+            chip.Click += (_, _) => { _filter = level; ApplyFilter(); };
+            chips.Controls.Add(chip);
         }
 
-        var copy = new SasistButton { Text = "Kopiuj", Margin = new Padding(8, 0, 0, 8) };
-        copy.Click += (_, _) =>
+        var actions = new FlowLayoutPanel
+        {
+            AutoSize = true,
+            WrapContents = true,
+            FlowDirection = FlowDirection.LeftToRight,
+            BackColor = Color.Transparent,
+            Margin = Padding.Empty,
+            Padding = Padding.Empty,
+        };
+        void addAction(string text, SasistButtonKind kind, EventHandler handler)
+        {
+            var b = new SasistButton { Text = text, Kind = kind, Margin = new Padding(0, 0, Theme.Space.Sm, Theme.Space.Sm) };
+            b.Click += handler;
+            actions.Controls.Add(b);
+        }
+        addAction("Kopiuj", SasistButtonKind.Secondary, (_, _) =>
         {
             var t = string.Join(Environment.NewLine, _list.Items.Cast<object>().OfType<LogLine>().Select(x => x.Text));
             if (!string.IsNullOrEmpty(t)) Clipboard.SetText(t);
-        };
-        var clear = new SasistButton { Text = "Wyczyść", Margin = new Padding(8, 0, 0, 8) };
-        clear.Click += (_, _) => ClearFiles();
-        var export = new SasistButton { Text = "Eksport", Primary = true, Margin = new Padding(8, 0, 0, 8) };
-        export.Click += (_, _) => Export();
-        var refresh = new SasistButton { Text = "Odśwież", Margin = new Padding(8, 0, 0, 8) };
-        refresh.Click += (_, _) => RefreshLogs();
-        bar.Controls.Add(copy);
-        bar.Controls.Add(clear);
-        bar.Controls.Add(export);
-        bar.Controls.Add(refresh);
+        });
+        addAction("Wyczyść", SasistButtonKind.Ghost, (_, _) => ClearFiles());
+        addAction("Eksport", SasistButtonKind.Primary, (_, _) => Export());
+        addAction("Odśwież", SasistButtonKind.Secondary, (_, _) => RefreshLogs());
 
-        var card = new SasistCard { Dock = DockStyle.Fill, Padding = new Padding(8), Margin = new Padding(0, 8, 0, 0) };
+        bar.Controls.Add(chips);
+        bar.Controls.Add(actions);
+        bar.Resize += (_, _) =>
+        {
+            actions.MaximumSize = new Size(Math.Max(200, bar.ClientSize.Width), 0);
+            actions.Width = Math.Max(200, bar.ClientSize.Width);
+        };
+
+        var card = new SasistCard { Dock = DockStyle.Fill, Padding = new Padding(Theme.Space.Sm), Margin = new Padding(0, Theme.Space.Sm, 0, 0) };
         _list = new ListBox
         {
             Dock = DockStyle.Fill,
             BorderStyle = BorderStyle.None,
             DrawMode = DrawMode.OwnerDrawVariable,
-            Font = Theme.FontMono,
+            Font = Theme.Mono,
             IntegralHeight = false,
             BackColor = Theme.Surface,
         };
@@ -88,9 +107,9 @@ internal sealed class LogsPage : UserControl, IPageView
         {
             if (e.Index < 0 || e.Index >= _list.Items.Count) return;
             var line = (LogLine)_list.Items[e.Index]!;
-            var size = TextRenderer.MeasureText(line.Text, Theme.FontMono, new Size(_list.ClientSize.Width - 8, int.MaxValue),
+            var size = TextRenderer.MeasureText(line.Text, Theme.Mono, new Size(_list.ClientSize.Width - Theme.Space.Sm, int.MaxValue),
                 TextFormatFlags.WordBreak | TextFormatFlags.NoPrefix | TextFormatFlags.TextBoxControl);
-            e.ItemHeight = Math.Max(22, size.Height + 4);
+            e.ItemHeight = Math.Max(22, size.Height + Theme.Space.Xs);
         };
         _list.DrawItem += OnDrawItem;
         _list.SelectedIndexChanged += (_, _) =>
@@ -100,7 +119,17 @@ internal sealed class LogsPage : UserControl, IPageView
         };
         card.Controls.Add(_list);
 
-        shell.Body.Controls.Add(card);
+        _empty = new SasistEmptyState(
+            "Brak logów",
+            "Zdarzenia pojawią się po uruchomieniu usługi Sasist Agent.",
+            AppIcons.Logs)
+        { Dock = DockStyle.Fill, Visible = false };
+
+        var host = new Panel { Dock = DockStyle.Fill };
+        host.Controls.Add(card);
+        host.Controls.Add(_empty);
+
+        shell.Body.Controls.Add(host);
         shell.Body.Controls.Add(bar);
         Controls.Add(shell);
     }
@@ -110,11 +139,11 @@ internal sealed class LogsPage : UserControl, IPageView
         e.DrawBackground();
         if (e.Index < 0 || e.Index >= _list.Items.Count) return;
         var line = (LogLine)_list.Items[e.Index]!;
-        TextRenderer.DrawText(e.Graphics, line.Text, Theme.FontMono, e.Bounds, line.Color,
+        TextRenderer.DrawText(e.Graphics, line.Text, Theme.Mono, e.Bounds, line.Color,
             TextFormatFlags.Left | TextFormatFlags.Top | TextFormatFlags.WordBreak | TextFormatFlags.NoPrefix | TextFormatFlags.TextBoxControl);
     }
 
-    public void ApplyValues(UiState state) { /* logs are user-driven — never rebuild on poll */ }
+    public void ApplyValues(UiState state) { }
     public void ForceSync(UiState state) => RefreshLogs();
 
     public void RefreshLogs()
@@ -129,12 +158,12 @@ internal sealed class LogsPage : UserControl, IPageView
                     .OrderByDescending(File.GetLastWriteTimeUtc).Take(8).ToList()
                 : [];
             if (files.Count == 0)
-                _all.Add(new LogLine("Brak logów. Pojawią się po uruchomieniu usługi.", "INFO", Theme.TextMuted));
+                _all.Add(new LogLine("Brak logów. Pojawią się po uruchomieniu usługi.", "INFO", Theme.MutedText));
             else
             {
                 foreach (var file in files)
                 {
-                    _all.Add(new LogLine($"===== {Path.GetFileName(file)} =====", "INFO", Theme.TextFaint));
+                    _all.Add(new LogLine($"===== {Path.GetFileName(file)} =====", "INFO", Theme.FaintText));
                     try
                     {
                         using var fs = new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
@@ -164,7 +193,7 @@ internal sealed class LogsPage : UserControl, IPageView
 
     private void ApplyFilter()
     {
-        var q = _search.Text.Trim();
+        var q = _search.Input.Text.Trim();
         _list.BeginUpdate();
         _list.Items.Clear();
         foreach (var line in _all)
@@ -174,6 +203,9 @@ internal sealed class LogsPage : UserControl, IPageView
             _list.Items.Add(line);
         }
         _list.EndUpdate();
+        var empty = _list.Items.Count == 0;
+        _empty.Visible = empty;
+        _list.Parent!.Visible = !empty;
         if (_autoScroll && _list.Items.Count > 0)
             _list.TopIndex = Math.Max(0, _list.Items.Count - 1);
     }
@@ -191,13 +223,13 @@ internal sealed class LogsPage : UserControl, IPageView
     {
         "ERROR" => Theme.Danger,
         "WARN" => Theme.Warning,
-        "DEBUG" => Theme.TextFaint,
+        "DEBUG" => Theme.FaintText,
         _ => Theme.Info,
     };
 
     private void ClearFiles()
     {
-        if (MessageBox.Show("Wyczyścić pliki logów?", "Logi", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return;
+        if (SasistDialog.Confirm(this, "Wyczyścić pliki logów?", "Logi") != DialogResult.Yes) return;
         foreach (var f in Directory.GetFiles(AgentPaths.LogsDir))
             try { File.WriteAllText(f, ""); } catch { }
         RefreshLogs();
