@@ -234,7 +234,10 @@ def get_workstation_devices(
 ):
     try:
         data = list_devices_grouped(db, tenant_id=tenant_id, workstation_id=workstation_id)
+        # Persist edge→agent_printer materialization from self-heal.
+        db.commit()
     except WorkstationError as exc:
+        db.rollback()
         _raise(exc)
     return DevicesGroupedResponse(**data)
 
@@ -248,7 +251,10 @@ def get_workstation_printers(
 ):
     try:
         data = get_printers_config(db, tenant_id=tenant_id, workstation_id=workstation_id)
+        # Persist edge→agent_printer materialization so mapping/print jobs stay consistent.
+        db.commit()
     except WorkstationError as exc:
+        db.rollback()
         _raise(exc)
     return PrintersConfigResponse(**data)
 

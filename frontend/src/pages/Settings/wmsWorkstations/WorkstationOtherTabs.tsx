@@ -116,7 +116,7 @@ export function PrintersTab({ workstationId, detail }: BaseProps) {
         description={
           detail.connection_status === "offline"
             ? "Agent jest offline i nie zgłasza drukarek. Uruchom Sasist Agent na komputerze stanowiska."
-            : "Na komputerze stanowiska nie wykryto aktywnych drukarek. Sprawdź instalację sterowników i odśwież listę w Agencie."
+            : "Agent nie zgłosił żadnej drukarki. Sprawdź urządzenia w zakładce Urządzenia oraz instalację sterowników na komputerze."
         }
         action={
           <button type="button" className="text-sm text-orange-700" onClick={() => void load()}>
@@ -140,8 +140,8 @@ export function PrintersTab({ workstationId, detail }: BaseProps) {
         </p>
       ) : null}
       <p className="text-sm text-slate-600">
-        Wybierz drukarkę dla typów wydruku używanych na tym stanowisku, zapisz, potem wykonaj wydruk
-        testowy.
+        Przypisz drukarkę wykrytą przez Agenta do każdego typu wydruku. To nie jest lista sprzętu —
+        sprzęt widać w zakładce Urządzenia.
       </p>
       <div className="overflow-x-auto rounded-lg border border-slate-200">
         <table className="min-w-full text-sm">
@@ -173,7 +173,7 @@ export function PrintersTab({ workstationId, detail }: BaseProps) {
                         }))
                       }
                     >
-                      <option value="">(wybierz)</option>
+                      <option value="">wybierz drukarkę</option>
                       {config.available_printers.map((p) => (
                         <option key={p.id} value={p.id}>
                           {p.name}
@@ -211,7 +211,7 @@ export function PrintersTab({ workstationId, detail }: BaseProps) {
       </div>
       {!hasAnyMapping ? (
         <p className="text-xs text-slate-500">
-          Zalecane: wybierz drukarkę dla etykiet i zapisz mapowanie przed produkcyjnym drukowaniem.
+          Wybierz drukarki i zapisz mapowanie przed produkcyjnym drukowaniem.
         </p>
       ) : null}
     </div>

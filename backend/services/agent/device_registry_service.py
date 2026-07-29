@@ -14,6 +14,13 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from ...models.agent.edge_device import EdgeDevice, EdgeDeviceAction, EdgeDeviceEvent
+from ...models.printing.agent_printer import AgentPrinter
+from ...models.printing.constants import (
+    PRINTER_TYPE_A4,
+    PRINTER_TYPE_LABEL,
+    PRINTER_TYPE_OTHER,
+    PRINTER_TYPE_RECEIPT,
+)
 from ...models.printing.printer_agent import PrinterAgent
 from ...schemas.agent.devices import (
     ActionResultRequest,
@@ -49,6 +56,90 @@ def _loads(raw: str | None, default: Any = None) -> Any:
         return json.loads(raw)
     except (TypeError, ValueError, json.JSONDecodeError):
         return default
+
+
+def _infer_legacy_printer_type(name: str) -> str:
+    n = (name or "").lower()
+    if any(x in n for x in ("zebra", "zdesigner", "godex", "tsc", "label", "etykiet")):
+        return PRINTER_TYPE_LABEL
+    if any(x in n for x in ("receipt", "pos-", "tm-", "fiskal")):
+        return PRINTER_TYPE_RECEIPT
+    if any(x in n for x in ("pdf", "microsoft", "xps", "onenote", "fax")):
+        return PRINTER_TYPE_A4
+    return PRINTER_TYPE_OTHER
+
+
+def link_edge_printer_to_agent_printer(db: Session, agent: PrinterAgent, edge: EdgeDevice) -> AgentPrinter | None:
+    """Keep agent_printers in sync with edge printer devices (print-job / mapping SSOT)."""
+    if (edge.device_type or "").lower() != "printer":
+        return None
+    system_name = (edge.local_id or edge.display_name or "").strip()
+    if not system_name:
+        return None
+    display = (edge.display_name or system_name).strip()
+
+    printer: AgentPrinter | None = None
+    if edge.legacy_printer_id is not None:
+        printer = (
+            db.query(AgentPrinter)
+            .filter(
+                AgentPrinter.id == edge.legacy_printer_id,
+                AgentPrinter.agent_id == agent.id,
+            )
+            .first()
+        )
+    if printer is None:
+        printer = (
+            db.query(AgentPrinter)
+            .filter(
+                AgentPrinter.agent_id == agent.id,
+                AgentPrinter.system_name == system_name,
+            )
+            .first()
+        )
+    if printer is None:
+        printer = AgentPrinter(
+            agent_id=agent.id,
+            name=display[:120],
+            system_name=system_name[:255],
+            printer_type=_infer_legacy_printer_type(display),
+            is_default=bool(edge.is_default),
+            is_active=bool(edge.is_active),
+        )
+        db.add(printer)
+        db.flush()
+    else:
+        printer.name = display[:120]
+        printer.is_active = bool(edge.is_active)
+        if edge.is_default:
+            printer.is_default = True
+
+    if edge.legacy_printer_id != printer.id:
+        edge.legacy_printer_id = printer.id
+    return printer
+
+
+def ensure_agent_printers_from_edge_devices(db: Session, *, agent_id: int) -> int:
+    """Self-heal: materialize AgentPrinter rows for edge printers missing legacy_printer_id."""
+    agent = db.query(PrinterAgent).filter(PrinterAgent.id == agent_id).first()
+    if agent is None:
+        return 0
+    edges = (
+        db.query(EdgeDevice)
+        .filter(
+            EdgeDevice.agent_id == agent_id,
+            EdgeDevice.is_active.is_(True),
+            EdgeDevice.device_type == "printer",
+        )
+        .all()
+    )
+    linked = 0
+    for edge in edges:
+        if link_edge_printer_to_agent_printer(db, agent, edge) is not None:
+            linked += 1
+    if linked:
+        db.flush()
+    return linked
 
 
 def serialize_edge_device(row: EdgeDevice) -> EdgeDeviceRead:
@@ -295,6 +386,8 @@ def _apply_upsert(db: Session, agent: PrinterAgent, item: EdgeDeviceUpsert) -> E
                 "recommended_actions": item.health.recommended_actions,
             }
         )
+    if (row.device_type or "").lower() == "printer":
+        link_edge_printer_to_agent_printer(db, agent, row)
     return row
 
 
@@ -317,6 +410,17 @@ def sync_devices_from_agent(
             .all()
         )
         for row in rows:
+            if row.legacy_printer_id is not None:
+                legacy = (
+                    db.query(AgentPrinter)
+                    .filter(
+                        AgentPrinter.id == row.legacy_printer_id,
+                        AgentPrinter.agent_id == agent.id,
+                    )
+                    .first()
+                )
+                if legacy is not None:
+                    legacy.is_active = False
             db.delete(row)
 
     for evt in payload.events or []:

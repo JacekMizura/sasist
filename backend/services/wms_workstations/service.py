@@ -605,6 +605,16 @@ def list_devices_grouped(
     if row.printer_agent_id is None:
         return empty
 
+    # Edge sync is source of discovery; materialize agent_printers for mapping / jobs.
+    try:
+        from ...services.agent.device_registry_service import (
+            ensure_agent_printers_from_edge_devices,
+        )
+
+        ensure_agent_printers_from_edge_devices(db, agent_id=int(row.printer_agent_id))
+    except Exception:
+        pass
+
     printers = (
         db.query(AgentPrinter)
         .filter(
@@ -681,6 +691,14 @@ def get_printers_config(
     agent = None
     online = False
     if row.printer_agent_id is not None:
+        try:
+            from ...services.agent.device_registry_service import (
+                ensure_agent_printers_from_edge_devices,
+            )
+
+            ensure_agent_printers_from_edge_devices(db, agent_id=int(row.printer_agent_id))
+        except Exception:
+            pass
         agent = db.query(PrinterAgent).filter(PrinterAgent.id == row.printer_agent_id).first()
         online = is_agent_online(agent) if agent else False
         printers = (
@@ -738,6 +756,15 @@ def put_printer_mapping(
     row = get_workstation_or_404(db, tenant_id=tenant_id, workstation_id=workstation_id)
     if row.printer_agent_id is None:
         raise WorkstationError("Najpierw połącz komputer ze stanowiskiem")
+
+    try:
+        from ...services.agent.device_registry_service import (
+            ensure_agent_printers_from_edge_devices,
+        )
+
+        ensure_agent_printers_from_edge_devices(db, agent_id=int(row.printer_agent_id))
+    except Exception:
+        pass
 
     allowed_ids = {
         p.id

@@ -33,6 +33,9 @@ def _create_engine():
     engine = create_printing_test_engine()
     ensure_wms_workstations_schema(engine)
     ensure_data_migrations_table(engine)
+    from backend.db.edge_device_schema import ensure_edge_device_schema
+
+    ensure_edge_device_schema(engine)
     with engine.begin() as conn:
         conn.execute(text("DROP TABLE IF EXISTS warehouses"))
         conn.execute(
@@ -122,6 +125,9 @@ class WorkstationsTestCase(unittest.TestCase):
                 "print_jobs",
                 "printing_defaults",
                 "agent_printers",
+                "edge_device_actions",
+                "edge_device_events",
+                "edge_devices",
                 "printer_agents",
                 "integration_api_keys",
             ):
@@ -297,6 +303,84 @@ class TestWorkstationLifecycle(WorkstationsTestCase):
             json={"mappings": [{"print_type": "labels", "agent_printer_id": 99999}]},
         )
         self.assertEqual(bad.status_code, 400)
+
+    def test_printers_tab_uses_edge_discovered_printers(self):
+        """Devices from edge sync must appear in printers mapping dropdown (not empty state)."""
+        from backend.models.agent.edge_device import EdgeDevice
+
+        ws = self._create_ws()
+        pair = self.client.post(
+            f"/api/wms/workstations/{ws['id']}/pair",
+            params={"tenant_id": 1},
+        ).json()
+        reg = self.client.post(
+            "/api/printing/agents/register",
+            headers={"Authorization": f"Bearer {pair['pairing_code']}"},
+            json={
+                "machine_id": "WIN-EDGE-1",
+                "name": "PC-EDGE",
+                "version": "1.2.1",
+                "warehouse_id": 1,
+                "printers": [],
+            },
+        )
+        self.assertEqual(reg.status_code, 200, reg.text)
+        agent_id = reg.json()["agent_id"]
+
+        with self.SessionLocal() as db:
+            db.add(
+                EdgeDevice(
+                    tenant_id=1,
+                    agent_id=agent_id,
+                    local_id="Epson TM-T88",
+                    module_id="printing",
+                    device_type="printer",
+                    display_name="Epson TM-T88",
+                    status="online",
+                    is_active=True,
+                    is_default=False,
+                )
+            )
+            db.add(
+                EdgeDevice(
+                    tenant_id=1,
+                    agent_id=agent_id,
+                    local_id="ZDesigner ZD420",
+                    module_id="printing",
+                    device_type="printer",
+                    display_name="Zebra",
+                    status="online",
+                    is_active=True,
+                    is_default=True,
+                )
+            )
+            db.commit()
+
+        devices = self.client.get(
+            f"/api/wms/workstations/{ws['id']}/devices",
+            params={"tenant_id": 1},
+        )
+        self.assertEqual(devices.status_code, 200, devices.text)
+        self.assertGreaterEqual(len(devices.json()["printers"]), 2)
+
+        printers = self.client.get(
+            f"/api/wms/workstations/{ws['id']}/printers",
+            params={"tenant_id": 1},
+        )
+        self.assertEqual(printers.status_code, 200, printers.text)
+        body = printers.json()
+        available = body["available_printers"]
+        self.assertEqual(len(available), 2, body)
+        self.assertTrue(all(m.get("agent_printer_id") is None for m in body["mappings"]))
+
+        pid = available[0]["id"]
+        mapped = self.client.put(
+            f"/api/wms/workstations/{ws['id']}/printer-mapping",
+            params={"tenant_id": 1},
+            json={"mappings": [{"print_type": "shipping_label", "agent_printer_id": pid}]},
+        )
+        self.assertEqual(mapped.status_code, 200, mapped.text)
+        self.assertEqual(mapped.json()["mappings"][0]["agent_printer_id"], pid)
 
     def test_migration_from_existing_agent(self):
         with self.SessionLocal() as db:
