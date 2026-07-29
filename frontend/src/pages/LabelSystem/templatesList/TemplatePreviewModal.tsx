@@ -1,6 +1,6 @@
-import { TemplatePreview } from "../../components/labels/TemplatePreview";
-import { TemplatePreviewShellModal } from "../../components/templates/TemplatePreviewShellModal";
-import { formatLabelSizeMm } from "../../utils/formatMm";
+import { TemplatePreview } from "../../../components/labels/TemplatePreview";
+import { TemplatePreviewShellModal } from "../../../components/templates/TemplatePreviewShellModal";
+import { formatLabelSizeMm } from "../../../utils/formatMm";
 import {
   getModalPreviewSize,
   parseTemplateJson,
