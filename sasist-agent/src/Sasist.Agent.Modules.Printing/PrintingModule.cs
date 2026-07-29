@@ -24,11 +24,11 @@ public sealed class PrintingModule : IAgentModule
 
     public PrintingModule(IPrintDriverResolver? drivers)
     {
-        _drivers = drivers ?? new PrintDriverResolver();
+        _drivers = drivers ?? new DriverFactory();
     }
 
     public string ModuleId => "printing";
-    public string ModuleVersion => "1.3.0";
+    public string ModuleVersion => "1.4.0";
 
     public IReadOnlyList<string> Capabilities =>
         _drivers.SupportedFormatTokens

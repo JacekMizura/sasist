@@ -9,23 +9,81 @@ public class PrintDriverTests
     [InlineData("pdf", PrintJobFormat.Pdf)]
     [InlineData("zpl", PrintJobFormat.Zpl)]
     [InlineData("raw_zpl", PrintJobFormat.Zpl)]
+    [InlineData("epl", PrintJobFormat.Epl)]
+    [InlineData("escpos", PrintJobFormat.EscPos)]
+    [InlineData("pcl", PrintJobFormat.Pcl)]
+    [InlineData("postscript", PrintJobFormat.PostScript)]
     [InlineData("raw", PrintJobFormat.Raw)]
     [InlineData("html", PrintJobFormat.Html)]
+    [InlineData("image", PrintJobFormat.Image)]
+    [InlineData("png", PrintJobFormat.Image)]
     public void FormatParser_RecognizesTokens(string token, PrintJobFormat expected)
     {
         Assert.True(PrintJobFormatParser.TryParse(token, out var format));
         Assert.Equal(expected, format);
     }
 
-    [Fact]
-    public void Resolver_ExposesAllFormats()
+    [Theory]
+    [InlineData(PrintJobFormat.Zpl)]
+    [InlineData(PrintJobFormat.Epl)]
+    [InlineData(PrintJobFormat.EscPos)]
+    [InlineData(PrintJobFormat.Pcl)]
+    [InlineData(PrintJobFormat.PostScript)]
+    [InlineData(PrintJobFormat.Raw)]
+    public void NativeLanguages_UseRawSpoolerPath(PrintJobFormat format)
     {
-        var resolver = new PrintDriverResolver();
-        Assert.Contains("pdf", resolver.SupportedFormatTokens);
-        Assert.Contains("zpl", resolver.SupportedFormatTokens);
-        Assert.Contains("raw", resolver.SupportedFormatTokens);
-        Assert.Contains("html", resolver.SupportedFormatTokens);
-        Assert.Equal("zpl", resolver.Resolve(PrintJobFormat.Zpl).DriverId);
+        Assert.True(PrintJobFormatParser.IsNativePrinterLanguage(format));
+        var driver = new DriverFactory().Resolve(format);
+        Assert.IsType<RawPrintDriver>(driver);
+    }
+
+    [Theory]
+    [InlineData(PrintJobFormat.Pdf)]
+    [InlineData(PrintJobFormat.Html)]
+    [InlineData(PrintJobFormat.Image)]
+    public void RenderedFormats_AreNotNativeLanguages(PrintJobFormat format)
+    {
+        Assert.False(PrintJobFormatParser.IsNativePrinterLanguage(format));
+    }
+
+    [Fact]
+    public void DriverFactory_Pdf_UsesPdfPrintDriver_NotRaw()
+    {
+        var factory = new DriverFactory();
+        var driver = factory.Resolve(PrintJobFormat.Pdf);
+        Assert.IsType<PdfPrintDriver>(driver);
+        Assert.Equal("pdf", driver.DriverId);
+        Assert.False(PrintJobFormatParser.IsNativePrinterLanguage(PrintJobFormat.Pdf));
+    }
+
+    [Fact]
+    public void DriverFactory_ExposesAllFormats()
+    {
+        var factory = new DriverFactory();
+        Assert.Contains("pdf", factory.SupportedFormatTokens);
+        Assert.Contains("zpl", factory.SupportedFormatTokens);
+        Assert.Contains("epl", factory.SupportedFormatTokens);
+        Assert.Contains("escpos", factory.SupportedFormatTokens);
+        Assert.Contains("image", factory.SupportedFormatTokens);
+        Assert.Equal("zpl", factory.Resolve(PrintJobFormat.Zpl).DriverId);
+        Assert.Equal("image", factory.Resolve(PrintJobFormat.Image).DriverId);
+    }
+
+    [Fact]
+    public async Task PdfDriver_RejectsNonPdfPayload()
+    {
+        var driver = new PdfPrintDriver();
+        var result = await driver.PrintAsync(new PrintJobRequest
+        {
+            JobId = 1,
+            PrinterName = "Virtual",
+            Format = PrintJobFormat.Pdf,
+            Payload = Encoding.UTF8.GetBytes("not a pdf"),
+            Copies = 1,
+            CancellationToken = CancellationToken.None,
+        });
+        Assert.Equal(PrintStatus.Failed, result.Status);
+        Assert.Equal("PDF_INVALID", result.ErrorCode);
     }
 
     [Fact]

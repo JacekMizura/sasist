@@ -4,7 +4,11 @@ using System.Runtime.Versioning;
 
 namespace Sasist.Agent.Modules.Printing.Drivers;
 
-/// <summary>Win32 RAW spooler — bytes go to the printer without GDI rendering.</summary>
+/// <summary>
+/// Win32 RAW spooler — bytes go to the printer without GDI rendering.
+/// Use only for native printer languages (ZPL, EPL, ESC/POS, PCL, PostScript, raw).
+/// Never use for PDF or images.
+/// </summary>
 [SupportedOSPlatform("windows")]
 public static class WindowsRawSpooler
 {
@@ -75,9 +79,9 @@ public static class WindowsRawSpooler
     [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
     private struct DocInfo1
     {
-        [MarshalAs(UnmanagedType.LPWStr)] public string pDocName;
-        [MarshalAs(UnmanagedType.LPWStr)] public string? pOutputFile;
-        [MarshalAs(UnmanagedType.LPWStr)] public string pDatatype;
+        public string pDocName;
+        public string? pOutputFile;
+        public string pDatatype;
     }
 
     [DllImport("winspool.drv", SetLastError = true, CharSet = CharSet.Unicode)]

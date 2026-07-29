@@ -1,3 +1,10 @@
+## 2026-07-29 — Agent: PDF przez renderer, nie RAW
+
+- `PdfPrintDriver`: PDFium (`PDFtoImage`) → bitmap → GDI `PrintDocument` (STA); **bez** `WindowsRawSpooler`
+- `WindowsRawSpooler` tylko ZPL/EPL/ESC-POS/PCL/PostScript/raw (`RawPrintDriver`)
+- `DriverFactory` (alias `PrintDriverResolver`): switch format → `IPrintDriver`; dodano Image + native language tokens
+- Lokalny „Druk testowy” tray nadal `PrintDocument` (GDI) — ta sama klasa ścieżki co PDF po renderze
+
 ## 2026-07-29 — Print dialog: szablon + miejsce wydruku
 
 - Nowy `PrintDocumentDialog`: szablon (DTE), stanowisko (drukarka + Online/Offline), alternatywy PDF/przeglądarka

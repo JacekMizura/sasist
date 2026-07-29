@@ -4,8 +4,13 @@ public enum PrintJobFormat
 {
     Pdf,
     Zpl,
+    Epl,
+    EscPos,
+    Pcl,
+    PostScript,
     Raw,
     Html,
+    Image,
 }
 
 public enum PrintStatus
