@@ -210,8 +210,12 @@ def assess_workstation_cloud_print_capability(
             **base,
             "reason": NO_WORKSTATION_CODE,
             "message": (
-                "Brak przypisanego stanowiska WMS. "
-                f"Przypisz stanowisko użytkownikowi lub skonfiguruj je w {STANOWISKA_HINT}."
+                "Rozpocznij pakowanie i wybierz stanowisko."
+                if workstation_id is None
+                else (
+                    "Brak przypisanego stanowiska WMS. "
+                    f"Przypisz stanowisko użytkownikowi lub skonfiguruj je w {STANOWISKA_HINT}."
+                )
             ),
         }
 

@@ -1,7 +1,10 @@
 import { useCallback, useState } from "react";
 import toast from "react-hot-toast";
 
-import { packingSessionWorkstationId } from "../../pages/wms/wmsPackingSession";
+import {
+  packingSessionWorkstationId,
+  PACKING_STATION_REQUIRED_MSG,
+} from "../../pages/wms/wmsPackingSession";
 import {
   cloudPrintUnavailableMessage,
   getCloudPrintCapability,
@@ -12,31 +15,16 @@ import type { PrintMethod, PrintMethodHandlers, PrintMethodKind } from "./printM
 type Options = {
   tenantId: number;
   warehouseId?: number | null;
-  /** Prefer packing-session workstation; do not use profile packing_station_id. */
-  workstationId?: number | null;
   printerKind?: PrintMethodKind;
 };
 
-function resolveWorkstationId(
-  explicit: number | null | undefined,
-  fromPackingSession: number | null,
-): number | null {
-  for (const value of [fromPackingSession, explicit]) {
-    if (value != null && Number.isFinite(Number(value)) && Number(value) >= 1) {
-      return Math.floor(Number(value));
-    }
-  }
-  return null;
-}
-
 /**
- * Shared print entrypoint: skip dialog only when Sasist Agent is ready
- * for packing-session workstation (Agent online + printer mapping).
+ * Shared print entrypoint. Agent readiness uses ONLY packing-session workstationId.
+ * No auth/me, packing_station_id, PrintingDefaults, or prop overrides.
  */
 export function usePrintMethodFlow({
   tenantId,
   warehouseId,
-  workstationId,
   printerKind = "a4",
 }: Options) {
   const [open, setOpen] = useState(false);
@@ -79,15 +67,27 @@ export function usePrintMethodFlow({
       if (pending) return;
       setPending(true);
       try {
-        const resolvedWorkstationId = resolveWorkstationId(
-          workstationId,
-          packingSessionWorkstationId(),
-        );
+        const workstationId = packingSessionWorkstationId();
+        if (workstationId == null) {
+          const capability: CloudPrintCapability = {
+            kind: printerKind,
+            ready: false,
+            reason: "NO_WORKSTATION",
+            printer_id: null,
+            has_online_agent: false,
+            workstation_id: null,
+            message: PACKING_STATION_REQUIRED_MSG,
+          };
+          setCloudCapability(capability);
+          setHandlers(next);
+          setOpen(true);
+          return;
+        }
         const capability = await getCloudPrintCapability(
           tenantId,
           warehouseId,
           printerKind,
-          resolvedWorkstationId,
+          workstationId,
         );
         setCloudCapability(capability);
         if (capability.ready) {
@@ -103,7 +103,7 @@ export function usePrintMethodFlow({
         setPending(false);
       }
     },
-    [pending, printerKind, tenantId, warehouseId, workstationId],
+    [pending, printerKind, tenantId, warehouseId],
   );
 
   const confirmMethod = useCallback(

@@ -86,8 +86,10 @@ export function PrintersTab({ workstationId, detail }: Props) {
     if (!detail.agent?.id) return;
     setTestBusy(true);
     try {
-      await sendAgentTestPage(WMS_WORKSTATIONS_TENANT_ID, detail.agent.id);
-      toast.success("Wysłano wydruk testowy do Agenta.");
+      await sendAgentTestPage(WMS_WORKSTATIONS_TENANT_ID, detail.agent.id, {
+        workstationId,
+      });
+      toast.success("Wysłano wydruk testowy do Agenta. Sprawdź zakładkę Historia.");
     } catch (e) {
       toast.error(extractApiErrorMessage(e, "Nie udało się wysłać wydruku testowego."));
     } finally {

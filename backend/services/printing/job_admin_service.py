@@ -132,6 +132,7 @@ def list_print_jobs(
     *,
     tenant_id: int,
     warehouse_id: int | None = None,
+    workstation_id: int | None = None,
     status: str | None = None,
     search: str | None = None,
     limit: int = 200,
@@ -146,6 +147,8 @@ def list_print_jobs(
     )
     if warehouse_id is not None:
         query = query.filter(PrintJob.warehouse_id == warehouse_id)
+    if workstation_id is not None:
+        query = query.filter(PrintJob.workstation_id == int(workstation_id))
     if status:
         query = query.filter(PrintJob.status == status.strip().lower())
 

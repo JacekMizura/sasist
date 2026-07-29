@@ -1,3 +1,11 @@
+## 2026-07-29 — Print pipeline: packing session SSOT only
+
+- Print FE (`usePrintMethodFlow`, `useQueuePrint`, `resolvePrintRoute`) reads only `packingSessionWorkstationId()` — no auth/me
+- Without session → „Rozpocznij pakowanie i wybierz stanowisko.”
+- Test page → WorkstationPrinterMapping (no PrintingDefaults); PrintJob.workstation_id set
+- HistoryTab → PrintJobs by workstation_id
+- device_count skips EdgeDevice with legacy_printer_id (align with DevicesTab)
+
 ## 2026-07-29 — Stanowisko SSOT + Pakowanie (final architecture)
 
 - Usunięto Settings → Urządzenia/Drukarki (menu + strony); redirect `/settings/printers|devices|/setup/printers` → Stanowiska

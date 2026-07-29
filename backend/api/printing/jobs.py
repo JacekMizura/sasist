@@ -66,6 +66,7 @@ def create_job(
 def list_jobs(
     tenant_id: int = Query(..., ge=1),
     warehouse_id: int | None = Query(default=None, ge=1),
+    workstation_id: int | None = Query(default=None, ge=1),
     status: str | None = Query(default=None),
     q: str | None = Query(default=None, min_length=1),
     limit: int = Query(default=200, ge=1, le=500),
@@ -76,6 +77,7 @@ def list_jobs(
         db,
         tenant_id=tenant_id,
         warehouse_id=warehouse_id,
+        workstation_id=workstation_id,
         status=status,
         search=q,
         limit=limit,

@@ -2,6 +2,10 @@ import type { WmsPackingModeParam } from "../../api/wmsPackingApi";
 import type { OrderUiMainGroup } from "../../types/orderUiStatus";
 
 const STORAGE_KEY = "wms_packing_session_v3";
+export const PENDING_WORKSTATION_KEY = "wms_packing_pending_workstation";
+
+/** Shown when Agent print is requested without an active packing workstation. */
+export const PACKING_STATION_REQUIRED_MSG = "Rozpocznij pakowanie i wybierz stanowisko.";
 
 export type WmsPackingMode = WmsPackingModeParam;
 
@@ -77,18 +81,36 @@ export function clearWmsPackingSession(): void {
   if (typeof sessionStorage === "undefined") return;
   try {
     sessionStorage.removeItem(STORAGE_KEY);
-    sessionStorage.removeItem("wms_packing_pending_workstation");
+    sessionStorage.removeItem(PENDING_WORKSTATION_KEY);
   } catch {
     /* ignore */
   }
 }
 
-/** Active packing workstation — only while packing session exists. */
+function pendingWorkstationId(): number | null {
+  if (typeof sessionStorage === "undefined") return null;
+  try {
+    const raw = sessionStorage.getItem(PENDING_WORKSTATION_KEY);
+    if (!raw) return null;
+    const o = JSON.parse(raw) as { workstationId?: number };
+    const id = o.workstationId;
+    if (id != null && Number.isFinite(Number(id)) && Number(id) >= 1) return Math.floor(Number(id));
+  } catch {
+    /* ignore */
+  }
+  return null;
+}
+
+/**
+ * Active packing workstation — sole SSOT for Agent print routing.
+ * Reads session first, then gate pending (before status creates full session).
+ * Never reads auth/me or profile packing_station_id.
+ */
 export function packingSessionWorkstationId(): number | null {
   const s = loadWmsPackingSession();
   const id = s?.workstationId;
   if (id != null && Number.isFinite(Number(id)) && Number(id) >= 1) return Math.floor(Number(id));
-  return null;
+  return pendingWorkstationId();
 }
 
 /** Czy zeskanowany typ wózka pasuje do wybranego trybu pakowania. */

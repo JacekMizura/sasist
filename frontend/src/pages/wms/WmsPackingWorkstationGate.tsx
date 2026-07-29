@@ -12,6 +12,7 @@ import {
   loadWmsPackingSession,
   packingSessionWorkstationId,
   patchWmsPackingSession,
+  PENDING_WORKSTATION_KEY,
 } from "./wmsPackingSession";
 
 /**
@@ -39,7 +40,7 @@ export default function WmsPackingWorkstationGate() {
         } else {
           // Status not chosen yet — stash station until status page creates session.
           sessionStorage.setItem(
-            "wms_packing_pending_workstation",
+            PENDING_WORKSTATION_KEY,
             JSON.stringify({ workstationId: station.id, workstationName: station.name }),
           );
         }
@@ -65,7 +66,7 @@ export default function WmsPackingWorkstationGate() {
         return;
       }
       try {
-        const pendingRaw = sessionStorage.getItem("wms_packing_pending_workstation");
+        const pendingRaw = sessionStorage.getItem(PENDING_WORKSTATION_KEY);
         if (pendingRaw) {
           const o = JSON.parse(pendingRaw) as { workstationId?: number };
           if (o.workstationId != null && Number(o.workstationId) >= 1) {
@@ -191,9 +192,9 @@ export function consumePendingPackingWorkstation(): {
   workstationName?: string;
 } {
   try {
-    const raw = sessionStorage.getItem("wms_packing_pending_workstation");
+    const raw = sessionStorage.getItem(PENDING_WORKSTATION_KEY);
     if (!raw) return {};
-    sessionStorage.removeItem("wms_packing_pending_workstation");
+    sessionStorage.removeItem(PENDING_WORKSTATION_KEY);
     const o = JSON.parse(raw) as { workstationId?: number; workstationName?: string };
     return {
       workstationId: o.workstationId,

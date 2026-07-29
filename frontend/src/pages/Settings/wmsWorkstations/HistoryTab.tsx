@@ -1,9 +1,14 @@
 import { useCallback, useEffect, useState } from "react";
-import { Cable, Clock, History, Link2Off, Printer, Settings2 } from "lucide-react";
+import { Clock, Printer } from "lucide-react";
 
 import { extractApiErrorMessage } from "../../../api/apiErrorMessage";
-import { fetchWorkstationHistory } from "../../../api/wmsWorkstationsApi";
-import type { HistoryEvent } from "../../../types/wmsWorkstations";
+import { fetchPrintJobs } from "../../../api/printingApi";
+import type { PrintJobRead } from "../../../types/printing";
+import {
+  formatDurationSeconds,
+  printJobStatusClass,
+  printJobStatusLabel,
+} from "../../../printing/presentation/printingQueuePresentation";
 import { wmsSettingsTokens } from "../wmsSettingsTokens";
 import { WmsSettingsSection } from "../WmsSettingsSection";
 import { WMS_WORKSTATIONS_TENANT_ID } from "./tenant";
@@ -14,53 +19,43 @@ import {
   wsTokens,
 } from "./workstationUi";
 
-function historyIcon(eventType: string) {
-  const t = eventType.toLowerCase();
-  if (t.includes("pair") || t.includes("connect")) return Cable;
-  if (t.includes("disconnect") || t.includes("unpair")) return Link2Off;
-  if (t.includes("print")) return Printer;
-  if (t.includes("update") || t.includes("config") || t.includes("map")) return Settings2;
-  return History;
+function formatDate(value: string | null | undefined): string {
+  if (!value) return "—";
+  const d = new Date(value);
+  return Number.isNaN(d.getTime()) ? value : d.toLocaleString("pl-PL");
 }
 
+/** Workstation history = PrintJob rows for this workstation (SSOT queue). */
 export function HistoryTab({ workstationId }: { workstationId: number }) {
-  const [items, setItems] = useState<HistoryEvent[]>([]);
+  const [items, setItems] = useState<PrintJobRead[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [offset, setOffset] = useState(0);
-  const [hasMore, setHasMore] = useState(false);
-  const pageSize = 50;
 
-  const load = useCallback(
-    async (nextOffset: number, append: boolean) => {
-      setLoading(true);
-      setError(null);
-      try {
-        const page = await fetchWorkstationHistory(WMS_WORKSTATIONS_TENANT_ID, workstationId, {
-          limit: pageSize,
-          offset: nextOffset,
-        });
-        setItems((prev) => (append ? [...prev, ...page] : page));
-        setOffset(nextOffset);
-        setHasMore(page.length === pageSize);
-      } catch (e) {
-        setError(extractApiErrorMessage(e));
-        if (!append) setItems([]);
-      } finally {
-        setLoading(false);
-      }
-    },
-    [workstationId],
-  );
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const rows = await fetchPrintJobs(WMS_WORKSTATIONS_TENANT_ID, {
+        workstationId,
+        limit: 100,
+      });
+      setItems(rows);
+    } catch (e) {
+      setError(extractApiErrorMessage(e));
+      setItems([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [workstationId]);
 
   useEffect(() => {
-    void load(0, false);
+    void load();
   }, [load]);
 
   if (error && items.length === 0) {
     return (
       <WorkstationTabShell>
-        <WorkstationErrorState message={error} onRetry={() => void load(0, false)} />
+        <WorkstationErrorState message={error} onRetry={() => void load()} />
       </WorkstationTabShell>
     );
   }
@@ -73,10 +68,16 @@ export function HistoryTab({ workstationId }: { workstationId: number }) {
   }
   if (items.length === 0) {
     return (
-      <WorkstationTabShell>
+      <WorkstationTabShell
+        actions={
+          <button type="button" className={wsTokens.mutedBtn} onClick={() => void load()}>
+            Odśwież
+          </button>
+        }
+      >
         <WorkstationEmptyState
-          title="Brak zdarzeń"
-          description="Historia zmian stanowiska pojawi się po utworzeniu, parowaniu lub zmianie konfiguracji."
+          title="Brak wydruków"
+          description="Zadania kolejki (w tym wydruk testowy) pojawią się tutaj po wysłaniu na Agenta."
         />
       </WorkstationTabShell>
     );
@@ -84,46 +85,50 @@ export function HistoryTab({ workstationId }: { workstationId: number }) {
 
   return (
     <WorkstationTabShell
-      intro="Historia zmian stanowiska."
+      intro="Kolejka wydruków tego stanowiska (PrintJob)."
       actions={
-        hasMore ? (
-          <button
-            type="button"
-            className={wsTokens.mutedBtn}
-            disabled={loading}
-            onClick={() => void load(offset + pageSize, true)}
-          >
-            {loading ? "Ładowanie…" : "Pokaż starsze"}
-          </button>
-        ) : null
+        <button type="button" className={wsTokens.mutedBtn} onClick={() => void load()}>
+          Odśwież
+        </button>
       }
     >
-      <WmsSettingsSection id="ws-history" title="Timeline">
+      <WmsSettingsSection id="ws-print-history" title="Historia wydruków">
         <ol className="relative space-y-4 border-l-2 border-slate-200 pl-6">
-          {items.map((ev) => {
-            const Icon = historyIcon(ev.event_type);
-            return (
-              <li key={ev.id} className="relative">
-                <span className="absolute -left-[1.9rem] top-3 flex h-7 w-7 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 shadow-sm">
-                  <Icon className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />
-                </span>
-                <article className={wmsSettingsTokens.cardInner}>
-                  <div className="flex items-center gap-2 text-xs font-medium text-slate-400">
-                    <Clock className="h-3.5 w-3.5 shrink-0" aria-hidden />
-                    {new Date(ev.created_at).toLocaleString("pl-PL", {
-                      hour: "2-digit",
-                      minute: "2-digit",
-                      day: "2-digit",
-                      month: "2-digit",
-                      year: "numeric",
-                    })}
-                  </div>
-                  <h4 className="mt-2 text-sm font-semibold text-slate-900">{ev.title}</h4>
-                  {ev.detail ? <p className="mt-1 text-sm text-slate-600">{ev.detail}</p> : null}
-                </article>
-              </li>
-            );
-          })}
+          {items.map((job) => (
+            <li key={job.id} className="relative">
+              <span className="absolute -left-[1.9rem] top-3 flex h-7 w-7 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 shadow-sm">
+                <Printer className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />
+              </span>
+              <article className={wmsSettingsTokens.cardInner}>
+                <div className="flex flex-wrap items-center gap-2 text-xs font-medium text-slate-400">
+                  <Clock className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                  {formatDate(job.finished_at ?? job.created_at)}
+                  <span
+                    className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${printJobStatusClass(job.status)}`}
+                  >
+                    {printJobStatusLabel(job.status)}
+                  </span>
+                </div>
+                <h4 className="mt-2 text-sm font-semibold text-slate-900">
+                  {job.document_type === "test_page"
+                    ? "Wydruk testowy"
+                    : job.document_type.replace(/_/g, " ")}{" "}
+                  <span className="font-normal text-slate-500">#{job.id}</span>
+                </h4>
+                <p className="mt-1 text-sm text-slate-600">
+                  {job.printer_name ?? `Drukarka #${job.printer_id}`}
+                  {job.agent_name || job.machine_id
+                    ? ` · ${job.agent_name ?? job.machine_id}`
+                    : ""}
+                  {" · "}
+                  {formatDurationSeconds(job.duration_seconds)}
+                </p>
+                {job.error_message ? (
+                  <p className="mt-1 text-sm text-red-600">{job.error_message}</p>
+                ) : null}
+              </article>
+            </li>
+          ))}
         </ol>
       </WmsSettingsSection>
     </WorkstationTabShell>

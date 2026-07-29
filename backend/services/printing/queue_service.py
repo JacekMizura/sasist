@@ -116,8 +116,7 @@ def resolve_queue_printer_id(
 
     if workstation_id is None:
         raise PrintingError(
-            "Brak stanowiska dla wydruku. Wybierz stanowisko w Pakowaniu "
-            "lub skonfiguruj mapowanie w Ustawienia WMS → Stanowiska.",
+            "Brak stanowiska dla wydruku. Rozpocznij pakowanie i wybierz stanowisko.",
             status_code=400,
             code="NO_WORKSTATION",
         )

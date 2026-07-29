@@ -52,7 +52,10 @@ export function cloudPrintUnavailableMessage(cap: CloudPrintCapability): string 
     return "Sasist Agent przypisany do stanowiska jest offline. Uruchom Agenta na komputerze stanowiska.";
   }
   if (cap.reason === "NO_WORKSTATION") {
-    return "Brak przypisanego stanowiska WMS. Przypisz stanowisko lub skonfiguruj je w Ustawienia WMS → Stanowiska.";
+    return (
+      cap.message?.trim() ||
+      "Rozpocznij pakowanie i wybierz stanowisko."
+    );
   }
   if (cap.reason === "NO_WORKSTATION_AGENT") {
     return "Stanowisko nie ma przypisanego Sasist Agent. Połącz komputer w Ustawienia WMS → Stanowiska.";

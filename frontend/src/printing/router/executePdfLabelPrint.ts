@@ -48,6 +48,10 @@ export async function executePdfLabelPrint(input: ExecutePdfLabelPrintInput): Pr
   }
 
   if (decision.transport === "browser") {
+    if (decision.fallbackReason === "no_workstation" && !input.forceTransport) {
+      trackFallbackReason("no_workstation");
+      throw new Error("Rozpocznij pakowanie i wybierz stanowisko.");
+    }
     openPdfBlobInPrintViewer(blob, { revokeBlobUrlsAfterMs: 120_000 });
     trackPrintedVia("browser");
     if (decision.fallbackReason) trackFallbackReason(decision.fallbackReason);
@@ -58,7 +62,9 @@ export async function executePdfLabelPrint(input: ExecutePdfLabelPrintInput): Pr
     if (decision.printerId == null) {
       trackFallbackReason("no_workstation_mapping");
       throw new Error(
-        "Brak mapowania drukarki na stanowisku. Skonfiguruj mapowanie w Ustawienia WMS → Stanowiska.",
+        decision.fallbackReason === "no_workstation"
+          ? "Rozpocznij pakowanie i wybierz stanowisko."
+          : "Brak mapowania drukarki na stanowisku. Skonfiguruj mapowanie w Ustawienia WMS → Stanowiska.",
       );
     }
     try {

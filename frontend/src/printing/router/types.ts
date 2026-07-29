@@ -10,6 +10,8 @@ export type PrintFormat = "pdf" | "zpl" | "raw" | "html";
 export type FallbackReason =
   | "flag_off"
   | "no_warehouse"
+  | "no_workstation"
+  | "no_workstation_mapping"
   | "no_online_agent"
   | "unsupported_capability"
   | "no_default_printer"
@@ -33,7 +35,7 @@ export type PrintRouteDecision = {
 export type ResolvePrintRouteInput = {
   tenantId: number;
   warehouseId?: number | null;
-  /** WMS Stanowisko — when set, prefer WorkstationPrinterMapping over warehouse defaults. */
+  /** Ignored if set — resolvePrintRoute uses packing session only. */
   workstationId?: number | null;
   /** Capability that must be present on agent for Agent path (default zpl). */
   gateFormat?: PrintFormat;

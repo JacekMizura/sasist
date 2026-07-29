@@ -115,6 +115,10 @@ def device_count_for_agent(db: Session, agent_id: int | None) -> int:
 
 
 def _device_counts_batch(db: Session, agent_ids: set[int]) -> dict[int, int]:
+    """
+    Count devices the same way DevicesTab shows them:
+    active AgentPrinters + active EdgeDevices that are NOT already linked via legacy_printer_id.
+    """
     if not agent_ids:
         return {}
     counts: dict[int, int] = defaultdict(int)
@@ -129,11 +133,13 @@ def _device_counts_batch(db: Session, agent_ids: set[int]) -> dict[int, int]:
         from ...models.agent.edge_device import EdgeDevice
 
         edge_rows = (
-            db.query(EdgeDevice.agent_id, EdgeDevice.id)
+            db.query(EdgeDevice.agent_id, EdgeDevice.id, EdgeDevice.legacy_printer_id)
             .filter(EdgeDevice.agent_id.in_(agent_ids), EdgeDevice.is_active.is_(True))
             .all()
         )
-        for agent_id, _eid in edge_rows:
+        for agent_id, _eid, legacy_printer_id in edge_rows:
+            if legacy_printer_id:
+                continue  # already counted as AgentPrinter
             counts[int(agent_id)] += 1
     except Exception:
         pass

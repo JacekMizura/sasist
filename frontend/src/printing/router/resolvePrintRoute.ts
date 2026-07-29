@@ -1,3 +1,4 @@
+import { packingSessionWorkstationId } from "../../pages/wms/wmsPackingSession";
 import { fetchPrintingAgents, fetchPrintingWarehouseSettings } from "../../api/printingApi";
 import { fetchWorkstationPrinters } from "../../api/wmsWorkstationsApi";
 import { trackFallbackReason } from "./telemetry";
@@ -31,19 +32,16 @@ async function resolveWorkstationMappedPrinterId(
 }
 
 /**
- * Resolve Agent print route from workstation mapping only.
- * No PrintingDefaults / QZ / silent browser auto-print as repair.
- * When Agent is not ready, transport is "browser" so the UI can open a conscious method dialog.
+ * Resolve Agent print route from packing-session workstation mapping only.
+ * No auth/me, PrintingDefaults, QZ, or silent browser repair.
  */
 export async function resolvePrintRoute(input: ResolvePrintRouteInput): Promise<PrintRouteDecision> {
   const gateFormat: PrintFormat = input.gateFormat ?? "zpl";
   const jobFormat: PrintFormat = input.jobFormat ?? "pdf";
   const printerKind = input.printerKind ?? "label";
   const warehouseId = input.warehouseId ?? null;
-  const workstationId =
-    input.workstationId != null && Number(input.workstationId) >= 1
-      ? Math.floor(Number(input.workstationId))
-      : null;
+  // Sole SSOT — ignore input.workstationId overrides.
+  const workstationId = packingSessionWorkstationId();
 
   const base = (partial: Partial<PrintRouteDecision>): PrintRouteDecision => ({
     transport: "browser",

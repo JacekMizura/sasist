@@ -172,6 +172,7 @@ export async function fetchPrintJobs(
   tenantId: number,
   opts?: {
     warehouseId?: number | null;
+    workstationId?: number | null;
     status?: PrintJobStatusFilter;
     q?: string;
     limit?: number;
@@ -181,6 +182,7 @@ export async function fetchPrintJobs(
     params: {
       tenant_id: tenantId,
       warehouse_id: opts?.warehouseId ?? undefined,
+      workstation_id: opts?.workstationId ?? undefined,
       status: opts?.status && opts.status !== "all" ? opts.status : undefined,
       q: opts?.q?.trim() || undefined,
       limit: opts?.limit,
@@ -220,9 +222,16 @@ export async function deletePrintJob(tenantId: number, jobId: number): Promise<P
   return data;
 }
 
-export async function sendAgentTestPage(tenantId: number, agentId: number): Promise<PrintJobRead> {
+export async function sendAgentTestPage(
+  tenantId: number,
+  agentId: number,
+  opts?: { workstationId?: number | null },
+): Promise<PrintJobRead> {
   const { data } = await api.post<PrintJobRead>(`/printing/agents/${agentId}/test-page`, null, {
-    params: { tenant_id: tenantId },
+    params: {
+      tenant_id: tenantId,
+      workstation_id: opts?.workstationId ?? undefined,
+    },
   });
   return data;
 }

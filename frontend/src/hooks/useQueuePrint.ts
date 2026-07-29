@@ -5,18 +5,16 @@ import { queuePrintJob } from "../api/printingApi";
 import { extractApiErrorMessage, extractApiOperationalErrorDetail } from "../api/apiErrorMessage";
 import type { QueuePrintRequest } from "../types/printing";
 import { NO_ACTIVE_AGENT_USER_MESSAGE } from "../components/printing/hasDefaultCloudPrinter";
-import { packingSessionWorkstationId } from "../pages/wms/wmsPackingSession";
+import {
+  packingSessionWorkstationId,
+  PACKING_STATION_REQUIRED_MSG,
+} from "../pages/wms/wmsPackingSession";
 
 const QUEUE_SUCCESS_MSG = "Dokument został wysłany do kolejki drukowania";
 
 type Options = {
   tenantId: number;
   warehouseId?: number | null;
-  /**
-   * Prefer packing-session workstation (SSOT during packing).
-   * Explicit override only for rare tooling; do not pass profile packing_station_id.
-   */
-  workstationId?: number | null;
 };
 
 function queueFailureMessage(err: unknown): string {
@@ -25,38 +23,29 @@ function queueFailureMessage(err: unknown): string {
     return op.code === "NO_ACTIVE_AGENT" ? NO_ACTIVE_AGENT_USER_MESSAGE : op.message;
   }
   if (op?.code === "NO_WORKSTATION" || op?.code === "NO_WORKSTATION_MAPPING") {
-    return op.message || "Brak mapowania drukarki na stanowisku pakowania.";
+    return op.message || PACKING_STATION_REQUIRED_MSG;
   }
   if (op?.message) return op.message;
   return extractApiErrorMessage(err, "Nie udało się wysłać do drukowania.");
 }
 
-function resolveWorkstationId(
-  explicit: number | null | undefined,
-  fromPackingSession: number | null,
-  fromBody: number | null | undefined,
-): number | null {
-  for (const value of [fromPackingSession, fromBody, explicit]) {
-    if (value != null && Number.isFinite(Number(value)) && Number(value) >= 1) {
-      return Math.floor(Number(value));
-    }
-  }
-  return null;
-}
-
-export function useQueuePrint({ tenantId, warehouseId, workstationId }: Options) {
+/**
+ * Queue prints using ONLY packing-session workstationId (SSOT).
+ * No prop/body/auth overrides.
+ */
+export function useQueuePrint({ tenantId, warehouseId }: Options) {
   const [busy, setBusy] = useState(false);
 
   const queuePrint = useCallback(
     async (body: QueuePrintRequest) => {
       if (busy) return false;
+      const workstation_id = packingSessionWorkstationId();
+      if (workstation_id == null) {
+        toast.error(PACKING_STATION_REQUIRED_MSG);
+        return false;
+      }
       setBusy(true);
       try {
-        const workstation_id = resolveWorkstationId(
-          workstationId,
-          packingSessionWorkstationId(),
-          body.workstation_id,
-        );
         await queuePrintJob(tenantId, {
           ...body,
           warehouse_id: body.warehouse_id ?? warehouseId ?? null,
@@ -71,7 +60,7 @@ export function useQueuePrint({ tenantId, warehouseId, workstationId }: Options)
         setBusy(false);
       }
     },
-    [busy, tenantId, warehouseId, workstationId],
+    [busy, tenantId, warehouseId],
   );
 
   const queueStockDocument = useCallback(
