@@ -4,14 +4,14 @@ import type { AutomationCondition, AutomationConditionJoin, AutomationEffect } f
 import { AutomationConditionDisplay, AutomationEffectDisplay } from "./AutomationRuleDisplay";
 import type { ConditionOption } from "../../../utils/orderAutomationConditionOptions";
 import { conditionErrorTitle, effectErrorTitle } from "../../../utils/orderAutomationValidation";
-import { flatSectionDividerClass } from "../../layout/flatSectionTokens";
 import {
   oaIconGhost,
   oaWorkflowAddCtaCondition,
   oaWorkflowAddCtaEffect,
   oaWorkflowCardActionsClass,
   oaWorkflowFlowArrowClass,
-  oaWorkflowLaneBadgeClass,
+  oaWorkflowLaneBadgeIfClass,
+  oaWorkflowLaneBadgeThenClass,
   oaWorkflowLaneClass,
 } from "./orderAutomationUiTokens";
 
@@ -43,8 +43,8 @@ function WorkflowCard({ title, summary, errorMessage, onEdit, onDuplicate, onRem
 
   return (
     <div
-      className={`group/card relative flex w-full min-h-14 cursor-pointer flex-col rounded-lg border-2 bg-white px-4 py-3 text-left transition ${
-        hasError ? "border-red-300 hover:border-red-400" : "border-slate-200 hover:border-slate-400"
+      className={`group/card relative flex w-full min-h-14 cursor-pointer flex-col rounded-lg border bg-white px-4 py-3 text-left transition ${
+        hasError ? "border-red-300 hover:border-red-400" : "border-slate-200 hover:border-slate-300"
       }`}
       onClick={onEdit}
       onKeyDown={(e) => e.key === "Enter" && onEdit()}
@@ -84,7 +84,7 @@ function WorkflowAddCta({ variant, label, onClick }: WorkflowAddCtaProps) {
   const cls = variant === "condition" ? oaWorkflowAddCtaCondition : oaWorkflowAddCtaEffect;
   return (
     <button type="button" className={cls} onClick={onClick}>
-      <Plus className="h-5 w-5 shrink-0" strokeWidth={2} />
+      <Plus className="h-4 w-4 shrink-0" strokeWidth={2} />
       {label}
     </button>
   );
@@ -127,16 +127,16 @@ export function AutomationIfThenSection({
     <section className="w-full min-w-0 max-w-none space-y-4">
       <div>
         <h2 className="text-lg font-semibold text-slate-900">Reguły automatyzacji</h2>
-        <p className="mt-0.5 text-sm text-slate-600">Kliknij kartę, aby edytować warunek lub akcję.</p>
+        <p className="mt-1 text-sm text-slate-500">
+          Skonfiguruj warunki brzegowe oraz akcje, które mają zostać wykonane.
+        </p>
       </div>
-      <div className={flatSectionDividerClass} aria-hidden />
 
-      <div className="grid w-full min-w-0 max-w-none items-stretch gap-y-6 lg:grid-cols-[minmax(0,1fr)_5.5rem_minmax(0,1fr)] lg:gap-x-6 lg:gap-y-0">
-        {/* JEŚLI — lewa kolumna */}
+      <div className="grid w-full min-w-0 max-w-none items-stretch gap-y-6 lg:grid-cols-[minmax(0,1fr)_4.5rem_minmax(0,1fr)] lg:gap-x-4 lg:gap-y-0">
         <div className={`${oaWorkflowLaneClass} min-w-0`}>
-          <div className="mb-4 flex items-center text-sm font-bold text-slate-700">
-            <span className={oaWorkflowLaneBadgeClass}>Jeśli</span>
-            Spełnione są warunki:
+          <div className="mb-4 flex flex-wrap items-center gap-y-1 text-sm font-medium text-slate-700">
+            <span className={oaWorkflowLaneBadgeIfClass}>JEŚLI</span>
+            Spełnione są wszystkie warunki:
           </div>
 
           <div className="flex flex-1 flex-col gap-3">
@@ -171,26 +171,24 @@ export function AutomationIfThenSection({
               </ul>
             ) : null}
 
-            <div className={conditions.length > 0 ? "mt-auto" : "flex-1"}>
+            <div className={conditions.length > 0 ? "mt-auto pt-1" : "flex-1"}>
               <WorkflowAddCta variant="condition" label="Dodaj warunek" onClick={onAddCondition} />
             </div>
           </div>
         </div>
 
-        {/* Strzałka — wyśrodkowana pionowo; pozioma na desktopie, pionowa na mobile */}
         <div className="flex items-center justify-center self-stretch px-1" aria-hidden>
           <div className={oaWorkflowFlowArrowClass}>
             <ArrowRight
-              className="h-8 w-8 rotate-90 text-slate-500 lg:h-10 lg:w-10 lg:rotate-0"
+              className="h-6 w-6 rotate-90 text-slate-400 lg:h-7 lg:w-7 lg:rotate-0"
               strokeWidth={2}
             />
           </div>
         </div>
 
-        {/* TO — prawa kolumna */}
         <div className={`${oaWorkflowLaneClass} min-w-0`}>
-          <div className="mb-4 flex items-center text-sm font-bold text-slate-700">
-            <span className={oaWorkflowLaneBadgeClass}>To</span>
+          <div className="mb-4 flex flex-wrap items-center gap-y-1 text-sm font-medium text-slate-700">
+            <span className={oaWorkflowLaneBadgeThenClass}>TO</span>
             Wykonaj akcje:
           </div>
 
@@ -222,7 +220,7 @@ export function AutomationIfThenSection({
               </ul>
             ) : null}
 
-            <div className={effects.length > 0 ? "mt-auto" : "flex-1"}>
+            <div className={effects.length > 0 ? "mt-auto pt-1" : "flex-1"}>
               <WorkflowAddCta variant="effect" label="Dodaj akcję" onClick={onAddEffect} />
             </div>
           </div>

@@ -53,10 +53,10 @@ export function AutomationManualTriggerSection({ manualTrigger, onChange }: Prop
   };
 
   return (
-    <div className="space-y-6 rounded-lg border border-slate-200 bg-white p-4">
+    <div className="space-y-6 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
       <div>
         <p className="text-sm font-semibold text-slate-900">Uruchamianie ręczne</p>
-        <p className="mt-0.5 text-sm text-slate-600">
+        <p className="mt-0.5 text-sm text-slate-500">
           Operator uruchamia regułę przyciskiem w wybranych miejscach systemu.
         </p>
       </div>

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
-import { ChevronDown, FlaskConical, Save, Trash2 } from "lucide-react";
+import { ChevronDown, FlaskConical, Trash2 } from "lucide-react";
 import toast from "react-hot-toast";
 
 import { useWarehouse } from "../../context/WarehouseContext";
@@ -42,8 +42,9 @@ import {
   oaBtn,
   oaBtnPri,
   oaBtnDanger,
+  oaEditorHeaderCardClass,
   oaInp,
-  oaLbl,
+  oaLblCaps,
 } from "../../components/orders/automation/orderAutomationUiTokens";
 import { AppOverlayPortal } from "../../components/overlay";
 
@@ -389,24 +390,24 @@ export default function OrderAutomationEditorPage() {
     <div className={`${moduleAutomationShellClass} min-w-0 pb-8 text-[13px] text-slate-900`}>
       <ModuleListBreadcrumb items={breadcrumbItems} />
 
-      <div className="mb-4 mt-4 flex flex-wrap items-end justify-between gap-3">
-        <div className="grid min-w-0 flex-1 gap-3 sm:grid-cols-[minmax(0,1fr)_10rem_auto] sm:items-end">
-          <label className={oaLbl}>
-            Nazwa
+      <div className={`${oaEditorHeaderCardClass} mb-6 mt-4`}>
+        <div className="flex flex-wrap items-end gap-4">
+          <label className="min-w-[14rem] flex-1">
+            <span className={oaLblCaps}>Nazwa automatyzacji</span>
             <input
               type="text"
-              className={`${oaInp} mt-1 ${nameInvalid ? "border-red-400 ring-2 ring-red-200" : ""}`}
+              className={`${oaInp} ${nameInvalid ? "border-red-400 ring-2 ring-red-200" : ""}`}
               value={draft.name}
               placeholder="np. Zmiana statusu po opłaceniu"
               onBlur={() => setNameTouched(true)}
               onChange={(e) => setDraft((d) => ({ ...d, name: e.target.value }))}
             />
           </label>
-          <div>
-            <span className={oaLbl}>Grupa</span>
+          <div className="w-full sm:w-44">
+            <span className={oaLblCaps}>Grupa</span>
             <button
               type="button"
-              className={`${oaInp} mt-1 flex items-center justify-between text-left`}
+              className={`${oaInp} flex items-center justify-between text-left`}
               onClick={(e) => {
                 groupMenuAnchorRef.current = e.currentTarget;
                 setGroupMenuOpen(true);
@@ -416,29 +417,34 @@ export default function OrderAutomationEditorPage() {
               <ChevronDown className="h-4 w-4 shrink-0 text-slate-400" />
             </button>
           </div>
-          <label className={`${oaLbl} flex h-9 items-center gap-2 pb-0.5`}>
+          <label className="mb-1.5 inline-flex cursor-pointer items-center gap-2.5 pb-1">
             <input
               type="checkbox"
-              className="h-4 w-4 rounded border-slate-300 accent-emerald-600"
+              role="switch"
+              className="peer sr-only"
               checked={draft.enabled}
               onChange={() => setDraft((d) => ({ ...d, enabled: !d.enabled }))}
             />
-            Aktywna
+            <span
+              className="relative h-6 w-11 rounded-full bg-slate-200 transition peer-checked:bg-emerald-500 peer-focus-visible:ring-2 peer-focus-visible:ring-emerald-400/50 after:absolute after:left-0.5 after:top-0.5 after:h-5 after:w-5 after:rounded-full after:bg-white after:shadow after:transition peer-checked:after:translate-x-5"
+              aria-hidden
+            />
+            <span className="text-sm font-medium text-slate-800">Aktywna</span>
           </label>
+          <div className="ml-auto flex shrink-0 flex-wrap gap-2 pb-0.5">
+            <button type="button" className={`${oaBtn} gap-2`} onClick={() => setTestOpen(true)}>
+              <FlaskConical className="h-4 w-4" /> Test
+            </button>
+            <button type="button" className={`${oaBtnPri} min-h-10 px-5`} onClick={save} disabled={!canSave}>
+              Zapisz
+            </button>
+          </div>
         </div>
-        <div className="flex shrink-0 flex-wrap gap-2">
-          <button type="button" className={`${oaBtn} gap-2`} onClick={() => setTestOpen(true)}>
-            <FlaskConical className="h-4 w-4" /> Test
-          </button>
-          <button type="button" className={`${oaBtnPri} gap-2`} onClick={save} disabled={!canSave}>
-            <Save className="h-4 w-4" /> Zapisz
-          </button>
-        </div>
+        {nameInvalid ? <p className="mt-2 text-xs text-red-600">Nazwa jest wymagana</p> : null}
       </div>
-      {nameInvalid ? <span className="-mt-2 mb-3 block text-xs text-red-600">Nazwa jest wymagana</span> : null}
 
       {saveAttempted && !validation.valid ? (
-        <div className="mb-4 rounded-lg border border-red-200 bg-white px-4 py-3">
+        <div className="mb-6 rounded-xl border border-red-200 bg-white px-4 py-3 shadow-sm">
           <p className="text-sm font-semibold text-red-800">Nie można zapisać automatyzacji.</p>
           <p className="mt-1 text-sm text-red-700">Popraw:</p>
           <ul className="mt-2 list-inside list-disc space-y-0.5 text-sm text-red-700">
@@ -449,7 +455,7 @@ export default function OrderAutomationEditorPage() {
         </div>
       ) : null}
 
-      <div className="w-full max-w-none space-y-8">
+      <div className="w-full max-w-none space-y-10">
         <AutomationExecutionSettingsSection
           automatic={draft.execution.automatic}
           manualEnabled={draft.manualTrigger.enabled}
