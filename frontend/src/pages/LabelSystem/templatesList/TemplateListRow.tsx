@@ -15,11 +15,15 @@ type Props = {
   /** Optional slot under meta (e.g. group select for labels). */
   belowMeta?: ReactNode;
   onPreview?: () => void;
+  /** Separate from Podgląd — e.g. document template assignments. */
+  onUsages?: () => void;
   onEdit: () => void;
   onDuplicate?: () => void;
   onDelete?: () => void;
   deleting?: boolean;
   showPreview?: boolean;
+  showUsages?: boolean;
+  usagesLabel?: string;
   showDuplicate?: boolean;
   showDelete?: boolean;
 };
@@ -40,11 +44,14 @@ export default function TemplateListRow({
   isDefault = false,
   belowMeta,
   onPreview,
+  onUsages,
   onEdit,
   onDuplicate,
   onDelete,
   deleting = false,
   showPreview = true,
+  showUsages = false,
+  usagesLabel = "Użycia",
   showDuplicate = true,
   showDelete = true,
 }: Props) {
@@ -127,6 +134,15 @@ export default function TemplateListRow({
           >
             <Eye className="h-3.5 w-3.5 text-slate-500" strokeWidth={2} aria-hidden />
             Podgląd
+          </button>
+        ) : null}
+        {showUsages && onUsages ? (
+          <button
+            type="button"
+            onClick={onUsages}
+            className="rounded-xl border border-[#E5E7EB] bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700 shadow-sm hover:shadow-md"
+          >
+            {usagesLabel}
           </button>
         ) : null}
         <button

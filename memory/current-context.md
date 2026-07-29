@@ -2,6 +2,6 @@
 
 ## Active
 
-**PDF print architecture (Agent):** PDF → PDFium render → GDI `PrintDocument`. `WindowsRawSpooler` only for native languages (ZPL/EPL/ESC-POS/PCL/PostScript/raw). `DriverFactory` resolves format → `IPrintDriver`.
+**Template preview UX:** „Podgląd” always = visual render. Labels → SVG; print templates → engine PDF via `DocumentTemplatePreviewModal` + shared `TemplatePreviewShellModal`. Usages = separate „Użycia” action.
 
-**Print dialog UX:** template + place (workstation) + PDF/browser alternatives; prefs per document type.
+**PDF print architecture (Agent):** PDF → PDFium → GDI. RAW only for native languages.

@@ -1,3 +1,9 @@
+## 2026-07-29 — Podgląd szablonów wydruków = render (jak etykiety)
+
+- Wspólny `TemplatePreviewShellModal`; etykiety i dokumenty używają tego samego chrome
+- Lista wydruków: „Podgląd” → PDF z silnika (`preview/pdf`), „Użycia” osobno; usunięto Otwórz→Firma z usage modal
+- Karty: klik miniatury = podgląd, body = edytor
+
 ## 2026-07-29 — Agent: PDF przez renderer, nie RAW
 
 - `PdfPrintDriver`: PDFium (`PDFtoImage`) → bitmap → GDI `PrintDocument` (STA); **bez** `WindowsRawSpooler`

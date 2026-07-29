@@ -42,6 +42,7 @@ import {
   documentTemplateUsedAsLabels,
   fmtDocumentTemplateLastEdited,
 } from "./documentTemplatesListPresentation";
+import { DocumentTemplatePreviewModal } from "./components/DocumentTemplatePreviewModal";
 import { TemplateUsageModal } from "./components/TemplateUsageModal";
 
 type SortValue = "updated_at_desc" | "updated_at_asc" | "name_asc" | "name_desc";
@@ -79,6 +80,11 @@ export function DocumentTemplatesListPage() {
     name: string;
     badges: DocumentTemplateListItemDto["usage_summary"];
     items: Awaited<ReturnType<typeof fetchTemplateUsage>>["items"];
+  } | null>(null);
+  const [previewModal, setPreviewModal] = useState<{
+    id: number;
+    name: string;
+    formatLabel: string;
   } | null>(null);
 
   const kinds = useMemo(() => {
@@ -200,9 +206,19 @@ export function DocumentTemplatesListPage() {
   };
 
   const openUsage = (row: DocumentTemplateListItemDto) => {
-    void fetchTemplateUsage(DEFAULT_TENANT_ID, row.id).then((data) =>
-      setUsageModal({ name: row.name, badges: data.badges, items: data.items }),
-    );
+    void fetchTemplateUsage(DEFAULT_TENANT_ID, row.id)
+      .then((data) => setUsageModal({ name: row.name, badges: data.badges, items: data.items }))
+      .catch((err) => toast.error(extractApiErrorMessage(err, "Nie udało się wczytać użyć szablonu.")));
+  };
+
+  const openPreview = (row: DocumentTemplateListItemDto) => {
+    const kind = row.kind?.name_pl ?? row.kind?.code ?? "Dokument";
+    const family = row.family?.name_pl;
+    setPreviewModal({
+      id: row.id,
+      name: row.name,
+      formatLabel: family ? `${family} · ${kind}` : kind,
+    });
   };
 
   return (
@@ -332,7 +348,9 @@ export function DocumentTemplatesListPage() {
                       }
                       showDelete={Boolean(row.can_delete)}
                       showPreview
-                      onPreview={() => openUsage(row)}
+                      onPreview={() => openPreview(row)}
+                      showUsages
+                      onUsages={() => openUsage(row)}
                     />
                   ))}
                 </div>
@@ -341,27 +359,27 @@ export function DocumentTemplatesListPage() {
                   {filtered.map((row) => (
                     <div
                       key={row.id}
-                      role="button"
-                      tabIndex={0}
-                      onClick={() => navigate(`${LIST_BASE}/${row.id}`)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter" || e.key === " ") {
-                          e.preventDefault();
-                          navigate(`${LIST_BASE}/${row.id}`);
-                        }
-                      }}
                       className={[TEMPLATES_LIST_GRID_CARD_BASE_CLASS, TEMPLATES_LIST_GRID_CARD_IDLE_CLASS].join(
                         " ",
                       )}
                       style={{ borderRadius: TEMPLATES_LIST_GRID_CARD_RADIUS }}
                     >
-                      <div className={TEMPLATES_LIST_GRID_CARD_PREVIEW_WRAP_CLASS}>
+                      <button
+                        type="button"
+                        onClick={() => openPreview(row)}
+                        className={TEMPLATES_LIST_GRID_CARD_PREVIEW_WRAP_CLASS}
+                        aria-label={`Podgląd szablonu ${row.name}`}
+                      >
                         <div className={TEMPLATES_LIST_GRID_CARD_PREVIEW_BAND_CLASS}>{rowThumbnail(row)}</div>
-                      </div>
-                      <div className={TEMPLATES_LIST_GRID_CARD_BODY_CLASS}>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => navigate(`${LIST_BASE}/${row.id}`)}
+                        className={`${TEMPLATES_LIST_GRID_CARD_BODY_CLASS} w-full text-left`}
+                      >
                         <p className="truncate text-sm font-semibold text-slate-900">{row.name}</p>
                         <p className="line-clamp-2 text-xs text-slate-500">{rowMeta(row)}</p>
-                      </div>
+                      </button>
                     </div>
                   ))}
                 </div>
@@ -370,6 +388,15 @@ export function DocumentTemplatesListPage() {
           )}
         </div>
       </div>
+
+      {previewModal ? (
+        <DocumentTemplatePreviewModal
+          templateId={previewModal.id}
+          templateName={previewModal.name}
+          formatLabel={previewModal.formatLabel}
+          onClose={() => setPreviewModal(null)}
+        />
+      ) : null}
 
       {usageModal ? (
         <TemplateUsageModal
