@@ -8,9 +8,9 @@ import {
   putWorkstationPrinterMapping,
 } from "../../../api/wmsWorkstationsApi";
 import type { PrintersConfig, WorkstationDetail } from "../../../types/wmsWorkstations";
+import { WmsSettingsSection } from "../WmsSettingsSection";
 import { WMS_WORKSTATIONS_TENANT_ID } from "./tenant";
 import {
-  WorkstationCard,
   WorkstationEmptyState,
   WorkstationErrorState,
   WorkstationTabShell,
@@ -142,7 +142,7 @@ export function PrintersTab({ workstationId, detail }: Props) {
 
   return (
     <WorkstationTabShell
-      intro="Przypisz drukarkę wykrytą przez Agenta do każdego typu wydruku. Lista sprzętu jest w zakładce Urządzenia."
+      intro="Przypisz drukarkę wykrytą przez Agenta do każdego typu wydruku."
       actions={
         <>
           <button type="button" className={wsTokens.primaryBtn} disabled={busy} onClick={() => void save()}>
@@ -160,20 +160,39 @@ export function PrintersTab({ workstationId, detail }: Props) {
       }
     >
       {detail.connection_status === "offline" ? (
-        <WorkstationCard>
-          <p className="text-sm text-amber-900">Agent jest offline — status drukarek może być nieaktualny.</p>
-        </WorkstationCard>
+        <div className="rounded-xl border border-amber-200 bg-amber-50/70 px-4 py-3 text-sm text-amber-900">
+          Agent jest offline — status drukarek może być nieaktualny.
+        </div>
       ) : null}
 
-      <div className="space-y-3">
+      <WmsSettingsSection id="ws-printer-mapping" title="Mapowanie drukarek">
         {config.mappings.map((m) => {
           const selected = draft[m.print_type];
           const configured = selected !== "" && selected != null;
           return (
-            <WorkstationCard key={m.print_type} title={m.print_type_label}>
-              <label className={wsTokens.fieldLabel}>
-                Drukarka
+            <div key={m.print_type} className={wsTokens.settingsRow}>
+              <div className="min-w-0">
+                <div className="text-sm font-medium text-slate-900">{m.print_type_label}</div>
+                <div className="mt-1">
+                  {configured ? (
+                    <WsStatusBadge tone="success">
+                      <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                      Skonfigurowano
+                    </WsStatusBadge>
+                  ) : (
+                    <WsStatusBadge tone="neutral">
+                      <span className="h-1.5 w-1.5 rounded-full bg-slate-400" />
+                      Nie skonfigurowano
+                    </WsStatusBadge>
+                  )}
+                </div>
+              </div>
+              <div className="w-full sm:max-w-sm">
+                <label className="sr-only" htmlFor={`printer-${m.print_type}`}>
+                  Drukarka dla {m.print_type_label}
+                </label>
                 <select
+                  id={`printer-${m.print_type}`}
                   className={wsTokens.select}
                   value={selected}
                   onChange={(e) =>
@@ -190,24 +209,11 @@ export function PrintersTab({ workstationId, detail }: Props) {
                     </option>
                   ))}
                 </select>
-              </label>
-              <div className="mt-3">
-                {configured ? (
-                  <WsStatusBadge tone="success">
-                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-                    Skonfigurowano
-                  </WsStatusBadge>
-                ) : (
-                  <WsStatusBadge tone="neutral">
-                    <span className="h-1.5 w-1.5 rounded-full bg-slate-400" />
-                    Nie skonfigurowano
-                  </WsStatusBadge>
-                )}
               </div>
-            </WorkstationCard>
+            </div>
           );
         })}
-      </div>
+      </WmsSettingsSection>
     </WorkstationTabShell>
   );
 }

@@ -1,24 +1,22 @@
 import { Link } from "react-router-dom";
 import type { ReactNode } from "react";
 
-import { brandOutlineButtonClass, brandPrimaryButtonClass } from "../../../design-system/brandUi";
 import { STATION_TYPE_STYLE } from "../../../types/wmsWorkstations";
 import { cnParts, wmsSettingsTokens } from "../wmsSettingsTokens";
+import { brandOutlineButtonClass, brandPrimaryButtonClass } from "../../../design-system/brandUi";
+import { pageShellEmptyStateClass } from "../../../design-system";
 
-/** Shared Stanowiska module chrome — one layout for every detail tab. */
 export const wsTokens = {
-  /** Content column shared by all tabs */
-  content: "mx-auto w-full max-w-3xl",
-  stack: "space-y-5",
+  stack: wmsSettingsTokens.mainStack,
   intro: "text-sm text-slate-600",
   sectionLabel: "text-xs font-semibold uppercase tracking-wide text-slate-500",
   card: wmsSettingsTokens.card,
-  cardTight: "rounded-xl border border-slate-200/90 bg-white p-4 shadow-sm",
+  cardInner: wmsSettingsTokens.cardInner,
   cardTitle: wmsSettingsTokens.cardTitle,
   cardDescription: wmsSettingsTokens.cardDescription,
   fieldLabel: "block text-sm font-medium text-slate-700",
-  input: wmsSettingsTokens.input.replace("max-w-md ", ""),
-  select: wmsSettingsTokens.select.replace("max-w-md ", ""),
+  input: wmsSettingsTokens.input.replace("max-w-md ", "w-full "),
+  select: wmsSettingsTokens.select.replace("max-w-md ", "w-full "),
   actions: "flex flex-wrap items-center gap-2 border-t border-slate-100 pt-4",
   mutedBtn:
     "inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:opacity-50",
@@ -26,6 +24,10 @@ export const wsTokens = {
     "inline-flex items-center justify-center rounded-lg border border-red-200 bg-white px-3 py-2 text-sm font-medium text-red-700 transition hover:bg-red-50 disabled:opacity-50",
   primaryBtn: brandPrimaryButtonClass,
   outlineBtn: brandOutlineButtonClass,
+  settingsRow:
+    "flex flex-col gap-3 border-b border-slate-100 py-4 last:border-b-0 sm:flex-row sm:items-center sm:justify-between",
+  listRow:
+    "grid gap-3 border-b border-slate-100 px-1 py-4 last:border-b-0 hover:bg-slate-50/70 sm:grid-cols-[minmax(0,1.4fr)_minmax(0,0.9fr)_minmax(0,1fr)_minmax(0,0.9fr)_minmax(0,1fr)_minmax(0,0.7fr)_minmax(0,0.9fr)_auto] sm:items-center",
 } as const;
 
 export function StationTypeBadge({
@@ -71,7 +73,6 @@ export function ConnectionDot({ status }: { status: string }) {
   );
 }
 
-/** Config / online / warning badges used across Agent + Printers tabs. */
 export function WsStatusBadge({
   tone,
   children,
@@ -119,6 +120,30 @@ export function formatUptime(seconds: number | null | undefined): string {
   return "poniżej minuty";
 }
 
+/** Full-width card — same tokens as WmsSettingsSection / Produkcja. */
+export function WorkstationCard({
+  title,
+  description,
+  children,
+}: {
+  title?: string;
+  description?: ReactNode;
+  children: ReactNode;
+}) {
+  return (
+    <div className={wmsSettingsTokens.card}>
+      {title ? (
+        <div className="mb-4">
+          <h3 className={wmsSettingsTokens.cardTitle}>{title}</h3>
+          {description ? <p className={wmsSettingsTokens.cardDescription}>{description}</p> : null}
+        </div>
+      ) : null}
+      {children}
+    </div>
+  );
+}
+
+/** Full-width tab body — same rhythm as other WMS settings panels. */
 export function WorkstationTabShell({
   intro,
   children,
@@ -129,38 +154,11 @@ export function WorkstationTabShell({
   actions?: ReactNode;
 }) {
   return (
-    <div className={cnParts(wsTokens.content, wsTokens.stack)}>
-      {intro ? <div className={wsTokens.intro}>{intro}</div> : null}
+    <div className={cnParts("w-full min-w-0", wsTokens.stack)}>
+      {intro ? <p className={wsTokens.intro}>{intro}</p> : null}
       {children}
       {actions ? <div className={wsTokens.actions}>{actions}</div> : null}
     </div>
-  );
-}
-
-export function WorkstationCard({
-  title,
-  description,
-  children,
-  footer,
-  className,
-}: {
-  title?: ReactNode;
-  description?: ReactNode;
-  children?: ReactNode;
-  footer?: ReactNode;
-  className?: string;
-}) {
-  return (
-    <section className={cnParts(wsTokens.card, className)}>
-      {title || description ? (
-        <header className={children || footer ? "mb-4" : undefined}>
-          {title ? <h3 className={wsTokens.cardTitle}>{title}</h3> : null}
-          {description ? <p className={wsTokens.cardDescription}>{description}</p> : null}
-        </header>
-      ) : null}
-      {children}
-      {footer ? <div className={cnParts(wsTokens.actions, "mt-4")}>{footer}</div> : null}
-    </section>
   );
 }
 
@@ -170,9 +168,9 @@ export function WorkstationDescList({
   rows: Array<{ label: string; value: ReactNode }>;
 }) {
   return (
-    <dl className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+    <dl className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
       {rows.map((row) => (
-        <div key={row.label} className="rounded-lg border border-slate-100 bg-slate-50/60 px-3 py-2.5">
+        <div key={row.label} className={wmsSettingsTokens.cardInner}>
           <dt className="text-xs font-medium uppercase tracking-wide text-slate-500">{row.label}</dt>
           <dd className="mt-1 text-sm font-medium text-slate-900">{row.value}</dd>
         </div>
@@ -208,7 +206,7 @@ export function DeviceCard({
   const icon = DEVICE_KIND_ICON[(deviceKind || "other").toLowerCase()] ?? DEVICE_KIND_ICON.other;
   const online = status === "online";
   return (
-    <article className={wsTokens.cardTight}>
+    <article className={wmsSettingsTokens.cardInner}>
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="flex items-center gap-2">
@@ -233,15 +231,25 @@ export function WorkstationEmptyState({
   title,
   description,
   action,
+  compact,
 }: {
   title: string;
   description?: string;
   action?: ReactNode;
+  compact?: boolean;
 }) {
+  if (compact) {
+    return (
+      <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50/70 px-3 py-3 text-sm text-slate-500">
+        <span className="font-medium text-slate-700">{title}</span>
+        {description ? <span className="mt-0.5 block text-xs">{description}</span> : null}
+      </div>
+    );
+  }
   return (
-    <div className={cnParts(wsTokens.card, "border-dashed bg-slate-50/80 px-6 py-10 text-center shadow-none")}>
+    <div className={cnParts(pageShellEmptyStateClass, "text-center")}>
       <h3 className="text-base font-semibold text-slate-900">{title}</h3>
-      {description ? <p className="mx-auto mt-2 max-w-md text-sm text-slate-600">{description}</p> : null}
+      {description ? <p className="mx-auto mt-2 max-w-lg text-sm text-slate-600">{description}</p> : null}
       {action ? <div className="mt-4 flex flex-wrap justify-center gap-2">{action}</div> : null}
     </div>
   );
@@ -266,6 +274,7 @@ export function WorkstationErrorState({
   );
 }
 
+/** @deprecated Prefer PageHeader breadcrumbs via WmsSettingsChrome */
 export function WorkstationsBreadcrumb({ current }: { current?: string }) {
   return (
     <nav className="text-sm text-slate-500" aria-label="Okruszki">

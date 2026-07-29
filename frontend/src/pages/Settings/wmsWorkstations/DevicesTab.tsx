@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from "react";
 import { extractApiErrorMessage } from "../../../api/apiErrorMessage";
 import { fetchWorkstationDevices } from "../../../api/wmsWorkstationsApi";
 import type { DevicesGrouped, WorkstationDetail } from "../../../types/wmsWorkstations";
+import { wmsSettingsTokens } from "../wmsSettingsTokens";
 import { WMS_WORKSTATIONS_TENANT_ID } from "./tenant";
 import {
   DeviceCard,
@@ -20,24 +21,34 @@ type Props = {
 
 type DeviceItem = DevicesGrouped["printers"][number];
 
-const SECTIONS: Array<{ key: keyof DevicesGrouped; title: string }> = [
-  { key: "printers", title: "Drukarki" },
-  { key: "scanners", title: "Skanery" },
-  { key: "scales", title: "Wagi" },
-  { key: "cameras", title: "Kamery" },
-  { key: "rfid", title: "RFID" },
-  { key: "barcode_readers", title: "Czytniki" },
-  { key: "other", title: "Inne" },
+const SECTIONS: Array<{ key: keyof DevicesGrouped; title: string; emptyTitle: string }> = [
+  { key: "printers", title: "Drukarki", emptyTitle: "Brak drukarek" },
+  { key: "scanners", title: "Skanery", emptyTitle: "Brak skanerów" },
+  { key: "scales", title: "Wagi", emptyTitle: "Brak wag" },
+  { key: "cameras", title: "Kamery", emptyTitle: "Brak kamer" },
+  { key: "rfid", title: "RFID", emptyTitle: "Brak RFID" },
+  { key: "barcode_readers", title: "Czytniki", emptyTitle: "Brak czytników" },
+  { key: "other", title: "Inne", emptyTitle: "Brak innych urządzeń" },
 ];
 
-function DeviceSection({ title, items }: { title: string; items: DeviceItem[] }) {
+function DeviceCategoryCard({
+  title,
+  emptyTitle,
+  items,
+}: {
+  title: string;
+  emptyTitle: string;
+  items: DeviceItem[];
+}) {
   return (
-    <section className="space-y-3">
-      <h4 className={wsTokens.sectionLabel}>{title}</h4>
+    <div className={wmsSettingsTokens.card}>
+      <h3 className={wmsSettingsTokens.cardTitle}>{title}</h3>
       {items.length === 0 ? (
-        <p className="text-sm text-slate-400">Brak urządzeń w tej kategorii.</p>
+        <div className="mt-3">
+          <WorkstationEmptyState title={emptyTitle} compact />
+        </div>
       ) : (
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
           {items.map((d) => (
             <DeviceCard
               key={d.id}
@@ -50,7 +61,7 @@ function DeviceSection({ title, items }: { title: string; items: DeviceItem[] })
           ))}
         </div>
       )}
-    </section>
+    </div>
   );
 }
 
@@ -148,7 +159,12 @@ export function DevicesTab({ workstationId, detail, onContinue }: Props) {
       }
     >
       {SECTIONS.map((s) => (
-        <DeviceSection key={s.key} title={s.title} items={devices[s.key]} />
+        <DeviceCategoryCard
+          key={s.key}
+          title={s.title}
+          emptyTitle={s.emptyTitle}
+          items={devices[s.key]}
+        />
       ))}
     </WorkstationTabShell>
   );

@@ -1,12 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Link, useBlocker } from "react-router-dom";
+import { useBlocker, useSearchParams } from "react-router-dom";
 import { useWarehouse } from "../../context/WarehouseContext";
-import PageLayout from "../../components/layout/PageLayout";
-import { PageHeader } from "../../components/layout/PageHeader";
-import { TabsContainer } from "../../components/layout/TabsContainer";
-import { tabsNavItemClassName } from "../../components/layout/TabsNav";
 import toast from "react-hot-toast";
-import { MonitorSmartphone } from "lucide-react";
 import {
   DirectSalesSettingsPanel,
   type DirectSalesSettingsPanelHandle,
@@ -24,34 +19,25 @@ import {
 } from "../../modules/wmsSettings/picking/WmsPickingSettingsPanel";
 import { WmsSettingsComingSoon } from "./WmsSettingsComingSoon";
 import { WmsSettingsFooter } from "./WmsSettingsFooter";
+import {
+  isWmsSettingsTabId,
+  WmsSettingsChrome,
+  type WmsSettingsTabId,
+  WMS_SETTINGS_TABS,
+} from "./WmsSettingsChrome";
 
-const WMS_SETTINGS_TABS = [
-  { id: "common", label: "Stany magazynowe" },
-  { id: "packing", label: "Pakowanie" },
-  { id: "picking", label: "Zbieranie" },
-  { id: "direct_sales", label: "Sprzedaż bezpośrednia" },
-  { id: "complaints", label: "Reklamacje" },
-  { id: "returns", label: "Zwroty" },
-  { id: "crossdocking", label: "Crossdocking" },
-  { id: "receiving", label: "Przyjęcia" },
-  { id: "production", label: "Produkcja" },
-  { id: "putaway", label: "Rozlokowania" },
-  { id: "transfers", label: "Przesunięcia" },
-  { id: "smart_matching", label: "Smart Matching" },
-  { id: "three_d_matching", label: "Dopasowanie przestrzenne" },
-] as const;
-
-type WmsSettingsTabId = (typeof WMS_SETTINGS_TABS)[number]["id"];
-
-function WmsSettingsFutureTabShell({ label }: { label: string; tabId?: string }) {
+function WmsSettingsFutureTabShell({ label }: { label: string }) {
   return <WmsSettingsComingSoon label={label} />;
 }
 
 export default function WmsSettingsPage() {
   const { warehouse } = useWarehouse();
   const warehouseIdTop = warehouse?.id ?? null;
+  const [searchParams] = useSearchParams();
 
-  const [activeTab, setActiveTab] = useState<WmsSettingsTabId>("common");
+  const rawTab = searchParams.get("tab");
+  const activeTab: WmsSettingsTabId =
+    isWmsSettingsTabId(rawTab) && rawTab !== "workstations" ? rawTab : "common";
 
   const packingRef = useRef<WmsPackingSettingsPanelHandle>(null);
   const directSalesRef = useRef<DirectSalesSettingsPanelHandle>(null);
@@ -108,127 +94,80 @@ export default function WmsSettingsPage() {
     }
   }, [packingDirty, directSalesDirty, pickingDirty]);
 
-  const handleSave = handleGlobalSave;
-  const handleReset = handleGlobalDiscard;
-
   const activeLabel = WMS_SETTINGS_TABS.find((t) => t.id === activeTab)?.label ?? "";
 
   return (
-    <PageLayout className="min-w-0 overflow-visible">
-      <PageHeader
-        title="Ustawienia WMS"
-        actions={
-          <Link
-            to="/settings/wms/workstations"
-            className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 shadow-sm hover:border-orange-300 hover:text-orange-700"
-          >
-            <MonitorSmartphone className="h-4 w-4" />
-            Stanowiska
-          </Link>
-        }
-      />
-
-        <div className="mt-2 space-y-6">
-          <TabsContainer className="w-full [-webkit-overflow-scrolling:touch]">
-            <nav
-              className="flex w-full flex-nowrap gap-6 overflow-x-auto sm:justify-start"
-              aria-label="Sekcje ustawień WMS"
-              role="tablist"
-            >
-              {WMS_SETTINGS_TABS.map((tab) => {
-                const selected = activeTab === tab.id;
-                return (
-                  <button
-                    key={tab.id}
-                    id={`wms-settings-tab-${tab.id}`}
-                    type="button"
-                    role="tab"
-                    aria-selected={selected}
-                    aria-controls={`wms-settings-panel-${tab.id}`}
-                    tabIndex={selected ? 0 : -1}
-                    onClick={() => {
-                      setActiveTab(tab.id);
-                    }}
-                    className={tabsNavItemClassName(selected)}
-                  >
-                    {tab.label}
-                  </button>
-                );
-              })}
-            </nav>
-          </TabsContainer>
-
-          <div
-            id={`wms-settings-panel-${activeTab}`}
-            className={["w-full min-h-[200px] min-w-0 overflow-visible", isDirty ? "pb-2" : ""].filter(Boolean).join(" ")}
-            role="tabpanel"
-            aria-labelledby={`wms-settings-tab-${activeTab}`}
-          >
-            <div className={activeTab === "picking" ? "block" : "hidden"} aria-hidden={activeTab !== "picking"}>
-              <WmsPickingSettingsSections
-                registerActions={(api) => {
-                  pickingActionsRef.current = api;
-                }}
-                onDirtyChange={setPickingDirty}
-                sectionNavObserve={activeTab === "picking"}
-              />
-            </div>
-            <div className={activeTab === "packing" ? "block" : "hidden"} aria-hidden={activeTab !== "packing"}>
-              <WmsPackingSettingsPanel
-                ref={packingRef}
-                warehouseId={warehouseIdTop}
-                onDirtyChange={setPackingDirty}
-                sectionNavObserve={activeTab === "packing"}
-              />
-            </div>
-            <div className={activeTab === "direct_sales" ? "block" : "hidden"} aria-hidden={activeTab !== "direct_sales"}>
-              <DirectSalesSettingsPanel
-                ref={directSalesRef}
-                warehouseId={warehouseIdTop}
-                onDirtyChange={setDirectSalesDirty}
-                sectionNavObserve={activeTab === "direct_sales"}
-              />
-            </div>
-            <div className={activeTab === "returns" ? "block" : "hidden"} aria-hidden={activeTab !== "returns"}>
-              <WmsReturnsSettingsPanel warehouseId={warehouseIdTop} />
-            </div>
-            <div className={activeTab === "common" ? "block" : "hidden"} aria-hidden={activeTab !== "common"}>
-              <WmsInventoryManagementSettingsPanel warehouseId={warehouseIdTop} />
-            </div>
-            <div className={activeTab === "smart_matching" ? "block" : "hidden"} aria-hidden={activeTab !== "smart_matching"}>
-              <WmsSmartMatchingSettingsPanel warehouseId={warehouseIdTop} sectionNavObserve={activeTab === "smart_matching"} />
-            </div>
-            <div className={activeTab === "three_d_matching" ? "block" : "hidden"} aria-hidden={activeTab !== "three_d_matching"}>
-              <WmsThreeDMatchingSettingsPanel warehouseId={warehouseIdTop} sectionNavObserve={activeTab === "three_d_matching"} />
-            </div>
-            <div className={activeTab === "receiving" ? "block" : "hidden"} aria-hidden={activeTab !== "receiving"}>
-              <WmsProductValidationSettingsPanel warehouseId={warehouseIdTop} />
-            </div>
-            <div className={activeTab === "production" ? "block" : "hidden"} aria-hidden={activeTab !== "production"}>
-              <WmsProductionSettingsPanel warehouseId={warehouseIdTop} />
-            </div>
-            {activeTab !== "picking" &&
-            activeTab !== "packing" &&
-            activeTab !== "direct_sales" &&
-            activeTab !== "returns" &&
-            activeTab !== "common" &&
-            activeTab !== "smart_matching" &&
-            activeTab !== "three_d_matching" &&
-            activeTab !== "receiving" &&
-            activeTab !== "production" ? (
-              <div className="w-full">
-                <WmsSettingsFutureTabShell label={activeLabel} tabId={activeTab} />
-              </div>
-            ) : null}
-          </div>
+    <WmsSettingsChrome>
+      <div
+        id={`wms-settings-panel-${activeTab}`}
+        className={["w-full min-h-[200px] min-w-0 overflow-visible", isDirty ? "pb-2" : ""].filter(Boolean).join(" ")}
+        role="tabpanel"
+        aria-labelledby={`wms-settings-tab-${activeTab}`}
+      >
+        <div className={activeTab === "picking" ? "block" : "hidden"} aria-hidden={activeTab !== "picking"}>
+          <WmsPickingSettingsSections
+            registerActions={(api) => {
+              pickingActionsRef.current = api;
+            }}
+            onDirtyChange={setPickingDirty}
+            sectionNavObserve={activeTab === "picking"}
+          />
         </div>
-        <WmsSettingsFooter
-          className="-mx-6"
-          visible={isDirty}
-          saving={globalSaving}
-          onCancel={() => void handleReset()}
-          onSave={() => void handleSave()}
-        />
-    </PageLayout>
+        <div className={activeTab === "packing" ? "block" : "hidden"} aria-hidden={activeTab !== "packing"}>
+          <WmsPackingSettingsPanel
+            ref={packingRef}
+            warehouseId={warehouseIdTop}
+            onDirtyChange={setPackingDirty}
+            sectionNavObserve={activeTab === "packing"}
+          />
+        </div>
+        <div className={activeTab === "direct_sales" ? "block" : "hidden"} aria-hidden={activeTab !== "direct_sales"}>
+          <DirectSalesSettingsPanel
+            ref={directSalesRef}
+            warehouseId={warehouseIdTop}
+            onDirtyChange={setDirectSalesDirty}
+            sectionNavObserve={activeTab === "direct_sales"}
+          />
+        </div>
+        <div className={activeTab === "returns" ? "block" : "hidden"} aria-hidden={activeTab !== "returns"}>
+          <WmsReturnsSettingsPanel warehouseId={warehouseIdTop} />
+        </div>
+        <div className={activeTab === "common" ? "block" : "hidden"} aria-hidden={activeTab !== "common"}>
+          <WmsInventoryManagementSettingsPanel warehouseId={warehouseIdTop} />
+        </div>
+        <div className={activeTab === "smart_matching" ? "block" : "hidden"} aria-hidden={activeTab !== "smart_matching"}>
+          <WmsSmartMatchingSettingsPanel warehouseId={warehouseIdTop} sectionNavObserve={activeTab === "smart_matching"} />
+        </div>
+        <div className={activeTab === "three_d_matching" ? "block" : "hidden"} aria-hidden={activeTab !== "three_d_matching"}>
+          <WmsThreeDMatchingSettingsPanel warehouseId={warehouseIdTop} sectionNavObserve={activeTab === "three_d_matching"} />
+        </div>
+        <div className={activeTab === "receiving" ? "block" : "hidden"} aria-hidden={activeTab !== "receiving"}>
+          <WmsProductValidationSettingsPanel warehouseId={warehouseIdTop} />
+        </div>
+        <div className={activeTab === "production" ? "block" : "hidden"} aria-hidden={activeTab !== "production"}>
+          <WmsProductionSettingsPanel warehouseId={warehouseIdTop} />
+        </div>
+        {activeTab !== "picking" &&
+        activeTab !== "packing" &&
+        activeTab !== "direct_sales" &&
+        activeTab !== "returns" &&
+        activeTab !== "common" &&
+        activeTab !== "smart_matching" &&
+        activeTab !== "three_d_matching" &&
+        activeTab !== "receiving" &&
+        activeTab !== "production" ? (
+          <div className="w-full">
+            <WmsSettingsFutureTabShell label={activeLabel} />
+          </div>
+        ) : null}
+      </div>
+      <WmsSettingsFooter
+        className="-mx-6"
+        visible={isDirty}
+        saving={globalSaving}
+        onCancel={() => void handleGlobalDiscard()}
+        onSave={() => void handleGlobalSave()}
+      />
+    </WmsSettingsChrome>
   );
 }

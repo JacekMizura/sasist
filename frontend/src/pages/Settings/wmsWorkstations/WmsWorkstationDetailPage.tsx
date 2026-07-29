@@ -3,18 +3,15 @@ import { Link, useParams } from "react-router-dom";
 
 import { extractApiErrorMessage } from "../../../api/apiErrorMessage";
 import { fetchWorkstation } from "../../../api/wmsWorkstationsApi";
-import PageLayout from "../../../components/layout/PageLayout";
+import { TabsContainer } from "../../../components/layout/TabsContainer";
 import { tabsNavItemClassName } from "../../../components/layout/TabsNav";
 import type { WorkstationDetail } from "../../../types/wmsWorkstations";
+import { WmsSettingsChrome, WMS_WORKSTATIONS_PATH } from "../WmsSettingsChrome";
 import { AgentTab } from "./AgentTab";
 import { InfoTab } from "./InfoTab";
 import { WMS_WORKSTATIONS_TENANT_ID } from "./tenant";
 import { DevicesTab, HistoryTab, PrintersTab } from "./WorkstationOtherTabs";
-import {
-  StationTypeBadge,
-  WorkstationErrorState,
-  WorkstationsBreadcrumb,
-} from "./workstationUi";
+import { StationTypeBadge, WorkstationErrorState } from "./workstationUi";
 
 const TABS = [
   { id: "info", label: "Informacje" },
@@ -67,63 +64,74 @@ export default function WmsWorkstationDetailPage() {
 
   if (!Number.isFinite(workstationId) || workstationId < 1) {
     return (
-      <PageLayout>
+      <WmsSettingsChrome trail={[{ label: "Stanowiska", to: WMS_WORKSTATIONS_PATH }]}>
         <WorkstationErrorState message="Nieprawidłowy identyfikator stanowiska." />
-        <Link to="/settings/wms/workstations" className="mt-3 inline-block text-orange-600">
+        <Link to={WMS_WORKSTATIONS_PATH} className="mt-3 inline-block text-sm text-orange-700 hover:text-orange-800">
           ← Wróć do listy
         </Link>
-      </PageLayout>
+      </WmsSettingsChrome>
     );
   }
 
   if (error) {
     return (
-      <PageLayout>
-        <WorkstationsBreadcrumb />
-        <div className="mt-4">
-          <WorkstationErrorState message={error} onRetry={() => void reload()} />
-        </div>
-        <Link to="/settings/wms/workstations" className="mt-3 inline-block text-sm text-orange-600">
+      <WmsSettingsChrome trail={[{ label: "Stanowiska", to: WMS_WORKSTATIONS_PATH }]}>
+        <WorkstationErrorState message={error} onRetry={() => void reload()} />
+        <Link to={WMS_WORKSTATIONS_PATH} className="mt-3 inline-block text-sm text-orange-700 hover:text-orange-800">
           ← Wróć do listy
         </Link>
-      </PageLayout>
+      </WmsSettingsChrome>
     );
   }
 
   if (!detail) {
     return (
-      <PageLayout>
+      <WmsSettingsChrome trail={[{ label: "Stanowiska", to: WMS_WORKSTATIONS_PATH }]}>
         <p className="text-sm text-slate-500">Ładowanie…</p>
-      </PageLayout>
+      </WmsSettingsChrome>
     );
   }
 
   return (
-    <PageLayout>
-      <div className="mx-auto w-full max-w-3xl space-y-5">
-        <WorkstationsBreadcrumb current={detail.name} />
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex flex-wrap items-center gap-3">
-            <h1 className="text-2xl font-semibold text-slate-900">{detail.name}</h1>
-            <StationTypeBadge stationType={detail.station_type} label={detail.station_type_label} />
-          </div>
-        </div>
+    <WmsSettingsChrome
+      trail={[
+        { label: "Stanowiska", to: WMS_WORKSTATIONS_PATH },
+        { label: detail.name },
+      ]}
+      title={
+        <span className="inline-flex flex-wrap items-center gap-3">
+          <span>{detail.name}</span>
+          <StationTypeBadge stationType={detail.station_type} label={detail.station_type_label} />
+        </span>
+      }
+      subtitle={detail.warehouse_name ? `Magazyn: ${detail.warehouse_name}` : undefined}
+    >
+      <TabsContainer className="w-full [-webkit-overflow-scrolling:touch]">
+        <nav
+          className="flex w-full flex-nowrap gap-6 overflow-x-auto sm:justify-start"
+          aria-label="Sekcje stanowiska"
+          role="tablist"
+        >
+          {TABS.map((t) => {
+            const selected = tab === t.id;
+            return (
+              <button
+                key={t.id}
+                type="button"
+                role="tab"
+                aria-selected={selected}
+                tabIndex={selected ? 0 : -1}
+                className={tabsNavItemClassName(selected)}
+                onClick={() => setTab(t.id)}
+              >
+                {t.label}
+              </button>
+            );
+          })}
+        </nav>
+      </TabsContainer>
 
-        <div className="flex gap-1 overflow-x-auto border-b border-slate-200">
-          {TABS.map((t) => (
-            <button
-              key={t.id}
-              type="button"
-              className={tabsNavItemClassName(tab === t.id)}
-              onClick={() => setTab(t.id)}
-            >
-              {t.label}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      <div className="mt-6">
+      <div className="mt-6 w-full min-w-0" role="tabpanel">
         {tab === "info" ? (
           <InfoTab workstationId={workstationId} detail={detail} onUpdated={setDetail} />
         ) : null}
@@ -145,6 +153,6 @@ export default function WmsWorkstationDetailPage() {
         {tab === "printers" ? <PrintersTab workstationId={workstationId} detail={detail} /> : null}
         {tab === "history" ? <HistoryTab workstationId={workstationId} /> : null}
       </div>
-    </PageLayout>
+    </WmsSettingsChrome>
   );
 }

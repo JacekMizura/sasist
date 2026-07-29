@@ -6,8 +6,9 @@ import { updateWorkstation } from "../../../api/wmsWorkstationsApi";
 import { useWarehouse } from "../../../context/WarehouseContext";
 import type { StationType, WorkstationDetail } from "../../../types/wmsWorkstations";
 import { STATION_TYPE_OPTIONS } from "../../../types/wmsWorkstations";
+import { WmsSettingsSection } from "../WmsSettingsSection";
 import { WMS_WORKSTATIONS_TENANT_ID } from "./tenant";
-import { WorkstationCard, WorkstationTabShell, wsTokens } from "./workstationUi";
+import { WorkstationTabShell, wsTokens } from "./workstationUi";
 
 type Props = {
   workstationId: number;
@@ -63,8 +64,8 @@ export function InfoTab({ workstationId, detail, onUpdated }: Props) {
         </button>
       }
     >
-      <WorkstationCard title="Dane stanowiska">
-        <div className="space-y-4">
+      <WmsSettingsSection id="ws-info" title="Dane stanowiska">
+        <div className="grid gap-x-6 gap-y-4 sm:grid-cols-2">
           <label className={wsTokens.fieldLabel}>
             Nazwa
             <input className={wsTokens.input} value={name} onChange={(e) => setName(e.target.value)} />
@@ -97,7 +98,7 @@ export function InfoTab({ workstationId, detail, onUpdated }: Props) {
               ))}
             </select>
           </label>
-          <label className={wsTokens.fieldLabel}>
+          <label className={`${wsTokens.fieldLabel} sm:col-span-2`}>
             Opis
             <textarea
               className={wsTokens.input}
@@ -107,7 +108,7 @@ export function InfoTab({ workstationId, detail, onUpdated }: Props) {
               placeholder="np. Stół pakowania przy bramie 2"
             />
           </label>
-          <div className="flex flex-col gap-3 sm:flex-row sm:gap-6">
+          <div className="flex flex-col gap-3 sm:col-span-2 sm:flex-row sm:gap-6">
             <label className="flex items-center gap-2 text-sm text-slate-700">
               <input type="checkbox" checked={isDefault} onChange={(e) => setIsDefault(e.target.checked)} />
               Domyślne dla magazynu
@@ -118,7 +119,7 @@ export function InfoTab({ workstationId, detail, onUpdated }: Props) {
             </label>
           </div>
         </div>
-      </WorkstationCard>
+      </WmsSettingsSection>
     </WorkstationTabShell>
   );
 }

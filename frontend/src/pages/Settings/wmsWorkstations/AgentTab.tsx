@@ -14,12 +14,13 @@ import {
   resolvePrinterAgentDownload,
 } from "../../../config/printerAgent";
 import type { WorkstationDetail } from "../../../types/wmsWorkstations";
+import { WmsSettingsSection } from "../WmsSettingsSection";
+import { WmsSettingsLayout } from "../WmsSettingsLayout";
 import { WMS_WORKSTATIONS_TENANT_ID } from "./tenant";
 import {
   ConnectionDot,
   formatRelativePl,
   formatUptime,
-  WorkstationCard,
   WorkstationDescList,
   WorkstationEmptyState,
   WorkstationTabShell,
@@ -361,15 +362,13 @@ export function AgentTab({ workstationId, detail, onUpdated, onPaired }: Props) 
         ) : null}
 
         {codeExpired && !showPairingPanel ? (
-          <WorkstationCard>
-            <p className="text-sm text-amber-800">
-              Kod połączenia wygasł. Wygeneruj nowy, a następnie wklej go w Agencie.
-            </p>
-          </WorkstationCard>
+          <div className="rounded-xl border border-amber-200 bg-amber-50/70 px-4 py-3 text-sm text-amber-900">
+            Kod połączenia wygasł. Wygeneruj nowy, a następnie wklej go w Agencie.
+          </div>
         ) : null}
 
         {showPairingPanel ? (
-          <WorkstationCard title="Kod połączenia" description={`Ważny do ${expiresLabel}`}>
+          <WmsSettingsSection id="ws-pairing-code" title="Kod połączenia" summary={`Ważny do ${expiresLabel}`}>
             <div className="text-center">
               <div
                 className="select-all font-mono text-2xl font-semibold tracking-widest text-slate-900"
@@ -397,66 +396,74 @@ export function AgentTab({ workstationId, detail, onUpdated, onPaired }: Props) 
                 Wygeneruj nowy kod
               </button>
             </div>
-          </WorkstationCard>
+          </WmsSettingsSection>
         ) : null}
       </WorkstationTabShell>
     );
   }
 
   return (
-    <WorkstationTabShell
-      intro="Komputer przypisany do tego stanowiska."
-      actions={
-        <>
-          <button
-            type="button"
-            className={wsTokens.dangerBtn}
-            disabled={busy}
-            onClick={() => void handleDisconnect()}
-          >
-            Odłącz komputer
-          </button>
-          <button
-            type="button"
-            className={wsTokens.mutedBtn}
-            disabled={busy}
-            onClick={() => void handlePair()}
-          >
-            Wygeneruj nowy kod
-          </button>
-        </>
-      }
+    <WmsSettingsLayout
+      sections={[
+        { id: "ws-agent-status", label: "Status połączenia" },
+        { id: "ws-agent-params", label: "Parametry Agenta" },
+      ]}
     >
-      <WorkstationCard
-        title="Status połączenia"
-        description={
-          detail.connection_status === "offline"
-            ? "Agent jest offline. Sprawdź, czy aplikacja działa na komputerze stanowiska."
-            : "Połączono. Sprawdź urządzenia, potem mapowanie drukarek i wykonaj wydruk testowy."
+      <WorkstationTabShell
+        intro="Komputer przypisany do tego stanowiska."
+        actions={
+          <>
+            <button
+              type="button"
+              className={wsTokens.dangerBtn}
+              disabled={busy}
+              onClick={() => void handleDisconnect()}
+            >
+              Odłącz komputer
+            </button>
+            <button
+              type="button"
+              className={wsTokens.mutedBtn}
+              disabled={busy}
+              onClick={() => void handlePair()}
+            >
+              Wygeneruj nowy kod
+            </button>
+          </>
         }
       >
-        <div className="flex flex-wrap items-center gap-2">
-          <ConnectionDot status={detail.connection_status} />
-          {detail.connection_status === "offline" ? (
-            <WsStatusBadge tone="warning">Offline</WsStatusBadge>
-          ) : (
-            <WsStatusBadge tone="success">Aktywny</WsStatusBadge>
-          )}
-        </div>
-      </WorkstationCard>
+        <WmsSettingsSection
+          id="ws-agent-status"
+          title="Status połączenia"
+          summary={
+            detail.connection_status === "offline"
+              ? "Agent jest offline. Sprawdź, czy aplikacja działa na komputerze stanowiska."
+              : "Połączono. Sprawdź urządzenia, potem mapowanie drukarek i wykonaj wydruk testowy."
+          }
+        >
+          <div className="flex flex-wrap items-center gap-2">
+            <ConnectionDot status={detail.connection_status} />
+            {detail.connection_status === "offline" ? (
+              <WsStatusBadge tone="warning">Offline</WsStatusBadge>
+            ) : (
+              <WsStatusBadge tone="success">Aktywny</WsStatusBadge>
+            )}
+          </div>
+        </WmsSettingsSection>
 
-      <WorkstationCard title="Parametry Agenta">
-        <WorkstationDescList
-          rows={[
-            { label: "Komputer", value: agent.computer_name },
-            { label: "System", value: agent.os ?? "—" },
-            { label: "Wersja", value: agent.agent_version ?? "—" },
-            { label: "IP", value: agent.last_ip ?? "—" },
-            { label: "Uptime", value: formatUptime(agent.uptime_seconds) },
-            { label: "Synchronizacja", value: formatRelativePl(agent.last_seen_at) },
-          ]}
-        />
-      </WorkstationCard>
-    </WorkstationTabShell>
+        <WmsSettingsSection id="ws-agent-params" title="Parametry Agenta">
+          <WorkstationDescList
+            rows={[
+              { label: "Komputer", value: agent.computer_name },
+              { label: "System", value: agent.os ?? "—" },
+              { label: "Wersja", value: agent.agent_version ?? "—" },
+              { label: "IP", value: agent.last_ip ?? "—" },
+              { label: "Uptime", value: formatUptime(agent.uptime_seconds) },
+              { label: "Synchronizacja", value: formatRelativePl(agent.last_seen_at) },
+            ]}
+          />
+        </WmsSettingsSection>
+      </WorkstationTabShell>
+    </WmsSettingsLayout>
   );
 }

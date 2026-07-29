@@ -1,3 +1,25 @@
+## 2026-07-29 — Stanowiska = zakładka Ustawień WMS (FE UX only)
+
+- Shared `WmsSettingsChrome` + `WMS_SETTINGS_TABS` (Stanowiska as last tab → `/settings/wms/workstations`)
+- Removed header CTA „Stanowiska”; breadcrumbs: Ustawienia WMS → Stanowiska → [nazwa]
+- Dropped `max-w-3xl` / private PageLayout shells; list rows + `WmsSettingsSection` / tokens
+- Detail full-width; Agent status panel; Devices category cards + compact empty; Printers settings rows; History timeline + icons
+- `useWmsSettingsSectionAnchor` no-op outside registry (sections usable without side nav)
+
+## 2026-07-29 — Stanowiska UX + nawigacja (FE)
+
+
+- Shared shell: `WorkstationTabShell`, `WorkstationCard`, `DeviceCard`, `WsStatusBadge`, `WorkstationDescList` (`max-w-3xl`)
+- Tabs rebuilt: Agent description cards; Devices device cards; Printers mapping cards + Skonfigurowano badges; History timeline cards
+- Nav: removed Stanowiska from DevicesSettingsModule tabs; devices index → inventory (not workstations); tests assert WMS category active, Settings/Urządzenia inactive
+
+## 2026-07-29 — Stanowiska: Drukarki empty state vs Urządzenia
+
+- Root cause: Devices = EdgeDevice; Printers mapping = AgentPrinter only (empty after token-only pair)
+- Fix: edge sync + GET devices/printers materialize AgentPrinter + legacy_printer_id; empty state only when zero discovered printers
+- FE: mapping form copy; placeholder „wybierz drukarkę”
+- Test: `test_printers_tab_uses_edge_discovered_printers`
+
 ## 2026-07-29 — Pairing blocker: Host crashed on spent pairing code
 
 - Root cause: Tray persisted pairing code as `agent_api_key`; Host `EnsureRegisteredAsync` re-claimed it → 401 → no heartbeat

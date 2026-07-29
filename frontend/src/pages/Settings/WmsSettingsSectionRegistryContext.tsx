@@ -195,7 +195,14 @@ export function useWmsSettingsSectionRegistry(): RegistryCtx {
   return ctx;
 }
 
+/** Registers section anchors when inside {@link WmsSettingsLayout}; no-op otherwise. */
 export function useWmsSettingsSectionAnchor(sectionId: string): (node: HTMLElement | null) => void {
-  const { setAnchorElement } = useWmsSettingsSectionRegistry();
-  return useCallback((node: HTMLElement | null) => setAnchorElement(sectionId, node), [sectionId, setAnchorElement]);
+  const ctx = useContext(WmsSettingsSectionRegistryContext);
+  const setAnchorElement = ctx?.setAnchorElement;
+  return useCallback(
+    (node: HTMLElement | null) => {
+      setAnchorElement?.(sectionId, node);
+    },
+    [sectionId, setAnchorElement],
+  );
 }
