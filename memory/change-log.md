@@ -1,3 +1,9 @@
+## 2026-07-29 — Browser PDF open + Agent GDI deploy
+
+- `openPdfBlobInPrintViewer`: otwiera natywny blob PDF (bez HTML embed / bez noopener)
+- Agent 1.4.0 zainstalowany in-place na E-HANDEL: `PdfShellPrint=False`, `WindowsGdiDocumentPrinter=True`, `PDFtoImage`+`pdfium` w Program Files; Host PID start 20:16:59
+- Dowód pipeline: `pdf-driver.log` → `pipeline=PDFium->GDI`
+
 ## 2026-07-29 — Podgląd szablonów wydruków = render (jak etykiety)
 
 - Wspólny `TemplatePreviewShellModal`; etykiety i dokumenty używają tego samego chrome

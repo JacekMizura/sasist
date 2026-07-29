@@ -45,13 +45,17 @@ public sealed class PdfPrintDriver : IPrintDriver
                     "PDF_EMPTY", "PDF has no pages"));
             }
 
+            // Proof marker for ops: must never call WindowsRawSpooler for PDF.
+            AppendPipelineLog(
+                $"pipeline=PDFium->GDI job={job.JobId} pages={pages.Count} pdfBytes={job.Payload.Length} printer={job.PrinterName}");
+
             for (var i = 0; i < copies; i++)
             {
                 job.CancellationToken.ThrowIfCancellationRequested();
                 WindowsGdiDocumentPrinter.PrintBitmaps(
                     job.PrinterName,
                     pages,
-                    $"Sasist PDF job {job.JobId}",
+                    $"Sasist PDF GDI job {job.JobId}",
                     job.CancellationToken);
             }
 
@@ -95,6 +99,24 @@ public sealed class PdfPrintDriver : IPrintDriver
         // Clone so the Bitmap owns its pixel buffer after the stream is disposed.
         using var tmp = new Bitmap(ms);
         return new Bitmap(tmp);
+    }
+
+    private static void AppendPipelineLog(string message)
+    {
+        try
+        {
+            var dir = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
+                "Sasist", "Agent", "logs");
+            Directory.CreateDirectory(dir);
+            File.AppendAllText(
+                Path.Combine(dir, "pdf-driver.log"),
+                $"{DateTimeOffset.Now:o} {message}{Environment.NewLine}");
+        }
+        catch
+        {
+            /* never fail print on logging */
+        }
     }
 
     private sealed class PageList : List<Image>, IDisposable

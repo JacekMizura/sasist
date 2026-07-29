@@ -43,7 +43,8 @@ async function fetchAuthenticatedProductionPdfBlob(
 /** Opens PDF blob in a new tab — native browser PDF viewer (Print / Save). */
 function openPdfBlobInNativeViewer(blob: Blob): void {
   const url = URL.createObjectURL(blob);
-  const tab = window.open(url, "_blank", "noopener,noreferrer");
+  // No noopener — blob: URLs are scoped to the creating document.
+  const tab = window.open(url, "_blank");
   if (!tab) {
     URL.revokeObjectURL(url);
     throw new Error("Przeglądarka zablokowała nową kartę. Zezwól na wyskakujące okna.");

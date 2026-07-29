@@ -2,6 +2,6 @@
 
 ## Active
 
-**Template preview UX:** „Podgląd” always = visual render. Labels → SVG; print templates → engine PDF via `DocumentTemplatePreviewModal` + shared `TemplatePreviewShellModal`. Usages = separate „Użycia” action.
+**Browser print:** `openPdfBlobInPrintViewer` opens native PDF blob (no HTML wrapper / no noopener).
 
-**PDF print architecture (Agent):** PDF → PDFium → GDI. RAW only for native languages.
+**Agent on E-HANDEL:** upgraded in-place to GDI/PDFium Printing.dll (2026-07-29 20:16). Service running new Host. Proof log: `%ProgramData%\Sasist\Agent\logs\pdf-driver.log`.
