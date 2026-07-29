@@ -3621,3 +3621,11 @@
 
 ## 2026-06-04 — POS UX polish
 - PDF print endpoints wired; formatMoneyPl; stationary-sale labels; linked documents UI
+
+## 2026-07-29 — Agent 1.5.0 release process + E2E print
+
+- Auto versioning: VERSION + Directory.Build.props + publish-release bump; clean-reinstall-admin.ps1
+- Installed 1.5.0 on E-HANDEL; shortcut Sasist Agent on desktop
+- E2E ERP batch 9: Pobierz PDF, Drukuj przez przeglądarkę (blob open bez noopener), Stanowisko 1 job 18 PDFium→GDI
+- Fix route order: /agents/self/test-page before {agent_id}
+- Update metadata: ignore legacy SasistPrinterAgent-Setup; default release 1.5.0

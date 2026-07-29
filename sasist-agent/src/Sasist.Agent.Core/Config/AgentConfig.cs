@@ -1,3 +1,4 @@
+using System.Reflection;
 using System.Runtime.Versioning;
 using System.Security.Cryptography;
 using System.Text;
@@ -9,7 +10,37 @@ namespace Sasist.Agent.Core.Config;
 public sealed class AgentConfig
 {
     public const int ProtocolVersion = 1;
-    public const string AgentVersion = "1.2.1";
+
+    /// <summary>
+    /// Product version from assembly metadata (SSOT: sasist-agent/VERSION via Directory.Build.props).
+    /// </summary>
+    public static string AgentVersion => ResolveAgentVersion();
+
+    private static string ResolveAgentVersion()
+    {
+        foreach (var asm in new Assembly?[] { Assembly.GetEntryAssembly(), typeof(AgentConfig).Assembly })
+        {
+            if (asm is null) continue;
+            var info = asm.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion;
+            var cleaned = CleanVersion(info);
+            if (cleaned is not null) return cleaned;
+            var ver = asm.GetName().Version;
+            if (ver is not null && (ver.Major > 0 || ver.Minor > 0 || ver.Build > 0))
+                return $"{ver.Major}.{ver.Minor}.{Math.Max(0, ver.Build)}";
+        }
+        return "0.0.0";
+    }
+
+    private static string? CleanVersion(string? raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw)) return null;
+        var v = raw.Split('+')[0].Split('-')[0].Trim();
+        var parts = v.Split('.');
+        if (parts.Length < 2) return null;
+        if (parts.Length >= 3)
+            return $"{parts[0]}.{parts[1]}.{parts[2]}";
+        return $"{parts[0]}.{parts[1]}.0";
+    }
 
     public string ServerUrl { get; set; } = "";
     /// <summary>Non-secret machine identity — stored in config.json.</summary>

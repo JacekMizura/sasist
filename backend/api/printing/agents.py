@@ -223,6 +223,29 @@ def agent_heartbeat(
     )
 
 
+# IMPORTANT: `/agents/self/test-page` must be registered BEFORE `/agents/{agent_id}/test-page`.
+# Otherwise Starlette matches `self` as agent_id and get_current_user rejects the agent bearer token.
+@router.post("/agents/self/test-page", response_model=PrintJobRead)
+def agent_self_test_page(
+    request: Request,
+    agent: PrinterAgent = Depends(get_current_agent),
+    db: Session = Depends(get_db),
+    workstation_id: int | None = Query(default=None, ge=1),
+):
+    api_base = str(request.base_url).rstrip("/")
+    try:
+        job = create_agent_test_page_job(
+            db,
+            tenant_id=agent.tenant_id,
+            agent_id=agent.id,
+            api_base_url=api_base,
+            workstation_id=workstation_id,
+        )
+    except PrintingError as exc:
+        raise_printing_error(exc)
+    return serialize_print_job(job)
+
+
 @router.post("/agents/{agent_id}/test-page", response_model=PrintJobRead)
 def agent_test_page(
     agent_id: int,
@@ -241,27 +264,6 @@ def agent_test_page(
             api_base_url=api_base,
             workstation_id=workstation_id,
             created_by_user_id=getattr(user, "id", None),
-        )
-    except PrintingError as exc:
-        raise_printing_error(exc)
-    return serialize_print_job(job)
-
-
-@router.post("/agents/self/test-page", response_model=PrintJobRead)
-def agent_self_test_page(
-    request: Request,
-    agent: PrinterAgent = Depends(get_current_agent),
-    db: Session = Depends(get_db),
-    workstation_id: int | None = Query(default=None, ge=1),
-):
-    api_base = str(request.base_url).rstrip("/")
-    try:
-        job = create_agent_test_page_job(
-            db,
-            tenant_id=agent.tenant_id,
-            agent_id=agent.id,
-            api_base_url=api_base,
-            workstation_id=workstation_id,
         )
     except PrintingError as exc:
         raise_printing_error(exc)

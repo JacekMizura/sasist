@@ -8,7 +8,6 @@
     <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
     <RootNamespace>Sasist.Agent.Tray</RootNamespace>
     <AssemblyName>Sasist.Agent.Tray</AssemblyName>
-    <Version>1.2.1</Version>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <ApplicationIcon>..\..\assets\sasist-agent.ico</ApplicationIcon>
     <Product>Sasist Agent</Product>

@@ -1,13 +1,13 @@
-; Sasist Agent — Inno Setup 6
+﻿; Sasist Agent â€” Inno Setup 6
 ; Build: ISCC.exe installer\SasistAgent.iss  (after scripts\publish-release.ps1)
 ;
 ; CRITICAL: Source is ONLY publish\win-x64 (self-contained).
-; Never point Source at bin\Release — that requires installed .NET Runtime.
+; Never point Source at bin\Release â€” that requires installed .NET Runtime.
 ;
 ; Upgrade-safe: stops service + kills Tray/Host BEFORE file copy (avoids DeleteFile code 5).
 
 #define MyAppName "Sasist Agent"
-#define MyAppVersion "1.4.0"
+#define MyAppVersion "1.5.0"
 #define MyAppPublisher "Sasist"
 #define MyAppExeName "Sasist.Agent.Tray.exe"
 #define MyServiceExe "Sasist.Agent.Host.exe"
@@ -47,7 +47,7 @@ Name: "polish"; MessagesFile: "compiler:Languages\Polish.isl"
 Name: "english"; MessagesFile: "compiler:Default.isl"
 
 [Tasks]
-Name: "desktopicon"; Description: "Utwórz skrót na pulpicie"; GroupDescription: "Dodatkowe skróty:"; Flags: unchecked
+Name: "desktopicon"; Description: "UtwĂłrz skrĂłt na pulpicie"; GroupDescription: "Dodatkowe skrĂłty:"; Flags: unchecked
 Name: "autostart"; Description: "Uruchamiaj Sasist Agent przy logowaniu"; GroupDescription: "Autostart:"; Flags: checkedonce
 
 [Dirs]
@@ -70,11 +70,11 @@ Name: "{autodesktop}\Sasist Agent"; Filename: "{app}\{#MyAppExeName}"; Tasks: de
 Root: HKLM; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "SasistAgentTray"; ValueData: """{app}\{#MyAppExeName}"""; Flags: uninsdeletevalue; Tasks: autostart
 
 [Run]
-Filename: "{sys}\sc.exe"; Parameters: "create {#MyServiceName} binPath= ""{app}\{#MyServiceExe}"" start= auto DisplayName= ""Sasist Agent"""; Flags: runhidden waituntilterminated; StatusMsg: "Instalacja usługi…"; Check: not ServiceExists
-Filename: "{sys}\sc.exe"; Parameters: "config {#MyServiceName} binPath= ""{app}\{#MyServiceExe}"" start= auto DisplayName= ""Sasist Agent"""; Flags: runhidden waituntilterminated; StatusMsg: "Aktualizacja usługi…"; Check: ServiceExists
-Filename: "{sys}\sc.exe"; Parameters: "description {#MyServiceName} ""Sasist Agent — drukowanie z Sasist"""; Flags: runhidden waituntilterminated
+Filename: "{sys}\sc.exe"; Parameters: "create {#MyServiceName} binPath= ""{app}\{#MyServiceExe}"" start= auto DisplayName= ""Sasist Agent"""; Flags: runhidden waituntilterminated; StatusMsg: "Instalacja usĹ‚ugiâ€¦"; Check: not ServiceExists
+Filename: "{sys}\sc.exe"; Parameters: "config {#MyServiceName} binPath= ""{app}\{#MyServiceExe}"" start= auto DisplayName= ""Sasist Agent"""; Flags: runhidden waituntilterminated; StatusMsg: "Aktualizacja usĹ‚ugiâ€¦"; Check: ServiceExists
+Filename: "{sys}\sc.exe"; Parameters: "description {#MyServiceName} ""Sasist Agent â€” drukowanie z Sasist"""; Flags: runhidden waituntilterminated
 Filename: "{sys}\sc.exe"; Parameters: "failure {#MyServiceName} reset= 60 actions= restart/5000/restart/10000/restart/30000"; Flags: runhidden waituntilterminated
-Filename: "{sys}\sc.exe"; Parameters: "start {#MyServiceName}"; Flags: runhidden waituntilterminated; StatusMsg: "Uruchamianie usługi…"
+Filename: "{sys}\sc.exe"; Parameters: "start {#MyServiceName}"; Flags: runhidden waituntilterminated; StatusMsg: "Uruchamianie usĹ‚ugiâ€¦"
 Filename: "{app}\{#MyAppExeName}"; Description: "Uruchom Sasist Agent"; Flags: nowait postinstall skipifsilent
 
 [UninstallRun]

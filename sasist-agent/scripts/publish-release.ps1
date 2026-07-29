@@ -10,7 +10,10 @@
 param(
     [string]$Configuration = "Release",
     [string]$Runtime = "win-x64",
-    [switch]$SkipInstaller
+    [switch]$SkipInstaller,
+    [switch]$NoBump,
+    [ValidateSet("major", "minor", "patch")]
+    [string]$Bump = "patch"
 )
 
 $ErrorActionPreference = "Stop"
@@ -20,9 +23,21 @@ $DistDir = Join-Path $Root "dist"
 $Sln = Join-Path $Root "Sasist.Agent.sln"
 $Iss = Join-Path $Root "installer\SasistAgent.iss"
 
+. (Join-Path $PSScriptRoot "lib\agent-version.ps1")
+
 Write-Host "== Sasist Agent release build ==" -ForegroundColor Cyan
 Write-Host "Root: $Root"
 Write-Host "Mode: self-contained $Runtime (NOT framework-dependent)"
+
+if ($NoBump) {
+    $version = Get-AgentVersion -Root $Root
+    Set-AgentVersion -Version $version -Root $Root  # sync iss / files
+    Write-Host "Version (no bump): $version" -ForegroundColor Yellow
+}
+else {
+    $version = Bump-AgentVersion -Part $Bump -Root $Root
+    Write-Host "Version bumped to: $version" -ForegroundColor Yellow
+}
 
 $IsccCandidates = @(
     "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe",
@@ -72,6 +87,7 @@ Get-ChildItem $PublishDir -Filter "Sasist.Agent.Modules.*.dll" -ErrorAction Sile
 
 Copy-Item (Join-Path $Root "config\config.default.json") (Join-Path $PublishDir "config.default.json") -Force
 Copy-Item (Join-Path $Root "config\config.example.json") (Join-Path $PublishDir "config.example.json") -Force
+Copy-Item (Join-Path $Root "VERSION") (Join-Path $PublishDir "VERSION") -Force
 
 Write-Host ""
 Write-Host "[4/5] Verify self-contained (fail if framework-dependent)..." -ForegroundColor Yellow
@@ -119,6 +135,7 @@ if (-not (Test-Path $Setup)) { throw "Missing $Setup" }
 $setupMb = [math]::Round((Get-Item $Setup).Length / 1MB, 1)
 Write-Host ""
 Write-Host "=== DONE ===" -ForegroundColor Green
+Write-Host ("Version:   {0}" -f $version)
 Write-Host ("Installer: {0}  ({1} MB)" -f $Setup, $setupMb)
 Write-Host ("Publish:   {0}  ({1} MB)" -f $PublishDir, $pubSizeMb)
 Write-Host ""

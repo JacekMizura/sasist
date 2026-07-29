@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Reflection;
 using System.Runtime.Versioning;
 using System.Text;
 using System.Text.Json;
@@ -28,7 +29,12 @@ public sealed class PrintingModule : IAgentModule
     }
 
     public string ModuleId => "printing";
-    public string ModuleVersion => "1.4.0";
+
+    public string ModuleVersion =>
+        typeof(PrintingModule).Assembly
+            .GetCustomAttribute<AssemblyInformationalVersionAttribute>()
+            ?.InformationalVersion?.Split('+')[0].Split('-')[0]
+        ?? "0.0.0";
 
     public IReadOnlyList<string> Capabilities =>
         _drivers.SupportedFormatTokens

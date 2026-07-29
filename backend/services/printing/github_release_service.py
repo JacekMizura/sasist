@@ -98,17 +98,21 @@ def _asset_prefix() -> str:
 
 
 def _asset_prefixes() -> list[str]:
-    """Primary + legacy prefixes for older GitHub releases / installed updaters."""
+    """Installer asset prefixes for the current Sasist Agent (C#).
+
+    Legacy Python ``SasistPrinterAgent-Setup*`` is intentionally excluded so
+    update metadata cannot advertise an old 1.0.x binary when no new
+    ``SasistAgentSetup*`` asset exists yet (falls back to AGENT_RELEASE_VERSION).
+    Set ``GITHUB_ALLOW_LEGACY_AGENT_ASSET=1`` only for emergency rollback.
+    """
     primary = _asset_prefix() or "SasistAgentSetup"
     prefixes = [primary]
-    # Compatibility: historical Python agent installer name
-    legacy = "SasistPrinterAgent-Setup"
-    if legacy not in prefixes:
-        prefixes.append(legacy)
-    # Also accept versioned / unversioned SasistAgentSetup*
     if "SasistAgentSetup" not in prefixes:
         prefixes.insert(0, "SasistAgentSetup")
-    # Dedupe preserving order
+    if os.getenv("GITHUB_ALLOW_LEGACY_AGENT_ASSET", "").strip().lower() in {"1", "true", "yes"}:
+        legacy = "SasistPrinterAgent-Setup"
+        if legacy not in prefixes:
+            prefixes.append(legacy)
     seen: set[str] = set()
     out: list[str] = []
     for p in prefixes:
