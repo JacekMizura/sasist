@@ -1,9 +1,13 @@
 /**
- * Return label print — routed via PrintingRouter (Agent / QZ legacy / browser).
- * Stage 5 Cleanup: remove QZ knowledge from this module (router owns transports).
+ * Return label print — routed via PrintingRouter (Agent / browser / download).
  */
 import api from "./axios";
 import { executePdfLabelPrint } from "../printing/router";
+import type { PrintRouteDecision } from "../printing/router/types";
+
+type PrintReturnLabelOpts = {
+  forceTransport?: PrintRouteDecision["transport"];
+};
 
 /**
  * POST /api/labels/print/return → PDF, then PrintingRouter selects transport.
@@ -13,6 +17,7 @@ export async function printReturnLabel(
   tenantId: number,
   warehouseId?: number | null,
   workstationId?: number | null,
+  opts?: PrintReturnLabelOpts,
 ): Promise<void> {
   const res = await api.post<ArrayBuffer>(
     "labels/print/return",
@@ -29,5 +34,6 @@ export async function printReturnLabel(
     jobFormat: "pdf",
     printerKind: "label",
     fileName: `return-${returnLineId}.pdf`,
+    forceTransport: opts?.forceTransport,
   });
 }

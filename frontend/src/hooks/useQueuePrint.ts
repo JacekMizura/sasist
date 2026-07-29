@@ -5,10 +5,7 @@ import { queuePrintJob } from "../api/printingApi";
 import { extractApiErrorMessage, extractApiOperationalErrorDetail } from "../api/apiErrorMessage";
 import type { QueuePrintRequest } from "../types/printing";
 import { NO_ACTIVE_AGENT_USER_MESSAGE } from "../components/printing/hasDefaultCloudPrinter";
-import {
-  packingSessionWorkstationId,
-  PACKING_STATION_REQUIRED_MSG,
-} from "../pages/wms/wmsPackingSession";
+import { packingSessionWorkstationId } from "../pages/wms/wmsPackingSession";
 
 const QUEUE_SUCCESS_MSG = "Dokument został wysłany do kolejki drukowania";
 
@@ -23,25 +20,31 @@ function queueFailureMessage(err: unknown): string {
     return op.code === "NO_ACTIVE_AGENT" ? NO_ACTIVE_AGENT_USER_MESSAGE : op.message;
   }
   if (op?.code === "NO_WORKSTATION" || op?.code === "NO_WORKSTATION_MAPPING") {
-    return op.message || PACKING_STATION_REQUIRED_MSG;
+    return op.message || "Brak mapowania drukarki na stanowisku. Wybierz inne stanowisko lub skonfiguruj mapowanie.";
   }
   if (op?.message) return op.message;
   return extractApiErrorMessage(err, "Nie udało się wysłać do drukowania.");
 }
 
+function resolveWorkstationId(explicit?: number | null): number | null {
+  if (explicit != null && Number.isFinite(Number(explicit)) && Number(explicit) >= 1) {
+    return Math.floor(Number(explicit));
+  }
+  return packingSessionWorkstationId();
+}
+
 /**
- * Queue prints using ONLY packing-session workstationId (SSOT).
- * No prop/body/auth overrides.
+ * Queue prints: explicit workstationId (from picker/flow) or packing-session SSOT.
  */
 export function useQueuePrint({ tenantId, warehouseId }: Options) {
   const [busy, setBusy] = useState(false);
 
   const queuePrint = useCallback(
-    async (body: QueuePrintRequest) => {
+    async (body: QueuePrintRequest, workstationId?: number | null) => {
       if (busy) return false;
-      const workstation_id = packingSessionWorkstationId();
+      const workstation_id = resolveWorkstationId(workstationId ?? body.workstation_id);
       if (workstation_id == null) {
-        toast.error(PACKING_STATION_REQUIRED_MSG);
+        toast.error("Wybierz stanowisko, aby drukować przez Sasist Agent.");
         return false;
       }
       setBusy(true);
@@ -64,24 +67,30 @@ export function useQueuePrint({ tenantId, warehouseId }: Options) {
   );
 
   const queueStockDocument = useCallback(
-    (documentId: number, warehouseIdOverride?: number | null) =>
-      queuePrint({
-        document_type: "stock_document",
-        document_id: documentId,
-        warehouse_id: warehouseIdOverride ?? warehouseId ?? null,
-        copies: 1,
-      }),
+    (documentId: number, warehouseIdOverride?: number | null, workstationId?: number | null) =>
+      queuePrint(
+        {
+          document_type: "stock_document",
+          document_id: documentId,
+          warehouse_id: warehouseIdOverride ?? warehouseId ?? null,
+          copies: 1,
+        },
+        workstationId,
+      ),
     [queuePrint, warehouseId],
   );
 
   const queueSaleDocument = useCallback(
-    (documentId: string, warehouseIdOverride?: number | null) =>
-      queuePrint({
-        document_type: "sale_document",
-        document_id_str: documentId,
-        warehouse_id: warehouseIdOverride ?? warehouseId ?? null,
-        copies: 1,
-      }),
+    (documentId: string, warehouseIdOverride?: number | null, workstationId?: number | null) =>
+      queuePrint(
+        {
+          document_type: "sale_document",
+          document_id_str: documentId,
+          warehouse_id: warehouseIdOverride ?? warehouseId ?? null,
+          copies: 1,
+        },
+        workstationId,
+      ),
     [queuePrint, warehouseId],
   );
 
@@ -90,38 +99,48 @@ export function useQueuePrint({ tenantId, warehouseId }: Options) {
       label: NonNullable<QueuePrintRequest["label"]>,
       warehouseIdOverride?: number | null,
       printerSelection?: Pick<QueuePrintRequest, "printer_id" | "printer_profile_id">,
+      workstationId?: number | null,
     ) =>
-      queuePrint({
-        document_type: "label",
-        label,
-        warehouse_id: warehouseIdOverride ?? warehouseId ?? null,
-        copies: 1,
-        printer_id: printerSelection?.printer_id ?? null,
-        printer_profile_id:
-          printerSelection?.printer_profile_id ?? label.printer_profile_id ?? null,
-      }),
+      queuePrint(
+        {
+          document_type: "label",
+          label,
+          warehouse_id: warehouseIdOverride ?? warehouseId ?? null,
+          copies: 1,
+          printer_id: printerSelection?.printer_id ?? null,
+          printer_profile_id:
+            printerSelection?.printer_profile_id ?? label.printer_profile_id ?? null,
+        },
+        workstationId,
+      ),
     [queuePrint, warehouseId],
   );
 
   const queueProductionBatchCard = useCallback(
-    (batchId: number, warehouseIdOverride?: number | null) =>
-      queuePrint({
-        document_type: "production_batch_card",
-        document_id: batchId,
-        warehouse_id: warehouseIdOverride ?? warehouseId ?? null,
-        copies: 1,
-      }),
+    (batchId: number, warehouseIdOverride?: number | null, workstationId?: number | null) =>
+      queuePrint(
+        {
+          document_type: "production_batch_card",
+          document_id: batchId,
+          warehouse_id: warehouseIdOverride ?? warehouseId ?? null,
+          copies: 1,
+        },
+        workstationId,
+      ),
     [queuePrint, warehouseId],
   );
 
   const queueProductionOrderCard = useCallback(
-    (orderId: number, warehouseIdOverride?: number | null) =>
-      queuePrint({
-        document_type: "production_order_card",
-        document_id: orderId,
-        warehouse_id: warehouseIdOverride ?? warehouseId ?? null,
-        copies: 1,
-      }),
+    (orderId: number, warehouseIdOverride?: number | null, workstationId?: number | null) =>
+      queuePrint(
+        {
+          document_type: "production_order_card",
+          document_id: orderId,
+          warehouse_id: warehouseIdOverride ?? warehouseId ?? null,
+          copies: 1,
+        },
+        workstationId,
+      ),
     [queuePrint, warehouseId],
   );
 

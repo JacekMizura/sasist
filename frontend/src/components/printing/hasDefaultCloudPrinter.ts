@@ -54,7 +54,7 @@ export function cloudPrintUnavailableMessage(cap: CloudPrintCapability): string 
   if (cap.reason === "NO_WORKSTATION") {
     return (
       cap.message?.trim() ||
-      "Rozpocznij pakowanie i wybierz stanowisko."
+      "Wybierz stanowisko, aby drukować przez Sasist Agent."
     );
   }
   if (cap.reason === "NO_WORKSTATION_AGENT") {

@@ -1,3 +1,11 @@
+## 2026-07-29 — Print UX: packing session ≠ wszystkie wydruki
+
+- `resolvePrintWorkstation` + `usePrintMethodFlow`: sesja pakowania **lub** available-for-me (1=auto, N=picker Online/Offline)
+- Domyślnie Agent (bez pierwszego ekranu Agent/Przeglądarka/PDF); alternatywy dopiero „Inna metoda” / offline / brak Agent
+- Callery: dokumenty magazynowe/sprzedaż, produkcja, zwroty, Z-PZ, LabelPrintQueue
+- Test print stanowiska bez zmian (workstation_id z edycji)
+- Usunięto „Rozpocznij pakowanie…” z ścieżek poza gate pakowania
+
 ## 2026-07-29 — Print pipeline: packing session SSOT only
 
 - Print FE (`usePrintMethodFlow`, `useQueuePrint`, `resolvePrintRoute`) reads only `packingSessionWorkstationId()` — no auth/me

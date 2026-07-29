@@ -9,7 +9,7 @@ import {
   printBulkProductionCardsBrowser,
   type ProductionBatchRead,
 } from "../../api/productionApi";
-import { PrintMethodDialog, usePrintMethodFlow } from "../../components/printing";
+import { PrintFlowModals, usePrintMethodFlow } from "../../components/printing";
 import { useQueuePrint } from "../../hooks/useQueuePrint";
 import { AppEmptyState } from "../../components/app-shell";
 import { PageHeader, PrimaryButton, StatusBadge } from "@/design-system";
@@ -97,11 +97,11 @@ export default function BatchesListPage({ embedded = false }: Props) {
           setPrintBusy(false);
         }
       },
-      onCloudPrint: async () => {
+      onCloudPrint: async (workstationId) => {
         setPrintBusy(true);
         try {
           for (const id of batchIds) {
-            await queueProductionBatchCard(id, warehouseId);
+            await queueProductionBatchCard(id, warehouseId, workstationId);
           }
         } finally {
           setPrintBusy(false);
@@ -232,16 +232,7 @@ export default function BatchesListPage({ embedded = false }: Props) {
     </div>
   );
 
-  const dialog = (
-    <PrintMethodDialog
-      open={printFlow.open}
-      pending={printFlow.pending || printBusy}
-      cloudCapability={printFlow.cloudCapability}
-      preferSasistAgent={printFlow.preferSasistAgent}
-      onClose={printFlow.close}
-      onConfirm={printFlow.confirmMethod}
-    />
-  );
+  const dialog = <PrintFlowModals flow={printFlow} />;
 
   if (embedded) {
     return (

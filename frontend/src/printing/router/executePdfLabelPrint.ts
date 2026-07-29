@@ -50,7 +50,7 @@ export async function executePdfLabelPrint(input: ExecutePdfLabelPrintInput): Pr
   if (decision.transport === "browser") {
     if (decision.fallbackReason === "no_workstation" && !input.forceTransport) {
       trackFallbackReason("no_workstation");
-      throw new Error("Rozpocznij pakowanie i wybierz stanowisko.");
+      throw new Error("Wybierz stanowisko, aby drukować przez Sasist Agent.");
     }
     openPdfBlobInPrintViewer(blob, { revokeBlobUrlsAfterMs: 120_000 });
     trackPrintedVia("browser");
@@ -63,7 +63,7 @@ export async function executePdfLabelPrint(input: ExecutePdfLabelPrintInput): Pr
       trackFallbackReason("no_workstation_mapping");
       throw new Error(
         decision.fallbackReason === "no_workstation"
-          ? "Rozpocznij pakowanie i wybierz stanowisko."
+          ? "Wybierz stanowisko, aby drukować przez Sasist Agent."
           : "Brak mapowania drukarki na stanowisku. Skonfiguruj mapowanie w Ustawienia WMS → Stanowiska.",
       );
     }

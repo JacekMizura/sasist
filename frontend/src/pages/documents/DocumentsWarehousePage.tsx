@@ -18,7 +18,7 @@ import {
   stockKindFromType,
 } from "../../utils/documentTemplatePrint";
 import { openPdfBlobInPrintViewer } from "../../utils/openPdfForBrowserPrint";
-import { PrintMethodDialog, usePrintMethodFlow, downloadPdfBlob } from "../../components/printing";
+import { PrintFlowModals, usePrintMethodFlow, downloadPdfBlob } from "../../components/printing";
 import { useQueuePrint } from "../../hooks/useQueuePrint";
 import {
   ErpBulkPrintModal,
@@ -238,8 +238,8 @@ export default function DocumentsWarehousePage() {
         const w = openPdfBlobInPrintViewer(blob, { autoPrint: true });
         if (!w) throw new Error("Przeglądarka zablokowała nową kartę. Zezwól na wyskakujące okna.");
       },
-      onCloudPrint: async () => {
-        await queueStockDocument(id, warehouseId);
+      onCloudPrint: async (workstationId) => {
+        await queueStockDocument(id, warehouseId, workstationId);
       },
       onDownloadPdf: async () => {
         const blob = await fetchDocumentPrintPdfBlob(resolvedTenantId, req);
@@ -532,14 +532,7 @@ export default function DocumentsWarehousePage() {
           )
         : null}
       {stockDocumentPickerModal}
-      <PrintMethodDialog
-        open={printFlow.open}
-        pending={printFlow.pending}
-        cloudCapability={printFlow.cloudCapability}
-        preferSasistAgent={printFlow.preferSasistAgent}
-        onClose={printFlow.close}
-        onConfirm={printFlow.confirmMethod}
-      />
+      <PrintFlowModals flow={printFlow} />
       <ErpBulkPrintModal
         open={bulkPrintOpen}
         onClose={() => setBulkPrintOpen(false)}

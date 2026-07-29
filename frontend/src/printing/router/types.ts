@@ -35,7 +35,7 @@ export type PrintRouteDecision = {
 export type ResolvePrintRouteInput = {
   tenantId: number;
   warehouseId?: number | null;
-  /** Ignored if set — resolvePrintRoute uses packing session only. */
+  /** From print flow / picker. Falls back to packing session in resolvePrintRoute. */
   workstationId?: number | null;
   /** Capability that must be present on agent for Agent path (default zpl). */
   gateFormat?: PrintFormat;

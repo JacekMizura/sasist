@@ -40,8 +40,11 @@ export async function resolvePrintRoute(input: ResolvePrintRouteInput): Promise<
   const jobFormat: PrintFormat = input.jobFormat ?? "pdf";
   const printerKind = input.printerKind ?? "label";
   const warehouseId = input.warehouseId ?? null;
-  // Sole SSOT — ignore input.workstationId overrides.
-  const workstationId = packingSessionWorkstationId();
+  // Explicit from picker/flow first; packing session as fallback.
+  const workstationId =
+    input.workstationId != null && Number(input.workstationId) >= 1
+      ? Math.floor(Number(input.workstationId))
+      : packingSessionWorkstationId();
 
   const base = (partial: Partial<PrintRouteDecision>): PrintRouteDecision => ({
     transport: "browser",

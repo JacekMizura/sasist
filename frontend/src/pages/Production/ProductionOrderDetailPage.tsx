@@ -20,7 +20,7 @@ import {
 
 } from "../../api/productionApi";
 
-import { PrintMethodDialog, usePrintMethodFlow } from "../../components/printing";
+import { PrintFlowModals, usePrintMethodFlow } from "../../components/printing";
 import { useQueuePrint } from "../../hooks/useQueuePrint";
 
 import { DocumentMaterialReservationsPanel } from "./components/DocumentMaterialReservationsPanel";
@@ -149,8 +149,8 @@ export default function ProductionOrderDetailPage() {
     if (!order || warehouseId == null) return;
     void printFlow.requestPrint({
       onBrowserPrint: () => printOrderProductionCardBrowser(tenantId, order.id, warehouseId),
-      onCloudPrint: async () => {
-        await queueProductionOrderCard(order.id, warehouseId);
+      onCloudPrint: async (workstationId) => {
+        await queueProductionOrderCard(order.id, warehouseId, workstationId);
       },
       onDownloadPdf: () => downloadOrderProductionCardPdf(tenantId, order.id, warehouseId),
     });
@@ -433,14 +433,7 @@ export default function ProductionOrderDetailPage() {
         />
       ) : null}
 
-      <PrintMethodDialog
-        open={printFlow.open}
-        pending={printFlow.pending}
-        cloudCapability={printFlow.cloudCapability}
-        preferSasistAgent={printFlow.preferSasistAgent}
-        onClose={printFlow.close}
-        onConfirm={printFlow.confirmMethod}
-      />
+      <PrintFlowModals flow={printFlow} />
 
     </div>
 

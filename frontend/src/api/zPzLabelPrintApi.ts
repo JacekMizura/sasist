@@ -1,9 +1,13 @@
 /**
- * Z-PZ label print — routed via PrintingRouter (Agent / QZ legacy / browser).
- * Stage 5 Cleanup: remove QZ knowledge from this module (router owns transports).
+ * Z-PZ label print — routed via PrintingRouter (Agent / browser / download).
  */
 import api from "./axios";
 import { executePdfLabelPrint } from "../printing/router";
+import type { PrintRouteDecision } from "../printing/router/types";
+
+type PrintZPzLabelOpts = {
+  forceTransport?: PrintRouteDecision["transport"];
+};
 
 /** POST /api/labels/print/z-pz → PDF, then PrintingRouter selects transport. */
 export async function printZPzLabel(
@@ -12,6 +16,7 @@ export async function printZPzLabel(
   tenantId: number,
   warehouseId?: number | null,
   workstationId?: number | null,
+  opts?: PrintZPzLabelOpts,
 ): Promise<void> {
   const res = await api.post<ArrayBuffer>(
     "labels/print/z-pz",
@@ -28,5 +33,6 @@ export async function printZPzLabel(
     jobFormat: "pdf",
     printerKind: "label",
     fileName: `z-pz-${stockDocumentId}.pdf`,
+    forceTransport: opts?.forceTransport,
   });
 }

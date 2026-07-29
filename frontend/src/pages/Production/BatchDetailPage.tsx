@@ -15,7 +15,7 @@ import {
   type ProductionBatchPickPlanRead,
   type ProductionBatchRead,
 } from "../../api/productionApi";
-import { PrintMethodDialog, usePrintMethodFlow } from "../../components/printing";
+import { PrintFlowModals, usePrintMethodFlow } from "../../components/printing";
 import { useQueuePrint } from "../../hooks/useQueuePrint";
 import {
   Card,
@@ -116,8 +116,8 @@ export default function BatchDetailPage() {
     const id = Number(batchId);
     void printFlow.requestPrint({
       onBrowserPrint: () => printBatchProductionCardBrowser(tenantId, id, warehouseId),
-      onCloudPrint: async () => {
-        await queueProductionBatchCard(id, warehouseId);
+      onCloudPrint: async (workstationId) => {
+        await queueProductionBatchCard(id, warehouseId, workstationId);
       },
       onDownloadPdf: () => downloadBatchProductionCardPdf(tenantId, id, warehouseId),
     });
@@ -362,14 +362,7 @@ export default function BatchDetailPage() {
           ) : null}
         </div>
       </PageHeader>
-      <PrintMethodDialog
-        open={printFlow.open}
-        pending={printFlow.pending}
-        cloudCapability={printFlow.cloudCapability}
-        preferSasistAgent={printFlow.preferSasistAgent}
-        onClose={printFlow.close}
-        onConfirm={printFlow.confirmMethod}
-      />
+      <PrintFlowModals flow={printFlow} />
     </div>
   );
 }

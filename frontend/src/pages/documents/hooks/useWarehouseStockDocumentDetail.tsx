@@ -16,7 +16,7 @@ import {
 } from "../../../components/documents/warehouse/WarehouseStockDocumentDetailView";
 import { useDocumentTemplatePrint } from "../../../hooks/useDocumentTemplatePrint";
 import { useQueuePrint } from "../../../hooks/useQueuePrint";
-import { PrintMethodDialog, usePrintMethodFlow, downloadPdfBlob } from "../../../components/printing";
+import { PrintFlowModals, usePrintMethodFlow, downloadPdfBlob } from "../../../components/printing";
 import {
   fetchDocumentPrintPdfBlob,
   stockKindFromType,
@@ -325,8 +325,8 @@ export function useWarehouseStockDocumentDetail({
         const w = openPdfBlobInPrintViewer(blob, { autoPrint: true });
         if (!w) throw new Error("Przeglądarka zablokowała nową kartę. Zezwól na wyskakujące okna.");
       },
-      onCloudPrint: async () => {
-        await queueStockDocument(documentId, warehouseId);
+      onCloudPrint: async (workstationId) => {
+        await queueStockDocument(documentId, warehouseId, workstationId);
       },
       onDownloadPdf: async () => {
         const blob = await fetchDocumentPrintPdfBlob(tenantId, req);
@@ -477,15 +477,6 @@ export function useWarehouseStockDocumentDetail({
     actions,
     state,
     pickerModal: stockDocumentPickerModal,
-    printMethodModal: (
-      <PrintMethodDialog
-        open={printFlow.open}
-        pending={printFlow.pending}
-        cloudCapability={printFlow.cloudCapability}
-        preferSasistAgent={printFlow.preferSasistAgent}
-        onClose={printFlow.close}
-        onConfirm={printFlow.confirmMethod}
-      />
-    ),
+    printMethodModal: <PrintFlowModals flow={printFlow} />,
   };
 }

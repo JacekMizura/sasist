@@ -20,7 +20,6 @@ import {
   processWmsReturnLineSplit,
 } from "../../api/wmsReturnsApi";
 import { getWmsReturnModuleConfig } from "../../api/returnModuleConfigApi";
-import { useAuth } from "../../context/AuthContext";
 import { useWmsScanner } from "../../context/WmsScannerContext";
 import type { DamageCandidate } from "../../types/damageReport";
 import type {
@@ -119,6 +118,7 @@ function customerReturnPeekBadgeSurfaceClass(tier: CustomerRiskTier): string {
 import { WMS_ROUTES } from "../wms/wmsRoutes";
 import api from "../../api/axios";
 import { printReturnLabel } from "../../api/returnLabelPrintApi";
+import { PrintFlowModals, usePrintMethodFlow } from "../../components/printing";
 import { wmsPhotoUploadClient } from "../../api/wmsPhotoUploadClient";
 import { resolveDamageMediaUrl } from "../../utils/resolveDamageMediaUrl";
 import { displayWarehouseDocumentNumber } from "../../utils/warehouseDocumentNumberDisplay";
@@ -974,10 +974,12 @@ export default function WmsReturnsPage() {
   const { returnId } = useParams<{ returnId: string }>();
   const navigate = useNavigate();
   const rid = Number(returnId);
-  const { user } = useAuth();
-  const sessionWorkstationId = user?.wms_profile?.packing_station_id ?? null;
-
   const [wmsReturn, setWmsReturn] = useState<WmsReturnRead | null>(null);
+  const printFlow = usePrintMethodFlow({
+    tenantId: DAMAGE_TENANT_ID,
+    warehouseId: wmsReturn?.warehouse_id ?? null,
+    printerKind: "label",
+  });
   const [sessionLoading, setSessionLoading] = useState(true);
   const [sessionLoadError, setSessionLoadError] = useState<string | null>(null);
   const [sessionRetryKey, setSessionRetryKey] = useState(0);
@@ -3846,34 +3848,46 @@ export default function WmsReturnsPage() {
         setPrintLabelToast("Brak identyfikatora pozycji zwrotu — nie można wydrukować etykiety.");
         return;
       }
-      try {
-        const wh = wmsReturn?.warehouse_id;
-        await printReturnLabel(
-          rlid,
-          DAMAGE_TENANT_ID,
-          wh != null && Number.isFinite(Number(wh)) && Number(wh) > 0 ? Math.floor(Number(wh)) : null,
-          sessionWorkstationId,
-        );
-      } catch (e) {
-        if (axios.isAxiosError(e) && e.response?.status === 404) {
-          let msg = "Brak szablonu etykiety typu RETURN.";
-          const raw = e.response.data;
-          if (raw instanceof ArrayBuffer) {
-            try {
-              const t = new TextDecoder().decode(raw);
-              const j = JSON.parse(t) as { detail?: unknown };
-              if (typeof j.detail === "string" && j.detail.trim()) msg = j.detail.trim();
-            } catch {
-              /* ignore */
+      const wh = wmsReturn?.warehouse_id;
+      const warehouseId =
+        wh != null && Number.isFinite(Number(wh)) && Number(wh) > 0 ? Math.floor(Number(wh)) : null;
+      void printFlow.requestPrint({
+        onCloudPrint: async (workstationId) => {
+          try {
+            await printReturnLabel(rlid, DAMAGE_TENANT_ID, warehouseId, workstationId);
+          } catch (e) {
+            if (axios.isAxiosError(e) && e.response?.status === 404) {
+              let msg = "Brak szablonu etykiety typu RETURN.";
+              const raw = e.response.data;
+              if (raw instanceof ArrayBuffer) {
+                try {
+                  const t = new TextDecoder().decode(raw);
+                  const j = JSON.parse(t) as { detail?: unknown };
+                  if (typeof j.detail === "string" && j.detail.trim()) msg = j.detail.trim();
+                } catch {
+                  /* ignore */
+                }
+              }
+              setPrintLabelToast(msg);
+              throw e;
             }
+            setPrintLabelToast("Nie udało się wydrukować etykiety.");
+            throw e;
           }
-          setPrintLabelToast(msg);
-          return;
-        }
-        setPrintLabelToast("Nie udało się wydrukować etykiety.");
-      }
+        },
+        onBrowserPrint: async () => {
+          await printReturnLabel(rlid, DAMAGE_TENANT_ID, warehouseId, null, {
+            forceTransport: "browser",
+          });
+        },
+        onDownloadPdf: async () => {
+          await printReturnLabel(rlid, DAMAGE_TENANT_ID, warehouseId, null, {
+            forceTransport: "download",
+          });
+        },
+      });
     },
-    [lineSeedByLineId, wmsReturn?.warehouse_id, sessionWorkstationId],
+    [lineSeedByLineId, wmsReturn?.warehouse_id, printFlow],
   );
 
   useEffect(() => {
@@ -3964,6 +3978,7 @@ export default function WmsReturnsPage() {
   return (
 
     <div className="flex h-[calc(100dvh-4rem)] min-h-0 w-full max-w-none flex-col overflow-hidden bg-white">
+      <PrintFlowModals flow={printFlow} />
       {printLabelToast ? (
         <div
           className="fixed bottom-6 left-1/2 z-[200] max-w-md -translate-x-1/2 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-center text-sm font-medium text-red-900 shadow-lg"

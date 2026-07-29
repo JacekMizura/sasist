@@ -2,4 +2,4 @@
 
 ## Active
 
-**Print SSOT = packing session only.** Agent print requires `wms_packing_session_v3` / pending workstation from packing gate. Test print uses WorkstationPrinterMapping. History tab = PrintJobs. Device count aligned with DevicesTab (no double-count).
+**Print UX (Agent vs packing):** packing session is SSOT **only inside packing**. Outside packing, Agent print uses `available-for-me` stations (auto if 1, picker if N). Browser/PDF via „Inna metoda wydruku” or Agent unavailable. Test print = edited workstation mapping (never packing session).

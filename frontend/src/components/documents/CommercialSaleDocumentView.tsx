@@ -1,13 +1,16 @@
 import { Link } from "react-router-dom";
 import { Download, FileText, Package, Printer, ScrollText } from "lucide-react";
 
+import { fetchSaleDocumentPdfBlob, fetchStockDocumentPdfBlob } from "../../api/saleDocumentsApi";
 import { DAMAGE_TENANT_ID } from "../../constants/panelTenant";
 import { printButtonLabelPl } from "../../components/directSales/directSalesTerminology";
+import { PrintFlowModals, usePrintMethodFlow, downloadPdfBlob } from "../../components/printing";
 import { useWarehouse } from "../../context/WarehouseContext";
 import { useQueuePrint } from "../../hooks/useQueuePrint";
 import DocumentPrintHistory from "../printing/DocumentPrintHistory";
 import type { SaleDocumentDetail } from "../../types/saleDocument";
 import { formatMoneyPl } from "../../utils/formatOrderMoney";
+import { openPdfBlobInPrintViewer } from "../../utils/openPdfForBrowserPrint";
 import { DocumentTypeBadge, ExternalStatusBadge, PaymentStatusBadge } from "../../pages/documents/documentsBadges";
 
 const btnSecondary =
@@ -53,6 +56,11 @@ export default function CommercialSaleDocumentView({ doc, onPrint, onExport }: P
     tenantId: DAMAGE_TENANT_ID,
     warehouseId,
   });
+  const printFlow = usePrintMethodFlow({
+    tenantId: DAMAGE_TENANT_ID,
+    warehouseId,
+    printerKind: "a4",
+  });
   const title = doc.doc_type === "PA" ? "Paragon" : "Faktura VAT";
   const legacy = doc.numbering_legacy;
   const printLabel = printButtonLabelPl(doc.document_subtype || doc.doc_type);
@@ -60,15 +68,42 @@ export default function CommercialSaleDocumentView({ doc, onPrint, onExport }: P
   const handlePrint =
     onPrint ??
     (() => {
-      void queueSaleDocument(doc.id, warehouseId);
+      void printFlow.requestPrint({
+        onBrowserPrint: async () => {
+          const blob = await fetchSaleDocumentPdfBlob(DAMAGE_TENANT_ID, doc.id);
+          const w = openPdfBlobInPrintViewer(blob, { autoPrint: true });
+          if (!w) throw new Error("Przeglądarka zablokowała nową kartę. Zezwól na wyskakujące okna.");
+        },
+        onCloudPrint: async (workstationId) => {
+          await queueSaleDocument(doc.id, warehouseId, workstationId);
+        },
+        onDownloadPdf: async () => {
+          const blob = await fetchSaleDocumentPdfBlob(DAMAGE_TENANT_ID, doc.id);
+          downloadPdfBlob(blob, `${doc.document_number || doc.id}.pdf`);
+        },
+      });
     });
 
   const handlePrintWz = (wzId: number) => {
-    void queueStockDocument(wzId, warehouseId);
+    void printFlow.requestPrint({
+      onBrowserPrint: async () => {
+        const blob = await fetchStockDocumentPdfBlob(DAMAGE_TENANT_ID, wzId);
+        const w = openPdfBlobInPrintViewer(blob, { autoPrint: true });
+        if (!w) throw new Error("Przeglądarka zablokowała nową kartę. Zezwól na wyskakujące okna.");
+      },
+      onCloudPrint: async (workstationId) => {
+        await queueStockDocument(wzId, warehouseId, workstationId);
+      },
+      onDownloadPdf: async () => {
+        const blob = await fetchStockDocumentPdfBlob(DAMAGE_TENANT_ID, wzId);
+        downloadPdfBlob(blob, `wz-${wzId}.pdf`);
+      },
+    });
   };
 
   return (
     <div className="flex flex-col gap-6">
+      <PrintFlowModals flow={printFlow} />
       <header className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div className="min-w-0 space-y-2">
@@ -98,7 +133,12 @@ export default function CommercialSaleDocumentView({ doc, onPrint, onExport }: P
           </div>
         </div>
         <div className="mt-5 flex flex-wrap gap-2">
-          <button type="button" className={btnSecondary} onClick={handlePrint} disabled={!doc.print.available || printBusy}>
+          <button
+            type="button"
+            className={btnSecondary}
+            onClick={handlePrint}
+            disabled={!doc.print.available || printBusy || printFlow.pending}
+          >
             <Printer className="h-4 w-4 shrink-0" aria-hidden />
             {printLabel}
           </button>
@@ -115,6 +155,7 @@ export default function CommercialSaleDocumentView({ doc, onPrint, onExport }: P
               type="button"
               className={btnSecondary}
               onClick={() => handlePrintWz(wz.id)}
+              disabled={printBusy || printFlow.pending}
             >
               <Package className="h-4 w-4 shrink-0" aria-hidden />
               Drukuj WZ {wz.document_number}

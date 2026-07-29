@@ -1,12 +1,14 @@
 ﻿import { useState, useCallback, useEffect, useMemo } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
+import toast from "react-hot-toast";
 import { brandSoftPanelButtonClass } from "../../design-system/brandUi";
 import { warn } from "../../utils/logger";
 import { jsPDF } from "jspdf";
 import api from "../../api/axios";
 import { useQueuePrint } from "../../hooks/useQueuePrint";
 import { useWarehouse } from "../../context/WarehouseContext";
-import { packingSessionWorkstationId } from "../wms/wmsPackingSession";
+import { PrintFlowModals, usePrintMethodFlow, downloadPdfBlob } from "../../components/printing";
+import { openPdfBlobInPrintViewer } from "../../utils/openPdfForBrowserPrint";
 import type {
   LabelTemplate,
   LabelRecord,
@@ -111,8 +113,12 @@ export function LabelPrintQueue({ template }: Props) {
   >("location");
   const { warehouse: activeWarehouse } = useWarehouse();
   const selectedWarehouseId = activeWarehouse?.id ?? null;
-  const sessionWorkstationId = packingSessionWorkstationId();
   const { queueLabelPrint } = useQueuePrint({ tenantId: TENANT_ID, warehouseId: selectedWarehouseId });
+  const printFlow = usePrintMethodFlow({
+    tenantId: TENANT_ID,
+    warehouseId: selectedWarehouseId,
+    printerKind: "label",
+  });
   const [cartList, setCartList] = useState<CartListItem[]>([]);
   const [selectedCartId, setSelectedCartId] = useState<number | null>(null);
   const [generatingBasketLabels, setGeneratingBasketLabels] = useState(false);
@@ -702,77 +708,91 @@ export function LabelPrintQueue({ template }: Props) {
     pdfPrintReady,
   ]);
 
-  const handlePrint = useCallback(async () => {
+  const handlePrint = useCallback(() => {
     if (printMode === "location" && locationRecordsFiltered.length === 0) return;
     if (printMode !== "location" && records.length === 0) return;
 
-    setPrinting(true);
-    try {
-      // PrintingRouter decides Agent cutover vs legacy-identical queue path.
-      const route = await resolvePrintRoute({
-        tenantId: TENANT_ID,
-        warehouseId: selectedWarehouseId,
-        workstationId: sessionWorkstationId,
-        gateFormat: "zpl",
-        jobFormat: "pdf",
-        printerKind: "label",
-      });
+    void printFlow.requestPrint({
+      onCloudPrint: async (workstationId) => {
+        setPrinting(true);
+        try {
+          const route = await resolvePrintRoute({
+            tenantId: TENANT_ID,
+            warehouseId: selectedWarehouseId,
+            workstationId,
+            gateFormat: "zpl",
+            jobFormat: "pdf",
+            printerKind: "label",
+          });
 
-      const templateId =
-        selectedLocationTemplateId ??
-        locationTemplates.find((t) => t.is_default)?.id ??
-        locationTemplates[0]?.id;
-      if (templateId == null) {
-        throw new Error("Wybierz szablon etykiety.");
-      }
+          const templateId =
+            selectedLocationTemplateId ??
+            locationTemplates.find((t) => t.is_default)?.id ??
+            locationTemplates[0]?.id;
+          if (templateId == null) {
+            throw new Error("Wybierz szablon etykiety.");
+          }
 
-      let templateForBackend: LabelTemplate | null = locationPreviewTemplate ?? template;
-      if (!templateForBackend?.elements?.length) {
-        const tRes = await api.get<{ template_json: string }>(`/label-templates/${templateId}`, {
-          params: { tenant_id: TENANT_ID },
-        });
-        templateForBackend = JSON.parse(tRes.data.template_json) as LabelTemplate;
-      }
+          let templateForBackend: LabelTemplate | null = locationPreviewTemplate ?? template;
+          if (!templateForBackend?.elements?.length) {
+            const tRes = await api.get<{ template_json: string }>(`/label-templates/${templateId}`, {
+              params: { tenant_id: TENANT_ID },
+            });
+            templateForBackend = JSON.parse(tRes.data.template_json) as LabelTemplate;
+          }
 
-      const sourceRecords = printMode === "location" ? locationRecordsFiltered : records;
-      const recordsToSend = buildRecordsForBackendRenderPdf(
-        templateForBackend,
-        sourceRecords,
-        labelDatasetPrepare,
-      );
-      const selectedPrinter = printers.find((p) => p.id === selectedPrinterId) ?? null;
-      const printerSelection = resolveLabelQueuePrinterSelection(
-        selectedPrinter,
-        agentPrinters,
-        profiles,
-        legacyPrinters,
-      );
+          const sourceRecords = printMode === "location" ? locationRecordsFiltered : records;
+          const recordsToSend = buildRecordsForBackendRenderPdf(
+            templateForBackend,
+            sourceRecords,
+            labelDatasetPrepare,
+          );
+          const selectedPrinter = printers.find((p) => p.id === selectedPrinterId) ?? null;
+          const printerSelection = resolveLabelQueuePrinterSelection(
+            selectedPrinter,
+            agentPrinters,
+            profiles,
+            legacyPrinters,
+          );
 
-      const ok = await queueLabelPrint(
-        {
-          template_id: templateId,
-          records: recordsToSend,
-          exclude_floors: excludeFloors,
-          printer_profile_id: printerSelection.printer_profile_id,
-          print_mode: pdfPrintReady,
-          ...(printMode === "csv_import" ? labelRenderPdfCsvGroupBody(csvPdfRequestUsesGrouping) : {}),
-        },
-        selectedWarehouseId,
-        printerSelection,
-      );
-      if (ok) {
-        if (route.transport === "agent") trackPrintedVia("agent");
-        else {
-          trackFallbackReason(route.fallbackReason);
-          // Legacy-identical path still queues to printing API (not QZ Tray).
-          trackPrintedVia("agent");
+          const ok = await queueLabelPrint(
+            {
+              template_id: templateId,
+              records: recordsToSend,
+              exclude_floors: excludeFloors,
+              printer_profile_id: printerSelection.printer_profile_id,
+              print_mode: pdfPrintReady,
+              ...(printMode === "csv_import" ? labelRenderPdfCsvGroupBody(csvPdfRequestUsesGrouping) : {}),
+            },
+            selectedWarehouseId,
+            printerSelection,
+            workstationId,
+          );
+          if (ok) {
+            if (route.transport === "agent") trackPrintedVia("agent");
+            else {
+              trackFallbackReason(route.fallbackReason);
+              trackPrintedVia("agent");
+            }
+          }
+        } catch (e) {
+          console.error("Label queue print failed:", e);
+          toast.error(e instanceof Error ? e.message : "Nie udało się wydrukować etykiet.");
+          throw e;
+        } finally {
+          setPrinting(false);
         }
-      }
-    } catch (e) {
-      console.error("Label queue print failed:", e);
-    } finally {
-      setPrinting(false);
-    }
+      },
+      onBrowserPrint: async () => {
+        const blob = await getLocationLabelPdfBlob();
+        const w = openPdfBlobInPrintViewer(blob, { autoPrint: true });
+        if (!w) throw new Error("Przeglądarka zablokowała nową kartę. Zezwól na wyskakujące okna.");
+      },
+      onDownloadPdf: async () => {
+        const blob = await getLocationLabelPdfBlob();
+        downloadPdfBlob(blob, "labels.pdf");
+      },
+    });
   }, [
     printMode,
     locationRecordsFiltered,
@@ -792,7 +812,8 @@ export function LabelPrintQueue({ template }: Props) {
     csvPdfRequestUsesGrouping,
     queueLabelPrint,
     selectedWarehouseId,
-    sessionWorkstationId,
+    printFlow,
+    getLocationLabelPdfBlob,
   ]);
 
   const handleDetectSystemPrinters = useCallback(async () => {
@@ -1936,6 +1957,7 @@ export function LabelPrintQueue({ template }: Props) {
 
   return (
     <>
+      <PrintFlowModals flow={printFlow} />
       <PrintQueueWorkspaceShell
         printMode={printMode}
         onPrintModeChange={setPrintMode}

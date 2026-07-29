@@ -70,6 +70,11 @@ export type PrintMethodDialogProps = {
   /** Sasist Agent readiness for assigned workstation — disables agent tile when not ready. */
   cloudCapability?: CloudPrintCapability | null;
   /**
+   * When true, only browser / PDF (and DEV QZ) — Agent is not offered as a primary choice.
+   * Used after station pick fails or user chose "Inna metoda wydruku".
+   */
+  alternativesOnly?: boolean;
+  /**
    * @deprecated Ignored — QZ is gated by DEV only, not warehouse settings.
    */
   preferSasistAgent?: boolean | null;
@@ -143,25 +148,40 @@ export function PrintMethodDialog({
   onClose,
   onConfirm,
   pending = false,
-  title = "Wybierz sposób wydruku",
-  description = "Wybierz sposób wydrukowania dokumentu.",
+  title,
+  description,
   cloudCapability = null,
+  alternativesOnly = false,
 }: PrintMethodDialogProps) {
-  const [selected, setSelected] = useState<PrintMethod>("agent");
-  const agentDisabled = cloudCapability != null && !cloudCapability.ready;
-  const agentHint = agentDisabled ? cloudPrintUnavailableMessage(cloudCapability) : null;
+  const resolvedTitle =
+    title ?? (alternativesOnly ? "Inna metoda wydruku" : "Wybierz sposób wydruku");
+  const resolvedDescription =
+    description ??
+    (alternativesOnly
+      ? "Wydruk przez przeglądarkę lub pobranie PDF."
+      : "Wybierz sposób wydrukowania dokumentu.");
+  const [selected, setSelected] = useState<PrintMethod>("browser");
+  const agentDisabled = alternativesOnly || (cloudCapability != null && !cloudCapability.ready);
+  const agentHint =
+    !alternativesOnly && agentDisabled && cloudCapability
+      ? cloudPrintUnavailableMessage(cloudCapability)
+      : alternativesOnly && cloudCapability && !cloudCapability.ready
+        ? cloudPrintUnavailableMessage(cloudCapability)
+        : null;
 
   const visibleOptions = useMemo(() => {
-    const list = [...PRIMARY_OPTIONS];
+    const list = alternativesOnly
+      ? PRIMARY_OPTIONS.filter((o) => o.id !== "agent")
+      : [...PRIMARY_OPTIONS];
     if (import.meta.env.DEV) list.push(DEV_QZ_OPTION);
     return list;
-  }, []);
+  }, [alternativesOnly]);
 
   useEffect(() => {
     if (open) {
-      setSelected(agentDisabled ? "browser" : "agent");
+      setSelected(agentDisabled || alternativesOnly ? "browser" : "agent");
     }
-  }, [open, agentDisabled]);
+  }, [open, agentDisabled, alternativesOnly]);
 
   useEffect(() => {
     if ((selected === "agent" || selected === "cloud") && agentDisabled) setSelected("browser");
@@ -180,7 +200,7 @@ export function PrintMethodDialog({
       }}
       size="md"
       panelClassName="overflow-hidden"
-      aria-label={typeof title === "string" ? title : "Wybierz sposób wydruku"}
+      aria-label={typeof resolvedTitle === "string" ? resolvedTitle : "Wybierz sposób wydruku"}
       footer={
         <>
           <SecondaryButton type="button" className="mr-auto" disabled={pending} onClick={onClose}>
@@ -194,10 +214,10 @@ export function PrintMethodDialog({
     >
       <PageHeader
         className="!mt-0"
-        title={<h2 className={typography.h1}>{title}</h2>}
+        title={<h2 className={typography.h1}>{resolvedTitle}</h2>}
       >
-        <p className={typography.pageDesc}>{description}</p>
-        {agentDisabled && agentHint ? (
+        <p className={typography.pageDesc}>{resolvedDescription}</p>
+        {agentHint ? (
           <p className={`mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 ${typography.bodyMuted} text-amber-950 whitespace-pre-line`}>
             {agentHint}
           </p>
