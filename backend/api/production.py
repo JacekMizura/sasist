@@ -864,18 +864,45 @@ def api_batch_production_card_pdf(
     _gate_production_batch(
         db, user, tenant_id=tenant_id, batch_id=batch_id, warehouse_id=warehouse_id
     )
+    log = logging.getLogger(__name__)
     try:
         pdf = generate_batch_production_card_pdf_bytes(db, tenant_id=tenant_id, batch_id=batch_id)
     except ValueError as exc:
+        log.warning(
+            "production-card.pdf ValueError tenant_id=%s batch_id=%s: %s",
+            tenant_id,
+            batch_id,
+            exc,
+            exc_info=True,
+        )
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except FileNotFoundError as exc:
-        logging.getLogger(__name__).error("production card PDF engine missing: %s", exc)
+        log.exception(
+            "production-card.pdf PDF engine missing tenant_id=%s batch_id=%s",
+            tenant_id,
+            batch_id,
+        )
         raise HTTPException(
             status_code=503,
             detail="PDF engine not configured (install Node deps in backend/scripts/structure_report_pdf).",
         ) from exc
     except RuntimeError as exc:
+        log.exception(
+            "production-card.pdf RuntimeError tenant_id=%s batch_id=%s",
+            tenant_id,
+            batch_id,
+        )
         raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except Exception:
+        # Do not swallow — log full traceback for Railway Deploy Logs, then re-raise
+        # so the global handler still returns request_id JSON 500.
+        log.exception(
+            "production-card.pdf unhandled error tenant_id=%s batch_id=%s warehouse_id=%s",
+            tenant_id,
+            batch_id,
+            warehouse_id,
+        )
+        raise
     return Response(
         content=pdf,
         media_type="application/pdf",
@@ -1204,12 +1231,26 @@ def api_order_production_card_pdf(
     _gate_production_order(
         db, user, tenant_id=tenant_id, order_id=order_id, warehouse_id=warehouse_id
     )
+    log = logging.getLogger(__name__)
     try:
         pdf = generate_order_production_card_pdf_bytes(db, tenant_id=tenant_id, order_id=order_id)
     except ProductionOrderError as exc:
         raise _order_err(exc) from exc
     except RuntimeError as exc:
+        log.exception(
+            "order production-card.pdf RuntimeError tenant_id=%s order_id=%s",
+            tenant_id,
+            order_id,
+        )
         raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except Exception:
+        log.exception(
+            "order production-card.pdf unhandled error tenant_id=%s order_id=%s warehouse_id=%s",
+            tenant_id,
+            order_id,
+            warehouse_id,
+        )
+        raise
     return Response(
         content=pdf,
         media_type="application/pdf",

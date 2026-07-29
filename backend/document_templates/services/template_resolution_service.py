@@ -3,20 +3,83 @@
 from __future__ import annotations
 
 import json
+import logging
 
 from sqlalchemy.orm import Session
 
-from ..constants import VERSION_STATUS_PUBLISHED
+from ..constants import SYSTEM_BASE_TEMPLATE_CODE, VERSION_STATUS_PUBLISHED
 from ..dto.resolved_document_template import ResolvedDocumentTemplate
 from ..errors import DocumentTemplateError
-from ..models import DocumentTemplate, DocumentTemplateVersion, DocumentTemplateVersionPartialPin
-from ..services.twig_parse_service import collect_all_include_codes
+from ..models import DocumentTemplateVersion, DocumentTemplateVersionPartialPin
+from ..services.twig_parse_service import (
+    collect_all_include_codes,
+    extract_extends_target,
+)
+
+logger = logging.getLogger(__name__)
 
 
 def resolve_plain_twig(twig_content: str) -> ResolvedDocumentTemplate:
+    """
+    Resolve a Twig string into a renderable document.
+
+    Plain snippets (no extends/includes) stay as legacy ``__plain__``.
+    Starters that ``{% extends %}`` / ``{% include_document %}`` are wired to the
+    filesystem system BASE + PARTIAL library so Jinja gets a DictLoader.
+    """
+    content = str(twig_content or "")
+    extends = extract_extends_target(content)
+    include_codes = collect_all_include_codes(content)
+
+    if not extends and not include_codes:
+        return ResolvedDocumentTemplate(
+            main_template_name="__plain__",
+            main_twig_content=content,
+        )
+
+    from .system_starter_library import load_system_starter_templates
+
+    system = load_system_starter_templates()
+    base_name = extends or SYSTEM_BASE_TEMPLATE_CODE
+    base_content = system.get(base_name)
+    if not base_content:
+        raise DocumentTemplateError(
+            f"Brak systemowego szablonu bazowego '{base_name}'.",
+            code="missing_system_base",
+        )
+
+    # Collect includes from document + base + every partial (nested includes).
+    partials: dict[str, str] = {}
+    pending = list(
+        dict.fromkeys(
+            [
+                *include_codes,
+                *collect_all_include_codes(base_content),
+            ]
+        )
+    )
+    seen: set[str] = set()
+    while pending:
+        code = pending.pop(0)
+        if code in seen:
+            continue
+        seen.add(code)
+        if code == base_name:
+            continue
+        body = system.get(code)
+        if not body:
+            logger.warning("system starter library missing partial %r — skipping", code)
+            continue
+        partials[code] = body
+        for nested in collect_all_include_codes(body):
+            if nested not in seen:
+                pending.append(nested)
+
     return ResolvedDocumentTemplate(
-        main_template_name="__plain__",
-        main_twig_content=str(twig_content or ""),
+        main_template_name="__document__",
+        main_twig_content=content,
+        base_chain=((base_name, base_content),),
+        partials=partials,
     )
 
 

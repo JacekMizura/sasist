@@ -17,51 +17,83 @@ KIND_CODE = "production_card"
 
 
 def render_batch_production_card_html(db: Session, *, tenant_id: int, batch_id: int) -> str:
-    html = render_document(
-        db,
-        tenant_id=int(tenant_id),
-        kind_code=KIND_CODE,
-        params={"batch_id": int(batch_id)},
-        output_format=DocumentOutputFormat.HTML,
-        warehouse_id=_batch_warehouse_id(db, tenant_id=tenant_id, batch_id=batch_id),
-    )
-    return str(html)
+    try:
+        html = render_document(
+            db,
+            tenant_id=int(tenant_id),
+            kind_code=KIND_CODE,
+            params={"batch_id": int(batch_id)},
+            output_format=DocumentOutputFormat.HTML,
+            warehouse_id=_batch_warehouse_id(db, tenant_id=tenant_id, batch_id=batch_id),
+        )
+        return str(html)
+    except Exception:
+        logger.exception(
+            "render_batch_production_card_html failed tenant_id=%s batch_id=%s",
+            tenant_id,
+            batch_id,
+        )
+        raise
 
 
 def render_order_production_card_html(db: Session, *, tenant_id: int, order_id: int) -> str:
-    html = render_document(
-        db,
-        tenant_id=int(tenant_id),
-        kind_code=KIND_CODE,
-        params={"order_id": int(order_id)},
-        output_format=DocumentOutputFormat.HTML,
-        warehouse_id=_order_warehouse_id(db, tenant_id=tenant_id, order_id=order_id),
-    )
-    return str(html)
+    try:
+        html = render_document(
+            db,
+            tenant_id=int(tenant_id),
+            kind_code=KIND_CODE,
+            params={"order_id": int(order_id)},
+            output_format=DocumentOutputFormat.HTML,
+            warehouse_id=_order_warehouse_id(db, tenant_id=tenant_id, order_id=order_id),
+        )
+        return str(html)
+    except Exception:
+        logger.exception(
+            "render_order_production_card_html failed tenant_id=%s order_id=%s",
+            tenant_id,
+            order_id,
+        )
+        raise
 
 
 def generate_batch_production_card_pdf_bytes(db: Session, *, tenant_id: int, batch_id: int) -> bytes:
-    pdf = render_document(
-        db,
-        tenant_id=int(tenant_id),
-        kind_code=KIND_CODE,
-        params={"batch_id": int(batch_id)},
-        output_format=DocumentOutputFormat.PDF,
-        warehouse_id=_batch_warehouse_id(db, tenant_id=tenant_id, batch_id=batch_id),
-    )
-    return bytes(pdf)
+    try:
+        pdf = render_document(
+            db,
+            tenant_id=int(tenant_id),
+            kind_code=KIND_CODE,
+            params={"batch_id": int(batch_id)},
+            output_format=DocumentOutputFormat.PDF,
+            warehouse_id=_batch_warehouse_id(db, tenant_id=tenant_id, batch_id=batch_id),
+        )
+        return bytes(pdf)
+    except Exception:
+        logger.exception(
+            "generate_batch_production_card_pdf_bytes (DTE) failed tenant_id=%s batch_id=%s",
+            tenant_id,
+            batch_id,
+        )
+        raise
 
 
 def generate_order_production_card_pdf_bytes(db: Session, *, tenant_id: int, order_id: int) -> bytes:
-    pdf = render_document(
-        db,
-        tenant_id=int(tenant_id),
-        kind_code=KIND_CODE,
-        params={"order_id": int(order_id)},
-        output_format=DocumentOutputFormat.PDF,
-        warehouse_id=_order_warehouse_id(db, tenant_id=tenant_id, order_id=order_id),
-    )
-    return bytes(pdf)
+    try:
+        pdf = render_document(
+            db,
+            tenant_id=int(tenant_id),
+            kind_code=KIND_CODE,
+            params={"order_id": int(order_id)},
+            output_format=DocumentOutputFormat.PDF,
+            warehouse_id=_order_warehouse_id(db, tenant_id=tenant_id, order_id=order_id),
+        )
+        return bytes(pdf)
+    except Exception:
+        logger.exception(
+            "generate_order_production_card_pdf_bytes (DTE) failed tenant_id=%s order_id=%s",
+            tenant_id,
+            order_id,
+        )
+        raise
 
 
 def generate_bulk_batch_production_cards_pdf_bytes(
@@ -70,33 +102,66 @@ def generate_bulk_batch_production_cards_pdf_bytes(
     tenant_id: int,
     batch_ids: list[int],
 ) -> bytes:
-    pages = [
-        render_batch_production_card_html(db, tenant_id=int(tenant_id), batch_id=int(bid))
-        for bid in batch_ids
-    ]
-    combined = _combine_card_html_documents(pages)
-    from ...services.structure_report_pdf_service import html_document_to_pdf_bytes
+    try:
+        pages = [
+            render_batch_production_card_html(db, tenant_id=int(tenant_id), batch_id=int(bid))
+            for bid in batch_ids
+        ]
+        combined = _combine_card_html_documents(pages)
+        from ...services.structure_report_pdf_service import html_document_to_pdf_bytes
 
-    return html_document_to_pdf_bytes(combined)
+        return html_document_to_pdf_bytes(combined)
+    except Exception:
+        logger.exception(
+            "generate_bulk_batch_production_cards_pdf_bytes failed tenant_id=%s batch_ids=%s",
+            tenant_id,
+            batch_ids,
+        )
+        raise
 
 
 def document_engine_available(db: Session, *, tenant_id: int) -> bool:
+    """True when a production_card template (binding or system starter) can be resolved."""
     try:
-        from ..services.template_service import resolve_bound_template_content
+        from ..services.template_service import resolve_bound_document_template
 
-        resolve_bound_template_content(db, tenant_id=int(tenant_id), kind_code=KIND_CODE)
+        resolve_bound_document_template(db, tenant_id=int(tenant_id), kind_code=KIND_CODE)
         return True
-    except DocumentTemplateError:
+    except DocumentTemplateError as exc:
+        logger.info(
+            "production_card DTE unavailable for tenant_id=%s: %s",
+            tenant_id,
+            exc,
+        )
+        return False
+    except Exception:
+        logger.exception(
+            "production_card document_engine_available check failed tenant_id=%s",
+            tenant_id,
+        )
         return False
 
 
 def _batch_warehouse_id(db: Session, *, tenant_id: int, batch_id: int) -> int | None:
-    from ...services.production_batch_service import _load_batch_entity
+    from ...services.production_batch_service import ProductionBatchError, _load_batch_entity
 
     try:
         batch = _load_batch_entity(db, tenant_id=tenant_id, batch_id=batch_id)
         return int(batch.warehouse_id)
+    except ProductionBatchError as exc:
+        logger.warning(
+            "production_card warehouse resolve failed batch_id=%s tenant_id=%s: %s",
+            batch_id,
+            tenant_id,
+            exc,
+        )
+        return None
     except Exception:
+        logger.exception(
+            "production_card warehouse resolve unexpected error batch_id=%s tenant_id=%s",
+            batch_id,
+            tenant_id,
+        )
         return None
 
 

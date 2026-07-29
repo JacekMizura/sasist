@@ -80,8 +80,23 @@ def test_variable_tree_has_production_nodes():
 
 
 def test_resolve_starter_template_content(doc_db):
+    from backend.document_templates.render.output_formats import DocumentOutputFormat
+    from backend.document_templates.services.document_render_service import render_document
+    from backend.document_templates.services.template_resolution_service import resolve_plain_twig
     from backend.document_templates.services.template_service import resolve_bound_template_content
 
-    content, template_id = resolve_bound_template_content(doc_db, tenant_id=1, kind_code="production_card")
-    assert template_id is not None
+    content, _template_id = resolve_bound_template_content(doc_db, tenant_id=1, kind_code="production_card")
     assert "components" in content or "Karta" in content or "<" in content
+
+    resolved = resolve_plain_twig(content)
+    assert not resolved.is_legacy_plain()
+    assert resolved.base_chain
+
+    html = render_document(
+        doc_db,
+        tenant_id=1,
+        kind_code="production_card",
+        params={"sample": True},
+        output_format=DocumentOutputFormat.HTML,
+    )
+    assert "Karta" in str(html) or "produkcyj" in str(html).lower() or "<html" in str(html).lower()

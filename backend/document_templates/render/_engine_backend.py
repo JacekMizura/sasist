@@ -72,16 +72,33 @@ def validate_syntax(template: str) -> None:
 
 def render_with_backend(resolved: ResolvedDocumentTemplate | str, context: dict[str, Any]) -> str:
     if isinstance(resolved, str):
-        return _render_plain(resolved, context)
+        from ..services.template_resolution_service import resolve_plain_twig
+
+        resolved = resolve_plain_twig(resolved)
     return _render_resolved(resolved, context)
 
 
 def _render_plain(template: str, context: dict[str, Any]) -> str:
+    """
+    Render a self-contained Twig snippet (no extends / include_document).
+
+    Templates that need a loader must go through ``resolve_plain_twig`` →
+    ``_render_resolved`` (DictLoader). Callers should not hit this path for
+    starters with ``{% extends %}``.
+    """
     content = _normalize_include_document_tags((template or "").strip())
     if not content:
         raise DocumentRenderError("Pusty szablon Twig.", code="empty_template")
+    if "{% extends" in content.lower() or "{% include" in content.lower():
+        # Defensive: never render extends/include without a loader.
+        from ..services.template_resolution_service import resolve_plain_twig
+
+        return _render_resolved(resolve_plain_twig(template), context)
     try:
-        compiled = _get_plain_engine().from_string(content)
+        # Still provide an empty DictLoader so Jinja never raises
+        # "no loader for this environment specified" on accidental includes.
+        env = _build_engine(DictLoader({"__plain__": content}))
+        compiled = env.get_template("__plain__")
         return compiled.render(**context)
     except DocumentRenderError:
         raise
@@ -104,6 +121,11 @@ def _render_resolved(resolved: ResolvedDocumentTemplate, context: dict[str, Any]
         templates[name] = _normalize_include_document_tags(content)
     templates[resolved.main_template_name] = _normalize_include_document_tags(resolved.main_twig_content)
 
+    # Fill missing extends/includes from filesystem system starters (BASE + PARTIALS).
+    # Covers published/migrated DOCUMENT rows that still reference base_document but
+    # were resolved without pins — previously raised TemplateNotFound / no-loader.
+    templates = _ensure_system_dependencies(templates)
+
     if not templates.get(resolved.main_template_name, "").strip():
         raise DocumentRenderError("Pusty szablon Twig.", code="empty_template")
 
@@ -119,3 +141,49 @@ def _render_resolved(resolved: ResolvedDocumentTemplate, context: dict[str, Any]
             f"Błąd renderowania Twig: {exc}\n\nTraceback:\n{tb}",
             code="twig_error",
         ) from exc
+
+
+_INCLUDE_RE = re.compile(
+    r"""\{%\s*include\s+['"]([^'"]+)['"]\s*%\}""",
+    re.IGNORECASE,
+)
+
+
+def _ensure_system_dependencies(templates: dict[str, str]) -> dict[str, str]:
+    """Merge system BASE/PARTIAL Twig files for any unresolved extends/include names."""
+    from ..services.system_starter_library import load_system_starter_templates
+    from ..services.twig_parse_service import collect_all_include_codes, extract_extends_target
+
+    out = dict(templates)
+    system = load_system_starter_templates()
+    pending: list[str] = []
+
+    def _refs_from(content: str) -> list[str]:
+        refs: list[str] = []
+        ext = extract_extends_target(content)
+        if ext:
+            refs.append(ext)
+        # Both include_document (raw) and include (after normalize).
+        refs.extend(collect_all_include_codes(content))
+        refs.extend(_INCLUDE_RE.findall(content or ""))
+        return refs
+
+    for content in out.values():
+        pending.extend(_refs_from(content))
+
+    seen: set[str] = set()
+    while pending:
+        code = pending.pop(0)
+        if not code or code in seen:
+            continue
+        seen.add(code)
+        if code in out and (out[code] or "").strip():
+            # Still scan for nested refs.
+            pending.extend(_refs_from(out[code]))
+            continue
+        body = system.get(code)
+        if not body:
+            continue
+        out[code] = _normalize_include_document_tags(body)
+        pending.extend(_refs_from(out[code]))
+    return out

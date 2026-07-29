@@ -298,13 +298,31 @@ def build_batch_production_card_html(db: Session, *, tenant_id: int, batch_id: i
         render_batch_production_card_html,
     )
 
-    if document_engine_available(db, tenant_id=int(tenant_id)):
-        return render_batch_production_card_html(db, tenant_id=tenant_id, batch_id=batch_id)
     try:
-        ctx = _batch_card_context(db, tenant_id=tenant_id, batch_id=batch_id)
-    except ProductionBatchError as err:
-        raise ValueError(str(err)) from err
-    return _jinja_env().get_template("production_card.html.j2").render(**ctx)
+        if document_engine_available(db, tenant_id=int(tenant_id)):
+            logger.info(
+                "production_card HTML via DTE tenant_id=%s batch_id=%s",
+                tenant_id,
+                batch_id,
+            )
+            return render_batch_production_card_html(db, tenant_id=tenant_id, batch_id=batch_id)
+        logger.info(
+            "production_card HTML via legacy Jinja tenant_id=%s batch_id=%s",
+            tenant_id,
+            batch_id,
+        )
+        try:
+            ctx = _batch_card_context(db, tenant_id=tenant_id, batch_id=batch_id)
+        except ProductionBatchError as err:
+            raise ValueError(str(err)) from err
+        return _jinja_env().get_template("production_card.html.j2").render(**ctx)
+    except Exception:
+        logger.exception(
+            "build_batch_production_card_html failed tenant_id=%s batch_id=%s",
+            tenant_id,
+            batch_id,
+        )
+        raise
 
 
 def build_order_production_card_html(db: Session, *, tenant_id: int, order_id: int) -> str:
@@ -313,10 +331,28 @@ def build_order_production_card_html(db: Session, *, tenant_id: int, order_id: i
         render_order_production_card_html,
     )
 
-    if document_engine_available(db, tenant_id=int(tenant_id)):
-        return render_order_production_card_html(db, tenant_id=tenant_id, order_id=order_id)
-    ctx = _order_card_context(db, tenant_id=tenant_id, order_id=order_id)
-    return _jinja_env().get_template("production_card.html.j2").render(**ctx)
+    try:
+        if document_engine_available(db, tenant_id=int(tenant_id)):
+            logger.info(
+                "production_card HTML via DTE tenant_id=%s order_id=%s",
+                tenant_id,
+                order_id,
+            )
+            return render_order_production_card_html(db, tenant_id=tenant_id, order_id=order_id)
+        logger.info(
+            "production_card HTML via legacy Jinja tenant_id=%s order_id=%s",
+            tenant_id,
+            order_id,
+        )
+        ctx = _order_card_context(db, tenant_id=tenant_id, order_id=order_id)
+        return _jinja_env().get_template("production_card.html.j2").render(**ctx)
+    except Exception:
+        logger.exception(
+            "build_order_production_card_html failed tenant_id=%s order_id=%s",
+            tenant_id,
+            order_id,
+        )
+        raise
 
 
 def _extract_body_html(full_html: str) -> str:
@@ -342,13 +378,42 @@ def _combine_card_html_documents(pages: list[str]) -> str:
 
 
 def generate_batch_production_card_pdf_bytes(db: Session, *, tenant_id: int, batch_id: int) -> bytes:
-    html = build_batch_production_card_html(db, tenant_id=tenant_id, batch_id=batch_id)
-    return html_document_to_pdf_bytes(html)
+    try:
+        html = build_batch_production_card_html(db, tenant_id=tenant_id, batch_id=batch_id)
+        logger.info(
+            "production_card PDF html_ready tenant_id=%s batch_id=%s html_bytes=%s",
+            tenant_id,
+            batch_id,
+            len(html or ""),
+        )
+        pdf = html_document_to_pdf_bytes(html)
+        logger.info(
+            "production_card PDF ok tenant_id=%s batch_id=%s pdf_bytes=%s",
+            tenant_id,
+            batch_id,
+            len(pdf or b""),
+        )
+        return pdf
+    except Exception:
+        logger.exception(
+            "generate_batch_production_card_pdf_bytes failed tenant_id=%s batch_id=%s",
+            tenant_id,
+            batch_id,
+        )
+        raise
 
 
 def generate_order_production_card_pdf_bytes(db: Session, *, tenant_id: int, order_id: int) -> bytes:
-    html = build_order_production_card_html(db, tenant_id=tenant_id, order_id=order_id)
-    return html_document_to_pdf_bytes(html)
+    try:
+        html = build_order_production_card_html(db, tenant_id=tenant_id, order_id=order_id)
+        return html_document_to_pdf_bytes(html)
+    except Exception:
+        logger.exception(
+            "generate_order_production_card_pdf_bytes failed tenant_id=%s order_id=%s",
+            tenant_id,
+            order_id,
+        )
+        raise
 
 
 def generate_bulk_batch_production_cards_pdf_bytes(
@@ -357,11 +422,19 @@ def generate_bulk_batch_production_cards_pdf_bytes(
     tenant_id: int,
     batch_ids: list[int],
 ) -> bytes:
-    pages: list[str] = []
-    for bid in batch_ids:
-        pages.append(build_batch_production_card_html(db, tenant_id=int(tenant_id), batch_id=int(bid)))
-    combined = _combine_card_html_documents(pages)
-    return html_document_to_pdf_bytes(combined)
+    try:
+        pages: list[str] = []
+        for bid in batch_ids:
+            pages.append(build_batch_production_card_html(db, tenant_id=int(tenant_id), batch_id=int(bid)))
+        combined = _combine_card_html_documents(pages)
+        return html_document_to_pdf_bytes(combined)
+    except Exception:
+        logger.exception(
+            "generate_bulk_batch_production_cards_pdf_bytes failed tenant_id=%s batch_ids=%s",
+            tenant_id,
+            batch_ids,
+        )
+        raise
 
 
 def merge_pdf_bytes(chunks: list[bytes]) -> bytes:

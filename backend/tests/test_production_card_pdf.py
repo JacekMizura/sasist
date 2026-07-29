@@ -170,6 +170,101 @@ def test_build_batch_production_card_html_renders(card_db):
     assert "Składnik" in html or "CMP" in html
 
 
+def test_resolve_plain_twig_attaches_system_base_and_partials():
+    """Starters with {% extends %} must resolve to DictLoader-ready template, not loader-less plain."""
+    from backend.document_templates.starters.compose_starters import STARTER_CONTENT
+    from backend.document_templates.services.template_resolution_service import resolve_plain_twig
+    from backend.document_templates.render.template_renderer import render
+
+    resolved = resolve_plain_twig(STARTER_CONTENT["production_card"])
+    assert resolved.is_legacy_plain() is False
+    assert resolved.base_chain
+    assert "base_document" in dict(resolved.base_chain)
+    assert "document_header" in resolved.partials
+
+    html = render(
+        resolved,
+        {
+            "job_number": "B-1",
+            "job_kind_label": "Partia",
+            "printed_at": "now",
+            "header_product_line": "Produkt X",
+            "header_sku": "SKU",
+            "header_planned_qty": "1",
+            "recipe_version": "v1",
+            "header_barcode_value": None,
+            "components": [
+                {
+                    "name": "Cmp",
+                    "sku": "C1",
+                    "required_qty": "2",
+                    "unit": "szt.",
+                    "suggested_location": "A1",
+                    "batch_number": "—",
+                }
+            ],
+            "company": {"name": "Demo", "street": "", "postal_code": "", "city": ""},
+            "warehouse": {"name": "Magazyn"},
+            "operator": {"name": "Op"},
+            "branding": {},
+            "theme": {},
+            "meta": {"generated_at": "now"},
+            "system": {"name": "Sasist"},
+            "language": "pl",
+            "logo": None,
+            "document": {},
+            "current_datetime": "now",
+        },
+    )
+    assert "Karta produkcyjna" in html
+    assert "Produkt X" in html
+    assert "Cmp" in html
+
+
+def test_wz_pz_invoice_starters_render_with_system_loader():
+    from backend.document_templates.starters.compose_starters import STARTER_CONTENT
+    from backend.document_templates.render.template_renderer import render
+
+    ctx = {
+        "company": {
+            "name": "Demo Sp. z o.o.",
+            "street": "ul. Test 1",
+            "postal_code": "00-001",
+            "city": "Warszawa",
+            "nip": "5250000000",
+        },
+        "warehouse": {"name": "Magazyn"},
+        "operator": {"name": "Operator"},
+        "branding": {"font_family": "Arial", "primary_color": "#2563eb"},
+        "theme": {},
+        "meta": {"generated_at": "now"},
+        "system": {"name": "Sasist"},
+        "language": "pl",
+        "logo": None,
+        "document": {"number": "TEST/1", "created_at": "2026-01-01", "status": "OK", "title": "Dokument"},
+        "title": "Dokument",
+        "items": [],
+        "products": [],
+        "currency": "PLN",
+        "job_number": "J-1",
+        "job_kind_label": "Test",
+        "printed_at": "now",
+        "header_product_line": "X",
+        "header_sku": "S",
+        "header_planned_qty": "1",
+        "recipe_version": "—",
+        "components": [],
+        "order_number": "O-1",
+        "customer": {"name": "Klient"},
+        "totals": {},
+        "current_datetime": "now",
+    }
+    for kind in ("wz", "pz", "invoice", "production_card"):
+        html = render(STARTER_CONTENT[kind], ctx)
+        assert html
+        assert "no loader" not in html.lower()
+
+
 def test_generate_batch_production_card_pdf_bytes(card_db, monkeypatch):
     monkeypatch.setattr(
         "backend.services.production_execution.production_card_pdf_service.html_document_to_pdf_bytes",
