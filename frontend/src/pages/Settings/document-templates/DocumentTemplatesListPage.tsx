@@ -9,6 +9,7 @@ import {
   fetchDocumentTemplatesList,
   fetchTemplateUsage,
   type DocumentTemplateListItemDto,
+  type TemplateUsageReport,
 } from "../../../api/documentTemplatesApi";
 import { extractApiErrorMessage } from "../../../api/apiErrorMessage";
 import { PrimaryButton } from "../../../design-system";
@@ -43,7 +44,7 @@ import {
   fmtDocumentTemplateLastEdited,
 } from "./documentTemplatesListPresentation";
 import { DocumentTemplatePreviewModal } from "./components/DocumentTemplatePreviewModal";
-import { TemplateUsageModal } from "./components/TemplateUsageModal";
+import { TemplateUsageDrawer } from "./components/TemplateUsageDrawer";
 
 type SortValue = "updated_at_desc" | "updated_at_asc" | "name_asc" | "name_desc";
 type ViewMode = "list" | "card";
@@ -76,10 +77,9 @@ export function DocumentTemplatesListPage() {
   const [viewMode, setViewMode] = useState<ViewMode>("list");
   const [exportBusy, setExportBusy] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
-  const [usageModal, setUsageModal] = useState<{
+  const [usageReport, setUsageReport] = useState<{
     name: string;
-    badges: DocumentTemplateListItemDto["usage_summary"];
-    items: Awaited<ReturnType<typeof fetchTemplateUsage>>["items"];
+    report: TemplateUsageReport;
   } | null>(null);
   const [previewModal, setPreviewModal] = useState<{
     id: number;
@@ -207,7 +207,7 @@ export function DocumentTemplatesListPage() {
 
   const openUsage = (row: DocumentTemplateListItemDto) => {
     void fetchTemplateUsage(DEFAULT_TENANT_ID, row.id)
-      .then((data) => setUsageModal({ name: row.name, badges: data.badges, items: data.items }))
+      .then((data) => setUsageReport({ name: row.name, report: data }))
       .catch((err) => toast.error(extractApiErrorMessage(err, "Nie udało się wczytać użyć szablonu.")));
   };
 
@@ -398,12 +398,11 @@ export function DocumentTemplatesListPage() {
         />
       ) : null}
 
-      {usageModal ? (
-        <TemplateUsageModal
-          templateName={usageModal.name}
-          badges={usageModal.badges ?? []}
-          items={usageModal.items}
-          onClose={() => setUsageModal(null)}
+      {usageReport ? (
+        <TemplateUsageDrawer
+          templateName={usageReport.name}
+          report={usageReport.report}
+          onClose={() => setUsageReport(null)}
         />
       ) : null}
     </>

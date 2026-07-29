@@ -3629,3 +3629,9 @@
 - E2E ERP batch 9: Pobierz PDF, Drukuj przez przeglądarkę (blob open bez noopener), Stanowisko 1 job 18 PDFium→GDI
 - Fix route order: /agents/self/test-page before {agent_id}
 - Update metadata: ignore legacy SasistPrinterAgent-Setup; default release 1.5.0
+
+## 2026-07-29 — Template usage impact report
+
+- Replaced small Użycia modal with right drawer + full usage report
+- Backend usage endpoint returns summary counts and sectioned entries with erp_link deep links
+- Editor Przypisania/Użycia tab shows the same report body

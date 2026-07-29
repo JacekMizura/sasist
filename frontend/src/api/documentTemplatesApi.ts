@@ -63,6 +63,43 @@ export type TemplateAssignmentItem = {
   erp_link?: string | null;
 };
 
+export type TemplateUsageEntry = {
+  id: string;
+  title: string;
+  subtitle: string | null;
+  erp_link: string | null;
+  meta?: Record<string, unknown>;
+};
+
+export type TemplateUsageSummaryCounts = {
+  companies: number;
+  warehouses: number;
+  workstations: number;
+  series: number;
+  rules: number;
+  other: number;
+  total: number;
+};
+
+export type TemplateUsageSections = {
+  companies: TemplateUsageEntry[];
+  warehouses: TemplateUsageEntry[];
+  workstations: TemplateUsageEntry[];
+  series: TemplateUsageEntry[];
+  rules: TemplateUsageEntry[];
+  other: TemplateUsageEntry[];
+};
+
+export type TemplateUsageReport = {
+  badges: TemplateUsageBadge[];
+  total: number;
+  items: TemplateAssignmentItem[];
+  template_id?: number;
+  template_name?: string;
+  summary?: TemplateUsageSummaryCounts;
+  sections?: TemplateUsageSections;
+};
+
 export type ScopeAssignmentDto = {
   id: number;
   tenant_id: number;
@@ -690,11 +727,7 @@ export async function upsertScopeAssignment(
 }
 
 export async function fetchTemplateUsage(tenantId: number, templateId: number) {
-  const { data } = await api.get<{
-    badges: TemplateUsageBadge[];
-    total: number;
-    items: TemplateAssignmentItem[];
-  }>(`/document-templates/templates/${templateId}/usage`, {
+  const { data } = await api.get<TemplateUsageReport>(`/document-templates/templates/${templateId}/usage`, {
     params: { tenant_id: tenantId },
   });
   return data;
