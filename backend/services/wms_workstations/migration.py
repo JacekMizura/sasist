@@ -29,6 +29,78 @@ from .serialize import append_event
 logger = logging.getLogger(__name__)
 
 MIGRATION_KEY_AGENTS_TO_WORKSTATIONS = "agents_to_workstations_v1"
+MIGRATION_KEY_PRINT_PROFILES_V1 = "print_profiles_v1"
+
+
+def migrate_printer_mappings_to_profiles(db: Session, *, force: bool = False) -> dict[str, Any]:
+    """Rewrite legacy print_type rows to print-profile codes; collapse DOCUMENTS dupes.
+
+    Must delete colliding rows before renaming, because uq_wms_ws_printer_mapping_type
+    is on (workstation_id, print_type).
+    """
+    from collections import defaultdict
+
+    from ...printing_profiles import (
+        PRINT_PROFILE_DOCUMENTS,
+        documents_legacy_priority_index,
+        normalize_print_profile,
+    )
+
+    try:
+        already = is_migration_applied(db, MIGRATION_KEY_PRINT_PROFILES_V1)
+    except Exception:
+        already = False
+
+    if already and not force:
+        logger.info(
+            "[wms_workstations.migrate] skip already_applied key=%s",
+            MIGRATION_KEY_PRINT_PROFILES_V1,
+        )
+        return {"skipped": True, "updated": 0, "deleted": 0, "collapsed": 0}
+
+    rows = db.query(WorkstationPrinterMapping).order_by(WorkstationPrinterMapping.id.asc()).all()
+    updated = 0
+    deleted = 0
+    collapsed = 0
+
+    by_ws: dict[int, list[WorkstationPrinterMapping]] = defaultdict(list)
+    for row in rows:
+        by_ws[int(row.workstation_id)].append(row)
+
+    for _ws_id, group in by_ws.items():
+        by_profile: dict[str, list[tuple[int, WorkstationPrinterMapping, str]]] = defaultdict(list)
+        for row in group:
+            raw = str(row.print_profile or "").strip()
+            profile = normalize_print_profile(raw) or PRINT_PROFILE_DOCUMENTS
+            prio = documents_legacy_priority_index(raw.lower())
+            by_profile[profile].append((prio, row, raw))
+
+        for profile, items in by_profile.items():
+            items.sort(key=lambda t: (t[0], int(t[1].id)))
+            _prio, keep, keep_raw = items[0]
+            for _p, dup, _raw in items[1:]:
+                db.delete(dup)
+                deleted += 1
+                collapsed += 1
+            if keep_raw != profile:
+                keep.print_profile = profile
+                updated += 1
+
+    result = {
+        "skipped": False,
+        "updated": updated,
+        "deleted": deleted,
+        "collapsed": collapsed,
+    }
+    mark_migration_applied(db, MIGRATION_KEY_PRINT_PROFILES_V1, detail=result)
+    db.flush()
+    logger.info(
+        "[wms_workstations.migrate] applied key=%s updated=%s deleted=%s",
+        MIGRATION_KEY_PRINT_PROFILES_V1,
+        updated,
+        deleted,
+    )
+    return result
 
 
 def ensure_data_migrations_table(engine: Engine) -> None:
@@ -244,7 +316,7 @@ def migrate_agents_to_workstations(db: Session, *, force: bool = False) -> dict[
             db.query(WorkstationPrinterMapping)
             .filter(
                 WorkstationPrinterMapping.workstation_id == ws.id,
-                WorkstationPrinterMapping.print_type == print_type,
+                WorkstationPrinterMapping.print_profile == print_type,
             )
             .first()
         )
@@ -253,7 +325,7 @@ def migrate_agents_to_workstations(db: Session, *, force: bool = False) -> dict[
         db.add(
             WorkstationPrinterMapping(
                 workstation_id=ws.id,
-                print_type=print_type,
+                print_profile=print_type,
                 agent_printer_id=default.agent_printer_id,
             )
         )

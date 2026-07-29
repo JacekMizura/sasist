@@ -7,6 +7,7 @@ import {
   fetchWorkstationPrinters,
   putWorkstationPrinterMapping,
 } from "../../../api/wmsWorkstationsApi";
+import { mappingProfileKey } from "../../../printing/profiles";
 import type { PrintersConfig, WorkstationDetail } from "../../../types/wmsWorkstations";
 import { WmsSettingsSection } from "../WmsSettingsSection";
 import { WMS_WORKSTATIONS_TENANT_ID } from "./tenant";
@@ -39,7 +40,7 @@ export function PrintersTab({ workstationId, detail }: Props) {
       setConfig(data);
       const next: Record<string, number | ""> = {};
       for (const m of data.mappings) {
-        next[m.print_type] = m.agent_printer_id ?? "";
+        next[mappingProfileKey(m)] = m.agent_printer_id ?? "";
       }
       setDraft(next);
     } catch (e) {
@@ -59,10 +60,13 @@ export function PrintersTab({ workstationId, detail }: Props) {
     if (!config) return;
     setBusy(true);
     try {
-      const mappings = config.mappings.map((m) => ({
-        print_type: m.print_type,
-        agent_printer_id: draft[m.print_type] === "" ? null : Number(draft[m.print_type]),
-      }));
+      const mappings = config.mappings.map((m) => {
+        const key = mappingProfileKey(m);
+        return {
+          print_profile: key,
+          agent_printer_id: draft[key] === "" ? null : Number(draft[key]),
+        };
+      });
       const updated = await putWorkstationPrinterMapping(
         WMS_WORKSTATIONS_TENANT_ID,
         workstationId,
@@ -71,10 +75,10 @@ export function PrintersTab({ workstationId, detail }: Props) {
       setConfig(updated);
       const next: Record<string, number | ""> = {};
       for (const m of updated.mappings) {
-        next[m.print_type] = m.agent_printer_id ?? "";
+        next[mappingProfileKey(m)] = m.agent_printer_id ?? "";
       }
       setDraft(next);
-      toast.success("Zapisano mapowanie drukarek.");
+      toast.success("Zapisano konfigurację drukarek.");
     } catch (e) {
       toast.error(extractApiErrorMessage(e));
     } finally {
@@ -89,7 +93,7 @@ export function PrintersTab({ workstationId, detail }: Props) {
       await sendAgentTestPage(WMS_WORKSTATIONS_TENANT_ID, detail.agent.id, {
         workstationId,
       });
-      toast.success("Wysłano wydruk testowy do Agenta. Sprawdź zakładkę Historia.");
+      toast.success("Wysłano wydruk testowy. Sprawdź zakładkę Historia.");
     } catch (e) {
       toast.error(extractApiErrorMessage(e, "Nie udało się wysłać wydruku testowego."));
     } finally {
@@ -144,11 +148,11 @@ export function PrintersTab({ workstationId, detail }: Props) {
 
   return (
     <WorkstationTabShell
-      intro="Przypisz drukarkę wykrytą przez Agenta do każdego typu wydruku."
+      intro="Przypisz drukarkę do profilu wydruku. Nowy typ dokumentu wystarczy dodać do profilu w systemie — tu nic nie zmieniasz."
       actions={
         <>
           <button type="button" className={wsTokens.primaryBtn} disabled={busy} onClick={() => void save()}>
-            {busy ? "Zapisywanie…" : "Zapisz mapowanie"}
+            {busy ? "Zapisywanie…" : "Zapisz"}
           </button>
           <button
             type="button"
@@ -167,14 +171,20 @@ export function PrintersTab({ workstationId, detail }: Props) {
         </div>
       ) : null}
 
-      <WmsSettingsSection id="ws-printer-mapping" title="Mapowanie drukarek">
+      <WmsSettingsSection id="ws-printer-mapping" title="Profile wydruku">
         {config.mappings.map((m) => {
-          const selected = draft[m.print_type];
+          const key = mappingProfileKey(m);
+          const label = m.print_profile_label || m.print_type_label || key;
+          const icon = m.print_profile_icon ? `${m.print_profile_icon} ` : "";
+          const selected = draft[key];
           const configured = selected !== "" && selected != null;
           return (
-            <div key={m.print_type} className={wsTokens.settingsRow}>
+            <div key={key} className={wsTokens.settingsRow}>
               <div className="min-w-0">
-                <div className="text-sm font-medium text-slate-900">{m.print_type_label}</div>
+                <div className="text-sm font-medium text-slate-900">
+                  {icon}
+                  {label}
+                </div>
                 <div className="mt-1">
                   {configured ? (
                     <WsStatusBadge tone="success">
@@ -190,17 +200,17 @@ export function PrintersTab({ workstationId, detail }: Props) {
                 </div>
               </div>
               <div className="w-full sm:max-w-sm">
-                <label className="sr-only" htmlFor={`printer-${m.print_type}`}>
-                  Drukarka dla {m.print_type_label}
+                <label className="sr-only" htmlFor={`printer-${key}`}>
+                  Drukarka dla {label}
                 </label>
                 <select
-                  id={`printer-${m.print_type}`}
+                  id={`printer-${key}`}
                   className={wsTokens.select}
                   value={selected}
                   onChange={(e) =>
                     setDraft((prev) => ({
                       ...prev,
-                      [m.print_type]: e.target.value ? Number(e.target.value) : "",
+                      [key]: e.target.value ? Number(e.target.value) : "",
                     }))
                   }
                 >

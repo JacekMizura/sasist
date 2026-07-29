@@ -2,6 +2,8 @@
 
 Requires an explicit workstation_id with WorkstationPrinterMapping.
 No warehouse PrintingDefault fallback.
+
+Document type → profile mapping lives in ``backend.printing_profiles`` only.
 """
 
 from __future__ import annotations
@@ -13,52 +15,19 @@ from sqlalchemy.orm import Session, joinedload
 from ...models.printing.agent_printer import AgentPrinter
 from ...models.printing.printer_agent import PrinterAgent
 from ...models.wms_workstations import WmsWorkstation, WorkstationPrinterMapping
-from ...models.wms_workstations.constants import (
-    PRINT_TYPE_INVOICE,
-    PRINT_TYPE_LABELS,
-    PRINT_TYPE_ORDER,
-    PRINT_TYPE_OTHER,
-    PRINT_TYPE_SHIPPING_LABEL,
+from ...printing_profiles import (
+    document_type_to_print_profile,
+    kind_to_print_profiles,
 )
-
-# Queue / document_type → workstation business print_type
-DOCUMENT_TYPE_TO_PRINT_TYPE: dict[str, str] = {
-    "label": PRINT_TYPE_LABELS,
-    "sale_document": PRINT_TYPE_INVOICE,
-    "stock_document": PRINT_TYPE_OTHER,
-    "production_batch_card": PRINT_TYPE_OTHER,
-    "production_order_card": PRINT_TYPE_ORDER,
-    "receipt": PRINT_TYPE_OTHER,
-    # Aliases used by some callers / future queue kinds
-    "shipping_label": PRINT_TYPE_SHIPPING_LABEL,
-    "invoice": PRINT_TYPE_INVOICE,
-    "order": PRINT_TYPE_ORDER,
-}
-
-# PrintMethodDialog kind → candidate workstation print_types (first match wins)
-KIND_TO_PRINT_TYPES: dict[str, tuple[str, ...]] = {
-    "label": (PRINT_TYPE_LABELS, PRINT_TYPE_SHIPPING_LABEL),
-    "labels": (PRINT_TYPE_LABELS, PRINT_TYPE_SHIPPING_LABEL),
-    "receipt": (PRINT_TYPE_OTHER,),
-    "receipts": (PRINT_TYPE_OTHER,),
-    "paragon": (PRINT_TYPE_OTHER,),
-    "a4": (PRINT_TYPE_OTHER, PRINT_TYPE_INVOICE, PRINT_TYPE_ORDER),
-}
 
 NO_WORKSTATION_CODE = "NO_WORKSTATION"
 NO_WORKSTATION_AGENT_CODE = "NO_WORKSTATION_AGENT"
 NO_WORKSTATION_MAPPING_CODE = "NO_WORKSTATION_MAPPING"
 STANOWISKA_HINT = "Ustawienia WMS → Stanowiska"
 
-
-def document_type_to_print_type(document_type: str) -> str:
-    key = (document_type or "").strip().lower()
-    return DOCUMENT_TYPE_TO_PRINT_TYPE.get(key, PRINT_TYPE_OTHER)
-
-
-def kind_to_print_types(kind: str) -> tuple[str, ...]:
-    key = (kind or "a4").strip().lower()
-    return KIND_TO_PRINT_TYPES.get(key, KIND_TO_PRINT_TYPES["a4"])
+# Backward-compatible aliases (older callers / tests)
+document_type_to_print_type = document_type_to_print_profile
+kind_to_print_types = kind_to_print_profiles
 
 
 def resolve_workstation_for_print(
@@ -109,19 +78,19 @@ def resolve_workstation_mapped_printer_id(
 ) -> int | None:
     """
     Return agent_printer_id from WorkstationPrinterMapping when:
-    - mapping exists for the document's print_type
+    - mapping exists for the document's print profile
     - printer is active and belongs to the workstation's assigned agent
     Otherwise None (caller raises NO_WORKSTATION_MAPPING).
     """
     if workstation.printer_agent_id is None:
         return None
 
-    print_type = document_type_to_print_type(document_type)
+    profile = document_type_to_print_profile(document_type)
     mapping = (
         db.query(WorkstationPrinterMapping)
         .filter(
             WorkstationPrinterMapping.workstation_id == workstation.id,
-            WorkstationPrinterMapping.print_type == print_type,
+            WorkstationPrinterMapping.print_profile == profile,
         )
         .first()
     )
@@ -147,13 +116,13 @@ def resolve_workstation_mapped_printer_id_for_kind(
     workstation: WmsWorkstation,
     kind: str,
 ) -> int | None:
-    """First active mapped printer for any print_type matching the dialog kind."""
-    for print_type in kind_to_print_types(kind):
+    """First active mapped printer for any print profile matching the dialog kind."""
+    for profile in kind_to_print_profiles(kind):
         mapping = (
             db.query(WorkstationPrinterMapping)
             .filter(
                 WorkstationPrinterMapping.workstation_id == workstation.id,
-                WorkstationPrinterMapping.print_type == print_type,
+                WorkstationPrinterMapping.print_profile == profile,
             )
             .first()
         )
@@ -186,7 +155,8 @@ def assess_workstation_cloud_print_capability(
     Does not consult legacy PrintingDefault.
     """
     kind_norm = (kind or "a4").strip().lower()
-    if kind_norm not in KIND_TO_PRINT_TYPES:
+    profiles = kind_to_print_profiles(kind_norm)
+    if not profiles:
         kind_norm = "a4"
 
     base: dict[str, Any] = {

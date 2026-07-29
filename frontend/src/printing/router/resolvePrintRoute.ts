@@ -1,18 +1,13 @@
 import { packingSessionWorkstationId } from "../../pages/wms/wmsPackingSession";
 import { fetchPrintingAgents, fetchPrintingWarehouseSettings } from "../../api/printingApi";
 import { fetchWorkstationPrinters } from "../../api/wmsWorkstationsApi";
+import { mappingProfileKey, profilesForPrinterKind } from "../profiles";
 import { trackFallbackReason } from "./telemetry";
 import type { PrintFormat, PrintRouteDecision, ResolvePrintRouteInput } from "./types";
 
 function normalizeFormats(list: string[] | undefined | null): string[] {
   if (!Array.isArray(list)) return [];
   return list.map((f) => String(f).trim().toLowerCase()).filter(Boolean);
-}
-
-function printTypeForKind(kind: "a4" | "label" | "receipt"): string {
-  if (kind === "label") return "labels";
-  if (kind === "receipt") return "other";
-  return "invoice";
 }
 
 async function resolveWorkstationMappedPrinterId(
@@ -22,10 +17,12 @@ async function resolveWorkstationMappedPrinterId(
 ): Promise<number | null> {
   try {
     const config = await fetchWorkstationPrinters(tenantId, workstationId);
-    const printType = printTypeForKind(printerKind);
-    const mapped = config.mappings.find((m) => m.print_type === printType);
-    const id = mapped?.agent_printer_id;
-    return id != null && id >= 1 ? id : null;
+    for (const profile of profilesForPrinterKind(printerKind)) {
+      const mapped = config.mappings.find((m) => mappingProfileKey(m) === profile);
+      const id = mapped?.agent_printer_id;
+      if (id != null && id >= 1) return id;
+    }
+    return null;
   } catch {
     return null;
   }

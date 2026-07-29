@@ -1,3 +1,11 @@
+## 2026-07-29 — Profile wydruku na stanowisku
+
+- SSOT: `backend/printing_profiles/` (`DOCUMENT_TYPE_TO_PRINT_PROFILE`, profile codes)
+- Stanowisko mapuje drukarkę → profil (nie dokument / moduł WMS)
+- Migracja `print_profiles_v1`: legacy `labels|shipping_label|invoice|order|other` → profile; collapse DOCUMENTS
+- FE `PrintersTab`: tylko 4 profile; `resolvePrintRoute` przez `profilesForPrinterKind`
+- Resolution kolejki: `printer_resolution_service` → `document_type_to_print_profile`
+
 ## 2026-07-29 — Browser PDF open + Agent GDI deploy
 
 - `openPdfBlobInPrintViewer`: otwiera natywny blob PDF (bez HTML embed / bez noopener)

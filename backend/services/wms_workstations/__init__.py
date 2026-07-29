@@ -1,7 +1,7 @@
 """WMS workstations service package."""
 
 from .errors import WorkstationError, WorkstationNotFoundError
-from .migration import migrate_agents_to_workstations
+from .migration import migrate_agents_to_workstations, migrate_printer_mappings_to_profiles
 from .service import (
     attach_agent_to_workstation,
     claim_pairing_code,
@@ -36,6 +36,7 @@ __all__ = [
     "list_workstations",
     "looks_like_pairing_code",
     "migrate_agents_to_workstations",
+    "migrate_printer_mappings_to_profiles",
     "put_printer_mapping",
     "try_attach_agent_after_register",
     "update_workstation",

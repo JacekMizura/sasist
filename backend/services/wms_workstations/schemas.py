@@ -114,8 +114,12 @@ class PrinterOption(BaseModel):
 
 
 class PrinterMappingRow(BaseModel):
-    print_type: str
-    print_type_label: str
+    print_profile: str
+    print_profile_label: str
+    print_profile_icon: str | None = None
+    # Backward-compatible aliases
+    print_type: str | None = None
+    print_type_label: str | None = None
     agent_printer_id: int | None = None
     printer_name: str | None = None
     status: str | None = None
@@ -129,7 +133,7 @@ class PrintersConfigResponse(BaseModel):
 class PrinterMappingPutBody(BaseModel):
     mappings: list[dict[str, Any]] = Field(
         ...,
-        description="[{print_type, agent_printer_id|null}]",
+        description="[{print_profile|print_type, agent_printer_id|null}]",
     )
 
 

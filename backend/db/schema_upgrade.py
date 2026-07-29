@@ -5033,6 +5033,7 @@ def ensure_wms_workstations_schema(engine: Engine) -> None:
         from ..services.wms_workstations.migration import (
             ensure_data_migrations_table,
             migrate_agents_to_workstations,
+            migrate_printer_mappings_to_profiles,
         )
 
         ensure_data_migrations_table(engine)
@@ -5040,6 +5041,7 @@ def ensure_wms_workstations_schema(engine: Engine) -> None:
         db = SessionLocal()
         try:
             migrate_agents_to_workstations(db)
+            migrate_printer_mappings_to_profiles(db)
             db.commit()
         except Exception:
             db.rollback()

@@ -131,7 +131,7 @@ export async function fetchWorkstationPrinters(
 export async function putWorkstationPrinterMapping(
   tenantId: number,
   workstationId: number,
-  mappings: { print_type: string; agent_printer_id: number | null }[],
+  mappings: { print_profile: string; agent_printer_id: number | null }[],
 ): Promise<PrintersConfig> {
   const { data } = await api.put<PrintersConfig>(
     `/wms/workstations/${workstationId}/printer-mapping`,

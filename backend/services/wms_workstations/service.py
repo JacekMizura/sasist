@@ -19,12 +19,9 @@ from ...models.wms_workstations import (
     EVENT_COMPUTER_DISCONNECTED,
     EVENT_CREATED,
     EVENT_PAIRING_CODE_ISSUED,
-    EVENT_PRINTER_MAPPING_CHANGED,
     EVENT_UPDATED,
     PAIRING_CODE_PATTERN,
     PAIRING_CODE_TTL_MINUTES,
-    PRINT_TYPE_LABELS_PL,
-    PRINT_TYPES,
     STATION_TYPES,
     WmsWorkstation,
     WorkstationEvent,
@@ -42,6 +39,7 @@ from ...services.audit_service import log_audit_entry
 from ...services.printing.agent_service import is_agent_online
 from ...services.tenant_default_warehouse import assert_tenant_warehouse_scope
 from .errors import WorkstationError, WorkstationNotFoundError
+from .printer_mapping_service import get_printers_config, put_printer_mapping
 from .serialize import append_event, serialize_workstation, serialize_workstations_batch
 
 logger = logging.getLogger(__name__)
@@ -678,154 +676,6 @@ def list_devices_grouped(
     except Exception:
         pass
     return empty
-
-
-def get_printers_config(
-    db: Session,
-    *,
-    tenant_id: int,
-    workstation_id: int,
-) -> dict[str, Any]:
-    row = get_workstation_or_404(db, tenant_id=tenant_id, workstation_id=workstation_id)
-    available: list[dict[str, Any]] = []
-    agent = None
-    online = False
-    if row.printer_agent_id is not None:
-        try:
-            from ...services.agent.device_registry_service import (
-                ensure_agent_printers_from_edge_devices,
-            )
-
-            ensure_agent_printers_from_edge_devices(db, agent_id=int(row.printer_agent_id))
-        except Exception:
-            pass
-        agent = db.query(PrinterAgent).filter(PrinterAgent.id == row.printer_agent_id).first()
-        online = is_agent_online(agent) if agent else False
-        printers = (
-            db.query(AgentPrinter)
-            .filter(
-                AgentPrinter.agent_id == row.printer_agent_id,
-                AgentPrinter.is_active.is_(True),
-            )
-            .order_by(AgentPrinter.name.asc())
-            .all()
-        )
-        for p in printers:
-            available.append(
-                {
-                    "id": p.id,
-                    "name": p.name or p.system_name,
-                    "system_name": p.system_name,
-                    "status": "online" if online else "offline",
-                    "is_online": online,
-                }
-            )
-
-    existing = {
-        m.print_type: m
-        for m in db.query(WorkstationPrinterMapping)
-        .filter(WorkstationPrinterMapping.workstation_id == row.id)
-        .all()
-    }
-    mappings: list[dict[str, Any]] = []
-    printer_by_id = {p["id"]: p for p in available}
-    for print_type in PRINT_TYPES:
-        m = existing.get(print_type)
-        printer_id = m.agent_printer_id if m else None
-        printer = printer_by_id.get(printer_id) if printer_id else None
-        mappings.append(
-            {
-                "print_type": print_type,
-                "print_type_label": PRINT_TYPE_LABELS_PL.get(print_type, print_type),
-                "agent_printer_id": printer_id if printer else None,
-                "printer_name": printer["name"] if printer else None,
-                "status": printer["status"] if printer else None,
-            }
-        )
-    return {"mappings": mappings, "available_printers": available}
-
-
-def put_printer_mapping(
-    db: Session,
-    *,
-    tenant_id: int,
-    workstation_id: int,
-    mappings: list[dict[str, Any]],
-    actor_user_id: int | None = None,
-) -> dict[str, Any]:
-    row = get_workstation_or_404(db, tenant_id=tenant_id, workstation_id=workstation_id)
-    if row.printer_agent_id is None:
-        raise WorkstationError("Najpierw połącz komputer ze stanowiskiem")
-
-    try:
-        from ...services.agent.device_registry_service import (
-            ensure_agent_printers_from_edge_devices,
-        )
-
-        ensure_agent_printers_from_edge_devices(db, agent_id=int(row.printer_agent_id))
-    except Exception:
-        pass
-
-    allowed_ids = {
-        p.id
-        for p in db.query(AgentPrinter)
-        .filter(
-            AgentPrinter.agent_id == row.printer_agent_id,
-            AgentPrinter.is_active.is_(True),
-        )
-        .all()
-    }
-    changes: list[str] = []
-    for item in mappings:
-        print_type = str(item.get("print_type") or "").strip()
-        if print_type not in PRINT_TYPES:
-            raise WorkstationError(f"Nieznany typ wydruku: {print_type}")
-        raw_id = item.get("agent_printer_id")
-        existing = (
-            db.query(WorkstationPrinterMapping)
-            .filter(
-                WorkstationPrinterMapping.workstation_id == row.id,
-                WorkstationPrinterMapping.print_type == print_type,
-            )
-            .first()
-        )
-        label = PRINT_TYPE_LABELS_PL.get(print_type, print_type)
-        if raw_id is None or raw_id == "":
-            if existing is not None:
-                db.delete(existing)
-                changes.append(f"{label} → (brak)")
-            continue
-        printer_id = int(raw_id)
-        if printer_id not in allowed_ids:
-            raise WorkstationError(
-                "Drukarka musi należeć do komputera przypisanego do tego stanowiska"
-            )
-        printer = db.query(AgentPrinter).filter(AgentPrinter.id == printer_id).first()
-        printer_name = (printer.name or printer.system_name) if printer else str(printer_id)
-        if existing is None:
-            db.add(
-                WorkstationPrinterMapping(
-                    workstation_id=row.id,
-                    print_type=print_type,
-                    agent_printer_id=printer_id,
-                )
-            )
-            changes.append(f"{label} → {printer_name}")
-        elif existing.agent_printer_id != printer_id:
-            existing.agent_printer_id = printer_id
-            changes.append(f"{label} → {printer_name}")
-
-    if changes:
-        append_event(
-            db,
-            tenant_id=tenant_id,
-            workstation_id=row.id,
-            event_type=EVENT_PRINTER_MAPPING_CHANGED,
-            title="Zmieniono konfigurację drukowania",
-            detail="; ".join(changes),
-            actor_user_id=actor_user_id,
-        )
-    return get_printers_config(db, tenant_id=tenant_id, workstation_id=workstation_id)
 
 
 def list_history(

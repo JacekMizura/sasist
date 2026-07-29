@@ -292,15 +292,16 @@ class TestWorkstationLifecycle(WorkstationsTestCase):
         ok = self.client.put(
             f"/api/wms/workstations/{ws['id']}/printer-mapping",
             params={"tenant_id": 1},
-            json={"mappings": [{"print_type": "labels", "agent_printer_id": pid}]},
+            json={"mappings": [{"print_profile": "LABELS", "agent_printer_id": pid}]},
         )
         self.assertEqual(ok.status_code, 200, ok.text)
-        self.assertEqual(ok.json()["mappings"][2]["agent_printer_id"], pid)  # labels index
+        labels_row = next(m for m in ok.json()["mappings"] if m["print_profile"] == "LABELS")
+        self.assertEqual(labels_row["agent_printer_id"], pid)
 
         bad = self.client.put(
             f"/api/wms/workstations/{ws['id']}/printer-mapping",
             params={"tenant_id": 1},
-            json={"mappings": [{"print_type": "labels", "agent_printer_id": 99999}]},
+            json={"mappings": [{"print_profile": "LABELS", "agent_printer_id": 99999}]},
         )
         self.assertEqual(bad.status_code, 400)
 
@@ -377,10 +378,13 @@ class TestWorkstationLifecycle(WorkstationsTestCase):
         mapped = self.client.put(
             f"/api/wms/workstations/{ws['id']}/printer-mapping",
             params={"tenant_id": 1},
-            json={"mappings": [{"print_type": "shipping_label", "agent_printer_id": pid}]},
+            json={"mappings": [{"print_profile": "SHIPPING_LABELS", "agent_printer_id": pid}]},
         )
         self.assertEqual(mapped.status_code, 200, mapped.text)
-        self.assertEqual(mapped.json()["mappings"][0]["agent_printer_id"], pid)
+        shipping = next(
+            m for m in mapped.json()["mappings"] if m["print_profile"] == "SHIPPING_LABELS"
+        )
+        self.assertEqual(shipping["agent_printer_id"], pid)
 
     def test_migration_from_existing_agent(self):
         with self.SessionLocal() as db:
@@ -538,7 +542,7 @@ class TestWorkstationPrinterResolution(WorkstationsTestCase):
             db.add(
                 WorkstationPrinterMapping(
                     workstation_id=ws["id"],
-                    print_type="labels",
+                    print_profile="LABELS",
                     agent_printer_id=ws_printer.id,
                 )
             )

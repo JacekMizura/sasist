@@ -1,6 +1,20 @@
-"""WMS workstations — station types, print types, event kinds."""
+"""WMS workstations — station types, legacy print types, event kinds.
+
+Print-profile SSOT lives in ``backend.printing_profiles``. Legacy PRINT_TYPE_*
+codes remain for migration / older tests only.
+"""
 
 from __future__ import annotations
+
+from ...printing_profiles import (
+    LEGACY_PRINTER_TYPE_TO_PROFILE,
+    PRINT_PROFILE_DOCUMENTS,
+    PRINT_PROFILE_LABELS,
+    PRINT_PROFILE_LABELS_PL,
+    PRINT_PROFILE_REPORTS,
+    PRINT_PROFILE_SHIPPING_LABELS,
+    PRINT_PROFILES,
+)
 
 STATION_TYPE_PICKING = "picking"
 STATION_TYPE_PACKING = "packing"
@@ -33,36 +47,22 @@ STATION_TYPE_LABELS_PL: dict[str, str] = {
     STATION_TYPE_OTHER: "Inne",
 }
 
-# Business print types (UI) — mapped onto agent printers at the workstation.
-PRINT_TYPE_SHIPPING_LABEL = "shipping_label"
-PRINT_TYPE_INVOICE = "invoice"
-PRINT_TYPE_LABELS = "labels"
-PRINT_TYPE_ORDER = "order"
-PRINT_TYPE_OTHER = "other"
+# --- Print profiles (preferred) ---------------------------------------------
+PRINT_TYPES = PRINT_PROFILES
+PRINT_TYPE_LABELS_PL = PRINT_PROFILE_LABELS_PL
 
-PRINT_TYPES = (
-    PRINT_TYPE_SHIPPING_LABEL,
-    PRINT_TYPE_INVOICE,
-    PRINT_TYPE_LABELS,
-    PRINT_TYPE_ORDER,
-    PRINT_TYPE_OTHER,
-)
+# Canonical profile codes (aliases for older imports)
+PRINT_TYPE_LABELS = PRINT_PROFILE_LABELS
+PRINT_TYPE_DOCUMENTS = PRINT_PROFILE_DOCUMENTS
+PRINT_TYPE_SHIPPING_LABEL = PRINT_PROFILE_SHIPPING_LABELS
+PRINT_TYPE_REPORTS = PRINT_PROFILE_REPORTS
+# Legacy document buckets collapsed into DOCUMENTS
+PRINT_TYPE_INVOICE = PRINT_PROFILE_DOCUMENTS
+PRINT_TYPE_ORDER = PRINT_PROFILE_DOCUMENTS
+PRINT_TYPE_OTHER = PRINT_PROFILE_DOCUMENTS
 
-PRINT_TYPE_LABELS_PL: dict[str, str] = {
-    PRINT_TYPE_SHIPPING_LABEL: "Lista przewozowa",
-    PRINT_TYPE_INVOICE: "Faktury",
-    PRINT_TYPE_LABELS: "Etykiety",
-    PRINT_TYPE_ORDER: "Zamówienie",
-    PRINT_TYPE_OTHER: "Pozostałe dokumenty",
-}
-
-# Legacy PrintingDefault.printer_type → workstation print_type
-LEGACY_PRINTER_TYPE_TO_PRINT_TYPE: dict[str, str] = {
-    "label": PRINT_TYPE_LABELS,
-    "a4": PRINT_TYPE_INVOICE,
-    "receipt": PRINT_TYPE_OTHER,
-    "other": PRINT_TYPE_OTHER,
-}
+# Legacy PrintingDefault.printer_type → workstation print profile
+LEGACY_PRINTER_TYPE_TO_PRINT_TYPE = LEGACY_PRINTER_TYPE_TO_PROFILE
 
 EVENT_CREATED = "created"
 EVENT_UPDATED = "updated"

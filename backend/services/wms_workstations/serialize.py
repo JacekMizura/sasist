@@ -21,8 +21,13 @@ from ...models.wms_workstations import (
 from ...models.wms_workstations.constants import STATION_TYPE_OTHER
 from ...services.printing.agent_service import agent_health_status, is_agent_online
 
-# Prefer document (A4) mappings first when surfacing a single "default printer" on lists.
-_DEFAULT_PRINTER_PRINT_TYPE_PRIORITY = (
+# Prefer document mappings first when surfacing a single "default printer" on lists.
+_DEFAULT_PRINTER_PRINT_PROFILE_PRIORITY = (
+    "DOCUMENTS",
+    "LABELS",
+    "SHIPPING_LABELS",
+    "REPORTS",
+    # Legacy pre-migration values (still sortable during rollout)
     "invoice",
     "order",
     "other",
@@ -180,12 +185,12 @@ def _default_printer_names_batch(db: Session, workstation_ids: set[int]) -> dict
     for m in mappings:
         by_ws[int(m.workstation_id)].append(m)
 
-    priority = {pt: i for i, pt in enumerate(_DEFAULT_PRINTER_PRINT_TYPE_PRIORITY)}
+    priority = {pt: i for i, pt in enumerate(_DEFAULT_PRINTER_PRINT_PROFILE_PRIORITY)}
     result: dict[int, str | None] = {wid: None for wid in workstation_ids}
     for wid, rows in by_ws.items():
         rows_sorted = sorted(
             rows,
-            key=lambda m: priority.get(str(m.print_type or ""), 99),
+            key=lambda m: priority.get(str(m.print_profile or ""), 99),
         )
         for m in rows_sorted:
             pid = m.agent_printer_id

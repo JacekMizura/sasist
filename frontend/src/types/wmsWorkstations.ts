@@ -10,7 +10,10 @@ export type StationType =
   | "shipping"
   | "other";
 
+/** @deprecated Use PrintProfile — legacy per-document buckets. */
 export type PrintType = "shipping_label" | "invoice" | "labels" | "order" | "other";
+
+export type PrintProfile = "LABELS" | "DOCUMENTS" | "SHIPPING_LABELS" | "REPORTS";
 
 export type ConnectionStatus = "connected" | "offline" | "unpaired";
 
@@ -87,8 +90,13 @@ export type PrinterOption = {
 };
 
 export type PrinterMappingRow = {
-  print_type: PrintType | string;
-  print_type_label: string;
+  print_profile: PrintProfile | string;
+  print_profile_label: string;
+  print_profile_icon?: string | null;
+  /** @deprecated Prefer print_profile */
+  print_type?: PrintType | string;
+  /** @deprecated Prefer print_profile_label */
+  print_type_label?: string;
   agent_printer_id: number | null;
   printer_name: string | null;
   status: string | null;

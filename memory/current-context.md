@@ -2,4 +2,4 @@
 
 ## Active
 
-**Template usage report:** drawer „Użycia” with sections (Firmy / Magazyny / Stanowiska / Serie / Reguły / Inne), summary counts, deep links. API `GET /document-templates/templates/{id}/usage` returns `summary` + `sections`.
+**Print profiles on workstations:** printers map to profiles (`LABELS` / `DOCUMENTS` / `SHIPPING_LABELS` / `REPORTS`), not document types or WMS modules. SSOT: `backend/printing_profiles/`. Migration `print_profiles_v1` collapses legacy invoice/order/other → DOCUMENTS.

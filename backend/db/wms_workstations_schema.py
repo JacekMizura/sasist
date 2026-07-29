@@ -13,7 +13,7 @@ from .schema_introspection import ensure_model_schema_sync, has_table
 
 logger = logging.getLogger(__name__)
 
-WMS_WORKSTATIONS_SCHEMA_VERSION = "2026.07.29.1"
+WMS_WORKSTATIONS_SCHEMA_VERSION = "2026.07.29.2"
 
 
 @dataclass(frozen=True)

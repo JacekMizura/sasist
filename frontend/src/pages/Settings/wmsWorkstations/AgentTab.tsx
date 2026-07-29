@@ -255,7 +255,7 @@ export function AgentTab({ workstationId, detail, onUpdated, onPaired }: Props) 
       const res = await pairWorkstation(WMS_WORKSTATIONS_TENANT_ID, workstationId);
       const code = String(res.pairing_code || "").trim();
       const exp = String(res.expires_at || "").trim();
-      // TEMP pairing diag — no full code/token
+      // TEMP pairing diag — no full code/secret
       console.info("[wms-pairing] POST /pair", {
         workstationId,
         codeLen: code.length,
