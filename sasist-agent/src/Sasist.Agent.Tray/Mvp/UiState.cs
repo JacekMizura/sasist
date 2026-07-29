@@ -32,12 +32,11 @@ internal sealed record UiState(
     public static UiState Capture(ConfigStore store)
     {
         var cfg = store.Load();
-        var needs = cfg.NeedsSetup;
-        var snap = AgentStatusStore.Read();
-        var running = ServiceHelper.IsRunning(TrayApplicationContext.ServiceName);
-        var online = !needs && running && (snap?.Online ?? false);
+        var connection = ConnectionState.Capture(
+            cfg,
+            ServiceHelper.IsRunning(TrayApplicationContext.ServiceName));
         var printers = LocalPrinters.List();
-        var devices = snap?.DeviceCount ?? printers.Count;
+        var devices = connection.DeviceCount > 0 ? connection.DeviceCount : printers.Count;
         var last = JobHistoryStore.Read().FirstOrDefault();
         string service;
         try
@@ -47,8 +46,10 @@ internal sealed record UiState(
         }
         catch { service = "Niedostępna"; }
 
+        var online = connection.Online;
+        var snap = AgentStatusStore.Read();
         return new UiState(
-            NeedsSetup: needs,
+            NeedsSetup: connection.NeedsSetup,
             Online: online,
             ConnPill: online ? "●  Połączono" : "●  Brak połączenia",
             ConnPillColor: online ? Theme.Success : Theme.Danger,
@@ -59,10 +60,10 @@ internal sealed record UiState(
             DevicesSummary: UiCopy.DevicesReadySummary(devices),
             LastPrintValue: last is null ? "Brak" : last.At.ToLocalTime().ToString("HH:mm"),
             LastPrintHint: last is null ? "Historia jest pusta" : $"{last.Printer} · {last.Status}",
-            SyncValue: UiCopy.RelativeSync(snap?.UpdatedAt),
+            SyncValue: UiCopy.RelativeSync(connection.LastSyncAt),
             ServiceStatus: service,
-            Endpoint: cfg.ServerUrl,
-            AgentId: cfg.AgentId > 0 ? cfg.AgentId.ToString() : "—",
+            Endpoint: string.IsNullOrWhiteSpace(connection.Endpoint) ? cfg.ServerUrl : connection.Endpoint,
+            AgentId: connection.AgentId > 0 ? connection.AgentId.ToString() : "—",
             TokenMasked: UiCopy.MaskSecret(cfg.Token),
             Heartbeat: $"co {cfg.HeartbeatIntervalSec} s",
             PollInterval: $"co {cfg.PollIntervalSec} s",

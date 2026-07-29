@@ -150,7 +150,9 @@ internal sealed class SettingsPage : UserControl, IPageView
     private void Export()
     {
         var cfg = _store.Load();
-        var snap = AgentStatusStore.Read();
+        var connection = ConnectionState.Capture(
+            cfg,
+            ServiceHelper.IsRunning(TrayApplicationContext.ServiceName));
         using var dlg = new SaveFileDialog { Filter = "Tekst (*.txt)|*.txt", FileName = $"sasist-diagnostyka-{DateTime.Now:yyyyMMdd-HHmm}.txt" };
         if (dlg.ShowDialog(this) != DialogResult.OK) return;
         File.WriteAllText(dlg.FileName, string.Join(Environment.NewLine, new[]
@@ -159,9 +161,9 @@ internal sealed class SettingsPage : UserControl, IPageView
             $"Wersja: {AgentConfig.AgentVersion}",
             $"Agent ID: {cfg.AgentId}",
             $"Machine ID: {cfg.MachineId}",
-            $"Endpoint: {cfg.ServerUrl}",
-            $"Firma: {UiCopy.CompanyName(cfg, snap)}",
-            $"Online: {snap?.Online}",
+            $"Endpoint: {connection.Endpoint}",
+            $"Firma: {UiCopy.CompanyName(cfg, AgentStatusStore.Read())}",
+            $"Online: {connection.Online}",
             $"Logi: {AgentPaths.LogsDir}",
         }));
     }

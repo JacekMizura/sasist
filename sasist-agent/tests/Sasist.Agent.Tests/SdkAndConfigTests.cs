@@ -42,4 +42,38 @@ public class SdkAndConfigTests
     {
         Assert.Equal(1, AgentConfig.ProtocolVersion);
     }
+
+    [Fact]
+    public void ConnectionState_Online_RequiresPairingServiceAndHostSnapshot()
+    {
+        var cfg = new AgentConfig
+        {
+            ServerUrl = "https://example.test",
+            Token = "spt_test",
+            AgentId = 42,
+            OrganizationName = "Acme",
+        };
+        var snap = new AgentStatusSnapshot
+        {
+            Online = true,
+            DeviceCount = 3,
+            OrganizationName = "Acme",
+            UpdatedAt = DateTimeOffset.UtcNow,
+        };
+
+        var online = ConnectionState.Capture(cfg, serviceRunning: true, snapshot: snap);
+        Assert.True(online.Online);
+        Assert.Equal(42, online.AgentId);
+        Assert.Equal("https://example.test", online.Endpoint);
+
+        var offlineHost = ConnectionState.Capture(cfg, serviceRunning: true, snapshot: new AgentStatusSnapshot { Online = false });
+        Assert.False(offlineHost.Online);
+
+        var stopped = ConnectionState.Capture(cfg, serviceRunning: false, snapshot: snap);
+        Assert.False(stopped.Online);
+
+        var unpaired = ConnectionState.Capture(new AgentConfig(), serviceRunning: true, snapshot: snap);
+        Assert.False(unpaired.Online);
+        Assert.True(unpaired.NeedsSetup);
+    }
 }

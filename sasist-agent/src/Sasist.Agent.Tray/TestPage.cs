@@ -1,4 +1,3 @@
-using System.Net.NetworkInformation;
 using System.Security.Cryptography;
 using System.ServiceProcess;
 using System.Text;
@@ -15,6 +14,7 @@ internal sealed class TestPage : UserControl, IPageView
     private readonly SasistButton _run;
     private readonly List<(SasistIcon Icon, SasistCaption Detail, SasistBody Title)> _rows = new();
     private PageShell? _shell;
+    private ConnectionState? _connection;
 
     private static readonly string[] Names =
     [
@@ -112,8 +112,16 @@ internal sealed class TestPage : UserControl, IPageView
         _result.MaximumSize = new Size(w, 0);
     }
 
-    public void ApplyValues(UiState state) { }
-    public void ForceSync(UiState state) => Relayout();
+    public void ApplyValues(UiState state) =>
+        _connection = ConnectionState.Capture(
+            _store.Load(),
+            ServiceHelper.IsRunning(TrayApplicationContext.ServiceName));
+
+    public void ForceSync(UiState state)
+    {
+        ApplyValues(state);
+        Relayout();
+    }
 
     private async Task RunAsync()
     {
@@ -121,12 +129,18 @@ internal sealed class TestPage : UserControl, IPageView
         _result.Text = "Trwa sprawdzanie…";
         _result.ForeColor = Theme.MutedText;
         Motion.StartPulse(_result);
+
+        // Same ConnectionState as Status / Diagnostyka / chrome — never a parallel HTTP probe.
+        _connection = ConnectionState.Capture(
+            _store.Load(),
+            ServiceHelper.IsRunning(TrayApplicationContext.ServiceName));
+
         var oks = new List<bool>();
         for (var i = 0; i < Names.Length; i++)
         {
             Set(i, null, "Sprawdzanie…");
             await Task.Delay(100);
-            var (ok, detail) = await CheckAsync(Names[i]);
+            var (ok, detail) = Check(Names[i], _connection);
             Set(i, ok, detail);
             oks.Add(ok);
         }
@@ -148,36 +162,47 @@ internal sealed class TestPage : UserControl, IPageView
         d.ForeColor = ok is null ? Theme.MutedText : ok.Value ? Theme.Success : Theme.Danger;
     }
 
-    private async Task<(bool, string)> CheckAsync(string name) => name switch
+    /// <summary>
+    /// Connectivity rows (Internet / Sasist / Backend / Agent) share <see cref="ConnectionState"/>.
+    /// Local readiness rows stay OS/filesystem checks.
+    /// </summary>
+    private static (bool, string) Check(string name, ConnectionState conn) => name switch
     {
-        "Internet" => (NetworkInterface.GetIsNetworkAvailable(), NetworkInterface.GetIsNetworkAvailable() ? "Sieć dostępna" : "Brak sieci"),
-        "Sasist" => await Probe(SasistCloud.ResolveApiBaseUrl() + "/health"),
-        "Backend" => await Probe(SasistCloud.ResolveApiBaseUrl().TrimEnd('/') + "/"),
-        "Agent" => Agent(),
+        "Internet" => Connectivity(conn, "Sieć i Sasist połączone", "Brak połączenia z Internetem / Sasist"),
+        "Sasist" => Connectivity(conn, "Połączono z Sasist", "Brak połączenia z Sasist"),
+        "Backend" => Connectivity(conn, $"Backend OK · {ShortEndpoint(conn.Endpoint)}", "Brak połączenia z backendem"),
+        "Agent" => Agent(conn),
         "Usługa" => Service(),
         "Drukarki" => Printers(),
-        "Synchronizacja" => Sync(),
+        "Synchronizacja" => Sync(conn),
         "Uprawnienia" => Perms(),
         "Folder logów" => Logs(),
         "DPAPI" => Dpapi(),
         _ => (true, "OK"),
     };
 
-    private static async Task<(bool, string)> Probe(string url)
+    private static (bool, string) Connectivity(ConnectionState conn, string okDetail, string failLabel) =>
+        conn.Online ? (true, okDetail) : (false, $"{failLabel} — {conn.OfflineReason}");
+
+    private static string ShortEndpoint(string endpoint)
     {
+        if (string.IsNullOrWhiteSpace(endpoint)) return "—";
         try
         {
-            using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(8) };
-            using var res = await http.GetAsync(url);
-            return (true, $"HTTP {(int)res.StatusCode}");
+            var u = new Uri(endpoint);
+            return u.Host;
         }
-        catch { return (false, "Brak połączenia z Sasist"); }
+        catch
+        {
+            return endpoint.Length > 40 ? endpoint[..40] + "…" : endpoint;
+        }
     }
 
-    private (bool, string) Agent()
+    private static (bool, string) Agent(ConnectionState conn)
     {
-        var cfg = _store.Load();
-        return cfg.NeedsSetup ? (false, "Brak połączenia — wpisz kod") : (true, $"Agent ID {cfg.AgentId}");
+        if (conn.NeedsSetup) return (false, "Brak połączenia — wpisz kod");
+        if (!conn.Online) return (false, conn.OfflineReason);
+        return (true, conn.AgentId > 0 ? $"Agent ID {conn.AgentId}" : "Agent sparowany");
     }
 
     private static (bool, string) Service()
@@ -196,12 +221,12 @@ internal sealed class TestPage : UserControl, IPageView
         return n > 0 ? (true, $"{n} drukarek") : (false, "Brak drukarek");
     }
 
-    private static (bool, string) Sync()
+    private static (bool, string) Sync(ConnectionState conn)
     {
-        var snap = AgentStatusStore.Read();
-        if (snap is null) return (false, "Brak synchronizacji");
-        return DateTimeOffset.UtcNow - snap.UpdatedAt.ToUniversalTime() < TimeSpan.FromMinutes(5)
-            ? (true, UiCopy.RelativeSync(snap.UpdatedAt))
+        if (!conn.Online || conn.LastSyncAt is null)
+            return (false, conn.NeedsSetup ? "Brak synchronizacji" : conn.OfflineReason);
+        return DateTimeOffset.UtcNow - conn.LastSyncAt.Value.ToUniversalTime() < TimeSpan.FromMinutes(5)
+            ? (true, UiCopy.RelativeSync(conn.LastSyncAt))
             : (false, "Synchronizacja przestarzała");
     }
 
