@@ -118,21 +118,24 @@ export default function WmsWorkstationsListPage() {
 
   return (
     <PageLayout>
-      <WorkstationsBreadcrumb />
-      <PageHeader
-        title="Stanowiska"
-        actions={
-          <button type="button" className={brandPrimaryButtonClass} onClick={openCreate}>
-            <Plus className="mr-1.5 h-4 w-4" />
-            Dodaj stanowisko
-          </button>
-        }
-      />
-      <p className="mb-4 text-sm text-slate-600">
-        Stanowisko to fizyczne miejsce pracy w magazynie. Komputer (Sasist Agent) przypisujesz w
-        szczegółach stanowiska.
-      </p>
+      <div className="mx-auto w-full max-w-3xl space-y-5">
+        <WorkstationsBreadcrumb />
+        <PageHeader
+          title="Stanowiska"
+          actions={
+            <button type="button" className={brandPrimaryButtonClass} onClick={openCreate}>
+              <Plus className="mr-1.5 h-4 w-4" />
+              Dodaj stanowisko
+            </button>
+          }
+        />
+        <p className="text-sm text-slate-600">
+          Stanowisko to fizyczne miejsce pracy w magazynie. Komputer (Sasist Agent) przypisujesz w
+          szczegółach stanowiska.
+        </p>
+      </div>
 
+      <div className="mx-auto mt-2 w-full max-w-3xl">
       {warehouses.length > 1 ? (
         <label className="mb-4 flex items-center gap-2 text-sm text-slate-700">
           Magazyn
@@ -249,6 +252,7 @@ export default function WmsWorkstationsListPage() {
           </table>
         </div>
       )}
+      </div>
 
       {modalOpen ? (
         <AppOverlayPortal>

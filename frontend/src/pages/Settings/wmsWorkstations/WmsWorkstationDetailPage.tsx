@@ -100,25 +100,27 @@ export default function WmsWorkstationDetailPage() {
 
   return (
     <PageLayout>
-      <WorkstationsBreadcrumb current={detail.name} />
-      <div className="mt-2 flex flex-wrap items-center justify-between gap-3">
-        <div className="flex flex-wrap items-center gap-3">
-          <h1 className="text-2xl font-semibold text-slate-900">{detail.name}</h1>
-          <StationTypeBadge stationType={detail.station_type} label={detail.station_type_label} />
+      <div className="mx-auto w-full max-w-3xl space-y-5">
+        <WorkstationsBreadcrumb current={detail.name} />
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center gap-3">
+            <h1 className="text-2xl font-semibold text-slate-900">{detail.name}</h1>
+            <StationTypeBadge stationType={detail.station_type} label={detail.station_type_label} />
+          </div>
         </div>
-      </div>
 
-      <div className="mt-4 flex gap-1 overflow-x-auto border-b border-slate-200">
-        {TABS.map((t) => (
-          <button
-            key={t.id}
-            type="button"
-            className={tabsNavItemClassName(tab === t.id)}
-            onClick={() => setTab(t.id)}
-          >
-            {t.label}
-          </button>
-        ))}
+        <div className="flex gap-1 overflow-x-auto border-b border-slate-200">
+          {TABS.map((t) => (
+            <button
+              key={t.id}
+              type="button"
+              className={tabsNavItemClassName(tab === t.id)}
+              onClick={() => setTab(t.id)}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
       </div>
 
       <div className="mt-6">

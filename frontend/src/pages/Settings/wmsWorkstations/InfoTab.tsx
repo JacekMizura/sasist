@@ -4,10 +4,10 @@ import toast from "react-hot-toast";
 import { extractApiErrorMessage } from "../../../api/apiErrorMessage";
 import { updateWorkstation } from "../../../api/wmsWorkstationsApi";
 import { useWarehouse } from "../../../context/WarehouseContext";
-import { brandPrimaryButtonClass } from "../../../design-system/brandUi";
 import type { StationType, WorkstationDetail } from "../../../types/wmsWorkstations";
 import { STATION_TYPE_OPTIONS } from "../../../types/wmsWorkstations";
 import { WMS_WORKSTATIONS_TENANT_ID } from "./tenant";
+import { WorkstationCard, WorkstationTabShell, wsTokens } from "./workstationUi";
 
 type Props = {
   workstationId: number;
@@ -55,65 +55,70 @@ export function InfoTab({ workstationId, detail, onUpdated }: Props) {
   };
 
   return (
-    <div className="max-w-xl space-y-4">
-      <p className="text-sm text-slate-600">Informacje o stanowisku (miejsce pracy)</p>
-      <label className="block text-sm font-medium text-slate-700">
-        Nazwa
-        <input
-          className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-        />
-      </label>
-      <label className="block text-sm font-medium text-slate-700">
-        Typ stanowiska
-        <select
-          className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2"
-          value={stationType}
-          onChange={(e) => setStationType(e.target.value)}
-        >
-          {STATION_TYPE_OPTIONS.map((o) => (
-            <option key={o.value} value={o.value}>
-              {o.label}
-            </option>
-          ))}
-        </select>
-      </label>
-      <label className="block text-sm font-medium text-slate-700">
-        Magazyn
-        <select
-          className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2"
-          value={warehouseId}
-          onChange={(e) => setWarehouseId(Number(e.target.value))}
-        >
-          {warehouses.map((w) => (
-            <option key={w.id} value={w.id}>
-              {w.name || `Magazyn #${w.id}`}
-            </option>
-          ))}
-        </select>
-      </label>
-      <label className="block text-sm font-medium text-slate-700">
-        Opis
-        <textarea
-          className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2"
-          rows={3}
-          value={description}
-          onChange={(e) => setDescription(e.target.value)}
-          placeholder="np. Stół pakowania przy bramie 2"
-        />
-      </label>
-      <label className="flex items-center gap-2 text-sm text-slate-700">
-        <input type="checkbox" checked={isDefault} onChange={(e) => setIsDefault(e.target.checked)} />
-        Domyślne dla magazynu
-      </label>
-      <label className="flex items-center gap-2 text-sm text-slate-700">
-        <input type="checkbox" checked={isActive} onChange={(e) => setIsActive(e.target.checked)} />
-        Aktywne
-      </label>
-      <button type="button" className={brandPrimaryButtonClass} disabled={busy} onClick={() => void save()}>
-        {busy ? "Zapisywanie…" : "Zapisz"}
-      </button>
-    </div>
+    <WorkstationTabShell
+      intro="Informacje o stanowisku (miejsce pracy)."
+      actions={
+        <button type="button" className={wsTokens.primaryBtn} disabled={busy} onClick={() => void save()}>
+          {busy ? "Zapisywanie…" : "Zapisz"}
+        </button>
+      }
+    >
+      <WorkstationCard title="Dane stanowiska">
+        <div className="space-y-4">
+          <label className={wsTokens.fieldLabel}>
+            Nazwa
+            <input className={wsTokens.input} value={name} onChange={(e) => setName(e.target.value)} />
+          </label>
+          <label className={wsTokens.fieldLabel}>
+            Typ stanowiska
+            <select
+              className={wsTokens.select}
+              value={stationType}
+              onChange={(e) => setStationType(e.target.value)}
+            >
+              {STATION_TYPE_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className={wsTokens.fieldLabel}>
+            Magazyn
+            <select
+              className={wsTokens.select}
+              value={warehouseId}
+              onChange={(e) => setWarehouseId(Number(e.target.value))}
+            >
+              {warehouses.map((w) => (
+                <option key={w.id} value={w.id}>
+                  {w.name || `Magazyn #${w.id}`}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className={wsTokens.fieldLabel}>
+            Opis
+            <textarea
+              className={wsTokens.input}
+              rows={3}
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="np. Stół pakowania przy bramie 2"
+            />
+          </label>
+          <div className="flex flex-col gap-3 sm:flex-row sm:gap-6">
+            <label className="flex items-center gap-2 text-sm text-slate-700">
+              <input type="checkbox" checked={isDefault} onChange={(e) => setIsDefault(e.target.checked)} />
+              Domyślne dla magazynu
+            </label>
+            <label className="flex items-center gap-2 text-sm text-slate-700">
+              <input type="checkbox" checked={isActive} onChange={(e) => setIsActive(e.target.checked)} />
+              Aktywne
+            </label>
+          </div>
+        </div>
+      </WorkstationCard>
+    </WorkstationTabShell>
   );
 }

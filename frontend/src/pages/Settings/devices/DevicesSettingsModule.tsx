@@ -8,8 +8,8 @@ import { DeviceDetailPanel } from "./DeviceDetailPanel";
 import { EventsPanel } from "./EventsPanel";
 import { InventoryPanel } from "./InventoryPanel";
 
+/** Edge inventory / events only — Stanowiska live under Ustawienia WMS. */
 const TABS: TabItem[] = [
-  { path: "/settings/wms/workstations", label: "Stanowiska" },
   { path: `${DEVICES_SETTINGS_BASE}/inventory`, label: "Urządzenia" },
   { path: `${DEVICES_SETTINGS_BASE}/events`, label: "Zdarzenia" },
   { path: "/settings/printers/queue", label: "Druk (kolejka)" },
@@ -29,12 +29,12 @@ export default function DevicesSettingsModule() {
         tabsAriaLabel="Urządzenia edge"
       >
         <Routes>
-          <Route index element={<Navigate to="/settings/wms/workstations" replace />} />
+          <Route index element={<Navigate to={`${DEVICES_SETTINGS_BASE}/inventory`} replace />} />
           <Route path="agents" element={<Navigate to="/settings/wms/workstations" replace />} />
           <Route path="inventory" element={<InventoryPanel />} />
           <Route path="device/:deviceId" element={<DeviceDetailPanel />} />
           <Route path="events" element={<EventsPanel />} />
-          <Route path="*" element={<Navigate to="/settings/wms/workstations" replace />} />
+          <Route path="*" element={<Navigate to={`${DEVICES_SETTINGS_BASE}/inventory`} replace />} />
         </Routes>
       </SettingsModuleStack>
     </PageLayout>

@@ -13,14 +13,18 @@ import {
   openPrinterAgentDownload,
   resolvePrinterAgentDownload,
 } from "../../../config/printerAgent";
-import { brandPrimaryButtonClass } from "../../../design-system/brandUi";
 import type { WorkstationDetail } from "../../../types/wmsWorkstations";
 import { WMS_WORKSTATIONS_TENANT_ID } from "./tenant";
 import {
   ConnectionDot,
   formatRelativePl,
   formatUptime,
+  WorkstationCard,
+  WorkstationDescList,
   WorkstationEmptyState,
+  WorkstationTabShell,
+  WsStatusBadge,
+  wsTokens,
 } from "./workstationUi";
 
 const PAIRING_POLL_MS = 2500;
@@ -328,14 +332,7 @@ export function AgentTab({ workstationId, detail, onUpdated, onPaired }: Props) 
 
   if (!agent) {
     return (
-      <div className="max-w-lg space-y-4">
-        <div>
-          <h3 className="text-base font-semibold text-slate-900">Sasist Agent</h3>
-          <p className="mt-1 text-sm text-slate-600">
-            Połącz komputer przy tym stanowisku, aby drukować etykiety i dokumenty.
-          </p>
-        </div>
-
+      <WorkstationTabShell intro="Połącz komputer przy tym stanowisku, aby drukować etykiety i dokumenty.">
         {!showPairingPanel ? (
           <WorkstationEmptyState
             title="Brak połączonego komputera"
@@ -344,7 +341,7 @@ export function AgentTab({ workstationId, detail, onUpdated, onPaired }: Props) 
               <>
                 <button
                   type="button"
-                  className={brandPrimaryButtonClass}
+                  className={wsTokens.primaryBtn}
                   disabled={!downloadUrl}
                   onClick={handleDownload}
                 >
@@ -352,7 +349,7 @@ export function AgentTab({ workstationId, detail, onUpdated, onPaired }: Props) 
                 </button>
                 <button
                   type="button"
-                  className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium hover:bg-slate-50"
+                  className={wsTokens.mutedBtn}
                   disabled={busy}
                   onClick={() => void handlePair()}
                 >
@@ -364,97 +361,102 @@ export function AgentTab({ workstationId, detail, onUpdated, onPaired }: Props) 
         ) : null}
 
         {codeExpired && !showPairingPanel ? (
-          <p className="text-sm text-amber-800">
-            Kod połączenia wygasł. Wygeneruj nowy, a następnie wklej go w Agencie.
-          </p>
+          <WorkstationCard>
+            <p className="text-sm text-amber-800">
+              Kod połączenia wygasł. Wygeneruj nowy, a następnie wklej go w Agencie.
+            </p>
+          </WorkstationCard>
         ) : null}
 
         {showPairingPanel ? (
-          <div className="rounded-xl border border-orange-100 bg-[#FFF7ED] p-5 text-center">
-            <div className="text-xs font-medium uppercase tracking-wide text-slate-500">
-              Kod połączenia
+          <WorkstationCard title="Kod połączenia" description={`Ważny do ${expiresLabel}`}>
+            <div className="text-center">
+              <div
+                className="select-all font-mono text-2xl font-semibold tracking-widest text-slate-900"
+                data-testid="pairing-code"
+              >
+                {pairingCode}
+              </div>
+              <p className="mt-2 text-xs text-slate-500">Oczekiwanie na połączenie z Agentem…</p>
+              <ol className="mx-auto mt-4 max-w-sm space-y-1 text-left text-sm text-slate-600">
+                <li>1. Otwórz Sasist Agent na komputerze przy tym stanowisku</li>
+                <li>2. Wklej kod połączenia</li>
+                <li>3. Status zmieni się automatycznie na „Połączono”</li>
+              </ol>
             </div>
-            <div
-              className="mt-2 select-all font-mono text-2xl font-semibold tracking-widest text-slate-900"
-              data-testid="pairing-code"
-            >
-              {pairingCode}
+            <div className={wsTokens.actions}>
+              <button type="button" className={wsTokens.primaryBtn} onClick={() => void handleCopy()}>
+                Kopiuj kod
+              </button>
+              <button
+                type="button"
+                className={wsTokens.mutedBtn}
+                disabled={busy}
+                onClick={() => void handlePair()}
+              >
+                Wygeneruj nowy kod
+              </button>
             </div>
-            <div className="mt-1 text-sm text-slate-500">ważny do {expiresLabel}</div>
-            <p className="mt-2 text-xs text-slate-500">Oczekiwanie na połączenie z Agentem…</p>
-            <button
-              type="button"
-              className={`${brandPrimaryButtonClass} mt-3`}
-              onClick={() => void handleCopy()}
-            >
-              Kopiuj kod
-            </button>
-            <button
-              type="button"
-              className="mt-2 block w-full text-sm text-slate-600 underline"
-              disabled={busy}
-              onClick={() => void handlePair()}
-            >
-              Wygeneruj nowy kod
-            </button>
-            <ol className="mt-4 space-y-1 text-left text-sm text-slate-600">
-              <li>1. Otwórz Sasist Agent na komputerze przy tym stanowisku</li>
-              <li>2. Wklej kod połączenia</li>
-              <li>3. Status zmieni się automatycznie na „Połączono”</li>
-            </ol>
-          </div>
+          </WorkstationCard>
         ) : null}
-      </div>
+      </WorkstationTabShell>
     );
   }
 
   return (
-    <div className="max-w-lg space-y-4">
-      <h3 className="text-base font-semibold text-slate-900">Sasist Agent</h3>
-      <p className="rounded-lg border border-emerald-100 bg-emerald-50 px-3 py-2 text-sm text-emerald-900">
-        Połączono. Sprawdź urządzenia, potem mapowanie drukarek i wykonaj wydruk testowy.
-      </p>
-      {detail.connection_status === "offline" ? (
-        <p className="rounded-lg border border-amber-100 bg-amber-50 px-3 py-2 text-sm text-amber-900">
-          Agent jest offline. Sprawdź, czy aplikacja działa na komputerze stanowiska.
-        </p>
-      ) : null}
-      <dl className="grid grid-cols-[10rem_1fr] gap-y-2 text-sm">
-        <dt className="text-slate-500">Status</dt>
-        <dd>
+    <WorkstationTabShell
+      intro="Komputer przypisany do tego stanowiska."
+      actions={
+        <>
+          <button
+            type="button"
+            className={wsTokens.dangerBtn}
+            disabled={busy}
+            onClick={() => void handleDisconnect()}
+          >
+            Odłącz komputer
+          </button>
+          <button
+            type="button"
+            className={wsTokens.mutedBtn}
+            disabled={busy}
+            onClick={() => void handlePair()}
+          >
+            Wygeneruj nowy kod
+          </button>
+        </>
+      }
+    >
+      <WorkstationCard
+        title="Status połączenia"
+        description={
+          detail.connection_status === "offline"
+            ? "Agent jest offline. Sprawdź, czy aplikacja działa na komputerze stanowiska."
+            : "Połączono. Sprawdź urządzenia, potem mapowanie drukarek i wykonaj wydruk testowy."
+        }
+      >
+        <div className="flex flex-wrap items-center gap-2">
           <ConnectionDot status={detail.connection_status} />
-        </dd>
-        <dt className="text-slate-500">Komputer</dt>
-        <dd className="font-medium text-slate-900">{agent.computer_name}</dd>
-        <dt className="text-slate-500">System</dt>
-        <dd>{agent.os ?? "—"}</dd>
-        <dt className="text-slate-500">Wersja Agenta</dt>
-        <dd>{agent.agent_version ?? "—"}</dd>
-        <dt className="text-slate-500">Adres IP</dt>
-        <dd>{agent.last_ip ?? "—"}</dd>
-        <dt className="text-slate-500">Uptime</dt>
-        <dd>{formatUptime(agent.uptime_seconds)}</dd>
-        <dt className="text-slate-500">Ostatnia synchronizacja</dt>
-        <dd>{formatRelativePl(agent.last_seen_at)}</dd>
-      </dl>
-      <div className="flex flex-wrap gap-2 pt-2">
-        <button
-          type="button"
-          className="rounded-lg border border-red-200 px-3 py-2 text-sm text-red-700 hover:bg-red-50"
-          disabled={busy}
-          onClick={() => void handleDisconnect()}
-        >
-          Odłącz komputer
-        </button>
-        <button
-          type="button"
-          className="rounded-lg border border-slate-200 px-3 py-2 text-sm hover:bg-slate-50"
-          disabled={busy}
-          onClick={() => void handlePair()}
-        >
-          Wygeneruj nowy kod
-        </button>
-      </div>
-    </div>
+          {detail.connection_status === "offline" ? (
+            <WsStatusBadge tone="warning">Offline</WsStatusBadge>
+          ) : (
+            <WsStatusBadge tone="success">Aktywny</WsStatusBadge>
+          )}
+        </div>
+      </WorkstationCard>
+
+      <WorkstationCard title="Parametry Agenta">
+        <WorkstationDescList
+          rows={[
+            { label: "Komputer", value: agent.computer_name },
+            { label: "System", value: agent.os ?? "—" },
+            { label: "Wersja", value: agent.agent_version ?? "—" },
+            { label: "IP", value: agent.last_ip ?? "—" },
+            { label: "Uptime", value: formatUptime(agent.uptime_seconds) },
+            { label: "Synchronizacja", value: formatRelativePl(agent.last_seen_at) },
+          ]}
+        />
+      </WorkstationCard>
+    </WorkstationTabShell>
   );
 }

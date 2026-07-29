@@ -16,14 +16,35 @@ describe("settings flyout IA", () => {
     expect(labels[4]).toBe("Import");
     expect(labels[5]).toBe("Metody dostawy");
     expect(labels[6]).toBe("Pule stanów");
-    expect(labels[7]).toBe("Drukarki");
+    expect(labels[7]).toBe("Urządzenia");
     expect(labels[8]).toBe("System");
     expect(labels).toContain("Słownik aplikacji");
+    expect(labels).not.toContain("Drukarki");
+    expect(labels).not.toContain("Stanowiska");
     expect(labels).not.toContain("Eksport");
     expect(labels).not.toContain("Szablony dokumentów");
     expect(labels).not.toContain("Szablony wiadomości");
     expect(labels).not.toContain("Szablony etykiet");
     expect(labels).not.toContain("System Etykiet");
+  });
+
+  it("keeps Stanowiska under Ustawienia WMS, not Settings → Urządzenia", () => {
+    const cats = buildNavFlyoutCategories();
+    const settings = cats.find((c) => c.id === "settings")!;
+    const wms = cats.find((c) => c.id === "wms-settings")!;
+    const wsPath = "/settings/wms/workstations";
+    const wsDetail = "/settings/wms/workstations/12";
+
+    expect(isCategoryActive(settings, wsPath)).toBe(false);
+    expect(isCategoryActive(settings, wsDetail)).toBe(false);
+    expect(isCategoryActive(wms, wsPath)).toBe(true);
+    expect(isCategoryActive(wms, wsDetail)).toBe(true);
+
+    expect(isNavPathActive(wsPath, "/settings/devices")).toBe(false);
+    expect(isNavPathActive(wsPath, "/settings/printers")).toBe(false);
+    expect(isNavPathActive(wsDetail, "/settings/devices")).toBe(false);
+    expect(isNavPathActive("/settings/wms", "/settings/wms")).toBe(true);
+    expect(isNavPathActive(wsPath, "/settings/wms")).toBe(true);
   });
 
   it("exposes Szablony as flyout category with four independent modules", () => {
