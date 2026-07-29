@@ -51,7 +51,9 @@ from ..schemas.permission_preset import (
 from ..services.avatar_upload import save_user_avatar_file, try_delete_stored_avatar
 from ..services.app_user_admin_service import (
     app_user_to_list_item,
+    assert_packing_station_allowed,
     create_user_transaction,
+    ensure_wms_profile,
     primary_workforce_group_badge,
     save_wms_topbar_pins,
     sort_app_users_list_items,
@@ -60,6 +62,7 @@ from ..services.app_user_admin_service import (
     wms_profile_response,
 )
 from ..schemas.user_warehouse_context import SetActiveWarehouseBody, WarehouseContextResponse
+from ..schemas.packing_station import SetPackingStationBody
 from ..services.user_warehouse_context_service import (
     ensure_active_warehouse_on_login,
     set_active_warehouse,
@@ -332,6 +335,32 @@ def me_set_active_warehouse(
     except Exception as exc:
         db.rollback()
         _reraise_auth_error(exc, action="me_set_active_warehouse", login_hint=getattr(current, "login", None))
+
+
+@router.put("/me/packing-station", response_model=WmsProfileResponse)
+def me_set_packing_station(
+    body: SetPackingStationBody,
+    current: AppUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Remember last packing workstation (convenience only — not global WMS context)."""
+    try:
+        assert_packing_station_allowed(db, int(current.id), int(body.packing_station_id))
+        profile = ensure_wms_profile(db, int(current.id))
+        profile.packing_station_id = int(body.packing_station_id)
+        db.commit()
+        return WmsProfileResponse(**wms_profile_response(db, int(current.id)))
+    except ValueError as exc:
+        db.rollback()
+        if str(exc) == "PACKING_STATION_NOT_ALLOWED":
+            raise HTTPException(status_code=400, detail="Stanowisko niedostępne dla tego użytkownika.") from exc
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except HTTPException:
+        db.rollback()
+        raise
+    except Exception as exc:
+        db.rollback()
+        _reraise_auth_error(exc, action="me_set_packing_station", login_hint=getattr(current, "login", None))
 
 
 @router.post("/change-password")

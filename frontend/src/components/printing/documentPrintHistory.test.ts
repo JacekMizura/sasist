@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { canRetryJob } from "../../pages/Settings/printing/printingQueuePresentation";
+import { canRetryJob } from "../../printing/presentation/printingQueuePresentation";
 
 describe("DocumentPrintHistory actions", () => {
   it("allows retry for failed printed jobs", () => {

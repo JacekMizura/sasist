@@ -121,12 +121,18 @@ def queue_job(
     payload: QueuePrintRequest,
     request: Request,
     tenant_id: int = Query(..., ge=1),
-    _: AppUser = Depends(get_current_user),
+    user: AppUser = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     api_base = str(request.base_url).rstrip("/")
     try:
-        job = queue_print_job(db, tenant_id=tenant_id, payload=payload, api_base_url=api_base)
+        job = queue_print_job(
+            db,
+            tenant_id=tenant_id,
+            payload=payload,
+            api_base_url=api_base,
+            created_by_user_id=getattr(user, "id", None),
+        )
     except PrintingError as exc:
         raise_printing_error(exc)
     return serialize_print_job(job)

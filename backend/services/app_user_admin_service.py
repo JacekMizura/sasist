@@ -19,9 +19,17 @@ from .user_protection import (
     assert_deactivate_allowed,
     assert_role_change_allowed,
 )
-from ..models.app_user import AppUser, AppUserWarehouse, UserPermission, UserSession, UserWmsProfile
+from ..models.app_user import (
+    AppUser,
+    AppUserWarehouse,
+    UserPermission,
+    UserSession,
+    UserWmsProfile,
+    UserWmsWorkstationAccess,
+)
 from ..models.user_warehouse_assignment import UserWarehouseAssignment
 from ..models.warehouse import Warehouse
+from ..models.wms_workstations import WmsWorkstation
 from ..models.workforce_user_group import WorkforceUserGroup
 from ..schemas.app_user import (
     AppUserCreate,
@@ -32,6 +40,74 @@ from ..schemas.app_user import (
     WmsProfileUpdate,
 )
 from ..wms_operational_modes import is_valid_wms_mode
+
+
+def _workstation_ids_for_user(db: Session, user_id: int) -> list[int]:
+    rows = (
+        db.query(UserWmsWorkstationAccess.workstation_id)
+        .filter(UserWmsWorkstationAccess.user_id == int(user_id))
+        .order_by(UserWmsWorkstationAccess.workstation_id.asc())
+        .all()
+    )
+    return [int(r[0]) for r in rows]
+
+
+def workstation_ids_for_user(db: Session, user_id: int) -> list[int]:
+    """Public alias — packing access list for a user."""
+    return _workstation_ids_for_user(db, user_id)
+
+
+def sync_workstation_access(
+    db: Session,
+    user_id: int,
+    workstation_ids: list[int],
+    *,
+    allowed_warehouse_ids: list[int] | None = None,
+) -> list[int]:
+    """Replace user's packing workstation access. Stations must belong to user's warehouses."""
+    uid = int(user_id)
+    wh_ids = allowed_warehouse_ids if allowed_warehouse_ids is not None else _warehouse_ids(db, uid)
+    wh_set = {int(x) for x in wh_ids}
+    wanted: list[int] = []
+    seen: set[int] = set()
+    for raw in workstation_ids:
+        try:
+            wid = int(raw)
+        except (TypeError, ValueError):
+            continue
+        if wid < 1 or wid in seen:
+            continue
+        seen.add(wid)
+        wanted.append(wid)
+
+    valid: list[int] = []
+    if wanted and wh_set:
+        rows = (
+            db.query(WmsWorkstation.id)
+            .filter(
+                WmsWorkstation.id.in_(wanted),
+                WmsWorkstation.warehouse_id.in_(wh_set),
+                WmsWorkstation.is_active.is_(True),
+            )
+            .all()
+        )
+        valid_set = {int(r[0]) for r in rows}
+        valid = [w for w in wanted if w in valid_set]
+
+    db.query(UserWmsWorkstationAccess).filter(UserWmsWorkstationAccess.user_id == uid).delete(
+        synchronize_session=False
+    )
+    for wid in valid:
+        db.add(UserWmsWorkstationAccess(user_id=uid, workstation_id=wid))
+    return valid
+
+
+def assert_packing_station_allowed(db: Session, user_id: int, packing_station_id: int | None) -> None:
+    if packing_station_id is None:
+        return
+    allowed = set(_workstation_ids_for_user(db, user_id))
+    if int(packing_station_id) not in allowed:
+        raise ValueError("PACKING_STATION_NOT_ALLOWED")
 
 
 def user_ids_with_active_session(db: Session, user_ids: Iterable[int]) -> set[int]:
@@ -188,7 +264,6 @@ def apply_wms_profile_create(db: Session, user_id: int, wms: WmsProfileInput, *,
     p.can_edit_products_preview = bool(wms.can_edit_products_preview)
     p.picker_color = (wms.picker_color or "").strip() or None
     p.packing_station_id = wms.packing_station_id
-    p.default_printer_id = wms.default_printer_id
     p.timezone = (wms.timezone or "").strip() or "Europe/Warsaw"
     p.picking_permissions_json = (
         json.dumps(wms.picking_permissions, ensure_ascii=False) if wms.picking_permissions else None
@@ -215,6 +290,9 @@ def apply_wms_profile_create(db: Session, user_id: int, wms: WmsProfileInput, *,
     )
     p.default_warehouse_id = dw
     sync_warehouse_assignments(db, user_id, ids, default_warehouse_id=dw)
+    synced_ws = sync_workstation_access(db, user_id, list(wms.workstation_ids or []), allowed_warehouse_ids=ids)
+    if p.packing_station_id is not None and int(p.packing_station_id) not in set(synced_ws):
+        p.packing_station_id = None
 
 
 def apply_wms_profile_update(db: Session, user_id: int, wms: WmsProfileUpdate) -> None:
@@ -241,8 +319,6 @@ def apply_wms_profile_update(db: Session, user_id: int, wms: WmsProfileUpdate) -
         p.picker_color = None if v is None else ((str(v).strip()) or None)
     if "packing_station_id" in data:
         p.packing_station_id = data["packing_station_id"]
-    if "default_printer_id" in data:
-        p.default_printer_id = data["default_printer_id"]
     if "timezone" in data and data["timezone"] is not None:
         p.timezone = (data["timezone"] or "").strip() or "Europe/Warsaw"
     if "picking_permissions" in data:
@@ -276,6 +352,18 @@ def apply_wms_profile_update(db: Session, user_id: int, wms: WmsProfileUpdate) -
         p.login_code_label_template_id = int(tid) if tid is not None else None
 
     _sync_wms_warehouse_assignments_from_profile(db, user_id, p, data)
+
+    if "workstation_ids" in data and data["workstation_ids"] is not None:
+        synced_ws = sync_workstation_access(
+            db,
+            user_id,
+            list(data["workstation_ids"] or []),
+            allowed_warehouse_ids=_warehouse_ids(db, user_id),
+        )
+        if p.packing_station_id is not None and int(p.packing_station_id) not in set(synced_ws):
+            p.packing_station_id = None
+    elif "packing_station_id" in data and p.packing_station_id is not None:
+        assert_packing_station_allowed(db, user_id, p.packing_station_id)
 
 
 def _assignment_warehouse_ids(db: Session, user_id: int) -> list[int]:
@@ -558,7 +646,7 @@ def wms_profile_response(db: Session, user_id: int) -> dict[str, Any]:
             "packing_permissions": None,
             "picker_color": None,
             "packing_station_id": None,
-            "default_printer_id": None,
+            "workstation_ids": [],
             "timezone": "Europe/Warsaw",
             "wms_operational_modes": [],
             "wms_topbar_pins": None,
@@ -586,7 +674,7 @@ def wms_profile_response(db: Session, user_id: int) -> dict[str, Any]:
         "packing_permissions": parse_json_list(p.packing_permissions_json),
         "picker_color": p.picker_color,
         "packing_station_id": p.packing_station_id,
-        "default_printer_id": p.default_printer_id,
+        "workstation_ids": _workstation_ids_for_user(db, user_id),
         "timezone": p.timezone or "Europe/Warsaw",
         "wms_operational_modes": modes,
         "wms_topbar_pins": pins,

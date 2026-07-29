@@ -46,13 +46,14 @@ import { PageContainer } from "../../components/layout/PageLayout";
 import { PageHeader } from "../../components/layout/PageHeader";
 import { useAuth } from "../../context/AuthContext";
 import { useWarehouse } from "../../context/WarehouseContext";
+import { DAMAGE_TENANT_ID } from "../../constants/panelTenant";
 import { isSuperRole } from "../../auth/isSuperRole";
 import { PLATFORM_ROLE_OPTIONS } from "../../settings/platformRoles";
 import { warehouseService, type Warehouse } from "../../services/warehouseService";
+import { fetchWorkstations } from "../../api/wmsWorkstationsApi";
 import UserPanelStatusMatrix from "../../components/admin/UserPanelStatusMatrix";
 import { fetchEmployeeCostProfile, putEmployeeCostProfile } from "../../api/workforceApi";
 import { fetchWorkforceUserGroups, type WorkforceUserGroupDto } from "../../api/workforceGroupsApi";
-import { DAMAGE_TENANT_ID } from "../../constants/panelTenant";
 import { WMS_OPERATIONAL_MODE_KEYS, WMS_OPERATIONAL_MODE_LABELS_PL } from "../../constants/wmsOperationalModes";
 import {
   auditDetailLines,
@@ -153,6 +154,10 @@ export default function AdministratorEditPage() {
   const [canEditPreview, setCanEditPreview] = useState(false);
   const [pickerColor, setPickerColor] = useState("");
   const [warehouseIds, setWarehouseIds] = useState<number[]>([]);
+  const [workstationIds, setWorkstationIds] = useState<number[]>([]);
+  const [availableWorkstations, setAvailableWorkstations] = useState<
+    { id: number; name: string; warehouse_id: number; warehouse_name: string | null }[]
+  >([]);
   const [defaultWarehouseId, setDefaultWarehouseId] = useState<number | "">("");
 
   const [primaryWorkforceGroupId, setPrimaryWorkforceGroupId] = useState<number | "">("");
@@ -194,7 +199,7 @@ export default function AdministratorEditPage() {
       login, email, password, firstName, lastName, phone, avatarUrl,
       role, isActive, language, permissions,
       barcodeLoginCode, loginCodeTemplateId, wmsLanguage, timezone, requireScan, canEditPreview,
-      pickerColor, warehouseIds, defaultWarehouseId,
+      pickerColor, warehouseIds, workstationIds, defaultWarehouseId,
       primaryWorkforceGroupId, wmsOperationalModes, supervisorUserId,
       employmentType, shiftType, jobPosition,
       warehouseZonesText, workforceColorTag,
@@ -202,7 +207,7 @@ export default function AdministratorEditPage() {
     });
   }, [
     login, email, password, firstName, lastName, phone, avatarUrl, role, isActive, language, permissions,
-    barcodeLoginCode, loginCodeTemplateId, wmsLanguage, timezone, requireScan, canEditPreview, pickerColor, warehouseIds, defaultWarehouseId,
+    barcodeLoginCode, loginCodeTemplateId, wmsLanguage, timezone, requireScan, canEditPreview, pickerColor, warehouseIds, workstationIds, defaultWarehouseId,
     primaryWorkforceGroupId, wmsOperationalModes, supervisorUserId, employmentType, shiftType, jobPosition,
     warehouseZonesText, workforceColorTag, costNet, costGross, costEmployerTotal, costHoursMonth, costPpk, costNotes,
     costEmployerRateOverride,
@@ -257,6 +262,7 @@ export default function AdministratorEditPage() {
       setCanEditPreview(wp.can_edit_products_preview ?? false);
       setPickerColor(wp.picker_color ?? "");
       setWarehouseIds(wp.warehouse_ids ?? []);
+      setWorkstationIds(wp.workstation_ids ?? []);
       setDefaultWarehouseId(wp.default_warehouse_id ?? "");
       setWmsOperationalModes(wp.wms_operational_modes ?? []);
       setSupervisorUserId(wp.workforce_supervisor_user_id ?? "");
@@ -298,6 +304,7 @@ export default function AdministratorEditPage() {
       timezone: timezone || "Europe/Warsaw",
       default_warehouse_id: defaultWarehouseId === "" ? null : Number(defaultWarehouseId),
       warehouse_ids: warehouseIds,
+      workstation_ids: workstationIds,
       require_scan_every_product: requireScan,
       can_edit_products_preview: canEditPreview,
       picker_color: pickerColor.trim() || null,
@@ -316,6 +323,7 @@ export default function AdministratorEditPage() {
     timezone,
     defaultWarehouseId,
     warehouseIds,
+    workstationIds,
     requireScan,
     canEditPreview,
     pickerColor,
@@ -348,6 +356,46 @@ export default function AdministratorEditPage() {
     void fetchPermissionCatalog().then(setCatalog).catch(() => setCatalog(null));
     void warehouseService.getAllWarehouses().then((res) => setWarehouses(Array.isArray(res.data) ? res.data : []));
   }, [sessionReady]);
+
+  useEffect(() => {
+    if (!sessionReady || warehouseIds.length === 0) {
+      setAvailableWorkstations([]);
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      try {
+        const lists = await Promise.all(
+          warehouseIds.map((wid) => fetchWorkstations(DAMAGE_TENANT_ID, wid).catch(() => [])),
+        );
+        if (cancelled) return;
+        const byId = new Map<number, { id: number; name: string; warehouse_id: number; warehouse_name: string | null }>();
+        for (const items of lists) {
+          for (const s of items) {
+            if (!s.is_active) continue;
+            byId.set(s.id, {
+              id: s.id,
+              name: s.name,
+              warehouse_id: s.warehouse_id,
+              warehouse_name: s.warehouse_name ?? null,
+            });
+          }
+        }
+        const next = [...byId.values()].sort((a, b) => a.name.localeCompare(b.name, "pl"));
+        setAvailableWorkstations(next);
+        const allowed = new Set(next.map((s) => s.id));
+        setWorkstationIds((prev) => {
+          const pruned = prev.filter((id) => allowed.has(id));
+          return pruned.length === prev.length ? prev : pruned;
+        });
+      } catch {
+        if (!cancelled) setAvailableWorkstations([]);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [sessionReady, warehouseIds]);
 
   useEffect(() => {
     if (!sessionReady || !canManageUsers) return;
@@ -874,6 +922,51 @@ export default function AdministratorEditPage() {
                               );
                             })}
                           </div>
+                        </div>
+
+                        <div className="space-y-3">
+                          <h3 className="text-sm font-black uppercase tracking-wider text-slate-500">Stanowiska</h3>
+                          <p className="text-sm text-slate-500">
+                            Wybierz stanowiska WMS, na których użytkownik może rozpocząć pakowanie (nie mylić z rolą
+                            operacyjną poniżej).
+                          </p>
+                          {warehouseIds.length === 0 ? (
+                            <p className="text-sm text-amber-800">Najpierw przypisz magazyny.</p>
+                          ) : availableWorkstations.length === 0 ? (
+                            <p className="text-sm text-slate-500">
+                              Brak aktywnych stanowisk w przypisanych magazynach. Skonfiguruj je w Ustawienia WMS →
+                              Stanowiska.
+                            </p>
+                          ) : (
+                            <div className="flex flex-col gap-2">
+                              {availableWorkstations.map((s) => {
+                                const on = workstationIds.includes(s.id);
+                                return (
+                                  <label
+                                    key={s.id}
+                                    className="flex cursor-pointer items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3"
+                                  >
+                                    <input
+                                      type="checkbox"
+                                      className="h-5 w-5 accent-orange-500"
+                                      checked={on}
+                                      onChange={() =>
+                                        setWorkstationIds((prev) =>
+                                          on ? prev.filter((x) => x !== s.id) : [...prev, s.id],
+                                        )
+                                      }
+                                    />
+                                    <span className="min-w-0">
+                                      <span className="block text-sm font-bold text-slate-800">{s.name}</span>
+                                      <span className="block text-xs text-slate-500">
+                                        {s.warehouse_name ?? `Magazyn #${s.warehouse_id}`}
+                                      </span>
+                                    </span>
+                                  </label>
+                                );
+                              })}
+                            </div>
+                          )}
                         </div>
 
                         <div className="space-y-3">

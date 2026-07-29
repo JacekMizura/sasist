@@ -11,7 +11,7 @@ import {
   formatDurationSeconds,
   printJobStatusClass,
   printJobStatusLabel,
-} from "../../pages/Settings/printing/printingQueuePresentation";
+} from "../../printing/presentation/printingQueuePresentation";
 
 type Props = {
   tenantId: number;
@@ -104,6 +104,8 @@ export default function DocumentPrintHistory({
               <tr>
                 <th className="py-1 pr-3 font-medium">Status</th>
                 <th className="py-1 pr-3 font-medium">Data</th>
+                <th className="py-1 pr-3 font-medium">Stanowisko</th>
+                <th className="py-1 pr-3 font-medium">Operator</th>
                 <th className="py-1 pr-3 font-medium">Drukarka</th>
                 <th className="py-1 pr-3 font-medium">Komputer</th>
                 <th className="py-1 pr-3 font-medium">Kopie</th>
@@ -120,6 +122,12 @@ export default function DocumentPrintHistory({
                     </span>
                   </td>
                   <td className="py-2 pr-3 whitespace-nowrap">{formatDate(row.finished_at ?? row.created_at)}</td>
+                  <td className="py-2 pr-3">
+                    {row.workstation_id != null ? `#${row.workstation_id}` : "—"}
+                  </td>
+                  <td className="py-2 pr-3">
+                    {row.created_by_user_id != null ? `#${row.created_by_user_id}` : "—"}
+                  </td>
                   <td className="py-2 pr-3">{row.printer_name ?? `#${row.printer_id}`}</td>
                   <td className="py-2 pr-3">{row.agent_name ?? row.machine_id ?? "—"}</td>
                   <td className="py-2 pr-3">{row.copies ?? 1}</td>

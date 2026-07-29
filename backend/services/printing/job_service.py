@@ -65,6 +65,8 @@ def create_print_job(
     job_type: str | None = None,
     parent_job_id: int | None = None,
     retry_number: int = 0,
+    workstation_id: int | None = None,
+    created_by_user_id: int | None = None,
 ) -> PrintJob:
     printer = _get_agent_printer_for_tenant(db, tenant_id=tenant_id, printer_id=payload.printer_id)
     if not printer.is_active:
@@ -89,6 +91,8 @@ def create_print_job(
         tenant_id=tenant_id,
         warehouse_id=payload.warehouse_id if payload.warehouse_id is not None else printer.agent.warehouse_id,
         printer_id=printer.id,
+        workstation_id=int(workstation_id) if workstation_id is not None else None,
+        created_by_user_id=int(created_by_user_id) if created_by_user_id is not None else None,
         document_type=payload.document_type.strip(),
         document_id=payload.document_id,
         payload_json=json.dumps(payload_data, ensure_ascii=False),
@@ -260,6 +264,8 @@ def serialize_print_job(job: PrintJob) -> dict[str, Any]:
         "tenant_id": job.tenant_id,
         "warehouse_id": job.warehouse_id,
         "printer_id": job.printer_id,
+        "workstation_id": getattr(job, "workstation_id", None),
+        "created_by_user_id": getattr(job, "created_by_user_id", None),
         "printer_name": printer.name if printer else None,
         "agent_id": agent.id if agent else None,
         "agent_name": agent.name if agent else None,

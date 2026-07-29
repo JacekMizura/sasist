@@ -33,7 +33,8 @@ class WmsProfileInput(BaseModel):
     packing_permissions: list[str] | None = None
     picker_color: str | None = None
     packing_station_id: int | None = None
-    default_printer_id: int | None = None
+    #: Allowed packing workstations (WMS Stanowiska). Not printer assignment.
+    workstation_ids: list[int] = Field(default_factory=list)
     timezone: str = "Europe/Warsaw"
     wms_operational_modes: list[str] = Field(default_factory=list)
     workforce_supervisor_user_id: int | None = None
@@ -58,7 +59,7 @@ class WmsProfileUpdate(BaseModel):
     packing_permissions: list[str] | None = None
     picker_color: str | None = None
     packing_station_id: int | None = None
-    default_printer_id: int | None = None
+    workstation_ids: list[int] | None = None
     timezone: str | None = None
     wms_operational_modes: list[str] | None = None
     workforce_supervisor_user_id: int | None = None
@@ -82,7 +83,8 @@ class WmsProfileResponse(BaseModel):
     packing_permissions: list[str] | None = None
     picker_color: str | None = None
     packing_station_id: int | None = None
-    default_printer_id: int | None = None
+    #: Allowed packing workstations (WMS Stanowiska). Not printer assignment.
+    workstation_ids: list[int] = Field(default_factory=list)
     timezone: str = "Europe/Warsaw"
     wms_operational_modes: list[str] = Field(default_factory=list)
     #: Preferencje topbara — null gdy brak zapisu (FE stosuje default).

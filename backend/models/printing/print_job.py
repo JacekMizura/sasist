@@ -28,6 +28,8 @@ class PrintJob(Base):
         nullable=False,
         index=True,
     )
+    workstation_id = Column(Integer, nullable=True, index=True)
+    created_by_user_id = Column(Integer, nullable=True, index=True)
     document_type = Column(String(64), nullable=False)
     document_id = Column(Integer, nullable=True)
     payload_json = Column(Text, nullable=False, default="{}")

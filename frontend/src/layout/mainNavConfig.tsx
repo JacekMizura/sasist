@@ -29,7 +29,6 @@ import {
   Building2,
   Plug,
   Download,
-  Printer,
   Upload,
   MessageSquare,
   FileText,
@@ -394,12 +393,6 @@ export function buildNavFlyoutCategories(): NavCategoryConfig[] {
             path: "/settings/sales/stock-pools",
             label: "Pule stanów",
             Icon: Layers,
-            permissionsAny: ["settings.users", "settings.company"],
-          },
-          {
-            path: "/settings/devices",
-            label: UI_STRINGS.navigation.printersNav,
-            Icon: Printer,
             permissionsAny: ["settings.users", "settings.company"],
           },
           {

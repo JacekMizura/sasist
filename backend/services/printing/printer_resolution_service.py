@@ -1,8 +1,7 @@
 """Single source of truth for choosing an agent printer for a print job.
 
-Priority (after explicit profile / request overrides in queue_service):
-  1. WorkstationPrinterMapping for the resolved workstation
-  2. Warehouse PrintingDefault (legacy fallback only for queue resolution)
+Requires an explicit workstation_id with WorkstationPrinterMapping.
+No warehouse PrintingDefault fallback.
 """
 
 from __future__ import annotations
@@ -112,7 +111,7 @@ def resolve_workstation_mapped_printer_id(
     Return agent_printer_id from WorkstationPrinterMapping when:
     - mapping exists for the document's print_type
     - printer is active and belongs to the workstation's assigned agent
-    Otherwise None → caller falls back to PrintingDefault.
+    Otherwise None (caller raises NO_WORKSTATION_MAPPING).
     """
     if workstation.printer_agent_id is None:
         return None

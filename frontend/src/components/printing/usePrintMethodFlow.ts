@@ -1,7 +1,7 @@
 import { useCallback, useState } from "react";
 import toast from "react-hot-toast";
 
-import { useAuth } from "../../context/AuthContext";
+import { packingSessionWorkstationId } from "../../pages/wms/wmsPackingSession";
 import {
   cloudPrintUnavailableMessage,
   getCloudPrintCapability,
@@ -12,16 +12,16 @@ import type { PrintMethod, PrintMethodHandlers, PrintMethodKind } from "./printM
 type Options = {
   tenantId: number;
   warehouseId?: number | null;
-  /** Explicit WMS Stanowisko; overrides session packing_station_id when set. */
+  /** Prefer packing-session workstation; do not use profile packing_station_id. */
   workstationId?: number | null;
   printerKind?: PrintMethodKind;
 };
 
 function resolveWorkstationId(
   explicit: number | null | undefined,
-  fromSession: number | null | undefined,
+  fromPackingSession: number | null,
 ): number | null {
-  for (const value of [explicit, fromSession]) {
+  for (const value of [fromPackingSession, explicit]) {
     if (value != null && Number.isFinite(Number(value)) && Number(value) >= 1) {
       return Math.floor(Number(value));
     }
@@ -31,8 +31,7 @@ function resolveWorkstationId(
 
 /**
  * Shared print entrypoint: skip dialog only when Sasist Agent is ready
- * for the assigned workstation (Agent online + printer mapping).
- * Otherwise open PrintMethodDialog (Agent / browser / PDF; QZ only in DEV).
+ * for packing-session workstation (Agent online + printer mapping).
  */
 export function usePrintMethodFlow({
   tenantId,
@@ -40,8 +39,6 @@ export function usePrintMethodFlow({
   workstationId,
   printerKind = "a4",
 }: Options) {
-  const { user } = useAuth();
-  const sessionWorkstationId = user?.wms_profile?.packing_station_id ?? null;
   const [open, setOpen] = useState(false);
   const [pending, setPending] = useState(false);
   const [handlers, setHandlers] = useState<PrintMethodHandlers | null>(null);
@@ -82,7 +79,10 @@ export function usePrintMethodFlow({
       if (pending) return;
       setPending(true);
       try {
-        const resolvedWorkstationId = resolveWorkstationId(workstationId, sessionWorkstationId);
+        const resolvedWorkstationId = resolveWorkstationId(
+          workstationId,
+          packingSessionWorkstationId(),
+        );
         const capability = await getCloudPrintCapability(
           tenantId,
           warehouseId,
@@ -103,7 +103,7 @@ export function usePrintMethodFlow({
         setPending(false);
       }
     },
-    [pending, printerKind, tenantId, warehouseId, workstationId, sessionWorkstationId],
+    [pending, printerKind, tenantId, warehouseId, workstationId],
   );
 
   const confirmMethod = useCallback(
@@ -118,7 +118,6 @@ export function usePrintMethodFlow({
     open,
     pending,
     cloudCapability,
-    /** @deprecated QZ is DEV-only; always treat Agent as preferred in production. */
     preferSasistAgent: true as boolean | null,
     requestPrint,
     confirmMethod,

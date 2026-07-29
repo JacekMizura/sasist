@@ -17,7 +17,7 @@ from .schema_introspection import ensure_model_schema_sync, has_table
 
 logger = logging.getLogger(__name__)
 
-PRINTING_SCHEMA_VERSION = "2026.07.27.1"
+PRINTING_SCHEMA_VERSION = "2026.07.29.1"
 
 
 @dataclass(frozen=True)

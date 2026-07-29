@@ -19,6 +19,16 @@ export async function fetchWorkstations(
   return Array.isArray(data.items) ? data.items : [];
 }
 
+/** Packing-allowed workstations for the logged-in operator. */
+export async function fetchWorkstationsAvailableForMe(
+  tenantId: number,
+): Promise<WorkstationListItem[]> {
+  const { data } = await api.get<{ items: WorkstationListItem[] }>("/wms/workstations/available-for-me", {
+    params: { tenant_id: tenantId },
+  });
+  return Array.isArray(data.items) ? data.items : [];
+}
+
 export async function fetchWorkstation(
   tenantId: number,
   workstationId: number,

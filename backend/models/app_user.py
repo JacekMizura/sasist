@@ -101,6 +101,24 @@ class AppUserWarehouse(Base):
     warehouse_id = Column(Integer, ForeignKey("warehouses.id", ondelete="CASCADE"), nullable=False, index=True)
 
 
+class UserWmsWorkstationAccess(Base):
+    """Which WMS Stanowiska a user may select when starting packing."""
+
+    __tablename__ = "user_wms_workstation_access"
+    __table_args__ = (
+        UniqueConstraint("user_id", "workstation_id", name="uq_user_wms_workstation_access"),
+    )
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey("app_users.id", ondelete="CASCADE"), nullable=False, index=True)
+    workstation_id = Column(
+        Integer,
+        ForeignKey("wms_workstations.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+
+
 class UserPermission(Base):
     __tablename__ = "user_permissions"
     __table_args__ = (UniqueConstraint("user_id", "permission_key", name="uq_app_user_permission"),)

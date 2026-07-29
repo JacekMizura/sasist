@@ -87,6 +87,8 @@ def _serialize_job_row(job: PrintJob, *, retry_count: int | None = None) -> dict
         "tenant_id": job.tenant_id,
         "warehouse_id": job.warehouse_id,
         "printer_id": job.printer_id,
+        "workstation_id": getattr(job, "workstation_id", None),
+        "created_by_user_id": getattr(job, "created_by_user_id", None),
         "printer_name": printer.name if printer else None,
         "agent_id": agent.id if agent else None,
         "agent_name": agent.name if agent else None,

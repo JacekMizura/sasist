@@ -10,7 +10,8 @@ import { classifyWmsScanCode } from "../../utils/wmsScanClassify";
 import { normalizeScanEan } from "../../utils/wmsScanNormalize";
 import { DAMAGE_TENANT_ID } from "../damage/damageShared";
 import { WmsFlowStatusTileButton } from "./WmsFlowStatusTileButton";
-import { clearWmsPackingSession, loadWmsPackingSession, saveWmsPackingSession } from "./wmsPackingSession";
+import { loadWmsPackingSession, saveWmsPackingSession } from "./wmsPackingSession";
+import { consumePendingPackingWorkstation } from "./WmsPackingWorkstationGate";
 
 type FlowPhase = "pick_status" | "pick_mode";
 
@@ -150,12 +151,15 @@ export default function WmsPackingStatusPage() {
     setBusyId(r.target_status_id);
     setErr(null);
     try {
-      clearWmsPackingSession();
+      const pending = consumePendingPackingWorkstation();
+      const prev = loadWmsPackingSession();
       saveWmsPackingSession({
         statusId: r.target_status_id,
         statusName: r.status,
         statusColor: r.color,
         mainGroup: r.main_group as OrderUiMainGroup,
+        workstationId: pending.workstationId ?? prev?.workstationId,
+        workstationName: pending.workstationName ?? prev?.workstationName,
       });
       setFlowPhase("pick_mode");
       void loadModesForStatus(r.target_status_id);

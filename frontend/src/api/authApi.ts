@@ -19,7 +19,8 @@ export type WmsProfilePayload = {
   packing_permissions?: string[] | null;
   picker_color?: string | null;
   packing_station_id?: number | null;
-  default_printer_id?: number | null;
+  /** Allowed packing workstations (WMS Stanowiska). */
+  workstation_ids?: number[];
   timezone?: string;
   wms_operational_modes?: string[];
   workforce_supervisor_user_id?: number | null;
@@ -43,7 +44,7 @@ export type WmsProfileResponse = {
   packing_permissions?: string[] | null;
   picker_color?: string | null;
   packing_station_id?: number | null;
-  default_printer_id?: number | null;
+  workstation_ids?: number[];
   timezone: string;
   wms_operational_modes?: string[];
   /** null = brak zapisu (FE stosuje default). */
@@ -203,6 +204,14 @@ export async function fetchWarehouseContext(): Promise<WarehouseContextResponse>
 export async function setActiveWarehouse(warehouseId: number): Promise<WarehouseContextResponse> {
   const res = await api.put<WarehouseContextResponse>("/auth/me/active-warehouse", {
     warehouse_id: warehouseId,
+  });
+  return res.data;
+}
+
+/** Remember last packing workstation (profile convenience only). */
+export async function setMePackingStation(packingStationId: number): Promise<WmsProfileResponse> {
+  const res = await api.put<WmsProfileResponse>("/auth/me/packing-station", {
+    packing_station_id: packingStationId,
   });
   return res.data;
 }

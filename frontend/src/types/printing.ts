@@ -130,6 +130,8 @@ export type PrintJobRead = {
   tenant_id: number;
   warehouse_id: number | null;
   printer_id: number;
+  workstation_id?: number | null;
+  created_by_user_id?: number | null;
   printer_name?: string | null;
   agent_id?: number | null;
   agent_name?: string | null;

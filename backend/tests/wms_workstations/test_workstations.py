@@ -556,20 +556,22 @@ class TestWorkstationPrinterResolution(WorkstationsTestCase):
             self.assertEqual(resolution.source, "workstation")
             self.assertEqual(resolution.printer_id, ws_printer.id)
 
-            # After clearing mapping → warehouse PrintingDefault
+            # After clearing mapping → NO_WORKSTATION_MAPPING (no PrintingDefault fallback)
+            from backend.services.printing.errors import PrintingError
+
             db.query(WorkstationPrinterMapping).delete()
             db.commit()
-            fallback = resolve_queue_printer_id(
-                db,
-                tenant_id=1,
-                warehouse_id=1,
-                document_type="label",
-                requested_printer_id=None,
-                requested_profile_id=None,
-                workstation_id=ws["id"],
-            )
-            self.assertEqual(fallback.source, "default")
-            self.assertEqual(fallback.printer_id, wh_printer.id)
+            with self.assertRaises(PrintingError) as ctx:
+                resolve_queue_printer_id(
+                    db,
+                    tenant_id=1,
+                    warehouse_id=1,
+                    document_type="label",
+                    requested_printer_id=None,
+                    requested_profile_id=None,
+                    workstation_id=ws["id"],
+                )
+            self.assertEqual(ctx.exception.code, "NO_WORKSTATION_MAPPING")
 
 
 class TestWorkstationHighPriority(WorkstationsTestCase):

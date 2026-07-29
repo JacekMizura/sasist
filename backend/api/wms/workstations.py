@@ -5,9 +5,10 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
-from ...auth.deps import require_permission
+from ...auth.deps import get_current_user, require_permission
 from ...database import get_db
 from ...models.app_user import AppUser
+from ...services.app_user_admin_service import workstation_ids_for_user
 from ...services.wms_workstations import (
     WorkstationError,
     WorkstationNotFoundError,
@@ -45,6 +46,24 @@ _admin_perm = require_permission("settings.users")
 
 def _raise(exc: WorkstationError) -> None:
     raise HTTPException(status_code=exc.status_code, detail=exc.message) from exc
+
+
+@router.get("/available-for-me", response_model=WorkstationListResponse)
+def get_workstations_available_for_me(
+    tenant_id: int = Query(..., ge=1),
+    db: Session = Depends(get_db),
+    user: AppUser = Depends(get_current_user),
+):
+    """Packing-allowed workstations for the logged-in operator."""
+    allowed = set(workstation_ids_for_user(db, int(user.id)))
+    if not allowed:
+        return WorkstationListResponse(items=[])
+    items = [
+        WorkstationListItem(**row)
+        for row in list_workstations(db, tenant_id=tenant_id, warehouse_id=None)
+        if int(row["id"]) in allowed
+    ]
+    return WorkstationListResponse(items=items)
 
 
 @router.get("", response_model=WorkstationListResponse)

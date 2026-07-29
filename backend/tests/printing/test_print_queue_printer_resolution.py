@@ -1,9 +1,9 @@
-"""Print queue printer resolution — profile / request / defaults priority."""
+"""Print queue printer resolution — workstation mapping only (no PrintingDefault)."""
 
 from __future__ import annotations
 
 import unittest
-from datetime import datetime, timedelta
+from datetime import datetime
 from unittest.mock import patch
 
 from sqlalchemy import text
@@ -16,7 +16,10 @@ from backend.models.printing.printing_default import PrintingDefault
 from backend.models.printing.printer_agent import PrinterAgent
 from backend.models.printer import Printer
 from backend.models.printer_profile import PrinterProfile
+from backend.models.wms_workstations import WmsWorkstation, WorkstationPrinterMapping
+from backend.models.wms_workstations.constants import PRINT_TYPE_LABELS, STATION_TYPE_PACKING
 from backend.schemas.printing.queue import LabelQueuePayload, QueuePrintRequest
+from backend.services.printing.errors import PrintingError
 from backend.services.printing.printer_service import (
     backfill_profile_agent_printer_links,
     resolve_profile_agent_printer_id,
@@ -45,6 +48,8 @@ class PrintQueuePrinterResolutionTestCase(unittest.TestCase):
         self.db = self.SessionLocal()
         with self.engine.begin() as conn:
             conn.execute(text("DELETE FROM print_jobs"))
+            conn.execute(text("DELETE FROM wms_workstation_printer_mappings"))
+            conn.execute(text("DELETE FROM wms_workstations"))
             conn.execute(text("DELETE FROM printing_defaults"))
             conn.execute(text("DELETE FROM agent_printers"))
             conn.execute(text("DELETE FROM printer_agents"))
@@ -91,6 +96,24 @@ class PrintQueuePrinterResolutionTestCase(unittest.TestCase):
             )
         )
 
+        self.workstation = WmsWorkstation(
+            tenant_id=1,
+            warehouse_id=1,
+            name="Pack Desk",
+            station_type=STATION_TYPE_PACKING,
+            is_active=True,
+            printer_agent_id=agent.id,
+        )
+        self.db.add(self.workstation)
+        self.db.flush()
+        self.db.add(
+            WorkstationPrinterMapping(
+                workstation_id=self.workstation.id,
+                print_type=PRINT_TYPE_LABELS,
+                agent_printer_id=self.label_default.id,
+            )
+        )
+
         self.profile = PrinterProfile(
             tenant_id=1,
             name="Epson profile",
@@ -115,19 +138,7 @@ class PrintQueuePrinterResolutionTestCase(unittest.TestCase):
 
 
 class TestResolveQueuePrinterId(PrintQueuePrinterResolutionTestCase):
-    def test_profile_printer_overrides_defaults(self) -> None:
-        resolution = resolve_queue_printer_id(
-            self.db,
-            tenant_id=1,
-            warehouse_id=1,
-            document_type="label",
-            requested_printer_id=None,
-            requested_profile_id=self.profile.id,
-        )
-        self.assertEqual(resolution.printer_id, self.profile_printer.id)
-        self.assertEqual(resolution.source, "profile")
-
-    def test_explicit_printer_overrides_defaults(self) -> None:
+    def test_explicit_printer_allowed(self) -> None:
         resolution = resolve_queue_printer_id(
             self.db,
             tenant_id=1,
@@ -139,7 +150,31 @@ class TestResolveQueuePrinterId(PrintQueuePrinterResolutionTestCase):
         self.assertEqual(resolution.printer_id, self.profile_printer.id)
         self.assertEqual(resolution.source, "request")
 
-    def test_defaults_used_only_when_nothing_selected(self) -> None:
+    def test_profile_id_ignored_without_workstation(self) -> None:
+        with self.assertRaises(PrintingError) as ctx:
+            resolve_queue_printer_id(
+                self.db,
+                tenant_id=1,
+                warehouse_id=1,
+                document_type="label",
+                requested_printer_id=None,
+                requested_profile_id=self.profile.id,
+            )
+        self.assertEqual(ctx.exception.code, "NO_WORKSTATION")
+
+    def test_printing_default_not_used_without_workstation(self) -> None:
+        with self.assertRaises(PrintingError) as ctx:
+            resolve_queue_printer_id(
+                self.db,
+                tenant_id=1,
+                warehouse_id=1,
+                document_type="label",
+                requested_printer_id=None,
+                requested_profile_id=None,
+            )
+        self.assertEqual(ctx.exception.code, "NO_WORKSTATION")
+
+    def test_workstation_mapping_resolves(self) -> None:
         resolution = resolve_queue_printer_id(
             self.db,
             tenant_id=1,
@@ -147,38 +182,26 @@ class TestResolveQueuePrinterId(PrintQueuePrinterResolutionTestCase):
             document_type="label",
             requested_printer_id=None,
             requested_profile_id=None,
+            workstation_id=self.workstation.id,
         )
         self.assertEqual(resolution.printer_id, self.label_default.id)
-        self.assertEqual(resolution.source, "default")
+        self.assertEqual(resolution.source, "workstation")
+        self.assertEqual(resolution.workstation_id, self.workstation.id)
 
-    def test_profile_resolves_from_legacy_printer_link(self) -> None:
-        self.profile.agent_printer_id = None
+    def test_missing_mapping_raises(self) -> None:
+        self.db.query(WorkstationPrinterMapping).delete()
         self.db.commit()
-
-        resolution = resolve_queue_printer_id(
-            self.db,
-            tenant_id=1,
-            warehouse_id=1,
-            document_type="label",
-            requested_printer_id=None,
-            requested_profile_id=self.profile.id,
-        )
-        self.assertEqual(resolution.printer_id, self.profile_printer.id)
-        self.assertEqual(resolution.source, "profile")
-        self.db.refresh(self.profile)
-        self.assertEqual(self.profile.agent_printer_id, self.profile_printer.id)
-
-    def test_profile_has_priority_over_explicit_request(self) -> None:
-        resolution = resolve_queue_printer_id(
-            self.db,
-            tenant_id=1,
-            warehouse_id=1,
-            document_type="label",
-            requested_printer_id=self.label_default.id,
-            requested_profile_id=self.profile.id,
-        )
-        self.assertEqual(resolution.printer_id, self.profile_printer.id)
-        self.assertEqual(resolution.source, "profile")
+        with self.assertRaises(PrintingError) as ctx:
+            resolve_queue_printer_id(
+                self.db,
+                tenant_id=1,
+                warehouse_id=1,
+                document_type="label",
+                requested_printer_id=None,
+                requested_profile_id=None,
+                workstation_id=self.workstation.id,
+            )
+        self.assertEqual(ctx.exception.code, "NO_WORKSTATION_MAPPING")
 
     def test_stale_profile_agent_printer_id_is_relinked(self) -> None:
         self.profile.agent_printer_id = 99999
@@ -207,15 +230,14 @@ class TestResolveQueuePrinterId(PrintQueuePrinterResolutionTestCase):
 class TestQueuePrintJobPrinterId(PrintQueuePrinterResolutionTestCase):
     @patch("backend.services.printing.queue_service.save_job_pdf")
     @patch("backend.services.printing.queue_service.generate_pdf_bytes", return_value=b"%PDF-1.4")
-    def test_queue_job_uses_profile_printer_id(self, _mock_pdf, _mock_save) -> None:
+    def test_queue_job_uses_workstation_mapping(self, _mock_pdf, _mock_save) -> None:
         payload = QueuePrintRequest(
             document_type="label",
             warehouse_id=1,
-            printer_profile_id=self.profile.id,
+            workstation_id=self.workstation.id,
             label=LabelQueuePayload(
                 template_id=1,
                 records=[{"loc_name": "A-01-01"}],
-                printer_profile_id=self.profile.id,
             ),
         )
         job = queue_print_job(
@@ -223,13 +245,18 @@ class TestQueuePrintJobPrinterId(PrintQueuePrinterResolutionTestCase):
             tenant_id=1,
             payload=payload,
             api_base_url="http://testserver",
+            created_by_user_id=1,
         )
-        self.assertEqual(job.printer_id, self.profile_printer.id)
+        self.assertEqual(job.printer_id, self.label_default.id)
+        self.assertEqual(job.workstation_id, self.workstation.id)
+        self.assertEqual(job.created_by_user_id, 1)
 
         stored = self.db.query(PrintJob).filter(PrintJob.id == job.id).first()
         assert stored is not None
-        self.assertEqual(stored.printer_id, self.profile_printer.id)
+        self.assertEqual(stored.printer_id, self.label_default.id)
         self.assertEqual(stored.status, JOB_STATUS_PENDING)
+        self.assertEqual(stored.workstation_id, self.workstation.id)
+        self.assertEqual(stored.created_by_user_id, 1)
 
 
 if __name__ == "__main__":

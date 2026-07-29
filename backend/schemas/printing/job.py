@@ -50,6 +50,8 @@ class PrintJobRead(BaseModel):
     agent_id: int | None = None
     agent_name: str | None = None
     machine_id: str | None = None
+    workstation_id: int | None = None
+    created_by_user_id: int | None = None
     document_type: str
     document_id: int | None = None
     payload_json: dict[str, Any] | str

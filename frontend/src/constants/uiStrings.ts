@@ -52,9 +52,6 @@ const UI_STRINGS_DEFAULTS = {
     /** Sidebar category + fly-out root (Polish). */
     settingsCategory: "Ustawienia",
     administratorsNav: "Administratorzy",
-    /** Przeniesione do Ustawienia → Firma (zachowany klucz dla tłumaczeń). */
-    systemSetupNav: "Firma i konfiguracja",
-    printersNav: "Urządzenia",
     wmsSettings: "Ustawienia WMS",
     /** Panel triage labels for returns list (not WMS workflow statuses). */
     returnPanelStatuses: "Zwroty — statusy panelu",

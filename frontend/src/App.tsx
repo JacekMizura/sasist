@@ -79,8 +79,6 @@ import WorkforceLayout from "./pages/Settings/WorkforceLayout"
 import WorkforceDashboardPage from "./pages/Settings/WorkforceDashboardPage"
 import WorkforceActivityPage from "./pages/Settings/WorkforceActivityPage"
 import WorkforceStatusMatrixPage from "./pages/Settings/WorkforceStatusMatrixPage"
-import PrintingSettingsModule from "./pages/Settings/printing"
-import DevicesSettingsModule from "./pages/Settings/devices/DevicesSettingsModule"
 import WmsSettingsPage from "./pages/Settings/WmsSettingsPage"
 import {
   WmsWorkstationDetailPage,
@@ -177,6 +175,7 @@ import WmsPackingModePage from "./pages/wms/WmsPackingModePage"
 import WmsPackingScanCartPage from "./pages/wms/WmsPackingScanCartPage"
 import WmsPackingOrdersPage from "./pages/wms/WmsPackingOrdersPage"
 import WmsPackingOrderPage from "./pages/wms/WmsPackingOrderPage"
+import WmsPackingWorkstationGate from "./pages/wms/WmsPackingWorkstationGate"
 import WmsDirectSalesPage from "./pages/wms/WmsDirectSalesPage"
 import DirectSalesSettingsLayout from "./pages/wms/direct-sales/DirectSalesSettingsLayout"
 import OperationsLayout from "./pages/wms/operations/OperationsLayout"
@@ -563,7 +562,7 @@ export const router = createBrowserRouter(
         >
           <Route index element={<WmsDirectSalesPage />} />
         </Route>
-        <Route path="packing" element={<Outlet />}>
+        <Route path="packing" element={<WmsPackingWorkstationGate />}>
           <Route index element={<WmsPackingStatusPage />} />
           <Route path="mode" element={<WmsPackingModePage />} />
           <Route path="scan-cart" element={<WmsPackingScanCartPage />} />
@@ -626,8 +625,8 @@ export const router = createBrowserRouter(
                   <Route path=":id" element={<AdministratorCreatePage />} />
                 </Route>
                 <Route path="setup/printers/*" element={<Navigate to="/settings/wms/workstations" replace />} />
-                <Route path="settings/devices/*" element={<DevicesSettingsModule />} />
-                <Route path="settings/printers/*" element={<PrintingSettingsModule />} />
+                <Route path="settings/devices/*" element={<Navigate to="/settings/wms/workstations" replace />} />
+                <Route path="settings/printers/*" element={<Navigate to="/settings/wms/workstations" replace />} />
                 <Route path="settings/wms/returns/*" element={<LegacySettingsWmsReturnsRedirect />} />
                 <Route path="settings/wms/workstations/:id" element={<WmsWorkstationDetailPage />} />
                 <Route path="settings/wms/workstations" element={<WmsWorkstationsListPage />} />

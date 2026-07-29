@@ -1,11 +1,11 @@
 import type { WmsPackingModeParam } from "../../api/wmsPackingApi";
 import type { OrderUiMainGroup } from "../../types/orderUiStatus";
 
-const STORAGE_KEY = "wms_packing_session_v2";
+const STORAGE_KEY = "wms_packing_session_v3";
 
 export type WmsPackingMode = WmsPackingModeParam;
 
-/** Stan sesji pakowania: status → tryb → opcjonalnie wózek (dla bulk/baskets). */
+/** Stan sesji pakowania — SSOT aktywnego stanowiska (tylko w trakcie pakowania). */
 export type WmsPackingSessionState = {
   statusId: number;
   statusName: string;
@@ -15,6 +15,8 @@ export type WmsPackingSessionState = {
   cartId?: number;
   cartCode?: string;
   cartType?: string;
+  workstationId?: number;
+  workstationName?: string;
 };
 
 export function loadWmsPackingSession(): WmsPackingSessionState | null {
@@ -43,6 +45,13 @@ export function loadWmsPackingSession(): WmsPackingSessionState | null {
     if (cid != null && Number.isFinite(Number(cid))) out.cartId = Number(cid);
     if (typeof rec.cartCode === "string" && rec.cartCode.trim()) out.cartCode = rec.cartCode.trim();
     if (typeof rec.cartType === "string" && rec.cartType.trim()) out.cartType = rec.cartType.trim();
+    const wid = rec.workstationId;
+    if (wid != null && Number.isFinite(Number(wid)) && Number(wid) >= 1) {
+      out.workstationId = Math.floor(Number(wid));
+    }
+    if (typeof rec.workstationName === "string" && rec.workstationName.trim()) {
+      out.workstationName = rec.workstationName.trim();
+    }
     return out;
   } catch {
     return null;
@@ -68,9 +77,18 @@ export function clearWmsPackingSession(): void {
   if (typeof sessionStorage === "undefined") return;
   try {
     sessionStorage.removeItem(STORAGE_KEY);
+    sessionStorage.removeItem("wms_packing_pending_workstation");
   } catch {
     /* ignore */
   }
+}
+
+/** Active packing workstation — only while packing session exists. */
+export function packingSessionWorkstationId(): number | null {
+  const s = loadWmsPackingSession();
+  const id = s?.workstationId;
+  if (id != null && Number.isFinite(Number(id)) && Number(id) >= 1) return Math.floor(Number(id));
+  return null;
 }
 
 /** Czy zeskanowany typ wózka pasuje do wybranego trybu pakowania. */
@@ -78,5 +96,5 @@ export function cartTypeMatchesPackingMode(mode: WmsPackingMode, cartType: strin
   const t = (cartType || "").toLowerCase();
   if (mode === "bulk") return t === "bulk";
   if (mode === "baskets") return t === "multi";
-  return false;
+  return true;
 }

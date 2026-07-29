@@ -23,7 +23,6 @@ from .assignment_service import ensure_queue_target_agent_online, log_print_queu
 from .errors import PrintingError
 from .file_service import save_job_pdf
 from .job_service import create_print_job
-from .printer_service import get_printing_defaults, resolve_profile_agent_printer_id
 
 logger = logging.getLogger(__name__)
 
@@ -53,25 +52,14 @@ def resolve_default_printer_id(
     warehouse_id: int | None,
     document_type: str,
 ) -> int:
-    defaults = get_printing_defaults(db, tenant_id=tenant_id, warehouse_id=warehouse_id)
-    if document_type == "label":
-        printer_id = defaults.get("label_printer_id")
-        kind = "etykiet"
-    elif document_type == "receipt":
-        printer_id = defaults.get("receipt_printer_id")
-        kind = "paragonów"
-    else:
-        printer_id = defaults.get("a4_printer_id")
-        kind = "A4"
-
-    if not printer_id:
-        raise PrintingError(
-            f"Brak drukarki ({kind}) dla stanowiska. "
-            "Skonfiguruj mapowanie w Ustawienia WMS → Stanowiska.",
-            status_code=400,
-            code="NO_DEFAULT_PRINTER",
-        )
-    return int(printer_id)
+    """Legacy — unused by queue path. Kept for rare callers; raises always."""
+    _ = (db, tenant_id, warehouse_id, document_type)
+    raise PrintingError(
+        "Brak mapowania drukarki na stanowisku. "
+        "Skonfiguruj mapowanie w Ustawienia WMS → Stanowiska.",
+        status_code=400,
+        code="NO_WORKSTATION_MAPPING",
+    )
 
 
 @dataclass(frozen=True)
@@ -102,42 +90,36 @@ def resolve_queue_printer_id(
     workstation_id: int | None = None,
 ) -> QueuePrinterResolution:
     """
-    Single entry for printer selection in the print queue.
+    Printer selection for the print queue.
 
     Order:
-      1. Explicit printer profile
-      2. Explicit printer_id on the request
-      3. WorkstationPrinterMapping when workstation_id is provided and mapped
-      4. Warehouse PrintingDefault (only when no workstation mapping applies)
+      1. Explicit printer_id on the request (rare / label tooling)
+      2. WorkstationPrinterMapping for workstation_id (SSOT for packing)
+    No warehouse PrintingDefault fallback.
     """
     from .printer_resolution_service import (
         resolve_workstation_for_print,
         resolve_workstation_mapped_printer_id,
     )
 
-    if requested_profile_id is not None:
-        profile_printer_id = resolve_profile_agent_printer_id(
-            db,
-            tenant_id=tenant_id,
-            warehouse_id=warehouse_id,
-            profile_id=requested_profile_id,
-        )
-        if profile_printer_id is not None:
-            return QueuePrinterResolution(
-                printer_id=profile_printer_id,
-                source="profile",
-                requested_profile_id=requested_profile_id,
-                requested_printer_id=requested_printer_id,
-                workstation_id=workstation_id,
-            )
+    # Profile override removed — not a user-printer assignment path.
+    _ = requested_profile_id
 
     if requested_printer_id is not None:
         return QueuePrinterResolution(
             printer_id=int(requested_printer_id),
             source="request",
-            requested_profile_id=requested_profile_id,
+            requested_profile_id=None,
             requested_printer_id=requested_printer_id,
             workstation_id=workstation_id,
+        )
+
+    if workstation_id is None:
+        raise PrintingError(
+            "Brak stanowiska dla wydruku. Wybierz stanowisko w Pakowaniu "
+            "lub skonfiguruj mapowanie w Ustawienia WMS → Stanowiska.",
+            status_code=400,
+            code="NO_WORKSTATION",
         )
 
     workstation = resolve_workstation_for_print(
@@ -146,33 +128,32 @@ def resolve_queue_printer_id(
         warehouse_id=warehouse_id,
         workstation_id=workstation_id,
     )
-    if workstation is not None:
-        mapped_id = resolve_workstation_mapped_printer_id(
-            db,
-            workstation=workstation,
-            document_type=document_type,
+    if workstation is None:
+        raise PrintingError(
+            "Stanowisko nie istnieje lub jest nieaktywne.",
+            status_code=400,
+            code="NO_WORKSTATION",
         )
-        if mapped_id is not None:
-            return QueuePrinterResolution(
-                printer_id=mapped_id,
-                source="workstation",
-                requested_profile_id=requested_profile_id,
-                requested_printer_id=requested_printer_id,
-                workstation_id=workstation.id,
-            )
 
-    default_printer_id = resolve_default_printer_id(
+    mapped_id = resolve_workstation_mapped_printer_id(
         db,
-        tenant_id=tenant_id,
-        warehouse_id=warehouse_id,
+        workstation=workstation,
         document_type=document_type,
     )
+    if mapped_id is None:
+        raise PrintingError(
+            "Brak mapowania drukarki na stanowisku. "
+            "Skonfiguruj mapowanie w Ustawienia WMS → Stanowiska.",
+            status_code=400,
+            code="NO_WORKSTATION_MAPPING",
+        )
+
     return QueuePrinterResolution(
-        printer_id=default_printer_id,
-        source="default",
-        requested_profile_id=requested_profile_id,
+        printer_id=mapped_id,
+        source="workstation",
+        requested_profile_id=None,
         requested_printer_id=requested_printer_id,
-        workstation_id=workstation.id if workstation is not None else None,
+        workstation_id=workstation.id,
     )
 
 
@@ -348,6 +329,7 @@ def queue_print_job(
     tenant_id: int,
     payload: QueuePrintRequest,
     api_base_url: str,
+    created_by_user_id: int | None = None,
 ) -> Any:
     document_type = payload.document_type.strip().lower()
     if document_type not in SUPPORTED_DOCUMENT_TYPES:
@@ -401,6 +383,8 @@ def queue_print_job(
         copies=copies,
         source_module=source_module,
         job_type=job_type,
+        workstation_id=resolution.workstation_id,
+        created_by_user_id=created_by_user_id,
     )
 
     save_job_pdf(job.id, pdf_bytes)

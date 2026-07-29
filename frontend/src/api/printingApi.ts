@@ -13,7 +13,7 @@ import type {
   PrintingWarehouseSettingsRead,
   QueuePrintRequest,
 } from "../types/printing";
-import type { PrintJobStatusFilter } from "../pages/Settings/printing/printingQueuePresentation";
+import type { PrintJobStatusFilter } from "../printing/presentation/printingQueuePresentation";
 
 export async function fetchPrintingAgents(
   tenantId: number,

@@ -1,3 +1,11 @@
+## 2026-07-29 — Stanowisko SSOT + Pakowanie (final architecture)
+
+- Usunięto Settings → Urządzenia/Drukarki (menu + strony); redirect `/settings/printers|devices|/setup/printers` → Stanowiska
+- `user_wms_workstation_access` + `workstation_ids` w profilu WMS; admin checkboxy w AdministratorEditPage
+- Gate tylko `/wms/packing/*` (`WmsPackingWorkstationGate`); sesja v3 = SSOT `workstationId`; `packing_station_id` = last-used
+- Queue/capability: workstation mapping only (`NO_WORKSTATION` / `NO_WORKSTATION_MAPPING`); PrintJob: `workstation_id` + `created_by_user_id`
+- Bez auto-fallback QZ/browser w `executePdfLabelPrint` / `resolvePrintRoute`
+
 ## 2026-07-29 — Printing cleanup po Sasist Agent
 
 - `cloud-capability` → Stanowisko + Agent online + mapowanie (bez `PrintingDefault`); query `workstation_id`

@@ -13,7 +13,7 @@ from .schema_introspection import ensure_model_schema_sync, has_table
 
 logger = logging.getLogger(__name__)
 
-WMS_WORKSTATIONS_SCHEMA_VERSION = "2026.07.28.2"
+WMS_WORKSTATIONS_SCHEMA_VERSION = "2026.07.29.1"
 
 
 @dataclass(frozen=True)
@@ -23,6 +23,7 @@ class _EntitySpec:
 
 
 def _registry() -> list[_EntitySpec]:
+    from ..models.app_user import UserWmsWorkstationAccess
     from ..models.wms_workstations import (
         WmsWorkstation,
         WorkstationEvent,
@@ -33,6 +34,7 @@ def _registry() -> list[_EntitySpec]:
         _EntitySpec("wms_workstations", WmsWorkstation),
         _EntitySpec("wms_workstation_printer_mappings", WorkstationPrinterMapping),
         _EntitySpec("wms_workstation_events", WorkstationEvent),
+        _EntitySpec("user_wms_workstation_access", UserWmsWorkstationAccess),
     ]
 
 

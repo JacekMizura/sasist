@@ -1,10 +1,5 @@
-import {
-  fetchPrintingAgents,
-  fetchPrintingDefaults,
-  fetchPrintingWarehouseSettings,
-} from "../../api/printingApi";
+import { fetchPrintingAgents, fetchPrintingWarehouseSettings } from "../../api/printingApi";
 import { fetchWorkstationPrinters } from "../../api/wmsWorkstationsApi";
-import { isQzAvailable } from "../qzService";
 import { trackFallbackReason } from "./telemetry";
 import type { PrintFormat, PrintRouteDecision, ResolvePrintRouteInput } from "./types";
 
@@ -36,7 +31,9 @@ async function resolveWorkstationMappedPrinterId(
 }
 
 /**
- * Fresh resolve on every call — disabling prefer_sasist_agent rolls back immediately.
+ * Resolve Agent print route from workstation mapping only.
+ * No PrintingDefaults / QZ / silent browser auto-print as repair.
+ * When Agent is not ready, transport is "browser" so the UI can open a conscious method dialog.
  */
 export async function resolvePrintRoute(input: ResolvePrintRouteInput): Promise<PrintRouteDecision> {
   const gateFormat: PrintFormat = input.gateFormat ?? "zpl";
@@ -52,7 +49,7 @@ export async function resolvePrintRoute(input: ResolvePrintRouteInput): Promise<
     transport: "browser",
     gateFormat,
     jobFormat,
-    preferSasistAgent: false,
+    preferSasistAgent: true,
     agentId: null,
     printerId: null,
     fallbackReason: null,
@@ -61,30 +58,26 @@ export async function resolvePrintRoute(input: ResolvePrintRouteInput): Promise<
   });
 
   if (warehouseId == null || warehouseId <= 0) {
-    const decision = base({
-      transport: isQzAvailable() ? "qz" : "browser",
-      fallbackReason: "no_warehouse",
-    });
+    const decision = base({ fallbackReason: "no_warehouse" });
     trackFallbackReason(decision.fallbackReason);
     return decision;
   }
 
-  let preferSasistAgent = false;
-  try {
-    const settings = await fetchPrintingWarehouseSettings(input.tenantId, warehouseId);
-    preferSasistAgent = Boolean(settings.prefer_sasist_agent);
-  } catch {
-    preferSasistAgent = false;
+  if (workstationId == null) {
+    const decision = base({ fallbackReason: "no_workstation" });
+    trackFallbackReason(decision.fallbackReason);
+    return decision;
   }
 
-  if (!preferSasistAgent) {
-    const decision = base({
-      transport: isQzAvailable() ? "qz" : "browser",
-      preferSasistAgent: false,
-      fallbackReason: "flag_off",
-    });
-    trackFallbackReason("flag_off");
-    return decision;
+  try {
+    const settings = await fetchPrintingWarehouseSettings(input.tenantId, warehouseId);
+    if (!settings.prefer_sasist_agent) {
+      const decision = base({ preferSasistAgent: false, fallbackReason: "flag_off" });
+      trackFallbackReason("flag_off");
+      return decision;
+    }
+  } catch {
+    /* prefer agent by default when settings unavailable */
   }
 
   let agents: Awaited<ReturnType<typeof fetchPrintingAgents>> = [];
@@ -96,11 +89,7 @@ export async function resolvePrintRoute(input: ResolvePrintRouteInput): Promise<
 
   const online = agents.filter((a) => a.is_online);
   if (online.length === 0) {
-    const decision = base({
-      transport: isQzAvailable() ? "qz" : "browser",
-      preferSasistAgent: true,
-      fallbackReason: "no_online_agent",
-    });
+    const decision = base({ fallbackReason: "no_online_agent" });
     trackFallbackReason(decision.fallbackReason);
     return decision;
   }
@@ -108,8 +97,6 @@ export async function resolvePrintRoute(input: ResolvePrintRouteInput): Promise<
   const withGate = online.find((a) => normalizeFormats(a.supported_formats).includes(gateFormat));
   if (!withGate) {
     const decision = base({
-      transport: isQzAvailable() ? "qz" : "browser",
-      preferSasistAgent: true,
       fallbackReason: "unsupported_capability",
       supportedFormats: normalizeFormats(online[0]?.supported_formats),
     });
@@ -120,8 +107,6 @@ export async function resolvePrintRoute(input: ResolvePrintRouteInput): Promise<
   const formats = normalizeFormats(withGate.supported_formats);
   if (!formats.includes(jobFormat)) {
     const decision = base({
-      transport: isQzAvailable() ? "qz" : "browser",
-      preferSasistAgent: true,
       agentId: withGate.id,
       fallbackReason: "unsupported_capability",
       supportedFormats: formats,
@@ -130,31 +115,15 @@ export async function resolvePrintRoute(input: ResolvePrintRouteInput): Promise<
     return decision;
   }
 
-  let printerId: number | null = null;
-  if (workstationId != null) {
-    printerId = await resolveWorkstationMappedPrinterId(
-      input.tenantId,
-      workstationId,
-      printerKind,
-    );
-  }
-  if (printerId == null) {
-    try {
-      const defaults = await fetchPrintingDefaults(input.tenantId, warehouseId);
-      if (printerKind === "label") printerId = defaults.label_printer_id;
-      else if (printerKind === "receipt") printerId = defaults.receipt_printer_id;
-      else printerId = defaults.a4_printer_id;
-    } catch {
-      printerId = null;
-    }
-  }
-
+  const printerId = await resolveWorkstationMappedPrinterId(
+    input.tenantId,
+    workstationId,
+    printerKind,
+  );
   if (printerId == null) {
     const decision = base({
-      transport: isQzAvailable() ? "qz" : "browser",
-      preferSasistAgent: true,
       agentId: withGate.id,
-      fallbackReason: "no_default_printer",
+      fallbackReason: "no_workstation_mapping",
       supportedFormats: formats,
     });
     trackFallbackReason(decision.fallbackReason);
@@ -163,7 +132,6 @@ export async function resolvePrintRoute(input: ResolvePrintRouteInput): Promise<
 
   return base({
     transport: "agent",
-    preferSasistAgent: true,
     agentId: withGate.id,
     printerId,
     fallbackReason: null,

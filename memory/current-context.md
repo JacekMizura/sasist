@@ -2,4 +2,6 @@
 
 ## Active
 
-**Printing cleanup (Sasist Agent)** — cloud-capability uses Stanowisko→Agent→mapowanie (not PrintingDefault); QZ DEV-only in PrintMethodDialog; `/settings/printers/*` redirects to WMS Stanowiska.
+**Stanowisko SSOT + Pakowanie (final)** — hardware config only under Ustawienia WMS → Stanowiska; packing session holds active `workstationId`; print queue/capability require session workstation + mapping (no PrintingDefault / silent QZ/browser).
+
+Admin assigns stations via Administrator → WMS i magazyny → Stanowiska (`user_wms_workstation_access`). Operator picks station only on `/wms/packing/*` gate.

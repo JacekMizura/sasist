@@ -1,9 +1,6 @@
-import api from "../../api/axios";
 import { createPrintJobFromPayload } from "../../api/printingApi";
-import type { Printer } from "../../types/printer";
 import { openPdfBlobInPrintViewer } from "../../utils/openPdfForBrowserPrint";
 import { downloadPdfBlob } from "../../components/printing/downloadPdfBlob";
-import { connectQZ, isQzAvailable, printPdf, setQzSecurity } from "../qzService";
 import { resolvePrintRoute } from "./resolvePrintRoute";
 import { trackFallbackReason, trackPrintedVia } from "./telemetry";
 import type { PrintRouteDecision, ResolvePrintRouteInput } from "./types";
@@ -21,43 +18,17 @@ function arrayBufferToBase64(buffer: ArrayBuffer): string {
   return btoa(binary);
 }
 
-async function printViaQz(pdfBase64: string, tenantId: number, blob: Blob): Promise<void> {
-  // Stage 5 Cleanup: remove QZ Tray path after full cutover.
-  if (!isQzAvailable()) {
-    openPdfBlobInPrintViewer(blob, { revokeBlobUrlsAfterMs: 120_000 });
-    trackPrintedVia("browser");
-    trackFallbackReason("qz_unavailable");
-    return;
-  }
-  setQzSecurity((toSign: string) =>
-    api.get<{ signature: string }>("/qz/sign", { params: { request: toSign } }).then((r) => r.data.signature),
-  );
-  await connectQZ();
-  const printersRes = await api.get<Printer[]>("/printers", { params: { tenant_id: tenantId } });
-  const list = Array.isArray(printersRes.data) ? printersRes.data : [];
-  const mapped = list.find((p) => p.system_printer_name != null && String(p.system_printer_name).trim() !== "");
-  const name = mapped?.system_printer_name?.trim();
-  if (!name) {
-    openPdfBlobInPrintViewer(blob, { revokeBlobUrlsAfterMs: 120_000 });
-    trackPrintedVia("browser");
-    trackFallbackReason("no_default_printer");
-    return;
-  }
-  await printPdf(name, pdfBase64);
-  trackPrintedVia("qz");
-}
-
 export type ExecutePdfLabelPrintInput = ResolvePrintRouteInput & {
   /** Pre-rendered label PDF. */
   pdf: ArrayBuffer | Blob;
-  /** Force transport (dialog selection). */
+  /** Force transport (conscious dialog selection only). */
   forceTransport?: PrintRouteDecision["transport"];
   fileName?: string;
 };
 
 /**
  * Single entry for PDF label prints (Z-PZ, return labels, LabelPrintQueue emergency paths).
- * Application code should call this instead of qzService / queue directly.
+ * No silent QZ / browser auto-fallback — Agent failure surfaces as an error.
  */
 export async function executePdfLabelPrint(input: ExecutePdfLabelPrintInput): Promise<PrintRouteDecision> {
   const blob =
@@ -85,9 +56,10 @@ export async function executePdfLabelPrint(input: ExecutePdfLabelPrintInput): Pr
 
   if (decision.transport === "agent") {
     if (decision.printerId == null) {
-      trackFallbackReason("no_default_printer");
-      await printViaQz(arrayBufferToBase64(buffer), input.tenantId, blob);
-      return { ...decision, transport: "qz", fallbackReason: "no_default_printer" };
+      trackFallbackReason("no_workstation_mapping");
+      throw new Error(
+        "Brak mapowania drukarki na stanowisku. Skonfiguruj mapowanie w Ustawienia WMS → Stanowiska.",
+      );
     }
     try {
       await createPrintJobFromPayload(input.tenantId, {
@@ -102,16 +74,17 @@ export async function executePdfLabelPrint(input: ExecutePdfLabelPrintInput): Pr
       });
       trackPrintedVia("agent");
       return decision;
-    } catch {
+    } catch (err) {
       trackFallbackReason("agent_error");
-      await printViaQz(arrayBufferToBase64(buffer), input.tenantId, blob);
-      return { ...decision, transport: "qz", fallbackReason: "agent_error" };
+      throw err instanceof Error
+        ? err
+        : new Error("Nie udało się wysłać etykiety do kolejki drukowania.");
     }
   }
 
-  // qz (legacy / rollback)
-  await printViaQz(arrayBufferToBase64(buffer), input.tenantId, blob);
-  return decision;
+  // QZ is DEV-only via PrintMethodDialog — never auto-selected here.
+  trackFallbackReason("unsupported_capability");
+  throw new Error("Wydruk Agent niedostępny. Wybierz metodę w oknie drukowania.");
 }
 
 export const PrintingRouter = {
