@@ -60,63 +60,106 @@ def register_printing_agent(
     from ...services.api_keys.api_key_service import record_key_usage
 
     api_key_raw = extract_raw_api_key(cred)
-    pairing_candidate = None
-    if (
-        not api_key_raw
-        and cred is not None
-        and cred.scheme.lower() == "bearer"
-        and cred.credentials
-    ):
-        candidate = cred.credentials.strip()
-        if looks_like_pairing_code(candidate):
-            pairing_candidate = candidate
+        pairing_candidate = None
+        if (
+            not api_key_raw
+            and cred is not None
+            and cred.scheme.lower() == "bearer"
+            and cred.credentials
+        ):
+            candidate = cred.credentials.strip()
+            if looks_like_pairing_code(candidate):
+                pairing_candidate = candidate
 
-    agent = None
-    token = None
-    try:
-        workstation_for_pair = None
-        if pairing_candidate:
-            api_key, workstation_for_pair = claim_pairing_code(
-                db,
-                pairing_candidate,
-                client_ip=client_ip_from_request(request),
-            )
-            record_key_usage(
-                db,
-                api_key,
-                client_ip=client_ip_from_request(request),
-                user_agent=user_agent_from_request(request),
-            )
-        elif api_key_raw:
-            api_key = validate_key(
-                db,
-                api_key_raw,
-                expected_type="printer_agent",
-                required_scope="printing.agent",
-                client_ip=client_ip_from_request(request),
-                user_agent=user_agent_from_request(request),
-            )
-        else:
-            raise HTTPException(
-                status_code=401,
-                detail="Authorization Bearer API key required",
-            )
+        logger.info(
+            "printing.agents.register received machine_id=%s has_pairing_code=%s has_api_key=%s",
+            getattr(payload, "machine_id", None),
+            bool(pairing_candidate),
+            bool(api_key_raw),
+        )
 
-        # Single transaction: register + attach + invalidate pairing code + events.
-        agent, token = register_agent_with_api_key(db, api_key=api_key, payload=payload)
-        if workstation_for_pair is not None:
-            attach_agent_to_workstation(
-                db,
-                workstation=workstation_for_pair,
-                agent=agent,
-                api_key=api_key,
+        agent = None
+        token = None
+        try:
+            workstation_for_pair = None
+            if pairing_candidate:
+                api_key, workstation_for_pair = claim_pairing_code(
+                    db,
+                    pairing_candidate,
+                    client_ip=client_ip_from_request(request),
+                )
+                logger.info(
+                    "printing.agents.register claim_ok workstation_id=%s api_key_id=%s tenant_id=%s",
+                    workstation_for_pair.id,
+                    api_key.id,
+                    api_key.tenant_id,
+                )
+                record_key_usage(
+                    db,
+                    api_key,
+                    client_ip=client_ip_from_request(request),
+                    user_agent=user_agent_from_request(request),
+                )
+            elif api_key_raw:
+                api_key = validate_key(
+                    db,
+                    api_key_raw,
+                    expected_type="printer_agent",
+                    required_scope="printing.agent",
+                    client_ip=client_ip_from_request(request),
+                    user_agent=user_agent_from_request(request),
+                )
+                logger.info(
+                    "printing.agents.register api_key_ok key_id=%s tenant_id=%s",
+                    api_key.id,
+                    api_key.tenant_id,
+                )
+            else:
+                raise HTTPException(
+                    status_code=401,
+                    detail="Authorization Bearer API key required",
+                )
+
+            # Single transaction: register + attach + invalidate pairing code + events.
+            agent, token = register_agent_with_api_key(db, api_key=api_key, payload=payload)
+            logger.info(
+                "printing.agents.register agent_upsert_ok agent_id=%s machine_id=%s",
+                agent.id,
+                agent.machine_id,
             )
-        else:
-            try_attach_agent_after_register(db, api_key=api_key, agent=agent)
-        db.commit()
-        db.refresh(agent)
+            if workstation_for_pair is not None:
+                attach_agent_to_workstation(
+                    db,
+                    workstation=workstation_for_pair,
+                    agent=agent,
+                    api_key=api_key,
+                )
+                logger.info(
+                    "printing.agents.register attach_ok workstation_id=%s agent_id=%s",
+                    workstation_for_pair.id,
+                    agent.id,
+                )
+            else:
+                attached = try_attach_agent_after_register(db, api_key=api_key, agent=agent)
+                logger.info(
+                    "printing.agents.register try_attach workstation_id=%s agent_id=%s",
+                    attached.id if attached else None,
+                    agent.id,
+                )
+            db.commit()
+            db.refresh(agent)
+            logger.info(
+                "printing.agents.register commit_ok agent_id=%s warehouse_id=%s",
+                agent.id,
+                agent.warehouse_id,
+            )
     except WorkstationError as exc:
         db.rollback()
+        logger.warning(
+            "printing.agents.register claim_or_attach_failed status=%s detail=%s",
+            exc.status_code,
+            exc.message,
+        )
         raise HTTPException(status_code=exc.status_code, detail=exc.message) from exc
     except ApiKeyRateLimitError as exc:
         db.rollback()
@@ -166,6 +209,12 @@ def agent_heartbeat(
         last_error=body.last_error,
         supported_formats=body.supported_formats,
         capabilities=body.capabilities,
+    )
+    logger.info(
+        "printing.agents.heartbeat agent_id=%s is_online=%s printer_count=%s",
+        updated.id,
+        is_agent_online(updated),
+        body.printer_count,
     )
     return AgentHeartbeatResponse(
         agent_id=updated.id,

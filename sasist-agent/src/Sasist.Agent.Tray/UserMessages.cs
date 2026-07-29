@@ -119,6 +119,8 @@ internal static class PairingClient
         req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", pairingCode);
         req.Content = JsonContent.Create(body, options: JsonOptions);
 
+        PairingDiag.Log($"register_request POST {baseUrl}agents/register machine_id={config.MachineId}");
+
         HttpResponseMessage res;
         try
         {
@@ -126,6 +128,7 @@ internal static class PairingClient
         }
         catch (HttpRequestException ex)
         {
+            PairingDiag.Log($"register_http_exception: {ex.GetType().Name}: {ex.Message}");
             try
             {
                 AgentPaths.EnsureDirectories();
@@ -138,10 +141,20 @@ internal static class PairingClient
         }
         catch (TaskCanceledException)
         {
+            PairingDiag.Log("register_timeout");
             throw new PairingException(UserMessages.CannotReachSasist);
         }
 
         var json = await res.Content.ReadAsStringAsync(ct);
+        var bodyPreview = json.Length > 240 ? json[..240] + "…" : json;
+        // Never log Authorization / token fields — strip common secret keys from preview.
+        bodyPreview = System.Text.RegularExpressions.Regex.Replace(
+            bodyPreview,
+            "\"(token|api_key|refresh_token)\"\\s*:\\s*\"[^\"]*\"",
+            "\"$1\":\"***\"",
+            System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        PairingDiag.Log($"register_response status={(int)res.StatusCode} body={bodyPreview}");
+
         if (res.StatusCode is System.Net.HttpStatusCode.Unauthorized or System.Net.HttpStatusCode.Forbidden)
             throw new PairingException(UserMessages.InvalidPairingCode);
         if ((int)res.StatusCode == 429)
@@ -181,4 +194,23 @@ internal static class PairingClient
 }
 
 internal readonly record struct PairingResult(int AgentId, string Token, int? WarehouseId, string OrganizationName);
+
+/// <summary>Temporary pairing diagnostics → ProgramData\Sasist\Agent\logs\pairing-diag.log (no secrets).</summary>
+internal static class PairingDiag
+{
+    public static void Log(string message)
+    {
+        try
+        {
+            AgentPaths.EnsureDirectories();
+            File.AppendAllText(
+                Path.Combine(AgentPaths.LogsDir, "pairing-diag.log"),
+                $"[{DateTimeOffset.Now:O}] {message}\n");
+        }
+        catch
+        {
+            // best-effort
+        }
+    }
+}
 

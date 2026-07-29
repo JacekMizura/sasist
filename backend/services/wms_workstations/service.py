@@ -341,10 +341,11 @@ def issue_pairing_code(
         },
     )
     logger.info(
-        "workstation.pairing_issued tenant_id=%s workstation_id=%s expires_at=%s",
+        "workstation.pairing_issued tenant_id=%s workstation_id=%s expires_at=%s code_len=%s",
         tenant_id,
         row.id,
         expires_aware.isoformat(),
+        len(plain_code),
     )
     return {
         "pairing_code": plain_code,
@@ -453,6 +454,12 @@ def claim_pairing_code(
             "api_key_id": key.id,
             "client_ip": client_ip,
         },
+    )
+    logger.info(
+        "workstation.pairing_claim_ok workstation_id=%s api_key_id=%s tenant_id=%s",
+        row.id,
+        key.id,
+        row.tenant_id,
     )
     return key, row
 

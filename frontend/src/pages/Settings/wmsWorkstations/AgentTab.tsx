@@ -160,10 +160,23 @@ export function AgentTab({ workstationId, detail, onUpdated, onPaired }: Props) 
         );
         if (cancelled || !pollingRef.current) return;
 
+        console.info("[wms-pairing] poll", {
+          workstationId,
+          pairing_active: status.pairing_active,
+          hasAgent: Boolean(status.agent),
+          connection_status: status.connection_status,
+          agentId: status.agent?.id ?? null,
+        });
+
         if (status.agent) {
           pollingRef.current = false;
           clearLocalPairing(false);
           const full = await refreshFull();
+          console.info("[wms-pairing] status→Połączono", {
+            workstationId,
+            connection_status: full.connection_status,
+            agentId: full.agent?.id ?? null,
+          });
           onUpdated(full);
           if (!toastConnectedRef.current) {
             toastConnectedRef.current = true;
@@ -237,6 +250,13 @@ export function AgentTab({ workstationId, detail, onUpdated, onPaired }: Props) 
       const res = await pairWorkstation(WMS_WORKSTATIONS_TENANT_ID, workstationId);
       const code = String(res.pairing_code || "").trim();
       const exp = String(res.expires_at || "").trim();
+      // TEMP pairing diag — no full code/token
+      console.info("[wms-pairing] POST /pair", {
+        workstationId,
+        codeLen: code.length,
+        expires_at: exp,
+        pairing_active_hint: Boolean(code),
+      });
       if (!code) {
         toast.error("Serwer nie zwrócił kodu połączenia.");
         return;

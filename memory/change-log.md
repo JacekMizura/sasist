@@ -1,3 +1,10 @@
+## 2026-07-29 — Pairing blocker: Host crashed on spent pairing code
+
+- Root cause: Tray persisted pairing code as `agent_api_key`; Host `EnsureRegisteredAsync` re-claimed it → 401 → no heartbeat
+- Fix: Tray does not store pairing code; Host clears pairing-shaped ApiKey and skips register when token present
+- Proven: register skip + heartbeat 200 + online + 4 devices against Railway
+- TEMP diag logs (no secrets) on Agent/Backend/FE
+
 ## 2026-07-29 — Sasist Agent Tray UI/UX (SaaS desktop)
 
 - Visual-only: Theme radii/typography/shadows, header (logo+name+badge+version), sidebar without brand block, PageShell centered max 960, Pairing onboarding card + SasistTextField 48px, soft status pills

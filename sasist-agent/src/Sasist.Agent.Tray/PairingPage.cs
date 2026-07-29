@@ -155,13 +155,19 @@ internal sealed class PairingPage : UserControl
         {
             var cfg = _store.Load();
             cfg.EnsureCloudUrl();
-            cfg.ApiKey = code;
+            // Pairing code is single-use Bearer for Tray register only — never persist as ApiKey.
+            // (Persisting it made Host re-POST the spent code → 401 → crash before heartbeat.)
             if (string.IsNullOrWhiteSpace(cfg.MachineId))
                 cfg.MachineId = $"{Environment.MachineName}-{Environment.TickCount:X8}";
             cfg.ComputerName = Environment.MachineName;
             _store.Save(cfg);
 
+            PairingDiag.Log($"pair_start server={cfg.ServerUrl} machine_id={cfg.MachineId} code_len={code.Length} code_shape=ok");
             var result = await PairingClient.PairAsync(cfg, code, CancellationToken.None);
+            PairingDiag.Log($"pair_ok agent_id={result.AgentId} warehouse_id={result.WarehouseId?.ToString() ?? "null"} org_len={result.OrganizationName?.Length ?? 0}");
+
+            // Clear any leftover pairing code from older builds; Host must run token-only.
+            cfg.ApiKey = "";
             cfg.Token = result.Token;
             cfg.AgentId = result.AgentId;
             cfg.OrganizationName = result.OrganizationName;
@@ -180,9 +186,11 @@ internal sealed class PairingPage : UserControl
             {
                 try { ServiceHelper.Restart(TrayApplicationContext.ServiceName); }
                 catch { ServiceHelper.StartIfNeeded(TrayApplicationContext.ServiceName); }
+                PairingDiag.Log("host_service_start_ok");
             }
-            catch
+            catch (Exception svcEx)
             {
+                PairingDiag.Log($"host_service_start_fail: {svcEx.GetType().Name}: {svcEx.Message}");
                 _status.ForeColor = Theme.Warning;
                 _status.Text = UserMessages.ServiceStartHint;
                 _onPaired();
@@ -196,6 +204,7 @@ internal sealed class PairingPage : UserControl
         }
         catch (Exception ex)
         {
+            PairingDiag.Log($"pair_fail: {ex.GetType().Name}: {ex.Message}");
             _status.ForeColor = Theme.Danger;
             _status.Text = UserMessages.FromException(ex);
         }

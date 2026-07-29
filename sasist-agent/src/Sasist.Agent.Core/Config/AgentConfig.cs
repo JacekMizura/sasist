@@ -24,7 +24,7 @@ public sealed class AgentConfig
     /// <summary>Company / tenant display name from Sasist (shown in Tray).</summary>
     public string OrganizationName { get; set; } = "";
 
-    /// <summary>Loaded from DPAPI secret store — never persisted in config.json. Pairing code (spa_…).</summary>
+    /// <summary>Loaded from DPAPI secret store — never persisted in config.json. Durable spa_/sasist_ key only (not pairing code).</summary>
     [JsonIgnore]
     public string ApiKey { get; set; } = "";
 

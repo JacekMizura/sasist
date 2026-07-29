@@ -77,14 +77,28 @@ public sealed class CompatPrintingTransport : IAgentTransport
         };
 
         using var req = new HttpRequestMessage(HttpMethod.Post, "agents/register");
+        // Durable spa_/sasist_ key only — never a spent pairing code (cleared in AgentRuntime).
+        var authKind = string.IsNullOrWhiteSpace(_config.ApiKey)
+            ? "empty"
+            : (_config.ApiKey.StartsWith("spa_", StringComparison.Ordinal) ||
+               _config.ApiKey.StartsWith("sasist_", StringComparison.Ordinal)
+                ? "api_key"
+                : "other");
+        _logger.LogInformation(
+            "register_request machine_id={MachineId} auth_kind={AuthKind} api_key_len={Len}",
+            request.MachineId,
+            authKind,
+            _config.ApiKey?.Length ?? 0);
         req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _config.ApiKey);
         AgentRequestSecurity.ApplyReplayHeaders(req);
         req.Content = JsonContent.Create(body, options: JsonOptions);
 
         using var res = await _printingHttp.SendAsync(req, cancellationToken);
+        _logger.LogInformation("register_response status={Status}", (int)res.StatusCode);
         var payload = await ReadJsonAsync<RegisterResponse>(res, cancellationToken);
         if (payload is null || string.IsNullOrWhiteSpace(payload.Token))
             throw new ApiException("Invalid register response");
+        _logger.LogInformation("register_ok agent_id={AgentId} warehouse_id={WarehouseId}", payload.AgentId, payload.WarehouseId);
         return new AgentRegistrationResult(payload.AgentId, payload.Token, payload.MachineId, payload.WarehouseId);
     }
 
@@ -122,10 +136,15 @@ public sealed class CompatPrintingTransport : IAgentTransport
             req.Content = JsonContent.Create(body, options: JsonOptions);
             using var res = await _printingHttp.SendAsync(req, cancellationToken);
             await EnsureSuccessAsync(res, cancellationToken);
+            _logger.LogInformation(
+                "heartbeat_ok agent_id={AgentId} device_count={Count} status={Status}",
+                _config.AgentId,
+                request.DeviceCount,
+                (int)res.StatusCode);
         }
         catch (Exception ex)
         {
-            _logger.LogDebug(ex, "Compat printing heartbeat adapter failed (edge sync already succeeded)");
+            _logger.LogWarning(ex, "Compat printing heartbeat adapter failed (edge sync already succeeded)");
         }
 
         return new AgentHeartbeatResult(sync, DateTimeOffset.UtcNow);

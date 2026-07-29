@@ -253,13 +253,36 @@ public sealed class AgentRuntime
 
     private async Task EnsureRegisteredAsync(CancellationToken ct)
     {
-        // With API key: (re)register so printer list syncs into ERP agent_printers (needed for test print / queue).
-        // Token-only: keep existing identity.
+        // Older Tray builds persisted the single-use pairing code as agent_api_key.
+        // Host then re-POSTed it to /agents/register → 401 "kod nieprawidłowy/wygasł" and crashed
+        // before heartbeat. Strip pairing-shaped secrets; keep real spa_/sasist_ API keys.
+        if (LooksLikePairingCode(_config.ApiKey))
+        {
+            _logger.LogWarning(
+                "Clearing spent pairing code from agent_api_key (len={Len}); Host will use agent token",
+                _config.ApiKey.Length);
+            _config.ApiKey = "";
+            _configStore.Save(_config);
+            ApplyTransportConfig();
+        }
+
+        // With durable API key: (re)register so printer list syncs into ERP agent_printers.
+        // Token-only (normal after Tray pairing): keep existing identity and go to heartbeat.
         if (_config.HasToken && _config.AgentId > 0 && !_config.HasApiKey)
+        {
+            _logger.LogInformation(
+                "Skip register — token present agent_id={AgentId}; proceeding to heartbeat",
+                _config.AgentId);
             return;
+        }
         if (!_config.HasApiKey)
             throw new InvalidOperationException("api_key required for first registration (DPAPI secret agent_api_key)");
 
+        _logger.LogInformation(
+            "Registering agent machine_id={MachineId} has_token={HasToken} agent_id={AgentId}",
+            _config.MachineId,
+            _config.HasToken,
+            _config.AgentId);
         var result = await _transport.EnsureRegisteredAsync(
             new AgentRegistrationRequest(
                 _config.MachineId,
@@ -276,6 +299,25 @@ public sealed class AgentRuntime
         _configStore.Save(_config);
         ApplyTransportConfig();
         _logger.LogInformation("Registered as agent_id={AgentId}", _config.AgentId);
+    }
+
+    /// <summary>Matches ERP pairing format XXXX-XXXX-XXXX (same alphabet as backend).</summary>
+    private static bool LooksLikePairingCode(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return false;
+        var n = value.Trim().ToUpperInvariant().Replace(" ", "", StringComparison.Ordinal);
+        if (n.Length != 14 || n[4] != '-' || n[9] != '-')
+            return false;
+        static bool Ok(char c) =>
+            (c is >= 'A' and <= 'Z' && c is not 'I' and not 'O') ||
+            (c is >= '2' and <= '9' && c is not '0' and not '1');
+        for (var i = 0; i < n.Length; i++)
+        {
+            if (i is 4 or 9) continue;
+            if (!Ok(n[i])) return false;
+        }
+        return true;
     }
 
     private async Task RunHeartbeatLoopAsync(CancellationToken ct)
