@@ -7,7 +7,7 @@ import type { QueuePrintRequest } from "../types/printing";
 import { NO_ACTIVE_AGENT_USER_MESSAGE } from "../components/printing/hasDefaultCloudPrinter";
 import { packingSessionWorkstationId } from "../pages/wms/wmsPackingSession";
 
-const QUEUE_SUCCESS_MSG = "Dokument został wysłany do kolejki drukowania";
+const QUEUE_SUCCESS_MSG = "Dokument został wysłany do drukowania";
 
 type Options = {
   tenantId: number;
@@ -44,7 +44,7 @@ export function useQueuePrint({ tenantId, warehouseId }: Options) {
       if (busy) return false;
       const workstation_id = resolveWorkstationId(workstationId ?? body.workstation_id);
       if (workstation_id == null) {
-        toast.error("Wybierz stanowisko, aby drukować przez Sasist Agent.");
+        toast.error("Wybierz miejsce wydruku.");
         return false;
       }
       setBusy(true);
@@ -67,12 +67,18 @@ export function useQueuePrint({ tenantId, warehouseId }: Options) {
   );
 
   const queueStockDocument = useCallback(
-    (documentId: number, warehouseIdOverride?: number | null, workstationId?: number | null) =>
+    (
+      documentId: number,
+      warehouseIdOverride?: number | null,
+      workstationId?: number | null,
+      templateVersionId?: number | null,
+    ) =>
       queuePrint(
         {
           document_type: "stock_document",
           document_id: documentId,
           warehouse_id: warehouseIdOverride ?? warehouseId ?? null,
+          template_version_id: templateVersionId ?? null,
           copies: 1,
         },
         workstationId,
@@ -81,12 +87,18 @@ export function useQueuePrint({ tenantId, warehouseId }: Options) {
   );
 
   const queueSaleDocument = useCallback(
-    (documentId: string, warehouseIdOverride?: number | null, workstationId?: number | null) =>
+    (
+      documentId: string,
+      warehouseIdOverride?: number | null,
+      workstationId?: number | null,
+      templateVersionId?: number | null,
+    ) =>
       queuePrint(
         {
           document_type: "sale_document",
           document_id_str: documentId,
           warehouse_id: warehouseIdOverride ?? warehouseId ?? null,
+          template_version_id: templateVersionId ?? null,
           copies: 1,
         },
         workstationId,
@@ -117,12 +129,18 @@ export function useQueuePrint({ tenantId, warehouseId }: Options) {
   );
 
   const queueProductionBatchCard = useCallback(
-    (batchId: number, warehouseIdOverride?: number | null, workstationId?: number | null) =>
+    (
+      batchId: number,
+      warehouseIdOverride?: number | null,
+      workstationId?: number | null,
+      templateVersionId?: number | null,
+    ) =>
       queuePrint(
         {
           document_type: "production_batch_card",
           document_id: batchId,
           warehouse_id: warehouseIdOverride ?? warehouseId ?? null,
+          template_version_id: templateVersionId ?? null,
           copies: 1,
         },
         workstationId,
@@ -131,12 +149,18 @@ export function useQueuePrint({ tenantId, warehouseId }: Options) {
   );
 
   const queueProductionOrderCard = useCallback(
-    (orderId: number, warehouseIdOverride?: number | null, workstationId?: number | null) =>
+    (
+      orderId: number,
+      warehouseIdOverride?: number | null,
+      workstationId?: number | null,
+      templateVersionId?: number | null,
+    ) =>
       queuePrint(
         {
           document_type: "production_order_card",
           document_id: orderId,
           warehouse_id: warehouseIdOverride ?? warehouseId ?? null,
+          template_version_id: templateVersionId ?? null,
           copies: 1,
         },
         workstationId,

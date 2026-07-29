@@ -115,9 +115,12 @@ export default function BatchDetailPage() {
     if (!batchId || warehouseId == null) return;
     const id = Number(batchId);
     void printFlow.requestPrint({
+      kindCode: "production_card",
+      documentTypeKey: "production_batch_card",
+      title: "Drukuj kartę produkcji",
       onBrowserPrint: () => printBatchProductionCardBrowser(tenantId, id, warehouseId),
-      onCloudPrint: async (workstationId) => {
-        await queueProductionBatchCard(id, warehouseId, workstationId);
+      onCloudPrint: async (workstationId, templateVersionId) => {
+        await queueProductionBatchCard(id, warehouseId, workstationId, templateVersionId);
       },
       onDownloadPdf: () => downloadBatchProductionCardPdf(tenantId, id, warehouseId),
     });

@@ -1,6 +1,13 @@
-export type { PrintMethod, PrintMethodHandlers, PrintMethodKind } from "./printMethodTypes";
+export type {
+  PrintMethod,
+  PrintMethodHandlers,
+  PrintMethodKind,
+  PrintRequestMeta,
+  PrintConfirmSelection,
+} from "./printMethodTypes";
 export { PrintMethodDialog } from "./PrintMethodDialog";
 export { PrintWorkstationDialog } from "./PrintWorkstationDialog";
+export { PrintDocumentDialog } from "./PrintDocumentDialog";
 export { PrintFlowModals } from "./PrintFlowModals";
 export { usePrintMethodFlow } from "./usePrintMethodFlow";
 export { resolvePrintWorkstation } from "./resolvePrintWorkstation";

@@ -81,7 +81,7 @@ export function PrintWorkstationDialog({
         title={<h2 className={typography.h1}>Wybierz stanowisko</h2>}
       >
         <p className={typography.pageDesc}>
-          Dokument zostanie wysłany do Sasist Agent na wybranym stanowisku.
+          Dokument zostanie wydrukowany na drukarce wybranego stanowiska.
         </p>
         <ul className="mt-4 space-y-2">
           {stations.map((s) => {

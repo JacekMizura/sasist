@@ -292,7 +292,13 @@ def _order_card_context(db: Session, *, tenant_id: int, order_id: int) -> dict[s
     }
 
 
-def build_batch_production_card_html(db: Session, *, tenant_id: int, batch_id: int) -> str:
+def build_batch_production_card_html(
+    db: Session,
+    *,
+    tenant_id: int,
+    batch_id: int,
+    template_version_id: int | None = None,
+) -> str:
     from ...document_templates.adapters.production_card_adapter import (
         document_engine_available,
         render_batch_production_card_html,
@@ -305,7 +311,12 @@ def build_batch_production_card_html(db: Session, *, tenant_id: int, batch_id: i
                 tenant_id,
                 batch_id,
             )
-            return render_batch_production_card_html(db, tenant_id=tenant_id, batch_id=batch_id)
+            return render_batch_production_card_html(
+                db,
+                tenant_id=tenant_id,
+                batch_id=batch_id,
+                template_version_id=template_version_id,
+            )
         logger.info(
             "production_card HTML via legacy Jinja tenant_id=%s batch_id=%s",
             tenant_id,
@@ -325,7 +336,13 @@ def build_batch_production_card_html(db: Session, *, tenant_id: int, batch_id: i
         raise
 
 
-def build_order_production_card_html(db: Session, *, tenant_id: int, order_id: int) -> str:
+def build_order_production_card_html(
+    db: Session,
+    *,
+    tenant_id: int,
+    order_id: int,
+    template_version_id: int | None = None,
+) -> str:
     from ...document_templates.adapters.production_card_adapter import (
         document_engine_available,
         render_order_production_card_html,
@@ -338,7 +355,12 @@ def build_order_production_card_html(db: Session, *, tenant_id: int, order_id: i
                 tenant_id,
                 order_id,
             )
-            return render_order_production_card_html(db, tenant_id=tenant_id, order_id=order_id)
+            return render_order_production_card_html(
+                db,
+                tenant_id=tenant_id,
+                order_id=order_id,
+                template_version_id=template_version_id,
+            )
         logger.info(
             "production_card HTML via legacy Jinja tenant_id=%s order_id=%s",
             tenant_id,
@@ -377,9 +399,20 @@ def _combine_card_html_documents(pages: list[str]) -> str:
     return f"<!DOCTYPE html><html lang=\"pl\"><head>{head}</head><body>{''.join(bodies)}</body></html>"
 
 
-def generate_batch_production_card_pdf_bytes(db: Session, *, tenant_id: int, batch_id: int) -> bytes:
+def generate_batch_production_card_pdf_bytes(
+    db: Session,
+    *,
+    tenant_id: int,
+    batch_id: int,
+    template_version_id: int | None = None,
+) -> bytes:
     try:
-        html = build_batch_production_card_html(db, tenant_id=tenant_id, batch_id=batch_id)
+        html = build_batch_production_card_html(
+            db,
+            tenant_id=tenant_id,
+            batch_id=batch_id,
+            template_version_id=template_version_id,
+        )
         logger.info(
             "production_card PDF html_ready tenant_id=%s batch_id=%s html_bytes=%s",
             tenant_id,
@@ -403,9 +436,20 @@ def generate_batch_production_card_pdf_bytes(db: Session, *, tenant_id: int, bat
         raise
 
 
-def generate_order_production_card_pdf_bytes(db: Session, *, tenant_id: int, order_id: int) -> bytes:
+def generate_order_production_card_pdf_bytes(
+    db: Session,
+    *,
+    tenant_id: int,
+    order_id: int,
+    template_version_id: int | None = None,
+) -> bytes:
     try:
-        html = build_order_production_card_html(db, tenant_id=tenant_id, order_id=order_id)
+        html = build_order_production_card_html(
+            db,
+            tenant_id=tenant_id,
+            order_id=order_id,
+            template_version_id=template_version_id,
+        )
         return html_document_to_pdf_bytes(html)
     except Exception:
         logger.exception(

@@ -89,6 +89,9 @@ export default function BatchesListPage({ embedded = false }: Props) {
     if (warehouseId == null || selected.size === 0) return;
     const batchIds = [...selected];
     void printFlow.requestPrint({
+      kindCode: "production_card",
+      documentTypeKey: "production_batch_card",
+      title: "Drukuj karty produkcyjne",
       onBrowserPrint: async () => {
         setPrintBusy(true);
         try {
@@ -97,11 +100,11 @@ export default function BatchesListPage({ embedded = false }: Props) {
           setPrintBusy(false);
         }
       },
-      onCloudPrint: async (workstationId) => {
+      onCloudPrint: async (workstationId, templateVersionId) => {
         setPrintBusy(true);
         try {
           for (const id of batchIds) {
-            await queueProductionBatchCard(id, warehouseId, workstationId);
+            await queueProductionBatchCard(id, warehouseId, workstationId, templateVersionId);
           }
         } finally {
           setPrintBusy(false);

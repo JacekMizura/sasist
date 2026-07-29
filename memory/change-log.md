@@ -1,3 +1,10 @@
+## 2026-07-29 — Print dialog: szablon + miejsce wydruku
+
+- Nowy `PrintDocumentDialog`: szablon (DTE), stanowisko (drukarka + Online/Offline), alternatywy PDF/przeglądarka
+- Prefs `sasist_print_document_prefs_v1` per typ dokumentu
+- `default_printer_name` na liście stanowisk; `template_version_id` w queue (stock/sale/production)
+- Usunięto z UX słowa Agent / kolejka / mapowanie
+
 ## 2026-07-29 — Print UX: packing session ≠ wszystkie wydruki
 
 - `resolvePrintWorkstation` + `usePrintMethodFlow`: sesja pakowania **lub** available-for-me (1=auto, N=picker Online/Offline)

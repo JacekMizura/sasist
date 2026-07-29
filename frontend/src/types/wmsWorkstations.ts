@@ -43,6 +43,8 @@ export type WorkstationListItem = {
   device_count: number;
   last_sync_at: string | null;
   agent: WorkstationAgentSummary | null;
+  /** Display name of the preferred mapped printer on this station. */
+  default_printer_name?: string | null;
 };
 
 export type WorkstationDetail = WorkstationListItem & {

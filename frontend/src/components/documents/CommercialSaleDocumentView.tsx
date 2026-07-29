@@ -11,6 +11,7 @@ import DocumentPrintHistory from "../printing/DocumentPrintHistory";
 import type { SaleDocumentDetail } from "../../types/saleDocument";
 import { formatMoneyPl } from "../../utils/formatOrderMoney";
 import { openPdfBlobInPrintViewer } from "../../utils/openPdfForBrowserPrint";
+import { saleKindFromSubtype } from "../../utils/documentTemplatePrint";
 import { DocumentTypeBadge, ExternalStatusBadge, PaymentStatusBadge } from "../../pages/documents/documentsBadges";
 
 const btnSecondary =
@@ -68,17 +69,21 @@ export default function CommercialSaleDocumentView({ doc, onPrint, onExport }: P
   const handlePrint =
     onPrint ??
     (() => {
+      const kindCode = saleKindFromSubtype(doc.document_subtype || doc.doc_type);
       void printFlow.requestPrint({
-        onBrowserPrint: async () => {
-          const blob = await fetchSaleDocumentPdfBlob(DAMAGE_TENANT_ID, doc.id);
+        kindCode,
+        documentTypeKey: kindCode,
+        title: `Drukuj ${printLabel}`,
+        onBrowserPrint: async (templateVersionId) => {
+          const blob = await fetchSaleDocumentPdfBlob(DAMAGE_TENANT_ID, doc.id, templateVersionId);
           const w = openPdfBlobInPrintViewer(blob, { autoPrint: true });
           if (!w) throw new Error("Przeglądarka zablokowała nową kartę. Zezwól na wyskakujące okna.");
         },
-        onCloudPrint: async (workstationId) => {
-          await queueSaleDocument(doc.id, warehouseId, workstationId);
+        onCloudPrint: async (workstationId, templateVersionId) => {
+          await queueSaleDocument(doc.id, warehouseId, workstationId, templateVersionId);
         },
-        onDownloadPdf: async () => {
-          const blob = await fetchSaleDocumentPdfBlob(DAMAGE_TENANT_ID, doc.id);
+        onDownloadPdf: async (templateVersionId) => {
+          const blob = await fetchSaleDocumentPdfBlob(DAMAGE_TENANT_ID, doc.id, templateVersionId);
           downloadPdfBlob(blob, `${doc.document_number || doc.id}.pdf`);
         },
       });
@@ -86,16 +91,19 @@ export default function CommercialSaleDocumentView({ doc, onPrint, onExport }: P
 
   const handlePrintWz = (wzId: number) => {
     void printFlow.requestPrint({
-      onBrowserPrint: async () => {
-        const blob = await fetchStockDocumentPdfBlob(DAMAGE_TENANT_ID, wzId);
+      kindCode: "wz",
+      documentTypeKey: "wz",
+      title: "Drukuj WZ",
+      onBrowserPrint: async (templateVersionId) => {
+        const blob = await fetchStockDocumentPdfBlob(DAMAGE_TENANT_ID, wzId, templateVersionId);
         const w = openPdfBlobInPrintViewer(blob, { autoPrint: true });
         if (!w) throw new Error("Przeglądarka zablokowała nową kartę. Zezwól na wyskakujące okna.");
       },
-      onCloudPrint: async (workstationId) => {
-        await queueStockDocument(wzId, warehouseId, workstationId);
+      onCloudPrint: async (workstationId, templateVersionId) => {
+        await queueStockDocument(wzId, warehouseId, workstationId, templateVersionId);
       },
-      onDownloadPdf: async () => {
-        const blob = await fetchStockDocumentPdfBlob(DAMAGE_TENANT_ID, wzId);
+      onDownloadPdf: async (templateVersionId) => {
+        const blob = await fetchStockDocumentPdfBlob(DAMAGE_TENANT_ID, wzId, templateVersionId);
         downloadPdfBlob(blob, `wz-${wzId}.pdf`);
       },
     });

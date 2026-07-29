@@ -1,6 +1,11 @@
 import { useCallback, useState } from "react";
 import toast from "react-hot-toast";
 
+import {
+  fetchPublishedTemplateOptions,
+  type PublishedTemplateOptionDto,
+} from "../../api/documentTemplatesApi";
+import { fetchWorkstationsAvailableForMe } from "../../api/wmsWorkstationsApi";
 import { useAuth } from "../../context/AuthContext";
 import { packingSessionWorkstationId } from "../../pages/wms/wmsPackingSession";
 import type { WorkstationListItem } from "../../types/wmsWorkstations";
@@ -9,25 +14,30 @@ import {
   getCloudPrintCapability,
   type CloudPrintCapability,
 } from "./hasDefaultCloudPrinter";
-import type { PrintMethod, PrintMethodHandlers, PrintMethodKind } from "./printMethodTypes";
-import { resolvePrintWorkstation } from "./resolvePrintWorkstation";
+import { getPrintDocumentPref, savePrintDocumentPref } from "./printDocumentPrefs";
+import type {
+  PrintConfirmSelection,
+  PrintMethodHandlers,
+  PrintMethodKind,
+  PrintRequestMeta,
+} from "./printMethodTypes";
 
 type Options = {
   tenantId: number;
   warehouseId?: number | null;
   printerKind?: PrintMethodKind;
   /**
-   * When true (default), documents support Agent print → station pick / auto Agent.
-   * When false, skip Agent and open browser/PDF alternatives only.
+   * When true (default), station print is offered.
+   * When false, only PDF / browser alternatives.
    */
   agentSupported?: boolean;
 };
 
+type RequestInput = PrintMethodHandlers & PrintRequestMeta;
+
 /**
- * Print entrypoint:
- * - Packing session workstation → Agent auto (or alternatives if offline/unmapped)
- * - Otherwise → available-for-me → 1 station auto / N station picker → Agent
- * - Browser/PDF only via "Inna metoda" or when Agent path unavailable
+ * Print entrypoint — always opens operator dialog (template + place + alternatives).
+ * Infrastructure (queue / mapping) stays invisible.
  */
 export function usePrintMethodFlow({
   tenantId,
@@ -36,37 +46,38 @@ export function usePrintMethodFlow({
   agentSupported = true,
 }: Options) {
   const { user } = useAuth();
-  const [methodOpen, setMethodOpen] = useState(false);
-  const [stationPickerOpen, setStationPickerOpen] = useState(false);
+  const [dialogOpen, setDialogOpen] = useState(false);
   const [stations, setStations] = useState<WorkstationListItem[]>([]);
+  const [templates, setTemplates] = useState<PublishedTemplateOptionDto[]>([]);
   const [pending, setPending] = useState(false);
   const [handlers, setHandlers] = useState<PrintMethodHandlers | null>(null);
   const [cloudCapability, setCloudCapability] = useState<CloudPrintCapability | null>(null);
-  const [activeWorkstationId, setActiveWorkstationId] = useState<number | null>(null);
-  /** Method dialog shows Agent tile only when a workstation is already chosen and ready-check failed. */
-  const [alternativesOnly, setAlternativesOnly] = useState(false);
+  const [documentTypeKey, setDocumentTypeKey] = useState<string>("");
+  const [title, setTitle] = useState<string>("Drukuj dokument");
+  const [description, setDescription] = useState<string | undefined>(undefined);
+  const [initialTemplateVersionId, setInitialTemplateVersionId] = useState<number | null>(null);
+  const [initialWorkstationId, setInitialWorkstationId] = useState<number | null>(null);
+  const [stationPrintAvailable, setStationPrintAvailable] = useState(true);
+  const [stationUnavailableMessage, setStationUnavailableMessage] = useState<string | null>(null);
 
-  const lastUsedStationId = user?.wms_profile?.packing_station_id ?? null;
+  const profileStationId = user?.wms_profile?.packing_station_id ?? null;
 
   const closeAll = useCallback(() => {
     if (pending) return;
-    setMethodOpen(false);
-    setStationPickerOpen(false);
+    setDialogOpen(false);
     setHandlers(null);
     setStations([]);
-    setAlternativesOnly(false);
+    setTemplates([]);
+    setCloudCapability(null);
   }, [pending]);
 
-  const openAlternatives = useCallback((cap: CloudPrintCapability | null, onlyAlts: boolean) => {
-    setCloudCapability(cap);
-    setAlternativesOnly(onlyAlts);
-    setStationPickerOpen(false);
-    setMethodOpen(true);
-  }, []);
-
-  const runAgent = useCallback(
-    async (workstationId: number, h: PrintMethodHandlers) => {
-      setActiveWorkstationId(workstationId);
+  const runStationPrint = useCallback(
+    async (
+      workstationId: number,
+      templateVersionId: number | null,
+      h: PrintMethodHandlers,
+      prefsKey: string,
+    ) => {
       const capability = await getCloudPrintCapability(
         tenantId,
         warehouseId,
@@ -75,102 +86,106 @@ export function usePrintMethodFlow({
       );
       setCloudCapability(capability);
       if (!capability.ready) {
-        openAlternatives(capability, true);
+        toast.error(cloudPrintUnavailableMessage(capability));
         return false;
       }
-      await (h.onAgentPrint ?? h.onCloudPrint)(workstationId);
-      setMethodOpen(false);
-      setStationPickerOpen(false);
+      await (h.onAgentPrint ?? h.onCloudPrint)(workstationId, templateVersionId);
+      if (prefsKey) {
+        savePrintDocumentPref(prefsKey, {
+          workstationId,
+          templateVersionId,
+        });
+      }
+      setDialogOpen(false);
       setHandlers(null);
       return true;
     },
-    [openAlternatives, printerKind, tenantId, warehouseId],
-  );
-
-  const runMethod = useCallback(
-    async (method: PrintMethod, h: PrintMethodHandlers) => {
-      const normalized = method === "cloud" ? "agent" : method;
-      if (normalized === "agent") {
-        const ws =
-          activeWorkstationId ??
-          packingSessionWorkstationId() ??
-          (stations.length === 1 ? stations[0].id : null);
-        if (ws == null) {
-          toast.error("Wybierz stanowisko, aby drukować przez Sasist Agent.");
-          return;
-        }
-        if (cloudCapability && !cloudCapability.ready) {
-          toast.error(cloudPrintUnavailableMessage(cloudCapability));
-          return;
-        }
-        setPending(true);
-        try {
-          await runAgent(ws, h);
-        } catch (e: unknown) {
-          toast.error(e instanceof Error ? e.message : "Nie udało się wykonać wydruku.");
-        } finally {
-          setPending(false);
-        }
-        return;
-      }
-      setPending(true);
-      try {
-        if (normalized === "browser") await h.onBrowserPrint();
-        else if (normalized === "qz") {
-          if (import.meta.env.DEV && h.onQzPrint) await h.onQzPrint();
-          else await h.onBrowserPrint();
-        } else await h.onDownloadPdf();
-        setMethodOpen(false);
-        setStationPickerOpen(false);
-        setHandlers(null);
-      } catch (e: unknown) {
-        toast.error(e instanceof Error ? e.message : "Nie udało się wykonać wydruku.");
-      } finally {
-        setPending(false);
-      }
-    },
-    [activeWorkstationId, cloudCapability, runAgent, stations],
+    [printerKind, tenantId, warehouseId],
   );
 
   const requestPrint = useCallback(
-    async (next: PrintMethodHandlers) => {
+    async (next: RequestInput) => {
       if (pending) return;
       setPending(true);
-      setHandlers(next);
+      const {
+        kindCode = null,
+        documentTypeKey: typeKey = kindCode,
+        title: nextTitle,
+        description: nextDescription,
+        onBrowserPrint,
+        onCloudPrint,
+        onDownloadPdf,
+        onAgentPrint,
+        onQzPrint,
+      } = next;
+      const prefsKey = (typeKey || kindCode || "").trim();
+      const h: PrintMethodHandlers = {
+        onBrowserPrint,
+        onCloudPrint,
+        onDownloadPdf,
+        onAgentPrint,
+        onQzPrint,
+      };
+      setHandlers(h);
+      setDocumentTypeKey(prefsKey);
+      setTitle(nextTitle?.trim() || "Drukuj dokument");
+      setDescription(nextDescription);
       try {
+        const prefs = prefsKey ? getPrintDocumentPref(prefsKey) : {};
+        setInitialTemplateVersionId(prefs.templateVersionId ?? null);
+
+        let loadedTemplates: PublishedTemplateOptionDto[] = [];
+        if (kindCode) {
+          try {
+            loadedTemplates = await fetchPublishedTemplateOptions(tenantId, {
+              kind_code: kindCode,
+            });
+          } catch {
+            loadedTemplates = [];
+          }
+        }
+        setTemplates(loadedTemplates);
+
         if (!agentSupported) {
-          openAlternatives(null, true);
+          setStations([]);
+          setStationPrintAvailable(false);
+          setStationUnavailableMessage(null);
+          setInitialWorkstationId(null);
+          setDialogOpen(true);
           return;
         }
 
-        const resolution = await resolvePrintWorkstation(tenantId, warehouseId);
-        setStations(resolution.stations);
-
-        if (resolution.kind === "session" || resolution.kind === "auto") {
-          await runAgent(resolution.workstationId, next);
-          return;
+        let list = await fetchWorkstationsAvailableForMe(tenantId);
+        if (warehouseId != null && warehouseId >= 1) {
+          list = list.filter((s) => s.warehouse_id === warehouseId);
         }
+        setStations(list);
 
-        if (resolution.kind === "none") {
-          openAlternatives(
-            {
-              kind: printerKind,
-              ready: false,
-              reason: "NO_WORKSTATION",
-              printer_id: null,
-              has_online_agent: false,
-              workstation_id: null,
-              message:
-                "Brak przypisanego stanowiska. Poproś administratora o dostęp do stanowiska WMS.",
-            },
-            true,
+        const sessionWs = packingSessionWorkstationId();
+        const preferredWs =
+          (sessionWs != null && list.some((s) => s.id === sessionWs) ? sessionWs : null) ??
+          (prefs.workstationId != null && list.some((s) => s.id === prefs.workstationId)
+            ? prefs.workstationId
+            : null) ??
+          (profileStationId != null && list.some((s) => s.id === profileStationId)
+            ? profileStationId
+            : null) ??
+          list.find((s) => s.connection_status === "connected" || s.agent?.is_online)?.id ??
+          list[0]?.id ??
+          null;
+        setInitialWorkstationId(preferredWs);
+
+        if (list.length === 0) {
+          setStationPrintAvailable(false);
+          setStationUnavailableMessage(
+            "Brak przypisanego stanowiska. Poproś administratora o dostęp do stanowiska WMS.",
           );
-          return;
+        } else {
+          setStationPrintAvailable(true);
+          setStationUnavailableMessage(null);
         }
 
-        // Prefer online last-used for preselect; picker is shown for N stations.
-        setActiveWorkstationId(null);
-        setStationPickerOpen(true);
+        setDialogOpen(true);
       } catch (e: unknown) {
         toast.error(e instanceof Error ? e.message : "Nie udało się rozpocząć wydruku.");
         setHandlers(null);
@@ -178,54 +193,76 @@ export function usePrintMethodFlow({
         setPending(false);
       }
     },
-    [agentSupported, openAlternatives, pending, printerKind, runAgent, tenantId, warehouseId],
+    [agentSupported, pending, profileStationId, tenantId, warehouseId],
   );
 
-  const confirmStation = useCallback(
-    async (workstationId: number) => {
+  const confirmSelection = useCallback(
+    async (selection: PrintConfirmSelection) => {
       if (!handlers) return;
       setPending(true);
       try {
-        await runAgent(workstationId, handlers);
+        if (selection.destination === "station") {
+          if (selection.workstationId == null) {
+            toast.error("Wybierz miejsce wydruku.");
+            return;
+          }
+          await runStationPrint(
+            selection.workstationId,
+            selection.templateVersionId,
+            handlers,
+            documentTypeKey,
+          );
+          return;
+        }
+        if (documentTypeKey) {
+          savePrintDocumentPref(documentTypeKey, {
+            templateVersionId: selection.templateVersionId,
+          });
+        }
+        if (selection.destination === "browser") {
+          await handlers.onBrowserPrint(selection.templateVersionId);
+        } else {
+          await handlers.onDownloadPdf(selection.templateVersionId);
+        }
+        setDialogOpen(false);
+        setHandlers(null);
       } catch (e: unknown) {
         toast.error(e instanceof Error ? e.message : "Nie udało się wykonać wydruku.");
       } finally {
         setPending(false);
       }
     },
-    [handlers, runAgent],
+    [documentTypeKey, handlers, runStationPrint],
   );
-
-  const confirmMethod = useCallback(
-    async (method: PrintMethod) => {
-      if (!handlers) return;
-      await runMethod(method, handlers);
-    },
-    [handlers, runMethod],
-  );
-
-  const openAlternativeFromPicker = useCallback(() => {
-    setAlternativesOnly(true);
-    setStationPickerOpen(false);
-    setMethodOpen(true);
-  }, []);
 
   return {
-    /** @deprecated use methodOpen — kept for callers of PrintMethodDialog */
-    open: methodOpen,
-    methodOpen,
-    stationPickerOpen,
+    /** @deprecated kept for older callers expecting PrintMethodDialog open flag */
+    open: dialogOpen,
+    dialogOpen,
+    methodOpen: false,
+    stationPickerOpen: false,
     stations,
+    templates,
     pending,
     cloudCapability,
     preferSasistAgent: true as boolean | null,
-    alternativesOnly,
-    lastUsedStationId,
-    activeWorkstationId,
+    alternativesOnly: false,
+    lastUsedStationId: initialWorkstationId ?? profileStationId,
+    activeWorkstationId: initialWorkstationId,
+    title,
+    description,
+    initialTemplateVersionId,
+    initialWorkstationId,
+    stationPrintAvailable,
+    stationUnavailableMessage,
     requestPrint,
-    confirmMethod,
-    confirmStation,
-    openAlternativeFromPicker,
+    confirmSelection,
+    /** @deprecated */
+    confirmMethod: async () => undefined,
+    /** @deprecated */
+    confirmStation: async () => undefined,
+    /** @deprecated */
+    openAlternativeFromPicker: () => undefined,
     close: closeAll,
   };
 }

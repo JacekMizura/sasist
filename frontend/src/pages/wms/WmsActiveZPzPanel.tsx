@@ -55,6 +55,8 @@ export function WmsActiveZPzPanel({ warehouseId, refreshKey = 0, onClosed }: Pro
   const requestZPzLabelPrint = useCallback(
     (stockDocumentId: number, templateId: number) => {
       void printFlow.requestPrint({
+        documentTypeKey: "z_pz_label",
+        title: "Drukuj etykietę Z-PZ",
         onCloudPrint: async (workstationId) => {
           await printZPzLabel(
             stockDocumentId,

@@ -16,9 +16,19 @@ from ...models.wms_workstations import (
     STATION_TYPE_LABELS_PL,
     WmsWorkstation,
     WorkstationEvent,
+    WorkstationPrinterMapping,
 )
 from ...models.wms_workstations.constants import STATION_TYPE_OTHER
 from ...services.printing.agent_service import agent_health_status, is_agent_online
+
+# Prefer document (A4) mappings first when surfacing a single "default printer" on lists.
+_DEFAULT_PRINTER_PRINT_TYPE_PRIORITY = (
+    "invoice",
+    "order",
+    "other",
+    "labels",
+    "shipping_label",
+)
 
 
 def _warehouse_names_batch(db: Session, warehouse_ids: set[int]) -> dict[int, str]:
@@ -146,6 +156,51 @@ def _device_counts_batch(db: Session, agent_ids: set[int]) -> dict[int, int]:
     return dict(counts)
 
 
+def _default_printer_names_batch(db: Session, workstation_ids: set[int]) -> dict[int, str | None]:
+    """Resolve one display printer name per workstation from printer mappings."""
+    if not workstation_ids:
+        return {}
+    mappings = (
+        db.query(WorkstationPrinterMapping)
+        .filter(
+            WorkstationPrinterMapping.workstation_id.in_(workstation_ids),
+            WorkstationPrinterMapping.agent_printer_id.isnot(None),
+        )
+        .all()
+    )
+    printer_ids = {
+        int(m.agent_printer_id) for m in mappings if m.agent_printer_id is not None
+    }
+    printers_by_id: dict[int, AgentPrinter] = {}
+    if printer_ids:
+        for p in db.query(AgentPrinter).filter(AgentPrinter.id.in_(printer_ids)).all():
+            printers_by_id[int(p.id)] = p
+
+    by_ws: dict[int, list[WorkstationPrinterMapping]] = defaultdict(list)
+    for m in mappings:
+        by_ws[int(m.workstation_id)].append(m)
+
+    priority = {pt: i for i, pt in enumerate(_DEFAULT_PRINTER_PRINT_TYPE_PRIORITY)}
+    result: dict[int, str | None] = {wid: None for wid in workstation_ids}
+    for wid, rows in by_ws.items():
+        rows_sorted = sorted(
+            rows,
+            key=lambda m: priority.get(str(m.print_type or ""), 99),
+        )
+        for m in rows_sorted:
+            pid = m.agent_printer_id
+            if pid is None:
+                continue
+            printer = printers_by_id.get(int(pid))
+            if printer is None:
+                continue
+            name = (printer.name or printer.system_name or "").strip()
+            if name:
+                result[wid] = name
+                break
+    return result
+
+
 def connection_status_from_summary(summary: dict[str, Any] | None) -> str:
     if summary is None:
         return "unpaired"
@@ -193,6 +248,7 @@ def serialize_workstations_batch(
             ip_by_key[int(key.id)] = key.last_used_ip
 
     device_counts = _device_counts_batch(db, agent_ids)
+    printer_names = _default_printer_names_batch(db, {int(w.id) for w in workstations})
     now = datetime.now(timezone.utc).replace(tzinfo=None)
     payloads: list[dict[str, Any]] = []
 
@@ -226,6 +282,7 @@ def serialize_workstations_batch(
             else 0,
             "last_sync_at": agent_summary["last_seen_at"] if agent_summary else None,
             "agent": agent_summary,
+            "default_printer_name": printer_names.get(int(workstation.id)),
         }
         if detail:
             exp = workstation.pairing_expires_at

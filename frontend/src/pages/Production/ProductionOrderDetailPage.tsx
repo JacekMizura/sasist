@@ -148,9 +148,12 @@ export default function ProductionOrderDetailPage() {
   const printCard = () => {
     if (!order || warehouseId == null) return;
     void printFlow.requestPrint({
+      kindCode: "production_card",
+      documentTypeKey: "production_order_card",
+      title: "Drukuj kartę produkcji",
       onBrowserPrint: () => printOrderProductionCardBrowser(tenantId, order.id, warehouseId),
-      onCloudPrint: async (workstationId) => {
-        await queueProductionOrderCard(order.id, warehouseId, workstationId);
+      onCloudPrint: async (workstationId, templateVersionId) => {
+        await queueProductionOrderCard(order.id, warehouseId, workstationId, templateVersionId);
       },
       onDownloadPdf: () => downloadOrderProductionCardPdf(tenantId, order.id, warehouseId),
     });

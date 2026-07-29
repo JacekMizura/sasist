@@ -233,16 +233,19 @@ export default function DocumentsWarehousePage() {
     const kindCode = stockKindFromType(docTab);
     const req = { kind: "stock_document" as const, documentId: id, kindCode };
     void printFlow.requestPrint({
-      onBrowserPrint: async () => {
-        const blob = await fetchDocumentPrintPdfBlob(resolvedTenantId, req);
+      kindCode,
+      documentTypeKey: kindCode,
+      title: "Drukuj dokument",
+      onBrowserPrint: async (templateVersionId) => {
+        const blob = await fetchDocumentPrintPdfBlob(resolvedTenantId, req, templateVersionId);
         const w = openPdfBlobInPrintViewer(blob, { autoPrint: true });
         if (!w) throw new Error("Przeglądarka zablokowała nową kartę. Zezwól na wyskakujące okna.");
       },
-      onCloudPrint: async (workstationId) => {
-        await queueStockDocument(id, warehouseId, workstationId);
+      onCloudPrint: async (workstationId, templateVersionId) => {
+        await queueStockDocument(id, warehouseId, workstationId, templateVersionId);
       },
-      onDownloadPdf: async () => {
-        const blob = await fetchDocumentPrintPdfBlob(resolvedTenantId, req);
+      onDownloadPdf: async (templateVersionId) => {
+        const blob = await fetchDocumentPrintPdfBlob(resolvedTenantId, req, templateVersionId);
         downloadPdfBlob(blob, `dokument-${id}.pdf`);
       },
     });

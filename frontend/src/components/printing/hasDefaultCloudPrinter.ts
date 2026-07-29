@@ -3,7 +3,7 @@ import type { CloudPrintCapabilityRead } from "../../types/printing";
 import type { PrintMethodKind } from "./printMethodTypes";
 
 export const NO_ACTIVE_AGENT_USER_MESSAGE =
-  "Brak aktywnego Sasist Agent na stanowisku.\nUruchom Agenta na komputerze przypisanym w Ustawienia WMS → Stanowiska.";
+  "Stanowisko nie jest gotowe do drukowania.\nUruchom komputer stanowiska i sprawdź mapowanie drukarki w Ustawienia WMS → Stanowiska.";
 
 export type CloudPrintCapability = CloudPrintCapabilityRead;
 
@@ -49,16 +49,16 @@ export function cloudPrintUnavailableMessage(cap: CloudPrintCapability): string 
     return NO_ACTIVE_AGENT_USER_MESSAGE;
   }
   if (cap.reason === "AGENT_OFFLINE") {
-    return "Sasist Agent przypisany do stanowiska jest offline. Uruchom Agenta na komputerze stanowiska.";
+    return "Stanowisko jest offline. Uruchom komputer stanowiska i spróbuj ponownie.";
   }
   if (cap.reason === "NO_WORKSTATION") {
     return (
       cap.message?.trim() ||
-      "Wybierz stanowisko, aby drukować przez Sasist Agent."
+      "Wybierz stanowisko, aby wydrukować dokument."
     );
   }
   if (cap.reason === "NO_WORKSTATION_AGENT") {
-    return "Stanowisko nie ma przypisanego Sasist Agent. Połącz komputer w Ustawienia WMS → Stanowiska.";
+    return "Stanowisko nie ma podłączonego komputera. Połącz komputer w Ustawienia WMS → Stanowiska.";
   }
   if (cap.reason === "NO_WORKSTATION_MAPPING" || cap.reason === "NO_DEFAULT_PRINTER") {
     return "Brak mapowania drukarki na stanowisku. Ustaw mapowanie w Ustawienia WMS → Stanowiska.";
@@ -66,5 +66,5 @@ export function cloudPrintUnavailableMessage(cap: CloudPrintCapability): string 
   if (cap.reason === "PRINTER_INACTIVE" || cap.reason === "PRINTER_MISSING") {
     return cap.message || "Drukarka stanowiska jest niedostępna.";
   }
-  return "Sasist Agent jest teraz niedostępny.";
+  return "Wydruk na stanowisku jest teraz niedostępny.";
 }

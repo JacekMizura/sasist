@@ -55,6 +55,8 @@ class WorkstationListItem(BaseModel):
     device_count: int = 0
     last_sync_at: datetime | None = None
     agent: AgentSummary | None = None
+    # Default mapped printer display name (invoice / labels / …).
+    default_printer_name: str | None = None
 
 
 class WorkstationDetail(WorkstationListItem):

@@ -16,7 +16,13 @@ logger = logging.getLogger(__name__)
 KIND_CODE = "production_card"
 
 
-def render_batch_production_card_html(db: Session, *, tenant_id: int, batch_id: int) -> str:
+def render_batch_production_card_html(
+    db: Session,
+    *,
+    tenant_id: int,
+    batch_id: int,
+    template_version_id: int | None = None,
+) -> str:
     try:
         html = render_document(
             db,
@@ -25,6 +31,7 @@ def render_batch_production_card_html(db: Session, *, tenant_id: int, batch_id: 
             params={"batch_id": int(batch_id)},
             output_format=DocumentOutputFormat.HTML,
             warehouse_id=_batch_warehouse_id(db, tenant_id=tenant_id, batch_id=batch_id),
+            template_version_id=template_version_id,
         )
         return str(html)
     except Exception:
@@ -36,7 +43,13 @@ def render_batch_production_card_html(db: Session, *, tenant_id: int, batch_id: 
         raise
 
 
-def render_order_production_card_html(db: Session, *, tenant_id: int, order_id: int) -> str:
+def render_order_production_card_html(
+    db: Session,
+    *,
+    tenant_id: int,
+    order_id: int,
+    template_version_id: int | None = None,
+) -> str:
     try:
         html = render_document(
             db,
@@ -45,6 +58,7 @@ def render_order_production_card_html(db: Session, *, tenant_id: int, order_id: 
             params={"order_id": int(order_id)},
             output_format=DocumentOutputFormat.HTML,
             warehouse_id=_order_warehouse_id(db, tenant_id=tenant_id, order_id=order_id),
+            template_version_id=template_version_id,
         )
         return str(html)
     except Exception:

@@ -713,6 +713,8 @@ export function LabelPrintQueue({ template }: Props) {
     if (printMode !== "location" && records.length === 0) return;
 
     void printFlow.requestPrint({
+      documentTypeKey: "label_queue",
+      title: "Drukuj etykiety",
       onCloudPrint: async (workstationId) => {
         setPrinting(true);
         try {

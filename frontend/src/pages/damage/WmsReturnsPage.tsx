@@ -3852,6 +3852,8 @@ export default function WmsReturnsPage() {
       const warehouseId =
         wh != null && Number.isFinite(Number(wh)) && Number(wh) > 0 ? Math.floor(Number(wh)) : null;
       void printFlow.requestPrint({
+        documentTypeKey: "return_label",
+        title: "Drukuj etykietę zwrotu",
         onCloudPrint: async (workstationId) => {
           try {
             await printReturnLabel(rlid, DAMAGE_TENANT_ID, warehouseId, workstationId);

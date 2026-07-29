@@ -302,7 +302,10 @@ def generate_pdf_bytes(db: Session, *, tenant_id: int, payload: QueuePrintReques
         )
 
         return generate_batch_production_card_pdf_bytes(
-            db, tenant_id=tenant_id, batch_id=int(payload.document_id)
+            db,
+            tenant_id=tenant_id,
+            batch_id=int(payload.document_id),
+            template_version_id=payload.template_version_id,
         )
     if document_type == "production_order_card":
         if payload.document_id is None:
@@ -312,7 +315,10 @@ def generate_pdf_bytes(db: Session, *, tenant_id: int, payload: QueuePrintReques
         )
 
         return generate_order_production_card_pdf_bytes(
-            db, tenant_id=tenant_id, order_id=int(payload.document_id)
+            db,
+            tenant_id=tenant_id,
+            order_id=int(payload.document_id),
+            template_version_id=payload.template_version_id,
         )
     raise PrintingError(f"Unsupported document_type: {document_type}", status_code=400)
 
