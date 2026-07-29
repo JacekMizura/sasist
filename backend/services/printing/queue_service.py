@@ -66,7 +66,8 @@ def resolve_default_printer_id(
 
     if not printer_id:
         raise PrintingError(
-            f"Brak domyślnej drukarki ({kind}). Ustaw ją w Ustawienia → Drukarki → Domyślne.",
+            f"Brak drukarki ({kind}) dla stanowiska. "
+            "Skonfiguruj mapowanie w Ustawienia WMS → Stanowiska.",
             status_code=400,
             code="NO_DEFAULT_PRINTER",
         )

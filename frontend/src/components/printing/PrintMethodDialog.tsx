@@ -18,7 +18,7 @@ import {
 } from "./hasDefaultCloudPrinter";
 
 const AGENT_INFO =
-  "Sasist Agent drukuje automatycznie na skonfigurowanej drukarce magazynu (kolejka / ZPL / PDF), bez okna przeglądarki.";
+  "Sasist Agent drukuje automatycznie na drukarce przypisanej do stanowiska (kolejka / ZPL / PDF), bez okna przeglądarki.";
 
 type MethodOption = {
   id: PrintMethod;
@@ -33,7 +33,7 @@ const PRIMARY_OPTIONS: MethodOption[] = [
   {
     id: "agent",
     title: "Sasist Agent",
-    description: "Automatyczny wydruk przez agenta na drukarce magazynu.",
+    description: "Automatyczny wydruk przez agenta na drukarce stanowiska.",
     icon: Cloud,
     info: AGENT_INFO,
   },
@@ -51,15 +51,14 @@ const PRIMARY_OPTIONS: MethodOption[] = [
   },
 ];
 
-const LEGACY_OPTIONS: MethodOption[] = [
-  {
-    id: "qz",
-    title: "QZ Tray (Legacy)",
-    description: "Awaryjny wydruk lokalny przez QZ Tray. Stage 5 Cleanup.",
-    icon: Printer,
-    legacy: true,
-  },
-];
+/** Legacy QZ — only offered in DEV builds, never to production users. */
+const DEV_QZ_OPTION: MethodOption = {
+  id: "qz",
+  title: "QZ Tray (DEV)",
+  description: "Lokalny wydruk przez QZ Tray — tylko w trybie deweloperskim.",
+  icon: Printer,
+  legacy: true,
+};
 
 export type PrintMethodDialogProps = {
   open: boolean;
@@ -68,11 +67,10 @@ export type PrintMethodDialogProps = {
   pending?: boolean;
   title?: ReactNode;
   description?: ReactNode;
-  /** Sasist Agent / Cloud readiness — disables agent tile when not ready. */
+  /** Sasist Agent readiness for assigned workstation — disables agent tile when not ready. */
   cloudCapability?: CloudPrintCapability | null;
   /**
-   * When true (prefer_sasist_agent), hide QZ unless user expands emergency methods.
-   * When false/null, QZ remains visible as legacy.
+   * @deprecated Ignored — QZ is gated by DEV only, not warehouse settings.
    */
   preferSasistAgent?: boolean | null;
 };
@@ -138,7 +136,7 @@ function InfoPopover({ text, label }: { text: string; label: string }) {
 }
 
 /**
- * Standard Sasist print-method dialog — Agent / browser / PDF / QZ legacy.
+ * Standard Sasist print-method dialog — Agent / browser / PDF (QZ only in DEV).
  */
 export function PrintMethodDialog({
   open,
@@ -148,24 +146,20 @@ export function PrintMethodDialog({
   title = "Wybierz sposób wydruku",
   description = "Wybierz sposób wydrukowania dokumentu.",
   cloudCapability = null,
-  preferSasistAgent = null,
 }: PrintMethodDialogProps) {
   const [selected, setSelected] = useState<PrintMethod>("agent");
-  const [showEmergency, setShowEmergency] = useState(false);
   const agentDisabled = cloudCapability != null && !cloudCapability.ready;
   const agentHint = agentDisabled ? cloudPrintUnavailableMessage(cloudCapability) : null;
-  const hideQzByDefault = preferSasistAgent === true;
 
   const visibleOptions = useMemo(() => {
     const list = [...PRIMARY_OPTIONS];
-    if (!hideQzByDefault || showEmergency) list.push(...LEGACY_OPTIONS);
+    if (import.meta.env.DEV) list.push(DEV_QZ_OPTION);
     return list;
-  }, [hideQzByDefault, showEmergency]);
+  }, []);
 
   useEffect(() => {
     if (open) {
       setSelected(agentDisabled ? "browser" : "agent");
-      setShowEmergency(false);
     }
   }, [open, agentDisabled]);
 
@@ -244,7 +238,7 @@ export function PrintMethodDialog({
                       {opt.title}
                       {opt.legacy ? (
                         <span className="ml-2 rounded bg-slate-200 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-700">
-                          Legacy
+                          DEV
                         </span>
                       ) : null}
                     </span>
@@ -252,7 +246,7 @@ export function PrintMethodDialog({
                   </span>
                   <span className={`mt-0.5 block ${typography.bodyMuted}`}>
                     {isAgent && agentDisabled
-                      ? "Niedostępne — brak aktywnego agenta lub domyślnej drukarki."
+                      ? "Niedostępne — brak aktywnego Agenta lub mapowania na stanowisku."
                       : opt.description}
                   </span>
                 </span>
@@ -260,15 +254,6 @@ export function PrintMethodDialog({
             );
           })}
         </div>
-        {hideQzByDefault && !showEmergency ? (
-          <button
-            type="button"
-            className="mt-3 text-sm font-medium text-slate-600 underline-offset-2 hover:text-slate-900 hover:underline"
-            onClick={() => setShowEmergency(true)}
-          >
-            Pokaż metody awaryjne
-          </button>
-        ) : null}
       </PageHeader>
     </Dialog>
   );

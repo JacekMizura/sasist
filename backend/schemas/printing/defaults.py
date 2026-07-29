@@ -32,11 +32,12 @@ class PrinterAssignmentRepairRead(BaseModel):
 
 
 class CloudPrintCapabilityRead(BaseModel):
-    """Whether Sasist Cloud Print can accept a job for the given printer kind."""
+    """Whether Sasist Agent print can accept a job for the assigned workstation."""
 
     kind: str
     ready: bool
     reason: str | None = None
     printer_id: int | None = None
     has_online_agent: bool = False
+    workstation_id: int | None = None
     message: str | None = None

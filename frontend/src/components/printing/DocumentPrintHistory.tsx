@@ -127,10 +127,10 @@ export default function DocumentPrintHistory({
                   <td className="py-2">
                     <div className="flex flex-wrap gap-2">
                       <Link
-                        to={`/settings/printers/queue?job=${row.id}`}
+                        to="/settings/wms/workstations"
                         className="text-xs text-slate-700 underline"
                       >
-                        Szczegóły
+                        Stanowiska
                       </Link>
                       <button
                         type="button"

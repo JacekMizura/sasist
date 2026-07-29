@@ -71,6 +71,7 @@ export type CloudPrintCapabilityRead = {
   reason: string | null;
   printer_id: number | null;
   has_online_agent: boolean;
+  workstation_id?: number | null;
   message: string | null;
 };
 

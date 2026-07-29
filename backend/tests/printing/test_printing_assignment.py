@@ -237,9 +237,13 @@ class TestPrinterAssignment(PrintingTestCase):
         self.assertIsNone(body["primary_agent_id"])
         self.assertEqual(body["defaults_remapped"], 0)
 
-    def test_cloud_capability_offline_default(self):
+    def test_cloud_capability_ignores_legacy_offline_default(self):
+        """Capability uses workstation mapping — stale PrintingDefault must not block Agent."""
+        from backend.models.wms_workstations import WmsWorkstation, WorkstationPrinterMapping
+        from backend.models.wms_workstations.constants import PRINT_TYPE_OTHER, STATION_TYPE_OTHER
+
         with self.SessionLocal() as db:
-            _agent, offline_printer = self._register_offline_agent(db, machine_id="WIN-CAP")
+            _offline_agent, offline_printer = self._register_offline_agent(db, machine_id="WIN-CAP-OFF")
             db.add(
                 PrintingDefault(
                     tenant_id=1,
@@ -248,16 +252,115 @@ class TestPrinterAssignment(PrintingTestCase):
                     agent_printer_id=offline_printer.id,
                 )
             )
+            online_payload = AgentRegisterRequest(
+                machine_id="WIN-CAP-ONLINE",
+                name="Online PC",
+                version="1.0.0",
+                warehouse_id=1,
+                printers=[
+                    RegisterAgentPrinterPayload(
+                        name="HP Online",
+                        system_name="HP-Online",
+                        printer_type="a4",
+                        is_default=True,
+                    )
+                ],
+            )
+            online_agent, _token = register_agent(db, tenant_id=1, payload=online_payload)
+            online_agent.last_seen_at = datetime.utcnow()
+            db.flush()
+            online_printer = (
+                db.query(AgentPrinter)
+                .filter(AgentPrinter.agent_id == online_agent.id, AgentPrinter.printer_type == "a4")
+                .first()
+            )
+            assert online_printer is not None
+            online_printer_id = int(online_printer.id)
+            ws = WmsWorkstation(
+                tenant_id=1,
+                warehouse_id=1,
+                name="Pack 1",
+                station_type=STATION_TYPE_OTHER,
+                is_active=True,
+                printer_agent_id=online_agent.id,
+            )
+            db.add(ws)
+            db.flush()
+            db.add(
+                WorkstationPrinterMapping(
+                    workstation_id=ws.id,
+                    print_type=PRINT_TYPE_OTHER,
+                    agent_printer_id=online_printer_id,
+                )
+            )
             db.commit()
+            ws_id = int(ws.id)
+
+        # Without workstation → not ready (no PrintingDefault fallback)
+        bare = self.client.get(
+            "/api/printing/cloud-capability",
+            params={"tenant_id": 1, "warehouse_id": 1, "kind": "a4"},
+        )
+        self.assertEqual(bare.status_code, 200)
+        bare_body = bare.json()
+        self.assertFalse(bare_body["ready"])
+        self.assertEqual(bare_body["reason"], "NO_WORKSTATION")
 
         response = self.client.get(
             "/api/printing/cloud-capability",
-            params={"tenant_id": 1, "warehouse_id": 1, "kind": "a4"},
+            params={
+                "tenant_id": 1,
+                "warehouse_id": 1,
+                "kind": "a4",
+                "workstation_id": ws_id,
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        self.assertTrue(body["ready"])
+        self.assertTrue(body["has_online_agent"])
+        self.assertEqual(body["printer_id"], online_printer_id)
+        self.assertEqual(body["workstation_id"], ws_id)
+
+    def test_cloud_capability_offline_workstation_agent(self):
+        from backend.models.wms_workstations import WmsWorkstation, WorkstationPrinterMapping
+        from backend.models.wms_workstations.constants import PRINT_TYPE_OTHER, STATION_TYPE_OTHER
+
+        with self.SessionLocal() as db:
+            offline_agent, offline_printer = self._register_offline_agent(db, machine_id="WIN-CAP")
+            ws = WmsWorkstation(
+                tenant_id=1,
+                warehouse_id=1,
+                name="Offline Pack",
+                station_type=STATION_TYPE_OTHER,
+                is_active=True,
+                printer_agent_id=offline_agent.id,
+            )
+            db.add(ws)
+            db.flush()
+            db.add(
+                WorkstationPrinterMapping(
+                    workstation_id=ws.id,
+                    print_type=PRINT_TYPE_OTHER,
+                    agent_printer_id=offline_printer.id,
+                )
+            )
+            db.commit()
+            ws_id = ws.id
+
+        response = self.client.get(
+            "/api/printing/cloud-capability",
+            params={
+                "tenant_id": 1,
+                "warehouse_id": 1,
+                "kind": "a4",
+                "workstation_id": ws_id,
+            },
         )
         self.assertEqual(response.status_code, 200)
         body = response.json()
         self.assertFalse(body["ready"])
-        self.assertEqual(body["reason"], "NO_ACTIVE_AGENT")
+        self.assertEqual(body["reason"], "AGENT_OFFLINE")
         self.assertFalse(body["has_online_agent"])
 
 

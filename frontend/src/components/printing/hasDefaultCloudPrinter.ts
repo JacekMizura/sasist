@@ -3,21 +3,22 @@ import type { CloudPrintCapabilityRead } from "../../types/printing";
 import type { PrintMethodKind } from "./printMethodTypes";
 
 export const NO_ACTIVE_AGENT_USER_MESSAGE =
-  "Brak aktywnego komputera z Sasist Agent.\nUruchom Sasist Agent na jednym z komputerów.";
+  "Brak aktywnego Sasist Agent na stanowisku.\nUruchom Agenta na komputerze przypisanym w Ustawienia WMS → Stanowiska.";
 
 export type CloudPrintCapability = CloudPrintCapabilityRead;
 
 /**
- * Cloud Print is usable only when a default printer is configured AND its agent is online.
- * A configured-but-offline default must NOT auto-queue jobs.
+ * Sasist Agent is usable when the assigned workstation has an online agent
+ * and a valid printer mapping for the kind. Does not use legacy PrintingDefault.
  */
 export async function getCloudPrintCapability(
   tenantId: number,
   warehouseId?: number | null,
   kind: PrintMethodKind = "a4",
+  workstationId?: number | null,
 ): Promise<CloudPrintCapability> {
   try {
-    return await fetchCloudPrintCapability(tenantId, { warehouseId, kind });
+    return await fetchCloudPrintCapability(tenantId, { warehouseId, kind, workstationId });
   } catch {
     return {
       kind,
@@ -25,34 +26,42 @@ export async function getCloudPrintCapability(
       reason: "NO_ACTIVE_AGENT",
       printer_id: null,
       has_online_agent: false,
+      workstation_id: workstationId ?? null,
       message: NO_ACTIVE_AGENT_USER_MESSAGE,
     };
   }
 }
 
-/** @deprecated Prefer getCloudPrintCapability — checks agent online, not only default id. */
+/** @deprecated Prefer getCloudPrintCapability — checks workstation agent + mapping. */
 export async function hasDefaultCloudPrinter(
   tenantId: number,
   warehouseId?: number | null,
   kind: PrintMethodKind = "a4",
+  workstationId?: number | null,
 ): Promise<boolean> {
-  const cap = await getCloudPrintCapability(tenantId, warehouseId, kind);
+  const cap = await getCloudPrintCapability(tenantId, warehouseId, kind, workstationId);
   return cap.ready;
 }
 
 export function cloudPrintUnavailableMessage(cap: CloudPrintCapability): string {
+  if (cap.message?.trim()) return cap.message.trim();
   if (cap.reason === "NO_ACTIVE_AGENT" || (!cap.has_online_agent && !cap.ready)) {
     return NO_ACTIVE_AGENT_USER_MESSAGE;
   }
-  if (cap.message?.trim()) return cap.message.trim();
   if (cap.reason === "AGENT_OFFLINE") {
-    return "Domyślna drukarka jest przypisana do nieaktywnego agenta.";
+    return "Sasist Agent przypisany do stanowiska jest offline. Uruchom Agenta na komputerze stanowiska.";
   }
-  if (cap.reason === "NO_DEFAULT_PRINTER") {
-    return "Brak domyślnej drukarki Sasist Agent. Ustaw ją w Ustawienia → Drukarki → Domyślne.";
+  if (cap.reason === "NO_WORKSTATION") {
+    return "Brak przypisanego stanowiska WMS. Przypisz stanowisko lub skonfiguruj je w Ustawienia WMS → Stanowiska.";
+  }
+  if (cap.reason === "NO_WORKSTATION_AGENT") {
+    return "Stanowisko nie ma przypisanego Sasist Agent. Połącz komputer w Ustawienia WMS → Stanowiska.";
+  }
+  if (cap.reason === "NO_WORKSTATION_MAPPING" || cap.reason === "NO_DEFAULT_PRINTER") {
+    return "Brak mapowania drukarki na stanowisku. Ustaw mapowanie w Ustawienia WMS → Stanowiska.";
   }
   if (cap.reason === "PRINTER_INACTIVE" || cap.reason === "PRINTER_MISSING") {
-    return cap.message || "Domyślna drukarka Sasist Agent jest niedostępna.";
+    return cap.message || "Drukarka stanowiska jest niedostępna.";
   }
   return "Sasist Agent jest teraz niedostępny.";
 }

@@ -72,6 +72,7 @@ def read_cloud_print_capability(
     tenant_id: int = Query(..., ge=1),
     warehouse_id: int | None = Query(default=None, ge=1),
     kind: str = Query(default="a4"),
+    workstation_id: int | None = Query(default=None, ge=1),
     _: AppUser = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -80,4 +81,5 @@ def read_cloud_print_capability(
         tenant_id=tenant_id,
         warehouse_id=warehouse_id,
         kind=kind,
+        workstation_id=workstation_id,
     )

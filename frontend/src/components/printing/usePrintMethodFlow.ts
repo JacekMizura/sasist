@@ -1,7 +1,7 @@
 import { useCallback, useState } from "react";
 import toast from "react-hot-toast";
 
-import { fetchPrintingWarehouseSettings } from "../../api/printingApi";
+import { useAuth } from "../../context/AuthContext";
 import {
   cloudPrintUnavailableMessage,
   getCloudPrintCapability,
@@ -12,19 +12,40 @@ import type { PrintMethod, PrintMethodHandlers, PrintMethodKind } from "./printM
 type Options = {
   tenantId: number;
   warehouseId?: number | null;
+  /** Explicit WMS Stanowisko; overrides session packing_station_id when set. */
+  workstationId?: number | null;
   printerKind?: PrintMethodKind;
 };
 
+function resolveWorkstationId(
+  explicit: number | null | undefined,
+  fromSession: number | null | undefined,
+): number | null {
+  for (const value of [explicit, fromSession]) {
+    if (value != null && Number.isFinite(Number(value)) && Number(value) >= 1) {
+      return Math.floor(Number(value));
+    }
+  }
+  return null;
+}
+
 /**
- * Shared print entrypoint: skip dialog only when Sasist Agent is ready.
- * Otherwise open PrintMethodDialog (Agent / browser / PDF / QZ legacy).
+ * Shared print entrypoint: skip dialog only when Sasist Agent is ready
+ * for the assigned workstation (Agent online + printer mapping).
+ * Otherwise open PrintMethodDialog (Agent / browser / PDF; QZ only in DEV).
  */
-export function usePrintMethodFlow({ tenantId, warehouseId, printerKind = "a4" }: Options) {
+export function usePrintMethodFlow({
+  tenantId,
+  warehouseId,
+  workstationId,
+  printerKind = "a4",
+}: Options) {
+  const { user } = useAuth();
+  const sessionWorkstationId = user?.wms_profile?.packing_station_id ?? null;
   const [open, setOpen] = useState(false);
   const [pending, setPending] = useState(false);
   const [handlers, setHandlers] = useState<PrintMethodHandlers | null>(null);
   const [cloudCapability, setCloudCapability] = useState<CloudPrintCapability | null>(null);
-  const [preferSasistAgent, setPreferSasistAgent] = useState<boolean | null>(null);
 
   const close = useCallback(() => {
     if (pending) return;
@@ -43,7 +64,7 @@ export function usePrintMethodFlow({ tenantId, warehouseId, printerKind = "a4" }
       if (normalized === "browser") await h.onBrowserPrint();
       else if (normalized === "agent") await (h.onAgentPrint ?? h.onCloudPrint)();
       else if (normalized === "qz") {
-        if (h.onQzPrint) await h.onQzPrint();
+        if (import.meta.env.DEV && h.onQzPrint) await h.onQzPrint();
         else await h.onBrowserPrint();
       } else await h.onDownloadPdf();
       setOpen(false);
@@ -61,14 +82,14 @@ export function usePrintMethodFlow({ tenantId, warehouseId, printerKind = "a4" }
       if (pending) return;
       setPending(true);
       try {
-        const [capability, settings] = await Promise.all([
-          getCloudPrintCapability(tenantId, warehouseId, printerKind),
-          warehouseId
-            ? fetchPrintingWarehouseSettings(tenantId, warehouseId).catch(() => null)
-            : Promise.resolve(null),
-        ]);
+        const resolvedWorkstationId = resolveWorkstationId(workstationId, sessionWorkstationId);
+        const capability = await getCloudPrintCapability(
+          tenantId,
+          warehouseId,
+          printerKind,
+          resolvedWorkstationId,
+        );
         setCloudCapability(capability);
-        setPreferSasistAgent(settings ? Boolean(settings.prefer_sasist_agent) : null);
         if (capability.ready) {
           await (next.onAgentPrint ?? next.onCloudPrint)();
           return;
@@ -82,7 +103,7 @@ export function usePrintMethodFlow({ tenantId, warehouseId, printerKind = "a4" }
         setPending(false);
       }
     },
-    [pending, printerKind, tenantId, warehouseId],
+    [pending, printerKind, tenantId, warehouseId, workstationId, sessionWorkstationId],
   );
 
   const confirmMethod = useCallback(
@@ -97,7 +118,8 @@ export function usePrintMethodFlow({ tenantId, warehouseId, printerKind = "a4" }
     open,
     pending,
     cloudCapability,
-    preferSasistAgent,
+    /** @deprecated QZ is DEV-only; always treat Agent as preferred in production. */
+    preferSasistAgent: true as boolean | null,
     requestPrint,
     confirmMethod,
     close,

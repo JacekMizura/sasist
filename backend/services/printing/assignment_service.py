@@ -19,13 +19,16 @@ from .printer_service import _get_agent_printer_for_tenant
 
 logger = logging.getLogger(__name__)
 
-OFFLINE_AGENT_QUEUE_MESSAGE = "Domyślna drukarka jest przypisana do nieaktywnego agenta."
+OFFLINE_AGENT_QUEUE_MESSAGE = (
+    "Sasist Agent przypisany do stanowiska / drukarki jest offline. "
+    "Uruchom Agenta na komputerze stanowiska."
+)
 OFFLINE_AGENT_CODE = "AGENT_OFFLINE"
 INACTIVE_PRINTER_CODE = "PRINTER_INACTIVE"
 NO_ACTIVE_AGENT_CODE = "NO_ACTIVE_AGENT"
 NO_ACTIVE_AGENT_MESSAGE = (
-    "Brak aktywnego komputera z agentem drukowania. "
-    "Uruchom Sellasist Print Agent na jednym z komputerów."
+    "Brak aktywnego Sasist Agent na stanowisku. "
+    "Uruchom Agenta na komputerze przypisanym w Ustawienia WMS → Stanowiska."
 )
 NO_DEFAULT_PRINTER_CODE = "NO_DEFAULT_PRINTER"
 PRINTER_MISSING_CODE = "PRINTER_MISSING"
@@ -200,85 +203,22 @@ def assess_cloud_print_capability(
     tenant_id: int,
     warehouse_id: int | None,
     kind: str,
+    workstation_id: int | None = None,
 ) -> dict[str, Any]:
-    """Business readiness for Cloud Print — never raises for offline / missing agent."""
-    from .constants import PRINTER_TYPE_A4, PRINTER_TYPE_LABEL, PRINTER_TYPE_RECEIPT
-    from .printer_service import get_printing_defaults
+    """
+    Business readiness for Sasist Agent print — Stanowisko → Agent → mapowanie.
+    Never uses legacy PrintingDefault. Never raises for offline / missing agent.
+    """
+    from .printer_resolution_service import assess_workstation_cloud_print_capability
 
-    kind_norm = (kind or "a4").strip().lower()
-    if kind_norm in {"label", "labels"}:
-        field = "label_printer_id"
-        printer_type = PRINTER_TYPE_LABEL
-    elif kind_norm in {"receipt", "receipts", "paragon"}:
-        field = "receipt_printer_id"
-        printer_type = PRINTER_TYPE_RECEIPT
-    else:
-        kind_norm = "a4"
-        field = "a4_printer_id"
-        printer_type = PRINTER_TYPE_A4
-
-    has_online = _primary_online_agent(db, tenant_id=tenant_id, warehouse_id=warehouse_id) is not None
-    defaults = get_printing_defaults(db, tenant_id=tenant_id, warehouse_id=warehouse_id)
-    printer_id = defaults.get(field)
-
-    base = {
-        "kind": kind_norm,
-        "printer_id": int(printer_id) if printer_id is not None else None,
-        "has_online_agent": has_online,
-        "message": None,
-    }
-
-    if printer_id is None:
-        return {
-            **base,
-            "ready": False,
-            "reason": NO_DEFAULT_PRINTER_CODE,
-            "message": f"Brak domyślnej drukarki ({printer_type}). Ustaw ją w Ustawienia → Drukarki → Domyślne.",
-        }
-
-    try:
-        printer = _get_agent_printer_for_tenant(db, tenant_id=tenant_id, printer_id=int(printer_id))
-    except PrintingError:
-        return {
-            **base,
-            "ready": False,
-            "reason": PRINTER_MISSING_CODE,
-            "message": "Domyślna drukarka nie istnieje lub została usunięta.",
-        }
-
-    agent = printer.agent
-    if agent is None:
-        return {
-            **base,
-            "ready": False,
-            "reason": PRINTER_MISSING_CODE,
-            "message": "Domyślna drukarka nie ma przypisanego agenta.",
-        }
-    if not printer.is_active:
-        return {
-            **base,
-            "ready": False,
-            "reason": INACTIVE_PRINTER_CODE,
-            "message": "Domyślna drukarka jest nieaktywna.",
-        }
-    if not _is_agent_online(agent):
-        return {
-            **base,
-            "ready": False,
-            "reason": OFFLINE_AGENT_CODE if has_online else NO_ACTIVE_AGENT_CODE,
-            "message": (
-                OFFLINE_AGENT_QUEUE_MESSAGE
-                if has_online
-                else NO_ACTIVE_AGENT_MESSAGE
-            ),
-        }
-
-    return {
-        **base,
-        "ready": True,
-        "reason": None,
-        "message": None,
-    }
+    return assess_workstation_cloud_print_capability(
+        db,
+        tenant_id=tenant_id,
+        warehouse_id=warehouse_id,
+        kind=kind,
+        workstation_id=workstation_id,
+        is_agent_online=_is_agent_online,
+    )
 
 def log_print_queue(
     *,

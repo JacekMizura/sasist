@@ -8,6 +8,7 @@ from sqlalchemy.pool import StaticPool
 
 from backend.db.printing_schema import ensure_printing_schema
 from backend.db.integration_api_keys_schema import ensure_integration_api_keys_schema
+from backend.db.wms_workstations_schema import ensure_wms_workstations_schema
 
 
 def create_printing_test_engine():
@@ -18,6 +19,7 @@ def create_printing_test_engine():
     )
     ensure_printing_schema(engine)
     ensure_integration_api_keys_schema(engine)
+    ensure_wms_workstations_schema(engine)
     from backend.models.app_user import AuditLog
     from sqlalchemy.schema import CreateTable
 

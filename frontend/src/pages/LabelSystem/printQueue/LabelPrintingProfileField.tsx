@@ -109,10 +109,10 @@ export function LabelPrintingProfileField({
               Utwórz profil
             </PrintQueuePrimaryButton>
             <Link
-              to="/settings/printers/devices"
+              to="/settings/wms/workstations"
               className="inline-flex items-center rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-800 hover:bg-slate-50"
             >
-              Otwórz ustawienia drukarek
+              Otwórz stanowiska WMS
             </Link>
           </div>
         </div>
@@ -187,17 +187,17 @@ export function LabelPrintingProfileField({
           {selectedAgentLinkBroken ? (
             <div className="mt-2 rounded-lg border border-amber-200 bg-amber-50/90 px-3 py-2 text-xs text-amber-950">
               Wydruk może trafić na domyślną drukarkę magazynu, dopóki profil nie wskazuje aktywnej drukarki agenta.
-              Zaktualizuj powiązanie w ustawieniach drukarek lub wybierz inną drukarkę systemową.
+              Zaktualizuj mapowanie w Ustawienia WMS → Stanowiska lub wybierz inną drukarkę systemową.
             </div>
           ) : null}
 
           <div className="mt-2 flex flex-wrap gap-2">
             <PrintQueueGhostButton onClick={() => setWizardOpen(true)}>Utwórz profil</PrintQueueGhostButton>
             <Link
-              to="/settings/printers/devices"
+              to="/settings/wms/workstations"
               className="inline-flex items-center rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
             >
-              Ustawienia drukarek
+              Stanowiska WMS
             </Link>
           </div>
         </div>

@@ -1,4 +1,24 @@
+## 2026-07-29 — Printing cleanup po Sasist Agent
+
+- `cloud-capability` → Stanowisko + Agent online + mapowanie (bez `PrintingDefault`); query `workstation_id`
+- FE: `usePrintMethodFlow` bierze `packing_station_id`; QZ tylko w `import.meta.env.DEV`
+- `/settings/printers/*` → redirect do Ustawienia WMS → Stanowiska; usunięto tab „Druk (kolejka)” z Urządzeń
+
+## 2026-07-29 — Fix DTE Jinja loader for extends/include (production-card.pdf)
+
+- Root: `_render_plain` / incomplete resolved sets used Environment(loader=None) or DictLoader without `base_document`
+- Fix: `resolve_plain_twig` + `_ensure_system_dependencies` load filesystem BASE/PARTIALS into DictLoader
+- Files: `_engine_backend.py`, `template_resolution_service.py`, `system_starter_library.py`
+
+## 2026-07-29 — production-card.pdf HTTP 500 root cause
+
+
+- Cause: DTE starter `production_card` uses `{% extends "base_document" %}` but `resolve_plain_twig` → `_render_plain` (no Jinja loader) → `TypeError: no loader for this environment specified` → unhandled 500
+- Fix: `document_engine_available` returns False for plain extends starters (legacy Jinja path); full `logger.exception` on PDF/HTML path + API re-raise after log
+- File/line: `backend/document_templates/render/_engine_backend.py` `_render_plain` ~L85
+
 ## 2026-07-29 — Stanowiska = zakładka Ustawień WMS (FE UX only)
+
 
 - Shared `WmsSettingsChrome` + `WMS_SETTINGS_TABS` (Stanowiska as last tab → `/settings/wms/workstations`)
 - Removed header CTA „Stanowiska”; breadcrumbs: Ustawienia WMS → Stanowiska → [nazwa]

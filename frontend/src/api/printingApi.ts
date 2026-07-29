@@ -117,13 +117,18 @@ export async function repairPrinterAssignments(
 
 export async function fetchCloudPrintCapability(
   tenantId: number,
-  opts?: { warehouseId?: number | null; kind?: "a4" | "label" | "receipt" },
+  opts?: {
+    warehouseId?: number | null;
+    kind?: "a4" | "label" | "receipt";
+    workstationId?: number | null;
+  },
 ): Promise<CloudPrintCapabilityRead> {
   const { data } = await api.get<CloudPrintCapabilityRead>("/printing/cloud-capability", {
     params: {
       tenant_id: tenantId,
       warehouse_id: opts?.warehouseId ?? undefined,
       kind: opts?.kind ?? "a4",
+      workstation_id: opts?.workstationId ?? undefined,
     },
   });
   return data;

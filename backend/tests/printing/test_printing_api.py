@@ -68,6 +68,9 @@ class PrintingTestCase(unittest.TestCase):
             conn.execute(__import__("sqlalchemy").text("DELETE FROM print_jobs"))
             conn.execute(__import__("sqlalchemy").text("DELETE FROM printing_auto_settings"))
             conn.execute(__import__("sqlalchemy").text("DELETE FROM printing_defaults"))
+            conn.execute(__import__("sqlalchemy").text("DELETE FROM wms_workstation_printer_mappings"))
+            conn.execute(__import__("sqlalchemy").text("DELETE FROM wms_workstation_events"))
+            conn.execute(__import__("sqlalchemy").text("DELETE FROM wms_workstations"))
             conn.execute(__import__("sqlalchemy").text("DELETE FROM agent_printers"))
             conn.execute(__import__("sqlalchemy").text("DELETE FROM printer_agents"))
 

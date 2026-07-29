@@ -12,7 +12,6 @@ import { InventoryPanel } from "./InventoryPanel";
 const TABS: TabItem[] = [
   { path: `${DEVICES_SETTINGS_BASE}/inventory`, label: "Urządzenia" },
   { path: `${DEVICES_SETTINGS_BASE}/events`, label: "Zdarzenia" },
-  { path: "/settings/printers/queue", label: "Druk (kolejka)" },
 ];
 
 export default function DevicesSettingsModule() {
