@@ -132,7 +132,7 @@ export const oaLaunchTileClass = (selected: boolean) =>
 
 /** Karta dnia w harmonogramie */
 export const oaDayScheduleCardClass =
-  "flex flex-wrap items-center gap-x-4 gap-y-3 rounded-xl border border-slate-200 bg-white px-4 py-3.5";
+  "flex flex-wrap items-center gap-x-4 gap-y-2 rounded-lg border border-slate-200 bg-slate-50/50 px-3 py-2.5";
 
 /** @deprecated use oaWorkflowCardClass */
 export const oaWorkflowSummaryCardClass = oaWorkflowCardClass;

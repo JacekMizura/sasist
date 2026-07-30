@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
-import { ChevronDown, FlaskConical, Trash2 } from "lucide-react";
+import { ChevronDown, FlaskConical } from "lucide-react";
 import toast from "react-hot-toast";
 
 import { useWarehouse } from "../../context/WarehouseContext";
@@ -391,8 +391,8 @@ export default function OrderAutomationEditorPage() {
       <ModuleListBreadcrumb items={breadcrumbItems} />
 
       <div className={`${oaEditorHeaderCardClass} mb-6 mt-4`}>
-        <div className="flex flex-wrap items-end gap-4">
-          <label className="min-w-[14rem] flex-1">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:gap-4">
+          <label className="min-w-0 flex-1">
             <span className={oaLblCaps}>Nazwa automatyzacji</span>
             <input
               type="text"
@@ -403,7 +403,7 @@ export default function OrderAutomationEditorPage() {
               onChange={(e) => setDraft((d) => ({ ...d, name: e.target.value }))}
             />
           </label>
-          <div className="w-full sm:w-44">
+          <div className="w-full shrink-0 sm:w-44">
             <span className={oaLblCaps}>Grupa</span>
             <button
               type="button"
@@ -417,7 +417,7 @@ export default function OrderAutomationEditorPage() {
               <ChevronDown className="h-4 w-4 shrink-0 text-slate-400" />
             </button>
           </div>
-          <label className="mb-1.5 inline-flex cursor-pointer items-center gap-2.5 pb-1">
+          <label className="inline-flex h-10 shrink-0 cursor-pointer items-center gap-2.5 lg:mb-0">
             <input
               type="checkbox"
               role="switch"
@@ -431,7 +431,7 @@ export default function OrderAutomationEditorPage() {
             />
             <span className="text-sm font-medium text-slate-800">Aktywna</span>
           </label>
-          <div className="ml-auto flex shrink-0 flex-wrap gap-2 pb-0.5">
+          <div className="flex shrink-0 flex-wrap gap-2 lg:ml-auto">
             <button type="button" className={`${oaBtn} gap-2`} onClick={() => setTestOpen(true)}>
               <FlaskConical className="h-4 w-4" /> Test
             </button>
@@ -511,16 +511,12 @@ export default function OrderAutomationEditorPage() {
         />
 
         {!isNew ? (
-          <AutomationRuleHistoryPanel
-            ruleId={draft.id}
-            changeLogs={changeLogs}
-            executionLogs={executionLogs}
-          />
-        ) : null}
-
-        <div className="flex flex-wrap items-center gap-2 border-t border-gray-200 pt-4">
-          <button type="button" className={oaBtn} onClick={() => navigate(baseList)}>Anuluj</button>
-          {!isNew ? (
+          <div className="space-y-3">
+            <AutomationRuleHistoryPanel
+              ruleId={draft.id}
+              changeLogs={changeLogs}
+              executionLogs={executionLogs}
+            />
             <button
               type="button"
               className={oaBtnDanger}
@@ -531,9 +527,15 @@ export default function OrderAutomationEditorPage() {
                 navigate(baseList);
               }}
             >
-              <Trash2 className="h-4 w-4" /> Usuń
+              Usuń automatyzację
             </button>
-          ) : null}
+          </div>
+        ) : null}
+
+        <div className="pt-2">
+          <button type="button" className={oaBtn} onClick={() => navigate(baseList)}>
+            Anuluj
+          </button>
         </div>
       </div>
 
