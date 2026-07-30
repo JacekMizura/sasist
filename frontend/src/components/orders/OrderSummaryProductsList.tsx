@@ -1,8 +1,7 @@
-import { useState, type ReactNode } from "react";
+import { useState } from "react";
 import { Link } from "react-router-dom";
 import { AlertTriangle } from "lucide-react";
 
-import { useMediaQuery } from "../../hooks/useMediaQuery";
 import { getProductDetailsPath, productDetailsNavState } from "../../pages/Products/productPaths";
 import { OrderLineKebabMenu } from "./OrderLineKebabMenu";
 import type { LogicalOrderEvent } from "./logicalOrderItems";
@@ -77,85 +76,8 @@ function marginCellClass(tone: OrderSummaryProductsListLine["marginTone"]): stri
   return "text-slate-700";
 }
 
-const COMPACT_LABEL = "text-[10px] uppercase tracking-[0.08em] text-slate-400";
-
-type CompactTier = "primary" | "secondary" | "tertiary";
-
-function CompactMetricCell({
-  label,
-  tier,
-  align = "right",
-  children,
-  className,
-}: {
-  label: string;
-  tier: CompactTier;
-  align?: "left" | "right";
-  children: ReactNode;
-  className?: string;
-}) {
-  const alignCls = align === "right" ? "items-end text-right" : "items-start text-left";
-  const valueCls =
-    tier === "primary"
-      ? "text-lg font-bold tabular-nums leading-tight text-slate-900"
-      : tier === "secondary"
-        ? "text-sm font-semibold tabular-nums leading-tight text-slate-800"
-        : "text-xs font-medium tabular-nums leading-tight text-slate-600";
-  return (
-    <div className={`flex min-h-0 shrink-0 flex-col justify-center gap-0.5 ${alignCls} ${className ?? ""}`}>
-      <span className={COMPACT_LABEL}>{label}</span>
-      <div className={valueCls}>{children}</div>
-    </div>
-  );
-}
-
-function CompactMarginBadge({
-  item,
-  marginPct,
-  marginTone,
-}: {
-  item: OrderSummaryProductItem;
-  marginPct: string;
-  marginTone?: OrderSummaryProductsListLine["marginTone"];
-}) {
-  const mp = item.line_margin_percent;
-  const tone = marginTone ?? "neutral";
-  if (tone === "warn" && (mp == null || !Number.isFinite(Number(mp)))) {
-    return (
-      <span className="inline-flex max-w-full items-center gap-0.5 rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-800">
-        <AlertTriangle className="h-3 w-3 shrink-0" aria-hidden />
-        <span className="tabular-nums">{marginPct}</span>
-      </span>
-    );
-  }
-  if (mp != null && Number.isFinite(Number(mp))) {
-    const n = Number(mp);
-    if (n > 0) {
-      return (
-        <span className="inline-block rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700 tabular-nums">
-          {marginPct}
-        </span>
-      );
-    }
-    if (n < 0) {
-      return (
-        <span className="inline-block rounded-full bg-rose-50 px-2 py-0.5 text-xs font-medium text-rose-700 tabular-nums">
-          {marginPct}
-        </span>
-      );
-    }
-  }
-  return (
-    <span className="inline-block rounded-full bg-slate-50 px-2 py-0.5 text-xs font-medium text-slate-600 tabular-nums">
-      {marginPct}
-    </span>
-  );
-}
-
 export function OrderSummaryProductsList({ lines, productEditTenantId, onLineAction, compact = false }: Props) {
   const [openMenuId, setOpenMenuId] = useState<number | null>(null);
-  /** Jeden kebab na wiersz — dwa montowane naraz psują Floating UI (kliknięcia w menu nie docierają). */
-  const mdUp = useMediaQuery("(min-width: 768px)");
 
   const gridCols =
     "grid-cols-[minmax(0,1fr)_44px_52px_minmax(0,72px)_minmax(0,72px)_minmax(0,88px)_minmax(0,88px)_minmax(0,52px)_40px]";
@@ -166,46 +88,114 @@ export function OrderSummaryProductsList({ lines, productEditTenantId, onLineAct
 
   if (compact) {
     return (
-      <div className="min-w-0 divide-y divide-slate-200 rounded-lg border border-slate-200 bg-white">
-        {lines.map((row) => {
-          const skuEan = [row.sku, row.ean]
-            .map((x) => (x ?? "").trim())
-            .filter(Boolean)
-            .join(" · ");
-          const pid = row.item.product?.id;
-          const canProductLink =
-            pid != null && Number.isFinite(Number(pid)) && Number(pid) > 0 && productEditTenantId != null && productEditTenantId > 0;
-          const productLinkCls =
-            "line-clamp-2 text-base font-semibold leading-snug text-slate-900 underline decoration-transparent underline-offset-2 hover:decoration-slate-300";
-          return (
-            <div key={row.item.id} className="relative px-2.5 py-2 transition-colors hover:bg-slate-50/60">
-              <div className="flex flex-col gap-2 md:flex-row md:items-center md:gap-4">
-                <div className="flex min-w-0 flex-1 items-center gap-3 pr-10 md:pr-0">
-                  <div className="flex h-[52px] w-[52px] shrink-0 items-center justify-center">
-                    {row.imageUrl ? (
-                      <img src={row.imageUrl} alt="" className="max-h-[52px] max-w-[52px] object-contain" loading="lazy" />
-                    ) : (
-                      <span className="text-[10px] text-slate-400">—</span>
-                    )}
-                  </div>
-                  <div className="min-w-0">
-                    {canProductLink ? (
-                      <Link
-                        to={getProductDetailsPath(pid)}
-                        state={productDetailsNavState({ tenantId: productEditTenantId })}
-                        className={productLinkCls}
-                      >
-                        {row.name}
-                      </Link>
-                    ) : (
-                      <span className="line-clamp-2 text-base font-semibold leading-snug text-slate-900">{row.name}</span>
-                    )}
-                    {skuEan ? <p className="mt-0.5 truncate text-xs text-slate-500">{skuEan}</p> : null}
-                  </div>
-                </div>
+      <div className="w-full min-w-0 overflow-x-auto rounded border border-slate-200">
+        <table className="w-full border-collapse text-left">
+          <thead>
+            <tr className="border-b border-slate-200 bg-slate-50/50">
+              <th className="w-[65%] px-4 py-2 text-xs font-normal text-slate-500">Produkt</th>
+              <th className="w-[5%] px-4 py-2 text-center text-xs font-normal text-slate-500">VAT</th>
+              <th className="w-[10%] px-4 py-2 text-center text-xs font-normal text-slate-500">Ilość</th>
+              <th className="w-[15%] px-4 py-2 text-right text-xs font-normal text-slate-500">Cena i wartość</th>
+              <th className="w-[5%] px-4 py-2" aria-hidden />
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-200">
+            {lines.map((row) => {
+              const pid = row.item.product?.id;
+              const canProductLink =
+                pid != null &&
+                Number.isFinite(Number(pid)) &&
+                Number(pid) > 0 &&
+                productEditTenantId != null &&
+                productEditTenantId > 0;
+              const qty = Number(row.item.quantity);
+              const qtyHighlight = Number.isFinite(qty) && qty > 1;
+              const metaBits: { label: string; value: string; strong?: boolean }[] = [];
+              if (row.sku.trim()) metaBits.push({ label: "SKU", value: row.sku });
+              if (row.ean.trim()) metaBits.push({ label: "EAN", value: row.ean });
+              if (row.catalog.trim()) metaBits.push({ label: "Nr kat", value: row.catalog });
+              if (row.location.trim()) metaBits.push({ label: "Lok", value: row.location });
+              if (row.basket.trim()) metaBits.push({ label: "Kosz", value: row.basket });
 
-                {!mdUp ? (
-                  <div className="absolute right-3 top-2.5">
+              return (
+                <tr key={row.item.id} className="align-top">
+                  <td className="px-4 py-4">
+                    <div className="flex items-start gap-4">
+                      <div className="h-12 w-12 shrink-0 rounded border border-slate-200 p-0.5">
+                        {row.imageUrl ? (
+                          <img
+                            src={row.imageUrl}
+                            alt=""
+                            className="h-full w-full object-cover"
+                            loading="lazy"
+                          />
+                        ) : (
+                          <div className="flex h-full w-full items-center justify-center text-[10px] text-slate-400">
+                            —
+                          </div>
+                        )}
+                      </div>
+                      <div className="min-w-0">
+                        <div className="mb-1 flex items-center gap-2">
+                          {canProductLink ? (
+                            <Link
+                              to={getProductDetailsPath(pid)}
+                              state={productDetailsNavState({ tenantId: productEditTenantId })}
+                              className="text-sm font-medium text-blue-600 hover:underline"
+                            >
+                              {row.name}
+                            </Link>
+                          ) : (
+                            <span className="text-sm font-medium text-slate-900">{row.name}</span>
+                          )}
+                        </div>
+                        {metaBits.length > 0 ? (
+                          <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-600">
+                            {metaBits.map((m) => (
+                              <span key={`${row.item.id}-${m.label}`}>
+                                {m.label}:{" "}
+                                <span
+                                  className={
+                                    m.label === "Nr kat"
+                                      ? "border-b border-dashed border-slate-400 text-slate-900"
+                                      : "text-slate-900"
+                                  }
+                                >
+                                  {m.value}
+                                </span>
+                              </span>
+                            ))}
+                          </div>
+                        ) : null}
+                      </div>
+                    </div>
+                  </td>
+                  <td className="px-4 py-4 text-center text-sm text-slate-700">{row.vatLabel}</td>
+                  <td className="px-4 py-4 text-center">
+                    {qtyHighlight ? (
+                      <span className="inline-flex h-6 w-6 items-center justify-center rounded bg-amber-100 text-sm font-bold text-amber-800">
+                        {row.quantityDisplay}
+                      </span>
+                    ) : (
+                      <span className="text-sm text-slate-900">{row.quantityDisplay}</span>
+                    )}
+                  </td>
+                  <td className="px-4 py-4 text-right">
+                    {qtyHighlight || (row.rabatDisplay && row.rabatDisplay !== "—") ? (
+                      <>
+                        <div className="text-[11px] text-slate-500">
+                          {row.unitGross}
+                          {row.rabatDisplay && row.rabatDisplay !== "—" ? (
+                            <span className="ml-1 text-red-500">-{row.rabatDisplay.replace(/^-/, "")}</span>
+                          ) : null}
+                        </div>
+                        <div className="text-sm font-bold text-slate-900">{row.lineGross}</div>
+                      </>
+                    ) : (
+                      <div className="text-sm text-slate-900">{row.lineGross}</div>
+                    )}
+                  </td>
+                  <td className="px-4 py-4 text-right">
                     <OrderLineKebabMenu
                       lineId={row.item.id}
                       anchorId={`order-summary-line-kebab-${row.item.id}`}
@@ -215,71 +205,12 @@ export function OrderSummaryProductsList({ lines, productEditTenantId, onLineAct
                       onRabat={() => onLineAction?.("rabat", row.item)}
                       onRemove={() => onLineAction?.("remove", row.item)}
                     />
-                  </div>
-                ) : null}
-
-                {/* Desktop metryki: większy odstęp od produktu (gap-8), między kolumnami gap-6 */}
-                {mdUp ? (
-                  <div className="flex min-w-0 max-w-none flex-1 flex-nowrap items-center justify-end gap-x-4 overflow-x-auto [scrollbar-width:thin]">
-                    <CompactMetricCell tier="tertiary" label="Ilość">
-                      {row.quantityDisplay}
-                    </CompactMetricCell>
-                    <CompactMetricCell tier="secondary" label="Netto/szt">
-                      {row.unitNet}
-                    </CompactMetricCell>
-                    <CompactMetricCell tier="secondary" label="Brutto/szt">
-                      {row.unitGross}
-                    </CompactMetricCell>
-                    <CompactMetricCell tier="tertiary" label="VAT">
-                      {row.vatLabel}
-                    </CompactMetricCell>
-                    <CompactMetricCell tier="tertiary" label="Rabat">
-                      {row.rabatDisplay}
-                    </CompactMetricCell>
-                    <div className="flex shrink-0 items-center gap-3 border-l border-slate-200 pl-4">
-                      <CompactMetricCell tier="primary" label="Wartość">
-                        {row.lineGross}
-                      </CompactMetricCell>
-                      <OrderLineKebabMenu
-                        lineId={row.item.id}
-                        anchorId={`order-summary-line-kebab-${row.item.id}`}
-                        open={openMenuId === row.item.id}
-                        onOpenChange={(next) => setOpenMenuId(next ? row.item.id : null)}
-                        onEdit={() => onLineAction?.("edit", row.item)}
-                        onRabat={() => onLineAction?.("rabat", row.item)}
-                        onRemove={() => onLineAction?.("remove", row.item)}
-                      />
-                    </div>
-                  </div>
-                ) : null}
-
-                {/* Mobile */}
-                <div className="space-y-2 border-t border-slate-100 pt-2 md:hidden">
-                  <div className="grid grid-cols-2 gap-x-3 gap-y-1.5">
-                    <CompactMetricCell tier="tertiary" label="Ilość" align="left">
-                      {row.quantityDisplay}
-                    </CompactMetricCell>
-                    <CompactMetricCell tier="secondary" label="Netto/szt" align="left">
-                      {row.unitNet}
-                    </CompactMetricCell>
-                    <CompactMetricCell tier="secondary" label="Brutto/szt" align="left">
-                      {row.unitGross}
-                    </CompactMetricCell>
-                    <CompactMetricCell tier="tertiary" label="VAT" align="left">
-                      {row.vatLabel}
-                    </CompactMetricCell>
-                    <CompactMetricCell tier="tertiary" label="Rabat" align="left">
-                      {row.rabatDisplay}
-                    </CompactMetricCell>
-                    <CompactMetricCell tier="primary" label="Wartość" align="left">
-                      {row.lineGross}
-                    </CompactMetricCell>
-                  </div>
-                </div>
-              </div>
-            </div>
-          );
-        })}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
       </div>
     );
   }
