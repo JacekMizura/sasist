@@ -1,6 +1,11 @@
 import { AlertTriangle, ArrowRight, Check, Copy, Pencil, Plus, Trash2 } from "lucide-react";
 
-import type { AutomationCondition, AutomationConditionJoin, AutomationEffect, AutomationEffectKind } from "../../../types/orderAutomation";
+import type {
+  AutomationCondition,
+  AutomationConditionJoin,
+  AutomationEffect,
+  AutomationEffectKind,
+} from "../../../types/orderAutomation";
 import type { OrderUiPanelSubgroupRead, OrderUiStatusPanelSummary } from "../../../types/orderUiStatus";
 import type { ConditionOption } from "../../../utils/orderAutomationConditionOptions";
 import {
@@ -8,9 +13,11 @@ import {
   formatEffectListBlock,
 } from "../../../utils/orderAutomationPreview";
 import { effectKindLabel } from "../../../utils/orderAutomationCatalog";
+import { isMultiValueConditionField } from "../../../utils/orderAutomationConditionUtils";
 import { IconButton } from "../../../design-system/components/Button/IconButton";
 import { AutomationConditionConfigFields } from "./AutomationConditionConfigFields";
 import { AutomationEffectConfigFields } from "./AutomationEffectConfigFields";
+import { AutomationValueBadges } from "./AutomationValueBadges";
 import {
   oaBtnPri,
   oaWorkflowAddCtaCondition,
@@ -21,16 +28,25 @@ import {
   oaWorkflowLaneClass,
 } from "./orderAutomationUiTokens";
 
-type ConditionJoinBadgeProps = {
+function ConditionJoinChip({
+  join,
+  onToggle,
+}: {
   join: AutomationConditionJoin;
-};
-
-function ConditionJoinBadge({ join }: ConditionJoinBadgeProps) {
+  onToggle: () => void;
+}) {
   return (
-    <div className="flex justify-center py-1" aria-hidden>
-      <span className="rounded border border-slate-200 px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-wide text-slate-600">
+    <div className="flex items-center justify-center gap-2 py-0.5">
+      <span className="h-px min-w-[1.5rem] flex-1 bg-slate-200" aria-hidden />
+      <button
+        type="button"
+        className="rounded border border-slate-200 bg-white px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-slate-600 transition hover:border-slate-300 hover:text-slate-900"
+        aria-label={`Łącznik ${join === "or" ? "LUB" : "ORAZ"}, kliknij aby przełączyć`}
+        onClick={onToggle}
+      >
         {join === "or" ? "LUB" : "ORAZ"}
-      </span>
+      </button>
+      <span className="h-px min-w-[1.5rem] flex-1 bg-slate-200" aria-hidden />
     </div>
   );
 }
@@ -90,20 +106,23 @@ function ConditionSummary({
   warehouseOptions: ConditionOption[];
 }) {
   const parts = formatConditionDisplayParts(condition, statusNameById, warehouseOptions);
+  const useBadges = isMultiValueConditionField(condition.fieldKey);
+
   return (
-    <div className="min-w-0 space-y-1">
-      <p className="text-sm font-semibold text-slate-900">{parts.field}</p>
-      <p className="text-sm text-slate-500">{parts.op}</p>
-      {parts.valueLabels.length > 0 ? (
-        <ul className="space-y-0.5">
-          {parts.valueLabels.map((label) => (
-            <li key={label} className="text-sm font-medium text-slate-800">
-              {label}
-            </li>
-          ))}
-        </ul>
+    <div className="min-w-0 space-y-1.5">
+      <p className="text-sm leading-snug text-slate-900">
+        <span className="font-semibold">{parts.field}</span>
+        <span className="text-slate-300"> · </span>
+        <span className="font-normal text-slate-600">{parts.op}</span>
+      </p>
+      {useBadges ? (
+        parts.valueLabels.length > 0 ? (
+          <AutomationValueBadges labels={parts.valueLabels} />
+        ) : (
+          <p className="text-sm text-slate-400">—</p>
+        )
       ) : (
-        <p className="text-sm text-slate-400">—</p>
+        <p className="text-sm font-medium text-slate-800">{parts.value}</p>
       )}
     </div>
   );
@@ -119,20 +138,34 @@ function EffectSummary({
   const block = formatEffectListBlock(effect, statusNameById);
   const title = effectKindLabel(effect.kind);
   const primary = block.primaryBold ?? block.secondaryDetail;
+
   return (
-    <div className="min-w-0 space-y-1">
+    <div className="min-w-0 space-y-1.5">
       <p className="text-sm font-semibold text-slate-900">{title}</p>
-      {primary ? <p className="text-sm font-medium text-slate-800">{primary}</p> : <p className="text-sm text-slate-400">—</p>}
-      {block.secondaryDetail && block.primaryBold ? (
+      {effect.kind === "change_status" && primary ? (
+        <AutomationValueBadges labels={[primary]} maxVisible={1} />
+      ) : primary ? (
+        <p className="text-sm font-medium text-slate-800">{primary}</p>
+      ) : (
+        <p className="text-sm text-slate-400">—</p>
+      )}
+      {block.secondaryDetail && block.primaryBold && effect.kind !== "change_status" ? (
         <p className="text-sm text-slate-500">{block.secondaryDetail}</p>
       ) : null}
     </div>
   );
 }
 
-/** Krótka animacja wysokości expand/collapse (~180ms). */
 const expandShellClass =
   "grid transition-[grid-template-rows] duration-[180ms] ease-out motion-reduce:transition-none";
+
+function cardShellClass(expanded: boolean, hasError: boolean): string {
+  if (hasError) return "rounded-lg border border-red-300 bg-white";
+  if (expanded) {
+    return "rounded-lg border border-orange-200 border-l-[3px] border-l-orange-500 bg-orange-50/40";
+  }
+  return "rounded-lg border border-slate-200 bg-white";
+}
 
 type ConditionRowProps = {
   condition: AutomationCondition;
@@ -141,14 +174,12 @@ type ConditionRowProps = {
   warehouseOptions: ConditionOption[];
   panelSummary: OrderUiStatusPanelSummary | null;
   panelSubgroups: OrderUiPanelSubgroupRead[];
-  showJoin: boolean;
   errorMessage?: string | null;
   onToggleEdit: () => void;
   onFinishEdit: () => void;
   onDuplicate: () => void;
   onRemove: () => void;
   onPatch: (patch: Partial<AutomationCondition>) => void;
-  onSetJoin: (join: AutomationConditionJoin) => void;
 };
 
 function ConditionRow({
@@ -158,21 +189,17 @@ function ConditionRow({
   warehouseOptions,
   panelSummary,
   panelSubgroups,
-  showJoin,
   errorMessage,
   onToggleEdit,
   onFinishEdit,
   onDuplicate,
   onRemove,
   onPatch,
-  onSetJoin,
 }: ConditionRowProps) {
   return (
     <div className="space-y-1">
-      <div
-        className={`rounded-lg border bg-white ${errorMessage ? "border-red-300" : "border-slate-200"}`}
-      >
-        <div className="flex items-start gap-2 px-3 py-2.5">
+      <div className={cardShellClass(expanded, Boolean(errorMessage))}>
+        <div className="flex items-start gap-2 px-2.5 py-2">
           {errorMessage ? <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-red-600" aria-hidden /> : null}
           <div className="min-w-0 flex-1">
             {!expanded ? (
@@ -181,9 +208,7 @@ function ConditionRow({
                 statusNameById={statusNameById}
                 warehouseOptions={warehouseOptions}
               />
-            ) : (
-              <p className="text-sm font-semibold text-slate-900">Edycja warunku</p>
-            )}
+            ) : null}
           </div>
           <RowActions
             editActive={expanded}
@@ -196,21 +221,18 @@ function ConditionRow({
         <div className={`${expandShellClass} ${expanded ? "grid-rows-[1fr]" : "grid-rows-[0fr]"}`}>
           <div className="min-h-0 overflow-hidden">
             {expanded ? (
-              <div className="border-t border-slate-100 px-3 pb-3 pt-2">
+              <div className="space-y-2 border-t border-orange-100/80 px-2.5 pb-2.5 pt-2">
                 <AutomationConditionConfigFields
                   condition={condition}
                   statusNameById={statusNameById}
                   panelSummary={panelSummary}
                   panelSubgroups={panelSubgroups}
                   warehouseOptions={warehouseOptions}
-                  showJoin={showJoin}
-                  joinToNext={condition.joinToNext ?? "and"}
                   onPatch={onPatch}
-                  onSetJoin={onSetJoin}
                 />
-                <div className="mt-3 flex justify-end">
-                  <button type="button" className={`${oaBtnPri} gap-1.5`} onClick={onFinishEdit}>
-                    <Check className="h-4 w-4" strokeWidth={2.5} aria-hidden />
+                <div className="flex justify-end">
+                  <button type="button" className={`${oaBtnPri} h-8 gap-1.5 px-3 text-xs`} onClick={onFinishEdit}>
+                    <Check className="h-3.5 w-3.5" strokeWidth={2.5} aria-hidden />
                     Zakończ edycję
                   </button>
                 </div>
@@ -255,17 +277,11 @@ function EffectRow({
 }: EffectRowProps) {
   return (
     <div className="space-y-1">
-      <div
-        className={`rounded-lg border bg-white ${errorMessage ? "border-red-300" : "border-slate-200"}`}
-      >
-        <div className="flex items-start gap-2 px-3 py-2.5">
+      <div className={cardShellClass(expanded, Boolean(errorMessage))}>
+        <div className="flex items-start gap-2 px-2.5 py-2">
           {errorMessage ? <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-red-600" aria-hidden /> : null}
           <div className="min-w-0 flex-1">
-            {!expanded ? (
-              <EffectSummary effect={effect} statusNameById={statusNameById} />
-            ) : (
-              <p className="text-sm font-semibold text-slate-900">Edycja akcji</p>
-            )}
+            {!expanded ? <EffectSummary effect={effect} statusNameById={statusNameById} /> : null}
           </div>
           <RowActions
             editActive={expanded}
@@ -278,17 +294,18 @@ function EffectRow({
         <div className={`${expandShellClass} ${expanded ? "grid-rows-[1fr]" : "grid-rows-[0fr]"}`}>
           <div className="min-h-0 overflow-hidden">
             {expanded ? (
-              <div className="border-t border-slate-100 px-3 pb-3 pt-2">
+              <div className="space-y-2 border-t border-orange-100/80 px-2.5 pb-2.5 pt-2">
                 <AutomationEffectConfigFields
                   effect={effect}
                   panelSummary={panelSummary}
                   panelSubgroups={panelSubgroups}
+                  statusNameById={statusNameById}
                   onChangeKind={onChangeKind}
                   onPatchPayload={onPatchPayload}
                 />
-                <div className="mt-3 flex justify-end">
-                  <button type="button" className={`${oaBtnPri} gap-1.5`} onClick={onFinishEdit}>
-                    <Check className="h-4 w-4" strokeWidth={2.5} aria-hidden />
+                <div className="flex justify-end">
+                  <button type="button" className={`${oaBtnPri} h-8 gap-1.5 px-3 text-xs`} onClick={onFinishEdit}>
+                    <Check className="h-3.5 w-3.5" strokeWidth={2.5} aria-hidden />
                     Zakończ edycję
                   </button>
                 </div>
@@ -380,14 +397,14 @@ export function AutomationIfThenSection({
 
       <div className="grid w-full min-w-0 max-w-none items-stretch gap-y-6 lg:grid-cols-[minmax(0,1fr)_4.5rem_minmax(0,1fr)] lg:gap-x-4 lg:gap-y-0">
         <div className={`${oaWorkflowLaneClass} min-w-0`}>
-          <div className="mb-4 flex flex-wrap items-center gap-y-1 text-sm font-medium text-slate-700">
+          <div className="mb-3 flex flex-wrap items-center gap-y-1 text-sm font-medium text-slate-700">
             <span className={oaWorkflowLaneBadgeIfClass}>JEŚLI</span>
             Spełnione są wszystkie warunki:
           </div>
 
-          <div className="flex flex-1 flex-col gap-3">
+          <div className="flex flex-1 flex-col gap-1.5">
             {conditions.length > 0 ? (
-              <ul className="space-y-2">
+              <ul className="space-y-1.5">
                 {conditions.map((c, idx) => {
                   const join = c.joinToNext ?? "and";
                   const isLast = idx >= conditions.length - 1;
@@ -401,16 +418,19 @@ export function AutomationIfThenSection({
                         warehouseOptions={warehouseOptions}
                         panelSummary={panelSummary}
                         panelSubgroups={panelSubgroups}
-                        showJoin={!isLast}
                         errorMessage={conditionErrors[c.uid] ?? null}
                         onToggleEdit={() => onExpandCondition(expanded ? null : c.uid)}
                         onFinishEdit={() => onExpandCondition(null)}
                         onDuplicate={() => onDuplicateCondition(c)}
                         onRemove={() => onRemoveCondition(c.uid)}
                         onPatch={(patch) => onPatchCondition(c.uid, patch)}
-                        onSetJoin={(j) => onSetConditionJoin(c.uid, j)}
                       />
-                      {!isLast ? <ConditionJoinBadge join={join} /> : null}
+                      {!isLast ? (
+                        <ConditionJoinChip
+                          join={join}
+                          onToggle={() => onSetConditionJoin(c.uid, join === "or" ? "and" : "or")}
+                        />
+                      ) : null}
                     </li>
                   );
                 })}
@@ -433,14 +453,14 @@ export function AutomationIfThenSection({
         </div>
 
         <div className={`${oaWorkflowLaneClass} min-w-0`}>
-          <div className="mb-4 flex flex-wrap items-center gap-y-1 text-sm font-medium text-slate-700">
+          <div className="mb-3 flex flex-wrap items-center gap-y-1 text-sm font-medium text-slate-700">
             <span className={oaWorkflowLaneBadgeThenClass}>TO</span>
             Wykonaj akcje:
           </div>
 
-          <div className="flex flex-1 flex-col gap-3">
+          <div className="flex flex-1 flex-col gap-1.5">
             {effects.length > 0 ? (
-              <ul className="space-y-2">
+              <ul className="space-y-1.5">
                 {effects.map((e) => {
                   const expanded = expandedEffectUid === e.uid;
                   return (

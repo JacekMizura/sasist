@@ -1,14 +1,9 @@
 import { useMemo, useState } from "react";
 import { ChevronDown } from "lucide-react";
 
-import type {
-  AutomationCondition,
-  AutomationConditionJoin,
-  AutomationConditionOp,
-} from "../../../types/orderAutomation";
+import type { AutomationCondition, AutomationConditionOp } from "../../../types/orderAutomation";
 import type { OrderUiPanelSubgroupRead, OrderUiStatusPanelSummary } from "../../../types/orderUiStatus";
 import { FilterMultiSelect } from "../../filters/FilterMultiSelect";
-import { PanelStatusHierarchyPicker } from "../../panel/PanelStatusHierarchyPicker";
 import {
   ORDER_AUTOMATION_CONDITION_FIELDS,
   ORDER_AUTOMATION_OPERATOR_UI,
@@ -27,12 +22,12 @@ import {
   migrateConditionValue,
 } from "../../../utils/orderAutomationConditionUtils";
 import { AutomationCategoryPickerModal } from "./AutomationCategoryPickerModal";
-import {
-  oaInp,
-  oaLbl,
-  oaWorkflowFieldLabelClass,
-  oaWorkflowFieldRowClass,
-} from "./orderAutomationUiTokens";
+import { AutomationStatusPicker } from "./AutomationStatusPicker";
+import { AutomationValueBadges } from "./AutomationValueBadges";
+import { oaInp } from "./orderAutomationUiTokens";
+
+const sentenceTriggerClass =
+  "inline-flex h-8 max-w-full min-w-0 items-center gap-1 rounded-md border border-slate-200 bg-white px-2 text-left text-sm font-medium text-slate-900 transition hover:border-slate-300";
 
 export type AutomationConditionConfigFieldsProps = {
   condition: AutomationCondition;
@@ -40,25 +35,19 @@ export type AutomationConditionConfigFieldsProps = {
   panelSummary: OrderUiStatusPanelSummary | null;
   panelSubgroups: OrderUiPanelSubgroupRead[];
   warehouseOptions: ConditionOption[];
-  showJoin: boolean;
-  joinToNext: AutomationConditionJoin;
   onPatch: (patch: Partial<AutomationCondition>) => void;
-  onSetJoin: (join: AutomationConditionJoin) => void;
 };
 
-/** Pola konfiguracji warunku — wspólne dla inline (bez shella modalu). */
 export function AutomationConditionConfigFields({
   condition,
   statusNameById,
   panelSummary,
   panelSubgroups,
   warehouseOptions,
-  showJoin,
-  joinToNext,
   onPatch,
-  onSetJoin,
 }: AutomationConditionConfigFieldsProps) {
   const [fieldPickerOpen, setFieldPickerOpen] = useState(false);
+  const [focusStatusId, setFocusStatusId] = useState<number | null>(null);
   const categorySteps = useMemo(() => buildConditionCategorySteps(), []);
 
   const statusOptions = useMemo(() => {
@@ -85,6 +74,7 @@ export function AutomationConditionConfigFields({
   const ops = defaultOperatorsForField(condition.fieldKey);
   const selectedLabels = resolveOptionLabels(values, selectOptions);
   const selectedStatusIds = values.map((v) => Number(v)).filter((id) => Number.isFinite(id) && id > 0);
+  const opLabel = ORDER_AUTOMATION_OPERATOR_UI[condition.operator] ?? condition.operator;
 
   const onFieldPick = (fieldKey: string) => {
     onPatch({
@@ -94,104 +84,93 @@ export function AutomationConditionConfigFields({
     });
   };
 
+  const removeValueAt = (index: number) => {
+    const next = values.filter((_, i) => i !== index);
+    onPatch({ value: next });
+  };
+
   return (
     <>
-      <div className="space-y-0">
-        <div className={oaWorkflowFieldRowClass}>
-          <span className={oaWorkflowFieldLabelClass}>Pole</span>
-          <button
-            type="button"
-            className={`${oaInp} flex items-center justify-between text-left`}
-            onClick={() => setFieldPickerOpen(true)}
-          >
-            <span className="truncate">{conditionFieldLabel(condition.fieldKey)}</span>
-            <ChevronDown className="h-4 w-4 shrink-0 text-slate-400" />
+      <div className="space-y-2">
+        <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+          <button type="button" className={sentenceTriggerClass} onClick={() => setFieldPickerOpen(true)}>
+            <span className="min-w-0 truncate">{conditionFieldLabel(condition.fieldKey)}</span>
+            <ChevronDown className="h-3.5 w-3.5 shrink-0 text-slate-400" />
           </button>
-        </div>
-        <div className={oaWorkflowFieldRowClass}>
-          <span className={oaWorkflowFieldLabelClass}>Operator</span>
-          <select
-            className={oaInp}
-            value={condition.operator}
-            onChange={(e) => onPatch({ operator: e.target.value as AutomationConditionOp })}
-          >
-            {ops.map((op) => (
-              <option key={op} value={op}>
-                {ORDER_AUTOMATION_OPERATOR_UI[op] ?? op}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div className={oaWorkflowFieldRowClass}>
-          <span className={oaWorkflowFieldLabelClass}>Wartość</span>
-          <div className="min-w-0 space-y-2">
-            {isOrderStatusField ? (
-              <div className="rounded-lg border border-slate-200 bg-white">
-                <PanelStatusHierarchyPicker
-                  panelSummary={panelSummary}
-                  panelSubgroups={panelSubgroups}
-                  selectedStatusIds={selectedStatusIds}
-                  showClearOption
-                  clearLabel="Wyczyść zaznaczenie"
-                  listMaxHeightClass="max-h-[min(40vh,16rem)]"
-                  onSelectedIdsChange={(ids) => onPatch({ value: ids.map(String) })}
-                />
-              </div>
-            ) : isMulti ? (
-              <>
-                <FilterMultiSelect
-                  value={values}
-                  onChange={(next) => onPatch({ value: next.map(String) })}
-                  options={selectOptions}
-                  placeholder="Wybierz wartości…"
-                  emptySummary="Wybierz wartości…"
-                  searchPlaceholder="Szukaj…"
-                  totalOptionCount={selectOptions.length}
-                />
-                {selectedLabels.length > 0 ? (
-                  <ul className="space-y-1 rounded-lg border border-slate-200 bg-white p-2">
-                    {selectedLabels.map((label) => (
-                      <li key={label} className="flex items-center gap-2 text-sm text-slate-800">
-                        <span className="text-emerald-600" aria-hidden>
-                          ✓
-                        </span>
-                        {label}
-                      </li>
-                    ))}
-                  </ul>
-                ) : null}
-              </>
-            ) : meta?.valueKind === "number" ? (
-              <input
-                className={oaInp}
-                type="number"
-                value={values[0] ?? ""}
-                placeholder="Wartość…"
-                onChange={(e) => onPatch({ value: e.target.value.trim() ? [e.target.value.trim()] : [] })}
-              />
-            ) : (
-              <input
-                className={oaInp}
-                value={values[0] ?? ""}
-                placeholder="Wartość…"
-                onChange={(e) => onPatch({ value: e.target.value.trim() ? [e.target.value.trim()] : [] })}
-              />
-            )}
-          </div>
-        </div>
-        {showJoin ? (
-          <label className={`${oaLbl} mt-3 block`}>
-            Łącznik z następnym warunkiem
+          <span className="text-slate-300" aria-hidden>
+            ·
+          </span>
+          <label className="relative inline-flex min-w-0">
+            <span className={`${sentenceTriggerClass} pr-7 font-normal text-slate-600`}>
+              <span className="truncate">{opLabel}</span>
+            </span>
+            <ChevronDown className="pointer-events-none absolute right-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
             <select
-              className={`${oaInp} mt-1.5`}
-              value={joinToNext}
-              onChange={(e) => onSetJoin(e.target.value as AutomationConditionJoin)}
+              className="absolute inset-0 cursor-pointer opacity-0"
+              value={condition.operator}
+              aria-label="Operator"
+              onChange={(e) => onPatch({ operator: e.target.value as AutomationConditionOp })}
             >
-              <option value="and">ORAZ</option>
-              <option value="or">LUB</option>
+              {ops.map((op) => (
+                <option key={op} value={op}>
+                  {ORDER_AUTOMATION_OPERATOR_UI[op] ?? op}
+                </option>
+              ))}
             </select>
           </label>
+        </div>
+
+        {isMulti && selectedLabels.length > 0 ? (
+          <AutomationValueBadges
+            labels={selectedLabels}
+            removable
+            onRemove={removeValueAt}
+            onBadgeClick={
+              isOrderStatusField
+                ? (index) => {
+                    const id = selectedStatusIds[index];
+                    if (id != null) setFocusStatusId(id);
+                  }
+                : undefined
+            }
+          />
         ) : null}
+
+        {isOrderStatusField ? (
+          <AutomationStatusPicker
+            panelSummary={panelSummary}
+            panelSubgroups={panelSubgroups}
+            selectedStatusIds={selectedStatusIds}
+            focusStatusId={focusStatusId}
+            onFocusStatusHandled={() => setFocusStatusId(null)}
+            onSelectedIdsChange={(ids) => onPatch({ value: ids.map(String) })}
+          />
+        ) : isMulti ? (
+          <FilterMultiSelect
+            value={values}
+            onChange={(next) => onPatch({ value: next.map(String) })}
+            options={selectOptions}
+            placeholder="Dodaj wartości…"
+            emptySummary="Dodaj wartości…"
+            searchPlaceholder="Szukaj…"
+            totalOptionCount={selectOptions.length}
+          />
+        ) : meta?.valueKind === "number" ? (
+          <input
+            className={`${oaInp} h-8`}
+            type="number"
+            value={values[0] ?? ""}
+            placeholder="Wartość…"
+            onChange={(e) => onPatch({ value: e.target.value.trim() ? [e.target.value.trim()] : [] })}
+          />
+        ) : (
+          <input
+            className={`${oaInp} h-8`}
+            value={values[0] ?? ""}
+            placeholder="Wartość…"
+            onChange={(e) => onPatch({ value: e.target.value.trim() ? [e.target.value.trim()] : [] })}
+          />
+        )}
       </div>
 
       <AutomationCategoryPickerModal
