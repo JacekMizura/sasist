@@ -233,76 +233,96 @@ export function AutomationExecutionSettingsSection({
               </div>
             </div>
 
-            <div className="max-w-lg space-y-4">
-              <p className="text-sm font-medium text-slate-800">Wybierz dni i dostosuj godziny</p>
+            <div className="max-w-lg transition-[opacity] duration-150 ease-out motion-reduce:transition-none">
               {runMode === "continuous" ? (
-                <p className="text-xs text-slate-500">
-                  Harmonogram jest stosowany w trybach z godzinami lub dniami.
-                </p>
-              ) : null}
-              {runMode === "hours_only" ? (
-                <div className="mb-2 flex flex-wrap items-center gap-3">
-                  <span className="text-sm text-slate-500">Od</span>
-                  <TimeField
-                    value={windowFrom}
-                    invalid={scheduleInvalid && showValidation}
-                    onChange={(v) => onChange({ windowFrom: v })}
-                  />
-                  <span className="text-sm text-slate-500">Do</span>
-                  <TimeField
-                    value={windowTo}
-                    invalid={scheduleInvalid && showValidation}
-                    onChange={(v) => onChange({ windowTo: v })}
-                  />
+                <div
+                  key="continuous"
+                  className="rounded-xl border border-dashed border-slate-200 bg-slate-50/60 px-4 py-8 text-center"
+                  aria-live="polite"
+                >
+                  <Clock className="mx-auto h-5 w-5 text-slate-300" strokeWidth={1.75} aria-hidden />
+                  <p className="mt-3 text-sm font-medium text-slate-500">Harmonogram nie jest używany.</p>
+                  <p className="mt-1 text-sm leading-relaxed text-slate-400">
+                    Automatyzacja działa bez ograniczeń czasowych.
+                  </p>
                 </div>
               ) : null}
-              <div className="grid max-w-md grid-cols-7 gap-2">
-                {DAY_ROWS.map(({ day, short }) => {
-                  const on = activeDays.includes(day);
-                  return (
-                    <button
-                      key={day}
-                      type="button"
-                      className={`flex h-10 w-full items-center justify-center rounded-lg border text-sm font-semibold transition ${
-                        on
-                          ? "border-orange-500 bg-orange-500 text-white"
-                          : "border-slate-200 bg-white text-slate-700 hover:border-slate-300"
-                      }`}
-                      onClick={() => toggleDay(day)}
-                    >
-                      {short}
-                    </button>
-                  );
-                })}
-              </div>
-              {showValidation && runMode === "days_and_hours" && activeDays.length === 0 ? (
-                <p className="text-xs text-red-600">Wybierz co najmniej jeden dzień tygodnia.</p>
+
+              {runMode === "hours_only" ? (
+                <div className="space-y-4" aria-live="polite">
+                  <div>
+                    <p className="text-sm font-medium text-slate-800">Godziny działania</p>
+                    <p className="mt-0.5 text-sm text-slate-500">Zakres obowiązuje codziennie.</p>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-3">
+                    <span className="text-sm text-slate-500">Od</span>
+                    <TimeField
+                      value={windowFrom}
+                      invalid={scheduleInvalid && showValidation}
+                      onChange={(v) => onChange({ windowFrom: v })}
+                    />
+                    <span className="text-sm text-slate-500">Do</span>
+                    <TimeField
+                      value={windowTo}
+                      invalid={scheduleInvalid && showValidation}
+                      onChange={(v) => onChange({ windowTo: v })}
+                    />
+                  </div>
+                </div>
               ) : null}
 
-              {selectedDays.length > 0 ? (
-                <div className="divide-y divide-slate-100 overflow-hidden rounded-lg border border-slate-200">
-                  {selectedDays.map(({ day, full }) => (
-                    <div
-                      key={day}
-                      className="flex flex-wrap items-center gap-x-4 gap-y-2 bg-white px-3 py-2.5"
-                    >
-                      <span className="min-w-[6.5rem] flex-1 text-sm font-medium text-slate-800">{full}</span>
-                      <div className="flex flex-wrap items-center gap-2.5">
-                        <span className="text-sm text-slate-500">Od</span>
-                        <TimeField
-                          value={windowFrom}
-                          invalid={scheduleInvalid && showValidation && runMode !== "continuous"}
-                          onChange={(v) => onChange({ windowFrom: v })}
-                        />
-                        <span className="text-sm text-slate-500">Do</span>
-                        <TimeField
-                          value={windowTo}
-                          invalid={scheduleInvalid && showValidation && runMode !== "continuous"}
-                          onChange={(v) => onChange({ windowTo: v })}
-                        />
-                      </div>
+              {runMode === "days_and_hours" ? (
+                <div className="space-y-4" aria-live="polite">
+                  <p className="text-sm font-medium text-slate-800">Wybierz dni i dostosuj godziny</p>
+                  <div className="grid max-w-md grid-cols-7 gap-2">
+                    {DAY_ROWS.map(({ day, short }) => {
+                      const on = activeDays.includes(day);
+                      return (
+                        <button
+                          key={day}
+                          type="button"
+                          className={`flex h-10 w-full items-center justify-center rounded-lg border text-sm font-semibold transition ${
+                            on
+                              ? "border-orange-500 bg-orange-500 text-white"
+                              : "border-slate-200 bg-white text-slate-700 hover:border-slate-300"
+                          }`}
+                          onClick={() => toggleDay(day)}
+                        >
+                          {short}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {showValidation && activeDays.length === 0 ? (
+                    <p className="text-xs text-red-600">Wybierz co najmniej jeden dzień tygodnia.</p>
+                  ) : null}
+
+                  {selectedDays.length > 0 ? (
+                    <div className="divide-y divide-slate-100 overflow-hidden rounded-lg border border-slate-200">
+                      {selectedDays.map(({ day, full }) => (
+                        <div
+                          key={day}
+                          className="flex flex-wrap items-center gap-x-4 gap-y-2 bg-white px-3 py-2.5"
+                        >
+                          <span className="min-w-[6.5rem] flex-1 text-sm font-medium text-slate-800">{full}</span>
+                          <div className="flex flex-wrap items-center gap-2.5">
+                            <span className="text-sm text-slate-500">Od</span>
+                            <TimeField
+                              value={windowFrom}
+                              invalid={scheduleInvalid && showValidation}
+                              onChange={(v) => onChange({ windowFrom: v })}
+                            />
+                            <span className="text-sm text-slate-500">Do</span>
+                            <TimeField
+                              value={windowTo}
+                              invalid={scheduleInvalid && showValidation}
+                              onChange={(v) => onChange({ windowTo: v })}
+                            />
+                          </div>
+                        </div>
+                      ))}
                     </div>
-                  ))}
+                  ) : null}
                 </div>
               ) : null}
             </div>
