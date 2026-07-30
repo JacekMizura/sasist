@@ -390,7 +390,7 @@ export default function OrderAutomationEditorPage() {
     <div className={`${moduleAutomationShellClass} min-w-0 pb-8 text-[13px] text-slate-900`}>
       <ModuleListBreadcrumb items={breadcrumbItems} />
 
-      <div className={`${oaEditorHeaderCardClass} mb-6 mt-4`}>
+      <div className={`${oaEditorHeaderCardClass} mb-8 mt-4`}>
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:gap-4">
           <label className="min-w-0 flex-1">
             <span className={oaLblCaps}>Nazwa automatyzacji</span>
@@ -455,7 +455,7 @@ export default function OrderAutomationEditorPage() {
         </div>
       ) : null}
 
-      <div className="w-full max-w-none space-y-10">
+      <div className="w-full max-w-none space-y-12">
         <AutomationExecutionSettingsSection
           automatic={draft.execution.automatic}
           manualEnabled={draft.manualTrigger.enabled}

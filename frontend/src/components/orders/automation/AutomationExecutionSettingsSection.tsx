@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { Clock, Hand, Zap } from "lucide-react";
 
 import type {
@@ -7,7 +8,6 @@ import type {
 import { isScheduleWindowValid } from "../../../utils/orderAutomationValidation";
 import { AutomationManualTriggerSection } from "./AutomationManualTriggerSection";
 import {
-  oaDayScheduleCardClass,
   oaEditorHeaderCardClass,
   oaInp,
   oaInpDense,
@@ -23,6 +23,8 @@ const DAY_ROWS: { day: number; short: string; full: string }[] = [
   { day: 6, short: "So", full: "Sobota" },
   { day: 7, short: "Nd", full: "Niedziela" },
 ];
+
+type LaunchFocus = "automatic" | "manual";
 
 type Props = {
   automatic: boolean;
@@ -68,6 +70,12 @@ function TimeField({
   );
 }
 
+function initialFocus(automatic: boolean, manualEnabled: boolean): LaunchFocus {
+  if (automatic) return "automatic";
+  if (manualEnabled) return "manual";
+  return "automatic";
+}
+
 export function AutomationExecutionSettingsSection({
   automatic,
   manualEnabled,
@@ -80,6 +88,12 @@ export function AutomationExecutionSettingsSection({
   showValidation = false,
   onChange,
 }: Props) {
+  const [focus, setFocus] = useState<LaunchFocus>(() => initialFocus(automatic, manualEnabled));
+
+  useEffect(() => {
+    setFocus(initialFocus(automatic, manualEnabled));
+  }, [automatic, manualEnabled]);
+
   const toggleDay = (day: number) => {
     const set = new Set(activeDays);
     if (set.has(day)) set.delete(day);
@@ -93,97 +107,104 @@ export function AutomationExecutionSettingsSection({
 
   const patchManual = (p: Partial<OrderAutomationManualTrigger>) => onChange({ manualTrigger: p });
 
-  const selectAutomatic = () => onChange({ automatic: !automatic });
+  /** Exclusive UI focus — enable chosen mode without wiping the other until user switches. */
+  const selectAutomatic = () => {
+    setFocus("automatic");
+    onChange({ automatic: true });
+  };
+
   const selectManual = () => {
-    const next = !manualEnabled;
+    setFocus("manual");
     onChange({
-      manualEnabled: next,
-      manualTrigger: {
-        enabled: next,
-        ...(next ? { buttonEnabled: true } : {}),
-      },
+      manualEnabled: true,
+      manualTrigger: { enabled: true, buttonEnabled: true },
     });
   };
 
   const selectedDays = DAY_ROWS.filter((d) => activeDays.includes(d.day));
-  const showSchedulePanel = automatic && runMode !== "continuous";
+  const showAutomaticPanel = focus === "automatic";
+  const showManualPanel = focus === "manual";
 
   return (
-    <section className="w-full space-y-4">
-      <div className={`${oaEditorHeaderCardClass} space-y-5`}>
-        <div>
-          <h2 className="text-lg font-semibold text-slate-900">Ustawienia wykonania</h2>
-          <p className="mt-1 max-w-3xl text-sm leading-relaxed text-slate-500">
-            System obserwuje zmiany w zamówieniach, produktach, WMS, dokumentach itd. Jeżeli warunki są
-            spełnione, wykonywane są efekty.
-          </p>
-        </div>
+    <section className="w-full space-y-6">
+      <div>
+        <h2 className="text-lg font-semibold text-slate-900">Ustawienia wykonania</h2>
+        <p className="mt-1 max-w-3xl text-sm leading-relaxed text-slate-500">
+          System obserwuje zmiany w zamówieniach, produktach, WMS, dokumentach itd. Jeżeli warunki są
+          spełnione, wykonywane są efekty.
+        </p>
+      </div>
 
-        <div className="grid gap-3 sm:grid-cols-2">
-          <button type="button" className={oaLaunchTileClass(automatic)} onClick={selectAutomatic}>
-            <span
-              className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full border-2 ${
-                automatic ? "border-orange-500" : "border-slate-300"
-              }`}
-              aria-hidden
-            >
-              {automatic ? <span className="h-2 w-2 rounded-full bg-orange-500" /> : null}
-            </span>
-            <span className="min-w-0 flex-1">
-              <span className={`block text-sm font-semibold ${automatic ? "text-orange-700" : "text-slate-900"}`}>
-                Automatycznie
-              </span>
-              <span className="mt-0.5 block text-sm leading-snug text-slate-500">
-                Wykonuje się samo, gdy zajdą określone zdarzenia.
-              </span>
-            </span>
-            <Zap
-              className={`mt-0.5 h-5 w-5 shrink-0 ${automatic ? "text-orange-400" : "text-slate-300"}`}
-              strokeWidth={1.75}
-              aria-hidden
-            />
-          </button>
-
-          <button type="button" className={oaLaunchTileClass(manualEnabled)} onClick={selectManual}>
-            <span
-              className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full border-2 ${
-                manualEnabled ? "border-orange-500" : "border-slate-300"
-              }`}
-              aria-hidden
-            >
-              {manualEnabled ? <span className="h-2 w-2 rounded-full bg-orange-500" /> : null}
-            </span>
-            <span className="min-w-0 flex-1">
-              <span
-                className={`block text-sm font-semibold ${manualEnabled ? "text-orange-700" : "text-slate-900"}`}
-              >
-                Ręcznie (Przycisk)
-              </span>
-              <span className="mt-0.5 block text-sm leading-snug text-slate-500">
-                Uruchamiane ręcznie z poziomu karty zamówienia.
-              </span>
-            </span>
-            <Hand
-              className={`mt-0.5 h-5 w-5 shrink-0 ${manualEnabled ? "text-orange-400" : "text-slate-300"}`}
-              strokeWidth={1.75}
-              aria-hidden
-            />
-          </button>
-        </div>
-
-        {launchInvalid ? (
-          <p className="text-sm text-red-600">Automatyzacja musi mieć przynajmniej jeden sposób uruchamiania.</p>
-        ) : null}
-
-        {automatic ? (
-          <div
-            className={`grid gap-8 border-t border-slate-100 pt-5 ${
-              showSchedulePanel ? "lg:grid-cols-2" : ""
+      <div className="grid gap-3 sm:grid-cols-2">
+        <button type="button" className={oaLaunchTileClass(focus === "automatic")} onClick={selectAutomatic}>
+          <span
+            className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full border-2 ${
+              focus === "automatic" ? "border-orange-500" : "border-slate-300"
             }`}
+            aria-hidden
           >
-            <div className="space-y-5">
-              <p className="text-sm font-semibold text-slate-900">Uruchamianie automatyczne</p>
+            {focus === "automatic" ? <span className="h-2 w-2 rounded-full bg-orange-500" /> : null}
+          </span>
+          <span className="min-w-0 flex-1">
+            <span
+              className={`block text-sm font-semibold ${
+                focus === "automatic" ? "text-orange-700" : "text-slate-900"
+              }`}
+            >
+              Automatycznie
+            </span>
+            <span className="mt-0.5 block text-sm leading-snug text-slate-500">
+              Wykonuje się samo, gdy zajdą określone zdarzenia.
+            </span>
+          </span>
+          <Zap
+            className={`mt-0.5 h-5 w-5 shrink-0 ${
+              focus === "automatic" ? "text-orange-400" : "text-slate-300"
+            }`}
+            strokeWidth={1.75}
+            aria-hidden
+          />
+        </button>
 
+        <button type="button" className={oaLaunchTileClass(focus === "manual")} onClick={selectManual}>
+          <span
+            className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full border-2 ${
+              focus === "manual" ? "border-orange-500" : "border-slate-300"
+            }`}
+            aria-hidden
+          >
+            {focus === "manual" ? <span className="h-2 w-2 rounded-full bg-orange-500" /> : null}
+          </span>
+          <span className="min-w-0 flex-1">
+            <span
+              className={`block text-sm font-semibold ${
+                focus === "manual" ? "text-orange-700" : "text-slate-900"
+              }`}
+            >
+              Ręcznie (Przycisk)
+            </span>
+            <span className="mt-0.5 block text-sm leading-snug text-slate-500">
+              Uruchamiane ręcznie z poziomu karty zamówienia.
+            </span>
+          </span>
+          <Hand
+            className={`mt-0.5 h-5 w-5 shrink-0 ${focus === "manual" ? "text-orange-400" : "text-slate-300"}`}
+            strokeWidth={1.75}
+            aria-hidden
+          />
+        </button>
+      </div>
+
+      {launchInvalid ? (
+        <p className="text-sm text-red-600">Automatyzacja musi mieć przynajmniej jeden sposób uruchamiania.</p>
+      ) : null}
+
+      {showAutomaticPanel ? (
+        <div className={`${oaEditorHeaderCardClass} space-y-5`}>
+          <p className="text-sm font-semibold text-slate-900">Uruchamianie automatyczne</p>
+
+          <div className="grid gap-10 lg:grid-cols-2 lg:items-start">
+            <div className="max-w-md space-y-5">
               <div className="flex flex-wrap items-center gap-2">
                 <span className="text-sm text-slate-700">Opóźnij wykonanie o</span>
                 <input
@@ -224,10 +245,15 @@ export function AutomationExecutionSettingsSection({
               </div>
             </div>
 
-            {runMode === "hours_only" ? (
-              <div className="space-y-3">
-                <p className="text-sm font-medium text-slate-800">Godziny działania</p>
-                <div className="flex flex-wrap items-center gap-3">
+            <div className="max-w-lg space-y-4">
+              <p className="text-sm font-medium text-slate-800">Wybierz dni i dostosuj godziny</p>
+              {runMode === "continuous" ? (
+                <p className="text-xs text-slate-500">
+                  Harmonogram jest stosowany w trybach z godzinami lub dniami.
+                </p>
+              ) : null}
+              {runMode === "hours_only" ? (
+                <div className="mb-2 flex flex-wrap items-center gap-3">
                   <span className="text-sm text-slate-500">Od</span>
                   <TimeField
                     value={windowFrom}
@@ -241,69 +267,66 @@ export function AutomationExecutionSettingsSection({
                     onChange={(v) => onChange({ windowTo: v })}
                   />
                 </div>
+              ) : null}
+              <div className="grid max-w-md grid-cols-7 gap-2">
+                {DAY_ROWS.map(({ day, short }) => {
+                  const on = activeDays.includes(day);
+                  return (
+                    <button
+                      key={day}
+                      type="button"
+                      className={`flex h-10 w-full items-center justify-center rounded-lg border text-sm font-semibold transition ${
+                        on
+                          ? "border-orange-500 bg-orange-500 text-white"
+                          : "border-slate-200 bg-white text-slate-700 hover:border-slate-300"
+                      }`}
+                      onClick={() => toggleDay(day)}
+                    >
+                      {short}
+                    </button>
+                  );
+                })}
               </div>
-            ) : null}
+              {showValidation && runMode === "days_and_hours" && activeDays.length === 0 ? (
+                <p className="text-xs text-red-600">Wybierz co najmniej jeden dzień tygodnia.</p>
+              ) : null}
 
-            {runMode === "days_and_hours" ? (
-              <div className="space-y-4">
-                <p className="text-sm font-medium text-slate-800">Wybierz dni i dostosuj godziny</p>
-                <div className="grid grid-cols-7 gap-2">
-                  {DAY_ROWS.map(({ day, short }) => {
-                    const on = activeDays.includes(day);
-                    return (
-                      <button
-                        key={day}
-                        type="button"
-                        className={`flex h-10 w-full items-center justify-center rounded-lg border text-sm font-semibold transition ${
-                          on
-                            ? "border-orange-500 bg-orange-500 text-white"
-                            : "border-slate-200 bg-white text-slate-700 hover:border-slate-300"
-                        }`}
-                        onClick={() => toggleDay(day)}
-                      >
-                        {short}
-                      </button>
-                    );
-                  })}
-                </div>
-                {showValidation && activeDays.length === 0 ? (
-                  <p className="text-xs text-red-600">Wybierz co najmniej jeden dzień tygodnia.</p>
-                ) : null}
-
-                {selectedDays.length > 0 ? (
-                  <div className="space-y-2">
-                    {selectedDays.map(({ day, full }) => (
-                      <div key={day} className={oaDayScheduleCardClass}>
-                        <span className="min-w-[6.5rem] flex-1 text-sm font-medium text-slate-800">{full}</span>
-                        <div className="flex flex-wrap items-center gap-2.5">
-                          <span className="text-sm text-slate-500">Od</span>
-                          <TimeField
-                            value={windowFrom}
-                            invalid={scheduleInvalid && showValidation}
-                            onChange={(v) => onChange({ windowFrom: v })}
-                          />
-                          <span className="text-sm text-slate-500">Do</span>
-                          <TimeField
-                            value={windowTo}
-                            invalid={scheduleInvalid && showValidation}
-                            onChange={(v) => onChange({ windowTo: v })}
-                          />
-                        </div>
+              {selectedDays.length > 0 ? (
+                <div className="divide-y divide-slate-100 overflow-hidden rounded-lg border border-slate-200">
+                  {selectedDays.map(({ day, full }) => (
+                    <div
+                      key={day}
+                      className="flex flex-wrap items-center gap-x-4 gap-y-2 bg-white px-3 py-2.5"
+                    >
+                      <span className="min-w-[6.5rem] flex-1 text-sm font-medium text-slate-800">{full}</span>
+                      <div className="flex flex-wrap items-center gap-2.5">
+                        <span className="text-sm text-slate-500">Od</span>
+                        <TimeField
+                          value={windowFrom}
+                          invalid={scheduleInvalid && showValidation && runMode !== "continuous"}
+                          onChange={(v) => onChange({ windowFrom: v })}
+                        />
+                        <span className="text-sm text-slate-500">Do</span>
+                        <TimeField
+                          value={windowTo}
+                          invalid={scheduleInvalid && showValidation && runMode !== "continuous"}
+                          onChange={(v) => onChange({ windowTo: v })}
+                        />
                       </div>
-                    ))}
-                  </div>
-                ) : null}
-              </div>
-            ) : null}
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+            </div>
           </div>
-        ) : null}
 
-        {scheduleInvalid && showValidation && automatic ? (
-          <p className="text-sm text-red-600">Godzina końcowa musi być większa od początkowej.</p>
-        ) : null}
-      </div>
+          {scheduleInvalid && showValidation ? (
+            <p className="text-sm text-red-600">Godzina końcowa musi być większa od początkowej.</p>
+          ) : null}
+        </div>
+      ) : null}
 
-      {manualEnabled ? (
+      {showManualPanel ? (
         <AutomationManualTriggerSection manualTrigger={manualTrigger} onChange={patchManual} />
       ) : null}
     </section>

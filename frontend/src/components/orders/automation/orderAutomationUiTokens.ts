@@ -93,7 +93,7 @@ export const oaWorkflowFieldLabelClass = "text-sm text-slate-500";
 
 /** Badge JEŚLI / TO w edytorze */
 export const oaWorkflowLaneBadgeIfClass =
-  "mr-2 inline-flex rounded-md border border-slate-200 bg-slate-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-slate-700";
+  "mr-2 inline-flex rounded-md border border-orange-200 bg-orange-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-orange-700";
 export const oaWorkflowLaneBadgeThenClass =
   "mr-2 inline-flex rounded-md border border-orange-200 bg-orange-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-orange-700";
 /** @deprecated use oaWorkflowLaneBadgeIfClass */
