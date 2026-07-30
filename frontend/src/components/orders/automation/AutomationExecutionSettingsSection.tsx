@@ -1,4 +1,3 @@
-import { useEffect, useState } from "react";
 import { Clock, Hand, Zap } from "lucide-react";
 
 import type {
@@ -23,8 +22,6 @@ const DAY_ROWS: { day: number; short: string; full: string }[] = [
   { day: 6, short: "So", full: "Sobota" },
   { day: 7, short: "Nd", full: "Niedziela" },
 ];
-
-type LaunchFocus = "automatic" | "manual";
 
 type Props = {
   automatic: boolean;
@@ -70,10 +67,21 @@ function TimeField({
   );
 }
 
-function initialFocus(automatic: boolean, manualEnabled: boolean): LaunchFocus {
-  if (automatic) return "automatic";
-  if (manualEnabled) return "manual";
-  return "automatic";
+function LaunchCheckMark({ selected }: { selected: boolean }) {
+  return (
+    <span
+      className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded border-2 ${
+        selected ? "border-orange-500 bg-orange-500 text-white" : "border-slate-300 bg-white"
+      }`}
+      aria-hidden
+    >
+      {selected ? (
+        <svg viewBox="0 0 12 12" className="h-2.5 w-2.5" fill="none" stroke="currentColor" strokeWidth="2.5">
+          <path d="M2.5 6.5 4.8 8.8 9.5 3.5" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      ) : null}
+    </span>
+  );
 }
 
 export function AutomationExecutionSettingsSection({
@@ -88,12 +96,6 @@ export function AutomationExecutionSettingsSection({
   showValidation = false,
   onChange,
 }: Props) {
-  const [focus, setFocus] = useState<LaunchFocus>(() => initialFocus(automatic, manualEnabled));
-
-  useEffect(() => {
-    setFocus(initialFocus(automatic, manualEnabled));
-  }, [automatic, manualEnabled]);
-
   const toggleDay = (day: number) => {
     const set = new Set(activeDays);
     if (set.has(day)) set.delete(day);
@@ -107,23 +109,21 @@ export function AutomationExecutionSettingsSection({
 
   const patchManual = (p: Partial<OrderAutomationManualTrigger>) => onChange({ manualTrigger: p });
 
-  /** Exclusive UI focus — enable chosen mode without wiping the other until user switches. */
-  const selectAutomatic = () => {
-    setFocus("automatic");
-    onChange({ automatic: true });
-  };
+  /** Independent toggles — both modes can be active at once. */
+  const toggleAutomatic = () => onChange({ automatic: !automatic });
 
-  const selectManual = () => {
-    setFocus("manual");
+  const toggleManual = () => {
+    const next = !manualEnabled;
     onChange({
-      manualEnabled: true,
-      manualTrigger: { enabled: true, buttonEnabled: true },
+      manualEnabled: next,
+      manualTrigger: {
+        enabled: next,
+        ...(next ? { buttonEnabled: true } : {}),
+      },
     });
   };
 
   const selectedDays = DAY_ROWS.filter((d) => activeDays.includes(d.day));
-  const showAutomaticPanel = focus === "automatic";
-  const showManualPanel = focus === "manual";
 
   return (
     <section className="w-full space-y-6">
@@ -131,26 +131,20 @@ export function AutomationExecutionSettingsSection({
         <h2 className="text-lg font-semibold text-slate-900">Ustawienia wykonania</h2>
         <p className="mt-1 max-w-3xl text-sm leading-relaxed text-slate-500">
           System obserwuje zmiany w zamówieniach, produktach, WMS, dokumentach itd. Jeżeli warunki są
-          spełnione, wykonywane są efekty.
+          spełnione, wykonywane są efekty. Możesz włączyć jednocześnie uruchamianie automatyczne i ręczne.
         </p>
       </div>
 
       <div className="grid gap-3 sm:grid-cols-2">
-        <button type="button" className={oaLaunchTileClass(focus === "automatic")} onClick={selectAutomatic}>
-          <span
-            className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full border-2 ${
-              focus === "automatic" ? "border-orange-500" : "border-slate-300"
-            }`}
-            aria-hidden
-          >
-            {focus === "automatic" ? <span className="h-2 w-2 rounded-full bg-orange-500" /> : null}
-          </span>
+        <button
+          type="button"
+          className={oaLaunchTileClass(automatic)}
+          aria-pressed={automatic}
+          onClick={toggleAutomatic}
+        >
+          <LaunchCheckMark selected={automatic} />
           <span className="min-w-0 flex-1">
-            <span
-              className={`block text-sm font-semibold ${
-                focus === "automatic" ? "text-orange-700" : "text-slate-900"
-              }`}
-            >
+            <span className={`block text-sm font-semibold ${automatic ? "text-orange-700" : "text-slate-900"}`}>
               Automatycznie
             </span>
             <span className="mt-0.5 block text-sm leading-snug text-slate-500">
@@ -158,28 +152,22 @@ export function AutomationExecutionSettingsSection({
             </span>
           </span>
           <Zap
-            className={`mt-0.5 h-5 w-5 shrink-0 ${
-              focus === "automatic" ? "text-orange-400" : "text-slate-300"
-            }`}
+            className={`mt-0.5 h-5 w-5 shrink-0 ${automatic ? "text-orange-400" : "text-slate-300"}`}
             strokeWidth={1.75}
             aria-hidden
           />
         </button>
 
-        <button type="button" className={oaLaunchTileClass(focus === "manual")} onClick={selectManual}>
-          <span
-            className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full border-2 ${
-              focus === "manual" ? "border-orange-500" : "border-slate-300"
-            }`}
-            aria-hidden
-          >
-            {focus === "manual" ? <span className="h-2 w-2 rounded-full bg-orange-500" /> : null}
-          </span>
+        <button
+          type="button"
+          className={oaLaunchTileClass(manualEnabled)}
+          aria-pressed={manualEnabled}
+          onClick={toggleManual}
+        >
+          <LaunchCheckMark selected={manualEnabled} />
           <span className="min-w-0 flex-1">
             <span
-              className={`block text-sm font-semibold ${
-                focus === "manual" ? "text-orange-700" : "text-slate-900"
-              }`}
+              className={`block text-sm font-semibold ${manualEnabled ? "text-orange-700" : "text-slate-900"}`}
             >
               Ręcznie (Przycisk)
             </span>
@@ -188,7 +176,7 @@ export function AutomationExecutionSettingsSection({
             </span>
           </span>
           <Hand
-            className={`mt-0.5 h-5 w-5 shrink-0 ${focus === "manual" ? "text-orange-400" : "text-slate-300"}`}
+            className={`mt-0.5 h-5 w-5 shrink-0 ${manualEnabled ? "text-orange-400" : "text-slate-300"}`}
             strokeWidth={1.75}
             aria-hidden
           />
@@ -199,7 +187,7 @@ export function AutomationExecutionSettingsSection({
         <p className="text-sm text-red-600">Automatyzacja musi mieć przynajmniej jeden sposób uruchamiania.</p>
       ) : null}
 
-      {showAutomaticPanel ? (
+      {automatic ? (
         <div className={`${oaEditorHeaderCardClass} space-y-5`}>
           <p className="text-sm font-semibold text-slate-900">Uruchamianie automatyczne</p>
 
@@ -326,7 +314,7 @@ export function AutomationExecutionSettingsSection({
         </div>
       ) : null}
 
-      {showManualPanel ? (
+      {manualEnabled ? (
         <AutomationManualTriggerSection manualTrigger={manualTrigger} onChange={patchManual} />
       ) : null}
     </section>
