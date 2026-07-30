@@ -31,11 +31,15 @@ import type {
 export type PanelStatusHierarchyPickerProps = {
   panelSummary: OrderUiStatusPanelSummary | null;
   panelSubgroups?: OrderUiPanelSubgroupRead[] | null;
+  /** Single-select (default). Ignored when `onSelectedIdsChange` is set. */
   selectedStatusId?: number | null;
+  onPick?: (statusId: number | null) => void;
+  /** Multi-select: controlled selected ids. Used when `onSelectedIdsChange` is set. */
+  selectedStatusIds?: readonly number[];
+  onSelectedIdsChange?: (ids: number[]) => void;
   disabled?: boolean;
   showClearOption?: boolean;
   clearLabel?: string;
-  onPick: (statusId: number | null) => void;
   className?: string;
   listMaxHeightClass?: string;
 };
@@ -79,6 +83,7 @@ function StatusPickRow({
     <button
       type="button"
       disabled={disabled}
+      aria-pressed={selected}
       className={`${panelTreeStatusRowClass(selected)} disabled:cursor-not-allowed disabled:opacity-50`}
       onClick={onPick}
     >
@@ -92,17 +97,59 @@ function StatusPickRow({
   );
 }
 
+function findStatusInSummary(
+  panelSummary: OrderUiStatusPanelSummary | null | undefined,
+  statusId: number,
+): { status: OrderUiStatusWithCount; mainGroup: OrderUiMainGroup } | null {
+  for (const block of panelSummary?.groups ?? []) {
+    const hit = block.sub_statuses.find((s) => s.id === statusId);
+    if (hit) return { status: hit, mainGroup: block.main_group };
+  }
+  return null;
+}
+
+function statusVisibleInSearch(
+  status: OrderUiStatusWithCount,
+  mainGroup: OrderUiMainGroup,
+  normalizedSearch: string,
+  panelSummary: OrderUiStatusPanelSummary,
+  sgDefs: OrderUiPanelSubgroupRead[],
+): boolean {
+  if (!normalizedSearch) return true;
+  const groupLabel = ORDERS_PANEL_GROUP_LABELS[mainGroup];
+  if (groupMatchesSearch(groupLabel, normalizedSearch)) return true;
+  const layout = buildPanelSidebarLayout(
+    mainGroup,
+    panelSummary.groups.find((g) => g.main_group === mainGroup)!.sub_statuses,
+    sgDefs,
+  );
+  const inUngrouped = layout.ungrouped.some((s) => s.id === status.id);
+  if (inUngrouped && statusMatchesSearch(status.name ?? "", normalizedSearch)) return true;
+  for (const sec of layout.subgroupSections) {
+    if (!sec.rows.some((s) => s.id === status.id)) continue;
+    if (subgroupMatchesSearch(sec.title, normalizedSearch)) return true;
+    if (statusMatchesSearch(status.name ?? "", normalizedSearch)) return true;
+  }
+  return false;
+}
+
 export function PanelStatusHierarchyPicker({
   panelSummary,
   panelSubgroups,
   selectedStatusId,
+  onPick,
+  selectedStatusIds,
+  onSelectedIdsChange,
   disabled = false,
   showClearOption = true,
   clearLabel = "Bez etykiety (wyczyść)",
-  onPick,
   className = "",
   listMaxHeightClass = "max-h-[min(60vh,22rem)]",
 }: PanelStatusHierarchyPickerProps) {
+  const multi = typeof onSelectedIdsChange === "function";
+  const selectedIds = selectedStatusIds ?? [];
+  const selectedIdSet = useMemo(() => new Set(selectedIds), [selectedIds]);
+
   const [searchQuery, setSearchQuery] = useState("");
   const normalizedSearch = normalizeSearchQuery(searchQuery);
   const sgDefs = panelSubgroups ?? [];
@@ -153,33 +200,54 @@ export function PanelStatusHierarchyPicker({
     sections.every((s) => s.filteredUngrouped.length === 0 && s.filteredSections.length === 0);
 
   const selectedStatusInfo = useMemo(() => {
-    if (selectedStatusId == null || typeof selectedStatusId !== "number") return null;
-    for (const block of panelSummary?.groups ?? []) {
-      const hit = block.sub_statuses.find((s) => s.id === selectedStatusId);
-      if (hit) return { status: hit, mainGroup: block.main_group };
-    }
-    return null;
-  }, [panelSummary?.groups, selectedStatusId]);
+    if (multi || selectedStatusId == null || typeof selectedStatusId !== "number") return null;
+    return findStatusInSummary(panelSummary, selectedStatusId);
+  }, [multi, panelSummary, selectedStatusId]);
 
   const selectedVisibleWhenFiltered = useMemo(() => {
-    if (!selectedStatusInfo || !normalizedSearch) return true;
-    const { status, mainGroup } = selectedStatusInfo;
-    const groupLabel = ORDERS_PANEL_GROUP_LABELS[mainGroup];
-    if (groupMatchesSearch(groupLabel, normalizedSearch)) return true;
-    const layout = buildPanelSidebarLayout(
-      mainGroup,
-      panelSummary!.groups.find((g) => g.main_group === mainGroup)!.sub_statuses,
+    if (!selectedStatusInfo || !normalizedSearch || !panelSummary) return true;
+    return statusVisibleInSearch(
+      selectedStatusInfo.status,
+      selectedStatusInfo.mainGroup,
+      normalizedSearch,
+      panelSummary,
       sgDefs,
     );
-    const inUngrouped = layout.ungrouped.some((s) => s.id === status.id);
-    if (inUngrouped && statusMatchesSearch(status.name ?? "", normalizedSearch)) return true;
-    for (const sec of layout.subgroupSections) {
-      if (!sec.rows.some((s) => s.id === status.id)) continue;
-      if (subgroupMatchesSearch(sec.title, normalizedSearch)) return true;
-      if (statusMatchesSearch(status.name ?? "", normalizedSearch)) return true;
-    }
-    return false;
   }, [normalizedSearch, selectedStatusInfo, panelSummary, sgDefs]);
+
+  const hiddenSelectedMulti = useMemo(() => {
+    if (!multi || !normalizedSearch || !panelSummary || selectedIds.length === 0) return [];
+    const out: { status: OrderUiStatusWithCount; mainGroup: OrderUiMainGroup }[] = [];
+    for (const id of selectedIds) {
+      const info = findStatusInSummary(panelSummary, id);
+      if (!info) continue;
+      if (!statusVisibleInSearch(info.status, info.mainGroup, normalizedSearch, panelSummary, sgDefs)) {
+        out.push(info);
+      }
+    }
+    return out;
+  }, [multi, normalizedSearch, panelSummary, selectedIds, sgDefs]);
+
+  const isSelected = (id: number) => (multi ? selectedIdSet.has(id) : selectedStatusId === id);
+
+  const handleStatusActivate = (id: number) => {
+    if (multi) {
+      const next = selectedIdSet.has(id) ? selectedIds.filter((x) => x !== id) : [...selectedIds, id];
+      onSelectedIdsChange!(next);
+      return;
+    }
+    onPick?.(id);
+  };
+
+  const handleClear = () => {
+    if (multi) {
+      onSelectedIdsChange!([]);
+      return;
+    }
+    onPick?.(null);
+  };
+
+  const clearSelected = multi ? selectedIds.length === 0 : selectedStatusId === null;
 
   return (
     <div className={`flex min-h-0 flex-col px-2 ${className}`}>
@@ -207,8 +275,8 @@ export function PanelStatusHierarchyPicker({
           <button
             type="button"
             disabled={disabled}
-            className={`${panelTreeMetaRowClass(selectedStatusId === null)} mb-1 disabled:cursor-not-allowed disabled:opacity-50`}
-            onClick={() => onPick(null)}
+            className={`${panelTreeMetaRowClass(clearSelected)} mb-1 disabled:cursor-not-allowed disabled:opacity-50`}
+            onClick={handleClear}
           >
             <span className="min-w-0 flex-1 leading-snug">{clearLabel}</span>
           </button>
@@ -222,8 +290,24 @@ export function PanelStatusHierarchyPicker({
               mainGroup={selectedStatusInfo.mainGroup}
               selected
               disabled={disabled}
-              onPick={() => onPick(selectedStatusInfo.status.id)}
+              onPick={() => handleStatusActivate(selectedStatusInfo.status.id)}
             />
+          </div>
+        ) : null}
+
+        {hiddenSelectedMulti.length > 0 ? (
+          <div className="mb-2 border-b border-slate-100 pb-2">
+            <div className="px-1 py-0.5 text-[10px] font-medium uppercase tracking-wide text-slate-400">Wybrane</div>
+            {hiddenSelectedMulti.map(({ status, mainGroup }) => (
+              <StatusPickRow
+                key={status.id}
+                status={status}
+                mainGroup={mainGroup}
+                selected
+                disabled={disabled}
+                onPick={() => handleStatusActivate(status.id)}
+              />
+            ))}
           </div>
         ) : null}
 
@@ -249,9 +333,9 @@ export function PanelStatusHierarchyPicker({
                         key={s.id}
                         status={s}
                         mainGroup={block.main_group}
-                        selected={selectedStatusId === s.id}
+                        selected={isSelected(s.id)}
                         disabled={disabled}
-                        onPick={() => onPick(s.id)}
+                        onPick={() => handleStatusActivate(s.id)}
                       />
                     ))}
                   </div>
@@ -273,9 +357,9 @@ export function PanelStatusHierarchyPicker({
                               key={s.id}
                               status={s}
                               mainGroup={block.main_group}
-                              selected={selectedStatusId === s.id}
+                              selected={isSelected(s.id)}
                               disabled={disabled}
-                              onPick={() => onPick(s.id)}
+                              onPick={() => handleStatusActivate(s.id)}
                             />
                           ))}
                         </div>

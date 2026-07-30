@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import type { AutomationEffect, AutomationEffectKind } from "../../../../types/orderAutomation";
+import type { OrderUiPanelSubgroupRead, OrderUiStatusPanelSummary } from "../../../../types/orderUiStatus";
 import {
   CircleDot,
   FileText,
@@ -11,6 +12,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 
+import { PanelStatusHierarchyPicker } from "../../../panel/PanelStatusHierarchyPicker";
 import { oaInp, oaWorkflowFieldLabelClass, oaWorkflowFieldRowClass } from "../orderAutomationUiTokens";
 
 /** Lewa kolumna: zwięzła etykieta operacji (ERP), nie pełna nazwa z katalogu. */
@@ -37,26 +39,31 @@ export type EffectEditorBaseProps = {
 };
 
 export type ChangeStatusEffectEditorProps = EffectEditorBaseProps & {
-  statusOptions: { id: number; name: string }[];
+  panelSummary: OrderUiStatusPanelSummary | null;
+  panelSubgroups: OrderUiPanelSubgroupRead[];
 };
 
-export function renderChangeStatusEffectEditor({ effect, patchPayload, statusOptions }: ChangeStatusEffectEditorProps) {
-  const v = String(effect.payload.order_ui_status_id ?? "");
+export function renderChangeStatusEffectEditor({ effect, patchPayload, panelSummary, panelSubgroups }: ChangeStatusEffectEditorProps) {
+  const raw = effect.payload.order_ui_status_id;
+  const selectedId = raw === "" || raw == null ? null : Number(raw);
+  const selectedStatusId = selectedId != null && Number.isFinite(selectedId) && selectedId > 0 ? selectedId : null;
+
   return (
     <div className={erpRow}>
       <span className={erpLbl}>Status docelowy</span>
-      <select
-        className={erpInp}
-        value={v}
-        onChange={(e) => patchPayload({ order_ui_status_id: e.target.value })}
-      >
-        <option value="">— wybierz —</option>
-        {statusOptions.map((s) => (
-          <option key={s.id} value={String(s.id)}>
-            {s.name}
-          </option>
-        ))}
-      </select>
+      <div className="min-w-0 rounded-lg border border-slate-200 bg-white">
+        <PanelStatusHierarchyPicker
+          panelSummary={panelSummary}
+          panelSubgroups={panelSubgroups}
+          selectedStatusId={selectedStatusId}
+          showClearOption
+          clearLabel="— wybierz —"
+          listMaxHeightClass="max-h-[min(40vh,16rem)]"
+          onPick={(statusId) =>
+            patchPayload({ order_ui_status_id: statusId != null ? String(statusId) : "" })
+          }
+        />
+      </div>
     </div>
   );
 }
@@ -365,7 +372,8 @@ export function renderWmsActionEffectEditor({ effect, patchPayload }: EffectEdit
 export function renderAutomationEffectConfigEditor(
   props: EffectEditorBaseProps & {
     kind: AutomationEffectKind;
-    statusOptions: { id: number; name: string }[];
+    panelSummary: OrderUiStatusPanelSummary | null;
+    panelSubgroups: OrderUiPanelSubgroupRead[];
   },
 ): ReactNode {
   switch (props.kind) {
@@ -373,7 +381,8 @@ export function renderAutomationEffectConfigEditor(
       return renderChangeStatusEffectEditor({
         effect: props.effect,
         patchPayload: props.patchPayload,
-        statusOptions: props.statusOptions,
+        panelSummary: props.panelSummary,
+        panelSubgroups: props.panelSubgroups,
       });
     case "generate_document":
       return renderGenerateDocumentEffectEditor(props);

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { ChevronDown, X } from "lucide-react";
 
 import type { AutomationEffect, AutomationEffectKind } from "../../../types/orderAutomation";
+import type { OrderUiPanelSubgroupRead, OrderUiStatusPanelSummary } from "../../../types/orderUiStatus";
 import { buildEffectCategorySteps, effectKindLabel } from "../../../utils/orderAutomationCatalog";
 import { renderAutomationEffectConfigEditor } from "./effects/orderAutomationEffectEditorRenderers";
 import { AutomationCategoryPickerModal } from "./AutomationCategoryPickerModal";
@@ -13,7 +14,8 @@ type Props = {
   open: boolean;
   effect: AutomationEffect | null;
   statusNameById: Map<number, string>;
-  panelStatusOptions: { id: number; name: string }[];
+  panelSummary: OrderUiStatusPanelSummary | null;
+  panelSubgroups: OrderUiPanelSubgroupRead[];
   onClose: () => void;
   onChangeKind: (kind: AutomationEffectKind) => void;
   onPatchPayload: (partial: Record<string, string | number | boolean | null>) => void;
@@ -23,7 +25,8 @@ export function AutomationEffectEditModal({
   open,
   effect,
   statusNameById,
-  panelStatusOptions,
+  panelSummary,
+  panelSubgroups,
   onClose,
   onChangeKind,
   onPatchPayload,
@@ -89,7 +92,8 @@ export function AutomationEffectEditModal({
               {renderAutomationEffectConfigEditor({
                 kind: effect.kind,
                 effect,
-                statusOptions: panelStatusOptions,
+                panelSummary,
+                panelSubgroups,
                 patchPayload: onPatchPayload,
               })}
             </div>

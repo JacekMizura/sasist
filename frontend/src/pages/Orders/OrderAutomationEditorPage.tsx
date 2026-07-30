@@ -27,8 +27,8 @@ import {
   buildConditionCategorySteps,
   buildEffectCategorySteps,
 } from "../../utils/orderAutomationCatalog";
-import { getOrderUiStatusSummary } from "../../api/orderUiStatusApi";
-import type { OrderUiStatusPanelSummary } from "../../types/orderUiStatus";
+import { getOrderPanelSubgroups, getOrderUiStatusSummary } from "../../api/orderUiStatusApi";
+import type { OrderUiPanelSubgroupRead, OrderUiStatusPanelSummary } from "../../types/orderUiStatus";
 import { AutomationExecutionSettingsSection } from "../../components/orders/automation/AutomationExecutionSettingsSection";
 import { AutomationAnchorMenu, type AutomationAnchorMenuGroup } from "../../components/orders/automation/AutomationAnchorMenu";
 import { AutomationCategoryPickerModal } from "../../components/orders/automation/AutomationCategoryPickerModal";
@@ -143,6 +143,7 @@ export default function OrderAutomationEditorPage() {
 
   const [draft, setDraft] = useState<OrderAutomationRule>(() => defaultRule());
   const [statusSummary, setStatusSummary] = useState<OrderUiStatusPanelSummary | null>(null);
+  const [panelSubgroups, setPanelSubgroups] = useState<OrderUiPanelSubgroupRead[]>([]);
   const [groupOptions, setGroupOptions] = useState<string[]>([]);
   const [nameTouched, setNameTouched] = useState(false);
   const [saveAttempted, setSaveAttempted] = useState(false);
@@ -175,10 +176,15 @@ export default function OrderAutomationEditorPage() {
     if (wid == null) return;
     void (async () => {
       try {
-        const s = await getOrderUiStatusSummary(DAMAGE_TENANT_ID, wid, { includeInactive: true });
+        const [s, subgroups] = await Promise.all([
+          getOrderUiStatusSummary(DAMAGE_TENANT_ID, wid, { includeInactive: true }),
+          getOrderPanelSubgroups(DAMAGE_TENANT_ID, wid),
+        ]);
         setStatusSummary(s);
+        setPanelSubgroups(subgroups);
       } catch {
         setStatusSummary(null);
+        setPanelSubgroups([]);
       }
     })();
     try {
@@ -212,16 +218,6 @@ export default function OrderAutomationEditorPage() {
       }
     }
     return m;
-  }, [statusSummary]);
-
-  const panelStatusOptions = useMemo(() => {
-    const out: { id: number; name: string }[] = [];
-    for (const g of statusSummary?.groups ?? []) {
-      for (const s of g.sub_statuses ?? []) {
-        out.push({ id: s.id, name: s.name });
-      }
-    }
-    return out;
   }, [statusSummary]);
 
   const conditionCategorySteps = useMemo(() => buildConditionCategorySteps(), []);
@@ -559,6 +555,8 @@ export default function OrderAutomationEditorPage() {
           open={editCondUid !== null}
           condition={editingCondition}
           statusNameById={statusNameById}
+          panelSummary={statusSummary}
+          panelSubgroups={panelSubgroups}
           warehouseOptions={warehouseOptions}
           showJoin={editingConditionIdx >= 0 && editingConditionIdx < draft.conditions.length - 1}
           joinToNext={editingCondition.joinToNext ?? "and"}
@@ -579,7 +577,8 @@ export default function OrderAutomationEditorPage() {
           open={editEffUid !== null}
           effect={editingEffect}
           statusNameById={statusNameById}
-          panelStatusOptions={panelStatusOptions}
+          panelSummary={statusSummary}
+          panelSubgroups={panelSubgroups}
           onClose={() => setEditEffUid(null)}
           onChangeKind={(kind) => patchEffectKind(editingEffect.uid, kind)}
           onPatchPayload={(partial) => patchEffectPayload(editingEffect.uid, partial)}
