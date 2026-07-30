@@ -102,15 +102,8 @@ import { OrderUiStatusConfigRowPresent } from "../../components/orders/orderList
 import { OrderWmsOperationalBadge } from "../../components/orders/orderList/OrderWmsOperationalBadge";
 import { shouldShowOrderWmsOperationalBadge } from "../../utils/orderWmsOperationalBadgeVisibility";
 import { OrderMatchedPackagingSection } from "../../components/orders/OrderMatchedPackagingSection";
-import { OrderDetailPrimaryStatusDropdown } from "../../components/orders/OrderDetailPrimaryStatusDropdown";
 import { OrderDetailInfoColumn } from "../../components/orders/OrderDetailInfoColumn";
-import { OrderDetailProcessStatusRow } from "../../components/orders/OrderDetailProcessStatusRow";
-import {
-  odHeaderIconBtnClass,
-  odInlineIconBtnClass,
-  odPaidBadgeClass,
-  odWmsPhaseChipClass,
-} from "../../components/orders/orderDetailUiTokens";
+import { odInlineIconBtnClass } from "../../components/orders/orderDetailUiTokens";
 import {
   OrderSummaryProductsList,
   type OrderSummaryLineMenuAction,
@@ -118,6 +111,36 @@ import {
   type OrderSummaryProductsListLine,
 } from "../../components/orders/OrderSummaryProductsList";
 import { OrderWarehouseProductsSection as ImportedWarehouseSection } from "../../components/orders/OrderWarehouseProductsSection";
+import { OrderDetailHeaderBar } from "../../components/orders/OrderDetailHeaderBar";
+import { OrderDetailSummaryTab } from "../../components/orders/OrderDetailSummaryTab";
+import { WmsOperationTimesKpiPanel } from "../../components/orders/WmsOperationTimesKpiPanel";
+import { DETAIL_TABS, type DetailTabId } from "../../components/orders/orderDetailTabs";
+import {
+  type OrderDetail,
+  type OrderItemRow,
+  type SummaryPanelLogRow,
+  PAYMENT_METHOD_PRESETS,
+  PAYMENT_STATUS_PRESETS,
+} from "../../components/orders/orderDetailPageTypes";
+import {
+  paymentStatusIsPaid,
+  parseBillingInvoice,
+  parsePhoneEmail,
+  parseShippingAddressBlock,
+  parseShippingExtras,
+  shippingFromOrderJson,
+  type ShippingAddrDraft,
+} from "../../utils/orderDetailAddress";
+import {
+  orderDocKindToneClass,
+  orderDocRowIsPdfOrImage,
+  orderDocumentTypeToLabel,
+  guessMimeFromFilename,
+  ORDER_DOCS_SECTION_TYPES,
+  type OrderDocTableRow,
+} from "../../components/orders/docs/orderDocTableTypes";
+import { OrderDocFilesTableSection } from "../../components/orders/docs/OrderDocFilesTableSection";
+import { OrderDetailSectionCard } from "../../components/orders/OrderDetailSectionCard";
 import {
   buildLogicalOrderItemGroups,
   countDistinctLogicalHistoryEvents,
@@ -133,169 +156,6 @@ import type { PanelConfigurableUiStatusBrief } from "../../utils/panelListStatus
 import { WMS_ROUTES, WMS_SHORTAGES_UPDATED_EVENT } from "../wms/wmsRoutes";
 import { dispatchWmsShortagesUpdated } from "../../utils/wmsRefresh";
 import { AppOverlayPortal } from "../../components/overlay";
-
-type SourceBundleBrief = { id: number; name: string; sku?: string | null };
-
-type OrderItemRow = {
-  id: number;
-  quantity: number;
-  unit_price?: number | null;
-  unit_price_net?: number | null;
-  unit_price_gross?: number | null;
-  vat_percent?: number | null;
-  unit?: string | null;
-  list_price?: number | null;
-  total_price?: number | null;
-  line_net_total?: number | null;
-  line_vat_amount?: number | null;
-  line_gross_total?: number | null;
-  line_purchase_total_net?: number | null;
-  line_margin_amount?: number | null;
-  line_margin_percent?: number | null;
-  oms_replacement_original_quantity?: number | null;
-  oms_replacement_transferred_quantity?: number | null;
-  oms_waiting_for_stock?: boolean;
-  oms_line_status?: string | null;
-  replaced_from_order_item_id?: number | null;
-  replaced_from_product_name?: string | null;
-  product?: {
-    id?: number;
-    name?: string | null;
-    ean?: string | null;
-    symbol?: string | null;
-    sku?: string | null;
-    image_url?: string | null;
-  };
-  source_bundle_id?: number | null;
-  bundle_instance_id?: string | null;
-  bundle_qty?: number | null;
-  from_bundle?: boolean;
-  source_bundle?: SourceBundleBrief | null;
-  is_bundle_parent?: boolean;
-  parent_bundle_order_item_id?: number | null;
-  bundle_display_unit_price?: number | null;
-  bundle_display_line_total?: number | null;
-};
-
-type OrderDetail = {
-  id: number;
-  tenant_id?: number;
-  warehouse_id?: number;
-  number?: string | null;
-  status?: string | null;
-  scan_code?: string | null;
-  value?: number | null;
-  discount_type?: "percent" | "amount" | null;
-  discount_value?: number | null;
-  discount_amount?: number | null;
-  total_products_value?: number | null;
-  shipping_revenue_net?: number | null;
-  total_revenue_net?: number | null;
-  total_purchase_cost?: number | null;
-  gross_profit?: number | null;
-  margin?: number | null;
-  currency?: string | null;
-  shipping_method_id?: string | null;
-  shipping_method?: string | null;
-  shipping_method_logo_url?: string | null;
-  first_name?: string | null;
-  last_name?: string | null;
-  external_id?: string | null;
-  source?: string | null;
-  order_origin?: string | null;
-  complaint_id?: number | null;
-  original_order_id?: number | null;
-  complaint_order_type?: string | null;
-  items: OrderItemRow[];
-  order_ui_status?: (OrderUiStatusBrief & {
-    badge_color?: string;
-    background_color?: string;
-    text_color?: string;
-    image_url?: string | null;
-  }) | null;
-  priority_color?: string | null;
-  order_date?: string | null;
-  created_at?: string | null;
-  addresses_json?: string | null;
-  sales_document_number?: string | null;
-  panel_document_type?: string | null;
-  panel_document_series_id?: string | null;
-  panel_payment_method?: string | null;
-  panel_payment_status?: string | null;
-  wms_packed_at?: string | null;
-  wms_packed_by_label?: string | null;
-  wms_workflow_phase?: string | null;
-  fulfillment_assignment_phase?: FulfillmentAssignmentPhase | string | null;
-  fulfillment_warehouse_name?: string | null;
-  fulfillment_warehouse_change_locked?: boolean;
-  fulfillment_assignment_strategy?: string | null;
-  fulfillment_assigned_at?: string | null;
-  fulfillment_assigned_by_label?: string | null;
-  fulfillment_assignment_reason?: string | null;
-  panel_amount_paid?: string | null;
-  panel_shipping_cost?: number | null;
-  panel_shipping_cost_display?: string | null;
-  panel_tracking_numbers?: string | null;
-  selected_carton_id?: string | null;
-  selected_carton?: {
-    id: string;
-    name: string;
-    dimensions?: string | null;
-    image_url?: string | null;
-  } | null;
-  customer_id?: number | null;
-  customer?: { id: number; display_name: string } | null;
-  panel_fulfillment_history?: {
-    at: string;
-    lines: string[];
-    kind?: string | null;
-    product_name?: string | null;
-    product_sku?: string | null;
-    product_ean?: string | null;
-    quantity_ordered?: number | null;
-    quantity_before?: number | null;
-    quantity_affected?: number | null;
-    unit_price?: number | null;
-    line_total?: number | null;
-  }[];
-  order_documents?: {
-    id: number;
-    document_type: string;
-    original_filename: string;
-    file_url: string;
-    created_at?: string | null;
-  }[];
-  order_activity_logs?: {
-    id: number;
-    event_type: string;
-    message: string;
-    created_at?: string | null;
-    operator_user_id?: number | null;
-    operator_display?: string | null;
-  }[];
-  order_notes?: OrderNoteDto[];
-  operational_notes?: OrderOperationalNoteDto[];
-  has_internal_note?: boolean;
-  has_customer_comment?: boolean;
-  latest_internal_note_preview?: string | null;
-  latest_customer_comment_preview?: string | null;
-  order_channel?: string | null;
-  fulfillment_mode?: string | null;
-  linked_documents?: {
-    id: string;
-    kind: "sale" | "warehouse";
-    document_type: string;
-    document_subtype?: string | null;
-    document_number: string;
-    detail_path: string;
-    print_kind?: string | null;
-    sale_document_id?: string | null;
-    stock_document_id?: number | null;
-  }[];
-};
-
-const PAYMENT_METHOD_PRESETS = ["przelew", "pobranie", "BLIK", "karta", "gotówka"] as const;
-const PAYMENT_STATUS_PRESETS = ["nieopłacone", "opłacone", "częściowo", "zwrot"] as const;
 
 function formatDetailDate(iso: string | null | undefined): string {
   if (!iso) return "—";
@@ -376,488 +236,8 @@ function orderOfficePinStorageKey(orderId: number): string {
   return `order_office_pin:${orderId}`;
 }
 
-function formatExternalIdSnippet(raw: string | null | undefined): string {
-  const s = (raw ?? "").trim();
-  if (!s) return "";
-  return s.length > 28 ? `${s.slice(0, 14)}…${s.slice(-8)}` : s;
-}
-
-// Global button class for uniform look — SSOT in orderDetailUiTokens
-const ORDER_DETAIL_HEADER_ICON_BTN = odHeaderIconBtnClass;
-
-function uniqJoinedAddressParts(parts: unknown[]): string {
-  const seen = new Set<string>();
-  const out: string[] = [];
-  for (const p of parts) {
-    const t = typeof p === "string" ? p.trim() : p != null ? String(p).trim() : "";
-    if (!t) continue;
-    const k = t.toLowerCase();
-    if (seen.has(k)) continue;
-    seen.add(k);
-    out.push(t);
-  }
-  return out.join(" ");
-}
-
-function parseShippingAddressBlock(json: string | null | undefined): string[] {
-  if (!json?.trim()) return ["—"];
-  try {
-    const root = JSON.parse(json) as Record<string, unknown>;
-    const ship = (root.shipping ?? root.delivery) as Record<string, unknown> | undefined;
-    if (ship && typeof ship === "object") {
-      const mainStreet = uniqJoinedAddressParts([ship.street, ship.street_name, ship.address, ship.Ulica]);
-      const s2raw = ship.street2 ?? ship.address_extra;
-      const s2 = typeof s2raw === "string" ? s2raw.trim() : s2raw != null ? String(s2raw).trim() : "";
-      const streetBlocks: string[] = [];
-      if (mainStreet) streetBlocks.push(mainStreet);
-      if (s2 && s2.toLowerCase() !== mainStreet.toLowerCase()) streetBlocks.push(s2);
-      const streetLine = streetBlocks.join(", ");
-      const parts = [
-        ship.name,
-        streetLine,
-        uniqJoinedAddressParts([ship.postal_code, ship.postcode, ship.zip, ship["Kod pocztowy"]]),
-        uniqJoinedAddressParts([ship.city, ship.town, ship.Miejscowość]),
-        uniqJoinedAddressParts([ship.country, ship.Kraj]),
-      ]
-        .map((x) => (typeof x === "string" ? x.trim() : x != null ? String(x).trim() : ""))
-        .filter(Boolean);
-      if (parts.length) return parts;
-    }
-    const bill = root.billing as Record<string, unknown> | undefined;
-    if (bill && typeof bill === "object") {
-      const parts = [
-        bill.name,
-        uniqJoinedAddressParts([bill.street, bill.street_name, bill.Ulica]),
-        uniqJoinedAddressParts([bill.postal_code, bill.postcode, bill["Kod pocztowy"]]),
-        uniqJoinedAddressParts([bill.city, bill.Miejscowość]),
-        uniqJoinedAddressParts([bill.country, bill.Kraj]),
-      ]
-        .map((x) => (typeof x === "string" ? x.trim() : x != null ? String(x).trim() : ""))
-        .filter(Boolean);
-      if (parts.length) return parts;
-    }
-  } catch {
-    /* ignore */
-  }
-  return ["—"];
-}
-
-type ShippingAddrDraft = { name: string; street: string; city: string; postal: string; country: string };
-
-function shippingFromOrderJson(json: string | null | undefined): ShippingAddrDraft {
-  const empty: ShippingAddrDraft = { name: "", street: "", city: "", postal: "", country: "" };
-  if (!json?.trim()) return empty;
-  try {
-    const root = JSON.parse(json) as Record<string, unknown>;
-    const ship = (root.shipping ?? root.delivery) as Record<string, unknown> | undefined;
-    if (!ship || typeof ship !== "object") return empty;
-    const street = uniqJoinedAddressParts([ship.street, ship.street_name, ship.address, ship.Ulica]);
-    const s2raw = ship.street2 ?? ship.address_extra;
-    const street2 = typeof s2raw === "string" ? s2raw.trim() : "";
-    let streetCombined = street;
-    if (street2 && street2.toLowerCase() !== street.toLowerCase()) {
-      streetCombined = street ? `${street}, ${street2}`.trim() : street2;
-    }
-    const city = uniqJoinedAddressParts([ship.city, ship.town, ship.Miejscowość]) || "";
-    const postal = uniqJoinedAddressParts([ship.postal_code, ship.postcode, ship.zip, ship["Kod pocztowy"]]) || "";
-    const country = uniqJoinedAddressParts([ship.country, ship.Kraj]) || "";
-    const name = typeof ship.name === "string" ? ship.name.trim() : "";
-    return {
-      name,
-      street: streetCombined,
-      city: city ?? "",
-      postal: postal ?? "",
-      country: country ?? "",
-    };
-  } catch {
-    return empty;
-  }
-}
-
-function parsePhoneEmail(json: string | null | undefined): { phone: string; email: string } {
-  let phone = "—";
-  let email = "—";
-  if (!json?.trim()) return { phone, email };
-  try {
-    const root = JSON.parse(json) as Record<string, unknown>;
-    for (const key of ["shipping", "billing", "customer", "delivery"]) {
-      const block = root[key] as Record<string, unknown> | undefined;
-      if (!block || typeof block !== "object") continue;
-      const p = block.phone ?? block.mobile ?? block.tel ?? block.Telefon;
-      const e = block.email ?? block.mail ?? block.Email;
-      if (typeof p === "string" && p.trim() && phone === "—") phone = p.trim();
-      if (typeof e === "string" && e.trim() && email === "—") email = e.trim();
-    }
-  } catch {
-    /* ignore */
-  }
-  return { phone, email };
-}
-
-type BillingInvoiceParsed = {
-  companyName: string;
-  nip: string;
-  streetLine: string;
-  cityLine: string;
-  email: string;
-};
-
-function parseBillingInvoice(json: string | null | undefined): BillingInvoiceParsed {
-  const empty: BillingInvoiceParsed = {
-    companyName: "",
-    nip: "",
-    streetLine: "",
-    cityLine: "",
-    email: "",
-  };
-  if (!json?.trim()) return empty;
-  try {
-    const root = JSON.parse(json) as Record<string, unknown>;
-    const bill = root.billing as Record<string, unknown> | undefined;
-    if (!bill || typeof bill !== "object") return empty;
-    const companyName = String(bill.company_name ?? bill.name ?? bill.firma ?? "").trim();
-    const nip = String(bill.nip ?? bill.NIP ?? bill.tax_id ?? "").trim();
-    const email = String(bill.email ?? bill.mail ?? "").trim();
-    const street = uniqJoinedAddressParts([bill.street, bill.street_name, bill.Ulica]);
-    const street2 = typeof bill.address_extra === "string" ? bill.address_extra.trim() : "";
-    const streetLine = street2 && street2.toLowerCase() !== street.toLowerCase() ? `${street} / ${street2}`.trim() : street;
-    const postal = uniqJoinedAddressParts([bill.postal_code, bill.postcode, bill.zip, bill["Kod pocztowy"]]);
-    const city = uniqJoinedAddressParts([bill.city, bill.Miejscowość]);
-    const country = uniqJoinedAddressParts([bill.country, bill.Kraj]);
-    const cityLine = [postal, city, country].filter(Boolean).join(" ");
-    return {
-      companyName,
-      nip,
-      streetLine,
-      cityLine,
-      email,
-    };
-  } catch {
-    return empty;
-  }
-}
-
-type ShippingExtrasParsed = {
-  company: string;
-  phone: string;
-  email: string;
-  pickupPoint: string;
-  pickupCode: string;
-};
-
-function parseShippingExtras(json: string | null | undefined): ShippingExtrasParsed {
-  const empty: ShippingExtrasParsed = { company: "", phone: "", email: "", pickupPoint: "", pickupCode: "" };
-  if (!json?.trim()) return empty;
-  try {
-    const root = JSON.parse(json) as Record<string, unknown>;
-    const ship = (root.shipping ?? root.delivery) as Record<string, unknown> | undefined;
-    if (!ship || typeof ship !== "object") return empty;
-    return {
-      company: String(ship.company_name ?? ship.company ?? ship.firma ?? "").trim(),
-      phone: String(ship.phone ?? ship.mobile ?? ship.tel ?? "").trim(),
-      email: String(ship.email ?? ship.mail ?? "").trim(),
-      pickupPoint: String(
-        ship.pickup_point_name ??
-          ship.parcel_locker_name ??
-          ship.point_name ??
-          ship.locker_name ??
-          ship.apm_name ??
-          "",
-      ).trim(),
-      pickupCode: String(ship.pickup_code ?? ship.collection_code ?? ship.access_code ?? ship.locker_code ?? "").trim(),
-    };
-  } catch {
-    return empty;
-  }
-}
-
-function paymentStatusIsPaid(status: string | null | undefined): boolean {
-  const s = (status ?? "").toLowerCase();
-  if (!s) return false;
-  if (/nieopłac|nieoplac|unpaid|częściowo|partial|nie\s*zapłac/.test(s)) return false;
-  return /opłac|zapłac|paid|complete|zapłacono|opłacone|tak/.test(s);
-}
-
-function SummaryDashboardCard({
-  title,
-  children,
-  right,
-  className,
-  contentClassName,
-}: {
-  title: string;
-  children: React.ReactNode;
-  right?: React.ReactNode;
-  className?: string;
-  contentClassName?: string;
-}) {
-  return (
-    <section
-      className={
-        className ??
-        "rounded-xl border border-slate-200 bg-white p-5 shadow-sm flex flex-col h-full"
-      }
-    >
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="text-[11px] font-bold uppercase tracking-widest text-slate-500">{title}</h3>
-        {right}
-      </div>
-      <div className={`flex-1 ${contentClassName ?? ""}`}>{children}</div>
-    </section>
-  );
-}
-
-function SummaryCompactRow({
-  label,
-  value,
-  actions,
-}: {
-  label: string;
-  value: React.ReactNode;
-  actions?: React.ReactNode;
-}) {
-  return (
-    <div className="flex items-start justify-between gap-3 border-b border-slate-100 py-2.5 text-sm last:border-b-0">
-      <span className="shrink-0 text-slate-500 font-medium">{label}</span>
-      <div className="flex min-w-0 items-start justify-end gap-1.5 text-right">
-        <div className="min-w-0 font-medium leading-snug text-slate-900">{value}</div>
-        {actions}
-      </div>
-    </div>
-  );
-}
-
-type OrderDocTableKindTone = "fa" | "pa" | "rz" | "lp" | "na";
-
-type OrderDocTableRow = {
-  id: string;
-  name: string;
-  type: string;
-  status: "approved" | "pending";
-  date: string;
-  fileUrl?: string;
-  mimeType?: string;
-  typeLabel?: { abbr: string; name: string; tone: OrderDocTableKindTone };
-  saleDocumentId?: string;
-  stockDocumentId?: number;
-  printKind?: string | null;
-};
-
-function orderDocRowIsPdfOrImage(row: OrderDocTableRow): boolean {
-  const mt = (row.mimeType ?? "").toLowerCase();
-  if (mt.includes("pdf") || mt.startsWith("image/")) return true;
-  const n = row.name.toLowerCase();
-  const path = (row.fileUrl ?? "").split(/[?#]/)[0]?.toLowerCase() ?? "";
-  if (path.endsWith(".pdf") || /\.(png|jpe?g|gif|webp|svg)$/i.test(path)) return true;
-  if (n.endsWith(".pdf") || /\.(png|jpe|jpeg|jpg|gif|webp|svg)$/i.test(n)) return true;
-  return false;
-}
-
-function orderDocKindToneClass(tone: OrderDocTableKindTone): string {
-  switch (tone) {
-    case "fa":
-      return "bg-emerald-600";
-    case "pa":
-      return "bg-amber-500";
-    case "rz":
-      return "bg-slate-500";
-    case "lp":
-      return "bg-blue-600";
-    default:
-      return "bg-slate-400";
-  }
-}
-
-const ORDER_DOCS_SECTION_TYPES = new Set([
-  "PARAGON",
-  "PROFORMA",
-  "FAKTURA",
-  "RACHUNEK",
-  "KOREKTA",
-  "DOKUMENT_SPRZEDAZY",
-]);
-
-function guessMimeFromFilename(name: string): string | undefined {
-  const n = (name || "").toLowerCase();
-  if (n.endsWith(".pdf")) return "application/pdf";
-  if (n.endsWith(".png")) return "image/png";
-  if (n.endsWith(".jpg") || n.endsWith(".jpeg")) return "image/jpeg";
-  if (n.endsWith(".gif")) return "image/gif";
-  if (n.endsWith(".webp")) return "image/webp";
-  return undefined;
-}
-
-function orderDocumentTypeToLabel(code: string): NonNullable<OrderDocTableRow["typeLabel"]> {
-  const c = (code || "").toUpperCase();
-  switch (c) {
-    case "PARAGON":
-      return { abbr: "Pa", name: "Paragon", tone: "pa" };
-    case "PROFORMA":
-      return { abbr: "Pr", name: "Proforma", tone: "rz" };
-    case "FAKTURA":
-      return { abbr: "Fa", name: "Faktura", tone: "fa" };
-    case "RACHUNEK":
-      return { abbr: "Ra", name: "Rachunek", tone: "rz" };
-    case "KOREKTA":
-      return { abbr: "Ko", name: "Korekta", tone: "na" };
-    case "DOKUMENT_SPRZEDAZY":
-      return { abbr: "DS", name: "Dokument sprzedaży", tone: "fa" };
-    case "ZALACZNIK":
-      return { abbr: "Zł", name: "Załącznik", tone: "na" };
-    case "LIST_PRZEWOZOWY":
-      return { abbr: "LP", name: "List przewozowy", tone: "lp" };
-    default:
-      return { abbr: "—", name: c || "—", tone: "na" };
-  }
-}
-
 type OrderDocModalType = (typeof ORDER_DOCUMENT_MODAL_TYPES)[number];
 const DEFAULT_DOC_MODAL_TYPE: OrderDocModalType = "FAKTURA";
-
-function OrderDocTableRowActions({
-  row,
-  onPreview,
-  onPrint,
-  onDownload,
-  onEmail,
-  onDelete,
-}: {
-  row: OrderDocTableRow;
-  onPreview: (row: OrderDocTableRow) => void;
-  onPrint: (row: OrderDocTableRow) => void;
-  onDownload: (row: OrderDocTableRow) => void;
-  onEmail: (row: OrderDocTableRow) => void;
-  onDelete: (row: OrderDocTableRow) => void;
-}) {
-  return (
-    <div className="flex w-full items-center justify-end gap-2">
-      <button type="button" className="rounded p-1.5 text-slate-400 hover:text-slate-800 hover:bg-slate-100" onClick={() => onPreview(row)}>
-        <Eye className="h-4 w-4" strokeWidth={2} />
-      </button>
-      <button type="button" className="rounded p-1.5 text-slate-400 hover:text-slate-800 hover:bg-slate-100" onClick={() => onPrint(row)}>
-        <Printer className="h-4 w-4" strokeWidth={2} />
-      </button>
-      <button type="button" className="rounded p-1.5 text-slate-400 hover:text-slate-800 hover:bg-slate-100" onClick={() => onDownload(row)}>
-        <Download className="h-4 w-4" strokeWidth={2} />
-      </button>
-      <button type="button" className="rounded p-1.5 text-slate-400 hover:text-slate-800 hover:bg-slate-100" onClick={() => onEmail(row)}>
-        <Mail className="h-4 w-4" strokeWidth={2} />
-      </button>
-      <button type="button" className="rounded p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50" onClick={() => onDelete(row)}>
-        <Trash2 className="h-4 w-4" strokeWidth={2} />
-      </button>
-    </div>
-  );
-}
-
-function OrderDocFilesTableSection({
-  title,
-  rows,
-  showTypeColumn,
-  onUploadFiles,
-  onToolbarPrint,
-  onToolbarEmail,
-  onPreview,
-  onPrint,
-  onDownload,
-  onEmail,
-  onDelete,
-}: {
-  title: string;
-  rows: OrderDocTableRow[];
-  showTypeColumn: boolean;
-  onUploadFiles?: (files: FileList | null) => void;
-  onToolbarPrint?: () => void;
-  onToolbarEmail?: () => void;
-  onPreview: (row: OrderDocTableRow) => void;
-  onPrint: (row: OrderDocTableRow) => void;
-  onDownload: (row: OrderDocTableRow) => void;
-  onEmail: (row: OrderDocTableRow) => void;
-  onDelete: (row: OrderDocTableRow) => void;
-}) {
-  const uploadInputRef = useRef<HTMLInputElement>(null);
-
-  return (
-    <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
-      <div className="p-4 border-b border-slate-200 flex items-center justify-between bg-slate-50">
-        <h3 className="text-[11px] font-bold text-slate-500 uppercase tracking-widest">{title}</h3>
-        <input type="file" ref={uploadInputRef} className="hidden" onChange={(e) => { onUploadFiles?.(e.target.files); e.target.value = ""; }} />
-      </div>
-      <div className="bg-white border-b border-slate-200 px-5 py-3 flex items-center space-x-4 text-sm">
-         <label className="flex items-center font-medium cursor-pointer text-slate-600"><input type="checkbox" className="mr-2 rounded border-slate-300 w-4 h-4"/> wykonaj</label>
-         <button className="text-slate-500 hover:text-slate-900" onClick={() => onToolbarPrint?.()}><Printer size={16}/></button>
-         <button className="text-slate-500 hover:text-slate-900" onClick={() => onToolbarEmail?.()}><Mail size={16}/></button>
-         <button className="text-slate-500 hover:text-slate-900" onClick={() => uploadInputRef.current?.click()}><Upload size={16}/></button>
-      </div>
-      <div className="overflow-x-auto">
-        <table className="w-full text-left text-sm whitespace-nowrap">
-          <thead className="text-[10px] text-slate-400 uppercase font-bold border-b border-slate-100 bg-slate-50/50">
-            <tr>
-              <th className="px-5 py-3 w-10"></th>
-              <th className="px-5 py-3 w-40">DATA</th>
-              <th className="px-5 py-3 w-48">RODZAJ</th>
-              <th className="px-5 py-3 w-full">NAZWA DOKUMENTU</th>
-              <th className="px-5 py-3 text-right"></th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100 text-slate-800">
-            {rows.map((row) => (
-              <tr key={row.id} className="hover:bg-slate-50 transition-colors">
-                <td className="px-5 py-4"><input type="checkbox" className="rounded border-slate-300 w-4 h-4"/></td>
-                <td className="px-5 py-4 text-slate-500">{row.date}</td>
-                <td className="px-5 py-4">
-                  {showTypeColumn && row.typeLabel ? (
-                    <div className="flex items-center">
-                      <span className={`text-[10px] font-bold text-white px-1.5 py-0.5 rounded mr-2 ${orderDocKindToneClass(row.typeLabel.tone)}`}>{row.typeLabel.abbr}</span> 
-                      {row.typeLabel.name}
-                    </div>
-                  ) : <span className="text-slate-400">—</span>}
-                </td>
-                <td className="px-5 py-4 max-w-[200px]">
-                  <span className="font-medium text-slate-800 truncate block">{row.name}</span>
-                </td>
-                <td className="px-5 py-4 text-right text-slate-400">
-                  <OrderDocTableRowActions row={row} onPreview={onPreview} onPrint={onPrint} onDownload={onDownload} onEmail={onEmail} onDelete={onDelete} />
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  );
-}
-
-type WmsSidebarTimeCell = { title: string; value: string; statusChip: string };
-
-function WmsOperationTimesKpiPanel({ cells }: { cells: readonly WmsSidebarTimeCell[] }) {
-  return (
-    <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm">
-      <h3 className="text-[11px] font-bold text-slate-500 uppercase tracking-widest mb-5">Czasy operacji (WMS)</h3>
-      <div className="grid grid-cols-2 gap-4">
-        {cells.map((cell) => (
-          <div key={cell.title} className="rounded-lg border border-slate-100 bg-slate-50/80 p-4 flex flex-col justify-between">
-            <p className="text-xs text-slate-500 mb-2">{cell.title}</p>
-            <div>
-              <p className="text-2xl font-black text-slate-900">{cell.value}</p>
-              <p className="mt-1 text-[10px] font-bold uppercase text-slate-400">{cell.statusChip}</p>
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-const DETAIL_TABS = [
-  { id: "summary", label: "Podsumowanie" },
-  { id: "products", label: "Produkty i magazyn" },
-  { id: "comms", label: "Komunikacja" },
-  { id: "docs", label: "Dokumenty i pliki" },
-  { id: "logs", label: "Logi" },
-] as const;
-
-type DetailTabId = (typeof DETAIL_TABS)[number]["id"];
 
 export default function OrderDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -1498,20 +878,6 @@ export default function OrderDetailPage() {
     }
   }, [order?.order_date]);
 
-  type SummaryPanelLogRow = {
-    id: string | number;
-    at: string;
-    user: string;
-    /** Machine-readable code (search / dev only). */
-    eventKey: string;
-    /** Localized label for UI. */
-    eventLabel: string;
-    msg: string;
-    severity: "info" | "warn" | "error";
-    /** Sort key ms — newest first. */
-    sortAt: number;
-  };
-
   const summaryPanelLogs = useMemo((): SummaryPanelLogRow[] => {
     if (!order) return [];
     const rows: SummaryPanelLogRow[] = [
@@ -1884,8 +1250,6 @@ export default function OrderDetailPage() {
     [order, wmsFulfillment],
   );
 
-  const inpSm = "mt-1 w-full rounded-md border border-slate-200 bg-white px-2.5 py-2 text-sm text-slate-900";
-
   if (loading) {
     return (
       <div className="flex min-h-[40vh] items-center justify-center gap-2 text-slate-500 bg-white p-6">
@@ -1986,633 +1350,104 @@ export default function OrderDetailPage() {
       </div>
 
       <div className="flex-1 flex flex-col h-screen overflow-hidden bg-white">
-        <div className="w-full flex-col lg:flex-row lg:items-start p-6 pb-0 max-w-full mx-auto">
-            <nav className="mb-4 flex flex-wrap items-center gap-1.5 text-sm" aria-label="Ścieżka nawigacji">
-              <Link to="/dashboard" className="inline-flex items-center gap-1 font-medium text-slate-500 transition hover:text-slate-800">
-                <Home className="h-4 w-4 shrink-0" strokeWidth={2} aria-hidden />
-              </Link>
-              <ChevronRight className="h-4 w-4 shrink-0 text-slate-300" aria-hidden />
-              <Link to="/orders/list" className="font-medium text-slate-500 transition hover:text-slate-800">Zamówienia</Link>
-              <ChevronRight className="h-4 w-4 shrink-0 text-slate-300" aria-hidden />
-              <span className="font-medium text-slate-900">#{order.number ?? order.id}</span>
-            </nav>
-
-            <div className="min-w-0 flex-1 space-y-4">
-                <div className="flex flex-wrap items-center gap-x-2 gap-y-2 lg:flex-nowrap lg:gap-x-3 pb-4">
-                  <div className="flex shrink-0 items-center gap-1">
-                    <button type="button" disabled={prevOrderId == null} onClick={() => prevOrderId != null && navigate(`/orders/${prevOrderId}`, { state: location.state })} className={ORDER_DETAIL_HEADER_ICON_BTN}>
-                      <ChevronLeft className="h-4 w-4 shrink-0" strokeWidth={2} />
-                    </button>
-                    <button type="button" disabled={nextOrderId == null} onClick={() => nextOrderId != null && navigate(`/orders/${nextOrderId}`, { state: location.state })} className={ORDER_DETAIL_HEADER_ICON_BTN}>
-                      <ChevronRight className="h-4 w-4 shrink-0" strokeWidth={2} />
-                    </button>
-                    <div className="mx-0.5 hidden h-6 w-px shrink-0 bg-slate-200 sm:block" />
-                    <OrderPriorityFlamePicker orderId={order.id} priorityColor={order.priority_color ?? null} compactTrigger onUpdated={(next) => setOrder((prev) => (prev ? { ...prev, priority_color: next } : prev))} />
-                  </div>
-
-                  <div className="flex min-w-0 flex-1 flex-wrap items-baseline gap-x-3 gap-y-1 lg:min-w-[12rem]">
-                      <h1 className="flex items-baseline gap-2 text-2xl font-normal text-slate-900">
-                        Zamówienie{" "}
-                        <span className="border-b border-dashed border-slate-400 text-3xl font-bold tracking-tight">
-                          {order.number ?? order.id}
-                        </span>
-                      </h1>
-                      <div className="ml-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-slate-500">
-                        {formatExternalIdSnippet(order.external_id) ? (
-                          <span>
-                            ID zew:{" "}
-                            <span className="cursor-help border-b border-dashed border-slate-400" title={order.external_id ?? undefined}>
-                              {formatExternalIdSnippet(order.external_id)}
-                            </span>
-                          </span>
-                        ) : null}
-                        <span>{dateLine}</span>
-                        {(order.source ?? "").trim() ? (
-                          <span className="hidden md:inline">{(order.source ?? "").trim()}</span>
-                        ) : null}
-                        <OrderDirectSalesBadge orderChannel={order.order_channel} fulfillmentMode={order.fulfillment_mode} />
-                      </div>
-                  </div>
-
-                  <div className="ml-auto flex shrink-0 items-center gap-2">
-                      <button type="button" onClick={() => { if (!order?.id) return; setOfficePin((p) => { const next = !p; try { if (next) window.localStorage.setItem(orderOfficePinStorageKey(order.id), "1"); else window.localStorage.removeItem(orderOfficePinStorageKey(order.id)); } catch {} return next; }); }} className={`${ORDER_DETAIL_HEADER_ICON_BTN} ${officePin ? "border-amber-400 bg-amber-50 text-amber-600" : ""}`}>
-                        <Bookmark className={`h-4 w-4 shrink-0 ${officePin ? "fill-current" : ""}`} strokeWidth={2} />
-                      </button>
-                      <button type="button" onClick={() => { setActiveTab("summary"); window.setTimeout(() => { document.getElementById("order-summary-operational-notes")?.scrollIntoView({ behavior: "smooth" }); }, 0); }} className={`${ORDER_DETAIL_HEADER_ICON_BTN} ${order?.has_internal_note ? "border-red-300 bg-red-50 text-red-700" : ""}`}>
-                        <Pin className="h-4 w-4 shrink-0" strokeWidth={2} />
-                      </button>
-                      <div className="relative" ref={returnsComplaintsRef}>
-                        <button type="button" onClick={() => setReturnsComplaintsOpen((v) => !v)} className={ORDER_DETAIL_HEADER_ICON_BTN}>
-                          <MessageSquareWarning className="h-4 w-4 shrink-0" strokeWidth={2} />
-                        </button>
-                      </div>
-                      <button type="button" onClick={() => { setActiveTab("comms"); window.setTimeout(() => { document.getElementById("order-comms-note")?.focus(); }, 0); }} className={`${ORDER_DETAIL_HEADER_ICON_BTN} ${order?.has_customer_comment ? "border-emerald-300 bg-emerald-50 text-emerald-700 relative" : "relative"}`}>
-                        <Mail className="h-4 w-4 shrink-0" strokeWidth={2} />
-                        {order?.has_customer_comment && <span className="absolute top-1 right-1 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-white"></span>}
-                      </button>
-                      <div className="w-px h-6 bg-slate-200 mx-1"></div>
-                      <OrderDocumentsPrintMenu
-                        orderId={order.id}
-                        linkedDocuments={order.linked_documents}
-                        panelDocumentType={order.panel_document_type}
-                        salesDocumentNumber={order.sales_document_number}
-                        onPrint={requestOrderDocumentPrint}
-                        busy={orderDocumentPrintBusy}
-                        compact
-                      />
-                      {!isStationarySale ? (
-                        <Link to={WMS_ROUTES.packingOrder(order.id)} className={brandPrimaryButtonClass}>Spakuj</Link>
-                      ) : null}
-                  </div>
-                </div>
-
-                <div className="flex flex-col gap-4 border-t border-slate-100 pt-4 pb-2">
-                  <OrderFulfillmentWarehousePanel
-                    orderId={order.id}
-                    tenantId={order.tenant_id ?? DAMAGE_TENANT_ID}
-                    warehouseId={orderFulfillmentWhId}
-                    warehouseName={order.fulfillment_warehouse_name ?? null}
-                    phase={order.fulfillment_assignment_phase}
-                    locked={Boolean(order.fulfillment_warehouse_change_locked)}
-                    strategy={order.fulfillment_assignment_strategy}
-                    assignedAt={order.fulfillment_assigned_at}
-                    assignedByLabel={order.fulfillment_assigned_by_label}
-                    assignmentReason={order.fulfillment_assignment_reason}
-                    onAssigned={() => reloadOrderById(order.id)}
-                  />
-                  <OrderConsolidationPanel
-                    orderId={order.id}
-                    onChanged={() => reloadOrderById(order.id)}
-                  />
-                  <OrderFulfillmentAssignmentHistory orderId={order.id} />
-                </div>
-
-                <div className="flex flex-col gap-4 border-t border-slate-100 pb-2 pt-4">
-                  <OrderDetailProcessStatusRow
-                    statusGroupLabel={
-                      order.order_ui_status?.main_group
-                        ? ORDERS_PANEL_GROUP_LABELS[order.order_ui_status.main_group]
-                        : null
-                    }
-                    statusControl={
-                      <div className="flex min-w-max shrink-0 items-center">
-                        {orderFulfillmentWhId != null ? (
-                          <OrderDetailPrimaryStatusDropdown
-                            variant="compact"
-                            currentStatus={order.order_ui_status ?? null}
-                            panelSummary={panelSummary}
-                            panelSubgroups={panelSubgroups}
-                            saving={panelSaving}
-                            onSelectStatus={async (subStatusId) => {
-                              setPanelSaving(true);
-                              try {
-                                const updated = await patchOrderUiStatus(
-                                  order.id,
-                                  DAMAGE_TENANT_ID,
-                                  orderFulfillmentWhId,
-                                  subStatusId,
-                                );
-                                setOrder((prev) =>
-                                  prev ? { ...prev, order_ui_status: updated.order_ui_status ?? null } : prev,
-                                );
-                                await loadPanelSummary();
-                              } finally {
-                                setPanelSaving(false);
-                              }
-                            }}
-                          />
-                        ) : panelOrderStatusBrief ? (
-                          <OrderUiStatusConfigRowPresent status={panelOrderStatusBrief} variant="compact" />
-                        ) : (
-                          <span className="text-xs text-slate-400">—</span>
-                        )}
-                      </div>
-                    }
-                    processTitle={
-                      wmsDualWorkflow &&
-                      wmsDualWorkflow.total > 0 &&
-                      wmsDualWorkflow.packed >= wmsDualWorkflow.total
-                        ? "Spakowane"
-                        : wmsDualWorkflow &&
-                            wmsDualWorkflow.total > 0 &&
-                            wmsDualWorkflow.pickedSum >= wmsDualWorkflow.total
-                          ? "Gotowe do pakowania"
-                          : wmsDualWorkflow && wmsDualWorkflow.pickedSum > 0
-                            ? `W zbieraniu (${wmsDualWorkflow.pickedSum}/${wmsDualWorkflow.total})`
-                            : shippingLabel !== "—"
-                              ? shippingLabel
-                              : "Oczekuje na realizację"
-                    }
-                    processSubtitle={dateLine !== "—" ? dateLine : null}
-                    hasProgress={Boolean(wmsDualWorkflow && wmsDualWorkflow.total > 0)}
-                    pickDone={Boolean(
-                      wmsDualWorkflow &&
-                        wmsDualWorkflow.total > 0 &&
-                        wmsDualWorkflow.pickedSum >= wmsDualWorkflow.total,
-                    )}
-                    packDone={Boolean(
-                      wmsDualWorkflow &&
-                        wmsDualWorkflow.total > 0 &&
-                        wmsDualWorkflow.packed >= wmsDualWorkflow.total,
-                    )}
-                  />
-                </div>
-
-                <div className="mt-2 border-b border-slate-200">
-                  <div className="flex gap-8 overflow-x-auto" role="tablist" aria-label="Sekcje zamówienia">
-                    {DETAIL_TABS.map((t) => (
-                      <button
-                        key={t.id}
-                        type="button"
-                        role="tab"
-                        aria-selected={activeTab === t.id}
-                        onClick={() => setActiveTab(t.id)}
-                        className={tabsNavItemClassName(activeTab === t.id)}
-                      >
-                        {t.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-            </div>
-        </div>
+        <OrderDetailHeaderBar
+          order={order}
+          setOrder={setOrder}
+          locationState={location.state}
+          navigate={navigate}
+          prevOrderId={prevOrderId}
+          nextOrderId={nextOrderId}
+          dateLine={dateLine}
+          officePin={officePin}
+          setOfficePin={setOfficePin}
+          activeTab={activeTab}
+          setActiveTab={setActiveTab}
+          returnsComplaintsRef={returnsComplaintsRef}
+          setReturnsComplaintsOpen={setReturnsComplaintsOpen}
+          requestOrderDocumentPrint={requestOrderDocumentPrint}
+          orderDocumentPrintBusy={orderDocumentPrintBusy}
+          isStationarySale={isStationarySale}
+          orderFulfillmentWhId={orderFulfillmentWhId}
+          panelSummary={panelSummary}
+          panelSubgroups={panelSubgroups}
+          panelSaving={panelSaving}
+          setPanelSaving={setPanelSaving}
+          loadPanelSummary={loadPanelSummary}
+          panelOrderStatusBrief={panelOrderStatusBrief}
+          wmsDualWorkflow={wmsDualWorkflow}
+          shippingLabel={shippingLabel}
+        />
 
         <div className="flex-1 overflow-auto bg-white p-6">
           <div className="w-full">
             {activeTab === "summary" ? (
-              <div className="space-y-6">
-                <div className="grid grid-cols-1 gap-8 mb-8 md:grid-cols-2 lg:grid-cols-4">
-                  <OrderDetailInfoColumn
-                    title="Kupujący"
-                    actions={
-                      <button
-                        type="button"
-                        onClick={() => setEditBuyerModalOpen(true)}
-                        className={odInlineIconBtnClass}
-                        aria-label="Edytuj kupującego"
-                      >
-                        <Pencil className="h-4 w-4" strokeWidth={2} />
-                      </button>
-                    }
-                  >
-                    <p className="text-base font-bold text-slate-900">{contact.name}</p>
-                    {order.customer ? (
-                      <Link to={`/customers/${order.customer.id}`} className="text-blue-700 font-medium hover:underline">
-                        {getCustomerDisplayName(order.customer)}
-                      </Link>
-                    ) : null}
-                    <OrderCustomerLinkPanel
-                      orderId={order.id}
-                      tenantId={order.tenant_id ?? DAMAGE_TENANT_ID}
-                      customerId={order.customer_id ?? order.customer?.id}
-                      hasContactData={orderHasUnlinkedCustomerData}
-                      onLinked={() => void reloadOrderById(order.id)}
-                    />
-                    <div className="flex items-center justify-between gap-2 border-t border-slate-100 pt-2">
-                      <span className="flex min-w-0 items-center gap-2 text-slate-600">
-                        <Phone size={14} className="shrink-0 text-slate-400" /> {contact.phone}
-                      </span>
-                      {contact.phone !== "—" ? (
-                        <a href={`tel:${contact.phone}`} className={odInlineIconBtnClass} aria-label="Zadzwoń">
-                          <Phone className="h-3.5 w-3.5" strokeWidth={2} />
-                        </a>
-                      ) : null}
-                    </div>
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="flex min-w-0 items-center gap-2 text-slate-600">
-                        <Mail size={14} className="shrink-0 text-slate-400" /> <span className="truncate">{contact.email}</span>
-                      </span>
-                      {contact.email !== "—" ? (
-                        <a href={`mailto:${contact.email}`} className={odInlineIconBtnClass} aria-label="Wyślij e-mail">
-                          <Mail className="h-3.5 w-3.5" strokeWidth={2} />
-                        </a>
-                      ) : null}
-                    </div>
-                  </OrderDetailInfoColumn>
-
-                  <OrderDetailInfoColumn
-                    title="Dostawa i płatność"
-                    actions={
-                      <button
-                        type="button"
-                        className="text-slate-400 hover:text-slate-800"
-                        onClick={() => { void reloadOrderById(order.id); void loadWmsFulfillment(); }}
-                      >
-                        <RefreshCw className="h-4 w-4" strokeWidth={2} />
-                      </button>
-                    }
-                  >
-                    <SummaryCompactRow label="Metoda płatności" value={<select className={inpSm} value={payMethodDraft} onChange={(e) => setPayMethodDraft(e.target.value)}><option value="">—</option>{Array.from(new Set([...PAYMENT_METHOD_PRESETS, payMethodDraft].filter(Boolean))).map((m) => (<option key={m} value={m}>{m}</option>))}</select>} />
-                    <div className="flex items-center justify-between border-b border-slate-100 py-2.5 text-sm">
-                      <span className="text-slate-500 font-medium">Status płatności</span>
-                      <select className={`rounded-md border px-2.5 py-1 text-xs font-bold outline-none ${paymentStatusIsPaid(payStatusDraft) ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-slate-200 bg-white"}`} value={payStatusDraft} onChange={(e) => setPayStatusDraft(e.target.value)}><option value="">—</option>{Array.from(new Set([...PAYMENT_STATUS_PRESETS, payStatusDraft].filter(Boolean))).map((m) => (<option key={m} value={m}>{m}</option>))}</select>
-                    </div>
-                    {!isStationarySale ? (
-                      <label className="flex flex-col gap-1.5 border-b border-slate-100 py-2.5 text-sm text-slate-500 last:border-b-0 font-medium">
-                        <span className="flex items-center gap-2"><Truck className="h-4 w-4" /> Sposób wysyłki</span>
-                        <select className="rounded-md border border-slate-200 bg-white px-2 py-1.5 text-sm font-bold text-orange-600 outline-none focus:border-orange-500" value={shipDraft} disabled={orderFulfillmentWhId == null} onChange={(e) => setShipDraft(e.target.value)}><option value="">— brak —</option>{shippingMethods.map((m) => (<option key={m.id} value={m.id}>{m.name}</option>))}</select>
-                      </label>
-                    ) : (
-                      <SummaryCompactRow label="Odbiór" value={order.shipping_method ?? "Odbiór osobisty"} />
-                    )}
-                    {orderFulfillmentWhId != null && (
-                      <div className="mt-3 flex justify-end gap-2">
-                        <button type="button" className="rounded-md border border-slate-300 bg-white px-4 py-1.5 text-xs font-bold text-slate-700 transition-colors hover:bg-slate-50" onClick={() => { setShipDraft(order.shipping_method_id?.trim() ?? ""); setPayMethodDraft((order.panel_payment_method ?? "").trim()); setPayStatusDraft((order.panel_payment_status ?? "").trim()); }}>Anuluj</button>
-                        <button type="button" disabled={shipPaySaving} onClick={() => { setShipPaySaving(true); void patchOrder(order.id, { shipping_method_id: shipDraft.trim() || null, payment_method: payMethodDraft.trim() || null, payment_status: payStatusDraft.trim() || null }).then(() => reloadOrderById(order.id)).finally(() => setShipPaySaving(false)); }} className={brandPrimaryButtonClass}>{shipPaySaving ? "..." : "Zapisz"}</button>
-                      </div>
-                    )}
-                  </OrderDetailInfoColumn>
-
-                  <OrderDetailInfoColumn
-                    title="Adres dostawy"
-                    actions={orderFulfillmentWhId != null && !addressEditing ? (
-                      <button onClick={() => { setAddrDraft(shippingFromOrderJson(order.addresses_json)); setAddressEditing(true); }} className={odInlineIconBtnClass} aria-label="Edytuj adres dostawy">
-                        <Pencil className="h-4 w-4" strokeWidth={2} />
-                      </button>
-                    ) : null}
-                  >
-                    {addressEditing ? (
-                      <div className="space-y-2 text-sm font-medium">
-                        <label className="flex flex-col text-slate-600">Imię i nazwisko<input className={inpSm} value={addrDraft.name} onChange={(e) => setAddrDraft((d) => ({ ...d, name: e.target.value }))} /></label>
-                        <label className="flex flex-col text-slate-600">Ulica<input className={inpSm} value={addrDraft.street} onChange={(e) => setAddrDraft((d) => ({ ...d, street: e.target.value }))} /></label>
-                        <div className="grid grid-cols-2 gap-2">
-                          <label className="flex flex-col text-slate-600">Kod<input className={inpSm} value={addrDraft.postal} onChange={(e) => setAddrDraft((d) => ({ ...d, postal: e.target.value }))} /></label>
-                          <label className="flex flex-col text-slate-600">Miasto<input className={inpSm} value={addrDraft.city} onChange={(e) => setAddrDraft((d) => ({ ...d, city: e.target.value }))} /></label>
-                        </div>
-                        <label className="flex flex-col text-slate-600">Kraj<input className={inpSm} value={addrDraft.country} onChange={(e) => setAddrDraft((d) => ({ ...d, country: e.target.value }))} /></label>
-                        <div className="flex justify-end gap-2 pt-3">
-                          <button className="rounded-md border border-slate-300 bg-white px-4 py-1.5 text-xs font-bold text-slate-700 transition-colors hover:bg-slate-50" onClick={() => { setAddrDraft(shippingFromOrderJson(order.addresses_json)); setAddressEditing(false); }}>Anuluj</button>
-                          <button disabled={addressSaving || orderFulfillmentWhId == null} className={brandPrimaryButtonClass} onClick={() => { setAddressSaving(true); void patchOrder(order.id, { shipping_name: addrDraft.name.trim() || null, shipping_street: addrDraft.street.trim() || null, shipping_city: addrDraft.city.trim() || null, shipping_postal_code: addrDraft.postal.trim() || null, shipping_country: addrDraft.country.trim() || null }).then(() => reloadOrderById(order.id)).finally(() => { setAddressSaving(false); setAddressEditing(false); }); }}>{addressSaving ? "..." : "Zapisz"}</button>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="space-y-1 text-sm text-slate-800">
-                        <p className="font-bold text-base text-slate-900 pb-1">{summaryShippingName}</p>
-                        {shippingExtras?.company && <p className="text-slate-600">{shippingExtras.company}</p>}
-                        <p className="text-slate-600 flex items-center pt-1"><Phone size={14} className="mr-2 text-slate-400"/> {shippingExtras?.phone || contact.phone}</p>
-                        <p className="text-slate-600 flex items-center pb-3 border-b border-slate-100"><Mail size={14} className="mr-2 text-slate-400"/> <span className="truncate">{shippingExtras?.email || contact.email}</span></p>
-                        <div className="pt-2">
-                          {contact.addressLines.length > 0 && contact.addressLines[0] !== "—" ? contact.addressLines.map((ln, i) => <p key={`ship-${i}`}>{ln}</p>) : <p className="text-slate-500">Brak adresu.</p>}
-                          {shippingExtras?.pickupPoint && <p className="font-bold text-slate-700 mt-3">{shippingExtras.pickupPoint}</p>}
-                          {shippingExtras?.pickupCode && <p className="text-slate-700">Kod odbioru: {shippingExtras.pickupCode}</p>}
-                        </div>
-                      </div>
-                    )}
-                  </OrderDetailInfoColumn>
-
-                  <OrderDetailInfoColumn
-                    title={summaryDocEditing ? (docDraft.document_type === "INVOICE" ? "Faktura" : "Paragon") : panelDocumentLabel}
-                    actions={orderFulfillmentWhId != null && !summaryDocEditing ? (
-                      <button onClick={() => { const inv = parseBillingInvoice(order.addresses_json); const t = (order.panel_document_type ?? "").trim().toUpperCase(); setDocDraft({ document_type: t === "INVOICE" ? "INVOICE" : "PARAGON", sales_document_number: (order.sales_document_number ?? "").trim(), company_name: inv.companyName, nip: inv.nip, billing_email: inv.email }); setSummaryDocEditing(true); }} className={odInlineIconBtnClass} aria-label="Edytuj dokument sprzedaży">
-                        <Pencil className="h-4 w-4" strokeWidth={2} />
-                      </button>
-                    ) : null}
-                  >
-                    {summaryDocEditing ? (
-                      <div className="space-y-2 text-sm font-medium">
-                        <label className="flex flex-col text-slate-600">Rodzaj dokumentu<select className={inpSm} value={docDraft.document_type} onChange={(e) => setDocDraft((d) => ({ ...d, document_type: e.target.value === "INVOICE" ? "INVOICE" : "PARAGON" }))}><option value="PARAGON">Paragon</option><option value="INVOICE">Faktura</option></select></label>
-                        <label className="flex flex-col text-slate-600">Numer dokumentu<input className={inpSm} value={docDraft.sales_document_number} onChange={(e) => setDocDraft((d) => ({ ...d, sales_document_number: e.target.value }))} /></label>
-                        {docDraft.document_type === "INVOICE" && (
-                          <>
-                            <label className="flex flex-col text-slate-600">Firma<input className={inpSm} value={docDraft.company_name} onChange={(e) => setDocDraft((d) => ({ ...d, company_name: e.target.value }))} /></label>
-                            <label className="flex flex-col text-slate-600">NIP<input className={inpSm} value={docDraft.nip} onChange={(e) => setDocDraft((d) => ({ ...d, nip: e.target.value }))} /></label>
-                            <label className="flex flex-col text-slate-600">E-mail<input type="email" className={inpSm} value={docDraft.billing_email} onChange={(e) => setDocDraft((d) => ({ ...d, billing_email: e.target.value }))} /></label>
-                          </>
-                        )}
-                        <div className="flex justify-end gap-2 pt-3">
-                          <button className="rounded-md border border-slate-300 bg-white px-4 py-1.5 text-xs font-bold text-slate-700 transition-colors hover:bg-slate-50" onClick={() => { const inv = parseBillingInvoice(order.addresses_json); const t = (order.panel_document_type ?? "").trim().toUpperCase(); setDocDraft({ document_type: t === "INVOICE" ? "INVOICE" : "PARAGON", sales_document_number: (order.sales_document_number ?? "").trim(), company_name: inv.companyName, nip: inv.nip, billing_email: inv.email }); setSummaryDocEditing(false); }}>Anuluj</button>
-                          <button disabled={docSaving || orderFulfillmentWhId == null} className={brandPrimaryButtonClass} onClick={() => { setDocSaving(true); const isInv = docDraft.document_type === "INVOICE"; void patchOrder(order.id, { document_type: docDraft.document_type, sales_document_number: docDraft.sales_document_number.trim() || null, company_name: isInv ? docDraft.company_name.trim() || null : null, nip: isInv ? docDraft.nip.trim() || null : null, email: isInv ? docDraft.billing_email.trim() || null : null }).then(() => reloadOrderById(order.id)).finally(() => { setDocSaving(false); setSummaryDocEditing(false); }); }}>{docSaving ? "..." : "Zapisz"}</button>
-                        </div>
-                      </div>
-                    ) : (
-                      <>
-                        <SummaryCompactRow label="Rodzaj" value={panelDocumentLabel} />
-                        <SummaryCompactRow label="Numer" value={<span className="font-mono text-blue-600 hover:underline cursor-pointer">{(order.sales_document_number ?? "").trim() || "—"}</span>} />
-                        {(order.panel_document_type ?? "").trim().toUpperCase() === "INVOICE" && billingInvoice && (billingInvoice.companyName || billingInvoice.nip || billingInvoice.email) && (
-                          <div className="mt-3 space-y-1 border-t border-slate-100 pt-3 text-sm text-slate-700">
-                            {billingInvoice.companyName && <p className="font-bold text-slate-900">{billingInvoice.companyName}</p>}
-                            {billingInvoice.nip && <p>NIP {billingInvoice.nip}</p>}
-                            {billingInvoice.email && <p className="break-all">{billingInvoice.email}</p>}
-                            {billingInvoice.streetLine && <p>{billingInvoice.streetLine}</p>}
-                            {billingInvoice.cityLine && <p>{billingInvoice.cityLine}</p>}
-                          </div>
-                        )}
-                      </>
-                    )}
-                  </OrderDetailInfoColumn>
-                </div>
-
-                {(order.linked_documents?.length ?? 0) > 0 ? (
-                  <SummaryDashboardCard title="Powiązane dokumenty">
-                    <div className="flex flex-wrap gap-2">
-                      {order.linked_documents!.map((doc) => (
-                        <button
-                          key={`${doc.kind}-${doc.id}`}
-                          type="button"
-                          className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-800 hover:bg-slate-50"
-                          onClick={() => {
-                            if (doc.kind === "sale" || doc.sale_document_id) {
-                              void requestOrderDocumentPrint({
-                                kind: "sale_document",
-                                documentId: String(doc.sale_document_id ?? doc.id),
-                                kindCode: saleKindFromSubtype(doc.document_subtype ?? doc.document_type),
-                              });
-                            } else if (doc.stock_document_id != null) {
-                              void requestOrderDocumentPrint({
-                                kind: "stock_document",
-                                documentId: doc.stock_document_id,
-                                kindCode: stockKindFromType(doc.document_type),
-                              });
-                            }
-                          }}
-                        >
-                          <Printer className="h-4 w-4 shrink-0" strokeWidth={2} />
-                          {printButtonLabelPl(doc.print_kind ?? doc.document_subtype ?? doc.document_type)}
-                          {doc.document_number ? ` ${doc.document_number}` : ""}
-                        </button>
-                      ))}
-                    </div>
-                  </SummaryDashboardCard>
-                ) : null}
-
-                <section className="rounded-md border border-slate-200 bg-white p-5 shadow-sm overflow-hidden">
-                  <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-                    <h2 className="text-xl font-bold text-slate-900">
-                      Zamówione produkty ({summaryProductsLines.length})
-                    </h2>
-                    <div className="flex flex-wrap items-center gap-3">
-                      <span className="text-xs text-slate-500">Dodawanie produktów dostępne w zakładce „Produkty i magazyn”.</span>
-                      <Link to={WMS_ROUTES.packingOrder(order.id)} className={brandPrimaryButtonClass}>Spakuj</Link>
-                    </div>
-                  </div>
-                  {/* Wymuszenie whitespace-nowrap z zewnątrz by naprawić tabele dla SummaryProductsList */}
-                  <div className="min-w-0 text-sm text-slate-800 [&_table]:w-full [&_th]:whitespace-nowrap [&_td]:whitespace-nowrap">
-                    <OrderSummaryProductsList compact lines={summaryProductsLines} productEditTenantId={order.tenant_id ?? DAMAGE_TENANT_ID} onLineAction={handleOrderLineMenuAction} />
-                  </div>
-                </section>
-
-                <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
-                  <div className="space-y-6 lg:col-span-8">
-                    <SummaryDashboardCard title="Dopasowane opakowania" right={<Link to={WMS_ROUTES.packingOrder(order.id)} className="text-slate-400 hover:text-slate-800 transition-colors"><Pencil className="h-4 w-4" strokeWidth={2}/></Link>}>
-                      {wmsLoading ? <p className="text-sm text-slate-500">Ładowanie propozycji...</p> : <OrderMatchedPackagingSection card={wmsFulfillment} pairRecommendationColumns />}
-                    </SummaryDashboardCard>
-
-                    <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-                      <SummaryDashboardCard title="Listy przewozowe">
-                        {docsTabWaybillsRows.length > 0 ? (
-                          <div className="flex flex-col gap-3">
-                            <p className="text-sm text-slate-600">Liczba dokumentów: <span className="font-bold text-slate-900">{docsTabWaybillsRows.length}</span></p>
-                            <button type="button" onClick={() => setActiveTab("docs")} className="self-start rounded-md border border-slate-300 bg-white px-4 py-1.5 text-xs font-bold text-slate-700 transition-colors hover:bg-slate-50">Zobacz dokumenty</button>
-                          </div>
-                        ) : (
-                          <div className="flex flex-col items-start gap-3">
-                            <p className="text-sm text-slate-500">Brak listów przewozowych.</p>
-                            <button type="button" onClick={() => setActiveTab("docs")} className={brandPrimaryButtonClass}>Nadaj przesyłkę</button>
-                          </div>
-                        )}
-                      </SummaryDashboardCard>
-
-                      <SummaryDashboardCard title="Wideo WMS">
-                        <table className="w-full text-left text-sm border-t border-slate-100 mt-2">
-                          <thead className="text-[10px] font-bold uppercase text-slate-400"><tr><th className="py-2">Data</th><th className="py-2">Typ</th><th className="py-2">Autor</th><th className="py-2">Wygasa</th></tr></thead>
-                          <tbody><tr><td colSpan={4} className="py-4 text-center text-slate-500">Brak nagrań.</td></tr></tbody>
-                        </table>
-                      </SummaryDashboardCard>
-                    </div>
-
-                    <section id="order-summary-operational-notes" className="rounded-xl border border-slate-200 bg-white p-5">
-                      <h3 className="mb-4 text-[11px] font-bold uppercase tracking-wider text-slate-500">Notatki</h3>
-                      <div className="mb-4 space-y-2">
-                        {order.operational_notes && order.operational_notes.length > 0 ? (
-                          order.operational_notes.map((n) => (
-                            <div
-                              key={n.id}
-                              className="-mx-2 rounded-lg border border-transparent p-2 transition-colors hover:border-slate-200 hover:bg-slate-50/50"
-                            >
-                              <p className="mb-1 whitespace-pre-wrap text-sm text-slate-900">{n.content}</p>
-                              <div className="flex flex-wrap items-center gap-3 text-[10px] text-slate-500">
-                                <span>{formatDetailDate(n.created_at ?? null)}</span>
-                                {n.show_in_picking ? (
-                                  <span className="rounded border border-slate-300 bg-white px-1.5 py-0.5">WMS Zbieranie</span>
-                                ) : null}
-                                {n.show_in_packing ? (
-                                  <span className="rounded border border-slate-300 bg-white px-1.5 py-0.5">WMS Pakowanie</span>
-                                ) : null}
-                              </div>
-                            </div>
-                          ))
-                        ) : (
-                          <p className="text-sm text-slate-500">Brak notatek operacyjnych.</p>
-                        )}
-                      </div>
-                      <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
-                        <textarea
-                          value={opDraft}
-                          onChange={(e) => setOpDraft(e.target.value)}
-                          rows={2}
-                          placeholder="Wpisz treść notatki..."
-                          className="mb-3 w-full resize-none rounded-md border border-slate-300 bg-white p-3 text-sm outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500"
-                        />
-                        <div className="flex flex-wrap items-center justify-between gap-2">
-                          <div className="flex gap-4 text-xs text-slate-600">
-                            <label className="flex cursor-pointer items-center gap-1.5">
-                              <input
-                                type="checkbox"
-                                className="rounded border-slate-300 text-orange-500 focus:ring-orange-500"
-                                checked={opVisPick}
-                                onChange={(e) => setOpVisPick(e.target.checked)}
-                              />
-                              WMS zbieranie
-                            </label>
-                            <label className="flex cursor-pointer items-center gap-1.5">
-                              <input
-                                type="checkbox"
-                                className="rounded border-slate-300 text-orange-500 focus:ring-orange-500"
-                                checked={opVisPack}
-                                onChange={(e) => setOpVisPack(e.target.checked)}
-                              />
-                              WMS pakowanie
-                            </label>
-                          </div>
-                          <button
-                            type="button"
-                            disabled={opSaving || !opDraft.trim()}
-                            onClick={() => void saveOperationalNote()}
-                            className="rounded-md border border-slate-300 bg-white px-4 py-1.5 text-xs font-medium text-slate-700 shadow-sm transition-colors hover:bg-slate-50 disabled:opacity-50"
-                          >
-                            Zapisz notatkę
-                          </button>
-                        </div>
-                      </div>
-                    </section>
-
-                    <SummaryDashboardCard title="Wiadomość do klienta">
-                      <div className="flex gap-2 mb-4">
-                        <span className="bg-blue-50 text-blue-700 border border-blue-200 px-4 py-1.5 rounded-md text-sm font-bold shadow-sm">✓ E-mail</span>
-                        <span className="text-slate-600 border border-slate-200 px-4 py-1.5 rounded-md text-sm font-medium cursor-pointer transition-colors hover:bg-slate-50">SMS</span>
-                      </div>
-                      <textarea value={noteDraft} onChange={(e) => setNoteDraft(e.target.value)} rows={4} placeholder="Wpisz treść..." className="w-full resize-y rounded-md border border-slate-200 bg-white px-3 py-2 text-sm focus:border-orange-500 outline-none mb-4 transition-colors" />
-                      <div className="flex justify-between items-center">
-                        <button className="text-sm font-bold border border-slate-300 px-4 py-2 rounded-md text-slate-700 hover:bg-slate-50 shadow-sm flex items-center transition-colors"><Plus size={16} className="mr-2"/> Dodaj załącznik</button>
-                        <button type="button" className={brandPrimaryButtonClass}>Wyślij <Send size={16} className="ml-2"/></button>
-                      </div>
-                    </SummaryDashboardCard>
-                  </div>
-
-                  <div className="space-y-6 lg:col-span-4">
-                    <SummaryDashboardCard title="Podsumowanie zamówienia">
-                      {((wmsFulfillment?.customer_comment ?? order.latest_customer_comment_preview ?? "").trim()) ? (
-                        <div className="bg-[#fff9c4] border border-[#f5e08b] text-yellow-900 p-4 rounded-lg text-sm mb-4 shadow-sm"><strong>Uwaga:</strong> {(wmsFulfillment?.customer_comment ?? order.latest_customer_comment_preview ?? "").trim()}</div>
-                      ) : null}
-                      <div className="space-y-4 text-sm text-slate-600">
-                        <div className="flex justify-between items-center"><span>Źródło</span><span className="font-bold text-slate-900">{(order.source ?? "").trim() || "—"}</span></div>
-                        <div className="flex justify-between items-center"><span>Wartość produktów</span><span className="font-medium text-slate-800">{linesTotalDisplay}</span></div>
-                        <div className="flex justify-between items-center"><span>Koszt dostawy</span><span className="font-medium text-slate-800 flex items-center">{order.panel_shipping_cost != null ? formatMoney(Number(order.panel_shipping_cost), order.currency) : (order.panel_shipping_cost_display ?? "—")}</span></div>
-                        <div className="border-t border-slate-200 pt-4 mt-4 flex justify-between items-end">
-                          <span className="font-medium text-slate-700">Razem</span>
-                          <div className="text-right">
-                            <span className="font-black text-2xl text-slate-900 block">{formatMoney(order.value, order.currency)}</span>
-                            {paymentStatusIsPaid(order.panel_payment_status) && <span className={`${odPaidBadgeClass} mt-1`}>Opłacone</span>}
-                          </div>
-                        </div>
-                      </div>
-                    </SummaryDashboardCard>
-
-                    <SummaryDashboardCard title="Rabat i marża">
-                      <div className="flex space-x-2 mb-4">
-                        <div className="flex bg-slate-100 rounded-md p-1">
-                          <button className={`px-4 py-1.5 rounded text-xs font-bold transition-colors ${orderRabatMode === "pln" ? "bg-slate-900 text-white shadow-sm" : "text-slate-600 hover:text-slate-900"}`} onClick={() => setOrderRabatMode("pln")}>PLN</button>
-                          <button className={`px-4 py-1.5 rounded text-xs font-bold transition-colors ${orderRabatMode === "pct" ? "bg-slate-900 text-white shadow-sm" : "text-slate-600 hover:text-slate-900"}`} onClick={() => setOrderRabatMode("pct")}>%</button>
-                        </div>
-                        <input className="min-w-0 flex-1 rounded-md border border-slate-200 px-3 py-1.5 text-sm outline-none focus:border-orange-500 transition-colors" value={orderRabatDraft} onChange={e => setOrderRabatDraft(e.target.value)} placeholder="Rabat"/>
-                        <button disabled={orderRabatSaving} onClick={() => void saveOrderDiscount()} className={brandPrimaryButtonClass}>{orderRabatSaving ? "..." : "Zapisz"}</button>
-                      </div>
-                      <div className="space-y-2 text-sm text-slate-600">
-                        <div className="flex justify-between"><span>Po rabacie</span><span className="font-medium text-slate-900">{formatMoney(productsAfterDiscount, order.currency)}</span></div>
-                        <div className="flex justify-between"><span>Marża %</span><span className={`font-bold ${marginTone}`}>{order.margin != null && Number.isFinite(Number(order.margin)) ? `${Number(order.margin).toFixed(2)}%` : "—"}</span></div>
-                      </div>
-                    </SummaryDashboardCard>
-
-                    <SummaryDashboardCard title="Safe Order">
-                      <div className="flex flex-col items-center gap-2 py-2 text-center">
-                        <div className="flex h-12 w-12 items-center justify-center rounded-full bg-blue-50">
-                          <Shield size={24} className="text-blue-500" />
-                        </div>
-                        <p className="font-bold text-slate-900">Brak sygnałów ryzyka</p>
-                        <p className="text-slate-500 text-xs">Zamówienie nie ma aktywnych oznaczeń fraud.</p>
-                      </div>
-                    </SummaryDashboardCard>
-
-                    <SummaryDashboardCard title="Dodatkowe pola">
-                      <OrderAdditionalFieldsSection orderId={order.id} documents={order.order_documents ?? []} onOrderRefresh={() => void reloadOrderById(order.id)} />
-                    </SummaryDashboardCard>
-
-                    <SummaryDashboardCard title="WMS — operatorzy">
-                      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 mt-2">
-                        <div className="rounded-md border border-slate-200 bg-slate-50 p-4">
-                          <span className={odWmsPhaseChipClass}>W zbieraniu</span>
-                          <p className="font-bold text-slate-900 mt-2">{(timelinePickEvt?.user_label ?? timelinePickEvt?.title ?? "").trim() || "—"}</p>
-                          <p className="text-xs text-slate-500">{timelinePickEvt?.at ? formatDetailDate(timelinePickEvt.at) : "—"}</p>
-                        </div>
-                        <div className="rounded-md border border-slate-200 bg-slate-50 p-4">
-                          <span className={odWmsPhaseChipClass}>W pakowaniu</span>
-                          <p className="font-bold text-slate-900 mt-2">{(timelinePackEvt?.user_label ?? timelinePackEvt?.title ?? "").trim() || "—"}</p>
-                          <p className="text-xs text-slate-500">{timelinePackEvt?.at ? formatDetailDate(timelinePackEvt.at) : "—"}</p>
-                        </div>
-                      </div>
-                      <p className="text-sm text-slate-600 mt-4">Koszyk / wózek: <span className="font-bold text-slate-900">{(wmsFulfillment?.basket_code ?? wmsFulfillment?.wms_vehicle_label ?? "").trim() || "—"}</span></p>
-                    </SummaryDashboardCard>
-                  </div>
-                </div>
-
-                <section className="overflow-hidden rounded-xl border border-slate-200 bg-white">
-                  <div className="flex items-center justify-between border-b border-slate-100 p-5">
-                    <h3 className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Logi czynności</h3>
-                    <div className="relative w-64 max-w-full">
-                      <input
-                        type="text"
-                        value={summaryLogSearch}
-                        onChange={(e) => setSummaryLogSearch(e.target.value)}
-                        placeholder="Szukaj..."
-                        className="w-full rounded-md border border-slate-200 py-1.5 pl-3 pr-8 text-xs outline-none transition-colors focus:border-slate-400"
-                      />
-                    </div>
-                  </div>
-                  <div className="w-full overflow-x-auto">
-                    <table className="w-full text-left">
-                      <thead>
-                        <tr className="border-b border-slate-100 bg-white">
-                          <th className="w-[15%] px-5 py-3 text-[10px] font-bold uppercase tracking-wider text-slate-400">Czas</th>
-                          <th className="w-[15%] px-5 py-3 text-[10px] font-bold uppercase tracking-wider text-slate-400">Użytkownik</th>
-                          <th className="w-[20%] px-5 py-3 text-[10px] font-bold uppercase tracking-wider text-slate-400">Zdarzenie</th>
-                          <th className="w-[50%] px-5 py-3 text-[10px] font-bold uppercase tracking-wider text-slate-400">Komunikat</th>
-                        </tr>
-                      </thead>
-                      <tbody className="text-xs text-slate-900">
-                        {summaryPanelLogs.map((row) => (
-                          <tr
-                            key={String(row.id)}
-                            className={`border-b border-slate-50 transition-colors hover:bg-slate-50/50 ${
-                              row.severity === "error"
-                                ? "bg-red-50 text-red-900"
-                                : row.severity === "warn"
-                                  ? "bg-amber-50 text-amber-900"
-                                  : ""
-                            }`}
-                          >
-                            <td className="px-5 py-3 text-slate-500">{row.at}</td>
-                            <td className="px-5 py-3 font-semibold">{row.user}</td>
-                            <td className="px-5 py-3">
-                              <OrderEventTypeLabel eventType={row.eventKey} />
-                            </td>
-                            <td className="px-5 py-3">{row.msg}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </section>
-              </div>
+              <OrderDetailSummaryTab
+                order={order}
+                contact={contact}
+                setEditBuyerModalOpen={setEditBuyerModalOpen}
+                orderHasUnlinkedCustomerData={orderHasUnlinkedCustomerData}
+                reloadOrderById={reloadOrderById}
+                loadWmsFulfillment={loadWmsFulfillment}
+                payMethodDraft={payMethodDraft}
+                setPayMethodDraft={setPayMethodDraft}
+                payStatusDraft={payStatusDraft}
+                setPayStatusDraft={setPayStatusDraft}
+                isStationarySale={isStationarySale}
+                shipDraft={shipDraft}
+                setShipDraft={setShipDraft}
+                orderFulfillmentWhId={orderFulfillmentWhId}
+                shippingMethods={shippingMethods}
+                shipPaySaving={shipPaySaving}
+                setShipPaySaving={setShipPaySaving}
+                addressEditing={addressEditing}
+                setAddressEditing={setAddressEditing}
+                addrDraft={addrDraft}
+                setAddrDraft={setAddrDraft}
+                addressSaving={addressSaving}
+                setAddressSaving={setAddressSaving}
+                summaryShippingName={summaryShippingName}
+                shippingExtras={shippingExtras}
+                summaryDocEditing={summaryDocEditing}
+                setSummaryDocEditing={setSummaryDocEditing}
+                docDraft={docDraft}
+                setDocDraft={setDocDraft}
+                panelDocumentLabel={panelDocumentLabel}
+                docSaving={docSaving}
+                setDocSaving={setDocSaving}
+                billingInvoice={billingInvoice}
+                requestOrderDocumentPrint={requestOrderDocumentPrint}
+                summaryProductsLines={summaryProductsLines}
+                handleOrderLineMenuAction={handleOrderLineMenuAction}
+                wmsLoading={wmsLoading}
+                wmsFulfillment={wmsFulfillment}
+                docsTabWaybillsRows={docsTabWaybillsRows}
+                setActiveTab={setActiveTab}
+                formatDetailDate={formatDetailDate}
+                opDraft={opDraft}
+                setOpDraft={setOpDraft}
+                opVisPick={opVisPick}
+                setOpVisPick={setOpVisPick}
+                opVisPack={opVisPack}
+                setOpVisPack={setOpVisPack}
+                opSaving={opSaving}
+                saveOperationalNote={saveOperationalNote}
+                noteDraft={noteDraft}
+                setNoteDraft={setNoteDraft}
+                linesTotalDisplay={linesTotalDisplay}
+                orderRabatMode={orderRabatMode}
+                setOrderRabatMode={setOrderRabatMode}
+                orderRabatDraft={orderRabatDraft}
+                setOrderRabatDraft={setOrderRabatDraft}
+                orderRabatSaving={orderRabatSaving}
+                saveOrderDiscount={saveOrderDiscount}
+                productsAfterDiscount={productsAfterDiscount}
+                marginTone={marginTone}
+                timelinePickEvt={timelinePickEvt}
+                timelinePackEvt={timelinePackEvt}
+                summaryLogSearch={summaryLogSearch}
+                setSummaryLogSearch={setSummaryLogSearch}
+                summaryPanelLogs={summaryPanelLogs}
+              />
             ) : null}
 
             {activeTab === "products" ? (
@@ -2659,6 +1494,26 @@ export default function OrderDetailPage() {
                       orderId={order.id}
                     />
                   ) : null}
+                  <div className="space-y-4">
+                    <OrderFulfillmentWarehousePanel
+                      orderId={order.id}
+                      tenantId={order.tenant_id ?? DAMAGE_TENANT_ID}
+                      warehouseId={orderFulfillmentWhId}
+                      warehouseName={order.fulfillment_warehouse_name ?? null}
+                      phase={order.fulfillment_assignment_phase}
+                      locked={Boolean(order.fulfillment_warehouse_change_locked)}
+                      strategy={order.fulfillment_assignment_strategy}
+                      assignedAt={order.fulfillment_assigned_at}
+                      assignedByLabel={order.fulfillment_assigned_by_label}
+                      assignmentReason={order.fulfillment_assignment_reason}
+                      onAssigned={() => reloadOrderById(order.id)}
+                    />
+                    <OrderConsolidationPanel
+                      orderId={order.id}
+                      onChanged={() => reloadOrderById(order.id)}
+                    />
+                    <OrderFulfillmentAssignmentHistory orderId={order.id} />
+                  </div>
                   <div className="bg-white rounded-md border border-slate-200 shadow-sm p-5">
                      <h3 className="text-[11px] font-bold uppercase tracking-widest text-slate-500 mb-4">HISTORIA WMS</h3>
                      <OrderHistoryTimeline compact events={orderHistoryTimelineEvents} formatDate={formatDetailDate} />
@@ -2690,13 +1545,13 @@ export default function OrderDetailPage() {
                   </section>
                 </main>
                 <aside className="space-y-6">
-                  <SummaryDashboardCard title="Klient">
+                  <OrderDetailSectionCard title="Klient">
                     <div className="text-sm space-y-2">
                       <p className="font-bold text-lg text-slate-900">{contact.name}</p>
                       <p className="text-slate-600 flex items-center pt-2"><Phone size={14} className="mr-2 text-slate-400"/> {contact.phone}</p>
                       <p className="text-slate-600 flex items-center"><Mail size={14} className="mr-2 text-slate-400"/> <span className="break-all">{contact.email}</span></p>
                     </div>
-                  </SummaryDashboardCard>
+                  </OrderDetailSectionCard>
                 </aside>
               </div>
             ) : null}
