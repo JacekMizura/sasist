@@ -1,3 +1,18 @@
+## 2026-07-30 — Karta Zamówienia: UX density / hierarchia (summary)
+
+- Status pełny (bez truncate), jak makieta; jedna etykieta grupy
+- Produkty jako pas centralny; mniej ramek; niższe wiersze; wrap meta
+- Prawa kolumna = jeden panel (`aside`) zamiast stosu kart
+- Opakowania `operatorQuiet` (bez silnik/pewność); puste sekcje kompaktowe
+- Zacieśnione paddingi/gapy; `max-w-[1440px]`; bez zmian API/logiki
+
+## 2026-07-30 — Karta Zamówienia: przebudowa UX wg makiety (summary)
+
+- Tokeny + `OrderDetailInfoColumn` / `OrderDetailProcessStatusRow`
+- Nagłówek (numer dashed) + status/proces + stepper z istniejącego WMS pick/pack
+- Podsumowanie: 4 kolumny info, tabela produktów (compact), siatka 8/4, notatki/logi
+- Bez zmian backend/API/logiki
+
 ## 2026-07-30 — Automatyzacje: wspólne summary na liście + historii
 
 - Extract: `AutomationConditionSummary`, `AutomationEffectSummary` (edytor + lista + historia)

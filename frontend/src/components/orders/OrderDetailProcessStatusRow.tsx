@@ -45,7 +45,7 @@ export function OrderDetailProcessStatusRow({
   const step3: StepState = packDone ? "done" : "idle";
 
   return (
-    <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+    <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
       <div className="min-w-0">
         {statusGroupLabel ? (
           <div className="mb-1 text-[11px] text-slate-500">{statusGroupLabel}</div>
@@ -53,7 +53,7 @@ export function OrderDetailProcessStatusRow({
         {statusControl}
       </div>
 
-      <div className="flex flex-wrap items-center gap-3 sm:gap-4">
+      <div className="flex flex-wrap items-center gap-3">
         <div className="flex items-center gap-3 rounded-full border border-slate-200 bg-white py-1 pl-1 pr-4">
           <div className="flex h-8 w-8 items-center justify-center rounded-full border border-slate-300 text-slate-600">
             <Truck className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />

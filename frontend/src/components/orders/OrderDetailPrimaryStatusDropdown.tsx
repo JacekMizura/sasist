@@ -18,7 +18,7 @@ type Props = {
   saving: boolean;
   /** Zapis statusu (PATCH + odświeżenie stanu). */
   onSelectStatus: (subStatusId: number | null) => Promise<void>;
-  /** Kompaktowy pill jak nagłówek operacyjny OMS (rounded-xl, kropka, bez grubego paska). */
+  /** Kompaktowy trigger jak w makiecie karty zamówienia (kropka + pełna nazwa). */
   variant?: "default" | "compact";
 };
 
@@ -32,12 +32,6 @@ function statusLabelCompact(status: OrderUiStatusBrief | null): string {
   if (!status?.name?.trim()) return "Status panelu";
   return status.name.trim();
 }
-
-const GROUP_MICRO: Record<OrderUiMainGroup, string> = {
-  NEW: "Nowe",
-  IN_PROGRESS: "W toku",
-  DONE: "Zakończone",
-};
 
 function PickRow({
   s,
@@ -130,8 +124,9 @@ export function OrderDetailPrimaryStatusDropdown({
       })
       .filter((x): x is NonNullable<typeof x> => x != null) ?? [];
 
+  /* Makieta: w-64, rounded, pełna nazwa statusu — bez truncate, bez mikro-grupy w chipie. */
   const triggerBtnClass = compact
-    ? "inline-flex h-[38px] max-w-[min(100%,14rem)] items-center gap-2 rounded-xl border border-slate-200/90 px-2.5 text-left text-xs font-semibold shadow-none outline-none ring-inset transition hover:brightness-[0.99] focus-visible:ring-2 focus-visible:ring-sky-500/30 focus-visible:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-50"
+    ? "inline-flex min-h-[38px] w-64 max-w-full items-center justify-between gap-2 rounded border px-3 py-2 text-left text-sm font-medium shadow-none outline-none transition hover:brightness-[0.99] focus-visible:ring-2 focus-visible:ring-sky-500/30 focus-visible:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-50"
     : "inline-flex min-h-[34px] w-fit max-w-[min(100%,36rem)] items-center gap-2 rounded-md px-3 py-1.5 text-left text-sm font-semibold shadow-none outline-none transition hover:brightness-[0.99] focus-visible:ring-2 focus-visible:ring-sky-500/35 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50";
 
   return (
@@ -142,29 +137,33 @@ export function OrderDetailPrimaryStatusDropdown({
         aria-expanded={open}
         aria-haspopup="listbox"
         className={triggerBtnClass}
-        style={compact ? { ...triggerStyle, borderLeft: "none", borderRadius: "0.75rem" } : triggerStyle}
+        style={compact ? { ...triggerStyle, borderLeft: undefined, borderRadius: "0.25rem" } : triggerStyle}
         onClick={() => {
           if (panelSummary == null || busy) return;
           setOpen((v) => !v);
         }}
       >
         {compact ? (
-          <>
-            <span className="hidden shrink-0 text-[9px] font-semibold uppercase leading-none tracking-wide text-slate-400 sm:inline">
-              {GROUP_MICRO[group]}
-            </span>
+          <span className="flex min-w-0 items-center gap-2">
             <span
-              className="h-2 w-2 shrink-0 rounded-full ring-1 ring-white/80"
+              className="h-2.5 w-2.5 shrink-0 rounded-full"
               style={{ backgroundColor: stripeHex }}
               aria-hidden
             />
+            <span className="whitespace-normal break-words leading-snug">
+              {statusLabelCompact(currentStatus)}
+            </span>
+          </span>
+        ) : (
+          <>
+            {currentStatus?.image_url ? (
+              <img src={currentStatus.image_url} alt="" className="h-5 w-5 shrink-0 rounded object-contain" />
+            ) : null}
+            <span className="min-w-0 whitespace-normal break-words leading-snug">
+              {statusLabelFull(currentStatus)}
+            </span>
           </>
-        ) : currentStatus?.image_url ? (
-          <img src={currentStatus.image_url} alt="" className="h-5 w-5 shrink-0 rounded object-contain" />
-        ) : null}
-        <span className="min-w-0 truncate">
-          {compact ? statusLabelCompact(currentStatus) : statusLabelFull(currentStatus)}
-        </span>
+        )}
         <ChevronDown
           className={`h-3.5 w-3.5 shrink-0 opacity-60 transition-transform ${open ? "rotate-180" : ""}`}
           aria-hidden

@@ -23,7 +23,7 @@ export function OrderDetailInfoColumn({ title, titleAddon, actions, children, cl
         </h2>
         {actions ? <div className="flex shrink-0 items-center gap-2">{actions}</div> : null}
       </div>
-      <div className="mt-6 space-y-3 text-sm text-slate-900">{children}</div>
+      <div className="mt-3 space-y-2 text-sm text-slate-900">{children}</div>
     </section>
   );
 }

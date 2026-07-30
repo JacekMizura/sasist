@@ -22,15 +22,15 @@ export function OrderDetailSectionCard({
   elevated = false,
 }: Props) {
   const shellClass = elevated
-    ? "rounded-xl border border-slate-200 bg-white p-6 shadow-sm"
-    : "rounded-xl border border-slate-200 bg-white p-5 shadow-sm";
+    ? "rounded-xl border border-slate-200 bg-white p-4 shadow-sm"
+    : "rounded-xl border border-slate-200 bg-white p-4";
   return (
-    <section className={className ?? `${shellClass} flex flex-col h-full`}>
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="text-[11px] font-bold uppercase tracking-widest text-slate-500">{title}</h3>
+    <section className={className ?? shellClass}>
+      <div className="mb-3 flex items-center justify-between">
+        <h3 className="text-[11px] font-bold uppercase tracking-wider text-slate-500">{title}</h3>
         {right}
       </div>
-      <div className={`flex-1 ${contentClassName ?? ""}`}>{children}</div>
+      <div className={contentClassName ?? ""}>{children}</div>
     </section>
   );
 }

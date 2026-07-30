@@ -111,15 +111,15 @@ export function OrderCustomerLinkPanel({
 
   return (
     <>
-      <div className="rounded-lg border border-amber-200 bg-amber-50/80 px-3 py-2.5 space-y-2">
+      <div className="rounded-lg border border-amber-200 bg-amber-50/80 px-2.5 py-2 space-y-1.5">
         <div className="flex flex-wrap items-center gap-2">
-          <span className="inline-flex rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-semibold text-amber-900 ring-1 ring-amber-200">
+          <span className="inline-flex rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-900 ring-1 ring-amber-200">
             Klient niezapisany
           </span>
           {loading ? (
-            <span className="inline-flex items-center gap-1 text-xs text-slate-600">
+            <span className="inline-flex items-center gap-1 text-[11px] text-slate-600">
               <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
-              Analiza danych…
+              Sprawdzam…
             </span>
           ) : null}
         </div>

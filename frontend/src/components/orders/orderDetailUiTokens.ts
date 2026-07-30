@@ -12,7 +12,7 @@ export const odInlineIconBtnClass =
   "inline-flex shrink-0 items-center justify-center rounded border border-slate-300 p-1 text-slate-500 transition-colors hover:border-slate-400 hover:text-slate-900";
 
 /** Large section title in info columns (Kupujący, Dostawa, …). */
-export const odInfoSectionTitleClass = "text-xl font-bold text-slate-900";
+export const odInfoSectionTitleClass = "text-lg font-bold text-slate-900";
 
 /** Micro uppercase card title (Podsumowanie, Safe Order, WMS, …). */
 export const odCardMicroTitleClass =
@@ -20,11 +20,15 @@ export const odCardMicroTitleClass =
 
 /** Standard content card shell. */
 export const odCardShellClass =
-  "rounded-xl border border-slate-200 bg-white p-5";
+  "rounded-xl border border-slate-200 bg-white p-4";
 
 /** Slightly elevated summary finance card. */
 export const odCardShellElevatedClass =
-  "rounded-xl border border-slate-200 bg-white p-6 shadow-sm";
+  "rounded-xl border border-slate-200 bg-white p-4 shadow-sm";
+
+/** Right-rail section divider title inside unified side panel. */
+export const odSidePanelSectionTitleClass =
+  "text-[11px] font-bold uppercase tracking-wider text-slate-500";
 
 /** Paid / success pill. */
 export const odPaidBadgeClass =

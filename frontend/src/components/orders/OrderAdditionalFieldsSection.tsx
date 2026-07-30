@@ -176,9 +176,11 @@ type Props = {
   documents: OrderDocBrief[];
   /** Po uploadzie pliku — odśwież zamówienie (np. gdy pole FILES tworzy wpis w dokumentach). */
   onOrderRefresh?: () => void;
+  /** Bez zewnętrznej ramki — gdy sekcja siedzi już w panelu bocznym. */
+  embedded?: boolean;
 };
 
-export default function OrderAdditionalFieldsSection({ orderId, documents, onOrderRefresh }: Props) {
+export default function OrderAdditionalFieldsSection({ orderId, documents, onOrderRefresh, embedded = false }: Props) {
   const [rows, setRows] = useState<OrderCustomFieldWithValueDto[]>([]);
   const [draftByFieldId, setDraftByFieldId] = useState<Record<number, unknown>>({});
   const [loading, setLoading] = useState(true);
@@ -412,11 +414,11 @@ export default function OrderAdditionalFieldsSection({ orderId, documents, onOrd
   }
 
   if (rows.length === 0) {
-    return <p className="text-[11px] leading-snug text-slate-500">Zamówienia: Pola dodatkowe</p>;
+    return <p className="text-[11px] leading-snug text-slate-500">Brak dodatkowych pól.</p>;
   }
 
   return (
-    <div className="rounded-lg border border-slate-200/90 bg-white">
+    <div className={embedded ? "" : "rounded-lg border border-slate-200/90 bg-white"}>
       <div className="divide-y divide-slate-100">
       {rows.map(({ field }) => {
         const draft = draftByFieldId[field.id];

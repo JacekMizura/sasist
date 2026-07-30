@@ -103,8 +103,8 @@ export function OrderDetailHeaderBar({
   shippingLabel,
 }: Props) {
   return (
-    <div className="w-full flex-col lg:flex-row lg:items-start p-6 pb-0 max-w-full mx-auto">
-        <nav className="mb-4 flex flex-wrap items-center gap-1.5 text-sm" aria-label="Ścieżka nawigacji">
+    <div className="mx-auto w-full max-w-[1440px] px-5 pb-0 pt-4">
+        <nav className="mb-3 flex flex-wrap items-center gap-1.5 text-sm" aria-label="Ścieżka nawigacji">
           <Link to="/dashboard" className="inline-flex items-center gap-1 font-medium text-slate-500 transition hover:text-slate-800">
             <Home className="h-4 w-4 shrink-0" strokeWidth={2} aria-hidden />
           </Link>
@@ -114,8 +114,8 @@ export function OrderDetailHeaderBar({
           <span className="font-medium text-slate-900">#{order.number ?? order.id}</span>
         </nav>
 
-        <div className="min-w-0 flex-1 space-y-4">
-            <div className="flex flex-wrap items-center gap-x-2 gap-y-2 lg:flex-nowrap lg:gap-x-3 pb-4">
+        <div className="min-w-0 flex-1 space-y-3">
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-2 pb-3 lg:flex-nowrap lg:gap-x-3">
               <div className="flex shrink-0 items-center gap-1">
                 <button type="button" disabled={prevOrderId == null} onClick={() => prevOrderId != null && navigate(`/orders/${prevOrderId}`, { state: locationState })} className={ORDER_DETAIL_HEADER_ICON_BTN}>
                   <ChevronLeft className="h-4 w-4 shrink-0" strokeWidth={2} />
@@ -183,7 +183,7 @@ export function OrderDetailHeaderBar({
               </div>
             </div>
 
-            <div className="flex flex-col gap-4 border-t border-slate-100 pb-2 pt-4">
+            <div className="flex flex-col gap-3 border-t border-slate-100 pb-1 pt-3">
               <OrderDetailProcessStatusRow
                 statusGroupLabel={
                   order.order_ui_status?.main_group
@@ -191,7 +191,7 @@ export function OrderDetailHeaderBar({
                     : null
                 }
                 statusControl={
-                  <div className="flex min-w-max shrink-0 items-center">
+                  <div className="flex min-w-0 shrink-0 items-center">
                     {orderFulfillmentWhId != null ? (
                       <OrderDetailPrimaryStatusDropdown
                         variant="compact"
@@ -254,8 +254,8 @@ export function OrderDetailHeaderBar({
               />
             </div>
 
-            <div className="mt-2 border-b border-slate-200">
-              <div className="flex gap-8 overflow-x-auto" role="tablist" aria-label="Sekcje zamówienia">
+            <div className="mt-1 border-b border-slate-200">
+              <div className="flex gap-6 overflow-x-auto" role="tablist" aria-label="Sekcje zamówienia">
                 {DETAIL_TABS.map((t) => (
                   <button
                     key={t.id}

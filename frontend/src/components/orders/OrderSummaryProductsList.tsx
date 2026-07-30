@@ -88,18 +88,18 @@ export function OrderSummaryProductsList({ lines, productEditTenantId, onLineAct
 
   if (compact) {
     return (
-      <div className="w-full min-w-0 overflow-x-auto rounded border border-slate-200">
+      <div className="w-full min-w-0 overflow-x-auto">
         <table className="w-full border-collapse text-left">
           <thead>
-            <tr className="border-b border-slate-200 bg-slate-50/50">
-              <th className="w-[65%] px-4 py-2 text-xs font-normal text-slate-500">Produkt</th>
-              <th className="w-[5%] px-4 py-2 text-center text-xs font-normal text-slate-500">VAT</th>
-              <th className="w-[10%] px-4 py-2 text-center text-xs font-normal text-slate-500">Ilość</th>
-              <th className="w-[15%] px-4 py-2 text-right text-xs font-normal text-slate-500">Cena i wartość</th>
-              <th className="w-[5%] px-4 py-2" aria-hidden />
+            <tr className="border-b border-slate-200">
+              <th className="w-[65%] px-3 py-2 text-xs font-normal text-slate-500">Produkt</th>
+              <th className="w-[5%] whitespace-nowrap px-3 py-2 text-center text-xs font-normal text-slate-500">VAT</th>
+              <th className="w-[10%] whitespace-nowrap px-3 py-2 text-center text-xs font-normal text-slate-500">Ilość</th>
+              <th className="w-[15%] whitespace-nowrap px-3 py-2 text-right text-xs font-normal text-slate-500">Cena i wartość</th>
+              <th className="w-[5%] px-3 py-2" aria-hidden />
             </tr>
           </thead>
-          <tbody className="divide-y divide-slate-200">
+          <tbody className="divide-y divide-slate-100">
             {lines.map((row) => {
               const pid = row.item.product?.id;
               const canProductLink =
@@ -119,9 +119,9 @@ export function OrderSummaryProductsList({ lines, productEditTenantId, onLineAct
 
               return (
                 <tr key={row.item.id} className="align-top">
-                  <td className="px-4 py-4">
-                    <div className="flex items-start gap-4">
-                      <div className="h-12 w-12 shrink-0 rounded border border-slate-200 p-0.5">
+                  <td className="min-w-0 px-3 py-2.5">
+                    <div className="flex items-start gap-3">
+                      <div className="h-10 w-10 shrink-0 rounded border border-slate-200 p-0.5">
                         {row.imageUrl ? (
                           <img
                             src={row.imageUrl}
@@ -135,8 +135,8 @@ export function OrderSummaryProductsList({ lines, productEditTenantId, onLineAct
                           </div>
                         )}
                       </div>
-                      <div className="min-w-0">
-                        <div className="mb-1 flex items-center gap-2">
+                      <div className="min-w-0 flex-1">
+                        <div className="mb-0.5 flex items-center gap-2">
                           {canProductLink ? (
                             <Link
                               to={getProductDetailsPath(pid)}
@@ -150,9 +150,9 @@ export function OrderSummaryProductsList({ lines, productEditTenantId, onLineAct
                           )}
                         </div>
                         {metaBits.length > 0 ? (
-                          <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-600">
+                          <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-slate-600">
                             {metaBits.map((m) => (
-                              <span key={`${row.item.id}-${m.label}`}>
+                              <span key={`${row.item.id}-${m.label}`} className="whitespace-normal break-words">
                                 {m.label}:{" "}
                                 <span
                                   className={
@@ -170,8 +170,8 @@ export function OrderSummaryProductsList({ lines, productEditTenantId, onLineAct
                       </div>
                     </div>
                   </td>
-                  <td className="px-4 py-4 text-center text-sm text-slate-700">{row.vatLabel}</td>
-                  <td className="px-4 py-4 text-center">
+                  <td className="whitespace-nowrap px-3 py-2.5 text-center text-sm text-slate-700">{row.vatLabel}</td>
+                  <td className="whitespace-nowrap px-3 py-2.5 text-center">
                     {qtyHighlight ? (
                       <span className="inline-flex h-6 w-6 items-center justify-center rounded bg-amber-100 text-sm font-bold text-amber-800">
                         {row.quantityDisplay}
@@ -180,7 +180,7 @@ export function OrderSummaryProductsList({ lines, productEditTenantId, onLineAct
                       <span className="text-sm text-slate-900">{row.quantityDisplay}</span>
                     )}
                   </td>
-                  <td className="px-4 py-4 text-right">
+                  <td className="whitespace-nowrap px-3 py-2.5 text-right">
                     {qtyHighlight || (row.rabatDisplay && row.rabatDisplay !== "—") ? (
                       <>
                         <div className="text-[11px] text-slate-500">
@@ -195,7 +195,7 @@ export function OrderSummaryProductsList({ lines, productEditTenantId, onLineAct
                       <div className="text-sm text-slate-900">{row.lineGross}</div>
                     )}
                   </td>
-                  <td className="px-4 py-4 text-right">
+                  <td className="whitespace-nowrap px-3 py-2.5 text-right">
                     <OrderLineKebabMenu
                       lineId={row.item.id}
                       anchorId={`order-summary-line-kebab-${row.item.id}`}
