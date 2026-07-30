@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ChevronRight, Search } from "lucide-react";
+import { Check, ChevronRight, Search } from "lucide-react";
 
 import { PanelStatusWmsIconColumn } from "../../panel/PanelStatusWmsIconColumn";
-import { panelTreeStatusBarClass, panelTreeStatusRowClass } from "../../panel/panelStatusTreeStyles";
+import { panelTreeStatusBarClass } from "../../panel/panelStatusTreeStyles";
 import { getPanelStatusWmsMarkers } from "../panelStatusWmsChips";
 import { ORDERS_PANEL_GROUP_LABELS } from "../OrdersPanelStatusSidebar";
 import { buildPanelSidebarLayout } from "../../../utils/orderPanelSidebarBuckets";
@@ -18,12 +18,10 @@ import type {
 export type AutomationStatusPickerProps = {
   panelSummary: OrderUiStatusPanelSummary | null;
   panelSubgroups?: OrderUiPanelSubgroupRead[] | null;
-  /** Multi when onSelectedIdsChange is set; otherwise single via onPick / selectedStatusId. */
   selectedStatusIds?: readonly number[];
   onSelectedIdsChange?: (ids: number[]) => void;
   selectedStatusId?: number | null;
   onPick?: (statusId: number | null) => void;
-  /** Scroll + flash this status (e.g. from badge click). */
   focusStatusId?: number | null;
   onFocusStatusHandled?: () => void;
   className?: string;
@@ -65,11 +63,21 @@ function StatusRow({
       type="button"
       id={`auto-st-${status.id}`}
       aria-pressed={selected}
-      className={`${panelTreeStatusRowClass(selected)} ${
-        highlighted ? "ring-2 ring-orange-300 ring-offset-1" : ""
-      }`}
+      className={`flex w-full items-start gap-2 rounded-md border px-2 py-1.5 text-left text-sm transition-colors ${
+        selected
+          ? "border-orange-200 bg-orange-50 font-medium text-slate-900"
+          : "border-transparent font-normal text-slate-700 hover:bg-slate-50"
+      } ${highlighted ? "ring-2 ring-orange-400 ring-offset-1" : ""}`}
       onClick={onPick}
     >
+      <span
+        className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded border ${
+          selected ? "border-orange-500 bg-orange-500 text-white" : "border-slate-300 bg-white"
+        }`}
+        aria-hidden
+      >
+        {selected ? <Check className="h-2.5 w-2.5" strokeWidth={3} /> : null}
+      </span>
       <PanelStatusWmsIconColumn markers={markers} />
       <span className={panelTreeStatusBarClass(selected)} style={{ backgroundColor: stripeColor }} aria-hidden />
       <span className="min-w-0 flex-1 leading-snug">{status.name}</span>
@@ -82,9 +90,6 @@ function StatusRow({
 
 const EMPTY_IDS: readonly number[] = [];
 
-/**
- * Status picker for automations: accordion groups, no counts, desktop multi-select friendly.
- */
 export function AutomationStatusPicker({
   panelSummary,
   panelSubgroups,
@@ -248,7 +253,7 @@ export function AutomationStatusPicker({
             </ul>
           )
         ) : (
-          <ul className="space-y-0.5">
+          <ul className="space-y-1">
             {groupBlocks.map(({ block, groupLabel, layout }) => {
               const key = block.main_group;
               const open = isGroupOpen(key);
@@ -256,24 +261,26 @@ export function AutomationStatusPicker({
                 layout.ungrouped.length + layout.subgroupSections.reduce((n, s) => n + s.rows.length, 0);
               if (statusCount === 0) return null;
               return (
-                <li key={key}>
+                <li key={key} className="rounded-md bg-slate-50/80">
                   <button
                     type="button"
-                    className="flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-left text-xs font-semibold uppercase tracking-wide text-slate-600 hover:bg-slate-50"
+                    className="flex w-full items-center gap-1.5 rounded-md px-2 py-2 text-left hover:bg-slate-100/80"
                     aria-expanded={open}
                     onClick={() => toggleGroup(key)}
                   >
                     <ChevronRight
-                      className={`h-3.5 w-3.5 shrink-0 text-slate-400 transition-transform duration-150 ${
+                      className={`h-3.5 w-3.5 shrink-0 text-slate-500 transition-transform duration-150 ${
                         open ? "rotate-90" : ""
                       }`}
                       strokeWidth={2}
                       aria-hidden
                     />
-                    <span className="min-w-0 flex-1">{groupLabel}</span>
+                    <span className="min-w-0 flex-1 text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                      {groupLabel}
+                    </span>
                   </button>
                   {open ? (
-                    <div className="ml-1 space-y-0.5 border-l border-slate-100 pl-2">
+                    <div className="space-y-0.5 bg-white px-1.5 pb-1.5 pt-0.5">
                       {layout.ungrouped.map((s) => (
                         <StatusRow
                           key={s.id}
@@ -287,7 +294,9 @@ export function AutomationStatusPicker({
                       ))}
                       {layout.subgroupSections.map((sec) => (
                         <div key={sec.key} className="pt-0.5">
-                          <p className="px-2 py-1 text-[10px] font-medium text-slate-400">{sec.title}</p>
+                          <p className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+                            {sec.title}
+                          </p>
                           {sec.rows.map((s) => (
                             <StatusRow
                               key={s.id}

@@ -117,7 +117,7 @@ function ConditionSummary({
       </p>
       {useBadges ? (
         parts.valueLabels.length > 0 ? (
-          <AutomationValueBadges labels={parts.valueLabels} />
+          <AutomationValueBadges labels={parts.valueLabels} fitToWidth />
         ) : (
           <p className="text-sm text-slate-400">—</p>
         )
@@ -143,7 +143,7 @@ function EffectSummary({
     <div className="min-w-0 space-y-1.5">
       <p className="text-sm font-semibold text-slate-900">{title}</p>
       {effect.kind === "change_status" && primary ? (
-        <AutomationValueBadges labels={[primary]} maxVisible={1} />
+        <AutomationValueBadges labels={[primary]} />
       ) : primary ? (
         <p className="text-sm font-medium text-slate-800">{primary}</p>
       ) : (

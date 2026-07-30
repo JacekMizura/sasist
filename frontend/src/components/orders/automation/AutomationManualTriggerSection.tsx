@@ -53,23 +53,44 @@ export function AutomationManualTriggerSection({ manualTrigger, onChange }: Prop
 
   return (
     <div className="space-y-4">
-      <div className={`${oaEditorHeaderCardClass} space-y-4`}>
-        <div>
-          <p className="text-sm font-semibold text-slate-900">Uruchamianie ręczne</p>
-          <p className="mt-1 text-sm leading-relaxed text-slate-500">
-            Operator uruchamia regułę przyciskiem w wybranych miejscach systemu.
-          </p>
+      <div className="grid gap-4 lg:grid-cols-2 lg:items-stretch">
+        <div className={`${oaEditorHeaderCardClass} space-y-4`}>
+          <div>
+            <p className="text-sm font-semibold text-slate-900">Uruchamianie ręczne</p>
+            <p className="mt-1 text-sm leading-relaxed text-slate-500">
+              Operator uruchamia regułę przyciskiem w wybranych miejscach systemu.
+            </p>
+          </div>
+
+          <label className="flex cursor-pointer items-center gap-2.5 text-sm font-medium text-slate-800">
+            <input
+              type="checkbox"
+              className={checkboxClass}
+              checked={buttonEnabled}
+              onChange={() => patch({ buttonEnabled: !buttonEnabled })}
+            />
+            Włącz przycisk ręczny
+          </label>
         </div>
 
-        <label className="flex cursor-pointer items-center gap-2.5 text-sm font-medium text-slate-800">
-          <input
-            type="checkbox"
-            className={checkboxClass}
-            checked={buttonEnabled}
-            onChange={() => patch({ buttonEnabled: !buttonEnabled })}
-          />
-          Włącz przycisk ręczny
-        </label>
+        <div className={`${oaEditorHeaderCardClass} space-y-4`}>
+          <p className="text-sm font-semibold text-slate-900">Sprawdzaj warunki przy ręcznym uruchamianiu</p>
+          <label className="flex cursor-pointer items-center gap-2.5 text-sm font-medium text-slate-800">
+            <input
+              type="checkbox"
+              className={checkboxClass}
+              checked={manualTrigger.checkConditionsOnManualRun !== false}
+              onChange={() =>
+                patch({ checkConditionsOnManualRun: manualTrigger.checkConditionsOnManualRun === false })
+              }
+            />
+            Włącz weryfikację warunków
+          </label>
+          <p className="text-sm leading-relaxed text-slate-500">
+            Gdy opcja jest włączona, przed wykonaniem zostaną zweryfikowane warunki reguły. Gdy jest wyłączona,
+            akcja zostanie wykonana niezależnie od warunków.
+          </p>
+        </div>
       </div>
 
       {buttonEnabled ? (
@@ -139,71 +160,54 @@ export function AutomationManualTriggerSection({ manualTrigger, onChange }: Prop
             </div>
           </div>
 
-          <div className={`${oaEditorHeaderCardClass} space-y-4`}>
-            <div>
-              <p className="text-sm font-semibold text-slate-900">Widoczność</p>
-              <p className="mt-1 text-sm leading-relaxed text-slate-500">
-                Miejsca, w których może pojawić się aktywator.
+          <div className="grid gap-4 lg:grid-cols-2 lg:items-stretch">
+            <div className={`${oaEditorHeaderCardClass} space-y-4`}>
+              <div>
+                <p className="text-sm font-semibold text-slate-900">Widoczność</p>
+                <p className="mt-1 text-sm leading-relaxed text-slate-500">
+                  Miejsca, w których może pojawić się aktywator.
+                </p>
+              </div>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <VisibilityCheckbox
+                  checked={manualTrigger.visibleOnOrderList !== false}
+                  label="Lista zamówień"
+                  onToggle={() => toggleVisibility("visibleOnOrderList")}
+                />
+                <VisibilityCheckbox
+                  checked={manualTrigger.visibleOnOrderCard !== false}
+                  label="Karta zamówienia"
+                  onToggle={() => toggleVisibility("visibleOnOrderCard")}
+                />
+                <VisibilityCheckbox
+                  checked={manualTrigger.visibleOnMultiActions !== false}
+                  label="Multiakcje"
+                  onToggle={() => toggleVisibility("visibleOnMultiActions")}
+                />
+                <VisibilityCheckbox
+                  checked={manualTrigger.visibleOnWmsPacking !== false}
+                  label="Pakowanie WMS"
+                  onToggle={() => toggleVisibility("visibleOnWmsPacking")}
+                />
+              </div>
+            </div>
+
+            <div className={`${oaEditorHeaderCardClass} space-y-4`}>
+              <p className="text-sm font-semibold text-slate-900">Skrót klawiaturowy</p>
+              <label className={oaLbl}>
+                Skrót
+                <input
+                  type="text"
+                  className={`${oaInp} mt-1.5 font-mono text-sm`}
+                  value={manualTrigger.shortcut}
+                  placeholder="Ctrl+Shift+P"
+                  onChange={(e) => patch({ shortcut: e.target.value })}
+                />
+              </label>
+              <p className="text-sm leading-relaxed text-slate-500">
+                Wyświetlany obok przycisku w podglądzie i w UI operatora.
               </p>
             </div>
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-              <VisibilityCheckbox
-                checked={manualTrigger.visibleOnOrderList !== false}
-                label="Lista zamówień"
-                onToggle={() => toggleVisibility("visibleOnOrderList")}
-              />
-              <VisibilityCheckbox
-                checked={manualTrigger.visibleOnOrderCard !== false}
-                label="Karta zamówienia"
-                onToggle={() => toggleVisibility("visibleOnOrderCard")}
-              />
-              <VisibilityCheckbox
-                checked={manualTrigger.visibleOnMultiActions !== false}
-                label="Multiakcje"
-                onToggle={() => toggleVisibility("visibleOnMultiActions")}
-              />
-              <VisibilityCheckbox
-                checked={manualTrigger.visibleOnWmsPacking !== false}
-                label="Pakowanie WMS"
-                onToggle={() => toggleVisibility("visibleOnWmsPacking")}
-              />
-            </div>
-          </div>
-
-          <div className={`${oaEditorHeaderCardClass} space-y-4`}>
-            <p className="text-sm font-semibold text-slate-900">Skrót klawiaturowy</p>
-            <label className={oaLbl}>
-              Skrót
-              <input
-                type="text"
-                className={`${oaInp} mt-1.5 max-w-md font-mono text-sm`}
-                value={manualTrigger.shortcut}
-                placeholder="Ctrl+Shift+P"
-                onChange={(e) => patch({ shortcut: e.target.value })}
-              />
-            </label>
-            <p className="text-sm leading-relaxed text-slate-500">
-              Wyświetlany obok przycisku w podglądzie i w UI operatora.
-            </p>
-          </div>
-
-          <div className={`${oaEditorHeaderCardClass} space-y-4`}>
-            <p className="text-sm font-semibold text-slate-900">Sprawdzaj warunki przy ręcznym uruchamianiu</p>
-            <label className="flex cursor-pointer items-center gap-2.5 text-sm font-medium text-slate-800">
-              <input
-                type="checkbox"
-                className={checkboxClass}
-                checked={manualTrigger.checkConditionsOnManualRun !== false}
-                onChange={() =>
-                  patch({ checkConditionsOnManualRun: manualTrigger.checkConditionsOnManualRun === false })
-                }
-              />
-              Włącz weryfikację warunków
-            </label>
-            <p className="text-sm leading-relaxed text-slate-500">
-              Gdy opcja jest włączona, przed wykonaniem zostaną zweryfikowane warunki reguły. Gdy jest wyłączona,
-              akcja zostanie wykonana niezależnie od warunków.
-            </p>
           </div>
         </>
       ) : null}
