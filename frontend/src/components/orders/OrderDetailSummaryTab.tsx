@@ -7,7 +7,7 @@ import { OrderDetailSectionCard } from "./OrderDetailSectionCard";
 import { OrderDetailSummaryCompactRow } from "./OrderDetailSummaryCompactRow";
 import { OrderCustomerLinkPanel } from "../customers/OrderCustomerLinkPanel";
 import { OrderMatchedPackagingSection } from "./OrderMatchedPackagingSection";
-import { OrderAdditionalFieldsSection } from "./OrderAdditionalFieldsSection";
+import OrderAdditionalFieldsSection from "./OrderAdditionalFieldsSection";
 import { OrderEventTypeLabel } from "./OrderEventTypeLabel";
 import {
   OrderSummaryProductsList,
