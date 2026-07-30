@@ -1,11 +1,26 @@
 import { useLayoutEffect, useRef, useState } from "react";
 import { X } from "lucide-react";
 
+export type AutomationBadgeTone = "default" | "added" | "removed" | "changed";
+
+const toneClass: Record<AutomationBadgeTone, string> = {
+  default:
+    "border-slate-200 bg-slate-50 text-slate-700",
+  added:
+    "border-emerald-200 bg-emerald-50 text-emerald-800",
+  removed:
+    "border-rose-200 bg-rose-50 text-rose-800 line-through decoration-rose-400/80",
+  changed:
+    "border-amber-200 bg-amber-50 text-amber-900",
+};
+
 export const automationValueBadgeClass =
-  "inline-flex max-w-[12rem] shrink-0 items-center gap-1 rounded-md border border-slate-200 bg-slate-50 px-2 py-0.5 text-xs font-medium text-slate-700 transition-[opacity,transform] duration-150 ease-out motion-reduce:transition-none";
+  "inline-flex max-w-[12rem] shrink-0 items-center gap-1 rounded-md border px-2 py-0.5 text-xs font-medium transition-[opacity,transform] duration-150 ease-out motion-reduce:transition-none";
 
 type Props = {
   labels: string[];
+  /** Optional per-label tone (history diff). Falls back to default. */
+  tones?: AutomationBadgeTone[];
   /** Collapsed summary: show as many badges as fit in one row, then +N. */
   fitToWidth?: boolean;
   onRemove?: (index: number) => void;
@@ -16,6 +31,7 @@ type Props = {
 function BadgeChip({
   label,
   index,
+  tone = "default",
   removable,
   onRemove,
   onBadgeClick,
@@ -23,13 +39,14 @@ function BadgeChip({
 }: {
   label: string;
   index: number;
+  tone?: AutomationBadgeTone;
   removable?: boolean;
   onRemove?: (index: number) => void;
   onBadgeClick?: (index: number) => void;
   measure?: boolean;
 }) {
   return (
-    <span data-badge className={automationValueBadgeClass}>
+    <span data-badge className={`${automationValueBadgeClass} ${toneClass[tone]}`}>
       {onBadgeClick ? (
         <button type="button" className="min-w-0 truncate text-left" onClick={() => onBadgeClick(index)}>
           {label}
@@ -56,6 +73,7 @@ function BadgeChip({
 
 export function AutomationValueBadges({
   labels,
+  tones,
   fitToWidth = false,
   onRemove,
   onBadgeClick,
@@ -106,7 +124,7 @@ export function AutomationValueBadges({
     const ro = new ResizeObserver(recompute);
     ro.observe(container);
     return () => ro.disconnect();
-  }, [labels, fitToWidth, removable]);
+  }, [labels, tones, fitToWidth, removable]);
 
   if (labels.length === 0) return null;
 
@@ -118,6 +136,7 @@ export function AutomationValueBadges({
             key={`${label}-${index}`}
             label={label}
             index={index}
+            tone={tones?.[index] ?? "default"}
             removable={removable}
             onRemove={onRemove}
             onBadgeClick={onBadgeClick}
@@ -138,7 +157,13 @@ export function AutomationValueBadges({
         aria-hidden
       >
         {labels.map((label, index) => (
-          <BadgeChip key={`m-${label}-${index}`} label={label} index={index} measure />
+          <BadgeChip
+            key={`m-${label}-${index}`}
+            label={label}
+            index={index}
+            tone={tones?.[index] ?? "default"}
+            measure
+          />
         ))}
         <span data-plus className="shrink-0 text-xs font-medium text-slate-500">
           +99
@@ -151,6 +176,7 @@ export function AutomationValueBadges({
             key={`${label}-${index}`}
             label={label}
             index={index}
+            tone={tones?.[index] ?? "default"}
             onBadgeClick={onBadgeClick}
           />
         ))}

@@ -535,6 +535,7 @@ export default function OrderAutomationEditorPage() {
               ruleId={draft.id}
               changeLogs={changeLogs}
               executionLogs={executionLogs}
+              ruleName={draft.name}
             />
             <button
               type="button"

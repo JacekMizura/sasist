@@ -1,3 +1,31 @@
+## 2026-07-30 — Automatyzacje: wspólne summary na liście + historii
+
+- Extract: `AutomationConditionSummary`, `AutomationEffectSummary` (edytor + lista + historia)
+- Lista: max 3 warunki/efekty, `+N kolejnych…`, expand jednego wiersza, bez ORAZ/LUB
+- Historia: `groupChangeLogEntries` (ruleId+userId+sekunda/≤2s) → jedna karta / save; badge + tone diff
+- Bez zmian API / `computeRuleChangeLogEntries`
+
+## 2026-07-30 — Edytor automatyzacji: exclusive Auto/Ręcznie + layout SaaS
+
+- Kafelki przełączają fokus UI — pokazywana tylko konfiguracja wybranego trybu
+- Auto: 2 kolumny (opóźnienie/tryb | dni+harmonogram), wiersze dni z dividerami
+- Ręcznie: wygląd+podgląd 2 kol., widoczność w siatce, skrót i „Sprawdzaj warunki” jako osobne karty
+- Badge JEŚLI = orange jak TO
+
+## 2026-07-30 — Edytor automatyzacji: layout 1:1 (v2)
+
+- Jedna karta „Ustawienia wykonania”: kafle + 2 kolumny (tryb | dni/godziny)
+- Dni Pn–Nd: równa szerokość, selected = brand orange
+- JEŚLI/TO: wiersze jak select/operator/wartość + menu ⋮ (IconButton); edycja nadal modal
+- Dolny pasek: tylko Anuluj; Zapisz w nagłówku; Usuń przy historii
+
+## 2026-07-29 — Edytor automatyzacji: UI 1:1 z projektem
+
+- Nagłówek w karcie: Nazwa / Grupa / toggle Aktywna (emerald) / Test / Zapisz
+- Kafelki Automatycznie / Ręcznie (Przycisk) z brand orange selected
+- Harmonogram: Ciągły / godziny / dni+godziny; karty per dzień (wspólne windowFrom/To w modelu)
+- JEŚLI / TO: badge’e, dashed CTA, okrągła strzałka; bez zmian logiki/modali edycji
+
 ## 2026-07-29 — Profile wydruku na stanowisku
 
 - SSOT: `backend/printing_profiles/` (`DOCUMENT_TYPE_TO_PRINT_PROFILE`, profile codes)

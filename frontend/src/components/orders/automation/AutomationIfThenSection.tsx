@@ -8,16 +8,11 @@ import type {
 } from "../../../types/orderAutomation";
 import type { OrderUiPanelSubgroupRead, OrderUiStatusPanelSummary } from "../../../types/orderUiStatus";
 import type { ConditionOption } from "../../../utils/orderAutomationConditionOptions";
-import {
-  formatConditionDisplayParts,
-  formatEffectListBlock,
-} from "../../../utils/orderAutomationPreview";
-import { effectKindLabel } from "../../../utils/orderAutomationCatalog";
-import { isMultiValueConditionField } from "../../../utils/orderAutomationConditionUtils";
 import { IconButton } from "../../../design-system/components/Button/IconButton";
 import { AutomationConditionConfigFields } from "./AutomationConditionConfigFields";
+import { AutomationConditionSummary } from "./AutomationConditionSummary";
 import { AutomationEffectConfigFields } from "./AutomationEffectConfigFields";
-import { AutomationValueBadges } from "./AutomationValueBadges";
+import { AutomationEffectSummary } from "./AutomationEffectSummary";
 import {
   oaBtnPri,
   oaWorkflowAddCtaCondition,
@@ -96,66 +91,6 @@ function RowActions({
   );
 }
 
-function ConditionSummary({
-  condition,
-  statusNameById,
-  warehouseOptions,
-}: {
-  condition: AutomationCondition;
-  statusNameById: Map<number, string>;
-  warehouseOptions: ConditionOption[];
-}) {
-  const parts = formatConditionDisplayParts(condition, statusNameById, warehouseOptions);
-  const useBadges = isMultiValueConditionField(condition.fieldKey);
-
-  return (
-    <div className="min-w-0 space-y-1.5">
-      <p className="text-sm leading-snug text-slate-900">
-        <span className="font-semibold">{parts.field}</span>
-        <span className="text-slate-300"> · </span>
-        <span className="font-normal text-slate-600">{parts.op}</span>
-      </p>
-      {useBadges ? (
-        parts.valueLabels.length > 0 ? (
-          <AutomationValueBadges labels={parts.valueLabels} fitToWidth />
-        ) : (
-          <p className="text-sm text-slate-400">—</p>
-        )
-      ) : (
-        <p className="text-sm font-medium text-slate-800">{parts.value}</p>
-      )}
-    </div>
-  );
-}
-
-function EffectSummary({
-  effect,
-  statusNameById,
-}: {
-  effect: AutomationEffect;
-  statusNameById: Map<number, string>;
-}) {
-  const block = formatEffectListBlock(effect, statusNameById);
-  const title = effectKindLabel(effect.kind);
-  const primary = block.primaryBold ?? block.secondaryDetail;
-
-  return (
-    <div className="min-w-0 space-y-1.5">
-      <p className="text-sm font-semibold text-slate-900">{title}</p>
-      {effect.kind === "change_status" && primary ? (
-        <AutomationValueBadges labels={[primary]} />
-      ) : primary ? (
-        <p className="text-sm font-medium text-slate-800">{primary}</p>
-      ) : (
-        <p className="text-sm text-slate-400">—</p>
-      )}
-      {block.secondaryDetail && block.primaryBold && effect.kind !== "change_status" ? (
-        <p className="text-sm text-slate-500">{block.secondaryDetail}</p>
-      ) : null}
-    </div>
-  );
-}
-
 const expandShellClass =
   "grid transition-[grid-template-rows] duration-[180ms] ease-out motion-reduce:transition-none";
 
@@ -203,7 +138,7 @@ function ConditionRow({
           {errorMessage ? <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-red-600" aria-hidden /> : null}
           <div className="min-w-0 flex-1">
             {!expanded ? (
-              <ConditionSummary
+              <AutomationConditionSummary
                 condition={condition}
                 statusNameById={statusNameById}
                 warehouseOptions={warehouseOptions}
@@ -281,7 +216,7 @@ function EffectRow({
         <div className="flex items-start gap-2 px-2.5 py-2">
           {errorMessage ? <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-red-600" aria-hidden /> : null}
           <div className="min-w-0 flex-1">
-            {!expanded ? <EffectSummary effect={effect} statusNameById={statusNameById} /> : null}
+            {!expanded ? <AutomationEffectSummary effect={effect} statusNameById={statusNameById} /> : null}
           </div>
           <RowActions
             editActive={expanded}

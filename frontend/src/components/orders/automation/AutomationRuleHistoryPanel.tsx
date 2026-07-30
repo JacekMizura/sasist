@@ -1,8 +1,9 @@
 import { useMemo, useState } from "react";
 
 import type { OrderAutomationChangeLogEntry, OrderAutomationExecutionLogEntry } from "../../../types/orderAutomation";
+import { groupChangeLogEntries } from "../../../utils/groupChangeLogEntries";
 import { flatSectionDividerClass } from "../../layout/flatSectionTokens";
-import { AutomationChangeLogDiffView } from "./AutomationChangeLogDiffView";
+import { AutomationChangeLogEventCard } from "./AutomationChangeLogEventCard";
 
 type TabId = "changes" | "executions";
 
@@ -22,8 +23,16 @@ function fmtDateTime(iso: string) {
   }
 }
 
-function ChangeLogList({ entries }: { entries: OrderAutomationChangeLogEntry[] }) {
-  if (entries.length === 0) {
+function ChangeLogList({
+  entries,
+  fallbackRuleName,
+}: {
+  entries: OrderAutomationChangeLogEntry[];
+  fallbackRuleName?: string | null;
+}) {
+  const events = useMemo(() => groupChangeLogEntries(entries), [entries]);
+
+  if (events.length === 0) {
     return (
       <p className="py-6 text-sm text-slate-500">
         Brak wpisów historii zmian. Zapisz regułę, aby rejestrować modyfikacje konfiguracji.
@@ -32,16 +41,10 @@ function ChangeLogList({ entries }: { entries: OrderAutomationChangeLogEntry[] }
   }
 
   return (
-    <ul className="divide-y divide-slate-100">
-      {entries.map((e) => (
-        <li key={e.id} className="py-4 first:pt-0">
-          <p className="text-sm font-medium tabular-nums text-slate-900">{fmtDateTime(e.createdAt)}</p>
-          <p className="mt-0.5 text-sm text-slate-700">{e.userName}</p>
-          <div className="mt-3 text-sm">
-            <p className="text-slate-500">Zmiana:</p>
-            <p className="mt-0.5 font-medium text-slate-900">{e.field}</p>
-            <AutomationChangeLogDiffView entry={e} />
-          </div>
+    <ul className="space-y-3">
+      {events.map((event) => (
+        <li key={event.id}>
+          <AutomationChangeLogEventCard event={event} fallbackRuleName={fallbackRuleName} />
         </li>
       ))}
     </ul>
@@ -95,9 +98,11 @@ type Props = {
   ruleId: string;
   changeLogs: OrderAutomationChangeLogEntry[];
   executionLogs: OrderAutomationExecutionLogEntry[];
+  /** Current rule name for event titles when „Nazwa” is missing in a group. */
+  ruleName?: string | null;
 };
 
-export function AutomationRuleHistoryPanel({ ruleId, changeLogs, executionLogs }: Props) {
+export function AutomationRuleHistoryPanel({ ruleId, changeLogs, executionLogs, ruleName }: Props) {
   const [tab, setTab] = useState<TabId>("changes");
 
   const ruleChanges = useMemo(
@@ -144,7 +149,11 @@ export function AutomationRuleHistoryPanel({ ruleId, changeLogs, executionLogs }
         </button>
       </div>
 
-      {tab === "changes" ? <ChangeLogList entries={ruleChanges} /> : <ExecutionLogList entries={ruleExecutions} />}
+      {tab === "changes" ? (
+        <ChangeLogList entries={ruleChanges} fallbackRuleName={ruleName} />
+      ) : (
+        <ExecutionLogList entries={ruleExecutions} />
+      )}
     </section>
   );
 }

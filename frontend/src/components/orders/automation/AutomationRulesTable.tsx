@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ChevronDown, ChevronUp, ClipboardList, Pencil, Trash2 } from "lucide-react";
 
@@ -10,9 +11,9 @@ import {
 } from "../../../utils/orderAutomationPreview";
 import type { ConditionOption } from "../../../utils/orderAutomationConditionOptions";
 import { formatExecutionListDisplay } from "../../../utils/orderAutomationExecution";
-import { AutomationConditionDisplay, AutomationEffectDisplay } from "./AutomationRuleDisplay";
+import { AutomationConditionSummary } from "./AutomationConditionSummary";
+import { AutomationEffectSummary } from "./AutomationEffectSummary";
 import {
-  oaListJoinBadgeClass,
   oaListRowClass,
   oaListTableClass,
   oaListTdClass,
@@ -20,6 +21,8 @@ import {
   oaRowActionBtn,
   oaRowActionBtnDanger,
 } from "./orderAutomationUiTokens";
+
+const COLLAPSED_LIMIT = 3;
 
 function fmtTime(iso: string | null | undefined) {
   if (!iso) return "—";
@@ -41,10 +44,12 @@ function ConditionsCell({
   rule,
   statusNameById,
   warehouseOptions,
+  expanded,
 }: {
   rule: OrderAutomationRule;
   statusNameById: Map<number, string>;
   warehouseOptions?: ConditionOption[];
+  expanded: boolean;
 }) {
   const { conditions } = rule;
 
@@ -52,21 +57,24 @@ function ConditionsCell({
     return <span className="text-slate-400">—</span>;
   }
 
+  const visible = expanded ? conditions : conditions.slice(0, COLLAPSED_LIMIT);
+  const hidden = expanded ? 0 : Math.max(0, conditions.length - COLLAPSED_LIMIT);
+
   return (
     <div className="flex min-w-0 flex-col gap-2.5">
-      {conditions.map((c, i) => {
-        const join = i > 0 ? (conditions[i - 1]?.joinToNext === "or" ? "LUB" : "ORAZ") : null;
-        return (
-          <div key={c.uid} className="flex min-w-0 flex-col gap-1.5">
-            {join ? <span className={oaListJoinBadgeClass}>{join}</span> : null}
-            <AutomationConditionDisplay
-              condition={c}
-              statusNameById={statusNameById}
-              warehouseOptions={warehouseOptions}
-            />
-          </div>
-        );
-      })}
+      {visible.map((c) => (
+        <AutomationConditionSummary
+          key={c.uid}
+          condition={c}
+          statusNameById={statusNameById}
+          warehouseOptions={warehouseOptions}
+          fitToWidth
+          truncateText
+        />
+      ))}
+      {hidden > 0 ? (
+        <p className="text-xs font-medium text-slate-500">+{hidden} kolejnych warunków</p>
+      ) : null}
     </div>
   );
 }
@@ -74,19 +82,32 @@ function ConditionsCell({
 function EffectsCell({
   rule,
   statusNameById,
+  expanded,
 }: {
   rule: OrderAutomationRule;
   statusNameById: Map<number, string>;
+  expanded: boolean;
 }) {
   if (rule.effects.length === 0) {
     return <span className="text-slate-400">—</span>;
   }
 
+  const visible = expanded ? rule.effects : rule.effects.slice(0, COLLAPSED_LIMIT);
+  const hidden = expanded ? 0 : Math.max(0, rule.effects.length - COLLAPSED_LIMIT);
+
   return (
-    <div className="flex min-w-0 flex-col gap-3">
-      {rule.effects.map((e) => (
-        <AutomationEffectDisplay key={e.uid} effect={e} statusNameById={statusNameById} />
+    <div className="flex min-w-0 flex-col gap-2.5">
+      {visible.map((e) => (
+        <AutomationEffectSummary
+          key={e.uid}
+          effect={e}
+          statusNameById={statusNameById}
+          truncateText
+        />
       ))}
+      {hidden > 0 ? (
+        <p className="text-xs font-medium text-slate-500">+{hidden} kolejnych akcji</p>
+      ) : null}
     </div>
   );
 }
@@ -113,15 +134,28 @@ type RuleRowProps = {
   statusNameById: Map<number, string>;
   warehouseOptions?: ConditionOption[];
   basePath: string;
+  expanded: boolean;
+  onToggleExpand: () => void;
   onToggle: () => void;
   onDelete: () => void;
   onLogs: () => void;
 };
 
-function AutomationRuleTableRow({ rule, statusNameById, warehouseOptions, basePath, onToggle, onDelete, onLogs }: RuleRowProps) {
+function AutomationRuleTableRow({
+  rule,
+  statusNameById,
+  warehouseOptions,
+  basePath,
+  expanded,
+  onToggleExpand,
+  onToggle,
+  onDelete,
+  onLogs,
+}: RuleRowProps) {
   const navigate = useNavigate();
   const displayId = formatRuleDisplayId(rule);
   const ruleName = formatRuleListName(rule);
+  const canExpand = rule.conditions.length > COLLAPSED_LIMIT || rule.effects.length > COLLAPSED_LIMIT;
 
   return (
     <tr className={`${oaListRowClass} ${rule.enabled ? "" : "opacity-55 hover:opacity-100"}`}>
@@ -156,10 +190,15 @@ function AutomationRuleTableRow({ rule, statusNameById, warehouseOptions, basePa
         <p className="text-xs leading-snug text-slate-500">Ostatnie: {fmtTime(rule.stats.lastRunAt)}</p>
       </td>
       <td className={oaListTdClass} style={{ width: "28%" }}>
-        <ConditionsCell rule={rule} statusNameById={statusNameById} warehouseOptions={warehouseOptions} />
+        <ConditionsCell
+          rule={rule}
+          statusNameById={statusNameById}
+          warehouseOptions={warehouseOptions}
+          expanded={expanded}
+        />
       </td>
       <td className={oaListTdClass} style={{ width: "28%" }}>
-        <EffectsCell rule={rule} statusNameById={statusNameById} />
+        <EffectsCell rule={rule} statusNameById={statusNameById} expanded={expanded} />
       </td>
       <td className={`${oaListTdClass} tabular-nums text-slate-600`} style={{ width: 120 }}>
         {formatDelayMinutes(rule.delayMinutes)}
@@ -190,6 +229,22 @@ function AutomationRuleTableRow({ rule, statusNameById, warehouseOptions, basePa
           >
             <ClipboardList className="h-4 w-4" strokeWidth={2} />
           </button>
+          {canExpand ? (
+            <button
+              type="button"
+              className={oaRowActionBtn}
+              title={expanded ? "Zwiń podgląd" : "Rozwiń podgląd"}
+              aria-label={expanded ? "Zwiń podgląd" : "Rozwiń podgląd"}
+              aria-expanded={expanded}
+              onClick={onToggleExpand}
+            >
+              {expanded ? (
+                <ChevronUp className="h-4 w-4" strokeWidth={2} />
+              ) : (
+                <ChevronDown className="h-4 w-4" strokeWidth={2} />
+              )}
+            </button>
+          ) : null}
         </div>
       </td>
     </tr>
@@ -220,6 +275,7 @@ export function AutomationRulesTable({
   onLogs,
 }: AutomationRulesTableProps) {
   const sorted = [...rules].sort((a, b) => compareRulesByPublicId(a, b, idSort));
+  const [expandedRuleId, setExpandedRuleId] = useState<string | null>(null);
 
   return (
     <div className="overflow-x-auto">
@@ -267,6 +323,10 @@ export function AutomationRulesTable({
               statusNameById={statusNameById}
               warehouseOptions={warehouseOptions}
               basePath={basePath}
+              expanded={expandedRuleId === r.id}
+              onToggleExpand={() =>
+                setExpandedRuleId((prev) => (prev === r.id ? null : r.id))
+              }
               onToggle={() => onToggle(r.id, !r.enabled)}
               onDelete={() => onDelete(r)}
               onLogs={() => onLogs(r)}

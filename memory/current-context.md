@@ -2,4 +2,8 @@
 
 ## Active
 
-**Print profiles on workstations:** printers map to profiles (`LABELS` / `DOCUMENTS` / `SHIPPING_LABELS` / `REPORTS`), not document types or WMS modules. SSOT: `backend/printing_profiles/`. Migration `print_profiles_v1` collapses legacy invoice/order/other → DOCUMENTS.
+Order Automations presentation unification (done this session):
+
+- Shared `AutomationConditionSummary` / `AutomationEffectSummary` + `AutomationValueBadges` (optional tone)
+- List: compact max 3 + expand one row; no ORAZ/LUB
+- History: FE `groupChangeLogEntries` → one card per save; badge/diff tones; no backend change
