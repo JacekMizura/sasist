@@ -29,13 +29,11 @@ import {
 } from "../../utils/orderAutomationCatalog";
 import { getOrderPanelSubgroups, getOrderUiStatusSummary } from "../../api/orderUiStatusApi";
 import type { OrderUiPanelSubgroupRead, OrderUiStatusPanelSummary } from "../../types/orderUiStatus";
-import { AutomationExecutionSettingsSection } from "../../components/orders/automation/AutomationExecutionSettingsSection";
-import { AutomationAnchorMenu, type AutomationAnchorMenuGroup } from "../../components/orders/automation/AutomationAnchorMenu";
 import { AutomationCategoryPickerModal } from "../../components/orders/automation/AutomationCategoryPickerModal";
-import { AutomationConditionEditModal } from "../../components/orders/automation/AutomationConditionEditModal";
-import { AutomationEffectEditModal } from "../../components/orders/automation/AutomationEffectEditModal";
 import { AutomationIfThenSection } from "../../components/orders/automation/AutomationIfThenSection";
 import { AutomationRuleHistoryPanel } from "../../components/orders/automation/AutomationRuleHistoryPanel";
+import { AutomationExecutionSettingsSection } from "../../components/orders/automation/AutomationExecutionSettingsSection";
+import { AutomationAnchorMenu, type AutomationAnchorMenuGroup } from "../../components/orders/automation/AutomationAnchorMenu";
 import { moduleAutomationShellClass } from "../../components/layout/flatSectionTokens";
 import { ModuleListBreadcrumb } from "../../components/listPage/moduleList";
 import {
@@ -151,8 +149,8 @@ export default function OrderAutomationEditorPage() {
 
   const [addCondPickerOpen, setAddCondPickerOpen] = useState(false);
   const [addEffPickerOpen, setAddEffPickerOpen] = useState(false);
-  const [editCondUid, setEditCondUid] = useState<string | null>(null);
-  const [editEffUid, setEditEffUid] = useState<string | null>(null);
+  const [expandedConditionUid, setExpandedConditionUid] = useState<string | null>(null);
+  const [expandedEffectUid, setExpandedEffectUid] = useState<string | null>(null);
   const groupMenuAnchorRef = useRef<HTMLElement | null>(null);
 
   const [groupMenuOpen, setGroupMenuOpen] = useState(false);
@@ -201,13 +199,19 @@ export default function OrderAutomationEditorPage() {
       if (!seededNew.current) {
         setDraft(defaultRule());
         seededNew.current = true;
+        setExpandedConditionUid(null);
+        setExpandedEffectUid(null);
       }
       return;
     }
     seededNew.current = false;
     const id = ruleId ?? "";
     const r = byId.get(id);
-    if (r) setDraft(normalizeRule({ ...r }));
+    if (r) {
+      setDraft(normalizeRule({ ...r }));
+      setExpandedConditionUid(null);
+      setExpandedEffectUid(null);
+    }
   }, [hydrated, isNew, ruleId, byId, scope]);
 
   const statusNameById = useMemo(() => {
@@ -255,14 +259,16 @@ export default function OrderAutomationEditorPage() {
       joinToNext: "and",
     };
     setDraft((d) => normalizeRule({ ...d, conditions: [...d.conditions, c] }));
-    setEditCondUid(uid);
+    setExpandedConditionUid(uid);
+    setAddCondPickerOpen(false);
   };
 
   const addEffect = (kind: AutomationEffectKind) => {
     const uid = newUid("e");
     const base: AutomationEffect = { uid, kind, payload: payloadForKind(kind) };
     setDraft((d) => ({ ...d, effects: [...d.effects, base] }));
-    setEditEffUid(uid);
+    setExpandedEffectUid(uid);
+    setAddEffPickerOpen(false);
   };
 
   const duplicateCondition = (c: AutomationCondition) => {
@@ -285,6 +291,15 @@ export default function OrderAutomationEditorPage() {
       next.splice(idx + 1, 0, copy);
       return { ...d, effects: next };
     });
+  };
+
+  const patchCondition = (uid: string, patch: Partial<AutomationCondition>) => {
+    setDraft((d) =>
+      normalizeRule({
+        ...d,
+        conditions: d.conditions.map((x) => (x.uid === uid ? { ...x, ...patch } : x)),
+      }),
+    );
   };
 
   const patchEffectKind = (uid: string, kind: AutomationEffectKind) => {
@@ -341,10 +356,6 @@ export default function OrderAutomationEditorPage() {
   };
 
   const nameInvalid = nameTouched && !draft.name.trim();
-
-  const editingCondition = editCondUid ? draft.conditions.find((c) => c.uid === editCondUid) ?? null : null;
-  const editingConditionIdx = editCondUid ? draft.conditions.findIndex((c) => c.uid === editCondUid) : -1;
-  const editingEffect = editEffUid ? draft.effects.find((e) => e.uid === editEffUid) ?? null : null;
 
   const breadcrumbItems = useMemo(() => {
     const base = [
@@ -492,18 +503,30 @@ export default function OrderAutomationEditorPage() {
           effects={draft.effects}
           statusNameById={statusNameById}
           warehouseOptions={warehouseOptions}
+          panelSummary={statusSummary}
+          panelSubgroups={panelSubgroups}
           conditionErrors={validation.conditionErrors}
           effectErrors={validation.effectErrors}
+          expandedConditionUid={expandedConditionUid}
+          expandedEffectUid={expandedEffectUid}
           onAddCondition={() => setAddCondPickerOpen(true)}
           onAddEffect={() => setAddEffPickerOpen(true)}
-          onEditCondition={setEditCondUid}
-          onEditEffect={setEditEffUid}
+          onExpandCondition={setExpandedConditionUid}
+          onExpandEffect={setExpandedEffectUid}
+          onPatchCondition={patchCondition}
+          onSetConditionJoin={setJoinToNext}
+          onChangeEffectKind={patchEffectKind}
+          onPatchEffectPayload={patchEffectPayload}
           onDuplicateCondition={duplicateCondition}
-          onRemoveCondition={(uid) =>
-            setDraft((d) => normalizeRule({ ...d, conditions: d.conditions.filter((x) => x.uid !== uid) }))
-          }
+          onRemoveCondition={(uid) => {
+            if (expandedConditionUid === uid) setExpandedConditionUid(null);
+            setDraft((d) => normalizeRule({ ...d, conditions: d.conditions.filter((x) => x.uid !== uid) }));
+          }}
           onDuplicateEffect={duplicateEffect}
-          onRemoveEffect={(uid) => setDraft((d) => ({ ...d, effects: d.effects.filter((x) => x.uid !== uid) }))}
+          onRemoveEffect={(uid) => {
+            if (expandedEffectUid === uid) setExpandedEffectUid(null);
+            setDraft((d) => ({ ...d, effects: d.effects.filter((x) => x.uid !== uid) }));
+          }}
         />
 
         {!isNew ? (
@@ -550,40 +573,6 @@ export default function OrderAutomationEditorPage() {
         onClose={() => setAddEffPickerOpen(false)}
         onPick={(id) => addEffect(id as AutomationEffectKind)}
       />
-      {wid != null && editingCondition ? (
-        <AutomationConditionEditModal
-          open={editCondUid !== null}
-          condition={editingCondition}
-          statusNameById={statusNameById}
-          panelSummary={statusSummary}
-          panelSubgroups={panelSubgroups}
-          warehouseOptions={warehouseOptions}
-          showJoin={editingConditionIdx >= 0 && editingConditionIdx < draft.conditions.length - 1}
-          joinToNext={editingCondition.joinToNext ?? "and"}
-          onClose={() => setEditCondUid(null)}
-          onPatch={(patch) =>
-            setDraft((d) =>
-              normalizeRule({
-                ...d,
-                conditions: d.conditions.map((x) => (x.uid === editingCondition.uid ? { ...x, ...patch } : x)),
-              }),
-            )
-          }
-          onSetJoin={(join) => setJoinToNext(editingCondition.uid, join)}
-        />
-      ) : null}
-      {editingEffect ? (
-        <AutomationEffectEditModal
-          open={editEffUid !== null}
-          effect={editingEffect}
-          statusNameById={statusNameById}
-          panelSummary={statusSummary}
-          panelSubgroups={panelSubgroups}
-          onClose={() => setEditEffUid(null)}
-          onChangeKind={(kind) => patchEffectKind(editingEffect.uid, kind)}
-          onPatchPayload={(partial) => patchEffectPayload(editingEffect.uid, partial)}
-        />
-      ) : null}
       <AutomationAnchorMenu
         open={groupMenuOpen}
         anchorRef={groupMenuAnchorRef}

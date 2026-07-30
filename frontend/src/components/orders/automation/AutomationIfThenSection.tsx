@@ -1,14 +1,18 @@
-import { useEffect, useRef, useState } from "react";
-import { AlertTriangle, ArrowRight, MoreVertical, Plus, X } from "lucide-react";
+import { AlertTriangle, ArrowRight, Check, Copy, Pencil, Plus, Trash2 } from "lucide-react";
 
-import type { AutomationCondition, AutomationConditionJoin, AutomationEffect } from "../../../types/orderAutomation";
+import type { AutomationCondition, AutomationConditionJoin, AutomationEffect, AutomationEffectKind } from "../../../types/orderAutomation";
+import type { OrderUiPanelSubgroupRead, OrderUiStatusPanelSummary } from "../../../types/orderUiStatus";
 import type { ConditionOption } from "../../../utils/orderAutomationConditionOptions";
 import {
   formatConditionDisplayParts,
   formatEffectListBlock,
 } from "../../../utils/orderAutomationPreview";
+import { effectKindLabel } from "../../../utils/orderAutomationCatalog";
 import { IconButton } from "../../../design-system/components/Button/IconButton";
+import { AutomationConditionConfigFields } from "./AutomationConditionConfigFields";
+import { AutomationEffectConfigFields } from "./AutomationEffectConfigFields";
 import {
+  oaBtnPri,
   oaWorkflowAddCtaCondition,
   oaWorkflowAddCtaEffect,
   oaWorkflowFlowArrowClass,
@@ -31,173 +35,189 @@ function ConditionJoinBadge({ join }: ConditionJoinBadgeProps) {
   );
 }
 
-function FakeSelect({
-  children,
-  className = "",
-  onClick,
-}: {
-  children: React.ReactNode;
-  className?: string;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      className={`inline-flex h-10 min-w-0 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 text-left text-sm text-slate-800 transition hover:border-slate-300 ${className}`}
-      onClick={onClick}
-    >
-      <span className="min-w-0 flex-1 truncate">{children}</span>
-      <span className="shrink-0 text-slate-400" aria-hidden>
-        ▾
-      </span>
-    </button>
-  );
-}
-
-function ValueChips({
-  labels,
-  onOpen,
-}: {
-  labels: string[];
-  onOpen: () => void;
-}) {
-  if (labels.length === 0) {
-    return (
-      <FakeSelect className="min-w-[8rem] flex-1 text-slate-400" onClick={onOpen}>
-        Wybierz…
-      </FakeSelect>
-    );
-  }
-  return (
-    <button
-      type="button"
-      className="inline-flex h-10 min-w-0 flex-1 items-center gap-1.5 overflow-hidden rounded-lg border border-slate-200 bg-white px-2 text-left transition hover:border-slate-300"
-      onClick={onOpen}
-    >
-      <span className="flex min-w-0 flex-1 items-center gap-1.5 overflow-x-auto">
-        {labels.map((label) => (
-          <span
-            key={label}
-            className="inline-flex shrink-0 items-center gap-1 rounded-md border border-slate-200 bg-slate-50 px-2 py-0.5 text-xs font-medium text-slate-700"
-          >
-            {label}
-            <X className="h-3 w-3 text-slate-400" aria-hidden />
-          </span>
-        ))}
-      </span>
-      <span className="shrink-0 pr-1 text-slate-400" aria-hidden>
-        ▾
-      </span>
-    </button>
-  );
-}
-
-function RowMenu({
+function RowActions({
   onEdit,
   onDuplicate,
   onRemove,
+  editActive,
 }: {
   onEdit: () => void;
   onDuplicate: () => void;
   onRemove: () => void;
+  editActive?: boolean;
 }) {
-  const [open, setOpen] = useState(false);
-  const rootRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    const onDoc = (e: MouseEvent) => {
-      if (!rootRef.current?.contains(e.target as Node)) setOpen(false);
-    };
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setOpen(false);
-    };
-    document.addEventListener("mousedown", onDoc);
-    window.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("mousedown", onDoc);
-      window.removeEventListener("keydown", onKey);
-    };
-  }, [open]);
-
   return (
-    <div className="relative shrink-0" ref={rootRef}>
+    <div className="flex shrink-0 items-center gap-0.5">
       <IconButton
-        aria-label="Więcej akcji"
-        aria-expanded={open}
+        aria-label={editActive ? "Zakończ edycję" : "Edytuj"}
+        aria-pressed={editActive}
         onClick={(e) => {
           e.stopPropagation();
-          setOpen((v) => !v);
+          onEdit();
         }}
       >
-        <MoreVertical className="h-4 w-4" />
+        <Pencil className="h-4 w-4" strokeWidth={2} />
       </IconButton>
-      {open ? (
-        <div className="absolute right-0 top-full z-30 mt-1 min-w-[9rem] overflow-hidden rounded-lg border border-slate-200 bg-white py-1 shadow-lg">
-          {(
-            [
-              { label: "Edytuj", run: onEdit },
-              { label: "Duplikuj", run: onDuplicate },
-              { label: "Usuń", run: onRemove, danger: true },
-            ] as const
-          ).map((item) => (
-            <button
-              key={item.label}
-              type="button"
-              className={`flex w-full px-3 py-2 text-left text-sm transition hover:bg-slate-50 ${
-                "danger" in item && item.danger ? "text-red-600" : "text-slate-800"
-              }`}
-              onClick={(e) => {
-                e.stopPropagation();
-                setOpen(false);
-                item.run();
-              }}
-            >
-              {item.label}
-            </button>
+      <IconButton
+        aria-label="Duplikuj"
+        onClick={(e) => {
+          e.stopPropagation();
+          onDuplicate();
+        }}
+      >
+        <Copy className="h-4 w-4" strokeWidth={2} />
+      </IconButton>
+      <IconButton
+        aria-label="Usuń"
+        onClick={(e) => {
+          e.stopPropagation();
+          onRemove();
+        }}
+      >
+        <Trash2 className="h-4 w-4" strokeWidth={2} />
+      </IconButton>
+    </div>
+  );
+}
+
+function ConditionSummary({
+  condition,
+  statusNameById,
+  warehouseOptions,
+}: {
+  condition: AutomationCondition;
+  statusNameById: Map<number, string>;
+  warehouseOptions: ConditionOption[];
+}) {
+  const parts = formatConditionDisplayParts(condition, statusNameById, warehouseOptions);
+  return (
+    <div className="min-w-0 space-y-1">
+      <p className="text-sm font-semibold text-slate-900">{parts.field}</p>
+      <p className="text-sm text-slate-500">{parts.op}</p>
+      {parts.valueLabels.length > 0 ? (
+        <ul className="space-y-0.5">
+          {parts.valueLabels.map((label) => (
+            <li key={label} className="text-sm font-medium text-slate-800">
+              {label}
+            </li>
           ))}
-        </div>
+        </ul>
+      ) : (
+        <p className="text-sm text-slate-400">—</p>
+      )}
+    </div>
+  );
+}
+
+function EffectSummary({
+  effect,
+  statusNameById,
+}: {
+  effect: AutomationEffect;
+  statusNameById: Map<number, string>;
+}) {
+  const block = formatEffectListBlock(effect, statusNameById);
+  const title = effectKindLabel(effect.kind);
+  const primary = block.primaryBold ?? block.secondaryDetail;
+  return (
+    <div className="min-w-0 space-y-1">
+      <p className="text-sm font-semibold text-slate-900">{title}</p>
+      {primary ? <p className="text-sm font-medium text-slate-800">{primary}</p> : <p className="text-sm text-slate-400">—</p>}
+      {block.secondaryDetail && block.primaryBold ? (
+        <p className="text-sm text-slate-500">{block.secondaryDetail}</p>
       ) : null}
     </div>
   );
 }
 
+/** Krótka animacja wysokości expand/collapse (~180ms). */
+const expandShellClass =
+  "grid transition-[grid-template-rows] duration-[180ms] ease-out motion-reduce:transition-none";
+
 type ConditionRowProps = {
   condition: AutomationCondition;
+  expanded: boolean;
   statusNameById: Map<number, string>;
   warehouseOptions: ConditionOption[];
+  panelSummary: OrderUiStatusPanelSummary | null;
+  panelSubgroups: OrderUiPanelSubgroupRead[];
+  showJoin: boolean;
   errorMessage?: string | null;
-  onEdit: () => void;
+  onToggleEdit: () => void;
+  onFinishEdit: () => void;
   onDuplicate: () => void;
   onRemove: () => void;
+  onPatch: (patch: Partial<AutomationCondition>) => void;
+  onSetJoin: (join: AutomationConditionJoin) => void;
 };
 
 function ConditionRow({
   condition,
+  expanded,
   statusNameById,
   warehouseOptions,
+  panelSummary,
+  panelSubgroups,
+  showJoin,
   errorMessage,
-  onEdit,
+  onToggleEdit,
+  onFinishEdit,
   onDuplicate,
   onRemove,
+  onPatch,
+  onSetJoin,
 }: ConditionRowProps) {
-  const parts = formatConditionDisplayParts(condition, statusNameById, warehouseOptions);
   return (
     <div className="space-y-1">
       <div
-        className={`flex flex-wrap items-center gap-2 rounded-lg border bg-white p-2 ${
-          errorMessage ? "border-red-300" : "border-slate-200"
-        }`}
+        className={`rounded-lg border bg-white ${errorMessage ? "border-red-300" : "border-slate-200"}`}
       >
-        {errorMessage ? <AlertTriangle className="h-4 w-4 shrink-0 text-red-600" aria-hidden /> : null}
-        <FakeSelect className="min-w-[9rem] sm:max-w-[12rem]" onClick={onEdit}>
-          {parts.field}
-        </FakeSelect>
-        <FakeSelect className="min-w-[7.5rem] sm:max-w-[10rem]" onClick={onEdit}>
-          {parts.op}
-        </FakeSelect>
-        <ValueChips labels={parts.valueLabels} onOpen={onEdit} />
-        <RowMenu onEdit={onEdit} onDuplicate={onDuplicate} onRemove={onRemove} />
+        <div className="flex items-start gap-2 px-3 py-2.5">
+          {errorMessage ? <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-red-600" aria-hidden /> : null}
+          <div className="min-w-0 flex-1">
+            {!expanded ? (
+              <ConditionSummary
+                condition={condition}
+                statusNameById={statusNameById}
+                warehouseOptions={warehouseOptions}
+              />
+            ) : (
+              <p className="text-sm font-semibold text-slate-900">Edycja warunku</p>
+            )}
+          </div>
+          <RowActions
+            editActive={expanded}
+            onEdit={onToggleEdit}
+            onDuplicate={onDuplicate}
+            onRemove={onRemove}
+          />
+        </div>
+
+        <div className={`${expandShellClass} ${expanded ? "grid-rows-[1fr]" : "grid-rows-[0fr]"}`}>
+          <div className="min-h-0 overflow-hidden">
+            {expanded ? (
+              <div className="border-t border-slate-100 px-3 pb-3 pt-2">
+                <AutomationConditionConfigFields
+                  condition={condition}
+                  statusNameById={statusNameById}
+                  panelSummary={panelSummary}
+                  panelSubgroups={panelSubgroups}
+                  warehouseOptions={warehouseOptions}
+                  showJoin={showJoin}
+                  joinToNext={condition.joinToNext ?? "and"}
+                  onPatch={onPatch}
+                  onSetJoin={onSetJoin}
+                />
+                <div className="mt-3 flex justify-end">
+                  <button type="button" className={`${oaBtnPri} gap-1.5`} onClick={onFinishEdit}>
+                    <Check className="h-4 w-4" strokeWidth={2.5} aria-hidden />
+                    Zakończ edycję
+                  </button>
+                </div>
+              </div>
+            ) : null}
+          </div>
+        </div>
       </div>
       {errorMessage ? <p className="px-1 text-xs text-red-600">{errorMessage}</p> : null}
     </div>
@@ -206,45 +226,91 @@ function ConditionRow({
 
 type EffectRowProps = {
   effect: AutomationEffect;
+  expanded: boolean;
   statusNameById: Map<number, string>;
+  panelSummary: OrderUiStatusPanelSummary | null;
+  panelSubgroups: OrderUiPanelSubgroupRead[];
   errorMessage?: string | null;
-  onEdit: () => void;
+  onToggleEdit: () => void;
+  onFinishEdit: () => void;
   onDuplicate: () => void;
   onRemove: () => void;
+  onChangeKind: (kind: AutomationEffectKind) => void;
+  onPatchPayload: (partial: Record<string, string | number | boolean | null>) => void;
 };
 
-function EffectRow({ effect, statusNameById, errorMessage, onEdit, onDuplicate, onRemove }: EffectRowProps) {
-  const block = formatEffectListBlock(effect, statusNameById);
-  const kindLabel = block.leadIn.replace(/\s+$/, "") || "Akcja";
-  const valueLabel = block.primaryBold || block.secondaryDetail || "—";
+function EffectRow({
+  effect,
+  expanded,
+  statusNameById,
+  panelSummary,
+  panelSubgroups,
+  errorMessage,
+  onToggleEdit,
+  onFinishEdit,
+  onDuplicate,
+  onRemove,
+  onChangeKind,
+  onPatchPayload,
+}: EffectRowProps) {
   return (
     <div className="space-y-1">
       <div
-        className={`flex flex-wrap items-center gap-2 rounded-lg border bg-white p-2 ${
-          errorMessage ? "border-red-300" : "border-slate-200"
-        }`}
+        className={`rounded-lg border bg-white ${errorMessage ? "border-red-300" : "border-slate-200"}`}
       >
-        {errorMessage ? <AlertTriangle className="h-4 w-4 shrink-0 text-red-600" aria-hidden /> : null}
-        <FakeSelect className="min-w-[9rem] flex-1 sm:max-w-[14rem]" onClick={onEdit}>
-          {kindLabel}
-        </FakeSelect>
-        <FakeSelect className="min-w-[8rem] flex-1" onClick={onEdit}>
-          {valueLabel}
-        </FakeSelect>
-        <RowMenu onEdit={onEdit} onDuplicate={onDuplicate} onRemove={onRemove} />
+        <div className="flex items-start gap-2 px-3 py-2.5">
+          {errorMessage ? <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-red-600" aria-hidden /> : null}
+          <div className="min-w-0 flex-1">
+            {!expanded ? (
+              <EffectSummary effect={effect} statusNameById={statusNameById} />
+            ) : (
+              <p className="text-sm font-semibold text-slate-900">Edycja akcji</p>
+            )}
+          </div>
+          <RowActions
+            editActive={expanded}
+            onEdit={onToggleEdit}
+            onDuplicate={onDuplicate}
+            onRemove={onRemove}
+          />
+        </div>
+
+        <div className={`${expandShellClass} ${expanded ? "grid-rows-[1fr]" : "grid-rows-[0fr]"}`}>
+          <div className="min-h-0 overflow-hidden">
+            {expanded ? (
+              <div className="border-t border-slate-100 px-3 pb-3 pt-2">
+                <AutomationEffectConfigFields
+                  effect={effect}
+                  panelSummary={panelSummary}
+                  panelSubgroups={panelSubgroups}
+                  onChangeKind={onChangeKind}
+                  onPatchPayload={onPatchPayload}
+                />
+                <div className="mt-3 flex justify-end">
+                  <button type="button" className={`${oaBtnPri} gap-1.5`} onClick={onFinishEdit}>
+                    <Check className="h-4 w-4" strokeWidth={2.5} aria-hidden />
+                    Zakończ edycję
+                  </button>
+                </div>
+              </div>
+            ) : null}
+          </div>
+        </div>
       </div>
       {errorMessage ? <p className="px-1 text-xs text-red-600">{errorMessage}</p> : null}
     </div>
   );
 }
 
-type WorkflowAddCtaProps = {
+function WorkflowAddCta({
+  variant,
+  label,
+  onClick,
+}: {
   variant: "condition" | "effect";
   label: string;
   onClick: () => void;
-};
-
-function WorkflowAddCta({ variant, label, onClick }: WorkflowAddCtaProps) {
+}) {
   const cls = variant === "condition" ? oaWorkflowAddCtaCondition : oaWorkflowAddCtaEffect;
   return (
     <button type="button" className={cls} onClick={onClick}>
@@ -259,12 +325,20 @@ export type AutomationIfThenSectionProps = {
   effects: AutomationEffect[];
   statusNameById: Map<number, string>;
   warehouseOptions?: ConditionOption[];
+  panelSummary: OrderUiStatusPanelSummary | null;
+  panelSubgroups: OrderUiPanelSubgroupRead[];
   conditionErrors?: Record<string, string>;
   effectErrors?: Record<string, string>;
+  expandedConditionUid: string | null;
+  expandedEffectUid: string | null;
   onAddCondition: () => void;
   onAddEffect: () => void;
-  onEditCondition: (uid: string) => void;
-  onEditEffect: (uid: string) => void;
+  onExpandCondition: (uid: string | null) => void;
+  onExpandEffect: (uid: string | null) => void;
+  onPatchCondition: (uid: string, patch: Partial<AutomationCondition>) => void;
+  onSetConditionJoin: (uid: string, join: AutomationConditionJoin) => void;
+  onChangeEffectKind: (uid: string, kind: AutomationEffectKind) => void;
+  onPatchEffectPayload: (uid: string, partial: Record<string, string | number | boolean | null>) => void;
   onDuplicateCondition: (c: AutomationCondition) => void;
   onRemoveCondition: (uid: string) => void;
   onDuplicateEffect: (e: AutomationEffect) => void;
@@ -276,12 +350,20 @@ export function AutomationIfThenSection({
   effects,
   statusNameById,
   warehouseOptions = [],
+  panelSummary,
+  panelSubgroups,
   conditionErrors = {},
   effectErrors = {},
+  expandedConditionUid,
+  expandedEffectUid,
   onAddCondition,
   onAddEffect,
-  onEditCondition,
-  onEditEffect,
+  onExpandCondition,
+  onExpandEffect,
+  onPatchCondition,
+  onSetConditionJoin,
+  onChangeEffectKind,
+  onPatchEffectPayload,
   onDuplicateCondition,
   onRemoveCondition,
   onDuplicateEffect,
@@ -309,16 +391,24 @@ export function AutomationIfThenSection({
                 {conditions.map((c, idx) => {
                   const join = c.joinToNext ?? "and";
                   const isLast = idx >= conditions.length - 1;
+                  const expanded = expandedConditionUid === c.uid;
                   return (
                     <li key={c.uid}>
                       <ConditionRow
                         condition={c}
+                        expanded={expanded}
                         statusNameById={statusNameById}
                         warehouseOptions={warehouseOptions}
+                        panelSummary={panelSummary}
+                        panelSubgroups={panelSubgroups}
+                        showJoin={!isLast}
                         errorMessage={conditionErrors[c.uid] ?? null}
-                        onEdit={() => onEditCondition(c.uid)}
+                        onToggleEdit={() => onExpandCondition(expanded ? null : c.uid)}
+                        onFinishEdit={() => onExpandCondition(null)}
                         onDuplicate={() => onDuplicateCondition(c)}
                         onRemove={() => onRemoveCondition(c.uid)}
+                        onPatch={(patch) => onPatchCondition(c.uid, patch)}
+                        onSetJoin={(j) => onSetConditionJoin(c.uid, j)}
                       />
                       {!isLast ? <ConditionJoinBadge join={join} /> : null}
                     </li>
@@ -351,18 +441,27 @@ export function AutomationIfThenSection({
           <div className="flex flex-1 flex-col gap-3">
             {effects.length > 0 ? (
               <ul className="space-y-2">
-                {effects.map((e) => (
-                  <li key={e.uid}>
-                    <EffectRow
-                      effect={e}
-                      statusNameById={statusNameById}
-                      errorMessage={effectErrors[e.uid] ?? null}
-                      onEdit={() => onEditEffect(e.uid)}
-                      onDuplicate={() => onDuplicateEffect(e)}
-                      onRemove={() => onRemoveEffect(e.uid)}
-                    />
-                  </li>
-                ))}
+                {effects.map((e) => {
+                  const expanded = expandedEffectUid === e.uid;
+                  return (
+                    <li key={e.uid}>
+                      <EffectRow
+                        effect={e}
+                        expanded={expanded}
+                        statusNameById={statusNameById}
+                        panelSummary={panelSummary}
+                        panelSubgroups={panelSubgroups}
+                        errorMessage={effectErrors[e.uid] ?? null}
+                        onToggleEdit={() => onExpandEffect(expanded ? null : e.uid)}
+                        onFinishEdit={() => onExpandEffect(null)}
+                        onDuplicate={() => onDuplicateEffect(e)}
+                        onRemove={() => onRemoveEffect(e.uid)}
+                        onChangeKind={(kind) => onChangeEffectKind(e.uid, kind)}
+                        onPatchPayload={(partial) => onPatchEffectPayload(e.uid, partial)}
+                      />
+                    </li>
+                  );
+                })}
               </ul>
             ) : null}
 
