@@ -2,10 +2,9 @@
 
 ## Active
 
-Order Card — zakładka **Produkty i magazyn** (UX/UI only, bez zmian API/WMS):
+Order Card — zakładka **Produkty i magazyn** polish:
 
-- Layout: lewa lista kart produktów + sticky prawa kolumna (KPI + historia timeline), stała szerokość
-- Karty produktów (nie tabela): thumb `object-contain`, meta SKU/EAN/nr kat, metryki, braki, zamienniki, usunięte, zestawy („Zestaw zawiera”)
-- Footer WMS: lokalizacja + badge Zebrano/W zbieraniu/Spakowano + operator (`OrderLineOperationalWorkflowModule`)
-- Dopasowane opakowanie: galeria kart (rekomendowany + alternatywy) z Pewność/Wykorzystanie
-- Gęstość ~−15%; pełna funkcjonalność zachowana
+- Usunięty kafelek „Braki z WMS / Przejdź do WMS”
+- Historia: max 10 + „Pokaż więcej”; Spakuj pierwsze w toolbarze
+- Lokalizacje: qty w `(…)`, max 3 + expand; większy odstęp pick/pack i wartość/ilość
+- Miniatura rozciągnięta na wysokość bloku tytułu+metryk; Cena netto + Cena brutto obok siebie

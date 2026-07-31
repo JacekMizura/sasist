@@ -1,6 +1,8 @@
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { Check, Clock, Info, MapPin, Truck, User } from "lucide-react";
 import type { OrderHistoryTimelineEvent } from "./orderHistoryTimelineModel";
+
+const HISTORY_PREVIEW_LIMIT = 10;
 
 function HistoryBadge({ label, tone }: { label: string; tone: "muted" | "dark" | "blue" }) {
   const cls =
@@ -123,6 +125,7 @@ export function OrderHistoryTimeline({
   hideHeader?: boolean;
   title?: string;
 }) {
+  const [expanded, setExpanded] = useState(false);
   const shell = compact ? "shadow-none" : "shadow-sm";
   const headerPad = compact ? "px-2.5 py-2" : "px-3 py-2";
   const titleCls = compact
@@ -131,6 +134,9 @@ export function OrderHistoryTimeline({
   const iconBox = compact ? "h-6 w-6" : "h-8 w-8";
   const truckIcon = compact ? "h-3 w-3" : "h-4 w-4";
   const infoIcon = compact ? "h-3 w-3" : "h-4 w-4";
+  const hasMore = events.length > HISTORY_PREVIEW_LIMIT;
+  const visibleEvents = expanded || !hasMore ? events : events.slice(0, HISTORY_PREVIEW_LIMIT);
+  const hiddenCount = Math.max(0, events.length - HISTORY_PREVIEW_LIMIT);
 
   return (
     <div className={`overflow-hidden rounded-lg border border-slate-200 bg-white ${shell}`}>
@@ -165,7 +171,7 @@ export function OrderHistoryTimeline({
           />
 
           <ul className="relative space-y-3">
-            {events.map((ev) => (
+            {visibleEvents.map((ev) => (
               <li
                 key={ev.key}
                 className={`relative ${compact ? "pl-8" : "pl-9"}`}
@@ -180,6 +186,19 @@ export function OrderHistoryTimeline({
               </li>
             ))}
           </ul>
+
+          {hasMore ? (
+            <div className={`relative z-[1] ${compact ? "mt-2.5 pl-8" : "mt-3 pl-9"}`}>
+              <button
+                type="button"
+                className="text-[11px] font-semibold text-slate-600 underline-offset-2 hover:text-slate-900 hover:underline"
+                aria-expanded={expanded}
+                onClick={() => setExpanded((v) => !v)}
+              >
+                {expanded ? "Zwiń historię" : `Pokaż więcej (${hiddenCount})`}
+              </button>
+            </div>
+          ) : null}
         </div>
       )}
     </div>

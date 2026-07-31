@@ -66,7 +66,6 @@ import { OrderDirectSalesBadge } from "../../components/orders/orderList/OrderDi
 import ActivityLogPanel from "../../components/activityLog/ActivityLogPanel";
 import { formatMoney } from "../../utils/formatOrderMoney";
 import OrderAdditionalFieldsSection from "../../components/orders/OrderAdditionalFieldsSection";
-import OrderMissingProductsSection from "../../components/orders/OrderMissingProductsSection";
 import { buildOrderReplacementPairs } from "../../components/orders/buildOrderReplacementSummary";
 import OrderReplaceProductModal from "../../components/orders/OrderReplaceProductModal";
 import { fmtOmsQty } from "../../components/orders/omsFulfillmentLinePresentation";
@@ -1369,7 +1368,6 @@ export default function OrderDetailPage() {
               <div className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,1fr)_320px] xl:grid-cols-[minmax(0,1fr)_340px] lg:items-start">
                 <div className="min-w-0 space-y-4">
                     {wmsErr && <p className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm font-medium text-amber-900 shadow-sm">{wmsErr}</p>}
-                    {orderFulfillmentWhId != null && <OrderMissingProductsSection tenantId={DAMAGE_TENANT_ID} orderId={order.id} lines={wmsFulfillment?.lines ?? []} itemWaitingById={itemWaitingById} onRefreshOrder={() => void reloadOrderById(order.id)} onRefreshWms={() => void loadWmsFulfillment()} sectionDomId="wms-braki-sekcja" />}
 
                     <div className="flex flex-wrap items-end justify-between gap-2">
                       <div className="flex flex-wrap items-center gap-2.5">
@@ -1380,9 +1378,9 @@ export default function OrderDetailPage() {
                         </label>
                       </div>
                       <div className="flex flex-wrap items-center gap-1.5">
+                        <Link to={WMS_ROUTES.packingOrder(order.id)} className={brandPrimaryButtonClass}>Spakuj</Link>
                         <button type="button" onClick={() => setAddProductOpen(true)} className="rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-sm font-bold shadow-sm transition-colors hover:bg-slate-50">Dodaj produkt</button>
                         <button type="button" onClick={() => setAddBundleOpen(true)} className="rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-sm font-bold shadow-sm transition-colors hover:bg-slate-50">Dodaj zestaw</button>
-                        <Link to={WMS_ROUTES.packingOrder(order.id)} className={brandPrimaryButtonClass}>Spakuj</Link>
                       </div>
                     </div>
 

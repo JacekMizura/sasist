@@ -20,7 +20,6 @@ import {
   findResolvedShortageForOrderLine,
   isResolvedShortageReducedLine,
   isResolvedShortageRemovedLine,
-  resolvedShortageBadgeLabel,
   type PanelFulfillmentHistoryEntryUi,
 } from "./orderLineResolvedShortage";
 
@@ -99,61 +98,91 @@ function hasWarehouseLocations(wm: WmsPackingOrderLineApi | undefined): boolean 
   return Boolean((wm.location_label ?? "").trim());
 }
 
+const LOCATION_PREVIEW_LIMIT = 3;
+
+type LocChip = {
+  key: string;
+  label: string;
+  quantity: number | null;
+  className: string;
+  title?: string;
+  extra?: ReactNode;
+};
+
 function LocationsBadges({ wm }: { wm: WmsPackingOrderLineApi | undefined }) {
-  const picked = wm?.picked_locations;
-  if (picked?.length) {
-    return (
-      <div className="flex min-w-0 flex-wrap gap-1.5">
-        {picked.map((loc, i) => {
-          const batch = (loc.batch_number ?? "").trim();
-          const exp = formatExpiryPl(loc.expiry_date);
-          return (
-            <span
-              key={`${loc.location_label}-${batch}-${loc.expiry_date ?? ""}-${i}`}
-              className="inline-flex w-fit max-w-full flex-wrap items-center gap-x-1.5 gap-y-0.5 rounded-md px-1.5 py-0.5 border border-emerald-200/60 bg-emerald-50 text-[11px] font-medium text-emerald-800"
-            >
-              <span className="truncate">{loc.location_label}</span>
+  const [expanded, setExpanded] = useState(false);
+
+  const chips: LocChip[] = (() => {
+    const picked = wm?.picked_locations;
+    if (picked?.length) {
+      return picked.map((loc, i) => {
+        const batch = (loc.batch_number ?? "").trim();
+        const exp = formatExpiryPl(loc.expiry_date);
+        const qty = loc.quantity != null && Number(loc.quantity) > 0 ? Math.round(Number(loc.quantity)) : null;
+        return {
+          key: `${loc.location_label}-${batch}-${loc.expiry_date ?? ""}-${i}`,
+          label: loc.location_label,
+          quantity: qty,
+          className:
+            "inline-flex w-fit max-w-full flex-wrap items-center gap-x-1 gap-y-0.5 rounded-md border border-emerald-200/60 bg-emerald-50 px-1.5 py-0.5 text-[11px] font-medium text-emerald-800",
+          extra: (
+            <>
               {batch ? <span className="font-mono text-[10px] opacity-80">Partia {batch}</span> : null}
               {exp ? <span className="text-[10px] opacity-80">{exp}</span> : null}
-              {loc.quantity != null && Number(loc.quantity) > 0 ? (
-                <span className="tabular-nums opacity-90">{Math.round(Number(loc.quantity))}</span>
-              ) : null}
-            </span>
-          );
-        })}
-      </div>
-    );
-  }
-  const slots = wm?.available_stock_locations;
-  if (slots?.length) {
-    return (
-      <div className="flex min-w-0 flex-wrap gap-1.5">
-        {slots.map((loc, i) => (
-          <span
-            key={`${loc.location_label}-${i}`}
-            className={`inline-flex w-fit max-w-full items-center gap-1.5 rounded-md px-1.5 py-0.5 text-[11px] font-medium tabular-nums ${locationBadgeClass(loc.storage_type)}`}
-            title={loc.storage_type ?? undefined}
-          >
-            <span className="truncate">{loc.location_label}</span>
-            {loc.quantity != null && Number(loc.quantity) > 0 ? (
-              <span className="tabular-nums opacity-90">{Math.round(Number(loc.quantity))}</span>
-            ) : null}
-          </span>
-        ))}
-      </div>
-    );
-  }
-  const lab = (wm?.location_label ?? "").trim();
-  if (!lab) return null;
+            </>
+          ),
+        };
+      });
+    }
+    const slots = wm?.available_stock_locations;
+    if (slots?.length) {
+      return slots.map((loc, i) => ({
+        key: `${loc.location_label}-${i}`,
+        label: loc.location_label,
+        quantity: loc.quantity != null && Number(loc.quantity) > 0 ? Math.round(Number(loc.quantity)) : null,
+        className: `inline-flex w-fit max-w-full items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] font-medium tabular-nums ${locationBadgeClass(loc.storage_type)}`,
+        title: loc.storage_type ?? undefined,
+      }));
+    }
+    const lab = (wm?.location_label ?? "").trim();
+    if (!lab) return [];
+    return [
+      {
+        key: lab,
+        label: lab,
+        quantity: wm?.location_bin_qty != null && wm.location_bin_qty > 0 ? wm.location_bin_qty : null,
+        className: `inline-flex w-fit max-w-full items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] font-medium ${locationBadgeClass(wm?.location_storage_type)}`,
+      },
+    ];
+  })();
+
+  if (chips.length === 0) return null;
+
+  const hasMore = chips.length > LOCATION_PREVIEW_LIMIT;
+  const visible = expanded || !hasMore ? chips : chips.slice(0, LOCATION_PREVIEW_LIMIT);
+  const hiddenCount = chips.length - LOCATION_PREVIEW_LIMIT;
+
   return (
-    <span
-      className={`inline-flex w-fit max-w-full items-center gap-1.5 rounded-md px-1.5 py-0.5 text-[11px] font-medium ${locationBadgeClass(wm?.location_storage_type)}`}
-    >
-      {lab}
-      {wm?.location_bin_qty != null && wm.location_bin_qty > 0 ? (
-        <span className="tabular-nums opacity-90">({wm.location_bin_qty})</span>
+    <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+      {visible.map((chip) => (
+        <span key={chip.key} className={chip.className} title={chip.title}>
+          <span className="truncate">{chip.label}</span>
+          {chip.extra}
+          {chip.quantity != null ? <span className="tabular-nums opacity-90">({chip.quantity})</span> : null}
+        </span>
+      ))}
+      {hasMore ? (
+        <button
+          type="button"
+          className="inline-flex h-6 min-w-6 items-center justify-center rounded-md border border-slate-200 bg-white px-1.5 text-[11px] font-bold text-slate-600 hover:bg-slate-50 hover:text-slate-900"
+          aria-expanded={expanded}
+          aria-label={expanded ? "Zwiń lokalizacje" : `Pokaż pozostałe lokalizacje (${hiddenCount})`}
+          onClick={() => setExpanded((v) => !v)}
+        >
+          {expanded ? "−" : `+${hiddenCount}`}
+        </button>
       ) : null}
-    </span>
+    </div>
   );
 }
 
@@ -275,10 +304,7 @@ function BundleComponentWarehouseRow({
 
           {shortageUi ? (
             <p className="text-[10px] font-semibold text-red-800">
-              Brak: {fmtOmsQty(Number(wm?.missing_quantity ?? 0))} szt. ·{" "}
-              <a href="#wms-braki-sekcja" className="underline underline-offset-2">
-                szczegóły braków
-              </a>
+              Brak: {fmtOmsQty(Number(wm?.missing_quantity ?? 0))} szt.
             </p>
           ) : null}
         </div>
@@ -391,12 +417,17 @@ export function OrderWarehouseProductsSection({
               key={row.item.id}
               className={`rounded-lg border border-slate-200 bg-white p-2.5 shadow-sm ${isArchive ? "opacity-[0.92]" : ""}`}
             >
-              <div className="flex items-start gap-3">
-                <div className="flex h-14 w-14 shrink-0 items-center justify-center">
+              <div className="flex items-stretch gap-3">
+                <div className="relative w-[4.75rem] shrink-0 self-stretch sm:w-20">
                   {row.imageUrl ? (
-                    <img src={row.imageUrl} alt="" className="h-14 w-14 object-contain" loading="lazy" />
+                    <img
+                      src={row.imageUrl}
+                      alt=""
+                      className="absolute inset-0 m-auto max-h-full max-w-full object-contain"
+                      loading="lazy"
+                    />
                   ) : (
-                    <span className="text-[11px] text-slate-300">—</span>
+                    <span className="absolute inset-0 flex items-center justify-center text-[11px] text-slate-300">—</span>
                   )}
                 </div>
                 <div className="min-w-0 flex-1">
@@ -428,14 +459,17 @@ export function OrderWarehouseProductsSection({
                         {row.catalog ? <CodeBadge label="Nr kat" value={row.catalog} /> : null}
                       </div>
                     </div>
-                    <div className="flex shrink-0 items-start gap-2">
+                    <div className="flex shrink-0 items-start gap-4">
                       {!hideLineTotalHeader ? (
                         <div className="hidden text-right sm:block">
                           <p className="text-[9px] font-bold uppercase tracking-wider text-slate-400">Wartość</p>
                           <p className="text-base font-extrabold tabular-nums text-slate-900">{row.lineGross}</p>
                         </div>
                       ) : null}
-                      <span className={lineQtyBadgeClass(false)}>{row.quantityDisplay}</span>
+                      <div className="flex flex-col items-center">
+                        <span className="mb-0.5 text-[9px] font-bold uppercase tracking-wider text-slate-400">Ilość</span>
+                        <span className={lineQtyBadgeClass(false)}>{row.quantityDisplay}</span>
+                      </div>
                       <OrderLineKebabMenu
                         lineId={row.item.id}
                         anchorId={`order-wh-line-kebab-${row.item.id}`}
@@ -451,11 +485,11 @@ export function OrderWarehouseProductsSection({
                     </div>
                   </div>
 
-                  <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1.5 sm:grid-cols-4 lg:grid-cols-5">
-                    <ProductMetric label="Cena">{row.unitGross}</ProductMetric>
+                  <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1.5 sm:grid-cols-3 lg:grid-cols-5">
+                    <ProductMetric label="Cena netto">{row.unitNet}</ProductMetric>
+                    <ProductMetric label="Cena brutto">{row.unitGross}</ProductMetric>
                     <ProductMetric label="Rabat">{rabatDisplay}</ProductMetric>
                     <ProductMetric label="VAT">{row.vatLabel}</ProductMetric>
-                    <ProductMetric label="Netto/szt">{row.unitNet}</ProductMetric>
                     {!hideLineTotalHeader ? (
                       <ProductMetric label="Wartość">
                         <span className="font-extrabold text-slate-900">{row.lineGross}</span>
@@ -488,11 +522,7 @@ export function OrderWarehouseProductsSection({
 
               {shortageUi ? (
                 <div className="mt-2 rounded-md border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-[11px] leading-snug text-amber-900">
-                  Uwaga: braki dotyczą składników zestawu — rozwiązania w{" "}
-                  <a href="#wms-braki-sekcja" className="font-semibold underline underline-offset-2 hover:text-amber-950">
-                    sekcji braków
-                  </a>
-                  .
+                  Uwaga: braki dotyczą składników zestawu — rozwiązania w panelu braków poniżej pozycji.
                 </div>
               ) : null}
             </article>
@@ -569,14 +599,19 @@ export function OrderWarehouseProductsSection({
             key={row.lineageRootId ?? row.item.id}
             className={lineArticleSurfaceClass(resolvedRemoved, resolvedReduced, isArchive)}
           >
-            <div className="flex items-start gap-3">
+            <div className="flex items-stretch gap-3">
               <div
-                className={`flex h-14 w-14 shrink-0 items-center justify-center ${resolvedRemoved ? "opacity-50 grayscale" : ""}`}
+                className={`relative w-[4.75rem] shrink-0 self-stretch sm:w-20 ${resolvedRemoved ? "opacity-50 grayscale" : ""}`}
               >
                 {row.imageUrl ? (
-                  <img src={row.imageUrl} alt="" className="h-14 w-14 object-contain" loading="lazy" />
+                  <img
+                    src={row.imageUrl}
+                    alt=""
+                    className="absolute inset-0 m-auto max-h-full max-w-full object-contain"
+                    loading="lazy"
+                  />
                 ) : (
-                  <span className="text-[11px] text-slate-300">—</span>
+                  <span className="absolute inset-0 flex items-center justify-center text-[11px] text-slate-300">—</span>
                 )}
               </div>
 
@@ -634,7 +669,7 @@ export function OrderWarehouseProductsSection({
                     ) : null}
                   </div>
 
-                  <div className="flex shrink-0 items-start gap-2">
+                  <div className="flex shrink-0 items-start gap-4">
                     {!hideLineTotalHeader ? (
                       <div className="hidden text-right sm:block">
                         <p className="text-[9px] font-bold uppercase tracking-wider text-slate-400">Wartość</p>
@@ -666,11 +701,11 @@ export function OrderWarehouseProductsSection({
                   </div>
                 </div>
 
-                <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1.5 sm:grid-cols-4 lg:grid-cols-5">
-                  <ProductMetric label="Cena">{row.unitGross}</ProductMetric>
+                <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1.5 sm:grid-cols-3 lg:grid-cols-5">
+                  <ProductMetric label="Cena netto">{row.unitNet}</ProductMetric>
+                  <ProductMetric label="Cena brutto">{row.unitGross}</ProductMetric>
                   <ProductMetric label="Rabat">{rabatDisplay}</ProductMetric>
                   <ProductMetric label="VAT">{row.vatLabel}</ProductMetric>
-                  <ProductMetric label="Netto/szt">{row.unitNet}</ProductMetric>
                   <ProductMetric label="Stan / Rez." alert={shortageUi}>
                     <span className="block">{stockDisp}</span>
                     <span className="mt-0.5 block text-[10px] font-medium text-slate-500">Rez.: {qtyDisplay}</span>

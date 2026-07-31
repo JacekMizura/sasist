@@ -105,40 +105,42 @@ export function OrderLineOperationalWorkflowModule({
           </div>
         ) : null}
 
-        <div className="flex items-center gap-2">
-          <ShoppingCart className="h-3.5 w-3.5 shrink-0 text-slate-500" strokeWidth={2} aria-hidden />
-          <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-1.5">
-              <span className={statusPill(m.pickTone, "pick")}>{m.pickLabel}</span>
-              <span className="text-[11px] font-bold tabular-nums text-slate-800">{qtyLine}</span>
+        <div className="ml-auto flex flex-wrap items-start gap-x-8 gap-y-2 sm:gap-x-10">
+          <div className="flex items-center gap-2">
+            <ShoppingCart className="h-3.5 w-3.5 shrink-0 text-slate-500" strokeWidth={2} aria-hidden />
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-1.5">
+                <span className={statusPill(m.pickTone, "pick")}>{m.pickLabel}</span>
+                <span className="text-[11px] font-bold tabular-nums text-slate-800">{qtyLine}</span>
+              </div>
+              <MiniTrack value01={m.pickProgress01} activeClass={progressBarFillClass(m.pickTone, "pick")} />
+              {pickOpLine ? (
+                <p className="mt-0.5 truncate text-[10px] font-medium text-slate-600" title={pickOpLine}>
+                  {pickOpLine}
+                </p>
+              ) : null}
+              {logistics.length > 0 ? (
+                <p className="mt-0.5 truncate text-[10px] text-slate-500" title={logistics.join(" · ")}>
+                  {logistics.join(" · ")}
+                </p>
+              ) : null}
             </div>
-            <MiniTrack value01={m.pickProgress01} activeClass={progressBarFillClass(m.pickTone, "pick")} />
-            {pickOpLine ? (
-              <p className="mt-0.5 truncate text-[10px] font-medium text-slate-600" title={pickOpLine}>
-                {pickOpLine}
-              </p>
-            ) : null}
-            {logistics.length > 0 ? (
-              <p className="mt-0.5 truncate text-[10px] text-slate-500" title={logistics.join(" · ")}>
-                {logistics.join(" · ")}
-              </p>
-            ) : null}
           </div>
-        </div>
 
-        <div className="flex items-center gap-2">
-          <Package className="h-3.5 w-3.5 shrink-0 text-slate-500" strokeWidth={2} aria-hidden />
-          <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-1.5">
-              <span className={statusPill(m.packTone, "pack")}>{m.packLabel}</span>
-              <span className="text-[11px] font-bold tabular-nums text-slate-800">{packQtyLine}</span>
+          <div className="flex items-center gap-2">
+            <Package className="h-3.5 w-3.5 shrink-0 text-slate-500" strokeWidth={2} aria-hidden />
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-1.5">
+                <span className={statusPill(m.packTone, "pack")}>{m.packLabel}</span>
+                <span className="text-[11px] font-bold tabular-nums text-slate-800">{packQtyLine}</span>
+              </div>
+              <MiniTrack value01={m.packProgress01} activeClass={progressBarFillClass(m.packTone, "pack")} />
+              {packOpLine ? (
+                <p className="mt-0.5 truncate text-[10px] font-medium text-slate-600" title={packOpLine}>
+                  {packOpLine}
+                </p>
+              ) : null}
             </div>
-            <MiniTrack value01={m.packProgress01} activeClass={progressBarFillClass(m.packTone, "pack")} />
-            {packOpLine ? (
-              <p className="mt-0.5 truncate text-[10px] font-medium text-slate-600" title={packOpLine}>
-                {packOpLine}
-              </p>
-            ) : null}
           </div>
         </div>
       </div>
