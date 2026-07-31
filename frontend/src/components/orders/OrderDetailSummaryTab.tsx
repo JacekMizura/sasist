@@ -8,7 +8,6 @@ import { OrderDetailSummaryCompactRow } from "./OrderDetailSummaryCompactRow";
 import { OrderCustomerLinkPanel } from "../customers/OrderCustomerLinkPanel";
 import { OrderMatchedPackagingSection } from "./OrderMatchedPackagingSection";
 import OrderAdditionalFieldsSection from "./OrderAdditionalFieldsSection";
-import { OrderEventTypeLabel } from "./OrderEventTypeLabel";
 import {
   OrderSummaryProductsList,
   type OrderSummaryLineMenuAction,
@@ -26,7 +25,6 @@ import {
 import type {
   OrderDetail,
   OrderDetailDocDraft,
-  SummaryPanelLogRow,
 } from "./orderDetailPageTypes";
 import { PAYMENT_METHOD_PRESETS, PAYMENT_STATUS_PRESETS } from "./orderDetailPageTypes";
 import {
@@ -115,9 +113,6 @@ type Props = {
   marginTone: string;
   timelinePickEvt: WmsOrderTimelineEventApi | undefined;
   timelinePackEvt: WmsOrderTimelineEventApi | undefined;
-  summaryLogSearch: string;
-  setSummaryLogSearch: Dispatch<SetStateAction<string>>;
-  summaryPanelLogs: SummaryPanelLogRow[];
 };
 
 /**
@@ -188,9 +183,6 @@ export function OrderDetailSummaryTab({
   marginTone,
   timelinePickEvt,
   timelinePackEvt,
-  summaryLogSearch,
-  setSummaryLogSearch,
-  summaryPanelLogs,
 }: Props) {
   const showPackaging = Boolean(
     wmsLoading ||
@@ -659,54 +651,6 @@ export function OrderDetailSummaryTab({
           </div>
         </aside>
       </div>
-
-      <section className="overflow-hidden rounded-lg border border-slate-200 bg-white">
-        <div className="flex items-center justify-between border-b border-slate-100 px-3.5 py-2">
-          <h3 className={odSidePanelSectionTitleClass}>Logi czynności</h3>
-          <div className="relative w-52 max-w-full">
-            <input
-              type="text"
-              value={summaryLogSearch}
-              onChange={(e) => setSummaryLogSearch(e.target.value)}
-              placeholder="Szukaj…"
-              className="w-full rounded-md border border-slate-200 py-1 pl-2.5 pr-2 text-xs outline-none focus:border-slate-400"
-            />
-          </div>
-        </div>
-        <div className="w-full overflow-x-auto">
-          <table className="w-full text-left">
-            <thead>
-              <tr className="border-b border-slate-100">
-                <th className="w-[15%] px-3.5 py-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-400">Czas</th>
-                <th className="w-[15%] px-3.5 py-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-400">Użytkownik</th>
-                <th className="w-[20%] px-3.5 py-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-400">Zdarzenie</th>
-                <th className="w-[50%] px-3.5 py-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-400">Komunikat</th>
-              </tr>
-            </thead>
-            <tbody className="text-xs text-slate-900">
-              {summaryPanelLogs.map((row) => (
-                <tr
-                  key={String(row.id)}
-                  className={`border-b border-slate-50 hover:bg-slate-50/50 ${
-                    row.severity === "error"
-                      ? "bg-red-50 text-red-900"
-                      : row.severity === "warn"
-                        ? "bg-amber-50 text-amber-900"
-                        : ""
-                  }`}
-                >
-                  <td className="px-3.5 py-1.5 text-slate-500">{row.at}</td>
-                  <td className="px-3.5 py-1.5 font-semibold">{row.user}</td>
-                  <td className="px-3.5 py-1.5">
-                    <OrderEventTypeLabel eventType={row.eventKey} />
-                  </td>
-                  <td className="px-3.5 py-1.5">{row.msg}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </section>
     </div>
   );
 }

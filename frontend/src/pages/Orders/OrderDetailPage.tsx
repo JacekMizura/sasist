@@ -81,8 +81,6 @@ import { OrderPriorityFlamePicker } from "../../components/orders/OrderPriorityF
 import { OrderHistoryTimeline } from "../../components/orders/OrderHistoryTimeline";
 import { WmsOrderValidationPanel } from "../../components/orders/WmsOrderValidationPanel";
 import { buildOrderHistoryTimelineEvents } from "../../components/orders/orderHistoryTimelineModel";
-import { OrderEventTypeLabel } from "../../components/orders/OrderEventTypeLabel";
-import { getOrderEventLabel } from "../../utils/orderEventLabels";
 import { getShippingMethods } from "../../api/shippingMethodsApi";
 import { getOrderPanelSubgroups, getOrderUiStatusSummary, patchOrderUiStatus } from "../../api/orderUiStatusApi";
 import type { OrderUiPanelSubgroupRead, OrderUiStatusBrief, OrderUiStatusPanelSummary } from "../../types/orderUiStatus";
@@ -111,10 +109,10 @@ import { OrderDetailHeaderBar } from "../../components/orders/OrderDetailHeaderB
 import { OrderDetailSummaryTab } from "../../components/orders/OrderDetailSummaryTab";
 import { WmsOperationTimesKpiPanel } from "../../components/orders/WmsOperationTimesKpiPanel";
 import { DETAIL_TABS, type DetailTabId } from "../../components/orders/orderDetailTabs";
+import { odMainMaxWidthClass } from "../../components/orders/orderDetailUiTokens";
 import {
   type OrderDetail,
   type OrderItemRow,
-  type SummaryPanelLogRow,
   PAYMENT_METHOD_PRESETS,
   PAYMENT_STATUS_PRESETS,
 } from "../../components/orders/orderDetailPageTypes";
@@ -316,7 +314,6 @@ export default function OrderDetailPage() {
   const [editProductModalFocus, setEditProductModalFocus] = useState<"main" | "rabat">("main");
   const [summaryLineRemoveItemId, setSummaryLineRemoveItemId] = useState<number | null>(null);
   const [summaryLineRemovePending, setSummaryLineRemovePending] = useState(false);
-  const [summaryLogSearch, setSummaryLogSearch] = useState("");
   const [orderRabatMode, setOrderRabatMode] = useState<"pct" | "pln">("pct");
   const [orderRabatDraft, setOrderRabatDraft] = useState("");
   const [orderRabatSaving, setOrderRabatSaving] = useState(false);
@@ -874,65 +871,6 @@ export default function OrderDetailPage() {
     }
   }, [order?.order_date]);
 
-  const summaryPanelLogs = useMemo((): SummaryPanelLogRow[] => {
-    if (!order) return [];
-    const rows: SummaryPanelLogRow[] = [
-      {
-        id: "sys-created",
-        at: formatDetailDate(order.created_at),
-        user: "System",
-        eventKey: "SYSTEM",
-        eventLabel: getOrderEventLabel("SYSTEM"),
-        msg: `Utworzono zamówienie (ID ${order.id})`,
-        severity: "info",
-        sortAt: order.created_at ? Date.parse(order.created_at) || 0 : 0,
-      },
-      {
-        id: "sys-source",
-        at: "—",
-        user: "System",
-        eventKey: "SOURCE",
-        eventLabel: getOrderEventLabel("SOURCE"),
-        msg: `Źródło: ${(order.source ?? "").trim() || "—"}`,
-        severity: "info",
-        sortAt: -1,
-      },
-    ];
-    for (const log of order.order_activity_logs ?? []) {
-      const msg = (log.message ?? "").trim() || "—";
-      let severity: SummaryPanelLogRow["severity"] = "info";
-      if (/^(błąd|error)/i.test(msg)) severity = "error";
-      else if (/^(ważne|warn)/i.test(msg)) severity = "warn";
-      const eventKey = (log.event_type ?? "").trim() || "—";
-      const created = log.created_at ? Date.parse(log.created_at) || 0 : 0;
-      rows.push({
-        id: log.id,
-        at: formatDetailDate(log.created_at ?? null),
-        user: (log.operator_display ?? "").trim() || "System",
-        eventKey,
-        eventLabel: getOrderEventLabel(eventKey),
-        msg,
-        severity,
-        sortAt: created,
-      });
-    }
-    // NEWEST → OLDEST (API already DESC for activity; synthetic rows sorted with them)
-    rows.sort((a, b) => {
-      if (b.sortAt !== a.sortAt) return b.sortAt - a.sortAt;
-      return String(b.id).localeCompare(String(a.id), "pl");
-    });
-    const q = summaryLogSearch.trim().toLowerCase();
-    if (!q) return rows;
-    return rows.filter(
-      (r) =>
-        r.msg.toLowerCase().includes(q) ||
-        r.eventLabel.toLowerCase().includes(q) ||
-        r.eventKey.toLowerCase().includes(q) ||
-        r.user.toLowerCase().includes(q) ||
-        r.at.toLowerCase().includes(q),
-    );
-  }, [order, summaryLogSearch]);
-
   const dateLine = order ? formatDetailDate(order.order_date ?? order.created_at) : "—";
 
   const productsSubtotalGross = useMemo(() => {
@@ -1440,9 +1378,6 @@ export default function OrderDetailPage() {
                 marginTone={marginTone}
                 timelinePickEvt={timelinePickEvt}
                 timelinePackEvt={timelinePackEvt}
-                summaryLogSearch={summaryLogSearch}
-                setSummaryLogSearch={setSummaryLogSearch}
-                summaryPanelLogs={summaryPanelLogs}
               />
             ) : null}
 
@@ -1541,7 +1476,7 @@ export default function OrderDetailPage() {
             ) : null}
 
             {activeTab === "logs" ? (
-              <div className="max-w-[1200px] rounded-md border border-slate-200 bg-white p-6 shadow-sm">
+              <div className={`${odMainMaxWidthClass} rounded-lg border border-slate-200 bg-white p-4 shadow-sm`}>
                 <ActivityLogPanel
                   objectType="order"
                   objectId={order.id}
@@ -1550,7 +1485,7 @@ export default function OrderDetailPage() {
                 />
               </div>
             ) : (
-              <div className="max-w-[1200px] px-1 pb-8">
+              <div className={`${odMainMaxWidthClass} pb-6 pt-3`}>
                 <ActivityLogPanel objectType="order" objectId={order.id} />
               </div>
             )}

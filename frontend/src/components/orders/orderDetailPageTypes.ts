@@ -176,17 +176,3 @@ export type OrderDetailDocDraft = {
   nip: string;
   billing_email: string;
 };
-
-export type SummaryPanelLogRow = {
-  id: string | number;
-  at: string;
-  user: string;
-  /** Machine-readable code (search / dev only). */
-  eventKey: string;
-  /** Localized label for UI. */
-  eventLabel: string;
-  msg: string;
-  severity: "info" | "warn" | "error";
-  /** Sort key ms — newest first. */
-  sortAt: number;
-};
