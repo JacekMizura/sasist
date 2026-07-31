@@ -1,3 +1,9 @@
+## 2026-07-31 — Dopasowane opakowanie: kompaktowa karta rekomendacji
+
+- Jeden nagłówek sekcji; bez diagnostyki Smart Matching na wierzchu (Szczegóły)
+- 2 kolumny: rekomendacja + placeholder/wybór; badge REKOMENDOWANY / Hybryda / Pewność / Wypełnienie / Tryb
+- Miniatury produktów i kartonów: `object-contain`, bez ramek/tła/cieni
+
 ## 2026-07-31 — Karta Zamówienia: przywrócenie pełnej funkcjonalności
 
 - Cofnięto nadmierne uproszczenia density pass: pełne opakowania, Safe Order, chipy WMS, Listy przewozowe, Wideo WMS, Wiadomość do klienta, pełny chrome kart

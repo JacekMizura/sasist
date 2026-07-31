@@ -121,18 +121,16 @@ export function OrderSummaryProductsList({ lines, productEditTenantId, onLineAct
                 <tr key={row.item.id} className="align-top">
                   <td className="min-w-0 px-3 py-2.5">
                     <div className="flex items-start gap-3">
-                      <div className="h-10 w-10 shrink-0 rounded border border-slate-200 p-0.5">
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center">
                         {row.imageUrl ? (
                           <img
                             src={row.imageUrl}
                             alt=""
-                            className="h-full w-full object-cover"
+                            className="h-10 w-10 object-contain"
                             loading="lazy"
                           />
                         ) : (
-                          <div className="flex h-full w-full items-center justify-center text-[10px] text-slate-400">
-                            —
-                          </div>
+                          <span className="text-[10px] text-slate-400">—</span>
                         )}
                       </div>
                       <div className="min-w-0 flex-1">

@@ -2,13 +2,9 @@
 
 ## Active
 
-Order Card Summary — restore full functionality after over-simplification:
+Order Card — packaging section UX polish (presentation only):
 
-- Restored from pre-density baseline (`26e3cf74`): full packaging (`pairRecommendationColumns`), Safe Order card, WMS phase chips, Listy przewozowe card, Wideo WMS section, Wiadomość do klienta, full `OrderDetailSectionCard` chrome
-- Added summary products header: Spakuj + Dodaj produkt + Dodaj zestaw (wired to existing modals)
-- Shipping/payment Zapisz/Anuluj only when draft differs from saved order (dirty-only)
-- Hierarchy layout (context → products → helpers) kept; no API/logic changes beyond dirty gate
-
-## Constraint
-
-Mockup = composition/hierarchy only. Never remove existing order-card capabilities when restyling.
+- Single header „Dopasowane opakowanie”; compact recommended card + empty selection placeholder
+- Engine/reason diagnostics behind „Szczegóły”
+- Product & carton thumbs: object-contain, no frame/bg/shadow
+- No API / selection logic changes

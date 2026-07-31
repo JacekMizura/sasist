@@ -191,8 +191,8 @@ function BundleSetPreviewBadge({
             const q = fmtOmsQty(c.quantity);
             return (
               <li key={c.id} className="flex gap-2 rounded-md bg-white p-1.5">
-                <div className="flex h-24 w-24 shrink-0 items-center justify-center rounded-2xl border border-slate-200/70 bg-white shadow-sm">
-                  {img ? <img src={img} alt="" className="max-h-10 max-w-10 object-contain drop-shadow-sm" loading="lazy" /> : <span className="text-[9px] text-slate-300">—</span>}
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center">
+                  {img ? <img src={img} alt="" className="h-10 w-10 object-contain" loading="lazy" /> : <span className="text-[9px] text-slate-300">—</span>}
                 </div>
                 <div className="min-w-0 flex-1">
                   <p className="truncate font-semibold leading-snug text-slate-900">{name}</p>
@@ -237,7 +237,7 @@ function BundleComponentWarehouseRow({
       <div className="flex gap-2.5">
         <div className="flex h-12 w-12 shrink-0 items-center justify-center">
           {img ? (
-            <img src={img} alt="" className="max-h-12 max-w-12 object-contain drop-shadow-sm" loading="lazy" />
+            <img src={img} alt="" className="h-12 w-12 object-contain" loading="lazy" />
           ) : (
             <span className="text-[10px] text-slate-300">—</span>
           )}
@@ -406,7 +406,7 @@ export function OrderWarehouseProductsSection({
                     <div className="flex min-w-0 flex-1 gap-4">
                       <div className="flex h-16 w-16 shrink-0 items-center justify-center">
                         {row.imageUrl ? (
-                          <img src={row.imageUrl} alt="" className="max-h-16 max-w-16 object-contain drop-shadow-sm" loading="lazy" />
+                          <img src={row.imageUrl} alt="" className="h-16 w-16 object-contain" loading="lazy" />
                         ) : (
                           <span className="text-[11px] text-slate-300">—</span>
                         )}
@@ -467,7 +467,7 @@ export function OrderWarehouseProductsSection({
                   <div className="flex gap-4">
                     <div className="flex h-[72px] w-[72px] shrink-0 items-center justify-center">
                       {row.imageUrl ? (
-                        <img src={row.imageUrl} alt="" className="max-h-[72px] max-w-[72px] object-contain drop-shadow-sm" loading="lazy" />
+                        <img src={row.imageUrl} alt="" className="h-[72px] w-[72px] object-contain" loading="lazy" />
                       ) : (
                         <span className="text-[11px] text-slate-300">—</span>
                       )}
@@ -660,7 +660,7 @@ export function OrderWarehouseProductsSection({
                       className={`flex h-[72px] w-[72px] shrink-0 items-center justify-center ${resolvedRemoved ? "opacity-50 grayscale" : ""}`}
                     >
                       {row.imageUrl ? (
-                        <img src={row.imageUrl} alt="" className="max-h-[72px] max-w-[72px] object-contain drop-shadow-sm" loading="lazy" />
+                        <img src={row.imageUrl} alt="" className="h-[72px] w-[72px] object-contain" loading="lazy" />
                       ) : (
                         <span className="text-[11px] text-slate-300">—</span>
                       )}

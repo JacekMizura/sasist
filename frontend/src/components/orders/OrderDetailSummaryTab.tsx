@@ -434,9 +434,9 @@ export function OrderDetailSummaryTab({
       <div className="grid grid-cols-1 gap-6 border-t border-slate-100 pt-6 lg:grid-cols-12 lg:items-start">
         <div className="space-y-6 lg:col-span-8">
           <OrderDetailSectionCard
-            title="Dopasowane opakowania"
+            title="Dopasowane opakowanie"
             right={
-              <Link to={WMS_ROUTES.packingOrder(order.id)} className="text-slate-400 transition-colors hover:text-slate-800">
+              <Link to={WMS_ROUTES.packingOrder(order.id)} className="text-slate-400 transition-colors hover:text-slate-800" aria-label="Edytuj opakowanie">
                 <Pencil className="h-4 w-4" strokeWidth={2} />
               </Link>
             }

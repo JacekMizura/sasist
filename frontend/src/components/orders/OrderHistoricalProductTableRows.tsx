@@ -187,16 +187,15 @@ function ProductIdentityBlock({
   const nameCls = muted
     ? "font-semibold leading-snug text-slate-500 line-through decoration-slate-400"
     : "font-semibold leading-snug text-slate-900";
-  const imgShell = muted ? "border-slate-200 bg-slate-200/60 grayscale" : "border-slate-200 bg-white";
   return (
     <div className={`rounded-lg border border-slate-200/80 bg-white p-2.5 shadow-sm ${wrap}`}>
       <p className="text-[10px] font-extrabold uppercase tracking-wide text-slate-500">{title}</p>
       <div className="mt-1.5 flex items-start gap-3">
-        <div className={`h-14 w-14 shrink-0 overflow-hidden rounded-lg border ${imgShell}`}>
+        <div className={`flex h-14 w-14 shrink-0 items-center justify-center ${muted ? "opacity-50 grayscale" : ""}`}>
           {imageUrl ? (
-            <img src={imageUrl} alt="" className="h-full w-full object-contain" />
+            <img src={imageUrl} alt="" className="h-14 w-14 object-contain" />
           ) : (
-            <div className="flex h-full w-full items-center justify-center text-[10px] text-slate-400">—</div>
+            <span className="text-[10px] text-slate-400">—</span>
           )}
         </div>
         <div className="min-w-0 flex-1">
@@ -352,8 +351,8 @@ export function HistoricalRemovedGhostTableRow({
       <div className="rounded-lg border border-slate-200/80 bg-slate-50/95 p-2.5 opacity-[0.92]">
         <p className="text-[11px] font-extrabold uppercase tracking-wide text-slate-600">Usunięto z zamówienia</p>
         <div className="mt-2 flex items-start gap-3">
-          <div className="h-14 w-14 shrink-0 overflow-hidden rounded-lg border border-slate-200 bg-slate-200/60 grayscale">
-            {img ? <img src={img} alt="" className="h-full w-full object-contain" /> : <div className="flex h-full w-full items-center justify-center text-xs">—</div>}
+          <div className="flex h-14 w-14 shrink-0 items-center justify-center opacity-50 grayscale">
+            {img ? <img src={img} alt="" className="h-14 w-14 object-contain" /> : <span className="text-xs text-slate-400">—</span>}
           </div>
           <div className="min-w-0 flex-1">
             <p className="font-semibold leading-snug text-slate-600 line-through decoration-slate-400">{nm}</p>
