@@ -73,7 +73,6 @@ type Props = {
 
 /**
  * Order-detail header: breadcrumb, title row, process status row, tabs strip.
- * Fulfillment warehouse / consolidation / assignment history live on the products (WMS) tab.
  */
 export function OrderDetailHeaderBar({
   order,

@@ -66,10 +66,6 @@ import { useDocumentTemplatePrint } from "../../hooks/useDocumentTemplatePrint";
 import { saleKindFromSubtype, stockKindFromType } from "../../utils/documentTemplatePrint";
 import { OrderDirectSalesBadge } from "../../components/orders/orderList/OrderDirectSalesBadge";
 import ActivityLogPanel from "../../components/activityLog/ActivityLogPanel";
-import OrderFulfillmentWarehousePanel from "../../components/orders/OrderFulfillmentWarehousePanel";
-import OrderConsolidationPanel from "../../components/orders/OrderConsolidationPanel";
-import OrderFulfillmentAssignmentHistory from "../../components/orders/OrderFulfillmentAssignmentHistory";
-import type { FulfillmentAssignmentPhase } from "../../api/orderFulfillmentApi";
 import { formatMoney } from "../../utils/formatOrderMoney";
 import OrderAdditionalFieldsSection from "../../components/orders/OrderAdditionalFieldsSection";
 import OrderMissingProductsSection from "../../components/orders/OrderMissingProductsSection";
@@ -1494,26 +1490,6 @@ export default function OrderDetailPage() {
                       orderId={order.id}
                     />
                   ) : null}
-                  <div className="space-y-4">
-                    <OrderFulfillmentWarehousePanel
-                      orderId={order.id}
-                      tenantId={order.tenant_id ?? DAMAGE_TENANT_ID}
-                      warehouseId={orderFulfillmentWhId}
-                      warehouseName={order.fulfillment_warehouse_name ?? null}
-                      phase={order.fulfillment_assignment_phase}
-                      locked={Boolean(order.fulfillment_warehouse_change_locked)}
-                      strategy={order.fulfillment_assignment_strategy}
-                      assignedAt={order.fulfillment_assigned_at}
-                      assignedByLabel={order.fulfillment_assigned_by_label}
-                      assignmentReason={order.fulfillment_assignment_reason}
-                      onAssigned={() => reloadOrderById(order.id)}
-                    />
-                    <OrderConsolidationPanel
-                      orderId={order.id}
-                      onChanged={() => reloadOrderById(order.id)}
-                    />
-                    <OrderFulfillmentAssignmentHistory orderId={order.id} />
-                  </div>
                   <div className="bg-white rounded-md border border-slate-200 shadow-sm p-5">
                      <h3 className="text-[11px] font-bold uppercase tracking-widest text-slate-500 mb-4">HISTORIA WMS</h3>
                      <OrderHistoryTimeline compact events={orderHistoryTimelineEvents} formatDate={formatDetailDate} />
