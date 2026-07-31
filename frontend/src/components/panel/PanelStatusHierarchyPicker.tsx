@@ -316,14 +316,18 @@ export function PanelStatusHierarchyPicker({
         ) : (
           sections.map(({ block, groupLabel, filteredUngrouped, filteredSections }, idx) => (
             <section key={block.main_group} className={idx > 0 ? `${PANEL_TREE_GROUP_SECTION_CLASS} border-t border-slate-100` : "pt-1"}>
-              <div className={`${PANEL_TREE_PICKER_GROUP_HEAD_CLASS} items-start gap-2`}>
+              <div className={`${PANEL_TREE_PICKER_GROUP_HEAD_CLASS} items-center gap-2`}>
                 <span
-                  className="mt-1 h-4 w-1 shrink-0 rounded-full"
+                  className="h-2.5 w-2.5 shrink-0 rounded-full"
                   style={{ backgroundColor: panelTreeGroupBarHex(block.main_group) }}
                   aria-hidden
                 />
                 <span className={`${PANEL_TREE_GROUP_LABEL_CLASS} min-w-0 flex-1`}>{groupLabel}</span>
-                <PanelTreeCount value={block.total_count} />
+                <PanelTreeCount
+                  value={block.total_count}
+                  colorHex={panelTreeGroupBarHex(block.main_group)}
+                  variant="solid"
+                />
               </div>
               <div className={PANEL_TREE_CHILDREN_CLASS}>
                 {filteredUngrouped.length > 0 ? (

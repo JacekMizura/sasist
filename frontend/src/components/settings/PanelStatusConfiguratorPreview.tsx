@@ -92,7 +92,7 @@ export function PanelStatusConfiguratorPreview({
         {displayName}
       </span>
       {imageUrl ? <img src={imageUrl} alt="" className="mt-0.5 h-4 w-4 shrink-0 rounded object-contain" /> : null}
-      <PanelTreeCount value={count} active={active} colorHex={counterColorHex} />
+      <PanelTreeCount value={count} active={active} colorHex={counterColorHex ?? row.stripeHex} variant="soft" />
     </div>
   );
 

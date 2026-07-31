@@ -20,7 +20,11 @@ import {
   PANEL_TREE_OPERATIONAL_LIST_CLASS,
   PANEL_TREE_OPERATIONAL_SECTION_HEADER_CLASS,
   PANEL_TREE_OPERATIONAL_TITLE_CLASS,
+  PANEL_TREE_SEARCH_ICON_CLASS,
+  PANEL_TREE_SEARCH_INPUT_CLASS,
+  PANEL_TREE_SEARCH_WRAP_CLASS,
   PANEL_TREE_SUBGROUP_LINE_CLASS,
+  panelTreeGroupBarHex,
   panelTreeMetaRowClass,
   panelTreeStatusBarClass,
 } from "../panel/panelStatusTreeStyles";
@@ -57,15 +61,6 @@ function sectionKeyForGroup(g: OrderUiMainGroup): "nowe" | "wtoku" | "zakonczone
   if (g === "NEW") return "nowe";
   if (g === "IN_PROGRESS") return "wtoku";
   return "zakonczone";
-}
-
-function statusDotClass(name: string): string {
-  const n = name.toLowerCase();
-  if (n === "nowe") return "bg-blue-500";
-  if (n === "w toku") return "bg-amber-500";
-  if (n === "zakończone") return "bg-emerald-500";
-  if (n === "pilne") return "bg-red-500";
-  return "bg-slate-400";
 }
 
 function normalizeSearchQuery(q: string): string {
@@ -185,7 +180,12 @@ export function OrdersPanelStatusSidebar({
         {s.image_url ? (
           <img src={s.image_url} alt="" className="mt-0.5 h-4 w-4 shrink-0 rounded object-contain" />
         ) : null}
-        <PanelTreeCount value={s.count} active={active} colorHex={counterColorForId?.(s.id)} />
+        <PanelTreeCount
+          value={s.count}
+          active={active}
+          colorHex={counterColorForId?.(s.id) ?? row.stripeHex}
+          variant="soft"
+        />
       </button>
     );
   };
@@ -207,8 +207,8 @@ export function OrdersPanelStatusSidebar({
 
   if (collapsed) {
     const collapsedRootClass = embedded
-      ? "w-full min-w-0 max-w-full shrink-0 space-y-1 overflow-x-hidden"
-      : `w-full max-w-full min-w-0 shrink-0 space-y-1 overflow-x-hidden rounded-md border border-slate-200/90 bg-slate-50 p-1 ${stickySelf} lg:w-14 lg:max-w-[3.5rem]`;
+      ? "w-full min-w-0 max-w-full shrink-0 space-y-1.5 overflow-x-hidden"
+      : `w-full max-w-full min-w-0 shrink-0 space-y-1.5 overflow-x-hidden rounded-md border border-slate-200/90 bg-slate-50 p-1.5 ${stickySelf} lg:w-14 lg:max-w-[3.5rem]`;
 
     return (
       <div className={collapsedRootClass}>
@@ -220,24 +220,24 @@ export function OrdersPanelStatusSidebar({
         />
         <button
           type="button"
-          className="flex w-full items-center justify-between rounded-md px-1 py-1 hover:bg-slate-100"
+          className="flex w-full flex-col items-center gap-1 rounded-md px-0.5 py-1 hover:bg-slate-100"
           onClick={() => onPanelFilterChange("all")}
           title="Wszystkie"
           aria-label="Wszystkie"
         >
           <span className="h-2.5 w-2.5 rounded-full bg-slate-500" />
-          <PanelTreeCount value={totalPanelOrders ?? "—"} />
+          <PanelTreeCount value={totalPanelOrders ?? "—"} variant="soft" />
         </button>
         {(panelSummary?.unassigned_count ?? 0) > 0 ? (
           <button
             type="button"
-            className="flex w-full items-center justify-between rounded-md px-1 py-1 hover:bg-slate-100"
+            className="flex w-full flex-col items-center gap-1 rounded-md px-0.5 py-1 hover:bg-slate-100"
             onClick={() => onPanelFilterChange("unassigned")}
             title="Bez etykiety"
             aria-label="Bez etykiety"
           >
             <span className="h-2.5 w-2.5 rounded-full bg-slate-400" />
-            <PanelTreeCount value={panelSummary?.unassigned_count ?? "—"} />
+            <PanelTreeCount value={panelSummary?.unassigned_count ?? "—"} variant="soft" />
           </button>
         ) : null}
         {MAIN_PANEL_GROUP_ORDER.flatMap((mg) => {
@@ -245,35 +245,43 @@ export function OrdersPanelStatusSidebar({
           if (!block) return [];
           const visibleStatuses = block.sub_statuses.filter((s) => statusMatchesSearch(s, normalizedSearch));
           if (normalizedSearch && visibleStatuses.length === 0) return [];
+          const groupHex = panelTreeGroupBarHex(block.main_group);
           return [
-            <div key={mg} className="space-y-1 border-t border-slate-200/80 pt-1 first:border-t-0 first:pt-0">
+            <div key={mg} className="space-y-1.5 border-t border-slate-200/80 pt-1.5 first:border-t-0 first:pt-0">
               <button
                 type="button"
-                className="flex w-full items-center justify-between rounded-md px-1 py-1 hover:bg-slate-100"
+                className="flex w-full flex-col items-center gap-1 rounded-md px-0.5 py-1 hover:bg-slate-100"
                 onClick={() => onPanelFilterChange({ kind: "group", group: block.main_group })}
                 title={panelGroupLabels[block.main_group]}
                 aria-label={panelGroupLabels[block.main_group]}
               >
-                <span className={`h-2.5 w-2.5 rounded-full ${statusDotClass(panelGroupLabels[block.main_group])}`} />
-                <PanelTreeCount value={block.total_count} />
+                <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: groupHex }} />
+                <PanelTreeCount value={block.total_count} colorHex={groupHex} variant="solid" />
               </button>
-              {visibleStatuses.map((s) => (
-                <button
-                  key={s.id}
-                  type="button"
-                  className="flex w-full items-center justify-between rounded-md px-1 py-1 hover:bg-slate-100"
-                  onClick={() => onPanelFilterChange({ kind: "sub", id: s.id })}
-                  title={panelStatusCollapsedTitle(s, block.main_group)}
-                  aria-label={panelStatusCollapsedTitle(s, block.main_group)}
-                >
-                  <span
-                    className="h-3 w-0.5 shrink-0 rounded-full"
-                    style={{ backgroundColor: sidebarSubStatusHex(s.badge_color ?? s.color, block.main_group) }}
-                    aria-hidden
-                  />
-                  <PanelTreeCount value={s.count} colorHex={counterColorForId?.(s.id)} />
-                </button>
-              ))}
+              {visibleStatuses.map((s) => {
+                const stripe = sidebarSubStatusHex(s.badge_color ?? s.color, block.main_group);
+                return (
+                  <button
+                    key={s.id}
+                    type="button"
+                    className="flex w-full flex-col items-center gap-1 rounded-md border border-slate-200/80 bg-white px-0.5 py-1 hover:bg-slate-50"
+                    onClick={() => onPanelFilterChange({ kind: "sub", id: s.id })}
+                    title={panelStatusCollapsedTitle(s, block.main_group)}
+                    aria-label={panelStatusCollapsedTitle(s, block.main_group)}
+                  >
+                    <span
+                      className="h-3 w-1 shrink-0 rounded-full"
+                      style={{ backgroundColor: stripe }}
+                      aria-hidden
+                    />
+                    <PanelTreeCount
+                      value={s.count}
+                      colorHex={counterColorForId?.(s.id) ?? stripe}
+                      variant="soft"
+                    />
+                  </button>
+                );
+              })}
             </div>,
           ];
         })}
@@ -301,30 +309,26 @@ export function OrdersPanelStatusSidebar({
         onToggleCollapsed={onToggleCollapsed}
       />
 
-      <div className="relative mb-2">
-        <Search
-          className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400"
-          strokeWidth={2}
-          aria-hidden
-        />
+      <div className={PANEL_TREE_SEARCH_WRAP_CLASS}>
+        <Search className={PANEL_TREE_SEARCH_ICON_CLASS} strokeWidth={2} aria-hidden />
         <input
           type="search"
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
           placeholder="Szukaj statusu…"
           aria-label="Szukaj statusu"
-          className="w-full rounded-lg border border-slate-200 bg-white py-1.5 pl-8 pr-2 text-xs text-slate-800 placeholder:text-slate-400 focus:border-slate-300 focus:outline-none focus:ring-1 focus:ring-slate-200"
+          className={PANEL_TREE_SEARCH_INPUT_CLASS}
         />
       </div>
 
-      <div className="space-y-1.5">
+      <div className="space-y-1">
         <button
           type="button"
           className={panelTreeMetaRowClass(panelFilter === "all")}
           onClick={() => onPanelFilterChange("all")}
         >
           <span className="min-w-0 flex-1 leading-snug">Wszystkie</span>
-          <PanelTreeCount value={totalPanelOrders ?? "—"} active={panelFilter === "all"} />
+          <PanelTreeCount value={totalPanelOrders ?? "—"} active={panelFilter === "all"} variant="soft" />
         </button>
 
         {(panelSummary?.unassigned_count ?? 0) > 0 ? (
@@ -334,7 +338,11 @@ export function OrdersPanelStatusSidebar({
             onClick={() => onPanelFilterChange("unassigned")}
           >
             <span className="min-w-0 flex-1 leading-snug">Bez etykiety</span>
-            <PanelTreeCount value={panelSummary?.unassigned_count ?? "—"} active={panelFilter === "unassigned"} />
+            <PanelTreeCount
+              value={panelSummary?.unassigned_count ?? "—"}
+              active={panelFilter === "unassigned"}
+              variant="soft"
+            />
           </button>
         ) : null}
       </div>

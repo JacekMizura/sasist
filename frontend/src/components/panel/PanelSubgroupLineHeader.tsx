@@ -19,8 +19,7 @@ export type PanelSubgroupLineHeaderProps = {
 };
 
 /**
- * Nagłówek sekcji podgrupy — etykieta + linia (+ opcjonalny licznik).
- * Chevron tylko do zwijania; nie wygląda jak wiersz statusu.
+ * Nagłówek sekcji podgrupy — mały uppercase + chevron (nie wygląda jak status).
  */
 export function PanelSubgroupLineHeader({
   title,
@@ -41,9 +40,9 @@ export function PanelSubgroupLineHeader({
         aria-label={expanded ? "Zwiń podgrupę" : "Rozwiń podgrupę"}
       >
         {expanded ? (
-          <ChevronDown className="h-3.5 w-3.5" strokeWidth={2.25} aria-hidden />
+          <ChevronDown className="h-3 w-3" strokeWidth={2.5} aria-hidden />
         ) : (
-          <ChevronRight className="h-3.5 w-3.5" strokeWidth={2.25} aria-hidden />
+          <ChevronRight className="h-3 w-3" strokeWidth={2.5} aria-hidden />
         )}
       </button>
       <span className={PANEL_TREE_SUBGROUP_TITLE_CLASS}>{displayTitle}</span>

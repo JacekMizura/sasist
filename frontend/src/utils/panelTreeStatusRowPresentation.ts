@@ -46,6 +46,8 @@ function treeRowBackgroundHex(status: PanelStatusHexBundle, mainGroup: PanelSide
  * counter_color → osobno w PanelTreeCount (localStorage)
  *
  * Grupy główne (Nowe / W toku / Zakończone) nie używają tej funkcji.
+ *
+ * Kafelek zawsze ma ramkę; active wzmacnia border + tint kategorii.
  */
 export function panelTreeStatusRowPresentation(
   status: PanelStatusHexBundle,
@@ -67,21 +69,35 @@ export function panelTreeStatusRowPresentation(
   const contrastBase = hasBg
     ? blendHexOverWhite(treeRowBackgroundHex(status, mainGroup), tintAlpha)
     : active
-      ? "#f1f5f9"
+      ? blendHexOverWhite(stripeHex, 0.12)
       : "#ffffff";
+
+  const idleBorder = "border-slate-200";
+  const activeBorderClass = "border-slate-300 shadow-sm font-semibold";
+  // Active: lekko mocniejsza ramka w kolorze kategorii (via boxShadow inset).
+  const activeRing = active
+    ? {
+        boxShadow: `inset 0 0 0 1px ${blendHexOverWhite(stripeHex, 0.55)}`,
+      }
+    : undefined;
 
   return {
     rowClassName: hasBg
       ? `${PANEL_TREE_STATUS_ROW_BASE} ${
-          active ? "border-slate-200/80 font-medium" : "border-transparent font-normal"
+          active ? `${activeBorderClass}` : `${idleBorder} font-medium hover:border-slate-300`
         }`
       : panelTreeStatusRowClass(active),
     rowStyle: hasBg
       ? {
           backgroundColor: rich.backgroundColor,
-          boxShadow: rich.boxShadow,
+          ...activeRing,
         }
-      : undefined,
+      : active
+        ? {
+            backgroundColor: blendHexOverWhite(stripeHex, 0.1),
+            ...activeRing,
+          }
+        : undefined,
     labelStyle: hasText
       ? { color: pickReadableTextOnBackground(status.text_color, contrastBase, 4.5) }
       : undefined,
