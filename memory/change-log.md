@@ -1,3 +1,9 @@
+## 2026-07-31 — Podsumowanie: final commercial polish
+
+- Zwarte 4 kolumny kontekstu; produkty `text-3xl`; prawa kolumna jako jeden panel
+- Kompaktowe empty: Wideo / listy; notatki 2 linie + auto-grow; cichszy Safe Order
+- Ship/pay Zapisz–Anuluj tylko dirty; bez usuwania funkcji; bez ponownych logów
+
 ## 2026-07-31 — Dopasowane opakowanie: kompaktowa karta rekomendacji
 
 - Jeden nagłówek sekcji; bez diagnostyki Smart Matching na wierzchu (Szczegóły)

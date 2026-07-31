@@ -2,9 +2,8 @@
 
 ## Active
 
-Order Card — packaging section UX polish (presentation only):
+Order Card Summary — final commercial polish (UX only):
 
-- Single header „Dopasowane opakowanie”; compact recommended card + empty selection placeholder
-- Engine/reason diagnostics behind „Szczegóły”
-- Product & carton thumbs: object-contain, no frame/bg/shadow
-- No API / selection logic changes
+- Denser 4-col context strip; products hero (`text-3xl`); unified right rail
+- Compact waybills/video empty; notes 2-line auto-grow; quieter Safe Order / extra fields
+- Zapisz/Anuluj ship-pay only when dirty; no function removals; no activity-log duplicate

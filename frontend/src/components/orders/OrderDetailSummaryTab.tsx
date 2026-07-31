@@ -21,6 +21,8 @@ import {
   odMainMaxWidthClass,
   odPaidBadgeClass,
   odProductsHeroTitleClass,
+  odSidePanelQuietTitleClass,
+  odSidePanelSectionTitleClass,
   odWmsPhaseChipClass,
 } from "./orderDetailUiTokens";
 import type {
@@ -47,7 +49,12 @@ import { DAMAGE_TENANT_ID } from "../../pages/damage/damageShared";
 import { WMS_ROUTES } from "../../pages/wms/wmsRoutes";
 import { brandPrimaryButtonClass } from "../../design-system/brandUi";
 
-const inpSm = "mt-1 w-full rounded-md border border-slate-200 bg-white px-2.5 py-2 text-sm text-slate-900";
+const inpSm = "mt-0.5 w-full rounded-md border border-slate-200 bg-white px-2 py-1.5 text-[13px] text-slate-900";
+
+function autoGrowTextarea(el: HTMLTextAreaElement, minPx = 52) {
+  el.style.height = "auto";
+  el.style.height = `${Math.max(el.scrollHeight, minPx)}px`;
+}
 
 type ContactInfo = { name: string; phone: string; email: string; addressLines: string[] };
 
@@ -197,9 +204,9 @@ export function OrderDetailSummaryTab({
 
   return (
     <div className={odMainMaxWidthClass}>
-      {/* —— 1. KONTEKST ZAMÓWIENIA (cichy pas pod statusem) —— */}
-      <div className="border-b border-slate-200 pb-6 mb-6">
-      <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-4">
+      {/* —— 1. KONTEKST ZAMÓWIENIA (zwarty pas) —— */}
+      <div className="mb-4 border-b border-slate-200 pb-4">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4 lg:gap-5">
         <OrderDetailInfoColumn
           title="Kupujący"
           actions={
@@ -226,7 +233,7 @@ export function OrderDetailSummaryTab({
             hasContactData={orderHasUnlinkedCustomerData}
             onLinked={() => void reloadOrderById(order.id)}
           />
-          <div className="flex items-center justify-between gap-2 border-t border-slate-100 pt-2">
+          <div className="flex items-center justify-between gap-2 border-t border-slate-100 pt-1.5">
             <span className="flex min-w-0 items-center gap-2 text-slate-600">
               <Phone size={14} className="shrink-0 text-slate-400" /> {contact.phone}
             </span>
@@ -261,21 +268,21 @@ export function OrderDetailSummaryTab({
           }
         >
           <OrderDetailSummaryCompactRow label="Metoda płatności" value={<select className={inpSm} value={payMethodDraft} onChange={(e) => setPayMethodDraft(e.target.value)}><option value="">—</option>{Array.from(new Set([...PAYMENT_METHOD_PRESETS, payMethodDraft].filter(Boolean))).map((m) => (<option key={m} value={m}>{m}</option>))}</select>} />
-          <div className="flex items-center justify-between border-b border-slate-100 py-2.5 text-sm">
-            <span className="text-slate-500 font-medium">Status płatności</span>
-            <select className={`rounded-md border px-2.5 py-1 text-xs font-bold outline-none ${paymentStatusIsPaid(payStatusDraft) ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-slate-200 bg-white"}`} value={payStatusDraft} onChange={(e) => setPayStatusDraft(e.target.value)}><option value="">—</option>{Array.from(new Set([...PAYMENT_STATUS_PRESETS, payStatusDraft].filter(Boolean))).map((m) => (<option key={m} value={m}>{m}</option>))}</select>
+          <div className="flex items-center justify-between border-b border-slate-100 py-1.5 text-[13px]">
+            <span className="font-medium text-slate-500">Status płatności</span>
+            <select className={`rounded-md border px-2 py-0.5 text-xs font-bold outline-none ${paymentStatusIsPaid(payStatusDraft) ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-slate-200 bg-white"}`} value={payStatusDraft} onChange={(e) => setPayStatusDraft(e.target.value)}><option value="">—</option>{Array.from(new Set([...PAYMENT_STATUS_PRESETS, payStatusDraft].filter(Boolean))).map((m) => (<option key={m} value={m}>{m}</option>))}</select>
           </div>
           {!isStationarySale ? (
-            <label className="flex flex-col gap-1.5 border-b border-slate-100 py-2.5 text-sm text-slate-500 last:border-b-0 font-medium">
+            <label className="flex flex-col gap-1 border-b border-slate-100 py-1.5 text-[13px] font-medium text-slate-500 last:border-b-0">
               <span className="flex items-center gap-2"><Truck className="h-4 w-4" /> Sposób wysyłki</span>
-              <select className="rounded-md border border-slate-200 bg-white px-2 py-1.5 text-sm font-bold text-orange-600 outline-none focus:border-orange-500" value={shipDraft} disabled={orderFulfillmentWhId == null} onChange={(e) => setShipDraft(e.target.value)}><option value="">— brak —</option>{shippingMethods.map((m) => (<option key={m.id} value={m.id}>{m.name}</option>))}</select>
+              <select className="rounded-md border border-slate-200 bg-white px-2 py-1.5 text-[13px] font-bold text-orange-600 outline-none focus:border-orange-500" value={shipDraft} disabled={orderFulfillmentWhId == null} onChange={(e) => setShipDraft(e.target.value)}><option value="">— brak —</option>{shippingMethods.map((m) => (<option key={m.id} value={m.id}>{m.name}</option>))}</select>
             </label>
           ) : (
             <OrderDetailSummaryCompactRow label="Odbiór" value={order.shipping_method ?? "Odbiór osobisty"} />
           )}
-          {orderFulfillmentWhId != null && shipPayDirty ? (
-            <div className="mt-3 flex justify-end gap-2">
-              <button type="button" className="rounded-md border border-slate-300 bg-white px-4 py-1.5 text-xs font-bold text-slate-700 transition-colors hover:bg-slate-50" onClick={() => { setShipDraft(order.shipping_method_id?.trim() ?? ""); setPayMethodDraft((order.panel_payment_method ?? "").trim()); setPayStatusDraft((order.panel_payment_status ?? "").trim()); }}>Anuluj</button>
+          {shipPayDirty ? (
+            <div className="mt-2 flex justify-end gap-2">
+              <button type="button" className="rounded-md border border-slate-300 bg-white px-3 py-1 text-xs font-bold text-slate-700 transition-colors hover:bg-slate-50" onClick={() => { setShipDraft(order.shipping_method_id?.trim() ?? ""); setPayMethodDraft((order.panel_payment_method ?? "").trim()); setPayStatusDraft((order.panel_payment_status ?? "").trim()); }}>Anuluj</button>
               <button type="button" disabled={shipPaySaving} onClick={() => { setShipPaySaving(true); void patchOrder(order.id, { shipping_method_id: shipDraft.trim() || null, payment_method: payMethodDraft.trim() || null, payment_status: payStatusDraft.trim() || null }).then(() => reloadOrderById(order.id)).finally(() => setShipPaySaving(false)); }} className={brandPrimaryButtonClass}>{shipPaySaving ? "..." : "Zapisz"}</button>
             </div>
           ) : null}
@@ -307,11 +314,11 @@ export function OrderDetailSummaryTab({
             <div className="space-y-1 text-[13px] text-slate-700">
               <p className="font-semibold text-slate-900">{summaryShippingName}</p>
               {shippingExtras?.company && <p className="text-slate-600">{shippingExtras.company}</p>}
-              <p className="text-slate-600 flex items-center pt-0.5"><Phone size={13} className="mr-2 text-slate-400"/> {shippingExtras?.phone || contact.phone}</p>
-              <p className="text-slate-600 flex items-center pb-2 border-b border-slate-100"><Mail size={13} className="mr-2 text-slate-400"/> <span className="truncate">{shippingExtras?.email || contact.email}</span></p>
-              <div className="pt-1.5">
+              <p className="flex items-center text-slate-600"><Phone size={13} className="mr-2 text-slate-400"/> {shippingExtras?.phone || contact.phone}</p>
+              <p className="flex items-center border-b border-slate-100 pb-1.5 text-slate-600"><Mail size={13} className="mr-2 text-slate-400"/> <span className="truncate">{shippingExtras?.email || contact.email}</span></p>
+              <div className="pt-1">
                 {contact.addressLines.length > 0 && contact.addressLines[0] !== "—" ? contact.addressLines.map((ln, i) => <p key={`ship-${i}`}>{ln}</p>) : <p className="text-slate-500">Brak adresu.</p>}
-                {shippingExtras?.pickupPoint && <p className="font-semibold text-slate-700 mt-2">{shippingExtras.pickupPoint}</p>}
+                {shippingExtras?.pickupPoint && <p className="mt-1.5 font-semibold text-slate-700">{shippingExtras.pickupPoint}</p>}
                 {shippingExtras?.pickupCode && <p className="text-slate-600">Kod odbioru: {shippingExtras.pickupCode}</p>}
               </div>
             </div>
@@ -347,7 +354,7 @@ export function OrderDetailSummaryTab({
               <OrderDetailSummaryCompactRow label="Rodzaj" value={panelDocumentLabel} />
               <OrderDetailSummaryCompactRow label="Numer" value={<span className="font-mono text-blue-600 hover:underline cursor-pointer">{(order.sales_document_number ?? "").trim() || "—"}</span>} />
               {(order.panel_document_type ?? "").trim().toUpperCase() === "INVOICE" && billingInvoice && (billingInvoice.companyName || billingInvoice.nip || billingInvoice.email) && (
-                <div className="mt-3 space-y-1 border-t border-slate-100 pt-3 text-sm text-slate-700">
+                <div className="mt-2 space-y-0.5 border-t border-slate-100 pt-2 text-[13px] text-slate-700">
                   {billingInvoice.companyName && <p className="font-bold text-slate-900">{billingInvoice.companyName}</p>}
                   {billingInvoice.nip && <p>NIP {billingInvoice.nip}</p>}
                   {billingInvoice.email && <p className="break-all">{billingInvoice.email}</p>}
@@ -362,8 +369,8 @@ export function OrderDetailSummaryTab({
       </div>
 
       {(order.linked_documents?.length ?? 0) > 0 ? (
-        <div className="mb-6">
-        <OrderDetailSectionCard title="Powiązane dokumenty">
+        <div className="mb-4">
+        <OrderDetailSectionCard title="Powiązane dokumenty" dense>
           <div className="flex flex-wrap gap-2">
             {order.linked_documents!.map((doc) => (
               <button
@@ -397,11 +404,11 @@ export function OrderDetailSummaryTab({
       ) : null}
 
       {/* —— 2. PRODUKTY (dominująca część ekranu) —— */}
-      <section className="mb-10">
-        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+      <section className="mb-7">
+        <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
           <h2 className={odProductsHeroTitleClass}>
             Zamówione produkty
-            <span className="ml-2 text-lg font-semibold text-slate-500">({summaryProductsLines.length})</span>
+            <span className="ml-2 text-xl font-semibold text-slate-500">({summaryProductsLines.length})</span>
           </h2>
           <div className="flex flex-wrap items-center gap-2">
             {!isStationarySale ? (
@@ -425,15 +432,16 @@ export function OrderDetailSummaryTab({
             </button>
           </div>
         </div>
-        <div className="min-w-0 overflow-hidden rounded border border-slate-200 bg-white text-sm text-slate-800 shadow-sm">
+        <div className="min-w-0 overflow-hidden rounded border border-slate-200 bg-white text-sm text-slate-800">
           <OrderSummaryProductsList compact lines={summaryProductsLines} productEditTenantId={order.tenant_id ?? DAMAGE_TENANT_ID} onLineAction={handleOrderLineMenuAction} />
         </div>
       </section>
 
-      {/* —— 3. SEKCJE POMOCNICZE (pełna funkcjonalność, układ drugorzędny) —— */}
-      <div className="grid grid-cols-1 gap-6 border-t border-slate-100 pt-6 lg:grid-cols-12 lg:items-start">
-        <div className="space-y-6 lg:col-span-8">
+      {/* —— 3. SEKCJE POMOCNICZE —— */}
+      <div className="grid grid-cols-1 gap-5 border-t border-slate-100 pt-5 lg:grid-cols-12 lg:items-start">
+        <div className="space-y-4 lg:col-span-8">
           <OrderDetailSectionCard
+            dense
             title="Dopasowane opakowanie"
             right={
               <Link to={WMS_ROUTES.packingOrder(order.id)} className="text-slate-400 transition-colors hover:text-slate-800" aria-label="Edytuj opakowanie">
@@ -448,24 +456,24 @@ export function OrderDetailSummaryTab({
             )}
           </OrderDetailSectionCard>
 
-          <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-            <OrderDetailSectionCard title="Listy przewozowe">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <OrderDetailSectionCard dense title="Listy przewozowe">
               {docsTabWaybillsRows.length > 0 ? (
-                <div className="flex flex-col gap-3">
-                  <p className="text-sm text-slate-600">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className="text-[13px] text-slate-600">
                     Liczba dokumentów: <span className="font-bold text-slate-900">{docsTabWaybillsRows.length}</span>
                   </p>
                   <button
                     type="button"
                     onClick={() => setActiveTab("docs")}
-                    className="self-start rounded-md border border-slate-300 bg-white px-4 py-1.5 text-xs font-bold text-slate-700 transition-colors hover:bg-slate-50"
+                    className="rounded-md border border-slate-300 bg-white px-3 py-1 text-xs font-bold text-slate-700 transition-colors hover:bg-slate-50"
                   >
                     Zobacz dokumenty
                   </button>
                 </div>
               ) : (
-                <div className="flex flex-col items-start gap-3">
-                  <p className="text-sm text-slate-500">Brak listów przewozowych.</p>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className="text-[13px] text-slate-500">Brak listów przewozowych.</p>
                   <button type="button" onClick={() => setActiveTab("docs")} className={brandPrimaryButtonClass}>
                     Nadaj przesyłkę
                   </button>
@@ -473,38 +481,22 @@ export function OrderDetailSummaryTab({
               )}
             </OrderDetailSectionCard>
 
-            <OrderDetailSectionCard title="Wideo WMS">
-              <table className="mt-2 w-full border-t border-slate-100 text-left text-sm">
-                <thead className="text-[10px] font-bold uppercase text-slate-400">
-                  <tr>
-                    <th className="py-2">Data</th>
-                    <th className="py-2">Typ</th>
-                    <th className="py-2">Autor</th>
-                    <th className="py-2">Wygasa</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr>
-                    <td colSpan={4} className="py-4 text-center text-slate-500">
-                      Brak nagrań.
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
+            <OrderDetailSectionCard dense title="Wideo WMS">
+              <p className="text-[13px] text-slate-500">Brak nagrań.</p>
             </OrderDetailSectionCard>
           </div>
 
-          <section id="order-summary-operational-notes" className="rounded-xl border border-slate-200 bg-white p-5">
-            <h3 className="mb-4 text-[11px] font-bold uppercase tracking-wider text-slate-500">Notatki</h3>
-            <div className="mb-4 space-y-2">
+          <section id="order-summary-operational-notes" className="rounded-lg border border-slate-200 bg-white p-3.5">
+            <h3 className="mb-2.5 text-[11px] font-bold uppercase tracking-wider text-slate-500">Notatki</h3>
+            <div className="mb-2.5 space-y-1.5">
               {order.operational_notes && order.operational_notes.length > 0 ? (
                 order.operational_notes.map((n) => (
                   <div
                     key={n.id}
-                    className="-mx-2 rounded-lg border border-transparent p-2 transition-colors hover:border-slate-200 hover:bg-slate-50/50"
+                    className="-mx-1 rounded-md border border-transparent px-1.5 py-1 transition-colors hover:border-slate-200 hover:bg-slate-50/50"
                   >
-                    <p className="mb-1 whitespace-pre-wrap text-sm text-slate-900">{n.content}</p>
-                    <div className="flex flex-wrap items-center gap-3 text-[10px] text-slate-500">
+                    <p className="mb-0.5 whitespace-pre-wrap text-[13px] text-slate-900">{n.content}</p>
+                    <div className="flex flex-wrap items-center gap-2 text-[10px] text-slate-500">
                       <span>{formatDetailDate(n.created_at ?? null)}</span>
                       {n.show_in_picking ? (
                         <span className="rounded border border-slate-300 bg-white px-1.5 py-0.5">WMS Zbieranie</span>
@@ -516,19 +508,23 @@ export function OrderDetailSummaryTab({
                   </div>
                 ))
               ) : (
-                <p className="text-sm text-slate-500">Brak notatek operacyjnych.</p>
+                <p className="text-[13px] text-slate-500">Brak notatek operacyjnych.</p>
               )}
             </div>
-            <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
+            <div className="rounded-md border border-slate-200 bg-slate-50 p-2.5">
               <textarea
                 value={opDraft}
-                onChange={(e) => setOpDraft(e.target.value)}
+                onChange={(e) => {
+                  setOpDraft(e.target.value);
+                  autoGrowTextarea(e.target);
+                }}
+                onFocus={(e) => autoGrowTextarea(e.target)}
                 rows={2}
                 placeholder="Wpisz treść notatki..."
-                className="mb-3 w-full resize-none rounded-md border border-slate-300 bg-white p-3 text-sm outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500"
+                className="mb-2 max-h-40 min-h-[3.25rem] w-full resize-none overflow-y-auto rounded-md border border-slate-300 bg-white px-2.5 py-2 text-[13px] outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500"
               />
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <div className="flex gap-4 text-xs text-slate-600">
+                <div className="flex gap-3 text-xs text-slate-600">
                   <label className="flex cursor-pointer items-center gap-1.5">
                     <input
                       type="checkbox"
@@ -552,7 +548,7 @@ export function OrderDetailSummaryTab({
                   type="button"
                   disabled={opSaving || !opDraft.trim()}
                   onClick={() => void saveOperationalNote()}
-                  className="rounded-md border border-slate-300 bg-white px-4 py-1.5 text-xs font-medium text-slate-700 shadow-sm transition-colors hover:bg-slate-50 disabled:opacity-50"
+                  className="rounded-md border border-slate-300 bg-white px-3 py-1 text-xs font-medium text-slate-700 shadow-sm transition-colors hover:bg-slate-50 disabled:opacity-50"
                 >
                   Zapisz notatkę
                 </button>
@@ -560,15 +556,15 @@ export function OrderDetailSummaryTab({
             </div>
           </section>
 
-          <OrderDetailSectionCard title="Wiadomość do klienta">
-            <div className="mb-4 flex gap-2">
-              <span className="rounded-md border border-blue-200 bg-blue-50 px-4 py-1.5 text-sm font-bold text-blue-700 shadow-sm">
+          <OrderDetailSectionCard dense title="Wiadomość do klienta">
+            <div className="mb-2 flex gap-1.5">
+              <span className="rounded border border-blue-200 bg-blue-50 px-2.5 py-1 text-xs font-bold text-blue-700">
                 ✓ E-mail
               </span>
               <button
                 type="button"
                 onClick={() => setActiveTab("comms")}
-                className="cursor-pointer rounded-md border border-slate-200 px-4 py-1.5 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-50"
+                className="cursor-pointer rounded border border-slate-200 px-2.5 py-1 text-xs font-medium text-slate-600 transition-colors hover:bg-slate-50"
               >
                 SMS
               </button>
@@ -576,47 +572,48 @@ export function OrderDetailSummaryTab({
             <textarea
               value={noteDraft}
               onChange={(e) => setNoteDraft(e.target.value)}
-              rows={4}
+              rows={2}
               placeholder="Wpisz treść..."
-              className="mb-4 w-full resize-y rounded-md border border-slate-200 bg-white px-3 py-2 text-sm outline-none transition-colors focus:border-orange-500"
+              className="mb-2 w-full resize-y rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-[13px] outline-none transition-colors focus:border-orange-500"
             />
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between gap-2">
               <button
                 type="button"
                 onClick={() => setActiveTab("comms")}
-                className="flex items-center rounded-md border border-slate-300 px-4 py-2 text-sm font-bold text-slate-700 shadow-sm transition-colors hover:bg-slate-50"
+                className="flex items-center rounded-md border border-slate-300 px-3 py-1.5 text-xs font-bold text-slate-700 shadow-sm transition-colors hover:bg-slate-50"
               >
-                <Plus size={16} className="mr-2" /> Dodaj załącznik
+                <Plus size={14} className="mr-1.5" /> Dodaj załącznik
               </button>
               <button
                 type="button"
                 onClick={() => setActiveTab("comms")}
                 className={brandPrimaryButtonClass}
               >
-                Wyślij <Send size={16} className="ml-2" />
+                Wyślij <Send size={14} className="ml-1.5" />
               </button>
             </div>
           </OrderDetailSectionCard>
         </div>
 
-        <aside className="space-y-6 lg:sticky lg:top-3 lg:col-span-4">
-          <OrderDetailSectionCard title="Podsumowanie zamówienia">
+        <aside className="overflow-hidden rounded-lg border border-slate-200 bg-white lg:sticky lg:top-3 lg:col-span-4">
+          <div className="border-b border-slate-100 px-3.5 py-3">
+            <h3 className={`${odSidePanelSectionTitleClass} mb-2`}>Podsumowanie zamówienia</h3>
             {((wmsFulfillment?.customer_comment ?? order.latest_customer_comment_preview ?? "").trim()) ? (
-              <div className="mb-4 rounded-lg border border-[#f5e08b] bg-[#fff9c4] p-4 text-sm text-yellow-900 shadow-sm">
+              <div className="mb-2.5 rounded-md border border-[#f5e08b] bg-[#fff9c4] p-2.5 text-xs text-yellow-900">
                 <strong>Uwaga:</strong>{" "}
                 {(wmsFulfillment?.customer_comment ?? order.latest_customer_comment_preview ?? "").trim()}
               </div>
             ) : null}
-            <div className="space-y-4 text-sm text-slate-600">
-              <div className="flex items-center justify-between">
+            <div className="space-y-2 text-[13px] text-slate-600">
+              <div className="flex items-center justify-between gap-2">
                 <span>Źródło</span>
                 <span className="font-bold text-slate-900">{(order.source ?? "").trim() || "—"}</span>
               </div>
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between gap-2">
                 <span>Wartość produktów</span>
                 <span className="font-medium text-slate-800">{linesTotalDisplay}</span>
               </div>
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between gap-2">
                 <span>Koszt dostawy</span>
                 <span className="font-medium text-slate-800">
                   {order.panel_shipping_cost != null
@@ -624,38 +621,39 @@ export function OrderDetailSummaryTab({
                     : (order.panel_shipping_cost_display ?? "—")}
                 </span>
               </div>
-              <div className="mt-4 flex items-end justify-between border-t border-slate-200 pt-4">
+              <div className="mt-2 flex items-end justify-between border-t border-slate-100 pt-2.5">
                 <span className="font-medium text-slate-700">Razem</span>
                 <div className="text-right">
-                  <span className="block text-2xl font-black text-slate-900">{formatMoney(order.value, order.currency)}</span>
+                  <span className="block text-xl font-black text-slate-900">{formatMoney(order.value, order.currency)}</span>
                   {paymentStatusIsPaid(order.panel_payment_status) ? (
-                    <span className={`${odPaidBadgeClass} mt-1`}>Opłacone</span>
+                    <span className={`${odPaidBadgeClass} mt-0.5`}>Opłacone</span>
                   ) : null}
                 </div>
               </div>
             </div>
-          </OrderDetailSectionCard>
+          </div>
 
-          <OrderDetailSectionCard title="Rabat i marża">
-            <div className="mb-4 flex space-x-2">
-              <div className="flex rounded-md bg-slate-100 p-1">
+          <div className="border-b border-slate-100 px-3.5 py-3">
+            <h3 className={`${odSidePanelSectionTitleClass} mb-2`}>Rabat i marża</h3>
+            <div className="mb-2.5 flex gap-1.5">
+              <div className="flex rounded-md bg-slate-100 p-0.5">
                 <button
                   type="button"
-                  className={`rounded px-4 py-1.5 text-xs font-bold transition-colors ${orderRabatMode === "pln" ? "bg-slate-900 text-white shadow-sm" : "text-slate-600 hover:text-slate-900"}`}
+                  className={`rounded px-3 py-1 text-xs font-bold transition-colors ${orderRabatMode === "pln" ? "bg-slate-900 text-white shadow-sm" : "text-slate-600 hover:text-slate-900"}`}
                   onClick={() => setOrderRabatMode("pln")}
                 >
                   PLN
                 </button>
                 <button
                   type="button"
-                  className={`rounded px-4 py-1.5 text-xs font-bold transition-colors ${orderRabatMode === "pct" ? "bg-slate-900 text-white shadow-sm" : "text-slate-600 hover:text-slate-900"}`}
+                  className={`rounded px-3 py-1 text-xs font-bold transition-colors ${orderRabatMode === "pct" ? "bg-slate-900 text-white shadow-sm" : "text-slate-600 hover:text-slate-900"}`}
                   onClick={() => setOrderRabatMode("pct")}
                 >
                   %
                 </button>
               </div>
               <input
-                className="min-w-0 flex-1 rounded-md border border-slate-200 px-3 py-1.5 text-sm outline-none transition-colors focus:border-orange-500"
+                className="min-w-0 flex-1 rounded-md border border-slate-200 px-2.5 py-1 text-[13px] outline-none transition-colors focus:border-orange-500"
                 value={orderRabatDraft}
                 onChange={(e) => setOrderRabatDraft(e.target.value)}
                 placeholder="Rabat"
@@ -669,12 +667,12 @@ export function OrderDetailSummaryTab({
                 {orderRabatSaving ? "..." : "Zapisz"}
               </button>
             </div>
-            <div className="space-y-2 text-sm text-slate-600">
-              <div className="flex justify-between">
+            <div className="space-y-1.5 text-[13px] text-slate-600">
+              <div className="flex justify-between gap-2">
                 <span>Po rabacie</span>
                 <span className="font-medium text-slate-900">{formatMoney(productsAfterDiscount, order.currency)}</span>
               </div>
-              <div className="flex justify-between">
+              <div className="flex justify-between gap-2">
                 <span>Marża %</span>
                 <span className={`font-bold ${marginTone}`}>
                   {order.margin != null && Number.isFinite(Number(order.margin))
@@ -683,54 +681,60 @@ export function OrderDetailSummaryTab({
                 </span>
               </div>
             </div>
-          </OrderDetailSectionCard>
+          </div>
 
-          <OrderDetailSectionCard title="Safe Order">
-            <div className="flex flex-col items-center gap-2 py-2 text-center">
-              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-blue-50">
-                <Shield size={24} className="text-blue-500" />
+          <div className="border-b border-slate-100 px-3.5 py-2.5">
+            <h3 className={`${odSidePanelQuietTitleClass} mb-1.5`}>Safe Order</h3>
+            <div className="flex items-center gap-2.5">
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-blue-50">
+                <Shield size={16} className="text-blue-500" />
               </div>
-              <p className="font-bold text-slate-900">Brak sygnałów ryzyka</p>
-              <p className="text-xs text-slate-500">Zamówienie nie ma aktywnych oznaczeń fraud.</p>
+              <div className="min-w-0">
+                <p className="text-[13px] font-semibold text-slate-800">Brak sygnałów ryzyka</p>
+                <p className="text-[11px] leading-snug text-slate-400">Brak aktywnych oznaczeń fraud.</p>
+              </div>
             </div>
-          </OrderDetailSectionCard>
+          </div>
 
-          <OrderDetailSectionCard title="Dodatkowe pola">
+          <div className="border-b border-slate-100 px-3.5 py-2.5">
+            <h3 className={`${odSidePanelQuietTitleClass} mb-1.5`}>Dodatkowe pola</h3>
             <OrderAdditionalFieldsSection
               orderId={order.id}
               documents={order.order_documents ?? []}
               onOrderRefresh={() => void reloadOrderById(order.id)}
+              embedded
             />
-          </OrderDetailSectionCard>
+          </div>
 
-          <OrderDetailSectionCard title="WMS — operatorzy">
-            <div className="mt-2 grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <div className="rounded-md border border-slate-200 bg-slate-50 p-4">
+          <div className="px-3.5 py-2.5">
+            <h3 className={`${odSidePanelSectionTitleClass} mb-2`}>WMS — operatorzy</h3>
+            <div className="grid grid-cols-2 gap-2">
+              <div className="rounded-md border border-slate-200 bg-slate-50 p-2">
                 <span className={odWmsPhaseChipClass}>W zbieraniu</span>
-                <p className="mt-2 font-bold text-slate-900">
+                <p className="mt-1.5 text-[13px] font-bold text-slate-900">
                   {(timelinePickEvt?.user_label ?? timelinePickEvt?.title ?? "").trim() || "—"}
                 </p>
-                <p className="text-xs text-slate-500">
+                <p className="text-[11px] text-slate-500">
                   {timelinePickEvt?.at ? formatDetailDate(timelinePickEvt.at) : "—"}
                 </p>
               </div>
-              <div className="rounded-md border border-slate-200 bg-slate-50 p-4">
+              <div className="rounded-md border border-slate-200 bg-slate-50 p-2">
                 <span className={odWmsPhaseChipClass}>W pakowaniu</span>
-                <p className="mt-2 font-bold text-slate-900">
+                <p className="mt-1.5 text-[13px] font-bold text-slate-900">
                   {(timelinePackEvt?.user_label ?? timelinePackEvt?.title ?? "").trim() || "—"}
                 </p>
-                <p className="text-xs text-slate-500">
+                <p className="text-[11px] text-slate-500">
                   {timelinePackEvt?.at ? formatDetailDate(timelinePackEvt.at) : "—"}
                 </p>
               </div>
             </div>
-            <p className="mt-4 text-sm text-slate-600">
+            <p className="mt-2 text-[13px] text-slate-600">
               Koszyk / wózek:{" "}
               <span className="font-bold text-slate-900">
                 {(wmsFulfillment?.basket_code ?? wmsFulfillment?.wms_vehicle_label ?? "").trim() || "—"}
               </span>
             </p>
-          </OrderDetailSectionCard>
+          </div>
         </aside>
       </div>
     </div>

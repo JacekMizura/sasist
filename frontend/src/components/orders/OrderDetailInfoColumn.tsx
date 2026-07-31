@@ -12,18 +12,18 @@ type Props = {
   className?: string;
 };
 
-/** Flat info column matching order-card mockup (no uppercase micro-title card chrome). */
+/** Flat info column — compact context strip above products. */
 export function OrderDetailInfoColumn({ title, titleAddon, actions, children, className }: Props) {
   return (
     <section className={className}>
       <div className="flex items-start justify-between gap-2">
-        <h2 className={`${odInfoSectionTitleClass} mb-1 flex flex-wrap items-center gap-2`}>
+        <h2 className={`${odInfoSectionTitleClass} mb-0.5 flex flex-wrap items-center gap-2`}>
           {title}
           {titleAddon}
         </h2>
-        {actions ? <div className="flex shrink-0 items-center gap-2">{actions}</div> : null}
+        {actions ? <div className="flex shrink-0 items-center gap-1.5">{actions}</div> : null}
       </div>
-      <div className="mt-6 space-y-3 text-sm text-slate-900">{children}</div>
+      <div className="mt-2.5 space-y-1 text-[13px] leading-snug text-slate-900">{children}</div>
     </section>
   );
 }
