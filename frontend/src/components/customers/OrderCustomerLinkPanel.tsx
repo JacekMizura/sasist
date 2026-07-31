@@ -12,7 +12,6 @@ import {
 import { listCustomers, type CustomerListRow } from "../../api/customersApi";
 import { PanelBulkStatusConfirmModal } from "../orders/panelList/PanelBulkStatusConfirmModal";
 import { getCustomerDisplayName } from "../../utils/getCustomerDisplayName";
-import { PrimaryButton } from "../../design-system/PrimaryButton";
 import { AppOverlayPortal } from "../../components/overlay";
 
 type Props = {
@@ -134,19 +133,24 @@ export function OrderCustomerLinkPanel({
             {preview.draft.nip ? ` · NIP ${preview.draft.nip}` : ""}
           </p>
         ) : null}
-        <div className="flex flex-wrap gap-2">
-          <PrimaryButton type="button" disabled={busy || loading} onClick={() => void handleCreate(false)}>
-            <UserPlus className="h-4 w-4" aria-hidden />
-            Dodaj do klientów
-          </PrimaryButton>
+        <div className="flex flex-wrap gap-1.5">
+          <button
+            type="button"
+            disabled={busy || loading}
+            onClick={() => void handleCreate(false)}
+            className="inline-flex items-center gap-1 rounded-md border border-amber-300 bg-white px-2 py-1 text-[11px] font-semibold text-amber-950 hover:bg-amber-50 disabled:opacity-50"
+          >
+            <UserPlus className="h-3.5 w-3.5" aria-hidden />
+            Dodaj klienta
+          </button>
           <button
             type="button"
             disabled={busy}
             onClick={() => setLinkModalOpen(true)}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-800 hover:bg-slate-50 disabled:opacity-50"
+            className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-2 py-1 text-[11px] font-semibold text-slate-800 hover:bg-slate-50 disabled:opacity-50"
           >
             <Users className="h-3.5 w-3.5" aria-hidden />
-            Połącz z istniejącym
+            Połącz
           </button>
         </div>
         {err ? <p className="text-xs text-red-700">{err}</p> : null}

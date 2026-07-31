@@ -1,3 +1,10 @@
+## 2026-07-30 — Karta Zamówienia: final product UX pass
+
+- Usunięto stuby (puste Wideo, fałszywy composer wiadomości → link do Komunikacji)
+- Opakowania tylko gdy jest treść; sticky panel finansowy; max-w 1680
+- Gęstszy info strip, produkty jako pas centralny, kompaktowe empty/CTA
+- Bez zmian API/logiki
+
 ## 2026-07-30 — Karta Zamówienia: UX density / hierarchia (summary)
 
 - Status pełny (bez truncate), jak makieta; jedna etykieta grupy

@@ -1,6 +1,6 @@
 import type { Dispatch, SetStateAction } from "react";
 import { Link } from "react-router-dom";
-import { Mail, Pencil, Phone, Plus, Printer, RefreshCw, Send, Shield, Truck } from "lucide-react";
+import { Mail, MessageSquare, Pencil, Phone, Printer, RefreshCw, Shield, Truck } from "lucide-react";
 
 import { OrderDetailInfoColumn } from "./OrderDetailInfoColumn";
 import { OrderDetailSectionCard } from "./OrderDetailSectionCard";
@@ -175,8 +175,8 @@ export function OrderDetailSummaryTab({
   setOpVisPack,
   opSaving,
   saveOperationalNote,
-  noteDraft,
-  setNoteDraft,
+  noteDraft: _noteDraft,
+  setNoteDraft: _setNoteDraft,
   linesTotalDisplay,
   orderRabatMode,
   setOrderRabatMode,
@@ -192,9 +192,17 @@ export function OrderDetailSummaryTab({
   setSummaryLogSearch,
   summaryPanelLogs,
 }: Props) {
+  const showPackaging = Boolean(
+    wmsLoading ||
+      wmsFulfillment?.selected_carton ||
+      wmsFulfillment?.primary_packaging_suggestion ||
+      (wmsFulfillment?.packaging_suggestions?.length ?? 0) > 0 ||
+      (wmsFulfillment?.packaging_alternatives?.length ?? 0) > 0,
+  );
+
   return (
-    <div className={`${odMainMaxWidthClass} space-y-4`}>
-      <div className="mb-4 grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-4">
+    <div className={`${odMainMaxWidthClass} space-y-3`}>
+      <div className="mb-2 grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-4">
         <OrderDetailInfoColumn
           title="Kupujący"
           actions={
@@ -208,7 +216,7 @@ export function OrderDetailSummaryTab({
             </button>
           }
         >
-          <p className="text-base font-bold text-slate-900">{contact.name}</p>
+          <p className="text-sm font-bold text-slate-900">{contact.name}</p>
           {order.customer ? (
             <Link to={`/customers/${order.customer.id}`} className="text-blue-700 font-medium hover:underline">
               {getCustomerDisplayName(order.customer)}
@@ -388,10 +396,11 @@ export function OrderDetailSummaryTab({
         </OrderDetailSectionCard>
       ) : null}
 
-      <section className="overflow-hidden border-t border-b border-slate-200 bg-white py-3">
-        <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
-          <h2 className="text-lg font-bold text-slate-900">
-            Zamówione produkty ({summaryProductsLines.length})
+      <section className="overflow-hidden border-y border-slate-200 bg-white py-2.5">
+        <div className="mb-1.5 flex flex-wrap items-baseline justify-between gap-2">
+          <h2 className="text-xl font-bold tracking-tight text-slate-900">
+            Zamówione produkty
+            <span className="ml-1.5 text-base font-semibold text-slate-500">({summaryProductsLines.length})</span>
           </h2>
         </div>
         <div className="min-w-0 text-sm text-slate-800">
@@ -399,61 +408,67 @@ export function OrderDetailSummaryTab({
         </div>
       </section>
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-12 lg:items-start">
-        <div className="space-y-4 lg:col-span-8">
-          <OrderDetailSectionCard
-            title="Dopasowane opakowania"
-            right={
-              <Link to={WMS_ROUTES.packingOrder(order.id)} className="text-slate-400 transition-colors hover:text-slate-800">
-                <Pencil className="h-4 w-4" strokeWidth={2} />
-              </Link>
-            }
-          >
-            {wmsLoading ? (
-              <p className="text-sm text-slate-500">Ładowanie propozycji...</p>
-            ) : (
-              <OrderMatchedPackagingSection card={wmsFulfillment} operatorQuiet />
-            )}
-          </OrderDetailSectionCard>
-
-          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-            <div className="rounded-lg border border-slate-200 bg-white px-3 py-2.5">
-              <h3 className={odSidePanelSectionTitleClass}>Listy przewozowe</h3>
-              {docsTabWaybillsRows.length > 0 ? (
-                <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
-                  <p className="text-sm text-slate-600">
-                    Dokumenty: <span className="font-semibold text-slate-900">{docsTabWaybillsRows.length}</span>
-                  </p>
-                  <button
-                    type="button"
-                    onClick={() => setActiveTab("docs")}
-                    className="rounded border border-slate-300 bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-700 hover:bg-slate-50"
-                  >
-                    Zobacz
-                  </button>
-                </div>
+      <div className="grid grid-cols-1 gap-3 lg:grid-cols-12 lg:items-start">
+        <div className="space-y-3 lg:col-span-8">
+          {showPackaging ? (
+            <OrderDetailSectionCard
+              title="Dopasowane opakowania"
+              right={
+                <Link to={WMS_ROUTES.packingOrder(order.id)} className="text-slate-400 transition-colors hover:text-slate-800">
+                  <Pencil className="h-4 w-4" strokeWidth={2} />
+                </Link>
+              }
+            >
+              {wmsLoading ? (
+                <p className="text-sm text-slate-500">Ładowanie…</p>
               ) : (
-                <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
-                  <p className="text-sm text-slate-500">Brak listów.</p>
-                  <button type="button" onClick={() => setActiveTab("docs")} className={brandPrimaryButtonClass}>
-                    Nadaj
-                  </button>
-                </div>
+                <OrderMatchedPackagingSection card={wmsFulfillment} operatorQuiet />
               )}
-            </div>
+            </OrderDetailSectionCard>
+          ) : null}
 
-            <div className="rounded-lg border border-slate-200 bg-white px-3 py-2.5">
-              <h3 className={odSidePanelSectionTitleClass}>Wideo WMS</h3>
-              <p className="mt-2 text-sm text-slate-500">Brak nagrań.</p>
+          <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2">
+            <div className="min-w-0">
+              <h3 className={odSidePanelSectionTitleClass}>Listy przewozowe</h3>
+              <p className="mt-0.5 text-sm text-slate-600">
+                {docsTabWaybillsRows.length > 0 ? (
+                  <>
+                    Dokumenty: <span className="font-semibold text-slate-900">{docsTabWaybillsRows.length}</span>
+                  </>
+                ) : (
+                  <span className="text-slate-500">Brak listów</span>
+                )}
+              </p>
             </div>
+            <button
+              type="button"
+              onClick={() => setActiveTab("docs")}
+              className={
+                docsTabWaybillsRows.length > 0
+                  ? "rounded border border-slate-300 bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-700 hover:bg-slate-50"
+                  : brandPrimaryButtonClass
+              }
+            >
+              {docsTabWaybillsRows.length > 0 ? "Zobacz" : "Nadaj"}
+            </button>
           </div>
 
-          <section id="order-summary-operational-notes" className="rounded-lg border border-slate-200 bg-white px-3 py-3">
-            <h3 className={`${odSidePanelSectionTitleClass} mb-2`}>Notatki</h3>
-            <div className="mb-3 space-y-1.5">
+          <section id="order-summary-operational-notes" className="rounded-lg border border-slate-200 bg-white px-3 py-2.5">
+            <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+              <h3 className={odSidePanelSectionTitleClass}>Notatki</h3>
+              <button
+                type="button"
+                onClick={() => setActiveTab("comms")}
+                className="inline-flex items-center gap-1 text-[11px] font-semibold text-slate-500 transition-colors hover:text-slate-800"
+              >
+                <MessageSquare className="h-3 w-3" strokeWidth={2} aria-hidden />
+                Napisz do klienta
+              </button>
+            </div>
+            <div className="mb-2.5 space-y-1">
               {order.operational_notes && order.operational_notes.length > 0 ? (
                 order.operational_notes.map((n) => (
-                  <div key={n.id} className="rounded-md px-1.5 py-1.5 hover:bg-slate-50/80">
+                  <div key={n.id} className="rounded-md px-1 py-1 hover:bg-slate-50/80">
                     <p className="mb-0.5 whitespace-pre-wrap text-sm text-slate-900">{n.content}</p>
                     <div className="flex flex-wrap items-center gap-2 text-[10px] text-slate-500">
                       <span>{formatDetailDate(n.created_at ?? null)}</span>
@@ -467,16 +482,16 @@ export function OrderDetailSummaryTab({
                   </div>
                 ))
               ) : (
-                <p className="text-sm text-slate-500">Brak notatek operacyjnych.</p>
+                <p className="text-sm text-slate-500">Brak notatek.</p>
               )}
             </div>
-            <div className="rounded-md border border-slate-200 bg-slate-50/80 p-2.5">
+            <div className="rounded-md border border-slate-200 bg-slate-50/70 p-2">
               <textarea
                 value={opDraft}
                 onChange={(e) => setOpDraft(e.target.value)}
                 rows={2}
-                placeholder="Wpisz treść notatki..."
-                className="mb-2 w-full resize-none rounded-md border border-slate-300 bg-white p-2 text-sm outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500"
+                placeholder="Nowa notatka…"
+                className="mb-1.5 w-full resize-none rounded-md border border-slate-300 bg-white p-2 text-sm outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500"
               />
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div className="flex gap-3 text-xs text-slate-600">
@@ -505,94 +520,68 @@ export function OrderDetailSummaryTab({
                   onClick={() => void saveOperationalNote()}
                   className="rounded-md border border-slate-300 bg-white px-3 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
                 >
-                  Zapisz notatkę
+                  Zapisz
                 </button>
               </div>
             </div>
           </section>
-
-          <section className="rounded-lg border border-slate-200 bg-white px-3 py-3">
-            <h3 className={`${odSidePanelSectionTitleClass} mb-2`}>Wiadomość do klienta</h3>
-            <div className="mb-2 flex gap-1.5">
-              <span className="rounded border border-blue-200 bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-700">E-mail</span>
-              <span className="rounded border border-slate-200 px-2.5 py-1 text-xs font-medium text-slate-500">SMS</span>
-            </div>
-            <textarea
-              value={noteDraft}
-              onChange={(e) => setNoteDraft(e.target.value)}
-              rows={2}
-              placeholder="Wpisz treść..."
-              className="mb-2 w-full resize-y rounded-md border border-slate-200 bg-white px-2.5 py-2 text-sm outline-none focus:border-orange-500"
-            />
-            <div className="flex items-center justify-between gap-2">
-              <button
-                type="button"
-                className="inline-flex items-center rounded border border-slate-300 px-2.5 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50"
-              >
-                <Plus size={14} className="mr-1" /> Załącznik
-              </button>
-              <button type="button" className={brandPrimaryButtonClass}>
-                Wyślij <Send size={14} className="ml-1.5" />
-              </button>
-            </div>
-          </section>
         </div>
 
-        <aside className="overflow-hidden rounded-xl border border-slate-200 bg-white lg:col-span-4">
-          <div className="border-b border-slate-100 px-4 py-3">
-            <h3 className={`${odSidePanelSectionTitleClass} mb-2.5`}>Podsumowanie zamówienia</h3>
+        <aside className="overflow-hidden rounded-lg border border-slate-200 bg-white lg:sticky lg:top-3 lg:col-span-4">
+          <div className="border-b border-slate-100 px-3.5 py-2.5">
+            <h3 className={`${odSidePanelSectionTitleClass} mb-2`}>Podsumowanie</h3>
             {((wmsFulfillment?.customer_comment ?? order.latest_customer_comment_preview ?? "").trim()) ? (
-              <div className="mb-2.5 rounded-md border border-[#f5e08b] bg-[#fff9c4] p-2.5 text-xs text-yellow-900">
+              <div className="mb-2 rounded-md border border-[#f5e08b] bg-[#fff9c4] p-2 text-xs text-yellow-900">
                 <strong>Uwaga:</strong>{" "}
                 {(wmsFulfillment?.customer_comment ?? order.latest_customer_comment_preview ?? "").trim()}
               </div>
             ) : null}
-            <div className="space-y-2 text-sm text-slate-600">
+            <div className="space-y-1.5 text-sm text-slate-600">
               <div className="flex items-center justify-between gap-2">
-                <span>Wartość produktów</span>
+                <span>Produkty</span>
                 <span className="font-medium text-slate-800">{linesTotalDisplay}</span>
               </div>
               <div className="flex items-center justify-between gap-2">
-                <span>Koszt dostawy</span>
+                <span>Dostawa</span>
                 <span className="font-medium text-slate-800">
                   {order.panel_shipping_cost != null
                     ? formatMoney(Number(order.panel_shipping_cost), order.currency)
                     : (order.panel_shipping_cost_display ?? "—")}
                 </span>
               </div>
-              <div className="mt-2 flex items-end justify-between border-t border-slate-100 pt-2.5">
+              <div className="mt-1.5 flex items-end justify-between border-t border-slate-100 pt-2">
                 <span className="font-medium text-slate-700">Razem</span>
                 <div className="text-right">
-                  <span className="block text-xl font-black text-slate-900">{formatMoney(order.value, order.currency)}</span>
+                  <span className="block text-lg font-bold text-slate-900">{formatMoney(order.value, order.currency)}</span>
                   {paymentStatusIsPaid(order.panel_payment_status) ? (
-                    <span className={`${odPaidBadgeClass} mt-1`}>Opłacone</span>
+                    <span className={`${odPaidBadgeClass} mt-0.5`}>Opłacone</span>
                   ) : null}
                 </div>
               </div>
             </div>
           </div>
 
-          <div className="border-b border-slate-100 px-4 py-3">
-            <h3 className={`${odSidePanelSectionTitleClass} mb-2.5`}>Rabat i marża</h3>
-            <div className="mb-2.5 flex gap-1.5">
+          <div className="border-b border-slate-100 px-3.5 py-2.5">
+            <h3 className={`${odSidePanelSectionTitleClass} mb-2`}>Rabat i marża</h3>
+            <div className="mb-2 flex gap-1.5">
               <div className="flex shrink-0 overflow-hidden rounded-md border border-slate-300 bg-slate-50">
                 <button
                   type="button"
-                  className={`px-2.5 py-1.5 text-xs font-bold ${orderRabatMode === "pln" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500"}`}
+                  className={`px-2 py-1 text-xs font-bold ${orderRabatMode === "pln" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500"}`}
                   onClick={() => setOrderRabatMode("pln")}
                 >
                   PLN
                 </button>
                 <button
                   type="button"
-                  className={`border-l border-slate-300 px-2.5 py-1.5 text-xs font-bold ${orderRabatMode === "pct" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500"}`}
+                  className={`border-l border-slate-300 px-2 py-1 text-xs font-bold ${orderRabatMode === "pct" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500"}`}
                   onClick={() => setOrderRabatMode("pct")}
                 >
                   %
                 </button>
               </div>
               <input
-                className="min-w-0 flex-1 rounded-md border border-slate-200 px-2.5 py-1.5 text-sm outline-none focus:border-orange-500"
+                className="min-w-0 flex-1 rounded-md border border-slate-200 px-2 py-1 text-sm outline-none focus:border-orange-500"
                 value={orderRabatDraft}
                 onChange={(e) => setOrderRabatDraft(e.target.value)}
                 placeholder="Rabat"
@@ -606,7 +595,7 @@ export function OrderDetailSummaryTab({
                 {orderRabatSaving ? "..." : "Zapisz"}
               </button>
             </div>
-            <div className="space-y-1.5 text-sm text-slate-600">
+            <div className="space-y-1 text-sm text-slate-600">
               <div className="flex justify-between gap-2">
                 <span>Po rabacie</span>
                 <span className="font-medium text-slate-900">{formatMoney(productsAfterDiscount, order.currency)}</span>
@@ -622,17 +611,15 @@ export function OrderDetailSummaryTab({
             </div>
           </div>
 
-          <div className="flex items-center justify-between gap-2 border-b border-slate-100 px-4 py-2.5">
+          <div className="flex items-center justify-between gap-2 border-b border-slate-100 px-3.5 py-2">
             <h3 className={`${odSidePanelSectionTitleClass} flex items-center gap-1.5`}>
               Safe Order <Shield size={12} className="text-slate-400" aria-hidden />
             </h3>
-            <span className="rounded border border-slate-200 px-1.5 py-0.5 text-[10px] text-slate-500">
-              Brak sygnałów ryzyka
-            </span>
+            <span className="text-[10px] text-slate-500">Brak ryzyka</span>
           </div>
 
-          <div className="border-b border-slate-100 px-4 py-3">
-            <h3 className={`${odSidePanelSectionTitleClass} mb-2`}>Dodatkowe pola</h3>
+          <div className="border-b border-slate-100 px-3.5 py-2.5">
+            <h3 className={`${odSidePanelSectionTitleClass} mb-1.5`}>Dodatkowe pola</h3>
             <OrderAdditionalFieldsSection
               orderId={order.id}
               documents={order.order_documents ?? []}
@@ -641,9 +628,9 @@ export function OrderDetailSummaryTab({
             />
           </div>
 
-          <div className="px-4 py-3">
-            <h3 className={`${odSidePanelSectionTitleClass} mb-2`}>WMS — operatorzy</h3>
-            <div className="grid grid-cols-2 gap-3 text-xs">
+          <div className="px-3.5 py-2.5">
+            <h3 className={`${odSidePanelSectionTitleClass} mb-1.5`}>WMS</h3>
+            <div className="grid grid-cols-2 gap-2.5 text-xs">
               <div>
                 <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Zbieranie</p>
                 <p className="mt-0.5 font-semibold text-slate-900">
@@ -663,8 +650,8 @@ export function OrderDetailSummaryTab({
                 </p>
               </div>
             </div>
-            <p className="mt-2 text-xs text-slate-600">
-              Koszyk / wózek:{" "}
+            <p className="mt-1.5 text-xs text-slate-600">
+              Koszyk:{" "}
               <span className="font-semibold text-slate-900">
                 {(wmsFulfillment?.basket_code ?? wmsFulfillment?.wms_vehicle_label ?? "").trim() || "—"}
               </span>
@@ -674,33 +661,33 @@ export function OrderDetailSummaryTab({
       </div>
 
       <section className="overflow-hidden rounded-lg border border-slate-200 bg-white">
-        <div className="flex items-center justify-between border-b border-slate-100 px-4 py-2.5">
+        <div className="flex items-center justify-between border-b border-slate-100 px-3.5 py-2">
           <h3 className={odSidePanelSectionTitleClass}>Logi czynności</h3>
-          <div className="relative w-56 max-w-full">
+          <div className="relative w-52 max-w-full">
             <input
               type="text"
               value={summaryLogSearch}
               onChange={(e) => setSummaryLogSearch(e.target.value)}
-              placeholder="Szukaj..."
-              className="w-full rounded-md border border-slate-200 py-1 pl-2.5 pr-8 text-xs outline-none transition-colors focus:border-slate-400"
+              placeholder="Szukaj…"
+              className="w-full rounded-md border border-slate-200 py-1 pl-2.5 pr-2 text-xs outline-none focus:border-slate-400"
             />
           </div>
         </div>
         <div className="w-full overflow-x-auto">
           <table className="w-full text-left">
             <thead>
-              <tr className="border-b border-slate-100 bg-white">
-                <th className="w-[15%] px-4 py-2 text-[10px] font-bold uppercase tracking-wider text-slate-400">Czas</th>
-                <th className="w-[15%] px-4 py-2 text-[10px] font-bold uppercase tracking-wider text-slate-400">Użytkownik</th>
-                <th className="w-[20%] px-4 py-2 text-[10px] font-bold uppercase tracking-wider text-slate-400">Zdarzenie</th>
-                <th className="w-[50%] px-4 py-2 text-[10px] font-bold uppercase tracking-wider text-slate-400">Komunikat</th>
+              <tr className="border-b border-slate-100">
+                <th className="w-[15%] px-3.5 py-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-400">Czas</th>
+                <th className="w-[15%] px-3.5 py-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-400">Użytkownik</th>
+                <th className="w-[20%] px-3.5 py-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-400">Zdarzenie</th>
+                <th className="w-[50%] px-3.5 py-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-400">Komunikat</th>
               </tr>
             </thead>
             <tbody className="text-xs text-slate-900">
               {summaryPanelLogs.map((row) => (
                 <tr
                   key={String(row.id)}
-                  className={`border-b border-slate-50 transition-colors hover:bg-slate-50/50 ${
+                  className={`border-b border-slate-50 hover:bg-slate-50/50 ${
                     row.severity === "error"
                       ? "bg-red-50 text-red-900"
                       : row.severity === "warn"
@@ -708,12 +695,12 @@ export function OrderDetailSummaryTab({
                         : ""
                   }`}
                 >
-                  <td className="px-4 py-2 text-slate-500">{row.at}</td>
-                  <td className="px-4 py-2 font-semibold">{row.user}</td>
-                  <td className="px-4 py-2">
+                  <td className="px-3.5 py-1.5 text-slate-500">{row.at}</td>
+                  <td className="px-3.5 py-1.5 font-semibold">{row.user}</td>
+                  <td className="px-3.5 py-1.5">
                     <OrderEventTypeLabel eventType={row.eventKey} />
                   </td>
-                  <td className="px-4 py-2">{row.msg}</td>
+                  <td className="px-3.5 py-1.5">{row.msg}</td>
                 </tr>
               ))}
             </tbody>

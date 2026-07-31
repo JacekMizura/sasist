@@ -103,7 +103,7 @@ export function OrderDetailHeaderBar({
   shippingLabel,
 }: Props) {
   return (
-    <div className="mx-auto w-full max-w-[1440px] px-5 pb-0 pt-4">
+    <div className={`mx-auto w-full max-w-[1680px] px-4 pb-0 pt-3 sm:px-5`}>
         <nav className="mb-3 flex flex-wrap items-center gap-1.5 text-sm" aria-label="Ścieżka nawigacji">
           <Link to="/dashboard" className="inline-flex items-center gap-1 font-medium text-slate-500 transition hover:text-slate-800">
             <Home className="h-4 w-4 shrink-0" strokeWidth={2} aria-hidden />
@@ -115,7 +115,7 @@ export function OrderDetailHeaderBar({
         </nav>
 
         <div className="min-w-0 flex-1 space-y-3">
-            <div className="flex flex-wrap items-center gap-x-2 gap-y-2 pb-3 lg:flex-nowrap lg:gap-x-3">
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-2 pb-2 lg:flex-nowrap lg:gap-x-3">
               <div className="flex shrink-0 items-center gap-1">
                 <button type="button" disabled={prevOrderId == null} onClick={() => prevOrderId != null && navigate(`/orders/${prevOrderId}`, { state: locationState })} className={ORDER_DETAIL_HEADER_ICON_BTN}>
                   <ChevronLeft className="h-4 w-4 shrink-0" strokeWidth={2} />

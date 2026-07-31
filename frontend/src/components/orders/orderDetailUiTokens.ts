@@ -11,8 +11,8 @@ export const odHeaderIconBtnClass =
 export const odInlineIconBtnClass =
   "inline-flex shrink-0 items-center justify-center rounded border border-slate-300 p-1 text-slate-500 transition-colors hover:border-slate-400 hover:text-slate-900";
 
-/** Large section title in info columns (Kupujący, Dostawa, …). */
-export const odInfoSectionTitleClass = "text-lg font-bold text-slate-900";
+/** Section title in info columns (Kupujący, Dostawa, …). */
+export const odInfoSectionTitleClass = "text-base font-bold text-slate-900";
 
 /** Micro uppercase card title (Podsumowanie, Safe Order, WMS, …). */
 export const odCardMicroTitleClass =
@@ -20,11 +20,11 @@ export const odCardMicroTitleClass =
 
 /** Standard content card shell. */
 export const odCardShellClass =
-  "rounded-xl border border-slate-200 bg-white p-4";
+  "rounded-lg border border-slate-200 bg-white p-3.5";
 
 /** Slightly elevated summary finance card. */
 export const odCardShellElevatedClass =
-  "rounded-xl border border-slate-200 bg-white p-4 shadow-sm";
+  "rounded-lg border border-slate-200 bg-white p-3.5 shadow-sm";
 
 /** Right-rail section divider title inside unified side panel. */
 export const odSidePanelSectionTitleClass =
@@ -42,5 +42,7 @@ export const odWmsPhaseChipClass =
 export const odMetaChipClass =
   "inline-flex items-center rounded border border-slate-300 bg-slate-50 px-2 py-1 text-sm text-slate-600";
 
-/** Main content max width aligned with mockup. */
-export const odMainMaxWidthClass = "mx-auto w-full max-w-[1440px]";
+/**
+ * Content width: readable on 1080p, denser on QHD/ultrawide without sparse infinite stretch.
+ */
+export const odMainMaxWidthClass = "mx-auto w-full max-w-[1680px]";

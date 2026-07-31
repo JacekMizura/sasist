@@ -22,11 +22,11 @@ export function OrderDetailSectionCard({
   elevated = false,
 }: Props) {
   const shellClass = elevated
-    ? "rounded-xl border border-slate-200 bg-white p-4 shadow-sm"
-    : "rounded-xl border border-slate-200 bg-white p-4";
+    ? "rounded-lg border border-slate-200 bg-white p-3.5 shadow-sm"
+    : "rounded-lg border border-slate-200 bg-white p-3.5";
   return (
     <section className={className ?? shellClass}>
-      <div className="mb-3 flex items-center justify-between">
+      <div className="mb-2.5 flex items-center justify-between gap-2">
         <h3 className="text-[11px] font-bold uppercase tracking-wider text-slate-500">{title}</h3>
         {right}
       </div>

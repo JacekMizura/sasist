@@ -2,12 +2,12 @@
 
 ## Active
 
-Order Card **Summary UX density pass** (presentation only — no API/logic):
+Order Card Summary — final product UX pass (presentation only):
 
-- Status: mockup-like `w-64`, full label, no truncate, no duplicate group micro-label in chip
-- Products: primary band (border-t/b only), shorter rows, wrap meta, no Spakuj duplicate / meta hint
-- Right column: single `aside` panel with internal dividers (finance → rabat → Safe Order compact → fields → WMS)
-- Packaging: `operatorQuiet` — carton + reason only, no engine/confidence chips
-- Density: tighter gaps/padding, max-w 1440 on summary, SectionCard without `h-full`
+- Removed prototype stubs: empty Wideo WMS, fake „Wiadomość do klienta” composer → link to Komunikacja
+- Packaging card only when recommendation/selection exists
+- Sticky right finance rail; max-w 1680; denser info strip + products as primary band
+- Compact client-link CTAs; quieter Safe Order / WMS / logs
+- No API/logic changes
 
-Do not rebuild Products/Comms/Docs tabs until asked. No backend changes.
+Browser MCP cannot open Vite HTTPS (self-signed) for live screenshot verification in this environment.

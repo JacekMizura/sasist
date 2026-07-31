@@ -1378,7 +1378,7 @@ export default function OrderDetailPage() {
           shippingLabel={shippingLabel}
         />
 
-        <div className="flex-1 overflow-auto bg-white px-5 py-4">
+        <div className="flex-1 overflow-auto bg-white px-4 py-3">
           <div className="w-full">
             {activeTab === "summary" ? (
               <OrderDetailSummaryTab
