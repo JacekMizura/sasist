@@ -11,27 +11,27 @@ export const odHeaderIconBtnClass =
 export const odInlineIconBtnClass =
   "inline-flex shrink-0 items-center justify-center rounded border border-slate-300 p-1 text-slate-500 transition-colors hover:border-slate-400 hover:text-slate-900";
 
-/** Context-strip titles (Kupujący, Dostawa…) — readable, not competing with products. */
-export const odInfoSectionTitleClass = "text-lg font-semibold text-slate-800";
+/** Info-column titles (Kupujący, Dostawa…). */
+export const odInfoSectionTitleClass = "text-xl font-bold text-slate-900";
 
 /** Dominant products section title. */
 export const odProductsHeroTitleClass = "text-2xl font-bold tracking-tight text-slate-900";
 
 /** Micro uppercase card title for secondary / helper blocks. */
 export const odCardMicroTitleClass =
-  "text-[10px] font-bold uppercase tracking-wider text-slate-400";
+  "text-[11px] font-bold uppercase tracking-wider text-slate-500";
 
-/** Quiet helper card shell (packaging, notes, waybills). */
+/** Helper card shell (packaging, notes, waybills). */
 export const odCardShellClass =
-  "rounded-md border border-slate-200/80 bg-white p-3";
+  "rounded-xl border border-slate-200 bg-white p-5";
 
-/** Slightly elevated finance card in side rail. */
+/** Elevated finance card in side rail. */
 export const odCardShellElevatedClass =
-  "rounded-md border border-slate-200/80 bg-white p-3 shadow-sm";
+  "rounded-xl border border-slate-200 bg-white p-6 shadow-sm";
 
 /** Right-rail / helper section divider title. */
 export const odSidePanelSectionTitleClass =
-  "text-[10px] font-bold uppercase tracking-wider text-slate-400";
+  "text-[11px] font-bold uppercase tracking-wider text-slate-500";
 
 /** Paid / success pill. */
 export const odPaidBadgeClass =

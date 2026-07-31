@@ -1356,6 +1356,8 @@ export default function OrderDetailPage() {
                 wmsFulfillment={wmsFulfillment}
                 docsTabWaybillsRows={docsTabWaybillsRows}
                 setActiveTab={setActiveTab}
+                onAddProduct={() => setAddProductOpen(true)}
+                onAddBundle={() => setAddBundleOpen(true)}
                 formatDetailDate={formatDetailDate}
                 opDraft={opDraft}
                 setOpDraft={setOpDraft}

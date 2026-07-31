@@ -2,12 +2,13 @@
 
 ## Active
 
-Order Card Summary — final product UX pass (presentation only):
+Order Card Summary — restore full functionality after over-simplification:
 
-- Removed prototype stubs: empty Wideo WMS, fake „Wiadomość do klienta” composer → link to Komunikacja
-- Packaging card only when recommendation/selection exists
-- Sticky right finance rail; max-w 1680; denser info strip + products as primary band
-- Compact client-link CTAs; quieter Safe Order / WMS / logs
-- No API/logic changes
+- Restored from pre-density baseline (`26e3cf74`): full packaging (`pairRecommendationColumns`), Safe Order card, WMS phase chips, Listy przewozowe card, Wideo WMS section, Wiadomość do klienta, full `OrderDetailSectionCard` chrome
+- Added summary products header: Spakuj + Dodaj produkt + Dodaj zestaw (wired to existing modals)
+- Shipping/payment Zapisz/Anuluj only when draft differs from saved order (dirty-only)
+- Hierarchy layout (context → products → helpers) kept; no API/logic changes beyond dirty gate
 
-Browser MCP cannot open Vite HTTPS (self-signed) for live screenshot verification in this environment.
+## Constraint
+
+Mockup = composition/hierarchy only. Never remove existing order-card capabilities when restyling.

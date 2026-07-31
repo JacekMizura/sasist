@@ -1,3 +1,10 @@
+## 2026-07-31 — Karta Zamówienia: przywrócenie pełnej funkcjonalności
+
+- Cofnięto nadmierne uproszczenia density pass: pełne opakowania, Safe Order, chipy WMS, Listy przewozowe, Wideo WMS, Wiadomość do klienta, pełny chrome kart
+- Przyciski Spakuj / Dodaj produkt / Dodaj zestaw na Podsumowaniu (te same modale co zakładka Produkty)
+- Sposób wysyłki / płatność: Zapisz+Anuluj tylko przy dirty draft
+- Bez kasowania możliwości; mockup = tylko hierarchia/kompozycja
+
 ## 2026-07-30 — Karta Zamówienia: final product UX pass
 
 - Usunięto stuby (puste Wideo, fałszywy composer wiadomości → link do Komunikacji)
