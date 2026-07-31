@@ -21,20 +21,22 @@ function MiniTrack({ value01, activeClass }: { value01: number; activeClass: str
 }
 
 function progressBarFillClass(
-  tone: "muted" | "progress" | "done" | "shortage",
+  tone: "muted" | "progress" | "done" | "shortage" | "waiting",
   kind: "pick" | "pack",
 ): string {
   if (tone === "done") return "bg-emerald-600";
+  if (tone === "waiting") return "bg-amber-500";
   if (tone === "shortage") return "bg-amber-500";
   if (tone === "progress") return kind === "pick" ? "bg-orange-500" : "bg-slate-600";
   return "bg-slate-300";
 }
 
 /** Mockup-style WMS phase pills (dark / green / outlined). */
-function statusPill(tone: "muted" | "progress" | "done" | "shortage", kind: "pick" | "pack"): string {
+function statusPill(tone: "muted" | "progress" | "done" | "shortage" | "waiting", kind: "pick" | "pack"): string {
   const base =
     "inline-flex max-w-full shrink-0 items-center rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide leading-none";
   if (tone === "done") return `${base} bg-emerald-600 text-white`;
+  if (tone === "waiting") return `${base} bg-amber-500 text-white`;
   if (tone === "shortage") return `${base} bg-amber-500 text-white`;
   if (tone === "progress") {
     return kind === "pick"
@@ -52,6 +54,8 @@ export type OrderLineOperationalWorkflowModuleProps = {
   pickedQuantityFinal?: number | null;
   wmsPickingLineStatus?: string | null;
   shortageLine?: boolean;
+  omsWaitingForStock?: boolean;
+  shortageDisplayKind?: string | null;
   timeline?: WmsOrderTimelineEventApi[] | null;
   /** Backend ``operator · dd.mm.yyyy HH:mm`` — zastępuje osobno pobranego operatora z osi czasu. */
   pickSubtitle?: string | null;
@@ -71,6 +75,8 @@ export function OrderLineOperationalWorkflowModule({
   pickedQuantityFinal,
   wmsPickingLineStatus,
   shortageLine = false,
+  omsWaitingForStock = false,
+  shortageDisplayKind = null,
   timeline,
   pickSubtitle,
   packSubtitle,
@@ -83,6 +89,8 @@ export function OrderLineOperationalWorkflowModule({
     pickedQuantityFinal,
     wmsPickingLineStatus,
     shortageLine,
+    omsWaitingForStock,
+    shortageDisplayKind,
     timeline,
   });
 

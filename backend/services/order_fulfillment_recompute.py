@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 
 from sqlalchemy.orm import Session, joinedload
 
-from ..models.fulfillment_event import FE_MISSING, FE_WAITING
+from ..models.fulfillment_event import FE_MISSING
 from ..models.order import Order
 from ..models.order_item import (
     OMS_LINE_STATUS_REPLACED,
@@ -53,13 +53,14 @@ def _oms_waiting_missing_cover_qty(item: OrderItem) -> float:
 def line_shortage_display_kind(oi: OrderItem, computed_missing: float) -> str:
     """
     Etykieta UI WMS/OMS: ``shortage`` | ``waiting`` | ``resolved`` | ``none``.
+    ``waiting`` ma pierwszeństwo — „Czeka” nie jest rozwiązaniem braku ani zebraniem.
     ``resolved`` = zgłoszono brak z WMS (``wms_shortage_declared_qty``), a bieżący brak operacyjny = 0 (np. po decyzji OMS).
     """
+    if _oms_waiting_for_stock(oi):
+        return "waiting"
     mq = float(computed_missing or 0.0)
     if mq > 1e-9:
         return "shortage"
-    if _oms_waiting_for_stock(oi):
-        return "waiting"
     declared = float(getattr(oi, "wms_shortage_declared_qty", None) or 0.0)
     if declared > 1e-9:
         return "resolved"
@@ -74,9 +75,10 @@ def compute_line_missing_qty(
     session_cart_id: int | None = None,
 ) -> float:
     """
-    missing = ordered - picked - removed - replaced - waiting
+    missing = ordered - picked - removed - replaced (operacyjny brak WMS/OMS).
 
-    ``waiting``: jeśli OMS oznaczył „czeka na towar”, odejmujemy cały pozostały luz (brak widoczny = 0).
+    ``oms_waiting_for_stock`` / ``FE_WAITING`` NIE zmniejszają braku — to flaga statusu
+    („Czeka” / oczekuje na ponowne pobranie), nie pobranie ani rozwiązanie braku.
     ``removed`` / ``replaced``: ilości z metadanych operacji OMS (domyślnie 0).
     ``wms_shortage_declared_qty``: zgłoszenie braku z WMS — nie więcej niż luz (ordered - picked).
 
@@ -107,17 +109,7 @@ def compute_line_missing_qty(
         shortfall = min(gap, max(0.0, declared))
     removed = float(getattr(oi, "oms_removed_qty", None) or 0.0)
     replaced = float(getattr(oi, "oms_replaced_qty", None) or 0.0)
-    if _oms_waiting_for_stock(oi):
-        cover = float(sum_line_events(db, int(oi.id), FE_WAITING))
-        if cover < 1e-9:
-            cover = _oms_waiting_missing_cover_qty(oi)
-        if cover > 1e-9:
-            waiting_term = min(shortfall, cover)
-        else:
-            waiting_term = shortfall
-    else:
-        waiting_term = 0.0
-    missing = shortfall - removed - replaced - waiting_term
+    missing = shortfall - removed - replaced
     return max(0.0, round(missing, 6))
 
 

@@ -1450,8 +1450,12 @@ def emit_oms_decision_wait(
     product_id: int | None,
     quantity: float,
     operator_user_id: int | None = None,
+    product_name: str | None = None,
+    operator_display_name: str | None = None,
 ) -> None:
     uid = int(operator_user_id) if operator_user_id is not None and int(operator_user_id) > 0 else None
+    pname = (product_name or "").strip() or (f"Produkt #{int(product_id)}" if product_id else "Produkt")
+    op_name = (operator_display_name or "").strip()
     insert_wms_order_event(
         db,
         tenant_id=int(tenant_id),
@@ -1462,15 +1466,36 @@ def emit_oms_decision_wait(
         product_id=int(product_id) if product_id else None,
         order_item_id=int(order_item_id),
         quantity=float(quantity),
-        metadata={"quantity": float(quantity)},
+        metadata={
+            "quantity": float(quantity),
+            "product_name": pname[:512],
+            "order_item_id": int(order_item_id),
+        },
     )
+    if op_name:
+        msg = f"Produkt „{pname}” został oznaczony jako CZEKA przez {op_name}."
+    else:
+        msg = f"Produkt „{pname}” oznaczono jako oczekujący na ponowne pobranie."
+    extra_links: list[Dict[str, Any]] = []
+    if product_id is not None and int(product_id) > 0:
+        extra_links.append(
+            {
+                "object_type": "product",
+                "object_id": int(product_id),
+                "role": "related",
+                "object_label": pname[:64],
+            }
+        )
     append_order_activity_for_wms(
         db,
         order_id=int(order_id),
         tenant_id=int(tenant_id),
         warehouse_id=int(warehouse_id),
         event_type=EVT_OMS_DECISION_WAIT,
-        message=f"OMS: oznaczono „czeka na towar” ({_fmt_qty(quantity)} szt.)",
+        message=msg,
+        operator_user_id=uid,
+        metadata={"product_name": pname[:512], "quantity": float(quantity)},
+        extra_activity_links=extra_links or None,
     )
 
 
@@ -2052,7 +2077,9 @@ def _timeline_event_from_row(db: Session, ev: WmsOrderEvent) -> WmsOrderTimeline
         if meta.get("old_product_name") and meta.get("new_product_name"):
             body.append(f"{meta['old_product_name']} → {meta['new_product_name']}")
     elif et == EVT_OMS_DECISION_WAIT:
-        title = "OMS: czeka na towar"
+        title = "Produkt oznaczony jako CZEKA"
+        if meta.get("product_name"):
+            body.append(str(meta["product_name"]))
     elif et == EVT_OMS_DECISION_ACCEPTED:
         title = meta.get("action") or "Decyzja OMS"
         if meta.get("product_name"):

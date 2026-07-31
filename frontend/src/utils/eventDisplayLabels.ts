@@ -46,7 +46,7 @@ export const EVENT_DISPLAY_LABELS: Record<string, string> = {
   REPLACEMENT_SHORTAGE_REPORTED: "Zgłoszono brak (zamiennik)",
   RECOVERY_SHORTAGE_REPORTED: "Zgłoszono brak (dogrywka)",
   ORDER_DETACHED_AFTER_SHORTAGE_FINALIZE: "Odłączono od wózka (braki)",
-  OMS_DECISION_WAIT: "OMS: oczekuje na decyzję",
+  OMS_DECISION_WAIT: "Produkt oznaczony jako CZEKA",
   OMS_DECISION_ACCEPTED: "Zaakceptowano decyzję OMS",
   ORDER_LINE_REPLACED: "Zamieniono produkt",
   ORDER_ITEM_REMOVED: "Usunięto pozycję",

@@ -2,8 +2,14 @@
 
 ## Active
 
-Order Card — zakładka **Dokumenty i pliki** (UX only):
+Fix **„Oznacz jako czeka”** (waiting_for_stock):
 
-- Lekkie karty Dokumenty / Załączniki / Listy przewozowe (jak Logi)
-- Toolbar: zaznacz + druk/mail/pobierz/upload; statusy Zatwierdzony/Niezatwierdzony
-- Załączniki: ikona typu pliku + CTA „Dodaj plik”; bez zmian API/upload/print/mail
+- `compute_line_missing_qty` nie odejmuje już waiting — brak operacyjny zostaje
+- `picked_quantity_final` nie dopycha do „Zebrano” przy fladze czeka
+- Log aktywności: actor = operator (nie System), komunikat z nazwą produktu
+- UI: badge CZEKA / OCZEKUJE na karcie produktu i w Braki WMS
+
+## Constraints
+
+- Bez zmiany API request/response i bez nowego modelu zbierania
+- SSOT lifecycle nadal `RecoveryWorkflowService`

@@ -657,7 +657,11 @@ def build_braki_shortage_lines_from_state(
             missing = max(0.0, ln.ordered_qty - ln.picked_qty)
         if missing <= _EPS and not ln.visible_in_recovery_pick:
             missing = 1.0
-        badge = "Oczekuje na decyzję OMS" if ln.reason == "awaiting_oms" else "Do zebrania"
+        badge = "Do zebrania"
+        if ln.reason == "awaiting_oms":
+            from .order_fulfillment_recompute import _oms_waiting_for_stock
+
+            badge = "CZEKA" if _oms_waiting_for_stock(oi) else "Oczekuje na decyzję OMS"
         row_out = {
             "order_item_id": int(ln.order_line_id),
             "product_id": pid,
@@ -817,6 +821,9 @@ def build_braki_detail_sections_from_state(
             missing = max(0.0, ln.ordered_qty - ln.picked_qty)
             if missing <= _EPS:
                 missing = 1.0
+            from .order_fulfillment_recompute import _oms_waiting_for_stock
+
+            wait_badge = "CZEKA" if _oms_waiting_for_stock(oi) else "Oczekuje na decyzję OMS"
             sections["shortage_decision_lines"].append(
                 _braki_detail_line_row(
                     db,
@@ -827,7 +834,7 @@ def build_braki_detail_sections_from_state(
                     warehouse_id=int(warehouse_id),
                     pick_summaries=pick_summaries,
                     line_kind="shortage_unresolved",
-                    badge_label="Oczekuje na decyzję OMS",
+                    badge_label=wait_badge,
                     display_qty=missing,
                 )
             )

@@ -5,7 +5,8 @@ import { buildWmsLineOperationalModel } from "./orderLineWmsOperationalModel";
 const pillBase =
   "inline-flex max-w-full shrink-0 items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-semibold leading-none tracking-tight";
 
-function pickPillClass(tone: "muted" | "progress" | "done" | "shortage"): string {
+function pickPillClass(tone: "muted" | "progress" | "done" | "shortage" | "waiting"): string {
+  if (tone === "waiting") return `${pillBase} border-amber-400/90 bg-amber-100 text-amber-950`;
   if (tone === "shortage") return `${pillBase} border-amber-300/80 bg-amber-50 text-amber-950`;
   if (tone === "done") return `${pillBase} border-emerald-200/90 bg-emerald-50/95 text-emerald-950`;
   if (tone === "progress") return `${pillBase} border-blue-200/90 bg-blue-50/95 text-blue-950`;
@@ -28,6 +29,8 @@ type Props = {
   wmsPickingLineStatus?: string | null;
   timeline?: WmsOrderTimelineEventApi[] | null;
   shortageLine?: boolean;
+  omsWaitingForStock?: boolean;
+  shortageDisplayKind?: string | null;
   segment?: OrderLineWmsInlinePickPackSegment;
 };
 
@@ -49,6 +52,8 @@ export function OrderLineWmsInlinePickPack({
   wmsPickingLineStatus,
   timeline,
   shortageLine = false,
+  omsWaitingForStock = false,
+  shortageDisplayKind = null,
   segment = "both",
 }: Props) {
   const m = buildWmsLineOperationalModel({
@@ -58,6 +63,8 @@ export function OrderLineWmsInlinePickPack({
     pickedQuantityFinal,
     wmsPickingLineStatus,
     shortageLine,
+    omsWaitingForStock,
+    shortageDisplayKind,
     timeline,
   });
 

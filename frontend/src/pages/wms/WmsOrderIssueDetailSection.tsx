@@ -183,7 +183,13 @@ export function IssueDetailSection({
                       </span>
                     ) : null}
                     {badge ? (
-                      <span className="rounded-md border border-slate-300 bg-white px-3 py-1 text-[10px] font-bold uppercase tracking-wide text-slate-700 shadow-sm">
+                      <span
+                        className={
+                          String(badge).toUpperCase() === "CZEKA"
+                            ? "rounded-md border border-amber-400 bg-amber-100 px-3 py-1 text-[10px] font-bold uppercase tracking-wide text-amber-950 shadow-sm"
+                            : "rounded-md border border-slate-300 bg-white px-3 py-1 text-[10px] font-bold uppercase tracking-wide text-slate-700 shadow-sm"
+                        }
+                      >
                         {badge}
                       </span>
                     ) : null}

@@ -35,7 +35,7 @@ export type WmsLineOperationalModel = {
   packLabel: string;
   pickUser: string | null;
   packUser: string | null;
-  pickTone: "muted" | "progress" | "done" | "shortage";
+  pickTone: "muted" | "progress" | "done" | "shortage" | "waiting";
   packTone: "muted" | "progress" | "done";
 };
 
@@ -46,6 +46,9 @@ export function buildWmsLineOperationalModel(args: {
   pickedQuantityFinal?: number | null;
   wmsPickingLineStatus?: string | null;
   shortageLine?: boolean;
+  /** OMS „czeka na towar” — nie traktuj jako Zebrano. */
+  omsWaitingForStock?: boolean;
+  shortageDisplayKind?: string | null;
   timeline?: WmsOrderTimelineEventApi[] | null;
 }): WmsLineOperationalModel {
   const q = Math.max(0, Number(args.quantity) || 0);
@@ -65,12 +68,20 @@ export function buildWmsLineOperationalModel(args: {
 
   const wmsPick = (args.wmsPickingLineStatus ?? "").trim().toLowerCase();
   const shortageLine = Boolean(args.shortageLine);
+  const waiting =
+    Boolean(args.omsWaitingForStock) ||
+    String(args.shortageDisplayKind ?? "")
+      .trim()
+      .toLowerCase() === "waiting";
 
   let pickLabel: string;
   let pickTone: WmsLineOperationalModel["pickTone"];
   if (q <= EPS) {
     pickLabel = "—";
     pickTone = "muted";
+  } else if (waiting) {
+    pickLabel = "Czeka";
+    pickTone = "waiting";
   } else if (shortageLine && pickedEff <= EPS && wmsPick === "missing") {
     pickLabel = "Brak na lok.";
     pickTone = "shortage";

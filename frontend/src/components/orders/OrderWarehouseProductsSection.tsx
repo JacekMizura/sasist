@@ -294,6 +294,7 @@ function BundleComponentWarehouseRow({
               pickedQuantityFinal={wm?.picked_quantity_final ?? null}
               wmsPickingLineStatus={wm?.wms_picking_line_status ?? null}
               shortageLine={shortageUi}
+              shortageDisplayKind={wm?.shortage_display_kind ?? null}
               timeline={timeline}
               pickSubtitle={wm?.last_pick_audit_summary ?? null}
               packSubtitle={wm?.last_pack_audit_summary ?? null}
@@ -305,6 +306,11 @@ function BundleComponentWarehouseRow({
           {shortageUi ? (
             <p className="text-[10px] font-semibold text-red-800">
               Brak: {fmtOmsQty(Number(wm?.missing_quantity ?? 0))} szt.
+              {String(wm?.shortage_display_kind ?? "")
+                .trim()
+                .toLowerCase() === "waiting"
+                ? " · CZEKA"
+                : ""}
             </p>
           ) : null}
         </div>
@@ -556,6 +562,11 @@ export function OrderWarehouseProductsSection({
         const resolvedReduced = isResolvedShortageReducedLine({ quantity: qtyN, resolved: resolvedMeta });
         const shortageUi =
           !resolvedRemoved && !resolvedReduced && wm != null && Number(wm.missing_quantity ?? 0) > 1e-6;
+        const lineWaiting =
+          (itemWaitingById.get(row.item.id) ?? false) ||
+          String(wm?.shortage_display_kind ?? "")
+            .trim()
+            .toLowerCase() === "waiting";
         const picked = Number(wm?.picked_quantity ?? 0);
         const packed = Number(wm?.quantity_packed ?? 0);
         const ols = (full?.oms_line_status ?? "").trim().toUpperCase();
@@ -651,6 +662,11 @@ export function OrderWarehouseProductsSection({
                           Zamiennik
                         </span>
                       ) : null}
+                      {lineWaiting ? (
+                        <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wide text-amber-900">
+                          Czeka
+                        </span>
+                      ) : null}
                     </div>
 
                     <div className="mt-1 flex flex-wrap gap-x-2.5 gap-y-0.5">
@@ -722,9 +738,21 @@ export function OrderWarehouseProductsSection({
 
             {shortageUi ? (
               <div className="mt-2.5 rounded-md border border-red-200 bg-red-50/90 px-2.5 py-2">
-                <p className="text-[12px] font-bold text-red-900">
-                  Zebrano {picked} / {qtyN} • Brak: {Number(wm?.missing_quantity ?? 0)}
-                </p>
+                <div className="flex flex-wrap items-center gap-2">
+                  <p className="text-[12px] font-bold text-red-900">
+                    Zebrano {picked} / {qtyN} • Brak: {Number(wm?.missing_quantity ?? 0)}
+                  </p>
+                  {lineWaiting ? (
+                    <span className="rounded-full bg-amber-200/90 px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wide text-amber-950">
+                      Oczekuje
+                    </span>
+                  ) : null}
+                </div>
+                {lineWaiting ? (
+                  <p className="mt-1 text-[11px] font-medium text-amber-950/90">
+                    Oznaczone jako CZEKA — wymaga ręcznego pobrania (Zbierz).
+                  </p>
+                ) : null}
                 <div className="mt-1.5">
                   <OrderFulfillmentLineShortageInlineActions
                     orderId={orderId}
@@ -753,6 +781,8 @@ export function OrderWarehouseProductsSection({
                   pickedQuantityFinal={wm?.picked_quantity_final ?? null}
                   wmsPickingLineStatus={wm?.wms_picking_line_status ?? null}
                   shortageLine={shortageUi}
+                  omsWaitingForStock={lineWaiting}
+                  shortageDisplayKind={wm?.shortage_display_kind ?? null}
                   timeline={timeline}
                   pickSubtitle={wm?.last_pick_audit_summary ?? null}
                   packSubtitle={wm?.last_pack_audit_summary ?? null}

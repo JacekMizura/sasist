@@ -995,11 +995,16 @@ def _packing_line_from_item(
 
     picked_final = float(picked_qty)
     if order is not None and q_ord > 0:
+        from .order_fulfillment_recompute import _oms_waiting_for_stock
+
         pf_o = getattr(order, "picking_finished_at", None) or getattr(order, "picked_at", None)
         removed = float(getattr(it, "oms_removed_qty", None) or 0.0)
         fulfillable = max(0.0, float(q_ord) - removed)
         substitute_pending = (rep_oid is not None and int(rep_oid) > 0) or ols_u == OMS_LINE_STATUS_TO_PICK
-        if pf_o is not None:
+        # „Czeka” ≠ zebrano — nigdy nie dopychaj picked_final do fulfillable.
+        if _oms_waiting_for_stock(it):
+            picked_final = min(fulfillable, float(picked_qty)) if float(picked_qty) > 1e-9 else float(picked_qty)
+        elif pf_o is not None:
             if missing_qty > 1e-9:
                 picked_final = max(float(picked_qty), fulfillable - float(missing_qty))
             elif substitute_pending:

@@ -2853,6 +2853,7 @@ def patch_order_item_line(
     item_id: int,
     body: OrderItemPanelPatchBody,
     db: Session = Depends(get_db),
+    current_user: Optional[AppUser] = Depends(get_optional_current_user),
 ):
     """Akcje na wyliczonym braku: zamiana tylko brakującej ilości, zmniejszenie zamówionej o brak, „czeka na towar`` tylko dla braku (metadane). Pobrań nie zmieniamy."""
     order = (
@@ -3104,6 +3105,18 @@ def patch_order_item_line(
         if body.waiting_for_stock:
             from ..services.wms_audit_service import emit_oms_decision_wait
 
+            wait_nm = ""
+            if item.product is not None and getattr(item.product, "name", None):
+                wait_nm = str(item.product.name).strip()
+            elif item.product_id:
+                wait_nm = f"Produkt #{int(item.product_id)}"
+            op_uid = int(current_user.id) if current_user is not None else None
+            op_label = ""
+            if current_user is not None:
+                op_label = (
+                    f"{(current_user.first_name or '').strip()} {(current_user.last_name or '').strip()}".strip()
+                    or (current_user.login or "").strip()
+                )
             emit_oms_decision_wait(
                 db,
                 tenant_id=int(order.tenant_id),
@@ -3112,6 +3125,9 @@ def patch_order_item_line(
                 order_item_id=int(item.id),
                 product_id=int(item.product_id) if item.product_id else None,
                 quantity=float(m),
+                operator_user_id=op_uid,
+                product_name=wait_nm,
+                operator_display_name=op_label or None,
             )
 
     elif body.line_edit is not None:

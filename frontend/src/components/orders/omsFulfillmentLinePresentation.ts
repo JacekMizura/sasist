@@ -13,6 +13,8 @@ export type OmsFulfillmentLineLike = {
   replaced_from_product_name?: string | null;
   /** Linia REPLACED: nazwa nowego produktu z backendu. */
   replacement_new_product_name?: string | null;
+  shortage_display_kind?: string | null;
+  oms_waiting_for_stock?: boolean;
 };
 
 export type OmsFulfillmentBadge = { label: string; className: string };
@@ -60,6 +62,18 @@ export function resolveOmsFulfillmentLineBadge(line: OmsFulfillmentLineLike): Om
     return {
       label: newNm ? `Zamieniono → ${newNm}` : "Zamieniono → nowy produkt",
       className: "border-indigo-300 bg-indigo-50 text-indigo-950",
+    };
+  }
+
+  const waiting =
+    Boolean(line.oms_waiting_for_stock) ||
+    String(line.shortage_display_kind ?? "")
+      .trim()
+      .toLowerCase() === "waiting";
+  if (waiting) {
+    return {
+      label: "Czeka",
+      className: "border-amber-400 bg-amber-100 text-amber-950",
     };
   }
 
@@ -120,6 +134,15 @@ export function resolveOmsFulfillmentCompletionBadge(line: OmsFulfillmentLineLik
 
   if (ols === "REPLACED") {
     return { label: "Archiwum", className: "border-slate-200 bg-slate-100 text-slate-500" };
+  }
+
+  const waiting =
+    Boolean(line.oms_waiting_for_stock) ||
+    String(line.shortage_display_kind ?? "")
+      .trim()
+      .toLowerCase() === "waiting";
+  if (waiting) {
+    return { label: "Czeka", className: "border-amber-400 bg-amber-100 text-amber-950" };
   }
 
   if (miss > EPS) {

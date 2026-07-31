@@ -1,3 +1,10 @@
+## 2026-07-24 — Fix „Oznacz jako czeka” (no auto-pick)
+
+- `compute_line_missing_qty`: waiting nie zeruje braku; `line_shortage_display_kind` → `waiting` first
+- Packing: nie inflate `picked_quantity_final` przy `oms_waiting_for_stock`
+- Audit: `emit_oms_decision_wait` z `operator_user_id` + komunikat produktu; patch endpoint przekazuje usera
+- UI: badge CZEKA/OCZEKUJE (karta produktu, workflow pick, Braki detail)
+
 ## 2026-07-24 — Dokumenty i pliki: polish pod mockup
 
 - Karty Dokumenty/Załączniki/LP: gęstsza tabela, badge statusów, ujednolicone akcje
