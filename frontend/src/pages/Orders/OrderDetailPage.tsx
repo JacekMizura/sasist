@@ -1476,7 +1476,7 @@ export default function OrderDetailPage() {
             ) : null}
 
             {activeTab === "logs" ? (
-              <div className={`${odMainMaxWidthClass} rounded-lg border border-slate-200 bg-white p-4 shadow-sm`}>
+              <div className={`${odMainMaxWidthClass} mt-2 rounded-md border border-slate-200/70 bg-white p-3`}>
                 <ActivityLogPanel
                   objectType="order"
                   objectId={order.id}
@@ -1485,7 +1485,7 @@ export default function OrderDetailPage() {
                 />
               </div>
             ) : (
-              <div className={`${odMainMaxWidthClass} pb-6 pt-3`}>
+              <div className={`${odMainMaxWidthClass} mt-8 border-t border-slate-100 pt-4 pb-6`}>
                 <ActivityLogPanel objectType="order" objectId={order.id} />
               </div>
             )}

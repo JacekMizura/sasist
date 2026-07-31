@@ -1,6 +1,6 @@
 /**
- * Order detail (Karta zamówienia) presentation tokens — visual SSOT for mockup-aligned UI.
- * No business logic. Prefer these over one-off class strings on the detail page.
+ * Order detail (Karta zamówienia) — visual hierarchy tokens.
+ * Composition: context (quiet) → products (dominant) → helpers (secondary).
  */
 
 /** Icon toolbar button in order header (nav, print, mail, …). */
@@ -11,24 +11,27 @@ export const odHeaderIconBtnClass =
 export const odInlineIconBtnClass =
   "inline-flex shrink-0 items-center justify-center rounded border border-slate-300 p-1 text-slate-500 transition-colors hover:border-slate-400 hover:text-slate-900";
 
-/** Section title in info columns (Kupujący, Dostawa, …). */
-export const odInfoSectionTitleClass = "text-base font-bold text-slate-900";
+/** Context-strip titles (Kupujący, Dostawa…) — readable, not competing with products. */
+export const odInfoSectionTitleClass = "text-lg font-semibold text-slate-800";
 
-/** Micro uppercase card title (Podsumowanie, Safe Order, WMS, …). */
+/** Dominant products section title. */
+export const odProductsHeroTitleClass = "text-2xl font-bold tracking-tight text-slate-900";
+
+/** Micro uppercase card title for secondary / helper blocks. */
 export const odCardMicroTitleClass =
-  "text-[11px] font-bold uppercase tracking-wider text-slate-500";
+  "text-[10px] font-bold uppercase tracking-wider text-slate-400";
 
-/** Standard content card shell. */
+/** Quiet helper card shell (packaging, notes, waybills). */
 export const odCardShellClass =
-  "rounded-lg border border-slate-200 bg-white p-3.5";
+  "rounded-md border border-slate-200/80 bg-white p-3";
 
-/** Slightly elevated summary finance card. */
+/** Slightly elevated finance card in side rail. */
 export const odCardShellElevatedClass =
-  "rounded-lg border border-slate-200 bg-white p-3.5 shadow-sm";
+  "rounded-md border border-slate-200/80 bg-white p-3 shadow-sm";
 
-/** Right-rail section divider title inside unified side panel. */
+/** Right-rail / helper section divider title. */
 export const odSidePanelSectionTitleClass =
-  "text-[11px] font-bold uppercase tracking-wider text-slate-500";
+  "text-[10px] font-bold uppercase tracking-wider text-slate-400";
 
 /** Paid / success pill. */
 export const odPaidBadgeClass =
@@ -44,9 +47,9 @@ export const odMetaChipClass =
 
 /**
  * Main workspace width next to the status sidebar.
- * Left-aligned (no mx-auto) so content sits close to the panel; soft ultrawide cap.
+ * Left-aligned so content sits close to the panel; soft ultrawide cap.
  */
 export const odMainMaxWidthClass = "w-full max-w-[2400px]";
 
-/** Horizontal inset for order-detail chrome (header + scroll body) — tight on the sidebar side. */
+/** Horizontal inset — tight on the sidebar side. */
 export const odMainHorizontalPadClass = "pl-2 pr-4 sm:pl-3 sm:pr-5";

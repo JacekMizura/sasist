@@ -20,6 +20,7 @@ import {
   odInlineIconBtnClass,
   odMainMaxWidthClass,
   odPaidBadgeClass,
+  odProductsHeroTitleClass,
   odSidePanelSectionTitleClass,
 } from "./orderDetailUiTokens";
 import type {
@@ -193,8 +194,10 @@ export function OrderDetailSummaryTab({
   );
 
   return (
-    <div className={`${odMainMaxWidthClass} space-y-3`}>
-      <div className="mb-2 grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-4">
+    <div className={odMainMaxWidthClass}>
+      {/* —— 1. KONTEKST ZAMÓWIENIA (cichy pas pod statusem) —— */}
+      <div className="border-b border-slate-200 pb-6 mb-6">
+      <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-4">
         <OrderDetailInfoColumn
           title="Kupujący"
           actions={
@@ -208,7 +211,7 @@ export function OrderDetailSummaryTab({
             </button>
           }
         >
-          <p className="text-sm font-bold text-slate-900">{contact.name}</p>
+          <p className="font-semibold text-slate-900">{contact.name}</p>
           {order.customer ? (
             <Link to={`/customers/${order.customer.id}`} className="text-blue-700 font-medium hover:underline">
               {getCustomerDisplayName(order.customer)}
@@ -299,15 +302,15 @@ export function OrderDetailSummaryTab({
               </div>
             </div>
           ) : (
-            <div className="space-y-1 text-sm text-slate-800">
-              <p className="font-bold text-base text-slate-900 pb-1">{summaryShippingName}</p>
+            <div className="space-y-1 text-[13px] text-slate-700">
+              <p className="font-semibold text-slate-900">{summaryShippingName}</p>
               {shippingExtras?.company && <p className="text-slate-600">{shippingExtras.company}</p>}
-              <p className="text-slate-600 flex items-center pt-1"><Phone size={14} className="mr-2 text-slate-400"/> {shippingExtras?.phone || contact.phone}</p>
-              <p className="text-slate-600 flex items-center pb-3 border-b border-slate-100"><Mail size={14} className="mr-2 text-slate-400"/> <span className="truncate">{shippingExtras?.email || contact.email}</span></p>
-              <div className="pt-2">
+              <p className="text-slate-600 flex items-center pt-0.5"><Phone size={13} className="mr-2 text-slate-400"/> {shippingExtras?.phone || contact.phone}</p>
+              <p className="text-slate-600 flex items-center pb-2 border-b border-slate-100"><Mail size={13} className="mr-2 text-slate-400"/> <span className="truncate">{shippingExtras?.email || contact.email}</span></p>
+              <div className="pt-1.5">
                 {contact.addressLines.length > 0 && contact.addressLines[0] !== "—" ? contact.addressLines.map((ln, i) => <p key={`ship-${i}`}>{ln}</p>) : <p className="text-slate-500">Brak adresu.</p>}
-                {shippingExtras?.pickupPoint && <p className="font-bold text-slate-700 mt-3">{shippingExtras.pickupPoint}</p>}
-                {shippingExtras?.pickupCode && <p className="text-slate-700">Kod odbioru: {shippingExtras.pickupCode}</p>}
+                {shippingExtras?.pickupPoint && <p className="font-semibold text-slate-700 mt-2">{shippingExtras.pickupPoint}</p>}
+                {shippingExtras?.pickupCode && <p className="text-slate-600">Kod odbioru: {shippingExtras.pickupCode}</p>}
               </div>
             </div>
           )}
@@ -354,15 +357,17 @@ export function OrderDetailSummaryTab({
           )}
         </OrderDetailInfoColumn>
       </div>
+      </div>
 
       {(order.linked_documents?.length ?? 0) > 0 ? (
+        <div className="mb-6">
         <OrderDetailSectionCard title="Powiązane dokumenty">
           <div className="flex flex-wrap gap-2">
             {order.linked_documents!.map((doc) => (
               <button
                 key={`${doc.kind}-${doc.id}`}
                 type="button"
-                className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-800 hover:bg-slate-50"
+                className="inline-flex items-center gap-2 rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-800 hover:bg-slate-50"
                 onClick={() => {
                   if (doc.kind === "sale" || doc.sale_document_id) {
                     void requestOrderDocumentPrint({
@@ -379,35 +384,38 @@ export function OrderDetailSummaryTab({
                   }
                 }}
               >
-                <Printer className="h-4 w-4 shrink-0" strokeWidth={2} />
+                <Printer className="h-3.5 w-3.5 shrink-0" strokeWidth={2} />
                 {printButtonLabelPl(doc.print_kind ?? doc.document_subtype ?? doc.document_type)}
                 {doc.document_number ? ` ${doc.document_number}` : ""}
               </button>
             ))}
           </div>
         </OrderDetailSectionCard>
+        </div>
       ) : null}
 
-      <section className="overflow-hidden border-y border-slate-200 bg-white py-2.5">
-        <div className="mb-1.5 flex flex-wrap items-baseline justify-between gap-2">
-          <h2 className="text-xl font-bold tracking-tight text-slate-900">
+      {/* —— 2. PRODUKTY (dominująca część ekranu) —— */}
+      <section className="mb-10">
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+          <h2 className={odProductsHeroTitleClass}>
             Zamówione produkty
-            <span className="ml-1.5 text-base font-semibold text-slate-500">({summaryProductsLines.length})</span>
+            <span className="ml-2 text-lg font-semibold text-slate-500">({summaryProductsLines.length})</span>
           </h2>
         </div>
-        <div className="min-w-0 text-sm text-slate-800">
+        <div className="min-w-0 overflow-hidden rounded border border-slate-200 bg-white text-sm text-slate-800 shadow-sm">
           <OrderSummaryProductsList compact lines={summaryProductsLines} productEditTenantId={order.tenant_id ?? DAMAGE_TENANT_ID} onLineAction={handleOrderLineMenuAction} />
         </div>
       </section>
 
-      <div className="grid grid-cols-1 gap-3 lg:grid-cols-12 lg:items-start">
+      {/* —— 3. SEKCJE POMOCNICZE (wyraźnie drugoplanowe) —— */}
+      <div className="grid grid-cols-1 gap-4 border-t border-slate-100 pt-6 lg:grid-cols-12 lg:items-start">
         <div className="space-y-3 lg:col-span-8">
           {showPackaging ? (
             <OrderDetailSectionCard
               title="Dopasowane opakowania"
               right={
                 <Link to={WMS_ROUTES.packingOrder(order.id)} className="text-slate-400 transition-colors hover:text-slate-800">
-                  <Pencil className="h-4 w-4" strokeWidth={2} />
+                  <Pencil className="h-3.5 w-3.5" strokeWidth={2} />
                 </Link>
               }
             >
@@ -419,10 +427,10 @@ export function OrderDetailSummaryTab({
             </OrderDetailSectionCard>
           ) : null}
 
-          <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2">
+          <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-slate-200/70 bg-white px-3 py-2">
             <div className="min-w-0">
               <h3 className={odSidePanelSectionTitleClass}>Listy przewozowe</h3>
-              <p className="mt-0.5 text-sm text-slate-600">
+              <p className="mt-0.5 text-[13px] text-slate-600">
                 {docsTabWaybillsRows.length > 0 ? (
                   <>
                     Dokumenty: <span className="font-semibold text-slate-900">{docsTabWaybillsRows.length}</span>
@@ -445,48 +453,48 @@ export function OrderDetailSummaryTab({
             </button>
           </div>
 
-          <section id="order-summary-operational-notes" className="rounded-lg border border-slate-200 bg-white px-3 py-2.5">
+          <section id="order-summary-operational-notes" className="rounded-md border border-slate-200/70 bg-white px-3 py-2.5">
             <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
               <h3 className={odSidePanelSectionTitleClass}>Notatki</h3>
               <button
                 type="button"
                 onClick={() => setActiveTab("comms")}
-                className="inline-flex items-center gap-1 text-[11px] font-semibold text-slate-500 transition-colors hover:text-slate-800"
+                className="inline-flex items-center gap-1 text-[11px] font-semibold text-slate-400 transition-colors hover:text-slate-700"
               >
                 <MessageSquare className="h-3 w-3" strokeWidth={2} aria-hidden />
                 Napisz do klienta
               </button>
             </div>
-            <div className="mb-2.5 space-y-1">
+            <div className="mb-2 space-y-1">
               {order.operational_notes && order.operational_notes.length > 0 ? (
                 order.operational_notes.map((n) => (
-                  <div key={n.id} className="rounded-md px-1 py-1 hover:bg-slate-50/80">
-                    <p className="mb-0.5 whitespace-pre-wrap text-sm text-slate-900">{n.content}</p>
-                    <div className="flex flex-wrap items-center gap-2 text-[10px] text-slate-500">
+                  <div key={n.id} className="rounded px-1 py-1 hover:bg-slate-50/80">
+                    <p className="mb-0.5 whitespace-pre-wrap text-[13px] text-slate-800">{n.content}</p>
+                    <div className="flex flex-wrap items-center gap-2 text-[10px] text-slate-400">
                       <span>{formatDetailDate(n.created_at ?? null)}</span>
                       {n.show_in_picking ? (
-                        <span className="rounded border border-slate-300 bg-white px-1.5 py-0.5">WMS Zbieranie</span>
+                        <span className="rounded border border-slate-200 bg-white px-1.5 py-0.5">WMS Zbieranie</span>
                       ) : null}
                       {n.show_in_packing ? (
-                        <span className="rounded border border-slate-300 bg-white px-1.5 py-0.5">WMS Pakowanie</span>
+                        <span className="rounded border border-slate-200 bg-white px-1.5 py-0.5">WMS Pakowanie</span>
                       ) : null}
                     </div>
                   </div>
                 ))
               ) : (
-                <p className="text-sm text-slate-500">Brak notatek.</p>
+                <p className="text-[13px] text-slate-400">Brak notatek.</p>
               )}
             </div>
-            <div className="rounded-md border border-slate-200 bg-slate-50/70 p-2">
+            <div className="rounded border border-slate-200/80 bg-slate-50/50 p-2">
               <textarea
                 value={opDraft}
                 onChange={(e) => setOpDraft(e.target.value)}
                 rows={2}
                 placeholder="Nowa notatka…"
-                className="mb-1.5 w-full resize-none rounded-md border border-slate-300 bg-white p-2 text-sm outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500"
+                className="mb-1.5 w-full resize-none rounded border border-slate-200 bg-white p-2 text-[13px] outline-none focus:border-orange-500"
               />
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <div className="flex gap-3 text-xs text-slate-600">
+                <div className="flex gap-3 text-[11px] text-slate-500">
                   <label className="flex cursor-pointer items-center gap-1.5">
                     <input
                       type="checkbox"
@@ -510,7 +518,7 @@ export function OrderDetailSummaryTab({
                   type="button"
                   disabled={opSaving || !opDraft.trim()}
                   onClick={() => void saveOperationalNote()}
-                  className="rounded-md border border-slate-300 bg-white px-3 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                  className="rounded border border-slate-300 bg-white px-2.5 py-1 text-[11px] font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
                 >
                   Zapisz
                 </button>
@@ -519,16 +527,16 @@ export function OrderDetailSummaryTab({
           </section>
         </div>
 
-        <aside className="overflow-hidden rounded-lg border border-slate-200 bg-white lg:sticky lg:top-3 lg:col-span-4">
-          <div className="border-b border-slate-100 px-3.5 py-2.5">
+        <aside className="overflow-hidden rounded-md border border-slate-200/70 bg-white lg:sticky lg:top-3 lg:col-span-4">
+          <div className="border-b border-slate-100 px-3 py-2.5">
             <h3 className={`${odSidePanelSectionTitleClass} mb-2`}>Podsumowanie</h3>
             {((wmsFulfillment?.customer_comment ?? order.latest_customer_comment_preview ?? "").trim()) ? (
-              <div className="mb-2 rounded-md border border-[#f5e08b] bg-[#fff9c4] p-2 text-xs text-yellow-900">
+              <div className="mb-2 rounded border border-[#f5e08b] bg-[#fff9c4] p-2 text-xs text-yellow-900">
                 <strong>Uwaga:</strong>{" "}
                 {(wmsFulfillment?.customer_comment ?? order.latest_customer_comment_preview ?? "").trim()}
               </div>
             ) : null}
-            <div className="space-y-1.5 text-sm text-slate-600">
+            <div className="space-y-1.5 text-[13px] text-slate-600">
               <div className="flex items-center justify-between gap-2">
                 <span>Produkty</span>
                 <span className="font-medium text-slate-800">{linesTotalDisplay}</span>
@@ -553,27 +561,27 @@ export function OrderDetailSummaryTab({
             </div>
           </div>
 
-          <div className="border-b border-slate-100 px-3.5 py-2.5">
+          <div className="border-b border-slate-100 px-3 py-2.5">
             <h3 className={`${odSidePanelSectionTitleClass} mb-2`}>Rabat i marża</h3>
             <div className="mb-2 flex gap-1.5">
-              <div className="flex shrink-0 overflow-hidden rounded-md border border-slate-300 bg-slate-50">
+              <div className="flex shrink-0 overflow-hidden rounded border border-slate-300 bg-slate-50">
                 <button
                   type="button"
-                  className={`px-2 py-1 text-xs font-bold ${orderRabatMode === "pln" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500"}`}
+                  className={`px-2 py-1 text-[11px] font-bold ${orderRabatMode === "pln" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500"}`}
                   onClick={() => setOrderRabatMode("pln")}
                 >
                   PLN
                 </button>
                 <button
                   type="button"
-                  className={`border-l border-slate-300 px-2 py-1 text-xs font-bold ${orderRabatMode === "pct" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500"}`}
+                  className={`border-l border-slate-300 px-2 py-1 text-[11px] font-bold ${orderRabatMode === "pct" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500"}`}
                   onClick={() => setOrderRabatMode("pct")}
                 >
                   %
                 </button>
               </div>
               <input
-                className="min-w-0 flex-1 rounded-md border border-slate-200 px-2 py-1 text-sm outline-none focus:border-orange-500"
+                className="min-w-0 flex-1 rounded border border-slate-200 px-2 py-1 text-[13px] outline-none focus:border-orange-500"
                 value={orderRabatDraft}
                 onChange={(e) => setOrderRabatDraft(e.target.value)}
                 placeholder="Rabat"
@@ -587,7 +595,7 @@ export function OrderDetailSummaryTab({
                 {orderRabatSaving ? "..." : "Zapisz"}
               </button>
             </div>
-            <div className="space-y-1 text-sm text-slate-600">
+            <div className="space-y-1 text-[13px] text-slate-600">
               <div className="flex justify-between gap-2">
                 <span>Po rabacie</span>
                 <span className="font-medium text-slate-900">{formatMoney(productsAfterDiscount, order.currency)}</span>
@@ -603,14 +611,14 @@ export function OrderDetailSummaryTab({
             </div>
           </div>
 
-          <div className="flex items-center justify-between gap-2 border-b border-slate-100 px-3.5 py-2">
+          <div className="flex items-center justify-between gap-2 border-b border-slate-100 px-3 py-2">
             <h3 className={`${odSidePanelSectionTitleClass} flex items-center gap-1.5`}>
-              Safe Order <Shield size={12} className="text-slate-400" aria-hidden />
+              Safe Order <Shield size={11} className="text-slate-400" aria-hidden />
             </h3>
-            <span className="text-[10px] text-slate-500">Brak ryzyka</span>
+            <span className="text-[10px] text-slate-400">Brak ryzyka</span>
           </div>
 
-          <div className="border-b border-slate-100 px-3.5 py-2.5">
+          <div className="border-b border-slate-100 px-3 py-2.5">
             <h3 className={`${odSidePanelSectionTitleClass} mb-1.5`}>Dodatkowe pola</h3>
             <OrderAdditionalFieldsSection
               orderId={order.id}
@@ -620,31 +628,31 @@ export function OrderDetailSummaryTab({
             />
           </div>
 
-          <div className="px-3.5 py-2.5">
+          <div className="px-3 py-2.5">
             <h3 className={`${odSidePanelSectionTitleClass} mb-1.5`}>WMS</h3>
-            <div className="grid grid-cols-2 gap-2.5 text-xs">
+            <div className="grid grid-cols-2 gap-2 text-[11px]">
               <div>
                 <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Zbieranie</p>
-                <p className="mt-0.5 font-semibold text-slate-900">
+                <p className="mt-0.5 font-semibold text-slate-800">
                   {(timelinePickEvt?.user_label ?? timelinePickEvt?.title ?? "").trim() || "—"}
                 </p>
-                <p className="text-slate-500">
+                <p className="text-slate-400">
                   {timelinePickEvt?.at ? formatDetailDate(timelinePickEvt.at) : "—"}
                 </p>
               </div>
               <div>
                 <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Pakowanie</p>
-                <p className="mt-0.5 font-semibold text-slate-900">
+                <p className="mt-0.5 font-semibold text-slate-800">
                   {(timelinePackEvt?.user_label ?? timelinePackEvt?.title ?? "").trim() || "—"}
                 </p>
-                <p className="text-slate-500">
+                <p className="text-slate-400">
                   {timelinePackEvt?.at ? formatDetailDate(timelinePackEvt.at) : "—"}
                 </p>
               </div>
             </div>
-            <p className="mt-1.5 text-xs text-slate-600">
+            <p className="mt-1.5 text-[11px] text-slate-500">
               Koszyk:{" "}
-              <span className="font-semibold text-slate-900">
+              <span className="font-semibold text-slate-800">
                 {(wmsFulfillment?.basket_code ?? wmsFulfillment?.wms_vehicle_label ?? "").trim() || "—"}
               </span>
             </p>
