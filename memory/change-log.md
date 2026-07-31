@@ -1,3 +1,23 @@
+## 2026-07-24 — Panel statusów: wyciszone liczniki
+
+- Usunięte kolorowe pastylki; małe okrągłe badge ~26px (białe + ramka)
+- Tint badge tylko dla aktywnego wiersza; kolor kategorii na pasku/kropce
+- Grupy: ten sam spokojny badge (nie solid); nazwa > licznik, hover = tło wiersza
+
+## 2026-07-24 — Order header actions toolbar (mockup)
+
+- 6 ikon 36×36: zwroty, wiadomości, dokumenty, połącz, kopiuj, drukuj
+- Panele/modale w `headerActions/`; badge zgłoszeń + wiadomości
+- Link lokalny (localStorage); copy UI gotowe pod API
+- Zachowane: pin, bookmark, Spakuj
+
+## 2026-07-24 — Panel statusów: UI pod mockup (tylko prezentacja)
+
+- Grupy: kropka + uppercase + solid badge + lock + chevron; większe odstępy
+- Statusy: kafelki z ramką/hover/active + soft badge; podgrupy uppercase
+- Search pill; collapsed: kropka/pasek + badge bez nazw
+- Bez zmian filtrowania / liczników / API
+
 ## 2026-07-24 — Fix „Oznacz jako czeka” (no auto-pick)
 
 - `compute_line_missing_qty`: waiting nie zeruje braku; `line_shortage_display_kind` → `waiting` first

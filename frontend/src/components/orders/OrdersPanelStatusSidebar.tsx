@@ -184,7 +184,6 @@ export function OrdersPanelStatusSidebar({
           value={s.count}
           active={active}
           colorHex={counterColorForId?.(s.id) ?? row.stripeHex}
-          variant="soft"
         />
       </button>
     );
@@ -226,7 +225,7 @@ export function OrdersPanelStatusSidebar({
           aria-label="Wszystkie"
         >
           <span className="h-2.5 w-2.5 rounded-full bg-slate-500" />
-          <PanelTreeCount value={totalPanelOrders ?? "—"} variant="soft" />
+          <PanelTreeCount value={totalPanelOrders ?? "—"} />
         </button>
         {(panelSummary?.unassigned_count ?? 0) > 0 ? (
           <button
@@ -237,7 +236,7 @@ export function OrdersPanelStatusSidebar({
             aria-label="Bez etykiety"
           >
             <span className="h-2.5 w-2.5 rounded-full bg-slate-400" />
-            <PanelTreeCount value={panelSummary?.unassigned_count ?? "—"} variant="soft" />
+            <PanelTreeCount value={panelSummary?.unassigned_count ?? "—"} />
           </button>
         ) : null}
         {MAIN_PANEL_GROUP_ORDER.flatMap((mg) => {
@@ -256,7 +255,7 @@ export function OrdersPanelStatusSidebar({
                 aria-label={panelGroupLabels[block.main_group]}
               >
                 <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: groupHex }} />
-                <PanelTreeCount value={block.total_count} colorHex={groupHex} variant="solid" />
+                <PanelTreeCount value={block.total_count} />
               </button>
               {visibleStatuses.map((s) => {
                 const stripe = sidebarSubStatusHex(s.badge_color ?? s.color, block.main_group);
@@ -274,11 +273,7 @@ export function OrdersPanelStatusSidebar({
                       style={{ backgroundColor: stripe }}
                       aria-hidden
                     />
-                    <PanelTreeCount
-                      value={s.count}
-                      colorHex={counterColorForId?.(s.id) ?? stripe}
-                      variant="soft"
-                    />
+                    <PanelTreeCount value={s.count} />
                   </button>
                 );
               })}
@@ -328,7 +323,7 @@ export function OrdersPanelStatusSidebar({
           onClick={() => onPanelFilterChange("all")}
         >
           <span className="min-w-0 flex-1 leading-snug">Wszystkie</span>
-          <PanelTreeCount value={totalPanelOrders ?? "—"} active={panelFilter === "all"} variant="soft" />
+          <PanelTreeCount value={totalPanelOrders ?? "—"} active={panelFilter === "all"} />
         </button>
 
         {(panelSummary?.unassigned_count ?? 0) > 0 ? (
@@ -341,7 +336,6 @@ export function OrdersPanelStatusSidebar({
             <PanelTreeCount
               value={panelSummary?.unassigned_count ?? "—"}
               active={panelFilter === "unassigned"}
-              variant="soft"
             />
           </button>
         ) : null}

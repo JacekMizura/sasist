@@ -3,60 +3,44 @@ import type { CSSProperties } from "react";
 import {
   PANEL_TREE_COUNT_BASE_CLASS,
   PANEL_TREE_COUNT_SOFT_BADGE_CLASS,
-  PANEL_TREE_COUNT_SOLID_BADGE_CLASS,
 } from "./panelStatusTreeStyles";
-import { blendHexOverWhite, isValidPanelStatusHex, contrastingTextColor } from "../../utils/panelStatusColor";
+import { blendHexOverWhite, isValidPanelStatusHex, pickReadableTextOnBackground } from "../../utils/panelStatusColor";
 
 type Props = {
   value: number | string;
   active?: boolean;
-  /** Opcjonalny kolor licznika (kategoria / konfiguracja). */
-  colorHex?: string | null;
   /**
-   * `soft` — jasny pill (statusy, Wszystkie).
-   * `solid` — wypełniony badge grupy głównej (biały tekst).
+   * Kolor kategorii — używany wyłącznie gdy ``active`` (lekki tint).
+   * Idle zawsze: białe tło + cienka ramka + ciemny tekst.
    */
+  colorHex?: string | null;
+  /** Zachowane dla kompatybilności — obie wartości = ten sam subtelny badge. */
   variant?: "soft" | "solid";
 };
 
-function softBadgeStyle(hex: string, active?: boolean): CSSProperties {
-  const alpha = active ? 0.22 : 0.14;
-  return {
-    backgroundColor: blendHexOverWhite(hex, alpha),
-    borderColor: blendHexOverWhite(hex, 0.35),
-    color: hex.toLowerCase(),
-  };
-}
-
-function solidBadgeStyle(hex: string): CSSProperties {
-  const bg = hex.toLowerCase();
+/** Aktywny wiersz: delikatny tint kategorii (nie pastylka). */
+function activeTintStyle(hex: string): CSSProperties {
+  const bg = blendHexOverWhite(hex, 0.12);
   return {
     backgroundColor: bg,
-    color: contrastingTextColor(bg),
+    borderColor: blendHexOverWhite(hex, 0.28),
+    color: pickReadableTextOnBackground(hex, bg, 4.5),
   };
 }
 
-export function PanelTreeCount({ value, active, colorHex, variant = "soft" }: Props) {
+/**
+ * Licznik statusu / grupy — mały okrągły badge (~28 px), hierarchia: nazwa > liczba.
+ */
+export function PanelTreeCount({ value, active, colorHex }: Props) {
   const hex = colorHex?.trim();
-  const colored = Boolean(hex && isValidPanelStatusHex(hex));
-
-  if (variant === "solid") {
-    return (
-      <span
-        className={`${PANEL_TREE_COUNT_BASE_CLASS} ${PANEL_TREE_COUNT_SOLID_BADGE_CLASS}`}
-        style={colored ? solidBadgeStyle(hex!) : { backgroundColor: "#94a3b8", color: "#ffffff" }}
-      >
-        {value}
-      </span>
-    );
-  }
+  const useTint = Boolean(active && hex && isValidPanelStatusHex(hex));
 
   return (
     <span
       className={`${PANEL_TREE_COUNT_BASE_CLASS} ${PANEL_TREE_COUNT_SOFT_BADGE_CLASS}${
-        active && !colored ? " border-slate-300 bg-slate-200/80 text-slate-800" : ""
+        active && !useTint ? " border-slate-300 bg-slate-50 text-slate-800" : ""
       }`}
-      style={colored ? softBadgeStyle(hex!, active) : undefined}
+      style={useTint ? activeTintStyle(hex!) : undefined}
     >
       {value}
     </span>

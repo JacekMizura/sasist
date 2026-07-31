@@ -73,18 +73,18 @@ export function panelTreeStatusRowPresentation(
       : "#ffffff";
 
   const idleBorder = "border-slate-200";
-  const activeBorderClass = "border-slate-300 shadow-sm font-semibold";
-  // Active: lekko mocniejsza ramka w kolorze kategorii (via boxShadow inset).
+  const activeBorderClass = "border-slate-300 font-semibold";
+  // Active: delikatna ramka w kolorze kategorii (inset) — bez cienia / bez dużego badge.
   const activeRing = active
     ? {
-        boxShadow: `inset 0 0 0 1px ${blendHexOverWhite(stripeHex, 0.55)}`,
+        boxShadow: `inset 0 0 0 1px ${blendHexOverWhite(stripeHex, 0.45)}`,
       }
     : undefined;
 
   return {
     rowClassName: hasBg
       ? `${PANEL_TREE_STATUS_ROW_BASE} ${
-          active ? `${activeBorderClass}` : `${idleBorder} font-medium hover:border-slate-300`
+          active ? `${activeBorderClass}` : `${idleBorder} font-medium hover:bg-slate-50`
         }`
       : panelTreeStatusRowClass(active),
     rowStyle: hasBg

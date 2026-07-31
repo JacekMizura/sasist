@@ -323,11 +323,7 @@ export function PanelStatusHierarchyPicker({
                   aria-hidden
                 />
                 <span className={`${PANEL_TREE_GROUP_LABEL_CLASS} min-w-0 flex-1`}>{groupLabel}</span>
-                <PanelTreeCount
-                  value={block.total_count}
-                  colorHex={panelTreeGroupBarHex(block.main_group)}
-                  variant="solid"
-                />
+                <PanelTreeCount value={block.total_count} />
               </div>
               <div className={PANEL_TREE_CHILDREN_CLASS}>
                 {filteredUngrouped.length > 0 ? (

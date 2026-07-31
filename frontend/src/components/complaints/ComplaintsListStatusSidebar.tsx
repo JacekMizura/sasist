@@ -104,7 +104,7 @@ export function ComplaintsListStatusSidebar({
           aria-label="Wszystkie"
         >
           <span className="h-2.5 w-2.5 rounded-full bg-slate-500" />
-          <PanelTreeCount value={totalCount ?? "—"} variant="soft" />
+          <PanelTreeCount value={totalCount ?? "—"} />
         </button>
         {visibleStatuses.map((code) => {
           const stripe = stripeHexForStatus(code);
@@ -118,7 +118,7 @@ export function ComplaintsListStatusSidebar({
               aria-label={COMPLAINT_SIDEBAR_FILTER_LABELS_PL[code]}
             >
               <span className="h-3 w-1 shrink-0 rounded-full" style={{ backgroundColor: stripe }} aria-hidden />
-              <PanelTreeCount value={countFor(code)} colorHex={stripe} variant="soft" />
+              <PanelTreeCount value={countFor(code)} />
             </button>
           );
         })}
@@ -164,7 +164,7 @@ export function ComplaintsListStatusSidebar({
           onClick={() => onPanelFilterChange("all")}
         >
           <span className="min-w-0 flex-1 leading-snug">Wszystkie</span>
-          <PanelTreeCount value={totalCount ?? "—"} active={panelFilter === "all"} variant="soft" />
+          <PanelTreeCount value={totalCount ?? "—"} active={panelFilter === "all"} />
         </button>
 
         {visibleStatuses.length === 0 ? (
@@ -185,7 +185,7 @@ export function ComplaintsListStatusSidebar({
                   <PanelStatusWmsIconColumn markers={[]} />
                   <span className={panelTreeStatusBarClass(active)} style={{ backgroundColor: dotColor }} aria-hidden />
                   <span className="min-w-0 flex-1 leading-snug">{COMPLAINT_SIDEBAR_FILTER_LABELS_PL[code]}</span>
-                  <PanelTreeCount value={countFor(code)} active={active} colorHex={dotColor} variant="soft" />
+                  <PanelTreeCount value={countFor(code)} active={active} colorHex={dotColor} />
                 </button>
               );
             })}

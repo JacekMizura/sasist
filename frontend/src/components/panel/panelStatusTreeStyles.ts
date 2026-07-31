@@ -21,18 +21,20 @@ export const PANEL_TREE_SEARCH_ICON_CLASS =
 export const PANEL_TREE_SEARCH_INPUT_CLASS =
   "w-full rounded-full border border-slate-200 bg-white py-2 pl-9 pr-3 text-xs text-slate-800 placeholder:text-slate-400 shadow-[0_0_0_1px_rgba(148,163,184,0.08)] focus:border-slate-300 focus:outline-none focus:ring-2 focus:ring-slate-100";
 
-/** Licznik — baza (badge dokłada PanelTreeCount). */
+/** Licznik — baza (wyrównanie do prawej: etykieta `flex-1` w wierszu). */
 export const PANEL_TREE_COUNT_BASE_CLASS = "shrink-0";
 
-/** Soft badge (Wszystkie / statusy) — zaokrąglony pill. */
+/**
+ * Mały okrągły badge (~28 px) — pomocniczy, nie kolorowa pastylka.
+ * Przy dłuższych liczbach rozszerza się tylko w poziomie (px).
+ */
 export const PANEL_TREE_COUNT_SOFT_BADGE_CLASS =
-  "inline-flex h-[1.25rem] min-w-[1.5rem] items-center justify-center rounded-full border border-slate-200/90 bg-slate-100 px-2 text-[10px] font-semibold tabular-nums leading-none text-slate-600";
+  "inline-flex h-[26px] min-w-[26px] items-center justify-center rounded-full border border-slate-200/90 bg-white px-1.5 text-[10px] font-medium tabular-nums leading-none text-slate-600";
 
-/** Solid badge grupy głównej — kolor kategorii, biały tekst. */
-export const PANEL_TREE_COUNT_SOLID_BADGE_CLASS =
-  "inline-flex h-[1.375rem] min-w-[1.75rem] items-center justify-center rounded-full px-2 text-[10px] font-bold tabular-nums leading-none text-white shadow-sm";
+/** Grupa główna — ten sam spokojny badge (nie solid / nie przycisk). */
+export const PANEL_TREE_COUNT_SOLID_BADGE_CLASS = PANEL_TREE_COUNT_SOFT_BADGE_CLASS;
 
-/** @deprecated — użyj PanelTreeCount variant. */
+/** @deprecated — użyj PanelTreeCount. */
 export const PANEL_TREE_COUNT_CLASS = `${PANEL_TREE_COUNT_BASE_CLASS} ${PANEL_TREE_COUNT_SOFT_BADGE_CLASS}`;
 
 export function panelTreeCountClass(_active?: boolean): string {
@@ -68,16 +70,16 @@ export const PANEL_TREE_GROUP_TOGGLE_CLASS =
   "shrink-0 rounded p-0.5 text-slate-400 transition-colors hover:text-slate-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-blue-500";
 
 /**
- * Kafelek statusu — zawsze ramka + białe tło; active = mocniejsza ramka + tint.
+ * Kafelek statusu — nazwa po lewej, badge po prawej; hover tylko na tle wiersza.
  */
 export const PANEL_TREE_STATUS_ROW_BASE =
-  "flex w-full items-start gap-1.5 rounded-lg border bg-white px-2.5 py-2 text-left text-[12px] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-blue-500";
+  "flex w-full items-center gap-1.5 rounded-lg border bg-white px-2.5 py-2 text-left text-[12px] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-blue-500";
 
 export function panelTreeStatusRowClass(active: boolean): string {
   return `${PANEL_TREE_STATUS_ROW_BASE} ${
     active
-      ? "border-slate-300 bg-slate-50 font-semibold text-slate-900 shadow-sm"
-      : "border-slate-200 font-medium text-slate-700 hover:border-slate-300 hover:bg-slate-50/80"
+      ? "border-slate-300 bg-slate-50 font-semibold text-slate-900"
+      : "border-slate-200 font-medium text-slate-700 hover:bg-slate-50"
   }`;
 }
 
@@ -155,10 +157,10 @@ export const PANEL_TREE_GROUP_SHELL_ACTIVE_CLASS = "bg-slate-50/90";
 export const PANEL_TREE_STATUS_ROW_CLASS = PANEL_TREE_STATUS_ROW_BASE;
 
 export const PANEL_TREE_STATUS_ROW_ACTIVE_CLASS =
-  "border-slate-300 bg-slate-50 font-semibold text-slate-900 shadow-sm";
+  "border-slate-300 bg-slate-50 font-semibold text-slate-900";
 
 export const PANEL_TREE_STATUS_ROW_IDLE_CLASS =
-  "border-slate-200 font-medium text-slate-700 hover:border-slate-300 hover:bg-slate-50/80";
+  "border-slate-200 font-medium text-slate-700 hover:bg-slate-50";
 
 export const PANEL_TREE_META_ROW_CLASS =
   "flex w-full items-center gap-2 rounded-lg px-1 py-1.5 text-left text-[13px]";

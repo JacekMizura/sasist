@@ -2,14 +2,14 @@
 
 ## Active
 
-Fix **„Oznacz jako czeka”** (waiting_for_stock):
+Lewy panel statusów — wyciszone liczniki (Linear/Stripe-style):
 
-- `compute_line_missing_qty` nie odejmuje już waiting — brak operacyjny zostaje
-- `picked_quantity_final` nie dopycha do „Zebrano” przy fladze czeka
-- Log aktywności: actor = operator (nie System), komunikat z nazwą produktu
-- UI: badge CZEKA / OCZEKUJE na karcie produktu i w Braki WMS
+- Małe okrągłe badge ~26px, idle: białe + ramka + ciemny tekst
+- Kolor kategorii tylko na pasku/kropce; tint badge wyłącznie gdy wiersz aktywny
+- Nazwa statusu = hierarchia główna; licznik pomocniczy, wyrównany do prawej
+- Hover: tylko tło wiersza
 
 ## Constraints
 
-- Bez zmiany API request/response i bez nowego modelu zbierania
-- SSOT lifecycle nadal `RecoveryWorkflowService`
+- Bez kolorowych pastylek / solid group badges
+- `PanelTreeCount` — wspólny komponent dla zamówień, zwrotów, pickera

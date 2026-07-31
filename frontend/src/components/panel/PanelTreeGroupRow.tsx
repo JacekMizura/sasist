@@ -29,10 +29,10 @@ export function PanelTreeGroupRow({ label, count, mainGroup, expanded, active, o
     <div className={panelTreeGroupContainerClass(active)}>
       <button type="button" onClick={onFilter} className={PANEL_TREE_GROUP_FILTER_BTN_CLASS}>
         <span className={PANEL_TREE_GROUP_DOT_CLASS} style={{ backgroundColor: accent }} aria-hidden />
-        <span className={PANEL_TREE_GROUP_LABEL_CLASS}>{label}</span>
+        <span className={`${PANEL_TREE_GROUP_LABEL_CLASS} min-w-0 flex-1`}>{label}</span>
         <Lock className={PANEL_TREE_GROUP_LOCK_CLASS} strokeWidth={2} aria-hidden />
       </button>
-      <PanelTreeCount value={count} active={active} colorHex={accent} variant="solid" />
+      <PanelTreeCount value={count} active={active} colorHex={accent} />
       <button
         type="button"
         onClick={onToggle}
