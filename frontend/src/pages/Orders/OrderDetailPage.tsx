@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import {
   ChevronDown,
@@ -57,7 +57,6 @@ import {
 import { getBackendPublicOrigin } from "../../config/apiBase";
 import { formatApiError } from "../../utils/apiErrorMessage";
 import { isStationarySaleOrder, printButtonLabelPl } from "../../components/directSales/directSalesTerminology";
-import { OrderDocumentsPrintMenu } from "../../components/orders/OrderDocumentsPrintMenu";
 import { useDocumentTemplatePrint } from "../../hooks/useDocumentTemplatePrint";
 import { saleKindFromSubtype, stockKindFromType } from "../../utils/documentTemplatePrint";
 import { OrderDirectSalesBadge } from "../../components/orders/orderList/OrderDirectSalesBadge";
@@ -295,8 +294,6 @@ export default function OrderDetailPage() {
   const [tableReplaceItemId, setTableReplaceItemId] = useState<number | null>(null);
   const [isStatusPanelCollapsed, setIsStatusPanelCollapsed] = useState(false);
   const [statusDrawerOpen, setStatusDrawerOpen] = useState(false);
-  const [returnsComplaintsOpen, setReturnsComplaintsOpen] = useState(false);
-  const returnsComplaintsRef = useRef<HTMLDivElement>(null);
   const [officePin, setOfficePin] = useState(false);
   const [opDraft, setOpDraft] = useState("");
   const [opVisPick, setOpVisPick] = useState(true);
@@ -510,17 +507,6 @@ export default function OrderDetailPage() {
     window.addEventListener(WMS_SHORTAGES_UPDATED_EVENT, onShortages);
     return () => window.removeEventListener(WMS_SHORTAGES_UPDATED_EVENT, onShortages);
   }, [order?.id, reloadOrderById, loadWmsFulfillment]);
-
-  useEffect(() => {
-    if (!returnsComplaintsOpen) return;
-    const onDoc = (e: MouseEvent) => {
-      const t = e.target as Node;
-      if (returnsComplaintsRef.current?.contains(t)) return;
-      setReturnsComplaintsOpen(false);
-    };
-    document.addEventListener("mousedown", onDoc);
-    return () => document.removeEventListener("mousedown", onDoc);
-  }, [returnsComplaintsOpen]);
 
   const wmsByItemId = useMemo(() => {
     const m = new Map<number, WmsPackingOrderLineApi>();
@@ -1275,8 +1261,6 @@ export default function OrderDetailPage() {
           setOfficePin={setOfficePin}
           activeTab={activeTab}
           setActiveTab={setActiveTab}
-          returnsComplaintsRef={returnsComplaintsRef}
-          setReturnsComplaintsOpen={setReturnsComplaintsOpen}
           requestOrderDocumentPrint={requestOrderDocumentPrint}
           orderDocumentPrintBusy={orderDocumentPrintBusy}
           isStationarySale={isStationarySale}
@@ -1289,6 +1273,7 @@ export default function OrderDetailPage() {
           panelOrderStatusBrief={panelOrderStatusBrief}
           wmsDualWorkflow={wmsDualWorkflow}
           shippingLabel={shippingLabel}
+          onOpenComplaintWizard={() => setComplaintWizardOpen(true)}
         />
 
         <div className={`flex-1 overflow-auto bg-white py-3 ${odMainHorizontalPadClass}`}>

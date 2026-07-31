@@ -1,16 +1,14 @@
-import type { Dispatch, RefObject, SetStateAction } from "react";
+import type { Dispatch, SetStateAction } from "react";
 import { Link } from "react-router-dom";
 import {
   Bookmark,
   ChevronLeft,
   ChevronRight,
   Home,
-  Mail,
-  MessageSquareWarning,
   Pin,
 } from "lucide-react";
 
-import { OrderDocumentsPrintMenu } from "./OrderDocumentsPrintMenu";
+import { OrderHeaderActionsToolbar } from "./headerActions";
 import { OrderDirectSalesBadge } from "./orderList/OrderDirectSalesBadge";
 import { OrderPriorityFlamePicker } from "./OrderPriorityFlame";
 import { OrderDetailPrimaryStatusDropdown } from "./OrderDetailPrimaryStatusDropdown";
@@ -55,8 +53,6 @@ type Props = {
   setOfficePin: Dispatch<SetStateAction<boolean>>;
   activeTab: DetailTabId;
   setActiveTab: Dispatch<SetStateAction<DetailTabId>>;
-  returnsComplaintsRef: RefObject<HTMLDivElement>;
-  setReturnsComplaintsOpen: Dispatch<SetStateAction<boolean>>;
   requestOrderDocumentPrint: (req: DocumentPrintRequest, opts?: { autoPrint?: boolean }) => Promise<void>;
   orderDocumentPrintBusy: boolean;
   isStationarySale: boolean;
@@ -69,6 +65,7 @@ type Props = {
   panelOrderStatusBrief: PanelConfigurableUiStatusBrief | null;
   wmsDualWorkflow: WmsDualWorkflow;
   shippingLabel: string;
+  onOpenComplaintWizard: () => void;
 };
 
 /**
@@ -86,8 +83,6 @@ export function OrderDetailHeaderBar({
   setOfficePin,
   activeTab,
   setActiveTab,
-  returnsComplaintsRef,
-  setReturnsComplaintsOpen,
   requestOrderDocumentPrint,
   orderDocumentPrintBusy,
   isStationarySale,
@@ -100,6 +95,7 @@ export function OrderDetailHeaderBar({
   panelOrderStatusBrief,
   wmsDualWorkflow,
   shippingLabel,
+  onOpenComplaintWizard,
 }: Props) {
   return (
     <div className={`${odMainMaxWidthClass} ${odMainHorizontalPadClass} pb-0 pt-3`}>
@@ -151,33 +147,28 @@ export function OrderDetailHeaderBar({
               </div>
 
               <div className="ml-auto flex shrink-0 items-center gap-2">
-                  <button type="button" onClick={() => { if (!order?.id) return; setOfficePin((p) => { const next = !p; try { if (next) window.localStorage.setItem(orderOfficePinStorageKey(order.id), "1"); else window.localStorage.removeItem(orderOfficePinStorageKey(order.id)); } catch {} return next; }); }} className={`${ORDER_DETAIL_HEADER_ICON_BTN} ${officePin ? "border-amber-400 bg-amber-50 text-amber-600" : ""}`}>
+                  <button type="button" onClick={() => { if (!order?.id) return; setOfficePin((p) => { const next = !p; try { if (next) window.localStorage.setItem(orderOfficePinStorageKey(order.id), "1"); else window.localStorage.removeItem(orderOfficePinStorageKey(order.id)); } catch {} return next; }); }} className={`${ORDER_DETAIL_HEADER_ICON_BTN} ${officePin ? "border-amber-400 bg-amber-50 text-amber-600" : ""}`} title="Przypnij w biurze">
                     <Bookmark className={`h-4 w-4 shrink-0 ${officePin ? "fill-current" : ""}`} strokeWidth={2} />
                   </button>
-                  <button type="button" onClick={() => { setActiveTab("summary"); window.setTimeout(() => { document.getElementById("order-summary-operational-notes")?.scrollIntoView({ behavior: "smooth" }); }, 0); }} className={`${ORDER_DETAIL_HEADER_ICON_BTN} ${order?.has_internal_note ? "border-red-300 bg-red-50 text-red-700" : ""}`}>
+                  <button type="button" onClick={() => { setActiveTab("summary"); window.setTimeout(() => { document.getElementById("order-summary-operational-notes")?.scrollIntoView({ behavior: "smooth" }); }, 0); }} className={`${ORDER_DETAIL_HEADER_ICON_BTN} ${order?.has_internal_note ? "border-red-300 bg-red-50 text-red-700" : ""}`} title="Notatki operacyjne">
                     <Pin className="h-4 w-4 shrink-0" strokeWidth={2} />
                   </button>
-                  <div className="relative" ref={returnsComplaintsRef}>
-                    <button type="button" onClick={() => setReturnsComplaintsOpen((v) => !v)} className={ORDER_DETAIL_HEADER_ICON_BTN}>
-                      <MessageSquareWarning className="h-4 w-4 shrink-0" strokeWidth={2} />
-                    </button>
-                  </div>
-                  <button type="button" onClick={() => { setActiveTab("comms"); window.setTimeout(() => { document.getElementById("order-comms-note")?.focus(); }, 0); }} className={`${ORDER_DETAIL_HEADER_ICON_BTN} ${order?.has_customer_comment ? "border-emerald-300 bg-emerald-50 text-emerald-700 relative" : "relative"}`}>
-                    <Mail className="h-4 w-4 shrink-0" strokeWidth={2} />
-                    {order?.has_customer_comment && <span className="absolute top-1 right-1 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-white"></span>}
-                  </button>
-                  <div className="w-px h-6 bg-slate-200 mx-1"></div>
-                  <OrderDocumentsPrintMenu
-                    orderId={order.id}
-                    linkedDocuments={order.linked_documents}
-                    panelDocumentType={order.panel_document_type}
-                    salesDocumentNumber={order.sales_document_number}
-                    onPrint={requestOrderDocumentPrint}
-                    busy={orderDocumentPrintBusy}
-                    compact
+                  <div className="mx-0.5 hidden h-6 w-px shrink-0 bg-slate-200 sm:block" aria-hidden />
+                  <OrderHeaderActionsToolbar
+                    order={order}
+                    warehouseId={orderFulfillmentWhId}
+                    printBusy={orderDocumentPrintBusy}
+                    onPrint={(req) => {
+                      void requestOrderDocumentPrint(req);
+                    }}
+                    onOpenComplaintWizard={onOpenComplaintWizard}
+                    onSetActiveTab={setActiveTab}
                   />
                   {!isStationarySale ? (
-                    <Link to={WMS_ROUTES.packingOrder(order.id)} className={brandPrimaryButtonClass}>Spakuj</Link>
+                    <>
+                      <div className="mx-0.5 hidden h-6 w-px shrink-0 bg-slate-200 sm:block" aria-hidden />
+                      <Link to={WMS_ROUTES.packingOrder(order.id)} className={brandPrimaryButtonClass}>Spakuj</Link>
+                    </>
                   ) : null}
               </div>
             </div>
