@@ -98,6 +98,17 @@ function RecommendedCard({ suggestion }: { suggestion: PackagingSuggestionApi })
         </div>
       </div>
 
+      <div className="mt-2.5 grid grid-cols-2 gap-1.5">
+        <div className="rounded-md bg-slate-50 px-2 py-1.5">
+          <p className="text-[9px] font-bold uppercase tracking-wider text-slate-400">Pewność</p>
+          <p className="text-[12px] font-bold tabular-nums text-slate-800">{pctConfidence(suggestion.confidence_score)}</p>
+        </div>
+        <div className="rounded-md bg-slate-50 px-2 py-1.5">
+          <p className="text-[9px] font-bold uppercase tracking-wider text-slate-400">Wykorzystanie</p>
+          <p className="text-[12px] font-bold tabular-nums text-slate-800">{fill ?? "—"}</p>
+        </div>
+      </div>
+
       {reason ? (
         <div className="mt-2 border-t border-violet-100/80 pt-1.5">
           <button
@@ -114,6 +125,35 @@ function RecommendedCard({ suggestion }: { suggestion: PackagingSuggestionApi })
           ) : null}
         </div>
       ) : null}
+    </div>
+  );
+}
+
+function AltPackagingCard({ suggestion, ordinal }: { suggestion: PackagingSuggestionApi; ordinal: number }) {
+  const fill =
+    suggestion.fill_percentage != null && Number.isFinite(Number(suggestion.fill_percentage))
+      ? `${Math.round(Number(suggestion.fill_percentage))}%`
+      : null;
+  return (
+    <div className="rounded-lg border border-slate-200 bg-white px-3 py-2.5">
+      <p className="mb-2 text-[10px] font-bold uppercase tracking-wide text-slate-400">Opakowanie {ordinal}</p>
+      <div className="flex items-start gap-3">
+        <CartonImage url={suggestion.image_url} />
+        <div className="min-w-0 flex-1">
+          <p className="font-mono text-[11px] tabular-nums text-slate-600">{suggestion.package_dimensions || "—"}</p>
+          <p className="truncate text-base font-bold leading-snug text-slate-900">{suggestion.package_name}</p>
+        </div>
+      </div>
+      <div className="mt-2.5 grid grid-cols-2 gap-1.5">
+        <div className="rounded-md bg-slate-50 px-2 py-1.5">
+          <p className="text-[9px] font-bold uppercase tracking-wider text-slate-400">Pewność</p>
+          <p className="text-[12px] font-bold tabular-nums text-slate-800">{pctConfidence(suggestion.confidence_score)}</p>
+        </div>
+        <div className="rounded-md bg-slate-50 px-2 py-1.5">
+          <p className="text-[9px] font-bold uppercase tracking-wider text-slate-400">Wykorzystanie</p>
+          <p className="text-[12px] font-bold tabular-nums text-slate-800">{fill ?? "—"}</p>
+        </div>
+      </div>
     </div>
   );
 }
@@ -192,9 +232,12 @@ export function OrderMatchedPackagingSection({
   card,
   /** Tylko zakładka Podsumowanie: rekomendacja i wybór operacyjny obok siebie. */
   pairRecommendationColumns = false,
+  /** Zakładka Produkty i magazyn: pozioma siatka kart (rekomendacja + alternatywy). */
+  productsGallery = false,
 }: {
   card: WmsPackingOrderCardApi | null;
   pairRecommendationColumns?: boolean;
+  productsGallery?: boolean;
 }) {
   const [altsOpen, setAltsOpen] = useState(false);
   const primary = card ? resolvePrimary(card) : undefined;
@@ -207,6 +250,25 @@ export function OrderMatchedPackagingSection({
   }
 
   const showAltToggle = alts.length > 0;
+
+  if (productsGallery) {
+    const galleryCards = [primary, ...alts].filter(Boolean) as PackagingSuggestionApi[];
+    return (
+      <div className="space-y-3" aria-label="Dopasowane opakowanie">
+        <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 xl:grid-cols-3">
+          {galleryCards.map((s, i) =>
+            i === 0 ? (
+              <RecommendedCard key={s.suggested_package_id} suggestion={s} />
+            ) : (
+              <AltPackagingCard key={s.suggested_package_id} suggestion={s} ordinal={i + 1} />
+            ),
+          )}
+        </div>
+        {selected ? <SelectedCartonCompact carton={selected} /> : null}
+        <OverrideCallout top={primary} selected={selected} />
+      </div>
+    );
+  }
 
   const recommendedColumn = (
     <div className="min-w-0 space-y-2">

@@ -1,3 +1,10 @@
+## 2026-07-24 — Produkty i magazyn: karty 1:1 mockup (UX only)
+
+- Lista → osobne karty (thumb contain, meta, metryki, wartość, kebab); zestawy „Zestaw zawiera”
+- Braki / zamienniki / usunięte jak mockup; footer WMS z lokalizacją + badge + operator
+- Sticky prawa kolumna (KPI + timeline); opakowania: galeria rekomendacja+alternatywy
+- Bez zmian API / modeli / logiki WMS; pełna funkcjonalność zachowana
+
 ## 2026-07-31 — Podsumowanie: final commercial polish
 
 - Zwarte 4 kolumny kontekstu; produkty `text-3xl`; prawa kolumna jako jeden panel

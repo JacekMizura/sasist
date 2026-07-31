@@ -1366,41 +1366,58 @@ export default function OrderDetailPage() {
             ) : null}
 
             {activeTab === "products" ? (
-              <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_360px] lg:items-start">
-                <div className="min-w-0 flex flex-col">
-                  <div className="space-y-6">
-                    {wmsErr && <p className="bg-amber-50 border border-amber-200 text-amber-900 p-4 rounded-md text-sm font-medium shadow-sm">{wmsErr}</p>}
+              <div className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,1fr)_320px] xl:grid-cols-[minmax(0,1fr)_340px] lg:items-start">
+                <div className="min-w-0 space-y-4">
+                    {wmsErr && <p className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm font-medium text-amber-900 shadow-sm">{wmsErr}</p>}
                     {orderFulfillmentWhId != null && <OrderMissingProductsSection tenantId={DAMAGE_TENANT_ID} orderId={order.id} lines={wmsFulfillment?.lines ?? []} itemWaitingById={itemWaitingById} onRefreshOrder={() => void reloadOrderById(order.id)} onRefreshWms={() => void loadWmsFulfillment()} sectionDomId="wms-braki-sekcja" />}
-                    
-                    <div className="flex justify-between items-center mb-2">
-                      <div className="flex gap-4 items-center">
-                        <h2 className="text-xs font-bold uppercase tracking-widest text-slate-500">Produkty</h2>
-                        <label className="text-sm text-slate-600 flex items-center font-medium"><input type="checkbox" className="mr-2 rounded border-slate-300 w-4 h-4 text-blue-600 focus:ring-blue-500" checked={showZeroQtyHistoryRows} onChange={e => setShowZeroQtyHistoryRows(e.target.checked)}/> Pokaż usunięte</label>
+
+                    <div className="flex flex-wrap items-end justify-between gap-2">
+                      <div className="flex flex-wrap items-center gap-2.5">
+                        <h2 className="text-lg font-bold tracking-tight text-slate-900 sm:text-xl">Zamówione produkty</h2>
+                        <label className="flex items-center text-xs font-medium text-slate-600">
+                          <input type="checkbox" className="mr-1.5 h-3.5 w-3.5 rounded border-slate-300 text-blue-600 focus:ring-blue-500" checked={showZeroQtyHistoryRows} onChange={(e) => setShowZeroQtyHistoryRows(e.target.checked)} />
+                          Pokaż usunięte
+                        </label>
                       </div>
-                      <div className="flex gap-2">
-                        <button onClick={() => setAddProductOpen(true)} className="border border-slate-300 rounded-md bg-white px-4 py-2 text-sm font-bold shadow-sm hover:bg-slate-50 transition-colors">Dodaj produkt</button>
-                        <button onClick={() => setAddBundleOpen(true)} className="border border-slate-300 rounded-md bg-white px-4 py-2 text-sm font-bold shadow-sm hover:bg-slate-50 transition-colors">Dodaj zestaw</button>
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <button type="button" onClick={() => setAddProductOpen(true)} className="rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-sm font-bold shadow-sm transition-colors hover:bg-slate-50">Dodaj produkt</button>
+                        <button type="button" onClick={() => setAddBundleOpen(true)} className="rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-sm font-bold shadow-sm transition-colors hover:bg-slate-50">Dodaj zestaw</button>
                         <Link to={WMS_ROUTES.packingOrder(order.id)} className={brandPrimaryButtonClass}>Spakuj</Link>
                       </div>
                     </div>
 
-                    <div className="bg-white rounded-md border border-slate-200 shadow-sm overflow-hidden">
-                      <ImportedWarehouseSection lines={summaryProductsLines} orderItems={order.items} wmsByItemId={wmsByItemId} wmsFulfillment={wmsFulfillment} wmsLoading={wmsLoading} currency={order.currency} productEditTenantId={order.tenant_id ?? DAMAGE_TENANT_ID} orderId={order.id} linesTotalDisplay={linesTotalDisplay} itemWaitingById={itemWaitingById} onRefreshOrder={() => void reloadOrderById(order.id)} onRefreshWms={() => void loadWmsFulfillment()} onReplaceProduct={(oid) => { setTableReplaceItemId(oid); setTableReplaceOpen(true); }} onLineAction={handleOrderLineMenuAction} formatMoney={formatMoney} hideLineTotalHeader panelFulfillmentHistory={panelFulfillmentHistory} formatDetailDate={formatDetailDate} showProductLineHistory={showZeroQtyHistoryRows} />
-                      
-                      {/* Sekcja Razem pod listą produktów magazynowych */}
-                      <div className="flex items-center justify-end gap-3 border-t border-slate-200 px-6 py-4">
-                        <span className="text-xs font-bold uppercase tracking-widest text-slate-500">Razem (produkty)</span>
-                        <span className="text-2xl font-black tabular-nums text-slate-900 pr-12">{linesTotalDisplay}</span>
+                    <ImportedWarehouseSection lines={summaryProductsLines} orderItems={order.items} wmsByItemId={wmsByItemId} wmsFulfillment={wmsFulfillment} wmsLoading={wmsLoading} currency={order.currency} productEditTenantId={order.tenant_id ?? DAMAGE_TENANT_ID} orderId={order.id} linesTotalDisplay={linesTotalDisplay} itemWaitingById={itemWaitingById} onRefreshOrder={() => void reloadOrderById(order.id)} onRefreshWms={() => void loadWmsFulfillment()} onReplaceProduct={(oid) => { setTableReplaceItemId(oid); setTableReplaceOpen(true); }} onLineAction={handleOrderLineMenuAction} formatMoney={formatMoney} panelFulfillmentHistory={panelFulfillmentHistory} formatDetailDate={formatDetailDate} showProductLineHistory={showZeroQtyHistoryRows} />
+
+                    <div className="flex items-center justify-end gap-2 border-t border-slate-200 pt-3">
+                      <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Razem (produkty)</span>
+                      <span className="text-xl font-black tabular-nums text-slate-900">{linesTotalDisplay}</span>
+                    </div>
+
+                    <section className="rounded-lg border border-slate-200 bg-white p-3.5 shadow-sm">
+                      <div className="mb-2.5 flex items-center justify-between gap-2">
+                        <h3 className="text-[13px] font-bold tracking-tight text-slate-900">
+                          Dopasowane opakowanie
+                          {(() => {
+                            const n =
+                              (wmsFulfillment?.packaging_suggestions?.length ?? 0) ||
+                              (wmsFulfillment?.primary_packaging_suggestion ? 1 : 0) +
+                                (wmsFulfillment?.packaging_alternatives?.length ?? 0);
+                            return n > 0 ? (
+                              <span className="font-semibold text-slate-500">
+                                {" "}
+                                • {n} {n === 1 ? "opakowanie" : "opakowania"}
+                              </span>
+                            ) : null;
+                          })()}
+                        </h3>
+                        <Link to={WMS_ROUTES.packingOrder(order.id)} className="text-slate-400 transition-colors hover:text-slate-800" aria-label="Edytuj opakowanie">
+                          <Pencil className="h-4 w-4" strokeWidth={2} />
+                        </Link>
                       </div>
-                    </div>
-                    
-                    <div className="bg-white rounded-md border border-slate-200 shadow-sm p-5">
-                      <h3 className="text-[11px] font-bold uppercase tracking-widest text-slate-500 mb-4">DOPASOWANE OPAKOWANIA</h3>
-                      <OrderMatchedPackagingSection card={wmsFulfillment} />
-                    </div>
-                  </div>
+                      <OrderMatchedPackagingSection card={wmsFulfillment} productsGallery />
+                    </section>
                 </div>
-                <aside className="space-y-6">
+                <aside className="w-full space-y-3 lg:sticky lg:top-3 lg:w-[320px] lg:shrink-0 lg:justify-self-end xl:w-[340px]">
                   <WmsOperationTimesKpiPanel cells={wmsSidebarTimeCells} />
                   {orderFulfillmentWhId != null ? (
                     <WmsOrderValidationPanel
@@ -1409,10 +1426,7 @@ export default function OrderDetailPage() {
                       orderId={order.id}
                     />
                   ) : null}
-                  <div className="bg-white rounded-md border border-slate-200 shadow-sm p-5">
-                     <h3 className="text-[11px] font-bold uppercase tracking-widest text-slate-500 mb-4">HISTORIA WMS</h3>
-                     <OrderHistoryTimeline compact events={orderHistoryTimelineEvents} formatDate={formatDetailDate} />
-                  </div>
+                  <OrderHistoryTimeline compact hideHeader events={orderHistoryTimelineEvents} formatDate={formatDetailDate} title="Historia zamówienia" />
                 </aside>
               </div>
             ) : null}

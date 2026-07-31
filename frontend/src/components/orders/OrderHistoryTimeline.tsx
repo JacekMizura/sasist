@@ -5,10 +5,10 @@ import type { OrderHistoryTimelineEvent } from "./orderHistoryTimelineModel";
 function HistoryBadge({ label, tone }: { label: string; tone: "muted" | "dark" | "blue" }) {
   const cls =
     tone === "dark"
-      ? "shrink-0 rounded-full bg-slate-900 px-2 py-0.5 text-[10px] font-medium leading-none text-white"
+      ? "shrink-0 rounded-full bg-slate-800 px-2 py-0.5 text-[10px] font-semibold leading-none text-white"
       : tone === "blue"
-        ? "shrink-0 rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-[10px] font-medium leading-none text-blue-700"
-        : "shrink-0 rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[10px] font-medium leading-none text-slate-600";
+        ? "shrink-0 rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-[10px] font-semibold leading-none text-blue-700"
+        : "shrink-0 rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[10px] font-semibold leading-none text-slate-600";
   return <span className={cls}>{label}</span>;
 }
 
@@ -22,7 +22,7 @@ function MetaIconRow({
   compact?: boolean;
 }) {
   return (
-    <div className={`flex items-start gap-2 text-xs text-slate-500 ${compact ? "mt-1" : "mt-2"}`}>
+    <div className={`flex items-start gap-1.5 text-xs text-slate-500 ${compact ? "mt-1" : "mt-1.5"}`}>
       <Icon
         className={`mt-0.5 shrink-0 text-slate-400 ${compact ? "h-3 w-3" : "h-3.5 w-3.5"}`}
         strokeWidth={2}
@@ -35,7 +35,7 @@ function MetaIconRow({
 
 function AutomationMetaRow({ children, compact }: { children: ReactNode; compact?: boolean }) {
   return (
-    <div className={`flex items-start gap-2 text-xs text-slate-500 ${compact ? "mt-1" : "mt-2"}`}>
+    <div className={`flex items-start gap-1.5 text-xs text-slate-500 ${compact ? "mt-1" : "mt-1.5"}`}>
       <span
         className={`mt-0.5 flex shrink-0 items-center justify-center rounded-full border border-slate-300 bg-white font-bold leading-none text-slate-600 ${compact ? "h-3 w-3 text-[8px]" : "h-3.5 w-3.5 text-[9px]"}`}
         aria-hidden
@@ -58,7 +58,7 @@ function TimelineEventCard({
 }) {
   const titleRow = (
     <div className="flex items-start justify-between gap-2">
-      <p className={`font-bold leading-snug text-slate-900 ${compact ? "text-xs" : "text-[13px]"}`}>{ev.title}</p>
+      <p className={`font-semibold leading-snug text-slate-900 ${compact ? "text-xs" : "text-[13px]"}`}>{ev.title}</p>
       {ev.badge ? <HistoryBadge label={ev.badge.label} tone={ev.badge.tone} /> : null}
     </div>
   );
@@ -75,7 +75,7 @@ function TimelineEventCard({
           <span className="text-slate-600">{ev.description}</span>
         </MetaIconRow>
       ) : ev.description ? (
-        <p className={`text-xs leading-snug text-slate-600 ${compact ? "mt-1" : "mt-2"}`}>{ev.description}</p>
+        <p className={`text-xs leading-snug text-slate-600 ${compact ? "mt-1" : "mt-1.5"}`}>{ev.description}</p>
       ) : null}
       {ev.automationLabel ? (
         <AutomationMetaRow compact={compact}>{ev.automationLabel}</AutomationMetaRow>
@@ -91,7 +91,7 @@ function TimelineEventCard({
       <div
         className={
           compact
-            ? "rounded-md border border-slate-200/90 bg-slate-50/90 p-2"
+            ? "rounded-md border border-slate-200 bg-white p-2.5 shadow-sm"
             : "rounded-lg border border-yellow-200 bg-yellow-50 p-3"
         }
       >
@@ -102,7 +102,7 @@ function TimelineEventCard({
   }
 
   return (
-    <div className="text-left">
+    <div className="rounded-md border border-slate-200/80 bg-white p-2.5 shadow-sm">
       {titleRow}
       {metaBlocks}
     </div>
@@ -113,15 +113,20 @@ export function OrderHistoryTimeline({
   events,
   formatDate,
   compact,
+  hideHeader = false,
+  title = "Oś czasu — zdarzenia i operatorzy",
 }: {
   events: OrderHistoryTimelineEvent[];
   formatDate: (iso: string) => string;
   compact?: boolean;
+  /** When true, omit chrome header (parent supplies section title). */
+  hideHeader?: boolean;
+  title?: string;
 }) {
   const shell = compact ? "shadow-none" : "shadow-sm";
-  const headerPad = compact ? "px-2 py-1.5" : "px-3 py-2";
+  const headerPad = compact ? "px-2.5 py-2" : "px-3 py-2";
   const titleCls = compact
-    ? "text-[10px] font-bold uppercase tracking-wide text-slate-700"
+    ? "text-[10px] font-bold uppercase tracking-widest text-slate-500"
     : "text-xs font-bold uppercase tracking-wide text-slate-800";
   const iconBox = compact ? "h-6 w-6" : "h-8 w-8";
   const truckIcon = compact ? "h-3 w-3" : "h-4 w-4";
@@ -129,38 +134,44 @@ export function OrderHistoryTimeline({
 
   return (
     <div className={`overflow-hidden rounded-lg border border-slate-200 bg-white ${shell}`}>
-      <div className={`flex items-center justify-between border-b border-slate-200/90 bg-white ${headerPad}`}>
-        <div className="flex min-w-0 items-center gap-1.5">
-          <h3 className={`min-w-0 truncate ${titleCls}`}>Oś czasu — zdarzenia i operatorzy</h3>
-          <Info className={`${infoIcon} shrink-0 text-blue-600`} strokeWidth={2} aria-hidden />
+      {!hideHeader ? (
+        <div className={`flex items-center justify-between border-b border-slate-200/90 bg-white ${headerPad}`}>
+          <div className="flex min-w-0 items-center gap-1.5">
+            <h3 className={`min-w-0 truncate ${titleCls}`}>{title}</h3>
+            <Info className={`${infoIcon} shrink-0 text-blue-600`} strokeWidth={2} aria-hidden />
+          </div>
+          <span
+            className={`flex ${iconBox} shrink-0 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-700`}
+            aria-hidden
+          >
+            <Truck className={truckIcon} strokeWidth={2} />
+          </span>
         </div>
-        <span
-          className={`flex ${iconBox} shrink-0 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-700`}
-          aria-hidden
-        >
-          <Truck className={truckIcon} strokeWidth={2} />
-        </span>
-      </div>
+      ) : (
+        <div className={`border-b border-slate-100 ${headerPad}`}>
+          <h3 className={titleCls}>{title}</h3>
+        </div>
+      )}
 
       {events.length === 0 ? (
-        <p className={`text-center text-xs text-slate-500 ${compact ? "px-2 py-3" : "px-3 py-6"}`}>
+        <p className={`text-center text-xs text-slate-500 ${compact ? "px-2 py-4" : "px-3 py-6"}`}>
           Brak wpisów w historii.
         </p>
       ) : (
-        <div className={`relative bg-white ${compact ? "px-2 pb-2 pt-2" : "px-3 pb-4 pt-3"}`}>
+        <div className={`relative bg-slate-50/40 ${compact ? "px-2.5 pb-3 pt-3" : "px-3 pb-4 pt-3"}`}>
           <div
-            className={`absolute w-px bg-slate-200/90 ${compact ? "bottom-2 left-[11px] top-2" : "bottom-4 left-[13px] top-3"}`}
+            className={`absolute w-px bg-slate-200 ${compact ? "bottom-3 left-[15px] top-3" : "bottom-4 left-[17px] top-3"}`}
             aria-hidden
           />
 
-          <ul className="relative">
+          <ul className="relative space-y-3">
             {events.map((ev) => (
               <li
                 key={ev.key}
-                className={`relative ${compact ? "pb-3 pl-8 last:pb-0" : "pb-6 pl-9 last:pb-0"}`}
+                className={`relative ${compact ? "pl-8" : "pl-9"}`}
               >
                 <span
-                  className={`absolute z-[1] flex items-center justify-center rounded-full bg-emerald-500 shadow-[0_0_0_3px_#fff] ${compact ? "left-[1px] top-1 h-4 w-4" : "left-[2px] top-2 h-[18px] w-[18px]"}`}
+                  className={`absolute z-[1] flex items-center justify-center rounded-full bg-emerald-500 shadow-[0_0_0_3px_#f8fafc] ${compact ? "left-[5px] top-2.5 h-3.5 w-3.5" : "left-[6px] top-3 h-4 w-4"}`}
                   aria-hidden
                 >
                   <Check className={`text-white ${compact ? "h-2 w-2" : "h-2.5 w-2.5"}`} strokeWidth={3} />

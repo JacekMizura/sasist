@@ -2,8 +2,10 @@
 
 ## Active
 
-Order Card Summary — final commercial polish (UX only):
+Order Card — zakładka **Produkty i magazyn** (UX/UI only, bez zmian API/WMS):
 
-- Denser 4-col context strip; products hero (`text-3xl`); unified right rail
-- Compact waybills/video empty; notes 2-line auto-grow; quieter Safe Order / extra fields
-- Zapisz/Anuluj ship-pay only when dirty; no function removals; no activity-log duplicate
+- Layout: lewa lista kart produktów + sticky prawa kolumna (KPI + historia timeline), stała szerokość
+- Karty produktów (nie tabela): thumb `object-contain`, meta SKU/EAN/nr kat, metryki, braki, zamienniki, usunięte, zestawy („Zestaw zawiera”)
+- Footer WMS: lokalizacja + badge Zebrano/W zbieraniu/Spakowano + operator (`OrderLineOperationalWorkflowModule`)
+- Dopasowane opakowanie: galeria kart (rekomendowany + alternatywy) z Pewność/Wykorzystanie
+- Gęstość ~−15%; pełna funkcjonalność zachowana

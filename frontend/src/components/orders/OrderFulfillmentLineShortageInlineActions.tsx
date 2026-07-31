@@ -117,12 +117,12 @@ export default function OrderFulfillmentLineShortageInlineActions({
           }
         />
       ) : null}
-      <div className="mt-2 flex flex-wrap gap-2">
+      <div className="mt-2 flex flex-wrap gap-1.5">
         <button
           type="button"
           disabled={busy}
           onClick={() => onReplaceProduct(orderItemId)}
-          className="rounded-md border border-slate-300 bg-white px-2 py-1 text-[11px] font-semibold text-slate-800 hover:bg-slate-50 disabled:opacity-50"
+          className="rounded-md border border-slate-300/90 bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-800 shadow-sm hover:bg-slate-50 disabled:opacity-50"
         >
           Zamień produkt
         </button>
@@ -130,7 +130,7 @@ export default function OrderFulfillmentLineShortageInlineActions({
           type="button"
           disabled={busy}
           onClick={() => setRemoveModalOpen(true)}
-          className="rounded-md border border-red-300 bg-white px-2 py-1 text-[11px] font-semibold text-red-900 hover:bg-red-50 disabled:opacity-50"
+          className="rounded-md border border-red-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-red-700 shadow-sm hover:bg-red-50 disabled:opacity-50"
         >
           Usuń produkt z zamówienia
         </button>
@@ -138,7 +138,7 @@ export default function OrderFulfillmentLineShortageInlineActions({
           type="button"
           disabled={busy}
           onClick={() => void toggleWaiting(!waiting)}
-          className="rounded-md border border-amber-300 bg-amber-50 px-2 py-1 text-[11px] font-semibold text-amber-950 hover:bg-amber-100 disabled:opacity-50"
+          className="rounded-md border border-amber-200 bg-orange-50/80 px-2.5 py-1 text-[11px] font-semibold text-amber-950 shadow-sm hover:bg-amber-100 disabled:opacity-50"
         >
           {waiting ? "Cofnij „czeka na towar”" : "Oznacz jako czeka"}
         </button>
