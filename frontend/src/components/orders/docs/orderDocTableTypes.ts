@@ -3,7 +3,7 @@
  * Extracted from OrderDetailPage.tsx — no logic changes.
  */
 
-export type OrderDocTableKindTone = "fa" | "pa" | "rz" | "lp" | "na";
+export type OrderDocTableKindTone = "fa" | "pa" | "rz" | "lp" | "wz" | "na";
 
 export type OrderDocTableRow = {
   id: string;
@@ -48,6 +48,8 @@ export function orderDocKindToneClass(tone: OrderDocTableKindTone): string {
       return "bg-slate-500";
     case "lp":
       return "bg-blue-600";
+    case "wz":
+      return "bg-slate-900";
     default:
       return "bg-slate-400";
   }

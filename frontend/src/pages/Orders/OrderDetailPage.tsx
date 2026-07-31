@@ -940,7 +940,7 @@ export default function OrderDetailPage() {
         const isWz = doc.kind === "warehouse" || doc.document_type === "WZ";
         const isFa = doc.document_type === "FV" || doc.document_subtype === "INVOICE";
         const typeLabel: NonNullable<OrderDocTableRow["typeLabel"]> = isWz
-          ? { abbr: "WZ", name: "WZ", tone: "lp" }
+          ? { abbr: "WZ", name: "WZ", tone: "wz" }
           : isFa
             ? { abbr: "Fa", name: "Faktura", tone: "fa" }
             : { abbr: "Pa", name: "Paragon", tone: "pa" };
@@ -1452,10 +1452,43 @@ export default function OrderDetailPage() {
             ) : null}
 
             {activeTab === "docs" ? (
-              <div className="space-y-6 max-w-[1200px]">
-                <OrderDocFilesTableSection title={`Dokumenty sprzedaży (${docsTabDocumentsRows.length})`} rows={docsTabDocumentsRows} showTypeColumn onUploadFiles={(files) => handleOrderDocUpload("docs", files)} onPreview={handleOrderDocPreview} onPrint={handleOrderDocPrint} onDownload={handleOrderDocDownload} onEmail={handleOrderDocEmail} onDelete={(row) => handleOrderDocDelete("docs", row)} />
-                <OrderDocFilesTableSection title={`Załączniki (${docsTabFilesRows.length})`} rows={docsTabFilesRows} showTypeColumn onUploadFiles={(files) => handleOrderDocUpload("files", files)} onPreview={handleOrderDocPreview} onPrint={handleOrderDocPrint} onDownload={handleOrderDocDownload} onEmail={handleOrderDocEmail} onDelete={(row) => handleOrderDocDelete("files", row)} />
-                <OrderDocFilesTableSection title={`Listy przewozowe (${docsTabWaybillsRows.length})`} rows={docsTabWaybillsRows} showTypeColumn onUploadFiles={(files) => handleOrderDocUpload("waybills", files)} onPreview={handleOrderDocPreview} onPrint={handleOrderDocPrint} onDownload={handleOrderDocDownload} onEmail={handleOrderDocEmail} onDelete={(row) => handleOrderDocDelete("waybills", row)} />
+              <div className="mt-1 w-full max-w-none space-y-3.5">
+                <OrderDocFilesTableSection
+                  title={`Dokumenty (${docsTabDocumentsRows.length})`}
+                  rows={docsTabDocumentsRows}
+                  showTypeColumn
+                  variant="documents"
+                  onUploadFiles={(files) => handleOrderDocUpload("docs", files)}
+                  onPreview={handleOrderDocPreview}
+                  onPrint={handleOrderDocPrint}
+                  onDownload={handleOrderDocDownload}
+                  onEmail={handleOrderDocEmail}
+                  onDelete={(row) => handleOrderDocDelete("docs", row)}
+                />
+                <OrderDocFilesTableSection
+                  title={`Załączniki (${docsTabFilesRows.length})`}
+                  rows={docsTabFilesRows}
+                  showTypeColumn={false}
+                  variant="attachments"
+                  onUploadFiles={(files) => handleOrderDocUpload("files", files)}
+                  onPreview={handleOrderDocPreview}
+                  onPrint={handleOrderDocPrint}
+                  onDownload={handleOrderDocDownload}
+                  onEmail={handleOrderDocEmail}
+                  onDelete={(row) => handleOrderDocDelete("files", row)}
+                />
+                <OrderDocFilesTableSection
+                  title={`Listy przewozowe (${docsTabWaybillsRows.length})`}
+                  rows={docsTabWaybillsRows}
+                  showTypeColumn
+                  variant="waybills"
+                  onUploadFiles={(files) => handleOrderDocUpload("waybills", files)}
+                  onPreview={handleOrderDocPreview}
+                  onPrint={handleOrderDocPrint}
+                  onDownload={handleOrderDocDownload}
+                  onEmail={handleOrderDocEmail}
+                  onDelete={(row) => handleOrderDocDelete("waybills", row)}
+                />
               </div>
             ) : null}
 

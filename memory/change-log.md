@@ -1,3 +1,8 @@
+## 2026-07-24 — Dokumenty i pliki: polish pod mockup
+
+- Karty Dokumenty/Załączniki/LP: gęstsza tabela, badge statusów, ujednolicone akcje
+- Toolbar zaznaczania + CTA Dodaj plik; bez zmian logiki dokumentów/API
+
 ## 2026-07-24 — Komunikacja: centrum komunikacji pod mockup
 
 - 8/4: compose + historia korespondencji | AI + klient + notatki/komentarz

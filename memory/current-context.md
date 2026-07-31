@@ -2,9 +2,8 @@
 
 ## Active
 
-Order Card — zakładka **Komunikacja** (UX only):
+Order Card — zakładka **Dokumenty i pliki** (UX only):
 
-- Layout 8/4: Nowa wiadomość + Historia | Notatka AI + Klient + Notatki
-- Bubble historia z `orderNotes`; compose (kanały/szablon/AI/załącznik) bez zmiany logiki Wyślij
-- Klient: kontakt, login z addresses_json, zamówienia (purchase-history API), notatka o kliencie (`customer_note_append`)
-- Notatki operacyjne + komentarz klienta + checkboxy zbieranie/pakowanie
+- Lekkie karty Dokumenty / Załączniki / Listy przewozowe (jak Logi)
+- Toolbar: zaznacz + druk/mail/pobierz/upload; statusy Zatwierdzony/Niezatwierdzony
+- Załączniki: ikona typu pliku + CTA „Dodaj plik”; bez zmian API/upload/print/mail
