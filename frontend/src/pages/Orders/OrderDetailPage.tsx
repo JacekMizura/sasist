@@ -13,11 +13,9 @@ import {
   Home,
   Inbox,
   Link2,
-  Mail,
   MessageSquare,
   MessageSquareWarning,
   Pin,
-  Phone,
   User,
   Pencil,
   Printer,
@@ -104,6 +102,7 @@ import {
 import { OrderWarehouseProductsSection as ImportedWarehouseSection } from "../../components/orders/OrderWarehouseProductsSection";
 import { OrderDetailHeaderBar } from "../../components/orders/OrderDetailHeaderBar";
 import { OrderDetailSummaryTab } from "../../components/orders/OrderDetailSummaryTab";
+import { OrderDetailCommsTab } from "../../components/orders/OrderDetailCommsTab";
 import { WmsOperationTimesKpiPanel } from "../../components/orders/WmsOperationTimesKpiPanel";
 import { DETAIL_TABS, type DetailTabId } from "../../components/orders/orderDetailTabs";
 import { odMainHorizontalPadClass, odMainMaxWidthClass } from "../../components/orders/orderDetailUiTokens";
@@ -131,7 +130,6 @@ import {
   type OrderDocTableRow,
 } from "../../components/orders/docs/orderDocTableTypes";
 import { OrderDocFilesTableSection } from "../../components/orders/docs/OrderDocFilesTableSection";
-import { OrderDetailSectionCard } from "../../components/orders/OrderDetailSectionCard";
 import {
   buildLogicalOrderItemGroups,
   countDistinctLogicalHistoryEvents,
@@ -1430,37 +1428,27 @@ export default function OrderDetailPage() {
             ) : null}
 
             {activeTab === "comms" ? (
-              <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_360px] lg:items-start">
-                <main className="space-y-6">
-                  <section className="bg-white rounded-md shadow-sm border border-slate-200 p-6">
-                    <h3 className="text-[11px] font-bold uppercase tracking-widest text-slate-500 mb-4">Notatki operacyjne</h3>
-                    <textarea value={opDraft} onChange={(e) => setOpDraft(e.target.value)} rows={3} placeholder="Wpisz treść..." className="w-full bg-white border border-slate-300 rounded-md p-3 text-sm focus:border-orange-500 outline-none mb-4 transition-colors"/>
-                    <div className="flex justify-between items-center">
-                      <div className="flex gap-4 text-sm font-medium text-slate-600">
-                        <label className="flex items-center"><input type="checkbox" className="mr-2 rounded border-slate-300 w-4 h-4 text-blue-600 focus:ring-blue-500" checked={opVisPick} onChange={e => setOpVisPick(e.target.checked)}/> Zbieranie</label>
-                        <label className="flex items-center"><input type="checkbox" className="mr-2 rounded border-slate-300 w-4 h-4 text-blue-600 focus:ring-blue-500" checked={opVisPack} onChange={e => setOpVisPack(e.target.checked)}/> Pakowanie</label>
-                      </div>
-                      <button disabled={opSaving || !opDraft.trim()} onClick={() => void saveOperationalNote()} className={brandPrimaryButtonClass}>Zapisz</button>
-                    </div>
-                  </section>
-                  <section className="bg-white rounded-md shadow-sm border border-slate-200 p-6">
-                    <h3 className="text-[11px] font-bold uppercase tracking-widest text-slate-500 mb-4">Wiadomość do klienta</h3>
-                    <textarea id="order-comms-note" value={noteDraft} onChange={(e) => setNoteDraft(e.target.value)} rows={4} placeholder="Wpisz treść..." className="w-full bg-white border border-slate-300 rounded-md p-3 text-sm focus:border-orange-500 outline-none mb-4 transition-colors"/>
-                    <div className="flex justify-end">
-                      <button type="button" className={brandPrimaryButtonClass}>Wyślij</button>
-                    </div>
-                  </section>
-                </main>
-                <aside className="space-y-6">
-                  <OrderDetailSectionCard title="Klient">
-                    <div className="text-sm space-y-2">
-                      <p className="font-bold text-lg text-slate-900">{contact.name}</p>
-                      <p className="text-slate-600 flex items-center pt-2"><Phone size={14} className="mr-2 text-slate-400"/> {contact.phone}</p>
-                      <p className="text-slate-600 flex items-center"><Mail size={14} className="mr-2 text-slate-400"/> <span className="break-all">{contact.email}</span></p>
-                    </div>
-                  </OrderDetailSectionCard>
-                </aside>
-              </div>
+              <OrderDetailCommsTab
+                order={order}
+                contact={contact}
+                orderNotes={orderNotes}
+                noteDraft={noteDraft}
+                setNoteDraft={setNoteDraft}
+                opDraft={opDraft}
+                setOpDraft={setOpDraft}
+                opVisPick={opVisPick}
+                setOpVisPick={setOpVisPick}
+                opVisPack={opVisPack}
+                setOpVisPack={setOpVisPack}
+                opSaving={opSaving}
+                saveOperationalNote={saveOperationalNote}
+                formatDetailDate={formatDetailDate}
+                formatMoney={formatMoney}
+                customerComment={(wmsFulfillment?.customer_comment ?? order.latest_customer_comment_preview ?? "").trim()}
+                onReloadOrder={() => void reloadOrderById(order.id)}
+                onReloadNotes={() => void reloadOrderNotes(order.id)}
+                tenantId={order.tenant_id ?? DAMAGE_TENANT_ID}
+              />
             ) : null}
 
             {activeTab === "docs" ? (

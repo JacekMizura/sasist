@@ -1,3 +1,8 @@
+## 2026-07-24 — Komunikacja: centrum komunikacji pod mockup
+
+- 8/4: compose + historia korespondencji | AI + klient + notatki/komentarz
+- Bubble UI z istniejących `orderNotes`; kanały/szablony/Sugestia AI lokalnie; bez zmian API wysyłki
+
 ## 2026-07-24 — Logi: journal UX pod mockup
 
 - Lekka tabela (czas+status, wykonawca, zdarzenie, efekt); sort newest/oldest; paginacja
