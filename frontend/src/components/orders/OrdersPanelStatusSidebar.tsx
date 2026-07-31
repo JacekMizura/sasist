@@ -313,7 +313,7 @@ export function OrdersPanelStatusSidebar({
           onChange={(e) => setSearchQuery(e.target.value)}
           placeholder="Szukaj statusu…"
           aria-label="Szukaj statusu"
-          className="w-full rounded-lg border border-slate-200 bg-slate-50 py-1.5 pl-8 pr-2 text-xs text-slate-800 placeholder:text-slate-400 focus:border-slate-300 focus:bg-white focus:outline-none focus:ring-1 focus:ring-slate-200"
+          className="w-full rounded-lg border border-slate-200 bg-white py-1.5 pl-8 pr-2 text-xs text-slate-800 placeholder:text-slate-400 focus:border-slate-300 focus:outline-none focus:ring-1 focus:ring-slate-200"
         />
       </div>
 

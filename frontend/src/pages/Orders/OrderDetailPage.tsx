@@ -3,7 +3,6 @@ import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import {
   ChevronDown,
   ChevronRight,
-  ChevronLeft,
   Bookmark,
   Copy,
   Download,
@@ -19,7 +18,6 @@ import {
   MessageSquareWarning,
   Pin,
   Phone,
-  Search,
   User,
   Pencil,
   Printer,
@@ -301,7 +299,6 @@ export default function OrderDetailPage() {
   const [isStatusPanelCollapsed, setIsStatusPanelCollapsed] = useState(false);
   const [statusDrawerOpen, setStatusDrawerOpen] = useState(false);
   const [returnsComplaintsOpen, setReturnsComplaintsOpen] = useState(false);
-  const [sidebarSearch, setSidebarSearch] = useState("");
   const returnsComplaintsRef = useRef<HTMLDivElement>(null);
   const [officePin, setOfficePin] = useState(false);
   const [opDraft, setOpDraft] = useState("");
@@ -1252,24 +1249,8 @@ export default function OrderDetailPage() {
   return (
     <div className="min-h-screen flex font-sans text-slate-800 bg-white">
       {/* Pasek statusów wg Twojej logiki */}
-      <div className={`hidden min-h-0 min-w-0 shrink-0 flex-col gap-2 border-r border-slate-200 bg-slate-50 lg:flex ${isStatusPanelCollapsed ? "w-14" : "w-[260px]"}`}>
-         <div className="p-4 flex justify-between items-center text-[10px] font-bold text-slate-400 tracking-wider">
-            STATUS PANELU
-            <button onClick={() => setIsStatusPanelCollapsed((v) => !v)} className="text-slate-400 hover:text-slate-600 bg-white p-1 rounded-md border border-slate-200 shadow-sm transition-colors">
-              <ChevronLeft className={`h-4 w-4 transition-transform ${isStatusPanelCollapsed ? "rotate-180" : ""}`} />
-            </button>
-         </div>
-         
-         {!isStatusPanelCollapsed && (
-           <div className="px-4 pb-2">
-              <div className="relative">
-                <Search className="absolute left-2.5 top-2 text-slate-400" size={16} />
-                <input type="text" placeholder="Szukaj statusu..." value={sidebarSearch} onChange={e => setSidebarSearch(e.target.value)} className="w-full pl-9 pr-3 py-1.5 text-sm border border-slate-300 rounded-md outline-none focus:border-blue-500 bg-white" />
-              </div>
-           </div>
-         )}
-         
-         <div className="flex-1 overflow-y-auto pb-4">
+      <div className={`hidden min-h-0 min-w-0 shrink-0 flex-col border-r border-slate-200 bg-white lg:flex ${isStatusPanelCollapsed ? "w-14" : "w-[260px]"}`}>
+         <div className="flex min-h-0 flex-1 flex-col overflow-y-auto p-2">
            <OrderStatusSidebar
               warehouseId={orderFulfillmentWhId}
               panelSummary={panelSummary}
@@ -1279,6 +1260,7 @@ export default function OrderDetailPage() {
               chromeVariant="sellasist"
               collapsed={isStatusPanelCollapsed}
               parentScrollContainer
+              onToggleCollapsed={() => setIsStatusPanelCollapsed((v) => !v)}
             />
          </div>
       </div>
