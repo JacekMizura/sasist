@@ -109,7 +109,7 @@ import { OrderDetailHeaderBar } from "../../components/orders/OrderDetailHeaderB
 import { OrderDetailSummaryTab } from "../../components/orders/OrderDetailSummaryTab";
 import { WmsOperationTimesKpiPanel } from "../../components/orders/WmsOperationTimesKpiPanel";
 import { DETAIL_TABS, type DetailTabId } from "../../components/orders/orderDetailTabs";
-import { odMainMaxWidthClass } from "../../components/orders/orderDetailUiTokens";
+import { odMainHorizontalPadClass, odMainMaxWidthClass } from "../../components/orders/orderDetailUiTokens";
 import {
   type OrderDetail,
   type OrderItemRow,
@@ -1312,7 +1312,7 @@ export default function OrderDetailPage() {
           shippingLabel={shippingLabel}
         />
 
-        <div className="flex-1 overflow-auto bg-white px-4 py-3">
+        <div className={`flex-1 overflow-auto bg-white py-3 ${odMainHorizontalPadClass}`}>
           <div className="w-full">
             {activeTab === "summary" ? (
               <OrderDetailSummaryTab

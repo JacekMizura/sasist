@@ -17,7 +17,7 @@ import { OrderDetailPrimaryStatusDropdown } from "./OrderDetailPrimaryStatusDrop
 import { OrderDetailProcessStatusRow } from "./OrderDetailProcessStatusRow";
 import { OrderUiStatusConfigRowPresent } from "./orderList/OrderUiStatusConfigRowPresent";
 import { ORDERS_PANEL_GROUP_LABELS } from "./OrderStatusSidebar";
-import { odHeaderIconBtnClass } from "./orderDetailUiTokens";
+import { odHeaderIconBtnClass, odMainHorizontalPadClass, odMainMaxWidthClass } from "./orderDetailUiTokens";
 import { DETAIL_TABS, type DetailTabId } from "./orderDetailTabs";
 import type { OrderDetail } from "./orderDetailPageTypes";
 import { patchOrderUiStatus } from "../../api/orderUiStatusApi";
@@ -102,7 +102,7 @@ export function OrderDetailHeaderBar({
   shippingLabel,
 }: Props) {
   return (
-    <div className={`mx-auto w-full max-w-[1680px] px-4 pb-0 pt-3 sm:px-5`}>
+    <div className={`${odMainMaxWidthClass} ${odMainHorizontalPadClass} pb-0 pt-3`}>
         <nav className="mb-3 flex flex-wrap items-center gap-1.5 text-sm" aria-label="Ścieżka nawigacji">
           <Link to="/dashboard" className="inline-flex items-center gap-1 font-medium text-slate-500 transition hover:text-slate-800">
             <Home className="h-4 w-4 shrink-0" strokeWidth={2} aria-hidden />

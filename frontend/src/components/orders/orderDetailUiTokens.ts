@@ -43,6 +43,10 @@ export const odMetaChipClass =
   "inline-flex items-center rounded border border-slate-300 bg-slate-50 px-2 py-1 text-sm text-slate-600";
 
 /**
- * Content width: readable on 1080p, denser on QHD/ultrawide without sparse infinite stretch.
+ * Main workspace width next to the status sidebar.
+ * Left-aligned (no mx-auto) so content sits close to the panel; soft ultrawide cap.
  */
-export const odMainMaxWidthClass = "mx-auto w-full max-w-[1680px]";
+export const odMainMaxWidthClass = "w-full max-w-[2400px]";
+
+/** Horizontal inset for order-detail chrome (header + scroll body) — tight on the sidebar side. */
+export const odMainHorizontalPadClass = "pl-2 pr-4 sm:pl-3 sm:pr-5";
