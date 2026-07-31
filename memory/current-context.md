@@ -2,9 +2,8 @@
 
 ## Active
 
-Order Card — zakładka **Produkty i magazyn** polish:
+Order Card — zakładka **Logi** (UX only):
 
-- Usunięty kafelek „Braki z WMS / Przejdź do WMS”
-- Historia: max 10 + „Pokaż więcej”; Spakuj pierwsze w toolbarze
-- Lokalizacje: qty w `(…)`, max 3 + expand; większy odstęp pick/pack i wartość/ilość
-- Miniatura rozciągnięta na wysokość bloku tytułu+metryk; Cena netto + Cena brutto obok siebie
+- Journal layout: nagłówek + szukaj/Filtruj + sort + tabela + paginacja
+- Kolumny: Czas i status | Wykonawca | Zdarzenie | Efekt/komunikat
+- Badge statusów, czerwone tło błędów, filtry API (severity/daty) bez zmian backendu

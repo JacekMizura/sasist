@@ -1472,12 +1472,12 @@ export default function OrderDetailPage() {
             ) : null}
 
             {activeTab === "logs" ? (
-              <div className={`${odMainMaxWidthClass} mt-2 rounded-md border border-slate-200/70 bg-white p-3`}>
+              <div className="mt-1 w-full max-w-none">
                 <ActivityLogPanel
                   objectType="order"
                   objectId={order.id}
                   defaultCollapsed={false}
-                  className="mt-0 border-t-0 pt-0"
+                  className="mt-0"
                 />
               </div>
             ) : (

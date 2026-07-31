@@ -1,3 +1,8 @@
+## 2026-07-24 — Logi: journal UX pod mockup
+
+- Lekka tabela (czas+status, wykonawca, zdarzenie, efekt); sort newest/oldest; paginacja
+- Szukaj + Filtruj (severity/daty przez istniejące parametry API); bez zmian backend/logiki
+
 ## 2026-07-24 — Produkty i magazyn: karty 1:1 mockup (UX only)
 
 - Lista → osobne karty (thumb contain, meta, metryki, wartość, kebab); zestawy „Zestaw zawiera”
