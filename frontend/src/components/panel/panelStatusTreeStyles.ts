@@ -85,7 +85,7 @@ export function panelTreeStatusRowClass(active: boolean): string {
 
 /** Meta (Wszystkie / Bez etykiety) — bez paska, lekki wiersz + badge. */
 export function panelTreeMetaRowClass(active: boolean): string {
-  return `flex w-full items-center gap-2 rounded-lg px-1 py-1.5 text-left text-[13px] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-blue-500 ${
+  return `flex w-full items-center gap-2 rounded-lg px-0.5 py-1.5 text-left text-[13px] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-blue-500 ${
     active
       ? "font-semibold text-slate-900"
       : "font-semibold text-slate-700 hover:bg-slate-50"
@@ -104,17 +104,19 @@ export function panelTreeOperationalRowClass(active: boolean): string {
 /** Odstęp między głównymi grupami — wyraźna separacja jak na mockupie. */
 export const PANEL_TREE_GROUP_SECTION_CLASS = "mt-5 first:mt-3";
 
-/** Kontener pod grupą główną. */
-export const PANEL_TREE_CHILDREN_CLASS = "mt-2 space-y-1.5";
+/** Kontener pod grupą główną — zwarty odstęp do pierwszego statusu. */
+export const PANEL_TREE_CHILDREN_CLASS = "mt-1 space-y-1.5";
 
-/** Status bez podgrupy — lekki wcięcie. */
-export const PANEL_TREE_LEVEL1_INDENT_CLASS = "pl-1";
+/**
+ * Wspólna lewa linia: Wszystkie / grupy / podgrupy / kafelki — bez dodatkowego pl.
+ */
+export const PANEL_TREE_LEVEL1_INDENT_CLASS = "";
 
-export const PANEL_TREE_GROUP_STATUS_LIST_CLASS = `space-y-1.5 ${PANEL_TREE_LEVEL1_INDENT_CLASS}`;
+export const PANEL_TREE_GROUP_STATUS_LIST_CLASS = `space-y-1.5 ${PANEL_TREE_LEVEL1_INDENT_CLASS}`.trim();
 
 /** Nagłówek podgrupy — mały uppercase, szary (nie wygląda jak status). */
 export const PANEL_TREE_SUBGROUP_SECTION_CLASS =
-  "mb-1 mt-3 flex w-full items-center gap-1.5 pr-1 pl-1";
+  "mb-0 mt-2.5 flex w-full items-center gap-1.5 pr-1 pl-0.5";
 
 export const PANEL_TREE_SUBGROUP_TOGGLE_CLASS =
   "flex w-4 shrink-0 items-center justify-center rounded text-slate-300 transition-colors hover:text-slate-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-blue-500";
@@ -124,8 +126,8 @@ export const PANEL_TREE_SUBGROUP_TITLE_CLASS =
 
 export const PANEL_TREE_SUBGROUP_LINE_CLASS = "h-px min-w-[1rem] flex-1 bg-transparent";
 
-/** Statusy w podgrupie. */
-export const PANEL_TREE_SUBGROUP_CHILDREN_CLASS = "space-y-1.5 pl-2";
+/** Statusy w podgrupie — ta sama lewa krawędź co nagłówki grup. */
+export const PANEL_TREE_SUBGROUP_CHILDREN_CLASS = "mt-0.5 space-y-1.5";
 
 /** Nagłówek sekcji Operacyjne (zwroty). */
 export const PANEL_TREE_OPERATIONAL_SECTION_HEADER_CLASS =
@@ -163,7 +165,7 @@ export const PANEL_TREE_STATUS_ROW_IDLE_CLASS =
   "border-slate-200 font-medium text-slate-700 hover:bg-slate-50";
 
 export const PANEL_TREE_META_ROW_CLASS =
-  "flex w-full items-center gap-2 rounded-lg px-1 py-1.5 text-left text-[13px]";
+  "flex w-full items-center gap-2 rounded-lg px-0.5 py-1.5 text-left text-[13px]";
 
 export const PANEL_TREE_META_ROW_ACTIVE_CLASS = "font-semibold text-slate-900";
 

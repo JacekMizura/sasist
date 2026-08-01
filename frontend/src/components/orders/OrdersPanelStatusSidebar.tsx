@@ -290,7 +290,7 @@ export function OrdersPanelStatusSidebar({
 
   const expandedRootClass = embedded
     ? "w-full min-w-0 max-w-full shrink-0 overflow-x-hidden"
-    : `w-full min-w-0 max-w-full shrink-0 overflow-x-hidden p-2 ${stickySelf} ${
+    : `w-full min-w-0 max-w-full shrink-0 overflow-x-hidden py-2 pr-2 pl-0.5 ${stickySelf} ${
         sellasist ? PANEL_SIDEBAR_WIDTH_LG_CLASS : panelListStatusSidebarWidthLg
       } ${sellasistScroll} rounded-xl border border-slate-200/90 bg-white`;
 

@@ -131,7 +131,7 @@ export function ComplaintsListStatusSidebar({
 
   const expandedRootClass = embedded
     ? "w-full min-w-0 max-w-full shrink-0 overflow-x-hidden"
-    : `w-full min-w-0 max-w-full shrink-0 overflow-x-hidden p-2 lg:sticky lg:top-4 ${
+    : `w-full min-w-0 max-w-full shrink-0 overflow-x-hidden py-2 pr-2 pl-0.5 lg:sticky lg:top-4 ${
         sellasist ? PANEL_SIDEBAR_WIDTH_LG_CLASS : panelListStatusSidebarWidthLg
       } ${sellasistScroll} rounded-xl border border-slate-200/90 bg-white`;
 

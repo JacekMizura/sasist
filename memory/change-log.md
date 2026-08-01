@@ -1,3 +1,8 @@
+## 2026-08-01 — Panel statusów: wyrównanie lewej krawędzi
+
+- Mniejszy lewy padding powłoki (`pl-0.5`); bez wcięć `pl` na listach/podgrupach
+- Wspólna linia: Wszystkie / grupy / podgrupy / kafelki; ciaśniejszy mt grupa→status
+
 ## 2026-08-01 — Zwroty/reklamacje UX polish + formularz klienta
 
 - Dropdown bez pustego stanu / WMS; Formularz zwrotu → ekran klienta

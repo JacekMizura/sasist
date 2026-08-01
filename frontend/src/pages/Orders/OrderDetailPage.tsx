@@ -1236,7 +1236,7 @@ export default function OrderDetailPage() {
     <div className="min-h-screen flex font-sans text-slate-800 bg-white">
       {/* Pasek statusów wg Twojej logiki */}
       <div className={`hidden min-h-0 min-w-0 shrink-0 flex-col border-r border-slate-200 bg-white lg:flex ${isStatusPanelCollapsed ? "w-14" : "w-[260px]"}`}>
-         <div className="flex min-h-0 flex-1 flex-col overflow-y-auto p-2">
+         <div className="flex min-h-0 flex-1 flex-col overflow-y-auto py-2 pr-2 pl-0.5">
            <OrderStatusSidebar
               warehouseId={orderFulfillmentWhId}
               panelSummary={panelSummary}
