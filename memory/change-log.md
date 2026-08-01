@@ -1,3 +1,9 @@
+## 2026-08-01 — Formularz zwrotu klienta: nowy layout
+
+- Osobna strona 70/30, karty produktów, sticky podsumowanie; bez tabel
+- „Dodaj do zwrotu” → zielony stan + pola; IBAN dopiero przy przelewie
+- Operator `OrderCaseCreateView` nietknięty
+
 ## 2026-08-01 — Panel statusów: wyrównanie lewej krawędzi
 
 - Mniejszy lewy padding powłoki (`pl-0.5`); bez wcięć `pl` na listach/podgrupach
