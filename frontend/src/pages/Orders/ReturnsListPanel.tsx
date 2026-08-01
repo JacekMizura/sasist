@@ -29,6 +29,11 @@ import { ReturnListFiltersPanel } from "../../components/returns/returnList/Retu
 import { ReturnsListTable } from "../../components/returns/returnList/ReturnsListTable";
 import { ReturnsListToolbar } from "../../components/returns/returnList/ReturnsListToolbar";
 import {
+  RETURN_LIST_DEFAULT_TABLE_COLUMN_ORDER,
+  RETURN_LIST_TABLE_COLUMN_CATALOG,
+} from "../../components/returns/returnList/returnListColumnCatalog";
+import { ColumnSelectorModal } from "../../components/columnPicker";
+import {
   buildReturnListViewAdapter,
   listViewActionsFromHook,
   readReturnListPanelFilter,
@@ -164,6 +169,8 @@ export default function ReturnsListPanel() {
     toggleFiltersPanel,
     filterFieldOrder,
     setFilterFieldOrder,
+    columnOrder,
+    persistColumnOrder,
     extensions,
     setExtension,
   } = listView;
@@ -192,6 +199,7 @@ export default function ReturnsListPanel() {
   const [bulkSelectMenuKey, setBulkSelectMenuKey] = useState(0);
   const openFilterFieldsRef = useRef<(() => void) | null>(null);
   const [statusDrawerOpen, setStatusDrawerOpen] = useState(false);
+  const [columnPickerOpen, setColumnPickerOpen] = useState(false);
 
   const effectiveWarehouseId = appliedFilters.listWarehouseId ?? warehouseId ?? null;
   const activeFilterLabel = useMemo(
@@ -554,6 +562,8 @@ export default function ReturnsListPanel() {
             filtersExpanded={filtersExpanded}
             onToggleFilters={toggleFiltersExpanded}
             openFilterFieldsRef={openFilterFieldsRef}
+            onColumnsClick={() => setColumnPickerOpen(true)}
+            columnsDisabled={false}
           />
 
           {effectiveWarehouseId == null && (
@@ -599,6 +609,7 @@ export default function ReturnsListPanel() {
             loading={loading}
             effectiveWarehouseId={effectiveWarehouseId}
             panelSummary={panelSummary}
+            columnOrder={columnOrder}
             bulkBusy={bulkBusy}
             bulkToolbarDisabled={bulkToolbarDisabled}
             bulkSelectMenuKey={bulkSelectMenuKey}
@@ -650,6 +661,16 @@ export default function ReturnsListPanel() {
           if (!bulkSubmitting) setBulkConfirm(null);
         }}
         onConfirm={() => void runBulkReturnStatusChange()}
+      />
+
+      <ColumnSelectorModal
+        open={columnPickerOpen}
+        onClose={() => setColumnPickerOpen(false)}
+        title="Wybór kolumn"
+        catalog={RETURN_LIST_TABLE_COLUMN_CATALOG}
+        selectedOrder={columnOrder}
+        onChange={persistColumnOrder}
+        defaultOrder={RETURN_LIST_DEFAULT_TABLE_COLUMN_ORDER}
       />
 
       {toast ? (

@@ -38,10 +38,12 @@ type ColumnSelectorModalProps = {
   title?: string;
   catalog: readonly ColumnCatalogItem[];
   selectedOrder: string[];
-  /** Called on every change — persist here (e.g. localStorage). */
+  /** Called on every change — persist here (e.g. localStorage / listView autosave). */
   onChange: (nextOrder: string[]) => void;
   selectedColumnLabel?: string;
   availableColumnLabel?: string;
+  /** Domyślna kolejność — przycisk „Przywróć domyślne”. */
+  defaultOrder?: readonly string[];
 };
 
 function labelFor(catalog: readonly ColumnCatalogItem[], id: string): string {
@@ -182,6 +184,7 @@ export function ColumnSelectorModal({
   onChange,
   selectedColumnLabel = "Widoczne",
   availableColumnLabel = "Dostępne",
+  defaultOrder,
 }: ColumnSelectorModalProps) {
   const selectableCatalog = useMemo(() => userCatalogOnly([...catalog]), [catalog]);
   const catalogIds = useMemo(() => selectableCatalog.map((c) => c.id), [selectableCatalog]);
@@ -202,6 +205,11 @@ export function ColumnSelectorModal({
     },
     [onChange],
   );
+
+  const restoreDefaults = useCallback(() => {
+    const next = (defaultOrder ?? catalogIds).filter((id) => catalogIds.includes(id));
+    pushChange(next.length > 0 ? next : [...catalogIds]);
+  }, [catalogIds, defaultOrder, pushChange]);
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
 
@@ -314,7 +322,10 @@ export function ColumnSelectorModal({
             </div>
           </div>
         </DndContext>
-        <div className="flex flex-wrap justify-end gap-2 border-t border-slate-100 px-4 py-3 sm:px-5 sm:py-4">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 px-4 py-3 sm:px-5 sm:py-4">
+          <button type="button" onClick={restoreDefaults} className={filterToolbarBtnSecondary}>
+            Przywróć domyślne
+          </button>
           <button type="button" onClick={onClose} className={filterToolbarBtnSecondary}>
             Zamknij
           </button>

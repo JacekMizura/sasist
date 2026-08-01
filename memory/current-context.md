@@ -2,11 +2,9 @@
 
 ## Active
 
-Visual rebuild of Returns detail widgets (configurator unchanged):
-- Shared `ReturnDetailWidgetShell` cards
-- Product cards + segmented decisions; KPI summary; timeline journal; WMS widget hidden when `DOCUMENTS_ONLY`
+Lista zwrotów: Status = `PanelTreeStatusItem` (SSOT z lewego panelu); usunięty przycisk WMS; „Wybór kolumn” działa + persist + Przywróć domyślne.
 
 ## Constraints
 
-- No configurator / business-logic changes
-- Widgets still driven by `detail_layout`
+- Nie duplikować rendererów statusów panelu
+- Konfigurator detail bez zmian w tym wątku

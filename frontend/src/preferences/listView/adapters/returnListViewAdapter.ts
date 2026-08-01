@@ -2,6 +2,10 @@ import {
   DEFAULT_APPLIED_RETURN_LIST_FILTERS,
   type AppliedReturnListFilters,
 } from "../../../components/returns/returnList/returnListFilterTypes";
+import {
+  RETURN_LIST_DEFAULT_TABLE_COLUMN_ORDER,
+  RETURN_LIST_USER_COLUMN_IDS,
+} from "../../../components/returns/returnList/returnListColumnCatalog";
 import { buildListViewAdapterConfig, factoryPayload, mergeFilterDefaults } from "../listViewAdapterFactory";
 import type { ListViewAdapterConfig } from "../listViewStateTypes";
 
@@ -22,7 +26,6 @@ const FILTER_FIELD_IDS = [
 ] as const;
 
 const DEFAULT_VISIBLE = ["search", "return_status", "panel_status_multi", "date_range"] as const;
-const PLACEHOLDER_COLUMNS = ["id"] as const;
 
 function deserializeReturnFilters(raw: unknown, defaults: AppliedReturnListFilters): AppliedReturnListFilters {
   const merged = mergeFilterDefaults(defaults, raw);
@@ -45,14 +48,14 @@ export function buildReturnListViewAdapter(tenantId: number): ListViewAdapterCon
     tenantId,
     filterDefaults: DEFAULT_APPLIED_RETURN_LIST_FILTERS,
     createFactoryDefault: () =>
-      factoryPayload(DEFAULT_APPLIED_RETURN_LIST_FILTERS, PLACEHOLDER_COLUMNS, DEFAULT_VISIBLE, {
+      factoryPayload(DEFAULT_APPLIED_RETURN_LIST_FILTERS, RETURN_LIST_DEFAULT_TABLE_COLUMN_ORDER, DEFAULT_VISIBLE, {
         sort: { key: "created_at", dir: "desc" },
         filtersExpanded: false,
         extensions: { panelFilter: "all", statusPanelCollapsed: false },
       }),
     columnCatalog: {
-      allowedIds: PLACEHOLDER_COLUMNS,
-      defaultOrder: PLACEHOLDER_COLUMNS,
+      allowedIds: RETURN_LIST_USER_COLUMN_IDS,
+      defaultOrder: RETURN_LIST_DEFAULT_TABLE_COLUMN_ORDER,
     },
     filterFieldCatalog: {
       ids: FILTER_FIELD_IDS,

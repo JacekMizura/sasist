@@ -1143,6 +1143,7 @@ export default function OrderList() {
             catalog={ORDER_LIST_TABLE_COLUMN_CATALOG}
             selectedOrder={columnOrder}
             onChange={persistColumnOrder}
+            defaultOrder={ORDER_LIST_DEFAULT_TABLE_COLUMN_ORDER}
           />
         </div>
       </div>

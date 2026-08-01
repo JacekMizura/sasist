@@ -1,59 +1,55 @@
 import type { CSSProperties, ReactNode } from "react";
 import { MoreHorizontal } from "lucide-react";
 
-import { panelSidebarSubRowStyleRich } from "../../../utils/panelSidebarHierarchy";
 import type { PanelConfigurableUiStatusBrief } from "../../../utils/panelListStatusBriefMappers";
+import { PanelTreeStatusItem } from "../../panel/PanelTreeStatusItem";
+import { getPanelStatusWmsMarkers } from "../../orders/panelStatusWmsChips";
+import type { OrderUiStatusWithCount } from "../../../types/orderUiStatus";
 import { moduleListRowActionsRevealClass, moduleListTdClass } from "./moduleListTableTokens";
 
-export function moduleListStatusPillStyle(brief: PanelConfigurableUiStatusBrief): CSSProperties {
-  const base = panelSidebarSubRowStyleRich(brief, brief.main_group, false, {
-    barWidthPx: 0,
-    inlineLabel: true,
-  });
-  return { ...base, borderLeft: "none" };
+/** @deprecated Prefer {@link PanelTreeStatusItem}. */
+export function moduleListStatusPillStyle(_brief: PanelConfigurableUiStatusBrief): CSSProperties {
+  return {};
 }
 
 type ModuleListStatusPillProps = {
   status: PanelConfigurableUiStatusBrief | null;
-  /** Etykieta gdy brak statusu. */
   emptyLabel?: string;
-  /** Opcjonalna ikona ✓ dla statusów terminalnych. */
   terminal?: boolean;
   terminalPositive?: boolean;
 };
 
-export function ModuleListStatusPill({
-  status,
-  emptyLabel = "Bez etykiety",
-  terminal = false,
-  terminalPositive = true,
-}: ModuleListStatusPillProps) {
+/**
+ * Kolumna Status na listach — ten sam komponent co lewy Panel Statusów ({@link PanelTreeStatusItem}).
+ */
+export function ModuleListStatusPill({ status, emptyLabel = "Bez etykiety" }: ModuleListStatusPillProps) {
   if (!status) {
     return (
-      <span className="inline-flex rounded-full border border-dashed border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-medium text-slate-400">
+      <span className="inline-flex rounded-lg border border-dashed border-slate-200 bg-white px-2.5 py-2 text-[12px] font-medium text-slate-400">
         {emptyLabel}
       </span>
     );
   }
 
-  const label = status.name.trim().toUpperCase();
+  const markers = getPanelStatusWmsMarkers(
+    { name: status.name } as OrderUiStatusWithCount,
+    status.main_group,
+  );
 
   return (
-    <span
-      className="inline-flex max-w-[min(100%,14rem)] items-center gap-0.5 rounded-full border px-2.5 py-1 text-xs font-medium"
-      style={moduleListStatusPillStyle(status)}
-      title={status.name}
-    >
-      {terminal ? (
-        <span
-          className={`shrink-0 ${terminalPositive ? "text-emerald-800/80" : "text-slate-600/85"}`}
-          aria-hidden
-        >
-          ✓
-        </span>
-      ) : null}
-      <span className="min-w-0 truncate">{label}</span>
-    </span>
+    <PanelTreeStatusItem
+      compact
+      name={status.name}
+      mainGroup={status.main_group}
+      colors={{
+        color: status.color,
+        badge_color: status.badge_color,
+        background_color: status.background_color,
+        text_color: status.text_color,
+      }}
+      imageUrl={status.image_url}
+      markers={markers}
+    />
   );
 }
 

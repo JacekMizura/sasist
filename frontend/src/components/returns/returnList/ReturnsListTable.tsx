@@ -1,6 +1,6 @@
-import { memo } from "react";
+import { memo, useMemo } from "react";
 import { Link } from "react-router-dom";
-import { Eye, ExternalLink, Trash2 } from "lucide-react";
+import { Eye, Trash2 } from "lucide-react";
 
 import {
   OperationalActionButton,
@@ -27,13 +27,17 @@ import {
   moduleListChannelBadgeClass,
   moduleListChannelBadgeEmptyClass,
 } from "../../listPage/moduleList";
-import { WMS_ROUTES } from "../../../pages/wms/wmsRoutes";
 import { resolveDamageMediaUrl } from "../../../utils/resolveDamageMediaUrl";
 import { displayWarehouseDocumentNumber } from "../../../utils/warehouseDocumentNumberDisplay";
 import { returnUiStatusBriefToPanelBrief, returnWorkflowStatusToPanelBrief } from "../../../utils/panelListStatusBriefMappers";
 import type { OrderUiPanelSubgroupRead, OrderUiStatusPanelSummary } from "../../../types/orderUiStatus";
 import type { ReturnUiStatusPanelSummary, WmsReturnListItem } from "../../../types/wmsReturn";
 import type { PanelBulkSelectionMode } from "../../../hooks/usePanelListBulkSelection";
+import {
+  RETURN_LIST_DEFAULT_TABLE_COLUMN_ORDER,
+  RETURN_LIST_TABLE_COLUMN_CATALOG,
+  migrateReturnListColumnIds,
+} from "./returnListColumnCatalog";
 
 const TH = moduleListThClass;
 const TD = moduleListTdClass;
@@ -135,17 +139,11 @@ function isReturnsListRowArchivedTone(r: WmsReturnListItem): boolean {
 const ReturnsListRowStatusBadges = memo(function ReturnsListRowStatusBadges({ r }: { r: WmsReturnListItem }) {
   const wfBrief = returnWorkflowStatusToPanelBrief(r.status);
   const uiBrief = r.ui_status ? returnUiStatusBriefToPanelBrief(r.ui_status) : null;
-  const uiTerminal = r.ui_status?.main_group === "DONE";
   const wfTitle = wfBrief.name !== uiBrief?.name ? `Workflow magazynowy: ${wfBrief.name}` : undefined;
 
   return (
     <div className="flex flex-col gap-1" aria-label="Status zwrotu" title={wfTitle}>
-      <ModuleListStatusPill
-        status={uiBrief}
-        terminal={uiTerminal}
-        terminalPositive={uiTerminal}
-        emptyLabel="Bez etykiety"
-      />
+      <ModuleListStatusPill status={uiBrief} emptyLabel="Bez etykiety" />
     </div>
   );
 });
@@ -154,15 +152,93 @@ type RowProps = {
   r: WmsReturnListItem;
   selected: boolean;
   rowBusy: boolean;
+  columnOrder: string[];
   onOpenDetail: (id: number) => void;
   onToggleSelect: (id: string, shiftKey: boolean) => void;
   onDelete: (id: number) => void;
 };
 
+function renderReturnUserCell(
+  colId: string,
+  ctx: {
+    r: WmsReturnListItem;
+    cust: string;
+    srcDisp: string;
+    srcIsEmpty: boolean;
+    displayLines: Array<{
+      quantity: number;
+      name?: string | null;
+      ean?: string | null;
+      sku?: string | null;
+      image_url?: string;
+    }>;
+  },
+) {
+  const { r, cust, srcDisp, srcIsEmpty, displayLines } = ctx;
+  switch (colId) {
+    case "number":
+      return (
+        <td key={colId} className={`${TD} min-w-[11rem]`}>
+          <div
+            className="font-medium text-slate-900 hover:underline"
+            title={[returnTypeBadgeLabel(r.return_type), r.status?.name].filter(Boolean).join(" · ")}
+          >
+            #{displayWarehouseDocumentNumber(r.rmz_number) || r.rmz_number}
+          </div>
+          <div className="mt-1 text-xs text-slate-400">{formatReturnDate(r.created_at)}</div>
+          {r.warehouse_document_id != null && r.warehouse_document_number ? (
+            <Link
+              to={`/wms/putaway/${r.warehouse_document_id}`}
+              className="mt-1 block text-xs font-medium text-slate-600 hover:underline"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {displayWarehouseDocumentNumber(r.warehouse_document_number)}
+            </Link>
+          ) : null}
+        </td>
+      );
+    case "status":
+      return (
+        <td key={colId} className={`${TD} min-w-[10rem]`}>
+          <ReturnsListRowStatusBadges r={r} />
+        </td>
+      );
+    case "products":
+      return (
+        <td key={colId} className={`${TD} min-w-[14rem] whitespace-normal !py-3`}>
+          <ReturnsListProductCell lines={displayLines} />
+        </td>
+      );
+    case "customer":
+      return (
+        <td key={colId} className={`${TD} min-w-[10rem] whitespace-normal break-words text-slate-600`}>
+          {cust}
+        </td>
+      );
+    case "channel":
+      return (
+        <td key={colId} className={TD}>
+          <span className={srcIsEmpty ? moduleListChannelBadgeEmptyClass : moduleListChannelBadgeClass}>
+            {srcIsEmpty ? "—" : srcDisp}
+          </span>
+        </td>
+      );
+    case "refund":
+      return (
+        <td key={colId} className={`${TD} text-right`}>
+          <div className="font-medium tabular-nums text-slate-900">{panelListRefundTotalPln(r)}</div>
+        </td>
+      );
+    default:
+      return null;
+  }
+}
+
 const ReturnsListTableRow = memo(function ReturnsListTableRow({
   r,
   selected,
   rowBusy,
+  columnOrder,
   onOpenDetail,
   onToggleSelect,
   onDelete,
@@ -196,39 +272,9 @@ const ReturnsListTableRow = memo(function ReturnsListTableRow({
           aria-label={`Zaznacz zwrot ${displayWarehouseDocumentNumber(r.rmz_number) || r.rmz_number}`}
         />
       </td>
-      <td className={`${TD} min-w-[11rem]`}>
-        <div
-          className="font-medium text-slate-900 hover:underline"
-          title={[returnTypeBadgeLabel(r.return_type), r.status?.name].filter(Boolean).join(" · ")}
-        >
-          #{displayWarehouseDocumentNumber(r.rmz_number) || r.rmz_number}
-        </div>
-        <div className="mt-1 text-xs text-slate-400">{formatReturnDate(r.created_at)}</div>
-        {r.warehouse_document_id != null && r.warehouse_document_number ? (
-          <Link
-            to={`/wms/putaway/${r.warehouse_document_id}`}
-            className="mt-1 block text-xs font-medium text-slate-600 hover:underline"
-            onClick={(e) => e.stopPropagation()}
-          >
-            {displayWarehouseDocumentNumber(r.warehouse_document_number)}
-          </Link>
-        ) : null}
-      </td>
-      <td className={`${TD} min-w-[10rem]`}>
-        <ReturnsListRowStatusBadges r={r} />
-      </td>
-      <td className={`${TD} min-w-[14rem] whitespace-normal !py-3`}>
-        <ReturnsListProductCell lines={displayLines} />
-      </td>
-      <td className={`${TD} min-w-[10rem] whitespace-normal break-words text-slate-600`}>{cust}</td>
-      <td className={TD}>
-        <span className={srcIsEmpty ? moduleListChannelBadgeEmptyClass : moduleListChannelBadgeClass}>
-          {srcIsEmpty ? "—" : srcDisp}
-        </span>
-      </td>
-      <td className={`${TD} text-right`}>
-        <div className="font-medium tabular-nums text-slate-900">{panelListRefundTotalPln(r)}</div>
-      </td>
+      {columnOrder.map((colId) =>
+        renderReturnUserCell(colId, { r, cust, srcDisp, srcIsEmpty, displayLines }),
+      )}
       <ModuleListRowActionsCell ariaLabel="Akcje zwrotu">
         <OperationalActionColumn
           layout="stack"
@@ -242,17 +288,6 @@ const ReturnsListTableRow = memo(function ReturnsListTableRow({
               onClick={(e) => e.stopPropagation()}
             >
               <Eye className="text-slate-600" strokeWidth={2} aria-hidden />
-            </OperationalActionLink>,
-            <OperationalActionLink
-              key="wms"
-              to={WMS_ROUTES.returnsProcess(r.id)}
-              target="_blank"
-              rel="noopener noreferrer"
-              title="Terminal WMS (nowa karta)"
-              aria-label="Obsłuż zwrot w terminalu WMS"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <ExternalLink className="text-slate-600" strokeWidth={2} aria-hidden />
             </OperationalActionLink>,
             <OperationalActionButton
               key="del"
@@ -276,10 +311,12 @@ const ReturnsListTableRow = memo(function ReturnsListTableRow({
 });
 
 export type ReturnsListTableProps = {
+  rows: WmsReturnListItem[];
   loading: boolean;
   effectiveWarehouseId: number | null;
   panelSummary: ReturnUiStatusPanelSummary | null;
   panelSubgroups?: OrderUiPanelSubgroupRead[] | null;
+  columnOrder?: string[];
   bulkBusy: boolean;
   bulkToolbarDisabled: boolean;
   bulkSelectMenuKey: number;
@@ -299,12 +336,19 @@ export type ReturnsListTableProps = {
   resolveBulkReturnStatusLabel: (statusVal: string) => string;
 };
 
+function thClassForColumn(colId: string): string {
+  if (colId === "products") return `${TH} w-1/3`;
+  if (colId === "refund") return `${TH} text-right`;
+  return TH;
+}
+
 function ReturnsListTableInner({
   rows,
   loading,
   effectiveWarehouseId,
   panelSummary,
   panelSubgroups,
+  columnOrder: columnOrderProp,
   bulkBusy,
   bulkToolbarDisabled,
   bulkSelectMenuKey,
@@ -323,6 +367,16 @@ function ReturnsListTableInner({
   onDeleteSingle,
   resolveBulkReturnStatusLabel,
 }: ReturnsListTableProps) {
+  const columnOrder = useMemo(() => {
+    const migrated = migrateReturnListColumnIds(columnOrderProp ?? []);
+    return migrated.length > 0 ? migrated : [...RETURN_LIST_DEFAULT_TABLE_COLUMN_ORDER];
+  }, [columnOrderProp]);
+
+  const headerLabel = useMemo(() => {
+    const m = new Map(RETURN_LIST_TABLE_COLUMN_CATALOG.map((c) => [c.id, c.label]));
+    return (id: string) => m.get(id) ?? id;
+  }, []);
+
   if (loading) {
     return <div className="py-12 text-center text-sm text-slate-500">Ładowanie…</div>;
   }
@@ -383,12 +437,11 @@ function ReturnsListTableInner({
                 <th className={`${TH} w-12 text-center`}>
                   <span className="sr-only">Zaznacz</span>
                 </th>
-                <th className={TH}>Zwrot / ID</th>
-                <th className={TH}>Status</th>
-                <th className={`${TH} w-1/3`}>Produkty</th>
-                <th className={TH}>Klient</th>
-                <th className={TH}>Kanał</th>
-                <th className={`${TH} text-right`}>Wartość</th>
+                {columnOrder.map((colId) => (
+                  <th key={colId} className={thClassForColumn(colId)}>
+                    {headerLabel(colId)}
+                  </th>
+                ))}
                 <th className={`${TH} text-center`}>Akcje</th>
               </tr>
             </thead>
@@ -399,6 +452,7 @@ function ReturnsListTableInner({
                   r={r}
                   selected={isRowSelected(String(r.id))}
                   rowBusy={bulkBusy}
+                  columnOrder={columnOrder}
                   onOpenDetail={onOpenDetail}
                   onToggleSelect={toggleOne}
                   onDelete={onDeleteSingle}

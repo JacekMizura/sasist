@@ -7,10 +7,10 @@ import type {
   OrderUiStatusWithCount,
 } from "../../types/orderUiStatus";
 import { getPanelStatusWmsMarkers, panelStatusCollapsedTitle } from "./panelStatusWmsChips";
-import { PanelStatusWmsIconColumn } from "../panel/PanelStatusWmsIconColumn";
 import { PanelSidebarSubgroupCollapsible } from "../panel/PanelSidebarSubgroupCollapsible";
 import { PanelTreeCount } from "../panel/PanelTreeCount";
 import { PanelTreeGroupRow } from "../panel/PanelTreeGroupRow";
+import { PanelTreeStatusItem } from "../panel/PanelTreeStatusItem";
 import { PanelStatusSidebarHeader } from "../panel/PanelStatusSidebarHeader";
 import {
   PANEL_SIDEBAR_WIDTH_LG_CLASS,
@@ -26,7 +26,6 @@ import {
   PANEL_TREE_SUBGROUP_LINE_CLASS,
   panelTreeGroupBarHex,
   panelTreeMetaRowClass,
-  panelTreeStatusBarClass,
 } from "../panel/panelStatusTreeStyles";
 import { sidebarSubStatusHex } from "../../utils/panelSidebarHierarchy";
 import { panelTreeStatusRowPresentation } from "../../utils/panelTreeStatusRowPresentation";
@@ -164,28 +163,25 @@ export function OrdersPanelStatusSidebar({
     );
 
     return (
-      <button
+      <PanelTreeStatusItem
         key={s.id}
-        type="button"
-        className={row.rowClassName}
-        style={row.rowStyle}
+        as="button"
+        name={s.name}
+        mainGroup={block.main_group}
+        colors={{
+          color: s.color,
+          badge_color: s.badge_color,
+          background_color: s.background_color,
+          text_color: s.text_color,
+        }}
+        imageUrl={s.image_url}
+        markers={markers}
+        count={s.count}
+        active={active}
+        counterColorHex={counterColorForId?.(s.id) ?? row.stripeHex}
         title={titleDetail || undefined}
         onClick={() => onPanelFilterChange({ kind: "sub", id: s.id })}
-      >
-        <PanelStatusWmsIconColumn markers={markers} />
-        <span className={panelTreeStatusBarClass(active)} style={{ backgroundColor: row.stripeHex }} aria-hidden />
-        <span className="min-w-0 flex-1 leading-snug" style={row.labelStyle}>
-          {s.name}
-        </span>
-        {s.image_url ? (
-          <img src={s.image_url} alt="" className="mt-0.5 h-4 w-4 shrink-0 rounded object-contain" />
-        ) : null}
-        <PanelTreeCount
-          value={s.count}
-          active={active}
-          colorHex={counterColorForId?.(s.id) ?? row.stripeHex}
-        />
-      </button>
+      />
     );
   };
 

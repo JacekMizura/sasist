@@ -1,3 +1,8 @@
+## 2026-08-01 — Lista zwrotów: status panelu + kolumny
+
+- Kolumna Status = `PanelTreeStatusItem` (ten sam co sidebar); bez szarych kapsuł
+- Usunięty przycisk/akcja WMS z listy; wybór kolumn DnD + autosave + Przywróć domyślne
+
 ## 2026-08-01 — Zwroty: redesign widgetów detail
 
 - Karty SaaS (`ReturnDetailWidgetShell`), produkty jako karty + segmented decyzje
