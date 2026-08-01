@@ -116,6 +116,7 @@ export function OrderHistoryTimeline({
   formatDate,
   compact,
   hideHeader = false,
+  bare = false,
   title = "Oś czasu — zdarzenia i operatorzy",
 }: {
   events: OrderHistoryTimelineEvent[];
@@ -123,10 +124,12 @@ export function OrderHistoryTimeline({
   compact?: boolean;
   /** When true, omit chrome header (parent supplies section title). */
   hideHeader?: boolean;
+  /** No outer border/card — for embedding inside another widget. */
+  bare?: boolean;
   title?: string;
 }) {
   const [expanded, setExpanded] = useState(false);
-  const shell = compact ? "shadow-none" : "shadow-sm";
+  const shell = bare ? "" : compact ? "shadow-none" : "shadow-sm";
   const headerPad = compact ? "px-2.5 py-2" : "px-3 py-2";
   const titleCls = compact
     ? "text-[10px] font-bold uppercase tracking-widest text-slate-500"
@@ -139,7 +142,13 @@ export function OrderHistoryTimeline({
   const hiddenCount = Math.max(0, events.length - HISTORY_PREVIEW_LIMIT);
 
   return (
-    <div className={`overflow-hidden rounded-lg border border-slate-200 bg-white ${shell}`}>
+    <div
+      className={
+        bare
+          ? "overflow-hidden"
+          : `overflow-hidden rounded-lg border border-slate-200 bg-white ${shell}`
+      }
+    >
       {!hideHeader ? (
         <div className={`flex items-center justify-between border-b border-slate-200/90 bg-white ${headerPad}`}>
           <div className="flex min-w-0 items-center gap-1.5">

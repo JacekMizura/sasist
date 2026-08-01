@@ -1,3 +1,10 @@
+## 2026-08-01 — Zwroty: redesign widgetów detail
+
+- Karty SaaS (`ReturnDetailWidgetShell`), produkty jako karty + segmented decyzje
+- Status badge, progress bar, timeline dziennik, KPI podsumowanie/stats
+- Terminal WMS ukrywany przy `inventory_management_mode=DOCUMENTS_ONLY`
+- Konfigurator bez zmian
+
 ## 2026-08-01 — Formularz zwrotu klienta: nowy layout
 
 - Osobna strona 70/30, karty produktów, sticky podsumowanie; bez tabel

@@ -8,11 +8,14 @@ import api from "../../api/axios";
 import {
   getWmsReturn,
   getWmsReturnsModeSettings,
+  getWmsCustomerInsights,
   finalizeWmsReturn,
 } from "../../api/wmsReturnsApi";
+import { getInventoryManagementSettings } from "../../api/inventoryManagementPolicyApi";
 import { getReturnUiStatusSummary } from "../../api/returnUiStatusApi";
 import { getOfficeReturnModuleConfig } from "../../api/returnModuleConfigApi";
 import type {
+  CustomerInsightsRead,
   ReturnUiMainGroup,
   ReturnUiStatusPanelSummary,
   ReturnStatusBrief,
@@ -22,6 +25,8 @@ import type {
   WmsReturnRead,
   WmsSettingsRead,
 } from "../../types/wmsReturn";
+import { parseShippingAddressBlock } from "../../utils/orderDetailAddress";
+import { ReturnDetailWidgetShell } from "../../components/returns/detailWidgets/ReturnDetailWidgetShell";
 import { coercePhotoUrlForDamageEntry, createDamageEntry } from "../../api/damageReportsApi";
 import { uploadDamageImageFile } from "../../api/damageUploadApi";
 import { formatRelativeAgo } from "../../utils/formatRelativeAgo";
@@ -208,11 +213,11 @@ function RejectionEvidencePanel({
 /** Panel RMZ product row — subtle left stripe + wash (decision scan). */
 function rmzLineRowShellClass(tone: "OK" | "DAMAGED" | "REJECTED" | null): string {
   const base =
-    "min-w-0 border-b border-gray-200 transition-colors duration-150 ease-in-out last:border-b-0 border-l-4";
-  if (tone === "OK") return `${base} border-l-emerald-500/85 bg-white hover:bg-slate-50/90`;
-  if (tone === "DAMAGED") return `${base} border-l-amber-500/85 bg-white hover:bg-amber-50/35`;
-  if (tone === "REJECTED") return `${base} border-l-rose-500/85 bg-white hover:bg-rose-50/30`;
-  return `${base} border-l-transparent bg-white hover:bg-slate-50/80`;
+    "min-w-0 rounded-xl border border-slate-200/80 bg-white p-4 transition-all duration-300 ease-out";
+  if (tone === "OK") return `${base} border-emerald-200/90 bg-emerald-50/35`;
+  if (tone === "DAMAGED") return `${base} border-amber-200/90 bg-amber-50/35`;
+  if (tone === "REJECTED") return `${base} border-rose-200/90 bg-rose-50/35`;
+  return base;
 }
 
 function advancedLineToneFromQtys(
@@ -498,6 +503,8 @@ export default function ReturnsReturnDetailPage() {
   const [data, setData] = useState<WmsReturnRead | null>(null);
   const [orderLite, setOrderLite] = useState<OrderDetailLite | null>(null);
   const [wmsSettings, setWmsSettings] = useState<WmsSettingsRead | null>(null);
+  const [showWmsTerminal, setShowWmsTerminal] = useState(true);
+  const [customerInsights, setCustomerInsights] = useState<CustomerInsightsRead | null>(null);
   const [panelSummary, setPanelSummary] = useState<ReturnUiStatusPanelSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
@@ -551,14 +558,16 @@ export default function ReturnsReturnDetailPage() {
           r.warehouse_id != null && Number.isFinite(Number(r.warehouse_id)) && Number(r.warehouse_id) > 0
             ? Math.floor(Number(r.warehouse_id))
             : undefined;
-        const [summary, settings] = await Promise.all([
+        const [summary, settings, invPolicy] = await Promise.all([
           getReturnUiStatusSummary(DAMAGE_TENANT_ID, wh),
           getWmsReturnsModeSettings({ tenantId: DAMAGE_TENANT_ID, warehouseId: wh }),
+          getInventoryManagementSettings({ tenantId: DAMAGE_TENANT_ID, warehouseId: wh }).catch(() => null),
         ]);
         if (cancelled) return;
         setData(r);
         setPanelSummary(summary);
         setWmsSettings(settings);
+        setShowWmsTerminal(invPolicy?.inventory_management_mode !== "DOCUMENTS_ONLY");
         const drafts: Record<number, WmsReturnFinalizeLineIn> = {};
         for (const ln of r.lines) {
           if (isRmzLineFullyResolved(ln)) {
@@ -572,12 +581,29 @@ export default function ReturnsReturnDetailPage() {
         } catch {
           if (!cancelled) setOrderLite(null);
         }
+        const email = (r.email || r.customer_email || "").trim();
+        const externalId = (r.external_id || "").trim();
+        if (email || externalId) {
+          try {
+            const insights = await getWmsCustomerInsights(DAMAGE_TENANT_ID, {
+              email: email || undefined,
+              external_id: externalId || undefined,
+            });
+            if (!cancelled) setCustomerInsights(insights);
+          } catch {
+            if (!cancelled) setCustomerInsights(null);
+          }
+        } else if (!cancelled) {
+          setCustomerInsights(null);
+        }
       } catch {
         if (!cancelled) {
           setErr("Nie udało się wczytać zwrotu.");
           setData(null);
           setPanelSummary(null);
           setWmsSettings(null);
+          setShowWmsTerminal(true);
+          setCustomerInsights(null);
           setOrderLite(null);
         }
       } finally {
@@ -675,6 +701,11 @@ export default function ReturnsReturnDetailPage() {
     () => bankTransferFromAddressesJson(orderLite?.addresses_json),
     [orderLite?.addresses_json],
   );
+  const customerAddress = useMemo(() => {
+    const lines = parseShippingAddressBlock(orderLite?.addresses_json);
+    if (lines.length) return lines.join("\n");
+    return bankTransfer.address;
+  }, [orderLite?.addresses_json, bankTransfer.address]);
 
   const activityEntries = useMemo(() => {
     if (!data) return [];
@@ -706,8 +737,9 @@ export default function ReturnsReturnDetailPage() {
 
   const partition = useMemo(() => {
     const n = normalizeReturnDetailLayout(moduleCfg?.detail_layout);
-    return { left: n.left, right: n.right };
-  }, [moduleCfg?.detail_layout]);
+    const keep = (sid: string) => showWmsTerminal || sid !== "wms_view";
+    return { left: n.left.filter(keep), right: n.right.filter(keep) };
+  }, [moduleCfg?.detail_layout, showWmsTerminal]);
 
   const allLinesReady = useMemo(() => {
     if (!data) return false;
@@ -812,78 +844,73 @@ export default function ReturnsReturnDetailPage() {
   const bankRecipient = bankTransfer.recipientName?.trim() || cust;
 
   const linesSection = (
-    <div className="min-w-0 overflow-hidden rounded-xl border border-slate-300 bg-white shadow-sm ring-1 ring-slate-900/5">
-      <header className="border-b border-slate-200 bg-slate-50/80 px-3 py-2.5">
-        <div className="flex flex-wrap items-start justify-between gap-2">
-          <div>
-            <h2 className="text-[13px] font-semibold uppercase tracking-wide text-slate-800">Produkty w zwrocie</h2>
-            <p className="mt-0.5 text-[11px] text-slate-600">
-              Rozstrzygnij pozycje lokalnie, potem zapisz cały zwrot jednym krokiem (Z-PZ + status).
-            </p>
-          </div>
-          {!terminal && allLinesReady ? (
-            <PrimaryButton
-              type="button"
-              disabled={finalizeSaving}
-              onClick={() => {
-                if (wmsSettings?.enable_refund) {
-                  openRefundModal();
-                } else {
-                  void runFinalizeReturn();
+    <ReturnDetailWidgetShell
+      title="Produkty w zwrocie"
+      hint="Rozstrzygnij pozycje lokalnie, potem zapisz cały zwrot jednym krokiem (Z-PZ + status)."
+      actions={
+        !terminal && allLinesReady ? (
+          <PrimaryButton
+            type="button"
+            disabled={finalizeSaving}
+            onClick={() => {
+              if (wmsSettings?.enable_refund) {
+                openRefundModal();
+              } else {
+                void runFinalizeReturn();
+              }
+            }}
+          >
+            {finalizeSaving ? "Zapisywanie…" : "Zapisz zwrot"}
+          </PrimaryButton>
+        ) : undefined
+      }
+    >
+      {lineErr ? (
+        <div className="mb-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">{lineErr}</div>
+      ) : null}
+      <div className="space-y-3">
+        {data.lines.map((ln, rowIdx) => {
+          const keyB = `${ln.order_item_id}:B`;
+          const keyC = `${ln.order_item_id}:C`;
+          return (
+            <LineOperationsCard
+              key={ln.id != null && Number(ln.id) > 0 ? `rmzl-${ln.id}` : `ln-oi-${ln.order_item_id}-r${rowIdx}`}
+              line={ln}
+              orderItem={itemByOrderItemId.get(ln.order_item_id)}
+              terminal={terminal}
+              saving={lineSavingOi === ln.order_item_id}
+              wmsSettings={wmsSettings}
+              warehouseId={data.warehouse_id}
+              returnType={data.return_type ?? "RMA"}
+              setLineErr={setLineErr}
+              onSaveSimple={async (payload) => {
+                setLineErr(null);
+                setLineSavingOi(ln.order_item_id);
+                try {
+                  const lineQty = Math.max(1, Math.floor(Number(ln.quantity) || 1));
+                  applyLineDraft(finalizeLineFromProcess(ln.order_item_id, ln.product_id, lineQty, payload));
+                } finally {
+                  setLineSavingOi(null);
                 }
               }}
-            >
-              {finalizeSaving ? "Zapisywanie…" : "Zapisz zwrot"}
-            </PrimaryButton>
-          ) : null}
-        </div>
-      </header>
-      {lineErr ? <div className="border-b border-gray-200 bg-red-50 px-3 py-1.5 text-sm text-red-800">{lineErr}</div> : null}
-      <div>
-        {data.lines.map((ln, rowIdx) => (
-          (() => {
-            const keyB = `${ln.order_item_id}:B`;
-            const keyC = `${ln.order_item_id}:C`;
-            return (
-          <LineOperationsCard
-            key={ln.id != null && Number(ln.id) > 0 ? `rmzl-${ln.id}` : `ln-oi-${ln.order_item_id}-r${rowIdx}`}
-            line={ln}
-            orderItem={itemByOrderItemId.get(ln.order_item_id)}
-            terminal={terminal}
-            saving={lineSavingOi === ln.order_item_id}
-            wmsSettings={wmsSettings}
-            warehouseId={data.warehouse_id}
-            returnType={data.return_type ?? "RMA"}
-            setLineErr={setLineErr}
-            onSaveSimple={async (payload) => {
-              setLineErr(null);
-              setLineSavingOi(ln.order_item_id);
-              try {
-                const lineQty = Math.max(1, Math.floor(Number(ln.quantity) || 1));
-                applyLineDraft(finalizeLineFromProcess(ln.order_item_id, ln.product_id, lineQty, payload));
-              } finally {
-                setLineSavingOi(null);
-              }
-            }}
-            onSaveSplit={async (payload) => {
-              setLineErr(null);
-              setLineSavingOi(ln.order_item_id);
-              try {
-                applyLineDraft(finalizeLineFromSplit(ln.order_item_id, payload));
-              } finally {
-                setLineSavingOi(null);
-              }
-            }}
-            damagedRefundB={damagedRefundByKey[keyB] ?? ""}
-            damagedRefundC={damagedRefundByKey[keyC] ?? ""}
-            onChangeDamagedRefundB={(val) => setDamagedRefundByKey((prev) => ({ ...prev, [keyB]: val }))}
-            onChangeDamagedRefundC={(val) => setDamagedRefundByKey((prev) => ({ ...prev, [keyC]: val }))}
-          />
-            );
-          })()
-        ))}
+              onSaveSplit={async (payload) => {
+                setLineErr(null);
+                setLineSavingOi(ln.order_item_id);
+                try {
+                  applyLineDraft(finalizeLineFromSplit(ln.order_item_id, payload));
+                } finally {
+                  setLineSavingOi(null);
+                }
+              }}
+              damagedRefundB={damagedRefundByKey[keyB] ?? ""}
+              damagedRefundC={damagedRefundByKey[keyC] ?? ""}
+              onChangeDamagedRefundB={(val) => setDamagedRefundByKey((prev) => ({ ...prev, [keyB]: val }))}
+              onChangeDamagedRefundC={(val) => setDamagedRefundByKey((prev) => ({ ...prev, [keyC]: val }))}
+            />
+          );
+        })}
       </div>
-    </div>
+    </ReturnDetailWidgetShell>
   );
 
   const openRefundModal = () => {
@@ -904,6 +931,7 @@ export default function ReturnsReturnDetailPage() {
     rid,
     terminal,
     cust,
+    customerAddress,
     salesDocRaw,
     fi,
     bankRecipient,
@@ -917,6 +945,8 @@ export default function ReturnsReturnDetailPage() {
     setErr,
     setPanelSummary,
     wmsSettings,
+    showWmsTerminal,
+    customerInsights,
     openRefundModal,
     refund,
     notesDraft,
@@ -1020,12 +1050,11 @@ export default function ReturnsReturnDetailPage() {
               >
                 <List className="h-4 w-4 shrink-0" strokeWidth={2} aria-hidden />
               </Link>
-              <Link
-                to={WMS_ROUTES.returnsProcess(data.id)}
-                className={primaryButtonClassName()}
-              >
-                Terminal WMS
-              </Link>
+              {showWmsTerminal ? (
+                <Link to={WMS_ROUTES.returnsProcess(data.id)} className={primaryButtonClassName()}>
+                  Terminal WMS
+                </Link>
+              ) : null}
             </>
           }
         />
@@ -1036,14 +1065,14 @@ export default function ReturnsReturnDetailPage() {
           </p>
         ) : null}
 
-        <div className={`${panelDetailMainGridClass} mt-5`}>
-          <div className={`${panelDetailMainColClass} flex min-w-0 flex-col gap-4`}>
+        <div className={`${panelDetailMainGridClass} mt-4`}>
+          <div className={`${panelDetailMainColClass} flex min-w-0 flex-col gap-3`}>
             {partition.left.map((sid) => (
               <Fragment key={sid}>{renderRmzDetailSection(sid as ReturnDetailSectionId, sectionCtx)}</Fragment>
             ))}
           </div>
           <aside
-            className={`${panelDetailAsideColClass} flex min-w-0 flex-col gap-4 lg:sticky lg:top-4 lg:self-start`}
+            className={`${panelDetailAsideColClass} flex min-w-0 flex-col gap-3 lg:sticky lg:top-4 lg:self-start`}
           >
             {partition.right.map((sid) => (
               <Fragment key={sid}>{renderRmzDetailSection(sid as ReturnDetailSectionId, sectionCtx)}</Fragment>
@@ -1333,13 +1362,6 @@ function LineOperationsCard({
   const disable = terminal || saving;
   /** Po sfinalizowaniu RMZ (Z-PZ) — tylko podgląd. */
   const splitInputsLocked = multiQty && terminal;
-  const btnOnOk = "bg-emerald-600 text-white ring-1 ring-emerald-700";
-  const btnOnDmg = "bg-amber-600 text-white ring-1 ring-amber-700";
-  const btnOnRej = "bg-red-600 text-white ring-1 ring-red-700";
-  const btnOff = "border border-slate-200 bg-slate-100 text-slate-500";
-
-  const skuAndEan =
-    `${skuMain}${ean ? ` · EAN ${ean}` : ""}`.trim();
 
   const PANEL_RMZ_MAX_PHOTOS = 15;
 
@@ -1466,22 +1488,29 @@ function LineOperationsCard({
   };
 
   const imageCell = (
-    <div className="flex h-full w-[72px] shrink-0 items-center justify-center">
+    <div className="flex h-24 w-24 shrink-0 items-center justify-center">
       {img ? (
-        <img
-          src={img}
-          alt=""
-          className="h-[68px] w-[68px] max-h-[72px] max-w-[72px] rounded border border-gray-100 bg-white object-contain sm:h-[72px] sm:w-[72px]"
-        />
+        <img src={img} alt="" className="h-24 w-24 object-contain" />
       ) : (
-        <div className="flex h-[68px] w-[68px] max-h-[72px] max-w-[72px] items-center justify-center rounded border border-gray-100 bg-gray-100 text-xs text-gray-400 sm:h-[72px] sm:w-[72px]">
-          —
+        <div className="flex h-24 w-24 items-center justify-center text-slate-300" aria-hidden>
+          <span className="text-xs">Brak</span>
         </div>
       )}
     </div>
   );
 
   const acceptedChosen = line.decision === "OK" || optimisticDecision === "OK";
+  const damagedChosen = line.decision === "DAMAGED";
+  const rejectedChosen = line.decision === "REJECTED";
+
+  const segmentBtn = (active: boolean, tone: "ok" | "dmg" | "rej") => {
+    if (active) {
+      if (tone === "ok") return "bg-emerald-600 text-white border-emerald-600 shadow-sm";
+      if (tone === "dmg") return "bg-amber-600 text-white border-amber-600 shadow-sm";
+      return "bg-rose-600 text-white border-rose-600 shadow-sm";
+    }
+    return "border-slate-200 bg-white text-slate-600 hover:bg-slate-50";
+  };
 
   return (
     <div className={`${rowShellClass} relative`}>
@@ -1493,33 +1522,43 @@ function LineOperationsCard({
           {lineSaveToast}
         </div>
       ) : null}
-      <div className="min-w-0 px-3 py-3">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex min-w-0 flex-1 items-start gap-3">
+      <div className="min-w-0">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <div className="flex min-w-0 flex-1 items-start gap-4">
             {imageCell}
             <div className="min-w-0 flex-1">
-              <p className="text-sm font-bold leading-snug text-gray-900">{name}</p>
-              <p className="mt-0.5 text-xs text-gray-600">
-                SKU {skuAndEan}
-                <span className="mx-1.5 text-gray-300">·</span>
-                <span className="font-semibold tabular-nums text-gray-900">{lineQty} szt.</span>
-                {unit != null ? (
-                  <>
-                    <span className="mx-1.5 text-gray-300">·</span>
-                    <span className="tabular-nums text-gray-600">{formatMoneyPln(unit)}</span>
-                    {extPrice != null ? (
-                      <span className="tabular-nums text-gray-800">
-                        {" "}
-                        → <span className="font-semibold">{formatMoneyPln(extPrice)}</span>
-                      </span>
-                    ) : null}
-                  </>
-                ) : null}
+              <p className="text-[15px] font-semibold leading-snug text-slate-900">{name}</p>
+              <p className="mt-1.5 space-x-2 text-[12px] text-slate-500">
+                <span>SKU {skuMain}</span>
+                <span className="text-slate-300">·</span>
+                <span>EAN {ean || "—"}</span>
               </p>
+              <div className="mt-3 flex flex-wrap gap-x-6 gap-y-1 text-[13px]">
+                <div>
+                  <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Ilość</p>
+                  <p className="font-medium tabular-nums text-slate-800">{lineQty} szt.</p>
+                </div>
+                {unit != null ? (
+                  <div>
+                    <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Cena</p>
+                    <p className="font-medium tabular-nums text-slate-800">{formatMoneyPln(unit)}</p>
+                  </div>
+                ) : null}
+                {extPrice != null ? (
+                  <div>
+                    <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Wartość</p>
+                    <p className="font-semibold tabular-nums text-slate-900">{formatMoneyPln(extPrice)}</p>
+                  </div>
+                ) : null}
+              </div>
             </div>
           </div>
           {!multiQty ? (
-            <div className="flex shrink-0 flex-wrap items-center justify-end gap-1.5">
+            <div
+              className="inline-flex shrink-0 flex-wrap gap-1 rounded-xl border border-slate-200/80 bg-slate-50/50 p-1"
+              role="group"
+              aria-label="Decyzja pozycji"
+            >
               <button
                 type="button"
                 disabled={disable}
@@ -1532,19 +1571,18 @@ function LineOperationsCard({
                       setLineSaveToast("Zapisano");
                     } catch {
                       setOptimisticDecision(null);
-                      /* błąd w pasie nad listą */
                     }
                   })();
                 }}
-                className={`rounded-md px-3 py-1.5 text-xs font-semibold transition-colors disabled:opacity-50 ${acceptedChosen ? btnOnOk : btnOff}`}
+                className={`rounded-lg border px-3 py-2 text-[12px] font-semibold transition-all duration-200 disabled:opacity-50 ${segmentBtn(acceptedChosen, "ok")}`}
               >
-                {acceptedChosen ? "✓ PRZYJĘTY" : "Przyjęte"}
+                Przyjęto
               </button>
               <button
                 type="button"
                 disabled={disable}
                 onClick={openDamageSheet}
-                className={`rounded-md px-3 py-1.5 text-xs font-semibold transition-colors disabled:opacity-50 ${line.decision === "DAMAGED" ? btnOnDmg : btnOff}`}
+                className={`rounded-lg border px-3 py-2 text-[12px] font-semibold transition-all duration-200 disabled:opacity-50 ${segmentBtn(damagedChosen, "dmg")}`}
               >
                 Uszkodzone
               </button>
@@ -1553,7 +1591,7 @@ function LineOperationsCard({
                   type="button"
                   disabled={disable}
                   onClick={openRejectSheet}
-                  className={`rounded-md px-3 py-1.5 text-xs font-semibold transition-colors disabled:opacity-50 ${line.decision === "REJECTED" ? btnOnRej : btnOff}`}
+                  className={`rounded-lg border px-3 py-2 text-[12px] font-semibold transition-all duration-200 disabled:opacity-50 ${segmentBtn(rejectedChosen, "rej")}`}
                 >
                   Odrzucone
                 </button>

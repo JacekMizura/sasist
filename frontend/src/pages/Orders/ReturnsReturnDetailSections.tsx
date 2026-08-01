@@ -1,14 +1,35 @@
 import type { Dispatch, ReactNode, SetStateAction } from "react";
 import { Link } from "react-router-dom";
+import {
+  Download,
+  Eye,
+  FileText,
+  MessageSquare,
+  NotebookPen,
+  Printer,
+  Terminal,
+  UserRound,
+} from "lucide-react";
 
-import type { ReturnUiStatusPanelSummary, WmsReturnRead, WmsSettingsRead } from "../../types/wmsReturn";
+import type { CustomerInsightsRead, ReturnUiStatusPanelSummary, WmsReturnRead, WmsSettingsRead } from "../../types/wmsReturn";
 import type { ReturnDetailSectionId } from "../../constants/returnModuleDetailSections";
 import { RETURN_DETAIL_SECTION_LABELS_PL } from "../../constants/returnModuleDetailSections";
 import { getReturnUiStatusSummary, patchReturnRmzUiStatus } from "../../api/returnUiStatusApi";
 import { DAMAGE_TENANT_ID } from "../damage/damageShared";
 import { WMS_ROUTES } from "../wms/wmsRoutes";
-import { listSellasistInputClass } from "../../components/listPage/listSellasistTokens";
 import { PrimaryButton, primaryButtonClassName } from "../../design-system/PrimaryButton";
+import { OrderHistoryTimeline } from "../../components/orders/OrderHistoryTimeline";
+import {
+  ReturnDetailEmptyState,
+  ReturnDetailKpiCell,
+  ReturnDetailWidgetShell,
+  RETURN_WIDGET_FIELD_CLASS,
+  RETURN_WIDGET_TEXTAREA_CLASS,
+} from "../../components/returns/detailWidgets/ReturnDetailWidgetShell";
+import {
+  buildReturnDetailTimelineEvents,
+  returnStatusBadgeTone,
+} from "../../components/returns/detailWidgets/returnDetailWidgetUtils";
 
 type FiBreakdown = {
   total: number;
@@ -24,6 +45,7 @@ export type RmzDetailSectionRenderCtx = {
   rid: number;
   terminal: boolean;
   cust: string;
+  customerAddress: string | null;
   salesDocRaw: string;
   fi: FiBreakdown | null;
   bankRecipient: string;
@@ -37,6 +59,8 @@ export type RmzDetailSectionRenderCtx = {
   setErr: Dispatch<SetStateAction<string | null>>;
   setPanelSummary: Dispatch<SetStateAction<ReturnUiStatusPanelSummary | null>>;
   wmsSettings: WmsSettingsRead | null;
+  showWmsTerminal: boolean;
+  customerInsights: CustomerInsightsRead | null;
   openRefundModal: () => void;
   refund: WmsReturnRead["refund"];
   notesDraft: string;
@@ -57,6 +81,9 @@ export type RmzDetailSectionRenderCtx = {
   linesSection: ReactNode;
 };
 
+const ghostBtn =
+  "inline-flex h-8 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 text-[11px] font-semibold text-slate-700 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40";
+
 export function renderRmzDetailSection(id: ReturnDetailSectionId, ctx: RmzDetailSectionRenderCtx): ReactNode {
   const label = RETURN_DETAIL_SECTION_LABELS_PL[id];
   const {
@@ -64,6 +91,7 @@ export function renderRmzDetailSection(id: ReturnDetailSectionId, ctx: RmzDetail
     rid,
     terminal,
     cust,
+    customerAddress,
     salesDocRaw,
     fi,
     bankRecipient,
@@ -77,6 +105,8 @@ export function renderRmzDetailSection(id: ReturnDetailSectionId, ctx: RmzDetail
     setErr,
     setPanelSummary,
     wmsSettings,
+    showWmsTerminal,
+    customerInsights,
     openRefundModal,
     refund,
     notesDraft,
@@ -99,18 +129,27 @@ export function renderRmzDetailSection(id: ReturnDetailSectionId, ctx: RmzDetail
 
   const resolvedCount = data.lines.filter((ln) => ln.processed_at != null).length;
   const totalLines = data.lines.length;
+  const progressPct = totalLines > 0 ? Math.min(100, Math.round((resolvedCount / totalLines) * 100)) : 0;
+  const phone = data.phone?.trim() || data.customer_phone?.trim() || "";
+  const email = data.email?.trim() || data.customer_email?.trim() || "";
+  const statusTone = returnStatusBadgeTone(data.status?.type);
+  const statusName = (data.status?.name || "").trim() || statusTone.fallbackLabel;
+  const statusColor = (data.status?.color || "").trim();
 
   switch (id) {
     case "return_status":
       return (
-        <div className="border-b border-slate-100 py-6 last:border-0">
-          <h2 className="mb-4 text-[11px] font-bold uppercase tracking-widest text-slate-900">{label}</h2>
-          <p className="mb-2 text-xs text-slate-500">Widoczna nazwa na liście zwrotów i w tym widoku.</p>
-          <p className="mb-6 text-sm text-slate-900">
-            Stan dokumentu: <span className="font-semibold">{data.status?.name ?? "—"}</span>
-          </p>
+        <ReturnDetailWidgetShell title={label} hint="Widoczna nazwa na liście zwrotów i w tym widoku.">
+          <div
+            className={`mb-5 inline-flex max-w-full items-center rounded-xl border px-4 py-2.5 text-lg font-semibold tracking-tight ${statusTone.className}`}
+            style={statusColor ? { borderColor: `${statusColor}55`, backgroundColor: `${statusColor}18`, color: statusColor } : undefined}
+          >
+            {statusName}
+          </div>
           <label className="block">
-            <span className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">Etykieta na liście</span>
+            <span className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+              Etykieta na liście
+            </span>
             <select
               value={data.ui_status?.id ?? ""}
               disabled={patchingUi || panelSummary == null || terminal}
@@ -132,7 +171,7 @@ export function renderRmzDetailSection(id: ReturnDetailSectionId, ctx: RmzDetail
                   }
                 })();
               }}
-              className={`${listSellasistInputClass} mt-2 w-full !border-0 !border-b !border-slate-200 !bg-transparent !px-0 !py-2 text-sm text-slate-900 !shadow-none !ring-0 focus:!border-slate-900`}
+              className={RETURN_WIDGET_FIELD_CLASS}
             >
               <option value="">— bez etykiety</option>
               {(panelSummary?.groups ?? []).map((block) => (
@@ -146,107 +185,139 @@ export function renderRmzDetailSection(id: ReturnDetailSectionId, ctx: RmzDetail
               ))}
             </select>
           </label>
-        </div>
+        </ReturnDetailWidgetShell>
       );
 
     case "progress_bar":
       return (
-        <div className="border-b border-slate-100 py-6 last:border-0">
-          <h2 className="mb-4 text-[11px] font-bold uppercase tracking-widest text-slate-900">{label}</h2>
-          <div className="mb-2 flex items-end justify-between">
-            <span className="text-sm text-slate-600">Rozliczono pozycje</span>
-            <span className="font-semibold tabular-nums text-slate-900">
-              {resolvedCount}/{totalLines || 1}
+        <ReturnDetailWidgetShell title={label}>
+          <div className="mb-2 flex items-end justify-between gap-3">
+            <span className="text-[13px] text-slate-600">
+              {resolvedCount} / {totalLines || 0} produktów rozliczonych
             </span>
+            <span className="text-[12px] font-semibold tabular-nums text-slate-500">{progressPct}%</span>
           </div>
-          <div className="h-1 w-full overflow-hidden bg-slate-100">
+          <div className="h-2.5 w-full overflow-hidden rounded-full bg-slate-100">
             <div
-              className="h-full bg-slate-900 transition-all duration-300"
-              style={{
-                width: `${totalLines > 0 ? Math.min(100, Math.round((resolvedCount / totalLines) * 100)) : 0}%`,
-              }}
+              className="h-full rounded-full bg-slate-800 transition-all duration-300 ease-out"
+              style={{ width: `${progressPct}%` }}
             />
           </div>
-        </div>
+        </ReturnDetailWidgetShell>
       );
 
     case "returned_products":
       return linesSection;
 
     case "wms_view":
+      if (!showWmsTerminal) return null;
       return (
-        <div className="border-b border-slate-100 py-6 last:border-0">
-          <h2 className="mb-2 text-[11px] font-bold uppercase tracking-widest text-slate-900">{label}</h2>
-          <p className="text-sm text-slate-600">
-            Zdjęcia i dokumentacja z terminala —{" "}
-            <Link to={WMS_ROUTES.returnsProcess(data.id)} className="font-medium text-slate-900 underline underline-offset-4 hover:text-slate-600">
-              otwórz terminal WMS
+        <ReturnDetailWidgetShell
+          title={label}
+          icon={<Terminal className="h-4 w-4" strokeWidth={2} aria-hidden />}
+          actions={
+            <Link to={WMS_ROUTES.returnsProcess(data.id)} className={primaryButtonClassName()}>
+              Otwórz terminal
             </Link>
+          }
+          hint="Zdjęcia i dokumentacja z terminala magazynowego."
+        >
+          <p className="text-[13px] text-slate-600">
+            Operacje magazynowe, dowody i Z-PZ prowadzisz w terminalu WMS — bez zmiany konfiguratora bloków.
           </p>
-        </div>
+        </ReturnDetailWidgetShell>
       );
 
     case "damage_photos":
       return (
-        <div className="border-b border-slate-100 py-6 last:border-0">
-          <h2 className="mb-2 text-[11px] font-bold uppercase tracking-widest text-slate-900">{label}</h2>
-          <p className="text-sm text-slate-500">Podgląd zdjęć z RMZ — wkrótce.</p>
-        </div>
+        <ReturnDetailWidgetShell title={label}>
+          <ReturnDetailEmptyState
+            title="Brak zdjęć uszkodzeń"
+            description="Podgląd zdjęć z RMZ pojawi się tutaj, gdy będą dostępne."
+          />
+        </ReturnDetailWidgetShell>
       );
 
     case "decision_history":
       return (
-        <div className="border-b border-slate-100 py-6 last:border-0">
-          <h2 className="mb-4 text-[11px] font-bold uppercase tracking-widest text-slate-900">{label}</h2>
-          <ul className="max-h-52 overflow-y-auto text-sm">
-            {activityEntries.length === 0 ? (
-              <li className="text-slate-500">Brak wpisów (pełna historia w WMS).</li>
-            ) : (
-              activityEntries.map((e, i) => (
-                <li key={i} className="flex gap-4 border-b border-slate-50 py-3 last:border-0">
-                  <span className="shrink-0 tabular-nums text-xs text-slate-400">{formatWhen(e.at)}</span>
-                  <span className="text-slate-800">{e.msg}</span>
-                </li>
-              ))
-            )}
-          </ul>
-        </div>
+        <ReturnDetailWidgetShell title={label}>
+          {activityEntries.length === 0 ? (
+            <ReturnDetailEmptyState
+              title="Brak wpisów w dzienniku"
+              description="Pełna historia operacyjna jest też dostępna w WMS."
+            />
+          ) : (
+            <OrderHistoryTimeline
+              compact
+              hideHeader
+              bare
+              events={buildReturnDetailTimelineEvents(activityEntries)}
+              formatDate={formatWhen}
+              title="Dziennik"
+            />
+          )}
+        </ReturnDetailWidgetShell>
       );
 
-    case "customer_data":
+    case "customer_data": {
+      const initials = cust
+        .split(/\s+/)
+        .filter(Boolean)
+        .slice(0, 2)
+        .map((p) => p[0]?.toUpperCase() ?? "")
+        .join("");
       return (
-        <div className="border-b border-slate-100 py-6 last:border-0">
-          <h2 className="mb-4 text-[11px] font-bold uppercase tracking-widest text-slate-900">{label}</h2>
-          <dl className="space-y-4 text-sm">
-            <div>
-              <dt className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Nazwa</dt>
-              <dd className="mt-0.5 font-medium text-slate-900">{cust}</dd>
+        <ReturnDetailWidgetShell
+          title={label}
+          icon={<UserRound className="h-4 w-4" strokeWidth={2} aria-hidden />}
+        >
+          <div className="flex items-start gap-3">
+            <div
+              className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-slate-100 text-[13px] font-semibold text-slate-600"
+              aria-hidden
+            >
+              {initials || "?"}
             </div>
-            <div>
-              <dt className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Telefon</dt>
-              <dd className="mt-0.5 break-all text-slate-800">{data.phone?.trim() || data.customer_phone?.trim() || "—"}</dd>
+            <div className="min-w-0 flex-1 space-y-2 text-[13px]">
+              <p className="font-semibold text-slate-900">{cust}</p>
+              {phone ? (
+                <a href={`tel:${phone}`} className="block text-slate-700 hover:text-slate-900 hover:underline">
+                  {phone}
+                </a>
+              ) : (
+                <p className="text-slate-400">Telefon —</p>
+              )}
+              {email ? (
+                <a href={`mailto:${email}`} className="block break-all text-slate-700 hover:text-slate-900 hover:underline">
+                  {email}
+                </a>
+              ) : (
+                <p className="text-slate-400">E-mail —</p>
+              )}
+              {customerAddress ? (
+                <p className="whitespace-pre-line text-slate-600">{customerAddress}</p>
+              ) : null}
             </div>
-            <div>
-              <dt className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">E-mail</dt>
-              <dd className="mt-0.5 break-all text-slate-800">{data.email?.trim() || data.customer_email?.trim() || "—"}</dd>
-            </div>
-          </dl>
-        </div>
+          </div>
+        </ReturnDetailWidgetShell>
       );
+    }
 
     case "notes":
       return (
-        <div className="border-b border-slate-100 py-6 last:border-0">
-          <h2 className="mb-4 text-[11px] font-bold uppercase tracking-widest text-slate-900">{label}</h2>
-          <p className="mb-3 text-[10px] text-slate-400">Zapis lokalnie w tej przeglądarce.</p>
+        <ReturnDetailWidgetShell
+          title={label}
+          icon={<NotebookPen className="h-4 w-4" strokeWidth={2} aria-hidden />}
+          hint="Zapis lokalnie w tej przeglądarce."
+        >
           <textarea
             value={notesDraft}
             onChange={(e) => setNotesDraft(e.target.value)}
             rows={3}
             placeholder="Notatka dla zespołu…"
-            className="w-full resize-y border-0 border-b border-slate-200 bg-transparent px-0 py-2 text-sm text-slate-900 placeholder:text-slate-300 focus:border-slate-900 focus:ring-0"
+            className={RETURN_WIDGET_TEXTAREA_CLASS}
           />
-          <div className="mt-4 flex items-center gap-4">
+          <div className="mt-3 flex items-center gap-3">
             <PrimaryButton
               type="button"
               onClick={() => {
@@ -261,44 +332,63 @@ export function renderRmzDetailSection(id: ReturnDetailSectionId, ctx: RmzDetail
               Zapisz
             </PrimaryButton>
             {notesSavedAt != null ? (
-              <span className="text-[10px] text-slate-400">Zapisano: {formatWhen(new Date(notesSavedAt).toISOString())}</span>
+              <span className="text-[11px] text-slate-400">
+                Zapisano: {formatWhen(new Date(notesSavedAt).toISOString())}
+              </span>
             ) : null}
           </div>
-        </div>
+          {notesDraft.trim() && notesSavedAt != null ? (
+            <article className="mt-4 rounded-xl border border-slate-200/80 bg-slate-50/40 px-3.5 py-3">
+              <div className="mb-1.5 flex flex-wrap items-baseline gap-2 text-[11px]">
+                <span className="font-semibold text-slate-800">Operator</span>
+                <span className="tabular-nums text-slate-400">
+                  {formatWhen(new Date(notesSavedAt).toISOString())}
+                </span>
+              </div>
+              <p className="whitespace-pre-wrap text-[13px] text-slate-800">{notesDraft}</p>
+            </article>
+          ) : null}
+        </ReturnDetailWidgetShell>
       );
 
     case "correspondence":
       return (
-        <div className="border-b border-slate-100 py-6 last:border-0">
-          <h2 className="mb-4 text-[11px] font-bold uppercase tracking-widest text-slate-900">{label}</h2>
-          <p className="mb-4 text-[10px] text-slate-400">Wpisy zapisane lokalnie na tym urządzeniu.</p>
-          
-          <ul className="mb-6 max-h-40 space-y-4 overflow-y-auto text-sm">
-            {commEntries.length === 0 ? (
-              <li className="text-slate-500">Brak wiadomości.</li>
-            ) : (
-              [...commEntries]
+        <ReturnDetailWidgetShell
+          title={label}
+          icon={<MessageSquare className="h-4 w-4" strokeWidth={2} aria-hidden />}
+          hint="Wpisy zapisane lokalnie na tym urządzeniu."
+        >
+          {commEntries.length === 0 ? (
+            <ReturnDetailEmptyState
+              title="Brak wiadomości"
+              description="Dodaj pierwszą wiadomość do klienta lub zespołu."
+            />
+          ) : (
+            <ul className="mb-4 max-h-52 space-y-2.5 overflow-y-auto">
+              {[...commEntries]
                 .sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime())
                 .map((c, i) => (
-                  <li key={i} className="border-l-2 border-slate-200 pl-3">
-                    <div className="mb-1 flex items-baseline gap-2 text-[10px]">
-                      <span className="font-semibold uppercase tracking-wider text-slate-900">{c.who}</span>
-                      <span className="text-slate-400 tabular-nums">{formatWhen(c.at)}</span>
+                  <li key={i} className="rounded-xl border border-slate-200/80 bg-white px-3.5 py-3">
+                    <div className="mb-1 flex items-baseline gap-2 text-[11px]">
+                      <span className="font-semibold text-slate-900">{c.who}</span>
+                      <span className="tabular-nums text-slate-400">{formatWhen(c.at)}</span>
                     </div>
-                    <p className="whitespace-pre-wrap text-sm text-slate-800">{c.body}</p>
+                    <p className="whitespace-pre-wrap text-[13px] text-slate-800">{c.body}</p>
                   </li>
-                ))
-            )}
-          </ul>
-          
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+                ))}
+            </ul>
+          )}
+
+          <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-end">
             <label className="min-w-0 flex-1">
-              <span className="mb-1 block text-[10px] font-semibold uppercase tracking-wider text-slate-400">Nowa wiadomość</span>
+              <span className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                Nowa wiadomość
+              </span>
               <textarea
                 value={commDraft}
                 onChange={(e) => setCommDraft(e.target.value)}
                 rows={2}
-                className="w-full resize-none border-0 border-b border-slate-200 bg-transparent px-0 py-2 text-sm text-slate-900 focus:border-slate-900 focus:ring-0"
+                className={RETURN_WIDGET_TEXTAREA_CLASS}
               />
             </label>
             <PrimaryButton
@@ -321,169 +411,190 @@ export function renderRmzDetailSection(id: ReturnDetailSectionId, ctx: RmzDetail
               Dodaj
             </PrimaryButton>
           </div>
-        </div>
+        </ReturnDetailWidgetShell>
       );
 
-    case "attachments":
+    case "attachments": {
+      const downloadSales = () => {
+        if (!salesDocRaw) return;
+        triggerTextDownload(
+          `dokument-sprzedazy-${salesDocRaw.replace(/[^\w.-]+/g, "_")}.txt`,
+          `Dokument sprzedaży (referencja z panelu)\nNumer: ${salesDocRaw}\nZamówienie: #${data.order_id}\nRMZ: ${data.rmz_number}\n`,
+        );
+      };
+      const downloadCorrection = () => {
+        if (!panelCorrectionFileRaw) return;
+        try {
+          const raw = panelCorrectionFileRaw;
+          let fileName = "korekta";
+          let body = raw;
+          try {
+            const parsed = JSON.parse(raw) as { name?: string; content?: string };
+            if (typeof parsed.content === "string") body = parsed.content;
+            if (typeof parsed.name === "string" && parsed.name.trim()) fileName = parsed.name.trim();
+          } catch {
+            // raw text
+          }
+          triggerTextDownload(`${fileName.replace(/[^\w.-]+/g, "_")}.txt`, body);
+        } catch {
+          setErr("Nie udało się odczytać pliku korekty.");
+        }
+      };
+
       return (
-        <div className="border-b border-slate-100 py-6 last:border-0">
-          <h2 className="mb-4 text-[11px] font-bold uppercase tracking-widest text-slate-900">{label}</h2>
-          <div className="space-y-4 text-sm">
-            <div className="flex flex-wrap items-center justify-between gap-4">
-              <div className="min-w-0">
-                <span className="block text-[10px] font-semibold uppercase tracking-wider text-slate-400">Sprzedaż</span>
-                <span className="block truncate text-slate-900" title={salesDocRaw || undefined}>
-                  {salesDocRaw || "—"}
-                </span>
+        <ReturnDetailWidgetShell title={label}>
+          <div className="space-y-3">
+            <article className="rounded-xl border border-slate-200/80 px-3.5 py-3">
+              <div className="flex items-start gap-3">
+                <FileText className="mt-0.5 h-5 w-5 shrink-0 text-slate-400" strokeWidth={1.75} aria-hidden />
+                <div className="min-w-0 flex-1">
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Sprzedaż</p>
+                  <p className="mt-0.5 truncate text-[13px] font-semibold text-slate-900" title={salesDocRaw || undefined}>
+                    {salesDocRaw || "Brak numeru"}
+                  </p>
+                  <p className="mt-0.5 text-[11px] text-slate-500">{salesDocRaw ? "Dostępny" : "Brak dokumentu"}</p>
+                </div>
               </div>
-              <button
-                type="button"
-                disabled={!salesDocRaw}
-                title={!salesDocRaw ? "Brak numeru dokumentu" : "Pobierz plik referencyjny"}
-                onClick={() => {
-                  if (!salesDocRaw) return;
-                  triggerTextDownload(
-                    `dokument-sprzedazy-${salesDocRaw.replace(/[^\w.-]+/g, "_")}.txt`,
-                    `Dokument sprzedaży (referencja z panelu)\nNumer: ${salesDocRaw}\nZamówienie: #${data.order_id}\nRMZ: ${data.rmz_number}\n`,
-                  );
-                }}
-                className="shrink-0 border border-slate-200 px-4 py-1.5 text-xs font-semibold text-slate-900 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-30"
-              >
-                Pobierz
-              </button>
-            </div>
-            
-            <div className="flex flex-wrap items-center justify-between gap-4 border-t border-slate-50 pt-4">
-              <div>
-                <span className="block text-[10px] font-semibold uppercase tracking-wider text-slate-400">Korekta</span>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <button type="button" className={ghostBtn} disabled={!salesDocRaw} onClick={downloadSales}>
+                  <Download className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />
+                  Pobierz
+                </button>
+                <button type="button" className={ghostBtn} disabled={!salesDocRaw} onClick={downloadSales}>
+                  <Eye className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />
+                  Podgląd
+                </button>
+                <button type="button" className={ghostBtn} disabled={!salesDocRaw} onClick={downloadSales}>
+                  <Printer className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />
+                  Drukuj
+                </button>
               </div>
-              <div className="flex gap-2">
-                <Link
-                  to={`/orders/${data.order_id}`}
-                  className={primaryButtonClassName()}
-                >
-                  Utwórz
-                </Link>
-                {panelCorrectionFileRaw ? (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      try {
-                        const raw = panelCorrectionFileRaw;
-                        let fileName = "korekta";
-                        let body = raw;
-                        try {
-                          const parsed = JSON.parse(raw) as { name?: string; content?: string };
-                          if (typeof parsed.content === "string") body = parsed.content;
-                          if (typeof parsed.name === "string" && parsed.name.trim()) fileName = parsed.name.trim();
-                        } catch {
-                          // raw text
-                        }
-                        triggerTextDownload(`${fileName.replace(/[^\w.-]+/g, "_")}.txt`, body);
-                      } catch {
-                        setErr("Nie udało się odczytać pliku korekty.");
-                      }
-                    }}
-                    className="border border-slate-200 px-4 py-1.5 text-xs font-semibold text-slate-900 transition-colors hover:bg-slate-50"
-                  >
+            </article>
+
+            {panelCorrectionFileRaw ? (
+              <article className="rounded-xl border border-slate-200/80 px-3.5 py-3">
+                <div className="flex items-start gap-3">
+                  <FileText className="mt-0.5 h-5 w-5 shrink-0 text-slate-400" strokeWidth={1.75} aria-hidden />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Korekta</p>
+                    <p className="mt-0.5 text-[13px] font-semibold text-slate-900">Plik korekty</p>
+                    <p className="mt-0.5 text-[11px] text-slate-500">Zapisany lokalnie</p>
+                  </div>
+                </div>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <button type="button" className={ghostBtn} onClick={downloadCorrection}>
+                    <Download className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />
                     Pobierz
                   </button>
-                ) : null}
-              </div>
-            </div>
+                  <button type="button" className={ghostBtn} onClick={downloadCorrection}>
+                    <Eye className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />
+                    Podgląd
+                  </button>
+                  <button type="button" className={ghostBtn} onClick={downloadCorrection}>
+                    <Printer className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />
+                    Drukuj
+                  </button>
+                </div>
+              </article>
+            ) : (
+              <Link to={`/orders/${data.order_id}`} className={`${primaryButtonClassName()} w-full justify-center`}>
+                Utwórz korektę
+              </Link>
+            )}
           </div>
-        </div>
+        </ReturnDetailWidgetShell>
       );
+    }
 
     case "payment_data":
       return (
-        <div className="border-b border-slate-100 py-6 last:border-0">
-          <h2 className="mb-1 text-[11px] font-bold uppercase tracking-widest text-slate-900">{label}</h2>
-          <p className="mb-4 text-[10px] text-slate-400">Z adresu zamówienia (import).</p>
-          <dl className="space-y-4 text-sm">
+        <ReturnDetailWidgetShell title={label} hint="Z adresu zamówienia (import).">
+          <dl className="space-y-3 text-[13px]">
             <div>
-              <dt className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Nazwa</dt>
-              <dd className="mt-0.5 text-slate-900">{bankRecipient}</dd>
+              <dt className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Nazwa</dt>
+              <dd className="mt-0.5 font-medium text-slate-900">{bankRecipient}</dd>
             </div>
             <div>
-              <dt className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Rachunek</dt>
-              <dd className="mt-0.5 break-all font-mono text-sm text-slate-900">{bankTransfer.bankAccount ?? "—"}</dd>
+              <dt className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Rachunek</dt>
+              <dd className="mt-0.5 break-all font-mono text-[12px] text-slate-900">
+                {bankTransfer.bankAccount ?? "—"}
+              </dd>
             </div>
             <div>
-              <dt className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Adres</dt>
+              <dt className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Adres</dt>
               <dd className="mt-0.5 text-slate-800">{bankTransfer.address ?? "—"}</dd>
             </div>
           </dl>
-        </div>
+        </ReturnDetailWidgetShell>
       );
 
     case "refund":
       return (
-        <div className="border-b border-slate-100 py-6 last:border-0">
-          <h2 className="mb-4 text-[11px] font-bold uppercase tracking-widest text-slate-900">{label}</h2>
-          
-          <div className="mb-6">
-            <p className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-slate-400">Łączny zwrot</p>
-            <p className="text-3xl font-light tracking-tight tabular-nums text-slate-900">{formatMoneyPln(fi?.total ?? 0)}</p>
-          </div>
-
-          <div className="mb-6 space-y-2 border-t border-slate-100 pt-4 text-sm">
-            <div className="flex justify-between">
-              <span className="text-slate-500">Produkty</span>
-              <span className="font-medium tabular-nums text-slate-900">{formatMoneyPln(fi?.products ?? 0)}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-slate-500">Dostawa</span>
-              <span className="font-medium tabular-nums text-slate-900">{formatMoneyPln(fi?.shipping ?? 0)}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-slate-500">Korekty</span>
-              <span className="font-medium tabular-nums text-slate-700">
-                {fi?.adjustments != null && fi.adjustments !== 0 ? formatMoneyPln(fi.adjustments) : "—"}
-              </span>
-            </div>
+        <ReturnDetailWidgetShell title={label}>
+          <div className="grid grid-cols-2 gap-2.5">
+            <ReturnDetailKpiCell label="Zwrot" value={formatMoneyPln(fi?.products ?? 0)} />
+            <ReturnDetailKpiCell label="Dostawa" value={formatMoneyPln(fi?.shipping ?? 0)} />
+            <ReturnDetailKpiCell
+              label="Korekty"
+              value={
+                fi?.adjustments != null && fi.adjustments !== 0 ? formatMoneyPln(fi.adjustments) : "—"
+              }
+            />
+            <ReturnDetailKpiCell label="Razem" value={formatMoneyPln(fi?.total ?? 0)} />
           </div>
 
           {wmsSettings?.enable_refund === false ? (
-            <p className="text-sm text-slate-500">Zwrot środków rozliczany w panelu biura.</p>
+            <p className="mt-4 text-[13px] text-slate-500">Zwrot środków rozliczany w panelu biura.</p>
           ) : (
-            <div className="pt-2">
+            <div className="mt-4">
               {refund ? (
-                <p className="mb-4 text-sm text-slate-800">
-                  <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 block mb-1">Typ zwrotu</span>
+                <p className="mb-3 text-[13px] text-slate-800">
+                  <span className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+                    Typ zwrotu
+                  </span>
                   {refundTypeLabelPl(refund.refund_type)}
                 </p>
               ) : (
-                <p className="mb-4 text-[10px] text-slate-400">Brak zapisanego zwrotu.</p>
+                <p className="mb-3 text-[12px] text-slate-400">Brak zapisanego zwrotu.</p>
               )}
-
-              <PrimaryButton
-                type="button"
-                className="w-full"
-                disabled={terminal}
-                onClick={() => openRefundModal()}
-              >
-                ZAPISZ ZWROT
+              <PrimaryButton type="button" className="w-full justify-center" disabled={terminal} onClick={() => openRefundModal()}>
+                Zapisz zwrot
               </PrimaryButton>
             </div>
           )}
-        </div>
+        </ReturnDetailWidgetShell>
       );
 
     case "customer_stats":
       return (
-        <div className="border-b border-slate-100 py-6 last:border-0">
-          <h2 className="mb-2 text-[11px] font-bold uppercase tracking-widest text-slate-900">{label}</h2>
-          <p className="text-sm text-slate-500">Dodatkowe informacje o kliencie pojawią się tutaj po podłączeniu analityki.</p>
-        </div>
+        <ReturnDetailWidgetShell title={label}>
+          {customerInsights ? (
+            <div className="grid grid-cols-2 gap-2.5">
+              <ReturnDetailKpiCell label="Zamówienia" value={String(customerInsights.total_orders_count)} />
+              <ReturnDetailKpiCell label="Zwroty" value={String(customerInsights.total_returns_count)} />
+              <ReturnDetailKpiCell
+                label="Wskaźnik zwrotów"
+                value={`${Math.round((customerInsights.return_rate || 0) * 100)}%`}
+              />
+              <ReturnDetailKpiCell label="Ryzyko" value={customerInsights.risk_label || "—"} />
+            </div>
+          ) : (
+            <ReturnDetailEmptyState
+              title="Brak statystyk klienta"
+              description="Podłącz e-mail klienta, aby wczytać KPI zamówień i zwrotów."
+            />
+          )}
+        </ReturnDetailWidgetShell>
       );
 
     case "prior_returns_history":
       return (
-        <div className="border-b border-slate-100 py-6 last:border-0">
-          <h2 className="mb-2 text-[11px] font-bold uppercase tracking-widest text-slate-900">{label}</h2>
-          <p className="text-sm text-slate-500">Historia wcześniejszych zwrotów dla tego klienta — w przygotowaniu.</p>
-        </div>
+        <ReturnDetailWidgetShell title={label}>
+          <ReturnDetailEmptyState
+            title="Brak historii wcześniejszych zwrotów"
+            description="Lista wcześniejszych RMZ dla tego klienta pojawi się w kolejnej iteracji."
+          />
+        </ReturnDetailWidgetShell>
       );
 
     default:
