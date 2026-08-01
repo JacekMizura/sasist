@@ -1,3 +1,9 @@
+## 2026-08-01 — RMZ: inline Uszkodzone/Odrzucone
+
+- Zamiast drawera: rozwijany panel w karcie produktu (height+opacity ~220ms)
+- Accordion: tylko jedna karta naraz; badge decyzji po zapisie
+- Klasa A/B/C + checklist typów; odrzucenie: kategoria → powody
+
 ## 2026-08-01 — RMZ detail: spójność z Panelem Zamówienia
 
 - Usunięty widget + CTA „Terminal WMS”; dostęp tylko z menu ⋮ gdy WMS aktywny

@@ -33,6 +33,16 @@ import type {
 } from "../../types/wmsReturn";
 import { parseShippingAddressBlock } from "../../utils/orderDetailAddress";
 import { ReturnDetailWidgetShell } from "../../components/returns/detailWidgets/ReturnDetailWidgetShell";
+import {
+  encodePanelRmzDamageTypes,
+  PANEL_RMZ_DAMAGE_TYPE_OPTIONS,
+  PANEL_RMZ_OTHER_DAMAGE_ID,
+  RmzDecisionSummaryBadge,
+  RmzInlineDamageForm,
+  RmzInlineExpandShell,
+  RmzInlineRejectForm,
+  type RmzInlineExpandMode,
+} from "../../components/returns/detailWidgets/RmzLineInlineDecisionPanel";
 import { coercePhotoUrlForDamageEntry, createDamageEntry } from "../../api/damageReportsApi";
 import { uploadDamageImageFile } from "../../api/damageUploadApi";
 import { formatRelativeAgo } from "../../utils/formatRelativeAgo";
@@ -49,12 +59,9 @@ import {
 import { WMS_ROUTES } from "../wms/wmsRoutes";
 import {
   decodeRmzDamageTypePayload,
-  encodeRmzDamageTypePayload,
-  filterRmzDamageTypeIdsForClass,
   rmzDamageTypeLabel,
-  RmzDamageTypeChips,
 } from "../damage/rmzDamageTypes";
-import { WMS_REJECT_OTHER_ID, WMS_REJECT_REASON_GROUPS, wmsRejectReasonSelectOptions } from "../damage/wmsRejectReasons";
+import { WMS_REJECT_OTHER_ID, WMS_REJECT_REASON_GROUPS } from "../damage/wmsRejectReasons";
 
 const WMS_REJECT_LABEL_BY_ID: Map<string, string> = (() => {
   const m = new Map<string, string>();
@@ -527,6 +534,8 @@ export default function ReturnsReturnDetailPage() {
   const [lineDrafts, setLineDrafts] = useState<Record<number, WmsReturnFinalizeLineIn>>({});
   const [finalizeSaving, setFinalizeSaving] = useState(false);
   const [finalizeSuccessMsg, setFinalizeSuccessMsg] = useState<string | null>(null);
+  /** Tylko jedna karta może mieć rozwinięty formularz Uszkodzone/Odrzucone. */
+  const [expandedDecisionOi, setExpandedDecisionOi] = useState<number | null>(null);
 
   const applyLineDraft = useCallback((draft: WmsReturnFinalizeLineIn) => {
     setLineDrafts((prev) => ({ ...prev, [draft.order_item_id]: draft }));
@@ -898,6 +907,11 @@ export default function ReturnsReturnDetailPage() {
               warehouseId={data.warehouse_id}
               returnType={data.return_type ?? "RMA"}
               setLineErr={setLineErr}
+              decisionExpanded={expandedDecisionOi === ln.order_item_id}
+              onDecisionExpandRequest={() => setExpandedDecisionOi(ln.order_item_id)}
+              onDecisionCollapse={() =>
+                setExpandedDecisionOi((cur) => (cur === ln.order_item_id ? null : cur))
+              }
               onSaveSimple={async (payload) => {
                 setLineErr(null);
                 setLineSavingOi(ln.order_item_id);
@@ -1246,6 +1260,9 @@ function LineOperationsCard({
   warehouseId,
   returnType,
   setLineErr,
+  decisionExpanded,
+  onDecisionExpandRequest,
+  onDecisionCollapse,
   onSaveSimple,
   onSaveSplit,
   damagedRefundB,
@@ -1261,6 +1278,9 @@ function LineOperationsCard({
   warehouseId: number;
   returnType: "RMA" | "UNCLAIMED";
   setLineErr: Dispatch<SetStateAction<string | null>>;
+  decisionExpanded: boolean;
+  onDecisionExpandRequest: () => void;
+  onDecisionCollapse: () => void;
   onSaveSimple: (p: import("../../types/wmsReturn").WmsReturnLineProcess) => Promise<void>;
   onSaveSplit: (p: import("../../types/wmsReturn").WmsReturnLineSplitProcess) => Promise<void>;
   damagedRefundB: string;
@@ -1276,18 +1296,20 @@ function LineOperationsCard({
   const skuMain = orderItem?.product?.sku || orderItem?.product?.symbol || "—";
   const ean = orderItem?.product?.ean?.trim();
 
-  const photoInputRef = useRef<HTMLInputElement>(null);
-  const [sheet, setSheet] = useState<null | "damage" | "reject">(null);
-  const [damageClass, setDamageClass] = useState<"B" | "C">("C");
+  const [sheet, setSheet] = useState<RmzInlineExpandMode | null>(null);
+  const [sheetVisible, setSheetVisible] = useState(false);
+  const [damageClass, setDamageClass] = useState<"A" | "B" | "C">("C");
   const [damageTypeIds, setDamageTypeIds] = useState<string[]>([]);
   const [photoUrls, setPhotoUrls] = useState<string[]>([]);
   const [photoUploading, setPhotoUploading] = useState(false);
   const [noteDamage, setNoteDamage] = useState("");
+  const [rejectCategory, setRejectCategory] = useState("");
   const [rejectReasonId, setRejectReasonId] = useState("");
   const [rejectOtherText, setRejectOtherText] = useState("");
   const [noteReject, setNoteReject] = useState("");
   const [localSheetErr, setLocalSheetErr] = useState<string | null>(null);
   const [sheetSaving, setSheetSaving] = useState(false);
+  const closeTimerRef = useRef<number | null>(null);
 
   const [acc, setAcc] = useState(String(line.accepted_qty ?? 0));
   const [dmgB, setDmgB] = useState(String(line.damaged_b_qty ?? 0));
@@ -1315,6 +1337,25 @@ function LineOperationsCard({
     const t = window.setTimeout(() => setLineSaveToast(null), 2200);
     return () => window.clearTimeout(t);
   }, [lineSaveToast]);
+
+  useEffect(() => {
+    return () => {
+      if (closeTimerRef.current != null) window.clearTimeout(closeTimerRef.current);
+    };
+  }, []);
+
+  /** Gdy inna karta przejęła accordion — zwijamy lokalny formularz. */
+  useEffect(() => {
+    if (!decisionExpanded && sheet != null) {
+      setSheetVisible(false);
+      if (closeTimerRef.current != null) window.clearTimeout(closeTimerRef.current);
+      closeTimerRef.current = window.setTimeout(() => {
+        setSheet(null);
+        setLocalSheetErr(null);
+        closeTimerRef.current = null;
+      }, 220);
+    }
+  }, [decisionExpanded, sheet]);
 
   const multiQty = lineQty > 1;
 
@@ -1389,30 +1430,63 @@ function LineOperationsCard({
 
   const PANEL_RMZ_MAX_PHOTOS = 15;
 
-  const closeSheet = () => {
+  const collapseSheet = (after?: () => void) => {
     if (sheetSaving) return;
-    setSheet(null);
-    setLocalSheetErr(null);
+    setSheetVisible(false);
+    if (closeTimerRef.current != null) window.clearTimeout(closeTimerRef.current);
+    closeTimerRef.current = window.setTimeout(() => {
+      setSheet(null);
+      setLocalSheetErr(null);
+      closeTimerRef.current = null;
+      onDecisionCollapse();
+      after?.();
+    }, 220);
+  };
+
+  const seedPanelDamageTypes = (decoded: string[], rawDamageType: string | null | undefined) => {
+    const allowed = new Set(PANEL_RMZ_DAMAGE_TYPE_OPTIONS.map((o) => o.id));
+    const next = decoded.filter((id) => allowed.has(id));
+    const raw = (rawDamageType ?? "").trim().toLowerCase();
+    if (raw === "other" || raw.startsWith("other")) {
+      if (!next.includes(PANEL_RMZ_OTHER_DAMAGE_ID)) next.push(PANEL_RMZ_OTHER_DAMAGE_ID);
+    }
+    return next;
   };
 
   const openDamageSheet = () => {
+    if (disable) return;
     setLocalSheetErr(null);
-    const cls: "B" | "C" = line.condition === "B" ? "B" : "C";
+    onDecisionExpandRequest();
+    const rawCond = (line.condition ?? "").toUpperCase();
+    const cls: "A" | "B" | "C" = rawCond === "A" || rawCond === "B" || rawCond === "C" ? rawCond : "C";
     setDamageClass(cls);
     const decoded = decodeRmzDamageTypePayload(line.damage_type);
-    setDamageTypeIds(filterRmzDamageTypeIdsForClass(cls, decoded));
+    setDamageTypeIds(seedPanelDamageTypes(decoded, line.damage_type));
     const pu = line.photo_urls;
     setPhotoUrls(Array.isArray(pu) ? [...pu] : []);
     setNoteDamage("");
+    if (closeTimerRef.current != null) {
+      window.clearTimeout(closeTimerRef.current);
+      closeTimerRef.current = null;
+    }
     setSheet("damage");
+    requestAnimationFrame(() => setSheetVisible(true));
   };
 
   const openRejectSheet = () => {
+    if (disable) return;
     setLocalSheetErr(null);
+    onDecisionExpandRequest();
+    setRejectCategory("");
     setRejectReasonId("");
     setRejectOtherText("");
     setNoteReject("");
+    if (closeTimerRef.current != null) {
+      window.clearTimeout(closeTimerRef.current);
+      closeTimerRef.current = null;
+    }
     setSheet("reject");
+    requestAnimationFrame(() => setSheetVisible(true));
   };
 
   const saveDamageSheet = async () => {
@@ -1421,8 +1495,7 @@ function LineOperationsCard({
       setLocalSheetErr("Brak magazynu dla zapisu — odśwież stronę.");
       return;
     }
-    const types = filterRmzDamageTypeIdsForClass(damageClass, damageTypeIds);
-    if (types.length < 1) {
+    if (damageTypeIds.length < 1) {
       setLocalSheetErr("Wybierz co najmniej jeden typ uszkodzenia.");
       return;
     }
@@ -1432,7 +1505,11 @@ function LineOperationsCard({
       setLocalSheetErr("Dodaj co najmniej jedno zdjęcie uszkodzenia.");
       return;
     }
-    const encoded = encodeRmzDamageTypePayload(types) || "other";
+    const encoded = encodePanelRmzDamageTypes(damageTypeIds);
+    if (!encoded) {
+      setLocalSheetErr("Wybierz co najmniej jeden typ uszkodzenia.");
+      return;
+    }
     setSheetSaving(true);
     try {
       if (urls.length > 0) {
@@ -1452,7 +1529,9 @@ function LineOperationsCard({
         damage_type: encoded,
         ...(noteDamage.trim() ? { note: noteDamage.trim() } : {}),
       });
-      setSheet(null);
+      setOptimisticDecision("DAMAGED");
+      setLineSaveToast("Zapisano");
+      collapseSheet();
     } catch {
       setLocalSheetErr("Nie udało się zapisać. Sprawdź dane i spróbuj ponownie.");
     } finally {
@@ -1482,7 +1561,9 @@ function LineOperationsCard({
             ? { note: noteReject.trim() }
             : {}),
       });
-      setSheet(null);
+      setOptimisticDecision("REJECTED");
+      setLineSaveToast("Zapisano");
+      collapseSheet();
     } catch {
       setLocalSheetErr("Nie udało się zapisać odrzucenia.");
     } finally {
@@ -1578,49 +1659,125 @@ function LineOperationsCard({
             </div>
           </div>
           {!multiQty ? (
-            <div className="inline-flex shrink-0 flex-wrap gap-1.5" role="group" aria-label="Decyzja pozycji">
-              <button
-                type="button"
-                disabled={disable}
-                onClick={() => {
-                  if (disable) return;
-                  setOptimisticDecision("OK");
-                  void (async () => {
-                    try {
-                      await onSaveSimple({ decision: "OK" });
-                      setLineSaveToast("Zapisano");
-                    } catch {
-                      setOptimisticDecision(null);
-                    }
-                  })();
-                }}
-                className={`inline-flex h-[34px] items-center justify-center rounded-lg border px-3 text-[12px] font-semibold transition-colors duration-150 disabled:opacity-50 ${segmentBtn(acceptedChosen, "ok")}`}
-              >
-                Przyjęto
-              </button>
-              <button
-                type="button"
-                disabled={disable}
-                onClick={openDamageSheet}
-                className={`inline-flex h-[34px] items-center justify-center rounded-lg border px-3 text-[12px] font-semibold transition-colors duration-150 disabled:opacity-50 ${segmentBtn(damagedChosen, "dmg")}`}
-              >
-                Uszkodzone
-              </button>
-              {returnType !== "UNCLAIMED" ? (
+            <div className="flex shrink-0 flex-col items-stretch gap-2 sm:items-end">
+              <div className="inline-flex flex-wrap gap-1.5" role="group" aria-label="Decyzja pozycji">
                 <button
                   type="button"
                   disabled={disable}
-                  onClick={openRejectSheet}
-                  className={`inline-flex h-[34px] items-center justify-center rounded-lg border px-3 text-[12px] font-semibold transition-colors duration-150 disabled:opacity-50 ${segmentBtn(rejectedChosen, "rej")}`}
+                  onClick={() => {
+                    if (disable) return;
+                    if (sheet != null) collapseSheet();
+                    setOptimisticDecision("OK");
+                    void (async () => {
+                      try {
+                        await onSaveSimple({ decision: "OK" });
+                        setLineSaveToast("Zapisano");
+                      } catch {
+                        setOptimisticDecision(null);
+                      }
+                    })();
+                  }}
+                  className={`inline-flex h-[34px] items-center justify-center rounded-lg border px-3 text-[12px] font-semibold transition-colors duration-150 disabled:opacity-50 ${segmentBtn(acceptedChosen && sheet == null, "ok")}`}
                 >
-                  Odrzucone
+                  Przyjęto
                 </button>
+                <button
+                  type="button"
+                  disabled={disable}
+                  onClick={() => {
+                    if (sheet === "damage" && sheetVisible) collapseSheet();
+                    else openDamageSheet();
+                  }}
+                  className={`inline-flex h-[34px] items-center justify-center rounded-lg border px-3 text-[12px] font-semibold transition-colors duration-150 disabled:opacity-50 ${segmentBtn(damagedChosen || sheet === "damage", "dmg")}`}
+                >
+                  Uszkodzone
+                </button>
+                {returnType !== "UNCLAIMED" ? (
+                  <button
+                    type="button"
+                    disabled={disable}
+                    onClick={() => {
+                      if (sheet === "reject" && sheetVisible) collapseSheet();
+                      else openRejectSheet();
+                    }}
+                    className={`inline-flex h-[34px] items-center justify-center rounded-lg border px-3 text-[12px] font-semibold transition-colors duration-150 disabled:opacity-50 ${segmentBtn(rejectedChosen || sheet === "reject", "rej")}`}
+                  >
+                    Odrzucone
+                  </button>
+                ) : null}
+              </div>
+              {!sheetVisible ? (
+                <RmzDecisionSummaryBadge
+                  decision={optimisticDecision ?? line.decision}
+                  condition={line.condition}
+                  damageTypeLabel={
+                    decodedDamageIds.length > 0
+                      ? rmzDamageTypeLabel(decodedDamageIds[0])
+                      : (line.damage_type ?? "").trim().toLowerCase() === "other"
+                        ? "Inne"
+                        : null
+                  }
+                  rejectReasonLabel={(() => {
+                    const parsed = parseRejectEvidenceFromLine(line);
+                    return parsed ? wmsRejectReasonLabel(parsed.reasonId) : null;
+                  })()}
+                />
               ) : null}
             </div>
           ) : null}
         </div>
 
-        {!multiQty && hasPersistedDamageEntries ? (
+        {!multiQty && sheet != null ? (
+          <RmzInlineExpandShell open={sheetVisible}>
+            {sheet === "damage" ? (
+              <RmzInlineDamageForm
+                damageClass={damageClass}
+                onDamageClassChange={setDamageClass}
+                damageTypeIds={damageTypeIds}
+                onToggleDamageType={(id) => {
+                  setDamageTypeIds((prev) => {
+                    const s = new Set(prev);
+                    if (s.has(id)) s.delete(id);
+                    else s.add(id);
+                    return [...s];
+                  });
+                }}
+                photoUrls={photoUrls}
+                photoUploading={photoUploading}
+                onPickPhotos={(files) => void onPickDamagePhotos(files)}
+                onRemovePhoto={(index) => setPhotoUrls((prev) => prev.filter((_, j) => j !== index))}
+                note={noteDamage}
+                onNoteChange={setNoteDamage}
+                error={localSheetErr}
+                saving={sheetSaving || saving}
+                requirePhotos={Boolean(wmsSettings?.require_photos)}
+                maxPhotos={PANEL_RMZ_MAX_PHOTOS}
+                onCancel={() => collapseSheet()}
+                onSave={() => void saveDamageSheet()}
+              />
+            ) : (
+              <RmzInlineRejectForm
+                categoryLabel={rejectCategory}
+                onCategoryChange={setRejectCategory}
+                reasonId={rejectReasonId}
+                onReasonChange={(id) => {
+                  setRejectReasonId(id);
+                  if (id !== WMS_REJECT_OTHER_ID) setRejectOtherText("");
+                }}
+                otherText={rejectOtherText}
+                onOtherTextChange={setRejectOtherText}
+                note={noteReject}
+                onNoteChange={setNoteReject}
+                error={localSheetErr}
+                saving={sheetSaving || saving}
+                onCancel={() => collapseSheet()}
+                onSave={() => void saveRejectSheet()}
+              />
+            )}
+          </RmzInlineExpandShell>
+        ) : null}
+
+        {!multiQty && !sheetVisible && hasPersistedDamageEntries ? (
           <div className="mt-3 space-y-2 border-t border-slate-200/90 pt-3">
             <p className="text-[10px] font-bold uppercase tracking-wide text-slate-600">Uszkodzenia — zapis operacyjny</p>
             {persistedDamageEntries.map((ent, i) => (
@@ -1628,7 +1785,11 @@ function LineOperationsCard({
             ))}
           </div>
         ) : null}
-        {!multiQty && line.decision === "DAMAGED" && !hasPersistedDamageEntries && decodedDamageIds.length > 0 ? (
+        {!multiQty &&
+        !sheetVisible &&
+        line.decision === "DAMAGED" &&
+        !hasPersistedDamageEntries &&
+        decodedDamageIds.length > 0 ? (
           <div className="mt-3 border-t border-slate-200/90 pt-3">
             <p className="text-[10px] font-bold uppercase tracking-wide text-slate-600">Powody (zapis zbiorczy)</p>
             <ul className="mt-1 list-inside list-disc text-xs text-slate-700">
@@ -1638,7 +1799,7 @@ function LineOperationsCard({
             </ul>
           </div>
         ) : null}
-        {!multiQty && rejectedEvidenceUnits > 0 ? (
+        {!multiQty && !sheetVisible && rejectedEvidenceUnits > 0 ? (
           <div className="mt-2 border-t border-slate-200/90 pt-3">
             <RejectionEvidencePanel line={line} rejectedUnits={rejectedEvidenceUnits} />
           </div>
@@ -1948,181 +2109,6 @@ function LineOperationsCard({
           </div>
         ) : null}
       </div>
-      {sheet ? (
-        <AppOverlayPortal>
-        <div
-          className="fixed inset-0 z-[250] flex justify-end bg-black/40"
-          onMouseDown={(e) => {
-            if (e.target === e.currentTarget && !sheetSaving) closeSheet();
-          }}
-        >
-          <div
-            className="flex h-full w-full max-w-md flex-col overflow-y-auto border-l border-gray-200 bg-white p-4 shadow-xl"
-            onMouseDown={(e) => e.stopPropagation()}
-          >
-            {sheet === "damage" ? (
-              <>
-                <h3 className="text-sm font-bold text-gray-900">Uszkodzony — {name}</h3>
-                <p className="mt-1 text-xs text-gray-600">Klasa B / C oraz typ uszkodzenia. {wmsSettings?.require_photos ? "Zdjęcia są wymagane." : "Zdjęcia zalecane."}</p>
-                <div className="mt-3 flex gap-2">
-                  <button
-                    type="button"
-                    disabled={sheetSaving}
-                    onClick={() => {
-                      setDamageClass("B");
-                      setDamageTypeIds((prev) => filterRmzDamageTypeIdsForClass("B", prev));
-                    }}
-                    className={`rounded-lg px-3 py-1.5 text-xs font-semibold ${damageClass === "B" ? "bg-amber-600 text-white" : "bg-gray-100 text-gray-800"}`}
-                  >
-                    B
-                  </button>
-                  <button
-                    type="button"
-                    disabled={sheetSaving}
-                    onClick={() => {
-                      setDamageClass("C");
-                      setDamageTypeIds((prev) => filterRmzDamageTypeIdsForClass("C", prev));
-                    }}
-                    className={`rounded-lg px-3 py-1.5 text-xs font-semibold ${damageClass === "C" ? "bg-amber-600 text-white" : "bg-gray-100 text-gray-800"}`}
-                  >
-                    C
-                  </button>
-                </div>
-                <div className="mt-3">
-                  <RmzDamageTypeChips
-                    damageClass={damageClass}
-                    selectedIds={filterRmzDamageTypeIdsForClass(damageClass, damageTypeIds)}
-                    disabled={sheetSaving}
-                    onToggle={(id) => {
-                      setDamageTypeIds((prev) => {
-                        const s = new Set(prev);
-                        if (s.has(id)) s.delete(id);
-                        else s.add(id);
-                        return [...s];
-                      });
-                    }}
-                  />
-                </div>
-                <div className="mt-4">
-                  <p className="text-[11px] font-semibold text-gray-700">Zdjęcia</p>
-                  <input
-                    ref={photoInputRef}
-                    type="file"
-                    accept="image/*"
-                    multiple
-                    className="sr-only"
-                    disabled={sheetSaving || photoUploading}
-                    onChange={(e) => {
-                      void onPickDamagePhotos(e.target.files);
-                      e.target.value = "";
-                    }}
-                  />
-                  <button
-                    type="button"
-                    disabled={sheetSaving || photoUploading || photoUrls.length >= PANEL_RMZ_MAX_PHOTOS}
-                    onClick={() => photoInputRef.current?.click()}
-                    className="mt-1 rounded-lg border border-gray-300 bg-white px-3 py-2 text-xs font-semibold text-gray-800 hover:bg-gray-50 disabled:opacity-50"
-                  >
-                    {photoUploading ? "Wgrywanie…" : "Dodaj zdjęcia"}
-                  </button>
-                  {photoUrls.length > 0 ? (
-                    <div className="mt-2 flex flex-wrap gap-2">
-                      {photoUrls.map((u, i) => (
-                        <div key={`${u}-${i}`} className="relative inline-block">
-                          <img src={resolveDamageMediaUrl(u)} alt="" className="h-16 w-16 rounded border border-gray-200 object-cover" />
-                          <button
-                            type="button"
-                            disabled={sheetSaving}
-                            className="absolute -right-1 -top-1 flex h-6 w-6 items-center justify-center rounded-full bg-rose-600 text-xs font-bold text-white shadow hover:bg-rose-500 disabled:opacity-50"
-                            title="Usuń"
-                            onClick={() => setPhotoUrls((prev) => prev.filter((_, j) => j !== i))}
-                          >
-                            ×
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  ) : null}
-                </div>
-                <label className="mt-4 block text-xs font-semibold text-gray-700">
-                  Notatka (opcjonalnie)
-                  <textarea
-                    value={noteDamage}
-                    disabled={sheetSaving}
-                    onChange={(e) => setNoteDamage(e.target.value)}
-                    rows={3}
-                    className="mt-1 w-full rounded-lg border border-gray-200 px-2 py-1.5 text-sm"
-                  />
-                </label>
-              </>
-            ) : (
-              <>
-                <h3 className="text-sm font-bold text-gray-900">Odrzuć — {name}</h3>
-                <p className="mt-1 text-xs text-gray-600">Wybierz powód odrzucenia zwrotu.</p>
-                <label className="mt-3 block text-xs font-semibold text-gray-700">
-                  Powód (wymagane)
-                  <select
-                    value={rejectReasonId}
-                    disabled={sheetSaving}
-                    onChange={(e) => {
-                      const v = e.target.value;
-                      setRejectReasonId(v);
-                      if (v !== WMS_REJECT_OTHER_ID) setRejectOtherText("");
-                    }}
-                    className="mt-1 w-full rounded-lg border border-gray-200 bg-white px-2 py-2 text-sm"
-                  >
-                    <option value="">— wybierz —</option>
-                    {wmsRejectReasonSelectOptions()}
-                  </select>
-                </label>
-                {rejectReasonId === WMS_REJECT_OTHER_ID ? (
-                  <label className="mt-3 block text-xs font-semibold text-gray-700">
-                    Uzasadnienie (wymagane)
-                    <textarea
-                      value={rejectOtherText}
-                      disabled={sheetSaving}
-                      onChange={(e) => setRejectOtherText(e.target.value)}
-                      rows={4}
-                      className="mt-1 w-full rounded-lg border border-rose-200 px-2 py-1.5 text-sm"
-                    />
-                  </label>
-                ) : (
-                  <label className="mt-3 block text-xs font-semibold text-gray-700">
-                    Notatka (opcjonalnie)
-                    <textarea
-                      value={noteReject}
-                      disabled={sheetSaving}
-                      onChange={(e) => setNoteReject(e.target.value)}
-                      rows={3}
-                      className="mt-1 w-full rounded-lg border border-gray-200 px-2 py-1.5 text-sm"
-                    />
-                  </label>
-                )}
-              </>
-            )}
-            {localSheetErr ? <p className="mt-3 text-sm font-semibold text-rose-700">{localSheetErr}</p> : null}
-            <div className="mt-auto flex shrink-0 gap-2 border-t border-gray-100 pt-4">
-              <button
-                type="button"
-                disabled={sheetSaving}
-                onClick={closeSheet}
-                className="flex-1 rounded-lg border border-gray-300 bg-white py-2 text-sm font-semibold text-gray-800 hover:bg-gray-50 disabled:opacity-50"
-              >
-                Anuluj
-              </button>
-              <button
-                type="button"
-                disabled={sheetSaving || saving}
-                onClick={() => void (sheet === "damage" ? saveDamageSheet() : saveRejectSheet())}
-                className="flex-1 rounded-lg bg-gray-900 py-2 text-sm font-semibold text-white hover:bg-gray-800 disabled:opacity-50"
-              >
-                {sheetSaving || saving ? "Zapisywanie…" : "Zapisz"}
-              </button>
-            </div>
-          </div>
-        </div>
-        </AppOverlayPortal>
-      ) : null}
     </div>
   );
 }

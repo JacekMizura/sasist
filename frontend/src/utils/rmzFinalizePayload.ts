@@ -73,15 +73,17 @@ export function finalizeLineFromProcess(
       damage_type: enc ? `reject:${enc}` : null,
     };
   }
-  const cls = payload.condition === "B" ? "B" : "C";
+  const cls =
+    payload.condition === "B" ? "B" : payload.condition === "A" ? "A" : "C";
   const urls = payload.photo_urls ?? [];
+  const qtyBucket: "B" | "C" = cls === "C" ? "C" : "B";
   return {
     order_item_id: orderItemId,
     product_id: productId,
     accepted_qty: 0,
     damaged_qty: total,
-    damaged_b_qty: cls === "B" ? total : 0,
-    damaged_c_qty: cls === "C" ? total : 0,
+    damaged_b_qty: qtyBucket === "B" ? total : 0,
+    damaged_c_qty: qtyBucket === "C" ? total : 0,
     rejected_qty: 0,
     condition: cls,
     photo_urls: urls.length ? urls : undefined,
@@ -92,7 +94,7 @@ export function finalizeLineFromProcess(
             {
               id: `panel-dmg-${orderItemId}-0`,
               qty: 1,
-              condition: cls,
+              condition: qtyBucket,
               damage_type: payload.damage_type ?? null,
               photo_urls: urls,
               note: payload.note ?? null,

@@ -2,10 +2,10 @@
 
 ## Active
 
-Szczegóły zwrotu (RMZ): przebudowa UX jak Panel Zamówienia — bez Terminala WMS w layoucie, etykieta panelu = `PanelBulkStatusPickerDropdown` / `PanelTreeStatusItem`, decyzje produktu jako samodzielne segmented buttons.
+RMZ detail: Uszkodzone/Odrzucone = inline expand w karcie produktu (bez drawera/modala); jeden produkt naraz; badge podsumowania po zapisie.
 
 ## Constraints
 
-- Tylko UX/UI — bez zmian logiki / backendu
-- Status panelu SSOT: `PanelTreeStatusItem` (nie osobny renderer dla zwrotów)
-- WMS: tylko akcja w menu ⋮ gdy moduł aktywny (`inventory_management_mode !== DOCUMENTS_ONLY`)
+- Tylko UX/UI — bez zmian backendu
+- Accordion: `expandedDecisionOi` w rodzicu
+- Formularze: `RmzLineInlineDecisionPanel`
