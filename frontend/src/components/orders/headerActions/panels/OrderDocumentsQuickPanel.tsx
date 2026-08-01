@@ -10,14 +10,13 @@ import {
 
 type LinkedDoc = NonNullable<OrderDetail["linked_documents"]>[number];
 
-type DocSlot = {
+type DocRowModel = {
   key: string;
   label: string;
   number?: string;
   previewUrl?: string | null;
   downloadUrl?: string | null;
   onPrint?: () => void;
-  present: boolean;
 };
 
 type Props = {
@@ -28,132 +27,71 @@ type Props = {
   onPrintLinked?: (doc: LinkedDoc) => void;
 };
 
-const SALE_SLOTS = [
-  { key: "INVOICE", label: "Faktura", match: ["INVOICE", "FV"] },
-  { key: "CORRECTION", label: "Korekta", match: ["CORRECTION", "KOR"] },
-  { key: "RECEIPT", label: "Paragon", match: ["RECEIPT", "PA", "PARAGON"] },
-  { key: "PROFORMA", label: "Proforma", match: ["PROFORMA"] },
-] as const;
+const SALE_LABELS: Record<string, string> = {
+  INVOICE: "Faktura",
+  FV: "Faktura",
+  CORRECTION: "Korekta",
+  KOR: "Korekta",
+  PROFORMA: "Proforma",
+  RECEIPT: "Paragon",
+  PA: "Paragon",
+  PARAGON: "Paragon",
+};
 
-const STOCK_SLOTS = [
-  { key: "WZ", label: "WZ", match: ["WZ"] },
-  { key: "PZ", label: "PZ", match: ["PZ"] },
-  { key: "RW", label: "RW", match: ["RW"] },
-  { key: "PW", label: "PW", match: ["PW"] },
-  { key: "MM", label: "MM", match: ["MM"] },
-  { key: "RESERVATION", label: "Rezerwacja", match: ["RESERVATION", "REZERWACJA"] },
-] as const;
+const STOCK_LABELS: Record<string, string> = {
+  WZ: "WZ",
+  PZ: "PZ",
+  PW: "PW",
+  RW: "RW",
+  MM: "MM",
+  RESERVATION: "Rezerwacja",
+  REZERWACJA: "Rezerwacja",
+};
 
-function matchType(raw: string | null | undefined, match: readonly string[]): boolean {
-  const t = (raw || "").toUpperCase();
-  return match.some((m) => t === m || t.includes(m));
-}
-
-function buildSlots(
-  order: OrderDetail,
-  kind: "sale" | "stock",
-  defs: readonly { key: string; label: string; match: readonly string[] }[],
-  onPrintLinked?: (doc: LinkedDoc) => void,
-): DocSlot[] {
-  const linked = order.linked_documents ?? [];
-  const uploads = order.order_documents ?? [];
-
-  return defs.map((def) => {
-    const linkedHit = linked.find((d) => {
-      const isSale = d.kind === "sale" || Boolean(d.sale_document_id);
-      if (kind === "sale" ? !isSale : isSale) return false;
-      return matchType(d.document_subtype, def.match) || matchType(d.document_type, def.match);
-    });
-    const uploadHit = uploads.find((d) => matchType(d.document_type, def.match));
-
-    if (linkedHit) {
-      return {
-        key: def.key,
-        label: def.label,
-        number: linkedHit.document_number || undefined,
-        previewUrl: linkedHit.detail_path || null,
-        downloadUrl: linkedHit.detail_path || null,
-        onPrint: onPrintLinked ? () => onPrintLinked(linkedHit) : undefined,
-        present: true,
-      };
-    }
-    if (uploadHit) {
-      return {
-        key: def.key,
-        label: def.label,
-        number: uploadHit.original_filename || undefined,
-        previewUrl: uploadHit.file_url || null,
-        downloadUrl: uploadHit.file_url || null,
-        present: true,
-      };
-    }
-    return { key: def.key, label: def.label, present: false };
-  });
-}
-
-function DocRow({ slot }: { slot: DocSlot }) {
-  const canPreview = Boolean(slot.previewUrl);
-  const canDownload = Boolean(slot.downloadUrl);
-  const canPrint = Boolean(slot.onPrint);
-
+function DocRow({ row }: { row: DocRowModel }) {
   return (
     <div className="flex items-center gap-2 px-3 py-2">
       <FileText className="h-4 w-4 shrink-0 text-slate-500" strokeWidth={2} aria-hidden />
       <div className="min-w-0 flex-1">
-        <p className={`truncate text-sm ${slot.present ? "font-medium text-slate-900" : "text-slate-500"}`}>
-          {slot.label}
-          {slot.number ? <span className="ml-1.5 font-normal text-slate-500">{slot.number}</span> : null}
+        <p className="truncate text-sm font-medium text-slate-900">
+          {row.label}
+          {row.number ? <span className="ml-1.5 font-normal text-slate-500">{row.number}</span> : null}
         </p>
-        {!slot.present ? <p className="text-[11px] text-slate-400">Brak dokumentu</p> : null}
       </div>
       <div className="flex shrink-0 items-center gap-1">
-        {canDownload ? (
+        {row.downloadUrl ? (
           <a
-            href={slot.downloadUrl!}
+            href={row.downloadUrl}
             target="_blank"
             rel="noreferrer"
             title="Pobierz"
-            aria-label={`Pobierz ${slot.label}`}
             className={odHeaderActionDocActionBtnClass}
           >
             <Download className="h-3.5 w-3.5" strokeWidth={2} />
           </a>
-        ) : (
-          <button type="button" disabled title="Pobierz" className={odHeaderActionDocActionBtnClass}>
-            <Download className="h-3.5 w-3.5" strokeWidth={2} />
-          </button>
-        )}
-        {canPreview ? (
+        ) : null}
+        {row.previewUrl ? (
           <a
-            href={slot.previewUrl!}
+            href={row.previewUrl}
             target="_blank"
             rel="noreferrer"
             title="Podgląd"
-            aria-label={`Podgląd ${slot.label}`}
             className={odHeaderActionDocActionBtnClass}
           >
             <Eye className="h-3.5 w-3.5" strokeWidth={2} />
           </a>
-        ) : (
-          <button type="button" disabled title="Podgląd" className={odHeaderActionDocActionBtnClass}>
-            <Eye className="h-3.5 w-3.5" strokeWidth={2} />
+        ) : null}
+        {row.onPrint ? (
+          <button type="button" title="Drukuj" onClick={row.onPrint} className={odHeaderActionDocActionBtnClass}>
+            <Printer className="h-3.5 w-3.5" strokeWidth={2} />
           </button>
-        )}
-        <button
-          type="button"
-          disabled={!canPrint}
-          title="Drukuj"
-          aria-label={`Drukuj ${slot.label}`}
-          onClick={slot.onPrint}
-          className={odHeaderActionDocActionBtnClass}
-        >
-          <Printer className="h-3.5 w-3.5" strokeWidth={2} />
-        </button>
+        ) : null}
       </div>
     </div>
   );
 }
 
+/** Only issued documents + issue actions — no empty document type slots. */
 export function OrderDocumentsQuickPanel({
   order,
   onGoToDocuments,
@@ -161,21 +99,60 @@ export function OrderDocumentsQuickPanel({
   onIssueStockDocument,
   onPrintLinked,
 }: Props) {
-  const saleSlots = buildSlots(order, "sale", SALE_SLOTS, onPrintLinked);
-  const stockSlots = buildSlots(order, "stock", STOCK_SLOTS, onPrintLinked);
+  const linked = order.linked_documents ?? [];
+  const uploads = order.order_documents ?? [];
+
+  const saleRows: DocRowModel[] = [];
+  const stockRows: DocRowModel[] = [];
+
+  for (const d of linked) {
+    const subtype = (d.document_subtype || d.document_type || "").toUpperCase();
+    const isSale = d.kind === "sale" || Boolean(d.sale_document_id);
+    const typeLabel = isSale
+      ? SALE_LABELS[subtype] || d.document_type || "Dokument sprzedażowy"
+      : STOCK_LABELS[subtype] || d.document_type || "Dokument magazynowy";
+    const row: DocRowModel = {
+      key: `linked-${d.id}`,
+      label: typeLabel,
+      number: d.document_number || undefined,
+      previewUrl: d.detail_path || null,
+      downloadUrl: d.detail_path || null,
+      onPrint: onPrintLinked ? () => onPrintLinked(d) : undefined,
+    };
+    if (isSale) saleRows.push(row);
+    else stockRows.push(row);
+  }
+
+  for (const d of uploads) {
+    const t = (d.document_type || "").toUpperCase();
+    const isSale = Boolean(SALE_LABELS[t]);
+    const row: DocRowModel = {
+      key: `upload-${d.id}`,
+      label: SALE_LABELS[t] || STOCK_LABELS[t] || d.document_type || "Dokument",
+      number: d.original_filename || undefined,
+      previewUrl: d.file_url || null,
+      downloadUrl: d.file_url || null,
+    };
+    if (isSale) saleRows.push(row);
+    else stockRows.push(row);
+  }
 
   return (
     <div>
       <p className={odHeaderActionSectionTitleClass}>Dokumenty sprzedażowe</p>
-      {saleSlots.map((slot) => (
-        <DocRow key={slot.key} slot={slot} />
-      ))}
+      {saleRows.length === 0 ? (
+        <p className="px-3 py-2 text-sm text-slate-500">Brak wystawionych dokumentów.</p>
+      ) : (
+        saleRows.map((row) => <DocRow key={row.key} row={row} />)
+      )}
 
       <div className={odHeaderActionMenuDividerClass} role="separator" />
       <p className={odHeaderActionSectionTitleClass}>Dokumenty magazynowe</p>
-      {stockSlots.map((slot) => (
-        <DocRow key={slot.key} slot={slot} />
-      ))}
+      {stockRows.length === 0 ? (
+        <p className="px-3 py-2 text-sm text-slate-500">Brak wystawionych dokumentów.</p>
+      ) : (
+        stockRows.map((row) => <DocRow key={row.key} row={row} />)
+      )}
 
       <div className={odHeaderActionMenuDividerClass} role="separator" />
       <button

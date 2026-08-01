@@ -1,3 +1,9 @@
+## 2026-08-01 — Zwroty/reklamacje: tworzenie w Panelu Zamówienia
+
+- Nowy zwrot/reklamacja w `OrderCaseCreateView` (produkty + summary), nie redirect WMS
+- Header bez Spakuj; menu Dokumenty tylko wystawione + wystaw sprzedażowy/magazynowy
+- Po create: karta w Panelu; RMZ nadal w module WMS
+
 ## 2026-08-01 — Modal Zamień produkt: redesign wizualny
 
 - Bez ramek przy zdjęciach; filtry segmentowe; lżejsze badge; zwarta lista

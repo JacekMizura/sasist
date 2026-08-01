@@ -2,14 +2,14 @@
 
 ## Active
 
-Modal „Zamień produkt” — przebudowa wizualna (design system):
+Zwroty/reklamacje w Panelu Zamówienia (create in-panel):
 
-- Zdjęcia bez ramek/tła; placeholder ikona
-- Filtry segmentowe ~34px, radius 8–10
-- Lżejsze badge, zwarta lista, stan magazynowy wyeksponowany
-- Najlepsze dopasowania jako kafelki (scroll do produktu)
-- Lżejszy footer; bez zmian logiki search/filtrów
+- Header: Nowy zwrot / Nowa reklamacja → `OrderCaseCreateView` (nie WMS)
+- Lista produktów + „Dodaj do zwrotu/reklamacji” + prawy panel podsumowania
+- Po zapisie: karta `/orders/returns/:id` lub `/orders/complaints/:id`; RMZ i tak w WMS
+- Usunięto Spakuj z headera; Dokumenty = tylko wystawione + 2 akcje wystawiania
 
 ## Constraints
 
-- Tylko UI — nie zmieniać API / filtrów / wyszukiwania
+- Tworzenie w Panelu; WMS = realizacja magazynowa (opcjonalny link)
+- Bez zmian kontraktu backend create (lines w `createWmsReturn` / `createComplaintFromOrder`)

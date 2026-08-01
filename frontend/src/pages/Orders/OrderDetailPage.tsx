@@ -100,6 +100,7 @@ import {
 } from "../../components/orders/OrderSummaryProductsList";
 import { OrderWarehouseProductsSection as ImportedWarehouseSection } from "../../components/orders/OrderWarehouseProductsSection";
 import { OrderDetailHeaderBar } from "../../components/orders/OrderDetailHeaderBar";
+import { OrderCaseCreateView, type OrderCaseKind } from "../../components/orders/caseCreate";
 import { OrderDetailSummaryTab } from "../../components/orders/OrderDetailSummaryTab";
 import { OrderDetailCommsTab } from "../../components/orders/OrderDetailCommsTab";
 import { WmsOperationTimesKpiPanel } from "../../components/orders/WmsOperationTimesKpiPanel";
@@ -237,6 +238,7 @@ export default function OrderDetailPage() {
   const [panelSummary, setPanelSummary] = useState<OrderUiStatusPanelSummary | null>(null);
   const [panelSubgroups, setPanelSubgroups] = useState<OrderUiPanelSubgroupRead[] | null>(null);
   const [panelSaving, setPanelSaving] = useState(false);
+  const [caseCreateKind, setCaseCreateKind] = useState<OrderCaseKind | null>(null);
   const [complaintWizardOpen, setComplaintWizardOpen] = useState(false);
   const [complaintPrefillItemIds, setComplaintPrefillItemIds] = useState<number[] | undefined>(undefined);
   const [shippingMethods, setShippingMethods] = useState<{ id: string; name: string; is_active: boolean }[]>([]);
@@ -1260,7 +1262,10 @@ export default function OrderDetailPage() {
           officePin={officePin}
           setOfficePin={setOfficePin}
           activeTab={activeTab}
-          setActiveTab={setActiveTab}
+          setActiveTab={(tab) => {
+            setCaseCreateKind(null);
+            setActiveTab(tab);
+          }}
           requestOrderDocumentPrint={requestOrderDocumentPrint}
           orderDocumentPrintBusy={orderDocumentPrintBusy}
           isStationarySale={isStationarySale}
@@ -1273,12 +1278,25 @@ export default function OrderDetailPage() {
           panelOrderStatusBrief={panelOrderStatusBrief}
           wmsDualWorkflow={wmsDualWorkflow}
           shippingLabel={shippingLabel}
-          onOpenComplaintWizard={() => setComplaintWizardOpen(true)}
+          onOpenCaseCreate={(kind) => setCaseCreateKind(kind)}
         />
 
         <div className={`flex-1 overflow-auto bg-white py-3 ${odMainHorizontalPadClass}`}>
           <div className="w-full">
-            {activeTab === "summary" ? (
+            {caseCreateKind ? (
+              <OrderCaseCreateView
+                kind={caseCreateKind}
+                order={order}
+                warehouseId={orderFulfillmentWhId}
+                onCancel={() => setCaseCreateKind(null)}
+                onCreated={(kind, createdId) => {
+                  setCaseCreateKind(null);
+                  if (kind === "return") navigate(`/orders/returns/${createdId}`);
+                  else navigate(`/orders/complaints/${createdId}`);
+                }}
+              />
+            ) : null}
+            {!caseCreateKind && activeTab === "summary" ? (
               <OrderDetailSummaryTab
                 order={order}
                 contact={contact}
@@ -1347,7 +1365,7 @@ export default function OrderDetailPage() {
               />
             ) : null}
 
-            {activeTab === "products" ? (
+            {!caseCreateKind && activeTab === "products" ? (
               <div className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,1fr)_320px] xl:grid-cols-[minmax(0,1fr)_340px] lg:items-start">
                 <div className="min-w-0 space-y-4">
                     {wmsErr && <p className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm font-medium text-amber-900 shadow-sm">{wmsErr}</p>}
@@ -1412,7 +1430,7 @@ export default function OrderDetailPage() {
               </div>
             ) : null}
 
-            {activeTab === "comms" ? (
+            {!caseCreateKind && activeTab === "comms" ? (
               <OrderDetailCommsTab
                 order={order}
                 contact={contact}
@@ -1436,7 +1454,7 @@ export default function OrderDetailPage() {
               />
             ) : null}
 
-            {activeTab === "docs" ? (
+            {!caseCreateKind && activeTab === "docs" ? (
               <div className="mt-1 w-full max-w-none space-y-3.5">
                 <OrderDocFilesTableSection
                   title={`Dokumenty (${docsTabDocumentsRows.length})`}
@@ -1477,7 +1495,7 @@ export default function OrderDetailPage() {
               </div>
             ) : null}
 
-            {activeTab === "logs" ? (
+            {!caseCreateKind && activeTab === "logs" ? (
               <div className="mt-1 w-full max-w-none">
                 <ActivityLogPanel
                   objectType="order"

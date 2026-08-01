@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
 import {
   Copy,
@@ -12,7 +11,6 @@ import {
 
 import type { DocumentPrintRequest } from "../../../utils/documentTemplatePrint";
 import { saleKindFromSubtype, stockKindFromType } from "../../../utils/documentTemplatePrint";
-import { WMS_ROUTES } from "../../../pages/wms/wmsRoutes";
 import type { DetailTabId } from "../orderDetailTabs";
 import type { OrderDetail } from "../orderDetailPageTypes";
 import { OrderHeaderActionIconButton } from "./OrderHeaderActionIconButton";
@@ -37,7 +35,8 @@ export type OrderHeaderActionsToolbarProps = {
   warehouseId: number | null;
   printBusy?: boolean;
   onPrint: (req: DocumentPrintRequest) => void;
-  onOpenComplaintWizard: () => void;
+  onNewReturn: () => void;
+  onNewComplaint: () => void;
   onSetActiveTab: (tab: DetailTabId) => void;
 };
 
@@ -52,10 +51,10 @@ export function OrderHeaderActionsToolbar({
   warehouseId,
   printBusy,
   onPrint,
-  onOpenComplaintWizard,
+  onNewReturn,
+  onNewComplaint,
   onSetActiveTab,
 }: OrderHeaderActionsToolbarProps) {
-  const navigate = useNavigate();
   const [panel, setPanel] = useState<PanelId>(null);
   const [linkModalOpen, setLinkModalOpen] = useState(false);
   const [copyMode, setCopyMode] = useState<OrderCopyMenuChoice | null>(null);
@@ -144,11 +143,8 @@ export function OrderHeaderActionsToolbar({
               returns={cases.returns}
               complaints={cases.complaints}
               onClose={closePanels}
-              onAddReturn={() => navigate(`/wms/returns/create/${order.id}`)}
-              onAddComplaint={onOpenComplaintWizard}
-              onOpenReturnForm={() =>
-                navigate(WMS_ROUTES.returns, { state: { preselectOrderId: order.id } })
-              }
+              onNewReturn={onNewReturn}
+              onNewComplaint={onNewComplaint}
             />
           </OrderHeaderPopoverFrame>
         </div>

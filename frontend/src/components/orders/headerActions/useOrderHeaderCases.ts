@@ -36,7 +36,7 @@ function mapReturn(row: WmsReturnListItem): OrderHeaderCaseRow {
     status: returnStatusLabel(row),
     date: fmtDate(row.created_at),
     owner: name || null,
-    openPath: `/wms/returns/process/${row.id}`,
+    openPath: `/orders/returns/${row.id}`,
   };
 }
 

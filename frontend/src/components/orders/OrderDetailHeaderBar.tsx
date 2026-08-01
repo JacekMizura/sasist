@@ -21,8 +21,6 @@ import type { OrderDetail } from "./orderDetailPageTypes";
 import { patchOrderUiStatus } from "../../api/orderUiStatusApi";
 import type { OrderUiPanelSubgroupRead, OrderUiStatusPanelSummary } from "../../types/orderUiStatus";
 import type { PanelConfigurableUiStatusBrief } from "../../utils/panelListStatusBriefMappers";
-import { WMS_ROUTES } from "../../pages/wms/wmsRoutes";
-import { brandPrimaryButtonClass } from "../../design-system/brandUi";
 import { tabsNavItemClassName } from "../layout/TabsNav";
 import { DAMAGE_TENANT_ID } from "../../pages/damage/damageShared";
 import type { DocumentPrintRequest } from "../../utils/documentTemplatePrint";
@@ -65,7 +63,7 @@ type Props = {
   panelOrderStatusBrief: PanelConfigurableUiStatusBrief | null;
   wmsDualWorkflow: WmsDualWorkflow;
   shippingLabel: string;
-  onOpenComplaintWizard: () => void;
+  onOpenCaseCreate: (kind: "return" | "complaint") => void;
 };
 
 /**
@@ -85,7 +83,7 @@ export function OrderDetailHeaderBar({
   setActiveTab,
   requestOrderDocumentPrint,
   orderDocumentPrintBusy,
-  isStationarySale,
+  isStationarySale: _isStationarySale,
   orderFulfillmentWhId,
   panelSummary,
   panelSubgroups,
@@ -95,7 +93,7 @@ export function OrderDetailHeaderBar({
   panelOrderStatusBrief,
   wmsDualWorkflow,
   shippingLabel,
-  onOpenComplaintWizard,
+  onOpenCaseCreate,
 }: Props) {
   return (
     <div className={`${odMainMaxWidthClass} ${odMainHorizontalPadClass} pb-0 pt-3`}>
@@ -161,15 +159,10 @@ export function OrderDetailHeaderBar({
                     onPrint={(req) => {
                       void requestOrderDocumentPrint(req);
                     }}
-                    onOpenComplaintWizard={onOpenComplaintWizard}
+                    onNewReturn={() => onOpenCaseCreate("return")}
+                    onNewComplaint={() => onOpenCaseCreate("complaint")}
                     onSetActiveTab={setActiveTab}
                   />
-                  {!isStationarySale ? (
-                    <>
-                      <div className="mx-0.5 hidden h-6 w-px shrink-0 bg-slate-200 sm:block" aria-hidden />
-                      <Link to={WMS_ROUTES.packingOrder(order.id)} className={brandPrimaryButtonClass}>Spakuj</Link>
-                    </>
-                  ) : null}
               </div>
             </div>
 
