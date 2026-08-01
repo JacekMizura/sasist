@@ -2,14 +2,13 @@
 
 ## Active
 
-Lewy panel statusów — wyciszone liczniki (Linear/Stripe-style):
+Order header toolbar — UX Sellasist (popover-first):
 
-- Małe okrągłe badge ~26px, idle: białe + ramka + ciemny tekst
-- Kolor kategorii tylko na pasku/kropce; tint badge wyłącznie gdy wiersz aktywny
-- Nazwa statusu = hierarchia główna; licznik pomocniczy, wyrównany do prawej
-- Hover: tylko tło wiersza
+- Ikony otwierają małe dropdowny (320–420px), nie duże modale
+- Modale tylko: reklamacja, zwrot/create, połącz nowe, kopia/podział, wystawianie (docs tab)
+- Panele: returns menu, messages list, docs sections, link list, copy menu, print list
 
 ## Constraints
 
-- Bez kolorowych pastylek / solid group badges
-- `PanelTreeCount` — wspólny komponent dla zamówień, zwrotów, pickera
+- Bez zmian backendu / endpointów
+- Zachować Spakuj, bookmark, pin

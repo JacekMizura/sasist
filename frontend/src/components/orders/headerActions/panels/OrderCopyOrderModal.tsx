@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import toast from "react-hot-toast";
 
 import { OrderHeaderModalFrame } from "../OrderHeaderModalFrame";
+import type { OrderCopyMenuChoice } from "./OrderCopyMenuPanel";
 
 export type OrderCopyOptions = {
   products: boolean;
@@ -21,11 +22,23 @@ const DEFAULT_OPTS: OrderCopyOptions = {
   documents: true,
 };
 
+function presetsFor(mode: OrderCopyMenuChoice | null): OrderCopyOptions {
+  if (mode === "with_products") {
+    return { ...DEFAULT_OPTS, products: true, discounts: true, customer: true, address: true };
+  }
+  if (mode === "without_products") {
+    return { ...DEFAULT_OPTS, products: false, discounts: false, customer: true, address: true };
+  }
+  return { ...DEFAULT_OPTS };
+}
+
 type Props = {
   open: boolean;
   onClose: () => void;
   orderId: number;
   orderNumber: string | null;
+  /** Which menu choice opened the modal. */
+  mode: OrderCopyMenuChoice | null;
   /** Hook for future API — until then shows toast with selected options. */
   onSubmitCopy?: (orderId: number, options: OrderCopyOptions) => Promise<void> | void;
 };
@@ -39,21 +52,31 @@ const CHECKS: { key: keyof OrderCopyOptions; label: string }[] = [
   { key: "documents", label: "kopiuj dokumenty" },
 ];
 
-export function OrderCopyOrderModal({ open, onClose, orderId, orderNumber, onSubmitCopy }: Props) {
+export function OrderCopyOrderModal({ open, onClose, orderId, orderNumber, mode, onSubmitCopy }: Props) {
   const [opts, setOpts] = useState<OrderCopyOptions>(DEFAULT_OPTS);
   const [pending, setPending] = useState(false);
 
   useEffect(() => {
-    if (open) setOpts(DEFAULT_OPTS);
-  }, [open]);
+    if (open) setOpts(presetsFor(mode));
+  }, [open, mode]);
 
   const toggle = (key: keyof OrderCopyOptions) => {
     setOpts((prev) => ({ ...prev, [key]: !prev[key] }));
   };
 
+  const isSplit = mode === "split";
+
   const submit = async () => {
     setPending(true);
     try {
+      if (isSplit) {
+        toast(
+          `Podział zamówienia ${orderNumber ?? orderId} — API w przygotowaniu.`,
+          { duration: 4000 },
+        );
+        onClose();
+        return;
+      }
       if (onSubmitCopy) {
         await onSubmitCopy(orderId, opts);
       } else {
@@ -74,7 +97,7 @@ export function OrderCopyOrderModal({ open, onClose, orderId, orderNumber, onSub
     <OrderHeaderModalFrame
       open={open}
       onClose={onClose}
-      title="Utwórz kopię zamówienia"
+      title={isSplit ? "Podziel zamówienie" : "Utwórz kopię zamówienia"}
       footer={
         <div className="flex justify-end gap-2">
           <button
@@ -91,29 +114,38 @@ export function OrderCopyOrderModal({ open, onClose, orderId, orderNumber, onSub
             onClick={() => void submit()}
             className="rounded-lg border border-slate-800 bg-slate-800 px-3 py-2 text-sm font-semibold text-white hover:bg-slate-900 disabled:opacity-50"
           >
-            Utwórz kopię
+            {isSplit ? "Podziel" : "Utwórz kopię"}
           </button>
         </div>
       }
     >
-      <p className="mb-3 text-sm text-slate-600">
-        Wybierz, które dane mają trafić do nowego zamówienia.
-      </p>
-      <ul className="space-y-2">
-        {CHECKS.map((c) => (
-          <li key={c.key}>
-            <label className="flex cursor-pointer items-center gap-2.5 rounded-lg border border-slate-200 px-3 py-2.5 hover:bg-slate-50">
-              <input
-                type="checkbox"
-                checked={opts[c.key]}
-                onChange={() => toggle(c.key)}
-                className="h-4 w-4 rounded border-slate-300 text-slate-800 focus:ring-slate-300"
-              />
-              <span className="text-sm font-medium text-slate-800">{c.label}</span>
-            </label>
-          </li>
-        ))}
-      </ul>
+      {isSplit ? (
+        <p className="text-sm text-slate-600">
+          Wybierz pozycje do przeniesienia do nowego zamówienia. Kreator podziału będzie podpięty pod API w
+          kolejnym kroku — na razie akcja jest zapisana jako intencja.
+        </p>
+      ) : (
+        <>
+          <p className="mb-3 text-sm text-slate-600">
+            Wybierz, które dane mają trafić do nowego zamówienia.
+          </p>
+          <ul className="space-y-2">
+            {CHECKS.map((c) => (
+              <li key={c.key}>
+                <label className="flex cursor-pointer items-center gap-2.5 rounded-lg border border-slate-200 px-3 py-2.5 hover:bg-slate-50">
+                  <input
+                    type="checkbox"
+                    checked={opts[c.key]}
+                    onChange={() => toggle(c.key)}
+                    className="h-4 w-4 rounded border-slate-300 text-slate-800 focus:ring-slate-300"
+                  />
+                  <span className="text-sm font-medium text-slate-800">{c.label}</span>
+                </label>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
     </OrderHeaderModalFrame>
   );
 }

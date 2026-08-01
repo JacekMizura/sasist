@@ -1,183 +1,203 @@
+import { Download, Eye, FilePlus2, FileText, Printer } from "lucide-react";
+
 import type { OrderDetail } from "../../orderDetailPageTypes";
 import {
+  odHeaderActionDocActionBtnClass,
   odHeaderActionFooterLinkClass,
+  odHeaderActionMenuDividerClass,
   odHeaderActionSectionTitleClass,
 } from "../orderHeaderActionTokens";
 
-type DocRow = {
+type LinkedDoc = NonNullable<OrderDetail["linked_documents"]>[number];
+
+type DocSlot = {
   key: string;
-  type: string;
-  number: string;
-  date: string | null;
-  status: string;
-  previewPath?: string | null;
-  fileUrl?: string | null;
+  label: string;
+  number?: string;
+  previewUrl?: string | null;
+  downloadUrl?: string | null;
   onPrint?: () => void;
+  present: boolean;
 };
 
 type Props = {
   order: OrderDetail;
   onGoToDocuments: () => void;
-  onPrintLinked?: (doc: NonNullable<OrderDetail["linked_documents"]>[number]) => void;
-  onPrintOrderConfirmation?: () => void;
+  onIssueSaleDocument: () => void;
+  onIssueStockDocument: () => void;
+  onPrintLinked?: (doc: LinkedDoc) => void;
 };
 
-const SALE_LABELS: Record<string, string> = {
-  INVOICE: "Faktura",
-  FV: "Faktura",
-  CORRECTION: "Korekta",
-  PROFORMA: "Proforma",
-  RECEIPT: "Paragon",
-  PA: "Paragon",
-  PARAGON: "Paragon",
-};
+const SALE_SLOTS = [
+  { key: "INVOICE", label: "Faktura", match: ["INVOICE", "FV"] },
+  { key: "CORRECTION", label: "Korekta", match: ["CORRECTION", "KOR"] },
+  { key: "RECEIPT", label: "Paragon", match: ["RECEIPT", "PA", "PARAGON"] },
+  { key: "PROFORMA", label: "Proforma", match: ["PROFORMA"] },
+] as const;
 
-const STOCK_LABELS: Record<string, string> = {
-  WZ: "WZ",
-  PZ: "PZ",
-  PW: "PW",
-  RW: "RW",
-  MM: "MM",
-  RESERVATION: "Rezerwacja",
-  REZERWACJA: "Rezerwacja",
-};
+const STOCK_SLOTS = [
+  { key: "WZ", label: "WZ", match: ["WZ"] },
+  { key: "PZ", label: "PZ", match: ["PZ"] },
+  { key: "RW", label: "RW", match: ["RW"] },
+  { key: "PW", label: "PW", match: ["PW"] },
+  { key: "MM", label: "MM", match: ["MM"] },
+  { key: "RESERVATION", label: "Rezerwacja", match: ["RESERVATION", "REZERWACJA"] },
+] as const;
 
-function fmtDate(iso: string | null | undefined): string | null {
-  if (!iso) return null;
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return null;
-  return d.toLocaleDateString("pl-PL");
+function matchType(raw: string | null | undefined, match: readonly string[]): boolean {
+  const t = (raw || "").toUpperCase();
+  return match.some((m) => t === m || t.includes(m));
 }
 
-function DocSection({ title, rows }: { title: string; rows: DocRow[] }) {
+function buildSlots(
+  order: OrderDetail,
+  kind: "sale" | "stock",
+  defs: readonly { key: string; label: string; match: readonly string[] }[],
+  onPrintLinked?: (doc: LinkedDoc) => void,
+): DocSlot[] {
+  const linked = order.linked_documents ?? [];
+  const uploads = order.order_documents ?? [];
+
+  return defs.map((def) => {
+    const linkedHit = linked.find((d) => {
+      const isSale = d.kind === "sale" || Boolean(d.sale_document_id);
+      if (kind === "sale" ? !isSale : isSale) return false;
+      return matchType(d.document_subtype, def.match) || matchType(d.document_type, def.match);
+    });
+    const uploadHit = uploads.find((d) => matchType(d.document_type, def.match));
+
+    if (linkedHit) {
+      return {
+        key: def.key,
+        label: def.label,
+        number: linkedHit.document_number || undefined,
+        previewUrl: linkedHit.detail_path || null,
+        downloadUrl: linkedHit.detail_path || null,
+        onPrint: onPrintLinked ? () => onPrintLinked(linkedHit) : undefined,
+        present: true,
+      };
+    }
+    if (uploadHit) {
+      return {
+        key: def.key,
+        label: def.label,
+        number: uploadHit.original_filename || undefined,
+        previewUrl: uploadHit.file_url || null,
+        downloadUrl: uploadHit.file_url || null,
+        present: true,
+      };
+    }
+    return { key: def.key, label: def.label, present: false };
+  });
+}
+
+function DocRow({ slot }: { slot: DocSlot }) {
+  const canPreview = Boolean(slot.previewUrl);
+  const canDownload = Boolean(slot.downloadUrl);
+  const canPrint = Boolean(slot.onPrint);
+
   return (
-    <section className="space-y-1.5">
-      <p className={odHeaderActionSectionTitleClass}>{title}</p>
-      {rows.length === 0 ? (
-        <p className="text-sm text-slate-500">Brak dokumentów w tej grupie.</p>
-      ) : (
-        <ul className="space-y-1.5">
-          {rows.map((row) => (
-            <li key={row.key} className="rounded-lg border border-slate-200 px-2.5 py-2">
-              <div className="flex flex-wrap items-start justify-between gap-2">
-                <div className="min-w-0">
-                  <p className="text-sm font-semibold text-slate-900">
-                    {row.type}
-                    {row.number ? (
-                      <span className="ml-1.5 font-medium text-slate-600">{row.number}</span>
-                    ) : null}
-                  </p>
-                  <p className="mt-0.5 text-[11px] text-slate-500">
-                    {row.date ?? "—"} · {row.status}
-                  </p>
-                </div>
-                <div className="flex flex-wrap gap-1">
-                  {row.previewPath ? (
-                    <a
-                      href={row.previewPath}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="rounded border border-slate-300 bg-white px-2 py-0.5 text-[10px] font-semibold text-slate-700 hover:bg-slate-50"
-                    >
-                      Podgląd
-                    </a>
-                  ) : null}
-                  {row.fileUrl ? (
-                    <a
-                      href={row.fileUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="rounded border border-slate-300 bg-white px-2 py-0.5 text-[10px] font-semibold text-slate-700 hover:bg-slate-50"
-                    >
-                      Pobierz PDF
-                    </a>
-                  ) : null}
-                  {row.onPrint ? (
-                    <button
-                      type="button"
-                      onClick={row.onPrint}
-                      className="rounded border border-slate-300 bg-white px-2 py-0.5 text-[10px] font-semibold text-slate-700 hover:bg-slate-50"
-                    >
-                      Drukuj
-                    </button>
-                  ) : null}
-                </div>
-              </div>
-            </li>
-          ))}
-        </ul>
-      )}
-    </section>
+    <div className="flex items-center gap-2 px-3 py-2">
+      <FileText className="h-4 w-4 shrink-0 text-slate-500" strokeWidth={2} aria-hidden />
+      <div className="min-w-0 flex-1">
+        <p className={`truncate text-sm ${slot.present ? "font-medium text-slate-900" : "text-slate-500"}`}>
+          {slot.label}
+          {slot.number ? <span className="ml-1.5 font-normal text-slate-500">{slot.number}</span> : null}
+        </p>
+        {!slot.present ? <p className="text-[11px] text-slate-400">Brak dokumentu</p> : null}
+      </div>
+      <div className="flex shrink-0 items-center gap-1">
+        {canDownload ? (
+          <a
+            href={slot.downloadUrl!}
+            target="_blank"
+            rel="noreferrer"
+            title="Pobierz"
+            aria-label={`Pobierz ${slot.label}`}
+            className={odHeaderActionDocActionBtnClass}
+          >
+            <Download className="h-3.5 w-3.5" strokeWidth={2} />
+          </a>
+        ) : (
+          <button type="button" disabled title="Pobierz" className={odHeaderActionDocActionBtnClass}>
+            <Download className="h-3.5 w-3.5" strokeWidth={2} />
+          </button>
+        )}
+        {canPreview ? (
+          <a
+            href={slot.previewUrl!}
+            target="_blank"
+            rel="noreferrer"
+            title="Podgląd"
+            aria-label={`Podgląd ${slot.label}`}
+            className={odHeaderActionDocActionBtnClass}
+          >
+            <Eye className="h-3.5 w-3.5" strokeWidth={2} />
+          </a>
+        ) : (
+          <button type="button" disabled title="Podgląd" className={odHeaderActionDocActionBtnClass}>
+            <Eye className="h-3.5 w-3.5" strokeWidth={2} />
+          </button>
+        )}
+        <button
+          type="button"
+          disabled={!canPrint}
+          title="Drukuj"
+          aria-label={`Drukuj ${slot.label}`}
+          onClick={slot.onPrint}
+          className={odHeaderActionDocActionBtnClass}
+        >
+          <Printer className="h-3.5 w-3.5" strokeWidth={2} />
+        </button>
+      </div>
+    </div>
   );
 }
 
 export function OrderDocumentsQuickPanel({
   order,
   onGoToDocuments,
+  onIssueSaleDocument,
+  onIssueStockDocument,
   onPrintLinked,
-  onPrintOrderConfirmation,
 }: Props) {
-  const linked = order.linked_documents ?? [];
-  const uploads = order.order_documents ?? [];
-
-  const saleRows: DocRow[] = [];
-  const stockRows: DocRow[] = [];
-
-  for (const d of linked) {
-    const subtype = (d.document_subtype || d.document_type || "").toUpperCase();
-    const isSale = d.kind === "sale" || Boolean(d.sale_document_id);
-    const typeLabel = isSale
-      ? SALE_LABELS[subtype] || d.document_type || "Dokument sprzedażowy"
-      : STOCK_LABELS[subtype] || d.document_type || "Dokument magazynowy";
-    const row: DocRow = {
-      key: `linked-${d.id}`,
-      type: typeLabel,
-      number: d.document_number || "",
-      date: null,
-      status: "Zatwierdzony",
-      previewPath: d.detail_path || null,
-      onPrint: onPrintLinked ? () => onPrintLinked(d) : undefined,
-    };
-    if (isSale) saleRows.push(row);
-    else stockRows.push(row);
-  }
-
-  for (const d of uploads) {
-    const t = (d.document_type || "").toUpperCase();
-    const isSale = t === "INVOICE" || t === "PARAGON" || t === "PROFORMA" || t === "CORRECTION";
-    const row: DocRow = {
-      key: `upload-${d.id}`,
-      type: SALE_LABELS[t] || STOCK_LABELS[t] || d.document_type || "Dokument",
-      number: d.original_filename || "",
-      date: fmtDate(d.created_at),
-      status: "Załącznik",
-      fileUrl: d.file_url || null,
-      previewPath: d.file_url || null,
-    };
-    if (isSale) saleRows.push(row);
-    else stockRows.push(row);
-  }
-
-  if (saleRows.length === 0 && onPrintOrderConfirmation) {
-    saleRows.push({
-      key: "order-confirmation",
-      type: "Potwierdzenie zamówienia",
-      number: order.number ? String(order.number) : `#${order.id}`,
-      date: null,
-      status: "Dostępny",
-      onPrint: onPrintOrderConfirmation,
-    });
-  }
+  const saleSlots = buildSlots(order, "sale", SALE_SLOTS, onPrintLinked);
+  const stockSlots = buildSlots(order, "stock", STOCK_SLOTS, onPrintLinked);
 
   return (
-    <div className="space-y-4">
-      <DocSection title="Dokumenty sprzedażowe" rows={saleRows} />
-      <DocSection title="Dokumenty magazynowe" rows={stockRows} />
-      <div className="border-t border-slate-100 pt-2.5 text-center">
-        <button type="button" onClick={onGoToDocuments} className={odHeaderActionFooterLinkClass}>
-          Przejdź do Dokumentów i plików
-        </button>
-      </div>
+    <div>
+      <p className={odHeaderActionSectionTitleClass}>Dokumenty sprzedażowe</p>
+      {saleSlots.map((slot) => (
+        <DocRow key={slot.key} slot={slot} />
+      ))}
+
+      <div className={odHeaderActionMenuDividerClass} role="separator" />
+      <p className={odHeaderActionSectionTitleClass}>Dokumenty magazynowe</p>
+      {stockSlots.map((slot) => (
+        <DocRow key={slot.key} slot={slot} />
+      ))}
+
+      <div className={odHeaderActionMenuDividerClass} role="separator" />
+      <button
+        type="button"
+        onClick={onIssueSaleDocument}
+        className="flex w-full items-center gap-2.5 px-3 py-2.5 text-left text-sm text-slate-800 transition-colors hover:bg-slate-50"
+      >
+        <FilePlus2 className="h-4 w-4 shrink-0 text-slate-500" strokeWidth={2} aria-hidden />
+        Wystaw dokument sprzedażowy
+      </button>
+      <button
+        type="button"
+        onClick={onIssueStockDocument}
+        className="flex w-full items-center gap-2.5 px-3 py-2.5 text-left text-sm text-slate-800 transition-colors hover:bg-slate-50"
+      >
+        <FilePlus2 className="h-4 w-4 shrink-0 text-slate-500" strokeWidth={2} aria-hidden />
+        Wystaw dokument magazynowy
+      </button>
+      <div className={odHeaderActionMenuDividerClass} role="separator" />
+      <button type="button" onClick={onGoToDocuments} className={odHeaderActionFooterLinkClass}>
+        Przejdź do Dokumentów
+      </button>
     </div>
   );
 }

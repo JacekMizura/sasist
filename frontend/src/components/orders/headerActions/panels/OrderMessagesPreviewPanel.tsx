@@ -1,15 +1,18 @@
 import { useEffect, useState } from "react";
-import { Loader2 } from "lucide-react";
+import { Loader2, Mail } from "lucide-react";
 
 import { getOrderNotes } from "../../../../api/ordersApi";
 import type { OrderNoteDto } from "../../orderDetailPageTypes";
 import {
   odHeaderActionFooterLinkClass,
-  odHeaderActionSectionTitleClass,
+  odHeaderActionMenuDividerClass,
+  odHeaderActionMenuItemClass,
+  odHeaderActionMenuItemIconClass,
 } from "../orderHeaderActionTokens";
 
 type Props = {
   orderId: number;
+  customerName?: string | null;
   customerPreview?: string | null;
   hasCustomerComment?: boolean;
   onGoToComms: () => void;
@@ -28,9 +31,25 @@ function fmtWhen(iso: string | null | undefined): string {
   });
 }
 
-/** Quick messages preview — full thread lives on Komunikacja tab. */
+function noteSubject(n: OrderNoteDto): string {
+  const raw = (n.content || "").trim();
+  if (!raw) return "Bez tematu";
+  const firstLine = raw.split(/\r?\n/)[0]?.trim() || raw;
+  return firstLine.length > 72 ? `${firstLine.slice(0, 72)}…` : firstLine;
+}
+
+function noteStatus(type: string): string {
+  const t = (type || "").toLowerCase();
+  if (t.includes("customer") || t.includes("client") || t === "comment") return "Klient";
+  if (t.includes("email") || t.includes("mail")) return "E-mail";
+  if (t.includes("internal") || t.includes("note")) return "Wewnętrzna";
+  return type?.trim() || "Wiadomość";
+}
+
+/** Mail-like messages preview — full thread on Komunikacja tab. */
 export function OrderMessagesPreviewPanel({
   orderId,
+  customerName,
   customerPreview,
   hasCustomerComment,
   onGoToComms,
@@ -56,45 +75,66 @@ export function OrderMessagesPreviewPanel({
     };
   }, [orderId]);
 
+  const clientLabel = (customerName || "").trim() || "Klient";
+  const hasPreview = Boolean(hasCustomerComment && (customerPreview || "").trim());
+  const empty = !loading && notes.length === 0 && !hasPreview;
+
   return (
-    <div className="space-y-3">
-      <div>
-        <p className={odHeaderActionSectionTitleClass}>Szybki podgląd</p>
-        {hasCustomerComment && (customerPreview || "").trim() ? (
-          <div className="mt-1.5 rounded-lg border border-emerald-200 bg-emerald-50/70 px-2.5 py-2 text-sm text-emerald-950">
-            {(customerPreview || "").trim()}
-          </div>
-        ) : (
-          <p className="mt-1.5 text-sm text-slate-500">Brak wyróżnionego komentarza klienta.</p>
-        )}
-      </div>
+    <div>
+      {loading ? (
+        <div className="flex items-center gap-2 px-3 py-4 text-sm text-slate-500">
+          <Loader2 className="h-4 w-4 animate-spin" />
+          Ładowanie…
+        </div>
+      ) : empty ? (
+        <p className="px-3 py-4 text-sm text-slate-500">Brak wiadomości.</p>
+      ) : (
+        <ul>
+          {hasPreview ? (
+            <li>
+              <button type="button" onClick={onGoToComms} className={odHeaderActionMenuItemClass}>
+                <span className={odHeaderActionMenuItemIconClass} aria-hidden>
+                  <Mail className="h-full w-full" strokeWidth={2} />
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-sm font-medium text-slate-900">
+                    {(customerPreview || "").trim()}
+                  </span>
+                  <span className="mt-0.5 flex flex-wrap gap-x-2 text-[11px] text-slate-500">
+                    <span>{clientLabel}</span>
+                    <span>·</span>
+                    <span>Klient</span>
+                  </span>
+                </span>
+              </button>
+            </li>
+          ) : null}
+          {notes.map((n) => (
+            <li key={n.id}>
+              <button type="button" onClick={onGoToComms} className={odHeaderActionMenuItemClass}>
+                <span className={odHeaderActionMenuItemIconClass} aria-hidden>
+                  <Mail className="h-full w-full" strokeWidth={2} />
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-sm font-medium text-slate-900">{noteSubject(n)}</span>
+                  <span className="mt-0.5 flex flex-wrap gap-x-2 text-[11px] text-slate-500">
+                    <span className="truncate">{clientLabel}</span>
+                    <span>·</span>
+                    <span className="shrink-0">{fmtWhen(n.created_at)}</span>
+                    <span>·</span>
+                    <span className="shrink-0">{noteStatus(n.type)}</span>
+                  </span>
+                </span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
 
-      <div>
-        <p className={odHeaderActionSectionTitleClass}>Historia wiadomości</p>
-        {loading ? (
-          <div className="flex items-center gap-2 py-3 text-sm text-slate-500">
-            <Loader2 className="h-4 w-4 animate-spin" />
-            Ładowanie…
-          </div>
-        ) : notes.length === 0 ? (
-          <p className="mt-1.5 text-sm text-slate-500">Brak notatek / wiadomości na zamówieniu.</p>
-        ) : (
-          <ul className="mt-1.5 space-y-1.5">
-            {notes.map((n) => (
-              <li key={n.id} className="rounded-lg border border-slate-200 px-2.5 py-2">
-                <p className="text-[11px] font-medium text-slate-500">{fmtWhen(n.created_at)}</p>
-                <p className="mt-0.5 line-clamp-3 text-sm text-slate-800">{(n.content || "—").trim()}</p>
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
-
-      <div className="border-t border-slate-100 pt-2.5 text-center">
-        <button type="button" onClick={onGoToComms} className={odHeaderActionFooterLinkClass}>
-          Przejdź do zakładki Komunikacja
-        </button>
-      </div>
+      <div className={odHeaderActionMenuDividerClass} role="separator" />
+      <button type="button" onClick={onGoToComms} className={odHeaderActionFooterLinkClass}>
+        Przejdź do Komunikacji
+      </button>
     </div>
   );
 }

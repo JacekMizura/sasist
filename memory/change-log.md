@@ -1,3 +1,9 @@
+## 2026-08-01 — Order header: Sellasist popover UX
+
+- Ikony → dropdown (nie modal); modal tylko przy wprowadzaniu danych
+- Returns/messages/docs/link/copy/print przebudowane na context menu
+- Link: lista + „Połącz nowe…” → modal; Copy: 3 opcje → formularz
+
 ## 2026-07-24 — Panel statusów: wyciszone liczniki
 
 - Usunięte kolorowe pastylki; małe okrągłe badge ~26px (białe + ramka)

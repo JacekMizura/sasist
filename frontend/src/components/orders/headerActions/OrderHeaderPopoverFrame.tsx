@@ -6,9 +6,15 @@ type Props = {
   open: boolean;
   onClose: () => void;
   rootRef: RefObject<HTMLDivElement | null>;
+  /** Accessible name (and optional chrome title when ``chrome``). */
   title: string;
   children: ReactNode;
   wide?: boolean;
+  /**
+   * ``menu`` — flat Sellasist context menu (no title bar).
+   * ``panel`` — light header with close (e.g. messages).
+   */
+  variant?: "menu" | "panel";
   footer?: ReactNode;
 };
 
@@ -20,6 +26,7 @@ export function OrderHeaderPopoverFrame({
   title,
   children,
   wide,
+  variant = "menu",
   footer,
 }: Props) {
   useEffect(() => {
@@ -41,25 +48,31 @@ export function OrderHeaderPopoverFrame({
 
   if (!open) return null;
 
+  const showChrome = variant === "panel";
+
   return (
     <div
-      role="dialog"
+      role="menu"
       aria-label={title}
       className={wide ? odHeaderActionPopoverWideClass : odHeaderActionPopoverClass}
     >
-      <div className="flex items-center justify-between gap-2 border-b border-slate-100 px-3 py-2.5">
-        <h3 className="text-sm font-bold text-slate-900">{title}</h3>
-        <button
-          type="button"
-          onClick={onClose}
-          className="inline-flex h-7 w-7 items-center justify-center rounded-md text-slate-400 hover:bg-slate-50 hover:text-slate-700"
-          aria-label="Zamknij"
-        >
-          <X className="h-4 w-4" strokeWidth={2} />
-        </button>
+      {showChrome ? (
+        <div className="flex items-center justify-between gap-2 border-b border-slate-100 px-3 py-2.5">
+          <h3 className="text-sm font-bold text-slate-900">{title}</h3>
+          <button
+            type="button"
+            onClick={onClose}
+            className="inline-flex h-7 w-7 items-center justify-center rounded-md text-slate-400 hover:bg-slate-50 hover:text-slate-700"
+            aria-label="Zamknij"
+          >
+            <X className="h-4 w-4" strokeWidth={2} />
+          </button>
+        </div>
+      ) : null}
+      <div className={showChrome ? "max-h-[min(28rem,70vh)] overflow-y-auto py-1" : "max-h-[min(28rem,70vh)] overflow-y-auto py-1"}>
+        {children}
       </div>
-      <div className="max-h-[min(28rem,70vh)] overflow-y-auto px-3 py-3">{children}</div>
-      {footer ? <div className="border-t border-slate-100 px-3 py-2.5">{footer}</div> : null}
+      {footer ? <div className="border-t border-slate-100">{footer}</div> : null}
     </div>
   );
 }

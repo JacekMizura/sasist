@@ -69,7 +69,7 @@ export function OrderLinkOrdersModal({ open, onClose, orderId, warehouseId }: Pr
     <OrderHeaderModalFrame
       open={open}
       onClose={onClose}
-      title="Połącz z innym zamówieniem"
+      title="Połącz zamówienia"
       footer={
         <p className="text-[11px] text-slate-500">
           Powiązania są zapisane lokalnie w przeglądarce — API połączeń zamówień będzie podpięte w kolejnym kroku.
@@ -78,7 +78,7 @@ export function OrderLinkOrdersModal({ open, onClose, orderId, warehouseId }: Pr
     >
       <div className="space-y-4">
         <div>
-          <label className="mb-1 block text-xs font-semibold text-slate-600">Wyszukiwarka</label>
+          <label className="mb-1 block text-xs font-semibold text-slate-600">Podaj numer zamówienia</label>
           <div className="flex gap-2">
             <div className="relative min-w-0 flex-1">
               <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
