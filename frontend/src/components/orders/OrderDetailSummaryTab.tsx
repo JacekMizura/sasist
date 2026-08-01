@@ -48,6 +48,7 @@ import { getCustomerDisplayName } from "../../utils/getCustomerDisplayName";
 import { DAMAGE_TENANT_ID } from "../../pages/damage/damageShared";
 import { WMS_ROUTES } from "../../pages/wms/wmsRoutes";
 import { brandPrimaryButtonClass } from "../../design-system/brandUi";
+import { displayCustomerComment } from "../../utils/displayCustomerComment";
 
 const inpSm = "mt-0.5 w-full rounded-md border border-slate-200 bg-white px-2 py-1.5 text-[13px] text-slate-900";
 
@@ -598,10 +599,10 @@ export function OrderDetailSummaryTab({
         <aside className="overflow-hidden rounded-lg border border-slate-200 bg-white lg:sticky lg:top-3 lg:col-span-4">
           <div className="border-b border-slate-100 px-3.5 py-3">
             <h3 className={`${odSidePanelSectionTitleClass} mb-2`}>Podsumowanie zamówienia</h3>
-            {((wmsFulfillment?.customer_comment ?? order.latest_customer_comment_preview ?? "").trim()) ? (
+            {displayCustomerComment(wmsFulfillment?.customer_comment ?? order.latest_customer_comment_preview) ? (
               <div className="mb-2.5 rounded-md border border-[#f5e08b] bg-[#fff9c4] p-2.5 text-xs text-yellow-900">
                 <strong>Uwaga:</strong>{" "}
-                {(wmsFulfillment?.customer_comment ?? order.latest_customer_comment_preview ?? "").trim()}
+                {displayCustomerComment(wmsFulfillment?.customer_comment ?? order.latest_customer_comment_preview)}
               </div>
             ) : null}
             <div className="space-y-2 text-[13px] text-slate-600">

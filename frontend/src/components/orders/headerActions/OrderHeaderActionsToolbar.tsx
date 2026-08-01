@@ -11,6 +11,7 @@ import {
 
 import type { DocumentPrintRequest } from "../../../utils/documentTemplatePrint";
 import { saleKindFromSubtype, stockKindFromType } from "../../../utils/documentTemplatePrint";
+import { hasDisplayableCustomerComment } from "../../../utils/displayCustomerComment";
 import type { DetailTabId } from "../orderDetailTabs";
 import type { OrderDetail } from "../orderDetailPageTypes";
 import { OrderHeaderActionIconButton } from "./OrderHeaderActionIconButton";
@@ -37,7 +38,10 @@ export type OrderHeaderActionsToolbarProps = {
   onPrint: (req: DocumentPrintRequest) => void;
   onNewReturn: () => void;
   onNewComplaint: () => void;
+  onOpenCustomerReturnForm: () => void;
   onSetActiveTab: (tab: DetailTabId) => void;
+  /** Open Komunikacja and scroll to message (optional note id). */
+  onOpenMessage: (noteId?: number | null) => void;
 };
 
 type PanelId = "cases" | "messages" | "docs" | "link" | "copy" | "print" | null;
@@ -53,7 +57,9 @@ export function OrderHeaderActionsToolbar({
   onPrint,
   onNewReturn,
   onNewComplaint,
+  onOpenCustomerReturnForm,
   onSetActiveTab,
+  onOpenMessage,
 }: OrderHeaderActionsToolbarProps) {
   const [panel, setPanel] = useState<PanelId>(null);
   const [linkModalOpen, setLinkModalOpen] = useState(false);
@@ -83,7 +89,7 @@ export function OrderHeaderActionsToolbar({
     if (panel === "link") setLinked(readLinkedOrders(order.id));
   }, [panel, order.id]);
 
-  const messagesBadge = order.has_customer_comment ? 1 : null;
+  const messagesBadge = hasDisplayableCustomerComment(order.latest_customer_comment_preview) ? 1 : null;
   const customerName =
     (order.customer?.display_name || "").trim() ||
     [order.first_name, order.last_name].filter(Boolean).join(" ").trim() ||
@@ -106,12 +112,6 @@ export function OrderHeaderActionsToolbar({
       documentId: stockId,
       kindCode: stockKindFromType(doc.document_type),
     });
-  };
-
-  const goToDocs = (hint?: string) => {
-    closePanels();
-    onSetActiveTab("docs");
-    if (hint) toast(hint, { duration: 2800 });
   };
 
   return (
@@ -145,6 +145,7 @@ export function OrderHeaderActionsToolbar({
               onClose={closePanels}
               onNewReturn={onNewReturn}
               onNewComplaint={onNewComplaint}
+              onOpenCustomerReturnForm={onOpenCustomerReturnForm}
             />
           </OrderHeaderPopoverFrame>
         </div>
@@ -172,12 +173,9 @@ export function OrderHeaderActionsToolbar({
               customerName={customerName}
               customerPreview={order.latest_customer_comment_preview}
               hasCustomerComment={order.has_customer_comment}
-              onGoToComms={() => {
+              onOpenMessage={(noteId) => {
                 closePanels();
-                onSetActiveTab("comms");
-                window.setTimeout(() => {
-                  document.getElementById("order-comms-note")?.focus();
-                }, 0);
+                onOpenMessage(noteId);
               }}
             />
           </OrderHeaderPopoverFrame>
@@ -202,13 +200,16 @@ export function OrderHeaderActionsToolbar({
           >
             <OrderDocumentsQuickPanel
               order={order}
-              onGoToDocuments={() => goToDocs()}
-              onIssueSaleDocument={() =>
-                goToDocs("Przejdź do zakładki Dokumenty, aby wystawić dokument sprzedażowy.")
-              }
-              onIssueStockDocument={() =>
-                goToDocs("Przejdź do zakładki Dokumenty, aby wystawić dokument magazynowy.")
-              }
+              onIssueSaleDocument={() => {
+                closePanels();
+                onSetActiveTab("docs");
+                toast("Wystaw dokument sprzedażowy w zakładce Dokumenty.", { duration: 2800 });
+              }}
+              onIssueStockDocument={() => {
+                closePanels();
+                onSetActiveTab("docs");
+                toast("Wystaw dokument magazynowy w zakładce Dokumenty.", { duration: 2800 });
+              }}
               onPrintLinked={printLinkedDoc}
             />
           </OrderHeaderPopoverFrame>

@@ -64,6 +64,8 @@ type Props = {
   wmsDualWorkflow: WmsDualWorkflow;
   shippingLabel: string;
   onOpenCaseCreate: (kind: "return" | "complaint") => void;
+  onOpenCustomerReturnForm: () => void;
+  onOpenMessage: (noteId?: number | null) => void;
 };
 
 /**
@@ -94,6 +96,8 @@ export function OrderDetailHeaderBar({
   wmsDualWorkflow,
   shippingLabel,
   onOpenCaseCreate,
+  onOpenCustomerReturnForm,
+  onOpenMessage,
 }: Props) {
   return (
     <div className={`${odMainMaxWidthClass} ${odMainHorizontalPadClass} pb-0 pt-3`}>
@@ -161,6 +165,8 @@ export function OrderDetailHeaderBar({
                     }}
                     onNewReturn={() => onOpenCaseCreate("return")}
                     onNewComplaint={() => onOpenCaseCreate("complaint")}
+                    onOpenCustomerReturnForm={onOpenCustomerReturnForm}
+                    onOpenMessage={onOpenMessage}
                     onSetActiveTab={setActiveTab}
                   />
               </div>

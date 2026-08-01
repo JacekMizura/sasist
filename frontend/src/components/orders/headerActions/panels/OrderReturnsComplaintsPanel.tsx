@@ -1,5 +1,4 @@
-import { Link } from "react-router-dom";
-import { FileWarning, Loader2, RotateCcw, Undo2 } from "lucide-react";
+import { FileText, FileWarning, Loader2, RotateCcw, Undo2 } from "lucide-react";
 
 import type { OrderHeaderCaseRow } from "../useOrderHeaderCases";
 import { OrderHeaderMenuItem } from "../OrderHeaderMenuItem";
@@ -12,11 +11,38 @@ type Props = {
   complaints: OrderHeaderCaseRow[];
   onNewReturn: () => void;
   onNewComplaint: () => void;
+  onOpenCustomerReturnForm: () => void;
   onClose: () => void;
 };
 
+function CaseRow({ row, onClose }: { row: OrderHeaderCaseRow; onClose: () => void }) {
+  const kindLabel = row.kind === "return" ? "Zwrot" : "Reklamacja";
+  return (
+    <OrderHeaderMenuItem
+      to={row.openPath}
+      onClick={onClose}
+      icon={
+        row.kind === "return" ? (
+          <RotateCcw className="h-full w-full" strokeWidth={2} />
+        ) : (
+          <FileWarning className="h-full w-full" strokeWidth={2} />
+        )
+      }
+      label={
+        <span className="min-w-0">
+          <span className="block truncate font-medium text-slate-900">{row.number}</span>
+          <span className="mt-0.5 block truncate text-[11px] font-normal text-slate-500">
+            {kindLabel} · {row.status}
+          </span>
+        </span>
+      }
+    />
+  );
+}
+
 /**
- * Returns/complaints header menu — create in Order Panel; open existing cards.
+ * Lightweight returns/complaints menu.
+ * Operator create stays in Order Panel; customer form is a separate screen.
  */
 export function OrderReturnsComplaintsPanel({
   loading,
@@ -25,12 +51,16 @@ export function OrderReturnsComplaintsPanel({
   complaints,
   onNewReturn,
   onNewComplaint,
+  onOpenCustomerReturnForm,
   onClose,
 }: Props) {
-  const hasCases = returns.length > 0 || complaints.length > 0;
+  const cases = [
+    ...returns.map((r) => ({ ...r, kind: "return" as const })),
+    ...complaints.map((c) => ({ ...c, kind: "complaint" as const })),
+  ];
 
-  return (
-    <div>
+  const createBlock = (
+    <>
       <OrderHeaderMenuItem
         icon={<Undo2 className="h-full w-full" strokeWidth={2} />}
         label="Nowy zwrot"
@@ -48,62 +78,41 @@ export function OrderReturnsComplaintsPanel({
           onNewComplaint();
         }}
       />
+      <div className={odHeaderActionMenuDividerClass} role="separator" />
+      <OrderHeaderMenuItem
+        icon={<FileText className="h-full w-full" strokeWidth={2} />}
+        label="Formularz zwrotu"
+        onClick={() => {
+          onClose();
+          onOpenCustomerReturnForm();
+        }}
+      />
+    </>
+  );
 
+  return (
+    <div>
       {loading ? (
-        <>
-          <div className={odHeaderActionMenuDividerClass} role="separator" />
-          <div className="flex items-center gap-2 px-3 py-3 text-sm text-slate-500">
-            <Loader2 className="h-4 w-4 animate-spin" />
-            Ładowanie zgłoszeń…
-          </div>
-        </>
+        <div className="flex items-center gap-2 px-3 py-3 text-sm text-slate-500">
+          <Loader2 className="h-4 w-4 animate-spin" />
+          Ładowanie…
+        </div>
       ) : error ? (
+        <p className="px-3 py-2.5 text-sm text-red-600">{error}</p>
+      ) : cases.length > 0 ? (
         <>
-          <div className={odHeaderActionMenuDividerClass} role="separator" />
-          <p className="px-3 py-2.5 text-sm text-red-600">{error}</p>
-        </>
-      ) : hasCases ? (
-        <>
-          <div className={odHeaderActionMenuDividerClass} role="separator" />
           <p className="px-3 pt-2 pb-1 text-[10px] font-bold uppercase tracking-wider text-slate-400">
             Aktywne zgłoszenia
           </p>
-          {complaints.map((row) => (
-            <OrderHeaderMenuItem
-              key={`c-${row.id}`}
-              to={row.openPath}
-              onClick={onClose}
-              icon={<FileWarning className="h-full w-full" strokeWidth={2} />}
-              label={row.number}
-              trailing={<span className="text-[11px] text-slate-400">{row.status}</span>}
-            />
+          {cases.map((row) => (
+            <CaseRow key={`${row.kind}-${row.id}`} row={row} onClose={onClose} />
           ))}
-          {returns.map((row) => (
-            <OrderHeaderMenuItem
-              key={`r-${row.id}`}
-              to={row.openPath}
-              onClick={onClose}
-              icon={<RotateCcw className="h-full w-full" strokeWidth={2} />}
-              label={row.number}
-              trailing={<span className="text-[11px] text-slate-400">{row.status}</span>}
-            />
-          ))}
+          <div className={odHeaderActionMenuDividerClass} role="separator" />
+          {createBlock}
         </>
       ) : (
-        <>
-          <div className={odHeaderActionMenuDividerClass} role="separator" />
-          <p className="px-3 py-2.5 text-sm text-slate-500">Brak aktywnych zwrotów i reklamacji.</p>
-        </>
+        createBlock
       )}
-
-      <div className={odHeaderActionMenuDividerClass} role="separator" />
-      <Link
-        to="/wms/returns"
-        onClick={onClose}
-        className="block px-3 py-2.5 text-left text-[12px] font-medium text-slate-500 transition-colors hover:bg-slate-50 hover:text-slate-800"
-      >
-        Realizacja magazynowa (WMS) — opcjonalnie
-      </Link>
     </div>
   );
 }

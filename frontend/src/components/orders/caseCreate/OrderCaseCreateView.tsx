@@ -1,6 +1,5 @@
 import axios from "axios";
 import { useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
 import { ArrowLeft } from "lucide-react";
 import toast from "react-hot-toast";
 
@@ -8,7 +7,6 @@ import { createComplaintFromOrder } from "../../../api/complaintsApi";
 import { createWmsReturn } from "../../../api/wmsReturnsApi";
 import { formatFastApiErrorDetail } from "../../../api/wmsPickingProductsApi";
 import { DAMAGE_TENANT_ID } from "../../../constants/panelTenant";
-import { WMS_ROUTES } from "../../../pages/wms/wmsRoutes";
 import type { OrderDetail, OrderItemRow } from "../orderDetailPageTypes";
 import { OrderCaseCreateProductList } from "./OrderCaseCreateProductList";
 import { OrderCaseCreateSummaryPanel } from "./OrderCaseCreateSummaryPanel";
@@ -21,6 +19,7 @@ import type {
   OrderCaseKind,
   OrderCaseLineDraft,
 } from "./orderCaseCreateTypes";
+import { parseShippingAddressBlock } from "../../../utils/orderDetailAddress";
 
 type Props = {
   kind: OrderCaseKind;
@@ -58,7 +57,6 @@ function eligibleItems(order: OrderDetail): OrderItemRow[] {
  * Persist via existing APIs; WMS receives the return as a warehouse task automatically.
  */
 export function OrderCaseCreateView({ kind, order, warehouseId, onCancel, onCreated }: Props) {
-  const navigate = useNavigate();
   const [lines, setLines] = useState<OrderCaseLineDraft[]>([]);
   const [meta, setMeta] = useState<OrderCaseDraftMeta>({
     refundShipping: false,
@@ -91,8 +89,13 @@ export function OrderCaseCreateView({ kind, order, warehouseId, onCancel, onCrea
   const title = kind === "return" ? "Nowy zwrot" : "Nowa reklamacja";
   const subtitle =
     kind === "return"
-      ? "Dodaj produkty z zamówienia do zwrotu. Realizacja magazynowa odbędzie się w module WMS."
-      : "Dodaj produkty z zamówienia do reklamacji. Kartę otworzysz później z Panelu Zamówienia.";
+      ? "Dodaj produkty z zamówienia. Realizacja magazynowa odbędzie się później w module WMS."
+      : "Dodaj produkty z zamówienia do reklamacji. Kartę otworzysz z Panelu Zamówienia.";
+  const customerName =
+    (order.customer?.display_name || "").trim() ||
+    [order.first_name, order.last_name].filter(Boolean).join(" ").trim() ||
+    "—";
+  const addressLines = parseShippingAddressBlock(order.addresses_json);
 
   const onAdd = (orderItemId: number) => {
     const row = catalog.find((c) => c.orderItemId === orderItemId);
@@ -195,31 +198,33 @@ export function OrderCaseCreateView({ kind, order, warehouseId, onCancel, onCrea
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0">
-          <button
-            type="button"
-            onClick={onCancel}
-            className="mb-2 inline-flex items-center gap-1.5 text-[13px] font-medium text-slate-600 transition-colors hover:text-slate-900"
-          >
-            <ArrowLeft className="h-3.5 w-3.5" strokeWidth={2} />
-            Wróć do zamówienia
-          </button>
-          <h2 className="text-xl font-semibold text-slate-900">{title}</h2>
-          <p className="mt-1 max-w-2xl text-[13px] text-slate-500">{subtitle}</p>
-          <p className="mt-1 text-[12px] text-slate-400">
-            Zamówienie #{order.number ?? order.id}
-          </p>
-        </div>
-        {kind === "return" ? (
-          <button
-            type="button"
-            onClick={() => navigate(WMS_ROUTES.returns, { state: { preselectOrderId: order.id } })}
-            className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-[12px] font-medium text-slate-600 transition-colors hover:bg-slate-50"
-          >
-            Opcjonalnie: otwórz Zwroty WMS
-          </button>
-        ) : null}
+      <div className="min-w-0">
+        <button
+          type="button"
+          onClick={onCancel}
+          className="mb-2 inline-flex items-center gap-1.5 text-[13px] font-medium text-slate-600 transition-colors hover:text-slate-900"
+        >
+          <ArrowLeft className="h-3.5 w-3.5" strokeWidth={2} />
+          Wróć do zamówienia
+        </button>
+        <h2 className="text-xl font-semibold text-slate-900">{title}</h2>
+        <p className="mt-1 max-w-2xl text-[13px] text-slate-500">{subtitle}</p>
+        <p className="mt-1 text-[12px] text-slate-400">Zamówienie #{order.number ?? order.id}</p>
+      </div>
+
+      <div className="grid gap-3 sm:grid-cols-2">
+        <section className="rounded-xl border border-slate-200 bg-white px-4 py-3">
+          <h3 className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Klient</h3>
+          <p className="mt-1 text-[13px] font-semibold text-slate-900">{customerName}</p>
+        </section>
+        <section className="rounded-xl border border-slate-200 bg-white px-4 py-3">
+          <h3 className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Adres</h3>
+          <div className="mt-1 space-y-0.5 text-[13px] text-slate-700">
+            {addressLines.map((line) => (
+              <p key={line}>{line}</p>
+            ))}
+          </div>
+        </section>
       </div>
 
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start">

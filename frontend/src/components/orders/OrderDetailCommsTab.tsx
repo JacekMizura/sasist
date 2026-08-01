@@ -21,6 +21,8 @@ import { brandPrimaryButtonClass } from "../../design-system/brandUi";
 import type { OrderDetail } from "./orderDetailPageTypes";
 import type { OrderOperationalNoteDto } from "../../api/ordersApi";
 
+import { displayCustomerComment } from "../../utils/displayCustomerComment";
+
 type Channel = "email" | "sms" | "sms_sa_call";
 type NotesFilter = "all" | "picking" | "packing";
 
@@ -196,8 +198,9 @@ export function OrderDetailCommsTab({
     } else if (order.value != null) {
       parts.push(`Wartość bieżącego zamówienia: ${formatMoney(order.value, order.currency)}.`);
     }
-    if (customerComment.trim()) {
-      parts.push(`Aktualny komentarz klienta: „${customerComment.trim()}”.`);
+    const safeComment = displayCustomerComment(customerComment);
+    if (safeComment) {
+      parts.push(`Aktualny komentarz klienta: „${safeComment}”.`);
     } else if (sortedNotes[0]?.content) {
       parts.push(`Ostatni wpis korespondencji: „${sortedNotes[0].content.trim().slice(0, 140)}${sortedNotes[0].content.length > 140 ? "…" : ""}”.`);
     } else {
@@ -362,6 +365,7 @@ export function OrderDetailCommsTab({
                 return (
                   <li
                     key={n.id}
+                    id={`order-comms-note-${n.id}`}
                     className={`rounded-md border border-slate-200/80 px-3 py-2.5 ${
                       fromCustomer
                         ? "border-l-[3px] border-l-blue-500 bg-white"
@@ -515,10 +519,10 @@ export function OrderDetailCommsTab({
         <section className={CARD}>
           <h3 className={`${SECTION_TITLE} mb-2.5`}>Notatki i komentarz</h3>
 
-          <div className="mb-3">
+          <div className="mb-3" id="order-comms-customer-comment">
             <p className={`${MICRO} mb-1`}>Komentarz klienta</p>
             <div className="rounded-md border border-[#f5e08b] bg-[#fff9c4] px-2.5 py-2 text-[12px] leading-snug text-yellow-950">
-              {customerComment.trim() || "Brak komentarza klienta."}
+              {displayCustomerComment(customerComment) || "Brak komentarza klienta."}
             </div>
           </div>
 

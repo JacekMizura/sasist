@@ -4,18 +4,18 @@ import { Loader2, Mail } from "lucide-react";
 import { getOrderNotes } from "../../../../api/ordersApi";
 import type { OrderNoteDto } from "../../orderDetailPageTypes";
 import {
-  odHeaderActionFooterLinkClass,
-  odHeaderActionMenuDividerClass,
-  odHeaderActionMenuItemClass,
-  odHeaderActionMenuItemIconClass,
-} from "../orderHeaderActionTokens";
+  displayCustomerComment,
+  hasDisplayableCustomerComment,
+} from "../../../../utils/displayCustomerComment";
+import { odHeaderActionMenuItemClass, odHeaderActionMenuItemIconClass } from "../orderHeaderActionTokens";
 
 type Props = {
   orderId: number;
   customerName?: string | null;
   customerPreview?: string | null;
   hasCustomerComment?: boolean;
-  onGoToComms: () => void;
+  /** Open Komunikacja and optionally scroll to a note. */
+  onOpenMessage: (noteId?: number | null) => void;
 };
 
 function fmtWhen(iso: string | null | undefined): string {
@@ -42,17 +42,38 @@ function noteStatus(type: string): string {
   const t = (type || "").toLowerCase();
   if (t.includes("customer") || t.includes("client") || t === "comment") return "Klient";
   if (t.includes("email") || t.includes("mail")) return "E-mail";
-  if (t.includes("internal") || t.includes("note")) return "Wewnętrzna";
+  if (t.includes("market") || t.includes("allegro") || t.includes("amazon")) return "Marketplace";
+  if (t.includes("sms")) return "SMS";
   return type?.trim() || "Wiadomość";
 }
 
-/** Mail-like messages preview — full thread on Komunikacja tab. */
+/** Customer-facing / correspondence notes only — not operational system noise. */
+function isCorrespondenceNote(type: string): boolean {
+  const t = (type || "").trim().toLowerCase();
+  if (!t) return false;
+  if (t.includes("system") || t.includes("audit") || t.includes("fulfillment") || t.includes("wms")) return false;
+  return (
+    t.includes("customer") ||
+    t.includes("client") ||
+    t.includes("email") ||
+    t.includes("mail") ||
+    t.includes("market") ||
+    t.includes("sms") ||
+    t === "comment" ||
+    t === "note" ||
+    t.includes("operator") ||
+    t.includes("shop") ||
+    t.includes("sklep")
+  );
+}
+
+/** Quick messages preview — click opens Komunikacja at the message. */
 export function OrderMessagesPreviewPanel({
   orderId,
   customerName,
   customerPreview,
   hasCustomerComment,
-  onGoToComms,
+  onOpenMessage,
 }: Props) {
   const [loading, setLoading] = useState(true);
   const [notes, setNotes] = useState<OrderNoteDto[]>([]);
@@ -62,7 +83,9 @@ export function OrderMessagesPreviewPanel({
     setLoading(true);
     void getOrderNotes(orderId)
       .then((rows) => {
-        if (!cancelled) setNotes(Array.isArray(rows) ? rows.slice(0, 8) : []);
+        if (cancelled) return;
+        const list = Array.isArray(rows) ? rows.filter((n) => isCorrespondenceNote(n.type)) : [];
+        setNotes(list.slice(0, 8));
       })
       .catch(() => {
         if (!cancelled) setNotes([]);
@@ -76,8 +99,9 @@ export function OrderMessagesPreviewPanel({
   }, [orderId]);
 
   const clientLabel = (customerName || "").trim() || "Klient";
-  const hasPreview = Boolean(hasCustomerComment && (customerPreview || "").trim());
-  const empty = !loading && notes.length === 0 && !hasPreview;
+  const previewText = displayCustomerComment(customerPreview);
+  const showPreview = Boolean(hasCustomerComment && hasDisplayableCustomerComment(customerPreview) && previewText);
+  const empty = !loading && notes.length === 0 && !showPreview;
 
   return (
     <div>
@@ -90,16 +114,14 @@ export function OrderMessagesPreviewPanel({
         <p className="px-3 py-4 text-sm text-slate-500">Brak wiadomości.</p>
       ) : (
         <ul>
-          {hasPreview ? (
+          {showPreview ? (
             <li>
-              <button type="button" onClick={onGoToComms} className={odHeaderActionMenuItemClass}>
+              <button type="button" onClick={() => onOpenMessage(null)} className={odHeaderActionMenuItemClass}>
                 <span className={odHeaderActionMenuItemIconClass} aria-hidden>
                   <Mail className="h-full w-full" strokeWidth={2} />
                 </span>
                 <span className="min-w-0 flex-1">
-                  <span className="block truncate text-sm font-medium text-slate-900">
-                    {(customerPreview || "").trim()}
-                  </span>
+                  <span className="block truncate text-sm font-medium text-slate-900">{previewText}</span>
                   <span className="mt-0.5 flex flex-wrap gap-x-2 text-[11px] text-slate-500">
                     <span>{clientLabel}</span>
                     <span>·</span>
@@ -111,7 +133,7 @@ export function OrderMessagesPreviewPanel({
           ) : null}
           {notes.map((n) => (
             <li key={n.id}>
-              <button type="button" onClick={onGoToComms} className={odHeaderActionMenuItemClass}>
+              <button type="button" onClick={() => onOpenMessage(n.id)} className={odHeaderActionMenuItemClass}>
                 <span className={odHeaderActionMenuItemIconClass} aria-hidden>
                   <Mail className="h-full w-full" strokeWidth={2} />
                 </span>
@@ -130,11 +152,6 @@ export function OrderMessagesPreviewPanel({
           ))}
         </ul>
       )}
-
-      <div className={odHeaderActionMenuDividerClass} role="separator" />
-      <button type="button" onClick={onGoToComms} className={odHeaderActionFooterLinkClass}>
-        Przejdź do Komunikacji
-      </button>
     </div>
   );
 }

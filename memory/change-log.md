@@ -1,3 +1,9 @@
+## 2026-08-01 — Zwroty/reklamacje UX polish + formularz klienta
+
+- Dropdown bez pustego stanu / WMS; Formularz zwrotu → ekran klienta
+- Messages/docs bez „Przejdź do…”; scroll do wiadomości w Komunikacji
+- `displayCustomerComment` odcina logi systemowe z komentarza klienta
+
 ## 2026-08-01 — Zwroty/reklamacje: tworzenie w Panelu Zamówienia
 
 - Nowy zwrot/reklamacja w `OrderCaseCreateView` (produkty + summary), nie redirect WMS

@@ -43,6 +43,7 @@ import ReturnsListPanel from "./pages/Orders/ReturnsListPanel"
 import ReturnsReturnDetailPage from "./pages/Orders/ReturnsReturnDetailPage"
 import CreateOrderPage from "./pages/Orders/CreateOrderPage"
 import OrderDetailPage from "./pages/Orders/OrderDetailPage"
+import CustomerReturnFormPage from "./pages/Orders/CustomerReturnFormPage"
 import OrderCustomFieldsListPage from "./pages/Orders/OrderCustomFieldsListPage"
 import OrderCustomFieldEditPage from "./pages/Orders/OrderCustomFieldEditPage"
 import OrderAutomationModuleShell from "./pages/Orders/OrderAutomationModuleShell"
@@ -877,6 +878,7 @@ export const router = createBrowserRouter(
                   <Route index element={<Navigate to="list" replace />} />
                   <Route path="new" element={<CreateOrderPage />} />
                   <Route path="list" element={<OrderList />} />
+                  <Route path=":id/customer-return-form" element={<CustomerReturnFormPage />} />
                   <Route path="custom-fields" element={<OrderCustomFieldsListPage />} />
                   <Route path="custom-fields/new" element={<OrderCustomFieldEditPage />} />
                   <Route path="custom-fields/:fieldId/edit" element={<OrderCustomFieldEditPage />} />

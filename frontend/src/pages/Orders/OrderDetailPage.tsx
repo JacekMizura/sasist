@@ -101,6 +101,7 @@ import {
 import { OrderWarehouseProductsSection as ImportedWarehouseSection } from "../../components/orders/OrderWarehouseProductsSection";
 import { OrderDetailHeaderBar } from "../../components/orders/OrderDetailHeaderBar";
 import { OrderCaseCreateView, type OrderCaseKind } from "../../components/orders/caseCreate";
+import { displayCustomerComment } from "../../utils/displayCustomerComment";
 import { OrderDetailSummaryTab } from "../../components/orders/OrderDetailSummaryTab";
 import { OrderDetailCommsTab } from "../../components/orders/OrderDetailCommsTab";
 import { WmsOperationTimesKpiPanel } from "../../components/orders/WmsOperationTimesKpiPanel";
@@ -1279,6 +1280,24 @@ export default function OrderDetailPage() {
           wmsDualWorkflow={wmsDualWorkflow}
           shippingLabel={shippingLabel}
           onOpenCaseCreate={(kind) => setCaseCreateKind(kind)}
+          onOpenCustomerReturnForm={() => navigate(`/orders/${order.id}/customer-return-form`)}
+          onOpenMessage={(noteId) => {
+            setCaseCreateKind(null);
+            setActiveTab("comms");
+            window.setTimeout(() => {
+              if (noteId != null) {
+                document.getElementById(`order-comms-note-${noteId}`)?.scrollIntoView({
+                  behavior: "smooth",
+                  block: "center",
+                });
+              } else {
+                document.getElementById("order-comms-customer-comment")?.scrollIntoView({
+                  behavior: "smooth",
+                  block: "center",
+                });
+              }
+            }, 80);
+          }}
         />
 
         <div className={`flex-1 overflow-auto bg-white py-3 ${odMainHorizontalPadClass}`}>
@@ -1447,7 +1466,9 @@ export default function OrderDetailPage() {
                 saveOperationalNote={saveOperationalNote}
                 formatDetailDate={formatDetailDate}
                 formatMoney={formatMoney}
-                customerComment={(wmsFulfillment?.customer_comment ?? order.latest_customer_comment_preview ?? "").trim()}
+                customerComment={displayCustomerComment(
+                  wmsFulfillment?.customer_comment ?? order.latest_customer_comment_preview,
+                )}
                 onReloadOrder={() => void reloadOrderById(order.id)}
                 onReloadNotes={() => void reloadOrderNotes(order.id)}
                 tenantId={order.tenant_id ?? DAMAGE_TENANT_ID}

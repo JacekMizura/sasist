@@ -2,14 +2,14 @@
 
 ## Active
 
-Zwroty/reklamacje w Panelu Zamówienia (create in-panel):
+UX zwrotów/reklamacji w Panelu (bez zmian backendu):
 
-- Header: Nowy zwrot / Nowa reklamacja → `OrderCaseCreateView` (nie WMS)
-- Lista produktów + „Dodaj do zwrotu/reklamacji” + prawy panel podsumowania
-- Po zapisie: karta `/orders/returns/:id` lub `/orders/complaints/:id`; RMZ i tak w WMS
-- Usunięto Spakuj z headera; Dokumenty = tylko wystawione + 2 akcje wystawiania
+- Dropdown: aktywne zgłoszenia + Nowy zwrot / Nowa reklamacja / Formularz zwrotu
+- Operator create = `OrderCaseCreateView` (klient + adres + produkty + summary)
+- Formularz klienta = `/orders/:id/customer-return-form`
+- Wiadomości/Dokumenty: bez „Przejdź do…”; klik wiadomości → Komunikacja + scroll
+- Komentarz klienta: filtr `displayCustomerComment` (bez logów systemowych)
 
 ## Constraints
 
-- Tworzenie w Panelu; WMS = realizacja magazynowa (opcjonalny link)
-- Bez zmian kontraktu backend create (lines w `createWmsReturn` / `createComplaintFromOrder`)
+- Tylko UX; WMS = realizacja; bez zmian API create

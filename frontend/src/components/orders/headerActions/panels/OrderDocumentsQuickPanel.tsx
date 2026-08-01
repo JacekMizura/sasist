@@ -3,7 +3,6 @@ import { Download, Eye, FilePlus2, FileText, Printer } from "lucide-react";
 import type { OrderDetail } from "../../orderDetailPageTypes";
 import {
   odHeaderActionDocActionBtnClass,
-  odHeaderActionFooterLinkClass,
   odHeaderActionMenuDividerClass,
   odHeaderActionSectionTitleClass,
 } from "../orderHeaderActionTokens";
@@ -21,7 +20,6 @@ type DocRowModel = {
 
 type Props = {
   order: OrderDetail;
-  onGoToDocuments: () => void;
   onIssueSaleDocument: () => void;
   onIssueStockDocument: () => void;
   onPrintLinked?: (doc: LinkedDoc) => void;
@@ -59,17 +57,6 @@ function DocRow({ row }: { row: DocRowModel }) {
         </p>
       </div>
       <div className="flex shrink-0 items-center gap-1">
-        {row.downloadUrl ? (
-          <a
-            href={row.downloadUrl}
-            target="_blank"
-            rel="noreferrer"
-            title="Pobierz"
-            className={odHeaderActionDocActionBtnClass}
-          >
-            <Download className="h-3.5 w-3.5" strokeWidth={2} />
-          </a>
-        ) : null}
         {row.previewUrl ? (
           <a
             href={row.previewUrl}
@@ -80,21 +67,43 @@ function DocRow({ row }: { row: DocRowModel }) {
           >
             <Eye className="h-3.5 w-3.5" strokeWidth={2} />
           </a>
-        ) : null}
-        {row.onPrint ? (
-          <button type="button" title="Drukuj" onClick={row.onPrint} className={odHeaderActionDocActionBtnClass}>
-            <Printer className="h-3.5 w-3.5" strokeWidth={2} />
+        ) : (
+          <button type="button" disabled title="Podgląd" className={odHeaderActionDocActionBtnClass}>
+            <Eye className="h-3.5 w-3.5" strokeWidth={2} />
           </button>
-        ) : null}
+        )}
+        {row.downloadUrl ? (
+          <a
+            href={row.downloadUrl}
+            target="_blank"
+            rel="noreferrer"
+            title="Pobierz PDF"
+            className={odHeaderActionDocActionBtnClass}
+          >
+            <Download className="h-3.5 w-3.5" strokeWidth={2} />
+          </a>
+        ) : (
+          <button type="button" disabled title="Pobierz PDF" className={odHeaderActionDocActionBtnClass}>
+            <Download className="h-3.5 w-3.5" strokeWidth={2} />
+          </button>
+        )}
+        <button
+          type="button"
+          title="Drukuj"
+          disabled={!row.onPrint}
+          onClick={row.onPrint}
+          className={odHeaderActionDocActionBtnClass}
+        >
+          <Printer className="h-3.5 w-3.5" strokeWidth={2} />
+        </button>
       </div>
     </div>
   );
 }
 
-/** Only issued documents + issue actions — no empty document type slots. */
+/** Issued documents only + issue actions — self-contained work menu. */
 export function OrderDocumentsQuickPanel({
   order,
-  onGoToDocuments,
   onIssueSaleDocument,
   onIssueStockDocument,
   onPrintLinked,
@@ -170,10 +179,6 @@ export function OrderDocumentsQuickPanel({
       >
         <FilePlus2 className="h-4 w-4 shrink-0 text-slate-500" strokeWidth={2} aria-hidden />
         Wystaw dokument magazynowy
-      </button>
-      <div className={odHeaderActionMenuDividerClass} role="separator" />
-      <button type="button" onClick={onGoToDocuments} className={odHeaderActionFooterLinkClass}>
-        Przejdź do Dokumentów
       </button>
     </div>
   );
