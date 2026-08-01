@@ -1,8 +1,14 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type Dispatch, type ReactNode, type SetStateAction } from "react";
-import { PrimaryButton, primaryButtonClassName } from "../../design-system/PrimaryButton";
+import { PrimaryButton } from "../../design-system/PrimaryButton";
 import { brandPrimaryButtonClass } from "../../design-system/brandUi";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { ChevronRight, Home, List } from "lucide-react";
+import { ChevronRight, ExternalLink, Home, List, MoreHorizontal } from "lucide-react";
+import { OrderHeaderMenuItem } from "../../components/orders/headerActions/OrderHeaderMenuItem";
+import {
+  odHeaderActionBtnClass,
+  odHeaderActionPopoverClass,
+} from "../../components/orders/headerActions/orderHeaderActionTokens";
+import { returnUiStatusBriefToPanelBrief } from "../../utils/panelListStatusBriefMappers";
 
 import api from "../../api/axios";
 import {
@@ -12,11 +18,11 @@ import {
   finalizeWmsReturn,
 } from "../../api/wmsReturnsApi";
 import { getInventoryManagementSettings } from "../../api/inventoryManagementPolicyApi";
-import { getReturnUiStatusSummary } from "../../api/returnUiStatusApi";
+import { getReturnPanelSubgroups, getReturnUiStatusSummary } from "../../api/returnUiStatusApi";
 import { getOfficeReturnModuleConfig } from "../../api/returnModuleConfigApi";
 import type {
   CustomerInsightsRead,
-  ReturnUiMainGroup,
+  ReturnUiPanelSubgroupRead,
   ReturnUiStatusPanelSummary,
   ReturnStatusBrief,
   WmsReturnFinalizeLineIn,
@@ -213,7 +219,7 @@ function RejectionEvidencePanel({
 /** Panel RMZ product row — subtle left stripe + wash (decision scan). */
 function rmzLineRowShellClass(tone: "OK" | "DAMAGED" | "REJECTED" | null): string {
   const base =
-    "min-w-0 rounded-xl border border-slate-200/80 bg-white p-4 transition-all duration-300 ease-out";
+    "min-w-0 rounded-xl border border-slate-200/80 bg-white p-3 transition-all duration-300 ease-out";
   if (tone === "OK") return `${base} border-emerald-200/90 bg-emerald-50/35`;
   if (tone === "DAMAGED") return `${base} border-amber-200/90 bg-amber-50/35`;
   if (tone === "REJECTED") return `${base} border-rose-200/90 bg-rose-50/35`;
@@ -261,14 +267,8 @@ import {
   panelDetailMainGridClass,
   panelDetailPageSectionSpacingClass,
 } from "../../components/panelDetail/panelDetailLayout";
-import { listSellasistToolbarSquareBtn } from "../../components/listPage/listSellasistTokens";
 import { renderRmzDetailSection, type RmzDetailSectionRenderCtx } from "./ReturnsReturnDetailSections";
-
-const DETAIL_GROUP_LABELS: Record<ReturnUiMainGroup, string> = {
-  NEW: "Nowe zwroty",
-  IN_PROGRESS: "W toku",
-  DONE: "Zakończone",
-};
+import type { OrderUiPanelSubgroupRead } from "../../types/orderUiStatus";
 
 const KNOWN_SOURCE_LABEL: Record<string, string> = {
   allegro: "Allegro",
@@ -506,6 +506,7 @@ export default function ReturnsReturnDetailPage() {
   const [showWmsTerminal, setShowWmsTerminal] = useState(true);
   const [customerInsights, setCustomerInsights] = useState<CustomerInsightsRead | null>(null);
   const [panelSummary, setPanelSummary] = useState<ReturnUiStatusPanelSummary | null>(null);
+  const [panelSubgroups, setPanelSubgroups] = useState<ReturnUiPanelSubgroupRead[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
   const [patchingUi, setPatchingUi] = useState(false);
@@ -558,14 +559,16 @@ export default function ReturnsReturnDetailPage() {
           r.warehouse_id != null && Number.isFinite(Number(r.warehouse_id)) && Number(r.warehouse_id) > 0
             ? Math.floor(Number(r.warehouse_id))
             : undefined;
-        const [summary, settings, invPolicy] = await Promise.all([
+        const [summary, subgroups, settings, invPolicy] = await Promise.all([
           getReturnUiStatusSummary(DAMAGE_TENANT_ID, wh),
+          getReturnPanelSubgroups(DAMAGE_TENANT_ID, wh).catch(() => null),
           getWmsReturnsModeSettings({ tenantId: DAMAGE_TENANT_ID, warehouseId: wh }),
           getInventoryManagementSettings({ tenantId: DAMAGE_TENANT_ID, warehouseId: wh }).catch(() => null),
         ]);
         if (cancelled) return;
         setData(r);
         setPanelSummary(summary);
+        setPanelSubgroups(subgroups);
         setWmsSettings(settings);
         setShowWmsTerminal(invPolicy?.inventory_management_mode !== "DOCUMENTS_ONLY");
         const drafts: Record<number, WmsReturnFinalizeLineIn> = {};
@@ -601,6 +604,7 @@ export default function ReturnsReturnDetailPage() {
           setErr("Nie udało się wczytać zwrotu.");
           setData(null);
           setPanelSummary(null);
+          setPanelSubgroups(null);
           setWmsSettings(null);
           setShowWmsTerminal(true);
           setCustomerInsights(null);
@@ -737,9 +741,20 @@ export default function ReturnsReturnDetailPage() {
 
   const partition = useMemo(() => {
     const n = normalizeReturnDetailLayout(moduleCfg?.detail_layout);
-    const keep = (sid: string) => showWmsTerminal || sid !== "wms_view";
-    return { left: n.left.filter(keep), right: n.right.filter(keep) };
-  }, [moduleCfg?.detail_layout, showWmsTerminal]);
+    const keep = (sid: string) => sid !== "wms_view";
+    const left = n.left.filter(keep);
+    const rightRaw = n.right.filter(keep);
+    const preferredRight = [
+      "return_status",
+      "notes",
+      "progress_bar",
+      "decision_history",
+      "attachments",
+    ];
+    const preferred = preferredRight.filter((id) => rightRaw.includes(id));
+    const rest = rightRaw.filter((id) => !preferredRight.includes(id));
+    return { left, right: [...preferred, ...rest] };
+  }, [moduleCfg?.detail_layout]);
 
   const allLinesReady = useMemo(() => {
     if (!data) return false;
@@ -939,6 +954,7 @@ export default function ReturnsReturnDetailPage() {
     activityEntries,
     panelCorrectionFileRaw,
     panelSummary,
+    panelSubgroups: panelSubgroups as unknown as OrderUiPanelSubgroupRead[] | null,
     patchingUi,
     setPatchingUi,
     setData,
@@ -963,7 +979,6 @@ export default function ReturnsReturnDetailPage() {
     formatMoneyPln,
     refundTypeLabelPl,
     triggerTextDownload,
-    detailGroupLabels: DETAIL_GROUP_LABELS,
     linesSection,
   };
 
@@ -1001,7 +1016,8 @@ export default function ReturnsReturnDetailPage() {
 
         <PanelDetailEntityHeader
           title={<>Zwrot {displayWarehouseDocumentNumber(data.rmz_number) || data.rmz_number}</>}
-          status={data.ui_status ?? null}
+          status={data.ui_status ? returnUiStatusBriefToPanelBrief(data.ui_status) : null}
+          compact
           meta={
             <p className="flex flex-wrap items-baseline gap-x-2 gap-y-1 text-slate-500">
               <span>
@@ -1041,21 +1057,29 @@ export default function ReturnsReturnDetailPage() {
             </p>
           }
           actions={
-            <>
-              <Link
-                to="/orders/returns"
-                className={listSellasistToolbarSquareBtn}
-                title="Lista zwrotów"
-                aria-label="Lista zwrotów"
+            <details className="relative">
+              <summary
+                className={`${odHeaderActionBtnClass} cursor-pointer list-none [&::-webkit-details-marker]:hidden`}
+                title="Więcej akcji"
+                aria-label="Więcej akcji"
               >
-                <List className="h-4 w-4 shrink-0" strokeWidth={2} aria-hidden />
-              </Link>
-              {showWmsTerminal ? (
-                <Link to={WMS_ROUTES.returnsProcess(data.id)} className={primaryButtonClassName()}>
-                  Terminal WMS
-                </Link>
-              ) : null}
-            </>
+                <MoreHorizontal className="h-[18px] w-[18px]" strokeWidth={2} aria-hidden />
+              </summary>
+              <div className={`${odHeaderActionPopoverClass} w-[min(18rem,calc(100vw-2rem))] py-1`} role="menu">
+                <OrderHeaderMenuItem
+                  to="/orders/returns"
+                  icon={<List className="h-4 w-4" strokeWidth={2} />}
+                  label="Lista zwrotów"
+                />
+                {showWmsTerminal ? (
+                  <OrderHeaderMenuItem
+                    to={WMS_ROUTES.returnsProcess(data.id)}
+                    icon={<ExternalLink className="h-4 w-4" strokeWidth={2} />}
+                    label="Otwórz w terminalu WMS"
+                  />
+                ) : null}
+              </div>
+            </details>
           }
         />
 
@@ -1488,12 +1512,12 @@ function LineOperationsCard({
   };
 
   const imageCell = (
-    <div className="flex h-24 w-24 shrink-0 items-center justify-center">
+    <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-slate-50 sm:h-16 sm:w-16">
       {img ? (
-        <img src={img} alt="" className="h-24 w-24 object-contain" />
+        <img src={img} alt="" className="h-full w-full object-contain" />
       ) : (
-        <div className="flex h-24 w-24 items-center justify-center text-slate-300" aria-hidden>
-          <span className="text-xs">Brak</span>
+        <div className="flex h-full w-full items-center justify-center text-slate-300" aria-hidden>
+          <span className="text-[10px]">Brak</span>
         </div>
       )}
     </div>
@@ -1505,11 +1529,11 @@ function LineOperationsCard({
 
   const segmentBtn = (active: boolean, tone: "ok" | "dmg" | "rej") => {
     if (active) {
-      if (tone === "ok") return "bg-emerald-600 text-white border-emerald-600 shadow-sm";
-      if (tone === "dmg") return "bg-amber-600 text-white border-amber-600 shadow-sm";
-      return "bg-rose-600 text-white border-rose-600 shadow-sm";
+      if (tone === "ok") return "border-emerald-600 bg-emerald-600 text-white";
+      if (tone === "dmg") return "border-amber-500 bg-amber-500 text-white";
+      return "border-rose-600 bg-rose-600 text-white";
     }
-    return "border-slate-200 bg-white text-slate-600 hover:bg-slate-50";
+    return "border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50";
   };
 
   return (
@@ -1523,42 +1547,38 @@ function LineOperationsCard({
         </div>
       ) : null}
       <div className="min-w-0">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-          <div className="flex min-w-0 flex-1 items-start gap-4">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div className="flex min-w-0 flex-1 items-start gap-3">
             {imageCell}
             <div className="min-w-0 flex-1">
-              <p className="text-[15px] font-semibold leading-snug text-slate-900">{name}</p>
-              <p className="mt-1.5 space-x-2 text-[12px] text-slate-500">
+              <p className="text-[14px] font-semibold leading-snug text-slate-900 line-clamp-2">{name}</p>
+              <p className="mt-0.5 space-x-2 text-[11px] text-slate-500">
                 <span>SKU {skuMain}</span>
                 <span className="text-slate-300">·</span>
                 <span>EAN {ean || "—"}</span>
               </p>
-              <div className="mt-3 flex flex-wrap gap-x-6 gap-y-1 text-[13px]">
-                <div>
-                  <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Ilość</p>
-                  <p className="font-medium tabular-nums text-slate-800">{lineQty} szt.</p>
-                </div>
+              <div className="mt-1.5 flex flex-wrap items-baseline gap-x-3 gap-y-0 text-[12px] tabular-nums text-slate-700">
+                <span>
+                  <span className="text-slate-400">Ilość </span>
+                  <span className="font-semibold text-slate-900">{lineQty} szt.</span>
+                </span>
                 {unit != null ? (
-                  <div>
-                    <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Cena</p>
-                    <p className="font-medium tabular-nums text-slate-800">{formatMoneyPln(unit)}</p>
-                  </div>
+                  <span>
+                    <span className="text-slate-400">Cena </span>
+                    <span className="font-medium text-slate-900">{formatMoneyPln(unit)}</span>
+                  </span>
                 ) : null}
                 {extPrice != null ? (
-                  <div>
-                    <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Wartość</p>
-                    <p className="font-semibold tabular-nums text-slate-900">{formatMoneyPln(extPrice)}</p>
-                  </div>
+                  <span>
+                    <span className="text-slate-400">Wartość </span>
+                    <span className="font-semibold text-slate-900">{formatMoneyPln(extPrice)}</span>
+                  </span>
                 ) : null}
               </div>
             </div>
           </div>
           {!multiQty ? (
-            <div
-              className="inline-flex shrink-0 flex-wrap gap-1 rounded-xl border border-slate-200/80 bg-slate-50/50 p-1"
-              role="group"
-              aria-label="Decyzja pozycji"
-            >
+            <div className="inline-flex shrink-0 flex-wrap gap-1.5" role="group" aria-label="Decyzja pozycji">
               <button
                 type="button"
                 disabled={disable}
@@ -1574,7 +1594,7 @@ function LineOperationsCard({
                     }
                   })();
                 }}
-                className={`rounded-lg border px-3 py-2 text-[12px] font-semibold transition-all duration-200 disabled:opacity-50 ${segmentBtn(acceptedChosen, "ok")}`}
+                className={`inline-flex h-[34px] items-center justify-center rounded-lg border px-3 text-[12px] font-semibold transition-colors duration-150 disabled:opacity-50 ${segmentBtn(acceptedChosen, "ok")}`}
               >
                 Przyjęto
               </button>
@@ -1582,7 +1602,7 @@ function LineOperationsCard({
                 type="button"
                 disabled={disable}
                 onClick={openDamageSheet}
-                className={`rounded-lg border px-3 py-2 text-[12px] font-semibold transition-all duration-200 disabled:opacity-50 ${segmentBtn(damagedChosen, "dmg")}`}
+                className={`inline-flex h-[34px] items-center justify-center rounded-lg border px-3 text-[12px] font-semibold transition-colors duration-150 disabled:opacity-50 ${segmentBtn(damagedChosen, "dmg")}`}
               >
                 Uszkodzone
               </button>
@@ -1591,7 +1611,7 @@ function LineOperationsCard({
                   type="button"
                   disabled={disable}
                   onClick={openRejectSheet}
-                  className={`rounded-lg border px-3 py-2 text-[12px] font-semibold transition-all duration-200 disabled:opacity-50 ${segmentBtn(rejectedChosen, "rej")}`}
+                  className={`inline-flex h-[34px] items-center justify-center rounded-lg border px-3 text-[12px] font-semibold transition-colors duration-150 disabled:opacity-50 ${segmentBtn(rejectedChosen, "rej")}`}
                 >
                   Odrzucone
                 </button>

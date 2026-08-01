@@ -7,7 +7,6 @@ import {
   MessageSquare,
   NotebookPen,
   Printer,
-  Terminal,
   UserRound,
 } from "lucide-react";
 
@@ -16,20 +15,17 @@ import type { ReturnDetailSectionId } from "../../constants/returnModuleDetailSe
 import { RETURN_DETAIL_SECTION_LABELS_PL } from "../../constants/returnModuleDetailSections";
 import { getReturnUiStatusSummary, patchReturnRmzUiStatus } from "../../api/returnUiStatusApi";
 import { DAMAGE_TENANT_ID } from "../damage/damageShared";
-import { WMS_ROUTES } from "../wms/wmsRoutes";
 import { PrimaryButton, primaryButtonClassName } from "../../design-system/PrimaryButton";
 import { OrderHistoryTimeline } from "../../components/orders/OrderHistoryTimeline";
+import { PanelBulkStatusPickerDropdown } from "../../components/panel/PanelBulkStatusPickerDropdown";
+import type { OrderUiPanelSubgroupRead, OrderUiStatusPanelSummary } from "../../types/orderUiStatus";
 import {
   ReturnDetailEmptyState,
   ReturnDetailKpiCell,
   ReturnDetailWidgetShell,
-  RETURN_WIDGET_FIELD_CLASS,
   RETURN_WIDGET_TEXTAREA_CLASS,
 } from "../../components/returns/detailWidgets/ReturnDetailWidgetShell";
-import {
-  buildReturnDetailTimelineEvents,
-  returnStatusBadgeTone,
-} from "../../components/returns/detailWidgets/returnDetailWidgetUtils";
+import { buildReturnDetailTimelineEvents } from "../../components/returns/detailWidgets/returnDetailWidgetUtils";
 
 type FiBreakdown = {
   total: number;
@@ -53,13 +49,15 @@ export type RmzDetailSectionRenderCtx = {
   activityEntries: { at: string; msg: string }[];
   panelCorrectionFileRaw: string | null;
   panelSummary: ReturnUiStatusPanelSummary | null;
+  panelSubgroups?: OrderUiPanelSubgroupRead[] | null;
   patchingUi: boolean;
   setPatchingUi: Dispatch<SetStateAction<boolean>>;
   setData: Dispatch<SetStateAction<WmsReturnRead | null>>;
   setErr: Dispatch<SetStateAction<string | null>>;
   setPanelSummary: Dispatch<SetStateAction<ReturnUiStatusPanelSummary | null>>;
   wmsSettings: WmsSettingsRead | null;
-  showWmsTerminal: boolean;
+  /** @deprecated Widget Terminal WMS usunięty — flaga tylko pod menu nagłówka. */
+  showWmsTerminal?: boolean;
   customerInsights: CustomerInsightsRead | null;
   openRefundModal: () => void;
   refund: WmsReturnRead["refund"];
@@ -77,7 +75,6 @@ export type RmzDetailSectionRenderCtx = {
   formatMoneyPln: (value: number | null | undefined) => string;
   refundTypeLabelPl: (t: string | null | undefined) => string;
   triggerTextDownload: (filename: string, body: string, mime?: string) => void;
-  detailGroupLabels: Record<string, string>;
   linesSection: ReactNode;
 };
 
@@ -105,7 +102,6 @@ export function renderRmzDetailSection(id: ReturnDetailSectionId, ctx: RmzDetail
     setErr,
     setPanelSummary,
     wmsSettings,
-    showWmsTerminal,
     customerInsights,
     openRefundModal,
     refund,
@@ -123,7 +119,6 @@ export function renderRmzDetailSection(id: ReturnDetailSectionId, ctx: RmzDetail
     formatMoneyPln,
     refundTypeLabelPl,
     triggerTextDownload,
-    detailGroupLabels,
     linesSection,
   } = ctx;
 
@@ -132,59 +127,40 @@ export function renderRmzDetailSection(id: ReturnDetailSectionId, ctx: RmzDetail
   const progressPct = totalLines > 0 ? Math.min(100, Math.round((resolvedCount / totalLines) * 100)) : 0;
   const phone = data.phone?.trim() || data.customer_phone?.trim() || "";
   const email = data.email?.trim() || data.customer_email?.trim() || "";
-  const statusTone = returnStatusBadgeTone(data.status?.type);
-  const statusName = (data.status?.name || "").trim() || statusTone.fallbackLabel;
-  const statusColor = (data.status?.color || "").trim();
 
   switch (id) {
     case "return_status":
       return (
-        <ReturnDetailWidgetShell title={label} hint="Widoczna nazwa na liście zwrotów i w tym widoku.">
-          <div
-            className={`mb-5 inline-flex max-w-full items-center rounded-xl border px-4 py-2.5 text-lg font-semibold tracking-tight ${statusTone.className}`}
-            style={statusColor ? { borderColor: `${statusColor}55`, backgroundColor: `${statusColor}18`, color: statusColor } : undefined}
-          >
-            {statusName}
-          </div>
-          <label className="block">
-            <span className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-              Etykieta na liście
-            </span>
-            <select
-              value={data.ui_status?.id ?? ""}
-              disabled={patchingUi || panelSummary == null || terminal}
-              onChange={(e) => {
-                const v = e.target.value;
-                const nextId = v === "" ? null : Number(v);
-                void (async () => {
-                  setPatchingUi(true);
-                  setErr(null);
-                  try {
-                    const updated = await patchReturnRmzUiStatus(rid, DAMAGE_TENANT_ID, nextId, data.warehouse_id);
-                    setData(updated);
-                    const s = await getReturnUiStatusSummary(DAMAGE_TENANT_ID, data.warehouse_id);
-                    setPanelSummary(s);
-                  } catch {
-                    setErr("Nie udało się zapisać statusu.");
-                  } finally {
-                    setPatchingUi(false);
-                  }
-                })();
-              }}
-              className={RETURN_WIDGET_FIELD_CLASS}
-            >
-              <option value="">— bez etykiety</option>
-              {(panelSummary?.groups ?? []).map((block) => (
-                <optgroup key={block.main_group} label={detailGroupLabels[block.main_group] ?? block.main_group}>
-                  {block.sub_statuses.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.name}
-                    </option>
-                  ))}
-                </optgroup>
-              ))}
-            </select>
-          </label>
+        <ReturnDetailWidgetShell
+          title="Etykieta na liście"
+          hint="Ten sam status co w Panelu Statusów — widoczny na liście zwrotów."
+        >
+          <PanelBulkStatusPickerDropdown
+            className="w-full max-w-full"
+            panelSummary={panelSummary as unknown as OrderUiStatusPanelSummary | null}
+            panelSubgroups={ctx.panelSubgroups}
+            selectedStatusId={data.ui_status?.id ?? null}
+            disabled={patchingUi || panelSummary == null || terminal}
+            placeholder="Bez etykiety"
+            ariaLabel="Etykieta panelu zwrotu"
+            onSelect={(v) => {
+              const nextId = v === "" ? null : Number(v);
+              void (async () => {
+                setPatchingUi(true);
+                setErr(null);
+                try {
+                  const updated = await patchReturnRmzUiStatus(rid, DAMAGE_TENANT_ID, nextId, data.warehouse_id);
+                  setData(updated);
+                  const s = await getReturnUiStatusSummary(DAMAGE_TENANT_ID, data.warehouse_id);
+                  setPanelSummary(s);
+                } catch {
+                  setErr("Nie udało się zapisać statusu.");
+                } finally {
+                  setPatchingUi(false);
+                }
+              })();
+            }}
+          />
         </ReturnDetailWidgetShell>
       );
 
@@ -210,23 +186,8 @@ export function renderRmzDetailSection(id: ReturnDetailSectionId, ctx: RmzDetail
       return linesSection;
 
     case "wms_view":
-      if (!showWmsTerminal) return null;
-      return (
-        <ReturnDetailWidgetShell
-          title={label}
-          icon={<Terminal className="h-4 w-4" strokeWidth={2} aria-hidden />}
-          actions={
-            <Link to={WMS_ROUTES.returnsProcess(data.id)} className={primaryButtonClassName()}>
-              Otwórz terminal
-            </Link>
-          }
-          hint="Zdjęcia i dokumentacja z terminala magazynowego."
-        >
-          <p className="text-[13px] text-slate-600">
-            Operacje magazynowe, dowody i Z-PZ prowadzisz w terminalu WMS — bez zmiany konfiguratora bloków.
-          </p>
-        </ReturnDetailWidgetShell>
-      );
+      // Terminal WMS nie jest stałym widgetem — opcjonalna akcja w menu nagłówka.
+      return null;
 
     case "damage_photos":
       return (

@@ -1,25 +1,24 @@
 import { RETURN_DETAIL_SECTION_IDS } from "../constants/returnModuleDetailSections";
 import type { ReturnDetailLayoutDto, ReturnDetailSectionWidth } from "../types/returnModuleConfig";
 
-/** Domyślny układ zbliżony do wcześniejszego widoku panelu (przed konfiguratorem). */
+/** Domyślny układ — bez Terminala WMS; prawa kolumna: etykieta → notatki → postęp → dziennik → dokumenty. */
 export const DEFAULT_RETURN_DETAIL_LAYOUT: ReturnDetailLayoutDto = {
   left_column: [
     "returned_products",
-    "wms_view",
     "damage_photos",
-    "decision_history",
-    "progress_bar",
-  ],
-  right_column: [
-    "return_status",
     "refund",
     "customer_data",
     "payment_data",
-    "attachments",
-    "notes",
     "correspondence",
     "customer_stats",
     "prior_returns_history",
+  ],
+  right_column: [
+    "return_status",
+    "notes",
+    "progress_bar",
+    "decision_history",
+    "attachments",
   ],
   section_widths: {},
 };

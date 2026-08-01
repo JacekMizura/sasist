@@ -21,7 +21,7 @@ export type ReturnDetailSectionId = (typeof RETURN_DETAIL_SECTION_IDS)[number];
 
 /** Etykiety wyłącznie po polsku (UI). */
 export const RETURN_DETAIL_SECTION_LABELS_PL: Record<ReturnDetailSectionId, string> = {
-  return_status: "Status",
+  return_status: "Etykieta na liście",
   progress_bar: "Postęp rozliczenia",
   returned_products: "Produkty",
   wms_view: "Terminal WMS",

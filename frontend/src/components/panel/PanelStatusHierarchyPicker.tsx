@@ -1,9 +1,9 @@
 import { useMemo, useState } from "react";
 import { Search } from "lucide-react";
 
-import { PanelStatusWmsIconColumn } from "./PanelStatusWmsIconColumn";
 import { PanelSubgroupLineHeader } from "./PanelSubgroupLineHeader";
 import { PanelTreeCount } from "./PanelTreeCount";
+import { PanelTreeStatusItem } from "./PanelTreeStatusItem";
 import {
   PANEL_TREE_CHILDREN_CLASS,
   PANEL_TREE_GROUP_LABEL_CLASS,
@@ -13,14 +13,11 @@ import {
   PANEL_TREE_SUBGROUP_CHILDREN_CLASS,
   panelTreeGroupBarHex,
   panelTreeMetaRowClass,
-  panelTreeStatusBarClass,
-  panelTreeStatusRowClass,
 } from "./panelStatusTreeStyles";
 import { getPanelStatusWmsMarkers } from "../orders/panelStatusWmsChips";
 import { ORDERS_PANEL_GROUP_LABELS } from "../orders/OrdersPanelStatusSidebar";
 import { buildPanelSidebarLayout } from "../../utils/orderPanelSidebarBuckets";
 import { MAIN_PANEL_GROUP_ORDER } from "../../utils/orderPanelMainGroupOrder";
-import { sidebarSubStatusHex } from "../../utils/panelSidebarHierarchy";
 import type {
   OrderUiMainGroup,
   OrderUiPanelSubgroupRead,
@@ -76,24 +73,23 @@ function StatusPickRow({
   disabled: boolean;
   onPick: () => void;
 }) {
-  const stripeColor = sidebarSubStatusHex(status.badge_color ?? status.color, mainGroup);
-  const markers = getPanelStatusWmsMarkers(status, mainGroup);
-
   return (
-    <button
-      type="button"
+    <PanelTreeStatusItem
+      as="button"
+      name={status.name}
+      mainGroup={mainGroup}
+      colors={{
+        color: status.color,
+        badge_color: status.badge_color,
+        background_color: status.background_color,
+        text_color: status.text_color,
+      }}
+      imageUrl={status.image_url}
+      markers={getPanelStatusWmsMarkers(status, mainGroup)}
+      active={selected}
       disabled={disabled}
-      aria-pressed={selected}
-      className={`${panelTreeStatusRowClass(selected)} disabled:cursor-not-allowed disabled:opacity-50`}
       onClick={onPick}
-    >
-      <PanelStatusWmsIconColumn markers={markers} />
-      <span className={panelTreeStatusBarClass(selected)} style={{ backgroundColor: stripeColor }} aria-hidden />
-      <span className="min-w-0 flex-1 leading-snug">{status.name}</span>
-      {status.image_url ? (
-        <img src={status.image_url} alt="" className="mt-0.5 h-4 w-4 shrink-0 rounded object-contain" />
-      ) : null}
-    </button>
+    />
   );
 }
 

@@ -1,3 +1,10 @@
+## 2026-08-01 — RMZ detail: spójność z Panelem Zamówienia
+
+- Usunięty widget + CTA „Terminal WMS”; dostęp tylko z menu ⋮ gdy WMS aktywny
+- Usunięty badge „W trakcie”; etykieta listy = `PanelBulkStatusPickerDropdown` / `PanelTreeStatusItem`
+- Decyzje produktu: samodzielne segmented buttons (bez szarego kontenera)
+- Prawa kolumna: etykieta → notatki → postęp → dziennik → dokumenty; kompaktowe karty produktów
+
 ## 2026-08-01 — Lista zwrotów: status panelu + kolumny
 
 - Kolumna Status = `PanelTreeStatusItem` (ten sam co sidebar); bez szarych kapsuł
