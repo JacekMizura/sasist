@@ -1,3 +1,9 @@
+## 2026-08-01 — Modal Zamień produkt: redesign wizualny
+
+- Bez ramek przy zdjęciach; filtry segmentowe; lżejsze badge; zwarta lista
+- Kafelki „Najlepsze dopasowania” + scroll; footer: Zamieniany produkt + checkbox
+- Logika search/filtrów bez zmian
+
 ## 2026-08-01 — Order header: Sellasist popover UX
 
 - Ikony → dropdown (nie modal); modal tylko przy wprowadzaniu danych
