@@ -1,6 +1,6 @@
 /**
- * Analizy — landing = Dashboard (nie zakładka).
- * Faza 3: dystans przeniesiony do Optymalizacji → Trasy i dystans.
+ * Sekcja raportów w hubie Analizy (podzakładka „Analizy”).
+ * Landing hubu = Pulpit (/analytics) — bez bocznego menu raportów.
  */
 
 export type SubNavItem = { path: string; label: string };

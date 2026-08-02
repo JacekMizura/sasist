@@ -17,7 +17,6 @@ import {
   type WarehouseOperatorCard,
   type WarehousePriorityTask,
 } from "../../api/warehouseOperationsApi";
-import PageContainer from "../../components/layout/PageLayout";
 import { PageHeader } from "../../components/layout/PageHeader";
 import { useWarehouse } from "../../context/WarehouseContext";
 import {
@@ -1517,23 +1516,29 @@ export default function CentrumOperacyjnePage() {
 
   if (loading && !snapshot) {
     return (
-      <PageContainer cardClassName="space-y-4">
+      <div className="min-w-0 space-y-4">
         <PageHeader
           title="Centrum operacyjne"
           subtitle="WMS na żywo — operatorzy, kolejki i alerty"
-          breadcrumbs={[{ label: "Centrum operacyjne" }]}
+          breadcrumbs={[
+            { label: "Analizy", to: "/analytics" },
+            { label: "Centrum operacyjne" },
+          ]}
         />
         <div className="rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-500">Ładowanie danych operacyjnych…</div>
-      </PageContainer>
+      </div>
     );
   }
 
   return (
-    <PageContainer cardClassName="space-y-4">
+    <div className="min-w-0 space-y-4">
       <PageHeader
         title="Centrum operacyjne"
         subtitle="WMS na żywo — kontrola pracy magazynu, operatorów i kolejek"
-        breadcrumbs={[{ label: "Centrum operacyjne" }]}
+        breadcrumbs={[
+          { label: "Analizy", to: "/analytics" },
+          { label: "Centrum operacyjne" },
+        ]}
         actions={
           <div className="flex flex-wrap items-center gap-2">
             {showWarehouseSelector ? (
@@ -1649,6 +1654,6 @@ export default function CentrumOperacyjnePage() {
           onConfirm={() => void handleConfirmDispatch()}
         />
       ) : null}
-    </PageContainer>
+    </div>
   );
 }

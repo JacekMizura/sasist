@@ -1,3 +1,10 @@
+## 2026-08-02 — IA: jeden hub Analizy w sidebarze
+
+- Usunięto osobne pozycje sidebaru: Centrum operacyjne, Optymalizacja
+- Jedna pozycja: **Analizy** → `/analytics` (Pulpit startowy)
+- `AnalizyModuleLayout` + sekcje: Pulpit · Centrum operacyjne · Analizy · Optymalizacja
+- Routing i logika biznesowa bez zmian; tylko Information Architecture
+
 ## 2026-08-02 — Faza 4 zaakceptowana
 
 - Zamknięcie pętli: Realizacja → Ocena → Historia

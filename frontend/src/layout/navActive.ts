@@ -54,16 +54,12 @@ export function isNavPathActive(pathname: string, path: string): boolean {
     return (
       pathname === "/analytics" ||
       pathname === "/analytics/dashboard" ||
-      (pathname.startsWith("/analytics/") &&
-        !pathname.startsWith("/analytics/warehouse-operations") &&
-        !pathname.startsWith("/analytics/live-warehouse"))
+      pathname.startsWith("/analytics/") ||
+      pathname === "/centrum-operacyjne" ||
+      pathname.startsWith("/centrum-operacyjne/") ||
+      pathname === "/optymalizacja" ||
+      pathname.startsWith("/optymalizacja/")
     );
-  }
-  if (path === "/centrum-operacyjne") {
-    return pathname === "/centrum-operacyjne" || pathname.startsWith("/centrum-operacyjne/");
-  }
-  if (path === "/optymalizacja") {
-    return pathname === "/optymalizacja" || pathname.startsWith("/optymalizacja/");
   }
   if (path === "/system") {
     return pathname.startsWith("/system") || pathname.startsWith("/changelog");

@@ -143,7 +143,7 @@ export default function AnalysisDashboard() {
   return (
     <div className="min-w-0 space-y-6">
       <div>
-        <h1 className="text-xl font-semibold text-slate-800">Analizy</h1>
+        <h1 className="text-xl font-semibold text-slate-800">Pulpit</h1>
         <p className="mt-1 text-sm text-slate-600">
           Co wymaga decyzji? Wybierz problem, zobacz przyczynę, wykonaj akcję.
         </p>

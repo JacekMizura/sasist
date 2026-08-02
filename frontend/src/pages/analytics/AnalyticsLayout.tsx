@@ -1,5 +1,4 @@
 import { NavLink, Outlet, useLocation } from "react-router-dom";
-import PageLayout from "../../components/layout/PageLayout";
 import { getAnalizySubNav, type SubNavItem } from "../../modules/analytics/analyticsTabs";
 
 function SubNav({ items }: { items: SubNavItem[] }) {
@@ -25,8 +24,7 @@ function SubNav({ items }: { items: SubNavItem[] }) {
 }
 
 /**
- * Hub Analizy: wejście = Dashboard (landing), raporty z boczną nawigacją.
- * Bez zakładek Dashboard / Mapy / Symulacje / Optymalizacja (Faza 1).
+ * Sekcja raportów Analiz — pod nawigacją hubu (PageLayout w AnalizyModuleLayout).
  */
 export default function AnalyticsLayout() {
   const { pathname } = useLocation();
@@ -34,17 +32,15 @@ export default function AnalyticsLayout() {
   const isLanding = pathname === "/analytics" || pathname === "/analytics/dashboard";
 
   return (
-    <PageLayout fullBleed>
-      <div className="relative flex min-h-[600px] w-full min-w-0 gap-6">
-        {!isLanding && subNav != null ? (
-          <aside className="shrink-0">
-            <SubNav items={subNav} />
-          </aside>
-        ) : null}
-        <div className="flex min-h-[600px] min-w-0 flex-1 flex-col">
-          <Outlet />
-        </div>
+    <div className="relative flex min-h-[600px] w-full min-w-0 gap-6">
+      {!isLanding && subNav != null ? (
+        <aside className="shrink-0">
+          <SubNav items={subNav} />
+        </aside>
+      ) : null}
+      <div className="flex min-h-[600px] min-w-0 flex-1 flex-col">
+        <Outlet />
       </div>
-    </PageLayout>
+    </div>
   );
 }

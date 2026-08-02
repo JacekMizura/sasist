@@ -3,7 +3,6 @@ import {
   ClipboardList,
   Package,
   Warehouse,
-  Activity,
   BarChart3,
   Tag,
   LayoutTemplate,
@@ -116,9 +115,7 @@ export const NAV_SIDEBAR_SECTIONS: NavSidebarSectionConfig[] = [
     id: "operations",
     label: "Operacje",
     categoryIds: [
-      "centrum-operacyjne",
       "analizy",
-      "optymalizacja",
       "purchasing",
       "templates",
       "warehouse",
@@ -295,27 +292,12 @@ export function buildNavFlyoutCategories(): NavCategoryConfig[] {
     ],
   },
   {
-    id: "centrum-operacyjne",
-    label: "Centrum operacyjne",
-    Icon: Activity,
-    directPath: "/centrum-operacyjne",
-    activePathPrefix: "/centrum-operacyjne",
-    flyoutSections: [],
-  },
-  {
     id: "analizy",
     label: "Analizy",
     Icon: BarChart3,
     directPath: "/analytics",
+    /** Hub obejmuje Pulpit, Centrum, raporty i Optymalizację. */
     activePathPrefix: "/analytics",
-    flyoutSections: [],
-  },
-  {
-    id: "optymalizacja",
-    label: "Optymalizacja",
-    Icon: SlidersHorizontal,
-    directPath: "/optymalizacja",
-    activePathPrefix: "/optymalizacja",
     flyoutSections: [],
   },
   {
@@ -481,9 +463,10 @@ export function isCategoryActive(category: NavCategoryConfig, pathname: string):
     if (pathname.startsWith("/settings/exports")) return true;
   }
   if (category.id === "analizy") {
-    // Optymalizacja i mapa ukryta — nie podświetlaj Analiz przy /optymalizacja
-    if (pathname.startsWith("/optymalizacja")) return false;
-    if (pathname.startsWith("/centrum-operacyjne")) return false;
+    if (pathname === "/analytics" || pathname.startsWith("/analytics/")) return true;
+    if (pathname === "/centrum-operacyjne" || pathname.startsWith("/centrum-operacyjne/")) return true;
+    if (pathname === "/optymalizacja" || pathname.startsWith("/optymalizacja/")) return true;
+    return false;
   }
   if (category.id === "wms-settings") {
     return pathname === "/settings/wms" || pathname.startsWith("/settings/wms/");

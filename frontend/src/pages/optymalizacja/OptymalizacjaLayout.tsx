@@ -1,5 +1,4 @@
 import { NavLink, Outlet, useLocation } from "react-router-dom";
-import PageLayout from "../../components/layout/PageLayout";
 import {
   getOptymalizacjaSubNav,
   type OptimizeSubNavItem,
@@ -30,23 +29,21 @@ function SubNav({ items }: { items: OptimizeSubNavItem[] }) {
   );
 }
 
-/** Hub Optymalizacja — osobny top-level (Faza 1). */
+/** Sekcja Optymalizacja — pod nawigacją hubu Analizy. */
 export default function OptymalizacjaLayout() {
   const { pathname } = useLocation();
   const subNav = getOptymalizacjaSubNav(pathname);
 
   return (
-    <PageLayout fullBleed>
-      <div className="relative flex min-h-[600px] w-full min-w-0 gap-6">
-        {subNav != null ? (
-          <aside className="shrink-0">
-            <SubNav items={subNav} />
-          </aside>
-        ) : null}
-        <div className="flex min-h-[600px] min-w-0 flex-1 flex-col">
-          <Outlet />
-        </div>
+    <div className="relative flex min-h-[600px] w-full min-w-0 gap-6">
+      {subNav != null ? (
+        <aside className="shrink-0">
+          <SubNav items={subNav} />
+        </aside>
+      ) : null}
+      <div className="flex min-h-[600px] min-w-0 flex-1 flex-col">
+        <Outlet />
       </div>
-    </PageLayout>
+    </div>
   );
 }

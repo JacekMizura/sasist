@@ -2,9 +2,11 @@
 
 ## Active
 
-**Faza 4 zaakceptowana** — pętla decyzyjna magazynu zamknięta.
+**IA hubu Analizy (nawigacja)** — trzy perspektywy w jednym module sidebaru „Analizy”.
 
-Pełny cykl produktu:
-Centrum Operacyjne → Analizy → Optymalizacja → Plan zmian → Realizacja → Ocena efektów → Historia zmian
+Sidebar: tylko **Analizy** → `/analytics` (Pulpit).
+Wewnętrzne sekcje: Pulpit · Centrum operacyjne · Analizy · Optymalizacja.
+Routing/URLe bez zmian (`/centrum-operacyjne`, `/analytics/*`, `/optymalizacja/*`).
 
-Nie startować kolejnych faz / Enterprise bez osobnej decyzji użytkownika.
+Produkt (pętla decyzyjna) bez zmian — Faza 4 zamknięta.
+Nie startować Enterprise / kolejnych faz bez decyzji użytkownika.
