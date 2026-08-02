@@ -2,10 +2,9 @@
 
 ## Active
 
-RMZ detail: Uszkodzone/Odrzucone = inline expand w karcie produktu (bez drawera/modala); jeden produkt naraz; badge podsumowania po zapisie.
+Document logo: root cause — `/uploads` relative + `file://` PDF rewrite; fixed via data-URI embed + `company.logo` in global context.
 
 ## Constraints
 
-- Tylko UX/UI — bez zmian backendu
-- Accordion: `expandedDecisionOi` w rodzicu
-- Formularze: `RmzLineInlineDecisionPanel`
+- No hardcoded logo paths
+- Temporary `[doc.logo]` logs in provider / company_logo / upload embed

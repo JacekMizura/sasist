@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from datetime import datetime
 from typing import Any
 
@@ -12,6 +13,8 @@ from ...models.company_profile import CompanyProfile
 from ...models.tenant import Tenant
 from ...models.warehouse import Warehouse
 from ..dto.print_context import GlobalPrintContext, dto_to_dict
+
+logger = logging.getLogger(__name__)
 
 
 def build_global_print_context_dto(
@@ -53,6 +56,16 @@ def build_global_print_context_dto(
         "bic_swift": _first_str(profile, "bic_swift"),
     }
     logo = _first_str(profile, "logo_url")
+    # document_header / company_logo() expect company.logo (same source as branding.logo_url).
+    company["logo"] = logo
+    company["logo_url"] = logo
+    logger.info(
+        "[doc.logo] global context tenant_id=%s logo_path=%r company.logo=%r branding.logo_url=%r",
+        tenant_id,
+        logo,
+        company.get("logo"),
+        logo,
+    )
     dto = GlobalPrintContext(
         company=company,
         tenant={

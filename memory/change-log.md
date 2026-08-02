@@ -1,3 +1,9 @@
+## 2026-08-02 — Document logo: data-URI embed + company.logo
+
+- Przyczyna: branding zapisuje `/uploads/...`, ale preview/PDF nie osadzały pliku (relative src + `file://` w Puppeteer)
+- Fix: `upload_media_embed` → data URI; `company.logo` w global context; `document_header` czyta też `branding.logo_url`
+- Tymczasowe logi `[doc.logo]`
+
 ## 2026-08-01 — RMZ: inline Uszkodzone/Odrzucone
 
 - Zamiast drawera: rozwijany panel w karcie produktu (height+opacity ~220ms)

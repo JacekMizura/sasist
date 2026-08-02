@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import io
+import logging
 from datetime import date as date_cls
 from datetime import datetime as datetime_cls
 from decimal import Decimal, InvalidOperation
@@ -11,7 +12,10 @@ from typing import Any
 import qrcode
 
 from ...services.production_execution.barcode_html import code128_png_data_uri
+from ...services.upload_media_embed import resolve_upload_src_for_embed
 from .helper_registry import TwigHelperRegistry, get_twig_helper_registry
+
+logger = logging.getLogger(__name__)
 
 
 def _parse_number(value: Any) -> Decimal | None:
@@ -123,7 +127,14 @@ def asset(path: Any) -> str:
 
 
 def image(url: Any, alt: str = "") -> str:
-    src = url if str(url or "").startswith("http") else asset(url)
+    raw = str(url or "").strip()
+    if not raw:
+        return ""
+    if raw.startswith(("http://", "https://", "data:")):
+        src = raw
+    else:
+        src = asset(raw)
+    src = resolve_upload_src_for_embed(src)
     if not src:
         return ""
     alt_text = str(alt or "").replace('"', "&quot;")
@@ -131,10 +142,25 @@ def image(url: Any, alt: str = "") -> str:
 
 
 def company_logo(context: dict[str, Any]) -> str:
-    logo_url = context.get("logo") or (context.get("branding") or {}).get("logo_url")
-    if not logo_url:
+    company = context.get("company") if isinstance(context.get("company"), dict) else {}
+    branding = context.get("branding") if isinstance(context.get("branding"), dict) else {}
+    logo_url = (
+        context.get("logo")
+        or (company or {}).get("logo")
+        or (company or {}).get("logo_url")
+        or (branding or {}).get("logo_url")
+    )
+    logo_s = str(logo_url).strip() if logo_url is not None else ""
+    logger.info(
+        "[doc.logo] company_logo() context keys company.logo=%r logo=%r branding.logo_url=%r chosen=%r",
+        (company or {}).get("logo"),
+        context.get("logo"),
+        (branding or {}).get("logo_url"),
+        logo_s or None,
+    )
+    if not logo_s:
         return ""
-    return image(logo_url, alt="Logo")
+    return image(logo_s, alt="Logo")
 
 
 def plural(count: Any, singular: str, plural_form: str) -> str:

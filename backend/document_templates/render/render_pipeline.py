@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from ...services.structure_report_pdf_service import html_document_to_pdf_bytes
+from ...services.upload_media_embed import embed_upload_srcs_in_html
 from ..dto.resolved_document_template import ResolvedDocumentTemplate
 from ..errors import DocumentRenderError
 from .output_formats import DocumentOutputFormat
@@ -12,7 +13,10 @@ from .template_renderer import render
 
 
 def render_html(resolved: ResolvedDocumentTemplate | str, context: dict[str, Any]) -> str:
-    return render(resolved, context)
+    html = render(resolved, context)
+    # Belt-and-suspenders for templates that put raw ``{{ logo }}`` in src=
+    # (company_logo()/image() already embed; this catches leftover /uploads).
+    return embed_upload_srcs_in_html(html)
 
 
 def render_pdf(resolved: ResolvedDocumentTemplate | str, context: dict[str, Any]) -> bytes:

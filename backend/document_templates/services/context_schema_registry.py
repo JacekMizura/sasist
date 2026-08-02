@@ -55,6 +55,7 @@ GLOBAL_FIELDS: list[FieldDef] = [
     _field("company.postal_code", "Firma → kod pocztowy"),
     _field("company.email", "Firma → e-mail"),
     _field("company.phone", "Firma → telefon", insert="{{ company.phone | phone }}"),
+    _field("company.logo", "Firma → logo", insert="{{ company_logo() }}"),
     _field("tenant.name", "Tenant → nazwa"),
     _field("warehouse.name", "Magazyn → nazwa"),
     _field("warehouse.code", "Magazyn → kod"),

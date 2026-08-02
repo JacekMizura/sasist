@@ -39,7 +39,9 @@ def _build_engine(loader=None) -> Environment:
 
                 @pass_context
                 def _company_logo(ctx) -> str:
-                    return company_logo(dict(ctx))
+                    # Jinja Context → plain dict for company_logo()
+                    data = ctx.get_all() if hasattr(ctx, "get_all") else dict(ctx)
+                    return company_logo(dict(data))
 
                 env.globals[name] = _company_logo
             continue

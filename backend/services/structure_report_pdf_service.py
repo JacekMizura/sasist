@@ -7,7 +7,6 @@ from __future__ import annotations
 
 import logging
 import os
-import re
 import shutil
 import subprocess
 from pathlib import Path
@@ -22,26 +21,12 @@ REPORT_TIMEOUT_MESSAGE = "Report rendering timeout - frontend not reachable or d
 
 _NODE_FALLBACK_PATHS = ("/usr/bin/node", "/usr/local/bin/node")
 
-_UPLOADS_ROOT = BACKEND_ROOT / "uploads"
-_UPLOAD_SRC_RE = re.compile(r'src="(/uploads/[^"]+)"')
-
 
 def _inline_upload_src_urls(html: str) -> str:
-    """Map /uploads/... img src to file:// so Puppeteer setContent can load logos locally."""
-    uploads_root = _UPLOADS_ROOT.resolve()
+    """Embed /uploads/... img src as data URIs so Puppeteer setContent can render logos."""
+    from .upload_media_embed import embed_upload_srcs_in_html
 
-    def _repl(match: re.Match[str]) -> str:
-        rel = match.group(1)
-        disk = (uploads_root / rel.removeprefix("/uploads/").lstrip("/")).resolve()
-        try:
-            disk.relative_to(uploads_root)
-        except ValueError:
-            return match.group(0)
-        if disk.is_file():
-            return f'src="{disk.as_uri()}"'
-        return match.group(0)
-
-    return _UPLOAD_SRC_RE.sub(_repl, html)
+    return embed_upload_srcs_in_html(html)
 
 
 def _node_executable() -> str:
