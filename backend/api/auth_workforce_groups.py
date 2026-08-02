@@ -13,7 +13,7 @@ from ..database import get_db
 from ..models.app_user import AppUser
 from ..models.workforce_user_group import WorkforceUserGroup
 from ..schemas.workforce_groups import WorkforceUserGroupCreate, WorkforceUserGroupRead, WorkforceUserGroupUpdate
-from ..wms_operational_modes import is_valid_wms_mode
+from ..wms_operational_modes import split_wms_modes_and_legacy_permissions
 
 workforce_user_groups_router = APIRouter(prefix="/workforce-user-groups", tags=["Workforce user groups"])
 
@@ -36,7 +36,8 @@ def _parse_modes(raw: str | None) -> list[str]:
     try:
         data = json.loads(raw)
         if isinstance(data, list):
-            return [str(x) for x in data if is_valid_wms_mode(str(x))]
+            floor, _legacy = split_wms_modes_and_legacy_permissions([str(x) for x in data])
+            return floor
     except json.JSONDecodeError:
         return []
     return []
@@ -81,15 +82,15 @@ def create_workforce_user_group(
     _: AppUser = Depends(require_permission("settings.users")),
 ):
     _validate_perm_keys(body.default_permission_keys)
-    modes = [m for m in body.default_wms_modes if is_valid_wms_mode(str(m))]
+    floor, legacy = split_wms_modes_and_legacy_permissions(list(body.default_wms_modes or []))
+    perm_keys = list(dict.fromkeys([*(body.default_permission_keys or []), *legacy]))
+    _validate_perm_keys(perm_keys)
     g = WorkforceUserGroup(
         name=body.name.strip(),
         color=(body.color or "#64748b").strip()[:32],
         icon_key=(body.icon_key or "Users").strip()[:64],
-        default_permission_keys_json=json.dumps(body.default_permission_keys, ensure_ascii=False)
-        if body.default_permission_keys
-        else None,
-        default_wms_modes_json=json.dumps(modes, ensure_ascii=False) if modes else None,
+        default_permission_keys_json=json.dumps(perm_keys, ensure_ascii=False) if perm_keys else None,
+        default_wms_modes_json=json.dumps(floor, ensure_ascii=False) if floor else None,
     )
     db.add(g)
     db.commit()
@@ -118,11 +119,19 @@ def update_workforce_user_group(
         g.archived_at = data["archived_at"]
     if "default_permission_keys" in data and data["default_permission_keys"] is not None:
         _validate_perm_keys(data["default_permission_keys"])
-        pk = data["default_permission_keys"]
+        pk = list(data["default_permission_keys"] or [])
+        if "default_wms_modes" in data and data["default_wms_modes"] is not None:
+            _floor, legacy = split_wms_modes_and_legacy_permissions(list(data["default_wms_modes"] or []))
+            pk = list(dict.fromkeys([*pk, *legacy]))
         g.default_permission_keys_json = json.dumps(pk, ensure_ascii=False) if pk else None
     if "default_wms_modes" in data and data["default_wms_modes"] is not None:
-        modes = [m for m in data["default_wms_modes"] if is_valid_wms_mode(str(m))]
-        g.default_wms_modes_json = json.dumps(modes, ensure_ascii=False) if modes else None
+        floor, legacy = split_wms_modes_and_legacy_permissions(list(data["default_wms_modes"] or []))
+        g.default_wms_modes_json = json.dumps(floor, ensure_ascii=False) if floor else None
+        if "default_permission_keys" not in data and legacy:
+            existing = _parse_keys(g.default_permission_keys_json)
+            merged = list(dict.fromkeys([*existing, *legacy]))
+            _validate_perm_keys(merged)
+            g.default_permission_keys_json = json.dumps(merged, ensure_ascii=False) if merged else None
     db.commit()
     db.refresh(g)
     return _to_read(g)

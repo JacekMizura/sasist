@@ -129,7 +129,9 @@ PERMISSION_TREE: list[dict[str, Any]] = [
                     _leaf("warehouse.reservations", "Rezerwacje"),
                     _leaf("warehouse.stock", "Stany"),
                     _leaf("warehouse.adjustments", "Korekty"),
-                    _leaf("warehouse.operations", "Operacje magazynowe (ogólne)"),
+                    _leaf("warehouse.operations", "Operacje"),
+                    _leaf("warehouse.carts", "Wózki"),
+                    _leaf("warehouse.qc", "Kontrola jakości"),
                 ],
             ),
             _node(
@@ -198,6 +200,11 @@ PERMISSION_TREE: list[dict[str, Any]] = [
         "Zakupy",
         [
             _node(
+                "sec_po_access",
+                "Dostęp",
+                [_leaf("purchasing.view", "Moduł Zakupy")],
+            ),
+            _node(
                 "sec_po",
                 "Zamówienia zakupu",
                 [
@@ -205,6 +212,28 @@ PERMISSION_TREE: list[dict[str, Any]] = [
                     _leaf("purchasing.orders.approve", "Akceptacja"),
                     _leaf("purchasing.orders.receive", "Przyjęcie"),
                 ],
+            ),
+        ],
+    ),
+    _node(
+        "cat_documents",
+        "Dokumenty",
+        [
+            _node(
+                "sec_documents_access",
+                "Dostęp",
+                [_leaf("documents.view", "Moduł Dokumenty")],
+            ),
+        ],
+    ),
+    _node(
+        "cat_analytics",
+        "Analiza",
+        [
+            _node(
+                "sec_analytics_access",
+                "Dostęp",
+                [_leaf("analytics.view", "Moduł Analiza")],
             ),
         ],
     ),
@@ -320,7 +349,13 @@ ROLE_PERMISSION_PRESETS: dict[str, tuple[str, ...]] = {
     "admin": tuple(
         k
         for k in PERMISSION_KEYS
-        if not k.startswith("purchasing.") or k in ("purchasing.orders.create", "purchasing.orders.receive")
+        if not k.startswith("purchasing.")
+        or k
+        in (
+            "purchasing.view",
+            "purchasing.orders.create",
+            "purchasing.orders.receive",
+        )
     ),
     "warehouse_manager": tuple(
         sorted(
@@ -354,6 +389,10 @@ ROLE_PERMISSION_PRESETS: dict[str, tuple[str, ...]] = {
                     "warehouse.stock",
                     "warehouse.adjustments",
                     "warehouse.operations",
+                    "warehouse.carts",
+                    "warehouse.qc",
+                    "documents.view",
+                    "analytics.view",
                     "warehouse.picking.start",
                     "warehouse.picking.continue",
                     "warehouse.picking.assign",
@@ -419,6 +458,7 @@ ROLE_PERMISSION_PRESETS: dict[str, tuple[str, ...]] = {
         "orders.list",
         "orders.detail",
         "products.view",
+        "purchasing.view",
         "purchasing.orders.create",
         "purchasing.orders.approve",
         "purchasing.orders.receive",
@@ -436,6 +476,7 @@ ROLE_PERMISSION_PRESETS: dict[str, tuple[str, ...]] = {
                     "warehouse.inventory",
                     "warehouse.stock",
                     "warehouse.operations",
+                    "analytics.view",
                     "audit.view",
                     "workforce.dashboard",
                     "workforce.activity.read",

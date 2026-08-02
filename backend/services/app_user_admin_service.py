@@ -39,7 +39,116 @@ from ..schemas.app_user import (
     WmsProfileInput,
     WmsProfileUpdate,
 )
-from ..wms_operational_modes import is_valid_wms_mode
+from ..wms_operational_modes import (
+    is_legacy_wms_module_mode,
+    is_valid_wms_mode,
+    split_wms_modes_and_legacy_permissions,
+)
+
+
+def _grant_user_permissions_if_missing(db: Session, user_id: int, permission_keys: Iterable[str]) -> None:
+    """Insert permission rows that are not already stored for the user."""
+    keys = [str(k).strip() for k in permission_keys if str(k).strip()]
+    if not keys:
+        return
+    allowed = set(PERMISSION_KEYS)
+    existing = {
+        str(r.permission_key)
+        for r in db.query(UserPermission.permission_key).filter(UserPermission.user_id == int(user_id)).all()
+    }
+    for pk in keys:
+        if pk not in allowed or pk in existing:
+            continue
+        db.add(UserPermission(user_id=int(user_id), permission_key=pk))
+        existing.add(pk)
+
+
+def _persist_wms_operational_modes(
+    db: Session,
+    user_id: int,
+    profile: UserWmsProfile,
+    raw_modes: list[str] | None,
+) -> list[str]:
+    """
+    Persist floor modes only; migrate former module-mode keys into user_permissions.
+    Returns the stored floor mode list.
+    """
+    floor, legacy_perms = split_wms_modes_and_legacy_permissions(raw_modes)
+    profile.wms_operational_modes_json = json.dumps(floor, ensure_ascii=False) if floor else None
+    if legacy_perms:
+        _grant_user_permissions_if_missing(db, user_id, legacy_perms)
+    return floor
+
+
+def _modes_for_client_gating(raw: list[str], floor: list[str]) -> list[str]:
+    """
+    Modes returned to clients for WMS gating.
+
+    Empty list means “all floor modes”. Never return [] when the stored list was
+    non-empty but contained only legacy module hubs — that would open every floor
+    mode. Keep legacy keys in the response for dual-read until an admin save
+    rewrites the profile to floor-only modes.
+    """
+    if floor:
+        return floor
+    if not raw:
+        return []
+    kept: list[str] = []
+    seen: set[str] = set()
+    for m in raw:
+        key = str(m).strip()
+        if not key or key in seen:
+            continue
+        if is_valid_wms_mode(key) or is_legacy_wms_module_mode(key):
+            seen.add(key)
+            kept.append(key)
+    return kept
+
+
+def migrate_legacy_wms_module_modes_on_profile(
+    db: Session,
+    user_id: int,
+    profile: UserWmsProfile | None = None,
+) -> list[str]:
+    """
+    Grant module permissions for legacy mode keys. Strip those keys from JSON only
+    when at least one floor mode remains (empty stored list = all floors).
+
+    Returns the mode list for client gating (caller owns commit).
+    """
+    p = profile or get_wms_profile(db, user_id)
+    if p is None:
+        return []
+    raw = parse_json_list(getattr(p, "wms_operational_modes_json", None) or None) or []
+    floor, legacy_perms = split_wms_modes_and_legacy_permissions(raw)
+    if legacy_perms:
+        _grant_user_permissions_if_missing(db, user_id, legacy_perms)
+    if floor and list(raw) != floor:
+        # Safe to drop legacy hubs — floor restriction still non-empty.
+        p.wms_operational_modes_json = json.dumps(floor, ensure_ascii=False)
+    return _modes_for_client_gating(raw, floor)
+
+
+def migrate_legacy_wms_module_modes_all_users(db: Session) -> int:
+    """
+    Bulk migrate: grant ``user_permissions`` for legacy module-mode keys.
+    Strip hubs from JSON only when floor modes remain. Returns profiles touched.
+    """
+    touched = 0
+    rows = db.query(UserWmsProfile).all()
+    for p in rows:
+        raw = parse_json_list(getattr(p, "wms_operational_modes_json", None) or None) or []
+        if not raw:
+            continue
+        floor, legacy = split_wms_modes_and_legacy_permissions(raw)
+        if not legacy and list(raw) == floor:
+            continue
+        if legacy:
+            _grant_user_permissions_if_missing(db, int(p.user_id), legacy)
+        if floor and list(raw) != floor:
+            p.wms_operational_modes_json = json.dumps(floor, ensure_ascii=False)
+        touched += 1
+    return touched
 
 
 def _workstation_ids_for_user(db: Session, user_id: int) -> list[int]:
@@ -271,8 +380,7 @@ def apply_wms_profile_create(db: Session, user_id: int, wms: WmsProfileInput, *,
     p.packing_permissions_json = (
         json.dumps(wms.packing_permissions, ensure_ascii=False) if wms.packing_permissions else None
     )
-    modes = [str(m) for m in (wms.wms_operational_modes or []) if is_valid_wms_mode(str(m))]
-    p.wms_operational_modes_json = json.dumps(modes, ensure_ascii=False) if modes else None
+    modes = _persist_wms_operational_modes(db, user_id, p, list(wms.wms_operational_modes or []))
     p.workforce_supervisor_user_id = wms.workforce_supervisor_user_id
     p.workforce_employment_type = (wms.workforce_employment_type or "").strip() or None
     p.workforce_shift_type = (wms.workforce_shift_type or "").strip() or None
@@ -328,8 +436,7 @@ def apply_wms_profile_update(db: Session, user_id: int, wms: WmsProfileUpdate) -
         pp = data["packing_permissions"]
         p.packing_permissions_json = json.dumps(pp, ensure_ascii=False) if pp else None
     if "wms_operational_modes" in data and data["wms_operational_modes"] is not None:
-        modes = [str(m) for m in data["wms_operational_modes"] if is_valid_wms_mode(str(m))]
-        p.wms_operational_modes_json = json.dumps(modes, ensure_ascii=False) if modes else None
+        _persist_wms_operational_modes(db, user_id, p, list(data["wms_operational_modes"] or []))
     if "workforce_supervisor_user_id" in data:
         p.workforce_supervisor_user_id = _resolve_supervisor_user_id(db, data["workforce_supervisor_user_id"])
     if "workforce_employment_type" in data:
@@ -454,8 +561,11 @@ def create_user_transaction(
     apply_wms_profile_create(db, u.id, wms_for_profile, role=role_stored)
 
     if not is_super_role(u.role):
-        for pk in stored_perms:
-            db.add(UserPermission(user_id=u.id, permission_key=pk))
+        _, legacy_from_modes = split_wms_modes_and_legacy_permissions(
+            list(wms_for_profile.wms_operational_modes or [])
+        )
+        for pk in list(dict.fromkeys([*stored_perms, *legacy_from_modes])):
+            _grant_user_permissions_if_missing(db, u.id, [pk])
 
     if body.primary_workforce_group_id is not None:
         gid = body.primary_workforce_group_id
@@ -523,6 +633,12 @@ def update_user_transaction(
 
     if body.permissions is not None:
         stored_perms = normalize_stored_permission_keys(body.permissions) or []
+        # Preserve module access migrated from legacy WMS mode chips in the same save.
+        if body.wms_profile is not None:
+            modes_patch = body.wms_profile.model_dump(exclude_unset=True).get("wms_operational_modes")
+            if modes_patch is not None:
+                _, legacy = split_wms_modes_and_legacy_permissions(list(modes_patch or []))
+                stored_perms = list(dict.fromkeys([*stored_perms, *legacy]))
         db.query(UserPermission).filter(UserPermission.user_id == u.id).delete()
         if not is_super_role(u.role):
             for pk in stored_perms:
@@ -658,8 +774,7 @@ def wms_profile_response(db: Session, user_id: int) -> dict[str, Any]:
             "workforce_color_tag": None,
             "login_code_label_template_id": None,
         }
-    modes_raw = parse_json_list(getattr(p, "wms_operational_modes_json", None) or None) or []
-    modes = [m for m in modes_raw if is_valid_wms_mode(str(m))]
+    modes = migrate_legacy_wms_module_modes_on_profile(db, user_id, p)
     pins = parse_wms_topbar_pins(getattr(p, "wms_topbar_pins_json", None))
     active_id = p.active_warehouse_id if p is not None else None
     return {

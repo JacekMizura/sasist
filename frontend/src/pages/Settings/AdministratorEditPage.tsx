@@ -54,7 +54,7 @@ import { fetchWorkstations } from "../../api/wmsWorkstationsApi";
 import UserPanelStatusMatrix from "../../components/admin/UserPanelStatusMatrix";
 import { fetchEmployeeCostProfile, putEmployeeCostProfile } from "../../api/workforceApi";
 import { fetchWorkforceUserGroups, type WorkforceUserGroupDto } from "../../api/workforceGroupsApi";
-import { WMS_OPERATIONAL_MODE_KEYS, WMS_OPERATIONAL_MODE_LABELS_PL } from "../../constants/wmsOperationalModes";
+import { WMS_OPERATIONAL_MODE_KEYS, WMS_OPERATIONAL_MODE_LABELS_PL, splitWmsModesAndLegacyPermissions } from "../../constants/wmsOperationalModes";
 import {
   auditDetailLines,
   humanizeAuditAction,
@@ -251,7 +251,7 @@ export default function AdministratorEditPage() {
     setRoleLocked(Boolean(u.is_role_changeable === false || u.is_system_user || u.is_owner || isSuperRole(u.role)));
     setActiveLocked(Boolean(u.is_system_user || isSuperRole(u.role)));
     setLanguage(u.language);
-    setPermissions(isSuperRole(u.role) ? [] : [...(u.explicit_permissions ?? [])]);
+    const explicit = isSuperRole(u.role) ? [] : [...(u.explicit_permissions ?? [])];
     if (u.wms_profile) {
       const wp = u.wms_profile;
       setBarcodeLoginCode(wp.barcode_login_code ?? "");
@@ -264,7 +264,13 @@ export default function AdministratorEditPage() {
       setWarehouseIds(wp.warehouse_ids ?? []);
       setWorkstationIds(wp.workstation_ids ?? []);
       setDefaultWarehouseId(wp.default_warehouse_id ?? "");
-      setWmsOperationalModes(wp.wms_operational_modes ?? []);
+      const { floorModes, permissionKeys: fromLegacyModes } = splitWmsModesAndLegacyPermissions(
+        wp.wms_operational_modes ?? [],
+      );
+      setWmsOperationalModes(floorModes);
+      setPermissions(
+        isSuperRole(u.role) ? [] : [...new Set([...explicit, ...fromLegacyModes])],
+      );
       setSupervisorUserId(wp.workforce_supervisor_user_id ?? "");
       setEmploymentType(wp.workforce_employment_type ?? "");
       setShiftType(wp.workforce_shift_type ?? "");
@@ -272,6 +278,8 @@ export default function AdministratorEditPage() {
       const zids = wp.workforce_active_warehouse_zone_ids ?? [];
       setWarehouseZonesText(zids.length ? zids.join(", ") : "");
       setWorkforceColorTag(wp.workforce_color_tag ?? "");
+    } else {
+      setPermissions(explicit);
     }
     setPrimaryWorkforceGroupId(u.primary_workforce_group_id ?? "");
   }, []);
@@ -971,6 +979,10 @@ export default function AdministratorEditPage() {
 
                         <div className="space-y-3">
                           <h3 className="text-sm font-black uppercase tracking-wider text-slate-500">Tryby operacyjne WMS</h3>
+                          <p className="text-xs text-slate-500">
+                            Tylko tryby pracy magazynowej (terminal). Moduły systemowe (Operacje, Wózki, Dokumenty, Analiza…)
+                            ustawiasz w zakładce Uprawnienia.
+                          </p>
                           <div className="flex flex-wrap gap-2">
                             {WMS_OPERATIONAL_MODE_KEYS.map((key) => {
                               const on = wmsOperationalModes.includes(key);

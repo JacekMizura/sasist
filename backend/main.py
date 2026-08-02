@@ -1834,6 +1834,14 @@ def _upgrade_schema_background() -> None:
             seed_wms_panel_defaults(_seed_db)
             backfill_protection_flags(_seed_db)
             seed_system_labels(_seed_db)
+            from .services.app_user_admin_service import migrate_legacy_wms_module_modes_all_users
+
+            n = migrate_legacy_wms_module_modes_all_users(_seed_db)
+            if n:
+                _seed_db.commit()
+                logging.getLogger(__name__).info(
+                    "migrated legacy WMS module modes → permissions for %s profiles", n
+                )
         finally:
             _seed_db.close()
     except Exception:

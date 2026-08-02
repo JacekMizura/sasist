@@ -27,7 +27,18 @@ export type WmsNavTabsResolution = {
 function moduleAllowed(
   module: WmsModuleDefinition,
   allowedModeKeys: Set<string> | null,
+  grantedPermissions: Set<string> | null,
 ): boolean {
+  if (module.requiredPermission) {
+    // Empty modes = legacy “all allowed” (including Operacje hub).
+    if (!allowedModeKeys || allowedModeKeys.size === 0) return true;
+    if (grantedPermissions?.has(module.requiredPermission)) return true;
+    // Dual-read: unmigrated profiles may still list former mode key.
+    if (module.requiredPermission === "warehouse.operations" && allowedModeKeys.has("operations")) {
+      return true;
+    }
+    return false;
+  }
   if (!allowedModeKeys || allowedModeKeys.size === 0) return true;
   if (!module.operationalMode) return true;
   return allowedModeKeys.has(module.operationalMode);
@@ -50,6 +61,7 @@ export function resolveWmsNavTabs(
   pinnedModes: WmsPinnedMode[],
   userOperationalModes?: string[] | null,
   activeWarehouseRequiresPutaway = true,
+  userPermissionKeys?: string[] | null,
 ): WmsNavTabsResolution {
   const catalog = WMS_TAB_ITEMS;
   const catalogIds = catalog.map((t) => t.id);
@@ -58,8 +70,12 @@ export function resolveWmsNavTabs(
     userOperationalModes && userOperationalModes.length > 0
       ? new Set(userOperationalModes.map((m) => String(m).trim()).filter(Boolean))
       : null;
+  const grantedPermissions =
+    userPermissionKeys && userPermissionKeys.length > 0
+      ? new Set(userPermissionKeys.map((k) => String(k).trim()).filter(Boolean))
+      : null;
 
-  let allowedModules = WMS_MODULES.filter((m) => moduleAllowed(m, allowedModeKeys));
+  let allowedModules = WMS_MODULES.filter((m) => moduleAllowed(m, allowedModeKeys, grantedPermissions));
   if (!activeWarehouseRequiresPutaway) {
     allowedModules = allowedModules.filter((m) => m.id !== "putaway");
   }

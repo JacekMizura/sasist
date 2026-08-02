@@ -33,6 +33,7 @@ export function useWmsPinnedModes(userId: number | null) {
   const serverPinsKey = serverPins == null ? "null" : JSON.stringify(serverPins);
   const operationalModes =
     user?.wms_operational_modes ?? user?.wms_profile?.wms_operational_modes ?? [];
+  const permissionKeys = user?.permissions ?? [];
 
   const [modes, setModes] = useState<WmsPinnedMode[]>(() =>
     modesFromServerOrLocal(userId, serverPins as WmsPinnedMode[] | null),
@@ -66,8 +67,8 @@ export function useWmsPinnedModes(userId: number | null) {
   }, [userId, modes]);
 
   const navResolution = useMemo(
-    () => resolveWmsNavTabs(modes, operationalModes, activeWarehouseRequiresPutaway),
-    [modes, operationalModes, activeWarehouseRequiresPutaway],
+    () => resolveWmsNavTabs(modes, operationalModes, activeWarehouseRequiresPutaway, permissionKeys),
+    [modes, operationalModes, activeWarehouseRequiresPutaway, permissionKeys],
   );
 
   const pinnedTabsInOrder: WmsTabConfigItem[] = navResolution.pinnedTabs;

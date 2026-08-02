@@ -2,9 +2,10 @@
 
 ## Active
 
-Document logo: root cause — `/uploads` relative + `file://` PDF rewrite; fixed via data-URI embed + `company.logo` in global context.
+Tryby operacyjne WMS = tylko tryby floor/terminal; Operacje/Wózki/QC/Dokumenty/Analiza/Zakupy/Etykiety → Uprawnienia (migracja legacy mode→permission).
 
 ## Constraints
 
-- No hardcoded logo paths
-- Temporary `[doc.logo]` logs in provider / company_logo / upload embed
+- Dual-read: empty modes nadal otwiera Operacje; non-empty wymaga `warehouse.operations` (lub legacy key)
+- Legacy-only JSON (`["operations","carts"]`) nie jest zerowane do `[]`/`null` (to = wszystkie tryby floor) — grant perms + keep keys do admin save
+- Brak zmiany dostępu po migracji

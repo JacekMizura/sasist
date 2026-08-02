@@ -63,7 +63,12 @@ class WmsTopbarPinsTests(unittest.TestCase):
         raw = json.loads(row.wms_topbar_pins_json or "[]")
         self.assertEqual(raw[1]["key"], "picking")
 
-    def test_catalog_has_module_modes(self) -> None:
+    def test_catalog_has_floor_modes_only(self) -> None:
+        from backend.wms_operational_modes import (
+            LEGACY_WMS_MODULE_MODE_TO_PERMISSION,
+            is_legacy_wms_module_mode,
+        )
+
         for key in (
             "receiving",
             "putaway",
@@ -76,12 +81,16 @@ class WmsTopbarPinsTests(unittest.TestCase):
             "mm",
             "consolidations",
             "direct_sales",
-            "operations",
         ):
             self.assertTrue(is_valid_wms_mode(key), key)
+        self.assertFalse(is_valid_wms_mode("operations"))
+        self.assertTrue(is_legacy_wms_module_mode("operations"))
+        self.assertEqual(LEGACY_WMS_MODULE_MODE_TO_PERMISSION["operations"], "warehouse.operations")
         labels = {k: v for k, v in WMS_OPERATIONAL_MODES}
         self.assertEqual(labels["issues"], "Braki")
         self.assertEqual(labels["putaway"], "Rozlokowanie PZ")
+        self.assertNotIn("operations", labels)
+        self.assertNotIn("labels", labels)
 
 
 if __name__ == "__main__":

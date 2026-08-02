@@ -1,3 +1,10 @@
+## 2026-08-02 — WMS: tryby operacyjne vs uprawnienia modułów
+
+- Usunięto z trybów: Operacje, Wózki, QC, Dokumenty, Analiza, Zakupy, Szablony etykiet
+- Nowe liście uprawnień: `warehouse.carts`, `warehouse.qc`, `documents.view`, `analytics.view`, `purchasing.view` (+ reuse `warehouse.operations`, `workforce.ops.label_templates`)
+- Migracja JSON trybów → `user_permissions`; Operacje gated przez `requiredPermission`
+- Guard: profile tylko z hubami legacy nie są zerowane do `[]` (to otwierałoby wszystkie tryby floor)
+
 ## 2026-08-02 — Document logo: data-URI embed + company.logo
 
 - Przyczyna: branding zapisuje `/uploads/...`, ale preview/PDF nie osadzały pliku (relative src + `file://` w Puppeteer)

@@ -63,6 +63,11 @@ export type WmsModuleDefinition = {
   dashboard: boolean;
   /** When set, user must have this mode in ``wms_operational_modes`` (if list is non-empty). */
   operationalMode?: WmsOperationalModeKey;
+  /**
+   * Module permission (Uprawnienia) required when operational modes list is non-empty.
+   * Empty modes list still allows access (legacy “all modes” including former hubs).
+   */
+  requiredPermission?: string;
   shortDescription?: string;
   /** Semantic color for dashboard tile + topbar icon. */
   accent: WmsModuleAccent;
@@ -332,7 +337,7 @@ export const WMS_MODULES: WmsModuleDefinition[] = [
     icon: Activity,
     sortOrder: 90,
     dashboard: true,
-    operationalMode: "operations",
+    requiredPermission: "warehouse.operations",
     shortDescription: "Runtime operacji",
     accent: A.sky,
     dashboardCategory: "other",

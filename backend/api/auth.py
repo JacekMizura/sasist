@@ -125,6 +125,13 @@ def _me_response(db: Session, user: AppUser) -> MeResponse:
     seed = bool(getattr(user, "is_system_seed", False))
     show_dev = APP_ENV != "production" and seed and must
     wp = wms_profile_response(db, user.id)
+    # Persist lazy mode→permission migration from profile read (safe on GET).
+    if db.dirty or db.new:
+        try:
+            db.commit()
+        except Exception:
+            db.rollback()
+            wp = wms_profile_response(db, user.id)
     perms = list_permissions_for_user(db, user)
     explicit_perms = explicit_permission_keys(db, user)
     wms_lang_flat = getattr(user, "wms_language", None) or wp.get("language")
