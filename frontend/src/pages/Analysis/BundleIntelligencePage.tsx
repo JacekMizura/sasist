@@ -12,8 +12,8 @@ import {
 } from "../../api/bundleIntelligenceApi";
 import { PrimaryButton } from "../../design-system/PrimaryButton";
 import { AnalysisDecisionHeader } from "../../modules/analytics/AnalysisDecisionHeader";
-
-const DEFAULT_TENANT_ID = 1;
+import { AnalizyWarehouseSelect } from "../../modules/analizy/AnalizyWarehouseSelect";
+import { useWarehouseApiScope } from "../../modules/analizy/warehouseApiScope";
 
 type TabId = "analytics" | "slotting" | "replenishment" | "capacity";
 
@@ -89,6 +89,7 @@ function PriorityBadge({ priority }: { priority: string }) {
 }
 
 export default function BundleIntelligencePage() {
+  const { scope, warehouseRevision } = useWarehouseApiScope();
   const [tab, setTab] = useState<TabId>("analytics");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -100,24 +101,33 @@ export default function BundleIntelligencePage() {
   const [capacity, setCapacity] = useState<BundleCapacityReport | null>(null);
 
   const loadTab = useCallback(async () => {
+    if (!scope) {
+      setDashboard(null);
+      setSlotting([]);
+      setReplenishment([]);
+      setCapacity(null);
+      setError(null);
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     setError(null);
     try {
       if (tab === "analytics") {
-        setDashboard(await getBundleIntelligenceDashboard(DEFAULT_TENANT_ID, { periodDays }));
+        setDashboard(await getBundleIntelligenceDashboard(scope, { periodDays }));
       } else if (tab === "slotting") {
-        setSlotting(await getBundleSlottingRecommendations(DEFAULT_TENANT_ID));
+        setSlotting(await getBundleSlottingRecommendations(scope));
       } else if (tab === "replenishment") {
-        setReplenishment(await getBundleReplenishmentForecast(DEFAULT_TENANT_ID));
+        setReplenishment(await getBundleReplenishmentForecast(scope));
       } else {
-        setCapacity(await getBundleCapacityReport(DEFAULT_TENANT_ID));
+        setCapacity(await getBundleCapacityReport(scope));
       }
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Błąd ładowania");
     } finally {
       setLoading(false);
     }
-  }, [tab, periodDays]);
+  }, [tab, periodDays, scope, warehouseRevision]);
 
   useEffect(() => {
     void loadTab();
@@ -134,6 +144,10 @@ export default function BundleIntelligencePage() {
           { label: "Zobacz produkty zamawiane razem", to: "/analytics/product-affinity" },
         ]}
       />
+
+      <div className="mb-4">
+        <AnalizyWarehouseSelect forceSelect />
+      </div>
 
       <div className="flex flex-wrap gap-2 mb-6 border-b border-slate-200 pb-2">
         {TABS.map((t) => (

@@ -10,7 +10,6 @@ import {
 } from "recharts";
 import { getSlotting, type SlottingProduct } from "../../api/analysisApi";
 import { layoutService } from "../../services/layoutService";
-import api from "../../api/axios";
 import type { LayoutState } from "../../types/warehouse";
 import { rawLayoutRackToRackState, type RawLayoutRack } from "../../components/warehouse/warehouseUtils";
 import { resolveWarehouseLocation, syncLayoutDisplayFields } from "../../utils/resolvedWarehouseLocation";
@@ -23,17 +22,17 @@ import type { ChangePriority } from "../../modules/optymalizacja/warehouseChange
 import { analizyKpiCardClass } from "../../modules/analizy/analizyUi";
 import { Link } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
-import { useWarehouse } from "../../context/WarehouseContext";
-
-const DEFAULT_TENANT_ID = 1;
+import { AnalizyWarehouseSelect } from "../../modules/analizy/AnalizyWarehouseSelect";
+import {
+  ANALIZY_DEFAULT_TENANT_ID,
+  useWarehouseApiScope,
+} from "../../modules/analizy/warehouseApiScope";
 
 const ABC_COLORS: Record<string, string> = {
   A: "#ef4444",
   B: "#f97316",
   C: "#22c55e",
 };
-
-type Warehouse = { id: number; name: string };
 
 type SortKey =
   | "product"
@@ -58,8 +57,8 @@ function formatNum(n: number, decimals = 2): string {
 }
 
 export default function SlottingPage() {
-  const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
-  const [warehouseId, setWarehouseId] = useState<number | null>(null);
+  const { scope, warehouseId, warehouse, warehouses, warehouseRevision } =
+    useWarehouseApiScope();
   const [name, setName] = useState("");
   const [ean, setEan] = useState("");
   const [sku, setSku] = useState("");
@@ -78,38 +77,27 @@ export default function SlottingPage() {
   } | null>(null);
 
   const runSearch = useCallback(() => {
-    if (warehouseId == null) return;
+    if (scope == null) return;
     setLoading(true);
     setError(null);
     const params: { name?: string; ean?: string; sku?: string } = {};
     if (name.trim()) params.name = name.trim();
     if (ean.trim()) params.ean = ean.trim();
     if (sku.trim()) params.sku = sku.trim();
-    getSlotting(warehouseId, params)
+    getSlotting(scope, params)
       .then((res) => setSlottingData(res.products ?? []))
       .catch((e) => setError(e?.message ?? "Błąd ładowania układu towaru."))
       .finally(() => setLoading(false));
-  }, [warehouseId, name, ean, sku]);
+  }, [scope, name, ean, sku]);
 
   useEffect(() => {
-    api
-      .get<Warehouse[]>("/warehouses/")
-      .then((r) => {
-        const list = Array.isArray(r.data) ? r.data : [];
-        setWarehouses(list);
-        if (list.length > 0 && warehouseId === null) setWarehouseId(list[0].id);
-      })
-      .catch(() => setWarehouses([]));
-  }, []);
-
-  useEffect(() => {
-    if (warehouseId == null) {
+    if (scope == null) {
       setSlottingData([]);
       setLoading(false);
       return;
     }
     runSearch();
-  }, [warehouseId]);
+  }, [scope, warehouseRevision]);
 
   useEffect(() => {
     if (warehouseId == null) {
@@ -119,7 +107,7 @@ export default function SlottingPage() {
     let cancelled = false;
     setLayoutLoading(true);
     layoutService
-      .getLayout({ tenant_id: DEFAULT_TENANT_ID, warehouse_id: warehouseId })
+      .getLayout({ tenant_id: ANALIZY_DEFAULT_TENANT_ID, warehouse_id: warehouseId })
       .then((res) => {
         const d = res.data as Record<string, unknown> | undefined;
         if (!cancelled && d && typeof d === "object") {
@@ -144,7 +132,7 @@ export default function SlottingPage() {
         if (!cancelled) setLayoutLoading(false);
       });
     return () => { cancelled = true; };
-  }, [warehouseId]);
+  }, [warehouseId, warehouseRevision]);
 
   /** Map location address (current_location or bin label) to slotting product for coloring bins. */
   const slottingByAddress = useMemo(() => {
@@ -264,7 +252,6 @@ export default function SlottingPage() {
   const { add } = useWarehouseChangePlan();
   const [planMsg, setPlanMsg] = useState<string | null>(null);
   const { user } = useAuth();
-  const { warehouse } = useWarehouse();
 
   const addSlottingToPlan = () => {
     if (moveCandidates.length === 0 || warehouseId == null) return;
@@ -313,19 +300,7 @@ export default function SlottingPage() {
       />
 
       <div className="mb-4 flex items-center gap-4">
-        <label className="text-sm font-medium text-slate-700">Magazyn</label>
-        <select
-          value={warehouseId ?? ""}
-          onChange={(e) => setWarehouseId(e.target.value ? Number(e.target.value) : null)}
-          className="rounded border border-slate-300 px-3 py-1.5 text-sm bg-white"
-        >
-          <option value="">—</option>
-          {warehouses.map((w) => (
-            <option key={w.id} value={w.id}>
-              {w.name ?? `Magazyn ${w.id}`}
-            </option>
-          ))}
-        </select>
+        <AnalizyWarehouseSelect forceSelect />
         {loading && <span className="text-sm text-slate-500">Ładowanie…</span>}
       </div>
 

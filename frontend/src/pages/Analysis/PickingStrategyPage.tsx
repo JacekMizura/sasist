@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import {
   BarChart,
   Bar,
@@ -9,7 +9,6 @@ import {
   CartesianGrid,
   Cell,
 } from "recharts";
-import api from "../../api/axios";
 import { PrimaryButton } from "../../design-system/PrimaryButton";
 import {
   getPickingStrategy,
@@ -24,13 +23,11 @@ import { useWarehouseChangePlan } from "../../modules/optymalizacja/useWarehouse
 import type { ChangePriority } from "../../modules/optymalizacja/warehouseChangePlanStore";
 import { Link } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
-import { useWarehouse } from "../../context/WarehouseContext";
+import { AnalizyWarehouseSelect } from "../../modules/analizy/AnalizyWarehouseSelect";
+import { useWarehouseApiScope } from "../../modules/analizy/warehouseApiScope";
 
-const DEFAULT_TENANT_ID = 1;
 const DEFAULT_ORDER_LIMIT = 100;
 const BAR_COLORS = ["#3b82f6", "#8b5cf6", "#06b6d4", "#10b981"];
-
-type Warehouse = { id: number; name: string };
 
 function toDateStr(d: Date): string {
   return d.toISOString().slice(0, 10);
@@ -50,8 +47,8 @@ function formatNum(n: number, decimals = 1): string {
 }
 
 export default function PickingStrategyPage() {
-  const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
-  const [warehouseId, setWarehouseId] = useState<number | null>(null);
+  const { scope, warehouseId, warehouse, warehouses, warehouseRevision } =
+    useWarehouseApiScope();
   const [orderLimit, setOrderLimit] = useState(DEFAULT_ORDER_LIMIT);
   const [startDate, setStartDate] = useState<string>("");
   const [endDate, setEndDate] = useState<string>("");
@@ -65,32 +62,20 @@ export default function PickingStrategyPage() {
   const [planMsg, setPlanMsg] = useState<string | null>(null);
   const { add } = useWarehouseChangePlan();
   const { user } = useAuth();
-  const { warehouse } = useWarehouse();
-
-  useEffect(() => {
-    api
-      .get<Warehouse[]>("/warehouses/")
-      .then((r) => {
-        const list = Array.isArray(r.data) ? r.data : [];
-        setWarehouses(list);
-        if (list.length > 0 && warehouseId === null) setWarehouseId(list[0].id);
-      })
-      .catch(() => setWarehouses([]));
-  }, []);
 
   const runSimulation = useCallback(() => {
-    if (warehouseId == null) return;
+    if (scope == null) return;
     setLoading(true);
     setError(null);
     setData(null);
     const options = useDateRange && startDate && endDate
       ? { startDate, endDate }
       : { limit: orderLimit };
-    getPickingStrategy(warehouseId, DEFAULT_TENANT_ID, options)
+    getPickingStrategy(scope, options)
       .then((res) => setData(res))
       .catch((e) => setError(e?.message ?? "Błąd symulacji"))
       .finally(() => setLoading(false));
-  }, [warehouseId, orderLimit, useDateRange, startDate, endDate]);
+  }, [scope, orderLimit, useDateRange, startDate, endDate, warehouseRevision]);
 
   const strategies: PickingStrategyResult[] = data?.strategies ?? [];
   const bestStrategy: PickingStrategyResult | null =
@@ -159,20 +144,12 @@ export default function PickingStrategyPage() {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 items-end">
           <label className="flex flex-col gap-1">
             <span className="text-xs text-slate-500">Magazyn</span>
-            <select
-              value={warehouseId ?? ""}
-              onChange={(e) =>
-                setWarehouseId(e.target.value ? Number(e.target.value) : null)
-              }
-              className="border border-slate-200 rounded-lg px-3 py-2 text-sm"
-            >
-              <option value="">Wybierz magazyn</option>
-              {warehouses.map((w) => (
-                <option key={w.id} value={w.id}>
-                  {w.name}
-                </option>
-              ))}
-            </select>
+            <AnalizyWarehouseSelect
+              forceSelect
+              label=""
+              className="block"
+              selectClassName="border border-slate-200 rounded-lg px-3 py-2 text-sm w-full"
+            />
           </label>
           <div className="flex flex-col gap-1">
             <span className="text-xs text-slate-500">Zakres dat zamówień</span>

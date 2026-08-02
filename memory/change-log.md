@@ -1,3 +1,10 @@
+## 2026-08-02 — warehouse_id: wspólny scope Analizy/Optymalizacja
+
+- Mechanizm: `useWarehouseApiScope` / `buildWarehouseParams` / `AnalizyWarehouseSelect`
+- Naprawione m.in. Bundle Intelligence (brakowało `warehouse_id` → 422) + walking-cost, hot-locations, pick-density, picking-analysis, slotting, strategy, sales-forecast, pick-route/orders
+- Źródło: aktywny magazyn z `WarehouseContext` (bez lokalnych `/warehouses/` na ekranach WH-scoped)
+- Backend bez zmian
+
 ## 2026-08-02 — Analizy P0/P1: produkcyjna spójność UI
 
 - Polonizacja (Centrum, kompletacja, układ, placeholdery)

@@ -20,12 +20,11 @@ import {
 } from "../../api/warehouseGraphApi";
 import { PageHeader } from "../../components/layout/PageHeader";
 import { FilterDateRange } from "../../components/filters";
-import { useWarehouse } from "../../context/WarehouseContext";
 import { AppOverlayPortal } from "../../components/overlay";
 import { AnalysisDecisionHeader } from "../../modules/analytics/AnalysisDecisionHeader";
 import { analizyKpiCardClass } from "../../modules/analizy/analizyUi";
+import { useWarehouseApiScope } from "../../modules/analizy/warehouseApiScope";
 
-const DEFAULT_TENANT_ID = 1;
 const SVG_WIDTH = 900;
 const SVG_HEIGHT = 500;
 const PAD = 40;
@@ -41,8 +40,8 @@ function pickColorByActivity(totalPicks: number, maxPicks: number): string {
 }
 
 export default function PickingAnalysis() {
-  const { warehouse: activeWarehouse, showWarehouseSelector } = useWarehouse();
-  const warehouseId = activeWarehouse?.id ?? null;
+  const { scope, warehouse, warehouseId, showWarehouseSelector, warehouseRevision } =
+    useWarehouseApiScope();
   const [summary, setSummary] = useState<SummaryType | null>(null);
   const [picks, setPicks] = useState<PickingAnalysisPickRow[]>([]);
   const [heatmap, setHeatmap] = useState<PickingAnalysisHeatmapItem[]>([]);
@@ -65,7 +64,7 @@ export default function PickingAnalysis() {
   } | null>(null);
 
   useEffect(() => {
-    if (warehouseId == null) {
+    if (scope == null || warehouseId == null) {
       setSummary(null);
       setPicks([]);
       setHeatmap([]);
@@ -79,9 +78,9 @@ export default function PickingAnalysis() {
     setLoading(true);
     setError(null);
     Promise.all([
-      getPickingAnalysisSummary(DEFAULT_TENANT_ID, warehouseId),
-      getPickingAnalysisPicks(DEFAULT_TENANT_ID, warehouseId, appliedFilters),
-      getPickingAnalysisHeatmap(DEFAULT_TENANT_ID, warehouseId),
+      getPickingAnalysisSummary(scope),
+      getPickingAnalysisPicks(scope, appliedFilters),
+      getPickingAnalysisHeatmap(scope),
       getWarehouseGraphNodes(warehouseId),
       getWarehouseGraphEdges(warehouseId),
       getWarehouseLocations(warehouseId),
@@ -105,14 +104,14 @@ export default function PickingAnalysis() {
     return () => {
       cancelled = true;
     };
-  }, [warehouseId, appliedFilters, refreshTrigger]);
+  }, [scope, warehouseId, appliedFilters, refreshTrigger, warehouseRevision]);
 
   const handleGenerateSimulatedPicks = () => {
-    if (warehouseId == null) return;
+    if (scope == null) return;
     setGenerating(true);
     setError(null);
     setGenerateMessage(null);
-    generateSimulatedPicks(DEFAULT_TENANT_ID, warehouseId, true)
+    generateSimulatedPicks(scope, true)
       .then((res) => {
         setGenerateMessage(
           `Wygenerowano ${res.created} pobrań z ${res.orders_processed} zamówień.`
@@ -124,12 +123,12 @@ export default function PickingAnalysis() {
   };
 
   const handleClearSimulatedPicks = () => {
-    if (warehouseId == null) return;
+    if (scope == null) return;
     setShowClearConfirm(false);
     setClearing(true);
     setError(null);
     setGenerateMessage(null);
-    deleteSimulatedPicks(DEFAULT_TENANT_ID, warehouseId)
+    deleteSimulatedPicks(scope)
       .then((res) => {
         setGenerateMessage(`Usunięto ${res.deleted} pobrań.`);
         setRefreshTrigger((t) => t + 1);
@@ -211,7 +210,7 @@ export default function PickingAnalysis() {
             <div className="flex flex-wrap items-center gap-4">
           {showWarehouseSelector ? (
             <span className="text-sm text-slate-600">
-              Magazyn: <span className="font-semibold text-slate-800">{activeWarehouse?.name ?? "—"}</span>
+              Magazyn: <span className="font-semibold text-slate-800">{warehouse?.name ?? "—"}</span>
             </span>
           ) : null}
           <button

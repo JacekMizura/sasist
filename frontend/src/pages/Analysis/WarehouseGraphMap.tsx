@@ -1,5 +1,4 @@
-import { useEffect, useState, useMemo } from "react";
-import api from "../../api/axios";
+import { useEffect, useMemo, useState } from "react";
 import {
   getWarehouseGraphNodes,
   getWarehouseGraphEdges,
@@ -10,6 +9,8 @@ import {
 } from "../../api/warehouseGraphApi";
 import { AnalysisDecisionHeader } from "../../modules/analytics/AnalysisDecisionHeader";
 import { analizyLoadingClass } from "../../modules/analizy/analizyUi";
+import { AnalizyWarehouseSelect } from "../../modules/analizy/AnalizyWarehouseSelect";
+import { useWarehouseApiScope } from "../../modules/analizy/warehouseApiScope";
 
 const SVG_WIDTH = 900;
 const SVG_HEIGHT = 500;
@@ -17,9 +18,7 @@ const PAD = 40;
 const NODE_R = 4;
 const LOC_SIZE = 3;
 
-type Warehouse = { id: number; name: string };
-
-function useGraphData(warehouseId: number | null) {
+function useGraphData(warehouseId: number | null, warehouseRevision: number) {
   const [nodes, setNodes] = useState<WarehouseGraphNode[]>([]);
   const [edges, setEdges] = useState<WarehouseGraphEdge[]>([]);
   const [locations, setLocations] = useState<WarehouseLocationItem[]>([]);
@@ -55,7 +54,7 @@ function useGraphData(warehouseId: number | null) {
         if (!cancelled) setLoading(false);
       });
     return () => { cancelled = true; };
-  }, [warehouseId]);
+  }, [warehouseId, warehouseRevision]);
 
   return { nodes, edges, locations, loading, error };
 }
@@ -96,26 +95,14 @@ function useScale(
 }
 
 export default function WarehouseGraphMap() {
-  const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
-  const [warehouseId, setWarehouseId] = useState<number | null>(null);
+  const { warehouseId, warehouseRevision } = useWarehouseApiScope();
   const [tooltip, setTooltip] = useState<{
     text: string;
     x: number;
     y: number;
   } | null>(null);
 
-  useEffect(() => {
-    api
-      .get<Warehouse[]>("/warehouses/")
-      .then((r) => {
-        const list = Array.isArray(r.data) ? r.data : [];
-        setWarehouses(list);
-        if (list.length > 0 && warehouseId === null) setWarehouseId(list[0].id);
-      })
-      .catch(() => setWarehouses([]));
-  }, []);
-
-  const { nodes, edges, locations, loading, error } = useGraphData(warehouseId);
+  const { nodes, edges, locations, loading, error } = useGraphData(warehouseId, warehouseRevision);
   const nodeById = useMemo(() => new Map(nodes.map((n) => [n.id, n])), [nodes]);
   const { scaleX, scaleY } = useScale(nodes, locations);
 
@@ -132,19 +119,7 @@ export default function WarehouseGraphMap() {
       />
 
       <div className="mb-4 flex items-center gap-4">
-        <label className="text-sm font-medium text-slate-600">Magazyn</label>
-        <select
-          className="rounded border border-slate-300 px-3 py-1.5 text-sm"
-          value={warehouseId ?? ""}
-          onChange={(e) => setWarehouseId(e.target.value ? Number(e.target.value) : null)}
-        >
-          <option value="">—</option>
-          {warehouses.map((w) => (
-            <option key={w.id} value={w.id}>
-              {w.name ?? `Magazyn ${w.id}`}
-            </option>
-          ))}
-        </select>
+        <AnalizyWarehouseSelect forceSelect />
       </div>
 
       {loading ? <p className={analizyLoadingClass}>Ładowanie…</p> : null}

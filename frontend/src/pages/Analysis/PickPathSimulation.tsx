@@ -17,16 +17,19 @@ import { useWarehouseChangePlan } from "../../modules/optymalizacja/useWarehouse
 import type { ChangePriority } from "../../modules/optymalizacja/warehouseChangePlanStore";
 import { Link } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
-import { useWarehouse } from "../../context/WarehouseContext";
+import { AnalizyWarehouseSelect } from "../../modules/analizy/AnalizyWarehouseSelect";
+import {
+  buildWarehouseParams,
+  useWarehouseApiScope,
+  type WarehouseApiScope,
+} from "../../modules/analizy/warehouseApiScope";
 
-const DEFAULT_TENANT_ID = 1;
 const ORDERS_PAGE_SIZE = 100;
 const SVG_WIDTH = 900;
 const SVG_HEIGHT = 400;
 const PAD = 40;
 const NODE_R = 4;
 
-type Warehouse = { id: number; name: string };
 type OrderOption = { id: number; number: string | null };
 type RoutePoint = { node_id?: number; x: number; y: number };
 type SpecialLocations = { pick_start: { id: number; x: number; y: number } | null; packing: { id: number; x: number; y: number } | null };
@@ -49,18 +52,16 @@ type BatchResult = {
 };
 
 async function fetchOrdersPage(
-  warehouseId: number,
+  scope: WarehouseApiScope,
   page: number,
   search: string
 ): Promise<{ orders: OrderOption[]; total: number }> {
-  const params = new URLSearchParams({
-    tenant_id: String(DEFAULT_TENANT_ID),
-    warehouse_id: String(warehouseId),
-    limit: String(ORDERS_PAGE_SIZE),
-    offset: String(page * ORDERS_PAGE_SIZE),
+  const params = buildWarehouseParams(scope, {
+    limit: ORDERS_PAGE_SIZE,
+    offset: page * ORDERS_PAGE_SIZE,
+    search: search.trim() || undefined,
   });
-  if (search.trim()) params.set("search", search.trim());
-  const { data, headers } = await api.get<OrderOption[]>(`/orders/?${params.toString()}`);
+  const { data, headers } = await api.get<OrderOption[]>("/orders/", { params });
   const list = Array.isArray(data) ? data : [];
   const total = headers?.["x-total-count"] != null ? parseInt(String(headers["x-total-count"]), 10) : list.length;
   return { orders: list.map((o) => ({ id: o.id, number: o.number ?? null })), total };
@@ -115,8 +116,7 @@ function useScale(
 }
 
 export default function PickPathSimulation() {
-  const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
-  const [warehouseId, setWarehouseId] = useState<number | null>(null);
+  const { scope, warehouseId, warehouse, warehouses, warehouseRevision } = useWarehouseApiScope();
   const [orders, setOrders] = useState<OrderOption[]>([]);
   const [totalOrders, setTotalOrders] = useState(0);
   const [page, setPage] = useState(0);
@@ -140,7 +140,6 @@ export default function PickPathSimulation() {
   const [planMsg, setPlanMsg] = useState<string | null>(null);
   const { add } = useWarehouseChangePlan();
   const { user } = useAuth();
-  const { warehouse } = useWarehouse();
 
   const authorMeta = () => {
     const authorName =
@@ -164,7 +163,7 @@ export default function PickPathSimulation() {
       else if (avg < 30) priority = "niski";
       const result = add({
         source: "routes",
-        dedupeKey: `routes:distance:tenant:${DEFAULT_TENANT_ID}`,
+        dedupeKey: `routes:distance:wh:${warehouseId ?? "x"}`,
         title: "Skróć średni dystans kompletacji",
         description: `Średni dystans ${Math.round(avg)} m na ${distanceSummary.count} zamówieniach.`,
         executedDescription: `Skrócono średni dystans kompletacji (bazowo ~${Math.round(avg)} m).`,
@@ -223,12 +222,9 @@ export default function PickPathSimulation() {
   };
 
   useEffect(() => {
-    api.get<Warehouse[]>("/warehouses/").then((r) => {
-      const list = Array.isArray(r.data) ? r.data : [];
-      setWarehouses(list);
-      if (list.length > 0 && warehouseId === null) setWarehouseId(list[0].id);
-    }).catch(() => setWarehouses([]));
-  }, []);
+    setPage(0);
+    setBatchResult(null);
+  }, [warehouseId, warehouseRevision]);
 
   useEffect(() => {
     const t = setTimeout(() => setSearchDebounced(search), 300);
@@ -236,14 +232,14 @@ export default function PickPathSimulation() {
   }, [search]);
 
   useEffect(() => {
-    if (warehouseId == null) {
+    if (scope == null) {
       setOrders([]);
       setTotalOrders(0);
       return;
     }
     let cancelled = false;
     setLoading(true);
-    fetchOrdersPage(warehouseId, page, searchDebounced)
+    fetchOrdersPage(scope, page, searchDebounced)
       .then(({ orders: list, total }) => {
         if (!cancelled) {
           setOrders(list);
@@ -252,7 +248,7 @@ export default function PickPathSimulation() {
       })
       .catch(() => { if (!cancelled) setOrders([]); setTotalOrders(0); })
       .finally(() => { if (!cancelled) setLoading(false); });
-  }, [warehouseId, page, searchDebounced]);
+  }, [scope, page, searchDebounced, warehouseRevision]);
 
   useEffect(() => {
     if (warehouseId == null) {
@@ -436,21 +432,7 @@ export default function PickPathSimulation() {
       ) : (
         <>
       <div className="flex flex-wrap items-center gap-4 mb-4">
-        <label className="text-sm font-medium text-slate-600">Magazyn</label>
-        <select
-          className="rounded border border-slate-300 px-3 py-1.5 text-sm"
-          value={warehouseId ?? ""}
-          onChange={(e) => {
-            setWarehouseId(e.target.value ? Number(e.target.value) : null);
-            setPage(0);
-            setBatchResult(null);
-          }}
-        >
-          <option value="">—</option>
-          {warehouses.map((w) => (
-            <option key={w.id} value={w.id}>{w.name ?? `Magazyn ${w.id}`}</option>
-          ))}
-        </select>
+        <AnalizyWarehouseSelect forceSelect />
         <label className="text-sm font-medium text-slate-600">Szukaj</label>
         <input
           type="text"

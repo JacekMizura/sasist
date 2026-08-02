@@ -9,7 +9,6 @@ import {
   ResponsiveContainer,
   CartesianGrid,
 } from "recharts";
-import api from "../../api/axios";
 import {
   getSalesForecast,
   getProductForecast,
@@ -19,12 +18,14 @@ import {
   type ProductRotationItem,
 } from "../../api/analysisApi";
 import { AnalysisDecisionHeader } from "../../modules/analytics/AnalysisDecisionHeader";
+import { AnalizyWarehouseSelect } from "../../modules/analizy/AnalizyWarehouseSelect";
+import {
+  ANALIZY_DEFAULT_TENANT_ID,
+  useWarehouseApiScope,
+} from "../../modules/analizy/warehouseApiScope";
 
-const DEFAULT_TENANT_ID = 1;
 const MIN_DAYS_FOR_FORECAST = 14;
 const NOT_ENOUGH_MSG = "Not enough historical data for forecasting.";
-
-type Warehouse = { id: number; name: string };
 
 function formatDate(d: string) {
   return new Date(d).toLocaleDateString("pl-PL", {
@@ -35,8 +36,7 @@ function formatDate(d: string) {
 }
 
 export default function SalesForecast() {
-  const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
-  const [warehouseId, setWarehouseId] = useState<number | null>(null);
+  const { scope, ready, warehouseRevision } = useWarehouseApiScope();
   const [warehouseData, setWarehouseData] = useState<SalesForecastResponse | null>(null);
   const [products, setProducts] = useState<ProductRotationItem[]>([]);
   const [productId, setProductId] = useState<number | null>(null);
@@ -46,26 +46,15 @@ export default function SalesForecast() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    api
-      .get<Warehouse[]>("/warehouses/")
-      .then((r) => {
-        const list = Array.isArray(r.data) ? r.data : [];
-        setWarehouses(list);
-        if (list.length > 0 && warehouseId === null) setWarehouseId(list[0].id);
-      })
-      .catch(() => setWarehouses([]));
-  }, []);
-
-  useEffect(() => {
-    let cancelled = false;
-    setLoadingWarehouse(true);
-    setError(null);
-    if (warehouseId == null) {
+    if (!ready || scope == null) {
       setWarehouseData(null);
       setLoadingWarehouse(false);
       return;
     }
-    getSalesForecast(warehouseId)
+    let cancelled = false;
+    setLoadingWarehouse(true);
+    setError(null);
+    getSalesForecast(scope)
       .then((res) => {
         if (!cancelled) setWarehouseData(res);
       })
@@ -76,11 +65,11 @@ export default function SalesForecast() {
         if (!cancelled) setLoadingWarehouse(false);
       });
     return () => { cancelled = true; };
-  }, [warehouseId]);
+  }, [scope, ready, warehouseRevision]);
 
   useEffect(() => {
     let cancelled = false;
-    getHotProducts(DEFAULT_TENANT_ID, 200)
+    getHotProducts(ANALIZY_DEFAULT_TENANT_ID, { limit: 200 })
       .then((data) => {
         if (!cancelled) setProducts(data);
       })
@@ -150,21 +139,7 @@ export default function SalesForecast() {
       />
 
       <div className="flex flex-wrap items-center gap-4 mb-6">
-        <label className="text-sm font-medium text-slate-600">Magazyn</label>
-        <select
-          className="rounded border border-slate-300 px-3 py-1.5 text-sm"
-          value={warehouseId ?? ""}
-          onChange={(e) =>
-            setWarehouseId(e.target.value ? Number(e.target.value) : null)
-          }
-        >
-          <option value="">—</option>
-          {warehouses.map((w) => (
-            <option key={w.id} value={w.id}>
-              {w.name ?? `Magazyn ${w.id}`}
-            </option>
-          ))}
-        </select>
+        <AnalizyWarehouseSelect forceSelect />
       </div>
 
       {error && (

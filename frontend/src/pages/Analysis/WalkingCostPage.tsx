@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { getWalkingCost, type WalkingCostItem } from "../../api/analysisApi";
-
-const DEFAULT_TENANT_ID = 1;
+import { useWarehouseApiScope } from "../../modules/analizy/warehouseApiScope";
 
 type Props = {
   /** Gdy true — bez własnego nagłówka (osadzone w Trasy i dystans). */
@@ -10,15 +9,22 @@ type Props = {
 };
 
 export default function WalkingCostPage({ embedded = false, onSummary }: Props) {
+  const { scope, warehouseRevision } = useWarehouseApiScope();
   const [items, setItems] = useState<WalkingCostItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    if (!scope) {
+      setItems([]);
+      setLoading(false);
+      setError(null);
+      return;
+    }
     let cancelled = false;
     setLoading(true);
     setError(null);
-    getWalkingCost(DEFAULT_TENANT_ID)
+    getWalkingCost(scope)
       .then((data) => {
         if (!cancelled) setItems(data);
       })
@@ -31,7 +37,7 @@ export default function WalkingCostPage({ embedded = false, onSummary }: Props) 
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [scope, warehouseRevision]);
 
   const avgDistance = useMemo(() => {
     const vals = items
@@ -55,6 +61,9 @@ export default function WalkingCostPage({ embedded = false, onSummary }: Props) 
         </div>
       </div>
     );
+  }
+  if (!scope) {
+    return <div className="min-w-0"><p className="text-slate-500">Wybierz aktywny magazyn.</p></div>;
   }
 
   return (

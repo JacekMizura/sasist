@@ -12,7 +12,11 @@ import {
 import { useWarehouseChangePlan } from "../../modules/optymalizacja/useWarehouseChangePlan";
 import { captureExistingEffectMetric } from "../../modules/optymalizacja/captureEffectMetric";
 import { useAuth } from "../../context/AuthContext";
-import { useWarehouse } from "../../context/WarehouseContext";
+import {
+  ANALIZY_DEFAULT_TENANT_ID,
+  useWarehouseApiScope,
+  type WarehouseApiScope,
+} from "../../modules/analizy/warehouseApiScope";
 import {
   analizyCtaPrimaryClass,
   analizyCtaSecondaryClass,
@@ -111,12 +115,19 @@ export default function PlanZmianPage() {
   const [busyId, setBusyId] = useState<string | null>(null);
   const navigate = useNavigate();
   const { user } = useAuth();
-  const { warehouse } = useWarehouse();
+  const { scope, warehouse } = useWarehouseApiScope();
+
+  const effectScopeForRow = (row: WarehouseChangeItem): WarehouseApiScope | number | null => {
+    if (row.warehouseId != null) {
+      return { tenantId: ANALIZY_DEFAULT_TENANT_ID, warehouseId: row.warehouseId };
+    }
+    return scope;
+  };
 
   const markDeployed = async (row: WarehouseChangeItem) => {
     setBusyId(row.id);
     try {
-      const before = await captureExistingEffectMetric(row.source, warehouse?.id ?? row.warehouseId);
+      const before = await captureExistingEffectMetric(row.source, effectScopeForRow(row));
       update(row.id, {
         status: "wdrozona",
         deployedAt: new Date().toISOString(),
@@ -134,7 +145,7 @@ export default function PlanZmianPage() {
   const markVerified = async (row: WarehouseChangeItem) => {
     setBusyId(row.id);
     try {
-      const after = await captureExistingEffectMetric(row.source, warehouse?.id ?? row.warehouseId);
+      const after = await captureExistingEffectMetric(row.source, effectScopeForRow(row));
       update(row.id, {
         status: "zweryfikowana",
         verifiedAt: new Date().toISOString(),

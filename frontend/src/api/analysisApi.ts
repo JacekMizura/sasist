@@ -1,4 +1,8 @@
 import api from "./axios";
+import {
+  buildWarehouseParams,
+  type WarehouseApiScope,
+} from "../modules/analizy/warehouseApiScope";
 
 export type TenantInventoryValueResponse = {
   tenant_id: number;
@@ -144,11 +148,10 @@ export async function getHotProducts(
 }
 
 export async function getPickDensity(
-  tenantId: number,
-  warehouseId?: number
+  scope: WarehouseApiScope
 ): Promise<PickDensityItem[]> {
   const { data } = await api.get<PickDensityItem[]>("/analysis/pick-density/", {
-    params: { tenant_id: tenantId, warehouse_id: warehouseId ?? undefined },
+    params: buildWarehouseParams(scope),
   });
   return Array.isArray(data) ? data : [];
 }
@@ -179,12 +182,11 @@ export type HotLocationItem = {
 };
 
 export async function getHotLocations(
-  tenantId: number,
-  warehouseId?: number,
+  scope: WarehouseApiScope,
   limit = 100
 ): Promise<HotLocationItem[]> {
   const { data } = await api.get<HotLocationItem[]>("/analysis/hot-locations/", {
-    params: { tenant_id: tenantId, warehouse_id: warehouseId ?? undefined, limit },
+    params: buildWarehouseParams(scope, { limit }),
   });
   return Array.isArray(data) ? data : [];
 }
@@ -228,12 +230,11 @@ export type PickingAnalysisFilters = {
 };
 
 export async function getPickingAnalysisSummary(
-  tenantId: number,
-  warehouseId?: number
+  scope: WarehouseApiScope
 ): Promise<PickingAnalysisSummary> {
   const { data } = await api.get<PickingAnalysisSummary>(
     "/analysis/picking-analysis/summary/",
-    { params: { tenant_id: tenantId, warehouse_id: warehouseId ?? undefined } }
+    { params: buildWarehouseParams(scope) }
   );
   return (
     data ?? {
@@ -246,23 +247,18 @@ export async function getPickingAnalysisSummary(
 }
 
 export async function getPickingAnalysisPicks(
-  tenantId: number,
-  warehouseId?: number,
+  scope: WarehouseApiScope,
   filters?: PickingAnalysisFilters
 ): Promise<PickingAnalysisPickRow[]> {
-  const params: Record<string, string | number | undefined> = {
-    tenant_id: tenantId,
-    warehouse_id: warehouseId ?? undefined,
-  };
-  if (filters?.product_name != null && filters.product_name !== "")
-    params.product_name = filters.product_name;
-  if (filters?.sku != null && filters.sku !== "") params.sku = filters.sku;
-  if (filters?.ean != null && filters.ean !== "") params.ean = filters.ean;
-  if (filters?.location != null && filters.location !== "") params.location = filters.location;
-  if (filters?.date_from != null && filters.date_from !== "")
-    params.date_from = filters.date_from;
-  if (filters?.date_to != null && filters.date_to !== "") params.date_to = filters.date_to;
-  if (filters?.limit != null) params.limit = filters.limit;
+  const params = buildWarehouseParams(scope, {
+    product_name: filters?.product_name,
+    sku: filters?.sku,
+    ean: filters?.ean,
+    location: filters?.location,
+    date_from: filters?.date_from,
+    date_to: filters?.date_to,
+    limit: filters?.limit,
+  });
   const { data } = await api.get<PickingAnalysisPickRow[]>(
     "/analysis/picking-analysis/picks/",
     { params }
@@ -271,12 +267,11 @@ export async function getPickingAnalysisPicks(
 }
 
 export async function getPickingAnalysisHeatmap(
-  tenantId: number,
-  warehouseId?: number
+  scope: WarehouseApiScope
 ): Promise<PickingAnalysisHeatmapItem[]> {
   const { data } = await api.get<PickingAnalysisHeatmapItem[]>(
     "/analysis/picking-analysis/heatmap/",
-    { params: { tenant_id: tenantId, warehouse_id: warehouseId ?? undefined } }
+    { params: buildWarehouseParams(scope) }
   );
   return Array.isArray(data) ? data : [];
 }
@@ -287,19 +282,16 @@ export type GenerateSimulatedPicksResponse = {
 };
 
 export async function generateSimulatedPicks(
-  tenantId: number,
-  warehouseId: number,
+  scope: WarehouseApiScope,
   replaceExisting = true
 ): Promise<GenerateSimulatedPicksResponse> {
   const { data } = await api.post<GenerateSimulatedPicksResponse>(
     "/analysis/picking-analysis/generate-simulated-picks/",
     null,
     {
-      params: {
-        tenant_id: tenantId,
-        warehouse_id: warehouseId,
+      params: buildWarehouseParams(scope, {
         replace_existing: replaceExisting,
-      },
+      }),
     }
   );
   return data ?? { created: 0, orders_processed: 0 };
@@ -308,12 +300,11 @@ export async function generateSimulatedPicks(
 export type DeleteSimulatedPicksResponse = { deleted: number };
 
 export async function deleteSimulatedPicks(
-  tenantId: number,
-  warehouseId: number
+  scope: WarehouseApiScope
 ): Promise<DeleteSimulatedPicksResponse> {
   const { data } = await api.delete<DeleteSimulatedPicksResponse>(
     "/analysis/picking-analysis/picks/",
-    { params: { tenant_id: tenantId, warehouse_id: warehouseId } }
+    { params: buildWarehouseParams(scope) }
   );
   return data ?? { deleted: 0 };
 }
@@ -348,11 +339,10 @@ export type WalkingCostItem = {
 };
 
 export async function getWalkingCost(
-  tenantId: number,
-  warehouseId?: number
+  scope: WarehouseApiScope
 ): Promise<WalkingCostItem[]> {
   const { data } = await api.get<WalkingCostItem[]>("/analysis/walking-cost/", {
-    params: { tenant_id: tenantId, warehouse_id: warehouseId ?? undefined },
+    params: buildWarehouseParams(scope),
   });
   return Array.isArray(data) ? data : [];
 }
@@ -367,10 +357,10 @@ export type SalesForecastResponse = {
 };
 
 export async function getSalesForecast(
-  warehouseId: number
+  scope: WarehouseApiScope
 ): Promise<SalesForecastResponse> {
   const { data } = await api.get<SalesForecastResponse>(
-    `/analysis/sales-forecast/${warehouseId}`
+    `/analysis/sales-forecast/${scope.warehouseId}`
   );
   return data ?? { history: [], forecast: [] };
 }
@@ -423,17 +413,21 @@ export type SlottingParams = {
 };
 
 export async function getSlotting(
-  warehouseId: number,
+  scope: WarehouseApiScope,
   params?: SlottingParams
 ): Promise<SlottingResponse> {
-  const query: Record<string, string | number> = {};
-  if (params?.name != null && params.name !== "") query.name = params.name;
-  if (params?.ean != null && params.ean !== "") query.ean = params.ean;
-  if (params?.sku != null && params.sku !== "") query.sku = params.sku;
-  if (params?.limit != null) query.limit = params.limit;
+  const query = buildWarehouseParams(scope, {
+    name: params?.name,
+    ean: params?.ean,
+    sku: params?.sku,
+    limit: params?.limit,
+  });
+  // Path uses warehouse_id; query still carries tenant_id (+ filters). Drop path duplicate.
+  const { warehouse_id: _wid, ...queryParams } = query;
+  void _wid;
   const { data } = await api.get<SlottingResponse>(
-    `/analysis/slotting/${warehouseId}`,
-    { params: Object.keys(query).length ? query : undefined }
+    `/analysis/slotting/${scope.warehouseId}`,
+    { params: queryParams }
   );
   return data ?? { packing_location: null, products: [] };
 }
@@ -455,11 +449,10 @@ export type PickingStrategyResponse = {
 };
 
 export async function getPickingStrategy(
-  warehouseId: number,
-  tenantId = 1,
+  scope: WarehouseApiScope,
   options?: { limit?: number; startDate?: string; endDate?: string }
 ): Promise<PickingStrategyResponse> {
-  const params: Record<string, string | number> = { tenant_id: tenantId };
+  const params = buildWarehouseParams(scope);
   if (options?.startDate != null && options?.endDate != null) {
     params.start_date = options.startDate;
     params.end_date = options.endDate;
@@ -467,7 +460,7 @@ export async function getPickingStrategy(
     params.limit = options?.limit ?? 100;
   }
   const { data } = await api.get<PickingStrategyResponse>(
-    `/analysis/picking-strategy/${warehouseId}`,
+    `/analysis/picking-strategy/${scope.warehouseId}`,
     { params }
   );
   return (

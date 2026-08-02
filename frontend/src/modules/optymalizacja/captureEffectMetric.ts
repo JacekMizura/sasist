@@ -4,13 +4,26 @@
  */
 
 import { getWalkingCost } from "../../api/analysisApi";
+import {
+  ANALIZY_DEFAULT_TENANT_ID,
+  type WarehouseApiScope,
+} from "../analizy/warehouseApiScope";
 import type { ChangeSource, EffectMetric } from "./warehouseChangePlanStore";
-
-const DEFAULT_TENANT_ID = 1;
 
 function avgFinite(values: number[]): number | null {
   if (values.length === 0) return null;
   return values.reduce((a, b) => a + b, 0) / values.length;
+}
+
+function toScope(
+  scopeOrWarehouseId?: WarehouseApiScope | number | null
+): WarehouseApiScope | null {
+  if (scopeOrWarehouseId == null) return null;
+  if (typeof scopeOrWarehouseId === "number") {
+    if (!Number.isFinite(scopeOrWarehouseId) || scopeOrWarehouseId < 1) return null;
+    return { tenantId: ANALIZY_DEFAULT_TENANT_ID, warehouseId: scopeOrWarehouseId };
+  }
+  return scopeOrWarehouseId;
 }
 
 /**
@@ -18,11 +31,14 @@ function avgFinite(values: number[]): number | null {
  */
 export async function captureExistingEffectMetric(
   source: ChangeSource,
-  warehouseId?: number | null
+  scopeOrWarehouseId?: WarehouseApiScope | number | null
 ): Promise<EffectMetric | null> {
+  const scope = toScope(scopeOrWarehouseId);
+  if (scope == null) return null;
+
   if (source === "routes") {
     try {
-      const items = await getWalkingCost(DEFAULT_TENANT_ID, warehouseId ?? undefined);
+      const items = await getWalkingCost(scope);
       const vals = items
         .map((i) => i.total_distance)
         .filter((d): d is number => d != null && Number.isFinite(d));

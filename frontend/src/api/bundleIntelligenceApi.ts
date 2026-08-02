@@ -1,4 +1,8 @@
 import api from "./axios";
+import {
+  buildWarehouseParams,
+  type WarehouseApiScope,
+} from "../modules/analizy/warehouseApiScope";
 
 export type BundleKpiRow = {
   bundle_id: number;
@@ -79,49 +83,46 @@ export type BundleCapacityReport = {
 };
 
 export async function getBundleIntelligenceDashboard(
-  tenantId: number,
+  scope: WarehouseApiScope,
   opts?: { periodDays?: number; listLimit?: number },
 ): Promise<BundleDashboard> {
   const res = await api.get<BundleDashboard>("/bundles/intelligence/dashboard", {
-    params: {
-      tenant_id: tenantId,
+    params: buildWarehouseParams(scope, {
       period_days: opts?.periodDays ?? 30,
       list_limit: opts?.listLimit ?? 10,
-    },
+    }),
   });
   return res.data;
 }
 
 export async function getBundleSlottingRecommendations(
-  tenantId: number,
+  scope: WarehouseApiScope,
   opts?: { minCoOccurrenceRate?: number; limit?: number },
 ): Promise<BundleSlottingPair[]> {
   const res = await api.get<BundleSlottingPair[]>("/bundles/intelligence/slotting", {
-    params: {
-      tenant_id: tenantId,
+    params: buildWarehouseParams(scope, {
       min_co_occurrence_rate: opts?.minCoOccurrenceRate ?? 0.8,
       limit: opts?.limit ?? 50,
-    },
+    }),
   });
   return res.data;
 }
 
 export async function getBundleReplenishmentForecast(
-  tenantId: number,
+  scope: WarehouseApiScope,
   opts?: { horizonWeeks?: number; velocityPeriodDays?: number },
 ): Promise<BundleReplenishmentRow[]> {
   const res = await api.get<BundleReplenishmentRow[]>("/bundles/intelligence/replenishment", {
-    params: {
-      tenant_id: tenantId,
+    params: buildWarehouseParams(scope, {
       horizon_weeks: opts?.horizonWeeks ?? 1,
       velocity_period_days: opts?.velocityPeriodDays ?? 30,
-    },
+    }),
   });
   return res.data;
 }
 
 export async function postBundleReplenishmentForecast(
-  tenantId: number,
+  scope: WarehouseApiScope,
   body: {
     bundle_qty_forecast?: Record<number, number>;
     horizon_weeks?: number;
@@ -129,14 +130,16 @@ export async function postBundleReplenishmentForecast(
   },
 ): Promise<BundleReplenishmentRow[]> {
   const res = await api.post<BundleReplenishmentRow[]>("/bundles/intelligence/replenishment", body, {
-    params: { tenant_id: tenantId },
+    params: buildWarehouseParams(scope),
   });
   return res.data;
 }
 
-export async function getBundleCapacityReport(tenantId: number): Promise<BundleCapacityReport> {
+export async function getBundleCapacityReport(
+  scope: WarehouseApiScope,
+): Promise<BundleCapacityReport> {
   const res = await api.get<BundleCapacityReport>("/bundles/intelligence/capacity", {
-    params: { tenant_id: tenantId },
+    params: buildWarehouseParams(scope),
   });
   return res.data;
 }
