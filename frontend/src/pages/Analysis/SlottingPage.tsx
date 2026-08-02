@@ -14,6 +14,15 @@ import api from "../../api/axios";
 import type { LayoutState } from "../../types/warehouse";
 import { rawLayoutRackToRackState, type RawLayoutRack } from "../../components/warehouse/warehouseUtils";
 import { resolveWarehouseLocation, syncLayoutDisplayFields } from "../../utils/resolvedWarehouseLocation";
+import {
+  OptimizationPlanPanel,
+  OptimizationToolHeader,
+} from "../../modules/optymalizacja/OptimizationPlan";
+import { useWarehouseChangePlan } from "../../modules/optymalizacja/useWarehouseChangePlan";
+import type { ChangePriority } from "../../modules/optymalizacja/warehouseChangePlanStore";
+import { Link } from "react-router-dom";
+import { useAuth } from "../../context/AuthContext";
+import { useWarehouse } from "../../context/WarehouseContext";
 
 const DEFAULT_TENANT_ID = 1;
 
@@ -233,12 +242,74 @@ export default function SlottingPage() {
     [slottingData]
   );
 
+  /** Plan: klasa A najdalej od pakowania — priorytet przesunięć. */
+  const moveCandidates = useMemo(() => {
+    return [...slottingData]
+      .filter((p) => p.abc_class === "A")
+      .sort((a, b) => b.distance_to_packing - a.distance_to_packing)
+      .slice(0, 20);
+  }, [slottingData]);
+
+  const movePlan = useMemo(
+    () =>
+      moveCandidates.map((p) => {
+        const name = p.product_name ?? `Produkt ${p.product_id}`;
+        const from = p.current_location ?? "brak lokalizacji";
+        return `${name}: ${from} → strefa ${p.recommended_zone}`;
+      }),
+    [moveCandidates]
+  );
+
+  const { add } = useWarehouseChangePlan();
+  const [planMsg, setPlanMsg] = useState<string | null>(null);
+  const { user } = useAuth();
+  const { warehouse } = useWarehouse();
+
+  const addSlottingToPlan = () => {
+    if (moveCandidates.length === 0 || warehouseId == null) return;
+    const totalDist = moveCandidates.reduce((s, p) => s + (p.distance_to_packing || 0), 0);
+    const avgDist = totalDist / moveCandidates.length;
+    let priority: ChangePriority = "sredni";
+    if (avgDist >= 40 || moveCandidates.length >= 10) priority = "wysoki";
+    else if (avgDist < 15 && moveCandidates.length < 4) priority = "niski";
+
+    const authorName =
+      [user?.first_name, user?.last_name].filter(Boolean).join(" ").trim() ||
+      user?.login ||
+      "Nieznany";
+    const whName =
+      warehouses.find((w) => w.id === warehouseId)?.name ?? warehouse?.name ?? null;
+
+    const result = add({
+      source: "slotting",
+      dedupeKey: `slotting:wh:${warehouseId}:classA`,
+      title: `Przesuń ${moveCandidates.length} produktów klasy A bliżej pakowania`,
+      description: movePlan.slice(0, 5).join("; "),
+      executedDescription: `Przeniesiono ${moveCandidates.length} produktów klasy A bliżej strefy kompletacji.`,
+      priority,
+      originLabel: "Układ towaru w magazynie",
+      impactConcrete: `~${Math.round(totalDist)} m łącznego dystansu klasy A`,
+      impactScore: totalDist,
+      sourcePath: "/optymalizacja/slotting",
+      authorName,
+      authorId: user?.id ?? null,
+      warehouseName: whName,
+      warehouseId,
+    });
+    setPlanMsg(
+      result.ok
+        ? "Dodano do planu zmian magazynu."
+        : "Ta rekomendacja jest już w planie zmian."
+    );
+  };
+
   return (
     <div className="min-w-0">
-      <h1 className="text-xl font-semibold text-slate-800">Slotting</h1>
-      <p className="mt-2 text-slate-600 mb-6">
-        Analiza rozmieszczenia towaru: velocity, cube, COI, klasy ABC, odległość do pakowania i rekomendowana strefa.
-      </p>
+      <OptimizationToolHeader
+        title="Układ towaru w magazynie"
+        question="Które produkty są za daleko od strefy kompletacji względem swojej rotacji?"
+        decision="Co przenieść bliżej — i w jakiej kolejności?"
+      />
 
       <div className="mb-4 flex items-center gap-4">
         <label className="text-sm font-medium text-slate-700">Magazyn</label>
@@ -351,7 +422,7 @@ export default function SlottingPage() {
                   <ThSort label="Distance to packing" sortKey="distance_to_packing" current={sortKey} asc={sortAsc} onSort={handleSort} />
                   <ThSort label="Current location" sortKey="current_location" current={sortKey} asc={sortAsc} onSort={handleSort} />
                   <ThSort label="Recommended zone" sortKey="recommended_zone" current={sortKey} asc={sortAsc} onSort={handleSort} />
-                  <ThSort label="Slotting score" sortKey="slotting_score" current={sortKey} asc={sortAsc} onSort={handleSort} />
+                  <ThSort label="Ocena układu" sortKey="slotting_score" current={sortKey} asc={sortAsc} onSort={handleSort} />
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -398,7 +469,7 @@ export default function SlottingPage() {
       {/* SLOTTING MAP — warehouse layout (racks and bins), bins colored by ABC from slotting */}
       <section className="mb-8">
         <h2 className="text-sm font-semibold text-slate-700 uppercase tracking-wide mb-3">
-          Slotting Map
+          Mapa układu towaru
         </h2>
         <div className="rounded-lg border border-slate-200 bg-white overflow-hidden shadow-sm">
           {layoutLoading && (
@@ -437,7 +508,7 @@ export default function SlottingPage() {
                   <p>Velocity: {formatNum(binTooltip.product.velocity)}</p>
                   <p>ABC class: {binTooltip.product.abc_class}</p>
                   <p>Distance to packing: {formatNum(binTooltip.product.distance_to_packing)}</p>
-                  <p>Slotting score: {formatNum(binTooltip.product.slotting_score, 4)}</p>
+                  <p>Ocena układu: {formatNum(binTooltip.product.slotting_score, 4)}</p>
                   <p>Location: {binTooltip.address}</p>
                 </div>
               )}
@@ -515,6 +586,31 @@ export default function SlottingPage() {
           )}
         </div>
       </section>
+
+      <OptimizationPlanPanel
+        summary={
+          movePlan.length > 0
+            ? `Priorytet: przenieś ${movePlan.length} produktów klasy A bliżej pakowania (największy dystans najpierw).`
+            : "Uruchom analizę, aby zbudować listę przesunięć."
+        }
+        items={movePlan}
+        emptyMessage="Brak produktów klasy A do przesunięcia w tym zakresie."
+        actions={[
+          ...(movePlan.length > 0
+            ? [{ label: "Dodaj do planu zmian", onClick: addSlottingToPlan, primary: true as const }]
+            : []),
+          { label: "Zobacz plan zmian", to: "/optymalizacja/plan" },
+          { label: "Sprawdź przeciążone lokalizacje", to: "/analytics/hot-locations" },
+        ]}
+      />
+      {planMsg ? (
+        <p className="mt-2 text-sm text-emerald-700">
+          {planMsg}{" "}
+          <Link to="/optymalizacja/plan" className="font-medium underline">
+            Otwórz plan
+          </Link>
+        </p>
+      ) : null}
     </div>
   );
 }

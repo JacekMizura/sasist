@@ -16,6 +16,15 @@ import {
   type PickingStrategyResult,
   type PickingStrategyResponse,
 } from "../../api/analysisApi";
+import {
+  OptimizationPlanPanel,
+  OptimizationToolHeader,
+} from "../../modules/optymalizacja/OptimizationPlan";
+import { useWarehouseChangePlan } from "../../modules/optymalizacja/useWarehouseChangePlan";
+import type { ChangePriority } from "../../modules/optymalizacja/warehouseChangePlanStore";
+import { Link } from "react-router-dom";
+import { useAuth } from "../../context/AuthContext";
+import { useWarehouse } from "../../context/WarehouseContext";
 
 const DEFAULT_TENANT_ID = 1;
 const DEFAULT_ORDER_LIMIT = 100;
@@ -53,6 +62,10 @@ export default function PickingStrategyPage() {
   const [data, setData] = useState<PickingStrategyResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [planMsg, setPlanMsg] = useState<string | null>(null);
+  const { add } = useWarehouseChangePlan();
+  const { user } = useAuth();
+  const { warehouse } = useWarehouse();
 
   useEffect(() => {
     api
@@ -79,13 +92,51 @@ export default function PickingStrategyPage() {
       .finally(() => setLoading(false));
   }, [warehouseId, orderLimit, useDateRange, startDate, endDate]);
 
-  const strategies = data?.strategies ?? [];
+  const strategies: PickingStrategyResult[] = data?.strategies ?? [];
   const bestStrategy: PickingStrategyResult | null =
     strategies.length > 0
       ? strategies.reduce((best, s) =>
           s.orders_per_hour > best.orders_per_hour ? s : best
         )
       : null;
+
+  const saveDecision = () => {
+    if (warehouseId == null || !bestStrategy) return;
+    const worst = strategies.reduce((w, s) =>
+      s.orders_per_hour < w.orders_per_hour ? s : w
+    );
+    const gain = bestStrategy.orders_per_hour - worst.orders_per_hour;
+    let priority: ChangePriority = "sredni";
+    if (gain >= 5) priority = "wysoki";
+    else if (gain < 1) priority = "niski";
+
+    const authorName =
+      [user?.first_name, user?.last_name].filter(Boolean).join(" ").trim() ||
+      user?.login ||
+      "Nieznany";
+    const result = add({
+      source: "strategy",
+      dedupeKey: `strategy:wh:${warehouseId}:${bestStrategy.strategy_name}`,
+      title: `Wdróż strategię „${bestStrategy.strategy_name}”`,
+      description: `${formatNum(bestStrategy.orders_per_hour)} zamówień/godz. (vs najsłabsza: ${formatNum(worst.orders_per_hour)})`,
+      executedDescription: `Wdrożono strategię kompletacji „${bestStrategy.strategy_name}”.`,
+      priority,
+      originLabel: "Strategia kompletacji",
+      impactConcrete: `+${formatNum(gain)} zamówień/godz. względem najsłabszej strategii`,
+      impactScore: gain * 100,
+      sourcePath: "/optymalizacja/picking-strategy",
+      authorName,
+      authorId: user?.id ?? null,
+      warehouseName:
+        warehouses.find((w) => w.id === warehouseId)?.name ?? warehouse?.name ?? null,
+      warehouseId,
+    });
+    setPlanMsg(
+      result.ok
+        ? "Dodano strategię do planu zmian."
+        : "Ta strategia jest już w planie zmian."
+    );
+  };
 
   const chartData = strategies.map((s) => ({
     name: s.strategy_name,
@@ -94,6 +145,12 @@ export default function PickingStrategyPage() {
 
   return (
     <div className="space-y-6 p-6">
+      <OptimizationToolHeader
+        title="Strategia kompletacji"
+        question="Który sposób pracy (wózek, koszyki, strefy) daje najwyższą wydajność na peak?"
+        decision="Jaką strategię wdrożyć na magazynie?"
+      />
+
       {/* 1. Simulation parameters */}
       <div className="bg-white rounded-xl shadow border border-slate-200 p-4">
         <h2 className="text-lg font-semibold text-slate-800 mb-4">
@@ -381,6 +438,43 @@ export default function PickingStrategyPage() {
           kompletacji.
         </p>
       )}
+
+      <OptimizationPlanPanel
+        summary={
+          bestStrategy
+            ? `Rekomendacja: wdroż strategię „${bestStrategy.strategy_name}” (${formatNum(bestStrategy.orders_per_hour)} zamówień/godz.).`
+            : "Uruchom symulację, aby wybrać strategię do planu zmian."
+        }
+        items={
+          bestStrategy
+            ? strategies.map(
+                (s) =>
+                  `${s.strategy_name}: ${formatNum(s.orders_per_hour)} zam./godz., dystans ${formatNum(s.total_walking_distance, 0)} m`
+              )
+            : undefined
+        }
+        emptyMessage="Brak wyników porównania."
+        actions={[
+          ...(bestStrategy
+            ? [
+                {
+                  label: "Dodaj strategię do planu",
+                  onClick: saveDecision,
+                  primary: true as const,
+                },
+              ]
+            : []),
+          { label: "Zobacz plan zmian", to: "/optymalizacja/plan" },
+        ]}
+      />
+      {planMsg ? (
+        <p className="text-sm text-emerald-700">
+          {planMsg}{" "}
+          <Link to="/optymalizacja/plan" className="font-medium underline">
+            Otwórz plan
+          </Link>
+        </p>
+      ) : null}
     </div>
   );
 }

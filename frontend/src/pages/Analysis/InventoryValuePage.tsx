@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { getTenantInventoryValue } from "../../api/analysisApi";
 import api from "../../api/axios";
+import { AnalysisDecisionHeader } from "../../modules/analytics/AnalysisDecisionHeader";
 
 const DEFAULT_TENANT_ID = 1;
 
@@ -49,8 +50,15 @@ export default function InventoryValuePage() {
 
   return (
     <div className="min-w-0">
-      <h2 className="text-lg font-semibold text-slate-800 mb-4">Wartość magazynowa</h2>
-      <p className="text-slate-600 mb-6">Wartość zapasów (tenant {DEFAULT_TENANT_ID}) – suma quantity × purchase_price.</p>
+      <AnalysisDecisionHeader
+        title="Wartość zapasów"
+        question="Ile kapitału wisi w magazynie?"
+        decision="Gdzie szukać redukcji zamrożonego kapitału?"
+        actions={[
+          { label: "Znajdź towar bez rotacji", to: "/analytics/dead-stock", primary: true },
+          { label: "Utwórz plan zakupów", to: "/purchasing/plan" },
+        ]}
+      />
       <div className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm mb-6 max-w-md">
         <p className="text-xs font-medium uppercase text-slate-400">Łączna wartość</p>
         <p className="text-3xl font-bold text-slate-800 mt-1">

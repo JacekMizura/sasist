@@ -700,7 +700,7 @@ function DetailModal({
   );
 }
 
-export default function WarehouseOperationsPage() {
+export default function CentrumOperacyjnePage() {
   const navigate = useNavigate();
   const { warehouse: activeWarehouse, showWarehouseSelector } = useWarehouse();
   const warehouseId = activeWarehouse?.id ?? null;
@@ -1521,7 +1521,7 @@ export default function WarehouseOperationsPage() {
         <PageHeader
           title="Centrum operacyjne"
           subtitle="WMS na żywo — operatorzy, kolejki i alerty"
-          breadcrumbs={[{ label: "Analiza", to: "/analytics/dashboard" }, { label: "Centrum operacyjne" }]}
+          breadcrumbs={[{ label: "Centrum operacyjne" }]}
         />
         <div className="rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-500">Ładowanie danych operacyjnych…</div>
       </PageContainer>
@@ -1533,7 +1533,7 @@ export default function WarehouseOperationsPage() {
       <PageHeader
         title="Centrum operacyjne"
         subtitle="WMS na żywo — kontrola pracy magazynu, operatorów i kolejek"
-        breadcrumbs={[{ label: "Analiza", to: "/analytics/dashboard" }, { label: "Centrum operacyjne" }]}
+        breadcrumbs={[{ label: "Centrum operacyjne" }]}
         actions={
           <div className="flex flex-wrap items-center gap-2">
             {showWarehouseSelector ? (

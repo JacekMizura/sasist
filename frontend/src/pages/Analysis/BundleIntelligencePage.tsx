@@ -11,16 +11,17 @@ import {
   type BundleSlottingPair,
 } from "../../api/bundleIntelligenceApi";
 import { PrimaryButton } from "../../design-system/PrimaryButton";
+import { AnalysisDecisionHeader } from "../../modules/analytics/AnalysisDecisionHeader";
 
 const DEFAULT_TENANT_ID = 1;
 
 type TabId = "analytics" | "slotting" | "replenishment" | "capacity";
 
 const TABS: { id: TabId; label: string }[] = [
-  { id: "analytics", label: "Analytics" },
-  { id: "slotting", label: "Slotting" },
-  { id: "replenishment", label: "Replenishment" },
-  { id: "capacity", label: "Capacity" },
+  { id: "analytics", label: "Wskaźniki" },
+  { id: "slotting", label: "Rozmieszczenie" },
+  { id: "replenishment", label: "Uzupełnianie" },
+  { id: "capacity", label: "Pojemność" },
 ];
 
 function KpiTable({ title, rows, showGrowth }: { title: string; rows: BundleKpiRow[]; showGrowth?: boolean }) {
@@ -124,10 +125,15 @@ export default function BundleIntelligencePage() {
 
   return (
     <div className="min-w-0">
-      <h2 className="text-lg font-semibold text-slate-800 mb-2">Bundle Warehouse Intelligence</h2>
-      <p className="text-slate-600 mb-4 text-sm">
-        Raporty i rekomendacje na podstawie danych bundle — bez automatycznych decyzji magazynowych.
-      </p>
+      <AnalysisDecisionHeader
+        title="Zestawy produktów"
+        question="Które zestawy generują braki, wolną kompletację lub złą lokalizację komponentów?"
+        decision="Co poprawić w układzie albo uzupełnianiu zestawów?"
+        actions={[
+          { label: "Zaplanuj relokację komponentów", to: "/optymalizacja/slotting", primary: true },
+          { label: "Zobacz produkty zamawiane razem", to: "/analytics/product-affinity" },
+        ]}
+      />
 
       <div className="flex flex-wrap gap-2 mb-6 border-b border-slate-200 pb-2">
         {TABS.map((t) => (
@@ -175,10 +181,10 @@ export default function BundleIntelligencePage() {
       {!loading && tab === "analytics" && dashboard && (
         <div className="space-y-6">
           <p className="text-xs text-slate-500">Okres analizy: {dashboard.period_days} dni</p>
-          <KpiTable title="Top Bundle (sprzedaż)" rows={dashboard.top_bundles} />
-          <KpiTable title="Najszybciej rosnące Bundle" rows={dashboard.fastest_growing} showGrowth />
-          <KpiTable title="Bundle z największą marżą" rows={dashboard.highest_margin} />
-          <KpiTable title="Bundle z największą liczbą zwrotów" rows={dashboard.most_returns} />
+          <KpiTable title="Najlepiej sprzedające się zestawy" rows={dashboard.top_bundles} />
+          <KpiTable title="Najszybciej rosnące zestawy" rows={dashboard.fastest_growing} showGrowth />
+          <KpiTable title="Zestawy z największą marżą" rows={dashboard.highest_margin} />
+          <KpiTable title="Zestawy z największą liczbą zwrotów" rows={dashboard.most_returns} />
         </div>
       )}
 

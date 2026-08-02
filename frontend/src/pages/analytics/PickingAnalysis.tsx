@@ -22,6 +22,7 @@ import { PageHeader } from "../../components/layout/PageHeader";
 import { FilterDateRange } from "../../components/filters";
 import { useWarehouse } from "../../context/WarehouseContext";
 import { AppOverlayPortal } from "../../components/overlay";
+import { AnalysisDecisionHeader } from "../../modules/analytics/AnalysisDecisionHeader";
 
 const DEFAULT_TENANT_ID = 1;
 const SVG_WIDTH = 900;
@@ -178,7 +179,15 @@ export default function PickingAnalysis() {
   if (loading && !summary) {
     return (
       <>
-        <PageHeader title="Picking Analysis" />
+        <AnalysisDecisionHeader
+          title="Jak przebiega kompletacja"
+          question="Gdzie kompletacja jest wolna albo przeciążona?"
+          decision="Czy reagować teraz na hali, czy zmienić sposób pracy?"
+          actions={[
+            { label: "Otwórz pracę na hali", to: "/centrum-operacyjne", primary: true },
+            { label: "Zmień strategię kompletacji", to: "/optymalizacja/picking-strategy" },
+          ]}
+        />
         <p className="text-slate-500">Ładowanie…</p>
       </>
     );
@@ -186,8 +195,17 @@ export default function PickingAnalysis() {
 
   return (
     <div className="min-w-0 space-y-6">
+        <AnalysisDecisionHeader
+          title="Jak przebiega kompletacja"
+          question="Gdzie kompletacja jest wolna albo przeciążona?"
+          decision="Czy reagować teraz na hali, czy zmienić sposób pracy?"
+          actions={[
+            { label: "Otwórz pracę na hali", to: "/centrum-operacyjne", primary: true },
+            { label: "Zmień strategię kompletacji", to: "/optymalizacja/picking-strategy" },
+          ]}
+        />
         <PageHeader
-          title="Picking Analysis"
+          title=""
           actions={
             <div className="flex flex-wrap items-center gap-4">
           {showWarehouseSelector ? (

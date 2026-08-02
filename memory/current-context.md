@@ -2,10 +2,9 @@
 
 ## Active
 
-Tryby operacyjne WMS = tylko tryby floor/terminal; Operacje/Wózki/QC/Dokumenty/Analiza/Zakupy/Etykiety → Uprawnienia (migracja legacy mode→permission).
+**Faza 4 zaakceptowana** — pętla decyzyjna magazynu zamknięta.
 
-## Constraints
+Pełny cykl produktu:
+Centrum Operacyjne → Analizy → Optymalizacja → Plan zmian → Realizacja → Ocena efektów → Historia zmian
 
-- Dual-read: empty modes nadal otwiera Operacje; non-empty wymaga `warehouse.operations` (lub legacy key)
-- Legacy-only JSON (`["operations","carts"]`) nie jest zerowane do `[]`/`null` (to = wszystkie tryby floor) — grant perms + keep keys do admin save
-- Brak zmiany dostępu po migracji
+Nie startować kolejnych faz / Enterprise bez osobnej decyzji użytkownika.

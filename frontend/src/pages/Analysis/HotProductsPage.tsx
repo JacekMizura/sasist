@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { getHotProducts } from "../../api/analysisApi";
 import { PrimaryButton } from "../../design-system/PrimaryButton";
+import { AnalysisDecisionHeader } from "../../modules/analytics/AnalysisDecisionHeader";
 
 const DEFAULT_TENANT_ID = 1;
 const ROWS_PER_PAGE_OPTIONS = [10, 25, 50, 100, 500] as const;
@@ -55,10 +56,15 @@ export default function HotProductsPage() {
 
   return (
     <div className="min-w-0">
-      <h2 className="text-lg font-semibold text-slate-800 mb-4">Gorące produkty</h2>
-      <p className="text-slate-600 mb-4">
-        Top produktów według łącznej ilości w zamówieniach (order_items).
-      </p>
+      <AnalysisDecisionHeader
+        title="Najczęściej sprzedawane produkty"
+        question="Które produkty generują największy ruch kompletacji?"
+        decision="Co trzymać blisko strefy kompletacji, a co można odsunąć?"
+        actions={[
+          { label: "Przenieś produkty bliżej kompletacji", to: "/optymalizacja/slotting", primary: true },
+          { label: "Znajdź towar bez rotacji", to: "/analytics/dead-stock" },
+        ]}
+      />
 
       <div className="mb-6 rounded-lg border border-slate-200 bg-white p-4">
         <h3 className="text-sm font-semibold text-slate-700 mb-3">Filtry</h3>

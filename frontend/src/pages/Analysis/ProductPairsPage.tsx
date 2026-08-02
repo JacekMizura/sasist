@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { getProductPairs, type ProductPairItem } from "../../api/analysisApi";
+import { AnalysisDecisionHeader } from "../../modules/analytics/AnalysisDecisionHeader";
 
 const DEFAULT_TENANT_ID = 1;
 
@@ -39,10 +40,15 @@ export default function ProductPairsPage() {
 
   return (
     <div className="min-w-0">
-      <h1 className="text-xl font-semibold text-slate-800">Produkty kupowane razem</h1>
-      <p className="mt-2 text-slate-600 mb-4">
-        Pary produktów często zamawianych w tym samym zamówieniu (order_items).
-      </p>
+      <AnalysisDecisionHeader
+        title="Produkty zamawiane razem"
+        question="Które produkty często jadą w tym samym zamówieniu?"
+        decision="Czy trzymać je bliżej siebie albo budować zestawy?"
+        actions={[
+          { label: "Przenieś produkty bliżej siebie", to: "/optymalizacja/slotting", primary: true },
+          { label: "Sprawdź problemy w zestawach", to: "/analytics/bundle-intelligence" },
+        ]}
+      />
       <div className="rounded-lg border border-slate-200 bg-white overflow-hidden">
         <table className="w-full text-sm">
           <thead className="bg-slate-50">

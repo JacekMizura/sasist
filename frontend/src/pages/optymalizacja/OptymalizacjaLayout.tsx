@@ -1,13 +1,19 @@
 import { NavLink, Outlet, useLocation } from "react-router-dom";
 import PageLayout from "../../components/layout/PageLayout";
-import { getAnalizySubNav, type SubNavItem } from "../../modules/analytics/analyticsTabs";
+import {
+  getOptymalizacjaSubNav,
+  type OptimizeSubNavItem,
+} from "../../modules/optymalizacja/optymalizacjaNav";
 
-function SubNav({ items }: { items: SubNavItem[] }) {
+function SubNav({ items }: { items: OptimizeSubNavItem[] }) {
   const { pathname } = useLocation();
   return (
-    <nav className="flex w-56 shrink-0 flex-col gap-0.5" aria-label="Analizy — raporty">
+    <nav className="flex w-56 shrink-0 flex-col gap-0.5" aria-label="Optymalizacja — plan zmian">
       {items.map((item) => {
-        const isActive = pathname === item.path;
+        const isActive =
+          item.path === "/optymalizacja"
+            ? pathname === "/optymalizacja" || pathname === "/optymalizacja/"
+            : pathname === item.path;
         return (
           <NavLink
             key={item.path}
@@ -24,19 +30,15 @@ function SubNav({ items }: { items: SubNavItem[] }) {
   );
 }
 
-/**
- * Hub Analizy: wejście = Dashboard (landing), raporty z boczną nawigacją.
- * Bez zakładek Dashboard / Mapy / Symulacje / Optymalizacja (Faza 1).
- */
-export default function AnalyticsLayout() {
+/** Hub Optymalizacja — osobny top-level (Faza 1). */
+export default function OptymalizacjaLayout() {
   const { pathname } = useLocation();
-  const subNav = getAnalizySubNav(pathname);
-  const isLanding = pathname === "/analytics" || pathname === "/analytics/dashboard";
+  const subNav = getOptymalizacjaSubNav(pathname);
 
   return (
     <PageLayout fullBleed>
       <div className="relative flex min-h-[600px] w-full min-w-0 gap-6">
-        {!isLanding && subNav != null ? (
+        {subNav != null ? (
           <aside className="shrink-0">
             <SubNav items={subNav} />
           </aside>

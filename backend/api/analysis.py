@@ -325,10 +325,10 @@ class BatchPickRequest(BaseModel):
 
 
 @router.post("/pick-route/batch/")
-def simulate_batch_pick_route(payload: BatchPickRequest, db: Session = Depends(get_db)):
+def simulate_batch_pick_route_legacy(payload: BatchPickRequest, db: Session = Depends(get_db)):
     """
-    Batch pick route simulation: load orders by external order numbers.
-    Returns debug: orders_found, order_items, order_numbers.
+    Legacy alias (trailing slash + order_numbers). Resolves numbers → ids and runs real batch sim.
+    Prefer POST /pick-route/batch with order_ids.
     """
     orders = (
         db.query(Order)
@@ -339,17 +339,20 @@ def simulate_batch_pick_route(payload: BatchPickRequest, db: Session = Depends(g
         )
         .all()
     )
-    order_ids = [o.id for o in orders]
-    items = (
-        db.query(OrderItem)
-        .filter(OrderItem.order_id.in_(order_ids))
-        .all()
+    order_ids = [int(o.id) for o in orders]
+    if not order_ids:
+        return {
+            "orders_count": 0,
+            "total_distance": 0.0,
+            "estimated_time": 0.0,
+            "routes": [],
+        }
+    return get_pick_route_batch(
+        db,
+        warehouse_id=payload.warehouse_id,
+        order_ids=order_ids,
+        record_picks=False,
     )
-    return {
-        "orders_found": len(orders),
-        "order_items": len(items),
-        "order_numbers": payload.order_numbers,
-    }
 
 
 @router.get("/slotting/{warehouse_id}")

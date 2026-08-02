@@ -55,7 +55,7 @@ export default function BatchPickingPage() {
 
   return (
     <div className="min-w-0">
-      <h1 className="text-xl font-semibold text-slate-800">Batch picking</h1>
+      <h1 className="text-xl font-semibold text-slate-800">Sprzedaż według produktów</h1>
       <p className="mt-2 text-slate-600 mb-4">
         Łączna ilość do kompletacji per produkt (suma quantity z order_items). Nie używa tabeli picks.
       </p>

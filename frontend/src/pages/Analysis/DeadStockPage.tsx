@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { getDeadStock, type DeadStockResponse } from "../../api/analysisApi";
 import { PrimaryButton } from "../../design-system/PrimaryButton";
+import { AnalysisDecisionHeader } from "../../modules/analytics/AnalysisDecisionHeader";
 
 const DEFAULT_TENANT_ID = 1;
 const DEFAULT_DAYS = 90;
@@ -91,10 +92,16 @@ export default function DeadStockPage() {
 
   return (
     <div className="min-w-0">
-      <h2 className="text-lg font-semibold text-slate-800 mb-2">Zalegający towar (Inventory Aging)</h2>
-      <p className="text-slate-600 mb-4">
-        Analiza starzenia zapasów: ostatnia sprzedaż, wartość magazynowa, rotacja i kategorie (szybka / wolna / zalegająca).
-      </p>
+      <AnalysisDecisionHeader
+        title="Zalegający towar"
+        question="Co stoi bez rotacji i zamraża kapitał?"
+        decision="Co przesunąć, przecenić albo nie dokupować?"
+        actions={[
+          { label: "Zaplanuj przesunięcie", to: "/wms/mm", primary: true },
+          { label: "Wstrzymaj zbędne zakupy", to: "/purchasing/plan" },
+          { label: "Sprawdź wartość zapasów", to: "/analytics/inventory-value" },
+        ]}
+      />
 
       <div className="mb-6 rounded-lg border border-slate-200 bg-white p-4">
         <h3 className="text-sm font-semibold text-slate-700 mb-3">Filtry</h3>

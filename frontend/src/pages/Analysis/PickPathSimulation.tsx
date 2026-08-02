@@ -8,6 +8,16 @@ import {
   type WarehouseGraphEdge,
 } from "../../api/warehouseGraphApi";
 import { PrimaryButton } from "../../design-system/PrimaryButton";
+import {
+  OptimizationPlanPanel,
+  OptimizationToolHeader,
+} from "../../modules/optymalizacja/OptimizationPlan";
+import WalkingCostPage from "./WalkingCostPage";
+import { useWarehouseChangePlan } from "../../modules/optymalizacja/useWarehouseChangePlan";
+import type { ChangePriority } from "../../modules/optymalizacja/warehouseChangePlanStore";
+import { Link } from "react-router-dom";
+import { useAuth } from "../../context/AuthContext";
+import { useWarehouse } from "../../context/WarehouseContext";
 
 const DEFAULT_TENANT_ID = 1;
 const ORDERS_PAGE_SIZE = 100;
@@ -36,9 +46,6 @@ type BatchResult = {
   total_distance?: number;
   estimated_time?: number;
   routes?: BatchRouteItem[];
-  orders_found?: number;
-  order_items?: number;
-  order_numbers?: string[];
 };
 
 async function fetchOrdersPage(
@@ -69,17 +76,13 @@ async function fetchSpecialLocations(warehouseId: number): Promise<SpecialLocati
   return data ?? { pick_start: null, packing: null };
 }
 
-async function fetchPickRouteBatch(
-  warehouseId: number,
-  orderNumbers: string[],
-  tenantId: number
-): Promise<BatchResult> {
-  const { data } = await api.post<BatchResult>("/analysis/pick-route/batch/", {
-    tenant_id: tenantId,
+async function fetchPickRouteBatch(warehouseId: number, orderIds: number[]): Promise<BatchResult> {
+  const { data } = await api.post<BatchResult>("/analysis/pick-route/batch", {
     warehouse_id: warehouseId,
-    order_numbers: orderNumbers,
+    order_ids: orderIds,
+    record_picks: false,
   });
-  return data ?? { orders_found: 0, order_items: 0, order_numbers: [] };
+  return data ?? { orders_count: 0, total_distance: 0, estimated_time: 0, routes: [] };
 }
 
 function useScale(
@@ -129,6 +132,95 @@ export default function PickPathSimulation() {
   const [error, setError] = useState<string | null>(null);
   const [batchResult, setBatchResult] = useState<BatchResult | null>(null);
   const [specialLocations, setSpecialLocations] = useState<SpecialLocations | null>(null);
+  const [view, setView] = useState<"routes" | "distance">("routes");
+  const [distanceSummary, setDistanceSummary] = useState<{
+    count: number;
+    avgDistance: number | null;
+  } | null>(null);
+  const [planMsg, setPlanMsg] = useState<string | null>(null);
+  const { add } = useWarehouseChangePlan();
+  const { user } = useAuth();
+  const { warehouse } = useWarehouse();
+
+  const authorMeta = () => {
+    const authorName =
+      [user?.first_name, user?.last_name].filter(Boolean).join(" ").trim() ||
+      user?.login ||
+      "Nieznany";
+    return {
+      authorName,
+      authorId: user?.id ?? null,
+      warehouseName: warehouse?.name ?? warehouses.find((w) => w.id === warehouseId)?.name ?? null,
+      warehouseId: warehouseId ?? warehouse?.id ?? null,
+    };
+  };
+
+  const addRoutesToPlan = (kind: "distance" | "batch" | "single") => {
+    const meta = authorMeta();
+    if (kind === "distance" && distanceSummary?.avgDistance != null) {
+      const avg = distanceSummary.avgDistance;
+      let priority: ChangePriority = "sredni";
+      if (avg >= 80) priority = "wysoki";
+      else if (avg < 30) priority = "niski";
+      const result = add({
+        source: "routes",
+        dedupeKey: `routes:distance:tenant:${DEFAULT_TENANT_ID}`,
+        title: "Skróć średni dystans kompletacji",
+        description: `Średni dystans ${Math.round(avg)} m na ${distanceSummary.count} zamówieniach.`,
+        executedDescription: `Skrócono średni dystans kompletacji (bazowo ~${Math.round(avg)} m).`,
+        priority,
+        originLabel: "Dystans kompletacji",
+        impactConcrete: `~${Math.round(avg)} m średnio / zamówienie`,
+        impactScore: avg,
+        sourcePath: "/optymalizacja/pick-path",
+        ...meta,
+      });
+      setPlanMsg(result.ok ? "Dodano do planu zmian." : "Ta rekomendacja jest już w planie.");
+      return;
+    }
+    if (kind === "batch" && batchResult?.total_distance != null) {
+      const total = batchResult.total_distance;
+      const orders = batchResult.orders_count ?? selectedIds.size;
+      let priority: ChangePriority = "sredni";
+      if (total >= 500) priority = "wysoki";
+      else if (total < 100) priority = "niski";
+      const result = add({
+        source: "routes",
+        dedupeKey: `routes:batch:wh:${warehouseId ?? "x"}:${orders}`,
+        title: `Skróć trasy dla wsadu ${orders} zamówień`,
+        description: `Łączny dystans wsadu: ${Math.round(total)} m.`,
+        executedDescription: `Zoptymalizowano trasy dla wsadu ${orders} zamówień.`,
+        priority,
+        originLabel: "Trasy kompletacji",
+        impactConcrete: `${Math.round(total)} m łącznie (wsad)`,
+        impactScore: total,
+        sourcePath: "/optymalizacja/pick-path",
+        ...meta,
+      });
+      setPlanMsg(result.ok ? "Dodano do planu zmian." : "Ta rekomendacja jest już w planie.");
+      return;
+    }
+    if (kind === "single" && routeData?.total_distance != null) {
+      const d = routeData.total_distance;
+      let priority: ChangePriority = "sredni";
+      if (d >= 100) priority = "wysoki";
+      else if (d < 40) priority = "niski";
+      const result = add({
+        source: "routes",
+        dedupeKey: `routes:single:${singleOrderId ?? "x"}`,
+        title: "Skróć trasę wybranego zamówienia",
+        description: `Dystans zamówienia: ${d} m.`,
+        executedDescription: `Skrócono trasę zamówienia (bazowo ${d} m).`,
+        priority,
+        originLabel: "Trasy kompletacji",
+        impactConcrete: `${d} m na zamówieniu`,
+        impactScore: d,
+        sourcePath: "/optymalizacja/pick-path",
+        ...meta,
+      });
+      setPlanMsg(result.ok ? "Dodano do planu zmian." : "Ta rekomendacja jest już w planie.");
+    }
+  };
 
   useEffect(() => {
     api.get<Warehouse[]>("/warehouses/").then((r) => {
@@ -243,18 +335,15 @@ export default function PickPathSimulation() {
       setError("Define start and packing locations in the warehouse designer.");
       return;
     }
-    const orderNumbers = orders
-      .filter((o) => selectedIds.has(o.id))
-      .map((o) => o.number)
-      .filter((n): n is string => n != null && n !== "");
-    if (orderNumbers.length === 0) {
-      setError("Selected orders have no order number.");
+    const orderIds = orders.filter((o) => selectedIds.has(o.id)).map((o) => o.id);
+    if (orderIds.length === 0) {
+      setError("Nie wybrano zamówień.");
       return;
     }
     setLoadingBatch(true);
     setError(null);
     setBatchResult(null);
-    fetchPickRouteBatch(warehouseId, orderNumbers, DEFAULT_TENANT_ID)
+    fetchPickRouteBatch(warehouseId, orderIds)
       .then(setBatchResult)
       .catch((err) => setError(err?.message ?? "Błąd symulacji wsadowej"))
       .finally(() => setLoadingBatch(false));
@@ -279,8 +368,73 @@ export default function PickPathSimulation() {
 
   return (
     <div className="min-w-0">
-      <h1 className="text-xl font-semibold text-slate-800">Symulacja trasy</h1>
+      <OptimizationToolHeader
+        title="Trasy i dystans kompletacji"
+        question="Gdzie trasy są za długie przy obecnym układzie i grafie?"
+        decision="Skrócić drogę regułą trasy czy przesunięciem towaru?"
+      />
 
+      <div className="mb-4 flex gap-2">
+        <button
+          type="button"
+          onClick={() => setView("routes")}
+          className={
+            view === "routes"
+              ? "rounded-lg bg-slate-800 px-3 py-1.5 text-sm font-medium text-white"
+              : "rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-700"
+          }
+        >
+          Symulacja tras
+        </button>
+        <button
+          type="button"
+          onClick={() => setView("distance")}
+          className={
+            view === "distance"
+              ? "rounded-lg bg-slate-800 px-3 py-1.5 text-sm font-medium text-white"
+              : "rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-700"
+          }
+        >
+          Dystans zamówień
+        </button>
+      </div>
+
+      {view === "distance" ? (
+        <>
+          <WalkingCostPage
+            embedded
+            onSummary={setDistanceSummary}
+          />
+          <OptimizationPlanPanel
+            summary={
+              distanceSummary?.avgDistance != null
+                ? `Średni dystans: ${Math.round(distanceSummary.avgDistance)} m na ${distanceSummary.count} zamówień.`
+                : "Policz dystans zamówień, aby dodać rekomendację do planu."
+            }
+            actions={[
+              ...(distanceSummary?.avgDistance != null
+                ? [
+                    {
+                      label: "Dodaj do planu zmian",
+                      onClick: () => addRoutesToPlan("distance"),
+                      primary: true as const,
+                    },
+                  ]
+                : []),
+              { label: "Zobacz plan zmian", to: "/optymalizacja/plan" },
+            ]}
+          />
+          {planMsg ? (
+            <p className="mt-2 text-sm text-emerald-700">
+              {planMsg}{" "}
+              <Link to="/optymalizacja/plan" className="font-medium underline">
+                Otwórz plan
+              </Link>
+            </p>
+          ) : null}
+        </>
+      ) : (
+        <>
       <div className="flex flex-wrap items-center gap-4 mb-4">
         <label className="text-sm font-medium text-slate-600">Magazyn</label>
         <select
@@ -408,21 +562,18 @@ export default function PickPathSimulation() {
           <h2 className="text-lg font-medium text-slate-800 mb-3">Wyniki symulacji wsadowej</h2>
           <div className="grid grid-cols-3 gap-4 mb-4">
             <div className="p-3 bg-slate-50 rounded">
-              <p className="text-xs text-slate-500 uppercase">Zamówienia znalezione</p>
-              <p className="text-xl font-semibold">{batchResult.orders_found ?? batchResult.orders_count ?? 0}</p>
+              <p className="text-xs text-slate-500 uppercase">Zamówienia</p>
+              <p className="text-xl font-semibold">{batchResult.orders_count ?? 0}</p>
             </div>
             <div className="p-3 bg-slate-50 rounded">
-              <p className="text-xs text-slate-500 uppercase">Pozycje zamówień</p>
-              <p className="text-xl font-semibold">{batchResult.order_items ?? "—"}</p>
+              <p className="text-xs text-slate-500 uppercase">Szacowany czas (s)</p>
+              <p className="text-xl font-semibold">{batchResult.estimated_time ?? "—"}</p>
             </div>
             <div className="p-3 bg-slate-50 rounded">
               <p className="text-xs text-slate-500 uppercase">Łączny dystans (m)</p>
               <p className="text-xl font-semibold">{batchResult.total_distance ?? "—"}</p>
             </div>
           </div>
-          {batchResult.order_numbers != null && batchResult.order_numbers.length > 0 && (
-            <p className="text-sm text-slate-600 mb-2">Numery zamówień: {batchResult.order_numbers.join(", ")}</p>
-          )}
           {chartData.length > 0 && (
             <div className="h-64">
               <ResponsiveContainer width="100%" height="100%">
@@ -551,6 +702,46 @@ export default function PickPathSimulation() {
         <span className="ml-4"><span className="inline-block w-3 h-3 rounded-full bg-[#22c55e] align-middle mr-1" /> START</span>
         <span className="ml-4"><span className="inline-block w-3 h-3 rounded bg-[#3b82f6] align-middle mr-1" /> PACK</span>
       </div>
+
+      <OptimizationPlanPanel
+        summary={
+          batchResult?.total_distance != null
+            ? `Wsad: ${batchResult.orders_count ?? selectedIds.size} zamówień, łącznie ${Math.round(batchResult.total_distance)} m.`
+            : routeData?.total_distance != null
+              ? `Wybrane zamówienie: ${routeData.total_distance} m.`
+              : "Uruchom symulację trasy, aby dodać rekomendację do planu zmian."
+        }
+        actions={[
+          ...(batchResult?.total_distance != null
+            ? [
+                {
+                  label: "Dodaj do planu zmian",
+                  onClick: () => addRoutesToPlan("batch"),
+                  primary: true as const,
+                },
+              ]
+            : routeData?.total_distance != null
+              ? [
+                  {
+                    label: "Dodaj do planu zmian",
+                    onClick: () => addRoutesToPlan("single"),
+                    primary: true as const,
+                  },
+                ]
+              : []),
+          { label: "Zobacz plan zmian", to: "/optymalizacja/plan" },
+        ]}
+      />
+      {planMsg && view === "routes" ? (
+        <p className="mt-2 text-sm text-emerald-700">
+          {planMsg}{" "}
+          <Link to="/optymalizacja/plan" className="font-medium underline">
+            Otwórz plan
+          </Link>
+        </p>
+      ) : null}
+        </>
+      )}
     </div>
   );
 }

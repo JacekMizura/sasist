@@ -20,7 +20,8 @@ router_assign = APIRouter(prefix="/simulation", tags=["Simulation"])
 @router.post("/simulate/")
 def simulate(data: Dict[str, float], db: Session = Depends(get_db)):
     """
-    data = { "order1": 1200, "order2": 800, ... }
+    Legacy CSV volume simulation — not used by current Analizy UI (Phase 0).
+    Returns explicit not-implemented payload; prefer pick-route / picking-strategy.
     """
     service = SimulationService(db)
     return service.simulate(order_volumes=data)

@@ -86,7 +86,7 @@ export default function WmsOperationalDashboardPage() {
             </p>
           </div>
           <Link
-            to="/analytics/warehouse-operations"
+            to="/centrum-operacyjne"
             className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-bold hover:bg-indigo-500"
           >
             Centrum operacyjne <ArrowRight size={16} />

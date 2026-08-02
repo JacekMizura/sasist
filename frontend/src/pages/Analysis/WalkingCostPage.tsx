@@ -1,9 +1,15 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { getWalkingCost, type WalkingCostItem } from "../../api/analysisApi";
 
 const DEFAULT_TENANT_ID = 1;
 
-export default function WalkingCostPage() {
+type Props = {
+  /** Gdy true — bez własnego nagłówka (osadzone w Trasy i dystans). */
+  embedded?: boolean;
+  onSummary?: (summary: { count: number; avgDistance: number | null }) => void;
+};
+
+export default function WalkingCostPage({ embedded = false, onSummary }: Props) {
   const [items, setItems] = useState<WalkingCostItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -22,8 +28,22 @@ export default function WalkingCostPage() {
       .finally(() => {
         if (!cancelled) setLoading(false);
       });
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, []);
+
+  const avgDistance = useMemo(() => {
+    const vals = items
+      .map((i) => i.total_distance)
+      .filter((d): d is number => d != null && Number.isFinite(d));
+    if (vals.length === 0) return null;
+    return vals.reduce((a, b) => a + b, 0) / vals.length;
+  }, [items]);
+
+  useEffect(() => {
+    onSummary?.({ count: items.length, avgDistance });
+  }, [items.length, avgDistance, onSummary]);
 
   if (loading) return <div className="min-w-0"><p className="text-slate-500">Ładowanie…</p></div>;
   if (error) {
@@ -39,10 +59,13 @@ export default function WalkingCostPage() {
 
   return (
     <div className="min-w-0">
-      <h1 className="text-xl font-semibold text-slate-800">Koszt chodzenia</h1>
-      <p className="mt-2 text-slate-600 mb-4">
-        Dystans przejścia per zamówienie (graf magazynu, dane zamówień). Start → lokalizacje produktów. Nie używa picków.
-      </p>
+      {!embedded ? (
+        <h1 className="text-xl font-semibold text-slate-800 mb-4">Dystans kompletacji</h1>
+      ) : (
+        <p className="text-sm text-slate-600 mb-4">
+          Dystans przejścia per zamówienie przy obecnym układzie (graf magazynu).
+        </p>
+      )}
       <div className="rounded-lg border border-slate-200 bg-white overflow-hidden">
         <table className="w-full text-sm">
           <thead className="bg-slate-50">
@@ -56,13 +79,19 @@ export default function WalkingCostPage() {
           </thead>
           <tbody className="divide-y divide-slate-100">
             {items.length === 0 ? (
-              <tr><td colSpan={5} className="px-4 py-6 text-center text-slate-500">Brak danych. Skonfiguruj sieć tras w projektancie (TRASY) i upewnij się, że zamówienia mają produkty w inwentarzu oraz Access Points.</td></tr>
+              <tr>
+                <td colSpan={5} className="px-4 py-6 text-center text-slate-500">
+                  Brak danych. Skonfiguruj sieć tras w projektancie (TRASY).
+                </td>
+              </tr>
             ) : (
               items.map((row) => (
                 <tr key={row.order_id}>
                   <td className="px-4 py-2">{row.order_id}</td>
                   <td className="px-4 py-2">{row.order_number ?? "—"}</td>
-                  <td className="px-4 py-2 text-right">{row.total_distance == null ? "N/A" : row.total_distance}</td>
+                  <td className="px-4 py-2 text-right">
+                    {row.total_distance == null ? "N/A" : row.total_distance}
+                  </td>
                   <td className="px-4 py-2 text-right">{row.distinct_locations_count}</td>
                   <td className="px-4 py-2 text-right">{row.total_items}</td>
                 </tr>

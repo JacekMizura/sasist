@@ -65,7 +65,7 @@ const UI_STRINGS_DEFAULTS = {
     warehouseMaterialsPackaging: "Materiały pakowe",
     /** Panel triage labels for complaints (office only). */
     complaintPanelStatuses: "Reklamacje — statusy panelu",
-    analysis: "Analiza",
+    analysis: "Analizy",
     system: "System",
     returns: "Zwroty",
     wmsTerminal: "WMS",

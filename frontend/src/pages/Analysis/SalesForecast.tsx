@@ -18,6 +18,7 @@ import {
   type ProductForecastResponse,
   type ProductRotationItem,
 } from "../../api/analysisApi";
+import { AnalysisDecisionHeader } from "../../modules/analytics/AnalysisDecisionHeader";
 
 const DEFAULT_TENANT_ID = 1;
 const MIN_DAYS_FOR_FORECAST = 14;
@@ -138,11 +139,15 @@ export default function SalesForecast() {
 
   return (
     <div className="min-w-0">
-      <h1 className="text-xl font-semibold text-slate-800">Prognoza sprzedaży</h1>
-      <p className="mt-2 text-slate-600 mb-6">
-        Prognozowanie popytu: ostatnie 90 dni, sezonowość dni tygodnia, średnia 14-dniowa, prognoza 14 dni.
-        Do slottingu, planowania obciążenia i zatrudnienia.
-      </p>
+      <AnalysisDecisionHeader
+        title="Prognoza sprzedaży"
+        question="Jaki popyt spodziewamy się w najbliższych dniach?"
+        decision="Co dokupić i ile zasobów zaplanować?"
+        actions={[
+          { label: "Utwórz zamówienie zakupowe", to: "/purchasing/plan", primary: true },
+          { label: "Zobacz najczęściej sprzedawane", to: "/analytics/hot-products" },
+        ]}
+      />
 
       <div className="flex flex-wrap items-center gap-4 mb-6">
         <label className="text-sm font-medium text-slate-600">Magazyn</label>

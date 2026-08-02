@@ -1,3 +1,59 @@
+## 2026-08-02 — Faza 4 zaakceptowana
+
+- Zamknięcie pętli: Realizacja → Ocena → Historia
+- Produkt kompletny jako cykl zarządzania magazynem (nie Enterprise)
+
+## 2026-08-02 — Faza 4: Realizacja + ocena + historia zmian
+
+- Status „Zweryfikowana”; cykl życia zamknięty
+- Historia zmian magazynu (`/optymalizacja/historia`) — decyzje biznesowe
+- Ocena PRZED/PO/Różnica z realnych odczytów (walking-cost); inaczej „Oczekuje na dane”
+- Ranking skuteczności (`/optymalizacja/ranking`) — tylko zweryfikowane z deltą
+- Bez nowych analiz/KPI/wykresów
+
+## 2026-08-02 — Plan zmian: statusy, źródło, realizacja
+
+- Statusy: Nowa / Zaplanowana / W realizacji / Wdrożona / Odrzucona
+- Źródło rekomendacji (originLabel) + efekt (metryka lub Wysoki/Średni/Niski wpływ)
+- „Wybierz sposób realizacji” → Projektant / MM / Strategia / Centrum / WMS
+- Migracja planu FE v1 → v2
+
+## 2026-08-02 — Optymalizacja: jeden Plan zmian magazynu
+
+- Wspólny plan FE (`warehouseChangePlanStore`) — rekomendacje z 3 analiz
+- Landing = pulpit planu (ile czeka / wpływ / co pierwsze)
+- CTA: „Dodaj do planu zmian” / „Dodaj strategię do planu”
+- Strona `/optymalizacja/plan` — lista, priorytet, wpływ, usuń, źródło, wdrożenie
+
+## 2026-08-02 — Optymalizacja Faza 3 v1
+
+- Landing `/optymalizacja` (układ / strategia / trasy+dystans)
+- `OptimizationToolHeader` + `OptimizationPlanPanel` — każde narzędzie kończy się planem
+- Walking cost → Optymalizacja (scalenie z trasami); usunięte z nav Analiz
+- Slotting: plan przesunięć A; Strategia: zapis rekomendacji; Trasy: plan skrócenia drogi
+
+## 2026-08-02 — Analizy Faza 2: Manifest (pytanie → decyzja → CTA)
+
+- Dashboard Analiz = landing decyzyjny (max 7 kart, bez backend health)
+- `AnalysisDecisionHeader` na raportach + bezpośrednie CTA
+- Scalenie: product-rotation / batch-picking → hot-products; pick-density → hot-locations
+- Sub-nav Analizy skrócony do 9 pozycji hubowych
+
+## 2026-08-02 — Analizy Faza 1: Split Centrum
+
+- Centrum operacyjne → `/centrum-operacyjne` (top-level, poza Analizami)
+- Analizy: Dashboard = landing `/analytics` (bez peer-tab)
+- Optymalizacja → `/optymalizacja` (slotting, strategia, trasy)
+- Mapy usunięte z menu; logika mapy zachowana
+- PL etykiety UI (bez zmiany nazw technicznych API/plików)
+
+## 2026-08-02 — Analizy Faza 0: Hygiene
+
+- Usunięto z menu/nav 6 stubów (dzień, czas, ruch, layout, throughput, problemy kompletacji)
+- Stare URL → redirect do działających powierzchni
+- Usunięto orphan AnalysisLayout + analysisTabs + pliki stubów
+- Batch pick-route: FE → prawdziwy silnik (`order_ids`); legacy `/batch/` deleguje zamiast liczników debug
+
 ## 2026-08-02 — WMS: tryby operacyjne vs uprawnienia modułów
 
 - Usunięto z trybów: Operacje, Wózki, QC, Dokumenty, Analiza, Zakupy, Szablony etykiet

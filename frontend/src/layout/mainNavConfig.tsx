@@ -115,7 +115,16 @@ export const NAV_SIDEBAR_SECTIONS: NavSidebarSectionConfig[] = [
   {
     id: "operations",
     label: "Operacje",
-    categoryIds: ["purchasing", "analytics", "templates", "warehouse", "settings", "wms-settings"],
+    categoryIds: [
+      "centrum-operacyjne",
+      "analizy",
+      "optymalizacja",
+      "purchasing",
+      "templates",
+      "warehouse",
+      "settings",
+      "wms-settings",
+    ],
   },
 ];
 
@@ -286,22 +295,28 @@ export function buildNavFlyoutCategories(): NavCategoryConfig[] {
     ],
   },
   {
-    id: "analytics",
-    label: UI_STRINGS.navigation.analysis,
+    id: "centrum-operacyjne",
+    label: "Centrum operacyjne",
+    Icon: Activity,
+    directPath: "/centrum-operacyjne",
+    activePathPrefix: "/centrum-operacyjne",
+    flyoutSections: [],
+  },
+  {
+    id: "analizy",
+    label: "Analizy",
     Icon: BarChart3,
+    directPath: "/analytics",
     activePathPrefix: "/analytics",
-    flyoutSections: [
-      {
-        items: [
-          { path: "/analytics/dashboard", label: "Dashboard", Icon: BarChart3 },
-          { path: "/analytics/inventory-value", label: "Analityka", Icon: BarChart3 },
-          { path: "/analytics/warehouse-operations", label: "Centrum operacyjne", Icon: Activity },
-          { path: "/analytics/pick-path-simulation", label: "Symulacje", Icon: Zap },
-          { path: "/analytics/slotting", label: "Optymalizacja", Icon: SlidersHorizontal },
-          { path: "/analytics/warehouse-map", label: "Mapy", Icon: Warehouse },
-        ],
-      },
-    ],
+    flyoutSections: [],
+  },
+  {
+    id: "optymalizacja",
+    label: "Optymalizacja",
+    Icon: SlidersHorizontal,
+    directPath: "/optymalizacja",
+    activePathPrefix: "/optymalizacja",
+    flyoutSections: [],
   },
   {
     id: "templates",
@@ -464,6 +479,11 @@ export function isCategoryActive(category: NavCategoryConfig, pathname: string):
     if (pathname.startsWith("/settings/document-templates")) return true;
     if (pathname.startsWith("/admin/message-templates")) return true;
     if (pathname.startsWith("/settings/exports")) return true;
+  }
+  if (category.id === "analizy") {
+    // Optymalizacja i mapa ukryta — nie podświetlaj Analiz przy /optymalizacja
+    if (pathname.startsWith("/optymalizacja")) return false;
+    if (pathname.startsWith("/centrum-operacyjne")) return false;
   }
   if (category.id === "wms-settings") {
     return pathname === "/settings/wms" || pathname.startsWith("/settings/wms/");

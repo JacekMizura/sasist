@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import { getTenantInventoryValue } from "../../api/analysisApi";
-import { getSystemHealth } from "../../api/systemApi";
+import { Link } from "react-router-dom";
+import { getDeadStock, getTenantInventoryValue } from "../../api/analysisApi";
 import {
   dashboardCardPadding,
   dashboardKpiGridGap,
@@ -9,10 +9,23 @@ import {
 
 const DEFAULT_TENANT_ID = 1;
 
+type DecisionCard = {
+  title: string;
+  value: string;
+  hint: string;
+  decision: string;
+  to: string;
+  cta: string;
+};
+
+/**
+ * Landing Analiz — ekran startowy decyzji (Manifest).
+ * Max 7 kart; CTA = czasownik (akcja), nie nazwa modułu.
+ */
 export default function AnalysisDashboard() {
   const [inventoryValue, setInventoryValue] = useState<number | null>(null);
-  const [warehousesBreakdown, setWarehousesBreakdown] = useState<{ warehouse_id: number; value: number }[]>([]);
-  const [healthStatus, setHealthStatus] = useState<string | null>(null);
+  const [deadPct, setDeadPct] = useState<number | null>(null);
+  const [deadValue, setDeadValue] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -22,71 +35,135 @@ export default function AnalysisDashboard() {
     setError(null);
     Promise.all([
       getTenantInventoryValue(DEFAULT_TENANT_ID, true),
-      getSystemHealth().catch(() => ({ status: "error" })),
+      getDeadStock(DEFAULT_TENANT_ID, 90, { limit: 5 }),
     ])
-      .then(([inv, h]) => {
+      .then(([inv, dead]) => {
         if (cancelled) return;
         setInventoryValue(inv.total_inventory_value);
-        setWarehousesBreakdown(inv.warehouses ?? []);
-        setHealthStatus((h as { status: string }).status === "ok" ? "ok" : null);
+        setDeadPct(dead.summary?.dead_percentage ?? null);
+        setDeadValue(dead.summary?.dead_stock_value ?? null);
       })
       .catch((e) => {
-        if (!cancelled) setError(e?.message ?? "Błąd połączenia z backendem");
+        if (!cancelled) setError(e?.message ?? "Błąd połączenia");
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
       });
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, []);
+
+  const money = (n: number | null) =>
+    n == null
+      ? "—"
+      : `${new Intl.NumberFormat("pl-PL", { minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(n)} zł`;
+
+  const cards: DecisionCard[] = [
+    {
+      title: "Wartość zapasów",
+      value: money(inventoryValue),
+      hint: "Ile kapitału wisi w magazynie?",
+      decision: "Gdzie szukać redukcji zamrożonego kapitału?",
+      to: "/analytics/inventory-value",
+      cta: "Sprawdź wartość zapasów",
+    },
+    {
+      title: "Zalegający towar",
+      value:
+        deadPct != null
+          ? `${deadPct.toFixed(1)}% · ${money(deadValue)}`
+          : "—",
+      hint: "Co stoi bez rotacji i zamraża pieniądze?",
+      decision: "Co przesunąć, przecenić albo nie dokupować?",
+      to: "/analytics/dead-stock",
+      cta: "Znajdź towar do przesunięcia",
+    },
+    {
+      title: "Najczęściej sprzedawane produkty",
+      value: "Ranking sprzedaży",
+      hint: "Które produkty generują największy ruch?",
+      decision: "Co trzymać blisko strefy kompletacji?",
+      to: "/analytics/hot-products",
+      cta: "Zobacz najczęściej sprzedawane",
+    },
+    {
+      title: "Najczęściej odwiedzane lokalizacje",
+      value: "Obciążenie lokalizacji",
+      hint: "Gdzie powstają korki przy kompletacji?",
+      decision: "Które strefy odciążyć albo wzmocnić?",
+      to: "/analytics/hot-locations",
+      cta: "Sprawdź przeciążone lokalizacje",
+    },
+    {
+      title: "Produkty zamawiane razem",
+      value: "Najczęstsze pary",
+      hint: "Które produkty często jadą w jednym zamówieniu?",
+      decision: "Czy trzymać je bliżej siebie lub budować zestawy?",
+      to: "/analytics/product-affinity",
+      cta: "Zobacz produkty zamawiane razem",
+    },
+    {
+      title: "Zestawy produktów",
+      value: "Zdrowie zestawów",
+      hint: "Które zestawy generują braki lub wolną kompletację?",
+      decision: "Co poprawić w układzie lub uzupełnianiu?",
+      to: "/analytics/bundle-intelligence",
+      cta: "Sprawdź problemy w zestawach",
+    },
+    {
+      title: "Plan zmian lokalizacji",
+      value: "Co zmienić w magazynie",
+      hint: "Gdzie warto przenieść towar, żeby skrócić drogę?",
+      decision: "Które przesunięcia wdrożyć w pierwszej kolejności?",
+      to: "/optymalizacja/slotting",
+      cta: "Otwórz plan zmian",
+    },
+  ];
 
   if (loading) {
     return (
-      <div className="min-w-0">
+      <div className="min-w-0 p-1">
         <p className="text-slate-500">Ładowanie…</p>
       </div>
     );
   }
+
   if (error) {
     return (
       <div className="min-w-0">
-        <div className="rounded-lg bg-red-50 border border-red-200 p-4 text-red-800">
+        <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-red-800">
           <p className="font-medium">Błąd</p>
-          <p className="text-sm mt-1">{error}</p>
+          <p className="mt-1 text-sm">{error}</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-w-0">
-      <p className="text-slate-600 mb-4">Przegląd wskaźników analitycznych (tenant {DEFAULT_TENANT_ID}).</p>
-      <div className={`grid ${dashboardKpiGridGap} sm:grid-cols-2 lg:grid-cols-3`}>
-        <div className={`${dashboardSurfaceCard} ${dashboardCardPadding}`}>
-          <p className="text-xs font-medium uppercase text-slate-400">Wartość magazynowa (tenant)</p>
-          <p className="mt-1 text-xl font-bold text-slate-800">
-            {inventoryValue != null ? `${inventoryValue.toFixed(2)} zł` : "—"}
-          </p>
-        </div>
-        <div className={`${dashboardSurfaceCard} ${dashboardCardPadding}`}>
-          <p className="text-xs font-medium uppercase text-slate-400">Backend</p>
-          <p className="mt-1 text-base font-semibold text-slate-800">
-            {healthStatus === "ok" ? "Działa" : "—"}
-          </p>
-        </div>
+    <div className="min-w-0 space-y-6">
+      <div>
+        <h1 className="text-xl font-semibold text-slate-800">Analizy</h1>
+        <p className="mt-1 text-sm text-slate-600">
+          Co wymaga decyzji? Wybierz problem, zobacz przyczynę, wykonaj akcję.
+        </p>
       </div>
-      {warehousesBreakdown.length > 0 && (
-        <div className="mt-4">
-          <h3 className="text-sm font-semibold text-slate-700 mb-2">Wartość per magazyn</h3>
-          <ul className={`${dashboardSurfaceCard} divide-y divide-slate-100`}>
-            {warehousesBreakdown.map((w) => (
-              <li key={w.warehouse_id} className="px-3 py-1.5 flex justify-between text-sm">
-                <span>Magazyn {w.warehouse_id}</span>
-                <span className="font-medium">{w.value.toFixed(2)} zł</span>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
+
+      <div className={`grid ${dashboardKpiGridGap} sm:grid-cols-2 lg:grid-cols-3`}>
+        {cards.map((c) => (
+          <Link
+            key={c.to}
+            to={c.to}
+            className={`${dashboardSurfaceCard} ${dashboardCardPadding} block transition hover:border-blue-300 hover:bg-blue-50/40`}
+          >
+            <p className="text-xs font-medium uppercase tracking-wide text-slate-400">{c.title}</p>
+            <p className="mt-2 text-lg font-semibold text-slate-900">{c.value}</p>
+            <p className="mt-2 text-sm text-slate-600">{c.hint}</p>
+            <p className="mt-1 text-xs text-slate-500">{c.decision}</p>
+            <p className="mt-3 text-sm font-medium text-blue-700">{c.cta} →</p>
+          </Link>
+        ))}
+      </div>
     </div>
   );
 }
