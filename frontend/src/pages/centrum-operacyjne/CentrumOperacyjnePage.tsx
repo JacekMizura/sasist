@@ -261,7 +261,7 @@ function OperatorCard({ operator, onOpen }: { operator: WarehouseOperatorCard; o
       </div>
 
       <div className="mt-3 flex items-center justify-between border-t border-slate-100 pt-2 text-[11px] text-slate-500">
-        <span>Idle: {formatOperationalDuration(operator.idle.total_idle_minutes)}</span>
+        <span>Bezczynność: {formatOperationalDuration(operator.idle.total_idle_minutes)}</span>
         <span>
           krótkie {operator.idle.short_idle_periods} · długie {operator.idle.long_idle_periods}
         </span>
@@ -616,7 +616,7 @@ function DetailModal({
             </div>
 
             <div className="rounded-xl border border-slate-200 p-3">
-              <div className="text-sm font-black text-slate-900">Idle analytics</div>
+              <div className="text-sm font-black text-slate-900">Analiza bezczynności</div>
               <div className="mt-3 grid grid-cols-3 gap-2 text-center">
                 <div className="rounded-lg bg-slate-50 p-2">
                   <div className="text-lg font-black text-slate-900">{formatOperationalDuration(operator.idle.total_idle_minutes)}</div>
@@ -1469,7 +1469,7 @@ export default function CentrumOperacyjnePage() {
       <div className="overflow-x-auto">
         <table className="min-w-full text-left text-sm">
           <thead className="text-xs uppercase text-slate-400">
-            <tr><th className="py-2">Operator</th><th>Tryb</th><th>Score</th><th>Produkty/h</th><th>Zam./h</th><th>Idle</th><th>Błędy</th><th>Braki</th><th>Scan</th></tr>
+            <tr><th className="py-2">Operator</th><th>Tryb</th><th>Wynik</th><th>Produkty/h</th><th>Zam./h</th><th>Bezczynność</th><th>Błędy</th><th>Braki</th><th>Skany</th></tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
             {(snapshot?.employee_rankings ?? []).map((row) => (
@@ -1520,10 +1520,6 @@ export default function CentrumOperacyjnePage() {
         <PageHeader
           title="Centrum operacyjne"
           subtitle="WMS na żywo — operatorzy, kolejki i alerty"
-          breadcrumbs={[
-            { label: "Analizy", to: "/analytics" },
-            { label: "Centrum operacyjne" },
-          ]}
         />
         <div className="rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-500">Ładowanie danych operacyjnych…</div>
       </div>
@@ -1535,10 +1531,6 @@ export default function CentrumOperacyjnePage() {
       <PageHeader
         title="Centrum operacyjne"
         subtitle="WMS na żywo — kontrola pracy magazynu, operatorów i kolejek"
-        breadcrumbs={[
-          { label: "Analizy", to: "/analytics" },
-          { label: "Centrum operacyjne" },
-        ]}
         actions={
           <div className="flex flex-wrap items-center gap-2">
             {showWarehouseSelector ? (

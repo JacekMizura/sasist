@@ -25,10 +25,10 @@ export default function AnalizyModuleLayout() {
               <NavLink
                 key={section.id}
                 to={section.path}
-                end={section.id === "pulpit"}
+                end={section.id === "przeglad"}
                 className={`rounded-t-lg px-3 py-2 text-sm font-medium transition-colors ${
                   isActive
-                    ? "border-b-2 border-blue-600 text-blue-700"
+                    ? "border-b-2 border-orange-500 text-orange-700"
                     : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
                 }`}
               >

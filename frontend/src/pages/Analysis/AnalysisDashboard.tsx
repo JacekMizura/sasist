@@ -6,6 +6,10 @@ import {
   dashboardKpiGridGap,
   dashboardSurfaceCard,
 } from "../../components/dashboard/dashboardDensityPrimitives";
+import {
+  analizyPageSubtitleClass,
+  analizyPageTitleClass,
+} from "../../modules/analizy/analizyUi";
 
 const DEFAULT_TENANT_ID = 1;
 
@@ -19,7 +23,7 @@ type DecisionCard = {
 };
 
 /**
- * Landing Analiz — ekran startowy decyzji (Manifest).
+ * Przegląd — ekran startowy hubu Analizy (Manifest).
  * Max 7 kart; CTA = czasownik (akcja), nie nazwa modułu.
  */
 export default function AnalysisDashboard() {
@@ -123,15 +127,27 @@ export default function AnalysisDashboard() {
 
   if (loading) {
     return (
-      <div className="min-w-0 p-1">
-        <p className="text-slate-500">Ładowanie…</p>
+      <div className="min-w-0 space-y-6">
+        <div>
+          <h1 className={analizyPageTitleClass}>Przegląd</h1>
+          <p className={analizyPageSubtitleClass}>
+            Co wymaga uwagi? Najważniejsze wskaźniki, skróty do raportów i decyzje do podjęcia.
+          </p>
+        </div>
+        <p className="text-sm text-slate-500">Ładowanie…</p>
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="min-w-0">
+      <div className="min-w-0 space-y-6">
+        <div>
+          <h1 className={analizyPageTitleClass}>Przegląd</h1>
+          <p className={analizyPageSubtitleClass}>
+            Co wymaga uwagi? Najważniejsze wskaźniki, skróty do raportów i decyzje do podjęcia.
+          </p>
+        </div>
         <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-red-800">
           <p className="font-medium">Błąd</p>
           <p className="mt-1 text-sm">{error}</p>
@@ -143,9 +159,9 @@ export default function AnalysisDashboard() {
   return (
     <div className="min-w-0 space-y-6">
       <div>
-        <h1 className="text-xl font-semibold text-slate-800">Pulpit</h1>
-        <p className="mt-1 text-sm text-slate-600">
-          Co wymaga decyzji? Wybierz problem, zobacz przyczynę, wykonaj akcję.
+        <h1 className={analizyPageTitleClass}>Przegląd</h1>
+        <p className={analizyPageSubtitleClass}>
+          Co wymaga uwagi? Najważniejsze wskaźniki, skróty do raportów i decyzje do podjęcia.
         </p>
       </div>
 
@@ -154,13 +170,13 @@ export default function AnalysisDashboard() {
           <Link
             key={c.to}
             to={c.to}
-            className={`${dashboardSurfaceCard} ${dashboardCardPadding} block transition hover:border-blue-300 hover:bg-blue-50/40`}
+            className={`${dashboardSurfaceCard} ${dashboardCardPadding} block transition hover:border-orange-300 hover:bg-orange-50/40`}
           >
             <p className="text-xs font-medium uppercase tracking-wide text-slate-400">{c.title}</p>
             <p className="mt-2 text-lg font-semibold text-slate-900">{c.value}</p>
             <p className="mt-2 text-sm text-slate-600">{c.hint}</p>
             <p className="mt-1 text-xs text-slate-500">{c.decision}</p>
-            <p className="mt-3 text-sm font-medium text-blue-700">{c.cta} →</p>
+            <p className="mt-3 text-sm font-medium text-orange-700">{c.cta} →</p>
           </Link>
         ))}
       </div>

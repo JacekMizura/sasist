@@ -20,6 +20,7 @@ import {
 } from "../../modules/optymalizacja/OptimizationPlan";
 import { useWarehouseChangePlan } from "../../modules/optymalizacja/useWarehouseChangePlan";
 import type { ChangePriority } from "../../modules/optymalizacja/warehouseChangePlanStore";
+import { analizyKpiCardClass } from "../../modules/analizy/analizyUi";
 import { Link } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import { useWarehouse } from "../../context/WarehouseContext";
@@ -86,7 +87,7 @@ export default function SlottingPage() {
     if (sku.trim()) params.sku = sku.trim();
     getSlotting(warehouseId, params)
       .then((res) => setSlottingData(res.products ?? []))
-      .catch((e) => setError(e?.message ?? "Błąd ładowania slottingu."))
+      .catch((e) => setError(e?.message ?? "Błąd ładowania układu towaru."))
       .finally(() => setLoading(false));
   }, [warehouseId, name, ean, sku]);
 
@@ -381,24 +382,24 @@ export default function SlottingPage() {
       {/* 1. KPI SUMMARY */}
       <section className="mb-8">
         <h2 className="text-sm font-semibold text-slate-700 uppercase tracking-wide mb-3">
-          Podsumowanie KPI
+          Podsumowanie wskaźników
         </h2>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-            <p className="text-xs font-medium text-slate-500 uppercase">Produkty analizowane</p>
-            <p className="text-2xl font-semibold text-slate-800 mt-1">{kpis.total}</p>
+        <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+          <div className={analizyKpiCardClass}>
+            <p className="text-xs font-medium uppercase tracking-wide text-slate-400">Produkty analizowane</p>
+            <p className="mt-2 text-2xl font-semibold text-slate-800">{kpis.total}</p>
           </div>
-          <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-            <p className="text-xs font-medium text-slate-500 uppercase">Klasa A</p>
-            <p className="text-2xl font-semibold text-emerald-700 mt-1">{kpis.classA}</p>
+          <div className={analizyKpiCardClass}>
+            <p className="text-xs font-medium uppercase tracking-wide text-slate-400">Klasa A</p>
+            <p className="mt-2 text-2xl font-semibold text-emerald-700">{kpis.classA}</p>
           </div>
-          <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-            <p className="text-xs font-medium text-slate-500 uppercase">Klasa B</p>
-            <p className="text-2xl font-semibold text-amber-700 mt-1">{kpis.classB}</p>
+          <div className={analizyKpiCardClass}>
+            <p className="text-xs font-medium uppercase tracking-wide text-slate-400">Klasa B</p>
+            <p className="mt-2 text-2xl font-semibold text-amber-700">{kpis.classB}</p>
           </div>
-          <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-            <p className="text-xs font-medium text-slate-500 uppercase">Klasa C</p>
-            <p className="text-2xl font-semibold text-slate-600 mt-1">{kpis.classC}</p>
+          <div className={analizyKpiCardClass}>
+            <p className="text-xs font-medium uppercase tracking-wide text-slate-400">Klasa C</p>
+            <p className="mt-2 text-2xl font-semibold text-slate-600">{kpis.classC}</p>
           </div>
         </div>
       </section>
@@ -406,22 +407,22 @@ export default function SlottingPage() {
       {/* 2. SLOTTING RECOMMENDATION TABLE */}
       <section className="mb-8">
         <h2 className="text-sm font-semibold text-slate-700 uppercase tracking-wide mb-3">
-          Tabela rekomendacji slottingu
+          Tabela rekomendacji układu
         </h2>
         <div className="rounded-lg border border-slate-200 bg-white overflow-hidden shadow-sm">
           <div className="overflow-x-auto max-h-[400px] overflow-y-auto">
             <table className="w-full text-sm min-w-[900px]">
               <thead className="bg-slate-50 sticky top-0 z-10">
                 <tr>
-                  <ThSort label="Product" sortKey="product" current={sortKey} asc={sortAsc} onSort={handleSort} />
+                  <ThSort label="Produkt" sortKey="product" current={sortKey} asc={sortAsc} onSort={handleSort} />
                   <ThSort label="SKU / Symbol" sortKey="symbol" current={sortKey} asc={sortAsc} onSort={handleSort} />
-                  <ThSort label="Velocity" sortKey="velocity" current={sortKey} asc={sortAsc} onSort={handleSort} />
-                  <ThSort label="Cube" sortKey="cube" current={sortKey} asc={sortAsc} onSort={handleSort} />
+                  <ThSort label="Rotacja" sortKey="velocity" current={sortKey} asc={sortAsc} onSort={handleSort} />
+                  <ThSort label="Objętość" sortKey="cube" current={sortKey} asc={sortAsc} onSort={handleSort} />
                   <ThSort label="COI" sortKey="coi" current={sortKey} asc={sortAsc} onSort={handleSort} />
-                  <ThSort label="ABC Class" sortKey="abc_class" current={sortKey} asc={sortAsc} onSort={handleSort} />
-                  <ThSort label="Distance to packing" sortKey="distance_to_packing" current={sortKey} asc={sortAsc} onSort={handleSort} />
-                  <ThSort label="Current location" sortKey="current_location" current={sortKey} asc={sortAsc} onSort={handleSort} />
-                  <ThSort label="Recommended zone" sortKey="recommended_zone" current={sortKey} asc={sortAsc} onSort={handleSort} />
+                  <ThSort label="Klasa ABC" sortKey="abc_class" current={sortKey} asc={sortAsc} onSort={handleSort} />
+                  <ThSort label="Dystans do pakowania" sortKey="distance_to_packing" current={sortKey} asc={sortAsc} onSort={handleSort} />
+                  <ThSort label="Obecna lokalizacja" sortKey="current_location" current={sortKey} asc={sortAsc} onSort={handleSort} />
+                  <ThSort label="Rekomendowana strefa" sortKey="recommended_zone" current={sortKey} asc={sortAsc} onSort={handleSort} />
                   <ThSort label="Ocena układu" sortKey="slotting_score" current={sortKey} asc={sortAsc} onSort={handleSort} />
                 </tr>
               </thead>
@@ -474,7 +475,7 @@ export default function SlottingPage() {
         <div className="rounded-lg border border-slate-200 bg-white overflow-hidden shadow-sm">
           {layoutLoading && (
             <div className="flex items-center justify-center py-12 text-slate-500 text-sm">
-              Ładowanie layoutu…
+              Ładowanie układu…
             </div>
           )}
           {!layoutLoading && layout && layout.racks.length > 0 && (
@@ -505,24 +506,24 @@ export default function SlottingPage() {
                 >
                   <p className="font-medium">{binTooltip.product.product_name ?? `#${binTooltip.product.product_id}`}</p>
                   <p className="text-slate-300">SKU: {binTooltip.product.symbol ?? "—"}</p>
-                  <p>Velocity: {formatNum(binTooltip.product.velocity)}</p>
-                  <p>ABC class: {binTooltip.product.abc_class}</p>
-                  <p>Distance to packing: {formatNum(binTooltip.product.distance_to_packing)}</p>
+                  <p>Rotacja: {formatNum(binTooltip.product.velocity)}</p>
+                  <p>Klasa ABC: {binTooltip.product.abc_class}</p>
+                  <p>Dystans do pakowania: {formatNum(binTooltip.product.distance_to_packing)}</p>
                   <p>Ocena układu: {formatNum(binTooltip.product.slotting_score, 4)}</p>
-                  <p>Location: {binTooltip.address}</p>
+                  <p>Lokalizacja: {binTooltip.address}</p>
                 </div>
               )}
               <div className="px-4 py-2 border-t border-slate-100 flex gap-6 text-sm text-slate-500">
                 <span><span className="inline-block w-2.5 h-2.5 rounded-full bg-[#ef4444] border border-white align-middle mr-1" /> A</span>
                 <span><span className="inline-block w-2.5 h-2.5 rounded-full bg-[#f97316] border border-white align-middle mr-1" /> B</span>
                 <span><span className="inline-block w-2.5 h-2.5 rounded-full bg-[#22c55e] border border-white align-middle mr-1" /> C</span>
-                <span className="text-slate-400">Biny z wynikami slottingu (product → inventory → location → bin)</span>
+                <span className="text-slate-400">Lokalizacje z wynikami układu towaru</span>
               </div>
             </>
           )}
           {!layoutLoading && warehouseId != null && (!layout || layout.racks.length === 0) && (
             <div className="flex items-center justify-center py-12 text-slate-500 text-sm">
-              Brak layoutu magazynu. Zapisz układ regałów w Projektancie magazynu.
+              Brak układu magazynu. Zapisz układ regałów w Projektancie magazynu.
             </div>
           )}
           {!layoutLoading && warehouseId == null && (
@@ -536,10 +537,10 @@ export default function SlottingPage() {
       {/* 3. SLOTTING ANALYSIS CHART */}
       <section>
         <h2 className="text-sm font-semibold text-slate-700 uppercase tracking-wide mb-3">
-          Wykres analizy slottingu
+          Wykres analizy układu
         </h2>
         <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-          <p className="text-sm font-medium text-slate-700 mb-3">Velocity vs Distance to Packing</p>
+          <p className="text-sm font-medium text-slate-700 mb-3">Rotacja vs dystans do pakowania</p>
           {chartData.length === 0 ? (
             <div className="h-[360px] flex items-center justify-center text-slate-500 text-sm">
               Brak danych do wyświetlenia.
@@ -552,17 +553,17 @@ export default function SlottingPage() {
                   <XAxis
                     type="number"
                     dataKey="x"
-                    name="Distance to packing"
+                    name="Dystans do pakowania"
                     unit=""
                     tickFormatter={(v) => formatNum(v)}
-                    label={{ value: "Distance to packing", position: "bottom", offset: 0 }}
+                    label={{ value: "Dystans do pakowania", position: "bottom", offset: 0 }}
                   />
                   <YAxis
                     type="number"
                     dataKey="y"
-                    name="Velocity"
+                    name="Rotacja"
                     tickFormatter={(v) => formatNum(v)}
-                    label={{ value: "Velocity", angle: -90, position: "insideLeft" }}
+                    label={{ value: "Rotacja", angle: -90, position: "insideLeft" }}
                   />
                   <Tooltip
                     cursor={{ strokeDasharray: "3 3" }}
@@ -573,13 +574,13 @@ export default function SlottingPage() {
                       return (
                         <div className="rounded bg-slate-800 text-white text-xs px-2 py-2 shadow-lg">
                           <p className="font-medium">{p.name}</p>
-                          <p>Distance: {formatNum(p.x)}</p>
-                          <p>Velocity: {formatNum(p.y)}</p>
+                          <p>Dystans: {formatNum(p.x)}</p>
+                          <p>Rotacja: {formatNum(p.y)}</p>
                         </div>
                       );
                     }}
                   />
-                  <Scatter data={chartData} name="Products" fill="#6366f1" fillOpacity={0.7} />
+                  <Scatter data={chartData} name="Produkty" fill="#6366f1" fillOpacity={0.7} />
                 </ScatterChart>
               </ResponsiveContainer>
             </div>
@@ -696,7 +697,7 @@ function SlottingLayoutMap({
                   >
                     <title>
                       {product
-                        ? `${product.product_name ?? "#" + product.product_id} · ${product.abc_class} · Velocity: ${formatNum(product.velocity)} · Score: ${formatNum(product.slotting_score, 4)}`
+                        ? `${product.product_name ?? "#" + product.product_id} · ${product.abc_class} · Rotacja: ${formatNum(product.velocity)} · Ocena: ${formatNum(product.slotting_score, 4)}`
                         : address}
                     </title>
                   </rect>

@@ -2,11 +2,11 @@
 
 ## Active
 
-**IA hubu Analizy (nawigacja)** — trzy perspektywy w jednym module sidebaru „Analizy”.
+**Analizy P0/P1 zamknięte** — polonizacja UI, CTA/nagłówki/KPI/loading/empty, Mapa z Manifestem.
 
-Sidebar: tylko **Analizy** → `/analytics` (Pulpit).
-Wewnętrzne sekcje: Pulpit · Centrum operacyjne · Analizy · Optymalizacja.
-Routing/URLe bez zmian (`/centrum-operacyjne`, `/analytics/*`, `/optymalizacja/*`).
+Werdykt: **gotowy do wdrożenia produkcyjnego** (bez lazy/split — poza zakresem P0/P1).
 
-Produkt (pętla decyzyjna) bez zmian — Faza 4 zamknięta.
-Nie startować Enterprise / kolejnych faz bez decyzji użytkownika.
+IA:
+```
+Analizy → Przegląd · Centrum · Raporty · Optymalizacja
+```

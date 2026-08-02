@@ -13,6 +13,14 @@ import { useWarehouseChangePlan } from "../../modules/optymalizacja/useWarehouse
 import { captureExistingEffectMetric } from "../../modules/optymalizacja/captureEffectMetric";
 import { useAuth } from "../../context/AuthContext";
 import { useWarehouse } from "../../context/WarehouseContext";
+import {
+  analizyCtaPrimaryClass,
+  analizyCtaSecondaryClass,
+  analizyEmptyStateClass,
+  analizyKpiCardClass,
+  analizyPageSubtitleClass,
+  analizyPageTitleClass,
+} from "../../modules/analizy/analizyUi";
 
 function StatusBadge({ status }: { status: ChangeStatus }) {
   const styles: Record<ChangeStatus, string> = {
@@ -142,8 +150,8 @@ export default function PlanZmianPage() {
     <div className="min-w-0 space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-xl font-semibold text-slate-800">Plan zmian magazynu</h1>
-          <p className="mt-1 text-sm text-slate-600">
+          <h1 className={analizyPageTitleClass}>Plan zmian magazynu</h1>
+          <p className={analizyPageSubtitleClass}>
             Nowa → Zaplanowana → W realizacji → Wdrożona → Zweryfikowana (lub Odrzucona).
           </p>
         </div>
@@ -153,7 +161,7 @@ export default function PlanZmianPage() {
             onClick={() => {
               if (window.confirm("Wyczyścić cały plan zmian?")) clear();
             }}
-            className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 hover:bg-slate-50"
+            className={analizyCtaSecondaryClass}
           >
             Wyczyść plan
           </button>
@@ -161,30 +169,38 @@ export default function PlanZmianPage() {
       </div>
 
       <div className="grid gap-3 sm:grid-cols-4">
-        <div className="rounded-xl border border-slate-200 bg-white p-4">
+        <div className={analizyKpiCardClass}>
           <p className="text-xs font-medium uppercase tracking-wide text-slate-400">Oczekujące</p>
           <p className="mt-1 text-2xl font-semibold text-slate-900">{snapshot.waitingCount}</p>
         </div>
-        <div className="rounded-xl border border-slate-200 bg-white p-4">
+        <div className={analizyKpiCardClass}>
           <p className="text-xs font-medium uppercase tracking-wide text-slate-400">Priorytet wysoki</p>
           <p className="mt-1 text-2xl font-semibold text-slate-900">{snapshot.highPriorityCount}</p>
         </div>
-        <div className="rounded-xl border border-slate-200 bg-white p-4">
+        <div className={analizyKpiCardClass}>
           <p className="text-xs font-medium uppercase tracking-wide text-slate-400">W historii</p>
           <p className="mt-1 text-2xl font-semibold text-slate-900">{snapshot.historyCount}</p>
         </div>
-        <div className="rounded-xl border border-slate-200 bg-white p-4">
+        <div className={analizyKpiCardClass}>
           <p className="text-xs font-medium uppercase tracking-wide text-slate-400">Zweryfikowane</p>
           <p className="mt-1 text-2xl font-semibold text-slate-900">{snapshot.verifiedCount}</p>
         </div>
       </div>
 
       {items.length === 0 ? (
-        <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 py-10 text-center">
-          <p className="text-slate-700 font-medium">Plan jest pusty</p>
+        <div className={analizyEmptyStateClass}>
+          <p className="font-medium text-slate-700">Plan jest pusty</p>
           <p className="mt-1 text-sm text-slate-500">
             Uruchom analizę i dodaj rekomendację przyciskiem „Dodaj do planu zmian”.
           </p>
+          <div className="mt-4 flex flex-wrap justify-center gap-2">
+            <Link to="/optymalizacja/slotting" className={analizyCtaPrimaryClass}>
+              Analizuj układ towaru
+            </Link>
+            <Link to="/optymalizacja/picking-strategy" className={analizyCtaSecondaryClass}>
+              Porównaj strategie kompletacji
+            </Link>
+          </div>
         </div>
       ) : (
         <div className="space-y-3">
@@ -197,7 +213,7 @@ export default function PlanZmianPage() {
               <article
                 key={row.id}
                 className={`relative rounded-xl border bg-white p-4 ${
-                  isFirstWaiting ? "border-blue-300 shadow-sm" : "border-slate-200"
+                  isFirstWaiting ? "border-orange-300 shadow-sm" : "border-slate-200"
                 } ${row.status === "odrzucona" ? "opacity-60" : ""}`}
               >
                 <div className="flex flex-wrap items-start justify-between gap-3">
@@ -205,7 +221,7 @@ export default function PlanZmianPage() {
                     <div className="flex flex-wrap items-center gap-2">
                       <StatusBadge status={row.status} />
                       {isFirstWaiting ? (
-                        <span className="text-xs font-medium text-blue-700">Zrób to jako pierwsze</span>
+                        <span className="text-xs font-medium text-orange-700">Zrób to jako pierwsze</span>
                       ) : null}
                     </div>
                     <h2 className="text-base font-semibold text-slate-900">{row.title}</h2>
@@ -253,7 +269,7 @@ export default function PlanZmianPage() {
 
                   <div className="flex flex-col items-stretch gap-2 shrink-0 w-52">
                     <label className="text-xs text-slate-500">
-                      Status
+                      Stan
                       <select
                         className="mt-1 block w-full rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-sm text-slate-800"
                         value={row.status}
@@ -275,7 +291,7 @@ export default function PlanZmianPage() {
 
                     <Link
                       to={row.sourcePath}
-                      className="rounded-lg border border-slate-300 px-3 py-1.5 text-center text-sm font-medium text-slate-700 hover:bg-slate-50"
+                      className={`${analizyCtaSecondaryClass} justify-center text-center`}
                     >
                       Otwórz analizę źródłową
                     </Link>
@@ -283,7 +299,7 @@ export default function PlanZmianPage() {
                     <div className="relative">
                       <button
                         type="button"
-                        className="w-full rounded-lg bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700"
+                        className={`w-full ${analizyCtaPrimaryClass}`}
                         onClick={() =>
                           setRealizeId((cur) => (cur === row.id ? null : row.id))
                         }
@@ -327,7 +343,7 @@ export default function PlanZmianPage() {
 
                     <Link
                       to="/optymalizacja/historia"
-                      className="text-center text-sm text-blue-700 hover:underline"
+                      className="text-center text-sm font-medium text-orange-700 hover:underline"
                     >
                       Historia zmian
                     </Link>

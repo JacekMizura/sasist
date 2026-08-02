@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { getTenantInventoryValue } from "../../api/analysisApi";
 import api from "../../api/axios";
 import { AnalysisDecisionHeader } from "../../modules/analytics/AnalysisDecisionHeader";
+import { analizyKpiCardClass } from "../../modules/analizy/analizyUi";
 
 const DEFAULT_TENANT_ID = 1;
 
@@ -34,18 +35,6 @@ export default function InventoryValuePage() {
     return () => { cancelled = true; };
   }, []);
 
-  if (loading) return <div className="min-w-0"><p className="text-slate-500">Ładowanie…</p></div>;
-  if (error) {
-    return (
-      <div className="min-w-0">
-        <div className="rounded-lg bg-red-50 border border-red-200 p-4 text-red-800">
-          <p className="font-medium">Błąd</p>
-          <p className="text-sm mt-1">{error}</p>
-        </div>
-      </div>
-    );
-  }
-
   const nameById = Object.fromEntries(warehouses.map((w) => [w.id, w.name ?? `Magazyn ${w.id}`]));
 
   return (
@@ -59,31 +48,51 @@ export default function InventoryValuePage() {
           { label: "Utwórz plan zakupów", to: "/purchasing/plan" },
         ]}
       />
-      <div className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm mb-6 max-w-md">
-        <p className="text-xs font-medium uppercase text-slate-400">Łączna wartość</p>
-        <p className="text-3xl font-bold text-slate-800 mt-1">
-          {total != null ? `${total.toFixed(2)} zł` : "—"}
-        </p>
-      </div>
-      <h3 className="text-sm font-semibold text-slate-700 mb-2">Per magazyn</h3>
-      <div className="rounded-lg border border-slate-200 bg-white overflow-hidden">
-        <table className="w-full text-sm">
-          <thead className="bg-slate-50">
-            <tr>
-              <th className="text-left px-4 py-2 font-medium text-slate-600">Magazyn</th>
-              <th className="text-right px-4 py-2 font-medium text-slate-600">Wartość (zł)</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100">
-            {warehousesBreakdown.map((w) => (
-              <tr key={w.warehouse_id}>
-                <td className="px-4 py-2">{nameById[w.warehouse_id] ?? `ID ${w.warehouse_id}`}</td>
-                <td className="px-4 py-2 text-right font-medium">{w.value.toFixed(2)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      {error ? (
+        <div className="mb-4 rounded-lg border border-red-200 bg-red-50 p-4 text-red-800">
+          <p className="font-medium">Błąd</p>
+          <p className="mt-1 text-sm">{error}</p>
+        </div>
+      ) : null}
+      {loading ? (
+        <p className="text-sm text-slate-500">Ładowanie…</p>
+      ) : (
+        <>
+          <div className={`${analizyKpiCardClass} mb-6 max-w-md`}>
+            <p className="text-xs font-medium uppercase tracking-wide text-slate-400">Łączna wartość</p>
+            <p className="mt-1 text-3xl font-bold text-slate-800">
+              {total != null ? `${total.toFixed(2)} zł` : "—"}
+            </p>
+          </div>
+          <h3 className="mb-2 text-sm font-semibold text-slate-700">Per magazyn</h3>
+          <div className="overflow-hidden rounded-lg border border-slate-200 bg-white">
+            <table className="w-full text-sm">
+              <thead className="bg-slate-50">
+                <tr>
+                  <th className="px-4 py-2 text-left font-medium text-slate-600">Magazyn</th>
+                  <th className="px-4 py-2 text-right font-medium text-slate-600">Wartość (zł)</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {warehousesBreakdown.length === 0 ? (
+                  <tr>
+                    <td colSpan={2} className="px-4 py-6 text-center text-slate-500">
+                      Brak danych o wartości zapasów w magazynach.
+                    </td>
+                  </tr>
+                ) : (
+                  warehousesBreakdown.map((w) => (
+                    <tr key={w.warehouse_id}>
+                      <td className="px-4 py-2">{nameById[w.warehouse_id] ?? `ID ${w.warehouse_id}`}</td>
+                      <td className="px-4 py-2 text-right font-medium">{w.value.toFixed(2)}</td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
     </div>
   );
 }

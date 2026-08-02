@@ -5,6 +5,12 @@ import {
   type ChangeStatus,
 } from "../../modules/optymalizacja/warehouseChangePlanStore";
 import { useWarehouseChangePlan } from "../../modules/optymalizacja/useWarehouseChangePlan";
+import {
+  analizyCtaPrimaryClass,
+  analizyEmptyStateClass,
+  analizyPageSubtitleClass,
+  analizyPageTitleClass,
+} from "../../modules/analizy/analizyUi";
 
 function formatDate(iso: string | null): string {
   if (!iso) return "—";
@@ -38,22 +44,19 @@ export default function HistoriaZmianPage() {
   return (
     <div className="min-w-0 space-y-6">
       <div>
-        <h1 className="text-xl font-semibold text-slate-800">Historia zmian magazynu</h1>
-        <p className="mt-1 text-sm text-slate-600">
+        <h1 className={analizyPageTitleClass}>Historia zmian magazynu</h1>
+        <p className={analizyPageSubtitleClass}>
           Baza wiedzy organizacji: co wdrożono, skąd rekomendacja, jaki był efekt.
         </p>
       </div>
 
       {history.length === 0 ? (
-        <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 py-10 text-center">
+        <div className={analizyEmptyStateClass}>
           <p className="font-medium text-slate-800">Brak wdrożonych zmian</p>
           <p className="mt-1 text-sm text-slate-500">
             Po oznaczeniu pozycji w Planie jako „Wdrożona” pojawią się tutaj.
           </p>
-          <Link
-            to="/optymalizacja/plan"
-            className="mt-4 inline-flex rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700"
-          >
+          <Link to="/optymalizacja/plan" className={`mt-4 ${analizyCtaPrimaryClass}`}>
             Przejdź do planu zmian
           </Link>
         </div>
@@ -96,7 +99,7 @@ export default function HistoriaZmianPage() {
                   </div>
                   <div>
                     <dt className="text-xs font-medium uppercase tracking-wide text-slate-400">
-                      Status
+                      Stan
                     </dt>
                     <dd className="mt-0.5 text-slate-800">{statusLabel(row.status)}</dd>
                   </div>
@@ -131,7 +134,7 @@ export default function HistoriaZmianPage() {
                 )}
                 <Link
                   to={row.sourcePath}
-                  className="inline-block text-sm font-medium text-blue-700 hover:underline"
+                  className="inline-block text-sm font-medium text-orange-700 hover:underline"
                 >
                   Otwórz analizę źródłową
                 </Link>

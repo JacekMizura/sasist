@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { getDeadStock, type DeadStockResponse } from "../../api/analysisApi";
 import { PrimaryButton } from "../../design-system/PrimaryButton";
 import { AnalysisDecisionHeader } from "../../modules/analytics/AnalysisDecisionHeader";
+import { analizyKpiCardClass } from "../../modules/analizy/analizyUi";
 
 const DEFAULT_TENANT_ID = 1;
 const DEFAULT_DAYS = 90;
@@ -78,13 +79,40 @@ export default function DeadStockPage() {
     return copy;
   }, [items, sortBy]);
 
-  if (loading) return <div className="min-w-0"><p className="text-slate-500">Ładowanie…</p></div>;
-  if (error) {
+  if (loading && !data) {
     return (
       <div className="min-w-0">
-        <div className="rounded-lg bg-red-50 border border-red-200 p-4 text-red-800">
+        <AnalysisDecisionHeader
+          title="Zalegający towar"
+          question="Co stoi bez rotacji i zamraża kapitał?"
+          decision="Co przesunąć, przecenić albo nie dokupować?"
+          actions={[
+            { label: "Zaplanuj przesunięcie", to: "/wms/mm", primary: true },
+            { label: "Wstrzymaj zbędne zakupy", to: "/purchasing/plan" },
+            { label: "Sprawdź wartość zapasów", to: "/analytics/inventory-value" },
+          ]}
+        />
+        <p className="text-sm text-slate-500">Ładowanie…</p>
+      </div>
+    );
+  }
+
+  if (error && !data) {
+    return (
+      <div className="min-w-0">
+        <AnalysisDecisionHeader
+          title="Zalegający towar"
+          question="Co stoi bez rotacji i zamraża kapitał?"
+          decision="Co przesunąć, przecenić albo nie dokupować?"
+          actions={[
+            { label: "Zaplanuj przesunięcie", to: "/wms/mm", primary: true },
+            { label: "Wstrzymaj zbędne zakupy", to: "/purchasing/plan" },
+            { label: "Sprawdź wartość zapasów", to: "/analytics/inventory-value" },
+          ]}
+        />
+        <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-red-800">
           <p className="font-medium">Błąd</p>
-          <p className="text-sm mt-1">{error}</p>
+          <p className="mt-1 text-sm">{error}</p>
         </div>
       </div>
     );
@@ -112,7 +140,7 @@ export default function DeadStockPage() {
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="np. cable"
+              placeholder="np. kabel / SKU-123"
               className="border border-slate-200 rounded-lg px-3 py-2 text-sm"
             />
           </label>
@@ -188,40 +216,40 @@ export default function DeadStockPage() {
       </div>
 
       {summary && (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-          <div className="rounded-lg border border-slate-200 bg-white p-4">
-            <p className="text-xs font-medium text-slate-500 uppercase">Szybka rotacja</p>
-            <p className="text-lg font-semibold text-slate-800">
+        <div className="mb-6 grid grid-cols-2 gap-4 md:grid-cols-4">
+          <div className={analizyKpiCardClass}>
+            <p className="text-xs font-medium uppercase tracking-wide text-slate-400">Szybka rotacja</p>
+            <p className="mt-2 text-lg font-semibold text-slate-800">
               {formatMoney(summary.fast_moving_value)}
               {summary.fast_percentage != null && (
-                <span className="text-slate-500 font-normal ml-1">({Math.round(summary.fast_percentage)}%)</span>
+                <span className="ml-1 font-normal text-slate-500">({Math.round(summary.fast_percentage)}%)</span>
               )}
             </p>
             <p className="text-xs text-slate-500">Ostatnia sprzedaż &lt; 30 dni</p>
           </div>
-          <div className="rounded-lg border border-slate-200 bg-white p-4">
-            <p className="text-xs font-medium text-slate-500 uppercase">Wolna rotacja</p>
-            <p className="text-lg font-semibold text-slate-800">
+          <div className={analizyKpiCardClass}>
+            <p className="text-xs font-medium uppercase tracking-wide text-slate-400">Wolna rotacja</p>
+            <p className="mt-2 text-lg font-semibold text-slate-800">
               {formatMoney(summary.slow_moving_value)}
               {summary.slow_percentage != null && (
-                <span className="text-slate-500 font-normal ml-1">({Math.round(summary.slow_percentage)}%)</span>
+                <span className="ml-1 font-normal text-slate-500">({Math.round(summary.slow_percentage)}%)</span>
               )}
             </p>
             <p className="text-xs text-slate-500">30–90 dni</p>
           </div>
-          <div className="rounded-lg border border-slate-200 bg-white p-4">
-            <p className="text-xs font-medium text-slate-500 uppercase">Zalegający</p>
-            <p className="text-lg font-semibold text-red-700">
+          <div className={analizyKpiCardClass}>
+            <p className="text-xs font-medium uppercase tracking-wide text-slate-400">Zalegający</p>
+            <p className="mt-2 text-lg font-semibold text-red-700">
               {formatMoney(summary.dead_stock_value)}
               {summary.dead_percentage != null && (
-                <span className="text-red-600/80 font-normal ml-1">({Math.round(summary.dead_percentage)}%)</span>
+                <span className="ml-1 font-normal text-red-600/80">({Math.round(summary.dead_percentage)}%)</span>
               )}
             </p>
             <p className="text-xs text-slate-500">&gt; 90 dni lub brak sprzedaży</p>
           </div>
-          <div className="rounded-lg border border-slate-200 bg-white p-4">
-            <p className="text-xs font-medium text-slate-500 uppercase">Łączna wartość zapasów</p>
-            <p className="text-lg font-semibold text-slate-800">{formatMoney(summary.total_inventory_value)}</p>
+          <div className={analizyKpiCardClass}>
+            <p className="text-xs font-medium uppercase tracking-wide text-slate-400">Łączna wartość zapasów</p>
+            <p className="mt-2 text-lg font-semibold text-slate-800">{formatMoney(summary.total_inventory_value)}</p>
           </div>
         </div>
       )}
@@ -259,7 +287,7 @@ export default function DeadStockPage() {
             {sortedItems.length === 0 ? (
               <tr>
                 <td colSpan={11} className="px-4 py-6 text-center text-slate-500">
-                  Brak produktów z zapasem dla tego tenanta.
+                  Brak produktów z zapasem dla tej organizacji.
                 </td>
               </tr>
             ) : (

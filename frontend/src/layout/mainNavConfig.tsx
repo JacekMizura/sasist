@@ -296,7 +296,7 @@ export function buildNavFlyoutCategories(): NavCategoryConfig[] {
     label: "Analizy",
     Icon: BarChart3,
     directPath: "/analytics",
-    /** Hub obejmuje Pulpit, Centrum, raporty i Optymalizację. */
+    /** Hub: Przegląd · Centrum operacyjne · Raporty · Optymalizacja. */
     activePathPrefix: "/analytics",
     flyoutSections: [],
   },

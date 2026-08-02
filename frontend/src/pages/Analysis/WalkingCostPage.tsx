@@ -90,7 +90,7 @@ export default function WalkingCostPage({ embedded = false, onSummary }: Props) 
                   <td className="px-4 py-2">{row.order_id}</td>
                   <td className="px-4 py-2">{row.order_number ?? "—"}</td>
                   <td className="px-4 py-2 text-right">
-                    {row.total_distance == null ? "N/A" : row.total_distance}
+                    {row.total_distance == null ? "—" : row.total_distance}
                   </td>
                   <td className="px-4 py-2 text-right">{row.distinct_locations_count}</td>
                   <td className="px-4 py-2 text-right">{row.total_items}</td>

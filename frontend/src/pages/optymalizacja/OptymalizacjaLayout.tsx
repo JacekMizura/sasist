@@ -3,6 +3,10 @@ import {
   getOptymalizacjaSubNav,
   type OptimizeSubNavItem,
 } from "../../modules/optymalizacja/optymalizacjaNav";
+import {
+  analizySideNavActiveClass,
+  analizySideNavIdleClass,
+} from "../../modules/analizy/analizyUi";
 
 function SubNav({ items }: { items: OptimizeSubNavItem[] }) {
   const { pathname } = useLocation();
@@ -18,7 +22,7 @@ function SubNav({ items }: { items: OptimizeSubNavItem[] }) {
             key={item.path}
             to={item.path}
             className={`block rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
-              isActive ? "bg-blue-600 text-white" : "text-slate-600 hover:bg-slate-100"
+              isActive ? analizySideNavActiveClass : analizySideNavIdleClass
             }`}
           >
             {item.label}

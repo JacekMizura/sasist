@@ -5,6 +5,13 @@ import {
   type WarehouseChangeItem,
 } from "../../modules/optymalizacja/warehouseChangePlanStore";
 import { useWarehouseChangePlan } from "../../modules/optymalizacja/useWarehouseChangePlan";
+import {
+  analizyCtaPrimaryClass,
+  analizyCtaSecondaryClass,
+  analizyEmptyStateClass,
+  analizyPageSubtitleClass,
+  analizyPageTitleClass,
+} from "../../modules/analizy/analizyUi";
 
 const CATEGORIES: { id: EffectCategory; title: string }[] = [
   { id: "trasy", title: "Największe skrócenie tras" },
@@ -54,31 +61,25 @@ export default function RankingZmianPage() {
   return (
     <div className="min-w-0 space-y-6">
       <div>
-        <h1 className="text-xl font-semibold text-slate-800">Ranking zmian</h1>
-        <p className="mt-1 text-sm text-slate-600">
+        <h1 className={analizyPageTitleClass}>Ranking zmian</h1>
+        <p className={analizyPageSubtitleClass}>
           Które wdrożone i zweryfikowane zmiany przyniosły największy mierzalny efekt.
         </p>
       </div>
 
       {ranked.length === 0 ? (
-        <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 py-10 text-center">
+        <div className={analizyEmptyStateClass}>
           <p className="font-medium text-slate-800">Za mało danych do rankingu</p>
           <p className="mt-1 text-sm text-slate-500">
-            Ranking pojawia się dopiero po statusie „Zweryfikowana” i realnym odczycie PRZED/PO.
+            Ranking pojawia się dopiero po stanie „Zweryfikowana” i realnym odczycie PRZED/PO.
             Nie pokazujemy wartości szacunkowych.
           </p>
           <div className="mt-4 flex flex-wrap justify-center gap-2">
-            <Link
-              to="/optymalizacja/historia"
-              className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700"
-            >
-              Historia zmian
+            <Link to="/optymalizacja/historia" className={analizyCtaSecondaryClass}>
+              Zobacz historię zmian
             </Link>
-            <Link
-              to="/optymalizacja/plan"
-              className="rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white"
-            >
-              Plan zmian
+            <Link to="/optymalizacja/plan" className={analizyCtaPrimaryClass}>
+              Otwórz plan zmian
             </Link>
           </div>
         </div>

@@ -5,7 +5,7 @@
 export type OptimizeSubNavItem = { path: string; label: string };
 
 export const OPTYMALIZACJA_SUB_NAV: OptimizeSubNavItem[] = [
-  { path: "/optymalizacja", label: "Pulpit planu" },
+  { path: "/optymalizacja", label: "Przegląd planu" },
   { path: "/optymalizacja/plan", label: "Plan zmian" },
   { path: "/optymalizacja/historia", label: "Historia zmian" },
   { path: "/optymalizacja/ranking", label: "Ranking zmian" },

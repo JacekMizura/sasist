@@ -1,10 +1,14 @@
 import { NavLink, Outlet, useLocation } from "react-router-dom";
 import { getAnalizySubNav, type SubNavItem } from "../../modules/analytics/analyticsTabs";
+import {
+  analizySideNavActiveClass,
+  analizySideNavIdleClass,
+} from "../../modules/analizy/analizyUi";
 
 function SubNav({ items }: { items: SubNavItem[] }) {
   const { pathname } = useLocation();
   return (
-    <nav className="flex w-56 shrink-0 flex-col gap-0.5" aria-label="Analizy — raporty">
+    <nav className="flex w-56 shrink-0 flex-col gap-0.5" aria-label="Raporty">
       {items.map((item) => {
         const isActive = pathname === item.path;
         return (
@@ -12,7 +16,7 @@ function SubNav({ items }: { items: SubNavItem[] }) {
             key={item.path}
             to={item.path}
             className={`block rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
-              isActive ? "bg-blue-600 text-white" : "text-slate-600 hover:bg-slate-100"
+              isActive ? analizySideNavActiveClass : analizySideNavIdleClass
             }`}
           >
             {item.label}
@@ -24,7 +28,7 @@ function SubNav({ items }: { items: SubNavItem[] }) {
 }
 
 /**
- * Sekcja raportów Analiz — pod nawigacją hubu (PageLayout w AnalizyModuleLayout).
+ * Sekcja Raporty — pod nawigacją hubu (PageLayout w AnalizyModuleLayout).
  */
 export default function AnalyticsLayout() {
   const { pathname } = useLocation();

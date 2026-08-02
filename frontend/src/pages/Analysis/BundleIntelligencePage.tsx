@@ -32,13 +32,13 @@ function KpiTable({ title, rows, showGrowth }: { title: string; rows: BundleKpiR
         <table className="w-full text-sm min-w-[640px]">
           <thead className="bg-slate-50">
             <tr>
-              <th className="text-left px-3 py-2 font-medium text-slate-600">Bundle</th>
+              <th className="text-left px-3 py-2 font-medium text-slate-600">Zestaw</th>
               <th className="text-right px-3 py-2 font-medium text-slate-600">Sprzedaż</th>
               <th className="text-right px-3 py-2 font-medium text-slate-600">Przychód</th>
               <th className="text-right px-3 py-2 font-medium text-slate-600">Marża</th>
               <th className="text-right px-3 py-2 font-medium text-slate-600">Zwroty</th>
-              <th className="text-right px-3 py-2 font-medium text-slate-600">Pick [s]</th>
-              <th className="text-right px-3 py-2 font-medium text-slate-600">Pack [s]</th>
+              <th className="text-right px-3 py-2 font-medium text-slate-600">Kompletacja [s]</th>
+              <th className="text-right px-3 py-2 font-medium text-slate-600">Pakowanie [s]</th>
               <th className="text-right px-3 py-2 font-medium text-slate-600">RK [s]</th>
               {showGrowth && <th className="text-right px-3 py-2 font-medium text-slate-600">Wzrost</th>}
             </tr>
@@ -142,7 +142,7 @@ export default function BundleIntelligencePage() {
             type="button"
             onClick={() => setTab(t.id)}
             className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-              tab === t.id ? "bg-blue-600 text-white" : "bg-slate-100 text-slate-700 hover:bg-slate-200"
+              tab === t.id ? "bg-orange-500 text-white" : "bg-slate-100 text-slate-700 hover:bg-slate-200"
             }`}
           >
             {t.label}
@@ -240,10 +240,10 @@ export default function BundleIntelligencePage() {
           <table className="w-full text-sm">
             <thead className="bg-slate-50">
               <tr>
-                <th className="text-left px-4 py-2 font-medium text-slate-600">Bundle</th>
+                <th className="text-left px-4 py-2 font-medium text-slate-600">Zestaw</th>
                 <th className="text-left px-4 py-2 font-medium text-slate-600">Składnik</th>
-                <th className="text-right px-4 py-2 font-medium text-slate-600">Prognoza bundle</th>
-                <th className="text-right px-4 py-2 font-medium text-slate-600">Szt./bundle</th>
+                <th className="text-right px-4 py-2 font-medium text-slate-600">Prognoza zestawów</th>
+                <th className="text-right px-4 py-2 font-medium text-slate-600">Szt. / zestaw</th>
                 <th className="text-right px-4 py-2 font-medium text-slate-600">Zapotrzebowanie</th>
                 <th className="text-left px-4 py-2 font-medium text-slate-600">Rekomendacja</th>
               </tr>
@@ -252,7 +252,7 @@ export default function BundleIntelligencePage() {
               {replenishment.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="px-4 py-6 text-center text-slate-500">
-                    Brak aktywnych bundle ze sprzedażą w okresie.
+                    Brak aktywnych zestawów ze sprzedażą w okresie.
                   </td>
                 </tr>
               ) : (
@@ -287,7 +287,7 @@ export default function BundleIntelligencePage() {
                   <tr>
                     <th className="text-left px-4 py-2 font-medium text-slate-600">Kod</th>
                     <th className="text-right px-4 py-2 font-medium text-slate-600">Wykorzystanie</th>
-                    <th className="text-right px-4 py-2 font-medium text-slate-600">Zam. bundle</th>
+                    <th className="text-right px-4 py-2 font-medium text-slate-600">Zam. zestawów</th>
                     <th className="text-left px-4 py-2 font-medium text-slate-600">Rekomendacja</th>
                   </tr>
                 </thead>
@@ -324,7 +324,7 @@ export default function BundleIntelligencePage() {
                     <th className="text-left px-4 py-2 font-medium text-slate-600">RK</th>
                     <th className="text-left px-4 py-2 font-medium text-slate-600">Segment</th>
                     <th className="text-right px-4 py-2 font-medium text-slate-600">Wypełnienie</th>
-                    <th className="text-center px-4 py-2 font-medium text-slate-600">Bundle</th>
+                    <th className="text-center px-4 py-2 font-medium text-slate-600">Zestaw</th>
                     <th className="text-left px-4 py-2 font-medium text-slate-600">Rekomendacja</th>
                   </tr>
                 </thead>

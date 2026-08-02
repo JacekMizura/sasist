@@ -144,10 +144,10 @@ export default function PickingStrategyPage() {
   }));
 
   return (
-    <div className="space-y-6 p-6">
+    <div className="min-w-0 space-y-6">
       <OptimizationToolHeader
         title="Strategia kompletacji"
-        question="Który sposób pracy (wózek, koszyki, strefy) daje najwyższą wydajność na peak?"
+        question="Który sposób pracy (wózek, koszyki, strefy) daje najwyższą wydajność w szczycie obciążenia?"
         decision="Jaką strategię wdrożyć na magazynie?"
       />
 

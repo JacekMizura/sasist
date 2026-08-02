@@ -1,31 +1,24 @@
 /**
  * Wewnętrzna nawigacja hubu Analizy (IA):
- * Pulpit · Centrum operacyjne · Analizy · Optymalizacja
+ * Przegląd · Centrum operacyjne · Raporty · Optymalizacja
  * Routing pozostaje bez zmian — tylko warstwa nawigacji.
  */
 
 export type AnalizyModuleSection = {
-  id: "pulpit" | "centrum" | "analizy" | "optymalizacja";
+  id: "przeglad" | "centrum" | "raporty" | "optymalizacja";
   label: string;
   path: string;
 };
 
-/** Pierwszy raport w sekcji Analizy (wejście z zakładki sekcji). */
+/** Pierwszy raport w sekcji Raporty (wejście z zakładki sekcji). */
 export const ANALIZY_REPORTS_ENTRY = "/analytics/inventory-value";
 
 export const ANALIZY_MODULE_SECTIONS: AnalizyModuleSection[] = [
-  { id: "pulpit", label: "Pulpit", path: "/analytics" },
+  { id: "przeglad", label: "Przegląd", path: "/analytics" },
   { id: "centrum", label: "Centrum operacyjne", path: "/centrum-operacyjne" },
-  { id: "analizy", label: "Analizy", path: ANALIZY_REPORTS_ENTRY },
+  { id: "raporty", label: "Raporty", path: ANALIZY_REPORTS_ENTRY },
   { id: "optymalizacja", label: "Optymalizacja", path: "/optymalizacja" },
 ];
-
-export function isAnalizyModulePath(pathname: string): boolean {
-  if (pathname === "/analytics" || pathname.startsWith("/analytics/")) return true;
-  if (pathname === "/centrum-operacyjne" || pathname.startsWith("/centrum-operacyjne/")) return true;
-  if (pathname === "/optymalizacja" || pathname.startsWith("/optymalizacja/")) return true;
-  return false;
-}
 
 export function getActiveAnalizyModuleSection(
   pathname: string
@@ -37,7 +30,7 @@ export function getActiveAnalizyModuleSection(
     return "optymalizacja";
   }
   if (pathname === "/analytics" || pathname === "/analytics/dashboard") {
-    return "pulpit";
+    return "przeglad";
   }
   if (pathname.startsWith("/analytics/")) {
     // Stare LIVE / ops — redirecty, ale gdyby coś zostało:
@@ -47,7 +40,7 @@ export function getActiveAnalizyModuleSection(
     ) {
       return "centrum";
     }
-    return "analizy";
+    return "raporty";
   }
   return null;
 }

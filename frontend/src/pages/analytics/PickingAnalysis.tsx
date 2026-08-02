@@ -23,6 +23,7 @@ import { FilterDateRange } from "../../components/filters";
 import { useWarehouse } from "../../context/WarehouseContext";
 import { AppOverlayPortal } from "../../components/overlay";
 import { AnalysisDecisionHeader } from "../../modules/analytics/AnalysisDecisionHeader";
+import { analizyKpiCardClass } from "../../modules/analizy/analizyUi";
 
 const DEFAULT_TENANT_ID = 1;
 const SVG_WIDTH = 900;
@@ -114,11 +115,11 @@ export default function PickingAnalysis() {
     generateSimulatedPicks(DEFAULT_TENANT_ID, warehouseId, true)
       .then((res) => {
         setGenerateMessage(
-          `Wygenerowano ${res.created} pików z ${res.orders_processed} zamówień.`
+          `Wygenerowano ${res.created} pobrań z ${res.orders_processed} zamówień.`
         );
         setRefreshTrigger((t) => t + 1);
       })
-      .catch((err) => setError(err?.message ?? "Błąd generowania pików"))
+      .catch((err) => setError(err?.message ?? "Błąd generowania pobrań"))
       .finally(() => setGenerating(false));
   };
 
@@ -130,10 +131,10 @@ export default function PickingAnalysis() {
     setGenerateMessage(null);
     deleteSimulatedPicks(DEFAULT_TENANT_ID, warehouseId)
       .then((res) => {
-        setGenerateMessage(`Usunięto ${res.deleted} pików.`);
+        setGenerateMessage(`Usunięto ${res.deleted} pobrań.`);
         setRefreshTrigger((t) => t + 1);
       })
-      .catch((err) => setError(err?.message ?? "Błąd usuwania pików"))
+      .catch((err) => setError(err?.message ?? "Błąd usuwania pobrań"))
       .finally(() => setClearing(false));
   };
 
@@ -219,7 +220,7 @@ export default function PickingAnalysis() {
             disabled={warehouseId == null || generating}
             className="rounded bg-emerald-600 text-white px-4 py-1.5 text-sm font-medium hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {generating ? "Generowanie…" : "Generuj symulowane piki"}
+            {generating ? "Generowanie…" : "Generuj symulowane pobrania"}
           </button>
           <button
             type="button"
@@ -227,7 +228,7 @@ export default function PickingAnalysis() {
             disabled={warehouseId == null || clearing}
             className="rounded bg-slate-200 text-slate-700 px-4 py-1.5 text-sm font-medium hover:bg-slate-300 disabled:opacity-50 disabled:cursor-not-allowed border border-slate-300"
           >
-            {clearing ? "Usuwanie…" : "Wyczyść symulowane piki"}
+            {clearing ? "Usuwanie…" : "Wyczyść symulowane pobrania"}
           </button>
           {generateMessage && (
             <span className="text-sm text-slate-600">{generateMessage}</span>
@@ -236,9 +237,9 @@ export default function PickingAnalysis() {
             <AppOverlayPortal>
             <div className="fixed inset-0 z-[280] flex items-center justify-center bg-black/30">
               <div className="bg-white rounded-lg shadow-lg p-4 max-w-sm mx-4 border border-slate-200">
-                <p className="text-slate-800 font-medium mb-2">Wyczyścić symulowane piki?</p>
+                <p className="text-slate-800 font-medium mb-2">Wyczyścić symulowane pobrania?</p>
                 <p className="text-sm text-slate-600 mb-4">
-                  Wszystkie piki dla wybranego magazynu zostaną trwale usunięte. Podsumowanie, tabela i heatmapa zostaną zaktualizowane.
+                  Wszystkie pobrania dla wybranego magazynu zostaną trwale usunięte. Podsumowanie, tabela i mapa obciążenia zostaną zaktualizowane.
                 </p>
                 <div className="flex gap-2 justify-end">
                   <button
@@ -272,28 +273,28 @@ export default function PickingAnalysis() {
         {/* SECTION 1 – Summary cards */}
         <section>
           <h2 className="text-lg font-semibold text-slate-800 mb-3">Podsumowanie</h2>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-              <p className="text-sm text-slate-500">Łączna liczba pików</p>
-              <p className="text-2xl font-semibold text-slate-800">
+          <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+            <div className={analizyKpiCardClass}>
+              <p className="text-sm text-slate-500">Łączna liczba pobrań</p>
+              <p className="mt-2 text-2xl font-semibold text-slate-800">
                 {summary?.total_picks ?? 0}
               </p>
             </div>
-            <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+            <div className={analizyKpiCardClass}>
               <p className="text-sm text-slate-500">Łączna skompletowana ilość</p>
-              <p className="text-2xl font-semibold text-slate-800">
+              <p className="mt-2 text-2xl font-semibold text-slate-800">
                 {summary?.total_picked_quantity ?? 0}
               </p>
             </div>
-            <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-              <p className="text-sm text-slate-500">Śr. pików na zamówienie</p>
-              <p className="text-2xl font-semibold text-slate-800">
+            <div className={analizyKpiCardClass}>
+              <p className="text-sm text-slate-500">Śr. pobrań na zamówienie</p>
+              <p className="mt-2 text-2xl font-semibold text-slate-800">
                 {summary?.avg_picks_per_order ?? 0}
               </p>
             </div>
-            <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+            <div className={analizyKpiCardClass}>
               <p className="text-sm text-slate-500">Śr. lokalizacji na zamówienie</p>
-              <p className="text-2xl font-semibold text-slate-800">
+              <p className="mt-2 text-2xl font-semibold text-slate-800">
                 {summary?.avg_locations_per_order ?? 0}
               </p>
             </div>
@@ -302,7 +303,7 @@ export default function PickingAnalysis() {
 
         {/* SECTION 2 – Picks table */}
         <section>
-          <h2 className="text-lg font-semibold text-slate-800 mb-3">Piki</h2>
+          <h2 className="text-lg font-semibold text-slate-800 mb-3">Pobrania</h2>
           <div className="flex flex-wrap gap-2 mb-3">
             <input
               type="text"
@@ -334,7 +335,7 @@ export default function PickingAnalysis() {
             />
             <div className="min-w-[min(100%,280px)] self-end">
               <FilterDateRange
-                label="Data piku (od – do)"
+                label="Data pobrania (od – do)"
                 from={filters.date_from ?? ""}
                 to={filters.date_to ?? ""}
                 onFromChange={(v) => setFilters((f) => ({ ...f, date_from: v || undefined }))}
@@ -353,19 +354,19 @@ export default function PickingAnalysis() {
             <table className="w-full text-sm">
               <thead className="bg-slate-50">
                 <tr>
-                  <th className="text-left px-4 py-2 font-medium text-slate-600">Order ID</th>
+                  <th className="text-left px-4 py-2 font-medium text-slate-600">ID zamówienia</th>
                   <th className="text-left px-4 py-2 font-medium text-slate-600">Produkt</th>
                   <th className="text-left px-4 py-2 font-medium text-slate-600">SKU</th>
                   <th className="text-left px-4 py-2 font-medium text-slate-600">Lokalizacja</th>
                   <th className="text-right px-4 py-2 font-medium text-slate-600">Ilość</th>
-                  <th className="text-left px-4 py-2 font-medium text-slate-600">Data/czas piku</th>
+                  <th className="text-left px-4 py-2 font-medium text-slate-600">Data/czas pobrania</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {picks.length === 0 ? (
                   <tr>
                     <td colSpan={6} className="px-4 py-6 text-center text-slate-500">
-                      Brak pików. Wybierz magazyn i kliknij „Generuj symulowane piki”, aby wygenerować piki z zamówień i inventory.
+                      Brak pobrań. Wybierz magazyn i kliknij „Generuj symulowane pobrania”, aby wygenerować pobrania z zamówień i stanu magazynowego.
                     </td>
                   </tr>
                 ) : (
@@ -391,7 +392,7 @@ export default function PickingAnalysis() {
 
         {/* SECTION 3 – Warehouse pick heatmap */}
         <section>
-          <h2 className="text-lg font-semibold text-slate-800 mb-3">Heatmapa pików w magazynie</h2>
+          <h2 className="text-lg font-semibold text-slate-800 mb-3">Mapa obciążenia pobrań w magazynie</h2>
           <p className="text-sm text-slate-600 mb-2">
             Kolor: zielony = niska aktywność, pomarańczowy = średnia, czerwony = wysoka.
           </p>
@@ -425,7 +426,7 @@ export default function PickingAnalysis() {
                 const fill = pickColorByActivity(h.total_picks, maxPicks);
                 const tooltipText = [
                   h.location_name || `ID ${h.location_id}`,
-                  `Piki: ${h.total_picks}`,
+                  `Pobrania: ${h.total_picks}`,
                   `Zamówienia: ${h.unique_orders}`,
                   `Produkty: ${h.products_picked}`,
                 ].join("\n");

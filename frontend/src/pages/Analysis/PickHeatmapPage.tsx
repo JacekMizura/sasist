@@ -13,7 +13,7 @@ type ViewMode = "picks" | "density";
 type DensityRow = { location_id: number; location_name?: string; total_quantity: number };
 
 /**
- * Faza 2: jedna heatmapa lokalizacji (picks + gęstość zamówień) + CTA do układu.
+ * Raport lokalizacji — pobrania + gęstość zamówień + CTA do układu.
  */
 export default function PickHeatmapPage() {
   const [view, setView] = useState<ViewMode>("picks");
@@ -43,13 +43,37 @@ export default function PickHeatmapPage() {
     };
   }, []);
 
-  if (loading) return <div className="min-w-0"><p className="text-slate-500">Ładowanie…</p></div>;
+  if (loading) {
+    return (
+      <div className="min-w-0">
+        <AnalysisDecisionHeader
+          title="Najczęściej odwiedzane lokalizacje"
+          question="Które lokalizacje są przeciążone i generują korki przy kompletacji?"
+          decision="Które strefy odciążyć (przesunięcie towaru) albo wzmocnić?"
+          actions={[
+            { label: "Zaplanuj relokację", to: "/optymalizacja/slotting", primary: true },
+            { label: "Pokaż lokalizacje na mapie", to: "/analytics/warehouse-map" },
+          ]}
+        />
+        <p className="text-sm text-slate-500">Ładowanie…</p>
+      </div>
+    );
+  }
   if (error) {
     return (
       <div className="min-w-0">
-        <div className="rounded-lg bg-red-50 border border-red-200 p-4 text-red-800">
+        <AnalysisDecisionHeader
+          title="Najczęściej odwiedzane lokalizacje"
+          question="Które lokalizacje są przeciążone i generują korki przy kompletacji?"
+          decision="Które strefy odciążyć (przesunięcie towaru) albo wzmocnić?"
+          actions={[
+            { label: "Zaplanuj relokację", to: "/optymalizacja/slotting", primary: true },
+            { label: "Pokaż lokalizacje na mapie", to: "/analytics/warehouse-map" },
+          ]}
+        />
+        <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-red-800">
           <p className="font-medium">Błąd</p>
-          <p className="text-sm mt-1">{error}</p>
+          <p className="mt-1 text-sm">{error}</p>
         </div>
       </div>
     );
@@ -80,7 +104,7 @@ export default function PickHeatmapPage() {
               : "rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-700"
           }
         >
-          Składane (picks)
+          Pobrania
         </button>
         <button
           type="button"
@@ -102,7 +126,7 @@ export default function PickHeatmapPage() {
               <th className="text-left px-4 py-2 font-medium text-slate-600">ID</th>
               <th className="text-left px-4 py-2 font-medium text-slate-600">Lokalizacja</th>
               <th className="text-right px-4 py-2 font-medium text-slate-600">
-                {showPicks ? "Składane (picks)" : "Ilość z zamówień"}
+                {showPicks ? "Pobrania" : "Ilość z zamówień"}
               </th>
               {showPicks ? (
                 <th className="text-right px-4 py-2 font-medium text-slate-600">Stan na magazynie</th>

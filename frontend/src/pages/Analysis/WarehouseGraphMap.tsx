@@ -8,6 +8,8 @@ import {
   type WarehouseGraphEdge,
   type WarehouseLocationItem,
 } from "../../api/warehouseGraphApi";
+import { AnalysisDecisionHeader } from "../../modules/analytics/AnalysisDecisionHeader";
+import { analizyLoadingClass } from "../../modules/analizy/analizyUi";
 
 const SVG_WIDTH = 900;
 const SVG_HEIGHT = 500;
@@ -119,12 +121,17 @@ export default function WarehouseGraphMap() {
 
   return (
     <div className="min-w-0">
-      <h1 className="text-xl font-semibold text-slate-800">Mapa magazynu</h1>
-      <p className="mt-2 text-slate-600 mb-4">
-        Wizualizacja grafu (węzły, krawędzie) i lokalizacji. Później: trasy kompletacji, heatmapa, slotting.
-      </p>
+      <AnalysisDecisionHeader
+        title="Mapa magazynu"
+        question="Jak wygląda układ lokalizacji i ścieżek w magazynie?"
+        decision="Gdzie przenieść towar, żeby skrócić drogę kompletacji?"
+        actions={[
+          { label: "Zaplanuj układ towaru", to: "/optymalizacja/slotting", primary: true },
+          { label: "Sprawdź przeciążone lokalizacje", to: "/analytics/hot-locations" },
+        ]}
+      />
 
-      <div className="flex items-center gap-4 mb-4">
+      <div className="mb-4 flex items-center gap-4">
         <label className="text-sm font-medium text-slate-600">Magazyn</label>
         <select
           className="rounded border border-slate-300 px-3 py-1.5 text-sm"
@@ -140,12 +147,13 @@ export default function WarehouseGraphMap() {
         </select>
       </div>
 
-      {loading && <p className="text-slate-500">Ładowanie…</p>}
-      {error && (
-        <div className="rounded-lg bg-red-50 border border-red-200 p-4 text-red-800 mb-4">
-          {error}
+      {loading ? <p className={analizyLoadingClass}>Ładowanie…</p> : null}
+      {error ? (
+        <div className="mb-4 rounded-lg border border-red-200 bg-red-50 p-4 text-red-800">
+          <p className="font-medium">Błąd</p>
+          <p className="mt-1 text-sm">{error}</p>
         </div>
-      )}
+      ) : null}
 
       <div className="rounded-lg border border-slate-200 bg-white overflow-hidden">
         <svg

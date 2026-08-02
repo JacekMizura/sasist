@@ -1,3 +1,21 @@
+## 2026-08-02 — Analizy P0/P1: produkcyjna spójność UI
+
+- Polonizacja (Centrum, kompletacja, układ, placeholdery)
+- CTA/nagłówki/KPI/side-nav: tokeny `analizyUi` + brand orange
+- Loading z nagłówkiem; empty Plan/Ranking z CTA czasownikami
+- Mapa magazynu: `AnalysisDecisionHeader` + CTA
+
+## 2026-08-02 — Audyt jakości hubu Analizy (pre-release)
+
+Werdykt: **nie gotowy do wydania** bez poprawy EN w UI + Manifest na Mapie magazynu + ujednolicenia CTA/headerów.
+Szczegóły w raporcie sesji (✅/⚠/❌). Legacy stubów brak; thin re-exporty analytics→Analysis nadal używane.
+
+## 2026-08-02 — IA v2: Przegląd / Raporty (bez „Analizy → Analizy”)
+
+- Zakładki hubu: Przegląd · Centrum operacyjne · Raporty · Optymalizacja
+- Mapa magazynu w bocznym menu Raportów; usunięte martwe wrappery (batch/rotation/density/walking-cost)
+- PL w UI (układ towaru, zestawy, rotacja); breadcrumbs Centrum uproszczone
+
 ## 2026-08-02 — IA: jeden hub Analizy w sidebarze
 
 - Usunięto osobne pozycje sidebaru: Centrum operacyjne, Optymalizacja

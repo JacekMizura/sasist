@@ -1,4 +1,11 @@
 import { Link } from "react-router-dom";
+import {
+  analizyCtaPrimaryClass,
+  analizyCtaSecondaryClass,
+  analizyDecisionBoxClass,
+  analizyHeaderStackClass,
+  analizyPageTitleClass,
+} from "../analizy/analizyUi";
 
 export type OptimizeAction = {
   label: string;
@@ -13,12 +20,12 @@ type HeaderProps = {
   decision: string;
 };
 
-/** Nagłówek narzędzia Optymalizacji — „co zmienić?” */
+/** Nagłówek narzędzia Optymalizacji — „co zmienić?” (ten sam Manifest co raporty). */
 export function OptimizationToolHeader({ title, question, decision }: HeaderProps) {
   return (
-    <header className="mb-6 space-y-3">
-      <h1 className="text-xl font-semibold text-slate-800">{title}</h1>
-      <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700 space-y-2">
+    <header className={analizyHeaderStackClass}>
+      <h1 className={analizyPageTitleClass}>{title}</h1>
+      <div className={analizyDecisionBoxClass}>
         <p>
           <span className="font-semibold text-slate-900">Pytanie: </span>
           {question}
@@ -41,12 +48,10 @@ type PlanProps = {
 };
 
 const actionClass = (primary?: boolean) =>
-  primary
-    ? "inline-flex items-center rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700"
-    : "inline-flex items-center rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50";
+  primary ? analizyCtaPrimaryClass : analizyCtaSecondaryClass;
 
 /**
- * Faza 3: rekomendacja z narzędzia → CTA „Dodaj do planu zmian”.
+ * Rekomendacja z narzędzia → CTA „Dodaj do planu zmian”.
  */
 export function OptimizationPlanPanel({
   title = "Rekomendacja",
@@ -58,11 +63,11 @@ export function OptimizationPlanPanel({
   const hasItems = items != null && items.length > 0;
 
   return (
-    <section className="mt-8 rounded-xl border-2 border-blue-200 bg-blue-50/60 px-4 py-4 space-y-3">
-      <h2 className="text-sm font-semibold uppercase tracking-wide text-blue-900">{title}</h2>
+    <section className="mt-8 space-y-3 rounded-xl border-2 border-orange-200 bg-orange-50/60 px-4 py-4">
+      <h2 className="text-sm font-semibold uppercase tracking-wide text-orange-900">{title}</h2>
       <p className="text-sm text-slate-800">{summary}</p>
       {hasItems ? (
-        <ul className="list-disc pl-5 text-sm text-slate-700 space-y-1 max-h-40 overflow-y-auto">
+        <ul className="max-h-40 list-disc space-y-1 overflow-y-auto pl-5 text-sm text-slate-700">
           {items!.slice(0, 12).map((line) => (
             <li key={line}>{line}</li>
           ))}
@@ -77,12 +82,7 @@ export function OptimizationPlanPanel({
         <div className="flex flex-wrap gap-2 pt-1">
           {actions.map((a) =>
             a.onClick ? (
-              <button
-                key={a.label}
-                type="button"
-                onClick={a.onClick}
-                className={actionClass(a.primary)}
-              >
+              <button key={a.label} type="button" onClick={a.onClick} className={actionClass(a.primary)}>
                 {a.label}
               </button>
             ) : a.to ? (

@@ -1,18 +1,21 @@
 import { Link } from "react-router-dom";
-import {
-  dashboardCardPadding,
-  dashboardKpiGridGap,
-  dashboardSurfaceCard,
-} from "../../components/dashboard/dashboardDensityPrimitives";
 import { useWarehouseChangePlan } from "../../modules/optymalizacja/useWarehouseChangePlan";
 import {
   effectDisplay,
   priorityLabel,
   statusLabel,
 } from "../../modules/optymalizacja/warehouseChangePlanStore";
+import {
+  analizyCtaPrimaryClass,
+  analizyCtaSecondaryClass,
+  analizyKpiCardClass,
+  analizyKpiGridClass,
+  analizyPageSubtitleClass,
+  analizyPageTitleClass,
+} from "../../modules/analizy/analizyUi";
 
 /**
- * Landing Optymalizacji — pulpit planu zmian.
+ * Landing Optymalizacji — przegląd planu zmian.
  */
 export default function OptymalizacjaLandingPage() {
   const { snapshot, items } = useWarehouseChangePlan();
@@ -22,14 +25,14 @@ export default function OptymalizacjaLandingPage() {
   return (
     <div className="min-w-0 space-y-6">
       <div>
-        <h1 className="text-xl font-semibold text-slate-800">Optymalizacja</h1>
-        <p className="mt-1 text-sm text-slate-600">
+        <h1 className={analizyPageTitleClass}>Optymalizacja</h1>
+        <p className={analizyPageSubtitleClass}>
           Planowanie zmian w magazynie: problem → analiza → rekomendacja → plan → realizacja.
         </p>
       </div>
 
-      <div className={`grid ${dashboardKpiGridGap} sm:grid-cols-2 lg:grid-cols-4`}>
-        <div className={`${dashboardSurfaceCard} ${dashboardCardPadding}`}>
+      <div className={analizyKpiGridClass}>
+        <div className={analizyKpiCardClass}>
           <p className="text-xs font-medium uppercase tracking-wide text-slate-400">
             Ile rekomendacji czeka?
           </p>
@@ -40,61 +43,49 @@ export default function OptymalizacjaLandingPage() {
               : "Brak pozycji o wysokim priorytecie"}
           </p>
         </div>
-        <div className={`${dashboardSurfaceCard} ${dashboardCardPadding}`}>
+        <div className={analizyKpiCardClass}>
           <p className="text-xs font-medium uppercase tracking-wide text-slate-400">
             Które mają największy wpływ?
           </p>
-          <p className="mt-2 text-lg font-semibold text-slate-900 leading-snug">
+          <p className="mt-2 text-lg font-semibold leading-snug text-slate-900">
             {first?.title ?? "—"}
           </p>
           <p className="mt-1 text-xs text-slate-500">
             {first ? `Źródło: ${first.originLabel}` : "Dodaj pierwszą rekomendację"}
           </p>
         </div>
-        <div className={`${dashboardSurfaceCard} ${dashboardCardPadding}`}>
+        <div className={analizyKpiCardClass}>
           <p className="text-xs font-medium uppercase tracking-wide text-slate-400">
             Jaką oszczędność / wpływ?
           </p>
-          <p className="mt-2 text-sm font-semibold text-slate-900 leading-snug">
+          <p className="mt-2 text-sm font-semibold leading-snug text-slate-900">
             {snapshot.waitingCount === 0 ? "Brak oczekujących zmian" : snapshot.impactSummary}
           </p>
         </div>
-        <div className={`${dashboardSurfaceCard} ${dashboardCardPadding}`}>
+        <div className={analizyKpiCardClass}>
           <p className="text-xs font-medium uppercase tracking-wide text-slate-400">
             Co zrobić jako pierwsze?
           </p>
-          <p className="mt-2 text-sm font-semibold text-slate-900 leading-snug">
+          <p className="mt-2 text-sm font-semibold leading-snug text-slate-900">
             {first
               ? `${first.title} (${priorityLabel(first.priority)} · ${statusLabel(first.status)})`
               : "Uruchom analizę i dodaj do planu"}
           </p>
-          <Link
-            to="/optymalizacja/plan"
-            className="mt-3 inline-block text-sm font-medium text-blue-700 hover:underline"
-          >
-            Otwórz plan zmian →
+          <Link to="/optymalizacja/plan" className={`mt-3 ${analizyCtaSecondaryClass}`}>
+            Otwórz plan zmian
           </Link>
         </div>
       </div>
 
       <div className="flex flex-wrap gap-2">
-        <Link
-          to="/optymalizacja/plan"
-          className="inline-flex items-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
-        >
+        <Link to="/optymalizacja/plan" className={analizyCtaPrimaryClass}>
           Przejdź do planu zmian
         </Link>
-        <Link
-          to="/optymalizacja/historia"
-          className="inline-flex items-center rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
-        >
-          Historia zmian
+        <Link to="/optymalizacja/historia" className={analizyCtaSecondaryClass}>
+          Zobacz historię zmian
         </Link>
-        <Link
-          to="/optymalizacja/ranking"
-          className="inline-flex items-center rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
-        >
-          Ranking skuteczności
+        <Link to="/optymalizacja/ranking" className={analizyCtaSecondaryClass}>
+          Zobacz ranking skuteczności
         </Link>
       </div>
 
@@ -106,16 +97,16 @@ export default function OptymalizacjaLandingPage() {
       )}
 
       {waiting.length > 0 ? (
-        <section className="rounded-xl border border-slate-200 bg-white overflow-hidden">
-          <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-slate-800">Kolejka planu (top 5)</h2>
-            <Link to="/optymalizacja/plan" className="text-sm text-blue-700 hover:underline">
+        <section className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+          <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
+            <h2 className="text-sm font-semibold text-slate-800">Kolejka planu (5 pierwszych)</h2>
+            <Link to="/optymalizacja/plan" className="text-sm font-medium text-orange-700 hover:underline">
               Zobacz cały plan
             </Link>
           </div>
           <ul className="divide-y divide-slate-100">
             {waiting.slice(0, 5).map((row, idx) => (
-              <li key={row.id} className="px-4 py-3 flex flex-wrap items-center justify-between gap-2">
+              <li key={row.id} className="flex flex-wrap items-center justify-between gap-2 px-4 py-3">
                 <div>
                   <p className="text-sm font-medium text-slate-900">
                     {idx + 1}. {row.title}
@@ -124,7 +115,7 @@ export default function OptymalizacjaLandingPage() {
                     Źródło: {row.originLabel} · {effectDisplay(row).primary} · {statusLabel(row.status)}
                   </p>
                 </div>
-                <Link to={row.sourcePath} className="text-sm text-blue-700 hover:underline">
+                <Link to={row.sourcePath} className="text-sm font-medium text-orange-700 hover:underline">
                   Otwórz analizę
                 </Link>
               </li>
@@ -134,34 +125,34 @@ export default function OptymalizacjaLandingPage() {
       ) : null}
 
       <section>
-        <h2 className="text-sm font-semibold text-slate-800 mb-2">Źródła rekomendacji</h2>
-        <p className="text-sm text-slate-600 mb-3">
+        <h2 className="mb-2 text-sm font-semibold text-slate-800">Źródła rekomendacji</h2>
+        <p className="mb-3 text-sm text-slate-600">
           Analizy nie są osobnymi planami — każda kończy się dodaniem do wspólnego planu zmian.
         </p>
-        <div className={`grid ${dashboardKpiGridGap} sm:grid-cols-3`}>
+        <div className="grid gap-4 sm:grid-cols-3">
           <Link
             to="/optymalizacja/slotting"
-            className={`${dashboardSurfaceCard} ${dashboardCardPadding} block hover:border-blue-300`}
+            className={`${analizyKpiCardClass} block transition hover:border-orange-300`}
           >
             <p className="font-medium text-slate-900">Układ towaru</p>
             <p className="mt-1 text-xs text-slate-500">Znajdź produkty do przesunięcia</p>
-            <p className="mt-2 text-sm text-blue-700">Analizuj układ →</p>
+            <p className="mt-2 text-sm font-medium text-orange-700">Analizuj układ →</p>
           </Link>
           <Link
             to="/optymalizacja/picking-strategy"
-            className={`${dashboardSurfaceCard} ${dashboardCardPadding} block hover:border-blue-300`}
+            className={`${analizyKpiCardClass} block transition hover:border-orange-300`}
           >
             <p className="font-medium text-slate-900">Strategia kompletacji</p>
             <p className="mt-1 text-xs text-slate-500">Porównaj warianty pracy</p>
-            <p className="mt-2 text-sm text-blue-700">Analizuj strategię →</p>
+            <p className="mt-2 text-sm font-medium text-orange-700">Analizuj strategię →</p>
           </Link>
           <Link
             to="/optymalizacja/pick-path"
-            className={`${dashboardSurfaceCard} ${dashboardCardPadding} block hover:border-blue-300`}
+            className={`${analizyKpiCardClass} block transition hover:border-orange-300`}
           >
             <p className="font-medium text-slate-900">Trasy i dystans</p>
             <p className="mt-1 text-xs text-slate-500">Znajdź zbyt długie trasy</p>
-            <p className="mt-2 text-sm text-blue-700">Analizuj trasy →</p>
+            <p className="mt-2 text-sm font-medium text-orange-700">Analizuj trasy →</p>
           </Link>
         </div>
       </section>

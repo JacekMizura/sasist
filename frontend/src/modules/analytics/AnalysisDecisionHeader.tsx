@@ -1,4 +1,11 @@
 import { Link } from "react-router-dom";
+import {
+  analizyCtaPrimaryClass,
+  analizyCtaSecondaryClass,
+  analizyDecisionBoxClass,
+  analizyHeaderStackClass,
+  analizyPageTitleClass,
+} from "../analizy/analizyUi";
 
 export type AnalysisAction = {
   label: string;
@@ -18,9 +25,9 @@ type Props = {
  */
 export function AnalysisDecisionHeader({ title, question, decision, actions }: Props) {
   return (
-    <header className="mb-6 space-y-3">
-      <h1 className="text-xl font-semibold text-slate-800">{title}</h1>
-      <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700 space-y-2">
+    <header className={analizyHeaderStackClass}>
+      <h1 className={analizyPageTitleClass}>{title}</h1>
+      <div className={analizyDecisionBoxClass}>
         <p>
           <span className="font-semibold text-slate-900">Pytanie: </span>
           {question}
@@ -36,11 +43,7 @@ export function AnalysisDecisionHeader({ title, question, decision, actions }: P
             <Link
               key={a.to + a.label}
               to={a.to}
-              className={
-                a.primary
-                  ? "inline-flex items-center rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700"
-                  : "inline-flex items-center rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
-              }
+              className={a.primary ? analizyCtaPrimaryClass : analizyCtaSecondaryClass}
             >
               {a.label}
             </Link>

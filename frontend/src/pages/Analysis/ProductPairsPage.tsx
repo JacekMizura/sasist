@@ -26,13 +26,37 @@ export default function ProductPairsPage() {
     return () => { cancelled = true; };
   }, []);
 
-  if (loading) return <div className="min-w-0"><p className="text-slate-500">Ładowanie…</p></div>;
+  if (loading) {
+    return (
+      <div className="min-w-0">
+        <AnalysisDecisionHeader
+          title="Produkty zamawiane razem"
+          question="Które produkty często jadą w tym samym zamówieniu?"
+          decision="Czy trzymać je bliżej siebie albo budować zestawy?"
+          actions={[
+            { label: "Przenieś produkty bliżej siebie", to: "/optymalizacja/slotting", primary: true },
+            { label: "Sprawdź problemy w zestawach", to: "/analytics/bundle-intelligence" },
+          ]}
+        />
+        <p className="text-sm text-slate-500">Ładowanie…</p>
+      </div>
+    );
+  }
   if (error) {
     return (
       <div className="min-w-0">
-        <div className="rounded-lg bg-red-50 border border-red-200 p-4 text-red-800">
+        <AnalysisDecisionHeader
+          title="Produkty zamawiane razem"
+          question="Które produkty często jadą w tym samym zamówieniu?"
+          decision="Czy trzymać je bliżej siebie albo budować zestawy?"
+          actions={[
+            { label: "Przenieś produkty bliżej siebie", to: "/optymalizacja/slotting", primary: true },
+            { label: "Sprawdź problemy w zestawach", to: "/analytics/bundle-intelligence" },
+          ]}
+        />
+        <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-red-800">
           <p className="font-medium">Błąd</p>
-          <p className="text-sm mt-1">{error}</p>
+          <p className="mt-1 text-sm">{error}</p>
         </div>
       </div>
     );

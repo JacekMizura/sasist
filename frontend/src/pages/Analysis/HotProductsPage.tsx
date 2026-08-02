@@ -40,15 +40,37 @@ export default function HotProductsPage() {
   }, []);
 
   if (loading && items.length === 0) {
-    return <div className="min-w-0"><p className="text-slate-500">Ładowanie…</p></div>;
+    return (
+      <div className="min-w-0">
+        <AnalysisDecisionHeader
+          title="Najczęściej sprzedawane produkty"
+          question="Które produkty generują największy ruch kompletacji?"
+          decision="Co trzymać blisko strefy kompletacji, a co można odsunąć?"
+          actions={[
+            { label: "Przenieś produkty bliżej kompletacji", to: "/optymalizacja/slotting", primary: true },
+            { label: "Znajdź towar bez rotacji", to: "/analytics/dead-stock" },
+          ]}
+        />
+        <p className="text-sm text-slate-500">Ładowanie…</p>
+      </div>
+    );
   }
 
   if (error && items.length === 0) {
     return (
       <div className="min-w-0">
-        <div className="rounded-lg bg-red-50 border border-red-200 p-4 text-red-800">
+        <AnalysisDecisionHeader
+          title="Najczęściej sprzedawane produkty"
+          question="Które produkty generują największy ruch kompletacji?"
+          decision="Co trzymać blisko strefy kompletacji, a co można odsunąć?"
+          actions={[
+            { label: "Przenieś produkty bliżej kompletacji", to: "/optymalizacja/slotting", primary: true },
+            { label: "Znajdź towar bez rotacji", to: "/analytics/dead-stock" },
+          ]}
+        />
+        <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-red-800">
           <p className="font-medium">Błąd</p>
-          <p className="text-sm mt-1">{error}</p>
+          <p className="mt-1 text-sm">{error}</p>
         </div>
       </div>
     );
@@ -75,7 +97,7 @@ export default function HotProductsPage() {
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="np. cable"
+              placeholder="np. kabel / SKU-123"
               className="border border-slate-200 rounded-lg px-3 py-2 text-sm"
             />
           </label>
