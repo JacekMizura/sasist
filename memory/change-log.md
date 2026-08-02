@@ -1,3 +1,24 @@
+## 2026-08-02 — Audyt wizualny Analizy (przeglądarka)
+
+- Przejście całego hubu w UI; znaleziono 14 widocznych EN fraz
+- Centrum: pick-face/stock/OMS/putaway/replenishment/priority_* → PL (API + render)
+- Raporty: Unknown Product → Nieznany produkt
+- Re-check w przeglądarce: 0 EN w treści Analizy
+
+## 2026-08-02 — PL UI: Centrum operacyjne + Analysis leftovers
+
+- CentrumOperacyjnePage: Deadline→Termin, Timeline→Oś czasu, Stock→Stan
+- PickingStrategyPage: CART/BASKET/ZONE/HYBRID → Wózek/Koszyki/Strefy/Hybryda; vs→względem
+- BundleIntelligence PriorityBadge: Wysoki/Średni/Niski; InventoryValue: backendem→systemem
+- SalesForecast NOT_ENOUGH_MSG i PickingAnalysis: już PL, bez zmian
+
+## 2026-08-02 — Pełna polonizacja UI hubu Analizy
+
+- Usunięto EN z Centrum/Raportów/Optymalizacji (Idle/Score/Scan, vs, CART…, Plan/Ranking → harmonogram/klasyfikacja)
+- Prognoza: mapowanie EN message z API; zestawy: polishRecommendation (bundle/pick-face)
+- Audyt skryptowy UI stringów: 0 pozostałych EN z listy zakazanej
+- Backend bez zmian
+
 ## 2026-08-02 — warehouse_id: wspólny scope Analizy/Optymalizacja
 
 - Mechanizm: `useWarehouseApiScope` / `buildWarehouseParams` / `AnalizyWarehouseSelect`

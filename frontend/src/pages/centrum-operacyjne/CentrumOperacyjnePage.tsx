@@ -76,7 +76,7 @@ const OPERATIONS_TABS: Array<{ id: OperationsTabId; label: string }> = [
   { id: "inbound", label: "Dostawy" },
   { id: "putaway-load", label: "Obciążenie magazynu" },
   { id: "carrier-issues", label: "Problemy przewoźników" },
-  { id: "ranking", label: "Ranking" },
+  { id: "ranking", label: "Klasyfikacja" },
   { id: "bottlenecks", label: "Wąskie gardła" },
   { id: "alerts", label: "Alerty" },
   { id: "manager-tasks", label: "Zadania kierownika" },
@@ -459,7 +459,7 @@ function DispatchTaskModal({
               </select>
             </label>
             <label className="block text-xs font-bold text-slate-600">
-              Deadline za
+              Termin za
               <select
                 value={draft.deadlineMinutes}
                 onChange={(e) => onChange({ ...draft, deadlineMinutes: e.target.value })}
@@ -677,7 +677,7 @@ function DetailModal({
           </section>
 
           <section className="rounded-xl border border-slate-200 p-3">
-            <div className="text-sm font-black text-slate-900">Timeline aktywności</div>
+            <div className="text-sm font-black text-slate-900">Oś czasu aktywności</div>
             <div className="mt-3 space-y-2">
               {operator.timeline.map((item, idx) => (
                 <div key={`${item.at}-${idx}`} className="grid grid-cols-[3rem_1fr] gap-3 rounded-lg bg-slate-50 p-2">
@@ -885,7 +885,7 @@ export default function CentrumOperacyjnePage() {
     if (warehouseId == null) return;
     const moveQty = Number(row.move_quantity ?? row.missing_quantity) || 0;
     if (moveQty <= 0 || !row.source_location) {
-      setError("Brak stocku źródłowego — nie można utworzyć przesunięcia.");
+      setError("Brak stanu źródłowego — nie można utworzyć przesunięcia.");
       return;
     }
     setCreatingRelocationFor(row.product_id);
@@ -1004,7 +1004,7 @@ export default function CentrumOperacyjnePage() {
     <section className="min-w-0 space-y-3">
       <div className="flex items-center justify-between">
         <h2 className="text-sm font-black uppercase tracking-wide text-slate-700">Operatorzy na żywo</h2>
-        <span className="text-xs font-semibold text-slate-500">polling 30 s</span>
+        <span className="text-xs font-semibold text-slate-500">odświeżanie co 30 s</span>
       </div>
       {(["KOMPLETACJA", "PAKOWANIE", "OPERACJE MAGAZYNOWE", "BRAKI"] as WarehouseOperationsMainMode[]).map((mode) => (
         <OperatorModeSection
@@ -1182,6 +1182,28 @@ export default function CentrumOperacyjnePage() {
       ESKALOWANE: "Eskalowane",
     })[status] ?? status;
 
+  // Display-only PL mapping for the raw task_type enum returned by the API.
+  const taskTypeDisplayLabel = (taskType: string) =>
+    ({
+      MANAGER_PRIORITY: "Priorytet kierownika",
+      QUALITY_CHECK: "Kontrola jakości",
+      INVENTORY_VERIFICATION: "Weryfikacja stanu",
+      putaway: "Rozlokowanie PZ",
+      PUTAWAY: "Rozlokowanie PZ",
+      replenishment: "Uzupełnienie",
+      REPLENISHMENT: "Uzupełnienie",
+      priority_packing: "Priorytet pakowania",
+      PRIORITY_PACKING: "Priorytet pakowania",
+      priority_picking: "Priorytet kompletacji",
+      PRIORITY_PICKING: "Priorytet kompletacji",
+    })[taskType] ?? taskType;
+
+  const taskTitleDisplay = (title: string | null | undefined) =>
+    String(title || "")
+      .replace(/pick-face/gi, "strefę pobrań")
+      .replace(/\bstock\b/gi, "stan")
+      .trim() || "Zadanie";
+
   const managerTaskSections: Array<{ key: string; title: string; rows: WarehousePriorityTask[] }> = [
     { key: "active", title: "Aktywne", rows: managerTasks.filter((t) => t.status === "NOWE" || t.status === "PRZYJĘTE") },
     { key: "progress", title: "W realizacji", rows: managerTasks.filter((t) => t.status === "W_TRAKCIE") },
@@ -1233,13 +1255,13 @@ export default function CentrumOperacyjnePage() {
               <article key={task.id} className="rounded-xl border border-slate-200 bg-slate-50/60 p-3">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <div className="truncate text-sm font-black text-slate-900">{task.title}</div>
+                    <div className="truncate text-sm font-black text-slate-900">{taskTitleDisplay(task.title)}</div>
                     <div className="mt-1 text-xs font-semibold text-slate-500">
                       {task.assigned_operator_name || "Nieprzypisane"} · {taskStatusLabel(task.status)}
                     </div>
                   </div>
                   <span className="rounded-full bg-white px-2 py-0.5 text-[11px] font-black text-slate-700 ring-1 ring-slate-200">
-                    {task.task_type}
+                    {taskTypeDisplayLabel(task.task_type)}
                   </span>
                 </div>
                 {task.status === "ODRZUCONE" ? (
@@ -1271,7 +1293,7 @@ export default function CentrumOperacyjnePage() {
     <section className="space-y-3">
       <div className="rounded-2xl border border-slate-200 bg-white p-3">
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-          <h2 className="text-sm font-black uppercase tracking-wide text-slate-700">Uzupełnienia pick-face</h2>
+          <h2 className="text-sm font-black uppercase tracking-wide text-slate-700">Uzupełnienia strefy pobrań</h2>
           <span className="text-xs font-semibold text-slate-500">{filteredReplenishments.length} pozycji</span>
         </div>
         <div className="grid gap-2 text-xs md:grid-cols-4">
@@ -1340,15 +1362,15 @@ export default function CentrumOperacyjnePage() {
                         <div>DO: {row.target_location}</div>
                       </>
                     ) : (
-                      <div>Uzupełnienie pick-face</div>
+                      <div>Uzupełnienie strefy pobrań</div>
                     )}
                   </div>
                   <div className="mt-3 grid gap-2 text-xs sm:grid-cols-3">
                     <div>
-                      Pick-face: <b>{quantityLabel(row.current_picking_stock)}</b>
+                      Strefa pobrań: <b>{quantityLabel(row.current_picking_stock)}</b>
                     </div>
                     <div>
-                      Stock źródłowy: <b>{quantityLabel(sourceAvail)}</b>
+                      Stan źródłowy: <b>{quantityLabel(sourceAvail)}</b>
                     </div>
                     {row.unresolved_shortage_qty && row.unresolved_shortage_qty > 0 ? (
                       <div>
@@ -1463,7 +1485,7 @@ export default function CentrumOperacyjnePage() {
   const rankingPanel = (
     <section className="rounded-2xl border border-slate-200 bg-white p-3">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-        <h2 className="text-sm font-black uppercase tracking-wide text-slate-700">Ranking jakości i efektywności</h2>
+        <h2 className="text-sm font-black uppercase tracking-wide text-slate-700">Klasyfikacja jakości i efektywności</h2>
         <div className="flex rounded-lg border border-slate-200 bg-slate-50 p-1 text-xs font-bold text-slate-500"><span className="rounded-md bg-white px-2 py-1 text-slate-900">Dzień</span><span className="px-2 py-1">Tydzień</span><span className="px-2 py-1">Miesiąc</span></div>
       </div>
       <div className="overflow-x-auto">

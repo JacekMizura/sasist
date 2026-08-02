@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { getProductPairs, type ProductPairItem } from "../../api/analysisApi";
 import { AnalysisDecisionHeader } from "../../modules/analytics/AnalysisDecisionHeader";
+import { displayProductName } from "../../modules/analizy/analizyUi";
 
 const DEFAULT_TENANT_ID = 1;
 
@@ -88,8 +89,8 @@ export default function ProductPairsPage() {
             ) : (
               items.map((row, i) => (
                 <tr key={`${row.product_id_a}-${row.product_id_b}-${i}`}>
-                  <td className="px-4 py-2">{row.product_name_a ?? row.product_id_a}</td>
-                  <td className="px-4 py-2">{row.product_name_b ?? row.product_id_b}</td>
+                  <td className="px-4 py-2">{displayProductName(row.product_name_a, String(row.product_id_a))}</td>
+                  <td className="px-4 py-2">{displayProductName(row.product_name_b, String(row.product_id_b))}</td>
                   <td className="px-4 py-2 text-right">{row.frequency}</td>
                 </tr>
               ))

@@ -18,6 +18,7 @@ import {
   type ProductRotationItem,
 } from "../../api/analysisApi";
 import { AnalysisDecisionHeader } from "../../modules/analytics/AnalysisDecisionHeader";
+import { displayProductName } from "../../modules/analizy/analizyUi";
 import { AnalizyWarehouseSelect } from "../../modules/analizy/AnalizyWarehouseSelect";
 import {
   ANALIZY_DEFAULT_TENANT_ID,
@@ -25,7 +26,13 @@ import {
 } from "../../modules/analizy/warehouseApiScope";
 
 const MIN_DAYS_FOR_FORECAST = 14;
-const NOT_ENOUGH_MSG = "Not enough historical data for forecasting.";
+const NOT_ENOUGH_MSG = "Za mało historii sprzedaży, by zbudować wiarygodną prognozę.";
+
+function displayForecastMessage(message?: string | null): string {
+  if (!message) return NOT_ENOUGH_MSG;
+  if (/not enough historical/i.test(message)) return NOT_ENOUGH_MSG;
+  return message;
+}
 
 function formatDate(d: string) {
   return new Date(d).toLocaleDateString("pl-PL", {
@@ -124,7 +131,12 @@ export default function SalesForecast() {
   ];
 
   const selectedProductName =
-    productId != null ? products.find((p) => p.product_id === productId)?.product_name ?? `Produkt ${productId}` : null;
+    productId != null
+      ? displayProductName(
+          products.find((p) => p.product_id === productId)?.product_name,
+          `Produkt ${productId}`,
+        )
+      : null;
 
   return (
     <div className="min-w-0">
@@ -152,7 +164,7 @@ export default function SalesForecast() {
 
       {warehouseData && warehouseNotEnough && (
         <div className="rounded-lg bg-amber-50 border border-amber-200 p-4 text-amber-800 mb-4">
-          {warehouseData.message ?? NOT_ENOUGH_MSG}
+          {displayForecastMessage(warehouseData.message)}
         </div>
       )}
 
@@ -217,7 +229,7 @@ export default function SalesForecast() {
           <option value="">— Wybierz produkt —</option>
           {products.map((p) => (
             <option key={p.product_id} value={p.product_id}>
-              {p.product_name ?? `Produkt ${p.product_id}`}
+              {displayProductName(p.product_name, `Produkt ${p.product_id}`)}
             </option>
           ))}
         </select>
@@ -227,7 +239,7 @@ export default function SalesForecast() {
 
       {productData && productNotEnough && (
         <div className="rounded-lg bg-amber-50 border border-amber-200 p-4 text-amber-800 mb-4">
-          {productData.message ?? NOT_ENOUGH_MSG}
+          {displayForecastMessage(productData.message)}
         </div>
       )}
 

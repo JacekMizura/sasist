@@ -11,7 +11,7 @@ import {
 function SubNav({ items }: { items: OptimizeSubNavItem[] }) {
   const { pathname } = useLocation();
   return (
-    <nav className="flex w-56 shrink-0 flex-col gap-0.5" aria-label="Optymalizacja — plan zmian">
+    <nav className="flex w-56 shrink-0 flex-col gap-0.5" aria-label="Optymalizacja — harmonogram zmian">
       {items.map((item) => {
         const isActive =
           item.path === "/optymalizacja"

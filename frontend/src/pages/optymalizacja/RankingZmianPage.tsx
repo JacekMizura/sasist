@@ -61,7 +61,7 @@ export default function RankingZmianPage() {
   return (
     <div className="min-w-0 space-y-6">
       <div>
-        <h1 className={analizyPageTitleClass}>Ranking zmian</h1>
+        <h1 className={analizyPageTitleClass}>Klasyfikacja efektów</h1>
         <p className={analizyPageSubtitleClass}>
           Które wdrożone i zweryfikowane zmiany przyniosły największy mierzalny efekt.
         </p>
@@ -69,9 +69,9 @@ export default function RankingZmianPage() {
 
       {ranked.length === 0 ? (
         <div className={analizyEmptyStateClass}>
-          <p className="font-medium text-slate-800">Za mało danych do rankingu</p>
+          <p className="font-medium text-slate-800">Za mało danych do klasyfikacji</p>
           <p className="mt-1 text-sm text-slate-500">
-            Ranking pojawia się dopiero po stanie „Zweryfikowana” i realnym odczycie PRZED/PO.
+            Klasyfikacja pojawia się dopiero po stanie „Zweryfikowana” i realnym odczycie PRZED/PO.
             Nie pokazujemy wartości szacunkowych.
           </p>
           <div className="mt-4 flex flex-wrap justify-center gap-2">
@@ -79,7 +79,7 @@ export default function RankingZmianPage() {
               Zobacz historię zmian
             </Link>
             <Link to="/optymalizacja/plan" className={analizyCtaPrimaryClass}>
-              Otwórz plan zmian
+              Otwórz harmonogram zmian
             </Link>
           </div>
         </div>

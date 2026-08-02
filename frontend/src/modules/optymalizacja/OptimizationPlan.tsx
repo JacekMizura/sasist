@@ -51,7 +51,7 @@ const actionClass = (primary?: boolean) =>
   primary ? analizyCtaPrimaryClass : analizyCtaSecondaryClass;
 
 /**
- * Rekomendacja z narzędzia → CTA „Dodaj do planu zmian”.
+ * Rekomendacja z narzędzia → CTA „Dodaj do harmonogramu zmian”.
  */
 export function OptimizationPlanPanel({
   title = "Rekomendacja",

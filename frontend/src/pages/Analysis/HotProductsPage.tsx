@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { getHotProducts } from "../../api/analysisApi";
 import { PrimaryButton } from "../../design-system/PrimaryButton";
 import { AnalysisDecisionHeader } from "../../modules/analytics/AnalysisDecisionHeader";
+import { displayProductName } from "../../modules/analizy/analizyUi";
 
 const DEFAULT_TENANT_ID = 1;
 const ROWS_PER_PAGE_OPTIONS = [10, 25, 50, 100, 500] as const;
@@ -157,7 +158,7 @@ export default function HotProductsPage() {
                 <tr key={row.product_id}>
                   <td className="px-4 py-2">{idx + 1}</td>
                   <td className="px-4 py-2">{row.product_id}</td>
-                  <td className="px-4 py-2">{row.product_name ?? "—"}</td>
+                  <td className="px-4 py-2">{displayProductName(row.product_name)}</td>
                   <td className="px-4 py-2 text-right">{row.total_quantity}</td>
                 </tr>
               ))

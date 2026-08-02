@@ -42,3 +42,11 @@ export const analizyLoadingClass = "text-sm text-slate-500";
 /** Active item in Raporty / Optymalizacja side nav. */
 export const analizySideNavActiveClass = "bg-orange-500 text-white";
 export const analizySideNavIdleClass = "text-slate-600 hover:bg-slate-100";
+
+/** Map technical / import placeholder product names to Polish UI copy. */
+export function displayProductName(name: string | null | undefined, fallback = "—"): string {
+  const raw = String(name ?? "").trim();
+  if (!raw) return fallback;
+  if (/^unknown product$/i.test(raw)) return "Nieznany produkt";
+  return raw;
+}

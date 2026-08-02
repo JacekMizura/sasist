@@ -54,10 +54,10 @@ export default function HistoriaZmianPage() {
         <div className={analizyEmptyStateClass}>
           <p className="font-medium text-slate-800">Brak wdrożonych zmian</p>
           <p className="mt-1 text-sm text-slate-500">
-            Po oznaczeniu pozycji w Planie jako „Wdrożona” pojawią się tutaj.
+            Po oznaczeniu pozycji w harmonogramie jako „Wdrożona” pojawią się tutaj.
           </p>
           <Link to="/optymalizacja/plan" className={`mt-4 ${analizyCtaPrimaryClass}`}>
-            Przejdź do planu zmian
+            Przejdź do harmonogramu zmian
           </Link>
         </div>
       ) : (

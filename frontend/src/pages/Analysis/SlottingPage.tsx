@@ -56,6 +56,16 @@ function formatNum(n: number, decimals = 2): string {
   }).format(n);
 }
 
+/** UI-only: kody stref z API → etykiety biznesowe. */
+function zoneDisplayName(zone: string): string {
+  const map: Record<string, string> = {
+    PICK_FACE: "Strefa kompletacji",
+    MID_ZONE: "Strefa środkowa",
+    RESERVE: "Rezerwa",
+  };
+  return map[zone] ?? zone;
+}
+
 export default function SlottingPage() {
   const { scope, warehouseId, warehouse, warehouses, warehouseRevision } =
     useWarehouseApiScope();
@@ -244,7 +254,7 @@ export default function SlottingPage() {
       moveCandidates.map((p) => {
         const name = p.product_name ?? `Produkt ${p.product_id}`;
         const from = p.current_location ?? "brak lokalizacji";
-        return `${name}: ${from} → strefa ${p.recommended_zone}`;
+        return `${name}: ${from} → strefa ${zoneDisplayName(p.recommended_zone)}`;
       }),
     [moveCandidates]
   );
@@ -286,8 +296,8 @@ export default function SlottingPage() {
     });
     setPlanMsg(
       result.ok
-        ? "Dodano do planu zmian magazynu."
-        : "Ta rekomendacja jest już w planie zmian."
+        ? "Dodano do harmonogramu zmian magazynu."
+        : "Ta rekomendacja jest już w harmonogramie zmian."
     );
   };
 
@@ -431,7 +441,7 @@ export default function SlottingPage() {
                       </td>
                       <td className="px-4 py-2 text-right">{formatNum(row.distance_to_packing)}</td>
                       <td className="px-4 py-2 text-slate-600">{row.current_location ?? "—"}</td>
-                      <td className="px-4 py-2 text-slate-700">{row.recommended_zone}</td>
+                      <td className="px-4 py-2 text-slate-700">{zoneDisplayName(row.recommended_zone)}</td>
                       <td className="px-4 py-2 text-right font-medium">{formatNum(row.slotting_score, 4)}</td>
                     </tr>
                   ))
@@ -515,7 +525,7 @@ export default function SlottingPage() {
           Wykres analizy układu
         </h2>
         <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-          <p className="text-sm font-medium text-slate-700 mb-3">Rotacja vs dystans do pakowania</p>
+          <p className="text-sm font-medium text-slate-700 mb-3">Rotacja względem dystansu do pakowania</p>
           {chartData.length === 0 ? (
             <div className="h-[360px] flex items-center justify-center text-slate-500 text-sm">
               Brak danych do wyświetlenia.
@@ -573,9 +583,9 @@ export default function SlottingPage() {
         emptyMessage="Brak produktów klasy A do przesunięcia w tym zakresie."
         actions={[
           ...(movePlan.length > 0
-            ? [{ label: "Dodaj do planu zmian", onClick: addSlottingToPlan, primary: true as const }]
+            ? [{ label: "Dodaj do harmonogramu zmian", onClick: addSlottingToPlan, primary: true as const }]
             : []),
-          { label: "Zobacz plan zmian", to: "/optymalizacja/plan" },
+          { label: "Zobacz harmonogram zmian", to: "/optymalizacja/plan" },
           { label: "Sprawdź przeciążone lokalizacje", to: "/analytics/hot-locations" },
         ]}
       />
@@ -583,7 +593,7 @@ export default function SlottingPage() {
         <p className="mt-2 text-sm text-emerald-700">
           {planMsg}{" "}
           <Link to="/optymalizacja/plan" className="font-medium underline">
-            Otwórz plan
+            Otwórz harmonogram
           </Link>
         </p>
       ) : null}

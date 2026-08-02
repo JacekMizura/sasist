@@ -2,15 +2,11 @@
 
 ## Active
 
-**warehouse_id unification (Analizy / Optymalizacja)** — wspólny mechanizm:
+**Audyt wizualny UI Analizy (przeglądarka)** — zakończony 2026-08-02.
+Znaleziono i poprawiono widoczne EN (Centrum: pick-face/stock/OMS/putaway/…; raporty: Unknown Product).
+Po poprawkach: wyłącznie polski UI w hubie Analizy (dozwolone skróty: WMS, SKU, EAN, CSV, XLSX, PZ, SLA, ABC, RK).
 
-- `useWarehouseApiScope()` + `buildWarehouseParams()` (`modules/analizy/warehouseApiScope.ts`)
-- UI: `AnalizyWarehouseSelect` (wiązany z `WarehouseContext.setWarehouse`)
-- API clients biorą `WarehouseApiScope`, nie kopiują `warehouse_id` w ekranach
-
-Backend / kontrakt API **bez zmian**.
-
-IA hubu:
+IA:
 ```
 Analizy → Przegląd · Centrum · Raporty · Optymalizacja
 ```

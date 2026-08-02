@@ -27,7 +27,7 @@ export default function OptymalizacjaLandingPage() {
       <div>
         <h1 className={analizyPageTitleClass}>Optymalizacja</h1>
         <p className={analizyPageSubtitleClass}>
-          Planowanie zmian w magazynie: problem → analiza → rekomendacja → plan → realizacja.
+          Planowanie zmian w magazynie: problem → analiza → rekomendacja → harmonogram → realizacja.
         </p>
       </div>
 
@@ -69,23 +69,23 @@ export default function OptymalizacjaLandingPage() {
           <p className="mt-2 text-sm font-semibold leading-snug text-slate-900">
             {first
               ? `${first.title} (${priorityLabel(first.priority)} · ${statusLabel(first.status)})`
-              : "Uruchom analizę i dodaj do planu"}
+              : "Uruchom analizę i dodaj do harmonogramu"}
           </p>
           <Link to="/optymalizacja/plan" className={`mt-3 ${analizyCtaSecondaryClass}`}>
-            Otwórz plan zmian
+            Otwórz harmonogram zmian
           </Link>
         </div>
       </div>
 
       <div className="flex flex-wrap gap-2">
         <Link to="/optymalizacja/plan" className={analizyCtaPrimaryClass}>
-          Przejdź do planu zmian
+          Przejdź do harmonogramu zmian
         </Link>
         <Link to="/optymalizacja/historia" className={analizyCtaSecondaryClass}>
           Zobacz historię zmian
         </Link>
         <Link to="/optymalizacja/ranking" className={analizyCtaSecondaryClass}>
-          Zobacz ranking skuteczności
+          Zobacz klasyfikację skuteczności
         </Link>
       </div>
 
@@ -99,9 +99,9 @@ export default function OptymalizacjaLandingPage() {
       {waiting.length > 0 ? (
         <section className="overflow-hidden rounded-xl border border-slate-200 bg-white">
           <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
-            <h2 className="text-sm font-semibold text-slate-800">Kolejka planu (5 pierwszych)</h2>
+            <h2 className="text-sm font-semibold text-slate-800">Kolejka harmonogramu (5 pierwszych)</h2>
             <Link to="/optymalizacja/plan" className="text-sm font-medium text-orange-700 hover:underline">
-              Zobacz cały plan
+              Zobacz cały harmonogram
             </Link>
           </div>
           <ul className="divide-y divide-slate-100">
@@ -127,7 +127,7 @@ export default function OptymalizacjaLandingPage() {
       <section>
         <h2 className="mb-2 text-sm font-semibold text-slate-800">Źródła rekomendacji</h2>
         <p className="mb-3 text-sm text-slate-600">
-          Analizy nie są osobnymi planami — każda kończy się dodaniem do wspólnego planu zmian.
+          Analizy nie są osobnymi harmonogramami — każda kończy się dodaniem do wspólnego harmonogramu zmian.
         </p>
         <div className="grid gap-4 sm:grid-cols-3">
           <Link

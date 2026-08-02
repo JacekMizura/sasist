@@ -511,7 +511,7 @@ export function getPlanSnapshot(items = getWarehouseChangePlan()): PlanSnapshot 
   const verified = items.filter((i) => i.status === "zweryfikowana");
   const impactSummary =
     waiting.length === 0
-      ? "Brak oczekujących zmian w planie."
+      ? "Brak oczekujących zmian w harmonogramie."
       : waiting
           .slice(0, 3)
           .map((i) => effectDisplay(i).primary)

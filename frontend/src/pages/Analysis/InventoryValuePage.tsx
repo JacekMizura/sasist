@@ -27,7 +27,7 @@ export default function InventoryValuePage() {
         setWarehousesBreakdown(data.warehouses ?? []);
       })
       .catch((e) => {
-        if (!cancelled) setError(e?.message ?? "Błąd połączenia z backendem");
+        if (!cancelled) setError(e?.message ?? "Błąd połączenia z systemem");
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -45,7 +45,7 @@ export default function InventoryValuePage() {
         decision="Gdzie szukać redukcji zamrożonego kapitału?"
         actions={[
           { label: "Znajdź towar bez rotacji", to: "/analytics/dead-stock", primary: true },
-          { label: "Utwórz plan zakupów", to: "/purchasing/plan" },
+          { label: "Utwórz listę zakupów", to: "/purchasing/plan" },
         ]}
       />
       {error ? (
@@ -64,7 +64,7 @@ export default function InventoryValuePage() {
               {total != null ? `${total.toFixed(2)} zł` : "—"}
             </p>
           </div>
-          <h3 className="mb-2 text-sm font-semibold text-slate-700">Per magazyn</h3>
+          <h3 className="mb-2 text-sm font-semibold text-slate-700">Według magazynu</h3>
           <div className="overflow-hidden rounded-lg border border-slate-200 bg-white">
             <table className="w-full text-sm">
               <thead className="bg-slate-50">

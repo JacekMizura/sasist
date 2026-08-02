@@ -53,7 +53,7 @@ function KpiTable({ title, rows, showGrowth }: { title: string; rows: BundleKpiR
             ) : (
               rows.map((r) => (
                 <tr key={`${title}-${r.bundle_id}`}>
-                  <td className="px-3 py-2">{r.bundle_name}</td>
+                  <td className="px-3 py-2">{polishRecommendation(r.bundle_name)}</td>
                   <td className="px-3 py-2 text-right">{r.units_sold}</td>
                   <td className="px-3 py-2 text-right">{r.revenue_net.toFixed(2)}</td>
                   <td className="px-3 py-2 text-right">
@@ -78,6 +78,30 @@ function KpiTable({ title, rows, showGrowth }: { title: string; rows: BundleKpiR
   );
 }
 
+function priorityLabel(priority: string): string {
+  switch (priority) {
+    case "high":
+      return "Wysoki";
+    case "medium":
+      return "Średni";
+    case "low":
+      return "Niski";
+    default:
+      return priority;
+  }
+}
+
+/** Wyświetlanie rekomendacji z API — bez angielskich żargonów (backend bez zmian). */
+function polishRecommendation(text: string): string {
+  if (text === "OK") return "Bez zmian";
+  return text
+    .replace(/pick-face/gi, "strefa pobrań")
+    .replace(/slottingu/gi, "układu lokalizacji")
+    .replace(/slotting/gi, "układ lokalizacji")
+    .replace(/Bundle/g, "Zestaw")
+    .replace(/bundle/g, "zestaw");
+}
+
 function PriorityBadge({ priority }: { priority: string }) {
   const cls =
     priority === "high"
@@ -85,7 +109,7 @@ function PriorityBadge({ priority }: { priority: string }) {
       : priority === "medium"
         ? "bg-blue-100 text-blue-800"
         : "bg-slate-100 text-slate-600";
-  return <span className={`inline-block px-2 py-0.5 rounded text-xs font-medium ${cls}`}>{priority}</span>;
+  return <span className={`inline-block px-2 py-0.5 rounded text-xs font-medium ${cls}`}>{priorityLabel(priority)}</span>;
 }
 
 export default function BundleIntelligencePage() {
@@ -240,7 +264,7 @@ export default function BundleIntelligencePage() {
                     <td className="px-4 py-2">
                       <PriorityBadge priority={r.priority} />
                     </td>
-                    <td className="px-4 py-2 text-slate-600">{r.recommendation}</td>
+                    <td className="px-4 py-2 text-slate-600">{polishRecommendation(r.recommendation)}</td>
                   </tr>
                 ))
               )}
@@ -272,7 +296,7 @@ export default function BundleIntelligencePage() {
               ) : (
                 replenishment.map((r) => (
                   <tr key={`${r.bundle_id}-${r.product_id}`}>
-                    <td className="px-4 py-2">{r.bundle_name}</td>
+                    <td className="px-4 py-2">{polishRecommendation(r.bundle_name)}</td>
                     <td className="px-4 py-2">
                       {r.product_name}
                       {r.sku ? ` (${r.sku})` : ""}
@@ -280,7 +304,7 @@ export default function BundleIntelligencePage() {
                     <td className="px-4 py-2 text-right">{r.bundle_qty_forecast.toFixed(1)}</td>
                     <td className="px-4 py-2 text-right">{r.qty_per_bundle}</td>
                     <td className="px-4 py-2 text-right font-medium">{r.total_component_qty}</td>
-                    <td className="px-4 py-2 text-slate-600 text-xs">{r.recommendation}</td>
+                    <td className="px-4 py-2 text-slate-600 text-xs">{polishRecommendation(r.recommendation)}</td>
                   </tr>
                 ))
               )}
@@ -318,7 +342,7 @@ export default function BundleIntelligencePage() {
                         <td className="px-4 py-2">{r.cart_code ?? `#${r.cart_id}`}</td>
                         <td className="px-4 py-2 text-right">{r.utilization_percent}%</td>
                         <td className="px-4 py-2 text-right">{r.bundle_orders_count}</td>
-                        <td className="px-4 py-2 text-slate-600 text-xs">{r.recommendation}</td>
+                        <td className="px-4 py-2 text-slate-600 text-xs">{polishRecommendation(r.recommendation)}</td>
                       </tr>
                     ))
                   )}
@@ -356,7 +380,7 @@ export default function BundleIntelligencePage() {
                         <td className="px-4 py-2">{r.segment_label ?? "—"}</td>
                         <td className="px-4 py-2 text-right">{r.fill_percent}%</td>
                         <td className="px-4 py-2 text-center">{r.has_bundle ? "tak" : "—"}</td>
-                        <td className="px-4 py-2 text-slate-600 text-xs">{r.recommendation}</td>
+                        <td className="px-4 py-2 text-slate-600 text-xs">{polishRecommendation(r.recommendation)}</td>
                       </tr>
                     ))
                   )}

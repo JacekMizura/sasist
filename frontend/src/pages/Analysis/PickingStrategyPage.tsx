@@ -46,6 +46,17 @@ function formatNum(n: number, decimals = 1): string {
   }).format(n);
 }
 
+/** UI-only labels; keep raw strategy_name for API / dedupeKey. */
+function strategyDisplayName(strategyName: string): string {
+  const map: Record<string, string> = {
+    CART: "Wózek",
+    BASKET: "Koszyki",
+    ZONE: "Strefy",
+    HYBRID: "Hybryda",
+  };
+  return map[strategyName] ?? strategyName;
+}
+
 export default function PickingStrategyPage() {
   const { scope, warehouseId, warehouse, warehouses, warehouseRevision } =
     useWarehouseApiScope();
@@ -99,12 +110,13 @@ export default function PickingStrategyPage() {
       [user?.first_name, user?.last_name].filter(Boolean).join(" ").trim() ||
       user?.login ||
       "Nieznany";
+    const bestLabel = strategyDisplayName(bestStrategy.strategy_name);
     const result = add({
       source: "strategy",
       dedupeKey: `strategy:wh:${warehouseId}:${bestStrategy.strategy_name}`,
-      title: `Wdróż strategię „${bestStrategy.strategy_name}”`,
-      description: `${formatNum(bestStrategy.orders_per_hour)} zamówień/godz. (vs najsłabsza: ${formatNum(worst.orders_per_hour)})`,
-      executedDescription: `Wdrożono strategię kompletacji „${bestStrategy.strategy_name}”.`,
+      title: `Wdróż strategię „${bestLabel}”`,
+      description: `${formatNum(bestStrategy.orders_per_hour)} zamówień/godz. (względem najsłabszej: ${formatNum(worst.orders_per_hour)})`,
+      executedDescription: `Wdrożono strategię kompletacji „${bestLabel}”.`,
       priority,
       originLabel: "Strategia kompletacji",
       impactConcrete: `+${formatNum(gain)} zamówień/godz. względem najsłabszej strategii`,
@@ -118,13 +130,13 @@ export default function PickingStrategyPage() {
     });
     setPlanMsg(
       result.ok
-        ? "Dodano strategię do planu zmian."
-        : "Ta strategia jest już w planie zmian."
+        ? "Dodano strategię do harmonogramu zmian."
+        : "Ta strategia jest już w harmonogramie zmian."
     );
   };
 
   const chartData = strategies.map((s) => ({
-    name: s.strategy_name,
+    name: strategyDisplayName(s.strategy_name),
     orders_per_hour: s.orders_per_hour,
   }));
 
@@ -305,7 +317,8 @@ export default function PickingStrategyPage() {
                 Rekomendacja dla tego magazynu
               </h3>
               <p className="text-emerald-700">
-                Najlepsza strategia: <strong>{bestStrategy.strategy_name}</strong> —{" "}
+                Najlepsza strategia:{" "}
+                <strong>{strategyDisplayName(bestStrategy.strategy_name)}</strong> —{" "}
                 {formatNum(bestStrategy.orders_per_hour)} zamówień/godz.
               </p>
               <p className="text-slate-600 text-sm mt-1">
@@ -348,7 +361,7 @@ export default function PickingStrategyPage() {
                       className="border-t border-slate-100 hover:bg-slate-50/80"
                     >
                       <td className="py-3 px-4 font-medium text-slate-800">
-                        {s.strategy_name}
+                        {strategyDisplayName(s.strategy_name)}
                       </td>
                       <td className="py-3 px-4 text-right text-slate-700">
                         {formatNum(s.total_walking_distance)}
@@ -419,14 +432,14 @@ export default function PickingStrategyPage() {
       <OptimizationPlanPanel
         summary={
           bestStrategy
-            ? `Rekomendacja: wdroż strategię „${bestStrategy.strategy_name}” (${formatNum(bestStrategy.orders_per_hour)} zamówień/godz.).`
-            : "Uruchom symulację, aby wybrać strategię do planu zmian."
+            ? `Rekomendacja: wdroż strategię „${strategyDisplayName(bestStrategy.strategy_name)}” (${formatNum(bestStrategy.orders_per_hour)} zamówień/godz.).`
+            : "Uruchom symulację, aby wybrać strategię do harmonogramu zmian."
         }
         items={
           bestStrategy
             ? strategies.map(
                 (s) =>
-                  `${s.strategy_name}: ${formatNum(s.orders_per_hour)} zam./godz., dystans ${formatNum(s.total_walking_distance, 0)} m`
+                  `${strategyDisplayName(s.strategy_name)}: ${formatNum(s.orders_per_hour)} zam./godz., dystans ${formatNum(s.total_walking_distance, 0)} m`
               )
             : undefined
         }
@@ -435,20 +448,20 @@ export default function PickingStrategyPage() {
           ...(bestStrategy
             ? [
                 {
-                  label: "Dodaj strategię do planu",
+                  label: "Dodaj strategię do harmonogramu",
                   onClick: saveDecision,
                   primary: true as const,
                 },
               ]
             : []),
-          { label: "Zobacz plan zmian", to: "/optymalizacja/plan" },
+          { label: "Zobacz harmonogram zmian", to: "/optymalizacja/plan" },
         ]}
       />
       {planMsg ? (
         <p className="text-sm text-emerald-700">
           {planMsg}{" "}
           <Link to="/optymalizacja/plan" className="font-medium underline">
-            Otwórz plan
+            Otwórz harmonogram
           </Link>
         </p>
       ) : null}

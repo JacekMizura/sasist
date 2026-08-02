@@ -580,12 +580,12 @@ def extend_alerts(
             _alert(
                 alert_id=f"critical-shortage-{row.product_id}",
                 level="critical",
-                title="Krytyczny brak na pick-face",
+                title="Krytyczny brak w strefie pobrań",
                 category="Braki",
                 priority_group="critical_now",
-                description="Pick-face jest pusty, ale w lokalizacji zapasu (rezerwie) jest stock — utwórz uzupełnienie.",
+                description="Strefa pobrań jest pusta, ale w lokalizacji zapasu (rezerwie) jest stan — utwórz uzupełnienie.",
                 responsible_area="Kompletacja / uzupełnienia",
-                recommended_action="Utwórz przesunięcie z lokalizacji źródłowej na pick-face.",
+                recommended_action="Utwórz przesunięcie z lokalizacji źródłowej do strefy pobrań.",
                 now=now,
                 impact=[
                     {"label": "Blokuje", "value": f"{row.blocked_orders} zamówień", "tone": "red"},
@@ -596,7 +596,7 @@ def extend_alerts(
                     {"label": "SKU", "value": row.sku or row.ean or f"ID {row.product_id}", "tone": "neutral"},
                     {"label": "Strefa", "value": row.zone or row.target_location or "Nieprzypisana", "tone": "neutral"},
                     {
-                        "label": "Stock źródłowy",
+                        "label": "Stan źródłowy",
                         "value": str(row.source_available_qty or row.reserve_stock),
                         "tone": "blue" if (row.source_available_qty or row.reserve_stock) > 0 else "red",
                     },
@@ -609,9 +609,9 @@ def extend_alerts(
                         "tone": "primary",
                         "payload": {
                             "task_type": "replenishment",
-                            "title": f"Uzupełnij {row.target_location or 'pick-face'}",
+                            "title": f"Uzupełnij {row.target_location or 'strefę pobrań'}",
                             "description": row.instruction_label
-                            or f"Przenieś z rezerwy do {row.target_location or 'lokalizacji pickingowej'}: {row.product_name}",
+                            or f"Przenieś z rezerwy do {row.target_location or 'lokalizacji pobrań'}: {row.product_name}",
                             "product_id": row.product_id,
                             "sku": row.sku,
                             "quantity": row.move_quantity or row.missing_quantity,
@@ -642,12 +642,12 @@ def extend_alerts(
             _alert(
                 alert_id=f"no-source-stock-{pid}",
                 level="critical" if blocked > 0 else "warning",
-                title="Brak stocku źródłowego",
+                title="Brak stanu źródłowego",
                 category="Braki",
                 priority_group="critical_now" if blocked > 0 else "requires_action",
                 description=(
-                    "Jest zapotrzebowanie na pick-face, ale w magazynie nie ma stocku w lokalizacji zapasu możliwego do przesunięcia. "
-                    "To nie jest zadanie uzupełnienia — wymaga przyjęcia, dogrywki lub decyzji OMS."
+                    "Jest zapotrzebowanie w strefie pobrań, ale w magazynie nie ma stanu w lokalizacji zapasu możliwego do przesunięcia. "
+                    "To nie jest zadanie uzupełnienia — wymaga przyjęcia, dogrywki lub decyzji w systemie zamówień."
                 ),
                 responsible_area="Braki / przyjęcia",
                 recommended_action="Sprawdź dostawy, braki zamówień lub zamienniki — nie twórz pustego przesunięcia.",
@@ -655,12 +655,12 @@ def extend_alerts(
                 impact=[
                     {"label": "Blokuje", "value": f"{blocked} zamówień", "tone": "red" if blocked else "neutral"},
                     {"label": "Potrzeba", "value": str(row.get("need_qty") or 0), "detail": "szt.", "tone": "amber"},
-                    {"label": "Stock źródłowy", "value": "0", "tone": "red"},
+                    {"label": "Stan źródłowy", "value": "0", "tone": "red"},
                 ],
                 context=[
                     {"label": "SKU", "value": row.get("sku") or f"ID {pid}", "tone": "neutral"},
-                    {"label": "Pick-face", "value": row.get("target_location") or "—", "tone": "neutral"},
-                    {"label": "Pick stock", "value": str(row.get("pick_stock") or 0), "tone": "red"},
+                    {"label": "Strefa pobrań", "value": row.get("target_location") or "—", "tone": "neutral"},
+                    {"label": "Stan w strefie pobrań", "value": str(row.get("pick_stock") or 0), "tone": "red"},
                 ],
                 actions=[
                     {"label": "Otwórz braki", "action_type": "navigate", "target_path": "/wms/braki", "tone": "primary"},
@@ -768,7 +768,7 @@ def extend_alerts(
                 title=f"Rozlokowanie PZ opóźnione{f' — Strefa {top_zone.zone}' if top_zone else ''}",
                 category="Rozlokowanie",
                 priority_group="critical_now" if level == "critical" else "requires_action",
-                description="Towar po przyjęciu czeka na rozlokowanie PZ i może blokować uzupełnienia pick-face.",
+                description="Towar po przyjęciu czeka na rozlokowanie PZ i może blokować uzupełnienia strefy pobrań.",
                 responsible_area="Rozlokowanie PZ",
                 recommended_action="Otwórz kolejkę rozlokowania PZ i przypisz operatora do najbardziej obciążonej strefy.",
                 now=now,
@@ -826,7 +826,7 @@ def extend_alerts(
                     {"label": "Otwórz dostawy", "action_type": "navigate", "target_path": "/wms/receiving", "tone": "primary"},
                     {"label": "Zobacz dostawy", "action_type": "switch_tab", "target_tab": "inbound", "tone": "secondary"},
                 ],
-                prediction_label="Opóźnione przyjęcia mogą przejść w braki pick-face.",
+                prediction_label="Opóźnione przyjęcia mogą przejść w braki w strefie pobrań.",
             )
         )
     elif inbound.active_deliveries:

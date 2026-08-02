@@ -85,7 +85,7 @@ export default function AnalysisDashboard() {
     },
     {
       title: "Najczęściej sprzedawane produkty",
-      value: "Ranking sprzedaży",
+      value: "Zestawienie sprzedaży",
       hint: "Które produkty generują największy ruch?",
       decision: "Co trzymać blisko strefy kompletacji?",
       to: "/analytics/hot-products",
@@ -116,12 +116,12 @@ export default function AnalysisDashboard() {
       cta: "Sprawdź problemy w zestawach",
     },
     {
-      title: "Plan zmian lokalizacji",
+      title: "Harmonogram zmian lokalizacji",
       value: "Co zmienić w magazynie",
       hint: "Gdzie warto przenieść towar, żeby skrócić drogę?",
       decision: "Które przesunięcia wdrożyć w pierwszej kolejności?",
       to: "/optymalizacja/slotting",
-      cta: "Otwórz plan zmian",
+      cta: "Otwórz harmonogram zmian",
     },
   ];
 

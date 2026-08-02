@@ -174,7 +174,7 @@ export default function PickPathSimulation() {
         sourcePath: "/optymalizacja/pick-path",
         ...meta,
       });
-      setPlanMsg(result.ok ? "Dodano do planu zmian." : "Ta rekomendacja jest już w planie.");
+      setPlanMsg(result.ok ? "Dodano do harmonogramu zmian." : "Ta rekomendacja jest już w harmonogramie.");
       return;
     }
     if (kind === "batch" && batchResult?.total_distance != null) {
@@ -196,7 +196,7 @@ export default function PickPathSimulation() {
         sourcePath: "/optymalizacja/pick-path",
         ...meta,
       });
-      setPlanMsg(result.ok ? "Dodano do planu zmian." : "Ta rekomendacja jest już w planie.");
+      setPlanMsg(result.ok ? "Dodano do harmonogramu zmian." : "Ta rekomendacja jest już w harmonogramie.");
       return;
     }
     if (kind === "single" && routeData?.total_distance != null) {
@@ -217,7 +217,7 @@ export default function PickPathSimulation() {
         sourcePath: "/optymalizacja/pick-path",
         ...meta,
       });
-      setPlanMsg(result.ok ? "Dodano do planu zmian." : "Ta rekomendacja jest już w planie.");
+      setPlanMsg(result.ok ? "Dodano do harmonogramu zmian." : "Ta rekomendacja jest już w harmonogramie.");
     }
   };
 
@@ -272,7 +272,7 @@ export default function PickPathSimulation() {
       setRouteData(null);
       setNodes([]);
       setEdges([]);
-      setError("Order number not available");
+      setError("Brak numeru zamówienia");
       return;
     }
     setLoading(true);
@@ -328,7 +328,7 @@ export default function PickPathSimulation() {
   const runBatchSimulation = () => {
     if (warehouseId == null || selectedIds.size === 0) return;
     if (!hasStartAndPacking) {
-      setError("Define start and packing locations in the warehouse designer.");
+      setError("Ustaw lokalizację startu kompletacji i pakowania w projektancie magazynu.");
       return;
     }
     const orderIds = orders.filter((o) => selectedIds.has(o.id)).map((o) => o.id);
@@ -405,26 +405,26 @@ export default function PickPathSimulation() {
             summary={
               distanceSummary?.avgDistance != null
                 ? `Średni dystans: ${Math.round(distanceSummary.avgDistance)} m na ${distanceSummary.count} zamówień.`
-                : "Policz dystans zamówień, aby dodać rekomendację do planu."
+                : "Policz dystans zamówień, aby dodać rekomendację do harmonogramu."
             }
             actions={[
               ...(distanceSummary?.avgDistance != null
                 ? [
                     {
-                      label: "Dodaj do planu zmian",
+                      label: "Dodaj do harmonogramu zmian",
                       onClick: () => addRoutesToPlan("distance"),
                       primary: true as const,
                     },
                   ]
                 : []),
-              { label: "Zobacz plan zmian", to: "/optymalizacja/plan" },
+              { label: "Zobacz harmonogram zmian", to: "/optymalizacja/plan" },
             ]}
           />
           {planMsg ? (
             <p className="mt-2 text-sm text-emerald-700">
               {planMsg}{" "}
               <Link to="/optymalizacja/plan" className="font-medium underline">
-                Otwórz plan
+                Otwórz harmonogram
               </Link>
             </p>
           ) : null}
@@ -448,7 +448,7 @@ export default function PickPathSimulation() {
 
       {warehouseId != null && !hasStartAndPacking && (
         <div className="rounded-lg bg-amber-50 border border-amber-200 p-4 mb-4 text-amber-800 text-sm">
-          Define start and packing locations in the warehouse designer.
+          Ustaw lokalizację startu kompletacji i pakowania w projektancie magazynu.
         </div>
       )}
 
@@ -647,7 +647,7 @@ export default function PickPathSimulation() {
                 stroke="#166534"
                 strokeWidth={2}
               />
-              <text x={scaleX(routeData.start.x)} y={scaleY(routeData.start.y) + 1} textAnchor="middle" fontSize={8} fill="#fff" fontWeight="bold">START</text>
+              <text x={scaleX(routeData.start.x)} y={scaleY(routeData.start.y) + 1} textAnchor="middle" fontSize={8} fill="#fff" fontWeight="bold">Pocz.</text>
             </g>
           )}
           {routeData?.end && (
@@ -662,7 +662,7 @@ export default function PickPathSimulation() {
                 strokeWidth={2}
                 rx={2}
               />
-              <text x={scaleX(routeData.end.x)} y={scaleY(routeData.end.y) + 1} textAnchor="middle" fontSize={8} fill="#fff" fontWeight="bold">PACK</text>
+              <text x={scaleX(routeData.end.x)} y={scaleY(routeData.end.y) + 1} textAnchor="middle" fontSize={8} fill="#fff" fontWeight="bold">Pak.</text>
             </g>
           )}
           {routePoints.map((p, i) => (
@@ -681,8 +681,8 @@ export default function PickPathSimulation() {
       <div className="mt-2 text-sm text-slate-500">
         <span className="inline-block w-3 h-3 rounded-full bg-[#3b82f6] align-middle mr-1" /> Graf
         <span className="ml-4"><span className="inline-block w-4 h-0.5 bg-[#dc2626] align-middle mr-1" style={{ borderStyle: "dashed" }} /> Trasa</span>
-        <span className="ml-4"><span className="inline-block w-3 h-3 rounded-full bg-[#22c55e] align-middle mr-1" /> START</span>
-        <span className="ml-4"><span className="inline-block w-3 h-3 rounded bg-[#3b82f6] align-middle mr-1" /> PACK</span>
+        <span className="ml-4"><span className="inline-block w-3 h-3 rounded-full bg-[#22c55e] align-middle mr-1" /> Początek</span>
+        <span className="ml-4"><span className="inline-block w-3 h-3 rounded bg-[#3b82f6] align-middle mr-1" /> Pakowanie</span>
       </div>
 
       <OptimizationPlanPanel
@@ -691,13 +691,13 @@ export default function PickPathSimulation() {
             ? `Wsad: ${batchResult.orders_count ?? selectedIds.size} zamówień, łącznie ${Math.round(batchResult.total_distance)} m.`
             : routeData?.total_distance != null
               ? `Wybrane zamówienie: ${routeData.total_distance} m.`
-              : "Uruchom symulację trasy, aby dodać rekomendację do planu zmian."
+              : "Uruchom symulację trasy, aby dodać rekomendację do harmonogramu zmian."
         }
         actions={[
           ...(batchResult?.total_distance != null
             ? [
                 {
-                  label: "Dodaj do planu zmian",
+                  label: "Dodaj do harmonogramu zmian",
                   onClick: () => addRoutesToPlan("batch"),
                   primary: true as const,
                 },
@@ -705,20 +705,20 @@ export default function PickPathSimulation() {
             : routeData?.total_distance != null
               ? [
                   {
-                    label: "Dodaj do planu zmian",
+                    label: "Dodaj do harmonogramu zmian",
                     onClick: () => addRoutesToPlan("single"),
                     primary: true as const,
                   },
                 ]
               : []),
-          { label: "Zobacz plan zmian", to: "/optymalizacja/plan" },
+          { label: "Zobacz harmonogram zmian", to: "/optymalizacja/plan" },
         ]}
       />
       {planMsg && view === "routes" ? (
         <p className="mt-2 text-sm text-emerald-700">
           {planMsg}{" "}
           <Link to="/optymalizacja/plan" className="font-medium underline">
-            Otwórz plan
+            Otwórz harmonogram
           </Link>
         </p>
       ) : null}

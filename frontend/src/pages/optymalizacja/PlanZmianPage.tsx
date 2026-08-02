@@ -161,7 +161,7 @@ export default function PlanZmianPage() {
     <div className="min-w-0 space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className={analizyPageTitleClass}>Plan zmian magazynu</h1>
+          <h1 className={analizyPageTitleClass}>Harmonogram zmian magazynu</h1>
           <p className={analizyPageSubtitleClass}>
             Nowa → Zaplanowana → W realizacji → Wdrożona → Zweryfikowana (lub Odrzucona).
           </p>
@@ -170,11 +170,11 @@ export default function PlanZmianPage() {
           <button
             type="button"
             onClick={() => {
-              if (window.confirm("Wyczyścić cały plan zmian?")) clear();
+              if (window.confirm("Wyczyścić cały harmonogram zmian?")) clear();
             }}
             className={analizyCtaSecondaryClass}
           >
-            Wyczyść plan
+            Wyczyść harmonogram
           </button>
         ) : null}
       </div>
@@ -200,9 +200,9 @@ export default function PlanZmianPage() {
 
       {items.length === 0 ? (
         <div className={analizyEmptyStateClass}>
-          <p className="font-medium text-slate-700">Plan jest pusty</p>
+          <p className="font-medium text-slate-700">Harmonogram jest pusty</p>
           <p className="mt-1 text-sm text-slate-500">
-            Uruchom analizę i dodaj rekomendację przyciskiem „Dodaj do planu zmian”.
+            Uruchom analizę i dodaj rekomendację przyciskiem „Dodaj do harmonogramu zmian”.
           </p>
           <div className="mt-4 flex flex-wrap justify-center gap-2">
             <Link to="/optymalizacja/slotting" className={analizyCtaPrimaryClass}>
@@ -364,7 +364,7 @@ export default function PlanZmianPage() {
                       onClick={() => remove(row.id)}
                       className="text-sm text-slate-500 hover:text-red-700"
                     >
-                      Usuń z planu
+                      Usuń z harmonogramu
                     </button>
                   </div>
                 </div>

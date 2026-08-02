@@ -186,12 +186,12 @@ def build_replenishment_alerts(
                 priority_label=(
                     "Przesunięcie w toku"
                     if priority == "blue"
-                    else ("Blokuje zamówienia" if priority == "red" else "Niski stan pick-face")
+                    else ("Blokuje zamówienia" if priority == "red" else "Niski stan strefy pobrań")
                 ),
                 minutes_since_detected=_minutes_between(first_shortage_at.get(pid), now),
                 zone=None,
                 category=None,
-                action_label="Utwórz przesunięcie" if move_qty > _EPS else "Brak stocku źródłowego",
+                action_label="Utwórz przesunięcie" if move_qty > _EPS else "Brak stanu źródłowego",
                 instruction_label=instruction,
             )
         )
