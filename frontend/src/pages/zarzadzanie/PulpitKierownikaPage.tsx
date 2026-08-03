@@ -1,19 +1,12 @@
-import { useEffect } from "react";
 import { ManagerDecisionsPanel } from "./ManagerDecisionsPanel";
 import { PulpitSection } from "./PulpitSection";
 import CentrumOperacyjnePage from "../centrum-operacyjne/CentrumOperacyjnePage";
 
 /**
- * Jedyny ekran live kierownika — Pulpit (dashboard).
- * Sekcje zwijane, nie osobne moduły / routingi.
+ * Jedyny ekran live kierownika — Pulpit jest dashboardem.
+ * Sekcje zwijane; bez osobnego routingu decyzji.
  */
 export default function PulpitKierownikaPage() {
-  useEffect(() => {
-    if (window.location.hash === "#decyzje") {
-      document.getElementById("decyzje")?.scrollIntoView({ behavior: "smooth", block: "start" });
-    }
-  }, []);
-
   return (
     <div className="min-w-0 space-y-4">
       <header>
@@ -23,7 +16,7 @@ export default function PulpitKierownikaPage() {
         </p>
       </header>
 
-      <PulpitSection id="decyzje" title="Decyzje" defaultOpen>
+      <PulpitSection id="co-zrobic-teraz" title="Co zrobić teraz" defaultOpen>
         <ManagerDecisionsPanel />
       </PulpitSection>
 

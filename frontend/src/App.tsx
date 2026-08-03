@@ -174,6 +174,9 @@ import WmsPackingWorkstationGate from "./pages/wms/WmsPackingWorkstationGate"
 import WmsDirectSalesPage from "./pages/wms/WmsDirectSalesPage"
 import DirectSalesSettingsLayout from "./pages/wms/direct-sales/DirectSalesSettingsLayout"
 import PulpitKierownikaPage from "./pages/zarzadzanie/PulpitKierownikaPage"
+import ZarzadzanieHubPage from "./pages/zarzadzanie/ZarzadzanieHubPage"
+import AdministracjaHubPage from "./pages/administracja/AdministracjaHubPage"
+import AdministracjaModuleLayout from "./pages/administracja/AdministracjaModuleLayout"
 import WmsReceivingPage from "./pages/wms/WmsReceivingPage"
 import WmsReceivingCountPage from "./pages/wms/WmsReceivingCountPage"
 import WmsIncompleteProductDataPage from "./pages/wms/WmsIncompleteProductDataPage"
@@ -470,7 +473,7 @@ export const router = createBrowserRouter(
         <Route path="receiving/incomplete-product-data" element={<WmsIncompleteProductDataPage />} />
         <Route path="product-data-completion" element={<WmsProductDataCompletionPage />} />
         <Route path="receiving" element={<WmsReceivingPage />} />
-        <Route path="supply-flow" element={<Navigate to="/pulpit-kierownika#decyzje" replace />} />
+        <Route path="supply-flow" element={<Navigate to="/zarzadzanie-magazynem/pulpit" replace />} />
         <Route path="putaway" element={<WmsPutawayPage />} />
         <Route path="putaway/:pzId/item/:itemId/execute" element={<WmsPutawayExecutePage />} />
         <Route path="putaway/:pzId/item/:itemId" element={<WmsPutawayItemDetailPage />} />
@@ -536,7 +539,7 @@ export const router = createBrowserRouter(
         />
         <Route path="product-preview" element={<WmsProductPreviewHubPage />} />
         <Route path="product-preview/:productId" element={<WmsProductPreviewPage />} />
-        <Route path="operations/*" element={<Navigate to="/pulpit-kierownika" replace />} />
+        <Route path="operations/*" element={<Navigate to="/zarzadzanie-magazynem/pulpit" replace />} />
         <Route
           path="direct-sales"
           element={
@@ -929,38 +932,25 @@ export const router = createBrowserRouter(
                 <Route path="barcode-management" element={<BarcodeManagement />} />
                 {/* LEGACY technical stock list — not Magazyn → Inwentaryzacja (/inventory-count). */}
                 <Route path="inventory" element={<InventoryList />} />
-                <Route element={<AnalizyModuleLayout />}>
-                  <Route path="pulpit-kierownika" element={<PulpitKierownikaPage />} />
-                  <Route path="centrum-operacyjne" element={<Navigate to="/pulpit-kierownika" replace />} />
-                  <Route path="analytics/warehouse-operations" element={<Navigate to="/pulpit-kierownika" replace />} />
-                  <Route path="analytics/live-warehouse" element={<Navigate to="/pulpit-kierownika" replace />} />
-                  <Route path="analytics" element={<AnalyticsLayout />}>
-                    <Route index element={<Navigate to="/pulpit-kierownika" replace />} />
-                    <Route path="dashboard" element={<Navigate to="/pulpit-kierownika" replace />} />
+                <Route path="administracja-magazynem" element={<AdministracjaModuleLayout />}>
+                  <Route index element={<AdministracjaHubPage />} />
+                </Route>
+                <Route path="zarzadzanie-magazynem" element={<AnalizyModuleLayout />}>
+                  <Route index element={<ZarzadzanieHubPage />} />
+                  <Route path="pulpit" element={<PulpitKierownikaPage />} />
+                  <Route path="raporty" element={<AnalyticsLayout />}>
+                    <Route index element={<Navigate to="inventory-value" replace />} />
                     <Route path="inventory-value" element={<InventoryValue />} />
                     <Route path="dead-stock" element={<DeadStock />} />
-                    <Route path="product-rotation" element={<Navigate to="/analytics/hot-products" replace />} />
                     <Route path="hot-products" element={<HotProducts />} />
                     <Route path="product-affinity" element={<ProductAffinity />} />
-                    <Route path="walking-cost" element={<Navigate to="/optymalizacja/pick-path" replace />} />
                     <Route path="hot-locations" element={<HotLocations />} />
-                    <Route path="pick-density" element={<Navigate to="/analytics/hot-locations" replace />} />
                     <Route path="picking-analysis" element={<PickingAnalysis />} />
                     <Route path="sales-forecast" element={<SalesForecastAnalytics />} />
-                    <Route path="batch-picking" element={<Navigate to="/analytics/hot-products" replace />} />
                     <Route path="bundle-intelligence" element={<BundleIntelligence />} />
                     <Route path="warehouse-map" element={<WarehouseMap />} />
-                    <Route path="pick-path-simulation" element={<Navigate to="/optymalizacja/pick-path" replace />} />
-                    <Route path="warehouse-day-simulation" element={<Navigate to="/optymalizacja/pick-path" replace />} />
-                    <Route path="pick-time-simulation" element={<Navigate to="/optymalizacja/picking-strategy" replace />} />
-                    <Route path="worker-flow-simulation" element={<Navigate to="/pulpit-kierownika" replace />} />
-                    <Route path="slotting" element={<Navigate to="/optymalizacja/slotting" replace />} />
-                    <Route path="picking-strategy" element={<Navigate to="/optymalizacja/picking-strategy" replace />} />
-                    <Route path="layout-optimization" element={<Navigate to="/optymalizacja/slotting" replace />} />
-                    <Route path="warehouse-throughput" element={<Navigate to="/analytics/inventory-value" replace />} />
-                    <Route path="picking-issues-dead-stock" element={<Navigate to="/analytics/dead-stock" replace />} />
                   </Route>
-                  <Route path="optymalizacja" element={<OptymalizacjaLayout />}>
+                  <Route path="plan-zmian" element={<OptymalizacjaLayout />}>
                     <Route index element={<OptymalizacjaLandingPage />} />
                     <Route path="plan" element={<PlanZmianPage />} />
                     <Route path="historia" element={<HistoriaZmianPage />} />
@@ -970,34 +960,70 @@ export const router = createBrowserRouter(
                     <Route path="pick-path" element={<PickPathSimulation />} />
                   </Route>
                 </Route>
-                <Route path="analysis" element={<Navigate to="/pulpit-kierownika" replace />} />
-                <Route path="analiza" element={<Navigate to="/pulpit-kierownika" replace />} />
-                <Route path="analysis/dashboard" element={<Navigate to="/pulpit-kierownika" replace />} />
-                <Route path="analysis/inventory-value" element={<Navigate to="/analytics/inventory-value" replace />} />
-                <Route path="analysis/dead-stock" element={<Navigate to="/analytics/dead-stock" replace />} />
-                <Route path="analysis/product-rotation" element={<Navigate to="/analytics/hot-products" replace />} />
-                <Route path="analysis/hot-products" element={<Navigate to="/analytics/hot-products" replace />} />
-                <Route path="analysis/product-pairs" element={<Navigate to="/analytics/product-affinity" replace />} />
-                <Route path="analysis/walking-cost" element={<Navigate to="/optymalizacja/pick-path" replace />} />
-                <Route path="analysis/pick-heatmap" element={<Navigate to="/analytics/hot-locations" replace />} />
-                <Route path="analysis/pick-density" element={<Navigate to="/analytics/hot-locations" replace />} />
-                <Route path="analysis/warehouse-operations" element={<Navigate to="/pulpit-kierownika" replace />} />
-                <Route path="analysis/live-warehouse" element={<Navigate to="/pulpit-kierownika" replace />} />
-                <Route path="analiza/centrum-operacyjne" element={<Navigate to="/pulpit-kierownika" replace />} />
-                <Route path="analysis/picking-analysis" element={<Navigate to="/analytics/picking-analysis" replace />} />
-                <Route path="analysis/sales-forecast" element={<Navigate to="/analytics/sales-forecast" replace />} />
-                <Route path="analysis/batch-picking" element={<Navigate to="/analytics/hot-products" replace />} />
-                <Route path="analysis/bundle-intelligence" element={<Navigate to="/analytics/bundle-intelligence" replace />} />
-                <Route path="analysis/pick-path-simulation" element={<Navigate to="/optymalizacja/pick-path" replace />} />
-                <Route path="analysis/warehouse-day-simulation" element={<Navigate to="/optymalizacja/pick-path" replace />} />
-                <Route path="analysis/pick-time-simulation" element={<Navigate to="/optymalizacja/picking-strategy" replace />} />
-                <Route path="analysis/worker-flow-simulation" element={<Navigate to="/pulpit-kierownika" replace />} />
-                <Route path="analysis/slotting" element={<Navigate to="/optymalizacja/slotting" replace />} />
-                <Route path="analysis/picking-strategy" element={<Navigate to="/optymalizacja/picking-strategy" replace />} />
-                <Route path="analysis/layout-optimization" element={<Navigate to="/optymalizacja/slotting" replace />} />
-                <Route path="analysis/warehouse-throughput" element={<Navigate to="/analytics/inventory-value" replace />} />
-                <Route path="analysis/warehouse-map" element={<Navigate to="/analytics/warehouse-map" replace />} />
-                <Route path="analysis/picking-issues-dead-stock" element={<Navigate to="/analytics/dead-stock" replace />} />
+                {/* Legacy → Zarządzanie magazynem */}
+                <Route path="pulpit-kierownika" element={<Navigate to="/zarzadzanie-magazynem/pulpit" replace />} />
+                <Route path="centrum-operacyjne" element={<Navigate to="/zarzadzanie-magazynem/pulpit" replace />} />
+                <Route path="analytics/warehouse-operations" element={<Navigate to="/zarzadzanie-magazynem/pulpit" replace />} />
+                <Route path="analytics/live-warehouse" element={<Navigate to="/zarzadzanie-magazynem/pulpit" replace />} />
+                <Route path="analytics" element={<Navigate to="/zarzadzanie-magazynem/raporty" replace />} />
+                <Route path="analytics/dashboard" element={<Navigate to="/zarzadzanie-magazynem/raporty" replace />} />
+                <Route path="analytics/inventory-value" element={<Navigate to="/zarzadzanie-magazynem/raporty/inventory-value" replace />} />
+                <Route path="analytics/dead-stock" element={<Navigate to="/zarzadzanie-magazynem/raporty/dead-stock" replace />} />
+                <Route path="analytics/product-rotation" element={<Navigate to="/zarzadzanie-magazynem/raporty/hot-products" replace />} />
+                <Route path="analytics/hot-products" element={<Navigate to="/zarzadzanie-magazynem/raporty/hot-products" replace />} />
+                <Route path="analytics/product-affinity" element={<Navigate to="/zarzadzanie-magazynem/raporty/product-affinity" replace />} />
+                <Route path="analytics/walking-cost" element={<Navigate to="/zarzadzanie-magazynem/plan-zmian/pick-path" replace />} />
+                <Route path="analytics/hot-locations" element={<Navigate to="/zarzadzanie-magazynem/raporty/hot-locations" replace />} />
+                <Route path="analytics/pick-density" element={<Navigate to="/zarzadzanie-magazynem/raporty/hot-locations" replace />} />
+                <Route path="analytics/picking-analysis" element={<Navigate to="/zarzadzanie-magazynem/raporty/picking-analysis" replace />} />
+                <Route path="analytics/sales-forecast" element={<Navigate to="/zarzadzanie-magazynem/raporty/sales-forecast" replace />} />
+                <Route path="analytics/batch-picking" element={<Navigate to="/zarzadzanie-magazynem/raporty/hot-products" replace />} />
+                <Route path="analytics/bundle-intelligence" element={<Navigate to="/zarzadzanie-magazynem/raporty/bundle-intelligence" replace />} />
+                <Route path="analytics/warehouse-map" element={<Navigate to="/zarzadzanie-magazynem/raporty/warehouse-map" replace />} />
+                <Route path="analytics/pick-path-simulation" element={<Navigate to="/zarzadzanie-magazynem/plan-zmian/pick-path" replace />} />
+                <Route path="analytics/warehouse-day-simulation" element={<Navigate to="/zarzadzanie-magazynem/plan-zmian/pick-path" replace />} />
+                <Route path="analytics/pick-time-simulation" element={<Navigate to="/zarzadzanie-magazynem/plan-zmian/picking-strategy" replace />} />
+                <Route path="analytics/worker-flow-simulation" element={<Navigate to="/zarzadzanie-magazynem/pulpit" replace />} />
+                <Route path="analytics/slotting" element={<Navigate to="/zarzadzanie-magazynem/plan-zmian/slotting" replace />} />
+                <Route path="analytics/picking-strategy" element={<Navigate to="/zarzadzanie-magazynem/plan-zmian/picking-strategy" replace />} />
+                <Route path="analytics/layout-optimization" element={<Navigate to="/zarzadzanie-magazynem/plan-zmian/slotting" replace />} />
+                <Route path="analytics/warehouse-throughput" element={<Navigate to="/zarzadzanie-magazynem/raporty/inventory-value" replace />} />
+                <Route path="analytics/picking-issues-dead-stock" element={<Navigate to="/zarzadzanie-magazynem/raporty/dead-stock" replace />} />
+                <Route path="optymalizacja" element={<Navigate to="/zarzadzanie-magazynem/plan-zmian" replace />} />
+                <Route path="optymalizacja/plan" element={<Navigate to="/zarzadzanie-magazynem/plan-zmian/plan" replace />} />
+                <Route path="optymalizacja/historia" element={<Navigate to="/zarzadzanie-magazynem/plan-zmian/historia" replace />} />
+                <Route path="optymalizacja/ranking" element={<Navigate to="/zarzadzanie-magazynem/plan-zmian/ranking" replace />} />
+                <Route path="optymalizacja/slotting" element={<Navigate to="/zarzadzanie-magazynem/plan-zmian/slotting" replace />} />
+                <Route path="optymalizacja/picking-strategy" element={<Navigate to="/zarzadzanie-magazynem/plan-zmian/picking-strategy" replace />} />
+                <Route path="optymalizacja/pick-path" element={<Navigate to="/zarzadzanie-magazynem/plan-zmian/pick-path" replace />} />
+                <Route path="analysis" element={<Navigate to="/zarzadzanie-magazynem" replace />} />
+                <Route path="analiza" element={<Navigate to="/zarzadzanie-magazynem" replace />} />
+                <Route path="analysis/dashboard" element={<Navigate to="/zarzadzanie-magazynem/pulpit" replace />} />
+                <Route path="analysis/inventory-value" element={<Navigate to="/zarzadzanie-magazynem/raporty/inventory-value" replace />} />
+                <Route path="analysis/dead-stock" element={<Navigate to="/zarzadzanie-magazynem/raporty/dead-stock" replace />} />
+                <Route path="analysis/product-rotation" element={<Navigate to="/zarzadzanie-magazynem/raporty/hot-products" replace />} />
+                <Route path="analysis/hot-products" element={<Navigate to="/zarzadzanie-magazynem/raporty/hot-products" replace />} />
+                <Route path="analysis/product-pairs" element={<Navigate to="/zarzadzanie-magazynem/raporty/product-affinity" replace />} />
+                <Route path="analysis/walking-cost" element={<Navigate to="/zarzadzanie-magazynem/plan-zmian/pick-path" replace />} />
+                <Route path="analysis/pick-heatmap" element={<Navigate to="/zarzadzanie-magazynem/raporty/hot-locations" replace />} />
+                <Route path="analysis/pick-density" element={<Navigate to="/zarzadzanie-magazynem/raporty/hot-locations" replace />} />
+                <Route path="analysis/warehouse-operations" element={<Navigate to="/zarzadzanie-magazynem/pulpit" replace />} />
+                <Route path="analysis/live-warehouse" element={<Navigate to="/zarzadzanie-magazynem/pulpit" replace />} />
+                <Route path="analiza/centrum-operacyjne" element={<Navigate to="/zarzadzanie-magazynem/pulpit" replace />} />
+                <Route path="analysis/picking-analysis" element={<Navigate to="/zarzadzanie-magazynem/raporty/picking-analysis" replace />} />
+                <Route path="analysis/sales-forecast" element={<Navigate to="/zarzadzanie-magazynem/raporty/sales-forecast" replace />} />
+                <Route path="analysis/batch-picking" element={<Navigate to="/zarzadzanie-magazynem/raporty/hot-products" replace />} />
+                <Route path="analysis/bundle-intelligence" element={<Navigate to="/zarzadzanie-magazynem/raporty/bundle-intelligence" replace />} />
+                <Route path="analysis/pick-path-simulation" element={<Navigate to="/zarzadzanie-magazynem/plan-zmian/pick-path" replace />} />
+                <Route path="analysis/warehouse-day-simulation" element={<Navigate to="/zarzadzanie-magazynem/plan-zmian/pick-path" replace />} />
+                <Route path="analysis/pick-time-simulation" element={<Navigate to="/zarzadzanie-magazynem/plan-zmian/picking-strategy" replace />} />
+                <Route path="analysis/worker-flow-simulation" element={<Navigate to="/zarzadzanie-magazynem/pulpit" replace />} />
+                <Route path="analysis/slotting" element={<Navigate to="/zarzadzanie-magazynem/plan-zmian/slotting" replace />} />
+                <Route path="analysis/picking-strategy" element={<Navigate to="/zarzadzanie-magazynem/plan-zmian/picking-strategy" replace />} />
+                <Route path="analysis/layout-optimization" element={<Navigate to="/zarzadzanie-magazynem/plan-zmian/slotting" replace />} />
+                <Route path="analysis/warehouse-throughput" element={<Navigate to="/zarzadzanie-magazynem/raporty/inventory-value" replace />} />
+                <Route path="analysis/warehouse-map" element={<Navigate to="/zarzadzanie-magazynem/raporty/warehouse-map" replace />} />
+                <Route path="analysis/picking-issues-dead-stock" element={<Navigate to="/zarzadzanie-magazynem/raporty/dead-stock" replace />} />
                 <Route path="system" element={<SystemLayout />}>
                   <Route index element={<Navigate to="health" replace />} />
                   <Route path="health" element={<SystemHealth />} />

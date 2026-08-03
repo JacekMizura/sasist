@@ -1,9 +1,12 @@
 ﻿## Active
 
-**IA Magazyn — 3 stanowiska (2026-08-03).**
+**IA Magazyn — scalona architektura (2026-08-03).**
 
-- Zarządzanie magazynem: `/pulpit-kierownika` (Decyzje = SF API, bez nazwy SF) · Raporty · Plan zmian
-- Administracja magazynem: flyout (layout, regały, strefy, konfiguracja WMS…)
-- Praca na hali (WMS): tylko tryby wykonania
-- Redirecty: centrum-operacyjne, supply-flow, operations → pulpit
-- Backend / Engine SF — bez zmian
+Trzy stanowiska:
+1. **Zarządzanie magazynem** `/zarzadzanie-magazynem` → Pulpit · Raporty · Plan zmian
+2. **Administracja magazynem** `/administracja-magazynem` (L1 hub, nie flyout)
+3. **Praca na hali (WMS)** `/wms/menu` — tylko tryby wykonania
+
+Pulpit = jedyny ekran live kierownika (sekcje zwijane, Decyzje bez osobnego route/hash).
+Supply Flow = tylko backend; Centrum Operacyjne i Operacje WMS = usunięte z produktu (redirect → pulpit).
+Backend / Engine / API — bez zmian w tej iteracji.

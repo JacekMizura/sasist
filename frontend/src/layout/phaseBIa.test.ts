@@ -1,18 +1,21 @@
 import { describe, expect, it } from "vitest";
 
+import { ADMINISTRACJA_LINKS } from "../modules/administracja/administracjaNav";
 import { buildNavFlyoutCategories, isCategoryActive } from "./mainNavConfig";
 
-describe("Phase B IA — Magazyn damages + no stub menu entries", () => {
-  it("exposes Szkody under Magazyn flyout only", () => {
+describe("Phase B IA — Administracja L1 + no stub menu entries", () => {
+  it("exposes Administracja as L1 hub (not flyout) with damages reachable from hub", () => {
     const warehouse = buildNavFlyoutCategories().find((c) => c.id === "warehouse");
     expect(warehouse).toBeTruthy();
-    const byLabel = Object.fromEntries(
-      warehouse!.flyoutSections.flatMap((s) => s.items.map((i) => [i.label, i.path])),
-    );
-    expect(byLabel["Szkody"]).toBe("/office/damages");
-    expect(byLabel["Protokoły szkód"]).toBe("/office/damage-reports");
+    expect(warehouse!.directPath).toBe("/administracja-magazynem");
+    expect(warehouse!.opensSideFlyout).toBeFalsy();
+    expect(warehouse!.flyoutSections).toEqual([]);
+
+    expect(ADMINISTRACJA_LINKS.some((l) => l.to === "/office/damages")).toBe(true);
+    expect(ADMINISTRACJA_LINKS.some((l) => l.to === "/office/damage-reports")).toBe(true);
     expect(isCategoryActive(warehouse!, "/office/damages")).toBe(true);
     expect(isCategoryActive(warehouse!, "/office/damage-reports")).toBe(true);
+    expect(isCategoryActive(warehouse!, "/administracja-magazynem")).toBe(true);
   });
 
   it("does not expose barcode, waves, planning, inventory list, or KSeF in main nav", () => {

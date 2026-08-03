@@ -7,12 +7,10 @@
 
 import type { LucideIcon } from "lucide-react";
 import {
-  Activity,
   AlertTriangle,
   ArrowLeftRight,
   ClipboardList,
   Factory,
-  GitBranch,
   Inbox,
   LayoutGrid,
   ListChecks,
@@ -36,10 +34,8 @@ export type WmsTabId =
   | "packing"
   | "issues"
   | "direct_sales"
-  | "operations"
   | "production"
-  | "inventory_count"
-  | "supply_flow";
+  | "inventory_count";
 
 /** Backend ``wms_operational_modes`` key; omit = always visible (no mode gate). */
 export type WmsOperationalModeKey = string;
@@ -210,18 +206,6 @@ export const WMS_MODULES: WmsModuleDefinition[] = [
     badgeProvider: "operations_snapshot",
   },
   {
-    id: "supply_flow",
-    path: "/pulpit-kierownika#decyzje",
-    label: "Decyzje",
-    icon: GitBranch,
-    sortOrder: 32,
-    dashboard: false,
-    shortDescription: "Przeniesione do Pulpitu kierownika",
-    accent: A.teal,
-    dashboardCategory: "daily",
-    canPin: false,
-  },
-  {
     id: "mm",
     path: "/wms/mm",
     label: "Przesunięcia magazynowe",
@@ -345,20 +329,6 @@ export const WMS_MODULES: WmsModuleDefinition[] = [
     canPin: true,
   },
   {
-    id: "operations",
-    path: "/pulpit-kierownika",
-    label: "Pulpit kierownika",
-    icon: Activity,
-    sortOrder: 90,
-    dashboard: false,
-    requiredPermission: "warehouse.operations",
-    shortDescription: "Przeniesione do Zarządzania magazynem",
-    accent: A.sky,
-    dashboardCategory: "other",
-    canPin: false,
-    badgeProvider: "operations_snapshot",
-  },
-  {
     id: "direct_sales",
     path: "/wms/direct-sales",
     label: "Sprzedaż stacjonarna",
@@ -391,12 +361,6 @@ export function isWmsTabPathActive(pathname: string, tab: WmsTabConfigItem): boo
   const p = pathname;
   if (tab.id === "issues") {
     return p.startsWith("/wms/braki") || p.startsWith("/wms/issues");
-  }
-  if (tab.id === "operations") {
-    return false;
-  }
-  if (tab.id === "supply_flow") {
-    return false;
   }
   if (tab.id === "production") {
     return p === "/wms/production" || p.startsWith("/wms/production/") || p.startsWith("/wms/production");

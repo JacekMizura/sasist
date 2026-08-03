@@ -1,5 +1,6 @@
 import { NavLink, Outlet, useLocation } from "react-router-dom";
 import { getAnalizySubNav, type SubNavItem } from "../../modules/analytics/analyticsTabs";
+import { ZARZADZANIE_REPORTS_ENTRY } from "../../modules/analizy/analizyModuleNav";
 import {
   analizySideNavActiveClass,
   analizySideNavIdleClass,
@@ -27,13 +28,15 @@ function SubNav({ items }: { items: SubNavItem[] }) {
   );
 }
 
-/**
- * Sekcja Raporty — pod nawigacją hubu (PageLayout w AnalizyModuleLayout).
- */
+/** Sekcja Raporty — pod nawigacją Zarządzanie magazynem. */
 export default function AnalyticsLayout() {
   const { pathname } = useLocation();
   const subNav = getAnalizySubNav(pathname);
-  const isLanding = pathname === "/analytics" || pathname === "/analytics/dashboard";
+  const isLanding =
+    pathname === ZARZADZANIE_REPORTS_ENTRY ||
+    pathname === `${ZARZADZANIE_REPORTS_ENTRY}/` ||
+    pathname === "/analytics" ||
+    pathname === "/analytics/dashboard";
 
   return (
     <div className="relative flex min-h-[600px] w-full min-w-0 gap-6">

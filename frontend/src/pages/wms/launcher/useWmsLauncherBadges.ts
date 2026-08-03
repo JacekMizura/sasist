@@ -117,7 +117,6 @@ export function useWmsLauncherBadges(warehouseId: number | null) {
         const packing = summary.packing ?? 0;
         const inbound = summary.inbound_deliveries_waiting ?? 0;
         const putaway = summary.products_waiting_putaway ?? 0;
-        const blocked = summary.blocked_orders ?? 0;
 
         nextKpi.picking = picking;
         nextKpi.packing = packing;
@@ -135,9 +134,6 @@ export function useWmsLauncherBadges(warehouseId: number | null) {
         }
         if (putaway > 0) {
           setMetrics(next, "putaway", [stat(`${putaway} do rozlokowania`, "warning")], putaway);
-        }
-        if (blocked > 0) {
-          setMetrics(next, "operations", [stat(`${blocked} zablokowanych`, "warning")], blocked);
         }
       }
 

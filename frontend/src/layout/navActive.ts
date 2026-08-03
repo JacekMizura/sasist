@@ -50,15 +50,19 @@ export function isNavPathActive(pathname: string, path: string): boolean {
   if (path === "/carts") {
     return pathname === "/carts" || pathname.startsWith("/carts/");
   }
-  if (path === "/analytics") {
+  if (path === "/analytics" || path === "/zarzadzanie-magazynem") {
     return (
+      pathname === "/zarzadzanie-magazynem" ||
+      pathname.startsWith("/zarzadzanie-magazynem/") ||
       pathname === "/analytics" ||
       pathname === "/analytics/dashboard" ||
       pathname.startsWith("/analytics/") ||
       pathname === "/centrum-operacyjne" ||
       pathname.startsWith("/centrum-operacyjne/") ||
       pathname === "/optymalizacja" ||
-      pathname.startsWith("/optymalizacja/")
+      pathname.startsWith("/optymalizacja/") ||
+      pathname === "/pulpit-kierownika" ||
+      pathname.startsWith("/pulpit-kierownika/")
     );
   }
   if (path === "/system") {

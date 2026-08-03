@@ -61,7 +61,7 @@ export const WMS_ROUTES = {
   /** Szczegóły PZ — wyłącznie liczenie (``WmsReceivingCountPage``), segment ``pz`` jak w REST ``/wms/receiving/pz/{id}``. */
   receivingPz: (pzId: number | string) => `/wms/receiving/pz/${pzId}`,
   putaway: "/wms/putaway",
-  /** Living Supply Flow Plan — rekomendacje, explainable, execution. */
+  /** @deprecated Legacy URL — redirects to /zarzadzanie-magazynem/pulpit (decisions section). */
   supplyFlow: "/wms/supply-flow",
   /** Warehouse production — unified WMS terminal (batch + MO). */
   production: "/wms/production",
@@ -88,7 +88,7 @@ export const WMS_ROUTES = {
     if (kindOrId != null) return `/wms/production/putaway/batch/${kindOrId}`;
     return "/wms/production/putaway";
   },
-  /** Live operational runtime hub (Phase 5). */
+  /** @deprecated Legacy URL — redirects to /zarzadzanie-magazynem/pulpit. */
   operations: "/wms/operations",
   operationsReplenishment: "/wms/operations/replenishment",
   operationsOperators: "/wms/operations/operators",

@@ -1,3 +1,12 @@
+## 2026-08-03 — IA: hub Zarządzanie + Administracja L1
+
+- FE only: `/zarzadzanie-magazynem` (hub → pulpit / raporty / plan-zmian)
+- Administracja: `/administracja-magazynem` jako L1 (nie flyout); usunięty osobny wiersz Ustawienia WMS
+- Decyzje = sekcja Pulpitu („Co zrobić teraz”); bez `#decyzje`
+- Redirecty: SF / operations / centrum / stary pulpit → `/zarzadzanie-magazynem/pulpit`; analytics → raporty; optymalizacja → plan-zmian
+- WMS: usunięte wpisy supply_flow + operations z rejestru modułów
+- Backend / Engine / API — bez zmian
+
 ## 2026-08-03 — IA: trzy stanowiska Magazyn
 
 - FE only: menu/routing/nazwy; Pulpit kierownika wchłania Centrum + Decyzje (SF UI)

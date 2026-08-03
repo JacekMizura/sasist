@@ -7,21 +7,17 @@ import {
   Tag,
   LayoutTemplate,
   Settings,
-  Settings2,
   Cpu,
   Zap,
   Tablet,
   RotateCcw,
   MessageSquareWarning,
-  ShoppingCart,
-  Route,
-  Recycle,
+  ShoppingBag,
   SlidersHorizontal,
   FolderOpen,
   Boxes,
   Factory,
   Truck,
-  ShoppingBag,
   Layers,
   Users,
   Key,
@@ -31,7 +27,6 @@ import {
   Upload,
   MessageSquare,
   FileText,
-  TriangleAlert,
 } from "lucide-react";
 
 import { UI_STRINGS } from "../constants/uiStrings";
@@ -120,7 +115,6 @@ export const NAV_SIDEBAR_SECTIONS: NavSidebarSectionConfig[] = [
       "templates",
       "warehouse",
       "settings",
-      "wms-settings",
     ],
   },
 ];
@@ -256,25 +250,10 @@ export function buildNavFlyoutCategories(): NavCategoryConfig[] {
     id: "warehouse",
     label: "Administracja magazynem",
     Icon: Warehouse,
-    opensSideFlyout: true,
-    flyoutSections: [
-      {
-        items: [
-          { path: "/designer", label: UI_STRINGS.navigation.warehouseDesigner, Icon: Warehouse },
-          { path: "/carts/racks", label: "Regały", Icon: Boxes },
-          { path: "/carts/bulk", label: UI_STRINGS.navigation.carts, Icon: ShoppingCart },
-          { path: "/carts/zones", label: "Strefy", Icon: Layers },
-          { path: "/carts/carriers", label: UI_STRINGS.navigation.warehouseCarriers, Icon: Package },
-          { path: "/inventory-count/dashboard", label: "Inwentaryzacja (planowanie)", Icon: ClipboardList },
-          { path: "/office/damages", label: "Szkody", Icon: TriangleAlert },
-          { path: "/office/damage-reports", label: "Protokoły szkód", Icon: FileText },
-          { path: "/carts/optimizer", label: UI_STRINGS.navigation.fleetPlanner, Icon: Route },
-          { path: "/warehouse/bdo", label: UI_STRINGS.navigation.warehouseBdo, Icon: Recycle },
-          { path: "/settings/wms", label: "Konfiguracja WMS", Icon: Settings2 },
-          { path: "/templates/labels", label: "Szablony etykiet", Icon: Tag },
-        ],
-      },
-    ],
+    /** Pełny moduł L1 — hub /administracja-magazynem (nie flyout). */
+    directPath: "/administracja-magazynem",
+    activePathPrefix: "/administracja-magazynem",
+    flyoutSections: [],
   },
   {
     id: "purchasing",
@@ -297,9 +276,9 @@ export function buildNavFlyoutCategories(): NavCategoryConfig[] {
     id: "analizy",
     label: "Zarządzanie magazynem",
     Icon: BarChart3,
-    directPath: "/pulpit-kierownika",
-    /** Stanowisko kierownika: Pulpit · Raporty · Plan zmian */
-    activePathPrefix: "/analytics",
+    /** Wejście do hubu — nie od razu na pulpit. */
+    directPath: "/zarzadzanie-magazynem",
+    activePathPrefix: "/zarzadzanie-magazynem",
     flyoutSections: [],
   },
   {
@@ -409,13 +388,6 @@ export function buildNavFlyoutCategories(): NavCategoryConfig[] {
       },
     ],
   },
-  {
-    id: "wms-settings",
-    label: UI_STRINGS.navigation.wmsSettings,
-    Icon: Settings2,
-    directPath: "/settings/wms",
-    flyoutSections: [],
-  },
 ];
 }
 
@@ -433,9 +405,13 @@ export function isCategoryActive(category: NavCategoryConfig, pathname: string):
     if (pathname === p || pathname.startsWith(`${p}/`)) return true;
   }
   if (category.id === "warehouse") {
+    if (pathname === "/administracja-magazynem" || pathname.startsWith("/administracja-magazynem/")) return true;
+    if (pathname.startsWith("/designer") || pathname.startsWith("/warehouse-designer")) return true;
+    if (pathname.startsWith("/carts/")) return true;
     if (pathname.startsWith("/warehouse/bdo")) return true;
-    if (pathname.startsWith("/carts/carriers")) return true;
     if (pathname.startsWith("/office/damages") || pathname.startsWith("/office/damage-reports")) return true;
+    if (pathname === "/inventory-count" || pathname.startsWith("/inventory-count/")) return true;
+    if (pathname === "/settings/wms" || pathname.startsWith("/settings/wms/")) return true;
   }
   if (category.id === "orders") {
     if (pathname.startsWith("/orders/automation")) return true;
@@ -449,7 +425,7 @@ export function isCategoryActive(category: NavCategoryConfig, pathname: string):
     if (pathname === "/production" || pathname.startsWith("/production/")) return true;
   }
   if (category.id === "settings") {
-    // Ustawienia WMS is its own sidebar row — do not highlight Ogólne Ustawienia there.
+    // Konfiguracja WMS należy do Administracji magazynem — nie podświetlaj Ogólnych.
     if (pathname === "/settings/wms" || pathname.startsWith("/settings/wms/")) return false;
     // Templates category owns exports / document templates / message templates.
     if (pathname.startsWith("/templates")) return false;
@@ -465,6 +441,7 @@ export function isCategoryActive(category: NavCategoryConfig, pathname: string):
     if (pathname.startsWith("/settings/exports")) return true;
   }
   if (category.id === "analizy") {
+    if (pathname === "/zarzadzanie-magazynem" || pathname.startsWith("/zarzadzanie-magazynem/")) return true;
     if (pathname === "/pulpit-kierownika" || pathname.startsWith("/pulpit-kierownika/")) return true;
     if (pathname === "/analytics" || pathname.startsWith("/analytics/")) return true;
     if (pathname === "/centrum-operacyjne" || pathname.startsWith("/centrum-operacyjne/")) return true;
@@ -472,12 +449,6 @@ export function isCategoryActive(category: NavCategoryConfig, pathname: string):
     if (pathname.startsWith("/wms/supply-flow")) return true;
     if (pathname.startsWith("/wms/operations")) return true;
     return false;
-  }
-  if (category.id === "warehouse") {
-    if (pathname === "/settings/wms" || pathname.startsWith("/settings/wms/")) return true;
-  }
-  if (category.id === "wms-settings") {
-    return pathname === "/settings/wms" || pathname.startsWith("/settings/wms/");
   }
   if (category.id === "documents") {
     if (pathname.startsWith("/documents")) return true;

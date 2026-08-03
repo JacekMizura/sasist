@@ -71,20 +71,20 @@ export default function OptymalizacjaLandingPage() {
               ? `${first.title} (${priorityLabel(first.priority)} · ${statusLabel(first.status)})`
               : "Uruchom analizę i dodaj do harmonogramu"}
           </p>
-          <Link to="/optymalizacja/plan" className={`mt-3 ${analizyCtaSecondaryClass}`}>
+          <Link to="/zarzadzanie-magazynem/plan-zmian/plan" className={`mt-3 ${analizyCtaSecondaryClass}`}>
             Otwórz harmonogram zmian
           </Link>
         </div>
       </div>
 
       <div className="flex flex-wrap gap-2">
-        <Link to="/optymalizacja/plan" className={analizyCtaPrimaryClass}>
+        <Link to="/zarzadzanie-magazynem/plan-zmian/plan" className={analizyCtaPrimaryClass}>
           Przejdź do harmonogramu zmian
         </Link>
-        <Link to="/optymalizacja/historia" className={analizyCtaSecondaryClass}>
+        <Link to="/zarzadzanie-magazynem/plan-zmian/historia" className={analizyCtaSecondaryClass}>
           Zobacz historię zmian
         </Link>
-        <Link to="/optymalizacja/ranking" className={analizyCtaSecondaryClass}>
+        <Link to="/zarzadzanie-magazynem/plan-zmian/ranking" className={analizyCtaSecondaryClass}>
           Zobacz klasyfikację skuteczności
         </Link>
       </div>
@@ -100,7 +100,7 @@ export default function OptymalizacjaLandingPage() {
         <section className="overflow-hidden rounded-xl border border-slate-200 bg-white">
           <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
             <h2 className="text-sm font-semibold text-slate-800">Kolejka harmonogramu (5 pierwszych)</h2>
-            <Link to="/optymalizacja/plan" className="text-sm font-medium text-orange-700 hover:underline">
+            <Link to="/zarzadzanie-magazynem/plan-zmian/plan" className="text-sm font-medium text-orange-700 hover:underline">
               Zobacz cały harmonogram
             </Link>
           </div>
@@ -131,7 +131,7 @@ export default function OptymalizacjaLandingPage() {
         </p>
         <div className="grid gap-4 sm:grid-cols-3">
           <Link
-            to="/optymalizacja/slotting"
+            to="/zarzadzanie-magazynem/plan-zmian/slotting"
             className={`${analizyKpiCardClass} block transition hover:border-orange-300`}
           >
             <p className="font-medium text-slate-900">Układ towaru</p>
@@ -139,7 +139,7 @@ export default function OptymalizacjaLandingPage() {
             <p className="mt-2 text-sm font-medium text-orange-700">Analizuj układ →</p>
           </Link>
           <Link
-            to="/optymalizacja/picking-strategy"
+            to="/zarzadzanie-magazynem/plan-zmian/picking-strategy"
             className={`${analizyKpiCardClass} block transition hover:border-orange-300`}
           >
             <p className="font-medium text-slate-900">Strategia kompletacji</p>
@@ -147,7 +147,7 @@ export default function OptymalizacjaLandingPage() {
             <p className="mt-2 text-sm font-medium text-orange-700">Analizuj strategię →</p>
           </Link>
           <Link
-            to="/optymalizacja/pick-path"
+            to="/zarzadzanie-magazynem/plan-zmian/pick-path"
             className={`${analizyKpiCardClass} block transition hover:border-orange-300`}
           >
             <p className="font-medium text-slate-900">Trasy i dystans</p>

@@ -28,17 +28,17 @@ describe("settings flyout IA", () => {
     expect(labels).not.toContain("System Etykiet");
   });
 
-  it("keeps Stanowiska under Ustawienia WMS only (no Settings hardware nav)", () => {
+  it("highlights WMS config under Administracja magazynem (not Ogólne Ustawienia)", () => {
     const cats = buildNavFlyoutCategories();
     const settings = cats.find((c) => c.id === "settings")!;
-    const wms = cats.find((c) => c.id === "wms-settings")!;
+    const warehouse = cats.find((c) => c.id === "warehouse")!;
     const wsPath = "/settings/wms/workstations";
     const wsDetail = "/settings/wms/workstations/12";
 
     expect(isCategoryActive(settings, wsPath)).toBe(false);
     expect(isCategoryActive(settings, wsDetail)).toBe(false);
-    expect(isCategoryActive(wms, wsPath)).toBe(true);
-    expect(isCategoryActive(wms, wsDetail)).toBe(true);
+    expect(isCategoryActive(warehouse, wsPath)).toBe(true);
+    expect(isCategoryActive(warehouse, wsDetail)).toBe(true);
 
     expect(isNavPathActive("/settings/wms", "/settings/wms")).toBe(true);
     expect(isNavPathActive(wsPath, "/settings/wms")).toBe(true);

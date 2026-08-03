@@ -74,8 +74,8 @@ export type RealizationOption = {
 export const REALIZATION_OPTIONS: RealizationOption[] = [
   { id: "designer", label: "Otwórz Projektanta magazynu", to: "/designer" },
   { id: "mm", label: "Otwórz Przesunięcia magazynowe", to: "/wms/mm" },
-  { id: "strategy", label: "Otwórz Strategię kompletacji", to: "/optymalizacja/picking-strategy" },
-  { id: "centrum", label: "Otwórz Pulpit kierownika", to: "/pulpit-kierownika" },
+  { id: "strategy", label: "Otwórz Strategię kompletacji", to: "/zarzadzanie-magazynem/plan-zmian/picking-strategy" },
+  { id: "centrum", label: "Otwórz Pulpit kierownika", to: "/zarzadzanie-magazynem/pulpit" },
   { id: "wms", label: "Otwórz WMS", to: "/wms/menu" },
 ];
 
@@ -192,7 +192,7 @@ function migrateLegacy(raw: unknown): WarehouseChangeItem | null {
     impactScore: Number(r.impactScore) || 0,
     effectCategory:
       (r.effectCategory as EffectCategory) || defaultEffectCategory(source),
-    sourcePath: String(r.sourcePath ?? "/optymalizacja"),
+    sourcePath: String(r.sourcePath ?? "/zarzadzanie-magazynem/plan-zmian"),
     authorName: String(r.authorName ?? "Nieznany"),
     authorId: typeof r.authorId === "number" ? r.authorId : null,
     warehouseName: typeof r.warehouseName === "string" ? r.warehouseName : null,

@@ -17,7 +17,6 @@ type Props = {
 const BADGE_TONE: Partial<Record<WmsTabId, string>> = {
   picking: "bg-blue-500",
   receiving: "bg-emerald-500",
-  supply_flow: "bg-teal-500",
   putaway: "bg-orange-500",
   issues: "bg-red-500",
   packing: "bg-violet-500",

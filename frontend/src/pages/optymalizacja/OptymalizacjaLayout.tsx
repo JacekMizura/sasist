@@ -1,4 +1,5 @@
 import { NavLink, Outlet, useLocation } from "react-router-dom";
+import { PLAN_ZMIAN_PATH } from "../../modules/analizy/analizyModuleNav";
 import {
   getOptymalizacjaSubNav,
   type OptimizeSubNavItem,
@@ -11,11 +12,11 @@ import {
 function SubNav({ items }: { items: OptimizeSubNavItem[] }) {
   const { pathname } = useLocation();
   return (
-    <nav className="flex w-56 shrink-0 flex-col gap-0.5" aria-label="Optymalizacja — harmonogram zmian">
+    <nav className="flex w-56 shrink-0 flex-col gap-0.5" aria-label="Plan zmian">
       {items.map((item) => {
         const isActive =
-          item.path === "/optymalizacja"
-            ? pathname === "/optymalizacja" || pathname === "/optymalizacja/"
+          item.path === PLAN_ZMIAN_PATH
+            ? pathname === PLAN_ZMIAN_PATH || pathname === `${PLAN_ZMIAN_PATH}/`
             : pathname === item.path;
         return (
           <NavLink
@@ -33,7 +34,7 @@ function SubNav({ items }: { items: OptimizeSubNavItem[] }) {
   );
 }
 
-/** Sekcja Optymalizacja — pod nawigacją hubu Analizy. */
+/** Sekcja Plan zmian — pod nawigacją Zarządzanie magazynem. */
 export default function OptymalizacjaLayout() {
   const { pathname } = useLocation();
   const subNav = getOptymalizacjaSubNav(pathname);
