@@ -52,7 +52,7 @@ const UI_STRINGS_DEFAULTS = {
     /** Sidebar category + fly-out root (Polish). */
     settingsCategory: "Ustawienia",
     administratorsNav: "Administratorzy",
-    wmsSettings: "Ustawienia WMS",
+    wmsSettings: "Konfiguracja WMS",
     /** Panel triage labels for returns list (not WMS workflow statuses). */
     returnPanelStatuses: "Zwroty — statusy panelu",
     /** Panel triage labels for orders list (not system `Order.status`). */
@@ -65,17 +65,17 @@ const UI_STRINGS_DEFAULTS = {
     warehouseMaterialsPackaging: "Materiały pakowe",
     /** Panel triage labels for complaints (office only). */
     complaintPanelStatuses: "Reklamacje — statusy panelu",
-    analysis: "Analizy",
+    analysis: "Zarządzanie magazynem",
     system: "System",
     returns: "Zwroty",
-    wmsTerminal: "WMS",
+    wmsTerminal: "Praca na hali (WMS)",
     complaints: "Reklamacje",
     locations: "Lokalizacje",
     customersList: "Klienci",
     addCustomer: "Dodaj klienta",
     groups: {
       orders: "Zamówienia",
-      warehouse: "Magazyn",
+      warehouse: "Administracja magazynem",
       customers: "Klienci",
     },
     /** Sidebar: read-only documents / reporting (not operational flows). */

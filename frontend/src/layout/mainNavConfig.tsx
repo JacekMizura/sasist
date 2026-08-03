@@ -88,7 +88,7 @@ export type NavCategoryConfig = {
 export const WMS_SIDEBAR_DIRECT = {
   id: "wms" as const,
   path: "/wms/menu",
-  label: "Przejdź do WMS",
+  label: "Praca na hali (WMS)",
   Icon: Tablet,
 };
 
@@ -254,7 +254,7 @@ export function buildNavFlyoutCategories(): NavCategoryConfig[] {
   },
   {
     id: "warehouse",
-    label: UI_STRINGS.navigation.groups.warehouse,
+    label: "Administracja magazynem",
     Icon: Warehouse,
     opensSideFlyout: true,
     flyoutSections: [
@@ -265,11 +265,13 @@ export function buildNavFlyoutCategories(): NavCategoryConfig[] {
           { path: "/carts/bulk", label: UI_STRINGS.navigation.carts, Icon: ShoppingCart },
           { path: "/carts/zones", label: "Strefy", Icon: Layers },
           { path: "/carts/carriers", label: UI_STRINGS.navigation.warehouseCarriers, Icon: Package },
-          { path: "/inventory-count/dashboard", label: "Inwentaryzacja", Icon: ClipboardList },
+          { path: "/inventory-count/dashboard", label: "Inwentaryzacja (planowanie)", Icon: ClipboardList },
           { path: "/office/damages", label: "Szkody", Icon: TriangleAlert },
           { path: "/office/damage-reports", label: "Protokoły szkód", Icon: FileText },
           { path: "/carts/optimizer", label: UI_STRINGS.navigation.fleetPlanner, Icon: Route },
           { path: "/warehouse/bdo", label: UI_STRINGS.navigation.warehouseBdo, Icon: Recycle },
+          { path: "/settings/wms", label: "Konfiguracja WMS", Icon: Settings2 },
+          { path: "/templates/labels", label: "Szablony etykiet", Icon: Tag },
         ],
       },
     ],
@@ -293,10 +295,10 @@ export function buildNavFlyoutCategories(): NavCategoryConfig[] {
   },
   {
     id: "analizy",
-    label: "Analizy",
+    label: "Zarządzanie magazynem",
     Icon: BarChart3,
-    directPath: "/analytics",
-    /** Hub: Przegląd · Centrum operacyjne · Raporty · Optymalizacja. */
+    directPath: "/pulpit-kierownika",
+    /** Stanowisko kierownika: Pulpit · Raporty · Plan zmian */
     activePathPrefix: "/analytics",
     flyoutSections: [],
   },
@@ -463,10 +465,16 @@ export function isCategoryActive(category: NavCategoryConfig, pathname: string):
     if (pathname.startsWith("/settings/exports")) return true;
   }
   if (category.id === "analizy") {
+    if (pathname === "/pulpit-kierownika" || pathname.startsWith("/pulpit-kierownika/")) return true;
     if (pathname === "/analytics" || pathname.startsWith("/analytics/")) return true;
     if (pathname === "/centrum-operacyjne" || pathname.startsWith("/centrum-operacyjne/")) return true;
     if (pathname === "/optymalizacja" || pathname.startsWith("/optymalizacja/")) return true;
+    if (pathname.startsWith("/wms/supply-flow")) return true;
+    if (pathname.startsWith("/wms/operations")) return true;
     return false;
+  }
+  if (category.id === "warehouse") {
+    if (pathname === "/settings/wms" || pathname.startsWith("/settings/wms/")) return true;
   }
   if (category.id === "wms-settings") {
     return pathname === "/settings/wms" || pathname.startsWith("/settings/wms/");

@@ -25,9 +25,9 @@ export default function OptymalizacjaLandingPage() {
   return (
     <div className="min-w-0 space-y-6">
       <div>
-        <h1 className={analizyPageTitleClass}>Optymalizacja</h1>
+        <h1 className={analizyPageTitleClass}>Plan zmian</h1>
         <p className={analizyPageSubtitleClass}>
-          Planowanie zmian w magazynie: problem → analiza → rekomendacja → harmonogram → realizacja.
+          Długoterminowe zmiany w magazynie: slotting, layout, procesy i symulacje.
         </p>
       </div>
 

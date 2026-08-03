@@ -30,6 +30,7 @@ import {
   opsSeverityLabel,
 } from "../../utils/replenishmentUiLabels";
 import { AppOverlayPortal } from "../../components/overlay";
+import { PulpitSection } from "../zarzadzanie/PulpitSection";
 
 const DEFAULT_TENANT_ID = 1;
 const CONFIG_STORAGE_KEY = "analytics.warehouseOperations.thresholds";
@@ -699,7 +700,12 @@ function DetailModal({
   );
 }
 
-export default function CentrumOperacyjnePage() {
+type CentrumProps = {
+  /** Wchłiony w Pulpit kierownika — sekcje zwijane, bez osobnego bytu „Centrum”. */
+  embedInPulpit?: boolean;
+};
+
+export default function CentrumOperacyjnePage({ embedInPulpit = false }: CentrumProps) {
   const navigate = useNavigate();
   const { warehouse: activeWarehouse, showWarehouseSelector } = useWarehouse();
   const warehouseId = activeWarehouse?.id ?? null;
@@ -750,9 +756,9 @@ export default function CentrumOperacyjnePage() {
     })
       .then((data) => {
         if (data) setSnapshot(data);
-        else setError("Centrum operacyjne chwilowo niedostępne — odśwież za chwilę.");
+        else setError("Pulpit chwilowo niedostępny — odśwież za chwilę.");
       })
-      .catch((err) => setError(err?.message ?? "Błąd ładowania centrum operacyjnego"))
+      .catch((err) => setError(err?.message ?? "Błąd ładowania pulpitu kierownika"))
       .finally(() => {
         setLoading(false);
         setRefreshing(false);
@@ -1536,121 +1542,65 @@ export default function CentrumOperacyjnePage() {
     </section>
   );
 
-  if (loading && !snapshot) {
-    return (
-      <div className="min-w-0 space-y-4">
-        <PageHeader
-          title="Centrum operacyjne"
-          subtitle="WMS na żywo — operatorzy, kolejki i alerty"
-        />
-        <div className="rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-500">Ładowanie danych operacyjnych…</div>
+  const toolbar = (
+    <div className="flex flex-wrap items-center gap-2">
+      {showWarehouseSelector ? (
+        <span className="rounded-lg bg-slate-100 px-3 py-1.5 text-sm font-semibold text-slate-700">
+          Magazyn: {activeWarehouse?.name ?? "—"}
+        </span>
+      ) : null}
+      <button
+        type="button"
+        onClick={() => setShowConfig((v) => !v)}
+        className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+      >
+        <Settings2 className="h-4 w-4" />
+        Progi
+      </button>
+      <PrimaryButton
+        type="button"
+        onClick={() => fetchSnapshot(true)}
+        disabled={refreshing || warehouseId == null}
+      >
+        <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />
+        Odśwież
+      </PrimaryButton>
+    </div>
+  );
+
+  const configPanel = showConfig ? (
+    <div className="rounded-xl border border-slate-200 bg-white p-3">
+      <div className="mb-3 text-sm font-black text-slate-900">Progi aktywności</div>
+      <div className="flex flex-wrap items-end gap-3">
+        <label className="text-xs font-semibold text-slate-600">
+          Krótka przerwa (min)
+          <input
+            type="number"
+            min={1}
+            value={draftConfig.shortBreakMinutes}
+            onChange={(e) => setDraftConfig((cfg) => ({ ...cfg, shortBreakMinutes: Number(e.target.value) }))}
+            className="mt-1 block w-32 rounded-lg border border-slate-300 px-3 py-1.5 text-sm"
+          />
+        </label>
+        <label className="text-xs font-semibold text-slate-600">
+          Długa przerwa (min)
+          <input
+            type="number"
+            min={2}
+            value={draftConfig.longBreakMinutes}
+            onChange={(e) => setDraftConfig((cfg) => ({ ...cfg, longBreakMinutes: Number(e.target.value) }))}
+            className="mt-1 block w-32 rounded-lg border border-slate-300 px-3 py-1.5 text-sm"
+          />
+        </label>
+        <button type="button" onClick={handleSaveConfig} className={brandPrimaryButtonClass}>
+          Zastosuj
+        </button>
       </div>
-    );
-  }
+    </div>
+  ) : null;
 
-  return (
-    <div className="min-w-0 space-y-4">
-      <PageHeader
-        title="Centrum operacyjne"
-        subtitle="WMS na żywo — kontrola pracy magazynu, operatorów i kolejek"
-        actions={
-          <div className="flex flex-wrap items-center gap-2">
-            {showWarehouseSelector ? (
-              <span className="rounded-lg bg-slate-100 px-3 py-1.5 text-sm font-semibold text-slate-700">
-                Magazyn: {activeWarehouse?.name ?? "—"}
-              </span>
-            ) : null}
-            <button
-              type="button"
-              onClick={() => setShowConfig((v) => !v)}
-              className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm font-semibold text-slate-700 hover:bg-slate-50"
-            >
-              <Settings2 className="h-4 w-4" />
-              Progi
-            </button>
-            <PrimaryButton
-              type="button"
-              onClick={() => fetchSnapshot(true)}
-              disabled={refreshing || warehouseId == null}
-            >
-              <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />
-              Odśwież
-            </PrimaryButton>
-          </div>
-        }
-      />
-
-      <OperationsTabs active={activeTab} onChange={setActiveTab} />
-
-      {error ? <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm font-semibold text-red-800">{error}</div> : null}
-
-      {showConfig ? (
-        <div className="rounded-xl border border-slate-200 bg-white p-3">
-          <div className="mb-3 text-sm font-black text-slate-900">Konfiguracja progów aktywności</div>
-          <div className="flex flex-wrap items-end gap-3">
-            <label className="text-xs font-semibold text-slate-600">
-              Krótka przerwa (min)
-              <input
-                type="number"
-                min={1}
-                value={draftConfig.shortBreakMinutes}
-                onChange={(e) => setDraftConfig((cfg) => ({ ...cfg, shortBreakMinutes: Number(e.target.value) }))}
-                className="mt-1 block w-32 rounded-lg border border-slate-300 px-3 py-1.5 text-sm"
-              />
-            </label>
-            <label className="text-xs font-semibold text-slate-600">
-              Długa przerwa (min)
-              <input
-                type="number"
-                min={2}
-                value={draftConfig.longBreakMinutes}
-                onChange={(e) => setDraftConfig((cfg) => ({ ...cfg, longBreakMinutes: Number(e.target.value) }))}
-                className="mt-1 block w-32 rounded-lg border border-slate-300 px-3 py-1.5 text-sm"
-              />
-            </label>
-            <button type="button" onClick={handleSaveConfig} className={brandPrimaryButtonClass}>
-              Zastosuj
-            </button>
-            <span className="text-xs text-slate-500">Domyślnie: 5 min / 10 min. Zapis lokalny dla stanowiska.</span>
-          </div>
-        </div>
-      ) : null}
-
-      {kpiStrip}
-
-      {activeTab === "live" ? (
-        <div className="grid gap-4 xl:grid-cols-[1.35fr_1fr_0.9fr]">
-          {operatorGroups}
-          <section className="min-w-0 space-y-3">
-            {queuesPanel}
-            {activityStream}
-            {exportPanel}
-          </section>
-          {alertsPanel}
-        </div>
-      ) : null}
-
-      {activeTab === "operators" ? operatorGroups : null}
-      {activeTab === "queues" ? <div className="grid gap-4 lg:grid-cols-[1fr_1fr]">{queuesPanel}{exportPanel}</div> : null}
-      {activeTab === "picking" ? (
-        <OperatorModeSection mode="KOMPLETACJA" operators={groupedOperators.KOMPLETACJA} recentEnded={recentEndedByMode.KOMPLETACJA} onOpen={setSelectedOperator} />
-      ) : null}
-      {activeTab === "packing" ? (
-        <OperatorModeSection mode="PAKOWANIE" operators={groupedOperators.PAKOWANIE} recentEnded={recentEndedByMode.PAKOWANIE} onOpen={setSelectedOperator} />
-      ) : null}
-      {activeTab === "warehouse-operations" ? (
-        <OperatorModeSection mode="OPERACJE MAGAZYNOWE" operators={groupedOperators["OPERACJE MAGAZYNOWE"]} recentEnded={recentEndedByMode["OPERACJE MAGAZYNOWE"]} onOpen={setSelectedOperator} />
-      ) : null}
-      {activeTab === "replenishments" ? replenishmentsPanel : null}
-      {activeTab === "inbound" ? inboundPanel : null}
-      {activeTab === "putaway-load" ? putawayPanel : null}
-      {activeTab === "carrier-issues" ? carrierIssuesPanel : null}
-      {activeTab === "ranking" ? rankingPanel : null}
-      {activeTab === "bottlenecks" ? bottlenecksPanel : null}
-      {activeTab === "alerts" ? alertsPanel : null}
-      {activeTab === "manager-tasks" ? managerTasksPanel : null}
-      {activeTab === "history" ? <div className="grid gap-4 lg:grid-cols-[1fr_0.9fr]">{activityStream}{exportPanel}</div> : null}
-
+  const modals = (
+    <>
       {selectedOperator ? (
         <DetailModal
           operator={selectedOperator}
@@ -1668,6 +1618,165 @@ export default function CentrumOperacyjnePage() {
           onConfirm={() => void handleConfirmDispatch()}
         />
       ) : null}
+    </>
+  );
+
+  if (loading && !snapshot) {
+    if (embedInPulpit) {
+      return (
+        <div className="rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-500">
+          Ładowanie pulpitu…
+        </div>
+      );
+    }
+    return (
+      <div className="min-w-0 space-y-4">
+        <PageHeader title="Pulpit kierownika" subtitle="Nadzór zmiany" />
+        <div className="rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-500">
+          Ładowanie danych operacyjnych…
+        </div>
+      </div>
+    );
+  }
+
+  if (embedInPulpit) {
+    return (
+      <div className="min-w-0 space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          {kpiStrip}
+          {toolbar}
+        </div>
+        {error ? (
+          <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm font-semibold text-red-800">
+            {error}
+          </div>
+        ) : null}
+        {configPanel}
+
+        <PulpitSection id="alerty" title="Alerty" defaultOpen>
+          <div className="space-y-3">
+            {alertsPanel}
+            {managerTasksPanel}
+            {carrierIssuesPanel}
+          </div>
+        </PulpitSection>
+
+        <PulpitSection id="dostawy" title="Dostawy">
+          <div className="space-y-3">
+            {inboundPanel}
+            {putawayPanel}
+          </div>
+        </PulpitSection>
+
+        <PulpitSection id="operatorzy" title="Operatorzy">
+          {operatorGroups}
+        </PulpitSection>
+
+        <PulpitSection id="kolejki" title="Kolejki i obciążenie">
+          <div className="space-y-3">
+            {queuesPanel}
+            {bottlenecksPanel}
+            {replenishmentsPanel}
+            <div className="grid gap-4 lg:grid-cols-2">
+              <OperatorModeSection
+                mode="KOMPLETACJA"
+                operators={groupedOperators.KOMPLETACJA}
+                recentEnded={recentEndedByMode.KOMPLETACJA}
+                onOpen={setSelectedOperator}
+              />
+              <OperatorModeSection
+                mode="PAKOWANIE"
+                operators={groupedOperators.PAKOWANIE}
+                recentEnded={recentEndedByMode.PAKOWANIE}
+                onOpen={setSelectedOperator}
+              />
+            </div>
+          </div>
+        </PulpitSection>
+
+        {modals}
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-w-0 space-y-4">
+      <PageHeader
+        title="Pulpit kierownika"
+        subtitle="Nadzór zmiany — operatorzy, kolejki i alerty"
+        actions={toolbar}
+      />
+
+      <OperationsTabs active={activeTab} onChange={setActiveTab} />
+
+      {error ? (
+        <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm font-semibold text-red-800">
+          {error}
+        </div>
+      ) : null}
+
+      {configPanel}
+      {kpiStrip}
+
+      {activeTab === "live" ? (
+        <div className="grid gap-4 xl:grid-cols-[1.35fr_1fr_0.9fr]">
+          {operatorGroups}
+          <section className="min-w-0 space-y-3">
+            {queuesPanel}
+            {activityStream}
+            {exportPanel}
+          </section>
+          {alertsPanel}
+        </div>
+      ) : null}
+
+      {activeTab === "operators" ? operatorGroups : null}
+      {activeTab === "queues" ? (
+        <div className="grid gap-4 lg:grid-cols-[1fr_1fr]">
+          {queuesPanel}
+          {exportPanel}
+        </div>
+      ) : null}
+      {activeTab === "picking" ? (
+        <OperatorModeSection
+          mode="KOMPLETACJA"
+          operators={groupedOperators.KOMPLETACJA}
+          recentEnded={recentEndedByMode.KOMPLETACJA}
+          onOpen={setSelectedOperator}
+        />
+      ) : null}
+      {activeTab === "packing" ? (
+        <OperatorModeSection
+          mode="PAKOWANIE"
+          operators={groupedOperators.PAKOWANIE}
+          recentEnded={recentEndedByMode.PAKOWANIE}
+          onOpen={setSelectedOperator}
+        />
+      ) : null}
+      {activeTab === "warehouse-operations" ? (
+        <OperatorModeSection
+          mode="OPERACJE MAGAZYNOWE"
+          operators={groupedOperators["OPERACJE MAGAZYNOWE"]}
+          recentEnded={recentEndedByMode["OPERACJE MAGAZYNOWE"]}
+          onOpen={setSelectedOperator}
+        />
+      ) : null}
+      {activeTab === "replenishments" ? replenishmentsPanel : null}
+      {activeTab === "inbound" ? inboundPanel : null}
+      {activeTab === "putaway-load" ? putawayPanel : null}
+      {activeTab === "carrier-issues" ? carrierIssuesPanel : null}
+      {activeTab === "ranking" ? rankingPanel : null}
+      {activeTab === "bottlenecks" ? bottlenecksPanel : null}
+      {activeTab === "alerts" ? alertsPanel : null}
+      {activeTab === "manager-tasks" ? managerTasksPanel : null}
+      {activeTab === "history" ? (
+        <div className="grid gap-4 lg:grid-cols-[1fr_0.9fr]">
+          {activityStream}
+          {exportPanel}
+        </div>
+      ) : null}
+
+      {modals}
     </div>
   );
 }

@@ -211,15 +211,15 @@ export const WMS_MODULES: WmsModuleDefinition[] = [
   },
   {
     id: "supply_flow",
-    path: "/wms/supply-flow",
-    label: "Przepływ dostaw",
+    path: "/pulpit-kierownika#decyzje",
+    label: "Decyzje",
     icon: GitBranch,
     sortOrder: 32,
-    dashboard: true,
-    shortDescription: "Kolejka pracy na zmianę — co rozładować i rozlokować teraz",
+    dashboard: false,
+    shortDescription: "Przeniesione do Pulpitu kierownika",
     accent: A.teal,
     dashboardCategory: "daily",
-    canPin: true,
+    canPin: false,
   },
   {
     id: "mm",
@@ -346,16 +346,16 @@ export const WMS_MODULES: WmsModuleDefinition[] = [
   },
   {
     id: "operations",
-    path: "/wms/operations",
-    label: "Operacje",
+    path: "/pulpit-kierownika",
+    label: "Pulpit kierownika",
     icon: Activity,
     sortOrder: 90,
-    dashboard: true,
+    dashboard: false,
     requiredPermission: "warehouse.operations",
-    shortDescription: "Runtime operacji",
+    shortDescription: "Przeniesione do Zarządzania magazynem",
     accent: A.sky,
     dashboardCategory: "other",
-    canPin: true,
+    canPin: false,
     badgeProvider: "operations_snapshot",
   },
   {
@@ -393,7 +393,10 @@ export function isWmsTabPathActive(pathname: string, tab: WmsTabConfigItem): boo
     return p.startsWith("/wms/braki") || p.startsWith("/wms/issues");
   }
   if (tab.id === "operations") {
-    return p.startsWith("/wms/operations");
+    return false;
+  }
+  if (tab.id === "supply_flow") {
+    return false;
   }
   if (tab.id === "production") {
     return p === "/wms/production" || p.startsWith("/wms/production/") || p.startsWith("/wms/production");

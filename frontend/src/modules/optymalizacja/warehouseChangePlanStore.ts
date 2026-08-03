@@ -75,7 +75,7 @@ export const REALIZATION_OPTIONS: RealizationOption[] = [
   { id: "designer", label: "Otwórz Projektanta magazynu", to: "/designer" },
   { id: "mm", label: "Otwórz Przesunięcia magazynowe", to: "/wms/mm" },
   { id: "strategy", label: "Otwórz Strategię kompletacji", to: "/optymalizacja/picking-strategy" },
-  { id: "centrum", label: "Otwórz Centrum Operacyjne", to: "/centrum-operacyjne" },
+  { id: "centrum", label: "Otwórz Pulpit kierownika", to: "/pulpit-kierownika" },
   { id: "wms", label: "Otwórz WMS", to: "/wms/menu" },
 ];
 

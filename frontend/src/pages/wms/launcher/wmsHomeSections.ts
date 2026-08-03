@@ -20,7 +20,7 @@ export const WMS_HOME_DESKTOP_SECTIONS: WmsHomeSectionDef[] = [
     id: "daily",
     title: "Operacje dzienne",
     description: "Codzienne procesy: przyjęcie, zbieranie, rozlokowanie i pakowanie.",
-    moduleIds: ["receiving", "supply_flow", "picking", "putaway", "packing"],
+    moduleIds: ["receiving", "picking", "putaway", "packing"],
   },
   {
     id: "control",
@@ -40,7 +40,6 @@ export const WMS_HOME_DESKTOP_SECTIONS: WmsHomeSectionDef[] = [
 export const WMS_HOME_COLLECTOR_TODO_IDS: WmsTabId[] = [
   "picking",
   "receiving",
-  "supply_flow",
   "putaway",
   "issues",
   "mm",

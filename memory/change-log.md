@@ -1,3 +1,10 @@
+## 2026-08-03 — IA: trzy stanowiska Magazyn
+
+- FE only: menu/routing/nazwy; Pulpit kierownika wchłania Centrum + Decyzje (SF UI)
+- Usunięte z WMS Home: Przepływ dostaw, Operacje
+- Redirecty starych URL → `/pulpit-kierownika`
+- Backend / Supply Flow Engine — bez zmian
+
 ## 2026-08-03 — Przepływ dostaw: UX prowadzenia zmiany (audyt)
 
 - Pierwszy viewport: alert + 1 karta uwagi + CTA; Dlaczego w karcie (≤2)

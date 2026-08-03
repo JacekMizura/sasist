@@ -1,5 +1,9 @@
 ﻿## Active
 
-**Przepływ dostaw — UX prowadzenia zmiany (2026-08-03).**
+**IA Magazyn — 3 stanowiska (2026-08-03).**
 
-Pierwszy viewport: alert + 1 decyzja + CTA. Dlaczego w karcie (max 2). Co dalej ≤3 + „+ X”. Plan w „Szczegóły planu”. Stan = 1 wiersz. Jedno „Odśwież”. Powrót z WMS = zakończone + następne. Backend/silnik bez zmian.
+- Zarządzanie magazynem: `/pulpit-kierownika` (Decyzje = SF API, bez nazwy SF) · Raporty · Plan zmian
+- Administracja magazynem: flyout (layout, regały, strefy, konfiguracja WMS…)
+- Praca na hali (WMS): tylko tryby wykonania
+- Redirecty: centrum-operacyjne, supply-flow, operations → pulpit
+- Backend / Engine SF — bez zmian

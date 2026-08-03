@@ -165,7 +165,7 @@ export function WmsDesktopHome({
           <h1 className="text-2xl font-bold tracking-tight text-slate-900">
             {greetingForHour(new Date().getHours())}
           </h1>
-          <p className="mt-1 text-sm text-slate-500">Centrum operacyjne magazynu</p>
+          <p className="mt-1 text-sm text-slate-500">Praca na hali — wybierz tryb wykonania</p>
         </header>
 
         <div className="mb-5">
