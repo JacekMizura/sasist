@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { RefreshCw } from "lucide-react";
-import { ActiveWarehouseRequiredBanner } from "../../../../components/layout/ActiveWarehouseRequiredBanner";
-import { useActiveWarehouseContext } from "../../../../hooks/useActiveWarehouseContext";
+import { ActiveWarehouseRequiredBanner } from "../../../components/layout/ActiveWarehouseRequiredBanner";
+import { useActiveWarehouseContext } from "../../../hooks/useActiveWarehouseContext";
 import { ShiftAlerts } from "./components/ShiftAlerts";
 import { ShiftAttentionCard } from "./components/ShiftAttentionCard";
 import { ShiftNextAfter } from "./components/ShiftNextAfter";
