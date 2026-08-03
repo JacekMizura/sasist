@@ -7,6 +7,7 @@ import {
   Tag,
   LayoutTemplate,
   Settings,
+  Settings2,
   Cpu,
   Zap,
   Tablet,
@@ -27,6 +28,12 @@ import {
   Upload,
   MessageSquare,
   FileText,
+  TriangleAlert,
+  Route,
+  Recycle,
+  ListOrdered,
+  LayoutDashboard,
+  CalendarRange,
 } from "lucide-react";
 
 import { UI_STRINGS } from "../constants/uiStrings";
@@ -98,7 +105,7 @@ export type NavSidebarSectionConfig = {
 
 /**
  * ERP sidebar grouping — SPRZEDAŻ / OPERACJE.
- * Magazyn & Ustawienia open side fly-outs; Ustawienia WMS is a direct link above WMS CTA.
+ * Kategorie z opensSideFlyout używają NavFlyoutPanel (jak Zamówienia / Szablony / Ustawienia).
  */
 export const NAV_SIDEBAR_SECTIONS: NavSidebarSectionConfig[] = [
   {
@@ -250,10 +257,23 @@ export function buildNavFlyoutCategories(): NavCategoryConfig[] {
     id: "warehouse",
     label: "Administracja magazynem",
     Icon: Warehouse,
-    /** Pełny moduł L1 — hub /administracja-magazynem (nie flyout). */
-    directPath: "/administracja-magazynem",
-    activePathPrefix: "/administracja-magazynem",
-    flyoutSections: [],
+    opensSideFlyout: true,
+    flyoutSections: [
+      {
+        items: [
+          { path: "/designer", label: "Layout magazynu", Icon: Warehouse },
+          { path: "/carts/racks", label: "Regały", Icon: Boxes },
+          { path: "/carts/zones", label: "Strefy", Icon: Layers },
+          { path: "/carts/carriers", label: "Nośniki", Icon: Package },
+          { path: "/settings/wms", label: "Konfiguracja WMS", Icon: Settings2 },
+          { path: "/templates/labels", label: "Szablony etykiet", Icon: Tag },
+          { path: "/carts/optimizer", label: "Flota", Icon: Route },
+          { path: "/warehouse/bdo", label: "BDO", Icon: Recycle },
+          { path: "/office/damages", label: "Szkody", Icon: TriangleAlert },
+          { path: "/office/damage-reports", label: "Protokoły szkód", Icon: FileText },
+        ],
+      },
+    ],
   },
   {
     id: "purchasing",
@@ -276,10 +296,34 @@ export function buildNavFlyoutCategories(): NavCategoryConfig[] {
     id: "analizy",
     label: "Zarządzanie magazynem",
     Icon: BarChart3,
-    /** Od razu Pulpit — bez landing page. */
-    directPath: "/zarzadzanie-magazynem/pulpit",
+    opensSideFlyout: true,
     activePathPrefix: "/zarzadzanie-magazynem",
-    flyoutSections: [],
+    flyoutSections: [
+      {
+        items: [
+          {
+            path: "/zarzadzanie-magazynem/pulpit",
+            label: "Pulpit kierownika",
+            Icon: LayoutDashboard,
+          },
+          {
+            path: "/zarzadzanie-magazynem/kolejnosc-dostaw",
+            label: "Kolejność dostaw",
+            Icon: ListOrdered,
+          },
+          {
+            path: "/zarzadzanie-magazynem/raporty",
+            label: "Raporty",
+            Icon: BarChart3,
+          },
+          {
+            path: "/zarzadzanie-magazynem/plan-zmian",
+            label: "Plan zmian",
+            Icon: CalendarRange,
+          },
+        ],
+      },
+    ],
   },
   {
     id: "templates",
@@ -405,13 +449,14 @@ export function isCategoryActive(category: NavCategoryConfig, pathname: string):
     if (pathname === p || pathname.startsWith(`${p}/`)) return true;
   }
   if (category.id === "warehouse") {
-    if (pathname === "/administracja-magazynem" || pathname.startsWith("/administracja-magazynem/")) return true;
     if (pathname.startsWith("/designer") || pathname.startsWith("/warehouse-designer")) return true;
     if (pathname.startsWith("/carts/")) return true;
     if (pathname.startsWith("/warehouse/bdo")) return true;
     if (pathname.startsWith("/office/damages") || pathname.startsWith("/office/damage-reports")) return true;
-    if (pathname === "/inventory-count" || pathname.startsWith("/inventory-count/")) return true;
     if (pathname === "/settings/wms" || pathname.startsWith("/settings/wms/")) return true;
+    // /templates/labels jest w flyoucie Administracji, ale highlight należy do kategorii Szablony.
+    const paths = categoryFlyoutPaths(category).filter((p) => !p.startsWith("/templates"));
+    return navGroupHasActivePath(pathname, paths);
   }
   if (category.id === "orders") {
     if (pathname.startsWith("/orders/automation")) return true;

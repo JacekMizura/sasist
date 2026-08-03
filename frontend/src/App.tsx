@@ -174,8 +174,7 @@ import WmsPackingWorkstationGate from "./pages/wms/WmsPackingWorkstationGate"
 import WmsDirectSalesPage from "./pages/wms/WmsDirectSalesPage"
 import DirectSalesSettingsLayout from "./pages/wms/direct-sales/DirectSalesSettingsLayout"
 import PulpitKierownikaPage from "./pages/zarzadzanie/PulpitKierownikaPage"
-import AdministracjaHubPage from "./pages/administracja/AdministracjaHubPage"
-import AdministracjaModuleLayout from "./pages/administracja/AdministracjaModuleLayout"
+import KolejnoscDostawPage from "./pages/zarzadzanie/KolejnoscDostawPage"
 import WmsReceivingPage from "./pages/wms/WmsReceivingPage"
 import WmsReceivingCountPage from "./pages/wms/WmsReceivingCountPage"
 import WmsIncompleteProductDataPage from "./pages/wms/WmsIncompleteProductDataPage"
@@ -472,7 +471,7 @@ export const router = createBrowserRouter(
         <Route path="receiving/incomplete-product-data" element={<WmsIncompleteProductDataPage />} />
         <Route path="product-data-completion" element={<WmsProductDataCompletionPage />} />
         <Route path="receiving" element={<WmsReceivingPage />} />
-        <Route path="supply-flow" element={<Navigate to="/zarzadzanie-magazynem/pulpit" replace />} />
+        <Route path="supply-flow" element={<Navigate to="/zarzadzanie-magazynem/kolejnosc-dostaw" replace />} />
         <Route path="putaway" element={<WmsPutawayPage />} />
         <Route path="putaway/:pzId/item/:itemId/execute" element={<WmsPutawayExecutePage />} />
         <Route path="putaway/:pzId/item/:itemId" element={<WmsPutawayItemDetailPage />} />
@@ -931,12 +930,11 @@ export const router = createBrowserRouter(
                 <Route path="barcode-management" element={<BarcodeManagement />} />
                 {/* LEGACY technical stock list — not Magazyn → Inwentaryzacja (/inventory-count). */}
                 <Route path="inventory" element={<InventoryList />} />
-                <Route path="administracja-magazynem" element={<AdministracjaModuleLayout />}>
-                  <Route index element={<AdministracjaHubPage />} />
-                </Route>
+                <Route path="administracja-magazynem" element={<Navigate to="/designer" replace />} />
                 <Route path="zarzadzanie-magazynem" element={<AnalizyModuleLayout />}>
                   <Route index element={<Navigate to="pulpit" replace />} />
                   <Route path="pulpit" element={<PulpitKierownikaPage />} />
+                  <Route path="kolejnosc-dostaw" element={<KolejnoscDostawPage />} />
                   <Route path="raporty" element={<AnalyticsLayout />}>
                     <Route index element={<Navigate to="inventory-value" replace />} />
                     <Route path="inventory-value" element={<InventoryValue />} />

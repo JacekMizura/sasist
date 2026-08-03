@@ -50,7 +50,7 @@ export function ShiftReturnBanner({
             onClick={onDismiss}
             className="mt-3 block text-xs font-semibold text-slate-500 hover:text-slate-700"
           >
-            Pokaż pełną kolejkę
+            Wróć do pulpitu zmiany
           </button>
         </div>
       </div>
