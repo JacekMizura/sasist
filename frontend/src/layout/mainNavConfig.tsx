@@ -276,8 +276,8 @@ export function buildNavFlyoutCategories(): NavCategoryConfig[] {
     id: "analizy",
     label: "Zarządzanie magazynem",
     Icon: BarChart3,
-    /** Wejście do hubu — nie od razu na pulpit. */
-    directPath: "/zarzadzanie-magazynem",
+    /** Od razu Pulpit — bez landing page. */
+    directPath: "/zarzadzanie-magazynem/pulpit",
     activePathPrefix: "/zarzadzanie-magazynem",
     flyoutSections: [],
   },

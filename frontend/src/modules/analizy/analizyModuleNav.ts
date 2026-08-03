@@ -1,7 +1,6 @@
 /**
  * Stanowisko: Zarządzanie magazynem
- * Wejście: /zarzadzanie-magazynem
- * Sekcje: Pulpit · Raporty · Plan zmian
+ * Wejście = Pulpit kierownika (bez landing page).
  */
 
 export type ZarzadzanieModuleSection = {
@@ -28,6 +27,7 @@ export function getActiveZarzadzanieModuleSection(
   pathname: string,
 ): ZarzadzanieModuleSection["id"] | null {
   if (
+    pathname === ZARZADZANIE_ROOT ||
     pathname === PULPIT_KIEROWNIKA_PATH ||
     pathname.startsWith(`${PULPIT_KIEROWNIKA_PATH}/`) ||
     pathname === "/pulpit-kierownika" ||
@@ -60,7 +60,6 @@ export function getActiveZarzadzanieModuleSection(
     }
     return "raporty";
   }
-  if (pathname === ZARZADZANIE_ROOT) return null;
   return null;
 }
 
