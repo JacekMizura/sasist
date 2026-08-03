@@ -40,6 +40,7 @@ export const WMS_MODULE_ACCENTS: Record<WmsTabId, WmsModuleAccent> = {
   returns: resolveWmsModuleAccent("returns"),
   receiving: resolveWmsModuleAccent("receiving"),
   putaway: resolveWmsModuleAccent("putaway"),
+  supply_flow: resolveWmsModuleAccent("supply_flow"),
   mm: resolveWmsModuleAccent("mm"),
   consolidations: resolveWmsModuleAccent("consolidations"),
   consolidation_racks: resolveWmsModuleAccent("consolidation_racks"),

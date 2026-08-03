@@ -12,6 +12,7 @@ import {
   ArrowLeftRight,
   ClipboardList,
   Factory,
+  GitBranch,
   Inbox,
   LayoutGrid,
   ListChecks,
@@ -37,7 +38,8 @@ export type WmsTabId =
   | "direct_sales"
   | "operations"
   | "production"
-  | "inventory_count";
+  | "inventory_count"
+  | "supply_flow";
 
 /** Backend ``wms_operational_modes`` key; omit = always visible (no mode gate). */
 export type WmsOperationalModeKey = string;
@@ -206,6 +208,18 @@ export const WMS_MODULES: WmsModuleDefinition[] = [
     dashboardCategory: "daily",
     canPin: true,
     badgeProvider: "operations_snapshot",
+  },
+  {
+    id: "supply_flow",
+    path: "/wms/supply-flow",
+    label: "Przepływ dostaw",
+    icon: GitBranch,
+    sortOrder: 32,
+    dashboard: true,
+    shortDescription: "Kolejka pracy na zmianę — co rozładować i rozlokować teraz",
+    accent: A.teal,
+    dashboardCategory: "daily",
+    canPin: true,
   },
   {
     id: "mm",

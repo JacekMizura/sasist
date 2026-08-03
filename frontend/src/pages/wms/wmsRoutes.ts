@@ -61,6 +61,8 @@ export const WMS_ROUTES = {
   /** Szczegóły PZ — wyłącznie liczenie (``WmsReceivingCountPage``), segment ``pz`` jak w REST ``/wms/receiving/pz/{id}``. */
   receivingPz: (pzId: number | string) => `/wms/receiving/pz/${pzId}`,
   putaway: "/wms/putaway",
+  /** Living Supply Flow Plan — rekomendacje, explainable, execution. */
+  supplyFlow: "/wms/supply-flow",
   /** Warehouse production — unified WMS terminal (batch + MO). */
   production: "/wms/production",
   /** @deprecated Use productionCollecting("batch", batchId) */

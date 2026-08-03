@@ -606,6 +606,20 @@ def create_delivery(
         notes=note_s or None,
     )
     db.add(d)
+    db.flush()
+    try:
+        from ..services.supply_flow.events import EVENT_NEW_DELIVERY, publish_supply_flow_event
+
+        publish_supply_flow_event(
+            db,
+            event_type=EVENT_NEW_DELIVERY,
+            tenant_id=int(body.tenant_id),
+            warehouse_id=int(body.warehouse_id),
+            delivery_id=int(d.id),
+            source="delivery_api",
+        )
+    except Exception:
+        pass
     db.commit()
     db.refresh(d)
     return _delivery_to_read(db, d)
@@ -624,6 +638,7 @@ def update_delivery(
         db, user, tenant_id=tenant_id, delivery_id=delivery_id, active_warehouse_id=warehouse_id
     )
     old_status = (d.status or "draft").strip().lower()
+    old_expected = d.expected_date
     if body.supplier_id is not None:
         sup = db.query(Supplier).filter(Supplier.id == body.supplier_id, Supplier.tenant_id == tenant_id).first()
         if not sup:
@@ -659,6 +674,27 @@ def update_delivery(
         if d.name is not None and len(d.name) > 512:
             d.name = d.name[:512]
     d.updated_at = datetime.utcnow()
+    status_changed = body.status is not None and (d.status or "").strip().lower() != old_status
+    # After mutations above, compare new expected vs old.
+    eta_changed = body.expected_date is not None and d.expected_date != old_expected
+    if (status_changed or eta_changed) and d.warehouse_id is not None:
+        try:
+            from ..services.supply_flow.events import (
+                EVENT_DELIVERY_PHASE_CHANGED,
+                EVENT_ETA_CHANGED,
+                publish_supply_flow_event,
+            )
+
+            publish_supply_flow_event(
+                db,
+                event_type=EVENT_ETA_CHANGED if (eta_changed and not status_changed) else EVENT_DELIVERY_PHASE_CHANGED,
+                tenant_id=int(tenant_id),
+                warehouse_id=int(d.warehouse_id),
+                delivery_id=int(d.id),
+                source="delivery_api",
+            )
+        except Exception:
+            pass
     db.commit()
     db.refresh(d)
     return _delivery_to_read(db, d)

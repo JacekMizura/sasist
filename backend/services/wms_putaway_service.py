@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+import logging
 import math
 from datetime import datetime
 from typing import List, Tuple
 
 from sqlalchemy import func
 from sqlalchemy.orm import Session
+
+logger = logging.getLogger(__name__)
 
 from ..models.stock_operation import STOCK_OP_MOVE_IN, STOCK_OP_MOVE_OUT, STOCK_OP_PUTAWAY, StockOperation
 
@@ -1831,6 +1834,22 @@ def finalize_wms_relocation_pz(db: Session, tenant_id: int, document_id: int) ->
     from .production_execution.batch_putaway_completion import try_complete_production_execution_from_pw_document
 
     try_complete_production_execution_from_pw_document(db, doc)
+    # Supply Flow — publish event only (Engine solely via Event Dispatcher).
+    try:
+        from .supply_flow.events import EVENT_PUTAWAY_FINISHED, publish_supply_flow_event
+
+        if doc.warehouse_id is not None:
+            publish_supply_flow_event(
+                db,
+                event_type=EVENT_PUTAWAY_FINISHED,
+                tenant_id=int(tenant_id),
+                warehouse_id=int(doc.warehouse_id),
+                delivery_id=int(doc.delivery_id) if doc.delivery_id is not None else None,
+                pz_id=int(document_id),
+                source="putaway",
+            )
+    except Exception:
+        logger.exception("supply_flow.publish PUTAWAY_FINISHED failed pz=%s", document_id)
     db.commit()
     db.refresh(doc)
     return build_stock_document_read(db, doc)

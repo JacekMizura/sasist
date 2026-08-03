@@ -8701,6 +8701,7 @@ from .inventory_management_policy_schema import ensure_inventory_management_poli
 from .purchase_sales_block_schema import ensure_purchase_sales_block_schema  # noqa: E402
 from .receiving_workflow_status_schema import ensure_receiving_workflow_status_schema  # noqa: E402
 from .tenant_warehouse_fulfillment_schema import ensure_tenant_warehouse_fulfillment_schema  # noqa: E402
+from .supply_flow_schema import ensure_supply_flow_schema  # noqa: E402
 
 
 def ensure_postgres_serial_sequences_synced(engine: Engine) -> int:

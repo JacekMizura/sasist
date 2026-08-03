@@ -1,12 +1,5 @@
-﻿# current-context
+﻿## Active
 
-## Active
+**Przepływ dostaw — UX prowadzenia zmiany (2026-08-03).**
 
-**Audyt wizualny UI Analizy (przeglądarka)** — zakończony 2026-08-02.
-Znaleziono i poprawiono widoczne EN (Centrum: pick-face/stock/OMS/putaway/…; raporty: Unknown Product).
-Po poprawkach: wyłącznie polski UI w hubie Analizy (dozwolone skróty: WMS, SKU, EAN, CSV, XLSX, PZ, SLA, ABC, RK).
-
-IA:
-```
-Analizy → Przegląd · Centrum · Raporty · Optymalizacja
-```
+Pierwszy viewport: alert + 1 decyzja + CTA. Dlaczego w karcie (max 2). Co dalej ≤3 + „+ X”. Plan w „Szczegóły planu”. Stan = 1 wiersz. Jedno „Odśwież”. Powrót z WMS = zakończone + następne. Backend/silnik bez zmian.

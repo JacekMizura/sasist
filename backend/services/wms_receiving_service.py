@@ -1891,6 +1891,22 @@ def finish_wms_receiving_pz(
     if dt_up == "PZ":
         sync_product_purchase_prices_from_pz(db, tenant_id=tenant_id, pz_id=pz_id, posted_at=doc.updated_at)
     _sync_po_from_pz(db, tenant_id, pz_id)
+    # Supply Flow — publish event only (Engine solely via Event Dispatcher).
+    try:
+        from .supply_flow.events import EVENT_UNLOAD_FINISHED, publish_supply_flow_event
+
+        if doc.warehouse_id is not None:
+            publish_supply_flow_event(
+                db,
+                event_type=EVENT_UNLOAD_FINISHED,
+                tenant_id=int(tenant_id),
+                warehouse_id=int(doc.warehouse_id),
+                delivery_id=int(doc.delivery_id) if doc.delivery_id is not None else None,
+                pz_id=int(pz_id),
+                source="receiving",
+            )
+    except Exception:
+        logger.exception("supply_flow.publish UNLOAD_FINISHED failed pz=%s", pz_id)
     db.commit()
     db.refresh(doc)
     return build_stock_document_read(db, doc)

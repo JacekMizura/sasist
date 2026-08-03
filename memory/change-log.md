@@ -1,3 +1,110 @@
+## 2026-08-03 — Przepływ dostaw: UX prowadzenia zmiany (audyt)
+
+- Pierwszy viewport: alert + 1 karta uwagi + CTA; Dlaczego w karcie (≤2)
+- Co dalej ≤3 + „+ jeszcze X”; plan ukryty w „Szczegóły planu”; stan = 1 wiersz
+- Jedno „Odśwież”; język magazynowy; powrót z WMS = zakończone + następne
+- Backend / Engine / API — bez zmian
+
+## 2026-08-03 — Przepływ dostaw: przebudowa UX kierownika
+
+- Wyłącznie FE: hierarchia Alerty → Uwaga → Co dalej → Dlaczego → Plan pracy → Stan magazynu
+- Mapper `shiftBoard.ts` tłumaczy plan API na język magazynu (bez score / polityk / klas)
+- Usunięte stare panele architektury (Execution board, config, raw priorities)
+- Backend / Engine / Event Pipeline / API — bez zmian
+
+## 2026-08-03 — Supply Flow UX (Living Plan)
+
+- API: GET/POST plan+recompute, GET/PATCH config (`/api/wms/supply-flow`)
+- FE: `/wms/supply-flow` — CTA, Execution board+monitor, Explainable, dostawy, config
+- Moduł WMS `supply_flow` w menu / home (daily)
+- Bez przebudowy Engine / Event / Priority / Explainable / Planner / Monitor
+
+## 2026-08-03 — Capability Pack 4: Execution Monitor
+
+- Pakiet `execution_monitor/`: ExecutionStatus, ExecutionState, ExecutionMonitor
+- Overlay na ExecutionPlan (seq); źródło: zdarzenia WMS (start/finish unload/putaway, cancel, fail)
+- Dispatcher syncuje stan po batchu; start/cancel/fail bez recompute Engine
+- Testy: 33 passed
+
+## 2026-08-03 — Capability Pack 3: Execution Planner
+
+- `ExecutionPlanner` + `ExecutionPlan` / `ExecutionStep` (status PLANNED)
+- Porządkuje Recommendation 1:1 (seq, goal, delivery_groups, recommendation_ref)
+- Plan: `projection.execution_plan`; bez zmiany decyzji Engine
+- Testy CP3 + suite supply_flow
+
+## 2026-08-03 — Capability Pack 2: Explainable Decision
+
+- `ExplainableDecisionBuilder` + model `ExplainableDecision` (projekcja only)
+- Konsumuje Recommendation, `priority_contributions` (z PriorityResolver), BusinessEffect
+- Plan: `explainable_decisions` + `recommendation.explanation`
+- Bez confidence / why_not / konfliktów / kolejek / Cross Dock / symulacji
+- Testy: 25 passed
+
+## 2026-08-03 — PriorityResolver → PriorityPolicy architecture
+
+- Pakiet `pipeline/priority/`: Context, Contribution, Policy protocol, aggregator
+- Policies: Phase, ETA, Demand, Recovery, Capacity, Slotting (CP1 math 1:1)
+- `PriorityResolver` tylko buduje Context i sumuje Contribution
+- Alias `DeliveryPriorityFactors` = `PriorityContext`; testy CP1 zielone (22 passed)
+- Bez Explainable / confidence / why_not
+
+## 2026-08-03 — Supply Flow Capability Pack 1: dynamic priority
+
+- `PriorityResolver`: multi-factor (phase/ETA/wait/open PZ/unlockable Recovery orders/capacity/slotting)
+- READ: delivery `product_ids`, recovery `shortage_links`, slotting `slotted_product_ids`
+- `BusinessEffectBuilder` czyta PriorityResolution (unlock estimate + top priority)
+- CandidateActionBuilder bez zmian logiki priorytetów
+- Testy CP1 + suite supply_flow
+
+## 2026-08-03 — Supply Flow ETAP 3C: decision pipeline
+
+- Pakiet `services/supply_flow/pipeline/`: CandidateAction / Priority / BusinessEffect / CTA / Recommendation builders + runner
+- Engine tylko: gather_input → DecisionPipeline.run → upsert plan
+- RecommendationBuilder = czysta projekcja ranked actions (bez ifów biznesowych)
+- Testy: 19 passed
+
+## 2026-08-03 — Supply Flow ETAP 3B: Engine v1 (prosta logika)
+
+- `engine_input.py` + `analysis.py`: rekomendacje fazowe, priorytet deterministyczny, business_effect jakościowy
+- READ: inventory/recovery/slotting/capacity(DOCK)/putaway open PZ — agregaty SSOT
+- Plan `stage=v1_simple`; CTA → istniejące ścieżki WMS
+- Testy: 16 passed; bez ML / explainable / kolejek
+
+## 2026-08-03 — Supply Flow ETAP 3A: Event Pipeline
+
+- Pakiet `services/supply_flow/events/`: types, buffer, publisher, dispatcher, handlers
+- WMS publikuje wyłącznie `publish_supply_flow_event` (receiving/putaway/delivery)
+- Dispatcher: dedupe, group(warehouse), debounce (flush window), priority → 1× recompute
+- Testy: 13 passed; bez algorytmów
+
+## 2026-08-03 — Supply Flow ETAP 2: wiring WMS
+
+- Hooki: `finish_wms_receiving_pz`, `finalize_wms_relocation_pz`, `create_delivery`, `update_delivery`
+- `orchestration.advance_toward_phase` (graf + macierz, bez sync osi zakupowej)
+- Soft CTA/next → `/wms/receiving`, `/wms/putaway`, `/goods-orders`
+- Putaway READ: SQL agregaty statusów PZ; Engine stage=`wiring`
+- Testy: 8 passed; bez UI / algorytmów
+
+## 2026-08-03 — Supply Flow ETAP 1 zaakceptowany
+
+- Po fixie config + macierz użytkownik zaakceptował zamknięcie ETAPU 1
+- ETAP 2 nie rozpoczęty
+
+## 2026-08-03 — Supply Flow ETAP 1: fix audytu (config + macierz)
+
+- `SupplyFlowWarehouseConfig` (tenant+warehouse): `optimization_goal`, `planning_horizon_hours`
+- Usunięto goal/horizon z `SupplyFlowPlan`; Engine czyta config, plan = wynik
+- `PURCHASE_OPERATIONAL_PHASE_MATRIX` — walidacja kombinacji, bez nadpisywania osi
+- Schema: bez seed sync status→phase; migracja legacy kolumn planu → config
+- Testy: 5 passed
+
+## 2026-08-03 — Supply Flow ETAP 1: fundament backendu
+
+- `operational_phase` + historia na dostawie; Living `SupplyFlowPlan` (projekcja)
+- Pakiet `services/supply_flow`: Engine szkielet, recompute triggers (TODO hooks), adaptery READ/WRITE
+- Schema: `ensure_supply_flow_schema`; bez UI / algorytmów
+
 ## 2026-08-02 — Audyt wizualny Analizy (przeglądarka)
 
 - Przejście całego hubu w UI; znaleziono 14 widocznych EN fraz

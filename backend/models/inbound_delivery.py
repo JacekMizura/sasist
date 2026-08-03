@@ -18,7 +18,11 @@ class InboundDelivery(Base):
     warehouse_id = Column(Integer, ForeignKey("warehouses.id", ondelete="SET NULL"), nullable=True, index=True)
 
     name = Column(String(512), nullable=True)
+    #: Purchase-axis status (draft / ordered / in_transit / received / cancelled).
     status = Column(String(32), nullable=False, default="draft", index=True)
+    #: Supply Flow operational lifecycle (separate axis from ``status``).
+    operational_phase = Column(String(64), nullable=False, default="AWIZOWANA", index=True)
+    operational_phase_changed_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
     updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
     expected_date = Column(DateTime, nullable=True)
@@ -43,6 +47,12 @@ class InboundDelivery(Base):
         "StockDocument",
         back_populates="delivery",
         foreign_keys="StockDocument.delivery_id",
+    )
+    supply_flow_phase_history = relationship(
+        "SupplyFlowPhaseHistory",
+        back_populates="delivery",
+        cascade="all, delete-orphan",
+        order_by="SupplyFlowPhaseHistory.changed_at",
     )
 
 

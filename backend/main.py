@@ -328,6 +328,7 @@ from .api.reports import router as reports_router
 from .api.damage_reports import router as damage_reports_router
 from .api.wms_receiving import router as wms_receiving_router
 from .api.wms_putaway import router as wms_putaway_router
+from .api.supply_flow import router as supply_flow_router
 from .api.wms_relocation import router as wms_relocation_router
 from .api.wms_mm_transfer import router as wms_mm_transfer_router
 from .api.wms_replenishment import router as wms_replenishment_router
@@ -1254,6 +1255,9 @@ try:
     ensure_production_mrp_schema(engine)
     ensure_purchase_sales_block_schema(engine)
     ensure_receiving_workflow_status_schema(engine)
+    from .db.supply_flow_schema import ensure_supply_flow_schema
+
+    ensure_supply_flow_schema(engine)
     from .db.warehouse_requires_putaway_schema import ensure_warehouse_requires_putaway_schema
 
     ensure_warehouse_requires_putaway_schema(engine)
@@ -2191,6 +2195,7 @@ _API_ROUTERS = (
     return_statuses_router,
     wms_receiving_router,
     wms_putaway_router,
+    supply_flow_router,
     wms_relocation_router,
     wms_mm_transfer_router,
     wms_replenishment_router,

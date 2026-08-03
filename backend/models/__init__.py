@@ -41,6 +41,11 @@ from .offer_stock_pool import OfferStockPool, OfferStockPoolWarehouse  # noqa: F
 from .product_warehouse_slotting import ProductWarehouseSlotting  # noqa: F401 — after Product
 from .supplier_product import SupplierProduct  # noqa: F401 - after Product & Supplier
 from .inbound_delivery import InboundDelivery, DeliveryItem  # noqa: F401
+from .supply_flow import (  # noqa: F401
+    SupplyFlowPhaseHistory,
+    SupplyFlowPlan,
+    SupplyFlowWarehouseConfig,
+)
 from .purchase_order import PurchaseOrder, PurchaseOrderItem  # noqa: F401
 from .currency_exchange_rate import CurrencyExchangeRate  # noqa: F401
 from .purchasing_alert import PurchasingAlertRule, PurchasingAlertEvent, PurchasingAutoDraft  # noqa: F401

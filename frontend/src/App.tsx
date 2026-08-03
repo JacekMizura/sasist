@@ -175,6 +175,7 @@ import WmsPackingOrderPage from "./pages/wms/WmsPackingOrderPage"
 import WmsPackingWorkstationGate from "./pages/wms/WmsPackingWorkstationGate"
 import WmsDirectSalesPage from "./pages/wms/WmsDirectSalesPage"
 import DirectSalesSettingsLayout from "./pages/wms/direct-sales/DirectSalesSettingsLayout"
+import SupplyFlowPage from "./pages/wms/supply-flow/SupplyFlowPage"
 import OperationsLayout from "./pages/wms/operations/OperationsLayout"
 import OperationsRuntimePage from "./pages/wms/operations/OperationsRuntimePage"
 import OperationsReplenishmentPage from "./pages/wms/operations/OperationsReplenishmentPage"
@@ -477,6 +478,7 @@ export const router = createBrowserRouter(
         <Route path="receiving/incomplete-product-data" element={<WmsIncompleteProductDataPage />} />
         <Route path="product-data-completion" element={<WmsProductDataCompletionPage />} />
         <Route path="receiving" element={<WmsReceivingPage />} />
+        <Route path="supply-flow" element={<SupplyFlowPage />} />
         <Route path="putaway" element={<WmsPutawayPage />} />
         <Route path="putaway/:pzId/item/:itemId/execute" element={<WmsPutawayExecutePage />} />
         <Route path="putaway/:pzId/item/:itemId" element={<WmsPutawayItemDetailPage />} />
