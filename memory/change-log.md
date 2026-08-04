@@ -1,3 +1,9 @@
+## 2026-08-04 — Edycja produktu: Ceny 1:1 z `ceny karta produktu.html` (FE only)
+
+- `ProductEditPricesTab`: układ 2/3+1/3, tabela HTML dostawców, Ostatni zakup, Podsumowanie (szary footer Zysk/Rentowność)
+- SASIST Input/MoneyInput/Textarea/Select/Button/Radio; bez DataTable/MetricCard/sticky
+- Handlery / API / model danych bez zmian
+
 ## 2026-08-04 — Edycja produktu: Podstawowe v2 z HTML (FE only)
 
 - `ProductEditBasicTab` → layout 1:1 z `podstawowy karta produckut v2.html` (grid 7/5)

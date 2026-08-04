@@ -1,5 +1,11 @@
 ﻿## Active
 
+**Edycja produktu — Ceny: DOM 1:1 z `ceny karta produktu.html` (2026-08-04).**
+
+- `ProductEditPricesTab` only: 2/3+1/3, HTML table dostawców, podsumowanie z szarym footerem
+- SASIST MoneyInput/Input/Textarea/Select/SecondaryButton/GhostButton/Radio; bez DataTable/MetricCard
+- Logika marży / dostawców / API bez zmian
+
 **Edycja produktu — Podstawowe v2: DOM 1:1 z HTML (2026-08-04).**
 
 - Spec: `Downloads/podstawowy karta produckut v2.html`

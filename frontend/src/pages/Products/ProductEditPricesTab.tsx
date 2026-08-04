@@ -1,7 +1,15 @@
 import { useEffect, useState } from "react";
 
 import type { SupplierRead } from "../../api/inboundSuppliersApi";
-import { MoneyInput, Input } from "../../design-system";
+import {
+  GhostButton,
+  Input,
+  MoneyInput,
+  Radio,
+  SecondaryButton,
+  Select,
+  Textarea,
+} from "../../design-system";
 import type { ProductPricingDisplay } from "../../utils/resolvedProductPricing";
 import { formatMoneyZlDisplay } from "./productPricingDisplay";
 
@@ -57,9 +65,10 @@ export type ProductEditPricesTabProps = {
   formatDateTimePl: (v: string | null | undefined) => string;
 };
 
+const labelClass = "mb-1.5 block text-sm font-medium text-gray-700";
+
 /**
- * Inline supplier price — same DOM slot as mock `<input class="w-20 …">`,
- * wired to existing patch handler via MoneyInput.
+ * Inline supplier price — same DOM slot as mock `<input class="w-20 …">`.
  */
 function SupplierPriceInput({
   row,
@@ -91,11 +100,8 @@ function SupplierPriceInput({
 
 /**
  * Product edit — Ceny tab.
- *
- * DOM hierarchy is a structural 1:1 port of
- * `edycja_produktu_nowy_widok (1).html` (main two-column prices body).
- * No ProductLikeSection / invented layout — plain section/div as in the mock.
- * MoneyInput / Input replace native inputs only; handlers unchanged.
+ * DOM hierarchy is a structural 1:1 port of `ceny karta produktu.html`
+ * (main two-column body under tabs). Logic / field wiring unchanged.
  */
 export function ProductEditPricesTab({
   isNew,
@@ -145,14 +151,14 @@ export function ProductEditPricesTab({
       : `${Number(purchasePriceOriginal).toFixed(4)} ${(purchaseCurrency || "").trim() || ""}`.trim();
 
   const emptyDd = "font-medium text-gray-400";
-  const filledDd = "font-semibold text-gray-900 whitespace-nowrap";
+  const filledDd = "whitespace-nowrap font-semibold text-gray-900";
 
   return (
     /* mock: <div class="flex flex-col xl:flex-row gap-6 items-start"> */
     <div className="flex flex-col items-start gap-6 xl:flex-row">
-      {/* mock: KOLUMNA LEWA — w-full xl:w-2/3 xl:min-w-[700px] flex flex-col gap-6 */}
+      {/* KOLUMNA LEWA: w-full xl:w-2/3 xl:min-w-[700px] */}
       <div className="flex w-full flex-col gap-6 xl:w-2/3 xl:min-w-[700px]">
-        {/* mock: KARTA Kalkulacja cenowa — section */}
+        {/* KARTA: Kalkulacja cenowa */}
         <section className="overflow-hidden rounded-xl border border-gray-200 bg-white">
           <div className="border-b border-gray-200 px-6 py-4">
             <h2 className="text-base font-semibold text-gray-900">Kalkulacja cenowa</h2>
@@ -160,7 +166,7 @@ export function ProductEditPricesTab({
           <div className="p-6">
             <div className="grid grid-cols-1 gap-x-8 gap-y-6 md:grid-cols-2">
               <div>
-                <label className="mb-1.5 block text-sm font-medium text-gray-700">Docelowa cena sprzedaży</label>
+                <label className={labelClass}>Docelowa cena sprzedaży</label>
                 <MoneyInput
                   value={salePrice}
                   onValueChange={setSalePrice}
@@ -171,7 +177,7 @@ export function ProductEditPricesTab({
               </div>
 
               <div>
-                <label className="mb-1.5 block text-sm font-medium text-gray-700">Ręczna cena zakupu netto</label>
+                <label className={labelClass}>Ręczna cena zakupu netto</label>
                 <MoneyInput
                   value={purchasePrice}
                   onValueChange={setPurchasePrice}
@@ -182,7 +188,7 @@ export function ProductEditPricesTab({
               </div>
 
               <div>
-                <label className="mb-1.5 block text-sm font-medium text-gray-700">Koszty pakowania (netto)</label>
+                <label className={labelClass}>Koszty pakowania (netto)</label>
                 <MoneyInput
                   value={extraCostPackagingNet}
                   onValueChange={setExtraCostPackagingNet}
@@ -193,7 +199,7 @@ export function ProductEditPricesTab({
               </div>
 
               <div>
-                <label className="mb-1.5 block text-sm font-medium text-gray-700">Prowizja marketplace (%)</label>
+                <label className={labelClass}>Prowizja marketplace (%)</label>
                 <Input
                   type="number"
                   min={0}
@@ -213,7 +219,7 @@ export function ProductEditPricesTab({
               </div>
 
               <div>
-                <label className="mb-1.5 block text-sm font-medium text-gray-700">Inne koszty operacyjne (netto)</label>
+                <label className={labelClass}>Inne koszty operacyjne (netto)</label>
                 <MoneyInput
                   value={extraCostOtherNet}
                   onValueChange={setExtraCostOtherNet}
@@ -224,7 +230,7 @@ export function ProductEditPricesTab({
               </div>
 
               <div>
-                <label className="mb-1.5 block text-sm font-medium text-gray-700">Stawka VAT (%)</label>
+                <label className={labelClass}>Stawka VAT (%)</label>
                 <Input
                   type="text"
                   density="comfortable"
@@ -236,13 +242,15 @@ export function ProductEditPricesTab({
               </div>
 
               <div className="md:col-span-2">
-                <label className="mb-1.5 block text-sm font-medium text-gray-700">Notatka promocyjna / cenowa</label>
-                <textarea
+                <label className={labelClass}>Notatka promocyjna / cenowa</label>
+                <Textarea
                   rows={4}
                   value={promotion}
                   onChange={(e) => setPromotion(e.target.value)}
                   placeholder="Krótki opis promocji, rabatów lub warunków..."
-                  className="w-full resize-y rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-700 shadow-sm transition-colors focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500 sm:text-sm"
+                  density="comfortable"
+                  focusTone="brand"
+                  className="resize-y text-gray-700"
                 />
               </div>
             </div>
@@ -250,9 +258,9 @@ export function ProductEditPricesTab({
         </section>
       </div>
 
-      {/* mock: KOLUMNA PRAWA — w-full xl:w-1/3 flex flex-col gap-6 */}
+      {/* KOLUMNA PRAWA: w-full xl:w-1/3 */}
       <div className="flex w-full flex-col gap-6 xl:w-1/3">
-        {/* mock: KARTA Dostawcy i ceny zakupu */}
+        {/* KARTA: Dostawcy i ceny zakupu */}
         <section className="overflow-hidden rounded-xl border border-gray-200 bg-white">
           <div className="border-b border-gray-200 px-5 py-4">
             <h2 className="text-base font-semibold text-gray-900">Dostawcy i ceny zakupu</h2>
@@ -263,8 +271,8 @@ export function ProductEditPricesTab({
               <div className="mb-5 flex items-center rounded-r-lg border-l-4 border-emerald-500 bg-emerald-50 p-3">
                 <p className="text-[13px] text-emerald-900">
                   <span className="font-bold">Najtańszy dostawca:</span>{" "}
-                  {(cheapestSupplierInsight.supplier_name || "").trim() || `#${cheapestSupplierInsight.supplier_id}`} —{" "}
-                  {formatMoneyZl(cheapestSupplierInsight.purchase_price)} netto
+                  {(cheapestSupplierInsight.supplier_name || "").trim() || `#${cheapestSupplierInsight.supplier_id}`}{" "}
+                  — {formatMoneyZl(cheapestSupplierInsight.purchase_price)} netto
                 </p>
               </div>
             ) : null}
@@ -273,7 +281,6 @@ export function ProductEditPricesTab({
               <p className="mb-5 text-sm text-gray-600">Najpierw zapisz produkt, aby móc powiązać go z dostawcami.</p>
             ) : (
               <>
-                {/* mock: overflow-x-auto mb-5 + table */}
                 <div className="mb-5 overflow-x-auto">
                   <table className="w-full whitespace-nowrap text-left text-sm">
                     <thead>
@@ -281,7 +288,7 @@ export function ProductEditPricesTab({
                         <th className="pb-2 font-medium">Dostawca</th>
                         <th className="pb-2 font-medium">Cena netto</th>
                         <th className="pb-2 text-center font-medium">Domyślny</th>
-                        <th className="pb-2 text-right font-medium" />
+                        <th className="pb-2 text-right font-medium">Usuń</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100">
@@ -311,8 +318,7 @@ export function ProductEditPricesTab({
                               />
                             </td>
                             <td className="py-3 pr-3 text-center">
-                              <input
-                                type="radio"
+                              <Radio
                                 name="product-default-supplier"
                                 className="h-4 w-4 cursor-pointer border-gray-300 text-orange-600 focus:ring-orange-500"
                                 checked={defaultSupplierId === row.supplier_id}
@@ -321,14 +327,15 @@ export function ProductEditPricesTab({
                               />
                             </td>
                             <td className="py-3 text-right">
-                              <button
+                              <GhostButton
                                 type="button"
+                                density="compact"
                                 disabled={supplierLinksBusy}
                                 onClick={() => onRemoveSupplierLink(row.id, row.supplier_id)}
-                                className="text-xs font-medium text-red-500 transition-colors hover:text-red-700 disabled:opacity-40"
+                                className="!px-0 !py-0 text-xs font-medium text-red-500 hover:bg-transparent hover:text-red-700 disabled:opacity-40"
                               >
                                 Usuń
-                              </button>
+                              </GhostButton>
                             </td>
                           </tr>
                         ))
@@ -337,12 +344,13 @@ export function ProductEditPricesTab({
                   </table>
                 </div>
 
-                {/* mock: Dodawanie dostawcy */}
                 <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
                   <label className="mb-2 block text-xs font-medium text-gray-700">Dodaj nowego dostawcę</label>
                   <div className="flex gap-2">
-                    <select
-                      className="flex-1 rounded-md border border-gray-300 bg-white px-2 py-1.5 text-sm text-gray-600 shadow-sm focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
+                    <Select
+                      className="flex-1 bg-white text-gray-600"
+                      density="compact"
+                      focusTone="brand"
                       value={addSupplierPick}
                       onChange={(e) => setAddSupplierPick(e.target.value)}
                       disabled={supplierLinksBusy}
@@ -355,15 +363,16 @@ export function ProductEditPricesTab({
                             {s.name}
                           </option>
                         ))}
-                    </select>
-                    <button
+                    </Select>
+                    <SecondaryButton
                       type="button"
+                      density="compact"
                       disabled={supplierLinksBusy || !addSupplierPick}
                       onClick={() => onAddSupplierLink()}
-                      className="rounded-md bg-[#f3b584] px-4 py-1.5 text-sm font-medium text-gray-900 shadow-sm transition-colors hover:bg-[#e8a36c] disabled:cursor-not-allowed disabled:opacity-50"
+                      className="!border-transparent !bg-[#f3b584] !px-4 !py-1.5 !text-sm !font-medium !text-gray-900 shadow-sm hover:!bg-[#e8a36c] disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       Dodaj
-                    </button>
+                    </SecondaryButton>
                   </div>
                 </div>
               </>
@@ -371,9 +380,9 @@ export function ProductEditPricesTab({
           </div>
         </section>
 
-        {/* mock: kontener Ostatni zakup + Podsumowanie — flex flex-col sm:flex-row xl:flex-col gap-6 */}
+        {/* Ostatni zakup + Podsumowanie */}
         <div className="flex flex-col gap-6 sm:flex-row xl:flex-col">
-          {/* mock: KARTA Ostatni zakup (z PZ) */}
+          {/* KARTA: Ostatni zakup (z PZ) */}
           <section className="flex-1 overflow-hidden rounded-xl border border-gray-200 bg-white">
             <div className="border-b border-gray-200 px-5 py-4">
               <h2 className="text-base font-semibold text-gray-900">Ostatni zakup (z PZ)</h2>
@@ -394,21 +403,27 @@ export function ProductEditPricesTab({
                 </div>
                 <div className="flex justify-between gap-4 py-2.5">
                   <dt className="text-gray-500">Ostatni dostawca</dt>
-                  <dd className={lastSupplierLabel === "—" ? emptyDd : "font-medium text-gray-900"}>{lastSupplierLabel}</dd>
+                  <dd className={lastSupplierLabel === "—" ? emptyDd : "font-medium text-gray-900"}>
+                    {lastSupplierLabel}
+                  </dd>
                 </div>
                 <div className="flex justify-between gap-4 py-2.5">
                   <dt className="text-gray-500">Waluta ostatniego zakupu</dt>
-                  <dd className={lastCurrencyLabel === "—" ? emptyDd : "font-medium text-gray-900"}>{lastCurrencyLabel}</dd>
+                  <dd className={lastCurrencyLabel === "—" ? emptyDd : "font-medium text-gray-900"}>
+                    {lastCurrencyLabel}
+                  </dd>
                 </div>
                 <div className="flex justify-between gap-4 py-2.5">
                   <dt className="text-gray-500">Cena oryginalna (waluta)</dt>
-                  <dd className={originalPriceLabel === "—" ? emptyDd : "font-medium text-gray-900"}>{originalPriceLabel}</dd>
+                  <dd className={originalPriceLabel === "—" ? emptyDd : "font-medium text-gray-900"}>
+                    {originalPriceLabel}
+                  </dd>
                 </div>
               </dl>
             </div>
           </section>
 
-          {/* mock: KARTA Podsumowanie kosztów */}
+          {/* KARTA: Podsumowanie kosztów */}
           <section className="flex-1 overflow-hidden rounded-xl border border-gray-200 bg-white">
             <div className="border-b border-gray-200 px-5 py-4">
               <h2 className="text-base font-semibold text-gray-900">Podsumowanie kosztów</h2>
@@ -421,7 +436,9 @@ export function ProductEditPricesTab({
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-gray-500">Cena zakupu brutto</span>
-                  <span className="font-medium text-gray-900">{formatMoneyZlDisplay(pricingDisplay.purchaseGross)}</span>
+                  <span className="font-medium text-gray-900">
+                    {formatMoneyZlDisplay(pricingDisplay.purchaseGross)}
+                  </span>
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-gray-500">Stawka VAT</span>
