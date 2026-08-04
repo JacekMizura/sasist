@@ -1,5 +1,14 @@
 ﻿## Active
 
+**Edycja produktu — Podstawowe: DOM 1:1 z HTML (2026-08-04).**
+
+- Spec: `Downloads/podstawowe karta produktu.html`
+- `ProductEditBasicTab` — plain section/div jak mock; SASIST Input/Select; bez ProductLikeSection
+- Wire w `ProductEditModal` gdy `activeTab === "basic"`
+- Historia: chrome z mocka + `ActivityLogPanel` (nie fake lista Magazynowe)
+- Extra (nie w mocku, zachowane): Producent/GPSR, Walidacja
+- Bez commita
+
 **Edycja produktu — Ceny: DOM 1:1 z mock HTML (2026-08-04).**
 
 - `ProductEditPricesTab` = hierarchia section/div jak w mocku (bez ProductLikeSection / DataTable / własnego layoutu)

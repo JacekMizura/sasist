@@ -51,22 +51,16 @@ import { ProductSalesOffersSection } from "./ProductSalesOffersSection";
 import { listCompositionsForProduct } from "../../api/compositionApi";
 import type { MagazynInvRowDisplay } from "../../components/products/MagazynInventoryLine";
 import { EditInventoryTraceabilityModal } from "../../components/products/EditInventoryTraceabilityModal";
-import { ProductValidationOverridesSection } from "../../components/wms/receiving/ProductValidationOverridesSection";
 import { getWmsProductValidationSettings } from "../../api/wmsProductValidationApi";
 import type { ProductValidationGlobalSettings } from "../../components/wms/receiving/ProductValidationOverridesSection";
 import { SUPPLIER_COUNTRIES } from "../../constants/supplierTaxonomy";
 import type { ProductImageEntry, ProductLabelData } from "../../types/productLabel";
 import {
   ProductLikePageLayout,
-  ProductLikeSection,
-  productLikeAsideColClass,
   productLikeFieldLabelClass,
   productLikeInputClass,
-  productLikeMainColClass,
-  productLikeTwoColClass,
   type ProductLikeStatCard,
 } from "../../components/catalog";
-import ActivityLogPanel from "../../components/activityLog/ActivityLogPanel";
 import {
   buildProductMetadataJson,
   ensureSingleMainImage,
@@ -76,8 +70,8 @@ import {
   pickMainImageUrl,
 } from "../../utils/productLabelMetadata";
 import { formatMoneyZlDisplay, resolveProductPricingDisplay } from "./productPricingDisplay";
-import { DocumentTemplateScopeSection } from "@/pages/Settings/document-templates/components/DocumentTemplateScopeSection";
 import { ProductEditPricesTab } from "./ProductEditPricesTab";
+import { ProductEditBasicTab } from "./ProductEditBasicTab";
 import { useDocumentTemplatePrint } from "../../hooks/useDocumentTemplatePrint";
 
 export type ProductForm = {
@@ -1870,267 +1864,54 @@ export function ProductEditModal({
         saving={saving}
       >
                 {activeTab === "basic" && (
-                  <div className={productLikeTwoColClass}>
-                    <div className={productLikeMainColClass}>
-                      <ProductLikeSection title="Informacje ogólne">
-                        <div className="grid grid-cols-1 gap-x-8 gap-y-6 md:grid-cols-2">
-                          <div className="md:col-span-2">
-                            <label className={fieldLabel}>Nazwa produktu</label>
-                            <input type="text" value={name} onChange={(e) => setName(e.target.value)} className={inputClass} required />
-                          </div>
-                          <div>
-                            <label className={fieldLabel}>Podmiot</label>
-                            <select value={tenantId ?? ""} onChange={(e) => setTenantId(e.target.value ? Number(e.target.value) : null)} className={inputClass} required={isNew}>
-                              <option value="">— Wybierz podmiot —</option>
-                              {tenants.map((t) => (
-                                <option key={t.id} value={t.id}>{t.name}</option>
-                              ))}
-                            </select>
-                          </div>
-                          <div>
-                            <label className={fieldLabel}>Symbol / SKU</label>
-                            <input type="text" value={symbol} onChange={(e) => setSymbol(e.target.value)} className={inputClass} />
-                          </div>
-                          <div>
-                            <label className={fieldLabel}>Numer katalogowy</label>
-                            <input type="text" defaultValue="" className={inputClass} placeholder="Brak (opcjonalne)" />
-                          </div>
-                          <div className="md:col-span-2 md:w-1/2 md:pr-4">
-                            <label className={fieldLabel}>Kod kreskowy (EAN/GTIN)</label>
-                            <input type="text" value={ean} onChange={(e) => setEan(e.target.value)} className={inputClass} />
-                          </div>
-                        </div>
-                      </ProductLikeSection>
-
-                      <ProductLikeSection title="Gabaryty jednostkowe">
-                        <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-                          <div>
-                            <label className="mb-1 block text-xs font-medium uppercase tracking-wider text-slate-500">Długość</label>
-                            <div className="relative">
-                              <input type="number" min={0} step={0.01} value={length === "" ? "" : length} onChange={(e) => updateDimension("length", e.target.value)} className={`${inputClass} pr-10`} />
-                              <span className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3 text-sm text-slate-500">cm</span>
-                            </div>
-                          </div>
-                          <div>
-                            <label className="mb-1 block text-xs font-medium uppercase tracking-wider text-slate-500">Szerokość</label>
-                            <div className="relative">
-                              <input type="number" min={0} step={0.01} value={width === "" ? "" : width} onChange={(e) => updateDimension("width", e.target.value)} className={`${inputClass} pr-10`} />
-                              <span className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3 text-sm text-slate-500">cm</span>
-                            </div>
-                          </div>
-                          <div>
-                            <label className="mb-1 block text-xs font-medium uppercase tracking-wider text-slate-500">Wysokość</label>
-                            <div className="relative">
-                              <input type="number" min={0} step={0.01} value={height === "" ? "" : height} onChange={(e) => updateDimension("height", e.target.value)} className={`${inputClass} pr-10`} />
-                              <span className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3 text-sm text-slate-500">cm</span>
-                            </div>
-                          </div>
-                          <div>
-                            <label className="mb-1 block text-xs font-medium uppercase tracking-wider text-slate-500">Waga brutto</label>
-                            <div className="relative">
-                              <input
-                                type="number" min={0} step={0.001}
-                                value={weight === "" ? "" : weight}
-                                onChange={(e) => {
-                                  const s = String(e.target.value).trim().replace(",", ".");
-                                  if (s === "") setWeight("");
-                                  else { const n = parseFloat(s); if (Number.isFinite(n)) setWeight(n); }
-                                }}
-                                className={`${inputClass} pr-10`}
-                              />
-                              <span className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3 text-sm text-slate-500">kg</span>
-                            </div>
-                          </div>
-                          <div className="md:col-span-2 mt-2">
-                            <label className="mb-1 block text-xs font-medium uppercase tracking-wider text-slate-500">Objętość wyliczona</label>
-                            <div className="relative">
-                              <input
-                                type="number" min={0} step={0.01} readOnly
-                                value={volume === "" ? "" : typeof volume === "number" ? round2(volume) : volume}
-                                className={`${inputClass} cursor-not-allowed bg-slate-50 pr-12 font-mono text-slate-600`}
-                              />
-                              <span className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3 text-sm text-slate-400">dm³</span>
-                            </div>
-                          </div>
-                          <div className="md:col-span-2 mt-2">
-                            <label className="mb-1 block text-xs font-medium uppercase tracking-wider text-slate-500">Jednostka miary</label>
-                            <input type="text" list="unit-list-pem" value={unit} onChange={(e) => setUnit(e.target.value)} placeholder="np. szt." className={inputClass} />
-                            <datalist id="unit-list-pem">
-                              <option value="szt." />
-                              <option value="opak." />
-                              <option value="para" />
-                              <option value="kg" />
-                              <option value="m" />
-                            </datalist>
-                          </div>
-                        </div>
-                      </ProductLikeSection>
-
-                      <ProductLikeSection title="Opakowanie zbiorcze (Karton)" accent="blue">
-                        <div className="grid grid-cols-1 gap-x-8 gap-y-6 md:grid-cols-2">
-                          <div>
-                            <label className={fieldLabel}>EAN kartonu zbiorczego</label>
-                            <input type="text" value={bulkEan} onChange={(e) => setBulkEan(e.target.value)} className={inputClass} placeholder="Opcjonalny kod" />
-                          </div>
-                          <div>
-                            <label className={fieldLabel}>Ilość sztuk w kartonie</label>
-                            <div className="relative">
-                              <input
-                                type="number" min={0} step={1}
-                                value={unitsPerCarton === "" ? "" : unitsPerCarton}
-                                onChange={(e) => {
-                                  const s = String(e.target.value).trim().replace(",", ".");
-                                  if (s === "") setUnitsPerCarton("");
-                                  else { const n = parseFloat(s); if (Number.isFinite(n) && n >= 0) setUnitsPerCarton(n); }
-                                }}
-                                className={`${inputClass} pr-12`}
-                              />
-                              <span className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3 text-sm text-slate-500">szt.</span>
-                            </div>
-                          </div>
-                          <div className="md:col-span-2 border-t border-slate-100 pt-4">
-                            <h3 className="mb-4 text-sm font-medium text-slate-900">Wymiary zewnętrzne kartonu</h3>
-                            <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-                              <div>
-                                <label className="mb-1 block text-xs text-slate-500">Długość (cm)</label>
-                                <input type="number" min={0} step={0.01} value={cartonLength === "" ? "" : cartonLength} onChange={(e) => updateCartonDimension("cartonLength", e.target.value)} className={inputClass} />
-                              </div>
-                              <div>
-                                <label className="mb-1 block text-xs text-slate-500">Szerokość (cm)</label>
-                                <input type="number" min={0} step={0.01} value={cartonWidth === "" ? "" : cartonWidth} onChange={(e) => updateCartonDimension("cartonWidth", e.target.value)} className={inputClass} />
-                              </div>
-                              <div>
-                                <label className="mb-1 block text-xs text-slate-500">Wysokość (cm)</label>
-                                <input type="number" min={0} step={0.01} value={cartonHeight === "" ? "" : cartonHeight} onChange={(e) => updateCartonDimension("cartonHeight", e.target.value)} className={inputClass} />
-                              </div>
-                              <div>
-                                <label className="mb-1 block text-xs text-slate-500">Waga brutto (kg)</label>
-                                <input
-                                  type="number" min={0} step={0.001}
-                                  value={cartonWeight === "" ? "" : cartonWeight}
-                                  onChange={(e) => {
-                                    const s = String(e.target.value).trim().replace(",", ".");
-                                    if (s === "") setCartonWeight("");
-                                    else { const n = parseFloat(s); if (Number.isFinite(n)) setCartonWeight(n); }
-                                  }}
-                                  className={inputClass}
-                                />
-                              </div>
-                            </div>
-                            <div className="mt-4 max-w-xs">
-                              <label className="mb-1 block text-xs text-slate-500">Objętość kartonu (dm³)</label>
-                              <input
-                                type="number" min={0} step={0.01} readOnly
-                                value={cartonVolume === "" ? "" : typeof cartonVolume === "number" ? round2(cartonVolume) : cartonVolume}
-                                className={`${inputClass} cursor-not-allowed bg-slate-50 font-semibold text-slate-700`}
-                              />
-                            </div>
-                          </div>
-                        </div>
-                      </ProductLikeSection>
-                    </div>
-
-                    <aside className={productLikeAsideColClass}>
-                      {!isNew && product?.id != null ? (
-                        <ProductLikeSection
-                          title="Szablon wydruku dokumentu"
-                          description="Domyślny układ karty dla tego konkretnego SKU."
-                          compact
-                        >
-                          <DocumentTemplateScopeSection
-                            tenantId={effectiveTenantId}
-                            scopeType="PRODUCT"
-                            scopeId={product.id}
-                            title=""
-                            description=""
-                            titleClassName="hidden"
-                            kinds={[{ kindCode: "product_card", label: "Karta produktu" }]}
-                          />
-                        </ProductLikeSection>
-                      ) : null}
-
-                      <ProductLikeSection title="Producent i GPSR" compact>
-                        <div className="space-y-4">
-                          <div>
-                            <label className={fieldLabel}>Producent z katalogu</label>
-                            <select
-                              value={manufacturerId != null ? String(manufacturerId) : ""}
-                              onChange={(e) => {
-                                const v = e.target.value;
-                                if (!v) { setManufacturerId(null); return; }
-                                const id = Number(v);
-                                const row = manufacturersCatalog.find((x) => x.id === id);
-                                setManufacturerId(Number.isFinite(id) ? id : null);
-                                if (row) setManufacturer(row.name);
-                              }}
-                              className={inputClass}
-                            >
-                              <option value="">— Wybierz —</option>
-                              {manufacturersCatalog.map((m) => (
-                                <option key={m.id} value={m.id}>{m.name} {!m.active ? "(nieaktywny)" : ""}</option>
-                              ))}
-                            </select>
-                          </div>
-                          <div>
-                            <label className={fieldLabel}>Nazwa producenta (ręczna)</label>
-                            <input
-                              type="text"
-                              value={manufacturer}
-                              onChange={(e) => {
-                                const t = e.target.value;
-                                setManufacturer(t);
-                                if (manufacturerId != null) {
-                                  const row = manufacturersCatalog.find((x) => x.id === manufacturerId);
-                                  if (row && t.trim() !== (row.name || "").trim()) setManufacturerId(null);
-                                }
-                              }}
-                              className={inputClass}
-                            />
-                          </div>
-                          <div>
-                            <label className={fieldLabel}>Osoba odpowiedzialna (GPSR)</label>
-                            <input
-                              type="text"
-                              value={responsiblePerson}
-                              onChange={(e) => setResponsiblePerson(e.target.value)}
-                              className={inputClass}
-                              placeholder="Puste = dziedziczenie z producenta"
-                            />
-                          </div>
-                          <div>
-                            <label className={fieldLabel}>E-mail osoby odpowiedzialnej (GPSR)</label>
-                            <input
-                              type="email"
-                              value={responsiblePersonEmail}
-                              onChange={(e) => setResponsiblePersonEmail(e.target.value)}
-                              className={inputClass}
-                              placeholder="Opcjonalnie; puste = z producenta"
-                            />
-                          </div>
-                        </div>
-                      </ProductLikeSection>
-
-                      <ProductLikeSection title="Walidacja" compact>
-                        <div id="wms-validation">
-                          <ProductValidationOverridesSection
-                            global={globalValidation}
-                            skips={validationSkips}
-                            disabled={saving}
-                            onChange={(patch) => setValidationSkips((prev) => ({ ...prev, ...patch }))}
-                          />
-                        </div>
-                      </ProductLikeSection>
-
-                      {!isNew && product?.id != null ? (
-                        <ActivityLogPanel
-                          objectType="product"
-                          objectId={product.id}
-                          title="Historia czynności"
-                          defaultCollapsed={false}
-                        />
-                      ) : null}
-                    </aside>
-                  </div>
+                  <ProductEditBasicTab
+                    isNew={isNew}
+                    saving={saving}
+                    name={name}
+                    setName={setName}
+                    tenantId={tenantId}
+                    setTenantId={setTenantId}
+                    tenants={tenants}
+                    symbol={symbol}
+                    setSymbol={setSymbol}
+                    ean={ean}
+                    setEan={setEan}
+                    length={length}
+                    width={width}
+                    height={height}
+                    weight={weight}
+                    volume={volume}
+                    unit={unit}
+                    setUnit={setUnit}
+                    setWeight={setWeight}
+                    updateDimension={updateDimension}
+                    bulkEan={bulkEan}
+                    setBulkEan={setBulkEan}
+                    unitsPerCarton={unitsPerCarton}
+                    setUnitsPerCarton={setUnitsPerCarton}
+                    cartonLength={cartonLength}
+                    cartonWidth={cartonWidth}
+                    cartonHeight={cartonHeight}
+                    cartonWeight={cartonWeight}
+                    cartonVolume={cartonVolume}
+                    setCartonWeight={setCartonWeight}
+                    updateCartonDimension={updateCartonDimension}
+                    round2={round2}
+                    productId={product?.id}
+                    effectiveTenantId={effectiveTenantId}
+                    manufacturerId={manufacturerId}
+                    setManufacturerId={setManufacturerId}
+                    manufacturersCatalog={manufacturersCatalog}
+                    manufacturer={manufacturer}
+                    setManufacturer={setManufacturer}
+                    responsiblePerson={responsiblePerson}
+                    setResponsiblePerson={setResponsiblePerson}
+                    responsiblePersonEmail={responsiblePersonEmail}
+                    setResponsiblePersonEmail={setResponsiblePersonEmail}
+                    globalValidation={globalValidation}
+                    validationSkips={validationSkips}
+                    setValidationSkips={setValidationSkips}
+                  />
                 )}
 
                 {activeTab === "prices" && (

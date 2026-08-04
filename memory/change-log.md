@@ -1,3 +1,10 @@
+## 2026-08-04 — Edycja produktu: Podstawowe DOM 1:1 z HTML (FE only)
+
+- Nowy `ProductEditBasicTab`: section/div jak `podstawowe karta produktu.html` (bez ProductLikeSection)
+- SASIST Input/Select w slotach; handlery/API bez zmian
+- Historia: chrome HTML + `ActivityLogPanel`; Producent/GPSR + Walidacja poza mockiem (zachowane)
+- Bez commita
+
 ## 2026-08-04 — Edycja produktu: zakładka Ceny (FE only)
 
 - 65/35: Kalkulacja cenowa (MoneyInput) · Dostawcy (DataTable) · Ostatni zakup · sticky Podsumowanie
