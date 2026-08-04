@@ -38,13 +38,7 @@ import {
 import { useWarehouse } from "../../context/WarehouseContext";
 import { productCreatedInWms } from "../../utils/wmsProductMeta";
 import type { AssignedLocation } from "../../types/warehouse";
-import { ProductLogisticsPackagingMatchingSection } from "../../components/products/ProductLogisticsPackagingMatchingSection";
 import { RetailLabel } from "../../components/products/RetailLabel";
-import { ProductWarehouseStockPanel } from "../../components/products/ProductWarehouseStockPanel";
-import ProductMultiWarehouseStockSection from "../../components/products/ProductMultiWarehouseStockSection";
-import ProductMultiWarehouseSlottingSection from "../../components/products/ProductMultiWarehouseSlottingSection";
-import ProductLocationCapacityList from "../../components/products/ProductLocationCapacityList";
-import { ProductStockCorrectionModal } from "../../components/products/ProductStockCorrectionModal";
 import { getInventoryManagementSettings } from "../../api/inventoryManagementPolicyApi";
 import { ProductManufacturingPanel } from "../Production/ProductManufacturingPanel";
 import { ProductSalesOffersSection } from "./ProductSalesOffersSection";
@@ -72,6 +66,7 @@ import {
 import { formatMoneyZlDisplay, resolveProductPricingDisplay } from "./productPricingDisplay";
 import { ProductEditPricesTab } from "./ProductEditPricesTab";
 import { ProductEditBasicTab } from "./ProductEditBasicTab";
+import { ProductEditWarehouseTab } from "./ProductEditWarehouseTab";
 import { useDocumentTemplatePrint } from "../../hooks/useDocumentTemplatePrint";
 
 export type ProductForm = {
@@ -1955,401 +1950,70 @@ export function ProductEditModal({
                 )}
 
                 {activeTab === "warehouse" && (
-                  <>
-                  <div className="grid grid-cols-1 items-start gap-6 xl:grid-cols-3 lg:gap-8">
-                    <div className="space-y-6">
-                      <ProductWarehouseStockPanel
-                          physicalStockDisplay={physicalStockDisplay}
-                          totalStockDisplay={inventoryBreakdown?.total ?? physicalStockDisplay}
-                          allocatedStockDisplay={inventoryBreakdown?.allocated ?? null}
-                          unallocatedStockDisplay={inventoryBreakdown?.unallocated ?? null}
-                          reservedDisplay={inventoryBreakdown?.reserved ?? null}
-                          productionReservedDisplay={inventoryBreakdown?.productionReserved ?? null}
-                          availableDisplay={inventoryBreakdown?.available ?? null}
-                          dispositionStock={product?.disposition_stock ?? null}
-                          commerciallySellableQty={product?.commercially_sellable_qty ?? null}
-                          salesBlockedQty={product?.sales_blocked_qty ?? null}
-                          networkCommerciallySellableQty={product?.network_commercially_sellable_qty ?? null}
-                          inventoryRows={magazynInventoryRows as MagazynInvRowDisplay[]}
-                          showInventoryLink={!isNew}
-                          canManualAdjustStock={canManualAdjustStock}
-                          onManualAdjustClick={() => setStockCorrectionOpen(true)}
-                          emptyLocationsMessage={magazynEmptyLocationsMessage}
-                          onEditTraceability={isNew ? undefined : (row) => setTraceEditRow(row)}
-                          traceabilityEditDisabled={saving}
-                        />
-                        {!isNew && product?.id && tenantId != null && warehouse?.id ? (
-                          <ProductStockCorrectionModal
-                            open={stockCorrectionOpen}
-                            onClose={() => setStockCorrectionOpen(false)}
-                            onSuccess={() => void reloadProductAfterStockCorrection()}
-                            tenantId={tenantId}
-                            warehouseId={warehouse.id}
-                            productId={product.id}
-                            productName={product.name}
-                            inventoryRows={magazynInventoryRows as MagazynInvRowDisplay[]}
-                          />
-                        ) : null}
-
-                      <section className="rounded-xl border border-slate-200 bg-white shadow-sm">
-                        <div className="border-b border-slate-100 px-5 py-4">
-                          <h3 className="font-semibold text-slate-800">Powiadomienia i alarmy</h3>
-                        </div>
-                        <div className="p-5">
-                          <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 space-y-4">
-                          <label className="flex cursor-pointer items-center gap-3 text-sm font-medium text-amber-900">
-                            <input
-                              type="checkbox"
-                              checked={enableStockAlert}
-                              onChange={(e) => setEnableStockAlert(e.target.checked)}
-                              className="h-5 w-5 rounded border-amber-400 text-amber-600 focus:ring-amber-500"
-                            />
-                            Włącz alarm niskiego stanu magazynowego
-                          </label>
-                          {enableStockAlert && (
-                            <div className="pl-8">
-                              <label className="mb-1 block text-sm font-medium text-amber-900">Próg alarmowy łącznego stanu (szt.)</label>
-                              <input
-                                type="number" min={0} step={0.01}
-                                value={minTotalStock === "" ? "" : minTotalStock}
-                                onChange={(e) => {
-                                  const s = String(e.target.value).trim().replace(",", ".");
-                                  if (s === "") setMinTotalStock("");
-                                  else {
-                                    const n = parseFloat(s);
-                                    if (Number.isFinite(n) && n >= 0) setMinTotalStock(n);
-                                  }
-                                }}
-                                className="w-full rounded border border-amber-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-amber-500 focus:ring-1 focus:ring-amber-500"
-                                placeholder="np. 10"
-                              />
-                            </div>
-                          )}
-                          </div>
-                        </div>
-                      </section>
-
-                      <section className="rounded-xl border border-slate-200 bg-white shadow-sm">
-                        <div className="border-b border-slate-100 px-5 py-4">
-                          <h3 className="font-semibold text-slate-800">Poziomy uzupełniania w strefach</h3>
-                        </div>
-                        <div className="space-y-8 p-5">
-                          <div>
-                            <h4 className="mb-3 text-sm font-bold uppercase tracking-wider text-slate-500">Strefa Kompletacji (Pick-face)</h4>
-                            <div className="grid grid-cols-1 gap-5">
-                              <div>
-                                <label className={fieldLabel}>Minimalna ilość (szt.)</label>
-                                <input
-                                  type="number" min={0} step={0.01}
-                                  value={minPickQuantity === "" ? "" : minPickQuantity}
-                                  onChange={(e) => {
-                                    const s = String(e.target.value).trim().replace(",", ".");
-                                    if (s === "") setMinPickQuantity("");
-                                    else { const n = parseFloat(s); if (Number.isFinite(n) && n >= 0) setMinPickQuantity(n); }
-                                  }}
-                                  className={inputClass} placeholder="np. 5"
-                                />
-                              </div>
-                              <div>
-                                <label className={fieldLabel}>Maksymalna ilość (szt.)</label>
-                                <input
-                                  type="number" min={0} step={0.01}
-                                  value={maxPickQuantity === "" ? "" : maxPickQuantity}
-                                  onChange={(e) => {
-                                    const s = String(e.target.value).trim().replace(",", ".");
-                                    if (s === "") setMaxPickQuantity("");
-                                    else { const n = parseFloat(s); if (Number.isFinite(n) && n >= 0) setMaxPickQuantity(n); }
-                                  }}
-                                  className={inputClass} placeholder="np. 50"
-                                />
-                              </div>
-                            </div>
-                          </div>
-                          <hr className="border-slate-100" />
-                          <div>
-                            <h4 className="mb-3 text-sm font-bold uppercase tracking-wider text-slate-500">Strefa Zapasu (Reserve)</h4>
-                            <div className="grid grid-cols-1 gap-5">
-                              <div>
-                                <label className={fieldLabel}>Minimalna ilość (szt.)</label>
-                                <input
-                                  type="number" min={0} step={0.01}
-                                  value={minReserveQuantity === "" ? "" : minReserveQuantity}
-                                  onChange={(e) => {
-                                    const s = String(e.target.value).trim().replace(",", ".");
-                                    if (s === "") setMinReserveQuantity("");
-                                    else { const n = parseFloat(s); if (Number.isFinite(n) && n >= 0) setMinReserveQuantity(n); }
-                                  }}
-                                  className={inputClass} placeholder="np. 12"
-                                />
-                              </div>
-                              <div>
-                                <label className={fieldLabel}>Maksymalna ilość (szt.)</label>
-                                <input
-                                  type="number" min={0} step={0.01}
-                                  value={maxReserveQuantity === "" ? "" : maxReserveQuantity}
-                                  onChange={(e) => {
-                                    const s = String(e.target.value).trim().replace(",", ".");
-                                    if (s === "") setMaxReserveQuantity("");
-                                    else { const n = parseFloat(s); if (Number.isFinite(n) && n >= 0) setMaxReserveQuantity(n); }
-                                  }}
-                                  className={inputClass} placeholder="opcjonalnie"
-                                />
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      </section>
-                    </div>
-
-                    <div className="space-y-6">
-                      <section className="rounded-xl border border-slate-200 bg-white shadow-sm">
-                        <div className="border-b border-slate-100 px-5 py-4">
-                          <h3 className="font-semibold text-slate-800">Logistyka i pakowanie: Produkt (Sztuka)</h3>
-                          <p className="mt-1 text-xs text-slate-500">
-                            Wymiary, orientacja i układanie — wspólny silnik fit (magazyn + pakowanie).
-                          </p>
-                        </div>
-                        <div className="space-y-5 p-5">
-                          <div>
-                            <label className={fieldLabel}>Wymagana orientacja</label>
-                            <select value={orientationType} onChange={(e) => setOrientationType(e.target.value as "any" | "upright" | "no_stack")} className={inputClass}>
-                              <option value="any">Dowolna</option>
-                              <option value="upright">Pionowo (strzałki do góry)</option>
-                              <option value="no_stack">Bez obracania</option>
-                            </select>
-                          </div>
-                          <div>
-                            <label className={fieldLabel}>Kształt</label>
-                            <select value={shapeType} onChange={(e) => setShapeType(e.target.value as "box" | "cylinder")} className={inputClass}>
-                              <option value="box">Prostopadłościan (Pudełko)</option>
-                              <option value="cylinder">Walec (np. Butelka / Tuba)</option>
-                            </select>
-                          </div>
-                          <div>
-                            <label className={fieldLabel}>Układanie</label>
-                            <select value={stackBehavior} onChange={(e) => setStackBehavior(e.target.value as "stackable" | "no_stack")} className={inputClass}>
-                              <option value="stackable">Można układać w stos</option>
-                              <option value="no_stack">Nie układać w stos (NO_STACK)</option>
-                            </select>
-                            <p className="mt-1 text-xs text-slate-500">
-                              NO_STACK: produktów nie można układać jeden na drugim. Nadal można układać je obok siebie.
-                              To nie to samo co Fragile.
-                            </p>
-                          </div>
-
-                          <label className="flex cursor-pointer items-center gap-3">
-                            <input
-                              type="checkbox"
-                              checked={fragile}
-                              onChange={(e) => setFragile(e.target.checked)}
-                              className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
-                            />
-                            <span className="text-sm font-medium text-slate-700">Delikatny / Fragile</span>
-                          </label>
-                          <p className="-mt-3 text-xs text-slate-500">
-                            Fragile: nie wolno umieszczać innego produktu bezpośrednio nad tą sztuką (reguła konserwatywna).
-                            To nie to samo co NO_STACK — możesz mieć stosowalny, ale kruchy towar.
-                          </p>
-                          
-                          {stackBehavior === "stackable" && (
-                            <div className="space-y-4 pt-2 border-t border-slate-200">
-                              <label className="flex cursor-pointer items-center gap-3">
-                                <input
-                                  type="checkbox"
-                                  checked={stackCompressible}
-                                  onChange={(e) => setStackCompressible(e.target.checked)}
-                                  className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
-                                />
-                                <span className="text-sm font-medium text-slate-700">Produkt kompresowalny</span>
-                              </label>
-                              
-                              <div className="grid grid-cols-1 gap-4">
-                                {stackCompressible ? (
-                                  <div>
-                                    <label className={fieldLabel}>Wysokość kolejnej sztuki po ściśnięciu (cm)</label>
-                                    <input
-                                      type="number" min={0.01} step={0.1}
-                                      value={compressedHeightCm === "" ? "" : compressedHeightCm}
-                                      onChange={(e) => {
-                                        const s = String(e.target.value).trim().replace(",", ".");
-                                        if (s === "") setCompressedHeightCm("");
-                                        else { const n = parseFloat(s); if (Number.isFinite(n) && n > 0) setCompressedHeightCm(n); }
-                                      }}
-                                      className={inputClass}
-                                    />
-                                    <p className="mt-1 text-xs text-slate-500">Musi być &gt; 0 i ≤ wysokości produktu.</p>
-                                  </div>
-                                ) : null}
-                                <div>
-                                  <label className={fieldLabel}>Maks. waga stosu (kg)</label>
-                                  <input
-                                    type="number" min={0} step={0.1}
-                                    value={maxStackWeight === "" ? "" : maxStackWeight}
-                                    onChange={(e) => {
-                                      const s = String(e.target.value).trim().replace(",", ".");
-                                      if (s === "") setMaxStackWeight("");
-                                      else { const n = parseFloat(s); if (Number.isFinite(n) && n >= 0) setMaxStackWeight(n); }
-                                    }}
-                                    placeholder="Opcjonalny limit (pusty = bez limitu)"
-                                    className={inputClass}
-                                  />
-                                </div>
-                                <div>
-                                  <label className={fieldLabel}>Maks. sztuk w jednym stosie</label>
-                                  <input
-                                    type="number" min={1} step={1}
-                                    value={maxStackCount === "" ? "" : maxStackCount}
-                                    onChange={(e) => {
-                                      const s = String(e.target.value).trim();
-                                      if (s === "") setMaxStackCount("");
-                                      else { const n = parseInt(s, 10); if (Number.isFinite(n) && n >= 1) setMaxStackCount(n); }
-                                    }}
-                                    placeholder="Puste = bez limitu sztuk (tylko geometria)"
-                                    className={inputClass}
-                                  />
-                                  <p className="mt-1 text-xs text-slate-500">
-                                    Limit liczby sztuk ułożonych pionowo w jednym stosie. Np. dla miękkich produktów
-                                    (poduszki, kołdry). Jeżeli na półce mieszczą się 4 stosy po 5 szt., łączna pojemność
-                                    wynosi 20 szt.
-                                  </p>
-                                </div>
-                              </div>
-                            </div>
-                          )}
-                          {stackBehavior === "no_stack" ? (
-                            <p className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
-                              Przy NO_STACK limit „maks. sztuk w stosie” jest ignorowany przez solver (efektywnie 1).
-                            </p>
-                          ) : null}
-                        </div>
-                      </section>
-
-                      <section className="rounded-xl border border-slate-200 bg-white shadow-sm">
-                        <div className="border-b border-slate-100 px-5 py-4">
-                          <h3 className="font-semibold text-slate-800">Magazynowanie: Karton</h3>
-                        </div>
-                        <div className="space-y-5 p-5">
-                          <div>
-                            <label className={fieldLabel}>Wymagana orientacja kartonu</label>
-                            <select value={cartonOrientationType} onChange={(e) => setCartonOrientationType(e.target.value as "any" | "upright" | "no_stack")} className={inputClass}>
-                              <option value="any">Dowolna orientacja</option>
-                              <option value="upright">Tylko w pionie (strzałki do góry)</option>
-                              <option value="no_stack">Nie obracać</option>
-                            </select>
-                          </div>
-                          <div>
-                            <label className={fieldLabel}>Kształt opakowania</label>
-                            <select value={cartonShapeType} onChange={(e) => setCartonShapeType(e.target.value as "box" | "cylinder")} className={inputClass}>
-                              <option value="box">Prostopadłościan</option>
-                              <option value="cylinder">Walec (Beczka)</option>
-                            </select>
-                          </div>
-                          <div>
-                            <label className={fieldLabel}>Czy kartony ułożysz w stos?</label>
-                            <select value={cartonStackBehavior} onChange={(e) => setCartonStackBehavior(e.target.value as "stackable" | "no_stack")} className={inputClass}>
-                              <option value="stackable">Tak, karton na kartonie</option>
-                              <option value="no_stack">Nie układać stosów!</option>
-                            </select>
-                          </div>
-                          
-                          {cartonStackBehavior === "stackable" && (
-                            <div className="space-y-4 pt-2 border-t border-indigo-100/50">
-                              <label className="flex cursor-pointer items-center gap-3">
-                                <input
-                                  type="checkbox"
-                                  checked={cartonStackCompressible}
-                                  onChange={(e) => setCartonStackCompressible(e.target.checked)}
-                                  className="h-4 w-4 rounded border-indigo-300 text-indigo-600 focus:ring-indigo-500"
-                                />
-                                <span className="text-sm font-medium text-slate-700">Karton "siada" przy nacisku</span>
-                              </label>
-
-                              <div className="grid grid-cols-1 gap-4">
-                                {cartonStackCompressible ? (
-                                  <div>
-                                    <label className={fieldLabel}>Wys. po kompresji (cm)</label>
-                                    <input
-                                      type="number" min={0.01} step={0.1}
-                                      value={cartonCompressedHeightCm === "" ? "" : cartonCompressedHeightCm}
-                                      onChange={(e) => {
-                                        const s = String(e.target.value).trim().replace(",", ".");
-                                        if (s === "") setCartonCompressedHeightCm("");
-                                        else { const n = parseFloat(s); if (Number.isFinite(n) && n > 0) setCartonCompressedHeightCm(n); }
-                                      }}
-                                      className={inputClass}
-                                    />
-                                  </div>
-                                ) : null}
-                                <div>
-                                  <label className={fieldLabel}>Maks. obciążenie na karton (kg)</label>
-                                  <input
-                                    type="number" min={0} step={0.1}
-                                    value={cartonMaxStackWeight === "" ? "" : cartonMaxStackWeight}
-                                    onChange={(e) => {
-                                      const s = String(e.target.value).trim().replace(",", ".");
-                                      if (s === "") setCartonMaxStackWeight("");
-                                      else { const n = parseFloat(s); if (Number.isFinite(n) && n >= 0) setCartonMaxStackWeight(n); }
-                                    }}
-                                    placeholder="Opcjonalny limit"
-                                    className={inputClass}
-                                  />
-                                </div>
-                                <div>
-                                  <label className={fieldLabel}>Maks. kartonów w jednym stosie</label>
-                                  <input
-                                    type="number" min={1} step={1}
-                                    value={cartonMaxStackCount === "" ? "" : cartonMaxStackCount}
-                                    onChange={(e) => {
-                                      const s = String(e.target.value).trim();
-                                      if (s === "") setCartonMaxStackCount("");
-                                      else { const n = parseInt(s, 10); if (Number.isFinite(n) && n >= 1) setCartonMaxStackCount(n); }
-                                    }}
-                                    placeholder="Limit jednego stosu master carton"
-                                    className={inputClass}
-                                  />
-                                </div>
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      </section>
-                    </div>
-
-                    <div className="space-y-6">
-                      <section className="rounded-xl border border-slate-200 bg-white shadow-sm">
-                        <div className="border-b border-slate-100 px-5 py-4">
-                          <h3 className="font-semibold text-slate-800">Dopasowanie opakowań (Wysyłka)</h3>
-                        </div>
-                        <div className="p-5">
-                        <ProductLogisticsPackagingMatchingSection
-                          productId={product?.id ?? null}
-                          tenantId={tenantId}
-                          dimensionsComplete={productDimensions != null}
-                          isNew={isNew}
-                        />
-                        </div>
-                      </section>
-                    </div>
-                  </div>
-
-                  {!isNew && product?.id && tenantId != null ? (
-                    <div className="mt-8 w-full max-w-7xl space-y-8">
-                      <ProductMultiWarehouseStockSection productId={product.id} tenantId={tenantId} />
-                      {!isNew && product?.id ? (
-                        <ProductLocationCapacityList
-                          productId={product.id}
-                          tenantId={tenantId}
-                          locations={(magazynInventoryRows as MagazynInvRowDisplay[]).map((r) => ({
-                            location_id: r.location_id,
-                            location_code: r.location_code,
-                            quantity: r.quantity,
-                          }))}
-                        />
-                      ) : null}
-                      <ProductMultiWarehouseSlottingSection productId={product.id} tenantId={tenantId} />
-                    </div>
-                  ) : null}
-                  </>
+                  <ProductEditWarehouseTab
+                    isNew={isNew}
+                    saving={saving}
+                    productId={product?.id ?? null}
+                    productName={product?.name ?? name}
+                    tenantId={tenantId}
+                    warehouseId={warehouse?.id ?? null}
+                    physicalStockDisplay={physicalStockDisplay}
+                    inventoryBreakdown={inventoryBreakdown}
+                    dispositionStock={product?.disposition_stock ?? null}
+                    commerciallySellableQty={product?.commercially_sellable_qty ?? null}
+                    salesBlockedQty={product?.sales_blocked_qty ?? null}
+                    networkCommerciallySellableQty={product?.network_commercially_sellable_qty ?? null}
+                    inventoryRows={magazynInventoryRows as MagazynInvRowDisplay[]}
+                    emptyLocationsMessage={magazynEmptyLocationsMessage}
+                    canManualAdjustStock={canManualAdjustStock}
+                    stockCorrectionOpen={stockCorrectionOpen}
+                    setStockCorrectionOpen={setStockCorrectionOpen}
+                    onStockCorrectionSuccess={() => void reloadProductAfterStockCorrection()}
+                    onEditTraceability={isNew ? undefined : (row) => setTraceEditRow(row)}
+                    enableStockAlert={enableStockAlert}
+                    setEnableStockAlert={setEnableStockAlert}
+                    minTotalStock={minTotalStock}
+                    setMinTotalStock={setMinTotalStock}
+                    orientationType={orientationType}
+                    setOrientationType={setOrientationType}
+                    shapeType={shapeType}
+                    setShapeType={setShapeType}
+                    stackBehavior={stackBehavior}
+                    setStackBehavior={setStackBehavior}
+                    fragile={fragile}
+                    setFragile={setFragile}
+                    stackCompressible={stackCompressible}
+                    setStackCompressible={setStackCompressible}
+                    compressedHeightCm={compressedHeightCm}
+                    setCompressedHeightCm={setCompressedHeightCm}
+                    maxStackWeight={maxStackWeight}
+                    setMaxStackWeight={setMaxStackWeight}
+                    maxStackCount={maxStackCount}
+                    setMaxStackCount={setMaxStackCount}
+                    cartonOrientationType={cartonOrientationType}
+                    setCartonOrientationType={setCartonOrientationType}
+                    cartonShapeType={cartonShapeType}
+                    setCartonShapeType={setCartonShapeType}
+                    cartonStackBehavior={cartonStackBehavior}
+                    setCartonStackBehavior={setCartonStackBehavior}
+                    cartonStackCompressible={cartonStackCompressible}
+                    setCartonStackCompressible={setCartonStackCompressible}
+                    cartonCompressedHeightCm={cartonCompressedHeightCm}
+                    setCartonCompressedHeightCm={setCartonCompressedHeightCm}
+                    cartonMaxStackWeight={cartonMaxStackWeight}
+                    setCartonMaxStackWeight={setCartonMaxStackWeight}
+                    cartonMaxStackCount={cartonMaxStackCount}
+                    setCartonMaxStackCount={setCartonMaxStackCount}
+                    minPickQuantity={minPickQuantity}
+                    setMinPickQuantity={setMinPickQuantity}
+                    maxPickQuantity={maxPickQuantity}
+                    setMaxPickQuantity={setMaxPickQuantity}
+                    minReserveQuantity={minReserveQuantity}
+                    setMinReserveQuantity={setMinReserveQuantity}
+                    maxReserveQuantity={maxReserveQuantity}
+                    setMaxReserveQuantity={setMaxReserveQuantity}
+                    dimensionsComplete={productDimensions != null}
+                  />
                 )}
 
                 {activeTab === "images" && (

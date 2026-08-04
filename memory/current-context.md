@@ -1,5 +1,11 @@
 ﻿## Active
 
+**Edycja produktu — Magazyn: DOM 1:1 z `magazyn karta produktu.html` (2026-08-04).**
+
+- `ProductEditWarehouseTab`: Stan i lokalizacje (grid 4) + Parametry logistyczne (2+1)
+- Kafle lokalizacji z pojemnością API; magazyny z breakdown; SASIST Input/Select/Checkbox/Button
+- Wire w `ProductEditModal` (tylko body taba); logika/API bez zmian
+
 **Edycja produktu — Ceny: DOM 1:1 z `ceny karta produktu.html` (2026-08-04).**
 
 - `ProductEditPricesTab` only: 2/3+1/3, HTML table dostawców, podsumowanie z szarym footerem
