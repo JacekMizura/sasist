@@ -1,11 +1,14 @@
 import { useState, type ReactNode } from "react";
-import { Barcode, Box, FileText, Search, Tag } from "lucide-react";
+import { Link } from "react-router-dom";
+import { Barcode, Box, FileText, Plus, Printer } from "lucide-react";
 
 import type { ManufacturerRead } from "../../api/manufacturersApi";
-import type { ProductValidationGlobalSettings, ProductValidationSkips } from "../../components/wms/receiving/ProductValidationOverridesSection";
-import { ProductValidationOverridesSection } from "../../components/wms/receiving/ProductValidationOverridesSection";
+import type {
+  ProductValidationGlobalSettings,
+  ProductValidationSkips,
+} from "../../components/wms/receiving/ProductValidationOverridesSection";
 import ActivityLogPanel from "../../components/activityLog/ActivityLogPanel";
-import { Input, Select } from "../../design-system";
+import { Checkbox, Input, Select } from "../../design-system";
 import { DocumentTemplateScopeSection } from "@/pages/Settings/document-templates/components/DocumentTemplateScopeSection";
 
 export type ProductEditBasicTabProps = {
@@ -57,27 +60,8 @@ export type ProductEditBasicTabProps = {
   setValidationSkips: React.Dispatch<React.SetStateAction<ProductValidationSkips>>;
 };
 
-const labelClass = "mb-1.5 block text-sm font-medium text-gray-700";
-const dimLabelClass = "mb-1 block text-xs font-medium uppercase tracking-wider text-gray-500";
-
-function AffixInput({
-  icon,
-  children,
-  className = "",
-}: {
-  icon: ReactNode;
-  children: ReactNode;
-  className?: string;
-}) {
-  return (
-    <div className={`flex rounded-md shadow-sm ${className}`.trim()}>
-      <span className="inline-flex items-center rounded-l-lg border border-r-0 border-gray-300 bg-white px-3 text-gray-500 sm:text-sm">
-        {icon}
-      </span>
-      <div className="min-w-0 flex-1 [&_input]:rounded-none [&_input]:rounded-r-lg">{children}</div>
-    </div>
-  );
-}
+/** Mock `.form-label` */
+const labelClass = "mb-1 block text-[0.8125rem] font-medium text-gray-700";
 
 function UnitField({
   label,
@@ -90,21 +74,48 @@ function UnitField({
 }) {
   return (
     <div>
-      <label className={dimLabelClass}>{label}</label>
-      <div className="relative rounded-lg shadow-sm">
+      <label className={labelClass}>{label}</label>
+      <div className="relative">
         {children}
-        <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3">
-          <span className="text-sm text-gray-500 sm:text-sm">{unit}</span>
-        </div>
+        <span className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-2.5 text-xs text-gray-400">
+          {unit}
+        </span>
       </div>
     </div>
   );
 }
 
+function SkipCheck({
+  checked,
+  onChange,
+  label,
+  disabled,
+  globalEnabled,
+}: {
+  checked: boolean;
+  onChange: (v: boolean) => void;
+  label: string;
+  disabled?: boolean;
+  globalEnabled: boolean;
+}) {
+  if (!globalEnabled) return null;
+  return (
+    <label className="flex cursor-pointer items-center gap-2 rounded p-1 hover:bg-gray-50">
+      <Checkbox
+        checked={checked}
+        disabled={disabled}
+        onChange={(e) => onChange(e.target.checked)}
+        className="rounded border-gray-300 text-orange-600 focus:ring-orange-500"
+      />
+      <span className="text-gray-700">{label}</span>
+    </label>
+  );
+}
+
 /**
  * Product edit — Podstawowe tab.
- * DOM hierarchy is a structural 1:1 port of `podstawowe karta produktu.html`
- * (main two-column body under tabs). No ProductLikeSection.
+ * DOM hierarchy is a structural 1:1 port of `podstawowy karta produckut v2.html`
+ * (main two-column body under tabs). Logic / field wiring unchanged.
  */
 export function ProductEditBasicTab({
   isNew,
@@ -155,33 +166,57 @@ export function ProductEditBasicTab({
   setValidationSkips,
 }: ProductEditBasicTabProps) {
   const [unitSystem, setUnitSystem] = useState<"metric" | "imperial">("metric");
+  const [templateMode, setTemplateMode] = useState<"pick" | "custom">("pick");
+  const g = globalValidation;
+
+  const productSkipsVisible = Boolean(g?.require_dimensions || g?.require_weight);
+  const batchSkipsVisible = Boolean(g?.require_batch || g?.require_expiry || g?.require_serial);
+  const cartonSkipsVisible = Boolean(
+    g?.require_master_carton ||
+      g?.require_master_carton_ean ||
+      g?.require_master_carton_qty ||
+      g?.require_master_carton_dims ||
+      g?.require_master_carton_weight,
+  );
+  const anyGlobalRequire = Boolean(
+    g &&
+      (g.require_dimensions ||
+        g.require_weight ||
+        g.require_batch ||
+        g.require_expiry ||
+        g.require_serial ||
+        g.require_master_carton ||
+        g.require_master_carton_ean ||
+        g.require_master_carton_qty ||
+        g.require_master_carton_dims ||
+        g.require_master_carton_weight),
+  );
 
   return (
-    /* mock: <div class="flex flex-col xl:flex-row gap-6 items-start"> */
-    <div className="flex flex-col items-start gap-6 xl:flex-row">
-      {/* mock LEFT: w-full xl:w-2/3 xl:min-w-[700px] flex flex-col gap-6 */}
-      <div className="flex w-full flex-col gap-6 xl:w-2/3 xl:min-w-[700px]">
-        {/* KARTA: Informacje ogólne */}
-        <section className="overflow-hidden rounded-xl border border-gray-200 bg-white">
-          <div className="border-b border-gray-200 px-6 py-4">
-            <h2 className="text-base font-semibold text-gray-900">Informacje ogólne</h2>
-          </div>
-          <div className="p-6">
-            <div className="grid grid-cols-1 gap-x-8 gap-y-6 md:grid-cols-2">
-              <div className="md:col-span-2">
-                <label className={labelClass}>
-                  Nazwa produktu <span className="text-red-500">*</span>
-                </label>
-                <Input
-                  type="text"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  required
-                  density="comfortable"
-                  focusTone="brand"
-                />
-              </div>
+    /* mock: <div class="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start"> */
+    <div className="grid grid-cols-1 items-start gap-8 lg:grid-cols-12">
+      {/* LEFT lg:col-span-7 */}
+      <div className="space-y-6 lg:col-span-7">
+        {/* Informacje ogólne */}
+        <section className="border-b border-gray-100 pb-6">
+          <h2 className="mb-4 text-base font-bold text-gray-900">Informacje ogólne</h2>
 
+          <div className="space-y-4">
+            <div>
+              <label className={labelClass}>
+                Nazwa produktu <span className="text-red-500">*</span>
+              </label>
+              <Input
+                type="text"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                required
+                density="comfortable"
+                focusTone="brand"
+              />
+            </div>
+
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div>
                 <label className={labelClass}>Podmiot</label>
                 <Select
@@ -190,7 +225,7 @@ export function ProductEditBasicTab({
                   required={isNew}
                   density="comfortable"
                   focusTone="brand"
-                  className="cursor-pointer"
+                  className="cursor-pointer bg-white"
                 >
                   <option value="">— Wybierz podmiot —</option>
                   {tenants.map((t) => (
@@ -200,28 +235,31 @@ export function ProductEditBasicTab({
                   ))}
                 </Select>
               </div>
-
               <div>
                 <label className={labelClass}>Kategoria</label>
-                <Select density="comfortable" focusTone="brand" className="cursor-pointer text-gray-500" disabled>
+                <Select density="comfortable" focusTone="brand" className="cursor-pointer bg-white text-gray-400" disabled>
                   <option>Wybierz kategorię...</option>
                 </Select>
               </div>
+            </div>
 
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div>
                 <label className={labelClass}>Symbol / SKU</label>
-                <AffixInput icon={<Tag className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />}>
+                <div className="relative">
+                  <span className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-gray-400">
+                    <Barcode className="h-3 w-3" strokeWidth={2} aria-hidden />
+                  </span>
                   <Input
                     type="text"
                     value={symbol}
                     onChange={(e) => setSymbol(e.target.value)}
                     density="comfortable"
                     focusTone="brand"
-                    className="font-mono"
+                    className="pl-8 font-mono text-xs"
                   />
-                </AffixInput>
+                </div>
               </div>
-
               <div>
                 <label className={labelClass}>Numer katalogowy</label>
                 <Input
@@ -230,42 +268,50 @@ export function ProductEditBasicTab({
                   placeholder="Brak (opcjonalne)"
                   density="comfortable"
                   focusTone="brand"
-                  className="text-gray-500 placeholder:text-gray-400"
+                  className="text-gray-400 placeholder:text-gray-400"
                 />
               </div>
+            </div>
 
-              <div className="md:col-span-2">
-                <label className={labelClass}>Kod kreskowy (EAN/GTIN)</label>
-                <AffixInput
-                  icon={<Barcode className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />}
-                  className="md:w-1/2 md:pr-4"
+            <div>
+              <div className="mb-1 flex items-center justify-between">
+                <label className={`${labelClass} mb-0`}>Kod kreskowy (EAN/GTIN)</label>
+                <button
+                  type="button"
+                  className="flex items-center gap-1 text-xs font-medium text-orange-600 hover:text-orange-700"
                 >
-                  <Input
-                    type="text"
-                    value={ean}
-                    onChange={(e) => setEan(e.target.value)}
-                    density="comfortable"
-                    focusTone="brand"
-                    className="font-mono"
-                  />
-                </AffixInput>
+                  <Plus className="h-3 w-3" strokeWidth={2} aria-hidden /> Dodaj kolejny EAN
+                </button>
+              </div>
+              <div className="relative">
+                <span className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-gray-400">
+                  <Barcode className="h-3 w-3" strokeWidth={2} aria-hidden />
+                </span>
+                <Input
+                  type="text"
+                  value={ean}
+                  onChange={(e) => setEan(e.target.value)}
+                  density="comfortable"
+                  focusTone="brand"
+                  className="pl-8 font-mono text-xs"
+                />
               </div>
             </div>
           </div>
         </section>
 
-        {/* KARTA: Gabaryty jednostkowe */}
-        <section className="overflow-hidden rounded-xl border border-gray-200 bg-white">
-          <div className="flex items-center justify-between border-b border-gray-200 px-6 py-4">
-            <h2 className="text-base font-semibold text-gray-900">Gabaryty jednostkowe</h2>
-            <div className="flex items-center rounded-lg border border-gray-200 bg-white p-0.5">
+        {/* Gabaryty jednostkowe (user title; mock HTML says Opakowanie) */}
+        <section className="border-b border-gray-100 pb-6">
+          <div className="mb-4 flex items-center justify-between">
+            <h2 className="text-base font-bold text-gray-900">Gabaryty jednostkowe</h2>
+            <div className="inline-flex overflow-hidden rounded border border-gray-200 text-xs">
               <button
                 type="button"
                 onClick={() => setUnitSystem("metric")}
                 className={
                   unitSystem === "metric"
-                    ? "rounded-md bg-gray-100 px-3 py-1 text-xs font-medium text-gray-900"
-                    : "rounded-md px-3 py-1 text-xs font-medium text-gray-500 hover:text-gray-900"
+                    ? "bg-gray-100 px-2.5 py-1 font-medium text-gray-800"
+                    : "bg-white px-2.5 py-1 text-gray-500 hover:bg-gray-50"
                 }
               >
                 Metryczne
@@ -275,16 +321,17 @@ export function ProductEditBasicTab({
                 onClick={() => setUnitSystem("imperial")}
                 className={
                   unitSystem === "imperial"
-                    ? "rounded-md bg-gray-100 px-3 py-1 text-xs font-medium text-gray-900"
-                    : "rounded-md px-3 py-1 text-xs font-medium text-gray-500 hover:text-gray-900"
+                    ? "bg-gray-100 px-2.5 py-1 font-medium text-gray-800"
+                    : "bg-white px-2.5 py-1 text-gray-500 hover:bg-gray-50"
                 }
               >
                 Imperialne
               </button>
             </div>
           </div>
-          <div className="p-6">
-            <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
               <UnitField label="Długość" unit="cm">
                 <Input
                   type="number"
@@ -294,7 +341,7 @@ export function ProductEditBasicTab({
                   onChange={(e) => updateDimension("length", e.target.value)}
                   density="comfortable"
                   focusTone="brand"
-                  className="pr-10 font-medium"
+                  className="pr-8"
                 />
               </UnitField>
               <UnitField label="Szerokość" unit="cm">
@@ -306,7 +353,7 @@ export function ProductEditBasicTab({
                   onChange={(e) => updateDimension("width", e.target.value)}
                   density="comfortable"
                   focusTone="brand"
-                  className="pr-10 font-medium"
+                  className="pr-8"
                 />
               </UnitField>
               <UnitField label="Wysokość" unit="cm">
@@ -318,7 +365,7 @@ export function ProductEditBasicTab({
                   onChange={(e) => updateDimension("height", e.target.value)}
                   density="comfortable"
                   focusTone="brand"
-                  className="pr-10 font-medium"
+                  className="pr-8"
                 />
               </UnitField>
               <UnitField label="Waga brutto" unit="kg">
@@ -337,34 +384,35 @@ export function ProductEditBasicTab({
                   }}
                   density="comfortable"
                   focusTone="brand"
-                  className="pr-10 font-medium"
+                  className="pr-8"
                 />
               </UnitField>
+            </div>
 
-              <div className="mt-2 md:col-span-2">
-                <label className={dimLabelClass}>Objętość wyliczona</label>
-                <div className="relative rounded-lg shadow-sm">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div>
+                <label className={labelClass}>Objętość wyliczona</label>
+                <div className="relative">
                   <Input
                     type="text"
                     readOnly
                     value={volume === "" ? "" : typeof volume === "number" ? String(round2(volume)) : String(volume)}
                     density="comfortable"
-                    className="cursor-not-allowed border-gray-200 pr-12 font-mono text-gray-600"
+                    className="cursor-not-allowed bg-gray-50 pr-12 text-gray-600"
                   />
-                  <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3">
-                    <span className="text-sm text-gray-400">dm³</span>
-                  </div>
+                  <span className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3 text-xs text-gray-400">
+                    dm³
+                  </span>
                 </div>
               </div>
-
-              <div className="mt-2 md:col-span-2">
-                <label className={dimLabelClass}>Jednostka miary</label>
+              <div>
+                <label className={labelClass}>Jednostka miary</label>
                 <Select
                   value={unit || "szt."}
                   onChange={(e) => setUnit(e.target.value)}
                   density="comfortable"
                   focusTone="brand"
-                  className="cursor-pointer"
+                  className="cursor-pointer bg-white"
                 >
                   <option value="szt.">szt. (sztuki)</option>
                   <option value="kpl.">kpl. (komplety)</option>
@@ -378,112 +426,128 @@ export function ProductEditBasicTab({
           </div>
         </section>
 
-        {/* KARTA: Opakowanie zbiorcze */}
-        <section className="overflow-hidden rounded-xl border border-gray-200 border-l-4 border-l-blue-500 bg-white">
-          <div className="flex items-center border-b border-gray-200 px-6 py-4">
-            <Box className="mr-2.5 h-4 w-4 text-blue-500" strokeWidth={2} aria-hidden />
-            <h2 className="text-base font-semibold text-gray-900">Opakowanie zbiorcze (Karton)</h2>
-          </div>
-          <div className="p-6">
-            <div className="grid grid-cols-1 gap-x-8 gap-y-6 md:grid-cols-2">
-              <div>
-                <label className={labelClass}>EAN kartonu zbiorczego</label>
-                <AffixInput icon={<Barcode className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />}>
-                  <Input
-                    type="text"
-                    value={bulkEan}
-                    onChange={(e) => setBulkEan(e.target.value)}
-                    density="comfortable"
-                    focusTone="brand"
-                    className="font-mono"
-                  />
-                </AffixInput>
-              </div>
+        {/* Opakowanie zbiorcze (Karton) — orange card from mock */}
+        <section className="pb-6">
+          <div className="space-y-4 rounded-lg border border-orange-100 bg-orange-50/20 p-4">
+            <div className="flex items-center gap-2 text-sm font-semibold text-gray-900">
+              <Box className="h-4 w-4 text-orange-500" strokeWidth={2} aria-hidden />
+              Opakowanie zbiorcze (Karton)
+            </div>
 
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div>
-                <label className={labelClass}>Ilość sztuk w kartonie</label>
-                <div className="relative rounded-lg shadow-sm">
+                <div className="mb-1 flex items-center justify-between">
+                  <label className={`${labelClass} mb-0`}>EAN kartonu zbiorczego</label>
+                  <button
+                    type="button"
+                    className="flex items-center gap-1 text-[11px] font-medium text-orange-600 hover:text-orange-700"
+                  >
+                    <Printer className="h-3 w-3" strokeWidth={2} aria-hidden /> Drukuj
+                  </button>
+                </div>
+                <Input
+                  type="text"
+                  value={bulkEan}
+                  onChange={(e) => setBulkEan(e.target.value)}
+                  density="comfortable"
+                  focusTone="brand"
+                  className="font-mono text-xs"
+                />
+              </div>
+              <div>
+                <label className={labelClass}>Kod kartonu</label>
+                <Input
+                  type="text"
+                  defaultValue=""
+                  placeholder="BOX-…"
+                  density="comfortable"
+                  focusTone="brand"
+                  className="font-mono text-xs"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className={labelClass}>Ilość sztuk w kartonie</label>
+              <Input
+                type="number"
+                min={0}
+                step={1}
+                value={unitsPerCarton === "" ? "" : unitsPerCarton}
+                onChange={(e) => {
+                  const s = String(e.target.value).trim().replace(",", ".");
+                  if (s === "") setUnitsPerCarton("");
+                  else {
+                    const n = parseFloat(s);
+                    if (Number.isFinite(n) && n >= 0) setUnitsPerCarton(n);
+                  }
+                }}
+                density="comfortable"
+                focusTone="brand"
+              />
+            </div>
+
+            <div>
+              <span className="mb-2 block text-xs font-semibold text-gray-700">Wymiary zewnętrzne kartonu</span>
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                <div>
+                  <span className="mb-1 block text-[11px] text-gray-500">Długość (cm)</span>
                   <Input
                     type="number"
                     min={0}
-                    step={1}
-                    value={unitsPerCarton === "" ? "" : unitsPerCarton}
+                    step={0.01}
+                    value={cartonLength === "" ? "" : cartonLength}
+                    onChange={(e) => updateCartonDimension("cartonLength", e.target.value)}
+                    density="compact"
+                    focusTone="brand"
+                    className="text-xs"
+                  />
+                </div>
+                <div>
+                  <span className="mb-1 block text-[11px] text-gray-500">Szerokość (cm)</span>
+                  <Input
+                    type="number"
+                    min={0}
+                    step={0.01}
+                    value={cartonWidth === "" ? "" : cartonWidth}
+                    onChange={(e) => updateCartonDimension("cartonWidth", e.target.value)}
+                    density="compact"
+                    focusTone="brand"
+                    className="text-xs"
+                  />
+                </div>
+                <div>
+                  <span className="mb-1 block text-[11px] text-gray-500">Wysokość (cm)</span>
+                  <Input
+                    type="number"
+                    min={0}
+                    step={0.01}
+                    value={cartonHeight === "" ? "" : cartonHeight}
+                    onChange={(e) => updateCartonDimension("cartonHeight", e.target.value)}
+                    density="compact"
+                    focusTone="brand"
+                    className="text-xs"
+                  />
+                </div>
+                <div>
+                  <span className="mb-1 block text-[11px] text-gray-500">Waga brutto (kg)</span>
+                  <Input
+                    type="number"
+                    min={0}
+                    step={0.1}
+                    value={cartonWeight === "" ? "" : cartonWeight}
                     onChange={(e) => {
                       const s = String(e.target.value).trim().replace(",", ".");
-                      if (s === "") setUnitsPerCarton("");
+                      if (s === "") setCartonWeight("");
                       else {
                         const n = parseFloat(s);
-                        if (Number.isFinite(n) && n >= 0) setUnitsPerCarton(n);
+                        if (Number.isFinite(n)) setCartonWeight(n);
                       }
                     }}
-                    density="comfortable"
+                    density="compact"
                     focusTone="brand"
-                    className="pr-12 font-medium"
+                    className="text-xs"
                   />
-                  <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3">
-                    <span className="text-sm text-gray-500">szt.</span>
-                  </div>
-                </div>
-              </div>
-
-              <div className="border-t border-gray-100 pt-4 md:col-span-2">
-                <h3 className="mb-4 text-sm font-medium text-gray-900">Wymiary zewnętrzne kartonu</h3>
-                <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-                  <div>
-                    <label className="mb-1 block text-xs text-gray-500">Długość (cm)</label>
-                    <Input
-                      type="number"
-                      min={0}
-                      step={0.01}
-                      value={cartonLength === "" ? "" : cartonLength}
-                      onChange={(e) => updateCartonDimension("cartonLength", e.target.value)}
-                      density="compact"
-                      focusTone="brand"
-                    />
-                  </div>
-                  <div>
-                    <label className="mb-1 block text-xs text-gray-500">Szerokość (cm)</label>
-                    <Input
-                      type="number"
-                      min={0}
-                      step={0.01}
-                      value={cartonWidth === "" ? "" : cartonWidth}
-                      onChange={(e) => updateCartonDimension("cartonWidth", e.target.value)}
-                      density="compact"
-                      focusTone="brand"
-                    />
-                  </div>
-                  <div>
-                    <label className="mb-1 block text-xs text-gray-500">Wysokość (cm)</label>
-                    <Input
-                      type="number"
-                      min={0}
-                      step={0.01}
-                      value={cartonHeight === "" ? "" : cartonHeight}
-                      onChange={(e) => updateCartonDimension("cartonHeight", e.target.value)}
-                      density="compact"
-                      focusTone="brand"
-                    />
-                  </div>
-                  <div>
-                    <label className="mb-1 block text-xs text-gray-500">Waga brutto (kg)</label>
-                    <Input
-                      type="number"
-                      min={0}
-                      step={0.1}
-                      value={cartonWeight === "" ? "" : cartonWeight}
-                      onChange={(e) => {
-                        const s = String(e.target.value).trim().replace(",", ".");
-                        if (s === "") setCartonWeight("");
-                        else {
-                          const n = parseFloat(s);
-                          if (Number.isFinite(n)) setCartonWeight(n);
-                        }
-                      }}
-                      density="compact"
-                      focusTone="brand"
-                    />
-                  </div>
                 </div>
               </div>
             </div>
@@ -491,175 +555,273 @@ export function ProductEditBasicTab({
         </section>
       </div>
 
-      {/* mock RIGHT: w-full xl:w-1/3 flex flex-col gap-6 */}
-      <div className="flex w-full flex-col gap-6 xl:w-1/3">
-        {/* KARTA: Szablon Dokumentu — flat p-5 card as in mock */}
-        <section className="rounded-xl border border-gray-200 bg-white p-5">
-          <h3 className="mb-1 flex items-center text-sm font-semibold text-gray-900">
-            <FileText className="mr-2 h-4 w-4 text-gray-500" strokeWidth={2} aria-hidden />
+      {/* RIGHT lg:col-span-5 */}
+      <div className="space-y-6 lg:col-span-5">
+        {/* Szablon wydruku */}
+        <section className="space-y-3 rounded-lg border border-gray-200 bg-white p-4">
+          <h2 className="flex items-center gap-2 text-sm font-bold text-gray-900">
+            <FileText className="h-4 w-4 text-gray-400" strokeWidth={2} aria-hidden />
             Szablon wydruku dokumentu
-          </h3>
-          <p className="mb-4 text-[13px] text-gray-500">Domyślny układ karty dla tego konkretnego SKU.</p>
+          </h2>
+          <p className="text-xs text-gray-500">Domyślny układ karty dla tego konkretnego SKU.</p>
 
-          {!isNew && productId != null ? (
-            <div className="space-y-3">
-              <div className="relative">
-                <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
-                  <Search className="h-3 w-3 text-gray-400" strokeWidth={2} aria-hidden />
-                </div>
-                <Input
-                  type="text"
-                  placeholder="Szukaj po nazwie..."
-                  density="comfortable"
+          <div className="pt-2">
+            <span className="mb-1 block text-xs font-medium text-gray-700">Szablon dokumentu</span>
+            {!isNew && productId != null ? (
+              <>
+                <Select
+                  value={templateMode}
+                  onChange={(e) => setTemplateMode(e.target.value === "custom" ? "custom" : "pick")}
+                  density="compact"
                   focusTone="brand"
-                  className="pl-8"
-                  disabled
-                  title="Filtrowanie szablonów — UI z mocka; wybór poniżej zapisuje przypisanie"
-                />
-              </div>
-              <DocumentTemplateScopeSection
-                tenantId={effectiveTenantId}
-                scopeType="PRODUCT"
-                scopeId={productId}
-                title=""
-                description="Brak wyboru spowoduje użycie standardowego przypisania."
-                titleClassName="hidden"
-                kinds={[{ kindCode: "product_card", label: "Karta produktu" }]}
-              />
-            </div>
-          ) : (
-            <p className="text-[13px] text-gray-500">Zapisz produkt, aby przypisać szablon.</p>
-          )}
-        </section>
+                  className="cursor-pointer bg-white text-xs"
+                >
+                  <option value="pick">Wybierz opublikowany szablon...</option>
+                  <option value="custom">Szukaj po nazwie...</option>
+                </Select>
 
-        {/* App sections not in mock HTML — same card chrome; required for existing fields */}
-        <section className="overflow-hidden rounded-xl border border-gray-200 bg-white">
-          <div className="border-b border-gray-200 px-5 py-4">
-            <h2 className="text-base font-semibold text-gray-900">Producent i GPSR</h2>
-          </div>
-          <div className="space-y-4 p-5">
-            <div>
-              <label className={labelClass}>Producent z katalogu</label>
-              <Select
-                value={manufacturerId != null ? String(manufacturerId) : ""}
-                onChange={(e) => {
-                  const v = e.target.value;
-                  if (!v) {
-                    setManufacturerId(null);
-                    return;
+                <div
+                  className={
+                    templateMode === "custom"
+                      ? "mt-2 [&_label]:hidden [&_p]:hidden"
+                      : "mt-2 [&_input[type=search]]:hidden [&_label]:hidden [&_p]:hidden"
                   }
-                  const id = Number(v);
-                  const row = manufacturersCatalog.find((x) => x.id === id);
-                  setManufacturerId(Number.isFinite(id) ? id : null);
-                  if (row) setManufacturer(row.name);
-                }}
-                density="comfortable"
-                focusTone="brand"
-              >
-                <option value="">— Wybierz —</option>
-                {manufacturersCatalog.map((m) => (
-                  <option key={m.id} value={m.id}>
-                    {m.name} {!m.active ? "(nieaktywny)" : ""}
-                  </option>
-                ))}
-              </Select>
-            </div>
-            <div>
-              <label className={labelClass}>Nazwa producenta (ręczna)</label>
-              <Input
-                type="text"
-                value={manufacturer}
-                onChange={(e) => {
-                  const t = e.target.value;
-                  setManufacturer(t);
-                  if (manufacturerId != null) {
-                    const row = manufacturersCatalog.find((x) => x.id === manufacturerId);
-                    if (row && t.trim() !== (row.name || "").trim()) setManufacturerId(null);
-                  }
-                }}
-                density="comfortable"
-                focusTone="brand"
-              />
-            </div>
-            <div>
-              <label className={labelClass}>Osoba odpowiedzialna (GPSR)</label>
-              <Input
-                type="text"
-                value={responsiblePerson}
-                onChange={(e) => setResponsiblePerson(e.target.value)}
-                placeholder="Puste = dziedziczenie z producenta"
-                density="comfortable"
-                focusTone="brand"
-              />
-            </div>
-            <div>
-              <label className={labelClass}>E-mail osoby odpowiedzialnej (GPSR)</label>
-              <Input
-                type="email"
-                value={responsiblePersonEmail}
-                onChange={(e) => setResponsiblePersonEmail(e.target.value)}
-                placeholder="Opcjonalnie; puste = z producenta"
-                density="comfortable"
-                focusTone="brand"
-              />
-            </div>
+                >
+                  <DocumentTemplateScopeSection
+                    tenantId={effectiveTenantId}
+                    scopeType="PRODUCT"
+                    scopeId={productId}
+                    title=""
+                    description=""
+                    titleClassName="hidden"
+                    kinds={[{ kindCode: "product_card", label: "Karta produktu" }]}
+                  />
+                </div>
+                <span className="mt-1 block text-[10px] text-gray-400">
+                  Brak wyboru – użyty zostanie standardowy binding typu dokumentu.
+                </span>
+              </>
+            ) : (
+              <p className="text-xs text-gray-500">Zapisz produkt, aby przypisać szablon.</p>
+            )}
           </div>
         </section>
 
-        <section className="overflow-hidden rounded-xl border border-gray-200 bg-white">
-          <div className="border-b border-gray-200 px-5 py-4">
-            <h2 className="text-base font-semibold text-gray-900">Walidacja</h2>
+        {/* Producent */}
+        <section className="space-y-3 rounded-lg border border-gray-200 bg-white p-4">
+          <h2 className="text-sm font-bold text-gray-900">Producent</h2>
+          <div>
+            <label className={`${labelClass} text-xs`}>Producent z katalogu</label>
+            <Select
+              value={manufacturerId != null ? String(manufacturerId) : ""}
+              onChange={(e) => {
+                const v = e.target.value;
+                if (!v) {
+                  setManufacturerId(null);
+                  return;
+                }
+                const id = Number(v);
+                const row = manufacturersCatalog.find((x) => x.id === id);
+                setManufacturerId(Number.isFinite(id) ? id : null);
+                if (row) setManufacturer(row.name);
+              }}
+              density="compact"
+              focusTone="brand"
+              className="bg-white text-xs"
+            >
+              <option value="">— Wybierz —</option>
+              {manufacturersCatalog.map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.name} {!m.active ? "(nieaktywny)" : ""}
+                </option>
+              ))}
+            </Select>
           </div>
-          <div className="p-5" id="wms-validation">
-            <ProductValidationOverridesSection
-              global={globalValidation}
-              skips={validationSkips}
-              disabled={saving}
-              onChange={(patch) => setValidationSkips((prev) => ({ ...prev, ...patch }))}
+          <div>
+            <label className={`${labelClass} text-xs`}>Nazwa producenta (ręczna)</label>
+            <Input
+              type="text"
+              value={manufacturer}
+              onChange={(e) => {
+                const t = e.target.value;
+                setManufacturer(t);
+                if (manufacturerId != null) {
+                  const row = manufacturersCatalog.find((x) => x.id === manufacturerId);
+                  if (row && t.trim() !== (row.name || "").trim()) setManufacturerId(null);
+                }
+              }}
+              density="compact"
+              focusTone="brand"
+              className="text-xs"
             />
           </div>
         </section>
 
-        {/* Historia — chrome 1:1 z mocka; treść = ActivityLogPanel (SSOT jak Orders) */}
+        {/* GPSR */}
+        <section className="space-y-3 rounded-lg border border-gray-200 bg-white p-4">
+          <h2 className="text-sm font-bold text-gray-900">GPSR</h2>
+          <div>
+            <label className={`${labelClass} text-xs`}>Osoba odpowiedzialna (GPSR)</label>
+            <Input
+              type="text"
+              value={responsiblePerson}
+              onChange={(e) => setResponsiblePerson(e.target.value)}
+              placeholder="Puste = dziedziczenie z producenta"
+              density="compact"
+              focusTone="brand"
+              className="text-xs placeholder:text-gray-400"
+            />
+          </div>
+          <div>
+            <label className={`${labelClass} text-xs`}>E-mail osoby odpowiedzialnej (GPSR)</label>
+            <Input
+              type="email"
+              value={responsiblePersonEmail}
+              onChange={(e) => setResponsiblePersonEmail(e.target.value)}
+              placeholder="Opcjonalnie; puste = z producenta"
+              density="compact"
+              focusTone="brand"
+              className="text-xs placeholder:text-gray-400"
+            />
+          </div>
+        </section>
+
+        {/* Walidacja — grouped Produkt / Partie / Opakowanie */}
+        <section className="space-y-3 rounded-lg border border-gray-200 bg-white p-4" id="wms-validation">
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-bold text-gray-900">Walidacja</h2>
+            <span className="rounded bg-orange-50 px-2 py-0.5 text-[10px] font-medium text-orange-700">
+              Reguły specjalne
+            </span>
+          </div>
+          <p className="text-xs leading-relaxed text-gray-500">
+            Wymagane globalne konfiguracje w{" "}
+            <Link to="/settings/wms" className="font-semibold text-gray-700 underline hover:text-gray-900">
+              Ustawienia → WMS → Przyjęcia → Walidacja produktów
+            </Link>
+            . Tutaj możesz wyłączyć wybrane reguły tylko dla tego SKU.
+          </p>
+
+          {!g ? (
+            <p className="text-xs text-gray-500">Wczytywanie ustawień globalnych…</p>
+          ) : !anyGlobalRequire ? (
+            <p className="text-xs text-gray-500">Brak aktywnych globalnych wymagań — wyłączenia nie są potrzebne.</p>
+          ) : (
+            <div className="space-y-4 border-t border-gray-100 pt-2 text-xs">
+              {productSkipsVisible ? (
+                <div>
+                  <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-gray-500">Produkt</p>
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                    <SkipCheck
+                      globalEnabled={g.require_dimensions}
+                      checked={validationSkips.validation_skip_dimensions}
+                      onChange={(v) => setValidationSkips((prev) => ({ ...prev, validation_skip_dimensions: v }))}
+                      label="Nie wymagaj wymiarów produktu"
+                      disabled={saving}
+                    />
+                    <SkipCheck
+                      globalEnabled={g.require_weight}
+                      checked={validationSkips.validation_skip_weight}
+                      onChange={(v) => setValidationSkips((prev) => ({ ...prev, validation_skip_weight: v }))}
+                      label="Nie wymagaj wagi produktu"
+                      disabled={saving}
+                    />
+                  </div>
+                </div>
+              ) : null}
+
+              {batchSkipsVisible ? (
+                <div>
+                  <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-gray-500">Partie</p>
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                    <SkipCheck
+                      globalEnabled={g.require_batch}
+                      checked={validationSkips.validation_skip_batch}
+                      onChange={(v) => setValidationSkips((prev) => ({ ...prev, validation_skip_batch: v }))}
+                      label="Nie wymagaj numeru partii"
+                      disabled={saving}
+                    />
+                    <SkipCheck
+                      globalEnabled={g.require_expiry}
+                      checked={validationSkips.validation_skip_expiry}
+                      onChange={(v) => setValidationSkips((prev) => ({ ...prev, validation_skip_expiry: v }))}
+                      label="Nie wymagaj daty ważności"
+                      disabled={saving}
+                    />
+                    <SkipCheck
+                      globalEnabled={g.require_serial}
+                      checked={validationSkips.validation_skip_serial}
+                      onChange={(v) => setValidationSkips((prev) => ({ ...prev, validation_skip_serial: v }))}
+                      label="Nie wymagaj numeru seryjnego"
+                      disabled={saving}
+                    />
+                  </div>
+                </div>
+              ) : null}
+
+              {cartonSkipsVisible ? (
+                <div>
+                  <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-gray-500">Opakowanie</p>
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                    <SkipCheck
+                      globalEnabled={g.require_master_carton}
+                      checked={validationSkips.validation_skip_master_carton}
+                      onChange={(v) => setValidationSkips((prev) => ({ ...prev, validation_skip_master_carton: v }))}
+                      label="Nie wymagaj opakowania zbiorczego"
+                      disabled={saving}
+                    />
+                    <SkipCheck
+                      globalEnabled={g.require_master_carton_ean}
+                      checked={validationSkips.validation_skip_master_carton_ean}
+                      onChange={(v) =>
+                        setValidationSkips((prev) => ({ ...prev, validation_skip_master_carton_ean: v }))
+                      }
+                      label="Nie wymagaj EAN kartonu"
+                      disabled={saving}
+                    />
+                    <SkipCheck
+                      globalEnabled={g.require_master_carton_qty}
+                      checked={validationSkips.validation_skip_master_carton_qty}
+                      onChange={(v) =>
+                        setValidationSkips((prev) => ({ ...prev, validation_skip_master_carton_qty: v }))
+                      }
+                      label="Nie wymagaj ilości w kartonie"
+                      disabled={saving}
+                    />
+                    <SkipCheck
+                      globalEnabled={g.require_master_carton_dims}
+                      checked={validationSkips.validation_skip_master_carton_dims}
+                      onChange={(v) =>
+                        setValidationSkips((prev) => ({ ...prev, validation_skip_master_carton_dims: v }))
+                      }
+                      label="Nie wymagaj wymiarów kartonu"
+                      disabled={saving}
+                    />
+                    <SkipCheck
+                      globalEnabled={g.require_master_carton_weight}
+                      checked={validationSkips.validation_skip_master_carton_weight}
+                      onChange={(v) =>
+                        setValidationSkips((prev) => ({ ...prev, validation_skip_master_carton_weight: v }))
+                      }
+                      label="Nie wymagaj wagi kartonu"
+                      disabled={saving}
+                    />
+                  </div>
+                </div>
+              ) : null}
+            </div>
+          )}
+        </section>
+
+        {/* Historia — ActivityLogPanel jak w zamówieniach (nie mock lista) */}
         {!isNew && productId != null ? (
-          <section className="flex h-full flex-col overflow-hidden rounded-xl border border-gray-200 bg-white xl:max-h-[800px]">
-            <div className="flex items-center justify-between rounded-t-xl border-b border-gray-200 px-5 py-4">
-              <h2 className="text-base font-semibold text-gray-900">Historia operacji</h2>
-              <button type="button" className="text-sm font-medium text-orange-600 hover:text-orange-700">
-                Pokaż pełną
-              </button>
-            </div>
-
-            <div className="border-b border-gray-200 bg-white p-3">
-              <div className="flex rounded-lg border border-gray-200 p-1">
-                <button
-                  type="button"
-                  className="flex-1 rounded-md bg-gray-100 py-1.5 text-xs font-semibold text-gray-800"
-                >
-                  Magazynowe
-                </button>
-                <button
-                  type="button"
-                  className="flex-1 rounded-md bg-white py-1.5 text-xs font-medium text-gray-500 hover:text-gray-700"
-                >
-                  Dostawy
-                </button>
-              </div>
-            </div>
-
-            <div className="min-h-0 flex-1 overflow-y-auto p-3 [&>section>div:first-child]:hidden">
-              <ActivityLogPanel
-                objectType="product"
-                objectId={productId}
-                title="Historia operacji"
-                defaultCollapsed={false}
-                className="border-0 shadow-none"
-              />
-            </div>
-
-            <div className="rounded-b-xl border-t border-gray-200 bg-white px-4 py-3 text-center">
-              <span className="text-[11px] text-gray-500">Wyświetlono ostatnie operacje</span>
-            </div>
+          <section className="rounded-lg border border-gray-200 bg-white p-4">
+            <ActivityLogPanel
+              objectType="product"
+              objectId={productId}
+              defaultCollapsed={false}
+              className="mt-0 border-0 shadow-none"
+            />
           </section>
         ) : null}
       </div>

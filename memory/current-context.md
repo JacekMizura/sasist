@@ -1,13 +1,12 @@
 ﻿## Active
 
-**Edycja produktu — Podstawowe: DOM 1:1 z HTML (2026-08-04).**
+**Edycja produktu — Podstawowe v2: DOM 1:1 z HTML (2026-08-04).**
 
-- Spec: `Downloads/podstawowe karta produktu.html`
-- `ProductEditBasicTab` — plain section/div jak mock; SASIST Input/Select; bez ProductLikeSection
-- Wire w `ProductEditModal` gdy `activeTab === "basic"`
-- Historia: chrome z mocka + `ActivityLogPanel` (nie fake lista Magazynowe)
-- Extra (nie w mocku, zachowane): Producent/GPSR, Walidacja
-- Bez commita
+- Spec: `Downloads/podstawowy karta produckut v2.html`
+- `ProductEditBasicTab` only: grid 7/5, flat left sections, orange carton card
+- Producent + GPSR osobno; walidacja grupowana Produkt/Partie/Opakowanie
+- Szablon: search dopiero po „Szukaj po nazwie…”; historia = `ActivityLogPanel` jak Orders
+- Gabaryty jednostkowe (nie „Opakowanie”); logika/API bez zmian
 
 **Edycja produktu — Ceny: DOM 1:1 z mock HTML (2026-08-04).**
 

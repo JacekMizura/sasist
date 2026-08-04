@@ -1,3 +1,9 @@
+## 2026-08-04 — Edycja produktu: Podstawowe v2 z HTML (FE only)
+
+- `ProductEditBasicTab` → layout 1:1 z `podstawowy karta produckut v2.html` (grid 7/5)
+- Producent / GPSR rozdzielone; walidacja Produkt·Partie·Opakowanie; szablon z gated search
+- Historia = `ActivityLogPanel` (jak zamówienia); Gabaryty jednostkowe; bez zmian API/handlerów
+
 ## 2026-08-04 — Edycja produktu: Podstawowe DOM 1:1 z HTML (FE only)
 
 - Nowy `ProductEditBasicTab`: section/div jak `podstawowe karta produktu.html` (bez ProductLikeSection)
