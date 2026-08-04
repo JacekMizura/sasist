@@ -265,6 +265,7 @@ export function buildNavFlyoutCategories(): NavCategoryConfig[] {
           { path: "/carts/racks", label: "Regały", Icon: Boxes },
           { path: "/carts/zones", label: "Strefy", Icon: Layers },
           { path: "/carts/carriers", label: "Nośniki", Icon: Package },
+          { path: "/inventory-count/dashboard", label: "Inwentaryzacja", Icon: ClipboardList },
           { path: "/settings/wms", label: "Konfiguracja WMS", Icon: Settings2 },
           { path: "/carts/optimizer", label: "Flota", Icon: Route },
           { path: "/warehouse/bdo", label: "BDO", Icon: Recycle },

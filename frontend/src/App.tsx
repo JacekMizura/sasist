@@ -934,7 +934,7 @@ export const router = createBrowserRouter(
                 <Route path="administracja-magazynem" element={<Navigate to="/designer" replace />} />
                 <Route path="zarzadzanie-magazynem" element={<AnalizyModuleLayout />}>
                   <Route index element={<Navigate to="pulpit" replace />} />
-                  <Route path="pulpit" element={<PulpitKierownikaPage />} />
+                  <Route path="pulpit/*" element={<PulpitKierownikaPage />} />
                   <Route path="kolejnosc-dostaw" element={<KolejnoscDostawPage />} />
                   <Route path="raporty" element={<AnalyticsLayout />}>
                     <Route index element={<AnalyticsDashboardPage />} />

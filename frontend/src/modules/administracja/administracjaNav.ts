@@ -13,6 +13,7 @@ export const ADMINISTRACJA_LINKS: AdministracjaLink[] = [
   { title: "Regały", description: "Struktura regałów.", to: "/carts/racks" },
   { title: "Strefy", description: "Strefy magazynowe.", to: "/carts/zones" },
   { title: "Nośniki", description: "Słownik nośników.", to: "/carts/carriers" },
+  { title: "Inwentaryzacja", description: "Planowanie inwentaryzacji ERP.", to: "/inventory-count/dashboard" },
   { title: "Konfiguracja WMS", description: "Ustawienia procesów i stanowisk.", to: "/settings/wms" },
   { title: "Flota", description: "Planowanie floty.", to: "/carts/optimizer" },
   { title: "BDO", description: "Opakowania i raport środowiskowy.", to: "/warehouse/bdo" },

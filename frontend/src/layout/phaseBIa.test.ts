@@ -29,6 +29,7 @@ describe("Zarządzanie / Magazyn IA — flyouts SASIST", () => {
       "Regały",
       "Strefy",
       "Nośniki",
+      "Inwentaryzacja",
       "Konfiguracja WMS",
       "Flota",
       "BDO",
@@ -37,6 +38,7 @@ describe("Zarządzanie / Magazyn IA — flyouts SASIST", () => {
     ]);
     expect(labels).not.toContain("Szablony etykiet");
     expect(isCategoryActive(warehouse!, "/designer")).toBe(true);
+    expect(isCategoryActive(warehouse!, "/inventory-count/dashboard")).toBe(true);
     expect(isCategoryActive(warehouse!, "/settings/wms")).toBe(true);
   });
 

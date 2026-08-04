@@ -30,7 +30,6 @@ import {
   opsSeverityLabel,
 } from "../../utils/replenishmentUiLabels";
 import { AppOverlayPortal } from "../../components/overlay";
-import { PulpitSection } from "../zarzadzanie/PulpitSection";
 
 const DEFAULT_TENANT_ID = 1;
 const CONFIG_STORAGE_KEY = "analytics.warehouseOperations.thresholds";
@@ -701,11 +700,16 @@ function DetailModal({
 }
 
 type CentrumProps = {
-  /** Wchłiony w Pulpit kierownika — sekcje zwijane, bez osobnego bytu „Centrum”. */
+  /** Wlozony w Pulpit kierownika — panel jednej zakladki (bez accordionow). */
   embedInPulpit?: boolean;
+  /** Zakladka Pulpitu (gdy embedInPulpit). */
+  pulpitSection?: "alerty" | "operatorzy" | "kolejki" | "dostawy" | "historia";
 };
 
-export default function CentrumOperacyjnePage({ embedInPulpit = false }: CentrumProps) {
+export default function CentrumOperacyjnePage({
+  embedInPulpit = false,
+  pulpitSection = "alerty",
+}: CentrumProps) {
   const navigate = useNavigate();
   const { warehouse: activeWarehouse, showWarehouseSelector } = useWarehouse();
   const warehouseId = activeWarehouse?.id ?? null;
@@ -1640,6 +1644,47 @@ export default function CentrumOperacyjnePage({ embedInPulpit = false }: Centrum
   }
 
   if (embedInPulpit) {
+    const sectionBody =
+      pulpitSection === "alerty" ? (
+        <div className="space-y-3">
+          {alertsPanel}
+          {managerTasksPanel}
+          {carrierIssuesPanel}
+        </div>
+      ) : pulpitSection === "operatorzy" ? (
+        operatorGroups
+      ) : pulpitSection === "kolejki" ? (
+        <div className="space-y-3">
+          {queuesPanel}
+          {bottlenecksPanel}
+          {replenishmentsPanel}
+          <div className="grid gap-4 lg:grid-cols-2">
+            <OperatorModeSection
+              mode="KOMPLETACJA"
+              operators={groupedOperators.KOMPLETACJA}
+              recentEnded={recentEndedByMode.KOMPLETACJA}
+              onOpen={setSelectedOperator}
+            />
+            <OperatorModeSection
+              mode="PAKOWANIE"
+              operators={groupedOperators.PAKOWANIE}
+              recentEnded={recentEndedByMode.PAKOWANIE}
+              onOpen={setSelectedOperator}
+            />
+          </div>
+        </div>
+      ) : pulpitSection === "dostawy" ? (
+        <div className="space-y-3">
+          {inboundPanel}
+          {putawayPanel}
+        </div>
+      ) : (
+        <div className="grid gap-4 lg:grid-cols-[1fr_0.9fr]">
+          {activityStream}
+          {exportPanel}
+        </div>
+      );
+
     return (
       <div className="min-w-0 space-y-3">
         {error ? (
@@ -1647,55 +1692,7 @@ export default function CentrumOperacyjnePage({ embedInPulpit = false }: Centrum
             {error}
           </div>
         ) : null}
-
-        <PulpitSection id="alerty" title="Alerty" defaultOpen={false}>
-          <div className="space-y-3">
-            {alertsPanel}
-            {managerTasksPanel}
-            {carrierIssuesPanel}
-          </div>
-        </PulpitSection>
-
-        <PulpitSection id="operatorzy" title="Operatorzy" defaultOpen={false}>
-          {operatorGroups}
-        </PulpitSection>
-
-        <PulpitSection id="kolejki" title="Kolejki i obciążenie" defaultOpen={false}>
-          <div className="space-y-3">
-            {queuesPanel}
-            {bottlenecksPanel}
-            {replenishmentsPanel}
-            <div className="grid gap-4 lg:grid-cols-2">
-              <OperatorModeSection
-                mode="KOMPLETACJA"
-                operators={groupedOperators.KOMPLETACJA}
-                recentEnded={recentEndedByMode.KOMPLETACJA}
-                onOpen={setSelectedOperator}
-              />
-              <OperatorModeSection
-                mode="PAKOWANIE"
-                operators={groupedOperators.PAKOWANIE}
-                recentEnded={recentEndedByMode.PAKOWANIE}
-                onOpen={setSelectedOperator}
-              />
-            </div>
-          </div>
-        </PulpitSection>
-
-        <PulpitSection id="dostawy" title="Dostawy" defaultOpen={false}>
-          <div className="space-y-3">
-            {inboundPanel}
-            {putawayPanel}
-          </div>
-        </PulpitSection>
-
-        <PulpitSection id="historia" title="Historia" defaultOpen={false}>
-          <div className="grid gap-4 lg:grid-cols-[1fr_0.9fr]">
-            {activityStream}
-            {exportPanel}
-          </div>
-        </PulpitSection>
-
+        {sectionBody}
         {modals}
       </div>
     );
