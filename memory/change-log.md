@@ -1,3 +1,9 @@
+## 2026-08-04 — Edycja produktu: Zdjęcia 1:1 z HTML (FE only)
+
+- Nowy `ProductEditImagesTab` wg `zdjecia karta produktu.html`
+- Dodaj URL + Wgraj z pliku; lista rekordów (miniatura, URL, Główne / W górę / W dół / Usuń)
+- Wire w ProductEditModal; handlery/API bez zmian
+
 ## 2026-08-04 — Edycja produktu: Produkcja 1:1 z HTML (FE only)
 
 - `ProductManufacturingPanel` + `CompositionVisualEditor` wg `produkcja karta produktu.html`

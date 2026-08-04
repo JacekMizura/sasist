@@ -1,5 +1,10 @@
 ﻿## Active
 
+**Edycja produktu — Zdjęcia: DOM 1:1 z `zdjecia karta produktu.html` (2026-08-04).**
+
+- `ProductEditImagesTab`: Galeria, dodawanie URL/plik, rekordy miniatur+akcje jak mock
+- SASIST Input/Button/Radio; upload / main / order / delete bez zmian logiki
+
 **Edycja produktu — Produkcja: DOM 1:1 z `produkcja karta produktu.html` (2026-08-04).**
 
 - `ProductManufacturingPanel` + `CompositionVisualEditor`: banner, 2+1 grid, składniki bez DataTable, BOM, sidebar

@@ -67,6 +67,7 @@ import { formatMoneyZlDisplay, resolveProductPricingDisplay } from "./productPri
 import { ProductEditPricesTab } from "./ProductEditPricesTab";
 import { ProductEditBasicTab } from "./ProductEditBasicTab";
 import { ProductEditWarehouseTab } from "./ProductEditWarehouseTab";
+import { ProductEditImagesTab } from "./ProductEditImagesTab";
 import { useDocumentTemplatePrint } from "../../hooks/useDocumentTemplatePrint";
 
 export type ProductForm = {
@@ -2017,92 +2018,18 @@ export function ProductEditModal({
                 )}
 
                 {activeTab === "images" && (
-                  <div className="w-full xl:max-w-4xl space-y-12">
-                    <section>
-                      <h3 className="mb-5 text-lg font-bold text-slate-900 border-b border-slate-200 pb-2">Galeria produktu</h3>
-                      <div className="space-y-6">
-                        <div className="flex flex-wrap items-end gap-3 rounded border border-slate-200 bg-slate-50 p-5 shadow-sm">
-                          <div className="min-w-[200px] flex-1">
-                            <label className="mb-2 block text-sm font-medium text-slate-700">Dodaj zdjęcie z adresu URL</label>
-                            <input
-                              type="url"
-                              className={inputClass}
-                              value={newGalleryUrl}
-                              onChange={(e) => setNewGalleryUrl(e.target.value)}
-                              placeholder="https://... lub /uploads/..."
-                            />
-                          </div>
-                          <PrimaryButton type="button" onClick={addGalleryFromUrl} disabled={!newGalleryUrl.trim()}>
-                            Dodaj URL
-                          </PrimaryButton>
-                          <label className="inline-flex cursor-pointer items-center justify-center rounded border border-slate-300 bg-white px-6 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors shadow-sm">
-                            <input type="file" accept="image/*" className="sr-only" onChange={onGalleryFileSelected} disabled={galleryUploadBusy} />
-                            {galleryUploadBusy ? "Wgrywanie…" : "Wgraj z pliku"}
-                          </label>
-                        </div>
-
-                        {ensureSingleMainImage(productImages).length === 0 ? (
-                          <div className="text-center py-12 border border-dashed border-slate-300 rounded-lg bg-slate-50">
-                            <p className="text-sm font-medium text-slate-500">Brak zdjęć w galerii.</p>
-                            <p className="text-xs text-slate-400 mt-1">Użyj opcji powyżej, aby dodać pierwsze zdjęcie.</p>
-                          </div>
-                        ) : (
-                          <ul className="space-y-4">
-                            {ensureSingleMainImage(productImages)
-                              .sort((a, b) => a.sort_order - b.sort_order)
-                              .map((img) => (
-                                <li
-                                  key={img.id}
-                                  className="flex flex-col sm:flex-row sm:items-center gap-6 rounded border border-slate-200 bg-white p-5 shadow-sm"
-                                >
-                                  {/* Czyste zdjęcie na białym tle, bez ramki ograniczającej */}
-                                  <div className="flex w-24 shrink-0 items-center justify-center overflow-hidden bg-white">
-                                    <img src={img.image_url} alt="" className="max-h-24 max-w-full object-contain" />
-                                  </div>
-                                  <div className="min-w-0 flex-1 space-y-4">
-                                    <input
-                                      type="url"
-                                      className={inputClass}
-                                      value={img.image_url}
-                                      onChange={(e) =>
-                                        setProductImages((prev) =>
-                                          ensureSingleMainImage(prev.map((x) => (x.id === img.id ? { ...x, image_url: e.target.value } : x))),
-                                        )
-                                      }
-                                    />
-                                    <div className="flex flex-wrap items-center gap-4 text-sm font-medium">
-                                      <label className="flex cursor-pointer items-center gap-2 text-blue-700">
-                                        <input
-                                          type="radio"
-                                          name="product-main-image"
-                                          className="h-4 w-4 border-slate-300 text-blue-600 focus:ring-blue-500"
-                                          checked={img.is_main}
-                                          onChange={() => setGalleryMain(img.id)}
-                                        />
-                                        Główne zdjęcie
-                                      </label>
-                                      <div className="hidden h-4 w-px bg-slate-200 sm:block"></div>
-                                      <div className="flex items-center gap-4">
-                                        <button type="button" className="text-slate-600 transition-colors hover:text-slate-900" onClick={() => moveGalleryImage(img.id, -1)}>
-                                          W górę
-                                        </button>
-                                        <button type="button" className="text-slate-600 transition-colors hover:text-slate-900" onClick={() => moveGalleryImage(img.id, 1)}>
-                                          W dół
-                                        </button>
-                                      </div>
-                                      <div className="hidden h-4 w-px bg-slate-200 sm:block"></div>
-                                      <button type="button" className="text-rose-600 transition-colors hover:text-rose-800" onClick={() => removeGalleryImage(img.id)}>
-                                        Usuń zdjęcie
-                                      </button>
-                                    </div>
-                                  </div>
-                                </li>
-                              ))}
-                          </ul>
-                        )}
-                      </div>
-                    </section>
-                  </div>
+                  <ProductEditImagesTab
+                    productImages={productImages}
+                    setProductImages={setProductImages}
+                    newGalleryUrl={newGalleryUrl}
+                    setNewGalleryUrl={setNewGalleryUrl}
+                    galleryUploadBusy={galleryUploadBusy}
+                    onAddFromUrl={addGalleryFromUrl}
+                    onFileSelected={onGalleryFileSelected}
+                    onSetMain={setGalleryMain}
+                    onMove={moveGalleryImage}
+                    onRemove={removeGalleryImage}
+                  />
                 )}
 
                 {activeTab === "production" && !isNew && tenantId != null && product?.id != null ? (
