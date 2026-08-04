@@ -1,4 +1,5 @@
 import { Link } from "react-router-dom";
+import { PageHeader } from "../../components/layout/PageHeader";
 import { useWarehouseChangePlan } from "../../modules/optymalizacja/useWarehouseChangePlan";
 import {
   effectDisplay,
@@ -10,12 +11,12 @@ import {
   analizyCtaSecondaryClass,
   analizyKpiCardClass,
   analizyKpiGridClass,
-  analizyPageSubtitleClass,
-  analizyPageTitleClass,
 } from "../../modules/analizy/analizyUi";
+import { PLAN_ZMIAN_PATH } from "../../modules/analizy/analizyModuleNav";
+import { typography } from "@/design-system";
 
 /**
- * Landing Optymalizacji — przegląd planu zmian.
+ * Landing Planu zmian — przegląd w shellu SASIST.
  */
 export default function OptymalizacjaLandingPage() {
   const { snapshot, items } = useWarehouseChangePlan();
@@ -23,84 +24,82 @@ export default function OptymalizacjaLandingPage() {
   const first = waiting[0] ?? snapshot.topImpact;
 
   return (
-    <div className="min-w-0 space-y-6">
-      <div>
-        <h1 className={analizyPageTitleClass}>Plan zmian</h1>
-        <p className={analizyPageSubtitleClass}>
-          Długoterminowe zmiany w magazynie: slotting, layout, procesy i symulacje.
-        </p>
-      </div>
+    <div className="min-w-0 space-y-4">
+      <PageHeader
+        title="Plan zmian"
+        subtitle="Długoterminowe zmiany w magazynie: slotting, layout, procesy i symulacje."
+        breadcrumbs={[
+          { label: "Magazyn", to: "/zarzadzanie-magazynem/pulpit" },
+          { label: "Plan zmian", to: PLAN_ZMIAN_PATH },
+          { label: "Przegląd" },
+        ]}
+      />
 
       <div className={analizyKpiGridClass}>
         <div className={analizyKpiCardClass}>
-          <p className="text-xs font-medium uppercase tracking-wide text-slate-400">
-            Ile rekomendacji czeka?
-          </p>
-          <p className="mt-2 text-2xl font-semibold text-slate-900">{snapshot.waitingCount}</p>
-          <p className="mt-1 text-xs text-slate-500">
+          <p className={typography.section}>Ile rekomendacji czeka?</p>
+          <p className={`mt-2 ${typography.metric}`}>{snapshot.waitingCount}</p>
+          <p className={`mt-1 ${typography.caption}`}>
             {snapshot.highPriorityCount > 0
               ? `${snapshot.highPriorityCount} z wysokim priorytetem`
               : "Brak pozycji o wysokim priorytecie"}
           </p>
         </div>
         <div className={analizyKpiCardClass}>
-          <p className="text-xs font-medium uppercase tracking-wide text-slate-400">
-            Które mają największy wpływ?
-          </p>
+          <p className={typography.section}>Które mają największy wpływ?</p>
           <p className="mt-2 text-lg font-semibold leading-snug text-slate-900">
             {first?.title ?? "—"}
           </p>
-          <p className="mt-1 text-xs text-slate-500">
+          <p className={`mt-1 ${typography.caption}`}>
             {first ? `Źródło: ${first.originLabel}` : "Dodaj pierwszą rekomendację"}
           </p>
         </div>
         <div className={analizyKpiCardClass}>
-          <p className="text-xs font-medium uppercase tracking-wide text-slate-400">
-            Jaką oszczędność / wpływ?
-          </p>
+          <p className={typography.section}>Jaką oszczędność / wpływ?</p>
           <p className="mt-2 text-sm font-semibold leading-snug text-slate-900">
             {snapshot.waitingCount === 0 ? "Brak oczekujących zmian" : snapshot.impactSummary}
           </p>
         </div>
         <div className={analizyKpiCardClass}>
-          <p className="text-xs font-medium uppercase tracking-wide text-slate-400">
-            Co zrobić jako pierwsze?
-          </p>
+          <p className={typography.section}>Co zrobić jako pierwsze?</p>
           <p className="mt-2 text-sm font-semibold leading-snug text-slate-900">
             {first
               ? `${first.title} (${priorityLabel(first.priority)} · ${statusLabel(first.status)})`
               : "Uruchom analizę i dodaj do harmonogramu"}
           </p>
-          <Link to="/zarzadzanie-magazynem/plan-zmian/plan" className={`mt-3 ${analizyCtaSecondaryClass}`}>
+          <Link to={`${PLAN_ZMIAN_PATH}/plan`} className={`mt-3 ${analizyCtaSecondaryClass}`}>
             Otwórz harmonogram zmian
           </Link>
         </div>
       </div>
 
       <div className="flex flex-wrap gap-2">
-        <Link to="/zarzadzanie-magazynem/plan-zmian/plan" className={analizyCtaPrimaryClass}>
+        <Link to={`${PLAN_ZMIAN_PATH}/plan`} className={analizyCtaPrimaryClass}>
           Przejdź do harmonogramu zmian
         </Link>
-        <Link to="/zarzadzanie-magazynem/plan-zmian/historia" className={analizyCtaSecondaryClass}>
+        <Link to={`${PLAN_ZMIAN_PATH}/historia`} className={analizyCtaSecondaryClass}>
           Zobacz historię zmian
         </Link>
-        <Link to="/zarzadzanie-magazynem/plan-zmian/ranking" className={analizyCtaSecondaryClass}>
+        <Link to={`${PLAN_ZMIAN_PATH}/ranking`} className={analizyCtaSecondaryClass}>
           Zobacz klasyfikację skuteczności
         </Link>
       </div>
 
       {(snapshot.historyCount > 0 || snapshot.verifiedCount > 0) && (
-        <p className="text-sm text-slate-600">
+        <p className={typography.bodyMuted}>
           W historii: <strong>{snapshot.historyCount}</strong> · Zweryfikowane:{" "}
           <strong>{snapshot.verifiedCount}</strong>
         </p>
       )}
 
       {waiting.length > 0 ? (
-        <section className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+        <section className="overflow-hidden rounded-xl border border-slate-200">
           <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
-            <h2 className="text-sm font-semibold text-slate-800">Kolejka harmonogramu (5 pierwszych)</h2>
-            <Link to="/zarzadzanie-magazynem/plan-zmian/plan" className="text-sm font-medium text-orange-700 hover:underline">
+            <h2 className={typography.h2}>Kolejka harmonogramu (5 pierwszych)</h2>
+            <Link
+              to={`${PLAN_ZMIAN_PATH}/plan`}
+              className="text-sm font-medium text-orange-700 hover:underline"
+            >
               Zobacz cały harmonogram
             </Link>
           </div>
@@ -108,10 +107,10 @@ export default function OptymalizacjaLandingPage() {
             {waiting.slice(0, 5).map((row, idx) => (
               <li key={row.id} className="flex flex-wrap items-center justify-between gap-2 px-4 py-3">
                 <div>
-                  <p className="text-sm font-medium text-slate-900">
+                  <p className={typography.bodyStrong}>
                     {idx + 1}. {row.title}
                   </p>
-                  <p className="text-xs text-slate-500">
+                  <p className={typography.caption}>
                     Źródło: {row.originLabel} · {effectDisplay(row).primary} · {statusLabel(row.status)}
                   </p>
                 </div>
@@ -124,34 +123,34 @@ export default function OptymalizacjaLandingPage() {
         </section>
       ) : null}
 
-      <section>
-        <h2 className="mb-2 text-sm font-semibold text-slate-800">Źródła rekomendacji</h2>
-        <p className="mb-3 text-sm text-slate-600">
+      <section className="space-y-3">
+        <h2 className={typography.h2}>Źródła rekomendacji</h2>
+        <p className={typography.bodyMuted}>
           Analizy nie są osobnymi harmonogramami — każda kończy się dodaniem do wspólnego harmonogramu zmian.
         </p>
-        <div className="grid gap-4 sm:grid-cols-3">
+        <div className="grid gap-3 sm:grid-cols-3">
           <Link
-            to="/zarzadzanie-magazynem/plan-zmian/slotting"
+            to={`${PLAN_ZMIAN_PATH}/slotting`}
             className={`${analizyKpiCardClass} block transition hover:border-orange-300`}
           >
-            <p className="font-medium text-slate-900">Układ towaru</p>
-            <p className="mt-1 text-xs text-slate-500">Znajdź produkty do przesunięcia</p>
+            <p className={typography.bodyStrong}>Układ towaru</p>
+            <p className={`mt-1 ${typography.caption}`}>Znajdź produkty do przesunięcia</p>
             <p className="mt-2 text-sm font-medium text-orange-700">Analizuj układ →</p>
           </Link>
           <Link
-            to="/zarzadzanie-magazynem/plan-zmian/picking-strategy"
+            to={`${PLAN_ZMIAN_PATH}/picking-strategy`}
             className={`${analizyKpiCardClass} block transition hover:border-orange-300`}
           >
-            <p className="font-medium text-slate-900">Strategia kompletacji</p>
-            <p className="mt-1 text-xs text-slate-500">Porównaj warianty pracy</p>
+            <p className={typography.bodyStrong}>Strategia kompletacji</p>
+            <p className={`mt-1 ${typography.caption}`}>Porównaj warianty pracy</p>
             <p className="mt-2 text-sm font-medium text-orange-700">Analizuj strategię →</p>
           </Link>
           <Link
-            to="/zarzadzanie-magazynem/plan-zmian/pick-path"
+            to={`${PLAN_ZMIAN_PATH}/pick-path`}
             className={`${analizyKpiCardClass} block transition hover:border-orange-300`}
           >
-            <p className="font-medium text-slate-900">Trasy i dystans</p>
-            <p className="mt-1 text-xs text-slate-500">Znajdź zbyt długie trasy</p>
+            <p className={typography.bodyStrong}>Trasy i dystans</p>
+            <p className={`mt-1 ${typography.caption}`}>Znajdź zbyt długie trasy</p>
             <p className="mt-2 text-sm font-medium text-orange-700">Analizuj trasy →</p>
           </Link>
         </div>

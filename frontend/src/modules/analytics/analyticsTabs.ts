@@ -27,7 +27,7 @@ export function isAnalizyReportPath(pathname: string): boolean {
   return ANALIZY_REPORT_PATHS.has(pathname);
 }
 
-/** Side nav zawsze gdy jesteśmy w Raportach (w tym na Przeglądzie). */
+/** Top tabs zawsze gdy jesteśmy w Raportach (w tym na Przeglądzie). */
 export function getAnalizySubNav(pathname: string): SubNavItem[] | null {
   if (
     pathname === ZARZADZANIE_REPORTS_ENTRY ||

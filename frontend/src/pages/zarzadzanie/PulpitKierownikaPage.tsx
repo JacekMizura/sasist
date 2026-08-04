@@ -5,8 +5,8 @@ import { useSupplyFlowPlan } from "../wms/supply-flow/hooks/useSupplyFlowPlan";
 import CentrumOperacyjnePage from "../centrum-operacyjne/CentrumOperacyjnePage";
 
 /**
- * Pulpit kierownika — najpierw „co zrobić teraz”, potem zwijane sekcje operacyjne
- * (istniejący embed Centrum — bez osobnego ekranu szczegółów).
+ * Pulpit kierownika — decyzja teraz (ShiftConductor), potem zwijane sekcje operacyjne.
+ * Shell = AnalizyModuleLayout → PageLayout (Layout 2.0).
  */
 export default function PulpitKierownikaPage() {
   const { hasActiveWarehouse, warehouseId } = useActiveWarehouseContext();
@@ -16,7 +16,7 @@ export default function PulpitKierownikaPage() {
   const { summary: ops } = usePulpitOpsSummary(hasActiveWarehouse ? warehouseId : null);
 
   return (
-    <div className="min-w-0 space-y-8">
+    <div className="min-w-0 space-y-4">
       <ShiftConductor
         board={board}
         ops={ops}
@@ -26,7 +26,7 @@ export default function PulpitKierownikaPage() {
         hasActiveWarehouse={hasActiveWarehouse}
         refresh={refresh}
       />
-      <div className="border-t border-slate-200 pt-6">
+      <div className="border-t border-slate-100 pt-4">
         <CentrumOperacyjnePage embedInPulpit />
       </div>
     </div>

@@ -1,54 +1,30 @@
-import { NavLink, Outlet, useLocation } from "react-router-dom";
+import { Outlet, useLocation } from "react-router-dom";
+import { TabsNav } from "../../components/layout/TabsNav";
 import { PLAN_ZMIAN_PATH } from "../../modules/analizy/analizyModuleNav";
-import {
-  getOptymalizacjaSubNav,
-  type OptimizeSubNavItem,
-} from "../../modules/optymalizacja/optymalizacjaNav";
-import {
-  analizySideNavActiveClass,
-  analizySideNavIdleClass,
-} from "../../modules/analizy/analizyUi";
+import { getOptymalizacjaSubNav } from "../../modules/optymalizacja/optymalizacjaNav";
 
-function SubNav({ items }: { items: OptimizeSubNavItem[] }) {
-  const { pathname } = useLocation();
-  return (
-    <nav className="flex w-56 shrink-0 flex-col gap-0.5" aria-label="Plan zmian">
-      {items.map((item) => {
-        const isActive =
-          item.path === PLAN_ZMIAN_PATH
-            ? pathname === PLAN_ZMIAN_PATH || pathname === `${PLAN_ZMIAN_PATH}/`
-            : pathname === item.path;
-        return (
-          <NavLink
-            key={item.path}
-            to={item.path}
-            className={`block rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
-              isActive ? analizySideNavActiveClass : analizySideNavIdleClass
-            }`}
-          >
-            {item.label}
-          </NavLink>
-        );
-      })}
-    </nav>
-  );
-}
-
-/** Sekcja Plan zmian — pod nawigacją Magazyn. */
+/**
+ * Plan zmian — top underline tabs (SASIST), bez lewego menu.
+ * Shell = AnalizyModuleLayout → PageLayout.
+ */
 export default function OptymalizacjaLayout() {
   const { pathname } = useLocation();
   const subNav = getOptymalizacjaSubNav(pathname);
 
   return (
-    <div className="relative flex min-h-[600px] w-full min-w-0 gap-6">
+    <div className="min-w-0 space-y-4">
       {subNav != null ? (
-        <aside className="shrink-0">
-          <SubNav items={subNav} />
-        </aside>
+        <TabsNav
+          items={subNav.map((item) => ({
+            path: item.path,
+            label: item.label,
+            end: item.path === PLAN_ZMIAN_PATH,
+          }))}
+          className="no-scrollbar -mx-6 w-[calc(100%+3rem)] overflow-x-auto px-6"
+          aria-label="Plan zmian"
+        />
       ) : null}
-      <div className="flex min-h-[600px] min-w-0 flex-1 flex-col">
-        <Outlet />
-      </div>
+      <Outlet />
     </div>
   );
 }

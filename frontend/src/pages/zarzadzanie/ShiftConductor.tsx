@@ -1,10 +1,13 @@
 /**
- * Przebieg zmiany kierownika — jeden narracyjny tok pracy, nie dashboard.
+ * Przebieg zmiany kierownika — ekran pracy SASIST (karty / sekcje), nie dokument.
  */
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { ArrowRight, RefreshCw } from "lucide-react";
 import { ActiveWarehouseRequiredBanner } from "../../components/layout/ActiveWarehouseRequiredBanner";
+import { PageHeader } from "../../components/layout/PageHeader";
+import { Card, SecondaryButton, StatusBadge, typography } from "@/design-system";
+import { brandPrimaryButtonClass, brandLinkTextClass } from "../../design-system/brandUi";
 import type { WarehouseOperationsSummary } from "../../api/warehouseOperationsApi";
 import { ShiftReturnBanner } from "../wms/supply-flow/components/ShiftReturnBanner";
 import {
@@ -29,6 +32,12 @@ type Props = {
   hasActiveWarehouse: boolean;
   refresh: () => void | Promise<void>;
 };
+
+function healthTone(health: ReturnType<typeof resolveShiftHealth>): "danger" | "warning" | "success" {
+  if (health === "critical") return "danger";
+  if (health === "decision") return "warning";
+  return "success";
+}
 
 export function ShiftConductor({
   board,
@@ -79,47 +88,38 @@ export function ShiftConductor({
   const nextCta = attention?.ctaLabel || next?.ctaLabel || "Przejdź do przyjęcia";
   const nextHref = attention?.ctaHref || next?.ctaHref || "/wms/receiving";
 
-  const healthTone =
-    health === "critical"
-      ? "text-rose-800"
-      : health === "decision"
-        ? "text-amber-800"
-        : "text-emerald-800";
-  const healthDot =
-    health === "critical"
-      ? "bg-rose-500"
-      : health === "decision"
-        ? "bg-amber-500"
-        : "bg-emerald-500";
-
   return (
-    <div className="mx-auto min-w-0 max-w-2xl">
-      {/* 1. Status zmiany — jeden wiersz, zero KPI */}
-      <div className="flex items-center justify-between gap-3 pb-4">
-        <p className={`inline-flex items-center gap-2 text-sm font-semibold ${healthTone}`}>
-          <span className={`h-2 w-2 shrink-0 rounded-full ${healthDot}`} aria-hidden />
-          {loading && !board.hasPlan && !board.emptyGuide ? "Sprawdzam stan zmiany…" : healthLabel}
-        </p>
-        <button
-          type="button"
-          onClick={() => void refresh()}
-          disabled={refreshing || loading || !hasActiveWarehouse}
-          className="inline-flex items-center gap-1 text-xs font-medium text-slate-500 hover:text-slate-800 disabled:opacity-40"
-          aria-label="Odśwież stan zmiany"
-        >
-          <RefreshCw size={13} className={refreshing ? "animate-spin" : ""} />
-          Odśwież
-        </button>
-      </div>
+    <div className="min-w-0 space-y-4">
+      <PageHeader
+        title="Pulpit kierownika"
+        subtitle="Co zrobić teraz na zmianie — decyzja, efekt, zlecenie na halę."
+        breadcrumbs={[{ label: "Magazyn", to: "/zarzadzanie-magazynem/pulpit" }, { label: "Pulpit kierownika" }]}
+        actions={
+          <div className="flex flex-wrap items-center gap-2">
+            <StatusBadge tone={healthTone(health)} density="compact">
+              {loading && !board.hasPlan && !board.emptyGuide ? "Sprawdzam…" : healthLabel}
+            </StatusBadge>
+            <SecondaryButton
+              type="button"
+              onClick={() => void refresh()}
+              disabled={refreshing || loading || !hasActiveWarehouse}
+              aria-label="Odśwież stan zmiany"
+            >
+              <RefreshCw size={14} className={refreshing ? "animate-spin" : ""} />
+              Odśwież
+            </SecondaryButton>
+          </div>
+        }
+      />
 
       {!hasActiveWarehouse ? (
         <ActiveWarehouseRequiredBanner hint="Wybierz aktywny magazyn, aby prowadzić zmianę." />
       ) : null}
 
       {error ? (
-        <p className="mb-4 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-semibold text-rose-800">
+        <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-semibold text-rose-800">
           {error}
-        </p>
+        </div>
       ) : null}
 
       {showReturn && returnCtx ? (
@@ -134,121 +134,123 @@ export function ShiftConductor({
           }}
         />
       ) : (
-        <div className="space-y-5">
-          {/* 2–4. Decyzja → efekt → wykonaj (jeden blok narracji) */}
-          {attention ? (
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-wide text-orange-700">
-                Twoja decyzja teraz
+        <div className="grid gap-4 lg:grid-cols-2">
+          <Card variant="section" density="comfortable" className="min-w-0 space-y-3">
+            <p className={typography.section}>Twoja decyzja teraz</p>
+
+            {attention ? (
+              <>
+                <h2 className={typography.h2}>{attention.title}</h2>
+                {effect ? (
+                  <p className={typography.bodyMuted}>
+                    <span className={typography.bodyStrong}>Efekt: </span>
+                    {effect}
+                  </p>
+                ) : null}
+                {attention.blockedReason ? (
+                  <p className="text-sm font-semibold text-amber-900">
+                    Blokada: {attention.blockedReason}
+                  </p>
+                ) : null}
+                {blocking && blocking.title !== attention.title ? (
+                  <p className="text-sm text-rose-800">
+                    {blocking.title}
+                    {blocking.detail ? ` — ${blocking.detail}` : ""}
+                  </p>
+                ) : null}
+                <div className="space-y-2 pt-1">
+                  <Link
+                    to={attention.ctaHref}
+                    onClick={() =>
+                      markLeavingForWork({
+                        leftAt: Date.now(),
+                        title: attention.title,
+                        deliveryId: attention.deliveryId,
+                      })
+                    }
+                    className={`${brandPrimaryButtonClass} gap-2`}
+                  >
+                    {attention.ctaLabel}
+                    <ArrowRight size={16} strokeWidth={2.5} />
+                  </Link>
+                  <p className={typography.caption}>
+                    {idle > 0
+                      ? `Zleć na hali — masz ${idle} ${idle === 1 ? "wolnego operatora" : "wolnych operatorów"}.`
+                      : activeOps > 0
+                        ? `Wykonanie na hali — ${activeOps} ${activeOps === 1 ? "operator aktywny" : "operatorów aktywnych"}.`
+                        : "Wykonanie odbywa się na hali (WMS)."}
+                  </p>
+                </div>
+              </>
+            ) : null}
+
+            {!attention && !loading && board.emptyGuide ? (
+              <>
+                <h2 className={typography.h2}>{board.emptyGuide.title}</h2>
+                <p className={typography.bodyMuted}>{board.emptyGuide.detail}</p>
+                <Link to={board.emptyGuide.ctaHref} className={`${brandPrimaryButtonClass} gap-2`}>
+                  {board.emptyGuide.ctaLabel}
+                  <ArrowRight size={16} strokeWidth={2.5} />
+                </Link>
+              </>
+            ) : null}
+
+            {!attention && !board.emptyGuide && !loading && hasActiveWarehouse && !error ? (
+              <>
+                <h2 className={typography.h2}>Nic nie wymaga Twojej decyzji</h2>
+                <p className={typography.bodyMuted}>
+                  Magazyn pracuje — wróć, gdy pojawi się dostawa albo blokada.
+                </p>
+              </>
+            ) : null}
+
+            {loading && !attention && !board.emptyGuide ? (
+              <p className={typography.bodyMuted}>Ładowanie decyzji…</p>
+            ) : null}
+          </Card>
+
+          <Card variant="section" density="comfortable" className="min-w-0 space-y-3">
+            <p className={typography.section}>Potem / obsada</p>
+            {attention && next && next.title !== attention.title ? (
+              <p className={typography.body}>
+                <span className={typography.bodyStrong}>Następne: </span>
+                {next.title}
               </p>
-              <h1 className="mt-1 text-2xl font-black leading-tight tracking-tight text-slate-900 sm:text-3xl">
-                {attention.title}
-              </h1>
-
-              {effect ? (
-                <p className="mt-3 text-base text-slate-600">
-                  <span className="font-semibold text-slate-800">Efekt: </span>
-                  {effect}
-                </p>
-              ) : null}
-
-              {attention.blockedReason ? (
-                <p className="mt-3 text-sm font-semibold text-amber-900">
-                  Blokada: {attention.blockedReason}
-                </p>
-              ) : null}
-
-              {blocking && blocking.title !== attention.title ? (
-                <p className="mt-2 text-sm text-rose-800">
-                  {blocking.title}
-                  {blocking.detail ? ` — ${blocking.detail}` : ""}
-                </p>
-              ) : null}
-
-              <div className="mt-5 space-y-2">
+            ) : null}
+            {!attention && next ? (
+              <p className={typography.body}>
+                <span className={typography.bodyStrong}>Gdy wrócisz: </span>
+                {next.title}
+                {" · "}
                 <Link
-                  to={attention.ctaHref}
+                  to={next.ctaHref}
                   onClick={() =>
                     markLeavingForWork({
                       leftAt: Date.now(),
-                      title: attention.title,
-                      deliveryId: attention.deliveryId,
+                      title: next.title,
+                      deliveryId: null,
                     })
                   }
-                  className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-orange-500 px-5 py-3.5 text-base font-black text-white hover:bg-orange-600 sm:w-auto"
+                  className={brandLinkTextClass}
                 >
-                  {attention.ctaLabel}
-                  <ArrowRight size={18} strokeWidth={2.5} />
+                  {next.ctaLabel}
                 </Link>
-                <p className="text-xs text-slate-500">
-                  {idle > 0
-                    ? `Zleć na hali — masz ${idle} ${idle === 1 ? "wolnego operatora" : "wolnych operatorów"}.`
-                    : activeOps > 0
-                      ? `Wykonanie na hali — ${activeOps} ${activeOps === 1 ? "operator aktywny" : "operatorów aktywnych"}.`
-                      : "Wykonanie odbywa się na hali (WMS)."}
-                </p>
+              </p>
+            ) : null}
+            {!next || (attention && next.title === attention.title) ? (
+              <p className={typography.bodyMuted}>Brak kolejnej pozycji w planie zmiany.</p>
+            ) : null}
+            <div className="grid grid-cols-2 gap-3 border-t border-slate-100 pt-3">
+              <div>
+                <p className={typography.kpiLabel}>Wolni operatorzy</p>
+                <p className={typography.metric}>{idle}</p>
+              </div>
+              <div>
+                <p className={typography.kpiLabel}>Aktywni operatorzy</p>
+                <p className={typography.metric}>{activeOps}</p>
               </div>
             </div>
-          ) : null}
-
-          {!attention && !loading && board.emptyGuide ? (
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                Twoja decyzja teraz
-              </p>
-              <h1 className="mt-1 text-2xl font-black tracking-tight text-slate-900 sm:text-3xl">
-                {board.emptyGuide.title}
-              </h1>
-              <p className="mt-3 text-base text-slate-600">{board.emptyGuide.detail}</p>
-              <Link
-                to={board.emptyGuide.ctaHref}
-                className="mt-5 inline-flex items-center gap-2 rounded-xl bg-orange-500 px-5 py-3.5 text-base font-black text-white hover:bg-orange-600"
-              >
-                {board.emptyGuide.ctaLabel}
-                <ArrowRight size={18} strokeWidth={2.5} />
-              </Link>
-            </div>
-          ) : null}
-
-          {!attention && !board.emptyGuide && !loading && hasActiveWarehouse && !error ? (
-            <div>
-              <h1 className="text-2xl font-black tracking-tight text-slate-900 sm:text-3xl">
-                Nic nie wymaga Twojej decyzji
-              </h1>
-              <p className="mt-2 text-base text-slate-600">
-                Magazyn pracuje — wróć, gdy pojawi się dostawa albo blokada.
-              </p>
-            </div>
-          ) : null}
-
-          {/* 5. Co będzie następne */}
-          {attention && next && next.title !== attention.title ? (
-            <p className="border-t border-slate-100 pt-4 text-sm text-slate-600">
-              <span className="font-semibold text-slate-800">Potem: </span>
-              {next.title}
-            </p>
-          ) : null}
-
-          {!attention && next ? (
-            <p className="text-sm text-slate-600">
-              <span className="font-semibold text-slate-800">Gdy wrócisz: </span>
-              {next.title}
-              {" · "}
-              <Link
-                to={next.ctaHref}
-                onClick={() =>
-                  markLeavingForWork({
-                    leftAt: Date.now(),
-                    title: next.title,
-                    deliveryId: null,
-                  })
-                }
-                className="font-semibold text-orange-700 hover:underline"
-              >
-                {next.ctaLabel}
-              </Link>
-            </p>
-          ) : null}
+          </Card>
         </div>
       )}
     </div>

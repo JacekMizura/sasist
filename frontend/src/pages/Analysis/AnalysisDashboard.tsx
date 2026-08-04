@@ -1,15 +1,11 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
+import { BarChart3 } from "lucide-react";
 import { getDeadStock, getTenantInventoryValue } from "../../api/analysisApi";
-import {
-  dashboardCardPadding,
-  dashboardKpiGridGap,
-  dashboardSurfaceCard,
-} from "../../components/dashboard/dashboardDensityPrimitives";
-import {
-  analizyPageSubtitleClass,
-  analizyPageTitleClass,
-} from "../../modules/analizy/analizyUi";
+import { PageHeader } from "../../components/layout/PageHeader";
+import { AppEmptyState } from "../../components/app-shell";
+import { Card, typography } from "@/design-system";
+import { brandLinkTextClass } from "../../design-system/brandUi";
 import { PLAN_ZMIAN_PATH, ZARZADZANIE_REPORTS_ENTRY } from "../../modules/analizy/analizyModuleNav";
 
 const DEFAULT_TENANT_ID = 1;
@@ -24,8 +20,7 @@ type DecisionCard = {
 };
 
 /**
- * Przegląd — ekran startowy hubu Analizy (Manifest).
- * Max 7 kart; CTA = czasownik (akcja), nie nazwa modułu.
+ * Przegląd raportów — indeks analiz w shellu SASIST (Layout 2.0).
  */
 export default function AnalysisDashboard() {
   const [inventoryValue, setInventoryValue] = useState<number | null>(null);
@@ -126,61 +121,50 @@ export default function AnalysisDashboard() {
     },
   ];
 
-  if (loading) {
-    return (
-      <div className="min-w-0 space-y-6">
-        <div>
-          <h1 className={analizyPageTitleClass}>Przegląd</h1>
-          <p className={analizyPageSubtitleClass}>
-            Co wymaga uwagi? Najważniejsze wskaźniki, skróty do raportów i decyzje do podjęcia.
-          </p>
-        </div>
-        <p className="text-sm text-slate-500">Ładowanie…</p>
-      </div>
-    );
-  }
+  return (
+    <div className="min-w-0 space-y-4">
+      <PageHeader
+        title="Przegląd"
+        subtitle="Co wymaga uwagi? Najważniejsze wskaźniki, skróty do raportów i decyzje do podjęcia."
+        breadcrumbs={[
+          { label: "Magazyn", to: "/zarzadzanie-magazynem/pulpit" },
+          { label: "Raporty", to: ZARZADZANIE_REPORTS_ENTRY },
+          { label: "Przegląd" },
+        ]}
+      />
 
-  if (error) {
-    return (
-      <div className="min-w-0 space-y-6">
-        <div>
-          <h1 className={analizyPageTitleClass}>Przegląd</h1>
-          <p className={analizyPageSubtitleClass}>
-            Co wymaga uwagi? Najważniejsze wskaźniki, skróty do raportów i decyzje do podjęcia.
-          </p>
-        </div>
+      {loading ? <p className={typography.bodyMuted}>Ładowanie…</p> : null}
+
+      {error ? (
         <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-red-800">
           <p className="font-medium">Błąd</p>
-          <p className="mt-1 text-sm">{error}</p>
+          <p className={`mt-1 ${typography.body}`}>{error}</p>
         </div>
-      </div>
-    );
-  }
+      ) : null}
 
-  return (
-    <div className="min-w-0 space-y-6">
-      <div>
-        <h1 className={analizyPageTitleClass}>Przegląd</h1>
-        <p className={analizyPageSubtitleClass}>
-          Co wymaga uwagi? Najważniejsze wskaźniki, skróty do raportów i decyzje do podjęcia.
-        </p>
-      </div>
+      {!loading && !error && cards.length === 0 ? (
+        <AppEmptyState
+          icon={BarChart3}
+          title="Brak raportów"
+          description="Nie znaleziono analiz do wyświetlenia."
+        />
+      ) : null}
 
-      <div className={`grid ${dashboardKpiGridGap} sm:grid-cols-2 lg:grid-cols-3`}>
-        {cards.map((c) => (
-          <Link
-            key={c.to}
-            to={c.to}
-            className={`${dashboardSurfaceCard} ${dashboardCardPadding} block transition hover:border-orange-300 hover:bg-orange-50/40`}
-          >
-            <p className="text-xs font-medium uppercase tracking-wide text-slate-400">{c.title}</p>
-            <p className="mt-2 text-lg font-semibold text-slate-900">{c.value}</p>
-            <p className="mt-2 text-sm text-slate-600">{c.hint}</p>
-            <p className="mt-1 text-xs text-slate-500">{c.decision}</p>
-            <p className="mt-3 text-sm font-medium text-orange-700">{c.cta} →</p>
-          </Link>
-        ))}
-      </div>
+      {!loading && !error ? (
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {cards.map((c) => (
+            <Link key={c.to} to={c.to} className="min-w-0 block">
+              <Card variant="listTile" density="comfortable" className="h-full transition hover:border-orange-200">
+                <p className={typography.section}>{c.title}</p>
+                <p className={`mt-2 ${typography.metric}`}>{c.value}</p>
+                <p className={`mt-2 ${typography.bodyMuted}`}>{c.hint}</p>
+                <p className={`mt-1 ${typography.caption}`}>{c.decision}</p>
+                <p className={`mt-3 text-sm ${brandLinkTextClass}`}>{c.cta} →</p>
+              </Card>
+            </Link>
+          ))}
+        </div>
+      ) : null}
     </div>
   );
 }
