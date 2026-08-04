@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { LocationTypeBadge } from "../../warehouse/LocationTypeBadge";
+import { getStorageTypeStyle } from "../../../utils/storageTypes";
 import { fallbackBadgeFromDisposition } from "../MagazynInventoryLine";
 import type { ProductListRow } from "../../../types/productListRow";
 
@@ -50,6 +50,47 @@ export function physicalInventoryLocations(p: Product): PhysicalInvLoc[] {
     }));
 }
 
+/**
+ * Badge lokalizacji wyłącznie dla listy produktów:
+ * pełna nazwa + ilość, bez ikon, bez truncate/ellipsis.
+ */
+function ProductListLocationBadge({ loc }: { loc: PhysicalInvLoc }) {
+  const typeStyle = getStorageTypeStyle(loc.storage_type);
+  const qty = Number.isFinite(loc.quantity)
+    ? Number.isInteger(loc.quantity)
+      ? String(loc.quantity)
+      : String(loc.quantity)
+    : "0";
+  const name = (loc.name || "").trim() || "—";
+
+  return (
+    <div
+      className="flex w-full items-center justify-between gap-3 rounded-md border px-2.5 py-1.5 shadow-sm"
+      style={{
+        backgroundColor: typeStyle.bg,
+        borderColor: typeStyle.border,
+        borderWidth: 1,
+        overflow: "visible",
+      }}
+    >
+      <span
+        className="font-mono text-[13px] font-medium leading-snug text-slate-800"
+        style={{
+          overflow: "visible",
+          textOverflow: "clip",
+          whiteSpace: "normal",
+          wordBreak: "break-word",
+        }}
+      >
+        {name}
+      </span>
+      <span className="shrink-0 whitespace-nowrap text-right text-[15px] font-bold tabular-nums tracking-tight text-slate-900">
+        {qty} szt.
+      </span>
+    </div>
+  );
+}
+
 function LocationOverflowPopover({ hidden }: { hidden: PhysicalInvLoc[] }) {
   const [open, setOpen] = useState(false);
   const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -95,7 +136,7 @@ function LocationOverflowPopover({ hidden }: { hidden: PhysicalInvLoc[] }) {
       </button>
       {open && (
         <div
-          className="absolute left-0 top-full z-[60] w-[min(20rem,calc(100vw-2rem))] rounded-lg border border-slate-200 bg-white p-3 shadow-lg"
+          className="absolute left-0 top-full z-[60] w-[min(22rem,calc(100vw-2rem))] rounded-lg border border-slate-200 bg-white p-3 shadow-lg"
           style={{ marginTop: "-6px" }}
           role="dialog"
           aria-label="Dodatkowe lokalizacje"
@@ -105,14 +146,7 @@ function LocationOverflowPopover({ hidden }: { hidden: PhysicalInvLoc[] }) {
         >
           <div className="flex max-h-[min(60vh,20rem)] w-full flex-col gap-1.5 overflow-y-auto">
             {hidden.map((l, i) => (
-              <LocationTypeBadge
-                key={`${l.name}-overflow-${i}`}
-                locationText={l.name}
-                quantity={l.quantity}
-                storageType={l.storage_type}
-                layoutSpread
-                showTypeIcon={false}
-              />
+              <ProductListLocationBadge key={`${l.name}-overflow-${i}`} loc={l} />
             ))}
           </div>
         </div>
@@ -135,16 +169,9 @@ export function ProductListLocationBadgeStack({
   const visible = locations.slice(0, MAX_LOCATION_BADGES);
   const hidden = locations.slice(MAX_LOCATION_BADGES);
   return (
-    <div className="flex w-full flex-col gap-1.5">
+    <div className="flex w-full flex-col gap-1.5" style={{ overflow: "visible", minWidth: 0 }}>
       {visible.map((l, i) => (
-        <LocationTypeBadge
-          key={`${l.name}-${i}`}
-          locationText={l.name}
-          quantity={l.quantity}
-          storageType={l.storage_type}
-          layoutSpread
-          showTypeIcon={false}
-        />
+        <ProductListLocationBadge key={`${l.name}-${i}`} loc={l} />
       ))}
       {hidden.length > 0 ? <LocationOverflowPopover hidden={hidden} /> : null}
     </div>

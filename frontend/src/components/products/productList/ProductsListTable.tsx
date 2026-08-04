@@ -48,14 +48,15 @@ import {
   productsListSortableThClass,
   productsListTableClass,
   productsListTdClass,
+  productsListLocationsTdClass,
   productsListThClass,
   productsListThRightClass,
   productsListActionsThClass,
 } from "./productsListTableTokens";
 
-const PRODUCTS_ACTIONS_PX = 96;
-const LOCATIONS_COL_MIN_PX = 220;
-const MANUFACTURER_COL_MAX_PX = 110;
+const PRODUCTS_ACTIONS_PX = 88;
+const LOCATIONS_COL_MIN_PX = 280;
+const MANUFACTURER_COL_MAX_PX = 96;
 
 const TABLE_LAYOUT = {
   ...PROPORTIONAL_TABLE_SYSTEM_WIDTHS,
@@ -320,7 +321,10 @@ const ProductTableRow = memo(function ProductTableRow({
         </div>
       </td>
       {columnOrder.map((colId) => (
-        <td key={colId} className={productsListTdClass}>
+        <td
+          key={colId}
+          className={colId === "locations" ? productsListLocationsTdClass : productsListTdClass}
+        >
           <DynamicCell
             row={row}
             columnId={colId}
