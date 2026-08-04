@@ -53,7 +53,24 @@ import {
   productsListActionsThClass,
 } from "./productsListTableTokens";
 
-const TABLE_LAYOUT = { ...PROPORTIONAL_TABLE_SYSTEM_WIDTHS, actionsPx: 120 };
+const PRODUCTS_ACTIONS_PX = 96;
+const LOCATIONS_COL_MIN_PX = 220;
+const MANUFACTURER_COL_MAX_PX = 110;
+
+const TABLE_LAYOUT = {
+  ...PROPORTIONAL_TABLE_SYSTEM_WIDTHS,
+  actionsPx: PRODUCTS_ACTIONS_PX,
+  dynamicMinPx: 110,
+  nameMinPx: 220,
+  nameMaxPx: 420,
+};
+
+function productDynamicColWidth(colId: string, dynamicPx: number): number | undefined {
+  if (!(dynamicPx > 0)) return undefined;
+  if (colId === "locations") return Math.max(dynamicPx, LOCATIONS_COL_MIN_PX);
+  if (colId === "manufacturer") return Math.min(dynamicPx, MANUFACTURER_COL_MAX_PX);
+  return dynamicPx;
+}
 
 export type ProductListSortKey = "id" | "name" | "ean" | "symbol" | "volume" | "weight" | "inventory_value";
 
@@ -194,7 +211,10 @@ function DynamicCell({
       );
     case "locations":
       return (
-        <div className={`${inner} min-w-0 flex-col !items-start gap-1 py-2`} onClick={(e) => e.stopPropagation()}>
+        <div
+          className={`${productsListRowInnerClass} w-full flex-col !items-stretch gap-1.5 py-2`}
+          onClick={(e) => e.stopPropagation()}
+        >
           <ProductListLocationBadgeStack
             product={row}
             locations={physicalInventoryLocations(row)}
@@ -366,14 +386,21 @@ export function ProductsListTable({
   rowDupBusyId,
   rowDeleteBusyId,
 }: ProductsListTableProps) {
-  const { containerRef, widths, contentMinWidthPx, needsHorizontalScroll } = useProportionalTableColumns(
+  const { containerRef, widths, contentMinWidthPx } = useProportionalTableColumns(
     columnOrder.length,
     TABLE_LAYOUT,
   );
 
+  const dynamicColWidths = columnOrder.map((colId) => productDynamicColWidth(colId, widths.dynamic) ?? 0);
+  const preferredTableWidth =
+    widths.checkbox +
+    widths.logo +
+    widths.name +
+    widths.actions +
+    dynamicColWidths.reduce((sum, w) => sum + w, 0);
   const colSpan = 4 + columnOrder.length;
-  const scrollClass = needsHorizontalScroll ? "overflow-x-auto" : "overflow-x-hidden";
-  const tableStyle = needsHorizontalScroll ? { width: contentMinWidthPx } : undefined;
+  const scrollClass = "overflow-x-auto";
+  const tableStyle = { minWidth: Math.max(preferredTableWidth, contentMinWidthPx), width: "100%" };
 
   const renderSortTh = (label: string, sortKey: ProductListSortKey, align: "left" | "right" = "left") => (
     <th
@@ -394,7 +421,7 @@ export function ProductsListTable({
           <col style={{ width: widths.logo }} />
           <col style={{ width: widths.name }} />
           {columnOrder.map((colId) => (
-            <col key={colId} style={{ width: widths.dynamic > 0 ? widths.dynamic : undefined }} />
+            <col key={colId} style={{ width: productDynamicColWidth(colId, widths.dynamic) }} />
           ))}
           <col style={{ width: widths.actions }} />
         </colgroup>

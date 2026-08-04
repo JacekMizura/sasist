@@ -95,7 +95,7 @@ function LocationOverflowPopover({ hidden }: { hidden: PhysicalInvLoc[] }) {
       </button>
       {open && (
         <div
-          className="absolute left-0 top-full z-[60] w-max min-w-[180px] rounded-lg border border-slate-200 bg-white p-3 shadow-lg"
+          className="absolute left-0 top-full z-[60] w-[min(20rem,calc(100vw-2rem))] rounded-lg border border-slate-200 bg-white p-3 shadow-lg"
           style={{ marginTop: "-6px" }}
           role="dialog"
           aria-label="Dodatkowe lokalizacje"
@@ -103,13 +103,14 @@ function LocationOverflowPopover({ hidden }: { hidden: PhysicalInvLoc[] }) {
           onMouseLeave={scheduleHide}
           onClick={(e) => e.stopPropagation()}
         >
-          <div className="flex max-h-[min(60vh,20rem)] flex-col items-start gap-2 overflow-y-auto">
+          <div className="flex max-h-[min(60vh,20rem)] w-full flex-col gap-1.5 overflow-y-auto">
             {hidden.map((l, i) => (
               <LocationTypeBadge
                 key={`${l.name}-overflow-${i}`}
                 locationText={l.name}
                 quantity={l.quantity}
                 storageType={l.storage_type}
+                layoutSpread
                 showTypeIcon={false}
               />
             ))}
@@ -120,6 +121,7 @@ function LocationOverflowPopover({ hidden }: { hidden: PhysicalInvLoc[] }) {
   );
 }
 
+/** Kolumna Lokalizacja — pełne badge’e w pionie, bez ikon i bez ucinania nazw. */
 export function ProductListLocationBadgeStack({
   locations,
 }: {
@@ -133,17 +135,18 @@ export function ProductListLocationBadgeStack({
   const visible = locations.slice(0, MAX_LOCATION_BADGES);
   const hidden = locations.slice(MAX_LOCATION_BADGES);
   return (
-    <div className="flex w-full flex-col items-start gap-1">
+    <div className="flex w-full flex-col gap-1.5">
       {visible.map((l, i) => (
         <LocationTypeBadge
           key={`${l.name}-${i}`}
           locationText={l.name}
           quantity={l.quantity}
           storageType={l.storage_type}
+          layoutSpread
           showTypeIcon={false}
         />
       ))}
-      {hidden.length > 0 && <LocationOverflowPopover hidden={hidden} />}
+      {hidden.length > 0 ? <LocationOverflowPopover hidden={hidden} /> : null}
     </div>
   );
 }

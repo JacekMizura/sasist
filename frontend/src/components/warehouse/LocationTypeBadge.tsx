@@ -17,8 +17,8 @@ export type LocationTypeBadgeProps = {
   /** Capacity / volume overflow — red chrome instead of type colors */
   volumeError?: boolean;
   /**
-   * Full-width row with `justify-between`, wrapping location text (no ellipsis).
-   * Use in popovers / wide containers where names must stay readable.
+   * Full-width row: location left, quantity right (no ellipsis on the name).
+   * Prefer for product list / wide containers.
    */
   layoutSpread?: boolean;
   /** Left type icon (color still comes from badge chrome). Default true. */
@@ -31,8 +31,8 @@ export type LocationTypeBadgeProps = {
 };
 
 /**
- * Location chip: type color chrome + full location label + quantity.
- * Location name is never truncated — badge grows / wraps instead.
+ * Location chip: type color chrome + location label + quantity.
+ * With {@link layoutSpread}, name is never truncated — badge fills the row.
  */
 export function LocationTypeBadge({
   locationText,
@@ -65,20 +65,20 @@ export function LocationTypeBadge({
       ? trimmedLocation
       : formatWarehouseLocationTypeLabel(locationText);
 
-  const rowClass = compact
-    ? layoutSpread
-      ? `inline-flex h-7 min-h-7 w-full justify-between items-center gap-1.5 rounded border px-2.5 py-0 text-left shadow-sm ${className}`
-      : `inline-flex h-auto min-h-7 w-fit flex-wrap items-center gap-x-1.5 gap-y-0.5 rounded border px-2.5 py-0 text-left shadow-sm ${className}`
-    : layoutSpread
-      ? `inline-flex w-full justify-between items-start gap-2 rounded-md border px-2.5 py-1.5 text-left shadow-sm ${className}`
+  const rowClass = layoutSpread
+    ? compact
+      ? `flex h-auto min-h-7 w-full items-center justify-between gap-3 rounded border px-2.5 py-1 text-left shadow-sm ${className}`
+      : `flex w-full items-center justify-between gap-3 rounded-md border px-2.5 py-1.5 text-left shadow-sm ${className}`
+    : compact
+      ? `inline-flex h-auto min-h-7 w-fit flex-wrap items-center gap-x-1.5 gap-y-0.5 rounded border px-2.5 py-0 text-left shadow-sm ${className}`
       : `inline-flex w-fit flex-wrap items-center gap-x-2 gap-y-0.5 rounded-md border px-2.5 py-1 text-left shadow-sm ${className}`;
 
-  const locationClass = compact
-    ? layoutSpread
+  const locationClass = layoutSpread
+    ? compact
+      ? "mr-auto whitespace-normal break-words text-left font-mono text-[13px] font-semibold leading-snug text-slate-900"
+      : "mr-auto whitespace-normal break-words text-left font-mono text-[13px] font-medium leading-snug text-slate-800"
+    : compact
       ? "whitespace-normal break-words font-mono text-[13px] font-semibold leading-snug text-slate-900"
-      : "whitespace-normal break-words font-mono text-[13px] font-semibold leading-snug text-slate-900"
-    : layoutSpread
-      ? "whitespace-normal break-words font-mono text-[13px] font-medium leading-snug text-slate-800"
       : "whitespace-normal break-words font-mono text-[13px] font-medium leading-snug text-slate-800";
 
   return (
@@ -91,21 +91,15 @@ export function LocationTypeBadge({
       }
     >
       {showTypeIcon ? (
-        <span
-          className={`shrink-0 opacity-[0.72] ${layoutSpread && !compact ? "mt-0.5" : ""}`}
-          style={{ color: iconColor }}
-          aria-hidden
-        >
+        <span className="shrink-0 opacity-[0.72]" style={{ color: iconColor }} aria-hidden>
           <StorageTypeIcon storageType={st} size={11} className="block" />
         </span>
       ) : null}
       <span className={locationClass}>{displayLocationText}</span>
       {qtyStr != null && (
         <span
-          className={`shrink-0 text-right tabular-nums leading-none tracking-tight text-slate-900 ${
-            compact
-              ? `text-[13px] font-bold ${layoutSpread ? "pl-1 whitespace-nowrap" : "pl-0.5 whitespace-nowrap"}`
-              : `text-[15px] font-bold tracking-tight ${layoutSpread ? "pl-2 pt-0.5 whitespace-nowrap" : "pl-1 whitespace-nowrap"}`
+          className={`shrink-0 whitespace-nowrap text-right tabular-nums leading-none tracking-tight text-slate-900 ${
+            compact ? "text-[13px] font-bold" : "text-[15px] font-bold tracking-tight"
           }`}
         >
           {qtyStr}
