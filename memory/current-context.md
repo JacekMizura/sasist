@@ -1,11 +1,10 @@
 ﻿## Active
 
-**Edycja produktu — Ceny 1:1 do mock HTML (2026-08-04).**
+**Edycja produktu — Ceny: DOM 1:1 z mock HTML (2026-08-04).**
 
-- Wzorzec = wyłącznie `edycja_produktu_nowy_widok (1).html` (nie zakładka Podstawowe)
-- Układ: left 2/3 · right 1/3; Ostatni zakup + Podsumowanie w `sm:flex-row xl:flex-col`
-- Footer podsumowania = emerald rows jak w mocku (bez MetricCard)
-- Logika / API — bez zmian
+- `ProductEditPricesTab` = hierarchia section/div jak w mocku (bez ProductLikeSection / DataTable / własnego layoutu)
+- MoneyInput/Input tylko w slotach inputów; handlery bez zmian
+- Uwaga: parent `ProductLikePageLayout` + `PageContainer` nadal dodają gutter/padding wokół taba
 
 **Edycja produktu — redesign UX jak HTML (2026-08-04).**
 
