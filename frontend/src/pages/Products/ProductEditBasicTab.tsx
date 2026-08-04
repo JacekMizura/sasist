@@ -157,7 +157,20 @@ export function ProductEditBasicTab({
   const [unitSystem, setUnitSystem] = useState<"metric" | "imperial">("metric");
 
   return (
-    /* mock: <div class="flex flex-col xl:flex-row gap-6 items-start"> */
+    <>
+      <div
+        style={{
+          background: "#ff0000",
+          color: "#fff",
+          padding: 20,
+          fontSize: 30,
+          fontWeight: "bold",
+          zIndex: 999999,
+        }}
+      >
+        TEST PRODUCTEDITBASICTAB
+      </div>
+    {/* mock: <div class="flex flex-col xl:flex-row gap-6 items-start"> */}
     <div className="flex flex-col items-start gap-6 xl:flex-row">
       {/* mock LEFT: w-full xl:w-2/3 xl:min-w-[700px] flex flex-col gap-6 */}
       <div className="flex w-full flex-col gap-6 xl:w-2/3 xl:min-w-[700px]">
@@ -664,5 +677,6 @@ export function ProductEditBasicTab({
         ) : null}
       </div>
     </div>
+    </>
   );
 }
