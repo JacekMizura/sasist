@@ -29,7 +29,7 @@ export default function OptymalizacjaLandingPage() {
         title="Plan zmian"
         subtitle="Długoterminowe zmiany w magazynie: slotting, layout, procesy i symulacje."
         breadcrumbs={[
-          { label: "Magazyn", to: "/zarzadzanie-magazynem/pulpit" },
+          { label: "Zarządzanie", to: "/zarzadzanie-magazynem/pulpit" },
           { label: "Plan zmian", to: PLAN_ZMIAN_PATH },
           { label: "Przegląd" },
         ]}

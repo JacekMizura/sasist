@@ -127,7 +127,7 @@ export default function AnalysisDashboard() {
         title="Przegląd"
         subtitle="Co wymaga uwagi? Najważniejsze wskaźniki, skróty do raportów i decyzje do podjęcia."
         breadcrumbs={[
-          { label: "Magazyn", to: "/zarzadzanie-magazynem/pulpit" },
+          { label: "Zarządzanie", to: "/zarzadzanie-magazynem/pulpit" },
           { label: "Raporty", to: ZARZADZANIE_REPORTS_ENTRY },
           { label: "Przegląd" },
         ]}

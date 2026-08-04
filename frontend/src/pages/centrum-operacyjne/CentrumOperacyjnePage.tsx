@@ -1642,11 +1642,8 @@ export default function CentrumOperacyjnePage({ embedInPulpit = false }: Centrum
   if (embedInPulpit) {
     return (
       <div className="min-w-0 space-y-3">
-        <p className="text-xs font-bold uppercase tracking-wide text-slate-500">
-          Kontekst zmiany
-        </p>
         {error ? (
-          <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm font-semibold text-red-800">
+          <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm font-semibold text-red-800">
             {error}
           </div>
         ) : null}

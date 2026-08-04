@@ -14,7 +14,6 @@ import {
   RotateCcw,
   MessageSquareWarning,
   ShoppingBag,
-  ShoppingCart,
   SlidersHorizontal,
   FolderOpen,
   Boxes,
@@ -256,21 +255,19 @@ export function buildNavFlyoutCategories(): NavCategoryConfig[] {
   },
   {
     id: "warehouse",
-    label: "Administracja magazynem",
+    label: "Magazyn",
     Icon: Warehouse,
     opensSideFlyout: true,
     flyoutSections: [
       {
         items: [
-          { path: "/designer", label: "Layout", Icon: Warehouse },
+          { path: "/designer", label: "Layout magazynu", Icon: Warehouse },
           { path: "/carts/racks", label: "Regały", Icon: Boxes },
           { path: "/carts/zones", label: "Strefy", Icon: Layers },
           { path: "/carts/carriers", label: "Nośniki", Icon: Package },
-          { path: "/carts/bulk", label: "Wózki", Icon: ShoppingCart },
           { path: "/settings/wms", label: "Konfiguracja WMS", Icon: Settings2 },
           { path: "/carts/optimizer", label: "Flota", Icon: Route },
           { path: "/warehouse/bdo", label: "BDO", Icon: Recycle },
-          { path: "/inventory-count/dashboard", label: "Inwentaryzacja (planowanie ERP)", Icon: ClipboardList },
           { path: "/office/damages", label: "Szkody", Icon: TriangleAlert },
           { path: "/office/damage-reports", label: "Protokoły szkód", Icon: FileText },
         ],
@@ -296,7 +293,7 @@ export function buildNavFlyoutCategories(): NavCategoryConfig[] {
   },
   {
     id: "analizy",
-    label: "Magazyn",
+    label: "Zarządzanie",
     Icon: BarChart3,
     opensSideFlyout: true,
     activePathPrefix: "/zarzadzanie-magazynem",
@@ -471,7 +468,7 @@ export function isCategoryActive(category: NavCategoryConfig, pathname: string):
     if (pathname === "/production" || pathname.startsWith("/production/")) return true;
   }
   if (category.id === "settings") {
-    // Konfiguracja WMS należy do Administracji magazynem — nie podświetlaj Ogólnych.
+    // Konfiguracja WMS należy do Magazynu — nie podświetlaj Ogólnych.
     if (pathname === "/settings/wms" || pathname.startsWith("/settings/wms/")) return false;
     // Templates category owns exports / document templates / message templates.
     if (pathname.startsWith("/templates")) return false;

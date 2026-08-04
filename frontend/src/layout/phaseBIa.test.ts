@@ -2,11 +2,11 @@ import { describe, expect, it } from "vitest";
 
 import { buildNavFlyoutCategories, isCategoryActive } from "./mainNavConfig";
 
-describe("Magazyn IA — flyouts SASIST", () => {
-  it("exposes Magazyn flyout for manager workstation", () => {
+describe("Zarządzanie / Magazyn IA — flyouts SASIST", () => {
+  it("exposes Zarządzanie flyout for manager workstation", () => {
     const analizy = buildNavFlyoutCategories().find((c) => c.id === "analizy");
     expect(analizy).toBeTruthy();
-    expect(analizy!.label).toBe("Magazyn");
+    expect(analizy!.label).toBe("Zarządzanie");
     expect(analizy!.opensSideFlyout).toBe(true);
     expect(analizy!.directPath).toBeUndefined();
     const labels = analizy!.flyoutSections.flatMap((s) => s.items.map((i) => i.label));
@@ -18,20 +18,26 @@ describe("Magazyn IA — flyouts SASIST", () => {
     ]);
   });
 
-  it("exposes Administracja magazynem with Wózki and Inwentaryzacja, without label templates", () => {
+  it("exposes Magazyn config flyout without label templates", () => {
     const warehouse = buildNavFlyoutCategories().find((c) => c.id === "warehouse");
     expect(warehouse).toBeTruthy();
-    expect(warehouse!.label).toBe("Administracja magazynem");
+    expect(warehouse!.label).toBe("Magazyn");
     expect(warehouse!.opensSideFlyout).toBe(true);
-    const byLabel = Object.fromEntries(
-      warehouse!.flyoutSections.flatMap((s) => s.items.map((i) => [i.label, i.path])),
-    );
-    expect(byLabel["Wózki"]).toBe("/carts/bulk");
-    expect(byLabel["Inwentaryzacja (planowanie ERP)"]).toBe("/inventory-count/dashboard");
-    expect(byLabel["Szkody"]).toBe("/office/damages");
-    expect(byLabel["Szablony etykiet"]).toBeUndefined();
-    expect(isCategoryActive(warehouse!, "/carts/bulk")).toBe(true);
-    expect(isCategoryActive(warehouse!, "/inventory-count/dashboard")).toBe(true);
+    const labels = warehouse!.flyoutSections.flatMap((s) => s.items.map((i) => i.label));
+    expect(labels).toEqual([
+      "Layout magazynu",
+      "Regały",
+      "Strefy",
+      "Nośniki",
+      "Konfiguracja WMS",
+      "Flota",
+      "BDO",
+      "Szkody",
+      "Protokoły szkód",
+    ]);
+    expect(labels).not.toContain("Szablony etykiet");
+    expect(isCategoryActive(warehouse!, "/designer")).toBe(true);
+    expect(isCategoryActive(warehouse!, "/settings/wms")).toBe(true);
   });
 
   it("keeps LabelSystem only under Szablony", () => {

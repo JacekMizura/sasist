@@ -115,7 +115,7 @@ export default function KolejnoscDostawPage() {
         title="Kolejność dostaw"
         subtitle="W jakiej kolejności prowadzić pracę przy dostawach na tej zmianie."
         breadcrumbs={[
-          { label: "Magazyn", to: "/zarzadzanie-magazynem/pulpit" },
+          { label: "Zarządzanie", to: "/zarzadzanie-magazynem/pulpit" },
           { label: "Kolejność dostaw" },
         ]}
         actions={
