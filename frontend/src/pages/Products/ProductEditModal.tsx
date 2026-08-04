@@ -14,7 +14,6 @@ import {
   Copy,
   Factory,
   Image as ImageIcon,
-  ImageUp,
   LayoutList,
   Layers,
   MoreHorizontal,
@@ -39,10 +38,8 @@ import {
 import { useWarehouse } from "../../context/WarehouseContext";
 import { productCreatedInWms } from "../../utils/wmsProductMeta";
 import type { AssignedLocation } from "../../types/warehouse";
-import { ProductWarehouseMovementsPanel } from "./ProductWarehouseMovementsPanel";
 import { ProductLogisticsPackagingMatchingSection } from "../../components/products/ProductLogisticsPackagingMatchingSection";
 import { RetailLabel } from "../../components/products/RetailLabel";
-import { WarehouseFormCard as Card } from "../../components/products/WarehouseFormCard";
 import { ProductWarehouseStockPanel } from "../../components/products/ProductWarehouseStockPanel";
 import ProductMultiWarehouseStockSection from "../../components/products/ProductMultiWarehouseStockSection";
 import ProductMultiWarehouseSlottingSection from "../../components/products/ProductMultiWarehouseSlottingSection";
@@ -61,10 +58,15 @@ import { SUPPLIER_COUNTRIES } from "../../constants/supplierTaxonomy";
 import type { ProductImageEntry, ProductLabelData } from "../../types/productLabel";
 import {
   ProductLikePageLayout,
+  ProductLikeSection,
+  productLikeAsideColClass,
   productLikeFieldLabelClass,
   productLikeInputClass,
+  productLikeMainColClass,
+  productLikeTwoColClass,
   type ProductLikeStatCard,
 } from "../../components/catalog";
+import ActivityLogPanel from "../../components/activityLog/ActivityLogPanel";
 import {
   buildProductMetadataJson,
   ensureSingleMainImage,
@@ -1675,22 +1677,28 @@ export function ProductEditModal({
   const inputClass = productLikeInputClass;
 
   const productStatCards = useMemo((): ProductLikeStatCard[] => {
-    const stockLabel =
-      physicalStockDisplay != null && physicalStockDisplay !== "—" ? `${physicalStockDisplay} szt.` : "—";
+    const stockValue =
+      physicalStockDisplay != null && physicalStockDisplay !== "—" ? physicalStockDisplay : "—";
     return [
-      { label: "Stan magazynu", value: stockLabel, variant: "blue" },
+      {
+        label: "Stan magazynu",
+        value: stockValue,
+        unit: stockValue !== "—" ? "szt." : undefined,
+        variant: "slate",
+      },
       {
         label: "Cena netto",
-        value: formatMoneyZlDisplay(pricingDisplay.saleNet, "brak ceny"),
+        value: formatMoneyZlDisplay(pricingDisplay.saleNet, "—").replace(/\s*zł$/, "").trim() || "—",
+        unit: pricingDisplay.saleNet != null ? "zł" : undefined,
         subValue: `Brutto: ${formatMoneyZlDisplay(pricingDisplay.saleGross, "brak danych")}`,
         variant: "green",
       },
       {
         label: "Marża",
         value: (
-          <span className="inline-flex items-center gap-1">
+          <span className="inline-flex items-center gap-1.5">
             {pricingDisplay.marginLabel}
-            <TrendingUp className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />
+            <TrendingUp className="h-3.5 w-3.5 text-orange-500" strokeWidth={2} aria-hidden />
           </span>
         ),
         variant: "orange",
@@ -1788,7 +1796,7 @@ export function ProductEditModal({
                     }
                   })();
                 }}
-                className="flex items-center gap-2 rounded border border-sky-200 bg-sky-50 px-3 py-2 text-sm font-semibold text-sky-900 shadow-sm transition-colors hover:bg-sky-100 disabled:opacity-50"
+                className="flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm transition-colors hover:bg-slate-50 disabled:opacity-50"
               >
                 {orderBusy ? "Tworzenie…" : "Zamów u dostawcy"}
               </button>
@@ -1799,60 +1807,67 @@ export function ProductEditModal({
                 title="Drukuj kartę produktu"
                 disabled={printBusy}
                 onClick={() => void requestProductCardPrint({ kind: "product_card", productId: product.id! })}
-                className="flex items-center gap-2 rounded border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 shadow-sm transition-colors hover:bg-slate-50 disabled:opacity-50"
+                className="hidden items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm transition-colors hover:bg-slate-50 disabled:opacity-50 sm:flex"
               >
-                <Printer className="h-4 w-4" strokeWidth={2} aria-hidden />
-                Drukuj kartę produktu
+                <Printer className="h-4 w-4 text-slate-500" strokeWidth={2} aria-hidden />
+                Drukuj
               </button>
             ) : null}
-            <button
-              type="button"
-              title="Duplikuj produkt"
-              disabled={isNew || dupBusy || product?.id == null || tenantId == null}
-              onClick={() => {
-                if (product?.id == null || tenantId == null) return;
-                void (async () => {
-                  setDupBusy(true);
-                  try {
-                    const created = await duplicateProduct(product.id!, tenantId);
-                    const newId = Number(created?.id);
-                    if (!Number.isFinite(newId) || newId < 1) {
-                      toast.error("Kopia mogła powstać, ale API nie zwróciło poprawnego ID produktu.");
-                      return;
+            {isPage ? <div className="mx-1 hidden h-6 w-px bg-slate-300 md:block" aria-hidden /> : null}
+            <div className="flex overflow-hidden rounded-lg border border-slate-300 bg-white shadow-sm">
+              <button
+                type="button"
+                title="Kopiuj"
+                disabled={isNew || dupBusy || product?.id == null || tenantId == null}
+                onClick={() => {
+                  if (product?.id == null || tenantId == null) return;
+                  void (async () => {
+                    setDupBusy(true);
+                    try {
+                      const created = await duplicateProduct(product.id!, tenantId);
+                      const newId = Number(created?.id);
+                      if (!Number.isFinite(newId) || newId < 1) {
+                        toast.error("Kopia mogła powstać, ale API nie zwróciło poprawnego ID produktu.");
+                        return;
+                      }
+                      toast.success(`Utworzono kopię: ${created.name ?? "produkt"}`);
+                      navigate(getProductDetailsPath(newId), { state: productDetailsNavState({ tenantId }) });
+                    } catch (e: unknown) {
+                      logError("duplicateProduct failed", e);
+                      toast.error(extractApiErrorMessage(e, "Kopiowanie produktu nie powiodło się."));
+                    } finally {
+                      setDupBusy(false);
                     }
-                    toast.success(`Utworzono kopię: ${created.name ?? "produkt"}`);
-                    navigate(getProductDetailsPath(newId), { state: productDetailsNavState({ tenantId }) });
-                  } catch (e: unknown) {
-                    logError("duplicateProduct failed", e);
-                    toast.error(extractApiErrorMessage(e, "Kopiowanie produktu nie powiodło się."));
-                  } finally {
-                    setDupBusy(false);
-                  }
-                })();
-              }}
-              className="flex items-center justify-center rounded border border-slate-300 bg-white p-2 text-slate-600 shadow-sm transition-colors hover:bg-slate-50 hover:text-slate-900 disabled:opacity-50"
-            >
-              <Copy className="h-4 w-4" strokeWidth={2} aria-hidden />
-            </button>
-            <button
-              type="button"
-              title={galleryUploadBusy ? "Wgrywanie…" : "Wgraj zdjęcie"}
-              disabled={galleryUploadBusy}
-              onClick={() => headerGalleryInputRef.current?.click()}
-              className="flex items-center justify-center rounded border border-slate-300 bg-white p-2 text-slate-600 shadow-sm transition-colors hover:bg-slate-50 hover:text-slate-900 disabled:opacity-50"
-            >
-              <ImageUp className="h-4 w-4" strokeWidth={2} aria-hidden />
-            </button>
-            <details className="relative">
-              <summary className="list-none cursor-pointer flex items-center justify-center rounded border border-slate-300 bg-white p-2 text-slate-600 shadow-sm transition-colors marker:content-none hover:bg-slate-50 hover:text-slate-900 [&::-webkit-details-marker]:hidden">
-                <MoreHorizontal className="h-4 w-4" strokeWidth={2} aria-hidden />
-              </summary>
-              <div className="absolute right-0 z-50 mt-2 w-48 rounded-md border border-slate-200 bg-white py-1 text-sm shadow-xl">
-                <Link to={backListTo} className="block px-4 py-2 font-medium text-slate-700 hover:bg-slate-50 hover:text-blue-600">
-                  {returnToRaw?.trim() ? "Wróć" : "Wróć do listy"}
-                </Link>
-              </div>
-            </details>
+                  })();
+                }}
+                className="flex items-center justify-center border-r border-slate-300 px-3 py-2 text-slate-600 transition-colors hover:bg-slate-50 hover:text-slate-900 disabled:opacity-50"
+              >
+                <Copy className="h-4 w-4" strokeWidth={2} aria-hidden />
+                <span className="sr-only">Kopiuj</span>
+              </button>
+              <details className="relative">
+                <summary
+                  className="list-none flex cursor-pointer items-center justify-center px-3 py-2 text-slate-600 transition-colors marker:content-none hover:bg-slate-50 hover:text-slate-900 [&::-webkit-details-marker]:hidden"
+                  title="Więcej"
+                >
+                  <MoreHorizontal className="h-4 w-4" strokeWidth={2} aria-hidden />
+                  <span className="sr-only">Więcej</span>
+                </summary>
+                <div className="absolute right-0 z-50 mt-2 w-48 rounded-md border border-slate-200 bg-white py-1 text-sm shadow-xl">
+                  <button
+                    type="button"
+                    disabled={galleryUploadBusy}
+                    onClick={() => headerGalleryInputRef.current?.click()}
+                    className="block w-full px-4 py-2 text-left font-medium text-slate-700 hover:bg-slate-50 hover:text-blue-600 disabled:opacity-50"
+                  >
+                    {galleryUploadBusy ? "Wgrywanie…" : "Wgraj zdjęcie"}
+                  </button>
+                  <Link to={backListTo} className="block px-4 py-2 font-medium text-slate-700 hover:bg-slate-50 hover:text-blue-600">
+                    {returnToRaw?.trim() ? "Wróć" : "Wróć do listy"}
+                  </Link>
+                </div>
+              </details>
+            </div>
           </>
         }
         tabs={railTabOrder.map((tabId) => ({ id: tabId, label: railLabel[tabId], icon: railIcon[tabId] }))}
@@ -1862,12 +1877,14 @@ export function ProductEditModal({
         saving={saving}
       >
                 {activeTab === "basic" && (
-                  <div className="flex flex-col 2xl:flex-row items-start gap-10 lg:gap-12">
-                    {/* Lewa kolumna: Informacje ogólne, Producent, Walidacja */}
-                    <div className="w-full 2xl:w-[420px] shrink-0 space-y-12">
-                      <section>
-                        <h3 className="mb-5 text-lg font-bold text-slate-900 border-b border-slate-200 pb-2">Informacje ogólne</h3>
-                        <div className="space-y-5">
+                  <div className={productLikeTwoColClass}>
+                    <div className={productLikeMainColClass}>
+                      <ProductLikeSection title="Informacje ogólne">
+                        <div className="grid grid-cols-1 gap-x-8 gap-y-6 md:grid-cols-2">
+                          <div className="md:col-span-2">
+                            <label className={fieldLabel}>Nazwa produktu</label>
+                            <input type="text" value={name} onChange={(e) => setName(e.target.value)} className={inputClass} required />
+                          </div>
                           <div>
                             <label className={fieldLabel}>Podmiot</label>
                             <select value={tenantId ?? ""} onChange={(e) => setTenantId(e.target.value ? Number(e.target.value) : null)} className={inputClass} required={isNew}>
@@ -1878,45 +1895,169 @@ export function ProductEditModal({
                             </select>
                           </div>
                           <div>
-                            <label className={fieldLabel}>Nazwa</label>
-                            <input type="text" value={name} onChange={(e) => setName(e.target.value)} className={inputClass} required />
-                          </div>
-                          <div className="grid grid-cols-2 gap-4">
-                            <div>
-                              <label className={fieldLabel}>Symbol / SKU</label>
-                              <input type="text" value={symbol} onChange={(e) => setSymbol(e.target.value)} className={inputClass} />
-                            </div>
-                            <div>
-                              <label className={fieldLabel}>Numer katalogowy</label>
-                              <input type="text" defaultValue="" className={inputClass} placeholder="Brak" />
-                            </div>
+                            <label className={fieldLabel}>Symbol / SKU</label>
+                            <input type="text" value={symbol} onChange={(e) => setSymbol(e.target.value)} className={inputClass} />
                           </div>
                           <div>
-                            <label className={fieldLabel}>EAN</label>
+                            <label className={fieldLabel}>Numer katalogowy</label>
+                            <input type="text" defaultValue="" className={inputClass} placeholder="Brak (opcjonalne)" />
+                          </div>
+                          <div className="md:col-span-2 md:w-1/2 md:pr-4">
+                            <label className={fieldLabel}>Kod kreskowy (EAN/GTIN)</label>
                             <input type="text" value={ean} onChange={(e) => setEan(e.target.value)} className={inputClass} />
                           </div>
                         </div>
-                      </section>
+                      </ProductLikeSection>
 
+                      <ProductLikeSection title="Gabaryty jednostkowe">
+                        <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+                          <div>
+                            <label className="mb-1 block text-xs font-medium uppercase tracking-wider text-slate-500">Długość</label>
+                            <div className="relative">
+                              <input type="number" min={0} step={0.01} value={length === "" ? "" : length} onChange={(e) => updateDimension("length", e.target.value)} className={`${inputClass} pr-10`} />
+                              <span className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3 text-sm text-slate-500">cm</span>
+                            </div>
+                          </div>
+                          <div>
+                            <label className="mb-1 block text-xs font-medium uppercase tracking-wider text-slate-500">Szerokość</label>
+                            <div className="relative">
+                              <input type="number" min={0} step={0.01} value={width === "" ? "" : width} onChange={(e) => updateDimension("width", e.target.value)} className={`${inputClass} pr-10`} />
+                              <span className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3 text-sm text-slate-500">cm</span>
+                            </div>
+                          </div>
+                          <div>
+                            <label className="mb-1 block text-xs font-medium uppercase tracking-wider text-slate-500">Wysokość</label>
+                            <div className="relative">
+                              <input type="number" min={0} step={0.01} value={height === "" ? "" : height} onChange={(e) => updateDimension("height", e.target.value)} className={`${inputClass} pr-10`} />
+                              <span className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3 text-sm text-slate-500">cm</span>
+                            </div>
+                          </div>
+                          <div>
+                            <label className="mb-1 block text-xs font-medium uppercase tracking-wider text-slate-500">Waga brutto</label>
+                            <div className="relative">
+                              <input
+                                type="number" min={0} step={0.001}
+                                value={weight === "" ? "" : weight}
+                                onChange={(e) => {
+                                  const s = String(e.target.value).trim().replace(",", ".");
+                                  if (s === "") setWeight("");
+                                  else { const n = parseFloat(s); if (Number.isFinite(n)) setWeight(n); }
+                                }}
+                                className={`${inputClass} pr-10`}
+                              />
+                              <span className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3 text-sm text-slate-500">kg</span>
+                            </div>
+                          </div>
+                          <div className="md:col-span-2 mt-2">
+                            <label className="mb-1 block text-xs font-medium uppercase tracking-wider text-slate-500">Objętość wyliczona</label>
+                            <div className="relative">
+                              <input
+                                type="number" min={0} step={0.01} readOnly
+                                value={volume === "" ? "" : typeof volume === "number" ? round2(volume) : volume}
+                                className={`${inputClass} cursor-not-allowed bg-slate-50 pr-12 font-mono text-slate-600`}
+                              />
+                              <span className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3 text-sm text-slate-400">dm³</span>
+                            </div>
+                          </div>
+                          <div className="md:col-span-2 mt-2">
+                            <label className="mb-1 block text-xs font-medium uppercase tracking-wider text-slate-500">Jednostka miary</label>
+                            <input type="text" list="unit-list-pem" value={unit} onChange={(e) => setUnit(e.target.value)} placeholder="np. szt." className={inputClass} />
+                            <datalist id="unit-list-pem">
+                              <option value="szt." />
+                              <option value="opak." />
+                              <option value="para" />
+                              <option value="kg" />
+                              <option value="m" />
+                            </datalist>
+                          </div>
+                        </div>
+                      </ProductLikeSection>
+
+                      <ProductLikeSection title="Opakowanie zbiorcze (Karton)" accent="blue">
+                        <div className="grid grid-cols-1 gap-x-8 gap-y-6 md:grid-cols-2">
+                          <div>
+                            <label className={fieldLabel}>EAN kartonu zbiorczego</label>
+                            <input type="text" value={bulkEan} onChange={(e) => setBulkEan(e.target.value)} className={inputClass} placeholder="Opcjonalny kod" />
+                          </div>
+                          <div>
+                            <label className={fieldLabel}>Ilość sztuk w kartonie</label>
+                            <div className="relative">
+                              <input
+                                type="number" min={0} step={1}
+                                value={unitsPerCarton === "" ? "" : unitsPerCarton}
+                                onChange={(e) => {
+                                  const s = String(e.target.value).trim().replace(",", ".");
+                                  if (s === "") setUnitsPerCarton("");
+                                  else { const n = parseFloat(s); if (Number.isFinite(n) && n >= 0) setUnitsPerCarton(n); }
+                                }}
+                                className={`${inputClass} pr-12`}
+                              />
+                              <span className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3 text-sm text-slate-500">szt.</span>
+                            </div>
+                          </div>
+                          <div className="md:col-span-2 border-t border-slate-100 pt-4">
+                            <h3 className="mb-4 text-sm font-medium text-slate-900">Wymiary zewnętrzne kartonu</h3>
+                            <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+                              <div>
+                                <label className="mb-1 block text-xs text-slate-500">Długość (cm)</label>
+                                <input type="number" min={0} step={0.01} value={cartonLength === "" ? "" : cartonLength} onChange={(e) => updateCartonDimension("cartonLength", e.target.value)} className={inputClass} />
+                              </div>
+                              <div>
+                                <label className="mb-1 block text-xs text-slate-500">Szerokość (cm)</label>
+                                <input type="number" min={0} step={0.01} value={cartonWidth === "" ? "" : cartonWidth} onChange={(e) => updateCartonDimension("cartonWidth", e.target.value)} className={inputClass} />
+                              </div>
+                              <div>
+                                <label className="mb-1 block text-xs text-slate-500">Wysokość (cm)</label>
+                                <input type="number" min={0} step={0.01} value={cartonHeight === "" ? "" : cartonHeight} onChange={(e) => updateCartonDimension("cartonHeight", e.target.value)} className={inputClass} />
+                              </div>
+                              <div>
+                                <label className="mb-1 block text-xs text-slate-500">Waga brutto (kg)</label>
+                                <input
+                                  type="number" min={0} step={0.001}
+                                  value={cartonWeight === "" ? "" : cartonWeight}
+                                  onChange={(e) => {
+                                    const s = String(e.target.value).trim().replace(",", ".");
+                                    if (s === "") setCartonWeight("");
+                                    else { const n = parseFloat(s); if (Number.isFinite(n)) setCartonWeight(n); }
+                                  }}
+                                  className={inputClass}
+                                />
+                              </div>
+                            </div>
+                            <div className="mt-4 max-w-xs">
+                              <label className="mb-1 block text-xs text-slate-500">Objętość kartonu (dm³)</label>
+                              <input
+                                type="number" min={0} step={0.01} readOnly
+                                value={cartonVolume === "" ? "" : typeof cartonVolume === "number" ? round2(cartonVolume) : cartonVolume}
+                                className={`${inputClass} cursor-not-allowed bg-slate-50 font-semibold text-slate-700`}
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      </ProductLikeSection>
+                    </div>
+
+                    <aside className={productLikeAsideColClass}>
                       {!isNew && product?.id != null ? (
-                        <section>
-                          <h3 className="mb-5 text-lg font-bold text-slate-900 border-b border-slate-200 pb-2">
-                            Szablon dokumentu
-                          </h3>
+                        <ProductLikeSection
+                          title="Szablon wydruku dokumentu"
+                          description="Domyślny układ karty dla tego konkretnego SKU."
+                          compact
+                        >
                           <DocumentTemplateScopeSection
                             tenantId={effectiveTenantId}
                             scopeType="PRODUCT"
                             scopeId={product.id}
-                            title="Karta produktu"
-                            description="Domyślny szablon karty produktu dla tego SKU."
+                            title=""
+                            description=""
+                            titleClassName="hidden"
                             kinds={[{ kindCode: "product_card", label: "Karta produktu" }]}
                           />
-                        </section>
+                        </ProductLikeSection>
                       ) : null}
 
-                      <section>
-                        <h3 className="mb-5 text-lg font-bold text-slate-900 border-b border-slate-200 pb-2">Producent i GPSR</h3>
-                        <div className="space-y-5">
+                      <ProductLikeSection title="Producent i GPSR" compact>
+                        <div className="space-y-4">
                           <div>
                             <label className={fieldLabel}>Producent z katalogu</label>
                             <select
@@ -1974,11 +2115,10 @@ export function ProductEditModal({
                             />
                           </div>
                         </div>
-                      </section>
+                      </ProductLikeSection>
 
-                      <section id="wms-validation">
-                        <h3 className="mb-5 text-lg font-bold text-slate-900 border-b border-slate-200 pb-2">Walidacja</h3>
-                        <div className="rounded-xl border border-slate-200 bg-slate-50/50 p-6">
+                      <ProductLikeSection title="Walidacja" compact>
+                        <div id="wms-validation">
                           <ProductValidationOverridesSection
                             global={globalValidation}
                             skips={validationSkips}
@@ -1986,203 +2126,17 @@ export function ProductEditModal({
                             onChange={(patch) => setValidationSkips((prev) => ({ ...prev, ...patch }))}
                           />
                         </div>
-                      </section>
-                    </div>
+                      </ProductLikeSection>
 
-                    {/* Środkowa kolumna: Wymiary i Opakowanie Zbiorcze */}
-                    <div className="w-full 2xl:w-[420px] shrink-0 space-y-12">
-                      <section>
-                        <h3 className="mb-5 text-lg font-bold text-slate-900 border-b border-slate-200 pb-2">Wymiary i waga produktu</h3>
-                        <div className="space-y-5">
-                          <div className="grid grid-cols-2 gap-4">
-                            <div>
-                              <label className={fieldLabel}>Długość (cm)</label>
-                              <input type="number" min={0} step={0.01} value={length === "" ? "" : length} onChange={(e) => updateDimension("length", e.target.value)} className={inputClass} />
-                            </div>
-                            <div>
-                              <label className={fieldLabel}>Szerokość (cm)</label>
-                              <input type="number" min={0} step={0.01} value={width === "" ? "" : width} onChange={(e) => updateDimension("width", e.target.value)} className={inputClass} />
-                            </div>
-                          </div>
-                          <div className="grid grid-cols-2 gap-4">
-                            <div>
-                              <label className={fieldLabel}>Wysokość (cm)</label>
-                              <input type="number" min={0} step={0.01} value={height === "" ? "" : height} onChange={(e) => updateDimension("height", e.target.value)} className={inputClass} />
-                            </div>
-                            <div>
-                              <label className={fieldLabel}>Waga (kg)</label>
-                              <input
-                                type="number" min={0} step={0.001}
-                                value={weight === "" ? "" : weight}
-                                onChange={(e) => {
-                                  const s = String(e.target.value).trim().replace(",", ".");
-                                  if (s === "") setWeight("");
-                                  else { const n = parseFloat(s); if (Number.isFinite(n)) setWeight(n); }
-                                }}
-                                className={inputClass}
-                              />
-                            </div>
-                          </div>
-                          <div className="grid grid-cols-2 gap-4">
-                            <div>
-                              <label className={fieldLabel}>Objętość (dm³)</label>
-                              <input
-                                type="number" min={0} step={0.01} readOnly
-                                value={volume === "" ? "" : typeof volume === "number" ? round2(volume) : volume}
-                                className={`${inputClass} font-semibold text-slate-700 bg-slate-50 cursor-not-allowed`}
-                              />
-                            </div>
-                            <div>
-                              <label className={fieldLabel}>Jednostka miary</label>
-                              <input type="text" list="unit-list-pem" value={unit} onChange={(e) => setUnit(e.target.value)} placeholder="np. szt." className={inputClass} />
-                              <datalist id="unit-list-pem">
-                                <option value="szt." />
-                                <option value="opak." />
-                                <option value="para" />
-                                <option value="kg" />
-                                <option value="m" />
-                              </datalist>
-                            </div>
-                          </div>
-                        </div>
-                      </section>
-
-                      <section>
-                        <h3 className="mb-5 text-lg font-bold text-slate-900 border-b border-slate-200 pb-2">Opakowanie zbiorcze (Karton)</h3>
-                        <div className="rounded-xl border border-indigo-100 bg-indigo-50/30 p-5 space-y-5">
-                          <div>
-                            <label className={fieldLabel}>EAN kartonu zbiorczego</label>
-                            <input type="text" value={bulkEan} onChange={(e) => setBulkEan(e.target.value)} className={inputClass} placeholder="Opcjonalny kod" />
-                          </div>
-                          <div>
-                            <label className={fieldLabel}>Ilość sztuk w kartonie</label>
-                            <input
-                              type="number" min={0} step={1}
-                              value={unitsPerCarton === "" ? "" : unitsPerCarton}
-                              onChange={(e) => {
-                                const s = String(e.target.value).trim().replace(",", ".");
-                                if (s === "") setUnitsPerCarton("");
-                                else { const n = parseFloat(s); if (Number.isFinite(n) && n >= 0) setUnitsPerCarton(n); }
-                              }}
-                              className={inputClass}
-                            />
-                          </div>
-                          
-                          <div className="pt-2">
-                            <h4 className="mb-3 text-sm font-bold text-slate-700">Zewnętrzne wymiary kartonu</h4>
-                            <div className="grid grid-cols-2 gap-4 mb-4">
-                              <div>
-                                <label className={fieldLabel}>Długość (cm)</label>
-                                <input type="number" min={0} step={0.01} value={cartonLength === "" ? "" : cartonLength} onChange={(e) => updateCartonDimension("cartonLength", e.target.value)} className={inputClass} />
-                              </div>
-                              <div>
-                                <label className={fieldLabel}>Szerokość (cm)</label>
-                                <input type="number" min={0} step={0.01} value={cartonWidth === "" ? "" : cartonWidth} onChange={(e) => updateCartonDimension("cartonWidth", e.target.value)} className={inputClass} />
-                              </div>
-                            </div>
-                            <div className="grid grid-cols-2 gap-4">
-                              <div>
-                                <label className={fieldLabel}>Wysokość (cm)</label>
-                                <input type="number" min={0} step={0.01} value={cartonHeight === "" ? "" : cartonHeight} onChange={(e) => updateCartonDimension("cartonHeight", e.target.value)} className={inputClass} />
-                              </div>
-                              <div>
-                                <label className={fieldLabel}>Waga brutto (kg)</label>
-                                <input
-                                  type="number" min={0} step={0.001}
-                                  value={cartonWeight === "" ? "" : cartonWeight}
-                                  onChange={(e) => {
-                                    const s = String(e.target.value).trim().replace(",", ".");
-                                    if (s === "") setCartonWeight("");
-                                    else { const n = parseFloat(s); if (Number.isFinite(n)) setCartonWeight(n); }
-                                  }}
-                                  className={inputClass}
-                                />
-                              </div>
-                            </div>
-                            <div className="mt-4">
-                              <label className={fieldLabel}>Objętość kartonu (dm³)</label>
-                              <input
-                                type="number" min={0} step={0.01} readOnly
-                                value={cartonVolume === "" ? "" : typeof cartonVolume === "number" ? round2(cartonVolume) : cartonVolume}
-                                className={`${inputClass} font-semibold text-slate-700 bg-white/50 cursor-not-allowed`}
-                              />
-                            </div>
-                          </div>
-                        </div>
-                      </section>
-                    </div>
-
-                    {/* Prawa kolumna: Historia magazynowa */}
-                    {!isNew && product?.id != null && (
-                      <aside className="w-full flex-1 min-w-0">
-                        <section>
-                          <h3 className="mb-5 text-lg font-bold text-slate-900 border-b border-slate-200 pb-2">Historia magazynowa</h3>
-                          <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-x-auto">
-                            <div className="min-w-[600px]">
-                              <div className="flex flex-wrap items-center gap-2 border-b border-slate-200 p-2 bg-slate-50/50">
-                                <button type="button" className="rounded-md bg-blue-600 px-4 py-1.5 text-[13px] font-medium text-white shadow-sm hover:bg-blue-700">
-                                  Operacje magazynowe
-                                </button>
-                                <button type="button" className="rounded-md px-4 py-1.5 text-[13px] font-medium text-slate-600 hover:bg-slate-200/50 hover:text-slate-900">
-                                  Historia dostaw
-                                </button>
-                                <div className="ml-auto flex items-center text-xs text-slate-500 px-2">
-                                  Pokaż na stronie 
-                                  <select className="ml-2 rounded border border-slate-300 bg-white py-1 text-slate-700 outline-none">
-                                    <option>25</option>
-                                    <option>50</option>
-                                  </select>
-                                </div>
-                              </div>
-                              <table className="w-full text-sm text-left">
-                                <thead className="border-b border-slate-200 text-xs font-semibold text-slate-700 bg-white">
-                                  <tr>
-                                    <th className="px-5 py-3.5 w-40">Data</th>
-                                    <th className="px-5 py-3.5">Akcja</th>
-                                    <th className="px-5 py-3.5">Dokument</th>
-                                    <th className="px-5 py-3.5">Użytkownik</th>
-                                    <th className="px-5 py-3.5">Lokalizacja</th>
-                                  </tr>
-                                </thead>
-                                <tbody className="divide-y divide-slate-100 text-[13px] text-slate-600">
-                                  <tr>
-                                    <td className="px-5 py-4 whitespace-nowrap">20.05.2026, 19:12:35</td>
-                                    <td className="px-5 py-4"><span className="rounded bg-slate-100 px-2.5 py-1 font-medium text-slate-700">Kompletacja</span></td>
-                                    <td className="px-5 py-4 text-slate-900">ORDER-1216</td>
-                                    <td className="px-5 py-4">Super Admin</td>
-                                    <td className="px-5 py-4">A10-A-1</td>
-                                  </tr>
-                                  <tr>
-                                    <td className="px-5 py-4 whitespace-nowrap">20.05.2026, 19:12:35</td>
-                                    <td className="px-5 py-4"><span className="rounded bg-slate-100 px-2.5 py-1 font-medium text-slate-700">Kompletacja</span></td>
-                                    <td className="px-5 py-4 text-slate-900">ORDER-1175</td>
-                                    <td className="px-5 py-4">Super Admin</td>
-                                    <td className="px-5 py-4">A10-A-1</td>
-                                  </tr>
-                                  <tr>
-                                    <td className="px-5 py-4 whitespace-nowrap">20.05.2026, 18:57:30</td>
-                                    <td className="px-5 py-4"><span className="rounded bg-indigo-50 text-indigo-700 px-2.5 py-1 font-medium">Rozlokowanie PZ</span></td>
-                                    <td className="px-5 py-4 text-slate-900">PZ-3</td>
-                                    <td className="px-5 py-4">Super Admin</td>
-                                    <td className="px-5 py-4">A10-A-1</td>
-                                  </tr>
-                                  <tr>
-                                    <td className="px-5 py-4 whitespace-nowrap">20.05.2026, 18:51:15</td>
-                                    <td className="px-5 py-4"><span className="rounded bg-emerald-50 text-emerald-700 px-2.5 py-1 font-medium">Przyjęcie</span></td>
-                                    <td className="px-5 py-4 text-slate-900">PZ-3</td>
-                                    <td className="px-5 py-4">Super Admin</td>
-                                    <td className="px-5 py-4">A1-A-1</td>
-                                  </tr>
-                                </tbody>
-                              </table>
-                              <div className="border-t border-slate-100 p-3 px-5 text-xs text-slate-500 bg-white">
-                                1-4 z 4
-                              </div>
-                            </div>
-                          </div>
-                        </section>
-                      </aside>
-                    )}
+                      {!isNew && product?.id != null ? (
+                        <ActivityLogPanel
+                          objectType="product"
+                          objectId={product.id}
+                          title="Historia czynności"
+                          defaultCollapsed={false}
+                        />
+                      ) : null}
+                    </aside>
                   </div>
                 )}
 

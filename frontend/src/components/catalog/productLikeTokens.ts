@@ -1,6 +1,6 @@
 /** Shared form tokens — must match ProductEditModal (catalog entity pages). */
 
-import { brandTabsNavItemClassName } from "../../design-system/brandUi";
+import { brandTabsNavItemClassName, brandTabsNavRowClassName } from "../../design-system/brandUi";
 
 export const productLikeFieldLabelClass = "mb-1.5 block text-sm font-medium text-slate-700";
 
@@ -13,15 +13,28 @@ export const productLikeNumericInputNoSpinnerClass =
 
 export const productLikeTabPanelPaddingClass = "w-full px-4 py-6 sm:px-6 sm:py-8 lg:px-8";
 
-/** Odstęp między hero nagłówka a poziomym paskiem zakładek (16–24px). */
-export const productLikeTabsNavClass =
-  "flex gap-1 overflow-x-auto border-t border-slate-100 px-4 pt-4 pb-2 sm:px-6 sm:pt-5 lg:px-8 lg:pt-6 [-webkit-overflow-scrolling:touch]";
+/**
+ * Horizontal TabsNav row — same orange underline as Zakupy / Produkcja / Klienci
+ * (`brandTabsNavRowClassName` + `brandTabsNavItemClassName`).
+ */
+export const productLikeTabsNavClass = `${brandTabsNavRowClassName} gap-8 overflow-x-auto px-4 sm:px-6 lg:px-8 [-webkit-overflow-scrolling:touch]`;
 
-export const productLikeSectionTitleClass = "mb-5 text-lg font-bold text-slate-900 border-b border-slate-200 pb-2";
+/** @deprecated Prefer ProductLikeSection card header. Kept for older section titles. */
+export const productLikeSectionTitleClass =
+  "mb-5 text-lg font-bold text-slate-900 border-b border-slate-200 pb-2";
 
 export const productLikeFormNumberReset =
   "[&_input[type=number]]:appearance-[textfield] [&_input[type=number]]:[&::-webkit-inner-spin-button]:appearance-none [&_input[type=number]]:[&::-webkit-outer-spin-button]:appearance-none";
 
+/** Basic tab: ~65% / ~35% two-column body (product edit HTML UX). */
+export const productLikeTwoColClass = "flex flex-col items-start gap-6 xl:flex-row";
+
+export const productLikeMainColClass =
+  "flex w-full min-w-0 flex-col gap-6 xl:w-2/3 xl:min-w-[700px]";
+
+export const productLikeAsideColClass = "flex w-full min-w-0 flex-col gap-6 xl:w-1/3";
+
+/** Legacy three-column / fixed-side tokens (other tabs). */
 export const productLikeThreeColClass = "flex flex-col 2xl:flex-row items-start gap-10 lg:gap-12";
 
 export const productLikeSideColClass = "w-full 2xl:w-[420px] shrink-0 space-y-12";

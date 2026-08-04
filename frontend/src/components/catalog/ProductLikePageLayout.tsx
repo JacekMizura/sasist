@@ -9,10 +9,6 @@ import {
   productLikeMetaChipLabelClass,
   productLikeMetaChipValueClass,
   productLikeRailBtnClass,
-  productLikeStatCardClass,
-  productLikeStatCardLabelClass,
-  productLikeStatCardSubClass,
-  productLikeStatCardValueClass,
   productLikeTabBtnClass,
   productLikeTabPanelPaddingClass,
   productLikeTabsNavClass,
@@ -29,6 +25,8 @@ export type ProductLikeMetaChip = {
 export type ProductLikeStatCard = {
   label: string;
   value: ReactNode;
+  /** Optional unit suffix shown next to the value (e.g. szt., zł). */
+  unit?: string;
   subValue?: ReactNode;
   variant?: "slate" | "blue" | "green" | "orange";
 };
@@ -94,13 +92,30 @@ export type ProductLikePageLayoutProps<T extends string = string> = {
   trailing?: ReactNode;
 };
 
-function StatCard({ card }: { card: ProductLikeStatCard }) {
+function ModernStat({ card, withDivider }: { card: ProductLikeStatCard; withDivider: boolean }) {
   const variant = card.variant ?? "slate";
+  const valueColor =
+    variant === "green"
+      ? "text-emerald-600"
+      : variant === "orange"
+        ? "text-orange-600"
+        : variant === "blue"
+          ? "text-slate-900"
+          : "text-slate-900";
   return (
-    <div className={productLikeStatCardClass(variant)}>
-      <div className={productLikeStatCardLabelClass(variant)}>{card.label}</div>
-      <div className={productLikeStatCardValueClass(variant)}>{card.value}</div>
-      {card.subValue ? <div className={productLikeStatCardSubClass(variant)}>{card.subValue}</div> : null}
+    <div
+      className={`flex flex-col justify-center text-right sm:text-left ${
+        withDivider ? "border-l border-slate-200 pl-4 sm:pl-8" : ""
+      }`}
+    >
+      <span className="mb-1 flex items-center text-xs font-medium uppercase tracking-wider text-slate-500">
+        {card.label}
+      </span>
+      <div className={`text-2xl font-bold leading-none tabular-nums ${valueColor}`}>
+        {card.value}
+        {card.unit ? <span className="ml-1 text-sm font-medium text-slate-500">{card.unit}</span> : null}
+      </div>
+      {card.subValue ? <div className="mt-1 text-[11px] font-medium text-slate-400">{card.subValue}</div> : null}
     </div>
   );
 }
@@ -203,7 +218,7 @@ export function ProductLikePageLayout<T extends string>({
 
   const headerActionCluster =
     headerActions || (saveInHeader && saveButton) ? (
-      <div className="flex shrink-0 items-center gap-2">
+      <div className="flex shrink-0 items-center gap-2 sm:gap-3">
         {headerActions}
         {saveInHeader ? saveButton : null}
       </div>
@@ -214,8 +229,15 @@ export function ProductLikePageLayout<T extends string>({
       {headerPrefix}
 
       {topToolbarSticky && (breadcrumbNav || headerActionCluster) ? (
-        <div className="sticky top-0 z-50 flex shrink-0 items-center justify-between gap-3 border-b border-slate-200 bg-white px-4 py-2.5 shadow-[0_1px_0_rgba(15,23,42,0.04)] sm:px-6 lg:px-8">
-          <div className="min-w-0 flex-1">{breadcrumbNav}</div>
+        <div className="sticky top-0 z-50 flex shrink-0 items-center justify-between gap-3 border-b border-slate-200 bg-white px-4 py-2.5 shadow-sm sm:px-6 lg:px-8">
+          <div className="flex min-w-0 flex-1 flex-col gap-0.5 sm:flex-row sm:items-center sm:gap-4">
+            {breadcrumbNav}
+            {title.trim() ? (
+              <span className="hidden min-w-0 truncate text-sm font-semibold text-slate-900 lg:inline" title={title}>
+                {title}
+              </span>
+            ) : null}
+          </div>
           {headerActionCluster}
         </div>
       ) : null}
@@ -225,13 +247,35 @@ export function ProductLikePageLayout<T extends string>({
           <div className="border-b border-slate-100 px-4 py-2.5 sm:px-6 lg:px-8">{breadcrumbNav}</div>
         ) : null}
 
-        <div className="flex flex-col gap-4 px-4 py-5 sm:px-6 lg:flex-row lg:items-start lg:justify-between lg:gap-6 lg:px-8 lg:py-6">
-          <div className="flex min-w-0 flex-1 gap-4 sm:gap-5">
-            <div className="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-slate-200 bg-white sm:h-24 sm:w-24">
+        <div
+          className={
+            modernHero
+              ? "flex flex-col justify-between gap-6 px-4 pb-4 pt-5 sm:px-6 lg:flex-row lg:items-center lg:gap-8 lg:px-8 lg:pt-6"
+              : "flex flex-col gap-4 px-4 py-5 sm:px-6 lg:flex-row lg:items-start lg:justify-between lg:gap-6 lg:px-8 lg:py-6"
+          }
+        >
+          <div className={`flex min-w-0 items-center gap-5 ${modernHero ? "lg:w-1/2" : "flex-1"}`}>
+            <div
+              className={
+                modernHero
+                  ? "h-20 w-20 shrink-0 sm:h-24 sm:w-24"
+                  : "flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-slate-200 bg-white sm:h-24 sm:w-24"
+              }
+            >
               {imageUrl?.trim() ? (
-                <img src={imageUrl.trim()} alt={imageAlt} className="max-h-full max-w-full object-contain p-1" />
+                <img
+                  src={imageUrl.trim()}
+                  alt={imageAlt}
+                  className={`max-h-full max-w-full object-contain ${modernHero ? "h-full w-full rounded-lg" : "p-1"}`}
+                />
               ) : (
-                <div className="flex h-full w-full items-center justify-center rounded-xl border border-dashed border-slate-300 bg-white">
+                <div
+                  className={`flex h-full w-full items-center justify-center bg-white ${
+                    modernHero
+                      ? "rounded-lg border border-dashed border-slate-300"
+                      : "rounded-xl border border-dashed border-slate-300"
+                  }`}
+                >
                   <span className="text-[10px] font-medium text-slate-400">Brak zdjęcia</span>
                 </div>
               )}
@@ -240,30 +284,32 @@ export function ProductLikePageLayout<T extends string>({
             <div className="min-w-0 flex-1 py-0.5">
               {modernHero ? (
                 <>
-                  <div className="mb-2 flex flex-wrap items-center gap-2">
+                  <div className="mb-1.5 flex flex-wrap items-center gap-2">
                     {productIdentifiers?.tenantLabel ? (
-                      <span className="rounded-full bg-indigo-100 px-2.5 py-0.5 text-xs font-semibold text-indigo-700">
+                      <span className="inline-flex items-center rounded border border-blue-200 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-blue-600">
                         {productIdentifiers.tenantLabel}
                       </span>
                     ) : null}
                     {productIdentifiers?.productId != null ? (
-                      <span className="inline-flex items-center gap-1 text-sm text-slate-500">
+                      <span className="rounded border border-slate-200 px-2 py-0.5 font-mono text-xs text-slate-500">
                         ID: {productIdentifiers.productId}
                       </span>
                     ) : null}
                     {titleBadge}
                   </div>
-                  <h1 className="text-xl font-bold tracking-tight text-slate-900 sm:text-2xl">{title}</h1>
-                  <div className="mt-2 flex flex-wrap items-center gap-3 text-sm text-slate-600">
-                    <div className="flex items-center gap-1.5">
-                      <span className="font-medium text-slate-400">SKU:</span>
-                      <span className="rounded bg-slate-100 px-2 py-0.5 font-mono text-slate-800">
+                  <h1 className="mb-2 text-xl font-bold leading-tight tracking-tight text-slate-900 sm:text-2xl">
+                    {title}
+                  </h1>
+                  <div className="flex flex-wrap gap-4 text-sm text-slate-600">
+                    <div className="flex items-baseline">
+                      <span className="mr-1.5 text-xs font-medium uppercase tracking-wider text-slate-500">SKU:</span>
+                      <span className="font-mono font-medium text-slate-900">
                         {(productIdentifiers?.sku ?? "").trim() || "—"}
                       </span>
                     </div>
-                    <div className="flex items-center gap-1.5">
-                      <span className="font-medium text-slate-400">EAN:</span>
-                      <span className="rounded bg-slate-100 px-2 py-0.5 font-mono text-slate-800">
+                    <div className="flex items-baseline">
+                      <span className="mr-1.5 text-xs font-medium uppercase tracking-wider text-slate-500">EAN:</span>
+                      <span className="font-mono font-medium text-slate-900">
                         {(productIdentifiers?.ean ?? "").trim() || "—"}
                       </span>
                     </div>
@@ -297,9 +343,9 @@ export function ProductLikePageLayout<T extends string>({
           </div>
 
           {modernHero && statCards ? (
-            <div className="flex shrink-0 flex-wrap gap-2 sm:justify-end lg:justify-end">
-              {statCards.map((card) => (
-                <StatCard key={card.label} card={card} />
+            <div className="flex shrink-0 flex-wrap items-center gap-8 sm:flex-nowrap sm:justify-end lg:w-1/2 lg:justify-end">
+              {statCards.map((card, idx) => (
+                <ModernStat key={card.label} card={card} withDivider={idx > 0} />
               ))}
             </div>
           ) : !saveInHeader && (headerActions || showSaveButton) ? (

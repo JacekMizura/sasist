@@ -1,3 +1,29 @@
+## 2026-08-04 — Edycja produktu: UX jak mock HTML (FE only)
+
+- Header: breadcrumb + nazwa + Zamów / Drukuj / Kopiuj+Więcej / Zapisz
+- Hero: zdjęcie, tenant, ID, SKU, EAN + 3 duże statystyki (stan / cena / marża)
+- Tabs: brand TabsNav (pomarańczowy underline); basic = Cards 65%/35%
+- Historia czynności = `ActivityLogPanel` objectType=product (jak Zamówienia)
+- Backend / API / routing / walidacja / hooki — bez zmian
+
+## 2026-08-04 — Pulpit: TabsNav zamiast accordionów
+
+- Usunięte PulpitSection (accordion); zakładki Decyzja/Alerty/Operatorzy/Kolejki/Dostawy/Historia via istniejący TabsNav
+- Route `pulpit/*`; treść Centrum tylko dla aktywnej zakładki
+- Backend / API / hooki — bez zmian
+
+## 2026-08-04 — Rename Zarządzanie/Magazyn + Pulpit jak Produkcja
+
+- Sidebar: Zarządzanie (Pulpit/Kolejność/Raporty/Plan) + Magazyn (Layout…Protokoły); bez Wózków/Inwentaryzacji w flyoucie
+- Pulpit: DS PageHeader + MetricCard + Card (wzorzec ProductionDashboard) — bez hero/landing
+- Backend / routing — bez zmian
+
+## 2026-08-04 — UX Magazyn: ujednolicenie do Layout System 2.0
+
+- Usunięte lewe menu Raportów i Planu zmian → `TabsNav` (jak Zakupy/Produkcja)
+- Pulpit / Kolejność / Przegląd: `PageHeader`, karty DS, tabela, filtry, bez `font-black` / `max-w-2xl`
+- IA / routing / backend / funkcjonalność — bez zmian
+
 ## 2026-08-04 — IA Magazyn: flyout Magazyn + Administracja + Pulpit sekcje
 
 - Sidebar: „Magazyn” (Pulpit · Kolejność · Raporty · Plan); „Administracja magazynem” (pełna lista + Wózki + Inwentaryzacja ERP; bez szablonów etykiet)
