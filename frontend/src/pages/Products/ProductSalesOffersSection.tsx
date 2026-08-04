@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { CaretDown, CaretUp, Plus, X } from "lucide-react";
+import { ChevronDown, ChevronUp, Plus, X } from "lucide-react";
 
 import {
   createOutletSalesOffer,
@@ -176,11 +176,11 @@ export function ProductSalesOffersSection({ productId, tenantId }: Props) {
               >
                 {collapsed ? (
                   <>
-                    <CaretDown className="h-3 w-3" aria-hidden /> Rozwiń
+                    <ChevronDown className="h-3 w-3" aria-hidden /> Rozwiń
                   </>
                 ) : (
                   <>
-                    <CaretUp className="h-3 w-3" aria-hidden /> Zwiń
+                    <ChevronUp className="h-3 w-3" aria-hidden /> Zwiń
                   </>
                 )}
               </SecondaryButton>
