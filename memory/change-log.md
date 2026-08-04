@@ -1,3 +1,8 @@
+## 2026-08-04 — Edycja produktu: Oferty 1:1 z HTML (FE only)
+
+- `ProductSalesOffersSection` wg `oferrty karta produktu.html` (karta marketplace, Zwiń/Rozwiń, tabela)
+- Handlery/API ofert sprzedażowych (outlet, pool, cena) bez zmian; bez DataTable
+
 ## 2026-08-04 — Edycja produktu: Zdjęcia 1:1 z HTML (FE only)
 
 - Nowy `ProductEditImagesTab` wg `zdjecia karta produktu.html`

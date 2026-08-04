@@ -1,5 +1,10 @@
 ﻿## Active
 
+**Edycja produktu — Oferty: DOM 1:1 z `oferrty karta produktu.html` (2026-08-04).**
+
+- `ProductSalesOffersSection`: nagłówek Oferty + Dodaj integrację, karta z Zwiń/Rozwiń, tabela jak marketplace
+- Kolumny/API ofert sprzedażowych bez zmian; SASIST Button/Input/Select/Badge
+
 **Edycja produktu — Zdjęcia: DOM 1:1 z `zdjecia karta produktu.html` (2026-08-04).**
 
 - `ProductEditImagesTab`: Galeria, dodawanie URL/plik, rekordy miniatur+akcje jak mock
