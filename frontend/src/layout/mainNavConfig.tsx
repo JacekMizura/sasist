@@ -255,7 +255,7 @@ export function buildNavFlyoutCategories(): NavCategoryConfig[] {
   },
   {
     id: "warehouse",
-    label: "Administracja magazynem",
+    label: "Magazyn",
     Icon: Warehouse,
     opensSideFlyout: true,
     flyoutSections: [
@@ -266,7 +266,6 @@ export function buildNavFlyoutCategories(): NavCategoryConfig[] {
           { path: "/carts/zones", label: "Strefy", Icon: Layers },
           { path: "/carts/carriers", label: "Nośniki", Icon: Package },
           { path: "/settings/wms", label: "Konfiguracja WMS", Icon: Settings2 },
-          { path: "/templates/labels", label: "Szablony etykiet", Icon: Tag },
           { path: "/carts/optimizer", label: "Flota", Icon: Route },
           { path: "/warehouse/bdo", label: "BDO", Icon: Recycle },
           { path: "/office/damages", label: "Szkody", Icon: TriangleAlert },
@@ -294,7 +293,7 @@ export function buildNavFlyoutCategories(): NavCategoryConfig[] {
   },
   {
     id: "analizy",
-    label: "Zarządzanie magazynem",
+    label: "Pulpit",
     Icon: BarChart3,
     opensSideFlyout: true,
     activePathPrefix: "/zarzadzanie-magazynem",
@@ -454,9 +453,7 @@ export function isCategoryActive(category: NavCategoryConfig, pathname: string):
     if (pathname.startsWith("/warehouse/bdo")) return true;
     if (pathname.startsWith("/office/damages") || pathname.startsWith("/office/damage-reports")) return true;
     if (pathname === "/settings/wms" || pathname.startsWith("/settings/wms/")) return true;
-    // /templates/labels jest w flyoucie Administracji, ale highlight należy do kategorii Szablony.
-    const paths = categoryFlyoutPaths(category).filter((p) => !p.startsWith("/templates"));
-    return navGroupHasActivePath(pathname, paths);
+    return navGroupHasActivePath(pathname, categoryFlyoutPaths(category));
   }
   if (category.id === "orders") {
     if (pathname.startsWith("/orders/automation")) return true;

@@ -2,10 +2,11 @@ import { describe, expect, it } from "vitest";
 
 import { buildNavFlyoutCategories, isCategoryActive } from "./mainNavConfig";
 
-describe("Phase B IA — Administracja flyout (SASIST pattern)", () => {
-  it("exposes Administracja as side flyout with damages links", () => {
+describe("Phase B IA — Magazyn / Pulpit flyouts (SASIST pattern)", () => {
+  it("exposes Magazyn as side flyout with damages links (no label templates)", () => {
     const warehouse = buildNavFlyoutCategories().find((c) => c.id === "warehouse");
     expect(warehouse).toBeTruthy();
+    expect(warehouse!.label).toBe("Magazyn");
     expect(warehouse!.opensSideFlyout).toBe(true);
     expect(warehouse!.directPath).toBeUndefined();
     const byLabel = Object.fromEntries(
@@ -13,13 +14,15 @@ describe("Phase B IA — Administracja flyout (SASIST pattern)", () => {
     );
     expect(byLabel["Szkody"]).toBe("/office/damages");
     expect(byLabel["Protokoły szkód"]).toBe("/office/damage-reports");
+    expect(byLabel["Szablony etykiet"]).toBeUndefined();
     expect(isCategoryActive(warehouse!, "/office/damages")).toBe(true);
     expect(isCategoryActive(warehouse!, "/office/damage-reports")).toBe(true);
   });
 
-  it("exposes Zarządzanie as side flyout (Pulpit, Kolejność, Raporty, Plan)", () => {
+  it("exposes Pulpit as side flyout (kierownika, Kolejność, Raporty, Plan)", () => {
     const analizy = buildNavFlyoutCategories().find((c) => c.id === "analizy");
     expect(analizy).toBeTruthy();
+    expect(analizy!.label).toBe("Pulpit");
     expect(analizy!.opensSideFlyout).toBe(true);
     expect(analizy!.directPath).toBeUndefined();
     const labels = analizy!.flyoutSections.flatMap((s) => s.items.map((i) => i.label));
@@ -45,7 +48,7 @@ describe("Phase B IA — Administracja flyout (SASIST pattern)", () => {
     expect(paths).not.toContain("/report/warehouse-structure");
   });
 
-  it("keeps LabelSystem under Szablony → /templates/labels (and Administracja flyout)", () => {
+  it("keeps LabelSystem only under Szablony → /templates/labels", () => {
     const labelEntries = buildNavFlyoutCategories().flatMap((c) =>
       c.flyoutSections.flatMap((s) =>
         s.items
@@ -53,11 +56,6 @@ describe("Phase B IA — Administracja flyout (SASIST pattern)", () => {
           .map((i) => ({ id: c.id, path: i.path })),
       ),
     );
-    expect(labelEntries).toEqual(
-      expect.arrayContaining([
-        { id: "templates", path: "/templates/labels" },
-        { id: "warehouse", path: "/templates/labels" },
-      ]),
-    );
+    expect(labelEntries).toEqual([{ id: "templates", path: "/templates/labels" }]);
   });
 });
