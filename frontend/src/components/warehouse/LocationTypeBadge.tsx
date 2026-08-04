@@ -21,6 +21,8 @@ export type LocationTypeBadgeProps = {
    * Use in popovers / wide containers where names must stay readable.
    */
   layoutSpread?: boolean;
+  /** Left type icon (color still comes from badge chrome). Default true. */
+  showTypeIcon?: boolean;
   /** Optional: open warehouse map for this location (icon on the right; stops row click propagation). */
   mapPinAction?: {
     onClick: (e: MouseEvent) => void;
@@ -28,7 +30,10 @@ export type LocationTypeBadgeProps = {
   };
 };
 
-/** Single-line row: [ subtle icon | location (medium) | quantity bold right ]. No type text labels — type is color + icon only. */
+/**
+ * Location chip: type color chrome + full location label + quantity.
+ * Location name is never truncated — badge grows / wraps instead.
+ */
 export function LocationTypeBadge({
   locationText,
   quantity,
@@ -38,6 +43,7 @@ export function LocationTypeBadge({
   title,
   volumeError,
   layoutSpread = false,
+  showTypeIcon = true,
   mapPinAction,
 }: LocationTypeBadgeProps) {
   const st = normalizeStorageType(storageType);
@@ -61,19 +67,19 @@ export function LocationTypeBadge({
 
   const rowClass = compact
     ? layoutSpread
-      ? `flex h-7 min-h-7 w-full min-w-0 justify-between items-center gap-1.5 rounded border px-2.5 py-0 text-left shadow-sm ${className}`
-      : `flex h-7 min-h-7 min-w-0 max-w-full items-center gap-1.5 rounded border px-2.5 py-0 text-left shadow-sm ${className}`
+      ? `inline-flex h-7 min-h-7 w-full justify-between items-center gap-1.5 rounded border px-2.5 py-0 text-left shadow-sm ${className}`
+      : `inline-flex h-auto min-h-7 w-fit flex-wrap items-center gap-x-1.5 gap-y-0.5 rounded border px-2.5 py-0 text-left shadow-sm ${className}`
     : layoutSpread
-      ? `flex w-full min-w-0 justify-between items-start gap-2 rounded-md border px-2.5 py-1.5 text-left shadow-sm ${className}`
-      : `flex min-w-0 max-w-full items-center gap-2 rounded-md border px-2.5 py-1 text-left shadow-sm ${className}`;
+      ? `inline-flex w-full justify-between items-start gap-2 rounded-md border px-2.5 py-1.5 text-left shadow-sm ${className}`
+      : `inline-flex w-fit flex-wrap items-center gap-x-2 gap-y-0.5 rounded-md border px-2.5 py-1 text-left shadow-sm ${className}`;
 
   const locationClass = compact
     ? layoutSpread
-      ? "min-w-0 flex-1 whitespace-normal break-words font-mono text-[13px] font-semibold leading-snug text-slate-900"
-      : "min-w-0 flex-1 truncate font-mono text-[13px] font-semibold leading-none text-slate-900"
+      ? "whitespace-normal break-words font-mono text-[13px] font-semibold leading-snug text-slate-900"
+      : "whitespace-normal break-words font-mono text-[13px] font-semibold leading-snug text-slate-900"
     : layoutSpread
-      ? "min-w-0 flex-1 whitespace-normal break-words font-mono text-[13px] font-medium leading-snug text-slate-800"
-      : "min-w-0 flex-1 truncate font-mono text-[13px] font-medium leading-none text-slate-800";
+      ? "whitespace-normal break-words font-mono text-[13px] font-medium leading-snug text-slate-800"
+      : "whitespace-normal break-words font-mono text-[13px] font-medium leading-snug text-slate-800";
 
   return (
     <div
@@ -84,20 +90,22 @@ export function LocationTypeBadge({
         (qtyStr != null ? `${displayLocationText} — ${qtyStr} szt.` : displayLocationText)
       }
     >
-      <span
-        className={`shrink-0 opacity-[0.72] ${layoutSpread && !compact ? "mt-0.5" : ""}`}
-        style={{ color: iconColor }}
-        aria-hidden
-      >
-        <StorageTypeIcon storageType={st} size={11} className="block" />
-      </span>
+      {showTypeIcon ? (
+        <span
+          className={`shrink-0 opacity-[0.72] ${layoutSpread && !compact ? "mt-0.5" : ""}`}
+          style={{ color: iconColor }}
+          aria-hidden
+        >
+          <StorageTypeIcon storageType={st} size={11} className="block" />
+        </span>
+      ) : null}
       <span className={locationClass}>{displayLocationText}</span>
       {qtyStr != null && (
         <span
           className={`shrink-0 text-right tabular-nums leading-none tracking-tight text-slate-900 ${
             compact
-              ? `text-[13px] font-bold ${layoutSpread ? "pl-1 whitespace-nowrap" : "pl-0.5"}`
-              : `text-[15px] font-bold tracking-tight ${layoutSpread ? "pl-2 pt-0.5 whitespace-nowrap" : "pl-1"}`
+              ? `text-[13px] font-bold ${layoutSpread ? "pl-1 whitespace-nowrap" : "pl-0.5 whitespace-nowrap"}`
+              : `text-[15px] font-bold tracking-tight ${layoutSpread ? "pl-2 pt-0.5 whitespace-nowrap" : "pl-1 whitespace-nowrap"}`
           }`}
         >
           {qtyStr}

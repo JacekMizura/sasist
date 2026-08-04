@@ -50,15 +50,7 @@ export function physicalInventoryLocations(p: Product): PhysicalInvLoc[] {
     }));
 }
 
-function LocationOverflowPopover({
-  hidden,
-  product,
-  onOpenLocationOnMap,
-}: {
-  hidden: PhysicalInvLoc[];
-  product: Product;
-  onOpenLocationOnMap: (payload: OpenLocationOnMapPayload) => void;
-}) {
+function LocationOverflowPopover({ hidden }: { hidden: PhysicalInvLoc[] }) {
   const [open, setOpen] = useState(false);
   const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -90,7 +82,7 @@ function LocationOverflowPopover({
   if (n === 0) return null;
 
   return (
-    <div className="relative inline-flex min-w-0 max-w-full" onMouseEnter={show} onMouseLeave={scheduleHide}>
+    <div className="relative inline-flex" onMouseEnter={show} onMouseLeave={scheduleHide}>
       <button
         type="button"
         className="text-left text-xs text-slate-500 underline decoration-dotted decoration-slate-400 underline-offset-2 hover:text-slate-800"
@@ -103,7 +95,7 @@ function LocationOverflowPopover({
       </button>
       {open && (
         <div
-          className="absolute left-0 top-full z-[60] w-max min-w-[180px] max-w-[300px] rounded-lg border border-slate-200 bg-white p-3 shadow-lg"
+          className="absolute left-0 top-full z-[60] w-max min-w-[180px] rounded-lg border border-slate-200 bg-white p-3 shadow-lg"
           style={{ marginTop: "-6px" }}
           role="dialog"
           aria-label="Dodatkowe lokalizacje"
@@ -111,28 +103,14 @@ function LocationOverflowPopover({
           onMouseLeave={scheduleHide}
           onClick={(e) => e.stopPropagation()}
         >
-          <div className="flex max-h-[min(60vh,20rem)] w-full min-w-[180px] max-w-[300px] flex-col gap-2 overflow-y-auto">
+          <div className="flex max-h-[min(60vh,20rem)] flex-col items-start gap-2 overflow-y-auto">
             {hidden.map((l, i) => (
               <LocationTypeBadge
                 key={`${l.name}-overflow-${i}`}
                 locationText={l.name}
                 quantity={l.quantity}
                 storageType={l.storage_type}
-                layoutSpread
-                className="w-full"
-                mapPinAction={
-                  l.warehouse_id != null && (l.location_uuid ?? "").trim() !== ""
-                    ? {
-                        title: "Pokaż na mapie magazynu",
-                        onClick: () =>
-                          onOpenLocationOnMap({
-                            product,
-                            warehouseId: l.warehouse_id!,
-                            focusedUuid: (l.location_uuid ?? "").trim(),
-                          }),
-                      }
-                    : undefined
-                }
+                showTypeIcon={false}
               />
             ))}
           </div>
@@ -143,9 +121,7 @@ function LocationOverflowPopover({
 }
 
 export function ProductListLocationBadgeStack({
-  product,
   locations,
-  onOpenLocationOnMap,
 }: {
   product: Product;
   locations: PhysicalInvLoc[];
@@ -157,31 +133,17 @@ export function ProductListLocationBadgeStack({
   const visible = locations.slice(0, MAX_LOCATION_BADGES);
   const hidden = locations.slice(MAX_LOCATION_BADGES);
   return (
-    <div className="flex min-w-0 w-full max-w-none flex-col gap-1">
+    <div className="flex w-full flex-col items-start gap-1">
       {visible.map((l, i) => (
         <LocationTypeBadge
           key={`${l.name}-${i}`}
           locationText={l.name}
           quantity={l.quantity}
           storageType={l.storage_type}
-          mapPinAction={
-            l.warehouse_id != null && (l.location_uuid ?? "").trim() !== ""
-              ? {
-                  title: "Pokaż na mapie magazynu",
-                  onClick: () =>
-                    onOpenLocationOnMap({
-                      product,
-                      warehouseId: l.warehouse_id!,
-                      focusedUuid: (l.location_uuid ?? "").trim(),
-                    }),
-                }
-              : undefined
-          }
+          showTypeIcon={false}
         />
       ))}
-      {hidden.length > 0 && (
-        <LocationOverflowPopover hidden={hidden} product={product} onOpenLocationOnMap={onOpenLocationOnMap} />
-      )}
+      {hidden.length > 0 && <LocationOverflowPopover hidden={hidden} />}
     </div>
   );
 }
