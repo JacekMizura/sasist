@@ -78,7 +78,7 @@ export function MoneyInput({
   };
 
   return (
-    <div className={`relative w-full ${className}`.trim()}>
+    <div className={`relative ${className.includes("w-") ? className : `w-full ${className}`.trim()}`.trim()}>
       <Input
         {...props}
         type="text"

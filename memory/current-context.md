@@ -1,9 +1,11 @@
 ﻿## Active
 
-**Edycja produktu — zakładka Ceny (2026-08-04).**
+**Edycja produktu — Ceny 1:1 do mock HTML (2026-08-04).**
 
-- Layout 65/35: Kalkulacja (MoneyInput) · Dostawcy (DataTable) · Ostatni zakup · sticky Podsumowanie (MetricCard + StatusBadge)
-- Backend / API / logika cen — bez zmian
+- Wzorzec = wyłącznie `edycja_produktu_nowy_widok (1).html` (nie zakładka Podstawowe)
+- Układ: left 2/3 · right 1/3; Ostatni zakup + Podsumowanie w `sm:flex-row xl:flex-col`
+- Footer podsumowania = emerald rows jak w mocku (bez MetricCard)
+- Logika / API — bez zmian
 
 **Edycja produktu — redesign UX jak HTML (2026-08-04).**
 
