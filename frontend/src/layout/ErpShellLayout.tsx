@@ -38,13 +38,21 @@ export default function ErpShellLayout({ children, headerMode }: ErpShellLayoutP
         <ErpSidebar />
 
         <div
-          className={`relative z-0 flex min-h-0 min-w-0 flex-1 flex-col ${wmsSettingsShellScroll ? "overflow-y-auto" : ""}`}
+          className={`relative z-0 flex min-h-0 min-w-0 flex-1 flex-col ${
+            wmsSettingsShellScroll ? "overflow-y-auto [scrollbar-gutter:stable]" : ""
+          }`}
         >
           <header className="flex shrink-0 flex-col bg-white">
             <AppTopBar />
           </header>
           <main
-            className={`flex min-h-0 min-w-0 flex-1 flex-col ${appLayoutTokens.appBackground} ${designerFill ? "overflow-hidden" : wmsSettingsShellScroll ? "overflow-visible" : "overflow-y-auto"}`}
+            className={`flex min-h-0 min-w-0 flex-1 flex-col ${appLayoutTokens.appBackground} ${
+              designerFill
+                ? "overflow-hidden"
+                : wmsSettingsShellScroll
+                  ? "overflow-visible"
+                  : "overflow-y-auto [scrollbar-gutter:stable]"
+            }`}
           >
             {children}
           </main>
