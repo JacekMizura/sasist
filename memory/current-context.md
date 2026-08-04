@@ -1,5 +1,10 @@
 ﻿## Active
 
+**Edycja produktu — Produkcja: DOM 1:1 z `produkcja karta produktu.html` (2026-08-04).**
+
+- `ProductManufacturingPanel` + `CompositionVisualEditor`: banner, 2+1 grid, składniki bez DataTable, BOM, sidebar
+- SASIST Input/Checkbox/Button/Badge; logika receptur/API bez zmian
+
 **Edycja produktu — Magazyn: DOM 1:1 z `magazyn karta produktu.html` (2026-08-04).**
 
 - `ProductEditWarehouseTab`: Stan i lokalizacje (grid 4) + Parametry logistyczne (2+1)

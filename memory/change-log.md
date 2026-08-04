@@ -1,3 +1,9 @@
+## 2026-08-04 — Edycja produktu: Produkcja 1:1 z HTML (FE only)
+
+- `ProductManufacturingPanel` + `CompositionVisualEditor` wg `produkcja karta produktu.html`
+- Banner, receptura (składniki grid, BOM), sidebar: zużycie / historia / koszt / wersje
+- Bez DataTable; SASIST Input/Checkbox/Button/Badge; API/logika bez zmian
+
 ## 2026-08-04 — Edycja produktu: Magazyn 1:1 z HTML (FE only)
 
 - Nowy `ProductEditWarehouseTab` wg `magazyn karta produktu.html` (sekcje Stan i lokalizacje + Parametry logistyczne)

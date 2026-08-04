@@ -11,8 +11,7 @@ import {
   type CompositionCostEstimateRead,
   type ProductCompositionRead,
 } from "../../api/compositionApi";
-import { brandPrimaryButtonClass } from "../../design-system/brandUi";
-import { PrimaryButton } from "../../design-system/PrimaryButton";
+import { Checkbox, GhostButton, Input, PrimaryButton } from "../../design-system";
 import { formatProductionMoney, PRODUCTION_NUMBER_INPUT } from "./productionUi";
 
 type CatalogProduct = {
@@ -93,12 +92,8 @@ function modeCopy(mode: CompositionMode) {
       activeLabel: "Aktywna receptura",
       addLabel: "Utwórz recepturę",
       defaultName: "Receptura produkcyjna",
-      accentBtn: brandPrimaryButtonClass,
-      accentRing: "focus:ring-slate-500 focus:border-slate-400",
-      cardBorder: "hover:border-slate-300",
-      outputBorder: "border-slate-300 bg-slate-50 text-slate-900",
-      editorPanel: "border-slate-200 bg-slate-50/50",
-      link: "text-slate-700 hover:underline",
+      outputBorder: "border-purple-200 bg-purple-50 text-purple-800",
+      link: "text-blue-600 hover:text-blue-800",
     };
   }
   return {
@@ -108,11 +103,7 @@ function modeCopy(mode: CompositionMode) {
     activeLabel: "Aktywny zestaw",
     addLabel: "Dodaj zestaw",
     defaultName: "Zestaw",
-    accentBtn: brandPrimaryButtonClass,
-    accentRing: "focus:ring-violet-500 focus:border-violet-400",
-    cardBorder: "hover:border-violet-200",
     outputBorder: "border-violet-200 bg-violet-50 text-violet-900",
-    editorPanel: "border-violet-200 bg-violet-50/30",
     link: "text-violet-600 hover:underline",
   };
 }
@@ -149,11 +140,7 @@ export function CompositionVisualEditor({
   const [searchResults, setSearchResults] = useState<CatalogProduct[]>([]);
   const [costEstimate, setCostEstimate] = useState<CompositionCostEstimateRead | null>(null);
 
-  const inputClass = `w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 focus:ring-2 ${copy.accentRing}`;
-  const numberInputClass = `${inputClass} ${PRODUCTION_NUMBER_INPUT}`;
-  const cellInputClass = `w-full rounded border border-slate-200 px-2 py-1.5 text-sm text-slate-800 focus:ring-1 ${copy.accentRing}`;
-  const cellNumberInputClass = `${cellInputClass} ${PRODUCTION_NUMBER_INPUT}`;
-  const labelClass = "block text-sm font-medium text-slate-700 mb-1";
+  const fieldLabelClass = "mb-1.5 block text-xs font-medium uppercase tracking-wide text-gray-600";
 
   const openNew = () => {
     setEditingId(null);
@@ -327,20 +314,22 @@ export function CompositionVisualEditor({
   }, [rows, compositions, prefetchProduct]);
 
   return (
-    <section className="space-y-4">
-      <div className="flex items-start justify-between gap-4">
+    <section className="space-y-6">
+      {/* Nagłówek sekcji — mock */}
+      <div className="flex items-center justify-between">
         <div>
-          <h4 className="text-base font-bold text-slate-900">{sectionTitle}</h4>
-          <p className="mt-1 text-xs text-slate-500">{sectionHint}</p>
+          <h2 className="text-lg font-bold text-gray-900">{sectionTitle}</h2>
+          <p className="mt-0.5 text-xs text-gray-500">{sectionHint}</p>
         </div>
-        <button
+        <PrimaryButton
           type="button"
+          density="compact"
           onClick={openNew}
-          className={`${copy.accentBtn} shrink-0`}
+          className="!rounded-lg !bg-orange-500 !px-4 !py-2 !text-sm !font-semibold shadow-sm hover:!bg-orange-600"
         >
-          <Plus className="h-4 w-4" aria-hidden />
+          <Plus className="mr-2 h-4 w-4" strokeWidth={2.5} aria-hidden />
           {copy.addLabel}
-        </button>
+        </PrimaryButton>
       </div>
 
       {err ? (
@@ -348,10 +337,10 @@ export function CompositionVisualEditor({
       ) : null}
 
       {compositions.length === 0 && !editorOpen ? (
-        <p className="text-sm text-slate-500">{copy.empty}</p>
+        <p className="text-sm text-gray-500">{copy.empty}</p>
       ) : hideCompositionCards ? (
         !editorOpen ? (
-          <p className="rounded-lg border border-dashed border-slate-200 bg-white px-4 py-6 text-center text-sm text-slate-500">
+          <p className="rounded-lg border border-dashed border-gray-200 bg-white px-4 py-6 text-center text-sm text-gray-500">
             Wybierz wersję receptury w panelu po prawej lub utwórz nową.
           </p>
         ) : null
@@ -360,50 +349,24 @@ export function CompositionVisualEditor({
           {compositions.map((comp) => (
             <div
               key={comp.id}
-              className={`rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition-colors ${copy.cardBorder}`}
+              className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm transition-colors hover:border-gray-300"
             >
               <div className="flex items-start justify-between gap-2">
                 <div>
-                  <p className="font-semibold text-slate-900">{comp.name}</p>
-                  <p className="text-xs text-slate-500">
+                  <p className="font-semibold text-gray-900">{comp.name}</p>
+                  <p className="text-xs text-gray-500">
                     v{comp.version} · wydajność {comp.yield_quantity} · {comp.lines.length} skł.
                   </p>
                 </div>
                 {comp.is_active ? (
                   <span className="rounded bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-800">Aktywna</span>
                 ) : (
-                  <button
-                    type="button"
-                    onClick={() => void handleActivate(comp.id)}
-                    className={`text-xs ${copy.link}`}
-                  >
+                  <button type="button" onClick={() => void handleActivate(comp.id)} className={`text-xs ${copy.link}`}>
                     Aktywuj
                   </button>
                 )}
               </div>
-              <div className="mt-3 flex flex-col items-center gap-1 py-2">
-                {comp.lines.slice(0, 4).map((ln) => (
-                  <div
-                    key={ln.id}
-                    className="w-full max-w-xs rounded-lg border border-slate-100 bg-slate-50 px-3 py-2 text-center text-sm"
-                  >
-                    <span className="font-medium text-slate-800">{ln.product_name ?? `#${ln.component_product_id}`}</span>
-                    <span className="block text-xs text-slate-500">{ln.quantity} szt.</span>
-                  </div>
-                ))}
-                {comp.lines.length > 4 ? (
-                  <p className="text-xs text-slate-500">+{comp.lines.length - 4} więcej</p>
-                ) : null}
-                <ArrowDown className="h-4 w-4 text-slate-300" aria-hidden />
-                <div className={`w-full max-w-xs rounded-lg border-2 px-3 py-2 text-center text-sm font-semibold ${copy.outputBorder}`}>
-                  {productName}
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => openEdit(comp)}
-                className={`mt-3 text-sm ${copy.link}`}
-              >
+              <button type="button" onClick={() => openEdit(comp)} className={`mt-3 text-sm ${copy.link}`}>
                 Edytuj
               </button>
             </div>
@@ -412,186 +375,244 @@ export function CompositionVisualEditor({
       )}
 
       {editorOpen ? (
-        <div className={`rounded-xl border p-4 space-y-4 ${copy.editorPanel}`}>
-          <h5 className="font-semibold text-slate-900">{editingId == null ? copy.newTitle : copy.editTitle}</h5>
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            <div className="sm:col-span-2">
-              <label className={labelClass}>Nazwa</label>
-              <input className={inputClass} value={name} onChange={(e) => setName(e.target.value)} />
-            </div>
-            <div>
-              <label className={labelClass}>Wersja</label>
-              <input className={inputClass} value={version} onChange={(e) => setVersion(e.target.value)} />
-            </div>
-            <div>
-              <label className={labelClass}>Wydajność (szt.)</label>
-              <input
-                type="number"
-                min={0.001}
-                step="any"
-                className={numberInputClass}
-                value={yieldQty}
-                onChange={(e) => setYieldQty(Number(e.target.value) || 1)}
-              />
-            </div>
+        <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+          <div className="border-b border-gray-100 bg-gray-50/50 px-6 py-4">
+            <h3 className="text-base font-bold text-gray-900">
+              {editingId == null ? copy.newTitle : copy.editTitle}
+            </h3>
           </div>
-          <label className="flex items-center gap-2 text-sm text-slate-700">
-            <input type="checkbox" checked={isActive} onChange={(e) => setIsActive(e.target.checked)} />
-            {copy.activeLabel}
-          </label>
 
-          <div className="space-y-4">
-            <div>
-              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Składniki</p>
-              <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">
-                <table className="min-w-full text-sm">
-                  <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
-                    <tr>
-                      <th className="px-2 py-2 font-medium">Produkt</th>
-                      <th className="w-24 px-2 py-2 font-medium">Ilość</th>
-                      <th className="w-20 px-2 py-2 font-medium">Jednostka</th>
-                      {mode === "manufacturing" ? <th className="w-20 px-2 py-2 font-medium">Odpad %</th> : null}
-                      <th className="w-10 px-2 py-2 font-medium">
-                        <span className="sr-only">Akcje</span>
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {rows.map((row, idx) => (
-                      <tr key={row.rowKey} className="border-t border-slate-100 align-middle">
-                        <td className="relative px-2 py-1.5">
-                          <input
-                            className={cellInputClass}
-                            value={row.searchText}
-                            onChange={(e) => {
-                              const v = e.target.value;
-                              setRows((prev) => prev.map((r, i) => (i === idx ? { ...r, searchText: v, listOpen: true } : r)));
-                              void searchProducts(v);
-                            }}
-                            onFocus={() => setRows((prev) => prev.map((r, i) => (i === idx ? { ...r, listOpen: true } : r)))}
-                            placeholder="SKU / nazwa…"
-                            aria-label="Produkt"
-                          />
-                          {row.listOpen && searchResults.length > 0 ? (
-                            <ul className="absolute left-2 right-2 z-20 mt-0.5 max-h-40 overflow-auto rounded-lg border border-slate-200 bg-white shadow-lg text-sm">
-                              {searchResults.map((p) => (
-                                <li key={p.id}>
-                                  <button
-                                    type="button"
-                                    className="block w-full px-2 py-1.5 text-left hover:bg-slate-50"
-                                    onClick={() => {
-                                      setProductCache((prev) => ({ ...prev, [p.id]: p }));
-                                      setRows((prev) =>
-                                        prev.map((r, i) =>
-                                          i === idx
-                                            ? {
-                                                ...r,
-                                                productId: p.id,
-                                                searchText: (p.name ?? `Produkt #${p.id}`).trim(),
-                                                listOpen: false,
-                                              }
-                                            : r,
-                                        ),
-                                      );
-                                    }}
-                                  >
-                                    {(p.name ?? `#${p.id}`).trim()} · {p.sku || p.symbol || "—"}
-                                  </button>
-                                </li>
-                              ))}
-                            </ul>
-                          ) : null}
-                        </td>
-                        <td className="px-2 py-1.5">
-                          <input
-                            type="number"
-                            min={0.001}
-                            step="any"
-                            className={cellNumberInputClass}
-                            value={row.quantity}
-                            onChange={(e) =>
-                              setRows((prev) =>
-                                prev.map((r, i) => (i === idx ? { ...r, quantity: Number(e.target.value) || 0 } : r)),
-                              )
-                            }
-                            aria-label="Ilość"
-                          />
-                        </td>
-                        <td className="px-2 py-1.5 text-slate-600">szt.</td>
-                        {mode === "manufacturing" ? (
-                          <td className="px-2 py-1.5">
-                            <input
-                              type="number"
-                              min={0}
-                              max={100}
-                              className={cellNumberInputClass}
-                              value={row.wastePercent}
-                              onChange={(e) =>
-                                setRows((prev) =>
-                                  prev.map((r, i) => (i === idx ? { ...r, wastePercent: Number(e.target.value) || 0 } : r)),
-                                )
-                              }
-                              aria-label="Odpad procent"
-                            />
-                          </td>
-                        ) : null}
-                        <td className="px-2 py-1.5 text-center">
-                          <button
-                            type="button"
-                            title="Usuń składnik"
-                            onClick={() => setRows((prev) => (prev.length > 1 ? prev.filter((_, i) => i !== idx) : [emptyRow()]))}
-                            className="rounded p-1 text-slate-400 hover:bg-red-50 hover:text-red-600"
-                          >
-                            <Trash2 className="h-4 w-4" aria-hidden />
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+          <div className="space-y-6 p-6">
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
+              <div className="md:col-span-2">
+                <label className={fieldLabelClass}>Nazwa</label>
+                <Input
+                  density="comfortable"
+                  focusTone="brand"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                />
               </div>
+              <div>
+                <label className={fieldLabelClass}>Wersja</label>
+                <Input
+                  density="comfortable"
+                  focusTone="brand"
+                  value={version}
+                  onChange={(e) => setVersion(e.target.value)}
+                  className="bg-gray-50"
+                />
+              </div>
+              <div>
+                <label className={fieldLabelClass}>Wydajność (szt.)</label>
+                <Input
+                  type="number"
+                  min={0.001}
+                  step="any"
+                  density="comfortable"
+                  focusTone="brand"
+                  className={PRODUCTION_NUMBER_INPUT}
+                  value={yieldQty}
+                  onChange={(e) => setYieldQty(Number(e.target.value) || 1)}
+                />
+              </div>
+            </div>
+
+            <label className="mt-2 flex cursor-pointer items-center">
+              <Checkbox
+                checked={isActive}
+                onChange={(e) => setIsActive(e.target.checked)}
+                className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+              />
+              <span className="ml-2 text-sm font-medium text-gray-800">{copy.activeLabel}</span>
+            </label>
+
+            {/* Składniki — grid rows jak mock, bez DataTable */}
+            <div className="pt-2">
+              <h4 className="mb-3 text-xs font-bold uppercase tracking-wider text-gray-500">Składniki</h4>
+
+              <div className="mb-2 grid grid-cols-12 gap-4 px-2 text-xs font-medium uppercase tracking-wider text-gray-500">
+                <div className="col-span-7">Produkt</div>
+                <div className="col-span-2 text-right">Ilość</div>
+                <div className="col-span-1">Jednostka</div>
+                {mode === "manufacturing" ? <div className="col-span-1 text-right">Odpad %</div> : <div className="col-span-1" />}
+                <div className="col-span-1 text-center" />
+              </div>
+
+              {rows.map((row, idx) => (
+                <div
+                  key={row.rowKey}
+                  className="mb-3 grid grid-cols-12 items-center gap-4 rounded-lg border border-gray-200 bg-white p-2 shadow-sm"
+                >
+                  <div className="relative col-span-7">
+                    <Input
+                      density="compact"
+                      focusTone="brand"
+                      className="!border-none !bg-transparent !shadow-none focus:!ring-0"
+                      value={row.searchText}
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        setRows((prev) =>
+                          prev.map((r, i) => (i === idx ? { ...r, searchText: v, listOpen: true } : r)),
+                        );
+                        void searchProducts(v);
+                      }}
+                      onFocus={() =>
+                        setRows((prev) => prev.map((r, i) => (i === idx ? { ...r, listOpen: true } : r)))
+                      }
+                      placeholder="SKU / nazwa…"
+                      aria-label="Produkt"
+                    />
+                    {row.listOpen && searchResults.length > 0 ? (
+                      <ul className="absolute left-0 right-0 z-20 mt-0.5 max-h-40 overflow-auto rounded-lg border border-gray-200 bg-white text-sm shadow-lg">
+                        {searchResults.map((p) => (
+                          <li key={p.id}>
+                            <button
+                              type="button"
+                              className="block w-full px-3 py-1.5 text-left hover:bg-gray-50"
+                              onClick={() => {
+                                setProductCache((prev) => ({ ...prev, [p.id]: p }));
+                                setRows((prev) =>
+                                  prev.map((r, i) =>
+                                    i === idx
+                                      ? {
+                                          ...r,
+                                          productId: p.id,
+                                          searchText: (p.name ?? `Produkt #${p.id}`).trim(),
+                                          listOpen: false,
+                                        }
+                                      : r,
+                                  ),
+                                );
+                              }}
+                            >
+                              {(p.name ?? `#${p.id}`).trim()} · {p.sku || p.symbol || "—"}
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : null}
+                  </div>
+                  <div className="col-span-2">
+                    <Input
+                      type="number"
+                      min={0.001}
+                      step="any"
+                      density="compact"
+                      focusTone="brand"
+                      className={`text-right ${PRODUCTION_NUMBER_INPUT}`}
+                      value={row.quantity}
+                      onChange={(e) =>
+                        setRows((prev) =>
+                          prev.map((r, i) => (i === idx ? { ...r, quantity: Number(e.target.value) || 0 } : r)),
+                        )
+                      }
+                      aria-label="Ilość"
+                    />
+                  </div>
+                  <div className="col-span-1 pl-2 text-sm text-gray-600">szt.</div>
+                  {mode === "manufacturing" ? (
+                    <div className="col-span-1">
+                      <Input
+                        type="number"
+                        min={0}
+                        max={100}
+                        density="compact"
+                        focusTone="brand"
+                        className={`text-right ${PRODUCTION_NUMBER_INPUT}`}
+                        value={row.wastePercent}
+                        onChange={(e) =>
+                          setRows((prev) =>
+                            prev.map((r, i) =>
+                              i === idx ? { ...r, wastePercent: Number(e.target.value) || 0 } : r,
+                            ),
+                          )
+                        }
+                        aria-label="Odpad procent"
+                      />
+                    </div>
+                  ) : (
+                    <div className="col-span-1" />
+                  )}
+                  <div className="col-span-1 text-center">
+                    <button
+                      type="button"
+                      title="Usuń składnik"
+                      onClick={() =>
+                        setRows((prev) => (prev.length > 1 ? prev.filter((_, i) => i !== idx) : [emptyRow()]))
+                      }
+                      className="text-gray-400 transition-colors hover:text-red-500"
+                    >
+                      <Trash2 className="mx-auto h-4 w-4" aria-hidden />
+                    </button>
+                  </div>
+                </div>
+              ))}
+
               <button
                 type="button"
                 onClick={() => setRows((prev) => [...prev, emptyRow()])}
-                className="mt-2 text-sm text-violet-600 hover:underline"
+                className="mt-2 flex items-center px-1 text-sm font-medium text-blue-600 transition-colors hover:text-blue-800"
               >
-                + Dodaj składnik
+                <Plus className="mr-1.5 h-3 w-3" strokeWidth={2.5} aria-hidden /> Dodaj składnik
               </button>
             </div>
 
-            <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed border-slate-200 bg-white p-4">
-              <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Podgląd BOM</p>
+            {/* Podgląd BOM */}
+            <div className="mt-4 flex flex-col items-center border-t border-gray-100 pt-6">
+              <h4 className="mb-4 text-[10px] font-bold uppercase tracking-wider text-gray-400">Podgląd BOM</h4>
+
               {previewLines.map((ln) => (
-                <div key={ln.id} className="w-full max-w-md rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-center shadow-sm">
-                  <p className="font-medium text-slate-800">{ln.name}</p>
-                  <p className="text-sm text-slate-600">
+                <div
+                  key={ln.id}
+                  className="w-full max-w-sm rounded-lg border border-gray-200 bg-gray-50 p-3 text-center shadow-sm"
+                >
+                  <div className="text-sm font-medium text-gray-800">{ln.name}</div>
+                  <div className="mt-1 text-xs text-gray-500">
                     {ln.qty} {ln.unit}
-                  </p>
+                  </div>
                 </div>
               ))}
-              {previewLines.length === 0 ? <p className="text-sm text-slate-500">Dodaj składniki…</p> : null}
-              <ArrowDown className="h-5 w-5 text-violet-400" aria-hidden />
-              <div className="w-full max-w-md rounded-lg border-2 border-violet-300 bg-violet-50 px-4 py-3 text-center font-semibold text-violet-900 shadow-sm">
-                {productName}
+              {previewLines.length === 0 ? (
+                <p className="text-sm text-gray-500">Dodaj składniki…</p>
+              ) : null}
+
+              <div className="relative h-6 w-px bg-gray-300">
+                <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 transform text-[10px] text-gray-400">
+                  <ArrowDown className="h-3 w-3" aria-hidden />
+                </div>
+              </div>
+
+              <div
+                className={`mt-1 w-full max-w-sm rounded-lg border p-3 text-center shadow-sm ${copy.outputBorder}`}
+              >
+                <div className="text-sm font-bold">{productName}</div>
               </div>
             </div>
+
+            {!hideCompositionCards && mode === "manufacturing" && costEstimate ? (
+              <p className="text-sm text-gray-600">
+                Szacowany koszt: <strong>{formatProductionMoney(costEstimate.unit_cost_net)}</strong> / szt.
+              </p>
+            ) : null}
           </div>
 
-          {!hideCompositionCards && mode === "manufacturing" && costEstimate ? (
-            <p className="text-sm text-slate-600">
-              Szacowany koszt: <strong>{formatProductionMoney(costEstimate.unit_cost_net)}</strong> / szt.
-            </p>
-          ) : null}
-
-          <div className="flex justify-end gap-2">
-            <button
+          <div className="flex justify-end space-x-3 border-t border-gray-100 bg-gray-50/50 px-6 py-4">
+            <GhostButton
               type="button"
+              density="compact"
               onClick={() => setEditorOpen(false)}
-              className="rounded-lg border border-slate-200 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"
+              className="!px-4 !py-2 !text-sm !font-medium !text-gray-600 hover:!bg-transparent hover:!text-gray-800"
             >
               Anuluj
-            </button>
-            <PrimaryButton type="button" disabled={saving} onClick={() => void handleSave()}>
+            </GhostButton>
+            <PrimaryButton
+              type="button"
+              density="compact"
+              disabled={saving}
+              onClick={() => void handleSave()}
+              className="!rounded-lg !bg-orange-500 !px-5 !py-2 !text-sm !font-semibold shadow-sm hover:!bg-orange-600"
+            >
               {saving ? "Zapisywanie…" : "Zapisz"}
             </PrimaryButton>
           </div>

@@ -1,6 +1,5 @@
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { ExternalLink, Factory, Plus } from "lucide-react";
 import {
   activateComposition,
   listCompositionsForProduct,
@@ -17,13 +16,13 @@ import {
   type RecipeDetailRead,
 } from "../../api/productionApi";
 import { CompositionVisualEditor } from "./CompositionVisualEditor";
-import { PrimaryButton } from "../../design-system/PrimaryButton";
+import { Badge, StatusBadge } from "../../design-system";
 import { erpProductionPaths } from "./productionPaths";
 import { warehouseStockDocumentPath } from "../../utils/stockDocumentPaths";
 import {
+  executionStatusTone,
   formatProductionMoney,
   PRODUCTION_STATUS_LABEL,
-  productionStatusBadgeClass,
 } from "./productionUi";
 import { useWarehouse } from "../../context/WarehouseContext";
 
@@ -41,15 +40,10 @@ type RwPwPreview = {
   pwId?: number | null;
 };
 
-function InfoPanelSection({ title, children }: { title: string; children: ReactNode }) {
-  return (
-    <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-      <h3 className="mb-3 border-b border-slate-200 pb-2 text-sm font-bold text-slate-900">{title}</h3>
-      {children}
-    </section>
-  );
-}
-
+/**
+ * Product edit — Produkcja tab.
+ * DOM hierarchy is a structural 1:1 port of `produkcja karta produktu.html`.
+ */
 export function ProductManufacturingPanel({ tenantId, productId, productName, onChanged }: Props) {
   const { warehouse } = useWarehouse();
   const warehouseId = warehouse?.id;
@@ -65,11 +59,6 @@ export function ProductManufacturingPanel({ tenantId, productId, productName, on
   const [liveCost, setLiveCost] = useState<CompositionCostEstimateRead | null>(null);
   const [activatingId, setActivatingId] = useState<number | null>(null);
   const [autoOpenedRecipe, setAutoOpenedRecipe] = useState(false);
-
-  const activeRecipe = useMemo(
-    () => recipes.find((c) => c.is_active) ?? recipes[0] ?? null,
-    [recipes],
-  );
 
   const estimatedUnitCost = liveCost?.unit_cost_net ?? detail?.unit_cost_net ?? null;
 
@@ -151,136 +140,120 @@ export function ProductManufacturingPanel({ tenantId, productId, productName, on
   };
 
   if (loading) {
-    return <p className="text-sm text-slate-500">Wczytywanie danych produkcji…</p>;
+    return <p className="text-sm text-gray-500">Wczytywanie danych produkcji…</p>;
   }
 
   return (
-    <div className="space-y-4">
+    /* mock: <div class="max-w-7xl mx-auto space-y-6"> */
+    <div className="mx-auto max-w-7xl space-y-6">
       {err ? (
         <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">{err}</div>
       ) : null}
 
-      <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-4">
-        <p className="text-sm text-slate-600">
-          Warstwa definicji produkcji (BOM / receptura). Planowanie zleceń i harmonogram — w module{" "}
-          <Link to={erpProductionPaths.home} className="font-semibold text-slate-800 underline hover:text-slate-600">
-            ERP Produkcja
-          </Link>
-          . Wykonanie — w{" "}
-          <Link to="/wms/production/collecting" className="font-semibold text-slate-800 underline hover:text-slate-600">
-            terminalu WMS
-          </Link>
-          .
-        </p>
+      {/* Info banner — 1:1 mock */}
+      <div className="flex items-center rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-600 shadow-sm">
+        Warstwa definicji produkcji (BOM / receptura). Planowanie zleceń i harmonogram — w module{" "}
+        <Link to={erpProductionPaths.home} className="mx-1 font-semibold text-gray-800 hover:underline">
+          ERP Produkcja
+        </Link>
+        . Wykonanie — w terminalu{" "}
+        <Link to="/wms/production/collecting" className="ml-1 font-semibold text-gray-800 hover:underline">
+          WMS
+        </Link>
+        .
       </div>
 
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,7fr)_minmax(0,3fr)]">
-        <div className="min-w-0 space-y-4">
-          {!activeRecipe && recipes.length === 0 ? (
-            <section className="rounded-xl border-2 border-dashed border-slate-300 bg-white p-8 text-center shadow-sm">
-              <Factory className="mx-auto h-10 w-10 text-slate-400" aria-hidden />
-              <h3 className="mt-4 text-lg font-semibold text-slate-900">Ten produkt nie posiada receptury produkcyjnej</h3>
-              <p className="mt-2 text-sm text-slate-500">
-                Zdefiniuj BOM (składniki, wydajność, koszt), aby móc planować i wykonywać produkcję z dokumentami RW/PW.
-              </p>
-              <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
-                <PrimaryButton type="button" onClick={() => setRequestNewRecipe(true)}>
-                  <Plus className="h-4 w-4" strokeWidth={2.5} aria-hidden />
-                  Utwórz recepturę
-                </PrimaryButton>
-                <Link
-                  to={erpProductionPaths.orders}
-                  className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium text-slate-800 hover:bg-slate-50"
-                >
-                  Otwórz moduł Produkcja ERP
-                  <ExternalLink className="h-4 w-4" aria-hidden />
-                </Link>
-              </div>
-            </section>
-          ) : (
-            <CompositionVisualEditor
-              tenantId={tenantId}
-              productId={productId}
-              productName={productName}
-              mode="manufacturing"
-              compositions={recipes}
-              onChanged={handleChanged}
-              sectionTitle="Receptura produkcyjna"
-              sectionHint="Dane receptury, składniki i podgląd BOM."
-              requestNewEditor={requestNewRecipe}
-              onRequestNewHandled={() => setRequestNewRecipe(false)}
-              hideCompositionCards
-              editCompositionId={editRecipeId}
-              onEditCompositionHandled={() => setEditRecipeId(null)}
-              onCostEstimateChange={setLiveCost}
-            />
-          )}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+        {/* LEWA — receptura (2 cols) */}
+        <div className="space-y-6 lg:col-span-2">
+          <CompositionVisualEditor
+            tenantId={tenantId}
+            productId={productId}
+            productName={productName}
+            mode="manufacturing"
+            compositions={recipes}
+            onChanged={handleChanged}
+            sectionTitle="Receptura produkcyjna"
+            sectionHint="Dane receptury, składniki i podgląd BOM"
+            requestNewEditor={requestNewRecipe}
+            onRequestNewHandled={() => setRequestNewRecipe(false)}
+            hideCompositionCards
+            editCompositionId={editRecipeId}
+            onEditCompositionHandled={() => setEditRecipeId(null)}
+            onCostEstimateChange={setLiveCost}
+          />
         </div>
 
-        <aside className="min-w-0 space-y-4 xl:sticky xl:top-4 xl:self-start">
-          <InfoPanelSection title="Zużycie materiałów">
+        {/* PRAWA — widżety; pt-11 wyrównanie z nagłówkiem receptury */}
+        <div className="space-y-6 pt-11 lg:pt-11">
+          {/* Zużycie w innych produktach */}
+          <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+            <h3 className="mb-4 text-sm font-bold text-gray-900">Zużycie w innych produktach</h3>
             {usages.length === 0 ? (
-              <p className="text-sm text-slate-500">Ten produkt nie jest składnikiem innych receptur.</p>
+              <p className="text-sm text-gray-500">Ten produkt nie jest składnikiem innych receptur.</p>
             ) : (
-              <ul className="space-y-1.5 text-sm">
-                {usages.map((u) => (
-                  <li
-                    key={`${u.composition_id}-${u.parent_product_id}`}
-                    className="flex justify-between gap-3 rounded-lg border border-slate-100 px-2.5 py-2"
-                  >
-                    <span className="min-w-0">
-                      <span className="font-medium text-slate-900">{u.parent_product_name}</span>
-                      <span className="block truncate text-xs text-slate-500">{u.composition_name}</span>
-                    </span>
-                    <span className="shrink-0 tabular-nums text-slate-600">× {u.quantity}</span>
-                  </li>
-                ))}
-              </ul>
+              usages.map((u) => (
+                <div
+                  key={`${u.composition_id}-${u.parent_product_id}`}
+                  className="flex items-center justify-between border-b border-gray-50 py-2 last:border-0"
+                >
+                  <div>
+                    <div className="text-sm font-medium text-gray-800">{u.parent_product_name}</div>
+                    <div className="mt-0.5 text-[10px] uppercase text-gray-500">{u.composition_name}</div>
+                  </div>
+                  <div className="rounded bg-gray-50 px-2 py-0.5 font-mono text-sm text-gray-600">
+                    x {u.quantity}
+                  </div>
+                </div>
+              ))
             )}
-          </InfoPanelSection>
+          </div>
 
-          <InfoPanelSection title="Historia produkcji produktu">
+          {/* Historia produkcji */}
+          <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+            <h3 className="mb-4 text-sm font-bold text-gray-900">Historia produkcji produktu</h3>
             {history.length === 0 ? (
-              <p className="text-sm text-slate-500">Brak zleceń produkcyjnych dla tego produktu.</p>
+              <p className="mb-4 text-sm text-gray-500">Brak zleceń produkcyjnych dla tego produktu.</p>
             ) : (
-              <div className="overflow-x-auto rounded-lg border border-slate-100">
-                <table className="min-w-full text-sm">
-                  <thead className="bg-slate-50 text-left text-xs uppercase text-slate-500">
-                    <tr>
-                      <th className="px-2 py-1.5">Nr</th>
-                      <th className="px-2 py-1.5">Status</th>
-                      <th className="px-2 py-1.5 text-right">Ilość</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {history.slice(0, 8).map((h) => {
-                      const href = h.id < 0 ? erpProductionPaths.batch(-h.id) : erpProductionPaths.order(h.id);
-                      return (
-                      <tr key={h.id} className="border-t border-slate-100 hover:bg-slate-50/80">
-                        <td className="px-2 py-1.5">
-                          <Link to={href} className="font-mono text-xs text-slate-800 hover:underline">
+              <table className="mb-4 w-full text-left text-sm">
+                <thead>
+                  <tr className="border-b border-gray-100 text-[10px] uppercase tracking-wider text-gray-400">
+                    <th className="pb-2 font-semibold">Nr</th>
+                    <th className="pb-2 font-semibold">Status</th>
+                    <th className="pb-2 text-right font-semibold">Ilość</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-50">
+                  {history.slice(0, 8).map((h) => {
+                    const href = h.id < 0 ? erpProductionPaths.batch(-h.id) : erpProductionPaths.order(h.id);
+                    return (
+                      <tr key={h.id}>
+                        <td className="py-2.5 font-mono text-xs text-gray-600">
+                          <Link to={href} className="hover:underline">
                             {h.number}
                           </Link>
                         </td>
-                        <td className="px-2 py-1.5">
-                          <span className={productionStatusBadgeClass(h.status)}>{PRODUCTION_STATUS_LABEL[h.status]}</span>
+                        <td className="py-2.5">
+                          <StatusBadge tone={executionStatusTone(h.status)} className="!text-[10px] !font-bold">
+                            {PRODUCTION_STATUS_LABEL[h.status] ?? h.status}
+                          </StatusBadge>
                         </td>
-                        <td className="px-2 py-1.5 text-right tabular-nums">
+                        <td className="py-2.5 text-right font-mono text-gray-800">
                           {h.status === "completed" ? h.produced_quantity : h.planned_quantity}
                         </td>
                       </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
+                    );
+                  })}
+                </tbody>
+              </table>
             )}
+
             {rwPw?.rwId || rwPw?.pwId ? (
-              <div className="mt-3 flex flex-wrap gap-2 border-t border-slate-100 pt-3">
+              <div className="mb-3 flex flex-wrap gap-2">
                 {rwPw.rwId ? (
                   <Link
                     to={warehouseStockDocumentPath("RW", rwPw.rwId)}
-                    className="rounded bg-slate-50 px-2 py-1 text-xs font-medium text-slate-700 ring-1 ring-slate-200 hover:bg-slate-100"
+                    className="rounded bg-gray-50 px-2 py-1 text-xs font-medium text-gray-700 ring-1 ring-gray-200 hover:bg-gray-100"
                   >
                     RW {rwPw.rwNumber ?? `#${rwPw.rwId}`}
                   </Link>
@@ -288,92 +261,115 @@ export function ProductManufacturingPanel({ tenantId, productId, productName, on
                 {rwPw.pwId ? (
                   <Link
                     to={warehouseStockDocumentPath("PW", rwPw.pwId)}
-                    className="rounded bg-slate-50 px-2 py-1 text-xs font-medium text-slate-700 ring-1 ring-slate-200 hover:bg-slate-100"
+                    className="rounded bg-gray-50 px-2 py-1 text-xs font-medium text-gray-700 ring-1 ring-gray-200 hover:bg-gray-100"
                   >
                     PW {rwPw.pwNumber ?? `#${rwPw.pwId}`}
                   </Link>
                 ) : null}
               </div>
             ) : null}
-            <Link
-              to={erpProductionPaths.history}
-              className="mt-3 inline-block text-xs font-medium text-slate-600 underline hover:text-slate-800"
-            >
+
+            <Link to={erpProductionPaths.history} className="text-xs text-blue-600 hover:underline">
               Pełna historia w module ERP →
             </Link>
-          </InfoPanelSection>
+          </div>
 
-          <InfoPanelSection title="Szacowany koszt produkcji">
-            {estimatedUnitCost != null ? (
-              <>
-                <p className="text-2xl font-semibold tabular-nums text-slate-900">{formatProductionMoney(estimatedUnitCost)}</p>
-                <p className="mt-1 text-xs text-slate-500">netto / szt. (aktywna receptura)</p>
-                {detail ? (
-                  <p className="mt-3 text-sm text-slate-600">
-                    Można wyprodukować:{" "}
-                    <strong className="text-emerald-800">{Math.floor(detail.max_producible)} szt.</strong>
-                  </p>
-                ) : null}
-              </>
-            ) : (
-              <p className="text-sm text-slate-500">Koszt pojawi się po zdefiniowaniu składników receptury.</p>
-            )}
-          </InfoPanelSection>
-
-          {recipes.length > 0 ? (
-            <InfoPanelSection title="Wersje receptury">
-              <ul className="space-y-2">
-                {recipes.map((r) => (
-                  <li
-                    key={r.id}
-                    className={`rounded-lg border px-3 py-2.5 text-sm ${
-                      r.is_active ? "border-emerald-200 bg-emerald-50/60" : "border-slate-100 bg-slate-50/40"
-                    }`}
-                  >
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0">
-                        <p className="truncate font-medium text-slate-900">{r.name}</p>
-                        <p className="text-xs text-slate-500">
-                          v{r.version} · {r.lines.length} skł. · wydajność {r.yield_quantity} szt.
-                        </p>
-                      </div>
-                      {r.is_active ? (
-                        <span className="shrink-0 rounded bg-emerald-100 px-1.5 py-0.5 text-xs font-semibold uppercase text-emerald-800">
-                          Aktywna
-                        </span>
-                      ) : null}
+          {/* Szacowany koszt */}
+          <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+            <h3 className="mb-1 text-sm font-bold text-gray-900">Szacowany koszt produkcji</h3>
+            <div className="mt-3">
+              {estimatedUnitCost != null ? (
+                <>
+                  <div className="flex items-baseline">
+                    <span className="font-mono text-2xl font-bold text-gray-900">
+                      {formatProductionMoney(estimatedUnitCost)}
+                    </span>
+                  </div>
+                  <div className="mb-3 mt-0.5 text-[10px] uppercase text-gray-500">
+                    netto / szt. (aktywna receptura)
+                  </div>
+                  {detail ? (
+                    <div className="text-sm text-gray-700">
+                      Można wyprodukować:{" "}
+                      <span className="font-mono font-bold text-green-600">
+                        {Math.floor(detail.max_producible)} szt.
+                      </span>
                     </div>
-                    <div className="mt-2 flex flex-wrap gap-2">
-                      <button
-                        type="button"
-                        onClick={() => setEditRecipeId(r.id)}
-                        className="text-xs font-medium text-slate-700 underline hover:text-slate-900"
+                  ) : null}
+                  <p className="mt-1 text-[10px] leading-tight text-gray-400">
+                    Ilość możliwa do wyprodukowania na podstawie obecnych stanów magazynowych składników.
+                  </p>
+                </>
+              ) : (
+                <p className="text-sm text-gray-500">Koszt pojawi się po zdefiniowaniu składników receptury.</p>
+              )}
+            </div>
+          </div>
+
+          {/* Wersje receptury */}
+          {recipes.length > 0 ? (
+            <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+              <h3 className="mb-4 text-sm font-bold text-gray-900">Wersje receptury</h3>
+              <div className="space-y-3">
+                {recipes.map((r) => (
+                  <div
+                    key={r.id}
+                    className={
+                      r.is_active
+                        ? "flex items-start justify-between rounded-lg border border-emerald-100 bg-emerald-50 p-3"
+                        : "flex items-start justify-between rounded-lg border border-gray-100 bg-gray-50 p-3"
+                    }
+                  >
+                    <div>
+                      <div
+                        className={`text-sm font-bold ${r.is_active ? "text-emerald-900" : "text-gray-900"}`}
                       >
-                        Edytuj
-                      </button>
-                      {!r.is_active ? (
+                        {r.name}
+                      </div>
+                      <div className={`mt-0.5 text-[10px] ${r.is_active ? "text-emerald-700" : "text-gray-500"}`}>
+                        v{r.version} · {r.lines.length} skł. · wydajność {r.yield_quantity} szt.
+                      </div>
+                      <div className="mt-2 text-xs">
                         <button
                           type="button"
-                          disabled={activatingId === r.id}
-                          onClick={() => void handleActivate(r.id)}
-                          className="text-xs font-medium text-violet-700 underline hover:text-violet-900 disabled:opacity-50"
+                          onClick={() => setEditRecipeId(r.id)}
+                          className={`font-medium hover:underline ${r.is_active ? "text-emerald-700" : "text-gray-700"}`}
                         >
-                          {activatingId === r.id ? "Aktywowanie…" : "Aktywuj"}
+                          Edytuj
                         </button>
-                      ) : null}
-                      <Link
-                        to={erpProductionPaths.recipe(r.id)}
-                        className="text-xs font-medium text-slate-500 underline hover:text-slate-700"
-                      >
-                        ERP →
-                      </Link>
+                        {!r.is_active ? (
+                          <>
+                            <span className="mx-1 text-gray-300">|</span>
+                            <button
+                              type="button"
+                              disabled={activatingId === r.id}
+                              onClick={() => void handleActivate(r.id)}
+                              className="font-medium text-violet-700 hover:underline disabled:opacity-50"
+                            >
+                              {activatingId === r.id ? "Aktywowanie…" : "Aktywuj"}
+                            </button>
+                          </>
+                        ) : null}
+                        <span className={`mx-1 ${r.is_active ? "text-emerald-300" : "text-gray-300"}`}>|</span>
+                        <Link
+                          to={erpProductionPaths.recipe(r.id)}
+                          className={`font-medium hover:underline ${r.is_active ? "text-emerald-700" : "text-gray-700"}`}
+                        >
+                          ERP →
+                        </Link>
+                      </div>
                     </div>
-                  </li>
+                    {r.is_active ? (
+                      <Badge tone="success" className="!rounded !px-1.5 !py-0.5 !text-[9px] !font-bold !uppercase !tracking-wider">
+                        Aktywna
+                      </Badge>
+                    ) : null}
+                  </div>
                 ))}
-              </ul>
-            </InfoPanelSection>
+              </div>
+            </div>
           ) : null}
-        </aside>
+        </div>
       </div>
     </div>
   );
