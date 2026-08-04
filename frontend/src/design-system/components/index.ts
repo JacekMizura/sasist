@@ -18,6 +18,7 @@ export {
   type FieldDensity,
   type FieldFocusTone,
 } from "./Input";
+export { MoneyInput, type MoneyInputProps } from "./MoneyInput";
 export {
   Checkbox,
   Radio,

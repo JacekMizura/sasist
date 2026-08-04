@@ -77,6 +77,7 @@ import {
 } from "../../utils/productLabelMetadata";
 import { formatMoneyZlDisplay, resolveProductPricingDisplay } from "./productPricingDisplay";
 import { DocumentTemplateScopeSection } from "@/pages/Settings/document-templates/components/DocumentTemplateScopeSection";
+import { ProductEditPricesTab } from "./ProductEditPricesTab";
 import { useDocumentTemplatePrint } from "../../hooks/useDocumentTemplatePrint";
 
 export type ProductForm = {
@@ -314,12 +315,6 @@ function formatDateTimePl(v: string | null | undefined): string {
   return d.toLocaleString("pl-PL", { dateStyle: "short", timeStyle: "short" });
 }
 
-function marginToneClass(marginPercent: number | null | undefined): string {
-  if (marginPercent == null || Number.isNaN(Number(marginPercent))) return "text-slate-700";
-  if (Number(marginPercent) > 30) return "text-emerald-600 font-semibold";
-  if (Number(marginPercent) >= 10) return "text-amber-600 font-semibold";
-  return "text-rose-600 font-semibold";
-}
 
 function parseLocationsFromApi(raw: unknown): ProductForm["locations"] {
   if (!Array.isArray(raw)) return undefined;
@@ -1559,8 +1554,6 @@ export function ProductEditModal({
     }
   };
 
-  const inputTableMini =
-    "w-full min-w-[4rem] rounded border border-slate-200 px-2 py-1 text-right text-sm tabular-nums focus:border-blue-400 focus:ring-1 focus:ring-blue-500";
 
   const onPatchSupplierLinkPrice = async (linkId: number, raw: string) => {
     const t = raw.trim().replace(",", ".");
@@ -2141,248 +2134,43 @@ export function ProductEditModal({
                 )}
 
                 {activeTab === "prices" && (
-                  <div className="flex flex-col xl:flex-row items-start gap-10 lg:gap-16">
-                    <div className="w-full xl:max-w-2xl space-y-12 shrink-0">
-                      <section>
-                        <h3 className="mb-5 text-lg font-bold text-slate-900 border-b border-slate-200 pb-2">Kalkulacja cenowa</h3>
-                        <div className="space-y-5">
-                          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
-                            <div>
-                              <label className={fieldLabel}>Docelowa cena sprzedaży</label>
-                              <input
-                                type="number" min={0} step={0.01}
-                                value={salePrice === "" ? "" : salePrice}
-                                onChange={(e) => {
-                                  const s = String(e.target.value).trim().replace(",", ".");
-                                  if (s === "") setSalePrice("");
-                                  else { const n = parseFloat(s); if (Number.isFinite(n)) setSalePrice(n); }
-                                }}
-                                className={inputClass}
-                              />
-                            </div>
-                            <div>
-                              <label className={fieldLabel}>Ręczna cena zakupu netto</label>
-                              <input
-                                type="number" min={0} step={0.01}
-                                value={purchasePrice === "" ? "" : purchasePrice}
-                                onChange={(e) => {
-                                  const s = String(e.target.value).trim().replace(",", ".");
-                                  if (s === "") setPurchasePrice("");
-                                  else { const n = parseFloat(s); if (Number.isFinite(n)) setPurchasePrice(n); }
-                                }}
-                                className={inputClass}
-                              />
-                            </div>
-                            <div>
-                              <label className={fieldLabel}>Koszty pakowania (netto)</label>
-                              <input
-                                type="number" min={0} step={0.01}
-                                value={extraCostPackagingNet === "" ? "" : extraCostPackagingNet}
-                                onChange={(e) => {
-                                  const s = String(e.target.value).trim().replace(",", ".");
-                                  if (s === "") setExtraCostPackagingNet("");
-                                  else { const n = parseFloat(s); if (Number.isFinite(n)) setExtraCostPackagingNet(n); }
-                                }}
-                                className={inputClass}
-                              />
-                            </div>
-                            <div>
-                              <label className={fieldLabel}>Prowizja marketplace (%)</label>
-                              <input
-                                type="number" min={0} step={0.01}
-                                value={extraCostCommissionPercent === "" ? "" : extraCostCommissionPercent}
-                                onChange={(e) => {
-                                  const s = String(e.target.value).trim().replace(",", ".");
-                                  if (s === "") setExtraCostCommissionPercent("");
-                                  else { const n = parseFloat(s); if (Number.isFinite(n)) setExtraCostCommissionPercent(n); }
-                                }}
-                                className={inputClass}
-                              />
-                            </div>
-                            <div>
-                              <label className={fieldLabel}>Inne koszty operacyjne (netto)</label>
-                              <input
-                                type="number" min={0} step={0.01}
-                                value={extraCostOtherNet === "" ? "" : extraCostOtherNet}
-                                onChange={(e) => {
-                                  const s = String(e.target.value).trim().replace(",", ".");
-                                  if (s === "") setExtraCostOtherNet("");
-                                  else { const n = parseFloat(s); if (Number.isFinite(n)) setExtraCostOtherNet(n); }
-                                }}
-                                className={inputClass}
-                              />
-                            </div>
-                            <div>
-                              <label className={fieldLabel}>Stawka VAT (%)</label>
-                              <input type="text" value={vatRate} onChange={(e) => setVatRate(e.target.value)} placeholder="np. 23" className={inputClass} />
-                            </div>
-                          </div>
-                          <div>
-                            <label className={fieldLabel}>Notatka promocyjna / cenowa</label>
-                            <textarea value={promotion} onChange={(e) => setPromotion(e.target.value)} rows={3} className={`${inputClass} resize-y`} placeholder="Krótki opis promocji, rabatów lub warunków…" />
-                          </div>
-                        </div>
-                      </section>
-                    </div>
-
-                    <aside className="w-full xl:max-w-[850px] flex-1 space-y-12">
-                      <section>
-                        <h3 className="mb-5 text-lg font-bold text-slate-900 border-b border-slate-200 pb-2">Dostawcy i ceny zakupu</h3>
-                        {cheapestSupplierInsight ? (
-                          <div className="mb-5 rounded border-l-4 border-emerald-500 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
-                            <span className="font-semibold">Najtańszy dostawca:</span> {(cheapestSupplierInsight.supplier_name || "").trim() || `#${cheapestSupplierInsight.supplier_id}`} — {formatMoneyZl(cheapestSupplierInsight.purchase_price)} netto
-                          </div>
-                        ) : null}
-
-                        {isNew ? (
-                          <p className="text-sm text-slate-600">Najpierw zapisz produkt, aby móc powiązać go z dostawcami.</p>
-                        ) : (
-                          <div className="space-y-6">
-                            <div className="overflow-hidden rounded border border-slate-200">
-                              <table className="w-full text-sm">
-                                <thead className="bg-slate-50 border-b border-slate-200 text-left">
-                                  <tr>
-                                    <th className="px-4 py-3 font-semibold text-slate-700">Dostawca</th>
-                                    <th className="px-4 py-3 text-right font-semibold text-slate-700 w-36">Cena netto</th>
-                                    <th className="px-4 py-3 text-center font-semibold text-slate-700 w-24">Domyślny</th>
-                                    <th className="px-4 py-3 w-16"></th>
-                                  </tr>
-                                </thead>
-                                <tbody className="divide-y divide-slate-100">
-                                  {supplierLinksBusy && supplierLinkRows.length === 0 ? (
-                                    <tr><td colSpan={4} className="px-4 py-6 text-center text-slate-500">Wczytywanie…</td></tr>
-                                  ) : supplierLinkRows.length === 0 ? (
-                                    <tr><td colSpan={4} className="px-4 py-6 text-center text-slate-500">Brak przypisanych dostawców.</td></tr>
-                                  ) : (
-                                    supplierLinkRows.map((row) => (
-                                      <ProductSupplierLinkRowEditor
-                                        key={row.id} row={row} busy={supplierLinksBusy} inputTableMini={inputTableMini}
-                                        isDefault={defaultSupplierId === row.supplier_id}
-                                        onSelectDefault={() => setDefaultSupplierId(row.supplier_id)}
-                                        onPatchPrice={(raw) => void onPatchSupplierLinkPrice(row.id, raw)}
-                                        onRemove={() => void onRemoveSupplierLink(row.id, row.supplier_id)}
-                                      />
-                                    ))
-                                  )}
-                                </tbody>
-                              </table>
-                            </div>
-
-                            <div className="flex flex-wrap items-end gap-3 rounded bg-slate-50 p-4 border border-slate-200">
-                              <div className="flex-1 min-w-[200px]">
-                                <label className="mb-2 block text-sm font-medium text-slate-700">Dodaj nowego dostawcę</label>
-                                <select className={inputClass} value={addSupplierPick} onChange={(e) => setAddSupplierPick(e.target.value)} disabled={supplierLinksBusy}>
-                                  <option value="">— Wybierz z listy —</option>
-                                  {suppliersCatalog.filter((s) => !supplierLinkRows.some((r) => r.supplier_id === s.id)).map((s) => (
-                                    <option key={s.id} value={s.id}>{s.name}</option>
-                                  ))}
-                                </select>
-                              </div>
-                              <PrimaryButton
-                                type="button"
-                                disabled={supplierLinksBusy || !addSupplierPick}
-                                onClick={() => void onAddSupplierLink()}
-                              >
-                                Dodaj
-                              </PrimaryButton>
-                            </div>
-                          </div>
-                        )}
-                      </section>
-
-                      <div className="grid grid-cols-1 gap-8 md:grid-cols-2">
-                        <section>
-                          <h3 className="mb-4 text-lg font-bold text-slate-900 border-b border-slate-200 pb-2">Ostatni zakup (z PZ)</h3>
-                          <dl className="space-y-3 text-sm text-slate-700 mt-5">
-                            <div className="flex items-center justify-between border-b border-slate-100 pb-2">
-                              <dt className="font-medium text-slate-500">Aktualna cena zakupu</dt>
-                              <dd className="tabular-nums font-semibold text-slate-900">{formatMoneyZl(purchasePrice === "" ? null : purchasePrice)}</dd>
-                            </div>
-                            <div className="flex items-center justify-between border-b border-slate-100 pb-2">
-                              <dt className="font-medium text-slate-500">Poprzednia cena</dt>
-                              <dd className="tabular-nums">{formatMoneyZl(previousPurchasePrice === "" ? null : previousPurchasePrice)}</dd>
-                            </div>
-                            <div className="flex items-center justify-between border-b border-slate-100 pb-2">
-                              <dt className="font-medium text-slate-500">Data ostatniego zakupu</dt>
-                              <dd>{formatDateTimePl(lastPurchaseDate)}</dd>
-                            </div>
-                            <div className="flex items-center justify-between border-b border-slate-100 pb-2">
-                              <dt className="font-medium text-slate-500">Ostatni dostawca</dt>
-                              <dd className="text-right">{(lastSupplierName || "").trim() || "—"}</dd>
-                            </div>
-                            <div className="flex items-center justify-between border-b border-slate-100 pb-2">
-                              <dt className="font-medium text-slate-500">Waluta ostatniego zakupu</dt>
-                              <dd className="tabular-nums">{(lastPurchaseCurrency || "").trim() || "—"}</dd>
-                            </div>
-                            <div className="flex items-center justify-between pt-1">
-                              <dt className="font-medium text-slate-500">Cena oryginalna (waluta)</dt>
-                              <dd className="tabular-nums font-medium text-slate-900">
-                                {purchasePriceOriginal === "" || purchasePriceOriginal == null ? "—" : `${Number(purchasePriceOriginal).toFixed(4)} ${(purchaseCurrency || "").trim() || ""}`.trim()}
-                              </dd>
-                            </div>
-                          </dl>
-                        </section>
-
-                        <section>
-                          <h3 className="mb-4 text-lg font-bold text-slate-900 border-b border-slate-200 pb-2">Podsumowanie kosztów</h3>
-                          <dl className="space-y-3 text-sm text-slate-700 mt-5">
-                            <div className="flex items-center justify-between border-b border-slate-100 pb-2">
-                              <dt className="text-slate-500">Cena zakupu netto</dt>
-                              <dd className="tabular-nums">{formatMoneyZlDisplay(pricingDisplay.purchaseNet)}</dd>
-                            </div>
-                            <div className="flex items-center justify-between border-b border-slate-100 pb-2">
-                              <dt className="text-slate-500">Cena zakupu brutto</dt>
-                              <dd className="tabular-nums">{formatMoneyZlDisplay(pricingDisplay.purchaseGross)}</dd>
-                            </div>
-                            <div className="flex items-center justify-between border-b border-slate-100 pb-2">
-                              <dt className="text-slate-500">Stawka VAT</dt>
-                              <dd className="tabular-nums">{pricingDisplay.vatLabel}</dd>
-                            </div>
-                            <div className="flex items-center justify-between border-b border-slate-100 pb-2">
-                              <dt className="text-slate-500">Pakowanie</dt>
-                              <dd className="tabular-nums text-rose-600">+{formatMoneyZl(extraCostPackagingNet === "" ? 0 : Number(extraCostPackagingNet))}</dd>
-                            </div>
-                            <div className="flex items-center justify-between border-b border-slate-100 pb-2">
-                              <dt className="text-slate-500">Prowizja</dt>
-                              <dd className="tabular-nums text-rose-600">+{(extraCostCommissionPercent === "" ? 0 : Number(extraCostCommissionPercent)).toFixed(2)}%</dd>
-                            </div>
-                            <div className="flex items-center justify-between border-b border-slate-100 pb-2">
-                              <dt className="text-slate-500">Inne koszty</dt>
-                              <dd className="tabular-nums text-rose-600">+{formatMoneyZl(extraCostOtherNet === "" ? 0 : Number(extraCostOtherNet))}</dd>
-                            </div>
-                            <div className="flex items-center justify-between border-b border-slate-200 pb-3 mt-1">
-                              <dt className="font-semibold text-slate-900">Łączny koszt netto (Landed)</dt>
-                              <dd className="tabular-nums font-bold text-slate-900">
-                                {formatMoneyZlDisplay(pricingDisplay.landedCostNet)}
-                              </dd>
-                            </div>
-                            <div className="flex items-center justify-between pt-1 border-b border-slate-100 pb-2">
-                              <dt className="text-slate-500">Cena sprzedaży netto</dt>
-                              <dd className="tabular-nums">{formatMoneyZlDisplay(pricingDisplay.saleNet)}</dd>
-                            </div>
-                            <div className="flex items-center justify-between border-b border-slate-100 pb-2">
-                              <dt className="text-slate-500">Cena sprzedaży brutto</dt>
-                              <dd className="tabular-nums font-semibold text-slate-900">
-                                {formatMoneyZlDisplay(pricingDisplay.saleGross)}
-                              </dd>
-                            </div>
-                            <div className="flex items-center justify-between pt-1">
-                              <dt className="font-medium text-slate-900">Zysk (Marża PLN)</dt>
-                              <dd className={`tabular-nums font-semibold ${marginToneClass(pricingDisplay.marginPercent)}`}>
-                                {formatMoneyZlDisplay(pricingDisplay.marginValue)}
-                              </dd>
-                            </div>
-                            <div className="flex items-center justify-between pt-1">
-                              <dt className="font-medium text-slate-900">Rentowność (Marża %)</dt>
-                              <dd className={`tabular-nums text-lg font-bold ${marginToneClass(pricingDisplay.marginPercent)}`}>
-                                {pricingDisplay.marginLabel}
-                              </dd>
-                            </div>
-                          </dl>
-                        </section>
-                      </div>
-                    </aside>
-                  </div>
+                  <ProductEditPricesTab
+                    isNew={isNew}
+                    salePrice={salePrice}
+                    setSalePrice={setSalePrice}
+                    purchasePrice={purchasePrice}
+                    setPurchasePrice={setPurchasePrice}
+                    extraCostPackagingNet={extraCostPackagingNet}
+                    setExtraCostPackagingNet={setExtraCostPackagingNet}
+                    extraCostCommissionPercent={extraCostCommissionPercent}
+                    setExtraCostCommissionPercent={setExtraCostCommissionPercent}
+                    extraCostOtherNet={extraCostOtherNet}
+                    setExtraCostOtherNet={setExtraCostOtherNet}
+                    vatRate={vatRate}
+                    setVatRate={setVatRate}
+                    promotion={promotion}
+                    setPromotion={setPromotion}
+                    cheapestSupplierInsight={cheapestSupplierInsight}
+                    supplierLinkRows={supplierLinkRows}
+                    supplierLinksBusy={supplierLinksBusy}
+                    suppliersCatalog={suppliersCatalog}
+                    addSupplierPick={addSupplierPick}
+                    setAddSupplierPick={setAddSupplierPick}
+                    defaultSupplierId={defaultSupplierId}
+                    setDefaultSupplierId={setDefaultSupplierId}
+                    onAddSupplierLink={() => void onAddSupplierLink()}
+                    onPatchSupplierLinkPrice={(linkId, raw) => void onPatchSupplierLinkPrice(linkId, raw)}
+                    onRemoveSupplierLink={(linkId, supplierId) => void onRemoveSupplierLink(linkId, supplierId)}
+                    previousPurchasePrice={previousPurchasePrice}
+                    lastPurchaseDate={lastPurchaseDate}
+                    lastSupplierName={lastSupplierName}
+                    lastPurchaseCurrency={lastPurchaseCurrency}
+                    purchasePriceOriginal={purchasePriceOriginal}
+                    purchaseCurrency={purchaseCurrency}
+                    pricingDisplay={pricingDisplay}
+                    formatMoneyZl={formatMoneyZl}
+                    formatDateTimePl={formatDateTimePl}
+                  />
                 )}
 
                 {activeTab === "warehouse" && (
@@ -3134,26 +2922,4 @@ export function ProductEditModal({
   );
 
   return shell;
-}
-
-function ProductSupplierLinkRowEditor({ row, busy, inputTableMini, isDefault, onSelectDefault, onPatchPrice, onRemove }: any) {
-  const [price, setPrice] = useState(row.purchase_price != null ? String(row.purchase_price) : "");
-  useEffect(() => setPrice(row.purchase_price != null ? String(row.purchase_price) : ""), [row.purchase_price, row.id]);
-
-  return (
-    <tr className="border-t border-slate-100 hover:bg-slate-50 transition-colors">
-      <td className="px-4 py-3 text-slate-800">{(row.supplier_name || "").trim() || `#${row.supplier_id}`}</td>
-      <td className="px-4 py-3 text-right">
-        <input className={inputTableMini} value={price} onChange={(e) => setPrice(e.target.value)} onBlur={() => onPatchPrice(price)} disabled={busy} placeholder="—" />
-      </td>
-      <td className="px-4 py-3 text-center">
-        <input type="radio" className="h-4 w-4 border-slate-300 text-blue-600 focus:ring-blue-500" name="product-default-supplier" checked={isDefault} onChange={onSelectDefault} disabled={busy} />
-      </td>
-      <td className="px-4 py-3 text-right">
-        <button type="button" disabled={busy} onClick={onRemove} className="text-sm font-medium text-rose-600 hover:text-rose-800 transition-colors disabled:opacity-40">
-          Usuń
-        </button>
-      </td>
-    </tr>
-  );
 }

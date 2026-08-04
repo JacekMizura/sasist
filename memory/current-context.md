@@ -1,5 +1,10 @@
 ﻿## Active
 
+**Edycja produktu — zakładka Ceny (2026-08-04).**
+
+- Layout 65/35: Kalkulacja (MoneyInput) · Dostawcy (DataTable) · Ostatni zakup · sticky Podsumowanie (MetricCard + StatusBadge)
+- Backend / API / logika cen — bez zmian
+
 **Edycja produktu — redesign UX jak HTML (2026-08-04).**
 
 - FE only: ProductLikePageLayout hero/stats/tabs + basic tab 65/35 Cards

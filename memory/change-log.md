@@ -1,3 +1,9 @@
+## 2026-08-04 — Edycja produktu: zakładka Ceny (FE only)
+
+- 65/35: Kalkulacja cenowa (MoneyInput) · Dostawcy (DataTable) · Ostatni zakup · sticky Podsumowanie
+- MetricCard (zysk) + StatusBadge (marża %); bez zmian API / walidacji / hooków
+- Dodano cienkie DS: `MoneyInput`, wspólny `DataTable`
+
 ## 2026-08-04 — Edycja produktu: UX jak mock HTML (FE only)
 
 - Header: breadcrumb + nazwa + Zamów / Drukuj / Kopiuj+Więcej / Zapisz
