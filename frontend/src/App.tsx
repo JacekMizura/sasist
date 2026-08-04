@@ -131,6 +131,7 @@ import SystemChangelog from "./pages/System/SystemChangelog"
 import SystemAppDictionaryPage from "./pages/System/SystemAppDictionaryPage"
 import AnalyticsLayout from "./pages/analytics/AnalyticsLayout"
 import AnalizyModuleLayout from "./pages/analizy/AnalizyModuleLayout"
+import AnalyticsDashboardPage from "./pages/analytics/AnalyticsDashboard"
 import InventoryValue from "./pages/analytics/InventoryValue"
 import DeadStock from "./pages/analytics/DeadStock"
 import HotProducts from "./pages/analytics/HotProducts"
@@ -936,7 +937,7 @@ export const router = createBrowserRouter(
                   <Route path="pulpit" element={<PulpitKierownikaPage />} />
                   <Route path="kolejnosc-dostaw" element={<KolejnoscDostawPage />} />
                   <Route path="raporty" element={<AnalyticsLayout />}>
-                    <Route index element={<Navigate to="inventory-value" replace />} />
+                    <Route index element={<AnalyticsDashboardPage />} />
                     <Route path="inventory-value" element={<InventoryValue />} />
                     <Route path="dead-stock" element={<DeadStock />} />
                     <Route path="hot-products" element={<HotProducts />} />

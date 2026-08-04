@@ -28,7 +28,7 @@ describe("settings flyout IA", () => {
     expect(labels).not.toContain("System Etykiet");
   });
 
-  it("highlights WMS config under Magazyn (not Ogólne Ustawienia)", () => {
+  it("highlights WMS config under Administracja magazynem (not Ogólne Ustawienia)", () => {
     const cats = buildNavFlyoutCategories();
     const settings = cats.find((c) => c.id === "settings")!;
     const warehouse = cats.find((c) => c.id === "warehouse")!;

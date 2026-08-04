@@ -1,3 +1,24 @@
+## 2026-08-04 — IA Magazyn: flyout Magazyn + Administracja + Pulpit sekcje
+
+- Sidebar: „Magazyn” (Pulpit · Kolejność · Raporty · Plan); „Administracja magazynem” (pełna lista + Wózki + Inwentaryzacja ERP; bez szablonów etykiet)
+- Pulpit: ShiftConductor + zwijane sekcje z embed Centrum (Alerty / Operatorzy / Kolejki / Dostawy / Historia)
+- Raporty: index = AnalysisDashboard (Przegląd); wszystkie raporty podłączone
+- Backend / API / Engine — bez zmian
+
+## 2026-08-03 — Pulpit jako przebieg zmiany (nie dashboard)
+
+- ShiftConductor: status → decyzja → efekt → CTA → potem; kontekst schowany
+- Usunięte widgety sekcji (alerts/status/crew/secondary jako osobne bloki)
+- Tabs Raporty/Plan niewidoczne na Pulpicie
+- Backend / Engine / API — bez zmian
+
+## 2026-08-03 — Pulpit jako strona główna Zarządzania
+
+- Usunięty landing (3 kafle) i tab „Przegląd”; `/zarzadzanie-magazynem` → `/pulpit`
+- Pulpit przebudowany produktowo: decyzje → stan → alerty → obciążenie → stopka
+- Odłączone embed Centrum Operacyjnego; bez ściany KPI
+- Backend / Engine / API — bez zmian
+
 ## 2026-08-03 — IA: hub Zarządzanie + Administracja L1
 
 - FE only: `/zarzadzanie-magazynem` (hub → pulpit / raporty / plan-zmian)

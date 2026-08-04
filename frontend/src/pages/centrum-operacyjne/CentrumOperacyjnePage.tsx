@@ -1641,19 +1641,17 @@ export default function CentrumOperacyjnePage({ embedInPulpit = false }: Centrum
 
   if (embedInPulpit) {
     return (
-      <div className="min-w-0 space-y-4">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          {kpiStrip}
-          {toolbar}
-        </div>
+      <div className="min-w-0 space-y-3">
+        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+          Kontekst zmiany
+        </p>
         {error ? (
           <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm font-semibold text-red-800">
             {error}
           </div>
         ) : null}
-        {configPanel}
 
-        <PulpitSection id="alerty" title="Alerty" defaultOpen>
+        <PulpitSection id="alerty" title="Alerty" defaultOpen={false}>
           <div className="space-y-3">
             {alertsPanel}
             {managerTasksPanel}
@@ -1661,18 +1659,11 @@ export default function CentrumOperacyjnePage({ embedInPulpit = false }: Centrum
           </div>
         </PulpitSection>
 
-        <PulpitSection id="dostawy" title="Dostawy">
-          <div className="space-y-3">
-            {inboundPanel}
-            {putawayPanel}
-          </div>
-        </PulpitSection>
-
-        <PulpitSection id="operatorzy" title="Operatorzy">
+        <PulpitSection id="operatorzy" title="Operatorzy" defaultOpen={false}>
           {operatorGroups}
         </PulpitSection>
 
-        <PulpitSection id="kolejki" title="Kolejki i obciążenie">
+        <PulpitSection id="kolejki" title="Kolejki i obciążenie" defaultOpen={false}>
           <div className="space-y-3">
             {queuesPanel}
             {bottlenecksPanel}
@@ -1691,6 +1682,20 @@ export default function CentrumOperacyjnePage({ embedInPulpit = false }: Centrum
                 onOpen={setSelectedOperator}
               />
             </div>
+          </div>
+        </PulpitSection>
+
+        <PulpitSection id="dostawy" title="Dostawy" defaultOpen={false}>
+          <div className="space-y-3">
+            {inboundPanel}
+            {putawayPanel}
+          </div>
+        </PulpitSection>
+
+        <PulpitSection id="historia" title="Historia" defaultOpen={false}>
+          <div className="grid gap-4 lg:grid-cols-[1fr_0.9fr]">
+            {activityStream}
+            {exportPanel}
           </div>
         </PulpitSection>
 

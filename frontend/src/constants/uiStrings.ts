@@ -65,7 +65,7 @@ const UI_STRINGS_DEFAULTS = {
     warehouseMaterialsPackaging: "Materiały pakowe",
     /** Panel triage labels for complaints (office only). */
     complaintPanelStatuses: "Reklamacje — statusy panelu",
-    analysis: "Pulpit",
+    analysis: "Magazyn",
     system: "System",
     returns: "Zwroty",
     wmsTerminal: "Praca na hali (WMS)",
@@ -75,7 +75,7 @@ const UI_STRINGS_DEFAULTS = {
     addCustomer: "Dodaj klienta",
     groups: {
       orders: "Zamówienia",
-      warehouse: "Magazyn",
+      warehouse: "Administracja magazynem",
       customers: "Klienci",
     },
     /** Sidebar: read-only documents / reporting (not operational flows). */

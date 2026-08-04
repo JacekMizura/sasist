@@ -10,6 +10,7 @@ import {
   analizyPageSubtitleClass,
   analizyPageTitleClass,
 } from "../../modules/analizy/analizyUi";
+import { PLAN_ZMIAN_PATH, ZARZADZANIE_REPORTS_ENTRY } from "../../modules/analizy/analizyModuleNav";
 
 const DEFAULT_TENANT_ID = 1;
 
@@ -69,7 +70,7 @@ export default function AnalysisDashboard() {
       value: money(inventoryValue),
       hint: "Ile kapitału wisi w magazynie?",
       decision: "Gdzie szukać redukcji zamrożonego kapitału?",
-      to: "/analytics/inventory-value",
+      to: `${ZARZADZANIE_REPORTS_ENTRY}/inventory-value`,
       cta: "Sprawdź wartość zapasów",
     },
     {
@@ -80,7 +81,7 @@ export default function AnalysisDashboard() {
           : "—",
       hint: "Co stoi bez rotacji i zamraża pieniądze?",
       decision: "Co przesunąć, przecenić albo nie dokupować?",
-      to: "/analytics/dead-stock",
+      to: `${ZARZADZANIE_REPORTS_ENTRY}/dead-stock`,
       cta: "Znajdź towar do przesunięcia",
     },
     {
@@ -88,7 +89,7 @@ export default function AnalysisDashboard() {
       value: "Zestawienie sprzedaży",
       hint: "Które produkty generują największy ruch?",
       decision: "Co trzymać blisko strefy kompletacji?",
-      to: "/analytics/hot-products",
+      to: `${ZARZADZANIE_REPORTS_ENTRY}/hot-products`,
       cta: "Zobacz najczęściej sprzedawane",
     },
     {
@@ -96,7 +97,7 @@ export default function AnalysisDashboard() {
       value: "Obciążenie lokalizacji",
       hint: "Gdzie powstają korki przy kompletacji?",
       decision: "Które strefy odciążyć albo wzmocnić?",
-      to: "/analytics/hot-locations",
+      to: `${ZARZADZANIE_REPORTS_ENTRY}/hot-locations`,
       cta: "Sprawdź przeciążone lokalizacje",
     },
     {
@@ -104,7 +105,7 @@ export default function AnalysisDashboard() {
       value: "Najczęstsze pary",
       hint: "Które produkty często jadą w jednym zamówieniu?",
       decision: "Czy trzymać je bliżej siebie lub budować zestawy?",
-      to: "/analytics/product-affinity",
+      to: `${ZARZADZANIE_REPORTS_ENTRY}/product-affinity`,
       cta: "Zobacz produkty zamawiane razem",
     },
     {
@@ -112,7 +113,7 @@ export default function AnalysisDashboard() {
       value: "Zdrowie zestawów",
       hint: "Które zestawy generują braki lub wolną kompletację?",
       decision: "Co poprawić w układzie lub uzupełnianiu?",
-      to: "/analytics/bundle-intelligence",
+      to: `${ZARZADZANIE_REPORTS_ENTRY}/bundle-intelligence`,
       cta: "Sprawdź problemy w zestawach",
     },
     {
@@ -120,7 +121,7 @@ export default function AnalysisDashboard() {
       value: "Co zmienić w magazynie",
       hint: "Gdzie warto przenieść towar, żeby skrócić drogę?",
       decision: "Które przesunięcia wdrożyć w pierwszej kolejności?",
-      to: "/optymalizacja/slotting",
+      to: `${PLAN_ZMIAN_PATH}/slotting`,
       cta: "Otwórz harmonogram zmian",
     },
   ];

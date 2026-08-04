@@ -34,7 +34,7 @@ function SubNav({ items }: { items: OptimizeSubNavItem[] }) {
   );
 }
 
-/** Sekcja Plan zmian — pod nawigacją Zarządzanie magazynem. */
+/** Sekcja Plan zmian — pod nawigacją Magazyn. */
 export default function OptymalizacjaLayout() {
   const { pathname } = useLocation();
   const subNav = getOptymalizacjaSubNav(pathname);

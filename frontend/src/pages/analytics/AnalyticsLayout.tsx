@@ -11,11 +11,15 @@ function SubNav({ items }: { items: SubNavItem[] }) {
   return (
     <nav className="flex w-56 shrink-0 flex-col gap-0.5" aria-label="Raporty">
       {items.map((item) => {
-        const isActive = pathname === item.path;
+        const isActive =
+          item.path === ZARZADZANIE_REPORTS_ENTRY
+            ? pathname === ZARZADZANIE_REPORTS_ENTRY || pathname === `${ZARZADZANIE_REPORTS_ENTRY}/`
+            : pathname === item.path;
         return (
           <NavLink
             key={item.path}
             to={item.path}
+            end={item.path === ZARZADZANIE_REPORTS_ENTRY}
             className={`block rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
               isActive ? analizySideNavActiveClass : analizySideNavIdleClass
             }`}
@@ -28,19 +32,14 @@ function SubNav({ items }: { items: SubNavItem[] }) {
   );
 }
 
-/** Sekcja Raporty — pod nawigacją Zarządzanie magazynem. */
+/** Raporty: Przegląd + indeks analiz (boczne menu). */
 export default function AnalyticsLayout() {
   const { pathname } = useLocation();
   const subNav = getAnalizySubNav(pathname);
-  const isLanding =
-    pathname === ZARZADZANIE_REPORTS_ENTRY ||
-    pathname === `${ZARZADZANIE_REPORTS_ENTRY}/` ||
-    pathname === "/analytics" ||
-    pathname === "/analytics/dashboard";
 
   return (
     <div className="relative flex min-h-[600px] w-full min-w-0 gap-6">
-      {!isLanding && subNav != null ? (
+      {subNav != null ? (
         <aside className="shrink-0">
           <SubNav items={subNav} />
         </aside>

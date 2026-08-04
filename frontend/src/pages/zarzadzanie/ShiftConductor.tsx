@@ -41,7 +41,6 @@ export function ShiftConductor({
 }: Props) {
   const [returnCtx, setReturnCtx] = useState<SupplyFlowReturnContext | null>(null);
   const [showReturn, setShowReturn] = useState(false);
-  const [showContext, setShowContext] = useState(false);
 
   const checkReturn = useCallback(() => {
     const r = consumeReturnContext();
@@ -252,46 +251,6 @@ export function ShiftConductor({
           ) : null}
         </div>
       )}
-
-      {/* 6. Kontekst — schowany, nie konkuruje z decyzją */}
-      <div className="mt-10 border-t border-slate-200 pt-4">
-        <button
-          type="button"
-          onClick={() => setShowContext((v) => !v)}
-          className="text-xs font-semibold text-slate-500 hover:text-slate-800"
-        >
-          {showContext ? "Ukryj kontekst zmiany" : "Pokaż kontekst zmiany"}
-        </button>
-
-        {showContext ? (
-          <div className="mt-3 space-y-3 text-sm text-slate-600">
-            <p>
-              Na rampie {board.warehouseState.onRamp}
-              {" · "}
-              Do rozlokowania{" "}
-              {board.warehouseState.awaitingPutaway || ops?.products_waiting_putaway || 0}
-              {" · "}
-              Kompletacja {ops?.picking ?? 0}
-              {" · "}
-              Problemy {(ops?.blocked_orders ?? 0) + (ops?.shortages ?? 0)}
-            </p>
-            {board.alerts.slice(0, 2).map((a, i) => (
-              <p key={`${a.title}-${i}`}>
-                {a.severity === "critical" ? "Krytyczne: " : "Uwaga: "}
-                {a.title}
-                {a.ctaHref ? (
-                  <>
-                    {" — "}
-                    <Link to={a.ctaHref} className="font-semibold text-orange-700 hover:underline">
-                      {a.ctaLabel}
-                    </Link>
-                  </>
-                ) : null}
-              </p>
-            ))}
-          </div>
-        ) : null}
-      </div>
     </div>
   );
 }
