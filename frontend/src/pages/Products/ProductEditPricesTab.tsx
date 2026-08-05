@@ -69,6 +69,14 @@ export type ProductEditPricesTabProps = {
 const labelClass = "mb-1.5 block text-sm font-medium text-gray-700";
 
 /**
+ * Mock HTML field chrome:
+ * `rounded-lg border border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500`
+ * Applied via descendants so MoneyInput / DS Input keep wiring but look like the mock.
+ */
+const mockFieldChrome =
+  "[&_input]:!rounded-lg [&_input]:!border [&_input]:!border-gray-300 [&_input]:!bg-white [&_input]:!shadow-sm [&_input]:!ring-0 [&_input]:!ring-offset-0 [&_input]:focus:!border-orange-500 [&_input]:focus:!ring-1 [&_input]:focus:!ring-orange-500 [&_textarea]:!rounded-lg [&_textarea]:!border [&_textarea]:!border-gray-300 [&_textarea]:!bg-white [&_textarea]:!shadow-sm [&_textarea]:!ring-0 [&_textarea]:focus:!border-orange-500 [&_textarea]:focus:!ring-1 [&_textarea]:focus:!ring-orange-500 [&_select]:!rounded-md [&_select]:!border [&_select]:!border-gray-300 [&_select]:!bg-white [&_select]:!shadow-sm [&_select]:!ring-0 [&_select]:focus:!border-orange-500 [&_select]:focus:!ring-1 [&_select]:focus:!ring-orange-500";
+
+/**
  * Inline supplier price — same DOM slot as mock `<input class="w-20 …">`.
  */
 function SupplierPriceInput({
@@ -93,6 +101,7 @@ function SupplierPriceInput({
       disabled={busy}
       currency=""
       density="compact"
+      focusTone="neutral"
       className="!w-20"
       aria-label="Cena netto dostawcy"
     />
@@ -101,8 +110,8 @@ function SupplierPriceInput({
 
 /**
  * Product edit — Ceny tab.
- * DOM hierarchy is a structural 1:1 port of `ceny karta produktu.html`
- * (main two-column body under tabs). Logic / field wiring unchanged.
+ * Visual / DOM port of `ceny karta produktu.html` (body under tabs).
+ * Logic / field wiring unchanged.
  */
 export function ProductEditPricesTab({
   isNew,
@@ -155,11 +164,10 @@ export function ProductEditPricesTab({
   const filledDd = "whitespace-nowrap font-semibold text-gray-900";
 
   return (
-    /* mock: <div class="flex flex-col xl:flex-row gap-6 items-start"> */
-    <div className="flex flex-col items-start gap-6 xl:flex-row">
-      {/* KOLUMNA LEWA: Formularze Edycji (Szersza) */}
-      <div className="flex w-full flex-col gap-6 xl:w-2/3 xl:min-w-[700px]">
-        {/* KARTA: Kalkulacja cenowa */}
+    /* mock: flex 2/3 + 1/3 — use grid so columns always fill full content width */
+    <div className={`grid w-full grid-cols-1 items-start gap-6 xl:grid-cols-12 ${mockFieldChrome}`}>
+      {/* KOLUMNA LEWA ~2/3 */}
+      <div className="flex w-full min-w-0 flex-col gap-6 xl:col-span-8">
         <section className="overflow-hidden rounded-xl border border-gray-200 bg-white">
           <div className="border-b border-gray-200 px-6 py-4">
             <h2 className="text-base font-semibold text-gray-900">Kalkulacja cenowa</h2>
@@ -173,7 +181,7 @@ export function ProductEditPricesTab({
                   onValueChange={setSalePrice}
                   currency=""
                   density="comfortable"
-                  focusTone="brand"
+                  focusTone="neutral"
                 />
               </div>
 
@@ -184,7 +192,7 @@ export function ProductEditPricesTab({
                   onValueChange={setPurchasePrice}
                   currency=""
                   density="comfortable"
-                  focusTone="brand"
+                  focusTone="neutral"
                 />
               </div>
 
@@ -195,7 +203,7 @@ export function ProductEditPricesTab({
                   onValueChange={setExtraCostPackagingNet}
                   currency=""
                   density="comfortable"
-                  focusTone="brand"
+                  focusTone="neutral"
                 />
               </div>
 
@@ -206,7 +214,7 @@ export function ProductEditPricesTab({
                   min={0}
                   step={0.01}
                   density="comfortable"
-                  focusTone="brand"
+                  focusTone="neutral"
                   value={extraCostCommissionPercent === "" ? "" : extraCostCommissionPercent}
                   onChange={(e) => {
                     const s = String(e.target.value).trim().replace(",", ".");
@@ -226,7 +234,7 @@ export function ProductEditPricesTab({
                   onValueChange={setExtraCostOtherNet}
                   currency=""
                   density="comfortable"
-                  focusTone="brand"
+                  focusTone="neutral"
                 />
               </div>
 
@@ -235,7 +243,7 @@ export function ProductEditPricesTab({
                 <Input
                   type="text"
                   density="comfortable"
-                  focusTone="brand"
+                  focusTone="neutral"
                   value={vatRate}
                   onChange={(e) => setVatRate(e.target.value)}
                   placeholder="np. 23"
@@ -250,7 +258,7 @@ export function ProductEditPricesTab({
                   onChange={(e) => setPromotion(e.target.value)}
                   placeholder="Krótki opis promocji, rabatów lub warunków..."
                   density="comfortable"
-                  focusTone="brand"
+                  focusTone="neutral"
                   className="resize-y text-gray-700"
                 />
               </div>
@@ -259,9 +267,8 @@ export function ProductEditPricesTab({
         </section>
       </div>
 
-      {/* KOLUMNA PRAWA: Dostawcy i Podsumowania (Węższa) */}
-      <div className="flex w-full flex-col gap-6 xl:w-1/3">
-        {/* KARTA: Dostawcy i ceny zakupu */}
+      {/* KOLUMNA PRAWA ~1/3 */}
+      <div className="flex w-full min-w-0 flex-col gap-6 xl:col-span-4">
         <section className="overflow-hidden rounded-xl border border-gray-200 bg-white">
           <div className="border-b border-gray-200 px-5 py-4">
             <h2 className="text-base font-semibold text-gray-900">Dostawcy i ceny zakupu</h2>
@@ -321,7 +328,7 @@ export function ProductEditPricesTab({
                             <td className="py-3 pr-3 text-center">
                               <Radio
                                 name="product-default-supplier"
-                                className="h-4 w-4 cursor-pointer border-gray-300 text-orange-600 focus:ring-orange-500"
+                                className="!h-4 !w-4 cursor-pointer border-gray-300 !text-orange-600 accent-orange-600 focus:!ring-orange-500"
                                 checked={defaultSupplierId === row.supplier_id}
                                 onChange={() => setDefaultSupplierId(row.supplier_id)}
                                 disabled={supplierLinksBusy}
@@ -349,9 +356,9 @@ export function ProductEditPricesTab({
                   <label className="mb-2 block text-xs font-medium text-gray-700">Dodaj nowego dostawcę</label>
                   <div className="flex gap-2">
                     <Select
-                      className="flex-1 bg-white text-gray-600"
+                      className="flex-1 text-gray-600"
                       density="compact"
-                      focusTone="brand"
+                      focusTone="neutral"
                       value={addSupplierPick}
                       onChange={(e) => setAddSupplierPick(e.target.value)}
                       disabled={supplierLinksBusy}
@@ -381,9 +388,7 @@ export function ProductEditPricesTab({
           </div>
         </section>
 
-        {/* Ostatni zakup + Podsumowanie — mock: flex-col sm:flex-row xl:flex-col */}
         <div className="flex flex-col gap-6 sm:flex-row xl:flex-col">
-          {/* KARTA: Ostatni zakup (z PZ) */}
           <section className="flex-1 overflow-hidden rounded-xl border border-gray-200 bg-white">
             <div className="border-b border-gray-200 px-5 py-4">
               <h2 className="text-base font-semibold text-gray-900">Ostatni zakup (z PZ)</h2>
@@ -424,7 +429,6 @@ export function ProductEditPricesTab({
             </div>
           </section>
 
-          {/* KARTA: Podsumowanie kosztów */}
           <section className="flex-1 overflow-hidden rounded-xl border border-gray-200 bg-white">
             <div className="border-b border-gray-200 px-5 py-4">
               <h2 className="text-base font-semibold text-gray-900">Podsumowanie kosztów</h2>
