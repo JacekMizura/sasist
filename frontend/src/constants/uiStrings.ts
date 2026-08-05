@@ -24,6 +24,8 @@ const UI_STRINGS_DEFAULTS = {
     categories: "Kategorie",
     sizeTables: "Tabele rozmiarów",
     variants: "Warianty",
+    productCustomFields: "Pola dodatkowe",
+    addProductCustomField: "Dodaj pole",
     addCategory: "Dodaj kategorię",
     addVariantGroup: "Nowa grupa wariantów",
     purchaseOrders: "Zamówienia do dostawców",

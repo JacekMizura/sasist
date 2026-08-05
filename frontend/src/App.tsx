@@ -272,6 +272,8 @@ import AssortmentCategoriesPage from "./pages/Assortment/categories/ProductCateg
 import SizeTablesPage from "./pages/Assortment/SizeTablesPage"
 import VariantGroupsPage from "./pages/Assortment/variants/VariantGroupsPage"
 import VariantGroupEditPage from "./pages/Assortment/variants/VariantGroupEditPage"
+import ProductCustomFieldsPage from "./pages/Assortment/productCustomFields/ProductCustomFieldsPage"
+import ProductCustomFieldEditPage from "./pages/Assortment/productCustomFields/ProductCustomFieldEditPage"
 import BdoLayout from "./pages/bdo/BdoLayout"
 import BdoDashboardPage from "./pages/bdo/BdoDashboardPage"
 import BdoMaterialsPage from "./pages/bdo/BdoMaterialsPage"
@@ -712,6 +714,9 @@ export const router = createBrowserRouter(
                 <Route path="variants" element={<VariantGroupsPage />} />
                 <Route path="variants/new" element={<VariantGroupEditPage />} />
                 <Route path="variants/:groupId/edit" element={<VariantGroupEditPage />} />
+                <Route path="product-custom-fields" element={<ProductCustomFieldsPage />} />
+                <Route path="product-custom-fields/new" element={<ProductCustomFieldEditPage />} />
+                <Route path="product-custom-fields/:fieldId/edit" element={<ProductCustomFieldEditPage />} />
                 <Route
                   path="production"
                   element={

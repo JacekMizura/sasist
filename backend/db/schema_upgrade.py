@@ -2421,6 +2421,92 @@ def ensure_product_variants_schema(engine: Engine) -> None:
         conn.commit()
 
 
+def ensure_product_custom_fields_schema(engine: Engine) -> None:
+    """Tenant-scoped product custom field definitions + per-product values."""
+    with engine.connect() as conn:
+        if not _table_exists(conn, "product_custom_fields"):
+            conn.execute(
+                text(
+                    """
+                    CREATE TABLE product_custom_fields (
+                        id INTEGER NOT NULL PRIMARY KEY,
+                        tenant_id INTEGER NOT NULL REFERENCES tenants(id),
+                        name VARCHAR(256) NOT NULL,
+                        slug VARCHAR(128) NOT NULL,
+                        type VARCHAR(32) NOT NULL,
+                        settings_json TEXT,
+                        sort_order INTEGER NOT NULL DEFAULT 0,
+                        is_active BOOLEAN NOT NULL DEFAULT true,
+                        created_at TIMESTAMP,
+                        updated_at TIMESTAMP,
+                        CONSTRAINT uq_pcf_tenant_slug UNIQUE (tenant_id, slug)
+                    )
+                    """
+                )
+            )
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_product_custom_fields_tenant_id ON product_custom_fields(tenant_id)"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_product_custom_fields_slug ON product_custom_fields(slug)"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_product_custom_fields_type ON product_custom_fields(type)"))
+
+        if not _table_exists(conn, "product_custom_field_options"):
+            conn.execute(
+                text(
+                    """
+                    CREATE TABLE product_custom_field_options (
+                        id INTEGER NOT NULL PRIMARY KEY,
+                        field_id INTEGER NOT NULL REFERENCES product_custom_fields(id) ON DELETE CASCADE,
+                        label VARCHAR(512) NOT NULL,
+                        sort_order INTEGER NOT NULL DEFAULT 0
+                    )
+                    """
+                )
+            )
+            conn.execute(
+                text(
+                    "CREATE INDEX IF NOT EXISTS ix_product_custom_field_options_field_id "
+                    "ON product_custom_field_options(field_id)"
+                )
+            )
+
+        if not _table_exists(conn, "product_custom_field_values"):
+            conn.execute(
+                text(
+                    """
+                    CREATE TABLE product_custom_field_values (
+                        id INTEGER NOT NULL PRIMARY KEY,
+                        product_id INTEGER NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+                        field_id INTEGER NOT NULL REFERENCES product_custom_fields(id) ON DELETE CASCADE,
+                        tenant_id INTEGER NOT NULL REFERENCES tenants(id),
+                        value_string TEXT,
+                        value_number FLOAT,
+                        value_json TEXT,
+                        updated_at TIMESTAMP,
+                        CONSTRAINT uq_pcfv_product_field UNIQUE (product_id, field_id)
+                    )
+                    """
+                )
+            )
+            conn.execute(
+                text(
+                    "CREATE INDEX IF NOT EXISTS ix_product_custom_field_values_product_id "
+                    "ON product_custom_field_values(product_id)"
+                )
+            )
+            conn.execute(
+                text(
+                    "CREATE INDEX IF NOT EXISTS ix_product_custom_field_values_field_id "
+                    "ON product_custom_field_values(field_id)"
+                )
+            )
+            conn.execute(
+                text(
+                    "CREATE INDEX IF NOT EXISTS ix_product_custom_field_values_tenant_id "
+                    "ON product_custom_field_values(tenant_id)"
+                )
+            )
+        conn.commit()
+
+
 def ensure_rmz_line_split_columns(engine: Engine) -> None:
     """Add split-quantity columns for RMZ line processing on existing DBs."""
     with engine.connect() as conn:

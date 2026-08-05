@@ -22,6 +22,7 @@ import {
   Layers,
   Ruler,
   Shapes,
+  ClipboardList,
   Users,
   Key,
   Building2,
@@ -233,6 +234,13 @@ export function buildNavFlyoutCategories(): NavCategoryConfig[] {
             Icon: Shapes,
             plusLinkTo: "/variants/new",
             plusLinkTitle: UI_STRINGS.navigation.addVariantGroup,
+          },
+          {
+            path: "/product-custom-fields",
+            label: UI_STRINGS.navigation.productCustomFields,
+            Icon: ClipboardList,
+            plusLinkTo: "/product-custom-fields/new",
+            plusLinkTitle: UI_STRINGS.navigation.addProductCustomField,
           },
           {
             path: "/manufacturers",

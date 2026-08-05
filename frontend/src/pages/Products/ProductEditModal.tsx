@@ -74,6 +74,7 @@ import { ProductEditLabelTab } from "./ProductEditLabelTab";
 import { ProductEditDescriptionTab } from "./ProductEditDescriptionTab";
 import { ProductEditCategoriesTab } from "./ProductEditCategoriesTab";
 import { ProductEditVariantsTab } from "./ProductEditVariantsTab";
+import { ProductAdditionalFieldsSection } from "./ProductAdditionalFieldsSection";
 import { ProductLabelPrintModal } from "./ProductLabelPrintModal";
 import ActivityLogPanel from "../../components/activityLog/ActivityLogPanel";
 
@@ -2273,6 +2274,10 @@ export function ProductEditModal({
                     parseDecimal={parseDecimal}
                   />
                 )}
+
+                {activeTab === "basic" && !isNew && product?.id != null && tenantId != null ? (
+                  <ProductAdditionalFieldsSection productId={product.id} tenantId={tenantId} />
+                ) : null}
 
                 {!isNew && product?.id != null ? (
                   <div className="mt-8 w-full max-w-none border-t border-slate-100 pb-6 pt-4">
