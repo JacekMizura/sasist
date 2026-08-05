@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { Zap } from "lucide-react";
+import { Sparkles } from "lucide-react";
 import toast from "react-hot-toast";
 
 import {
@@ -18,9 +18,13 @@ type Props = {
   label?: string;
 };
 
+/** Same chrome as EAN „Generuj” on ProductEditBasicTab. */
+const generateBtnClass =
+  "inline-flex h-full shrink-0 items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 text-xs font-semibold text-gray-700 shadow-sm transition-colors hover:bg-gray-50 disabled:opacity-50";
+
 /**
  * Central SKU / catalog Generuj control — preview + allocate via product-codes API.
- * Does not save the product.
+ * Does not save the product. Button chrome matches Kod kreskowy → Generuj.
  */
 export function ProductCodeGenerateControl({
   kind,
@@ -96,7 +100,6 @@ export function ProductCodeGenerateControl({
         productId: primaryCategoryId == null ? productId : undefined,
       });
       onGenerated(res.value);
-      // Show next candidate under the button
       void refreshPreview();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Generowanie nie powiodło się.");
@@ -107,23 +110,25 @@ export function ProductCodeGenerateControl({
   };
 
   return (
-    <div className="flex shrink-0 flex-col items-stretch gap-0.5">
+    <div className="relative flex shrink-0 self-stretch">
       <button
         type="button"
         title={kind === "sku" ? "Wygeneruj SKU z kategorii" : "Wygeneruj numer katalogowy z kategorii"}
         disabled={busy || tenantId == null}
         onClick={() => void onClick()}
-        className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 text-xs font-semibold text-gray-700 shadow-sm transition-colors hover:bg-gray-50 disabled:opacity-50"
+        className={generateBtnClass}
       >
-        <Zap className="h-3.5 w-3.5 text-amber-500" strokeWidth={2.5} aria-hidden />
+        <Sparkles className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />
         {busy ? "…" : label}
       </button>
       {preview ? (
-        <span className="px-0.5 text-[10px] text-slate-500">
+        <span className="absolute left-0 top-full z-10 mt-0.5 whitespace-nowrap px-0.5 text-[10px] text-slate-500">
           Przykład: <span className="font-mono font-medium text-slate-700">{preview}</span>
         </span>
       ) : hint ? (
-        <span className="max-w-[11rem] px-0.5 text-[10px] leading-snug text-amber-700">{hint}</span>
+        <span className="absolute left-0 top-full z-10 mt-0.5 max-w-[12rem] px-0.5 text-[10px] leading-snug text-amber-700">
+          {hint}
+        </span>
       ) : null}
     </div>
   );
