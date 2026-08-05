@@ -7,6 +7,10 @@ export type ProductCategoryTreeNode = {
   description?: string | null;
   is_active: boolean;
   sort_order: number;
+  sku_code?: string | null;
+  catalog_code?: string | null;
+  sku_template?: string | null;
+  catalog_template?: string | null;
   product_count: number;
   path_ids: number[];
   path_names: string[];
@@ -21,6 +25,10 @@ export type ProductCategoryRead = {
   description?: string | null;
   is_active: boolean;
   sort_order: number;
+  sku_code?: string | null;
+  catalog_code?: string | null;
+  sku_template?: string | null;
+  catalog_template?: string | null;
   product_count: number;
   child_count: number;
   path_ids: number[];
@@ -42,6 +50,10 @@ export type ProductCategoryCreateBody = {
   description?: string | null;
   is_active?: boolean;
   sort_order?: number | null;
+  sku_code?: string | null;
+  catalog_code?: string | null;
+  sku_template?: string | null;
+  catalog_template?: string | null;
 };
 
 export type ProductCategoryUpdateBody = {
@@ -51,6 +63,10 @@ export type ProductCategoryUpdateBody = {
   description?: string | null;
   is_active?: boolean;
   sort_order?: number | null;
+  sku_code?: string | null;
+  catalog_code?: string | null;
+  sku_template?: string | null;
+  catalog_template?: string | null;
 };
 
 export async function fetchCategoryTree(params: {

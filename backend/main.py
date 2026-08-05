@@ -288,6 +288,7 @@ from .api.product_categories import (
     product_assignment_router as product_category_assignment_router,
     router as product_categories_router,
 )
+from .api.product_codes import router as product_codes_router
 from .api.purchasing import router as purchasing_router
 from .api.supplier import router as supplier_router
 from .api.customers import router as customers_router
@@ -2125,6 +2126,7 @@ _API_ROUTERS = (
     manufacturer_router,
     product_categories_router,
     product_category_assignment_router,
+    product_codes_router,
     purchasing_router,
     supplier_router,
     customers_router,

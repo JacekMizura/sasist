@@ -13,6 +13,10 @@ class ProductCategoryCreateBody(BaseModel):
     description: Optional[str] = None
     is_active: bool = True
     sort_order: Optional[int] = None
+    sku_code: Optional[str] = Field(None, max_length=64)
+    catalog_code: Optional[str] = Field(None, max_length=64)
+    sku_template: Optional[str] = Field(None, max_length=255)
+    catalog_template: Optional[str] = Field(None, max_length=255)
 
 
 class ProductCategoryUpdateBody(BaseModel):
@@ -23,6 +27,10 @@ class ProductCategoryUpdateBody(BaseModel):
     sort_order: Optional[int] = None
     #: Explicit clear of parent (move to root). Distinct from omitting parent_id.
     clear_parent: bool = False
+    sku_code: Optional[str] = Field(None, max_length=64)
+    catalog_code: Optional[str] = Field(None, max_length=64)
+    sku_template: Optional[str] = Field(None, max_length=255)
+    catalog_template: Optional[str] = Field(None, max_length=255)
 
 
 class ProductCategoryMoveBody(BaseModel):
@@ -43,6 +51,10 @@ class ProductCategoryRead(BaseModel):
     description: Optional[str] = None
     is_active: bool
     sort_order: int
+    sku_code: Optional[str] = None
+    catalog_code: Optional[str] = None
+    sku_template: Optional[str] = None
+    catalog_template: Optional[str] = None
     product_count: int = 0
     child_count: int = 0
     #: Breadcrumb names from root to this node (inclusive).
@@ -57,6 +69,10 @@ class ProductCategoryTreeNode(BaseModel):
     description: Optional[str] = None
     is_active: bool
     sort_order: int
+    sku_code: Optional[str] = None
+    catalog_code: Optional[str] = None
+    sku_template: Optional[str] = None
+    catalog_template: Optional[str] = None
     product_count: int = 0
     path_names: List[str] = Field(default_factory=list)
     path_ids: List[int] = Field(default_factory=list)

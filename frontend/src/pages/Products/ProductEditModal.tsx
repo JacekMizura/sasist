@@ -32,6 +32,7 @@ import { error as logError, log } from "../../utils/logger";
 import api from "../../api/axios";
 import { listManufacturers, type ManufacturerRead } from "../../api/manufacturersApi";
 import { listSuppliers, type SupplierRead } from "../../api/inboundSuppliersApi";
+import { getProductCategoryAssignment } from "../../api/productCategoriesApi";
 import {
   createSupplierProductLink,
   deleteSupplierProductLink,
@@ -421,6 +422,7 @@ export function ProductEditModal({
   );
   const [symbol, setSymbol] = useState(product?.symbol ?? "");
   const [catalogNumber, setCatalogNumber] = useState(product?.catalog_number ?? "");
+  const [primaryCategoryId, setPrimaryCategoryId] = useState<number | null>(null);
   const round2 = (n: number) => Math.round(n * 100) / 100;
   const round3 = (n: number) => Math.round(n * 1000) / 1000;
   const [length, setLength] = useState<number | "">(product?.length ?? "");
@@ -1668,6 +1670,24 @@ export function ProductEditModal({
     };
   }, [isNew, tenantId, product?.id]);
 
+  useEffect(() => {
+    if (isNew || tenantId == null || tenantId < 1 || product?.id == null) {
+      setPrimaryCategoryId(null);
+      return;
+    }
+    let cancelled = false;
+    void getProductCategoryAssignment({ tenantId, productId: product.id })
+      .then((a) => {
+        if (!cancelled) setPrimaryCategoryId(a.primary_category_id);
+      })
+      .catch(() => {
+        if (!cancelled) setPrimaryCategoryId(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isNew, tenantId, product?.id, activityRefreshKey]);
+
   const railTabOrder = useMemo((): TabId[] => {
     if (!isNew) {
       return ["basic", "prices", "description", "images", "offers", "categories", "production", "labelSheet", "warehouse"];
@@ -1963,6 +1983,7 @@ export function ProductEditModal({
                     setSymbol={setSymbol}
                     catalogNumber={catalogNumber}
                     setCatalogNumber={setCatalogNumber}
+                    primaryCategoryId={primaryCategoryId}
                     ean={ean}
                     setEan={setEan}
                     extraEans={extraEans}
@@ -2176,7 +2197,11 @@ export function ProductEditModal({
                   isNew || product?.id == null || tenantId == null ? (
                     <p className="text-sm text-slate-500">Zapisz produkt, aby przypisać kategorie.</p>
                   ) : (
-                    <ProductEditCategoriesTab productId={product.id} tenantId={tenantId} />
+                    <ProductEditCategoriesTab
+                      productId={product.id}
+                      tenantId={tenantId}
+                      onAssignmentChange={setPrimaryCategoryId}
+                    />
                   )
                 )}
 

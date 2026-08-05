@@ -150,6 +150,10 @@ export default function ProductCategoriesPage() {
               description: values.description || null,
               is_active: values.is_active,
               sort_order: values.sort_order,
+              sku_code: values.sku_code || null,
+              catalog_code: values.catalog_code || null,
+              sku_template: values.sku_template || null,
+              catalog_template: values.catalog_template || null,
             });
           } else if (editing) {
             await treeState.update(editing.id, {
@@ -159,6 +163,10 @@ export default function ProductCategoriesPage() {
               description: values.description,
               is_active: values.is_active,
               sort_order: values.sort_order,
+              sku_code: values.sku_code || null,
+              catalog_code: values.catalog_code || null,
+              sku_template: values.sku_template || null,
+              catalog_template: values.catalog_template || null,
             });
           }
           setFormOpen(false);

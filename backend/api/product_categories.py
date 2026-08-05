@@ -91,6 +91,10 @@ def api_create_category(
             description=body.description,
             is_active=body.is_active,
             sort_order=body.sort_order,
+            sku_code=body.sku_code,
+            catalog_code=body.catalog_code,
+            sku_template=body.sku_template,
+            catalog_template=body.catalog_template,
         )
         db.commit()
         db.refresh(row)
@@ -121,6 +125,14 @@ def api_update_category(
             is_active=body.is_active,
             sort_order=body.sort_order,
             parent_set="parent_id" in fields or bool(body.clear_parent),
+            sku_code=body.sku_code,
+            sku_code_set="sku_code" in fields,
+            catalog_code=body.catalog_code,
+            catalog_code_set="catalog_code" in fields,
+            sku_template=body.sku_template,
+            sku_template_set="sku_template" in fields,
+            catalog_template=body.catalog_template,
+            catalog_template_set="catalog_template" in fields,
         )
         db.commit()
         db.refresh(row)

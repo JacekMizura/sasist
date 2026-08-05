@@ -2207,6 +2207,10 @@ def ensure_product_categories_schema(engine: Engine) -> None:
                         description TEXT,
                         is_active BOOLEAN NOT NULL DEFAULT true,
                         sort_order INTEGER NOT NULL DEFAULT 0,
+                        sku_code VARCHAR(64),
+                        catalog_code VARCHAR(64),
+                        sku_template VARCHAR(255),
+                        catalog_template VARCHAR(255),
                         sku_generator_json TEXT,
                         catalog_number_generator_json TEXT,
                         default_label_template_id INTEGER,
@@ -2227,6 +2231,10 @@ def ensure_product_categories_schema(engine: Engine) -> None:
 
         cols = _table_column_names(conn, "product_categories") if _table_exists(conn, "product_categories") else set()
         for col, ddl in (
+            ("sku_code", "ALTER TABLE product_categories ADD COLUMN sku_code VARCHAR(64)"),
+            ("catalog_code", "ALTER TABLE product_categories ADD COLUMN catalog_code VARCHAR(64)"),
+            ("sku_template", "ALTER TABLE product_categories ADD COLUMN sku_template VARCHAR(255)"),
+            ("catalog_template", "ALTER TABLE product_categories ADD COLUMN catalog_template VARCHAR(255)"),
             ("sku_generator_json", "ALTER TABLE product_categories ADD COLUMN sku_generator_json TEXT"),
             ("catalog_number_generator_json", "ALTER TABLE product_categories ADD COLUMN catalog_number_generator_json TEXT"),
             ("default_label_template_id", "ALTER TABLE product_categories ADD COLUMN default_label_template_id INTEGER"),
@@ -2244,6 +2252,26 @@ def ensure_product_categories_schema(engine: Engine) -> None:
         ):
             if cols and col not in cols:
                 conn.execute(text(ddl))
+
+        if not _table_exists(conn, "product_code_sequences"):
+            conn.execute(
+                text(
+                    """
+                    CREATE TABLE product_code_sequences (
+                        id INTEGER NOT NULL PRIMARY KEY,
+                        tenant_id INTEGER NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+                        kind VARCHAR(16) NOT NULL,
+                        sequence_key VARCHAR(255) NOT NULL,
+                        last_value INTEGER NOT NULL DEFAULT 0,
+                        updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                        CONSTRAINT uq_product_code_sequence UNIQUE (tenant_id, kind, sequence_key)
+                    )
+                    """
+                )
+            )
+            conn.execute(
+                text("CREATE INDEX IF NOT EXISTS ix_product_code_sequences_tenant_id ON product_code_sequences(tenant_id)")
+            )
 
         if not _table_exists(conn, "product_category_links"):
             conn.execute(

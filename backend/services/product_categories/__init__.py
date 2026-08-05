@@ -77,6 +77,11 @@ def _next_sort_order(db: Session, tenant_id: int, parent_id: Optional[int]) -> i
     return int(q.scalar() or -1) + 1
 
 
+def _norm_code(s: Optional[str]) -> Optional[str]:
+    t = _strip(s)
+    return t.upper() if t else None
+
+
 def create_category(
     db: Session,
     tenant_id: int,
@@ -86,6 +91,10 @@ def create_category(
     description: Optional[str] = None,
     is_active: bool = True,
     sort_order: Optional[int] = None,
+    sku_code: Optional[str] = None,
+    catalog_code: Optional[str] = None,
+    sku_template: Optional[str] = None,
+    catalog_template: Optional[str] = None,
 ) -> ProductCategory:
     clean_name = _strip(name)
     if not clean_name:
@@ -100,6 +109,10 @@ def create_category(
         description=_strip(description),
         is_active=bool(is_active),
         sort_order=int(order),
+        sku_code=_norm_code(sku_code),
+        catalog_code=_norm_code(catalog_code),
+        sku_template=_strip(sku_template),
+        catalog_template=_strip(catalog_template),
     )
     db.add(row)
     db.flush()
@@ -119,6 +132,14 @@ def update_category(
     is_active: Optional[bool] = None,
     sort_order: Optional[int] = None,
     parent_set: bool = False,
+    sku_code: Optional[str] = None,
+    sku_code_set: bool = False,
+    catalog_code: Optional[str] = None,
+    catalog_code_set: bool = False,
+    sku_template: Optional[str] = None,
+    sku_template_set: bool = False,
+    catalog_template: Optional[str] = None,
+    catalog_template_set: bool = False,
 ) -> ProductCategory:
     row = get_category(db, tenant_id, category_id)
     if name is not None:
@@ -132,6 +153,14 @@ def update_category(
         row.is_active = bool(is_active)
     if sort_order is not None:
         row.sort_order = int(sort_order)
+    if sku_code_set:
+        row.sku_code = _norm_code(sku_code)
+    if catalog_code_set:
+        row.catalog_code = _norm_code(catalog_code)
+    if sku_template_set:
+        row.sku_template = _strip(sku_template)
+    if catalog_template_set:
+        row.catalog_template = _strip(catalog_template)
 
     if clear_parent:
         row.parent_id = None
@@ -307,6 +336,10 @@ def build_tree_nodes(
             "description": r.description,
             "is_active": bool(r.is_active),
             "sort_order": int(r.sort_order or 0),
+            "sku_code": getattr(r, "sku_code", None),
+            "catalog_code": getattr(r, "catalog_code", None),
+            "sku_template": getattr(r, "sku_template", None),
+            "catalog_template": getattr(r, "catalog_template", None),
             "product_count": int(counts.get(cid, 0)),
             "path_ids": path_ids.get(cid, [cid]),
             "path_names": path_names.get(cid, [r.name]),
@@ -339,6 +372,10 @@ def serialize_category(
         "description": row.description,
         "is_active": bool(row.is_active),
         "sort_order": int(row.sort_order or 0),
+        "sku_code": getattr(row, "sku_code", None),
+        "catalog_code": getattr(row, "catalog_code", None),
+        "sku_template": getattr(row, "sku_template", None),
+        "catalog_template": getattr(row, "catalog_template", None),
         "product_count": int(counts.get(cid, 0)),
         "child_count": child_count,
         "path_ids": path_ids.get(cid, [cid]),

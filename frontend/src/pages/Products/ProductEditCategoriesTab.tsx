@@ -14,13 +14,14 @@ import { CategoryTree } from "../Assortment/categories/CategoryTree";
 type Props = {
   tenantId: number;
   productId: number;
+  onAssignmentChange?: (primaryCategoryId: number | null) => void;
 };
 
 /**
  * Product edit — Kategorie tab.
  * Left: live-searchable category tree. Right: primary + additional summary.
  */
-export function ProductEditCategoriesTab({ tenantId, productId }: Props) {
+export function ProductEditCategoriesTab({ tenantId, productId, onAssignmentChange }: Props) {
   const [rawTree, setRawTree] = useState<ProductCategoryTreeNode[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -49,6 +50,7 @@ export function ProductEditCategoriesTab({ tenantId, productId }: Props) {
         assignment.additional.map((a) => ({ id: a.id, names: a.path_names })),
       );
       setDirty(false);
+      onAssignmentChange?.(assignment.primary_category_id);
       if (assignment.primary_path_ids.length) {
         setExpandedIds(new Set(assignment.primary_path_ids.slice(0, -1)));
       }
@@ -57,7 +59,7 @@ export function ProductEditCategoriesTab({ tenantId, productId }: Props) {
     } finally {
       setLoading(false);
     }
-  }, [tenantId, productId]);
+  }, [tenantId, productId, onAssignmentChange]);
 
   useEffect(() => {
     void reload();
@@ -137,6 +139,7 @@ export function ProductEditCategoriesTab({ tenantId, productId }: Props) {
       setPrimaryPath(assignment.primary_path_names);
       setAdditionalPaths(assignment.additional.map((a) => ({ id: a.id, names: a.path_names })));
       setDirty(false);
+      onAssignmentChange?.(assignment.primary_category_id);
     } catch (e) {
       setError(extractApiErrorMessage(e));
     } finally {

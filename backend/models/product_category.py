@@ -33,10 +33,16 @@ class ProductCategory(Base):
     #: Sibling order under the same parent (lower = higher in list).
     sort_order = Column(Integer, nullable=False, default=0)
 
-    # --- Future extension hooks (unused in v1) ---
-    #: JSON: sku generator rules / prefixes / counters config.
+    # --- Numbering (SKU / catalog) — used by central product_codes service ---
+    sku_code = Column(String(64), nullable=True)
+    catalog_code = Column(String(64), nullable=True)
+    sku_template = Column(String(255), nullable=True)
+    catalog_template = Column(String(255), nullable=True)
+
+    # --- Future extension hooks ---
+    #: JSON: advanced sku generator rules beyond simple template (future).
     sku_generator_json = Column(Text, nullable=True)
-    #: JSON: catalog number generator rules.
+    #: JSON: advanced catalog generator rules (future).
     catalog_number_generator_json = Column(Text, nullable=True)
     default_label_template_id = Column(Integer, nullable=True, index=True)
     default_vat_rate = Column(Numeric(8, 2), nullable=True)
