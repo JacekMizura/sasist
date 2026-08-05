@@ -620,8 +620,6 @@ export function ProductEditModal({
   const [traceEditRow, setTraceEditRow] = useState<MagazynInvRowDisplay | null>(null);
   const [inventoryOverride, setInventoryOverride] = useState<ProductForm["inventory"] | null>(null);
   const [productTemplates, setProductTemplates] = useState<{ id: number; name: string }[]>([]);
-  const [templatePreviewSvg, setTemplatePreviewSvg] = useState<string | null>(null);
-  const [templatePreviewLoading, setTemplatePreviewLoading] = useState(false);
 
   const producerDisplayNameForGpsrHint = useMemo(() => {
     if (manufacturerId != null) {
@@ -996,21 +994,6 @@ export function ProductEditModal({
       .then((res) => setProductTemplates(Array.isArray(res.data) ? res.data : []))
       .catch(() => setProductTemplates([]));
   }, []);
-
-  useEffect(() => {
-    if (labelTemplateId == null) {
-      setTemplatePreviewSvg(null);
-      setTemplatePreviewLoading(false);
-      return;
-    }
-    setTemplatePreviewLoading(true);
-    setTemplatePreviewSvg(null);
-    api
-      .get<{ svg: string }>(`/label-templates/${labelTemplateId}/preview`, { params: { tenant_id: 1 } })
-      .then((res) => setTemplatePreviewSvg(res.data?.svg ?? null))
-      .catch(() => setTemplatePreviewSvg(null))
-      .finally(() => setTemplatePreviewLoading(false));
-  }, [labelTemplateId]);
 
   const reloadProductSupplierLinks = useCallback(async () => {
     const tid = tenantId;
@@ -2110,16 +2093,24 @@ export function ProductEditModal({
                     labelTemplateId={labelTemplateId}
                     setLabelTemplateId={setLabelTemplateId}
                     productTemplates={productTemplates}
-                    templatePreviewSvg={templatePreviewSvg}
-                    templatePreviewLoading={templatePreviewLoading}
+                    tenantId={tenantId}
                     labelData={labelData}
                     setLabelData={setLabelData}
                     name={name}
+                    symbol={symbol}
                     ean={ean}
+                    imageUrl={sidebarPreviewUrl}
                     manufacturerId={manufacturerId}
                     manufacturerReadonly={manufacturerReadonly}
                     manufacturer={manufacturer}
                     salePrice={salePrice}
+                    purchasePrice={purchasePrice}
+                    vatRate={vatRate}
+                    unit={unit}
+                    weight={weight}
+                    length={length}
+                    width={width}
+                    height={height}
                     parseDecimal={parseDecimal}
                   />
                 )}

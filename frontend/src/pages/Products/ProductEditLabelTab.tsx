@@ -1,63 +1,182 @@
-import type { Dispatch, SetStateAction } from "react";
+import { useEffect, useMemo, useState, type Dispatch, type SetStateAction } from "react";
 
-import { RetailLabel } from "../../components/products/RetailLabel";
-import { SUPPLIER_COUNTRIES } from "../../constants/supplierTaxonomy";
+import api from "../../api/axios";
 import {
   productLikeFieldLabelClass,
   productLikeInputClass,
 } from "../../components/catalog";
+import { SUPPLIER_COUNTRIES } from "../../constants/supplierTaxonomy";
+import type { LabelTemplate } from "../../types/labelSystem";
 import type { ProductLabelData } from "../../types/productLabel";
+import { ProductLabelSvgPreview } from "./ProductLabelSvgPreview";
+import {
+  buildProductLabelDataRecord,
+  buildProductLabelPlaceholderRecord,
+} from "./productLabelPreviewRecords";
 
 const fieldLabel = productLikeFieldLabelClass;
 const inputClass = productLikeInputClass;
+
+const PLACEHOLDER_RECORD = buildProductLabelPlaceholderRecord();
 
 export type ProductEditLabelTabProps = {
   labelTemplateId: number | null;
   setLabelTemplateId: (v: number | null) => void;
   productTemplates: { id: number; name: string }[];
-  templatePreviewSvg: string | null;
-  templatePreviewLoading: boolean;
+  tenantId: number | null;
   labelData: ProductLabelData;
   setLabelData: Dispatch<SetStateAction<ProductLabelData>>;
   name: string;
+  symbol: string;
   ean: string;
+  imageUrl?: string | null;
   manufacturerId: number | null;
   manufacturerReadonly: { name: string; address: string };
   manufacturer: string;
   salePrice: number | "";
+  purchasePrice?: number | "";
+  vatRate?: string;
+  unit?: string;
+  weight?: number | "";
+  length?: number | "";
+  width?: number | "";
+  height?: number | "";
   parseDecimal: (s: string | number | undefined | null) => number | undefined;
 };
 
+function asNum(v: number | "" | undefined | null): number | null {
+  if (v === "" || v == null) return null;
+  return typeof v === "number" && Number.isFinite(v) ? v : null;
+}
+
 /**
  * Product edit — Etykieta tab.
- * DOM hierarchy is a structural 1:1 port of `etykieta karta produktu.html`
- * (full-width 2/3 + 1/3 under tabs).
+ * Both previews use the same `renderLabel` engine; only the data model differs.
  */
 export function ProductEditLabelTab({
   labelTemplateId,
   setLabelTemplateId,
   productTemplates,
-  templatePreviewSvg,
-  templatePreviewLoading,
+  tenantId,
   labelData,
   setLabelData,
   name,
+  symbol,
   ean,
+  imageUrl,
   manufacturerId,
   manufacturerReadonly,
   manufacturer,
   salePrice,
+  purchasePrice = "",
+  vatRate = "",
+  unit = "",
+  weight = "",
+  length = "",
+  width = "",
+  height = "",
   parseDecimal,
 }: ProductEditLabelTabProps) {
+  const [template, setTemplate] = useState<LabelTemplate | null>(null);
+  const [templateLoading, setTemplateLoading] = useState(false);
+
+  useEffect(() => {
+    if (labelTemplateId == null) {
+      setTemplate(null);
+      setTemplateLoading(false);
+      return;
+    }
+    let cancelled = false;
+    setTemplateLoading(true);
+    setTemplate(null);
+    const tid = tenantId != null && tenantId > 0 ? tenantId : 1;
+    api
+      .get<{ template_json: string }>(`/label-templates/${labelTemplateId}`, {
+        params: { tenant_id: tid },
+      })
+      .then((res) => {
+        if (cancelled) return;
+        const raw = res.data?.template_json;
+        if (!raw?.trim()) {
+          setTemplate(null);
+          return;
+        }
+        const parsed = JSON.parse(raw) as LabelTemplate;
+        setTemplate({
+          ...parsed,
+          id: parsed.id ?? String(labelTemplateId),
+          name: parsed.name ?? "",
+          widthMm: Number(parsed.widthMm) || 50,
+          heightMm: Number(parsed.heightMm) || 30,
+          dpi: Number(parsed.dpi) || 300,
+          elements: Array.isArray(parsed.elements) ? parsed.elements : [],
+          template_type: parsed.template_type ?? "product",
+        });
+      })
+      .catch(() => {
+        if (!cancelled) setTemplate(null);
+      })
+      .finally(() => {
+        if (!cancelled) setTemplateLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [labelTemplateId, tenantId]);
+
   const salePriceNum =
     salePrice === ""
       ? null
       : typeof salePrice === "number"
         ? salePrice
         : parseDecimal(String(salePrice)) ?? null;
+  const purchasePriceNum =
+    purchasePrice === ""
+      ? null
+      : typeof purchasePrice === "number"
+        ? purchasePrice
+        : parseDecimal(String(purchasePrice)) ?? null;
+
+  const productRecord = useMemo(
+    () =>
+      buildProductLabelDataRecord({
+        name,
+        symbol,
+        ean,
+        imageUrl,
+        manufacturerName: manufacturerReadonly.name || manufacturer,
+        manufacturerAddress: manufacturerReadonly.address,
+        salePrice: salePriceNum,
+        purchasePrice: purchasePriceNum,
+        vatRate,
+        unit,
+        weight: asNum(weight),
+        length: asNum(length),
+        width: asNum(width),
+        height: asNum(height),
+        labelData,
+      }),
+    [
+      name,
+      symbol,
+      ean,
+      imageUrl,
+      manufacturerReadonly.name,
+      manufacturerReadonly.address,
+      manufacturer,
+      salePriceNum,
+      purchasePriceNum,
+      vatRate,
+      unit,
+      weight,
+      length,
+      width,
+      height,
+      labelData,
+    ],
+  );
 
   return (
-    /* mock: flex flex-col lg:flex-row gap-12 — full page width */
     <div className="flex w-full max-w-none flex-col gap-12 lg:flex-row">
       {/* LEWA ~2/3 */}
       <div className="w-full space-y-10 lg:w-7/12 xl:w-2/3">
@@ -79,17 +198,18 @@ export function ProductEditLabelTab({
                 ))}
               </select>
             </div>
-            <div className="flex min-h-[160px] items-center justify-center rounded-lg border border-dashed border-gray-300 bg-gray-50/50 p-8">
-              {templatePreviewLoading ? (
-                <span className="text-sm font-medium text-gray-400">Ładowanie…</span>
-              ) : templatePreviewSvg ? (
-                <div
-                  className="max-h-36 max-w-full overflow-auto [&_svg]:max-h-36"
-                  dangerouslySetInnerHTML={{ __html: templatePreviewSvg }}
-                />
-              ) : (
-                <span className="text-sm font-medium text-gray-400">Brak podglądu</span>
-              )}
+            <div>
+              <p className="mb-2 text-sm font-medium text-gray-700">Podgląd szablonu</p>
+              <p className="mb-3 text-xs leading-relaxed text-gray-500">
+                Ten sam silnik renderowania co gotowa etykieta — pola pokazują placeholdery (
+                {"{{NAZWA}}"}, {"{{EAN}}"}, {"{{SKU}}"}…).
+              </p>
+              <ProductLabelSvgPreview
+                template={template}
+                record={PLACEHOLDER_RECORD}
+                loadingTemplate={templateLoading}
+                emptyHint="Wybierz szablon, aby zobaczyć placeholdery pól"
+              />
             </div>
           </div>
         </section>
@@ -255,30 +375,14 @@ export function ProductEditLabelTab({
         <div className="lg:sticky lg:top-8">
           <h2 className="mb-2 text-lg font-bold text-gray-900">Podgląd gotowej etykiety</h2>
           <p className="mb-6 text-sm leading-relaxed text-gray-500">
-            Symulacja wydruku (~60×40 mm). Puste sekcje są automatycznie ukrywane.
+            Ten sam układ i skala co podgląd szablonu — z rzeczywistymi danymi produktu.
           </p>
-          <div className="flex items-center justify-center rounded-lg bg-gray-100 p-4">
-            <div className="origin-top scale-[1.15] bg-white shadow-sm sm:scale-125">
-              <RetailLabel
-                brandName={manufacturerReadonly.name || manufacturer.trim() || "—"}
-                productNamePl={(labelData.product_name_pl ?? "").trim() || name.trim() || "—"}
-                composition={labelData.material_composition}
-                manufacturerName={manufacturerReadonly.name || undefined}
-                manufacturerAddress={manufacturerReadonly.address || undefined}
-                importerName={labelData.importer_name}
-                importerAddress={labelData.importer_address}
-                ean={ean.trim() || undefined}
-                batchNumber={labelData.batch_number}
-                seriesNumber={labelData.series_number}
-                countryOfOrigin={labelData.country_of_origin}
-                careInstructions={labelData.care_instructions}
-                sizeOrLength={labelData.size_or_length}
-                salePrice={salePriceNum}
-                showPriceOnLabel={Boolean(labelData.show_price_on_label)}
-                showCeMark={Boolean(labelData.requires_ce_mark)}
-              />
-            </div>
-          </div>
+          <ProductLabelSvgPreview
+            template={template}
+            record={productRecord}
+            loadingTemplate={templateLoading}
+            emptyHint="Wybierz szablon, aby zobaczyć etykietę z danymi produktu"
+          />
         </div>
       </div>
     </div>
