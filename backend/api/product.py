@@ -24,10 +24,17 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 from typing import List, Optional, Any, Tuple
 from collections import defaultdict
 
+from ..auth.deps import get_optional_current_user
 from ..database import engine, get_db
+from ..models.app_user import AppUser
 from ..schemas.entity_delete import EntityBulkDeleteResult, entity_bulk_delete_result_from_service_dict
 from ..schemas.order_bulk import BulkProductsDeleteBody, BulkProductsSelection, ProductBulkListFilters, ProductBulkUpdateExtendedBody
 from ..domain.supplier_product_linkage import apply_supplier_product_filter
+from ..services.product_activity_service import (
+    EVENT_PRODUCT_CREATED,
+    EVENT_PRODUCT_UPDATED,
+    record_product_card_activity,
+)
 from ..config import product_refactor_flags as pr_flags
 from ..models.manufacturer import Manufacturer
 from ..models.supplier import Supplier
@@ -2597,6 +2604,7 @@ def create_product(
     body: ProductBody,
     db: Session = Depends(get_db),
     tenant_id: Optional[int] = None,
+    user: Optional[AppUser] = Depends(get_optional_current_user),
 ):
     """Create product. Requires name in body and tenant_id (in body or query)."""
     if not (body.name or "").strip():
@@ -2696,6 +2704,16 @@ def create_product(
     from ..services.barcode_generation import next_product_barcode
     product.barcode = next_product_barcode(db, tid)
     _ensure_supplier_product_link(db, product)
+    pname = (product.name or "").strip() or f"#{product.id}"
+    record_product_card_activity(
+        db,
+        product_id=int(product.id),
+        tenant_id=int(tid),
+        event_code=EVENT_PRODUCT_CREATED,
+        description=f"Utworzono produkt „{pname}”.",
+        actor_user_id=int(user.id) if user is not None else None,
+        metadata={"product_name": pname, "sku": (product.symbol or "") or None},
+    )
     db.commit()
     db.refresh(product)
     out = _product_to_dict(product)
@@ -3365,6 +3383,7 @@ def update_product(
     body: ProductBody,
     db: Session = Depends(get_db),
     tenant_id: Optional[int] = None,
+    user: Optional[AppUser] = Depends(get_optional_current_user),
 ):
     """Update product by ID. tenant_id optional for scoping; body.tenant_id can change product's tenant.
     Accepts both legacy (length, weight, volume) and alternate (length_cm, weight_kg, volume_dm3) field names."""
@@ -3744,6 +3763,17 @@ def update_product(
                 stock_disposition=DEFAULT_STOCK_DISPOSITION,
             )
             db.add(inv)
+
+    pname = (product.name or "").strip() or f"#{product.id}"
+    record_product_card_activity(
+        db,
+        product_id=int(product.id),
+        tenant_id=int(product.tenant_id),
+        event_code=EVENT_PRODUCT_UPDATED,
+        description=f"Zaktualizowano kartę produktu „{pname}”.",
+        actor_user_id=int(user.id) if user is not None else None,
+        metadata={"product_name": pname, "sku": (product.symbol or "") or None},
+    )
 
     try:
         db.commit()

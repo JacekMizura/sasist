@@ -486,6 +486,7 @@ export function ProductEditModal({
   const [addSupplierPick, setAddSupplierPick] = useState<string>("");
   const [labelData, setLabelData] = useState<ProductLabelData>({});
   const [productImages, setProductImages] = useState<ProductImageEntry[]>([]);
+  const [activityRefreshKey, setActivityRefreshKey] = useState(0);
   const [descTagsText, setDescTagsText] = useState("");
   const [descShort, setDescShort] = useState("");
   const [descSerialNotes, setDescSerialNotes] = useState("");
@@ -1551,6 +1552,7 @@ export function ProductEditModal({
         });
       }
       toast.success("Zapisano produkt");
+      setActivityRefreshKey((k) => k + 1);
       onClose();
     } catch (err: unknown) {
       console.error("Product save failed:", err);
@@ -1933,6 +1935,7 @@ export function ProductEditModal({
                     globalValidation={globalValidation}
                     validationSkips={validationSkips}
                     setValidationSkips={setValidationSkips}
+                    activityRefreshKey={activityRefreshKey}
                   />
                 )}
 

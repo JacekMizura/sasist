@@ -37,6 +37,10 @@ export const EVENT_DISPLAY_LABELS: Record<string, string> = {
   ORDER_DETACHED: "Odłączono zamówienie",
   EMPTY_ORPHAN_CART_RELEASED: "Zwolniono pusty wózek",
 
+  // --- Product catalog ---
+  PRODUCT_CREATED: "Utworzono produkt",
+  PRODUCT_UPDATED: "Zaktualizowano produkt",
+
   // --- Order / WMS operational ---
   SYSTEM: "System",
   SOURCE: "Źródło",

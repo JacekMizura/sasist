@@ -58,6 +58,8 @@ export type ProductEditBasicTabProps = {
   globalValidation: ProductValidationGlobalSettings | null;
   validationSkips: ProductValidationSkips;
   setValidationSkips: React.Dispatch<React.SetStateAction<ProductValidationSkips>>;
+  /** Bumps ActivityLogPanel reload after save (same pattern as order card). */
+  activityRefreshKey?: number;
 };
 
 /** Mock `.form-label` */
@@ -164,6 +166,7 @@ export function ProductEditBasicTab({
   globalValidation,
   validationSkips,
   setValidationSkips,
+  activityRefreshKey = 0,
 }: ProductEditBasicTabProps) {
   const [unitSystem, setUnitSystem] = useState<"metric" | "imperial">("metric");
   const [templateMode, setTemplateMode] = useState<"pick" | "custom">("pick");
@@ -193,7 +196,8 @@ export function ProductEditBasicTab({
   );
 
   return (
-    /* mock: <div class="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start"> */
+    <>
+    {/* mock: <div class="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start"> */}
     <div className="grid grid-cols-1 items-start gap-8 lg:grid-cols-12">
       {/* LEFT lg:col-span-7 */}
       <div className="space-y-6 lg:col-span-7">
@@ -813,18 +817,15 @@ export function ProductEditBasicTab({
           )}
         </section>
 
-        {/* Historia — ActivityLogPanel jak w zamówieniach (nie mock lista) */}
-        {!isNew && productId != null ? (
-          <section className="rounded-lg border border-gray-200 bg-white p-4">
-            <ActivityLogPanel
-              objectType="product"
-              objectId={productId}
-              defaultCollapsed={false}
-              className="mt-0 border-0 shadow-none"
-            />
-          </section>
-        ) : null}
       </div>
     </div>
+
+      {/* Historia czynności — ten sam ActivityLogPanel co na karcie zamówienia (pełna szerokość pod układem) */}
+      {!isNew && productId != null ? (
+        <div className="mt-8 w-full max-w-none border-t border-slate-100 pb-6 pt-4">
+          <ActivityLogPanel objectType="product" objectId={productId} refreshKey={activityRefreshKey} />
+        </div>
+      ) : null}
+    </>
   );
 }
