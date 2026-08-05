@@ -40,6 +40,7 @@ from ..models.manufacturer import Manufacturer
 from ..models.supplier import Supplier
 from ..models.supplier_product import SupplierProduct
 from ..models.product import Product
+from ..models.product_barcode import ProductBarcode
 from ..models.inventory import Inventory
 from ..models.location import Location
 from ..models.order import Order
@@ -453,11 +454,20 @@ def _parse_float(v: Any) -> Optional[float]:
     return _coerce_float(v)
 
 
+class ProductBarcodeBody(BaseModel):
+    """Alternate EAN for a product (unit/multipack). Primary EAN stays on Product.ean."""
+
+    ean: str
+    multiplier: int = Field(1, ge=1, le=100_000)
+
+
 class ProductBody(BaseModel):
     """Request body for create/update. All fields optional for update; name required for create.
     Accepts both legacy (length, weight, volume) and alternate (length_cm, weight_kg, volume_dm3) names."""
     name: Optional[str] = None
     ean: Optional[str] = None
+    # Additional EANs in product_barcodes (not including primary Product.ean).
+    extra_barcodes: Optional[List[ProductBarcodeBody]] = None
     symbol: Optional[str] = None
     length: Optional[float] = None
     width: Optional[float] = None
@@ -1405,6 +1415,15 @@ def _product_to_dict(p: Product) -> dict:
         "tenant_id": p.tenant_id,
         "name": p.name,
         "ean": p.ean,
+        "extra_barcodes": [
+            {
+                "id": int(b.id),
+                "ean": (b.ean or "").strip(),
+                "multiplier": int(b.multiplier) if b.multiplier and int(b.multiplier) >= 1 else 1,
+            }
+            for b in (getattr(p, "extra_barcodes", None) or [])
+            if (b.ean or "").strip()
+        ],
         "symbol": p.symbol,
         "length": p.length,
         "width": p.width,
@@ -1502,6 +1521,32 @@ def _product_to_dict(p: Product) -> dict:
         "validation_skip_master_carton_dims": bool(getattr(p, "validation_skip_master_carton_dims", False)),
         "validation_skip_master_carton_weight": bool(getattr(p, "validation_skip_master_carton_weight", False)),
     }
+
+
+def _sync_product_extra_barcodes(
+    db: Session,
+    product: Product,
+    items: Optional[List[ProductBarcodeBody]],
+) -> None:
+    """Replace product_barcodes for this product. Skips empty / duplicate / primary EAN."""
+    if items is None:
+        return
+    primary = (product.ean or "").strip()
+    desired: list[tuple[str, int]] = []
+    seen: set[str] = set()
+    for it in items:
+        e = (it.ean or "").strip()
+        if not e or e == primary or e in seen:
+            continue
+        seen.add(e)
+        mult = int(it.multiplier) if it.multiplier and int(it.multiplier) >= 1 else 1
+        desired.append((e, mult))
+    existing = list(getattr(product, "extra_barcodes", None) or [])
+    for row in existing:
+        db.delete(row)
+    db.flush()
+    for e, mult in desired:
+        db.add(ProductBarcode(product_id=int(product.id), ean=e, multiplier=mult))
 
 
 def _product_ui_gpsr_from_metadata(metadata_json: Optional[str]) -> tuple[str, str]:
@@ -2704,6 +2749,7 @@ def create_product(
     from ..services.barcode_generation import next_product_barcode
     product.barcode = next_product_barcode(db, tid)
     _ensure_supplier_product_link(db, product)
+    _sync_product_extra_barcodes(db, product, body.extra_barcodes)
     pname = (product.name or "").strip() or f"#{product.id}"
     record_product_card_activity(
         db,
@@ -3689,6 +3735,8 @@ def update_product(
 
     if "bulk_ean" in fields_set:
         product.bulk_ean = (body.bulk_ean or "").strip() or None
+    if "extra_barcodes" in fields_set:
+        _sync_product_extra_barcodes(db, product, body.extra_barcodes)
     if "units_per_carton" in fields_set:
         product.units_per_carton = (
             _round_float(body.units_per_carton, 2) if body.units_per_carton is not None else None

@@ -343,7 +343,7 @@ export function ProductLikePageLayout<T extends string>({
           </div>
 
           {modernHero && statCards ? (
-            <div className="flex shrink-0 flex-wrap items-center gap-8 sm:flex-nowrap sm:justify-end lg:w-1/2 lg:justify-end">
+            <div className="flex shrink-0 flex-wrap items-start gap-8 sm:flex-nowrap sm:justify-end lg:w-1/2 lg:justify-end">
               {statCards.map((card, idx) => (
                 <ModernStat key={card.label} card={card} withDivider={idx > 0} />
               ))}

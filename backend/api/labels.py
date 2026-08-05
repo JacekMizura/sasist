@@ -63,6 +63,8 @@ class ProductLabelBody(BaseModel):
     product_id: int
     template_id: int
     quantity: int = 1
+    """When set, print this barcode/EAN on the label instead of product.ean."""
+    ean_override: str | None = None
 
 
 class BundleLabelBody(BaseModel):
@@ -172,6 +174,13 @@ def post_labels_product(
     if not template:
         raise HTTPException(status_code=404, detail="Template not found")
     record = _product_to_label_record(product)
+    ov = (body.ean_override or "").strip()
+    if ov:
+        record["ean"] = ov
+        record["{ean}"] = ov
+        record["barcode_data"] = ov
+        record["product_barcode"] = ov
+        record["{product_barcode}"] = ov
     records = [record] * body.quantity
     pdf_bytes = render_label_template(
         db=db,

@@ -1,6 +1,7 @@
 import { useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
-import { Barcode, Box, FileText, Plus, Printer } from "lucide-react";
+import { Barcode, Box, FileText, Plus, Printer, X } from "lucide-react";
+import toast from "react-hot-toast";
 
 import type { ManufacturerRead } from "../../api/manufacturersApi";
 import type {
@@ -10,6 +11,7 @@ import type {
 import ActivityLogPanel from "../../components/activityLog/ActivityLogPanel";
 import { Checkbox, Input, Select } from "../../design-system";
 import { DocumentTemplateScopeSection } from "@/pages/Settings/document-templates/components/DocumentTemplateScopeSection";
+import { ProductLabelPrintModal } from "./ProductLabelPrintModal";
 
 export type ProductEditBasicTabProps = {
   isNew: boolean;
@@ -23,6 +25,9 @@ export type ProductEditBasicTabProps = {
   setSymbol: (v: string) => void;
   ean: string;
   setEan: (v: string) => void;
+  /** Additional EANs (product_barcodes), not including primary `ean`. */
+  extraEans: string[];
+  setExtraEans: React.Dispatch<React.SetStateAction<string[]>>;
   length: number | "";
   width: number | "";
   height: number | "";
@@ -46,6 +51,7 @@ export type ProductEditBasicTabProps = {
   round2: (n: number) => number;
   productId: number | null | undefined;
   effectiveTenantId: number;
+  labelTemplateId?: number | null;
   manufacturerId: number | null;
   setManufacturerId: (v: number | null) => void;
   manufacturersCatalog: ManufacturerRead[];
@@ -131,6 +137,8 @@ export function ProductEditBasicTab({
   setSymbol,
   ean,
   setEan,
+  extraEans,
+  setExtraEans,
   length,
   width,
   height,
@@ -154,6 +162,7 @@ export function ProductEditBasicTab({
   round2,
   productId,
   effectiveTenantId,
+  labelTemplateId = null,
   manufacturerId,
   setManufacturerId,
   manufacturersCatalog,
@@ -168,9 +177,22 @@ export function ProductEditBasicTab({
   setValidationSkips,
   activityRefreshKey = 0,
 }: ProductEditBasicTabProps) {
-  const [unitSystem, setUnitSystem] = useState<"metric" | "imperial">("metric");
   const [templateMode, setTemplateMode] = useState<"pick" | "custom">("pick");
+  const [labelPrint, setLabelPrint] = useState<{ ean: string; title: string } | null>(null);
   const g = globalValidation;
+
+  const openEanPrint = (code: string, title: string) => {
+    if (isNew || productId == null) {
+      toast.error("Najpierw zapisz produkt, aby drukować etykietę.");
+      return;
+    }
+    const trimmed = code.trim();
+    if (!trimmed) {
+      toast.error("Wpisz kod EAN przed drukowaniem.");
+      return;
+    }
+    setLabelPrint({ ean: trimmed, title });
+  };
 
   const productSkipsVisible = Boolean(g?.require_dimensions || g?.require_weight);
   const batchSkipsVisible = Boolean(g?.require_batch || g?.require_expiry || g?.require_serial);
@@ -283,56 +305,81 @@ export function ProductEditBasicTab({
                 <button
                   type="button"
                   className="flex items-center gap-1 text-xs font-medium text-orange-600 hover:text-orange-700"
+                  onClick={() => setExtraEans((prev) => [...prev, ""])}
                 >
                   <Plus className="h-3 w-3" strokeWidth={2} aria-hidden /> Dodaj kolejny EAN
                 </button>
               </div>
-              <div className="relative">
-                <span className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-gray-400">
-                  <Barcode className="h-3 w-3" strokeWidth={2} aria-hidden />
-                </span>
-                <Input
-                  type="text"
-                  value={ean}
-                  onChange={(e) => setEan(e.target.value)}
-                  density="comfortable"
-                  focusTone="brand"
-                  className="pl-8 font-mono text-xs"
-                />
+              <div className="space-y-2">
+                <div className="flex items-stretch gap-2">
+                  <div className="relative min-w-0 flex-1">
+                    <span className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-gray-400">
+                      <Barcode className="h-3 w-3" strokeWidth={2} aria-hidden />
+                    </span>
+                    <Input
+                      type="text"
+                      value={ean}
+                      onChange={(e) => setEan(e.target.value)}
+                      density="comfortable"
+                      focusTone="brand"
+                      className="pl-8 font-mono text-xs"
+                      aria-label="Główny EAN"
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => openEanPrint(ean, "Drukuj etykietę — EAN produktu")}
+                    className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-orange-200 bg-white px-3 text-xs font-semibold text-orange-600 shadow-sm transition-colors hover:bg-orange-50"
+                  >
+                    <Printer className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />
+                    Drukuj
+                  </button>
+                </div>
+                {extraEans.map((code, idx) => (
+                  <div key={`extra-ean-${idx}`} className="flex items-stretch gap-2">
+                    <div className="relative min-w-0 flex-1">
+                      <span className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-gray-400">
+                        <Barcode className="h-3 w-3" strokeWidth={2} aria-hidden />
+                      </span>
+                      <Input
+                        type="text"
+                        value={code}
+                        onChange={(e) =>
+                          setExtraEans((prev) => prev.map((v, i) => (i === idx ? e.target.value : v)))
+                        }
+                        density="comfortable"
+                        focusTone="brand"
+                        className="pl-8 font-mono text-xs"
+                        placeholder="Dodatkowy EAN"
+                        aria-label={`Dodatkowy EAN ${idx + 1}`}
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => openEanPrint(code, `Drukuj etykietę — EAN ${idx + 2}`)}
+                      className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-orange-200 bg-white px-3 text-xs font-semibold text-orange-600 shadow-sm transition-colors hover:bg-orange-50"
+                    >
+                      <Printer className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />
+                      Drukuj
+                    </button>
+                    <button
+                      type="button"
+                      title="Usuń EAN"
+                      onClick={() => setExtraEans((prev) => prev.filter((_, i) => i !== idx))}
+                      className="inline-flex shrink-0 items-center justify-center rounded-lg border border-gray-200 bg-white px-2 text-gray-500 hover:bg-gray-50 hover:text-gray-800"
+                    >
+                      <X className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />
+                    </button>
+                  </div>
+                ))}
               </div>
             </div>
           </div>
         </section>
 
-        {/* Gabaryty jednostkowe (user title; mock HTML says Opakowanie) */}
+        {/* Gabaryty jednostkowe */}
         <section className="border-b border-gray-100 pb-6">
-          <div className="mb-4 flex items-center justify-between">
-            <h2 className="text-base font-bold text-gray-900">Gabaryty jednostkowe</h2>
-            <div className="inline-flex overflow-hidden rounded border border-gray-200 text-xs">
-              <button
-                type="button"
-                onClick={() => setUnitSystem("metric")}
-                className={
-                  unitSystem === "metric"
-                    ? "bg-gray-100 px-2.5 py-1 font-medium text-gray-800"
-                    : "bg-white px-2.5 py-1 text-gray-500 hover:bg-gray-50"
-                }
-              >
-                Metryczne
-              </button>
-              <button
-                type="button"
-                onClick={() => setUnitSystem("imperial")}
-                className={
-                  unitSystem === "imperial"
-                    ? "bg-gray-100 px-2.5 py-1 font-medium text-gray-800"
-                    : "bg-white px-2.5 py-1 text-gray-500 hover:bg-gray-50"
-                }
-              >
-                Imperialne
-              </button>
-            </div>
-          </div>
+          <h2 className="mb-4 text-base font-bold text-gray-900">Gabaryty jednostkowe</h2>
 
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -440,23 +487,25 @@ export function ProductEditBasicTab({
 
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div>
-                <div className="mb-1 flex items-center justify-between">
-                  <label className={`${labelClass} mb-0`}>EAN kartonu zbiorczego</label>
+                <label className={`${labelClass} mb-1`}>EAN kartonu zbiorczego</label>
+                <div className="flex items-stretch gap-2">
+                  <Input
+                    type="text"
+                    value={bulkEan}
+                    onChange={(e) => setBulkEan(e.target.value)}
+                    density="comfortable"
+                    focusTone="brand"
+                    className="min-w-0 flex-1 font-mono text-xs"
+                  />
                   <button
                     type="button"
-                    className="flex items-center gap-1 text-[11px] font-medium text-orange-600 hover:text-orange-700"
+                    onClick={() => openEanPrint(bulkEan, "Drukuj etykietę — EAN kartonu")}
+                    className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-orange-200 bg-white px-3 text-xs font-semibold text-orange-600 shadow-sm transition-colors hover:bg-orange-50"
                   >
-                    <Printer className="h-3 w-3" strokeWidth={2} aria-hidden /> Drukuj
+                    <Printer className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />
+                    Drukuj
                   </button>
                 </div>
-                <Input
-                  type="text"
-                  value={bulkEan}
-                  onChange={(e) => setBulkEan(e.target.value)}
-                  density="comfortable"
-                  focusTone="brand"
-                  className="font-mono text-xs"
-                />
               </div>
               <div>
                 <label className={labelClass}>Kod kartonu</label>
@@ -825,6 +874,19 @@ export function ProductEditBasicTab({
         <div className="mt-8 w-full max-w-none border-t border-slate-100 pb-6 pt-4">
           <ActivityLogPanel objectType="product" objectId={productId} refreshKey={activityRefreshKey} />
         </div>
+      ) : null}
+
+      {labelPrint != null && productId != null ? (
+        <ProductLabelPrintModal
+          product={{
+            id: productId,
+            tenant_id: effectiveTenantId,
+            label_template_id: labelTemplateId,
+          }}
+          eanOverride={labelPrint.ean}
+          title={labelPrint.title}
+          onClose={() => setLabelPrint(null)}
+        />
       ) : null}
     </>
   );

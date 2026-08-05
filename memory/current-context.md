@@ -1,5 +1,29 @@
 ﻿## Active
 
+**Edycja produktu — Podstawowe: multi-EAN + Drukuj + bez Metryczne/Imperialne (2026-08-05).**
+
+- Wiele EAN: główny + lista `extra_barcodes` (API sync w `product.py`); UI „+ Dodaj kolejny EAN” / usuń
+- Przycisk **Drukuj** obok każdego EAN produktu i EAN kartonu → `ProductLabelPrintModal` z `ean_override`
+- Usunięty przełącznik Metryczne/Imperialne (zawsze cm/kg/dm³)
+- Druk wymaga zapisanego produktu i niepustego kodu
+
+**Edycja produktu — Etykieta: wspólny renderLabel + placeholdery (2026-08-05).**
+
+- Oba podglądy: `renderLabel` (Label System) — bez RetailLabel / bez SVG z API preview
+- Szablon = placeholdery `{{NAZWA}}`/`{{EAN}}`…; gotowa = dane produktu
+- Chrome: białe tło, wycentrowane, `shadow-md` (bez gray-100)
+
+**Edycja produktu — Historia czynności na Podstawowe jak zamówienie (2026-08-05).**
+
+- `ActivityLogPanel` full-width pod gridem (border-t, collapsible) — ten sam komponent co karta zamówienia, `objectType=product`
+- BE: `record_product_card_activity` przy create/update produktu → `activity_events` + link product
+
+**Edycja produktu — Opis: nowa zakładka + kolejność tabów (2026-08-05).**
+
+- `ProductEditDescriptionTab`: 1:1 z `edycja_produktu_nowy_widok.html` (tagi, krótki/długi opis, nr seryjny, uniwersalny, parametry, atrybuty, log)
+- Persist: `metadata_json.tags` + `metadata_json.product_description`
+- Kolejność: Podstawowe → Ceny → Opis → Zdjęcia → Oferty → Produkcja → Etykieta → Magazyn
+
 **Edycja produktu — Etykieta: full-width 1:1 z HTML (2026-08-05).**
 
 - `ProductEditLabelTab`: bez banera TEST; `w-full` 2/3+1/3 (formularz A–F + szablon | sticky preview `RetailLabel`)

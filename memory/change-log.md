@@ -1,3 +1,9 @@
+## 2026-08-05 — Edycja produktu: multi-EAN + Drukuj (Podstawowe)
+
+- UI: wiele EAN (+ Dodaj / Usuń), Drukuj przy EAN produktu i EAN kartonu, bez Metryczne/Imperialne
+- BE: `extra_barcodes` sync na create/update; `ean_override` w `/labels/product`
+- Print modal: etykieta z nadpisanym EAN dla wybranego kodu
+
 ## 2026-08-05 — Edycja produktu: Ceny final (bez banera TEST)
 
 - `ProductEditPricesTab` dopięty do `ceny karta produktu.html` (bez probe banera)

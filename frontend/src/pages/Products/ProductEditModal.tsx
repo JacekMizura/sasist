@@ -75,6 +75,8 @@ export type ProductForm = {
   tenant_id?: number;
   name: string;
   ean: string;
+  /** Alternate EANs from product_barcodes (excluding primary ean). */
+  extra_barcodes?: { id?: number; ean: string; multiplier?: number }[];
   symbol: string;
   length?: number;
   width?: number;
@@ -406,6 +408,13 @@ export function ProductEditModal({
     });
   const [name, setName] = useState(product?.name ?? "");
   const [ean, setEan] = useState(product?.ean ?? "");
+  const [extraEans, setExtraEans] = useState<string[]>(() =>
+    Array.isArray(product?.extra_barcodes)
+      ? product!.extra_barcodes!
+          .map((b) => (b.ean ?? "").trim())
+          .filter((code) => code && code !== (product?.ean ?? "").trim())
+      : [],
+  );
   const [symbol, setSymbol] = useState(product?.symbol ?? "");
   const round2 = (n: number) => Math.round(n * 100) / 100;
   const round3 = (n: number) => Math.round(n * 1000) / 1000;
@@ -799,6 +808,15 @@ export function ProductEditModal({
       setTenantId(product.tenant_id ?? null);
       setName(product.name ?? "");
       setEan(product.ean ?? "");
+      {
+        const primary = (product.ean ?? "").trim();
+        const extras = Array.isArray(product.extra_barcodes)
+          ? product.extra_barcodes
+              .map((b) => (b.ean ?? "").trim())
+              .filter((code) => code && code !== primary)
+          : [];
+        setExtraEans(extras);
+      }
       setSymbol(product.symbol ?? "");
       setLength(product.length ?? "");
       setWidth(product.width ?? "");
@@ -930,6 +948,7 @@ export function ProductEditModal({
       setVatRate("");
       setPromotion("");
       setBulkEan("");
+      setExtraEans([]);
       setUnitsPerCarton("");
       setCartonLength("");
       setCartonWidth("");
@@ -1377,6 +1396,18 @@ export function ProductEditModal({
       body.carton_height_cm = cartonHeight === "" ? null : parseNumber(cartonHeight);
       body.carton_weight_kg = cartonWeight === "" ? null : parseNumber(cartonWeight);
       body.carton_volume_dm3 = cartonVolume === "" ? null : parseNumber(cartonVolume);
+      {
+        const primary = ean.trim();
+        const seen = new Set<string>();
+        const extras: { ean: string; multiplier: number }[] = [];
+        for (const raw of extraEans) {
+          const code = raw.trim();
+          if (!code || code === primary || seen.has(code)) continue;
+          seen.add(code);
+          extras.push({ ean: code, multiplier: 1 });
+        }
+        body.extra_barcodes = extras;
+      }
       if (metaStr != null) {
         body.metadata_json = metaStr;
       }
@@ -1883,6 +1914,8 @@ export function ProductEditModal({
                     setSymbol={setSymbol}
                     ean={ean}
                     setEan={setEan}
+                    extraEans={extraEans}
+                    setExtraEans={setExtraEans}
                     length={length}
                     width={width}
                     height={height}
@@ -1906,6 +1939,7 @@ export function ProductEditModal({
                     round2={round2}
                     productId={product?.id}
                     effectiveTenantId={effectiveTenantId}
+                    labelTemplateId={labelTemplateId}
                     manufacturerId={manufacturerId}
                     setManufacturerId={setManufacturerId}
                     manufacturersCatalog={manufacturersCatalog}
