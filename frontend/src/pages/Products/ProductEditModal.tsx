@@ -70,6 +70,7 @@ import { ProductEditImagesTab } from "./ProductEditImagesTab";
 import { ProductEditLabelTab } from "./ProductEditLabelTab";
 import { ProductEditDescriptionTab } from "./ProductEditDescriptionTab";
 import { ProductLabelPrintModal } from "./ProductLabelPrintModal";
+import ActivityLogPanel from "../../components/activityLog/ActivityLogPanel";
 
 export type ProductForm = {
   id?: number;
@@ -79,6 +80,7 @@ export type ProductForm = {
   /** Alternate EANs from product_barcodes (excluding primary ean). */
   extra_barcodes?: { id?: number; ean: string; multiplier?: number }[];
   symbol: string;
+  catalog_number?: string | null;
   length?: number;
   width?: number;
   height?: number;
@@ -415,6 +417,7 @@ export function ProductEditModal({
       : [],
   );
   const [symbol, setSymbol] = useState(product?.symbol ?? "");
+  const [catalogNumber, setCatalogNumber] = useState(product?.catalog_number ?? "");
   const round2 = (n: number) => Math.round(n * 100) / 100;
   const round3 = (n: number) => Math.round(n * 1000) / 1000;
   const [length, setLength] = useState<number | "">(product?.length ?? "");
@@ -817,6 +820,7 @@ export function ProductEditModal({
         setExtraEans(extras);
       }
       setSymbol(product.symbol ?? "");
+      setCatalogNumber(product.catalog_number ?? "");
       setLength(product.length ?? "");
       setWidth(product.width ?? "");
       setHeight(product.height ?? "");
@@ -927,6 +931,8 @@ export function ProductEditModal({
         validation_skip_master_carton_weight: Boolean(product.validation_skip_master_carton_weight),
       });
     } else {
+      setCatalogNumber("");
+      setSymbol("");
       setPurchasePrice("");
       setExtraCostPackagingNet(0);
       setExtraCostCommissionPercent(0);
@@ -1267,6 +1273,7 @@ export function ProductEditModal({
         name: name.trim(),
         ean: ean.trim(),
         symbol: symbol.trim(),
+        catalog_number: catalogNumber.trim() || null,
         length: len != null ? round2(len) : undefined,
         width: wid != null ? round2(wid) : undefined,
         height: hei != null ? round2(hei) : undefined,
@@ -1345,6 +1352,7 @@ export function ProductEditModal({
         name: payload.name,
         ean: payload.ean ?? "",
         symbol: payload.symbol ?? "",
+        catalog_number: payload.catalog_number ?? null,
         length_cm: parseNumber(length) ?? undefined,
         width_cm: parseNumber(width) ?? undefined,
         height_cm: parseNumber(height) ?? undefined,
@@ -1951,6 +1959,8 @@ export function ProductEditModal({
                     tenants={tenants}
                     symbol={symbol}
                     setSymbol={setSymbol}
+                    catalogNumber={catalogNumber}
+                    setCatalogNumber={setCatalogNumber}
                     ean={ean}
                     setEan={setEan}
                     extraEans={extraEans}
@@ -1991,7 +2001,6 @@ export function ProductEditModal({
                     globalValidation={globalValidation}
                     validationSkips={validationSkips}
                     setValidationSkips={setValidationSkips}
-                    activityRefreshKey={activityRefreshKey}
                   />
                 )}
 
@@ -2177,6 +2186,16 @@ export function ProductEditModal({
                     parseDecimal={parseDecimal}
                   />
                 )}
+
+                {!isNew && product?.id != null ? (
+                  <div className="mt-8 w-full max-w-none border-t border-slate-100 pb-6 pt-4">
+                    <ActivityLogPanel
+                      objectType="product"
+                      objectId={product.id}
+                      refreshKey={activityRefreshKey}
+                    />
+                  </div>
+                ) : null}
 
       </ProductLikePageLayout>
 

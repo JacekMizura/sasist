@@ -3,6 +3,7 @@ import { Trash2 } from "lucide-react";
 
 import type { ProductImageEntry } from "../../../types/productLabel";
 import { Input, SecondaryButton, Textarea } from "../../../design-system";
+import { PRODUCT_IMAGE_SURFACE_CLASS } from "../../../utils/productImageSurface";
 import { GalleryModalSaveButton, ProductGalleryModalShell } from "./ProductGalleryModalShell";
 
 type Props = {
@@ -39,7 +40,9 @@ export function ProductImageEditModal({ image, onClose, onSave, onDelete, onOpen
       }
     >
       <div className="flex flex-col gap-5 sm:flex-row">
-        <div className="flex h-40 w-full shrink-0 items-center justify-center overflow-hidden rounded-lg border border-slate-200 bg-slate-50 sm:h-44 sm:w-44">
+        <div
+          className={`flex h-40 w-full shrink-0 items-center justify-center overflow-hidden rounded-lg border border-slate-200 sm:h-44 sm:w-44 ${PRODUCT_IMAGE_SURFACE_CLASS}`}
+        >
           {imageUrl.trim() ? (
             <img src={imageUrl} alt="" className="h-full w-full object-contain" />
           ) : (

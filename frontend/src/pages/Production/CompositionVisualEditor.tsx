@@ -70,7 +70,7 @@ type Props = {
   compositions: ProductCompositionRead[];
   onChanged: () => void;
   sectionTitle: string;
-  sectionHint: string;
+  sectionHint?: string;
   /** Parent can request opening the new-recipe editor (e.g. product empty state CTA). */
   requestNewEditor?: boolean;
   onRequestNewHandled?: () => void;
@@ -319,7 +319,9 @@ export function CompositionVisualEditor({
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-lg font-bold text-gray-900">{sectionTitle}</h2>
-          <p className="mt-0.5 text-xs text-gray-500">{sectionHint}</p>
+          {sectionHint?.trim() ? (
+            <p className="mt-0.5 text-xs text-gray-500">{sectionHint}</p>
+          ) : null}
         </div>
         <PrimaryButton
           type="button"
@@ -557,10 +559,7 @@ export function CompositionVisualEditor({
               </button>
             </div>
 
-            {/* Podgląd BOM */}
             <div className="mt-4 flex flex-col items-center border-t border-gray-100 pt-6">
-              <h4 className="mb-4 text-[10px] font-bold uppercase tracking-wider text-gray-400">Podgląd BOM</h4>
-
               {previewLines.map((ln) => (
                 <div
                   key={ln.id}

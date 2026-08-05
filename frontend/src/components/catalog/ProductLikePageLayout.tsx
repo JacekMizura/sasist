@@ -281,7 +281,7 @@ export function ProductLikePageLayout<T extends string>({
             <div
               className={
                 modernHero
-                  ? "h-20 w-20 shrink-0 sm:h-24 sm:w-24"
+                  ? "flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-white sm:h-24 sm:w-24"
                   : "flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-slate-200 bg-white sm:h-24 sm:w-24"
               }
             >
@@ -289,7 +289,7 @@ export function ProductLikePageLayout<T extends string>({
                 <img
                   src={imageUrl.trim()}
                   alt={imageAlt}
-                  className={`max-h-full max-w-full object-contain ${modernHero ? "h-full w-full rounded-lg" : "p-1"}`}
+                  className={`max-h-full max-w-full object-contain ${modernHero ? "h-full w-full" : "p-1"}`}
                 />
               ) : (
                 <div

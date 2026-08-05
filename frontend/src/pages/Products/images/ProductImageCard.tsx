@@ -3,6 +3,7 @@ import { ChevronLeft, ChevronRight, MoreVertical, Play, Trash2 } from "lucide-re
 
 import type { ProductImageEntry } from "../../../types/productLabel";
 import { Checkbox } from "../../../design-system";
+import { PRODUCT_IMAGE_SURFACE_CLASS } from "../../../utils/productImageSurface";
 import { resolveImageVisibility, PRODUCT_IMAGE_VISIBILITY_CHANNELS } from "./productImageVisibility";
 
 type Props = {
@@ -43,7 +44,7 @@ export function ProductImageCard({
 
   return (
     <div className="flex flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-      <div className="group relative aspect-square bg-slate-50">
+      <div className={`group relative aspect-square ${PRODUCT_IMAGE_SURFACE_CLASS}`}>
         {image.image_url.trim() ? (
           <img src={image.image_url} alt={image.title || ""} className="h-full w-full object-contain p-2" />
         ) : (
@@ -165,7 +166,7 @@ export function ProductImageCard({
           <button
             type="button"
             onClick={onSetMain}
-            className="w-full rounded-lg border border-slate-200 bg-slate-50 px-2 py-2 text-xs font-medium text-slate-700 transition-colors hover:bg-slate-100"
+            className="w-full rounded-lg border border-slate-200 bg-white px-2 py-2 text-xs font-medium text-slate-700 transition-colors hover:bg-slate-50"
           >
             Ustaw jako główne
           </button>

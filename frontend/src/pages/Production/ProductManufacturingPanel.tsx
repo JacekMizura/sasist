@@ -151,19 +151,6 @@ export function ProductManufacturingPanel({ tenantId, productId, productName, on
         <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">{err}</div>
       ) : null}
 
-      {/* Info banner — 1:1 mock */}
-      <div className="flex items-center rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-600 shadow-sm">
-        Warstwa definicji produkcji (BOM / receptura). Planowanie zleceń i harmonogram — w module{" "}
-        <Link to={erpProductionPaths.home} className="mx-1 font-semibold text-gray-800 hover:underline">
-          ERP Produkcja
-        </Link>
-        . Wykonanie — w terminalu{" "}
-        <Link to="/wms/production/collecting" className="ml-1 font-semibold text-gray-800 hover:underline">
-          WMS
-        </Link>
-        .
-      </div>
-
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         {/* LEWA — receptura (2 cols) */}
         <div className="space-y-6 lg:col-span-2">
@@ -174,8 +161,8 @@ export function ProductManufacturingPanel({ tenantId, productId, productName, on
             mode="manufacturing"
             compositions={recipes}
             onChanged={handleChanged}
-            sectionTitle="Receptura produkcyjna"
-            sectionHint="Dane receptury, składniki i podgląd BOM"
+            sectionTitle="Receptura"
+            sectionHint=""
             requestNewEditor={requestNewRecipe}
             onRequestNewHandled={() => setRequestNewRecipe(false)}
             hideCompositionCards
@@ -270,9 +257,6 @@ export function ProductManufacturingPanel({ tenantId, productId, productName, on
               </div>
             ) : null}
 
-            <Link to={erpProductionPaths.history} className="text-xs text-blue-600 hover:underline">
-              Pełna historia w module ERP →
-            </Link>
           </div>
 
           {/* Szacowany koszt */}
@@ -289,17 +273,6 @@ export function ProductManufacturingPanel({ tenantId, productId, productName, on
                   <div className="mb-3 mt-0.5 text-[10px] uppercase text-gray-500">
                     netto / szt. (aktywna receptura)
                   </div>
-                  {detail ? (
-                    <div className="text-sm text-gray-700">
-                      Można wyprodukować:{" "}
-                      <span className="font-mono font-bold text-green-600">
-                        {Math.floor(detail.max_producible)} szt.
-                      </span>
-                    </div>
-                  ) : null}
-                  <p className="mt-1 text-[10px] leading-tight text-gray-400">
-                    Ilość możliwa do wyprodukowania na podstawie obecnych stanów magazynowych składników.
-                  </p>
                 </>
               ) : (
                 <p className="text-sm text-gray-500">Koszt pojawi się po zdefiniowaniu składników receptury.</p>
@@ -356,7 +329,7 @@ export function ProductManufacturingPanel({ tenantId, productId, productName, on
                           to={erpProductionPaths.recipe(r.id)}
                           className={`font-medium hover:underline ${r.is_active ? "text-emerald-700" : "text-gray-700"}`}
                         >
-                          ERP →
+                          Otwórz
                         </Link>
                       </div>
                     </div>

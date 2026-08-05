@@ -1,5 +1,4 @@
-import { Link } from "react-router-dom";
-import { ArrowLeftRight, Box, Map as MapIcon } from "lucide-react";
+import { ArrowLeftRight, Box } from "lucide-react";
 import { Loader2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
@@ -439,7 +438,7 @@ export function ProductEditWarehouseTab({
           {/* Kolumna 1 */}
           <div className="space-y-6">
             <div>
-              <h3 className={sectionLabelClass}>Stan łączny (sieć)</h3>
+              <h3 className={sectionLabelClass}>Stan łączny</h3>
               <div className="mb-6">
                 <div className="mb-1 text-sm text-gray-500">Stan fizyczny ogółem:</div>
                 <div className="font-mono text-3xl font-bold text-gray-900">
@@ -512,11 +511,7 @@ export function ProductEditWarehouseTab({
           {/* Kolumny 3–4: lokalizacje */}
           <div className="space-y-6 lg:col-span-2">
             <div className="mb-4 flex items-center justify-between">
-              <h3 className="text-xs font-bold uppercase tracking-wider text-gray-400">Lokalizacje (Inventory)</h3>
-              <Link to="/designer" className="flex items-center text-xs font-medium text-blue-600 hover:underline">
-                <MapIcon className="mr-1 h-3.5 w-3.5" strokeWidth={2} aria-hidden />
-                Projektant Magazynu
-              </Link>
+              <h3 className="text-xs font-bold uppercase tracking-wider text-gray-400">Lokalizacje</h3>
             </div>
 
             {!isNew && productId != null && tenantId != null && inventoryRows.length > 0 ? (
@@ -532,9 +527,6 @@ export function ProductEditWarehouseTab({
       <div>
         <div className="mb-8 border-b border-gray-100 pb-4">
           <h2 className="text-xl font-bold text-gray-900">Parametry logistyczne i pakowanie</h2>
-          <p className="mt-1 text-sm text-gray-500">
-            Ustawienia wymagane przez zaawansowany silnik magazynowy (3D fit) oraz moduł pakowania przesyłek.
-          </p>
         </div>
 
         <div className="grid grid-cols-1 gap-8 lg:grid-cols-3">
@@ -571,7 +563,7 @@ export function ProductEditWarehouseTab({
                   </Select>
                 </div>
                 <div className="sm:col-span-2">
-                  <label className={labelClass}>Reguły układania (Stacking)</label>
+                  <label className={labelClass}>Reguły układania</label>
                   <Select
                     value={stackBehavior}
                     onChange={(e) => setStackBehavior(e.target.value as "stackable" | "no_stack")}
@@ -580,11 +572,8 @@ export function ProductEditWarehouseTab({
                     className="bg-white"
                   >
                     <option value="stackable">Można układać w stos</option>
-                    <option value="no_stack">Nie można układać w stos (NO_STACK)</option>
+                    <option value="no_stack">Nie można układać w stos</option>
                   </Select>
-                  <p className="mt-1.5 text-xs text-gray-400">
-                    Wybór &quot;NO_STACK&quot; blokuje układanie sztuki na sztuce, ale pozwala obok siebie.
-                  </p>
                 </div>
               </div>
               <div className="mt-4 flex flex-wrap gap-x-6 gap-y-3">
@@ -594,7 +583,7 @@ export function ProductEditWarehouseTab({
                     onChange={(e) => setFragile(e.target.checked)}
                     className="rounded border-gray-300 text-orange-500 focus:ring-orange-500"
                   />
-                  <span className="ml-2 text-sm text-gray-700">Delikatny (Fragile)</span>
+                  <span className="ml-2 text-sm text-gray-700">Delikatny</span>
                 </label>
                 <label className="flex cursor-pointer items-center">
                   <Checkbox
@@ -667,9 +656,8 @@ export function ProductEditWarehouseTab({
               ) : null}
             </div>
 
-            {/* Master Carton */}
             <div className="border-t border-gray-100 pt-8">
-              <h3 className="mb-5 text-base font-bold text-gray-900">Opakowanie zbiorcze (Master Carton)</h3>
+              <h3 className="mb-5 text-base font-bold text-gray-900">Opakowanie zbiorcze</h3>
               <div className="grid grid-cols-1 gap-x-6 gap-y-5 sm:grid-cols-2">
                 <div>
                   <label className={labelClass}>Wymagana orientacja kartonu</label>
@@ -790,7 +778,7 @@ export function ProductEditWarehouseTab({
               <div className="space-y-5">
                 <div className="rounded-lg border border-gray-100 bg-gray-50 p-4">
                   <div className="mb-3 text-[11px] font-bold uppercase tracking-wider text-gray-500">
-                    Strefa kompletacji (Pick-face)
+                    Strefa kompletacji
                   </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div>
@@ -824,7 +812,7 @@ export function ProductEditWarehouseTab({
 
                 <div className="rounded-lg border border-gray-100 bg-gray-50 p-4">
                   <div className="mb-3 text-[11px] font-bold uppercase tracking-wider text-gray-500">
-                    Strefa zapasu (Reserve)
+                    Strefa zapasu
                   </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div>

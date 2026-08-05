@@ -469,6 +469,7 @@ class ProductBody(BaseModel):
     # Additional EANs in product_barcodes (not including primary Product.ean).
     extra_barcodes: Optional[List[ProductBarcodeBody]] = None
     symbol: Optional[str] = None
+    catalog_number: Optional[str] = None
     length: Optional[float] = None
     width: Optional[float] = None
     height: Optional[float] = None
@@ -2693,6 +2694,7 @@ def create_product(
         name=(body.name or "").strip(),
         ean=(body.ean or "").strip() or None,
         symbol=(body.symbol or "").strip() or None,
+        catalog_number=(getattr(body, "catalog_number", None) or "").strip() or None,
         length=len_,
         width=wid_,
         height=hei_,
@@ -3512,6 +3514,8 @@ def update_product(
         product.ean = (body.ean or "").strip() or None
     if body.symbol is not None:
         product.symbol = (body.symbol or "").strip() or None
+    if body.catalog_number is not None:
+        product.catalog_number = (body.catalog_number or "").strip() or None
     # Numeric fields: accept both legacy and alternate names, safe parse (comma decimal, strings)
     length_val = _parse_float(payload.get("length_cm") or payload.get("length"))
     if length_val is not None:

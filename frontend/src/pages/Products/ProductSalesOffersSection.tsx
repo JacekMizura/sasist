@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ChevronDown, ChevronUp, Plus, X } from "lucide-react";
+import { ChevronDown, ChevronUp, Plus, Trash2 } from "lucide-react";
 
 import {
   createOutletSalesOffer,
@@ -11,7 +11,7 @@ import {
 } from "../../api/productSalesOffersApi";
 import { listOfferStockPools, type OfferStockPoolRead } from "../../api/offerStockPoolApi";
 import { extractApiErrorMessage } from "../../api/apiErrorMessage";
-import { Badge, GhostButton, IconButton, Input, SecondaryButton, Select } from "../../design-system";
+import { GhostButton, Input, Select } from "../../design-system";
 
 type Props = {
   productId: number;
@@ -19,10 +19,16 @@ type Props = {
   warehouseId?: number | null;
 };
 
+type ChannelGroup = {
+  key: string;
+  title: string;
+  offers: ProductSalesOfferRead[];
+};
+
 /**
  * Product edit — Oferty tab.
- * DOM hierarchy is a structural 1:1 port of `oferrty karta produktu.html`
- * (marketplace card chrome + table, full-width). Columns / handlers stay app SSOT.
+ * Sellasist-like chrome: page title + „Dodaj integrację”, then collapsible channel cards with offer tables.
+ * Data remains product sales-offers SSOT (disposition / pool / price).
  */
 export function ProductSalesOffersSection({ productId, tenantId }: Props) {
   const [offers, setOffers] = useState<ProductSalesOfferRead[]>([]);
@@ -31,9 +37,34 @@ export function ProductSalesOffersSection({ productId, tenantId }: Props) {
   const [busyId, setBusyId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [priceDraft, setPriceDraft] = useState<Record<number, string>>({});
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
 
   const defaultPool = useMemo(() => pools.find((p) => p.is_default) ?? null, [pools]);
+
+  const channels = useMemo((): ChannelGroup[] => {
+    const map = new Map<string, ProductSalesOfferRead[]>();
+    for (const o of offers) {
+      const key = (o.stock_disposition || "SALEABLE").toUpperCase();
+      const list = map.get(key) ?? [];
+      list.push(o);
+      map.set(key, list);
+    }
+    const order = ["SALEABLE", "OUTLET_B"];
+    const keys = [...map.keys()].sort((a, b) => {
+      const ia = order.indexOf(a);
+      const ib = order.indexOf(b);
+      if (ia >= 0 || ib >= 0) return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib);
+      return a.localeCompare(b);
+    });
+    if (keys.length === 0) {
+      return [{ key: "SALEABLE", title: "Sklep", offers: [] }];
+    }
+    return keys.map((key) => ({
+      key,
+      title: key === "SALEABLE" ? "Sklep" : dispositionOfferLabel(key),
+      offers: map.get(key) ?? [],
+    }));
+  }, [offers]);
 
   const reload = useCallback(async () => {
     setLoading(true);
@@ -69,7 +100,7 @@ export function ProductSalesOffersSection({ productId, tenantId }: Props) {
     try {
       await createOutletSalesOffer({ tenantId, productId });
       await reload();
-      setCollapsed(false);
+      setCollapsed((prev) => ({ ...prev, OUTLET_B: false }));
     } catch (e) {
       setError(extractApiErrorMessage(e));
     } finally {
@@ -134,99 +165,89 @@ export function ProductSalesOffersSection({ productId, tenantId }: Props) {
     return "";
   };
 
+  const isCollapsed = (key: string) => Boolean(collapsed[key]);
+
   return (
-    /* mock body under tabs — full page width, white surface */
-    <div className="w-full max-w-none">
-      <div className="mb-6 flex items-center justify-between">
-        <h2 className="text-xl font-bold text-gray-800">Oferty</h2>
-        <SecondaryButton
+    <div className="w-full max-w-none bg-white">
+      <div className="mb-6 flex items-center justify-between gap-3">
+        <h2 className="text-xl font-bold text-gray-900">Oferty</h2>
+        <button
           type="button"
-          density="compact"
           disabled={busyId !== null}
           onClick={() => void onCreateOutlet()}
-          className="!rounded !border-gray-300 !bg-white !px-4 !py-2 !text-sm !font-medium !text-gray-700 hover:!bg-gray-50"
+          className="inline-flex items-center gap-1.5 rounded border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 disabled:opacity-50"
         >
           <Plus className="h-3.5 w-3.5 text-gray-400" strokeWidth={2.5} aria-hidden />
           Dodaj integrację
-        </SecondaryButton>
+        </button>
       </div>
 
       {error ? <p className="mb-4 text-sm text-red-600">{error}</p> : null}
 
       <div className="space-y-6">
-        {/* Karta kanału — chrome jak marketplace w mocku; dane = oferty sprzedażowe SSOT */}
-        <div className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
-          <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4">
-            <div className="flex items-center gap-4">
-              <h3 className="text-xl font-semibold text-gray-800">Oferty sprzedażowe</h3>
-              <SecondaryButton
-                type="button"
-                density="compact"
-                disabled={busyId !== null}
-                onClick={() => void onCreateOutlet()}
-                className="!rounded !border-gray-300 !bg-white !px-3 !py-1 !text-xs !font-medium !text-gray-600 hover:!bg-gray-50"
-              >
-                Dodaj nową ofertę
-              </SecondaryButton>
-              <SecondaryButton
-                type="button"
-                density="compact"
-                onClick={() => setCollapsed((v) => !v)}
-                className="!rounded !border-gray-300 !bg-white !px-3 !py-1 !text-xs !font-medium !text-gray-600 hover:!bg-gray-50"
-              >
-                {collapsed ? (
-                  <>
-                    <ChevronDown className="h-3 w-3" aria-hidden /> Rozwiń
-                  </>
-                ) : (
-                  <>
-                    <ChevronUp className="h-3 w-3" aria-hidden /> Zwiń
-                  </>
-                )}
-              </SecondaryButton>
+        {channels.map((ch) => (
+          <div key={ch.key} className="overflow-hidden rounded border border-gray-200 bg-white">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-100 px-5 py-3.5">
+              <div className="flex flex-wrap items-center gap-3">
+                <h3 className="text-lg font-semibold text-gray-900">{ch.title}</h3>
+                {ch.key === "SALEABLE" || ch.key === "OUTLET_B" ? (
+                  <button
+                    type="button"
+                    disabled={busyId !== null}
+                    onClick={() => void onCreateOutlet()}
+                    className="rounded border border-gray-300 bg-white px-2.5 py-1 text-xs font-medium text-gray-600 transition-colors hover:bg-gray-50 disabled:opacity-50"
+                  >
+                    Dodaj nową ofertę
+                  </button>
+                ) : null}
+                <button
+                  type="button"
+                  onClick={() => setCollapsed((prev) => ({ ...prev, [ch.key]: !prev[ch.key] }))}
+                  className="inline-flex items-center gap-1 rounded border border-gray-300 bg-white px-2.5 py-1 text-xs font-medium text-gray-600 transition-colors hover:bg-gray-50"
+                >
+                  {isCollapsed(ch.key) ? (
+                    <>
+                      <ChevronDown className="h-3 w-3" aria-hidden /> Rozwiń
+                    </>
+                  ) : (
+                    <>
+                      <ChevronUp className="h-3 w-3" aria-hidden /> Zwiń
+                    </>
+                  )}
+                </button>
+              </div>
             </div>
-          </div>
 
-          {!collapsed ? (
-            <div className="overflow-x-auto">
-              {loading ? (
-                <p className="px-5 py-6 text-sm text-gray-500">Ładowanie ofert…</p>
-              ) : (
-                <table className="w-full text-left text-sm">
-                  <thead>
-                    <tr className="border-b border-gray-200 bg-gray-50 text-gray-500">
-                      <th className="px-4 py-3 font-medium">Nazwa</th>
-                      <th className="w-36 px-4 py-3 font-medium">Pula disposition</th>
-                      <th className="w-44 px-4 py-3 font-medium">Źródło stanu</th>
-                      <th className="w-44 px-4 py-3 font-medium">Cena netto</th>
-                      <th className="w-24 px-4 py-3 font-medium">Dostępne</th>
-                      <th className="w-36 px-4 py-3 font-medium">Status</th>
-                      <th className="w-28 px-4 py-3 text-center font-medium">Akcje</th>
-                    </tr>
-                  </thead>
-                  <tbody className="text-gray-700">
-                    {offers.length === 0 ? (
-                      <tr>
-                        <td colSpan={7} className="bg-white px-4 py-6 text-center text-gray-500">
-                          Produkt nie jest obecnie oferowany — oferty pojawią się po utworzeniu lub
-                          automatycznie przy pierwszym odczycie.
-                        </td>
+            {!isCollapsed(ch.key) ? (
+              <div className="overflow-x-auto">
+                {loading ? (
+                  <p className="px-5 py-6 text-sm text-gray-500">Ładowanie ofert…</p>
+                ) : ch.offers.length === 0 ? (
+                  <p className="px-5 py-6 text-sm text-gray-500">
+                    Produkt nie jest obecnie oferowany w tym kanale.
+                  </p>
+                ) : (
+                  <table className="w-full min-w-[720px] text-left text-sm">
+                    <thead>
+                      <tr className="border-b border-gray-200 text-xs font-medium text-gray-500">
+                        <th className="whitespace-nowrap px-4 py-2.5 font-medium">ID oferty</th>
+                        <th className="whitespace-nowrap px-4 py-2.5 font-medium">Konto</th>
+                        <th className="px-4 py-2.5 font-medium">Nazwa</th>
+                        <th className="whitespace-nowrap px-4 py-2.5 font-medium">Stan</th>
+                        <th className="whitespace-nowrap px-4 py-2.5 font-medium">Cena</th>
+                        <th className="whitespace-nowrap px-4 py-2.5 font-medium">Status</th>
+                        <th className="whitespace-nowrap px-4 py-2.5 text-center font-medium">Akcje</th>
                       </tr>
-                    ) : (
-                      offers.map((o) => (
-                        <tr key={o.id} className="border-b border-gray-100 hover:bg-gray-50 last:border-b-0">
-                          <td className="px-4 py-3.5 align-top">
-                            <div className="font-medium text-gray-900">{o.name}</div>
-                            {o.is_default ? (
-                              <div className="mt-1 text-[10px] text-gray-400">domyślna</div>
-                            ) : null}
+                    </thead>
+                    <tbody className="text-gray-800">
+                      {ch.offers.map((o) => (
+                        <tr key={o.id} className="border-b border-gray-100 last:border-b-0">
+                          <td className="whitespace-nowrap px-4 py-3 font-mono text-xs text-gray-600">
+                            {o.id}
                           </td>
-                          <td className="border-l-4 border-orange-500 px-4 py-3.5 align-top">
-                            {dispositionOfferLabel(o.stock_disposition)}
-                          </td>
-                          <td className="px-4 py-3.5 align-top">
+                          <td className="px-4 py-3 align-top">
                             {pools.length === 0 ? (
-                              <span className="text-gray-500">{o.stock_pool_name ?? "—"}</span>
+                              <span className="text-gray-600">{o.stock_pool_name ?? "—"}</span>
                             ) : (
                               <Select
                                 density="compact"
@@ -237,30 +258,39 @@ export function ProductSalesOffersSection({ productId, tenantId }: Props) {
                                   const v = Number.parseInt(e.target.value, 10);
                                   if (Number.isFinite(v)) void onPoolChange(o, v);
                                 }}
-                                className="max-w-[12rem] bg-white"
-                                aria-label="Źródło stanu"
+                                className="max-w-[11rem] bg-white"
+                                aria-label="Konto / źródło stanu"
                               >
                                 {pools.map((p) => (
                                   <option key={p.id} value={p.id}>
                                     {p.name}
-                                    {p.is_default ? " (domyślna)" : ""}
+                                    {p.is_default ? " (dom)" : ""}
                                   </option>
                                 ))}
                               </Select>
                             )}
                           </td>
-                          <td className="px-4 py-3.5 align-top">
+                          <td className="px-4 py-3 align-top">
+                            <div className="font-medium text-gray-900">{o.name}</div>
+                            {o.is_default ? (
+                              <div className="mt-0.5 text-[10px] text-gray-400">domyślna</div>
+                            ) : null}
+                          </td>
+                          <td className="whitespace-nowrap px-4 py-3 align-top font-medium tabular-nums">
+                            {o.available_qty}
+                          </td>
+                          <td className="px-4 py-3 align-top">
                             <div className="flex items-center gap-2">
                               <Input
                                 type="text"
                                 inputMode="decimal"
                                 density="compact"
                                 focusTone="brand"
-                                className="w-28"
+                                className="w-24"
                                 placeholder={
                                   o.uses_product_price && o.effective_sale_price_net != null
-                                    ? `produkt: ${o.effective_sale_price_net}`
-                                    : "cena produktu"
+                                    ? String(o.effective_sale_price_net)
+                                    : "cena"
                                 }
                                 value={priceDraft[o.id] ?? ""}
                                 onChange={(e) =>
@@ -279,48 +309,47 @@ export function ProductSalesOffersSection({ productId, tenantId }: Props) {
                             </div>
                             {o.effective_sale_price_net != null ? (
                               <div className="mt-1 text-[10px] text-gray-400">
-                                efektywna: {o.effective_sale_price_net.toFixed(2)} zł
+                                {o.effective_sale_price_net.toFixed(2)} zł
                               </div>
                             ) : null}
                           </td>
-                          <td className="px-4 py-3.5 align-top font-medium">{o.available_qty}</td>
-                          <td className="px-4 py-3.5 align-top">
+                          <td className="px-4 py-3 align-top">
                             {o.active ? (
-                              <div className="w-fit rounded bg-green-100 px-2 py-1 text-xs font-medium text-green-800">
+                              <span className="inline-flex rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-medium text-emerald-800">
                                 Aktywna
-                              </div>
+                              </span>
                             ) : (
-                              <Badge tone="neutral" density="compact">
+                              <span className="inline-flex rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-gray-600">
                                 Nieaktywna
-                              </Badge>
+                              </span>
                             )}
                           </td>
-                          <td className="space-x-1.5 px-4 py-3.5 text-center align-top text-base text-gray-500">
-                            {!o.is_default ? (
-                              <IconButton
-                                type="button"
-                                tone="danger"
-                                density="compact"
-                                disabled={busyId === o.id}
-                                title="Usuń"
-                                onClick={() => void onDelete(o)}
-                                className="!text-red-500 hover:!text-red-700"
-                              >
-                                <X className="h-4 w-4" strokeWidth={2.5} aria-hidden />
-                              </IconButton>
-                            ) : (
-                              <span className="text-xs text-gray-400">—</span>
-                            )}
+                          <td className="px-4 py-3 align-top">
+                            <div className="flex items-center justify-center gap-1">
+                              {!o.is_default ? (
+                                <button
+                                  type="button"
+                                  disabled={busyId === o.id}
+                                  title="Usuń"
+                                  onClick={() => void onDelete(o)}
+                                  className="inline-flex h-7 w-7 items-center justify-center rounded text-red-500 transition-colors hover:bg-red-50 hover:text-red-700 disabled:opacity-50"
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />
+                                </button>
+                              ) : (
+                                <span className="text-xs text-gray-300">—</span>
+                              )}
+                            </div>
                           </td>
                         </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
-              )}
-            </div>
-          ) : null}
-        </div>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+            ) : null}
+          </div>
+        ))}
       </div>
     </div>
   );

@@ -41,7 +41,7 @@ function HitRow({
       }`}
     >
       {/* Miniatura / Placeholder */}
-      <div className="w-12 h-12 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-center flex-shrink-0 overflow-hidden shadow-inner">
+      <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center overflow-hidden rounded-xl border border-slate-100 bg-white shadow-inner">
         {resolvedDirectSalesSettings.show_product_images && hit.image_url ? (
           <img src={hit.image_url} alt="" className="w-full h-full object-cover" />
         ) : (

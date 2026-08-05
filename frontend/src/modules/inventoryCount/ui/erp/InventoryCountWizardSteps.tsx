@@ -44,10 +44,16 @@ function SelectionTag({ label, onRemove }: { label: string; onRemove: () => void
 
 function ProductThumb({ url, name }: { url?: string | null; name?: string | null }) {
   if (url) {
-    return <img src={url} alt="" className="h-8 w-8 shrink-0 rounded border border-slate-100 object-cover" />;
+    return (
+      <img
+        src={url}
+        alt=""
+        className="h-8 w-8 shrink-0 rounded border border-slate-100 bg-white object-contain"
+      />
+    );
   }
   return (
-    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded border border-slate-100 bg-slate-50 text-[9px] font-bold text-slate-400">
+    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded border border-slate-100 bg-white text-[9px] font-bold text-slate-400">
       {(name ?? "?").slice(0, 2).toUpperCase()}
     </div>
   );

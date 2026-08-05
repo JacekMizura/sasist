@@ -7,10 +7,10 @@ import type {
   ProductValidationGlobalSettings,
   ProductValidationSkips,
 } from "../../components/wms/receiving/ProductValidationOverridesSection";
-import ActivityLogPanel from "../../components/activityLog/ActivityLogPanel";
 import { Checkbox, Input, Select } from "../../design-system";
 import { DocumentTemplateScopeSection } from "@/pages/Settings/document-templates/components/DocumentTemplateScopeSection";
 import { generateFakeEan13 } from "../../utils/ean13";
+import { generateFakeCatalogNumber, generateFakeSku } from "../../utils/productCodes";
 import { ProductLabelPrintModal } from "./ProductLabelPrintModal";
 
 export type ProductEditBasicTabProps = {
@@ -23,6 +23,8 @@ export type ProductEditBasicTabProps = {
   tenants: { id: number; name: string }[];
   symbol: string;
   setSymbol: (v: string) => void;
+  catalogNumber: string;
+  setCatalogNumber: (v: string) => void;
   ean: string;
   setEan: (v: string) => void;
   /** Additional EANs (product_barcodes), not including primary `ean`. */
@@ -64,8 +66,6 @@ export type ProductEditBasicTabProps = {
   globalValidation: ProductValidationGlobalSettings | null;
   validationSkips: ProductValidationSkips;
   setValidationSkips: React.Dispatch<React.SetStateAction<ProductValidationSkips>>;
-  /** Bumps ActivityLogPanel reload after save (same pattern as order card). */
-  activityRefreshKey?: number;
 };
 
 /** Mock `.form-label` */
@@ -135,6 +135,8 @@ export function ProductEditBasicTab({
   tenants,
   symbol,
   setSymbol,
+  catalogNumber,
+  setCatalogNumber,
   ean,
   setEan,
   extraEans,
@@ -175,7 +177,6 @@ export function ProductEditBasicTab({
   globalValidation,
   validationSkips,
   setValidationSkips,
-  activityRefreshKey = 0,
 }: ProductEditBasicTabProps) {
   const [templateMode, setTemplateMode] = useState<"pick" | "custom">("pick");
   const [labelPrint, setLabelPrint] = useState<{ ean: string; title: string } | null>(null);
@@ -269,30 +270,53 @@ export function ProductEditBasicTab({
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div>
                 <label className={labelClass}>Symbol / SKU</label>
-                <div className="relative">
-                  <span className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-gray-400">
-                    <Barcode className="h-3 w-3" strokeWidth={2} aria-hidden />
-                  </span>
-                  <Input
-                    type="text"
-                    value={symbol}
-                    onChange={(e) => setSymbol(e.target.value)}
-                    density="comfortable"
-                    focusTone="brand"
-                    className="pl-8 font-mono text-xs"
-                  />
+                <div className="flex items-stretch gap-2">
+                  <div className="relative min-w-0 flex-1">
+                    <span className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-gray-400">
+                      <Barcode className="h-3 w-3" strokeWidth={2} aria-hidden />
+                    </span>
+                    <Input
+                      type="text"
+                      value={symbol}
+                      onChange={(e) => setSymbol(e.target.value)}
+                      density="comfortable"
+                      focusTone="brand"
+                      className="pl-8 font-mono text-xs"
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    title="Wygeneruj symbol SKU"
+                    onClick={() => setSymbol(generateFakeSku())}
+                    className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 text-xs font-semibold text-gray-700 shadow-sm transition-colors hover:bg-gray-50"
+                  >
+                    <Sparkles className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />
+                    Generuj
+                  </button>
                 </div>
               </div>
               <div>
                 <label className={labelClass}>Numer katalogowy</label>
-                <Input
-                  type="text"
-                  defaultValue=""
-                  placeholder="Brak (opcjonalne)"
-                  density="comfortable"
-                  focusTone="brand"
-                  className="text-gray-400 placeholder:text-gray-400"
-                />
+                <div className="flex items-stretch gap-2">
+                  <Input
+                    type="text"
+                    value={catalogNumber}
+                    onChange={(e) => setCatalogNumber(e.target.value)}
+                    placeholder="Opcjonalne"
+                    density="comfortable"
+                    focusTone="brand"
+                    className="min-w-0 flex-1 font-mono text-xs"
+                  />
+                  <button
+                    type="button"
+                    title="Wygeneruj numer katalogowy"
+                    onClick={() => setCatalogNumber(generateFakeCatalogNumber())}
+                    className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 text-xs font-semibold text-gray-700 shadow-sm transition-colors hover:bg-gray-50"
+                  >
+                    <Sparkles className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />
+                    Generuj
+                  </button>
+                </div>
               </div>
             </div>
 
@@ -360,6 +384,17 @@ export function ProductEditBasicTab({
                         aria-label={`Dodatkowy EAN ${idx + 1}`}
                       />
                     </div>
+                    <button
+                      type="button"
+                      title="Wygeneruj poprawny EAN-13"
+                      onClick={() =>
+                        setExtraEans((prev) => prev.map((v, i) => (i === idx ? generateFakeEan13() : v)))
+                      }
+                      className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 text-xs font-semibold text-gray-700 shadow-sm transition-colors hover:bg-gray-50"
+                    >
+                      <Sparkles className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />
+                      Generuj
+                    </button>
                     <button
                       type="button"
                       onClick={() => openEanPrint(code, `Drukuj etykietę — EAN ${idx + 2}`)}
@@ -853,13 +888,6 @@ export function ProductEditBasicTab({
 
       </div>
     </div>
-
-      {/* Historia czynności — ten sam ActivityLogPanel co na karcie zamówienia (pełna szerokość pod układem) */}
-      {!isNew && productId != null ? (
-        <div className="mt-8 w-full max-w-none border-t border-slate-100 pb-6 pt-4">
-          <ActivityLogPanel objectType="product" objectId={productId} refreshKey={activityRefreshKey} />
-        </div>
-      ) : null}
 
       {labelPrint != null && productId != null ? (
         <ProductLabelPrintModal
