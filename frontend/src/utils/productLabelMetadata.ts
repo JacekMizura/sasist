@@ -1,6 +1,59 @@
 import type { ManufacturerRead } from "../api/manufacturersApi";
 import type { ProductImageEntry, ProductLabelData } from "../types/productLabel";
 
+export type ProductDescriptionMeta = {
+  tagsText: string;
+  shortDescription: string;
+  serialNotes: string;
+  longDescription: string;
+  attributeGroup: string;
+};
+
+export function parseProductDescription(meta: unknown): ProductDescriptionMeta {
+  const empty: ProductDescriptionMeta = {
+    tagsText: "",
+    shortDescription: "",
+    serialNotes: "",
+    longDescription: "",
+    attributeGroup: "",
+  };
+  if (meta == null || typeof meta !== "object" || Array.isArray(meta)) return empty;
+  const root = meta as Record<string, unknown>;
+  const tagsRaw = root.tags;
+  const tagsText = Array.isArray(tagsRaw)
+    ? tagsRaw.map((t) => String(t).trim()).filter(Boolean).join(", ")
+    : typeof tagsRaw === "string"
+      ? tagsRaw.trim()
+      : "";
+  const block = root.product_description;
+  const d =
+    block != null && typeof block === "object" && !Array.isArray(block)
+      ? (block as Record<string, unknown>)
+      : {};
+  return {
+    tagsText,
+    shortDescription: String(d.short ?? d.short_description ?? ""),
+    serialNotes: String(d.serial_notes ?? d.serial ?? ""),
+    longDescription: String(d.long ?? d.long_description ?? ""),
+    attributeGroup: String(d.attribute_group ?? ""),
+  };
+}
+
+function tagsTextToArray(tagsText: string): string[] {
+  return tagsText
+    .split(/[,;]+/)
+    .map((t) => t.trim())
+    .filter(Boolean);
+}
+
+function descriptionHasContent(d: ProductDescriptionMeta): boolean {
+  if (d.shortDescription.trim()) return true;
+  if (d.serialNotes.trim()) return true;
+  if (d.longDescription.trim()) return true;
+  if (d.attributeGroup.trim()) return true;
+  return false;
+}
+
 export function parseLabelData(meta: unknown): ProductLabelData {
   if (meta == null || typeof meta !== "object" || Array.isArray(meta)) return {};
   const raw = (meta as Record<string, unknown>).label_data;
@@ -94,6 +147,7 @@ export function buildProductMetadataJson(
     productUi: { responsible_person: string; responsible_person_email: string; vat_rate: string; promotion: string };
     labelData: ProductLabelData;
     productImages: ProductImageEntry[];
+    description?: ProductDescriptionMeta;
   },
 ): string | undefined {
   let root: Record<string, unknown> = {};
@@ -144,6 +198,27 @@ export function buildProductMetadataJson(
     }));
   } else {
     delete root.product_images;
+  }
+
+  if (parts.description != null) {
+    const tags = tagsTextToArray(parts.description.tagsText);
+    if (tags.length > 0) {
+      root.tags = tags;
+    } else {
+      delete root.tags;
+    }
+    if (descriptionHasContent(parts.description)) {
+      const block: Record<string, unknown> = {};
+      if (parts.description.shortDescription.trim()) block.short = parts.description.shortDescription.trim();
+      if (parts.description.serialNotes.trim()) block.serial_notes = parts.description.serialNotes.trim();
+      if (parts.description.longDescription.trim()) block.long = parts.description.longDescription.trim();
+      if (parts.description.attributeGroup.trim()) {
+        block.attribute_group = parts.description.attributeGroup.trim();
+      }
+      root.product_description = block;
+    } else {
+      delete root.product_description;
+    }
   }
 
   if (Object.keys(root).length === 0) {

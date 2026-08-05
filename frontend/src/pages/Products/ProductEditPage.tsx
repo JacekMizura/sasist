@@ -32,6 +32,7 @@ export default function ProductEditPage() {
     "labelSheet",
     "images",
     "prices",
+    "description",
     "warehouse",
     "warehouseOps",
     "logistics",

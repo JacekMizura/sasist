@@ -14,6 +14,7 @@ import {
   Copy,
   Factory,
   Image as ImageIcon,
+  AlignLeft,
   LayoutList,
   Layers,
   MoreHorizontal,
@@ -56,6 +57,7 @@ import {
   ensureSingleMainImage,
   manufacturerLabelBlock,
   parseLabelData,
+  parseProductDescription,
   parseProductImages,
   pickMainImageUrl,
 } from "../../utils/productLabelMetadata";
@@ -65,6 +67,7 @@ import { ProductEditBasicTab } from "./ProductEditBasicTab";
 import { ProductEditWarehouseTab } from "./ProductEditWarehouseTab";
 import { ProductEditImagesTab } from "./ProductEditImagesTab";
 import { ProductEditLabelTab } from "./ProductEditLabelTab";
+import { ProductEditDescriptionTab } from "./ProductEditDescriptionTab";
 import { useDocumentTemplatePrint } from "../../hooks/useDocumentTemplatePrint";
 
 export type ProductForm = {
@@ -233,6 +236,7 @@ export type ProductEditTabId =
   | "labelSheet"
   | "images"
   | "prices"
+  | "description"
   | "warehouse"
   | "warehouseOps"
   | "logistics"
@@ -482,6 +486,11 @@ export function ProductEditModal({
   const [addSupplierPick, setAddSupplierPick] = useState<string>("");
   const [labelData, setLabelData] = useState<ProductLabelData>({});
   const [productImages, setProductImages] = useState<ProductImageEntry[]>([]);
+  const [descTagsText, setDescTagsText] = useState("");
+  const [descShort, setDescShort] = useState("");
+  const [descSerialNotes, setDescSerialNotes] = useState("");
+  const [descLong, setDescLong] = useState("");
+  const [descAttributeGroup, setDescAttributeGroup] = useState("");
   const [newGalleryUrl, setNewGalleryUrl] = useState("");
   const [galleryUploadBusy, setGalleryUploadBusy] = useState(false);
   const [unit, setUnit] = useState(product?.unit ?? "");
@@ -1036,10 +1045,21 @@ export function ProductEditModal({
     if (product == null) {
       setLabelData({});
       setProductImages([]);
+      setDescTagsText("");
+      setDescShort("");
+      setDescSerialNotes("");
+      setDescLong("");
+      setDescAttributeGroup("");
       return;
     }
     const meta = product.metadata_json;
     setLabelData(parseLabelData(meta));
+    const desc = parseProductDescription(meta);
+    setDescTagsText(desc.tagsText);
+    setDescShort(desc.shortDescription);
+    setDescSerialNotes(desc.serialNotes);
+    setDescLong(desc.longDescription);
+    setDescAttributeGroup(desc.attributeGroup);
     let imgs = parseProductImages(meta);
     if (imgs.length === 0 && (product.image_url ?? "").trim()) {
       imgs = [
@@ -1231,6 +1251,13 @@ export function ProductEditModal({
         },
         labelData,
         productImages: imagesForMeta,
+        description: {
+          tagsText: descTagsText,
+          shortDescription: descShort,
+          serialNotes: descSerialNotes,
+          longDescription: descLong,
+          attributeGroup: descAttributeGroup,
+        },
       });
       const mainImgResolved = pickMainImageUrl(imagesForMeta, image_url);
 
@@ -1616,14 +1643,17 @@ export function ProductEditModal({
   }, [isNew, tenantId, product?.id]);
 
   const railTabOrder = useMemo((): TabId[] => {
-    const base: TabId[] = ["basic", "prices", "warehouse", "images", "offers", "labelSheet"];
-    if (!isNew) return [...base.slice(0, 3), "production", ...base.slice(3)];
-    return base;
+    // Podstawowe, Ceny, Opis, Zdjęcia, Oferty, Produkcja, Etykieta, Magazyn
+    if (!isNew) {
+      return ["basic", "prices", "description", "images", "offers", "production", "labelSheet", "warehouse"];
+    }
+    return ["basic", "prices", "description", "images", "offers", "labelSheet", "warehouse"];
   }, [isNew]);
 
   const railLabel: Record<TabId, string> = {
     basic: "Podstawowe",
     prices: "Ceny",
+    description: "Opis",
     warehouse: "Magazyn",
     images: "Zdjęcia",
     offers: "Oferty",
@@ -1643,6 +1673,7 @@ export function ProductEditModal({
     labelSheet: Printer,
     images: ImageIcon,
     prices: Tag,
+    description: AlignLeft,
     warehouse: Warehouse,
     warehouseOps: ClipboardList,
     logistics: Truck,
@@ -1942,6 +1973,22 @@ export function ProductEditModal({
                     pricingDisplay={pricingDisplay}
                     formatMoneyZl={formatMoneyZl}
                     formatDateTimePl={formatDateTimePl}
+                  />
+                )}
+
+                {activeTab === "description" && (
+                  <ProductEditDescriptionTab
+                    tagsText={descTagsText}
+                    setTagsText={setDescTagsText}
+                    shortDescription={descShort}
+                    setShortDescription={setDescShort}
+                    serialNotes={descSerialNotes}
+                    setSerialNotes={setDescSerialNotes}
+                    longDescription={descLong}
+                    setLongDescription={setDescLong}
+                    attributeGroup={descAttributeGroup}
+                    setAttributeGroup={setDescAttributeGroup}
+                    saving={saving}
                   />
                 )}
 
