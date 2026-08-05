@@ -22,7 +22,7 @@ type Props = {
 /**
  * Product edit — Oferty tab.
  * DOM hierarchy is a structural 1:1 port of `oferrty karta produktu.html`
- * (marketplace card chrome + table). Columns / handlers stay app SSOT.
+ * (marketplace card chrome + table, full-width). Columns / handlers stay app SSOT.
  */
 export function ProductSalesOffersSection({ productId, tenantId }: Props) {
   const [offers, setOffers] = useState<ProductSalesOfferRead[]>([]);
@@ -135,23 +135,8 @@ export function ProductSalesOffersSection({ productId, tenantId }: Props) {
   };
 
   return (
-    /* mock: <main class="… max-w-[1400px] mx-auto bg-gray-50/30"> */
-    <div className="mx-auto w-full max-w-[1400px] bg-gray-50/30">
-      <div
-        style={{
-          background: "#ff0000",
-          color: "white",
-          fontSize: 32,
-          padding: 20,
-          fontWeight: "bold",
-        }}
-      >
-        ==============================
-        <br />
-        TEST OFERTY TAB
-        <br />
-        ==============================
-      </div>
+    /* mock body under tabs — full page width, white surface */
+    <div className="w-full max-w-none">
       <div className="mb-6 flex items-center justify-between">
         <h2 className="text-xl font-bold text-gray-800">Oferty</h2>
         <SecondaryButton
