@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { ArrowLeftRight, Box, Map } from "lucide-react";
+import { ArrowLeftRight, Box, Map as MapIcon } from "lucide-react";
 import { Loader2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
@@ -528,7 +528,7 @@ export function ProductEditWarehouseTab({
             <div className="mb-4 flex items-center justify-between">
               <h3 className="text-xs font-bold uppercase tracking-wider text-gray-400">Lokalizacje (Inventory)</h3>
               <Link to="/designer" className="flex items-center text-xs font-medium text-blue-600 hover:underline">
-                <Map className="mr-1 h-3.5 w-3.5" strokeWidth={2} aria-hidden />
+                <MapIcon className="mr-1 h-3.5 w-3.5" strokeWidth={2} aria-hidden />
                 Projektant Magazynu
               </Link>
             </div>

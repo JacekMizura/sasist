@@ -154,7 +154,23 @@ export function ProductEditPricesTab({
   const filledDd = "whitespace-nowrap font-semibold text-gray-900";
 
   return (
-    /* mock: <div class="flex flex-col xl:flex-row gap-6 items-start"> */
+    <div className="w-full space-y-6">
+      <div
+        style={{
+          background: "#ff0000",
+          color: "white",
+          fontSize: 32,
+          padding: 20,
+          fontWeight: "bold",
+        }}
+      >
+        ==============================
+        <br />
+        TEST CENY TAB
+        <br />
+        ==============================
+      </div>
+    {/* mock: <div class="flex flex-col xl:flex-row gap-6 items-start"> */}
     <div className="flex flex-col items-start gap-6 xl:flex-row">
       {/* KOLUMNA LEWA: w-full xl:w-2/3 xl:min-w-[700px] */}
       <div className="flex w-full flex-col gap-6 xl:w-2/3 xl:min-w-[700px]">
@@ -495,6 +511,7 @@ export function ProductEditPricesTab({
           </section>
         </div>
       </div>
+    </div>
     </div>
   );
 }
