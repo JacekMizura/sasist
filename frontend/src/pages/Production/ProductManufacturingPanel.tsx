@@ -42,7 +42,8 @@ type RwPwPreview = {
 
 /**
  * Product edit — Produkcja tab.
- * DOM hierarchy is a structural 1:1 port of `produkcja karta produktu.html`.
+ * DOM hierarchy is a structural 1:1 port of `produkcja karta produktu.html`
+ * (full-width body under tabs).
  */
 export function ProductManufacturingPanel({ tenantId, productId, productName, onChanged }: Props) {
   const { warehouse } = useWarehouse();
@@ -140,46 +141,12 @@ export function ProductManufacturingPanel({ tenantId, productId, productName, on
   };
 
   if (loading) {
-    return (
-      <>
-        <div
-          style={{
-            background: "#ff0000",
-            color: "white",
-            fontSize: 32,
-            padding: 20,
-            fontWeight: "bold",
-          }}
-        >
-          ==============================
-          <br />
-          TEST PRODUKCJA TAB
-          <br />
-          ==============================
-        </div>
-        <p className="text-sm text-gray-500">Wczytywanie danych produkcji…</p>
-      </>
-    );
+    return <p className="text-sm text-gray-500">Wczytywanie danych produkcji…</p>;
   }
 
   return (
-    /* mock: <div class="max-w-7xl mx-auto space-y-6"> */
-    <div className="mx-auto max-w-7xl space-y-6">
-      <div
-        style={{
-          background: "#ff0000",
-          color: "white",
-          fontSize: 32,
-          padding: 20,
-          fontWeight: "bold",
-        }}
-      >
-        ==============================
-        <br />
-        TEST PRODUKCJA TAB
-        <br />
-        ==============================
-      </div>
+    /* mock body under tabs — full page width (no max-w-7xl) */
+    <div className="w-full max-w-none space-y-6">
       {err ? (
         <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">{err}</div>
       ) : null}
