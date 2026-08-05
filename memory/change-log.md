@@ -1,3 +1,8 @@
+## 2026-08-05 — Edycja produktu: Ceny final (bez banera TEST)
+
+- `ProductEditPricesTab` dopięty do `ceny karta produktu.html` (bez probe banera)
+- Hierarchia: Kalkulacja | Dostawcy / Ostatni zakup / Podsumowanie; handlery bez zmian
+
 ## 2026-08-04 — Edycja produktu: Oferty 1:1 z HTML (FE only)
 
 - `ProductSalesOffersSection` wg `oferrty karta produktu.html` (karta marketplace, Zwiń/Rozwiń, tabela)
