@@ -27,7 +27,7 @@ export function CatalogEntityPageShell({
     <PageLayout
       fullBleed
       flush={flush}
-      className={flush ? "!p-0" : undefined}
+      className={flush ? "!p-0 flex min-h-full w-full flex-1 flex-col bg-white" : undefined}
       cardClassName={flush ? undefined : "overflow-hidden p-0 space-y-0"}
     >
       {loading ? (

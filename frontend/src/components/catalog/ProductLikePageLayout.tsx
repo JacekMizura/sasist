@@ -159,15 +159,15 @@ export function ProductLikePageLayout<T extends string>({
   const topToolbarSticky = isPage && saveInHeader;
 
   const formShellClass = isPage
-    ? `flex flex-col ${productLikeFormNumberReset}`
+    ? `flex w-full min-h-full flex-1 flex-col bg-white ${productLikeFormNumberReset}`
     : `flex min-h-0 flex-1 flex-col overflow-hidden bg-white ${productLikeFormNumberReset}`;
 
   const bodyRowClass = isPage
-    ? "flex w-full flex-col lg:flex-row lg:items-start"
+    ? "flex w-full min-w-0 flex-1 flex-col lg:flex-row lg:items-start"
     : "flex min-h-0 w-full flex-1 flex-col overflow-hidden lg:flex-row lg:items-stretch";
 
   const mainColClass = isPage
-    ? "flex min-w-0 flex-col"
+    ? "flex w-full min-w-0 flex-1 flex-col"
     : "flex min-w-0 flex-1 flex-col overflow-hidden";
 
   const asideClass = isPage
