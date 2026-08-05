@@ -417,6 +417,21 @@ export function ProductEditWarehouseTab({
 
   return (
     <div className="mx-auto max-w-7xl space-y-12">
+      <div
+        style={{
+          background: "#ff0000",
+          color: "white",
+          fontSize: 32,
+          padding: 20,
+          fontWeight: "bold",
+        }}
+      >
+        ==============================
+        <br />
+        TEST MAGAZYN TAB
+        <br />
+        ==============================
+      </div>
       {/* SEKCJA 1: Stan i lokalizacje */}
       <div>
         <div className="mb-8 flex items-center justify-between border-b border-gray-100 pb-4">

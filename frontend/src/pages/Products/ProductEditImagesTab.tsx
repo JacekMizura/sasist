@@ -39,6 +39,21 @@ export function ProductEditImagesTab({
   return (
     /* mock: <main class="… max-w-7xl mx-auto"> */
     <div className="mx-auto w-full max-w-7xl">
+      <div
+        style={{
+          background: "#ff0000",
+          color: "white",
+          fontSize: 32,
+          padding: 20,
+          fontWeight: "bold",
+        }}
+      >
+        ==============================
+        <br />
+        TEST ZDJĘCIA TAB
+        <br />
+        ==============================
+      </div>
       <h2 className="mb-6 text-lg font-bold text-gray-900">Galeria produktu</h2>
 
       <div className="max-w-4xl space-y-6">

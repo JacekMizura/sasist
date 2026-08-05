@@ -2061,7 +2061,23 @@ export function ProductEditModal({
                 )}
 
                 {activeTab === "labelSheet" && (
-                  <div className="w-full xl:max-w-5xl space-y-12 lg:grid lg:grid-cols-[1fr_min(340px,35%)] lg:items-start lg:gap-12 lg:space-y-0">
+                  <div className="w-full xl:max-w-5xl space-y-12">
+                    <div
+                      style={{
+                        background: "#ff0000",
+                        color: "white",
+                        fontSize: 32,
+                        padding: 20,
+                        fontWeight: "bold",
+                      }}
+                    >
+                      ==============================
+                      <br />
+                      TEST ETYKIETA TAB
+                      <br />
+                      ==============================
+                    </div>
+                  <div className="w-full space-y-12 lg:grid lg:grid-cols-[1fr_min(340px,35%)] lg:items-start lg:gap-12 lg:space-y-0">
                     <div className="space-y-12">
                       <section>
                         <h3 className="mb-5 text-lg font-bold text-slate-900 border-b border-slate-200 pb-2">Wybór szablonu</h3>
@@ -2273,6 +2289,7 @@ export function ProductEditModal({
                         </div>
                       </section>
                     </aside>
+                  </div>
                   </div>
                 )}
 

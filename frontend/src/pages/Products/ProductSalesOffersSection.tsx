@@ -137,6 +137,21 @@ export function ProductSalesOffersSection({ productId, tenantId }: Props) {
   return (
     /* mock: <main class="… max-w-[1400px] mx-auto bg-gray-50/30"> */
     <div className="mx-auto w-full max-w-[1400px] bg-gray-50/30">
+      <div
+        style={{
+          background: "#ff0000",
+          color: "white",
+          fontSize: 32,
+          padding: 20,
+          fontWeight: "bold",
+        }}
+      >
+        ==============================
+        <br />
+        TEST OFERTY TAB
+        <br />
+        ==============================
+      </div>
       <div className="mb-6 flex items-center justify-between">
         <h2 className="text-xl font-bold text-gray-800">Oferty</h2>
         <SecondaryButton
