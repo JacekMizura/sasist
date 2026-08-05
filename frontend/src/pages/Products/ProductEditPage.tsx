@@ -168,7 +168,7 @@ export default function ProductEditPage() {
   const p = productRow;
 
   return (
-    <CatalogEntityPageShell>
+    <CatalogEntityPageShell flush>
       <ProductEditModal
               variant="page"
               tenants={tenants}

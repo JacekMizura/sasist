@@ -5,8 +5,8 @@ import {
   GhostButton,
   Input,
   MoneyInput,
+  PrimaryButton,
   Radio,
-  SecondaryButton,
   Select,
   Textarea,
 } from "../../design-system";
@@ -164,10 +164,10 @@ export function ProductEditPricesTab({
   const filledDd = "whitespace-nowrap font-semibold text-gray-900";
 
   return (
-    /* mock: flex 2/3 + 1/3 — use grid so columns always fill full content width */
-    <div className={`grid w-full grid-cols-1 items-start gap-6 xl:grid-cols-12 ${mockFieldChrome}`}>
+    /* mock: full-width 2/3 + 1/3 — flex grow so columns always fill the page content width */
+    <div className={`flex w-full max-w-none flex-col items-stretch gap-6 lg:flex-row lg:items-start ${mockFieldChrome}`}>
       {/* KOLUMNA LEWA ~2/3 */}
-      <div className="flex w-full min-w-0 flex-col gap-6 xl:col-span-8">
+      <div className="flex w-full min-w-0 flex-col gap-6 lg:flex-[2]">
         <section className="overflow-hidden rounded-xl border border-gray-200 bg-white">
           <div className="border-b border-gray-200 px-6 py-4">
             <h2 className="text-base font-semibold text-gray-900">Kalkulacja cenowa</h2>
@@ -268,7 +268,7 @@ export function ProductEditPricesTab({
       </div>
 
       {/* KOLUMNA PRAWA ~1/3 */}
-      <div className="flex w-full min-w-0 flex-col gap-6 xl:col-span-4">
+      <div className="flex w-full min-w-0 flex-col gap-6 lg:flex-[1]">
         <section className="overflow-hidden rounded-xl border border-gray-200 bg-white">
           <div className="border-b border-gray-200 px-5 py-4">
             <h2 className="text-base font-semibold text-gray-900">Dostawcy i ceny zakupu</h2>
@@ -372,15 +372,14 @@ export function ProductEditPricesTab({
                           </option>
                         ))}
                     </Select>
-                    <SecondaryButton
+                    <PrimaryButton
                       type="button"
                       density="compact"
                       disabled={supplierLinksBusy || !addSupplierPick}
                       onClick={() => onAddSupplierLink()}
-                      className="!border-transparent !bg-[#f3b584] !px-4 !py-1.5 !text-sm !font-medium !text-gray-900 shadow-sm hover:!bg-[#e8a36c] disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       Dodaj
-                    </SecondaryButton>
+                    </PrimaryButton>
                   </div>
                 </div>
               </>
@@ -388,7 +387,7 @@ export function ProductEditPricesTab({
           </div>
         </section>
 
-        <div className="flex flex-col gap-6 sm:flex-row xl:flex-col">
+        <div className="flex flex-col gap-6 sm:flex-row lg:flex-col">
           <section className="flex-1 overflow-hidden rounded-xl border border-gray-200 bg-white">
             <div className="border-b border-gray-200 px-5 py-4">
               <h2 className="text-base font-semibold text-gray-900">Ostatni zakup (z PZ)</h2>

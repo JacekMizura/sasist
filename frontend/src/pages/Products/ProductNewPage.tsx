@@ -21,7 +21,7 @@ export default function ProductNewPage() {
   const goProducts = () => navigate("/products", { replace: true });
 
   return (
-    <CatalogEntityPageShell>
+    <CatalogEntityPageShell flush>
       <ProductEditModal variant="page" tenants={tenants} product={null} onSave={goProducts} onClose={goProducts} />
     </CatalogEntityPageShell>
   );
