@@ -20,7 +20,8 @@ export type ProductEditImagesTabProps = {
 
 /**
  * Product edit — Zdjęcia tab.
- * DOM hierarchy is a structural 1:1 port of `zdjecia karta produktu.html`.
+ * DOM hierarchy is a structural 1:1 port of `zdjecia karta produktu.html`
+ * (full-width body under tabs).
  */
 export function ProductEditImagesTab({
   productImages,
@@ -37,26 +38,11 @@ export function ProductEditImagesTab({
   const images = ensureSingleMainImage(productImages).sort((a, b) => a.sort_order - b.sort_order);
 
   return (
-    /* mock: <main class="… max-w-7xl mx-auto"> */
-    <div className="mx-auto w-full max-w-7xl">
-      <div
-        style={{
-          background: "#ff0000",
-          color: "white",
-          fontSize: 32,
-          padding: 20,
-          fontWeight: "bold",
-        }}
-      >
-        ==============================
-        <br />
-        TEST ZDJĘCIA TAB
-        <br />
-        ==============================
-      </div>
+    /* mock body under tabs — full page width */
+    <div className="w-full max-w-none">
       <h2 className="mb-6 text-lg font-bold text-gray-900">Galeria produktu</h2>
 
-      <div className="max-w-4xl space-y-6">
+      <div className="w-full space-y-6">
         {/* BOX 1: Dodawanie zdjęcia */}
         <div className="rounded-xl border border-gray-100 bg-white p-5 shadow-sm">
           <label className="mb-3 block text-sm font-semibold text-gray-800">Dodaj zdjęcie z adresu URL</label>
@@ -64,7 +50,7 @@ export function ProductEditImagesTab({
             <Input
               type="url"
               density="comfortable"
-              focusTone="brand"
+              focusTone="neutral"
               className="flex-1 placeholder:text-gray-400"
               value={newGalleryUrl}
               onChange={(e) => setNewGalleryUrl(e.target.value)}
@@ -76,7 +62,6 @@ export function ProductEditImagesTab({
                 density="compact"
                 disabled={!newGalleryUrl.trim()}
                 onClick={onAddFromUrl}
-                className="!rounded-lg !bg-orange-300 !px-5 !py-2 !text-sm !font-medium !text-white hover:!bg-orange-400 disabled:opacity-50"
               >
                 Dodaj URL
               </PrimaryButton>
