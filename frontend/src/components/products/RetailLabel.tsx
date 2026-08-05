@@ -18,6 +18,8 @@ export type RetailLabelProps = {
   careInstructions?: string;
   sizeOrLength?: string;
   salePrice?: number | null;
+  /** When set, shown instead of formatted `salePrice` (e.g. template field caption „Cena”). */
+  priceText?: string;
   showPriceOnLabel?: boolean;
   showCeMark?: boolean;
   className?: string;
@@ -69,6 +71,7 @@ export function RetailLabel({
   careInstructions,
   sizeOrLength,
   salePrice,
+  priceText,
   showPriceOnLabel,
   showCeMark,
   className = "",
@@ -87,10 +90,13 @@ export function RetailLabel({
   const care = block(careInstructions);
   const size = block(sizeOrLength);
   const midHas = comp || mName || mAddr || impN || impA;
-  const priceStr =
-    showPriceOnLabel && salePrice != null && Number.isFinite(Number(salePrice))
-      ? `${Number(salePrice).toFixed(2)} zł`
-      : null;
+  const priceCaption = block(priceText);
+  const priceStr = showPriceOnLabel
+    ? priceCaption ||
+      (salePrice != null && Number.isFinite(Number(salePrice))
+        ? `${Number(salePrice).toFixed(2)} zł`
+        : null)
+    : null;
 
   return (
     <div

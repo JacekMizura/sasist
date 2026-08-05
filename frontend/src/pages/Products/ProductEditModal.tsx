@@ -2127,24 +2127,14 @@ export function ProductEditModal({
                     labelTemplateId={labelTemplateId}
                     setLabelTemplateId={setLabelTemplateId}
                     productTemplates={productTemplates}
-                    tenantId={tenantId}
                     labelData={labelData}
                     setLabelData={setLabelData}
                     name={name}
-                    symbol={symbol}
                     ean={ean}
-                    imageUrl={sidebarPreviewUrl}
                     manufacturerId={manufacturerId}
                     manufacturerReadonly={manufacturerReadonly}
                     manufacturer={manufacturer}
                     salePrice={salePrice}
-                    purchasePrice={purchasePrice}
-                    vatRate={vatRate}
-                    unit={unit}
-                    weight={weight}
-                    length={length}
-                    width={width}
-                    height={height}
                     parseDecimal={parseDecimal}
                   />
                 )}
