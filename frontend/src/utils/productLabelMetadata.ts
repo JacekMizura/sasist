@@ -89,6 +89,13 @@ export function parseProductImages(meta: unknown): ProductImageEntry[] {
       image_url: url,
       is_main: Boolean(r.is_main),
       sort_order: typeof r.sort_order === "number" && Number.isFinite(r.sort_order) ? r.sort_order : idx,
+      title: r.title != null ? String(r.title) : undefined,
+      description: r.description != null ? String(r.description) : undefined,
+      link_url: r.link_url != null ? String(r.link_url) : r.link != null ? String(r.link) : undefined,
+      video_url: r.video_url != null ? String(r.video_url) : undefined,
+      visibility: Array.isArray(r.visibility)
+        ? r.visibility.map((v) => String(v)).filter(Boolean)
+        : undefined,
     });
   });
   return out.sort((a, b) => a.sort_order - b.sort_order);
@@ -190,12 +197,22 @@ export function buildProductMetadataJson(
 
   const imgsNorm = ensureSingleMainImage(parts.productImages);
   if (imgsNorm.length > 0) {
-    root.product_images = imgsNorm.map((img, i) => ({
-      id: img.id,
-      image_url: normalizeImageUrl(img.image_url) ?? "",
-      is_main: Boolean(img.is_main),
-      sort_order: i,
-    }));
+    root.product_images = imgsNorm.map((img, i) => {
+      const row: Record<string, unknown> = {
+        id: img.id,
+        image_url: normalizeImageUrl(img.image_url) ?? "",
+        is_main: Boolean(img.is_main),
+        sort_order: i,
+      };
+      if (img.title?.trim()) row.title = img.title.trim();
+      if (img.description?.trim()) row.description = img.description.trim();
+      if (img.link_url?.trim()) row.link_url = img.link_url.trim();
+      if (img.video_url?.trim()) row.video_url = img.video_url.trim();
+      if (Array.isArray(img.visibility) && img.visibility.length > 0) {
+        row.visibility = img.visibility.map(String).filter(Boolean);
+      }
+      return row;
+    });
   } else {
     delete root.product_images;
   }

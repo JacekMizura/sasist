@@ -13,10 +13,23 @@ export type ProductLabelData = {
   show_price_on_label?: boolean;
 };
 
+/** Visibility channel ids stored on each gallery image (Sellasist-like). */
+export type ProductImageVisibilityId = string;
+
 /** Stored under `metadata_json.product_images` */
 export type ProductImageEntry = {
   id: string;
   image_url: string;
   is_main: boolean;
   sort_order: number;
+  title?: string;
+  description?: string;
+  link_url?: string;
+  /** When set, gallery may treat the still as a video poster. */
+  video_url?: string;
+  /**
+   * Channels where this image is visible.
+   * Missing / empty = all default channels on.
+   */
+  visibility?: ProductImageVisibilityId[];
 };
