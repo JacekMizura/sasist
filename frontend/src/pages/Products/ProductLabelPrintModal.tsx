@@ -1,6 +1,9 @@
 import { useEffect, useState } from "react";
+import { X } from "lucide-react";
 import api from "../../api/axios";
 import { PrimaryButton } from "../../design-system/PrimaryButton";
+import { SecondaryButton } from "../../design-system";
+import { downloadPdfBlob } from "../../components/printing/downloadPdfBlob";
 import { openPdfBlobInPrintViewer } from "../../utils/openPdfForBrowserPrint";
 import { AppOverlayPortal } from "../../components/overlay";
 
@@ -31,7 +34,7 @@ export function ProductLabelPrintModal({
   const [quantity, setQuantity] = useState(1);
   const [previewSvg, setPreviewSvg] = useState<string | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
-  const [generating, setGenerating] = useState(false);
+  const [busy, setBusy] = useState<"print" | "download" | null>(null);
 
   const tenantId = product?.tenant_id ?? DEFAULT_TENANT_ID;
   const overrideTrimmed = (eanOverride ?? "").trim();
@@ -77,39 +80,69 @@ export function ProductLabelPrintModal({
 
   if (product == null) return null;
 
-  const handleGenerate = async () => {
+  const fetchPdfBlob = async (): Promise<Blob> => {
+    if (templateId == null) throw new Error("Brak szablonu");
+    const res = await api.post(
+      "/labels/product",
+      {
+        product_id: product.id,
+        template_id: templateId,
+        quantity,
+        ...(overrideTrimmed ? { ean_override: overrideTrimmed } : {}),
+      },
+      { params: { tenant_id: tenantId }, responseType: "blob" },
+    );
+    return new Blob([res.data], { type: "application/pdf" });
+  };
+
+  const handlePrint = async () => {
     if (templateId == null) return;
-    setGenerating(true);
+    setBusy("print");
     try {
-      const res = await api.post(
-        "/labels/product",
-        {
-          product_id: product.id,
-          template_id: templateId,
-          quantity,
-          ...(overrideTrimmed ? { ean_override: overrideTrimmed } : {}),
-        },
-        { params: { tenant_id: tenantId }, responseType: "blob" },
-      );
-      const blob = new Blob([res.data], { type: "application/pdf" });
-      openPdfBlobInPrintViewer(blob);
+      const blob = await fetchPdfBlob();
+      openPdfBlobInPrintViewer(blob, { autoPrint: true });
       onClose();
     } catch (err) {
       console.error(err);
       alert("Nie udało się wygenerować PDF. Sprawdź konsolę.");
     } finally {
-      setGenerating(false);
+      setBusy(null);
     }
   };
+
+  const handleDownload = async () => {
+    if (templateId == null) return;
+    setBusy("download");
+    try {
+      const blob = await fetchPdfBlob();
+      const suffix = overrideTrimmed || String(product.id);
+      downloadPdfBlob(blob, `etykieta-${suffix}.pdf`);
+    } catch (err) {
+      console.error(err);
+      alert("Nie udało się pobrać PDF. Sprawdź konsolę.");
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const actionsDisabled = templateId == null || busy != null;
 
   return (
     <AppOverlayPortal>
       <div className="fixed inset-0 z-[280] flex items-center justify-center bg-black/40" onClick={onClose}>
         <div
-          className="mx-4 w-full max-w-md rounded-xl bg-white shadow-xl"
+          className="relative mx-4 w-full max-w-md rounded-xl bg-white shadow-xl"
           onClick={(e) => e.stopPropagation()}
         >
-          <h3 className="border-b border-slate-100 px-6 py-4 text-lg font-bold text-slate-800">{title}</h3>
+          <button
+            type="button"
+            onClick={onClose}
+            className="absolute right-3 top-3 inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-800"
+            aria-label="Zamknij"
+          >
+            <X className="h-4 w-4" strokeWidth={2} aria-hidden />
+          </button>
+          <h3 className="border-b border-slate-100 py-4 pl-6 pr-12 text-lg font-bold text-slate-800">{title}</h3>
           <div className="space-y-4 p-6">
             {overrideTrimmed ? (
               <p className="rounded-md border border-orange-100 bg-orange-50/50 px-3 py-2 text-xs text-slate-600">
@@ -160,21 +193,22 @@ export function ProductLabelPrintModal({
               />
             </div>
           </div>
-          <div className="flex justify-end gap-2 border-t border-slate-100 px-6 py-4">
-            <button
+          <div className="flex flex-wrap justify-end gap-2 border-t border-slate-100 px-6 py-4">
+            <SecondaryButton
               type="button"
-              onClick={onClose}
-              className="rounded-lg border border-slate-200 px-4 py-2 text-slate-700 hover:bg-slate-50"
+              density="compact"
+              disabled={actionsDisabled}
+              onClick={() => void handleDownload()}
             >
-              Anuluj
-            </button>
+              {busy === "download" ? "Pobieranie…" : "Pobierz PDF"}
+            </SecondaryButton>
             <PrimaryButton
               type="button"
               density="compact"
-              disabled={templateId == null || generating}
-              onClick={() => void handleGenerate()}
+              disabled={actionsDisabled}
+              onClick={() => void handlePrint()}
             >
-              {generating ? "Generowanie…" : "Drukuj PDF"}
+              {busy === "print" ? "Generowanie…" : "Drukuj PDF"}
             </PrimaryButton>
           </div>
         </div>
