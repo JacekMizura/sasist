@@ -1,5 +1,32 @@
 ﻿## Active
 
+**Edycja produktu — Etykieta: full-width 1:1 z HTML (2026-08-05).**
+
+- `ProductEditLabelTab`: bez banera TEST; `w-full` 2/3+1/3 (formularz A–F + szablon | sticky preview `RetailLabel`)
+- Wyciągnięte z `ProductEditModal`; logika/API etykiet bez zmian
+
+**Edycja produktu — Oferty: full-width 1:1 z HTML (2026-08-05).**
+
+- `ProductSalesOffersSection`: bez banera TEST; `w-full` (bez max-w / gray-50/30)
+- Chrome marketplace + tabela ofert sprzedażowych SSOT; API bez zmian
+
+**Edycja produktu — Zdjęcia: full-width 1:1 z HTML (2026-08-05).**
+
+- `ProductEditImagesTab`: bez banera TEST; `w-full`; Galeria + Dodaj URL / Wgraj + rekordy
+- PrimaryButton Sasist na „Dodaj URL”; logika galerii bez zmian
+
+**Edycja produktu — Produkcja: full-width 1:1 z HTML (2026-08-05).**
+
+- `ProductManufacturingPanel`: bez banera TEST; `w-full` (bez max-w-7xl); grid 2+1 jak mock
+- `CompositionVisualEditor`: PrimaryButton Sasist (Utwórz / Zapisz)
+- Białe tło strony z ErpShell product-edit
+
+**Edycja produktu — Magazyn: final DOM 1:1 + białe tło strony (2026-08-05).**
+
+- `ProductEditWarehouseTab`: bez banera TEST; `w-full` (bez max-w-7xl); Korekta = PrimaryButton
+- `ErpShellLayout`: `/products/.../edit` i `/products/new` → `bg-white` na main (bez slate-50)
+- Logika/API bez zmian
+
 **Edycja produktu — Ceny: final DOM 1:1 z `ceny karta produktu.html` (2026-08-05).**
 
 - `ProductEditPricesTab`: usunięty baner TEST; układ 2/3+1/3 jak mock (Kalkulacja | Dostawcy + Ostatni zakup + Podsumowanie)

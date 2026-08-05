@@ -38,7 +38,6 @@ import {
 import { useWarehouse } from "../../context/WarehouseContext";
 import { productCreatedInWms } from "../../utils/wmsProductMeta";
 import type { AssignedLocation } from "../../types/warehouse";
-import { RetailLabel } from "../../components/products/RetailLabel";
 import { getInventoryManagementSettings } from "../../api/inventoryManagementPolicyApi";
 import { ProductManufacturingPanel } from "../Production/ProductManufacturingPanel";
 import { ProductSalesOffersSection } from "./ProductSalesOffersSection";
@@ -47,12 +46,9 @@ import type { MagazynInvRowDisplay } from "../../components/products/MagazynInve
 import { EditInventoryTraceabilityModal } from "../../components/products/EditInventoryTraceabilityModal";
 import { getWmsProductValidationSettings } from "../../api/wmsProductValidationApi";
 import type { ProductValidationGlobalSettings } from "../../components/wms/receiving/ProductValidationOverridesSection";
-import { SUPPLIER_COUNTRIES } from "../../constants/supplierTaxonomy";
 import type { ProductImageEntry, ProductLabelData } from "../../types/productLabel";
 import {
   ProductLikePageLayout,
-  productLikeFieldLabelClass,
-  productLikeInputClass,
   type ProductLikeStatCard,
 } from "../../components/catalog";
 import {
@@ -68,6 +64,7 @@ import { ProductEditPricesTab } from "./ProductEditPricesTab";
 import { ProductEditBasicTab } from "./ProductEditBasicTab";
 import { ProductEditWarehouseTab } from "./ProductEditWarehouseTab";
 import { ProductEditImagesTab } from "./ProductEditImagesTab";
+import { ProductEditLabelTab } from "./ProductEditLabelTab";
 import { useDocumentTemplatePrint } from "../../hooks/useDocumentTemplatePrint";
 
 export type ProductForm = {
@@ -1656,8 +1653,6 @@ export function ProductEditModal({
 
   const tenantDisplay =
     tenantId != null ? (tenants.find((t) => t.id === tenantId)?.name ?? "").trim() || `#${tenantId}` : "—";
-  const fieldLabel = productLikeFieldLabelClass;
-  const inputClass = productLikeInputClass;
 
   const productStatCards = useMemo((): ProductLikeStatCard[] => {
     const stockValue =
@@ -2061,236 +2056,22 @@ export function ProductEditModal({
                 )}
 
                 {activeTab === "labelSheet" && (
-                  <div className="w-full xl:max-w-5xl space-y-12">
-                    <div
-                      style={{
-                        background: "#ff0000",
-                        color: "white",
-                        fontSize: 32,
-                        padding: 20,
-                        fontWeight: "bold",
-                      }}
-                    >
-                      ==============================
-                      <br />
-                      TEST ETYKIETA TAB
-                      <br />
-                      ==============================
-                    </div>
-                  <div className="w-full space-y-12 lg:grid lg:grid-cols-[1fr_min(340px,35%)] lg:items-start lg:gap-12 lg:space-y-0">
-                    <div className="space-y-12">
-                      <section>
-                        <h3 className="mb-5 text-lg font-bold text-slate-900 border-b border-slate-200 pb-2">Wybór szablonu</h3>
-                        <div className="space-y-5">
-                          <div>
-                            <label className={fieldLabel}>Szablon etykiety</label>
-                            <select
-                              value={labelTemplateId ?? ""}
-                              onChange={(e) => setLabelTemplateId(e.target.value === "" ? null : Number(e.target.value))}
-                              className={inputClass}
-                            >
-                              <option value="">Brak</option>
-                              {productTemplates.map((t) => (
-                                <option key={t.id} value={t.id}>{t.name}</option>
-                              ))}
-                            </select>
-                          </div>
-                          <div className="rounded border border-slate-200 bg-slate-50 p-5">
-                            <p className="mb-3 text-sm font-medium text-slate-700">Podgląd szablonu (SVG)</p>
-                            <div className="flex min-h-[100px] items-center justify-center rounded border border-dashed border-slate-300 bg-white p-2">
-                              {templatePreviewLoading ? (
-                                <p className="text-xs text-slate-500">Ładowanie…</p>
-                              ) : templatePreviewSvg ? (
-                                <div
-                                  className="max-h-36 max-w-full overflow-auto [&_svg]:max-h-36"
-                                  dangerouslySetInnerHTML={{ __html: templatePreviewSvg }}
-                                />
-                              ) : (
-                                <p className="text-xs text-slate-500">Brak podglądu</p>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                      </section>
-
-                      <section>
-                        <h3 className="mb-5 text-lg font-bold text-slate-900 border-b border-slate-200 pb-2">A. Podstawowe</h3>
-                        <div>
-                          <label className={fieldLabel}>Nazwa produktu na etykiecie (PL)</label>
-                          <input
-                            type="text"
-                            className={inputClass}
-                            value={labelData.product_name_pl ?? ""}
-                            onChange={(e) => setLabelData((d) => ({ ...d, product_name_pl: e.target.value }))}
-                            placeholder={name.trim() || "jak nazwa produktu"}
-                          />
-                        </div>
-                      </section>
-
-                      <section>
-                        <h3 className="mb-5 text-lg font-bold text-slate-900 border-b border-slate-200 pb-2">B. Producent / Importer</h3>
-                        <div className="space-y-5">
-                          <div className="rounded border border-slate-200 bg-slate-50 px-4 py-3 text-sm">
-                            <p className="font-semibold text-slate-900">{manufacturerReadonly.name || "—"}</p>
-                            <p className="mt-1 whitespace-pre-line text-slate-700">{manufacturerReadonly.address || "—"}</p>
-                            {manufacturerId == null ? (
-                              <p className="mt-2 text-xs text-amber-600 font-medium">Wybierz producenta w zakładce Podstawowe, aby wypełnić blok producenta.</p>
-                            ) : null}
-                          </div>
-                          <div>
-                            <label className={fieldLabel}>Importer — nazwa</label>
-                            <input
-                              type="text"
-                              className={inputClass}
-                              value={labelData.importer_name ?? ""}
-                              onChange={(e) => setLabelData((d) => ({ ...d, importer_name: e.target.value }))}
-                            />
-                          </div>
-                          <div>
-                            <label className={fieldLabel}>Importer — adres</label>
-                            <textarea
-                              className={`${inputClass} min-h-[64px] resize-y`}
-                              value={labelData.importer_address ?? ""}
-                              onChange={(e) => setLabelData((d) => ({ ...d, importer_address: e.target.value }))}
-                            />
-                          </div>
-                        </div>
-                      </section>
-
-                      <section>
-                        <h3 className="mb-5 text-lg font-bold text-slate-900 border-b border-slate-200 pb-2">C. Identyfikacja</h3>
-                        <div className="space-y-5">
-                          <div>
-                            <label className={fieldLabel}>EAN</label>
-                            <input type="text" className={`${inputClass} bg-slate-50 cursor-not-allowed`} value={ean} readOnly />
-                          </div>
-                          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
-                            <div>
-                              <label className={fieldLabel}>Numer partii</label>
-                              <input
-                                type="text"
-                                className={inputClass}
-                                value={labelData.batch_number ?? ""}
-                                onChange={(e) => setLabelData((d) => ({ ...d, batch_number: e.target.value }))}
-                              />
-                            </div>
-                            <div>
-                              <label className={fieldLabel}>Numer serii</label>
-                              <input
-                                type="text"
-                                className={inputClass}
-                                value={labelData.series_number ?? ""}
-                                onChange={(e) => setLabelData((d) => ({ ...d, series_number: e.target.value }))}
-                              />
-                            </div>
-                          </div>
-                        </div>
-                      </section>
-
-                      <section>
-                        <h3 className="mb-5 text-lg font-bold text-slate-900 border-b border-slate-200 pb-2">D. Regulacje i Cechy</h3>
-                        <div className="space-y-5">
-                          <label className="flex cursor-pointer items-center gap-3 text-sm text-slate-800">
-                            <input
-                              type="checkbox"
-                              className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
-                              checked={Boolean(labelData.requires_ce_mark)}
-                              onChange={(e) => setLabelData((d) => ({ ...d, requires_ce_mark: e.target.checked }))}
-                            />
-                            Wymaga znaku CE na etykiecie
-                          </label>
-                          <label className="flex cursor-pointer items-center gap-3 text-sm text-slate-800">
-                            <input
-                              type="checkbox"
-                              className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
-                              checked={Boolean(labelData.show_price_on_label)}
-                              onChange={(e) => setLabelData((d) => ({ ...d, show_price_on_label: e.target.checked }))}
-                            />
-                            Pokazuj cenę na etykiecie
-                          </label>
-                        </div>
-                      </section>
-
-                      <section>
-                        <h3 className="mb-5 text-lg font-bold text-slate-900 border-b border-slate-200 pb-2">E. Branżowe (tekstylia)</h3>
-                        <div className="space-y-5">
-                          <div>
-                            <label className={fieldLabel}>Skład materiałowy</label>
-                            <textarea
-                              className={`${inputClass} min-h-[72px] resize-y`}
-                              value={labelData.material_composition ?? ""}
-                              onChange={(e) => setLabelData((d) => ({ ...d, material_composition: e.target.value }))}
-                              placeholder="np. 100% bawełna"
-                            />
-                          </div>
-                          <div>
-                            <label className={fieldLabel}>Instrukcja pielęgnacji</label>
-                            <textarea
-                              className={`${inputClass} min-h-[72px] resize-y`}
-                              value={labelData.care_instructions ?? ""}
-                              onChange={(e) => setLabelData((d) => ({ ...d, care_instructions: e.target.value }))}
-                            />
-                          </div>
-                          <div>
-                            <label className={fieldLabel}>Rozmiar / długość</label>
-                            <input
-                              type="text"
-                              className={inputClass}
-                              value={labelData.size_or_length ?? ""}
-                              onChange={(e) => setLabelData((d) => ({ ...d, size_or_length: e.target.value }))}
-                            />
-                          </div>
-                        </div>
-                      </section>
-
-                      <section>
-                        <h3 className="mb-5 text-lg font-bold text-slate-900 border-b border-slate-200 pb-2">F. Pochodzenie</h3>
-                        <div>
-                          <label className={fieldLabel}>Kraj pochodzenia</label>
-                          <select
-                            className={inputClass}
-                            value={labelData.country_of_origin ?? ""}
-                            onChange={(e) => setLabelData((d) => ({ ...d, country_of_origin: e.target.value || undefined }))}
-                          >
-                            <option value="">— Brak —</option>
-                            {SUPPLIER_COUNTRIES.map((c) => (
-                              <option key={c.value} value={c.value}>{c.label}</option>
-                            ))}
-                          </select>
-                        </div>
-                      </section>
-                    </div>
-
-                    <aside className="min-h-0 lg:sticky lg:top-8 mt-10 lg:mt-0">
-                      <section>
-                        <h3 className="mb-5 text-lg font-bold text-slate-900 border-b border-slate-200 pb-2">Podgląd gotowej etykiety</h3>
-                        <p className="mb-5 text-sm text-slate-500">Symulacja wydruku (~60×40 mm). Puste sekcje są automatycznie ukrywane.</p>
-                        <div className="flex justify-center rounded bg-slate-50 border border-slate-200 px-4 py-8 shadow-inner overflow-hidden mb-24 sm:mb-32">
-                          <div className="origin-top scale-[1.35] shadow-md sm:scale-150 bg-white">
-                            <RetailLabel
-                              brandName={manufacturerReadonly.name || manufacturer.trim() || "—"}
-                              productNamePl={(labelData.product_name_pl ?? "").trim() || name.trim() || "—"}
-                              composition={labelData.material_composition}
-                              manufacturerName={manufacturerReadonly.name || undefined}
-                              manufacturerAddress={manufacturerReadonly.address || undefined}
-                              importerName={labelData.importer_name}
-                              importerAddress={labelData.importer_address}
-                              ean={ean.trim() || undefined}
-                              batchNumber={labelData.batch_number}
-                              seriesNumber={labelData.series_number}
-                              countryOfOrigin={labelData.country_of_origin}
-                              careInstructions={labelData.care_instructions}
-                              sizeOrLength={labelData.size_or_length}
-                              salePrice={salePrice === "" ? null : typeof salePrice === "number" ? salePrice : parseDecimal(String(salePrice)) ?? null}
-                              showPriceOnLabel={Boolean(labelData.show_price_on_label)}
-                              showCeMark={Boolean(labelData.requires_ce_mark)}
-                            />
-                          </div>
-                        </div>
-                      </section>
-                    </aside>
-                  </div>
-                  </div>
+                  <ProductEditLabelTab
+                    labelTemplateId={labelTemplateId}
+                    setLabelTemplateId={setLabelTemplateId}
+                    productTemplates={productTemplates}
+                    templatePreviewSvg={templatePreviewSvg}
+                    templatePreviewLoading={templatePreviewLoading}
+                    labelData={labelData}
+                    setLabelData={setLabelData}
+                    name={name}
+                    ean={ean}
+                    manufacturerId={manufacturerId}
+                    manufacturerReadonly={manufacturerReadonly}
+                    manufacturer={manufacturer}
+                    salePrice={salePrice}
+                    parseDecimal={parseDecimal}
+                  />
                 )}
 
       </ProductLikePageLayout>
