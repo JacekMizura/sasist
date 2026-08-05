@@ -106,6 +106,7 @@ from .db.schema_upgrade import (
     ensure_production_schema_evolution,
     ensure_bundles_tables_and_order_item_bundle_columns,
     ensure_manufacturers_table_and_product_manufacturer_id,
+    ensure_product_categories_schema,
     ensure_suppliers_and_inbound_deliveries_tables,
     ensure_deliveries_name_column,
     ensure_supplier_assortment_columns_and_product_default_supplier,
@@ -283,6 +284,10 @@ from .api.production import router as production_router
 from .api.production_planning import router as production_planning_router
 from .api.production_shortages import router as production_shortages_router
 from .api.manufacturer import router as manufacturer_router
+from .api.product_categories import (
+    product_assignment_router as product_category_assignment_router,
+    router as product_categories_router,
+)
 from .api.purchasing import router as purchasing_router
 from .api.supplier import router as supplier_router
 from .api.customers import router as customers_router
@@ -1051,6 +1056,10 @@ try:
 except Exception:
     logging.getLogger(__name__).exception("ensure_manufacturers_table_and_product_manufacturer_id failed at import")
 try:
+    ensure_product_categories_schema(engine)
+except Exception:
+    logging.getLogger(__name__).exception("ensure_product_categories_schema failed at import")
+try:
     ensure_suppliers_and_inbound_deliveries_tables(engine)
 except Exception:
     logging.getLogger(__name__).exception("ensure_suppliers_and_inbound_deliveries_tables failed at import")
@@ -1498,6 +1507,10 @@ def _upgrade_schema_background() -> None:
         return
     try:
         ensure_manufacturers_table_and_product_manufacturer_id(engine)
+    except Exception:
+        pass
+    try:
+        ensure_product_categories_schema(engine)
     except Exception:
         pass
     try:
@@ -2110,6 +2123,8 @@ _API_ROUTERS = (
     production_planning_router,
     production_shortages_router,
     manufacturer_router,
+    product_categories_router,
+    product_category_assignment_router,
     purchasing_router,
     supplier_router,
     customers_router,

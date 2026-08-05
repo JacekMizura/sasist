@@ -35,6 +35,7 @@ from .customer_analytics import CustomerProductStats, CustomerSalesStats  # noqa
 from .customer_crm import CustomerCrmEvent, CustomerNote  # noqa: F401
 from .gus_lookup_cache import GusLookupCache, GusNipCache  # noqa: F401
 from .product import Product
+from .product_category import ProductCategory, ProductCategoryLink  # noqa: F401 — before product FKs resolved at mapper
 from .product_barcode import ProductBarcode  # noqa: F401 — after Product
 from .product_sales_offer import ProductSalesOffer  # noqa: F401 — after Product
 from .offer_stock_pool import OfferStockPool, OfferStockPoolWarehouse  # noqa: F401

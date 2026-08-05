@@ -268,6 +268,8 @@ import PurchaseOrderNewPage from "./pages/Assortment/PurchaseOrderNewPage"
 import ProductsImportTabPage from "./pages/Products/ProductsImportTabPage"
 import ProductsImportHistoryTabPage from "./pages/Products/ProductsImportHistoryTabPage"
 import ProductCategoriesPage from "./pages/Products/ProductCategoriesPage"
+import AssortmentCategoriesPage from "./pages/Assortment/categories/ProductCategoriesPage"
+import SizeTablesPage from "./pages/Assortment/SizeTablesPage"
 import BdoLayout from "./pages/bdo/BdoLayout"
 import BdoDashboardPage from "./pages/bdo/BdoDashboardPage"
 import BdoMaterialsPage from "./pages/bdo/BdoMaterialsPage"
@@ -703,6 +705,8 @@ export const router = createBrowserRouter(
                 <Route path="bundles" element={<BundlesPage />} />
                 <Route path="bundles/new" element={<BundleNewPage />} />
                 <Route path="bundles/:id/edit" element={<BundleEditPage />} />
+                <Route path="categories" element={<AssortmentCategoriesPage />} />
+                <Route path="size-tables" element={<SizeTablesPage />} />
                 <Route
                   path="production"
                   element={

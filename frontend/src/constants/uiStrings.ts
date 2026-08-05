@@ -21,6 +21,9 @@ const UI_STRINGS_DEFAULTS = {
     bundles: "Zestawy",
     manufacturers: "Producenci",
     suppliers: "Dostawcy",
+    categories: "Kategorie",
+    sizeTables: "Tabele rozmiarów",
+    addCategory: "Dodaj kategorię",
     purchaseOrders: "Zamówienia do dostawców",
     /** Sidebar category: purchasing & replenishment module. */
     purchasingCategory: "Zakupy i planowanie",

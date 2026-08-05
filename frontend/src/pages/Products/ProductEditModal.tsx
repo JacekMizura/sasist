@@ -14,6 +14,7 @@ import {
   ClipboardList,
   Copy,
   Factory,
+  FolderTree,
   Image as ImageIcon,
   AlignLeft,
   LayoutList,
@@ -69,6 +70,7 @@ import { ProductEditWarehouseTab } from "./ProductEditWarehouseTab";
 import { ProductEditImagesTab } from "./ProductEditImagesTab";
 import { ProductEditLabelTab } from "./ProductEditLabelTab";
 import { ProductEditDescriptionTab } from "./ProductEditDescriptionTab";
+import { ProductEditCategoriesTab } from "./ProductEditCategoriesTab";
 import { ProductLabelPrintModal } from "./ProductLabelPrintModal";
 import ActivityLogPanel from "../../components/activityLog/ActivityLogPanel";
 
@@ -242,6 +244,7 @@ export type ProductEditTabId =
   | "images"
   | "prices"
   | "description"
+  | "categories"
   | "warehouse"
   | "warehouseOps"
   | "logistics"
@@ -1666,9 +1669,8 @@ export function ProductEditModal({
   }, [isNew, tenantId, product?.id]);
 
   const railTabOrder = useMemo((): TabId[] => {
-    // Podstawowe, Ceny, Opis, Zdjęcia, Oferty, Produkcja, Etykieta, Magazyn
     if (!isNew) {
-      return ["basic", "prices", "description", "images", "offers", "production", "labelSheet", "warehouse"];
+      return ["basic", "prices", "description", "images", "offers", "categories", "production", "labelSheet", "warehouse"];
     }
     return ["basic", "prices", "description", "images", "offers", "labelSheet", "warehouse"];
   }, [isNew]);
@@ -1677,11 +1679,11 @@ export function ProductEditModal({
     basic: "Podstawowe",
     prices: "Ceny",
     description: "Opis",
+    categories: "Kategorie",
     warehouse: "Magazyn",
     images: "Zdjęcia",
     offers: "Oferty",
     labelSheet: "Etykieta",
-    // Nieużywane w górnym menu, ale typ wymaga ich obecności:
     suppliers: "Dostawcy",
     warehouseOps: "Operacje magazynowe",
     logistics: "Logistyka",
@@ -1689,7 +1691,6 @@ export function ProductEditModal({
     production: "Produkcja",
   };
 
-  // Tego fragmentu zabrakło:
   const railIcon: Record<TabId, LucideIcon> = {
     basic: LayoutList,
     suppliers: Building2,
@@ -1697,6 +1698,7 @@ export function ProductEditModal({
     images: ImageIcon,
     prices: Tag,
     description: AlignLeft,
+    categories: FolderTree,
     warehouse: Warehouse,
     warehouseOps: ClipboardList,
     logistics: Truck,
@@ -2167,6 +2169,14 @@ export function ProductEditModal({
                       tenantId={tenantId}
                       warehouseId={warehouse?.id ?? null}
                     />
+                  )
+                )}
+
+                {activeTab === "categories" && (
+                  isNew || product?.id == null || tenantId == null ? (
+                    <p className="text-sm text-slate-500">Zapisz produkt, aby przypisać kategorie.</p>
+                  ) : (
+                    <ProductEditCategoriesTab productId={product.id} tenantId={tenantId} />
                   )
                 )}
 

@@ -2187,6 +2187,97 @@ def ensure_manufacturers_table_and_product_manufacturer_id(engine: Engine) -> No
         conn.commit()
 
 
+def ensure_product_categories_schema(engine: Engine) -> None:
+    """
+    Product category tree + product assignment (primary FK + additional links).
+
+    Extension columns are created empty for future SKU/catalog generators, labels,
+    VAT, manufacturer defaults, attributes, and marketplace mapping.
+    """
+    with engine.connect() as conn:
+        if not _table_exists(conn, "product_categories"):
+            conn.execute(
+                text(
+                    """
+                    CREATE TABLE product_categories (
+                        id INTEGER NOT NULL PRIMARY KEY,
+                        tenant_id INTEGER NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+                        parent_id INTEGER REFERENCES product_categories(id) ON DELETE RESTRICT,
+                        name VARCHAR(255) NOT NULL,
+                        description TEXT,
+                        is_active BOOLEAN NOT NULL DEFAULT true,
+                        sort_order INTEGER NOT NULL DEFAULT 0,
+                        sku_generator_json TEXT,
+                        catalog_number_generator_json TEXT,
+                        default_label_template_id INTEGER,
+                        default_vat_rate NUMERIC(8, 2),
+                        default_manufacturer_id INTEGER REFERENCES manufacturers(id) ON DELETE SET NULL,
+                        attributes_schema_json TEXT,
+                        marketplace_mapping_json TEXT,
+                        extensions_json TEXT,
+                        created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                        updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+                    )
+                    """
+                )
+            )
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_product_categories_tenant_id ON product_categories(tenant_id)"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_product_categories_parent_id ON product_categories(parent_id)"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_product_categories_sort ON product_categories(tenant_id, parent_id, sort_order)"))
+
+        cols = _table_column_names(conn, "product_categories") if _table_exists(conn, "product_categories") else set()
+        for col, ddl in (
+            ("sku_generator_json", "ALTER TABLE product_categories ADD COLUMN sku_generator_json TEXT"),
+            ("catalog_number_generator_json", "ALTER TABLE product_categories ADD COLUMN catalog_number_generator_json TEXT"),
+            ("default_label_template_id", "ALTER TABLE product_categories ADD COLUMN default_label_template_id INTEGER"),
+            ("default_vat_rate", "ALTER TABLE product_categories ADD COLUMN default_vat_rate NUMERIC(8, 2)"),
+            (
+                "default_manufacturer_id",
+                "ALTER TABLE product_categories ADD COLUMN default_manufacturer_id INTEGER REFERENCES manufacturers(id) ON DELETE SET NULL",
+            ),
+            ("attributes_schema_json", "ALTER TABLE product_categories ADD COLUMN attributes_schema_json TEXT"),
+            ("marketplace_mapping_json", "ALTER TABLE product_categories ADD COLUMN marketplace_mapping_json TEXT"),
+            ("extensions_json", "ALTER TABLE product_categories ADD COLUMN extensions_json TEXT"),
+            ("description", "ALTER TABLE product_categories ADD COLUMN description TEXT"),
+            ("is_active", "ALTER TABLE product_categories ADD COLUMN is_active BOOLEAN NOT NULL DEFAULT true"),
+            ("sort_order", "ALTER TABLE product_categories ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0"),
+        ):
+            if cols and col not in cols:
+                conn.execute(text(ddl))
+
+        if not _table_exists(conn, "product_category_links"):
+            conn.execute(
+                text(
+                    """
+                    CREATE TABLE product_category_links (
+                        id INTEGER NOT NULL PRIMARY KEY,
+                        tenant_id INTEGER NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+                        product_id INTEGER NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+                        category_id INTEGER NOT NULL REFERENCES product_categories(id) ON DELETE CASCADE,
+                        created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                        CONSTRAINT uq_product_category_link UNIQUE (product_id, category_id)
+                    )
+                    """
+                )
+            )
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_product_category_links_tenant_id ON product_category_links(tenant_id)"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_product_category_links_product_id ON product_category_links(product_id)"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_product_category_links_category_id ON product_category_links(category_id)"))
+
+        pcols = _table_column_names(conn, "products")
+        if "primary_category_id" not in pcols:
+            conn.execute(
+                text(
+                    "ALTER TABLE products ADD COLUMN primary_category_id INTEGER "
+                    "REFERENCES product_categories(id) ON DELETE SET NULL"
+                )
+            )
+            conn.execute(
+                text("CREATE INDEX IF NOT EXISTS ix_products_primary_category_id ON products(primary_category_id)")
+            )
+        conn.commit()
+
+
 def ensure_rmz_line_split_columns(engine: Engine) -> None:
     """Add split-quantity columns for RMZ line processing on existing DBs."""
     with engine.connect() as conn:

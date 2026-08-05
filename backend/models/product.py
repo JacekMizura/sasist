@@ -72,6 +72,13 @@ class Product(Base):
         index=True,
     )
     manufacturer_row = relationship("Manufacturer", back_populates="products", foreign_keys=[manufacturer_id])
+    primary_category_id = Column(
+        Integer,
+        ForeignKey("product_categories.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    primary_category = relationship("ProductCategory", foreign_keys=[primary_category_id])
     default_supplier_id = Column(
         Integer,
         ForeignKey("suppliers.id", ondelete="SET NULL"),

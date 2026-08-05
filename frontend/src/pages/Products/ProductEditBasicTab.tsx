@@ -259,12 +259,6 @@ export function ProductEditBasicTab({
                   ))}
                 </Select>
               </div>
-              <div>
-                <label className={labelClass}>Kategoria</label>
-                <Select density="comfortable" focusTone="brand" className="cursor-pointer bg-white text-gray-400" disabled>
-                  <option>Wybierz kategorię...</option>
-                </Select>
-              </div>
             </div>
 
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
