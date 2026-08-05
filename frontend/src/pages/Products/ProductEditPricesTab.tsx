@@ -65,6 +65,7 @@ export type ProductEditPricesTabProps = {
   formatDateTimePl: (v: string | null | undefined) => string;
 };
 
+/** Matches mock: `block text-sm font-medium text-gray-700 mb-1.5` */
 const labelClass = "mb-1.5 block text-sm font-medium text-gray-700";
 
 /**
@@ -154,25 +155,9 @@ export function ProductEditPricesTab({
   const filledDd = "whitespace-nowrap font-semibold text-gray-900";
 
   return (
-    <div className="w-full space-y-6">
-      <div
-        style={{
-          background: "#ff0000",
-          color: "white",
-          fontSize: 32,
-          padding: 20,
-          fontWeight: "bold",
-        }}
-      >
-        ==============================
-        <br />
-        TEST CENY TAB
-        <br />
-        ==============================
-      </div>
-    {/* mock: <div class="flex flex-col xl:flex-row gap-6 items-start"> */}
+    /* mock: <div class="flex flex-col xl:flex-row gap-6 items-start"> */
     <div className="flex flex-col items-start gap-6 xl:flex-row">
-      {/* KOLUMNA LEWA: w-full xl:w-2/3 xl:min-w-[700px] */}
+      {/* KOLUMNA LEWA: Formularze Edycji (Szersza) */}
       <div className="flex w-full flex-col gap-6 xl:w-2/3 xl:min-w-[700px]">
         {/* KARTA: Kalkulacja cenowa */}
         <section className="overflow-hidden rounded-xl border border-gray-200 bg-white">
@@ -274,7 +259,7 @@ export function ProductEditPricesTab({
         </section>
       </div>
 
-      {/* KOLUMNA PRAWA: w-full xl:w-1/3 */}
+      {/* KOLUMNA PRAWA: Dostawcy i Podsumowania (Węższa) */}
       <div className="flex w-full flex-col gap-6 xl:w-1/3">
         {/* KARTA: Dostawcy i ceny zakupu */}
         <section className="overflow-hidden rounded-xl border border-gray-200 bg-white">
@@ -304,7 +289,7 @@ export function ProductEditPricesTab({
                         <th className="pb-2 font-medium">Dostawca</th>
                         <th className="pb-2 font-medium">Cena netto</th>
                         <th className="pb-2 text-center font-medium">Domyślny</th>
-                        <th className="pb-2 text-right font-medium">Usuń</th>
+                        <th className="pb-2 text-right font-medium" />
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100">
@@ -396,7 +381,7 @@ export function ProductEditPricesTab({
           </div>
         </section>
 
-        {/* Ostatni zakup + Podsumowanie */}
+        {/* Ostatni zakup + Podsumowanie — mock: flex-col sm:flex-row xl:flex-col */}
         <div className="flex flex-col gap-6 sm:flex-row xl:flex-col">
           {/* KARTA: Ostatni zakup (z PZ) */}
           <section className="flex-1 overflow-hidden rounded-xl border border-gray-200 bg-white">
@@ -511,7 +496,6 @@ export function ProductEditPricesTab({
           </section>
         </div>
       </div>
-    </div>
     </div>
   );
 }

@@ -1,5 +1,11 @@
 ﻿## Active
 
+**Edycja produktu — Ceny: final DOM 1:1 z `ceny karta produktu.html` (2026-08-05).**
+
+- `ProductEditPricesTab`: usunięty baner TEST; układ 2/3+1/3 jak mock (Kalkulacja | Dostawcy + Ostatni zakup + Podsumowanie)
+- SASIST MoneyInput/Input/Textarea/Select/Button/Radio; logika/API bez zmian
+- Inne zakładki nadal mają banery TEST (Magazyn/Produkcja/Zdjęcia/Oferty/Etykieta)
+
 **Edycja produktu — Oferty: DOM 1:1 z `oferrty karta produktu.html` (2026-08-04).**
 
 - `ProductSalesOffersSection`: nagłówek Oferty + Dodaj integrację, karta z Zwiń/Rozwiń, tabela jak marketplace
