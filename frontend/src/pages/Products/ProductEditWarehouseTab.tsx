@@ -338,6 +338,7 @@ function WarehousesColumn({ productId, tenantId }: { productId: number; tenantId
 /**
  * Product edit — Magazyn tab.
  * DOM hierarchy is a structural 1:1 port of `magazyn karta produktu.html`.
+ * Full-width under tabs; page surface white via ProductLikePageLayout + ErpShell.
  */
 export function ProductEditWarehouseTab({
   isNew,
@@ -416,22 +417,8 @@ export function ProductEditWarehouseTab({
       : null;
 
   return (
-    <div className="mx-auto max-w-7xl space-y-12">
-      <div
-        style={{
-          background: "#ff0000",
-          color: "white",
-          fontSize: 32,
-          padding: 20,
-          fontWeight: "bold",
-        }}
-      >
-        ==============================
-        <br />
-        TEST MAGAZYN TAB
-        <br />
-        ==============================
-      </div>
+    /* mock: full-width body under tabs (no max-w-7xl — fills product page) */
+    <div className="w-full max-w-none space-y-12">
       {/* SEKCJA 1: Stan i lokalizacje */}
       <div>
         <div className="mb-8 flex items-center justify-between border-b border-gray-100 pb-4">
@@ -441,7 +428,6 @@ export function ProductEditWarehouseTab({
               type="button"
               density="compact"
               onClick={() => setStockCorrectionOpen(true)}
-              className="!rounded-lg !bg-orange-500 !px-4 !py-2 !text-sm !font-semibold shadow-sm hover:!bg-orange-600"
             >
               <ArrowLeftRight className="mr-2 h-4 w-4" strokeWidth={2} aria-hidden />
               Korekta stanu

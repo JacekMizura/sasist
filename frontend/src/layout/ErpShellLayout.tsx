@@ -18,6 +18,12 @@ function isWarehouseDesignerRoute(pathname: string): boolean {
   return pathname.startsWith("/designer") || pathname.startsWith("/warehouse-designer");
 }
 
+/** Product create/edit — full white surface (no slate-50 fragment under tabs). */
+function isProductEditRoute(pathname: string): boolean {
+  if (pathname === "/products/new") return true;
+  return /^\/products\/[^/]+\/edit\/?$/.test(pathname);
+}
+
 /**
  * Wspólny szkielet ERP: lewy sidebar + fly-out + top bar + treść.
  *
@@ -29,8 +35,11 @@ export default function ErpShellLayout({ children, headerMode }: ErpShellLayoutP
   const { pathname } = useLocation();
 
   const designerFill = isWarehouseDesignerRoute(pathname);
+  const productEditWhite = isProductEditRoute(pathname);
   const wmsSettingsShellScroll =
     headerMode === "settings" && (pathname === "/settings/wms" || pathname.startsWith("/settings/wms/"));
+
+  const mainSurface = productEditWhite ? "bg-white" : appLayoutTokens.appBackground;
 
   return (
     <ErpSidebarUiProvider>
@@ -40,13 +49,13 @@ export default function ErpShellLayout({ children, headerMode }: ErpShellLayoutP
         <div
           className={`relative z-0 flex min-h-0 min-w-0 flex-1 flex-col ${
             wmsSettingsShellScroll ? "overflow-y-auto [scrollbar-gutter:stable]" : ""
-          }`}
+          } ${productEditWhite ? "bg-white" : ""}`}
         >
           <header className="flex shrink-0 flex-col bg-white">
             <AppTopBar />
           </header>
           <main
-            className={`flex min-h-0 min-w-0 flex-1 flex-col ${appLayoutTokens.appBackground} ${
+            className={`flex min-h-0 min-w-0 flex-1 flex-col ${mainSurface} ${
               designerFill
                 ? "overflow-hidden"
                 : wmsSettingsShellScroll
