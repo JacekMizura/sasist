@@ -2306,6 +2306,121 @@ def ensure_product_categories_schema(engine: Engine) -> None:
         conn.commit()
 
 
+def ensure_product_variants_schema(engine: Engine) -> None:
+    """
+    Catalog variant groups (axes + values) and product parent/child SKU links.
+    """
+    with engine.connect() as conn:
+        if not _table_exists(conn, "variant_groups"):
+            conn.execute(
+                text(
+                    """
+                    CREATE TABLE variant_groups (
+                        id INTEGER NOT NULL PRIMARY KEY,
+                        tenant_id INTEGER NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+                        name VARCHAR(255) NOT NULL,
+                        is_active BOOLEAN NOT NULL DEFAULT true,
+                        created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                        updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+                    )
+                    """
+                )
+            )
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_variant_groups_tenant_id ON variant_groups(tenant_id)"))
+
+        if not _table_exists(conn, "variant_axes"):
+            conn.execute(
+                text(
+                    """
+                    CREATE TABLE variant_axes (
+                        id INTEGER NOT NULL PRIMARY KEY,
+                        tenant_id INTEGER NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+                        group_id INTEGER NOT NULL REFERENCES variant_groups(id) ON DELETE CASCADE,
+                        name VARCHAR(255) NOT NULL,
+                        sort_order INTEGER NOT NULL DEFAULT 0,
+                        display_type VARCHAR(32) NOT NULL DEFAULT 'text',
+                        show_in_filters BOOLEAN NOT NULL DEFAULT false,
+                        sort_alpha BOOLEAN NOT NULL DEFAULT false
+                    )
+                    """
+                )
+            )
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_variant_axes_tenant_id ON variant_axes(tenant_id)"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_variant_axes_group_id ON variant_axes(group_id)"))
+
+        if not _table_exists(conn, "variant_values"):
+            conn.execute(
+                text(
+                    """
+                    CREATE TABLE variant_values (
+                        id INTEGER NOT NULL PRIMARY KEY,
+                        tenant_id INTEGER NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+                        axis_id INTEGER NOT NULL REFERENCES variant_axes(id) ON DELETE CASCADE,
+                        name VARCHAR(255) NOT NULL,
+                        sort_order INTEGER NOT NULL DEFAULT 0,
+                        color_hex VARCHAR(16),
+                        image_url VARCHAR(1024)
+                    )
+                    """
+                )
+            )
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_variant_values_tenant_id ON variant_values(tenant_id)"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_variant_values_axis_id ON variant_values(axis_id)"))
+
+        if not _table_exists(conn, "product_variant_selections"):
+            conn.execute(
+                text(
+                    """
+                    CREATE TABLE product_variant_selections (
+                        id INTEGER NOT NULL PRIMARY KEY,
+                        tenant_id INTEGER NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+                        product_id INTEGER NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+                        variant_value_id INTEGER NOT NULL REFERENCES variant_values(id) ON DELETE CASCADE,
+                        created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                        CONSTRAINT uq_product_variant_selection UNIQUE (product_id, variant_value_id)
+                    )
+                    """
+                )
+            )
+            conn.execute(
+                text(
+                    "CREATE INDEX IF NOT EXISTS ix_product_variant_selections_tenant_id "
+                    "ON product_variant_selections(tenant_id)"
+                )
+            )
+            conn.execute(
+                text(
+                    "CREATE INDEX IF NOT EXISTS ix_product_variant_selections_product_id "
+                    "ON product_variant_selections(product_id)"
+                )
+            )
+            conn.execute(
+                text(
+                    "CREATE INDEX IF NOT EXISTS ix_product_variant_selections_value_id "
+                    "ON product_variant_selections(variant_value_id)"
+                )
+            )
+
+        pcols = _table_column_names(conn, "products")
+        if "variant_group_id" not in pcols:
+            conn.execute(
+                text(
+                    "ALTER TABLE products ADD COLUMN variant_group_id INTEGER "
+                    "REFERENCES variant_groups(id) ON DELETE SET NULL"
+                )
+            )
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_products_variant_group_id ON products(variant_group_id)"))
+        if "variant_parent_id" not in pcols:
+            conn.execute(
+                text(
+                    "ALTER TABLE products ADD COLUMN variant_parent_id INTEGER "
+                    "REFERENCES products(id) ON DELETE SET NULL"
+                )
+            )
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_products_variant_parent_id ON products(variant_parent_id)"))
+        conn.commit()
+
+
 def ensure_rmz_line_split_columns(engine: Engine) -> None:
     """Add split-quantity columns for RMZ line processing on existing DBs."""
     with engine.connect() as conn:

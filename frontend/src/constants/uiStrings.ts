@@ -23,7 +23,9 @@ const UI_STRINGS_DEFAULTS = {
     suppliers: "Dostawcy",
     categories: "Kategorie",
     sizeTables: "Tabele rozmiarów",
+    variants: "Warianty",
     addCategory: "Dodaj kategorię",
+    addVariantGroup: "Nowa grupa wariantów",
     purchaseOrders: "Zamówienia do dostawców",
     /** Sidebar category: purchasing & replenishment module. */
     purchasingCategory: "Zakupy i planowanie",

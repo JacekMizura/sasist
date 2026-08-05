@@ -1911,12 +1911,18 @@ def get_products(
         True,
         description="B1 — hide auto-provisioned shadow products for STOCK bundles from catalog list.",
     ),
+    exclude_variant_children: bool = Query(
+        True,
+        description="Hide generated variant SKUs (variant_parent_id set) from catalog list.",
+    ),
 ):
     """
     Lista produktów z filtrowaniem, sortowaniem (sort_by, sort_dir: asc|desc) i paginacją.
     tenant_id optional: when provided, only products for that tenant; when omitted, all products.
     """
     q = db.query(Product).filter(Product.deleted_at.is_(None))
+    if exclude_variant_children:
+        q = q.filter(Product.variant_parent_id.is_(None))
     if exclude_bundle_stock_shadows:
         q = q.filter(
             or_(

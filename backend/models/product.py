@@ -78,6 +78,20 @@ class Product(Base):
         nullable=True,
         index=True,
     )
+    #: Attached variant group template (parent / master product only).
+    variant_group_id = Column(
+        Integer,
+        ForeignKey("variant_groups.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    #: Parent product when this row is a generated variant SKU.
+    variant_parent_id = Column(
+        Integer,
+        ForeignKey("products.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
     primary_category = relationship("ProductCategory", foreign_keys=[primary_category_id])
     default_supplier_id = Column(
         Integer,

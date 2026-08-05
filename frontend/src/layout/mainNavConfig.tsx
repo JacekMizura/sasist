@@ -21,6 +21,7 @@ import {
   Truck,
   Layers,
   Ruler,
+  Shapes,
   Users,
   Key,
   Building2,
@@ -225,6 +226,13 @@ export function buildNavFlyoutCategories(): NavCategoryConfig[] {
             path: "/size-tables",
             label: UI_STRINGS.navigation.sizeTables,
             Icon: Ruler,
+          },
+          {
+            path: "/variants",
+            label: UI_STRINGS.navigation.variants,
+            Icon: Shapes,
+            plusLinkTo: "/variants/new",
+            plusLinkTitle: UI_STRINGS.navigation.addVariantGroup,
           },
           {
             path: "/manufacturers",

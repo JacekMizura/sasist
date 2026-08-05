@@ -107,6 +107,7 @@ from .db.schema_upgrade import (
     ensure_bundles_tables_and_order_item_bundle_columns,
     ensure_manufacturers_table_and_product_manufacturer_id,
     ensure_product_categories_schema,
+    ensure_product_variants_schema,
     ensure_suppliers_and_inbound_deliveries_tables,
     ensure_deliveries_name_column,
     ensure_supplier_assortment_columns_and_product_default_supplier,
@@ -287,6 +288,10 @@ from .api.manufacturer import router as manufacturer_router
 from .api.product_categories import (
     product_assignment_router as product_category_assignment_router,
     router as product_categories_router,
+)
+from .api.product_variants import (
+    product_variants_router,
+    router as variant_groups_router,
 )
 from .api.product_codes import router as product_codes_router
 from .api.purchasing import router as purchasing_router
@@ -1061,6 +1066,10 @@ try:
 except Exception:
     logging.getLogger(__name__).exception("ensure_product_categories_schema failed at import")
 try:
+    ensure_product_variants_schema(engine)
+except Exception:
+    logging.getLogger(__name__).exception("ensure_product_variants_schema failed at import")
+try:
     ensure_suppliers_and_inbound_deliveries_tables(engine)
 except Exception:
     logging.getLogger(__name__).exception("ensure_suppliers_and_inbound_deliveries_tables failed at import")
@@ -1512,6 +1521,10 @@ def _upgrade_schema_background() -> None:
         pass
     try:
         ensure_product_categories_schema(engine)
+    except Exception:
+        pass
+    try:
+        ensure_product_variants_schema(engine)
     except Exception:
         pass
     try:
@@ -2126,6 +2139,8 @@ _API_ROUTERS = (
     manufacturer_router,
     product_categories_router,
     product_category_assignment_router,
+    variant_groups_router,
+    product_variants_router,
     product_codes_router,
     purchasing_router,
     supplier_router,

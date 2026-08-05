@@ -270,6 +270,8 @@ import ProductsImportHistoryTabPage from "./pages/Products/ProductsImportHistory
 import ProductCategoriesPage from "./pages/Products/ProductCategoriesPage"
 import AssortmentCategoriesPage from "./pages/Assortment/categories/ProductCategoriesPage"
 import SizeTablesPage from "./pages/Assortment/SizeTablesPage"
+import VariantGroupsPage from "./pages/Assortment/variants/VariantGroupsPage"
+import VariantGroupEditPage from "./pages/Assortment/variants/VariantGroupEditPage"
 import BdoLayout from "./pages/bdo/BdoLayout"
 import BdoDashboardPage from "./pages/bdo/BdoDashboardPage"
 import BdoMaterialsPage from "./pages/bdo/BdoMaterialsPage"
@@ -707,6 +709,9 @@ export const router = createBrowserRouter(
                 <Route path="bundles/:id/edit" element={<BundleEditPage />} />
                 <Route path="categories" element={<AssortmentCategoriesPage />} />
                 <Route path="size-tables" element={<SizeTablesPage />} />
+                <Route path="variants" element={<VariantGroupsPage />} />
+                <Route path="variants/new" element={<VariantGroupEditPage />} />
+                <Route path="variants/:groupId/edit" element={<VariantGroupEditPage />} />
                 <Route
                   path="production"
                   element={
