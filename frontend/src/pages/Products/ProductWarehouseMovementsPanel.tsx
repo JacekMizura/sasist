@@ -55,13 +55,17 @@ function mapMovementTypeLabel(type: string | null | undefined): string {
     putaway_pw: "Rozlokowanie PW",
     production_rw: "Produkcja RW",
     production_pw: "Produkcja PW",
+    production: "Produkcja",
     picking: "Kompletacja",
     pick: "Kompletacja",
+    packing: "Pakowanie",
     move: "Przesunięcie",
     adjust: "Korekta",
     return: "Zwrot",
     manual_mm: "Ręczne przesunięcie",
     replenishment: "Uzupełnianie braków",
+    inventory: "Inwentaryzacja",
+    complaint: "Reklamacja",
   };
   return m[t] ?? (type ? type : "—");
 }
@@ -225,7 +229,7 @@ export function ProductWarehouseMovementsPanel({ productId, tenantId }: Props) {
               setPage(1);
             }}
           >
-            Operacje magazynowe
+            Operacje WMS
           </button>
           <button
             type="button"
@@ -267,7 +271,7 @@ export function ProductWarehouseMovementsPanel({ productId, tenantId }: Props) {
                 <th className="px-3 py-2.5 text-left font-semibold text-slate-700">Akcja</th>
                 <th className="px-3 py-2.5 text-left font-semibold text-slate-700">Dokument</th>
                 <th className="px-3 py-2.5 text-left font-semibold text-slate-700">Użytkownik</th>
-                <th className="px-3 py-2.5 text-left font-semibold text-slate-700">Lokalizacja</th>
+                <th className="px-3 py-2.5 text-left font-semibold text-slate-700">Lokalizacja (regał / półka)</th>
                 <th className="px-3 py-2.5 text-left font-semibold text-slate-700">Partia</th>
                 <th className="px-3 py-2.5 text-left font-semibold text-slate-700">Data ważności</th>
                 <th className="px-3 py-2.5 text-right font-semibold text-slate-700">Ilość przed</th>

@@ -11,7 +11,6 @@ import { PrimaryButton } from "../../design-system/PrimaryButton";
 import { getProductDetailsPath, productDetailsNavState } from "./productPaths";
 import {
   Building2,
-  ClipboardList,
   Copy,
   Factory,
   FolderTree,
@@ -22,6 +21,7 @@ import {
   MoreHorizontal,
   Printer,
   Shapes,
+  ScrollText,
   Tag,
   Truck,
   Warehouse,
@@ -75,6 +75,7 @@ import { ProductEditDescriptionTab } from "./ProductEditDescriptionTab";
 import { ProductEditCategoriesTab } from "./ProductEditCategoriesTab";
 import { ProductEditVariantsTab } from "./ProductEditVariantsTab";
 import { ProductAdditionalFieldsSection } from "./ProductAdditionalFieldsSection";
+import { ProductWarehouseMovementsPanel } from "./ProductWarehouseMovementsPanel";
 import { ProductLabelPrintModal } from "./ProductLabelPrintModal";
 import ActivityLogPanel from "../../components/activityLog/ActivityLogPanel";
 
@@ -1695,7 +1696,7 @@ export function ProductEditModal({
 
   const railTabOrder = useMemo((): TabId[] => {
     if (!isNew) {
-      return ["basic", "prices", "description", "images", "offers", "categories", "variants", "production", "labelSheet", "warehouse"];
+      return ["basic", "prices", "description", "images", "offers", "categories", "variants", "production", "labelSheet", "warehouse", "warehouseOps"];
     }
     return ["basic", "prices", "description", "images", "offers", "labelSheet", "warehouse"];
   }, [isNew]);
@@ -1711,7 +1712,7 @@ export function ProductEditModal({
     offers: "Oferty",
     labelSheet: "Etykieta",
     suppliers: "Dostawcy",
-    warehouseOps: "Operacje magazynowe",
+    warehouseOps: "Logi z WMS",
     logistics: "Logistyka",
     settings: "Ustawienia",
     production: "Produkcja",
@@ -1727,7 +1728,7 @@ export function ProductEditModal({
     categories: FolderTree,
     variants: Shapes,
     warehouse: Warehouse,
-    warehouseOps: ClipboardList,
+    warehouseOps: ScrollText,
     logistics: Truck,
     offers: Layers,
     settings: Wrench,
@@ -2193,6 +2194,14 @@ export function ProductEditModal({
                     setMaxReserveQuantity={setMaxReserveQuantity}
                     dimensionsComplete={productDimensions != null}
                   />
+                )}
+
+                {activeTab === "warehouseOps" && (
+                  isNew || product?.id == null || tenantId == null ? (
+                    <p className="text-sm text-slate-500">Zapisz produkt, aby zobaczyć logi z WMS.</p>
+                  ) : (
+                    <ProductWarehouseMovementsPanel productId={product.id} tenantId={tenantId} />
+                  )
                 )}
 
                 {activeTab === "images" && (
