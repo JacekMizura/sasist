@@ -325,7 +325,6 @@ export function CompositionVisualEditor({
           type="button"
           density="compact"
           onClick={openNew}
-          className="!rounded-lg !bg-orange-500 !px-4 !py-2 !text-sm !font-semibold shadow-sm hover:!bg-orange-600"
         >
           <Plus className="mr-2 h-4 w-4" strokeWidth={2.5} aria-hidden />
           {copy.addLabel}
@@ -611,7 +610,6 @@ export function CompositionVisualEditor({
               density="compact"
               disabled={saving}
               onClick={() => void handleSave()}
-              className="!rounded-lg !bg-orange-500 !px-5 !py-2 !text-sm !font-semibold shadow-sm hover:!bg-orange-600"
             >
               {saving ? "Zapisywanie…" : "Zapisz"}
             </PrimaryButton>
