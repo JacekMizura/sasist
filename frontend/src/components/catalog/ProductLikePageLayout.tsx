@@ -1,6 +1,7 @@
 import type { FormEvent, ReactNode } from "react";
 import type { LucideIcon } from "lucide-react";
 import { Save } from "lucide-react";
+import toast from "react-hot-toast";
 
 import { PrimaryButton } from "../../design-system/PrimaryButton";
 import {
@@ -91,6 +92,28 @@ export type ProductLikePageLayoutProps<T extends string = string> = {
   footerExtra?: ReactNode;
   trailing?: ReactNode;
 };
+
+function CopyableIdBadge({ label, value }: { label: string; value: string }) {
+  const trimmed = value.trim();
+  return (
+    <button
+      type="button"
+      title={trimmed ? `Kliknij, aby skopiować ${label}` : undefined}
+      disabled={!trimmed}
+      onClick={() => {
+        if (!trimmed) return;
+        void navigator.clipboard.writeText(trimmed).then(
+          () => toast.success(`${label} skopiowano`),
+          () => toast.error(`Nie udało się skopiować ${label}`),
+        );
+      }}
+      className="inline-flex items-center gap-1.5 rounded-md border border-slate-200 bg-slate-50 px-2.5 py-1 text-left transition-colors hover:border-slate-300 hover:bg-slate-100 disabled:cursor-default disabled:opacity-60"
+    >
+      <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">{label}</span>
+      <span className="font-mono text-xs font-medium text-slate-900">{trimmed || "—"}</span>
+    </button>
+  );
+}
 
 function ModernStat({ card, withDivider }: { card: ProductLikeStatCard; withDivider: boolean }) {
   const variant = card.variant ?? "slate";
@@ -300,19 +323,9 @@ export function ProductLikePageLayout<T extends string>({
                   <h1 className="mb-2 text-xl font-bold leading-tight tracking-tight text-slate-900 sm:text-2xl">
                     {title}
                   </h1>
-                  <div className="flex flex-wrap gap-4 text-sm text-slate-600">
-                    <div className="flex items-baseline">
-                      <span className="mr-1.5 text-xs font-medium uppercase tracking-wider text-slate-500">SKU:</span>
-                      <span className="font-mono font-medium text-slate-900">
-                        {(productIdentifiers?.sku ?? "").trim() || "—"}
-                      </span>
-                    </div>
-                    <div className="flex items-baseline">
-                      <span className="mr-1.5 text-xs font-medium uppercase tracking-wider text-slate-500">EAN:</span>
-                      <span className="font-mono font-medium text-slate-900">
-                        {(productIdentifiers?.ean ?? "").trim() || "—"}
-                      </span>
-                    </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <CopyableIdBadge label="EAN" value={productIdentifiers?.ean ?? ""} />
+                    <CopyableIdBadge label="SKU" value={productIdentifiers?.sku ?? ""} />
                   </div>
                 </>
               ) : (

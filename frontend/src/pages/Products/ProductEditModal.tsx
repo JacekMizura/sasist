@@ -3,6 +3,7 @@ import toast from "react-hot-toast";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import axios from "axios";
 import { duplicateProduct } from "../../api/productsApi";
+import { postProductsBulkDelete } from "../../api/productsBulkApi";
 import { extractApiErrorMessage } from "../../api/authApi";
 import { quickPurchaseOrderFromProduct } from "../../api/inboundDeliveriesApi";
 import { useActiveWarehouseContext, ACTIVE_WAREHOUSE_REQUIRED_MESSAGE } from "../../hooks/useActiveWarehouseContext";
@@ -68,7 +69,7 @@ import { ProductEditWarehouseTab } from "./ProductEditWarehouseTab";
 import { ProductEditImagesTab } from "./ProductEditImagesTab";
 import { ProductEditLabelTab } from "./ProductEditLabelTab";
 import { ProductEditDescriptionTab } from "./ProductEditDescriptionTab";
-import { useDocumentTemplatePrint } from "../../hooks/useDocumentTemplatePrint";
+import { ProductLabelPrintModal } from "./ProductLabelPrintModal";
 
 export type ProductForm = {
   id?: number;
@@ -402,10 +403,8 @@ export function ProductEditModal({
 
   const [tenantId, setTenantId] = useState<number | null>(product?.tenant_id ?? null);
   const effectiveTenantId = tenantId ?? product?.tenant_id ?? 1;
-  const { requestPrint: requestProductCardPrint, pickerModal: productCardPickerModal, printBusy } =
-    useDocumentTemplatePrint({
-      tenantId: effectiveTenantId,
-    });
+  const [headerLabelPrintOpen, setHeaderLabelPrintOpen] = useState(false);
+  const [deleteBusy, setDeleteBusy] = useState(false);
   const [name, setName] = useState(product?.name ?? "");
   const [ean, setEan] = useState(product?.ean ?? "");
   const [extraEans, setExtraEans] = useState<string[]>(() =>
@@ -1829,10 +1828,9 @@ export function ProductEditModal({
             {!isNew && product?.id != null ? (
               <button
                 type="button"
-                title="Drukuj kartę produktu"
-                disabled={printBusy}
-                onClick={() => void requestProductCardPrint({ kind: "product_card", productId: product.id! })}
-                className="hidden items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm transition-colors hover:bg-slate-50 disabled:opacity-50 sm:flex"
+                title="Drukuj etykietę produktu"
+                onClick={() => setHeaderLabelPrintOpen(true)}
+                className="hidden items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm transition-colors hover:bg-slate-50 sm:flex"
               >
                 <Printer className="h-4 w-4 text-slate-500" strokeWidth={2} aria-hidden />
                 Drukuj
@@ -1890,6 +1888,47 @@ export function ProductEditModal({
                   <Link to={backListTo} className="block px-4 py-2 font-medium text-slate-700 hover:bg-slate-50 hover:text-blue-600">
                     {returnToRaw?.trim() ? "Wróć" : "Wróć do listy"}
                   </Link>
+                  {!isNew && product?.id != null && tenantId != null ? (
+                    <button
+                      type="button"
+                      disabled={deleteBusy}
+                      onClick={() => {
+                        if (
+                          !window.confirm(
+                            "Usunąć ten produkt? Powiązane z historią zostaną zarchiwizowane, pozostałe usunięte trwale.",
+                          )
+                        ) {
+                          return;
+                        }
+                        void (async () => {
+                          setDeleteBusy(true);
+                          try {
+                            const summary = await postProductsBulkDelete({
+                              tenant_id: tenantId,
+                              selection: { mode: "explicit_ids", ids: [product.id!] },
+                            });
+                            if (summary.errors?.length) {
+                              toast.error(summary.errors.join("; "));
+                              return;
+                            }
+                            toast.success(
+                              summary.soft_deleted_count
+                                ? "Produkt zarchiwizowany."
+                                : "Produkt usunięty.",
+                            );
+                            navigate(backListTo);
+                          } catch (e: unknown) {
+                            toast.error(extractApiErrorMessage(e, "Nie udało się usunąć produktu."));
+                          } finally {
+                            setDeleteBusy(false);
+                          }
+                        })();
+                      }}
+                      className="block w-full px-4 py-2 text-left font-medium text-red-600 hover:bg-red-50 disabled:opacity-50"
+                    >
+                      {deleteBusy ? "Usuwanie…" : "Usuń produkt"}
+                    </button>
+                  ) : null}
                 </div>
               </details>
             </div>
@@ -2152,7 +2191,18 @@ export function ProductEditModal({
         onClose={() => setTraceEditRow(null)}
         onSaved={() => setTraceEditRow(null)}
       />
-      {productCardPickerModal}
+      {headerLabelPrintOpen && product?.id != null ? (
+        <ProductLabelPrintModal
+          product={{
+            id: product.id,
+            tenant_id: tenantId ?? product.tenant_id ?? undefined,
+            label_template_id: labelTemplateId,
+          }}
+          eanOverride={ean.trim() || null}
+          title="Drukuj etykietę — produkt"
+          onClose={() => setHeaderLabelPrintOpen(false)}
+        />
+      ) : null}
     </>
   );
 

@@ -1,5 +1,4 @@
 import { useState, type ReactNode } from "react";
-import { Link } from "react-router-dom";
 import { Barcode, Box, FileText, Plus, Printer, Sparkles, X } from "lucide-react";
 import toast from "react-hot-toast";
 
@@ -224,10 +223,7 @@ export function ProductEditBasicTab({
     <div className="grid grid-cols-1 items-start gap-8 lg:grid-cols-12">
       {/* LEFT lg:col-span-7 */}
       <div className="space-y-6 lg:col-span-7">
-        {/* Informacje ogólne */}
         <section className="border-b border-gray-100 pb-6">
-          <h2 className="mb-4 text-base font-bold text-gray-900">Informacje ogólne</h2>
-
           <div className="space-y-4">
             <div>
               <label className={labelClass}>
@@ -302,7 +298,7 @@ export function ProductEditBasicTab({
 
             <div>
               <div className="mb-1 flex items-center justify-between">
-                <label className={`${labelClass} mb-0`}>Kod kreskowy (EAN/GTIN)</label>
+                <label className={`${labelClass} mb-0`}>Kod kreskowy</label>
                 <button
                   type="button"
                   className="flex items-center gap-1 text-xs font-medium text-orange-600 hover:text-orange-700"
@@ -492,7 +488,7 @@ export function ProductEditBasicTab({
           <div className="space-y-4 rounded-lg border border-orange-100 bg-orange-50/20 p-4">
             <div className="flex items-center gap-2 text-sm font-semibold text-gray-900">
               <Box className="h-4 w-4 text-orange-500" strokeWidth={2} aria-hidden />
-              Opakowanie zbiorcze (Karton)
+              Opakowanie zbiorcze
             </div>
 
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -629,15 +625,13 @@ export function ProductEditBasicTab({
 
       {/* RIGHT lg:col-span-5 */}
       <div className="space-y-6 lg:col-span-5">
-        {/* Szablon wydruku */}
         <section className="space-y-3 rounded-lg border border-gray-200 bg-white p-4">
           <h2 className="flex items-center gap-2 text-sm font-bold text-gray-900">
             <FileText className="h-4 w-4 text-gray-400" strokeWidth={2} aria-hidden />
             Szablon wydruku dokumentu
           </h2>
-          <p className="text-xs text-gray-500">Domyślny układ karty dla tego konkretnego SKU.</p>
 
-          <div className="pt-2">
+          <div>
             <span className="mb-1 block text-xs font-medium text-gray-700">Szablon dokumentu</span>
             {!isNew && productId != null ? (
               <>
@@ -669,9 +663,6 @@ export function ProductEditBasicTab({
                     kinds={[{ kindCode: "product_card", label: "Karta produktu" }]}
                   />
                 </div>
-                <span className="mt-1 block text-[10px] text-gray-400">
-                  Brak wyboru – użyty zostanie standardowy binding typu dokumentu.
-                </span>
               </>
             ) : (
               <p className="text-xs text-gray-500">Zapisz produkt, aby przypisać szablon.</p>
@@ -679,17 +670,17 @@ export function ProductEditBasicTab({
           </div>
         </section>
 
-        {/* Producent */}
         <section className="space-y-3 rounded-lg border border-gray-200 bg-white p-4">
           <h2 className="text-sm font-bold text-gray-900">Producent</h2>
           <div>
-            <label className={`${labelClass} text-xs`}>Producent z katalogu</label>
+            <label className={`${labelClass} text-xs`}>Producent</label>
             <Select
               value={manufacturerId != null ? String(manufacturerId) : ""}
               onChange={(e) => {
                 const v = e.target.value;
                 if (!v) {
                   setManufacturerId(null);
+                  setManufacturer("");
                   return;
                 }
                 const id = Number(v);
@@ -708,24 +699,6 @@ export function ProductEditBasicTab({
                 </option>
               ))}
             </Select>
-          </div>
-          <div>
-            <label className={`${labelClass} text-xs`}>Nazwa producenta (ręczna)</label>
-            <Input
-              type="text"
-              value={manufacturer}
-              onChange={(e) => {
-                const t = e.target.value;
-                setManufacturer(t);
-                if (manufacturerId != null) {
-                  const row = manufacturersCatalog.find((x) => x.id === manufacturerId);
-                  if (row && t.trim() !== (row.name || "").trim()) setManufacturerId(null);
-                }
-              }}
-              density="compact"
-              focusTone="brand"
-              className="text-xs"
-            />
           </div>
         </section>
 
@@ -766,13 +739,6 @@ export function ProductEditBasicTab({
               Reguły specjalne
             </span>
           </div>
-          <p className="text-xs leading-relaxed text-gray-500">
-            Wymagane globalne konfiguracje w{" "}
-            <Link to="/settings/wms" className="font-semibold text-gray-700 underline hover:text-gray-900">
-              Ustawienia → WMS → Przyjęcia → Walidacja produktów
-            </Link>
-            . Tutaj możesz wyłączyć wybrane reguły tylko dla tego SKU.
-          </p>
 
           {!g ? (
             <p className="text-xs text-gray-500">Wczytywanie ustawień globalnych…</p>
