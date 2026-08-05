@@ -1,111 +1,16 @@
 ﻿## Active
 
-**Edycja produktu — Podstawowe: multi-EAN + Drukuj + bez Metryczne/Imperialne (2026-08-05).**
+**Przekształć produkt ↔ zestaw (2026-08-05).**
 
-- Wiele EAN: główny + lista `extra_barcodes` (API sync w `product.py`); UI „+ Dodaj kolejny EAN” / usuń
-- Przycisk **Drukuj** obok każdego EAN produktu i EAN kartonu → `ProductLabelPrintModal` z `ean_override`
-- Usunięty przełącznik Metryczne/Imperialne (zawsze cm/kg/dm³)
-- Druk wymaga zapisanego produktu i niepustego kodu
+- BE: `assortment_convert_service` + `POST /products/{id}/convert-to-bundle`, `POST /bundles/{id}/convert-to-product`
+- Soft-delete źródła; EAN przenoszony; BOM nie jest wymyślany (pusty zestaw)
+- FE: ikona Shapes w nagłówku karty — „Przekształć w zestaw” / „Przekształć w produkt”
 
-**Edycja produktu — Etykieta: wspólny renderLabel + placeholdery (2026-08-05).**
+**SKU / numer katalogowy z kategorii (2026-08-05).**
 
-- Oba podglądy: `renderLabel` (Label System) — bez RetailLabel / bez SVG z API preview
-- Szablon = placeholdery `{{NAZWA}}`/`{{EAN}}`…; gotowa = dane produktu
-- Chrome: białe tło, wycentrowane, `shadow-md` (bez gray-100)
+- Centralny serwis `product_codes` + liczniki `product_code_sequences` (osobno na szablon/prefiks)
+- Kategorie: `sku_code`, `catalog_code`, `sku_template`, `catalog_template` (domyślnie `{CODE}-{NNNNN}`)
+- API: `POST /product-codes/preview` + `/allocate` (nie zapisuje produktu)
+- Podstawowe: Generuj ⚡ z podglądem; reguły: kategoria wymagana, szablon wymagany, confirm przy nadpisaniu
 
-**Edycja produktu — Historia czynności na Podstawowe jak zamówienie (2026-08-05).**
-
-- `ActivityLogPanel` full-width pod gridem (border-t, collapsible) — ten sam komponent co karta zamówienia, `objectType=product`
-- BE: `record_product_card_activity` przy create/update produktu → `activity_events` + link product
-
-**Edycja produktu — Opis: nowa zakładka + kolejność tabów (2026-08-05).**
-
-- `ProductEditDescriptionTab`: 1:1 z `edycja_produktu_nowy_widok.html` (tagi, krótki/długi opis, nr seryjny, uniwersalny, parametry, atrybuty, log)
-- Persist: `metadata_json.tags` + `metadata_json.product_description`
-- Kolejność: Podstawowe → Ceny → Opis → Zdjęcia → Oferty → Produkcja → Etykieta → Magazyn
-
-**Edycja produktu — Etykieta: full-width 1:1 z HTML (2026-08-05).**
-
-- `ProductEditLabelTab`: bez banera TEST; `w-full` 2/3+1/3 (formularz A–F + szablon | sticky preview `RetailLabel`)
-- Wyciągnięte z `ProductEditModal`; logika/API etykiet bez zmian
-
-**Edycja produktu — Oferty: full-width 1:1 z HTML (2026-08-05).**
-
-- `ProductSalesOffersSection`: bez banera TEST; `w-full` (bez max-w / gray-50/30)
-- Chrome marketplace + tabela ofert sprzedażowych SSOT; API bez zmian
-
-**Edycja produktu — Zdjęcia: full-width 1:1 z HTML (2026-08-05).**
-
-- `ProductEditImagesTab`: bez banera TEST; `w-full`; Galeria + Dodaj URL / Wgraj + rekordy
-- PrimaryButton Sasist na „Dodaj URL”; logika galerii bez zmian
-
-**Edycja produktu — Produkcja: full-width 1:1 z HTML (2026-08-05).**
-
-- `ProductManufacturingPanel`: bez banera TEST; `w-full` (bez max-w-7xl); grid 2+1 jak mock
-- `CompositionVisualEditor`: PrimaryButton Sasist (Utwórz / Zapisz)
-- Białe tło strony z ErpShell product-edit
-
-**Edycja produktu — Magazyn: final DOM 1:1 + białe tło strony (2026-08-05).**
-
-- `ProductEditWarehouseTab`: bez banera TEST; `w-full` (bez max-w-7xl); Korekta = PrimaryButton
-- `ErpShellLayout`: `/products/.../edit` i `/products/new` → `bg-white` na main (bez slate-50)
-- Logika/API bez zmian
-
-**Edycja produktu — Ceny: final DOM 1:1 z `ceny karta produktu.html` (2026-08-05).**
-
-- `ProductEditPricesTab`: usunięty baner TEST; układ 2/3+1/3 jak mock (Kalkulacja | Dostawcy + Ostatni zakup + Podsumowanie)
-- SASIST MoneyInput/Input/Textarea/Select/Button/Radio; logika/API bez zmian
-- Inne zakładki nadal mają banery TEST (Magazyn/Produkcja/Zdjęcia/Oferty/Etykieta)
-
-**Edycja produktu — Oferty: DOM 1:1 z `oferrty karta produktu.html` (2026-08-04).**
-
-- `ProductSalesOffersSection`: nagłówek Oferty + Dodaj integrację, karta z Zwiń/Rozwiń, tabela jak marketplace
-- Kolumny/API ofert sprzedażowych bez zmian; SASIST Button/Input/Select/Badge
-
-**Edycja produktu — Zdjęcia: DOM 1:1 z `zdjecia karta produktu.html` (2026-08-04).**
-
-- `ProductEditImagesTab`: Galeria, dodawanie URL/plik, rekordy miniatur+akcje jak mock
-- SASIST Input/Button/Radio; upload / main / order / delete bez zmian logiki
-
-**Edycja produktu — Produkcja: DOM 1:1 z `produkcja karta produktu.html` (2026-08-04).**
-
-- `ProductManufacturingPanel` + `CompositionVisualEditor`: banner, 2+1 grid, składniki bez DataTable, BOM, sidebar
-- SASIST Input/Checkbox/Button/Badge; logika receptur/API bez zmian
-
-**Edycja produktu — Magazyn: DOM 1:1 z `magazyn karta produktu.html` (2026-08-04).**
-
-- `ProductEditWarehouseTab`: Stan i lokalizacje (grid 4) + Parametry logistyczne (2+1)
-- Kafle lokalizacji z pojemnością API; magazyny z breakdown; SASIST Input/Select/Checkbox/Button
-- Wire w `ProductEditModal` (tylko body taba); logika/API bez zmian
-
-**Edycja produktu — Ceny: DOM 1:1 z `ceny karta produktu.html` (2026-08-04).**
-
-- `ProductEditPricesTab` only: 2/3+1/3, HTML table dostawców, podsumowanie z szarym footerem
-- SASIST MoneyInput/Input/Textarea/Select/SecondaryButton/GhostButton/Radio; bez DataTable/MetricCard
-- Logika marży / dostawców / API bez zmian
-
-**Edycja produktu — Podstawowe v2: DOM 1:1 z HTML (2026-08-04).**
-
-- Spec: `Downloads/podstawowy karta produckut v2.html`
-- `ProductEditBasicTab` only: grid 7/5, flat left sections, orange carton card
-- Producent + GPSR osobno; walidacja grupowana Produkt/Partie/Opakowanie
-- Szablon: search dopiero po „Szukaj po nazwie…”; historia = `ActivityLogPanel` jak Orders
-- Gabaryty jednostkowe (nie „Opakowanie”); logika/API bez zmian
-
-**Edycja produktu — Ceny: DOM 1:1 z mock HTML (2026-08-04).**
-
-- `ProductEditPricesTab` = hierarchia section/div jak w mocku (bez ProductLikeSection / DataTable / własnego layoutu)
-- MoneyInput/Input tylko w slotach inputów; handlery bez zmian
-- Uwaga: parent `ProductLikePageLayout` + `PageContainer` nadal dodają gutter/padding wokół taba
-
-**Edycja produktu — redesign UX jak HTML (2026-08-04).**
-
-- FE only: ProductLikePageLayout hero/stats/tabs + basic tab 65/35 Cards
-- Historia = `ActivityLogPanel` (jak Zamówienia), nie mock HTML
-- Backend / API / formularze / hooki — bez zmian
-
-**Pulpit: TabsNav zamiast accordionów (2026-08-04).**
-
-- Zakładki: Decyzja · Alerty · Operatorzy · Kolejki · Dostawy · Historia
-- Domyślna: Decyzja (`/zarzadzanie-magazynem/pulpit`)
-- Backend / API / logika Centrum — bez zmian
+**Moduł Kategorie produktów (2026-08-05).**

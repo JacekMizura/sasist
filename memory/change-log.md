@@ -1,3 +1,37 @@
+## 2026-08-05 — Przekształć produkt ↔ zestaw (jak Sellasist)
+
+- BE: `assortment_convert_service` — soft-delete źródła, przeniesienie EAN/cen/wymiarów; pusty BOM przy product→bundle
+- API: `POST /products/{id}/convert-to-bundle`, `POST /bundles/{id}/convert-to-product`
+- FE: przycisk Shapes w nagłówku karty produktu/zestawu + confirm + nawigacja do nowej karty
+
+## 2026-08-05 — Centralne generowanie SKU / numeru katalogowego
+
+- Kategorie: kod + szablon SKU/katalog; liczniki per `sequence_key`
+- API preview/allocate; UI Generuj na Podstawowe z podglądem i regułami UX
+- Silnik szablonów gotowy pod przyszłe tokeny ({YEAR}, {MANUFACTURER}, …)
+
+## 2026-08-05 — Moduł Kategorie produktów (od zera)
+
+- BE: `product_categories` tree + `product_category_links` + `primary_category_id`; API `/product-categories` + assignment
+- FE: Asortyment `/categories` (drzewo + CRUD), `/size-tables` placeholder, zakładka Kategorie na karcie produktu
+- Model gotowy pod przyszłe generatory SKU/katalog, VAT, etykiety, atrybuty, marketplace
+
+## 2026-08-05 — Zdjęcia: zawsze białe tło + Oferty jak Sellasist
+
+- Galeria / nagłówek / miniatury: `bg-white` pod zdjęciem produktu (zakaz szarego tła)
+- Oferty: chrome Sellasist (sekcje kanałów + tabela ID/Konto/Nazwa/Stan/Cena/Status)
+
+## 2026-08-05 — Edycja produktu: Generuj kody + cleanup tabów + wspólna Historia
+
+- Generuj: dodatkowy EAN, Symbol, Numer katalogowy; persist `catalog_number`
+- Historia czynności: wspólny panel pod każdą zakładką (`objectType=product`)
+- Produkcja/Magazyn: usunięte zbędne teksty techniczne / angielskie dopiski
+
+## 2026-08-05 — Etykieta: przywróć RetailLabel + spolszczone pola w podglądzie szablonu
+
+- Gotowa etykieta: z powrotem `RetailLabel` (finalny wydruk produktu)
+- Podgląd szablonu: ten sam układ, wartości = polskie nazwy pól (bez `{{}}` i bez tekstów technicznych)
+
 ## 2026-08-05 — Edycja produktu: multi-EAN + Drukuj (Podstawowe)
 
 - UI: wiele EAN (+ Dodaj / Usuń), Drukuj przy EAN produktu i EAN kartonu, bez Metryczne/Imperialne

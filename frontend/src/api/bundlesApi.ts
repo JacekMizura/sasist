@@ -194,6 +194,26 @@ export async function deleteBundle(tenantId: number, bundleId: number): Promise<
   return res.data;
 }
 
+export type ConvertBundleToProductResult = {
+  id: number;
+  tenant_id: number;
+  name: string;
+  sku?: string | null;
+  ean?: string | null;
+};
+
+export async function convertBundleToProduct(
+  tenantId: number,
+  bundleId: number,
+): Promise<ConvertBundleToProductResult> {
+  const res = await api.post<ConvertBundleToProductResult>(
+    `/bundles/${bundleId}/convert-to-product`,
+    {},
+    { params: { tenant_id: tenantId } },
+  );
+  return res.data;
+}
+
 export async function postBundlesBulkDelete(body: {
   tenant_id: number;
   ids: number[];

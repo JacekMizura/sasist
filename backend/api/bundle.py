@@ -548,6 +548,37 @@ def update_bundle(
     return _serialize_bundle(db, b, stock_map)
 
 
+@router.post("/{bundle_id}/convert-to-product", status_code=201)
+def convert_bundle_to_product_endpoint(
+    bundle_id: int,
+    tenant_id: int = Query(..., ge=1),
+    db: Session = Depends(get_db),
+):
+    """
+    Przekształć zestaw w produkt: kopiuje dane handlowe (lub przywraca linked product),
+    archiwizuje zestaw.
+    """
+    from ..services.assortment_convert_service import AssortmentConvertError, convert_bundle_to_product
+
+    try:
+        product = convert_bundle_to_product(db, tenant_id, bundle_id)
+        db.commit()
+        db.refresh(product)
+    except AssortmentConvertError as e:
+        db.rollback()
+        raise HTTPException(status_code=400, detail={"message": e.message, "code": e.code}) from e
+    except Exception:
+        db.rollback()
+        raise
+    return {
+        "id": int(product.id),
+        "tenant_id": int(product.tenant_id),
+        "name": product.name,
+        "sku": getattr(product, "sku", None) or product.symbol,
+        "ean": product.ean,
+    }
+
+
 @router.delete("/{bundle_id}", response_model=EntityBulkDeleteResult)
 def delete_bundle(
     bundle_id: int,

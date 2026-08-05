@@ -1,13 +1,17 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { History, ImageUp, Link2, MoreHorizontal, ScrollText, TrendingUp } from "lucide-react";
+import toast from "react-hot-toast";
+import { History, ImageUp, Link2, MoreHorizontal, ScrollText, Shapes, TrendingUp } from "lucide-react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 
 import {
+  convertBundleToProduct,
   createBundle,
   getBundle,
   updateBundle,
   type BundleRead,
 } from "../../api/bundlesApi";
+import { extractApiErrorMessage } from "../../api/authApi";
+import { getProductDetailsPath, productDetailsNavState } from "../Products/productPaths";
 import api from "../../api/axios";
 import {
   CatalogEntityGallerySection,
@@ -143,6 +147,7 @@ export function BundleEditModal({
 
   const [activeTab, setActiveTab] = useState<BundleEditTabId>(initialTab ?? tabFromUrl ?? "basic");
   const [saving, setSaving] = useState(false);
+  const [convertBusy, setConvertBusy] = useState(false);
   const [loadErr, setLoadErr] = useState<string | null>(null);
   const [saveErr, setSaveErr] = useState<string | null>(null);
 
@@ -621,6 +626,45 @@ export function BundleEditModal({
       >
         <ImageUp className="h-4 w-4" strokeWidth={2} aria-hidden />
       </button>
+      {!isNew && bundleId != null ? (
+        <button
+          type="button"
+          title="Przekształć w produkt"
+          disabled={convertBusy || saving}
+          onClick={() => {
+            if (
+              !window.confirm(
+                "Przekształcić zestaw w produkt?\n\nZestaw zostanie zarchiwizowany. Dane handlowe przeniosą się do produktu (przy trybie magazynowym — do powiązanego produktu magazynowego).",
+              )
+            ) {
+              return;
+            }
+            void (async () => {
+              setConvertBusy(true);
+              try {
+                const created = await convertBundleToProduct(tenantId, bundleId);
+                const newId = Number(created?.id);
+                if (!Number.isFinite(newId) || newId < 1) {
+                  toast.error("Przekształcenie mogło się udać, ale API nie zwróciło ID produktu.");
+                  return;
+                }
+                toast.success(`Utworzono produkt: ${created.name ?? "produkt"}`);
+                navigate(getProductDetailsPath(newId), {
+                  state: productDetailsNavState({ tenantId }),
+                });
+              } catch (e: unknown) {
+                toast.error(extractApiErrorMessage(e, "Przekształcenie w produkt nie powiodło się."));
+              } finally {
+                setConvertBusy(false);
+              }
+            })();
+          }}
+          className="flex items-center justify-center rounded border border-slate-300 bg-white p-2 text-slate-600 shadow-sm transition-colors hover:bg-slate-50 hover:text-slate-900 disabled:opacity-50"
+        >
+          <Shapes className="h-4 w-4" strokeWidth={2} aria-hidden />
+          <span className="sr-only">Przekształć w produkt</span>
+        </button>
+      ) : null}
       <details className="relative">
         <summary className="flex list-none cursor-pointer items-center justify-center rounded border border-slate-300 bg-white p-2 text-slate-600 shadow-sm transition-colors marker:content-none hover:bg-slate-50 hover:text-slate-900 [&::-webkit-details-marker]:hidden">
           <MoreHorizontal className="h-4 w-4" strokeWidth={2} aria-hidden />

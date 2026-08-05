@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import toast from "react-hot-toast";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import axios from "axios";
-import { duplicateProduct } from "../../api/productsApi";
+import { convertProductToBundle, duplicateProduct } from "../../api/productsApi";
 import { postProductsBulkDelete } from "../../api/productsBulkApi";
 import { extractApiErrorMessage } from "../../api/authApi";
 import { quickPurchaseOrderFromProduct } from "../../api/inboundDeliveriesApi";
@@ -21,6 +21,7 @@ import {
   Layers,
   MoreHorizontal,
   Printer,
+  Shapes,
   Tag,
   Truck,
   Warehouse,
@@ -396,6 +397,7 @@ export function ProductEditModal({
   const isPage = variant === "page";
   const isNew = product == null;
   const [dupBusy, setDupBusy] = useState(false);
+  const [convertBusy, setConvertBusy] = useState(false);
   const [orderBusy, setOrderBusy] = useState(false);
   const { warehouse } = useWarehouse();
   const returnToRaw = (location.state as { returnTo?: string } | null)?.returnTo;
@@ -1867,11 +1869,49 @@ export function ProductEditModal({
               </button>
             ) : null}
             {isPage ? <div className="mx-1 hidden h-6 w-px bg-slate-300 md:block" aria-hidden /> : null}
+            {!isNew && product?.id != null && tenantId != null ? (
+              <button
+                type="button"
+                title="Przekształć w zestaw"
+                disabled={convertBusy || dupBusy}
+                onClick={() => {
+                  if (
+                    !window.confirm(
+                      "Przekształcić produkt w zestaw?\n\nProdukt zostanie zarchiwizowany. Dane handlowe (nazwa, EAN, cena, wymiary) przeniosą się do nowego zestawu. Składniki uzupełnisz na karcie zestawu.",
+                    )
+                  ) {
+                    return;
+                  }
+                  void (async () => {
+                    setConvertBusy(true);
+                    try {
+                      const created = await convertProductToBundle(product.id!, tenantId);
+                      const newId = Number(created?.id);
+                      if (!Number.isFinite(newId) || newId < 1) {
+                        toast.error("Przekształcenie mogło się udać, ale API nie zwróciło ID zestawu.");
+                        return;
+                      }
+                      toast.success(`Utworzono zestaw: ${created.name ?? "zestaw"}`);
+                      navigate(`/bundles/${newId}/edit`);
+                    } catch (e: unknown) {
+                      logError("convertProductToBundle failed", e);
+                      toast.error(extractApiErrorMessage(e, "Przekształcenie w zestaw nie powiodło się."));
+                    } finally {
+                      setConvertBusy(false);
+                    }
+                  })();
+                }}
+                className="flex items-center justify-center rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-600 shadow-sm transition-colors hover:bg-slate-50 hover:text-slate-900 disabled:opacity-50"
+              >
+                <Shapes className="h-4 w-4" strokeWidth={2} aria-hidden />
+                <span className="sr-only">Przekształć w zestaw</span>
+              </button>
+            ) : null}
             <div className="flex overflow-hidden rounded-lg border border-slate-300 bg-white shadow-sm">
               <button
                 type="button"
                 title="Kopiuj"
-                disabled={isNew || dupBusy || product?.id == null || tenantId == null}
+                disabled={isNew || dupBusy || convertBusy || product?.id == null || tenantId == null}
                 onClick={() => {
                   if (product?.id == null || tenantId == null) return;
                   void (async () => {

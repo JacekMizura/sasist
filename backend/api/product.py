@@ -3342,6 +3342,37 @@ def duplicate_product(
     return out
 
 
+@router.post("/{product_id}/convert-to-bundle", status_code=201)
+def convert_product_to_bundle_endpoint(
+    product_id: int,
+    db: Session = Depends(get_db),
+    tenant_id: int = Query(..., ge=1),
+):
+    """
+    Przekształć produkt w zestaw: kopiuje dane handlowe, archiwizuje produkt.
+    Składniki zestawu uzupełnia operator na karcie zestawu.
+    """
+    from ..services.assortment_convert_service import AssortmentConvertError, convert_product_to_bundle
+
+    try:
+        bundle = convert_product_to_bundle(db, tenant_id, product_id)
+        db.commit()
+        db.refresh(bundle)
+    except AssortmentConvertError as e:
+        db.rollback()
+        raise HTTPException(status_code=400, detail={"message": e.message, "code": e.code}) from e
+    except Exception:
+        db.rollback()
+        raise
+    return {
+        "id": int(bundle.id),
+        "tenant_id": int(bundle.tenant_id),
+        "name": bundle.name,
+        "sku": bundle.sku,
+        "ean": bundle.ean,
+    }
+
+
 @router.get("/{product_id}/")
 def get_product(
     product_id: int,
