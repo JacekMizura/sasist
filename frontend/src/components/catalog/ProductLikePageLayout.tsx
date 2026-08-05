@@ -104,7 +104,7 @@ function ModernStat({ card, withDivider }: { card: ProductLikeStatCard; withDivi
           : "text-slate-900";
   return (
     <div
-      className={`flex flex-col justify-center text-right sm:text-left ${
+      className={`flex flex-col justify-start text-right sm:text-left ${
         withDivider ? "border-l border-slate-200 pl-4 sm:pl-8" : ""
       }`}
     >
