@@ -1,3 +1,10 @@
+## 2026-08-06 — Product Management ecosystem (etapy 0–7)
+
+- Plan zaakceptowany: `memory/plan-product-management-ecosystem.md`
+- 0 nav + size-tables stub · 1 Kategorie polish · 3 Rodziny UX · 4 generator allocate SKU/katalog · 5 lista group-by family · 6 identity header · 7 PIM UX tokens (`pimUi.ts`)
+- Lista produktów: `product_family_id/name` w API; toggle Lista płaska | Grupuj po rodzinie
+- Karta: blok Tożsamość (rodzina, kategoria, SKU, katalog, status); mid-page Family uproszczony
+
 ## 2026-08-06 — Product Family (7 commits) — ADR + implementacja
 
 - ADR: `memory/adr-product-family.md` (opcjonalna rodzina, base product, generator A/B, etapowe usunięcie Variant)
