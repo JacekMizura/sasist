@@ -11,6 +11,7 @@ import { GhostButton } from "../../../design-system";
 import { UI_STRINGS } from "../../../constants/uiStrings";
 import { pimPanelIdentityClass, pimStatTileClass } from "../pimUi";
 import { CategoryEditTabPlaceholder } from "./CategoryEditTabPlaceholder";
+import { CategoryEditBasicTab } from "./CategoryEditBasicTab";
 
 export type CategoryEditTabId =
   | "basic"
@@ -153,10 +154,15 @@ export default function CategoryEditPage() {
 
       <div className="mt-4">
         {activeTab === "basic" ? (
-          <CategoryEditTabPlaceholder
-            title="Podstawowe"
-            description="Nazwa, opis, rodzic, status i domyślne ustawienia produktu."
-          />
+          tenantId != null ? (
+            <CategoryEditBasicTab
+              tenantId={tenantId}
+              category={category}
+              onSaved={(next) => setCategory(next)}
+            />
+          ) : (
+            <p className="text-sm text-slate-500">Ładowanie…</p>
+          )
         ) : null}
         {activeTab === "products" ? (
           <CategoryEditTabPlaceholder

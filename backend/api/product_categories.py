@@ -133,6 +133,28 @@ def api_update_category(
             sku_template_set="sku_template" in fields,
             catalog_template=body.catalog_template,
             catalog_template_set="catalog_template" in fields,
+            default_vat_rate=None if body.clear_default_vat_rate else body.default_vat_rate,
+            default_vat_rate_set="default_vat_rate" in fields or bool(body.clear_default_vat_rate),
+            default_manufacturer_id=None
+            if body.clear_default_manufacturer_id
+            else body.default_manufacturer_id,
+            default_manufacturer_id_set="default_manufacturer_id" in fields
+            or bool(body.clear_default_manufacturer_id),
+            default_label_template_id=None
+            if body.clear_default_label_template_id
+            else body.default_label_template_id,
+            default_label_template_id_set="default_label_template_id" in fields
+            or bool(body.clear_default_label_template_id),
+            default_unit=body.default_unit,
+            default_unit_set="default_unit" in fields,
+            default_warehouse_id=body.default_warehouse_id,
+            default_warehouse_id_set="default_warehouse_id" in fields,
+            default_supplier_id=body.default_supplier_id,
+            default_supplier_id_set="default_supplier_id" in fields,
+            attributes_schema_json=body.attributes_schema_json,
+            attributes_schema_set="attributes_schema_json" in fields,
+            marketplace_mapping_json=body.marketplace_mapping_json,
+            marketplace_mapping_set="marketplace_mapping_json" in fields,
         )
         db.commit()
         db.refresh(row)

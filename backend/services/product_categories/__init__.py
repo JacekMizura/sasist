@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from typing import Dict, Iterable, List, Optional, Sequence, Set, Tuple
+import json
+from typing import Any, Dict, Iterable, List, Optional, Sequence, Set, Tuple
 
 from sqlalchemy import func
 from sqlalchemy.orm import Session
@@ -23,6 +24,69 @@ def _strip(s: Optional[str]) -> Optional[str]:
         return None
     t = str(s).strip()
     return t or None
+
+
+def _parse_json_field(raw: Optional[str]) -> Any:
+    if raw is None or not str(raw).strip():
+        return None
+    try:
+        return json.loads(raw)
+    except (TypeError, ValueError, json.JSONDecodeError):
+        return None
+
+
+def _dump_json_field(value: Any) -> Optional[str]:
+    if value is None:
+        return None
+    return json.dumps(value, ensure_ascii=False)
+
+
+def _extensions_dict(row: ProductCategory) -> dict:
+    parsed = _parse_json_field(getattr(row, "extensions_json", None))
+    return parsed if isinstance(parsed, dict) else {}
+
+
+def _defaults_from_row(row: ProductCategory) -> dict:
+    ext = _extensions_dict(row)
+    defaults = ext.get("defaults") if isinstance(ext.get("defaults"), dict) else {}
+    vat = getattr(row, "default_vat_rate", None)
+    return {
+        "default_vat_rate": float(vat) if vat is not None else None,
+        "default_manufacturer_id": int(mid) if (mid := getattr(row, "default_manufacturer_id", None)) is not None else None,
+        "default_label_template_id": int(lid)
+        if (lid := getattr(row, "default_label_template_id", None)) is not None
+        else None,
+        "default_unit": (defaults.get("unit") or None),
+        "default_warehouse_id": int(wid) if (wid := defaults.get("warehouse_id")) is not None else None,
+        "default_supplier_id": int(sid) if (sid := defaults.get("supplier_id")) is not None else None,
+    }
+
+
+def _set_extensions_defaults(
+    row: ProductCategory,
+    *,
+    unit: Optional[str] = None,
+    unit_set: bool = False,
+    warehouse_id: Optional[int] = None,
+    warehouse_set: bool = False,
+    supplier_id: Optional[int] = None,
+    supplier_set: bool = False,
+) -> None:
+    ext = _extensions_dict(row)
+    defaults = dict(ext.get("defaults") if isinstance(ext.get("defaults"), dict) else {})
+    if unit_set:
+        defaults["unit"] = _strip(unit)
+    if warehouse_set:
+        defaults["warehouse_id"] = int(warehouse_id) if warehouse_id is not None else None
+    if supplier_set:
+        defaults["supplier_id"] = int(supplier_id) if supplier_id is not None else None
+    # Drop empty defaults keys
+    cleaned = {k: v for k, v in defaults.items() if v is not None and v != ""}
+    if cleaned:
+        ext["defaults"] = cleaned
+    elif "defaults" in ext:
+        del ext["defaults"]
+    row.extensions_json = _dump_json_field(ext) if ext else None
 
 
 def get_category(db: Session, tenant_id: int, category_id: int) -> ProductCategory:
@@ -140,6 +204,22 @@ def update_category(
     sku_template_set: bool = False,
     catalog_template: Optional[str] = None,
     catalog_template_set: bool = False,
+    default_vat_rate: Optional[float] = None,
+    default_vat_rate_set: bool = False,
+    default_manufacturer_id: Optional[int] = None,
+    default_manufacturer_id_set: bool = False,
+    default_label_template_id: Optional[int] = None,
+    default_label_template_id_set: bool = False,
+    default_unit: Optional[str] = None,
+    default_unit_set: bool = False,
+    default_warehouse_id: Optional[int] = None,
+    default_warehouse_id_set: bool = False,
+    default_supplier_id: Optional[int] = None,
+    default_supplier_id_set: bool = False,
+    attributes_schema_json: Any = None,
+    attributes_schema_set: bool = False,
+    marketplace_mapping_json: Any = None,
+    marketplace_mapping_set: bool = False,
 ) -> ProductCategory:
     row = get_category(db, tenant_id, category_id)
     if name is not None:
@@ -161,6 +241,31 @@ def update_category(
         row.sku_template = _strip(sku_template)
     if catalog_template_set:
         row.catalog_template = _strip(catalog_template)
+
+    if default_vat_rate_set:
+        row.default_vat_rate = default_vat_rate
+    if default_manufacturer_id_set:
+        row.default_manufacturer_id = (
+            int(default_manufacturer_id) if default_manufacturer_id is not None else None
+        )
+    if default_label_template_id_set:
+        row.default_label_template_id = (
+            int(default_label_template_id) if default_label_template_id is not None else None
+        )
+    if default_unit_set or default_warehouse_id_set or default_supplier_id_set:
+        _set_extensions_defaults(
+            row,
+            unit=default_unit,
+            unit_set=default_unit_set,
+            warehouse_id=default_warehouse_id,
+            warehouse_set=default_warehouse_id_set,
+            supplier_id=default_supplier_id,
+            supplier_set=default_supplier_id_set,
+        )
+    if attributes_schema_set:
+        row.attributes_schema_json = _dump_json_field(attributes_schema_json)
+    if marketplace_mapping_set:
+        row.marketplace_mapping_json = _dump_json_field(marketplace_mapping_json)
 
     if clear_parent:
         row.parent_id = None
@@ -364,6 +469,7 @@ def serialize_category(
     if counts is None:
         counts = product_counts_by_category(db, tenant_id, [cid])
     child_count = sum(1 for r in rows if r.parent_id is not None and int(r.parent_id) == cid)
+    defaults = _defaults_from_row(row)
     return {
         "id": cid,
         "tenant_id": int(row.tenant_id),
@@ -380,6 +486,9 @@ def serialize_category(
         "child_count": child_count,
         "path_ids": path_ids.get(cid, [cid]),
         "path_names": path_names.get(cid, [row.name]),
+        **defaults,
+        "attributes_schema_json": _parse_json_field(getattr(row, "attributes_schema_json", None)),
+        "marketplace_mapping_json": _parse_json_field(getattr(row, "marketplace_mapping_json", None)),
     }
 
 

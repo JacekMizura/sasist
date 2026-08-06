@@ -31,6 +31,17 @@ class ProductCategoryUpdateBody(BaseModel):
     catalog_code: Optional[str] = Field(None, max_length=64)
     sku_template: Optional[str] = Field(None, max_length=255)
     catalog_template: Optional[str] = Field(None, max_length=255)
+    default_vat_rate: Optional[float] = None
+    default_manufacturer_id: Optional[int] = None
+    default_label_template_id: Optional[int] = None
+    default_unit: Optional[str] = Field(None, max_length=32)
+    default_warehouse_id: Optional[int] = None
+    default_supplier_id: Optional[int] = None
+    clear_default_vat_rate: bool = False
+    clear_default_manufacturer_id: bool = False
+    clear_default_label_template_id: bool = False
+    attributes_schema_json: Optional[Any] = None
+    marketplace_mapping_json: Optional[Any] = None
 
 
 class ProductCategoryMoveBody(BaseModel):
@@ -60,6 +71,14 @@ class ProductCategoryRead(BaseModel):
     #: Breadcrumb names from root to this node (inclusive).
     path_names: List[str] = Field(default_factory=list)
     path_ids: List[int] = Field(default_factory=list)
+    default_vat_rate: Optional[float] = None
+    default_manufacturer_id: Optional[int] = None
+    default_label_template_id: Optional[int] = None
+    default_unit: Optional[str] = None
+    default_warehouse_id: Optional[int] = None
+    default_supplier_id: Optional[int] = None
+    attributes_schema_json: Optional[Any] = None
+    marketplace_mapping_json: Optional[Any] = None
 
 
 class ProductCategoryTreeNode(BaseModel):

@@ -33,6 +33,14 @@ export type ProductCategoryRead = {
   child_count: number;
   path_ids: number[];
   path_names: string[];
+  default_vat_rate?: number | null;
+  default_manufacturer_id?: number | null;
+  default_label_template_id?: number | null;
+  default_unit?: string | null;
+  default_warehouse_id?: number | null;
+  default_supplier_id?: number | null;
+  attributes_schema_json?: unknown;
+  marketplace_mapping_json?: unknown;
 };
 
 export type ProductCategoryAssignment = {
@@ -67,6 +75,17 @@ export type ProductCategoryUpdateBody = {
   catalog_code?: string | null;
   sku_template?: string | null;
   catalog_template?: string | null;
+  default_vat_rate?: number | null;
+  default_manufacturer_id?: number | null;
+  default_label_template_id?: number | null;
+  default_unit?: string | null;
+  default_warehouse_id?: number | null;
+  default_supplier_id?: number | null;
+  clear_default_vat_rate?: boolean;
+  clear_default_manufacturer_id?: boolean;
+  clear_default_label_template_id?: boolean;
+  attributes_schema_json?: unknown;
+  marketplace_mapping_json?: unknown;
 };
 
 export async function fetchCategoryTree(params: {
