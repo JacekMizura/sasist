@@ -212,8 +212,11 @@ export function isNavPathActive(pathname: string, path: string): boolean {
   if (path === "/settings/wms") {
     return pathname === "/settings/wms" || pathname.startsWith("/settings/wms/");
   }
+  if (path === "/orders/statuses") {
+    return pathname === "/orders/statuses" || pathname.startsWith("/orders/statuses/");
+  }
   if (path === "/settings/orders/ui-statuses") {
-    return pathname === "/settings/orders/ui-statuses" || pathname.startsWith("/settings/orders/");
+    return pathname === "/orders/statuses" || pathname.startsWith("/orders/statuses/");
   }
   if (path === "/settings/complaints/ui-statuses") {
     return pathname === "/settings/complaints/ui-statuses" || pathname.startsWith("/settings/complaints/");

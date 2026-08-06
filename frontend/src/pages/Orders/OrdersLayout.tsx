@@ -19,7 +19,7 @@ export default function OrdersLayout() {
     return listShell;
   }
 
-  if (pathname === "/orders/list" || pathname.startsWith("/orders/custom-fields") || pathname.startsWith("/orders/automation")) {
+  if (pathname === "/orders/list" || pathname.startsWith("/orders/custom-fields") || pathname.startsWith("/orders/automation") || pathname.startsWith("/orders/statuses")) {
     return listShell;
   }
 

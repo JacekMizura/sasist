@@ -20,8 +20,8 @@ function OrdersListToolbarInner({ onOpenColumnPicker, viewControls, ...props }: 
   return (
     <ModuleListPageToolbar
       title="Zamówienia"
-      settingsHref="/settings/orders/ui-statuses"
-      settingsTitle="Ustawienia statusów panelu"
+      settingsHref="/orders/statuses"
+      settingsTitle="Statusy zamówień"
       columnsDisabled={false}
       onColumnsClick={onOpenColumnPicker}
       extraToolbarControls={viewControls}

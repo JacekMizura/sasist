@@ -62,7 +62,7 @@ function defaultExpanded(): Record<string, boolean> {
   return m;
 }
 
-/** Ustawienia → statusy zamówień (panel). */
+/** Zamówienia → Statusy zamówień (panel UI). */
 export default function OrderPanelUiStatusesSettingsPage() {
   const { warehouse } = useWarehouse();
   const warehouseId = warehouse?.id ?? null;
@@ -595,12 +595,14 @@ export default function OrderPanelUiStatusesSettingsPage() {
     <div className="w-full space-y-6">
       <div>
         <p className="text-sm text-slate-500">
-          <Link to="/settings/company" className="font-medium text-slate-700 underline decoration-slate-300 underline-offset-2 hover:text-slate-900">
-            Ustawienia
+          <Link to="/orders/list" className="font-medium text-slate-700 underline decoration-slate-300 underline-offset-2 hover:text-slate-900">
+            Zamówienia
           </Link>
           <span className="mx-1.5 text-slate-300">/</span>
-          <span className="text-slate-700">Zamówienia</span>
+          <span className="text-slate-700">Statusy zamówień</span>
         </p>
+        <h1 className="mt-1 text-2xl font-bold text-slate-900">Statusy zamówień</h1>
+        <p className="mt-1 text-sm text-slate-500">Twórz i porządkuj statusy panelu zamówień (grupy, kolory, kolejność).</p>
       </div>
 
       {err ? <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">{err}</div> : null}

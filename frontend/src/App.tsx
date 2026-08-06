@@ -625,7 +625,7 @@ export const router = createBrowserRouter(
                 <Route path="settings/wms" element={<WmsSettingsPage />} />
                 <Route path="settings/returns/*" element={<LegacySettingsReturnsRedirect />} />
                 <Route path="settings/returns" element={<LegacySettingsReturnsRedirect />} />
-                <Route path="settings/orders/ui-statuses" element={<OrderPanelUiStatusesSettingsPage />} />
+                <Route path="settings/orders/ui-statuses" element={<Navigate to="/orders/statuses" replace />} />
                 <Route path="settings/complaints/ui-statuses" element={<ComplaintPanelUiStatusesSettingsPage />} />
                 <Route path="settings/shipping-methods" element={<ShippingMethodsSettingsPage />} />
                 <Route path="settings/sales/stock-pools" element={<OfferStockPoolsSettingsPage />} />
@@ -880,6 +880,7 @@ export const router = createBrowserRouter(
                   <Route path="custom-fields" element={<OrderCustomFieldsListPage />} />
                   <Route path="custom-fields/new" element={<OrderCustomFieldEditPage />} />
                   <Route path="custom-fields/:fieldId/edit" element={<OrderCustomFieldEditPage />} />
+                  <Route path="statuses" element={<OrderPanelUiStatusesSettingsPage />} />
                   <Route path="import" element={<Navigate to="/settings/import?kind=orders" replace />} />
                   <Route path="returns" element={<ReturnsModuleLayout />}>
                     <Route index element={<ReturnsListPanel />} />

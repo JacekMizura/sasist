@@ -159,6 +159,13 @@ export function buildNavFlyoutCategories(): NavCategoryConfig[] {
             plusLinkTitle: "Nowe pole dodatkowe",
           },
           {
+            path: "/orders/statuses",
+            label: "Statusy zamówień",
+            Icon: ListOrdered,
+            plusLinkTo: "/orders/statuses",
+            plusLinkTitle: "Statusy zamówień",
+          },
+          {
             path: "/complaints",
             label: UI_STRINGS.navigation.complaints,
             Icon: MessageSquareWarning,
