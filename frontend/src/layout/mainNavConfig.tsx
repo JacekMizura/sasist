@@ -35,6 +35,7 @@ import {
   ListOrdered,
   LayoutDashboard,
   CalendarRange,
+  Network,
 } from "lucide-react";
 
 import { UI_STRINGS } from "../constants/uiStrings";
@@ -234,6 +235,13 @@ export function buildNavFlyoutCategories(): NavCategoryConfig[] {
             Icon: Shapes,
             plusLinkTo: "/variants/new",
             plusLinkTitle: UI_STRINGS.navigation.addVariantGroup,
+          },
+          {
+            path: "/product-families",
+            label: UI_STRINGS.navigation.productFamilies,
+            Icon: Network,
+            plusLinkTo: "/product-families/new",
+            plusLinkTitle: UI_STRINGS.navigation.addProductFamily,
           },
           {
             path: "/product-custom-fields",

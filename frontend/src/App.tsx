@@ -271,6 +271,8 @@ import ProductCategoriesPage from "./pages/Products/ProductCategoriesPage"
 import AssortmentCategoriesPage from "./pages/Assortment/categories/ProductCategoriesPage"
 import VariantGroupsPage from "./pages/Assortment/variants/VariantGroupsPage"
 import VariantGroupEditPage from "./pages/Assortment/variants/VariantGroupEditPage"
+import ProductFamiliesPage from "./pages/Assortment/families/ProductFamiliesPage"
+import ProductFamilyEditPage from "./pages/Assortment/families/ProductFamilyEditPage"
 import ProductCustomFieldsPage from "./pages/Assortment/productCustomFields/ProductCustomFieldsPage"
 import ProductCustomFieldEditPage from "./pages/Assortment/productCustomFields/ProductCustomFieldEditPage"
 import BdoLayout from "./pages/bdo/BdoLayout"
@@ -712,6 +714,9 @@ export const router = createBrowserRouter(
                 <Route path="variants" element={<VariantGroupsPage />} />
                 <Route path="variants/new" element={<VariantGroupEditPage />} />
                 <Route path="variants/:groupId/edit" element={<VariantGroupEditPage />} />
+                <Route path="product-families" element={<ProductFamiliesPage />} />
+                <Route path="product-families/new" element={<ProductFamilyEditPage />} />
+                <Route path="product-families/:familyId/edit" element={<ProductFamilyEditPage />} />
                 <Route path="product-custom-fields" element={<ProductCustomFieldsPage />} />
                 <Route path="product-custom-fields/new" element={<ProductCustomFieldEditPage />} />
                 <Route path="product-custom-fields/:fieldId/edit" element={<ProductCustomFieldEditPage />} />
