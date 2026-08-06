@@ -1,3 +1,12 @@
+## 2026-08-06 — Zakładka Rodzina na karcie produktu (etapy 1–6)
+
+- Tab `family` w railu; panel w `pages/Products/productFamily/`
+- Usunięto rodzinę z identity / Podstawowych
+- Members: sale_price + stock_quantity w payloadzie członków
+- Generator osadzony + Generuj SKU/katalogowe (`product_codes` allocate + PUT)
+- Dziedziczenie: UI-only checkboxy; powiązania z produktu bazowego
+- Historia: activity log `product_family` (attach/detach/generate)
+
 ## 2026-08-06 — Product Management ecosystem (etapy 0–7)
 
 - Plan zaakceptowany: `memory/plan-product-management-ecosystem.md`
