@@ -17,7 +17,9 @@ import { pimFieldLabelClass, pimHintClass, pimPanelClass } from "../Assortment/p
 import { FamilyAttributesCard } from "./productFamily/FamilyAttributesCard";
 import { FamilyGeneratorCard } from "./productFamily/FamilyGeneratorCard";
 import { FamilyInfoCard } from "./productFamily/FamilyInfoCard";
+import { FamilyInheritanceCard } from "./productFamily/FamilyInheritanceCard";
 import { FamilyMembersCard } from "./productFamily/FamilyMembersCard";
+import { FamilyRelatedCard } from "./productFamily/FamilyRelatedCard";
 
 type Props = {
   tenantId: number;
@@ -156,6 +158,8 @@ export function ProductEditFamilyTab({ tenantId, productId }: Props) {
             members={family.members ?? []}
             onChanged={() => setRefreshKey((k) => k + 1)}
           />
+          <FamilyInheritanceCard familyId={family.id} />
+          <FamilyRelatedCard tenantId={tenantId} family={family} />
         </>
       )}
     </div>
