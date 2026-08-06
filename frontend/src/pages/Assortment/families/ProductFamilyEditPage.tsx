@@ -5,6 +5,7 @@ import toast from "react-hot-toast";
 
 import { fetchTenantsList } from "../../../api/tenantsApi";
 import {
+  attachProductFamily,
   createProductFamily,
   deleteProductFamily,
   getProductFamily,
@@ -19,7 +20,10 @@ import { ListPageHeader } from "../../../components/listPage/ListPageHeader";
 import PageLayout from "../../../components/layout/PageLayout";
 import { Checkbox, GhostButton, Input, PrimaryButton, Select } from "../../../design-system";
 import { UI_STRINGS } from "../../../constants/uiStrings";
+import { getProductDetailsPath } from "../../Products/productPaths";
 import { ProductFamilyGeneratorPanel } from "./ProductFamilyGeneratorPanel";
+import { FamilyProductSearchField } from "./FamilyProductSearchField";
+import type { ProductSearchHit } from "../../../api/productsSearchApi";
 
 type DraftAttr = {
   key: string;
@@ -84,12 +88,13 @@ export default function ProductFamilyEditPage() {
   const [tenantId, setTenantId] = useState<number | null>(null);
   const [name, setName] = useState("");
   const [isActive, setIsActive] = useState(true);
-  const [baseProductId, setBaseProductId] = useState("");
+  const [baseProductId, setBaseProductId] = useState<number | null>(null);
   const [baseProductName, setBaseProductName] = useState<string | null>(null);
   const [attributes, setAttributes] = useState<DraftAttr[]>([emptyAttr()]);
   const [members, setMembers] = useState<ProductFamilyMember[]>([]);
   const [loading, setLoading] = useState(!isNew);
   const [saving, setSaving] = useState(false);
+  const [attachBusy, setAttachBusy] = useState(false);
 
   useEffect(() => {
     void fetchTenantsList()
@@ -104,7 +109,7 @@ export default function ProductFamilyEditPage() {
       .then((g) => {
         setName(g.name);
         setIsActive(g.is_active);
-        setBaseProductId(g.base_product_id != null ? String(g.base_product_id) : "");
+        setBaseProductId(g.base_product_id != null ? Number(g.base_product_id) : null);
         setBaseProductName(g.base_product_name ?? null);
         setAttributes(fromApiAttributes(g.attributes));
         setMembers(g.members ?? []);
@@ -117,12 +122,10 @@ export default function ProductFamilyEditPage() {
   }, [tenantId, isNew, numericId, navigate]);
 
   const toPayload = useCallback(() => {
-    const trimmedBase = baseProductId.trim();
-    const parsedBase = trimmedBase ? Number(trimmedBase) : null;
     return {
       name: name.trim(),
       is_active: isActive,
-      base_product_id: parsedBase != null && Number.isFinite(parsedBase) ? parsedBase : null,
+      base_product_id: baseProductId,
       attributes: attributes
         .map((ax, ai) => ({
           id: ax.id,
@@ -144,6 +147,28 @@ export default function ProductFamilyEditPage() {
         .filter((ax) => ax.name),
     };
   }, [name, isActive, baseProductId, attributes]);
+
+  const reloadFamily = useCallback(async () => {
+    if (tenantId == null || numericId == null) return;
+    const g = await getProductFamily(tenantId, numericId);
+    setBaseProductId(g.base_product_id != null ? Number(g.base_product_id) : null);
+    setBaseProductName(g.base_product_name ?? null);
+    setMembers(g.members ?? []);
+  }, [tenantId, numericId]);
+
+  const onAttachExisting = async (hit: ProductSearchHit | null) => {
+    if (!hit || tenantId == null || numericId == null) return;
+    setAttachBusy(true);
+    try {
+      await attachProductFamily(tenantId, hit.id, numericId);
+      toast.success(`Dołączono „${hit.name || hit.id}” do rodziny.`);
+      await reloadFamily();
+    } catch (e) {
+      toast.error(extractApiErrorMessage(e, "Nie udało się dołączyć produktu."));
+    } finally {
+      setAttachBusy(false);
+    }
+  };
 
   const onSave = async () => {
     if (tenantId == null) return;
@@ -222,7 +247,11 @@ export default function ProductFamilyEditPage() {
     <PageLayout>
       <ListPageHeader
         title={isNew ? "Nowa rodzina produktów" : `Edycja: ${name || "—"}`}
-        description="Cecha = wymiar (Kolor, Rozmiar). Produkt bazowy to tylko źródło kopiowania dla generatora — bez live inheritance."
+        description={
+          isNew
+            ? "Cecha = wymiar (Kolor, Rozmiar). Produkt bazowy to źródło kopiowania dla kreatora — bez live inheritance."
+            : `Produktów w rodzinie: ${members.length}. Bazowy służy tylko do kopiowania w kreatorze.`
+        }
         breadcrumbs={[
           { label: UI_STRINGS.navigation.assortment },
           { label: UI_STRINGS.navigation.productFamilies, to: "/product-families" },
@@ -247,24 +276,33 @@ export default function ProductFamilyEditPage() {
           <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Nazwa rodziny</span>
           <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="np. Sznurowadła CAT" />
         </label>
-        <label className="block">
+        <div>
           <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">
-            Produkt bazowy (ID, opcjonalnie)
+            Produkt bazowy (opcjonalnie)
           </span>
-          <Input
-            value={baseProductId}
-            onChange={(e) => setBaseProductId(e.target.value)}
-            placeholder="ID produktu źródłowego do kopiowania"
-            inputMode="numeric"
-          />
-          {baseProductName ? (
-            <p className="mt-1 text-xs text-slate-500">Aktualnie: {baseProductName}</p>
+          {tenantId != null ? (
+            <FamilyProductSearchField
+              tenantId={tenantId}
+              selectedId={baseProductId}
+              selectedLabel={baseProductName}
+              disabled={saving}
+              onSelect={(hit) => {
+                if (!hit) {
+                  setBaseProductId(null);
+                  setBaseProductName(null);
+                  return;
+                }
+                setBaseProductId(hit.id);
+                setBaseProductName(hit.name || `Produkt #${hit.id}`);
+              }}
+            />
           ) : (
-            <p className="mt-1 text-xs text-slate-400">
-              Nie parent/master — wyłącznie źródło danych dla kreatora produktów.
-            </p>
+            <p className="text-sm text-slate-400">Ładowanie tenantów…</p>
           )}
-        </label>
+          <p className="mt-1 text-xs text-slate-400">
+            Nie parent/master — wyłącznie źródło danych dla kreatora produktów (tryb B).
+          </p>
+        </div>
         <label className="inline-flex items-center gap-2 text-sm text-slate-700">
           <Checkbox checked={isActive} onChange={(e) => setIsActive(e.target.checked)} />
           Rodzina aktywna
@@ -445,24 +483,57 @@ export default function ProductFamilyEditPage() {
         ))}
       </div>
 
-      {!isNew && members.length > 0 ? (
+      {!isNew && tenantId != null && numericId != null ? (
         <section className="mt-8 max-w-3xl rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-          <h2 className="text-sm font-semibold text-slate-800">Produkty w rodzinie ({members.length})</h2>
-          <ul className="mt-3 divide-y divide-slate-100">
-            {members.map((m) => (
-              <li key={m.id} className="flex items-center justify-between gap-3 py-2 text-sm">
-                <div className="min-w-0">
-                  <Link to={`/products/list?productId=${m.id}`} className="font-medium text-slate-900 hover:text-blue-700">
-                    {m.name}
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <h2 className="text-sm font-semibold text-slate-800">Produkty w rodzinie ({members.length})</h2>
+            <Link
+              to={`/products/new?tenant_id=${tenantId}&product_family_id=${numericId}`}
+              className="text-sm font-medium text-blue-700 hover:underline"
+            >
+              + Utwórz nowy produkt
+            </Link>
+          </div>
+          <div className="mt-3">
+            <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">
+              Dołącz istniejący produkt
+            </span>
+            <FamilyProductSearchField
+              tenantId={tenantId}
+              selectedId={null}
+              disabled={attachBusy}
+              placeholder="Szukaj i dołącz do rodziny…"
+              onSelect={(hit) => void onAttachExisting(hit)}
+            />
+          </div>
+          {members.length === 0 ? (
+            <p className="mt-4 text-sm text-slate-500">Brak produktów — dołącz istniejący lub użyj generatora.</p>
+          ) : (
+            <ul className="mt-4 divide-y divide-slate-100">
+              {members.map((m) => (
+                <li key={m.id} className="flex items-center justify-between gap-3 py-2.5 text-sm">
+                  <div className="min-w-0">
+                    <Link
+                      to={getProductDetailsPath(m.id, { tenantId })}
+                      className="font-medium text-slate-900 hover:text-blue-700"
+                    >
+                      {m.name}
+                    </Link>
+                    <p className="truncate text-xs text-slate-500">
+                      {[m.sku, m.catalog_number, m.attribute_summary].filter(Boolean).join(" · ") || "—"}
+                      {m.is_base ? " · produkt bazowy" : ""}
+                    </p>
+                  </div>
+                  <Link
+                    to={getProductDetailsPath(m.id, { tenantId })}
+                    className="shrink-0 text-xs font-medium text-blue-700 hover:underline"
+                  >
+                    Otwórz
                   </Link>
-                  <p className="truncate text-xs text-slate-500">
-                    {[m.sku, m.attribute_summary].filter(Boolean).join(" · ") || "—"}
-                    {m.is_base ? " · produkt bazowy" : ""}
-                  </p>
-                </div>
-              </li>
-            ))}
-          </ul>
+                </li>
+              ))}
+            </ul>
+          )}
         </section>
       ) : null}
 
@@ -471,7 +542,7 @@ export default function ProductFamilyEditPage() {
           tenantId={tenantId}
           familyId={numericId}
           onGenerated={() => {
-            void getProductFamily(tenantId, numericId).then((g) => setMembers(g.members ?? []));
+            void reloadFamily();
           }}
         />
       ) : null}

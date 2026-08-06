@@ -71,7 +71,7 @@ export default function ProductFamiliesPage() {
     <PageLayout>
       <ListPageHeader
         title="Rodziny produktów"
-        description="Opcjonalne grupy pełnych produktów. Cechy rodziny służą do opisu i generatora — bez dziedziczenia po utworzeniu."
+        description="Opcjonalne grupy pełnych produktów. Cechy rodziny służą do opisu i kreatora — bez dziedziczenia po utworzeniu."
         breadcrumbs={[
           { label: UI_STRINGS.navigation.assortment },
           { label: UI_STRINGS.navigation.productFamilies },
@@ -95,6 +95,9 @@ export default function ProductFamiliesPage() {
         </div>
         <span className="text-sm text-slate-500">
           {filtered.length} {filtered.length === 1 ? "rodzina" : "rodzin"}
+          {!loading && rows.length > 0
+            ? ` · ${rows.reduce((s, r) => s + (r.product_count || 0), 0)} produktów`
+            : ""}
         </span>
       </div>
 
