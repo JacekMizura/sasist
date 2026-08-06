@@ -22,9 +22,15 @@ type Props = {
 const generateBtnClass =
   "inline-flex h-full shrink-0 items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 text-xs font-semibold text-gray-700 shadow-sm transition-colors hover:bg-gray-50 disabled:opacity-50";
 
+function categoryRequiredMessage(kind: ProductCodeKind): string {
+  return kind === "sku"
+    ? "Aby wygenerować SKU należy najpierw wybrać kategorię."
+    : "Aby wygenerować numer katalogowy należy najpierw wybrać kategorię.";
+}
+
 /**
  * Central SKU / catalog Generuj control — preview + allocate via product-codes API.
- * Does not save the product. Button chrome matches Kod kreskowy → Generuj.
+ * Category-required message only via toast on click (no permanent under-button hint).
  */
 export function ProductCodeGenerateControl({
   kind,
@@ -36,22 +42,15 @@ export function ProductCodeGenerateControl({
   label = "Generuj",
 }: Props) {
   const [preview, setPreview] = useState<string | null>(null);
-  const [hint, setHint] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   const refreshPreview = useCallback(async () => {
     if (tenantId == null || tenantId < 1) {
       setPreview(null);
-      setHint(null);
       return;
     }
     if (primaryCategoryId == null && (productId == null || productId < 1)) {
       setPreview(null);
-      setHint(
-        kind === "sku"
-          ? "Aby wygenerować SKU należy najpierw wybrać kategorię."
-          : "Aby wygenerować numer katalogowy należy najpierw wybrać kategorię.",
-      );
       return;
     }
     try {
@@ -62,10 +61,8 @@ export function ProductCodeGenerateControl({
         productId: primaryCategoryId == null ? productId : undefined,
       });
       setPreview(res.value);
-      setHint(null);
-    } catch (e) {
+    } catch {
       setPreview(null);
-      setHint(e instanceof Error ? e.message : "Nie udało się pobrać podglądu numeracji.");
     }
   }, [tenantId, primaryCategoryId, productId, kind]);
 
@@ -76,11 +73,7 @@ export function ProductCodeGenerateControl({
   const onClick = async () => {
     if (tenantId == null) return;
     if (primaryCategoryId == null && (productId == null || productId < 1)) {
-      toast.error(
-        kind === "sku"
-          ? "Aby wygenerować SKU należy najpierw wybrać kategorię."
-          : "Aby wygenerować numer katalogowy należy najpierw wybrać kategorię.",
-      );
+      toast.error(categoryRequiredMessage(kind));
       return;
     }
     if (currentValue.trim()) {
@@ -103,7 +96,6 @@ export function ProductCodeGenerateControl({
       void refreshPreview();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Generowanie nie powiodło się.");
-      setHint(e instanceof Error ? e.message : null);
     } finally {
       setBusy(false);
     }
@@ -124,10 +116,6 @@ export function ProductCodeGenerateControl({
       {preview ? (
         <span className="absolute left-0 top-full z-10 mt-0.5 whitespace-nowrap px-0.5 text-[10px] text-slate-500">
           Przykład: <span className="font-mono font-medium text-slate-700">{preview}</span>
-        </span>
-      ) : hint ? (
-        <span className="absolute left-0 top-full z-10 mt-0.5 max-w-[12rem] px-0.5 text-[10px] leading-snug text-amber-700">
-          {hint}
         </span>
       ) : null}
     </div>
