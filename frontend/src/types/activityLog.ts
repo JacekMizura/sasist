@@ -9,6 +9,8 @@ export type ActivityObjectType =
   | "rack"
   | "carrier"
   | "product"
+  | "product_family"
+  | "product_category"
   | "operator"
   | "document"
   | "return"

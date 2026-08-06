@@ -74,6 +74,11 @@ EVENT_TITLES_PL: dict[str, str] = {
     EVENT_ADMIN_PICKING_CANCELLED: "Anulowano zbieranie przez administratora",
     EVENT_ORDER_DETACHED: "Odłączono zamówienie",
     EVENT_EMPTY_ORPHAN_CART_RELEASED: "Zwolniono pusty wózek",
+    "product_category_created": "Utworzono kategorię",
+    "product_category_updated": "Zaktualizowano kategorię",
+    "product_family_member_attached": "Dodano produkt do rodziny",
+    "product_family_member_detached": "Usunięto produkt z rodziny",
+    "product_family_generated": "Wygenerowano produkty rodziny",
 }
 
 # event_code → domyślny komunikat PL (tylko prezentacja)

@@ -16,6 +16,7 @@ import { PrimaryButton, Select } from "../../design-system";
 import { pimFieldLabelClass, pimHintClass, pimPanelClass } from "../Assortment/pimUi";
 import { FamilyAttributesCard } from "./productFamily/FamilyAttributesCard";
 import { FamilyGeneratorCard } from "./productFamily/FamilyGeneratorCard";
+import { FamilyHistoryCard } from "./productFamily/FamilyHistoryCard";
 import { FamilyInfoCard } from "./productFamily/FamilyInfoCard";
 import { FamilyInheritanceCard } from "./productFamily/FamilyInheritanceCard";
 import { FamilyMembersCard } from "./productFamily/FamilyMembersCard";
@@ -27,7 +28,7 @@ type Props = {
 };
 
 /**
- * Product edit → Rodzina: attach + info + attributes + members.
+ * Product edit → Rodzina: full family management panel (attach, info, attrs, members, generator, …).
  */
 export function ProductEditFamilyTab({ tenantId, productId }: Props) {
   const [families, setFamilies] = useState<ProductFamilyListItem[]>([]);
@@ -160,6 +161,7 @@ export function ProductEditFamilyTab({ tenantId, productId }: Props) {
           />
           <FamilyInheritanceCard familyId={family.id} />
           <FamilyRelatedCard tenantId={tenantId} family={family} />
+          <FamilyHistoryCard familyId={family.id} refreshKey={refreshKey} />
         </>
       )}
     </div>

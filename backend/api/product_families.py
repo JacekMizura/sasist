@@ -17,6 +17,7 @@ from ..schemas.product_family import (
     ProductFamilyRead,
     ProductFamilyUpdateBody,
 )
+from ..services.activity_log import ActivityLinkSpec, record_activity
 from ..services.product_families import (
     ProductFamilyError,
     attach_product_to_family,
@@ -40,6 +41,51 @@ def _http(err: ProductFamilyError) -> HTTPException:
     status = 404 if err.code in {"family_not_found", "product_not_found", "base_product_not_found"} else 400
     return HTTPException(status_code=status, detail={"message": err.message, "code": err.code})
 
+
+def _log_family(
+    db: Session,
+    *,
+    tenant_id: int,
+    family_id: int,
+    name: str,
+    event_code: str,
+    description: str,
+    product_id: int | None = None,
+) -> None:
+    try:
+        nested = db.begin_nested()
+        try:
+            links = [
+                ActivityLinkSpec(
+                    object_type="product_family",
+                    object_id=int(family_id),
+                    role="subject",
+                    object_label=name,
+                )
+            ]
+            if product_id is not None:
+                links.append(
+                    ActivityLinkSpec(
+                        object_type="product",
+                        object_id=int(product_id),
+                        role="related",
+                    )
+                )
+            record_activity(
+                db,
+                event_code=event_code,
+                description=description,
+                links=links,
+                severity="INFO",
+                category="catalog",
+                tenant_id=int(tenant_id),
+            )
+            nested.commit()
+        except Exception:
+            nested.rollback()
+            raise
+    except Exception:
+        pass
 
 @router.get("", response_model=list[ProductFamilyListItem])
 def api_list_product_families(
@@ -183,6 +229,18 @@ def api_generate_family_products(
             only_missing=body.only_missing,
         )
         db.commit()
+        created = int(result.get("created_count") or 0)
+        fam = result.get("family") if isinstance(result.get("family"), dict) else None
+        fname = str((fam or {}).get("name") or family_id)
+        _log_family(
+            db,
+            tenant_id=tenant_id,
+            family_id=int(family_id),
+            name=fname,
+            event_code="product_family_generated",
+            description=f"Wygenerowano {created} produktów w rodzinie „{fname}”.",
+        )
+        db.commit()
         return FamilyGenerateResult.model_validate(result)
     except ProductFamilyError as e:
         db.rollback()
@@ -218,8 +276,37 @@ def api_attach_product_family(
     db: Session = Depends(get_db),
 ):
     try:
+        prev = get_product_family_state(db, tenant_id, product_id)
+        prev_fid = prev.get("product_family_id")
+        prev_fam = prev.get("family") if isinstance(prev.get("family"), dict) else None
         state = attach_product_to_family(db, tenant_id, product_id, body.product_family_id)
         db.commit()
+        fid = state.get("product_family_id")
+        fam = state.get("family") if isinstance(state.get("family"), dict) else None
+        if fid is not None:
+            fname = str((fam or {}).get("name") or fid)
+            _log_family(
+                db,
+                tenant_id=tenant_id,
+                family_id=int(fid),
+                name=fname,
+                event_code="product_family_member_attached",
+                description=f"Dodano produkt #{product_id} do rodziny „{fname}”.",
+                product_id=int(product_id),
+            )
+            db.commit()
+        elif prev_fid is not None:
+            fname = str((prev_fam or {}).get("name") or prev_fid)
+            _log_family(
+                db,
+                tenant_id=tenant_id,
+                family_id=int(prev_fid),
+                name=fname,
+                event_code="product_family_member_detached",
+                description=f"Usunięto produkt #{product_id} z rodziny „{fname}”.",
+                product_id=int(product_id),
+            )
+            db.commit()
         return ProductFamilyProductStateRead.model_validate(state)
     except ProductFamilyError as e:
         db.rollback()
