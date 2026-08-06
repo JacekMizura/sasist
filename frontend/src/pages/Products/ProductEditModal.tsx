@@ -74,6 +74,7 @@ import { ProductEditLabelTab } from "./ProductEditLabelTab";
 import { ProductEditDescriptionTab } from "./ProductEditDescriptionTab";
 import { ProductEditCategoriesTab } from "./ProductEditCategoriesTab";
 import { ProductEditFamilySection } from "./ProductEditFamilySection";
+import { ProductEditIdentityHeader } from "./ProductEditIdentityHeader";
 import { ProductAdditionalFieldsSection } from "./ProductAdditionalFieldsSection";
 import { ProductWarehouseMovementsPanel } from "./ProductWarehouseMovementsPanel";
 import { ProductLabelPrintModal } from "./ProductLabelPrintModal";
@@ -428,6 +429,7 @@ export function ProductEditModal({
   const [symbol, setSymbol] = useState(product?.symbol ?? "");
   const [catalogNumber, setCatalogNumber] = useState(product?.catalog_number ?? "");
   const [primaryCategoryId, setPrimaryCategoryId] = useState<number | null>(null);
+  const [primaryCategoryPath, setPrimaryCategoryPath] = useState<string | null>(null);
   const round2 = (n: number) => Math.round(n * 100) / 100;
   const round3 = (n: number) => Math.round(n * 1000) / 1000;
   const [length, setLength] = useState<number | "">(product?.length ?? "");
@@ -1678,15 +1680,22 @@ export function ProductEditModal({
   useEffect(() => {
     if (isNew || tenantId == null || tenantId < 1 || product?.id == null) {
       setPrimaryCategoryId(null);
+      setPrimaryCategoryPath(null);
       return;
     }
     let cancelled = false;
     void getProductCategoryAssignment({ tenantId, productId: product.id })
       .then((a) => {
-        if (!cancelled) setPrimaryCategoryId(a.primary_category_id);
+        if (cancelled) return;
+        setPrimaryCategoryId(a.primary_category_id);
+        const path = (a.primary_path_names || []).filter(Boolean).join(" › ");
+        setPrimaryCategoryPath(path || null);
       })
       .catch(() => {
-        if (!cancelled) setPrimaryCategoryId(null);
+        if (!cancelled) {
+          setPrimaryCategoryId(null);
+          setPrimaryCategoryPath(null);
+        }
       });
     return () => {
       cancelled = true;
@@ -2013,6 +2022,18 @@ export function ProductEditModal({
         onSubmit={handleSubmit}
         saving={saving}
       >
+                <ProductEditIdentityHeader
+                  isNew={isNew}
+                  tenantId={tenantId}
+                  productId={product?.id}
+                  symbol={symbol}
+                  setSymbol={setSymbol}
+                  catalogNumber={catalogNumber}
+                  setCatalogNumber={setCatalogNumber}
+                  primaryCategoryId={primaryCategoryId}
+                  primaryCategoryPath={primaryCategoryPath}
+                  onOpenCategoriesTab={() => setActiveTab("categories")}
+                />
                 {activeTab === "basic" && (
                   <ProductEditBasicTab
                     isNew={isNew}
@@ -2022,11 +2043,6 @@ export function ProductEditModal({
                     tenantId={tenantId}
                     setTenantId={setTenantId}
                     tenants={tenants}
-                    symbol={symbol}
-                    setSymbol={setSymbol}
-                    catalogNumber={catalogNumber}
-                    setCatalogNumber={setCatalogNumber}
-                    primaryCategoryId={primaryCategoryId}
                     ean={ean}
                     setEan={setEan}
                     extraEans={extraEans}
@@ -2251,7 +2267,22 @@ export function ProductEditModal({
                     <ProductEditCategoriesTab
                       productId={product.id}
                       tenantId={tenantId}
-                      onAssignmentChange={setPrimaryCategoryId}
+                      onAssignmentChange={(id) => {
+                        setPrimaryCategoryId(id);
+                        if (tenantId == null || product?.id == null) {
+                          setPrimaryCategoryPath(null);
+                          return;
+                        }
+                        void getProductCategoryAssignment({ tenantId, productId: product.id })
+                          .then((a) => {
+                            setPrimaryCategoryId(a.primary_category_id);
+                            const path = (a.primary_path_names || []).filter(Boolean).join(" › ");
+                            setPrimaryCategoryPath(path || null);
+                          })
+                          .catch(() => {
+                            /* keep id from callback */
+                          });
+                      }}
                     />
                   )
                 )}
