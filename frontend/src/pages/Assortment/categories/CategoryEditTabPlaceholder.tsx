@@ -7,7 +7,6 @@ type Props = {
   children?: ReactNode;
 };
 
-/** Placeholder panel until the tab is implemented in a later stage. */
 export function CategoryEditTabPlaceholder({ title, description, children }: Props) {
   return (
     <section className={pimPanelClass}>

@@ -12,6 +12,7 @@ import { UI_STRINGS } from "../../../constants/uiStrings";
 import { pimPanelIdentityClass, pimStatTileClass } from "../pimUi";
 import { CategoryEditTabPlaceholder } from "./CategoryEditTabPlaceholder";
 import { CategoryEditBasicTab } from "./CategoryEditBasicTab";
+import { CategoryEditNumberingTab } from "./CategoryEditNumberingTab";
 
 export type CategoryEditTabId =
   | "basic"
@@ -30,9 +31,6 @@ const TABS: { id: CategoryEditTabId; label: string }[] = [
   { id: "history", label: "Historia" },
 ];
 
-/**
- * Category edit shell — header identity + tabs. Tab bodies filled in later stages.
- */
 export default function CategoryEditPage() {
   const { categoryId } = useParams();
   const navigate = useNavigate();
@@ -64,6 +62,11 @@ export default function CategoryEditPage() {
   useEffect(() => {
     void reload();
   }, [reload]);
+
+  const onSaved = (next: ProductCategoryRead) => {
+    setCategory(next);
+    setHistoryKey((k) => k + 1);
+  };
 
   if (loading || !category) {
     return (
@@ -135,16 +138,16 @@ export default function CategoryEditPage() {
         </dl>
       </section>
 
-      <nav className="mt-4 flex flex-wrap gap-1 border-b border-slate-200 pb-px" aria-label="Zakładki kategorii">
+      <nav className="mt-4 flex flex-wrap gap-1 border-b border-slate-200" aria-label="Zakładki kategorii">
         {TABS.map((tab) => (
           <button
             key={tab.id}
             type="button"
             onClick={() => setActiveTab(tab.id)}
-            className={`rounded-t-lg px-3 py-2 text-sm font-medium transition ${
+            className={`-mb-px rounded-t-lg border px-3 py-2 text-sm font-medium transition ${
               activeTab === tab.id
-                ? "border border-b-white border-slate-200 bg-white text-slate-900"
-                : "text-slate-500 hover:bg-slate-50 hover:text-slate-800"
+                ? "border-slate-200 border-b-white bg-white text-slate-900"
+                : "border-transparent text-slate-500 hover:bg-slate-50 hover:text-slate-800"
             }`}
           >
             {tab.label}
@@ -153,43 +156,23 @@ export default function CategoryEditPage() {
       </nav>
 
       <div className="mt-4">
-        {activeTab === "basic" ? (
-          tenantId != null ? (
-            <CategoryEditBasicTab
-              tenantId={tenantId}
-              category={category}
-              onSaved={(next) => setCategory(next)}
-            />
-          ) : (
-            <p className="text-sm text-slate-500">Ładowanie…</p>
-          )
+        {activeTab === "basic" && tenantId != null ? (
+          <CategoryEditBasicTab tenantId={tenantId} category={category} onSaved={onSaved} />
+        ) : null}
+        {activeTab === "numbering" && tenantId != null ? (
+          <CategoryEditNumberingTab tenantId={tenantId} category={category} onSaved={onSaved} />
         ) : null}
         {activeTab === "products" ? (
-          <CategoryEditTabPlaceholder
-            title="Produkty"
-            description="Tabela produktów przypisanych do tej kategorii."
-          />
-        ) : null}
-        {activeTab === "numbering" ? (
-          <CategoryEditTabPlaceholder
-            title="Numeracja"
-            description="Kod i szablon SKU / numeru katalogowego oraz podgląd kolejnych numerów."
-          />
+          <CategoryEditTabPlaceholder title="Produkty" description="Tabela produktów kategorii." />
         ) : null}
         {activeTab === "attributes" ? (
-          <CategoryEditTabPlaceholder
-            title="Atrybuty"
-            description="Schemat pól kategorii (baza pod formularze produktów)."
-          />
+          <CategoryEditTabPlaceholder title="Atrybuty" description="Schemat pól kategorii." />
         ) : null}
         {activeTab === "marketplace" ? (
-          <CategoryEditTabPlaceholder
-            title="Marketplace"
-            description="Mapowanie Allegro / Empik / Erli / Amazon — bez synchronizacji."
-          />
+          <CategoryEditTabPlaceholder title="Marketplace" description="Mapowanie kanałów." />
         ) : null}
         {activeTab === "history" ? (
-          <CategoryEditTabPlaceholder title="Historia" description="Historia zmian kategorii." />
+          <CategoryEditTabPlaceholder title="Historia" description="Historia zmian." />
         ) : null}
       </div>
     </PageLayout>
