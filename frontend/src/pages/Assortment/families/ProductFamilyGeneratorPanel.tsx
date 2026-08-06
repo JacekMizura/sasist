@@ -15,6 +15,8 @@ type Props = {
   tenantId: number;
   familyId: number;
   onGenerated?: () => void;
+  /** When true, tighter chrome for embedding on product Family tab. */
+  embedded?: boolean;
 };
 
 /**
@@ -22,7 +24,7 @@ type Props = {
  * Mode A = empty products; Mode B = copy from base product (default when base exists).
  * SKU / catalog numbers are allocated via product_codes when base category is configured.
  */
-export function ProductFamilyGeneratorPanel({ tenantId, familyId, onGenerated }: Props) {
+export function ProductFamilyGeneratorPanel({ tenantId, familyId, onGenerated, embedded = false }: Props) {
   const [preview, setPreview] = useState<FamilyGeneratePreview | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -125,8 +127,10 @@ export function ProductFamilyGeneratorPanel({ tenantId, familyId, onGenerated }:
   if (!preview) return null;
 
   return (
-    <section className={`mt-8 max-w-3xl ${pimPanelClass}`}>
-      <h2 className="text-sm font-semibold text-slate-900">Generator produktów</h2>
+    <section className={embedded ? "mt-4 border-t border-slate-100 pt-4" : `mt-8 max-w-3xl ${pimPanelClass}`}>
+      <h2 className="text-sm font-semibold text-slate-900">
+        {embedded ? "Wybór kombinacji" : "Generator produktów"}
+      </h2>
       <p className="mt-1 text-sm text-slate-500">
         Przed utworzeniem wybierz kombinacje. SKU i numery katalogowe przydziela kategoria produktu
         bazowego (gdy skonfigurowana).

@@ -15,6 +15,7 @@ import { extractApiErrorMessage } from "../../api/authApi";
 import { PrimaryButton, Select } from "../../design-system";
 import { pimFieldLabelClass, pimHintClass, pimPanelClass } from "../Assortment/pimUi";
 import { FamilyAttributesCard } from "./productFamily/FamilyAttributesCard";
+import { FamilyGeneratorCard } from "./productFamily/FamilyGeneratorCard";
 import { FamilyInfoCard } from "./productFamily/FamilyInfoCard";
 import { FamilyMembersCard } from "./productFamily/FamilyMembersCard";
 
@@ -148,6 +149,12 @@ export function ProductEditFamilyTab({ tenantId, productId }: Props) {
             tenantId={tenantId}
             members={family.members ?? []}
             currentProductId={productId}
+          />
+          <FamilyGeneratorCard
+            tenantId={tenantId}
+            familyId={family.id}
+            members={family.members ?? []}
+            onChanged={() => setRefreshKey((k) => k + 1)}
           />
         </>
       )}
