@@ -123,53 +123,82 @@ export function CategoryFormModal({
         </>
       }
     >
-      <div className="space-y-4">
-        <div>
-          <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Nazwa</label>
-          <Input
-            density="comfortable"
-            focusTone="brand"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="np. Łazienka"
-            autoFocus
-          />
-        </div>
-        <div>
-          <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Rodzic</label>
-          <Select
-            density="comfortable"
-            focusTone="brand"
-            value={parentId}
-            onChange={(e) => {
-              const v = e.target.value;
-              setParentId(v === "" ? "" : Number(v));
-            }}
-            className="bg-white"
-          >
-            <option value="">— Kategoria główna (korzeń) —</option>
-            {parentOptions.map((n) => (
-              <option key={n.id} value={n.id}>
-                {n.path_names.join(" › ")}
-              </option>
-            ))}
-          </Select>
-        </div>
-        <div>
-          <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Opis</label>
-          <Textarea
-            density="comfortable"
-            focusTone="brand"
-            rows={2}
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            placeholder="Opcjonalny opis kategorii"
-          />
-        </div>
+      <div className="space-y-5">
+        <section className="space-y-4">
+          <h3 className="text-sm font-semibold text-slate-900">Podstawowe</h3>
+          <p className="text-xs text-slate-500">
+            Hierarchia kategorii produktów. Import pełnego drzewa Allegro będzie osobnym etapem — ta struktura jest pod
+            to przygotowana.
+          </p>
+          <div>
+            <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Nazwa</label>
+            <Input
+              density="comfortable"
+              focusTone="brand"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="np. Sznurowadła"
+              autoFocus
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Rodzic</label>
+            <Select
+              density="comfortable"
+              focusTone="brand"
+              value={parentId}
+              onChange={(e) => {
+                const v = e.target.value;
+                setParentId(v === "" ? "" : Number(v));
+              }}
+              className="bg-white"
+            >
+              <option value="">— Kategoria główna (korzeń) —</option>
+              {parentOptions.map((n) => (
+                <option key={n.id} value={n.id}>
+                  {n.path_names.join(" › ")}
+                </option>
+              ))}
+            </Select>
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Opis</label>
+            <Textarea
+              density="comfortable"
+              focusTone="brand"
+              rows={2}
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="Opcjonalny opis kategorii"
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Kolejność</label>
+              <Input
+                type="number"
+                density="comfortable"
+                focusTone="brand"
+                value={sortOrder}
+                onChange={(e) => setSortOrder(Number.parseInt(e.target.value, 10) || 0)}
+              />
+            </div>
+            <div className="flex items-end pb-1">
+              <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-800">
+                <Checkbox checked={isActive} onChange={(e) => setIsActive(e.target.checked)} />
+                Aktywna
+              </label>
+            </div>
+          </div>
+        </section>
 
-        <div className="rounded-lg border border-slate-200 bg-slate-50/40 p-4">
-          <h3 className="mb-3 text-sm font-bold text-slate-900">Numeracja SKU / katalog</h3>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <section className="rounded-xl border border-slate-200 bg-slate-50/50 p-4">
+          <h3 className="text-sm font-semibold text-slate-900">Numeracja SKU i numeru katalogowego</h3>
+          <p className="mt-1 text-xs text-slate-500">
+            Liczniki są prowadzone osobno dla każdego prefiksu (np. <span className="font-mono">WAN-00001</span>,{" "}
+            <span className="font-mono">BRO-00001</span>). Używane przez Generuj na karcie produktu i kreator rodzin.
+          </p>
+          <div className="mt-3 grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div>
               <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Kod SKU</label>
               <Input
@@ -208,7 +237,9 @@ export function CategoryFormModal({
                 <p className="mt-1 text-[11px] text-slate-500">
                   Przykład: <span className="font-mono font-medium text-slate-700">{skuPreview}</span>
                 </p>
-              ) : null}
+              ) : (
+                <p className="mt-1 text-[11px] text-slate-400">Uzupełnij kod i szablon, aby zobaczyć przykład.</p>
+              )}
             </div>
             <div>
               <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">
@@ -226,33 +257,16 @@ export function CategoryFormModal({
                 <p className="mt-1 text-[11px] text-slate-500">
                   Przykład: <span className="font-mono font-medium text-slate-700">{catalogPreview}</span>
                 </p>
-              ) : null}
+              ) : (
+                <p className="mt-1 text-[11px] text-slate-400">Uzupełnij kod i szablon, aby zobaczyć przykład.</p>
+              )}
             </div>
           </div>
           <p className="mt-3 text-[11px] leading-relaxed text-slate-500">
             Tokeny v1: <code className="font-mono">{"{CODE}"}</code>, <code className="font-mono">{"{NNNNN}"}</code>.
-            Numeracja jest osobna dla każdego szablonu/prefiksu.
+            Bez kodu i szablonu przycisk Generuj na produkcie nie przydzieli numeru.
           </p>
-        </div>
-
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Kolejność</label>
-            <Input
-              type="number"
-              density="comfortable"
-              focusTone="brand"
-              value={sortOrder}
-              onChange={(e) => setSortOrder(Number.parseInt(e.target.value, 10) || 0)}
-            />
-          </div>
-          <div className="flex items-end pb-1">
-            <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-800">
-              <Checkbox checked={isActive} onChange={(e) => setIsActive(e.target.checked)} />
-              Aktywna
-            </label>
-          </div>
-        </div>
+        </section>
       </div>
     </Dialog>
   );

@@ -68,10 +68,10 @@ export default function ProductCategoriesPage() {
     <PageLayout>
       <ListPageHeader
         title="Kategorie"
-        description="Hierarchia kategorii produktów — bez limitu poziomów."
+        description="Hierarchia kategorii z numeracją SKU i katalogu. Import drzewa Allegro — później; struktura jest pod to przygotowana."
         breadcrumbs={[
           { label: UI_STRINGS.navigation.assortment },
-          { label: "Kategorie" },
+          { label: UI_STRINGS.navigation.categories },
         ]}
         actions={
           <PrimaryButton type="button" density="compact" onClick={() => openCreate(null)}>
