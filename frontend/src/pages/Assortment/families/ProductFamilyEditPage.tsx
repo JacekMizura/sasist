@@ -19,6 +19,7 @@ import { ListPageHeader } from "../../../components/listPage/ListPageHeader";
 import PageLayout from "../../../components/layout/PageLayout";
 import { Checkbox, GhostButton, Input, PrimaryButton, Select } from "../../../design-system";
 import { UI_STRINGS } from "../../../constants/uiStrings";
+import { ProductFamilyGeneratorPanel } from "./ProductFamilyGeneratorPanel";
 
 type DraftAttr = {
   key: string;
@@ -463,6 +464,16 @@ export default function ProductFamilyEditPage() {
             ))}
           </ul>
         </section>
+      ) : null}
+
+      {!isNew && tenantId != null && numericId != null ? (
+        <ProductFamilyGeneratorPanel
+          tenantId={tenantId}
+          familyId={numericId}
+          onGenerated={() => {
+            void getProductFamily(tenantId, numericId).then((g) => setMembers(g.members ?? []));
+          }}
+        />
       ) : null}
 
       <p className="mt-6 text-sm text-slate-500">

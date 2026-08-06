@@ -107,3 +107,44 @@ class ProductFamilyProductStateRead(BaseModel):
     product_family_id: Optional[int] = None
     family: Optional[ProductFamilyRead] = None
     family_product_count: int = 0
+
+
+class FamilyGenerateBaseProduct(BaseModel):
+    id: int
+    name: str
+
+
+class FamilyGenerateCombination(BaseModel):
+    value_key: str
+    value_ids: list[int] = Field(default_factory=list)
+    label: str
+    exists: bool = False
+
+
+class FamilyGeneratePreview(BaseModel):
+    family_id: int
+    family_name: str
+    attribute_count: int = 0
+    combination_count: int = 0
+    existing_count: int = 0
+    missing_count: int = 0
+    new_sku_count: int = 0
+    has_base_product: bool = False
+    base_product: Optional[FamilyGenerateBaseProduct] = None
+    default_mode: Literal["empty", "copy_base"] = "empty"
+    combinations: list[FamilyGenerateCombination] = Field(default_factory=list)
+
+
+class FamilyGenerateBody(BaseModel):
+    #: empty = blank products; copy_base = clone from family base product (default when available)
+    mode: Literal["empty", "copy_base"] = "copy_base"
+    #: Explicit value_key list — required; never auto-create without selection
+    value_keys: list[str] = Field(..., min_length=1)
+    only_missing: bool = True
+
+
+class FamilyGenerateResult(BaseModel):
+    created_count: int
+    mode: str
+    products: list[ProductFamilyMemberRead] = Field(default_factory=list)
+    family: Optional[ProductFamilyRead] = None

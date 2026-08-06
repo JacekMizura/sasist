@@ -142,3 +142,58 @@ export async function attachProductFamily(
   );
   return res.data;
 }
+
+export type FamilyGenerateMode = "empty" | "copy_base";
+
+export type FamilyGenerateCombination = {
+  value_key: string;
+  value_ids: number[];
+  label: string;
+  exists: boolean;
+};
+
+export type FamilyGeneratePreview = {
+  family_id: number;
+  family_name: string;
+  attribute_count: number;
+  combination_count: number;
+  existing_count: number;
+  missing_count: number;
+  new_sku_count: number;
+  has_base_product: boolean;
+  base_product?: { id: number; name: string } | null;
+  default_mode: FamilyGenerateMode;
+  combinations: FamilyGenerateCombination[];
+};
+
+export type FamilyGenerateResult = {
+  created_count: number;
+  mode: string;
+  products: ProductFamilyMember[];
+  family?: ProductFamily | null;
+};
+
+export async function previewFamilyGenerate(
+  tenantId: number,
+  familyId: number,
+): Promise<FamilyGeneratePreview> {
+  const res = await api.get<FamilyGeneratePreview>(`/product-families/${familyId}/generate/preview`, {
+    params: { tenant_id: tenantId },
+  });
+  return res.data;
+}
+
+export async function generateFamilyProducts(
+  tenantId: number,
+  familyId: number,
+  body: {
+    mode: FamilyGenerateMode;
+    value_keys: string[];
+    only_missing?: boolean;
+  },
+): Promise<FamilyGenerateResult> {
+  const res = await api.post<FamilyGenerateResult>(`/product-families/${familyId}/generate`, body, {
+    params: { tenant_id: tenantId },
+  });
+  return res.data;
+}

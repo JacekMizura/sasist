@@ -7,6 +7,9 @@ from sqlalchemy.orm import Session
 
 from ..database import get_db
 from ..schemas.product_family import (
+    FamilyGenerateBody,
+    FamilyGeneratePreview,
+    FamilyGenerateResult,
     ProductFamilyAttachBody,
     ProductFamilyCreateBody,
     ProductFamilyListItem,
@@ -19,9 +22,11 @@ from ..services.product_families import (
     attach_product_to_family,
     create_family,
     delete_family,
+    generate_family_products,
     get_family,
     get_product_family_state,
     list_families,
+    preview_family_generate,
     serialize_family,
     update_family,
 )
@@ -121,6 +126,48 @@ def api_delete_product_family(
     try:
         delete_family(db, tenant_id, family_id)
         db.commit()
+    except ProductFamilyError as e:
+        db.rollback()
+        raise _http(e) from e
+    except Exception:
+        db.rollback()
+        raise
+
+
+@router.get("/{family_id}/generate/preview", response_model=FamilyGeneratePreview)
+def api_preview_family_generate(
+    family_id: int,
+    tenant_id: int = Query(..., ge=1),
+    db: Session = Depends(get_db),
+):
+    try:
+        return FamilyGeneratePreview.model_validate(preview_family_generate(db, tenant_id, family_id))
+    except ProductFamilyError as e:
+        raise _http(e) from e
+
+
+@router.post(
+    "/{family_id}/generate",
+    response_model=FamilyGenerateResult,
+    status_code=201,
+)
+def api_generate_family_products(
+    family_id: int,
+    body: FamilyGenerateBody,
+    tenant_id: int = Query(..., ge=1),
+    db: Session = Depends(get_db),
+):
+    try:
+        result = generate_family_products(
+            db,
+            tenant_id,
+            family_id,
+            mode=body.mode,
+            value_keys=body.value_keys,
+            only_missing=body.only_missing,
+        )
+        db.commit()
+        return FamilyGenerateResult.model_validate(result)
     except ProductFamilyError as e:
         db.rollback()
         raise _http(e) from e
