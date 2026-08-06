@@ -295,6 +295,10 @@ from .api.product_variants import (
     product_variants_router,
     router as variant_groups_router,
 )
+from .api.product_families import (
+    product_family_membership_router,
+    router as product_families_router,
+)
 from .api.product_custom_fields import (
     product_values_router as product_custom_field_values_router,
     router as product_custom_fields_router,
@@ -2163,6 +2167,8 @@ _API_ROUTERS = (
     product_category_assignment_router,
     variant_groups_router,
     product_variants_router,
+    product_families_router,
+    product_family_membership_router,
     product_custom_fields_router,
     product_custom_field_values_router,
     product_codes_router,
