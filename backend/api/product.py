@@ -42,6 +42,7 @@ from ..models.supplier_product import SupplierProduct
 from ..models.product import Product
 from ..models.product_barcode import ProductBarcode
 from ..models.product_family import ProductFamily
+from ..models.product_category import ProductCategoryLink
 from ..models.inventory import Inventory
 from ..models.location import Location
 from ..models.order import Order
@@ -1920,6 +1921,11 @@ def get_products(
     tenant_id: Optional[int] = None,
     warehouse_id: Optional[int] = Query(None, ge=1),
     manufacturer_id: Optional[int] = Query(None, ge=1),
+    category_id: Optional[int] = Query(
+        None,
+        ge=1,
+        description="Products with this category as primary or additional (product_category_links).",
+    ),
     db: Session = Depends(get_db),
     ean: Optional[str] = None,
     name: Optional[str] = None,
@@ -1971,6 +1977,25 @@ def get_products(
         q = q.filter(Product.tenant_id == tenant_id)
     if manufacturer_id is not None:
         q = q.filter(Product.manufacturer_id == manufacturer_id)
+    if category_id is not None:
+        link_pids = (
+            db.query(ProductCategoryLink.product_id)
+            .filter(
+                ProductCategoryLink.category_id == int(category_id),
+                *(
+                    [ProductCategoryLink.tenant_id == int(tenant_id)]
+                    if tenant_id is not None
+                    else []
+                ),
+            )
+            .subquery()
+        )
+        q = q.filter(
+            or_(
+                Product.primary_category_id == int(category_id),
+                Product.id.in_(link_pids),
+            )
+        )
     if default_supplier_id is not None:
         q = apply_supplier_product_filter(q, default_supplier_id)
 

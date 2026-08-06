@@ -13,6 +13,7 @@ import { pimPanelIdentityClass, pimStatTileClass } from "../pimUi";
 import { CategoryEditTabPlaceholder } from "./CategoryEditTabPlaceholder";
 import { CategoryEditBasicTab } from "./CategoryEditBasicTab";
 import { CategoryEditNumberingTab } from "./CategoryEditNumberingTab";
+import { CategoryEditProductsTab } from "./CategoryEditProductsTab";
 
 export type CategoryEditTabId =
   | "basic"
@@ -65,7 +66,6 @@ export default function CategoryEditPage() {
 
   const onSaved = (next: ProductCategoryRead) => {
     setCategory(next);
-    setHistoryKey((k) => k + 1);
   };
 
   if (loading || !category) {
