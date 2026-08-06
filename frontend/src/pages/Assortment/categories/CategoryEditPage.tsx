@@ -14,6 +14,7 @@ import { CategoryEditTabPlaceholder } from "./CategoryEditTabPlaceholder";
 import { CategoryEditBasicTab } from "./CategoryEditBasicTab";
 import { CategoryEditNumberingTab } from "./CategoryEditNumberingTab";
 import { CategoryEditProductsTab } from "./CategoryEditProductsTab";
+import { CategoryEditAttributesTab } from "./CategoryEditAttributesTab";
 
 export type CategoryEditTabId =
   | "basic"
@@ -162,8 +163,8 @@ export default function CategoryEditPage() {
         {activeTab === "numbering" && tenantId != null ? (
           <CategoryEditNumberingTab tenantId={tenantId} category={category} onSaved={onSaved} />
         ) : null}
-        {activeTab === "products" ? (
-          <CategoryEditTabPlaceholder title="Produkty" description="Tabela produktów kategorii." />
+        {activeTab === "products" && tenantId != null ? (
+          <CategoryEditProductsTab tenantId={tenantId} categoryId={category.id} />
         ) : null}
         {activeTab === "attributes" ? (
           <CategoryEditTabPlaceholder title="Atrybuty" description="Schemat pól kategorii." />
