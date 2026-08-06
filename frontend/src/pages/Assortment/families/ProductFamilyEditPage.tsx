@@ -24,6 +24,7 @@ import { getProductDetailsPath } from "../../Products/productPaths";
 import { ProductFamilyGeneratorPanel } from "./ProductFamilyGeneratorPanel";
 import { FamilyProductSearchField } from "./FamilyProductSearchField";
 import type { ProductSearchHit } from "../../../api/productsSearchApi";
+import { pimFieldLabelClass, pimPanelClass } from "../pimUi";
 
 type DraftAttr = {
   key: string;
@@ -271,13 +272,13 @@ export default function ProductFamilyEditPage() {
         }
       />
 
-      <section className="mt-6 max-w-3xl space-y-4 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+      <section className={`mt-6 max-w-3xl space-y-4 ${pimPanelClass}`}>
         <label className="block">
-          <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Nazwa rodziny</span>
+          <span className={pimFieldLabelClass}>Nazwa rodziny</span>
           <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="np. Sznurowadła CAT" />
         </label>
         <div>
-          <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">
+          <span className={pimFieldLabelClass}>
             Produkt bazowy (opcjonalnie)
           </span>
           {tenantId != null ? (
@@ -319,10 +320,10 @@ export default function ProductFamilyEditPage() {
 
       <div className="mt-3 space-y-4">
         {attributes.map((ax, ai) => (
-          <section key={ax.key} className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+          <section key={ax.key} className={pimPanelClass}>
             <div className="flex flex-wrap items-start gap-3">
               <label className="min-w-[200px] flex-1">
-                <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Nazwa cechy</span>
+                <span className={pimFieldLabelClass}>Nazwa cechy</span>
                 <Input
                   value={ax.name}
                   onChange={(e) =>
@@ -332,7 +333,7 @@ export default function ProductFamilyEditPage() {
                 />
               </label>
               <label className="w-40">
-                <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Typ</span>
+                <span className={pimFieldLabelClass}>Typ</span>
                 <Select
                   value={ax.display_type}
                   onChange={(e) =>
@@ -394,7 +395,7 @@ export default function ProductFamilyEditPage() {
             </div>
 
             <div className="mt-4">
-              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Wartości</p>
+              <p className={`${pimFieldLabelClass} mb-2`}>Wartości</p>
               <ul className="space-y-2">
                 {ax.values.map((v, vi) => (
                   <li key={v.key} className="flex flex-wrap items-center gap-2">
@@ -484,7 +485,7 @@ export default function ProductFamilyEditPage() {
       </div>
 
       {!isNew && tenantId != null && numericId != null ? (
-        <section className="mt-8 max-w-3xl rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+        <section className={`mt-8 max-w-3xl ${pimPanelClass}`}>
           <div className="flex flex-wrap items-center justify-between gap-3">
             <h2 className="text-sm font-semibold text-slate-800">Produkty w rodzinie ({members.length})</h2>
             <Link
@@ -495,7 +496,7 @@ export default function ProductFamilyEditPage() {
             </Link>
           </div>
           <div className="mt-3">
-            <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">
+            <span className={pimFieldLabelClass}>
               Dołącz istniejący produkt
             </span>
             <FamilyProductSearchField

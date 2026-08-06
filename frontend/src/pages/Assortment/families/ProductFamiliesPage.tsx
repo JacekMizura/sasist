@@ -14,6 +14,7 @@ import { ListPageHeader } from "../../../components/listPage/ListPageHeader";
 import PageLayout from "../../../components/layout/PageLayout";
 import { EmptyState, GhostButton, PrimaryButton, SearchInput } from "../../../design-system";
 import { UI_STRINGS } from "../../../constants/uiStrings";
+import { pimCardHoverClass, pimIconBadgeMutedClass, PIM_ASSORTMENT_TAGLINE } from "../pimUi";
 
 /**
  * Asortyment → Rodziny — opcjonalne grupowanie pełnych produktów + cechy rodziny.
@@ -71,7 +72,7 @@ export default function ProductFamiliesPage() {
     <PageLayout>
       <ListPageHeader
         title="Rodziny produktów"
-        description="Opcjonalne grupy pełnych produktów. Cechy rodziny służą do opisu i kreatora — bez dziedziczenia po utworzeniu."
+        description={`${PIM_ASSORTMENT_TAGLINE}. Opcjonalne grupy pełnych produktów — cechy służą do opisu i kreatora, bez dziedziczenia po utworzeniu.`}
         breadcrumbs={[
           { label: UI_STRINGS.navigation.assortment },
           { label: UI_STRINGS.navigation.productFamilies },
@@ -126,9 +127,9 @@ export default function ProductFamiliesPage() {
         <ul className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
           {filtered.map((row) => (
             <li key={row.id}>
-              <article className="flex h-full flex-col rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition hover:border-slate-300">
+              <article className={pimCardHoverClass}>
                 <div className="flex items-start gap-3">
-                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-600">
+                  <span className={pimIconBadgeMutedClass}>
                     <Network className="h-5 w-5" strokeWidth={2} aria-hidden />
                   </span>
                   <div className="min-w-0 flex-1">

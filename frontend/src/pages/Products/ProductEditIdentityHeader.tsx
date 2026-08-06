@@ -12,6 +12,11 @@ import {
 import { extractApiErrorMessage } from "../../api/authApi";
 import { GhostButton, Input, PrimaryButton, Select } from "../../design-system";
 import { ProductCodeGenerateControl } from "./ProductCodeGenerateControl";
+import {
+  pimFieldLabelClass,
+  pimIconBadgeClass,
+  pimPanelIdentityClass,
+} from "../Assortment/pimUi";
 
 type Props = {
   isNew: boolean;
@@ -97,10 +102,10 @@ export function ProductEditIdentityHeader({
   const statusLabel = isNew ? "Szkic" : "Aktywny";
 
   return (
-    <section className="mb-6 rounded-xl border border-slate-200 bg-gradient-to-br from-slate-50 to-white p-4 shadow-sm sm:p-5">
+    <section className={pimPanelIdentityClass}>
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2">
-          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-800 text-white">
+          <span className={pimIconBadgeClass}>
             <Layers3 className="h-4 w-4" strokeWidth={2} aria-hidden />
           </span>
           <div>
@@ -119,7 +124,7 @@ export function ProductEditIdentityHeader({
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <div>
-          <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">
+          <span className={pimFieldLabelClass}>
             Rodzina
           </span>
           {isNew || productId == null || tenantId == null ? (
@@ -165,7 +170,7 @@ export function ProductEditIdentityHeader({
         </div>
 
         <div>
-          <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">
+          <span className={pimFieldLabelClass}>
             Kategoria
           </span>
           {primaryCategoryPath ? (
@@ -187,7 +192,7 @@ export function ProductEditIdentityHeader({
         </div>
 
         <div>
-          <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">
+          <span className={pimFieldLabelClass}>
             SKU
           </span>
           <div className="flex items-stretch gap-2">
@@ -212,7 +217,7 @@ export function ProductEditIdentityHeader({
         </div>
 
         <div>
-          <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">
+          <span className={pimFieldLabelClass}>
             Numer katalogowy
           </span>
           <div className="flex items-stretch gap-2">

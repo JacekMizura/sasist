@@ -4,6 +4,7 @@ import { ListPageHeader } from "../../components/listPage/ListPageHeader";
 import PageLayout from "../../components/layout/PageLayout";
 import { EmptyState } from "../../design-system";
 import { UI_STRINGS } from "../../constants/uiStrings";
+import { pimPanelClass, PIM_ASSORTMENT_TAGLINE } from "./pimUi";
 
 /**
  * Asortyment → Tabele rozmiarów — placeholder shell for a future size-chart module.
@@ -13,13 +14,13 @@ export default function SizeTablesPage() {
     <PageLayout>
       <ListPageHeader
         title="Tabele rozmiarów"
-        description="Słownik tabel rozmiarów powiązanych z kategoriami i produktami."
+        description={`${PIM_ASSORTMENT_TAGLINE}. Słownik tabel rozmiarów powiązanych z kategoriami i produktami.`}
         breadcrumbs={[
           { label: UI_STRINGS.navigation.assortment },
           { label: UI_STRINGS.navigation.sizeTables },
         ]}
       />
-      <div className="mt-6">
+      <div className={`mt-6 ${pimPanelClass}`}>
         <EmptyState
           title="Moduł w przygotowaniu"
           description="Tabele rozmiarów będą dostępne w kolejnym etapie — miejsce w Asortymencie jest już zarezerwowane."

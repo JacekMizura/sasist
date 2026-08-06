@@ -9,6 +9,7 @@ import {
 } from "../../../api/productFamiliesApi";
 import { extractApiErrorMessage } from "../../../api/authApi";
 import { Checkbox, GhostButton, PrimaryButton, Select } from "../../../design-system";
+import { pimFieldLabelClass, pimPanelClass, pimStatTileClass } from "../pimUi";
 
 type Props = {
   tenantId: number;
@@ -124,7 +125,7 @@ export function ProductFamilyGeneratorPanel({ tenantId, familyId, onGenerated }:
   if (!preview) return null;
 
   return (
-    <section className="mt-8 max-w-3xl rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+    <section className={`mt-8 max-w-3xl ${pimPanelClass}`}>
       <h2 className="text-sm font-semibold text-slate-900">Generator produktów</h2>
       <p className="mt-1 text-sm text-slate-500">
         Przed utworzeniem wybierz kombinacje. SKU i numery katalogowe przydziela kategoria produktu
@@ -132,19 +133,19 @@ export function ProductFamilyGeneratorPanel({ tenantId, familyId, onGenerated }:
       </p>
 
       <dl className="mt-4 grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
-        <div className="rounded-lg bg-slate-50 px-3 py-2">
+        <div className={pimStatTileClass}>
           <dt className="text-xs text-slate-500">Produkty (brakujące)</dt>
           <dd className="font-semibold text-slate-900">{preview.product_count ?? preview.missing_count}</dd>
         </div>
-        <div className="rounded-lg bg-slate-50 px-3 py-2">
+        <div className={pimStatTileClass}>
           <dt className="text-xs text-slate-500">SKU</dt>
           <dd className="font-semibold text-slate-900">{preview.sku_count ?? 0}</dd>
         </div>
-        <div className="rounded-lg bg-slate-50 px-3 py-2">
+        <div className={pimStatTileClass}>
           <dt className="text-xs text-slate-500">Numery katalogowe</dt>
           <dd className="font-semibold text-slate-900">{preview.catalog_count ?? 0}</dd>
         </div>
-        <div className="rounded-lg bg-slate-50 px-3 py-2">
+        <div className={pimStatTileClass}>
           <dt className="text-xs text-slate-500">Wybrane</dt>
           <dd className="font-semibold text-slate-900">
             {selectedMissingCount} / {selectedSkuCount} SKU / {selectedCatalogCount} kat.
@@ -160,7 +161,7 @@ export function ProductFamilyGeneratorPanel({ tenantId, familyId, onGenerated }:
       ) : null}
 
       <label className="mt-4 block max-w-md">
-        <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Tryb</span>
+        <span className={pimFieldLabelClass}>Tryb</span>
         <Select
           value={mode}
           disabled={busy}

@@ -11,6 +11,7 @@ import { useCategoryTree } from "../../../modules/productCategories/useCategoryT
 import { useEffect } from "react";
 import { CategoryFormModal } from "./CategoryFormModal";
 import { CategoryTree } from "./CategoryTree";
+import { PIM_ASSORTMENT_TAGLINE } from "../pimUi";
 
 /**
  * Asortyment → Kategorie — hierarchical tree (not a table).
@@ -68,7 +69,7 @@ export default function ProductCategoriesPage() {
     <PageLayout>
       <ListPageHeader
         title="Kategorie"
-        description="Hierarchia kategorii z numeracją SKU i katalogu. Import drzewa Allegro — później; struktura jest pod to przygotowana."
+        description={`${PIM_ASSORTMENT_TAGLINE}. Hierarchia z numeracją SKU i katalogu — struktura gotowa pod późniejszy import Allegro.`}
         breadcrumbs={[
           { label: UI_STRINGS.navigation.assortment },
           { label: UI_STRINGS.navigation.categories },
