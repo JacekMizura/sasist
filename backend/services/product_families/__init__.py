@@ -10,6 +10,7 @@ from .service import (
     update_family,
 )
 from .generate import generate_family_products, preview_family_generate
+from .migrate_from_variants import migrate_variants_to_families_for_tenant
 
 __all__ = [
     "ProductFamilyError",
@@ -20,6 +21,7 @@ __all__ = [
     "get_family",
     "get_product_family_state",
     "list_families",
+    "migrate_variants_to_families_for_tenant",
     "preview_family_generate",
     "serialize_family",
     "update_family",

@@ -26,6 +26,7 @@ from ..services.product_families import (
     get_family,
     get_product_family_state,
     list_families,
+    migrate_variants_to_families_for_tenant,
     preview_family_generate,
     serialize_family,
     update_family,
@@ -47,6 +48,21 @@ def api_list_product_families(
     db: Session = Depends(get_db),
 ):
     return [ProductFamilyListItem.model_validate(x) for x in list_families(db, tenant_id, include_inactive=include_inactive)]
+
+
+@router.post("/migrate-from-variants")
+def api_migrate_variants_to_families(
+    tenant_id: int = Query(..., ge=1),
+    db: Session = Depends(get_db),
+):
+    """Idempotent Variant → Product Family data migration for one tenant."""
+    try:
+        result = migrate_variants_to_families_for_tenant(db, tenant_id)
+        db.commit()
+        return result
+    except Exception:
+        db.rollback()
+        raise
 
 
 @router.get("/{family_id}", response_model=ProductFamilyRead)

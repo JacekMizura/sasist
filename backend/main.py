@@ -1084,6 +1084,12 @@ try:
 except Exception:
     logging.getLogger(__name__).exception("ensure_product_families_schema failed at import")
 try:
+    from .services.product_families.migrate_from_variants import ensure_variant_to_family_migration
+
+    ensure_variant_to_family_migration(engine)
+except Exception:
+    logging.getLogger(__name__).exception("ensure_variant_to_family_migration failed at import")
+try:
     ensure_product_custom_fields_schema(engine)
 except Exception:
     logging.getLogger(__name__).exception("ensure_product_custom_fields_schema failed at import")
@@ -1547,6 +1553,12 @@ def _upgrade_schema_background() -> None:
         pass
     try:
         ensure_product_families_schema(engine)
+    except Exception:
+        pass
+    try:
+        from .services.product_families.migrate_from_variants import ensure_variant_to_family_migration
+
+        ensure_variant_to_family_migration(engine)
     except Exception:
         pass
     try:
