@@ -159,15 +159,22 @@ export type FamilyGeneratePreview = {
   combination_count: number;
   existing_count: number;
   missing_count: number;
+  product_count: number;
+  sku_count: number;
+  catalog_count: number;
   new_sku_count: number;
+  will_allocate_sku: boolean;
+  will_allocate_catalog: boolean;
   has_base_product: boolean;
-  base_product?: { id: number; name: string } | null;
+  base_product?: { id: number; name: string; primary_category_id?: number | null } | null;
   default_mode: FamilyGenerateMode;
   combinations: FamilyGenerateCombination[];
 };
 
 export type FamilyGenerateResult = {
   created_count: number;
+  allocated_sku_count?: number;
+  allocated_catalog_count?: number;
   mode: string;
   products: ProductFamilyMember[];
   family?: ProductFamily | null;

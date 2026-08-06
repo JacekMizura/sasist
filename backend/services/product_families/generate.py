@@ -9,6 +9,14 @@ from sqlalchemy.orm import Session
 
 from ...models.product import Product
 from ...models.product_family import FamilyAttribute, FamilyAttributeValue, ProductAttributeValue
+from ..product_categories import get_category
+from ..product_categories.errors import CategoryNotFoundError, CategoryValidationError
+from ..product_codes import preview_or_allocate, resolve_category_numbering
+from ..product_codes.errors import (
+    ProductCodeNoCategoryError,
+    ProductCodeNotConfiguredError,
+    ProductCodeValidationError,
+)
 from .service import (
     ProductFamilyError,
     _combination_count,
@@ -19,6 +27,45 @@ from .service import (
 )
 
 GenerateMode = Literal["empty", "copy_base"]
+
+
+def _category_numbering_flags(db: Session, tenant_id: int, category_id: Optional[int]) -> dict[str, bool]:
+    """Whether SKU / catalog counters are configured for this category."""
+    flags = {"sku": False, "catalog": False}
+    if category_id is None:
+        return flags
+    try:
+        category = get_category(db, tenant_id, int(category_id))
+    except (CategoryNotFoundError, CategoryValidationError):
+        return flags
+    for kind in ("sku", "catalog"):
+        try:
+            resolve_category_numbering(category, kind)  # type: ignore[arg-type]
+            flags[kind] = True
+        except ProductCodeNotConfiguredError:
+            pass
+    return flags
+
+
+def _try_allocate_code(
+    db: Session,
+    tenant_id: int,
+    *,
+    kind: Literal["sku", "catalog"],
+    category_id: int,
+) -> Optional[str]:
+    try:
+        result = preview_or_allocate(
+            db,
+            tenant_id,
+            kind=kind,
+            category_id=int(category_id),
+            allocate=True,
+        )
+        value = (result.get("value") or "").strip()
+        return value or None
+    except (ProductCodeNotConfiguredError, ProductCodeNoCategoryError, ProductCodeValidationError):
+        return None
 
 
 def value_key_for_ids(value_ids: list[int]) -> str:
@@ -85,6 +132,7 @@ def preview_family_generate(db: Session, tenant_id: int, family_id: int) -> dict
         )
 
     base = None
+    category_id: Optional[int] = None
     if family.base_product_id:
         base_row = (
             db.query(Product)
@@ -96,7 +144,19 @@ def preview_family_generate(db: Session, tenant_id: int, family_id: int) -> dict
             .first()
         )
         if base_row:
-            base = {"id": int(base_row.id), "name": base_row.name or f"Produkt #{base_row.id}"}
+            category_id = getattr(base_row, "primary_category_id", None)
+            category_id = int(category_id) if category_id is not None else None
+            base = {
+                "id": int(base_row.id),
+                "name": base_row.name or f"Produkt #{base_row.id}",
+                "primary_category_id": category_id,
+            }
+
+    numbering = _category_numbering_flags(db, tenant_id, category_id)
+    will_sku = numbering["sku"]
+    will_catalog = numbering["catalog"]
+    sku_count = missing_count if will_sku else 0
+    catalog_count = missing_count if will_catalog else 0
 
     return {
         "family_id": int(family.id),
@@ -105,7 +165,12 @@ def preview_family_generate(db: Session, tenant_id: int, family_id: int) -> dict
         "combination_count": _combination_count(attrs),
         "existing_count": len(existing),
         "missing_count": missing_count,
-        "new_sku_count": missing_count,
+        "product_count": missing_count,
+        "sku_count": sku_count,
+        "catalog_count": catalog_count,
+        "new_sku_count": sku_count if will_sku else missing_count,
+        "will_allocate_sku": will_sku,
+        "will_allocate_catalog": will_catalog,
         "has_base_product": base is not None,
         "base_product": base,
         "default_mode": "copy_base" if base is not None else "empty",
@@ -179,12 +244,7 @@ def generate_family_products(
 
     mode_norm: GenerateMode = "copy_base" if mode == "copy_base" else "empty"
     base: Optional[Product] = None
-    if mode_norm == "copy_base":
-        if not family.base_product_id:
-            raise ProductFamilyError(
-                "Tryb kopiowania wymaga produktu bazowego na rodzinie.",
-                code="base_product_required",
-            )
+    if family.base_product_id:
         base = (
             db.query(Product)
             .filter(
@@ -194,12 +254,28 @@ def generate_family_products(
             )
             .first()
         )
+    if mode_norm == "copy_base":
         if base is None:
+            if not family.base_product_id:
+                raise ProductFamilyError(
+                    "Tryb kopiowania wymaga produktu bazowego na rodzinie.",
+                    code="base_product_required",
+                )
             raise ProductFamilyError("Nie znaleziono produktu bazowego.", code="base_product_not_found")
 
     family_name = (family.name or "").strip() or f"Rodzina #{family.id}"
-    copy_kwargs = _copy_fields_from_base(base) if base is not None else {}
+    copy_kwargs = _copy_fields_from_base(base) if (mode_norm == "copy_base" and base is not None) else {}
+    # Category for product_codes: copied product, else base (empty mode still can allocate).
+    allocate_category_id: Optional[int] = None
+    if copy_kwargs.get("primary_category_id") is not None:
+        allocate_category_id = int(copy_kwargs["primary_category_id"])
+    elif base is not None and getattr(base, "primary_category_id", None) is not None:
+        allocate_category_id = int(base.primary_category_id)
+
+    numbering = _category_numbering_flags(db, tenant_id, allocate_category_id)
     created: list[Product] = []
+    allocated_sku = 0
+    allocated_catalog = 0
 
     for key in selected:
         if only_missing and key in existing:
@@ -219,6 +295,20 @@ def generate_family_products(
 
         db.add(product)
         db.flush()
+
+        cat_id = getattr(product, "primary_category_id", None) or allocate_category_id
+        if cat_id is not None:
+            if numbering["sku"]:
+                sku = _try_allocate_code(db, tenant_id, kind="sku", category_id=int(cat_id))
+                if sku:
+                    product.sku = sku
+                    allocated_sku += 1
+            if numbering["catalog"]:
+                catalog = _try_allocate_code(db, tenant_id, kind="catalog", category_id=int(cat_id))
+                if catalog:
+                    product.catalog_number = catalog
+                    allocated_catalog += 1
+
         for attr, val in zip(attrs, combo):
             db.add(
                 ProductAttributeValue(
@@ -236,6 +326,8 @@ def generate_family_products(
     created_ids = {int(p.id) for p in created}
     return {
         "created_count": len(created),
+        "allocated_sku_count": allocated_sku,
+        "allocated_catalog_count": allocated_catalog,
         "mode": mode_norm,
         "products": [m for m in members if int(m["id"]) in created_ids],
         "family": serialize_family(db, get_family(db, tenant_id, family_id), include_members=True),

@@ -112,6 +112,7 @@ class ProductFamilyProductStateRead(BaseModel):
 class FamilyGenerateBaseProduct(BaseModel):
     id: int
     name: str
+    primary_category_id: Optional[int] = None
 
 
 class FamilyGenerateCombination(BaseModel):
@@ -128,7 +129,16 @@ class FamilyGeneratePreview(BaseModel):
     combination_count: int = 0
     existing_count: int = 0
     missing_count: int = 0
+    #: Products that would be created for all missing combinations
+    product_count: int = 0
+    #: SKU codes that would be allocated (0 if category numbering not configured)
+    sku_count: int = 0
+    #: Catalog numbers that would be allocated
+    catalog_count: int = 0
+    #: Legacy alias — prefer sku_count / product_count
     new_sku_count: int = 0
+    will_allocate_sku: bool = False
+    will_allocate_catalog: bool = False
     has_base_product: bool = False
     base_product: Optional[FamilyGenerateBaseProduct] = None
     default_mode: Literal["empty", "copy_base"] = "empty"
@@ -145,6 +155,8 @@ class FamilyGenerateBody(BaseModel):
 
 class FamilyGenerateResult(BaseModel):
     created_count: int
+    allocated_sku_count: int = 0
+    allocated_catalog_count: int = 0
     mode: str
     products: list[ProductFamilyMemberRead] = Field(default_factory=list)
     family: Optional[ProductFamilyRead] = None

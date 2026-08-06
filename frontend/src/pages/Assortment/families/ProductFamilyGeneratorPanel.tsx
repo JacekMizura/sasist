@@ -19,6 +19,7 @@ type Props = {
 /**
  * Generator: always shows counts + selectable combinations (never auto-creates hundreds).
  * Mode A = empty products; Mode B = copy from base product (default when base exists).
+ * SKU / catalog numbers are allocated via product_codes when base category is configured.
  */
 export function ProductFamilyGeneratorPanel({ tenantId, familyId, onGenerated }: Props) {
   const [preview, setPreview] = useState<FamilyGeneratePreview | null>(null);
@@ -56,6 +57,9 @@ export function ProductFamilyGeneratorPanel({ tenantId, familyId, onGenerated }:
     [missingKeys, selected],
   );
 
+  const selectedSkuCount = preview?.will_allocate_sku ? selectedMissingCount : 0;
+  const selectedCatalogCount = preview?.will_allocate_catalog ? selectedMissingCount : 0;
+
   const toggle = (key: string, exists: boolean) => {
     if (exists) return;
     setSelected((prev) => {
@@ -80,11 +84,13 @@ export function ProductFamilyGeneratorPanel({ tenantId, familyId, onGenerated }:
       toast.error("Ustaw produkt bazowy albo wybierz tryb pustych produktów.");
       return;
     }
+    const skuN = preview.will_allocate_sku ? keys.length : 0;
+    const catalogN = preview.will_allocate_catalog ? keys.length : 0;
     if (
       !window.confirm(
         `Utworzyć ${keys.length} produktów?\n` +
           `Tryb: ${mode === "copy_base" ? "kopia z produktu bazowego" : "puste produkty"}.\n` +
-          `Nowe SKU: ${keys.length} z ${preview.missing_count} brakujących.`,
+          `SKU: ${skuN} · Numery katalogowe: ${catalogN}.`,
       )
     ) {
       return;
@@ -96,7 +102,13 @@ export function ProductFamilyGeneratorPanel({ tenantId, familyId, onGenerated }:
         value_keys: keys,
         only_missing: true,
       });
-      toast.success(`Utworzono ${result.created_count} produktów.`);
+      const skuPart =
+        result.allocated_sku_count != null ? `, SKU: ${result.allocated_sku_count}` : "";
+      const catPart =
+        result.allocated_catalog_count != null
+          ? `, katalog: ${result.allocated_catalog_count}`
+          : "";
+      toast.success(`Utworzono ${result.created_count} produktów${skuPart}${catPart}.`);
       await reload();
       onGenerated?.();
     } catch (e) {
@@ -115,27 +127,37 @@ export function ProductFamilyGeneratorPanel({ tenantId, familyId, onGenerated }:
     <section className="mt-8 max-w-3xl rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
       <h2 className="text-sm font-semibold text-slate-900">Generator produktów</h2>
       <p className="mt-1 text-sm text-slate-500">
-        Przed utworzeniem wybierz kombinacje. Nigdy nie tworzymy setek produktów bez potwierdzenia.
+        Przed utworzeniem wybierz kombinacje. SKU i numery katalogowe przydziela kategoria produktu
+        bazowego (gdy skonfigurowana).
       </p>
 
       <dl className="mt-4 grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
         <div className="rounded-lg bg-slate-50 px-3 py-2">
-          <dt className="text-xs text-slate-500">Kombinacje</dt>
-          <dd className="font-semibold text-slate-900">{preview.combination_count}</dd>
+          <dt className="text-xs text-slate-500">Produkty (brakujące)</dt>
+          <dd className="font-semibold text-slate-900">{preview.product_count ?? preview.missing_count}</dd>
         </div>
         <div className="rounded-lg bg-slate-50 px-3 py-2">
-          <dt className="text-xs text-slate-500">Istniejące</dt>
-          <dd className="font-semibold text-slate-900">{preview.existing_count}</dd>
+          <dt className="text-xs text-slate-500">SKU</dt>
+          <dd className="font-semibold text-slate-900">{preview.sku_count ?? 0}</dd>
         </div>
         <div className="rounded-lg bg-slate-50 px-3 py-2">
-          <dt className="text-xs text-slate-500">Nowe SKU</dt>
-          <dd className="font-semibold text-slate-900">{preview.new_sku_count}</dd>
+          <dt className="text-xs text-slate-500">Numery katalogowe</dt>
+          <dd className="font-semibold text-slate-900">{preview.catalog_count ?? 0}</dd>
         </div>
         <div className="rounded-lg bg-slate-50 px-3 py-2">
           <dt className="text-xs text-slate-500">Wybrane</dt>
-          <dd className="font-semibold text-slate-900">{selectedMissingCount}</dd>
+          <dd className="font-semibold text-slate-900">
+            {selectedMissingCount} / {selectedSkuCount} SKU / {selectedCatalogCount} kat.
+          </dd>
         </div>
       </dl>
+
+      {!preview.will_allocate_sku && !preview.will_allocate_catalog ? (
+        <p className="mt-3 text-xs text-amber-700">
+          Brak numeracji w kategorii produktu bazowego — produkty powstaną bez SKU / numeru
+          katalogowego. Skonfiguruj numery w Kategorie albo użyj Generuj na karcie produktu.
+        </p>
+      ) : null}
 
       <label className="mt-4 block max-w-md">
         <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Tryb</span>
@@ -152,6 +174,9 @@ export function ProductFamilyGeneratorPanel({ tenantId, familyId, onGenerated }:
         {preview.base_product ? (
           <p className="mt-1 text-xs text-slate-500">
             Źródło kopiowania: {preview.base_product.name} (#{preview.base_product.id})
+            {preview.base_product.primary_category_id
+              ? ` · kategoria #${preview.base_product.primary_category_id}`
+              : " · brak kategorii — bez automatycznych kodów"}
           </p>
         ) : null}
       </label>
