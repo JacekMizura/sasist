@@ -34,7 +34,7 @@ export function ModuleStatusSidebarShell({
         {mobileOpenLabel}
       </button>
       <aside
-        className={`${PANEL_STATUS_SIDEBAR_PAGE_SHELL_CLASS} ${flatListSidebarDividerClass} ${collapsed ? "lg:w-14" : "lg:w-[18rem]"}`}
+        className={`${PANEL_STATUS_SIDEBAR_PAGE_SHELL_CLASS} ${flatListSidebarDividerClass} ${collapsed ? "lg:w-14" : "lg:w-[13.75rem]"}`}
       >
         {sidebar}
       </aside>

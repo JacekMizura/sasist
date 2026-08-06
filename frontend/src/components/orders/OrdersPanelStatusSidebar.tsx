@@ -28,12 +28,10 @@ import {
   panelTreeMetaRowClass,
 } from "../panel/panelStatusTreeStyles";
 import { sidebarSubStatusHex } from "../../utils/panelSidebarHierarchy";
-import { panelTreeStatusRowPresentation } from "../../utils/panelTreeStatusRowPresentation";
+import { panelTreeStatusIsProblem } from "../../utils/panelTreeStatusRowPresentation";
 import { buildPanelSidebarLayout } from "../../utils/orderPanelSidebarBuckets";
 import { MAIN_PANEL_GROUP_ORDER } from "../../utils/orderPanelMainGroupOrder";
 import { panelListStatusSidebarWidthLg } from "../listPage/listSellasistTokens";
-import { panelStatusCounterColorResolver } from "../../hooks/usePanelStatusCounterColor";
-import { DAMAGE_TENANT_ID } from "../../pages/damage/damageShared";
 import type { PanelStatusCounterColorModule } from "../../utils/panelStatusCounterColorStore";
 
 export type OrderPanelFilter =
@@ -112,15 +110,11 @@ export function OrdersPanelStatusSidebar({
   returnsOperationalQueuesCollapsedSlot,
   parentScrollContainer = false,
   onToggleCollapsed,
-  counterColorModule = "orders",
-  statusCounterColorForId: statusCounterColorForIdProp,
+  counterColorModule: _counterColorModule = "orders",
+  statusCounterColorForId: _statusCounterColorForId,
 }: OrdersPanelStatusSidebarProps) {
-  const statusCounterColorForIdFromStore = useMemo(() => {
-    if (warehouseId == null || warehouseId <= 0) return undefined;
-    return panelStatusCounterColorResolver(counterColorModule, DAMAGE_TENANT_ID, warehouseId);
-  }, [warehouseId, counterColorModule]);
-
-  const counterColorForId = statusCounterColorForIdProp ?? statusCounterColorForIdFromStore;
+  void _counterColorModule;
+  void _statusCounterColorForId;
   const totalPanelOrders =
     panelSummary != null
       ? panelSummary.unassigned_count + panelSummary.groups.reduce((acc, g) => acc + g.total_count, 0)
@@ -151,16 +145,6 @@ export function OrdersPanelStatusSidebar({
     const active = isSubFilterActive(panelFilter, s.id);
     const markers = getPanelStatusWmsMarkers(s, block.main_group);
     const titleDetail = panelStatusCollapsedTitle(s, block.main_group);
-    const row = panelTreeStatusRowPresentation(
-      {
-        color: s.color,
-        badge_color: s.badge_color,
-        background_color: s.background_color,
-        text_color: s.text_color,
-      },
-      block.main_group,
-      active,
-    );
 
     return (
       <PanelTreeStatusItem
@@ -178,7 +162,6 @@ export function OrdersPanelStatusSidebar({
         markers={markers}
         count={s.count}
         active={active}
-        counterColorHex={counterColorForId?.(s.id) ?? row.stripeHex}
         title={titleDetail || undefined}
         onClick={() => onPanelFilterChange({ kind: "sub", id: s.id })}
       />
@@ -255,6 +238,7 @@ export function OrdersPanelStatusSidebar({
               </button>
               {visibleStatuses.map((s) => {
                 const stripe = sidebarSubStatusHex(s.badge_color ?? s.color, block.main_group);
+                const problem = panelTreeStatusIsProblem(s.name);
                 return (
                   <button
                     key={s.id}
@@ -269,7 +253,7 @@ export function OrdersPanelStatusSidebar({
                       style={{ backgroundColor: stripe }}
                       aria-hidden
                     />
-                    <PanelTreeCount value={s.count} />
+                    <PanelTreeCount value={s.count} tone={problem ? "problem" : "neutral"} />
                   </button>
                 );
               })}
@@ -337,7 +321,7 @@ export function OrdersPanelStatusSidebar({
         ) : null}
       </div>
 
-      <div className="mt-3">
+      <div className="mt-2">
         {MAIN_PANEL_GROUP_ORDER.map((mainGroup) => {
           const block = blocksByMainGroup.get(mainGroup);
           if (!block) return null;

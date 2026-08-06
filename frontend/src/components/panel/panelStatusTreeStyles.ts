@@ -1,10 +1,10 @@
 import type { OrderUiMainGroup } from "../../types/orderUiStatus";
 
-/** Sidebar statusów — 288px (280–288 px docelowo). */
-export const PANEL_SIDEBAR_WIDTH_LG_CLASS = "lg:w-[18rem]";
+/** Sidebar statusów — ~220px (więcej miejsca na tabelę). */
+export const PANEL_SIDEBAR_WIDTH_LG_CLASS = "lg:w-[13.75rem]";
 
 /** Szerokość powłoki listy (zamówienia / zwroty) — ten sam wymiar co sidebar. */
-export const PANEL_SIDEBAR_WIDTH_CLASS = "w-[18rem]";
+export const PANEL_SIDEBAR_WIDTH_CLASS = "w-[13.75rem]";
 
 /** Kolumna sidebara na stronie listy — bez zewnętrznej karty (płaski układ). */
 export const PANEL_STATUS_SIDEBAR_PAGE_SHELL_BASE =
@@ -12,24 +12,27 @@ export const PANEL_STATUS_SIDEBAR_PAGE_SHELL_BASE =
 
 export const PANEL_STATUS_SIDEBAR_PAGE_SHELL_CLASS = `hidden lg:flex ${PANEL_STATUS_SIDEBAR_PAGE_SHELL_BASE}`;
 
-/** Wyszukiwarka statusów — pełna szerokość, pill. */
-export const PANEL_TREE_SEARCH_WRAP_CLASS = "relative mb-3";
+/** Wyszukiwarka statusów — kompaktowa. */
+export const PANEL_TREE_SEARCH_WRAP_CLASS = "relative mb-2";
 
 export const PANEL_TREE_SEARCH_ICON_CLASS =
-  "pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400";
+  "pointer-events-none absolute left-2.5 top-1/2 h-3 w-3 -translate-y-1/2 text-slate-400";
 
 export const PANEL_TREE_SEARCH_INPUT_CLASS =
-  "w-full rounded-full border border-slate-200 bg-white py-2 pl-9 pr-3 text-xs text-slate-800 placeholder:text-slate-400 shadow-[0_0_0_1px_rgba(148,163,184,0.08)] focus:border-slate-300 focus:outline-none focus:ring-2 focus:ring-slate-100";
+  "w-full rounded-md border border-slate-200 bg-white py-1.5 pl-8 pr-2 text-[11px] text-slate-800 placeholder:text-slate-400 focus:border-slate-300 focus:outline-none focus:ring-1 focus:ring-slate-200";
 
 /** Licznik — baza (wyrównanie do prawej: etykieta `flex-1` w wierszu). */
 export const PANEL_TREE_COUNT_BASE_CLASS = "shrink-0";
 
 /**
- * Mały okrągły badge (~28 px) — pomocniczy, nie kolorowa pastylka.
- * Przy dłuższych liczbach rozszerza się tylko w poziomie (px).
+ * Mała kapsułka licznika — neutralna (szara); problemy: osobny tone w PanelTreeCount.
  */
 export const PANEL_TREE_COUNT_SOFT_BADGE_CLASS =
-  "inline-flex h-[26px] min-w-[26px] items-center justify-center rounded-full border border-slate-200/90 bg-white px-1.5 text-[10px] font-medium tabular-nums leading-none text-slate-600";
+  "inline-flex h-[22px] min-w-[22px] items-center justify-center rounded-full border border-slate-200 bg-slate-50 px-1.5 text-[10px] font-medium tabular-nums leading-none text-slate-600";
+
+/** Kapsułka problemów (braki / alerty). */
+export const PANEL_TREE_COUNT_PROBLEM_BADGE_CLASS =
+  "inline-flex h-[22px] min-w-[22px] items-center justify-center rounded-full border border-red-200 bg-red-50 px-1.5 text-[10px] font-semibold tabular-nums leading-none text-red-700";
 
 /** Grupa główna — ten sam spokojny badge (nie solid / nie przycisk). */
 export const PANEL_TREE_COUNT_SOLID_BADGE_CLASS = PANEL_TREE_COUNT_SOFT_BADGE_CLASS;
@@ -41,28 +44,30 @@ export function panelTreeCountClass(_active?: boolean): string {
   return `${PANEL_TREE_COUNT_BASE_CLASS} ${PANEL_TREE_COUNT_SOFT_BADGE_CLASS}`;
 }
 
-/** Lewy pasek koloru na kafelku statusu. */
-export const PANEL_TREE_STATUS_BAR_CLASS = "mt-0.5 h-[1.05rem] w-1 shrink-0 rounded-full";
+/** Lewy pasek — aktywny status: cienki pomarańczowy; idle: kolor statusu. */
+export const PANEL_TREE_STATUS_ACTIVE_BAR_HEX = "#f97316";
+
+export const PANEL_TREE_STATUS_BAR_CLASS = "h-4 w-0.5 shrink-0 rounded-full";
 
 /** Stała lewa kolumna na ikony WMS (pusta gdy brak markera). */
 export const PANEL_TREE_WMS_ICON_COLUMN_CLASS =
-  "flex w-5 shrink-0 items-center justify-center gap-0.5 pt-0.5";
+  "flex w-4 shrink-0 items-center justify-center gap-0.5";
 
-/** Nagłówek grupy głównej — płaski (kropka + uppercase + badge + chevron). */
+/** Nagłówek grupy głównej — ten sam spokojny badge (nie solid / nie przycisk). */
 export const PANEL_TREE_GROUP_CONTAINER_BASE =
-  "flex items-center gap-1.5 rounded-lg px-0.5 py-1.5 transition-colors";
+  "flex items-center gap-1 rounded-md px-0.5 py-1 transition-colors";
 
 export function panelTreeGroupContainerClass(active: boolean): string {
-  return `${PANEL_TREE_GROUP_CONTAINER_BASE} ${active ? "bg-slate-50/90" : ""}`;
+  return `${PANEL_TREE_GROUP_CONTAINER_BASE} ${active ? "bg-slate-50" : ""}`;
 }
 
 export const PANEL_TREE_GROUP_FILTER_BTN_CLASS =
-  "flex min-w-0 flex-1 items-center gap-2 py-0.5 text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-blue-500";
+  "flex min-w-0 flex-1 items-center gap-1.5 py-0.5 text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-blue-500";
 
-export const PANEL_TREE_GROUP_DOT_CLASS = "h-2.5 w-2.5 shrink-0 rounded-full";
+export const PANEL_TREE_GROUP_DOT_CLASS = "h-1.5 w-1.5 shrink-0 rounded-full";
 
 export const PANEL_TREE_GROUP_LABEL_CLASS =
-  "text-[11px] font-extrabold uppercase tracking-wide text-slate-800";
+  "truncate text-[11px] font-semibold tracking-wide text-slate-700";
 
 export const PANEL_TREE_GROUP_LOCK_CLASS = "h-3 w-3 shrink-0 text-slate-300";
 
@@ -70,25 +75,25 @@ export const PANEL_TREE_GROUP_TOGGLE_CLASS =
   "shrink-0 rounded p-0.5 text-slate-400 transition-colors hover:text-slate-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-blue-500";
 
 /**
- * Kafelek statusu — nazwa po lewej, badge po prawej; hover tylko na tle wiersza.
+ * Kafelek statusu — ~36px, nazwa po lewej, kapsułka po prawej.
  */
 export const PANEL_TREE_STATUS_ROW_BASE =
-  "flex w-full items-center gap-1.5 rounded-lg border bg-white px-2.5 py-2 text-left text-[12px] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-blue-500";
+  "flex h-9 w-full items-center gap-1.5 rounded-md border border-transparent bg-transparent px-1.5 py-0 text-left text-[12px] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-blue-500";
 
 export function panelTreeStatusRowClass(active: boolean): string {
   return `${PANEL_TREE_STATUS_ROW_BASE} ${
     active
-      ? "border-slate-300 bg-slate-50 font-semibold text-slate-900"
-      : "border-slate-200 font-medium text-slate-700 hover:bg-slate-50"
+      ? "bg-slate-50/80 font-semibold text-slate-900"
+      : "font-medium text-slate-700 hover:bg-slate-50"
   }`;
 }
 
 /** Meta (Wszystkie / Bez etykiety) — bez paska, lekki wiersz + badge. */
 export function panelTreeMetaRowClass(active: boolean): string {
-  return `flex w-full items-center gap-2 rounded-lg px-0.5 py-1.5 text-left text-[13px] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-blue-500 ${
+  return `flex h-8 w-full items-center gap-1.5 rounded-md px-1 py-0 text-left text-[12px] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-blue-500 ${
     active
-      ? "font-semibold text-slate-900"
-      : "font-semibold text-slate-700 hover:bg-slate-50"
+      ? "bg-slate-50/80 font-semibold text-slate-900"
+      : "font-medium text-slate-700 hover:bg-slate-50"
   }`;
 }
 
@@ -101,42 +106,42 @@ export function panelTreeOperationalRowClass(active: boolean): string {
   }`;
 }
 
-/** Odstęp między głównymi grupami — wyraźna separacja jak na mockupie. */
-export const PANEL_TREE_GROUP_SECTION_CLASS = "mt-5 first:mt-3";
+/** Odstęp między głównymi grupami. */
+export const PANEL_TREE_GROUP_SECTION_CLASS = "mt-3 first:mt-2";
 
 /** Kontener pod grupą główną — zwarty odstęp do pierwszego statusu. */
-export const PANEL_TREE_CHILDREN_CLASS = "mt-1 space-y-1.5";
+export const PANEL_TREE_CHILDREN_CLASS = "mt-0.5 space-y-0.5";
 
 /**
  * Wspólna lewa linia: Wszystkie / grupy / podgrupy / kafelki — bez dodatkowego pl.
  */
 export const PANEL_TREE_LEVEL1_INDENT_CLASS = "";
 
-export const PANEL_TREE_GROUP_STATUS_LIST_CLASS = `space-y-1.5 ${PANEL_TREE_LEVEL1_INDENT_CLASS}`.trim();
+export const PANEL_TREE_GROUP_STATUS_LIST_CLASS = `space-y-0.5 ${PANEL_TREE_LEVEL1_INDENT_CLASS}`.trim();
 
 /** Nagłówek podgrupy — mały uppercase, szary (nie wygląda jak status). */
 export const PANEL_TREE_SUBGROUP_SECTION_CLASS =
-  "mb-0 mt-2.5 flex w-full items-center gap-1.5 pr-1 pl-0.5";
+  "mb-0 mt-1.5 flex w-full items-center gap-1.5 pr-1 pl-0.5";
 
 export const PANEL_TREE_SUBGROUP_TOGGLE_CLASS =
   "flex w-4 shrink-0 items-center justify-center rounded text-slate-300 transition-colors hover:text-slate-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-blue-500";
 
 export const PANEL_TREE_SUBGROUP_TITLE_CLASS =
-  "shrink-0 text-[10px] font-bold uppercase tracking-wider text-slate-400";
+  "shrink-0 text-[10px] font-semibold uppercase tracking-wider text-slate-400";
 
 export const PANEL_TREE_SUBGROUP_LINE_CLASS = "h-px min-w-[1rem] flex-1 bg-transparent";
 
 /** Statusy w podgrupie — ta sama lewa krawędź co nagłówki grup. */
-export const PANEL_TREE_SUBGROUP_CHILDREN_CLASS = "mt-0.5 space-y-1.5";
+export const PANEL_TREE_SUBGROUP_CHILDREN_CLASS = "mt-0.5 space-y-0.5";
 
 /** Nagłówek sekcji Operacyjne (zwroty). */
 export const PANEL_TREE_OPERATIONAL_SECTION_HEADER_CLASS =
-  "mb-1.5 mt-5 flex w-full items-center gap-2 border-t border-slate-100 pt-4";
+  "mb-1 mt-3 flex w-full items-center gap-2 border-t border-slate-100 pt-3";
 
 export const PANEL_TREE_OPERATIONAL_TITLE_CLASS =
-  "shrink-0 text-[10px] font-bold uppercase tracking-wider text-slate-400";
+  "shrink-0 text-[10px] font-semibold uppercase tracking-wider text-slate-400";
 
-export const PANEL_TREE_OPERATIONAL_LIST_CLASS = "space-y-1.5";
+export const PANEL_TREE_OPERATIONAL_LIST_CLASS = "space-y-0.5";
 
 /** Nagłówek grupy w pickerze (nieklikalny). */
 export const PANEL_TREE_PICKER_GROUP_HEAD_CLASS = `${PANEL_TREE_GROUP_CONTAINER_BASE}`;
@@ -158,11 +163,9 @@ export const PANEL_TREE_GROUP_SHELL_ACTIVE_CLASS = "bg-slate-50/90";
 /** @deprecated v3 — ten sam token co status row base. */
 export const PANEL_TREE_STATUS_ROW_CLASS = PANEL_TREE_STATUS_ROW_BASE;
 
-export const PANEL_TREE_STATUS_ROW_ACTIVE_CLASS =
-  "border-slate-300 bg-slate-50 font-semibold text-slate-900";
+export const PANEL_TREE_STATUS_ROW_ACTIVE_CLASS = "bg-slate-50/80 font-semibold text-slate-900";
 
-export const PANEL_TREE_STATUS_ROW_IDLE_CLASS =
-  "border-slate-200 font-medium text-slate-700 hover:bg-slate-50";
+export const PANEL_TREE_STATUS_ROW_IDLE_CLASS = "font-medium text-slate-700 hover:bg-slate-50";
 
 export const PANEL_TREE_META_ROW_CLASS =
   "flex w-full items-center gap-2 rounded-lg px-0.5 py-1.5 text-left text-[13px]";

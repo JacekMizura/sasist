@@ -14,7 +14,7 @@ export function PanelStatusSidebarCollapseButton({
     <button
       type="button"
       onClick={onToggle}
-      className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 hover:text-slate-700"
+      className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 hover:text-slate-700"
       aria-label={collapsed ? "Rozwiń panel statusów" : "Zwiń panel statusów"}
     >
       <ChevronLeft className={`h-4 w-4 transition-transform ${collapsed ? "rotate-180" : ""}`} />
@@ -36,15 +36,15 @@ export function PanelStatusSidebarHeader({
   onToggleCollapsed,
 }: PanelStatusSidebarHeaderProps) {
   return (
-    <div className={`mb-3 space-y-3 ${collapsed ? "" : ""}`}>
-      <div className={`flex items-center gap-2 ${collapsed ? "justify-end" : "justify-between"}`}>
+    <div className={`mb-2 ${collapsed ? "" : "space-y-2"}`}>
+      <div className={`flex items-center gap-1.5 ${collapsed ? "justify-end" : "justify-between"}`}>
         {!collapsed ? (
-          <h2 className="text-[11px] font-bold uppercase tracking-wider text-slate-500">{title}</h2>
+          <h2 className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">{title}</h2>
         ) : (
           <span className="sr-only">{title}</span>
         )}
         {(titleTrailing != null || onToggleCollapsed != null) && (
-          <div className="ml-auto flex shrink-0 items-center gap-1.5">
+          <div className="ml-auto flex shrink-0 items-center gap-1">
             {titleTrailing}
             {onToggleCollapsed ? (
               <PanelStatusSidebarCollapseButton collapsed={!!collapsed} onToggle={onToggleCollapsed} />

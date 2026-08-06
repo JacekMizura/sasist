@@ -1,48 +1,32 @@
-import type { CSSProperties } from "react";
-
 import {
   PANEL_TREE_COUNT_BASE_CLASS,
+  PANEL_TREE_COUNT_PROBLEM_BADGE_CLASS,
   PANEL_TREE_COUNT_SOFT_BADGE_CLASS,
 } from "./panelStatusTreeStyles";
-import { blendHexOverWhite, isValidPanelStatusHex, pickReadableTextOnBackground } from "../../utils/panelStatusColor";
 
 type Props = {
   value: number | string;
   active?: boolean;
   /**
-   * Kolor kategorii — używany wyłącznie gdy ``active`` (lekki tint).
-   * Idle zawsze: białe tło + cienka ramka + ciemny tekst.
+   * Zachowane dla kompatybilności — w panelu statusów nie kolorujemy kapsułek kategorią.
    */
   colorHex?: string | null;
-  /** Zachowane dla kompatybilności — obie wartości = ten sam subtelny badge. */
+  /** Zachowane dla kompatybilności. */
   variant?: "soft" | "solid";
+  /** Czerwona kapsułka tylko dla problemów (braki / alerty). */
+  tone?: "neutral" | "problem";
 };
 
-/** Aktywny wiersz: delikatny tint kategorii (nie pastylka). */
-function activeTintStyle(hex: string): CSSProperties {
-  const bg = blendHexOverWhite(hex, 0.12);
-  return {
-    backgroundColor: bg,
-    borderColor: blendHexOverWhite(hex, 0.28),
-    color: pickReadableTextOnBackground(hex, bg, 4.5),
-  };
-}
-
 /**
- * Licznik statusu / grupy — mały okrągły badge (~28 px), hierarchia: nazwa > liczba.
+ * Licznik statusu / grupy — mała kapsułka; domyślnie szara.
  */
-export function PanelTreeCount({ value, active, colorHex }: Props) {
-  const hex = colorHex?.trim();
-  const useTint = Boolean(active && hex && isValidPanelStatusHex(hex));
+export function PanelTreeCount({ value, active, tone = "neutral" }: Props) {
+  const badge =
+    tone === "problem" ? PANEL_TREE_COUNT_PROBLEM_BADGE_CLASS : PANEL_TREE_COUNT_SOFT_BADGE_CLASS;
+  const activeNeutral =
+    tone === "neutral" && active ? " border-slate-300 bg-slate-100 text-slate-800" : "";
 
   return (
-    <span
-      className={`${PANEL_TREE_COUNT_BASE_CLASS} ${PANEL_TREE_COUNT_SOFT_BADGE_CLASS}${
-        active && !useTint ? " border-slate-300 bg-slate-50 text-slate-800" : ""
-      }`}
-      style={useTint ? activeTintStyle(hex!) : undefined}
-    >
-      {value}
-    </span>
+    <span className={`${PANEL_TREE_COUNT_BASE_CLASS} ${badge}${activeNeutral}`}>{value}</span>
   );
 }

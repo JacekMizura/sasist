@@ -2,7 +2,10 @@ import type { ButtonHTMLAttributes, CSSProperties, HTMLAttributes } from "react"
 
 import type { OrderUiMainGroup } from "../../types/orderUiStatus";
 import type { PanelStatusHexBundle } from "../../utils/panelSidebarHierarchy";
-import { panelTreeStatusRowPresentation } from "../../utils/panelTreeStatusRowPresentation";
+import {
+  panelTreeStatusIsProblem,
+  panelTreeStatusRowPresentation,
+} from "../../utils/panelTreeStatusRowPresentation";
 import { panelTreeStatusBarClass } from "./panelStatusTreeStyles";
 import { PanelStatusWmsIconColumn } from "./PanelStatusWmsIconColumn";
 import type { PanelWmsOperationalMarker } from "../orders/panelStatusWmsChips";
@@ -18,8 +21,8 @@ export type PanelTreeStatusItemProps = {
   active?: boolean;
   counterColorHex?: string | null;
   /**
-   * Lista / gęste komórki — ta sama karta, lekko mniejsza (~92%).
-   * Sidebar zostawia `false`.
+   * Lista / gęste komórki — tryb „rich” + lekki scale.
+   * Sidebar (`false`) = kompaktowy chrome bez tintu.
    */
   compact?: boolean;
   title?: string;
@@ -31,7 +34,6 @@ export type PanelTreeStatusItemProps = {
 
 /**
  * Kafelek statusu Panelu Statusów — SSOT wizualny dla sidebara i kolumn list.
- * Nie duplikować stylów w ModuleListStatusPill / innych rendererach.
  */
 export function PanelTreeStatusItem({
   name,
@@ -41,7 +43,7 @@ export function PanelTreeStatusItem({
   markers = [],
   count,
   active = false,
-  counterColorHex,
+  counterColorHex: _counterColorHex,
   compact = false,
   title,
   className = "",
@@ -49,8 +51,12 @@ export function PanelTreeStatusItem({
   onClick,
   ...rest
 }: PanelTreeStatusItemProps) {
-  const row = panelTreeStatusRowPresentation(colors, mainGroup, active);
+  void _counterColorHex;
+  const chrome = compact ? "rich" : "sidebar";
+  const row = panelTreeStatusRowPresentation(colors, mainGroup, active, chrome);
   const showCount = count != null && count !== "";
+  const isProblem =
+    panelTreeStatusIsProblem(name) || markers.some((m) => m.id === "short");
   const rowClassName = compact
     ? row.rowClassName.replace(/\bw-full\b/g, "w-fit max-w-full")
     : row.rowClassName;
@@ -61,19 +67,19 @@ export function PanelTreeStatusItem({
   const body = (
     <>
       <PanelStatusWmsIconColumn markers={markers} />
-      <span className={panelTreeStatusBarClass(active)} style={{ backgroundColor: row.stripeHex }} aria-hidden />
-      <span className={`min-w-0 leading-snug ${compact ? "" : "flex-1"}`} style={row.labelStyle}>
+      <span
+        className={panelTreeStatusBarClass(active)}
+        style={{ backgroundColor: row.stripeHex }}
+        aria-hidden
+      />
+      <span className={`min-w-0 truncate leading-snug ${compact ? "" : "flex-1"}`} style={row.labelStyle}>
         {name}
       </span>
       {imageUrl ? (
-        <img src={imageUrl} alt="" className="mt-0.5 h-4 w-4 shrink-0 rounded object-contain" />
+        <img src={imageUrl} alt="" className="h-3.5 w-3.5 shrink-0 rounded object-contain" />
       ) : null}
       {showCount ? (
-        <PanelTreeCount
-          value={count!}
-          active={active}
-          colorHex={counterColorHex ?? row.stripeHex}
-        />
+        <PanelTreeCount value={count!} active={active} tone={isProblem ? "problem" : "neutral"} />
       ) : null}
     </>
   );

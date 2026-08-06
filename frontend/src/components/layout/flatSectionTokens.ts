@@ -9,8 +9,8 @@ export const flatSectionsStackClass =
 export const flatFormSectionsStackClass =
   "[&>section:not(:first-child)]:mt-6 [&>section:not(:first-child)]:border-t [&>section:not(:first-child)]:border-gray-200 [&>section:not(:first-child)]:pt-6";
 
-/** Pionowy separator kolumny listy (sidebar | treść). */
-export const flatListSidebarDividerClass = "lg:border-r lg:border-gray-200 lg:pr-8";
+/** Pionowy separator kolumny listy (sidebar | treść) — wąski gutter. */
+export const flatListSidebarDividerClass = "lg:border-r lg:border-gray-200 lg:pr-3";
 
 /** Separator między filtrem a tabelą na liście modułu. */
 export const flatListTableSectionClass = "border-t border-gray-200 pt-6";

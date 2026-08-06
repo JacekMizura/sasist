@@ -70,5 +70,5 @@ export const listSellasistToolbarSquareBtn = iconButtonClass;
 /** „Dodaj” next to list title. */
 export const listSellasistTitleAddBtn = iconButtonClass;
 
-/** Orders / Returns panel status sidebar @ lg — mockup v3 (~312px). */
-export const panelListStatusSidebarWidthLg = "lg:w-[18rem]";
+/** Orders / Returns panel status sidebar @ lg — ~220px (więcej miejsca na tabelę). */
+export const panelListStatusSidebarWidthLg = "lg:w-[13.75rem]";

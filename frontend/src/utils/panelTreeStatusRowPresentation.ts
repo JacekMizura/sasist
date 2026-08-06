@@ -2,6 +2,7 @@ import type { CSSProperties } from "react";
 
 import {
   PANEL_TREE_STATUS_ROW_BASE,
+  PANEL_TREE_STATUS_ACTIVE_BAR_HEX,
   panelTreeStatusRowClass,
 } from "../components/panel/panelStatusTreeStyles";
 import {
@@ -17,11 +18,13 @@ import {
   pickReadableTextOnBackground,
 } from "./panelStatusColor";
 
-/** Tint tła wiersza statusu na białym sidebarze (nie pełny fill). */
+/** Tint tła wiersza statusu — tylko tryb „rich” (np. komórki tabeli). */
 export const PANEL_TREE_ROW_TINT_ALPHA = {
   idle: 0.1,
   active: 0.14,
 } as const;
+
+export type PanelTreeStatusRowChrome = "sidebar" | "rich";
 
 export type PanelTreeStatusRowPresentation = {
   rowClassName: string;
@@ -40,30 +43,39 @@ function treeRowBackgroundHex(status: PanelStatusHexBundle, mainGroup: PanelSide
 /**
  * Kolory wiersza podstatusu w drzewie panelu (zamówienia / zwroty).
  *
- * badge_color → lewy pasek
- * background_color → delikatny tint (~10–14%)
- * text_color → nazwa (z kontrolą kontrastu na zblendowanym tle)
- * counter_color → osobno w PanelTreeCount (localStorage)
- *
- * Grupy główne (Nowe / W toku / Zakończone) nie używają tej funkcji.
- *
- * Kafelek zawsze ma ramkę; active wzmacnia border + tint kategorii.
+ * ``sidebar``: bez dużego tintu; aktywny = pomarańczowy pasek z lewej.
+ * ``rich``: legacy tint (komórki tabeli / kompakt).
  */
 export function panelTreeStatusRowPresentation(
   status: PanelStatusHexBundle,
   mainGroup: PanelSidebarMainGroup,
   active: boolean,
+  chrome: PanelTreeStatusRowChrome = "rich",
 ): PanelTreeStatusRowPresentation {
+  const statusStripe =
+    status.badge_color && isValidPanelStatusHex(status.badge_color)
+      ? normalizePanelStatusBg(status.badge_color)
+      : sidebarSubStatusHex(status.color, mainGroup);
+
+  if (chrome === "sidebar") {
+    return {
+      rowClassName: panelTreeStatusRowClass(active),
+      rowStyle: undefined,
+      labelStyle:
+        status.text_color && isValidPanelStatusHex(status.text_color)
+          ? { color: pickReadableTextOnBackground(status.text_color, "#ffffff", 4.5) }
+          : undefined,
+      stripeHex: active ? PANEL_TREE_STATUS_ACTIVE_BAR_HEX : statusStripe,
+    };
+  }
+
   const hasBg = Boolean(status.background_color && isValidPanelStatusHex(status.background_color));
   const hasText = Boolean(status.text_color && isValidPanelStatusHex(status.text_color));
   const rich = panelSidebarSubRowStyleRich(status, mainGroup, active, {
     barWidthPx: 0,
     treeRow: true,
   });
-  const stripeHex =
-    status.badge_color && isValidPanelStatusHex(status.badge_color)
-      ? normalizePanelStatusBg(status.badge_color)
-      : sidebarSubStatusHex(status.color, mainGroup);
+  const stripeHex = statusStripe;
 
   const tintAlpha = active ? PANEL_TREE_ROW_TINT_ALPHA.active : PANEL_TREE_ROW_TINT_ALPHA.idle;
   const contrastBase = hasBg
@@ -74,7 +86,6 @@ export function panelTreeStatusRowPresentation(
 
   const idleBorder = "border-slate-200";
   const activeBorderClass = "border-slate-300 font-semibold";
-  // Active: delikatna ramka w kolorze kategorii (inset) — bez cienia / bez dużego badge.
   const activeRing = active
     ? {
         boxShadow: `inset 0 0 0 1px ${blendHexOverWhite(stripeHex, 0.45)}`,
@@ -103,4 +114,11 @@ export function panelTreeStatusRowPresentation(
       : undefined,
     stripeHex,
   };
+}
+
+/** Status „problemowy” → czerwona kapsułka licznika (UI only). */
+export function panelTreeStatusIsProblem(name: string | null | undefined): boolean {
+  return /brak|niedobór|niedobor|shortage|deficyt|missing|niekomplet|problem|błąd|blad|error|awaria|reklamac/i.test(
+    (name ?? "").trim(),
+  );
 }
