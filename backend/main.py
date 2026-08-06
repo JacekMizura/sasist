@@ -291,10 +291,6 @@ from .api.product_categories import (
     product_assignment_router as product_category_assignment_router,
     router as product_categories_router,
 )
-from .api.product_variants import (
-    product_variants_router,
-    router as variant_groups_router,
-)
 from .api.product_families import (
     product_family_membership_router,
     router as product_families_router,
@@ -1076,10 +1072,6 @@ try:
 except Exception:
     logging.getLogger(__name__).exception("ensure_product_categories_schema failed at import")
 try:
-    ensure_product_variants_schema(engine)
-except Exception:
-    logging.getLogger(__name__).exception("ensure_product_variants_schema failed at import")
-try:
     ensure_product_families_schema(engine)
 except Exception:
     logging.getLogger(__name__).exception("ensure_product_families_schema failed at import")
@@ -1089,6 +1081,10 @@ try:
     ensure_variant_to_family_migration(engine)
 except Exception:
     logging.getLogger(__name__).exception("ensure_variant_to_family_migration failed at import")
+try:
+    ensure_product_variants_schema(engine)  # drops legacy catalog Variant schema
+except Exception:
+    logging.getLogger(__name__).exception("ensure_product_variants_schema (drop) failed at import")
 try:
     ensure_product_custom_fields_schema(engine)
 except Exception:
@@ -1548,10 +1544,6 @@ def _upgrade_schema_background() -> None:
     except Exception:
         pass
     try:
-        ensure_product_variants_schema(engine)
-    except Exception:
-        pass
-    try:
         ensure_product_families_schema(engine)
     except Exception:
         pass
@@ -1559,6 +1551,10 @@ def _upgrade_schema_background() -> None:
         from .services.product_families.migrate_from_variants import ensure_variant_to_family_migration
 
         ensure_variant_to_family_migration(engine)
+    except Exception:
+        pass
+    try:
+        ensure_product_variants_schema(engine)  # drops legacy catalog Variant schema
     except Exception:
         pass
     try:
@@ -2177,8 +2173,6 @@ _API_ROUTERS = (
     manufacturer_router,
     product_categories_router,
     product_category_assignment_router,
-    variant_groups_router,
-    product_variants_router,
     product_families_router,
     product_family_membership_router,
     product_custom_fields_router,

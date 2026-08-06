@@ -20,7 +20,6 @@ import {
   Factory,
   Truck,
   Layers,
-  Shapes,
   Users,
   Key,
   Building2,
@@ -228,13 +227,6 @@ export function buildNavFlyoutCategories(): NavCategoryConfig[] {
             Icon: FolderOpen,
             plusLinkTo: "/categories",
             plusLinkTitle: UI_STRINGS.navigation.addCategory,
-          },
-          {
-            path: "/variants",
-            label: UI_STRINGS.navigation.variants,
-            Icon: Shapes,
-            plusLinkTo: "/variants/new",
-            plusLinkTitle: UI_STRINGS.navigation.addVariantGroup,
           },
           {
             path: "/product-families",

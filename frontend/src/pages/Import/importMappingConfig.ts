@@ -8,7 +8,7 @@ export const PRODUCT_FIELDS = [
   "identifier", "title", "catalog_number", "ean", "ean_extra", "symbol", "price", "promo_price",
   "purchase_price_gross", "vat", "weight", "images", "manufacturer", "main_category", "stock",
   "location", "status", "volume", "length", "width", "height", "extra_info", "is_bundle", "unit", "shipping_time", "tags",
-  "is_new", "is_bestseller", "is_recommended", "is_promo", "variant_group", "attribute_group",
+  "is_new", "is_bestseller", "is_recommended", "is_promo", "product_family", "attribute_group",
   "attributes", "parameters", "meta", "data_field", "extra_field", "price_fields",
 ] as const;
 

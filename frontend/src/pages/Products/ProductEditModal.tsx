@@ -73,7 +73,6 @@ import { ProductEditImagesTab } from "./ProductEditImagesTab";
 import { ProductEditLabelTab } from "./ProductEditLabelTab";
 import { ProductEditDescriptionTab } from "./ProductEditDescriptionTab";
 import { ProductEditCategoriesTab } from "./ProductEditCategoriesTab";
-import { ProductEditVariantsTab } from "./ProductEditVariantsTab";
 import { ProductEditFamilySection } from "./ProductEditFamilySection";
 import { ProductAdditionalFieldsSection } from "./ProductAdditionalFieldsSection";
 import { ProductWarehouseMovementsPanel } from "./ProductWarehouseMovementsPanel";
@@ -251,7 +250,6 @@ export type ProductEditTabId =
   | "prices"
   | "description"
   | "categories"
-  | "variants"
   | "warehouse"
   | "warehouseOps"
   | "logistics"
@@ -1697,7 +1695,7 @@ export function ProductEditModal({
 
   const railTabOrder = useMemo((): TabId[] => {
     if (!isNew) {
-      return ["basic", "prices", "description", "images", "offers", "categories", "variants", "production", "labelSheet", "warehouse", "warehouseOps"];
+      return ["basic", "prices", "description", "images", "offers", "categories", "production", "labelSheet", "warehouse", "warehouseOps"];
     }
     return ["basic", "prices", "description", "images", "offers", "labelSheet", "warehouse"];
   }, [isNew]);
@@ -1707,7 +1705,6 @@ export function ProductEditModal({
     prices: "Ceny",
     description: "Opis",
     categories: "Kategorie",
-    variants: "Warianty",
     warehouse: "Magazyn",
     images: "Zdjęcia",
     offers: "Oferty",
@@ -1727,7 +1724,6 @@ export function ProductEditModal({
     prices: Tag,
     description: AlignLeft,
     categories: FolderTree,
-    variants: Shapes,
     warehouse: Warehouse,
     warehouseOps: ScrollText,
     logistics: Truck,
@@ -2257,14 +2253,6 @@ export function ProductEditModal({
                       tenantId={tenantId}
                       onAssignmentChange={setPrimaryCategoryId}
                     />
-                  )
-                )}
-
-                {activeTab === "variants" && (
-                  isNew || product?.id == null || tenantId == null ? (
-                    <p className="text-sm text-slate-500">Zapisz produkt, aby zarządzać wariantami.</p>
-                  ) : (
-                    <ProductEditVariantsTab productId={product.id} tenantId={tenantId} />
                   )
                 )}
 

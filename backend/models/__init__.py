@@ -43,12 +43,6 @@ from .product_family import (  # noqa: F401 — Product Family (optional groupin
     FamilyAttributeValue,
     ProductAttributeValue,
 )
-from .product_variant import (  # noqa: F401 — legacy catalog variants (removed after Family migration)
-    VariantGroup,
-    VariantAxis,
-    VariantValue,
-    ProductVariantSelection,
-)
 from .product_barcode import ProductBarcode  # noqa: F401 — after Product
 from .product_sales_offer import ProductSalesOffer  # noqa: F401 — after Product
 from .offer_stock_pool import OfferStockPool, OfferStockPoolWarehouse  # noqa: F401

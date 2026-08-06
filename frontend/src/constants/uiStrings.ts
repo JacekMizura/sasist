@@ -22,12 +22,10 @@ const UI_STRINGS_DEFAULTS = {
     manufacturers: "Producenci",
     suppliers: "Dostawcy",
     categories: "Kategorie",
-    variants: "Warianty",
     productFamilies: "Rodziny",
     productCustomFields: "Pola dodatkowe",
     addProductCustomField: "Dodaj pole",
     addCategory: "Dodaj kategorię",
-    addVariantGroup: "Nowa grupa wariantów",
     addProductFamily: "Nowa rodzina produktów",
     purchaseOrders: "Zamówienia do dostawców",
     /** Sidebar category: purchasing & replenishment module. */
