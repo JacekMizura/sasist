@@ -1,11 +1,12 @@
 ﻿## Active
 
-**Product Family (ADR Accepted 2026-08-06) — implementacja etapowa.**
+**Product Family (ADR Accepted 2026-08-06) — DONE (7 commits).**
 
 - ADR: `memory/adr-product-family.md`
-- Commit 1: modele `ProductFamily` / `FamilyAttribute` / `FamilyAttributeValue` / `ProductAttributeValue` + `products.product_family_id` + `ensure_product_families_schema`
-- Variant stack zostaje do Commit 6–7
-- Następne: CRUD API → UI Rodziny → karta produktu → generator → migracja → usunięcie Variant
+- Commits: models → CRUD → UI Rodziny → karta produktu → generator A/B → migracja Variant→Family → usunięcie Variant
+- Asortyment → Rodziny (`/product-families`); karta produktu → Podstawowe → blok Rodzina
+- Generator: preview + wybór kombinacji; tryb B (kopia bazowego) / A (puste)
+- Katalogowy Variant usunięty; `ProductRecipeVariant` (MRP) bez zmian
 
 **Logi z WMS na karcie produktu (2026-08-05).**
 

@@ -1,3 +1,10 @@
+## 2026-08-06 — Product Family (7 commits) — ADR + implementacja
+
+- ADR: `memory/adr-product-family.md` (opcjonalna rodzina, base product, generator A/B, etapowe usunięcie Variant)
+- C1 modele · C2 CRUD `/product-families` · C3 UI Rodziny · C4 blok na karcie · C5 generator · C6 migracja · C7 usunięcie Variant
+- Produkty bez rodziny bez zmian; brak `exclude_variant_children`; lista nadal pokazuje wszystkie produkty
+- Follow-up: grupowanie listy produktów po rodzinie (UX), głębsze kopiowanie SEO/GPSR w generatorze
+
 ## 2026-08-06 — Product Family Commit 1 (modele)
 
 - ADR zaakceptowany: `memory/adr-product-family.md` (opcjonalna rodzina, base product, generator A/B, etapowe usunięcie Variant)
