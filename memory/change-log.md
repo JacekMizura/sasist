@@ -1,3 +1,16 @@
+## 2026-08-05 — Pola dodatkowe produktów (jak zamówienia, typy jak Sellasist)
+
+- Definicje: Asortyment → Pola dodatkowe (tekst, liczba, pliki, lista 1/n, GPSR, załączniki z typem)
+- Wartości na karcie produktu → Podstawowe, nad historią
+- Osobny stack od order custom fields (tenant-scoped, bez warehouse)
+
+## 2026-08-05 — Warianty produktów (lepiej niż Sellasist)
+
+- Słownik grup: osie + wartości (karty, nie gęsta tabela); nav Asortyment → Warianty
+- Produkt: zakładka Warianty — przypisz grupę, generuj brakujące kombinacje jako osobne SKU
+- SKU dzieci ukryte na liście produktów (`exclude_variant_children`); stan/EAN/cena per SKU
+- Świadomie bez marketplace / „produkty zależne” / „opcje” z Sellasist (v1 = czysty katalog)
+
 ## 2026-08-05 — Przekształć produkt ↔ zestaw (jak Sellasist)
 
 - BE: `assortment_convert_service` — soft-delete źródła, przeniesienie EAN/cen/wymiarów; pusty BOM przy product→bundle

@@ -22,7 +22,6 @@ import {
   Layers,
   Ruler,
   Shapes,
-  ClipboardList,
   Users,
   Key,
   Building2,
