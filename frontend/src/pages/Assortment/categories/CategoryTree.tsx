@@ -31,7 +31,7 @@ export function CategoryTree({
   depth = 0,
 }: Props) {
   return (
-    <div className={depth === 0 ? "overflow-hidden rounded-xl border border-slate-200 bg-white" : ""}>
+    <div className={depth === 0 ? "overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm" : ""}>
       {nodes.map((node) => {
         const hasChildren = (node.children?.length ?? 0) > 0;
         const expanded = expandedIds.has(node.id);

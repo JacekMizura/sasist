@@ -10,12 +10,12 @@ import PageLayout from "../../../components/layout/PageLayout";
 import { GhostButton } from "../../../design-system";
 import { UI_STRINGS } from "../../../constants/uiStrings";
 import { pimPanelIdentityClass, pimStatTileClass } from "../pimUi";
-import { CategoryEditTabPlaceholder } from "./CategoryEditTabPlaceholder";
 import { CategoryEditBasicTab } from "./CategoryEditBasicTab";
 import { CategoryEditNumberingTab } from "./CategoryEditNumberingTab";
 import { CategoryEditProductsTab } from "./CategoryEditProductsTab";
 import { CategoryEditAttributesTab } from "./CategoryEditAttributesTab";
 import { CategoryEditMarketplaceTab } from "./CategoryEditMarketplaceTab";
+import { CategoryEditHistoryTab } from "./CategoryEditHistoryTab";
 
 export type CategoryEditTabId =
   | "basic"
@@ -42,6 +42,7 @@ export default function CategoryEditPage() {
   const [category, setCategory] = useState<ProductCategoryRead | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<CategoryEditTabId>("basic");
+  const [historyKey, setHistoryKey] = useState(0);
 
   useEffect(() => {
     void fetchTenantsList()
@@ -68,6 +69,7 @@ export default function CategoryEditPage() {
 
   const onSaved = (next: ProductCategoryRead) => {
     setCategory(next);
+    setHistoryKey((k) => k + 1);
   };
 
   if (loading || !category) {
@@ -170,11 +172,11 @@ export default function CategoryEditPage() {
         {activeTab === "attributes" && tenantId != null ? (
           <CategoryEditAttributesTab tenantId={tenantId} category={category} onSaved={onSaved} />
         ) : null}
-        {activeTab === "marketplace" ? (
-          <CategoryEditTabPlaceholder title="Marketplace" description="Mapowanie kanałów." />
+        {activeTab === "marketplace" && tenantId != null ? (
+          <CategoryEditMarketplaceTab tenantId={tenantId} category={category} onSaved={onSaved} />
         ) : null}
         {activeTab === "history" ? (
-          <CategoryEditTabPlaceholder title="Historia" description="Historia zmian." />
+          <CategoryEditHistoryTab categoryId={category.id} refreshKey={historyKey} />
         ) : null}
       </div>
     </PageLayout>

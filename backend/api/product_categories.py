@@ -32,6 +32,7 @@ from ..services.product_categories import (
     update_category,
 )
 from ..services.product_categories.errors import ProductCategoryError
+from ..services.activity_log import ActivityLinkSpec, record_activity
 
 router = APIRouter(prefix="/product-categories", tags=["ProductCategories"])
 product_assignment_router = APIRouter(prefix="/products", tags=["ProductCategories"])
@@ -40,6 +41,34 @@ product_assignment_router = APIRouter(prefix="/products", tags=["ProductCategori
 def _http(err: ProductCategoryError) -> HTTPException:
     status = 404 if err.code == "category_not_found" else 400
     return HTTPException(status_code=status, detail={"message": err.message, "code": err.code})
+
+
+def _log_category(db: Session, *, tenant_id: int, category_id: int, name: str, event_code: str, description: str) -> None:
+    try:
+        nested = db.begin_nested()
+        try:
+            record_activity(
+                db,
+                event_code=event_code,
+                description=description,
+                links=[
+                    ActivityLinkSpec(
+                        object_type="product_category",
+                        object_id=int(category_id),
+                        role="subject",
+                        object_label=name,
+                    )
+                ],
+                severity="INFO",
+                category="catalog",
+                tenant_id=int(tenant_id),
+            )
+            nested.commit()
+        except Exception:
+            nested.rollback()
+            raise
+    except Exception:
+        pass
 
 
 @router.get("/tree", response_model=ProductCategoryTreeOut)
@@ -98,6 +127,15 @@ def api_create_category(
         )
         db.commit()
         db.refresh(row)
+        _log_category(
+            db,
+            tenant_id=tenant_id,
+            category_id=int(row.id),
+            name=row.name or "",
+            event_code="product_category_created",
+            description=f"Utworzono kategorię „{row.name}”.",
+        )
+        db.commit()
         return ProductCategoryRead.model_validate(serialize_category(db, tenant_id, row))
     except ProductCategoryError as e:
         db.rollback()
@@ -158,6 +196,15 @@ def api_update_category(
         )
         db.commit()
         db.refresh(row)
+        _log_category(
+            db,
+            tenant_id=tenant_id,
+            category_id=int(row.id),
+            name=row.name or "",
+            event_code="product_category_updated",
+            description=f"Zaktualizowano kategorię „{row.name}”.",
+        )
+        db.commit()
         return ProductCategoryRead.model_validate(serialize_category(db, tenant_id, row))
     except ProductCategoryError as e:
         db.rollback()
