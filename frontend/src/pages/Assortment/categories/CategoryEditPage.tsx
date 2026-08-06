@@ -15,6 +15,7 @@ import { CategoryEditBasicTab } from "./CategoryEditBasicTab";
 import { CategoryEditNumberingTab } from "./CategoryEditNumberingTab";
 import { CategoryEditProductsTab } from "./CategoryEditProductsTab";
 import { CategoryEditAttributesTab } from "./CategoryEditAttributesTab";
+import { CategoryEditMarketplaceTab } from "./CategoryEditMarketplaceTab";
 
 export type CategoryEditTabId =
   | "basic"
@@ -166,8 +167,8 @@ export default function CategoryEditPage() {
         {activeTab === "products" && tenantId != null ? (
           <CategoryEditProductsTab tenantId={tenantId} categoryId={category.id} />
         ) : null}
-        {activeTab === "attributes" ? (
-          <CategoryEditTabPlaceholder title="Atrybuty" description="Schemat pól kategorii." />
+        {activeTab === "attributes" && tenantId != null ? (
+          <CategoryEditAttributesTab tenantId={tenantId} category={category} onSaved={onSaved} />
         ) : null}
         {activeTab === "marketplace" ? (
           <CategoryEditTabPlaceholder title="Marketplace" description="Mapowanie kanałów." />
