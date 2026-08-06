@@ -74,6 +74,7 @@ import { ProductEditLabelTab } from "./ProductEditLabelTab";
 import { ProductEditDescriptionTab } from "./ProductEditDescriptionTab";
 import { ProductEditCategoriesTab } from "./ProductEditCategoriesTab";
 import { ProductEditVariantsTab } from "./ProductEditVariantsTab";
+import { ProductEditFamilySection } from "./ProductEditFamilySection";
 import { ProductAdditionalFieldsSection } from "./ProductAdditionalFieldsSection";
 import { ProductWarehouseMovementsPanel } from "./ProductWarehouseMovementsPanel";
 import { ProductLabelPrintModal } from "./ProductLabelPrintModal";
@@ -2285,7 +2286,10 @@ export function ProductEditModal({
                 )}
 
                 {activeTab === "basic" && !isNew && product?.id != null && tenantId != null ? (
-                  <ProductAdditionalFieldsSection productId={product.id} tenantId={tenantId} />
+                  <>
+                    <ProductEditFamilySection productId={product.id} tenantId={tenantId} />
+                    <ProductAdditionalFieldsSection productId={product.id} tenantId={tenantId} />
+                  </>
                 ) : null}
 
                 {!isNew && product?.id != null ? (
