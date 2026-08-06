@@ -27,6 +27,10 @@ export type ProductListRow = {
   manufacturer?: string | null;
   manufacturer_id?: number | null;
   manufacturer_brief?: { id: number; name: string; logo_url?: string | null } | null;
+  product_family_id?: number | null;
+  product_family_name?: string | null;
+  sku?: string | null;
+  catalog_number?: string | null;
   default_supplier_id?: number | null;
   default_supplier_brief?: { id: number; name: string } | null;
   gpsr_responsible_name?: string | null;

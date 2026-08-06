@@ -41,6 +41,7 @@ from ..models.supplier import Supplier
 from ..models.supplier_product import SupplierProduct
 from ..models.product import Product
 from ..models.product_barcode import ProductBarcode
+from ..models.product_family import ProductFamily
 from ..models.inventory import Inventory
 from ..models.location import Location
 from ..models.order import Order
@@ -1450,6 +1451,8 @@ def _product_to_dict(p: Product) -> dict:
         "default_supplier_id": int(ds) if (ds := getattr(p, "default_supplier_id", None)) is not None else None,
         "unit": getattr(p, "unit", None),
         "catalog_number": getattr(p, "catalog_number", None),
+        "sku": getattr(p, "sku", None),
+        "product_family_id": int(fid) if (fid := getattr(p, "product_family_id", None)) is not None else None,
         "metadata_json": _safe_parse_metadata_json(getattr(p, "metadata_json", None)),
         "image_url": p.image_url,
         "assigned_locations": _parse_assigned_locations(p.assigned_locations),
@@ -1561,6 +1564,45 @@ def _product_ui_gpsr_from_metadata(metadata_json: Optional[str]) -> tuple[str, s
         str(ui.get("responsible_person") or "").strip(),
         str(ui.get("responsible_person_email") or "").strip(),
     )
+
+
+def _enrich_product_family_names(db: Session, items: list[dict]) -> None:
+    """Batch-attach product_family_name for list payloads (no N+1)."""
+    family_ids: set[int] = set()
+    tenant_ids: set[int] = set()
+    for d in items:
+        fid = d.get("product_family_id")
+        if fid is None:
+            d["product_family_name"] = None
+            continue
+        try:
+            family_ids.add(int(fid))
+        except (TypeError, ValueError):
+            d["product_family_name"] = None
+            continue
+        tid = d.get("tenant_id")
+        if tid is not None:
+            try:
+                tenant_ids.add(int(tid))
+            except (TypeError, ValueError):
+                pass
+    if not family_ids:
+        return
+    q = db.query(ProductFamily.id, ProductFamily.name, ProductFamily.tenant_id).filter(
+        ProductFamily.id.in_(list(family_ids))
+    )
+    if len(tenant_ids) == 1:
+        q = q.filter(ProductFamily.tenant_id == next(iter(tenant_ids)))
+    name_by_id = {int(r.id): (r.name or "").strip() or f"Rodzina #{int(r.id)}" for r in q.all()}
+    for d in items:
+        fid = d.get("product_family_id")
+        if fid is None:
+            d["product_family_name"] = None
+        else:
+            try:
+                d["product_family_name"] = name_by_id.get(int(fid))
+            except (TypeError, ValueError):
+                d["product_family_name"] = None
 
 
 def _enrich_product_manufacturer(db: Session, d: dict, p: Product) -> None:
@@ -2028,6 +2070,7 @@ def get_products(
         _enrich_product_default_supplier(db, d, p)
         _enrich_product_last_supplier(db, d, p)
         items.append(d)
+    _enrich_product_family_names(db, items)
 
     if rows:
         attach_inventory_display_to_product_dicts(

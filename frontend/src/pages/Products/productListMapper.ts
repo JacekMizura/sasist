@@ -213,6 +213,18 @@ export function mapProductListRow(p: Record<string, unknown>): ProductListRow {
                 : null,
           }
         : null,
+    product_family_id: p.product_family_id != null ? Number(p.product_family_id) : null,
+    product_family_name:
+      typeof p.product_family_name === "string" && p.product_family_name.trim()
+        ? p.product_family_name.trim()
+        : null,
+    sku: typeof p.sku === "string" ? p.sku : p.sku == null ? null : String(p.sku),
+    catalog_number:
+      typeof p.catalog_number === "string"
+        ? p.catalog_number
+        : p.catalog_number == null
+          ? null
+          : String(p.catalog_number),
     default_supplier_id: p.default_supplier_id != null ? Number(p.default_supplier_id) : null,
     default_supplier_brief:
       p.default_supplier_brief != null && typeof p.default_supplier_brief === "object"

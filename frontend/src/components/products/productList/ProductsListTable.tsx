@@ -1,4 +1,4 @@
-import { memo, type RefObject, type ReactNode } from "react";
+import { memo, Fragment, type RefObject, type ReactNode } from "react";
 import { brandPrimaryButtonClass } from "../../../design-system/brandUi";
 import { Copy, Pencil, Trash2 } from "lucide-react";
 import { Link } from "react-router-dom";
@@ -94,7 +94,45 @@ export type ProductsListTableProps = {
   rowDupBusyId: number | null;
   rowDeleteBusyId: number | null;
   emptyAction?: ReactNode;
+  /** When true, render ▶ family headers with expandable product rows (page-local). */
+  groupByFamily?: boolean;
+  collapsedFamilyKeys?: ReadonlySet<string>;
+  onToggleFamilyGroup?: (key: string) => void;
 };
+
+export type ProductFamilyListSection = {
+  key: string;
+  title: string;
+  rows: ProductListRow[];
+};
+
+export function buildProductFamilyListSections(rows: ProductListRow[]): ProductFamilyListSection[] {
+  const map = new Map<string, ProductFamilyListSection>();
+  for (const row of rows) {
+    const fid = row.product_family_id;
+    const key = fid != null && Number.isFinite(fid) ? `f-${fid}` : "ungrouped";
+    let section = map.get(key);
+    if (!section) {
+      section = {
+        key,
+        title:
+          key === "ungrouped"
+            ? "Bez rodziny"
+            : (row.product_family_name || "").trim() || `Rodzina #${fid}`,
+        rows: [],
+      };
+      map.set(key, section);
+    }
+    section.rows.push(row);
+  }
+  const sections = [...map.values()];
+  sections.sort((a, b) => {
+    if (a.key === "ungrouped") return 1;
+    if (b.key === "ungrouped") return -1;
+    return a.title.localeCompare(b.title, "pl");
+  });
+  return sections;
+}
 
 const RIGHT_ALIGN_COLS = new Set([
   "price",
@@ -389,6 +427,9 @@ export function ProductsListTable({
   onOpenLocationOnMap,
   rowDupBusyId,
   rowDeleteBusyId,
+  groupByFamily = false,
+  collapsedFamilyKeys,
+  onToggleFamilyGroup,
 }: ProductsListTableProps) {
   const { containerRef, widths, contentMinWidthPx } = useProportionalTableColumns(
     columnOrder.length,
@@ -405,6 +446,7 @@ export function ProductsListTable({
   const colSpan = 4 + columnOrder.length;
   const scrollClass = "overflow-x-auto";
   const tableStyle = { minWidth: Math.max(preferredTableWidth, contentMinWidthPx), width: "100%" };
+  const familySections = groupByFamily ? buildProductFamilyListSections(rows) : null;
 
   const renderSortTh = (label: string, sortKey: ProductListSortKey, align: "left" | "right" = "left") => (
     <th
@@ -415,6 +457,23 @@ export function ProductsListTable({
       {label}
       <SortIndicator active={sortBy === sortKey} dir={sortDir} />
     </th>
+  );
+
+  const renderProductRow = (row: ProductListRow) => (
+    <ProductTableRow
+      key={row.id}
+      row={row}
+      columnOrder={columnOrder}
+      columnCatalog={columnCatalog}
+      selected={isRowSelected(row.id)}
+      onToggleOne={onToggleOne}
+      onRowOpen={onRowOpen}
+      onDuplicate={onDuplicate}
+      onDelete={onDelete}
+      onOpenLocationOnMap={onOpenLocationOnMap}
+      rowDupBusyId={rowDupBusyId}
+      rowDeleteBusyId={rowDeleteBusyId}
+    />
   );
 
   return (
@@ -475,23 +534,34 @@ export function ProductsListTable({
                 </Link>
               </td>
             </tr>
+          ) : familySections ? (
+            familySections.map((section) => {
+              const collapsed = collapsedFamilyKeys?.has(section.key) ?? false;
+              return (
+                <Fragment key={section.key}>
+                  <tr className="bg-slate-100/90">
+                    <td colSpan={colSpan} className={`${productsListTdClass} !py-2`}>
+                      <button
+                        type="button"
+                        className="flex w-full items-center gap-2 text-left text-sm font-semibold text-slate-800"
+                        onClick={() => onToggleFamilyGroup?.(section.key)}
+                      >
+                        <span className="inline-block w-4 tabular-nums text-slate-500" aria-hidden>
+                          {collapsed ? "▶" : "▼"}
+                        </span>
+                        <span className="truncate">{section.title}</span>
+                        <span className="shrink-0 font-medium tabular-nums text-slate-500">
+                          ({section.rows.length})
+                        </span>
+                      </button>
+                    </td>
+                  </tr>
+                  {!collapsed ? section.rows.map((row) => renderProductRow(row)) : null}
+                </Fragment>
+              );
+            })
           ) : (
-            rows.map((row) => (
-              <ProductTableRow
-                key={row.id}
-                row={row}
-                columnOrder={columnOrder}
-                columnCatalog={columnCatalog}
-                selected={isRowSelected(row.id)}
-                onToggleOne={onToggleOne}
-                onRowOpen={onRowOpen}
-                onDuplicate={onDuplicate}
-                onDelete={onDelete}
-                onOpenLocationOnMap={onOpenLocationOnMap}
-                rowDupBusyId={rowDupBusyId}
-                rowDeleteBusyId={rowDeleteBusyId}
-              />
-            ))
+            rows.map((row) => renderProductRow(row))
           )}
         </tbody>
       </table>

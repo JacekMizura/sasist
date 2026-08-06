@@ -323,6 +323,18 @@ export default function ProductList() {
 
   const clientMode = useMemo(() => needsClientSideFiltering(appliedFilters), [appliedFilters]);
 
+  const groupByFamily = Boolean(extensions.groupByFamily);
+  const [collapsedFamilyKeys, setCollapsedFamilyKeys] = useState<Set<string>>(() => new Set());
+
+  const toggleFamilyGroup = useCallback((key: string) => {
+    setCollapsedFamilyKeys((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }, []);
+
   const productBulkFiltersPayload = useMemo(
     () =>
       buildProductBulkListFiltersPayload({
@@ -466,6 +478,10 @@ export default function ProductList() {
     const start = (page - 1) * rowsPerPage;
     return filteredCatalog.slice(start, start + rowsPerPage);
   }, [clientMode, catalog, filteredCatalog, page, rowsPerPage]);
+
+  useEffect(() => {
+    setCollapsedFamilyKeys(new Set());
+  }, [page, groupByFamily, displayRows]);
 
   const totalCount = clientMode ? filteredCatalog.length : serverTotal;
 
@@ -956,23 +972,36 @@ export default function ProductList() {
               }}
               onExport={() => setExportOpen(true)}
               trailing={
-                <label className="flex items-center gap-2 text-xs font-medium text-slate-600">
-                  <span className="whitespace-nowrap">Na stronę</span>
-                  <select
-                    value={rowsPerPage}
-                    onChange={(e) => {
-                      setRowsPerPage(Number(e.target.value));
-                      setPage(1);
-                    }}
-                    className={`${listSellasistInputClass} !h-8 w-auto min-w-[4rem] py-0 pr-7 text-sm`}
-                  >
-                    {ROWS_PER_PAGE_OPTIONS.map((n) => (
-                      <option key={n} value={n}>
-                        {n}
-                      </option>
-                    ))}
-                  </select>
-                </label>
+                <div className="flex flex-wrap items-center gap-3">
+                  <label className="flex items-center gap-2 text-xs font-medium text-slate-600">
+                    <span className="whitespace-nowrap">Widok</span>
+                    <select
+                      value={groupByFamily ? "family" : "flat"}
+                      onChange={(e) => setExtension("groupByFamily", e.target.value === "family")}
+                      className={`${listSellasistInputClass} !h-8 w-auto min-w-[9rem] py-0 pr-7 text-sm`}
+                    >
+                      <option value="flat">Lista płaska</option>
+                      <option value="family">Grupuj po rodzinie</option>
+                    </select>
+                  </label>
+                  <label className="flex items-center gap-2 text-xs font-medium text-slate-600">
+                    <span className="whitespace-nowrap">Na stronę</span>
+                    <select
+                      value={rowsPerPage}
+                      onChange={(e) => {
+                        setRowsPerPage(Number(e.target.value));
+                        setPage(1);
+                      }}
+                      className={`${listSellasistInputClass} !h-8 w-auto min-w-[4rem] py-0 pr-7 text-sm`}
+                    >
+                      {ROWS_PER_PAGE_OPTIONS.map((n) => (
+                        <option key={n} value={n}>
+                          {n}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
               }
             />
             {effectiveProductSelectionCount > 0 ? (
@@ -999,6 +1028,9 @@ export default function ProductList() {
               onOpenLocationOnMap={openProductLocationOnMap}
               rowDupBusyId={rowDupBusyId}
               rowDeleteBusyId={rowDeleteBusyId}
+              groupByFamily={groupByFamily}
+              collapsedFamilyKeys={collapsedFamilyKeys}
+              onToggleFamilyGroup={toggleFamilyGroup}
             />
             <div className={`${moduleTablePaginationFooterClass} px-4`}>
               <div className="flex flex-wrap items-center gap-3">
