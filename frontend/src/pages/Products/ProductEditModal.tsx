@@ -14,6 +14,7 @@ import {
   Copy,
   Factory,
   FolderTree,
+  Network,
   Image as ImageIcon,
   AlignLeft,
   LayoutList,
@@ -73,8 +74,8 @@ import { ProductEditImagesTab } from "./ProductEditImagesTab";
 import { ProductEditLabelTab } from "./ProductEditLabelTab";
 import { ProductEditDescriptionTab } from "./ProductEditDescriptionTab";
 import { ProductEditCategoriesTab } from "./ProductEditCategoriesTab";
-import { ProductEditFamilySection } from "./ProductEditFamilySection";
 import { ProductEditIdentityHeader } from "./ProductEditIdentityHeader";
+import { ProductEditFamilyTab } from "./ProductEditFamilyTab";
 import { ProductAdditionalFieldsSection } from "./ProductAdditionalFieldsSection";
 import { ProductWarehouseMovementsPanel } from "./ProductWarehouseMovementsPanel";
 import { ProductLabelPrintModal } from "./ProductLabelPrintModal";
@@ -245,6 +246,7 @@ type Tenant = { id: number; name: string };
 
 export type ProductEditTabId =
   | "basic"
+  | "family"
   | "suppliers"
   | "labelSheet"
   | "images"
@@ -1704,13 +1706,26 @@ export function ProductEditModal({
 
   const railTabOrder = useMemo((): TabId[] => {
     if (!isNew) {
-      return ["basic", "prices", "description", "images", "offers", "categories", "production", "labelSheet", "warehouse", "warehouseOps"];
+      return [
+        "basic",
+        "family",
+        "prices",
+        "description",
+        "images",
+        "offers",
+        "categories",
+        "production",
+        "labelSheet",
+        "warehouse",
+        "warehouseOps",
+      ];
     }
     return ["basic", "prices", "description", "images", "offers", "labelSheet", "warehouse"];
   }, [isNew]);
 
   const railLabel: Record<TabId, string> = {
     basic: "Podstawowe",
+    family: "Rodzina",
     prices: "Ceny",
     description: "Opis",
     categories: "Kategorie",
@@ -1727,6 +1742,7 @@ export function ProductEditModal({
 
   const railIcon: Record<TabId, LucideIcon> = {
     basic: LayoutList,
+    family: Network,
     suppliers: Building2,
     labelSheet: Printer,
     images: ImageIcon,
@@ -2304,11 +2320,12 @@ export function ProductEditModal({
                   />
                 )}
 
+                {activeTab === "family" && !isNew && product?.id != null && tenantId != null ? (
+                  <ProductEditFamilyTab tenantId={tenantId} productId={product.id} />
+                ) : null}
+
                 {activeTab === "basic" && !isNew && product?.id != null && tenantId != null ? (
-                  <>
-                    <ProductEditFamilySection productId={product.id} tenantId={tenantId} />
-                    <ProductAdditionalFieldsSection productId={product.id} tenantId={tenantId} />
-                  </>
+                  <ProductAdditionalFieldsSection productId={product.id} tenantId={tenantId} />
                 ) : null}
 
                 {!isNew && product?.id != null ? (

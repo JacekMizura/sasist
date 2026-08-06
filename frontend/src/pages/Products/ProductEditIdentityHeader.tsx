@@ -1,16 +1,6 @@
-import { useCallback, useEffect, useState } from "react";
-import { ExternalLink, Layers3 } from "lucide-react";
-import { Link } from "react-router-dom";
-import toast from "react-hot-toast";
+import { Layers3 } from "lucide-react";
 
-import {
-  attachProductFamily,
-  getProductFamilyState,
-  listProductFamilies,
-  type ProductFamilyListItem,
-} from "../../api/productFamiliesApi";
-import { extractApiErrorMessage } from "../../api/authApi";
-import { GhostButton, Input, PrimaryButton, Select } from "../../design-system";
+import { GhostButton, Input } from "../../design-system";
 import { ProductCodeGenerateControl } from "./ProductCodeGenerateControl";
 import {
   pimFieldLabelClass,
@@ -32,7 +22,8 @@ type Props = {
 };
 
 /**
- * Top-of-card identity: Family, Category, SKU+Generuj, Catalog+Generuj, Status.
+ * Top-of-card identity: Category, SKU+Generuj, Catalog+Generuj, Status.
+ * Family management lives exclusively on the Rodzina tab.
  */
 export function ProductEditIdentityHeader({
   isNew,
@@ -46,59 +37,6 @@ export function ProductEditIdentityHeader({
   primaryCategoryPath,
   onOpenCategoriesTab,
 }: Props) {
-  const [families, setFamilies] = useState<ProductFamilyListItem[]>([]);
-  const [draftFamilyId, setDraftFamilyId] = useState("");
-  const [familyName, setFamilyName] = useState<string | null>(null);
-  const [familyBusy, setFamilyBusy] = useState(false);
-  const [familyLoading, setFamilyLoading] = useState(false);
-
-  const reloadFamily = useCallback(async () => {
-    if (tenantId == null || productId == null) {
-      setDraftFamilyId("");
-      setFamilyName(null);
-      setFamilies([]);
-      return;
-    }
-    setFamilyLoading(true);
-    try {
-      const [st, list] = await Promise.all([
-        getProductFamilyState(tenantId, productId),
-        listProductFamilies(tenantId, { includeInactive: false }),
-      ]);
-      setFamilies(list);
-      setDraftFamilyId(st.product_family_id != null ? String(st.product_family_id) : "");
-      setFamilyName(st.family?.name ?? null);
-    } catch (e) {
-      toast.error(extractApiErrorMessage(e, "Nie udało się wczytać rodziny."));
-    } finally {
-      setFamilyLoading(false);
-    }
-  }, [tenantId, productId]);
-
-  useEffect(() => {
-    void reloadFamily();
-  }, [reloadFamily]);
-
-  const onSaveFamily = async () => {
-    if (tenantId == null || productId == null) return;
-    const nextId = draftFamilyId.trim() ? Number(draftFamilyId) : null;
-    if (draftFamilyId.trim() && !Number.isFinite(nextId)) {
-      toast.error("Nieprawidłowa rodzina.");
-      return;
-    }
-    setFamilyBusy(true);
-    try {
-      const st = await attachProductFamily(tenantId, productId, nextId);
-      setDraftFamilyId(st.product_family_id != null ? String(st.product_family_id) : "");
-      setFamilyName(st.family?.name ?? null);
-      toast.success(nextId == null ? "Odłączono od rodziny." : "Przypisano do rodziny.");
-    } catch (e) {
-      toast.error(extractApiErrorMessage(e, "Nie udało się zmienić rodziny."));
-    } finally {
-      setFamilyBusy(false);
-    }
-  };
-
   const statusLabel = isNew ? "Szkic" : "Aktywny";
 
   return (
@@ -110,7 +48,7 @@ export function ProductEditIdentityHeader({
           </span>
           <div>
             <h2 className="text-sm font-semibold text-slate-900">Tożsamość produktu</h2>
-            <p className="text-xs text-slate-500">Rodzina · kategoria · SKU · katalog · status</p>
+            <p className="text-xs text-slate-500">Kategoria · SKU · katalog · status</p>
           </div>
         </div>
         <span
@@ -124,55 +62,7 @@ export function ProductEditIdentityHeader({
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <div>
-          <span className={pimFieldLabelClass}>
-            Rodzina
-          </span>
-          {isNew || productId == null || tenantId == null ? (
-            <p className="text-sm text-slate-500">Dostępne po zapisaniu produktu.</p>
-          ) : familyLoading ? (
-            <p className="text-sm text-slate-500">Ładowanie…</p>
-          ) : (
-            <div className="space-y-2">
-              <div className="flex flex-wrap items-end gap-2">
-                <Select
-                  value={draftFamilyId}
-                  disabled={familyBusy}
-                  onChange={(e) => setDraftFamilyId(e.target.value)}
-                  className="min-w-[12rem] flex-1"
-                >
-                  <option value="">— Brak —</option>
-                  {families.map((f) => (
-                    <option key={f.id} value={String(f.id)}>
-                      {f.name}
-                    </option>
-                  ))}
-                </Select>
-                <PrimaryButton
-                  type="button"
-                  density="compact"
-                  disabled={familyBusy}
-                  onClick={() => void onSaveFamily()}
-                >
-                  Zapisz
-                </PrimaryButton>
-              </div>
-              {familyName && draftFamilyId ? (
-                <Link
-                  to={`/product-families/${draftFamilyId}/edit`}
-                  className="inline-flex items-center gap-1 text-xs font-medium text-blue-700 hover:underline"
-                >
-                  Otwórz {familyName}
-                  <ExternalLink className="h-3 w-3" aria-hidden />
-                </Link>
-              ) : null}
-            </div>
-          )}
-        </div>
-
-        <div>
-          <span className={pimFieldLabelClass}>
-            Kategoria
-          </span>
+          <span className={pimFieldLabelClass}>Kategoria</span>
           {primaryCategoryPath ? (
             <p className="text-sm font-medium text-slate-900">{primaryCategoryPath}</p>
           ) : (
@@ -191,10 +81,10 @@ export function ProductEditIdentityHeader({
           ) : null}
         </div>
 
+        <div className="hidden lg:block" aria-hidden />
+
         <div>
-          <span className={pimFieldLabelClass}>
-            SKU
-          </span>
+          <span className={pimFieldLabelClass}>SKU</span>
           <div className="flex items-stretch gap-2">
             <Input
               type="text"
@@ -217,9 +107,7 @@ export function ProductEditIdentityHeader({
         </div>
 
         <div>
-          <span className={pimFieldLabelClass}>
-            Numer katalogowy
-          </span>
+          <span className={pimFieldLabelClass}>Numer katalogowy</span>
           <div className="flex items-stretch gap-2">
             <Input
               type="text"
