@@ -22,7 +22,6 @@ const UI_STRINGS_DEFAULTS = {
     manufacturers: "Producenci",
     suppliers: "Dostawcy",
     categories: "Kategorie",
-    sizeTables: "Tabele rozmiarów",
     variants: "Warianty",
     productCustomFields: "Pola dodatkowe",
     addProductCustomField: "Dodaj pole",

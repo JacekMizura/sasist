@@ -20,7 +20,6 @@ import {
   Factory,
   Truck,
   Layers,
-  Ruler,
   Shapes,
   Users,
   Key,
@@ -221,11 +220,6 @@ export function buildNavFlyoutCategories(): NavCategoryConfig[] {
             Icon: FolderOpen,
             plusLinkTo: "/categories",
             plusLinkTitle: UI_STRINGS.navigation.addCategory,
-          },
-          {
-            path: "/size-tables",
-            label: UI_STRINGS.navigation.sizeTables,
-            Icon: Ruler,
           },
           {
             path: "/variants",

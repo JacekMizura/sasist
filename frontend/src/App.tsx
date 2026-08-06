@@ -269,7 +269,6 @@ import ProductsImportTabPage from "./pages/Products/ProductsImportTabPage"
 import ProductsImportHistoryTabPage from "./pages/Products/ProductsImportHistoryTabPage"
 import ProductCategoriesPage from "./pages/Products/ProductCategoriesPage"
 import AssortmentCategoriesPage from "./pages/Assortment/categories/ProductCategoriesPage"
-import SizeTablesPage from "./pages/Assortment/SizeTablesPage"
 import VariantGroupsPage from "./pages/Assortment/variants/VariantGroupsPage"
 import VariantGroupEditPage from "./pages/Assortment/variants/VariantGroupEditPage"
 import ProductCustomFieldsPage from "./pages/Assortment/productCustomFields/ProductCustomFieldsPage"
@@ -710,7 +709,6 @@ export const router = createBrowserRouter(
                 <Route path="bundles/new" element={<BundleNewPage />} />
                 <Route path="bundles/:id/edit" element={<BundleEditPage />} />
                 <Route path="categories" element={<AssortmentCategoriesPage />} />
-                <Route path="size-tables" element={<SizeTablesPage />} />
                 <Route path="variants" element={<VariantGroupsPage />} />
                 <Route path="variants/new" element={<VariantGroupEditPage />} />
                 <Route path="variants/:groupId/edit" element={<VariantGroupEditPage />} />
