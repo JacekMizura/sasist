@@ -69,6 +69,9 @@ class ProductFamilyMemberRead(BaseModel):
     image_url: Optional[str] = None
     is_base: bool = False
     attribute_summary: str = ""
+    sale_price: Optional[float] = None
+    stock_quantity: Optional[float] = None
+    is_active: bool = True
 
 
 class ProductFamilyRead(BaseModel):

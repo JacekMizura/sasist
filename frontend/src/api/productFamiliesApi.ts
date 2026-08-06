@@ -41,6 +41,9 @@ export type ProductFamilyMember = {
   image_url?: string | null;
   is_base: boolean;
   attribute_summary: string;
+  sale_price?: number | null;
+  stock_quantity?: number | null;
+  is_active?: boolean;
 };
 
 export type ProductFamily = {

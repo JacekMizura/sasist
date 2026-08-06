@@ -8,6 +8,7 @@ from typing import Any, Optional
 from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
 
+from ...models.inventory import Inventory
 from ...models.product import Product
 from ...models.product_family import (
     FamilyAttribute,
@@ -198,11 +199,25 @@ def list_family_members(db: Session, tenant_id: int, family: ProductFamily) -> l
             (attr_order.get(int(row.attribute_id), 0), value_names.get(int(row.value_id), ""))
         )
 
+    stock_by_pid: dict[int, float] = {}
+    for pid, qty in (
+        db.query(Inventory.product_id, func.coalesce(func.sum(Inventory.quantity), 0.0))
+        .filter(Inventory.product_id.in_(pids), Inventory.tenant_id == tenant_id)
+        .group_by(Inventory.product_id)
+        .all()
+    ):
+        stock_by_pid[int(pid)] = float(qty or 0)
+
     base_id = int(family.base_product_id) if family.base_product_id else None
     out: list[dict[str, Any]] = []
     for p in products:
         parts = sorted(by_product.get(int(p.id), []), key=lambda t: t[0])
         summary = " / ".join(name for _, name in parts if name)
+        sale = getattr(p, "sale_price", None)
+        try:
+            sale_f = float(sale) if sale is not None else None
+        except (TypeError, ValueError):
+            sale_f = None
         out.append(
             {
                 "id": int(p.id),
@@ -213,6 +228,9 @@ def list_family_members(db: Session, tenant_id: int, family: ProductFamily) -> l
                 "image_url": p.image_url,
                 "is_base": base_id is not None and int(p.id) == base_id,
                 "attribute_summary": summary,
+                "sale_price": sale_f,
+                "stock_quantity": stock_by_pid.get(int(p.id), 0.0),
+                "is_active": getattr(p, "deleted_at", None) is None,
             }
         )
     return out
