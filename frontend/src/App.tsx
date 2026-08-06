@@ -269,6 +269,7 @@ import ProductsImportTabPage from "./pages/Products/ProductsImportTabPage"
 import ProductsImportHistoryTabPage from "./pages/Products/ProductsImportHistoryTabPage"
 import ProductCategoriesPage from "./pages/Products/ProductCategoriesPage"
 import AssortmentCategoriesPage from "./pages/Assortment/categories/ProductCategoriesPage"
+import CategoryEditPage from "./pages/Assortment/categories/CategoryEditPage"
 import ProductFamiliesPage from "./pages/Assortment/families/ProductFamiliesPage"
 import ProductFamilyEditPage from "./pages/Assortment/families/ProductFamilyEditPage"
 import SizeTablesPage from "./pages/Assortment/SizeTablesPage"
@@ -710,6 +711,7 @@ export const router = createBrowserRouter(
                 <Route path="bundles/new" element={<BundleNewPage />} />
                 <Route path="bundles/:id/edit" element={<BundleEditPage />} />
                 <Route path="categories" element={<AssortmentCategoriesPage />} />
+                <Route path="categories/:categoryId/edit" element={<CategoryEditPage />} />
                 <Route path="product-families" element={<ProductFamiliesPage />} />
                 <Route path="product-families/new" element={<ProductFamilyEditPage />} />
                 <Route path="product-families/:familyId/edit" element={<ProductFamilyEditPage />} />

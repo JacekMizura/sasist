@@ -129,7 +129,14 @@ export function CategoryTreeRow({
             ) : null}
           </div>
         ) : (
-          <div className="truncate text-sm font-medium text-slate-900">{node.name}</div>
+          <button
+            type="button"
+            className="min-w-0 flex-1 truncate text-left text-sm font-medium text-slate-900 hover:text-blue-700"
+            onClick={onEdit}
+            title="Otwórz kartę kategorii"
+          >
+            {node.name}
+          </button>
         )}
         {!node.is_active ? (
           <div className="text-[10px] font-medium uppercase tracking-wide text-slate-400">Nieaktywna</div>

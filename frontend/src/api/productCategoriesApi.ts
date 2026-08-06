@@ -82,6 +82,16 @@ export async function fetchCategoryTree(params: {
   return data.nodes ?? [];
 }
 
+export async function getProductCategory(params: {
+  tenantId: number;
+  categoryId: number;
+}): Promise<ProductCategoryRead> {
+  const { data } = await api.get<ProductCategoryRead>(`/product-categories/${params.categoryId}`, {
+    params: { tenant_id: params.tenantId },
+  });
+  return data;
+}
+
 export async function createProductCategory(params: {
   tenantId: number;
   body: ProductCategoryCreateBody;

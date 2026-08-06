@@ -1,5 +1,6 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useState, useEffect } from "react";
 import { FolderTree, Plus } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 
 import { fetchTenantsList } from "../../../api/tenantsApi";
 import type { ProductCategoryTreeNode } from "../../../api/productCategoriesApi";
@@ -8,45 +9,38 @@ import PageLayout from "../../../components/layout/PageLayout";
 import { EmptyState, GhostButton, PrimaryButton, SearchInput } from "../../../design-system";
 import { UI_STRINGS } from "../../../constants/uiStrings";
 import { useCategoryTree } from "../../../modules/productCategories/useCategoryTree";
-import { useEffect } from "react";
 import { CategoryFormModal } from "./CategoryFormModal";
 import { CategoryTree } from "./CategoryTree";
 import { PIM_ASSORTMENT_TAGLINE } from "../pimUi";
 
 /**
- * Asortyment → Kategorie — hierarchical tree (not a table).
+ * Asortyment → Kategorie — hierarchical explorer; edit opens full category card.
  */
 export default function ProductCategoriesPage() {
+  const navigate = useNavigate();
   const [tenantId, setTenantId] = useState<number | null>(null);
 
   useEffect(() => {
     void fetchTenantsList()
-      .then((list) => {
-        const first = list[0];
-        setTenantId(first?.id ?? null);
-      })
+      .then((list) => setTenantId(list[0]?.id ?? null))
       .catch(() => setTenantId(null));
   }, []);
 
   const treeState = useCategoryTree(tenantId);
   const [formOpen, setFormOpen] = useState(false);
-  const [formMode, setFormMode] = useState<"create" | "edit">("create");
-  const [editing, setEditing] = useState<ProductCategoryTreeNode | null>(null);
   const [defaultParentId, setDefaultParentId] = useState<number | null>(null);
 
   const openCreate = useCallback((parentId: number | null = null) => {
-    setFormMode("create");
-    setEditing(null);
     setDefaultParentId(parentId);
     setFormOpen(true);
   }, []);
 
-  const openEdit = useCallback((node: ProductCategoryTreeNode) => {
-    setFormMode("edit");
-    setEditing(node);
-    setDefaultParentId(null);
-    setFormOpen(true);
-  }, []);
+  const openEdit = useCallback(
+    (node: ProductCategoryTreeNode) => {
+      navigate(`/categories/${node.id}/edit`);
+    },
+    [navigate],
+  );
 
   const onDelete = useCallback(
     async (node: ProductCategoryTreeNode) => {
@@ -69,7 +63,7 @@ export default function ProductCategoriesPage() {
     <PageLayout>
       <ListPageHeader
         title="Kategorie"
-        description={`${PIM_ASSORTMENT_TAGLINE}. Hierarchia z numeracją SKU i katalogu — struktura gotowa pod późniejszy import Allegro.`}
+        description={`${PIM_ASSORTMENT_TAGLINE}. Eksplorator drzewa — pełna konfiguracja na karcie kategorii.`}
         breadcrumbs={[
           { label: UI_STRINGS.navigation.assortment },
           { label: UI_STRINGS.navigation.categories },
@@ -137,40 +131,19 @@ export default function ProductCategoriesPage() {
 
       <CategoryFormModal
         open={formOpen}
-        mode={formMode}
         tree={treeState.rawTree}
-        initial={editing}
         defaultParentId={defaultParentId}
         busy={treeState.busy}
         onClose={() => setFormOpen(false)}
         onSubmit={async (values) => {
-          if (formMode === "create") {
-            await treeState.create({
-              name: values.name,
-              parent_id: values.parent_id,
-              description: values.description || null,
-              is_active: values.is_active,
-              sort_order: values.sort_order,
-              sku_code: values.sku_code || null,
-              catalog_code: values.catalog_code || null,
-              sku_template: values.sku_template || null,
-              catalog_template: values.catalog_template || null,
-            });
-          } else if (editing) {
-            await treeState.update(editing.id, {
-              name: values.name,
-              parent_id: values.parent_id,
-              clear_parent: values.clear_parent,
-              description: values.description,
-              is_active: values.is_active,
-              sort_order: values.sort_order,
-              sku_code: values.sku_code || null,
-              catalog_code: values.catalog_code || null,
-              sku_template: values.sku_template || null,
-              catalog_template: values.catalog_template || null,
-            });
-          }
+          const created = await treeState.create({
+            name: values.name,
+            parent_id: values.parent_id,
+          });
           setFormOpen(false);
+          if (created?.id) {
+            navigate(`/categories/${created.id}/edit`);
+          }
         }}
       />
     </PageLayout>
