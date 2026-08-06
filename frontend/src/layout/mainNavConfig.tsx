@@ -35,6 +35,7 @@ import {
   LayoutDashboard,
   CalendarRange,
   Network,
+  Ruler,
 } from "lucide-react";
 
 import { UI_STRINGS } from "../constants/uiStrings";
@@ -215,11 +216,11 @@ export function buildNavFlyoutCategories(): NavCategoryConfig[] {
             plusLinkTitle: UI_STRINGS.navigation.addProduct,
           },
           {
-            path: "/bundles",
-            label: UI_STRINGS.navigation.bundles,
-            Icon: Boxes,
-            plusLinkTo: "/bundles/new",
-            plusLinkTitle: UI_STRINGS.navigation.addBundle,
+            path: "/product-families",
+            label: UI_STRINGS.navigation.productFamilies,
+            Icon: Network,
+            plusLinkTo: "/product-families/new",
+            plusLinkTitle: UI_STRINGS.navigation.addProductFamily,
           },
           {
             path: "/categories",
@@ -229,11 +230,16 @@ export function buildNavFlyoutCategories(): NavCategoryConfig[] {
             plusLinkTitle: UI_STRINGS.navigation.addCategory,
           },
           {
-            path: "/product-families",
-            label: UI_STRINGS.navigation.productFamilies,
-            Icon: Network,
-            plusLinkTo: "/product-families/new",
-            plusLinkTitle: UI_STRINGS.navigation.addProductFamily,
+            path: "/size-tables",
+            label: UI_STRINGS.navigation.sizeTables,
+            Icon: Ruler,
+          },
+          {
+            path: "/bundles",
+            label: UI_STRINGS.navigation.bundles,
+            Icon: Boxes,
+            plusLinkTo: "/bundles/new",
+            plusLinkTitle: UI_STRINGS.navigation.addBundle,
           },
           {
             path: "/product-custom-fields",

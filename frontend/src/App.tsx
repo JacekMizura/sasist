@@ -271,6 +271,7 @@ import ProductCategoriesPage from "./pages/Products/ProductCategoriesPage"
 import AssortmentCategoriesPage from "./pages/Assortment/categories/ProductCategoriesPage"
 import ProductFamiliesPage from "./pages/Assortment/families/ProductFamiliesPage"
 import ProductFamilyEditPage from "./pages/Assortment/families/ProductFamilyEditPage"
+import SizeTablesPage from "./pages/Assortment/SizeTablesPage"
 import ProductCustomFieldsPage from "./pages/Assortment/productCustomFields/ProductCustomFieldsPage"
 import ProductCustomFieldEditPage from "./pages/Assortment/productCustomFields/ProductCustomFieldEditPage"
 import BdoLayout from "./pages/bdo/BdoLayout"
@@ -712,6 +713,7 @@ export const router = createBrowserRouter(
                 <Route path="product-families" element={<ProductFamiliesPage />} />
                 <Route path="product-families/new" element={<ProductFamilyEditPage />} />
                 <Route path="product-families/:familyId/edit" element={<ProductFamilyEditPage />} />
+                <Route path="size-tables" element={<SizeTablesPage />} />
                 <Route path="product-custom-fields" element={<ProductCustomFieldsPage />} />
                 <Route path="product-custom-fields/new" element={<ProductCustomFieldEditPage />} />
                 <Route path="product-custom-fields/:fieldId/edit" element={<ProductCustomFieldEditPage />} />
