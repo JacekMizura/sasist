@@ -108,6 +108,7 @@ from .db.schema_upgrade import (
     ensure_manufacturers_table_and_product_manufacturer_id,
     ensure_product_categories_schema,
     ensure_product_variants_schema,
+    ensure_product_families_schema,
     ensure_product_custom_fields_schema,
     ensure_suppliers_and_inbound_deliveries_tables,
     ensure_deliveries_name_column,
@@ -1075,6 +1076,10 @@ try:
 except Exception:
     logging.getLogger(__name__).exception("ensure_product_variants_schema failed at import")
 try:
+    ensure_product_families_schema(engine)
+except Exception:
+    logging.getLogger(__name__).exception("ensure_product_families_schema failed at import")
+try:
     ensure_product_custom_fields_schema(engine)
 except Exception:
     logging.getLogger(__name__).exception("ensure_product_custom_fields_schema failed at import")
@@ -1534,6 +1539,10 @@ def _upgrade_schema_background() -> None:
         pass
     try:
         ensure_product_variants_schema(engine)
+    except Exception:
+        pass
+    try:
+        ensure_product_families_schema(engine)
     except Exception:
         pass
     try:

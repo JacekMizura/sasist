@@ -37,10 +37,27 @@ from .gus_lookup_cache import GusLookupCache, GusNipCache  # noqa: F401
 from .product import Product
 from .product_category import ProductCategory, ProductCategoryLink  # noqa: F401 — before product FKs resolved at mapper
 from .product_code_sequence import ProductCodeSequence  # noqa: F401
+from .product_family import (  # noqa: F401 — Product Family (optional grouping)
+    ProductFamily,
+    FamilyAttribute,
+    FamilyAttributeValue,
+    ProductAttributeValue,
+)
+from .product_variant import (  # noqa: F401 — legacy catalog variants (removed after Family migration)
+    VariantGroup,
+    VariantAxis,
+    VariantValue,
+    ProductVariantSelection,
+)
 from .product_barcode import ProductBarcode  # noqa: F401 — after Product
 from .product_sales_offer import ProductSalesOffer  # noqa: F401 — after Product
 from .offer_stock_pool import OfferStockPool, OfferStockPoolWarehouse  # noqa: F401
 from .product_warehouse_slotting import ProductWarehouseSlotting  # noqa: F401 — after Product
+from .product_custom_field import (  # noqa: F401
+    ProductCustomField,
+    ProductCustomFieldOption,
+    ProductCustomFieldValue,
+)
 from .supplier_product import SupplierProduct  # noqa: F401 - after Product & Supplier
 from .inbound_delivery import InboundDelivery, DeliveryItem  # noqa: F401
 from .supply_flow import (  # noqa: F401

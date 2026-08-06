@@ -1,5 +1,12 @@
 ﻿## Active
 
+**Product Family (ADR Accepted 2026-08-06) — implementacja etapowa.**
+
+- ADR: `memory/adr-product-family.md`
+- Commit 1: modele `ProductFamily` / `FamilyAttribute` / `FamilyAttributeValue` / `ProductAttributeValue` + `products.product_family_id` + `ensure_product_families_schema`
+- Variant stack zostaje do Commit 6–7
+- Następne: CRUD API → UI Rodziny → karta produktu → generator → migracja → usunięcie Variant
+
 **Logi z WMS na karcie produktu (2026-08-05).**
 
 - Zakładka „Logi z WMS” (`warehouseOps`) — podpięty istniejący `ProductWarehouseMovementsPanel` + `GET /products/{id}/movements`

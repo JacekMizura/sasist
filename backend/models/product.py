@@ -79,6 +79,7 @@ class Product(Base):
         index=True,
     )
     #: Attached variant group template (parent / master product only).
+    #: Legacy — removed in Product Family Commit 7 after migration.
     variant_group_id = Column(
         Integer,
         ForeignKey("variant_groups.id", ondelete="SET NULL"),
@@ -86,9 +87,17 @@ class Product(Base):
         index=True,
     )
     #: Parent product when this row is a generated variant SKU.
+    #: Legacy — removed in Product Family Commit 7 after migration.
     variant_parent_id = Column(
         Integer,
         ForeignKey("products.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    #: Optional Product Family membership (grouping only; no inheritance).
+    product_family_id = Column(
+        Integer,
+        ForeignKey("product_families.id", ondelete="SET NULL"),
         nullable=True,
         index=True,
     )

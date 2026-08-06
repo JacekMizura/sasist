@@ -2306,6 +2306,161 @@ def ensure_product_categories_schema(engine: Engine) -> None:
         conn.commit()
 
 
+def ensure_product_families_schema(engine: Engine) -> None:
+    """
+    Optional Product Family grouping + family attributes + product attribute values.
+    base_product_id is generator copy-source only (no live inheritance).
+    """
+    with engine.connect() as conn:
+        if not _table_exists(conn, "product_families"):
+            conn.execute(
+                text(
+                    """
+                    CREATE TABLE product_families (
+                        id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+                        tenant_id INTEGER NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+                        name VARCHAR(255) NOT NULL,
+                        is_active BOOLEAN NOT NULL DEFAULT true,
+                        base_product_id INTEGER REFERENCES products(id) ON DELETE SET NULL,
+                        created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                        updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+                    )
+                    """
+                )
+            )
+            conn.execute(
+                text("CREATE INDEX IF NOT EXISTS ix_product_families_tenant_id ON product_families(tenant_id)")
+            )
+            conn.execute(
+                text(
+                    "CREATE INDEX IF NOT EXISTS ix_product_families_base_product_id "
+                    "ON product_families(base_product_id)"
+                )
+            )
+        else:
+            fcols = _table_column_names(conn, "product_families")
+            if "base_product_id" not in fcols:
+                conn.execute(
+                    text(
+                        "ALTER TABLE product_families ADD COLUMN base_product_id INTEGER "
+                        "REFERENCES products(id) ON DELETE SET NULL"
+                    )
+                )
+                conn.execute(
+                    text(
+                        "CREATE INDEX IF NOT EXISTS ix_product_families_base_product_id "
+                        "ON product_families(base_product_id)"
+                    )
+                )
+
+        if not _table_exists(conn, "family_attributes"):
+            conn.execute(
+                text(
+                    """
+                    CREATE TABLE family_attributes (
+                        id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+                        tenant_id INTEGER NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+                        family_id INTEGER NOT NULL REFERENCES product_families(id) ON DELETE CASCADE,
+                        name VARCHAR(255) NOT NULL,
+                        sort_order INTEGER NOT NULL DEFAULT 0,
+                        display_type VARCHAR(32) NOT NULL DEFAULT 'text',
+                        show_in_filters BOOLEAN NOT NULL DEFAULT false,
+                        sort_alpha BOOLEAN NOT NULL DEFAULT false
+                    )
+                    """
+                )
+            )
+            conn.execute(
+                text("CREATE INDEX IF NOT EXISTS ix_family_attributes_tenant_id ON family_attributes(tenant_id)")
+            )
+            conn.execute(
+                text("CREATE INDEX IF NOT EXISTS ix_family_attributes_family_id ON family_attributes(family_id)")
+            )
+
+        if not _table_exists(conn, "family_attribute_values"):
+            conn.execute(
+                text(
+                    """
+                    CREATE TABLE family_attribute_values (
+                        id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+                        tenant_id INTEGER NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+                        attribute_id INTEGER NOT NULL REFERENCES family_attributes(id) ON DELETE CASCADE,
+                        name VARCHAR(255) NOT NULL,
+                        sort_order INTEGER NOT NULL DEFAULT 0,
+                        color_hex VARCHAR(16),
+                        image_url VARCHAR(1024)
+                    )
+                    """
+                )
+            )
+            conn.execute(
+                text(
+                    "CREATE INDEX IF NOT EXISTS ix_family_attribute_values_tenant_id "
+                    "ON family_attribute_values(tenant_id)"
+                )
+            )
+            conn.execute(
+                text(
+                    "CREATE INDEX IF NOT EXISTS ix_family_attribute_values_attribute_id "
+                    "ON family_attribute_values(attribute_id)"
+                )
+            )
+
+        if not _table_exists(conn, "product_attribute_values"):
+            conn.execute(
+                text(
+                    """
+                    CREATE TABLE product_attribute_values (
+                        id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+                        tenant_id INTEGER NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+                        product_id INTEGER NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+                        attribute_id INTEGER NOT NULL REFERENCES family_attributes(id) ON DELETE CASCADE,
+                        value_id INTEGER NOT NULL REFERENCES family_attribute_values(id) ON DELETE CASCADE,
+                        created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                        CONSTRAINT uq_product_attribute_value UNIQUE (product_id, attribute_id)
+                    )
+                    """
+                )
+            )
+            conn.execute(
+                text(
+                    "CREATE INDEX IF NOT EXISTS ix_product_attribute_values_tenant_id "
+                    "ON product_attribute_values(tenant_id)"
+                )
+            )
+            conn.execute(
+                text(
+                    "CREATE INDEX IF NOT EXISTS ix_product_attribute_values_product_id "
+                    "ON product_attribute_values(product_id)"
+                )
+            )
+            conn.execute(
+                text(
+                    "CREATE INDEX IF NOT EXISTS ix_product_attribute_values_attribute_id "
+                    "ON product_attribute_values(attribute_id)"
+                )
+            )
+            conn.execute(
+                text(
+                    "CREATE INDEX IF NOT EXISTS ix_product_attribute_values_value_id "
+                    "ON product_attribute_values(value_id)"
+                )
+            )
+
+        pcols = _table_column_names(conn, "products")
+        if "product_family_id" not in pcols:
+            conn.execute(
+                text(
+                    "ALTER TABLE products ADD COLUMN product_family_id INTEGER "
+                    "REFERENCES product_families(id) ON DELETE SET NULL"
+                )
+            )
+            conn.execute(
+                text("CREATE INDEX IF NOT EXISTS ix_products_product_family_id ON products(product_family_id)")
+            )
+        conn.commit()
+
+
 def ensure_product_variants_schema(engine: Engine) -> None:
     """
     Catalog variant groups (axes + values) and product parent/child SKU links.

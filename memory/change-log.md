@@ -1,3 +1,10 @@
+## 2026-08-06 — Product Family Commit 1 (modele)
+
+- ADR zaakceptowany: `memory/adr-product-family.md` (opcjonalna rodzina, base product, generator A/B, etapowe usunięcie Variant)
+- Modele: `product_families`, `family_attributes`, `family_attribute_values`, `product_attribute_values`
+- `products.product_family_id`; schema `ensure_product_families_schema`
+- Variant stack bez zmian (usunięcie w Commit 7)
+
 ## 2026-08-05 — Pola dodatkowe produktów (jak zamówienia, typy jak Sellasist)
 
 - Definicje: Asortyment → Pola dodatkowe (tekst, liczba, pliki, lista 1/n, GPSR, załączniki z typem)
