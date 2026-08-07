@@ -1,5 +1,5 @@
-﻿import type { ModuleCardProps, ProductMultiModuleDef } from "../types";
-import { pmaLab, pmaInp } from "../uiTokens";
+import type { ModuleCardProps, ProductMultiModuleDef } from "../types";
+import { pmaInp, pmaLab } from "../uiTokens";
 
 export const VAT_PRESET_OPTIONS: { token: string; label: string }[] = [
   { token: "23", label: "23%" },
@@ -22,7 +22,7 @@ function VatRateCard({ config, onChange, disabled }: ModuleCardProps<VatRateConf
         value={config.token}
         onChange={(e) => onChange({ token: e.target.value })}
       >
-        <option value="">â€” wybierz â€”</option>
+        <option value="">— wybierz —</option>
         {VAT_PRESET_OPTIONS.map((o) => (
           <option key={o.token} value={o.token}>
             {o.label}
@@ -35,12 +35,11 @@ function VatRateCard({ config, onChange, disabled }: ModuleCardProps<VatRateConf
 
 export const vatRateModule: ProductMultiModuleDef<VatRateConfig> = {
   id: "vat_rate",
-  label: "Stawka VAT",
+  label: "VAT",
   group: "Ceny",
   stage: 1,
   defaultConfig: () => ({ token: "" }),
-  validate: (cfg) => (cfg.token ? null : "Wybierz stawkÄ™ VAT."),
+  validate: (cfg) => (cfg.token ? null : "Wybierz stawkę VAT."),
   Card: VatRateCard,
   toOps: (cfg) => [{ action: "set_vat_rate", value: cfg.token }],
 };
-

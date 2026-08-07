@@ -1,4 +1,4 @@
-﻿import { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 
 import { listProductFamilies, type ProductFamilyListItem } from "../../../../api/productFamiliesApi";
 import type { ModuleCardProps, ProductMultiModuleDef } from "../types";
@@ -35,7 +35,7 @@ function ProductFamilyCard({ config, onChange, tenantId, disabled }: ModuleCardP
 
   return (
     <label className={pmaLab}>
-      Rodzina produktĂłw
+      Rodzina produktów
       <select
         className={pmaInp}
         disabled={disabled || loading}
@@ -47,8 +47,8 @@ function ProductFamilyCard({ config, onChange, tenantId, disabled }: ModuleCardP
           else onChange({ productFamilyId: Number(v), clear: false });
         }}
       >
-        <option value="">{loading ? "Ĺadowanieâ€¦" : "â€” wybierz â€”"}</option>
-        <option value="__clear__">OdĹ‚Ä…cz od rodziny</option>
+        <option value="">{loading ? "Ładowanie…" : "— wybierz —"}</option>
+        <option value="__clear__">Odłącz od rodziny</option>
         {rows.map((f) => (
           <option key={f.id} value={f.id}>
             {f.name}
@@ -61,13 +61,13 @@ function ProductFamilyCard({ config, onChange, tenantId, disabled }: ModuleCardP
 
 export const productFamilyModule: ProductMultiModuleDef<ProductFamilyConfig> = {
   id: "product_family",
-  label: "Rodzina produktĂłw",
+  label: "Rodzina produktów",
   group: "Asortyment",
   stage: 1,
   defaultConfig: () => ({ productFamilyId: null, clear: false }),
   validate: (cfg) => {
     if (!cfg.clear && (cfg.productFamilyId == null || cfg.productFamilyId < 1)) {
-      return "Wybierz rodzinÄ™ lub odĹ‚Ä…cz.";
+      return "Wybierz rodzinę lub odłącz.";
     }
     return null;
   },
@@ -79,4 +79,3 @@ export const productFamilyModule: ProductMultiModuleDef<ProductFamilyConfig> = {
     },
   ],
 };
-

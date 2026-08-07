@@ -1,10 +1,11 @@
-﻿import { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { Plus, Trash2 } from "lucide-react";
 
 import {
   listProductCustomFields,
   type ProductCustomFieldDto,
 } from "../../../../api/productCustomFieldsApi";
+import { GhostButton } from "../../../../design-system";
 import type { ModuleCardProps, ProductMultiModuleDef } from "../types";
 import { parseDecimal } from "../patchFieldUtils";
 import { pmaInp, pmaLab } from "../uiTokens";
@@ -53,13 +54,13 @@ function CustomFieldsCard({ config, onChange, tenantId, disabled }: ModuleCardPr
   };
 
   return (
-    <div className="space-y-3">
-      {loading ? <p className="text-xs text-slate-500">Ĺadowanie pĂłlâ€¦</p> : null}
+    <div className="space-y-2.5">
+      {loading ? <p className="text-xs text-slate-500">Ładowanie pól…</p> : null}
       {config.rows.map((row, idx) => {
         const def = defs.find((d) => d.id === row.fieldId);
         return (
-          <div key={idx} className="rounded-lg border border-slate-200 bg-slate-50/50 p-3">
-            <div className="flex items-start gap-2">
+          <div key={idx} className="space-y-1.5 border-b border-slate-100 pb-2.5 last:border-b-0 last:pb-0">
+            <div className="flex items-end gap-2">
               <label className={`${pmaLab} min-w-0 flex-1`}>
                 Pole
                 <select
@@ -75,7 +76,7 @@ function CustomFieldsCard({ config, onChange, tenantId, disabled }: ModuleCardPr
                     })
                   }
                 >
-                  <option value="">â€” wybierz â€”</option>
+                  <option value="">— wybierz —</option>
                   {defs.map((d) => (
                     <option key={d.id} value={d.id}>
                       {d.name}
@@ -83,21 +84,19 @@ function CustomFieldsCard({ config, onChange, tenantId, disabled }: ModuleCardPr
                   ))}
                 </select>
               </label>
-              <button
+              <GhostButton
                 type="button"
-                className="mt-5 rounded p-1.5 text-red-600 hover:bg-red-50 disabled:opacity-40"
+                density="compact"
                 disabled={disabled || config.rows.length <= 1}
-                onClick={() =>
-                  onChange({ rows: config.rows.filter((_, i) => i !== idx) })
-                }
-                aria-label="UsuĹ„ wiersz"
+                onClick={() => onChange({ rows: config.rows.filter((_, i) => i !== idx) })}
+                aria-label="Usuń wiersz"
               >
-                <Trash2 className="h-4 w-4" />
-              </button>
+                <Trash2 className="h-4 w-4 text-red-600" />
+              </GhostButton>
             </div>
             {def?.type === "NUMBER" ? (
-              <label className={`${pmaLab} mt-2`}>
-                WartoĹ›Ä‡
+              <label className={pmaLab}>
+                Wartość
                 <input
                   className={pmaInp}
                   disabled={disabled}
@@ -108,8 +107,8 @@ function CustomFieldsCard({ config, onChange, tenantId, disabled }: ModuleCardPr
               </label>
             ) : null}
             {def?.type === "TEXT" ? (
-              <label className={`${pmaLab} mt-2`}>
-                WartoĹ›Ä‡
+              <label className={pmaLab}>
+                Wartość
                 <input
                   className={pmaInp}
                   disabled={disabled}
@@ -119,7 +118,7 @@ function CustomFieldsCard({ config, onChange, tenantId, disabled }: ModuleCardPr
               </label>
             ) : null}
             {def?.type === "SELECT_SINGLE" || def?.type === "SELECT_MULTI" ? (
-              <label className={`${pmaLab} mt-2`}>
+              <label className={pmaLab}>
                 Opcja
                 <select
                   className={pmaInp}
@@ -127,7 +126,7 @@ function CustomFieldsCard({ config, onChange, tenantId, disabled }: ModuleCardPr
                   value={row.optionId}
                   onChange={(e) => updateRow(idx, { optionId: e.target.value })}
                 >
-                  <option value="">â€” wybierz â€”</option>
+                  <option value="">— wybierz —</option>
                   {(def.options ?? []).map((o) => (
                     <option key={o.id} value={String(o.id)}>
                       {o.label}
@@ -137,22 +136,22 @@ function CustomFieldsCard({ config, onChange, tenantId, disabled }: ModuleCardPr
               </label>
             ) : null}
             {def && !["TEXT", "NUMBER", "SELECT_SINGLE", "SELECT_MULTI"].includes(String(def.type)) ? (
-              <p className="mt-2 text-xs text-amber-800">
-                Ten typ pola nie jest jeszcze obsĹ‚ugiwany w multiakcjach (uĹĽyj karty produktu).
+              <p className="text-xs text-amber-800">
+                Ten typ pola nie jest jeszcze obsługiwany w multiakcjach (użyj karty produktu).
               </p>
             ) : null}
           </div>
         );
       })}
-      <button
+      <GhostButton
         type="button"
+        density="compact"
         disabled={disabled}
-        className="inline-flex items-center gap-1.5 text-sm font-medium text-slate-700 hover:text-slate-900 disabled:opacity-40"
         onClick={() => onChange({ rows: [...config.rows, emptyRow()] })}
       >
-        <Plus className="h-4 w-4" />
+        <Plus className="mr-1 h-4 w-4" />
         Dodaj pole
-      </button>
+      </GhostButton>
     </div>
   );
 }
@@ -179,21 +178,10 @@ export const customFieldsModule: ProductMultiModuleDef<CustomFieldsConfig> = {
         }
         if (r.optionId) {
           const oid = Number(r.optionId);
-          return {
-            field_id,
-            string_value: String(oid),
-            number_value: null,
-            json_value: oid,
-          };
+          return { field_id, string_value: String(oid), number_value: null, json_value: oid };
         }
-        return {
-          field_id,
-          string_value: r.stringValue,
-          number_value: null,
-          json_value: null,
-        };
+        return { field_id, string_value: r.stringValue, number_value: null, json_value: null };
       });
     return [{ action: "set_custom_field_values", value: { values } }];
   },
 };
-

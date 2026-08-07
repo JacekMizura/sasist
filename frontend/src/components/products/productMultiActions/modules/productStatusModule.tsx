@@ -1,5 +1,5 @@
-﻿import type { ModuleCardProps, ProductMultiModuleDef } from "../types";
-import { pmaLab, pmaInp } from "../uiTokens";
+import type { ModuleCardProps, ProductMultiModuleDef } from "../types";
+import { pmaInp, pmaLab } from "../uiTokens";
 
 export type ProductStatusConfig = {
   status: "active" | "inactive" | "";
@@ -15,7 +15,7 @@ function ProductStatusCard({ config, onChange, disabled }: ModuleCardProps<Produ
         value={config.status}
         onChange={(e) => onChange({ status: e.target.value as ProductStatusConfig["status"] })}
       >
-        <option value="">â€” wybierz â€”</option>
+        <option value="">— wybierz —</option>
         <option value="active">Aktywny</option>
         <option value="inactive">Nieaktywny</option>
       </select>
@@ -33,4 +33,3 @@ export const productStatusModule: ProductMultiModuleDef<ProductStatusConfig> = {
   Card: ProductStatusCard,
   toOps: (cfg) => [{ action: "set_product_status", value: { status: cfg.status } }],
 };
-

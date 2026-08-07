@@ -1,14 +1,14 @@
-﻿import { PatchFieldsEditor } from "../PatchFieldsEditor";
+import { PatchFieldsEditor } from "../PatchFieldsEditor";
 import { buildPatchSet, emptyPatchState, type PatchFieldDef, type PatchFieldState } from "../patchFieldUtils";
 import type { ModuleCardProps, ProductMultiModuleDef } from "../types";
 
 const FIELDS: PatchFieldDef[] = [
   { key: "bulk_ean", label: "EAN opakowania zbiorczego", type: "text" },
   { key: "units_per_carton", label: "Sztuk w kartonie", type: "number", min: 0, step: 1 },
-  { key: "carton_length_cm", label: "Karton â€” dĹ‚ugoĹ›Ä‡ (cm)", type: "number", min: 0 },
-  { key: "carton_width_cm", label: "Karton â€” szerokoĹ›Ä‡ (cm)", type: "number", min: 0 },
-  { key: "carton_height_cm", label: "Karton â€” wysokoĹ›Ä‡ (cm)", type: "number", min: 0 },
-  { key: "carton_weight_kg", label: "Waga kartonu (kg)", type: "number", min: 0 },
+  { key: "carton_length_cm", label: "Długość (cm)", type: "number", min: 0 },
+  { key: "carton_width_cm", label: "Szerokość (cm)", type: "number", min: 0 },
+  { key: "carton_height_cm", label: "Wysokość (cm)", type: "number", min: 0 },
+  { key: "carton_weight_kg", label: "Waga (kg)", type: "number", min: 0 },
 ];
 
 export type MasterCartonConfig = {
@@ -43,4 +43,3 @@ export const masterCartonModule: ProductMultiModuleDef<MasterCartonConfig> = {
     return [{ action: "patch_logistics_fields", value: { set: built.set } }];
   },
 };
-

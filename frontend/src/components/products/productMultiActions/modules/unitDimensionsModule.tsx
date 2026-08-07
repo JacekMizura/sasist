@@ -1,4 +1,4 @@
-﻿import type { ModuleCardProps, ProductMultiModuleDef } from "../types";
+import type { ModuleCardProps, ProductMultiModuleDef } from "../types";
 import { parseDecimal } from "../patchFieldUtils";
 import { pmaCheckRow, pmaInp, pmaLab } from "../uiTokens";
 
@@ -11,13 +11,13 @@ export type UnitDimensionsConfig = {
 
 function UnitDimensionsCard({ config, onChange, disabled }: ModuleCardProps<UnitDimensionsConfig>) {
   return (
-    <div className="space-y-3">
+    <div className="space-y-2">
       <div className="grid grid-cols-3 gap-2">
         {(
           [
-            ["length", "DĹ‚ugoĹ›Ä‡ (cm)"],
-            ["width", "SzerokoĹ›Ä‡ (cm)"],
-            ["height", "WysokoĹ›Ä‡ (cm)"],
+            ["length", "Długość (cm)"],
+            ["width", "Szerokość (cm)"],
+            ["height", "Wysokość (cm)"],
           ] as const
         ).map(([key, label]) => (
           <label key={key} className={pmaLab}>
@@ -40,7 +40,7 @@ function UnitDimensionsCard({ config, onChange, disabled }: ModuleCardProps<Unit
           disabled={disabled}
           onChange={(e) => onChange({ ...config, overwrite: e.target.checked })}
         />
-        <span>Nadpisz istniejÄ…ce</span>
+        <span>Nadpisz istniejące</span>
       </label>
     </div>
   );
@@ -48,7 +48,7 @@ function UnitDimensionsCard({ config, onChange, disabled }: ModuleCardProps<Unit
 
 export const unitDimensionsModule: ProductMultiModuleDef<UnitDimensionsConfig> = {
   id: "unit_dimensions",
-  label: "Gabaryty jednostkowe",
+  label: "Gabaryty",
   group: "Logistyka",
   stage: 1,
   defaultConfig: () => ({ length: "", width: "", height: "", overwrite: true }),
@@ -56,8 +56,8 @@ export const unitDimensionsModule: ProductMultiModuleDef<UnitDimensionsConfig> =
     const L = parseDecimal(cfg.length);
     const W = parseDecimal(cfg.width);
     const H = parseDecimal(cfg.height);
-    if (L == null || W == null || H == null) return "Podaj dĹ‚ugoĹ›Ä‡, szerokoĹ›Ä‡ i wysokoĹ›Ä‡.";
-    if (L <= 0 || W <= 0 || H <= 0) return "Wymiary muszÄ… byÄ‡ wiÄ™ksze od zera.";
+    if (L == null || W == null || H == null) return "Podaj długość, szerokość i wysokość.";
+    if (L <= 0 || W <= 0 || H <= 0) return "Wymiary muszą być większe od zera.";
     return null;
   },
   Card: UnitDimensionsCard,
@@ -72,4 +72,3 @@ export const unitDimensionsModule: ProductMultiModuleDef<UnitDimensionsConfig> =
     },
   ],
 };
-

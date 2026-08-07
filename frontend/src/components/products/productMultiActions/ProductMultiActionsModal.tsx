@@ -1,15 +1,16 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ArrowDown, ArrowUp, ChevronDown, X, Zap } from "lucide-react";
+import { ArrowDown, ArrowUp, ChevronDown, Plus, X, Zap } from "lucide-react";
 
+import { GhostButton } from "../../../design-system";
 import { brandPrimaryButtonClass } from "../../../design-system/brandUi";
 import { AppOverlayPortal } from "../../overlay";
-import { getProductMultiModule, listPickerGroups } from "./registry";
+import { ProductMultiModulePicker } from "./ProductMultiModulePicker";
+import { getProductMultiModule } from "./registry";
 import type {
   ProductMultiActionRow,
   ProductMultiConfigBag,
   ProductMultiModuleId,
 } from "./types";
-import { pmaInp, pmaLab } from "./uiTokens";
 
 function newRow(moduleId: ProductMultiModuleId): ProductMultiActionRow {
   return {
@@ -17,6 +18,18 @@ function newRow(moduleId: ProductMultiModuleId): ProductMultiActionRow {
     moduleId,
     expanded: true,
   };
+}
+
+function productCountLabel(n: number): string {
+  if (n === 1) return "1 produkt";
+  if (n >= 2 && n <= 4) return `${n} produkty`;
+  return `${n} produktów`;
+}
+
+function moduleCountLabel(n: number): string {
+  if (n === 1) return "1 moduł";
+  if (n >= 2 && n <= 4) return `${n} moduły`;
+  return `${n} modułów`;
 }
 
 export type ProductMultiActionsModalProps = {
@@ -41,16 +54,14 @@ export function ProductMultiActionsModal({
 }: ProductMultiActionsModalProps) {
   const [rows, setRows] = useState<ProductMultiActionRow[]>([]);
   const [config, setConfig] = useState<ProductMultiConfigBag>({});
-  const [addSelect, setAddSelect] = useState("");
+  const [pickerOpen, setPickerOpen] = useState(false);
   const [confirmed, setConfirmed] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
-
-  const groups = useMemo(() => listPickerGroups(), []);
 
   const reset = useCallback(() => {
     setRows([]);
     setConfig({});
-    setAddSelect("");
+    setPickerOpen(false);
     setConfirmed(false);
     setLocalError(null);
   }, []);
@@ -58,6 +69,8 @@ export function ProductMultiActionsModal({
   useEffect(() => {
     if (!open) reset();
   }, [open, reset]);
+
+  const usedIds = useMemo(() => new Set(rows.map((r) => r.moduleId)), [rows]);
 
   const addModule = useCallback((moduleId: ProductMultiModuleId) => {
     const mod = getProductMultiModule(moduleId);
@@ -140,29 +153,34 @@ export function ProductMultiActionsModal({
           onClick={(e) => e.stopPropagation()}
         >
           <div className="flex items-start justify-between gap-2 border-b border-slate-100 px-5 py-4">
-            <div>
+            <div className="min-w-0">
               <h2 id="product-multi-title" className="flex items-center gap-2 text-lg font-bold text-slate-900">
                 <Zap className="h-5 w-5 text-amber-500" strokeWidth={2} aria-hidden />
                 Multiakcje
               </h2>
-              <p className="mt-0.5 text-xs text-slate-500">
-                Produktów: {productCount}. Zmiany wykonywane są po kolei na całym zaznaczeniu.
-              </p>
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                <span className="inline-flex items-center rounded-md border border-slate-200 bg-slate-50 px-2 py-0.5 text-xs font-medium text-slate-700">
+                  {productCountLabel(productCount)}
+                </span>
+                <span className="inline-flex items-center rounded-md border border-slate-200 bg-slate-50 px-2 py-0.5 text-xs font-medium text-slate-700">
+                  {moduleCountLabel(rows.length)}
+                </span>
+              </div>
             </div>
-            <button
+            <GhostButton
               type="button"
+              density="compact"
               disabled={busy}
-              className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-800 disabled:opacity-50"
               onClick={onClose}
               aria-label="Zamknij"
             >
               <X className="h-5 w-5" aria-hidden />
-            </button>
+            </GhostButton>
           </div>
 
           <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
             {rows.length === 0 ? (
-              <p className="text-sm text-slate-600">Dodaj co najmniej jedną zmianę z listy poniżej.</p>
+              <p className="text-sm text-slate-600">Dodaj co najmniej jedną zmianę.</p>
             ) : (
               <ul className="space-y-2">
                 {rows.map((row, idx) => {
@@ -171,11 +189,11 @@ export function ProductMultiActionsModal({
                   const cfg = config[row.moduleId] ?? mod.defaultConfig();
                   const Card = mod.Card;
                   return (
-                    <li key={row.id} className="rounded-lg border border-slate-200 bg-slate-50/80">
-                      <div className="flex items-center gap-1 px-2 py-1.5">
-                        <button
+                    <li key={row.id} className="rounded-lg border border-slate-200 bg-white">
+                      <div className="flex items-center gap-0.5 px-2 py-1">
+                        <GhostButton
                           type="button"
-                          className="rounded p-1.5 text-slate-600 hover:bg-white"
+                          density="compact"
                           onClick={() => toggleExpand(row.id)}
                           aria-expanded={row.expanded}
                           title={row.expanded ? "Zwiń" : "Rozwiń"}
@@ -184,40 +202,43 @@ export function ProductMultiActionsModal({
                             className={`h-4 w-4 transition-transform ${row.expanded ? "rotate-180" : ""}`}
                             aria-hidden
                           />
-                        </button>
-                        <span className="min-w-0 flex-1 truncate text-sm font-semibold text-slate-800">
+                        </GhostButton>
+                        <span className="min-w-0 flex-1 truncate px-1 text-sm font-semibold text-slate-800">
                           {mod.label}
                         </span>
-                        <button
+                        <GhostButton
                           type="button"
+                          density="compact"
                           disabled={busy || idx === 0}
-                          className="rounded p-1.5 text-slate-600 hover:bg-white disabled:opacity-30"
                           title="Wyżej"
+                          aria-label="Przenieś wyżej"
                           onClick={() => moveRow(row.id, -1)}
                         >
                           <ArrowUp className="h-4 w-4" aria-hidden />
-                        </button>
-                        <button
+                        </GhostButton>
+                        <GhostButton
                           type="button"
+                          density="compact"
                           disabled={busy || idx >= rows.length - 1}
-                          className="rounded p-1.5 text-slate-600 hover:bg-white disabled:opacity-30"
                           title="Niżej"
+                          aria-label="Przenieś niżej"
                           onClick={() => moveRow(row.id, 1)}
                         >
                           <ArrowDown className="h-4 w-4" aria-hidden />
-                        </button>
-                        <button
+                        </GhostButton>
+                        <GhostButton
                           type="button"
+                          density="compact"
                           disabled={busy}
-                          className="rounded p-1.5 text-red-600 hover:bg-red-50 disabled:opacity-40"
                           title="Usuń zmianę"
+                          aria-label="Usuń zmianę"
                           onClick={() => removeRow(row.id)}
                         >
-                          <X className="h-4 w-4" aria-hidden />
-                        </button>
+                          <X className="h-4 w-4 text-red-600" aria-hidden />
+                        </GhostButton>
                       </div>
                       {row.expanded ? (
-                        <div className="border-t border-slate-200 bg-white px-3 py-3">
+                        <div className="border-t border-slate-100 px-3 py-2.5">
                           <Card
                             config={cfg}
                             tenantId={tenantId}
@@ -237,31 +258,16 @@ export function ProductMultiActionsModal({
               </ul>
             )}
 
-            <div className="mt-4 border-t border-slate-100 pt-4">
-              <label className={pmaLab}>
-                + Dodaj zmianę
-                <select
-                  className={pmaInp}
-                  value={addSelect}
-                  disabled={busy}
-                  onChange={(e) => {
-                    const v = e.target.value as ProductMultiModuleId | "";
-                    setAddSelect("");
-                    if (v) addModule(v);
-                  }}
-                >
-                  <option value="">— wybierz moduł —</option>
-                  {groups.map((g) => (
-                    <optgroup key={g.group} label={g.group}>
-                      {g.modules.map((m) => (
-                        <option key={m.id} value={m.id}>
-                          {m.label}
-                        </option>
-                      ))}
-                    </optgroup>
-                  ))}
-                </select>
-              </label>
+            <div className="mt-4">
+              <GhostButton
+                type="button"
+                density="compact"
+                disabled={busy}
+                onClick={() => setPickerOpen(true)}
+              >
+                <Plus className="mr-1 h-4 w-4" strokeWidth={2} aria-hidden />
+                Dodaj zmianę
+              </GhostButton>
             </div>
 
             {localError ? (
@@ -279,21 +285,15 @@ export function ProductMultiActionsModal({
                 onChange={(e) => setConfirmed(e.target.checked)}
               />
               <span>
-                Potwierdzam wykonanie wybranych zmian na {productCount}{" "}
-                {productCount === 1 ? "produkcie" : "produktach"}.
+                Potwierdzam wykonanie na {productCountLabel(productCount)}.
               </span>
             </label>
           </div>
 
           <div className="flex flex-wrap justify-end gap-2 border-t border-slate-100 px-5 py-4">
-            <button
-              type="button"
-              disabled={busy}
-              className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-800 hover:bg-slate-50 disabled:opacity-50"
-              onClick={onClose}
-            >
+            <GhostButton type="button" density="compact" disabled={busy} onClick={onClose}>
               Anuluj
-            </button>
+            </GhostButton>
             <button
               type="button"
               disabled={!canRun}
@@ -305,6 +305,13 @@ export function ProductMultiActionsModal({
           </div>
         </div>
       </div>
+
+      <ProductMultiModulePicker
+        open={pickerOpen}
+        disabledIds={usedIds}
+        onClose={() => setPickerOpen(false)}
+        onPick={addModule}
+      />
     </AppOverlayPortal>
   );
 }

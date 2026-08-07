@@ -1,4 +1,4 @@
-﻿import type { ReactNode } from "react";
+import type { ReactNode } from "react";
 
 import type { BulkUpdateAction } from "../../../api/productsBulkApi";
 import type { ProductBulkListFiltersPayload } from "../../../utils/productListBulkFilters";

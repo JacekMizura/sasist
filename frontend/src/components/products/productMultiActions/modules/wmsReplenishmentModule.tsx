@@ -1,12 +1,12 @@
-﻿import { PatchFieldsEditor } from "../PatchFieldsEditor";
+import { PatchFieldsEditor } from "../PatchFieldsEditor";
 import { buildPatchSet, emptyPatchState, type PatchFieldDef, type PatchFieldState } from "../patchFieldUtils";
 import type { ModuleCardProps, ProductMultiModuleDef } from "../types";
 
 const FIELDS: PatchFieldDef[] = [
-  { key: "min_pick_quantity", label: "PICK â€” min. iloĹ›Ä‡", type: "number", min: 0, step: 1 },
-  { key: "max_pick_quantity", label: "PICK â€” max. iloĹ›Ä‡", type: "number", min: 0, step: 1 },
-  { key: "min_reserve_quantity", label: "ZAPAS â€” min. iloĹ›Ä‡", type: "number", min: 0, step: 1 },
-  { key: "max_reserve_quantity", label: "ZAPAS â€” max. iloĹ›Ä‡", type: "number", min: 0, step: 1 },
+  { key: "min_pick_quantity", label: "PICK — min. ilość", type: "number", min: 0, step: 1 },
+  { key: "max_pick_quantity", label: "PICK — max. ilość", type: "number", min: 0, step: 1 },
+  { key: "min_reserve_quantity", label: "ZAPAS — min. ilość", type: "number", min: 0, step: 1 },
+  { key: "max_reserve_quantity", label: "ZAPAS — max. ilość", type: "number", min: 0, step: 1 },
 ];
 
 export type WmsReplenishmentConfig = {
@@ -26,7 +26,7 @@ function WmsReplenishmentCard({ config, onChange, disabled }: ModuleCardProps<Wm
 
 export const wmsReplenishmentModule: ProductMultiModuleDef<WmsReplenishmentConfig> = {
   id: "wms_replenishment",
-  label: "UzupeĹ‚nienia WMS",
+  label: "Uzupełnienia WMS",
   group: "Magazyn",
   stage: 1,
   defaultConfig: () => ({ fields: emptyPatchState(FIELDS) }),
@@ -41,4 +41,3 @@ export const wmsReplenishmentModule: ProductMultiModuleDef<WmsReplenishmentConfi
     return [{ action: "patch_logistics_fields", value: { set: built.set } }];
   },
 };
-

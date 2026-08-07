@@ -1,17 +1,22 @@
-﻿import { PatchFieldsEditor } from "../PatchFieldsEditor";
+import { PatchFieldsEditor } from "../PatchFieldsEditor";
 import { buildPatchSet, emptyPatchState, type PatchFieldDef, type PatchFieldState } from "../patchFieldUtils";
 import type { ModuleCardProps, ProductMultiModuleDef } from "../types";
 
 const FIELDS: PatchFieldDef[] = [
-  { key: "require_dimensions", label: "Wymagaj wymiarĂłw produktu", type: "boolean", hint: "DĹ‚ugoĹ›Ä‡, szerokoĹ›Ä‡, wysokoĹ›Ä‡" },
+  {
+    key: "require_dimensions",
+    label: "Wymagaj wymiarów produktu",
+    type: "boolean",
+    hint: "Długość, szerokość, wysokość",
+  },
   { key: "require_recv_weight", label: "Wymagaj wagi produktu", type: "boolean" },
   { key: "track_batch", label: "Wymagaj numeru partii", type: "boolean" },
-  { key: "track_expiry", label: "Wymagaj daty waĹĽnoĹ›ci", type: "boolean" },
+  { key: "track_expiry", label: "Wymagaj daty ważności", type: "boolean" },
   { key: "track_serial", label: "Wymagaj numeru seryjnego", type: "boolean" },
   { key: "require_recv_master_carton", label: "Produkt posiada opakowanie zbiorcze", type: "boolean" },
   { key: "require_recv_master_carton_ean", label: "Wymagaj EAN opakowania zbiorczego", type: "boolean" },
-  { key: "require_recv_master_carton_qty", label: "Wymagaj iloĹ›ci w opakowaniu zbiorczym", type: "boolean" },
-  { key: "require_recv_master_carton_dims", label: "Wymagaj wymiarĂłw opakowania zbiorczego", type: "boolean" },
+  { key: "require_recv_master_carton_qty", label: "Wymagaj ilości w opakowaniu zbiorczym", type: "boolean" },
+  { key: "require_recv_master_carton_dims", label: "Wymagaj wymiarów opakowania zbiorczego", type: "boolean" },
   { key: "require_recv_master_carton_weight", label: "Wymagaj wagi opakowania zbiorczego", type: "boolean" },
 ];
 
@@ -47,4 +52,3 @@ export const wmsValidationModule: ProductMultiModuleDef<WmsValidationConfig> = {
     return [{ action: "patch_logistics_fields", value: { set: built.set } }];
   },
 };
-

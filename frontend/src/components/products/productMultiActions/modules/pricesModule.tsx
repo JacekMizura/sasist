@@ -1,6 +1,6 @@
-﻿import type { ModuleCardProps, ProductBulkOp, ProductMultiModuleDef } from "../types";
+import type { ModuleCardProps, ProductMultiModuleDef } from "../types";
 import { parseDecimal } from "../patchFieldUtils";
-import { pmaCheckRow, pmaInp, pmaLab } from "../uiTokens";
+import { pmaCheckRow, pmaInp } from "../uiTokens";
 
 export type PricesConfig = {
   applySale: boolean;
@@ -14,9 +14,9 @@ export type PricesConfig = {
 
 function PricesCard({ config, onChange, disabled }: ModuleCardProps<PricesConfig>) {
   return (
-    <div className="space-y-3">
+    <div className="space-y-2.5">
       <fieldset>
-        <legend className={pmaLab}>Tryb</legend>
+        <legend className="text-xs font-medium text-slate-600">Tryb</legend>
         <div className="mt-1 flex flex-wrap gap-3 text-sm">
           <label className="inline-flex items-center gap-2">
             <input
@@ -25,7 +25,7 @@ function PricesCard({ config, onChange, disabled }: ModuleCardProps<PricesConfig
               disabled={disabled}
               onChange={() => onChange({ ...config, mode: "set" })}
             />
-            Ustaw kwotÄ™
+            Ustaw kwotę
           </label>
           <label className="inline-flex items-center gap-2">
             <input
@@ -34,7 +34,7 @@ function PricesCard({ config, onChange, disabled }: ModuleCardProps<PricesConfig
               disabled={disabled}
               onChange={() => onChange({ ...config, mode: "percent" })}
             />
-            ZmieĹ„ o %
+            Zmień o %
           </label>
         </div>
       </fieldset>
@@ -48,7 +48,7 @@ function PricesCard({ config, onChange, disabled }: ModuleCardProps<PricesConfig
           onChange={(e) => onChange({ ...config, applySale: e.target.checked })}
         />
         <span className="min-w-0 flex-1">
-          <span className="font-medium">Cena sprzedaĹĽy (netto)</span>
+          <span className="text-sm font-medium text-slate-800">Cena sprzedaży (netto)</span>
           {config.applySale ? (
             <input
               className={pmaInp}
@@ -77,7 +77,7 @@ function PricesCard({ config, onChange, disabled }: ModuleCardProps<PricesConfig
           onChange={(e) => onChange({ ...config, applyPurchase: e.target.checked })}
         />
         <span className="min-w-0 flex-1">
-          <span className="font-medium">Cena zakupu (netto)</span>
+          <span className="text-sm font-medium text-slate-800">Cena zakupu (netto)</span>
           {config.applyPurchase ? (
             <input
               className={pmaInp}
@@ -115,25 +115,22 @@ export const pricesModule: ProductMultiModuleDef<PricesConfig> = {
     purchasePercent: "",
   }),
   validate: (cfg) => {
-    if (!cfg.applySale && !cfg.applyPurchase) return "Zaznacz co najmniej jednÄ… cenÄ™.";
+    if (!cfg.applySale && !cfg.applyPurchase) return "Zaznacz co najmniej jedną cenę.";
     if (cfg.mode === "set") {
-      if (cfg.applySale && parseDecimal(cfg.saleAmount) == null) return "Podaj cenÄ™ sprzedaĹĽy.";
-      if (cfg.applyPurchase && parseDecimal(cfg.purchaseAmount) == null) return "Podaj cenÄ™ zakupu.";
+      if (cfg.applySale && parseDecimal(cfg.saleAmount) == null) return "Podaj cenę sprzedaży.";
+      if (cfg.applyPurchase && parseDecimal(cfg.purchaseAmount) == null) return "Podaj cenę zakupu.";
     } else {
-      if (cfg.applySale && parseDecimal(cfg.salePercent) == null) return "Podaj % dla sprzedaĹĽy.";
+      if (cfg.applySale && parseDecimal(cfg.salePercent) == null) return "Podaj % dla sprzedaży.";
       if (cfg.applyPurchase && parseDecimal(cfg.purchasePercent) == null) return "Podaj % dla zakupu.";
     }
     return null;
   },
   Card: PricesCard,
   toOps: (cfg) => {
-    const ops: ProductBulkOp[] = [];
+    const ops: { action: string; value: unknown }[] = [];
     if (cfg.mode === "set") {
       if (cfg.applySale) {
-        ops.push({
-          action: "set_price",
-          value: { field: "sale_price", amount: parseDecimal(cfg.saleAmount) },
-        });
+        ops.push({ action: "set_price", value: { field: "sale_price", amount: parseDecimal(cfg.saleAmount) } });
       }
       if (cfg.applyPurchase) {
         ops.push({
@@ -158,4 +155,3 @@ export const pricesModule: ProductMultiModuleDef<PricesConfig> = {
     return ops;
   },
 };
-

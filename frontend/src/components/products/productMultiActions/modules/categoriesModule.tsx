@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import {
   fetchCategoryTree,
@@ -19,7 +19,7 @@ function flattenCategories(
   const out: { id: number; label: string }[] = [];
   for (const n of nodes) {
     const path = [...prefix, n.name];
-    out.push({ id: n.id, label: path.join(" â€ş ") });
+    out.push({ id: n.id, label: path.join(" › ") });
     if (n.children?.length) out.push(...flattenCategories(n.children, path));
   }
   return out;
@@ -51,9 +51,9 @@ function CategoriesCard({ config, onChange, tenantId, disabled }: ModuleCardProp
   const additionalSet = useMemo(() => new Set(config.additionalCategoryIds), [config.additionalCategoryIds]);
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-2.5">
       <label className={pmaLab}>
-        Kategoria gĹ‚Ăłwna
+        Kategoria główna
         <select
           className={pmaInp}
           disabled={disabled || loading}
@@ -66,7 +66,7 @@ function CategoriesCard({ config, onChange, tenantId, disabled }: ModuleCardProp
             });
           }}
         >
-          <option value="">{loading ? "Ĺadowanieâ€¦" : "â€” bez kategorii â€”"}</option>
+          <option value="">{loading ? "Ładowanie…" : "— bez kategorii —"}</option>
           {options.map((o) => (
             <option key={o.id} value={o.id}>
               {o.label}
@@ -77,12 +77,12 @@ function CategoriesCard({ config, onChange, tenantId, disabled }: ModuleCardProp
 
       <div>
         <p className={pmaLab}>Kategorie dodatkowe</p>
-        <div className="mt-1 max-h-40 space-y-1 overflow-y-auto rounded-lg border border-slate-200 bg-white p-2">
+        <div className="mt-1 max-h-36 space-y-0.5 overflow-y-auto rounded-lg border border-slate-200 bg-white p-2">
           {options.length === 0 ? (
             <p className="text-xs text-slate-500">Brak kategorii.</p>
           ) : (
             options.map((o) => (
-              <label key={o.id} className="flex cursor-pointer items-start gap-2 text-sm text-slate-800">
+              <label key={o.id} className="flex cursor-pointer items-start gap-2 py-0.5 text-sm text-slate-800">
                 <input
                   type="checkbox"
                   className="mt-0.5 rounded border-slate-300"
@@ -123,4 +123,3 @@ export const categoriesModule: ProductMultiModuleDef<CategoriesConfig> = {
     },
   ],
 };
-

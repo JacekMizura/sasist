@@ -1,4 +1,4 @@
-﻿import type { ModuleCardProps, ProductMultiModuleDef } from "../types";
+import type { ModuleCardProps, ProductMultiModuleDef } from "../types";
 import { pmaInp, pmaLab } from "../uiTokens";
 
 export type TagsConfig = {
@@ -15,9 +15,9 @@ function parseTags(raw: string): string[] {
 
 function TagsCard({ config, onChange, disabled }: ModuleCardProps<TagsConfig>) {
   return (
-    <div className="space-y-3">
+    <div className="space-y-2.5">
       <fieldset>
-        <legend className={pmaLab}>Tryb</legend>
+        <legend className="text-xs font-medium text-slate-600">Tryb</legend>
         <div className="mt-1 flex flex-wrap gap-3 text-sm">
           <label className="inline-flex items-center gap-2">
             <input
@@ -26,7 +26,7 @@ function TagsCard({ config, onChange, disabled }: ModuleCardProps<TagsConfig>) {
               disabled={disabled}
               onChange={() => onChange({ ...config, mode: "replace" })}
             />
-            ZastÄ…p tagi
+            Zastąp tagi
           </label>
           <label className="inline-flex items-center gap-2">
             <input
@@ -35,18 +35,18 @@ function TagsCard({ config, onChange, disabled }: ModuleCardProps<TagsConfig>) {
               disabled={disabled}
               onChange={() => onChange({ ...config, mode: "add" })}
             />
-            Dodaj do istniejÄ…cych
+            Dodaj do istniejących
           </label>
         </div>
       </fieldset>
       <label className={pmaLab}>
         Tagi (oddzielone przecinkiem)
         <textarea
-          className={`${pmaInp} min-h-[4.5rem]`}
+          className={`${pmaInp} min-h-[4rem]`}
           disabled={disabled}
           value={config.raw}
           onChange={(e) => onChange({ ...config, raw: e.target.value })}
-          placeholder="np. nowoĹ›Ä‡, promo, outlet"
+          placeholder="np. nowość, promo, outlet"
         />
       </label>
     </div>
@@ -71,4 +71,3 @@ export const tagsModule: ProductMultiModuleDef<TagsConfig> = {
     },
   ],
 };
-

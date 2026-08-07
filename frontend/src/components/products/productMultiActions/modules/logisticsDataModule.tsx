@@ -1,11 +1,15 @@
-﻿import { PatchFieldsEditor } from "../PatchFieldsEditor";
+import { PatchFieldsEditor } from "../PatchFieldsEditor";
+import {
+  buildPatchSet,
+  emptyPatchState,
+  type PatchFieldDef,
+  type PatchFieldState,
+} from "../patchFieldUtils";
 import type { ModuleCardProps, ProductBulkOp, ProductMultiModuleDef } from "../types";
-import { buildPatchSet, emptyPatchState, type PatchFieldDef, type PatchFieldState } from "../patchFieldUtils";
 import { pmaCheckRow } from "../uiTokens";
 
-/** Remaining logistics knobs not covered by dedicated dimension/weight/carton cards. */
 const FIELDS: PatchFieldDef[] = [
-  { key: "min_total_stock", label: "PrĂłg alarmu stanu (min. Ĺ‚Ä…czny)", type: "number", min: 0 },
+  { key: "min_total_stock", label: "Próg alarmu stanu (min. łączny)", type: "number", min: 0 },
 ];
 
 export type LogisticsDataConfig = {
@@ -15,7 +19,7 @@ export type LogisticsDataConfig = {
 
 function LogisticsDataCard({ config, onChange, disabled }: ModuleCardProps<LogisticsDataConfig>) {
   return (
-    <div className="space-y-3">
+    <div className="space-y-2.5">
       <label className={pmaCheckRow}>
         <input
           type="checkbox"
@@ -24,7 +28,7 @@ function LogisticsDataCard({ config, onChange, disabled }: ModuleCardProps<Logis
           disabled={disabled}
           onChange={(e) => onChange({ ...config, clearAll: e.target.checked })}
         />
-        <span>WyczyĹ›Ä‡ dane logistyczne (wymiary, waga, karton)</span>
+        <span>Wyczyść dane logistyczne (wymiary, waga, karton)</span>
       </label>
       {!config.clearAll ? (
         <PatchFieldsEditor
@@ -54,7 +58,6 @@ export const logisticsDataModule: ProductMultiModuleDef<LogisticsDataConfig> = {
     if (cfg.clearAll) return [{ action: "clear_logistics_data", value: {} }];
     const built = buildPatchSet(FIELDS, cfg.fields);
     if ("error" in built) return [];
-    // min_total_stock is not in logistics patch â€” use set_min_stock
     const { min_total_stock, ...rest } = built.set as Record<string, unknown>;
     const ops: ProductBulkOp[] = [];
     if (min_total_stock != null) {
@@ -69,4 +72,3 @@ export const logisticsDataModule: ProductMultiModuleDef<LogisticsDataConfig> = {
     return ops;
   },
 };
-

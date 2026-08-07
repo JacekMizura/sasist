@@ -1,11 +1,11 @@
-﻿import { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 
 import { listManufacturers, type ManufacturerRead } from "../../../../api/manufacturersApi";
 import type { ModuleCardProps, ProductMultiModuleDef } from "../types";
 import { pmaInp, pmaLab } from "../uiTokens";
 
 export type ManufacturerConfig = {
-  manufacturerId: number | null; // null = clear
+  manufacturerId: number | null;
   clear: boolean;
 };
 
@@ -47,8 +47,8 @@ function ManufacturerCard({ config, onChange, tenantId, disabled }: ModuleCardPr
           else onChange({ manufacturerId: Number(v), clear: false });
         }}
       >
-        <option value="">{loading ? "Ĺadowanieâ€¦" : "â€” wybierz â€”"}</option>
-        <option value="__clear__">WyczyĹ›Ä‡ producenta</option>
+        <option value="">{loading ? "Ładowanie…" : "— wybierz —"}</option>
+        <option value="__clear__">Wyczyść producenta</option>
         {rows.map((m) => (
           <option key={m.id} value={m.id}>
             {m.name}
@@ -67,11 +67,10 @@ export const manufacturerModule: ProductMultiModuleDef<ManufacturerConfig> = {
   defaultConfig: () => ({ manufacturerId: null, clear: false }),
   validate: (cfg) => {
     if (!cfg.clear && (cfg.manufacturerId == null || cfg.manufacturerId < 1)) {
-      return "Wybierz producenta lub wyczyĹ›Ä‡.";
+      return "Wybierz producenta lub wyczyść.";
     }
     return null;
   },
   Card: ManufacturerCard,
   toOps: (cfg) => [{ action: "set_manufacturer", value: cfg.clear ? null : cfg.manufacturerId }],
 };
-
