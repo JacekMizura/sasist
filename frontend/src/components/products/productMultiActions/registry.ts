@@ -15,6 +15,7 @@ import { vatRateModule } from "./modules/vatRateModule";
 import { weightModule } from "./modules/weightModule";
 import { wmsReplenishmentModule } from "./modules/wmsReplenishmentModule";
 import { wmsValidationModule } from "./modules/wmsValidationModule";
+import { createModuleRegistry } from "../../multiActions";
 
 /**
  * Stage 1 registry. Adding a future module = new file under modules/ + push here.
@@ -41,26 +42,10 @@ export const PRODUCT_MULTI_MODULES: ProductMultiModuleDef<any>[] = [
   wmsReplenishmentModule,
 ];
 
-const byId = new Map(PRODUCT_MULTI_MODULES.map((m) => [m.id, m]));
+const registry = createModuleRegistry(PRODUCT_MULTI_MODULES);
 
-export function getProductMultiModule(id: ProductMultiModuleId) {
-  return byId.get(id);
-}
-
-export function listPickerModules() {
-  return PRODUCT_MULTI_MODULES.filter((m) => m.stage === 1);
-}
-
-/** Grouped options for "+ Dodaj zmianę" select. */
-export function listPickerGroups(): { group: string; modules: typeof PRODUCT_MULTI_MODULES }[] {
-  const order: string[] = [];
-  const map = new Map<string, typeof PRODUCT_MULTI_MODULES>();
-  for (const m of listPickerModules()) {
-    if (!map.has(m.group)) {
-      order.push(m.group);
-      map.set(m.group, []);
-    }
-    map.get(m.group)!.push(m);
-  }
-  return order.map((group) => ({ group, modules: map.get(group)! }));
-}
+export const getProductMultiModule = registry.getModule as (id: ProductMultiModuleId) =>
+  | ProductMultiModuleDef
+  | undefined;
+export const listPickerModules = registry.listPickerModules;
+export const listPickerGroups = registry.listPickerGroups;

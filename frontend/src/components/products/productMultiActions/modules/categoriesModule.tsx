@@ -26,7 +26,8 @@ function flattenCategories(
   return out;
 }
 
-function CategoriesCard({ config, onChange, tenantId, disabled }: ModuleCardProps<CategoriesConfig>) {
+function CategoriesCard({ config, onChange, cardContext, disabled }: ModuleCardProps<CategoriesConfig>) {
+  const { tenantId } = cardContext;
   const [tree, setTree] = useState<ProductCategoryTreeNode[]>([]);
   const [loading, setLoading] = useState(false);
 

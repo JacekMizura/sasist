@@ -1,3 +1,12 @@
+## 2026-08-07 — Order Multiakcje + shared multiActions shell
+
+- Extracted generic `frontend/src/components/multiActions/` (MultiActionsModal, MultiModulePicker, createRegistry, types).
+- Products: ProductMultiActionsModal → thin wrapper; ModuleCardProps uses `cardContext.tenantId`.
+- Orders: `orderMultiActions/` — 13 modules; live: status, payment, note, shipping, document, custom_field; stubs: operator, tags, warehouse, source; host: packing_queue, export, delete.
+- Removed dropdown `OrderListMultiActionsMenu`, old `OrderBulkMultiActionModal`, dead `OrderBulkCustomFieldModal`.
+- OrderList + OrdersListBulkBar: Zap button → full creator modal; `executeOrderBulkActions` + `payment_status`.
+- `npm run build` OK
+
 ## 2026-08-07 — Ustawienia WMS: wspólny wzorzec UI (Pakowanie)
 
 - `WmsSettingsTabFrame`: tytuł, opis, wyszukiwarka, Przywróć / Zapisz

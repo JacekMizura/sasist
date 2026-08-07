@@ -8,12 +8,17 @@ import { usePanelListBulkSelection } from "../../hooks/usePanelListBulkSelection
 import { formatMoney } from "../../utils/formatOrderMoney";
 import { getShippingMethods, type ShippingMethodDto } from "../../api/shippingMethodsApi";
 import { OrderListFiltersPanel } from "../../components/orders/orderList/OrderListFiltersPanel";
-import { OrderBulkMultiActionModal } from "../../components/orders/orderList/OrderBulkMultiActionModal";
+import {
+  OrderMultiActionsModal,
+  executeOrderMultiActions,
+  type OrderMultiActionRow,
+  type OrderMultiConfigBag,
+  type OrderMultiModuleId,
+} from "../../components/orders/orderMultiActions";
 import { OrderQuickActionModals } from "../../components/orders/orderList/OrderQuickActionModals";
 import type { OrderQuickToolbarActionKind } from "../../components/orders/orderList/orderQuickActionKinds";
 import { executeOrderBulkActions } from "../../components/orders/orderList/executeOrderBulkActions";
 import type { AppliedOrderListFilters } from "../../components/orders/orderList/orderListFilterTypes";
-import type { BulkActionConfig, BulkActionRow } from "../../components/orders/orderList/bulkMultiActionTypes";
 import {
   postOrdersBulkDelete,
   postOrdersBulkPatch,
@@ -63,9 +68,7 @@ import {
   OrderListQuickNoteModal,
   type QuickNoteAudience,
 } from "../../components/orders/orderList/OrderListQuickNoteModal";
-import { OrderBulkCustomFieldModal } from "../../components/orders/orderList/OrderBulkCustomFieldModal";
 import { listSellasistInputClass } from "../../components/listPage/listSellasistTokens";
-import type { MultiMenuActionId } from "../../components/orders/orderList/OrderListMultiActionsMenu";
 import {
   ErpBulkPrintModal,
   ORDER_BULK_DOCUMENT_TYPES,
@@ -215,8 +218,6 @@ export default function OrderList() {
   const [quickNoteBusy, setQuickNoteBusy] = useState(false);
   const [quickNoteSelection, setQuickNoteSelection] = useState<OrderBulkSelectionDto | null>(null);
   const [quickNoteCount, setQuickNoteCount] = useState(0);
-  const [customFieldModalOpen, setCustomFieldModalOpen] = useState(false);
-
   const [panelSummary, setPanelSummary] = useState<OrderUiStatusPanelSummary | null>(null);
   const [panelSubgroups, setPanelSubgroups] = useState<OrderUiPanelSubgroupRead[] | null>(null);
 
@@ -714,18 +715,6 @@ export default function OrderList() {
     }
   };
 
-  const onBulkCustomFieldApplied = useCallback(() => {
-    setToast("Pola dodatkowe zaktualizowane.");
-    clearSelection();
-    setBulkSelectMenuKey((k) => k + 1);
-    fetchOrders();
-    void loadPanelSummary();
-  }, [clearSelection, fetchOrders, loadPanelSummary]);
-
-  const onBulkCustomFieldError = useCallback((msg: string) => {
-    setFetchError(msg);
-  }, []);
-
   const submitQuickNote = async ({
     audience,
     text,
@@ -816,122 +805,88 @@ export default function OrderList() {
     setBulkPrintOpen(true);
   };
 
-  const handleMultiMenu = (id: MultiMenuActionId) => {
-    const allowWithoutSelection = id === "packing_queue" || id === "export";
-    if (!allowWithoutSelection && effectiveSelectionCount === 0) {
-      setToast("Zaznacz zamówienia.");
-      return;
-    }
-    switch (id) {
-      case "change_status":
-        openQuickAction("change_status");
-        break;
-      case "change_operator":
-        setToast("Zmiana operatora — w przygotowaniu.");
-        break;
-      case "add_tag":
-      case "remove_tag":
-        setToast("Tagi zamówień — w przygotowaniu.");
-        break;
-      case "add_note": {
-        const sel = toBulkSelectionDto();
-        if (!sel) return;
-        setQuickNoteSelection(sel);
-        setQuickNoteCount(effectiveSelectionCount);
-        setQuickNoteOpen(true);
-        break;
-      }
-      case "change_shipping":
-        openMultiModal();
-        break;
-      case "change_payment_status":
-        openQuickAction("change_payment_status");
-        break;
-      case "packing_queue":
-        navigate(WMS_ROUTES.packing);
-        break;
-      case "issue_document":
-        openQuickAction("issue_document");
-        break;
-      case "export":
-        setExportOpen(true);
-        break;
-      case "custom_field_value":
-        if (bulkSelectionMode === "filtered_all") {
-          setToast("Ta akcja wymaga zaznaczenia rekordów na stronie (nie „wszystkie z filtra”).");
-          return;
-        }
-        if (!resolveWarehouseForBulkAction("custom_field_value").ok) return;
-        setCustomFieldModalOpen(true);
-        break;
+  const moduleIdToBulkKind = (moduleId: OrderMultiModuleId): OrderListBulkActionKind => {
+    switch (moduleId) {
+      case "order_status":
+        return "change_status";
+      case "payment_status":
+        return "change_payment_status";
+      case "note":
+        return "add_note";
+      case "shipping_method":
+        return "change_shipping";
+      case "document":
+        return "issue_document";
+      case "custom_field":
+        return "custom_field_value";
       case "delete":
-        void bulkDelete();
-        break;
-      case "archive":
-        setToast("Archiwizacja zbiorcza — w przygotowaniu.");
-        break;
+        return "delete";
+      case "export":
+        return "export";
       default:
-        break;
+        return "change_status";
     }
   };
 
-  const handleMultiExecute = async (payload: { rows: BulkActionRow[]; config: BulkActionConfig }) => {
+  const handleMultiExecute = async (payload: {
+    rows: OrderMultiActionRow[];
+    config: OrderMultiConfigBag;
+  }) => {
     if (effectiveSelectionCount === 0) return;
-    const primaryKind = (payload.rows[0]?.kind ?? "change_status") as OrderListBulkActionKind;
-    const gate = resolveWarehouseForBulkAction(
-      primaryKind === "change_status" ||
-        primaryKind === "set_priority" ||
-        primaryKind === "add_note" ||
-        primaryKind === "change_shipping" ||
-        primaryKind === "issue_document"
-        ? primaryKind
-        : "change_status",
+    const firstBulkRow = payload.rows.find(
+      (r) => r.moduleId !== "packing_queue" && r.moduleId !== "export" && r.moduleId !== "delete",
     );
+    const gateKind = firstBulkRow ? moduleIdToBulkKind(firstBulkRow.moduleId) : "change_status";
+    const gate = resolveWarehouseForBulkAction(gateKind);
     if (!gate.ok) return;
-    for (const row of payload.rows) {
-      if (row.kind === "change_status") {
-        const sid = (payload.config.change_status?.statusId ?? "").trim();
-        if (sid === "") {
-          setFetchError("W sekcji „Zmień status” wybierz status lub opcję wyczyszczenia.");
-          return;
-        }
-      }
-      if (row.kind === "change_shipping") {
-        const sm = (payload.config.change_shipping?.shippingMethodId ?? "").trim();
-        if (sm === "") {
-          setFetchError("W sekcji „Zmień metodę dostawy” wybierz metodę.");
-          return;
-        }
-      }
-      if (row.kind === "add_note") {
-        const tx = (payload.config.add_note?.text ?? "").trim();
-        if (!tx) {
-          setFetchError("W sekcji „Dodaj notatkę” wpisz treść.");
-          return;
-        }
-      }
-    }
+
     setMultiBusy(true);
     setFetchError(null);
     try {
-      const { errors } = await executeOrderBulkActions({
+      const { errors, hostActions } = await executeOrderMultiActions({
         tenantId: DAMAGE_TENANT_ID,
         warehouseId: gate.warehouseId,
         selection: orderListBulkSelectionArg(),
         rows: payload.rows,
         config: payload.config,
       });
+
+      const hasBulkOps = payload.rows.some(
+        (r) => r.moduleId !== "packing_queue" && r.moduleId !== "export" && r.moduleId !== "delete",
+      );
+
       if (errors.length) {
         setFetchError(errors.slice(0, 5).join(" · "));
         setToast(errors.length > 5 ? "Część operacji zakończona z błędami." : "Część operacji zakończona z błędami.");
-      } else {
+      } else if (hasBulkOps || hostActions.length === 0) {
         setToast("Multiakcje zakończone pomyślnie.");
         setMultiModalOpen(false);
         clearSelection();
         setBulkSelectMenuKey((k) => k + 1);
+      } else {
+        setMultiModalOpen(false);
       }
-      fetchOrders();
-      void loadPanelSummary();
+
+      if (hasBulkOps) {
+        fetchOrders();
+        void loadPanelSummary();
+      }
+
+      for (const action of hostActions) {
+        switch (action) {
+          case "packing_queue":
+            navigate(WMS_ROUTES.packing);
+            break;
+          case "export":
+            setExportOpen(true);
+            break;
+          case "delete":
+            await bulkDelete();
+            break;
+          default:
+            break;
+        }
+      }
     } catch {
       setFetchError("Wykonanie multiakcji nie powiodło się.");
     } finally {
@@ -1042,7 +997,7 @@ export default function OrderList() {
                   onClearSelection={clearSelection}
                   onSelectMenuBump={() => setBulkSelectMenuKey((k) => k + 1)}
                   onBulkStatusSelect={(statusId) => void handleQuickChangeStatus(statusId)}
-                  onMultiMenuSelect={handleMultiMenu}
+                  onOpenMultiActions={openMultiModal}
                   onQuickAction={openQuickAction}
                   onPrint={openBulkPrint}
                   onExport={() => setExportOpen(true)}
@@ -1151,11 +1106,13 @@ export default function OrderList() {
         </div>
       </div>
 
-      <OrderBulkMultiActionModal
+      <OrderMultiActionsModal
         open={multiModalOpen}
         onClose={() => {
           if (!multiBusy) setMultiModalOpen(false);
         }}
+        tenantId={DAMAGE_TENANT_ID}
+        warehouseId={fulfillmentWarehouseFilter ?? warehouse?.id ?? null}
         orderCount={effectiveSelectionCount}
         panelSummary={panelSummary}
         panelSubgroups={panelSubgroups}
@@ -1193,21 +1150,6 @@ export default function OrderList() {
         }}
         onSubmit={submitQuickNote}
       />
-
-      {(() => {
-        const cfWh = fulfillmentWarehouseFilter ?? warehouse?.id ?? null;
-        if (cfWh == null) return null;
-        return (
-          <OrderBulkCustomFieldModal
-            open={customFieldModalOpen}
-            warehouseId={cfWh}
-            orderIds={selectedIds.map((s) => Number(s)).filter((n) => Number.isFinite(n))}
-            onClose={() => setCustomFieldModalOpen(false)}
-            onApplied={onBulkCustomFieldApplied}
-            onError={onBulkCustomFieldError}
-          />
-        );
-      })()}
 
       {toast ? (
         <div

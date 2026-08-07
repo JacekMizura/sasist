@@ -1,4 +1,4 @@
-import { Download, FileText, Mail, Printer } from "lucide-react";
+import { Download, FileText, Mail, Printer, Zap } from "lucide-react";
 
 import { PanelBulkStatusPickerDropdown } from "../../panel/PanelBulkStatusPickerDropdown";
 import type { PanelBulkSelectionMode } from "../../../hooks/usePanelListBulkSelection";
@@ -9,7 +9,6 @@ import {
   moduleBulkOrSeparatorClass,
   moduleBulkTextBtnClass,
 } from "../../listPage/moduleList";
-import { OrderListMultiActionsMenu, type MultiMenuActionId } from "./OrderListMultiActionsMenu";
 import type { OrderQuickToolbarActionKind } from "./orderQuickActionKinds";
 
 export type OrdersListBulkBarProps = {
@@ -28,7 +27,7 @@ export type OrdersListBulkBarProps = {
   onClearSelection: () => void;
   onSelectMenuBump: () => void;
   onBulkStatusSelect: (statusId: string) => void;
-  onMultiMenuSelect: (id: MultiMenuActionId) => void;
+  onOpenMultiActions: () => void;
   onQuickAction: (kind: OrderQuickToolbarActionKind) => void;
   onPrint: () => void;
   onExport: () => void;
@@ -50,7 +49,7 @@ export function OrdersListBulkBar({
   onClearSelection,
   onSelectMenuBump,
   onBulkStatusSelect,
-  onMultiMenuSelect,
+  onOpenMultiActions,
   onQuickAction,
   onPrint,
   onExport,
@@ -85,7 +84,16 @@ export function OrdersListBulkBar({
             }}
           />
           <span className={moduleBulkOrSeparatorClass}>lub</span>
-          <OrderListMultiActionsMenu disabled={bulkBusy} onSelect={onMultiMenuSelect} />
+          <button
+            type="button"
+            disabled={bulkToolbarDisabled}
+            className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-900 shadow-none transition hover:bg-slate-50 disabled:pointer-events-none disabled:opacity-40"
+            aria-label="Multiakcje"
+            onClick={onOpenMultiActions}
+          >
+            <Zap className="h-3.5 w-3.5 text-amber-500" strokeWidth={2} aria-hidden />
+            Multiakcje
+          </button>
         </>
       }
       iconActions={

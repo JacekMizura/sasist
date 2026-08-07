@@ -10,7 +10,8 @@ export type ManufacturerConfig = {
   clear: boolean;
 };
 
-function ManufacturerCard({ config, onChange, tenantId, disabled }: ModuleCardProps<ManufacturerConfig>) {
+function ManufacturerCard({ config, onChange, cardContext, disabled }: ModuleCardProps<ManufacturerConfig>) {
+  const { tenantId } = cardContext;
   const [rows, setRows] = useState<ManufacturerRead[]>([]);
   const [loading, setLoading] = useState(false);
 

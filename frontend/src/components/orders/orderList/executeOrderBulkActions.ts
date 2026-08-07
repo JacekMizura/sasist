@@ -26,6 +26,8 @@ function bulkKindFromAction(kind: BulkActionKind): OrderListBulkActionKind {
       return "change_shipping";
     case "add_note":
       return "add_note";
+    case "payment_status":
+      return "change_payment_status";
     default:
       return "change_status";
   }
@@ -67,6 +69,12 @@ async function runOne(
       const text = (cfg.add_note?.text ?? "").trim();
       if (!text) throw new Error("Wpisz treść notatki.");
       await patchOrder(orderId, { internal_note_append: text });
+      return;
+    }
+    case "payment_status": {
+      await patchOrder(orderId, {
+        payment_status: cfg.payment_status?.paymentStatus ?? null,
+      });
       return;
     }
     case "send_message":
@@ -157,6 +165,19 @@ export async function executeOrderBulkActions(input: {
               warehouse_id: warehouseId,
               selection: { mode: "filtered_query", filters },
               internal_note_append: text,
+            });
+            break;
+          }
+          case "payment_status": {
+            await postOrdersBulkPatch({
+              tenant_id: input.tenantId,
+              warehouse_id: warehouseId,
+              selection: { mode: "filtered_query", filters },
+              payment_status:
+                input.config.payment_status?.paymentStatus === null ||
+                input.config.payment_status?.paymentStatus === undefined
+                  ? ""
+                  : input.config.payment_status.paymentStatus,
             });
             break;
           }

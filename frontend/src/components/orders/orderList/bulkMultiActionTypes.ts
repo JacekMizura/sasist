@@ -5,7 +5,8 @@ export type BulkActionKind =
   | "generate_label"
   | "send_message"
   | "add_note"
-  | "change_shipping";
+  | "change_shipping"
+  | "payment_status";
 
 export type BulkActionConfig = {
   change_status?: { statusId: string };
@@ -15,6 +16,7 @@ export type BulkActionConfig = {
   send_message?: { subject: string; body: string };
   add_note?: { text: string };
   generate_label?: { templateCode: string };
+  payment_status?: { paymentStatus: string | null };
 };
 
 export type BulkActionRow = {
@@ -31,6 +33,7 @@ export const BULK_ACTION_LABELS: Record<BulkActionKind, string> = {
   send_message: "Wyślij wiadomość",
   add_note: "Dodaj notatkę",
   change_shipping: "Zmień metodę dostawy",
+  payment_status: "Zmień status płatności",
 };
 
 export const BULK_ACTION_DROPDOWN_ORDER: BulkActionKind[] = [

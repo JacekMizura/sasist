@@ -10,7 +10,8 @@ export type ProductFamilyConfig = {
   clear: boolean;
 };
 
-function ProductFamilyCard({ config, onChange, tenantId, disabled }: ModuleCardProps<ProductFamilyConfig>) {
+function ProductFamilyCard({ config, onChange, cardContext, disabled }: ModuleCardProps<ProductFamilyConfig>) {
+  const { tenantId } = cardContext;
   const [rows, setRows] = useState<ProductFamilyListItem[]>([]);
   const [loading, setLoading] = useState(false);
 

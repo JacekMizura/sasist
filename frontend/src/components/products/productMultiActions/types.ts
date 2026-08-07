@@ -1,7 +1,6 @@
-import type { ReactNode } from "react";
-
 import type { BulkUpdateAction } from "../../../api/productsBulkApi";
 import type { ProductBulkListFiltersPayload } from "../../../utils/productListBulkFilters";
+import type { MultiModuleDef, ModuleCardProps, MultiActionRow, MultiConfigBag } from "../../multiActions";
 
 /** Selection shape shared with delete modal / list host. */
 export type ProductBulkModalSelection =
@@ -42,30 +41,19 @@ export type ProductBulkOp = {
   value: unknown;
 };
 
-export type ProductMultiActionRow = {
-  id: string;
-  moduleId: ProductMultiModuleId;
-  expanded: boolean;
-};
-
+export type ProductMultiActionRow = MultiActionRow<ProductMultiModuleId>;
 export type ProductMultiSelection = ProductBulkModalSelection;
+export type ProductMultiCardContext = { tenantId: number };
+export type ProductMultiConfigBag = MultiConfigBag<ProductMultiModuleId>;
 
-export type ModuleCardProps<TConfig = unknown> = {
-  config: TConfig;
-  onChange: (next: TConfig) => void;
-  tenantId: number;
-  disabled?: boolean;
-};
+export type ProductModuleCardProps<TConfig = unknown> = ModuleCardProps<TConfig, ProductMultiCardContext>;
 
-export type ProductMultiModuleDef<TConfig = unknown> = {
-  id: ProductMultiModuleId;
-  label: string;
-  group: string;
-  stage: 1 | "future";
-  defaultConfig: () => TConfig;
-  validate: (cfg: TConfig) => string | null;
-  Card: (props: ModuleCardProps<TConfig>) => ReactNode;
-  toOps: (cfg: TConfig) => ProductBulkOp[];
-};
+export type ProductMultiModuleDef<TConfig = unknown> = MultiModuleDef<
+  ProductMultiModuleId,
+  TConfig,
+  ProductMultiCardContext,
+  ProductBulkOp
+>;
 
-export type ProductMultiConfigBag = Partial<Record<ProductMultiModuleId, unknown>>;
+/** @deprecated Use ProductModuleCardProps */
+export type ModuleCardProps<TConfig = unknown> = ProductModuleCardProps<TConfig>;

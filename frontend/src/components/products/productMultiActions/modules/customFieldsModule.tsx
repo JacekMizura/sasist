@@ -26,7 +26,8 @@ function emptyRow(): CustomFieldRow {
   return { fieldId: "", stringValue: "", numberValue: "", optionId: "" };
 }
 
-function CustomFieldsCard({ config, onChange, tenantId, disabled }: ModuleCardProps<CustomFieldsConfig>) {
+function CustomFieldsCard({ config, onChange, cardContext, disabled }: ModuleCardProps<CustomFieldsConfig>) {
+  const { tenantId } = cardContext;
   const [defs, setDefs] = useState<ProductCustomFieldDto[]>([]);
   const [loading, setLoading] = useState(false);
 
