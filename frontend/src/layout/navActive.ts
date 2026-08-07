@@ -65,9 +65,6 @@ export function isNavPathActive(pathname: string, path: string): boolean {
       pathname.startsWith("/pulpit-kierownika/")
     );
   }
-  if (path === "/system") {
-    return pathname.startsWith("/system") || pathname.startsWith("/changelog");
-  }
   if (path === "/dashboard") {
     return pathname === "/dashboard";
   }
@@ -190,12 +187,6 @@ export function isNavPathActive(pathname: string, path: string): boolean {
       pathname.startsWith("/settings/document-templates/") ||
       pathname === "/templates/print" ||
       pathname.startsWith("/templates/print/")
-    );
-  }
-  if (path === "/settings/sales/stock-pools") {
-    return (
-      pathname === "/settings/sales/stock-pools" ||
-      pathname.startsWith("/settings/sales/stock-pools/")
     );
   }
   if (path === "/admin/message-templates") {

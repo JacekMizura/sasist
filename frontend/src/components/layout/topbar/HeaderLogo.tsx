@@ -3,13 +3,13 @@ import { Link } from "react-router-dom";
 import markUrl from "../../../assets/logo/sasist-mark.svg";
 
 type Props = {
-  /** Tighter mark + wordmark for sidebar next to hamburger. */
+  /** Slightly tighter mark + wordmark. */
   compact?: boolean;
-  /** Hexagon mark only (collapsed sidebar). */
+  /** Hexagon mark only (rare). */
   markOnly?: boolean;
 };
 
-/** Orange hexagon „S” + SASIST wordmark (font-weight 800). */
+/** Orange hexagon „S” + SASIST wordmark (font-weight 800). Always full brand in the app header. */
 export default function HeaderLogo({ compact = false, markOnly = false }: Props) {
   if (markOnly) {
     return (

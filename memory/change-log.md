@@ -1,3 +1,12 @@
+## 2026-08-07 — Shell: header nad sidebarem + usunięcie martwych modułów
+
+- Layout: wspólny header na całą szerokość; sidebar dopiero pod belką
+- Logo SASIST zawsze w headerze; hamburger usunięty
+- Zwijanie menu: pozycja w menu użytkownika (Administracja → Firma → Zwiń/Rozwiń → Wyloguj)
+- Usunięto FE: Pule stanów, cały `/system/*` UI, Słownik aplikacji (admin)
+- BE: wyrejestrowano/usunięto `offer_stock_pool` router; zostawiono health + labels/resolved
+- `npm run build` OK
+
 ## 2026-08-07 — Globalna wyszukiwarka ustawień WMS
 
 - `settingsSearch/`: catalog + combobox + navigate (tab/section/focus/flash 2s)

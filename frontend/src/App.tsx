@@ -91,7 +91,6 @@ import ReturnPanelUiStatusesSettingsPage from "./pages/Settings/ReturnPanelUiSta
 import OrderPanelUiStatusesSettingsPage from "./pages/Settings/OrderPanelUiStatusesSettingsPage"
 import ComplaintPanelUiStatusesSettingsPage from "./pages/Settings/ComplaintPanelUiStatusesSettingsPage"
 import ShippingMethodsSettingsPage from "./pages/Settings/ShippingMethodsSettingsPage"
-import OfferStockPoolsSettingsPage from "./pages/Settings/OfferStockPoolsSettingsPage"
 import ApiKeysSettingsPage from "./pages/Settings/integrations/ApiKeysSettingsPage"
 import IntegrationsSettingsPage from "./pages/Settings/integrations/IntegrationsSettingsPage"
 import ExportsPage from "./pages/Settings/ExportsPage"
@@ -122,13 +121,6 @@ import { StarterGalleryPage } from "./pages/Settings/document-templates/StarterG
 import { StarterDetailPage } from "./pages/Settings/document-templates/StarterDetailPage";
 import MessageTemplatesModule from "./pages/admin/MessageTemplatesModule"
 import InventoryList from "./pages/InventoryList"
-import SystemLayout from "./pages/System/SystemLayout"
-import SystemHealth from "./pages/System/SystemHealth"
-import SystemDbSize from "./pages/System/SystemDbSize"
-import SystemMetrics from "./pages/System/SystemMetrics"
-import SystemErrorLogs from "./pages/System/SystemErrorLogs"
-import SystemChangelog from "./pages/System/SystemChangelog"
-import SystemAppDictionaryPage from "./pages/System/SystemAppDictionaryPage"
 import AnalyticsLayout from "./pages/analytics/AnalyticsLayout"
 import AnalizyModuleLayout from "./pages/analizy/AnalizyModuleLayout"
 import AnalyticsDashboardPage from "./pages/analytics/AnalyticsDashboard"
@@ -631,7 +623,6 @@ export const router = createBrowserRouter(
                 <Route path="settings/orders/ui-statuses" element={<Navigate to="/orders/statuses" replace />} />
                 <Route path="settings/complaints/ui-statuses" element={<ComplaintPanelUiStatusesSettingsPage />} />
                 <Route path="settings/shipping-methods" element={<ShippingMethodsSettingsPage />} />
-                <Route path="settings/sales/stock-pools" element={<OfferStockPoolsSettingsPage />} />
                 <Route path="settings/integrations" element={<IntegrationsSettingsPage />} />
                 <Route path="settings/api-keys" element={<ApiKeysSettingsPage />} />
                 <Route
@@ -1041,15 +1032,6 @@ export const router = createBrowserRouter(
                 <Route path="analysis/warehouse-throughput" element={<Navigate to="/zarzadzanie-magazynem/raporty/inventory-value" replace />} />
                 <Route path="analysis/warehouse-map" element={<Navigate to="/zarzadzanie-magazynem/raporty/warehouse-map" replace />} />
                 <Route path="analysis/picking-issues-dead-stock" element={<Navigate to="/zarzadzanie-magazynem/raporty/dead-stock" replace />} />
-                <Route path="system" element={<SystemLayout />}>
-                  <Route index element={<Navigate to="health" replace />} />
-                  <Route path="health" element={<SystemHealth />} />
-                  <Route path="db-size" element={<SystemDbSize />} />
-                  <Route path="metrics" element={<SystemMetrics />} />
-                  <Route path="errors" element={<SystemErrorLogs />} />
-                  <Route path="changelog" element={<SystemChangelog />} />
-                  <Route path="labels" element={<SystemAppDictionaryPage />} />
-                </Route>
                 <Route path="templates" element={<Navigate to="/templates/labels" replace />} />
                 <Route path="templates/labels/*" element={<LabelSystem />} />
                 <Route path="templates/print" element={<DocumentTemplatesLayout />}>

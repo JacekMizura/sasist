@@ -1,9 +1,7 @@
 import { useEffect, type LucideIcon } from "react";
-import { ChevronRight, Menu } from "lucide-react";
+import { ChevronRight } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
 
-import HeaderLogo from "../components/layout/topbar/HeaderLogo";
-import UserAccountMenu from "../components/layout/UserAccountMenu";
 import {
   buildNavFlyoutCategories,
   NAV_SIDEBAR_SECTIONS,
@@ -242,13 +240,14 @@ function WmsCtaButton({ collapsed }: { collapsed: boolean }) {
 }
 
 /**
- * Left ERP navigation — default: narrow icon rail; toggle expands full labels.
+ * Left ERP navigation — sits below the shared app header.
+ * Collapse / expand is controlled from the user menu (top bar).
  */
 export default function ErpSidebar() {
   const { pathname } = useLocation();
   useLabels();
   const navCategories = buildNavFlyoutCategories();
-  const { collapsed, toggleCollapsed } = useErpSidebarUi();
+  const { collapsed } = useErpSidebarUi();
   const {
     hoveredCategoryId,
     anchorTop,
@@ -274,35 +273,13 @@ export default function ErpSidebar() {
     <>
       <aside
         className={[
-          "relative z-30 flex h-screen shrink-0 flex-col",
+          "relative z-30 flex h-full min-h-0 shrink-0 flex-col transition-[width] duration-200 ease-out",
           collapsed ? ERP_SIDEBAR_COLLAPSED_WIDTH_CLASS : ERP_SIDEBAR_WIDTH_CLASS,
         ].join(" ")}
       >
         <div className={`flex h-full min-h-0 flex-col ${ERP_SIDEBAR_SURFACE}`}>
-          <div
-            className={[
-              "flex h-14 shrink-0 items-center border-b border-slate-200",
-              collapsed ? "justify-center px-1" : "gap-1 px-2",
-            ].join(" ")}
-          >
-            <button
-              type="button"
-              onClick={toggleCollapsed}
-              className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-slate-600 transition-colors duration-150 ease-out hover:bg-white hover:text-slate-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-400"
-              aria-label={collapsed ? "Rozwiń menu boczne" : "Zwiń menu boczne"}
-              title={collapsed ? "Rozwiń menu" : "Zwiń menu"}
-            >
-              <Menu className="h-5 w-5" strokeWidth={2} aria-hidden />
-            </button>
-            {!collapsed ? (
-              <div className="min-w-0 flex-1">
-                <HeaderLogo compact />
-              </div>
-            ) : null}
-          </div>
-
           <nav className={`min-h-0 flex-1 ${ERP_SIDEBAR_NAV_SCROLL}`} aria-label="Menu główne">
-            <div className={collapsed ? "flex flex-col gap-2 py-2" : "flex flex-col pb-2"}>
+            <div className={collapsed ? "flex flex-col gap-2 py-2" : "flex flex-col py-2"}>
               {NAV_SIDEBAR_SECTIONS.map((section) => (
                 <SectionBlock
                   key={section.id}
@@ -321,12 +298,11 @@ export default function ErpSidebar() {
 
           <div
             className={[
-              "mt-auto shrink-0 space-y-2 border-t border-slate-200 bg-inherit pt-3",
+              "mt-auto shrink-0 border-t border-slate-200 bg-inherit pt-3",
               collapsed ? "px-1.5 pb-3" : "px-2 pb-3",
             ].join(" ")}
           >
             <WmsCtaButton collapsed={collapsed} />
-            <UserAccountMenu variant="sidebar" collapsed={collapsed} />
           </div>
         </div>
       </aside>

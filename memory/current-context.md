@@ -1,12 +1,10 @@
 ﻿## Active
 
-**WMS global settings search (2026-08-07).**
+**App shell navigation rebuild (2026-08-07).**
 
-- Combobox in `WmsSettingsChrome` header — searches all tabs via `settingsSearch/catalog`
-- Min 3 chars; ↑↓ Enter Esc; navigates tab + `?section=` + scroll/focus/flash
-- Fields marked with `data-wms-setting-id` / `WmsSettingField`
-- Per-tab search removed from `WmsSettingsTabFrame`
+- Full-width header (logo + search + notif + warehouse + user) above sidebar
+- Sidebar collapse via user menu „Zwiń/Rozwiń menu” (localStorage)
+- Removed: Pule stanów (settings UI + public API), System module UI, Słownik aplikacji admin
+- Kept: `/system/health`, `/system/labels/resolved`, internal offer stock pool for offers
 
-**WMS settings section nav = switcher.**
-
-- Left rail mounts one subsection; URL `?section=`
+**Prior:** WMS settings section switcher + global settings search

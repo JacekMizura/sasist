@@ -15,9 +15,9 @@ describe("settings flyout IA", () => {
     expect(labels[3]).toBe("Klucze API");
     expect(labels[4]).toBe("Import");
     expect(labels[5]).toBe("Metody dostawy");
-    expect(labels[6]).toBe("Pule stanów");
-    expect(labels[7]).toBe("System");
-    expect(labels).toContain("Słownik aplikacji");
+    expect(labels).not.toContain("Pule stanów");
+    expect(labels).not.toContain("System");
+    expect(labels).not.toContain("Słownik aplikacji");
     expect(labels).not.toContain("Urządzenia");
     expect(labels).not.toContain("Drukarki");
     expect(labels).not.toContain("Stanowiska");

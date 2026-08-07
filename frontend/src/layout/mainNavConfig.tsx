@@ -8,7 +8,6 @@ import {
   LayoutTemplate,
   Settings,
   Settings2,
-  Cpu,
   Zap,
   Tablet,
   RotateCcw,
@@ -39,7 +38,6 @@ import {
 } from "lucide-react";
 
 import { UI_STRINGS } from "../constants/uiStrings";
-import { getLabel } from "../labels/labelStore";
 import { DOCUMENTS_MAIN_FLYOUT_SECTIONS } from "../pages/documents/documentsNavConfig";
 import { navGroupHasActivePath } from "./navActive";
 
@@ -451,23 +449,6 @@ export function buildNavFlyoutCategories(): NavCategoryConfig[] {
             Icon: Truck,
             permissionsAny: ["settings.users", "settings.company"],
           },
-          {
-            path: "/settings/sales/stock-pools",
-            label: "Pule stanów",
-            Icon: Layers,
-            permissionsAny: ["settings.users", "settings.company"],
-          },
-          {
-            path: "/system",
-            label: UI_STRINGS.navigation.system,
-            Icon: Cpu,
-          },
-          {
-            path: "/system/labels",
-            label: getLabel("system.tab.labels", "Słownik aplikacji"),
-            Icon: SlidersHorizontal,
-            superRoleOnly: true,
-          },
         ],
       },
     ],
@@ -515,7 +496,6 @@ export function isCategoryActive(category: NavCategoryConfig, pathname: string):
     // Templates category owns exports / document templates / message templates.
     if (pathname.startsWith("/templates")) return false;
     if (pathname.startsWith("/settings")) return true;
-    if (pathname === "/system" || pathname.startsWith("/system/")) return true;
   }
   if (category.id === "templates") {
     if (pathname.startsWith("/templates")) return true;

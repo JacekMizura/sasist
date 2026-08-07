@@ -105,10 +105,7 @@ Przykłady (kolejność zgodna z flyoutem):
 | Klucze API | `/settings/api-keys` |
 | Import | `/settings/import` |
 | Metody dostawy | `/settings/shipping-methods` |
-| Pule stanów | `/settings/sales/stock-pools` |
 | Drukarki | `/settings/printers` |
-| System | `/system` |
-| Słownik aplikacji | `/system/labels` (super-role) |
 
 **Nie należy** umieszczać w Ustawieniach pełnych modułów szablonów (etykiety, wydruki, wiadomości, eksporty) — te żyją w **Operacje → Szablony** (flyout).  
 **Drukarki** = infrastruktura druku; **Szablony etykiet** = projektowanie etykiet (moduł w kategorii Szablony).
@@ -125,7 +122,6 @@ Przykłady (kolejność zgodna z flyoutem):
 | Szablony wiadomości | `/templates/messages` | Komunikacja; własny layout. |
 | Eksporty | `/templates/exports` | Szablony eksportu CSV; własny layout. |
 | Drukarki | `/settings/printers` | Agenci / urządzenia / kolejka. |
-| Słownik aplikacji | `/system/labels` | **Nie** mylić z `/templates/labels`. |
 
 ### Aliasy historyczne (tylko kompatybilność)
 

@@ -274,7 +274,6 @@ from .api.cartons import router as cartons_router
 from .api.packaging_materials import router as packaging_materials_router
 from .api.product import router as product_router
 from .api.product_sales_offers import router as product_sales_offers_router
-from .api.offer_stock_pool import router as offer_stock_pool_router
 from .api.api_keys import router as api_keys_router
 from .api.product_warehouse_slotting import router as product_warehouse_slotting_router
 from .api.bundle import router as bundle_router
@@ -2161,7 +2160,6 @@ _API_ROUTERS = (
     product_warehouse_slotting_router,
     product_router,
     product_sales_offers_router,
-    offer_stock_pool_router,
     bundle_router,
     bundle_traceability_router,
     bundle_logistics_router,

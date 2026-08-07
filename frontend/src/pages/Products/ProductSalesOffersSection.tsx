@@ -9,9 +9,8 @@ import {
   patchProductSalesOffer,
   type ProductSalesOfferRead,
 } from "../../api/productSalesOffersApi";
-import { listOfferStockPools, type OfferStockPoolRead } from "../../api/offerStockPoolApi";
 import { extractApiErrorMessage } from "../../api/apiErrorMessage";
-import { GhostButton, Input, Select } from "../../design-system";
+import { GhostButton, Input } from "../../design-system";
 
 type Props = {
   productId: number;
@@ -32,14 +31,11 @@ type ChannelGroup = {
  */
 export function ProductSalesOffersSection({ productId, tenantId }: Props) {
   const [offers, setOffers] = useState<ProductSalesOfferRead[]>([]);
-  const [pools, setPools] = useState<OfferStockPoolRead[]>([]);
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [priceDraft, setPriceDraft] = useState<Record<number, string>>({});
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
-
-  const defaultPool = useMemo(() => pools.find((p) => p.is_default) ?? null, [pools]);
 
   const channels = useMemo((): ChannelGroup[] => {
     const map = new Map<string, ProductSalesOfferRead[]>();
@@ -70,12 +66,8 @@ export function ProductSalesOffersSection({ productId, tenantId }: Props) {
     setLoading(true);
     setError(null);
     try {
-      const [res, poolItems] = await Promise.all([
-        listProductSalesOffers({ tenantId, productId }),
-        listOfferStockPools(tenantId),
-      ]);
+      const res = await listProductSalesOffers({ tenantId, productId });
       setOffers(res.offers ?? []);
-      setPools(poolItems);
       const drafts: Record<number, string> = {};
       for (const o of res.offers ?? []) {
         drafts[o.id] =
@@ -126,24 +118,6 @@ export function ProductSalesOffersSection({ productId, tenantId }: Props) {
     }
   };
 
-  const onPoolChange = async (offer: ProductSalesOfferRead, poolId: number) => {
-    setBusyId(offer.id);
-    setError(null);
-    const useDefault = defaultPool != null && poolId === defaultPool.id;
-    try {
-      await patchProductSalesOffer({
-        tenantId,
-        offerId: offer.id,
-        body: { stock_pool_id: useDefault ? null : poolId },
-      });
-      await reload();
-    } catch (e) {
-      setError(extractApiErrorMessage(e));
-    } finally {
-      setBusyId(null);
-    }
-  };
-
   const onDelete = async (offer: ProductSalesOfferRead) => {
     if (offer.is_default) return;
     if (!window.confirm(`Usunąć ofertę „${offer.name}”?`)) return;
@@ -157,12 +131,6 @@ export function ProductSalesOffersSection({ productId, tenantId }: Props) {
     } finally {
       setBusyId(null);
     }
-  };
-
-  const selectedPoolId = (offer: ProductSalesOfferRead): number | "" => {
-    if (offer.stock_pool_id != null) return offer.stock_pool_id;
-    if (defaultPool != null) return defaultPool.id;
-    return "";
   };
 
   const isCollapsed = (key: string) => Boolean(collapsed[key]);
@@ -227,11 +195,10 @@ export function ProductSalesOffersSection({ productId, tenantId }: Props) {
                     Produkt nie jest obecnie oferowany w tym kanale.
                   </p>
                 ) : (
-                  <table className="w-full min-w-[720px] text-left text-sm">
+                  <table className="w-full min-w-[640px] text-left text-sm">
                     <thead>
                       <tr className="border-b border-gray-200 text-xs font-medium text-gray-500">
                         <th className="whitespace-nowrap px-4 py-2.5 font-medium">ID oferty</th>
-                        <th className="whitespace-nowrap px-4 py-2.5 font-medium">Konto</th>
                         <th className="px-4 py-2.5 font-medium">Nazwa</th>
                         <th className="whitespace-nowrap px-4 py-2.5 font-medium">Stan</th>
                         <th className="whitespace-nowrap px-4 py-2.5 font-medium">Cena</th>
@@ -244,31 +211,6 @@ export function ProductSalesOffersSection({ productId, tenantId }: Props) {
                         <tr key={o.id} className="border-b border-gray-100 last:border-b-0">
                           <td className="whitespace-nowrap px-4 py-3 font-mono text-xs text-gray-600">
                             {o.id}
-                          </td>
-                          <td className="px-4 py-3 align-top">
-                            {pools.length === 0 ? (
-                              <span className="text-gray-600">{o.stock_pool_name ?? "—"}</span>
-                            ) : (
-                              <Select
-                                density="compact"
-                                focusTone="brand"
-                                value={selectedPoolId(o)}
-                                disabled={busyId === o.id}
-                                onChange={(e) => {
-                                  const v = Number.parseInt(e.target.value, 10);
-                                  if (Number.isFinite(v)) void onPoolChange(o, v);
-                                }}
-                                className="max-w-[11rem] bg-white"
-                                aria-label="Konto / źródło stanu"
-                              >
-                                {pools.map((p) => (
-                                  <option key={p.id} value={p.id}>
-                                    {p.name}
-                                    {p.is_default ? " (dom)" : ""}
-                                  </option>
-                                ))}
-                              </Select>
-                            )}
                           </td>
                           <td className="px-4 py-3 align-top">
                             <div className="font-medium text-gray-900">{o.name}</div>

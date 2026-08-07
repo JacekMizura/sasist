@@ -25,7 +25,7 @@ function isProductEditRoute(pathname: string): boolean {
 }
 
 /**
- * Wspólny szkielet ERP: lewy sidebar + fly-out + top bar + treść.
+ * Wspólny szkielet ERP: pełna szerokość headera, poniżej sidebar + treść.
  *
  * Sidebar (`z-30`) and content (`relative z-0`) are sibling stacking contexts —
  * page `fixed` overlays inside content cannot cover the sidebar. Use
@@ -43,28 +43,31 @@ export default function ErpShellLayout({ children, headerMode }: ErpShellLayoutP
 
   return (
     <ErpSidebarUiProvider>
-      <div className={`flex h-screen min-h-0 overflow-hidden ${appLayoutTokens.appBackground}`}>
-        <ErpSidebar />
+      <div className={`flex h-screen min-h-0 flex-col overflow-hidden ${appLayoutTokens.appBackground}`}>
+        <header className="z-40 flex w-full shrink-0 flex-col bg-white">
+          <AppTopBar />
+        </header>
 
-        <div
-          className={`relative z-0 flex min-h-0 min-w-0 flex-1 flex-col ${
-            wmsSettingsShellScroll ? "overflow-y-auto [scrollbar-gutter:stable]" : ""
-          } ${productEditWhite ? "bg-white" : ""}`}
-        >
-          <header className="flex shrink-0 flex-col bg-white">
-            <AppTopBar />
-          </header>
-          <main
-            className={`flex min-h-0 min-w-0 flex-1 flex-col ${mainSurface} ${
-              designerFill
-                ? "overflow-hidden"
-                : wmsSettingsShellScroll
-                  ? "overflow-visible"
-                  : "overflow-y-auto [scrollbar-gutter:stable]"
-            }`}
+        <div className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden">
+          <ErpSidebar />
+
+          <div
+            className={`relative z-0 flex min-h-0 min-w-0 flex-1 flex-col ${
+              wmsSettingsShellScroll ? "overflow-y-auto [scrollbar-gutter:stable]" : ""
+            } ${productEditWhite ? "bg-white" : ""}`}
           >
-            {children}
-          </main>
+            <main
+              className={`flex min-h-0 min-w-0 flex-1 flex-col ${mainSurface} ${
+                designerFill
+                  ? "overflow-hidden"
+                  : wmsSettingsShellScroll
+                    ? "overflow-visible"
+                    : "overflow-y-auto [scrollbar-gutter:stable]"
+              }`}
+            >
+              {children}
+            </main>
+          </div>
         </div>
       </div>
     </ErpSidebarUiProvider>

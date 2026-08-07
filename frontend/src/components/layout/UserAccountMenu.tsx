@@ -1,9 +1,10 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { ChevronDown, LogOut, Settings, Users } from "lucide-react";
+import { ChevronDown, LogOut, PanelLeftClose, PanelLeftOpen, Settings, Users } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 
 import { useAuth } from "../../context/AuthContext";
+import { useErpSidebarUiOptional } from "../../layout/ErpSidebarUiContext";
 
 function initials(u: { first_name: string | null; last_name: string | null; login: string }): string {
   const a = (u.first_name ?? "").trim().charAt(0);
@@ -40,6 +41,7 @@ export default function UserAccountMenu({
 }: UserAccountMenuProps) {
   const { user, logout, hasPermission } = useAuth();
   const navigate = useNavigate();
+  const sidebarUi = useErpSidebarUiOptional();
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -50,8 +52,7 @@ export default function UserAccountMenu({
     const b = triggerRef.current?.getBoundingClientRect();
     if (!b) return;
     if (variant === "sidebar") {
-      // Open above the footer trigger; align to left edge of button (sidebar).
-      const menuApproxH = 220;
+      const menuApproxH = 260;
       const top = Math.max(8, b.top - menuApproxH - 8);
       setMenuPos({ top, right: Math.max(8, window.innerWidth - b.left - 240) });
       return;
@@ -110,41 +111,63 @@ export default function UserAccountMenu({
       }
       role="menu"
     >
-      <div className="border-b border-slate-100 px-4 py-3 mb-1">
+      <div className="mb-1 border-b border-slate-100 px-4 py-3">
         <p className="truncate text-sm font-bold text-slate-900">{display}</p>
-        <p className="truncate text-xs font-medium text-slate-500 mt-0.5">{user.login}</p>
+        <p className="mt-0.5 truncate text-xs font-medium text-slate-500">{user.login}</p>
         <div className="mt-2.5 inline-flex rounded-md bg-slate-100 px-2 py-1 text-[10px] font-bold uppercase tracking-widest text-slate-600">
           {user.role}
         </div>
       </div>
-      
-      <div className="px-1.5 space-y-0.5">
+
+      <div className="space-y-0.5 px-1.5">
         {hasPermission("settings.users") ? (
           <Link
             to="/settings/administrators"
-            className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50 hover:text-slate-900 transition-colors"
+            className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50 hover:text-slate-900"
             onClick={() => setOpen(false)}
             role="menuitem"
           >
             <Users className="h-4 w-4 shrink-0 text-slate-400" />
-            Administratorzy
+            Administracja
           </Link>
         ) : null}
         <Link
           to="/settings/company"
-          className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50 hover:text-slate-900 transition-colors"
+          className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50 hover:text-slate-900"
           onClick={() => setOpen(false)}
           role="menuitem"
         >
           <Settings className="h-4 w-4 shrink-0 text-slate-400" />
           Firma i magazyny
         </Link>
-        
-        <div className="my-1 border-t border-slate-100 mx-2"></div>
-        
+
+        {sidebarUi ? (
+          <>
+            <div className="mx-2 my-1 border-t border-slate-100" />
+            <button
+              type="button"
+              className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50 hover:text-slate-900"
+              role="menuitem"
+              onClick={() => {
+                sidebarUi.toggleCollapsed();
+                setOpen(false);
+              }}
+            >
+              {sidebarUi.collapsed ? (
+                <PanelLeftOpen className="h-4 w-4 shrink-0 text-slate-400" aria-hidden />
+              ) : (
+                <PanelLeftClose className="h-4 w-4 shrink-0 text-slate-400" aria-hidden />
+              )}
+              {sidebarUi.collapsed ? "Rozwiń menu" : "Zwiń menu"}
+            </button>
+          </>
+        ) : null}
+
+        <div className="mx-2 my-1 border-t border-slate-100" />
+
         <button
           type="button"
-          className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-bold text-red-600 hover:bg-red-50 hover:text-red-700 transition-colors"
+          className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-bold text-red-600 transition-colors hover:bg-red-50 hover:text-red-700"
           role="menuitem"
           onClick={() => {
             setOpen(false);
@@ -155,7 +178,7 @@ export default function UserAccountMenu({
           }}
         >
           <LogOut className="h-4 w-4 shrink-0" />
-          Wyloguj sesję
+          Wyloguj
         </button>
       </div>
     </div>
@@ -244,24 +267,21 @@ export default function UserAccountMenu({
             "flex shrink-0 items-center justify-center rounded-full font-bold shadow-sm",
             profileVariant === "minimal"
               ? "h-9 w-9 bg-slate-800 text-sm text-white"
-              : [
-                  "bg-violet-600 text-white",
-                  compact ? "h-9 w-9 text-sm" : "h-10 w-10 text-sm",
-                ].join(" "),
+              : ["bg-violet-600 text-white", compact ? "h-9 w-9 text-sm" : "h-10 w-10 text-sm"].join(" "),
           ].join(" ")}
         >
           {initials(user)}
         </span>
 
         {!compact ? (
-          <span className="hidden max-w-[10rem] truncate text-sm font-bold text-slate-700 group-hover:text-slate-900 transition-colors sm:inline">
+          <span className="hidden max-w-[10rem] truncate text-sm font-bold text-slate-700 transition-colors group-hover:text-slate-900 sm:inline">
             {display}
           </span>
         ) : null}
 
         {!hideChevron ? (
           <ChevronDown
-            className={`shrink-0 text-slate-400 group-hover:text-slate-600 transition-colors ${
+            className={`shrink-0 text-slate-400 transition-colors group-hover:text-slate-600 ${
               compact ? "mr-1 hidden h-4 w-4 xl:block" : "h-4 w-4"
             }`}
             aria-hidden
