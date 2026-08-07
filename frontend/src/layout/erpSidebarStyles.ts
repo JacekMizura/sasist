@@ -11,22 +11,22 @@ import {
   brandSidebarNavItemClassName,
 } from "../design-system/brandUi";
 
-/** Expanded (full labels) — still denser than the old 260px. */
-export const ERP_SIDEBAR_WIDTH_PX = 220;
-export const ERP_SIDEBAR_WIDTH_CLASS = "w-[220px]";
-
 /**
  * Default icon rail — Sellasist-like narrow strip with icon + tiny label.
- * ~88px leaves room for 2-line truncated labels without eating the content column.
+ * ~80px matches Sellasist proportions; labels stay readable via line-clamp.
  */
-export const ERP_SIDEBAR_COLLAPSED_WIDTH_PX = 88;
-export const ERP_SIDEBAR_COLLAPSED_WIDTH_CLASS = "w-[88px]";
+export const ERP_SIDEBAR_COLLAPSED_WIDTH_PX = 80;
+export const ERP_SIDEBAR_COLLAPSED_WIDTH_CLASS = "w-[80px]";
+
+/** Expanded (full labels) — only when user explicitly opens the rail. */
+export const ERP_SIDEBAR_WIDTH_PX = 200;
+export const ERP_SIDEBAR_WIDTH_CLASS = "w-[200px]";
 
 export const ERP_SIDEBAR_MOBILE_WIDTH_PX = 280;
 export const ERP_SIDEBAR_MOBILE_WIDTH_CLASS = "w-[280px]";
 export const ERP_FLYOUT_WIDTH_PX = 300;
 
-export const ERP_SIDEBAR_SURFACE = "bg-slate-50 border-r border-slate-200";
+export const ERP_SIDEBAR_SURFACE = "bg-white border-r border-slate-200";
 
 export const ERP_SIDEBAR_NAV_SCROLL =
   "[scrollbar-width:thin] [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-transparent hover:[&::-webkit-scrollbar-thumb]:bg-slate-300";
@@ -48,15 +48,16 @@ export function erpSidebarIconRailItemClassName(isActive: boolean): string {
     "group relative flex w-full flex-col items-center justify-center gap-0.5 rounded-lg px-1 py-2 text-center transition-colors duration-150 ease-out",
     "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-400",
     isActive
-      ? "bg-white font-semibold text-orange-600 shadow-sm ring-1 ring-slate-200/80"
-      : "font-medium text-slate-600 hover:bg-white/80 hover:text-slate-900",
+      ? "bg-orange-50/80 font-semibold text-orange-600"
+      : "font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900",
   ].join(" ");
 }
 
 export const ERP_SIDEBAR_ICON_RAIL_LABEL_CLASS =
   "max-w-full px-0.5 text-[9px] font-medium leading-[1.15] tracking-tight line-clamp-2 break-words";
 
-export const ERP_SIDEBAR_COLLAPSE_STORAGE_KEY = "erp-sidebar-collapsed";
+/** Bump key so old “expanded” preference does not stick after rail redesign. */
+export const ERP_SIDEBAR_COLLAPSE_STORAGE_KEY = "erp-sidebar-rail-v2";
 
 export type NavCategoryAccent = {
   barClass: string;

@@ -223,7 +223,7 @@ function WmsCtaButton({ collapsed }: { collapsed: boolean }) {
         to={WMS_SIDEBAR_DIRECT.path}
         title={label}
         aria-label={label}
-        className="mx-auto flex w-full max-w-[4.5rem] flex-col items-center gap-0.5 rounded-lg border border-slate-200 bg-white px-1 py-2 text-slate-700 transition-colors duration-150 ease-out hover:bg-slate-50 hover:text-slate-900"
+        className="mx-auto flex w-full max-w-[4.25rem] flex-col items-center gap-0.5 rounded-lg border border-slate-200 bg-white px-1 py-2 text-slate-700 transition-colors duration-150 ease-out hover:bg-slate-50 hover:text-slate-900"
       >
         <WmsIcon className="h-5 w-5" strokeWidth={1.75} aria-hidden />
         <span className={ERP_SIDEBAR_ICON_RAIL_LABEL_CLASS}>{label}</span>
