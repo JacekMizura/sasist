@@ -200,9 +200,26 @@ function BoolRowPicking({
   );
 }
 
-function CustomCheckbox({ checked, onChange, label, hint, disabled }: { checked: boolean; onChange: (v: boolean) => void; label: string; hint?: string; disabled?: boolean }) {
+function CustomCheckbox({
+  checked,
+  onChange,
+  label,
+  hint,
+  disabled,
+  settingId,
+}: {
+  checked: boolean;
+  onChange: (v: boolean) => void;
+  label: string;
+  hint?: string;
+  disabled?: boolean;
+  settingId?: string;
+}) {
   return (
-    <label className={`flex items-start gap-3 cursor-pointer group py-1 ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}>
+    <label
+      {...(settingId ? { "data-wms-setting-id": settingId } : {})}
+      className={`wms-setting-field flex items-start gap-3 cursor-pointer group py-1 rounded-lg ${disabled ? "opacity-50 cursor-not-allowed" : ""}`}
+    >
       <div className="relative flex items-center justify-center mt-0.5 shrink-0">
         <input
           type="checkbox"
@@ -211,10 +228,14 @@ function CustomCheckbox({ checked, onChange, label, hint, disabled }: { checked:
           onChange={(e) => !disabled && onChange(e.target.checked)}
           disabled={disabled}
         />
-        <div className={`w-5 h-5 rounded border flex items-center justify-center transition-colors
-          ${checked
-            ? 'bg-blue-600 border-blue-600 text-white'
-            : 'bg-white border-slate-300 group-hover:border-blue-400'}`}>
+        <div
+          className={`w-5 h-5 rounded border flex items-center justify-center transition-colors
+          ${
+            checked
+              ? "bg-blue-600 border-blue-600 text-white"
+              : "bg-white border-slate-300 group-hover:border-blue-400"
+          }`}
+        >
           {checked && (
             <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
@@ -2325,7 +2346,7 @@ export function WmsPickingSettingsSections({
                   onChange={(e) => patchExtended("singleItemVolumeLimit", Math.max(0, Math.floor(Number(e.target.value) || 0)))}
                 />
               </label>
-              <label className="block pb-2 text-sm font-medium text-slate-700 sm:col-span-2">
+              <label className="wms-setting-field block pb-2 text-sm font-medium text-slate-700 sm:col-span-2" data-wms-setting-id="picking.batch_management_mode">
                 Zarządzanie zbiorami
                 <select
                   className={selectClass}
@@ -2590,9 +2611,14 @@ export function WmsPickingSettingsSections({
           </SubsectionPicking>
           <SubsectionPicking title="Układ listy">
             <FieldGridPicking>
-              <CustomCheckbox label="Tryb kompaktowy" checked={extended.compactMode} onChange={(v) => patchExtended("compactMode", v)} />
+              <CustomCheckbox
+                settingId="picking.compact_mode"
+                label="Tryb kompaktowy"
+                checked={extended.compactMode}
+                onChange={(v) => patchExtended("compactMode", v)}
+              />
               <CustomCheckbox label="Plakietka priorytetu" checked={extended.showPriorityBadge} onChange={(v) => patchExtended("showPriorityBadge", v)} />
-              <label className="block pt-2 text-sm font-medium text-slate-700 sm:col-span-2">
+              <label className="wms-setting-field block pt-2 text-sm font-medium text-slate-700 sm:col-span-2" data-wms-setting-id="picking.list_density">
                 Gęstość listy
                 <select
                   className={selectClass}

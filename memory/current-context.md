@@ -1,11 +1,12 @@
 ﻿## Active
 
-**WMS settings section nav = switcher (2026-08-07).**
+**WMS global settings search (2026-08-07).**
 
-- Left rail selects one subsection; only that section mounts (no page scroll-spy)
-- URL `?section=` deep-link / refresh persistence
-- Forms, top tabs, save logic unchanged
+- Combobox in `WmsSettingsChrome` header — searches all tabs via `settingsSearch/catalog`
+- Min 3 chars; ↑↓ Enter Esc; navigates tab + `?section=` + scroll/focus/flash
+- Fields marked with `data-wms-setting-id` / `WmsSettingField`
+- Per-tab search removed from `WmsSettingsTabFrame`
 
-**Order Multiakcje (2026-08-07) — done.**
+**WMS settings section nav = switcher.**
 
-- Shared multiActions shell; order creator mirrors products
+- Left rail mounts one subsection; URL `?section=`

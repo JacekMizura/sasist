@@ -5,6 +5,8 @@ import PageLayout from "../../components/layout/PageLayout";
 import { PageHeader } from "../../components/layout/PageHeader";
 import { TabsContainer } from "../../components/layout/TabsContainer";
 import { tabsNavItemClassName } from "../../components/layout/TabsNav";
+import { WmsSettingsGlobalSearch } from "./settingsSearch";
+import "./settingsSearch/settingFlash.css";
 
 /** Canonical WMS settings top tabs — process settings only (hub + Stanowiska). */
 export const WMS_SETTINGS_TABS = [
@@ -126,7 +128,12 @@ export function WmsSettingsChrome({
         title={title}
         subtitle={subtitle}
         breadcrumbs={breadcrumbs}
-        actions={actions}
+        actions={
+          <div className="flex w-full flex-col items-stretch gap-2 sm:flex-row sm:items-center sm:justify-end">
+            <WmsSettingsGlobalSearch />
+            {actions}
+          </div>
+        }
         tabs={tabs}
       />
       <div className="mt-4 w-full min-w-0">{children}</div>

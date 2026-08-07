@@ -1,3 +1,11 @@
+## 2026-08-07 — Globalna wyszukiwarka ustawień WMS
+
+- `settingsSearch/`: catalog + combobox + navigate (tab/section/focus/flash 2s)
+- Header chrome: VS Code-style search across all WMS tabs (≥3 znaki, klawiatura)
+- Anchory: `data-wms-setting-id` / `WmsSettingField` (Pakowanie Widok + kluczowe pola)
+- Usunięto lokalną wyszukiwarkę z `WmsSettingsTabFrame`
+- `npm run build` OK
+
 ## 2026-08-07 — WMS settings: left nav switches section (no scroll)
 
 - Registry: `selectSection` + `?section=` query; removed IntersectionObserver / scroll-spy

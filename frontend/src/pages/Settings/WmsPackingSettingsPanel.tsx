@@ -44,6 +44,8 @@ import { WmsSettingsSection } from "./WmsSettingsSection";
 import { WmsSettingCard } from "./WmsSettingCard";
 import { WMS_PACKING_SETTINGS_NAV_SECTIONS } from "./wmsPackingSettingsNavSections";
 import { wmsSettingsTokens } from "./wmsSettingsTokens";
+import { WmsSettingField } from "./settingsSearch";
+import { WMS_SETTING_DATA_ATTR } from "./settingsSearch/navigateToSetting";
 
 type LabelTemplateOption = { id: number; name: string };
 
@@ -112,11 +114,23 @@ function FieldGrid({ children }: { children: ReactNode }) {
   return <div className={wmsSettingsTokens.fieldGrid}>{children}</div>;
 }
 
-function Subsection({ title, description, children }: { title: string; description?: string; children: ReactNode }) {
+function Subsection({
+  title,
+  description,
+  settingId,
+  children,
+}: {
+  title: string;
+  description?: string;
+  settingId?: string;
+  children: ReactNode;
+}) {
   return (
-    <WmsSettingCard title={title} description={description}>
-      {children}
-    </WmsSettingCard>
+    <div {...(settingId ? { [WMS_SETTING_DATA_ATTR]: settingId } : {})} className="wms-setting-field rounded-lg">
+      <WmsSettingCard title={title} description={description}>
+        {children}
+      </WmsSettingCard>
+    </div>
   );
 }
 
@@ -127,6 +141,7 @@ function BoolRow({
   help,
   title,
   disabled,
+  settingId,
 }: {
   label: string;
   checked: boolean;
@@ -134,10 +149,12 @@ function BoolRow({
   help?: string;
   title?: string;
   disabled?: boolean;
+  settingId?: string;
 }) {
   return (
     <label
-      className={`flex items-start gap-3 rounded-lg border border-transparent px-1 py-1 ${disabled ? "cursor-not-allowed opacity-60" : "cursor-pointer hover:bg-slate-50/80"}`}
+      {...(settingId ? { [WMS_SETTING_DATA_ATTR]: settingId } : {})}
+      className={`wms-setting-field flex items-start gap-3 rounded-lg border border-transparent px-1 py-1 ${disabled ? "cursor-not-allowed opacity-60" : "cursor-pointer hover:bg-slate-50/80"}`}
       title={title}
     >
       <input
@@ -443,9 +460,13 @@ const WmsPackingSettingsPanel = forwardRef<
             summary="Układ interfejsu, panel klienta i dokumentów, widok produktów przy pakowaniu oraz lista zamówień."
           >
             <div className="space-y-5">
-              <Subsection title="A. Ogólny układ" description="Szerokość obszaru roboczego, lista produktów i pozycja przycisków automatyzacji.">
+              <Subsection
+                settingId="packing.group.layout_general"
+                title="A. Ogólny układ"
+                description="Szerokość obszaru roboczego, lista produktów i pozycja przycisków automatyzacji."
+              >
                 <FieldGrid>
-                  <label className="block text-sm font-medium text-slate-700">
+                  <WmsSettingField settingId="packing.layout_mode" className="block text-sm font-medium text-slate-700">
                     Tryb układu
                     <select
                       className={selectClass}
@@ -455,8 +476,11 @@ const WmsPackingSettingsPanel = forwardRef<
                       <option value="full_width">Pełna szerokość</option>
                       <option value="centered">Wyśrodkowany</option>
                     </select>
-                  </label>
-                  <label className="block text-sm font-medium text-slate-700" title="Gdzie renderować przyciski automatyzacji">
+                  </WmsSettingField>
+                  <WmsSettingField
+                    settingId="packing.automation_buttons_position"
+                    className="block text-sm font-medium text-slate-700"
+                  >
                     Pozycja przycisków automatyzacji
                     <select
                       className={selectClass}
@@ -472,8 +496,11 @@ const WmsPackingSettingsPanel = forwardRef<
                       <option value="right">Prawa kolumna</option>
                       <option value="floating">Pływające</option>
                     </select>
-                  </label>
-                  <label className="block text-sm font-medium text-slate-700 sm:col-span-2">
+                  </WmsSettingField>
+                  <WmsSettingField
+                    settingId="packing.product_display_mode"
+                    className="block text-sm font-medium text-slate-700 sm:col-span-2"
+                  >
                     Lista produktów (widok siatki / listy)
                     <select
                       className={selectClass}
@@ -485,13 +512,17 @@ const WmsPackingSettingsPanel = forwardRef<
                       <option value="list">Lista</option>
                       <option value="grid">Siatka</option>
                     </select>
-                  </label>
+                  </WmsSettingField>
                 </FieldGrid>
               </Subsection>
 
-              <Subsection title="B. Panel klienta i dokumentów" description="Komentarz klienta, podgląd dokumentu sprzedaży, dodatkowa lista spakowanych.">
+              <Subsection
+                settingId="packing.group.customer_panel"
+                title="B. Panel klienta i dokumentów"
+                description="Komentarz klienta, podgląd dokumentu sprzedaży, dodatkowa lista spakowanych."
+              >
                 <FieldGrid>
-                  <label className="block text-sm font-medium text-slate-700">
+                  <WmsSettingField settingId="packing.customer_comment_style" className="block text-sm font-medium text-slate-700">
                     Komentarz klienta
                     <select
                       className={selectClass}
@@ -503,8 +534,8 @@ const WmsPackingSettingsPanel = forwardRef<
                       <option value="highlighted">Wyróżniony</option>
                       <option value="normal">Zwykły</option>
                     </select>
-                  </label>
-                  <label className="block text-sm font-medium text-slate-700">
+                  </WmsSettingField>
+                  <WmsSettingField settingId="packing.sales_document_preview" className="block text-sm font-medium text-slate-700">
                     Podgląd dokumentu sprzedaży
                     <select
                       className={selectClass}
@@ -516,10 +547,11 @@ const WmsPackingSettingsPanel = forwardRef<
                       <option value="simplified">Uproszczony</option>
                       <option value="full">Pełny</option>
                     </select>
-                  </label>
+                  </WmsSettingField>
                 </FieldGrid>
                 <div className="mt-4 border-t border-slate-200/80 pt-4">
                   <BoolRow
+                    settingId="packing.packed_products_extra_list"
                     label="Dodatkowa lista spakowanych produktów"
                     checked={extended.packedProductsExtraList}
                     onChange={(v) => patchExtended("packedProductsExtraList", v)}
@@ -529,11 +561,15 @@ const WmsPackingSettingsPanel = forwardRef<
               </Subsection>
 
               <Subsection
+                settingId="packing.group.products_view"
                 title="C. Widok produktów podczas pakowania"
                 description="Miniaturka, lokalizacja, kolumny danych oraz opcje listy linii. Cztery pierwsze przełączniki danych zapisują się w API."
               >
                 <FieldGrid>
-                  <label className="block text-sm font-medium text-slate-700" title="Pozycja plakietki lokalizacji na karcie produktu">
+                  <WmsSettingField
+                    settingId="packing.location_badge_position"
+                    className="block text-sm font-medium text-slate-700"
+                  >
                     Pozycja plakietki lokalizacji
                     <select
                       className={selectClass}
@@ -550,20 +586,23 @@ const WmsPackingSettingsPanel = forwardRef<
                       <option value="bottom_right">Dół prawo</option>
                       <option value="bottom_left">Dół lewo</option>
                     </select>
-                  </label>
+                  </WmsSettingField>
                 </FieldGrid>
                 <div className="mt-4 space-y-3 border-t border-slate-200/80 pt-4">
                   <BoolRow
+                    settingId="packing.show_product_image"
                     label="Pokazuj zdjęcie produktu"
                     checked={extended.showProductImage}
                     onChange={(v) => patchExtended("showProductImage", v)}
                   />
                   <BoolRow
+                    settingId="packing.show_product_location"
                     label="Pokazuj lokalizację produktu"
                     checked={extended.showProductLocation}
                     onChange={(v) => patchExtended("showProductLocation", v)}
                   />
                   <BoolRow
+                    settingId="packing.move_packed_to_bottom"
                     label="Przenieś spakowane na dół listy"
                     checked={extended.movePackedToBottom}
                     onChange={(v) => patchExtended("movePackedToBottom", v)}
@@ -575,14 +614,15 @@ const WmsPackingSettingsPanel = forwardRef<
                 <div className="grid gap-3 sm:grid-cols-2">
                   {(
                     [
-                      ["show_stock", "Stan magazynowy"],
-                      ["show_ean", "EAN"],
-                      ["show_symbol", "SKU / symbol"],
-                      ["show_catalog_number", "Numer katalogowy"],
+                      ["show_stock", "Stan magazynowy", "packing.show_stock"],
+                      ["show_ean", "EAN", "packing.show_ean"],
+                      ["show_symbol", "SKU / symbol", "packing.show_symbol"],
+                      ["show_catalog_number", "Numer katalogowy", "packing.show_catalog_number"],
                     ] as const
-                  ).map(([k, label]) => (
+                  ).map(([k, label, settingId]) => (
                     <BoolRow
                       key={k}
+                      settingId={settingId}
                       label={`${label} (API)`}
                       checked={Boolean(effectiveDraft.interface_display[k])}
                       onChange={() => toggleInterfaceField(k)}
@@ -604,7 +644,7 @@ const WmsPackingSettingsPanel = forwardRef<
 
               <Subsection title="D. Widok listy zamówień" description="Układ listy, liczba rekordów i kolumny podglądu zamówienia.">
                 <FieldGrid>
-                  <label className="block text-sm font-medium text-slate-700">
+                  <WmsSettingField settingId="packing.orders_list_layout" className="block text-sm font-medium text-slate-700">
                     Układ listy zamówień
                     <select
                       className={selectClass}
@@ -617,7 +657,7 @@ const WmsPackingSettingsPanel = forwardRef<
                       <option value="compact">Kompaktowy</option>
                       <option value="cards">Karty</option>
                     </select>
-                  </label>
+                  </WmsSettingField>
                   <label className="block text-sm font-medium text-slate-700">
                     Początkowa liczba zamówień
                     <input
@@ -656,7 +696,7 @@ const WmsPackingSettingsPanel = forwardRef<
 
           <SectionCard id="wms-pack-workflow" title="Workflow" summary="Powiązanie statusów panelu z procesem pakowania.">
             <FieldGrid>
-              <label className="block text-sm font-medium text-slate-700">
+              <WmsSettingField settingId="packing.start_status_id" className="block text-sm font-medium text-slate-700">
                 Status na początku pakowania
                 <select
                   className={selectClass}
@@ -670,8 +710,8 @@ const WmsPackingSettingsPanel = forwardRef<
                     </option>
                   ))}
                 </select>
-              </label>
-              <label className="block text-sm font-medium text-slate-700">
+              </WmsSettingField>
+              <WmsSettingField settingId="packing.packed_status_id" className="block text-sm font-medium text-slate-700">
                 Status po spakowaniu
                 <select
                   className={selectClass}
@@ -685,8 +725,8 @@ const WmsPackingSettingsPanel = forwardRef<
                     </option>
                   ))}
                 </select>
-              </label>
-              <label className="block text-sm font-medium text-slate-700 sm:col-span-2">
+              </WmsSettingField>
+              <WmsSettingField settingId="packing.missing_status_id" className="block text-sm font-medium text-slate-700 sm:col-span-2">
                 Status przy brakach
                 <select
                   className={selectClass}
@@ -700,7 +740,7 @@ const WmsPackingSettingsPanel = forwardRef<
                     </option>
                   ))}
                 </select>
-              </label>
+              </WmsSettingField>
             </FieldGrid>
             <div className="mt-4 border-t border-slate-100 pt-4">
               <p className="text-sm font-medium text-slate-800">Dozwolone statusy startu (wielokrotny wybór, lokalnie)</p>
@@ -1065,12 +1105,18 @@ const WmsPackingSettingsPanel = forwardRef<
           <SectionCard id="wms-pack-permissions" title="Ogólne" summary="Reguły dla pakującego i magazynu.">
             <div className="space-y-3">
               <BoolRow
+                settingId="packing.packer_is_not_picker"
                 label="Pakujący ≠ kompletujący"
                 checked={extended.packerIsNotPicker}
                 onChange={(v) => patchExtended("packerIsNotPicker", v)}
                 help="Wymuszenie rozdziału ról (symulacja UI)."
               />
-              <BoolRow label="Wymuś okno z notatkami" checked={extended.requireNotesPopup} onChange={(v) => patchExtended("requireNotesPopup", v)} />
+              <BoolRow
+                settingId="packing.require_notes_popup"
+                label="Wymuś okno z notatkami"
+                checked={extended.requireNotesPopup}
+                onChange={(v) => patchExtended("requireNotesPopup", v)}
+              />
               <BoolRow label="Pokaż wszystkie notatki" checked={extended.showAllNotes} onChange={(v) => patchExtended("showAllNotes", v)} />
               <BoolRow
                 label="Tylko stan z magazynu pakowania"

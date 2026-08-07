@@ -1,0 +1,7 @@
+/* Flash highlight after global settings search navigation */
+.wms-setting-field--flash {
+  outline: 2px solid rgb(249 115 22);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 4px rgb(249 115 22 / 0.22);
+  border-radius: 0.5rem;
+}
