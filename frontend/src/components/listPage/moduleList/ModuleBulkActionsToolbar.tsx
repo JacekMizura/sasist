@@ -22,6 +22,12 @@ export type ModuleBulkActionsToolbarProps = {
   /** Między „wykonaj” a skrótami — picker statusu, multiakcje itd. */
   primaryActions?: ReactNode;
   showOrBeforeIcons?: boolean;
+  /** Legacy hint „wykonaj” — default on for orders; products hide it. */
+  showExecuteLabel?: boolean;
+  /** Status „Strona / Częściowo” — products hide it. */
+  showSelectionStatus?: boolean;
+  /** „Odznacz” in select — products hide it (clear via page banner / header). */
+  showClearOption?: boolean;
   iconActions?: ReactNode;
   secondaryActions?: ReactNode;
   trailing?: ReactNode;
@@ -44,6 +50,9 @@ export function ModuleBulkActionsToolbar({
   headerIndeterminate,
   primaryActions,
   showOrBeforeIcons = true,
+  showExecuteLabel = true,
+  showSelectionStatus = true,
+  showClearOption = true,
   iconActions,
   secondaryActions,
   trailing,
@@ -76,14 +85,14 @@ export function ModuleBulkActionsToolbar({
             Filtry ({filteredTotalCount})
           </option>
         ) : null}
-        <option value="clear">Odznacz</option>
+        {showClearOption ? <option value="clear">Odznacz</option> : null}
       </select>
-      {(headerChecked || headerIndeterminate) && (
+      {showSelectionStatus && (headerChecked || headerIndeterminate) ? (
         <span className="hidden shrink-0 text-xs text-slate-500 lg:inline" aria-live="polite">
           {bulkSelectionMode === "filtered_all" ? "Pełny zbiór wg filtrów" : headerChecked ? "Strona" : "Częściowo"}
         </span>
-      )}
-      <span className="shrink-0 text-xs text-slate-500">wykonaj</span>
+      ) : null}
+      {showExecuteLabel ? <span className="shrink-0 text-xs text-slate-500">wykonaj</span> : null}
       {primaryActions}
       {iconActions ? (
         <>

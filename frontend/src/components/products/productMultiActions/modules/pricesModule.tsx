@@ -1,6 +1,7 @@
 import type { ModuleCardProps, ProductMultiModuleDef } from "../types";
 import { parseDecimal } from "../patchFieldUtils";
-import { pmaCheckRow, pmaInp } from "../uiTokens";
+import { PmaFieldRow } from "../PmaFieldRow";
+import { pmaInp } from "../uiTokens";
 
 export type PricesConfig = {
   applySale: boolean;
@@ -14,47 +15,37 @@ export type PricesConfig = {
 
 function PricesCard({ config, onChange, disabled }: ModuleCardProps<PricesConfig>) {
   return (
-    <div className="space-y-2.5">
-      <fieldset>
-        <legend className="text-xs font-medium text-slate-600">Tryb</legend>
-        <div className="mt-1 flex flex-wrap gap-3 text-sm">
-          <label className="inline-flex items-center gap-2">
-            <input
-              type="radio"
-              checked={config.mode === "set"}
-              disabled={disabled}
-              onChange={() => onChange({ ...config, mode: "set" })}
-            />
-            Ustaw kwotę
-          </label>
-          <label className="inline-flex items-center gap-2">
-            <input
-              type="radio"
-              checked={config.mode === "percent"}
-              disabled={disabled}
-              onChange={() => onChange({ ...config, mode: "percent" })}
-            />
-            Zmień o %
-          </label>
-        </div>
-      </fieldset>
+    <div className="space-y-0.5">
+      <p className="mb-1.5 text-[10px] font-bold uppercase tracking-wide text-slate-500">Tryb</p>
+      <PmaFieldRow
+        label="Ustaw kwotę"
+        radioName="pma-prices-mode"
+        radioValue="set"
+        radioChecked={config.mode === "set"}
+        onRadioSelect={() => onChange({ ...config, mode: "set" })}
+        disabled={disabled}
+      />
+      <PmaFieldRow
+        label="Zmień o %"
+        radioName="pma-prices-mode"
+        radioValue="percent"
+        radioChecked={config.mode === "percent"}
+        onRadioSelect={() => onChange({ ...config, mode: "percent" })}
+        disabled={disabled}
+      />
 
-      <label className={pmaCheckRow}>
-        <input
-          type="checkbox"
-          className="mt-0.5 rounded border-slate-300"
-          checked={config.applySale}
-          disabled={disabled}
-          onChange={(e) => onChange({ ...config, applySale: e.target.checked })}
-        />
-        <span className="min-w-0 flex-1">
-          <span className="text-sm font-medium text-slate-800">Cena sprzedaży (netto)</span>
-          {config.applySale ? (
+      <PmaFieldRow
+        label="Cena sprzedaży (netto)"
+        checked={config.applySale}
+        onCheckedChange={(applySale) => onChange({ ...config, applySale })}
+        disabled={disabled}
+        control={
+          config.applySale ? (
             <input
               className={pmaInp}
               disabled={disabled}
               inputMode="decimal"
-              placeholder={config.mode === "set" ? "Kwota" : "Procent (np. 10)"}
+              placeholder={config.mode === "set" ? "Kwota" : "%"}
               value={config.mode === "set" ? config.saleAmount : config.salePercent}
               onChange={(e) =>
                 onChange(
@@ -64,26 +55,22 @@ function PricesCard({ config, onChange, disabled }: ModuleCardProps<PricesConfig
                 )
               }
             />
-          ) : null}
-        </span>
-      </label>
+          ) : undefined
+        }
+      />
 
-      <label className={pmaCheckRow}>
-        <input
-          type="checkbox"
-          className="mt-0.5 rounded border-slate-300"
-          checked={config.applyPurchase}
-          disabled={disabled}
-          onChange={(e) => onChange({ ...config, applyPurchase: e.target.checked })}
-        />
-        <span className="min-w-0 flex-1">
-          <span className="text-sm font-medium text-slate-800">Cena zakupu (netto)</span>
-          {config.applyPurchase ? (
+      <PmaFieldRow
+        label="Cena zakupu (netto)"
+        checked={config.applyPurchase}
+        onCheckedChange={(applyPurchase) => onChange({ ...config, applyPurchase })}
+        disabled={disabled}
+        control={
+          config.applyPurchase ? (
             <input
               className={pmaInp}
               disabled={disabled}
               inputMode="decimal"
-              placeholder={config.mode === "set" ? "Kwota" : "Procent (np. 10)"}
+              placeholder={config.mode === "set" ? "Kwota" : "%"}
               value={config.mode === "set" ? config.purchaseAmount : config.purchasePercent}
               onChange={(e) =>
                 onChange(
@@ -93,9 +80,9 @@ function PricesCard({ config, onChange, disabled }: ModuleCardProps<PricesConfig
                 )
               }
             />
-          ) : null}
-        </span>
-      </label>
+          ) : undefined
+        }
+      />
     </div>
   );
 }

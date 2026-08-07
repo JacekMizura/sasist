@@ -1,6 +1,7 @@
 import type { ModuleCardProps, ProductMultiModuleDef } from "../types";
 import { parseDecimal } from "../patchFieldUtils";
-import { pmaCheckRow, pmaInp, pmaLab } from "../uiTokens";
+import { PmaFieldRow } from "../PmaFieldRow";
+import { pmaInp } from "../uiTokens";
 
 export type UnitDimensionsConfig = {
   length: string;
@@ -11,17 +12,19 @@ export type UnitDimensionsConfig = {
 
 function UnitDimensionsCard({ config, onChange, disabled }: ModuleCardProps<UnitDimensionsConfig>) {
   return (
-    <div className="space-y-2">
-      <div className="grid grid-cols-3 gap-2">
-        {(
-          [
-            ["length", "Długość (cm)"],
-            ["width", "Szerokość (cm)"],
-            ["height", "Wysokość (cm)"],
-          ] as const
-        ).map(([key, label]) => (
-          <label key={key} className={pmaLab}>
-            {label}
+    <div className="space-y-0.5">
+      {(
+        [
+          ["length", "Długość (cm)"],
+          ["width", "Szerokość (cm)"],
+          ["height", "Wysokość (cm)"],
+        ] as const
+      ).map(([key, label]) => (
+        <PmaFieldRow
+          key={key}
+          label={label}
+          disabled={disabled}
+          control={
             <input
               className={pmaInp}
               disabled={disabled}
@@ -29,19 +32,15 @@ function UnitDimensionsCard({ config, onChange, disabled }: ModuleCardProps<Unit
               value={config[key]}
               onChange={(e) => onChange({ ...config, [key]: e.target.value })}
             />
-          </label>
-        ))}
-      </div>
-      <label className={pmaCheckRow}>
-        <input
-          type="checkbox"
-          className="mt-0.5 rounded border-slate-300"
-          checked={config.overwrite}
-          disabled={disabled}
-          onChange={(e) => onChange({ ...config, overwrite: e.target.checked })}
+          }
         />
-        <span>Nadpisz istniejące</span>
-      </label>
+      ))}
+      <PmaFieldRow
+        label="Nadpisz istniejące"
+        checked={config.overwrite}
+        onCheckedChange={(overwrite) => onChange({ ...config, overwrite })}
+        disabled={disabled}
+      />
     </div>
   );
 }

@@ -2,7 +2,8 @@ import { useEffect, useState } from "react";
 
 import { listManufacturers, type ManufacturerRead } from "../../../../api/manufacturersApi";
 import type { ModuleCardProps, ProductMultiModuleDef } from "../types";
-import { pmaInp, pmaLab } from "../uiTokens";
+import { PmaFieldRow } from "../PmaFieldRow";
+import { pmaInp } from "../uiTokens";
 
 export type ManufacturerConfig = {
   manufacturerId: number | null;
@@ -34,28 +35,31 @@ function ManufacturerCard({ config, onChange, tenantId, disabled }: ModuleCardPr
   const selectValue = config.clear ? "__clear__" : config.manufacturerId != null ? String(config.manufacturerId) : "";
 
   return (
-    <label className={pmaLab}>
-      Producent
-      <select
-        className={pmaInp}
-        disabled={disabled || loading}
-        value={selectValue}
-        onChange={(e) => {
-          const v = e.target.value;
-          if (v === "__clear__") onChange({ manufacturerId: null, clear: true });
-          else if (v === "") onChange({ manufacturerId: null, clear: false });
-          else onChange({ manufacturerId: Number(v), clear: false });
-        }}
-      >
-        <option value="">{loading ? "Ładowanie…" : "— wybierz —"}</option>
-        <option value="__clear__">Wyczyść producenta</option>
-        {rows.map((m) => (
-          <option key={m.id} value={m.id}>
-            {m.name}
-          </option>
-        ))}
-      </select>
-    </label>
+    <PmaFieldRow
+      label="Producent"
+      disabled={disabled}
+      control={
+        <select
+          className={pmaInp}
+          disabled={disabled || loading}
+          value={selectValue}
+          onChange={(e) => {
+            const v = e.target.value;
+            if (v === "__clear__") onChange({ manufacturerId: null, clear: true });
+            else if (v === "") onChange({ manufacturerId: null, clear: false });
+            else onChange({ manufacturerId: Number(v), clear: false });
+          }}
+        >
+          <option value="">{loading ? "Ładowanie…" : "— wybierz —"}</option>
+          <option value="__clear__">Wyczyść producenta</option>
+          {rows.map((m) => (
+            <option key={m.id} value={m.id}>
+              {m.name}
+            </option>
+          ))}
+        </select>
+      }
+    />
   );
 }
 

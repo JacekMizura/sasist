@@ -1,10 +1,10 @@
 ﻿## Active
 
-**Product custom fields polish (2026-08-07).**
+**Product list + Multiakcje UX (2026-08-07).**
 
-- Kolumna Akcje: `5rem`, wyrównanie prawo, ikony `h-8 w-8`
-- Nazwa: `adminListNameClass` = `text-sm font-medium` (jak kategorie/rodziny)
-- Grupowanie jak automatyzacje: localStorage registry + `settings_json.group`; „Bez grupy”
-- Usunięte zbędne opisy (produkt + order CF edit)
+- Jednolite wiersze pól w kartach Multiakcji (`PmaFieldRow`)
+- Toolbar listy produktów uproszczony: Multiakcje + druk + eksport (Upload); bez mail/Usuń/Odznacz/statusów
+- Moduł Generowanie EAN (skip/overwrite) + BE `generate_fake_ean`
+- Uzupełnienia WMS: nazwy użytkowe PICK/ZAPAS
 
-**Admin list UI standard** — `AdminDataTable` + tokeny.
+**Plugin architecture** — `productMultiActions/` registry + modules.

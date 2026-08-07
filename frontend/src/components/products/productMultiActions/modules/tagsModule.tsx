@@ -1,5 +1,6 @@
 import type { ModuleCardProps, ProductMultiModuleDef } from "../types";
-import { pmaInp, pmaLab } from "../uiTokens";
+import { PmaFieldRow } from "../PmaFieldRow";
+import { pmaInp } from "../uiTokens";
 
 export type TagsConfig = {
   mode: "replace" | "add";
@@ -15,32 +16,27 @@ function parseTags(raw: string): string[] {
 
 function TagsCard({ config, onChange, disabled }: ModuleCardProps<TagsConfig>) {
   return (
-    <div className="space-y-2.5">
-      <fieldset>
-        <legend className="text-xs font-medium text-slate-600">Tryb</legend>
-        <div className="mt-1 flex flex-wrap gap-3 text-sm">
-          <label className="inline-flex items-center gap-2">
-            <input
-              type="radio"
-              checked={config.mode === "replace"}
-              disabled={disabled}
-              onChange={() => onChange({ ...config, mode: "replace" })}
-            />
-            Zastąp tagi
-          </label>
-          <label className="inline-flex items-center gap-2">
-            <input
-              type="radio"
-              checked={config.mode === "add"}
-              disabled={disabled}
-              onChange={() => onChange({ ...config, mode: "add" })}
-            />
-            Dodaj do istniejących
-          </label>
-        </div>
-      </fieldset>
-      <label className={pmaLab}>
-        Tagi (oddzielone przecinkiem)
+    <div className="space-y-0.5">
+      <p className="mb-1.5 text-[10px] font-bold uppercase tracking-wide text-slate-500">Tryb</p>
+      <PmaFieldRow
+        label="Zastąp tagi"
+        radioName="pma-tags-mode"
+        radioValue="replace"
+        radioChecked={config.mode === "replace"}
+        onRadioSelect={() => onChange({ ...config, mode: "replace" })}
+        disabled={disabled}
+      />
+      <PmaFieldRow
+        label="Dodaj do istniejących"
+        radioName="pma-tags-mode"
+        radioValue="add"
+        radioChecked={config.mode === "add"}
+        onRadioSelect={() => onChange({ ...config, mode: "add" })}
+        disabled={disabled}
+      />
+      <div className="pt-1.5">
+        <label className="mb-1 block text-sm font-medium text-slate-800">Tagi</label>
+        <p className="mb-1 text-xs text-slate-400">Oddzielone przecinkiem</p>
         <textarea
           className={`${pmaInp} min-h-[4rem]`}
           disabled={disabled}
@@ -48,7 +44,7 @@ function TagsCard({ config, onChange, disabled }: ModuleCardProps<TagsConfig>) {
           onChange={(e) => onChange({ ...config, raw: e.target.value })}
           placeholder="np. nowość, promo, outlet"
         />
-      </label>
+      </div>
     </div>
   );
 }

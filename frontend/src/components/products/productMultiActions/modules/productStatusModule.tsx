@@ -1,5 +1,6 @@
 import type { ModuleCardProps, ProductMultiModuleDef } from "../types";
-import { pmaInp, pmaLab } from "../uiTokens";
+import { PmaFieldRow } from "../PmaFieldRow";
+import { pmaInp } from "../uiTokens";
 
 export type ProductStatusConfig = {
   status: "active" | "inactive" | "";
@@ -7,19 +8,22 @@ export type ProductStatusConfig = {
 
 function ProductStatusCard({ config, onChange, disabled }: ModuleCardProps<ProductStatusConfig>) {
   return (
-    <label className={pmaLab}>
-      Status produktu
-      <select
-        className={pmaInp}
-        disabled={disabled}
-        value={config.status}
-        onChange={(e) => onChange({ status: e.target.value as ProductStatusConfig["status"] })}
-      >
-        <option value="">— wybierz —</option>
-        <option value="active">Aktywny</option>
-        <option value="inactive">Nieaktywny</option>
-      </select>
-    </label>
+    <PmaFieldRow
+      label="Status produktu"
+      disabled={disabled}
+      control={
+        <select
+          className={pmaInp}
+          disabled={disabled}
+          value={config.status}
+          onChange={(e) => onChange({ status: e.target.value as ProductStatusConfig["status"] })}
+        >
+          <option value="">— wybierz —</option>
+          <option value="active">Aktywny</option>
+          <option value="inactive">Nieaktywny</option>
+        </select>
+      }
+    />
   );
 }
 

@@ -3,10 +3,10 @@ import { buildPatchSet, emptyPatchState, type PatchFieldDef, type PatchFieldStat
 import type { ModuleCardProps, ProductMultiModuleDef } from "../types";
 
 const FIELDS: PatchFieldDef[] = [
-  { key: "min_pick_quantity", label: "PICK — min. ilość", type: "number", min: 0, step: 1 },
-  { key: "max_pick_quantity", label: "PICK — max. ilość", type: "number", min: 0, step: 1 },
-  { key: "min_reserve_quantity", label: "ZAPAS — min. ilość", type: "number", min: 0, step: 1 },
-  { key: "max_reserve_quantity", label: "ZAPAS — max. ilość", type: "number", min: 0, step: 1 },
+  { key: "min_pick_quantity", label: "Minimalna ilość PICK", type: "number", min: 0, step: 1 },
+  { key: "max_pick_quantity", label: "Maksymalna ilość PICK", type: "number", min: 0, step: 1 },
+  { key: "min_reserve_quantity", label: "Minimalna ilość ZAPAS", type: "number", min: 0, step: 1 },
+  { key: "max_reserve_quantity", label: "Maksymalna ilość ZAPAS", type: "number", min: 0, step: 1 },
 ];
 
 export type WmsReplenishmentConfig = {

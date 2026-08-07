@@ -6,7 +6,7 @@ import {
   type PatchFieldState,
 } from "../patchFieldUtils";
 import type { ModuleCardProps, ProductBulkOp, ProductMultiModuleDef } from "../types";
-import { pmaCheckRow } from "../uiTokens";
+import { PmaFieldRow } from "../PmaFieldRow";
 
 const FIELDS: PatchFieldDef[] = [
   { key: "min_total_stock", label: "Próg alarmu stanu (min. łączny)", type: "number", min: 0 },
@@ -19,17 +19,14 @@ export type LogisticsDataConfig = {
 
 function LogisticsDataCard({ config, onChange, disabled }: ModuleCardProps<LogisticsDataConfig>) {
   return (
-    <div className="space-y-2.5">
-      <label className={pmaCheckRow}>
-        <input
-          type="checkbox"
-          className="mt-0.5 rounded border-slate-300"
-          checked={config.clearAll}
-          disabled={disabled}
-          onChange={(e) => onChange({ ...config, clearAll: e.target.checked })}
-        />
-        <span>Wyczyść dane logistyczne (wymiary, waga, karton)</span>
-      </label>
+    <div className="space-y-0.5">
+      <PmaFieldRow
+        label="Wyczyść dane logistyczne"
+        hint="Wymiary, waga, karton"
+        checked={config.clearAll}
+        onCheckedChange={(clearAll) => onChange({ ...config, clearAll })}
+        disabled={disabled}
+      />
       {!config.clearAll ? (
         <PatchFieldsEditor
           fields={FIELDS}

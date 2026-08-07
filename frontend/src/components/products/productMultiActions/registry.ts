@@ -1,6 +1,7 @@
 import type { ProductMultiModuleDef, ProductMultiModuleId } from "./types";
 import { categoriesModule } from "./modules/categoriesModule";
 import { customFieldsModule } from "./modules/customFieldsModule";
+import { generateEanModule } from "./modules/generateEanModule";
 import { logisticsDataModule } from "./modules/logisticsDataModule";
 import { manufacturerModule } from "./modules/manufacturerModule";
 import { masterCartonModule } from "./modules/masterCartonModule";
@@ -24,6 +25,7 @@ import { wmsValidationModule } from "./modules/wmsValidationModule";
 export const PRODUCT_MULTI_MODULES: ProductMultiModuleDef<any>[] = [
   manufacturerModule,
   productStatusModule,
+  generateEanModule,
   categoriesModule,
   productFamilyModule,
   tagsModule,

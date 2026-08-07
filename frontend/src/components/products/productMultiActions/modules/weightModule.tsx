@@ -1,6 +1,7 @@
 import type { ModuleCardProps, ProductMultiModuleDef } from "../types";
 import { parseDecimal } from "../patchFieldUtils";
-import { pmaCheckRow, pmaInp, pmaLab } from "../uiTokens";
+import { PmaFieldRow } from "../PmaFieldRow";
+import { pmaInp } from "../uiTokens";
 
 export type WeightConfig = {
   weightKg: string;
@@ -9,27 +10,26 @@ export type WeightConfig = {
 
 function WeightCard({ config, onChange, disabled }: ModuleCardProps<WeightConfig>) {
   return (
-    <div className="space-y-2">
-      <label className={pmaLab}>
-        Waga (kg)
-        <input
-          className={pmaInp}
-          disabled={disabled}
-          inputMode="decimal"
-          value={config.weightKg}
-          onChange={(e) => onChange({ ...config, weightKg: e.target.value })}
-        />
-      </label>
-      <label className={pmaCheckRow}>
-        <input
-          type="checkbox"
-          className="mt-0.5 rounded border-slate-300"
-          checked={config.overwrite}
-          disabled={disabled}
-          onChange={(e) => onChange({ ...config, overwrite: e.target.checked })}
-        />
-        <span>Nadpisz istniejące</span>
-      </label>
+    <div className="space-y-0.5">
+      <PmaFieldRow
+        label="Waga (kg)"
+        disabled={disabled}
+        control={
+          <input
+            className={pmaInp}
+            disabled={disabled}
+            inputMode="decimal"
+            value={config.weightKg}
+            onChange={(e) => onChange({ ...config, weightKg: e.target.value })}
+          />
+        }
+      />
+      <PmaFieldRow
+        label="Nadpisz istniejące"
+        checked={config.overwrite}
+        onCheckedChange={(overwrite) => onChange({ ...config, overwrite })}
+        disabled={disabled}
+      />
     </div>
   );
 }

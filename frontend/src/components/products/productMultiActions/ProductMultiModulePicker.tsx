@@ -19,6 +19,7 @@ import {
   CircleDollarSign,
   FormInput,
   Layers,
+  Barcode,
 } from "lucide-react";
 
 import { AppOverlayPortal } from "../../overlay";
@@ -28,6 +29,7 @@ import type { ProductMultiModuleId } from "./types";
 const MODULE_ICONS: Partial<Record<ProductMultiModuleId, LucideIcon>> = {
   manufacturer: Factory,
   product_status: ToggleLeft,
+  generate_ean: Barcode,
   categories: FolderTree,
   product_family: Users,
   tags: Tags,

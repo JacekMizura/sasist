@@ -8,7 +8,8 @@ import {
 import { GhostButton } from "../../../../design-system";
 import type { ModuleCardProps, ProductMultiModuleDef } from "../types";
 import { parseDecimal } from "../patchFieldUtils";
-import { pmaInp, pmaLab } from "../uiTokens";
+import { PmaFieldRow } from "../PmaFieldRow";
+import { pmaInp } from "../uiTokens";
 
 export type CustomFieldRow = {
   fieldId: number | "";
@@ -54,86 +55,98 @@ function CustomFieldsCard({ config, onChange, tenantId, disabled }: ModuleCardPr
   };
 
   return (
-    <div className="space-y-2.5">
+    <div className="space-y-2">
       {loading ? <p className="text-xs text-slate-500">Ładowanie pól…</p> : null}
       {config.rows.map((row, idx) => {
         const def = defs.find((d) => d.id === row.fieldId);
         return (
-          <div key={idx} className="space-y-1.5 border-b border-slate-100 pb-2.5 last:border-b-0 last:pb-0">
-            <div className="flex items-end gap-2">
-              <label className={`${pmaLab} min-w-0 flex-1`}>
-                Pole
-                <select
-                  className={pmaInp}
-                  disabled={disabled}
-                  value={row.fieldId === "" ? "" : String(row.fieldId)}
-                  onChange={(e) =>
-                    updateRow(idx, {
-                      fieldId: e.target.value ? Number(e.target.value) : "",
-                      stringValue: "",
-                      numberValue: "",
-                      optionId: "",
-                    })
-                  }
-                >
-                  <option value="">— wybierz —</option>
-                  {defs.map((d) => (
-                    <option key={d.id} value={d.id}>
-                      {d.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <GhostButton
-                type="button"
-                density="compact"
-                disabled={disabled || config.rows.length <= 1}
-                onClick={() => onChange({ rows: config.rows.filter((_, i) => i !== idx) })}
-                aria-label="Usuń wiersz"
-              >
-                <Trash2 className="h-4 w-4 text-red-600" />
-              </GhostButton>
-            </div>
+          <div key={idx} className="space-y-0.5 border-b border-slate-100 pb-2 last:border-b-0 last:pb-0">
+            <PmaFieldRow
+              label="Pole"
+              disabled={disabled}
+              control={
+                <div className="flex items-center gap-1">
+                  <select
+                    className={pmaInp}
+                    disabled={disabled}
+                    value={row.fieldId === "" ? "" : String(row.fieldId)}
+                    onChange={(e) =>
+                      updateRow(idx, {
+                        fieldId: e.target.value ? Number(e.target.value) : "",
+                        stringValue: "",
+                        numberValue: "",
+                        optionId: "",
+                      })
+                    }
+                  >
+                    <option value="">— wybierz —</option>
+                    {defs.map((d) => (
+                      <option key={d.id} value={d.id}>
+                        {d.name}
+                      </option>
+                    ))}
+                  </select>
+                  <GhostButton
+                    type="button"
+                    density="compact"
+                    disabled={disabled || config.rows.length <= 1}
+                    onClick={() => onChange({ rows: config.rows.filter((_, i) => i !== idx) })}
+                    aria-label="Usuń wiersz"
+                  >
+                    <Trash2 className="h-4 w-4 text-red-600" />
+                  </GhostButton>
+                </div>
+              }
+            />
             {def?.type === "NUMBER" ? (
-              <label className={pmaLab}>
-                Wartość
-                <input
-                  className={pmaInp}
-                  disabled={disabled}
-                  inputMode="decimal"
-                  value={row.numberValue}
-                  onChange={(e) => updateRow(idx, { numberValue: e.target.value })}
-                />
-              </label>
+              <PmaFieldRow
+                label="Wartość"
+                disabled={disabled}
+                control={
+                  <input
+                    className={pmaInp}
+                    disabled={disabled}
+                    inputMode="decimal"
+                    value={row.numberValue}
+                    onChange={(e) => updateRow(idx, { numberValue: e.target.value })}
+                  />
+                }
+              />
             ) : null}
             {def?.type === "TEXT" ? (
-              <label className={pmaLab}>
-                Wartość
-                <input
-                  className={pmaInp}
-                  disabled={disabled}
-                  value={row.stringValue}
-                  onChange={(e) => updateRow(idx, { stringValue: e.target.value })}
-                />
-              </label>
+              <PmaFieldRow
+                label="Wartość"
+                disabled={disabled}
+                control={
+                  <input
+                    className={pmaInp}
+                    disabled={disabled}
+                    value={row.stringValue}
+                    onChange={(e) => updateRow(idx, { stringValue: e.target.value })}
+                  />
+                }
+              />
             ) : null}
             {def?.type === "SELECT_SINGLE" || def?.type === "SELECT_MULTI" ? (
-              <label className={pmaLab}>
-                Opcja
-                <select
-                  className={pmaInp}
-                  disabled={disabled}
-                  value={row.optionId}
-                  onChange={(e) => updateRow(idx, { optionId: e.target.value })}
-                >
-                  <option value="">— wybierz —</option>
-                  {(def.options ?? []).map((o) => (
-                    <option key={o.id} value={String(o.id)}>
-                      {o.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
+              <PmaFieldRow
+                label="Opcja"
+                disabled={disabled}
+                control={
+                  <select
+                    className={pmaInp}
+                    disabled={disabled}
+                    value={row.optionId}
+                    onChange={(e) => updateRow(idx, { optionId: e.target.value })}
+                  >
+                    <option value="">— wybierz —</option>
+                    {(def.options ?? []).map((o) => (
+                      <option key={o.id} value={String(o.id)}>
+                        {o.label}
+                      </option>
+                    ))}
+                  </select>
+                }
+              />
             ) : null}
             {def && !["TEXT", "NUMBER", "SELECT_SINGLE", "SELECT_MULTI"].includes(String(def.type)) ? (
               <p className="text-xs text-amber-800">

@@ -813,6 +813,7 @@ BULK_UPDATE_ACTIONS = frozenset({
     "set_tags",
     "set_custom_field_values",
     "set_product_status",
+    "generate_fake_ean",
 })
 
 # Bulk „set_vat_rate” — canonical tokens stored in metadata_json.product_ui.vat_rate (same as karta produktu).
@@ -1169,6 +1170,54 @@ def _execute_product_bulk_update(
             ui["status"] = status
             meta["product_ui"] = ui
             p.metadata_json = json.dumps(meta, ensure_ascii=False)
+            n += 1
+        return n
+
+    if act == "generate_fake_ean":
+        import random
+
+        if not isinstance(value, dict):
+            raise HTTPException(status_code=400, detail="value must be object with mode")
+        mode = str(value.get("mode") or "skip").strip().lower()
+        if mode not in ("skip", "overwrite"):
+            raise HTTPException(status_code=400, detail="mode must be skip or overwrite")
+
+        def _ean13_check(digits12: str) -> str:
+            s = 0
+            for i, ch in enumerate(digits12):
+                s += int(ch) if i % 2 == 0 else int(ch) * 3
+            return str((10 - (s % 10)) % 10)
+
+        def _make_fake_ean(used: set[str]) -> str:
+            for _ in range(80):
+                body = "200" + "".join(str(random.randint(0, 9)) for _ in range(9))
+                code = body + _ean13_check(body)
+                if code not in used:
+                    return code
+            raise HTTPException(status_code=500, detail="Nie udało się wygenerować unikalnego EAN")
+
+        # Existing EANs in tenant (avoid collisions)
+        used: set[str] = set()
+        for (ean,) in (
+            db.query(Product.ean)
+            .filter(Product.tenant_id == tenant_id, Product.deleted_at.is_(None), Product.ean.isnot(None))
+            .all()
+        ):
+            e = str(ean or "").strip()
+            if e:
+                used.add(e)
+
+        rows = db.query(Product).filter(filt).all()
+        n = 0
+        for p in rows:
+            current = str(getattr(p, "ean", None) or "").strip()
+            if current and mode == "skip":
+                continue
+            if current:
+                used.discard(current)
+            new_ean = _make_fake_ean(used)
+            used.add(new_ean)
+            p.ean = new_ean
             n += 1
         return n
 

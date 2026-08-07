@@ -20,8 +20,7 @@ import {
   moduleTablePaginationFooterClass,
 } from "../../components/listPage/moduleList";
 import { ProductsListBulkBar } from "../../components/products/productList/ProductsListBulkBar";
-import {
-  ProductMultiActionsModal,
+import { ProductMultiActionsModal,
   executeProductMultiActions,
   type ProductBulkModalSelection,
   type ProductMultiActionRow,
@@ -54,8 +53,7 @@ import {
   readProductListTenantFilter,
   useListViewState,
 } from "../../preferences/listView";
-import { ProductBulkDeleteModal } from "./ProductBulkDeleteModal";
-import { postProductsBulkDelete, type ProductsBulkDeleteResult } from "../../api/productsBulkApi";
+import { postProductsBulkDelete } from "../../api/productsBulkApi";
 import { buildProductBulkListFiltersPayload } from "../../utils/productListBulkFilters";
 import ExportModal from "../../components/exports/ExportModal";
 import {
@@ -180,7 +178,6 @@ export default function ProductList() {
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [productBulkMode, setProductBulkMode] = useState<"none" | "filtered_all" | "explicit">("none");
   const [productBulkSelectKey, setProductBulkSelectKey] = useState(0);
-  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
   const [multiActionsOpen, setMultiActionsOpen] = useState(false);
   const [multiActionsBusy, setMultiActionsBusy] = useState(false);
   const [rowDeleteBusyId, setRowDeleteBusyId] = useState<number | null>(null);
@@ -627,15 +624,6 @@ export default function ProductList() {
     setMultiActionsOpen(true);
   };
 
-  const openBulkDelete = () => {
-    if (effectiveProductSelectionCount === 0) return;
-    if (bulkTenantId == null) {
-      window.alert("Ustal filtr „Tenant”, aby usunąć produkty.");
-      return;
-    }
-    setBulkDeleteOpen(true);
-  };
-
   const handleMultiExecute = async (payload: {
     rows: ProductMultiActionRow[];
     config: ProductMultiConfigBag;
@@ -662,53 +650,6 @@ export default function ProductList() {
       toast.error(extractApiErrorMessage(e, "Wykonanie multiakcji nie powiodło się."));
     } finally {
       setMultiActionsBusy(false);
-    }
-  };
-
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- bulk delete not in toolbar; keep for reuse
-  const bulkDelete = async () => {
-    if (effectiveProductSelectionCount === 0) return;
-    const firstProduct = displayRows.find((p) => selectedIds.has(p.id));
-    const tid = tenantFilter ?? firstProduct?.tenant_id ?? undefined;
-    if (tid == null) {
-      window.alert("Ustal filtr „Tenant”, aby usunąć produkty.");
-      return;
-    }
-    const n = effectiveProductSelectionCount;
-    const ok = window.confirm(
-      `Usunąć lub zarchiwizować ${n} produktów?\n\nRekordy powiązane z historią (zamówienia, dokumenty magazynowe, dostawy) zostaną ukryte z listy (archiwizacja), a nie skasowane z bazy.`,
-    );
-    if (!ok) return;
-    try {
-      let summary: ProductsBulkDeleteResult | null = null;
-      if (productBulkMode === "filtered_all") {
-        summary = await postProductsBulkDelete({
-          tenant_id: tid,
-          selection: { mode: "filtered_query", filters: productBulkFiltersPayload },
-        });
-      } else {
-        summary = await postProductsBulkDelete({
-          tenant_id: tid,
-          selection: { mode: "explicit_ids", ids: Array.from(selectedIds) },
-        });
-      }
-      clearProductSelection();
-      if (clientMode) fetchClientBatch();
-      else fetchServerPage();
-      if (summary) {
-        const parts = [
-          summary.errors?.length ? `Błędy: ${summary.errors.join("; ")}` : null,
-          `Usunięto trwale: ${summary.success_count ?? 0}`,
-          `Zarchiwizowano: ${summary.soft_deleted_count ?? 0}`,
-          summary.skipped_not_found ? `Nie znaleziono w tenancie: ${summary.skipped_not_found}` : null,
-          summary.skipped_already_archived ? `Już zarchiwizowane: ${summary.skipped_already_archived}` : null,
-          summary.messages?.length ? summary.messages.join(" ") : null,
-        ].filter(Boolean);
-        window.alert(parts.length ? parts.join("\n") : "Operacja zakończona.");
-      }
-    } catch (e) {
-      console.error(e);
-      window.alert("Usuwanie produktów nie powiodło się (szczegóły w konsoli).");
     }
   };
 
@@ -986,7 +927,6 @@ export default function ProductList() {
               onClearSelection={clearProductSelection}
               onSelectMenuBump={() => setProductBulkSelectKey((k) => k + 1)}
               onOpenMultiActions={openMultiActions}
-              onDelete={openBulkDelete}
               onPrint={() => {
                 if (effectiveProductSelectionCount === 0) return;
                 if (productBulkMode === "filtered_all") {
@@ -1116,20 +1056,6 @@ export default function ProductList() {
             if (!multiActionsBusy) setMultiActionsOpen(false);
           }}
           onExecute={handleMultiExecute}
-        />
-      ) : null}
-
-      {bulkDeleteOpen && bulkTenantId != null && productBulkModalSelection ? (
-        <ProductBulkDeleteModal
-          open
-          tenantId={bulkTenantId}
-          selection={productBulkModalSelection}
-          onClose={() => setBulkDeleteOpen(false)}
-          onSuccess={() => {
-            clearProductSelection();
-            if (clientMode) void fetchClientBatch();
-            else void fetchServerPage();
-          }}
         />
       ) : null}
 

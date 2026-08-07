@@ -1,13 +1,8 @@
 import type { ReactNode } from "react";
-import { Zap } from "lucide-react";
+import { Printer, Upload, Zap } from "lucide-react";
 
 import type { PanelBulkSelectionMode } from "../../../hooks/usePanelListBulkSelection";
-import {
-  ModuleBulkActionsToolbar,
-  moduleBulkIconBtnClass,
-  moduleBulkTextBtnClass,
-} from "../../listPage/moduleList";
-import { Download, Mail, Printer } from "lucide-react";
+import { ModuleBulkActionsToolbar, moduleBulkIconBtnClass } from "../../listPage/moduleList";
 
 export type ProductsListBulkBarProps = {
   bulkSelectMenuKey: number;
@@ -23,7 +18,6 @@ export type ProductsListBulkBarProps = {
   onClearSelection: () => void;
   onSelectMenuBump: () => void;
   onOpenMultiActions: () => void;
-  onDelete: () => void;
   onPrint: () => void;
   onExport: () => void;
   trailing?: ReactNode;
@@ -43,7 +37,6 @@ export function ProductsListBulkBar({
   onClearSelection,
   onSelectMenuBump,
   onOpenMultiActions,
-  onDelete,
   onPrint,
   onExport,
   trailing,
@@ -64,6 +57,10 @@ export function ProductsListBulkBar({
       bulkSelectionMode={bulkSelectionMode}
       headerChecked={headerChecked}
       headerIndeterminate={headerIndeterminate}
+      showExecuteLabel={false}
+      showSelectionStatus={false}
+      showClearOption={false}
+      showOrBeforeIcons={false}
       primaryActions={
         <button
           type="button"
@@ -90,45 +87,13 @@ export function ProductsListBulkBar({
           </button>
           <button
             type="button"
-            disabled
-            className={`${moduleBulkIconBtnClass} opacity-40`}
-            title="Wkrótce"
-            aria-label="E-mail"
-          >
-            <Mail className="h-4 w-4" strokeWidth={2} aria-hidden />
-          </button>
-          <button
-            type="button"
             disabled={bulkToolbarDisabled}
             className={moduleBulkIconBtnClass}
             title="Eksportuj"
             aria-label="Eksportuj"
             onClick={onExport}
           >
-            <Download className="h-4 w-4" strokeWidth={2} aria-hidden />
-          </button>
-        </>
-      }
-      secondaryActions={
-        <>
-          <button
-            type="button"
-            disabled={bulkToolbarDisabled}
-            className={moduleBulkTextBtnClass}
-            onClick={onDelete}
-          >
-            Usuń
-          </button>
-          <button
-            type="button"
-            disabled={bulkToolbarDisabled}
-            className={moduleBulkTextBtnClass}
-            onClick={() => {
-              onClearSelection();
-              onSelectMenuBump();
-            }}
-          >
-            Odznacz
+            <Upload className="h-4 w-4" strokeWidth={2} aria-hidden />
           </button>
         </>
       }

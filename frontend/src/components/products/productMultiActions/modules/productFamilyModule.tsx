@@ -2,7 +2,8 @@ import { useEffect, useState } from "react";
 
 import { listProductFamilies, type ProductFamilyListItem } from "../../../../api/productFamiliesApi";
 import type { ModuleCardProps, ProductMultiModuleDef } from "../types";
-import { pmaInp, pmaLab } from "../uiTokens";
+import { PmaFieldRow } from "../PmaFieldRow";
+import { pmaInp } from "../uiTokens";
 
 export type ProductFamilyConfig = {
   productFamilyId: number | null;
@@ -34,28 +35,31 @@ function ProductFamilyCard({ config, onChange, tenantId, disabled }: ModuleCardP
   const selectValue = config.clear ? "__clear__" : config.productFamilyId != null ? String(config.productFamilyId) : "";
 
   return (
-    <label className={pmaLab}>
-      Rodzina produktów
-      <select
-        className={pmaInp}
-        disabled={disabled || loading}
-        value={selectValue}
-        onChange={(e) => {
-          const v = e.target.value;
-          if (v === "__clear__") onChange({ productFamilyId: null, clear: true });
-          else if (v === "") onChange({ productFamilyId: null, clear: false });
-          else onChange({ productFamilyId: Number(v), clear: false });
-        }}
-      >
-        <option value="">{loading ? "Ładowanie…" : "— wybierz —"}</option>
-        <option value="__clear__">Odłącz od rodziny</option>
-        {rows.map((f) => (
-          <option key={f.id} value={f.id}>
-            {f.name}
-          </option>
-        ))}
-      </select>
-    </label>
+    <PmaFieldRow
+      label="Rodzina produktów"
+      disabled={disabled}
+      control={
+        <select
+          className={pmaInp}
+          disabled={disabled || loading}
+          value={selectValue}
+          onChange={(e) => {
+            const v = e.target.value;
+            if (v === "__clear__") onChange({ productFamilyId: null, clear: true });
+            else if (v === "") onChange({ productFamilyId: null, clear: false });
+            else onChange({ productFamilyId: Number(v), clear: false });
+          }}
+        >
+          <option value="">{loading ? "Ładowanie…" : "— wybierz —"}</option>
+          <option value="__clear__">Odłącz od rodziny</option>
+          {rows.map((f) => (
+            <option key={f.id} value={f.id}>
+              {f.name}
+            </option>
+          ))}
+        </select>
+      }
+    />
   );
 }
 

@@ -25,6 +25,7 @@ export type ProductMultiModuleId =
   | "tags"
   | "custom_fields"
   | "product_status"
+  | "generate_ean"
   | "gpsr"
   | "photos"
   | "offers"

@@ -1,3 +1,26 @@
+## 2026-08-07 — Lista produktów + Multiakcje: wyrównanie UX
+
+- Formularze Multiakcji: jednolity wiersz `checkbox/radio | etykieta | pole` (`PmaFieldRow`, `PatchFieldsEditor`)
+- Uzupełnienia WMS: etykiety „Minimalna/Maksymalna ilość PICK/ZAPAS”
+- Toolbar produktów: bez Strona/Częściowo/wykonaj, maila, Usuń, Odznacz; eksport = ikona Upload
+- Nowy moduł „Generowanie EAN” (pomiń/nadpisz) + BE `generate_fake_ean`
+- `npm run build` OK
+
+## 2026-08-07 — Multiakcje produktów: UX kreatora
+
+- Naprawa UTF-8 w kartach/modułach
+- Command-palette picker zamiast `<select>`; ikony + grupy
+- „Parametry składowania”: sekcje Produkt/Karton, kompaktowa lista pól
+- GhostButton ↑↓×; badge podsumowania produktów/modułów
+- `npm run build` OK
+
+## 2026-08-07 — Multiakcje produktów: kreator z pluginami (Etap 1)
+
+- Usunięto dropdown „Wybierz akcję”; jeden przycisk Multiakcje + Usuń
+- Pakiet `productMultiActions`: shell, registry, execute; 15 kart-modułów
+- BE: set_categories / set_product_family / set_tags / set_custom_field_values / set_product_status
+- `npm run build` OK
+
 ## 2026-08-07 — Dodatkowe pola produktów: akcje, typografia, grupy
 
 - Kolumna Akcje: min. `5rem`, right-align, równe ikony `h-8 w-8`

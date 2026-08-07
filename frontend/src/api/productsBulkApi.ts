@@ -17,7 +17,8 @@ export type BulkUpdateAction =
   | "set_product_family"
   | "set_tags"
   | "set_custom_field_values"
-  | "set_product_status";
+  | "set_product_status"
+  | "generate_fake_ean";
 
 export type BulkUpdatePayload =
   | {
