@@ -1,3 +1,11 @@
+## 2026-08-07 — Standard list administracyjnych (AdminDataTable)
+
+- Nowy `components/admin/AdminDataTable` + tokeny (drag, checkbox, ID, name, columns, icon actions)
+- `OrderCustomFieldsTable` przepięty na AdminDataTable; stare tokeny = re-export
+- `ProductCustomFieldsPage` UI jak pola zamówień (wyszukiwarka, DnD, bulk delete, ikony Edytuj/Usuń)
+- API FE: `bulkDeleteProductCustomFields`
+- `npm run build` OK
+
 ## 2026-08-07 — Rodzina produktów: spójność przycisków DS
 
 - Jeden toolbar (Generator Secondary, Zapisz Primary, Usuń danger outline + Trash)

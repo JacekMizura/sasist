@@ -105,6 +105,15 @@ export async function deleteProductCustomField(tenantId: number, fieldId: number
   await api.delete(`/product-custom-fields/${fieldId}`, { params: { tenant_id: tenantId } });
 }
 
+export async function bulkDeleteProductCustomFields(tenantId: number, ids: number[]): Promise<number> {
+  const res = await api.post<{ deleted: number }>(
+    "/product-custom-fields/bulk-delete",
+    { ids },
+    { params: { tenant_id: tenantId } },
+  );
+  return res.data.deleted;
+}
+
 export async function getProductCustomFieldsWithValues(
   tenantId: number,
   productId: number,

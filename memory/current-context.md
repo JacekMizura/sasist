@@ -1,10 +1,9 @@
 ﻿## Active
 
-**Product Family tab (product card) — assign + preview only (2026-08-07).**
+**Admin list UI standard (2026-08-07).**
 
-- 3 karty: Przynależność · Podgląd (KPI) · Cechy (chipy)
-- Zarządzanie rodziną wyłącznie w Asortyment → Rodziny
+- Wspólny `AdminDataTable` + `adminDataTableTokens` (wzorzec: Dodatkowe pola zamówień)
+- Pola produktów przebudowane na ten sam układ (DnD, checkbox, ID, ikonowe akcje)
+- Order custom fields table korzysta z AdminDataTable
 
-**Product Family edit — dashboard cards UX (2026-08-07).**
-
-**Product card tabs — identity panel removed (2026-08-07).**
+**Product Family edit / tab — DONE.**
