@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { Network } from "lucide-react";
 import toast from "react-hot-toast";
 
 import {
@@ -8,25 +7,36 @@ import {
   getProductFamily,
   getProductFamilyState,
   listProductFamilies,
+  previewFamilyGenerate,
   type ProductFamily,
   type ProductFamilyListItem,
 } from "../../api/productFamiliesApi";
 import { extractApiErrorMessage } from "../../api/authApi";
 import { PrimaryButton, Select } from "../../design-system";
-import { pimFieldLabelClass, pimHintClass, pimPanelClass } from "../Assortment/pimUi";
+import { pimFieldLabelClass, pimHintClass, pimPanelClass, pimStatTileClass } from "../Assortment/pimUi";
 
 type Props = {
   tenantId: number;
   productId: number;
 };
 
+type ProductAttrChip = {
+  key: string;
+  name: string;
+  value: string;
+  displayType: "text" | "color" | "image";
+  colorHex: string | null;
+};
+
 /**
- * Product edit → Rodzina: membership only (family, status, base, this product's attributes).
+ * Product edit → Rodzina: assign + compact family preview (no family management).
  */
 export function ProductEditFamilyTab({ tenantId, productId }: Props) {
   const [families, setFamilies] = useState<ProductFamilyListItem[]>([]);
+  const [savedFamilyId, setSavedFamilyId] = useState<string>("");
   const [draftFamilyId, setDraftFamilyId] = useState("");
   const [family, setFamily] = useState<ProductFamily | null>(null);
+  const [missingCount, setMissingCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
@@ -39,15 +49,28 @@ export function ProductEditFamilyTab({ tenantId, productId }: Props) {
         listProductFamilies(tenantId, { includeInactive: false }),
       ]);
       setFamilies(list);
-      setDraftFamilyId(st.product_family_id != null ? String(st.product_family_id) : "");
+      const fid = st.product_family_id != null ? String(st.product_family_id) : "";
+      setSavedFamilyId(fid);
+      setDraftFamilyId(fid);
       if (st.product_family_id != null) {
-        setFamily(await getProductFamily(tenantId, st.product_family_id, { includeMembers: true }));
+        const g = await getProductFamily(tenantId, st.product_family_id, { includeMembers: true });
+        setFamily(g);
+        try {
+          const preview = await previewFamilyGenerate(tenantId, st.product_family_id);
+          setMissingCount(preview.missing_count ?? 0);
+        } catch {
+          setMissingCount(Math.max(0, (g.combination_count ?? 0) - (g.product_count ?? 0)));
+        }
       } else {
         setFamily(null);
+        setMissingCount(0);
       }
     } catch (e) {
       toast.error(extractApiErrorMessage(e, "Nie udało się wczytać rodziny."));
       setFamily(null);
+      setSavedFamilyId("");
+      setDraftFamilyId("");
+      setMissingCount(0);
     } finally {
       setLoading(false);
     }
@@ -57,12 +80,21 @@ export function ProductEditFamilyTab({ tenantId, productId }: Props) {
     void reload();
   }, [reload, refreshKey]);
 
+  const dirty = draftFamilyId !== savedFamilyId;
+
+  const openFamilyId = draftFamilyId.trim()
+    ? Number(draftFamilyId)
+    : savedFamilyId.trim()
+      ? Number(savedFamilyId)
+      : null;
+  const canOpenFamily = openFamilyId != null && Number.isFinite(openFamilyId);
+
   const member = useMemo(
     () => family?.members?.find((m) => m.id === productId) ?? null,
     [family, productId],
   );
 
-  const productAttributes = useMemo(() => {
+  const productChips = useMemo((): ProductAttrChip[] => {
     if (!family) return [];
     const attrs = [...(family.attributes ?? [])].sort(
       (a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0) || a.name.localeCompare(b.name),
@@ -71,12 +103,25 @@ export function ProductEditFamilyTab({ tenantId, productId }: Props) {
       .split(" / ")
       .map((s) => s.trim())
       .filter(Boolean);
-    return attrs.map((attr, i) => ({
-      id: attr.id,
-      name: attr.name,
-      value: parts[i] || "—",
-    }));
+    return attrs.map((attr, i) => {
+      const value = parts[i] || "";
+      const matched = (attr.values ?? []).find((v) => (v.name || "").trim() === value);
+      return {
+        key: String(attr.id ?? attr.name),
+        name: attr.name,
+        value: value || "—",
+        displayType: attr.display_type || "text",
+        colorHex: matched?.color_hex?.trim() || null,
+      };
+    });
   }, [family, member]);
+
+  const statusLabel = member?.is_base ? "Produkt bazowy" : "Członek rodziny";
+  const productCount = family?.product_count ?? family?.members?.length ?? 0;
+  const combinationCount = family?.combination_count ?? 0;
+  const baseLabel =
+    family?.base_product_name?.trim() ||
+    (family?.base_product_id != null ? `#${family.base_product_id}` : "—");
 
   const onAttach = async () => {
     const nextId = draftFamilyId.trim() ? Number(draftFamilyId) : null;
@@ -97,123 +142,125 @@ export function ProductEditFamilyTab({ tenantId, productId }: Props) {
   };
 
   if (loading) {
-    return <p className="text-sm text-slate-500">Ładowanie rodziny…</p>;
+    return <p className="text-sm text-slate-500">Ładowanie…</p>;
   }
-
-  const statusLabel = !family
-    ? "Poza rodziną"
-    : member?.is_base
-      ? "Produkt bazowy"
-      : "Członek rodziny";
 
   return (
     <div className="space-y-4">
+      {/* 1 — Przynależność */}
       <section className={pimPanelClass}>
-        <div className="flex items-start gap-3">
-          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-slate-800 text-white">
-            <Network className="h-4 w-4" strokeWidth={2} aria-hidden />
-          </span>
-          <div className="min-w-0 flex-1">
-            <h2 className="text-sm font-semibold text-slate-900">Przynależność do rodziny</h2>
-            <p className={pimHintClass}>
-              Ta zakładka dotyczy wyłącznie przypisania produktu do rodziny i jego cech w rodzinie.
-            </p>
-            <div className="mt-3 flex flex-wrap items-end gap-2">
-              <label className="min-w-[220px] flex-1">
-                <span className={pimFieldLabelClass}>Rodzina produktów</span>
-                <Select
-                  value={draftFamilyId}
-                  disabled={busy}
-                  onChange={(e) => setDraftFamilyId(e.target.value)}
-                  className="bg-white"
-                >
-                  <option value="">— Brak —</option>
-                  {families.map((f) => (
-                    <option key={f.id} value={String(f.id)}>
-                      {f.name}
-                    </option>
-                  ))}
-                </Select>
-              </label>
-              <PrimaryButton type="button" density="compact" disabled={busy} onClick={() => void onAttach()}>
-                {busy ? "Zapisywanie…" : "Zapisz przypisanie"}
-              </PrimaryButton>
-              {family ? (
-                <Link
-                  to={`/product-families/${family.id}/edit`}
-                  className="inline-flex h-8 items-center rounded-md border border-slate-200 px-3 text-sm font-medium text-slate-700 hover:bg-slate-50"
-                >
-                  Otwórz rodzinę
-                </Link>
-              ) : (
-                <Link
-                  to="/product-families"
-                  className="inline-flex h-8 items-center text-sm font-medium text-blue-700 hover:underline"
-                >
-                  Lista rodzin
-                </Link>
-              )}
-            </div>
-          </div>
+        <h2 className="text-sm font-semibold text-slate-900">Przynależność do rodziny</h2>
+        <p className={pimHintClass}>Ten produkt może należeć do jednej rodziny produktów.</p>
+
+        <div className="mt-4 flex flex-wrap items-end gap-2">
+          <label className="min-w-[240px] flex-1">
+            <span className={pimFieldLabelClass}>Rodzina produktów</span>
+            <Select
+              value={draftFamilyId}
+              disabled={busy}
+              onChange={(e) => setDraftFamilyId(e.target.value)}
+              className="bg-white"
+            >
+              <option value="">— Brak —</option>
+              {families.map((f) => (
+                <option key={f.id} value={String(f.id)}>
+                  {f.name}
+                </option>
+              ))}
+            </Select>
+          </label>
+
+          {canOpenFamily ? (
+            <Link
+              to={`/product-families/${openFamilyId}/edit`}
+              className="inline-flex h-8 items-center rounded-md border border-slate-200 bg-white px-3 text-sm font-medium text-slate-700 hover:bg-slate-50"
+            >
+              Otwórz rodzinę
+            </Link>
+          ) : null}
+
+          {dirty ? (
+            <PrimaryButton type="button" density="compact" disabled={busy} onClick={() => void onAttach()}>
+              {busy ? "Zapisywanie…" : "Zapisz przypisanie"}
+            </PrimaryButton>
+          ) : null}
         </div>
       </section>
 
-      {!family ? (
+      {/* 2 — Podgląd rodziny (tylko po zapisanym przypisaniu) */}
+      {family ? (
         <section className={pimPanelClass}>
-          <p className="text-sm text-slate-500">
-            Przypisz produkt do rodziny, aby zobaczyć status, produkt bazowy i cechy tego produktu.
-          </p>
-        </section>
-      ) : (
-        <section className={pimPanelClass}>
-          <dl className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <div>
-              <dt className={pimFieldLabelClass}>Wybrana rodzina</dt>
-              <dd className="text-sm font-medium text-slate-900">{family.name}</dd>
+          <div>
+            <p className={pimFieldLabelClass}>Rodzina</p>
+            <p className="text-base font-semibold text-slate-900">{family.name}</p>
+          </div>
+
+          <dl className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+            <div className={pimStatTileClass}>
+              <dt className="text-xs text-slate-500">Produkt bazowy</dt>
+              <dd className="mt-0.5 truncate text-sm font-semibold text-slate-900">{baseLabel}</dd>
             </div>
-            <div>
-              <dt className={pimFieldLabelClass}>Status w rodzinie</dt>
-              <dd className="text-sm font-medium text-slate-900">{statusLabel}</dd>
+            <div className={pimStatTileClass}>
+              <dt className="text-xs text-slate-500">Status</dt>
+              <dd className="mt-0.5 text-sm font-semibold text-slate-900">{statusLabel}</dd>
             </div>
-            <div className="sm:col-span-2">
-              <dt className={pimFieldLabelClass}>Produkt bazowy</dt>
-              <dd className="text-sm text-slate-800">
-                {family.base_product_id != null ? (
-                  member?.is_base ? (
-                    <span>Ten produkt jest produktem bazowym rodziny.</span>
-                  ) : (
-                    <span>
-                      {family.base_product_name?.trim() || `Produkt #${family.base_product_id}`}
-                      <span className="ml-1 text-slate-400">#{family.base_product_id}</span>
-                    </span>
-                  )
-                ) : (
-                  <span className="text-slate-500">Brak produktu bazowego</span>
-                )}
-              </dd>
+            <div className={pimStatTileClass}>
+              <dt className="text-xs text-slate-500">Produkty w rodzinie</dt>
+              <dd className="mt-0.5 text-sm font-semibold tabular-nums text-slate-900">{productCount}</dd>
+            </div>
+            <div className={pimStatTileClass}>
+              <dt className="text-xs text-slate-500">Kombinacje</dt>
+              <dd className="mt-0.5 text-sm font-semibold tabular-nums text-slate-900">{combinationCount}</dd>
+            </div>
+            <div className={pimStatTileClass}>
+              <dt className="text-xs text-slate-500">Brakujące</dt>
+              <dd className="mt-0.5 text-sm font-semibold tabular-nums text-amber-700">{missingCount}</dd>
             </div>
           </dl>
 
-          <div className="mt-5 border-t border-slate-100 pt-4">
-            <h3 className="text-sm font-semibold text-slate-900">Cechy przypisane do produktu</h3>
-            {productAttributes.length === 0 ? (
-              <p className="mt-2 text-sm text-slate-500">Rodzina nie ma zdefiniowanych cech.</p>
-            ) : (
-              <ul className="mt-3 divide-y divide-slate-100 rounded-lg border border-slate-200 bg-white">
-                {productAttributes.map((attr) => (
-                  <li
-                    key={attr.id ?? attr.name}
-                    className="flex items-center justify-between gap-3 px-3 py-2.5 text-sm"
-                  >
-                    <span className="font-medium text-slate-700">{attr.name}</span>
-                    <span className="font-mono text-xs text-slate-900">{attr.value}</span>
-                  </li>
-                ))}
-              </ul>
-            )}
+          <div className="mt-4">
+            <Link
+              to={`/product-families/${family.id}/edit`}
+              className="inline-flex h-8 items-center rounded-md border border-slate-200 bg-white px-3 text-sm font-medium text-slate-700 hover:bg-slate-50"
+            >
+              Otwórz rodzinę
+            </Link>
           </div>
         </section>
-      )}
+      ) : null}
+
+      {/* 3 — Cechy tego produktu */}
+      {family ? (
+        <section className={pimPanelClass}>
+          <h2 className="text-sm font-semibold text-slate-900">Cechy tego produktu</h2>
+          {productChips.length === 0 ? (
+            <p className="mt-3 text-sm text-slate-500">Rodzina nie ma zdefiniowanych cech.</p>
+          ) : (
+            <div className="mt-3 flex flex-wrap gap-2">
+              {productChips.map((chip) => (
+                <div
+                  key={chip.key}
+                  className="inline-flex max-w-full flex-col gap-0.5 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2"
+                >
+                  <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+                    {chip.name}
+                  </span>
+                  <span className="inline-flex items-center gap-1.5 text-sm font-medium text-slate-900">
+                    {chip.displayType === "color" ? (
+                      <span
+                        className="h-3 w-3 shrink-0 rounded-full border border-slate-200"
+                        style={{ backgroundColor: chip.colorHex || "#cbd5e1" }}
+                        aria-hidden
+                      />
+                    ) : null}
+                    {chip.value}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+      ) : null}
     </div>
   );
 }

@@ -1,3 +1,9 @@
+## 2026-08-07 — Zakładka Rodzina na karcie produktu (assign + preview)
+
+- 3 karty PIM: przynależność (select + zapisz dirty), podgląd KPI, cechy jako chipy
+- Bez zarządzania cechami / generatorem / członkami
+- `npm run build` OK
+
 ## 2026-08-07 — Dashboard edycji Rodziny produktów
 
 - Kartowy UX: nagłówek (status, KPI, Generator/Zapisz), Informacje, Cechy (osobne karty), tabela Produktów, panel Generatora
