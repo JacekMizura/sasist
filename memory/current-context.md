@@ -1,9 +1,10 @@
 ﻿## Active
 
-**Admin list UI standard (2026-08-07).**
+**Product custom fields polish (2026-08-07).**
 
-- Wspólny `AdminDataTable` + `adminDataTableTokens` (wzorzec: Dodatkowe pola zamówień)
-- Pola produktów przebudowane na ten sam układ (DnD, checkbox, ID, ikonowe akcje)
-- Order custom fields table korzysta z AdminDataTable
+- Kolumna Akcje: `5rem`, wyrównanie prawo, ikony `h-8 w-8`
+- Nazwa: `adminListNameClass` = `text-sm font-medium` (jak kategorie/rodziny)
+- Grupowanie jak automatyzacje: localStorage registry + `settings_json.group`; „Bez grupy”
+- Usunięte zbędne opisy (produkt + order CF edit)
 
-**Product Family edit / tab — DONE.**
+**Admin list UI standard** — `AdminDataTable` + tokeny.

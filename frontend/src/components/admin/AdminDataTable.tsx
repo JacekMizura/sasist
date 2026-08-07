@@ -8,8 +8,10 @@ import {
   adminListActionsCellClass,
   adminListActionsColWidth,
   adminListActionsInnerClass,
+  adminListActionsThClass,
   adminListCheckboxClass,
   adminListDragHandleClass,
+  adminListNameClass,
   adminListRowActionBtn,
   adminListRowActionBtnDanger,
   adminListRowClass,
@@ -170,7 +172,7 @@ function AdminSortableRow<T>({
           {onNameClick || href ? (
             <button
               type="button"
-              className="block max-w-full truncate text-left text-base font-bold text-slate-900 hover:underline"
+              className={adminListNameClass}
               title={name}
               onClick={() => {
                 if (onNameClick) onNameClick(row);
@@ -180,7 +182,7 @@ function AdminSortableRow<T>({
               {name}
             </button>
           ) : (
-            <span className="block max-w-full truncate text-base font-bold text-slate-900" title={name}>
+            <span className={adminListNameClass} title={name}>
               {name}
             </span>
           )}
@@ -313,7 +315,7 @@ export function AdminDataTable<T>({
                   {col.header}
                 </th>
               ))}
-              <th className={adminListThClass} style={{ width: adminListActionsColWidth }}>
+              <th className={adminListActionsThClass} style={{ width: adminListActionsColWidth }}>
                 Akcje
               </th>
             </tr>

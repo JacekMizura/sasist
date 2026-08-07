@@ -123,11 +123,11 @@ export function ProductCustomFieldsTable({
               />
             </label>
             <div className="min-w-0 flex-1">
-              <button
-                type="button"
-                className="text-left text-base font-bold text-slate-900 hover:underline"
-                onClick={() => navigate(`/product-custom-fields/${row.id}/edit`)}
-              >
+                  <button
+                    type="button"
+                    className="text-left text-sm font-medium text-slate-900 hover:text-slate-700"
+                    onClick={() => navigate(`/product-custom-fields/${row.id}/edit`)}
+                  >
                 {row.name}
               </button>
               <p className="mt-1 font-mono text-xs tabular-nums text-slate-500">ID {row.id}</p>

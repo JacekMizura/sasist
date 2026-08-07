@@ -1,3 +1,11 @@
+## 2026-08-07 — Dodatkowe pola produktów: akcje, typografia, grupy
+
+- Kolumna Akcje: min. `5rem`, right-align, równe ikony `h-8 w-8`
+- Nazwa pola: `adminListNameClass` (`text-sm font-medium`) — bez bold
+- Grupowanie (jak Akcje automatyczne): tworzenie/rename/reorder/collapse; membership w `settings_json.group`; registry localStorage; „Bez grupy”
+- Edycja: select grupy (+ nowa); usunięte techniczne opisy; order CF: usunięte „Akceptowane…” / „Opcjonalnie…”
+- `npm run build` OK
+
 ## 2026-08-07 — Fix product custom fields list (AdminDataTable)
 
 - Bug: `hidden` + `block` w AdminDataTable → tabela niewidoczna (Tailwind conflict)

@@ -469,9 +469,6 @@ export default function OrderCustomFieldEditPage() {
                     </label>
                   ))}
                 </div>
-                <p className="mt-3 text-xs leading-relaxed text-slate-500">
-                  Akceptowane m.in. PNG, JPG, PDF — dokładne reguły zależą od ustawień magazynu.
-                </p>
               </div>
             ) : null}
 
@@ -634,9 +631,6 @@ export default function OrderCustomFieldEditPage() {
                     placeholder="Generowany automatycznie z nazwy"
                   />
                 </label>
-                <p className="text-xs text-slate-500">
-                  Opcjonalnie — dla integracji API. Puste pole: system utworzy identyfikator z nazwy (np. „Numer referencyjny” → numer_referencyjny).
-                </p>
               </div>
             </IntegrationsApiPanel>
           </section>

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Plus, Trash2 } from "lucide-react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import toast from "react-hot-toast";
 
 import { fetchTenantsList } from "../../../api/tenantsApi";
@@ -16,6 +16,14 @@ import { ListPageHeader } from "../../../components/listPage/ListPageHeader";
 import PageLayout from "../../../components/layout/PageLayout";
 import { Checkbox, GhostButton, Input, PrimaryButton, Select } from "../../../design-system";
 import { UI_STRINGS } from "../../../constants/uiStrings";
+import {
+  PRODUCT_CUSTOM_FIELD_UNGROUPED,
+  getFieldGroupName,
+  loadProductCustomFieldGroups,
+  newProductCustomFieldGroupId,
+  saveProductCustomFieldGroups,
+  withFieldGroupName,
+} from "./productCustomFieldGroupsStore";
 
 type UiKind = "TEXT" | "NUMBER" | "FILES" | "LIST" | "GPSR_ATTACHMENTS" | "ATTACHMENTS";
 
@@ -59,6 +67,10 @@ export default function ProductCustomFieldEditPage() {
   const [attachmentFilter, setAttachmentFilter] = useState("");
   const [options, setOptions] = useState<OptionDraft[]>([{ label: "" }]);
   const [isActive, setIsActive] = useState(true);
+  const [groupName, setGroupName] = useState(PRODUCT_CUSTOM_FIELD_UNGROUPED);
+  const [groupOptions, setGroupOptions] = useState<string[]>([]);
+  const [existingSettings, setExistingSettings] = useState<Record<string, unknown>>({});
+  const [existingSortOrder, setExistingSortOrder] = useState(0);
   const [loading, setLoading] = useState(!isNew);
   const [saving, setSaving] = useState(false);
 
@@ -72,6 +84,12 @@ export default function ProductCustomFieldEditPage() {
   }, []);
 
   useEffect(() => {
+    if (tenantId == null) return;
+    const stored = loadProductCustomFieldGroups(tenantId).map((g) => g.name);
+    setGroupOptions(stored);
+  }, [tenantId]);
+
+  useEffect(() => {
     if (tenantId == null || isNew || numericId == null || !Number.isFinite(numericId)) return;
     setLoading(true);
     void getProductCustomField(tenantId, numericId)
@@ -81,13 +99,24 @@ export default function ProductCustomFieldEditPage() {
         setKind(ui.kind);
         setListMulti(ui.listMulti);
         setIsActive(f.is_active);
-        const att = (f.settings_json?.attachments as { kind?: string } | undefined)?.kind;
+        setExistingSortOrder(f.sort_order ?? 0);
+        const settings = (f.settings_json ?? {}) as Record<string, unknown>;
+        setExistingSettings(settings);
+        const g = getFieldGroupName(settings);
+        setGroupName(g);
+        const att = (settings.attachments as { kind?: string } | undefined)?.kind;
         if (att) setAttachmentKind(att);
         setOptions(
           f.options?.length
             ? f.options.map((o) => ({ id: o.id, label: o.label }))
             : [{ label: "" }],
         );
+        const stored = loadProductCustomFieldGroups(tenantId).map((x) => x.name);
+        if (g !== PRODUCT_CUSTOM_FIELD_UNGROUPED && !stored.includes(g)) {
+          setGroupOptions([...stored, g]);
+        } else {
+          setGroupOptions(stored);
+        }
       })
       .catch((e) => {
         toast.error(extractApiErrorMessage(e, "Nie udało się wczytać pola."));
@@ -101,6 +130,31 @@ export default function ProductCustomFieldEditPage() {
     if (!q) return attachmentKinds;
     return attachmentKinds.filter((k) => k.label.toLowerCase().includes(q) || k.value.includes(q));
   }, [attachmentKinds, attachmentFilter]);
+
+  const onGroupChange = (value: string) => {
+    if (value === "__new__") {
+      const created = window.prompt("Nazwa nowej grupy");
+      if (created == null) return;
+      const cleaned = created.trim();
+      if (!cleaned || cleaned === PRODUCT_CUSTOM_FIELD_UNGROUPED) {
+        toast.error("Podaj prawidłową nazwę grupy.");
+        return;
+      }
+      if (tenantId != null) {
+        const existing = loadProductCustomFieldGroups(tenantId);
+        if (!existing.some((g) => g.name.toLowerCase() === cleaned.toLowerCase())) {
+          saveProductCustomFieldGroups(tenantId, [
+            ...existing,
+            { id: newProductCustomFieldGroupId(), name: cleaned, sortOrder: (existing.length + 1) * 10 },
+          ]);
+        }
+      }
+      setGroupOptions((prev) => (prev.includes(cleaned) ? prev : [...prev, cleaned]));
+      setGroupName(cleaned);
+      return;
+    }
+    setGroupName(value);
+  };
 
   const onSave = async () => {
     if (tenantId == null) return;
@@ -118,7 +172,7 @@ export default function ProductCustomFieldEditPage() {
       toast.error("Dodaj co najmniej jedną opcję listy.");
       return;
     }
-    const settings_json: Record<string, unknown> =
+    const typeSettings: Record<string, unknown> =
       kind === "ATTACHMENTS"
         ? { files: { mode: "documents" }, attachments: { kind: attachmentKind } }
         : kind === "GPSR_ATTACHMENTS"
@@ -131,6 +185,23 @@ export default function ProductCustomFieldEditPage() {
                 ? { select: { multi: listMulti } }
                 : { text: { subtype: "any", multiline: false } };
 
+    // Preserve unrelated keys (e.g. existing integrations); type-specific keys overwrite.
+    const mergedSettings: Record<string, unknown> = {
+      ...existingSettings,
+      ...typeSettings,
+    };
+    // Drop type keys that no longer apply when the field kind changes.
+    if (kind !== "ATTACHMENTS") delete mergedSettings.attachments;
+    if (kind !== "GPSR_ATTACHMENTS") delete mergedSettings.gpsr;
+    if (kind !== "NUMBER") delete mergedSettings.number;
+    if (kind !== "LIST") delete mergedSettings.select;
+    if (kind !== "TEXT") delete mergedSettings.text;
+    if (kind !== "FILES" && kind !== "ATTACHMENTS" && kind !== "GPSR_ATTACHMENTS") {
+      delete mergedSettings.files;
+    }
+
+    const settings_json = withFieldGroupName(mergedSettings, groupName);
+
     setSaving(true);
     try {
       const body = {
@@ -139,7 +210,7 @@ export default function ProductCustomFieldEditPage() {
         settings_json,
         is_active: isActive,
         options: opts,
-        sort_order: 0,
+        sort_order: isNew ? 0 : existingSortOrder,
       };
       if (isNew) {
         const created = await createProductCustomField(tenantId, body);
@@ -167,8 +238,7 @@ export default function ProductCustomFieldEditPage() {
   return (
     <PageLayout>
       <ListPageHeader
-        title={isNew ? "Dodajesz pole" : `Edytujesz pole: ${name || "—"}`}
-        description="Rodzaje pól jak w Sellasist — tekst, liczba, pliki, lista, GPSR i załączniki."
+        title={isNew ? "Nowe pole" : name.trim() || "Edycja pola"}
         breadcrumbs={[
           { label: UI_STRINGS.navigation.assortment },
           { label: UI_STRINGS.navigation.productCustomFields, to: "/product-custom-fields" },
@@ -185,6 +255,19 @@ export default function ProductCustomFieldEditPage() {
         <label className="block">
           <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Nazwa</span>
           <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Nazwa pola" />
+        </label>
+
+        <label className="block">
+          <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Grupa</span>
+          <Select value={groupName} onChange={(e) => onGroupChange(e.target.value)}>
+            <option value={PRODUCT_CUSTOM_FIELD_UNGROUPED}>{PRODUCT_CUSTOM_FIELD_UNGROUPED}</option>
+            {groupOptions.map((g) => (
+              <option key={g} value={g}>
+                {g}
+              </option>
+            ))}
+            <option value="__new__">+ Nowa grupa…</option>
+          </Select>
         </label>
 
         <label className="block">
@@ -265,13 +348,6 @@ export default function ProductCustomFieldEditPage() {
           </ul>
         </section>
       ) : null}
-
-      <p className="mt-6 text-sm text-slate-500">
-        Po zapisaniu pole pojawi się na karcie produktu → Podstawowe (nad historią).{" "}
-        <Link to="/product-custom-fields" className="text-blue-700 hover:underline">
-          Wróć do listy
-        </Link>
-      </p>
     </PageLayout>
   );
 }
