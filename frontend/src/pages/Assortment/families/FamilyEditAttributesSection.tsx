@@ -1,7 +1,7 @@
 import { ArrowDown, ArrowUp, Plus, Trash2 } from "lucide-react";
 
 import type { FamilyDisplayType } from "../../../api/productFamiliesApi";
-import { Checkbox, GhostButton, Input, Select } from "../../../design-system";
+import { Checkbox, IconButton, Input, SecondaryButton, Select } from "../../../design-system";
 import { pimPanelClass } from "../pimUi";
 import {
   displayTypeLabel,
@@ -53,10 +53,10 @@ export function FamilyEditAttributesSection({ attributes, setAttributes }: Props
           <h2 className="text-sm font-semibold text-slate-900">Cechy rodziny</h2>
           <p className="mt-0.5 text-xs text-slate-500">Każda cecha to osobna karta z listą wartości.</p>
         </div>
-        <GhostButton type="button" density="compact" onClick={() => setAttributes((p) => [...p, emptyAttr()])}>
-          <Plus className="mr-1 h-4 w-4" strokeWidth={2.5} aria-hidden />
+        <SecondaryButton type="button" density="compact" onClick={() => setAttributes((p) => [...p, emptyAttr()])}>
+          <Plus className="mr-1.5 h-4 w-4" strokeWidth={2.5} aria-hidden />
           Dodaj cechę
-        </GhostButton>
+        </SecondaryButton>
       </div>
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
@@ -77,22 +77,36 @@ export function FamilyEditAttributesSection({ attributes, setAttributes }: Props
                 />
               </label>
               <div className="flex gap-1 pt-1">
-                <GhostButton type="button" density="compact" title="Wyżej" onClick={() => moveAttr(ai, -1)}>
-                  <ArrowUp className="h-4 w-4" />
-                </GhostButton>
-                <GhostButton type="button" density="compact" title="Niżej" onClick={() => moveAttr(ai, 1)}>
-                  <ArrowDown className="h-4 w-4" />
-                </GhostButton>
-                <GhostButton
+                <IconButton
                   type="button"
                   density="compact"
+                  title="Wyżej"
+                  aria-label="Przenieś cechę wyżej"
+                  onClick={() => moveAttr(ai, -1)}
+                >
+                  <ArrowUp className="h-4 w-4" strokeWidth={2} aria-hidden />
+                </IconButton>
+                <IconButton
+                  type="button"
+                  density="compact"
+                  title="Niżej"
+                  aria-label="Przenieś cechę niżej"
+                  onClick={() => moveAttr(ai, 1)}
+                >
+                  <ArrowDown className="h-4 w-4" strokeWidth={2} aria-hidden />
+                </IconButton>
+                <IconButton
+                  type="button"
+                  density="compact"
+                  tone="danger"
                   title="Usuń cechę"
+                  aria-label="Usuń cechę"
                   onClick={() =>
                     setAttributes((prev) => (prev.length <= 1 ? prev : prev.filter((_, i) => i !== ai)))
                   }
                 >
-                  <Trash2 className="h-4 w-4 text-red-600" />
-                </GhostButton>
+                  <Trash2 className="h-4 w-4" strokeWidth={2} aria-hidden />
+                </IconButton>
               </div>
             </div>
 
@@ -204,15 +218,30 @@ export function FamilyEditAttributesSection({ attributes, setAttributes }: Props
                     />
                   ) : null}
                   <div className="flex shrink-0 opacity-60 transition group-hover:opacity-100">
-                    <GhostButton type="button" density="compact" onClick={() => moveValue(ai, vi, -1)}>
-                      <ArrowUp className="h-3.5 w-3.5" />
-                    </GhostButton>
-                    <GhostButton type="button" density="compact" onClick={() => moveValue(ai, vi, 1)}>
-                      <ArrowDown className="h-3.5 w-3.5" />
-                    </GhostButton>
-                    <GhostButton
+                    <IconButton
                       type="button"
                       density="compact"
+                      title="Wyżej"
+                      aria-label="Przenieś wartość wyżej"
+                      onClick={() => moveValue(ai, vi, -1)}
+                    >
+                      <ArrowUp className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />
+                    </IconButton>
+                    <IconButton
+                      type="button"
+                      density="compact"
+                      title="Niżej"
+                      aria-label="Przenieś wartość niżej"
+                      onClick={() => moveValue(ai, vi, 1)}
+                    >
+                      <ArrowDown className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />
+                    </IconButton>
+                    <IconButton
+                      type="button"
+                      density="compact"
+                      tone="danger"
+                      title="Usuń wartość"
+                      aria-label="Usuń wartość"
                       onClick={() =>
                         setAttributes((prev) =>
                           prev.map((x, i) =>
@@ -226,25 +255,26 @@ export function FamilyEditAttributesSection({ attributes, setAttributes }: Props
                         )
                       }
                     >
-                      <Trash2 className="h-3.5 w-3.5 text-red-600" />
-                    </GhostButton>
+                      <Trash2 className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />
+                    </IconButton>
                   </div>
                 </li>
               ))}
             </ul>
 
-            <button
+            <SecondaryButton
               type="button"
-              className="mt-3 inline-flex items-center gap-1 self-start text-sm font-medium text-blue-700 hover:text-blue-800"
+              density="compact"
+              className="mt-3 self-start"
               onClick={() =>
                 setAttributes((prev) =>
                   prev.map((x, i) => (i === ai ? { ...x, values: [...x.values, emptyValue()] } : x)),
                 )
               }
             >
-              <Plus className="h-4 w-4" strokeWidth={2.5} aria-hidden />
+              <Plus className="mr-1.5 h-4 w-4" strokeWidth={2.5} aria-hidden />
               Dodaj wartość
-            </button>
+            </SecondaryButton>
           </article>
         ))}
       </div>

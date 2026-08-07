@@ -1,3 +1,10 @@
+## 2026-08-07 — Rodzina produktów: spójność przycisków DS
+
+- Jeden toolbar (Generator Secondary, Zapisz Primary, Usuń danger outline + Trash)
+- Usunięto zduplikowane akcje ze stripa i link „Wróć do listy”
+- Dodaj cechę/wartość → SecondaryButton; otwórz produkt → IconButton + ExternalLink
+- `npm run build` OK
+
 ## 2026-08-07 — Zakładka Rodzina na karcie produktu (assign + preview)
 
 - 3 karty PIM: przynależność (select + zapisz dirty), podgląd KPI, cechy jako chipy

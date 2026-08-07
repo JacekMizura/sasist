@@ -1,10 +1,10 @@
 import { useMemo, useState } from "react";
-import { Link } from "react-router-dom";
-import { Plus, Search } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { ExternalLink, Plus, Search } from "lucide-react";
 
 import type { ProductFamilyMember } from "../../../api/productFamiliesApi";
 import type { ProductSearchHit } from "../../../api/productsSearchApi";
-import { Input, PrimaryButton } from "../../../design-system";
+import { IconButton, Input, PrimaryButton, SecondaryButton } from "../../../design-system";
 import { getProductDetailsPath } from "../../Products/productPaths";
 import { pimPanelClass } from "../pimUi";
 import { FamilyProductSearchField } from "./FamilyProductSearchField";
@@ -27,6 +27,7 @@ function formatStock(qty: number | null | undefined): string {
  * Family dashboard — members table with search + attach.
  */
 export function FamilyEditMembersCard({ tenantId, familyId, members, attachBusy, onAttach }: Props) {
+  const navigate = useNavigate();
   const [query, setQuery] = useState("");
   const [attachOpen, setAttachOpen] = useState(false);
 
@@ -66,15 +67,19 @@ export function FamilyEditMembersCard({ tenantId, familyId, members, attachBusy,
             />
           </div>
           <PrimaryButton type="button" density="compact" onClick={() => setAttachOpen((v) => !v)}>
-            <Plus className="mr-1 h-4 w-4" strokeWidth={2.5} aria-hidden />
+            <Plus className="mr-1.5 h-4 w-4" strokeWidth={2.5} aria-hidden />
             Dołącz produkt
           </PrimaryButton>
-          <Link
-            to={`/products/new?tenant_id=${tenantId}&product_family_id=${familyId}`}
-            className="inline-flex h-8 items-center rounded-md border border-slate-200 px-3 text-sm font-medium text-slate-700 hover:bg-slate-50"
+          <SecondaryButton
+            type="button"
+            density="compact"
+            onClick={() =>
+              navigate(`/products/new?tenant_id=${tenantId}&product_family_id=${familyId}`)
+            }
           >
+            <Plus className="mr-1.5 h-4 w-4" strokeWidth={2.5} aria-hidden />
             Nowy produkt
-          </Link>
+          </SecondaryButton>
         </div>
       </div>
 
@@ -110,7 +115,7 @@ export function FamilyEditMembersCard({ tenantId, familyId, members, attachBusy,
                 <th className="px-3 py-2 font-semibold">SKU</th>
                 <th className="px-3 py-2 font-semibold">Cechy</th>
                 <th className="px-3 py-2 font-semibold">Stan</th>
-                <th className="px-3 py-2 font-semibold" />
+                <th className="w-12 px-3 py-2 font-semibold" />
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -130,12 +135,7 @@ export function FamilyEditMembersCard({ tenantId, familyId, members, attachBusy,
                     )}
                   </td>
                   <td className="px-3 py-2">
-                    <Link
-                      to={getProductDetailsPath(m.id, { tenantId })}
-                      className="font-medium text-slate-900 hover:text-blue-700"
-                    >
-                      {m.name || `Produkt #${m.id}`}
-                    </Link>
+                    <span className="font-medium text-slate-900">{m.name || `Produkt #${m.id}`}</span>
                     {m.is_base ? (
                       <span className="ml-2 rounded bg-slate-800 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white">
                         Bazowy
@@ -148,12 +148,15 @@ export function FamilyEditMembersCard({ tenantId, familyId, members, attachBusy,
                   </td>
                   <td className="px-3 py-2 tabular-nums text-slate-800">{formatStock(m.stock_quantity)}</td>
                   <td className="px-3 py-2 text-right">
-                    <Link
-                      to={getProductDetailsPath(m.id, { tenantId })}
-                      className="text-xs font-medium text-blue-700 hover:underline"
+                    <IconButton
+                      type="button"
+                      density="compact"
+                      title="Otwórz produkt"
+                      aria-label={`Otwórz produkt ${m.name || m.id}`}
+                      onClick={() => navigate(getProductDetailsPath(m.id, { tenantId }))}
                     >
-                      Otwórz
-                    </Link>
+                      <ExternalLink className="h-4 w-4" strokeWidth={2} aria-hidden />
+                    </IconButton>
                   </td>
                 </tr>
               ))}

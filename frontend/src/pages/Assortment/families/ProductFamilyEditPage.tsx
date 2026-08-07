@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
-import { Sparkles } from "lucide-react";
+import { useNavigate, useParams } from "react-router-dom";
+import { Sparkles, Trash2 } from "lucide-react";
 import toast from "react-hot-toast";
 
 import { fetchTenantsList } from "../../../api/tenantsApi";
@@ -16,7 +16,11 @@ import {
 import { extractApiErrorMessage } from "../../../api/authApi";
 import { ListPageHeader } from "../../../components/listPage/ListPageHeader";
 import PageLayout from "../../../components/layout/PageLayout";
-import { GhostButton, PrimaryButton } from "../../../design-system";
+import {
+  PrimaryButton,
+  SecondaryButton,
+  dangerOutlineButtonClassFor,
+} from "../../../design-system";
 import { UI_STRINGS } from "../../../constants/uiStrings";
 import type { ProductSearchHit } from "../../../api/productsSearchApi";
 import { FamilyEditAttributesSection } from "./FamilyEditAttributesSection";
@@ -218,26 +222,30 @@ export default function ProductFamilyEditPage() {
           { label: isNew ? "Nowa" : "Edycja" },
         ]}
         actions={
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             {!isNew ? (
-              <GhostButton type="button" density="compact" onClick={() => void onDelete()}>
-                Usuń
-              </GhostButton>
-            ) : null}
-            {!isNew ? (
-              <GhostButton type="button" density="compact" onClick={scrollToGenerator}>
-                <Sparkles className="mr-1 h-4 w-4" strokeWidth={2} aria-hidden />
+              <SecondaryButton type="button" density="compact" onClick={scrollToGenerator}>
+                <Sparkles className="mr-1.5 h-4 w-4" strokeWidth={2} aria-hidden />
                 Generator
-              </GhostButton>
+              </SecondaryButton>
             ) : null}
             <PrimaryButton type="button" density="compact" disabled={saving} onClick={() => void onSave()}>
               {saving ? "Zapisywanie…" : "Zapisz"}
             </PrimaryButton>
+            {!isNew ? (
+              <button
+                type="button"
+                className={dangerOutlineButtonClassFor("compact")}
+                onClick={() => void onDelete()}
+              >
+                <Trash2 className="mr-1.5 h-4 w-4" strokeWidth={2} aria-hidden />
+                Usuń
+              </button>
+            ) : null}
           </div>
         }
       />
 
-      {/* Dashboard summary strip */}
       <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
         <div className="min-w-0">
           <p className="truncate text-sm font-semibold text-slate-900">{name.trim() || "Bez nazwy"}</p>
@@ -258,17 +266,6 @@ export default function ProductFamilyEditPage() {
             {baseProductName?.trim() || (baseProductId != null ? `#${baseProductId}` : "—")}
           </span>
         </span>
-        <div className="ml-auto flex flex-wrap gap-2">
-          {!isNew ? (
-            <GhostButton type="button" density="compact" onClick={scrollToGenerator}>
-              <Sparkles className="mr-1 h-4 w-4" strokeWidth={2} aria-hidden />
-              Generator
-            </GhostButton>
-          ) : null}
-          <PrimaryButton type="button" density="compact" disabled={saving} onClick={() => void onSave()}>
-            {saving ? "Zapisywanie…" : "Zapisz"}
-          </PrimaryButton>
-        </div>
       </div>
 
       <div className="mt-6 space-y-6">
@@ -324,12 +321,6 @@ export default function ProductFamilyEditPage() {
           </div>
         ) : null}
       </div>
-
-      <p className="mt-6 text-sm text-slate-500">
-        <Link to="/product-families" className="text-blue-700 hover:underline">
-          Wróć do listy rodzin
-        </Link>
-      </p>
     </PageLayout>
   );
 }
