@@ -1,4 +1,4 @@
-import { useEffect, useMemo, type LucideIcon } from "react";
+import { useEffect, type LucideIcon } from "react";
 import { ChevronRight, Menu } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
 
@@ -18,11 +18,13 @@ import {
   ERP_SIDEBAR_COLLAPSED_WIDTH_PX,
   ERP_SIDEBAR_ICON_CLASS,
   ERP_SIDEBAR_ICON_COLLAPSED_CLASS,
+  ERP_SIDEBAR_ICON_RAIL_LABEL_CLASS,
   ERP_SIDEBAR_NAV_SCROLL,
   ERP_SIDEBAR_SECTION_LABEL,
   ERP_SIDEBAR_SURFACE,
   ERP_SIDEBAR_WIDTH_CLASS,
   ERP_SIDEBAR_WIDTH_PX,
+  erpSidebarIconRailItemClassName,
   erpSidebarNavChevronClassName,
   erpSidebarNavIconClassName,
   erpSidebarNavItemClassName,
@@ -61,43 +63,54 @@ function SidebarNavButton({
   onClick,
 }: SidebarNavButtonProps) {
   const highlighted = active || Boolean(flyoutOpen);
+  if (collapsed) {
+    return (
+      <button
+        type="button"
+        title={label}
+        aria-label={label}
+        aria-current={active ? "page" : undefined}
+        aria-expanded={showChevron ? flyoutOpen : undefined}
+        data-erp-nav-trigger
+        className={erpSidebarIconRailItemClassName(highlighted)}
+        onMouseEnter={onMouseEnter}
+        onMouseLeave={onMouseLeave}
+        onClick={onClick}
+      >
+        <Icon
+          className={[ERP_SIDEBAR_ICON_COLLAPSED_CLASS, erpSidebarNavIconClassName(highlighted)].join(" ")}
+          strokeWidth={highlighted ? 2.25 : 1.75}
+          aria-hidden
+        />
+        <span className={ERP_SIDEBAR_ICON_RAIL_LABEL_CLASS}>{label}</span>
+      </button>
+    );
+  }
+
   return (
     <button
       type="button"
-      title={collapsed ? label : undefined}
       aria-label={label}
       aria-current={active ? "page" : undefined}
       aria-expanded={showChevron ? flyoutOpen : undefined}
       data-erp-nav-trigger
-      className={[
-        erpSidebarNavItemClassName(highlighted),
-        collapsed ? "justify-center px-0" : "",
-      ]
-        .filter(Boolean)
-        .join(" ")}
+      className={erpSidebarNavItemClassName(highlighted)}
       onMouseEnter={onMouseEnter}
       onMouseLeave={onMouseLeave}
       onClick={onClick}
     >
       {highlighted ? <span className={ERP_SIDEBAR_ACTIVE_BAR} aria-hidden /> : null}
       <Icon
-        className={[
-          collapsed ? ERP_SIDEBAR_ICON_COLLAPSED_CLASS : ERP_SIDEBAR_ICON_CLASS,
-          erpSidebarNavIconClassName(highlighted),
-        ].join(" ")}
+        className={[ERP_SIDEBAR_ICON_CLASS, erpSidebarNavIconClassName(highlighted)].join(" ")}
         strokeWidth={highlighted ? 2.25 : 1.75}
         aria-hidden
       />
-      {!collapsed ? (
-        <>
-          <span className="min-w-0 flex-1 truncate leading-tight">{label}</span>
-          {showChevron ? (
-            <ChevronRight
-              className={`h-4 w-4 shrink-0 transition-transform duration-200 ${flyoutOpen ? "translate-x-0.5" : ""} ${erpSidebarNavChevronClassName(highlighted)}`}
-              aria-hidden
-            />
-          ) : null}
-        </>
+      <span className="min-w-0 flex-1 truncate leading-tight">{label}</span>
+      {showChevron ? (
+        <ChevronRight
+          className={`h-4 w-4 shrink-0 transition-transform duration-200 ${flyoutOpen ? "translate-x-0.5" : ""} ${erpSidebarNavChevronClassName(highlighted)}`}
+          aria-hidden
+        />
       ) : null}
     </button>
   );
@@ -131,38 +144,49 @@ function SectionBlock({
   return (
     <div>
       {!collapsed ? <p className={ERP_SIDEBAR_SECTION_LABEL}>{section.label}</p> : null}
-      <div className="flex flex-col gap-1.5 px-2">
+      <div className={collapsed ? "flex flex-col gap-1 px-1.5" : "flex flex-col gap-1 px-2"}>
         {items.map((cat) => {
           const directPath = cat.directPath?.trim();
           if (directPath) {
             const active = isCategoryActive(cat, pathname);
             const Icon = cat.Icon;
+            if (collapsed) {
+              return (
+                <Link
+                  key={cat.id}
+                  to={directPath}
+                  title={cat.label}
+                  aria-label={cat.label}
+                  aria-current={active ? "page" : undefined}
+                  className={erpSidebarIconRailItemClassName(active)}
+                >
+                  <Icon
+                    className={[
+                      ERP_SIDEBAR_ICON_COLLAPSED_CLASS,
+                      erpSidebarNavIconClassName(active),
+                    ].join(" ")}
+                    strokeWidth={active ? 2.25 : 1.75}
+                    aria-hidden
+                  />
+                  <span className={ERP_SIDEBAR_ICON_RAIL_LABEL_CLASS}>{cat.label}</span>
+                </Link>
+              );
+            }
             return (
               <Link
                 key={cat.id}
                 to={directPath}
-                title={collapsed ? cat.label : undefined}
                 aria-label={cat.label}
                 aria-current={active ? "page" : undefined}
-                className={[
-                  erpSidebarNavItemClassName(active),
-                  collapsed ? "justify-center px-0" : "",
-                ]
-                  .filter(Boolean)
-                  .join(" ")}
+                className={erpSidebarNavItemClassName(active)}
               >
                 {active ? <span className={ERP_SIDEBAR_ACTIVE_BAR} aria-hidden /> : null}
                 <Icon
-                  className={[
-                    collapsed ? ERP_SIDEBAR_ICON_COLLAPSED_CLASS : ERP_SIDEBAR_ICON_CLASS,
-                    erpSidebarNavIconClassName(active),
-                  ].join(" ")}
+                  className={[ERP_SIDEBAR_ICON_CLASS, erpSidebarNavIconClassName(active)].join(" ")}
                   strokeWidth={active ? 2.25 : 1.75}
                   aria-hidden
                 />
-                {!collapsed ? (
-                  <span className="min-w-0 flex-1 truncate leading-tight">{cat.label}</span>
-                ) : null}
+                <span className="min-w-0 flex-1 truncate leading-tight">{cat.label}</span>
               </Link>
             );
           }
@@ -199,16 +223,17 @@ function WmsCtaButton({ collapsed }: { collapsed: boolean }) {
         to={WMS_SIDEBAR_DIRECT.path}
         title={label}
         aria-label={label}
-        className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl border border-[#E2E8F0] bg-white text-slate-700 transition-colors duration-150 ease-out hover:bg-[#F8FAFC] hover:text-slate-900"
+        className="mx-auto flex w-full max-w-[4.5rem] flex-col items-center gap-0.5 rounded-lg border border-slate-200 bg-white px-1 py-2 text-slate-700 transition-colors duration-150 ease-out hover:bg-slate-50 hover:text-slate-900"
       >
-        <WmsIcon className="h-6 w-6" strokeWidth={1.75} aria-hidden />
+        <WmsIcon className="h-5 w-5" strokeWidth={1.75} aria-hidden />
+        <span className={ERP_SIDEBAR_ICON_RAIL_LABEL_CLASS}>{label}</span>
       </Link>
     );
   }
   return (
     <Link
       to={WMS_SIDEBAR_DIRECT.path}
-      className="flex h-[56px] w-full items-center justify-center gap-2 rounded-2xl border border-[#E2E8F0] bg-white px-4 text-[15px] font-semibold text-slate-800 transition-colors duration-150 ease-out hover:bg-[#F8FAFC] hover:text-slate-900"
+      className="flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-800 transition-colors duration-150 ease-out hover:bg-slate-50 hover:text-slate-900"
     >
       <WmsIcon className="h-5 w-5 shrink-0 text-slate-600" strokeWidth={1.75} aria-hidden />
       {label}
@@ -217,11 +242,11 @@ function WmsCtaButton({ collapsed }: { collapsed: boolean }) {
 }
 
 /**
- * Left ERP navigation — SPRZEDAŻ / OPERACJE, Magazyn+Ustawienia flyouts, WMS CTA.
+ * Left ERP navigation — default: narrow icon rail; toggle expands full labels.
  */
 export default function ErpSidebar() {
   const { pathname } = useLocation();
-  useLabels(); // re-render when dictionary / support mode changes
+  useLabels();
   const navCategories = buildNavFlyoutCategories();
   const { collapsed, toggleCollapsed } = useErpSidebarUi();
   const {
@@ -256,14 +281,14 @@ export default function ErpSidebar() {
         <div className={`flex h-full min-h-0 flex-col ${ERP_SIDEBAR_SURFACE}`}>
           <div
             className={[
-              "flex h-[70px] shrink-0 items-center border-b border-slate-200",
-              collapsed ? "justify-center px-2" : "gap-1 px-3",
+              "flex h-14 shrink-0 items-center border-b border-slate-200",
+              collapsed ? "justify-center px-1" : "gap-1 px-2",
             ].join(" ")}
           >
             <button
               type="button"
               onClick={toggleCollapsed}
-              className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-slate-600 transition-colors duration-150 ease-out hover:bg-[#EFF6FF] hover:text-slate-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2563EB]"
+              className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-slate-600 transition-colors duration-150 ease-out hover:bg-white hover:text-slate-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-400"
               aria-label={collapsed ? "Rozwiń menu boczne" : "Zwiń menu boczne"}
               title={collapsed ? "Rozwiń menu" : "Zwiń menu"}
             >
@@ -277,7 +302,7 @@ export default function ErpSidebar() {
           </div>
 
           <nav className={`min-h-0 flex-1 ${ERP_SIDEBAR_NAV_SCROLL}`} aria-label="Menu główne">
-            <div className="flex flex-col pb-2">
+            <div className={collapsed ? "flex flex-col gap-2 py-2" : "flex flex-col pb-2"}>
               {NAV_SIDEBAR_SECTIONS.map((section) => (
                 <SectionBlock
                   key={section.id}
@@ -296,8 +321,8 @@ export default function ErpSidebar() {
 
           <div
             className={[
-              "mt-auto shrink-0 space-y-3 border-t border-slate-200 bg-white pt-4",
-              collapsed ? "px-2 pb-4" : "px-3 pb-4",
+              "mt-auto shrink-0 space-y-2 border-t border-slate-200 bg-inherit pt-3",
+              collapsed ? "px-1.5 pb-3" : "px-2 pb-3",
             ].join(" ")}
           >
             <WmsCtaButton collapsed={collapsed} />

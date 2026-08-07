@@ -86,7 +86,7 @@ export function brandSidebarNavItemClassName(
   const size =
     density === "flyout"
       ? "min-h-10 gap-3 rounded-xl px-3 py-2.5 text-sm"
-      : "gap-3.5 rounded-xl px-4 py-3.5 text-[15px]";
+      : "gap-2.5 rounded-lg px-3 py-2.5 text-sm";
   return [
     "group relative flex w-full items-center text-left transition-colors duration-150 ease-out",
     size,

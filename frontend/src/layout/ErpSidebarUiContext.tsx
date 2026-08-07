@@ -19,9 +19,12 @@ const ErpSidebarUiContext = createContext<ErpSidebarUiValue | null>(null);
 
 function readCollapsedPreference(): boolean {
   try {
-    return localStorage.getItem(ERP_SIDEBAR_COLLAPSE_STORAGE_KEY) === "1";
+    const raw = localStorage.getItem(ERP_SIDEBAR_COLLAPSE_STORAGE_KEY);
+    // Default = icon rail (narrow). Only expand when user explicitly saved "0".
+    if (raw === null) return true;
+    return raw === "1";
   } catch {
-    return false;
+    return true;
   }
 }
 
