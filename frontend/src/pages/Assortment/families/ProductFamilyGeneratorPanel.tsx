@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import toast from "react-hot-toast";
 
 import {
@@ -15,27 +15,35 @@ type Props = {
   tenantId: number;
   familyId: number;
   onGenerated?: () => void;
+  onPreviewChange?: (preview: FamilyGeneratePreview) => void;
   /** When true, tighter chrome for embedding on product Family tab. */
   embedded?: boolean;
 };
 
 /**
- * Generator: always shows counts + selectable combinations (never auto-creates hundreds).
- * Mode A = empty products; Mode B = copy from base product (default when base exists).
- * SKU / catalog numbers are allocated via product_codes when base category is configured.
+ * Generator panel: missing combinations, create mode, create action.
  */
-export function ProductFamilyGeneratorPanel({ tenantId, familyId, onGenerated, embedded = false }: Props) {
+export function ProductFamilyGeneratorPanel({
+  tenantId,
+  familyId,
+  onGenerated,
+  onPreviewChange,
+  embedded = false,
+}: Props) {
   const [preview, setPreview] = useState<FamilyGeneratePreview | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [mode, setMode] = useState<FamilyGenerateMode>("copy_base");
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const onPreviewChangeRef = useRef(onPreviewChange);
+  onPreviewChangeRef.current = onPreviewChange;
 
   const reload = useCallback(async () => {
     setLoading(true);
     try {
       const p = await previewFamilyGenerate(tenantId, familyId);
       setPreview(p);
+      onPreviewChangeRef.current?.(p);
       setMode(p.default_mode);
       setSelected(new Set(p.combinations.filter((c) => !c.exists).map((c) => c.value_key)));
     } catch (e) {
@@ -50,21 +58,19 @@ export function ProductFamilyGeneratorPanel({ tenantId, familyId, onGenerated, e
     void reload();
   }, [reload]);
 
-  const missingKeys = useMemo(
-    () => (preview?.combinations.filter((c) => !c.exists).map((c) => c.value_key) ?? []),
+  const missing = useMemo(
+    () => preview?.combinations.filter((c) => !c.exists) ?? [],
     [preview],
   );
+
+  const missingKeys = useMemo(() => missing.map((c) => c.value_key), [missing]);
 
   const selectedMissingCount = useMemo(
     () => missingKeys.filter((k) => selected.has(k)).length,
     [missingKeys, selected],
   );
 
-  const selectedSkuCount = preview?.will_allocate_sku ? selectedMissingCount : 0;
-  const selectedCatalogCount = preview?.will_allocate_catalog ? selectedMissingCount : 0;
-
-  const toggle = (key: string, exists: boolean) => {
-    if (exists) return;
+  const toggle = (key: string) => {
     setSelected((prev) => {
       const next = new Set(prev);
       if (next.has(key)) next.delete(key);
@@ -122,110 +128,115 @@ export function ProductFamilyGeneratorPanel({ tenantId, familyId, onGenerated, e
   };
 
   if (loading) {
-    return <p className="mt-4 text-sm text-slate-500">Ładowanie podglądu generatora…</p>;
+    return (
+      <section className={embedded ? "mt-4 border-t border-slate-100 pt-4" : pimPanelClass}>
+        <p className="text-sm text-slate-500">Ładowanie generatora…</p>
+      </section>
+    );
   }
   if (!preview) return null;
 
   return (
-    <section className={embedded ? "mt-4 border-t border-slate-100 pt-4" : `mt-8 max-w-3xl ${pimPanelClass}`}>
-      <h2 className="text-sm font-semibold text-slate-900">
-        {embedded ? "Wybór kombinacji" : "Generator produktów"}
-      </h2>
-      <p className="mt-1 text-sm text-slate-500">
-        Przed utworzeniem wybierz kombinacje. SKU i numery katalogowe przydziela kategoria produktu
-        bazowego (gdy skonfigurowana).
-      </p>
-
-      <dl className="mt-4 grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
-        <div className={pimStatTileClass}>
-          <dt className="text-xs text-slate-500">Produkty (brakujące)</dt>
-          <dd className="font-semibold text-slate-900">{preview.product_count ?? preview.missing_count}</dd>
-        </div>
-        <div className={pimStatTileClass}>
-          <dt className="text-xs text-slate-500">SKU</dt>
-          <dd className="font-semibold text-slate-900">{preview.sku_count ?? 0}</dd>
-        </div>
-        <div className={pimStatTileClass}>
-          <dt className="text-xs text-slate-500">Numery katalogowe</dt>
-          <dd className="font-semibold text-slate-900">{preview.catalog_count ?? 0}</dd>
-        </div>
-        <div className={pimStatTileClass}>
-          <dt className="text-xs text-slate-500">Wybrane</dt>
-          <dd className="font-semibold text-slate-900">
-            {selectedMissingCount} / {selectedSkuCount} SKU / {selectedCatalogCount} kat.
-          </dd>
-        </div>
-      </dl>
-
-      {!preview.will_allocate_sku && !preview.will_allocate_catalog ? (
-        <p className="mt-3 text-xs text-amber-700">
-          Brak numeracji w kategorii produktu bazowego — produkty powstaną bez SKU / numeru
-          katalogowego. Skonfiguruj numery w Kategorie albo użyj Generuj na karcie produktu.
-        </p>
-      ) : null}
-
-      <label className="mt-4 block max-w-md">
-        <span className={pimFieldLabelClass}>Tryb</span>
-        <Select
-          value={mode}
-          disabled={busy}
-          onChange={(e) => setMode(e.target.value as FamilyGenerateMode)}
-        >
-          <option value="copy_base" disabled={!preview.has_base_product}>
-            B — Kopia z produktu bazowego{preview.has_base_product ? "" : " (brak bazowego)"}
-          </option>
-          <option value="empty">A — Puste produkty</option>
-        </Select>
-        {preview.base_product ? (
-          <p className="mt-1 text-xs text-slate-500">
-            Źródło kopiowania: {preview.base_product.name} (#{preview.base_product.id})
-            {preview.base_product.primary_category_id
-              ? ` · kategoria #${preview.base_product.primary_category_id}`
-              : " · brak kategorii — bez automatycznych kodów"}
+    <section className={embedded ? "mt-4 border-t border-slate-100 pt-4" : pimPanelClass}>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 className="text-sm font-semibold text-slate-900">Generator produktów</h2>
+          <p className="mt-0.5 text-xs text-slate-500">
+            Tworzy brakujące kombinacje cech. SKU / katalog — wg kategorii produktu bazowego.
           </p>
-        ) : null}
-      </label>
-
-      <div className="mt-4 flex flex-wrap gap-2">
-        <GhostButton type="button" density="compact" disabled={busy || !missingKeys.length} onClick={selectAllMissing}>
-          Zaznacz wszystkie nowe
-        </GhostButton>
-        <GhostButton type="button" density="compact" disabled={busy} onClick={clearSelection}>
-          Wyczyść wybór
-        </GhostButton>
+        </div>
         <PrimaryButton
           type="button"
           density="compact"
           disabled={busy || selectedMissingCount === 0}
           onClick={() => void onGenerate()}
         >
-          {busy ? "Tworzenie…" : `Utwórz wybrane (${selectedMissingCount})`}
+          {busy ? "Tworzenie…" : `Utwórz produkty (${selectedMissingCount})`}
         </PrimaryButton>
       </div>
 
-      {preview.combinations.length === 0 ? (
-        <p className="mt-4 text-sm text-slate-500">Dodaj cechy i wartości, aby zobaczyć kombinacje.</p>
-      ) : (
-        <ul className="mt-4 max-h-72 space-y-1 overflow-y-auto rounded-lg border border-slate-100 p-2">
-          {preview.combinations.map((c) => (
-            <li key={c.value_key}>
-              <label
-                className={`flex items-center gap-2 rounded px-2 py-1.5 text-sm ${
-                  c.exists ? "bg-slate-50 text-slate-400" : "hover:bg-slate-50 text-slate-800"
-                }`}
-              >
-                <Checkbox
-                  checked={c.exists || selected.has(c.value_key)}
-                  disabled={c.exists || busy}
-                  onChange={() => toggle(c.value_key, c.exists)}
-                />
-                <span className="flex-1 truncate">{c.label}</span>
-                <span className="text-xs text-slate-400">{c.exists ? "istnieje" : "nowy"}</span>
-              </label>
-            </li>
-          ))}
-        </ul>
-      )}
+      <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <div className={pimStatTileClass}>
+          <p className="text-xs text-slate-500">Brakujące kombinacje</p>
+          <p className="mt-1 text-xl font-semibold tabular-nums text-amber-700">{preview.missing_count}</p>
+        </div>
+        <div className={pimStatTileClass}>
+          <p className="text-xs text-slate-500">Wszystkie kombinacje</p>
+          <p className="mt-1 text-xl font-semibold tabular-nums text-slate-900">{preview.combination_count}</p>
+        </div>
+        <div className={pimStatTileClass}>
+          <p className="text-xs text-slate-500">Istniejące</p>
+          <p className="mt-1 text-xl font-semibold tabular-nums text-slate-900">{preview.existing_count}</p>
+        </div>
+        <div className={pimStatTileClass}>
+          <p className="text-xs text-slate-500">Wybrane do utworzenia</p>
+          <p className="mt-1 text-xl font-semibold tabular-nums text-slate-900">{selectedMissingCount}</p>
+        </div>
+      </div>
+
+      {!preview.will_allocate_sku && !preview.will_allocate_catalog ? (
+        <p className="mt-3 text-xs text-amber-700">
+          Brak numeracji w kategorii produktu bazowego — produkty powstaną bez SKU / numeru
+          katalogowego.
+        </p>
+      ) : null}
+
+      <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-12">
+        <label className="block lg:col-span-4">
+          <span className={pimFieldLabelClass}>Tryb tworzenia</span>
+          <Select
+            value={mode}
+            disabled={busy}
+            onChange={(e) => setMode(e.target.value as FamilyGenerateMode)}
+            className="bg-white"
+          >
+            <option value="copy_base" disabled={!preview.has_base_product}>
+              Kopia z produktu bazowego{preview.has_base_product ? "" : " (brak bazowego)"}
+            </option>
+            <option value="empty">Puste produkty</option>
+          </Select>
+          {preview.base_product ? (
+            <p className="mt-1 text-xs text-slate-500">
+              Źródło: {preview.base_product.name} (#{preview.base_product.id})
+            </p>
+          ) : null}
+        </label>
+        <div className="flex flex-wrap items-end gap-2 lg:col-span-8">
+          <GhostButton type="button" density="compact" disabled={busy || !missingKeys.length} onClick={selectAllMissing}>
+            Zaznacz wszystkie brakujące
+          </GhostButton>
+          <GhostButton type="button" density="compact" disabled={busy} onClick={clearSelection}>
+            Wyczyść wybór
+          </GhostButton>
+        </div>
+      </div>
+
+      <div className="mt-4">
+        <p className={pimFieldLabelClass}>Brakujące kombinacje</p>
+        {missing.length === 0 ? (
+          <p className="mt-2 text-sm text-slate-500">
+            {preview.combinations.length === 0
+              ? "Dodaj cechy i wartości, zapisz rodzinę, aby zobaczyć kombinacje."
+              : "Wszystkie kombinacje mają już produkty."}
+          </p>
+        ) : (
+          <ul className="mt-2 max-h-72 space-y-1 overflow-y-auto rounded-lg border border-slate-200 bg-white p-2">
+            {missing.map((c) => (
+              <li key={c.value_key}>
+                <label className="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-sm text-slate-800 hover:bg-slate-50">
+                  <Checkbox
+                    checked={selected.has(c.value_key)}
+                    disabled={busy}
+                    onChange={() => toggle(c.value_key)}
+                  />
+                  <span className="flex-1 truncate">{c.label}</span>
+                  <span className="text-xs font-medium text-amber-700">brakuje</span>
+                </label>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
     </section>
   );
 }

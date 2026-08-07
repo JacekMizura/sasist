@@ -1,3 +1,10 @@
+## 2026-08-07 — Dashboard edycji Rodziny produktów
+
+- Kartowy UX: nagłówek (status, KPI, Generator/Zapisz), Informacje, Cechy (osobne karty), tabela Produktów, panel Generatora
+- Komponenty: `FamilyEditInfoCard`, `FamilyEditAttributesSection`, `FamilyEditMembersCard`, `familyEditDraft.ts`
+- Usunięto stopkę „Rodzina jest opcjonalna…”
+- `npm run build` OK
+
 ## 2026-08-07 — Usunięcie panelu „Tożsamość produktu”
 
 - `ProductEditIdentityHeader` usunięty — nie renderuje się już nad zakładkami
