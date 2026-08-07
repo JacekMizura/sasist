@@ -1,4 +1,7 @@
-"""Increase / decrease carton + packaging_materials.stock from supplier receipts (PZ)."""
+"""Increase / decrease packaging stock via Inventory (shared WMS engine).
+
+Legacy scalar ``cartons.stock`` / ``packaging_materials.stock`` are deprecated.
+"""
 
 from __future__ import annotations
 
@@ -9,6 +12,14 @@ from sqlalchemy.orm import Session
 
 from ..models.carton import Carton
 from ..models.packaging_material import PackagingMaterial
+from .packaging_materials.inventory_apply import (
+    apply_packaging_inventory_issue,
+    apply_packaging_inventory_receive,
+)
+from .packaging_materials.stockable_bridge import (
+    ensure_carton_stockable_product,
+    ensure_packaging_stockable_product,
+)
 
 _EPS = 1e-9
 
@@ -24,17 +35,31 @@ def apply_wm_catalog_receive_delta(
     vat_rate_pct: float | None = None,
     supplier_id: int | None = None,
     purchase_at: Optional[datetime] = None,
+    warehouse_id: int | None = None,
+    location_id: int | None = None,
 ) -> None:
     k = (wm_kind or "").strip().lower()
     wid = (wm_id or "").strip()
     if not k or not wid or float(qty or 0) <= _EPS:
         return
     q = float(qty)
+
     if k == "carton":
         c = db.query(Carton).filter(Carton.id == wid, Carton.tenant_id == int(tenant_id)).first()
         if not c:
             raise ValueError(f"Karton {wid} nie został znaleziony dla tej firmy")
-        c.stock = float(c.stock or 0) + q
+        ensure_carton_stockable_product(db, c)
+        wh = int(warehouse_id if warehouse_id is not None else c.warehouse_id)
+        apply_packaging_inventory_receive(
+            db,
+            tenant_id=int(tenant_id),
+            warehouse_id=wh,
+            wm_kind=k,
+            wm_id=wid,
+            qty=q,
+            location_id=location_id,
+            location_label=getattr(c, "location_label", None),
+        )
         if purchase_price_net is not None:
             c.last_purchase_price_net = float(purchase_price_net)
             vr = float(vat_rate_pct if vat_rate_pct is not None else 23.0)
@@ -51,7 +76,18 @@ def apply_wm_catalog_receive_delta(
         )
         if not m:
             raise ValueError(f"Materiał opakowaniowy {wid} nie został znaleziony dla tej firmy")
-        m.stock = float(m.stock or 0) + q
+        ensure_packaging_stockable_product(db, m)
+        wh = int(warehouse_id if warehouse_id is not None else m.warehouse_id)
+        apply_packaging_inventory_receive(
+            db,
+            tenant_id=int(tenant_id),
+            warehouse_id=wh,
+            wm_kind=k,
+            wm_id=wid,
+            qty=q,
+            location_id=location_id,
+            location_label=getattr(m, "location_label", None),
+        )
         if purchase_price_net is not None:
             m.last_purchase_price_net = float(purchase_price_net)
             vr = float(vat_rate_pct if vat_rate_pct is not None else 23.0)
@@ -84,6 +120,7 @@ def update_wm_catalog_last_purchase_metadata(
         c = db.query(Carton).filter(Carton.id == wid, Carton.tenant_id == int(tenant_id)).first()
         if not c:
             return
+        ensure_carton_stockable_product(db, c)
         c.last_purchase_price_net = float(purchase_price_net)
         vr = float(vat_rate_pct if vat_rate_pct is not None else 23.0)
         c.last_purchase_price_gross = float(purchase_price_net) * (1.0 + vr / 100.0)
@@ -99,6 +136,7 @@ def update_wm_catalog_last_purchase_metadata(
         )
         if not m:
             return
+        ensure_packaging_stockable_product(db, m)
         m.last_purchase_price_net = float(purchase_price_net)
         vr = float(vat_rate_pct if vat_rate_pct is not None else 23.0)
         m.last_purchase_price_gross = float(purchase_price_net) * (1.0 + vr / 100.0)
@@ -114,6 +152,8 @@ def revert_wm_catalog_receive_delta(
     wm_kind: str,
     wm_id: str,
     qty: float,
+    *,
+    warehouse_id: int | None = None,
 ) -> None:
     k = (wm_kind or "").strip().lower()
     wid = (wm_id or "").strip()
@@ -124,10 +164,16 @@ def revert_wm_catalog_receive_delta(
         c = db.query(Carton).filter(Carton.id == wid, Carton.tenant_id == int(tenant_id)).first()
         if not c:
             raise ValueError(f"Karton {wid} nie znaleziony — nie można cofnąć przyjęcia")
-        new_s = float(c.stock or 0) - q
-        if new_s < -1e-5:
-            raise ValueError("Niewystarczający stan kartonów do cofnięcia przyjęcia")
-        c.stock = max(0.0, new_s)
+        product = ensure_carton_stockable_product(db, c)
+        wh = int(warehouse_id if warehouse_id is not None else c.warehouse_id)
+        apply_packaging_inventory_issue(
+            db,
+            tenant_id=int(tenant_id),
+            warehouse_id=wh,
+            product_id=int(product.id),
+            qty=q,
+            allow_negative=False,
+        )
     elif k == "packaging":
         m = (
             db.query(PackagingMaterial)
@@ -136,9 +182,15 @@ def revert_wm_catalog_receive_delta(
         )
         if not m:
             raise ValueError(f"Materiał {wid} nie znaleziony — nie można cofnąć przyjęcia")
-        new_s = float(m.stock or 0) - q
-        if new_s < -1e-5:
-            raise ValueError("Niewystarczający stan materiału do cofnięcia przyjęcia")
-        m.stock = max(0.0, new_s)
+        product = ensure_packaging_stockable_product(db, m)
+        wh = int(warehouse_id if warehouse_id is not None else m.warehouse_id)
+        apply_packaging_inventory_issue(
+            db,
+            tenant_id=int(tenant_id),
+            warehouse_id=wh,
+            product_id=int(product.id),
+            qty=q,
+            allow_negative=False,
+        )
     else:
         raise ValueError(f"Nieobsługiwany typ materiału magazynowego: {wm_kind}")

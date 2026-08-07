@@ -198,6 +198,7 @@ from .db.schema_upgrade import (
     ensure_supplier_product_tiers_and_delivery_price_manual_columns,
     ensure_delivery_item_catalog_snapshot_columns,
     ensure_bdo_packaging_wm_ref_migration,
+    ensure_packaging_materials_inventory_ssot,
     ensure_document_series_extended_columns,
     ensure_stock_document_series_columns,
     ensure_sale_documents_table,
@@ -1850,6 +1851,7 @@ def _upgrade_schema_background() -> None:
         ensure_supplier_product_tiers_and_delivery_price_manual_columns(engine)
         ensure_delivery_item_catalog_snapshot_columns(engine)
         ensure_bdo_packaging_wm_ref_migration(engine)
+        ensure_packaging_materials_inventory_ssot(engine)
         ensure_document_series_extended_columns(engine)
         ensure_stock_document_series_columns(engine)
         ensure_sale_documents_table(engine)

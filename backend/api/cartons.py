@@ -71,7 +71,7 @@ def _fopt_row(row: Carton, attr: str) -> Optional[float]:
         return None
 
 
-def _carton_to_read(row: Carton) -> CartonRead:
+def _carton_to_read(db: Session, row: Carton) -> CartonRead:
     sms = list(getattr(row, "shipping_methods", None) or [])
     sup = getattr(row, "supplier", None)
     supplier_name = None
@@ -85,8 +85,17 @@ def _carton_to_read(row: Carton) -> CartonRead:
     img = getattr(row, "image_url", None)
     sku_own = getattr(row, "sku", None)
     ean_own = getattr(row, "ean", None)
-    sk = float(getattr(row, "stock", 0) or 0)
-    rq = float(getattr(row, "reserved_qty", 0) or 0)
+    from ..services.packaging_materials.inventory_qty import packaging_inventory_quantity
+    from ..services.packaging_materials.stockable_bridge import ensure_carton_stockable_product
+
+    product = ensure_carton_stockable_product(db, row)
+    sk = packaging_inventory_quantity(
+        db,
+        tenant_id=int(row.tenant_id),
+        warehouse_id=int(row.warehouse_id),
+        product_id=int(product.id),
+    )
+    rq = 0.0
     avail = max(0.0, sk - rq)
     vat = float(getattr(row, "vat_rate_pct", 23) or 23)
     pq = getattr(row, "package_qty", None)
@@ -308,7 +317,7 @@ def get_carton(
     )
     if not row:
         raise HTTPException(status_code=404, detail="Nie znaleziono kartonu.")
-    return _carton_to_read(row)
+    return _carton_to_read(db, row)
 
 
 @router.post("/{carton_id}/duplicate/", response_model=CartonRead, status_code=201)
@@ -406,7 +415,7 @@ def duplicate_carton(
         .filter(Carton.id == nid)
         .first()
     )
-    return _carton_to_read(row)
+    return _carton_to_read(db, row)
 
 
 @router.post("/", response_model=CartonRead, status_code=201)
@@ -462,8 +471,8 @@ def create_carton(body: CartonCreate, db: Session = Depends(get_db)):
         else None,
         last_purchase_price_net=float(body.last_purchase_price_net) if body.last_purchase_price_net is not None else None,
         supplier_sku=(body.supplier_sku or "").strip()[:128] or None,
-        stock=float(body.stock),
-        reserved_qty=float(body.reserved_qty),
+        stock=None,
+        reserved_qty=None,
         location_label=(body.location_label or "").strip()[:512] or None,
         purchase_price=float(body.purchase_price) if body.purchase_price is not None else None,
         unit_cost=float(body.unit_cost) if body.unit_cost is not None else None,
@@ -497,6 +506,21 @@ def create_carton(body: CartonCreate, db: Session = Depends(get_db)):
         row.shipping_methods = sms
     db.add(row)
     db.flush()
+    from ..services.packaging_materials.stockable_bridge import ensure_carton_stockable_product
+    from ..services.packaging_materials.inventory_apply import apply_packaging_inventory_receive
+
+    ensure_carton_stockable_product(db, row)
+    initial_stock = float(body.stock or 0)
+    if initial_stock > 1e-9:
+        apply_packaging_inventory_receive(
+            db,
+            tenant_id=int(body.tenant_id),
+            warehouse_id=int(body.warehouse_id),
+            wm_kind="carton",
+            wm_id=str(row.id),
+            qty=initial_stock,
+            location_label=row.location_label,
+        )
     if body.price_tiers:
         _replace_carton_tiers(
             db,
@@ -512,7 +536,7 @@ def create_carton(body: CartonCreate, db: Session = Depends(get_db)):
         .filter(Carton.id == row.id)
         .first()
     )
-    return _carton_to_read(row)
+    return _carton_to_read(db, row)
 
 
 @router.put("/{carton_id}/", response_model=CartonRead)
@@ -636,9 +660,22 @@ def update_carton(
         raw = patch.get("supplier_sku")
         row.supplier_sku = (str(raw).strip()[:128] if raw is not None else "") or None
     if "stock" in patch and patch["stock"] is not None:
-        row.stock = float(patch["stock"])
+        from ..services.packaging_materials.set_absolute_stock import set_packaging_inventory_absolute
+        from ..services.packaging_materials.stockable_bridge import ensure_carton_stockable_product
+
+        ensure_carton_stockable_product(db, row)
+        set_packaging_inventory_absolute(
+            db,
+            tenant_id=int(row.tenant_id),
+            warehouse_id=int(row.warehouse_id),
+            wm_kind="carton",
+            wm_id=str(row.id),
+            target_qty=float(patch["stock"]),
+            location_label=getattr(row, "location_label", None),
+        )
+        row.stock = None
     if "reserved_qty" in patch and patch["reserved_qty"] is not None:
-        row.reserved_qty = float(patch["reserved_qty"])
+        row.reserved_qty = None
     if "location_label" in patch:
         raw = patch.get("location_label")
         row.location_label = (str(raw).strip()[:512] if raw is not None else "") or None
@@ -704,7 +741,7 @@ def update_carton(
         .filter(Carton.id == str(carton_id).strip())
         .first()
     )
-    return _carton_to_read(row)
+    return _carton_to_read(db, row)
 
 
 @router.patch("/bulk-supplier/", response_model=dict)

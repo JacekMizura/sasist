@@ -5184,16 +5184,11 @@ def ensure_warehouse_materials_master_data(engine: Engine) -> None:
 
 
 def ensure_bdo_packaging_wm_ref_migration(engine: Engine) -> None:
-    """Replace legacy bdo_packaging_materials + integer material_id with wm_kind + wm_id."""
-    from ..models.bdo_packaging import BdoCorrection, BdoPackagingPurchase, BdoStockCountLine, BdoStockCountSession
+    """Legacy: drop obsolete BDO operational ledger (purchases / corrections / stock counts).
 
+    BDO is report-only over packaging Inventory + stock documents.
+    """
     with engine.connect() as conn:
-        t = _table_exists(conn, "bdo_packaging_purchases")
-        if not t:
-            return
-        names = _table_column_names(conn, "bdo_packaging_purchases")
-        if "wm_kind" in names:
-            return
         for tbl in (
             "bdo_corrections",
             "bdo_stock_count_lines",
@@ -5201,12 +5196,96 @@ def ensure_bdo_packaging_wm_ref_migration(engine: Engine) -> None:
             "bdo_packaging_purchases",
             "bdo_packaging_materials",
         ):
-            conn.execute(text(f"DROP TABLE IF EXISTS {tbl}"))
+            if _table_exists(conn, tbl):
+                conn.execute(text(f"DROP TABLE IF EXISTS {tbl}"))
         conn.commit()
-    BdoPackagingPurchase.__table__.create(bind=engine, checkfirst=True)
-    BdoStockCountSession.__table__.create(bind=engine, checkfirst=True)
-    BdoStockCountLine.__table__.create(bind=engine, checkfirst=True)
-    BdoCorrection.__table__.create(bind=engine, checkfirst=True)
+
+
+def ensure_packaging_materials_inventory_ssot(engine: Engine) -> None:
+    """
+    Bridge packaging catalog → Product + Inventory SSOT.
+
+    - products.stock_item_kind
+    - cartons.product_id / packaging_materials.product_id
+    - orders.packing_consumables_json / packing_packaging_rw_document_id
+    - migrate scalar stock into inventory, then null scalar counters
+    """
+    from sqlalchemy.orm import sessionmaker
+
+    from ..models.carton import Carton
+    from ..models.packaging_material import PackagingMaterial
+    from ..services.packaging_materials.inventory_apply import migrate_scalar_stock_to_inventory
+    from ..services.packaging_materials.stockable_bridge import (
+        ensure_carton_stockable_product,
+        ensure_packaging_stockable_product,
+    )
+
+    with engine.connect() as conn:
+        # products.stock_item_kind
+        if _table_exists(conn, "products"):
+            cols = _table_column_names(conn, "products")
+            if "stock_item_kind" not in cols:
+                conn.execute(
+                    text(
+                        "ALTER TABLE products ADD COLUMN stock_item_kind VARCHAR(32) NOT NULL DEFAULT 'SELLABLE'"
+                    )
+                )
+        for tbl in ("cartons", "packaging_materials"):
+            if not _table_exists(conn, tbl):
+                continue
+            cols = _table_column_names(conn, tbl)
+            if "product_id" not in cols:
+                conn.execute(text(f"ALTER TABLE {tbl} ADD COLUMN product_id INTEGER"))
+                try:
+                    conn.execute(text(f"CREATE UNIQUE INDEX IF NOT EXISTS uq_{tbl}_product_id ON {tbl}(product_id)"))
+                except Exception:
+                    pass
+        if _table_exists(conn, "orders"):
+            ocols = _table_column_names(conn, "orders")
+            if "packing_consumables_json" not in ocols:
+                conn.execute(text("ALTER TABLE orders ADD COLUMN packing_consumables_json TEXT"))
+            if "packing_packaging_rw_document_id" not in ocols:
+                conn.execute(text("ALTER TABLE orders ADD COLUMN packing_packaging_rw_document_id INTEGER"))
+        conn.commit()
+
+    SessionLocal = sessionmaker(bind=engine)
+    db = SessionLocal()
+    try:
+        for c in db.query(Carton).all():
+            prod = ensure_carton_stockable_product(db, c)
+            scalar = float(getattr(c, "stock", 0) or 0)
+            if scalar > 1e-9:
+                migrate_scalar_stock_to_inventory(
+                    db,
+                    tenant_id=int(c.tenant_id),
+                    warehouse_id=int(c.warehouse_id),
+                    product_id=int(prod.id),
+                    scalar_qty=scalar,
+                    location_label=getattr(c, "location_label", None),
+                )
+            c.stock = None
+            c.reserved_qty = None
+        for m in db.query(PackagingMaterial).all():
+            prod = ensure_packaging_stockable_product(db, m)
+            scalar = float(getattr(m, "stock", 0) or 0)
+            if scalar > 1e-9:
+                migrate_scalar_stock_to_inventory(
+                    db,
+                    tenant_id=int(m.tenant_id),
+                    warehouse_id=int(m.warehouse_id),
+                    product_id=int(prod.id),
+                    scalar_qty=scalar,
+                    location_label=getattr(m, "location_label", None),
+                )
+            m.stock = None
+            m.reserved_qty = None
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+    finally:
+        db.close()
+
 
 
 def ensure_document_series_extended_columns(engine: Engine) -> None:

@@ -1954,6 +1954,13 @@ def accept_stock_document(db: Session, tenant_id: int, document_id: int) -> Stoc
             sid = int(doc.supplier_id) if doc.supplier_id is not None else None
             wmk = str(getattr(sdi, "wm_kind", "") or "")
             wmid = str(getattr(sdi, "wm_id", "") or "")
+            from .packaging_materials.stockable_bridge import resolve_product_id_for_wm
+            from .stock_operation_receipt_service import append_receipt_operation
+
+            pid = resolve_product_id_for_wm(db, tenant_id, wmk, wmid)
+            if pid is None:
+                raise ValueError(f"Nie znaleziono stockable product dla materiału {wmk}:{wmid}")
+            sdi.product_id = int(pid)
             if to_dock > 1e-9:
                 apply_wm_catalog_receive_delta(
                     db,
@@ -1965,7 +1972,9 @@ def accept_stock_document(db: Session, tenant_id: int, document_id: int) -> Stoc
                     vat_rate_pct=vatp,
                     supplier_id=sid,
                     purchase_at=now,
+                    warehouse_id=int(doc.warehouse_id) if doc.warehouse_id is not None else None,
                 )
+                append_receipt_operation(db, doc, sdi, to_dock, skip_inventory_movement=False)
             elif rec > 1e-9 and sdi.purchase_price_net is not None:
                 update_wm_catalog_last_purchase_metadata(
                     db,

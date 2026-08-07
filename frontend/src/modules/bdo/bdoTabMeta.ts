@@ -1,54 +1,25 @@
-export type BdoTabMeta = {
-  title: string;
-  description: string;
-  breadcrumbLabel: string;
-};
-
-const META: Record<string, BdoTabMeta> = {
+export const BDO_TAB_META: Record<
+  string,
+  { title: string; description: string }
+> = {
   "/warehouse/bdo/dashboard": {
-    title: "Dashboard",
-    description: "Ewidencja materiałów opakowaniowych i raportowanie BDO",
-    breadcrumbLabel: "Dashboard",
+    title: "Dashboard BDO",
+    description: "Podgląd materiałów opakowaniowych objętych raportowaniem środowiskowym.",
   },
   "/warehouse/bdo/materials": {
     title: "Materiały opakowaniowe",
-    description: "Katalog materiałów magazynowych z polami BDO — kg tworzywa, papieru i innych surowców na jednostkę",
-    breadcrumbLabel: "Materiały opakowaniowe",
+    description: "Flagi BDO i masy jednostkowe (kg) — stany pochodzą z magazynu WMS.",
   },
   "/warehouse/bdo/movements": {
-    title: "Historia ruchów",
-    description: "Historia zakupów, korekt i spisów materiałów",
-    breadcrumbLabel: "Historia ruchów",
-  },
-  "/warehouse/bdo/purchases": {
-    title: "Rejestracja zakupu (BDO)",
-    description: "Ręczne wpisy zakupów materiałów objętych ewidencją BDO",
-    breadcrumbLabel: "Zakupy BDO",
-  },
-  "/warehouse/bdo/stock-count": {
-    title: "Spis z natury",
-    description: "Inwentaryzacja materiałów objętych ewidencją BDO",
-    breadcrumbLabel: "Spis z natury",
+    title: "Historia",
+    description: "Ruchy wynikające z dokumentów magazynowych (PZ / RW).",
   },
   "/warehouse/bdo/monthly-report": {
     title: "Raport miesięczny",
-    description: "Zużycie opakowań wg surowca — dane do raportowania BDO za wybrany okres",
-    breadcrumbLabel: "Raport miesięczny",
-  },
-  "/warehouse/bdo/corrections": {
-    title: "Korekty",
-    description: "Korekty stanu materiałów BDO — uszkodzenia, utylizacja, zwroty i stan otwarcia",
-    breadcrumbLabel: "Korekty",
+    description: "Raport BDO z przyjęć PZ i zużycia RW (w tym pakowanie).",
   },
   "/warehouse/bdo/settings": {
-    title: "Ustawienia",
-    description: "Dane firmy raportującej, numery rejestrowe i domyślna metodyka obliczeń",
-    breadcrumbLabel: "Ustawienia",
+    title: "Ustawienia BDO",
+    description: "Dane podmiotu i metodologia raportu.",
   },
 };
-
-export function resolveBdoTabMeta(pathname: string): BdoTabMeta | null {
-  if (META[pathname]) return META[pathname];
-  const base = pathname.replace(/\/$/, "");
-  return META[base] ?? null;
-}

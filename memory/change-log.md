@@ -1,3 +1,13 @@
+## 2026-08-07 — Materiały opakowaniowe + BDO report-only (backend foundation)
+
+- Stockable bridge: `Product.stock_item_kind` + `Carton/PackagingMaterial.product_id` → Inventory SSOT
+- `wm_catalog_stock_service` posts Inventory (not scalar stock)
+- Packing finish → `create_packing_packaging_rw` (RW ISSUE)
+- BDO API rewrite: dashboard/catalog/settings/monthly from documents; purchases/corrections/stock-counts → 410
+- Dropped BDO ledger tables in migration; FE redirects + deleted purchase/correction/stock-count pages
+- Rename UI: Materiały opakowaniowe
+- Remaining: packing consumables UI, movements projection, full FE polish, product-list filters excluding packaging stockables
+
 ## 2026-08-07 — Magazyn: uproszczenie urządzeń (Wózki + Strefa sortująca)
 
 - Zakładki: Wózki | Strefa sortująca | Planer floty | Nośniki (`cartsTabs.ts`)

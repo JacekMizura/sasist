@@ -3600,6 +3600,37 @@ def _run_wms_packing_post_pack_pipeline(
             )
         )
 
+    # Packaging materials RW (carton + optional consumables) — shared Inventory engine.
+    try:
+        from .packaging_materials.packing_consume_service import create_packing_packaging_rw
+
+        pkg_rw = create_packing_packaging_rw(
+            db,
+            order=order,
+            tenant_id=int(tenant_id),
+            warehouse_id=int(warehouse_id),
+            operator_user_id=operator_user_id,
+        )
+        out.append(
+            WmsPackingPostPackStepResult(
+                step="packaging_rw",
+                ok=True,
+                skipped=pkg_rw is None,
+                message=(f"id={pkg_rw.id}" if pkg_rw is not None else "no_consumables"),
+            )
+        )
+    except Exception as e:
+        logger.exception("PACKING_FINISH packaging_rw failed order_id=%s", getattr(order, "id", None))
+        out.append(
+            WmsPackingPostPackStepResult(
+                step="packaging_rw",
+                ok=False,
+                skipped=False,
+                message=str(e)[:500],
+            )
+        )
+        raise
+
     if actions.generate_shipment:
         try:
             out.append(_packing_step_generate_shipment(db, order))

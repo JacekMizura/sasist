@@ -30,6 +30,8 @@ class Carton(Base):
 
     tenant_id = Column(Integer, ForeignKey("tenants.id"), nullable=False, index=True)
     warehouse_id = Column(Integer, ForeignKey("warehouses.id"), nullable=False, index=True)
+    #: Linked stockable Product — physical qty lives in ``inventory`` only.
+    product_id = Column(Integer, ForeignKey("products.id", ondelete="SET NULL"), nullable=True, index=True, unique=True)
 
     name = Column(String(256), nullable=False)
     image_url = Column(String(512), nullable=True)
@@ -61,8 +63,9 @@ class Carton(Base):
     last_purchase_price_gross = Column(Float, nullable=True)
     last_purchased_at = Column(DateTime, nullable=True)
     supplier_sku = Column(String(128), nullable=True)
-    stock = Column(Float, nullable=False, server_default=text("0"), default=0.0)
-    reserved_qty = Column(Float, nullable=False, server_default=text("0"), default=0.0)
+    #: DEPRECATED scalar counters — migrated to Inventory; kept nullable for schema upgrade only.
+    stock = Column(Float, nullable=True)
+    reserved_qty = Column(Float, nullable=True)
     location_label = Column(String(512), nullable=True)
     purchase_price = Column(Float, nullable=True)
     unit_cost = Column(Float, nullable=True)

@@ -65,7 +65,7 @@ const UI_STRINGS_DEFAULTS = {
     /** Panel triage labels for orders list (not system `Order.status`). */
     orderPanelStatuses: "Zamówienia — statusy panelu",
     shippingMethods: "Metody dostawy",
-    warehouseMaterials: "Materiały magazynowe",
+    warehouseMaterials: "Materiały opakowaniowe",
     /** Magazyn → BDO (opakowania, raport środowiskowy). */
     warehouseBdo: "BDO",
     warehouseMaterialsCartons: "Kartony i opakowania",

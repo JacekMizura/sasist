@@ -269,11 +269,8 @@ import ProductCustomFieldEditPage from "./pages/Assortment/productCustomFields/P
 import BdoLayout from "./pages/bdo/BdoLayout"
 import BdoDashboardPage from "./pages/bdo/BdoDashboardPage"
 import BdoMaterialsPage from "./pages/bdo/BdoMaterialsPage"
-import BdoPurchasesPage from "./pages/bdo/BdoPurchasesPage"
 import BdoMovementHistoryPage from "./pages/bdo/BdoMovementHistoryPage"
-import BdoStockCountPage from "./pages/bdo/BdoStockCountPage"
 import BdoMonthlyReportPage from "./pages/bdo/BdoMonthlyReportPage"
-import BdoCorrectionsPage from "./pages/bdo/BdoCorrectionsPage"
 import BdoSettingsPage from "./pages/bdo/BdoSettingsPage"
 import DocumentsLayout from "./pages/documents/DocumentsLayout"
 import DocumentsSalesPage from "./pages/documents/DocumentsSalesPage"
@@ -797,10 +794,10 @@ export const router = createBrowserRouter(
                   <Route path="dashboard" element={<BdoDashboardPage />} />
                   <Route path="materials" element={<BdoMaterialsPage />} />
                   <Route path="movements" element={<BdoMovementHistoryPage />} />
-                  <Route path="purchases" element={<BdoPurchasesPage />} />
-                  <Route path="stock-count" element={<BdoStockCountPage />} />
+                  <Route path="purchases" element={<Navigate to="/warehouse/bdo/dashboard" replace />} />
+                  <Route path="stock-count" element={<Navigate to="/warehouse/bdo/dashboard" replace />} />
                   <Route path="monthly-report" element={<BdoMonthlyReportPage />} />
-                  <Route path="corrections" element={<BdoCorrectionsPage />} />
+                  <Route path="corrections" element={<Navigate to="/warehouse/bdo/dashboard" replace />} />
                   <Route path="settings" element={<BdoSettingsPage />} />
                 </Route>
                 <Route path="purchase-orders" element={<LegacyPurchaseOrdersRedirect />} />

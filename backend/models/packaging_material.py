@@ -18,6 +18,8 @@ class PackagingMaterial(Base):
 
     tenant_id = Column(Integer, ForeignKey("tenants.id"), nullable=False, index=True)
     warehouse_id = Column(Integer, ForeignKey("warehouses.id"), nullable=False, index=True)
+    #: Linked stockable Product — physical qty lives in ``inventory`` only.
+    product_id = Column(Integer, ForeignKey("products.id", ondelete="SET NULL"), nullable=True, index=True, unique=True)
 
     name = Column(String(256), nullable=False)
     #: stretch_foil | packing_tape | paper_filler | bubble_wrap | courier_envelope | label_roll | other
@@ -29,8 +31,9 @@ class PackagingMaterial(Base):
     image_url = Column(String(512), nullable=True)
     sku = Column(String(128), nullable=True)
 
-    stock = Column(Float, nullable=False, server_default=text("0"), default=0.0)
-    reserved_qty = Column(Float, nullable=False, server_default=text("0"), default=0.0)
+    #: DEPRECATED scalar counters — migrated to Inventory; kept nullable for schema upgrade only.
+    stock = Column(Float, nullable=True)
+    reserved_qty = Column(Float, nullable=True)
     is_active = Column(Boolean, nullable=False, server_default=text("true"), default=True)
 
     supplier_id = Column(Integer, ForeignKey("suppliers.id", ondelete="SET NULL"), nullable=True, index=True)

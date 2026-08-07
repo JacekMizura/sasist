@@ -1,11 +1,13 @@
 ﻿## Active
 
-**Magazyn devices IA rebuild (2026-08-07).**
+**Packaging materials + BDO architecture refactor (in progress, 2026-08-07).**
 
-Tabs: Wózki | Strefa sortująca | Planer floty | Nośniki
-- Wózki: unified BULK+MULTI list (`CartsFleetPage`), `?type=` filter, type picker on create, badges on cards
-- Strefa sortująca: former Regały (`/carts/racks`); UI copy without „Regały”
-- Strefy: removed (FE pages + `/zones` API); redirect `/carts/zones` → `/carts/bulk`
-- Models `PickingZone` kept for WMS order associations
+SSOT direction:
+- Carton / PackagingMaterial = master data + BDO kg flags
+- Physical stock = `inventory` via linked `products.stock_item_kind` (CARTON | PACKAGING_MATERIAL)
+- BDO = report-only over stock documents (PZ RECEIPT / RW ISSUE)
+- Packing finish creates packaging RW for selected carton (+ consumables JSON)
 
-**Prior:** App shell header above sidebar; WMS settings search
+Removed / removing: BDO purchases, corrections, stock-count ledger tables & FE pages.
+
+**Next stages:** FE consumables UI on packing; document movement history projection; MM/inventory-count UX for packaging stockables; purge dead BDO API client helpers.

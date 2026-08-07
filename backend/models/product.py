@@ -34,6 +34,8 @@ class Product(Base):
     name = Column(String)
     sku = Column(String, index=True)
     ean = Column(String, index=True)
+    #: SELLABLE | CARTON | PACKAGING_MATERIAL — packaging stockables share Inventory engine.
+    stock_item_kind = Column(String(32), nullable=False, default="SELLABLE", server_default=text("'SELLABLE'"), index=True)
     symbol = Column(String)  # legacy alias for sku
     barcode = Column(String(64), unique=True, nullable=True, index=True)  # PRD-000001 (Code128, scan)
 

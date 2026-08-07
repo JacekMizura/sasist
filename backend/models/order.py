@@ -84,6 +84,12 @@ class Order(Base):
     basket_id = Column(Integer, ForeignKey("cart_baskets.id", ondelete="SET NULL"), nullable=True)
     #: Karton wybrany na stanowisku pakowania WMS (słownik cartons).
     selected_carton_id = Column(String(36), ForeignKey("cartons.id", ondelete="SET NULL"), nullable=True, index=True)
+    #: JSON list of extra packaging consumables: [{wm_kind, wm_id, qty, location_id?}].
+    packing_consumables_json = Column(Text, nullable=True)
+    #: RW document created on packing finish for packaging consumption (idempotency).
+    packing_packaging_rw_document_id = Column(
+        Integer, ForeignKey("stock_documents.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     total_volume_dm3 = Column(Float, nullable=True)  # objętość zamówienia (dm³) – ustawiana przy przypisaniu
 
     # Fala kompletacji (wave picking). NULL = gotowe do przypisania do fali.

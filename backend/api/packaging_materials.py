@@ -73,14 +73,23 @@ def _tier_reads(row: PackagingMaterial) -> list[PriceTierRead]:
     ]
 
 
-def _row_to_read(row: PackagingMaterial) -> PackagingMaterialRead:
+def _row_to_read(db: Session, row: PackagingMaterial) -> PackagingMaterialRead:
+    from ..services.packaging_materials.inventory_qty import packaging_inventory_quantity
+    from ..services.packaging_materials.stockable_bridge import ensure_packaging_stockable_product
+
     sup = getattr(row, "supplier", None)
     supplier_name = (getattr(sup, "name", None) or "").strip() or None if sup else None
     prod = getattr(row, "producer", None)
     producer_id = int(row.producer_id) if getattr(row, "producer_id", None) is not None else None
     producer_name = (getattr(prod, "name", None) or "").strip() or None if prod is not None else None
-    sk = float(getattr(row, "stock", 0) or 0)
-    rq = float(getattr(row, "reserved_qty", 0) or 0)
+    product = ensure_packaging_stockable_product(db, row)
+    sk = packaging_inventory_quantity(
+        db,
+        tenant_id=int(row.tenant_id),
+        warehouse_id=int(row.warehouse_id),
+        product_id=int(product.id),
+    )
+    rq = 0.0
     avail = max(0.0, sk - rq)
     vat = float(getattr(row, "vat_rate_pct", 23) or 23)
     pq = getattr(row, "package_qty", None)
@@ -233,7 +242,13 @@ def _replace_packaging_tiers(
         )
 
 
-def _apply_payload_to_row(row: PackagingMaterial, body: PackagingMaterialCreate | PackagingMaterialUpdate, *, is_create: bool) -> None:
+def _apply_payload_to_row(
+    db: Session,
+    row: PackagingMaterial,
+    body: PackagingMaterialCreate | PackagingMaterialUpdate,
+    *,
+    is_create: bool,
+) -> None:
     """Mutate row from pydantic body (create uses all fields; update uses model_dump exclude_unset)."""
     if is_create:
         data = body.model_dump() if isinstance(body, PackagingMaterialCreate) else {}
@@ -247,9 +262,11 @@ def _apply_payload_to_row(row: PackagingMaterial, body: PackagingMaterialCreate 
         row.name = str(body.name).strip()[:256]  # type: ignore[union-attr]
         row.material_type = str(body.material_type).strip()[:32]  # type: ignore[union-attr]
         row.unit = str(body.unit).strip()[:32]  # type: ignore[union-attr]
-        row.stock = float(body.stock)  # type: ignore[union-attr]
-        row.reserved_qty = float(body.reserved_qty)  # type: ignore[union-attr]
+        row.stock = None
+        row.reserved_qty = None
         row.is_active = bool(body.is_active)  # type: ignore[union-attr]
+        # Stash initial stock for Inventory post after flush (attribute on body handled by caller).
+        setattr(row, "_initial_stock_for_inventory", float(getattr(body, "stock", 0) or 0))
     if "name" in data and not is_create:
         nn = str(data["name"] or "").strip()
         if not nn:
@@ -260,9 +277,22 @@ def _apply_payload_to_row(row: PackagingMaterial, body: PackagingMaterialCreate 
     if "unit" in data and not is_create:
         row.unit = str(data["unit"]).strip()[:32]
     if "stock" in data and not is_create and data["stock"] is not None:
-        row.stock = float(data["stock"])
+        from ..services.packaging_materials.set_absolute_stock import set_packaging_inventory_absolute
+        from ..services.packaging_materials.stockable_bridge import ensure_packaging_stockable_product
+
+        ensure_packaging_stockable_product(db, row)
+        set_packaging_inventory_absolute(
+            db,
+            tenant_id=int(row.tenant_id),
+            warehouse_id=int(row.warehouse_id),
+            wm_kind="packaging",
+            wm_id=str(row.id),
+            target_qty=float(data["stock"]),
+            location_label=getattr(row, "location_label", None),
+        )
+        row.stock = None
     if "reserved_qty" in data and not is_create and data["reserved_qty"] is not None:
-        row.reserved_qty = float(data["reserved_qty"])
+        row.reserved_qty = None
     if "is_active" in data and not is_create and data["is_active"] is not None:
         row.is_active = bool(data["is_active"])
 
@@ -416,7 +446,7 @@ def list_packaging_materials(
                 func.lower(func.coalesce(PackagingMaterial.sku, "")).like(like),
             )
         )
-    return [_row_to_read(x) for x in query.all()]
+    return [_row_to_read(db, x) for x in query.all()]
 
 
 @router.get("/{material_id}/", response_model=PackagingMaterialRead)
@@ -433,7 +463,7 @@ def get_packaging_material(
     )
     if not row:
         raise HTTPException(status_code=404, detail="Nie znaleziono materiału.")
-    return _row_to_read(row)
+    return _row_to_read(db, row)
 
 
 @router.post("/{material_id}/duplicate/", response_model=PackagingMaterialRead, status_code=201)
@@ -544,7 +574,7 @@ def duplicate_packaging_material(
         .filter(PackagingMaterial.id == nid)
         .first()
     )
-    return _row_to_read(row)
+    return _row_to_read(db, row)
 
 
 @router.post("/", response_model=PackagingMaterialRead, status_code=201)
@@ -565,9 +595,24 @@ def create_packaging_material(body: PackagingMaterialCreate, db: Session = Depen
         created_at=now,
         updated_at=now,
     )
-    _apply_payload_to_row(row, body, is_create=True)
+    _apply_payload_to_row(db, row, body, is_create=True)
     db.add(row)
     db.flush()
+    from ..services.packaging_materials.stockable_bridge import ensure_packaging_stockable_product
+    from ..services.packaging_materials.inventory_apply import apply_packaging_inventory_receive
+
+    ensure_packaging_stockable_product(db, row)
+    initial = float(getattr(row, '_initial_stock_for_inventory', 0) or 0)
+    if initial > 1e-9:
+        apply_packaging_inventory_receive(
+            db,
+            tenant_id=int(body.tenant_id),
+            warehouse_id=int(body.warehouse_id),
+            wm_kind='packaging',
+            wm_id=str(row.id),
+            qty=initial,
+            location_label=row.location_label,
+        )
     if body.price_tiers:
         _replace_packaging_tiers(
             db,
@@ -583,7 +628,7 @@ def create_packaging_material(body: PackagingMaterialCreate, db: Session = Depen
         .filter(PackagingMaterial.id == row.id)
         .first()
     )
-    return _row_to_read(row)
+    return _row_to_read(db, row)
 
 
 @router.put("/{material_id}/", response_model=PackagingMaterialRead)
@@ -611,7 +656,7 @@ def update_packaging_material(
         _validate_supplier_id(db, tenant_id=int(tenant_id), supplier_id=patch.get("supplier_id"))
     if "producer_id" in patch:
         _validate_producer_id(db, tenant_id=int(tenant_id), producer_id=patch.get("producer_id"))
-    _apply_payload_to_row(row, body, is_create=False)
+    _apply_payload_to_row(db, row, body, is_create=False)
 
     if "price_tiers" in patch:
         tiers = patch.get("price_tiers")
@@ -637,7 +682,7 @@ def update_packaging_material(
         .filter(PackagingMaterial.id == str(material_id).strip())
         .first()
     )
-    return _row_to_read(row)
+    return _row_to_read(db, row)
 
 
 @router.patch("/{material_id}/stock/", response_model=PackagingMaterialRead)
@@ -659,7 +704,20 @@ def patch_packaging_stock(
     )
     if not row:
         raise HTTPException(status_code=404, detail="Nie znaleziono materiału.")
-    row.stock = float(body.stock)
+    from ..services.packaging_materials.set_absolute_stock import set_packaging_inventory_absolute
+    from ..services.packaging_materials.stockable_bridge import ensure_packaging_stockable_product
+
+    ensure_packaging_stockable_product(db, row)
+    set_packaging_inventory_absolute(
+        db,
+        tenant_id=int(tenant_id),
+        warehouse_id=int(warehouse_id),
+        wm_kind="packaging",
+        wm_id=str(row.id),
+        target_qty=float(body.stock),
+        location_label=getattr(row, "location_label", None),
+    )
+    row.stock = None
     row.updated_at = datetime.utcnow()
     db.commit()
     row = (
@@ -667,7 +725,7 @@ def patch_packaging_stock(
         .filter(PackagingMaterial.id == str(material_id).strip())
         .first()
     )
-    return _row_to_read(row)
+    return _row_to_read(db, row)
 
 
 @router.patch("/bulk-supplier/", response_model=dict)

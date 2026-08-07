@@ -1,78 +1,12 @@
-"""BDO — zakupy, spisy, korekty; materiały = asortyment (packaging_materials + cartons)."""
+"""BDO — settings + audit only. Operational ledger removed (report-only over WMS docs)."""
 
 from __future__ import annotations
 
-from datetime import date, datetime
+from datetime import datetime
 
-from sqlalchemy import Boolean, Column, Date, DateTime, Float, ForeignKey, Integer, String, Text, UniqueConstraint, text
+from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String, Text, text
 
 from ..database import Base
-
-
-class BdoPackagingPurchase(Base):
-    __tablename__ = "bdo_packaging_purchases"
-
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    tenant_id = Column(Integer, ForeignKey("tenants.id"), nullable=False, index=True)
-    #: ``packaging`` → packaging_materials.id ; ``carton`` → cartons.id
-    wm_kind = Column(String(16), nullable=False, index=True)
-    wm_id = Column(String(36), nullable=False, index=True)
-
-    purchase_date = Column(Date, nullable=False, index=True)
-    supplier_name = Column(String(512), nullable=False, server_default="")
-    qty = Column(Float, nullable=False)
-    unit_cost = Column(Float, nullable=True)
-    total = Column(Float, nullable=True)
-    document_no = Column(String(256), nullable=True)
-    notes = Column(Text, nullable=True)
-
-    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
-
-
-class BdoStockCountSession(Base):
-    __tablename__ = "bdo_stock_count_sessions"
-
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    tenant_id = Column(Integer, ForeignKey("tenants.id"), nullable=False, index=True)
-
-    count_date = Column(Date, nullable=False, index=True)
-    period_label = Column(String(32), nullable=True)
-    notes = Column(Text, nullable=True)
-    created_by_label = Column(String(256), nullable=True)
-
-    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
-
-
-class BdoStockCountLine(Base):
-    __tablename__ = "bdo_stock_count_lines"
-
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    session_id = Column(Integer, ForeignKey("bdo_stock_count_sessions.id", ondelete="CASCADE"), nullable=False, index=True)
-    wm_kind = Column(String(16), nullable=False, index=True)
-    wm_id = Column(String(36), nullable=False, index=True)
-
-    system_stock = Column(Float, nullable=False)
-    counted_stock = Column(Float, nullable=False)
-    difference = Column(Float, nullable=False)
-    notes = Column(Text, nullable=True)
-
-    __table_args__ = (UniqueConstraint("session_id", "wm_kind", "wm_id", name="uq_bdo_count_line_session_wm"),)
-
-
-class BdoCorrection(Base):
-    __tablename__ = "bdo_corrections"
-
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    tenant_id = Column(Integer, ForeignKey("tenants.id"), nullable=False, index=True)
-    wm_kind = Column(String(16), nullable=False, index=True)
-    wm_id = Column(String(36), nullable=False, index=True)
-
-    correction_date = Column(Date, nullable=False, index=True)
-    qty = Column(Float, nullable=False)
-    reason = Column(String(64), nullable=False)
-    notes = Column(Text, nullable=True)
-
-    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
 
 
 class BdoSettings(Base):
