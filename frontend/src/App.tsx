@@ -270,6 +270,7 @@ import ProductsImportHistoryTabPage from "./pages/Products/ProductsImportHistory
 import ProductCategoriesPage from "./pages/Products/ProductCategoriesPage"
 import AssortmentCategoriesPage from "./pages/Assortment/categories/ProductCategoriesPage"
 import CategoryEditPage from "./pages/Assortment/categories/CategoryEditPage"
+import AssortmentSettingsPage from "./pages/Assortment/settings/AssortmentSettingsPage"
 import ProductFamiliesPage from "./pages/Assortment/families/ProductFamiliesPage"
 import ProductFamilyEditPage from "./pages/Assortment/families/ProductFamilyEditPage"
 import SizeTablesPage from "./pages/Assortment/SizeTablesPage"
@@ -719,6 +720,7 @@ export const router = createBrowserRouter(
                 <Route path="product-custom-fields" element={<ProductCustomFieldsPage />} />
                 <Route path="product-custom-fields/new" element={<ProductCustomFieldEditPage />} />
                 <Route path="product-custom-fields/:fieldId/edit" element={<ProductCustomFieldEditPage />} />
+                <Route path="assortment/settings" element={<AssortmentSettingsPage />} />
                 <Route
                   path="production"
                   element={

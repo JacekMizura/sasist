@@ -6,9 +6,8 @@ import { PageHeader } from "../../components/layout/PageHeader";
 import { TabsContainer } from "../../components/layout/TabsContainer";
 import { tabsNavItemClassName } from "../../components/layout/TabsNav";
 
-/** Canonical WMS settings top tabs — shared by hub and Stanowiska routes. */
+/** Canonical WMS settings top tabs — process settings only (hub + Stanowiska). */
 export const WMS_SETTINGS_TABS = [
-  { id: "common", label: "Stany magazynowe" },
   { id: "packing", label: "Pakowanie" },
   { id: "picking", label: "Zbieranie" },
   { id: "direct_sales", label: "Sprzedaż bezpośrednia" },
@@ -29,13 +28,16 @@ export type WmsSettingsTabId = (typeof WMS_SETTINGS_TABS)[number]["id"];
 export const WMS_SETTINGS_HUB_PATH = "/settings/wms";
 export const WMS_WORKSTATIONS_PATH = "/settings/wms/workstations";
 
+/** Former „Stany magazynowe” tab — now Asortyment → Ustawienia. */
+export const ASSORTMENT_INVENTORY_SETTINGS_PATH = "/assortment/settings";
+
 export function isWmsSettingsTabId(value: string | null | undefined): value is WmsSettingsTabId {
   return Boolean(value && WMS_SETTINGS_TABS.some((t) => t.id === value));
 }
 
 export function wmsSettingsTabHref(tabId: WmsSettingsTabId): string {
   if (tabId === "workstations") return WMS_WORKSTATIONS_PATH;
-  if (tabId === "common") return WMS_SETTINGS_HUB_PATH;
+  if (tabId === "packing") return WMS_SETTINGS_HUB_PATH;
   return `${WMS_SETTINGS_HUB_PATH}?tab=${tabId}`;
 }
 
@@ -48,7 +50,7 @@ export function resolveWmsSettingsTabFromLocation(
   }
   const raw = searchParams.get("tab");
   if (isWmsSettingsTabId(raw) && raw !== "workstations") return raw;
-  return "common";
+  return "packing";
 }
 
 type ChromeProps = {

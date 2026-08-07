@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useBlocker, useSearchParams } from "react-router-dom";
+import { Navigate, useBlocker, useSearchParams } from "react-router-dom";
 import { useWarehouse } from "../../context/WarehouseContext";
 import toast from "react-hot-toast";
 import {
@@ -8,7 +8,6 @@ import {
 } from "../../modules/wmsSettings/directSales/DirectSalesSettingsPanel";
 import WmsPackingSettingsPanel, { type WmsPackingSettingsPanelHandle } from "./WmsPackingSettingsPanel";
 import WmsReturnsSettingsPanel from "./WmsReturnsSettingsPanel";
-import WmsInventoryManagementSettingsPanel from "./WmsInventoryManagementSettingsPanel";
 import WmsSmartMatchingSettingsPanel from "./WmsSmartMatchingSettingsPanel";
 import WmsThreeDMatchingSettingsPanel from "./WmsThreeDMatchingSettingsPanel";
 import WmsProductValidationSettingsPanel from "./WmsProductValidationSettingsPanel";
@@ -20,6 +19,7 @@ import {
 import { WmsSettingsComingSoon } from "./WmsSettingsComingSoon";
 import { WmsSettingsFooter } from "./WmsSettingsFooter";
 import {
+  ASSORTMENT_INVENTORY_SETTINGS_PATH,
   isWmsSettingsTabId,
   WmsSettingsChrome,
   type WmsSettingsTabId,
@@ -36,8 +36,10 @@ export default function WmsSettingsPage() {
   const [searchParams] = useSearchParams();
 
   const rawTab = searchParams.get("tab");
+  const legacyInventoryRedirect = rawTab === "common";
+
   const activeTab: WmsSettingsTabId =
-    isWmsSettingsTabId(rawTab) && rawTab !== "workstations" ? rawTab : "common";
+    isWmsSettingsTabId(rawTab) && rawTab !== "workstations" ? rawTab : "packing";
 
   const packingRef = useRef<WmsPackingSettingsPanelHandle>(null);
   const directSalesRef = useRef<DirectSalesSettingsPanelHandle>(null);
@@ -59,7 +61,7 @@ export default function WmsSettingsPage() {
     return () => window.removeEventListener("beforeunload", onBeforeUnload);
   }, [packingDirty, directSalesDirty, pickingDirty]);
 
-  const blocker = useBlocker(isDirty);
+  const blocker = useBlocker(isDirty && !legacyInventoryRedirect);
 
   useEffect(() => {
     if (blocker.state !== "blocked") return;
@@ -93,6 +95,11 @@ export default function WmsSettingsPage() {
       toast.error("Nie udało się przywrócić zapisanych ustawień.");
     }
   }, [packingDirty, directSalesDirty, pickingDirty]);
+
+  /** Legacy bookmark: Stany magazynowe moved to Asortyment → Ustawienia. */
+  if (legacyInventoryRedirect) {
+    return <Navigate to={ASSORTMENT_INVENTORY_SETTINGS_PATH} replace />;
+  }
 
   const activeLabel = WMS_SETTINGS_TABS.find((t) => t.id === activeTab)?.label ?? "";
 
@@ -132,9 +139,6 @@ export default function WmsSettingsPage() {
         <div className={activeTab === "returns" ? "block" : "hidden"} aria-hidden={activeTab !== "returns"}>
           <WmsReturnsSettingsPanel warehouseId={warehouseIdTop} />
         </div>
-        <div className={activeTab === "common" ? "block" : "hidden"} aria-hidden={activeTab !== "common"}>
-          <WmsInventoryManagementSettingsPanel warehouseId={warehouseIdTop} />
-        </div>
         <div className={activeTab === "smart_matching" ? "block" : "hidden"} aria-hidden={activeTab !== "smart_matching"}>
           <WmsSmartMatchingSettingsPanel warehouseId={warehouseIdTop} sectionNavObserve={activeTab === "smart_matching"} />
         </div>
@@ -151,7 +155,6 @@ export default function WmsSettingsPage() {
         activeTab !== "packing" &&
         activeTab !== "direct_sales" &&
         activeTab !== "returns" &&
-        activeTab !== "common" &&
         activeTab !== "smart_matching" &&
         activeTab !== "three_d_matching" &&
         activeTab !== "receiving" &&

@@ -249,6 +249,11 @@ export function buildNavFlyoutCategories(): NavCategoryConfig[] {
             plusLinkTitle: UI_STRINGS.navigation.addProductCustomField,
           },
           {
+            path: "/assortment/settings",
+            label: "Ustawienia",
+            Icon: Settings2,
+          },
+          {
             path: "/manufacturers",
             label: UI_STRINGS.navigation.manufacturers,
             Icon: Factory,
@@ -502,6 +507,7 @@ export function isCategoryActive(category: NavCategoryConfig, pathname: string):
     if (pathname.startsWith("/goods-orders")) return true;
     if (pathname.startsWith("/warehouse-materials")) return true;
     if (pathname === "/production" || pathname.startsWith("/production/")) return true;
+    if (pathname === "/assortment" || pathname.startsWith("/assortment/")) return true;
   }
   if (category.id === "settings") {
     // Konfiguracja WMS należy do Magazynu — nie podświetlaj Ogólnych.

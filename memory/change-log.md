@@ -1,3 +1,11 @@
+## 2026-08-07 — Asortyment → Ustawienia (Stany magazynowe)
+
+- Nowa pozycja menu Asortyment → Ustawienia (`/assortment/settings`)
+- Zakładka Stany magazynowe przeniesiona z Konfiguracji WMS (bez zmian API)
+- WMS: usunięto tab `common`; default Pakowanie; `?tab=common` → redirect
+- Shell zakładek gotowy na kolejne sekcje produktów
+- `npm run build` OK
+
 ## 2026-08-07 — Lista produktów + Multiakcje: wyrównanie UX
 
 - Formularze Multiakcji: jednolity wiersz `checkbox/radio | etykieta | pole` (`PmaFieldRow`, `PatchFieldsEditor`)
