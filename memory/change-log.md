@@ -1,3 +1,11 @@
+## 2026-08-07 — WMS settings: left nav switches section (no scroll)
+
+- Registry: `selectSection` + `?section=` query; removed IntersectionObserver / scroll-spy
+- `WmsSettingsSection` mounts only the active subsection
+- Nav / Packing / Picking / DS / etc. unchanged visually; save logic untouched
+- Deleted `wmsSettingsSectionDom.ts`
+- `npm run build` OK
+
 ## 2026-08-07 — Order Multiakcje + shared multiActions shell
 
 - Extracted generic `frontend/src/components/multiActions/` (MultiActionsModal, MultiModulePicker, createRegistry, types).

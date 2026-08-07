@@ -1,15 +1,11 @@
 ﻿## Active
 
+**WMS settings section nav = switcher (2026-08-07).**
+
+- Left rail selects one subsection; only that section mounts (no page scroll-spy)
+- URL `?section=` deep-link / refresh persistence
+- Forms, top tabs, save logic unchanged
+
 **Order Multiakcje (2026-08-07) — done.**
 
-- Shared `frontend/src/components/multiActions/` shell
-- Order list: Zap „Multiakcje” → `OrderMultiActionsModal` (same UX as products)
-- Live modules: status, payment, note, shipping, document, custom_field
-- Host: packing_queue, export, delete
-- Stubs (no BE yet): operator, tags, fulfillment_warehouse, order_source
-- Dropdown multiakcji usunięty
-
-**WMS settings UI unification (2026-08-07).**
-
-- Shared `WmsSettingsTabFrame` + collapsible icon sections + icon left nav
-- All process tabs aligned to Pakowanie pattern (layout only)
+- Shared multiActions shell; order creator mirrors products

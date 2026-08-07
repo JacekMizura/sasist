@@ -13,6 +13,7 @@ export type WmsSettingsTabFrameProps = {
   sections: WmsSettingsSectionConfig[];
   asideLabel?: string;
   observeSections?: boolean;
+  /** @deprecated Unused — retained for call-site compatibility. */
   observeRevision?: unknown;
   /** Dirty / save wiring from page host (same as sticky footer). */
   dirty?: boolean;

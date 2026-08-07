@@ -1,9 +1,8 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { ChevronDown, type LucideIcon } from "lucide-react";
 
-import { WMS_SETTINGS_SECTION_ANCHOR_CLASS } from "./wmsSettingsSectionConstants";
-import { useWmsSettingsSectionAnchor } from "./WmsSettingsSectionRegistryContext";
 import { useWmsSettingsSearch } from "./WmsSettingsSearchContext";
+import { useWmsSettingsSectionVisible } from "./WmsSettingsSectionRegistryContext";
 import { cnParts, wmsSettingsTokens } from "./wmsSettingsTokens";
 
 export type WmsSettingsSectionProps = {
@@ -22,7 +21,7 @@ export type WmsSettingsSectionProps = {
 };
 
 /**
- * Anchored, collapsible settings section card (left-nav target).
+ * Settings section card. With left-nav switcher enabled, only the active section mounts.
  */
 export function WmsSettingsSection({
   id,
@@ -35,7 +34,7 @@ export function WmsSettingsSection({
   defaultCollapsed = false,
   searchText,
 }: WmsSettingsSectionProps) {
-  const anchorRef = useWmsSettingsSectionAnchor(id);
+  const visible = useWmsSettingsSectionVisible(id);
   const { query } = useWmsSettingsSearch();
   const heading = (title ?? "").trim();
   const [collapsed, setCollapsed] = useState(defaultCollapsed);
@@ -50,14 +49,14 @@ export function WmsSettingsSection({
     if (query && matchesSearch) setCollapsed(false);
   }, [query, matchesSearch]);
 
+  if (!visible) return null;
   if (!matchesSearch) return null;
 
   return (
     <section
-      ref={anchorRef}
       id={id}
       data-wms-section=""
-      className={cnParts(WMS_SETTINGS_SECTION_ANCHOR_CLASS, className)}
+      className={cnParts("min-w-0", className)}
       aria-label={heading ? `Sekcja: ${heading}` : undefined}
     >
       <div className={wmsSettingsTokens.card}>

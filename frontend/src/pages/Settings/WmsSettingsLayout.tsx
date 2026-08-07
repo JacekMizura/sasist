@@ -17,6 +17,7 @@ export type WmsSettingsLayoutProps = {
 
 /**
  * Shared WMS settings body: optional left section rail + content column.
+ * Left rail switches which section mounts in the main column (admin-panel style).
  * Sidebar is hidden when there is at most one section (content uses full width).
  */
 export function WmsSettingsLayout({
@@ -29,6 +30,7 @@ export function WmsSettingsLayout({
   mainClassName = "",
 }: WmsSettingsLayoutProps) {
   const showAside = sections.length >= 1;
+  /** When false, all sections mount (no left-nav switcher gating). */
   const observe = observeSections && showAside;
 
   return (

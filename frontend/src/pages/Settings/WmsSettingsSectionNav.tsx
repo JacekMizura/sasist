@@ -4,10 +4,11 @@ import { useState } from "react";
 
 /**
  * Left section rail — icon + label, brand-orange active state (Pakowanie pattern).
+ * Switches the right-hand content (sub-tabs); does not scroll the page.
  * On small screens collapses into a simple disclosure list.
  */
 export default function WmsSettingsSectionNav() {
-  const { orderedSections, activeSectionId, scrollToSection, observe } = useWmsSettingsSectionRegistry();
+  const { orderedSections, activeSectionId, selectSection, observe } = useWmsSettingsSectionRegistry();
   const [mobileOpen, setMobileOpen] = useState(false);
 
   const list = (
@@ -22,8 +23,9 @@ export default function WmsSettingsSectionNav() {
           <button
             key={section.id}
             type="button"
+            aria-current={isActive ? "page" : undefined}
             onClick={() => {
-              scrollToSection(section.id);
+              selectSection(section.id);
               setMobileOpen(false);
             }}
             className={
