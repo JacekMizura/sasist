@@ -252,7 +252,7 @@ export function AdminDataTable<T>({
 
   return (
     <>
-      <div className={`hidden overflow-x-auto ${renderMobileCard ? "md:block" : "block"}`}>
+      <div className={renderMobileCard ? "hidden overflow-x-auto md:block" : "overflow-x-auto"}>
         <table className={tableClass}>
           <colgroup>
             <col className="w-10" />

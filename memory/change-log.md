@@ -1,3 +1,10 @@
+## 2026-08-07 — Fix product custom fields list (AdminDataTable)
+
+- Bug: `hidden` + `block` w AdminDataTable → tabela niewidoczna (Tailwind conflict)
+- Product page: PageLayout fullBleed + ProductCustomFieldsTable jak OrderCustomFieldsTable
+- Ten sam toolbar/search/DnD/bulk; kolumny: Typ, Rodzaj, Aktywne
+- `npm run build` OK
+
 ## 2026-08-07 — Standard list administracyjnych (AdminDataTable)
 
 - Nowy `components/admin/AdminDataTable` + tokeny (drag, checkbox, ID, name, columns, icon actions)

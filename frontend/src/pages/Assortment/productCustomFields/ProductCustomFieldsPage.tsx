@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   DndContext,
@@ -23,34 +23,18 @@ import {
 } from "../../../api/productCustomFieldsApi";
 import { extractApiErrorMessage } from "../../../api/authApi";
 import { moduleAutomationShellClass } from "../../../components/layout/flatSectionTokens";
+import PageLayout from "../../../components/layout/PageLayout";
 import { ModuleListBreadcrumb, moduleListEmptyStateClass } from "../../../components/listPage/moduleList";
-import { AdminDataTable, adminDataTableSortableIds, type AdminDataTableColumn } from "../../../components/admin";
 import {
   oaBtnDanger,
   oaBtnPri,
   oaSearchInp,
 } from "../../../components/orders/automation/orderAutomationUiTokens";
 import { UI_STRINGS } from "../../../constants/uiStrings";
-
-const TYPE_LABEL: Record<string, string> = {
-  TEXT: "Tekst",
-  NUMBER: "Liczba",
-  FILES: "Pliki",
-  SELECT_SINGLE: "Lista",
-  SELECT_MULTI: "Lista",
-  GPSR_ATTACHMENTS: "GPSR",
-  ATTACHMENTS: "Załączniki",
-};
-
-const KIND_LABEL: Record<string, string> = {
-  TEXT: "Pole tekstowe",
-  NUMBER: "Pole liczbowe",
-  FILES: "Pliki",
-  SELECT_SINGLE: "Jednokrotny wybór",
-  SELECT_MULTI: "Wielokrotny wybór",
-  GPSR_ATTACHMENTS: "Instrukcja bezpieczeństwa (GPSR)",
-  ATTACHMENTS: "Załączniki",
-};
+import {
+  ProductCustomFieldsTable,
+  productCustomFieldsSortableIds,
+} from "./ProductCustomFieldsTable";
 
 type ListOrderMode = "manual" | "id";
 
@@ -87,9 +71,13 @@ function countLabel(n: number): string {
   return `${n} pól`;
 }
 
+/**
+ * Product custom fields admin list — same layout/components as OrderCustomFieldsListPage.
+ */
 export default function ProductCustomFieldsPage() {
   const navigate = useNavigate();
   const [tenantId, setTenantId] = useState<number | null>(null);
+  const [tenantReady, setTenantReady] = useState(false);
   const [rows, setRows] = useState<ProductCustomFieldDto[]>([]);
   const [loading, setLoading] = useState(false);
   const [reorderBusy, setReorderBusy] = useState(false);
@@ -105,12 +93,14 @@ export default function ProductCustomFieldsPage() {
   useEffect(() => {
     void fetchTenantsList()
       .then((list) => setTenantId(list[0]?.id ?? null))
-      .catch(() => setTenantId(null));
+      .catch(() => setTenantId(null))
+      .finally(() => setTenantReady(true));
   }, []);
 
   const load = useCallback(async () => {
     if (tenantId == null) {
       setRows([]);
+      setErr(null);
       return;
     }
     setLoading(true);
@@ -119,7 +109,7 @@ export default function ProductCustomFieldsPage() {
       setRows(await listProductCustomFields(tenantId));
       setSelectedIds(new Set());
     } catch (e) {
-      setErr(extractApiErrorMessage(e, "Nie udało się wczytać pól."));
+      setErr(extractApiErrorMessage(e, "Nie udało się wczytać dodatkowych pól."));
       setRows([]);
     } finally {
       setLoading(false);
@@ -140,10 +130,7 @@ export default function ProductCustomFieldsPage() {
   }, [filteredRows, listOrderMode, idSort]);
 
   const reorderEnabled = listOrderMode === "manual" && search.trim() === "";
-  const sortableIds = useMemo(
-    () => adminDataTableSortableIds(displayRows, (r) => r.id),
-    [displayRows],
-  );
+  const sortableIds = useMemo(() => productCustomFieldsSortableIds(displayRows), [displayRows]);
 
   const visibleIds = useMemo(() => displayRows.map((r) => r.id), [displayRows]);
   const allVisibleSelected = visibleIds.length > 0 && visibleIds.every((id) => selectedIds.has(id));
@@ -258,169 +245,137 @@ export default function ProductCustomFieldsPage() {
     }
   };
 
-  const columns: AdminDataTableColumn<ProductCustomFieldDto>[] = [
-    {
-      id: "type",
-      header: "Typ pola",
-      width: "14%",
-      hideBelow: "md",
-      className: "text-slate-700",
-      cell: (r) => TYPE_LABEL[r.type] ?? r.type,
-    },
-    {
-      id: "kind",
-      header: "Rodzaj",
-      width: "18%",
-      hideBelow: "lg",
-      className: "text-slate-600",
-      cell: (r) => KIND_LABEL[r.type] ?? r.type,
-    },
-    {
-      id: "active",
-      header: "Aktywne",
-      width: "10%",
-      hideBelow: "sm",
-      cell: (r) =>
-        r.is_active ? (
-          <span className="font-medium text-emerald-700">Tak</span>
-        ) : (
-          <span className="text-slate-400">Nie</span>
-        ),
-    },
-  ];
-
   const shell = `${moduleAutomationShellClass} w-full max-w-none pb-6`;
 
-  if (tenantId == null && !loading) {
-    return (
+  let body: ReactNode;
+  if (!tenantReady) {
+    body = <div className={`${shell} text-sm text-slate-600`}>Ładowanie…</div>;
+  } else if (tenantId == null) {
+    body = (
       <div className={shell}>
-        <p className="text-sm text-slate-600">Ładowanie podmiotu…</p>
+        <p className="text-sm text-slate-600">Brak dostępnego podmiotu — nie można wczytać listy pól.</p>
+      </div>
+    );
+  } else {
+    body = (
+      <div className={shell}>
+        <ModuleListBreadcrumb
+          items={[
+            { label: UI_STRINGS.navigation.assortment, to: "/products" },
+            { label: "Dodatkowe pola" },
+          ]}
+        />
+
+        <div className="mb-4 mt-6 flex flex-wrap items-end justify-between gap-4">
+          <div className="min-w-0 flex-1">
+            <h1 className="text-2xl font-semibold text-slate-900">Dodatkowe pola produktów</h1>
+            {!loading ? (
+              <p className="mt-1 text-sm text-slate-500">{countLabel(rows.length)}</p>
+            ) : null}
+          </div>
+          <button type="button" onClick={() => navigate("/product-custom-fields/new")} className={oaBtnPri}>
+            <Plus className="h-4 w-4 shrink-0" strokeWidth={2} aria-hidden />
+            Dodaj pole
+          </button>
+        </div>
+
+        <div className="relative mb-4 max-w-xl">
+          <Search
+            className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"
+            strokeWidth={2}
+            aria-hidden
+          />
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Szukaj pola…"
+            className={oaSearchInp}
+            type="search"
+            aria-label="Szukaj pola"
+          />
+        </div>
+
+        {err ? (
+          <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800" role="alert">
+            {err}
+          </div>
+        ) : null}
+
+        {reorderBusy ? <p className="mb-2 text-xs text-slate-500">Zapisywanie kolejności…</p> : null}
+
+        {listOrderMode === "id" ? (
+          <p className="mb-2 text-xs text-slate-500">
+            Sortowanie po ID — kliknij nagłówek ID ponownie, aby wrócić do kolejności ręcznej i przeciągania.
+          </p>
+        ) : search.trim() ? (
+          <p className="mb-2 text-xs text-slate-500">Wyczyść wyszukiwanie, aby zmienić kolejność pól.</p>
+        ) : null}
+
+        {selectedCount > 0 ? (
+          <div className="mb-4 flex flex-wrap items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+            <span className="text-sm font-medium text-slate-800">
+              Zaznaczono: <span className="tabular-nums">{selectedCount}</span>
+            </span>
+            <button
+              type="button"
+              className={oaBtnDanger}
+              disabled={bulkBusy}
+              onClick={() => void onBulkDelete()}
+            >
+              Usuń zaznaczone
+            </button>
+          </div>
+        ) : null}
+
+        {loading && rows.length === 0 ? (
+          <div className={moduleListEmptyStateClass}>Ładowanie listy…</div>
+        ) : rows.length === 0 ? (
+          <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-slate-200 bg-white px-6 py-16 text-center">
+            <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-slate-200 bg-slate-50 text-slate-400">
+              <ClipboardList className="h-7 w-7" strokeWidth={1.75} aria-hidden />
+            </div>
+            <p className="mt-5 text-base font-semibold text-slate-900">Brak dodatkowych pól</p>
+            <p className="mt-1 max-w-sm text-sm text-slate-500">
+              Zdefiniuj pola widoczne na kartach produktów — tekst, liczby, listy, załączniki i więcej.
+            </p>
+            <button
+              type="button"
+              className={`${oaBtnPri} mt-6`}
+              onClick={() => navigate("/product-custom-fields/new")}
+            >
+              <Plus className="h-4 w-4 shrink-0" strokeWidth={2} aria-hidden />
+              Dodaj pierwsze pole
+            </button>
+          </div>
+        ) : displayRows.length === 0 ? (
+          <div className="rounded-lg border border-dashed border-slate-200 px-6 py-12 text-center">
+            <p className="text-sm font-medium text-slate-800">Brak wyników wyszukiwania</p>
+            <p className="mt-1 text-sm text-slate-500">Zmień frazę lub wyczyść pole wyszukiwania.</p>
+          </div>
+        ) : (
+          <div className="rounded-xl border border-slate-200 bg-white">
+            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
+              <SortableContext items={sortableIds} strategy={verticalListSortingStrategy}>
+                <ProductCustomFieldsTable
+                  rows={displayRows}
+                  selectedIds={selectedIds}
+                  idSort={idSort}
+                  onIdSortChange={handleIdSortChange}
+                  onSelect={handleSelect}
+                  onSelectAll={handleSelectAll}
+                  onDelete={(row) => void onDeleteOne(row)}
+                  reorderEnabled={reorderEnabled}
+                  reorderBusy={reorderBusy || bulkBusy}
+                  allVisibleSelected={allVisibleSelected}
+                  someVisibleSelected={someVisibleSelected}
+                />
+              </SortableContext>
+            </DndContext>
+          </div>
+        )}
       </div>
     );
   }
 
-  return (
-    <div className={shell}>
-      <ModuleListBreadcrumb
-        items={[
-          { label: UI_STRINGS.navigation.assortment, to: "/products" },
-          { label: UI_STRINGS.navigation.productCustomFields },
-        ]}
-      />
-
-      <div className="mb-4 mt-6 flex flex-wrap items-end justify-between gap-4">
-        <div className="min-w-0">
-          <h1 className="text-2xl font-semibold text-slate-900">Dodatkowe pola produktów</h1>
-          {!loading ? (
-            <p className="mt-1 text-sm text-slate-500">{countLabel(rows.length)}</p>
-          ) : null}
-        </div>
-        <button type="button" onClick={() => navigate("/product-custom-fields/new")} className={oaBtnPri}>
-          <Plus className="h-4 w-4 shrink-0" strokeWidth={2} aria-hidden />
-          Dodaj pole
-        </button>
-      </div>
-
-      <div className="relative mb-4 max-w-xl">
-        <Search
-          className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"
-          strokeWidth={2}
-          aria-hidden
-        />
-        <input
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Szukaj pola…"
-          className={oaSearchInp}
-          type="search"
-          aria-label="Szukaj pola"
-        />
-      </div>
-
-      {err ? (
-        <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800" role="alert">
-          {err}
-        </div>
-      ) : null}
-
-      {reorderBusy ? <p className="mb-2 text-xs text-slate-500">Zapisywanie kolejności…</p> : null}
-
-      {listOrderMode === "id" ? (
-        <p className="mb-2 text-xs text-slate-500">
-          Sortowanie po ID — kliknij nagłówek ID ponownie, aby wrócić do kolejności ręcznej i przeciągania.
-        </p>
-      ) : search.trim() ? (
-        <p className="mb-2 text-xs text-slate-500">Wyczyść wyszukiwanie, aby zmienić kolejność pól.</p>
-      ) : null}
-
-      {selectedCount > 0 ? (
-        <div className="mb-4 flex flex-wrap items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
-          <span className="text-sm font-medium text-slate-800">
-            Zaznaczono: <span className="tabular-nums">{selectedCount}</span>
-          </span>
-          <button
-            type="button"
-            className={oaBtnDanger}
-            disabled={bulkBusy}
-            onClick={() => void onBulkDelete()}
-          >
-            Usuń zaznaczone
-          </button>
-        </div>
-      ) : null}
-
-      {loading && rows.length === 0 ? (
-        <div className={moduleListEmptyStateClass}>Ładowanie listy…</div>
-      ) : rows.length === 0 ? (
-        <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-slate-200 bg-white px-6 py-16 text-center">
-          <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-slate-200 bg-slate-50 text-slate-400">
-            <ClipboardList className="h-7 w-7" strokeWidth={1.75} aria-hidden />
-          </div>
-          <p className="mt-5 text-base font-semibold text-slate-900">Brak dodatkowych pól</p>
-          <p className="mt-1 max-w-sm text-sm text-slate-500">
-            Zdefiniuj pola widoczne na kartach produktów — tekst, liczby, listy, załączniki i więcej.
-          </p>
-          <button
-            type="button"
-            className={`${oaBtnPri} mt-6`}
-            onClick={() => navigate("/product-custom-fields/new")}
-          >
-            <Plus className="h-4 w-4 shrink-0" strokeWidth={2} aria-hidden />
-            Dodaj pierwsze pole
-          </button>
-        </div>
-      ) : displayRows.length === 0 ? (
-        <div className="rounded-lg border border-dashed border-slate-200 px-6 py-12 text-center">
-          <p className="text-sm font-medium text-slate-800">Brak wyników wyszukiwania</p>
-          <p className="mt-1 text-sm text-slate-500">Zmień frazę lub wyczyść pole wyszukiwania.</p>
-        </div>
-      ) : (
-        <div className="rounded-xl border border-slate-200 bg-white">
-          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
-            <SortableContext items={sortableIds} strategy={verticalListSortingStrategy}>
-              <AdminDataTable
-                rows={displayRows}
-                getRowId={(r) => r.id}
-                getRowName={(r) => r.name}
-                columns={columns}
-                selectedIds={selectedIds}
-                onSelect={handleSelect}
-                onSelectAll={handleSelectAll}
-                allVisibleSelected={allVisibleSelected}
-                someVisibleSelected={someVisibleSelected}
-                nameHeader="Nazwa pola"
-                onNameClick={(r) => navigate(`/product-custom-fields/${r.id}/edit`)}
-                editTo={(r) => `/product-custom-fields/${r.id}/edit`}
-                onDelete={(r) => void onDeleteOne(r)}
-                reorderEnabled={reorderEnabled}
-                reorderBusy={reorderBusy || bulkBusy}
-                idSort={idSort}
-                onIdSortChange={handleIdSortChange}
-              />
-            </SortableContext>
-          </DndContext>
-        </div>
-      )}
-    </div>
-  );
+  return <PageLayout fullBleed>{body}</PageLayout>;
 }
