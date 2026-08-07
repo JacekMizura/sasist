@@ -2,7 +2,6 @@ import type { CSSProperties } from "react";
 
 import {
   PANEL_TREE_STATUS_ROW_BASE,
-  PANEL_TREE_STATUS_ACTIVE_BAR_HEX,
   panelTreeStatusRowClass,
 } from "../components/panel/panelStatusTreeStyles";
 import {
@@ -18,13 +17,11 @@ import {
   pickReadableTextOnBackground,
 } from "./panelStatusColor";
 
-/** Tint tła wiersza statusu — tylko tryb „rich” (np. komórki tabeli). */
+/** Tint tła wiersza statusu na białym sidebarze (nie pełny fill). */
 export const PANEL_TREE_ROW_TINT_ALPHA = {
   idle: 0.1,
   active: 0.14,
 } as const;
-
-export type PanelTreeStatusRowChrome = "sidebar" | "rich";
 
 export type PanelTreeStatusRowPresentation = {
   rowClassName: string;
@@ -43,39 +40,27 @@ function treeRowBackgroundHex(status: PanelStatusHexBundle, mainGroup: PanelSide
 /**
  * Kolory wiersza podstatusu w drzewie panelu (zamówienia / zwroty).
  *
- * ``sidebar``: bez dużego tintu; aktywny = pomarańczowy pasek z lewej.
- * ``rich``: legacy tint (komórki tabeli / kompakt).
+ * badge_color → lewy pasek (także gdy aktywny)
+ * background_color → delikatny tint (~10–14%)
+ * text_color → nazwa (z kontrolą kontrastu)
+ *
+ * Grupy główne (Nowe / W toku / Zakończone) nie używają tej funkcji.
  */
 export function panelTreeStatusRowPresentation(
   status: PanelStatusHexBundle,
   mainGroup: PanelSidebarMainGroup,
   active: boolean,
-  chrome: PanelTreeStatusRowChrome = "rich",
 ): PanelTreeStatusRowPresentation {
-  const statusStripe =
-    status.badge_color && isValidPanelStatusHex(status.badge_color)
-      ? normalizePanelStatusBg(status.badge_color)
-      : sidebarSubStatusHex(status.color, mainGroup);
-
-  if (chrome === "sidebar") {
-    return {
-      rowClassName: panelTreeStatusRowClass(active),
-      rowStyle: undefined,
-      labelStyle:
-        status.text_color && isValidPanelStatusHex(status.text_color)
-          ? { color: pickReadableTextOnBackground(status.text_color, "#ffffff", 4.5) }
-          : undefined,
-      stripeHex: active ? PANEL_TREE_STATUS_ACTIVE_BAR_HEX : statusStripe,
-    };
-  }
-
   const hasBg = Boolean(status.background_color && isValidPanelStatusHex(status.background_color));
   const hasText = Boolean(status.text_color && isValidPanelStatusHex(status.text_color));
   const rich = panelSidebarSubRowStyleRich(status, mainGroup, active, {
     barWidthPx: 0,
     treeRow: true,
   });
-  const stripeHex = statusStripe;
+  const stripeHex =
+    status.badge_color && isValidPanelStatusHex(status.badge_color)
+      ? normalizePanelStatusBg(status.badge_color)
+      : sidebarSubStatusHex(status.color, mainGroup);
 
   const tintAlpha = active ? PANEL_TREE_ROW_TINT_ALPHA.active : PANEL_TREE_ROW_TINT_ALPHA.idle;
   const contrastBase = hasBg
@@ -116,7 +101,7 @@ export function panelTreeStatusRowPresentation(
   };
 }
 
-/** Status „problemowy” → czerwona kapsułka licznika (UI only). */
+/** Status „problemowy” — heurystyka nazwy (UI). */
 export function panelTreeStatusIsProblem(name: string | null | undefined): boolean {
   return /brak|niedobór|niedobor|shortage|deficyt|missing|niekomplet|problem|błąd|blad|error|awaria|reklamac/i.test(
     (name ?? "").trim(),

@@ -32,7 +32,7 @@ export function PanelTreeGroupRow({ label, count, mainGroup, expanded, active, o
         <span className={`${PANEL_TREE_GROUP_LABEL_CLASS} min-w-0 flex-1`}>{label}</span>
         <Lock className={PANEL_TREE_GROUP_LOCK_CLASS} strokeWidth={2} aria-hidden />
       </button>
-      <PanelTreeCount value={count} active={active} />
+      <PanelTreeCount value={count} active={active} colorHex={accent} />
       <button
         type="button"
         onClick={onToggle}

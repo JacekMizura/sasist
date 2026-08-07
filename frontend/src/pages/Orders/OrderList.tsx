@@ -191,6 +191,9 @@ export default function OrderList() {
     [setExtension],
   );
   const isStatusPanelCollapsed = Boolean(extensions.statusPanelCollapsed);
+  const toggleStatusPanelCollapsed = useCallback(() => {
+    setExtension("statusPanelCollapsed", !isStatusPanelCollapsed);
+  }, [isStatusPanelCollapsed, setExtension]);
 
   const [orders, setOrders] = useState<Order[]>([]);
   const [totalCount, setTotalCount] = useState(0);
@@ -943,7 +946,7 @@ export default function OrderList() {
       <div className={moduleListTwoColumnShellClass}>
         <ModuleStatusSidebarShell
           collapsed={isStatusPanelCollapsed}
-          onToggleCollapsed={() => setExtension("statusPanelCollapsed", !isStatusPanelCollapsed)}
+          onToggleCollapsed={toggleStatusPanelCollapsed}
           statusDrawerOpen={statusDrawerOpen}
           onStatusDrawerOpenChange={setStatusDrawerOpen}
           sidebar={
@@ -957,7 +960,7 @@ export default function OrderList() {
               collapsed={isStatusPanelCollapsed}
               parentScrollContainer
               counterColorModule="orders"
-              onToggleCollapsed={() => setIsStatusPanelCollapsed((v) => !v)}
+              onToggleCollapsed={toggleStatusPanelCollapsed}
             />
           }
           mobileDrawerSidebar={

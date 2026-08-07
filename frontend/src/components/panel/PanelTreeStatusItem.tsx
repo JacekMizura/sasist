@@ -21,8 +21,8 @@ export type PanelTreeStatusItemProps = {
   active?: boolean;
   counterColorHex?: string | null;
   /**
-   * Lista / gęste komórki — tryb „rich” + lekki scale.
-   * Sidebar (`false`) = kompaktowy chrome bez tintu.
+   * Lista / gęste komórki — ta sama karta, lekko mniejsza (~92%).
+   * Sidebar zostawia `false`.
    */
   compact?: boolean;
   title?: string;
@@ -43,7 +43,7 @@ export function PanelTreeStatusItem({
   markers = [],
   count,
   active = false,
-  counterColorHex: _counterColorHex,
+  counterColorHex,
   compact = false,
   title,
   className = "",
@@ -51,9 +51,7 @@ export function PanelTreeStatusItem({
   onClick,
   ...rest
 }: PanelTreeStatusItemProps) {
-  void _counterColorHex;
-  const chrome = compact ? "rich" : "sidebar";
-  const row = panelTreeStatusRowPresentation(colors, mainGroup, active, chrome);
+  const row = panelTreeStatusRowPresentation(colors, mainGroup, active);
   const showCount = count != null && count !== "";
   const isProblem =
     panelTreeStatusIsProblem(name) || markers.some((m) => m.id === "short");
@@ -76,10 +74,15 @@ export function PanelTreeStatusItem({
         {name}
       </span>
       {imageUrl ? (
-        <img src={imageUrl} alt="" className="h-3.5 w-3.5 shrink-0 rounded object-contain" />
+        <img src={imageUrl} alt="" className="h-4 w-4 shrink-0 rounded object-contain" />
       ) : null}
       {showCount ? (
-        <PanelTreeCount value={count!} active={active} tone={isProblem ? "problem" : "neutral"} />
+        <PanelTreeCount
+          value={count!}
+          active={active}
+          colorHex={isProblem ? undefined : counterColorHex ?? row.stripeHex}
+          tone={isProblem ? "problem" : "neutral"}
+        />
       ) : null}
     </>
   );
