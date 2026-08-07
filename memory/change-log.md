@@ -1,3 +1,10 @@
+## 2026-08-07 — Usunięcie panelu „Tożsamość produktu”
+
+- `ProductEditIdentityHeader` usunięty — nie renderuje się już nad zakładkami
+- SKU / numer katalogowy przywrócone w `ProductEditBasicTab`
+- Zakładka Rodzina uproszczona do membership + cechy produktu; usunięto karty `productFamily/*` z karty produktu
+- `npm run build` OK
+
 ## 2026-08-06 — Zakładka Rodzina na karcie produktu (etapy 1–6)
 
 - Tab `family` w railu; panel w `pages/Products/productFamily/`

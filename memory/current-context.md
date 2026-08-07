@@ -1,11 +1,11 @@
 ﻿## Active
 
-**Product Family tab on product card (2026-08-06) — DONE (etapy 1–6).**
+**Product card tabs — identity panel removed (2026-08-07).**
 
-- Tab **Rodzina** = pełny panel (attach, info, cechy RO, członkowie, generator, dziedziczenie UI, powiązania, historia)
-- Rodzina usunięta z Tożsamości / Podstawowych
-- Activity: `object_type=product_family` przy attach/detach/generate
-- Komponenty: `frontend/src/pages/Products/productFamily/`
+- Usunięto panel „Tożsamość produktu” ze wszystkich zakładek (`ProductEditIdentityHeader` deleted)
+- SKU + numer katalogowy z powrotem w **Podstawowe**
+- **Rodzina** = wyłącznie przynależność: rodzina, status, bazowy, cechy tego produktu, link „Otwórz rodzinę”
+- Zarządzanie rodziną (członkowie, generator itd.) tylko na stronie edycji rodziny
 
 **Category module rebuild — DONE (A–G).**
 

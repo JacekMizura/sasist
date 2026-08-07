@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { Network } from "lucide-react";
 import toast from "react-hot-toast";
@@ -14,13 +14,6 @@ import {
 import { extractApiErrorMessage } from "../../api/authApi";
 import { PrimaryButton, Select } from "../../design-system";
 import { pimFieldLabelClass, pimHintClass, pimPanelClass } from "../Assortment/pimUi";
-import { FamilyAttributesCard } from "./productFamily/FamilyAttributesCard";
-import { FamilyGeneratorCard } from "./productFamily/FamilyGeneratorCard";
-import { FamilyHistoryCard } from "./productFamily/FamilyHistoryCard";
-import { FamilyInfoCard } from "./productFamily/FamilyInfoCard";
-import { FamilyInheritanceCard } from "./productFamily/FamilyInheritanceCard";
-import { FamilyMembersCard } from "./productFamily/FamilyMembersCard";
-import { FamilyRelatedCard } from "./productFamily/FamilyRelatedCard";
 
 type Props = {
   tenantId: number;
@@ -28,7 +21,7 @@ type Props = {
 };
 
 /**
- * Product edit → Rodzina: full family management panel (attach, info, attrs, members, generator, …).
+ * Product edit → Rodzina: membership only (family, status, base, this product's attributes).
  */
 export function ProductEditFamilyTab({ tenantId, productId }: Props) {
   const [families, setFamilies] = useState<ProductFamilyListItem[]>([]);
@@ -64,6 +57,27 @@ export function ProductEditFamilyTab({ tenantId, productId }: Props) {
     void reload();
   }, [reload, refreshKey]);
 
+  const member = useMemo(
+    () => family?.members?.find((m) => m.id === productId) ?? null,
+    [family, productId],
+  );
+
+  const productAttributes = useMemo(() => {
+    if (!family) return [];
+    const attrs = [...(family.attributes ?? [])].sort(
+      (a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0) || a.name.localeCompare(b.name),
+    );
+    const parts = (member?.attribute_summary ?? "")
+      .split(" / ")
+      .map((s) => s.trim())
+      .filter(Boolean);
+    return attrs.map((attr, i) => ({
+      id: attr.id,
+      name: attr.name,
+      value: parts[i] || "—",
+    }));
+  }, [family, member]);
+
   const onAttach = async () => {
     const nextId = draftFamilyId.trim() ? Number(draftFamilyId) : null;
     if (draftFamilyId.trim() && !Number.isFinite(nextId)) {
@@ -86,6 +100,12 @@ export function ProductEditFamilyTab({ tenantId, productId }: Props) {
     return <p className="text-sm text-slate-500">Ładowanie rodziny…</p>;
   }
 
+  const statusLabel = !family
+    ? "Poza rodziną"
+    : member?.is_base
+      ? "Produkt bazowy"
+      : "Członek rodziny";
+
   return (
     <div className="space-y-4">
       <section className={pimPanelClass}>
@@ -94,9 +114,9 @@ export function ProductEditFamilyTab({ tenantId, productId }: Props) {
             <Network className="h-4 w-4" strokeWidth={2} aria-hidden />
           </span>
           <div className="min-w-0 flex-1">
-            <h2 className="text-sm font-semibold text-slate-900">Przypisanie do rodziny</h2>
+            <h2 className="text-sm font-semibold text-slate-900">Przynależność do rodziny</h2>
             <p className={pimHintClass}>
-              Zarządzanie odmianami produktu odbywa się wyłącznie w tej zakładce.
+              Ta zakładka dotyczy wyłącznie przypisania produktu do rodziny i jego cech w rodzinie.
             </p>
             <div className="mt-3 flex flex-wrap items-end gap-2">
               <label className="min-w-[220px] flex-1">
@@ -141,28 +161,58 @@ export function ProductEditFamilyTab({ tenantId, productId }: Props) {
       {!family ? (
         <section className={pimPanelClass}>
           <p className="text-sm text-slate-500">
-            Przypisz produkt do rodziny, aby zobaczyć cechy, członków, generator i powiązania.
+            Przypisz produkt do rodziny, aby zobaczyć status, produkt bazowy i cechy tego produktu.
           </p>
         </section>
       ) : (
-        <>
-          <FamilyInfoCard family={family} />
-          <FamilyAttributesCard family={family} />
-          <FamilyMembersCard
-            tenantId={tenantId}
-            members={family.members ?? []}
-            currentProductId={productId}
-          />
-          <FamilyGeneratorCard
-            tenantId={tenantId}
-            familyId={family.id}
-            members={family.members ?? []}
-            onChanged={() => setRefreshKey((k) => k + 1)}
-          />
-          <FamilyInheritanceCard familyId={family.id} />
-          <FamilyRelatedCard tenantId={tenantId} family={family} />
-          <FamilyHistoryCard familyId={family.id} refreshKey={refreshKey} />
-        </>
+        <section className={pimPanelClass}>
+          <dl className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div>
+              <dt className={pimFieldLabelClass}>Wybrana rodzina</dt>
+              <dd className="text-sm font-medium text-slate-900">{family.name}</dd>
+            </div>
+            <div>
+              <dt className={pimFieldLabelClass}>Status w rodzinie</dt>
+              <dd className="text-sm font-medium text-slate-900">{statusLabel}</dd>
+            </div>
+            <div className="sm:col-span-2">
+              <dt className={pimFieldLabelClass}>Produkt bazowy</dt>
+              <dd className="text-sm text-slate-800">
+                {family.base_product_id != null ? (
+                  member?.is_base ? (
+                    <span>Ten produkt jest produktem bazowym rodziny.</span>
+                  ) : (
+                    <span>
+                      {family.base_product_name?.trim() || `Produkt #${family.base_product_id}`}
+                      <span className="ml-1 text-slate-400">#{family.base_product_id}</span>
+                    </span>
+                  )
+                ) : (
+                  <span className="text-slate-500">Brak produktu bazowego</span>
+                )}
+              </dd>
+            </div>
+          </dl>
+
+          <div className="mt-5 border-t border-slate-100 pt-4">
+            <h3 className="text-sm font-semibold text-slate-900">Cechy przypisane do produktu</h3>
+            {productAttributes.length === 0 ? (
+              <p className="mt-2 text-sm text-slate-500">Rodzina nie ma zdefiniowanych cech.</p>
+            ) : (
+              <ul className="mt-3 divide-y divide-slate-100 rounded-lg border border-slate-200 bg-white">
+                {productAttributes.map((attr) => (
+                  <li
+                    key={attr.id ?? attr.name}
+                    className="flex items-center justify-between gap-3 px-3 py-2.5 text-sm"
+                  >
+                    <span className="font-medium text-slate-700">{attr.name}</span>
+                    <span className="font-mono text-xs text-slate-900">{attr.value}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </section>
       )}
     </div>
   );

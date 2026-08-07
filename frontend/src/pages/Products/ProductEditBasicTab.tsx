@@ -11,6 +11,7 @@ import { Checkbox, Input, Select } from "../../design-system";
 import { DocumentTemplateScopeSection } from "@/pages/Settings/document-templates/components/DocumentTemplateScopeSection";
 import { generateFakeEan13 } from "../../utils/ean13";
 import { ProductLabelPrintModal } from "./ProductLabelPrintModal";
+import { ProductCodeGenerateControl } from "./ProductCodeGenerateControl";
 
 export type ProductEditBasicTabProps = {
   isNew: boolean;
@@ -20,6 +21,12 @@ export type ProductEditBasicTabProps = {
   tenantId: number | null;
   setTenantId: (v: number | null) => void;
   tenants: { id: number; name: string }[];
+  symbol: string;
+  setSymbol: (v: string) => void;
+  catalogNumber: string;
+  setCatalogNumber: (v: string) => void;
+  /** Primary category — required for SKU / catalog generation. */
+  primaryCategoryId: number | null;
   ean: string;
   setEan: (v: string) => void;
   /** Additional EANs (product_barcodes), not including primary `ean`. */
@@ -128,6 +135,11 @@ export function ProductEditBasicTab({
   tenantId,
   setTenantId,
   tenants,
+  symbol,
+  setSymbol,
+  catalogNumber,
+  setCatalogNumber,
+  primaryCategoryId,
   ean,
   setEan,
   extraEans,
@@ -249,6 +261,57 @@ export function ProductEditBasicTab({
                     </option>
                   ))}
                 </Select>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div>
+                <label className={labelClass}>Symbol / SKU</label>
+                <div className="flex items-stretch gap-2">
+                  <div className="relative min-w-0 flex-1">
+                    <span className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-gray-400">
+                      <Barcode className="h-3 w-3" strokeWidth={2} aria-hidden />
+                    </span>
+                    <Input
+                      type="text"
+                      value={symbol}
+                      onChange={(e) => setSymbol(e.target.value)}
+                      density="comfortable"
+                      focusTone="brand"
+                      className="pl-8 font-mono text-xs"
+                    />
+                  </div>
+                  <ProductCodeGenerateControl
+                    kind="sku"
+                    tenantId={tenantId}
+                    productId={productId}
+                    primaryCategoryId={primaryCategoryId}
+                    currentValue={symbol}
+                    onGenerated={setSymbol}
+                  />
+                </div>
+              </div>
+              <div>
+                <label className={labelClass}>Numer katalogowy</label>
+                <div className="flex items-stretch gap-2">
+                  <Input
+                    type="text"
+                    value={catalogNumber}
+                    onChange={(e) => setCatalogNumber(e.target.value)}
+                    placeholder="Opcjonalne"
+                    density="comfortable"
+                    focusTone="brand"
+                    className="min-w-0 flex-1 font-mono text-xs"
+                  />
+                  <ProductCodeGenerateControl
+                    kind="catalog"
+                    tenantId={tenantId}
+                    productId={productId}
+                    primaryCategoryId={primaryCategoryId}
+                    currentValue={catalogNumber}
+                    onGenerated={setCatalogNumber}
+                  />
+                </div>
               </div>
             </div>
 
