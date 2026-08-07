@@ -57,7 +57,7 @@ export default function ConsolidationRackStructurePreview({
   if (rows.length === 0) {
     return (
       <div className="flex min-h-[200px] items-center justify-center rounded-xl border border-dashed border-slate-200 bg-white text-sm text-slate-500">
-        Dodaj poziom regału.
+        Dodaj poziom układu.
       </div>
     );
   }
@@ -65,7 +65,7 @@ export default function ConsolidationRackStructurePreview({
   return (
     <div className={`flex min-h-0 flex-col bg-white ${className}`}>
       <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 px-1 pb-2">
-        <h4 className="text-sm font-bold text-slate-600">Podgląd regału — na żywo</h4>
+        <h4 className="text-sm font-bold text-slate-600">Podgląd układu — na żywo</h4>
         <div className="inline-flex rounded-lg border border-slate-200 bg-white p-0.5">
           {MODE_OPTIONS.map((opt) => (
             <button
@@ -219,7 +219,7 @@ export default function ConsolidationRackStructurePreview({
       </div>
       <p className="mt-2 shrink-0 px-1 text-[11px] text-slate-500">
         {clickable ? "Kliknij segment, aby edytować w panelu po prawej. " : null}
-        Skala proporcjonalna (max {CONSOLIDATION_PREVIEW_MAX_HEIGHT_PX}px). Szer. regału: {rackWidth} mm.
+        Skala proporcjonalna (max {CONSOLIDATION_PREVIEW_MAX_HEIGHT_PX}px). Szer. układu: {rackWidth} mm.
       </p>
     </div>
   );

@@ -123,19 +123,19 @@ export function ConsolidationRacksListTable({
               ))}
               <td className={racksListActionsCellClass} onClick={(e) => e.stopPropagation()}>
                 <div className={`${racksListRowInnerClass} justify-center`}>
-                  <FleetResourceActionBar aria-label="Akcje regału">
-                    <FleetResourceActionButton onClick={() => onPreview(row.id)} title="Podgląd regału" aria-label="Podgląd regału">
+                  <FleetResourceActionBar aria-label="Akcje układu">
+                    <FleetResourceActionButton onClick={() => onPreview(row.id)} title="Podgląd układu" aria-label="Podgląd układu">
                       <Eye strokeWidth={2} aria-hidden />
                     </FleetResourceActionButton>
-                    <FleetResourceActionButton onClick={() => onEdit(row.id)} title="Edytuj regał" aria-label="Edytuj regał">
+                    <FleetResourceActionButton onClick={() => onEdit(row.id)} title="Edytuj układ" aria-label="Edytuj układ">
                       <Pencil strokeWidth={2} aria-hidden />
                     </FleetResourceActionButton>
                     <FleetResourceActionButton
                       variant="danger"
                       disabled={deleteBusyId === row.id}
                       onClick={() => onDelete(row)}
-                      title="Usuń regał"
-                      aria-label="Usuń regał"
+                      title="Usuń układ"
+                      aria-label="Usuń układ"
                     >
                       <Trash2 strokeWidth={2} aria-hidden />
                     </FleetResourceActionButton>

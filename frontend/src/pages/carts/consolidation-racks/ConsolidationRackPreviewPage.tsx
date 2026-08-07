@@ -40,7 +40,7 @@ export default function ConsolidationRackPreviewPage() {
       setSelection(null);
     } catch (err: unknown) {
       console.error("[ConsolidationRackPreview] load error:", err);
-      setError("Nie udało się wczytać regału.");
+      setError("Nie udało się wczytać układu.");
     } finally {
       setLoading(false);
     }
@@ -82,7 +82,7 @@ export default function ConsolidationRackPreviewPage() {
   if (error || !rack || !draft) {
     return (
       <div className={`${cartsPageShellClass} rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-800`}>
-        {error ?? "Regał nie istnieje."}
+        {error ?? "Układ nie istnieje."}
       </div>
     );
   }

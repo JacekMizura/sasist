@@ -1,3 +1,13 @@
+## 2026-08-07 — Magazyn: uproszczenie urządzeń (Wózki + Strefa sortująca)
+
+- Zakładki: Wózki | Strefa sortująca | Planer floty | Nośniki (`cartsTabs.ts`)
+- Wózki: jeden ekran (`CartsFleetPage`) + filtr ALL/BULK/MULTI + modal typu przy „+ Dodaj wózek”; badge typu na karcie
+- Redirect `/carts/baskets` → `/carts/bulk?type=multi`; `/carts/zones` → `/carts/bulk`
+- Usunięto FE: CartsBulk/Baskets/Zones, ZonesTab, ZoneConfigurator
+- Usunięto BE: `picking_zone` API/service/schema (model + M2M order zostaje dla WMS)
+- Nav Magazyn: Wózki, Strefa sortująca (bez Stref); Planer floty
+- `npm run build` + vitest carts/IA OK
+
 ## 2026-08-07 — Shell: header nad sidebarem + usunięcie martwych modułów
 
 - Layout: wspólny header na całą szerokość; sidebar dopiero pod belką

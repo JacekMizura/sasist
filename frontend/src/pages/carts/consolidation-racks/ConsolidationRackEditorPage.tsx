@@ -81,7 +81,7 @@ export default function ConsolidationRackEditorPage() {
       setSelection(null);
     } catch (err: unknown) {
       console.error("[ConsolidationRackEditor] load error:", err);
-      setError("Nie udało się wczytać regału.");
+      setError("Nie udało się wczytać układu.");
     } finally {
       setLoading(false);
     }
@@ -134,7 +134,7 @@ export default function ConsolidationRackEditorPage() {
       return;
     }
     if (!draft.rackName.trim()) {
-      setError("Podaj nazwę regału.");
+      setError("Podaj nazwę układu.");
       return;
     }
     if (!validation.valid) {
@@ -156,7 +156,7 @@ export default function ConsolidationRackEditorPage() {
       navigate(`/carts/racks/${data.id}/edit`);
     } catch (err: unknown) {
       console.error("[ConsolidationRackEditor] create error:", err);
-      setError("Nie udało się utworzyć regału.");
+      setError("Nie udało się utworzyć układu.");
     } finally {
       setSaving(false);
     }
@@ -184,7 +184,7 @@ export default function ConsolidationRackEditorPage() {
       await loadRack(rack.id);
     } catch (err: unknown) {
       console.error("[ConsolidationRackEditor] save error:", err);
-      setError("Nie udało się zapisać regału.");
+      setError("Nie udało się zapisać układu.");
     } finally {
       setSaving(false);
     }
@@ -211,7 +211,7 @@ export default function ConsolidationRackEditorPage() {
   if (!draft && !loading) {
     return (
       <div className={`${cartsPageShellClass} py-12 text-center text-sm text-slate-500`}>
-        Brak danych regału.
+        Brak danych układu.
       </div>
     );
   }
@@ -234,7 +234,7 @@ export default function ConsolidationRackEditorPage() {
         <div className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-950">
           {validation.globalError ?? (
             <>
-              Suma szerokości segmentów musi być równa szerokości regału ({draft.totalWidthMm ?? "—"} mm):{" "}
+              Suma szerokości segmentów musi być równa szerokości układu ({draft.totalWidthMm ?? "—"} mm):{" "}
               {validation.levelErrors.map((e) => `Poziom ${e.levelName} ${e.usedMm}/${e.targetMm} mm`).join("; ")}
             </>
           )}
@@ -242,7 +242,7 @@ export default function ConsolidationRackEditorPage() {
       ) : null}
 
       <ConsolidationRackFormShell
-        title={isCreate ? "Nowy regał kompletacyjny" : "Edycja regału"}
+        title={isCreate ? "Nowy układ sortujący" : "Edycja układu"}
         subtitle="Kliknij segment na wizualizacji — panel edycji po prawej, jak w kreatorze szablonów"
         backTo="/carts/racks"
         headerActions={
@@ -313,7 +313,7 @@ export default function ConsolidationRackEditorPage() {
           <div className="space-y-4">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <p className="text-xs text-slate-500">
-                Regał → poziomy → segmenty. Kliknij komórkę, aby edytować wymiary i nazwę.
+                Układ → poziomy → segmenty. Kliknij komórkę, aby edytować wymiary i nazwę.
               </p>
               <button
                 type="button"
@@ -322,7 +322,7 @@ export default function ConsolidationRackEditorPage() {
                 onClick={() => void (isCreate ? handleCreate() : handleSaveEdit())}
               >
                 {saving ? <Loader2 className="mr-1 inline h-4 w-4 animate-spin" /> : <Save className="mr-1 inline h-4 w-4" />}
-                {isCreate ? "Utwórz regał" : "Zapisz regał"}
+                {isCreate ? "Utwórz układ" : "Zapisz układ"}
               </button>
             </div>
             {!isCreate && rackId ? (

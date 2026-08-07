@@ -1,4 +1,4 @@
-/** Shared ERP/WMS UI tokens for Wózki / Regały / Strefy / Nośniki — dense operational chrome. */
+/** Shared ERP/WMS UI tokens for Wózki / Strefa sortująca / Planer floty / Nośniki — dense operational chrome. */
 
 export {
   filterInputClass as cartsInputClass,

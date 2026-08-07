@@ -7,7 +7,7 @@ import { WmsMessageProvider } from "../../components/wms/WmsMessageProvider";
 import { CARTS_TABS } from "./cartsTabs";
 import { CartsTabActionsProvider, useCartsTabActionsSlot } from "./CartsTabActionsContext";
 
-/** Pełnoekranowy widok szczegółu nośnika — bez zakładek modułu. Regały zachowują tabs. */
+/** Pełnoekranowy widok szczegółu nośnika — bez zakładek modułu. Strefa sortująca zachowuje tabs. */
 const FULL_PAGE_CONTENT = /^\/carts\/carriers\/[^/]+$/;
 
 /** Aktywna zakładka z pathname — breadcrumb odzwierciedla bieżący widok. */

@@ -19,7 +19,7 @@ export function ConsolidationRackFormShell({
   title,
   subtitle,
   backTo,
-  backLabel = "Lista regałów",
+  backLabel = "Lista układów",
   headerActions,
   summaryBar,
   sidebar,

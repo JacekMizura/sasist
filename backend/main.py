@@ -309,7 +309,6 @@ from .api.stock_documents import documents_router as documents_alias_router
 from .api.stock_documents import router as stock_documents_router
 from .api.supplier_orders import router as supplier_orders_router
 from .api.optimizer import router as optimizer_router
-from .api.picking_zone import router as picking_zone_router
 from .api.consolidation_rack import router as consolidation_rack_router
 from .api.warehouse_map import router as warehouse_map_router
 from .api.warehouse_layout import router as warehouse_layout_router
@@ -2198,7 +2197,6 @@ _API_ROUTERS = (
     simulation_assign_router,
     analysis_router,
     optimizer_router,
-    picking_zone_router,
     consolidation_rack_router,
     warehouse_map_router,
     warehouse_layout_router,

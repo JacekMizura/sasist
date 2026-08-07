@@ -300,12 +300,12 @@ export function buildNavFlyoutCategories(): NavCategoryConfig[] {
       {
         items: [
           { path: "/designer", label: "Layout magazynu", Icon: Warehouse },
-          { path: "/carts/racks", label: "Regały", Icon: Boxes },
-          { path: "/carts/zones", label: "Strefy", Icon: Layers },
+          { path: "/carts/bulk", label: "Wózki", Icon: Boxes },
+          { path: "/carts/racks", label: "Strefa sortująca", Icon: Layers },
           { path: "/carts/carriers", label: "Nośniki", Icon: Package },
           { path: "/inventory-count/dashboard", label: "Inwentaryzacja", Icon: ClipboardList },
           { path: "/settings/wms", label: "Konfiguracja WMS", Icon: Settings2 },
-          { path: "/carts/optimizer", label: "Flota", Icon: Route },
+          { path: "/carts/optimizer", label: "Planer floty", Icon: Route },
           { path: "/warehouse/bdo", label: "BDO", Icon: Recycle },
           { path: "/office/damages", label: "Szkody", Icon: TriangleAlert },
           { path: "/office/damage-reports", label: "Protokoły szkód", Icon: FileText },

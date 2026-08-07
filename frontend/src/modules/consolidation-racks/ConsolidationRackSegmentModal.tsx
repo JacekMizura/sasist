@@ -212,7 +212,7 @@ export default function ConsolidationRackSegmentModal({
             </p>
           ) : onDraftSave ? (
             <p className="rounded-lg border border-violet-200 bg-violet-50 px-3 py-2 text-xs text-violet-900">
-              Opcjonalne nadpisanie profilu regału. Domyślnie segment dziedziczy wymiary regału.
+              Opcjonalne nadpisanie profilu układu. Domyślnie segment dziedziczy wymiary układu.
             </p>
           ) : segment.orderId != null ? (
             <p className="rounded-lg border border-orange-200 bg-orange-50 px-3 py-2 text-xs text-orange-900">
@@ -224,7 +224,7 @@ export default function ConsolidationRackSegmentModal({
             </p>
           ) : defaultDimsText ? (
             <p className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
-              Dziedziczy profil regału: {defaultDimsText}
+              Dziedziczy profil układu: {defaultDimsText}
             </p>
           ) : null}
 

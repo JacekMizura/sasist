@@ -26,12 +26,12 @@ describe("Zarządzanie / Magazyn IA — flyouts SASIST", () => {
     const labels = warehouse!.flyoutSections.flatMap((s) => s.items.map((i) => i.label));
     expect(labels).toEqual([
       "Layout magazynu",
-      "Regały",
-      "Strefy",
+      "Wózki",
+      "Strefa sortująca",
       "Nośniki",
       "Inwentaryzacja",
       "Konfiguracja WMS",
-      "Flota",
+      "Planer floty",
       "BDO",
       "Szkody",
       "Protokoły szkód",

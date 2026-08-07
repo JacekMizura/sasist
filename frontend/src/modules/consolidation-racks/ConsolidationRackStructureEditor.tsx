@@ -92,10 +92,10 @@ export default function ConsolidationRackStructureEditor({
   return (
     <div className="space-y-4">
       <section>
-        <h2 className="text-xs font-bold uppercase tracking-wide text-slate-600">Regał</h2>
+        <h2 className="text-xs font-bold uppercase tracking-wide text-slate-600">Układ</h2>
         <div className="mt-2 space-y-2">
           <label className="block">
-            <span className={cartsFieldLabelClass}>Nazwa regału</span>
+            <span className={cartsFieldLabelClass}>Nazwa układu</span>
             {readOnly ? (
               <div className="mt-1 font-mono text-sm font-semibold text-slate-900">{draft.rackName}</div>
             ) : (

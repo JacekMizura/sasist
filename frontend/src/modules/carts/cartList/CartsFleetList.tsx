@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 
 import api from "../../../api/axios";
 import { ConfirmModal } from "../../../components/ui/ConfirmModal";
@@ -11,6 +11,7 @@ import { CartsInlineGroupForm } from "../CartsInlineGroupForm";
 import { useCartsTabActions } from "../CartsTabActionsContext";
 import { brandPrimaryButtonClass } from "../../../design-system/brandUi";
 import { cartsOutlineCtaClass } from "../cartsModuleTokens";
+import { CART_DEVICE_TYPE_LABEL, type CartDeviceTypeFilter } from "../cartsTabs";
 import { CartsFleetGroupActions } from "./CartsFleetGroupActions";
 import { CartsFleetGroupSection } from "./CartsFleetGroupSection";
 import { CartsFleetSummaryKpi } from "./CartsFleetSummaryKpi";
@@ -54,18 +55,31 @@ type CartItemType = {
   assignment_since?: string | null;
 };
 
-type GroupType = { id: number; name: string; items: CartItemType[] };
-
-export type CartsFleetCartType = "BULK" | "MULTI";
+type GroupType = { id: number; name: string; cart_type?: string; items: CartItemType[] };
 
 export type CartsFleetListProps = {
-  cartType: CartsFleetCartType;
+  cartTypeFilter: CartDeviceTypeFilter;
   refreshTrigger?: number;
-  onAddNew: (groupId?: number) => void;
-  onEdit: (id: number) => void;
+  filterSlot?: ReactNode;
+  onAddNew: (knownType?: "BULK" | "MULTI") => void;
+  onEdit: (id: number, cartType?: string | null) => void;
 };
 
-export function CartsFleetList({ cartType, refreshTrigger = 0, onAddNew, onEdit }: CartsFleetListProps) {
+function normalizeCartType(raw: unknown): "BULK" | "MULTI" | null {
+  const v = String(raw ?? "")
+    .trim()
+    .toUpperCase();
+  if (v === "BULK" || v === "MULTI") return v;
+  return null;
+}
+
+export function CartsFleetList({
+  cartTypeFilter,
+  refreshTrigger = 0,
+  filterSlot,
+  onAddNew,
+  onEdit,
+}: CartsFleetListProps) {
   const t = useTranslation();
   const { warehouse } = useWarehouse();
   const ctx = useCartsRefresh();
@@ -76,6 +90,7 @@ export function CartsFleetList({ cartType, refreshTrigger = 0, onAddNew, onEdit 
   const [resetting, setResetting] = useState(false);
   const [showGroupForm, setShowGroupForm] = useState(false);
   const [newGroupName, setNewGroupName] = useState("");
+  const [newGroupType, setNewGroupType] = useState<"BULK" | "MULTI">("BULK");
   const [editingGroupId, setEditingGroupId] = useState<number | null>(null);
   const [editingGroupName, setEditingGroupName] = useState("");
   const [printCart, setPrintCart] = useState<{ id: number; name: string } | null>(null);
@@ -87,7 +102,9 @@ export function CartsFleetList({ cartType, refreshTrigger = 0, onAddNew, onEdit 
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await api.get(`/carts/?tenant_id=${TENANT_ID}&cart_type=${cartType}`);
+      const params = new URLSearchParams({ tenant_id: String(TENANT_ID) });
+      if (cartTypeFilter !== "ALL") params.set("cart_type", cartTypeFilter);
+      const res = await api.get(`/carts/?${params.toString()}`);
       const raw = res.data;
       if (!Array.isArray(raw)) {
         setGroups([]);
@@ -95,10 +112,11 @@ export function CartsFleetList({ cartType, refreshTrigger = 0, onAddNew, onEdit 
       }
       const safe: GroupType[] = raw
         .map((g: unknown) => {
-          const row = g as { id?: number; name?: string; items?: unknown[] };
+          const row = g as { id?: number; name?: string; cart_type?: string; items?: unknown[] };
           return {
             id: Number(row.id) || 0,
             name: String(row.name ?? ""),
+            cart_type: row.cart_type,
             items: Array.isArray(row.items) ? (row.items as CartItemType[]) : [],
           };
         })
@@ -110,7 +128,7 @@ export function CartsFleetList({ cartType, refreshTrigger = 0, onAddNew, onEdit 
     } finally {
       setLoading(false);
     }
-  }, [cartType]);
+  }, [cartTypeFilter]);
 
   useEffect(() => {
     void fetchData();
@@ -118,7 +136,13 @@ export function CartsFleetList({ cartType, refreshTrigger = 0, onAddNew, onEdit 
 
   useEffect(() => {
     setExpandedCartId(null);
-  }, [cartType]);
+  }, [cartTypeFilter]);
+
+  useEffect(() => {
+    if (cartTypeFilter === "BULK" || cartTypeFilter === "MULTI") {
+      setNewGroupType(cartTypeFilter);
+    }
+  }, [cartTypeFilter]);
 
   const handleResetFleet = useCallback(async () => {
     if (!warehouse?.id) return;
@@ -139,9 +163,11 @@ export function CartsFleetList({ cartType, refreshTrigger = 0, onAddNew, onEdit 
 
   const handleCreateGroup = async () => {
     if (!newGroupName.trim()) return;
+    const cart_type =
+      cartTypeFilter === "ALL" ? newGroupType : cartTypeFilter === "MULTI" ? "MULTI" : "BULK";
     try {
       await api.post(`/carts/groups/?tenant_id=${TENANT_ID}`, {
-        cart_type: cartType,
+        cart_type,
         name: newGroupName,
         description: "",
       });
@@ -153,15 +179,18 @@ export function CartsFleetList({ cartType, refreshTrigger = 0, onAddNew, onEdit 
     }
   };
 
-  const handleDeleteCart = useCallback(async (id: number) => {
-    try {
-      await api.delete(`/carts/${id}/`);
-      setConfirmDeleteCartId(null);
-      await fetchData();
-    } catch (err) {
-      console.error("Błąd usuwania:", err);
-    }
-  }, [fetchData]);
+  const handleDeleteCart = useCallback(
+    async (id: number) => {
+      try {
+        await api.delete(`/carts/${id}/`);
+        setConfirmDeleteCartId(null);
+        await fetchData();
+      } catch (err) {
+        console.error("Błąd usuwania:", err);
+      }
+    },
+    [fetchData],
+  );
 
   const handleSaveGroupEdit = async () => {
     if (!editingGroupId || !editingGroupName.trim()) {
@@ -179,19 +208,21 @@ export function CartsFleetList({ cartType, refreshTrigger = 0, onAddNew, onEdit 
     }
   };
 
-  const handleDeleteGroup = useCallback(async (groupId: number) => {
-    if (groupId === 999) return;
-    try {
-      await api.delete(`/carts/groups/${groupId}/`);
-      setConfirmDeleteGroupId(null);
-      await fetchData();
-    } catch (err) {
-      console.error("Błąd usuwania grupy:", err);
-    }
-  }, [fetchData]);
+  const handleDeleteGroup = useCallback(
+    async (groupId: number) => {
+      if (groupId === 999) return;
+      try {
+        await api.delete(`/carts/groups/${groupId}/`);
+        setConfirmDeleteGroupId(null);
+        await fetchData();
+      } catch (err) {
+        console.error("Błąd usuwania grupy:", err);
+      }
+    },
+    [fetchData],
+  );
 
   const summary = useMemo(() => computeCartsFleetSummary(groups), [groups]);
-  const isMulti = cartType === "MULTI";
 
   const tabActions = useMemo(
     () => (
@@ -205,16 +236,15 @@ export function CartsFleetList({ cartType, refreshTrigger = 0, onAddNew, onEdit 
         >
           {resetting ? "…" : "Wyczyść przypisania"}
         </button>
-        <button
-          type="button"
-          onClick={() => setShowGroupForm((v) => !v)}
-          className={cartsOutlineCtaClass}
-        >
+        <button type="button" onClick={() => setShowGroupForm((v) => !v)} className={cartsOutlineCtaClass}>
           {showGroupForm ? t.cancel : `+ ${t.newGroup}`}
+        </button>
+        <button type="button" onClick={() => onAddNew()} className={brandPrimaryButtonClass}>
+          + Dodaj wózek
         </button>
       </div>
     ),
-    [resetting, warehouse?.id, showGroupForm, t.cancel, t.newGroup],
+    [resetting, warehouse?.id, showGroupForm, t.cancel, t.newGroup, onAddNew],
   );
 
   useCartsTabActions(tabActions);
@@ -223,14 +253,36 @@ export function CartsFleetList({ cartType, refreshTrigger = 0, onAddNew, onEdit 
     <div className="w-full min-w-0 space-y-5">
       {!loading ? <CartsFleetSummaryKpi summary={summary} /> : null}
 
+      {filterSlot ? <div className="flex flex-wrap items-center gap-3">{filterSlot}</div> : null}
+
       {showGroupForm ? (
-        <CartsInlineGroupForm
-          value={newGroupName}
-          onChange={setNewGroupName}
-          onSubmit={handleCreateGroup}
-          placeholder={t.groupNamePlaceholder}
-          submitLabel={t.create}
-        />
+        <div className="space-y-2">
+          {cartTypeFilter === "ALL" ? (
+            <div className="flex flex-wrap gap-2">
+              {(["BULK", "MULTI"] as const).map((kind) => (
+                <button
+                  key={kind}
+                  type="button"
+                  onClick={() => setNewGroupType(kind)}
+                  className={
+                    newGroupType === kind
+                      ? "rounded-lg border border-orange-300 bg-orange-50 px-3 py-1.5 text-xs font-semibold text-orange-800"
+                      : "rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                  }
+                >
+                  {CART_DEVICE_TYPE_LABEL[kind]}
+                </button>
+              ))}
+            </div>
+          ) : null}
+          <CartsInlineGroupForm
+            value={newGroupName}
+            onChange={setNewGroupName}
+            onSubmit={handleCreateGroup}
+            placeholder={t.groupNamePlaceholder}
+            submitLabel={t.create}
+          />
+        </div>
       ) : null}
 
       {loading ? (
@@ -245,10 +297,11 @@ export function CartsFleetList({ cartType, refreshTrigger = 0, onAddNew, onEdit 
             const count = group.items?.length ?? 0;
             const summaryText = count === 0 ? t.statusEmpty : t.statusAllOk;
             const isUnassigned = group.id === 999;
+            const groupKind = normalizeCartType(group.cart_type);
 
             const headerActions = isUnassigned ? (
               <button type="button" onClick={() => onAddNew()} className={brandPrimaryButtonClass}>
-                {cartType === "BULK" ? t.addBulkCart : t.addMultiCart}
+                + Dodaj wózek
               </button>
             ) : (
               <CartsFleetGroupActions
@@ -265,7 +318,7 @@ export function CartsFleetList({ cartType, refreshTrigger = 0, onAddNew, onEdit 
                   setEditingGroupName(group.name || "");
                 }}
                 onDeleteGroup={() => setConfirmDeleteGroupId(group.id)}
-                onAddCart={() => onAddNew(isMulti ? group.id : undefined)}
+                onAddCart={() => onAddNew(groupKind ?? undefined)}
                 editLabel={t.editGroup}
                 deleteLabel={t.deleteGroup}
                 addCartLabel={`+ ${t.addCart}`}
@@ -276,7 +329,7 @@ export function CartsFleetList({ cartType, refreshTrigger = 0, onAddNew, onEdit 
 
             return (
               <CartsFleetGroupSection
-                key={group.id}
+                key={`${group.id}-${group.cart_type ?? "x"}`}
                 title={group.name}
                 count={count}
                 summaryText={summaryText}
@@ -286,52 +339,57 @@ export function CartsFleetList({ cartType, refreshTrigger = 0, onAddNew, onEdit 
                   {count === 0 ? (
                     <div className="px-6 py-10 text-center text-sm text-slate-500">{t.noCartsInGroup}</div>
                   ) : (
-                    group.items.map((c) => (
-                      <CartCard
-                        key={c.id}
-                        id={c.id}
-                        name={c.name}
-                        code={c.code}
-                        status={c.status}
-                        used_volume={c.used_volume}
-                        total_volume_dm3={c.total_volume_dm3}
-                        assigned_orders={c.assigned_orders}
-                        order_numbers={c.order_numbers}
-                        total_weight_kg={c.total_weight_kg}
-                        total_orders={c.total_orders}
-                        total_products={c.total_products}
-                        baskets_used={c.baskets_used}
-                        capacity={c.capacity}
-                        capacity_strategy={c.capacity_strategy}
-                        capacity_orders={c.capacity_orders}
-                        capacity_volume={c.capacity_volume}
-                        wms_picking_order_count={c.wms_picking_order_count}
-                        wms_picking_product_count={c.wms_picking_product_count}
-                        wms_picking_quantity={c.wms_picking_quantity}
-                        assigned_user_id={c.assigned_user_id}
-                        assigned_user_name={c.assigned_user_name}
-                        assignment_type={c.assignment_type}
-                        assignment_since={c.assignment_since}
-                        image_url={c.image_url}
-                        updated_at={c.updated_at}
-                        length={c.length}
-                        width={c.width}
-                        height={c.height}
-                        total_baskets={c.total_baskets}
-                        type={c.type}
-                        tenant_id={isMulti ? TENANT_ID : undefined}
-                        warehouse_id={isMulti ? warehouse?.id : undefined}
-                        expanded={expandedCartId === c.id}
-                        onToggleExpand={() =>
-                          setExpandedCartId((prev) => (prev === c.id ? null : c.id))
-                        }
-                        onSimulateSuccess={fetchData}
-                        onClearSuccess={fetchData}
-                        onEdit={onEdit}
-                        onDelete={(id) => setConfirmDeleteCartId(id)}
-                        onPrintLabel={setPrintCart}
-                      />
-                    ))
+                    group.items.map((c) => {
+                      const itemKind = normalizeCartType(c.type) ?? groupKind;
+                      const isMulti = itemKind === "MULTI";
+                      return (
+                        <CartCard
+                          key={c.id}
+                          id={c.id}
+                          name={c.name}
+                          code={c.code}
+                          status={c.status}
+                          used_volume={c.used_volume}
+                          total_volume_dm3={c.total_volume_dm3}
+                          assigned_orders={c.assigned_orders}
+                          order_numbers={c.order_numbers}
+                          total_weight_kg={c.total_weight_kg}
+                          total_orders={c.total_orders}
+                          total_products={c.total_products}
+                          baskets_used={c.baskets_used}
+                          capacity={c.capacity}
+                          capacity_strategy={c.capacity_strategy}
+                          capacity_orders={c.capacity_orders}
+                          capacity_volume={c.capacity_volume}
+                          wms_picking_order_count={c.wms_picking_order_count}
+                          wms_picking_product_count={c.wms_picking_product_count}
+                          wms_picking_quantity={c.wms_picking_quantity}
+                          assigned_user_id={c.assigned_user_id}
+                          assigned_user_name={c.assigned_user_name}
+                          assignment_type={c.assignment_type}
+                          assignment_since={c.assignment_since}
+                          image_url={c.image_url}
+                          updated_at={c.updated_at}
+                          length={c.length}
+                          width={c.width}
+                          height={c.height}
+                          total_baskets={c.total_baskets}
+                          type={c.type}
+                          showTypeBadge
+                          tenant_id={isMulti ? TENANT_ID : undefined}
+                          warehouse_id={isMulti ? warehouse?.id : undefined}
+                          expanded={expandedCartId === c.id}
+                          onToggleExpand={() =>
+                            setExpandedCartId((prev) => (prev === c.id ? null : c.id))
+                          }
+                          onSimulateSuccess={fetchData}
+                          onClearSuccess={fetchData}
+                          onEdit={(id) => onEdit(id, c.type)}
+                          onDelete={(id) => setConfirmDeleteCartId(id)}
+                          onPrintLabel={setPrintCart}
+                        />
+                      );
+                    })
                   )}
                 </div>
               </CartsFleetGroupSection>

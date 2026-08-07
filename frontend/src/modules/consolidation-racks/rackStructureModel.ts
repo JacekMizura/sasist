@@ -589,7 +589,7 @@ export function validateRackDraft(draft: RackStructureDraft): RackDraftValidatio
     return {
       valid: false,
       levelErrors: [],
-      globalError: "Podaj prawidłową szerokość regału (mm).",
+      globalError: "Podaj prawidłową szerokość układu (mm).",
     };
   }
 
@@ -625,7 +625,7 @@ export const RACK_PRESET_LABELS: Record<RackPresetId, string> = {
   "4x4": "4×4",
   "3x6": "3×6",
   "2x8": "2×8",
-  empty: "Pusty regał",
+  empty: "Pusty układ",
 };
 
 function buildPresetLevels(

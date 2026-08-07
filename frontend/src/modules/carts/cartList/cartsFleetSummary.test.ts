@@ -7,9 +7,7 @@ describe("CARTS_TABS", () => {
   it("keeps Magazyn tab order from reference screens", () => {
     expect(CARTS_TABS.map((t) => t.label)).toEqual([
       "Wózki",
-      "Wózki z koszykami",
-      "Regały",
-      "Strefy",
+      "Strefa sortująca",
       "Planer floty",
       "Nośniki",
     ]);

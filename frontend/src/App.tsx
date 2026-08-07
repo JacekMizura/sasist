@@ -63,10 +63,8 @@ import CompanyWarehousesTab from "./modules/companySettings/views/CompanyWarehou
 import CompanyTenantsTab from "./modules/companySettings/views/CompanyTenantsTab"
 import CompanyBrandingTab from "./modules/companySettings/views/CompanyBrandingTab"
 import CartsLayout from "./pages/CartsLayout"
-import CartsBulk from "./pages/CartsBulk"
-import CartsBaskets from "./pages/CartsBaskets"
+import CartsFleetPage from "./pages/CartsFleetPage"
 import CartsRacks from "./pages/CartsRacks"
-import CartsZones from "./pages/CartsZones"
 import LoginPage from "./pages/LoginPage"
 import PasswordChangeGate from "./components/auth/PasswordChangeGate"
 import AdministratorsPage from "./pages/Settings/AdministratorsPage"
@@ -922,10 +920,10 @@ export const router = createBrowserRouter(
                   <Route index element={<Navigate to="bulk" replace />} />
                   <Route path="carriers" element={<WarehouseCarriersPage />} />
                   <Route path="carriers/:id" element={<WarehouseCarrierDetailPage />} />
-                  <Route path="bulk" element={<CartsBulk />} />
-                  <Route path="baskets" element={<CartsBaskets />} />
+                  <Route path="bulk" element={<CartsFleetPage />} />
+                  <Route path="baskets" element={<Navigate to="/carts/bulk?type=multi" replace />} />
                   <Route path="racks/*" element={<CartsRacks />} />
-                  <Route path="zones" element={<CartsZones />} />
+                  <Route path="zones" element={<Navigate to="/carts/bulk" replace />} />
                   <Route path="optimizer" element={<FleetPlanner />} />
                 </Route>
                 <Route path="changelog" element={<Changelog />} />

@@ -77,7 +77,7 @@ export default function ConsolidationRackSegmentEditPanel({
           <div className="text-sm font-medium text-slate-500">Wybierz segment</div>
         </div>
         <div className="flex flex-1 items-center justify-center px-4 text-center text-xs text-slate-400">
-          Kliknij segment na wizualizacji regału, aby zobaczyć szczegóły.
+          Kliknij segment na wizualizacji układu, aby zobaczyć szczegóły.
         </div>
       </div>
     );

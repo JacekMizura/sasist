@@ -48,7 +48,7 @@ export default function ConsolidationRacksListPage() {
       setRacks(Array.isArray(res.data) ? res.data : []);
     } catch (err: unknown) {
       console.error("[ConsolidationRacksList] fetch error:", err);
-      setError("Nie udało się załadować regałów.");
+      setError("Nie udało się załadować strefy sortującej.");
       setRacks([]);
     } finally {
       setLoading(false);
@@ -68,7 +68,7 @@ export default function ConsolidationRacksListPage() {
         onClick={() => navigate("/carts/racks/new")}
       >
         <Plus className="h-4 w-4" strokeWidth={2.5} aria-hidden />
-        Nowy regał kompletacyjny
+        Dodaj układ sortujący
       </button>
     ),
     [hasActiveWarehouse, navigate],
@@ -111,7 +111,7 @@ export default function ConsolidationRacksListPage() {
       await fetchRacks();
     } catch (err: unknown) {
       console.error("[ConsolidationRacksList] delete error:", err);
-      window.alert("Nie udało się usunąć regału.");
+      window.alert("Nie udało się usunąć układu.");
     } finally {
       setDeletingId(null);
     }
@@ -120,12 +120,12 @@ export default function ConsolidationRacksListPage() {
   return (
     <div className="space-y-5">
       <p className="text-sm text-slate-500">
-        Konfiguracja regałów magazynowych wykorzystywanych przez procesy WMS.
+        Układy sortujące używane podczas kompletacji, sortowania i konsolidacji zamówień.
       </p>
 
       {!loading && !error && hasActiveWarehouse ? (
         <PurchasingKpiGrid columns={4}>
-          <PurchasingKpiCard title="Regały" value={aggregateStats.rackCount} tone="indigo" icon={<Layers aria-hidden />} />
+          <PurchasingKpiCard title="Układy" value={aggregateStats.rackCount} tone="indigo" icon={<Layers aria-hidden />} />
           <PurchasingKpiCard
             title="Segmenty"
             value={aggregateStats.segments}
@@ -147,7 +147,7 @@ export default function ConsolidationRacksListPage() {
           <p className="text-sm font-medium text-amber-900">{ACTIVE_WAREHOUSE_REQUIRED_MESSAGE}</p>
         </div>
       ) : loading ? (
-        <div className="space-y-2 py-8" aria-busy="true" aria-label="Ładowanie listy regałów">
+        <div className="space-y-2 py-8" aria-busy="true" aria-label="Ładowanie strefy sortującej">
           {[0, 1, 2, 3, 4].map((i) => (
             <div key={i} className="h-14 animate-pulse rounded-md bg-slate-100" />
           ))}
@@ -167,12 +167,12 @@ export default function ConsolidationRacksListPage() {
         <div className="min-w-0 overflow-hidden">
           <AppEmptyState
             icon={Layers}
-            title="Brak regałów"
-            description="Utwórz pierwszy regał kompletacyjny dla aktywnego magazynu."
+            title="Brak układów sortujących"
+            description="Utwórz pierwszy układ dla aktywnego magazynu."
             action={
               <button type="button" className={brandPrimaryButtonClass} onClick={() => navigate("/carts/racks/new")}>
                 <Plus className="h-4 w-4" strokeWidth={2.5} aria-hidden />
-                Nowy regał kompletacyjny
+                Dodaj układ sortujący
               </button>
             }
           />
@@ -193,8 +193,8 @@ export default function ConsolidationRacksListPage() {
 
       {confirmDelete ? (
         <ConfirmModal
-          title="Usuń regał"
-          message={`Usunąć regał ${confirmDelete.name}? Segmenty z przypisanymi zamówieniami zostaną zwolnione.`}
+          title="Usuń układ"
+          message={`Usunąć układ ${confirmDelete.name}? Segmenty z przypisanymi zamówieniami zostaną zwolnione.`}
           confirmLabel="Usuń"
           confirmTone="danger"
           pending={deletingId === confirmDelete.id}

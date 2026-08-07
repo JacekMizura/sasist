@@ -10,7 +10,7 @@ type Props = {
   children: ReactNode;
 };
 
-/** Sekcja grupy wózków — pełna szerokość, bez zewnętrznej ramki (wzorzec Nośniki / Regały). */
+/** Sekcja grupy wózków — pełna szerokość, bez zewnętrznej ramki (wzorzec Nośniki / Strefa sortująca). */
 export function CartsFleetGroupSection({
   title,
   count,

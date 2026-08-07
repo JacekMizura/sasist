@@ -1,10 +1,11 @@
 ﻿## Active
 
-**App shell navigation rebuild (2026-08-07).**
+**Magazyn devices IA rebuild (2026-08-07).**
 
-- Full-width header (logo + search + notif + warehouse + user) above sidebar
-- Sidebar collapse via user menu „Zwiń/Rozwiń menu” (localStorage)
-- Removed: Pule stanów (settings UI + public API), System module UI, Słownik aplikacji admin
-- Kept: `/system/health`, `/system/labels/resolved`, internal offer stock pool for offers
+Tabs: Wózki | Strefa sortująca | Planer floty | Nośniki
+- Wózki: unified BULK+MULTI list (`CartsFleetPage`), `?type=` filter, type picker on create, badges on cards
+- Strefa sortująca: former Regały (`/carts/racks`); UI copy without „Regały”
+- Strefy: removed (FE pages + `/zones` API); redirect `/carts/zones` → `/carts/bulk`
+- Models `PickingZone` kept for WMS order associations
 
-**Prior:** WMS settings section switcher + global settings search
+**Prior:** App shell header above sidebar; WMS settings search

@@ -55,6 +55,8 @@ export type CartCardProps = {
   total_baskets?: number;
   /** CartType from API: BULK | MULTI — SSOT for sectional vs ordinary cart. */
   type?: string | null;
+  /** Show device-type badge on the row (unified fleet list). */
+  showTypeBadge?: boolean;
   length?: number;
   width?: number;
   height?: number;
@@ -101,6 +103,7 @@ export default function CartCard(props: CartCardProps) {
     updated_at,
     total_baskets,
     type: cartTypeProp,
+    showTypeBadge = false,
     length,
     width,
     height,
@@ -271,6 +274,20 @@ export default function CartCard(props: CartCardProps) {
           <span className="min-w-0 truncate text-sm font-semibold text-slate-900" title={name}>
             {name}
           </span>
+          {showTypeBadge ? (
+            <>
+              <span className={fleetResourceMetaSepClass}>|</span>
+              <span
+                className={
+                  isSectional
+                    ? "inline-flex shrink-0 rounded-md bg-violet-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-violet-800"
+                    : "inline-flex shrink-0 rounded-md bg-sky-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-sky-800"
+                }
+              >
+                {isSectional ? "Wózek z koszykami" : "Wózek"}
+              </span>
+            </>
+          ) : null}
           {cartCodeDisplay ? (
             <>
               <span className={fleetResourceMetaSepClass}>|</span>
