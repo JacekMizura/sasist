@@ -808,6 +808,11 @@ BULK_UPDATE_ACTIONS = frozenset({
     "patch_logistics_fields",
     "clear_logistics_data",
     "toggle_master_carton_pack",
+    "set_categories",
+    "set_product_family",
+    "set_tags",
+    "set_custom_field_values",
+    "set_product_status",
 })
 
 # Bulk „set_vat_rate” — canonical tokens stored in metadata_json.product_ui.vat_rate (same as karta produktu).
@@ -1041,6 +1046,131 @@ def _execute_product_bulk_update(
         from ..services.product_bulk_logistics_patch import apply_toggle_master_carton_pack
 
         return apply_toggle_master_carton_pack(db, filt, value)
+
+    if act == "set_categories":
+        from ..services.product_categories import set_product_assignment
+        from ..services.product_categories.errors import ProductCategoryError
+
+        if not isinstance(value, dict):
+            raise HTTPException(
+                status_code=400,
+                detail="value must be object with primary_category_id and additional_category_ids",
+            )
+        primary = value.get("primary_category_id")
+        if primary is not None:
+            try:
+                primary = int(primary)
+            except (TypeError, ValueError):
+                raise HTTPException(status_code=400, detail="primary_category_id must be int or null")
+        additional_raw = value.get("additional_category_ids") or []
+        if not isinstance(additional_raw, list):
+            raise HTTPException(status_code=400, detail="additional_category_ids must be a list")
+        n = 0
+        for pid in ids:
+            try:
+                set_product_assignment(
+                    db,
+                    tenant_id,
+                    pid,
+                    primary_category_id=primary,
+                    additional_category_ids=additional_raw,
+                )
+                n += 1
+            except ProductCategoryError as e:
+                raise HTTPException(status_code=400, detail=str(e)) from e
+        return n
+
+    if act == "set_product_family":
+        from ..services.product_families import ProductFamilyError, attach_product_to_family
+
+        if not isinstance(value, dict):
+            raise HTTPException(status_code=400, detail="value must be object with product_family_id")
+        fam_id = value.get("product_family_id")
+        if fam_id is not None:
+            try:
+                fam_id = int(fam_id)
+            except (TypeError, ValueError):
+                raise HTTPException(status_code=400, detail="product_family_id must be int or null")
+        n = 0
+        for pid in ids:
+            try:
+                attach_product_to_family(db, tenant_id, pid, fam_id)
+                n += 1
+            except ProductFamilyError as e:
+                raise HTTPException(status_code=400, detail=str(e)) from e
+        return n
+
+    if act == "set_tags":
+        if not isinstance(value, dict):
+            raise HTTPException(status_code=400, detail="value must be object with mode and tags")
+        mode = str(value.get("mode") or "replace").strip().lower()
+        if mode not in ("replace", "add"):
+            raise HTTPException(status_code=400, detail="mode must be replace or add")
+        tags_raw = value.get("tags") or []
+        if not isinstance(tags_raw, list):
+            raise HTTPException(status_code=400, detail="tags must be a list")
+        tags = [str(t).strip() for t in tags_raw if str(t).strip()]
+        rows = db.query(Product).filter(filt).all()
+        n = 0
+        for p in rows:
+            meta = _safe_parse_metadata_json(getattr(p, "metadata_json", None))
+            if meta is None:
+                meta = {}
+            existing = meta.get("tags")
+            if not isinstance(existing, list):
+                existing = []
+            existing_clean = [str(t).strip() for t in existing if str(t).strip()]
+            if mode == "replace":
+                meta["tags"] = tags
+            else:
+                seen = {t.lower() for t in existing_clean}
+                merged = list(existing_clean)
+                for t in tags:
+                    if t.lower() not in seen:
+                        merged.append(t)
+                        seen.add(t.lower())
+                meta["tags"] = merged
+            p.metadata_json = json.dumps(meta, ensure_ascii=False)
+            n += 1
+        return n
+
+    if act == "set_custom_field_values":
+        from ..services.product_custom_fields import ProductCustomFieldError, put_product_field_values
+
+        if not isinstance(value, dict):
+            raise HTTPException(status_code=400, detail="value must be object with values list")
+        values = value.get("values") or []
+        if not isinstance(values, list) or not values:
+            raise HTTPException(status_code=400, detail="values must be a non-empty list")
+        n = 0
+        for pid in ids:
+            try:
+                put_product_field_values(db, tenant_id, pid, values)
+                n += 1
+            except ProductCustomFieldError as e:
+                raise HTTPException(status_code=400, detail=str(e)) from e
+        return n
+
+    if act == "set_product_status":
+        if not isinstance(value, dict):
+            raise HTTPException(status_code=400, detail="value must be object with status")
+        status = str(value.get("status") or "").strip().lower()
+        if status not in ("active", "inactive"):
+            raise HTTPException(status_code=400, detail="status must be active or inactive")
+        rows = db.query(Product).filter(filt).all()
+        n = 0
+        for p in rows:
+            meta = _safe_parse_metadata_json(getattr(p, "metadata_json", None))
+            if meta is None:
+                meta = {}
+            ui = meta.get("product_ui")
+            if not isinstance(ui, dict):
+                ui = {}
+            ui["status"] = status
+            meta["product_ui"] = ui
+            p.metadata_json = json.dumps(meta, ensure_ascii=False)
+            n += 1
+        return n
 
     raise HTTPException(status_code=400, detail="Unhandled action")
 

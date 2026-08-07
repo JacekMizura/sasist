@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { postProductsBulkDelete, type ProductsBulkDeleteResult } from "../../api/productsBulkApi";
-import type { ProductBulkModalSelection } from "./ProductBulkActionModal";
+import type { ProductBulkModalSelection } from "../../components/products/productMultiActions";
 import { AppOverlayPortal } from "../../components/overlay";
 
 type Props = {

@@ -21,6 +21,13 @@ import {
 } from "../../components/listPage/moduleList";
 import { ProductsListBulkBar } from "../../components/products/productList/ProductsListBulkBar";
 import {
+  ProductMultiActionsModal,
+  executeProductMultiActions,
+  type ProductBulkModalSelection,
+  type ProductMultiActionRow,
+  type ProductMultiConfigBag,
+} from "../../components/products/productMultiActions";
+import {
   ErpBulkPrintModal,
   PRODUCT_BULK_DOCUMENT_TYPES,
 } from "../../components/documentTemplates/ErpBulkPrintModal";
@@ -47,14 +54,9 @@ import {
   readProductListTenantFilter,
   useListViewState,
 } from "../../preferences/listView";
-import { ProductBulkActionModal } from "./ProductBulkActionModal";
 import { ProductBulkDeleteModal } from "./ProductBulkDeleteModal";
-import { ProductBulkPatchModal } from "./ProductBulkPatchModal";
-import { isBulkPatchPreset, isBulkUpdateAction, type ProductBulkHubChoice } from "./productBulkHubTypes";
-import type { BulkUpdateAction } from "../../api/productsBulkApi";
 import { postProductsBulkDelete, type ProductsBulkDeleteResult } from "../../api/productsBulkApi";
 import { buildProductBulkListFiltersPayload } from "../../utils/productListBulkFilters";
-import type { ProductBulkModalSelection } from "./ProductBulkActionModal";
 import ExportModal from "../../components/exports/ExportModal";
 import {
   listSellasistInputClass,
@@ -178,10 +180,9 @@ export default function ProductList() {
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [productBulkMode, setProductBulkMode] = useState<"none" | "filtered_all" | "explicit">("none");
   const [productBulkSelectKey, setProductBulkSelectKey] = useState(0);
-  const [bulkActionChoice, setBulkActionChoice] = useState<BulkUpdateAction | "">("");
-  const [bulkPatchPreset, setBulkPatchPreset] = useState<ProductBulkPatchPreset | "">("");
   const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
-  const [bulkModalOpen, setBulkModalOpen] = useState(false);
+  const [multiActionsOpen, setMultiActionsOpen] = useState(false);
+  const [multiActionsBusy, setMultiActionsBusy] = useState(false);
   const [rowDeleteBusyId, setRowDeleteBusyId] = useState<number | null>(null);
   const [rowDupBusyId, setRowDupBusyId] = useState<number | null>(null);
   const [tenants, setTenants] = useState<Tenant[]>([]);
@@ -613,7 +614,7 @@ export default function ProductList() {
     [productBulkMode, selectedIds],
   );
 
-  const handleBulkActionSelect = (action: ProductBulkHubChoice) => {
+  const openMultiActions = () => {
     if (effectiveProductSelectionCount === 0) return;
     if (bulkTenantId == null) {
       window.alert("Ustal filtr „Tenant”, aby wykonać masową zmianę.");
@@ -623,21 +624,44 @@ export default function ProductList() {
       window.alert("Wybierz tenant w filtrze, aby masowo przetwarzać cały zbiór.");
       return;
     }
-    onBulkHubSelectAction(action);
+    setMultiActionsOpen(true);
   };
 
-  const onBulkHubSelectAction = (action: ProductBulkHubChoice) => {
-    if (action === "delete_products") {
-      setBulkDeleteOpen(true);
+  const openBulkDelete = () => {
+    if (effectiveProductSelectionCount === 0) return;
+    if (bulkTenantId == null) {
+      window.alert("Ustal filtr „Tenant”, aby usunąć produkty.");
       return;
     }
-    if (isBulkPatchPreset(action)) {
-      setBulkPatchPreset(action);
-      return;
-    }
-    if (isBulkUpdateAction(action)) {
-      setBulkActionChoice(action);
-      setBulkModalOpen(true);
+    setBulkDeleteOpen(true);
+  };
+
+  const handleMultiExecute = async (payload: {
+    rows: ProductMultiActionRow[];
+    config: ProductMultiConfigBag;
+  }) => {
+    if (bulkTenantId == null || !productBulkModalSelection) return;
+    setMultiActionsBusy(true);
+    try {
+      const { errors } = await executeProductMultiActions({
+        tenantId: bulkTenantId,
+        selection: productBulkModalSelection,
+        rows: payload.rows,
+        config: payload.config,
+      });
+      if (errors.length) {
+        toast.error(errors.slice(0, 3).join(" · ") + (errors.length > 3 ? ` (+${errors.length - 3})` : ""));
+      } else {
+        toast.success("Multiakcje zakończone pomyślnie.");
+      }
+      setMultiActionsOpen(false);
+      clearProductSelection();
+      if (clientMode) void fetchClientBatch();
+      else void fetchServerPage();
+    } catch (e) {
+      toast.error(extractApiErrorMessage(e, "Wykonanie multiakcji nie powiodło się."));
+    } finally {
+      setMultiActionsBusy(false);
     }
   };
 
@@ -961,7 +985,8 @@ export default function ProductList() {
               onSelectFiltered={selectAllProductsFiltered}
               onClearSelection={clearProductSelection}
               onSelectMenuBump={() => setProductBulkSelectKey((k) => k + 1)}
-              onBulkActionSelect={handleBulkActionSelect}
+              onOpenMultiActions={openMultiActions}
+              onDelete={openBulkDelete}
               onPrint={() => {
                 if (effectiveProductSelectionCount === 0) return;
                 if (productBulkMode === "filtered_all") {
@@ -1081,36 +1106,16 @@ export default function ProductList() {
         </div>
       )}
 
-      {bulkModalOpen && bulkTenantId != null && bulkActionChoice && productBulkModalSelection ? (
-        <ProductBulkActionModal
-          open={bulkModalOpen}
+      {multiActionsOpen && bulkTenantId != null && productBulkModalSelection ? (
+        <ProductMultiActionsModal
+          open={multiActionsOpen}
           tenantId={bulkTenantId}
-          selection={productBulkModalSelection}
-          action={bulkActionChoice}
+          productCount={effectiveProductSelectionCount}
+          busy={multiActionsBusy}
           onClose={() => {
-            setBulkModalOpen(false);
-            setBulkActionChoice("");
+            if (!multiActionsBusy) setMultiActionsOpen(false);
           }}
-          onSuccess={() => {
-            clearProductSelection();
-            if (clientMode) void fetchClientBatch();
-            else void fetchServerPage();
-          }}
-        />
-      ) : null}
-
-      {bulkPatchPreset && bulkTenantId != null && productBulkModalSelection ? (
-        <ProductBulkPatchModal
-          open
-          preset={bulkPatchPreset}
-          tenantId={bulkTenantId}
-          selection={productBulkModalSelection}
-          onClose={() => setBulkPatchPreset("")}
-          onSuccess={() => {
-            clearProductSelection();
-            if (clientMode) void fetchClientBatch();
-            else void fetchServerPage();
-          }}
+          onExecute={handleMultiExecute}
         />
       ) : null}
 

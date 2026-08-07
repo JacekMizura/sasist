@@ -12,7 +12,12 @@ export type BulkUpdateAction =
   | "set_min_stock"
   | "patch_logistics_fields"
   | "clear_logistics_data"
-  | "toggle_master_carton_pack";
+  | "toggle_master_carton_pack"
+  | "set_categories"
+  | "set_product_family"
+  | "set_tags"
+  | "set_custom_field_values"
+  | "set_product_status";
 
 export type BulkUpdatePayload =
   | {
