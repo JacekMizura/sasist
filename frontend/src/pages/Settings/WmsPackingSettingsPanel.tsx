@@ -39,7 +39,7 @@ import {
   loadWmsPackingExtendedUi,
   saveWmsPackingExtendedUi,
 } from "../../types/wmsPackingExtendedUi";
-import { WmsSettingsLayout } from "./WmsSettingsLayout";
+import { WmsSettingsTabFrame } from "./WmsSettingsTabFrame";
 import { WmsSettingsSection } from "./WmsSettingsSection";
 import { WmsSettingCard } from "./WmsSettingCard";
 import { WMS_PACKING_SETTINGS_NAV_SECTIONS } from "./wmsPackingSettingsNavSections";
@@ -81,14 +81,24 @@ function SectionCard({
   title,
   summary,
   children,
+  defaultCollapsed,
 }: {
   id: string;
   title: string;
   summary?: string;
   children: ReactNode;
+  defaultCollapsed?: boolean;
 }) {
+  const meta = WMS_PACKING_SETTINGS_NAV_SECTIONS.find((s) => s.id === id);
   return (
-    <WmsSettingsSection id={id} title={title} summary={summary}>
+    <WmsSettingsSection
+      id={id}
+      title={title}
+      summary={summary}
+      icon={meta?.icon}
+      iconClassName={meta?.iconClassName}
+      defaultCollapsed={defaultCollapsed}
+    >
       {children}
     </WmsSettingsSection>
   );
@@ -167,6 +177,7 @@ const WmsPackingSettingsPanel = forwardRef<
   const [baselineDraft, setBaselineDraft] = useState<string | null>(null);
   const [baselineExtended, setBaselineExtended] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [okMsg, setOkMsg] = useState<string | null>(null);
 
@@ -323,6 +334,7 @@ const WmsPackingSettingsPanel = forwardRef<
     if (warehouseId == null || effectiveDraft == null) return;
     const normalized = normalizeWmsPackingSettingsRead(DAMAGE_TENANT_ID, warehouseId, effectiveDraft);
     setOkMsg(null);
+    setSaving(true);
     try {
       const docSettings = {
         ...normalized.document_settings,
@@ -366,6 +378,8 @@ const WmsPackingSettingsPanel = forwardRef<
       setBaselineExtended(stableStringify(extended));
       setErr(null);
       setOkMsg("Zapisano lokalnie — serwer był niedostępny. Ponów zapis z paska na dole, gdy połączenie wróci.");
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -394,29 +408,35 @@ const WmsPackingSettingsPanel = forwardRef<
   }
 
   return (
-    <WmsSettingsLayout
+    <WmsSettingsTabFrame
+      title="Pakowanie"
+      description="Konfiguracja procesu pakowania i wyglądu ekranu pakowania."
       sections={WMS_PACKING_SETTINGS_NAV_SECTIONS}
       asideLabel="Sekcje ustawień pakowania"
       observeSections={sectionNavObserve && Boolean(effectiveDraft)}
       observeRevision={loading}
-      mainClassName="space-y-5"
+      dirty={dirty}
+      saving={saving}
+      onSave={() => void saveAll()}
+      onRestoreDefaults={() => {
+        if (warehouseId == null) return;
+        const defaults = createDefaultWmsPackingSettingsRead(DAMAGE_TENANT_ID, warehouseId);
+        setDraft(defaults);
+        setExtended({ ...DEFAULT_WMS_PACKING_EXTENDED_UI });
+        setOkMsg(null);
+      }}
     >
-      <header className="border-b border-slate-200 pb-3">
-        <h2 className="text-base font-semibold text-slate-900">Ustawienia pakowania WMS</h2>
-        <p className="mt-1 text-xs text-slate-500">Proces pakowania i widok operacyjny dla magazynu.</p>
-      </header>
-
       {loading && <p className="text-sm text-slate-500">Ładowanie…</p>}
       {err ? (
         <p className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
           <span className="font-medium">Ostrzeżenie: </span>
-          {err} Edycja jest możliwa; zapis wykonasz z paska na dole strony.
+          {err} Edycja jest możliwa; zapis wykonasz z paska na dole strony lub przycisku „Zapisz zmiany”.
         </p>
       ) : null}
       {okMsg && <p className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">{okMsg}</p>}
 
       {effectiveDraft != null ? (
-        <div className="space-y-3">
+        <div className="space-y-4">
           <SectionCard
             id="wms-pack-appearance"
             title="Widok"
@@ -1165,7 +1185,7 @@ const WmsPackingSettingsPanel = forwardRef<
           </SectionCard>
         </div>
       ) : null}
-    </WmsSettingsLayout>
+    </WmsSettingsTabFrame>
   );
 });
 

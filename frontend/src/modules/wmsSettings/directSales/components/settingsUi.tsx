@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 
 import { WmsSettingsSection } from "../../../../pages/Settings/WmsSettingsSection";
 import { wmsSettingsTokens } from "../../../../pages/Settings/wmsSettingsTokens";
+import { DIRECT_SALES_SETTINGS_NAV_SECTIONS } from "../directSalesSettingsNavSections";
 
 export const selectClass = wmsSettingsTokens.select;
 export const checkboxClass = wmsSettingsTokens.checkbox;
@@ -17,8 +18,16 @@ export function SettingsCard({
   summary?: string;
   children: ReactNode;
 }) {
+  const meta = DIRECT_SALES_SETTINGS_NAV_SECTIONS.find((s) => s.id === id);
   return (
-    <WmsSettingsSection id={id} title={title} summary={summary}>
+    <WmsSettingsSection
+      id={id}
+      title={title}
+      summary={summary}
+      icon={meta?.icon}
+      iconClassName={meta?.iconClassName}
+      searchText={meta?.searchText}
+    >
       {children}
     </WmsSettingsSection>
   );

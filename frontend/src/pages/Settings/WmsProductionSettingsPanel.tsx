@@ -1,3 +1,4 @@
+import { Boxes, ClipboardList, FileText, LayoutTemplate, Settings2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import toast from "react-hot-toast";
 
@@ -11,11 +12,11 @@ import {
   type WmsProductionSettings,
 } from "../../api/wmsProductionSettingsApi";
 import { DAMAGE_TENANT_ID } from "../damage/damageShared";
-import { WmsSettingsLayout } from "./WmsSettingsLayout";
+import { WmsSettingsTabFrame } from "./WmsSettingsTabFrame";
 import { WmsSettingsSection } from "./WmsSettingsSection";
+import type { WmsSettingsSectionConfig } from "./wmsSettingsSectionConfig";
 import { DocumentTemplateScopeSection } from "./document-templates/components/DocumentTemplateScopeSection";
 import { PRODUCTION_SCOPE_KINDS } from "./document-templates/documentTemplateScopeKinds";
-import { brandPrimaryButtonClass } from "../../design-system/brandUi";
 
 const SECTION_FORECAST = "wms-production-forecast";
 const SECTION_RESERVATION = "wms-production-reservation";
@@ -41,8 +42,35 @@ type Props = {
   warehouseId: number | null;
 };
 
-function SectionCard({ sectionId, children }: { sectionId: string; children: ReactNode }) {
-  return <WmsSettingsSection id={sectionId}>{children}</WmsSettingsSection>;
+function SectionCard({
+  sectionId,
+  title,
+  summary,
+  children,
+}: {
+  sectionId: string;
+  title: string;
+  summary?: string;
+  children: ReactNode;
+}) {
+  const meta = [
+    { id: SECTION_FORECAST, icon: Settings2, iconClassName: "bg-slate-100 text-slate-600" },
+    { id: SECTION_RESERVATION, icon: Boxes, iconClassName: "bg-amber-50 text-amber-600" },
+    { id: SECTION_DISPLAY, icon: LayoutTemplate, iconClassName: "bg-sky-50 text-sky-600" },
+    { id: SECTION_REQUIRED, icon: ClipboardList, iconClassName: "bg-violet-50 text-violet-600" },
+    { id: "wms-production-document-templates", icon: FileText, iconClassName: "bg-indigo-50 text-indigo-600" },
+  ].find((s) => s.id === sectionId);
+  return (
+    <WmsSettingsSection
+      id={sectionId}
+      title={title}
+      summary={summary}
+      icon={meta?.icon}
+      iconClassName={meta?.iconClassName}
+    >
+      {children}
+    </WmsSettingsSection>
+  );
 }
 
 function BoolRow({
@@ -159,11 +187,17 @@ export default function WmsProductionSettingsPanel({ warehouseId }: Props) {
     }
   };
 
-  const sections = [
-    { id: SECTION_FORECAST, label: "Prognozowanie" },
-    { id: SECTION_RESERVATION, label: "Rezerwacje" },
-    { id: SECTION_DISPLAY, label: "Widok terminala" },
-    { id: SECTION_REQUIRED, label: "Wymagane dane" },
+  const sections: WmsSettingsSectionConfig[] = [
+    { id: SECTION_FORECAST, label: "Ogólne", icon: Settings2, iconClassName: "bg-slate-100 text-slate-600" },
+    { id: SECTION_RESERVATION, label: "Rezerwacje", icon: Boxes, iconClassName: "bg-amber-50 text-amber-600" },
+    { id: SECTION_DISPLAY, label: "Widok", icon: LayoutTemplate, iconClassName: "bg-sky-50 text-sky-600" },
+    { id: SECTION_REQUIRED, label: "Terminal", icon: ClipboardList, iconClassName: "bg-violet-50 text-violet-600" },
+    {
+      id: "wms-production-document-templates",
+      label: "Dokumenty",
+      icon: FileText,
+      iconClassName: "bg-indigo-50 text-indigo-600",
+    },
   ];
 
   if (loading || !draftDisplay || !draftRequired || !draftForecast || !draftReservation) {
@@ -171,13 +205,30 @@ export default function WmsProductionSettingsPanel({ warehouseId }: Props) {
   }
 
   return (
-    <WmsSettingsLayout sections={sections} asideLabel="Produkcja — nawigacja">
-      <SectionCard sectionId={SECTION_FORECAST}>
-        <h2 className="text-base font-bold text-slate-900">Prognozowanie</h2>
-        <p className="mt-1 text-sm text-slate-600">
-          Strategia wyliczania dziennej sprzedaży dla planowania zapotrzebowania MRP (per magazyn).
-        </p>
-        <div className="mt-4 space-y-4">
+    <WmsSettingsTabFrame
+      title="Produkcja"
+      description="Prognozowanie, rezerwacje materiałów i widok terminala produkcyjnego."
+      sections={sections}
+      asideLabel="Produkcja — nawigacja"
+      dirty={dirty}
+      saving={saving}
+      onSave={() => void save()}
+      onRestoreDefaults={() => {
+        if (saved) {
+          setDraftDisplay(saved.terminal_display);
+          setDraftRequired(saved.terminal_required);
+          setDraftForecast(saved.forecast);
+          setDraftReservation(saved.reservation ?? { allocation_strategy: "FEFO" });
+        }
+      }}
+      restoreDisabled={!dirty}
+    >
+      <SectionCard
+        sectionId={SECTION_FORECAST}
+        title="Ogólne"
+        summary="Strategia wyliczania dziennej sprzedaży dla planowania zapotrzebowania MRP."
+      >
+        <div className="space-y-4">
           <label className="block">
             <span className="text-sm font-medium text-slate-900">Strategia prognozy</span>
             <select
@@ -214,12 +265,12 @@ export default function WmsProductionSettingsPanel({ warehouseId }: Props) {
         </div>
       </SectionCard>
 
-      <SectionCard sectionId={SECTION_RESERVATION}>
-        <h2 className="text-base font-bold text-slate-900">Rezerwacje materiałów</h2>
-        <p className="mt-1 text-sm text-slate-600">
-          Strategia automatycznej alokacji lokalizacji przy rezerwacji surowców produkcji (FIFO / FEFO / LIFO).
-        </p>
-        <label className="mt-4 block max-w-md">
+      <SectionCard
+        sectionId={SECTION_RESERVATION}
+        title="Rezerwacje"
+        summary="Strategia automatycznej alokacji lokalizacji przy rezerwacji surowców produkcji."
+      >
+        <label className="block max-w-md">
           <span className="text-sm font-medium text-slate-900">Strategia alokacji</span>
           <select
             className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
@@ -256,10 +307,12 @@ export default function WmsProductionSettingsPanel({ warehouseId }: Props) {
         </label>
       </SectionCard>
 
-      <SectionCard sectionId={SECTION_DISPLAY}>
-        <h2 className="text-base font-bold text-slate-900">Widok terminala</h2>
-        <p className="mt-1 text-sm text-slate-600">Elementy widoczne operatorowi w terminalu zbierania i produkcji.</p>
-        <div className="mt-4 grid gap-1 sm:grid-cols-2">
+      <SectionCard
+        sectionId={SECTION_DISPLAY}
+        title="Widok"
+        summary="Elementy widoczne operatorowi w terminalu zbierania i produkcji."
+      >
+        <div className="grid gap-1 sm:grid-cols-2">
           {DISPLAY_FIELDS.map(({ key, label }) => (
             <BoolRow
               key={key}
@@ -271,12 +324,12 @@ export default function WmsProductionSettingsPanel({ warehouseId }: Props) {
         </div>
       </SectionCard>
 
-      <SectionCard sectionId={SECTION_REQUIRED}>
-        <h2 className="text-base font-bold text-slate-900">Wymagane dane</h2>
-        <p className="mt-1 text-sm text-slate-600">
-          Pola wymagane przy zakończeniu produkcji w terminalu WMS (rozszerzenie w kolejnych iteracjach formularza).
-        </p>
-        <div className="mt-4 grid gap-1 sm:grid-cols-2">
+      <SectionCard
+        sectionId={SECTION_REQUIRED}
+        title="Terminal"
+        summary="Pola wymagane przy zakończeniu produkcji w terminalu WMS."
+      >
+        <div className="grid gap-1 sm:grid-cols-2">
           {REQUIRED_FIELDS.map(({ key, label }) => (
             <BoolRow
               key={key}
@@ -288,7 +341,11 @@ export default function WmsProductionSettingsPanel({ warehouseId }: Props) {
         </div>
       </SectionCard>
 
-      <SectionCard sectionId="wms-production-document-templates">
+      <SectionCard
+        sectionId="wms-production-document-templates"
+        title="Dokumenty"
+        summary="Szablony wydruków powiązane z produkcją."
+      >
         <DocumentTemplateScopeSection
           tenantId={DAMAGE_TENANT_ID}
           scopeType="PRODUCTION"
@@ -297,32 +354,6 @@ export default function WmsProductionSettingsPanel({ warehouseId }: Props) {
           kinds={PRODUCTION_SCOPE_KINDS}
         />
       </SectionCard>
-
-      <div className="mt-6 flex justify-end gap-3">
-        <button
-          type="button"
-          disabled={!dirty || saving}
-          onClick={() => {
-            if (saved) {
-              setDraftDisplay(saved.terminal_display);
-              setDraftRequired(saved.terminal_required);
-              setDraftForecast(saved.forecast);
-              setDraftReservation(saved.reservation ?? { allocation_strategy: "FEFO" });
-            }
-          }}
-          className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 disabled:opacity-40"
-        >
-          Anuluj
-        </button>
-        <button
-          type="button"
-          disabled={!dirty || saving}
-          onClick={() => void save()}
-          className={brandPrimaryButtonClass}
-        >
-          {saving ? "Zapisywanie…" : "Zapisz"}
-        </button>
-      </div>
-    </WmsSettingsLayout>
+    </WmsSettingsTabFrame>
   );
 }

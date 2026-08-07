@@ -28,7 +28,7 @@ export function WmsSettingsLayout({
   footer,
   mainClassName = "",
 }: WmsSettingsLayoutProps) {
-  const showAside = sections.length > 1;
+  const showAside = sections.length >= 1;
   const observe = observeSections && showAside;
 
   return (

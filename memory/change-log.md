@@ -1,3 +1,12 @@
+## 2026-08-07 — Ustawienia WMS: wspólny wzorzec UI (Pakowanie)
+
+- `WmsSettingsTabFrame`: tytuł, opis, wyszukiwarka, Przywróć / Zapisz
+- Lewa nawigacja z ikonami (aktywny orange), mobile disclosure
+- Sekcje zwijane z ikoną (`WmsSettingsSection`)
+- Podpięte: Pakowanie, Zbieranie, Zwroty, Przyjęcia, Produkcja, DS, Smart/3D, Coming soon
+- Logika/API bez zmian; sticky footer nadal dla dirty w hostcie
+- `npm run build` OK
+
 ## 2026-08-07 — Asortyment → Ustawienia (Stany magazynowe)
 
 - Nowa pozycja menu Asortyment → Ustawienia (`/assortment/settings`)

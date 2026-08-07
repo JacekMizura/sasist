@@ -5,7 +5,7 @@ import { listOrderStatuses } from "../../api/orderStatusesApi";
 import { DAMAGE_TENANT_ID } from "../damage/damageShared";
 import type { OrderStatusOption } from "../../types/wmsPackingSettings";
 import { orderPanelStatusSelectLabel } from "../../utils/orderPanelStatusUi";
-import { WmsSettingsLayout } from "./WmsSettingsLayout";
+import { WmsSettingsTabFrame } from "./WmsSettingsTabFrame";
 import { WmsSettingsSection } from "./WmsSettingsSection";
 import { WMS_THREE_D_MATCHING_NAV_SECTIONS } from "./wmsThreeDMatchingSettingsNavSections";
 import {
@@ -152,26 +152,14 @@ export function WmsThreeDMatchingSettingsPanel({ warehouseId, sectionNavObserve 
   const failed = dashboard?.failed_suggestions ?? null;
 
   return (
-    <WmsSettingsLayout
+    <WmsSettingsTabFrame
+      title="Dopasowanie przestrzenne"
+      description="Silnik 3D, progi dopasowania i analityka opakowań."
       sections={WMS_THREE_D_MATCHING_NAV_SECTIONS}
-      asideLabel="Sekcje 3D Matching"
+      asideLabel="Sekcje dopasowania przestrzennego"
       observeSections={sectionNavObserve}
-      observeRevision={
-        dashLoading ? "loading" : `${dashboard?.products_missing_dimensions ?? 0}-${flowRevision}-${engineRevision}`
-      }
-      mainClassName="space-y-5"
+      observeRevision={dashLoading ? "loading" : `${flowRevision}-${engineRevision}`}
     >
-      <header className="border-b border-slate-200 pb-3">
-        <h2 className="text-base font-semibold text-slate-900">3D Matching</h2>
-        <p className="mt-1 text-xs text-slate-500">
-          <span className="font-medium text-slate-700">Silnik geometryczny</span> — dopasowanie kartonu z wymiarów produktów, definicji
-          kartonów i reguł przewoźnika. <strong className="font-medium text-slate-700">Nie uczy się z historii</strong> i nie „trenuje” po
-          statusach: statusy panelu są wyłącznie <strong className="font-medium text-slate-700">triggerami workflow</strong> (kiedy
-          uruchomić obliczenia i etykiety), tak jak w Smart Matching. Parametry tolerancji i strategii ustawiasz poniżej w sekcji{" "}
-          <span className="font-medium text-slate-700">Ustawienia 3D Matching</span>.
-        </p>
-      </header>
-
       {panelStatusErr ? (
         <p className="rounded-lg border border-amber-200 bg-amber-50/80 px-3 py-2 text-sm text-amber-950">{panelStatusErr}</p>
       ) : null}
@@ -273,7 +261,7 @@ export function WmsThreeDMatchingSettingsPanel({ warehouseId, sectionNavObserve 
       <SectionCard id="wms-3d-analytics" title="6. Analityka" summary="Pełne metryki i rankingi.">
         <PackagingIntelligenceKpiFull dashboard={dashLoading ? null : dashboard} />
       </SectionCard>
-    </WmsSettingsLayout>
+    </WmsSettingsTabFrame>
   );
 }
 

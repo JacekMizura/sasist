@@ -1,18 +1,27 @@
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 import toast from "react-hot-toast";
+import { FileText, Settings2, Printer } from "lucide-react";
 
 import api from "../../api/axios";
 import { getWmsReturnsModeSettings, setWmsReturnsModeSettings } from "../../api/wmsReturnsApi";
 import type { ReturnsMode } from "../../types/wmsReturn";
 import { DAMAGE_TENANT_ID } from "../damage/damageShared";
-import { WmsSettingsLayout } from "./WmsSettingsLayout";
+import { WmsSettingsTabFrame } from "./WmsSettingsTabFrame";
 import { WmsSettingsSection } from "./WmsSettingsSection";
 import { DocumentTemplateScopeSection } from "./document-templates/components/DocumentTemplateScopeSection";
 import { RETURNS_SCOPE_KINDS } from "./document-templates/documentTemplateScopeKinds";
 import { wmsSettingsTokens } from "./wmsSettingsTokens";
+import type { WmsSettingsSectionConfig } from "./wmsSettingsSectionConfig";
 
 const MODE_SECTION_ID = "wms-returns-workflow-mode";
 const ZPZ_LABEL_SECTION_ID = "wms-returns-z-pz-label";
+const DOCS_SECTION_ID = "wms-returns-document-templates";
+
+const RETURNS_NAV: WmsSettingsSectionConfig[] = [
+  { id: MODE_SECTION_ID, label: "Ogólne", icon: Settings2, iconClassName: "bg-slate-100 text-slate-600" },
+  { id: ZPZ_LABEL_SECTION_ID, label: "Przyjęcie", icon: Printer, iconClassName: "bg-sky-50 text-sky-600", searchText: "etykieta Z-PZ" },
+  { id: DOCS_SECTION_ID, label: "Dokumenty", icon: FileText, iconClassName: "bg-indigo-50 text-indigo-600" },
+];
 
 type LabelTemplateOption = {
   id: number;
@@ -35,12 +44,28 @@ const selectCls = wmsSettingsTokens.select;
 
 function SettingsSectionCard({
   sectionId,
+  title,
+  summary,
   children,
 }: {
   sectionId: string;
+  title: string;
+  summary?: string;
   children: ReactNode;
 }) {
-  return <WmsSettingsSection id={sectionId}>{children}</WmsSettingsSection>;
+  const meta = RETURNS_NAV.find((s) => s.id === sectionId);
+  return (
+    <WmsSettingsSection
+      id={sectionId}
+      title={title}
+      summary={summary}
+      icon={meta?.icon}
+      iconClassName={meta?.iconClassName}
+      searchText={meta?.searchText}
+    >
+      {children}
+    </WmsSettingsSection>
+  );
 }
 
 type Props = {
@@ -139,33 +164,33 @@ export default function WmsReturnsSettingsPanel({ warehouseId }: Props) {
   };
 
   return (
-    <WmsSettingsLayout
-      sections={[
-        { id: MODE_SECTION_ID, label: "Tryb zwrotów" },
-        { id: ZPZ_LABEL_SECTION_ID, label: "Etykieta Z-PZ" },
-      ]}
+    <WmsSettingsTabFrame
+      title="Zwroty"
+      description="Konfiguracja przyjęcia zwrotów, kontroli jakości i dokumentów Z-PZ."
+      sections={RETURNS_NAV}
       asideLabel="Sekcje: Zwroty"
-      mainClassName="space-y-5"
+      dirty={dirty}
+      saving={saving}
+      onSave={() => void save()}
+      onRestoreDefaults={() => {
+        setDraftMode(savedMode);
+        setDraftPrintLabel(savedPrintLabel);
+        setDraftTemplateId(savedTemplateId);
+      }}
+      restoreDisabled={!dirty}
     >
-      <header className="border-b border-slate-200 pb-3">
-        <h2 className="text-base font-semibold text-slate-900">Zwroty / Reklamacje</h2>
-        <p className="mt-1 text-xs text-slate-500">
-          Konfiguracja modułu zwrotów WMS — tryb przepływu RMZ i etykiety zbiorczych dokumentów Z-PZ.
-        </p>
-      </header>
-
-      <SettingsSectionCard sectionId={MODE_SECTION_ID}>
-        <div className="mb-4">
-          <h3 className="text-base font-semibold text-slate-900">Tryb obsługi zwrotów</h3>
-          <p className={fieldHint}>Konfiguracja sposobu obsługi RMZ i decyzji magazynowych.</p>
+      <SettingsSectionCard
+        sectionId={MODE_SECTION_ID}
+        title="Ogólne"
+        summary="Tryb przepływu RMZ i decyzji magazynowych."
+      >
           {resolvedTenantLabel != null && resolvedWarehouseLabel != null ? (
-            <p className="mt-2 text-[11px] text-slate-400">
+            <p className="text-[11px] text-slate-400">
               Aktywna konfiguracja: tenant <span className="tabular-nums font-medium">{resolvedTenantLabel}</span>, magazyn{" "}
               <span className="tabular-nums font-medium">{resolvedWarehouseLabel}</span>
               {warehouseId == null ? " (magazyn domyślny)" : ""}.
             </p>
           ) : null}
-        </div>
 
         {loadError ? (
           <div className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-900">
@@ -199,12 +224,11 @@ export default function WmsReturnsSettingsPanel({ warehouseId }: Props) {
         )}
       </SettingsSectionCard>
 
-      <SettingsSectionCard sectionId={ZPZ_LABEL_SECTION_ID}>
-        <div className="mb-4">
-          <h3 className="text-base font-semibold text-slate-900">Etykieta Z-PZ</h3>
-          <p className={fieldHint}>Automatyczny wydruk po zamknięciu zbiorczego dokumentu zwrotów.</p>
-        </div>
-
+      <SettingsSectionCard
+        sectionId={ZPZ_LABEL_SECTION_ID}
+        title="Przyjęcie"
+        summary="Automatyczny wydruk etykiety po zamknięciu zbiorczego dokumentu zwrotów."
+      >
         {loading || loadError ? null : (
           <div className="space-y-4">
             <label className="flex cursor-pointer items-start gap-2">
@@ -253,7 +277,11 @@ export default function WmsReturnsSettingsPanel({ warehouseId }: Props) {
         )}
       </SettingsSectionCard>
 
-      <SettingsSectionCard sectionId="wms-returns-document-templates">
+      <SettingsSectionCard
+        sectionId={DOCS_SECTION_ID}
+        title="Dokumenty"
+        summary="Szablony wydruków powiązane ze zwrotami."
+      >
         <DocumentTemplateScopeSection
           tenantId={DAMAGE_TENANT_ID}
           scopeType="RETURNS"
@@ -262,26 +290,6 @@ export default function WmsReturnsSettingsPanel({ warehouseId }: Props) {
           kinds={RETURNS_SCOPE_KINDS}
         />
       </SettingsSectionCard>
-
-      {!loading && !loadError ? (
-        <>
-          {dirty ? (
-            <p className="text-xs font-medium text-amber-800">Masz niezapisane zmiany.</p>
-          ) : (
-            <p className="text-xs text-slate-400">Brak niezapisanych zmian.</p>
-          )}
-          <div className="flex flex-wrap items-center gap-3 border-t border-slate-100 pt-5">
-            <button
-              type="button"
-              disabled={!canSave || printRequiresTemplate}
-              className="min-h-[44px] rounded-lg bg-[#41546a] px-5 text-sm font-bold text-white shadow-sm hover:bg-[#364556] disabled:cursor-not-allowed disabled:opacity-50"
-              onClick={() => void save()}
-            >
-              {saving ? "Zapisywanie…" : "Zapisz ustawienia"}
-            </button>
-          </div>
-        </>
-      ) : null}
-    </WmsSettingsLayout>
+    </WmsSettingsTabFrame>
   );
 }

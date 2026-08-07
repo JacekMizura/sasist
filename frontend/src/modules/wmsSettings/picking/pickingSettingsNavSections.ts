@@ -1,16 +1,80 @@
+import {
+  Boxes,
+  LayoutTemplate,
+  ListOrdered,
+  ScanLine,
+  Settings2,
+  Sparkles,
+  Tablet,
+  TriangleAlert,
+  Warehouse,
+} from "lucide-react";
+
 import type { WmsSettingsSectionConfig } from "../../../pages/Settings/wmsSettingsSectionConfig";
 
 /**
- * Left-nav sections for picking settings (Sellasist-aligned labels; DOM ids stable for scrollspy).
+ * Left-nav sections for picking settings (DOM ids stable for scrollspy).
+ * Labels aligned with Pakowanie-style IA; field names / APIs unchanged.
  */
 export const WMS_PICKING_SETTINGS_NAV_SECTIONS: WmsSettingsSectionConfig[] = [
-  { id: "wms-pick-modes", label: "Konfiguracja statusów" },
-  { id: "wms-pick-queue", label: "Zarządzanie zbiorami" },
-  { id: "wms-pick-scan", label: "Ustawienia wspólne" },
-  { id: "wms-pick-carts", label: "Metody zbierania" },
-  { id: "wms-pick-shortage", label: "Braki przy zbieraniu" },
-  { id: "wms-pick-warehouses", label: "Magazyny" },
-  { id: "wms-pick-automation", label: "Automatyzacja" },
-  { id: "wms-pick-view", label: "Widok i interfejs" },
-  { id: "wms-pick-advanced", label: "Zaawansowane" },
+  {
+    id: "wms-pick-modes",
+    label: "Ogólne",
+    icon: Settings2,
+    iconClassName: "bg-slate-100 text-slate-600",
+    searchText: "statusy konfiguracja trybów",
+  },
+  {
+    id: "wms-pick-view",
+    label: "Widok",
+    icon: LayoutTemplate,
+    iconClassName: "bg-sky-50 text-sky-600",
+    searchText: "interfejs kolumny lista",
+  },
+  {
+    id: "wms-pick-queue",
+    label: "Lista zleceń",
+    icon: ListOrdered,
+    iconClassName: "bg-violet-50 text-violet-600",
+    searchText: "zbiory kolejka objętość",
+  },
+  {
+    id: "wms-pick-scan",
+    label: "Terminal",
+    icon: ScanLine,
+    iconClassName: "bg-cyan-50 text-cyan-700",
+    searchText: "skan walidacja",
+  },
+  {
+    id: "wms-pick-carts",
+    label: "Metody zbierania",
+    icon: Boxes,
+    iconClassName: "bg-amber-50 text-amber-600",
+    searchText: "kontener wózek",
+  },
+  {
+    id: "wms-pick-shortage",
+    label: "Braki",
+    icon: TriangleAlert,
+    iconClassName: "bg-rose-50 text-rose-600",
+    searchText: "braki dogrywka",
+  },
+  {
+    id: "wms-pick-warehouses",
+    label: "Magazyny",
+    icon: Warehouse,
+    iconClassName: "bg-emerald-50 text-emerald-600",
+  },
+  {
+    id: "wms-pick-automation",
+    label: "Automatyzacja",
+    icon: Sparkles,
+    iconClassName: "bg-orange-50 text-orange-600",
+  },
+  {
+    id: "wms-pick-advanced",
+    label: "Zaawansowane",
+    icon: Tablet,
+    iconClassName: "bg-indigo-50 text-indigo-600",
+  },
 ];

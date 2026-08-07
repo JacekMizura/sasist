@@ -1,3 +1,4 @@
+import { ShieldCheck } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import toast from "react-hot-toast";
 import { Link } from "react-router-dom";
@@ -9,18 +10,40 @@ import {
 } from "../../api/wmsProductValidationApi";
 import { ProductReceivingRequirementsSection } from "../../components/wms/receiving/ProductReceivingRequirementsSection";
 import { DAMAGE_TENANT_ID } from "../damage/damageShared";
-import { WmsSettingsLayout } from "./WmsSettingsLayout";
+import { WmsSettingsTabFrame } from "./WmsSettingsTabFrame";
 import { WmsSettingsSection } from "./WmsSettingsSection";
-import { PrimaryButton } from "../../design-system/PrimaryButton";
+import type { WmsSettingsSectionConfig } from "./wmsSettingsSectionConfig";
 
 const SECTION_ID = "wms-receiving-product-validation";
+
+const RECEIVING_NAV: WmsSettingsSectionConfig[] = [
+  {
+    id: SECTION_ID,
+    label: "Ogólne",
+    icon: ShieldCheck,
+    iconClassName: "bg-emerald-50 text-emerald-600",
+    searchText: "walidacja master-data karton",
+  },
+];
 
 type Props = {
   warehouseId: number | null;
 };
 
 function SectionCard({ sectionId, children }: { sectionId: string; children: ReactNode }) {
-  return <WmsSettingsSection id={sectionId}>{children}</WmsSettingsSection>;
+  const meta = RECEIVING_NAV.find((s) => s.id === sectionId);
+  return (
+    <WmsSettingsSection
+      id={sectionId}
+      title="Ogólne"
+      summary="Globalne wymagania master-data i traceability przy przyjęciu WMS."
+      icon={meta?.icon}
+      iconClassName={meta?.iconClassName}
+      searchText={meta?.searchText}
+    >
+      {children}
+    </WmsSettingsSection>
+  );
 }
 
 function toDraft(s: WmsProductValidationSettings) {
@@ -100,26 +123,34 @@ export default function WmsProductValidationSettingsPanel({ warehouseId }: Props
     }
   };
 
-  const sections = [{ id: SECTION_ID, label: "Walidacja produktów" }];
+  const sections = RECEIVING_NAV;
 
   if (loading || !draft) {
     return <p className="text-sm text-slate-500">Wczytywanie ustawień walidacji produktów…</p>;
   }
 
   return (
-    <WmsSettingsLayout sections={sections} asideLabel="Przyjęcia — nawigacja">
+    <WmsSettingsTabFrame
+      title="Przyjęcia"
+      description="Walidacja produktów i wymagania przy przyjęciu dostawy."
+      sections={sections}
+      asideLabel="Przyjęcia — nawigacja"
+      dirty={dirty}
+      saving={saving}
+      onSave={() => void save()}
+      onRestoreDefaults={() => setDraft(saved ? { ...saved } : draft)}
+      restoreDisabled={!dirty}
+    >
       <SectionCard sectionId={SECTION_ID}>
-        <h2 className="text-base font-bold text-slate-900">Walidacja produktów</h2>
-        <p className="mt-1 text-sm text-slate-600">
-          Globalne wymagania master-data i traceability przy przyjęciu WMS. Na karcie produktu można jedynie{" "}
-          <strong>wyłączyć</strong> wybrane reguły dla konkretnego SKU (
+        <p className="text-sm text-slate-600">
+          Na karcie produktu można jedynie <strong>wyłączyć</strong> wybrane reguły dla konkretnego SKU (
           <Link to="/products" className="text-indigo-800 underline hover:text-indigo-950">
             Produkty
           </Link>
           → Ustawienia → Walidacja).
         </p>
 
-        <div className="mt-5">
+        <div className="mt-2">
           <ProductReceivingRequirementsSection
             requireDimensions={draft.requireDimensions}
             requireWeight={draft.requireWeight}
@@ -135,21 +166,10 @@ export default function WmsProductValidationSettingsPanel({ warehouseId }: Props
             onChange={applyPatch}
           />
         </div>
-
-        <div className="mt-6 flex justify-end gap-2 border-t border-slate-100 pt-4">
-          <button
-            type="button"
-            disabled={!dirty || saving}
-            onClick={() => setDraft(saved ? { ...saved } : draft)}
-            className="rounded-lg border border-slate-200 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-50"
-          >
-            Cofnij
-          </button>
-          <PrimaryButton type="button" disabled={!dirty || saving} onClick={() => void save()}>
-            {saving ? "Zapisywanie…" : "Zapisz"}
-          </PrimaryButton>
-        </div>
+        {resolvedWh != null ? (
+          <p className="mt-3 text-xs text-slate-400">Magazyn konfiguracji: #{resolvedWh}</p>
+        ) : null}
       </SectionCard>
-    </WmsSettingsLayout>
+    </WmsSettingsTabFrame>
   );
 }

@@ -5,7 +5,7 @@ import { listOrderStatuses } from "../../api/orderStatusesApi";
 import { DAMAGE_TENANT_ID } from "../damage/damageShared";
 import type { OrderStatusOption } from "../../types/wmsPackingSettings";
 import { orderPanelStatusSelectLabel } from "../../utils/orderPanelStatusUi";
-import { WmsSettingsLayout } from "./WmsSettingsLayout";
+import { WmsSettingsTabFrame } from "./WmsSettingsTabFrame";
 import { WmsSettingsSection } from "./WmsSettingsSection";
 import { WMS_SMART_MATCHING_NAV_SECTIONS } from "./wmsSmartMatchingSettingsNavSections";
 import {
@@ -33,8 +33,16 @@ function SectionCard({
   summary?: string;
   children: ReactNode;
 }) {
+  const meta = WMS_SMART_MATCHING_NAV_SECTIONS.find((s) => s.id === id);
   return (
-    <WmsSettingsSection id={id} title={title} summary={summary}>
+    <WmsSettingsSection
+      id={id}
+      title={title}
+      summary={summary}
+      icon={meta?.icon}
+      iconClassName={meta?.iconClassName}
+      searchText={meta?.searchText}
+    >
       {children}
     </WmsSettingsSection>
   );
@@ -132,31 +140,21 @@ export function WmsSmartMatchingSettingsPanel({ warehouseId, sectionNavObserve =
   }
 
   return (
-    <WmsSettingsLayout
+    <WmsSettingsTabFrame
+      title="Smart Matching"
+      description="Uczenie na powtarzalnych decyzjach pakowania dla identycznego składu zamówienia."
       sections={WMS_SMART_MATCHING_NAV_SECTIONS}
       asideLabel="Sekcje Smart Matching"
       observeSections={sectionNavObserve}
       observeRevision={dashLoading ? "loading" : `${dashboard?.suggestions_total ?? 0}-${configRevision}`}
-      mainClassName="space-y-5"
     >
-      <header className="border-b border-slate-200 pb-3">
-        <h2 className="text-base font-semibold text-slate-900">Smart Matching</h2>
-        <p className="mt-1 text-xs text-slate-500">
-          Uczenie wynika z <span className="font-medium text-slate-700">powtarzalnych decyzji pakowania</span> dla{" "}
-          <span className="font-medium text-slate-700">identycznego składu zamówienia</span> (te same produkty i ilości) — nie z list
-          statusów jako danych treningowych. Statusy służą jako <span className="font-medium text-slate-700">triggery workflow</span>{" "}
-          (w tym wiele statusów inicjujących propozycję). Silnik 3D pozostaje osobnym modułem geometrycznym, ale współdzieli te same
-          przełączniki przepływu.
-        </p>
-      </header>
-
       {statusLoadErr ? (
         <p className="rounded-lg border border-amber-200 bg-amber-50/80 px-3 py-2 text-sm text-amber-950">{statusLoadErr}</p>
       ) : null}
 
       <SectionCard
         id="wms-smart-dashboard"
-        title="1. Dashboard"
+        title="Widok"
         summary="Operacyjne metryki — uzupełniane z audytu propozycji po stronie backendu."
       >
         <PackagingIntelligenceKpiCompact dashboard={dashLoading ? null : dashboard} />
@@ -165,7 +163,7 @@ export function WmsSmartMatchingSettingsPanel({ warehouseId, sectionNavObserve =
 
       <SectionCard
         id="wms-smart-config"
-        title="2. Konfiguracja Smart Matching"
+        title="Ogólne"
         summary="Próg uczenia (Smart), wspólne statusy inicjujące propozycję oraz auto-etykiety po dopasowaniu."
       >
         <WmsPackagingProposalEngineConfigForm
@@ -192,14 +190,14 @@ export function WmsSmartMatchingSettingsPanel({ warehouseId, sectionNavObserve =
         </div>
       </SectionCard>
 
-      <SectionCard id="wms-smart-history" title="3. Historia dopasowań" summary="Audyt propozycji i decyzji operatorów.">
+      <SectionCard id="wms-smart-history" title="Integracje" summary="Audyt propozycji i decyzji operatorów.">
         <PackagingIntelligenceAuditPlaceholderTable moduleLabel="Smart Matching" colSource="Silnik / zestawienie" />
       </SectionCard>
 
-      <SectionCard id="wms-smart-analytics" title="4. Analityka" summary="Pełny zestaw metryk i ranking kartonów.">
+      <SectionCard id="wms-smart-analytics" title="Zaawansowane" summary="Pełny zestaw metryk i ranking kartonów.">
         <PackagingIntelligenceKpiFull dashboard={dashLoading ? null : dashboard} />
       </SectionCard>
-    </WmsSettingsLayout>
+    </WmsSettingsTabFrame>
   );
 }
 

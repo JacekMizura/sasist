@@ -1,7 +1,7 @@
 import { forwardRef, useEffect, useImperativeHandle } from "react";
 
 import { DAMAGE_TENANT_ID } from "../../../constants/panelTenant";
-import { WmsSettingsLayout } from "../../../pages/Settings/WmsSettingsLayout";
+import { WmsSettingsTabFrame } from "../../../pages/Settings/WmsSettingsTabFrame";
 import { ValidationWarnings } from "./components/ValidationWarnings";
 import { DIRECT_SALES_SETTINGS_NAV_SECTIONS } from "./directSalesSettingsNavSections";
 import { useDirectSalesSettings } from "./hooks/useDirectSalesSettings";
@@ -61,11 +61,20 @@ export const DirectSalesSettingsPanel = forwardRef<DirectSalesSettingsPanelHandl
     }
 
     return (
-      <div className="space-y-4">
-        <div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50/80 p-4">
+      <WmsSettingsTabFrame
+        title="Sprzedaż bezpośrednia"
+        description="Konfiguracja terminala sprzedaży, płatności, stanów i klientów."
+        sections={DIRECT_SALES_SETTINGS_NAV_SECTIONS}
+        observeSections={sectionNavObserve}
+        dirty={state.dirty}
+        onSave={() => void state.save()}
+        onRestoreDefaults={() => state.discard()}
+        restoreDisabled={!state.dirty}
+      >
+        <div className="mb-2 space-y-3 rounded-xl border border-slate-200 bg-slate-50/80 p-4">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
-              <h2 className="text-sm font-semibold text-slate-900">Zakres konfiguracji</h2>
+              <h3 className="text-sm font-semibold text-slate-900">Zakres konfiguracji</h3>
               <p className="text-xs text-slate-500">
                 Magazyn: #{warehouseId}
                 {state.hasWarehouseOverride ? " · aktywne nadpisanie magazynu" : " · dziedziczy domyślne tenanta"}
@@ -90,16 +99,14 @@ export const DirectSalesSettingsPanel = forwardRef<DirectSalesSettingsPanelHandl
           </div>
           <ValidationWarnings config={state.draft} statusOptions={state.statusOptions} />
         </div>
-        <WmsSettingsLayout sections={DIRECT_SALES_SETTINGS_NAV_SECTIONS} observeSections={sectionNavObserve}>
-          <GeneralSection config={state.draft} statusOptions={state.statusOptions} onChange={state.patch} />
-          <PaymentsSection config={state.draft} onChange={state.patch} />
-          <StockSection config={state.draft} onChange={state.patch} />
-          <PricingSection config={state.draft} onChange={state.patch} />
-          <DiscountsSection config={state.draft} onChange={state.patch} />
-          <CustomersSection config={state.draft} onChange={state.patch} />
-          <TerminalSection config={state.draft} onChange={state.patch} />
-        </WmsSettingsLayout>
-      </div>
+        <GeneralSection config={state.draft} statusOptions={state.statusOptions} onChange={state.patch} />
+        <PaymentsSection config={state.draft} onChange={state.patch} />
+        <StockSection config={state.draft} onChange={state.patch} />
+        <PricingSection config={state.draft} onChange={state.patch} />
+        <DiscountsSection config={state.draft} onChange={state.patch} />
+        <CustomersSection config={state.draft} onChange={state.patch} />
+        <TerminalSection config={state.draft} onChange={state.patch} />
+      </WmsSettingsTabFrame>
     );
   },
 );

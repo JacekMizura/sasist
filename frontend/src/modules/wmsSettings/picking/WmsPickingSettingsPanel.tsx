@@ -42,9 +42,10 @@ import {
 import { loadCachedPickingConfigRows, saveCachedPickingConfigRows } from "../../../types/wmsPickingConfigLocalCache";
 import { WmsSettingsSection } from "../../../pages/Settings/WmsSettingsSection";
 import { WmsSettingCard } from "../../../pages/Settings/WmsSettingCard";
+import { WmsSettingsTabFrame } from "../../../pages/Settings/WmsSettingsTabFrame";
 import { wmsSettingsTokens } from "../../../pages/Settings/wmsSettingsTokens";
 import { PickingSettingsModal } from "./PickingSettingsModal";
-import { PickingSettingsShell } from "./PickingSettingsShell";
+import { WMS_PICKING_SETTINGS_NAV_SECTIONS } from "./pickingSettingsNavSections";
 import {
   PickingStatusSelect,
   pickingStatusBadgeColor,
@@ -127,8 +128,16 @@ function SectionCardPicking({
   summary?: string;
   children: ReactNode;
 }) {
+  const meta = WMS_PICKING_SETTINGS_NAV_SECTIONS.find((s) => s.id === id);
   return (
-    <WmsSettingsSection id={id} title={title} summary={summary}>
+    <WmsSettingsSection
+      id={id}
+      title={title}
+      summary={summary}
+      icon={meta?.icon}
+      iconClassName={meta?.iconClassName}
+      searchText={meta?.searchText}
+    >
       {children}
     </WmsSettingsSection>
   );
@@ -2184,11 +2193,58 @@ export function WmsPickingSettingsSections({
 
   return (
     <>
-      <PickingSettingsShell observe={sectionNavObserve} observeRevision={pickingConfigsLoading}>
-        <header className="border-b border-slate-200 pb-3">
-          <h2 className="text-lg font-bold text-slate-900">Zbieranie</h2>
-        </header>
-
+      <WmsSettingsTabFrame
+        title="Zbieranie"
+        description="Konfiguracja procesu zbierania, kolejki zleceń i terminala magazyniera."
+        sections={WMS_PICKING_SETTINGS_NAV_SECTIONS}
+        asideLabel="Sekcje ustawień zbierania"
+        observeSections={sectionNavObserve}
+        observeRevision={pickingConfigsLoading}
+        dirty={pickingDirty}
+        onSave={() =>
+          void (async () => {
+            if (warehouseId == null) return;
+            if (shortagePanelDirty && shortageRef.current) {
+              const ok = await shortageRef.current.save();
+              if (!ok) throw new Error("shortage_save_failed");
+            }
+            let configsToPersist = savedConfigs;
+            if (draft != null) {
+              const built = buildCommittedConfigList();
+              if (!built.ok) throw new Error("draft_commit_failed");
+              configsToPersist = built.nextList;
+              setSavedConfigs(built.nextList);
+              setEditBackup(null);
+              setDraft(null);
+              setSaveFormError(null);
+            }
+            const configsNeedPersist =
+              baselineConfigsFp == null ||
+              fingerprintPickingConfigsWarehouseState(configsToPersist, globalBulkSingle, globalBulkMulti) !==
+                baselineConfigsFp;
+            if (configsNeedPersist) {
+              const result = await persistPickingConfigList(configsToPersist);
+              if (!result.ok) throw new Error(result.message);
+            }
+            if (extendedDirty) {
+              saveExtendedOnly();
+            }
+          })()
+        }
+        onRestoreDefaults={() => {
+          void (async () => {
+            if (warehouseId == null) return;
+            const e = { ...DEFAULT_WMS_PICKING_EXTENDED_UI };
+            setExtended(e);
+            setBaselineExtended(stableStringifyPicking(e));
+            saveWmsPickingExtendedUi(warehouseId, e);
+            await loadPickingConfigsFromServer();
+            setEditBackup(null);
+            setDraft(null);
+            setSaveFormError(null);
+          })();
+        }}
+      >
         {pickingConfigsLoading ? <p className="text-sm text-slate-500">Ładowanie konfiguracji z serwera…</p> : null}
         {pickingConfigsLoadErr ? (
           <p className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
@@ -2212,8 +2268,8 @@ export function WmsPickingSettingsSections({
 
         <SectionCardPicking
           id="wms-pick-modes"
-          title="Konfiguracja statusów"
-          summary="Konfiguracja trybów zbierania — reguły statusów panelu."
+          title="Ogólne"
+          summary="Tryby zbierania i mapowanie statusów panelu."
         >
           <WmsPickingStatusConfig
             savedConfigs={savedConfigs}
@@ -2229,7 +2285,7 @@ export function WmsPickingSettingsSections({
           />
         </SectionCardPicking>
 
-        <SectionCardPicking id="wms-pick-queue" title="Zarządzanie zbiorami" summary="Zbiory, objętość, kurierzy i akcja po zebraniu.">
+        <SectionCardPicking id="wms-pick-queue" title="Lista zleceń" summary="Zbiory, objętość, kurierzy i akcja po zebraniu.">
           <SubsectionPicking title="Zarządzanie zbiorami">
             <FieldGridPicking>
               <label className="block text-sm font-medium text-slate-700">
@@ -2378,7 +2434,7 @@ export function WmsPickingSettingsSections({
           </SubsectionPicking>
         </SectionCardPicking>
 
-        <SectionCardPicking id="wms-pick-scan" title="Ustawienia wspólne" summary="Wymagania skanów i reguły walidacji podczas zbierania.">
+        <SectionCardPicking id="wms-pick-scan" title="Terminal" summary="Wymagania skanów i reguły walidacji podczas zbierania.">
           <FieldGridPicking>
             <CustomCheckbox
               label="Wymagane skanowanie produktu przynajmniej jeden raz"
@@ -2521,7 +2577,7 @@ export function WmsPickingSettingsSections({
           </FieldGridPicking>
         </SectionCardPicking>
 
-        <SectionCardPicking id="wms-pick-view" title="Widok i interfejs" summary="Kolumny listy, gęstość i tryb kompaktowy.">
+        <SectionCardPicking id="wms-pick-view" title="Widok" summary="Kolumny listy, gęstość i tryb kompaktowy.">
           <SubsectionPicking title="Kolumny produktu (lista zbierania)" description="Wybór informacji widocznych na liście zbierania.">
             <FieldGridPicking>
               <CustomCheckbox label="Zdjęcie produktu" checked={extended.showProductImage} onChange={(v) => patchExtended("showProductImage", v)} />
@@ -2563,7 +2619,7 @@ export function WmsPickingSettingsSections({
             <CustomCheckbox label="Zaawansowany routing" hint="Algorytm tras" checked={extended.advancedRoutingMode} onChange={(v) => patchExtended("advancedRoutingMode", v)} />
           </FieldGridPicking>
         </SectionCardPicking>
-      </PickingSettingsShell>
+      </WmsSettingsTabFrame>
 
       <PickingSettingsModal
         open={draft != null}

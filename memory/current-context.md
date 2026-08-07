@@ -1,7 +1,7 @@
 ﻿## Active
 
-**Asortyment → Ustawienia (2026-08-07).**
+**WMS settings UI unification (2026-08-07).**
 
-- Stany magazynowe przeniesione z `/settings/wms?tab=common` → `/assortment/settings`
-- WMS hub default: Pakowanie; redirect legacy `?tab=common`
-- API `wms/settings/inventory-management` bez zmian
+- Shared `WmsSettingsTabFrame` + collapsible icon sections + icon left nav
+- All process tabs aligned to Pakowanie pattern (layout only)
+- Inventory policy remains under Asortyment → Ustawienia
