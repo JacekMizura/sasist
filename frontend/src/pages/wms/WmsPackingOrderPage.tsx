@@ -393,6 +393,11 @@ export default function WmsPackingOrderPage() {
         showProceedAfterLinesCompleteCta={ctrl.showProceedAfterLinesCompleteCta}
         onProceedAfterLinesComplete={ctrl.proceedAfterLinesComplete}
         onMarkLineShortage={(id) => void onMarkLineShortage(id)}
+        showAutomationButtons={ctrl.packingExtendedUi.showAutomationButtons}
+        automationButtonsPosition={ctrl.packingExtendedUi.automationButtonsPosition}
+        warehouseId={ctrl.warehouseId}
+        onAutomationToast={showScannerToast}
+        onAutomationStatusChanged={() => void ctrl.fetchDetail()}
       />
     </>
   );

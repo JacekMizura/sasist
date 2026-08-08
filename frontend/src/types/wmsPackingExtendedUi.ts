@@ -16,7 +16,12 @@ export type PackingExecutionMode = "automatic" | "prepare_only" | "simulation";
 export type PackingSalesDocumentType = "invoice" | "receipt" | "none";
 /** @deprecated Prefer {@link WmsPackingExtendedUiSettings.packingBySingleOrMultiItemEnabled}. */
 export type PackingSingleOrMultiStrategy = "auto" | "single_first" | "multi_first";
-export type PackingPostDocumentAction = "none" | "print" | "download" | "open";
+/** Akcja po wystawieniu dokumentu sprzedaży / listu przewozowego — tylko Wydrukuj / Pobierz. */
+export type PackingPostDocumentAction = "print" | "download";
+
+export function normalizePackingPostDocumentAction(raw: unknown): PackingPostDocumentAction {
+  return raw === "download" ? "download" : "print";
+}
 
 export type WmsPackingExtendedUiSettings = {
   layoutMode: PackingLayoutMode;
@@ -140,8 +145,8 @@ export const DEFAULT_WMS_PACKING_EXTENDED_UI: WmsPackingExtendedUiSettings = {
   autoChangeOrderStatus: true,
   afterActionsBehavior: "stay_here",
 
-  afterSalesDocumentAction: "none",
-  afterWaybillAction: "none",
+  afterSalesDocumentAction: "print",
+  afterWaybillAction: "print",
 
   salesDocumentType: "invoice",
   skipA4ReceiptWhenFiscalPrinter: false,
@@ -208,6 +213,8 @@ export function loadWmsPackingExtendedUi(warehouseId: number): WmsPackingExtende
       allowedStartStatusIds: Array.isArray(parsed.allowedStartStatusIds)
         ? parsed.allowedStartStatusIds.map(Number).filter((n) => Number.isFinite(n))
         : DEFAULT_WMS_PACKING_EXTENDED_UI.allowedStartStatusIds,
+      afterSalesDocumentAction: normalizePackingPostDocumentAction(parsed.afterSalesDocumentAction),
+      afterWaybillAction: normalizePackingPostDocumentAction(parsed.afterWaybillAction),
     };
   } catch {
     return { ...DEFAULT_WMS_PACKING_EXTENDED_UI };

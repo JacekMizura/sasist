@@ -22,10 +22,13 @@ from ..models.enums import CartType
 from ..models.inventory import Inventory
 from ..models.location import Location
 from ..models.order import Order
+from ..models.order_document import OrderDocument
+from ..models.order_document_type_enum import OrderDocumentType
 from ..models.order_item import OMS_LINE_STATUS_TO_PICK, OrderItem, order_item_is_replaced_line
 from ..models.order_ui_status import OrderUiStatus
 from ..models.label_template import SavedLabelTemplate
 from ..models.picking_config import PickingConfig
+from ..models.sale_document import SaleDocument
 from ..models.wms_packing_settings import WmsPackingSettings
 from ..schemas.order import OrderUiMainGroup
 from .cart_display import cart_display_name_for_wms
@@ -3587,10 +3590,79 @@ def _packing_create_sale_document_strict(
     return created
 
 
+def _latest_order_document(
+    db: Session,
+    *,
+    order: Order,
+    document_type: str,
+) -> OrderDocument | None:
+    return (
+        db.query(OrderDocument)
+        .filter(
+            OrderDocument.order_id == int(order.id),
+            OrderDocument.tenant_id == int(order.tenant_id),
+            OrderDocument.warehouse_id == int(order.warehouse_id),
+            OrderDocument.document_type == str(document_type),
+        )
+        .order_by(OrderDocument.id.desc())
+        .first()
+    )
+
+
+def _latest_sale_document_for_order(db: Session, *, order: Order) -> SaleDocument | None:
+    return (
+        db.query(SaleDocument)
+        .filter(
+            SaleDocument.order_id == int(order.id),
+            SaleDocument.tenant_id == int(order.tenant_id),
+        )
+        .order_by(SaleDocument.created_at.desc(), SaleDocument.id.desc())
+        .first()
+    )
+
+
+def _client_doc_message(*, kind: str, order_document_id: int | None = None, file_url: str | None = None, sale_document_id: str | None = None) -> str:
+    parts = [kind]
+    if sale_document_id:
+        parts.append(f"sale_document_id={sale_document_id}")
+    if order_document_id is not None:
+        parts.append(f"order_document_id={int(order_document_id)}")
+    if file_url:
+        parts.append(f"file_url={file_url}")
+    return ";".join(parts)
+
+
+def _append_sales_companion_to_message(db: Session, *, order: Order, message: str) -> str:
+    """Dołącz URL pola „Dokument sprzedaży” — klient soft-failuje, gdy brak pliku."""
+    sales_attached = _latest_order_document(
+        db, order=order, document_type=OrderDocumentType.DOKUMENT_SPRZEDAZY.value
+    )
+    if sales_attached is None or not str(sales_attached.file_url or "").strip():
+        return message
+    return (
+        f"{message}"
+        f";sales_order_document_id={int(sales_attached.id)}"
+        f";sales_file_url={str(sales_attached.file_url)}"
+    )
+
+
 def _packing_step_generate_shipment(db: Session, order: Order) -> WmsPackingPostPackStepResult:
-    _ = db
     try:
         logger.info("wms_packing post-pack generate_shipment order_id=%s", order.id)
+        existing = _latest_order_document(db, order=order, document_type=OrderDocumentType.LIST_PRZEWOZOWY.value)
+        if existing is not None and str(existing.file_url or "").strip():
+            msg = _client_doc_message(
+                kind="existing_waybill",
+                order_document_id=int(existing.id),
+                file_url=str(existing.file_url),
+            )
+            msg = _append_sales_companion_to_message(db, order=order, message=msg)
+            return WmsPackingPostPackStepResult(
+                step="generate_shipment",
+                ok=True,
+                skipped=False,
+                message=msg,
+            )
         return WmsPackingPostPackStepResult(
             step="generate_shipment",
             ok=True,
@@ -3602,14 +3674,43 @@ def _packing_step_generate_shipment(db: Session, order: Order) -> WmsPackingPost
 
 
 def _packing_step_print_document(db: Session, order: Order) -> WmsPackingPostPackStepResult:
-    _ = db
+    """Resolve sales document for client print/download — never invent an empty PDF."""
     try:
-        logger.info("wms_packing post-pack print_document order_id=%s", order.id)
+        try:
+            sale = _latest_sale_document_for_order(db, order=order)
+        except Exception:
+            # Brak tabeli / błąd odczytu SaleDocument — kontynuuj przez pole dodatkowe.
+            sale = None
+        if sale is not None:
+            return WmsPackingPostPackStepResult(
+                step="print_document",
+                ok=True,
+                skipped=False,
+                message=_client_doc_message(
+                    kind="client_print_sales_doc",
+                    sale_document_id=str(sale.id),
+                ),
+            )
+        attached = _latest_order_document(
+            db, order=order, document_type=OrderDocumentType.DOKUMENT_SPRZEDAZY.value
+        )
+        if attached is not None and str(attached.file_url or "").strip():
+            return WmsPackingPostPackStepResult(
+                step="print_document",
+                ok=True,
+                skipped=False,
+                message=_client_doc_message(
+                    kind="client_print_sales_doc",
+                    order_document_id=int(attached.id),
+                    file_url=str(attached.file_url),
+                ),
+            )
+        logger.info("wms_packing post-pack print_document missing sales doc order_id=%s", order.id)
         return WmsPackingPostPackStepResult(
             step="print_document",
             ok=True,
             skipped=True,
-            message="print_delegated_to_client_qz",
+            message="missing_sales_document",
         )
     except Exception as e:  # pragma: no cover
         return WmsPackingPostPackStepResult(step="print_document", ok=False, message=str(e)[:500])
@@ -3622,14 +3723,40 @@ def _packing_step_print_label(
     order: Order,
     fb: WmsPackingFallbackLabel,
 ) -> WmsPackingPostPackStepResult:
+    """
+    Resolve waybill (LIST_PRZEWOZOWY / pole „List przewozowy”) for client print/download.
+    Fallback product-label template is NOT a courier waybill — only used when no waybill file exists
+    and a template is configured (legacy replacement label).
+    """
+    _ = tenant_id
     try:
+        waybill = _latest_order_document(db, order=order, document_type=OrderDocumentType.LIST_PRZEWOZOWY.value)
+        if waybill is not None and str(waybill.file_url or "").strip():
+            logger.info(
+                "wms_packing post-pack print_label order_id=%s order_document_id=%s",
+                order.id,
+                waybill.id,
+            )
+            msg = _client_doc_message(
+                kind="client_print_waybill",
+                order_document_id=int(waybill.id),
+                file_url=str(waybill.file_url),
+            )
+            # Companion: pole dodatkowe „Dokument sprzedaży” — klient drukuje przy afterWaybill=print.
+            msg = _append_sales_companion_to_message(db, order=order, message=msg)
+            return WmsPackingPostPackStepResult(
+                step="print_label",
+                ok=True,
+                skipped=False,
+                message=msg,
+            )
         tid = fb.template_id
         if tid is None:
             return WmsPackingPostPackStepResult(
                 step="print_label",
                 ok=True,
                 skipped=True,
-                message="no_fallback_template",
+                message="missing_waybill",
             )
         tpl = (
             db.query(SavedLabelTemplate)
@@ -3642,21 +3769,16 @@ def _packing_step_print_label(
         if tpl is None:
             return WmsPackingPostPackStepResult(
                 step="print_label",
-                ok=False,
-                skipped=False,
-                message="template_not_found_for_tenant",
+                ok=True,
+                skipped=True,
+                message="missing_waybill",
             )
-        logger.info(
-            "wms_packing post-pack print_label order_id=%s template_id=%s name=%s",
-            order.id,
-            tid,
-            getattr(tpl, "name", ""),
-        )
+        # Replacement label exists but is not a waybill — skip rather than fake a courier label.
         return WmsPackingPostPackStepResult(
             step="print_label",
             ok=True,
             skipped=True,
-            message="label_render_stub",
+            message="missing_waybill",
         )
     except Exception as e:
         return WmsPackingPostPackStepResult(step="print_label", ok=False, message=str(e)[:500])
@@ -3672,60 +3794,55 @@ def _packing_step_apply_packed_status(
     warehouse_id: int,
 ) -> WmsPackingPostPackStepResult:
     """
-    Ustawia status panelu „spakowane” (konfiguracja lub heurystyka). Wywoływane **najpierw** w potoku finish,
-    zanim utworzymy dokument sprzedaży (wymóg kolejności zapisów).
+    Gdy ``change_order_status`` włączone — ustawia ``packed_status_id``.
+    Gdy wyłączone — nie zmienia statusu zamówienia tą akcją.
     """
     try:
-        if actions.change_order_status:
-            pid = row.packed_status_id
-            if pid is None:
-                return WmsPackingPostPackStepResult(
-                    step="change_order_status",
-                    ok=False,
-                    message="packed_status_id_required_when_change_order_status_enabled",
-                )
-            st = (
-                db.query(OrderUiStatus)
-                .filter(
-                    OrderUiStatus.id == int(pid),
-                    OrderUiStatus.tenant_id == int(tenant_id),
-                    OrderUiStatus.warehouse_id == int(warehouse_id),
-                )
-                .first()
-            )
-            if st is None:
-                return WmsPackingPostPackStepResult(
-                    step="change_order_status",
-                    ok=False,
-                    message="invalid_packed_status_id",
-                )
-            order.order_ui_status_id = int(pid)
-            db.flush()
+        if not actions.change_order_status:
             logger.info(
-                "PACKING_FINISH order_id=%s packed_status_id=%s name=%s",
+                "PACKING_FINISH order_id=%s change_order_status disabled — leave status unchanged",
                 order.id,
-                pid,
-                str(st.name or "")[:120],
             )
             return WmsPackingPostPackStepResult(
                 step="change_order_status",
                 ok=True,
-                message=str(st.name or "")[:200],
+                skipped=True,
+                message="disabled_in_settings",
             )
-        packed_sid = resolve_packed_order_ui_status_id(db, tenant_id=tenant_id, warehouse_id=warehouse_id)
-        if packed_sid is not None:
-            order.order_ui_status_id = int(packed_sid)
+        pid = row.packed_status_id
+        if pid is None:
+            return WmsPackingPostPackStepResult(
+                step="change_order_status",
+                ok=False,
+                message="packed_status_id_required_when_change_order_status_enabled",
+            )
+        st = (
+            db.query(OrderUiStatus)
+            .filter(
+                OrderUiStatus.id == int(pid),
+                OrderUiStatus.tenant_id == int(tenant_id),
+                OrderUiStatus.warehouse_id == int(warehouse_id),
+            )
+            .first()
+        )
+        if st is None:
+            return WmsPackingPostPackStepResult(
+                step="change_order_status",
+                ok=False,
+                message="invalid_packed_status_id",
+            )
+        order.order_ui_status_id = int(pid)
         db.flush()
         logger.info(
-            "PACKING_FINISH order_id=%s packed_status_heuristic=%s",
+            "PACKING_FINISH order_id=%s packed_status_id=%s name=%s",
             order.id,
-            packed_sid,
+            pid,
+            str(st.name or "")[:120],
         )
         return WmsPackingPostPackStepResult(
             step="change_order_status",
             ok=True,
-            skipped=packed_sid is None,
-            message="default_heuristic" if packed_sid is not None else "no_done_substatus",
+            message=str(st.name or "")[:200],
         )
     except Exception as e:
         logger.exception("PACKING_FINISH change_order_status failed order_id=%s", getattr(order, "id", None))

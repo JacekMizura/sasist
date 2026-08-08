@@ -1,3 +1,47 @@
+## 2026-08-08 — Pakowanie: Automatyzacja / Przesyłki i dokumenty
+
+- `change_order_status` off → bez zmiany statusu; on → `packed_status_id`
+- List przewozowy: `LIST_PRZEWOZOWY` / pole SHIPPING_LABEL; brak = soft-skip (nie pusty PDF)
+- Po dokumencie sprzedaży / liście: tylko Wydrukuj|Pobierz; przy Wydrukuj listu + companion „Dokument sprzedaży”
+- Aktywatory w PackingView: filtr `visibleOnWmsPacking` + `showAutomationButtons`
+- Testy `test_wms_packing_post_pack_auto_actions` (7) + finish baskets; `npm run build` OK; bez commit/push
+
+## 2026-08-08 — Pakowanie: statusy startowe (wiele)
+
+- API `allowed_start_status_ids` (JSON w `wms_packing_settings`) + walidacja UI statusów
+- `list_packing_target_statuses` łączy picking targets + `start_status_id` + multi-start
+- UI: multi `OrderUiStatusField` (badge NOWE/W TOKU/ZAKOŃCZONE), ikona (i), bez BRAK FUNKCJONALNOŚCI
+- Migracja z localStorage `allowedStartStatusIds`; logika Zbierania bez zmian
+- Testy unit + `npm run build` OK; bez commit/push
+
+## 2026-08-08 — Ustawienia WMS: layout Sellasist LABEL|CONTROL
+
+- Wspólny `SettingRow` (`wmsSettingRow.tsx`): kolumny ~20rem|15rem, `items-start`, max-width pary (kontrolki nie na krawędzi ekranu)
+- Długie nazwy zawijają się; badge/hint/(i) w kolumnie LABEL; checkbox/select w CONTROL przy 1. linii
+- Outliery: stacked label→input w Zbieraniu, Info/Printers stanowisk → `WmsControlSettingRow` / `WmsBoolSettingRow`
+- Logika/API bez zmian; `npm run build` OK; bez commit/push
+
+## 2026-08-08 — Pakowanie: efekt po akcjach automatycznych (3 opcje)
+
+- Usunięty checkbox „Po spakowaniu… następnego…” i badge CZĘŚCIOWO WDROŻONE
+- `packing_after_finish_action`: `STAY` | `GO_TO_LIST` | `NEXT_ORDER` (persist API)
+- Finish: pipeline auto → potem nawigacja; NEXT_ORDER = FIFO z kolejki trybu (`next_order_id`)
+- `npm run build` OK; bez commit/push
+
+## 2026-08-08 — Pakowanie: start status, braki, jedno-/wieloelementowe
+
+- Usunięty tekst CAP o zbieraniu przy `start_status_id`; status startowy wchodzi też do `list_packing_target_statuses` (bez mieszania z regułami zbierania)
+- `missing_status_id` → akcja „Oznacz jako brak” na kafelku + popup + `POST …/mark-shortage` + powrót jak „Przerwij”
+- Checkbox jedno-/wieloelementowe → kafelki na ekranie trybu; filtr `order_type` na liście (jak zbieranie)
+- Testy packing/shortage + `npm run build`; bez commit/push
+
+## 2026-08-08 — OrderUiStatusField: grupowanie wybranych statusów
+
+- `OrderUiStatusSelectedGroups` — NOWE / W TOKU / ZAKOŃCZONE na liście już wybranych (puste grupy ukryte)
+- Nazwa statusu bez sufiksu grupy; kolory z brief SSOT
+- `OrderUiStatusField` (Pakowanie + Akcje automatyczne) + `AutomationConditionSummary` („jest jednym z…”)
+- Logika zapisu bez zmian; `npm run build` OK; bez commit/push
+
 ## 2026-08-08 — Ustawienia WMS: wspólny standard UI (nie tylko Pakowanie)
 
 - Barrel `wmsSettingsUi` + wiersze `WmsBoolSettingRow` / `WmsControlSettingRow` (kolumny 34rem|26rem, kontrolki nie na krawędzi)

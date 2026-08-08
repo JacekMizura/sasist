@@ -2,7 +2,6 @@ import type { WmsPackingExtendedUiSettings } from "../../../types/wmsPackingExte
 import type { WmsPackingAutoActions, WmsPackingSettingsRead } from "../../../types/wmsPackingSettings";
 import {
   BoolRow,
-  CAP_NONE,
   CAP_PARTIAL,
   FieldGrid,
   SectionCard,
@@ -39,31 +38,26 @@ export function PackingAutomationSection({ extended, draft, patchExtended, toggl
             checked={draft.auto_actions.generate_shipment}
             onChange={() => toggleAction("generate_shipment")}
             capability={CAP_PARTIAL}
-            capabilityNote="bez realnego połączenia z kurierem."
+            capabilityNote="gdy brak konektora kuriera — używany istniejący list z pola „List przewozowy”."
           />
           <BoolRow
             settingId="packing.auto_print_document"
             label="Wydrukuj / pobierz dokument sprzedaży"
             checked={draft.auto_actions.print_document}
             onChange={() => toggleAction("print_document")}
-            capability={CAP_PARTIAL}
-            capabilityNote="druk nie jest wykonywany po stronie serwera."
           />
           <BoolRow
             settingId="packing.auto_print_label"
             label="Wydrukuj / pobierz list przewozowy"
             checked={draft.auto_actions.print_label}
             onChange={() => toggleAction("print_label")}
-            capability={CAP_PARTIAL}
-            capabilityNote="druk etykiety działa w trybie zastępczym."
           />
           <BoolRow
             settingId="packing.auto_change_order_status"
             label="Zmień status zamówienia"
             checked={draft.auto_actions.change_order_status}
             onChange={() => toggleAction("change_order_status")}
-            capability={CAP_PARTIAL}
-            capabilityNote="status i tak może zostać ustawiony heurystycznie."
+            help="Po spakowaniu ustawia status z „Status dla spakowanego zamówienia”. Wyłączone = bez zmiany statusu."
           />
         </div>
       </Subsection>
@@ -73,30 +67,25 @@ export function PackingAutomationSection({ extended, draft, patchExtended, toggl
           <SelectField
             settingId="packing.after_sales_document_action"
             label="Akcja po wystawieniu dokumentu sprzedaży"
-            capability={CAP_NONE}
             value={extended.afterSalesDocumentAction}
             onChange={(v) =>
               patchExtended("afterSalesDocumentAction", v as WmsPackingExtendedUiSettings["afterSalesDocumentAction"])
             }
           >
-            <option value="none">Brak</option>
-            <option value="print">Drukuj</option>
+            <option value="print">Wydrukuj</option>
             <option value="download">Pobierz</option>
-            <option value="open">Otwórz</option>
           </SelectField>
           <SelectField
             settingId="packing.after_waybill_action"
             label="Akcja po wystawieniu listu przewozowego"
-            capability={CAP_NONE}
             value={extended.afterWaybillAction}
             onChange={(v) =>
               patchExtended("afterWaybillAction", v as WmsPackingExtendedUiSettings["afterWaybillAction"])
             }
+            help="Przy „Wydrukuj” dodatkowo drukowany jest dokument z pola „Dokument sprzedaży”, jeśli istnieje."
           >
-            <option value="none">Brak</option>
-            <option value="print">Drukuj</option>
+            <option value="print">Wydrukuj</option>
             <option value="download">Pobierz</option>
-            <option value="open">Otwórz</option>
           </SelectField>
         </FieldGrid>
       </Subsection>
@@ -107,8 +96,8 @@ export function PackingAutomationSection({ extended, draft, patchExtended, toggl
           label="Wyświetlaj Aktywatory Automatyzacji podczas pakowania zamówienia"
           checked={extended.showAutomationButtons}
           onChange={(v) => patchExtended("showAutomationButtons", v)}
-          capability={CAP_NONE}
           infoKey="packing.show_automation_buttons"
+          help="Pokazywane są wyłącznie aktywatory reguł z zaznaczoną opcją „Pakowanie WMS”."
         />
       </div>
     </SectionCard>

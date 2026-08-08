@@ -30,6 +30,12 @@ import type { BundleScanOut } from "../../../api/bundlesLogisticsApi";
 import { loadWmsPackingSession, type WmsPackingSessionState } from "../../../pages/wms/wmsPackingSession";
 import { WMS_ROUTES } from "../../../pages/wms/wmsRoutes";
 import {
+  DEFAULT_WMS_PACKING_EXTENDED_UI,
+  loadWmsPackingExtendedUi,
+  type WmsPackingExtendedUiSettings,
+} from "../../../types/wmsPackingExtendedUi";
+import { runPackingPostFinishClientActions } from "./packingPostFinishClientActions";
+import {
   decideListScanBootstrapUi,
   firstIncompleteOrderItemId,
   isPackingOrderLinesFullyPacked,
@@ -47,11 +53,6 @@ import {
   shouldOpenPackingNotesPopup,
   type NotesPopupPendingAction,
 } from "./packingNotes";
-import {
-  DEFAULT_WMS_PACKING_EXTENDED_UI,
-  loadWmsPackingExtendedUi,
-  type WmsPackingExtendedUiSettings,
-} from "../../../types/wmsPackingExtendedUi";
 
 export type PackingScanBootstrapState = {
   packingScanBootstrap?: WmsPackingScanOutApi;
@@ -293,7 +294,27 @@ export function usePackingOrderController(
           },
         );
         finishWithoutCartonRef.current = false;
-        // Kolejność: finish API już wykonał akcje automatyczne → dopiero potem efekt nawigacji.
+
+        // Po potoku serwera: druk/pobieranie listu i dokumentu (soft-fail).
+        try {
+          const [apiSettings, ext] = await Promise.all([
+            getWmsPackingSettings(DAMAGE_TENANT_ID, warehouseId).catch(() => null),
+            Promise.resolve(loadWmsPackingExtendedUi(warehouseId)),
+          ]);
+          await runPackingPostFinishClientActions({
+            tenantId: DAMAGE_TENANT_ID,
+            warehouseId,
+            pipeline: out.post_pack_pipeline,
+            afterSalesDocumentAction: ext.afterSalesDocumentAction,
+            afterWaybillAction: ext.afterWaybillAction,
+            printDocumentEnabled: Boolean(apiSettings?.auto_actions.print_document),
+            printLabelEnabled: Boolean(apiSettings?.auto_actions.print_label),
+          });
+        } catch {
+          /* soft-fail */
+        }
+
+        // Kolejność: finish API już wykonał akcje automatyczne → client print → efekt nawigacji.
         if (out.packing_after_finish_action === "GO_TO_LIST") {
           const currentStatus = s.statusId;
           navigatedAway = true;

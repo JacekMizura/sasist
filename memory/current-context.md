@@ -1,5 +1,5 @@
 ﻿## Active
 
-**WMS Settings UI standard (2026-08-08):** Całe Ustawienia WMS używają wspólnego układu Sellasist — `wmsSettingsUi` / `wmsSettingRow` (`[label | kontrolka]`), `WmsSettingsSection`, `OrderUiStatusField`/`Picker`, badge capability + `SettingInfoButton`. Pakowanie = wzorzec; pozostałe zakładki ujednolicone (Coming Soon: Reklamacje / Crossdocking / Rozlokowania / Przesunięcia).
+**Pakowanie Automatyzacja / Przesyłki i dokumenty (2026-08-08):** post-pack status gate, waybill/sales print-download (client + pipeline metadata), aktywatory tylko z „Pakowanie WMS”. Bez commit/push.
 
-**Next:** implementacja kolejnych ustawień procesów z checklisty; bez commit/push tej fali UI (na życzenie).
+**Next:** commit/push na życzenie; kolejne ustawienia z checklisty Sellasist.

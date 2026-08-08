@@ -90,7 +90,11 @@ export const PACKING_SETTING_HELP: Record<string, PackingSettingHelpEntry> = {
     description: (
       <ul>
         <li>
-          W oknie pakowania pojawią się aktywatory automatyzacji, takie same jak w edycji zamówienia w panelu Sellasist.
+          W oknie pakowania pojawią się aktywatory automatyzacji (przyciski reguł z włączonym aktywatorem ręcznym).
+        </li>
+        <li>
+          Pokazywane są wyłącznie reguły z zaznaczoną opcją „Pakowanie WMS”. To ustawienie steruje tylko widocznością —
+          nie zmienia działania samych akcji automatycznych.
         </li>
       </ul>
     ),

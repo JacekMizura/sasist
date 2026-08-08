@@ -28,6 +28,9 @@ import { DoneCard } from "./DoneCard";
 import { ScannerHandler } from "./ScannerHandler";
 import { PackingMainCartonLeft, PackingRecommendedCartonsPanel } from "./PackingRecommendedCartons";
 import PackingFitRecommendationPanel from "./PackingFitRecommendationPanel";
+import { PackingAutomationActivators } from "./PackingAutomationActivators";
+import type { PackingAutomationButtonsPosition } from "../../../types/wmsPackingExtendedUi";
+import { DAMAGE_TENANT_ID } from "../../../pages/damage/damageShared";
 
 const NOTES_RED = "#d32f2f";
 const PRIMARY_GREEN = "#4caf50";
@@ -116,6 +119,12 @@ type PackingViewProps = {
   showProceedAfterLinesCompleteCta?: boolean;
   onProceedAfterLinesComplete?: () => void;
   onMarkLineShortage?: (orderItemId: number) => void;
+  /** Aktywatory akcji automatycznych (widoczność + filtr „Pakowanie WMS”). */
+  showAutomationButtons?: boolean;
+  automationButtonsPosition?: PackingAutomationButtonsPosition;
+  warehouseId?: number | null;
+  onAutomationToast?: (message: string) => void;
+  onAutomationStatusChanged?: () => void;
 };
 
 export function PackingView({
@@ -147,6 +156,11 @@ export function PackingView({
   showProceedAfterLinesCompleteCta = false,
   onProceedAfterLinesComplete,
   onMarkLineShortage,
+  showAutomationButtons = false,
+  automationButtonsPosition = "bottom",
+  warehouseId = null,
+  onAutomationToast,
+  onAutomationStatusChanged,
 }: PackingViewProps) {
   const { setScannerInputPlaceholder } = useWmsScanner();
   const wedgeRef = useRef<HTMLInputElement>(null);
@@ -363,6 +377,22 @@ export function PackingView({
           >
             Przerwij
           </button>
+          {showAutomationButtons &&
+          warehouseId != null &&
+          warehouseId > 0 &&
+          (automationButtonsPosition === "bottom" || automationButtonsPosition === "right") ? (
+            <div className="mt-2 border-t border-slate-100 pt-2">
+              <PackingAutomationActivators
+                tenantId={DAMAGE_TENANT_ID}
+                warehouseId={warehouseId}
+                orderId={detail.order_id}
+                showAutomationButtons={showAutomationButtons}
+                position={automationButtonsPosition}
+                onToast={onAutomationToast}
+                onStatusChanged={onAutomationStatusChanged}
+              />
+            </div>
+          ) : null}
         </div>
       </aside>
 
@@ -490,6 +520,20 @@ export function PackingView({
             })}
           </ul>
         </section>
+        {showAutomationButtons &&
+        warehouseId != null &&
+        warehouseId > 0 &&
+        automationButtonsPosition === "floating" ? (
+          <PackingAutomationActivators
+            tenantId={DAMAGE_TENANT_ID}
+            warehouseId={warehouseId}
+            orderId={detail.order_id}
+            showAutomationButtons={showAutomationButtons}
+            position="floating"
+            onToast={onAutomationToast}
+            onStatusChanged={onAutomationStatusChanged}
+          />
+        ) : null}
       </div>
     </div>
   );
