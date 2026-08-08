@@ -17,6 +17,7 @@ export type OrdersListViewProps = {
   loading: boolean;
   error: string | null;
   showBasketCode?: boolean;
+  showAllNotes?: boolean;
   onOpenOrder: (orderId: number) => void;
   onProductClick?: (orderItemId: number, orderId: number) => void;
   onBack: () => void;
@@ -31,6 +32,7 @@ export function OrdersListView({
   loading,
   error,
   showBasketCode,
+  showAllNotes = true,
   onOpenOrder,
   onProductClick,
   onBack,
@@ -102,6 +104,7 @@ export function OrdersListView({
                 key={o.order_id}
                 order={o}
                 showBasketCode={showBasketCode}
+                showAllNotes={showAllNotes}
                 onOpenOrder={onOpenOrder}
                 onProductClick={onProductClick}
               />

@@ -39,6 +39,19 @@ import {
   scanErrorMessage,
   sortLinesForPacking,
 } from "./packingHelpers";
+import {
+  decideAfterNotesPopupDismiss,
+  decideFullyPackedNotesGate,
+  filterPackingOperationalNotes,
+  isSingleUnitPackingOrder,
+  shouldOpenPackingNotesPopup,
+  type NotesPopupPendingAction,
+} from "./packingNotes";
+import {
+  DEFAULT_WMS_PACKING_EXTENDED_UI,
+  loadWmsPackingExtendedUi,
+  type WmsPackingExtendedUiSettings,
+} from "../../../types/wmsPackingExtendedUi";
 
 export type PackingScanBootstrapState = {
   packingScanBootstrap?: WmsPackingScanOutApi;
@@ -88,7 +101,33 @@ export function usePackingOrderController(
   const [packingInterfaceDisplay, setPackingInterfaceDisplay] = useState<WmsPackingInterfaceDisplay>(
     DEFAULT_WMS_PACKING_INTERFACE_DISPLAY,
   );
+  const [packingExtendedUi, setPackingExtendedUi] = useState<WmsPackingExtendedUiSettings>(() => ({
+    ...DEFAULT_WMS_PACKING_EXTENDED_UI,
+  }));
+  const [notesPopupOpen, setNotesPopupOpen] = useState(false);
+  const [notesAcknowledged, setNotesAcknowledged] = useState(false);
+  const notesPendingActionRef = useRef<NotesPopupPendingAction>("none");
+  /** Popup przerwał ścieżkę fully_packed — po zamknięciu (1×1) wymagany kolejny skan/pack. */
+  const notesInterruptedFullyPackedRef = useRef(false);
+  /** Po zamknięciu popupu na 1×1: kolejny skan/pack ma wejść w karton/finalizację (bez drugiego popupu). */
+  const resumeAutoAfterNotesRescanRef = useRef(false);
   const [bundlePackScan, setBundlePackScan] = useState<BundleScanOut | null>(null);
+
+  useEffect(() => {
+    if (warehouseId == null) {
+      setPackingExtendedUi({ ...DEFAULT_WMS_PACKING_EXTENDED_UI });
+      return;
+    }
+    setPackingExtendedUi(loadWmsPackingExtendedUi(warehouseId));
+  }, [warehouseId]);
+
+  useEffect(() => {
+    setNotesPopupOpen(false);
+    setNotesAcknowledged(false);
+    notesPendingActionRef.current = "none";
+    notesInterruptedFullyPackedRef.current = false;
+    resumeAutoAfterNotesRescanRef.current = false;
+  }, [orderId]);
 
   const refreshSession = useCallback(() => {
     setSession(loadWmsPackingSession());
@@ -305,6 +344,83 @@ export function usePackingOrderController(
     }
   }, []);
 
+  const beginPostPackAdvance = useCallback(
+    (d: WmsPackingOrderDetailApi) => {
+      deferCartonFromListBootstrapRef.current = false;
+      setShowProceedAfterLinesCompleteCta(false);
+      const sel = (d.selected_carton_id ?? "").trim();
+      const allowNoCarton = finishWithoutCartonRef.current;
+      if (!sel && !allowNoCarton) {
+        pendingFinishAfterCartonRef.current = true;
+        setAwaitingPostPackCarton(true);
+        return;
+      }
+      setAwaitingPostPackCarton(false);
+      setAwaitingFinalizationRun(true);
+    },
+    [finishWithoutCartonRef],
+  );
+
+  const visiblePackingNotes = useMemo(() => {
+    if (!detail) return [];
+    return filterPackingOperationalNotes(
+      detail.operational_notes_packing,
+      packingExtendedUi.showAllNotes,
+    );
+  }, [detail, packingExtendedUi.showAllNotes]);
+
+  /** Wejście w zamówienie z notatkami — popup zanim operator kontynuuje. */
+  useEffect(() => {
+    if (!detail || notesAcknowledged || notesPopupOpen) return;
+    if (
+      !shouldOpenPackingNotesPopup({
+        requireNotesPopup: packingExtendedUi.requireNotesPopup,
+        visibleNotes: visiblePackingNotes,
+        alreadyAcknowledged: notesAcknowledged,
+      })
+    ) {
+      return;
+    }
+    setNotesPopupOpen(true);
+  }, [
+    detail,
+    notesAcknowledged,
+    notesPopupOpen,
+    packingExtendedUi.requireNotesPopup,
+    visiblePackingNotes,
+  ]);
+
+  const acknowledgeNotesPopup = useCallback(() => {
+    const pending = notesPendingActionRef.current;
+    const interruptedFullyPacked = notesInterruptedFullyPackedRef.current;
+    notesPendingActionRef.current = "none";
+    notesInterruptedFullyPackedRef.current = false;
+    setNotesPopupOpen(false);
+    setNotesAcknowledged(true);
+
+    const single = detail ? isSingleUnitPackingOrder(detail) : false;
+    const decision = decideAfterNotesPopupDismiss({
+      isSingleUnit: single,
+      pendingAction: pending,
+    });
+
+    if (single && interruptedFullyPacked) {
+      // Nie uruchamiaj automatyki — wymagany kolejny skan/pack.
+      resumeAutoAfterNotesRescanRef.current = true;
+      setShowProceedAfterLinesCompleteCta(false);
+      return;
+    }
+
+    if (decision.showProceedCta) {
+      deferCartonFromListBootstrapRef.current = true;
+      setShowProceedAfterLinesCompleteCta(true);
+      return;
+    }
+    if (decision.advanceToCartonOrFinish && detail) {
+      beginPostPackAdvance(detail);
+    }
+  }, [detail, beginPostPackAdvance]);
+
   const applyPackingResult = useCallback(
     (out: WmsPackingScanOutApi, opts?: { fromListBootstrap?: boolean }) => {
       setDetail(out.detail);
@@ -317,25 +433,41 @@ export function usePackingOrderController(
         }
         setActiveProductId(null);
 
+        const visibleNotes = filterPackingOperationalNotes(
+          out.detail.operational_notes_packing,
+          packingExtendedUi.showAllNotes,
+        );
+        const single = isSingleUnitPackingOrder(out.detail);
+        const gate = decideFullyPackedNotesGate({
+          requireNotesPopup: packingExtendedUi.requireNotesPopup,
+          visibleNotesCount: visibleNotes.length,
+          alreadyAcknowledged: notesAcknowledged,
+          fromListBootstrap: Boolean(opts?.fromListBootstrap),
+          isSingleUnit: single,
+        });
+
+        if (gate.openNotesPopup) {
+          notesPendingActionRef.current = gate.pendingAction;
+          notesInterruptedFullyPackedRef.current = true;
+          setNotesPopupOpen(true);
+          return;
+        }
+
+        // Po zamknięciu popupu na 1×1: ten pack/skan wznawia auto-ścieżkę.
+        if (resumeAutoAfterNotesRescanRef.current && notesAcknowledged) {
+          resumeAutoAfterNotesRescanRef.current = false;
+          beginPostPackAdvance(out.detail);
+          return;
+        }
+
         if (opts?.fromListBootstrap) {
           const decision = decideListScanBootstrapUi({ fullyPacked: true });
           deferCartonFromListBootstrapRef.current = decision.showProceedAfterLinesCompleteCta;
           setShowProceedAfterLinesCompleteCta(decision.showProceedAfterLinesCompleteCta);
-          // Never open carton/finalization immediately after list scan.
           return;
         }
 
-        deferCartonFromListBootstrapRef.current = false;
-        setShowProceedAfterLinesCompleteCta(false);
-        const sel = (out.detail.selected_carton_id ?? "").trim();
-        const allowNoCarton = finishWithoutCartonRef.current;
-        if (!sel && !allowNoCarton) {
-          pendingFinishAfterCartonRef.current = true;
-          setAwaitingPostPackCarton(true);
-          return;
-        }
-        setAwaitingPostPackCarton(false);
-        setAwaitingFinalizationRun(true);
+        beginPostPackAdvance(out.detail);
         return;
       }
       deferCartonFromListBootstrapRef.current = false;
@@ -345,7 +477,14 @@ export function usePackingOrderController(
         triggerFlash(out.last_packed_order_item_id);
       }
     },
-    [triggerFlash, advanceActiveAfterPack, finishWithoutCartonRef],
+    [
+      triggerFlash,
+      advanceActiveAfterPack,
+      packingExtendedUi.requireNotesPopup,
+      packingExtendedUi.showAllNotes,
+      notesAcknowledged,
+      beginPostPackAdvance,
+    ],
   );
 
   /** Pierwszy skan z listy: wynik POST resolve-ean/scan — dokładnie raz, bez replay; bez auto-kartonu. */
@@ -361,19 +500,9 @@ export function usePackingOrderController(
   }, [location.state, location.pathname, orderId, navigate, applyPackingResult]);
 
   const proceedAfterLinesComplete = useCallback(() => {
-    deferCartonFromListBootstrapRef.current = false;
-    setShowProceedAfterLinesCompleteCta(false);
     if (!detail) return;
-    const sel = (detail.selected_carton_id ?? "").trim();
-    const allowNoCarton = finishWithoutCartonRef.current;
-    if (!sel && !allowNoCarton) {
-      pendingFinishAfterCartonRef.current = true;
-      setAwaitingPostPackCarton(true);
-      return;
-    }
-    setAwaitingPostPackCarton(false);
-    setAwaitingFinalizationRun(true);
-  }, [detail, finishWithoutCartonRef]);
+    beginPostPackAdvance(detail);
+  }, [detail, beginPostPackAdvance]);
 
   useEffect(() => {
     if (activeProductId == null || detail == null) return;
@@ -391,10 +520,20 @@ export function usePackingOrderController(
     [detail?.lines, flashItemId],
   );
 
+  const tryResumeAutoAfterNotesRescan = useCallback((): boolean => {
+    if (!detail) return false;
+    if (!resumeAutoAfterNotesRescanRef.current || !notesAcknowledged) return false;
+    if (!isPackingOrderLinesFullyPacked(detail)) return false;
+    resumeAutoAfterNotesRescanRef.current = false;
+    beginPostPackAdvance(detail);
+    return true;
+  }, [detail, notesAcknowledged, beginPostPackAdvance]);
+
   const onScan = useCallback(
     async (raw: string) => {
       const ean = normalizeScanEan(raw);
       if (!ean || warehouseId == null || scanBusyRef.current) return;
+      if (notesPopupOpen) return;
       const s = loadWmsPackingSession();
       if (!s?.mode || !Number.isFinite(orderId) || orderId < 1) return;
       if ((s.mode === "bulk" && (s.cartId == null || !Number.isFinite(s.cartId)))) return;
@@ -402,6 +541,12 @@ export function usePackingOrderController(
       scanBusyRef.current = true;
       setScanBusy(true);
       try {
+        if (tryResumeAutoAfterNotesRescan()) {
+          playScanBeep();
+          appendScanToHistory(ean);
+          return;
+        }
+
         const bundle = await tryPackingBundleScan(DAMAGE_TENANT_ID, orderId, ean);
         if (bundle.handled && bundle.scan) {
           setBundlePackScan(bundle.scan);
@@ -445,10 +590,15 @@ export function usePackingOrderController(
         refocusScannerInput();
       }
     },
-    [warehouseId, orderId, appendScanToHistory, showScannerToast, refocusScannerInput, applyPackingResult],
+    [warehouseId, orderId, appendScanToHistory, showScannerToast, refocusScannerInput, applyPackingResult, notesPopupOpen, tryResumeAutoAfterNotesRescan],
   );
 
   const confirmPack = useCallback(async (orderItemId?: number, qtyOverride?: number) => {
+    if (notesPopupOpen) return;
+    if (tryResumeAutoAfterNotesRescan()) {
+      playScanBeep();
+      return;
+    }
     const targetId = orderItemId ?? activeProductId;
     if (targetId == null || detail == null || warehouseId == null || actionBusyRef.current || linePackBusy) return;
     const line = detail.lines.find((l) => l.order_item_id === targetId);
@@ -493,9 +643,16 @@ export function usePackingOrderController(
     showScannerToast,
     refocusScannerInput,
     linePackBusy,
+    notesPopupOpen,
+    tryResumeAutoAfterNotesRescan,
   ]);
 
   const packAll = useCallback(async () => {
+    if (notesPopupOpen) return;
+    if (tryResumeAutoAfterNotesRescan()) {
+      playScanBeep();
+      return;
+    }
     if (warehouseId == null || actionBusyRef.current || !detail) return;
     if (detail.packed_quantity >= detail.total_quantity) return;
     const s = loadWmsPackingSession();
@@ -521,7 +678,16 @@ export function usePackingOrderController(
       setScanBusy(false);
       refocusScannerInput();
     }
-  }, [warehouseId, detail, orderId, applyPackingResult, showScannerToast, refocusScannerInput]);
+  }, [
+    warehouseId,
+    detail,
+    orderId,
+    applyPackingResult,
+    showScannerToast,
+    refocusScannerInput,
+    notesPopupOpen,
+    tryResumeAutoAfterNotesRescan,
+  ]);
 
   const activateProduct = useCallback((orderItemId: number) => {
     setActiveProductId(orderItemId);
@@ -629,5 +795,9 @@ export function usePackingOrderController(
     runPostPackFinish,
     bundlePackScan,
     postPackPipeline,
+    packingExtendedUi,
+    visiblePackingNotes,
+    notesPopupOpen,
+    acknowledgeNotesPopup,
   };
 }

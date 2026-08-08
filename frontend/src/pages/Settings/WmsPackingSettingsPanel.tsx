@@ -51,6 +51,7 @@ import {
   PackingFieldLabel,
   type PackingSettingCapability,
 } from "./packingSettingCapability";
+import { SettingInfoButton } from "./SettingInfoButton";
 
 type LabelTemplateOption = { id: number; name: string };
 
@@ -152,6 +153,7 @@ function BoolRow({
   settingId,
   capability,
   capabilityNote,
+  infoDescription,
 }: {
   label: string;
   checked: boolean;
@@ -162,30 +164,35 @@ function BoolRow({
   settingId?: string;
   capability?: PackingSettingCapability;
   capabilityNote?: string;
+  /** Opis do modala ⓘ — sekcja „Jak działa ta opcja:”. */
+  infoDescription?: ReactNode;
 }) {
   return (
-    <label
+    <div
       {...(settingId ? { [WMS_SETTING_DATA_ATTR]: settingId } : {})}
-      className={`wms-setting-field flex items-start gap-3 rounded-lg border border-transparent px-1 py-1 ${disabled ? "cursor-not-allowed opacity-60" : "cursor-pointer hover:bg-slate-50/80"}`}
+      className={`wms-setting-field flex items-start gap-2 rounded-lg border border-transparent px-1 py-1 ${disabled ? "opacity-60" : "hover:bg-slate-50/80"}`}
       title={title}
     >
-      <input
-        type="checkbox"
-        className={checkboxClass}
-        checked={checked}
-        disabled={disabled}
-        onChange={(e) => onChange(e.target.checked)}
-      />
-      <span className="min-w-0 flex-1">
-        <span className="block text-sm font-medium text-slate-800">{label}</span>
-        {capability ? (
-          <span className="mt-1 block">
-            <PackingCapabilityBadge kind={capability} note={capabilityNote} />
-          </span>
-        ) : null}
-        {help ? <Help>{help}</Help> : null}
-      </span>
-    </label>
+      <label className={`flex min-w-0 flex-1 items-start gap-3 ${disabled ? "cursor-not-allowed" : "cursor-pointer"}`}>
+        <input
+          type="checkbox"
+          className={checkboxClass}
+          checked={checked}
+          disabled={disabled}
+          onChange={(e) => onChange(e.target.checked)}
+        />
+        <span className="min-w-0 flex-1">
+          <span className="block text-sm font-medium text-slate-800">{label}</span>
+          {capability ? (
+            <span className="mt-1 block">
+              <PackingCapabilityBadge kind={capability} note={capabilityNote} />
+            </span>
+          ) : null}
+          {help ? <Help>{help}</Help> : null}
+        </span>
+      </label>
+      {infoDescription ? <SettingInfoButton title={label} description={infoDescription} /> : null}
+    </div>
   );
 }
 
@@ -1251,16 +1258,49 @@ const WmsPackingSettingsPanel = forwardRef<
               />
               <BoolRow
                 settingId="packing.require_notes_popup"
-                label="Wymuś okno z notatkami"
+                label="Otwieraj notatki jako popup"
                 checked={extended.requireNotesPopup}
                 onChange={(v) => patchExtended("requireNotesPopup", v)}
-                capability={CAP_NONE}
+                infoDescription={
+                  <>
+                    <p>
+                      Jeśli zamówienie posiada notatkę, w trybie pakowania zostanie ona automatycznie wyświetlona w
+                      wyskakującym oknie (popup), które należy zamknąć, aby kontynuować pakowanie.
+                    </p>
+                    <p>
+                      W przypadku zamówienia jednoelementowego zawierającego 1 sztukę produktu, pakowanie standardowo
+                      pomija widok zamówienia i przechodzi od razu do akcji automatycznych.
+                    </p>
+                    <p>
+                      Jeżeli takie zamówienie posiada notatkę, proces zostaje przerwany przez popup z notatką, a po jego
+                      zamknięciu konieczne jest ponowne zeskanowanie lub spakowanie produktu, aby uruchomić dalsze akcje.
+                    </p>
+                  </>
+                }
               />
               <BoolRow
+                settingId="packing.show_all_notes"
                 label="Pokaż wszystkie notatki"
                 checked={extended.showAllNotes}
                 onChange={(v) => patchExtended("showAllNotes", v)}
-                capability={CAP_NONE}
+                infoDescription={
+                  <>
+                    <ul className="list-disc space-y-1.5 pl-5">
+                      <li>Określa, które notatki są wyświetlane w trybie pakowania.</li>
+                      <li>
+                        Po włączeniu tej opcji w pakowaniu pokazywane są wszystkie notatki przypisane do zamówienia,
+                        niezależnie od ustawionej widoczności.
+                      </li>
+                      <li>
+                        Po wyłączeniu tej opcji wyświetlane są tylko notatki z włączoną widocznością „WMS – pakowanie”.
+                      </li>
+                    </ul>
+                    <p className="font-semibold text-slate-800">Ważne:</p>
+                    <ul className="list-disc space-y-1.5 pl-5">
+                      <li>Widoczność notatek jest ustawiana na karcie zamówienia lub przez akcje automatyczne.</li>
+                    </ul>
+                  </>
+                }
               />
               <BoolRow
                 label="Tylko stan z magazynu pakowania"

@@ -3,6 +3,7 @@ import type { CSSProperties } from "react";
 import { Mail } from "lucide-react";
 import type { WmsPackingOrderCardApi } from "../../../../api/wmsPackingApi";
 import { ShippingMethodLogo } from "../../../../components/shipping/ShippingMethodLogo";
+import { filterPackingOperationalNotes, packingNotesAlertTitle } from "../packingNotes";
 import { ProductInlineItem } from "./ProductInlineItem";
 import { ProductOverflow } from "./ProductOverflow";
 
@@ -53,6 +54,8 @@ function IconDocument({ generated }: { generated: boolean }) {
 export type OrderRowProps = {
   order: WmsPackingOrderCardApi;
   showBasketCode?: boolean;
+  /** Ustawienie „Pokaż wszystkie notatki”. */
+  showAllNotes?: boolean;
   onOpenOrder: (orderId: number) => void;
   onProductClick?: (orderItemId: number, orderId: number) => void;
 };
@@ -72,14 +75,14 @@ function packedRatioBadgeStyle(packed: number, total: number): CSSProperties | u
   return undefined;
 }
 
-function OrderRowInner({ order, showBasketCode, onOpenOrder, onProductClick }: OrderRowProps) {
+function OrderRowInner({ order, showBasketCode, showAllNotes = true, onOpenOrder, onProductClick }: OrderRowProps) {
   const rawNum = order.number.replace(/^#/, "").trim();
   const docGenerated = Boolean((order.sales_document_label ?? "").trim());
   const showCustomerComm =
     Boolean((order.customer_comment ?? "").trim()) || Boolean((order.staff_notes ?? "").trim());
-  const opsPacking = order.operational_notes_packing ?? [];
+  const opsPacking = filterPackingOperationalNotes(order.operational_notes_packing, showAllNotes);
   const showOps = opsPacking.length > 0;
-  const alertTitle = (order.wms_operational_alert_title ?? "").trim();
+  const alertTitle = packingNotesAlertTitle(opsPacking, order.wms_operational_alert_title);
 
   const pq = order.packed_quantity;
   const tq = order.total_quantity;

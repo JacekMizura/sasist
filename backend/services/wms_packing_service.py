@@ -10,7 +10,7 @@ from collections import defaultdict
 from typing import List, Literal, Optional, Tuple, Type, TypeVar, cast
 
 from pydantic import BaseModel
-from sqlalchemy import and_, exists, func, or_, select
+from sqlalchemy import and_, desc, exists, func, or_, select
 from sqlalchemy.orm import Session, joinedload
 
 from ..models.cart import Cart
@@ -1207,9 +1207,17 @@ def _build_packing_order_card(
         sr = getattr(order, "selected_carton_id", None)
         selected_carton_id = str(sr).strip() if sr else None
         selected_carton = _selected_carton_summary_for_order(db, order)
-        from ..services.order_list_communication import operational_notes_for_module
+        from ..models.order_operational_note import OrderOperationalNote
 
-        pack_notes = operational_notes_for_module(db, int(order.id), packing=True)
+        pack_notes = (
+            db.query(OrderOperationalNote)
+            .filter(OrderOperationalNote.order_id == int(order.id))
+            .order_by(
+                desc(func.coalesce(OrderOperationalNote.updated_at, OrderOperationalNote.created_at)),
+                desc(OrderOperationalNote.id),
+            )
+            .all()
+        )
         operational_notes_brief = [
             WmsOperationalNoteBrief(
                 id=int(n.id),
@@ -1223,7 +1231,11 @@ def _build_packing_order_card(
             )
             for n in pack_notes
         ]
-        alert_title = "UWAGA PAKOWANIE" if operational_notes_brief else None
+        alert_title = (
+            "UWAGA PAKOWANIE"
+            if any(bool(getattr(n, "show_in_packing", False)) for n in pack_notes)
+            else None
+        )
     bundle_trees_out: List[WmsPackingBundleTreeNode] = []
     if enrich and db is not None:
         from .bundles.bundle_operational_ux_service import build_packing_bundle_trees

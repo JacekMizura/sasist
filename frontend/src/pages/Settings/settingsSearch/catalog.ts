@@ -237,7 +237,14 @@ export const WMS_SETTINGS_SEARCH_CATALOG: WmsSettingsSearchEntry[] = [
   }),
   e({
     id: "packing.require_notes_popup",
-    label: "Wymuś okno z notatkami",
+    label: "Otwieraj notatki jako popup",
+    tabId: "packing",
+    sectionId: "wms-pack-permissions",
+    sectionLabel: "Ogólne",
+  }),
+  e({
+    id: "packing.show_all_notes",
+    label: "Pokaż wszystkie notatki",
     tabId: "packing",
     sectionId: "wms-pack-permissions",
     sectionLabel: "Ogólne",

@@ -10,10 +10,12 @@ import {
 import { AutoActionsView } from "../../components/wms/packing/postComplete/AutoActionsView";
 import { PackingCartonGateModal } from "../../components/wms/packing/PackingCartonGateModal";
 import { PackingFinalizationView } from "../../components/wms/packing/PackingFinalizationView";
+import { PackingNotesPopupModal } from "../../components/wms/packing/PackingNotesPopupModal";
 import { PackingView } from "../../components/wms/packing/PackingView";
 import {
   formatPackerDisplayName,
   isPackingSessionFinished,
+  orderNumberLabel,
   scanErrorMessage,
 } from "../../components/wms/packing/packingHelpers";
 import { usePackingOrderController } from "../../components/wms/packing/usePackingOrderController";
@@ -254,6 +256,12 @@ export default function WmsPackingOrderPage() {
 
   return (
     <>
+      <PackingNotesPopupModal
+        open={ctrl.notesPopupOpen}
+        notes={ctrl.visiblePackingNotes}
+        orderNumber={orderNumberLabel(packingDetail.number)}
+        onClose={ctrl.acknowledgeNotesPopup}
+      />
       <PackingCartonGateModal
         open={ctrl.awaitingPostPackCarton}
         shippingMethodLogoUrl={packingDetail.shipping_method_logo_url}
@@ -296,7 +304,8 @@ export default function WmsPackingOrderPage() {
         selectCartonBusy={ctrl.selectCartonBusy}
         interfaceDisplay={ctrl.packingInterfaceDisplay}
         packerDisplayName={packerDisplayName}
-        packingActionsLocked={ctrl.awaitingPostPackCarton}
+        packingActionsLocked={ctrl.awaitingPostPackCarton || ctrl.notesPopupOpen}
+        visibleOperationalNotes={ctrl.visiblePackingNotes}
         bundlePackScan={ctrl.bundlePackScan}
         showHeaderCartonPicker={false}
         showProceedAfterLinesCompleteCta={ctrl.showProceedAfterLinesCompleteCta}

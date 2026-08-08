@@ -27,6 +27,7 @@ import { DAMAGE_TENANT_ID } from "../damage/damageShared";
 import { clearActivePriorityTask, loadActivePriorityTask, priorityTaskAppliesTo, priorityTaskOrderIds, type ActivePriorityTask } from "./activePriorityTask";
 import { cartTypeMatchesPackingMode, loadWmsPackingSession, patchWmsPackingSession, type WmsPackingSessionState } from "./wmsPackingSession";
 import { scanErrorMessage } from "../../components/wms/packing/packingHelpers";
+import { loadWmsPackingExtendedUi } from "../../types/wmsPackingExtendedUi";
 import { WMS_ROUTES } from "./wmsRoutes";
 
 async function tryPackingShelfEntry(
@@ -122,6 +123,11 @@ export default function WmsPackingOrdersPage() {
   const [rejectOpen, setRejectOpen] = useState(false);
   const [rejectReason, setRejectReason] = useState("");
   const listScanBusyRef = useRef(false);
+
+  const showAllNotes = useMemo(() => {
+    if (warehouseId == null) return true;
+    return loadWmsPackingExtendedUi(warehouseId).showAllNotes;
+  }, [warehouseId]);
 
   useEffect(() => {
     const sync = () => {
@@ -465,6 +471,7 @@ export default function WmsPackingOrdersPage() {
         loading={loading}
         error={err}
         showBasketCode={s.mode === "baskets"}
+        showAllNotes={showAllNotes}
         onOpenOrder={(id) => {
           if (activePriorityTask && assignedOrderIds.length > 0 && !assignedOrderSet.has(id)) {
             showScannerToast("To zamówienie jest poza aktywnym zadaniem kierownika.");

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef } from "react";
 import type {
   PackagingEngineSourceApi,
+  WmsOperationalNoteBriefApi,
   WmsPackingOrderDetailApi,
   WmsPackingOrderLineApi,
   WmsPackingRecommendedCartonApi,
@@ -104,6 +105,8 @@ type PackingViewProps = {
   packerDisplayName?: string | null;
   /** Modal wyboru kartonu — blokuje skany i pakowanie do potwierdzenia opakowania. */
   packingActionsLocked?: boolean;
+  /** Notatki operacyjne już przefiltrowane wg „Pokaż wszystkie notatki”. */
+  visibleOperationalNotes?: WmsOperationalNoteBriefApi[];
   /** Lista kartonów w nagłówku — domyślnie wyłączona (propozycja tylko w sidebarze). */
   showHeaderCartonPicker?: boolean;
   bundlePackScan?: BundleScanOut | null;
@@ -137,6 +140,7 @@ export function PackingView({
   interfaceDisplay,
   packerDisplayName,
   packingActionsLocked = false,
+  visibleOperationalNotes = [],
   showHeaderCartonPicker = false,
   bundlePackScan = null,
   showProceedAfterLinesCompleteCta = false,
@@ -311,8 +315,22 @@ export function PackingView({
 
           {notatkiMag ? (
             <div className="rounded-lg px-3 py-2.5 text-white shadow-sm" style={{ background: NOTES_RED }}>
-              <p className="text-xs font-bold uppercase tracking-wide">Notatki</p>
+              <p className="text-xs font-bold uppercase tracking-wide">Notatki magazynu</p>
               <p className="mt-1 text-sm font-medium leading-snug">{notatkiMag}</p>
+            </div>
+          ) : null}
+          {visibleOperationalNotes.length > 0 ? (
+            <div className="space-y-2">
+              {visibleOperationalNotes.map((n) => (
+                <div
+                  key={n.id}
+                  className="rounded-lg px-3 py-2.5 text-white shadow-sm"
+                  style={{ background: NOTES_RED }}
+                >
+                  <p className="text-xs font-bold uppercase tracking-wide">Notatka</p>
+                  <p className="mt-1 text-sm font-medium leading-snug">{(n.content ?? "").trim()}</p>
+                </div>
+              ))}
             </div>
           ) : null}
         </div>

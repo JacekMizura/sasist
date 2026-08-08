@@ -297,7 +297,7 @@ class WmsPackingOrderCard(BaseModel):
     packaging_fit_plan: Optional[PackagingFitPlanOut] = Field(default=None)
     #: Ephemeral recommended id from last fit (not a DB column)
     recommended_carton_id: Optional[str] = Field(default=None)
-    #: Notatki operacyjne przypięte do modułu pakowania (widoczność ``show_in_packing``).
+    #: Notatki operacyjne zamówienia (wszystkie + flagi widoczności). FE filtruje wg „Pokaż wszystkie notatki”.
     operational_notes_packing: list[WmsOperationalNoteBrief] = Field(default_factory=list)
     #: Krótki nagłówek ostrzeżenia (np. baner na stanowisku pakowania).
     wms_operational_alert_title: Optional[str] = Field(default=None, max_length=120)
