@@ -6,7 +6,7 @@ import type { OrderUiPanelSubgroupRead, OrderUiStatusPanelSummary } from "../../
 import { buildEffectCategorySteps, effectKindLabel } from "../../../utils/orderAutomationCatalog";
 import { renderAutomationEffectConfigEditor } from "./effects/orderAutomationEffectEditorRenderers";
 import { AutomationCategoryPickerModal } from "./AutomationCategoryPickerModal";
-import { AutomationStatusField } from "./AutomationStatusField";
+import { OrderUiStatusField } from "../OrderUiStatusField";
 import { oaWorkflowBlockBodyClass } from "./orderAutomationUiTokens";
 
 const sentenceTriggerClass =
@@ -47,7 +47,7 @@ export function AutomationEffectConfigFields({
             <ChevronDown className="h-3.5 w-3.5 shrink-0 text-slate-400" />
           </button>
 
-          <AutomationStatusField
+          <OrderUiStatusField
             panelSummary={panelSummary}
             panelSubgroups={panelSubgroups}
             statusNameById={statusNameById}

@@ -22,7 +22,7 @@ import {
   migrateConditionValue,
 } from "../../../utils/orderAutomationConditionUtils";
 import { AutomationCategoryPickerModal } from "./AutomationCategoryPickerModal";
-import { AutomationStatusField } from "./AutomationStatusField";
+import { OrderUiStatusField } from "../OrderUiStatusField";
 import { AutomationValueBadges } from "./AutomationValueBadges";
 import { oaInp } from "./orderAutomationUiTokens";
 
@@ -124,7 +124,7 @@ export function AutomationConditionConfigFields({
         ) : null}
 
         {isOrderStatusField ? (
-          <AutomationStatusField
+          <OrderUiStatusField
             panelSummary={panelSummary}
             panelSubgroups={panelSubgroups}
             statusNameById={statusNameById}

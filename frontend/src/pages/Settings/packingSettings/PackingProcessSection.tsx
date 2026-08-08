@@ -1,6 +1,6 @@
 import type { ComponentProps } from "react";
 
-import { AutomationStatusField } from "../../../components/orders/automation/AutomationStatusField";
+import { OrderUiStatusField } from "../../../components/orders/OrderUiStatusField";
 import type { OrderUiPanelSubgroupRead, OrderUiStatusPanelSummary } from "../../../types/orderUiStatus";
 import type { WmsPackingExtendedUiSettings } from "../../../types/wmsPackingExtendedUi";
 import type { WmsPackingSettingsRead } from "../../../types/wmsPackingSettings";
@@ -26,10 +26,7 @@ type Props = {
   setStatus: (key: "start_status_id" | "packed_status_id" | "missing_status_id", raw: string) => void;
 };
 
-type StatusFieldProps = Omit<
-  ComponentProps<typeof AutomationStatusField>,
-  "panelSummary" | "panelSubgroups"
->;
+type StatusFieldProps = Omit<ComponentProps<typeof OrderUiStatusField>, "panelSummary" | "panelSubgroups">;
 
 /** Grupa 3: Proces pakowania */
 export function PackingProcessSection({
@@ -45,7 +42,7 @@ export function PackingProcessSection({
 
   const statusField = (props: StatusFieldProps) =>
     hasStatuses ? (
-      <AutomationStatusField panelSummary={panelSummary} panelSubgroups={panelSubgroups} {...props} />
+      <OrderUiStatusField panelSummary={panelSummary} panelSubgroups={panelSubgroups} {...props} />
     ) : (
       <p className="text-sm text-slate-500">Brak statusów dla magazynu.</p>
     );
