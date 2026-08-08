@@ -3,7 +3,7 @@ import { Search, X } from "lucide-react";
 
 import { getOrderPanelSubgroups, getOrderUiStatusSummary } from "../../../api/orderUiStatusApi";
 import type { OrderUiPanelSubgroupRead, OrderUiStatusPanelSummary } from "../../../types/orderUiStatus";
-import { getStatusClass } from "../orderList/OrderListPanelStatusBadge";
+import { OrderUiStatusBadge } from "../OrderUiStatusBadge";
 import { buildWmsOrderedStatusPickerRows, filterWmsStatusPickerRows } from "../../../utils/wmsOrderStatusPickerRows";
 import { AppOverlayPortal } from "../../../components/overlay";
 
@@ -119,7 +119,6 @@ export function WmsOrderedStatusPickerDialog({
                 );
               }
               const active = selectedId === r.status.id;
-              const colorClass = getStatusClass(r.status.name ?? "");
               return (
                 <button
                   key={r.key}
@@ -132,14 +131,18 @@ export function WmsOrderedStatusPickerDialog({
                     active ? "border-cyan-400 bg-cyan-50/80 ring-1 ring-cyan-300/60" : "border-slate-200/80 hover:border-slate-300 hover:bg-slate-50"
                   }`}
                 >
-                  <span
-                    className={`inline-flex min-w-0 flex-1 items-center gap-2 rounded-sm border-l-4 px-2 py-0.5 text-xs font-semibold ${colorClass}`}
-                  >
-                    {r.status.image_url ? (
-                      <img src={r.status.image_url} alt="" className="h-4 w-4 shrink-0 rounded object-contain" />
-                    ) : null}
-                    <span className="min-w-0 truncate">{r.status.name}</span>
-                  </span>
+                  <OrderUiStatusBadge
+                    status={{
+                      name: r.status.name,
+                      color: r.status.color,
+                      main_group: r.mainGroup,
+                      badge_color: r.status.badge_color,
+                      background_color: r.status.background_color,
+                      text_color: r.status.text_color,
+                      image_url: r.status.image_url,
+                    }}
+                    className="min-w-0 flex-1"
+                  />
                   {r.subgroup ? (
                     <span className="hidden shrink-0 text-[10px] text-slate-400 sm:inline">{r.subgroup}</span>
                   ) : null}

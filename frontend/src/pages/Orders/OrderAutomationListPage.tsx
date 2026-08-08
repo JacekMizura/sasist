@@ -4,7 +4,10 @@ import { ChevronDown, Plus, Search } from "lucide-react";
 import toast from "react-hot-toast";
 
 import { AutomationRulesTable } from "../../components/orders/automation/AutomationRulesTable";
-import { buildOrderUiStatusNameById } from "../../components/orders/automation/buildOrderUiStatusNameById";
+import {
+  buildOrderUiStatusBriefById,
+  buildOrderUiStatusNameById,
+} from "../../components/orders/automation/buildOrderUiStatusNameById";
 import { moduleAutomationShellClass } from "../../components/layout/flatSectionTokens";
 import { moduleListEmptyStateClass } from "../../components/listPage/moduleList";
 import { useWarehouse } from "../../context/WarehouseContext";
@@ -66,6 +69,7 @@ export default function OrderAutomationListPage() {
     })();
   }, [wid]);
 
+  const statusBriefById = useMemo(() => buildOrderUiStatusBriefById(statusSummary), [statusSummary]);
   const statusNameById = useMemo(() => buildOrderUiStatusNameById(statusSummary), [statusSummary]);
 
   const groups = useMemo(() => [...new Set(rules.map((r) => r.group || "—"))].sort((a, b) => a.localeCompare(b, "pl")), [rules]);
@@ -197,6 +201,7 @@ export default function OrderAutomationListPage() {
                     <AutomationRulesTable
                       rules={list}
                       statusNameById={statusNameById}
+                      statusBriefById={statusBriefById}
                       warehouseOptions={warehouseOptions}
                       basePath={basePath}
                       idSort={idSort}

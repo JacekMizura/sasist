@@ -13,6 +13,7 @@ import type { ConditionOption } from "../../../utils/orderAutomationConditionOpt
 import { formatExecutionListDisplay } from "../../../utils/orderAutomationExecution";
 import { AutomationConditionSummary } from "./AutomationConditionSummary";
 import { AutomationEffectSummary } from "./AutomationEffectSummary";
+import type { OrderUiStatusBriefById } from "./buildOrderUiStatusNameById";
 import {
   oaListRowClass,
   oaListTableClass,
@@ -43,11 +44,13 @@ function fmtTime(iso: string | null | undefined) {
 function ConditionsCell({
   rule,
   statusNameById,
+  statusBriefById,
   warehouseOptions,
   expanded,
 }: {
   rule: OrderAutomationRule;
   statusNameById: Map<number, string>;
+  statusBriefById?: OrderUiStatusBriefById;
   warehouseOptions?: ConditionOption[];
   expanded: boolean;
 }) {
@@ -67,6 +70,7 @@ function ConditionsCell({
           key={c.uid}
           condition={c}
           statusNameById={statusNameById}
+          statusBriefById={statusBriefById}
           warehouseOptions={warehouseOptions}
           fitToWidth
           truncateText
@@ -82,10 +86,12 @@ function ConditionsCell({
 function EffectsCell({
   rule,
   statusNameById,
+  statusBriefById,
   expanded,
 }: {
   rule: OrderAutomationRule;
   statusNameById: Map<number, string>;
+  statusBriefById?: OrderUiStatusBriefById;
   expanded: boolean;
 }) {
   if (rule.effects.length === 0) {
@@ -102,6 +108,7 @@ function EffectsCell({
           key={e.uid}
           effect={e}
           statusNameById={statusNameById}
+          statusBriefById={statusBriefById}
           truncateText
         />
       ))}
@@ -132,6 +139,7 @@ function ExecutionCell({ rule }: { rule: OrderAutomationRule }) {
 type RuleRowProps = {
   rule: OrderAutomationRule;
   statusNameById: Map<number, string>;
+  statusBriefById?: OrderUiStatusBriefById;
   warehouseOptions?: ConditionOption[];
   basePath: string;
   expanded: boolean;
@@ -144,6 +152,7 @@ type RuleRowProps = {
 function AutomationRuleTableRow({
   rule,
   statusNameById,
+  statusBriefById,
   warehouseOptions,
   basePath,
   expanded,
@@ -193,12 +202,18 @@ function AutomationRuleTableRow({
         <ConditionsCell
           rule={rule}
           statusNameById={statusNameById}
+          statusBriefById={statusBriefById}
           warehouseOptions={warehouseOptions}
           expanded={expanded}
         />
       </td>
       <td className={oaListTdClass} style={{ width: "28%" }}>
-        <EffectsCell rule={rule} statusNameById={statusNameById} expanded={expanded} />
+        <EffectsCell
+          rule={rule}
+          statusNameById={statusNameById}
+          statusBriefById={statusBriefById}
+          expanded={expanded}
+        />
       </td>
       <td className={`${oaListTdClass} tabular-nums text-slate-600`} style={{ width: 120 }}>
         {formatDelayMinutes(rule.delayMinutes)}
@@ -254,6 +269,7 @@ function AutomationRuleTableRow({
 export type AutomationRulesTableProps = {
   rules: OrderAutomationRule[];
   statusNameById: Map<number, string>;
+  statusBriefById?: OrderUiStatusBriefById;
   warehouseOptions?: ConditionOption[];
   basePath: string;
   idSort: "asc" | "desc";
@@ -266,6 +282,7 @@ export type AutomationRulesTableProps = {
 export function AutomationRulesTable({
   rules,
   statusNameById,
+  statusBriefById,
   warehouseOptions,
   basePath,
   idSort,
@@ -321,6 +338,7 @@ export function AutomationRulesTable({
               key={r.id}
               rule={r}
               statusNameById={statusNameById}
+              statusBriefById={statusBriefById}
               warehouseOptions={warehouseOptions}
               basePath={basePath}
               expanded={expandedRuleId === r.id}

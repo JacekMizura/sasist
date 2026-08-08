@@ -1,11 +1,17 @@
 import type { AutomationEffect } from "../../../types/orderAutomation";
 import { effectKindLabel } from "../../../utils/orderAutomationCatalog";
 import { formatEffectListBlock } from "../../../utils/orderAutomationPreview";
+import { OrderUiStatusBadge } from "../OrderUiStatusBadge";
 import { AutomationValueBadges, type AutomationBadgeTone } from "./AutomationValueBadges";
+import {
+  fallbackOrderUiStatusBrief,
+  type OrderUiStatusBriefById,
+} from "./buildOrderUiStatusNameById";
 
 export type AutomationEffectSummaryProps = {
   effect: AutomationEffect;
   statusNameById?: Map<number, string>;
+  statusBriefById?: OrderUiStatusBriefById;
   truncateText?: boolean;
 };
 
@@ -13,17 +19,24 @@ export type AutomationEffectSummaryProps = {
 export function AutomationEffectSummary({
   effect,
   statusNameById,
+  statusBriefById,
   truncateText = false,
 }: AutomationEffectSummaryProps) {
   const block = formatEffectListBlock(effect, statusNameById);
   const title = effectKindLabel(effect.kind);
   const primary = block.primaryBold ?? block.secondaryDetail;
+  const changeStatusId = Number(effect.payload.order_ui_status_id);
+  const changeStatusBrief =
+    effect.kind === "change_status" && Number.isFinite(changeStatusId) && changeStatusId > 0
+      ? statusBriefById?.get(changeStatusId) ??
+        fallbackOrderUiStatusBrief(changeStatusId, primary ?? statusNameById?.get(changeStatusId))
+      : null;
 
   return (
     <div className="min-w-0 space-y-1.5">
       <p className="text-sm font-semibold text-slate-900">{title}</p>
-      {effect.kind === "change_status" && primary ? (
-        <AutomationValueBadges labels={[primary]} />
+      {effect.kind === "change_status" && changeStatusBrief ? (
+        <OrderUiStatusBadge status={changeStatusBrief} />
       ) : primary ? (
         <p
           className={`text-sm font-medium text-slate-800 ${truncateText ? "truncate" : ""}`}

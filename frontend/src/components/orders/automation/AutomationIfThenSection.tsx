@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { AlertTriangle, ArrowRight, Check, Copy, Pencil, Plus, Trash2 } from "lucide-react";
 
 import type {
@@ -13,6 +14,7 @@ import { AutomationConditionConfigFields } from "./AutomationConditionConfigFiel
 import { AutomationConditionSummary } from "./AutomationConditionSummary";
 import { AutomationEffectConfigFields } from "./AutomationEffectConfigFields";
 import { AutomationEffectSummary } from "./AutomationEffectSummary";
+import { buildOrderUiStatusBriefById } from "./buildOrderUiStatusNameById";
 import {
   oaBtnPri,
   oaWorkflowAddCtaCondition,
@@ -131,6 +133,8 @@ function ConditionRow({
   onRemove,
   onPatch,
 }: ConditionRowProps) {
+  const statusBriefById = useMemo(() => buildOrderUiStatusBriefById(panelSummary), [panelSummary]);
+
   return (
     <div className="space-y-1">
       <div className={cardShellClass(expanded, Boolean(errorMessage))}>
@@ -141,6 +145,7 @@ function ConditionRow({
               <AutomationConditionSummary
                 condition={condition}
                 statusNameById={statusNameById}
+                statusBriefById={statusBriefById}
                 warehouseOptions={warehouseOptions}
               />
             ) : null}
@@ -210,13 +215,21 @@ function EffectRow({
   onChangeKind,
   onPatchPayload,
 }: EffectRowProps) {
+  const statusBriefById = useMemo(() => buildOrderUiStatusBriefById(panelSummary), [panelSummary]);
+
   return (
     <div className="space-y-1">
       <div className={cardShellClass(expanded, Boolean(errorMessage))}>
         <div className="flex items-start gap-2 px-2.5 py-2">
           {errorMessage ? <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-red-600" aria-hidden /> : null}
           <div className="min-w-0 flex-1">
-            {!expanded ? <AutomationEffectSummary effect={effect} statusNameById={statusNameById} /> : null}
+            {!expanded ? (
+              <AutomationEffectSummary
+                effect={effect}
+                statusNameById={statusNameById}
+                statusBriefById={statusBriefById}
+              />
+            ) : null}
           </div>
           <RowActions
             editActive={expanded}

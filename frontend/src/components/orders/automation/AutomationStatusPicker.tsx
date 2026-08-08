@@ -2,12 +2,11 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Check, ChevronRight, Search } from "lucide-react";
 
 import { PanelStatusWmsIconColumn } from "../../panel/PanelStatusWmsIconColumn";
-import { panelTreeStatusBarClass } from "../../panel/panelStatusTreeStyles";
 import { getPanelStatusWmsMarkers } from "../panelStatusWmsChips";
 import { ORDERS_PANEL_GROUP_LABELS } from "../OrdersPanelStatusSidebar";
+import { OrderUiStatusBadge } from "../OrderUiStatusBadge";
 import { buildPanelSidebarLayout } from "../../../utils/orderPanelSidebarBuckets";
 import { MAIN_PANEL_GROUP_ORDER } from "../../../utils/orderPanelMainGroupOrder";
-import { sidebarSubStatusHex } from "../../../utils/panelSidebarHierarchy";
 import type {
   OrderUiMainGroup,
   OrderUiPanelSubgroupRead,
@@ -57,7 +56,6 @@ function StatusRow({
   rowRef?: (el: HTMLButtonElement | null) => void;
   onPick: () => void;
 }) {
-  const stripeColor = sidebarSubStatusHex(status.badge_color ?? status.color, mainGroup);
   const markers = getPanelStatusWmsMarkers(status, mainGroup);
 
   return (
@@ -66,7 +64,7 @@ function StatusRow({
       type="button"
       id={`auto-st-${status.id}`}
       aria-pressed={selected}
-      className={`flex w-full items-start gap-2 rounded-md border px-2 py-1.5 text-left text-sm transition-colors ${
+      className={`flex w-full items-center gap-2 rounded-md border px-2 py-1.5 text-left text-sm transition-colors ${
         selected
           ? "border-orange-200 bg-orange-50 font-medium text-slate-900"
           : "border-transparent font-normal text-slate-700 hover:bg-slate-50"
@@ -74,7 +72,7 @@ function StatusRow({
       onClick={onPick}
     >
       <span
-        className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded border ${
+        className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border ${
           selected ? "border-orange-500 bg-orange-500 text-white" : "border-slate-300 bg-white"
         }`}
         aria-hidden
@@ -82,11 +80,19 @@ function StatusRow({
         {selected ? <Check className="h-2.5 w-2.5" strokeWidth={3} /> : null}
       </span>
       <PanelStatusWmsIconColumn markers={markers} />
-      <span className={panelTreeStatusBarClass(selected)} style={{ backgroundColor: stripeColor }} aria-hidden />
-      <span className="min-w-0 flex-1 leading-snug">{status.name}</span>
-      {status.image_url ? (
-        <img src={status.image_url} alt="" className="mt-0.5 h-4 w-4 shrink-0 rounded object-contain" />
-      ) : null}
+      <OrderUiStatusBadge
+        status={{
+          name: status.name,
+          color: status.color,
+          main_group: mainGroup,
+          badge_color: status.badge_color,
+          background_color: status.background_color,
+          text_color: status.text_color,
+          image_url: status.image_url,
+          is_active: status.is_active,
+        }}
+        className="min-w-0 flex-1"
+      />
     </button>
   );
 }

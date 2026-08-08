@@ -13,9 +13,13 @@ import { ChevronDown } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
 import type { OrderUiPanelSubgroupRead, OrderUiStatusPanelSummary } from "../../../types/orderUiStatus";
+import { OrderUiStatusBadgeList } from "../OrderUiStatusBadge";
 import { AutomationStatusPicker } from "./AutomationStatusPicker";
-import { AutomationValueBadges } from "./AutomationValueBadges";
-import { buildOrderUiStatusNameById } from "./buildOrderUiStatusNameById";
+import {
+  buildOrderUiStatusBriefById,
+  buildOrderUiStatusNameById,
+  fallbackOrderUiStatusBrief,
+} from "./buildOrderUiStatusNameById";
 
 export type AutomationStatusFieldProps = {
   panelSummary: OrderUiStatusPanelSummary | null;
@@ -36,7 +40,7 @@ export type AutomationStatusFieldProps = {
 
 /**
  * Shared status control for automations and WMS settings:
- * closed field with chips → click opens popover with {@link AutomationStatusPicker}.
+ * closed field with colored status badges → click opens popover with {@link AutomationStatusPicker}.
  */
 export function AutomationStatusField({
   panelSummary,
@@ -57,21 +61,25 @@ export function AutomationStatusField({
   const [open, setOpen] = useState(false);
   const [focusStatusId, setFocusStatusId] = useState<number | null>(null);
 
+  const statusBriefById = useMemo(() => buildOrderUiStatusBriefById(panelSummary), [panelSummary]);
   const statusNameById = useMemo(
     () => statusNameByIdProp ?? buildOrderUiStatusNameById(panelSummary),
     [statusNameByIdProp, panelSummary],
   );
 
-  const selectedIds = selectedStatusIds ?? [];
-  const chipLabels = useMemo(() => {
-    if (multi) {
-      return selectedIds.map((id) => statusNameById.get(id) ?? `#${id}`);
-    }
-    if (selectedStatusId != null && selectedStatusId > 0) {
-      return [statusNameById.get(selectedStatusId) ?? `#${selectedStatusId}`];
-    }
-    return [];
-  }, [multi, selectedIds, selectedStatusId, statusNameById]);
+  const selectedIds = useMemo(() => {
+    if (multi) return [...(selectedStatusIds ?? [])];
+    if (selectedStatusId != null && selectedStatusId > 0) return [selectedStatusId];
+    return [] as number[];
+  }, [multi, selectedStatusIds, selectedStatusId]);
+
+  const chipStatuses = useMemo(
+    () =>
+      selectedIds.map(
+        (id) => statusBriefById.get(id) ?? fallbackOrderUiStatusBrief(id, statusNameById.get(id)),
+      ),
+    [selectedIds, statusBriefById, statusNameById],
+  );
 
   const { refs, floatingStyles, context } = useFloating({
     open,
@@ -147,9 +155,9 @@ export function AutomationStatusField({
         })}
       >
         <span className="min-w-0 flex-1">
-          {chipLabels.length > 0 ? (
-            <AutomationValueBadges
-              labels={chipLabels}
+          {chipStatuses.length > 0 ? (
+            <OrderUiStatusBadgeList
+              statuses={chipStatuses}
               removable={!disabled}
               onRemove={(index) => {
                 if (multi) {
@@ -162,12 +170,8 @@ export function AutomationStatusField({
               onBadgeClick={(index) => {
                 if (disabled) return;
                 setOpen(true);
-                if (multi) {
-                  const id = selectedIds[index];
-                  if (id != null) setFocusStatusId(id);
-                } else if (selectedStatusId != null) {
-                  setFocusStatusId(selectedStatusId);
-                }
+                const id = selectedIds[index];
+                if (id != null) setFocusStatusId(id);
               }}
             />
           ) : (

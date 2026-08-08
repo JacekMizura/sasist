@@ -13,7 +13,7 @@ import { Search } from "lucide-react";
 
 import { getOrderPanelSubgroups, getOrderUiStatusSummary } from "../../../api/orderUiStatusApi";
 import type { OrderUiPanelSubgroupRead, OrderUiStatusPanelSummary } from "../../../types/orderUiStatus";
-import { getStatusClass } from "../orderList/OrderListPanelStatusBadge";
+import { OrderUiStatusBadge } from "../OrderUiStatusBadge";
 import { buildWmsOrderedStatusPickerRows, filterWmsStatusPickerRows, type WmsStatusPickerRow } from "../../../utils/wmsOrderStatusPickerRows";
 
 type Props = {
@@ -207,7 +207,6 @@ export function WmsOrderedStatusPopover({
               const flat = statusOrdinal;
               const active = selectedId === r.status.id;
               const kbdHere = statusSlots[kbdFlat]?.row.status.id === r.status.id;
-              const colorClass = getStatusClass(r.status.name ?? "");
               return (
                 <button
                   key={r.key}
@@ -228,14 +227,18 @@ export function WmsOrderedStatusPopover({
                     active ? "border-cyan-400 bg-cyan-50/90" : "border-slate-200 hover:border-slate-300 hover:bg-slate-50"
                   }`}
                 >
-                  <span
-                    className={`inline-flex min-w-0 flex-1 items-center gap-1.5 rounded-md border-l-[3px] px-2 py-1 text-sm font-semibold leading-snug ${colorClass}`}
-                  >
-                    {r.status.image_url ? (
-                      <img src={r.status.image_url} alt="" className="h-4 w-4 shrink-0 rounded object-contain" />
-                    ) : null}
-                    <span className="min-w-0 truncate">{r.status.name}</span>
-                  </span>
+                  <OrderUiStatusBadge
+                    status={{
+                      name: r.status.name,
+                      color: r.status.color,
+                      main_group: r.status.main_group,
+                      badge_color: r.status.badge_color,
+                      background_color: r.status.background_color,
+                      text_color: r.status.text_color,
+                      image_url: r.status.image_url,
+                    }}
+                    className="min-w-0 flex-1"
+                  />
                 </button>
               );
             })

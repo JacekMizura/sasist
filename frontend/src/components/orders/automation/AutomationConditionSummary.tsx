@@ -1,12 +1,21 @@
 import type { AutomationCondition } from "../../../types/orderAutomation";
 import type { ConditionOption } from "../../../utils/orderAutomationConditionOptions";
 import { formatConditionDisplayParts } from "../../../utils/orderAutomationPreview";
-import { isMultiValueConditionField } from "../../../utils/orderAutomationConditionUtils";
+import {
+  isMultiValueConditionField,
+  migrateConditionValue,
+} from "../../../utils/orderAutomationConditionUtils";
+import { OrderUiStatusBadgeList } from "../OrderUiStatusBadge";
 import { AutomationValueBadges, type AutomationBadgeTone } from "./AutomationValueBadges";
+import {
+  fallbackOrderUiStatusBrief,
+  type OrderUiStatusBriefById,
+} from "./buildOrderUiStatusNameById";
 
 export type AutomationConditionSummaryProps = {
   condition: AutomationCondition;
   statusNameById?: Map<number, string>;
+  statusBriefById?: OrderUiStatusBriefById;
   warehouseOptions?: ConditionOption[];
   fitToWidth?: boolean;
   /** Truncate non-badge text values (list). */
@@ -17,12 +26,25 @@ export type AutomationConditionSummaryProps = {
 export function AutomationConditionSummary({
   condition,
   statusNameById,
+  statusBriefById,
   warehouseOptions,
   fitToWidth = true,
   truncateText = false,
 }: AutomationConditionSummaryProps) {
   const parts = formatConditionDisplayParts(condition, statusNameById, warehouseOptions);
   const useBadges = isMultiValueConditionField(condition.fieldKey);
+  const isOrderStatus = condition.fieldKey === "order_status";
+
+  const orderStatusBriefs = isOrderStatus
+    ? migrateConditionValue(condition.value).map((raw, index) => {
+        const id = Number(raw);
+        const label = parts.valueLabels[index] ?? statusNameById?.get(id) ?? String(raw);
+        if (Number.isFinite(id) && id > 0) {
+          return statusBriefById?.get(id) ?? fallbackOrderUiStatusBrief(id, label);
+        }
+        return fallbackOrderUiStatusBrief(0, label);
+      })
+    : [];
 
   return (
     <div className="min-w-0 space-y-1.5">
@@ -33,7 +55,11 @@ export function AutomationConditionSummary({
       </p>
       {useBadges ? (
         parts.valueLabels.length > 0 ? (
-          <AutomationValueBadges labels={parts.valueLabels} fitToWidth={fitToWidth} />
+          isOrderStatus ? (
+            <OrderUiStatusBadgeList statuses={orderStatusBriefs} fitToWidth={fitToWidth} />
+          ) : (
+            <AutomationValueBadges labels={parts.valueLabels} fitToWidth={fitToWidth} />
+          )
         ) : (
           <p className="text-sm text-slate-400">—</p>
         )
