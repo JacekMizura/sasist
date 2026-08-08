@@ -1,3 +1,9 @@
+## 2026-08-08 — Pakowanie: ⓘ jak w Sellasist
+
+- Niebieskie (i) inline przy nazwie opcji (`BoolRow` / `SelectField` / magazyn)
+- Modal: tytuł + X, „Jak działa ta opcja:”, opcjonalnie „Wskazówka:” — bez łapek pomocności
+- `PACKING_SETTING_HELP` jako `{ description, tip? }`
+
 ## 2026-08-08 — ETAP 3A PPWR foundation
 
 - Kontrakt: SALES / TRANSPORT / ECOMMERCE / AUXILIARY / FILLER / OUT_OF_SCOPE

@@ -1,7 +1,5 @@
 ﻿## Active
 
-**Ustawienia Pakowanie UI audit labels (2026-08-08):** Opcje oznaczone BRAK FUNKCJONALNOŚCI / CZĘŚCIOWO WDROŻONE + PL copy. Bez implementacji brakujących funkcji.
+**Ustawienia Pakowanie — ⓘ Sellasist-style (2026-08-08):** Niebieskie (i) tuż przy nazwie opcji; modal z „Jak działa ta opcja:” / opcjonalnie „Wskazówka:”; bez łapek pomocności.
 
-**ETAP 3A PPWR:** Domain contract + ProductSalesPackaging.
-
-**Next:** implementacja wybranych ustawień pakowania pojedynczo.
+**Next:** implementacja kolejnych ustawień pakowania pojedynczo z checklisty.

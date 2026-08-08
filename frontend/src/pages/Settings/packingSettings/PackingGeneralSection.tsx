@@ -1,5 +1,5 @@
 import type { WmsPackingExtendedUiSettings } from "../../../types/wmsPackingExtendedUi";
-import { PackingFieldLabel } from "../packingSettingCapability";
+import { PackingCapabilityBadge } from "../packingSettingCapability";
 import { SettingInfoButton } from "../SettingInfoButton";
 import { WmsSettingField } from "../settingsSearch";
 import { PACKING_SETTING_HELP } from "./packingSettingsHelp";
@@ -41,11 +41,20 @@ export function PackingGeneralSection({ extended, patchExtended }: Props) {
       </div>
       <div className="mt-3">
         <WmsSettingField settingId="packing.main_packing_warehouse" className="block text-sm font-medium text-slate-700">
-          <span className="mb-1 flex items-start gap-2">
-            <PackingFieldLabel capability={CAP_NONE}>Główny magazyn do pakowania</PackingFieldLabel>
-            {mainWhHelp ? (
-              <SettingInfoButton title="Główny magazyn do pakowania" description={mainWhHelp} />
-            ) : null}
+          <span className="mb-1 block">
+            <span className="inline text-sm font-medium leading-snug text-slate-700">
+              Główny magazyn do pakowania
+              {mainWhHelp ? (
+                <SettingInfoButton
+                  title="Główny magazyn do pakowania"
+                  description={mainWhHelp.description}
+                  tip={mainWhHelp.tip}
+                />
+              ) : null}
+            </span>
+            <span className="mt-1 block">
+              <PackingCapabilityBadge kind={CAP_NONE} />
+            </span>
           </span>
           <input
             type="text"

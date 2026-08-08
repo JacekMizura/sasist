@@ -5,7 +5,6 @@ import { WmsSettingField } from "../settingsSearch";
 import { WMS_SETTING_DATA_ATTR } from "../settingsSearch/navigateToSetting";
 import {
   PackingCapabilityBadge,
-  PackingFieldLabel,
   type PackingSettingCapability,
 } from "../packingSettingCapability";
 import { SettingInfoButton } from "../SettingInfoButton";
@@ -68,6 +67,7 @@ export function BoolRow({
   capabilityNote,
   infoKey,
   infoDescription,
+  infoTip,
 }: {
   label: string;
   checked: boolean;
@@ -79,14 +79,17 @@ export function BoolRow({
   capabilityNote?: string;
   infoKey?: string;
   infoDescription?: ReactNode;
+  infoTip?: ReactNode;
 }) {
-  const info = infoDescription ?? (infoKey ? PACKING_SETTING_HELP[infoKey] : undefined);
+  const helpEntry = infoKey ? PACKING_SETTING_HELP[infoKey] : undefined;
+  const info = infoDescription ?? helpEntry?.description;
+  const tip = infoTip ?? helpEntry?.tip;
   return (
     <div
       {...(settingId ? { [WMS_SETTING_DATA_ATTR]: settingId } : {})}
-      className={`wms-setting-field flex items-start gap-2 rounded-lg border border-transparent px-1 py-1 ${disabled ? "opacity-60" : "hover:bg-slate-50/80"}`}
+      className={`wms-setting-field rounded-lg border border-transparent px-1 py-1 ${disabled ? "opacity-60" : "hover:bg-slate-50/80"}`}
     >
-      <label className={`flex min-w-0 flex-1 items-start gap-3 ${disabled ? "cursor-not-allowed" : "cursor-pointer"}`}>
+      <label className={`flex min-w-0 items-start gap-3 ${disabled ? "cursor-not-allowed" : "cursor-pointer"}`}>
         <input
           type="checkbox"
           className={checkboxClass}
@@ -95,7 +98,12 @@ export function BoolRow({
           onChange={(e) => onChange(e.target.checked)}
         />
         <span className="min-w-0 flex-1">
-          <span className="block text-sm font-medium leading-snug text-slate-800">{label}</span>
+          <span className="inline text-sm font-medium leading-snug text-slate-800">
+            {label}
+            {info ? (
+              <SettingInfoButton title={label} description={info} tip={tip} />
+            ) : null}
+          </span>
           {capability ? (
             <span className="mt-1 block">
               <PackingCapabilityBadge kind={capability} note={capabilityNote} />
@@ -104,7 +112,6 @@ export function BoolRow({
           {help ? <Help>{help}</Help> : null}
         </span>
       </label>
-      {info ? <SettingInfoButton title={label} description={info} /> : null}
     </div>
   );
 }
@@ -130,16 +137,21 @@ export function SelectField({
   infoKey?: string;
   help?: ReactNode;
 }) {
-  const info = infoKey ? PACKING_SETTING_HELP[infoKey] : undefined;
+  const helpEntry = infoKey ? PACKING_SETTING_HELP[infoKey] : undefined;
+  const info = helpEntry?.description;
+  const tip = helpEntry?.tip;
   return (
     <WmsSettingField settingId={settingId} className="block text-sm font-medium text-slate-700">
-      <span className="mb-1 flex items-start gap-2">
-        <span className="min-w-0 flex-1">
-          <PackingFieldLabel capability={capability} capabilityNote={capabilityNote}>
-            {label}
-          </PackingFieldLabel>
+      <span className="mb-1 block">
+        <span className="inline text-sm font-medium leading-snug text-slate-700">
+          {label}
+          {info ? <SettingInfoButton title={label} description={info} tip={tip} /> : null}
         </span>
-        {info ? <SettingInfoButton title={label} description={info} /> : null}
+        {capability ? (
+          <span className="mt-1 block">
+            <PackingCapabilityBadge kind={capability} note={capabilityNote} />
+          </span>
+        ) : null}
       </span>
       <select className={selectClass} value={value} onChange={(e) => onChange(e.target.value)}>
         {children}
