@@ -6,10 +6,20 @@ export const wmsSettingsTokens = {
   sectionTitle: "text-base font-semibold text-slate-900",
   sectionSummary: "mt-1 text-sm text-slate-500",
   card: "rounded-xl border border-slate-200/90 bg-white p-5 shadow-sm",
-  cardInner: "rounded-lg border border-slate-200/90 bg-slate-50/50 p-4",
-  cardTitle: "text-sm font-semibold text-slate-900",
-  cardDescription: "mt-1 text-xs leading-relaxed text-slate-500",
-  fieldStack: "space-y-4",
+  /** @deprecated Prefer {@link subsection} / SettingsSubsection. */
+  cardInner:
+    "rounded-lg border border-slate-200/75 bg-slate-50/55 px-3.5 py-3.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.65)]",
+  cardTitle: "text-sm font-semibold tracking-tight text-slate-900",
+  cardDescription: "mt-0.5 text-xs leading-relaxed text-slate-500",
+  /** Gap between śródsekcje (and other blocks) inside a main section. */
+  fieldStack: "space-y-5",
+  /** Light nested group — SEKCJA → ŚRÓDSEKCJA → wiersze ustawień. */
+  subsection:
+    "rounded-lg border border-slate-200/75 bg-slate-50/55 px-3.5 py-3.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.65)]",
+  subsectionHeader: "mb-2.5",
+  subsectionTitle: "text-sm font-semibold tracking-tight text-slate-900",
+  subsectionDescription: "mt-0.5 text-xs leading-relaxed text-slate-500",
+  subsectionBody: "min-w-0",
   /** Prefer Sellasist `SettingRow` stack — not a multi-column field grid. */
   fieldGrid: "space-y-1",
   help: "mt-1 text-xs leading-relaxed text-slate-500",

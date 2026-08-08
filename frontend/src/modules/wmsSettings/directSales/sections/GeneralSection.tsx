@@ -1,5 +1,6 @@
 import type { OrderUiPanelSubgroupRead, OrderUiStatusPanelSummary } from "../../../../types/orderUiStatus";
 import type { OrderStatusOption } from "../../../../types/wmsPackingSettings";
+import { SettingsSubsection } from "../../../../pages/Settings/SettingsSubsection";
 import { OrderStatusIdSelect } from "../components/OrderStatusIdSelect";
 import type { DirectSalesSettingsConfig } from "../schemas/directSalesSettingsSchema";
 import { FieldRow, selectClass, SettingsCard, ToggleRow } from "../components/settingsUi";
@@ -36,12 +37,11 @@ export function GeneralSection({ config, panelSummary, panelSubgroups, onChange 
           onChange={(default_order_status_id) => onChange({ default_order_status_id })}
         />
       </FieldRow>
-      <details className="rounded-lg border border-slate-200/90 bg-slate-50/60 p-3 text-sm" open>
-        <summary className="cursor-pointer font-medium text-slate-800">Statusy operacyjne workflow</summary>
-        <p className="mt-2 text-xs text-slate-500">
-          Ten sam wybór statusów co w Pakowaniu i Akcjach automatycznych (NOWE / W TOKU / ZAKOŃCZONE).
-        </p>
-        <div className="mt-3 space-y-1">
+      <SettingsSubsection
+        title="Statusy operacyjne workflow"
+        description="Ten sam wybór statusów co w Pakowaniu i Akcjach automatycznych (NOWE / W TOKU / ZAKOŃCZONE)."
+      >
+        <div className="space-y-1">
           <FieldRow label="Status po utworzeniu sesji">
             <OrderStatusIdSelect
               value={config.session_created_order_status_id}
@@ -79,7 +79,7 @@ export function GeneralSection({ config, panelSummary, panelSubgroups, onChange 
             />
           </FieldRow>
         </div>
-      </details>
+      </SettingsSubsection>
       <FieldRow label="Typ dokumentu domyślny">
         <select
           className={selectClass}

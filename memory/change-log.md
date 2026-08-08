@@ -1,3 +1,9 @@
+## 2026-08-08 — Ustawienia WMS: śródsekcje SettingsSubsection
+
+- Nowy lekki kontener: tło slate-50, cienka obwódka, zaokrąglenie, tytuł + opcjonalny opis, większy gap (`space-y-5`)
+- Packing `Subsection`, picking `SubsectionPicking`, DS workflow statuses → ten sam komponent
+- Wiersze ustawień bez dodatkowych ramek; `npm run build`; bez commit/push
+
 ## 2026-08-08 — Ustawienia WMS: „i” w pierwszym wierszu tytułu
 
 - `SettingRow` z powrotem 2 kolumny LABEL|CONTROL; `.option-title` = flex (tekst + „i” `items-start`)

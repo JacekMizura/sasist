@@ -24,7 +24,10 @@ export function PackingAutomationSection({ extended, draft, patchExtended, toggl
       title="Automatyzacja"
       summary="Akcje automatyczne po spakowaniu oraz aktywatory."
     >
-      <Subsection title="Akcje automatyczne po spakowaniu zamówienia">
+      <Subsection
+        title="Akcje automatyczne po spakowaniu zamówienia"
+        description="Akcje wykonywane po zakończeniu pakowania."
+      >
         <div className="space-y-1">
           <BoolRow
             settingId="packing.auto_create_document"
@@ -87,18 +90,15 @@ export function PackingAutomationSection({ extended, draft, patchExtended, toggl
             <option value="print">Wydrukuj</option>
             <option value="download">Pobierz</option>
           </SelectField>
+          <BoolRow
+            settingId="packing.show_automation_buttons"
+            label="Wyświetlaj Aktywatory Automatyzacji podczas pakowania zamówienia"
+            checked={extended.showAutomationButtons}
+            onChange={(v) => patchExtended("showAutomationButtons", v)}
+            infoKey="packing.show_automation_buttons"
+          />
         </FieldGrid>
       </Subsection>
-
-      <div className="mt-3 space-y-1">
-        <BoolRow
-          settingId="packing.show_automation_buttons"
-          label="Wyświetlaj Aktywatory Automatyzacji podczas pakowania zamówienia"
-          checked={extended.showAutomationButtons}
-          onChange={(v) => patchExtended("showAutomationButtons", v)}
-          infoKey="packing.show_automation_buttons"
-        />
-      </div>
     </SectionCard>
   );
 }

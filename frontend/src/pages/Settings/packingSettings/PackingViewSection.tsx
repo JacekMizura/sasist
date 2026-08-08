@@ -4,7 +4,6 @@ import {
   BoolRow,
   CAP_NONE,
   FieldGrid,
-  Help,
   SectionCard,
   SelectField,
   Subsection,
@@ -194,7 +193,10 @@ export function PackingViewSection({ extended, draft, patchExtended, toggleInter
         />
       </div>
 
-      <Subsection title="Lista zamówień">
+      <Subsection
+        title="Lista zamówień"
+        description="Poniższe ustawienia układu listy dotyczą trybu rozbudowanego."
+      >
         <FieldGrid>
           <SelectField
             settingId="packing.orders_list_layout"
@@ -224,7 +226,6 @@ export function PackingViewSection({ extended, draft, patchExtended, toggleInter
             ))}
           </SelectField>
         </FieldGrid>
-        <Help>Poniższe ustawienia dotyczą układu listy w typie rozbudowanym.</Help>
         <div className="mt-2 space-y-1">
           <BoolRow
             settingId="packing.show_product_image_in_orders"

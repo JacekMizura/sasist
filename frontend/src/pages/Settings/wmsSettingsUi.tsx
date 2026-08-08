@@ -4,6 +4,8 @@
  */
 export { WmsSettingsSection as WmsSettingsSectionCard } from "./WmsSettingsSection";
 export { SettingInfoButton } from "./SettingInfoButton";
+export { SettingsSubsection, WmsSettingCard } from "./SettingsSubsection";
+export type { SettingsSubsectionProps, WmsSettingCardProps } from "./SettingsSubsection";
 export {
   WmsSettingCapabilityBadge,
   WmsSettingCapabilityFooter,

@@ -45,9 +45,8 @@ import {
 } from "../../../types/wmsPickingExtendedUi";
 import { loadCachedPickingConfigRows, saveCachedPickingConfigRows } from "../../../types/wmsPickingConfigLocalCache";
 import { WmsSettingsSection } from "../../../pages/Settings/WmsSettingsSection";
-import { WmsSettingCard } from "../../../pages/Settings/WmsSettingCard";
+import { SettingsSubsection } from "../../../pages/Settings/SettingsSubsection";
 import { WmsSettingsTabFrame } from "../../../pages/Settings/WmsSettingsTabFrame";
-import { wmsSettingsTokens } from "../../../pages/Settings/wmsSettingsTokens";
 import {
   WmsBoolSettingRow,
   WmsControlSettingRow,
@@ -149,20 +148,24 @@ function SectionCardPicking({
   );
 }
 
-function SubsectionPicking({ title, description, children }: { title: string; description?: string; children: ReactNode }) {
+function SubsectionPicking({
+  title,
+  description,
+  children,
+}: {
+  title: string;
+  description?: ReactNode;
+  children?: ReactNode;
+}) {
   return (
-    <WmsSettingCard title={title} description={description}>
+    <SettingsSubsection title={title} description={description}>
       {children}
-    </WmsSettingCard>
+    </SettingsSubsection>
   );
 }
 
 function FieldGridPicking({ children }: { children: ReactNode }) {
   return <div className={wmsSettingsRowsStackClass}>{children}</div>;
-}
-
-function HelpPicking({ children }: { children: ReactNode }) {
-  return <p className={wmsSettingsTokens.help}>{children}</p>;
 }
 
 function BoolRowPicking({
@@ -2426,12 +2429,16 @@ export function WmsPickingSettingsSections({
             </p>
           )}
 
-          <SubsectionPicking title="Integracje / dokumenty">
-            <HelpPicking>
-              Dokumenty sprzedaży konfigurujesz w zakładce <strong className="font-semibold text-slate-900">Pakowanie</strong> — w module
-              zbierania nie ma osobnych pól dokumentów.
-            </HelpPicking>
-          </SubsectionPicking>
+          <SubsectionPicking
+            title="Integracje / dokumenty"
+            description={
+              <>
+                Dokumenty sprzedaży konfigurujesz w zakładce{" "}
+                <strong className="font-semibold text-slate-900">Pakowanie</strong> — w module zbierania nie ma osobnych
+                pól dokumentów.
+              </>
+            }
+          />
         </SectionCardPicking>
 
         <SectionCardPicking id="wms-pick-scan" title="Terminal" summary="Wymagania skanów i reguły walidacji podczas zbierania.">

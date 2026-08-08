@@ -10,7 +10,6 @@ import {
   CAP_NONE,
   CAP_PARTIAL,
   FieldGrid,
-  Help,
   MethodChecklist,
   numberInputClass,
   SectionCard,
@@ -104,11 +103,10 @@ export function PackingShipmentsDocsSection({
         </div>
       </Subsection>
 
-      <Subsection title="Dokumenty sprzedaży (nowe)">
-        <Help>
-          Podczas generowania faktury lub paragonu, jeśli nie zostanie wybrana seria z modułu [NOWE] dokumenty, system
-          użyje odpowiedniej serii numeracji faktur i paragonów ze starego modułu.
-        </Help>
+      <Subsection
+        title="Dokumenty sprzedaży (nowe)"
+        description="Podczas generowania faktury lub paragonu, jeśli nie zostanie wybrana seria z modułu [NOWE] dokumenty, system użyje odpowiedniej serii numeracji faktur i paragonów ze starego modułu."
+      >
         <FieldGrid>
           <SelectField
             settingId="packing.invoice_series"

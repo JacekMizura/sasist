@@ -7,6 +7,7 @@ import {
   type PackingSettingCapability,
 } from "../packingSettingCapability";
 import { SettingInfoButton } from "../SettingInfoButton";
+import { SettingsSubsection } from "../SettingsSubsection";
 import {
   SettingRow,
   WmsBoolSettingRow,
@@ -63,14 +64,24 @@ export function SectionCard({
   );
 }
 
-export function Subsection({ title, children }: { title: string; children: ReactNode }) {
+/** Packing alias — canonical {@link SettingsSubsection}. */
+export function Subsection({
+  title,
+  description,
+  children,
+}: {
+  title: string;
+  description?: ReactNode;
+  children: ReactNode;
+}) {
   return (
-    <div className="mt-4 border-t border-slate-100 pt-4 first:mt-0 first:border-t-0 first:pt-0">
-      {title ? <p className="mb-2 text-sm font-semibold text-slate-800">{title}</p> : null}
+    <SettingsSubsection title={title} description={description}>
       {children}
-    </div>
+    </SettingsSubsection>
   );
 }
+
+export { SettingsSubsection };
 
 export function BoolRow({
   label,
