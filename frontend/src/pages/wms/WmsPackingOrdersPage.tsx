@@ -159,6 +159,7 @@ export default function WmsPackingOrdersPage() {
         s.statusId,
         s.mode,
         s.mode === "no_cart" ? undefined : s.cartId,
+        s.orderTypeFilter ?? "all",
       );
       setOrders(list);
     } catch {

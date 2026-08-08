@@ -14,6 +14,7 @@ export type PackingAfterActionsBehavior = "return_to_list" | "next_order" | "sta
 /** Zachowane w localStorage — nie pokazywane w kanonicznym UI Sellasist. */
 export type PackingExecutionMode = "automatic" | "prepare_only" | "simulation";
 export type PackingSalesDocumentType = "invoice" | "receipt" | "none";
+/** @deprecated Prefer {@link WmsPackingExtendedUiSettings.packingBySingleOrMultiItemEnabled}. */
 export type PackingSingleOrMultiStrategy = "auto" | "single_first" | "multi_first";
 export type PackingPostDocumentAction = "none" | "print" | "download" | "open";
 
@@ -92,6 +93,12 @@ export type WmsPackingExtendedUiSettings = {
   /** @deprecated Server SSOT: TenantFulfillmentConfiguration.consolidation_warehouse_id (UI select). */
   mainPackingWarehouse: string;
   fallbackLegacyTemplates: boolean;
+  /**
+   * Gdy włączone — na ekranie trybu pakowania widać kafelki
+   * „Zamówienia jednoelementowe” / „Zamówienia wieloelementowe”.
+   */
+  packingBySingleOrMultiItemEnabled: boolean;
+  /** @deprecated Migracja z selecta — nie używane w UI. */
   packingSingleOrMultiItemStrategy: PackingSingleOrMultiStrategy;
 };
 
@@ -165,6 +172,7 @@ export const DEFAULT_WMS_PACKING_EXTENDED_UI: WmsPackingExtendedUiSettings = {
 
   mainPackingWarehouse: "",
   fallbackLegacyTemplates: false,
+  packingBySingleOrMultiItemEnabled: false,
   packingSingleOrMultiItemStrategy: "auto",
 };
 
@@ -176,10 +184,20 @@ export function loadWmsPackingExtendedUi(warehouseId: number): WmsPackingExtende
   try {
     const raw = localStorage.getItem(storageKeyWmsPackingExtendedUi(warehouseId));
     if (!raw) return { ...DEFAULT_WMS_PACKING_EXTENDED_UI };
-    const parsed = JSON.parse(raw) as Partial<WmsPackingExtendedUiSettings>;
+    const parsed = JSON.parse(raw) as Partial<WmsPackingExtendedUiSettings> & {
+      packingBySingleOrMultiItemEnabled?: boolean;
+      packingSingleOrMultiItemStrategy?: PackingSingleOrMultiStrategy;
+    };
+    const legacyStrategy = parsed.packingSingleOrMultiItemStrategy;
+    const enabledFromLegacy =
+      legacyStrategy != null && legacyStrategy !== "auto" ? true : undefined;
     return {
       ...DEFAULT_WMS_PACKING_EXTENDED_UI,
       ...parsed,
+      packingBySingleOrMultiItemEnabled:
+        typeof parsed.packingBySingleOrMultiItemEnabled === "boolean"
+          ? parsed.packingBySingleOrMultiItemEnabled
+          : (enabledFromLegacy ?? DEFAULT_WMS_PACKING_EXTENDED_UI.packingBySingleOrMultiItemEnabled),
       forceScanShipmentTemplateMethodIds: Array.isArray(parsed.forceScanShipmentTemplateMethodIds)
         ? parsed.forceScanShipmentTemplateMethodIds.map(String)
         : DEFAULT_WMS_PACKING_EXTENDED_UI.forceScanShipmentTemplateMethodIds,

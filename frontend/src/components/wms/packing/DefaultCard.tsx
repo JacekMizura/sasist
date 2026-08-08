@@ -3,15 +3,17 @@ import type { WmsPackingOrderLineApi } from "../../../api/wmsPackingApi";
 import { lineQuantityRequired } from "./packingHelpers";
 import type { WmsPackingInterfaceDisplay } from "../../../types/wmsPackingSettings";
 import { LineDetailsBlock } from "./LineDetailsBlock";
+import { PackingLineActionsMenu } from "./PackingLineActionsMenu";
 
 export type DefaultCardProps = {
   line: WmsPackingOrderLineApi;
   scanBusy: boolean;
   fieldVisibility: WmsPackingInterfaceDisplay;
   onActivate: (orderItemId: number) => void;
+  onMarkShortage?: (orderItemId: number) => void;
 };
 
-function DefaultCardInner({ line, scanBusy, fieldVisibility, onActivate }: DefaultCardProps) {
+function DefaultCardInner({ line, scanBusy, fieldVisibility, onActivate, onMarkShortage }: DefaultCardProps) {
   const qtyReq = lineQuantityRequired(line);
   const loc = (line.location_label ?? "").trim();
   const locQty = line.location_bin_qty;
@@ -55,7 +57,15 @@ function DefaultCardInner({ line, scanBusy, fieldVisibility, onActivate }: Defau
           </span>
         </div>
         <div className="flex shrink-0 flex-col items-end justify-between gap-0.5 self-stretch">
-          <span className="text-[9px] font-bold uppercase tracking-wide text-slate-500">LOKALIZACJA</span>
+          <div className="flex items-start gap-1">
+            <span className="text-[9px] font-bold uppercase tracking-wide text-slate-500">LOKALIZACJA</span>
+            {onMarkShortage ? (
+              <PackingLineActionsMenu
+                disabled={scanBusy}
+                onMarkShortage={() => onMarkShortage(line.order_item_id)}
+              />
+            ) : null}
+          </div>
           <span className="max-w-[9.5rem] rounded-full border-2 border-slate-800 px-2 py-0.5 text-center text-[11px] font-bold leading-tight text-slate-900">
             {locBadge}
           </span>
@@ -92,7 +102,8 @@ function defaultCardEqual(a: DefaultCardProps, b: DefaultCardProps): boolean {
     a.fieldVisibility.show_ean === b.fieldVisibility.show_ean &&
     a.fieldVisibility.show_symbol === b.fieldVisibility.show_symbol &&
     a.fieldVisibility.show_catalog_number === b.fieldVisibility.show_catalog_number &&
-    a.onActivate === b.onActivate
+    a.onActivate === b.onActivate &&
+    a.onMarkShortage === b.onMarkShortage
   );
 }
 

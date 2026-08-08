@@ -315,7 +315,7 @@ class TestPackingModeDistribution(unittest.TestCase):
                 return_value={},
             ),
         ):
-            no_cart, bulk, baskets = svc.packing_mode_distribution(
+            no_cart, bulk, baskets, *_ = svc.packing_mode_distribution(
                 db, tenant_id=1, warehouse_id=1, status_id=5
             )
         self.assertEqual((no_cart, bulk, baskets), (3, 7, 2))

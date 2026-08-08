@@ -5,6 +5,7 @@ import { PackingModeSelectionView } from "../../components/wms/packing/PackingMo
 import { useWarehouse } from "../../context/WarehouseContext";
 import { useWmsScanner } from "../../context/WmsScannerContext";
 import { DAMAGE_TENANT_ID } from "../damage/damageShared";
+import { loadWmsPackingExtendedUi } from "../../types/wmsPackingExtendedUi";
 import { loadWmsPackingSession } from "./wmsPackingSession";
 import { WMS_ROUTES } from "./wmsRoutes";
 
@@ -15,7 +16,13 @@ export default function WmsPackingModePage() {
   const { setActiveDocument, setScannerInputPlaceholder, refocusScannerInput } = useWmsScanner();
 
   const [session, setSession] = useState(() => loadWmsPackingSession());
-  const [modes, setModes] = useState<{ no_cart: number; bulk: number; baskets: number } | null>(null);
+  const [modes, setModes] = useState<{
+    no_cart: number;
+    bulk: number;
+    baskets: number;
+    single_item?: number;
+    multi_item?: number;
+  } | null>(null);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
 
@@ -77,7 +84,13 @@ export default function WmsPackingModePage() {
     );
   }
 
-  const total = modes ? modes.no_cart + modes.bulk + modes.baskets : 0;
+  const showSingleMulti = loadWmsPackingExtendedUi(warehouseId).packingBySingleOrMultiItemEnabled;
+  const total = modes
+    ? modes.no_cart +
+      modes.bulk +
+      modes.baskets +
+      (showSingleMulti ? (modes.single_item ?? 0) + (modes.multi_item ?? 0) : 0)
+    : 0;
 
   return (
     <div className="flex h-full min-h-0 w-full flex-col bg-white">
@@ -90,7 +103,7 @@ export default function WmsPackingModePage() {
 
         {loading ? (
           <p className="py-12 text-center text-base font-medium text-slate-500">Ładowanie…</p>
-        ) : modes && total === 0 ? (
+        ) : modes && total === 0 && !showSingleMulti ? (
           <p className="mt-4 rounded-2xl border border-slate-200 bg-white px-5 py-8 text-center text-sm leading-relaxed text-slate-600 shadow-sm">
             Brak zamówień do pakowania w tym statusie (wg podziału na wózki).
           </p>
@@ -101,6 +114,7 @@ export default function WmsPackingModePage() {
             mainGroup={session.mainGroup}
             modes={modes}
             warehouseId={warehouseId}
+            showSingleMultiTiles={showSingleMulti}
           />
         ) : null}
       </div>

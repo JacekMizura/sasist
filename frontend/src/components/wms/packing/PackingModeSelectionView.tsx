@@ -18,6 +18,7 @@ import {
   patchWmsPackingSession,
   saveWmsPackingSession,
   type WmsPackingMode,
+  type WmsPackingOrderTypeFilter,
 } from "../../../pages/wms/wmsPackingSession";
 import { WMS_ROUTES } from "../../../pages/wms/wmsRoutes";
 import { wmsPackingApiErrorCode, wmsPackingApiErrorMessage } from "../../../api/wmsPackingApi";
@@ -26,8 +27,16 @@ export type PackingModeSelectionViewProps = {
   statusName: string;
   statusColor: string;
   mainGroup: OrderUiMainGroup;
-  modes: { no_cart: number; bulk: number; baskets: number };
+  modes: {
+    no_cart: number;
+    bulk: number;
+    baskets: number;
+    single_item?: number;
+    multi_item?: number;
+  };
   warehouseId: number;
+  /** Pokazuj kafelki jedno-/wieloelementowe (ustawienie procesu pakowania). */
+  showSingleMultiTiles?: boolean;
 };
 
 type ScanTarget = "bulk" | "baskets";
@@ -38,6 +47,7 @@ export function PackingModeSelectionView({
   mainGroup,
   modes,
   warehouseId,
+  showSingleMultiTiles = false,
 }: PackingModeSelectionViewProps) {
   const navigate = useNavigate();
   const {
@@ -53,12 +63,13 @@ export function PackingModeSelectionView({
 
   const badgeStyle = panelSidebarSubCountBadgeStyle(statusColor, mainGroup);
 
-  const goToOrdersNoCart = useCallback(() => {
+  const goToOrdersNoCart = useCallback((orderType: WmsPackingOrderTypeFilter = "all") => {
     const cur = loadWmsPackingSession();
     if (!cur) return;
     saveWmsPackingSession({
       ...cur,
       mode: "no_cart",
+      orderTypeFilter: orderType,
       cartId: undefined,
       cartCode: undefined,
       cartType: undefined,
@@ -72,6 +83,7 @@ export function PackingModeSelectionView({
     saveWmsPackingSession({
       ...cur,
       mode: "baskets",
+      orderTypeFilter: "all",
       cartId: undefined,
       cartCode: undefined,
       cartType: undefined,
@@ -89,6 +101,7 @@ export function PackingModeSelectionView({
       }
       patchWmsPackingSession({
         mode,
+        orderTypeFilter: "all",
         cartId: r.cart_id,
         cartCode: code || undefined,
         cartType: r.cart_type?.trim() || undefined,
@@ -123,7 +136,7 @@ export function PackingModeSelectionView({
             );
             playScanBeep();
             appendScanToHistory(scan);
-            patchWmsPackingSession({ mode: "baskets" });
+            patchWmsPackingSession({ mode: "baskets", orderTypeFilter: "all" });
             setScanTarget(null);
             navigate(WMS_ROUTES.packingOrder(br.order_id), { replace: true });
           } catch (e) {
@@ -200,6 +213,8 @@ export function PackingModeSelectionView({
 
   const showBulkScan = modes.bulk > 0;
   const showBasketsScan = modes.baskets > 0;
+  const singleCount = modes.single_item ?? 0;
+  const multiCount = modes.multi_item ?? 0;
 
   const modalNode =
     scanTarget != null ? (
@@ -275,9 +290,35 @@ export function PackingModeSelectionView({
             <button
               type="button"
               className="flex w-full min-h-[5.5rem] items-center justify-center rounded-xl border border-slate-200/95 bg-white px-6 py-5 text-center text-xl font-bold text-slate-900 shadow-sm transition-[box-shadow,background-color] hover:bg-slate-50 hover:shadow-md sm:min-h-[6rem] sm:text-2xl"
-              onClick={goToOrdersNoCart}
+              onClick={() => goToOrdersNoCart("all")}
             >
               Bez wózka — {modes.no_cart} zamówień
+            </button>
+          </li>
+        ) : null}
+        {showSingleMultiTiles ? (
+          <li>
+            <button
+              type="button"
+              disabled={singleCount <= 0}
+              className="flex w-full min-h-[5.5rem] items-center justify-center rounded-xl border border-slate-200/95 bg-white px-6 py-5 text-center text-xl font-bold text-slate-900 shadow-sm transition-[box-shadow,background-color] hover:bg-slate-50 hover:shadow-md disabled:cursor-not-allowed disabled:opacity-45 sm:min-h-[6rem] sm:text-2xl"
+              onClick={() => goToOrdersNoCart("single")}
+            >
+              Zamówienia jednoelementowe
+              <span className="ml-3 text-base font-semibold text-slate-500">({singleCount})</span>
+            </button>
+          </li>
+        ) : null}
+        {showSingleMultiTiles ? (
+          <li>
+            <button
+              type="button"
+              disabled={multiCount <= 0}
+              className="flex w-full min-h-[5.5rem] items-center justify-center rounded-xl border border-slate-200/95 bg-white px-6 py-5 text-center text-xl font-bold text-slate-900 shadow-sm transition-[box-shadow,background-color] hover:bg-slate-50 hover:shadow-md disabled:cursor-not-allowed disabled:opacity-45 sm:min-h-[6rem] sm:text-2xl"
+              onClick={() => goToOrdersNoCart("multi")}
+            >
+              Zamówienia wieloelementowe
+              <span className="ml-3 text-base font-semibold text-slate-500">({multiCount})</span>
             </button>
           </li>
         ) : null}

@@ -15,6 +15,19 @@ export type WmsPackingModesApi = {
   no_cart: number;
   bulk: number;
   baskets: number;
+  single_item?: number;
+  multi_item?: number;
+};
+
+export type WmsPackingOrderTypeParam = "all" | "single" | "multi";
+
+export type WmsPackingMarkShortageOutApi = {
+  ok: boolean;
+  order_id: number;
+  order_item_id: number;
+  shortage_qty: number;
+  missing_status_id: number;
+  missing_status_name: string;
 };
 
 export type WmsPackingOrderUiStatusApi = {
@@ -427,15 +440,31 @@ export async function getWmsPackingOrders(
   statusId: number,
   mode: WmsPackingModeParam,
   cartId?: number | null,
+  orderType: WmsPackingOrderTypeParam = "all",
 ): Promise<WmsPackingOrderCardApi[]> {
   const params: Record<string, string | number> = {
     tenant_id: tenantId,
     warehouse_id: warehouseId,
     status: statusId,
     mode,
+    order_type: orderType,
   };
   if (cartId != null) params.cart_id = cartId;
   const res = await api.get<WmsPackingOrderCardApi[]>("/wms/packing/orders", { params });
+  return res.data;
+}
+
+export async function postWmsPackingMarkShortage(
+  tenantId: number,
+  warehouseId: number,
+  orderId: number,
+  orderItemId: number,
+): Promise<WmsPackingMarkShortageOutApi> {
+  const res = await api.post<WmsPackingMarkShortageOutApi>(
+    `/wms/packing/orders/${orderId}/mark-shortage`,
+    { order_item_id: orderItemId },
+    { params: { tenant_id: tenantId, warehouse_id: warehouseId } },
+  );
   return res.data;
 }
 

@@ -53,14 +53,7 @@ export function PackingProcessSection({
         <WmsControlSettingRow
           settingId="packing.start_status_id"
           label="Status zamówienia do rozpoczęcia pakowania"
-          footer={
-            <span className="mt-1 block">
-              <PackingCapabilityBadge
-                kind={CAP_PARTIAL}
-                note="używane po zbieraniu / domknięciu braków, nie jako filtr startu ekranu pakowania."
-              />
-            </span>
-          }
+          hint="Status startowy pakowania, gdy nie korzystasz ze zbierania. Konfiguracja zbierania działa niezależnie."
         >
           {statusField({
             selectedStatusId: draft.start_status_id,
@@ -85,11 +78,7 @@ export function PackingProcessSection({
         <WmsControlSettingRow
           settingId="packing.missing_status_id"
           label="Status dla braków w zamówieniu"
-          footer={
-            <span className="mt-1 block">
-              <PackingCapabilityBadge kind={CAP_NONE} />
-            </span>
-          }
+          hint="Używany przy akcji „Oznacz jako brak” na kafelku produktu w pakowaniu."
         >
           {statusField({
             selectedStatusId: draft.missing_status_id,
@@ -101,23 +90,17 @@ export function PackingProcessSection({
       </SettingsStack>
 
       <div className="mt-2">
+        <BoolRow
+          settingId="packing.single_or_multi_strategy"
+          label="Pakowanie według zamówień jednoelementowych lub wieloelementowych"
+          checked={extended.packingBySingleOrMultiItemEnabled}
+          onChange={(v) => patchExtended("packingBySingleOrMultiItemEnabled", v)}
+          help="Po włączeniu na ekranie wyboru trybu pakowania pojawią się kafelki: zamówienia jednoelementowe i wieloelementowe."
+        />
+      </div>
+
+      <div className="mt-2">
         <FieldGrid>
-          <SelectField
-            settingId="packing.single_or_multi_strategy"
-            label="Pakowanie według zamówień jednoelementowych lub wieloelementowych"
-            capability={CAP_NONE}
-            value={extended.packingSingleOrMultiItemStrategy}
-            onChange={(v) =>
-              patchExtended(
-                "packingSingleOrMultiItemStrategy",
-                v as WmsPackingExtendedUiSettings["packingSingleOrMultiItemStrategy"],
-              )
-            }
-          >
-            <option value="auto">Automatycznie</option>
-            <option value="single_first">Najpierw jednoelementowe</option>
-            <option value="multi_first">Najpierw wieloelementowe</option>
-          </SelectField>
           <SelectField
             settingId="packing.effect_after_auto_actions"
             label="Efekt po wykonaniu akcji automatycznych"

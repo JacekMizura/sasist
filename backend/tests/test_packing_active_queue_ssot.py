@@ -163,7 +163,7 @@ def test_case1_active_basket_count_and_queue(db):
     _bind(db, cart, b, o)
     db.commit()
 
-    _, _, baskets = packing_mode_distribution(db, tenant_id=1, warehouse_id=1, status_id=8)
+    _, _, baskets, *_ = packing_mode_distribution(db, tenant_id=1, warehouse_id=1, status_id=8)  # 5-tuple
     assert baskets == 1
     row = (
         _packing_orders_base_query(
@@ -186,7 +186,7 @@ def test_case2_finalized_handoff_history_not_counted(db):
     db.add_all([o, b])
     db.commit()
 
-    _, _, baskets = packing_mode_distribution(db, tenant_id=1, warehouse_id=1, status_id=8)
+    _, _, baskets, *_ = packing_mode_distribution(db, tenant_id=1, warehouse_id=1, status_id=8)  # 5-tuple
     assert baskets == 0
     assert (
         _packing_orders_base_query(
@@ -201,7 +201,7 @@ def test_case2_finalized_handoff_history_not_counted(db):
 def test_case3_handoff_basket_null_basket_id_rejected(db):
     o = _order(db, number="NOB", cart_id=None, basket_id=None, fs=PACKING)
     db.commit()
-    _, _, baskets = packing_mode_distribution(db, tenant_id=1, warehouse_id=1, status_id=8)
+    _, _, baskets, *_ = packing_mode_distribution(db, tenant_id=1, warehouse_id=1, status_id=8)  # 5-tuple
     assert baskets == 0
 
 
@@ -215,7 +215,7 @@ def test_case4_basket_custody_inconsistent(db):
     db.add_all([o, b])
     db.commit()
 
-    _, _, baskets = packing_mode_distribution(db, tenant_id=1, warehouse_id=1, status_id=8)
+    _, _, baskets, *_ = packing_mode_distribution(db, tenant_id=1, warehouse_id=1, status_id=8)  # 5-tuple
     assert baskets == 0
 
 
@@ -236,7 +236,7 @@ def test_case5_partial_multi_one_released(db):
     db.add_all([o1, b1])
     db.commit()
 
-    _, _, baskets = packing_mode_distribution(db, tenant_id=1, warehouse_id=1, status_id=8)
+    _, _, baskets, *_ = packing_mode_distribution(db, tenant_id=1, warehouse_id=1, status_id=8)  # 5-tuple
     assert baskets == 1
     ids = {
         int(r.id)
@@ -267,7 +267,7 @@ def test_case6_cart_and_cartless_unchanged(db):
     o_cart = _order(db, number="CT", handoff=HANDOFF_CART, cart_id=int(cart.id), basket_id=None)
     db.commit()
 
-    no_cart, bulk, baskets = packing_mode_distribution(db, tenant_id=1, warehouse_id=1, status_id=8)
+    no_cart, bulk, baskets, *_ = packing_mode_distribution(db, tenant_id=1, warehouse_id=1, status_id=8)  # 5-tuple
     assert no_cart == 1
     assert bulk == 1
     assert baskets == 0
@@ -284,5 +284,5 @@ def test_case7_ui_status_packing_but_automation_finished(db):
     _bind(db, cart, b, o)
     db.commit()
 
-    _, _, baskets = packing_mode_distribution(db, tenant_id=1, warehouse_id=1, status_id=8)
+    _, _, baskets, *_ = packing_mode_distribution(db, tenant_id=1, warehouse_id=1, status_id=8)  # 5-tuple
     assert baskets == 0

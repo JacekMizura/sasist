@@ -39,6 +39,29 @@ class WmsPackingModeDistribution(BaseModel):
         ge=0,
         description="BASKET: picking_handoff_mode=BASKET (skan koszyka → exact order)",
     )
+    single_item: int = Field(
+        0,
+        ge=0,
+        description="Zamówienia z 1 aktywną pozycją (filtr jednoelementowe)",
+    )
+    multi_item: int = Field(
+        0,
+        ge=0,
+        description="Zamówienia z >1 aktywną pozycją (filtr wieloelementowe)",
+    )
+
+
+class WmsPackingMarkShortageBody(BaseModel):
+    order_item_id: int = Field(..., ge=1)
+
+
+class WmsPackingMarkShortageOut(BaseModel):
+    ok: bool = True
+    order_id: int
+    order_item_id: int
+    shortage_qty: float
+    missing_status_id: int
+    missing_status_name: str
 
 
 class WmsPackingOrderUiStatusBadge(BaseModel):

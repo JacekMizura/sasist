@@ -3,13 +3,18 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
   getWmsPackingResolveShelf,
+  postWmsPackingMarkShortage,
   postWmsPackingResolveEanScan,
   wmsPackingApiErrorCode,
   wmsPackingApiErrorMessage,
 } from "../../api/wmsPackingApi";
+import { getWmsPackingSettings } from "../../api/wmsPackingSettingsApi";
+import { getOrderUiStatusSummary } from "../../api/orderUiStatusApi";
+import { buildOrderUiStatusNameById } from "../../components/orders/automation/buildOrderUiStatusNameById";
 import { AutoActionsView } from "../../components/wms/packing/postComplete/AutoActionsView";
 import { PackingCartonGateModal } from "../../components/wms/packing/PackingCartonGateModal";
 import { PackingFinalizationView } from "../../components/wms/packing/PackingFinalizationView";
+import { PackingMarkShortageModal } from "../../components/wms/packing/PackingMarkShortageModal";
 import { PackingNotesPopupModal } from "../../components/wms/packing/PackingNotesPopupModal";
 import { PackingView } from "../../components/wms/packing/PackingView";
 import {
@@ -47,7 +52,74 @@ export default function WmsPackingOrderPage() {
   const activeOrderIds = priorityTaskOrderIds(activePackingTask);
   const [dismissPostPacking, setDismissPostPacking] = useState(false);
   const [resumeScanBusy, setResumeScanBusy] = useState(false);
+  const [shortageLineId, setShortageLineId] = useState<number | null>(null);
+  const [shortageStatusName, setShortageStatusName] = useState<string | null>(null);
+  const [shortageNotConfigured, setShortageNotConfigured] = useState(false);
+  const [shortageBusy, setShortageBusy] = useState(false);
   const packerDisplayName = formatPackerDisplayName(user);
+
+  const leavePackingToList = useCallback(() => {
+    // Ta sama ścieżka co „Przerwij” — respektuje tryb sesji (wózek / koszyki / no_cart / shelf).
+    navigate(WMS_ROUTES.packingOrders);
+  }, [navigate]);
+
+  const onMarkLineShortage = useCallback(
+    async (orderItemId: number) => {
+      if (ctrl.warehouseId == null) return;
+      setShortageLineId(orderItemId);
+      setShortageBusy(false);
+      setShortageNotConfigured(false);
+      setShortageStatusName(null);
+      try {
+        const [settings, summary] = await Promise.all([
+          getWmsPackingSettings(DAMAGE_TENANT_ID, ctrl.warehouseId),
+          getOrderUiStatusSummary(DAMAGE_TENANT_ID, ctrl.warehouseId, { includeInactive: true }).catch(() => null),
+        ]);
+        const sid = settings.missing_status_id;
+        if (sid == null || sid <= 0) {
+          setShortageNotConfigured(true);
+          return;
+        }
+        const names = buildOrderUiStatusNameById(summary);
+        setShortageStatusName(names.get(sid) ?? `#${sid}`);
+      } catch {
+        setShortageNotConfigured(true);
+      }
+    },
+    [ctrl.warehouseId],
+  );
+
+  const confirmMarkShortage = useCallback(async () => {
+    if (ctrl.warehouseId == null || shortageLineId == null || !Number.isFinite(orderId) || orderId < 1) return;
+    if (shortageNotConfigured) {
+      setShortageLineId(null);
+      return;
+    }
+    setShortageBusy(true);
+    try {
+      await postWmsPackingMarkShortage(DAMAGE_TENANT_ID, ctrl.warehouseId, orderId, shortageLineId);
+      setShortageLineId(null);
+      leavePackingToList();
+    } catch (e) {
+      const code = wmsPackingApiErrorCode(e);
+      const msg = wmsPackingApiErrorMessage(e);
+      if (code === "MISSING_STATUS_NOT_CONFIGURED") {
+        setShortageNotConfigured(true);
+      } else {
+        showScannerToast(msg || scanErrorMessage(code) || "Nie udało się oznaczyć braku.");
+        setShortageLineId(null);
+      }
+    } finally {
+      setShortageBusy(false);
+    }
+  }, [
+    ctrl.warehouseId,
+    shortageLineId,
+    orderId,
+    shortageNotConfigured,
+    leavePackingToList,
+    showScannerToast,
+  ]);
 
   useEffect(() => {
     setActiveDocument({ kind: "custom", label: "Pakowanie — zamówienie" });
@@ -282,6 +354,16 @@ export default function WmsPackingOrderPage() {
             : undefined
         }
       />
+      <PackingMarkShortageModal
+        open={shortageLineId != null}
+        missingStatusName={shortageStatusName}
+        missingStatusNotConfigured={shortageNotConfigured}
+        busy={shortageBusy}
+        onCancel={() => {
+          if (!shortageBusy) setShortageLineId(null);
+        }}
+        onConfirm={() => void confirmMarkShortage()}
+      />
       <PackingView
         detail={packingDetail}
         sortedLines={ctrl.sortedLines}
@@ -297,19 +379,20 @@ export default function WmsPackingOrderPage() {
         onPackQtyChange={ctrl.onPackQtyChange}
         navigate={navigate}
         refocusScannerInput={ctrl.refocusScannerInput}
-        onInterrupt={() => navigate(WMS_ROUTES.packingOrders)}
+        onInterrupt={leavePackingToList}
         recommendedCartons={packingDetail.recommended_cartons ?? []}
         selectedCartonId={packingDetail.selected_carton_id}
         onSelectCarton={(id) => void ctrl.selectCarton(id)}
         selectCartonBusy={ctrl.selectCartonBusy}
         interfaceDisplay={ctrl.packingInterfaceDisplay}
         packerDisplayName={packerDisplayName}
-        packingActionsLocked={ctrl.awaitingPostPackCarton || ctrl.notesPopupOpen}
+        packingActionsLocked={ctrl.awaitingPostPackCarton || ctrl.notesPopupOpen || shortageBusy}
         visibleOperationalNotes={ctrl.visiblePackingNotes}
         bundlePackScan={ctrl.bundlePackScan}
         showHeaderCartonPicker={false}
         showProceedAfterLinesCompleteCta={ctrl.showProceedAfterLinesCompleteCta}
         onProceedAfterLinesComplete={ctrl.proceedAfterLinesComplete}
+        onMarkLineShortage={(id) => void onMarkLineShortage(id)}
       />
     </>
   );

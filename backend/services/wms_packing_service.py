@@ -2767,19 +2767,52 @@ def packing_pack_all_lines(
     )
 
 
+def _packing_order_type_line_counts_subquery(db: Session):
+    """Liczba aktywnych pozycji zamówienia — jak filtr single/multi w zbieraniu."""
+    from .bundle_order_item_ops import sqlalchemy_operational_picking_order_item_clause
+    from ..models.order_item import OMS_LINE_STATUS_REPLACED
+
+    ols = OrderItem.oms_line_status
+    not_replaced = or_(ols.is_(None), ols != OMS_LINE_STATUS_REPLACED)
+    return (
+        db.query(OrderItem.order_id, func.count(OrderItem.id).label("cnt"))
+        .filter(
+            sqlalchemy_operational_picking_order_item_clause(OrderItem),
+            not_replaced,
+        )
+        .group_by(OrderItem.order_id)
+        .subquery()
+    )
+
+
+def apply_packing_order_type_filter(q, db: Session, *, order_type: str):
+    """Filtr single (1 pozycja) / multi (>1) / all — ta sama definicja co zbieranie."""
+    ot = (order_type or "all").strip().lower()
+    if ot not in ("single", "multi", "all"):
+        raise ValueError("Parametr order_type musi być: single, multi lub all.")
+    if ot == "all":
+        return q
+    line_counts = _packing_order_type_line_counts_subquery(db)
+    q = q.join(line_counts, line_counts.c.order_id == Order.id)
+    if ot == "single":
+        return q.filter(line_counts.c.cnt == 1)
+    return q.filter(line_counts.c.cnt > 1)
+
+
 def packing_mode_distribution(
     db: Session,
     *,
     tenant_id: int,
     warehouse_id: int,
     status_id: int,
-) -> Tuple[int, int, int]:
+) -> Tuple[int, int, int, int, int]:
     """
     Rzeczywiste kohorty handoff + live custody (nie total,total,total):
 
-    returns (cartless/no_cart, cart/bulk, basket/baskets)
+    returns (cartless/no_cart, cart/bulk, basket/baskets, single_item, multi_item)
 
     BASKET count wymaga aktywnego basket custody — nie samego ``picking_handoff_mode=BASKET``.
+    single/multi = liczba zamówień w statusie (wszystkie handoff) wg liczby pozycji.
     """
     # Safe reconcile only when legacy NULL handoff candidates exist
     from .picking_handoff_service import HANDOFF_BASKET, HANDOFF_CART, HANDOFF_CARTLESS, reconcile_picking_handoff_modes
@@ -2864,7 +2897,32 @@ def packing_mode_distribution(
     except Exception:
         logger.exception("PACKING_QUEUE_TRACE ghost check failed")
 
-    return cartless, cart, baskets
+    # Single / multi — wśród wszystkich zamówień kwalifikujących się do pakowania w statusie.
+    # Fail-soft: lekkie schematy testowe mogą nie mieć ``order_items``.
+    single_item = 0
+    multi_item = 0
+    try:
+        line_counts = _packing_order_type_line_counts_subquery(db)
+        single_item = int(
+            db.query(func.count(Order.id))
+            .filter(*base)
+            .join(line_counts, line_counts.c.order_id == Order.id)
+            .filter(line_counts.c.cnt == 1)
+            .scalar()
+            or 0
+        )
+        multi_item = int(
+            db.query(func.count(Order.id))
+            .filter(*base)
+            .join(line_counts, line_counts.c.order_id == Order.id)
+            .filter(line_counts.c.cnt > 1)
+            .scalar()
+            or 0
+        )
+    except Exception:
+        logger.debug("packing_mode_distribution single/multi counts unavailable", exc_info=True)
+
+    return cartless, cart, baskets, single_item, multi_item
 
 
 def list_packing_target_statuses(
@@ -2873,6 +2931,12 @@ def list_packing_target_statuses(
     tenant_id: int,
     warehouse_id: int,
 ) -> List[WmsPackingTargetStatusItem]:
+    """
+    Kolejki pakowania:
+    - statusy docelowe z konfiguracji zbierania (``picking_config.target_status_id``),
+    - oraz ``start_status_id`` z ustawień pakowania, gdy skonfigurowany i jeszcze nie na liście
+      (pakowanie bez zbierania / prosty status startowy).
+    """
     rows: List[PickingConfig] = (
         db.query(PickingConfig)
         .options(joinedload(PickingConfig.target_status))
@@ -2888,6 +2952,7 @@ def list_packing_target_statuses(
         by_target[int(pc.target_status_id)].append(pc)
 
     out: List[WmsPackingTargetStatusItem] = []
+    seen: set[int] = set()
     for tid, pcs in by_target.items():
         st = pcs[0].target_status
         if st is None:
@@ -2903,6 +2968,7 @@ def list_packing_target_statuses(
         if st is None:
             continue
         gkey = _norm_group(st.main_group)
+        seen.add(int(st.id))
         out.append(
             WmsPackingTargetStatusItem(
                 target_status_id=int(st.id),
@@ -2912,6 +2978,38 @@ def list_packing_target_statuses(
                 order_count=0,
             )
         )
+
+    # Prosty status startowy pakowania (niezależny od konfiguracji zbierania).
+    pack_settings = (
+        db.query(WmsPackingSettings)
+        .filter(
+            WmsPackingSettings.tenant_id == int(tenant_id),
+            WmsPackingSettings.warehouse_id == int(warehouse_id),
+        )
+        .first()
+    )
+    start_sid = getattr(pack_settings, "start_status_id", None) if pack_settings is not None else None
+    if start_sid is not None and int(start_sid) > 0 and int(start_sid) not in seen:
+        st = (
+            db.query(OrderUiStatus)
+            .filter(
+                OrderUiStatus.id == int(start_sid),
+                OrderUiStatus.tenant_id == int(tenant_id),
+                OrderUiStatus.warehouse_id == int(warehouse_id),
+            )
+            .first()
+        )
+        if st is not None:
+            gkey = _norm_group(st.main_group)
+            out.append(
+                WmsPackingTargetStatusItem(
+                    target_status_id=int(st.id),
+                    status=str(st.name),
+                    color=normalize_stored_color(st.color),
+                    main_group=cast(OrderUiMainGroup, gkey),
+                    order_count=0,
+                )
+            )
 
     target_ids = [int(x.target_status_id) for x in out]
     counts_map: dict[int, int] = {}
@@ -2949,6 +3047,7 @@ def list_packing_orders(
     status_id: int,
     mode: str,
     cart_id: int | None = None,
+    order_type: str = "all",
     limit: int = 500,
 ) -> List[WmsPackingOrderCard]:
     q = _packing_orders_base_query(
@@ -2959,6 +3058,7 @@ def list_packing_orders(
         mode=mode,
         cart_id=cart_id,
     )
+    q = apply_packing_order_type_filter(q, db, order_type=order_type)
     q = q.order_by(Order.order_date.desc().nullslast(), Order.id.desc())
     m = (mode or "").strip().lower()
     opts = [

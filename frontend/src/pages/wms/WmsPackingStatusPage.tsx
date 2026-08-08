@@ -10,6 +10,7 @@ import { classifyWmsScanCode } from "../../utils/wmsScanClassify";
 import { normalizeScanEan } from "../../utils/wmsScanNormalize";
 import { DAMAGE_TENANT_ID } from "../damage/damageShared";
 import { WmsFlowStatusTileButton } from "./WmsFlowStatusTileButton";
+import { loadWmsPackingExtendedUi } from "../../types/wmsPackingExtendedUi";
 import { loadWmsPackingSession, saveWmsPackingSession } from "./wmsPackingSession";
 import { consumePendingPackingWorkstation } from "./WmsPackingWorkstationGate";
 
@@ -32,7 +33,13 @@ export default function WmsPackingStatusPage() {
   const [err, setErr] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<number | null>(null);
   const [flowPhase, setFlowPhase] = useState<FlowPhase>("pick_status");
-  const [modes, setModes] = useState<{ no_cart: number; bulk: number; baskets: number } | null>(null);
+  const [modes, setModes] = useState<{
+    no_cart: number;
+    bulk: number;
+    baskets: number;
+    single_item?: number;
+    multi_item?: number;
+  } | null>(null);
   const [modesLoading, setModesLoading] = useState(false);
   const [modesErr, setModesErr] = useState<string | null>(null);
   const scanBusyRef = useRef(false);
@@ -169,7 +176,14 @@ export default function WmsPackingStatusPage() {
   };
 
   const session = loadWmsPackingSession();
-  const totalModes = modes ? modes.no_cart + modes.bulk + modes.baskets : 0;
+  const showSingleMulti =
+    warehouseId != null ? loadWmsPackingExtendedUi(warehouseId).packingBySingleOrMultiItemEnabled : false;
+  const totalModes = modes
+    ? modes.no_cart +
+      modes.bulk +
+      modes.baskets +
+      (showSingleMulti ? (modes.single_item ?? 0) + (modes.multi_item ?? 0) : 0)
+    : 0;
 
   return (
     <div className="flex h-full min-h-0 w-full flex-col bg-white">
@@ -192,9 +206,10 @@ export default function WmsPackingStatusPage() {
 
         {warehouseId != null && !loading && !err && rows.length === 0 ? (
           <p className="mt-4 rounded-2xl border border-slate-200 bg-white px-5 py-8 text-center text-sm leading-relaxed text-slate-600 shadow-sm">
-            Brak statusów docelowych z konfiguracji zbierania. W{" "}
-            <span className="font-medium text-slate-800">Ustawienia WMS → Zbieranie</span> ustaw reguły ze statusem po
-            zbieraniu — wtedy pojawią się tu kolejki pakowania.
+            Brak kolejek pakowania. Ustaw{" "}
+            <span className="font-medium text-slate-800">status do rozpoczęcia pakowania</span> w Ustawieniach WMS →
+            Pakowanie (gdy nie korzystasz ze zbierania) albo reguły ze statusem po zbieraniu w{" "}
+            <span className="font-medium text-slate-800">Ustawienia WMS → Zbieranie</span>.
           </p>
         ) : null}
 
@@ -207,7 +222,7 @@ export default function WmsPackingStatusPage() {
             ) : null}
             {modesLoading ? (
               <p className="py-10 text-center text-sm font-medium text-slate-500">Ładowanie trybów…</p>
-            ) : modes && totalModes === 0 ? (
+            ) : modes && totalModes === 0 && !showSingleMulti ? (
               <p className="mt-4 rounded-2xl border border-slate-200 bg-white px-5 py-8 text-center text-sm leading-relaxed text-slate-600 shadow-sm">
                 Brak zamówień do pakowania w tym statusie (wg podziału na wózki).
               </p>
@@ -218,6 +233,7 @@ export default function WmsPackingStatusPage() {
                 mainGroup={session.mainGroup}
                 modes={modes}
                 warehouseId={warehouseId}
+                showSingleMultiTiles={showSingleMulti}
               />
             ) : null}
           </div>

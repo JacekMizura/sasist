@@ -25,6 +25,8 @@ from ..schemas.wms_packing import (
     WmsPackingEntryOut,
     WmsPackingFinishBody,
     WmsPackingLinePackBody,
+    WmsPackingMarkShortageBody,
+    WmsPackingMarkShortageOut,
     WmsPackingModeDistribution,
     WmsPackingOrderCard,
     WmsPackingOrderDetailOut,
@@ -49,6 +51,10 @@ from ..services.wms_packing_service import (
     packing_resolve_and_scan_ean,
     packing_scan_increment,
     resolve_packing_entry_for_order,
+)
+from ..services.wms_packing_shortage_service import (
+    PackingShortageError,
+    packing_mark_line_shortage_and_defer,
 )
 
 router = APIRouter(prefix="/wms", tags=["WMS packing"])
@@ -81,15 +87,21 @@ def get_packing_modes(
 ):
     """Liczba zamówień w statusie: bez wózka / na wózku BULK / na wózku z koszykami (MULTI)."""
     try:
-        no_cart, bulk, baskets = packing_mode_distribution(
+        no_cart, bulk, baskets, single_item, multi_item = packing_mode_distribution(
             db, tenant_id=tenant_id, warehouse_id=warehouse_id, status_id=status
         )
         db.commit()
-        return WmsPackingModeDistribution(no_cart=no_cart, bulk=bulk, baskets=baskets)
+        return WmsPackingModeDistribution(
+            no_cart=no_cart,
+            bulk=bulk,
+            baskets=baskets,
+            single_item=single_item,
+            multi_item=multi_item,
+        )
     except SQLAlchemyError:
         db.rollback()
         logger.exception("get_packing_modes")
-        return WmsPackingModeDistribution(no_cart=0, bulk=0, baskets=0)
+        return WmsPackingModeDistribution(no_cart=0, bulk=0, baskets=0, single_item=0, multi_item=0)
 
 
 @router.post("/packing/start-cart")
@@ -146,6 +158,10 @@ def get_packing_orders(
         description="no_cart | bulk | baskets — zgodnie z wyborem na ekranie trybu pakowania",
     ),
     cart_id: int | None = Query(default=None, ge=1, description="Wymagane dla mode=bulk i mode=baskets"),
+    order_type: str = Query(
+        default="all",
+        description="all | single | multi — filtr jedno-/wieloelementowe (jak w zbieraniu)",
+    ),
     db: Session = Depends(get_db),
 ):
     """Zamówienia w statusie wg trybu: bez wózka albo na konkretnym wózku (typ zgodny z trybem)."""
@@ -157,6 +173,7 @@ def get_packing_orders(
             status_id=status,
             mode=mode,
             cart_id=cart_id,
+            order_type=order_type,
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
@@ -583,6 +600,47 @@ def post_packing_order_pack_all(
         db.rollback()
         logger.exception("post_packing_order_pack_all")
         raise HTTPException(status_code=500, detail="Database error") from e
+
+
+@router.post("/packing/orders/{order_id}/mark-shortage", response_model=WmsPackingMarkShortageOut)
+def post_packing_order_mark_shortage(
+    order_id: int,
+    body: WmsPackingMarkShortageBody = Body(...),
+    tenant_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_operable_warehouse),
+    db: Session = Depends(get_db),
+    current_user: Optional[AppUser] = Depends(get_optional_current_user),
+):
+    """
+    Oznacz pozycję jako brak z ekranu pakowania → status z ustawienia ``missing_status_id``
+    → operator wraca do listy (nawigacja FE).
+    """
+    try:
+        out = packing_mark_line_shortage_and_defer(
+            db,
+            tenant_id=int(tenant_id),
+            warehouse_id=int(warehouse_id),
+            order_id=int(order_id),
+            order_item_id=int(body.order_item_id),
+            operator_user_id=int(current_user.id) if current_user is not None else None,
+        )
+        db.commit()
+        return WmsPackingMarkShortageOut(**out)
+    except PackingShortageError as e:
+        db.rollback()
+        detail = {"code": str(e.code)}
+        if e.message:
+            detail["error"] = str(e.message)
+        if e.order_item_id is not None:
+            detail["order_item_id"] = int(e.order_item_id)
+        status = 400
+        if e.code in ("ORDER_NOT_FOUND", "LINE_NOT_FOUND"):
+            status = 404
+        raise HTTPException(status_code=status, detail=detail) from e
+    except SQLAlchemyError:
+        db.rollback()
+        logger.exception("post_packing_order_mark_shortage")
+        raise HTTPException(status_code=500, detail="Database error")
 
 
 @router.post("/packing/orders/{order_id}/pause")

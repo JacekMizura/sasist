@@ -9,6 +9,9 @@ export const PACKING_STATION_REQUIRED_MSG = "Rozpocznij pakowanie i wybierz stan
 
 export type WmsPackingMode = WmsPackingModeParam;
 
+/** Filtr jedno-/wieloelementowe — ta sama definicja co zbieranie (liczba aktywnych pozycji). */
+export type WmsPackingOrderTypeFilter = "all" | "single" | "multi";
+
 /** Stan sesji pakowania — SSOT aktywnego stanowiska (tylko w trakcie pakowania). */
 export type WmsPackingSessionState = {
   statusId: number;
@@ -16,6 +19,8 @@ export type WmsPackingSessionState = {
   statusColor: string;
   mainGroup: OrderUiMainGroup;
   mode?: WmsPackingMode;
+  /** Domyślnie all — ustawiane kafelkami jedno-/wieloelementowe. */
+  orderTypeFilter?: WmsPackingOrderTypeFilter;
   cartId?: number;
   cartCode?: string;
   cartType?: string;
@@ -45,6 +50,8 @@ export function loadWmsPackingSession(): WmsPackingSessionState | null {
     };
     const m = rec.mode;
     if (m === "no_cart" || m === "bulk" || m === "baskets" || m === "shelf") out.mode = m;
+    const ot = rec.orderTypeFilter;
+    if (ot === "all" || ot === "single" || ot === "multi") out.orderTypeFilter = ot;
     const cid = rec.cartId;
     if (cid != null && Number.isFinite(Number(cid))) out.cartId = Number(cid);
     if (typeof rec.cartCode === "string" && rec.cartCode.trim()) out.cartCode = rec.cartCode.trim();

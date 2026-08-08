@@ -115,6 +115,7 @@ type PackingViewProps = {
    */
   showProceedAfterLinesCompleteCta?: boolean;
   onProceedAfterLinesComplete?: () => void;
+  onMarkLineShortage?: (orderItemId: number) => void;
 };
 
 export function PackingView({
@@ -145,6 +146,7 @@ export function PackingView({
   bundlePackScan = null,
   showProceedAfterLinesCompleteCta = false,
   onProceedAfterLinesComplete,
+  onMarkLineShortage,
 }: PackingViewProps) {
   const { setScannerInputPlaceholder } = useWmsScanner();
   const wedgeRef = useRef<HTMLInputElement>(null);
@@ -464,6 +466,11 @@ export function PackingView({
                       fieldVisibility={interfaceDisplay}
                       onPackQtyChange={onPackQtyChange}
                       onConfirmPack={handleConfirmPack}
+                      onMarkShortage={
+                        packingActionsLocked || !onMarkLineShortage
+                          ? undefined
+                          : onMarkLineShortage
+                      }
                     />
                   ) : (
                     <DefaultCard
@@ -471,6 +478,11 @@ export function PackingView({
                       scanBusy={scanBusy || packingActionsLocked}
                       fieldVisibility={interfaceDisplay}
                       onActivate={activateProduct}
+                      onMarkShortage={
+                        packingActionsLocked || !onMarkLineShortage
+                          ? undefined
+                          : onMarkLineShortage
+                      }
                     />
                   )}
                 </li>

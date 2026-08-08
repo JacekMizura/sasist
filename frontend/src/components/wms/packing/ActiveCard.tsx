@@ -3,6 +3,7 @@ import type { WmsPackingOrderLineApi } from "../../../api/wmsPackingApi";
 import { lineQuantityRequired } from "./packingHelpers";
 import type { WmsPackingInterfaceDisplay } from "../../../types/wmsPackingSettings";
 import { LineDetailsBlock } from "./LineDetailsBlock";
+import { PackingLineActionsMenu } from "./PackingLineActionsMenu";
 
 const PRIMARY_GREEN = "#4caf50";
 
@@ -15,6 +16,7 @@ export type ActiveCardProps = {
   fieldVisibility: WmsPackingInterfaceDisplay;
   onPackQtyChange: (orderItemId: number, qty: number) => void;
   onConfirmPack: (orderItemId: number, qtyOverride?: number) => void;
+  onMarkShortage?: (orderItemId: number) => void;
 };
 
 function ActiveCardInner({
@@ -26,6 +28,7 @@ function ActiveCardInner({
   fieldVisibility,
   onPackQtyChange,
   onConfirmPack,
+  onMarkShortage,
 }: ActiveCardProps) {
   const qtyReq = lineQuantityRequired(line);
   const maxPack = Math.max(0, qtyReq - line.quantity_packed);
@@ -107,7 +110,15 @@ function ActiveCardInner({
         </div>
 
         <div className="flex shrink-0 flex-col items-end justify-between gap-0.5 self-stretch">
-          <span className="text-[9px] font-bold uppercase tracking-wide text-slate-500">LOKALIZACJA</span>
+          <div className="flex items-start gap-1">
+            <span className="text-[9px] font-bold uppercase tracking-wide text-slate-500">LOKALIZACJA</span>
+            {onMarkShortage ? (
+              <PackingLineActionsMenu
+                disabled={scanBusy || linePackBusy}
+                onMarkShortage={() => onMarkShortage(line.order_item_id)}
+              />
+            ) : null}
+          </div>
           <span className="max-w-[9.5rem] rounded-full border-2 border-slate-800 px-2 py-0.5 text-center text-[11px] font-bold leading-tight text-slate-900">
             {locBadge}
           </span>
@@ -148,7 +159,8 @@ function activeCardEqual(a: ActiveCardProps, b: ActiveCardProps): boolean {
     a.fieldVisibility.show_symbol === b.fieldVisibility.show_symbol &&
     a.fieldVisibility.show_catalog_number === b.fieldVisibility.show_catalog_number &&
     a.onPackQtyChange === b.onPackQtyChange &&
-    a.onConfirmPack === b.onConfirmPack
+    a.onConfirmPack === b.onConfirmPack &&
+    a.onMarkShortage === b.onMarkShortage
   );
 }
 
