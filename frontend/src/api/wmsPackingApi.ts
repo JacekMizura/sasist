@@ -330,7 +330,7 @@ export type WmsPackingScanOutApi = {
   detail: WmsPackingOrderDetailApi;
   fully_packed: boolean;
   /** Ustawiane na odpowiedzi POST …/finish — z konfiguracji pakowania. */
-  packing_after_finish_action?: "STAY" | "GO_TO_LIST" | null;
+  packing_after_finish_action?: "STAY" | "GO_TO_LIST" | "NEXT_ORDER" | null;
   next_order_id: number | null;
   last_packed_order_item_id: number | null;
   post_pack_pipeline?: WmsPackingPostPackStepApi[] | null;
@@ -628,13 +628,14 @@ export async function postWmsPackingOrderFinish(
   mode: WmsPackingModeParam,
   orderId: number,
   cartId?: number | null,
-  options?: { allow_without_carton?: boolean },
+  options?: { allow_without_carton?: boolean; orderType?: WmsPackingOrderTypeParam },
 ): Promise<WmsPackingScanOutApi> {
   const params: Record<string, string | number> = {
     tenant_id: tenantId,
     warehouse_id: warehouseId,
     status: statusId,
     mode,
+    order_type: options?.orderType ?? "all",
   };
   if (cartId != null) params.cart_id = cartId;
   const res = await api.post<WmsPackingScanOutApi>(

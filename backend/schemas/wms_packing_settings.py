@@ -42,7 +42,7 @@ class WmsPackingSettingsRead(BaseModel):
     start_status_id: Optional[int] = None
     packed_status_id: Optional[int] = None
     missing_status_id: Optional[int] = None
-    packing_after_finish_action: Literal["STAY", "GO_TO_LIST"] = "STAY"
+    packing_after_finish_action: Literal["STAY", "GO_TO_LIST", "NEXT_ORDER"] = "STAY"
     auto_actions: WmsPackingAutoActions = Field(default_factory=WmsPackingAutoActions)
     document_settings: WmsPackingDocumentSettings = Field(default_factory=WmsPackingDocumentSettings)
     fallback_label: WmsPackingFallbackLabel = Field(default_factory=WmsPackingFallbackLabel)
@@ -55,7 +55,7 @@ class WmsPackingSettingsSave(BaseModel):
     start_status_id: Optional[int] = None
     packed_status_id: Optional[int] = None
     missing_status_id: Optional[int] = None
-    packing_after_finish_action: Literal["STAY", "GO_TO_LIST"] = "STAY"
+    packing_after_finish_action: Literal["STAY", "GO_TO_LIST", "NEXT_ORDER"] = "STAY"
     auto_actions: WmsPackingAutoActions = Field(default_factory=WmsPackingAutoActions)
     document_settings: WmsPackingDocumentSettings = Field(default_factory=WmsPackingDocumentSettings)
     fallback_label: WmsPackingFallbackLabel = Field(default_factory=WmsPackingFallbackLabel)

@@ -287,15 +287,31 @@ export function usePackingOrderController(
           s.mode,
           orderId,
           s.mode === "bulk" || s.mode === "baskets" ? s.cartId : undefined,
-          { allow_without_carton: finishWithoutCartonRef.current },
+          {
+            allow_without_carton: finishWithoutCartonRef.current,
+            orderType: s.orderTypeFilter ?? "all",
+          },
         );
         finishWithoutCartonRef.current = false;
+        // Kolejność: finish API już wykonał akcje automatyczne → dopiero potem efekt nawigacji.
         if (out.packing_after_finish_action === "GO_TO_LIST") {
           const currentStatus = s.statusId;
           navigatedAway = true;
           navigate(`${WMS_ROUTES.packingOrders}?status=${encodeURIComponent(String(currentStatus))}`, {
             replace: true,
           });
+          return true;
+        }
+        if (out.packing_after_finish_action === "NEXT_ORDER") {
+          const nextId = out.next_order_id;
+          navigatedAway = true;
+          if (nextId != null && Number.isFinite(nextId) && nextId > 0) {
+            navigate(WMS_ROUTES.packingOrder(nextId), { replace: true });
+          } else {
+            navigate(`${WMS_ROUTES.packingOrders}?status=${encodeURIComponent(String(s.statusId))}`, {
+              replace: true,
+            });
+          }
           return true;
         }
         setDetail(out.detail);

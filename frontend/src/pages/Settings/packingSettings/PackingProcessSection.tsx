@@ -8,8 +8,6 @@ import { PackingCapabilityBadge } from "../packingSettingCapability";
 import { WmsControlSettingRow } from "../wmsSettingRow";
 import {
   BoolRow,
-  CAP_NONE,
-  CAP_PARTIAL,
   FieldGrid,
   SectionCard,
   SelectField,
@@ -104,8 +102,6 @@ export function PackingProcessSection({
           <SelectField
             settingId="packing.effect_after_auto_actions"
             label="Efekt po wykonaniu akcji automatycznych"
-            capability={CAP_PARTIAL}
-            capabilityNote="„Zostań” i „Wróć na listę” działają; „Następne zamówienie” jeszcze nie."
             value={extended.afterActionsBehavior}
             onChange={(v) =>
               patchExtended("afterActionsBehavior", v as WmsPackingExtendedUiSettings["afterActionsBehavior"])
@@ -116,16 +112,6 @@ export function PackingProcessSection({
             <option value="next_order">Przejdź do następnego zamówienia</option>
           </SelectField>
         </FieldGrid>
-      </div>
-
-      <div className="mt-2">
-        <BoolRow
-          settingId="packing.go_next_order_after_packed"
-          label="Po spakowaniu zamówienia przejdź do następnego zamówienia"
-          checked={extended.goNextOrderAfterPacked}
-          onChange={(v) => patchExtended("goNextOrderAfterPacked", v)}
-          capability={CAP_NONE}
-        />
       </div>
 
       <Subsection title="">

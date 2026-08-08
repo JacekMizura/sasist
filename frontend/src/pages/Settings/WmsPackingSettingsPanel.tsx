@@ -28,7 +28,6 @@ import type {
   OrderUiStatusPanelSummary,
 } from "../../types/orderUiStatus";
 import type {
-  WmsPackingAfterFinishAction,
   WmsPackingAutoActions,
   WmsPackingInterfaceDisplay,
   WmsPackingSettingsRead,
@@ -38,6 +37,8 @@ import {
   DEFAULT_WMS_PACKING_INTERFACE_DISPLAY,
   loadCachedWmsPackingSettingsRead,
   normalizeWmsPackingSettingsRead,
+  packingAfterFinishActionToUi,
+  packingAfterFinishUiToAction,
   saveCachedWmsPackingSettingsRead,
 } from "../../types/wmsPackingSettings";
 import type { WmsPackingExtendedUiSettings } from "../../types/wmsPackingExtendedUi";
@@ -215,9 +216,13 @@ const WmsPackingSettingsPanel = forwardRef<
     setBaselineMainPackingWarehouseId(mainWh);
 
     setDraft((prev) => (cfgRes.status === "fulfilled" ? nextDraft : prev ?? fallbackDraft));
-    const ext = { ...loadWmsPackingExtendedUi(warehouseId) };
-    setExtended(ext);
     const finalDraft = cfgRes.status === "fulfilled" ? nextDraft : fallbackDraft;
+    const ext = {
+      ...loadWmsPackingExtendedUi(warehouseId),
+      // SSOT efektu po akcjach = API ``packing_after_finish_action`` (nie lokalny checkbox).
+      afterActionsBehavior: packingAfterFinishActionToUi(finalDraft.packing_after_finish_action),
+    };
+    setExtended(ext);
     setBaselineDraft(packingDraftFingerprint(finalDraft));
     setBaselineExtended(stableStringify(ext));
     setLoading(false);
@@ -294,7 +299,11 @@ const WmsPackingSettingsPanel = forwardRef<
 
   const saveAll = async () => {
     if (warehouseId == null || effectiveDraft == null) return;
-    const normalized = normalizeWmsPackingSettingsRead(DAMAGE_TENANT_ID, warehouseId, effectiveDraft);
+    const packingAfter = packingAfterFinishUiToAction(extended.afterActionsBehavior);
+    const normalized = normalizeWmsPackingSettingsRead(DAMAGE_TENANT_ID, warehouseId, {
+      ...effectiveDraft,
+      packing_after_finish_action: packingAfter,
+    });
     setOkMsg(null);
     setSaving(true);
     try {
@@ -304,8 +313,6 @@ const WmsPackingSettingsPanel = forwardRef<
         invoice_series_id: normalized.document_settings.invoice_series_id?.trim() || null,
         receipt_series_id: normalized.document_settings.receipt_series_id?.trim() || null,
       };
-      const packingAfter: WmsPackingAfterFinishAction =
-        extended.afterActionsBehavior === "return_to_list" ? "GO_TO_LIST" : "STAY";
       const saved = await saveWmsPackingSettings({
         tenant_id: DAMAGE_TENANT_ID,
         warehouse_id: warehouseId,

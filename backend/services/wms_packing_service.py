@@ -2004,7 +2004,12 @@ def _packing_build_scan_out_after_commit(
     action_out: str | None = None
     if packing_after_finish_action is not None:
         u = str(packing_after_finish_action).strip().upper()
-        action_out = "GO_TO_LIST" if u == "GO_TO_LIST" else "STAY"
+        if u == "GO_TO_LIST":
+            action_out = "GO_TO_LIST"
+        elif u == "NEXT_ORDER":
+            action_out = "NEXT_ORDER"
+        else:
+            action_out = "STAY"
     return WmsPackingScanOut(
         detail=detail,
         fully_packed=fully_packed,
@@ -2283,6 +2288,15 @@ def _release_cart_after_packing_finish(
     )
 
 
+def _normalize_packing_after_finish_action(raw: object | None) -> str:
+    u = str(raw or "STAY").strip().upper()
+    if u == "GO_TO_LIST":
+        return "GO_TO_LIST"
+    if u == "NEXT_ORDER":
+        return "NEXT_ORDER"
+    return "STAY"
+
+
 def packing_finish_order(
     db: Session,
     *,
@@ -2295,6 +2309,7 @@ def packing_finish_order(
     operator_user_id: Optional[int] = None,
     allow_without_carton: bool = False,
     current_user: Optional[AppUser] = None,
+    order_type: str = "all",
 ) -> WmsPackingScanOut:
     """
     Wywołaj **po** pełnym spakowaniu (skan / line-pack / pack-all już zacommitowane).
@@ -2395,8 +2410,9 @@ def packing_finish_order(
                     str(e)[:200],
                 )
         ps_row = _get_or_create_wms_packing_settings_row(db, tenant_id, warehouse_id)
-        raw_finish = getattr(ps_row, "packing_after_finish_action", None) or "STAY"
-        finish_action = "GO_TO_LIST" if str(raw_finish).strip().upper() == "GO_TO_LIST" else "STAY"
+        finish_action = _normalize_packing_after_finish_action(
+            getattr(ps_row, "packing_after_finish_action", None)
+        )
         next_id = find_next_fifo_packing_order_id(
             db,
             tenant_id=tenant_id,
@@ -2405,6 +2421,7 @@ def packing_finish_order(
             mode=mode,
             cart_id=cart_id,
             exclude_order_id=int(order_id),
+            order_type=order_type,
         )
         db.commit()
         _packing_finish_trace(
@@ -2477,8 +2494,9 @@ def packing_finish_order(
     _touch_order_wms_packing_timestamps(order, fully_packed=True)
 
     ps_row = _get_or_create_wms_packing_settings_row(db, tenant_id, warehouse_id)
-    raw_finish = getattr(ps_row, "packing_after_finish_action", None) or "STAY"
-    finish_action = "GO_TO_LIST" if str(raw_finish).strip().upper() == "GO_TO_LIST" else "STAY"
+    finish_action = _normalize_packing_after_finish_action(
+        getattr(ps_row, "packing_after_finish_action", None)
+    )
 
     post_pack_pipeline = _run_wms_packing_post_pack_pipeline(
         db,
@@ -2537,6 +2555,7 @@ def packing_finish_order(
         mode=mode,
         cart_id=cart_id,
         exclude_order_id=int(order_id),
+        order_type=order_type,
     )
     _packing_finish_trace(
         stage="ok",
@@ -2578,6 +2597,7 @@ def find_next_fifo_packing_order_id(
     mode: str,
     cart_id: int | None,
     exclude_order_id: int | None,
+    order_type: str = "all",
 ) -> Optional[int]:
     q = _packing_orders_base_query(
         db,
@@ -2587,6 +2607,7 @@ def find_next_fifo_packing_order_id(
         mode=mode,
         cart_id=cart_id,
     )
+    q = apply_packing_order_type_filter(q, db, order_type=order_type or "all")
     q = q.order_by(Order.created_at.asc().nulls_last(), Order.id.asc())
     orders = q.options(joinedload(Order.items), joinedload(Order.shipping_method_row)).all()
     for o in orders:

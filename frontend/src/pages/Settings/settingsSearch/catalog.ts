@@ -235,11 +235,12 @@ export const WMS_SETTINGS_SEARCH_CATALOG: WmsSettingsSearchEntry[] = [
     sectionLabel: "Automatyzacja",
   }),
   e({
-    id: "packing.go_next_order_after_packed",
-    label: "Po spakowaniu zamówienia przejdź do następnego zamówienia",
+    id: "packing.effect_after_auto_actions",
+    label: "Efekt po wykonaniu akcji automatycznych",
     tabId: "packing",
     sectionId: "wms-pack-process",
     sectionLabel: "Proces pakowania",
+    keywords: ["następne", "lista", "zostań"],
   }),
 
   // Picking

@@ -70,7 +70,7 @@ export function normalizeWmsPackingSettingsRead(
   if (!raw || typeof raw !== "object") return d;
   const pfa = raw.packing_after_finish_action;
   const packing_after_finish_action: WmsPackingAfterFinishAction =
-    pfa === "GO_TO_LIST" || pfa === "STAY" ? pfa : d.packing_after_finish_action;
+    pfa === "GO_TO_LIST" || pfa === "STAY" || pfa === "NEXT_ORDER" ? pfa : d.packing_after_finish_action;
   const delayRaw = raw.fallback_label?.delay_seconds;
   const delay_seconds =
     typeof delayRaw === "number" && Number.isFinite(delayRaw) ? Math.max(0, Math.floor(delayRaw)) : d.fallback_label.delay_seconds;
@@ -124,7 +124,24 @@ export function saveCachedWmsPackingSettingsRead(warehouseId: number, data: WmsP
   }
 }
 
-export type WmsPackingAfterFinishAction = "STAY" | "GO_TO_LIST";
+export type WmsPackingAfterFinishAction = "STAY" | "GO_TO_LIST" | "NEXT_ORDER";
+
+/** Map API finish action ↔ UI select for „Efekt po wykonaniu akcji automatycznych”. */
+export function packingAfterFinishActionToUi(
+  action: WmsPackingAfterFinishAction | null | undefined,
+): "stay_here" | "return_to_list" | "next_order" {
+  if (action === "GO_TO_LIST") return "return_to_list";
+  if (action === "NEXT_ORDER") return "next_order";
+  return "stay_here";
+}
+
+export function packingAfterFinishUiToAction(
+  ui: "stay_here" | "return_to_list" | "next_order",
+): WmsPackingAfterFinishAction {
+  if (ui === "return_to_list") return "GO_TO_LIST";
+  if (ui === "next_order") return "NEXT_ORDER";
+  return "STAY";
+}
 
 export type WmsPackingSettingsRead = {
   tenant_id: number;

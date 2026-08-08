@@ -457,9 +457,9 @@ class WmsPackingScanOut(BaseModel):
     detail: WmsPackingOrderDetailOut
     fully_packed: bool = Field(..., description="True gdy wszystkie linie mają pełną ilość spakowaną")
     #: Wypełniane na odpowiedzi ``POST …/finish`` — z ustawień pakowania magazynu.
-    packing_after_finish_action: Optional[Literal["STAY", "GO_TO_LIST"]] = Field(
+    packing_after_finish_action: Optional[Literal["STAY", "GO_TO_LIST", "NEXT_ORDER"]] = Field(
         default=None,
-        description="STAY = zostaj na ekranie zamówienia; GO_TO_LIST = wróć na listę kolejki",
+        description="STAY | GO_TO_LIST | NEXT_ORDER — efekt po zakończeniu akcji automatycznych",
     )
     next_order_id: Optional[int] = Field(None, description="Następne zamówienie w kolejce FIFO po domknięciu")
     last_packed_order_item_id: Optional[int] = Field(

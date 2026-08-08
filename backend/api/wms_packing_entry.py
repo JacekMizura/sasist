@@ -513,6 +513,10 @@ def post_packing_order_finish(
     status: int = Query(..., ge=1),
     mode: str = Query(...),
     cart_id: int | None = Query(default=None, ge=1),
+    order_type: str = Query(
+        default="all",
+        description="all | single | multi — filtr kolejki przy NEXT_ORDER",
+    ),
     body: WmsPackingFinishBody = Body(default_factory=WmsPackingFinishBody),
     db: Session = Depends(get_db),
     current_user: Optional[AppUser] = Depends(get_optional_current_user),
@@ -533,6 +537,7 @@ def post_packing_order_finish(
             operator_user_id=int(current_user.id) if current_user is not None else None,
             allow_without_carton=bool(body.allow_without_carton),
             current_user=current_user,
+            order_type=order_type,
         )
     except PackingScanError as e:
         db.rollback()

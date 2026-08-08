@@ -27,7 +27,7 @@ class WmsPackingSettings(Base):
     #: UI ekranu pakowania (checkboxy: stan, EAN, symbol, nr kat.) — JSON obiekt.
     interface_display_json = Column(Text, nullable=False, default="{}")
 
-    #: Po zakończeniu pakowania: ``STAY`` (ekran zamówienia) | ``GO_TO_LIST`` (lista kolejki).
+    #: Po akcjach automatycznych: ``STAY`` | ``GO_TO_LIST`` | ``NEXT_ORDER``.
     packing_after_finish_action = Column(String(24), nullable=False, default="STAY")
 
     created_at = Column(DateTime, nullable=True, default=datetime.utcnow)
