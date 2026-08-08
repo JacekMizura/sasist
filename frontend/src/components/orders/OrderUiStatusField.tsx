@@ -13,8 +13,8 @@ import { ChevronDown } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
 import type { OrderUiPanelSubgroupRead, OrderUiStatusPanelSummary } from "../../types/orderUiStatus";
-import { OrderUiStatusBadgeList } from "./OrderUiStatusBadge";
 import { OrderUiStatusPicker } from "./OrderUiStatusPicker";
+import { OrderUiStatusSelectedGroups } from "./OrderUiStatusSelectedGroups";
 import {
   buildOrderUiStatusBriefById,
   buildOrderUiStatusNameById,
@@ -39,7 +39,8 @@ export type OrderUiStatusFieldProps = {
 };
 
 /**
- * Shared status field: colored badges → click opens popover with {@link OrderUiStatusPicker}.
+ * Shared status field: selected statuses grouped by NOWE / W TOKU / ZAKOŃCZONE →
+ * click opens popover with {@link OrderUiStatusPicker}.
  * Used by packing settings and order automations (single source of status selection UI).
  */
 export function OrderUiStatusField({
@@ -135,7 +136,7 @@ export function OrderUiStatusField({
         aria-haspopup="listbox"
         aria-expanded={open}
         aria-disabled={disabled || undefined}
-        className={`flex min-h-10 w-full cursor-pointer items-center gap-2 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-left text-sm text-slate-900 outline-none transition hover:border-slate-300 focus-visible:ring-2 focus-visible:ring-blue-500/40 ${
+        className={`flex min-h-10 w-full cursor-pointer items-start gap-2 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-left text-sm text-slate-900 outline-none transition hover:border-slate-300 focus-visible:ring-2 focus-visible:ring-blue-500/40 ${
           disabled ? "cursor-not-allowed opacity-60" : ""
         } ${open ? "border-slate-300 ring-2 ring-blue-500/30" : ""}`}
         {...getReferenceProps({
@@ -154,23 +155,26 @@ export function OrderUiStatusField({
           },
         })}
       >
-        <span className="min-w-0 flex-1">
+        <span className="min-w-0 flex-1 py-0.5">
           {chipStatuses.length > 0 ? (
-            <OrderUiStatusBadgeList
+            <OrderUiStatusSelectedGroups
               statuses={chipStatuses}
               removable={!disabled}
-              onRemove={(index) => {
+              onRemove={(statusId, index) => {
                 if (multi) {
-                  const next = selectedIds.filter((_, i) => i !== index);
+                  const next =
+                    statusId != null
+                      ? selectedIds.filter((id) => id !== statusId)
+                      : selectedIds.filter((_, i) => i !== index);
                   onSelectedIdsChange?.(next);
                   return;
                 }
                 onPick?.(null);
               }}
-              onBadgeClick={(index) => {
+              onBadgeClick={(statusId, index) => {
                 if (disabled) return;
                 setOpen(true);
-                const id = selectedIds[index];
+                const id = statusId ?? selectedIds[index];
                 if (id != null) setFocusStatusId(id);
               }}
             />
@@ -179,7 +183,7 @@ export function OrderUiStatusField({
           )}
         </span>
         <ChevronDown
-          className={`h-4 w-4 shrink-0 text-slate-400 transition ${open ? "rotate-180" : ""}`}
+          className={`mt-2 h-4 w-4 shrink-0 text-slate-400 transition ${open ? "rotate-180" : ""}`}
           strokeWidth={2}
           aria-hidden
         />

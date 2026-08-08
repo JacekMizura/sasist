@@ -13,3 +13,11 @@ export {
   buildOrderUiStatusNameById,
 } from "./automation/buildOrderUiStatusNameById";
 export { OrderUiStatusBadge, OrderUiStatusBadgeList } from "./OrderUiStatusBadge";
+export {
+  OrderUiStatusSelectedGroups,
+  groupOrderUiStatusesByMainGroup,
+} from "./OrderUiStatusSelectedGroups";
+export type {
+  OrderUiStatusSelectedGroupsProps,
+  OrderUiStatusSelectedItem,
+} from "./OrderUiStatusSelectedGroups";

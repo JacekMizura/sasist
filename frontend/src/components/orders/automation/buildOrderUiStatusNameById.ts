@@ -15,7 +15,8 @@ export function buildOrderUiStatusBriefById(
         id: s.id,
         name,
         color: s.color,
-        main_group: s.main_group,
+        // Prefer panel group block — selected chips group by NEW / IN_PROGRESS / DONE.
+        main_group: g.main_group ?? s.main_group,
         badge_color: s.badge_color ?? null,
         background_color: s.background_color ?? null,
         text_color: s.text_color ?? null,

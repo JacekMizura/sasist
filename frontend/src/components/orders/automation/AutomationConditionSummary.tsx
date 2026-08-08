@@ -5,7 +5,7 @@ import {
   isMultiValueConditionField,
   migrateConditionValue,
 } from "../../../utils/orderAutomationConditionUtils";
-import { OrderUiStatusBadgeList } from "../OrderUiStatusBadge";
+import { OrderUiStatusSelectedGroups } from "../OrderUiStatusSelectedGroups";
 import { AutomationValueBadges, type AutomationBadgeTone } from "./AutomationValueBadges";
 import {
   fallbackOrderUiStatusBrief,
@@ -56,7 +56,7 @@ export function AutomationConditionSummary({
       {useBadges ? (
         parts.valueLabels.length > 0 ? (
           isOrderStatus ? (
-            <OrderUiStatusBadgeList statuses={orderStatusBriefs} fitToWidth={fitToWidth} />
+            <OrderUiStatusSelectedGroups statuses={orderStatusBriefs} compact />
           ) : (
             <AutomationValueBadges labels={parts.valueLabels} fitToWidth={fitToWidth} />
           )
