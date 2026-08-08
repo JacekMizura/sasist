@@ -25,7 +25,7 @@ const ICONS: Record<string, { icon: LucideIcon; iconClassName: string }> = {
 /** DOM ids — keep in sync with packing panel section ids. Nav order follows canonical vocabulary. */
 export const WMS_PACKING_SETTINGS_NAV_SECTIONS: WmsSettingsSectionConfig[] = [
   { id: "wms-pack-permissions", label: WMS_SETTINGS_CANONICAL_SECTION.general, ...ICONS["wms-pack-permissions"] },
-  { id: "wms-pack-workflow", label: WMS_SETTINGS_CANONICAL_SECTION.workflow, ...ICONS["wms-pack-workflow"] },
+  { id: "wms-pack-workflow", label: "Statusy procesu", ...ICONS["wms-pack-workflow"] },
   { id: "wms-pack-appearance", label: WMS_SETTINGS_CANONICAL_SECTION.view, ...ICONS["wms-pack-appearance"] },
   { id: "wms-pack-automation", label: WMS_SETTINGS_CANONICAL_SECTION.automation, ...ICONS["wms-pack-automation"] },
   { id: "wms-pack-documents", label: WMS_SETTINGS_CANONICAL_SECTION.integrations, ...ICONS["wms-pack-documents"] },

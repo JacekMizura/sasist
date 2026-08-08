@@ -1,5 +1,7 @@
 ﻿## Active
 
-**ETAP 3A PPWR foundation (2026-08-08):** Domain contract + Carton/PackagingMaterial PPWR fields + ProductSalesPackaging + product UI tab + WM PPWR projection. No composition/void/consumables/hub.
+**Ustawienia Pakowanie UI audit labels (2026-08-08):** Opcje oznaczone BRAK FUNKCJONALNOŚCI / CZĘŚCIOWO WDROŻONE + PL copy. Bez implementacji brakujących funkcji.
 
-**Next:** composition lines; void/fill; packing consumables; full PPWR compliance later.
+**ETAP 3A PPWR:** Domain contract + ProductSalesPackaging.
+
+**Next:** implementacja wybranych ustawień pakowania pojedynczo.

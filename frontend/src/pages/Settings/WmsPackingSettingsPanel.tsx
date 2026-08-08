@@ -46,6 +46,11 @@ import { WMS_PACKING_SETTINGS_NAV_SECTIONS } from "./wmsPackingSettingsNavSectio
 import { wmsSettingsTokens } from "./wmsSettingsTokens";
 import { WmsSettingField } from "./settingsSearch";
 import { WMS_SETTING_DATA_ATTR } from "./settingsSearch/navigateToSetting";
+import {
+  PackingCapabilityBadge,
+  PackingFieldLabel,
+  type PackingSettingCapability,
+} from "./packingSettingCapability";
 
 type LabelTemplateOption = { id: number; name: string };
 
@@ -53,6 +58,9 @@ const selectClass = wmsSettingsTokens.select;
 const numberInputClass = wmsSettingsTokens.input.replace("max-w-md", "max-w-xs") + " tabular-nums";
 const textInputClass = wmsSettingsTokens.input;
 const checkboxClass = wmsSettingsTokens.checkbox;
+
+const CAP_NONE: PackingSettingCapability = "none";
+const CAP_PARTIAL: PackingSettingCapability = "partial";
 
 function stableStringify(v: unknown): string {
   if (v === null || v === undefined) return JSON.stringify(v);
@@ -142,6 +150,8 @@ function BoolRow({
   title,
   disabled,
   settingId,
+  capability,
+  capabilityNote,
 }: {
   label: string;
   checked: boolean;
@@ -150,6 +160,8 @@ function BoolRow({
   title?: string;
   disabled?: boolean;
   settingId?: string;
+  capability?: PackingSettingCapability;
+  capabilityNote?: string;
 }) {
   return (
     <label
@@ -166,6 +178,11 @@ function BoolRow({
       />
       <span className="min-w-0 flex-1">
         <span className="block text-sm font-medium text-slate-800">{label}</span>
+        {capability ? (
+          <span className="mt-1 block">
+            <PackingCapabilityBadge kind={capability} note={capabilityNote} />
+          </span>
+        ) : null}
         {help ? <Help>{help}</Help> : null}
       </span>
     </label>
@@ -467,7 +484,7 @@ const WmsPackingSettingsPanel = forwardRef<
               >
                 <FieldGrid>
                   <WmsSettingField settingId="packing.layout_mode" className="block text-sm font-medium text-slate-700">
-                    Tryb układu
+                    <PackingFieldLabel capability={CAP_NONE}>Tryb układu</PackingFieldLabel>
                     <select
                       className={selectClass}
                       value={extended.layoutMode}
@@ -481,7 +498,7 @@ const WmsPackingSettingsPanel = forwardRef<
                     settingId="packing.automation_buttons_position"
                     className="block text-sm font-medium text-slate-700"
                   >
-                    Pozycja przycisków automatyzacji
+                    <PackingFieldLabel capability={CAP_NONE}>Pozycja przycisków automatyzacji</PackingFieldLabel>
                     <select
                       className={selectClass}
                       value={extended.automationButtonsPosition}
@@ -501,7 +518,7 @@ const WmsPackingSettingsPanel = forwardRef<
                     settingId="packing.product_display_mode"
                     className="block text-sm font-medium text-slate-700 sm:col-span-2"
                   >
-                    Lista produktów (widok siatki / listy)
+                    <PackingFieldLabel capability={CAP_NONE}>Lista produktów (widok siatki / listy)</PackingFieldLabel>
                     <select
                       className={selectClass}
                       value={extended.productDisplayMode}
@@ -523,7 +540,7 @@ const WmsPackingSettingsPanel = forwardRef<
               >
                 <FieldGrid>
                   <WmsSettingField settingId="packing.customer_comment_style" className="block text-sm font-medium text-slate-700">
-                    Komentarz klienta
+                    <PackingFieldLabel capability={CAP_NONE}>Komentarz klienta</PackingFieldLabel>
                     <select
                       className={selectClass}
                       value={extended.customerCommentStyle}
@@ -536,7 +553,7 @@ const WmsPackingSettingsPanel = forwardRef<
                     </select>
                   </WmsSettingField>
                   <WmsSettingField settingId="packing.sales_document_preview" className="block text-sm font-medium text-slate-700">
-                    Podgląd dokumentu sprzedaży
+                    <PackingFieldLabel capability={CAP_NONE}>Podgląd dokumentu sprzedaży</PackingFieldLabel>
                     <select
                       className={selectClass}
                       value={extended.salesDocumentPreview}
@@ -555,7 +572,8 @@ const WmsPackingSettingsPanel = forwardRef<
                     label="Dodatkowa lista spakowanych produktów"
                     checked={extended.packedProductsExtraList}
                     onChange={(v) => patchExtended("packedProductsExtraList", v)}
-                    help="Symulacja — logika backendu w kolejnej iteracji."
+                    capability={CAP_NONE}
+                    help="Opcja przygotowana na późniejsze wdrożenie."
                   />
                 </div>
               </Subsection>
@@ -570,7 +588,7 @@ const WmsPackingSettingsPanel = forwardRef<
                     settingId="packing.location_badge_position"
                     className="block text-sm font-medium text-slate-700"
                   >
-                    Pozycja plakietki lokalizacji
+                    <PackingFieldLabel capability={CAP_NONE}>Pozycja plakietki lokalizacji</PackingFieldLabel>
                     <select
                       className={selectClass}
                       value={extended.locationBadgePosition}
@@ -594,22 +612,25 @@ const WmsPackingSettingsPanel = forwardRef<
                     label="Pokazuj zdjęcie produktu"
                     checked={extended.showProductImage}
                     onChange={(v) => patchExtended("showProductImage", v)}
+                    capability={CAP_NONE}
                   />
                   <BoolRow
                     settingId="packing.show_product_location"
                     label="Pokazuj lokalizację produktu"
                     checked={extended.showProductLocation}
                     onChange={(v) => patchExtended("showProductLocation", v)}
+                    capability={CAP_NONE}
                   />
                   <BoolRow
                     settingId="packing.move_packed_to_bottom"
                     label="Przenieś spakowane na dół listy"
                     checked={extended.movePackedToBottom}
                     onChange={(v) => patchExtended("movePackedToBottom", v)}
+                    capability={CAP_NONE}
                   />
                 </div>
                 <p className="mb-3 mt-4 text-xs text-slate-500">
-                  Pola stanu, EAN, SKU i numeru katalogowego — zapis w API (<strong>interface_display</strong>).
+                  Pola stanu, EAN, SKU i numeru katalogowego zapisują się na serwerze i sterują widocznością na ekranie pakowania.
                 </p>
                 <div className="grid gap-3 sm:grid-cols-2">
                   {(
@@ -623,29 +644,50 @@ const WmsPackingSettingsPanel = forwardRef<
                     <BoolRow
                       key={k}
                       settingId={settingId}
-                      label={`${label} (API)`}
+                      label={label}
                       checked={Boolean(effectiveDraft.interface_display[k])}
                       onChange={() => toggleInterfaceField(k)}
                     />
                   ))}
                 </div>
                 <div className="mt-4 space-y-3 border-t border-slate-200/80 pt-4">
-                  <BoolRow label="Pokaż podpis / uwagi na linii" checked={extended.showSignature} onChange={(v) => patchExtended("showSignature", v)} />
-                  <BoolRow label="Pokaż cenę" checked={extended.showPrice} onChange={(v) => patchExtended("showPrice", v)} />
-                  <BoolRow label="Informacja o zestawie (bundle)" checked={extended.showBundleInfo} onChange={(v) => patchExtended("showBundleInfo", v)} />
+                  <BoolRow
+                    label="Pokaż podpis / uwagi na linii"
+                    checked={extended.showSignature}
+                    onChange={(v) => patchExtended("showSignature", v)}
+                    capability={CAP_NONE}
+                  />
+                  <BoolRow
+                    label="Pokaż cenę"
+                    checked={extended.showPrice}
+                    onChange={(v) => patchExtended("showPrice", v)}
+                    capability={CAP_NONE}
+                  />
+                  <BoolRow
+                    label="Informacja o zestawie"
+                    checked={extended.showBundleInfo}
+                    onChange={(v) => patchExtended("showBundleInfo", v)}
+                    capability={CAP_NONE}
+                  />
                   <BoolRow
                     label="Nazwa produktu podczas pakowania"
                     checked={extended.showProductNameDuringPacking}
                     onChange={(v) => patchExtended("showProductNameDuringPacking", v)}
+                    capability={CAP_NONE}
                   />
-                  <BoolRow label="Skracaj bardzo długie nazwy" checked={extended.truncateLongNames} onChange={(v) => patchExtended("truncateLongNames", v)} />
+                  <BoolRow
+                    label="Skracaj bardzo długie nazwy"
+                    checked={extended.truncateLongNames}
+                    onChange={(v) => patchExtended("truncateLongNames", v)}
+                    capability={CAP_NONE}
+                  />
                 </div>
               </Subsection>
 
               <Subsection title="D. Widok listy zamówień" description="Układ listy, liczba rekordów i kolumny podglądu zamówienia.">
                 <FieldGrid>
                   <WmsSettingField settingId="packing.orders_list_layout" className="block text-sm font-medium text-slate-700">
-                    Układ listy zamówień
+                    <PackingFieldLabel capability={CAP_NONE}>Układ listy zamówień</PackingFieldLabel>
                     <select
                       className={selectClass}
                       value={extended.ordersListLayout}
@@ -659,7 +701,7 @@ const WmsPackingSettingsPanel = forwardRef<
                     </select>
                   </WmsSettingField>
                   <label className="block text-sm font-medium text-slate-700">
-                    Początkowa liczba zamówień
+                    <PackingFieldLabel capability={CAP_NONE}>Początkowa liczba zamówień</PackingFieldLabel>
                     <input
                       type="number"
                       min={5}
@@ -675,29 +717,52 @@ const WmsPackingSettingsPanel = forwardRef<
                     label="Miniaturka produktu na liście zamówień"
                     checked={extended.showProductImageInOrders}
                     onChange={(v) => patchExtended("showProductImageInOrders", v)}
+                    capability={CAP_NONE}
                   />
-                  <BoolRow label="SKU na liście zamówień" checked={extended.showSKUInOrders} onChange={(v) => patchExtended("showSKUInOrders", v)} />
-                  <BoolRow label="EAN na liście zamówień" checked={extended.showEANInOrders} onChange={(v) => patchExtended("showEANInOrders", v)} />
+                  <BoolRow
+                    label="SKU na liście zamówień"
+                    checked={extended.showSKUInOrders}
+                    onChange={(v) => patchExtended("showSKUInOrders", v)}
+                    capability={CAP_NONE}
+                  />
+                  <BoolRow
+                    label="EAN na liście zamówień"
+                    checked={extended.showEANInOrders}
+                    onChange={(v) => patchExtended("showEANInOrders", v)}
+                    capability={CAP_NONE}
+                  />
                   <BoolRow
                     label="Numer katalogowy na liście zamówień"
                     checked={extended.showCatalogNumberInOrders}
                     onChange={(v) => patchExtended("showCatalogNumberInOrders", v)}
+                    capability={CAP_NONE}
                   />
                   <BoolRow
                     label="Skracaj długie nazwy (lista zamówień)"
                     checked={extended.truncateNamesInOrders}
                     onChange={(v) => patchExtended("truncateNamesInOrders", v)}
+                    capability={CAP_NONE}
                   />
-                  <BoolRow label="Pokazuj już spakowane" checked={extended.showPackedOrders} onChange={(v) => patchExtended("showPackedOrders", v)} />
+                  <BoolRow
+                    label="Pokazuj już spakowane"
+                    checked={extended.showPackedOrders}
+                    onChange={(v) => patchExtended("showPackedOrders", v)}
+                    capability={CAP_NONE}
+                  />
                 </div>
               </Subsection>
             </div>
           </SectionCard>
 
-          <SectionCard id="wms-pack-workflow" title="Workflow" summary="Powiązanie statusów panelu z procesem pakowania.">
+          <SectionCard id="wms-pack-workflow" title="Statusy procesu" summary="Powiązanie statusów panelu z procesem pakowania.">
             <FieldGrid>
               <WmsSettingField settingId="packing.start_status_id" className="block text-sm font-medium text-slate-700">
-                Status na początku pakowania
+                <PackingFieldLabel
+                  capability={CAP_PARTIAL}
+                  capabilityNote="używane po zbieraniu / domknięciu braków, nie jako filtr startu pakowania."
+                >
+                  Status na początku pakowania
+                </PackingFieldLabel>
                 <select
                   className={selectClass}
                   value={effectiveDraft.start_status_id ?? ""}
@@ -727,7 +792,7 @@ const WmsPackingSettingsPanel = forwardRef<
                 </select>
               </WmsSettingField>
               <WmsSettingField settingId="packing.missing_status_id" className="block text-sm font-medium text-slate-700 sm:col-span-2">
-                Status przy brakach
+                <PackingFieldLabel capability={CAP_NONE}>Status przy brakach</PackingFieldLabel>
                 <select
                   className={selectClass}
                   value={effectiveDraft.missing_status_id ?? ""}
@@ -743,8 +808,11 @@ const WmsPackingSettingsPanel = forwardRef<
               </WmsSettingField>
             </FieldGrid>
             <div className="mt-4 border-t border-slate-100 pt-4">
-              <p className="text-sm font-medium text-slate-800">Dozwolone statusy startu (wielokrotny wybór, lokalnie)</p>
-              <Help>W przyszłości walidacja startu pakowania; na razie tylko zapis w przeglądarce.</Help>
+              <p className="text-sm font-medium text-slate-800">Dozwolone statusy startu (wielokrotny wybór)</p>
+              <div className="mt-1">
+                <PackingCapabilityBadge kind={CAP_NONE} />
+              </div>
+              <Help>Zapis lokalny na tej stacji — walidacja startu pakowania będzie w kolejnym wdrożeniu.</Help>
               <div className="mt-2 max-h-48 space-y-2 overflow-y-auto rounded-lg border border-slate-200/90 bg-slate-50/50 p-2">
                 {statusOptions.map((o) => (
                   <label key={o.id} className="flex cursor-pointer items-center gap-2 text-sm text-slate-800">
@@ -774,22 +842,41 @@ const WmsPackingSettingsPanel = forwardRef<
                 <div className="flex flex-col gap-3">
                   {(
                     [
-                      ["generate_shipment", "Generuj przesyłkę"],
-                      ["create_document", "Utwórz dokument sprzedaży"],
-                      ["print_label", "Drukuj etykietę"],
-                      ["print_document", "Drukuj dokument"],
-                      ["change_order_status", "Zmień status zamówienia"],
+                      [
+                        "generate_shipment",
+                        "Generuj przesyłkę",
+                        CAP_PARTIAL,
+                        "krok jest uruchamiany, ale bez realnego połączenia z kurierem.",
+                      ],
+                      ["create_document", "Utwórz dokument sprzedaży", undefined, undefined],
+                      [
+                        "print_label",
+                        "Drukuj etykietę",
+                        CAP_PARTIAL,
+                        "sprawdza szablon i opóźnienie; druk etykiety jest jeszcze w trybie zastępczym.",
+                      ],
+                      [
+                        "print_document",
+                        "Drukuj dokument",
+                        CAP_PARTIAL,
+                        "krok jest oznaczany, ale druk nie jest wykonywany po stronie serwera.",
+                      ],
+                      [
+                        "change_order_status",
+                        "Zmień status zamówienia",
+                        CAP_PARTIAL,
+                        "przy wyłączeniu status i tak może zostać ustawiony heurystycznie.",
+                      ],
                     ] as const
-                  ).map(([k, label]) => (
-                    <label key={k} className="flex cursor-pointer items-center gap-3 text-sm text-slate-800">
-                      <input
-                        type="checkbox"
-                        className="h-4 w-4 rounded border-slate-300 text-blue-600"
-                        checked={Boolean(effectiveDraft.auto_actions[k])}
-                        onChange={() => toggleAction(k)}
-                      />
-                      {label}
-                    </label>
+                  ).map(([k, label, capability, capabilityNote]) => (
+                    <BoolRow
+                      key={k}
+                      label={label}
+                      checked={Boolean(effectiveDraft.auto_actions[k])}
+                      onChange={() => toggleAction(k)}
+                      capability={capability}
+                      capabilityNote={capabilityNote}
+                    />
                   ))}
                 </div>
               </Subsection>
@@ -798,7 +885,13 @@ const WmsPackingSettingsPanel = forwardRef<
                 title="Sposób wykonania"
                 description="Decyduje, czy wybrane czynności mają uruchamiać się od razu, czy tylko czekać na operatora, albo użyć trybu testowego przesyłki."
               >
-                <div className="flex flex-col gap-2">
+                <div className="mb-2">
+                  <PackingCapabilityBadge kind={CAP_NONE} />
+                </div>
+                <Help>
+                  Te przełączniki zapisują się lokalnie. Produkcyjny przebieg po pakowaniu sterują opcje „Czynności po zakończeniu pakowania” powyżej (zapis na serwerze).
+                </Help>
+                <div className="mt-2 flex flex-col gap-2">
                   {(
                     [
                       ["automatic", "Wykonuj automatycznie", "Po pakowaniu uruchamiane są zaznaczone poniżej zachowania szczegółowe (druk, dokument itd.)."],
@@ -862,16 +955,37 @@ const WmsPackingSettingsPanel = forwardRef<
                       }
                       checked={extended.autoGenerateShipment}
                       onChange={(v) => patchExtended("autoGenerateShipment", v)}
+                      capability={CAP_NONE}
                       help={
                         extended.executionMode === "simulation"
-                          ? "Symulacja nie zastępuje produkcyjnego utworzenia przesyłki — służy do ćwiczeń i testów na stanowisku."
-                          : "Jeśli integracja kuriera jest wyłączona lub środowisko testowe, może działać jak symulacja — ustaw wtedy tryb „Symulacji” powyżej, aby uniknąć nieporozumień."
+                          ? "Preferencja lokalna — nie zastępuje produkcyjnego utworzenia przesyłki."
+                          : "Preferencja lokalna. Produkcyjną przesyłkę steruje opcja „Generuj przesyłkę” powyżej."
                       }
                     />
-                    <BoolRow label="Automatycznie utwórz dokument sprzedaży" checked={extended.autoCreateSalesDocument} onChange={(v) => patchExtended("autoCreateSalesDocument", v)} />
-                    <BoolRow label="Automatycznie zmień status zamówienia" checked={extended.autoChangeOrderStatus} onChange={(v) => patchExtended("autoChangeOrderStatus", v)} />
-                    <BoolRow label="Automatyczny druk przesyłki (etykieta kurierska)" checked={extended.autoPrintShipment} onChange={(v) => patchExtended("autoPrintShipment", v)} />
-                    <BoolRow label="Automatyczny druk dokumentu sprzedaży" checked={extended.autoPrintSalesDocument} onChange={(v) => patchExtended("autoPrintSalesDocument", v)} />
+                    <BoolRow
+                      label="Automatycznie utwórz dokument sprzedaży"
+                      checked={extended.autoCreateSalesDocument}
+                      onChange={(v) => patchExtended("autoCreateSalesDocument", v)}
+                      capability={CAP_NONE}
+                    />
+                    <BoolRow
+                      label="Automatycznie zmień status zamówienia"
+                      checked={extended.autoChangeOrderStatus}
+                      onChange={(v) => patchExtended("autoChangeOrderStatus", v)}
+                      capability={CAP_NONE}
+                    />
+                    <BoolRow
+                      label="Automatyczny druk przesyłki (etykieta kurierska)"
+                      checked={extended.autoPrintShipment}
+                      onChange={(v) => patchExtended("autoPrintShipment", v)}
+                      capability={CAP_NONE}
+                    />
+                    <BoolRow
+                      label="Automatyczny druk dokumentu sprzedaży"
+                      checked={extended.autoPrintSalesDocument}
+                      onChange={(v) => patchExtended("autoPrintSalesDocument", v)}
+                      capability={CAP_NONE}
+                    />
                   </div>
                 </Subsection>
               ) : null}
@@ -888,36 +1002,44 @@ const WmsPackingSettingsPanel = forwardRef<
                     patchExtended("autoPrintShipment", v);
                     patchExtended("autoPrintSalesDocument", v);
                   }}
+                  capability={CAP_NONE}
                   help={
                     extended.executionMode === "prepare_only"
                       ? "Niedostępne w trybie „Tylko przygotuj” — druk uruchamia operator ręcznie."
-                      : "Ustawia jednocześnie automatyczny druk etykiety przesyłki i dokumentu sprzedaży. Aby ustawić każdą opcję osobno, rozwiń sekcję szczegółów powyżej."
+                      : "Ustawia jednocześnie lokalne opcje druku etykiety i dokumentu. Aby ustawić każdą osobno, użyj szczegółów powyżej."
                   }
                 />
                 <p className="mt-4 text-sm font-medium text-slate-800">Po zakończeniu czynności</p>
                 <Help>
-                  „Wróć na listę” jest zapisywane w ustawieniach magazynu. Opcja „Następne zamówienie” działa w interfejsie pakowania na tej stacji (preferencja lokalna).
+                  „Wróć na listę” zapisuje się na serwerze. „Następne zamówienie” jest na razie tylko preferencją lokalną.
                 </Help>
                 <div className="mt-2 flex flex-col gap-2">
                   {(
                     [
-                      ["stay_here", "Zostań przy bieżącym zamówieniu"],
-                      ["return_to_list", "Wróć na listę zamówień"],
-                      ["next_order", "Przejdź do następnego zamówienia"],
+                      ["stay_here", "Zostań przy bieżącym zamówieniu", undefined, undefined],
+                      ["return_to_list", "Wróć na listę zamówień", undefined, undefined],
+                      ["next_order", "Przejdź do następnego zamówienia", CAP_NONE, undefined],
                     ] as const
-                  ).map(([value, label]) => (
+                  ).map(([value, label, capability]) => (
                     <label
                       key={value}
-                      className="flex cursor-pointer items-center gap-3 rounded-lg border border-slate-200/80 bg-slate-50/40 px-3 py-2.5 text-sm text-slate-800 hover:bg-slate-50"
+                      className="flex cursor-pointer flex-col gap-1 rounded-lg border border-slate-200/80 bg-slate-50/40 px-3 py-2.5 text-sm text-slate-800 hover:bg-slate-50"
                     >
-                      <input
-                        type="radio"
-                        name="after-actions-behavior"
-                        className="h-4 w-4 border-slate-300 text-blue-600"
-                        checked={extended.afterActionsBehavior === value}
-                        onChange={() => patchExtended("afterActionsBehavior", value)}
-                      />
-                      {label}
+                      <span className="flex items-center gap-3">
+                        <input
+                          type="radio"
+                          name="after-actions-behavior"
+                          className="h-4 w-4 border-slate-300 text-blue-600"
+                          checked={extended.afterActionsBehavior === value}
+                          onChange={() => patchExtended("afterActionsBehavior", value)}
+                        />
+                        <span className="font-medium">{label}</span>
+                      </span>
+                      {capability ? (
+                        <span className="pl-7">
+                          <PackingCapabilityBadge kind={capability} />
+                        </span>
+                      ) : null}
                     </label>
                   ))}
                 </div>
@@ -925,10 +1047,10 @@ const WmsPackingSettingsPanel = forwardRef<
             </div>
           </SectionCard>
 
-          <SectionCard id="wms-pack-documents" title="Integracje" summary="Typ dokumentu (lokalnie) + serie z API.">
+          <SectionCard id="wms-pack-documents" title="Integracje" summary="Typ dokumentu (lokalnie) + serie zapisane na serwerze.">
             <FieldGrid>
               <label className="block text-sm font-medium text-slate-700">
-                Typ dokumentu (preferencja, lokalnie)
+                <PackingFieldLabel capability={CAP_NONE}>Typ dokumentu (preferencja lokalna)</PackingFieldLabel>
                 <select
                   className={selectClass}
                   value={extended.salesDocumentType}
@@ -948,8 +1070,14 @@ const WmsPackingSettingsPanel = forwardRef<
                 label="Pomiń A4 dla paragonu przy drukarce fiskalnej"
                 checked={extended.skipA4ReceiptWhenFiscalPrinter}
                 onChange={(v) => patchExtended("skipA4ReceiptWhenFiscalPrinter", v)}
+                capability={CAP_NONE}
               />
-              <BoolRow label="Drukuj kopię dokumentu sprzedaży" checked={extended.printCopyOfSalesDoc} onChange={(v) => patchExtended("printCopyOfSalesDoc", v)} />
+              <BoolRow
+                label="Drukuj kopię dokumentu sprzedaży"
+                checked={extended.printCopyOfSalesDoc}
+                onChange={(v) => patchExtended("printCopyOfSalesDoc", v)}
+                capability={CAP_NONE}
+              />
             </div>
             <div className="mt-4 border-t border-slate-100 pt-4">
               <p className="text-sm font-semibold text-slate-800">Serie dokumentów</p>
@@ -1022,7 +1150,7 @@ const WmsPackingSettingsPanel = forwardRef<
           <SectionCard
             id="wms-pack-labels"
             title="Drukowanie"
-            summary="Przesyłki, limity paczek, etykiety zastępcze (lokalnie) oraz reguły etykiet."
+            summary="Przesyłki, limity paczek oraz lokalne preferencje etykiety zastępczej."
           >
             <div className="space-y-5">
               <Subsection title="Przesyłka i paczki" description="Walidacja, wiele paczek, limity etykiet.">
@@ -1031,25 +1159,34 @@ const WmsPackingSettingsPanel = forwardRef<
                     label="Wymuś skan szablonu przesyłki"
                     checked={extended.forceScanShipmentTemplate}
                     onChange={(v) => patchExtended("forceScanShipmentTemplate", v)}
+                    capability={CAP_NONE}
                   />
                   <BoolRow
                     label="Wymagaj potwierdzenia przed utworzeniem przesyłki"
                     checked={extended.requireConfirmBeforeShipment}
                     onChange={(v) => patchExtended("requireConfirmBeforeShipment", v)}
+                    capability={CAP_NONE}
                   />
-                  <BoolRow label="Wiele paczek (multi-parcel)" checked={extended.enableMultiParcel} onChange={(v) => patchExtended("enableMultiParcel", v)} />
+                  <BoolRow
+                    label="Wiele paczek"
+                    checked={extended.enableMultiParcel}
+                    onChange={(v) => patchExtended("enableMultiParcel", v)}
+                    capability={CAP_NONE}
+                  />
                   <BoolRow
                     label="Wyłącz automatyczne pobieranie liczby paczek"
                     checked={extended.autoFetchParcelCountDisabled}
                     onChange={(v) => patchExtended("autoFetchParcelCountDisabled", v)}
+                    capability={CAP_NONE}
                   />
                   <BoolRow
                     label="Limituj etykiety przesyłki do ilości"
                     checked={extended.limitShipmentLabelsToQty}
                     onChange={(v) => patchExtended("limitShipmentLabelsToQty", v)}
+                    capability={CAP_NONE}
                   />
                   <label className="block text-sm font-medium text-slate-700" title="Próg paczek bez potwierdzenia kierownika">
-                    Limit paczek bez potwierdzenia kierownika
+                    <PackingFieldLabel capability={CAP_NONE}>Limit paczek bez potwierdzenia kierownika</PackingFieldLabel>
                     <input
                       type="number"
                       min={0}
@@ -1068,11 +1205,11 @@ const WmsPackingSettingsPanel = forwardRef<
               </Subsection>
               <Subsection
                 title="Etykieta zastępcza (preferencje lokalne)"
-                description="Szablon i opóźnienie zapisywane w przeglądarce — osobno od etykiety zastępczej w API (asystent pakowania)."
+                description="Szablon i opóźnienie na tej stacji — osobno od etykiety zastępczej zapisanej na serwerze w sekcji Automatyzacja."
               >
                 <FieldGrid>
                   <label className="block text-sm font-medium text-slate-700" title="Identyfikator lub nazwa szablonu zastępczego">
-                    Szablon etykiety zastępczej
+                    <PackingFieldLabel capability={CAP_NONE}>Szablon etykiety zastępczej</PackingFieldLabel>
                     <input
                       type="text"
                       className={textInputClass}
@@ -1082,7 +1219,7 @@ const WmsPackingSettingsPanel = forwardRef<
                     />
                   </label>
                   <label className="block text-sm font-medium text-slate-700" title="Opóźnienie przed akcją etykiety zastępczej">
-                    Opóźnienie (s)
+                    <PackingFieldLabel capability={CAP_NONE}>Opóźnienie (s)</PackingFieldLabel>
                     <input
                       type="number"
                       min={0}
@@ -1109,40 +1246,62 @@ const WmsPackingSettingsPanel = forwardRef<
                 label="Pakujący ≠ kompletujący"
                 checked={extended.packerIsNotPicker}
                 onChange={(v) => patchExtended("packerIsNotPicker", v)}
-                help="Wymuszenie rozdziału ról (symulacja UI)."
+                capability={CAP_NONE}
+                help="Rozdział ról — przygotowane do późniejszego wdrożenia."
               />
               <BoolRow
                 settingId="packing.require_notes_popup"
                 label="Wymuś okno z notatkami"
                 checked={extended.requireNotesPopup}
                 onChange={(v) => patchExtended("requireNotesPopup", v)}
+                capability={CAP_NONE}
               />
-              <BoolRow label="Pokaż wszystkie notatki" checked={extended.showAllNotes} onChange={(v) => patchExtended("showAllNotes", v)} />
+              <BoolRow
+                label="Pokaż wszystkie notatki"
+                checked={extended.showAllNotes}
+                onChange={(v) => patchExtended("showAllNotes", v)}
+                capability={CAP_NONE}
+              />
               <BoolRow
                 label="Tylko stan z magazynu pakowania"
                 checked={extended.onlyPackagingWarehouseStock}
                 onChange={(v) => patchExtended("onlyPackagingWarehouseStock", v)}
+                capability={CAP_NONE}
               />
               <BoolRow
                 label="Ogranicz szablony do konta zamówienia"
                 checked={extended.restrictTemplatesToOrderAccount}
                 onChange={(v) => patchExtended("restrictTemplatesToOrderAccount", v)}
+                capability={CAP_NONE}
               />
             </div>
           </SectionCard>
 
-          <SectionCard id="wms-pack-assistant" title="Automatyzacja" summary="Przyciski automatyzacji na ekranie pakowania oraz etykieta zastępcza zapisana w ustawieniach magazynu.">
+          <SectionCard
+            id="wms-pack-assistant"
+            title="Automatyzacja"
+            summary="Przyciski na ekranie pakowania oraz etykieta zastępcza zapisana w ustawieniach magazynu."
+          >
             <div className="space-y-3">
               <BoolRow
                 label="Pokazuj przyciski automatyzacji"
                 checked={extended.showAutomationButtons}
                 onChange={(v) => patchExtended("showAutomationButtons", v)}
+                capability={CAP_NONE}
               />
             </div>
             <div className="mt-4 border-t border-slate-100 pt-4">
-              <p className="text-sm font-semibold text-slate-800">Etykieta zastępcza</p>
+              <p className="text-sm font-semibold text-slate-800">Etykieta zastępcza (serwer)</p>
+              <Help>
+                Używana przy czynności „Drukuj etykietę”. Druk jest częściowo wdrożony — szablon i opóźnienie są respektowane, render etykiety jeszcze zastępczy.
+              </Help>
               <label className="mt-2 block text-sm font-medium text-slate-700">
-                Szablon etykiety
+                <PackingFieldLabel
+                  capability={CAP_PARTIAL}
+                  capabilityNote="szablon jest sprawdzany; pełny druk etykiety jeszcze nie."
+                >
+                  Szablon etykiety
+                </PackingFieldLabel>
                 <select
                   className={selectClass}
                   value={effectiveDraft.fallback_label.template_id ?? ""}
@@ -1190,10 +1349,14 @@ const WmsPackingSettingsPanel = forwardRef<
             </div>
           </SectionCard>
 
-          <SectionCard id="wms-pack-advanced" title="Zaawansowane" summary="Magazyn domyślny, szablony legacy, strategia jedno/wielopozycyjne.">
+          <SectionCard
+            id="wms-pack-advanced"
+            title="Zaawansowane"
+            summary="Magazyn domyślny, stare szablony, strategia jedno-/wielopozycyjna."
+          >
             <FieldGrid>
-              <label className="block text-sm font-medium text-slate-700" title="Identyfikator lub nazwa magazynu — placeholder">
-                Główny magazyn pakowania
+              <label className="block text-sm font-medium text-slate-700" title="Identyfikator lub nazwa magazynu">
+                <PackingFieldLabel capability={CAP_NONE}>Główny magazyn pakowania</PackingFieldLabel>
                 <input
                   type="text"
                   className={textInputClass}
@@ -1203,7 +1366,7 @@ const WmsPackingSettingsPanel = forwardRef<
                 />
               </label>
               <label className="block text-sm font-medium text-slate-700">
-                Strategia jedno / wielopozycyjne
+                <PackingFieldLabel capability={CAP_NONE}>Strategia jedno / wielopozycyjne</PackingFieldLabel>
                 <select
                   className={selectClass}
                   value={extended.packingSingleOrMultiItemStrategy}
@@ -1222,9 +1385,10 @@ const WmsPackingSettingsPanel = forwardRef<
             </FieldGrid>
             <div className="mt-4 border-t border-slate-100 pt-4">
               <BoolRow
-                label="Fallback do szablonów legacy"
+                label="Awaryjne użycie starych szablonów"
                 checked={extended.fallbackLegacyTemplates}
                 onChange={(v) => patchExtended("fallbackLegacyTemplates", v)}
+                capability={CAP_NONE}
                 title="Przy braku nowego szablonu użyj starych definicji"
               />
             </div>

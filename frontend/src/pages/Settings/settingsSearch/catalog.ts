@@ -177,27 +177,27 @@ export const WMS_SETTINGS_SEARCH_CATALOG: WmsSettingsSearchEntry[] = [
     keywords: ["układ"],
   }),
 
-  // Packing — Workflow / Automation / General
+  // Packing — Statusy procesu / Automatyzacja / Ogólne
   e({
     id: "packing.start_status_id",
     label: "Status na początku pakowania",
     tabId: "packing",
     sectionId: "wms-pack-workflow",
-    sectionLabel: "Workflow",
+    sectionLabel: "Statusy procesu",
   }),
   e({
     id: "packing.packed_status_id",
     label: "Status po spakowaniu",
     tabId: "packing",
     sectionId: "wms-pack-workflow",
-    sectionLabel: "Workflow",
+    sectionLabel: "Statusy procesu",
   }),
   e({
     id: "packing.missing_status_id",
     label: "Status przy brakach",
     tabId: "packing",
     sectionId: "wms-pack-workflow",
-    sectionLabel: "Workflow",
+    sectionLabel: "Statusy procesu",
   }),
   e({
     id: "packing.auto_generate_shipment",
@@ -244,14 +244,14 @@ export const WMS_SETTINGS_SEARCH_CATALOG: WmsSettingsSearchEntry[] = [
   }),
   e({
     id: "packing.sales_document_type",
-    label: "Typ dokumentu (preferencja, lokalnie)",
+    label: "Typ dokumentu (preferencja lokalna)",
     tabId: "packing",
     sectionId: "wms-pack-documents",
     sectionLabel: "Integracje",
   }),
   e({
     id: "packing.enable_multi_parcel",
-    label: "Wiele paczek (multi-parcel)",
+    label: "Wiele paczek",
     tabId: "packing",
     sectionId: "wms-pack-labels",
     sectionLabel: "Drukowanie",
