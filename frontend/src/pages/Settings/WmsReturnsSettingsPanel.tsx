@@ -231,29 +231,38 @@ export default function WmsReturnsSettingsPanel({ warehouseId }: Props) {
       >
         {loading || loadError ? null : (
           <div className="space-y-4">
-            <label className="flex cursor-pointer items-start gap-2">
-              <input
-                type="checkbox"
-                className="mt-0.5 h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
-                checked={draftPrintLabel}
-                onChange={(e) => setDraftPrintLabel(e.target.checked)}
-              />
-              <span>
+            <label className="flex cursor-pointer items-start justify-between gap-4">
+              <span className="min-w-0 flex-1">
                 <span className={fieldLabel}>Drukuj etykietę po zamknięciu Z-PZ</span>
                 <span className={fieldHint}>
                   Po zamknięciu nośnika zwrotów etykieta trafi na drukarkę WMS (QZ) lub do podglądu PDF.
                 </span>
               </span>
+              <input
+                type="checkbox"
+                className="mt-0.5 h-4 w-4 shrink-0 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                checked={draftPrintLabel}
+                onChange={(e) => setDraftPrintLabel(e.target.checked)}
+              />
             </label>
 
-            <div>
-              <label htmlFor="wms-z-pz-label-template" className={fieldLabel}>
-                Szablon etykiety Z-PZ
-              </label>
-              <p className={fieldHint}>Szablon z modułu etykiet — pola: numer dokumentu, kod kreskowy, pozycje, sztuki.</p>
+            <div className="flex items-start justify-between gap-4">
+              <div className="min-w-0 flex-1">
+                <label htmlFor="wms-z-pz-label-template" className={fieldLabel}>
+                  Szablon etykiety Z-PZ
+                </label>
+                <p className={fieldHint}>
+                  Szablon z modułu etykiet — pola: numer dokumentu, kod kreskowy, pozycje, sztuki.
+                </p>
+                {printRequiresTemplate ? (
+                  <p className="mt-1 text-xs font-medium text-amber-800">
+                    Wybierz szablon, aby włączyć automatyczny druk.
+                  </p>
+                ) : null}
+              </div>
               <select
                 id="wms-z-pz-label-template"
-                className={selectCls}
+                className={`${selectCls} mt-0 max-w-xs shrink-0`}
                 value={draftTemplateId ?? ""}
                 disabled={!draftPrintLabel}
                 onChange={(e) => {
@@ -269,9 +278,6 @@ export default function WmsReturnsSettingsPanel({ warehouseId }: Props) {
                   </option>
                 ))}
               </select>
-              {printRequiresTemplate ? (
-                <p className="mt-1 text-xs font-medium text-amber-800">Wybierz szablon, aby włączyć automatyczny druk.</p>
-              ) : null}
             </div>
           </div>
         )}

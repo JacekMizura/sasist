@@ -68,20 +68,20 @@ export function WmsPackagingProposalEngineConfigForm({
   return (
     <div className="space-y-6">
       <div className="rounded-lg border border-slate-100 bg-slate-50/50 p-4">
-        <label className="flex cursor-pointer items-start gap-3">
-          <input
-            type="checkbox"
-            className={checkboxClass}
-            checked={config.packagingSuggestionsEnabled}
-            onChange={(e) => patchConfig({ packagingSuggestionsEnabled: e.target.checked })}
-          />
-          <span className="min-w-0">
+        <label className="flex cursor-pointer items-start justify-between gap-4">
+          <span className="min-w-0 flex-1">
             <span className="block text-sm font-semibold text-slate-900">Włącz propozycje opakowań dla zamówień</span>
             <Help>
               Globalny przełącznik: gdy wyłączony, ani Smart Matching, ani 3D Matching nie aktywują silnika propozycji w przepływie
               realizacji (do podpięcia pod backend).
             </Help>
           </span>
+          <input
+            type="checkbox"
+            className={checkboxClass}
+            checked={config.packagingSuggestionsEnabled}
+            onChange={(e) => patchConfig({ packagingSuggestionsEnabled: e.target.checked })}
+          />
         </label>
       </div>
 
@@ -141,14 +141,14 @@ export function WmsPackagingProposalEngineConfigForm({
                 const on = config.proposalInitStatusIds.includes(s.id);
                 return (
                   <li key={s.id}>
-                    <label className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 hover:bg-white/80">
+                    <label className="flex cursor-pointer items-center justify-between gap-3 rounded-md px-2 py-1.5 hover:bg-white/80">
+                      <span className="text-sm text-slate-800">{orderPanelStatusSelectLabel(s)}</span>
                       <input
                         type="checkbox"
                         className={checkboxClass}
                         checked={on}
                         onChange={(e) => toggleProposalInit(s.id, e.target.checked)}
                       />
-                      <span className="text-sm text-slate-800">{orderPanelStatusSelectLabel(s)}</span>
                     </label>
                   </li>
                 );
@@ -165,14 +165,16 @@ export function WmsPackagingProposalEngineConfigForm({
           Możesz zdefiniować <strong className="font-medium text-slate-700">wiele statusów</strong>, przy których dozwolone jest
           automatyczne tworzenie etykiet.
         </Help>
-        <label className="mt-3 flex cursor-pointer items-start gap-3">
+        <label className="mt-3 flex cursor-pointer items-start justify-between gap-4">
+          <span className="min-w-0 flex-1 text-sm font-medium text-slate-800">
+            Włącz automatyczne generowanie etykiet po dopasowaniu
+          </span>
           <input
             type="checkbox"
             className={checkboxClass}
             checked={config.autoLabelAfterMatchEnabled}
             onChange={(e) => patchConfig({ autoLabelAfterMatchEnabled: e.target.checked })}
           />
-          <span className="text-sm font-medium text-slate-800">Włącz automatyczne generowanie etykiet po dopasowaniu</span>
         </label>
 
         {config.autoLabelAfterMatchEnabled ? (
@@ -194,14 +196,14 @@ export function WmsPackagingProposalEngineConfigForm({
                     const on = config.autoLabelWorkflowStatusIds.includes(s.id);
                     return (
                       <li key={s.id}>
-                        <label className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 hover:bg-white/80">
+                        <label className="flex cursor-pointer items-center justify-between gap-3 rounded-md px-2 py-1.5 hover:bg-white/80">
+                          <span className="text-sm text-slate-800">{orderPanelStatusSelectLabel(s)}</span>
                           <input
                             type="checkbox"
                             className={checkboxClass}
                             checked={on}
                             onChange={(e) => toggleAutoLabelStatus(s.id, e.target.checked)}
                           />
-                          <span className="text-sm text-slate-800">{orderPanelStatusSelectLabel(s)}</span>
                         </label>
                       </li>
                     );

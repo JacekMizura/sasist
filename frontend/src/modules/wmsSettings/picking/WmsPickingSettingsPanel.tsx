@@ -173,29 +173,33 @@ function BoolRowPicking({
   title?: string;
 }) {
   return (
-    <label className="flex items-start gap-3 cursor-pointer group py-1" title={title}>
-      <div className="relative flex items-center justify-center mt-0.5 shrink-0">
+    <label className="group flex cursor-pointer items-start justify-between gap-4 py-1" title={title}>
+      <span className="min-w-0 flex-1 select-none">
+        <span className="block text-sm font-medium text-slate-700 transition-colors group-hover:text-slate-900">{label}</span>
+        {help ? <HelpPicking>{help}</HelpPicking> : null}
+      </span>
+      <div className="relative mt-0.5 flex shrink-0 items-center justify-center">
         <input
           type="checkbox"
           className="peer sr-only"
           checked={checked}
           onChange={(e) => onChange(e.target.checked)}
         />
-        <div className={`w-5 h-5 rounded border flex items-center justify-center transition-colors
-          ${checked
-            ? 'bg-blue-600 border-blue-600 text-white'
-            : 'bg-white border-slate-300 group-hover:border-blue-400'}`}>
+        <div
+          className={`flex h-5 w-5 items-center justify-center rounded border transition-colors
+          ${
+            checked
+              ? "border-blue-600 bg-blue-600 text-white"
+              : "border-slate-300 bg-white group-hover:border-blue-400"
+          }`}
+        >
           {checked && (
-            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+            <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
             </svg>
           )}
         </div>
       </div>
-      <span className="min-w-0 flex-1 select-none">
-        <span className="block text-sm font-medium text-slate-700 group-hover:text-slate-900 transition-colors">{label}</span>
-        {help ? <HelpPicking>{help}</HelpPicking> : null}
-      </span>
     </label>
   );
 }
@@ -218,9 +222,13 @@ function CustomCheckbox({
   return (
     <label
       {...(settingId ? { "data-wms-setting-id": settingId } : {})}
-      className={`wms-setting-field flex items-start gap-3 cursor-pointer group py-1 rounded-lg ${disabled ? "opacity-50 cursor-not-allowed" : ""}`}
+      className={`wms-setting-field group flex cursor-pointer items-start justify-between gap-4 rounded-lg py-1 ${disabled ? "cursor-not-allowed opacity-50" : ""}`}
     >
-      <div className="relative flex items-center justify-center mt-0.5 shrink-0">
+      <span className="min-w-0 flex-1 select-none">
+        <span className="block text-sm font-semibold text-slate-900">{label}</span>
+        {hint && <span className={`${fieldHintClass} block`}>{hint}</span>}
+      </span>
+      <div className="relative mt-0.5 flex shrink-0 items-center justify-center">
         <input
           type="checkbox"
           className="peer sr-only"
@@ -229,24 +237,20 @@ function CustomCheckbox({
           disabled={disabled}
         />
         <div
-          className={`w-5 h-5 rounded border flex items-center justify-center transition-colors
+          className={`flex h-5 w-5 items-center justify-center rounded border transition-colors
           ${
             checked
-              ? "bg-blue-600 border-blue-600 text-white"
-              : "bg-white border-slate-300 group-hover:border-blue-400"
+              ? "border-blue-600 bg-blue-600 text-white"
+              : "border-slate-300 bg-white group-hover:border-blue-400"
           }`}
         >
           {checked && (
-            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+            <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
             </svg>
           )}
         </div>
       </div>
-      <span className="min-w-0 flex-1 select-none">
-        <span className="block text-sm font-semibold text-slate-900">{label}</span>
-        {hint && <span className={`${fieldHintClass} block`}>{hint}</span>}
-      </span>
     </label>
   );
 }

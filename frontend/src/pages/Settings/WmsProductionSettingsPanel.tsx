@@ -83,14 +83,14 @@ function BoolRow({
   onChange: (v: boolean) => void;
 }) {
   return (
-    <label className="flex items-start gap-3 cursor-pointer py-1.5">
+    <label className="flex cursor-pointer items-start justify-between gap-4 py-1.5">
+      <span className="min-w-0 flex-1 text-sm font-medium text-slate-900">{label}</span>
       <input
         type="checkbox"
-        className="mt-1 h-4 w-4 rounded border-slate-300"
+        className="mt-0.5 h-4 w-4 shrink-0 rounded border-slate-300"
         checked={checked}
         onChange={(e) => onChange(e.target.checked)}
       />
-      <span className="text-sm font-medium text-slate-900">{label}</span>
     </label>
   );
 }
@@ -290,10 +290,13 @@ export default function WmsProductionSettingsPanel({ warehouseId }: Props) {
             ))}
           </select>
         </label>
-        <label className="mt-4 flex max-w-md items-start gap-3">
+        <label className="mt-4 flex max-w-md items-start justify-between gap-4">
+          <span className="min-w-0 flex-1 text-sm text-slate-700">
+            Dopuszczaj lokalizacje sprzedażowe (sklep, ekspozycja, POS) przy rezerwacji materiałów.
+          </span>
           <input
             type="checkbox"
-            className="mt-1 h-4 w-4 rounded border-slate-300"
+            className="mt-1 h-4 w-4 shrink-0 rounded border-slate-300"
             checked={draftReservation.allow_sales_locations}
             onChange={(e) =>
               setDraftReservation((prev) =>
@@ -301,9 +304,6 @@ export default function WmsProductionSettingsPanel({ warehouseId }: Props) {
               )
             }
           />
-          <span className="text-sm text-slate-700">
-            Dopuszczaj lokalizacje sprzedażowe (sklep, ekspozycja, POS) przy rezerwacji materiałów.
-          </span>
         </label>
       </SectionCard>
 

@@ -2,18 +2,24 @@ import { useState, type ReactNode } from "react";
 import { wmsSettingsTokens } from "../wmsSettingsTokens";
 import { WmsSettingsSection } from "../WmsSettingsSection";
 import { WmsSettingField } from "../settingsSearch";
-import { WMS_SETTING_DATA_ATTR } from "../settingsSearch/navigateToSetting";
 import {
   PackingCapabilityBadge,
   type PackingSettingCapability,
 } from "../packingSettingCapability";
 import { SettingInfoButton } from "../SettingInfoButton";
+import {
+  WmsBoolSettingRow,
+  WmsControlSettingRow,
+  wmsSettingCheckboxClass,
+  wmsSettingControlInputClass,
+  wmsSettingControlSelectClass,
+} from "../wmsSettingRow";
 import { PACKING_SETTING_HELP } from "./packingSettingsHelp";
 
-export const selectClass = wmsSettingsTokens.select;
-export const numberInputClass = wmsSettingsTokens.input.replace("max-w-md", "max-w-xs") + " tabular-nums";
-export const textInputClass = wmsSettingsTokens.input;
-export const checkboxClass = wmsSettingsTokens.checkbox;
+export const selectClass = wmsSettingControlSelectClass;
+export const numberInputClass = wmsSettingControlInputClass;
+export const textInputClass = wmsSettingControlSelectClass;
+export const checkboxClass = wmsSettingCheckboxClass;
 
 export const CAP_NONE: PackingSettingCapability = "none";
 export const CAP_PARTIAL: PackingSettingCapability = "partial";
@@ -23,7 +29,8 @@ export function Help({ children }: { children: ReactNode }) {
 }
 
 export function FieldGrid({ children }: { children: ReactNode }) {
-  return <div className={wmsSettingsTokens.fieldGrid}>{children}</div>;
+  /** Single column — label|control rows need full width. */
+  return <div className="space-y-2">{children}</div>;
 }
 
 /** Jedna sekcja nawigacji WMS = jedna karta Sellasist. */
@@ -85,34 +92,26 @@ export function BoolRow({
   const info = infoDescription ?? helpEntry?.description;
   const tip = infoTip ?? helpEntry?.tip;
   return (
-    <div
-      {...(settingId ? { [WMS_SETTING_DATA_ATTR]: settingId } : {})}
-      className={`wms-setting-field rounded-lg border border-transparent px-1 py-1 ${disabled ? "opacity-60" : "hover:bg-slate-50/80"}`}
-    >
-      <label className={`flex min-w-0 items-start gap-3 ${disabled ? "cursor-not-allowed" : "cursor-pointer"}`}>
-        <input
-          type="checkbox"
-          className={checkboxClass}
-          checked={checked}
-          disabled={disabled}
-          onChange={(e) => onChange(e.target.checked)}
-        />
-        <span className="min-w-0 flex-1">
-          <span className="inline text-sm font-medium leading-snug text-slate-800">
-            {label}
-            {info ? (
-              <SettingInfoButton title={label} description={info} tip={tip} />
-            ) : null}
+    <WmsBoolSettingRow
+      settingId={settingId}
+      label={
+        <>
+          {label}
+          {info ? <SettingInfoButton title={label} description={info} tip={tip} /> : null}
+        </>
+      }
+      checked={checked}
+      onChange={onChange}
+      disabled={disabled}
+      hint={help}
+      footer={
+        capability ? (
+          <span className="mt-1 block">
+            <PackingCapabilityBadge kind={capability} note={capabilityNote} />
           </span>
-          {capability ? (
-            <span className="mt-1 block">
-              <PackingCapabilityBadge kind={capability} note={capabilityNote} />
-            </span>
-          ) : null}
-          {help ? <Help>{help}</Help> : null}
-        </span>
-      </label>
-    </div>
+        ) : null
+      }
+    />
   );
 }
 
@@ -141,23 +140,30 @@ export function SelectField({
   const info = helpEntry?.description;
   const tip = helpEntry?.tip;
   return (
-    <WmsSettingField settingId={settingId} className="block text-sm font-medium text-slate-700">
-      <span className="mb-1 block">
-        <span className="inline text-sm font-medium leading-snug text-slate-700">
+    <WmsControlSettingRow
+      settingId={settingId}
+      label={
+        <>
           {label}
           {info ? <SettingInfoButton title={label} description={info} tip={tip} /> : null}
-        </span>
-        {capability ? (
-          <span className="mt-1 block">
-            <PackingCapabilityBadge kind={capability} note={capabilityNote} />
-          </span>
-        ) : null}
-      </span>
+        </>
+      }
+      hint={typeof help === "string" ? help : undefined}
+      footer={
+        <>
+          {capability ? (
+            <span className="mt-1 block">
+              <PackingCapabilityBadge kind={capability} note={capabilityNote} />
+            </span>
+          ) : null}
+          {help && typeof help !== "string" ? <div className="mt-1">{help}</div> : null}
+        </>
+      }
+    >
       <select className={selectClass} value={value} onChange={(e) => onChange(e.target.value)}>
         {children}
       </select>
-      {help ? <div className="mt-1">{help}</div> : null}
-    </WmsSettingField>
+    </WmsControlSettingRow>
   );
 }
 
@@ -179,14 +185,14 @@ export function MethodChecklist({
   return (
     <div className="max-h-56 space-y-1.5 overflow-y-auto rounded-lg border border-slate-200 bg-slate-50/50 p-2">
       {methods.map((m) => (
-        <label key={m.id} className="flex cursor-pointer items-start gap-2 rounded px-1 py-0.5 hover:bg-white">
+        <label key={m.id} className="flex cursor-pointer items-center justify-between gap-3 rounded px-1 py-0.5 hover:bg-white">
+          <span className="text-sm leading-snug text-slate-800">{m.name}</span>
           <input
             type="checkbox"
             className={checkboxClass}
             checked={set.has(m.id)}
             onChange={() => onToggle(m.id)}
           />
-          <span className="text-sm leading-snug text-slate-800">{m.name}</span>
         </label>
       ))}
     </div>
@@ -199,3 +205,6 @@ export { SettingInfoButton as SettingHelpModal } from "../SettingInfoButton";
 export function useCollapsed(defaultCollapsed = false) {
   return useState(defaultCollapsed);
 }
+
+/** Re-export for sections that still import WmsSettingField for custom rows. */
+export { WmsSettingField };

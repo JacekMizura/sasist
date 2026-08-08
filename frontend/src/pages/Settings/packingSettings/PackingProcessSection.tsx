@@ -123,14 +123,17 @@ export function PackingProcessSection({
         ) : (
           <div className="max-h-64 space-y-1.5 overflow-y-auto rounded-lg border border-slate-200 bg-slate-50/50 p-2">
             {statusOptions.map((o) => (
-              <label key={o.id} className="flex cursor-pointer items-start gap-2 rounded px-1 py-0.5 hover:bg-white">
+              <label
+                key={o.id}
+                className="flex cursor-pointer items-center justify-between gap-3 rounded px-1 py-0.5 hover:bg-white"
+              >
+                <span className="text-sm leading-snug text-slate-800">{orderPanelStatusSelectLabel(o)}</span>
                 <input
                   type="checkbox"
                   className={checkboxClass}
                   checked={extended.allowedStartStatusIds.includes(o.id)}
                   onChange={() => toggleAllowedStart(o.id)}
                 />
-                <span className="text-sm leading-snug text-slate-800">{orderPanelStatusSelectLabel(o)}</span>
               </label>
             ))}
           </div>

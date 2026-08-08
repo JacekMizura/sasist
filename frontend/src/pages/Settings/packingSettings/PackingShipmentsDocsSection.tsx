@@ -3,8 +3,8 @@ import type { DocumentSeriesDto } from "../../../api/documentSeriesApi";
 import type { ShippingMethodDto } from "../../../api/shippingMethodsApi";
 import type { WmsPackingExtendedUiSettings } from "../../../types/wmsPackingExtendedUi";
 import type { WmsPackingSettingsRead } from "../../../types/wmsPackingSettings";
-import { PackingFieldLabel } from "../packingSettingCapability";
-import { WmsSettingField } from "../settingsSearch";
+import { PackingCapabilityBadge } from "../packingSettingCapability";
+import { WmsControlSettingRow } from "../wmsSettingRow";
 import {
   BoolRow,
   CAP_NONE,
@@ -263,13 +263,15 @@ export function PackingShipmentsDocsSection({
           </div>
         ) : null}
         <div className="mt-3">
-          <WmsSettingField
+          <WmsControlSettingRow
             settingId="packing.parcel_limit_without_manager"
-            className="block text-sm font-medium text-slate-700"
+            label="Limit paczek bez potwierdzenia kierownika (umowa własna)"
+            footer={
+              <span className="mt-1 block">
+                <PackingCapabilityBadge kind={CAP_NONE} />
+              </span>
+            }
           >
-            <PackingFieldLabel capability={CAP_NONE}>
-              Limit paczek bez potwierdzenia kierownika (umowa własna)
-            </PackingFieldLabel>
             <input
               type="number"
               min={0}
@@ -283,7 +285,7 @@ export function PackingShipmentsDocsSection({
                 }
               }}
             />
-          </WmsSettingField>
+          </WmsControlSettingRow>
         </div>
       </Subsection>
 
@@ -325,8 +327,11 @@ export function PackingShipmentsDocsSection({
               </option>
             ))}
           </SelectField>
-          <WmsSettingField settingId="packing.fallback_label_delay" className="block text-sm font-medium text-slate-700">
-            <PackingFieldLabel>Opóźnienie etykiety zastępczej</PackingFieldLabel>
+          <WmsControlSettingRow
+            settingId="packing.fallback_label_delay"
+            label="Opóźnienie etykiety zastępczej"
+            hint="Czas oczekiwania (sekundy) przed drukiem etykiety zastępczej."
+          >
             <input
               type="number"
               min={0}
@@ -348,8 +353,7 @@ export function PackingShipmentsDocsSection({
                 });
               }}
             />
-            <Help>Czas oczekiwania (sekundy) przed drukiem etykiety zastępczej.</Help>
-          </WmsSettingField>
+          </WmsControlSettingRow>
         </FieldGrid>
       </Subsection>
     </SectionCard>

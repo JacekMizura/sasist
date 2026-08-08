@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import type { WmsPackingExtendedUiSettings } from "../../../types/wmsPackingExtendedUi";
 import { SettingInfoButton } from "../SettingInfoButton";
-import { WmsSettingField } from "../settingsSearch";
+import { WmsControlSettingRow } from "../wmsSettingRow";
 import { PACKING_SETTING_HELP } from "./packingSettingsHelp";
 import { BoolRow, CAP_NONE, SectionCard, selectClass } from "./packingSettingsUi";
 
@@ -31,7 +31,6 @@ export function PackingGeneralSection({
 
   const options = useMemo(() => {
     const byId = new Map(warehouses.map((w) => [w.id, w]));
-    // Keep selected WH visible even if it temporarily dropped from eligible list.
     if (mainPackingWarehouseId != null && mainPackingWarehouseId > 0 && !byId.has(mainPackingWarehouseId)) {
       return [
         ...warehouses,
@@ -66,11 +65,10 @@ export function PackingGeneralSection({
           capability={CAP_NONE}
           infoKey="packing.packer_is_not_picker"
         />
-      </div>
-      <div className="mt-3">
-        <WmsSettingField settingId="packing.main_packing_warehouse" className="block text-sm font-medium text-slate-700">
-          <span className="mb-1 block">
-            <span className="inline text-sm font-medium leading-snug text-slate-700">
+        <WmsControlSettingRow
+          settingId="packing.main_packing_warehouse"
+          label={
+            <>
               Główny magazyn do pakowania
               {mainWhHelp ? (
                 <SettingInfoButton
@@ -79,8 +77,9 @@ export function PackingGeneralSection({
                   tip={mainWhHelp.tip}
                 />
               ) : null}
-            </span>
-          </span>
+            </>
+          }
+        >
           <select
             className={selectClass}
             value={selectValue}
@@ -97,7 +96,7 @@ export function PackingGeneralSection({
               </option>
             ))}
           </select>
-        </WmsSettingField>
+        </WmsControlSettingRow>
       </div>
     </SectionCard>
   );

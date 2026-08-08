@@ -1,4 +1,7 @@
-/** Shared spacing / typography for all WMS settings modules. */
+/** Shared spacing / typography for all WMS settings modules.
+ * Layout rule: option label LEFT, control (checkbox / select / input) RIGHT —
+ * use {@link ./wmsSettingRow} helpers (`WmsBoolSettingRow`, `WmsControlSettingRow`).
+ */
 export const wmsSettingsTokens = {
   mainStack: "space-y-6",
   sectionTitle: "text-base font-semibold text-slate-900",
@@ -10,6 +13,7 @@ export const wmsSettingsTokens = {
   fieldStack: "space-y-4",
   fieldGrid: "grid gap-x-6 gap-y-4 sm:grid-cols-2",
   help: "mt-1 text-xs leading-relaxed text-slate-500",
+  /** Stacked control under label (legacy). Prefer wmsSettingRow control classes for horizontal rows. */
   select:
     "mt-1.5 w-full max-w-md rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40",
   input:

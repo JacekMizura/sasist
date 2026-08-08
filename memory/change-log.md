@@ -1,3 +1,9 @@
+## 2026-08-08 — WMS settings: label left, control right
+
+- Wspólne `wmsSettingRow` (`WmsBoolSettingRow` / `WmsControlSettingRow`)
+- Pakowanie, zbieranie (CustomCheckbox), sprzedaż bezpośrednia, produkcja, zwroty, Smart/3D Matching, walidacja przyjęcia
+- Zasada: nazwa opcji (+ ⓘ) z lewej, checkbox/select/input z prawej
+
 ## 2026-08-08 — Główny magazyn do pakowania (funkcjonalny)
 
 - UI: select magazynów tenanta (ID), bez badge BRAK; zapis przez `PATCH /company/fulfillment-configuration` → `consolidation_warehouse_id`

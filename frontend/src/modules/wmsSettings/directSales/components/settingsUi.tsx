@@ -1,11 +1,16 @@
 import type { ReactNode } from "react";
 
 import { WmsSettingsSection } from "../../../../pages/Settings/WmsSettingsSection";
-import { wmsSettingsTokens } from "../../../../pages/Settings/wmsSettingsTokens";
+import {
+  WmsBoolSettingRow,
+  WmsControlSettingRow,
+  wmsSettingCheckboxClass,
+  wmsSettingControlSelectClass,
+} from "../../../../pages/Settings/wmsSettingRow";
 import { DIRECT_SALES_SETTINGS_NAV_SECTIONS } from "../directSalesSettingsNavSections";
 
-export const selectClass = wmsSettingsTokens.select;
-export const checkboxClass = wmsSettingsTokens.checkbox;
+export const selectClass = wmsSettingControlSelectClass;
+export const checkboxClass = wmsSettingCheckboxClass;
 
 export function SettingsCard({
   id,
@@ -43,13 +48,9 @@ export function FieldRow({
   children: ReactNode;
 }) {
   return (
-    <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)] sm:items-start">
-      <div>
-        <div className="text-sm font-medium text-slate-800">{label}</div>
-        {hint ? <p className="mt-0.5 text-xs text-slate-500">{hint}</p> : null}
-      </div>
-      <div>{children}</div>
-    </div>
+    <WmsControlSettingRow label={label} hint={hint}>
+      {children}
+    </WmsControlSettingRow>
   );
 }
 
@@ -67,19 +68,13 @@ export function ToggleRow({
   disabled?: boolean;
 }) {
   return (
-    <label className="flex cursor-pointer items-start gap-2.5 rounded-lg border border-transparent px-1 py-1 hover:bg-slate-50">
-      <input
-        type="checkbox"
-        className={checkboxClass}
-        checked={checked}
-        disabled={disabled}
-        onChange={(e) => onChange(e.target.checked)}
-      />
-      <span className="min-w-0">
-        <span className="text-sm font-medium text-slate-800">{label}</span>
-        {hint ? <span className="mt-0.5 block text-xs text-slate-500">{hint}</span> : null}
-      </span>
-    </label>
+    <WmsBoolSettingRow
+      label={label}
+      hint={hint}
+      checked={checked}
+      onChange={onChange}
+      disabled={disabled}
+    />
   );
 }
 
