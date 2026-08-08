@@ -5,12 +5,12 @@ import { wmsSettingsTokens } from "./wmsSettingsTokens";
 
 /**
  * Canonical WMS settings form row (not a table):
- * LEFT ~58%: name, description, badges
- * RIGHT ~42%: checkbox / select / input / picker — shared vertical axis
+ * LEFT: name, description, badges (grows with container)
+ * RIGHT: fixed-width control column — shared vertical axis, not page-centered
  */
 
 export const wmsSettingRowClass =
-  "wms-setting-field grid grid-cols-1 items-start gap-x-6 gap-y-2 rounded-lg border border-transparent px-1 py-2.5 sm:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)]";
+  "wms-setting-field grid grid-cols-1 items-start gap-x-6 gap-y-2 rounded-lg border border-transparent px-1 py-2.5 sm:grid-cols-[minmax(0,1fr)_minmax(16rem,22rem)]";
 
 export const wmsSettingLabelColClass = "min-w-0";
 
@@ -28,8 +28,8 @@ export const wmsSettingControlInputClass = wmsSettingControlSelectClass + " tabu
 export const wmsSettingCheckboxClass =
   "h-4 w-4 shrink-0 rounded border-slate-300 text-blue-600 focus:ring-blue-500";
 
-/** Max width for packing (and similar) settings forms — keeps controls off the page edge. */
-export const wmsSettingsFormMaxWidthClass = "mx-auto w-full max-w-[72rem]";
+/** Full width of the settings content pane (after left nav) — no centered narrow column. */
+export const wmsSettingsFormMaxWidthClass = "w-full min-w-0";
 
 type BoolRowProps = {
   label: ReactNode;

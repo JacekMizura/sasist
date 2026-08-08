@@ -6,8 +6,7 @@ import type { OrderUiPanelSubgroupRead, OrderUiStatusPanelSummary } from "../../
 import { buildEffectCategorySteps, effectKindLabel } from "../../../utils/orderAutomationCatalog";
 import { renderAutomationEffectConfigEditor } from "./effects/orderAutomationEffectEditorRenderers";
 import { AutomationCategoryPickerModal } from "./AutomationCategoryPickerModal";
-import { AutomationStatusPicker } from "./AutomationStatusPicker";
-import { AutomationValueBadges } from "./AutomationValueBadges";
+import { AutomationStatusField } from "./AutomationStatusField";
 import { oaWorkflowBlockBodyClass } from "./orderAutomationUiTokens";
 
 const sentenceTriggerClass =
@@ -31,7 +30,6 @@ export function AutomationEffectConfigFields({
   onPatchPayload,
 }: AutomationEffectConfigFieldsProps) {
   const [kindPickerOpen, setKindPickerOpen] = useState(false);
-  const [focusStatusId, setFocusStatusId] = useState<number | null>(null);
   const categorySteps = useMemo(() => buildEffectCategorySteps(), []);
   const title = effectKindLabel(effect.kind);
 
@@ -40,8 +38,6 @@ export function AutomationEffectConfigFields({
     const selectedId = raw === "" || raw == null ? null : Number(raw);
     const selectedStatusId =
       selectedId != null && Number.isFinite(selectedId) && selectedId > 0 ? selectedId : null;
-    const selectedLabel =
-      selectedStatusId != null ? statusNameById.get(selectedStatusId) ?? `#${selectedStatusId}` : null;
 
     return (
       <>
@@ -51,23 +47,14 @@ export function AutomationEffectConfigFields({
             <ChevronDown className="h-3.5 w-3.5 shrink-0 text-slate-400" />
           </button>
 
-          {selectedLabel ? (
-            <AutomationValueBadges
-              labels={[selectedLabel]}
-              removable
-              onRemove={() => onPatchPayload({ order_ui_status_id: "" })}
-              onBadgeClick={() => {
-                if (selectedStatusId != null) setFocusStatusId(selectedStatusId);
-              }}
-            />
-          ) : null}
-
-          <AutomationStatusPicker
+          <AutomationStatusField
             panelSummary={panelSummary}
             panelSubgroups={panelSubgroups}
+            statusNameById={statusNameById}
             selectedStatusId={selectedStatusId}
-            focusStatusId={focusStatusId}
-            onFocusStatusHandled={() => setFocusStatusId(null)}
+            allowClear
+            clearLabel="— brak —"
+            placeholder="Wybierz status…"
             onPick={(statusId) =>
               onPatchPayload({ order_ui_status_id: statusId != null ? String(statusId) : "" })
             }

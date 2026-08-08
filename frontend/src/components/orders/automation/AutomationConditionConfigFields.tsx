@@ -22,7 +22,7 @@ import {
   migrateConditionValue,
 } from "../../../utils/orderAutomationConditionUtils";
 import { AutomationCategoryPickerModal } from "./AutomationCategoryPickerModal";
-import { AutomationStatusPicker } from "./AutomationStatusPicker";
+import { AutomationStatusField } from "./AutomationStatusField";
 import { AutomationValueBadges } from "./AutomationValueBadges";
 import { oaInp } from "./orderAutomationUiTokens";
 
@@ -47,7 +47,6 @@ export function AutomationConditionConfigFields({
   onPatch,
 }: AutomationConditionConfigFieldsProps) {
   const [fieldPickerOpen, setFieldPickerOpen] = useState(false);
-  const [focusStatusId, setFocusStatusId] = useState<number | null>(null);
   const categorySteps = useMemo(() => buildConditionCategorySteps(), []);
 
   const statusOptions = useMemo(() => {
@@ -120,29 +119,17 @@ export function AutomationConditionConfigFields({
           </label>
         </div>
 
-        {isMulti && selectedLabels.length > 0 ? (
-          <AutomationValueBadges
-            labels={selectedLabels}
-            removable
-            onRemove={removeValueAt}
-            onBadgeClick={
-              isOrderStatusField
-                ? (index) => {
-                    const id = selectedStatusIds[index];
-                    if (id != null) setFocusStatusId(id);
-                  }
-                : undefined
-            }
-          />
+        {isMulti && !isOrderStatusField && selectedLabels.length > 0 ? (
+          <AutomationValueBadges labels={selectedLabels} removable onRemove={removeValueAt} />
         ) : null}
 
         {isOrderStatusField ? (
-          <AutomationStatusPicker
+          <AutomationStatusField
             panelSummary={panelSummary}
             panelSubgroups={panelSubgroups}
+            statusNameById={statusNameById}
             selectedStatusIds={selectedStatusIds}
-            focusStatusId={focusStatusId}
-            onFocusStatusHandled={() => setFocusStatusId(null)}
+            placeholder="Wybierz statusy…"
             onSelectedIdsChange={(ids) => onPatch({ value: ids.map(String) })}
           />
         ) : isMulti ? (

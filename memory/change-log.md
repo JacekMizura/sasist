@@ -1,3 +1,9 @@
+## 2026-08-08 — Pakowanie: status field + layout full-width
+
+- Wspólny `AutomationStatusField`: trigger z chipami → popover z `AutomationStatusPicker` (Pakowanie + Akcje automatyczne)
+- Etykieta statusu = sama nazwa (`Spakowane`), bez sufiksu grupy; `buildOrderUiStatusNameById`
+- Formularz pakowania: `w-full` (bez `mx-auto` / wąskiego max-width); prawa kolumna `16–22rem` wyrównana w osi
+
 ## 2026-08-08 — Pakowanie: wspólny picker statusów
 
 - Ustawienia procesu pakowania używają `AutomationStatusPicker` (jak akcje automatyczne)

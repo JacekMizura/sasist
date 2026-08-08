@@ -4,6 +4,7 @@ import { ChevronDown, Plus, Search } from "lucide-react";
 import toast from "react-hot-toast";
 
 import { AutomationRulesTable } from "../../components/orders/automation/AutomationRulesTable";
+import { buildOrderUiStatusNameById } from "../../components/orders/automation/buildOrderUiStatusNameById";
 import { moduleAutomationShellClass } from "../../components/layout/flatSectionTokens";
 import { moduleListEmptyStateClass } from "../../components/listPage/moduleList";
 import { useWarehouse } from "../../context/WarehouseContext";
@@ -65,15 +66,7 @@ export default function OrderAutomationListPage() {
     })();
   }, [wid]);
 
-  const statusNameById = useMemo(() => {
-    const m = new Map<number, string>();
-    for (const g of statusSummary?.groups ?? []) {
-      for (const s of g.sub_statuses ?? []) {
-        m.set(s.id, s.name);
-      }
-    }
-    return m;
-  }, [statusSummary]);
+  const statusNameById = useMemo(() => buildOrderUiStatusNameById(statusSummary), [statusSummary]);
 
   const groups = useMemo(() => [...new Set(rules.map((r) => r.group || "—"))].sort((a, b) => a.localeCompare(b, "pl")), [rules]);
 

@@ -34,6 +34,7 @@ import { AutomationIfThenSection } from "../../components/orders/automation/Auto
 import { AutomationRuleHistoryPanel } from "../../components/orders/automation/AutomationRuleHistoryPanel";
 import { AutomationExecutionSettingsSection } from "../../components/orders/automation/AutomationExecutionSettingsSection";
 import { AutomationAnchorMenu, type AutomationAnchorMenuGroup } from "../../components/orders/automation/AutomationAnchorMenu";
+import { buildOrderUiStatusNameById } from "../../components/orders/automation/buildOrderUiStatusNameById";
 import { moduleAutomationShellClass } from "../../components/layout/flatSectionTokens";
 import { ModuleListBreadcrumb } from "../../components/listPage/moduleList";
 import {
@@ -214,15 +215,7 @@ export default function OrderAutomationEditorPage() {
     }
   }, [hydrated, isNew, ruleId, byId, scope]);
 
-  const statusNameById = useMemo(() => {
-    const m = new Map<number, string>();
-    for (const g of statusSummary?.groups ?? []) {
-      for (const s of g.sub_statuses ?? []) {
-        m.set(s.id, s.name);
-      }
-    }
-    return m;
-  }, [statusSummary]);
+  const statusNameById = useMemo(() => buildOrderUiStatusNameById(statusSummary), [statusSummary]);
 
   const conditionCategorySteps = useMemo(() => buildConditionCategorySteps(), []);
   const effectCategorySteps = useMemo(() => buildEffectCategorySteps(), []);
