@@ -1,3 +1,9 @@
+## 2026-08-08 — Ustawienia WMS: „i” w pierwszym wierszu tytułu
+
+- `SettingRow` z powrotem 2 kolumny LABEL|CONTROL; `.option-title` = flex (tekst + „i” `items-start`)
+- Ikona przy pierwszej linii nazwy, nie obok całego wieloliniowego bloku
+- `hint` nadal → „i” (bez tekstu pod opcją); kontrolka top-aligned; bez commit/push
+
 ## 2026-08-08 — Ustawienia WMS: układ LABEL | [i] | CONTROL
 
 - `SettingRow`: 3 kolumny; `hint` nie renderuje się pod nazwą — treść trafia do środkowej ikony „i”

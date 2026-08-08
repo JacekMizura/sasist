@@ -1,5 +1,5 @@
 ﻿## Active
 
-**Ustawienia WMS layout LABEL|[i]|CONTROL (2026-08-08):** wspólny wiersz 3-kolumnowy; opisy pod opcjami → ikona „i”; bez commit/push.
+**Ustawienia WMS layout (2026-08-08):** „i” w pierwszym wierszu tytułu (flex title), CONTROL w prawej kolumnie; bez commit/push.
 
 **Next:** commit/push na życzenie.

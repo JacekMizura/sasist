@@ -159,7 +159,7 @@ export function SelectField({
       label={label}
       info={infoNode}
       infoTitle={label}
-      // Legacy string help → middle-column „i”; ReactNode help was under-label chrome — drop it.
+      // Legacy string help → title-row „i”; ReactNode help was under-label chrome — drop it.
       hint={infoNode ? undefined : stringHelp}
       footer={
         capability ? (

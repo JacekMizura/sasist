@@ -6,38 +6,46 @@ import { wmsSettingsTokens } from "./wmsSettingsTokens";
 
 /**
  * Sellasist-style WMS settings row:
- * LEFT   — option name / badges (wraps to 2–3 lines)
- * MIDDLE — optional info „i” (aligned to first line of the label)
- * RIGHT  — control column (checkbox / select / input / picker)
+ * LEFT  — title (text + optional „i” on the first line) / badges under title
+ * RIGHT — control column (checkbox / select / input / picker), top-aligned
  *
- * Controls share one vertical column. Extra viewport width stays empty on the right.
+ * The info icon lives inside `.option-title` (horizontal flex), not in a separate
+ * column beside the whole multi-line label block.
  */
 
-/** Label column — fills the fixed track; long names wrap inside it. */
+/** Label column — fills the fixed track; long names wrap inside the title text. */
 export const WMS_SETTING_LABEL_COL_CLASS = "min-w-0";
 
-/** Fixed middle column for the info icon — reserved from `sm` up so controls stay aligned. */
+/**
+ * @deprecated Info icon is no longer a grid column — kept for import compatibility.
+ */
 export const WMS_SETTING_INFO_COL_CLASS =
-  "h-[1.375rem] w-[1.75rem] shrink-0 items-center justify-center self-start";
+  "inline-flex h-[17px] w-[17px] shrink-0 items-center justify-center";
 
 /** Control column — shared width for selects / inputs / checkboxes. */
 export const WMS_SETTING_CONTROL_COL_CLASS =
   "flex min-w-0 w-full flex-col items-stretch justify-start";
 
 /**
- * Row shell: LABEL | [i] | CONTROL from `sm` up; stacked on narrow viewports.
- * `items-start` keeps the control and „i” on the first line of a multi-line label.
- * Equal track sizes on every row → one vertical control column.
+ * Row shell: LABEL | CONTROL from `sm` up; stacked on narrow viewports.
+ * `items-start` keeps the control on the first line of a multi-line title.
  */
 export const wmsSettingRowClass =
-  "wms-setting-field grid w-full max-w-[calc(20rem+1.75rem+15rem+2.25rem)] grid-cols-1 items-start gap-x-3 gap-y-2 rounded-lg border border-transparent px-1 py-2.5 sm:grid-cols-[minmax(12rem,20rem)_1.75rem_minmax(10rem,15rem)]";
+  "wms-setting-field grid w-full max-w-[calc(20rem+15rem+1.25rem)] grid-cols-1 items-start gap-x-5 gap-y-2 rounded-lg border border-transparent px-1 py-2.5 sm:grid-cols-[minmax(12rem,20rem)_minmax(10rem,15rem)]";
 
 export const wmsSettingLabelColClass = WMS_SETTING_LABEL_COL_CLASS;
 
+/** @deprecated See {@link WMS_SETTING_INFO_COL_CLASS}. */
 export const wmsSettingInfoColClass = WMS_SETTING_INFO_COL_CLASS;
 
 export const wmsSettingLabelTextClass =
   "text-sm font-medium leading-snug text-slate-800 break-words [overflow-wrap:anywhere]";
+
+/**
+ * Title row: shrink-wraps to text+icon when short; at full label width when long.
+ * `items-start` keeps „i” on the first line while the name wraps below.
+ */
+export const wmsSettingTitleClass = "inline-flex max-w-full items-start gap-1.5";
 
 export const wmsSettingControlColClass = WMS_SETTING_CONTROL_COL_CLASS;
 
@@ -69,11 +77,11 @@ type SettingRowProps = {
   label: ReactNode;
   children: ReactNode;
   /**
-   * Optional under-option description (legacy).
-   * No longer rendered under the label — shown via the middle-column „i” when `info` is absent.
+   * Legacy under-option description.
+   * Not rendered under the title — promoted to the title-row „i” when `info` is absent.
    */
   hint?: ReactNode;
-  /** Middle-column info control (typically {@link SettingInfoButton}). */
+  /** Info control rendered inside the title row (typically {@link SettingInfoButton}). */
   info?: ReactNode;
   /** Modal title when `hint` is auto-promoted to SettingInfoButton. */
   infoTitle?: string;
@@ -85,7 +93,7 @@ type SettingRowProps = {
 };
 
 /**
- * Shared WMS settings row: LABEL | [i] | CONTROL.
+ * Shared WMS settings row: LABEL (title + „i”) | CONTROL.
  * Prefer this (or {@link WmsControlSettingRow} / {@link WmsBoolSettingRow}) in all WMS settings tabs.
  */
 export function SettingRow({
@@ -112,16 +120,11 @@ export function SettingRow({
       className={`${wmsSettingRowClass} hover:bg-slate-50/80 ${className ?? ""}`}
     >
       <span className={wmsSettingLabelColClass}>
-        <span className={`block ${wmsSettingLabelTextClass}`}>{label}</span>
+        <span className={wmsSettingTitleClass}>
+          <span className={`min-w-0 ${wmsSettingLabelTextClass}`}>{label}</span>
+          {resolvedInfo ? <span className="mt-0.5 inline-flex shrink-0">{resolvedInfo}</span> : null}
+        </span>
         {footer}
-      </span>
-      <span
-        className={`${wmsSettingInfoColClass} ${
-          resolvedInfo == null ? "hidden sm:flex" : "flex"
-        }`}
-        aria-hidden={resolvedInfo == null ? true : undefined}
-      >
-        {resolvedInfo}
       </span>
       <span className={wmsSettingControlColClass}>{children}</span>
     </Comp>
@@ -144,7 +147,7 @@ type BoolRowProps = {
   className?: string;
 };
 
-/** Left: label / badges. Middle: optional „i”. Right: checkbox. */
+/** Left: title + optional „i”. Right: checkbox. */
 export function WmsBoolSettingRow({
   label,
   checked,
@@ -193,7 +196,7 @@ type ControlRowProps = {
   asLabel?: boolean;
 };
 
-/** Left: label / badges. Middle: optional „i”. Right: select / input / picker. */
+/** Left: title + optional „i”. Right: select / input / picker. */
 export function WmsControlSettingRow({
   label,
   children,
@@ -237,7 +240,6 @@ export function WmsSettingControlSlot({
       className={`${wmsSettingRowClass} ${className ?? ""}`}
     >
       <span className={`${wmsSettingLabelColClass} hidden sm:block`} aria-hidden />
-      <span className={`${wmsSettingInfoColClass} hidden sm:flex`} aria-hidden />
       <span className={wmsSettingControlColClass}>{children}</span>
     </div>
   );
