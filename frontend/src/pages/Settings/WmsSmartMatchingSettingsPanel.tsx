@@ -1,10 +1,9 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 
 import { getPackagingIntelligenceDashboard, type PackagingIntelligenceDashboardApi } from "../../api/packagingIntelligenceApi";
-import { listOrderStatuses } from "../../api/orderStatusesApi";
+import { getOrderPanelSubgroups, getOrderUiStatusSummary } from "../../api/orderUiStatusApi";
 import { DAMAGE_TENANT_ID } from "../damage/damageShared";
-import type { OrderStatusOption } from "../../types/wmsPackingSettings";
-import { orderPanelStatusSelectLabel } from "../../utils/orderPanelStatusUi";
+import type { OrderUiPanelSubgroupRead, OrderUiStatusPanelSummary } from "../../types/orderUiStatus";
 import { WmsSettingsTabFrame } from "./WmsSettingsTabFrame";
 import { WmsSettingsSection } from "./WmsSettingsSection";
 import { WMS_SMART_MATCHING_NAV_SECTIONS } from "./wmsSmartMatchingSettingsNavSections";
@@ -60,7 +59,8 @@ type Props = {
 export function WmsSmartMatchingSettingsPanel({ warehouseId, sectionNavObserve = true }: Props) {
   const [dashboard, setDashboard] = useState<PackagingIntelligenceDashboardApi | null>(null);
   const [dashLoading, setDashLoading] = useState(false);
-  const [statusOptions, setStatusOptions] = useState<OrderStatusOption[]>([]);
+  const [panelSummary, setPanelSummary] = useState<OrderUiStatusPanelSummary | null>(null);
+  const [panelSubgroups, setPanelSubgroups] = useState<OrderUiPanelSubgroupRead[]>([]);
   const [statusLoadErr, setStatusLoadErr] = useState<string | null>(null);
   const [config, setConfig] = useState<WmsPackagingProposalLocalConfigV1>(DEFAULT_WMS_PACKAGING_PROPOSAL_LOCAL_CONFIG);
 
@@ -101,7 +101,8 @@ export function WmsSmartMatchingSettingsPanel({ warehouseId, sectionNavObserve =
 
   useEffect(() => {
     if (warehouseId == null) {
-      setStatusOptions([]);
+      setPanelSummary(null);
+      setPanelSubgroups([]);
       setStatusLoadErr(null);
       return;
     }
@@ -109,11 +110,18 @@ export function WmsSmartMatchingSettingsPanel({ warehouseId, sectionNavObserve =
     setStatusLoadErr(null);
     void (async () => {
       try {
-        const items = await listOrderStatuses(DAMAGE_TENANT_ID, warehouseId);
-        if (!cancel) setStatusOptions(Array.isArray(items) ? items : []);
+        const [summary, subgroups] = await Promise.all([
+          getOrderUiStatusSummary(DAMAGE_TENANT_ID, warehouseId, { includeInactive: true }),
+          getOrderPanelSubgroups(DAMAGE_TENANT_ID, warehouseId),
+        ]);
+        if (!cancel) {
+          setPanelSummary(summary);
+          setPanelSubgroups(subgroups);
+        }
       } catch {
         if (!cancel) {
-          setStatusOptions([]);
+          setPanelSummary(null);
+          setPanelSubgroups([]);
           setStatusLoadErr("Nie udało się wczytać statusów panelu.");
         }
       }
@@ -122,12 +130,6 @@ export function WmsSmartMatchingSettingsPanel({ warehouseId, sectionNavObserve =
       cancel = true;
     };
   }, [warehouseId]);
-
-  const sortedStatuses = useMemo(() => {
-    return [...statusOptions].sort((a, b) =>
-      orderPanelStatusSelectLabel(a).localeCompare(orderPanelStatusSelectLabel(b), "pl", { sensitivity: "base" }),
-    );
-  }, [statusOptions]);
 
   const configRevision = useMemo(() => JSON.stringify(config), [config]);
 
@@ -170,7 +172,8 @@ export function WmsSmartMatchingSettingsPanel({ warehouseId, sectionNavObserve =
           showSmartLearningThreshold
           config={config}
           patchConfig={patchConfig}
-          sortedStatuses={sortedStatuses}
+          panelSummary={panelSummary}
+          panelSubgroups={panelSubgroups}
         />
 
         <div className="mt-6 rounded-lg border border-blue-200/70 bg-blue-50/40 px-3 py-3 text-xs leading-relaxed text-slate-800">

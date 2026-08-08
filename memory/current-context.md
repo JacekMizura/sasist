@@ -1,5 +1,5 @@
 ﻿## Active
 
-**Pakowanie UI (2026-08-08):** Proces pakowania — full-width za lewym menu; wspólny `AutomationStatusField` (chip + popover) jak w Akcjach automatycznych; nazwy statusów bez grupy.
+**WMS Settings UI standard (2026-08-08):** Całe Ustawienia WMS używają wspólnego układu Sellasist — `wmsSettingsUi` / `wmsSettingRow` (`[label | kontrolka]`), `WmsSettingsSection`, `OrderUiStatusField`/`Picker`, badge capability + `SettingInfoButton`. Pakowanie = wzorzec; pozostałe zakładki ujednolicone (Coming Soon: Reklamacje / Crossdocking / Rozlokowania / Przesunięcia).
 
-**Next:** implementacja kolejnych ustawień pakowania pojedynczo z checklisty.
+**Next:** implementacja kolejnych ustawień procesów z checklisty; bez commit/push tej fali UI (na życzenie).

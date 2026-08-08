@@ -1,3 +1,34 @@
+## 2026-08-08 — Ustawienia WMS: wspólny standard UI (nie tylko Pakowanie)
+
+- Barrel `wmsSettingsUi` + wiersze `WmsBoolSettingRow` / `WmsControlSettingRow` (kolumny 34rem|26rem, kontrolki nie na krawędzi)
+- Migracja: Zbieranie, Sprzedaż bezpośrednia, Zwroty, Przyjęcia, Produkcja, Smart/3D Matching, Stanowiska (grid wierszy)
+- Statusy → `OrderUiStatusField` + subgroups; capability badge / info (i) wspólne
+- Logika biznesowa bez zmian; placeholdery Coming Soon bez usuwania zakładek
+- `npm run build` OK; bez commit/push
+
+## 2026-08-08 — Zbieranie: layout Sellasist + OrderUiStatusField
+
+- `WmsPickingSettingsPanel`: `WmsBoolSettingRow` / `WmsControlSettingRow` / `wmsSettingsRowsStackClass`
+- Statusy (braki API, extended, konfigurator trybu) → `OrderUiStatusField` + `getOrderPanelSubgroups`
+- Usunięty `PickingStatusSelect` z panelu; payloady / znaczenie status id bez zmian
+
+## 2026-08-08 — Wspólny OrderUiStatusPicker (NOWE / W TOKU / ZAKOŃCZONE)
+
+- Kanoniczny `OrderUiStatusPicker` + `OrderUiStatusField` (Pakowanie + Akcje automatyczne)
+- Popup: 3 grupy zwijane (domyślnie otwarte), wyszukiwarka, single/multi, kolorowe badge
+- Wybrany status = sama nazwa (bez sufiksu grupy); aliasy `AutomationStatus*` zachowane
+
+## 2026-08-08 — Pakowanie: layout Sellasist (kontrole nie na prawej krawędzi)
+
+- `wmsSettingRow`: kolumny `[max 34rem | 26rem]` wyrównane do lewej — kontrolki zaraz obok etykiety
+- Puste miejsce po prawej OK; bez `1fr` wypychającego select/checkbox na skraj ekranu
+
+## 2026-08-08 — Wspólne kolorowe badge statusów WMS
+
+- `OrderUiStatusBadge` / `OrderUiStatusBadgeList` → SSOT via `panelSidebarSubRowStyleRich` (kolory z rejestru statusów)
+- Akcje automatyczne (warunki/efekty/lista) + `AutomationStatusField` (Pakowanie) + picker: kolorowe chipy, nazwa bez grupy
+- `+N` overflow zachowany; `buildOrderUiStatusBriefById` jako mapa id → brief
+
 ## 2026-08-08 — Pakowanie: status field + layout full-width
 
 - Wspólny `AutomationStatusField`: trigger z chipami → popover z `AutomationStatusPicker` (Pakowanie + Akcje automatyczne)

@@ -1,10 +1,9 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 
 import { getPackagingIntelligenceDashboard, type PackagingIntelligenceDashboardApi } from "../../api/packagingIntelligenceApi";
-import { listOrderStatuses } from "../../api/orderStatusesApi";
+import { getOrderPanelSubgroups, getOrderUiStatusSummary } from "../../api/orderUiStatusApi";
 import { DAMAGE_TENANT_ID } from "../damage/damageShared";
-import type { OrderStatusOption } from "../../types/wmsPackingSettings";
-import { orderPanelStatusSelectLabel } from "../../utils/orderPanelStatusUi";
+import type { OrderUiPanelSubgroupRead, OrderUiStatusPanelSummary } from "../../types/orderUiStatus";
 import { WmsSettingsTabFrame } from "./WmsSettingsTabFrame";
 import { WmsSettingsSection } from "./WmsSettingsSection";
 import { WMS_THREE_D_MATCHING_NAV_SECTIONS } from "./wmsThreeDMatchingSettingsNavSections";
@@ -54,7 +53,8 @@ type Props = {
 export function WmsThreeDMatchingSettingsPanel({ warehouseId, sectionNavObserve = true }: Props) {
   const [dashboard, setDashboard] = useState<PackagingIntelligenceDashboardApi | null>(null);
   const [dashLoading, setDashLoading] = useState(false);
-  const [panelStatusOptions, setPanelStatusOptions] = useState<OrderStatusOption[]>([]);
+  const [panelSummary, setPanelSummary] = useState<OrderUiStatusPanelSummary | null>(null);
+  const [panelSubgroups, setPanelSubgroups] = useState<OrderUiPanelSubgroupRead[]>([]);
   const [panelStatusErr, setPanelStatusErr] = useState<string | null>(null);
   const [flowConfig, setFlowConfig] = useState<WmsPackagingProposalLocalConfigV1>(DEFAULT_WMS_PACKAGING_PROPOSAL_LOCAL_CONFIG);
   const [engineConfig, setEngineConfig] = useState<WmsThreeDEngineLocalConfigV1>(DEFAULT_WMS_THREE_D_ENGINE_LOCAL_CONFIG);
@@ -109,7 +109,8 @@ export function WmsThreeDMatchingSettingsPanel({ warehouseId, sectionNavObserve 
 
   useEffect(() => {
     if (warehouseId == null) {
-      setPanelStatusOptions([]);
+      setPanelSummary(null);
+      setPanelSubgroups([]);
       setPanelStatusErr(null);
       return;
     }
@@ -117,11 +118,18 @@ export function WmsThreeDMatchingSettingsPanel({ warehouseId, sectionNavObserve 
     setPanelStatusErr(null);
     void (async () => {
       try {
-        const items = await listOrderStatuses(DAMAGE_TENANT_ID, warehouseId);
-        if (!cancel) setPanelStatusOptions(Array.isArray(items) ? items : []);
+        const [summary, subgroups] = await Promise.all([
+          getOrderUiStatusSummary(DAMAGE_TENANT_ID, warehouseId, { includeInactive: true }),
+          getOrderPanelSubgroups(DAMAGE_TENANT_ID, warehouseId),
+        ]);
+        if (!cancel) {
+          setPanelSummary(summary);
+          setPanelSubgroups(subgroups);
+        }
       } catch {
         if (!cancel) {
-          setPanelStatusOptions([]);
+          setPanelSummary(null);
+          setPanelSubgroups([]);
           setPanelStatusErr("Nie udało się wczytać statusów panelu.");
         }
       }
@@ -130,12 +138,6 @@ export function WmsThreeDMatchingSettingsPanel({ warehouseId, sectionNavObserve 
       cancel = true;
     };
   }, [warehouseId]);
-
-  const sortedPanelStatuses = useMemo(() => {
-    return [...panelStatusOptions].sort((a, b) =>
-      orderPanelStatusSelectLabel(a).localeCompare(orderPanelStatusSelectLabel(b), "pl", { sensitivity: "base" }),
-    );
-  }, [panelStatusOptions]);
 
   const flowRevision = useMemo(() => JSON.stringify(flowConfig), [flowConfig]);
   const engineRevision = useMemo(() => JSON.stringify(engineConfig), [engineConfig]);
@@ -195,7 +197,8 @@ export function WmsThreeDMatchingSettingsPanel({ warehouseId, sectionNavObserve 
           showSmartLearningThreshold={false}
           config={flowConfig}
           patchConfig={patchFlowConfig}
-          sortedStatuses={sortedPanelStatuses}
+          panelSummary={panelSummary}
+          panelSubgroups={panelSubgroups}
         />
       </SectionCard>
 

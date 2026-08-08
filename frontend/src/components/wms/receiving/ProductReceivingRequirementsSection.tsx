@@ -1,3 +1,8 @@
+import {
+  WmsBoolSettingRow,
+  wmsSettingsRowsStackClass,
+} from "../../../pages/Settings/wmsSettingsUi";
+
 type Props = {
   requireDimensions: boolean;
   requireWeight: boolean;
@@ -12,36 +17,6 @@ type Props = {
   onChange: (patch: Partial<Record<string, boolean>>) => void;
   disabled?: boolean;
 };
-
-function CheckRow({
-  checked,
-  onChange,
-  label,
-  disabled,
-  hint,
-}: {
-  checked: boolean;
-  onChange: (v: boolean) => void;
-  label: string;
-  disabled?: boolean;
-  hint?: string;
-}) {
-  return (
-    <label className="flex cursor-pointer items-start gap-2.5 text-sm text-slate-800">
-      <span className="min-w-0">
-        {label}
-        {hint ? <span className="mt-0.5 block text-xs font-normal text-slate-500">{hint}</span> : null}
-      </span>
-      <input
-        type="checkbox"
-        checked={checked}
-        disabled={disabled}
-        onChange={(e) => onChange(e.target.checked)}
-        className="mt-0.5 h-4 w-4 shrink-0 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
-      />
-    </label>
-  );
-}
 
 /**
  * Product settings: which master-data fields operators should complete during WMS receiving (soft validation).
@@ -61,79 +36,75 @@ export function ProductReceivingRequirementsSection({
   disabled,
 }: Props) {
   return (
-    <div id="wms-validation" className="rounded-xl border border-indigo-200 bg-indigo-50/40 p-4 space-y-5 scroll-mt-24">
+    <div id="wms-validation" className="scroll-mt-24 space-y-5">
       <div>
-        <h4 className="text-sm font-black text-slate-900">Wymagania globalne</h4>
-      </div>
-
-      <div>
-        <p className="mb-2 text-[10px] font-bold uppercase tracking-wide text-slate-500">Dane produktu</p>
-        <div className="grid gap-2 sm:grid-cols-2">
-          <CheckRow
-            checked={requireDimensions}
-            onChange={(v) => onChange({ requireDimensions: v })}
+        <p className="mb-1 text-[10px] font-bold uppercase tracking-wide text-slate-500">Dane produktu</p>
+        <div className={wmsSettingsRowsStackClass}>
+          <WmsBoolSettingRow
             label="Wymagaj wymiarów produktu"
+            checked={requireDimensions}
             disabled={disabled}
+            onChange={(v) => onChange({ requireDimensions: v })}
           />
-          <CheckRow
-            checked={requireWeight}
-            onChange={(v) => onChange({ requireWeight: v })}
+          <WmsBoolSettingRow
             label="Wymagaj wagi produktu"
+            checked={requireWeight}
             disabled={disabled}
+            onChange={(v) => onChange({ requireWeight: v })}
           />
-          <CheckRow
-            checked={requireBatch}
-            onChange={(v) => onChange({ requireBatch: v })}
+          <WmsBoolSettingRow
             label="Wymagaj numeru partii"
+            checked={requireBatch}
             disabled={disabled}
+            onChange={(v) => onChange({ requireBatch: v })}
           />
-          <CheckRow
-            checked={requireExpiry}
-            onChange={(v) => onChange({ requireExpiry: v })}
+          <WmsBoolSettingRow
             label="Wymagaj daty ważności"
+            checked={requireExpiry}
             disabled={disabled}
+            onChange={(v) => onChange({ requireExpiry: v })}
           />
-          <CheckRow
-            checked={requireSerial}
-            onChange={(v) => onChange({ requireSerial: v })}
+          <WmsBoolSettingRow
             label="Wymagaj numeru seryjnego"
+            checked={requireSerial}
             disabled={disabled}
+            onChange={(v) => onChange({ requireSerial: v })}
           />
         </div>
       </div>
 
       <div>
-        <p className="mb-2 text-[10px] font-bold uppercase tracking-wide text-slate-500">Opakowanie zbiorcze</p>
-        <div className="grid gap-2 sm:grid-cols-2">
-          <CheckRow
-            checked={requireMasterCarton}
-            onChange={(v) => onChange({ requireMasterCarton: v })}
+        <p className="mb-1 text-[10px] font-bold uppercase tracking-wide text-slate-500">Opakowanie zbiorcze</p>
+        <div className={wmsSettingsRowsStackClass}>
+          <WmsBoolSettingRow
             label="Produkt posiada opakowanie zbiorcze"
+            checked={requireMasterCarton}
             disabled={disabled}
+            onChange={(v) => onChange({ requireMasterCarton: v })}
           />
-          <CheckRow
-            checked={requireMasterCartonEan}
-            onChange={(v) => onChange({ requireMasterCartonEan: v })}
+          <WmsBoolSettingRow
             label="Wymagaj EAN opakowania zbiorczego"
+            checked={requireMasterCartonEan}
             disabled={disabled}
+            onChange={(v) => onChange({ requireMasterCartonEan: v })}
           />
-          <CheckRow
-            checked={requireMasterCartonQty}
-            onChange={(v) => onChange({ requireMasterCartonQty: v })}
+          <WmsBoolSettingRow
             label="Wymagaj ilości w opakowaniu zbiorczym"
+            checked={requireMasterCartonQty}
             disabled={disabled}
+            onChange={(v) => onChange({ requireMasterCartonQty: v })}
           />
-          <CheckRow
-            checked={requireMasterCartonDims}
-            onChange={(v) => onChange({ requireMasterCartonDims: v })}
+          <WmsBoolSettingRow
             label="Wymagaj wymiarów opakowania zbiorczego"
+            checked={requireMasterCartonDims}
             disabled={disabled}
+            onChange={(v) => onChange({ requireMasterCartonDims: v })}
           />
-          <CheckRow
-            checked={requireMasterCartonWeight}
-            onChange={(v) => onChange({ requireMasterCartonWeight: v })}
+          <WmsBoolSettingRow
             label="Wymagaj wagi opakowania zbiorczego"
+            checked={requireMasterCartonWeight}
             disabled={disabled}
+            onChange={(v) => onChange({ requireMasterCartonWeight: v })}
           />
         </div>
       </div>

@@ -21,16 +21,14 @@ export function PaymentsSection({ config, onChange }: Props) {
 
   return (
     <SettingsCard id="ds-payments" title="Płatności" summary="Metody płatności i zachowanie kasy gotówkowej.">
-      <div className="grid gap-2 sm:grid-cols-2">
-        {METHODS.map((m) => (
-          <ToggleRow
-            key={m.key}
-            label={m.label}
-            checked={config.payment_methods[m.key]}
-            onChange={(v) => setMethod(m.key, v)}
-          />
-        ))}
-      </div>
+      {METHODS.map((m) => (
+        <ToggleRow
+          key={m.key}
+          label={m.label}
+          checked={config.payment_methods[m.key]}
+          onChange={(v) => setMethod(m.key, v)}
+        />
+      ))}
       <ToggleRow
         label="Wymagaj podania kwoty wpłaconej przy gotówce"
         checked={config.require_cash_received}

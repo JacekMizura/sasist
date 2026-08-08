@@ -99,7 +99,13 @@ export const DirectSalesSettingsPanel = forwardRef<DirectSalesSettingsPanelHandl
           </div>
           <ValidationWarnings config={state.draft} statusOptions={state.statusOptions} />
         </div>
-        <GeneralSection config={state.draft} statusOptions={state.statusOptions} onChange={state.patch} />
+        <GeneralSection
+          config={state.draft}
+          statusOptions={state.statusOptions}
+          panelSummary={state.panelSummary}
+          panelSubgroups={state.panelSubgroups}
+          onChange={state.patch}
+        />
         <PaymentsSection config={state.draft} onChange={state.patch} />
         <StockSection config={state.draft} onChange={state.patch} />
         <PricingSection config={state.draft} onChange={state.patch} />

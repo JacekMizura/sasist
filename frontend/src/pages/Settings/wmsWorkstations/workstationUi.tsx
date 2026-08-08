@@ -25,7 +25,7 @@ export const wsTokens = {
   primaryBtn: brandPrimaryButtonClass,
   outlineBtn: brandOutlineButtonClass,
   settingsRow:
-    "flex flex-col gap-3 border-b border-slate-100 py-4 last:border-b-0 sm:flex-row sm:items-center sm:justify-between",
+    "grid grid-cols-1 items-start gap-x-6 gap-y-2 border-b border-slate-100 py-4 last:border-b-0 sm:grid-cols-[minmax(0,34rem)_26rem] sm:justify-start",
   listRow:
     "grid gap-3 border-b border-slate-100 px-1 py-4 last:border-b-0 hover:bg-slate-50/70 sm:grid-cols-[minmax(0,1.4fr)_minmax(0,0.9fr)_minmax(0,1fr)_minmax(0,0.9fr)_minmax(0,1fr)_minmax(0,0.7fr)_minmax(0,0.9fr)_auto] sm:items-center",
 } as const;

@@ -1,41 +1,29 @@
 import type { ReactNode } from "react";
 
-/** Status wdrożenia ustawienia pakowania (audyt 2026-08). */
-export type PackingSettingCapability = "none" | "partial";
+import {
+  WmsSettingCapabilityBadge,
+  type WmsSettingCapability,
+} from "./wmsSettingCapability";
 
-const BADGE_CLASS =
-  "mt-0.5 inline-flex max-w-full flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[11px] font-semibold uppercase tracking-wide";
+/** @deprecated Prefer {@link WmsSettingCapability}. */
+export type PackingSettingCapability = Extract<WmsSettingCapability, "none" | "partial">;
 
 /**
- * Widoczna informacja o stanie funkcji — nie błąd systemu.
- * `none` = zapisuje się, ale nie zmienia runtime pakowania.
- * `partial` = częściowo podpięte / stub.
+ * Packing-specific copy for capability badges (same visual system as all WMS settings).
  */
 export function PackingCapabilityBadge({
   kind,
   note,
 }: {
   kind: PackingSettingCapability;
-  /** Krótki opis braków dla „częściowo”. */
   note?: string;
 }) {
-  if (kind === "none") {
-    return (
-      <span className={`${BADGE_CLASS} text-amber-800`} title="Ustawienie jest zapisane, ale na razie nie wpływa na pakowanie.">
-        <span className="rounded bg-amber-100 px-1.5 py-0.5">Brak funkcjonalności</span>
-        <span className="font-normal normal-case tracking-normal text-amber-900/80">
-          — na razie nie zmienia działania pakowania
-        </span>
-      </span>
-    );
-  }
   return (
-    <span className={`${BADGE_CLASS} text-sky-800`} title={note || "Funkcja działa tylko częściowo."}>
-      <span className="rounded bg-sky-100 px-1.5 py-0.5">Częściowo wdrożone</span>
-      {note ? (
-        <span className="font-normal normal-case tracking-normal text-sky-900/80">— {note}</span>
-      ) : null}
-    </span>
+    <WmsSettingCapabilityBadge
+      kind={kind}
+      note={note}
+      inactiveHint="na razie nie zmienia działania pakowania"
+    />
   );
 }
 

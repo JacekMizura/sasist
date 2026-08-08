@@ -10,8 +10,13 @@ import { WmsSettingsTabFrame } from "./WmsSettingsTabFrame";
 import { WmsSettingsSection } from "./WmsSettingsSection";
 import { DocumentTemplateScopeSection } from "./document-templates/components/DocumentTemplateScopeSection";
 import { RETURNS_SCOPE_KINDS } from "./document-templates/documentTemplateScopeKinds";
-import { wmsSettingsTokens } from "./wmsSettingsTokens";
 import type { WmsSettingsSectionConfig } from "./wmsSettingsSectionConfig";
+import {
+  WmsBoolSettingRow,
+  WmsControlSettingRow,
+  wmsSettingControlSelectClass,
+  wmsSettingsRowsStackClass,
+} from "./wmsSettingsUi";
 
 const MODE_SECTION_ID = "wms-returns-workflow-mode";
 const ZPZ_LABEL_SECTION_ID = "wms-returns-z-pz-label";
@@ -38,9 +43,6 @@ const RETURNS_MODE_OPTIONS: Array<{ value: ReturnsMode; label: string }> = [
 const radioOuter =
   "flex cursor-pointer items-start gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm transition hover:border-slate-300 hover:bg-slate-50/80 has-[:checked]:border-blue-400 has-[:checked]:bg-blue-50/40";
 const radioInput = "mt-1 h-4 w-4 shrink-0 border-slate-300 text-blue-600 focus:ring-blue-500";
-const fieldLabel = "text-sm font-medium text-slate-800";
-const fieldHint = "mt-0.5 text-xs text-slate-500";
-const selectCls = wmsSettingsTokens.select;
 
 function SettingsSectionCard({
   sectionId,
@@ -230,39 +232,27 @@ export default function WmsReturnsSettingsPanel({ warehouseId }: Props) {
         summary="Automatyczny wydruk etykiety po zamknięciu zbiorczego dokumentu zwrotów."
       >
         {loading || loadError ? null : (
-          <div className="space-y-4">
-            <label className="flex cursor-pointer items-start gap-2.5">
-              <span className="min-w-0">
-                <span className={fieldLabel}>Drukuj etykietę po zamknięciu Z-PZ</span>
-                <span className={fieldHint}>
-                  Po zamknięciu nośnika zwrotów etykieta trafi na drukarkę WMS (QZ) lub do podglądu PDF.
-                </span>
-              </span>
-              <input
-                type="checkbox"
-                className="mt-0.5 h-4 w-4 shrink-0 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
-                checked={draftPrintLabel}
-                onChange={(e) => setDraftPrintLabel(e.target.checked)}
-              />
-            </label>
-
-            <div className="flex flex-wrap items-start gap-2.5">
-              <div className="min-w-0">
-                <label htmlFor="wms-z-pz-label-template" className={fieldLabel}>
-                  Szablon etykiety Z-PZ
-                </label>
-                <p className={fieldHint}>
-                  Szablon z modułu etykiet — pola: numer dokumentu, kod kreskowy, pozycje, sztuki.
-                </p>
-                {printRequiresTemplate ? (
-                  <p className="mt-1 text-xs font-medium text-amber-800">
+          <div className={wmsSettingsRowsStackClass}>
+            <WmsBoolSettingRow
+              label="Drukuj etykietę po zamknięciu Z-PZ"
+              hint="Po zamknięciu nośnika zwrotów etykieta trafi na drukarkę WMS (QZ) lub do podglądu PDF."
+              checked={draftPrintLabel}
+              onChange={setDraftPrintLabel}
+            />
+            <WmsControlSettingRow
+              label="Szablon etykiety Z-PZ"
+              hint="Szablon z modułu etykiet — pola: numer dokumentu, kod kreskowy, pozycje, sztuki."
+              footer={
+                printRequiresTemplate ? (
+                  <span className="mt-1 block text-xs font-medium text-amber-800">
                     Wybierz szablon, aby włączyć automatyczny druk.
-                  </p>
-                ) : null}
-              </div>
+                  </span>
+                ) : null
+              }
+            >
               <select
                 id="wms-z-pz-label-template"
-                className={`${selectCls} mt-0 max-w-xs shrink-0`}
+                className={wmsSettingControlSelectClass}
                 value={draftTemplateId ?? ""}
                 disabled={!draftPrintLabel}
                 onChange={(e) => {
@@ -278,7 +268,7 @@ export default function WmsReturnsSettingsPanel({ warehouseId }: Props) {
                   </option>
                 ))}
               </select>
-            </div>
+            </WmsControlSettingRow>
           </div>
         )}
       </SettingsSectionCard>

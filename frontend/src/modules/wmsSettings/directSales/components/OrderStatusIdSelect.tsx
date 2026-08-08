@@ -1,41 +1,43 @@
-import type { OrderStatusOption } from "../../../../types/wmsPackingSettings";
-import { orderPanelStatusGroupedSelectLabel } from "../../../../utils/orderPanelStatusUi";
-import { selectClass } from "./settingsUi";
+import { OrderUiStatusField } from "../../../../components/orders/OrderUiStatusField";
+import type { OrderUiPanelSubgroupRead, OrderUiStatusPanelSummary } from "../../../../types/orderUiStatus";
 
 type Props = {
   value: number | null | undefined;
-  options: OrderStatusOption[];
   onChange: (statusId: number | null) => void;
+  panelSummary: OrderUiStatusPanelSummary | null;
+  panelSubgroups: OrderUiPanelSubgroupRead[];
   emptyLabel?: string;
   disabled?: boolean;
+  placeholder?: string;
 };
 
+/** Shared status field for Direct Sales settings (same picker as packing / automations). */
 export function OrderStatusIdSelect({
   value,
-  options,
   onChange,
-  emptyLabel = "— wybierz status —",
+  panelSummary,
+  panelSubgroups,
+  emptyLabel = "— brak —",
   disabled = false,
+  placeholder = "Wybierz status…",
 }: Props) {
-  const resolved =
-    value != null && options.some((o) => o.id === value) ? String(value) : value != null ? "" : "";
+  const hasStatuses =
+    panelSummary != null && panelSummary.groups.some((g) => (g.sub_statuses?.length ?? 0) > 0);
+
+  if (!hasStatuses) {
+    return <p className="text-sm text-slate-500">Brak skonfigurowanych statusów panelu.</p>;
+  }
 
   return (
-    <select
-      className={selectClass}
-      disabled={disabled || options.length === 0}
-      value={resolved}
-      onChange={(e) => {
-        const raw = e.target.value;
-        onChange(raw === "" ? null : Number(raw));
-      }}
-    >
-      <option value="">{options.length === 0 ? "Brak skonfigurowanych statusów" : emptyLabel}</option>
-      {options.map((o) => (
-        <option key={o.id} value={o.id}>
-          {orderPanelStatusGroupedSelectLabel(o)}
-        </option>
-      ))}
-    </select>
+    <OrderUiStatusField
+      panelSummary={panelSummary}
+      panelSubgroups={panelSubgroups}
+      selectedStatusId={value ?? null}
+      allowClear
+      clearLabel={emptyLabel}
+      placeholder={placeholder}
+      disabled={disabled}
+      onPick={(id) => onChange(id)}
+    />
   );
 }

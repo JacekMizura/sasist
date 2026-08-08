@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { listOrderStatuses } from "../../../../api/orderStatusesApi";
+import { getOrderPanelSubgroups, getOrderUiStatusSummary } from "../../../../api/orderUiStatusApi";
 import type { OrderStatusOption } from "../../../../types/wmsPackingSettings";
+import type { OrderUiPanelSubgroupRead, OrderUiStatusPanelSummary } from "../../../../types/orderUiStatus";
 import { writeCachedDirectSalesSettings } from "../../../directSales/settings/directSalesSettingsCache";
 import { getDirectSalesSettings, saveDirectSalesSettings } from "../api/directSalesSettingsApi";
 import type { DirectSalesSettingsConfig, EditScope } from "../schemas/directSalesSettingsSchema";
@@ -19,17 +21,23 @@ export function useDirectSalesSettings(tenantId: number, warehouseId: number | n
   const [savedScopeSnapshot, setSavedScopeSnapshot] = useState("");
   const [hasWarehouseOverride, setHasWarehouseOverride] = useState(false);
   const [statusOptions, setStatusOptions] = useState<OrderStatusOption[]>([]);
+  const [panelSummary, setPanelSummary] = useState<OrderUiStatusPanelSummary | null>(null);
+  const [panelSubgroups, setPanelSubgroups] = useState<OrderUiPanelSubgroupRead[]>([]);
 
   const load = useCallback(async () => {
     if (warehouseId == null) return;
     setLoading(true);
     setError(null);
     try {
-      const [data, statuses] = await Promise.all([
+      const [data, statuses, summary, subgroups] = await Promise.all([
         getDirectSalesSettings({ tenantId, warehouseId }),
         listOrderStatuses(tenantId, warehouseId).catch(() => [] as OrderStatusOption[]),
+        getOrderUiStatusSummary(tenantId, warehouseId, { includeInactive: true }).catch(() => null),
+        getOrderPanelSubgroups(tenantId, warehouseId).catch(() => [] as OrderUiPanelSubgroupRead[]),
       ]);
       setStatusOptions(statuses);
+      setPanelSummary(summary);
+      setPanelSubgroups(subgroups);
       setHasWarehouseOverride(data.has_warehouse_override);
       const base = scope === "tenant" ? data.tenant_defaults : data.resolved;
       const normalized = normalizeDirectSalesSettings(base, statuses);
@@ -52,7 +60,9 @@ export function useDirectSalesSettings(tenantId: number, warehouseId: number | n
   }, [draft, savedScopeSnapshot]);
 
   const patch = useCallback((p: Partial<DirectSalesSettingsConfig>) => {
-    setDraft((prev) => (prev ? { ...prev, ...p, payment_methods: { ...prev.payment_methods, ...(p.payment_methods ?? {}) } } : prev));
+    setDraft((prev) =>
+      prev ? { ...prev, ...p, payment_methods: { ...prev.payment_methods, ...(p.payment_methods ?? {}) } } : prev,
+    );
   }, []);
 
   const save = useCallback(async () => {
@@ -95,6 +105,8 @@ export function useDirectSalesSettings(tenantId: number, warehouseId: number | n
     discard,
     hasWarehouseOverride,
     statusOptions,
+    panelSummary,
+    panelSubgroups,
     reload: load,
   };
 }

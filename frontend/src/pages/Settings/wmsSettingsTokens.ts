@@ -10,14 +10,15 @@ export const wmsSettingsTokens = {
   cardTitle: "text-sm font-semibold text-slate-900",
   cardDescription: "mt-1 text-xs leading-relaxed text-slate-500",
   fieldStack: "space-y-4",
-  fieldGrid: "grid gap-x-6 gap-y-4 sm:grid-cols-2",
+  /** Prefer single-column Sellasist rows ({@link ./wmsSettingRow}); not a 2-col grid. */
+  fieldGrid: "space-y-1",
   help: "mt-1 text-xs leading-relaxed text-slate-500",
-  /** Stacked control under label (legacy). Prefer wmsSettingRow control classes for horizontal rows. */
+  /** Prefer {@link ./wmsSettingRow} `wmsSettingControlSelectClass` for horizontal rows. */
   select:
-    "mt-1.5 w-full max-w-md rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40",
+    "w-full max-w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40",
   input:
-    "mt-1.5 w-full max-w-md rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40",
-  checkbox: "mt-0.5 h-4 w-4 shrink-0 rounded border-slate-300 text-blue-600 focus:ring-blue-500",
+    "w-full max-w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40",
+  checkbox: "h-4 w-4 shrink-0 rounded border-slate-300 text-blue-600 focus:ring-blue-500",
 } as const;
 
 /** Canonical section labels for WMS settings side nav. */

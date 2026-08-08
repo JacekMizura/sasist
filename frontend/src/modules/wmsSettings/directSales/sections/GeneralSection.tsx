@@ -1,3 +1,4 @@
+import type { OrderUiPanelSubgroupRead, OrderUiStatusPanelSummary } from "../../../../types/orderUiStatus";
 import type { OrderStatusOption } from "../../../../types/wmsPackingSettings";
 import { OrderStatusIdSelect } from "../components/OrderStatusIdSelect";
 import type { DirectSalesSettingsConfig } from "../schemas/directSalesSettingsSchema";
@@ -6,10 +7,12 @@ import { FieldRow, selectClass, SettingsCard, ToggleRow } from "../components/se
 type Props = {
   config: DirectSalesSettingsConfig;
   statusOptions: OrderStatusOption[];
+  panelSummary: OrderUiStatusPanelSummary | null;
+  panelSubgroups: OrderUiPanelSubgroupRead[];
   onChange: (patch: Partial<DirectSalesSettingsConfig>) => void;
 };
 
-export function GeneralSection({ config, statusOptions, onChange }: Props) {
+export function GeneralSection({ config, panelSummary, panelSubgroups, onChange }: Props) {
   return (
     <SettingsCard
       id="ds-general"
@@ -28,20 +31,22 @@ export function GeneralSection({ config, statusOptions, onChange }: Props) {
       >
         <OrderStatusIdSelect
           value={config.default_order_status_id}
-          options={statusOptions}
+          panelSummary={panelSummary}
+          panelSubgroups={panelSubgroups}
           onChange={(default_order_status_id) => onChange({ default_order_status_id })}
         />
       </FieldRow>
       <details className="rounded-lg border border-slate-200/90 bg-slate-50/60 p-3 text-sm" open>
         <summary className="cursor-pointer font-medium text-slate-800">Statusy operacyjne workflow</summary>
         <p className="mt-2 text-xs text-slate-500">
-          Statusy z panelu zamówień (grupa / podgrupa). Zapis jako ID — etykiety ładują się dynamicznie z API.
+          Ten sam wybór statusów co w Pakowaniu i Akcjach automatycznych (NOWE / W TOKU / ZAKOŃCZONE).
         </p>
-        <div className="mt-3 space-y-3">
+        <div className="mt-3 space-y-1">
           <FieldRow label="Status po utworzeniu sesji">
             <OrderStatusIdSelect
               value={config.session_created_order_status_id}
-              options={statusOptions}
+              panelSummary={panelSummary}
+              panelSubgroups={panelSubgroups}
               emptyLabel="— brak —"
               onChange={(session_created_order_status_id) => onChange({ session_created_order_status_id })}
             />
@@ -49,7 +54,8 @@ export function GeneralSection({ config, statusOptions, onChange }: Props) {
           <FieldRow label="Status po opłaceniu">
             <OrderStatusIdSelect
               value={config.paid_order_status_id}
-              options={statusOptions}
+              panelSummary={panelSummary}
+              panelSubgroups={panelSubgroups}
               emptyLabel="— brak —"
               onChange={(paid_order_status_id) => onChange({ paid_order_status_id })}
             />
@@ -57,7 +63,8 @@ export function GeneralSection({ config, statusOptions, onChange }: Props) {
           <FieldRow label="Status po wydaniu">
             <OrderStatusIdSelect
               value={config.issued_order_status_id}
-              options={statusOptions}
+              panelSummary={panelSummary}
+              panelSubgroups={panelSubgroups}
               emptyLabel="— brak —"
               onChange={(issued_order_status_id) => onChange({ issued_order_status_id })}
             />
@@ -65,7 +72,8 @@ export function GeneralSection({ config, statusOptions, onChange }: Props) {
           <FieldRow label="Status po anulowaniu">
             <OrderStatusIdSelect
               value={config.cancelled_order_status_id}
-              options={statusOptions}
+              panelSummary={panelSummary}
+              panelSubgroups={panelSubgroups}
               emptyLabel="— brak —"
               onChange={(cancelled_order_status_id) => onChange({ cancelled_order_status_id })}
             />
@@ -76,7 +84,9 @@ export function GeneralSection({ config, statusOptions, onChange }: Props) {
         <select
           className={selectClass}
           value={config.default_document_type}
-          onChange={(e) => onChange({ default_document_type: e.target.value as DirectSalesSettingsConfig["default_document_type"] })}
+          onChange={(e) =>
+            onChange({ default_document_type: e.target.value as DirectSalesSettingsConfig["default_document_type"] })
+          }
         >
           <option value="PA">Paragon (PA)</option>
           <option value="FV">Faktura VAT (FV)</option>

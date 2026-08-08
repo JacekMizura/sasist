@@ -17,6 +17,13 @@ import { WmsSettingsSection } from "./WmsSettingsSection";
 import type { WmsSettingsSectionConfig } from "./wmsSettingsSectionConfig";
 import { DocumentTemplateScopeSection } from "./document-templates/components/DocumentTemplateScopeSection";
 import { PRODUCTION_SCOPE_KINDS } from "./document-templates/documentTemplateScopeKinds";
+import {
+  WmsBoolSettingRow,
+  WmsControlSettingRow,
+  wmsSettingControlInputClass,
+  wmsSettingControlSelectClass,
+  wmsSettingsRowsStackClass,
+} from "./wmsSettingsUi";
 
 const SECTION_FORECAST = "wms-production-forecast";
 const SECTION_RESERVATION = "wms-production-reservation";
@@ -82,17 +89,7 @@ function BoolRow({
   checked: boolean;
   onChange: (v: boolean) => void;
 }) {
-  return (
-    <label className="flex cursor-pointer items-start gap-2.5 py-1.5">
-      <span className="min-w-0 text-sm font-medium text-slate-900">{label}</span>
-      <input
-        type="checkbox"
-        className="mt-0.5 h-4 w-4 shrink-0 rounded border-slate-300"
-        checked={checked}
-        onChange={(e) => onChange(e.target.checked)}
-      />
-    </label>
-  );
+  return <WmsBoolSettingRow label={label} checked={checked} onChange={onChange} />;
 }
 
 const DISPLAY_FIELDS: { key: keyof ProductionTerminalDisplaySettings; label: string }[] = [
@@ -228,11 +225,10 @@ export default function WmsProductionSettingsPanel({ warehouseId }: Props) {
         title="Ogólne"
         summary="Strategia wyliczania dziennej sprzedaży dla planowania zapotrzebowania MRP."
       >
-        <div className="space-y-4">
-          <label className="block">
-            <span className="text-sm font-medium text-slate-900">Strategia prognozy</span>
+        <div className={wmsSettingsRowsStackClass}>
+          <WmsControlSettingRow label="Strategia prognozy">
             <select
-              className="mt-1 w-full max-w-md rounded-lg border border-slate-200 px-3 py-2 text-sm"
+              className={wmsSettingControlSelectClass}
               value={draftForecast.strategy}
               onChange={(e) =>
                 setDraftForecast((prev) =>
@@ -246,14 +242,13 @@ export default function WmsProductionSettingsPanel({ warehouseId }: Props) {
                 </option>
               ))}
             </select>
-          </label>
-          <label className="block max-w-xs">
-            <span className="text-sm font-medium text-slate-900">Okres historii sprzedaży (dni)</span>
+          </WmsControlSettingRow>
+          <WmsControlSettingRow label="Okres historii sprzedaży (dni)">
             <input
               type="number"
               min={7}
               max={365}
-              className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+              className={wmsSettingControlInputClass}
               value={draftForecast.sales_lookback_days}
               onChange={(e) =>
                 setDraftForecast((prev) =>
@@ -261,7 +256,7 @@ export default function WmsProductionSettingsPanel({ warehouseId }: Props) {
                 )
               }
             />
-          </label>
+          </WmsControlSettingRow>
         </div>
       </SectionCard>
 
@@ -270,41 +265,37 @@ export default function WmsProductionSettingsPanel({ warehouseId }: Props) {
         title="Rezerwacje"
         summary="Strategia automatycznej alokacji lokalizacji przy rezerwacji surowców produkcji."
       >
-        <label className="block max-w-md">
-          <span className="text-sm font-medium text-slate-900">Strategia alokacji</span>
-          <select
-            className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
-            value={draftReservation.allocation_strategy}
-            onChange={(e) =>
-              setDraftReservation((prev) =>
-                prev
-                  ? { ...prev, allocation_strategy: e.target.value as ProductionReservationSettings["allocation_strategy"] }
-                  : prev,
-              )
-            }
-          >
-            {ALLOCATION_STRATEGIES.map((s) => (
-              <option key={s.key} value={s.key}>
-                {s.label}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="mt-4 flex max-w-md items-start gap-2.5">
-          <span className="min-w-0 text-sm text-slate-700">
-            Dopuszczaj lokalizacje sprzedażowe (sklep, ekspozycja, POS) przy rezerwacji materiałów.
-          </span>
-          <input
-            type="checkbox"
-            className="mt-1 h-4 w-4 shrink-0 rounded border-slate-300"
+        <div className={wmsSettingsRowsStackClass}>
+          <WmsControlSettingRow label="Strategia alokacji">
+            <select
+              className={wmsSettingControlSelectClass}
+              value={draftReservation.allocation_strategy}
+              onChange={(e) =>
+                setDraftReservation((prev) =>
+                  prev
+                    ? {
+                        ...prev,
+                        allocation_strategy: e.target.value as ProductionReservationSettings["allocation_strategy"],
+                      }
+                    : prev,
+                )
+              }
+            >
+              {ALLOCATION_STRATEGIES.map((s) => (
+                <option key={s.key} value={s.key}>
+                  {s.label}
+                </option>
+              ))}
+            </select>
+          </WmsControlSettingRow>
+          <WmsBoolSettingRow
+            label="Dopuszczaj lokalizacje sprzedażowe (sklep, ekspozycja, POS) przy rezerwacji materiałów."
             checked={draftReservation.allow_sales_locations}
-            onChange={(e) =>
-              setDraftReservation((prev) =>
-                prev ? { ...prev, allow_sales_locations: e.target.checked } : prev,
-              )
+            onChange={(v) =>
+              setDraftReservation((prev) => (prev ? { ...prev, allow_sales_locations: v } : prev))
             }
           />
-        </label>
+        </div>
       </SectionCard>
 
       <SectionCard
@@ -312,7 +303,7 @@ export default function WmsProductionSettingsPanel({ warehouseId }: Props) {
         title="Widok"
         summary="Elementy widoczne operatorowi w terminalu zbierania i produkcji."
       >
-        <div className="grid gap-1 sm:grid-cols-2">
+        <div className={wmsSettingsRowsStackClass}>
           {DISPLAY_FIELDS.map(({ key, label }) => (
             <BoolRow
               key={key}
@@ -329,7 +320,7 @@ export default function WmsProductionSettingsPanel({ warehouseId }: Props) {
         title="Terminal"
         summary="Pola wymagane przy zakończeniu produkcji w terminalu WMS."
       >
-        <div className="grid gap-1 sm:grid-cols-2">
+        <div className={wmsSettingsRowsStackClass}>
           {REQUIRED_FIELDS.map(({ key, label }) => (
             <BoolRow
               key={key}

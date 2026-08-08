@@ -1,5 +1,5 @@
 import type { DirectSalesSettingsConfig } from "../schemas/directSalesSettingsSchema";
-import { FieldRow, SettingsCard, ToggleRow } from "../components/settingsUi";
+import { FieldRow, inputClass, SettingsCard, ToggleRow } from "../components/settingsUi";
 
 type Props = {
   config: DirectSalesSettingsConfig;
@@ -43,7 +43,7 @@ export function DiscountsSection({ config, onChange }: Props) {
           min={0}
           max={100}
           step={1}
-          className="mt-1.5 w-full max-w-xs rounded-lg border border-slate-200 px-3 py-2 text-sm"
+          className={inputClass}
           value={d.max_discount_percent}
           onChange={(e) => {
             const v = Number(e.target.value);
@@ -58,7 +58,7 @@ export function DiscountsSection({ config, onChange }: Props) {
       >
         <input
           type="text"
-          className="mt-1.5 w-full max-w-md rounded-lg border border-slate-200 px-3 py-2 text-sm"
+          className={inputClass}
           value={d.quick_discount_percents.join(", ")}
           onChange={(e) => {
             const parts = e.target.value

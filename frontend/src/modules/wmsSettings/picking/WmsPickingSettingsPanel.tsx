@@ -14,7 +14,7 @@ import {
   type ReactNode,
   type SetStateAction,
 } from "react";
-import { getOrderUiStatusSummary } from "../../../api/orderUiStatusApi";
+import { getOrderPanelSubgroups, getOrderUiStatusSummary } from "../../../api/orderUiStatusApi";
 import {
   listPickingConfigs,
   replacePickingConfigsForWarehouse,
@@ -24,7 +24,11 @@ import {
   type WmsPickingConfigReplaceItem,
 } from "../../../api/wmsPickingConfigApi";
 import { useWarehouse } from "../../../context/WarehouseContext";
-import type { OrderUiMainGroup, OrderUiStatusPanelSummary } from "../../../types/orderUiStatus";
+import type {
+  OrderUiMainGroup,
+  OrderUiPanelSubgroupRead,
+  OrderUiStatusPanelSummary,
+} from "../../../types/orderUiStatus";
 import { DAMAGE_TENANT_ID } from "../../../pages/damage/damageShared";
 import toast from "react-hot-toast";
 import {
@@ -44,38 +48,41 @@ import { WmsSettingsSection } from "../../../pages/Settings/WmsSettingsSection";
 import { WmsSettingCard } from "../../../pages/Settings/WmsSettingCard";
 import { WmsSettingsTabFrame } from "../../../pages/Settings/WmsSettingsTabFrame";
 import { wmsSettingsTokens } from "../../../pages/Settings/wmsSettingsTokens";
+import {
+  WmsBoolSettingRow,
+  WmsControlSettingRow,
+  wmsSettingControlInputClass,
+  wmsSettingControlSelectClass,
+  wmsSettingsRowsStackClass,
+} from "../../../pages/Settings/wmsSettingsUi";
+import { OrderUiStatusField } from "../../../components/orders/OrderUiStatusField";
 import { PickingSettingsModal } from "./PickingSettingsModal";
 import { WMS_PICKING_SETTINGS_NAV_SECTIONS } from "./pickingSettingsNavSections";
-import {
-  PickingStatusSelect,
-  pickingStatusBadgeColor,
-  type PickingStatusSelectOption,
-} from "./PickingStatusSelect";
 import { brandPrimaryButtonClass } from "../../../design-system/brandUi";
 
 const PANEL_STATUS_GROUP_ORDER: OrderUiMainGroup[] = ["NEW", "IN_PROGRESS", "DONE"];
 
-/** Flat status list for picking selects — NEW → IN_PROGRESS → DONE, then sort_order. */
+/** Flat status list for name lookups / selectable-id checks — NEW → IN_PROGRESS → DONE, then sort_order. */
 function flattenOrderUiStatusOptions(
   summary: OrderUiStatusPanelSummary | null,
-): PickingStatusSelectOption[] {
+): Array<{ id: number; name: string }> {
   if (!summary) return [];
   const byMain = new Map(summary.groups.map((g) => [g.main_group, g]));
-  const out: PickingStatusSelectOption[] = [];
+  const out: Array<{ id: number; name: string }> = [];
   for (const mg of PANEL_STATUS_GROUP_ORDER) {
     const block = byMain.get(mg);
     if (!block) continue;
     const subs = [...block.sub_statuses].sort((a, b) => a.sort_order - b.sort_order || a.id - b.id);
     for (const s of subs) {
-      out.push({
-        id: s.id,
-        name: s.name,
-        main_group: s.main_group,
-        badgeColor: pickingStatusBadgeColor(s.color, s.badge_color, s.main_group),
-      });
+      out.push({ id: s.id, name: s.name });
     }
   }
   return out;
+}
+
+function statusIdFromSettingValue(value: string): number | null {
+  const n = Number(value);
+  return Number.isFinite(n) && n > 0 ? n : null;
 }
 
 const BULK_ORDER_LIMIT_MAX = 100;
@@ -95,14 +102,13 @@ function parseBulkOrderLimitInput(
   return { ok: true, value: n };
 }
 
-const selectClass = wmsSettingsTokens.select;
+const selectClass = wmsSettingControlSelectClass;
 const radioLabelClass =
   "flex cursor-pointer items-center gap-2.5 rounded-lg border border-transparent px-3 py-2 hover:bg-slate-50 transition-colors has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-blue-500/30";
 const radioInputClass = "h-4 w-4 shrink-0 border-slate-300 text-blue-600 focus:ring-blue-500 bg-white cursor-pointer";
 
-const textInputClassPicking = wmsSettingsTokens.input;
-const numberInputClass =
-  "mt-1.5 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm tabular-nums outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40";
+const textInputClassPicking = wmsSettingControlSelectClass;
+const numberInputClass = wmsSettingControlInputClass;
 const fieldHintClass = "mt-1.5 text-xs leading-relaxed text-slate-500";
 const configBlockTitleClass = "text-sm font-semibold text-slate-900";
 
@@ -152,7 +158,7 @@ function SubsectionPicking({ title, description, children }: { title: string; de
 }
 
 function FieldGridPicking({ children }: { children: ReactNode }) {
-  return <div className={wmsSettingsTokens.fieldGrid}>{children}</div>;
+  return <div className={wmsSettingsRowsStackClass}>{children}</div>;
 }
 
 function HelpPicking({ children }: { children: ReactNode }) {
@@ -173,34 +179,9 @@ function BoolRowPicking({
   title?: string;
 }) {
   return (
-    <label className="group flex cursor-pointer items-start gap-2.5 py-1" title={title}>
-      <span className="min-w-0">
-        <span className="block text-sm font-medium text-slate-700 transition-colors group-hover:text-slate-900">{label}</span>
-        {help ? <HelpPicking>{help}</HelpPicking> : null}
-      </span>
-      <div className="relative mt-0.5 flex shrink-0 items-center justify-center">
-        <input
-          type="checkbox"
-          className="peer sr-only"
-          checked={checked}
-          onChange={(e) => onChange(e.target.checked)}
-        />
-        <div
-          className={`flex h-5 w-5 items-center justify-center rounded border transition-colors
-          ${
-            checked
-              ? "border-blue-600 bg-blue-600 text-white"
-              : "border-slate-300 bg-white group-hover:border-blue-400"
-          }`}
-        >
-          {checked && (
-            <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-            </svg>
-          )}
-        </div>
-      </div>
-    </label>
+    <div title={title}>
+      <WmsBoolSettingRow label={label} checked={checked} onChange={onChange} hint={help} />
+    </div>
   );
 }
 
@@ -220,38 +201,14 @@ function CustomCheckbox({
   settingId?: string;
 }) {
   return (
-    <label
-      {...(settingId ? { "data-wms-setting-id": settingId } : {})}
-      className={`wms-setting-field group flex cursor-pointer items-start gap-2.5 rounded-lg py-1 ${disabled ? "cursor-not-allowed opacity-50" : ""}`}
-    >
-      <span className="min-w-0 select-none">
-        <span className="block text-sm font-semibold text-slate-900">{label}</span>
-        {hint && <span className={`${fieldHintClass} block`}>{hint}</span>}
-      </span>
-      <div className="relative mt-0.5 flex shrink-0 items-center justify-center">
-        <input
-          type="checkbox"
-          className="peer sr-only"
-          checked={checked}
-          onChange={(e) => !disabled && onChange(e.target.checked)}
-          disabled={disabled}
-        />
-        <div
-          className={`flex h-5 w-5 items-center justify-center rounded border transition-colors
-          ${
-            checked
-              ? "border-blue-600 bg-blue-600 text-white"
-              : "border-slate-300 bg-white group-hover:border-blue-400"
-          }`}
-        >
-          {checked && (
-            <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-            </svg>
-          )}
-        </div>
-      </div>
-    </label>
+    <WmsBoolSettingRow
+      label={label}
+      hint={hint}
+      checked={checked}
+      onChange={onChange}
+      disabled={disabled}
+      settingId={settingId}
+    />
   );
 }
 
@@ -285,12 +242,23 @@ const PickingShortageSettingsPanel = forwardRef<
     tenantId: number;
     warehouseId: number | null;
     statusOptionsFlat: Array<{ id: number; name: string }>;
+    orderUiSummary: OrderUiStatusPanelSummary | null;
+    panelSubgroups: OrderUiPanelSubgroupRead[];
     orderUiLoading: boolean;
     orderUiErr: string | null;
     onDirtyChange?: (dirty: boolean) => void;
   }
 >(function PickingShortageSettingsPanel(
-  { tenantId, warehouseId, statusOptionsFlat, orderUiLoading, orderUiErr, onDirtyChange },
+  {
+    tenantId,
+    warehouseId,
+    statusOptionsFlat,
+    orderUiSummary,
+    panelSubgroups,
+    orderUiLoading,
+    orderUiErr,
+    onDirtyChange,
+  },
   ref,
 ) {
   const settingsLoadedOkRef = useRef(false);
@@ -504,58 +472,48 @@ const PickingShortageSettingsPanel = forwardRef<
       {loading || orderUiLoading ? (
         <p className="text-sm font-medium text-slate-500">Wczytywanie…</p>
       ) : (
-        <div className="space-y-6">
-          <div>
-            <label className="text-sm font-medium text-slate-900">Status zamówienia z brakującymi produktami</label>
-            <select
-              className={selectClass}
-              value={reportedStatus}
-              onChange={(e) => setReportedStatus(e.target.value)}
-              disabled={saving}
-            >
-              <option value="">— Bez zmiany statusu</option>
-              {statusOptionsFlat.map((s) => (
-                <option key={s.id} value={String(s.id)}>
-                  {s.name}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div className="rounded-xl border border-white/50 bg-white/60 p-4 shadow-sm">
-            <CustomCheckbox
-              label="Pokaż zamówienie w zakładce Braki po zgłoszeniu braku"
-              hint="Zamówienie trafi na listę do decyzji / uzupełnienia braków."
-              checked={autoBraki}
-              onChange={setAutoBraki}
+        <div className={wmsSettingsRowsStackClass}>
+          <WmsControlSettingRow label="Status zamówienia z brakującymi produktami">
+            <OrderUiStatusField
+              panelSummary={orderUiSummary}
+              panelSubgroups={panelSubgroups}
+              selectedStatusId={statusIdFromSettingValue(reportedStatus)}
+              onPick={(id) => setReportedStatus(id != null ? String(id) : "")}
+              allowClear
+              clearLabel="— Bez zmiany statusu"
               disabled={saving}
             />
-          </div>
+          </WmsControlSettingRow>
 
-          <div className="rounded-xl border border-white/50 bg-white/60 p-4 shadow-sm">
-            <CustomCheckbox
-              label="Pozwól magazynierowi zbierać pozostałe produkty po zgłoszeniu braku"
-              hint="Po zgłoszeniu braku można dalej zbierać inne pozycje z tego zamówienia."
-              checked={allowContinue}
-              onChange={setAllowContinue}
-              disabled={saving}
-            />
-          </div>
+          <CustomCheckbox
+            label="Pokaż zamówienie w zakładce Braki po zgłoszeniu braku"
+            hint="Zamówienie trafi na listę do decyzji / uzupełnienia braków."
+            checked={autoBraki}
+            onChange={setAutoBraki}
+            disabled={saving}
+          />
 
-          <div className="rounded-xl border border-white/50 bg-white/60 p-4 shadow-sm">
-            <CustomCheckbox
-              label="Wyłącz auto-odpinanie zamówień z brakami z wózków"
-              hint="Odznaczone = po zakończeniu zbierania zamówienia z brakami są odpinane z wózka. Zaznaczone = zostają na wózku."
-              checked={disableAutoDetach}
-              onChange={setDisableAutoDetach}
-              disabled={saving}
-            />
-          </div>
+          <CustomCheckbox
+            label="Pozwól magazynierowi zbierać pozostałe produkty po zgłoszeniu braku"
+            hint="Po zgłoszeniu braku można dalej zbierać inne pozycje z tego zamówienia."
+            checked={allowContinue}
+            onChange={setAllowContinue}
+            disabled={saving}
+          />
 
-          <div>
-            <span className="text-sm font-medium text-slate-900">Priorytet po rozwiązaniu problemu</span>
-            <p className={fieldHintClass}>Określa jak szybko zamówienie wróci do realizacji.</p>
-            <div className="mt-2 space-y-1">
+          <CustomCheckbox
+            label="Wyłącz auto-odpinanie zamówień z brakami z wózków"
+            hint="Odznaczone = po zakończeniu zbierania zamówienia z brakami są odpinane z wózka. Zaznaczone = zostają na wózku."
+            checked={disableAutoDetach}
+            onChange={setDisableAutoDetach}
+            disabled={saving}
+          />
+
+          <WmsControlSettingRow
+            label="Priorytet po rozwiązaniu problemu"
+            hint="Określa jak szybko zamówienie wróci do realizacji."
+          >
+            <div className="space-y-1">
               {PRIORITY_OPTIONS.map((o) => (
                 <label key={o.value} className={radioLabelClass}>
                   <input
@@ -571,35 +529,30 @@ const PickingShortageSettingsPanel = forwardRef<
                 </label>
               ))}
             </div>
-          </div>
+          </WmsControlSettingRow>
 
-          <div className="rounded-xl border border-white/50 bg-white/60 p-4 shadow-sm">
-            <CustomCheckbox
-              label="Po rozwiązaniu problemu pokaż zamówienie ponownie w Zbieraniu"
-              hint="Po podmianie produktu lub cofnięciu braku zamówienie wróci na listę zbierania."
-              checked={autoReopen}
-              onChange={setAutoReopen}
+          <CustomCheckbox
+            label="Po rozwiązaniu problemu pokaż zamówienie ponownie w Zbieraniu"
+            hint="Po podmianie produktu lub cofnięciu braku zamówienie wróci na listę zbierania."
+            checked={autoReopen}
+            onChange={setAutoReopen}
+            disabled={saving}
+          />
+
+          <WmsControlSettingRow
+            label="Status po zebraniu brakujących produktów"
+            hint="Status ustawiany po zebraniu brakujących pozycji."
+          >
+            <OrderUiStatusField
+              panelSummary={orderUiSummary}
+              panelSubgroups={panelSubgroups}
+              selectedStatusId={statusIdFromSettingValue(recoveryStatus)}
+              onPick={(id) => setRecoveryStatus(id != null ? String(id) : "")}
+              allowClear
+              clearLabel="— Jak w ustawieniach Pakowanie (status startu)"
               disabled={saving}
             />
-          </div>
-
-          <div>
-            <label className="text-sm font-medium text-slate-900">Status po zebraniu brakujących produktów</label>
-            <p className={fieldHintClass}>Status ustawiany po zebraniu brakujących pozycji.</p>
-            <select
-              className={selectClass}
-              value={recoveryStatus}
-              onChange={(e) => setRecoveryStatus(e.target.value)}
-              disabled={saving}
-            >
-              <option value="">— Jak w ustawieniach Pakowanie (status startu)</option>
-              {statusOptionsFlat.map((s) => (
-                <option key={`r-${s.id}`} value={String(s.id)}>
-                  {s.name}
-                </option>
-              ))}
-            </select>
-          </div>
+          </WmsControlSettingRow>
 
           <div className="rounded-xl border border-amber-200/80 bg-amber-50/50 p-4 space-y-2">
             <h4 className="text-sm font-black uppercase tracking-widest text-amber-950">Walidacja WMS</h4>
@@ -607,20 +560,17 @@ const PickingShortageSettingsPanel = forwardRef<
               Zamówienie, którego nie da się skompletować (brak lokalizacji / stock / blokada), nie wejdzie do Capacity.
               Bez wybranego statusu — gate działa, ale status panelu nie jest zmieniany.
             </p>
-            <label className="text-sm font-medium text-slate-900">Status po błędzie walidacji</label>
-            <select
-              className={selectClass}
-              value={validationFailedStatus}
-              onChange={(e) => setValidationFailedStatus(e.target.value)}
-              disabled={saving}
-            >
-              <option value="">— Bez zmiany statusu (tylko gate)</option>
-              {statusOptionsFlat.map((s) => (
-                <option key={`v-${s.id}`} value={String(s.id)}>
-                  {s.name}
-                </option>
-              ))}
-            </select>
+            <WmsControlSettingRow label="Status po błędzie walidacji">
+              <OrderUiStatusField
+                panelSummary={orderUiSummary}
+                panelSubgroups={panelSubgroups}
+                selectedStatusId={statusIdFromSettingValue(validationFailedStatus)}
+                onPick={(id) => setValidationFailedStatus(id != null ? String(id) : "")}
+                allowClear
+                clearLabel="— Bez zmiany statusu (tylko gate)"
+                disabled={saving}
+              />
+            </WmsControlSettingRow>
           </div>
 
           <p className="text-xs text-slate-500 pt-2 border-t border-slate-200/50">Zapis zmian — przycisk „Zapisz” na dole strony.</p>
@@ -1334,6 +1284,7 @@ function PickingConfiguratorEditor({
   fieldIdPrefix,
   warehouseId,
   orderUiSummary,
+  panelSubgroups,
   orderUiLoading,
   orderUiErr,
   statusToPick,
@@ -1351,11 +1302,11 @@ function PickingConfiguratorEditor({
   onOrderSortChange,
   blocks,
   patchBlock,
-  reservedStatusIds,
 }: {
   fieldIdPrefix: string;
   warehouseId: number | null;
   orderUiSummary: OrderUiStatusPanelSummary | null;
+  panelSubgroups: OrderUiPanelSubgroupRead[];
   orderUiLoading: boolean;
   orderUiErr: string | null;
   statusToPick: string;
@@ -1373,13 +1324,8 @@ function PickingConfiguratorEditor({
   onOrderSortChange: (sort: PickingOrderSort) => void;
   blocks: Record<PickingOrderTypeKey, PickingBlockState>;
   patchBlock: (key: PickingOrderTypeKey, patch: Partial<PickingBlockState>) => void;
-  reservedStatusIds: Set<number>;
 }) {
   const allStatusOptions = useMemo(() => flattenOrderUiStatusOptions(orderUiSummary), [orderUiSummary]);
-  const statusOptionsForPick = useMemo(() => {
-    const pickId = Number(statusToPick);
-    return allStatusOptions.filter((o) => !reservedStatusIds.has(o.id) || o.id === pickId);
-  }, [allStatusOptions, reservedStatusIds, statusToPick]);
 
   const selectDisabled =
     warehouseId == null || orderUiLoading || orderUiErr != null || allStatusOptions.length === 0;
@@ -1401,70 +1347,86 @@ function PickingConfiguratorEditor({
         </p>
       ) : null}
 
-      <div className="grid gap-3 lg:grid-cols-2">
-        <div className="rounded-xl border border-slate-200 bg-white p-3.5">
-          <label className="block">
-            <span className="text-sm font-medium text-slate-900">Status do zbierania</span>
-            <span className="ml-1 text-red-600" aria-hidden>
-              *
-            </span>
-            <PickingStatusSelect
-              value={statusToPick}
-              onChange={onStatusToPickChange}
-              onBlur={onStatusToPickBlur}
-              options={statusOptionsForPick}
-              disabled={selectDisabled}
-              loading={orderUiLoading}
-              invalid={statusToPickRequired || statusPairConflict}
-              aria-required
-              aria-invalid={statusToPickRequired || statusPairConflict}
-              aria-busy={orderUiLoading}
-            />
-          </label>
-          {statusToPickRequired ? (
-            <p className="mt-1.5 text-xs font-medium text-red-700" role="alert">
-              To pole jest wymagane.
-            </p>
-          ) : null}
-          {statusPairConflict ? (
-            <p className="mt-1.5 text-xs font-medium text-red-700" role="alert">
-              Status do zbierania nie może być taki sam jak status po zebraniu.
-            </p>
-          ) : null}
-          <p className={fieldHintClass}>Każdy status może mieć tylko jedną zapisaną konfigurację.</p>
-        </div>
+      <div className={wmsSettingsRowsStackClass}>
+        <WmsControlSettingRow
+          label={
+            <>
+              Status do zbierania
+              <span className="ml-1 text-red-600" aria-hidden>
+                *
+              </span>
+            </>
+          }
+          hint="Każdy status może mieć tylko jedną zapisaną konfigurację."
+          footer={
+            <>
+              {statusToPickRequired ? (
+                <p className="mt-1.5 text-xs font-medium text-red-700" role="alert">
+                  To pole jest wymagane.
+                </p>
+              ) : null}
+              {statusPairConflict ? (
+                <p className="mt-1.5 text-xs font-medium text-red-700" role="alert">
+                  Status do zbierania nie może być taki sam jak status po zebraniu.
+                </p>
+              ) : null}
+            </>
+          }
+        >
+          <OrderUiStatusField
+            panelSummary={orderUiSummary}
+            panelSubgroups={panelSubgroups}
+            selectedStatusId={statusIdFromSettingValue(statusToPick)}
+            onPick={(id) => {
+              onStatusToPickChange(id != null ? String(id) : "");
+              onStatusToPickBlur();
+            }}
+            allowClear
+            clearLabel="— wybierz —"
+            placeholder="Wybierz status…"
+            disabled={selectDisabled}
+          />
+        </WmsControlSettingRow>
 
-        <div className="rounded-xl border border-slate-200 bg-white p-3.5">
-          <label className="block">
-            <span className="text-sm font-medium text-slate-900">Status po zakończeniu zbierania</span>
-            <span className="ml-1 text-red-600" aria-hidden>
-              *
-            </span>
-            <PickingStatusSelect
-              value={statusAfterPick}
-              onChange={onStatusAfterPickChange}
-              onBlur={onStatusAfterPickBlur}
-              options={allStatusOptions}
-              disabled={selectDisabled}
-              loading={orderUiLoading}
-              invalid={statusAfterPickRequired || statusPairConflict}
-              aria-required
-              aria-invalid={statusAfterPickRequired || statusPairConflict}
-              aria-busy={orderUiLoading}
-            />
-          </label>
-          {statusAfterPickRequired ? (
-            <p className="mt-1.5 text-xs font-medium text-red-700" role="alert">
-              Wybierz status po zebraniu.
-            </p>
-          ) : null}
-          {statusPairConflict ? (
-            <p className="mt-1.5 text-xs font-medium text-red-700" role="alert">
-              Wybierz inny status niż „do zbierania”, aby uniknąć pętli w procesie.
-            </p>
-          ) : null}
-          <p className={fieldHintClass}>Po zakończeniu zbierania status zamówienia zostanie automatycznie zmieniony.</p>
-        </div>
+        <WmsControlSettingRow
+          label={
+            <>
+              Status po zakończeniu zbierania
+              <span className="ml-1 text-red-600" aria-hidden>
+                *
+              </span>
+            </>
+          }
+          hint="Po zakończeniu zbierania status zamówienia zostanie automatycznie zmieniony."
+          footer={
+            <>
+              {statusAfterPickRequired ? (
+                <p className="mt-1.5 text-xs font-medium text-red-700" role="alert">
+                  Wybierz status po zebraniu.
+                </p>
+              ) : null}
+              {statusPairConflict ? (
+                <p className="mt-1.5 text-xs font-medium text-red-700" role="alert">
+                  Wybierz inny status niż „do zbierania”, aby uniknąć pętli w procesie.
+                </p>
+              ) : null}
+            </>
+          }
+        >
+          <OrderUiStatusField
+            panelSummary={orderUiSummary}
+            panelSubgroups={panelSubgroups}
+            selectedStatusId={statusIdFromSettingValue(statusAfterPick)}
+            onPick={(id) => {
+              onStatusAfterPickChange(id != null ? String(id) : "");
+              onStatusAfterPickBlur();
+            }}
+            allowClear
+            clearLabel="— wybierz —"
+            placeholder="Wybierz status…"
+            disabled={selectDisabled}
+          />
+        </WmsControlSettingRow>
       </div>
 
       <div className="grid gap-3 lg:grid-cols-2">
@@ -1729,15 +1691,11 @@ export function WmsPickingSettingsSections({
   const [extendedOk, setExtendedOk] = useState<string | null>(null);
 
   const [orderUiSummary, setOrderUiSummary] = useState<OrderUiStatusPanelSummary | null>(null);
+  const [panelSubgroups, setPanelSubgroups] = useState<OrderUiPanelSubgroupRead[]>([]);
   const [orderUiLoading, setOrderUiLoading] = useState(false);
   const [orderUiErr, setOrderUiErr] = useState<string | null>(null);
 
   const statusOptionsFlat = useMemo(() => flattenOrderUiStatusOptions(orderUiSummary), [orderUiSummary]);
-
-  const reservedStatusIds = useMemo(
-    () => new Set(savedConfigs.map((c) => c.statusToPickId)),
-    [savedConfigs],
-  );
 
   const draftDirty = useMemo(() => {
     if (!draft) return false;
@@ -1785,17 +1743,23 @@ export function WmsPickingSettingsSections({
   const loadOrderUiStatuses = useCallback(async () => {
     if (warehouseId == null) {
       setOrderUiSummary(null);
+      setPanelSubgroups([]);
       setOrderUiErr(null);
       return;
     }
     setOrderUiLoading(true);
     setOrderUiErr(null);
     try {
-      const data = await getOrderUiStatusSummary(DAMAGE_TENANT_ID, warehouseId);
+      const [data, subgroups] = await Promise.all([
+        getOrderUiStatusSummary(DAMAGE_TENANT_ID, warehouseId),
+        getOrderPanelSubgroups(DAMAGE_TENANT_ID, warehouseId).catch(() => [] as OrderUiPanelSubgroupRead[]),
+      ]);
       setOrderUiSummary(data);
+      setPanelSubgroups(subgroups);
     } catch {
       setOrderUiErr("Nie udało się wczytać statusów panelu zamówień.");
       setOrderUiSummary(null);
+      setPanelSubgroups([]);
     } finally {
       setOrderUiLoading(false);
     }
@@ -2517,24 +2481,17 @@ export function WmsPickingSettingsSections({
 
         <SectionCardPicking id="wms-pick-shortage" title="Braki przy zbieraniu" summary="Statusy po zgłoszeniu braku, priorytety i dogrywka.">
           <SubsectionPicking title="Status zamówienia z brakującymi produktami" description="Preferencja lokalna (przeglądarka) — uzupełnienie do ustawień API poniżej.">
-            <label className="block text-sm font-medium text-slate-700">
-              Status zamówienia z brakującymi produktami
-              <select
-                className={selectClass}
-                value={extended.shortageOrderStatusId ?? ""}
-                onChange={(e) => {
-                  const v = e.target.value.trim();
-                  patchExtended("shortageOrderStatusId", v === "" ? null : Number(v));
-                }}
-              >
-                <option value="">— brak —</option>
-                {statusOptionsFlat.map((o) => (
-                  <option key={o.id} value={String(o.id)}>
-                    {o.name}
-                  </option>
-                ))}
-              </select>
-            </label>
+            <WmsControlSettingRow label="Status zamówienia z brakującymi produktami">
+              <OrderUiStatusField
+                panelSummary={orderUiSummary}
+                panelSubgroups={panelSubgroups}
+                selectedStatusId={extended.shortageOrderStatusId}
+                onPick={(id) => patchExtended("shortageOrderStatusId", id)}
+                allowClear
+                clearLabel="— brak —"
+                placeholder="Wybierz status…"
+              />
+            </WmsControlSettingRow>
           </SubsectionPicking>
 
           <PickingShortageSettingsPanel
@@ -2542,6 +2499,8 @@ export function WmsPickingSettingsSections({
             tenantId={DAMAGE_TENANT_ID}
             warehouseId={warehouseId}
             statusOptionsFlat={statusOptionsFlat}
+            orderUiSummary={orderUiSummary}
+            panelSubgroups={panelSubgroups}
             orderUiLoading={orderUiLoading}
             orderUiErr={orderUiErr}
             onDirtyChange={setShortagePanelDirty}
@@ -2668,6 +2627,7 @@ export function WmsPickingSettingsSections({
             fieldIdPrefix={`picking-draft-${draft.id.slice(0, 8)}`}
             warehouseId={warehouseId}
             orderUiSummary={orderUiSummary}
+            panelSubgroups={panelSubgroups}
             orderUiLoading={orderUiLoading}
             orderUiErr={orderUiErr}
             statusToPick={draft.statusToPick}
@@ -2687,7 +2647,6 @@ export function WmsPickingSettingsSections({
             onOrderSortChange={(sort) => setDraft((d) => (d ? { ...d, orderSort: sort } : d))}
             blocks={draft.blocks}
             patchBlock={patchDraftBlock}
-            reservedStatusIds={reservedStatusIds}
           />
         ) : null}
       </PickingSettingsModal>

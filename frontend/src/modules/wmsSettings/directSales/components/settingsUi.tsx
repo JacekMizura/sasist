@@ -5,11 +5,14 @@ import {
   WmsBoolSettingRow,
   WmsControlSettingRow,
   wmsSettingCheckboxClass,
+  wmsSettingControlInputClass,
   wmsSettingControlSelectClass,
 } from "../../../../pages/Settings/wmsSettingRow";
+import { wmsSettingsRowsStackClass } from "../../../../pages/Settings/wmsSettingsUi";
 import { DIRECT_SALES_SETTINGS_NAV_SECTIONS } from "../directSalesSettingsNavSections";
 
 export const selectClass = wmsSettingControlSelectClass;
+export const inputClass = wmsSettingControlInputClass;
 export const checkboxClass = wmsSettingCheckboxClass;
 
 export function SettingsCard({
@@ -33,7 +36,7 @@ export function SettingsCard({
       iconClassName={meta?.iconClassName}
       searchText={meta?.searchText}
     >
-      {children}
+      <div className={wmsSettingsRowsStackClass}>{children}</div>
     </WmsSettingsSection>
   );
 }
