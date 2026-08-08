@@ -206,6 +206,7 @@ def _get_or_create_packing_settings(db: Session, tenant_id: int, warehouse_id: i
     row = WmsPackingSettings(
         tenant_id=int(tenant_id),
         warehouse_id=int(warehouse_id),
+        allowed_start_status_ids_json="[]",
         auto_actions_json="{}",
         document_settings_json="{}",
         fallback_label_json="{}",
@@ -276,6 +277,40 @@ def _assert_sale_series_id(
         )
 
 
+def _parse_allowed_start_status_ids(raw: object | None) -> list[int]:
+    if raw is None:
+        return []
+    data = raw
+    if isinstance(raw, str):
+        try:
+            data = json.loads(raw or "[]")
+        except json.JSONDecodeError:
+            return []
+    if not isinstance(data, list):
+        return []
+    out: list[int] = []
+    seen: set[int] = set()
+    for item in data:
+        try:
+            n = int(item)
+        except (TypeError, ValueError):
+            continue
+        if n <= 0 or n in seen:
+            continue
+        seen.add(n)
+        out.append(n)
+    return out
+
+
+def _normalize_packing_after_finish_action_read(raw: object | None) -> str:
+    u = str(raw or "STAY").strip().upper()
+    if u == "GO_TO_LIST":
+        return "GO_TO_LIST"
+    if u == "NEXT_ORDER":
+        return "NEXT_ORDER"
+    return "STAY"
+
+
 def _packing_row_to_read(row: WmsPackingSettings) -> WmsPackingSettingsRead:
     def _loads(raw: str, default: dict) -> dict:
         try:
@@ -297,15 +332,16 @@ def _packing_row_to_read(row: WmsPackingSettings) -> WmsPackingSettingsRead:
     ui = WmsPackingInterfaceDisplay.model_validate(
         {**WmsPackingInterfaceDisplay().model_dump(), **_loads(raw_idisp if isinstance(raw_idisp, str) else "{}", {})}
     )
-    raw_action = getattr(row, "packing_after_finish_action", None) or "STAY"
-    action = "GO_TO_LIST" if str(raw_action).strip().upper() == "GO_TO_LIST" else "STAY"
+    action = _normalize_packing_after_finish_action_read(getattr(row, "packing_after_finish_action", None))
+    allowed_ids = _parse_allowed_start_status_ids(getattr(row, "allowed_start_status_ids_json", None))
     return WmsPackingSettingsRead(
         tenant_id=int(row.tenant_id),
         warehouse_id=int(row.warehouse_id),
         start_status_id=row.start_status_id,
         packed_status_id=row.packed_status_id,
         missing_status_id=row.missing_status_id,
-        packing_after_finish_action=action,
+        allowed_start_status_ids=allowed_ids,
+        packing_after_finish_action=action,  # type: ignore[arg-type]
         auto_actions=aa,
         document_settings=ds,
         fallback_label=fb,
@@ -333,6 +369,15 @@ def _save_wms_packing_settings_impl(body: WmsPackingSettingsSave, db: Session) -
     _assert_ui_status(db, tenant_id=body.tenant_id, warehouse_id=wh_id, status_id=body.start_status_id, field="start_status_id")
     _assert_ui_status(db, tenant_id=body.tenant_id, warehouse_id=wh_id, status_id=body.packed_status_id, field="packed_status_id")
     _assert_ui_status(db, tenant_id=body.tenant_id, warehouse_id=wh_id, status_id=body.missing_status_id, field="missing_status_id")
+    allowed_start_ids = _parse_allowed_start_status_ids(body.allowed_start_status_ids)
+    for sid in allowed_start_ids:
+        _assert_ui_status(
+            db,
+            tenant_id=body.tenant_id,
+            warehouse_id=wh_id,
+            status_id=sid,
+            field="allowed_start_status_ids",
+        )
 
     if body.auto_actions.change_order_status and body.packed_status_id is None:
         raise HTTPException(
@@ -383,7 +428,8 @@ def _save_wms_packing_settings_impl(body: WmsPackingSettingsSave, db: Session) -
     row.start_status_id = body.start_status_id
     row.packed_status_id = body.packed_status_id
     row.missing_status_id = body.missing_status_id
-    row.packing_after_finish_action = body.packing_after_finish_action
+    row.allowed_start_status_ids_json = json.dumps(allowed_start_ids, ensure_ascii=False)
+    row.packing_after_finish_action = _normalize_packing_after_finish_action_read(body.packing_after_finish_action)
     row.auto_actions_json = json.dumps(body.auto_actions.model_dump(), ensure_ascii=False)
     row.document_settings_json = json.dumps(body.document_settings.model_dump(), ensure_ascii=False)
     row.fallback_label_json = json.dumps(body.fallback_label.model_dump(), ensure_ascii=False)

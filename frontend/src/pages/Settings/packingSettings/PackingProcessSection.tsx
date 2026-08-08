@@ -4,15 +4,15 @@ import { OrderUiStatusField } from "../../../components/orders/OrderUiStatusFiel
 import type { OrderUiPanelSubgroupRead, OrderUiStatusPanelSummary } from "../../../types/orderUiStatus";
 import type { WmsPackingExtendedUiSettings } from "../../../types/wmsPackingExtendedUi";
 import type { WmsPackingSettingsRead } from "../../../types/wmsPackingSettings";
-import { PackingCapabilityBadge } from "../packingSettingCapability";
+import { SettingInfoButton } from "../SettingInfoButton";
 import { WmsControlSettingRow } from "../wmsSettingRow";
+import { PACKING_SETTING_HELP } from "./packingSettingsHelp";
 import {
   BoolRow,
   FieldGrid,
   SectionCard,
   SelectField,
   SettingsStack,
-  Subsection,
 } from "./packingSettingsUi";
 
 type Props = {
@@ -22,9 +22,19 @@ type Props = {
   panelSubgroups: OrderUiPanelSubgroupRead[];
   patchExtended: <K extends keyof WmsPackingExtendedUiSettings>(key: K, value: WmsPackingExtendedUiSettings[K]) => void;
   setStatus: (key: "start_status_id" | "packed_status_id" | "missing_status_id", raw: string) => void;
+  setAllowedStartStatusIds: (ids: number[]) => void;
 };
 
 type StatusFieldProps = Omit<ComponentProps<typeof OrderUiStatusField>, "panelSummary" | "panelSubgroups">;
+
+const startStatusHelp = PACKING_SETTING_HELP["packing.start_status_without_picking"];
+
+function StartStatusInfo({ title }: { title: string }) {
+  if (!startStatusHelp) return null;
+  return (
+    <SettingInfoButton title={title} description={startStatusHelp.description} tip={startStatusHelp.tip} />
+  );
+}
 
 /** Grupa 3: Proces pakowania */
 export function PackingProcessSection({
@@ -34,6 +44,7 @@ export function PackingProcessSection({
   panelSubgroups,
   patchExtended,
   setStatus,
+  setAllowedStartStatusIds,
 }: Props) {
   const hasStatuses =
     panelSummary != null && panelSummary.groups.some((g) => (g.sub_statuses?.length ?? 0) > 0);
@@ -50,14 +61,35 @@ export function PackingProcessSection({
       <SettingsStack>
         <WmsControlSettingRow
           settingId="packing.start_status_id"
-          label="Status zamówienia do rozpoczęcia pakowania"
-          hint="Status startowy pakowania, gdy nie korzystasz ze zbierania. Konfiguracja zbierania działa niezależnie."
+          label={
+            <>
+              Status zamówienia do rozpoczęcia pakowania
+              <StartStatusInfo title="Status zamówienia do rozpoczęcia pakowania" />
+            </>
+          }
         >
           {statusField({
             selectedStatusId: draft.start_status_id,
             allowClear: true,
             clearLabel: "— brak —",
             onPick: (id) => setStatus("start_status_id", id != null ? String(id) : ""),
+          })}
+        </WmsControlSettingRow>
+
+        <WmsControlSettingRow
+          settingId="packing.allowed_start_status_ids"
+          label={
+            <>
+              Statusy zamówienia do rozpoczęcia pakowania (wiele)
+              <StartStatusInfo title="Statusy zamówienia do rozpoczęcia pakowania (wiele)" />
+            </>
+          }
+        >
+          {statusField({
+            selectedStatusIds: draft.allowed_start_status_ids,
+            onSelectedIdsChange: (ids) => setAllowedStartStatusIds([...ids].sort((a, b) => a - b)),
+            placeholder: "Wybierz statusy…",
+            listMaxHeightClass: "max-h-72",
           })}
         </WmsControlSettingRow>
 
@@ -113,29 +145,6 @@ export function PackingProcessSection({
           </SelectField>
         </FieldGrid>
       </div>
-
-      <Subsection title="">
-        <WmsControlSettingRow
-          settingId="packing.allowed_start_status_ids"
-          label="Statusy zamówienia do rozpoczęcia pakowania (wiele)"
-          footer={
-            <span className="mt-1 block">
-              <PackingCapabilityBadge kind="none" />
-            </span>
-          }
-        >
-          {statusField({
-            selectedStatusIds: extended.allowedStartStatusIds,
-            onSelectedIdsChange: (ids) =>
-              patchExtended(
-                "allowedStartStatusIds",
-                [...ids].sort((a, b) => a - b),
-              ),
-            placeholder: "Wybierz statusy…",
-            listMaxHeightClass: "max-h-72",
-          })}
-        </WmsControlSettingRow>
-      </Subsection>
     </SectionCard>
   );
 }

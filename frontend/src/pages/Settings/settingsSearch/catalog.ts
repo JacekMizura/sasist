@@ -137,6 +137,13 @@ export const WMS_SETTINGS_SEARCH_CATALOG: WmsSettingsSearchEntry[] = [
     sectionLabel: "Proces pakowania",
   }),
   e({
+    id: "packing.allowed_start_status_ids",
+    label: "Statusy zamówienia do rozpoczęcia pakowania (wiele)",
+    tabId: "packing",
+    sectionId: "wms-pack-process",
+    sectionLabel: "Proces pakowania",
+  }),
+  e({
     id: "packing.packed_status_id",
     label: "Status dla spakowanego zamówienia",
     tabId: "packing",

@@ -68,8 +68,8 @@ def get_packing_target_statuses(
     db: Session = Depends(get_db),
 ):
     """
-    Unikalne statusy panelu będące ``target_status_id`` w ``picking_config``
-    (kolejka „po zbieraniu” / gotowe do pakowania).
+    Statusy kolejek pakowania: ``picking_config.target_status_id`` oraz
+    statusy startowe z ustawień pakowania (``start_status_id`` + ``allowed_start_status_ids``).
     """
     try:
         return list_packing_target_statuses(db, tenant_id=tenant_id, warehouse_id=warehouse_id)

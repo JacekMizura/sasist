@@ -2946,6 +2946,68 @@ def packing_mode_distribution(
     return cartless, cart, baskets, single_item, multi_item
 
 
+def _parse_packing_allowed_start_status_ids(raw: object | None) -> List[int]:
+    """Normalize JSON list of status ids from ``WmsPackingSettings.allowed_start_status_ids_json``."""
+    if raw is None:
+        return []
+    data = raw
+    if isinstance(raw, str):
+        try:
+            data = json.loads(raw or "[]")
+        except json.JSONDecodeError:
+            return []
+    if not isinstance(data, list):
+        return []
+    out: List[int] = []
+    seen: set[int] = set()
+    for item in data:
+        try:
+            n = int(item)
+        except (TypeError, ValueError):
+            continue
+        if n <= 0 or n in seen:
+            continue
+        seen.add(n)
+        out.append(n)
+    return out
+
+
+def _append_packing_queue_status(
+    db: Session,
+    *,
+    tenant_id: int,
+    warehouse_id: int,
+    status_id: int,
+    seen: set[int],
+    out: List[WmsPackingTargetStatusItem],
+) -> None:
+    sid = int(status_id)
+    if sid <= 0 or sid in seen:
+        return
+    st = (
+        db.query(OrderUiStatus)
+        .filter(
+            OrderUiStatus.id == sid,
+            OrderUiStatus.tenant_id == int(tenant_id),
+            OrderUiStatus.warehouse_id == int(warehouse_id),
+        )
+        .first()
+    )
+    if st is None:
+        return
+    gkey = _norm_group(st.main_group)
+    seen.add(sid)
+    out.append(
+        WmsPackingTargetStatusItem(
+            target_status_id=int(st.id),
+            status=str(st.name),
+            color=normalize_stored_color(st.color),
+            main_group=cast(OrderUiMainGroup, gkey),
+            order_count=0,
+        )
+    )
+
+
 def list_packing_target_statuses(
     db: Session,
     *,
@@ -2955,8 +3017,8 @@ def list_packing_target_statuses(
     """
     Kolejki pakowania:
     - statusy docelowe z konfiguracji zbierania (``picking_config.target_status_id``),
-    - oraz ``start_status_id`` z ustawień pakowania, gdy skonfigurowany i jeszcze nie na liście
-      (pakowanie bez zbierania / prosty status startowy).
+    - oraz statusy startowe z ustawień pakowania (``start_status_id`` + ``allowed_start_status_ids``),
+      gdy jeszcze nie na liście (pakowanie bez zbierania — niezależne od reguł zbierania).
     """
     rows: List[PickingConfig] = (
         db.query(PickingConfig)
@@ -3000,7 +3062,7 @@ def list_packing_target_statuses(
             )
         )
 
-    # Prosty status startowy pakowania (niezależny od konfiguracji zbierania).
+    # Statusy startowe pakowania (niezależne od konfiguracji zbierania).
     pack_settings = (
         db.query(WmsPackingSettings)
         .filter(
@@ -3009,27 +3071,27 @@ def list_packing_target_statuses(
         )
         .first()
     )
-    start_sid = getattr(pack_settings, "start_status_id", None) if pack_settings is not None else None
-    if start_sid is not None and int(start_sid) > 0 and int(start_sid) not in seen:
-        st = (
-            db.query(OrderUiStatus)
-            .filter(
-                OrderUiStatus.id == int(start_sid),
-                OrderUiStatus.tenant_id == int(tenant_id),
-                OrderUiStatus.warehouse_id == int(warehouse_id),
+    if pack_settings is not None:
+        start_sid = getattr(pack_settings, "start_status_id", None)
+        if start_sid is not None:
+            _append_packing_queue_status(
+                db,
+                tenant_id=int(tenant_id),
+                warehouse_id=int(warehouse_id),
+                status_id=int(start_sid),
+                seen=seen,
+                out=out,
             )
-            .first()
-        )
-        if st is not None:
-            gkey = _norm_group(st.main_group)
-            out.append(
-                WmsPackingTargetStatusItem(
-                    target_status_id=int(st.id),
-                    status=str(st.name),
-                    color=normalize_stored_color(st.color),
-                    main_group=cast(OrderUiMainGroup, gkey),
-                    order_count=0,
-                )
+        for sid in _parse_packing_allowed_start_status_ids(
+            getattr(pack_settings, "allowed_start_status_ids_json", None)
+        ):
+            _append_packing_queue_status(
+                db,
+                tenant_id=int(tenant_id),
+                warehouse_id=int(warehouse_id),
+                status_id=int(sid),
+                seen=seen,
+                out=out,
             )
 
     target_ids = [int(x.target_status_id) for x in out]
@@ -3396,6 +3458,7 @@ def _get_or_create_wms_packing_settings_row(db: Session, tenant_id: int, warehou
     row = WmsPackingSettings(
         tenant_id=int(tenant_id),
         warehouse_id=int(warehouse_id),
+        allowed_start_status_ids_json="[]",
         auto_actions_json="{}",
         document_settings_json="{}",
         fallback_label_json="{}",

@@ -45,6 +45,7 @@ export type WmsPackingExtendedUiSettings = {
   truncateNamesInOrders: boolean;
   showPackedOrders: boolean;
 
+  /** @deprecated SSOT = API ``allowed_start_status_ids``; kept as local mirror for migration. */
   allowedStartStatusIds: number[];
 
   /** Legacy localStorage — nie w kanonicznym UI. */

@@ -74,6 +74,7 @@ function packingDraftFingerprint(d: WmsPackingSettingsRead): string {
     start_status_id: d.start_status_id,
     packed_status_id: d.packed_status_id,
     missing_status_id: d.missing_status_id,
+    allowed_start_status_ids: d.allowed_start_status_ids,
     packing_after_finish_action: d.packing_after_finish_action,
     auto_actions: d.auto_actions,
     document_settings: d.document_settings,
@@ -157,7 +158,11 @@ const WmsPackingSettingsPanel = forwardRef<
         fetchFulfillmentConfiguration(DAMAGE_TENANT_ID),
       ]);
 
+    const legacyExtended = loadWmsPackingExtendedUi(warehouseId);
+
     let nextDraft: WmsPackingSettingsRead;
+    /** Server fingerprint before localStorage migrate — so UI shows dirty until user saves. */
+    let baselineFromServer: WmsPackingSettingsRead | null = null;
     if (cfgRes.status === "fulfilled") {
       const cfg = cfgRes.value;
       nextDraft = normalizeWmsPackingSettingsRead(DAMAGE_TENANT_ID, warehouseId, {
@@ -168,6 +173,21 @@ const WmsPackingSettingsPanel = forwardRef<
           ...(cfg.interface_display ?? {}),
         },
       });
+      baselineFromServer = nextDraft;
+      // One-time migrate legacy localStorage multi-start statuses → API draft when server list empty.
+      if (
+        nextDraft.allowed_start_status_ids.length === 0 &&
+        Array.isArray(legacyExtended.allowedStartStatusIds) &&
+        legacyExtended.allowedStartStatusIds.length > 0
+      ) {
+        nextDraft = {
+          ...nextDraft,
+          allowed_start_status_ids: [...legacyExtended.allowedStartStatusIds]
+            .map(Number)
+            .filter((n) => Number.isFinite(n) && n > 0)
+            .sort((a, b) => a - b),
+        };
+      }
       saveCachedWmsPackingSettingsRead(warehouseId, nextDraft);
     } else {
       console.warn("Packing settings API failed, using fallback", cfgRes.reason);
@@ -218,12 +238,14 @@ const WmsPackingSettingsPanel = forwardRef<
     setDraft((prev) => (cfgRes.status === "fulfilled" ? nextDraft : prev ?? fallbackDraft));
     const finalDraft = cfgRes.status === "fulfilled" ? nextDraft : fallbackDraft;
     const ext = {
-      ...loadWmsPackingExtendedUi(warehouseId),
+      ...legacyExtended,
       // SSOT efektu po akcjach = API ``packing_after_finish_action`` (nie lokalny checkbox).
       afterActionsBehavior: packingAfterFinishActionToUi(finalDraft.packing_after_finish_action),
+      // SSOT multi-start = API; keep local mirror in sync after migrate/load.
+      allowedStartStatusIds: finalDraft.allowed_start_status_ids,
     };
     setExtended(ext);
-    setBaselineDraft(packingDraftFingerprint(finalDraft));
+    setBaselineDraft(packingDraftFingerprint(baselineFromServer ?? finalDraft));
     setBaselineExtended(stableStringify(ext));
     setLoading(false);
   }, [warehouseId, resolveFallbackDraft]);
@@ -268,6 +290,16 @@ const WmsPackingSettingsPanel = forwardRef<
       const next = v === "" ? null : Number(v);
       return { ...base, [key]: next != null && Number.isFinite(next) && next > 0 ? next : null };
     });
+  };
+
+  const setAllowedStartStatusIds = (ids: number[]) => {
+    const nextIds = [...ids].filter((n) => Number.isFinite(n) && n > 0).sort((a, b) => a - b);
+    setDraft((d) => {
+      if (warehouseId == null) return d;
+      const base = d ?? resolveFallbackDraft();
+      return { ...base, allowed_start_status_ids: nextIds };
+    });
+    setExtended((e) => ({ ...e, allowedStartStatusIds: nextIds }));
   };
 
   const toggleAction = (key: keyof WmsPackingAutoActions) => {
@@ -319,6 +351,7 @@ const WmsPackingSettingsPanel = forwardRef<
         start_status_id: normalized.start_status_id,
         packed_status_id: normalized.packed_status_id,
         missing_status_id: normalized.missing_status_id,
+        allowed_start_status_ids: normalized.allowed_start_status_ids,
         packing_after_finish_action: packingAfter,
         auto_actions: normalized.auto_actions,
         document_settings: docSettings,
@@ -330,9 +363,15 @@ const WmsPackingSettingsPanel = forwardRef<
       });
       setDraft(saved);
       saveCachedWmsPackingSettingsRead(warehouseId, saved);
-      saveWmsPackingExtendedUi(warehouseId, extended);
+      const extAfterSave = {
+        ...extended,
+        afterActionsBehavior: packingAfterFinishActionToUi(saved.packing_after_finish_action),
+        allowedStartStatusIds: saved.allowed_start_status_ids,
+      };
+      setExtended(extAfterSave);
+      saveWmsPackingExtendedUi(warehouseId, extAfterSave);
       setBaselineDraft(packingDraftFingerprint(saved));
-      setBaselineExtended(stableStringify(extended));
+      setBaselineExtended(stableStringify(extAfterSave));
       setBaselineMainPackingWarehouseId(mainPackingWarehouseId);
       setErr(null);
       try {
@@ -346,9 +385,14 @@ const WmsPackingSettingsPanel = forwardRef<
       console.warn("Packing settings save API failed; persisting local cache only", e);
       saveCachedWmsPackingSettingsRead(warehouseId, normalized);
       setDraft(normalized);
-      saveWmsPackingExtendedUi(warehouseId, extended);
+      const extLocal = {
+        ...extended,
+        allowedStartStatusIds: normalized.allowed_start_status_ids,
+      };
+      setExtended(extLocal);
+      saveWmsPackingExtendedUi(warehouseId, extLocal);
       setBaselineDraft(packingDraftFingerprint(normalized));
-      setBaselineExtended(stableStringify(extended));
+      setBaselineExtended(stableStringify(extLocal));
       setErr(
         "Nie udało się zapisać ustawień (w tym głównego magazynu pakowania) na serwerze. Sprawdź połączenie i spróbuj ponownie.",
       );
@@ -435,6 +479,7 @@ const WmsPackingSettingsPanel = forwardRef<
             panelSubgroups={panelSubgroups}
             patchExtended={patchExtended}
             setStatus={setStatus}
+            setAllowedStartStatusIds={setAllowedStartStatusIds}
           />
           <PackingAutomationSection
             extended={extended}

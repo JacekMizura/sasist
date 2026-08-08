@@ -20,6 +20,8 @@ class WmsPackingSettings(Base):
     start_status_id = Column(Integer, ForeignKey("order_ui_statuses.id", ondelete="SET NULL"), nullable=True, index=True)
     packed_status_id = Column(Integer, ForeignKey("order_ui_statuses.id", ondelete="SET NULL"), nullable=True, index=True)
     missing_status_id = Column(Integer, ForeignKey("order_ui_statuses.id", ondelete="SET NULL"), nullable=True, index=True)
+    #: JSON array of order_ui_status ids — additional packing-queue statuses when not using picking.
+    allowed_start_status_ids_json = Column(Text, nullable=False, default="[]")
 
     auto_actions_json = Column(Text, nullable=False, default="{}")
     document_settings_json = Column(Text, nullable=False, default="{}")

@@ -59,6 +59,15 @@ export const PACKING_SETTING_HELP: Record<string, PackingSettingHelpEntry> = {
       </ul>
     ),
   },
+  "packing.start_status_without_picking": {
+    description: (
+      <p>
+        To ustawienie służy do określenia statusów zamówień dostępnych do pakowania, gdy nie korzystasz z procesu
+        zbierania. Jeżeli korzystasz ze Zbierania, status do rozpoczęcia pakowania jest określany w konfiguracji
+        Zbierania.
+      </p>
+    ),
+  },
   "packing.main_packing_warehouse": {
     description: (
       <ul>

@@ -41,6 +41,19 @@ export const DEFAULT_WMS_PACKING_AUTO_ACTIONS: WmsPackingAutoActions = {
   change_order_status: false,
 };
 
+function normalizeAllowedStartStatusIds(raw: unknown): number[] {
+  if (!Array.isArray(raw)) return [];
+  const out: number[] = [];
+  const seen = new Set<number>();
+  for (const item of raw) {
+    const n = Number(item);
+    if (!Number.isFinite(n) || n <= 0 || seen.has(n)) continue;
+    seen.add(n);
+    out.push(n);
+  }
+  return out.sort((a, b) => a - b);
+}
+
 export function createDefaultWmsPackingSettingsRead(tenantId: number, warehouseId: number): WmsPackingSettingsRead {
   return {
     tenant_id: tenantId,
@@ -48,6 +61,7 @@ export function createDefaultWmsPackingSettingsRead(tenantId: number, warehouseI
     start_status_id: null,
     packed_status_id: null,
     missing_status_id: null,
+    allowed_start_status_ids: [],
     packing_after_finish_action: "STAY",
     auto_actions: { ...DEFAULT_WMS_PACKING_AUTO_ACTIONS },
     document_settings: {
@@ -82,6 +96,9 @@ export function normalizeWmsPackingSettingsRead(
     ...raw,
     tenant_id: tenantId,
     warehouse_id: warehouseId,
+    allowed_start_status_ids: normalizeAllowedStartStatusIds(
+      raw.allowed_start_status_ids ?? d.allowed_start_status_ids,
+    ),
     packing_after_finish_action,
     auto_actions: { ...d.auto_actions, ...(raw.auto_actions ?? {}) },
     document_settings: {
@@ -149,6 +166,8 @@ export type WmsPackingSettingsRead = {
   start_status_id: number | null;
   packed_status_id: number | null;
   missing_status_id: number | null;
+  /** Dodatkowe statusy startowe pakowania (multi) — SSOT API, nie localStorage. */
+  allowed_start_status_ids: number[];
   packing_after_finish_action: WmsPackingAfterFinishAction;
   auto_actions: WmsPackingAutoActions;
   document_settings: WmsPackingDocumentSettings;

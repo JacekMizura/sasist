@@ -2116,6 +2116,7 @@ def ensure_wms_packing_settings_table(engine: Engine) -> None:
                         start_status_id INTEGER REFERENCES order_ui_statuses(id) ON DELETE SET NULL,
                         packed_status_id INTEGER REFERENCES order_ui_statuses(id) ON DELETE SET NULL,
                         missing_status_id INTEGER REFERENCES order_ui_statuses(id) ON DELETE SET NULL,
+                        allowed_start_status_ids_json TEXT NOT NULL DEFAULT '[]',
                         auto_actions_json TEXT NOT NULL DEFAULT '{}',
                         document_settings_json TEXT NOT NULL DEFAULT '{}',
                         fallback_label_json TEXT NOT NULL DEFAULT '{}',
@@ -2146,6 +2147,12 @@ def ensure_wms_packing_settings_table(engine: Engine) -> None:
             if "interface_display_json" not in cols:
                 conn.execute(
                     text("ALTER TABLE wms_packing_settings ADD COLUMN interface_display_json TEXT NOT NULL DEFAULT '{}'")
+                )
+            if "allowed_start_status_ids_json" not in cols:
+                conn.execute(
+                    text(
+                        "ALTER TABLE wms_packing_settings ADD COLUMN allowed_start_status_ids_json TEXT NOT NULL DEFAULT '[]'"
+                    )
                 )
         conn.commit()
 

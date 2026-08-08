@@ -42,6 +42,8 @@ class WmsPackingSettingsRead(BaseModel):
     start_status_id: Optional[int] = None
     packed_status_id: Optional[int] = None
     missing_status_id: Optional[int] = None
+    #: Dodatkowe statusy kwalifikujące zamówienie do pakowania (bez zbierania); łącznie z ``start_status_id``.
+    allowed_start_status_ids: List[int] = Field(default_factory=list)
     packing_after_finish_action: Literal["STAY", "GO_TO_LIST", "NEXT_ORDER"] = "STAY"
     auto_actions: WmsPackingAutoActions = Field(default_factory=WmsPackingAutoActions)
     document_settings: WmsPackingDocumentSettings = Field(default_factory=WmsPackingDocumentSettings)
@@ -55,6 +57,7 @@ class WmsPackingSettingsSave(BaseModel):
     start_status_id: Optional[int] = None
     packed_status_id: Optional[int] = None
     missing_status_id: Optional[int] = None
+    allowed_start_status_ids: List[int] = Field(default_factory=list)
     packing_after_finish_action: Literal["STAY", "GO_TO_LIST", "NEXT_ORDER"] = "STAY"
     auto_actions: WmsPackingAutoActions = Field(default_factory=WmsPackingAutoActions)
     document_settings: WmsPackingDocumentSettings = Field(default_factory=WmsPackingDocumentSettings)
