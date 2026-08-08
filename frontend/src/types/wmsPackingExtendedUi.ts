@@ -11,10 +11,11 @@ export type PackingLocationBadgePosition = "top_right" | "top_left" | "bottom_ri
 export type PackingAutomationButtonsPosition = "bottom" | "right" | "floating";
 export type PackingOrdersListLayout = "expanded_vertical" | "compact" | "cards";
 export type PackingAfterActionsBehavior = "return_to_list" | "next_order" | "stay_here";
-/** Jak uruchamiane są czynności po pakowaniu — tylko UI (localStorage). */
+/** Zachowane w localStorage — nie pokazywane w kanonicznym UI Sellasist. */
 export type PackingExecutionMode = "automatic" | "prepare_only" | "simulation";
 export type PackingSalesDocumentType = "invoice" | "receipt" | "none";
 export type PackingSingleOrMultiStrategy = "auto" | "single_first" | "multi_first";
+export type PackingPostDocumentAction = "none" | "print" | "download" | "open";
 
 export type WmsPackingExtendedUiSettings = {
   layoutMode: PackingLayoutMode;
@@ -45,25 +46,36 @@ export type WmsPackingExtendedUiSettings = {
 
   allowedStartStatusIds: number[];
 
-  /** Co uruchamiać bez klikania — wyłączone sensownie przy ``prepare_only``. */
+  /** Legacy localStorage — nie w kanonicznym UI. */
   executionMode: PackingExecutionMode;
   autoGenerateShipment: boolean;
   autoPrintShipment: boolean;
   autoCreateSalesDocument: boolean;
   autoPrintSalesDocument: boolean;
   autoChangeOrderStatus: boolean;
+  /** Efekt po wykonaniu akcji automatycznych. */
   afterActionsBehavior: PackingAfterActionsBehavior;
+
+  afterSalesDocumentAction: PackingPostDocumentAction;
+  afterWaybillAction: PackingPostDocumentAction;
 
   salesDocumentType: PackingSalesDocumentType;
   skipA4ReceiptWhenFiscalPrinter: boolean;
   printCopyOfSalesDoc: boolean;
 
+  /** Wybór liczby listów przewozowych do druku. */
+  chooseWaybillPrintCount: boolean;
   forceScanShipmentTemplate: boolean;
+  forceScanShipmentTemplateSelectedMethodsOnly: boolean;
+  forceScanShipmentTemplateMethodIds: string[];
   requireConfirmBeforeShipment: boolean;
   enableMultiParcel: boolean;
   autoFetchParcelCountDisabled: boolean;
   limitShipmentLabelsToQty: boolean;
   parcelLimitWithoutManagerConfirm: number;
+
+  blockExtraParcelsEnabled: boolean;
+  blockExtraParcelsMethodIds: string[];
 
   packerIsNotPicker: boolean;
   requireNotesPopup: boolean;
@@ -73,6 +85,7 @@ export type WmsPackingExtendedUiSettings = {
 
   goNextOrderAfterPacked: boolean;
   showAutomationButtons: boolean;
+  /** Legacy lokalny duplikat — UI używa fallback_label z API. */
   replacementLabelTemplate: string;
   replacementLabelDelaySec: number;
 
@@ -118,16 +131,25 @@ export const DEFAULT_WMS_PACKING_EXTENDED_UI: WmsPackingExtendedUiSettings = {
   autoChangeOrderStatus: true,
   afterActionsBehavior: "stay_here",
 
+  afterSalesDocumentAction: "none",
+  afterWaybillAction: "none",
+
   salesDocumentType: "invoice",
   skipA4ReceiptWhenFiscalPrinter: false,
   printCopyOfSalesDoc: false,
 
+  chooseWaybillPrintCount: false,
   forceScanShipmentTemplate: false,
+  forceScanShipmentTemplateSelectedMethodsOnly: false,
+  forceScanShipmentTemplateMethodIds: [],
   requireConfirmBeforeShipment: true,
   enableMultiParcel: false,
   autoFetchParcelCountDisabled: false,
   limitShipmentLabelsToQty: true,
   parcelLimitWithoutManagerConfirm: 5,
+
+  blockExtraParcelsEnabled: false,
+  blockExtraParcelsMethodIds: [],
 
   packerIsNotPicker: false,
   requireNotesPopup: false,
@@ -154,7 +176,19 @@ export function loadWmsPackingExtendedUi(warehouseId: number): WmsPackingExtende
     const raw = localStorage.getItem(storageKeyWmsPackingExtendedUi(warehouseId));
     if (!raw) return { ...DEFAULT_WMS_PACKING_EXTENDED_UI };
     const parsed = JSON.parse(raw) as Partial<WmsPackingExtendedUiSettings>;
-    return { ...DEFAULT_WMS_PACKING_EXTENDED_UI, ...parsed };
+    return {
+      ...DEFAULT_WMS_PACKING_EXTENDED_UI,
+      ...parsed,
+      forceScanShipmentTemplateMethodIds: Array.isArray(parsed.forceScanShipmentTemplateMethodIds)
+        ? parsed.forceScanShipmentTemplateMethodIds.map(String)
+        : DEFAULT_WMS_PACKING_EXTENDED_UI.forceScanShipmentTemplateMethodIds,
+      blockExtraParcelsMethodIds: Array.isArray(parsed.blockExtraParcelsMethodIds)
+        ? parsed.blockExtraParcelsMethodIds.map(String)
+        : DEFAULT_WMS_PACKING_EXTENDED_UI.blockExtraParcelsMethodIds,
+      allowedStartStatusIds: Array.isArray(parsed.allowedStartStatusIds)
+        ? parsed.allowedStartStatusIds.map(Number).filter((n) => Number.isFinite(n))
+        : DEFAULT_WMS_PACKING_EXTENDED_UI.allowedStartStatusIds,
+    };
   } catch {
     return { ...DEFAULT_WMS_PACKING_EXTENDED_UI };
   }

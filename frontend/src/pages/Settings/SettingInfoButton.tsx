@@ -11,6 +11,7 @@ type SettingInfoButtonProps = {
 
 /**
  * Generyczna ikona ⓘ przy ustawieniu — otwiera modal z opisem działania.
+ * Alias: {@link SettingHelpModal}.
  */
 export function SettingInfoButton({ title, description, className }: SettingInfoButtonProps) {
   const [open, setOpen] = useState(false);
@@ -70,3 +71,6 @@ export function SettingInfoButton({ title, description, className }: SettingInfo
     </>
   );
 }
+
+/** Alias kanoniczny (SettingInfoButton / SettingHelpModal). */
+export const SettingHelpModal = SettingInfoButton;
