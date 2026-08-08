@@ -21,20 +21,10 @@ def get_packaging_intelligence_dashboard(
     period_days: int = Query(7, ge=1, le=90),
     db: Session = Depends(get_db),
 ):
-    """
-    Operacyjne KPI dopasowania opakowań.
+    """Operacyjne KPI dopasowania opakowań — z historii Smart Matching."""
+    from ..services.packaging_engine.smart_matching_store import dashboard_stats
 
-    Pełne agregaty (override rate, accuracy) wymagają tabeli zdarzeń silnika — obecnie zwracany jest szkielet.
-    """
-    _ = db  # rezerwacja na zapytania agregujące
-    return PackagingIntelligenceDashboardOut(
-        period_days=period_days,
-        suggestions_total=0,
-        override_rate_pct=None,
-        avg_confidence=None,
-        avg_fill_pct=None,
-        products_missing_dimensions=0,
-        top_packages=[],
-        failed_suggestions=0,
-        note="Podłącz tabele audytu propozycji (packaging_suggestion_events) aby wypełnić KPI.",
+    stats = dashboard_stats(
+        db, tenant_id=int(tenant_id), warehouse_id=int(warehouse_id), period_days=int(period_days)
     )
+    return PackagingIntelligenceDashboardOut.model_validate(stats)

@@ -192,6 +192,12 @@ from .wms_order_return import WmsOrderReturn  # noqa: F401
 from .wms_settings import WmsSettings  # noqa: F401
 from .wms_packing_settings import WmsPackingSettings  # noqa: F401
 from .wms_packing_replacement_label import WmsPackingReplacementLabel  # noqa: F401
+from .wms_smart_matching import (  # noqa: F401
+    WmsSmartMatchingBreak,
+    WmsSmartMatchingHistory,
+    WmsSmartMatchingRule,
+    WmsSmartMatchingSettings,
+)
 from .wms_picking_shortage_settings import WmsPickingShortageSettings  # noqa: F401
 from .wms_recovery_pick_task import WmsRecoveryPickTask  # noqa: F401
 from .wms_recovery_batch_session import WmsRecoveryBatchSession  # noqa: F401

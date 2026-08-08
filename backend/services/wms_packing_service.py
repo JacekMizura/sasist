@@ -2518,6 +2518,21 @@ def packing_finish_order(
     # Wszystkie guardy przeszły — dopiero teraz mutacje finalizacji.
     _touch_order_wms_packing_timestamps(order, fully_packed=True)
 
+    # Smart Matching — nauka z rzeczywistego wyboru opakowania przy spakowaniu.
+    if sel:
+        try:
+            from .packaging_engine.smart_matching_store import record_packing_carton_choice
+
+            record_packing_carton_choice(
+                db,
+                order=order,
+                carton_id=str(sel),
+                operator_user_id=operator_user_id,
+                suggested_carton_id=None,  # reguła aktywna wyliczana w store
+            )
+        except Exception:
+            logger.exception("smart_matching record on finish order_id=%s", getattr(order, "id", None))
+
     ps_row = _get_or_create_wms_packing_settings_row(db, tenant_id, warehouse_id)
     finish_action = _normalize_packing_after_finish_action(
         getattr(ps_row, "packing_after_finish_action", None)

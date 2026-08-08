@@ -13,9 +13,13 @@ import {
   PackagingIntelligenceKpiFull,
 } from "./wmsPackagingIntelligenceKpiBlocks";
 import {
+  getWmsSmartMatchingSettings,
+  putWmsSmartMatchingSettings,
+} from "../../api/wmsSmartMatchingApi";
+import {
   DEFAULT_WMS_PACKAGING_PROPOSAL_LOCAL_CONFIG,
-  loadWmsPackagingProposalLocalConfig,
-  saveWmsPackagingProposalLocalConfig,
+  configFromApi,
+  configToApiBody,
   type WmsPackagingProposalLocalConfigV1,
 } from "./wmsPackagingProposalLocalConfig";
 import { WmsPackagingProposalEngineConfigForm } from "./WmsPackagingProposalEngineConfigForm";
@@ -64,7 +68,10 @@ export function WmsThreeDMatchingSettingsPanel({ warehouseId, sectionNavObserve 
       if (warehouseId == null) return;
       setFlowConfig((prev) => {
         const next = { ...prev, ...patch };
-        saveWmsPackagingProposalLocalConfig(warehouseId, next);
+        void putWmsSmartMatchingSettings(configToApiBody(next, DAMAGE_TENANT_ID, warehouseId)).then(
+          (saved) => setFlowConfig(configFromApi(saved)),
+          () => undefined,
+        );
         return next;
       });
     },
@@ -88,14 +95,19 @@ export function WmsThreeDMatchingSettingsPanel({ warehouseId, sectionNavObserve 
       setDashboard(null);
       return;
     }
-    setFlowConfig(loadWmsPackagingProposalLocalConfig(warehouseId));
     setEngineConfig(loadWmsThreeDEngineLocalConfig(warehouseId));
     let cancel = false;
     setDashLoading(true);
     void (async () => {
       try {
-        const d = await getPackagingIntelligenceDashboard(DAMAGE_TENANT_ID, warehouseId);
-        if (!cancel) setDashboard(d);
+        const [d, sm] = await Promise.all([
+          getPackagingIntelligenceDashboard(DAMAGE_TENANT_ID, warehouseId),
+          getWmsSmartMatchingSettings(DAMAGE_TENANT_ID, warehouseId),
+        ]);
+        if (!cancel) {
+          setDashboard(d);
+          setFlowConfig(configFromApi(sm));
+        }
       } catch {
         if (!cancel) setDashboard(null);
       } finally {
@@ -187,18 +199,15 @@ export function WmsThreeDMatchingSettingsPanel({ warehouseId, sectionNavObserve 
       <SectionCard
         id="wms-3d-settings"
         title="2. Konfiguracja przepływu"
-        summary="Wspólna z Smart Matching: włączenie propozycji, wiele statusów inicjujących obliczenia, auto-etykiety — bez progu uczenia i bez „tabel uczących się po statusach”."
+        summary="Wspólna z Smart Matching: włączenie propozycji, status inicjujący oraz auto-etykiety — bez progu uczenia."
       >
-        <p className="mb-4 rounded-lg border border-slate-100 bg-slate-50/60 px-3 py-2 text-xs leading-relaxed text-slate-700">
-          Zmiany tutaj zapisują się w tym samym miejscu co zakładka Smart Matching. Statusy określają{" "}
-          <span className="font-medium text-slate-800">kiedy</span> uruchomić silniki propozycji, a nie jak mają się uczyć.
-        </p>
         <WmsPackagingProposalEngineConfigForm
           showSmartLearningThreshold={false}
           config={flowConfig}
           patchConfig={patchFlowConfig}
           panelSummary={panelSummary}
           panelSubgroups={panelSubgroups}
+          wiredToBackend
         />
       </SectionCard>
 

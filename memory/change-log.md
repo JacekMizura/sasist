@@ -1,3 +1,11 @@
+## 2026-08-08 — Smart Matching (WMS settings + learning)
+
+- Trwałe ustawienia (enable, próg 2/3/5, status inicjujący, multi auto-label) zamiast localStorage
+- Nauka z historii pakowania → reguły auto; przerwane serie; reset tylko reguł auto
+- Hook finish + zmiana statusu panelu; propozycje w pakowaniu (ten sam model kartonu)
+- UI Sellasist-like: OrderUiStatusPicker/Field, historia, „!”, SettingsSubsection
+- Testy `test_wms_smart_matching.py`; `npm run build`; bez commit/push
+
 ## 2026-08-08 — Etykieta zastępcza (pakowanie WMS)
 
 - Nowy typ szablonu `order_replacement` („Etykieta zastępcza”, rodzina Zamówienia) — constants/API/settings/UI designer

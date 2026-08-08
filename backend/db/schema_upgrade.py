@@ -2153,6 +2153,124 @@ def ensure_wms_packing_replacement_labels_table(engine: Engine) -> None:
         conn.commit()
 
 
+def ensure_wms_smart_matching_tables(engine: Engine) -> None:
+    """Smart Matching: settings, learned rules, packing history, interrupted series."""
+    with engine.connect() as conn:
+        if not _table_exists(conn, "wms_smart_matching_settings"):
+            conn.execute(
+                text(
+                    """
+                    CREATE TABLE wms_smart_matching_settings (
+                        id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+                        tenant_id INTEGER NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+                        warehouse_id INTEGER NOT NULL REFERENCES warehouses(id) ON DELETE CASCADE,
+                        enabled BOOLEAN NOT NULL DEFAULT 1,
+                        identical_orders_threshold INTEGER NOT NULL DEFAULT 3,
+                        proposal_init_status_id INTEGER REFERENCES order_ui_statuses(id) ON DELETE SET NULL,
+                        auto_label_enabled BOOLEAN NOT NULL DEFAULT 0,
+                        auto_label_status_ids_json TEXT NOT NULL DEFAULT '[]',
+                        created_at DATETIME,
+                        updated_at DATETIME,
+                        UNIQUE(tenant_id, warehouse_id)
+                    )
+                    """
+                )
+            )
+            conn.execute(
+                text(
+                    "CREATE INDEX IF NOT EXISTS ix_wms_sm_settings_tenant "
+                    "ON wms_smart_matching_settings(tenant_id)"
+                )
+            )
+            conn.execute(
+                text(
+                    "CREATE INDEX IF NOT EXISTS ix_wms_sm_settings_wh "
+                    "ON wms_smart_matching_settings(warehouse_id)"
+                )
+            )
+        if not _table_exists(conn, "wms_smart_matching_rules"):
+            conn.execute(
+                text(
+                    """
+                    CREATE TABLE wms_smart_matching_rules (
+                        id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+                        tenant_id INTEGER NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+                        warehouse_id INTEGER NOT NULL REFERENCES warehouses(id) ON DELETE CASCADE,
+                        composition_key VARCHAR(64) NOT NULL,
+                        composition_label VARCHAR(512) NOT NULL DEFAULT '',
+                        carton_id VARCHAR(36) NOT NULL REFERENCES cartons(id) ON DELETE CASCADE,
+                        hit_count INTEGER NOT NULL DEFAULT 0,
+                        is_auto BOOLEAN NOT NULL DEFAULT 1,
+                        last_order_id INTEGER REFERENCES orders(id) ON DELETE SET NULL,
+                        last_used_at DATETIME,
+                        created_at DATETIME,
+                        updated_at DATETIME,
+                        UNIQUE(tenant_id, warehouse_id, composition_key, carton_id)
+                    )
+                    """
+                )
+            )
+            conn.execute(
+                text(
+                    "CREATE INDEX IF NOT EXISTS ix_wms_sm_rules_comp "
+                    "ON wms_smart_matching_rules(composition_key)"
+                )
+            )
+        if not _table_exists(conn, "wms_smart_matching_history"):
+            conn.execute(
+                text(
+                    """
+                    CREATE TABLE wms_smart_matching_history (
+                        id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+                        tenant_id INTEGER NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+                        warehouse_id INTEGER NOT NULL REFERENCES warehouses(id) ON DELETE CASCADE,
+                        order_id INTEGER NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
+                        composition_key VARCHAR(64) NOT NULL,
+                        composition_label VARCHAR(512) NOT NULL DEFAULT '',
+                        carton_id VARCHAR(36) REFERENCES cartons(id) ON DELETE SET NULL,
+                        carton_name VARCHAR(255),
+                        suggested_carton_id VARCHAR(36),
+                        user_id INTEGER REFERENCES app_users(id) ON DELETE SET NULL,
+                        user_display VARCHAR(255),
+                        quantity_units FLOAT,
+                        broke_series BOOLEAN NOT NULL DEFAULT 0,
+                        created_at DATETIME
+                    )
+                    """
+                )
+            )
+            conn.execute(
+                text(
+                    "CREATE INDEX IF NOT EXISTS ix_wms_sm_hist_created "
+                    "ON wms_smart_matching_history(created_at)"
+                )
+            )
+        if not _table_exists(conn, "wms_smart_matching_breaks"):
+            conn.execute(
+                text(
+                    """
+                    CREATE TABLE wms_smart_matching_breaks (
+                        id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+                        tenant_id INTEGER NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+                        warehouse_id INTEGER NOT NULL REFERENCES warehouses(id) ON DELETE CASCADE,
+                        rule_id INTEGER REFERENCES wms_smart_matching_rules(id) ON DELETE CASCADE,
+                        history_id INTEGER REFERENCES wms_smart_matching_history(id) ON DELETE SET NULL,
+                        order_id INTEGER NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
+                        composition_key VARCHAR(64) NOT NULL,
+                        suggested_carton_id VARCHAR(36),
+                        chosen_carton_id VARCHAR(36),
+                        chosen_carton_name VARCHAR(255),
+                        user_id INTEGER REFERENCES app_users(id) ON DELETE SET NULL,
+                        user_display VARCHAR(255),
+                        quantity_units FLOAT,
+                        created_at DATETIME
+                    )
+                    """
+                )
+            )
+        conn.commit()
+
+
 def ensure_wms_packing_settings_table(engine: Engine) -> None:
     """WMS packing automation + panel status bindings per tenant + warehouse."""
     with engine.connect() as conn:

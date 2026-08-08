@@ -1,11 +1,11 @@
 ﻿## Active
 
-**Etykieta zastępcza (2026-08-08):** pełny mechanizm awaryjny przy braku listu kurierskiego w pakowaniu.
+**Smart Matching (2026-08-08):** ustawienia + uczenie z historii pakowania podpięte pod istniejący packaging engine.
 
-- Typ szablonu `order_replacement` (rodzina Zamówienia) — BE + FE + walidacja ustawień
-- Trwały stan w `wms_packing_replacement_labels` (snapshot opakowania/paczek/metody, barcode `RPL-######`, statusy)
-- Popup po `offer_replacement_label` + delay z `fallback_label.delay_seconds`
-- Skan RPL → restore snapshot → retry courier
-- Testy: `test_wms_packing_replacement_label.py` + zaktualizowane auto-actions; `npm run build` OK
+- API `/wms/smart-matching/*` (settings, history, rules, reset)
+- Tabele: settings / rules / history / breaks
+- Finish pakowania → `record_packing_carton_choice`; status panelu → proposal init + auto-label (tylko z opakowaniem)
+- UI: OrderUiStatusField, historia, przerwane serie (!), reset
+- Testy `test_wms_smart_matching.py` (8); `npm run build` OK
 
 **Next:** commit/push na życzenie.

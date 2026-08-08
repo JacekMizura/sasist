@@ -131,6 +131,11 @@ function PackingFitRecommendationPanel({ detail, busy, onUseCarton }: Props) {
           <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">
             {estimated ? "Rekomendacja szacunkowa" : "Rekomendowane"}
           </p>
+          {primary?.source_engine === "SMART_MATCHING" ||
+          primary?.source_engine === "COMBINED" ||
+          (primary?.reason || "").includes("HISTORICAL_MATCH") ? (
+            <p className="mt-1 text-[11px] font-bold text-indigo-700">Propozycja Smart Matching</p>
+          ) : null}
           <p className="mt-1 text-lg font-black text-slate-900">WEŹ: {bestCarton.name || "—"}</p>
           {plan && !multi && plan.plan?.[0]?.items?.length ? (
             <ul className="mt-3 space-y-1 text-sm text-slate-700">

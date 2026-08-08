@@ -189,6 +189,7 @@ from .db.schema_upgrade import (
     ensure_direct_sales_settings_table,
     ensure_wms_packing_settings_table,
     ensure_wms_packing_replacement_labels_table,
+    ensure_wms_smart_matching_tables,
     ensure_shipping_methods_table_and_order_fk,
     ensure_warehouse_materials_tables,
     ensure_warehouse_materials_bdo_columns,
@@ -394,6 +395,7 @@ from .api.wms_packing_basket_entry import router as wms_packing_basket_entry_rou
 from .api.wms_dashboard import router as wms_dashboard_router
 from .api.warehouse_operations import router as warehouse_operations_router
 from .api.packaging_intelligence import router as packaging_intelligence_router
+from .api.wms_smart_matching import router as wms_smart_matching_router
 from .api.wms_products import router as wms_products_router
 from .api.wms_photo_upload import router as wms_photo_upload_router
 from .api.auth import router as auth_router
@@ -1848,6 +1850,7 @@ def _upgrade_schema_background() -> None:
         ensure_direct_sales_settings_table(engine)
         ensure_wms_packing_settings_table(engine)
         ensure_wms_packing_replacement_labels_table(engine)
+        ensure_wms_smart_matching_tables(engine)
         ensure_shipping_methods_table_and_order_fk(engine)
         ensure_warehouse_materials_tables(engine)
         ensure_warehouse_materials_bdo_columns(engine)
@@ -2271,6 +2274,7 @@ _API_ROUTERS = (
     wms_dashboard_router,
     warehouse_operations_router,
     packaging_intelligence_router,
+    wms_smart_matching_router,
     wms_products_router,
     return_statuses_router,
     wms_receiving_router,

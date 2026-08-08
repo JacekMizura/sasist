@@ -22,6 +22,26 @@ from .cart_picking_lifecycle_service import (
 logger = logging.getLogger(__name__)
 
 
+def _run_smart_matching_status_hook(
+    db: Session,
+    *,
+    order: Order,
+    sub_status_id: Optional[int],
+    operator_user_id: Optional[int],
+) -> None:
+    try:
+        from .packaging_engine.smart_matching_triggers import on_order_status_changed_smart_matching
+
+        on_order_status_changed_smart_matching(
+            db,
+            order=order,
+            new_status_id=int(sub_status_id) if sub_status_id is not None else None,
+            operator_user_id=operator_user_id,
+        )
+    except Exception:
+        logger.exception("smart_matching trigger after status order_id=%s", getattr(order, "id", None))
+
+
 def apply_order_panel_ui_status(
     db: Session,
     *,
@@ -41,6 +61,9 @@ def apply_order_panel_ui_status(
     cart_id = getattr(order, "cart_id", None)
     if cart_id is None or int(cart_id) <= 0:
         db.add(order)
+        _run_smart_matching_status_hook(
+            db, order=order, sub_status_id=sub_status_id, operator_user_id=operator_user_id
+        )
         return {"status_updated": True, "detached": False}
 
     tid = int(order.tenant_id)
@@ -67,6 +90,9 @@ def apply_order_panel_ui_status(
         )
         clear_order_picking_session_context(order)
         db.add(order)
+        _run_smart_matching_status_hook(
+            db, order=order, sub_status_id=sub_status_id, operator_user_id=operator_user_id
+        )
         return {"status_updated": True, "detached": False, "healed_orphan_cart": True}
 
     allowed, block_reason = can_detach_order_from_cart(db, cart=cart, order=order)
@@ -85,5 +111,8 @@ def apply_order_panel_ui_status(
         warehouse_id=wid,
         operator_user_id=operator_user_id,
         reason="Odłączenie po zmianie statusu panelu zamówienia.",
+    )
+    _run_smart_matching_status_hook(
+        db, order=order, sub_status_id=sub_status_id, operator_user_id=operator_user_id
     )
     return {"status_updated": True, "detached": True, "cart_id": cid}

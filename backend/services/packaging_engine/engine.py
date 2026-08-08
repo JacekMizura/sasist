@@ -206,6 +206,11 @@ def build_packaging_suggestions_for_order(
       candidates → PHYSICAL FIT (cartonization) → eligible only
       → Smart soft scores → deterministic ranking → PRIMARY.
     """
+    from .smart_matching_store import get_or_create_settings
+
+    settings = get_or_create_settings(db, tenant_id=tenant_id, warehouse_id=warehouse_id)
+    suggestions_enabled = bool(settings.enabled)
+
     cartons = _load_active_cartons(db, tenant_id=tenant_id, warehouse_id=warehouse_id)
     by_id = {str(c.id): c for c in cartons}
     items = items_from_order(order)
@@ -233,13 +238,21 @@ def build_packaging_suggestions_for_order(
             eligible.add(str(plan.carton_id))
         if fit.recommended_carton_id:
             eligible.add(str(fit.recommended_carton_id))
-    td = suggest_three_d_matching(order, cartons=cartons, shipping_constraints=shipping_constraints)
+    td = (
+        suggest_three_d_matching(order, cartons=cartons, shipping_constraints=shipping_constraints)
+        if suggestions_enabled
+        else []
+    )
     for d in td:
         if "Odrzucony:" not in (d.reason or ""):
             eligible.add(str(d.suggested_package_id))
     eligible -= rejected_ids
 
-    smart = suggest_smart_matching(db, order=order, tenant_id=tenant_id, warehouse_id=warehouse_id, cartons=cartons)
+    smart = (
+        suggest_smart_matching(db, order=order, tenant_id=tenant_id, warehouse_id=warehouse_id, cartons=cartons)
+        if suggestions_enabled
+        else []
+    )
     smart_bonus = {
         str(s.suggested_package_id): max(0.0, float(s.confidence_score) - 0.4)
         for s in smart
