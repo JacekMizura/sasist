@@ -83,8 +83,8 @@ function BoolRow({
   onChange: (v: boolean) => void;
 }) {
   return (
-    <label className="flex cursor-pointer items-start justify-between gap-4 py-1.5">
-      <span className="min-w-0 flex-1 text-sm font-medium text-slate-900">{label}</span>
+    <label className="flex cursor-pointer items-start gap-2.5 py-1.5">
+      <span className="min-w-0 text-sm font-medium text-slate-900">{label}</span>
       <input
         type="checkbox"
         className="mt-0.5 h-4 w-4 shrink-0 rounded border-slate-300"
@@ -290,8 +290,8 @@ export default function WmsProductionSettingsPanel({ warehouseId }: Props) {
             ))}
           </select>
         </label>
-        <label className="mt-4 flex max-w-md items-start justify-between gap-4">
-          <span className="min-w-0 flex-1 text-sm text-slate-700">
+        <label className="mt-4 flex max-w-md items-start gap-2.5">
+          <span className="min-w-0 text-sm text-slate-700">
             Dopuszczaj lokalizacje sprzedażowe (sklep, ekspozycja, POS) przy rezerwacji materiałów.
           </span>
           <input

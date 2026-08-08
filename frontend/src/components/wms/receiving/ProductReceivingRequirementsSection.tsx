@@ -27,8 +27,8 @@ function CheckRow({
   hint?: string;
 }) {
   return (
-    <label className="flex cursor-pointer items-start justify-between gap-3 text-sm text-slate-800">
-      <span className="min-w-0 flex-1">
+    <label className="flex cursor-pointer items-start gap-2.5 text-sm text-slate-800">
+      <span className="min-w-0">
         {label}
         {hint ? <span className="mt-0.5 block text-xs font-normal text-slate-500">{hint}</span> : null}
       </span>

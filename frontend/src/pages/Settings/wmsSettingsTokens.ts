@@ -1,5 +1,5 @@
 /** Shared spacing / typography for all WMS settings modules.
- * Layout rule: option label LEFT, control (checkbox / select / input) RIGHT —
+ * Layout rule: option label first, control immediately beside it (not page-edge stretch) —
  * use {@link ./wmsSettingRow} helpers (`WmsBoolSettingRow`, `WmsControlSettingRow`).
  */
 export const wmsSettingsTokens = {

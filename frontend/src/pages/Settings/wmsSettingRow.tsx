@@ -4,22 +4,22 @@ import { WMS_SETTING_DATA_ATTR } from "./settingsSearch/navigateToSetting";
 import { wmsSettingsTokens } from "./wmsSettingsTokens";
 
 /**
- * Canonical WMS settings layout (Sellasist-style):
- * option name (+ optional ⓘ) on the LEFT, control on the RIGHT.
+ * Canonical WMS settings layout:
+ * option name (+ optional ⓘ) first, then control immediately beside it — not at the page edge.
  */
 
 export const wmsSettingRowClass =
-  "wms-setting-field flex min-w-0 items-start justify-between gap-4 rounded-lg border border-transparent px-1 py-1.5 hover:bg-slate-50/80";
+  "wms-setting-field flex flex-col gap-1 rounded-lg border border-transparent px-1 py-1.5 hover:bg-slate-50/80";
 
-export const wmsSettingLabelColClass = "min-w-0 flex-1";
+export const wmsSettingMainLineClass = "flex min-w-0 flex-wrap items-start gap-2.5";
 
 export const wmsSettingLabelTextClass = "inline text-sm font-medium leading-snug text-slate-800";
 
 export const wmsSettingControlColClass = "shrink-0 pt-0.5";
 
-/** Select/input used on the right side of a setting row (no top margin). */
+/** Select/input beside the label (compact, not full-bleed). */
 export const wmsSettingControlSelectClass =
-  "w-full min-w-[11rem] max-w-xs rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 sm:min-w-[14rem]";
+  "w-auto min-w-[12rem] max-w-xs rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40";
 
 export const wmsSettingControlInputClass = wmsSettingControlSelectClass + " tabular-nums";
 
@@ -36,7 +36,7 @@ type BoolRowProps = {
   className?: string;
 };
 
-/** Label left, checkbox right. */
+/** Label first, checkbox right next to it. */
 export function WmsBoolSettingRow({
   label,
   checked,
@@ -52,20 +52,20 @@ export function WmsBoolSettingRow({
       {...(settingId ? { [WMS_SETTING_DATA_ATTR]: settingId } : {})}
       className={`${wmsSettingRowClass} ${disabled ? "cursor-not-allowed opacity-60" : "cursor-pointer"} ${className ?? ""}`}
     >
-      <span className={wmsSettingLabelColClass}>
-        <span className={wmsSettingLabelTextClass}>{label}</span>
-        {hint ? <span className="mt-0.5 block text-xs leading-relaxed text-slate-500">{hint}</span> : null}
-        {footer}
+      <span className={wmsSettingMainLineClass}>
+        <span className={`min-w-0 ${wmsSettingLabelTextClass}`}>{label}</span>
+        <span className={wmsSettingControlColClass}>
+          <input
+            type="checkbox"
+            className={wmsSettingCheckboxClass}
+            checked={checked}
+            disabled={disabled}
+            onChange={(e) => onChange(e.target.checked)}
+          />
+        </span>
       </span>
-      <span className={wmsSettingControlColClass}>
-        <input
-          type="checkbox"
-          className={wmsSettingCheckboxClass}
-          checked={checked}
-          disabled={disabled}
-          onChange={(e) => onChange(e.target.checked)}
-        />
-      </span>
+      {hint ? <span className="text-xs leading-relaxed text-slate-500">{hint}</span> : null}
+      {footer}
     </label>
   );
 }
@@ -81,7 +81,7 @@ type ControlRowProps = {
   asLabel?: boolean;
 };
 
-/** Label left, select/input/custom control right. */
+/** Label first, select/input immediately beside it. */
 export function WmsControlSettingRow({
   label,
   children,
@@ -97,12 +97,12 @@ export function WmsControlSettingRow({
       {...(settingId ? { [WMS_SETTING_DATA_ATTR]: settingId } : {})}
       className={`${wmsSettingRowClass} ${asLabel ? "cursor-pointer" : ""} ${className ?? ""}`}
     >
-      <span className={wmsSettingLabelColClass}>
-        <span className={wmsSettingLabelTextClass}>{label}</span>
-        {hint ? <span className="mt-0.5 block text-xs leading-relaxed text-slate-500">{hint}</span> : null}
-        {footer}
+      <span className={wmsSettingMainLineClass}>
+        <span className={`min-w-0 ${wmsSettingLabelTextClass}`}>{label}</span>
+        <span className={wmsSettingControlColClass}>{children}</span>
       </span>
-      <span className={`${wmsSettingControlColClass} max-w-[min(100%,20rem)]`}>{children}</span>
+      {hint ? <span className="text-xs leading-relaxed text-slate-500">{hint}</span> : null}
+      {footer}
     </Comp>
   );
 }

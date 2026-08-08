@@ -103,8 +103,8 @@ export function WmsThreeDEngineConfigForm({ config, patchConfig }: Props) {
       </label>
 
       <div className="space-y-3 rounded-lg border border-slate-100 bg-slate-50/40 p-4">
-        <label className="flex cursor-pointer items-start justify-between gap-4">
-          <span className="min-w-0 flex-1">
+        <label className="flex cursor-pointer items-start gap-2.5">
+          <span className="min-w-0">
             <span className="text-sm font-medium text-slate-900">Obracanie produktów w symulacji</span>
             <p className="mt-1 text-xs leading-relaxed text-slate-500">
               Pozwala silnikowi rozważać orientację 3D produktów przy liczeniu dopasowania (jeśli dane na to pozwalają).
@@ -118,8 +118,8 @@ export function WmsThreeDEngineConfigForm({ config, patchConfig }: Props) {
           />
         </label>
 
-        <label className="mt-2 flex cursor-pointer items-start justify-between gap-4">
-          <span className="min-w-0 flex-1">
+        <label className="mt-2 flex cursor-pointer items-start gap-2.5">
+          <span className="min-w-0">
             <span className="text-sm font-medium text-slate-900">Dozwolone nadpisanie przez operatora</span>
             <p className="mt-1 text-xs leading-relaxed text-slate-500">
               Gdy wyłączone, UI może blokować zmianę kartonu względem propozycji 3D (do podpięcia pod backend).

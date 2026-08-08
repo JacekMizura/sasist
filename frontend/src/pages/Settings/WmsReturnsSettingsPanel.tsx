@@ -231,8 +231,8 @@ export default function WmsReturnsSettingsPanel({ warehouseId }: Props) {
       >
         {loading || loadError ? null : (
           <div className="space-y-4">
-            <label className="flex cursor-pointer items-start justify-between gap-4">
-              <span className="min-w-0 flex-1">
+            <label className="flex cursor-pointer items-start gap-2.5">
+              <span className="min-w-0">
                 <span className={fieldLabel}>Drukuj etykietę po zamknięciu Z-PZ</span>
                 <span className={fieldHint}>
                   Po zamknięciu nośnika zwrotów etykieta trafi na drukarkę WMS (QZ) lub do podglądu PDF.
@@ -246,8 +246,8 @@ export default function WmsReturnsSettingsPanel({ warehouseId }: Props) {
               />
             </label>
 
-            <div className="flex items-start justify-between gap-4">
-              <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-start gap-2.5">
+              <div className="min-w-0">
                 <label htmlFor="wms-z-pz-label-template" className={fieldLabel}>
                   Szablon etykiety Z-PZ
                 </label>

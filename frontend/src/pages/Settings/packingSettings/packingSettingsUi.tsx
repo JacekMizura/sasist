@@ -185,7 +185,7 @@ export function MethodChecklist({
   return (
     <div className="max-h-56 space-y-1.5 overflow-y-auto rounded-lg border border-slate-200 bg-slate-50/50 p-2">
       {methods.map((m) => (
-        <label key={m.id} className="flex cursor-pointer items-center justify-between gap-3 rounded px-1 py-0.5 hover:bg-white">
+        <label key={m.id} className="flex cursor-pointer items-center gap-2.5 rounded px-1 py-0.5 hover:bg-white">
           <span className="text-sm leading-snug text-slate-800">{m.name}</span>
           <input
             type="checkbox"

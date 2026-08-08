@@ -173,8 +173,8 @@ function BoolRowPicking({
   title?: string;
 }) {
   return (
-    <label className="group flex cursor-pointer items-start justify-between gap-4 py-1" title={title}>
-      <span className="min-w-0 flex-1 select-none">
+    <label className="group flex cursor-pointer items-start gap-2.5 py-1" title={title}>
+      <span className="min-w-0">
         <span className="block text-sm font-medium text-slate-700 transition-colors group-hover:text-slate-900">{label}</span>
         {help ? <HelpPicking>{help}</HelpPicking> : null}
       </span>
@@ -222,9 +222,9 @@ function CustomCheckbox({
   return (
     <label
       {...(settingId ? { "data-wms-setting-id": settingId } : {})}
-      className={`wms-setting-field group flex cursor-pointer items-start justify-between gap-4 rounded-lg py-1 ${disabled ? "cursor-not-allowed opacity-50" : ""}`}
+      className={`wms-setting-field group flex cursor-pointer items-start gap-2.5 rounded-lg py-1 ${disabled ? "cursor-not-allowed opacity-50" : ""}`}
     >
-      <span className="min-w-0 flex-1 select-none">
+      <span className="min-w-0 select-none">
         <span className="block text-sm font-semibold text-slate-900">{label}</span>
         {hint && <span className={`${fieldHintClass} block`}>{hint}</span>}
       </span>

@@ -125,7 +125,7 @@ export function PackingProcessSection({
             {statusOptions.map((o) => (
               <label
                 key={o.id}
-                className="flex cursor-pointer items-center justify-between gap-3 rounded px-1 py-0.5 hover:bg-white"
+                className="flex cursor-pointer items-center gap-2.5 rounded px-1 py-0.5 hover:bg-white"
               >
                 <span className="text-sm leading-snug text-slate-800">{orderPanelStatusSelectLabel(o)}</span>
                 <input
