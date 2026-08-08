@@ -54,6 +54,8 @@ export type PackingCartonGateModalProps = {
   onProceedToFinalization: () => void;
   onContinueWithoutCarton: () => void;
   onAddOwnPackaging?: () => void;
+  /** Gdy false — jedno opakowanie (zastępuje wybór); bez „dodaj paczkę”. */
+  enableMultiParcel?: boolean;
 };
 
 /**
@@ -73,6 +75,7 @@ export function PackingCartonGateModal({
   onProceedToFinalization,
   onContinueWithoutCarton,
   onAddOwnPackaging,
+  enableMultiParcel = false,
 }: PackingCartonGateModalProps) {
   const gridRef = useRef<HTMLUListElement>(null);
   if (!open) return null;
@@ -80,6 +83,8 @@ export function PackingCartonGateModal({
   const sel = (selectedCartonId ?? "").trim();
   const pkgCount = selectedPackagingIds.length;
   const hasSelection = pkgCount > 0 || sel !== "";
+  const title = enableMultiParcel ? "Zarządzaj paczkami" : "Wybierz opakowanie";
+  const proceedLabel = enableMultiParcel ? "Zakończ konfigurację paczek" : "Przejdź do finalizacji";
 
   const scrollToGrid = () => {
     gridRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -109,11 +114,18 @@ export function PackingCartonGateModal({
           </div>
         </div>
         <h2 id="packing-post-carton-title" className="mx-auto mt-3 max-w-6xl text-lg font-black tracking-tight text-slate-900">
-          Wybierz opakowanie
+          {title}
         </h2>
+        {enableMultiParcel ? (
+          <p className="mx-auto mt-1 max-w-6xl text-sm text-slate-600">
+            Dodaj kolejne paczki i przypisz opakowanie. Po zakończeniu uruchomią się akcje automatyczne.
+          </p>
+        ) : null}
         {pkgCount > 0 ? (
           <div className="mx-auto mt-2 flex max-w-6xl flex-wrap gap-1.5">
-            <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Wybrane ({pkgCount}):</span>
+            <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+              {enableMultiParcel ? `Paczki (${pkgCount}):` : `Wybrane (${pkgCount}):`}
+            </span>
             {selectedPackagingIds.map((id) => (
               <span
                 key={id}
@@ -194,10 +206,10 @@ export function PackingCartonGateModal({
               onClick={onProceedToFinalization}
               className="order-first w-full rounded-lg border-2 border-slate-900 bg-slate-900 px-4 py-3 text-center text-sm font-bold text-white shadow-sm transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-40 sm:order-none sm:min-w-[200px] sm:flex-1"
             >
-              Przejdź do finalizacji
+              {proceedLabel}
             </button>
 
-            {compatible.length > 0 ? (
+            {enableMultiParcel && compatible.length > 0 ? (
               <button
                 type="button"
                 disabled={busy}
@@ -207,7 +219,7 @@ export function PackingCartonGateModal({
                 }}
                 className="w-full rounded-lg border-2 border-dashed border-slate-300 bg-white py-2.5 text-center text-xs font-bold text-slate-700 shadow-sm transition hover:border-slate-400 hover:bg-slate-50 disabled:opacity-50 sm:flex-1"
               >
-                + Dodaj opakowanie
+                + Dodaj kolejną paczkę
               </button>
             ) : null}
 

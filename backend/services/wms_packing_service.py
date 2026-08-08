@@ -2300,6 +2300,25 @@ def _normalize_packing_after_finish_action(raw: object | None) -> str:
     return "STAY"
 
 
+def _apply_packing_carton_ids_to_order(order: Order, packaging_carton_ids: list[str] | None) -> None:
+    """Zapisuje wybrane paczki do ``packing_consumables_json`` + ostatni karton jako ``selected_carton_id``."""
+    ids: list[str] = []
+    seen: set[str] = set()
+    for raw in packaging_carton_ids or []:
+        cid = str(raw or "").strip()
+        if not cid or cid in seen:
+            continue
+        seen.add(cid)
+        ids.append(cid)
+    if not ids:
+        return
+    order.selected_carton_id = ids[-1]
+    order.packing_consumables_json = json.dumps(
+        [{"wm_kind": "carton", "wm_id": cid, "qty": 1} for cid in ids],
+        ensure_ascii=False,
+    )
+
+
 def packing_finish_order(
     db: Session,
     *,
@@ -2311,6 +2330,7 @@ def packing_finish_order(
     order_id: int,
     operator_user_id: Optional[int] = None,
     allow_without_carton: bool = False,
+    packaging_carton_ids: list[str] | None = None,
     current_user: Optional[AppUser] = None,
     order_type: str = "all",
 ) -> WmsPackingScanOut:
@@ -2358,6 +2378,10 @@ def packing_finish_order(
                 failure_detail="order not in packing scope and not already finalized",
             )
             raise PackingScanError("ORDER_NOT_IN_QUEUE")
+
+    if not idempotent_replay:
+        _apply_packing_carton_ids_to_order(order, packaging_carton_ids)
+        db.flush()
 
     snap = _packing_finish_validation_snapshot(db, order, log=True)
     raw_sel = getattr(order, "selected_carton_id", None)
@@ -3507,13 +3531,19 @@ def _packing_order_set_import_meta(order: Order, meta: dict) -> None:
 def _resolve_post_pack_sale_series_id(order: Order, doc: WmsPackingDocumentSettings) -> tuple[str | None, str, str | None]:
     """
     Jedno źródło: ``invoice_series_id`` / ``receipt_series_id`` z ustawień pakowania.
-    Typ dokumentu z metadanych zamówienia: INVOICE → faktura, PARAGON → paragon (bez zgadywania / bez series_id).
+    Typ: ``preferred_document_type`` (INVOICE|PARAGON) albo FROM_ORDER → ``panel_document_type`` zamówienia.
     Zwraca (series_id lub None, panel_document_type INVOICE|PARAGON, kod_błędu gdy brak serii).
     """
-    meta = _packing_order_import_meta(order)
-    doc_t = (meta.get("panel_document_type") or "").strip().upper()
-    if doc_t not in ("INVOICE", "PARAGON"):
+    pref = (getattr(doc, "preferred_document_type", None) or "FROM_ORDER").strip().upper()
+    if pref == "INVOICE":
         doc_t = "INVOICE"
+    elif pref == "PARAGON":
+        doc_t = "PARAGON"
+    else:
+        meta = _packing_order_import_meta(order)
+        doc_t = (meta.get("panel_document_type") or "").strip().upper()
+        if doc_t not in ("INVOICE", "PARAGON"):
+            doc_t = "INVOICE"
     inv = (doc.invoice_series_id or "").strip()
     rec = (doc.receipt_series_id or "").strip()
     if doc_t == "PARAGON":
@@ -3596,6 +3626,16 @@ def _latest_order_document(
     order: Order,
     document_type: str,
 ) -> OrderDocument | None:
+    rows = _list_order_documents(db, order=order, document_type=document_type)
+    return rows[0] if rows else None
+
+
+def _list_order_documents(
+    db: Session,
+    *,
+    order: Order,
+    document_type: str,
+) -> list[OrderDocument]:
     return (
         db.query(OrderDocument)
         .filter(
@@ -3605,8 +3645,35 @@ def _latest_order_document(
             OrderDocument.document_type == str(document_type),
         )
         .order_by(OrderDocument.id.desc())
-        .first()
+        .all()
     )
+
+
+def _waybill_docs_client_message(
+    db: Session,
+    *,
+    order: Order,
+    kind: str,
+) -> str | None:
+    """Buduje message z listami przewozowymi (file_url + opcjonalnie file_urls=a|b)."""
+    docs = [
+        d
+        for d in _list_order_documents(db, order=order, document_type=OrderDocumentType.LIST_PRZEWOZOWY.value)
+        if str(getattr(d, "file_url", None) or "").strip()
+    ]
+    if not docs:
+        return None
+    urls = [str(d.file_url).strip() for d in docs]
+    msg = _client_doc_message(
+        kind=kind,
+        order_document_id=int(docs[0].id),
+        file_url=urls[0],
+    )
+    if len(urls) > 1:
+        msg += f";file_urls={'|'.join(urls)};waybill_count={len(urls)}"
+    else:
+        msg += ";waybill_count=1"
+    return _append_sales_companion_to_message(db, order=order, message=msg)
 
 
 def _latest_sale_document_for_order(db: Session, *, order: Order) -> SaleDocument | None:
@@ -3649,14 +3716,8 @@ def _append_sales_companion_to_message(db: Session, *, order: Order, message: st
 def _packing_step_generate_shipment(db: Session, order: Order) -> WmsPackingPostPackStepResult:
     try:
         logger.info("wms_packing post-pack generate_shipment order_id=%s", order.id)
-        existing = _latest_order_document(db, order=order, document_type=OrderDocumentType.LIST_PRZEWOZOWY.value)
-        if existing is not None and str(existing.file_url or "").strip():
-            msg = _client_doc_message(
-                kind="existing_waybill",
-                order_document_id=int(existing.id),
-                file_url=str(existing.file_url),
-            )
-            msg = _append_sales_companion_to_message(db, order=order, message=msg)
+        msg = _waybill_docs_client_message(db, order=order, kind="existing_waybill")
+        if msg:
             return WmsPackingPostPackStepResult(
                 step="generate_shipment",
                 ok=True,
@@ -3730,20 +3791,9 @@ def _packing_step_print_label(
     """
     _ = tenant_id
     try:
-        waybill = _latest_order_document(db, order=order, document_type=OrderDocumentType.LIST_PRZEWOZOWY.value)
-        if waybill is not None and str(waybill.file_url or "").strip():
-            logger.info(
-                "wms_packing post-pack print_label order_id=%s order_document_id=%s",
-                order.id,
-                waybill.id,
-            )
-            msg = _client_doc_message(
-                kind="client_print_waybill",
-                order_document_id=int(waybill.id),
-                file_url=str(waybill.file_url),
-            )
-            # Companion: pole dodatkowe „Dokument sprzedaży” — klient drukuje przy afterWaybill=print.
-            msg = _append_sales_companion_to_message(db, order=order, message=msg)
+        msg = _waybill_docs_client_message(db, order=order, kind="client_print_waybill")
+        if msg:
+            logger.info("wms_packing post-pack print_label order_id=%s message=%s", order.id, msg[:200])
             return WmsPackingPostPackStepResult(
                 step="print_label",
                 ok=True,

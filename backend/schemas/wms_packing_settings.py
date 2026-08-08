@@ -20,6 +20,8 @@ class WmsPackingDocumentSettings(BaseModel):
     series_id: Optional[str] = Field(None, max_length=36, description="deprecated — legacy JSON")
     invoice_series_id: Optional[str] = Field(None, description="Seria faktury (SALE + subtype INVOICE) gdy zamówienie INVOICE")
     receipt_series_id: Optional[str] = Field(None, description="Seria paragonu (SALE + subtype RECEIPT) gdy zamówienie PARAGON")
+    #: Typ dokumentu wystawianego przy pakowaniu: FROM_ORDER | INVOICE | PARAGON.
+    preferred_document_type: Literal["FROM_ORDER", "INVOICE", "PARAGON"] = "FROM_ORDER"
 
 
 class WmsPackingFallbackLabel(BaseModel):

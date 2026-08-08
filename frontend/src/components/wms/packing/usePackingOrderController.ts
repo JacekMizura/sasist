@@ -34,7 +34,10 @@ import {
   loadWmsPackingExtendedUi,
   type WmsPackingExtendedUiSettings,
 } from "../../../types/wmsPackingExtendedUi";
-import { runPackingPostFinishClientActions } from "./packingPostFinishClientActions";
+import {
+  runPackingPostFinishClientActions,
+  type WaybillPrintChoice,
+} from "./packingPostFinishClientActions";
 import {
   decideListScanBootstrapUi,
   firstIncompleteOrderItemId,
@@ -53,6 +56,8 @@ import {
   shouldOpenPackingNotesPopup,
   type NotesPopupPendingAction,
 } from "./packingNotes";
+
+export type PackingFinishRunResult = "ok" | "cancelled" | "error";
 
 export type PackingScanBootstrapState = {
   packingScanBootstrap?: WmsPackingScanOutApi;
@@ -76,7 +81,7 @@ export function usePackingOrderController(
   const actionBusyRef = useRef(false);
   const finishBusyRef = useRef(false);
   /** Zapobiega podwójnemu POST …/finish (Strict Mode / podwójny mount ekranu finalizacji). */
-  const finishPromiseRef = useRef<Promise<boolean> | null>(null);
+  const finishPromiseRef = useRef<Promise<PackingFinishRunResult> | null>(null);
   const bootstrapConsumedRef = useRef(false);
   /** Po skanie z listy: nie otwieraj kartonu automatycznie — najpierw widok zamówienia. */
   const deferCartonFromListBootstrapRef = useRef(false);
@@ -98,6 +103,11 @@ export function usePackingOrderController(
   const [selectedPackagingIds, setSelectedPackagingIds] = useState<string[]>([]);
   const pendingFinishAfterCartonRef = useRef(false);
   const [postPackPipeline, setPostPackPipeline] = useState<WmsPackingPostPackStepApi[] | null>(null);
+  const [shipmentConfirmOpen, setShipmentConfirmOpen] = useState(false);
+  const shipmentConfirmResolverRef = useRef<((ok: boolean) => void) | null>(null);
+  const [waybillChoiceOpen, setWaybillChoiceOpen] = useState(false);
+  const [waybillChoiceCount, setWaybillChoiceCount] = useState(1);
+  const waybillChoiceResolverRef = useRef<((c: WaybillPrintChoice) => void) | null>(null);
 
   const [packingInterfaceDisplay, setPackingInterfaceDisplay] = useState<WmsPackingInterfaceDisplay>(
     DEFAULT_WMS_PACKING_INTERFACE_DISPLAY,
@@ -229,16 +239,24 @@ export function usePackingOrderController(
     if (finishBusyRef.current) return;
     if (awaitingPostPackCarton || awaitingFinalizationRun) return;
     if (deferCartonFromListBootstrapRef.current) return;
+    const multiParcel = packingExtendedUi.enableMultiParcel;
     const sel = (detail.selected_carton_id ?? "").trim();
     const allowNoCarton = finishWithoutCartonRef.current;
-    if (!sel && !allowNoCarton) {
+    // Wielopaczkowość ON → zawsze okno paczek przed akcjami automatycznymi.
+    if (multiParcel || (!sel && !allowNoCarton)) {
       pendingFinishAfterCartonRef.current = true;
       setAwaitingPostPackCarton(true);
       return;
     }
     setAwaitingPostPackCarton(false);
     setAwaitingFinalizationRun(true);
-  }, [detail, awaitingPostPackCarton, awaitingFinalizationRun, finishWithoutCartonRef]);
+  }, [
+    detail,
+    awaitingPostPackCarton,
+    awaitingFinalizationRun,
+    finishWithoutCartonRef,
+    packingExtendedUi.enableMultiParcel,
+  ]);
 
   useEffect(() => {
     if (warehouseId == null) return;
@@ -269,18 +287,68 @@ export function usePackingOrderController(
     }, 750);
   }, []);
 
-  const runPostPackFinish = useCallback(async (): Promise<boolean> => {
-    if (finishPromiseRef.current) return finishPromiseRef.current;
-    if (finishBusyRef.current || warehouseId == null || !Number.isFinite(orderId) || orderId < 1) return false;
-    const s = loadWmsPackingSession();
-    if (!s?.mode) return false;
-    if ((s.mode === "bulk" && (s.cartId == null || !Number.isFinite(s.cartId)))) return false;
+  const askShipmentConfirm = useCallback((): Promise<boolean> => {
+    return new Promise((resolve) => {
+      shipmentConfirmResolverRef.current = resolve;
+      setShipmentConfirmOpen(true);
+    });
+  }, []);
 
-    const run = (async (): Promise<boolean> => {
+  const resolveShipmentConfirm = useCallback((ok: boolean) => {
+    setShipmentConfirmOpen(false);
+    const r = shipmentConfirmResolverRef.current;
+    shipmentConfirmResolverRef.current = null;
+    r?.(ok);
+  }, []);
+
+  const askWaybillPrintChoice = useCallback((count: number): Promise<WaybillPrintChoice> => {
+    return new Promise((resolve) => {
+      setWaybillChoiceCount(count);
+      waybillChoiceResolverRef.current = resolve;
+      setWaybillChoiceOpen(true);
+    });
+  }, []);
+
+  const resolveWaybillPrintChoice = useCallback((choice: WaybillPrintChoice) => {
+    setWaybillChoiceOpen(false);
+    const r = waybillChoiceResolverRef.current;
+    waybillChoiceResolverRef.current = null;
+    r?.(choice);
+  }, []);
+
+  const runPostPackFinish = useCallback(async (): Promise<PackingFinishRunResult> => {
+    if (finishPromiseRef.current) return finishPromiseRef.current;
+    if (finishBusyRef.current || warehouseId == null || !Number.isFinite(orderId) || orderId < 1) {
+      return "error";
+    }
+    const s = loadWmsPackingSession();
+    if (!s?.mode) return "error";
+    if ((s.mode === "bulk" && (s.cartId == null || !Number.isFinite(s.cartId)))) return "error";
+
+    const run = (async (): Promise<PackingFinishRunResult> => {
       finishBusyRef.current = true;
       setPostPackFinishBusy(true);
       let navigatedAway = false;
       try {
+        const [apiSettings, ext] = await Promise.all([
+          getWmsPackingSettings(DAMAGE_TENANT_ID, warehouseId).catch(() => null),
+          Promise.resolve(loadWmsPackingExtendedUi(warehouseId)),
+        ]);
+
+        if (ext.requireConfirmBeforeShipment && apiSettings?.auto_actions.generate_shipment) {
+          const confirmed = await askShipmentConfirm();
+          if (!confirmed) {
+            return "cancelled";
+          }
+        }
+
+        const packagingIds =
+          selectedPackagingIds.length > 0
+            ? selectedPackagingIds
+            : (detail?.selected_carton_id ?? "").trim()
+              ? [(detail!.selected_carton_id as string).trim()]
+              : [];
+
         const out = await postWmsPackingOrderFinish(
           DAMAGE_TENANT_ID,
           warehouseId,
@@ -291,16 +359,12 @@ export function usePackingOrderController(
           {
             allow_without_carton: finishWithoutCartonRef.current,
             orderType: s.orderTypeFilter ?? "all",
+            packaging_carton_ids: packagingIds,
           },
         );
         finishWithoutCartonRef.current = false;
 
-        // Po potoku serwera: druk/pobieranie listu i dokumentu (soft-fail).
         try {
-          const [apiSettings, ext] = await Promise.all([
-            getWmsPackingSettings(DAMAGE_TENANT_ID, warehouseId).catch(() => null),
-            Promise.resolve(loadWmsPackingExtendedUi(warehouseId)),
-          ]);
           await runPackingPostFinishClientActions({
             tenantId: DAMAGE_TENANT_ID,
             warehouseId,
@@ -309,19 +373,21 @@ export function usePackingOrderController(
             afterWaybillAction: ext.afterWaybillAction,
             printDocumentEnabled: Boolean(apiSettings?.auto_actions.print_document),
             printLabelEnabled: Boolean(apiSettings?.auto_actions.print_label),
+            printCopyOfSalesDoc: Boolean(ext.printCopyOfSalesDoc),
+            chooseWaybillPrintCount: Boolean(ext.chooseWaybillPrintCount),
+            requestWaybillPrintChoice: askWaybillPrintChoice,
           });
         } catch {
           /* soft-fail */
         }
 
-        // Kolejność: finish API już wykonał akcje automatyczne → client print → efekt nawigacji.
         if (out.packing_after_finish_action === "GO_TO_LIST") {
           const currentStatus = s.statusId;
           navigatedAway = true;
           navigate(`${WMS_ROUTES.packingOrders}?status=${encodeURIComponent(String(currentStatus))}`, {
             replace: true,
           });
-          return true;
+          return "ok";
         }
         if (out.packing_after_finish_action === "NEXT_ORDER") {
           const nextId = out.next_order_id;
@@ -333,28 +399,20 @@ export function usePackingOrderController(
               replace: true,
             });
           }
-          return true;
+          return "ok";
         }
         setDetail(out.detail);
         setAwaitingFinalizationRun(false);
         if (out.post_pack_pipeline != null) {
           setPostPackPipeline(out.post_pack_pipeline);
         }
-        if (import.meta.env.DEV) {
-          const docStep = out.post_pack_pipeline?.find((x) => x.step === "create_document" && x.ok && x.skipped !== true);
-          if (docStep?.message) {
-            const m = docStep.message;
-            const idMatch = /^id=([^;]+)/.exec(m);
-            if (idMatch) console.log("DOCUMENT CREATED", idMatch[1]);
-          }
-        }
-        return true;
+        return "ok";
       } catch (e) {
         const code = wmsPackingApiErrorCode(e);
         const apiMsg = wmsPackingApiErrorMessage(e);
         showScannerToast(apiMsg || scanErrorMessage(code));
         if (import.meta.env.DEV) console.error("DOCUMENT CREATE FAILED / finish packing", e);
-        return false;
+        return "error";
       } finally {
         finishBusyRef.current = false;
         if (!navigatedAway) setPostPackFinishBusy(false);
@@ -366,7 +424,17 @@ export function usePackingOrderController(
       if (finishPromiseRef.current === run) finishPromiseRef.current = null;
     });
     return run;
-  }, [warehouseId, orderId, showScannerToast, navigate, finishWithoutCartonRef]);
+  }, [
+    warehouseId,
+    orderId,
+    showScannerToast,
+    navigate,
+    finishWithoutCartonRef,
+    askShipmentConfirm,
+    askWaybillPrintChoice,
+    selectedPackagingIds,
+    detail,
+  ]);
 
   const advanceActiveAfterPack = useCallback((d: WmsPackingOrderDetailApi, lastPackedOrderItemId: number | null) => {
     if (lastPackedOrderItemId == null) {
@@ -385,9 +453,10 @@ export function usePackingOrderController(
     (d: WmsPackingOrderDetailApi) => {
       deferCartonFromListBootstrapRef.current = false;
       setShowProceedAfterLinesCompleteCta(false);
+      const multiParcel = packingExtendedUi.enableMultiParcel;
       const sel = (d.selected_carton_id ?? "").trim();
       const allowNoCarton = finishWithoutCartonRef.current;
-      if (!sel && !allowNoCarton) {
+      if (multiParcel || (!sel && !allowNoCarton)) {
         pendingFinishAfterCartonRef.current = true;
         setAwaitingPostPackCarton(true);
         return;
@@ -395,7 +464,7 @@ export function usePackingOrderController(
       setAwaitingPostPackCarton(false);
       setAwaitingFinalizationRun(true);
     },
-    [finishWithoutCartonRef],
+    [finishWithoutCartonRef, packingExtendedUi.enableMultiParcel],
   );
 
   const visiblePackingNotes = useMemo(() => {
@@ -768,7 +837,10 @@ export function usePackingOrderController(
               }
             : null,
         );
-        setSelectedPackagingIds((prev) => (prev.includes(cid) ? prev : [...prev, cid]));
+        setSelectedPackagingIds((prev) => {
+          if (!packingExtendedUi.enableMultiParcel) return [cid];
+          return prev.includes(cid) ? prev : [...prev, cid];
+        });
         return res;
       } catch {
         showScannerToast("Nie udało się zapisać wyboru kartonu.");
@@ -776,7 +848,7 @@ export function usePackingOrderController(
         setSelectCartonBusy(false);
       }
     },
-    [warehouseId, orderId, session, showScannerToast],
+    [warehouseId, orderId, session, showScannerToast, packingExtendedUi.enableMultiParcel],
   );
 
   const proceedToFinalization = useCallback(() => {
@@ -836,5 +908,10 @@ export function usePackingOrderController(
     visiblePackingNotes,
     notesPopupOpen,
     acknowledgeNotesPopup,
+    shipmentConfirmOpen,
+    resolveShipmentConfirm,
+    waybillChoiceOpen,
+    waybillChoiceCount,
+    resolveWaybillPrintChoice,
   };
 }

@@ -62,15 +62,28 @@ export function PackingShipmentsDocsSection({
           <SelectField
             settingId="packing.sales_document_type"
             label="Dokument sprzedaży"
-            capability={CAP_NONE}
             value={extended.salesDocumentType}
-            onChange={(v) =>
-              patchExtended("salesDocumentType", v as WmsPackingExtendedUiSettings["salesDocumentType"])
-            }
+            onChange={(v) => {
+              const next = v as WmsPackingExtendedUiSettings["salesDocumentType"];
+              patchExtended("salesDocumentType", next);
+              setDraft((d) => {
+                const base = d ?? resolveFallbackDraft();
+                const preferred =
+                  next === "invoice" ? "INVOICE" : next === "receipt" ? "PARAGON" : "FROM_ORDER";
+                return {
+                  ...base,
+                  document_settings: {
+                    ...base.document_settings,
+                    preferred_document_type: preferred,
+                  },
+                };
+              });
+            }}
+            help="„Pobrane z zamówienia” — typ z danych zamówienia (bez wymuszania faktury/paragonu)."
           >
-            <option value="invoice">Faktura</option>
             <option value="receipt">Paragon</option>
-            <option value="none">Brak</option>
+            <option value="invoice">Faktura</option>
+            <option value="from_order">Pobrane z zamówienia</option>
           </SelectField>
         </FieldGrid>
         <div className="mt-3 space-y-1">
@@ -86,7 +99,7 @@ export function PackingShipmentsDocsSection({
             label="Drukowanie kopii dokumentu sprzedaży"
             checked={extended.printCopyOfSalesDoc}
             onChange={(v) => patchExtended("printCopyOfSalesDoc", v)}
-            capability={CAP_NONE}
+            help="Po wystawieniu drukuje dokument, a następnie jego kopię (ten sam dokument, bez nowej numeracji)."
           />
         </div>
       </Subsection>
@@ -157,8 +170,8 @@ export function PackingShipmentsDocsSection({
             label="Wybór liczby listów przewozowych do druku"
             checked={extended.chooseWaybillPrintCount}
             onChange={(v) => patchExtended("chooseWaybillPrintCount", v)}
-            capability={CAP_NONE}
             infoKey="packing.choose_waybill_print_count"
+            help="Przy więcej niż jednym liście — popup „Wydrukuj jeden” / „Wydrukuj wszystkie”."
           />
           <BoolRow
             settingId="packing.force_scan_shipment_template"
@@ -195,14 +208,14 @@ export function PackingShipmentsDocsSection({
             label="Wymagaj potwierdzenia przed wygenerowaniem listu przewozowego"
             checked={extended.requireConfirmBeforeShipment}
             onChange={(v) => patchExtended("requireConfirmBeforeShipment", v)}
-            capability={CAP_NONE}
+            help="Przed generowaniem listu — popup z potwierdzeniem. Anulowanie nie jest błędem."
           />
           <BoolRow
             settingId="packing.enable_multi_parcel"
             label="Włącz wielopaczkowość"
             checked={extended.enableMultiParcel}
             onChange={(v) => patchExtended("enableMultiParcel", v)}
-            capability={CAP_NONE}
+            help="Wiele paczek przy generowaniu listu oraz okno paczek po spakowaniu, przed akcjami automatycznymi."
           />
           <BoolRow
             settingId="packing.only_packaging_warehouse_stock"

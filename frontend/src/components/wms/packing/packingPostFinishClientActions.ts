@@ -5,6 +5,8 @@ import { getBackendPublicOrigin } from "../../../config/apiBase";
 import { openPdfBlobInPrintViewer } from "../../../utils/openPdfForBrowserPrint";
 import type { PackingPostDocumentAction } from "../../../types/wmsPackingExtendedUi";
 
+export type WaybillPrintChoice = "one" | "all";
+
 export type PackingPostFinishClientActionOpts = {
   tenantId: number;
   warehouseId: number;
@@ -15,6 +17,12 @@ export type PackingPostFinishClientActionOpts = {
   printDocumentEnabled: boolean;
   /** auto_actions.print_label — wymuś akcję na liście przewozowym. */
   printLabelEnabled: boolean;
+  /** Drukuj kopię tego samego dokumentu sprzedaży (bez nowej numeracji). */
+  printCopyOfSalesDoc?: boolean;
+  /** Gdy >1 list — zapytaj operatora ile drukować. */
+  chooseWaybillPrintCount?: boolean;
+  /** Zwraca wybór operatora; domyślnie „all” gdy brak callbacka. */
+  requestWaybillPrintChoice?: (waybillCount: number) => Promise<WaybillPrintChoice>;
 };
 
 function parseStepMessage(message: string | null | undefined): Record<string, string> {
@@ -78,12 +86,20 @@ async function deliverSalesDoc(
   tenantId: number,
   meta: Record<string, string>,
   action: PackingPostDocumentAction,
+  opts?: { printCopy?: boolean },
 ): Promise<void> {
   const saleId = (meta.sale_document_id || "").trim();
+  const printOnce = async (blob: Blob, name: string) => {
+    await deliverPdf(blob, action, name);
+    if (opts?.printCopy && action === "print") {
+      // Kopia tego samego PDF — bez nowego dokumentu / numeracji.
+      await deliverPdf(blob, "print", name.replace(/\.pdf$/i, "-kopia.pdf"));
+    }
+  };
   if (saleId) {
     try {
       const blob = await fetchSaleDocumentPdfBlob(tenantId, saleId);
-      await deliverPdf(blob, action, `dokument-sprzedazy-${saleId}.pdf`);
+      await printOnce(blob, `dokument-sprzedazy-${saleId}.pdf`);
     } catch {
       /* brak / błąd PDF — nie przerywaj potoku */
     }
@@ -93,24 +109,35 @@ async function deliverSalesDoc(
   if (!fileUrl) return;
   const blob = await fetchBlobFromUrl(fileUrl);
   if (!blob) return;
-  await deliverPdf(blob, action, `dokument-sprzedazy.pdf`);
+  await printOnce(blob, `dokument-sprzedazy.pdf`);
 }
 
 async function deliverWaybill(
-  meta: Record<string, string>,
+  fileUrl: string,
   action: PackingPostDocumentAction,
+  index: number,
 ): Promise<void> {
-  const fileUrl = (meta.file_url || "").trim();
-  if (!fileUrl) return;
   const blob = await fetchBlobFromUrl(fileUrl);
   if (!blob) return;
-  await deliverPdf(blob, action, `list-przewozowy.pdf`);
+  await deliverPdf(blob, action, `list-przewozowy-${index + 1}.pdf`);
 }
 
 function stepHasWaybillFile(step: WmsPackingPostPackStepApi | undefined): boolean {
   if (!step || !step.ok || step.skipped === true) return false;
   const meta = parseStepMessage(step.message);
   return Boolean((meta.file_url || "").trim());
+}
+
+function collectWaybillUrls(meta: Record<string, string>): string[] {
+  const multi = (meta.file_urls || "").trim();
+  if (multi) {
+    return multi
+      .split("|")
+      .map((u) => u.trim())
+      .filter(Boolean);
+  }
+  const one = (meta.file_url || "").trim();
+  return one ? [one] : [];
 }
 
 /**
@@ -125,6 +152,9 @@ export async function runPackingPostFinishClientActions(opts: PackingPostFinishC
     afterWaybillAction,
     printDocumentEnabled,
     printLabelEnabled,
+    printCopyOfSalesDoc = false,
+    chooseWaybillPrintCount = false,
+    requestWaybillPrintChoice,
   } = opts;
 
   const salesAction: PackingPostDocumentAction =
@@ -135,19 +165,17 @@ export async function runPackingPostFinishClientActions(opts: PackingPostFinishC
   try {
     let salesHandled = false;
 
-    // 4. Akcja po wystawieniu dokumentu sprzedaży
     const createStep = findStep(pipeline, "create_document");
     if (createStep?.ok && createStep.skipped !== true) {
       const meta = parseStepMessage(createStep.message);
       const idMatch = /^id=([^;]+)/.exec((createStep.message || "").trim());
       if (idMatch?.[1]) meta.sale_document_id = idMatch[1];
       if (meta.sale_document_id || meta.file_url) {
-        await deliverSalesDoc(tenantId, meta, salesAction);
+        await deliverSalesDoc(tenantId, meta, salesAction, { printCopy: printCopyOfSalesDoc });
         salesHandled = true;
       }
     }
 
-    // Osobna akcja „Wydrukuj / pobierz dokument sprzedaży”
     const printDocStep = findStep(pipeline, "print_document");
     if (
       !salesHandled &&
@@ -155,11 +183,12 @@ export async function runPackingPostFinishClientActions(opts: PackingPostFinishC
       printDocStep?.ok &&
       printDocStep.skipped !== true
     ) {
-      await deliverSalesDoc(tenantId, parseStepMessage(printDocStep.message), salesAction);
+      await deliverSalesDoc(tenantId, parseStepMessage(printDocStep.message), salesAction, {
+        printCopy: printCopyOfSalesDoc,
+      });
       salesHandled = true;
     }
 
-    // 1/3/5: list przewozowy — preferuj print_label (companion), inaczej generate_shipment
     const printLabel = findStep(pipeline, "print_label");
     const genShip = findStep(pipeline, "generate_shipment");
     const waybillStep =
@@ -173,16 +202,25 @@ export async function runPackingPostFinishClientActions(opts: PackingPostFinishC
 
     if (waybillStep) {
       const meta = parseStepMessage(waybillStep.message);
-      if ((meta.file_url || "").trim()) {
-        await deliverWaybill(meta, waybillAction);
-        if (waybillAction === "print") {
-          // Dodatkowy druk dokumentu sprzedaży z pola dodatkowego — bez twardego błędu.
-          const companion: Record<string, string> = {};
-          if (meta.sales_file_url) companion.file_url = meta.sales_file_url;
-          if (meta.sales_order_document_id) companion.order_document_id = meta.sales_order_document_id;
-          if (companion.file_url) {
-            await deliverSalesDoc(tenantId, companion, "print");
-          }
+      let urls = collectWaybillUrls(meta);
+      if (urls.length > 1 && chooseWaybillPrintCount) {
+        const choice = requestWaybillPrintChoice
+          ? await requestWaybillPrintChoice(urls.length)
+          : "all";
+        if (choice === "one") {
+          // Istniejący mechanizm „jeden list” — najnowszy (pierwszy w kolejności desc).
+          urls = urls.slice(0, 1);
+        }
+      }
+      for (let i = 0; i < urls.length; i++) {
+        await deliverWaybill(urls[i]!, waybillAction, i);
+      }
+      if (waybillAction === "print" && urls.length > 0) {
+        const companion: Record<string, string> = {};
+        if (meta.sales_file_url) companion.file_url = meta.sales_file_url;
+        if (meta.sales_order_document_id) companion.order_document_id = meta.sales_order_document_id;
+        if (companion.file_url) {
+          await deliverSalesDoc(tenantId, companion, "print");
         }
       }
     }

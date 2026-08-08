@@ -536,6 +536,7 @@ def post_packing_order_finish(
             order_id=order_id,
             operator_user_id=int(current_user.id) if current_user is not None else None,
             allow_without_carton=bool(body.allow_without_carton),
+            packaging_carton_ids=list(body.packaging_carton_ids or []),
             current_user=current_user,
             order_type=order_type,
         )

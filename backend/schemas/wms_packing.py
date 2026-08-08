@@ -399,6 +399,8 @@ class WmsPackingFinishBody(BaseModel):
         default=False,
         description="Domknij potok bez wybranego kartonu — tylko dla operatorów z uprawnieniem magazynowym",
     )
+    #: Kartony/paczki wybrane w oknie wielopaczkowości — zapis do ``packing_consumables_json``.
+    packaging_carton_ids: List[str] = Field(default_factory=list)
 
 
 class WmsPackingOrderDetailOut(WmsPackingOrderCard):

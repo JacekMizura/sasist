@@ -13,7 +13,29 @@ export type PackingOrdersListLayout = "expanded_vertical" | "compact" | "cards";
 export type PackingAfterActionsBehavior = "return_to_list" | "next_order" | "stay_here";
 /** Zachowane w localStorage — nie pokazywane w kanonicznym UI Sellasist. */
 export type PackingExecutionMode = "automatic" | "prepare_only" | "simulation";
-export type PackingSalesDocumentType = "invoice" | "receipt" | "none";
+/** Paragon | Faktura | Pobrane z zamówienia. Legacy ``none`` → ``from_order``. */
+export type PackingSalesDocumentType = "invoice" | "receipt" | "from_order";
+
+export function normalizePackingSalesDocumentType(raw: unknown): PackingSalesDocumentType {
+  if (raw === "invoice" || raw === "receipt") return raw;
+  // legacy „Brak” / nieznane → pobrane z zamówienia
+  return "from_order";
+}
+
+export function packingSalesDocumentTypeToApi(
+  v: PackingSalesDocumentType,
+): "FROM_ORDER" | "INVOICE" | "PARAGON" {
+  if (v === "invoice") return "INVOICE";
+  if (v === "receipt") return "PARAGON";
+  return "FROM_ORDER";
+}
+
+export function packingSalesDocumentTypeFromApi(raw: unknown): PackingSalesDocumentType {
+  const s = String(raw ?? "").trim().toUpperCase();
+  if (s === "INVOICE") return "invoice";
+  if (s === "PARAGON") return "receipt";
+  return "from_order";
+}
 /** @deprecated Prefer {@link WmsPackingExtendedUiSettings.packingBySingleOrMultiItemEnabled}. */
 export type PackingSingleOrMultiStrategy = "auto" | "single_first" | "multi_first";
 /** Akcja po wystawieniu dokumentu sprzedaży / listu przewozowego — tylko Wydrukuj / Pobierz. */
@@ -148,7 +170,7 @@ export const DEFAULT_WMS_PACKING_EXTENDED_UI: WmsPackingExtendedUiSettings = {
   afterSalesDocumentAction: "print",
   afterWaybillAction: "print",
 
-  salesDocumentType: "invoice",
+  salesDocumentType: "from_order",
   skipA4ReceiptWhenFiscalPrinter: false,
   printCopyOfSalesDoc: false,
 
@@ -215,6 +237,7 @@ export function loadWmsPackingExtendedUi(warehouseId: number): WmsPackingExtende
         : DEFAULT_WMS_PACKING_EXTENDED_UI.allowedStartStatusIds,
       afterSalesDocumentAction: normalizePackingPostDocumentAction(parsed.afterSalesDocumentAction),
       afterWaybillAction: normalizePackingPostDocumentAction(parsed.afterWaybillAction),
+      salesDocumentType: normalizePackingSalesDocumentType(parsed.salesDocumentType),
     };
   } catch {
     return { ...DEFAULT_WMS_PACKING_EXTENDED_UI };

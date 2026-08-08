@@ -628,7 +628,11 @@ export async function postWmsPackingOrderFinish(
   mode: WmsPackingModeParam,
   orderId: number,
   cartId?: number | null,
-  options?: { allow_without_carton?: boolean; orderType?: WmsPackingOrderTypeParam },
+  options?: {
+    allow_without_carton?: boolean;
+    orderType?: WmsPackingOrderTypeParam;
+    packaging_carton_ids?: string[];
+  },
 ): Promise<WmsPackingScanOutApi> {
   const params: Record<string, string | number> = {
     tenant_id: tenantId,
@@ -640,7 +644,12 @@ export async function postWmsPackingOrderFinish(
   if (cartId != null) params.cart_id = cartId;
   const res = await api.post<WmsPackingScanOutApi>(
     `/wms/packing/orders/${orderId}/finish`,
-    { allow_without_carton: options?.allow_without_carton === true },
+    {
+      allow_without_carton: options?.allow_without_carton === true,
+      packaging_carton_ids: Array.isArray(options?.packaging_carton_ids)
+        ? options!.packaging_carton_ids!.map(String).filter(Boolean)
+        : [],
+    },
     { params },
   );
   return res.data;

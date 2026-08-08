@@ -17,6 +17,8 @@ import { PackingFinalizationView } from "../../components/wms/packing/PackingFin
 import { PackingMarkShortageModal } from "../../components/wms/packing/PackingMarkShortageModal";
 import { PackingNotesPopupModal } from "../../components/wms/packing/PackingNotesPopupModal";
 import { PackingView } from "../../components/wms/packing/PackingView";
+import { ConfirmModal } from "../../components/ui/ConfirmModal";
+import { ChoiceModal } from "../../components/ui/ChoiceModal";
 import {
   formatPackerDisplayName,
   isPackingSessionFinished,
@@ -343,17 +345,51 @@ export default function WmsPackingOrderPage() {
         selectedCartonId={packingDetail.selected_carton_id}
         selectedPackagingIds={ctrl.selectedPackagingIds}
         busy={ctrl.selectCartonBusy}
-        canContinueWithoutCarton={canFinishWithoutCarton}
+        canContinueWithoutCarton={canFinishWithoutCarton && !ctrl.packingExtendedUi.enableMultiParcel}
+        enableMultiParcel={ctrl.packingExtendedUi.enableMultiParcel}
         onSelectCarton={(id) => void ctrl.selectCarton(id)}
         onProceedToFinalization={() => ctrl.proceedToFinalization()}
         onContinueWithoutCarton={() => ctrl.continueWithoutCartonToFinalization()}
         onAddOwnPackaging={
-          isSuperRole(user?.role)
-            ? () =>
-                showScannerToast("Skonfiguruj materiał opakowaniowy w ustawieniach magazynu (powiązanie z metodą wysyłki).")
-            : undefined
+          ctrl.packingExtendedUi.enableMultiParcel
+            ? () => showScannerToast("Wybierz opakowanie z listy — zostanie dodane jako kolejna paczka.")
+            : isSuperRole(user?.role)
+              ? () =>
+                  showScannerToast(
+                    "Skonfiguruj materiał opakowaniowy w ustawieniach magazynu (powiązanie z metodą wysyłki).",
+                  )
+              : undefined
         }
       />
+      {ctrl.shipmentConfirmOpen ? (
+        <ConfirmModal
+          title="Wygenerować list przewozowy?"
+          message="Za chwilę zostanie wygenerowany list przewozowy dla tego zamówienia."
+          confirmLabel="Generuj list przewozowy"
+          confirmTone="default"
+          onConfirm={() => ctrl.resolveShipmentConfirm(true)}
+          onCancel={() => ctrl.resolveShipmentConfirm(false)}
+        />
+      ) : null}
+      {ctrl.waybillChoiceOpen ? (
+        <ChoiceModal
+          title="Ile listów przewozowych wydrukować?"
+          message={`Zamówienie ma ${ctrl.waybillChoiceCount} listów przewozowych. Wybierz, ile wydrukować.`}
+          showCancel={false}
+          actions={[
+            {
+              label: "Wydrukuj jeden",
+              onClick: () => ctrl.resolveWaybillPrintChoice("one"),
+            },
+            {
+              label: "Wydrukuj wszystkie",
+              tone: "primary",
+              onClick: () => ctrl.resolveWaybillPrintChoice("all"),
+            },
+          ]}
+          onCancel={() => ctrl.resolveWaybillPrintChoice("one")}
+        />
+      ) : null}
       <PackingMarkShortageModal
         open={shortageLineId != null}
         missingStatusName={shortageStatusName}

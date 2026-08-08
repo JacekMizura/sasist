@@ -6,11 +6,15 @@ export type WmsPackingAutoActions = {
   change_order_status: boolean;
 };
 
+export type WmsPackingPreferredDocumentType = "FROM_ORDER" | "INVOICE" | "PARAGON";
+
 export type WmsPackingDocumentSettings = {
   /** Legacy — backend przy tworzeniu dokumentu nie używa; zapis pakowania zeruje pole. */
   series_id?: string | null;
   invoice_series_id: string | null;
   receipt_series_id: string | null;
+  /** Typ dokumentu wystawianego przy pakowaniu. */
+  preferred_document_type?: WmsPackingPreferredDocumentType;
 };
 
 export type WmsPackingFallbackLabel = {
@@ -68,6 +72,7 @@ export function createDefaultWmsPackingSettingsRead(tenantId: number, warehouseI
       series_id: null,
       invoice_series_id: null,
       receipt_series_id: null,
+      preferred_document_type: "FROM_ORDER",
     },
     fallback_label: { template_id: null, delay_seconds: 0 },
     interface_display: { ...DEFAULT_WMS_PACKING_INTERFACE_DISPLAY },
@@ -106,6 +111,13 @@ export function normalizeWmsPackingSettingsRead(
       ...(raw.document_settings ?? {}),
       invoice_series_id: raw.document_settings?.invoice_series_id ?? d.document_settings.invoice_series_id,
       receipt_series_id: raw.document_settings?.receipt_series_id ?? d.document_settings.receipt_series_id,
+      preferred_document_type: (() => {
+        const p = String(raw.document_settings?.preferred_document_type ?? d.document_settings.preferred_document_type ?? "FROM_ORDER")
+          .trim()
+          .toUpperCase();
+        if (p === "INVOICE" || p === "PARAGON") return p;
+        return "FROM_ORDER";
+      })(),
     },
     fallback_label: {
       ...d.fallback_label,

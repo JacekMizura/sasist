@@ -3,6 +3,7 @@ import { Loader2, RefreshCw } from "lucide-react";
 import type { WmsPackingOrderDetailApi } from "../../../api/wmsPackingApi";
 import { ShippingMethodLogo } from "../../shipping/ShippingMethodLogo";
 import { orderNumberLabel, packingCourierName, packingCourierLabelCount } from "./packingHelpers";
+import type { PackingFinishRunResult } from "./usePackingOrderController";
 
 const PAGE_BG = "#eef2f6";
 
@@ -23,7 +24,7 @@ function isCashOnDelivery(detail: WmsPackingOrderDetailApi): boolean {
 
 export type PackingFinalizationViewProps = {
   detail: WmsPackingOrderDetailApi;
-  runPostPackFinish: () => Promise<boolean>;
+  runPostPackFinish: () => Promise<PackingFinishRunResult>;
   postPackFinishBusy: boolean;
 };
 
@@ -34,6 +35,7 @@ export type PackingFinalizationViewProps = {
 export function PackingFinalizationView({ detail, runPostPackFinish, postPackFinishBusy }: PackingFinalizationViewProps) {
   const [runId, setRunId] = useState(0);
   const [failed, setFailed] = useState(false);
+  const [cancelled, setCancelled] = useState(false);
   const [activeStep, setActiveStep] = useState(0);
   const stepTimerRef = useRef<ReturnType<typeof window.setInterval> | undefined>(undefined);
 
@@ -50,8 +52,9 @@ export function PackingFinalizationView({ detail, runPostPackFinish, postPackFin
   const packageImg = carton?.image_url?.trim();
 
   useEffect(() => {
-    let cancelled = false;
+    let cancelledRun = false;
     setFailed(false);
+    setCancelled(false);
     setActiveStep(0);
     if (stepTimerRef.current !== undefined) {
       window.clearInterval(stepTimerRef.current);
@@ -62,18 +65,19 @@ export function PackingFinalizationView({ detail, runPostPackFinish, postPackFin
     }, 1100);
 
     void (async () => {
-      const ok = await runPostPackFinish();
+      const result = await runPostPackFinish();
       if (stepTimerRef.current !== undefined) {
         window.clearInterval(stepTimerRef.current);
         stepTimerRef.current = undefined;
       }
-      if (cancelled) return;
-      if (ok) setActiveStep(STEPS.length);
+      if (cancelledRun) return;
+      if (result === "ok") setActiveStep(STEPS.length);
+      else if (result === "cancelled") setCancelled(true);
       else setFailed(true);
     })();
 
     return () => {
-      cancelled = true;
+      cancelledRun = true;
       if (stepTimerRef.current !== undefined) {
         window.clearInterval(stepTimerRef.current);
         stepTimerRef.current = undefined;
@@ -132,8 +136,8 @@ export function PackingFinalizationView({ detail, runPostPackFinish, postPackFin
           </div>
           <ul className="flex flex-col gap-3 px-5 py-5 lg:px-6">
             {STEPS.map((label, idx) => {
-              const done = !postPackFinishBusy && !failed && activeStep > idx;
-              const active = postPackFinishBusy && !failed && activeStep === idx;
+              const done = !postPackFinishBusy && !failed && !cancelled && activeStep > idx;
+              const active = postPackFinishBusy && !failed && !cancelled && activeStep === idx;
               return (
                 <li key={label} className="flex items-start gap-3 rounded-lg border border-slate-100 bg-slate-50/60 px-3 py-2.5">
                   <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center" aria-hidden>
@@ -159,6 +163,21 @@ export function PackingFinalizationView({ detail, runPostPackFinish, postPackFin
               );
             })}
           </ul>
+          {cancelled ? (
+            <div className="mt-auto border-t border-slate-100 bg-slate-50/90 px-5 py-4 lg:px-6">
+              <p className="text-sm font-semibold text-slate-800">
+                Anulowano generowanie listu przewozowego. Możesz ponowić finalizację, gdy będziesz gotowy.
+              </p>
+              <button
+                type="button"
+                onClick={() => setRunId((n) => n + 1)}
+                className="mt-3 inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-bold text-slate-900 hover:bg-slate-50"
+              >
+                <RefreshCw className="h-4 w-4" />
+                Ponów finalizację
+              </button>
+            </div>
+          ) : null}
           {failed ? (
             <div className="mt-auto border-t border-amber-100 bg-amber-50/90 px-5 py-4 lg:px-6">
               <p className="text-sm font-semibold text-amber-950">Nie udało się dokończyć operacji. Sprawdź komunikat i spróbuj ponownie.</p>

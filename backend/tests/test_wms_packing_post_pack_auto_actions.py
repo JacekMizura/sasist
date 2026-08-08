@@ -19,12 +19,18 @@ from backend.models.order_ui_status import OrderUiStatus
 from backend.models.tenant import Tenant
 from backend.models.warehouse import Warehouse
 from backend.models.wms_packing_settings import WmsPackingSettings
-from backend.schemas.wms_packing_settings import WmsPackingAutoActions, WmsPackingFallbackLabel
+from backend.schemas.wms_packing_settings import (
+    WmsPackingAutoActions,
+    WmsPackingDocumentSettings,
+    WmsPackingFallbackLabel,
+)
 from backend.services.wms_packing_service import (
     _packing_step_apply_packed_status,
     _packing_step_generate_shipment,
     _packing_step_print_document,
     _packing_step_print_label,
+    _resolve_post_pack_sale_series_id,
+    _waybill_docs_client_message,
 )
 
 
@@ -229,3 +235,64 @@ def test_print_document_missing_soft_skips(db):
     assert step.ok is True
     assert step.skipped is True
     assert step.message == "missing_sales_document"
+
+
+def test_preferred_document_type_invoice_overrides_order(db):
+    order = _order(db)
+    order.import_metadata_json = '{"panel_document_type":"PARAGON"}'
+    db.commit()
+    doc = WmsPackingDocumentSettings(
+        preferred_document_type="INVOICE",
+        invoice_series_id="inv-1",
+        receipt_series_id="rec-1",
+    )
+    series_id, panel_t, err = _resolve_post_pack_sale_series_id(order, doc)
+    assert err is None
+    assert panel_t == "INVOICE"
+    assert series_id == "inv-1"
+
+
+def test_preferred_document_type_from_order(db):
+    order = _order(db)
+    order.import_metadata_json = '{"panel_document_type":"PARAGON"}'
+    db.commit()
+    doc = WmsPackingDocumentSettings(
+        preferred_document_type="FROM_ORDER",
+        invoice_series_id="inv-1",
+        receipt_series_id="rec-1",
+    )
+    series_id, panel_t, err = _resolve_post_pack_sale_series_id(order, doc)
+    assert err is None
+    assert panel_t == "PARAGON"
+    assert series_id == "rec-1"
+
+
+def test_waybill_message_lists_all_urls(db):
+    order = _order(db)
+    db.add(
+        OrderDocument(
+            order_id=order.id,
+            tenant_id=1,
+            warehouse_id=1,
+            document_type=OrderDocumentType.LIST_PRZEWOZOWY.value,
+            original_filename="a.pdf",
+            stored_filename="a.pdf",
+            file_url="/files/a.pdf",
+        )
+    )
+    db.add(
+        OrderDocument(
+            order_id=order.id,
+            tenant_id=1,
+            warehouse_id=1,
+            document_type=OrderDocumentType.LIST_PRZEWOZOWY.value,
+            original_filename="b.pdf",
+            stored_filename="b.pdf",
+            file_url="/files/b.pdf",
+        )
+    )
+    db.commit()
+    msg = _waybill_docs_client_message(db, order=order, kind="client_print_waybill")
+    assert msg is not None
+    assert "file_urls=" in msg
+    assert "waybill_count=2" in msg

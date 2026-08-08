@@ -237,12 +237,19 @@ const WmsPackingSettingsPanel = forwardRef<
 
     setDraft((prev) => (cfgRes.status === "fulfilled" ? nextDraft : prev ?? fallbackDraft));
     const finalDraft = cfgRes.status === "fulfilled" ? nextDraft : fallbackDraft;
+    const preferred = String(finalDraft.document_settings.preferred_document_type ?? "FROM_ORDER")
+      .trim()
+      .toUpperCase();
+    const salesDocumentType =
+      preferred === "INVOICE" ? "invoice" : preferred === "PARAGON" ? "receipt" : "from_order";
     const ext = {
       ...legacyExtended,
       // SSOT efektu po akcjach = API ``packing_after_finish_action`` (nie lokalny checkbox).
       afterActionsBehavior: packingAfterFinishActionToUi(finalDraft.packing_after_finish_action),
       // SSOT multi-start = API; keep local mirror in sync after migrate/load.
       allowedStartStatusIds: finalDraft.allowed_start_status_ids,
+      // SSOT typu dokumentu = API preferred_document_type (z fallbackiem localStorage).
+      salesDocumentType: salesDocumentType as WmsPackingExtendedUiSettings["salesDocumentType"],
     };
     setExtended(ext);
     setBaselineDraft(packingDraftFingerprint(baselineFromServer ?? finalDraft));
@@ -339,11 +346,18 @@ const WmsPackingSettingsPanel = forwardRef<
     setOkMsg(null);
     setSaving(true);
     try {
+      const preferredFromUi =
+        extended.salesDocumentType === "invoice"
+          ? "INVOICE"
+          : extended.salesDocumentType === "receipt"
+            ? "PARAGON"
+            : "FROM_ORDER";
       const docSettings = {
         ...normalized.document_settings,
         series_id: null,
         invoice_series_id: normalized.document_settings.invoice_series_id?.trim() || null,
         receipt_series_id: normalized.document_settings.receipt_series_id?.trim() || null,
+        preferred_document_type: preferredFromUi as "FROM_ORDER" | "INVOICE" | "PARAGON",
       };
       const saved = await saveWmsPackingSettings({
         tenant_id: DAMAGE_TENANT_ID,
