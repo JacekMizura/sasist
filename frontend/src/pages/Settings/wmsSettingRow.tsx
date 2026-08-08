@@ -4,22 +4,26 @@ import { WMS_SETTING_DATA_ATTR } from "./settingsSearch/navigateToSetting";
 import { wmsSettingsTokens } from "./wmsSettingsTokens";
 
 /**
- * Canonical WMS settings form row (not a table):
- * LEFT: name, description, badges (grows with container)
- * RIGHT: fixed-width control column — shared vertical axis, not page-centered
+ * Sellasist-style WMS settings row:
+ * LEFT — name / description / badges (wraps, capped width)
+ * RIGHT — fixed control column immediately beside the label
+ *
+ * Extra viewport width stays empty on the RIGHT. Do not push controls to the edge
+ * (no space-between, no 1fr label that shoves the control column right).
  */
 
+/** Label column ≈ 34rem, control column 26rem (416px) — aligned start of each row. */
 export const wmsSettingRowClass =
-  "wms-setting-field grid grid-cols-1 items-start gap-x-6 gap-y-2 rounded-lg border border-transparent px-1 py-2.5 sm:grid-cols-[minmax(0,1fr)_minmax(16rem,22rem)]";
+  "wms-setting-field grid w-full grid-cols-1 items-start gap-x-6 gap-y-2 rounded-lg border border-transparent px-1 py-2.5 sm:grid-cols-[minmax(0,34rem)_26rem] sm:justify-start";
 
-export const wmsSettingLabelColClass = "min-w-0";
+export const wmsSettingLabelColClass = "min-w-0 max-w-full";
 
 export const wmsSettingLabelTextClass = "text-sm font-medium leading-snug text-slate-800";
 
 export const wmsSettingControlColClass =
-  "flex min-w-0 w-full flex-col items-stretch justify-start sm:pt-0.5";
+  "flex w-full min-w-0 max-w-[26rem] flex-col items-stretch justify-start sm:pt-0.5";
 
-/** Select/input fill the right column (aligned axis across rows). */
+/** Select/input fill the fixed control column. */
 export const wmsSettingControlSelectClass =
   "w-full max-w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40";
 
@@ -28,7 +32,7 @@ export const wmsSettingControlInputClass = wmsSettingControlSelectClass + " tabu
 export const wmsSettingCheckboxClass =
   "h-4 w-4 shrink-0 rounded border-slate-300 text-blue-600 focus:ring-blue-500";
 
-/** Full width of the settings content pane (after left nav) — no centered narrow column. */
+/** Full width of the settings content pane — form uses the pane; controls stay compact. */
 export const wmsSettingsFormMaxWidthClass = "w-full min-w-0";
 
 type BoolRowProps = {
@@ -42,7 +46,7 @@ type BoolRowProps = {
   className?: string;
 };
 
-/** Left: label / hint / badges. Right: checkbox. */
+/** Left: label / hint / badges. Right: checkbox in the shared control column. */
 export function WmsBoolSettingRow({
   label,
   checked,

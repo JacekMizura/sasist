@@ -193,12 +193,12 @@ export function MethodChecklist({
       {methods.map((m) => (
         <label
           key={m.id}
-          className="grid cursor-pointer grid-cols-[1fr_auto] items-center gap-3 rounded px-1 py-0.5 hover:bg-white"
+          className="flex cursor-pointer items-start gap-3 rounded px-1 py-0.5 hover:bg-white"
         >
-          <span className="min-w-0 text-sm leading-snug text-slate-800">{m.name}</span>
+          <span className="min-w-0 flex-1 text-sm leading-snug text-slate-800">{m.name}</span>
           <input
             type="checkbox"
-            className={checkboxClass}
+            className={`${checkboxClass} mt-0.5 shrink-0`}
             checked={set.has(m.id)}
             onChange={() => onToggle(m.id)}
           />
