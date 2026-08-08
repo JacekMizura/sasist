@@ -1,3 +1,11 @@
+## 2026-08-08 — Etykieta zastępcza (pakowanie WMS)
+
+- Nowy typ szablonu `order_replacement` („Etykieta zastępcza”, rodzina Zamówienia) — constants/API/settings/UI designer
+- Tabela `wms_packing_replacement_labels` + serwis: snapshot pakowania, PDF, barcode `RPL-*`, retry courier
+- Finish pipeline: brak listu → `offer_replacement_label`; popup + delay; create/print; skan na liście/ekranie zamówienia
+- Ustawienie szablonu filtruje tylko `order_replacement`; opóźnienie zachowane
+- Testy backend (create/snapshot/scan/retry/fail) + `npm run build`; bez commit/push
+
 ## 2026-08-08 — Ustawienia WMS: śródsekcje SettingsSubsection
 
 - Nowy lekki kontener: tło slate-50, cienka obwódka, zaokrąglenie, tytuł + opcjonalny opis, większy gap (`space-y-5`)

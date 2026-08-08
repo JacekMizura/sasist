@@ -58,6 +58,8 @@ def parse_barcode_type(barcode: str) -> str | None:
         return "cart"
     if s.startswith("ORD"):
         return "order"
+    if s.startswith("RPL"):
+        return "replacement_label"
     if s.startswith("PAL"):
         return "pallet"
     return None
@@ -183,6 +185,25 @@ def resolve_barcode(db: Session, barcode: str) -> dict[str, Any]:
         if row:
             result["id"] = row.id
             result["additional_data"] = {"number": row.number, "status": row.status}
+        return result
+
+    if t == "replacement_label":
+        from ..models.wms_packing_replacement_label import WmsPackingReplacementLabel
+
+        repl = (
+            db.query(WmsPackingReplacementLabel)
+            .filter(func.upper(WmsPackingReplacementLabel.barcode) == lookup.upper())
+            .first()
+        )
+        if repl is not None:
+            result["id"] = int(repl.id)
+            result["additional_data"] = {
+                "order_id": int(repl.order_id),
+                "barcode": repl.barcode,
+                "status": repl.status,
+                "warehouse_id": int(repl.warehouse_id),
+                "tenant_id": int(repl.tenant_id),
+            }
         return result
 
     if t == "cart":

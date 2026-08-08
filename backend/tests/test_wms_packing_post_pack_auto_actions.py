@@ -160,7 +160,7 @@ def test_print_label_uses_existing_waybill_document(db):
     assert "file_url=/files/waybill.pdf" in (step.message or "")
 
 
-def test_print_label_missing_waybill_soft_skips(db):
+def test_print_label_missing_waybill_offers_replacement(db):
     order = _order(db)
     step = _packing_step_print_label(
         db,
@@ -168,8 +168,23 @@ def test_print_label_missing_waybill_soft_skips(db):
         order=order,
         fb=WmsPackingFallbackLabel(),
     )
-    assert step.ok is True
-    assert step.skipped is True
+    assert step.ok is False
+    assert step.skipped is not True
+    assert step.offer_replacement_label is True
+    assert "courier_label_unavailable" in (step.message or "")
+
+
+def test_print_label_missing_waybill_no_offer_on_retry_path(db):
+    order = _order(db)
+    step = _packing_step_print_label(
+        db,
+        tenant_id=1,
+        order=order,
+        fb=WmsPackingFallbackLabel(),
+        offer_replacement_on_missing=False,
+    )
+    assert step.ok is False
+    assert step.offer_replacement_label is not True
     assert step.message == "missing_waybill"
 
 

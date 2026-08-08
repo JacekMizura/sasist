@@ -5,6 +5,7 @@ export const LABEL_PRINT_MODULE_TYPE_ORDER = [
   "basket",
   "product",
   "order",
+  "order_replacement",
 ] as const;
 
 export const DOCUMENT_PRINT_MODULE_TYPE_ORDER = [
@@ -24,6 +25,7 @@ export const LABEL_PRINT_MODULE_TYPE_LABELS: Record<LabelPrintModuleType, string
   basket: "Koszyk",
   product: "Produkt",
   order: "Zamówienie",
+  order_replacement: "Etykieta zastępcza",
 };
 
 export const DOCUMENT_PRINT_MODULE_TYPE_LABELS: Record<DocumentPrintModuleType, string> = {

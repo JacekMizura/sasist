@@ -17,6 +17,12 @@ import {
   type WmsPackingScanOutApi,
 } from "../../../api/wmsPackingApi";
 import {
+  createAndPrintReplacementLabel,
+  findReplacementOfferStep,
+  handleReplacementLabelScan,
+  isReplacementLabelBarcode,
+} from "./packingReplacementLabelActions";
+import {
   DEFAULT_WMS_PACKING_INTERFACE_DISPLAY,
   type WmsPackingInterfaceDisplay,
 } from "../../../types/wmsPackingSettings";
@@ -108,6 +114,11 @@ export function usePackingOrderController(
   const [waybillChoiceOpen, setWaybillChoiceOpen] = useState(false);
   const [waybillChoiceCount, setWaybillChoiceCount] = useState(1);
   const waybillChoiceResolverRef = useRef<((c: WaybillPrintChoice) => void) | null>(null);
+  const [replacementModalOpen, setReplacementModalOpen] = useState(false);
+  const [replacementModalError, setReplacementModalError] = useState("");
+  const [replacementModalDelay, setReplacementModalDelay] = useState(0);
+  const [replacementModalBusy, setReplacementModalBusy] = useState(false);
+  const replacementModalResolverRef = useRef<((generate: boolean) => void) | null>(null);
 
   const [packingInterfaceDisplay, setPackingInterfaceDisplay] = useState<WmsPackingInterfaceDisplay>(
     DEFAULT_WMS_PACKING_INTERFACE_DISPLAY,
@@ -316,6 +327,35 @@ export function usePackingOrderController(
     r?.(choice);
   }, []);
 
+  const askReplacementLabelOffer = useCallback(
+    (errorMessage: string, delaySeconds: number): Promise<boolean> => {
+      return new Promise((resolve) => {
+        replacementModalResolverRef.current = resolve;
+        setReplacementModalError(errorMessage);
+        setReplacementModalDelay(delaySeconds);
+        setReplacementModalBusy(false);
+        setReplacementModalOpen(true);
+      });
+    },
+    [],
+  );
+
+  const confirmReplacementLabelGenerate = useCallback(() => {
+    // Keep modal open — parent sets busy and closes after create/print.
+    const r = replacementModalResolverRef.current;
+    replacementModalResolverRef.current = null;
+    r?.(true);
+  }, []);
+
+  const cancelReplacementLabelModal = useCallback(() => {
+    if (replacementModalBusy) return;
+    setReplacementModalOpen(false);
+    setReplacementModalBusy(false);
+    const r = replacementModalResolverRef.current;
+    replacementModalResolverRef.current = null;
+    r?.(false);
+  }, [replacementModalBusy]);
+
   const runPostPackFinish = useCallback(async (): Promise<PackingFinishRunResult> => {
     if (finishPromiseRef.current) return finishPromiseRef.current;
     if (finishBusyRef.current || warehouseId == null || !Number.isFinite(orderId) || orderId < 1) {
@@ -381,6 +421,42 @@ export function usePackingOrderController(
           /* soft-fail */
         }
 
+        const offerStep = findReplacementOfferStep(out.post_pack_pipeline);
+        if (offerStep) {
+          const delaySeconds = Number(apiSettings?.fallback_label?.delay_seconds) || 0;
+          const wantGenerate = await askReplacementLabelOffer(
+            offerStep.message || "Nie udało się wygenerować etykiety kurierskiej.",
+            delaySeconds,
+          );
+          if (wantGenerate) {
+            setReplacementModalBusy(true);
+            try {
+              await createAndPrintReplacementLabel({
+                tenantId: DAMAGE_TENANT_ID,
+                warehouseId,
+                orderId,
+                courierError: offerStep.message,
+              });
+              showScannerToast("Wygenerowano etykietę zastępczą.");
+            } catch (e) {
+              const code = wmsPackingApiErrorCode(e);
+              const apiMsg = wmsPackingApiErrorMessage(e);
+              if (code === "replacement_template_not_configured") {
+                showScannerToast(
+                  apiMsg || "Nie skonfigurowano szablonu etykiety zastępczej w ustawieniach WMS.",
+                );
+              } else {
+                showScannerToast(apiMsg || "Nie udało się wygenerować etykiety zastępczej.");
+              }
+            } finally {
+              setReplacementModalOpen(false);
+              setReplacementModalBusy(false);
+            }
+          } else {
+            setReplacementModalOpen(false);
+          }
+        }
+
         if (out.packing_after_finish_action === "GO_TO_LIST") {
           const currentStatus = s.statusId;
           navigatedAway = true;
@@ -432,6 +508,7 @@ export function usePackingOrderController(
     finishWithoutCartonRef,
     askShipmentConfirm,
     askWaybillPrintChoice,
+    askReplacementLabelOffer,
     selectedPackagingIds,
     detail,
   ]);
@@ -647,6 +724,34 @@ export function usePackingOrderController(
       scanBusyRef.current = true;
       setScanBusy(true);
       try {
+        if (isReplacementLabelBarcode(ean)) {
+          playScanBeep();
+          appendScanToHistory(ean);
+          const result = await handleReplacementLabelScan({
+            tenantId: DAMAGE_TENANT_ID,
+            warehouseId,
+            barcode: ean,
+          });
+          if (result.ok) {
+            if (result.retry.message === "courier_already_generated") {
+              showScannerToast("Etykieta kurierska dla tej etykiety zastępczej jest już wygenerowana.");
+            } else {
+              showScannerToast("Wygenerowano właściwą etykietę kurierską z zapisanych parametrów pakowania.");
+            }
+            if (result.orderId !== orderId) {
+              navigate(WMS_ROUTES.packingOrder(result.orderId), { replace: true });
+            } else {
+              await fetchDetail();
+            }
+            return;
+          }
+          showScannerToast(result.message);
+          if (result.orderId != null && result.orderId !== orderId) {
+            navigate(WMS_ROUTES.packingOrder(result.orderId), { replace: true });
+          }
+          return;
+        }
+
         if (tryResumeAutoAfterNotesRescan()) {
           playScanBeep();
           appendScanToHistory(ean);
@@ -696,7 +801,18 @@ export function usePackingOrderController(
         refocusScannerInput();
       }
     },
-    [warehouseId, orderId, appendScanToHistory, showScannerToast, refocusScannerInput, applyPackingResult, notesPopupOpen, tryResumeAutoAfterNotesRescan],
+    [
+      warehouseId,
+      orderId,
+      appendScanToHistory,
+      showScannerToast,
+      refocusScannerInput,
+      applyPackingResult,
+      notesPopupOpen,
+      tryResumeAutoAfterNotesRescan,
+      navigate,
+      fetchDetail,
+    ],
   );
 
   const confirmPack = useCallback(async (orderItemId?: number, qtyOverride?: number) => {
@@ -913,5 +1029,11 @@ export function usePackingOrderController(
     waybillChoiceOpen,
     waybillChoiceCount,
     resolveWaybillPrintChoice,
+    replacementModalOpen,
+    replacementModalError,
+    replacementModalDelay,
+    replacementModalBusy,
+    confirmReplacementLabelGenerate,
+    cancelReplacementLabelModal,
   };
 }

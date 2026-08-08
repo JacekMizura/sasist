@@ -188,6 +188,7 @@ from .db.schema_upgrade import (
     ensure_order_items_packing_quantity_packed_column,
     ensure_direct_sales_settings_table,
     ensure_wms_packing_settings_table,
+    ensure_wms_packing_replacement_labels_table,
     ensure_shipping_methods_table_and_order_fk,
     ensure_warehouse_materials_tables,
     ensure_warehouse_materials_bdo_columns,
@@ -1846,6 +1847,7 @@ def _upgrade_schema_background() -> None:
         ensure_order_items_packing_quantity_packed_column(engine)
         ensure_direct_sales_settings_table(engine)
         ensure_wms_packing_settings_table(engine)
+        ensure_wms_packing_replacement_labels_table(engine)
         ensure_shipping_methods_table_and_order_fk(engine)
         ensure_warehouse_materials_tables(engine)
         ensure_warehouse_materials_bdo_columns(engine)

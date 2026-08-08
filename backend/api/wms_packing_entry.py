@@ -30,6 +30,9 @@ from ..schemas.wms_packing import (
     WmsPackingModeDistribution,
     WmsPackingOrderCard,
     WmsPackingOrderDetailOut,
+    WmsPackingReplacementLabelCreateBody,
+    WmsPackingReplacementLabelOut,
+    WmsPackingReplacementLabelRetryOut,
     WmsPackingResolveEanOut,
     WmsPackingShelfOrderOut,
     WmsPackingScanBody,
@@ -721,3 +724,124 @@ def post_packing_order_resume(
         logger.exception("post_packing_order_resume")
         raise HTTPException(status_code=500, detail="Database error") from e
     return {"ok": True}
+
+
+@router.post(
+    "/packing/orders/{order_id}/replacement-label",
+    response_model=WmsPackingReplacementLabelOut,
+)
+def post_packing_replacement_label(
+    order_id: int,
+    tenant_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_operable_warehouse),
+    body: WmsPackingReplacementLabelCreateBody = Body(default_factory=WmsPackingReplacementLabelCreateBody),
+    db: Session = Depends(get_db),
+):
+    """Wygeneruj etykietę zastępczą + zapisz snapshot wyborów pakowania."""
+    from ..services.wms_packing_replacement_label_service import (
+        ReplacementLabelError,
+        create_replacement_label,
+        pdf_to_base64,
+        serialize_replacement_row,
+    )
+
+    order = (
+        db.query(Order)
+        .filter(
+            Order.id == int(order_id),
+            Order.tenant_id == int(tenant_id),
+            Order.warehouse_id == int(warehouse_id),
+        )
+        .first()
+    )
+    if order is None:
+        raise HTTPException(status_code=404, detail="ORDER_NOT_FOUND")
+    try:
+        row, pdf = create_replacement_label(
+            db,
+            tenant_id=int(tenant_id),
+            warehouse_id=int(warehouse_id),
+            order=order,
+            courier_error=body.courier_error,
+        )
+        db.commit()
+        db.refresh(row)
+        out = serialize_replacement_row(row)
+        out["pdf_base64"] = pdf_to_base64(pdf)
+        return WmsPackingReplacementLabelOut.model_validate(out)
+    except ReplacementLabelError as e:
+        db.rollback()
+        raise HTTPException(status_code=400, detail={"code": e.code, "error": e.message}) from e
+    except ValueError as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=400,
+            detail={"code": "REPLACEMENT_LABEL_RENDER_FAILED", "error": str(e)[:500]},
+        ) from e
+    except SQLAlchemyError as e:
+        db.rollback()
+        logger.exception("post_packing_replacement_label")
+        raise HTTPException(status_code=500, detail="Database error") from e
+
+
+@router.get(
+    "/packing/replacement-labels/by-barcode/{barcode}",
+    response_model=WmsPackingReplacementLabelOut,
+)
+def get_packing_replacement_label_by_barcode(
+    barcode: str,
+    tenant_id: int = Query(..., ge=1),
+    db: Session = Depends(get_db),
+):
+    from ..services.wms_packing_replacement_label_service import get_by_barcode, serialize_replacement_row
+
+    row = get_by_barcode(db, tenant_id=int(tenant_id), barcode=barcode)
+    if row is None:
+        raise HTTPException(status_code=404, detail="REPLACEMENT_LABEL_NOT_FOUND")
+    return WmsPackingReplacementLabelOut.model_validate(serialize_replacement_row(row))
+
+
+@router.post(
+    "/packing/replacement-labels/{replacement_id}/retry-courier",
+    response_model=WmsPackingReplacementLabelRetryOut,
+)
+def post_packing_replacement_label_retry(
+    replacement_id: int,
+    tenant_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_operable_warehouse),
+    db: Session = Depends(get_db),
+):
+    """Po skanie etykiety zastępczej — przywróć snapshot i ponów generowanie listu kurierskiego."""
+    from ..models.wms_packing_replacement_label import WmsPackingReplacementLabel
+    from ..services.wms_packing_replacement_label_service import (
+        ReplacementLabelError,
+        retry_courier_label_from_replacement,
+    )
+
+    row = (
+        db.query(WmsPackingReplacementLabel)
+        .filter(
+            WmsPackingReplacementLabel.id == int(replacement_id),
+            WmsPackingReplacementLabel.tenant_id == int(tenant_id),
+            WmsPackingReplacementLabel.warehouse_id == int(warehouse_id),
+        )
+        .first()
+    )
+    if row is None:
+        raise HTTPException(status_code=404, detail="REPLACEMENT_LABEL_NOT_FOUND")
+    try:
+        result = retry_courier_label_from_replacement(
+            db,
+            tenant_id=int(tenant_id),
+            warehouse_id=int(warehouse_id),
+            row=row,
+        )
+        db.commit()
+        return WmsPackingReplacementLabelRetryOut.model_validate(result)
+    except ReplacementLabelError as e:
+        db.rollback()
+        raise HTTPException(status_code=400, detail={"code": e.code, "error": e.message}) from e
+    except SQLAlchemyError as e:
+        db.rollback()
+        logger.exception("post_packing_replacement_label_retry")
+        raise HTTPException(status_code=500, detail="Database error") from e

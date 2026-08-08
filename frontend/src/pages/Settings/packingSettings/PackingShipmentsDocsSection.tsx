@@ -8,7 +8,6 @@ import { WmsControlSettingRow, WmsSettingControlSlot } from "../wmsSettingRow";
 import {
   BoolRow,
   CAP_NONE,
-  CAP_PARTIAL,
   FieldGrid,
   MethodChecklist,
   numberInputClass,
@@ -315,8 +314,7 @@ export function PackingShipmentsDocsSection({
           <SelectField
             settingId="packing.fallback_label_template"
             label="Szablon etykiety zastępczej"
-            capability={CAP_PARTIAL}
-            capabilityNote="szablon jest sprawdzany; pełny druk etykiety jeszcze nie."
+            help="Lista zawiera wyłącznie szablony: rodzina Zamówienia, typ Etykieta zastępcza."
             value={draft.fallback_label.template_id != null ? String(draft.fallback_label.template_id) : ""}
             onChange={(v) => {
               setDraft((d) => {
@@ -341,7 +339,7 @@ export function PackingShipmentsDocsSection({
           <WmsControlSettingRow
             settingId="packing.fallback_label_delay"
             label="Opóźnienie etykiety zastępczej"
-            hint="Czas oczekiwania (sekundy) przed drukiem etykiety zastępczej."
+            hint="Czas oczekiwania (sekundy) zanim przycisk „Wygeneruj etykietę zastępczą” stanie się dostępny."
           >
             <input
               type="number"

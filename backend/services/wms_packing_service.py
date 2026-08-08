@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 import logging
-import time
 from datetime import datetime
 from collections import defaultdict
 from typing import List, Literal, Optional, Tuple, Type, TypeVar, cast
@@ -26,7 +25,6 @@ from ..models.order_document import OrderDocument
 from ..models.order_document_type_enum import OrderDocumentType
 from ..models.order_item import OMS_LINE_STATUS_TO_PICK, OrderItem, order_item_is_replaced_line
 from ..models.order_ui_status import OrderUiStatus
-from ..models.label_template import SavedLabelTemplate
 from ..models.picking_config import PickingConfig
 from ..models.sale_document import SaleDocument
 from ..models.wms_packing_settings import WmsPackingSettings
@@ -3724,14 +3722,25 @@ def _packing_step_generate_shipment(db: Session, order: Order) -> WmsPackingPost
                 skipped=False,
                 message=msg,
             )
+        # Brak listu / connectora — nie kończ „sukcesem”; UI może zaproponować etykietę zastępczą.
         return WmsPackingPostPackStepResult(
             step="generate_shipment",
-            ok=True,
-            skipped=True,
-            message="no_shipment_connector_configured",
+            ok=False,
+            skipped=False,
+            message=(
+                "courier_label_unavailable:"
+                "Nie udało się wygenerować etykiety kurierskiej "
+                "(brak listu przewozowego / connector nie skonfigurowany)."
+            ),
+            offer_replacement_label=True,
         )
     except Exception as e:  # pragma: no cover
-        return WmsPackingPostPackStepResult(step="generate_shipment", ok=False, message=str(e)[:500])
+        return WmsPackingPostPackStepResult(
+            step="generate_shipment",
+            ok=False,
+            message=f"courier_label_unavailable:{str(e)[:480]}",
+            offer_replacement_label=True,
+        )
 
 
 def _packing_step_print_document(db: Session, order: Order) -> WmsPackingPostPackStepResult:
@@ -3783,13 +3792,15 @@ def _packing_step_print_label(
     tenant_id: int,
     order: Order,
     fb: WmsPackingFallbackLabel,
+    offer_replacement_on_missing: bool = True,
 ) -> WmsPackingPostPackStepResult:
     """
     Resolve waybill (LIST_PRZEWOZOWY / pole „List przewozowy”) for client print/download.
-    Fallback product-label template is NOT a courier waybill — only used when no waybill file exists
-    and a template is configured (legacy replacement label).
+
+    Gdy brak listu — nie drukuj szablonu „etykieta zastępcza” jako listu kurierskiego.
+    Zamiast tego zwróć błąd z ``offer_replacement_label`` (osobny endpoint / popup).
     """
-    _ = tenant_id
+    _ = fb
     try:
         msg = _waybill_docs_client_message(db, order=order, kind="client_print_waybill")
         if msg:
@@ -3800,38 +3811,30 @@ def _packing_step_print_label(
                 skipped=False,
                 message=msg,
             )
-        tid = fb.template_id
-        if tid is None:
+        if not offer_replacement_on_missing:
             return WmsPackingPostPackStepResult(
                 step="print_label",
-                ok=True,
-                skipped=True,
+                ok=False,
+                skipped=False,
                 message="missing_waybill",
             )
-        tpl = (
-            db.query(SavedLabelTemplate)
-            .filter(
-                SavedLabelTemplate.id == int(tid),
-                SavedLabelTemplate.tenant_id == int(tenant_id),
-            )
-            .first()
-        )
-        if tpl is None:
-            return WmsPackingPostPackStepResult(
-                step="print_label",
-                ok=True,
-                skipped=True,
-                message="missing_waybill",
-            )
-        # Replacement label exists but is not a waybill — skip rather than fake a courier label.
         return WmsPackingPostPackStepResult(
             step="print_label",
-            ok=True,
-            skipped=True,
-            message="missing_waybill",
+            ok=False,
+            skipped=False,
+            message=(
+                "courier_label_unavailable:"
+                "Nie udało się wydrukować etykiety kurierskiej — brak listu przewozowego."
+            ),
+            offer_replacement_label=True,
         )
     except Exception as e:
-        return WmsPackingPostPackStepResult(step="print_label", ok=False, message=str(e)[:500])
+        return WmsPackingPostPackStepResult(
+            step="print_label",
+            ok=False,
+            message=f"courier_label_unavailable:{str(e)[:480]}",
+            offer_replacement_label=offer_replacement_on_missing,
+        )
 
 
 def _packing_step_apply_packed_status(
@@ -4017,12 +4020,12 @@ def _run_wms_packing_post_pack_pipeline(
 
     if actions.print_label:
         try:
-            delay = max(0, min(int(fb.delay_seconds or 0), 120))
-            if delay > 0:
-                time.sleep(float(delay))
+            # Opóźnienie etykiety zastępczej jest obsługiwane w UI (przycisk po delay_seconds).
+            # Nie blokujemy tu wątku worker/API sleepem.
+            _ = max(0, min(int(fb.delay_seconds or 0), 120))
             lbl_step = _packing_step_print_label(db, tenant_id=tenant_id, order=order, fb=fb)
             out.append(lbl_step)
-            if lbl_step.ok:
+            if lbl_step.ok and not lbl_step.skipped:
                 ship = getattr(order, "shipping_method_row", None)
                 carrier = (getattr(ship, "name", None) or "").strip() or "Przewoźnik"
                 emit_wms_label_generated(
@@ -4036,7 +4039,14 @@ def _run_wms_packing_post_pack_pipeline(
                     template_hint=str(getattr(fb, "template_id", None) or "") or None,
                 )
         except Exception as e:
-            out.append(WmsPackingPostPackStepResult(step="print_label", ok=False, message=str(e)[:500]))
+            out.append(
+                WmsPackingPostPackStepResult(
+                    step="print_label",
+                    ok=False,
+                    message=str(e)[:500],
+                    offer_replacement_label=True,
+                )
+            )
 
     return out
 

@@ -324,6 +324,30 @@ export type WmsPackingPostPackStepApi = {
   ok: boolean;
   skipped?: boolean;
   message?: string | null;
+  offer_replacement_label?: boolean;
+};
+
+export type WmsPackingReplacementLabelApi = {
+  id: number;
+  tenant_id: number;
+  warehouse_id: number;
+  order_id: number;
+  barcode: string;
+  status: string;
+  template_id?: number | null;
+  snapshot?: Record<string, unknown>;
+  last_error?: string | null;
+  pdf_base64?: string | null;
+};
+
+export type WmsPackingReplacementLabelRetryApi = {
+  ok: boolean;
+  status: string;
+  message?: string | null;
+  order_id: number;
+  replacement_label_id: number;
+  barcode: string;
+  waybill_message?: string | null;
 };
 
 export type WmsPackingScanOutApi = {
@@ -651,6 +675,44 @@ export async function postWmsPackingOrderFinish(
         : [],
     },
     { params },
+  );
+  return res.data;
+}
+
+export async function postWmsPackingReplacementLabel(
+  tenantId: number,
+  warehouseId: number,
+  orderId: number,
+  courierError?: string | null,
+): Promise<WmsPackingReplacementLabelApi> {
+  const res = await api.post<WmsPackingReplacementLabelApi>(
+    `/wms/packing/orders/${orderId}/replacement-label`,
+    { courier_error: courierError ?? null },
+    { params: { tenant_id: tenantId, warehouse_id: warehouseId } },
+  );
+  return res.data;
+}
+
+export async function getWmsPackingReplacementLabelByBarcode(
+  tenantId: number,
+  barcode: string,
+): Promise<WmsPackingReplacementLabelApi> {
+  const res = await api.get<WmsPackingReplacementLabelApi>(
+    `/wms/packing/replacement-labels/by-barcode/${encodeURIComponent(barcode)}`,
+    { params: { tenant_id: tenantId } },
+  );
+  return res.data;
+}
+
+export async function postWmsPackingReplacementLabelRetry(
+  tenantId: number,
+  warehouseId: number,
+  replacementId: number,
+): Promise<WmsPackingReplacementLabelRetryApi> {
+  const res = await api.post<WmsPackingReplacementLabelRetryApi>(
+    `/wms/packing/replacement-labels/${replacementId}/retry-courier`,
+    {},
+    { params: { tenant_id: tenantId, warehouse_id: warehouseId } },
   );
   return res.data;
 }

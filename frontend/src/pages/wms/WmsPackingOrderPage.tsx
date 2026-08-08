@@ -16,6 +16,7 @@ import { PackingCartonGateModal } from "../../components/wms/packing/PackingCart
 import { PackingFinalizationView } from "../../components/wms/packing/PackingFinalizationView";
 import { PackingMarkShortageModal } from "../../components/wms/packing/PackingMarkShortageModal";
 import { PackingNotesPopupModal } from "../../components/wms/packing/PackingNotesPopupModal";
+import { PackingReplacementLabelModal } from "../../components/wms/packing/PackingReplacementLabelModal";
 import { PackingView } from "../../components/wms/packing/PackingView";
 import { ConfirmModal } from "../../components/ui/ConfirmModal";
 import { ChoiceModal } from "../../components/ui/ChoiceModal";
@@ -390,6 +391,14 @@ export default function WmsPackingOrderPage() {
           onCancel={() => ctrl.resolveWaybillPrintChoice("one")}
         />
       ) : null}
+      <PackingReplacementLabelModal
+        open={ctrl.replacementModalOpen}
+        errorMessage={ctrl.replacementModalError}
+        delaySeconds={ctrl.replacementModalDelay}
+        busy={ctrl.replacementModalBusy}
+        onGenerate={() => ctrl.confirmReplacementLabelGenerate()}
+        onClose={() => ctrl.cancelReplacementLabelModal()}
+      />
       <PackingMarkShortageModal
         open={shortageLineId != null}
         missingStatusName={shortageStatusName}

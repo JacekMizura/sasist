@@ -2101,6 +2101,58 @@ def ensure_direct_sales_settings_table(engine: Engine) -> None:
         conn.commit()
 
 
+def ensure_wms_packing_replacement_labels_table(engine: Engine) -> None:
+    """Persisted etykieta zastępcza state (barcode + packing snapshot) per order."""
+    with engine.connect() as conn:
+        if not _table_exists(conn, "wms_packing_replacement_labels"):
+            conn.execute(
+                text(
+                    """
+                    CREATE TABLE wms_packing_replacement_labels (
+                        id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+                        tenant_id INTEGER NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+                        warehouse_id INTEGER NOT NULL REFERENCES warehouses(id) ON DELETE CASCADE,
+                        order_id INTEGER NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
+                        barcode VARCHAR(64) NOT NULL,
+                        status VARCHAR(32) NOT NULL DEFAULT 'awaiting_courier',
+                        template_id INTEGER REFERENCES saved_label_templates(id) ON DELETE SET NULL,
+                        snapshot_json TEXT NOT NULL DEFAULT '{}',
+                        last_error TEXT,
+                        created_at DATETIME,
+                        updated_at DATETIME,
+                        resolved_at DATETIME,
+                        UNIQUE(tenant_id, barcode)
+                    )
+                    """
+                )
+            )
+            conn.execute(
+                text(
+                    "CREATE INDEX IF NOT EXISTS ix_wms_pack_repl_label_tenant "
+                    "ON wms_packing_replacement_labels(tenant_id)"
+                )
+            )
+            conn.execute(
+                text(
+                    "CREATE INDEX IF NOT EXISTS ix_wms_pack_repl_label_order "
+                    "ON wms_packing_replacement_labels(order_id)"
+                )
+            )
+            conn.execute(
+                text(
+                    "CREATE INDEX IF NOT EXISTS ix_wms_pack_repl_label_barcode "
+                    "ON wms_packing_replacement_labels(barcode)"
+                )
+            )
+            conn.execute(
+                text(
+                    "CREATE INDEX IF NOT EXISTS ix_wms_pack_repl_label_status "
+                    "ON wms_packing_replacement_labels(status)"
+                )
+            )
+        conn.commit()
+
+
 def ensure_wms_packing_settings_table(engine: Engine) -> None:
     """WMS packing automation + panel status bindings per tenant + warehouse."""
     with engine.connect() as conn:

@@ -453,6 +453,44 @@ class WmsPackingPostPackStepResult(BaseModel):
     ok: bool
     skipped: bool = False
     message: Optional[str] = None
+    #: Gdy True — UI może zaproponować wygenerowanie etykiety zastępczej.
+    offer_replacement_label: bool = False
+
+
+class WmsPackingReplacementLabelOut(BaseModel):
+    id: int
+    tenant_id: int
+    warehouse_id: int
+    order_id: int
+    barcode: str
+    status: str
+    template_id: Optional[int] = None
+    snapshot: dict = Field(default_factory=dict)
+    last_error: Optional[str] = None
+    created_at: Optional[str] = None
+    resolved_at: Optional[str] = None
+    pdf_base64: Optional[str] = Field(
+        default=None,
+        description="PDF etykiety (base64) — tylko przy create",
+    )
+
+
+class WmsPackingReplacementLabelCreateBody(BaseModel):
+    courier_error: Optional[str] = Field(
+        default=None,
+        max_length=2000,
+        description="Komunikat błędu generowania etykiety kurierskiej (opcjonalnie)",
+    )
+
+
+class WmsPackingReplacementLabelRetryOut(BaseModel):
+    ok: bool
+    status: str
+    message: Optional[str] = None
+    order_id: int
+    replacement_label_id: int
+    barcode: str
+    waybill_message: Optional[str] = None
 
 
 class WmsPackingScanOut(BaseModel):

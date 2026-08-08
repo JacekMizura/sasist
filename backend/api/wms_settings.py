@@ -387,6 +387,8 @@ def _save_wms_packing_settings_impl(body: WmsPackingSettingsSave, db: Session) -
 
     tid = body.fallback_label.template_id
     if tid is not None:
+        from ..domain.label_templates.constants import is_order_replacement_template_type
+
         tpl = (
             db.query(SavedLabelTemplate)
             .filter(
@@ -397,6 +399,14 @@ def _save_wms_packing_settings_impl(body: WmsPackingSettingsSave, db: Session) -
         )
         if tpl is None:
             raise HTTPException(status_code=400, detail="fallback_label.template_id not found for tenant")
+        if not is_order_replacement_template_type(getattr(tpl, "template_type", None)):
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "fallback_label.template_id must be a template of type "
+                    "„Etykieta zastępcza” (order_replacement) in family Zamówienia"
+                ),
+            )
 
     ds = body.document_settings
     _assert_sale_series_id(

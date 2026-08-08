@@ -30,6 +30,7 @@ export type TemplateType =
   | "cart"
   | "basket"
   | "order"
+  | "order_replacement"
   | "user_login"
   | "document_receipt"
   | "document_invoice"
@@ -42,12 +43,17 @@ export const TEMPLATE_TYPE_OPTIONS: { value: TemplateType; label: string }[] = [
   { value: "cart", label: "Wózek" },
   { value: "basket", label: "Koszyk" },
   { value: "order", label: "Zamówienie" },
+  { value: "order_replacement", label: "Etykieta zastępcza" },
   { value: "user_login", label: "Kod logowania użytkownika" },
   { value: "document_receipt", label: "Paragon" },
   { value: "document_invoice", label: "Faktura VAT" },
   { value: "document_wz", label: "WZ" },
   { value: "document_correction", label: "Korekta" },
 ];
+
+/** Rodzina „Zamówienia” w Szablonach wydruków. */
+export const ORDER_FAMILY_TEMPLATE_TYPES: ReadonlySet<string> = new Set(["order", "order_replacement"]);
+export const ORDER_REPLACEMENT_TEMPLATE_TYPE = "order_replacement" as const;
 
 export type VariableCategoryId =
   | "warehouse"
@@ -242,6 +248,7 @@ export const TEMPLATE_TYPE_CATEGORIES: Record<TemplateType, VariableCategoryId[]
   cart: ["cart", "fleet"],
   basket: ["basket", "cart"],
   order: ["orders"],
+  order_replacement: ["orders"],
   user_login: ["user"],
   document_receipt: ["documents"],
   document_invoice: ["documents"],

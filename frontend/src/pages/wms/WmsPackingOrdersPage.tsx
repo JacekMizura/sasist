@@ -13,6 +13,10 @@ import {
   wmsPackingApiErrorCode,
   wmsPackingApiErrorMessage,
 } from "../../api/wmsPackingApi";
+import {
+  handleReplacementLabelScan,
+  isReplacementLabelBarcode,
+} from "../../components/wms/packing/packingReplacementLabelActions";
 import { getWmsPickingResolveCart } from "../../api/wmsPickingProductsApi";
 import { OrdersListView } from "../../components/wms/packing/ordersList/OrdersListView";
 import { AppOverlayPortal } from "../../components/overlay";
@@ -299,6 +303,32 @@ export default function WmsPackingOrdersPage() {
       listScanBusyRef.current = true;
       let tryCart = false;
       try {
+        if (isReplacementLabelBarcode(scan)) {
+          playScanBeep();
+          appendScanToHistory(scan);
+          const result = await handleReplacementLabelScan({
+            tenantId: DAMAGE_TENANT_ID,
+            warehouseId,
+            barcode: scan,
+          });
+          if (result.ok) {
+            if (result.retry.message === "courier_already_generated") {
+              showScannerToast("Etykieta kurierska dla tej etykiety zastępczej jest już wygenerowana.");
+            } else {
+              showScannerToast("Wygenerowano właściwą etykietę kurierską z zapisanych parametrów pakowania.");
+            }
+            if (result.orderId > 0) {
+              navigate(WMS_ROUTES.packingOrder(result.orderId));
+            }
+            return;
+          }
+          showScannerToast(result.message);
+          if (result.orderId != null && result.orderId > 0) {
+            navigate(WMS_ROUTES.packingOrder(result.orderId));
+          }
+          return;
+        }
+
         // CASE B: baskets — najpierw warehouse-global skan koszyka → exact order
         if (s.mode === "baskets") {
           try {

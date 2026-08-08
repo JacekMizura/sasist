@@ -18,6 +18,7 @@ export const LABEL_DESIGNER_TYPE_OPTIONS: { value: string; label: string }[] = [
 
 const ERP_OR_ORDER_TYPES = new Set([
   "order",
+  "order_replacement",
   "document_receipt",
   "document_invoice",
   "document_wz",
@@ -38,6 +39,8 @@ export function labelDesignerVariableCategoryType(value: string | null | undefin
   if (v === "product") return "product";
   if (v === "cart") return "cart";
   if (v === "basket") return "basket";
+  if (v === "order" || v === "order_replacement") return "order";
+  if (v === "user_login") return "user_login";
   return "location";
 }
 

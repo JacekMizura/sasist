@@ -203,7 +203,9 @@ const WmsPackingSettingsPanel = forwardRef<
         getOrderUiStatusSummary(DAMAGE_TENANT_ID, warehouseId, { includeInactive: true }),
         getOrderPanelSubgroups(DAMAGE_TENANT_ID, warehouseId),
         getWmsPackingSettings(DAMAGE_TENANT_ID, warehouseId),
-        api.get<LabelTemplateOption[]>("/label-templates/", { params: { tenant_id: DAMAGE_TENANT_ID } }),
+        api.get<LabelTemplateOption[]>("/label-templates/", {
+          params: { tenant_id: DAMAGE_TENANT_ID, template_type: "order_replacement" },
+        }),
         listDocumentSeries(DAMAGE_TENANT_ID, warehouseId),
         getShippingMethods({ tenant_id: DAMAGE_TENANT_ID, warehouse_id: warehouseId, active_only: true }),
         warehouseService.getWarehouses(DAMAGE_TENANT_ID),
