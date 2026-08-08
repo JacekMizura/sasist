@@ -1,3 +1,16 @@
+## 2026-08-08 — Ustawienia WMS: fałszywy dirty przy zmianie grupy
+
+- Root cause: baseline draft liczony przed migracją localStorage `allowed_start_status_ids` + niespójny fingerprint
+- Fix: `packingDraftFingerprint` / `packingExtendedFingerprint` (normalize + kanoniczne pola); baseline = stan po load/migrate; clear baseline podczas load; idempotent `setAllowedStartStatusIds`
+- Ostrzeżenie nawigacji nadal tylko przy prawdziwej zmianie ustawień; bez commit/push
+
+## 2026-08-08 — Pakowanie: dokumenty, listy, wielopaczkowość
+
+- `preferred_document_type` API: FROM_ORDER | INVOICE | PARAGON (UI: Paragon/Faktura/Pobrane z zamówienia)
+- Kopia dokumentu sprzedaży (ten sam PDF 2×); popup liczby listów; ConfirmModal przed generate_shipment
+- Wielopaczkowość: okno paczek przed finish/auto; `packaging_carton_ids` → packing_consumables_json
+- Testy packing auto-actions + finish baskets; `npm run build` OK; bez commit/push
+
 ## 2026-08-08 — Pakowanie: Automatyzacja / Przesyłki i dokumenty
 
 - `change_order_status` off → bez zmiany statusu; on → `packed_status_id`

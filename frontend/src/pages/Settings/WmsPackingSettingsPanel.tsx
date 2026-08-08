@@ -45,6 +45,8 @@ import type { WmsPackingExtendedUiSettings } from "../../types/wmsPackingExtende
 import {
   DEFAULT_WMS_PACKING_EXTENDED_UI,
   loadWmsPackingExtendedUi,
+  normalizePackingPostDocumentAction,
+  normalizePackingSalesDocumentType,
   saveWmsPackingExtendedUi,
 } from "../../types/wmsPackingExtendedUi";
 import { WmsSettingsTabFrame } from "./WmsSettingsTabFrame";
@@ -69,18 +71,66 @@ function stableStringify(v: unknown): string {
     .join(",")}}`;
 }
 
-function packingDraftFingerprint(d: WmsPackingSettingsRead): string {
+/**
+ * Canonical fingerprint for dirty detection — always normalize first so
+ * load/save/migrate do not falsely mark the form dirty.
+ */
+function packingDraftFingerprint(
+  tenantId: number,
+  warehouseId: number,
+  raw: WmsPackingSettingsRead | Partial<WmsPackingSettingsRead>,
+): string {
+  const d = normalizeWmsPackingSettingsRead(tenantId, warehouseId, raw);
   return stableStringify({
-    start_status_id: d.start_status_id,
-    packed_status_id: d.packed_status_id,
-    missing_status_id: d.missing_status_id,
+    start_status_id: d.start_status_id ?? null,
+    packed_status_id: d.packed_status_id ?? null,
+    missing_status_id: d.missing_status_id ?? null,
     allowed_start_status_ids: d.allowed_start_status_ids,
     packing_after_finish_action: d.packing_after_finish_action,
-    auto_actions: d.auto_actions,
-    document_settings: d.document_settings,
-    fallback_label: d.fallback_label,
-    interface_display: d.interface_display,
+    auto_actions: {
+      create_document: Boolean(d.auto_actions.create_document),
+      generate_shipment: Boolean(d.auto_actions.generate_shipment),
+      print_document: Boolean(d.auto_actions.print_document),
+      print_label: Boolean(d.auto_actions.print_label),
+      change_order_status: Boolean(d.auto_actions.change_order_status),
+    },
+    document_settings: {
+      invoice_series_id: d.document_settings.invoice_series_id ?? null,
+      receipt_series_id: d.document_settings.receipt_series_id ?? null,
+      preferred_document_type: d.document_settings.preferred_document_type ?? "FROM_ORDER",
+    },
+    fallback_label: {
+      template_id: d.fallback_label.template_id ?? null,
+      delay_seconds: Number(d.fallback_label.delay_seconds) || 0,
+    },
+    interface_display: {
+      show_stock: Boolean(d.interface_display.show_stock),
+      show_ean: Boolean(d.interface_display.show_ean),
+      show_symbol: Boolean(d.interface_display.show_symbol),
+      show_catalog_number: Boolean(d.interface_display.show_catalog_number),
+    },
   });
+}
+
+/** Fingerprint of extended UI — merge defaults + normalize enums (ignore key-order / legacy noise). */
+function packingExtendedFingerprint(ext: WmsPackingExtendedUiSettings): string {
+  const e: WmsPackingExtendedUiSettings = {
+    ...DEFAULT_WMS_PACKING_EXTENDED_UI,
+    ...ext,
+    salesDocumentType: normalizePackingSalesDocumentType(ext.salesDocumentType),
+    afterSalesDocumentAction: normalizePackingPostDocumentAction(ext.afterSalesDocumentAction),
+    afterWaybillAction: normalizePackingPostDocumentAction(ext.afterWaybillAction),
+    allowedStartStatusIds: Array.isArray(ext.allowedStartStatusIds)
+      ? ext.allowedStartStatusIds.map(Number).filter((n) => Number.isFinite(n) && n > 0).sort((a, b) => a - b)
+      : DEFAULT_WMS_PACKING_EXTENDED_UI.allowedStartStatusIds,
+    forceScanShipmentTemplateMethodIds: Array.isArray(ext.forceScanShipmentTemplateMethodIds)
+      ? ext.forceScanShipmentTemplateMethodIds.map(String)
+      : DEFAULT_WMS_PACKING_EXTENDED_UI.forceScanShipmentTemplateMethodIds,
+    blockExtraParcelsMethodIds: Array.isArray(ext.blockExtraParcelsMethodIds)
+      ? ext.blockExtraParcelsMethodIds.map(String)
+      : DEFAULT_WMS_PACKING_EXTENDED_UI.blockExtraParcelsMethodIds,
+  };
+  return stableStringify(e);
 }
 
 export type WmsPackingSettingsPanelHandle = {
@@ -142,6 +192,9 @@ const WmsPackingSettingsPanel = forwardRef<
     setLoading(true);
     setErr(null);
     setOkMsg(null);
+    // Clear baselines while loading so interim draft/fallback cannot look "dirty".
+    setBaselineDraft(null);
+    setBaselineExtended(null);
     const fallbackDraft = resolveFallbackDraft();
     setDraft((prev) => prev ?? fallbackDraft);
 
@@ -161,8 +214,6 @@ const WmsPackingSettingsPanel = forwardRef<
     const legacyExtended = loadWmsPackingExtendedUi(warehouseId);
 
     let nextDraft: WmsPackingSettingsRead;
-    /** Server fingerprint before localStorage migrate — so UI shows dirty until user saves. */
-    let baselineFromServer: WmsPackingSettingsRead | null = null;
     if (cfgRes.status === "fulfilled") {
       const cfg = cfgRes.value;
       nextDraft = normalizeWmsPackingSettingsRead(DAMAGE_TENANT_ID, warehouseId, {
@@ -173,8 +224,8 @@ const WmsPackingSettingsPanel = forwardRef<
           ...(cfg.interface_display ?? {}),
         },
       });
-      baselineFromServer = nextDraft;
-      // One-time migrate legacy localStorage multi-start statuses → API draft when server list empty.
+      // One-time migrate legacy localStorage multi-start statuses into the working draft.
+      // Baseline uses the same post-migrate draft — do not mark dirty for migrate alone.
       if (
         nextDraft.allowed_start_status_ids.length === 0 &&
         Array.isArray(legacyExtended.allowedStartStatusIds) &&
@@ -235,25 +286,28 @@ const WmsPackingSettingsPanel = forwardRef<
     setMainPackingWarehouseId(mainWh);
     setBaselineMainPackingWarehouseId(mainWh);
 
-    setDraft((prev) => (cfgRes.status === "fulfilled" ? nextDraft : prev ?? fallbackDraft));
     const finalDraft = cfgRes.status === "fulfilled" ? nextDraft : fallbackDraft;
+    setDraft(finalDraft);
     const preferred = String(finalDraft.document_settings.preferred_document_type ?? "FROM_ORDER")
       .trim()
       .toUpperCase();
-    const salesDocumentType =
-      preferred === "INVOICE" ? "invoice" : preferred === "PARAGON" ? "receipt" : "from_order";
-    const ext = {
+    const salesDocumentType = normalizePackingSalesDocumentType(
+      preferred === "INVOICE" ? "invoice" : preferred === "PARAGON" ? "receipt" : "from_order",
+    );
+    const ext: WmsPackingExtendedUiSettings = {
+      ...DEFAULT_WMS_PACKING_EXTENDED_UI,
       ...legacyExtended,
       // SSOT efektu po akcjach = API ``packing_after_finish_action`` (nie lokalny checkbox).
       afterActionsBehavior: packingAfterFinishActionToUi(finalDraft.packing_after_finish_action),
       // SSOT multi-start = API; keep local mirror in sync after migrate/load.
       allowedStartStatusIds: finalDraft.allowed_start_status_ids,
-      // SSOT typu dokumentu = API preferred_document_type (z fallbackiem localStorage).
-      salesDocumentType: salesDocumentType as WmsPackingExtendedUiSettings["salesDocumentType"],
+      // SSOT typu dokumentu = API preferred_document_type.
+      salesDocumentType,
     };
     setExtended(ext);
-    setBaselineDraft(packingDraftFingerprint(baselineFromServer ?? finalDraft));
-    setBaselineExtended(stableStringify(ext));
+    // Baseline = exactly what is shown — section switches / remounts must not look dirty.
+    setBaselineDraft(packingDraftFingerprint(DAMAGE_TENANT_ID, warehouseId, finalDraft));
+    setBaselineExtended(packingExtendedFingerprint(ext));
     setLoading(false);
   }, [warehouseId, resolveFallbackDraft]);
 
@@ -268,11 +322,13 @@ const WmsPackingSettingsPanel = forwardRef<
   }, [warehouseId, draft, resolveFallbackDraft]);
 
   const dirty = useMemo(() => {
-    if (warehouseId == null || effectiveDraft == null || baselineDraft == null || baselineExtended == null) return false;
+    if (warehouseId == null || effectiveDraft == null || baselineDraft == null || baselineExtended == null) {
+      return false;
+    }
     const mainWhDirty = mainPackingWarehouseId !== baselineMainPackingWarehouseId;
     return (
-      packingDraftFingerprint(effectiveDraft) !== baselineDraft ||
-      stableStringify(extended) !== baselineExtended ||
+      packingDraftFingerprint(DAMAGE_TENANT_ID, warehouseId, effectiveDraft) !== baselineDraft ||
+      packingExtendedFingerprint(extended) !== baselineExtended ||
       mainWhDirty
     );
   }, [
@@ -301,12 +357,17 @@ const WmsPackingSettingsPanel = forwardRef<
 
   const setAllowedStartStatusIds = (ids: number[]) => {
     const nextIds = [...ids].filter((n) => Number.isFinite(n) && n > 0).sort((a, b) => a - b);
+    const sameIds = (prev: number[] | undefined) =>
+      Array.isArray(prev) &&
+      prev.length === nextIds.length &&
+      prev.every((v, i) => v === nextIds[i]);
     setDraft((d) => {
       if (warehouseId == null) return d;
       const base = d ?? resolveFallbackDraft();
+      if (sameIds(base.allowed_start_status_ids)) return d;
       return { ...base, allowed_start_status_ids: nextIds };
     });
-    setExtended((e) => ({ ...e, allowedStartStatusIds: nextIds }));
+    setExtended((e) => (sameIds(e.allowedStartStatusIds) ? e : { ...e, allowedStartStatusIds: nextIds }));
   };
 
   const toggleAction = (key: keyof WmsPackingAutoActions) => {
@@ -339,19 +400,23 @@ const WmsPackingSettingsPanel = forwardRef<
   const saveAll = async () => {
     if (warehouseId == null || effectiveDraft == null) return;
     const packingAfter = packingAfterFinishUiToAction(extended.afterActionsBehavior);
+    const preferredFromUi =
+      extended.salesDocumentType === "invoice"
+        ? "INVOICE"
+        : extended.salesDocumentType === "receipt"
+          ? "PARAGON"
+          : "FROM_ORDER";
     const normalized = normalizeWmsPackingSettingsRead(DAMAGE_TENANT_ID, warehouseId, {
       ...effectiveDraft,
       packing_after_finish_action: packingAfter,
+      document_settings: {
+        ...effectiveDraft.document_settings,
+        preferred_document_type: preferredFromUi as "FROM_ORDER" | "INVOICE" | "PARAGON",
+      },
     });
     setOkMsg(null);
     setSaving(true);
     try {
-      const preferredFromUi =
-        extended.salesDocumentType === "invoice"
-          ? "INVOICE"
-          : extended.salesDocumentType === "receipt"
-            ? "PARAGON"
-            : "FROM_ORDER";
       const docSettings = {
         ...normalized.document_settings,
         series_id: null,
@@ -375,17 +440,27 @@ const WmsPackingSettingsPanel = forwardRef<
       await patchFulfillmentConfiguration(DAMAGE_TENANT_ID, {
         consolidation_warehouse_id: mainPackingWarehouseId,
       });
-      setDraft(saved);
-      saveCachedWmsPackingSettingsRead(warehouseId, saved);
-      const extAfterSave = {
+      const savedNormalized = normalizeWmsPackingSettingsRead(DAMAGE_TENANT_ID, warehouseId, {
+        ...saved,
+        document_settings: {
+          ...saved.document_settings,
+          preferred_document_type: preferredFromUi,
+        },
+      });
+      setDraft(savedNormalized);
+      saveCachedWmsPackingSettingsRead(warehouseId, savedNormalized);
+      const extAfterSave: WmsPackingExtendedUiSettings = {
         ...extended,
-        afterActionsBehavior: packingAfterFinishActionToUi(saved.packing_after_finish_action),
-        allowedStartStatusIds: saved.allowed_start_status_ids,
+        afterActionsBehavior: packingAfterFinishActionToUi(savedNormalized.packing_after_finish_action),
+        allowedStartStatusIds: savedNormalized.allowed_start_status_ids,
+        salesDocumentType: normalizePackingSalesDocumentType(
+          preferredFromUi === "INVOICE" ? "invoice" : preferredFromUi === "PARAGON" ? "receipt" : "from_order",
+        ),
       };
       setExtended(extAfterSave);
       saveWmsPackingExtendedUi(warehouseId, extAfterSave);
-      setBaselineDraft(packingDraftFingerprint(saved));
-      setBaselineExtended(stableStringify(extAfterSave));
+      setBaselineDraft(packingDraftFingerprint(DAMAGE_TENANT_ID, warehouseId, savedNormalized));
+      setBaselineExtended(packingExtendedFingerprint(extAfterSave));
       setBaselineMainPackingWarehouseId(mainPackingWarehouseId);
       setErr(null);
       try {
@@ -399,14 +474,17 @@ const WmsPackingSettingsPanel = forwardRef<
       console.warn("Packing settings save API failed; persisting local cache only", e);
       saveCachedWmsPackingSettingsRead(warehouseId, normalized);
       setDraft(normalized);
-      const extLocal = {
+      const extLocal: WmsPackingExtendedUiSettings = {
         ...extended,
         allowedStartStatusIds: normalized.allowed_start_status_ids,
+        salesDocumentType: normalizePackingSalesDocumentType(
+          preferredFromUi === "INVOICE" ? "invoice" : preferredFromUi === "PARAGON" ? "receipt" : "from_order",
+        ),
       };
       setExtended(extLocal);
       saveWmsPackingExtendedUi(warehouseId, extLocal);
-      setBaselineDraft(packingDraftFingerprint(normalized));
-      setBaselineExtended(stableStringify(extLocal));
+      setBaselineDraft(packingDraftFingerprint(DAMAGE_TENANT_ID, warehouseId, normalized));
+      setBaselineExtended(packingExtendedFingerprint(extLocal));
       setErr(
         "Nie udało się zapisać ustawień (w tym głównego magazynu pakowania) na serwerze. Sprawdź połączenie i spróbuj ponownie.",
       );
