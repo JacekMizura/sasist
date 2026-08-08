@@ -22,7 +22,8 @@ class OrderIssueTask(Base):
 
     #: Ostatnio zapisany typ (np. MIXED); UI może policzyć `recommended_action` na żywo.
     type = Column(String(32), nullable=False, index=True)
-    status = Column(String(16), nullable=False, default="OPEN", index=True)
+    # Legal values include READY_FOR_PACKING (17); keep headroom for workflow statuses.
+    status = Column(String(32), nullable=False, default="OPEN", index=True)
 
     missing_items = Column(Text, nullable=False, default="[]")
     picked_items = Column(Text, nullable=False, default="[]")

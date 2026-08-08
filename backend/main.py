@@ -206,6 +206,7 @@ from .db.schema_upgrade import (
     ensure_order_issue_tasks_table,
     ensure_order_issue_tasks_archive_columns,
     ensure_order_issue_tasks_lifecycle_columns,
+    ensure_order_issue_tasks_status_column_width,
     ensure_order_issue_task_items_table,
     ensure_wms_picking_shortage_settings_columns,
     ensure_wms_operational_tasks_table,
@@ -758,6 +759,7 @@ _POSTGRES_SAFE_SCHEMA_FUNCS = frozenset({
     "ensure_order_issue_tasks_table",
     "ensure_order_issue_tasks_archive_columns",
     "ensure_order_issue_tasks_lifecycle_columns",
+    "ensure_order_issue_tasks_status_column_width",
     "ensure_order_issue_task_items_table",
     "ensure_wms_picking_shortage_settings_columns",
     # Production module — MUST run on PostgreSQL (not SQLite-only legacy helpers).
@@ -1858,6 +1860,7 @@ def _upgrade_schema_background() -> None:
         ensure_order_issue_tasks_table(engine)
         ensure_order_issue_tasks_archive_columns(engine)
         ensure_order_issue_tasks_lifecycle_columns(engine)
+        ensure_order_issue_tasks_status_column_width(engine)
         ensure_order_issue_task_items_table(engine)
         ensure_wms_operational_tasks_table(engine)
         ensure_fulfillment_events_table(engine)
@@ -1959,6 +1962,7 @@ try:
     ensure_order_issue_tasks_table(engine)
     ensure_order_issue_tasks_archive_columns(engine)
     ensure_order_issue_tasks_lifecycle_columns(engine)
+    ensure_order_issue_tasks_status_column_width(engine)
     ensure_order_issue_task_items_table(engine)
     ensure_wms_picking_shortage_settings_columns(engine)
     ensure_wms_operational_tasks_table(engine)

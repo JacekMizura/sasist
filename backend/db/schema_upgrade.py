@@ -5417,6 +5417,13 @@ def ensure_order_issue_tasks_lifecycle_columns(engine: Engine) -> None:
     _impl(engine)
 
 
+def ensure_order_issue_tasks_status_column_width(engine: Engine) -> None:
+    """Widen ``order_issue_tasks.status`` for READY_FOR_PACKING (SQLite + PostgreSQL)."""
+    from .schema_introspection import ensure_order_issue_tasks_status_column_width as _impl
+
+    _impl(engine)
+
+
 def ensure_order_issue_task_items_table(engine: Engine) -> None:
     """Operational line items per Braki task."""
     from .schema_introspection import ensure_order_issue_task_items_table as _impl

@@ -67,6 +67,7 @@ def ensure_order_issue_task_lifecycle_schema(db: Session) -> None:
         ensure_order_issue_task_items_table,
         ensure_order_issue_tasks_archive_columns,
         ensure_order_issue_tasks_lifecycle_columns,
+        ensure_order_issue_tasks_status_column_width,
         get_engine,
     )
     from ..db.schema_upgrade import ensure_orders_picking_handoff_mode_column
@@ -81,6 +82,7 @@ def ensure_order_issue_task_lifecycle_schema(db: Session) -> None:
     ensure_order_issue_task_items_table(engine)
     ensure_order_issue_tasks_archive_columns(engine)
     ensure_order_issue_tasks_lifecycle_columns(engine)
+    ensure_order_issue_tasks_status_column_width(engine)
     ensure_orders_picking_handoff_mode_column(engine)
     # Order ORM columns required when Braki list loads full ``Order`` rows.
     try:

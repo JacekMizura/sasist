@@ -1,13 +1,7 @@
 ﻿## Active
 
-**Packaging materials + BDO architecture refactor (in progress, 2026-08-07).**
+**Prod hotfixes applied (2026-08-08):** BDO `resolveBdoTabMeta` export restored; `order_issue_tasks.status` → VARCHAR(32); list endpoint session recovery after failed flush.
 
-SSOT direction:
-- Carton / PackagingMaterial = master data + BDO kg flags
-- Physical stock = `inventory` via linked `products.stock_item_kind` (CARTON | PACKAGING_MATERIAL)
-- BDO = report-only over stock documents (PZ RECEIPT / RW ISSUE)
-- Packing finish creates packaging RW for selected carton (+ consumables JSON)
+**Packaging materials + BDO architecture** (previous): stock via Product bridge; BDO report-only; packing RW.
 
-Removed / removing: BDO purchases, corrections, stock-count ledger tables & FE pages.
-
-**Next stages:** FE consumables UI on packing; document movement history projection; MM/inventory-count UX for packaging stockables; purge dead BDO API client helpers.
+**Next stages:** FE consumables UI on packing; document movement history projection; MM/inventory-count UX for packaging stockables.

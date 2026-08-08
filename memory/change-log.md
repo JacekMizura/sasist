@@ -1,3 +1,9 @@
+## 2026-08-08 — Prod hotfix: BDO build + order_issue_tasks.status
+
+- FE: restore `resolveBdoTabMeta` in `bdoTabMeta.ts` (current report-only tabs + breadcrumb) — Vercel Rollup import fix
+- BE: widen `order_issue_tasks.status` String(16)→String(32) + `ensure_order_issue_tasks_status_column_width` (PG ALTER; READY_FOR_PACKING=17)
+- BE: `_recover_session_after_failed_flush` in WMS issue-tasks list after nested repair failure (avoid PendingRollbackError mask)
+
 ## 2026-08-07 — Materiały opakowaniowe + BDO report-only (backend foundation)
 
 - Stockable bridge: `Product.stock_item_kind` + `Carton/PackagingMaterial.product_id` → Inventory SSOT

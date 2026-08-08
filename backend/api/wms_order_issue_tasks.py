@@ -11,7 +11,7 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import event
-from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.exc import PendingRollbackError, SQLAlchemyError
 from sqlalchemy.orm import Session, joinedload, selectinload
 
 from ..auth.deps import get_optional_current_user
@@ -759,6 +759,29 @@ def get_order_issue_task(
     return item
 
 
+def _recover_session_after_failed_flush(db: Session) -> bool:
+    """Rollback a poisoned session after a failed flush so later ORM access is safe.
+
+    ``begin_nested()`` normally isolates SQL errors via SAVEPOINT. When the savepoint
+    was not established (or the outer txn was already aborted), PostgreSQL leaves the
+    Session needing rollback; further use raises ``PendingRollbackError`` and masks
+    the original failure. Returns True when a full rollback was performed.
+    """
+    try:
+        trans = db.get_transaction()
+    except Exception:
+        trans = None
+    if trans is not None and not getattr(trans, "is_active", True):
+        db.rollback()
+        return True
+    try:
+        db.connection()
+    except PendingRollbackError:
+        db.rollback()
+        return True
+    return False
+
+
 def _build_order_issue_tasks_list(
     db: Session,
     *,
@@ -848,6 +871,16 @@ def _build_order_issue_tasks_list(
                         getattr(t, "order_id", None),
                         wf_exc,
                     )
+                    # Do not leave a failed flush as PendingRollbackError for serialize().
+                    if _recover_session_after_failed_flush(db):
+                        task_id = int(getattr(t, "id", 0) or 0)
+                        order_id = int(getattr(t, "order_id", 0) or 0)
+                        t = db.get(OrderIssueTask, task_id) if task_id else None
+                        o = db.get(Order, order_id) if order_id else None
+                        if t is None:
+                            continue
+                        if o is not None:
+                            order_map[order_id] = o
                 item = serialize_order_issue_task_list_card(db, t, o)
                 if not order_requires_shortage_handling(db, o):
                     from ..services.order_issue_task_lifecycle import maybe_auto_resolve_issue_task
@@ -856,8 +889,33 @@ def _build_order_issue_tasks_list(
                     continue
                 out.append(item)
             except Exception as exc:
-                err_public = _public_serialize_error_message(exc)
-                snap = order_issue_task_debug_snapshot(db, t, o, workflow_status=wf_status)
+                # Clear aborted txn before snapshot/fallback so we don't mask the root error.
+                session_recovered = _recover_session_after_failed_flush(db)
+                root: BaseException = exc
+                if isinstance(exc, PendingRollbackError) or session_recovered:
+                    root = exc.__cause__ or exc.__context__ or exc
+                err_public = _public_serialize_error_message(root)
+                if session_recovered:
+                    task_id = int(getattr(t, "id", 0) or 0)
+                    order_id = int(getattr(t, "order_id", 0) or 0)
+                    t = db.get(OrderIssueTask, task_id) if task_id else None
+                    o = db.get(Order, order_id) if order_id else None
+                try:
+                    snap = (
+                        order_issue_task_debug_snapshot(db, t, o, workflow_status=wf_status)
+                        if t is not None
+                        else {
+                            "task_id": getattr(t, "id", None),
+                            "order_id": getattr(t, "order_id", None),
+                            "workflow_status": wf_status,
+                        }
+                    )
+                except Exception:
+                    snap = {
+                        "task_id": getattr(t, "id", None),
+                        "order_id": getattr(t, "order_id", None),
+                        "workflow_status": wf_status,
+                    }
                 logger.exception(
                     "[wms.order_issue.serialize] task_id=%s order_id=%s workflow_status=%s "
                     "relocation_required=%s archived=%s closed_at=%s error_code=%s err=%s",
@@ -868,11 +926,13 @@ def _build_order_issue_tasks_list(
                     snap.get("archived"),
                     snap.get("closed_at"),
                     _SERIALIZE_ERROR_CODE,
-                    exc,
+                    root,
                 )
                 from ..services.braki_queue_normalize import build_fallback_braki_queue_card
 
                 try:
+                    if t is None:
+                        raise RuntimeError("task missing after session recovery")
                     fallback = build_fallback_braki_queue_card(
                         db,
                         t,
@@ -891,19 +951,22 @@ def _build_order_issue_tasks_list(
                 except Exception as fallback_exc:
                     logger.exception(
                         "[braki.queue.render_fallback] task_id=%s order_id=%s fallback_failed err=%s",
-                        int(t.id),
-                        int(t.order_id),
+                        getattr(t, "id", None),
+                        getattr(t, "order_id", None),
                         fallback_exc,
                     )
-                    skipped.append(
-                        OrderIssueTaskSkippedItem(
-                            task_id=int(t.id),
-                            order_id=int(t.order_id),
-                            order_number=str((o.number if o is not None else None) or f"#{t.order_id}"),
-                            error_code=_SERIALIZE_ERROR_CODE,
-                            error_message=err_public,
+                    if t is not None:
+                        skipped.append(
+                            OrderIssueTaskSkippedItem(
+                                task_id=int(t.id),
+                                order_id=int(t.order_id),
+                                order_number=str(
+                                    (o.number if o is not None else None) or f"#{t.order_id}"
+                                ),
+                                error_code=_SERIALIZE_ERROR_CODE,
+                                error_message=err_public,
+                            )
                         )
-                    )
                 continue
         serialization_ms = int((time.perf_counter() - t_serialize_start) * 1000)
 

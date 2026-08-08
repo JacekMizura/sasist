@@ -134,6 +134,58 @@ def ensure_order_issue_tasks_lifecycle_columns(engine: Engine) -> None:
     )
 
 
+# Max legal OrderIssueTask.status today: READY_FOR_PACKING (17). Use 32 for headroom.
+_ORDER_ISSUE_TASK_STATUS_WIDTH = 32
+
+
+def ensure_order_issue_tasks_status_column_width(engine: Engine) -> None:
+    """Widen ``order_issue_tasks.status`` so READY_FOR_PACKING and peers fit (PG + SQLite)."""
+    if not has_table(engine, "order_issue_tasks"):
+        return
+    reflected = _get_reflected_columns(engine, "order_issue_tasks")
+    col = reflected.get("status")
+    if not col:
+        return
+    typ = col.get("type")
+    length = getattr(typ, "length", None)
+    if length is not None and int(length) >= _ORDER_ISSUE_TASK_STATUS_WIDTH:
+        return
+
+    dialect = engine.dialect.name
+    target = _ORDER_ISSUE_TASK_STATUS_WIDTH
+    with engine.begin() as conn:
+        if dialect == "postgresql":
+            conn.execute(
+                text(
+                    f"ALTER TABLE order_issue_tasks ALTER COLUMN status TYPE VARCHAR({target}) "
+                    f"USING CAST(status AS VARCHAR({target}))"
+                )
+            )
+        elif dialect == "sqlite":
+            # SQLite does not enforce VARCHAR length; recreate only when reflection reports a short type.
+            # No table rebuild — length is advisory; ORM model already uses String(32) for new DBs.
+            pass
+        else:
+            try:
+                conn.execute(
+                    text(
+                        f"ALTER TABLE order_issue_tasks ALTER COLUMN status TYPE VARCHAR({target})"
+                    )
+                )
+            except Exception:
+                logger.info(
+                    "[schema] order_issue_tasks.status widen skipped dialect=%s",
+                    dialect,
+                )
+                return
+    logger.info(
+        "[schema] order_issue_tasks.status widened to VARCHAR(%s) dialect=%s prior_len=%s",
+        target,
+        dialect,
+        length,
+    )
+
+
 def ensure_order_issue_task_items_table(engine: Engine) -> None:
     """Operational line items for Braki tasks — dialect-aware ORM DDL (SQLite + PostgreSQL)."""
     if has_table(engine, "order_issue_task_items"):
