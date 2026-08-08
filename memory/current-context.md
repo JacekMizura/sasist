@@ -1,5 +1,5 @@
 ﻿## Active
 
-**Ustawienia WMS dirty false-positive (2026-08-08):** baseline fingerprint po migrate/load = stan wyświetlany; przełączanie grup sidebara bez ostrzeżenia. Bez commit/push.
+**Ustawienia WMS layout LABEL|[i]|CONTROL (2026-08-08):** wspólny wiersz 3-kolumnowy; opisy pod opcjami → ikona „i”; bez commit/push.
 
 **Next:** commit/push na życzenie.

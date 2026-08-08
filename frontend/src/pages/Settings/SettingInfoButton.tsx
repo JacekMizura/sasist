@@ -15,7 +15,7 @@ type SettingInfoButtonProps = {
 const INFO_BLUE = "#3b82f6";
 
 /**
- * Niebieska ikona (i) w stylu Sellasist — tuż przy nazwie opcji.
+ * Niebieska ikona (i) w stylu Sellasist — środkowa kolumna wiersza LABEL | [i] | CONTROL.
  * Modal bez sekcji „czy artykuł był pomocny”.
  */
 export function SettingInfoButton({ title, description, tip, className }: SettingInfoButtonProps) {
@@ -37,7 +37,7 @@ export function SettingInfoButton({ title, description, tip, className }: Settin
         type="button"
         className={
           className ??
-          "ml-1 inline-flex h-[17px] w-[17px] shrink-0 translate-y-px items-center justify-center rounded-full border border-[#3b82f6] bg-white text-[11px] font-semibold leading-none text-[#3b82f6] hover:bg-blue-50"
+          "inline-flex h-[17px] w-[17px] shrink-0 items-center justify-center rounded-full border border-[#3b82f6] bg-white text-[11px] font-semibold leading-none text-[#3b82f6] hover:bg-blue-50"
         }
         style={{ borderColor: INFO_BLUE, color: INFO_BLUE }}
         aria-label={`Informacja: ${title}`}

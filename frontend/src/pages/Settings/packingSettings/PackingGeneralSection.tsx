@@ -67,17 +67,15 @@ export function PackingGeneralSection({
         />
         <WmsControlSettingRow
           settingId="packing.main_packing_warehouse"
-          label={
-            <>
-              Główny magazyn do pakowania
-              {mainWhHelp ? (
-                <SettingInfoButton
-                  title="Główny magazyn do pakowania"
-                  description={mainWhHelp.description}
-                  tip={mainWhHelp.tip}
-                />
-              ) : null}
-            </>
+          label="Główny magazyn do pakowania"
+          info={
+            mainWhHelp ? (
+              <SettingInfoButton
+                title="Główny magazyn do pakowania"
+                description={mainWhHelp.description}
+                tip={mainWhHelp.tip}
+              />
+            ) : undefined
           }
         >
           <select

@@ -18,6 +18,7 @@ export {
   wmsSettingCheckboxClass,
   wmsSettingControlInputClass,
   wmsSettingControlSelectClass,
+  wmsSettingInfoColClass,
   wmsSettingLabelTextClass,
   wmsSettingRowClass,
   wmsSettingsFormMaxWidthClass,

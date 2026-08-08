@@ -61,12 +61,8 @@ export function PackingProcessSection({
       <SettingsStack>
         <WmsControlSettingRow
           settingId="packing.start_status_id"
-          label={
-            <>
-              Status zamówienia do rozpoczęcia pakowania
-              <StartStatusInfo title="Status zamówienia do rozpoczęcia pakowania" />
-            </>
-          }
+          label="Status zamówienia do rozpoczęcia pakowania"
+          info={<StartStatusInfo title="Status zamówienia do rozpoczęcia pakowania" />}
         >
           {statusField({
             selectedStatusId: draft.start_status_id,
@@ -78,12 +74,8 @@ export function PackingProcessSection({
 
         <WmsControlSettingRow
           settingId="packing.allowed_start_status_ids"
-          label={
-            <>
-              Statusy zamówienia do rozpoczęcia pakowania (wiele)
-              <StartStatusInfo title="Statusy zamówienia do rozpoczęcia pakowania (wiele)" />
-            </>
-          }
+          label="Statusy zamówienia do rozpoczęcia pakowania (wiele)"
+          info={<StartStatusInfo title="Statusy zamówienia do rozpoczęcia pakowania (wiele)" />}
         >
           {statusField({
             selectedStatusIds: draft.allowed_start_status_ids,

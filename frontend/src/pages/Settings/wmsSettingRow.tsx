@@ -1,34 +1,40 @@
 import type { ElementType, ReactNode } from "react";
 
+import { SettingInfoButton } from "./SettingInfoButton";
 import { WMS_SETTING_DATA_ATTR } from "./settingsSearch/navigateToSetting";
 import { wmsSettingsTokens } from "./wmsSettingsTokens";
 
 /**
  * Sellasist-style WMS settings row:
- * LEFT  — name / description / badges (fixed max width, wraps to 2–3 lines)
- * RIGHT — control column immediately beside the first line of the label
+ * LEFT   — option name / badges (wraps to 2–3 lines)
+ * MIDDLE — optional info „i” (aligned to first line of the label)
+ * RIGHT  — control column (checkbox / select / input / picker)
  *
- * Controls form one vertical column across rows. Extra viewport width stays empty
- * on the right — never push controls to the section/page edge.
+ * Controls share one vertical column. Extra viewport width stays empty on the right.
  */
 
 /** Label column — fills the fixed track; long names wrap inside it. */
 export const WMS_SETTING_LABEL_COL_CLASS = "min-w-0";
+
+/** Fixed middle column for the info icon — reserved from `sm` up so controls stay aligned. */
+export const WMS_SETTING_INFO_COL_CLASS =
+  "h-[1.375rem] w-[1.75rem] shrink-0 items-center justify-center self-start";
 
 /** Control column — shared width for selects / inputs / checkboxes. */
 export const WMS_SETTING_CONTROL_COL_CLASS =
   "flex min-w-0 w-full flex-col items-stretch justify-start";
 
 /**
- * Row shell: horizontal LABEL | CONTROL from `sm` up, stacked only on narrow viewports.
- * `items-start` keeps the control on the first line of a multi-line label.
- * Row max-width caps the pair so controls stay beside the name (not at the page edge).
+ * Row shell: LABEL | [i] | CONTROL from `sm` up; stacked on narrow viewports.
+ * `items-start` keeps the control and „i” on the first line of a multi-line label.
  * Equal track sizes on every row → one vertical control column.
  */
 export const wmsSettingRowClass =
-  "wms-setting-field grid w-full max-w-[calc(20rem+15rem+1.25rem)] grid-cols-1 items-start gap-x-5 gap-y-2 rounded-lg border border-transparent px-1 py-2.5 sm:grid-cols-[minmax(12rem,20rem)_minmax(10rem,15rem)]";
+  "wms-setting-field grid w-full max-w-[calc(20rem+1.75rem+15rem+2.25rem)] grid-cols-1 items-start gap-x-3 gap-y-2 rounded-lg border border-transparent px-1 py-2.5 sm:grid-cols-[minmax(12rem,20rem)_1.75rem_minmax(10rem,15rem)]";
 
 export const wmsSettingLabelColClass = WMS_SETTING_LABEL_COL_CLASS;
+
+export const wmsSettingInfoColClass = WMS_SETTING_INFO_COL_CLASS;
 
 export const wmsSettingLabelTextClass =
   "text-sm font-medium leading-snug text-slate-800 break-words [overflow-wrap:anywhere]";
@@ -47,10 +53,30 @@ export const wmsSettingCheckboxClass =
 /** Form uses the pane width; row pair stays compact via max-w on the row. */
 export const wmsSettingsFormMaxWidthClass = "w-full min-w-0";
 
+function resolveInfoTitle(infoTitle: string | undefined, label: ReactNode): string {
+  if (infoTitle && infoTitle.trim()) return infoTitle.trim();
+  if (typeof label === "string" && label.trim()) return label.trim();
+  return "Ustawienie";
+}
+
+function hasHintContent(hint: ReactNode | undefined): boolean {
+  if (hint == null || hint === false || hint === true) return false;
+  if (typeof hint === "string") return hint.trim().length > 0;
+  return true;
+}
+
 type SettingRowProps = {
   label: ReactNode;
   children: ReactNode;
+  /**
+   * Optional under-option description (legacy).
+   * No longer rendered under the label — shown via the middle-column „i” when `info` is absent.
+   */
   hint?: ReactNode;
+  /** Middle-column info control (typically {@link SettingInfoButton}). */
+  info?: ReactNode;
+  /** Modal title when `hint` is auto-promoted to SettingInfoButton. */
+  infoTitle?: string;
   footer?: ReactNode;
   settingId?: string;
   className?: string;
@@ -59,19 +85,27 @@ type SettingRowProps = {
 };
 
 /**
- * Shared WMS settings row: LABEL | CONTROL.
+ * Shared WMS settings row: LABEL | [i] | CONTROL.
  * Prefer this (or {@link WmsControlSettingRow} / {@link WmsBoolSettingRow}) in all WMS settings tabs.
  */
 export function SettingRow({
   label,
   children,
   hint,
+  info,
+  infoTitle,
   footer,
   settingId,
   className,
   as = "div",
 }: SettingRowProps) {
   const Comp = as as ElementType;
+  const resolvedInfo =
+    info ??
+    (hasHintContent(hint) ? (
+      <SettingInfoButton title={resolveInfoTitle(infoTitle, label)} description={hint} />
+    ) : null);
+
   return (
     <Comp
       {...(settingId ? { [WMS_SETTING_DATA_ATTR]: settingId } : {})}
@@ -79,8 +113,15 @@ export function SettingRow({
     >
       <span className={wmsSettingLabelColClass}>
         <span className={`block ${wmsSettingLabelTextClass}`}>{label}</span>
-        {hint ? <span className="mt-1 block text-xs leading-relaxed text-slate-500">{hint}</span> : null}
         {footer}
+      </span>
+      <span
+        className={`${wmsSettingInfoColClass} ${
+          resolvedInfo == null ? "hidden sm:flex" : "flex"
+        }`}
+        aria-hidden={resolvedInfo == null ? true : undefined}
+      >
+        {resolvedInfo}
       </span>
       <span className={wmsSettingControlColClass}>{children}</span>
     </Comp>
@@ -95,18 +136,22 @@ type BoolRowProps = {
   checked: boolean;
   onChange: (v: boolean) => void;
   hint?: ReactNode;
+  info?: ReactNode;
+  infoTitle?: string;
   footer?: ReactNode;
   disabled?: boolean;
   settingId?: string;
   className?: string;
 };
 
-/** Left: label / hint / badges. Right: checkbox in the shared control column. */
+/** Left: label / badges. Middle: optional „i”. Right: checkbox. */
 export function WmsBoolSettingRow({
   label,
   checked,
   onChange,
   hint,
+  info,
+  infoTitle,
   footer,
   disabled,
   settingId,
@@ -118,6 +163,8 @@ export function WmsBoolSettingRow({
       settingId={settingId}
       label={label}
       hint={hint}
+      info={info}
+      infoTitle={infoTitle}
       footer={footer}
       className={`${disabled ? "cursor-not-allowed opacity-60" : "cursor-pointer"} ${className ?? ""}`}
     >
@@ -138,17 +185,21 @@ type ControlRowProps = {
   label: ReactNode;
   children: ReactNode;
   hint?: ReactNode;
+  info?: ReactNode;
+  infoTitle?: string;
   footer?: ReactNode;
   settingId?: string;
   className?: string;
   asLabel?: boolean;
 };
 
-/** Left: label / hint / badges. Right: select / input / picker. */
+/** Left: label / badges. Middle: optional „i”. Right: select / input / picker. */
 export function WmsControlSettingRow({
   label,
   children,
   hint,
+  info,
+  infoTitle,
   footer,
   settingId,
   className,
@@ -160,6 +211,8 @@ export function WmsControlSettingRow({
       settingId={settingId}
       label={label}
       hint={hint}
+      info={info}
+      infoTitle={infoTitle}
       footer={footer}
       className={`${asLabel ? "cursor-pointer" : ""} ${className ?? ""}`}
     >
@@ -184,6 +237,7 @@ export function WmsSettingControlSlot({
       className={`${wmsSettingRowClass} ${className ?? ""}`}
     >
       <span className={`${wmsSettingLabelColClass} hidden sm:block`} aria-hidden />
+      <span className={`${wmsSettingInfoColClass} hidden sm:flex`} aria-hidden />
       <span className={wmsSettingControlColClass}>{children}</span>
     </div>
   );

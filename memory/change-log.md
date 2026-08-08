@@ -1,3 +1,10 @@
+## 2026-08-08 — Ustawienia WMS: układ LABEL | [i] | CONTROL
+
+- `SettingRow`: 3 kolumny; `hint` nie renderuje się pod nazwą — treść trafia do środkowej ikony „i”
+- Packing: `info` prop zamiast ikony w labelu; badge/capability bez zmian
+- Globalnie: picking / direct sales / returns / silniki — istniejące `hint`/`help` → „i”
+- Logika ustawień bez zmian; `npm run build`; bez commit/push
+
 ## 2026-08-08 — Ustawienia WMS: fałszywy dirty przy zmianie grupy
 
 - Root cause: baseline draft liczony przed migracją localStorage `allowed_start_status_ids` + niespójny fingerprint

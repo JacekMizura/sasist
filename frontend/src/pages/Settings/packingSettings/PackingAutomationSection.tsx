@@ -97,7 +97,6 @@ export function PackingAutomationSection({ extended, draft, patchExtended, toggl
           checked={extended.showAutomationButtons}
           onChange={(v) => patchExtended("showAutomationButtons", v)}
           infoKey="packing.show_automation_buttons"
-          help="Pokazywane są wyłącznie aktywatory reguł z zaznaczoną opcją „Pakowanie WMS”."
         />
       </div>
     </SectionCard>

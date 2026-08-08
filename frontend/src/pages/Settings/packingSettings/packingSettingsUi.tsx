@@ -98,21 +98,22 @@ export function BoolRow({
   infoTip?: ReactNode;
 }) {
   const helpEntry = infoKey ? PACKING_SETTING_HELP[infoKey] : undefined;
-  const info = infoDescription ?? helpEntry?.description;
+  const infoBody = infoDescription ?? helpEntry?.description;
   const tip = infoTip ?? helpEntry?.tip;
+  const infoNode = infoBody ? (
+    <SettingInfoButton title={label} description={infoBody} tip={tip} />
+  ) : undefined;
   return (
     <WmsBoolSettingRow
       settingId={settingId}
-      label={
-        <>
-          {label}
-          {info ? <SettingInfoButton title={label} description={info} tip={tip} /> : null}
-        </>
-      }
+      label={label}
+      info={infoNode}
+      infoTitle={label}
       checked={checked}
       onChange={onChange}
       disabled={disabled}
-      hint={help}
+      // Prefer catalog/info modal; legacy `help` becomes „i” only when no catalog entry.
+      hint={infoNode ? undefined : help}
       footer={
         capability ? (
           <span className="mt-1 block">
@@ -146,27 +147,26 @@ export function SelectField({
   help?: ReactNode;
 }) {
   const helpEntry = infoKey ? PACKING_SETTING_HELP[infoKey] : undefined;
-  const info = helpEntry?.description;
+  const infoBody = helpEntry?.description;
   const tip = helpEntry?.tip;
+  const infoNode = infoBody ? (
+    <SettingInfoButton title={label} description={infoBody} tip={tip} />
+  ) : undefined;
+  const stringHelp = typeof help === "string" ? help : undefined;
   return (
     <WmsControlSettingRow
       settingId={settingId}
-      label={
-        <>
-          {label}
-          {info ? <SettingInfoButton title={label} description={info} tip={tip} /> : null}
-        </>
-      }
-      hint={typeof help === "string" ? help : undefined}
+      label={label}
+      info={infoNode}
+      infoTitle={label}
+      // Legacy string help → middle-column „i”; ReactNode help was under-label chrome — drop it.
+      hint={infoNode ? undefined : stringHelp}
       footer={
-        <>
-          {capability ? (
-            <span className="mt-1 block">
-              <PackingCapabilityBadge kind={capability} note={capabilityNote} />
-            </span>
-          ) : null}
-          {help && typeof help !== "string" ? <div className="mt-1">{help}</div> : null}
-        </>
+        capability ? (
+          <span className="mt-1 block">
+            <PackingCapabilityBadge kind={capability} note={capabilityNote} />
+          </span>
+        ) : null
       }
     >
       <select className={selectClass} value={value} onChange={(e) => onChange(e.target.value)}>
