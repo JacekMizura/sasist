@@ -10,6 +10,7 @@ import {
 import { mappingProfileKey } from "../../../printing/profiles";
 import type { PrintersConfig, WorkstationDetail } from "../../../types/wmsWorkstations";
 import { WmsSettingsSection } from "../WmsSettingsSection";
+import { WmsControlSettingRow } from "../wmsSettingsUi";
 import { WMS_WORKSTATIONS_TENANT_ID } from "./tenant";
 import {
   WorkstationEmptyState,
@@ -179,13 +180,16 @@ export function PrintersTab({ workstationId, detail }: Props) {
           const selected = draft[key];
           const configured = selected !== "" && selected != null;
           return (
-            <div key={key} className={wsTokens.settingsRow}>
-              <div className="min-w-0">
-                <div className="text-sm font-medium text-slate-900">
+            <WmsControlSettingRow
+              key={key}
+              label={
+                <>
                   {icon}
                   {label}
-                </div>
-                <div className="mt-1">
+                </>
+              }
+              footer={
+                <span className="mt-1 block">
                   {configured ? (
                     <WsStatusBadge tone="success">
                       <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
@@ -197,32 +201,32 @@ export function PrintersTab({ workstationId, detail }: Props) {
                       Nie skonfigurowano
                     </WsStatusBadge>
                   )}
-                </div>
-              </div>
-              <div className="w-full sm:max-w-sm">
-                <label className="sr-only" htmlFor={`printer-${key}`}>
-                  Drukarka dla {label}
-                </label>
-                <select
-                  id={`printer-${key}`}
-                  className={wsTokens.select}
-                  value={selected}
-                  onChange={(e) =>
-                    setDraft((prev) => ({
-                      ...prev,
-                      [key]: e.target.value ? Number(e.target.value) : "",
-                    }))
-                  }
-                >
-                  <option value="">wybierz drukarkę</option>
-                  {config.available_printers.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
+                </span>
+              }
+              className="border-b border-slate-100 py-4 last:border-b-0"
+            >
+              <label className="sr-only" htmlFor={`printer-${key}`}>
+                Drukarka dla {label}
+              </label>
+              <select
+                id={`printer-${key}`}
+                className={wsTokens.select}
+                value={selected}
+                onChange={(e) =>
+                  setDraft((prev) => ({
+                    ...prev,
+                    [key]: e.target.value ? Number(e.target.value) : "",
+                  }))
+                }
+              >
+                <option value="">wybierz drukarkę</option>
+                {config.available_printers.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                  </option>
+                ))}
+              </select>
+            </WmsControlSettingRow>
           );
         })}
       </WmsSettingsSection>

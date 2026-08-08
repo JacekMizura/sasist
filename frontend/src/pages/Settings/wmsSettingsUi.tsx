@@ -10,6 +10,8 @@ export {
   type WmsSettingCapability,
 } from "./wmsSettingCapability";
 export {
+  SettingRow,
+  WmsSettingRow,
   WmsBoolSettingRow,
   WmsControlSettingRow,
   WmsSettingControlSlot,

@@ -8,6 +8,7 @@ import {
 } from "../packingSettingCapability";
 import { SettingInfoButton } from "../SettingInfoButton";
 import {
+  SettingRow,
   WmsBoolSettingRow,
   WmsControlSettingRow,
   WmsSettingControlSlot,
@@ -16,6 +17,8 @@ import {
   wmsSettingControlSelectClass,
   wmsSettingsFormMaxWidthClass,
 } from "../wmsSettingRow";
+
+export { SettingRow };
 import { PACKING_SETTING_HELP } from "./packingSettingsHelp";
 
 export const selectClass = wmsSettingControlSelectClass;
@@ -195,10 +198,12 @@ export function MethodChecklist({
           key={m.id}
           className="flex cursor-pointer items-start gap-3 rounded px-1 py-0.5 hover:bg-white"
         >
-          <span className="min-w-0 flex-1 text-sm leading-snug text-slate-800">{m.name}</span>
+          <span className="min-w-0 max-w-[14rem] shrink-0 text-sm leading-snug break-words text-slate-800">
+            {m.name}
+          </span>
           <input
             type="checkbox"
-            className={`${checkboxClass} mt-0.5 shrink-0`}
+            className={`${checkboxClass} shrink-0`}
             checked={set.has(m.id)}
             onChange={() => onToggle(m.id)}
           />

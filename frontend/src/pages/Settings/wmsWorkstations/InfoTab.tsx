@@ -7,6 +7,11 @@ import { useWarehouse } from "../../../context/WarehouseContext";
 import type { StationType, WorkstationDetail } from "../../../types/wmsWorkstations";
 import { STATION_TYPE_OPTIONS } from "../../../types/wmsWorkstations";
 import { WmsSettingsSection } from "../WmsSettingsSection";
+import {
+  WmsBoolSettingRow,
+  WmsControlSettingRow,
+  wmsSettingsRowsStackClass,
+} from "../wmsSettingsUi";
 import { WMS_WORKSTATIONS_TENANT_ID } from "./tenant";
 import { WorkstationTabShell, wsTokens } from "./workstationUi";
 
@@ -65,13 +70,11 @@ export function InfoTab({ workstationId, detail, onUpdated }: Props) {
       }
     >
       <WmsSettingsSection id="ws-info" title="Dane stanowiska">
-        <div className="grid gap-x-6 gap-y-4 sm:grid-cols-2">
-          <label className={wsTokens.fieldLabel}>
-            Nazwa
+        <div className={wmsSettingsRowsStackClass}>
+          <WmsControlSettingRow asLabel label="Nazwa">
             <input className={wsTokens.input} value={name} onChange={(e) => setName(e.target.value)} />
-          </label>
-          <label className={wsTokens.fieldLabel}>
-            Typ stanowiska
+          </WmsControlSettingRow>
+          <WmsControlSettingRow asLabel label="Typ stanowiska">
             <select
               className={wsTokens.select}
               value={stationType}
@@ -83,9 +86,8 @@ export function InfoTab({ workstationId, detail, onUpdated }: Props) {
                 </option>
               ))}
             </select>
-          </label>
-          <label className={wsTokens.fieldLabel}>
-            Magazyn
+          </WmsControlSettingRow>
+          <WmsControlSettingRow asLabel label="Magazyn">
             <select
               className={wsTokens.select}
               value={warehouseId}
@@ -97,9 +99,8 @@ export function InfoTab({ workstationId, detail, onUpdated }: Props) {
                 </option>
               ))}
             </select>
-          </label>
-          <label className={`${wsTokens.fieldLabel} sm:col-span-2`}>
-            Opis
+          </WmsControlSettingRow>
+          <WmsControlSettingRow asLabel label="Opis">
             <textarea
               className={wsTokens.input}
               rows={3}
@@ -107,17 +108,13 @@ export function InfoTab({ workstationId, detail, onUpdated }: Props) {
               onChange={(e) => setDescription(e.target.value)}
               placeholder="np. Stół pakowania przy bramie 2"
             />
-          </label>
-          <div className="flex flex-col gap-3 sm:col-span-2 sm:flex-row sm:gap-6">
-            <label className="flex items-center gap-2 text-sm text-slate-700">
-              <input type="checkbox" checked={isDefault} onChange={(e) => setIsDefault(e.target.checked)} />
-              Domyślne dla magazynu
-            </label>
-            <label className="flex items-center gap-2 text-sm text-slate-700">
-              <input type="checkbox" checked={isActive} onChange={(e) => setIsActive(e.target.checked)} />
-              Aktywne
-            </label>
-          </div>
+          </WmsControlSettingRow>
+          <WmsBoolSettingRow
+            label="Domyślne dla magazynu"
+            checked={isDefault}
+            onChange={setIsDefault}
+          />
+          <WmsBoolSettingRow label="Aktywne" checked={isActive} onChange={setIsActive} />
         </div>
       </WmsSettingsSection>
     </WorkstationTabShell>

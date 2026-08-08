@@ -1,5 +1,5 @@
 /** Shared spacing / typography for all WMS settings modules.
- * Form rows: label column LEFT + control column RIGHT via {@link ./wmsSettingRow}.
+ * Form rows: LABEL (wrap) | CONTROL (first-line) via {@link ./wmsSettingRow} `SettingRow`.
  */
 export const wmsSettingsTokens = {
   mainStack: "space-y-6",
@@ -10,15 +10,15 @@ export const wmsSettingsTokens = {
   cardTitle: "text-sm font-semibold text-slate-900",
   cardDescription: "mt-1 text-xs leading-relaxed text-slate-500",
   fieldStack: "space-y-4",
-  /** Prefer single-column Sellasist rows ({@link ./wmsSettingRow}); not a 2-col grid. */
+  /** Prefer Sellasist `SettingRow` stack — not a multi-column field grid. */
   fieldGrid: "space-y-1",
   help: "mt-1 text-xs leading-relaxed text-slate-500",
-  /** Prefer {@link ./wmsSettingRow} `wmsSettingControlSelectClass` for horizontal rows. */
+  /** Prefer {@link ./wmsSettingRow} `wmsSettingControlSelectClass` inside SettingRow. */
   select:
     "w-full max-w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40",
   input:
     "w-full max-w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40",
-  checkbox: "h-4 w-4 shrink-0 rounded border-slate-300 text-blue-600 focus:ring-blue-500",
+  checkbox: "mt-0.5 h-4 w-4 shrink-0 rounded border-slate-300 text-blue-600 focus:ring-blue-500",
 } as const;
 
 /** Canonical section labels for WMS settings side nav. */

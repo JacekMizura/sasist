@@ -1,27 +1,39 @@
-import type { ReactNode } from "react";
+import type { ElementType, ReactNode } from "react";
 
 import { WMS_SETTING_DATA_ATTR } from "./settingsSearch/navigateToSetting";
 import { wmsSettingsTokens } from "./wmsSettingsTokens";
 
 /**
  * Sellasist-style WMS settings row:
- * LEFT — name / description / badges (wraps, capped width)
- * RIGHT — fixed control column immediately beside the label
+ * LEFT  — name / description / badges (fixed max width, wraps to 2–3 lines)
+ * RIGHT — control column immediately beside the first line of the label
  *
- * Extra viewport width stays empty on the RIGHT. Do not push controls to the edge
- * (no space-between, no 1fr label that shoves the control column right).
+ * Controls form one vertical column across rows. Extra viewport width stays empty
+ * on the right — never push controls to the section/page edge.
  */
 
-/** Label column ≈ 34rem, control column 26rem (416px) — aligned start of each row. */
+/** Label column — fills the fixed track; long names wrap inside it. */
+export const WMS_SETTING_LABEL_COL_CLASS = "min-w-0";
+
+/** Control column — shared width for selects / inputs / checkboxes. */
+export const WMS_SETTING_CONTROL_COL_CLASS =
+  "flex min-w-0 w-full flex-col items-stretch justify-start";
+
+/**
+ * Row shell: horizontal LABEL | CONTROL from `sm` up, stacked only on narrow viewports.
+ * `items-start` keeps the control on the first line of a multi-line label.
+ * Row max-width caps the pair so controls stay beside the name (not at the page edge).
+ * Equal track sizes on every row → one vertical control column.
+ */
 export const wmsSettingRowClass =
-  "wms-setting-field grid w-full grid-cols-1 items-start gap-x-6 gap-y-2 rounded-lg border border-transparent px-1 py-2.5 sm:grid-cols-[minmax(0,34rem)_26rem] sm:justify-start";
+  "wms-setting-field grid w-full max-w-[calc(20rem+15rem+1.25rem)] grid-cols-1 items-start gap-x-5 gap-y-2 rounded-lg border border-transparent px-1 py-2.5 sm:grid-cols-[minmax(12rem,20rem)_minmax(10rem,15rem)]";
 
-export const wmsSettingLabelColClass = "min-w-0 max-w-full";
+export const wmsSettingLabelColClass = WMS_SETTING_LABEL_COL_CLASS;
 
-export const wmsSettingLabelTextClass = "text-sm font-medium leading-snug text-slate-800";
+export const wmsSettingLabelTextClass =
+  "text-sm font-medium leading-snug text-slate-800 break-words [overflow-wrap:anywhere]";
 
-export const wmsSettingControlColClass =
-  "flex w-full min-w-0 max-w-[26rem] flex-col items-stretch justify-start sm:pt-0.5";
+export const wmsSettingControlColClass = WMS_SETTING_CONTROL_COL_CLASS;
 
 /** Select/input fill the fixed control column. */
 export const wmsSettingControlSelectClass =
@@ -30,10 +42,53 @@ export const wmsSettingControlSelectClass =
 export const wmsSettingControlInputClass = wmsSettingControlSelectClass + " tabular-nums";
 
 export const wmsSettingCheckboxClass =
-  "h-4 w-4 shrink-0 rounded border-slate-300 text-blue-600 focus:ring-blue-500";
+  "mt-0.5 h-4 w-4 shrink-0 rounded border-slate-300 text-blue-600 focus:ring-blue-500";
 
-/** Full width of the settings content pane — form uses the pane; controls stay compact. */
+/** Form uses the pane width; row pair stays compact via max-w on the row. */
 export const wmsSettingsFormMaxWidthClass = "w-full min-w-0";
+
+type SettingRowProps = {
+  label: ReactNode;
+  children: ReactNode;
+  hint?: ReactNode;
+  footer?: ReactNode;
+  settingId?: string;
+  className?: string;
+  /** Render as <label> when the whole row activates the control (e.g. checkbox). */
+  as?: "div" | "label";
+};
+
+/**
+ * Shared WMS settings row: LABEL | CONTROL.
+ * Prefer this (or {@link WmsControlSettingRow} / {@link WmsBoolSettingRow}) in all WMS settings tabs.
+ */
+export function SettingRow({
+  label,
+  children,
+  hint,
+  footer,
+  settingId,
+  className,
+  as = "div",
+}: SettingRowProps) {
+  const Comp = as as ElementType;
+  return (
+    <Comp
+      {...(settingId ? { [WMS_SETTING_DATA_ATTR]: settingId } : {})}
+      className={`${wmsSettingRowClass} hover:bg-slate-50/80 ${className ?? ""}`}
+    >
+      <span className={wmsSettingLabelColClass}>
+        <span className={`block ${wmsSettingLabelTextClass}`}>{label}</span>
+        {hint ? <span className="mt-1 block text-xs leading-relaxed text-slate-500">{hint}</span> : null}
+        {footer}
+      </span>
+      <span className={wmsSettingControlColClass}>{children}</span>
+    </Comp>
+  );
+}
+
+/** @deprecated Prefer {@link SettingRow} — same layout. */
+export const WmsSettingRow = SettingRow;
 
 type BoolRowProps = {
   label: ReactNode;
@@ -58,16 +113,15 @@ export function WmsBoolSettingRow({
   className,
 }: BoolRowProps) {
   return (
-    <label
-      {...(settingId ? { [WMS_SETTING_DATA_ATTR]: settingId } : {})}
-      className={`${wmsSettingRowClass} ${disabled ? "cursor-not-allowed opacity-60" : "cursor-pointer hover:bg-slate-50/80"} ${className ?? ""}`}
+    <SettingRow
+      as="label"
+      settingId={settingId}
+      label={label}
+      hint={hint}
+      footer={footer}
+      className={`${disabled ? "cursor-not-allowed opacity-60" : "cursor-pointer"} ${className ?? ""}`}
     >
-      <span className={wmsSettingLabelColClass}>
-        <span className={`block ${wmsSettingLabelTextClass}`}>{label}</span>
-        {hint ? <span className="mt-1 block text-xs leading-relaxed text-slate-500">{hint}</span> : null}
-        {footer}
-      </span>
-      <span className={`${wmsSettingControlColClass} items-start`}>
+      <span className="flex items-start">
         <input
           type="checkbox"
           className={wmsSettingCheckboxClass}
@@ -76,7 +130,7 @@ export function WmsBoolSettingRow({
           onChange={(e) => onChange(e.target.checked)}
         />
       </span>
-    </label>
+    </SettingRow>
   );
 }
 
@@ -100,19 +154,17 @@ export function WmsControlSettingRow({
   className,
   asLabel = false,
 }: ControlRowProps) {
-  const Comp = asLabel ? "label" : "div";
   return (
-    <Comp
-      {...(settingId ? { [WMS_SETTING_DATA_ATTR]: settingId } : {})}
-      className={`${wmsSettingRowClass} ${asLabel ? "cursor-pointer" : ""} hover:bg-slate-50/80 ${className ?? ""}`}
+    <SettingRow
+      as={asLabel ? "label" : "div"}
+      settingId={settingId}
+      label={label}
+      hint={hint}
+      footer={footer}
+      className={`${asLabel ? "cursor-pointer" : ""} ${className ?? ""}`}
     >
-      <span className={wmsSettingLabelColClass}>
-        <span className={`block ${wmsSettingLabelTextClass}`}>{label}</span>
-        {hint ? <span className="mt-1 block text-xs leading-relaxed text-slate-500">{hint}</span> : null}
-        {footer}
-      </span>
-      <span className={wmsSettingControlColClass}>{children}</span>
-    </Comp>
+      {children}
+    </SettingRow>
   );
 }
 
@@ -131,7 +183,7 @@ export function WmsSettingControlSlot({
       {...(settingId ? { [WMS_SETTING_DATA_ATTR]: settingId } : {})}
       className={`${wmsSettingRowClass} ${className ?? ""}`}
     >
-      <span className="hidden min-w-0 sm:block" aria-hidden />
+      <span className={`${wmsSettingLabelColClass} hidden sm:block`} aria-hidden />
       <span className={wmsSettingControlColClass}>{children}</span>
     </div>
   );

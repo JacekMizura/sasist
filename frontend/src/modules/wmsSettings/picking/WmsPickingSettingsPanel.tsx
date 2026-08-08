@@ -1221,7 +1221,6 @@ function WmsPickingLogisticsBulkLimitsSection({
   if (!visible) return null;
 
   const inputErr = " border-red-400 focus-visible:ring-red-500/35";
-  const cols = showSingleField && showMultiField ? "sm:grid-cols-2" : "sm:grid-cols-1";
 
   return (
     <div className="mt-5 space-y-4">
@@ -1232,10 +1231,19 @@ function WmsPickingLogisticsBulkLimitsSection({
           skanowania)” — przy skanie lub koszykach limity wynikają z ustawień wózka.
         </p>
       </div>
-      <div className={["grid w-full gap-4", cols].join(" ")}>
+      <div className={wmsSettingsRowsStackClass}>
         {showSingleField ? (
-          <label className="block">
-            <span className="text-sm font-medium text-slate-900">Maksymalna liczba zamówień (jednoelementowe)</span>
+          <WmsControlSettingRow
+            asLabel
+            label="Maksymalna liczba zamówień (jednoelementowe)"
+            footer={
+              errorSingle ? (
+                <p className="mt-1 text-xs font-medium text-red-700" role="alert">
+                  {errorSingle}
+                </p>
+              ) : null
+            }
+          >
             <input
               type="number"
               min={1}
@@ -1247,16 +1255,20 @@ function WmsPickingLogisticsBulkLimitsSection({
               onBlur={onBlurMaxSingle}
               aria-invalid={Boolean(errorSingle)}
             />
-            {errorSingle ? (
-              <p className="mt-1 text-xs font-medium text-red-700" role="alert">
-                {errorSingle}
-              </p>
-            ) : null}
-          </label>
+          </WmsControlSettingRow>
         ) : null}
         {showMultiField ? (
-          <label className="block">
-            <span className="text-sm font-medium text-slate-900">Maksymalna liczba zamówień (wieloelementowe)</span>
+          <WmsControlSettingRow
+            asLabel
+            label="Maksymalna liczba zamówień (wieloelementowe)"
+            footer={
+              errorMulti ? (
+                <p className="mt-1 text-xs font-medium text-red-700" role="alert">
+                  {errorMulti}
+                </p>
+              ) : null
+            }
+          >
             <input
               type="number"
               min={1}
@@ -1268,12 +1280,7 @@ function WmsPickingLogisticsBulkLimitsSection({
               onBlur={onBlurMaxMulti}
               aria-invalid={Boolean(errorMulti)}
             />
-            {errorMulti ? (
-              <p className="mt-1 text-xs font-medium text-red-700" role="alert">
-                {errorMulti}
-              </p>
-            ) : null}
-          </label>
+          </WmsControlSettingRow>
         ) : null}
       </div>
     </div>
@@ -2277,8 +2284,7 @@ export function WmsPickingSettingsSections({
         <SectionCardPicking id="wms-pick-queue" title="Lista zleceń" summary="Zbiory, objętość, kurierzy i akcja po zebraniu.">
           <SubsectionPicking title="Zarządzanie zbiorami">
             <FieldGridPicking>
-              <label className="block text-sm font-medium text-slate-700">
-                Liczba zamówień w zbiorze wieloelementowych zamówień
+              <WmsControlSettingRow asLabel label="Liczba zamówień w zbiorze wieloelementowych zamówień">
                 <input
                   type="number"
                   min={1}
@@ -2289,9 +2295,8 @@ export function WmsPickingSettingsSections({
                     patchExtended("multiItemBatchOrdersCount", Math.max(1, Math.min(200, Math.floor(Number(e.target.value) || 1))))
                   }
                 />
-              </label>
-              <label className="block text-sm font-medium text-slate-700">
-                Liczba zamówień w zbiorze jednoelementowych zamówień
+              </WmsControlSettingRow>
+              <WmsControlSettingRow asLabel label="Liczba zamówień w zbiorze jednoelementowych zamówień">
                 <input
                   type="number"
                   min={1}
@@ -2302,9 +2307,12 @@ export function WmsPickingSettingsSections({
                     patchExtended("singleItemBatchOrdersCount", Math.max(1, Math.min(200, Math.floor(Number(e.target.value) || 1))))
                   }
                 />
-              </label>
-              <label className="block text-sm font-medium text-slate-700 sm:col-span-2" title="0 = bez limitu objętości">
-                Objętość zamówień jednoelementowych
+              </WmsControlSettingRow>
+              <WmsControlSettingRow
+                asLabel
+                label="Objętość zamówień jednoelementowych"
+                hint="0 = bez limitu objętości"
+              >
                 <input
                   type="number"
                   min={0}
@@ -2313,9 +2321,12 @@ export function WmsPickingSettingsSections({
                   value={extended.singleItemVolumeLimit}
                   onChange={(e) => patchExtended("singleItemVolumeLimit", Math.max(0, Math.floor(Number(e.target.value) || 0)))}
                 />
-              </label>
-              <label className="wms-setting-field block pb-2 text-sm font-medium text-slate-700 sm:col-span-2" data-wms-setting-id="picking.batch_management_mode">
-                Zarządzanie zbiorami
+              </WmsControlSettingRow>
+              <WmsControlSettingRow
+                asLabel
+                settingId="picking.batch_management_mode"
+                label="Zarządzanie zbiorami"
+              >
                 <select
                   className={selectClass}
                   value={extended.batchManagementMode}
@@ -2327,9 +2338,9 @@ export function WmsPickingSettingsSections({
                   <option value="auto_assign_picker">Auto przypisanie zbierającego</option>
                   <option value="full_auto">Pełna automatyzacja</option>
                 </select>
-              </label>
+              </WmsControlSettingRow>
             </FieldGridPicking>
-            <div className="mt-6 grid gap-x-6 gap-y-4 border-t border-slate-200/50 pt-6 sm:grid-cols-2">
+            <div className="mt-6 border-t border-slate-200/50 pt-4">
               <CustomCheckbox label="Sortuj po wieku zamówienia" checked={extended.sortOrdersByAge} onChange={(v) => patchExtended("sortOrdersByAge", v)} />
             </div>
           </SubsectionPicking>
@@ -2455,8 +2466,7 @@ export function WmsPickingSettingsSections({
 
         <SectionCardPicking id="wms-pick-carts" title="Metody zbierania" summary="Typ kontenera, skany startowe i auto-sugestie.">
           <FieldGridPicking>
-            <label className="block pb-2 text-sm font-medium text-slate-700 sm:col-span-2">
-              Domyślny typ kontenera
+            <WmsControlSettingRow asLabel label="Domyślny typ kontenera">
               <select
                 className={selectClass}
                 value={extended.defaultPickingContainerType}
@@ -2471,7 +2481,7 @@ export function WmsPickingSettingsSections({
                 <option value="cart_with_baskets">Wózek z koszykami</option>
                 <option value="basket">Koszyk</option>
               </select>
-            </label>
+            </WmsControlSettingRow>
             <CustomCheckbox label="Wymagaj skanu wózka na start" checked={extended.requireCartScanStart} onChange={(v) => patchExtended("requireCartScanStart", v)} />
             <CustomCheckbox label="Wymagaj skanu koszyka na start" checked={extended.requireBasketScanStart} onChange={(v) => patchExtended("requireBasketScanStart", v)} />
             <CustomCheckbox label="Auto-sugestia wózka" checked={extended.autoSuggestCart} onChange={(v) => patchExtended("autoSuggestCart", v)} />
@@ -2516,7 +2526,7 @@ export function WmsPickingSettingsSections({
         </SectionCardPicking>
 
         <SectionCardPicking id="wms-pick-warehouses" title="Magazyny" summary="Podział pracy i identyfikatory magazynów.">
-          <div className="grid gap-x-6 gap-y-4 sm:grid-cols-2">
+          <FieldGridPicking>
             <CustomCheckbox
               label="Rozdziel pracę między magazynami"
               checked={extended.splitWorkBetweenWarehouses}
@@ -2528,27 +2538,23 @@ export function WmsPickingSettingsSections({
               onChange={(v) => patchExtended("ignoreLocationStockLevels", v)}
             />
             <CustomCheckbox label="Zbieranie strefowe" checked={extended.zonePickingEnabled} onChange={(v) => patchExtended("zonePickingEnabled", v)} />
-          </div>
-          <div className="mt-6 grid gap-x-6 gap-y-4 sm:grid-cols-2">
-            <label className="block text-sm font-medium text-slate-700">
-              Główny magazyn zbierania
+            <WmsControlSettingRow asLabel label="Główny magazyn zbierania">
               <input
                 className={textInputClassPicking}
                 value={extended.mainPickingWarehouse}
                 onChange={(e) => patchExtended("mainPickingWarehouse", e.target.value)}
                 placeholder="ID lub nazwa"
               />
-            </label>
-            <label className="block text-sm font-medium text-slate-700">
-              Magazyn zapasowy
+            </WmsControlSettingRow>
+            <WmsControlSettingRow asLabel label="Magazyn zapasowy">
               <input
                 className={textInputClassPicking}
                 value={extended.fallbackWarehouse}
                 onChange={(e) => patchExtended("fallbackWarehouse", e.target.value)}
                 placeholder="ID lub nazwa"
               />
-            </label>
-          </div>
+            </WmsControlSettingRow>
+          </FieldGridPicking>
         </SectionCardPicking>
 
         <SectionCardPicking id="wms-pick-automation" title="Automatyzacja" summary="Automatyczne akcje podczas i po zbieraniu.">
@@ -2581,8 +2587,7 @@ export function WmsPickingSettingsSections({
                 onChange={(v) => patchExtended("compactMode", v)}
               />
               <CustomCheckbox label="Plakietka priorytetu" checked={extended.showPriorityBadge} onChange={(v) => patchExtended("showPriorityBadge", v)} />
-              <label className="wms-setting-field block pt-2 text-sm font-medium text-slate-700 sm:col-span-2" data-wms-setting-id="picking.list_density">
-                Gęstość listy
+              <WmsControlSettingRow asLabel settingId="picking.list_density" label="Gęstość listy">
                 <select
                   className={selectClass}
                   value={extended.listDensity}
@@ -2591,7 +2596,7 @@ export function WmsPickingSettingsSections({
                   <option value="comfortable">Komfortowa</option>
                   <option value="compact">Kompaktowa</option>
                 </select>
-              </label>
+              </WmsControlSettingRow>
             </FieldGridPicking>
           </SubsectionPicking>
         </SectionCardPicking>
