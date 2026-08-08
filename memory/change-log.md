@@ -1,3 +1,9 @@
+## 2026-08-08 — Pakowanie: wspólny picker statusów
+
+- Ustawienia procesu pakowania używają `AutomationStatusPicker` (jak akcje automatyczne)
+- Single + multi; badge „Nazwa — Grupa”; `allowClear` = „— brak —”
+- Alias: `OrderPanelStatusPicker`; zapis statusów bez zmian modelu
+
 ## 2026-08-08 — WMS settings: label left, control right
 
 - Wspólne `wmsSettingRow` (`WmsBoolSettingRow` / `WmsControlSettingRow`)

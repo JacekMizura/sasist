@@ -1,12 +1,17 @@
-import { orderPanelStatusSelectLabel } from "../../../utils/orderPanelStatusUi";
+import { useMemo, useState, type ReactNode } from "react";
+
+import { AutomationStatusPicker } from "../../../components/orders/automation/AutomationStatusPicker";
+import { AutomationValueBadges } from "../../../components/orders/automation/AutomationValueBadges";
+import { ORDERS_PANEL_GROUP_LABELS } from "../../../components/orders/OrdersPanelStatusSidebar";
+import type { OrderUiPanelSubgroupRead, OrderUiStatusPanelSummary } from "../../../types/orderUiStatus";
 import type { WmsPackingExtendedUiSettings } from "../../../types/wmsPackingExtendedUi";
-import type { OrderStatusOption, WmsPackingSettingsRead } from "../../../types/wmsPackingSettings";
-import { PackingCapabilityBadge } from "../packingSettingCapability";
+import type { WmsPackingSettingsRead } from "../../../types/wmsPackingSettings";
+import { PackingCapabilityBadge, type PackingSettingCapability } from "../packingSettingCapability";
+import { WMS_SETTING_DATA_ATTR } from "../settingsSearch/navigateToSetting";
 import {
   BoolRow,
   CAP_NONE,
   CAP_PARTIAL,
-  checkboxClass,
   FieldGrid,
   SectionCard,
   SelectField,
@@ -16,62 +21,174 @@ import {
 type Props = {
   extended: WmsPackingExtendedUiSettings;
   draft: WmsPackingSettingsRead;
-  statusOptions: OrderStatusOption[];
+  panelSummary: OrderUiStatusPanelSummary | null;
+  panelSubgroups: OrderUiPanelSubgroupRead[];
   patchExtended: <K extends keyof WmsPackingExtendedUiSettings>(key: K, value: WmsPackingExtendedUiSettings[K]) => void;
   setStatus: (key: "start_status_id" | "packed_status_id" | "missing_status_id", raw: string) => void;
-  toggleAllowedStart: (id: number) => void;
 };
+
+function buildStatusLabelById(summary: OrderUiStatusPanelSummary | null): Map<number, string> {
+  const map = new Map<number, string>();
+  if (!summary) return map;
+  for (const block of summary.groups) {
+    const groupLabel = ORDERS_PANEL_GROUP_LABELS[block.main_group] ?? block.main_group;
+    for (const s of block.sub_statuses) {
+      const name = (s.name || "").trim() || `#${s.id}`;
+      map.set(s.id, `${name} — ${groupLabel}`);
+    }
+  }
+  return map;
+}
+
+function PackingStatusSetting({
+  settingId,
+  label,
+  capability,
+  capabilityNote,
+  selectedLabel,
+  onClear,
+  onFocusSelected,
+  children,
+}: {
+  settingId: string;
+  label: string;
+  capability?: PackingSettingCapability;
+  capabilityNote?: string;
+  selectedLabel: string | null;
+  onClear?: () => void;
+  onFocusSelected?: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <div {...{ [WMS_SETTING_DATA_ATTR]: settingId }} className="wms-setting-field space-y-2 py-1">
+      <div>
+        <span className="text-sm font-medium leading-snug text-slate-800">{label}</span>
+        {capability ? (
+          <span className="mt-1 block">
+            <PackingCapabilityBadge kind={capability} note={capabilityNote} />
+          </span>
+        ) : null}
+      </div>
+      {selectedLabel ? (
+        <AutomationValueBadges
+          labels={[selectedLabel]}
+          removable={Boolean(onClear)}
+          onRemove={onClear ? () => onClear() : undefined}
+          onBadgeClick={onFocusSelected}
+        />
+      ) : null}
+      {children}
+    </div>
+  );
+}
 
 /** Grupa 3: Proces pakowania */
 export function PackingProcessSection({
   extended,
   draft,
-  statusOptions,
+  panelSummary,
+  panelSubgroups,
   patchExtended,
   setStatus,
-  toggleAllowedStart,
 }: Props) {
-  const statusOpts = (
-    <>
-      <option value="">— brak —</option>
-      {statusOptions.map((o) => (
-        <option key={o.id} value={o.id}>
-          {orderPanelStatusSelectLabel(o)}
-        </option>
-      ))}
-    </>
-  );
+  const statusLabelById = useMemo(() => buildStatusLabelById(panelSummary), [panelSummary]);
+  const [focusStart, setFocusStart] = useState<number | null>(null);
+  const [focusPacked, setFocusPacked] = useState<number | null>(null);
+  const [focusMissing, setFocusMissing] = useState<number | null>(null);
+  const [focusMulti, setFocusMulti] = useState<number | null>(null);
+
+  const labelFor = (id: number | null | undefined) =>
+    id != null && id > 0 ? statusLabelById.get(id) ?? `#${id}` : null;
+
+  const hasStatuses =
+    panelSummary != null && panelSummary.groups.some((g) => (g.sub_statuses?.length ?? 0) > 0);
 
   return (
     <SectionCard id="wms-pack-process" title="Proces pakowania" summary="Statusy, kolejność i przebieg pakowania.">
-      <FieldGrid>
-        <SelectField
+      <div className="space-y-4">
+        <PackingStatusSetting
           settingId="packing.start_status_id"
           label="Status zamówienia do rozpoczęcia pakowania"
           capability={CAP_PARTIAL}
           capabilityNote="używane po zbieraniu / domknięciu braków, nie jako filtr startu ekranu pakowania."
-          value={draft.start_status_id != null ? String(draft.start_status_id) : ""}
-          onChange={(v) => setStatus("start_status_id", v)}
+          selectedLabel={labelFor(draft.start_status_id)}
+          onClear={() => setStatus("start_status_id", "")}
+          onFocusSelected={() => {
+            if (draft.start_status_id != null) setFocusStart(draft.start_status_id);
+          }}
         >
-          {statusOpts}
-        </SelectField>
-        <SelectField
+          {hasStatuses ? (
+            <AutomationStatusPicker
+              panelSummary={panelSummary}
+              panelSubgroups={panelSubgroups}
+              selectedStatusId={draft.start_status_id}
+              allowClear
+              clearLabel="— brak —"
+              focusStatusId={focusStart}
+              onFocusStatusHandled={() => setFocusStart(null)}
+              listMaxHeightClass="max-h-64"
+              onPick={(id) => setStatus("start_status_id", id != null ? String(id) : "")}
+            />
+          ) : (
+            <p className="text-sm text-slate-500">Brak statusów dla magazynu.</p>
+          )}
+        </PackingStatusSetting>
+
+        <PackingStatusSetting
           settingId="packing.packed_status_id"
           label="Status dla spakowanego zamówienia"
-          value={draft.packed_status_id != null ? String(draft.packed_status_id) : ""}
-          onChange={(v) => setStatus("packed_status_id", v)}
+          selectedLabel={labelFor(draft.packed_status_id)}
+          onClear={() => setStatus("packed_status_id", "")}
+          onFocusSelected={() => {
+            if (draft.packed_status_id != null) setFocusPacked(draft.packed_status_id);
+          }}
         >
-          {statusOpts}
-        </SelectField>
-        <SelectField
+          {hasStatuses ? (
+            <AutomationStatusPicker
+              panelSummary={panelSummary}
+              panelSubgroups={panelSubgroups}
+              selectedStatusId={draft.packed_status_id}
+              allowClear
+              clearLabel="— brak —"
+              focusStatusId={focusPacked}
+              onFocusStatusHandled={() => setFocusPacked(null)}
+              listMaxHeightClass="max-h-64"
+              onPick={(id) => setStatus("packed_status_id", id != null ? String(id) : "")}
+            />
+          ) : (
+            <p className="text-sm text-slate-500">Brak statusów dla magazynu.</p>
+          )}
+        </PackingStatusSetting>
+
+        <PackingStatusSetting
           settingId="packing.missing_status_id"
           label="Status dla braków w zamówieniu"
           capability={CAP_NONE}
-          value={draft.missing_status_id != null ? String(draft.missing_status_id) : ""}
-          onChange={(v) => setStatus("missing_status_id", v)}
+          selectedLabel={labelFor(draft.missing_status_id)}
+          onClear={() => setStatus("missing_status_id", "")}
+          onFocusSelected={() => {
+            if (draft.missing_status_id != null) setFocusMissing(draft.missing_status_id);
+          }}
         >
-          {statusOpts}
-        </SelectField>
+          {hasStatuses ? (
+            <AutomationStatusPicker
+              panelSummary={panelSummary}
+              panelSubgroups={panelSubgroups}
+              selectedStatusId={draft.missing_status_id}
+              allowClear
+              clearLabel="— brak —"
+              focusStatusId={focusMissing}
+              onFocusStatusHandled={() => setFocusMissing(null)}
+              listMaxHeightClass="max-h-64"
+              onPick={(id) => setStatus("missing_status_id", id != null ? String(id) : "")}
+            />
+          ) : (
+            <p className="text-sm text-slate-500">Brak statusów dla magazynu.</p>
+          )}
+        </PackingStatusSetting>
+      </div>
+
+      <FieldGrid>
         <SelectField
           settingId="packing.single_or_multi_strategy"
           label="Pakowanie według zamówień jednoelementowych lub wieloelementowych"
@@ -115,29 +232,46 @@ export function PackingProcessSection({
       </div>
 
       <Subsection title="Statusy zamówienia do rozpoczęcia pakowania (wiele)">
-        <div className="mb-2">
-          <PackingCapabilityBadge kind="none" />
-        </div>
-        {statusOptions.length === 0 ? (
-          <p className="text-sm text-slate-500">Brak statusów dla magazynu.</p>
-        ) : (
-          <div className="max-h-64 space-y-1.5 overflow-y-auto rounded-lg border border-slate-200 bg-slate-50/50 p-2">
-            {statusOptions.map((o) => (
-              <label
-                key={o.id}
-                className="flex cursor-pointer items-center gap-2.5 rounded px-1 py-0.5 hover:bg-white"
-              >
-                <span className="text-sm leading-snug text-slate-800">{orderPanelStatusSelectLabel(o)}</span>
-                <input
-                  type="checkbox"
-                  className={checkboxClass}
-                  checked={extended.allowedStartStatusIds.includes(o.id)}
-                  onChange={() => toggleAllowedStart(o.id)}
-                />
-              </label>
-            ))}
+        <div
+          {...{ [WMS_SETTING_DATA_ATTR]: "packing.allowed_start_status_ids" }}
+          className="wms-setting-field space-y-2"
+        >
+          <div className="mb-2">
+            <PackingCapabilityBadge kind="none" />
           </div>
-        )}
+          {extended.allowedStartStatusIds.length > 0 ? (
+            <AutomationValueBadges
+              labels={extended.allowedStartStatusIds.map((id) => statusLabelById.get(id) ?? `#${id}`)}
+              removable
+              onRemove={(index) => {
+                const next = extended.allowedStartStatusIds.filter((_, i) => i !== index);
+                patchExtended("allowedStartStatusIds", next);
+              }}
+              onBadgeClick={(index) => {
+                const id = extended.allowedStartStatusIds[index];
+                if (id != null) setFocusMulti(id);
+              }}
+            />
+          ) : null}
+          {hasStatuses ? (
+            <AutomationStatusPicker
+              panelSummary={panelSummary}
+              panelSubgroups={panelSubgroups}
+              selectedStatusIds={extended.allowedStartStatusIds}
+              focusStatusId={focusMulti}
+              onFocusStatusHandled={() => setFocusMulti(null)}
+              listMaxHeightClass="max-h-72"
+              onSelectedIdsChange={(ids) =>
+                patchExtended(
+                  "allowedStartStatusIds",
+                  [...ids].sort((a, b) => a - b),
+                )
+              }
+            />
+          ) : (
+            <p className="text-sm text-slate-500">Brak statusów dla magazynu.</p>
+          )}
+        </div>
       </Subsection>
     </SectionCard>
   );

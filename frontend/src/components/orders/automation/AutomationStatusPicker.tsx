@@ -22,6 +22,9 @@ export type AutomationStatusPickerProps = {
   onSelectedIdsChange?: (ids: number[]) => void;
   selectedStatusId?: number | null;
   onPick?: (statusId: number | null) => void;
+  /** Single-select only: show a clear row (e.g. „— brak —”). */
+  allowClear?: boolean;
+  clearLabel?: string;
   focusStatusId?: number | null;
   onFocusStatusHandled?: () => void;
   className?: string;
@@ -97,6 +100,8 @@ export function AutomationStatusPicker({
   onSelectedIdsChange,
   selectedStatusId,
   onPick,
+  allowClear = false,
+  clearLabel = "— brak —",
   focusStatusId = null,
   onFocusStatusHandled,
   className = "",
@@ -232,6 +237,28 @@ export function AutomationStatusPicker({
       </div>
 
       <div ref={listRef} className={`min-h-0 flex-1 overflow-y-auto overscroll-y-contain p-1.5 ${listMaxHeightClass}`}>
+        {!multi && allowClear && !normalizedSearch ? (
+          <button
+            type="button"
+            className={`mb-1 flex w-full items-center gap-2 rounded-md border px-2 py-1.5 text-left text-sm transition-colors ${
+              selectedStatusId == null
+                ? "border-orange-200 bg-orange-50 font-medium text-slate-900"
+                : "border-transparent font-normal text-slate-600 hover:bg-slate-50"
+            }`}
+            aria-pressed={selectedStatusId == null}
+            onClick={() => onPick?.(null)}
+          >
+            <span
+              className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded border ${
+                selectedStatusId == null ? "border-orange-500 bg-orange-500 text-white" : "border-slate-300 bg-white"
+              }`}
+              aria-hidden
+            >
+              {selectedStatusId == null ? <Check className="h-2.5 w-2.5" strokeWidth={3} /> : null}
+            </span>
+            <span className="min-w-0 flex-1 leading-snug">{clearLabel}</span>
+          </button>
+        ) : null}
         {normalizedSearch ? (
           searchHits.length === 0 ? (
             <p className="px-2 py-3 text-xs text-slate-500">Brak statusów pasujących do wyszukiwania.</p>

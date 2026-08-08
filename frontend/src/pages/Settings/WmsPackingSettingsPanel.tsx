@@ -13,18 +13,21 @@ import {
   fetchFulfillmentConfiguration,
   patchFulfillmentConfiguration,
 } from "../../api/fulfillmentConfigurationApi";
+import { getOrderPanelSubgroups, getOrderUiStatusSummary } from "../../api/orderUiStatusApi";
 import { getWmsPackingSettings, saveWmsPackingSettings } from "../../api/wmsPackingSettingsApi";
 import {
   filterSaleSeriesForPacking,
   listDocumentSeries,
   type DocumentSeriesDto,
 } from "../../api/documentSeriesApi";
-import { listOrderStatuses } from "../../api/orderStatusesApi";
 import { getShippingMethods, type ShippingMethodDto } from "../../api/shippingMethodsApi";
 import { DAMAGE_TENANT_ID } from "../damage/damageShared";
 import { warehouseService } from "../../services/warehouseService";
 import type {
-  OrderStatusOption,
+  OrderUiPanelSubgroupRead,
+  OrderUiStatusPanelSummary,
+} from "../../types/orderUiStatus";
+import type {
   WmsPackingAfterFinishAction,
   WmsPackingAutoActions,
   WmsPackingInterfaceDisplay,
@@ -90,7 +93,8 @@ const WmsPackingSettingsPanel = forwardRef<
     sectionNavObserve?: boolean;
   }
 >(function WmsPackingSettingsPanel({ warehouseId, onDirtyChange, sectionNavObserve = true }, ref) {
-  const [statusOptions, setStatusOptions] = useState<OrderStatusOption[]>([]);
+  const [panelSummary, setPanelSummary] = useState<OrderUiStatusPanelSummary | null>(null);
+  const [panelSubgroups, setPanelSubgroups] = useState<OrderUiPanelSubgroupRead[]>([]);
   const [saleSeries, setSaleSeries] = useState<DocumentSeriesDto[]>([]);
   const [templates, setTemplates] = useState<LabelTemplateOption[]>([]);
   const [shippingMethods, setShippingMethods] = useState<ShippingMethodDto[]>([]);
@@ -117,7 +121,8 @@ const WmsPackingSettingsPanel = forwardRef<
 
   const load = useCallback(async () => {
     if (warehouseId == null) {
-      setStatusOptions([]);
+      setPanelSummary(null);
+      setPanelSubgroups([]);
       setSaleSeries([]);
       setTemplates([]);
       setShippingMethods([]);
@@ -137,16 +142,18 @@ const WmsPackingSettingsPanel = forwardRef<
     const fallbackDraft = resolveFallbackDraft();
     setDraft((prev) => prev ?? fallbackDraft);
 
-    const [stRes, cfgRes, tRes, serRes, shipRes, whRes, asgRes, fcRes] = await Promise.allSettled([
-      listOrderStatuses(DAMAGE_TENANT_ID, warehouseId),
-      getWmsPackingSettings(DAMAGE_TENANT_ID, warehouseId),
-      api.get<LabelTemplateOption[]>("/label-templates/", { params: { tenant_id: DAMAGE_TENANT_ID } }),
-      listDocumentSeries(DAMAGE_TENANT_ID, warehouseId),
-      getShippingMethods({ tenant_id: DAMAGE_TENANT_ID, warehouse_id: warehouseId, active_only: true }),
-      warehouseService.getWarehouses(DAMAGE_TENANT_ID),
-      warehouseService.getAssignments({ tenant_id: DAMAGE_TENANT_ID }),
-      fetchFulfillmentConfiguration(DAMAGE_TENANT_ID),
-    ]);
+    const [summaryRes, subgroupsRes, cfgRes, tRes, serRes, shipRes, whRes, asgRes, fcRes] =
+      await Promise.allSettled([
+        getOrderUiStatusSummary(DAMAGE_TENANT_ID, warehouseId, { includeInactive: true }),
+        getOrderPanelSubgroups(DAMAGE_TENANT_ID, warehouseId),
+        getWmsPackingSettings(DAMAGE_TENANT_ID, warehouseId),
+        api.get<LabelTemplateOption[]>("/label-templates/", { params: { tenant_id: DAMAGE_TENANT_ID } }),
+        listDocumentSeries(DAMAGE_TENANT_ID, warehouseId),
+        getShippingMethods({ tenant_id: DAMAGE_TENANT_ID, warehouse_id: warehouseId, active_only: true }),
+        warehouseService.getWarehouses(DAMAGE_TENANT_ID),
+        warehouseService.getAssignments({ tenant_id: DAMAGE_TENANT_ID }),
+        fetchFulfillmentConfiguration(DAMAGE_TENANT_ID),
+      ]);
 
     let nextDraft: WmsPackingSettingsRead;
     if (cfgRes.status === "fulfilled") {
@@ -166,7 +173,8 @@ const WmsPackingSettingsPanel = forwardRef<
       setErr("Nie udało się wczytać ustawień pakowania.");
     }
 
-    setStatusOptions(stRes.status === "fulfilled" ? stRes.value : []);
+    setPanelSummary(summaryRes.status === "fulfilled" ? summaryRes.value : null);
+    setPanelSubgroups(subgroupsRes.status === "fulfilled" ? subgroupsRes.value : []);
     setSaleSeries(serRes.status === "fulfilled" ? filterSaleSeriesForPacking(serRes.value) : []);
     setShippingMethods(shipRes.status === "fulfilled" ? shipRes.value : []);
     if (tRes.status === "fulfilled") {
@@ -281,15 +289,6 @@ const WmsPackingSettingsPanel = forwardRef<
 
   const patchExtended = <K extends keyof WmsPackingExtendedUiSettings>(key: K, value: WmsPackingExtendedUiSettings[K]) => {
     setExtended((e) => ({ ...e, [key]: value }));
-  };
-
-  const toggleAllowedStart = (id: number) => {
-    setExtended((e) => {
-      const set = new Set(e.allowedStartStatusIds);
-      if (set.has(id)) set.delete(id);
-      else set.add(id);
-      return { ...e, allowedStartStatusIds: Array.from(set).sort((a, b) => a - b) };
-    });
   };
 
   const saveAll = async () => {
@@ -424,10 +423,10 @@ const WmsPackingSettingsPanel = forwardRef<
           <PackingProcessSection
             extended={extended}
             draft={effectiveDraft}
-            statusOptions={statusOptions}
+            panelSummary={panelSummary}
+            panelSubgroups={panelSubgroups}
             patchExtended={patchExtended}
             setStatus={setStatus}
-            toggleAllowedStart={toggleAllowedStart}
           />
           <PackingAutomationSection
             extended={extended}
