@@ -7,7 +7,7 @@ import type { OrderUiPanelSubgroupRead, OrderUiStatusPanelSummary } from "../../
 import type { WmsPackingExtendedUiSettings } from "../../../types/wmsPackingExtendedUi";
 import type { WmsPackingSettingsRead } from "../../../types/wmsPackingSettings";
 import { PackingCapabilityBadge, type PackingSettingCapability } from "../packingSettingCapability";
-import { WMS_SETTING_DATA_ATTR } from "../settingsSearch/navigateToSetting";
+import { WmsControlSettingRow } from "../wmsSettingRow";
 import {
   BoolRow,
   CAP_NONE,
@@ -15,6 +15,7 @@ import {
   FieldGrid,
   SectionCard,
   SelectField,
+  SettingsStack,
   Subsection,
 } from "./packingSettingsUi";
 
@@ -60,25 +61,31 @@ function PackingStatusSetting({
   children: ReactNode;
 }) {
   return (
-    <div {...{ [WMS_SETTING_DATA_ATTR]: settingId }} className="wms-setting-field space-y-2 py-1">
-      <div>
-        <span className="text-sm font-medium leading-snug text-slate-800">{label}</span>
-        {capability ? (
-          <span className="mt-1 block">
-            <PackingCapabilityBadge kind={capability} note={capabilityNote} />
-          </span>
-        ) : null}
-      </div>
-      {selectedLabel ? (
-        <AutomationValueBadges
-          labels={[selectedLabel]}
-          removable={Boolean(onClear)}
-          onRemove={onClear ? () => onClear() : undefined}
-          onBadgeClick={onFocusSelected}
-        />
-      ) : null}
+    <WmsControlSettingRow
+      settingId={settingId}
+      label={label}
+      footer={
+        <>
+          {capability ? (
+            <span className="mt-1 block">
+              <PackingCapabilityBadge kind={capability} note={capabilityNote} />
+            </span>
+          ) : null}
+          {selectedLabel ? (
+            <span className="mt-2 block">
+              <AutomationValueBadges
+                labels={[selectedLabel]}
+                removable={Boolean(onClear)}
+                onRemove={onClear ? () => onClear() : undefined}
+                onBadgeClick={onFocusSelected}
+              />
+            </span>
+          ) : null}
+        </>
+      }
+    >
       {children}
-    </div>
+    </WmsControlSettingRow>
   );
 }
 
@@ -105,7 +112,7 @@ export function PackingProcessSection({
 
   return (
     <SectionCard id="wms-pack-process" title="Proces pakowania" summary="Statusy, kolejność i przebieg pakowania.">
-      <div className="space-y-4">
+      <SettingsStack>
         <PackingStatusSetting
           settingId="packing.start_status_id"
           label="Status zamówienia do rozpoczęcia pakowania"
@@ -186,42 +193,44 @@ export function PackingProcessSection({
             <p className="text-sm text-slate-500">Brak statusów dla magazynu.</p>
           )}
         </PackingStatusSetting>
+      </SettingsStack>
+
+      <div className="mt-2">
+        <FieldGrid>
+          <SelectField
+            settingId="packing.single_or_multi_strategy"
+            label="Pakowanie według zamówień jednoelementowych lub wieloelementowych"
+            capability={CAP_NONE}
+            value={extended.packingSingleOrMultiItemStrategy}
+            onChange={(v) =>
+              patchExtended(
+                "packingSingleOrMultiItemStrategy",
+                v as WmsPackingExtendedUiSettings["packingSingleOrMultiItemStrategy"],
+              )
+            }
+          >
+            <option value="auto">Automatycznie</option>
+            <option value="single_first">Najpierw jednoelementowe</option>
+            <option value="multi_first">Najpierw wieloelementowe</option>
+          </SelectField>
+          <SelectField
+            settingId="packing.effect_after_auto_actions"
+            label="Efekt po wykonaniu akcji automatycznych"
+            capability={CAP_PARTIAL}
+            capabilityNote="„Zostań” i „Wróć na listę” działają; „Następne zamówienie” jeszcze nie."
+            value={extended.afterActionsBehavior}
+            onChange={(v) =>
+              patchExtended("afterActionsBehavior", v as WmsPackingExtendedUiSettings["afterActionsBehavior"])
+            }
+          >
+            <option value="stay_here">Zostań przy bieżącym zamówieniu</option>
+            <option value="return_to_list">Wróć na listę zamówień</option>
+            <option value="next_order">Przejdź do następnego zamówienia</option>
+          </SelectField>
+        </FieldGrid>
       </div>
 
-      <FieldGrid>
-        <SelectField
-          settingId="packing.single_or_multi_strategy"
-          label="Pakowanie według zamówień jednoelementowych lub wieloelementowych"
-          capability={CAP_NONE}
-          value={extended.packingSingleOrMultiItemStrategy}
-          onChange={(v) =>
-            patchExtended(
-              "packingSingleOrMultiItemStrategy",
-              v as WmsPackingExtendedUiSettings["packingSingleOrMultiItemStrategy"],
-            )
-          }
-        >
-          <option value="auto">Automatycznie</option>
-          <option value="single_first">Najpierw jednoelementowe</option>
-          <option value="multi_first">Najpierw wieloelementowe</option>
-        </SelectField>
-        <SelectField
-          settingId="packing.effect_after_auto_actions"
-          label="Efekt po wykonaniu akcji automatycznych"
-          capability={CAP_PARTIAL}
-          capabilityNote="„Zostań” i „Wróć na listę” działają; „Następne zamówienie” jeszcze nie."
-          value={extended.afterActionsBehavior}
-          onChange={(v) =>
-            patchExtended("afterActionsBehavior", v as WmsPackingExtendedUiSettings["afterActionsBehavior"])
-          }
-        >
-          <option value="stay_here">Zostań przy bieżącym zamówieniu</option>
-          <option value="return_to_list">Wróć na listę zamówień</option>
-          <option value="next_order">Przejdź do następnego zamówienia</option>
-        </SelectField>
-      </FieldGrid>
-
-      <div className="mt-3 space-y-2">
+      <div className="mt-2">
         <BoolRow
           settingId="packing.go_next_order_after_packed"
           label="Po spakowaniu zamówienia przejdź do następnego zamówienia"
@@ -231,28 +240,34 @@ export function PackingProcessSection({
         />
       </div>
 
-      <Subsection title="Statusy zamówienia do rozpoczęcia pakowania (wiele)">
-        <div
-          {...{ [WMS_SETTING_DATA_ATTR]: "packing.allowed_start_status_ids" }}
-          className="wms-setting-field space-y-2"
+      <Subsection title="">
+        <WmsControlSettingRow
+          settingId="packing.allowed_start_status_ids"
+          label="Statusy zamówienia do rozpoczęcia pakowania (wiele)"
+          footer={
+            <>
+              <span className="mt-1 block">
+                <PackingCapabilityBadge kind="none" />
+              </span>
+              {extended.allowedStartStatusIds.length > 0 ? (
+                <span className="mt-2 block">
+                  <AutomationValueBadges
+                    labels={extended.allowedStartStatusIds.map((id) => statusLabelById.get(id) ?? `#${id}`)}
+                    removable
+                    onRemove={(index) => {
+                      const next = extended.allowedStartStatusIds.filter((_, i) => i !== index);
+                      patchExtended("allowedStartStatusIds", next);
+                    }}
+                    onBadgeClick={(index) => {
+                      const id = extended.allowedStartStatusIds[index];
+                      if (id != null) setFocusMulti(id);
+                    }}
+                  />
+                </span>
+              ) : null}
+            </>
+          }
         >
-          <div className="mb-2">
-            <PackingCapabilityBadge kind="none" />
-          </div>
-          {extended.allowedStartStatusIds.length > 0 ? (
-            <AutomationValueBadges
-              labels={extended.allowedStartStatusIds.map((id) => statusLabelById.get(id) ?? `#${id}`)}
-              removable
-              onRemove={(index) => {
-                const next = extended.allowedStartStatusIds.filter((_, i) => i !== index);
-                patchExtended("allowedStartStatusIds", next);
-              }}
-              onBadgeClick={(index) => {
-                const id = extended.allowedStartStatusIds[index];
-                if (id != null) setFocusMulti(id);
-              }}
-            />
-          ) : null}
           {hasStatuses ? (
             <AutomationStatusPicker
               panelSummary={panelSummary}
@@ -271,7 +286,7 @@ export function PackingProcessSection({
           ) : (
             <p className="text-sm text-slate-500">Brak statusów dla magazynu.</p>
           )}
-        </div>
+        </WmsControlSettingRow>
       </Subsection>
     </SectionCard>
   );

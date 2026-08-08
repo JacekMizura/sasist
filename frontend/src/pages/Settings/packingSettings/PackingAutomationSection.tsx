@@ -26,7 +26,7 @@ export function PackingAutomationSection({ extended, draft, patchExtended, toggl
       summary="Akcje automatyczne po spakowaniu oraz aktywatory."
     >
       <Subsection title="Akcje automatyczne po spakowaniu zamówienia">
-        <div className="space-y-2">
+        <div className="space-y-1">
           <BoolRow
             settingId="packing.auto_create_document"
             label="Wystaw dokument sprzedaży"
@@ -101,7 +101,7 @@ export function PackingAutomationSection({ extended, draft, patchExtended, toggl
         </FieldGrid>
       </Subsection>
 
-      <div className="mt-3 space-y-2">
+      <div className="mt-3 space-y-1">
         <BoolRow
           settingId="packing.show_automation_buttons"
           label="Wyświetlaj Aktywatory Automatyzacji podczas pakowania zamówienia"

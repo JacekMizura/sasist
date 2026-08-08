@@ -3,7 +3,7 @@ import type { WmsPackingExtendedUiSettings } from "../../../types/wmsPackingExte
 import { SettingInfoButton } from "../SettingInfoButton";
 import { WmsControlSettingRow } from "../wmsSettingRow";
 import { PACKING_SETTING_HELP } from "./packingSettingsHelp";
-import { BoolRow, CAP_NONE, SectionCard, selectClass } from "./packingSettingsUi";
+import { BoolRow, CAP_NONE, SectionCard, selectClass, SettingsStack } from "./packingSettingsUi";
 
 export type PackingWarehouseOption = { id: number; name: string };
 
@@ -42,7 +42,7 @@ export function PackingGeneralSection({
 
   return (
     <SectionCard id="wms-pack-general" title="Ogólne" summary="Ogólne zachowanie procesu pakowania.">
-      <div className="space-y-2">
+      <SettingsStack>
         <BoolRow
           settingId="packing.show_all_notes"
           label="Pokazuj wszystkie notatki"
@@ -97,7 +97,7 @@ export function PackingGeneralSection({
             ))}
           </select>
         </WmsControlSettingRow>
-      </div>
+      </SettingsStack>
     </SectionCard>
   );
 }

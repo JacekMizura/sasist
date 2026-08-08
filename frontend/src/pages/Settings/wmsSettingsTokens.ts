@@ -1,6 +1,5 @@
 /** Shared spacing / typography for all WMS settings modules.
- * Layout rule: option label first, control immediately beside it (not page-edge stretch) —
- * use {@link ./wmsSettingRow} helpers (`WmsBoolSettingRow`, `WmsControlSettingRow`).
+ * Form rows: label column LEFT + control column RIGHT via {@link ./wmsSettingRow}.
  */
 export const wmsSettingsTokens = {
   mainStack: "space-y-6",

@@ -104,7 +104,7 @@ export function PackingViewSection({ extended, draft, patchExtended, toggleInter
         </SelectField>
       </FieldGrid>
 
-      <div className="mt-3 space-y-2">
+      <div className="mt-3 space-y-1">
         <BoolRow
           settingId="packing.packed_products_extra_list"
           label="Dodatkowa lista produktów spakowanych"
@@ -225,7 +225,7 @@ export function PackingViewSection({ extended, draft, patchExtended, toggleInter
           </SelectField>
         </FieldGrid>
         <Help>Poniższe ustawienia dotyczą układu listy w typie rozbudowanym.</Help>
-        <div className="mt-2 space-y-2">
+        <div className="mt-2 space-y-1">
           <BoolRow
             settingId="packing.show_product_image_in_orders"
             label="Wyświetlaj zdjęcie produktu na liście zamówień"

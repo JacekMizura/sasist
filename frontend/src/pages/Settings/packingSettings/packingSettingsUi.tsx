@@ -10,9 +10,11 @@ import { SettingInfoButton } from "../SettingInfoButton";
 import {
   WmsBoolSettingRow,
   WmsControlSettingRow,
+  WmsSettingControlSlot,
   wmsSettingCheckboxClass,
   wmsSettingControlInputClass,
   wmsSettingControlSelectClass,
+  wmsSettingsFormMaxWidthClass,
 } from "../wmsSettingRow";
 import { PACKING_SETTING_HELP } from "./packingSettingsHelp";
 
@@ -20,6 +22,7 @@ export const selectClass = wmsSettingControlSelectClass;
 export const numberInputClass = wmsSettingControlInputClass;
 export const textInputClass = wmsSettingControlSelectClass;
 export const checkboxClass = wmsSettingCheckboxClass;
+export { WmsSettingControlSlot, wmsSettingsFormMaxWidthClass };
 
 export const CAP_NONE: PackingSettingCapability = "none";
 export const CAP_PARTIAL: PackingSettingCapability = "partial";
@@ -29,8 +32,11 @@ export function Help({ children }: { children: ReactNode }) {
 }
 
 export function FieldGrid({ children }: { children: ReactNode }) {
-  /** Single column — label|control rows need full width. */
-  return <div className="space-y-2">{children}</div>;
+  return <div className="space-y-1">{children}</div>;
+}
+
+export function SettingsStack({ children }: { children: ReactNode }) {
+  return <div className="space-y-1">{children}</div>;
 }
 
 /** Jedna sekcja nawigacji WMS = jedna karta Sellasist. */
@@ -185,8 +191,11 @@ export function MethodChecklist({
   return (
     <div className="max-h-56 space-y-1.5 overflow-y-auto rounded-lg border border-slate-200 bg-slate-50/50 p-2">
       {methods.map((m) => (
-        <label key={m.id} className="flex cursor-pointer items-center gap-2.5 rounded px-1 py-0.5 hover:bg-white">
-          <span className="text-sm leading-snug text-slate-800">{m.name}</span>
+        <label
+          key={m.id}
+          className="grid cursor-pointer grid-cols-[1fr_auto] items-center gap-3 rounded px-1 py-0.5 hover:bg-white"
+        >
+          <span className="min-w-0 text-sm leading-snug text-slate-800">{m.name}</span>
           <input
             type="checkbox"
             className={checkboxClass}

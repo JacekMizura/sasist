@@ -4,7 +4,7 @@ import type { ShippingMethodDto } from "../../../api/shippingMethodsApi";
 import type { WmsPackingExtendedUiSettings } from "../../../types/wmsPackingExtendedUi";
 import type { WmsPackingSettingsRead } from "../../../types/wmsPackingSettings";
 import { PackingCapabilityBadge } from "../packingSettingCapability";
-import { WmsControlSettingRow } from "../wmsSettingRow";
+import { WmsControlSettingRow, WmsSettingControlSlot } from "../wmsSettingRow";
 import {
   BoolRow,
   CAP_NONE,
@@ -73,7 +73,7 @@ export function PackingShipmentsDocsSection({
             <option value="none">Brak</option>
           </SelectField>
         </FieldGrid>
-        <div className="mt-3 space-y-2">
+        <div className="mt-3 space-y-1">
           <BoolRow
             settingId="packing.skip_a4_receipt_fiscal"
             label="System zintegrowany z drukarką fiskalną - pomijaj drukowanie paragonów w formacie A4"
@@ -151,7 +151,7 @@ export function PackingShipmentsDocsSection({
       </Subsection>
 
       <Subsection title="Przesyłki / listy przewozowe">
-        <div className="space-y-2">
+        <div className="space-y-1">
           <BoolRow
             settingId="packing.choose_waybill_print_count"
             label="Wybór liczby listów przewozowych do druku"
@@ -176,7 +176,7 @@ export function PackingShipmentsDocsSection({
           />
         </div>
         {extended.forceScanShipmentTemplateSelectedMethodsOnly ? (
-          <div className="mt-2">
+          <WmsSettingControlSlot>
             <MethodChecklist
               methods={methods}
               selectedIds={extended.forceScanShipmentTemplateMethodIds}
@@ -187,9 +187,9 @@ export function PackingShipmentsDocsSection({
                 )
               }
             />
-          </div>
+          </WmsSettingControlSlot>
         ) : null}
-        <div className="mt-3 space-y-2">
+        <div className="mt-3 space-y-1">
           <BoolRow
             settingId="packing.require_confirm_before_shipment"
             label="Wymagaj potwierdzenia przed wygenerowaniem listu przewozowego"
@@ -222,7 +222,7 @@ export function PackingShipmentsDocsSection({
       </Subsection>
 
       <Subsection title="Paczki">
-        <div className="space-y-2">
+        <div className="space-y-1">
           <BoolRow
             settingId="packing.auto_fetch_parcel_count_disabled"
             label="Wyłącz automatyczne pobieranie liczby paczek do zamówienia"
@@ -241,7 +241,7 @@ export function PackingShipmentsDocsSection({
       </Subsection>
 
       <Subsection title="Blokowanie dodatkowych paczek">
-        <div className="space-y-2">
+        <div className="space-y-1">
           <BoolRow
             settingId="packing.block_extra_parcels_enabled"
             label="Blokuj generowanie dodatkowych paczek dla"
@@ -252,7 +252,7 @@ export function PackingShipmentsDocsSection({
           />
         </div>
         {extended.blockExtraParcelsEnabled ? (
-          <div className="mt-2">
+          <WmsSettingControlSlot>
             <MethodChecklist
               methods={methods}
               selectedIds={extended.blockExtraParcelsMethodIds}
@@ -260,7 +260,7 @@ export function PackingShipmentsDocsSection({
                 patchExtended("blockExtraParcelsMethodIds", toggleId(extended.blockExtraParcelsMethodIds, id))
               }
             />
-          </div>
+          </WmsSettingControlSlot>
         ) : null}
         <div className="mt-3">
           <WmsControlSettingRow
