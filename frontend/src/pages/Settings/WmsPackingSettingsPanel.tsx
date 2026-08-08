@@ -40,10 +40,11 @@ import {
 } from "../../types/wmsPackingExtendedUi";
 import { WmsSettingsTabFrame } from "./WmsSettingsTabFrame";
 import { WMS_PACKING_SETTINGS_NAV_SECTIONS } from "./wmsPackingSettingsNavSections";
-import { PackingViewModeSections } from "./packingSettings/PackingViewModeSections";
-import { PackingProcessSections } from "./packingSettings/PackingProcessSections";
-import { PackingDocsShipmentsSections } from "./packingSettings/PackingDocsShipmentsSections";
-import { PackingOperatorSections } from "./packingSettings/PackingOperatorSections";
+import { PackingGeneralSection } from "./packingSettings/PackingGeneralSection";
+import { PackingViewSection } from "./packingSettings/PackingViewSection";
+import { PackingProcessSection } from "./packingSettings/PackingProcessSection";
+import { PackingAutomationSection } from "./packingSettings/PackingAutomationSection";
+import { PackingShipmentsDocsSection } from "./packingSettings/PackingShipmentsDocsSection";
 
 type LabelTemplateOption = { id: number; name: string };
 
@@ -343,22 +344,28 @@ const WmsPackingSettingsPanel = forwardRef<
         <p className="text-sm text-slate-500">Ładowanie…</p>
       ) : effectiveDraft ? (
         <div className="space-y-4">
-          <PackingViewModeSections
+          <PackingGeneralSection extended={extended} patchExtended={patchExtended} />
+          <PackingViewSection
             extended={extended}
             draft={effectiveDraft}
             patchExtended={patchExtended}
             toggleInterfaceField={toggleInterfaceField}
           />
-          <PackingProcessSections
+          <PackingProcessSection
             extended={extended}
             draft={effectiveDraft}
             statusOptions={statusOptions}
             patchExtended={patchExtended}
             setStatus={setStatus}
-            toggleAction={toggleAction}
             toggleAllowedStart={toggleAllowedStart}
           />
-          <PackingDocsShipmentsSections
+          <PackingAutomationSection
+            extended={extended}
+            draft={effectiveDraft}
+            patchExtended={patchExtended}
+            toggleAction={toggleAction}
+          />
+          <PackingShipmentsDocsSection
             extended={extended}
             draft={effectiveDraft}
             saleSeries={saleSeries}
@@ -368,7 +375,6 @@ const WmsPackingSettingsPanel = forwardRef<
             setDraft={setDraft}
             resolveFallbackDraft={resolveFallbackDraft}
           />
-          <PackingOperatorSections extended={extended} patchExtended={patchExtended} />
         </div>
       ) : null}
     </WmsSettingsTabFrame>
