@@ -1,7 +1,7 @@
 import type { TabsNavItem } from "@/components/layout/TabsNav";
 import { erpInventoryCountPaths } from "./inventoryCountPaths";
 
-/** ERP module tabs — shared {@link TabsNav} (Dostawcy / Materiały magazynowe). */
+/** ERP module tabs — shared {@link TabsNav} (Dostawcy / Materiały opakowaniowe). */
 export const ERP_INVENTORY_COUNT_TABS: TabsNavItem[] = [
   { path: erpInventoryCountPaths.dashboard, label: "Pulpit", end: true },
   { path: erpInventoryCountPaths.documents, label: "Dokumenty", end: false },

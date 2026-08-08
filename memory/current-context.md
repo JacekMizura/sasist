@@ -1,7 +1,5 @@
 ﻿## Active
 
-**Prod hotfixes applied (2026-08-08):** BDO `resolveBdoTabMeta` export restored; `order_issue_tasks.status` → VARCHAR(32); list endpoint session recovery after failed flush.
-
-**Packaging materials + BDO architecture** (previous): stock via Product bridge; BDO report-only; packing RW.
+**IA packaging (2026-08-08):** Single catalog Asortyment → Materiały opakowaniowe (`/warehouse-materials`). BDO has no second materials list (redirect). Carton/PackagingMaterial + APIs kept; BDO fields on detail tabs.
 
 **Next stages:** FE consumables UI on packing; document movement history projection; MM/inventory-count UX for packaging stockables.

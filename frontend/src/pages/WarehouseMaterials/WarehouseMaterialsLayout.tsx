@@ -12,7 +12,7 @@ import { WAREHOUSE_MATERIALS_MODULE_TABS } from "../../modules/warehouseMaterial
 const FULL_PAGE_FORM = /^\/warehouse-materials\/(?:cartons|packaging)\/(?:new|[^/]+)$/;
 
 /**
- * Shell modułu Materiały magazynowe — breadcrumb → zakładki → treść (bez pośredniego h1).
+ * Shell modułu Materiały opakowaniowe — breadcrumb → zakładki → treść (bez pośredniego h1).
  */
 export default function WarehouseMaterialsLayout() {
   const { pathname } = useLocation();
@@ -37,7 +37,7 @@ export default function WarehouseMaterialsLayout() {
       <TabsNav
         items={WAREHOUSE_MATERIALS_MODULE_TABS}
         exact
-        aria-label="Materiały magazynowe — zakładki"
+        aria-label="Materiały opakowaniowe — zakładki"
         className="gap-8"
       />
       <div className={`${flatSectionDividerClass} mt-2`} aria-hidden />

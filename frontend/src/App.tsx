@@ -268,7 +268,6 @@ import ProductCustomFieldsPage from "./pages/Assortment/productCustomFields/Prod
 import ProductCustomFieldEditPage from "./pages/Assortment/productCustomFields/ProductCustomFieldEditPage"
 import BdoLayout from "./pages/bdo/BdoLayout"
 import BdoDashboardPage from "./pages/bdo/BdoDashboardPage"
-import BdoMaterialsPage from "./pages/bdo/BdoMaterialsPage"
 import BdoMovementHistoryPage from "./pages/bdo/BdoMovementHistoryPage"
 import BdoMonthlyReportPage from "./pages/bdo/BdoMonthlyReportPage"
 import BdoSettingsPage from "./pages/bdo/BdoSettingsPage"
@@ -792,7 +791,11 @@ export const router = createBrowserRouter(
                 <Route path="warehouse/bdo" element={<BdoLayout />}>
                   <Route index element={<Navigate to="dashboard" replace />} />
                   <Route path="dashboard" element={<BdoDashboardPage />} />
-                  <Route path="materials" element={<BdoMaterialsPage />} />
+                  {/* Catalog CRUD: Asortyment → Materiały opakowaniowe (/warehouse-materials). */}
+                  <Route
+                    path="materials"
+                    element={<Navigate to="/warehouse-materials/cartons" replace />}
+                  />
                   <Route path="movements" element={<BdoMovementHistoryPage />} />
                   <Route path="purchases" element={<Navigate to="/warehouse/bdo/dashboard" replace />} />
                   <Route path="stock-count" element={<Navigate to="/warehouse/bdo/dashboard" replace />} />

@@ -1,3 +1,10 @@
+## 2026-08-08 — IA: jeden katalog Materiały opakowaniowe
+
+- Jedyny katalog CRUD: Asortyment → Materiały opakowaniowe (`/warehouse-materials` — Kartony | Materiały pakowe)
+- Usunięto zakładkę BDO „Materiały opakowaniowe” + `BdoMaterialsPage`; `/warehouse/bdo/materials` → redirect do katalogu
+- BDO zostaje report/config; flagi kg/`include_in_bdo` edytowalne na karcie materiału (zakładka BDO)
+- Modele/API Carton + PackagingMaterial bez zmian
+
 ## 2026-08-08 — Prod hotfix: BDO build + order_issue_tasks.status
 
 - FE: restore `resolveBdoTabMeta` in `bdoTabMeta.ts` (current report-only tabs + breadcrumb) — Vercel Rollup import fix

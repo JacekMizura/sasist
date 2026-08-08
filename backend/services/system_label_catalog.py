@@ -45,7 +45,7 @@ SYSTEM_LABEL_SEED: list[tuple[str, str, str, str]] = [
     ("navigation.returnPanelStatuses", "Zwroty — statusy panelu", "navigation", "Statusy zwrotów"),
     ("navigation.orderPanelStatuses", "Zamówienia — statusy panelu", "navigation", "Statusy zamówień"),
     ("navigation.shippingMethods", "Metody dostawy", "navigation", "Metody dostawy"),
-    ("navigation.warehouseMaterials", "Materiały magazynowe", "navigation", "Materiały"),
+    ("navigation.warehouseMaterials", "Materiały opakowaniowe", "navigation", "Materiały"),
     ("navigation.warehouseBdo", "BDO", "navigation", "BDO"),
     ("navigation.warehouseMaterialsCartons", "Kartony i opakowania", "navigation", "Kartony"),
     ("navigation.warehouseMaterialsPackaging", "Materiały pakowe", "navigation", "Pakowe"),

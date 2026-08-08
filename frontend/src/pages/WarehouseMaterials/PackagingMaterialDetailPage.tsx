@@ -18,6 +18,7 @@ import {
   type ProductLikeStatCard,
 } from "../../components/catalog";
 import { DAMAGE_TENANT_ID } from "../../constants/panelTenant";
+import { UI_STRINGS } from "../../constants/uiStrings";
 import { useWarehouse } from "../../context/WarehouseContext";
 import { WmFormSectionCard } from "../../modules/warehouseMaterials/components/WmFormSectionCard";
 import { WarehouseMaterialEditLayout } from "../../modules/warehouseMaterials/components/WarehouseMaterialEditLayout";
@@ -464,7 +465,7 @@ export default function PackagingMaterialDetailPage() {
       sku={sku}
       breadcrumbs={[
         { label: "Asortyment", onClick: () => navigate("/products/list") },
-        { label: "Materiały magazynowe", onClick: () => navigate("/warehouse-materials/packaging") },
+        { label: UI_STRINGS.navigation.warehouseMaterials, onClick: () => navigate("/warehouse-materials/packaging") },
         { label: isNew ? "Nowy materiał pakowy" : title },
       ]}
       tabs={PACKAGING_EDIT_TABS}

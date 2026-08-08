@@ -4,17 +4,12 @@ export type BdoTabMeta = {
   breadcrumbLabel: string;
 };
 
-/** Meta for active BDO report-only tabs (purchases / stock-count / corrections removed). */
+/** Meta for active BDO report/config tabs (materials catalog lives under Asortyment). */
 const META: Record<string, BdoTabMeta> = {
   "/warehouse/bdo/dashboard": {
     title: "Dashboard BDO",
     description: "Podgląd materiałów opakowaniowych objętych raportowaniem środowiskowym.",
     breadcrumbLabel: "Dashboard",
-  },
-  "/warehouse/bdo/materials": {
-    title: "Materiały opakowaniowe",
-    description: "Flagi BDO i masy jednostkowe (kg) — stany pochodzą z magazynu WMS.",
-    breadcrumbLabel: "Materiały opakowaniowe",
   },
   "/warehouse/bdo/movements": {
     title: "Historia",
