@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { History } from "lucide-react";
 import { Link } from "react-router-dom";
 import { listBdoMovements, type BdoMovement } from "../../api/bdoPackagingApi";
@@ -16,18 +16,22 @@ import { BdoFilterBar } from "./components/BdoFilterBar";
 import { useBdoTenant } from "./hooks/useBdoTenant";
 
 function typeLabel(t: string): string {
-  switch (t) {
-    case "purchase":
-      return "Zakup (BDO)";
-    case "correction":
+  switch ((t || "").toUpperCase()) {
+    case "PZ":
+      return "PZ (przyjęcie)";
+    case "RW":
+      return "RW (wydanie)";
+    case "MM":
+      return "MM";
+    case "KOREKTA":
+    case "ADJUSTMENT":
       return "Korekta";
-    case "stock_count":
-      return "Spis z natury";
     default:
-      return t;
+      return t || "—";
   }
 }
 
+/** BDO historia = projekcja tych samych ruchów co Asortyment → Materiały opakowaniowe → Historia. */
 export default function BdoMovementHistoryPage() {
   const { selectedWarehouseId } = useWarehouse();
   const { tenants, tenantId, setTenantId } = useBdoTenant();
@@ -59,14 +63,6 @@ export default function BdoMovementHistoryPage() {
     void load();
   }, [load]);
 
-  const fmtMoney = useMemo(
-    () => (n: number | null | undefined) =>
-      n == null || !Number.isFinite(n)
-        ? "—"
-        : new Intl.NumberFormat("pl-PL", { style: "currency", currency: "PLN", maximumFractionDigits: 2 }).format(n),
-    [],
-  );
-
   const fmtDt = (iso: string) => {
     try {
       return new Date(iso).toLocaleString("pl-PL", { dateStyle: "short", timeStyle: "short" });
@@ -94,18 +90,21 @@ export default function BdoMovementHistoryPage() {
             onChange={(e) => setFilterType(e.target.value)}
           >
             <option value="">Wszystkie</option>
-            <option value="purchase">Zakupy (BDO)</option>
-            <option value="correction">Korekty</option>
-            <option value="stock_count">Spisy</option>
+            <option value="PZ">PZ</option>
+            <option value="RW">RW</option>
+            <option value="MM">MM</option>
+            <option value="KOREKTA">Korekta</option>
           </select>
         </PurchasingFilterField>
       </BdoFilterBar>
 
       <PurchasingInfoNotice tone="slate">
-        Zbiorcza historia operacji BDO: ręczne zakupy materiałów, korekty stanu oraz spisy z natury.{" "}
-        <Link to="/warehouse/bdo/purchases" className="font-semibold text-blue-600 hover:underline">
-          Rejestracja pojedynczego zakupu (BDO)
+        Historia BDO pochodzi z dokumentów magazynowych (Inventory / StockDocument) dla Carton i
+        PackagingMaterial — bez osobnego ledgeru BDO. Katalog i edycja:{" "}
+        <Link to="/warehouse-materials/history" className="font-semibold text-blue-600 hover:underline">
+          Materiały opakowaniowe → Historia
         </Link>
+        .
       </PurchasingInfoNotice>
 
       {selectedWarehouseId == null ? (
@@ -121,32 +120,29 @@ export default function BdoMovementHistoryPage() {
         <AppEmptyState
           icon={History}
           title="Brak zarejestrowanych operacji"
-          description="Zakupy, korekty i spisy z natury pojawią się tutaj po zapisie w module BDO."
+          description="Ruchy PZ / RW / MM materiałów opakowaniowych pojawią się tutaj po dokumentach magazynowych."
         />
       ) : null}
 
       {rows.length > 0 ? (
-        <PurchasingTableSection title="Operacje BDO">
+        <PurchasingTableSection title="Ruchy opakowań (dokumenty magazynowe)">
           <table className="w-full min-w-[880px] text-sm">
             <PurchasingTableHeader
-              headers={["Data", "Typ", "Materiał / opis", "wm_ref", "Ilość", "Kwota", "Ref / uwagi"]}
-              align={["left", "left", "left", "left", "right", "right", "left"]}
+              headers={["Data", "Typ", "Materiał / opis", "wm_ref", "Ilość", "Ref / uwagi"]}
+              align={["left", "left", "left", "left", "right", "left"]}
             />
             <tbody>
               {rows.map((r) => (
                 <tr key={r.id} className="border-t border-slate-100 transition-colors hover:bg-slate-50/80">
                   <td className={`${purchasingTableTdClass} tabular-nums text-slate-700`}>{fmtDt(r.occurred_at)}</td>
                   <td className={`${purchasingTableTdClass} text-slate-800`}>{typeLabel(r.movement_type)}</td>
-                  <td className={`${purchasingTableTdClass} font-medium text-slate-900`}>{r.material_name}</td>
-                  <td className={`${purchasingTableTdClass} font-mono text-xs text-slate-600`}>{r.wm_ref ?? "—"}</td>
-                  <td className={`${purchasingTableTdClass} text-right tabular-nums text-slate-800`}>
-                    {r.qty != null && Number.isFinite(r.qty) ? r.qty.toLocaleString("pl-PL", { maximumFractionDigits: 3 }) : "—"}
+                  <td className={purchasingTableTdClass}>{r.material_name || "—"}</td>
+                  <td className={`${purchasingTableTdClass} text-slate-600`}>{r.wm_ref || "—"}</td>
+                  <td className={`${purchasingTableTdClass} tabular-nums text-right`}>
+                    {r.qty != null ? r.qty : "—"}
                   </td>
-                  <td className={`${purchasingTableTdClass} text-right tabular-nums text-slate-800`}>{fmtMoney(r.amount_pln)}</td>
-                  <td className={`${purchasingTableTdClass} max-w-xs truncate text-slate-600`} title={r.notes ?? r.reference ?? ""}>
-                    {r.reference ? <span className="font-medium">{r.reference}</span> : null}
-                    {r.reference && r.notes ? " · " : null}
-                    {r.notes ?? ""}
+                  <td className={`${purchasingTableTdClass} text-slate-600`}>
+                    {[r.reference, r.notes].filter(Boolean).join(" · ") || "—"}
                   </td>
                 </tr>
               ))}

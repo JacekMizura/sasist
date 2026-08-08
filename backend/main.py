@@ -274,6 +274,7 @@ from .api.returns_bulk import router as returns_bulk_router
 from .api.shipping_methods import router as shipping_methods_router
 from .api.cartons import router as cartons_router
 from .api.packaging_materials import router as packaging_materials_router
+from .api.warehouse_materials_history import router as warehouse_materials_history_router
 from .api.product import router as product_router
 from .api.product_sales_offers import router as product_sales_offers_router
 from .api.api_keys import router as api_keys_router
@@ -2195,6 +2196,7 @@ _API_ROUTERS = (
     shipping_methods_router,
     cartons_router,
     packaging_materials_router,
+    warehouse_materials_history_router,
     import_router,
     export_router,
     cart_router,

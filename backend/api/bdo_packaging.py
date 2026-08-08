@@ -357,12 +357,25 @@ def monthly_report_csv(
 @router.get("/movements", response_model=list[BdoMovementRead])
 def list_bdo_movements(
     tenant_id: int = Query(..., ge=1),
+    warehouse_id: int | None = Query(None, ge=1),
+    movement_type: str | None = Query(None),
     limit: int = Query(100, ge=1, le=500),
     db: Session = Depends(get_db),
 ):
-    """History is document-driven — empty stub until document movement projection is wired in UI."""
-    _ = (tenant_id, limit, db)
-    return []
+    """BDO history = projection of packaging StockDocument / StockOperation (no BDO ledger)."""
+    from ..services.packaging_materials.movement_history_service import (
+        list_packaging_stock_movements,
+        movement_row_to_bdo_dict,
+    )
+
+    rows = list_packaging_stock_movements(
+        db,
+        tenant_id=int(tenant_id),
+        warehouse_id=int(warehouse_id) if warehouse_id is not None else None,
+        movement_type=movement_type,
+        limit=limit,
+    )
+    return [BdoMovementRead(**movement_row_to_bdo_dict(r)) for r in rows]
 
 
 # Removed operational BDO ledger endpoints (410).

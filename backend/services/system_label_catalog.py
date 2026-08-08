@@ -49,6 +49,8 @@ SYSTEM_LABEL_SEED: list[tuple[str, str, str, str]] = [
     ("navigation.warehouseBdo", "BDO", "navigation", "BDO"),
     ("navigation.warehouseMaterialsCartons", "Kartony i opakowania", "navigation", "Kartony"),
     ("navigation.warehouseMaterialsPackaging", "Materiały pakowe", "navigation", "Pakowe"),
+    ("navigation.warehouseMaterialsPpwr", "PPWR", "navigation", "PPWR"),
+    ("navigation.warehouseMaterialsHistory", "Historia", "navigation", "Historia"),
     ("navigation.complaintPanelStatuses", "Reklamacje — statusy panelu", "navigation", "Statusy reklamacji"),
     ("navigation.analysis", "Analiza", "navigation", "Analiza"),
     ("navigation.system", "System", "navigation", "Moduł System"),

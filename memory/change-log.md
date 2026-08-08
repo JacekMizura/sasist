@@ -1,3 +1,10 @@
+## 2026-08-08 — ETAP 1+2 Materiały opakowaniowe (IA + Inventory SSOT)
+
+- Zakładki: Kartony | Pakowe | PPWR (projekcja) | Historia (StockDocument/StockOperation)
+- Usunięto legacy scalar bump przy delivery `received` (metadata-only); stan tylko przez Inventory/PZ
+- BDO movements = ta sama projekcja dokumentów (bez ledgeru)
+- Bez: consumables packing, void snapshots, pełne PPWR fields
+
 ## 2026-08-08 — IA: jeden katalog Materiały opakowaniowe
 
 - Jedyny katalog CRUD: Asortyment → Materiały opakowaniowe (`/warehouse-materials` — Kartony | Materiały pakowe)

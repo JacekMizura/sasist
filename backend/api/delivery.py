@@ -343,8 +343,14 @@ def _delivery_to_list_row(
     )
 
 
-def _apply_wm_inventory_from_received_delivery(db: Session, tenant_id: int, delivery_id: int) -> None:
-    """When a purchase order is marked received, add WM line quantities to carton / packaging stock."""
+def _sync_wm_metadata_from_received_delivery(db: Session, tenant_id: int, delivery_id: int) -> None:
+    """On PO marked received: fill qty_received + last-purchase metadata only.
+
+    Physical stock SSOT is Inventory via StockDocument (PZ post) — do **not** bump
+    deprecated ``Carton.stock`` / ``PackagingMaterial.stock`` here (avoids double-count).
+    """
+    from ..services.wm_catalog_stock_service import update_wm_catalog_last_purchase_metadata
+
     items = db.query(DeliveryItem).filter(DeliveryItem.delivery_id == delivery_id).all()
     for it in items:
         k = (getattr(it, "wm_kind", None) or "").strip().lower()
@@ -357,20 +363,26 @@ def _apply_wm_inventory_from_received_delivery(db: Session, tenant_id: int, deli
             it.quantity_received = qrecv
         if qrecv < 1e-9:
             continue
-        if k == "carton":
-            c = db.query(Carton).filter(Carton.id == wid, Carton.tenant_id == int(tenant_id)).first()
-            if not c:
-                continue
-            c.stock = float(c.stock or 0) + qrecv
-            if it.purchase_price is not None:
-                c.last_purchase_price_net = float(it.purchase_price)
-        elif k == "packaging":
-            m = db.query(PackagingMaterial).filter(PackagingMaterial.id == wid, PackagingMaterial.tenant_id == int(tenant_id)).first()
-            if not m:
-                continue
-            m.stock = float(m.stock or 0) + qrecv
-            if it.purchase_price is not None:
-                m.last_purchase_price_net = float(it.purchase_price)
+        price = float(it.purchase_price) if it.purchase_price is not None else None
+        if price is None:
+            continue
+        try:
+            update_wm_catalog_last_purchase_metadata(
+                db,
+                int(tenant_id),
+                k,
+                wid,
+                purchase_price_net=price,
+                purchase_at=datetime.utcnow(),
+            )
+        except Exception:
+            # Metadata-only; never fail receive status for missing WM row.
+            continue
+
+
+def _apply_wm_inventory_from_received_delivery(db: Session, tenant_id: int, delivery_id: int) -> None:
+    """Deprecated name — kept for call-site compatibility; Inventory is PZ-only."""
+    _sync_wm_metadata_from_received_delivery(db, tenant_id, delivery_id)
 
 
 def _delivery_to_read(db: Session, d: InboundDelivery) -> DeliveryRead:

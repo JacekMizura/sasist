@@ -1,5 +1,5 @@
 ﻿## Active
 
-**IA packaging (2026-08-08):** Single catalog Asortyment → Materiały opakowaniowe (`/warehouse-materials`). BDO has no second materials list (redirect). Carton/PackagingMaterial + APIs kept; BDO fields on detail tabs.
+**IA packaging ETAP 1+2 (2026-08-08):** Tabs Kartony | Pakowe | PPWR | Historia. Stock SSOT = Inventory via StockDocument (no delivery scalar bump). BDO movements = document projection.
 
-**Next stages:** FE consumables UI on packing; document movement history projection; MM/inventory-count UX for packaging stockables.
+**Next stages:** packing consumables UI; void/fill snapshots; full PPWR fields; composition.

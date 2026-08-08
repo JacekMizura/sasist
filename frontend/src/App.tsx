@@ -100,6 +100,8 @@ import CartonsListPage from "./pages/WarehouseMaterials/CartonsListPage"
 import CartonDetailPage from "./pages/WarehouseMaterials/CartonDetailPage"
 import WarehouseMaterialsPackagingPage from "./pages/WarehouseMaterials/WarehouseMaterialsPackagingPage"
 import PackagingMaterialDetailPage from "./pages/WarehouseMaterials/PackagingMaterialDetailPage"
+import WarehouseMaterialsPpwrPage from "./pages/WarehouseMaterials/WarehouseMaterialsPpwrPage"
+import WarehouseMaterialsHistoryPage from "./pages/WarehouseMaterials/WarehouseMaterialsHistoryPage"
 import ComplaintsLayout from "./pages/Complaints/ComplaintsLayout"
 import ComplaintsPanelPage from "./pages/Complaints/ComplaintsPanelPage"
 import ComplaintDetailPage from "./pages/Complaints/ComplaintDetailPage"
@@ -787,6 +789,8 @@ export const router = createBrowserRouter(
                     <Route path="new" element={<PackagingMaterialDetailPage />} />
                     <Route path=":materialId" element={<PackagingMaterialDetailPage />} />
                   </Route>
+                  <Route path="ppwr" element={<WarehouseMaterialsPpwrPage />} />
+                  <Route path="history" element={<WarehouseMaterialsHistoryPage />} />
                 </Route>
                 <Route path="warehouse/bdo" element={<BdoLayout />}>
                   <Route index element={<Navigate to="dashboard" replace />} />

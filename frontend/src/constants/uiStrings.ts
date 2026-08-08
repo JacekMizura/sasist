@@ -70,6 +70,8 @@ const UI_STRINGS_DEFAULTS = {
     warehouseBdo: "BDO",
     warehouseMaterialsCartons: "Kartony i opakowania",
     warehouseMaterialsPackaging: "Materiały pakowe",
+    warehouseMaterialsPpwr: "PPWR",
+    warehouseMaterialsHistory: "Historia",
     /** Panel triage labels for complaints (office only). */
     complaintPanelStatuses: "Reklamacje — statusy panelu",
     analysis: "Zarządzanie",
