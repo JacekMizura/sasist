@@ -41,6 +41,11 @@ import {
 } from "../../modules/warehouseMaterials/warehouseMaterialsMoney";
 import { ShippingMethodLogo } from "../../components/shipping/ShippingMethodLogo";
 import PriceTiersPanel, { tiersFromDto, tiersToPayload, type TierDraft } from "./PriceTiersPanel";
+import {
+  PPWR_FUNCTION_OPTIONS_CARTON,
+  parseOptionalPct,
+  ppwrStatusLabel,
+} from "../../modules/warehouseMaterials/ppwrLabels";
 
 export default function CartonDetailPage() {
   const { cartonId } = useParams<{ cartonId: string }>();
@@ -97,6 +102,12 @@ export default function CartonDetailPage() {
   const [lowStockThr, setLowStockThr] = useState("");
   const [reorderQty, setReorderQty] = useState("");
   const [includeInBdo, setIncludeInBdo] = useState(false);
+  const [ppwrFunction, setPpwrFunction] = useState("");
+  const [ppwrFormat, setPpwrFormat] = useState("");
+  const [recyclablePct, setRecyclablePct] = useState("");
+  const [recycledContentPct, setRecycledContentPct] = useState("");
+  const [isReusable, setIsReusable] = useState(false);
+  const [ppwrStatus, setPpwrStatus] = useState("NOT_ASSESSED");
   const [plasticKg, setPlasticKg] = useState("0");
   const [paperKg, setPaperKg] = useState("");
   const [woodKg, setWoodKg] = useState("0");
@@ -150,6 +161,12 @@ export default function CartonDetailPage() {
     setReorderQty(r.reorder_qty != null ? String(r.reorder_qty) : "");
     setIncludeInBdo(!!r.include_in_bdo);
     setPlasticKg(String(r.plastic_kg_per_unit ?? 0));
+    setPpwrFunction(r.ppwr_function ?? "");
+    setPpwrFormat(r.ppwr_format ?? "");
+    setRecyclablePct(r.recyclable_pct != null ? String(r.recyclable_pct) : "");
+    setRecycledContentPct(r.recycled_content_pct != null ? String(r.recycled_content_pct) : "");
+    setIsReusable(!!r.is_reusable);
+    setPpwrStatus(r.ppwr_status ?? "NOT_ASSESSED");
     setPaperKg(r.paper_kg_per_unit != null ? String(r.paper_kg_per_unit) : String(r.weight_kg ?? ""));
     setWoodKg(String(r.wood_kg_per_unit ?? 0));
     setGlassKg(String(r.glass_kg_per_unit ?? 0));
@@ -283,6 +300,10 @@ export default function CartonDetailPage() {
     const wo = parseFloat(String(woodKg).replace(",", "."));
     const gl = parseFloat(String(glassKg).replace(",", "."));
     const me = parseFloat(String(metalKg).replace(",", "."));
+    const rec = parseOptionalPct(recyclablePct);
+    if (rec === "invalid") return { err: "Recyklingowalność PPWR musi być 0–100." };
+    const rcc = parseOptionalPct(recycledContentPct);
+    if (rcc === "invalid") return { err: "Recycled content PPWR musi być 0–100." };
     const payload: CartonWritePayload = {
       name: name.trim(),
       image_url: imageUrl?.trim() || null,
@@ -339,6 +360,11 @@ export default function CartonDetailPage() {
       glass_kg_per_unit: Number.isFinite(gl) && gl >= 0 ? gl : 0,
       metal_kg_per_unit: Number.isFinite(me) && me >= 0 ? me : 0,
       packaging_type: packagingTypeBdo.trim() || null,
+      ppwr_function: ppwrFunction.trim() || null,
+      ppwr_format: ppwrFormat.trim() || null,
+      recyclable_pct: rec,
+      recycled_content_pct: rcc,
+      is_reusable: isReusable ? true : null,
     };
     return { err: null as null, payload };
   }, [
@@ -381,6 +407,15 @@ export default function CartonDetailPage() {
     glassKg,
     metalKg,
     packagingTypeBdo,
+    ppwrFunction,
+    ppwrFormat,
+    recyclablePct,
+    recycledContentPct,
+    isReusable,
+    il,
+    iw,
+    ih,
+    maxPayload,
   ]);
 
   const onLogoFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -868,6 +903,71 @@ export default function CartonDetailPage() {
               </label>
             </div>
           </div>
+          </WmFormSectionCard>
+        ) : null}
+
+        {activeTab === "ppwr" ? (
+          <WmFormSectionCard
+            title="PPWR"
+            description="Funkcja opakowania transportowego / e-commerce. Nie mylić z masami BDO ani opakowaniem sprzedażowym produktu."
+          >
+            <div className="space-y-4">
+              <p className="text-sm text-slate-600">
+                Status: <span className="font-medium text-slate-900">{ppwrStatusLabel(ppwrStatus)}</span>
+              </p>
+              <label className="block">
+                <span className="text-xs font-bold uppercase tracking-wide text-slate-600">Funkcja PPWR</span>
+                <select
+                  className={inputClass}
+                  value={ppwrFunction}
+                  onChange={(e) => setPpwrFunction(e.target.value)}
+                >
+                  {PPWR_FUNCTION_OPTIONS_CARTON.map((o) => (
+                    <option key={o.value || "empty"} value={o.value}>
+                      {o.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="block">
+                <span className="text-xs font-bold uppercase tracking-wide text-slate-600">Format</span>
+                <input
+                  className={inputClass}
+                  value={ppwrFormat}
+                  onChange={(e) => setPpwrFormat(e.target.value)}
+                  placeholder="np. shipper_box, mailer"
+                />
+              </label>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <label className="block">
+                  <span className="text-xs font-bold uppercase text-slate-600">Recyklingowalność %</span>
+                  <input
+                    className={inputClass}
+                    value={recyclablePct}
+                    onChange={(e) => setRecyclablePct(e.target.value)}
+                    inputMode="decimal"
+                  />
+                </label>
+                <label className="block">
+                  <span className="text-xs font-bold uppercase text-slate-600">Recycled content %</span>
+                  <input
+                    className={inputClass}
+                    value={recycledContentPct}
+                    onChange={(e) => setRecycledContentPct(e.target.value)}
+                    inputMode="decimal"
+                  />
+                </label>
+              </div>
+              <label className="flex items-center gap-2 text-sm font-medium text-slate-800">
+                <input
+                  type="checkbox"
+                  checked={isReusable}
+                  onChange={(e) => setIsReusable(e.target.checked)}
+                  className="h-4 w-4"
+                />
+                Wielokrotnego użytku
+              </label>
+            </div>
           </WmFormSectionCard>
         ) : null}
 

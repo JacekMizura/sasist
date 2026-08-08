@@ -114,6 +114,7 @@ from .shipping_method import ShippingMethod  # noqa: F401
 from .warehouse_structural_weight_limit import WarehouseStructuralWeightLimit  # noqa: F401
 from .carton import Carton, carton_shipping_method_links  # noqa: F401
 from .packaging_material import PackagingMaterial  # noqa: F401
+from .product_sales_packaging import ProductSalesPackaging  # noqa: F401
 from .wm_price_tier import WmPriceTier  # noqa: F401
 from .storage_unit import StorageUnit
 from .zone_slot import ZoneSlot  # noqa: F401

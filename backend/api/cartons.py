@@ -27,6 +27,7 @@ from ..schemas.warehouse_materials import (
     carton_base_unit_prices,
 )
 from ..services.wm_pricing import complete_package_totals, serialize_wm_tiers
+from ..services.packaging_materials.ppwr_fields import apply_carton_ppwr, ppwr_fields_from_row
 
 router = APIRouter(prefix="/cartons", tags=["Warehouse materials — cartons"])
 
@@ -165,6 +166,7 @@ def _carton_to_read(db: Session, row: Carton) -> CartonRead:
         metal_kg_per_unit=float(getattr(row, "metal_kg_per_unit", 0) or 0),
         packaging_type=(str(getattr(row, "packaging_type", None) or "").strip() or None) or None,
         include_in_bdo=bool(getattr(row, "include_in_bdo", False)),
+        **ppwr_fields_from_row(row),
         shipping_method_ids=[str(x.id) for x in sms],
         shipping_methods=[_sm_mini(x) for x in sms],
         price_tiers=tier_reads,
@@ -492,6 +494,20 @@ def create_carton(body: CartonCreate, db: Session = Depends(get_db)):
         created_at=now,
         updated_at=now,
     )
+    try:
+        apply_carton_ppwr(
+            row,
+            {
+                "ppwr_function": body.ppwr_function,
+                "ppwr_format": body.ppwr_format,
+                "recyclable_pct": body.recyclable_pct,
+                "recycled_content_pct": body.recycled_content_pct,
+                "is_reusable": body.is_reusable,
+                "ppwr_status": body.ppwr_status,
+            },
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     if body.shipping_method_ids:
         uniq = list({str(x).strip() for x in body.shipping_method_ids if str(x).strip()})
         sms = (
@@ -716,6 +732,19 @@ def update_carton(
         row.packaging_type = (str(raw).strip()[:64] if raw is not None else "") or None
     if "include_in_bdo" in patch and patch["include_in_bdo"] is not None:
         row.include_in_bdo = bool(patch["include_in_bdo"])
+    ppwr_keys = (
+        "ppwr_function",
+        "ppwr_format",
+        "recyclable_pct",
+        "recycled_content_pct",
+        "is_reusable",
+        "ppwr_status",
+    )
+    if any(k in patch for k in ppwr_keys):
+        try:
+            apply_carton_ppwr(row, {k: patch[k] for k in ppwr_keys if k in patch})
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     if "price_tiers" in patch:
         tiers = patch.get("price_tiers")

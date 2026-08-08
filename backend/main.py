@@ -191,6 +191,7 @@ from .db.schema_upgrade import (
     ensure_shipping_methods_table_and_order_fk,
     ensure_warehouse_materials_tables,
     ensure_warehouse_materials_bdo_columns,
+    ensure_ppwr_stage_3a_schema,
     ensure_warehouse_materials_master_data,
     ensure_warehouse_materials_purchasing_columns,
     ensure_wm_last_purchase_extension_columns,
@@ -277,6 +278,7 @@ from .api.packaging_materials import router as packaging_materials_router
 from .api.warehouse_materials_history import router as warehouse_materials_history_router
 from .api.product import router as product_router
 from .api.product_sales_offers import router as product_sales_offers_router
+from .api.product_sales_packaging import router as product_sales_packaging_router
 from .api.api_keys import router as api_keys_router
 from .api.product_warehouse_slotting import router as product_warehouse_slotting_router
 from .api.bundle import router as bundle_router
@@ -785,6 +787,8 @@ _POSTGRES_SAFE_SCHEMA_FUNCS = frozenset({
     "ensure_pick_lot_columns",
     "ensure_carts_code_column",
     "ensure_esp_scan_code_columns",
+    # PPWR stage 3A — dialect-safe ADD COLUMN / CREATE TABLE.
+    "ensure_ppwr_stage_3a_schema",
 })
 _POSTGRES_SQLITE_ONLY_HELPERS: list[str] = []
 if not _is_sqlite_engine():
@@ -1845,6 +1849,7 @@ def _upgrade_schema_background() -> None:
         ensure_shipping_methods_table_and_order_fk(engine)
         ensure_warehouse_materials_tables(engine)
         ensure_warehouse_materials_bdo_columns(engine)
+        ensure_ppwr_stage_3a_schema(engine)
         ensure_warehouse_materials_master_data(engine)
         ensure_warehouse_materials_purchasing_columns(engine)
         ensure_cartons_usable_dimensions_columns(engine)
@@ -2166,6 +2171,7 @@ _API_ROUTERS = (
     product_warehouse_slotting_router,
     product_router,
     product_sales_offers_router,
+    product_sales_packaging_router,
     bundle_router,
     bundle_traceability_router,
     bundle_logistics_router,

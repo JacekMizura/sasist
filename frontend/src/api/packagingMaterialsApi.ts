@@ -96,6 +96,12 @@ export type PackagingMaterialDto = {
   metal_kg_per_unit?: number;
   packaging_type?: string | null;
   include_in_bdo?: boolean;
+  ppwr_function?: string | null;
+  ppwr_format?: string | null;
+  recyclable_pct?: number | null;
+  recycled_content_pct?: number | null;
+  is_reusable?: boolean | null;
+  ppwr_status?: string;
   price_tiers?: PriceTierDto[];
 };
 
@@ -182,6 +188,12 @@ export type PackagingMaterialWritePayload = {
   metal_kg_per_unit?: number;
   packaging_type?: string | null;
   include_in_bdo?: boolean;
+  ppwr_function?: string | null;
+  ppwr_format?: string | null;
+  recyclable_pct?: number | null;
+  recycled_content_pct?: number | null;
+  is_reusable?: boolean | null;
+  ppwr_status?: string | null;
   price_tiers?: PriceTierWrite[];
 };
 

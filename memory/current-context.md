@@ -1,5 +1,5 @@
 ﻿## Active
 
-**IA packaging ETAP 1+2 (2026-08-08):** Tabs Kartony | Pakowe | PPWR | Historia. Stock SSOT = Inventory via StockDocument (no delivery scalar bump). BDO movements = document projection.
+**ETAP 3A PPWR foundation (2026-08-08):** Domain contract + Carton/PackagingMaterial PPWR fields + ProductSalesPackaging + product UI tab + WM PPWR projection. No composition/void/consumables/hub.
 
-**Next stages:** packing consumables UI; void/fill snapshots; full PPWR fields; composition.
+**Next:** composition lines; void/fill; packing consumables; full PPWR compliance later.

@@ -5085,6 +5085,70 @@ def ensure_warehouse_materials_bdo_columns(engine: Engine) -> None:
         conn.commit()
 
 
+def ensure_ppwr_stage_3a_schema(engine: Engine) -> None:
+    """PPWR stage 3A: Carton/PackagingMaterial PPWR columns + product_sales_packaging table.
+
+    Existing rows: ppwr_status=NOT_ASSESSED, other PPWR fields NULL (no guessed classification).
+    """
+    ppwr_cols = [
+        ("ppwr_function", "VARCHAR(32)"),
+        ("ppwr_format", "VARCHAR(64)"),
+        ("recyclable_pct", "REAL"),
+        ("recycled_content_pct", "REAL"),
+        ("is_reusable", "INTEGER"),
+        ("ppwr_status", "VARCHAR(32) NOT NULL DEFAULT 'NOT_ASSESSED'"),
+    ]
+    with engine.begin() as conn:
+        for table in ("cartons", "packaging_materials"):
+            if not _table_exists(conn, table):
+                continue
+            cols = _table_column_names(conn, table)
+            for col, typ in ppwr_cols:
+                if col not in cols:
+                    conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {col} {typ}"))
+            # Backfill status for rows that got nullable column without default on some dialects
+            try:
+                conn.execute(
+                    text(
+                        f"UPDATE {table} SET ppwr_status = 'NOT_ASSESSED' "
+                        f"WHERE ppwr_status IS NULL OR TRIM(ppwr_status) = ''"
+                    )
+                )
+            except Exception:
+                pass
+
+        if not _table_exists(conn, "product_sales_packaging"):
+            conn.execute(
+                text(
+                    """
+                    CREATE TABLE product_sales_packaging (
+                        id VARCHAR(36) NOT NULL PRIMARY KEY,
+                        product_id INTEGER NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+                        name VARCHAR(256) NOT NULL,
+                        level VARCHAR(16) NOT NULL DEFAULT 'PRIMARY',
+                        ppwr_format VARCHAR(64),
+                        material_category VARCHAR(128),
+                        mass_g REAL,
+                        recyclable_pct REAL,
+                        recycled_content_pct REAL,
+                        is_reusable INTEGER,
+                        ppwr_status VARCHAR(32) NOT NULL DEFAULT 'NOT_ASSESSED',
+                        is_active INTEGER NOT NULL DEFAULT 1,
+                        sort_order INTEGER NOT NULL DEFAULT 0,
+                        created_at DATETIME,
+                        updated_at DATETIME
+                    )
+                    """
+                )
+            )
+            conn.execute(
+                text(
+                    "CREATE INDEX IF NOT EXISTS ix_product_sales_packaging_product_id "
+                    "ON product_sales_packaging(product_id)"
+                )
+            )
+
+
 def ensure_warehouse_materials_master_data(engine: Engine) -> None:
     """Master data: pricing columns, tiers table, packaging attributes, thresholds."""
     with engine.connect() as conn:

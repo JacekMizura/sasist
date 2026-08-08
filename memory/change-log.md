@@ -1,3 +1,12 @@
+## 2026-08-08 — ETAP 3A PPWR foundation
+
+- Kontrakt: SALES / TRANSPORT / ECOMMERCE / AUXILIARY / FILLER / OUT_OF_SCOPE
+- Carton + PackagingMaterial: ppwr_function/format/recyclable/recycled/reusable/status (bez duplikacji BDO)
+- Nowa tabela `product_sales_packaging` + CRUD `/products/{id}/sales-packaging`
+- FE: zakładka produktu „Opakowanie produktu”; WM PPWR projection; zakładka PPWR na karcie kartonu/materiału
+- Migracja `ensure_ppwr_stage_3a_schema` (allowlist PG); testy `test_ppwr_stage_3a.py`; `npm run build` OK
+- Poza zakresem: composition, void, consumables, hub
+
 ## 2026-08-08 — ETAP 1+2 Materiały opakowaniowe (IA + Inventory SSOT)
 
 - Zakładki: Kartony | Pakowe | PPWR (projekcja) | Historia (StockDocument/StockOperation)

@@ -28,6 +28,7 @@ import {
   Warehouse,
   Wrench,
   TrendingUp,
+  Package,
   type LucideIcon,
 } from "lucide-react";
 import { error as logError, log } from "../../utils/logger";
@@ -47,6 +48,7 @@ import type { AssignedLocation } from "../../types/warehouse";
 import { getInventoryManagementSettings } from "../../api/inventoryManagementPolicyApi";
 import { ProductManufacturingPanel } from "../Production/ProductManufacturingPanel";
 import { ProductSalesOffersSection } from "./ProductSalesOffersSection";
+import { ProductEditSalesPackagingTab } from "./ProductEditSalesPackagingTab";
 import { listCompositionsForProduct } from "../../api/compositionApi";
 import type { MagazynInvRowDisplay } from "../../components/products/MagazynInventoryLine";
 import { EditInventoryTraceabilityModal } from "../../components/products/EditInventoryTraceabilityModal";
@@ -256,6 +258,7 @@ export type ProductEditTabId =
   | "warehouseOps"
   | "logistics"
   | "offers"
+  | "salesPackaging"
   | "settings"
   | "production";
 
@@ -1707,6 +1710,7 @@ export function ProductEditModal({
         "description",
         "images",
         "offers",
+        "salesPackaging",
         "categories",
         "production",
         "labelSheet",
@@ -1714,7 +1718,7 @@ export function ProductEditModal({
         "warehouseOps",
       ];
     }
-    return ["basic", "prices", "description", "images", "offers", "labelSheet", "warehouse"];
+    return ["basic", "prices", "description", "images", "offers", "salesPackaging", "labelSheet", "warehouse"];
   }, [isNew]);
 
   const railLabel: Record<TabId, string> = {
@@ -1726,6 +1730,7 @@ export function ProductEditModal({
     warehouse: "Magazyn",
     images: "Zdjęcia",
     offers: "Oferty",
+    salesPackaging: "Opakowanie produktu",
     labelSheet: "Etykieta",
     suppliers: "Dostawcy",
     warehouseOps: "Logi z WMS",
@@ -1747,6 +1752,7 @@ export function ProductEditModal({
     warehouseOps: ScrollText,
     logistics: Truck,
     offers: Layers,
+    salesPackaging: Package,
     settings: Wrench,
     production: Factory,
   };
@@ -2260,6 +2266,16 @@ export function ProductEditModal({
                       tenantId={tenantId}
                       warehouseId={warehouse?.id ?? null}
                     />
+                  )
+                )}
+
+                {activeTab === "salesPackaging" && (
+                  isNew || product?.id == null || tenantId == null ? (
+                    <p className="text-sm text-slate-500">
+                      Zapisz produkt, aby dodać specyfikację opakowania produktu (PPWR).
+                    </p>
+                  ) : (
+                    <ProductEditSalesPackagingTab productId={product.id} tenantId={tenantId} />
                   )
                 )}
 

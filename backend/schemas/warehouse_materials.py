@@ -109,6 +109,12 @@ class CartonRead(BaseModel):
     metal_kg_per_unit: float = 0.0
     packaging_type: Optional[str] = None
     include_in_bdo: bool = False
+    ppwr_function: Optional[str] = None
+    ppwr_format: Optional[str] = None
+    recyclable_pct: Optional[float] = None
+    recycled_content_pct: Optional[float] = None
+    is_reusable: Optional[bool] = None
+    ppwr_status: str = "NOT_ASSESSED"
     shipping_method_ids: List[str] = Field(default_factory=list)
     shipping_methods: List[ShippingMethodMini] = Field(default_factory=list)
     price_tiers: List[PriceTierRead] = Field(default_factory=list)
@@ -160,6 +166,12 @@ class CartonCreate(BaseModel):
     metal_kg_per_unit: Optional[float] = Field(None, ge=0)
     packaging_type: Optional[str] = Field(None, max_length=64)
     include_in_bdo: bool = False
+    ppwr_function: Optional[str] = Field(None, max_length=32)
+    ppwr_format: Optional[str] = Field(None, max_length=64)
+    recyclable_pct: Optional[float] = None
+    recycled_content_pct: Optional[float] = None
+    is_reusable: Optional[bool] = None
+    ppwr_status: Optional[str] = Field(None, max_length=32)
     shipping_method_ids: List[str] = Field(default_factory=list)
     price_tiers: List[PriceTierIn] = Field(default_factory=list)
 
@@ -211,6 +223,12 @@ class CartonUpdate(BaseModel):
     metal_kg_per_unit: Optional[float] = Field(None, ge=0)
     packaging_type: Optional[str] = Field(None, max_length=64)
     include_in_bdo: Optional[bool] = None
+    ppwr_function: Optional[str] = Field(None, max_length=32)
+    ppwr_format: Optional[str] = Field(None, max_length=64)
+    recyclable_pct: Optional[float] = None
+    recycled_content_pct: Optional[float] = None
+    is_reusable: Optional[bool] = None
+    ppwr_status: Optional[str] = Field(None, max_length=32)
     shipping_method_ids: Optional[List[str]] = None
     price_tiers: Optional[List[PriceTierIn]] = None
 
@@ -282,6 +300,12 @@ class PackagingMaterialRead(BaseModel):
     metal_kg_per_unit: float = 0.0
     packaging_type: Optional[str] = None
     include_in_bdo: bool = False
+    ppwr_function: Optional[str] = None
+    ppwr_format: Optional[str] = None
+    recyclable_pct: Optional[float] = None
+    recycled_content_pct: Optional[float] = None
+    is_reusable: Optional[bool] = None
+    ppwr_status: str = "NOT_ASSESSED"
     price_tiers: List[PriceTierRead] = Field(default_factory=list)
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
@@ -343,6 +367,12 @@ class PackagingMaterialCreate(BaseModel):
     metal_kg_per_unit: float = Field(default=0, ge=0)
     packaging_type: Optional[str] = Field(None, max_length=64)
     include_in_bdo: bool = False
+    ppwr_function: Optional[str] = Field(None, max_length=32)
+    ppwr_format: Optional[str] = Field(None, max_length=64)
+    recyclable_pct: Optional[float] = None
+    recycled_content_pct: Optional[float] = None
+    is_reusable: Optional[bool] = None
+    ppwr_status: Optional[str] = Field(None, max_length=32)
     price_tiers: List[PriceTierIn] = Field(default_factory=list)
 
     @field_validator("package_qty", mode="before")
@@ -405,6 +435,12 @@ class PackagingMaterialUpdate(BaseModel):
     metal_kg_per_unit: Optional[float] = Field(None, ge=0)
     packaging_type: Optional[str] = Field(None, max_length=64)
     include_in_bdo: Optional[bool] = None
+    ppwr_function: Optional[str] = Field(None, max_length=32)
+    ppwr_format: Optional[str] = Field(None, max_length=64)
+    recyclable_pct: Optional[float] = None
+    recycled_content_pct: Optional[float] = None
+    is_reusable: Optional[bool] = None
+    ppwr_status: Optional[str] = Field(None, max_length=32)
     price_tiers: Optional[List[PriceTierIn]] = None
 
     @field_validator("package_qty", mode="before")

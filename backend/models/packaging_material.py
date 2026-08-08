@@ -97,6 +97,20 @@ class PackagingMaterial(Base):
     packaging_type = Column(String(64), nullable=True)
     include_in_bdo = Column(Boolean, nullable=False, server_default=text("false"), default=False)
 
+    #: PPWR stage 3A — AUXILIARY / FILLER / … ; NULL = not assessed (do not auto-classify legacy rows).
+    ppwr_function = Column(String(32), nullable=True, index=True)
+    ppwr_format = Column(String(64), nullable=True)
+    recyclable_pct = Column(Float, nullable=True)
+    recycled_content_pct = Column(Float, nullable=True)
+    is_reusable = Column(Boolean, nullable=True)
+    ppwr_status = Column(
+        String(32),
+        nullable=False,
+        server_default=text("'NOT_ASSESSED'"),
+        default="NOT_ASSESSED",
+        index=True,
+    )
+
     created_at = Column(DateTime, nullable=True, default=datetime.utcnow)
     updated_at = Column(DateTime, nullable=True, default=datetime.utcnow, onupdate=datetime.utcnow)
 

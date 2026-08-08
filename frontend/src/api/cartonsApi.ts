@@ -69,6 +69,12 @@ export type CartonDto = {
   metal_kg_per_unit?: number;
   packaging_type?: string | null;
   include_in_bdo?: boolean;
+  ppwr_function?: string | null;
+  ppwr_format?: string | null;
+  recyclable_pct?: number | null;
+  recycled_content_pct?: number | null;
+  is_reusable?: boolean | null;
+  ppwr_status?: string;
   shipping_method_ids: string[];
   shipping_methods: CartonShippingMethodMini[];
   price_tiers?: PriceTierDto[];
@@ -154,6 +160,12 @@ export type CartonWritePayload = {
   metal_kg_per_unit?: number | null;
   packaging_type?: string | null;
   include_in_bdo?: boolean;
+  ppwr_function?: string | null;
+  ppwr_format?: string | null;
+  recyclable_pct?: number | null;
+  recycled_content_pct?: number | null;
+  is_reusable?: boolean | null;
+  ppwr_status?: string | null;
   shipping_method_ids?: string[];
   price_tiers?: PriceTierWrite[];
 };

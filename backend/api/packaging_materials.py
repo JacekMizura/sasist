@@ -26,6 +26,7 @@ from ..schemas.warehouse_materials import (
     carton_base_unit_prices,
 )
 from ..services.wm_pricing import complete_package_totals, serialize_wm_tiers
+from ..services.packaging_materials.ppwr_fields import apply_packaging_material_ppwr, ppwr_fields_from_row
 
 router = APIRouter(prefix="/packaging-materials", tags=["Warehouse materials — consumables"])
 
@@ -175,6 +176,7 @@ def _row_to_read(db: Session, row: PackagingMaterial) -> PackagingMaterialRead:
         metal_kg_per_unit=float(getattr(row, "metal_kg_per_unit", 0) or 0),
         packaging_type=(str(getattr(row, "packaging_type", None) or "").strip() or None) or None,
         include_in_bdo=bool(getattr(row, "include_in_bdo", False)),
+        **ppwr_fields_from_row(row),
         price_tiers=tier_reads,
         created_at=getattr(row, "created_at", None),
         updated_at=getattr(row, "updated_at", None),
@@ -419,6 +421,35 @@ def _apply_payload_to_row(
     if "include_in_bdo" in data or (is_create and isinstance(body, PackagingMaterialCreate)):
         v = data.get("include_in_bdo") if not is_create else body.include_in_bdo  # type: ignore[union-attr]
         row.include_in_bdo = bool(v)
+
+    ppwr_keys = (
+        "ppwr_function",
+        "ppwr_format",
+        "recyclable_pct",
+        "recycled_content_pct",
+        "is_reusable",
+        "ppwr_status",
+    )
+    if is_create and isinstance(body, PackagingMaterialCreate):
+        try:
+            apply_packaging_material_ppwr(
+                row,
+                {
+                    "ppwr_function": body.ppwr_function,
+                    "ppwr_format": body.ppwr_format,
+                    "recyclable_pct": body.recyclable_pct,
+                    "recycled_content_pct": body.recycled_content_pct,
+                    "is_reusable": body.is_reusable,
+                    "ppwr_status": body.ppwr_status,
+                },
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+    elif any(k in data for k in ppwr_keys):
+        try:
+            apply_packaging_material_ppwr(row, {k: data[k] for k in ppwr_keys if k in data})
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @router.get("/", response_model=list[PackagingMaterialRead])

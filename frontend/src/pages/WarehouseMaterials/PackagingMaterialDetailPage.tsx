@@ -35,6 +35,11 @@ import {
   parseOptionalPositiveQuantity,
 } from "../../modules/warehouseMaterials/warehouseMaterialsMoney";
 import PriceTiersPanel, { tiersFromDto, tiersToPayload, type TierDraft } from "./PriceTiersPanel";
+import {
+  PPWR_FUNCTION_OPTIONS_PACKAGING,
+  parseOptionalPct,
+  ppwrStatusLabel,
+} from "../../modules/warehouseMaterials/ppwrLabels";
 
 const MATERIAL_OPTIONS: { value: string; label: string }[] = [
   { value: "stretch_foil", label: "Folia stretch" },
@@ -99,6 +104,12 @@ export default function PackagingMaterialDetailPage() {
   const [lowStockThr, setLowStockThr] = useState("");
   const [reorderQty, setReorderQty] = useState("");
   const [includeInBdo, setIncludeInBdo] = useState(false);
+  const [ppwrFunction, setPpwrFunction] = useState("");
+  const [ppwrFormat, setPpwrFormat] = useState("");
+  const [recyclablePct, setRecyclablePct] = useState("");
+  const [recycledContentPct, setRecycledContentPct] = useState("");
+  const [isReusable, setIsReusable] = useState(false);
+  const [ppwrStatus, setPpwrStatus] = useState("NOT_ASSESSED");
   const [plasticKg, setPlasticKg] = useState("0");
   const [paperKg, setPaperKg] = useState("0");
   const [woodKg, setWoodKg] = useState("0");
@@ -161,6 +172,12 @@ export default function PackagingMaterialDetailPage() {
     setLowStockThr(r.low_stock_threshold != null ? String(r.low_stock_threshold) : "");
     setReorderQty(r.reorder_qty != null ? String(r.reorder_qty) : "");
     setIncludeInBdo(!!r.include_in_bdo);
+    setPpwrFunction(r.ppwr_function ?? "");
+    setPpwrFormat(r.ppwr_format ?? "");
+    setRecyclablePct(r.recyclable_pct != null ? String(r.recyclable_pct) : "");
+    setRecycledContentPct(r.recycled_content_pct != null ? String(r.recycled_content_pct) : "");
+    setIsReusable(!!r.is_reusable);
+    setPpwrStatus(r.ppwr_status ?? "NOT_ASSESSED");
     setPlasticKg(String(r.plastic_kg_per_unit ?? 0));
     setPaperKg(String(r.paper_kg_per_unit ?? 0));
     setWoodKg(String(r.wood_kg_per_unit ?? 0));
@@ -269,6 +286,10 @@ export default function PackagingMaterialDetailPage() {
     const last_purchase_price_net = parseMoneyToOptionalRounded(lastPurchaseNetStr);
     const vatN = parseFloat(String(vatRatePct).replace(",", "."));
     const vatOk = Number.isFinite(vatN) && vatN >= 0 && vatN <= 100 ? vatN : 23;
+    const rec = parseOptionalPct(recyclablePct);
+    if (rec === "invalid") return { err: "Recyklingowalność PPWR musi być 0–100." } as const;
+    const rcc = parseOptionalPct(recycledContentPct);
+    if (rcc === "invalid") return { err: "Recycled content PPWR musi być 0–100." } as const;
     return {
       err: null as null,
       payload: {
@@ -305,6 +326,11 @@ export default function PackagingMaterialDetailPage() {
         glass_kg_per_unit: parseOpt(glassKg) ?? 0,
         metal_kg_per_unit: parseOpt(metalKg) ?? 0,
         packaging_type: packagingTypeBdo.trim() || null,
+        ppwr_function: ppwrFunction.trim() || null,
+        ppwr_format: ppwrFormat.trim() || null,
+        recyclable_pct: rec,
+        recycled_content_pct: rcc,
+        is_reusable: isReusable ? true : null,
         width_mm: parseOpt(widthMm),
         length_m: parseOpt(lengthM),
         thickness_micron: parseOpt(thick),
@@ -828,6 +854,71 @@ export default function PackagingMaterialDetailPage() {
               <label className="block sm:col-span-2">
                 <span className={fieldLabel}>Metal</span>
                 <input className={inputClass} value={metalKg} onChange={(e) => setMetalKg(e.target.value)} inputMode="decimal" />
+              </label>
+            </div>
+          </WmFormSectionCard>
+        ) : null}
+
+        {activeTab === "ppwr" ? (
+          <WmFormSectionCard
+            title="PPWR"
+            description="Rola materiału pakowego (AUXILIARY / FILLER / …). Osobno od mas BDO."
+          >
+            <div className="space-y-4">
+              <p className="text-sm text-slate-600">
+                Status: <span className="font-medium text-slate-900">{ppwrStatusLabel(ppwrStatus)}</span>
+              </p>
+              <label className="block max-w-md">
+                <span className={fieldLabel}>Funkcja PPWR</span>
+                <select
+                  className={inputClass}
+                  value={ppwrFunction}
+                  onChange={(e) => setPpwrFunction(e.target.value)}
+                >
+                  {PPWR_FUNCTION_OPTIONS_PACKAGING.map((o) => (
+                    <option key={o.value || "empty"} value={o.value}>
+                      {o.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="block max-w-md">
+                <span className={fieldLabel}>Format</span>
+                <input
+                  className={inputClass}
+                  value={ppwrFormat}
+                  onChange={(e) => setPpwrFormat(e.target.value)}
+                  placeholder="np. stretch, tape, bubble_wrap"
+                />
+              </label>
+              <div className="grid w-full grid-cols-1 gap-4 sm:grid-cols-2">
+                <label className="block">
+                  <span className={fieldLabel}>Recyklingowalność %</span>
+                  <input
+                    className={inputClass}
+                    value={recyclablePct}
+                    onChange={(e) => setRecyclablePct(e.target.value)}
+                    inputMode="decimal"
+                  />
+                </label>
+                <label className="block">
+                  <span className={fieldLabel}>Recycled content %</span>
+                  <input
+                    className={inputClass}
+                    value={recycledContentPct}
+                    onChange={(e) => setRecycledContentPct(e.target.value)}
+                    inputMode="decimal"
+                  />
+                </label>
+              </div>
+              <label className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={isReusable}
+                  onChange={(e) => setIsReusable(e.target.checked)}
+                  className="h-4 w-4 rounded border-slate-300"
+                />
+                <span className="text-sm font-medium text-slate-800">Wielokrotnego użytku</span>
               </label>
             </div>
           </WmFormSectionCard>

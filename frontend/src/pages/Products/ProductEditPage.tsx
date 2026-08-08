@@ -37,8 +37,11 @@ export default function ProductEditPage() {
     "warehouseOps",
     "logistics",
     "offers",
+    "salesPackaging",
     "settings",
     "production",
+    "family",
+    "categories",
   ];
   const tabResolved =
     tabParam === "wms-validation" ? "settings" : tabParam;
