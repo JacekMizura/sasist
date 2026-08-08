@@ -1,18 +1,46 @@
+import { useMemo } from "react";
 import type { WmsPackingExtendedUiSettings } from "../../../types/wmsPackingExtendedUi";
-import { PackingCapabilityBadge } from "../packingSettingCapability";
 import { SettingInfoButton } from "../SettingInfoButton";
 import { WmsSettingField } from "../settingsSearch";
 import { PACKING_SETTING_HELP } from "./packingSettingsHelp";
-import { BoolRow, CAP_NONE, SectionCard, textInputClass } from "./packingSettingsUi";
+import { BoolRow, CAP_NONE, SectionCard, selectClass } from "./packingSettingsUi";
+
+export type PackingWarehouseOption = { id: number; name: string };
 
 type Props = {
   extended: WmsPackingExtendedUiSettings;
   patchExtended: <K extends keyof WmsPackingExtendedUiSettings>(key: K, value: WmsPackingExtendedUiSettings[K]) => void;
+  /** Server-backed: TenantFulfillmentConfiguration.consolidation_warehouse_id */
+  mainPackingWarehouseId: number | null;
+  onMainPackingWarehouseChange: (warehouseId: number | null) => void;
+  warehouses: PackingWarehouseOption[];
+  warehousesLoading?: boolean;
 };
 
 /** Grupa 1: Ogólne */
-export function PackingGeneralSection({ extended, patchExtended }: Props) {
+export function PackingGeneralSection({
+  extended,
+  patchExtended,
+  mainPackingWarehouseId,
+  onMainPackingWarehouseChange,
+  warehouses,
+  warehousesLoading,
+}: Props) {
   const mainWhHelp = PACKING_SETTING_HELP["packing.main_packing_warehouse"];
+  const selectValue = mainPackingWarehouseId != null && mainPackingWarehouseId > 0 ? String(mainPackingWarehouseId) : "";
+
+  const options = useMemo(() => {
+    const byId = new Map(warehouses.map((w) => [w.id, w]));
+    // Keep selected WH visible even if it temporarily dropped from eligible list.
+    if (mainPackingWarehouseId != null && mainPackingWarehouseId > 0 && !byId.has(mainPackingWarehouseId)) {
+      return [
+        ...warehouses,
+        { id: mainPackingWarehouseId, name: `Magazyn #${mainPackingWarehouseId} (niedostępny)` },
+      ];
+    }
+    return warehouses;
+  }, [warehouses, mainPackingWarehouseId]);
+
   return (
     <SectionCard id="wms-pack-general" title="Ogólne" summary="Ogólne zachowanie procesu pakowania.">
       <div className="space-y-2">
@@ -52,17 +80,23 @@ export function PackingGeneralSection({ extended, patchExtended }: Props) {
                 />
               ) : null}
             </span>
-            <span className="mt-1 block">
-              <PackingCapabilityBadge kind={CAP_NONE} />
-            </span>
           </span>
-          <input
-            type="text"
-            className={textInputClass}
-            value={extended.mainPackingWarehouse}
-            onChange={(e) => patchExtended("mainPackingWarehouse", e.target.value)}
-            placeholder="Kod lub nazwa magazynu"
-          />
+          <select
+            className={selectClass}
+            value={selectValue}
+            disabled={warehousesLoading}
+            onChange={(e) => {
+              const v = e.target.value;
+              onMainPackingWarehouseChange(v === "" ? null : Number(v));
+            }}
+          >
+            <option value="">— wybierz magazyn —</option>
+            {options.map((w) => (
+              <option key={w.id} value={w.id}>
+                {w.name}
+              </option>
+            ))}
+          </select>
         </WmsSettingField>
       </div>
     </SectionCard>

@@ -1,5 +1,5 @@
 ﻿## Active
 
-**Ustawienia Pakowanie — ⓘ Sellasist-style (2026-08-08):** Niebieskie (i) tuż przy nazwie opcji; modal z „Jak działa ta opcja:” / opcjonalnie „Wskazówka:”; bez łapek pomocności.
+**Główny magazyn do pakowania (2026-08-08):** UI select → `TenantFulfillmentConfiguration.consolidation_warehouse_id` (SSOT). Preferencja w `resolve_preferred_consolidation_target_id` dla zamówień multi-WH / strefa sortująca. Brak wyboru = dotychczasowy fallback.
 
 **Next:** implementacja kolejnych ustawień pakowania pojedynczo z checklisty.

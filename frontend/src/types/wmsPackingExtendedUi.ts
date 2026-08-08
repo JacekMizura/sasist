@@ -89,6 +89,7 @@ export type WmsPackingExtendedUiSettings = {
   replacementLabelTemplate: string;
   replacementLabelDelaySec: number;
 
+  /** @deprecated Server SSOT: TenantFulfillmentConfiguration.consolidation_warehouse_id (UI select). */
   mainPackingWarehouse: string;
   fallbackLegacyTemplates: boolean;
   packingSingleOrMultiItemStrategy: PackingSingleOrMultiStrategy;

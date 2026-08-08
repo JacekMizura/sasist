@@ -9,6 +9,10 @@ import {
 } from "react";
 
 import api from "../../api/axios";
+import {
+  fetchFulfillmentConfiguration,
+  patchFulfillmentConfiguration,
+} from "../../api/fulfillmentConfigurationApi";
 import { getWmsPackingSettings, saveWmsPackingSettings } from "../../api/wmsPackingSettingsApi";
 import {
   filterSaleSeriesForPacking,
@@ -18,6 +22,7 @@ import {
 import { listOrderStatuses } from "../../api/orderStatusesApi";
 import { getShippingMethods, type ShippingMethodDto } from "../../api/shippingMethodsApi";
 import { DAMAGE_TENANT_ID } from "../damage/damageShared";
+import { warehouseService } from "../../services/warehouseService";
 import type {
   OrderStatusOption,
   WmsPackingAfterFinishAction,
@@ -40,7 +45,7 @@ import {
 } from "../../types/wmsPackingExtendedUi";
 import { WmsSettingsTabFrame } from "./WmsSettingsTabFrame";
 import { WMS_PACKING_SETTINGS_NAV_SECTIONS } from "./wmsPackingSettingsNavSections";
-import { PackingGeneralSection } from "./packingSettings/PackingGeneralSection";
+import { PackingGeneralSection, type PackingWarehouseOption } from "./packingSettings/PackingGeneralSection";
 import { PackingViewSection } from "./packingSettings/PackingViewSection";
 import { PackingProcessSection } from "./packingSettings/PackingProcessSection";
 import { PackingAutomationSection } from "./packingSettings/PackingAutomationSection";
@@ -89,6 +94,9 @@ const WmsPackingSettingsPanel = forwardRef<
   const [saleSeries, setSaleSeries] = useState<DocumentSeriesDto[]>([]);
   const [templates, setTemplates] = useState<LabelTemplateOption[]>([]);
   const [shippingMethods, setShippingMethods] = useState<ShippingMethodDto[]>([]);
+  const [packingWarehouses, setPackingWarehouses] = useState<PackingWarehouseOption[]>([]);
+  const [mainPackingWarehouseId, setMainPackingWarehouseId] = useState<number | null>(null);
+  const [baselineMainPackingWarehouseId, setBaselineMainPackingWarehouseId] = useState<number | null>(null);
   const [draft, setDraft] = useState<WmsPackingSettingsRead | null>(null);
   const [extended, setExtended] = useState<WmsPackingExtendedUiSettings>(() => ({
     ...DEFAULT_WMS_PACKING_EXTENDED_UI,
@@ -113,6 +121,9 @@ const WmsPackingSettingsPanel = forwardRef<
       setSaleSeries([]);
       setTemplates([]);
       setShippingMethods([]);
+      setPackingWarehouses([]);
+      setMainPackingWarehouseId(null);
+      setBaselineMainPackingWarehouseId(null);
       setDraft(null);
       setExtended({ ...DEFAULT_WMS_PACKING_EXTENDED_UI });
       setBaselineDraft(null);
@@ -126,12 +137,15 @@ const WmsPackingSettingsPanel = forwardRef<
     const fallbackDraft = resolveFallbackDraft();
     setDraft((prev) => prev ?? fallbackDraft);
 
-    const [stRes, cfgRes, tRes, serRes, shipRes] = await Promise.allSettled([
+    const [stRes, cfgRes, tRes, serRes, shipRes, whRes, asgRes, fcRes] = await Promise.allSettled([
       listOrderStatuses(DAMAGE_TENANT_ID, warehouseId),
       getWmsPackingSettings(DAMAGE_TENANT_ID, warehouseId),
       api.get<LabelTemplateOption[]>("/label-templates/", { params: { tenant_id: DAMAGE_TENANT_ID } }),
       listDocumentSeries(DAMAGE_TENANT_ID, warehouseId),
       getShippingMethods({ tenant_id: DAMAGE_TENANT_ID, warehouse_id: warehouseId, active_only: true }),
+      warehouseService.getWarehouses(DAMAGE_TENANT_ID),
+      warehouseService.getAssignments({ tenant_id: DAMAGE_TENANT_ID }),
+      fetchFulfillmentConfiguration(DAMAGE_TENANT_ID),
     ]);
 
     let nextDraft: WmsPackingSettingsRead;
@@ -162,6 +176,35 @@ const WmsPackingSettingsPanel = forwardRef<
       setTemplates([]);
     }
 
+    const warehousesRaw = whRes.status === "fulfilled" && Array.isArray(whRes.value.data) ? whRes.value.data : [];
+    const assignmentsRaw =
+      asgRes.status === "fulfilled" && Array.isArray(asgRes.value.data) ? asgRes.value.data : [];
+    const eligibleIds = new Set(
+      assignmentsRaw
+        .filter((a) => a.fulfillment_eligible !== false)
+        .map((a) => Number(a.warehouse_id))
+        .filter((id) => Number.isFinite(id) && id > 0),
+    );
+    // Prefer fulfillment-eligible; if assignments missing, fall back to all tenant warehouses.
+    const eligibleWarehouses =
+      eligibleIds.size > 0
+        ? warehousesRaw.filter((w) => eligibleIds.has(Number(w.id)))
+        : warehousesRaw;
+    setPackingWarehouses(
+      eligibleWarehouses
+        .map((w) => ({ id: Number(w.id), name: String(w.name || `Magazyn #${w.id}`) }))
+        .filter((w) => Number.isFinite(w.id) && w.id > 0)
+        .sort((a, b) => a.name.localeCompare(b.name, "pl")),
+    );
+
+    const cw =
+      fcRes.status === "fulfilled" && fcRes.value.consolidation_warehouse_id != null
+        ? Number(fcRes.value.consolidation_warehouse_id)
+        : null;
+    const mainWh = cw != null && Number.isFinite(cw) && cw > 0 ? cw : null;
+    setMainPackingWarehouseId(mainWh);
+    setBaselineMainPackingWarehouseId(mainWh);
+
     setDraft((prev) => (cfgRes.status === "fulfilled" ? nextDraft : prev ?? fallbackDraft));
     const ext = { ...loadWmsPackingExtendedUi(warehouseId) };
     setExtended(ext);
@@ -183,8 +226,21 @@ const WmsPackingSettingsPanel = forwardRef<
 
   const dirty = useMemo(() => {
     if (warehouseId == null || effectiveDraft == null || baselineDraft == null || baselineExtended == null) return false;
-    return packingDraftFingerprint(effectiveDraft) !== baselineDraft || stableStringify(extended) !== baselineExtended;
-  }, [warehouseId, effectiveDraft, extended, baselineDraft, baselineExtended]);
+    const mainWhDirty = mainPackingWarehouseId !== baselineMainPackingWarehouseId;
+    return (
+      packingDraftFingerprint(effectiveDraft) !== baselineDraft ||
+      stableStringify(extended) !== baselineExtended ||
+      mainWhDirty
+    );
+  }, [
+    warehouseId,
+    effectiveDraft,
+    extended,
+    baselineDraft,
+    baselineExtended,
+    mainPackingWarehouseId,
+    baselineMainPackingWarehouseId,
+  ]);
 
   useEffect(() => {
     onDirtyChange?.(dirty);
@@ -262,11 +318,15 @@ const WmsPackingSettingsPanel = forwardRef<
         fallback_label: normalized.fallback_label,
         interface_display: normalized.interface_display,
       });
+      await patchFulfillmentConfiguration(DAMAGE_TENANT_ID, {
+        consolidation_warehouse_id: mainPackingWarehouseId,
+      });
       setDraft(saved);
       saveCachedWmsPackingSettingsRead(warehouseId, saved);
       saveWmsPackingExtendedUi(warehouseId, extended);
       setBaselineDraft(packingDraftFingerprint(saved));
       setBaselineExtended(stableStringify(extended));
+      setBaselineMainPackingWarehouseId(mainPackingWarehouseId);
       setErr(null);
       try {
         const refreshed = await listDocumentSeries(DAMAGE_TENANT_ID, warehouseId);
@@ -282,8 +342,10 @@ const WmsPackingSettingsPanel = forwardRef<
       saveWmsPackingExtendedUi(warehouseId, extended);
       setBaselineDraft(packingDraftFingerprint(normalized));
       setBaselineExtended(stableStringify(extended));
-      setErr(null);
-      setOkMsg("Zapisano lokalnie — serwer był niedostępny. Ponów zapis z paska na dole, gdy połączenie wróci.");
+      setErr(
+        "Nie udało się zapisać ustawień (w tym głównego magazynu pakowania) na serwerze. Sprawdź połączenie i spróbuj ponownie.",
+      );
+      setOkMsg(null);
     } finally {
       setSaving(false);
     }
@@ -329,6 +391,7 @@ const WmsPackingSettingsPanel = forwardRef<
         const defaults = createDefaultWmsPackingSettingsRead(DAMAGE_TENANT_ID, warehouseId);
         setDraft(defaults);
         setExtended({ ...DEFAULT_WMS_PACKING_EXTENDED_UI });
+        setMainPackingWarehouseId(null);
         setOkMsg(null);
       }}
     >
@@ -344,7 +407,14 @@ const WmsPackingSettingsPanel = forwardRef<
         <p className="text-sm text-slate-500">Ładowanie…</p>
       ) : effectiveDraft ? (
         <div className="space-y-4">
-          <PackingGeneralSection extended={extended} patchExtended={patchExtended} />
+          <PackingGeneralSection
+            extended={extended}
+            patchExtended={patchExtended}
+            mainPackingWarehouseId={mainPackingWarehouseId}
+            onMainPackingWarehouseChange={setMainPackingWarehouseId}
+            warehouses={packingWarehouses}
+            warehousesLoading={loading}
+          />
           <PackingViewSection
             extended={extended}
             draft={effectiveDraft}

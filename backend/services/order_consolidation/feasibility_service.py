@@ -169,12 +169,32 @@ def _score_target_warehouse(
     return available_lines, missing_units, skus_to_pull, feasible
 
 
+def _is_valid_main_packing_warehouse(db: Session, tenant_id: int, warehouse_id: int) -> bool:
+    """Preferred packing/consolidation WH must still belong to tenant and be fulfillment-eligible."""
+    row = (
+        db.query(TenantWarehouse)
+        .filter(
+            TenantWarehouse.tenant_id == int(tenant_id),
+            TenantWarehouse.warehouse_id == int(warehouse_id),
+            TenantWarehouse.fulfillment_eligible.is_(True),
+        )
+        .first()
+    )
+    return row is not None
+
+
 def resolve_preferred_consolidation_target_id(db: Session, order: Order) -> int | None:
-    """P5.1 — tenant consolidation WH or resolver fallback (no plan mutation)."""
+    """P5.1 — main packing warehouse (consolidation_warehouse_id) or resolver fallback.
+
+    „Główny magazyn do pakowania” = TenantFulfillmentConfiguration.consolidation_warehouse_id.
+    If unset or no longer valid for the tenant, keep legacy fallback (order WH / initial resolver).
+    Does not mutate plans or single-warehouse fulfillment assignments.
+    """
     tid = int(order.tenant_id)
     cfg = get_or_create_fulfillment_configuration(db, tid)
-    if cfg.consolidation_warehouse_id is not None and int(cfg.consolidation_warehouse_id) > 0:
-        return int(cfg.consolidation_warehouse_id)
+    cw = getattr(cfg, "consolidation_warehouse_id", None)
+    if cw is not None and int(cw) > 0 and _is_valid_main_packing_warehouse(db, tid, int(cw)):
+        return int(cw)
     if order.warehouse_id is not None and int(order.warehouse_id) > 0:
         return int(order.warehouse_id)
     resolution = resolve_initial_fulfillment_warehouse(db, tenant_id=tid, order=order)

@@ -1,3 +1,9 @@
+## 2026-08-08 — Główny magazyn do pakowania (funkcjonalny)
+
+- UI: select magazynów tenanta (ID), bez badge BRAK; zapis przez `PATCH /company/fulfillment-configuration` → `consolidation_warehouse_id`
+- Runtime: istniejący `resolve_preferred_consolidation_target_id` + soft validation jeśli WH usunięty/nie-eligible
+- Testy: `test_main_packing_warehouse.py` (unset / set / single-WH / other-tenant / clear / invalid fallback)
+
 ## 2026-08-08 — Pakowanie: ⓘ jak w Sellasist
 
 - Niebieskie (i) inline przy nazwie opcji (`BoolRow` / `SelectField` / magazyn)

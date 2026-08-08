@@ -63,7 +63,16 @@ export const PACKING_SETTING_HELP: Record<string, PackingSettingHelpEntry> = {
     description: (
       <ul>
         <li>
-          Zamówienia, których nie da się skompletować w jednym magazynie będą docelowo pakowane w tym magazynie.
+          Określa magazyn, w którym będą pakowane zamówienia wymagające połączenia produktów z kilku magazynów.
+          Produkty są najpierw kompletowane z odpowiednich magazynów, a następnie zamówienie trafia do wybranego
+          magazynu pakowania.
+        </li>
+        <li>
+          Dotyczy wyłącznie zamówień kierowanych do <strong>strefy sortującej</strong> (konsolidacja). Zamówienia
+          możliwe do skompletowania w jednym magazynie nie są przez to ustawienie zmieniane.
+        </li>
+        <li>
+          Brak wyboru oznacza dotychczasowe zachowanie systemu (bez preferowanego magazynu pakowania).
         </li>
       </ul>
     ),

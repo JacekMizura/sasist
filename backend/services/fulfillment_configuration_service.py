@@ -111,11 +111,14 @@ def update_fulfillment_configuration(
         mode = normalize_fulfillment_assignment_mode(body.fulfillment_assignment_mode)
         validate_fulfillment_assignment_mode(db, tenant_id, mode)
         row.fulfillment_assignment_mode = mode
-    if body.consolidation_warehouse_id is not None:
-        cw = int(body.consolidation_warehouse_id)
-        if cw <= 0:
+    # Explicit null / 0 clears „Główny magazyn do pakowania”; omitted field leaves previous value.
+    fields_set = getattr(body, "model_fields_set", None) or getattr(body, "__fields_set__", set())
+    if "consolidation_warehouse_id" in fields_set:
+        raw_cw = body.consolidation_warehouse_id
+        if raw_cw is None or int(raw_cw) <= 0:
             row.consolidation_warehouse_id = None
         else:
+            cw = int(raw_cw)
             tw = (
                 db.query(TenantWarehouse)
                 .filter(
@@ -127,7 +130,7 @@ def update_fulfillment_configuration(
             )
             if tw is None:
                 raise FulfillmentConfigurationError(
-                    "Magazyn konsolidacyjny musi należeć do tenanta i mieć flagę fulfillment_eligible."
+                    "Główny magazyn do pakowania musi należeć do tenanta i mieć flagę fulfillment_eligible."
                 )
             row.consolidation_warehouse_id = cw
     db.add(row)
