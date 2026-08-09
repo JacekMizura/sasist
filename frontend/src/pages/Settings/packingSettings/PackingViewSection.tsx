@@ -130,6 +130,27 @@ export function PackingViewSection({ extended, draft, patchExtended, toggleInter
           infoKey="packing.move_packed_to_bottom"
         />
         <BoolRow
+          settingId="packing.show_order_phone"
+          label="Wyświetlaj numer telefonu"
+          checked={extended.showOrderPhone}
+          onChange={(v) => patchExtended("showOrderPhone", v)}
+          infoKey="packing.show_order_phone"
+        />
+        <BoolRow
+          settingId="packing.show_order_value"
+          label="Wyświetlaj wartość zamówienia"
+          checked={extended.showOrderValue}
+          onChange={(v) => patchExtended("showOrderValue", v)}
+          infoKey="packing.show_order_value"
+        />
+        <BoolRow
+          settingId="packing.show_shipping_address"
+          label="Wyświetlaj adres dostawy"
+          checked={extended.showShippingAddress}
+          onChange={(v) => patchExtended("showShippingAddress", v)}
+          infoKey="packing.show_shipping_address"
+        />
+        <BoolRow
           settingId="packing.show_stock"
           label="Wyświetlaj stan magazynowy w produktach"
           checked={draft.interface_display.show_stock}

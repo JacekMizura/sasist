@@ -81,6 +81,10 @@ export type WmsPackingExtendedUiSettings = {
   automationButtonsPosition: PackingAutomationButtonsPosition;
 
   movePackedToBottom: boolean;
+  /** Widoczność danych zamówienia w chrome pakowania (sidebar / full-width). */
+  showOrderPhone: boolean;
+  showOrderValue: boolean;
+  showShippingAddress: boolean;
   showSignature: boolean;
   showPrice: boolean;
   showBundleInfo: boolean;
@@ -167,6 +171,9 @@ export const DEFAULT_WMS_PACKING_EXTENDED_UI: WmsPackingExtendedUiSettings = {
   automationButtonsPosition: "bottom",
 
   movePackedToBottom: true,
+  showOrderPhone: true,
+  showOrderValue: true,
+  showShippingAddress: true,
   showSignature: false,
   showPrice: false,
   showBundleInfo: true,

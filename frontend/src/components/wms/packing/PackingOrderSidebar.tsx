@@ -42,6 +42,9 @@ export type PackingOrderSidebarProps = {
   salesDocumentPreview: PackingSalesDocPreview;
   /** Gdy true — komentarz jest w bannerze; nie powtarzaj w sidebarze. */
   commentInBanner: boolean;
+  showOrderPhone?: boolean;
+  showOrderValue?: boolean;
+  showShippingAddress?: boolean;
   wszystkoSpakowane: boolean;
   scanBusy: boolean;
   packingActionsLocked: boolean;
@@ -64,6 +67,9 @@ export function PackingOrderSidebar({
   detail,
   salesDocumentPreview,
   commentInBanner,
+  showOrderPhone = true,
+  showOrderValue = true,
+  showShippingAddress = true,
   wszystkoSpakowane,
   scanBusy,
   packingActionsLocked,
@@ -88,10 +94,13 @@ export function PackingOrderSidebar({
   const clientName = (detail.customer_name ?? "").trim();
   const nip = (detail.customer_nip ?? "").trim();
   const address = (detail.shipping_address ?? "").trim();
+  const showAddress = showShippingAddress && !!address;
   const telefon = (detail.customer_phone ?? "").trim() || "—";
   const telHref = telefon !== "—" ? telefon.replace(/\s/g, "") : "";
+  const showPhone = showOrderPhone && telefon !== "—";
   const orderValueDisplay = (detail.order_value_display ?? "").trim();
   const shippingFee = (detail.shipping_fee_display ?? "").trim();
+  const showValue = showOrderValue && !!orderValueDisplay;
   const paymentText = (detail.payment_method_text ?? detail.payment_label ?? "").trim();
   const paymentMethodLower = paymentText.toLowerCase();
   const isCashOnDelivery =
@@ -145,14 +154,14 @@ export function PackingOrderSidebar({
         </div>
 
         {/* Kupujący — tylko dokument szczegółowy */}
-        {detailed && (clientName || nip || address) ? (
+        {detailed && (clientName || nip || showAddress) ? (
           <div className="min-w-0 border-t border-slate-100 pt-3">
             <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">Kupujący</p>
             {clientName && clientName !== "—" ? (
               <p className="mt-1 text-sm font-bold leading-snug text-slate-900">{clientName}</p>
             ) : null}
             {nip ? <p className="mt-0.5 text-xs font-medium text-slate-600">NIP: {nip}</p> : null}
-            {address ? (
+            {showAddress ? (
               <p className="mt-1 whitespace-pre-line text-xs font-medium leading-snug text-slate-600">{address}</p>
             ) : null}
           </div>
@@ -180,14 +189,14 @@ export function PackingOrderSidebar({
           </div>
         </div>
 
-        {paymentText || orderValueDisplay ? (
+        {paymentText || showPhone || showValue ? (
           <div className="min-w-0 border-t border-slate-100 pt-3 space-y-1.5">
             {paymentText ? (
               <p className="text-xs font-medium text-slate-700">
                 Płatność: <span className="font-semibold text-slate-900">{paymentText}</span>
               </p>
             ) : null}
-            {telefon !== "—" ? (
+            {showPhone ? (
               <p className="inline-flex flex-wrap items-center gap-1.5 text-sm font-bold tabular-nums text-slate-900">
                 <IconPhoneSmall />
                 <a href={`tel:${telHref}`} className="hover:underline">
@@ -195,7 +204,7 @@ export function PackingOrderSidebar({
                 </a>
               </p>
             ) : null}
-            {orderValueDisplay ? (
+            {showValue ? (
               <p className="text-xs font-medium text-slate-700">
                 {isCashOnDelivery ? "Pobranie" : "Wartość"}:{" "}
                 <span className="font-bold tabular-nums text-slate-900">

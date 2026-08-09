@@ -51,6 +51,15 @@ export const PACKING_SETTING_HELP: Record<string, PackingSettingHelpEntry> = {
   "packing.move_packed_to_bottom": {
     description: "Po włączeniu całkowicie spakowane produkty są automatycznie przenoszone na koniec listy.",
   },
+  "packing.show_order_phone": {
+    description: "Po włączeniu numer telefonu klienta jest widoczny w widoku pakowania.",
+  },
+  "packing.show_order_value": {
+    description: "Po włączeniu wartość zamówienia jest widoczna w widoku pakowania.",
+  },
+  "packing.show_shipping_address": {
+    description: "Po włączeniu adres dostawy jest widoczny w widoku pakowania.",
+  },
   "packing.customer_comment_style": {
     description: (
       <ul>

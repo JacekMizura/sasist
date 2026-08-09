@@ -20,6 +20,8 @@ function IconPhoneSmall() {
 export type PackingOrderFullWidthInfoProps = {
   detail: WmsPackingOrderDetailApi;
   customerCommentStyle: PackingCustomerCommentStyle;
+  showOrderPhone?: boolean;
+  showOrderValue?: boolean;
   visibleOperationalNotes: WmsOperationalNoteBriefApi[];
   headerCartons: WmsPackingRecommendedCartonApi[];
   selectedCartonId: string | null | undefined;
@@ -34,6 +36,8 @@ export type PackingOrderFullWidthInfoProps = {
 export function PackingOrderFullWidthInfo({
   detail,
   customerCommentStyle,
+  showOrderPhone = true,
+  showOrderValue = true,
   visibleOperationalNotes,
   headerCartons,
   selectedCartonId,
@@ -45,8 +49,10 @@ export function PackingOrderFullWidthInfo({
   const notatkiMag = (detail.staff_notes ?? "").trim();
   const telefon = (detail.customer_phone ?? "").trim() || "—";
   const telHref = telefon !== "—" ? telefon.replace(/\s/g, "") : "";
+  const showPhone = showOrderPhone && telefon !== "—";
   const orderValueDisplay = (detail.order_value_display ?? "").trim();
   const shippingFee = (detail.shipping_fee_display ?? "").trim();
+  const showValue = showOrderValue && !!orderValueDisplay;
   const paymentText = (detail.payment_method_text ?? detail.payment_label ?? "").trim();
   const paymentMethodLower = paymentText.toLowerCase();
   const isCashOnDelivery =
@@ -85,7 +91,7 @@ export function PackingOrderFullWidthInfo({
                 <span className="font-semibold text-slate-900">{detail.pickup_point ? "Tak" : "Nie"}</span>
               </p>
             ) : null}
-            {telefon !== "—" ? (
+            {showPhone ? (
               <p className="inline-flex flex-wrap items-center gap-1.5 text-sm font-bold tabular-nums text-slate-900">
                 <IconPhoneSmall />
                 <a href={`tel:${telHref}`} className="hover:underline">
@@ -98,7 +104,7 @@ export function PackingOrderFullWidthInfo({
                 Płatność: <span className="font-semibold text-slate-900">{paymentText}</span>
               </p>
             ) : null}
-            {orderValueDisplay ? (
+            {showValue ? (
               <p>
                 {isCashOnDelivery ? "Pobranie" : "Wartość"}:{" "}
                 <span className="font-bold tabular-nums text-slate-900">

@@ -108,6 +108,9 @@ type PackingViewProps = {
   salesDocumentPreview?: PackingSalesDocPreview;
   /** `with_sidebar` = lewy panel; `full_width` = pas info + siatka na całą szerokość. */
   layoutMode?: PackingLayoutMode;
+  showOrderPhone?: boolean;
+  showOrderValue?: boolean;
+  showShippingAddress?: boolean;
 };
 
 export function PackingView({
@@ -147,6 +150,9 @@ export function PackingView({
   customerCommentStyle = "normal",
   salesDocumentPreview = "simplified",
   layoutMode = "with_sidebar",
+  showOrderPhone = true,
+  showOrderValue = true,
+  showShippingAddress = true,
 }: PackingViewProps) {
   const { setScannerInputPlaceholder } = useWmsScanner();
   const wedgeRef = useRef<HTMLInputElement>(null);
@@ -224,6 +230,9 @@ export function PackingView({
           detail={detail}
           salesDocumentPreview={effectiveDocumentPreview}
           commentInBanner={commentHighlighted}
+          showOrderPhone={showOrderPhone}
+          showOrderValue={showOrderValue}
+          showShippingAddress={showShippingAddress}
           wszystkoSpakowane={wszystkoSpakowane}
           scanBusy={scanBusy}
           packingActionsLocked={packingActionsLocked}
@@ -312,6 +321,8 @@ export function PackingView({
           <PackingOrderFullWidthInfo
             detail={detail}
             customerCommentStyle={customerCommentStyle}
+            showOrderPhone={showOrderPhone}
+            showOrderValue={showOrderValue}
             visibleOperationalNotes={visibleOperationalNotes}
             headerCartons={showHeaderCartonPicker ? headerCartons : []}
             selectedCartonId={selectedCartonId}
