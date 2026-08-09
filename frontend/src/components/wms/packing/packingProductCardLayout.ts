@@ -1,50 +1,85 @@
+import type { CSSProperties } from "react";
 import type { PackingProductDisplayMode } from "../../../types/wmsPackingExtendedUi";
 
 /**
- * Wymiary kart produktów w widoku pakowania (Lista / Siatka).
- * Kontener układa kolejne karty (wrap) — bez rozciągania do szerokości ekranu.
+ * Wymiary i rozmieszczenie kart produktów (Lista / Siatka).
+ *
+ * Kontener: flex-wrap + justify-content:flex-start + stały gap.
+ * Karty: stały flex-basis / width — bez grow, bez 1fr, bez space-between.
  */
 
-/** Lista: stała szerokość (~416px), lekki clamp na wąskich ekranach. */
-export const PACKING_PRODUCT_LIST_CARD_WIDTH = "min(26rem, 100%)";
+/** Lista: stała szerokość (~416px). */
+export const PACKING_PRODUCT_LIST_CARD_WIDTH = "26rem";
 
 /** Siatka: stała szerokość (~248px). */
-export const PACKING_PRODUCT_GRID_CARD_WIDTH = "min(15.5rem, 100%)";
+export const PACKING_PRODUCT_GRID_CARD_WIDTH = "15.5rem";
 
-/** Siatka: stała wysokość — jednakowa dla wszystkich kart (Default / Active / Done). */
+/** Siatka: stała wysokość — jednakowa dla wszystkich kart. */
 export const PACKING_PRODUCT_GRID_CARD_HEIGHT = "28rem";
 
-/** Kontener listy produktów — wrap, bez stretch do viewportu. */
+const GAP = "0.75rem";
+
+/** Kontener — karty od lewej, stały odstęp, wrap do kolejnego wiersza. */
 export function packingProductCardsContainerClass(): string {
-  return "m-0 flex w-full list-none flex-wrap content-start items-start gap-3 bg-white p-0";
+  return "m-0 flex w-full list-none flex-wrap bg-white p-0";
 }
 
-/** Wrapper `<li>` — rozmiar z karty, bez flex-grow. */
+export function packingProductCardsContainerStyle(): CSSProperties {
+  return {
+    display: "flex",
+    flexWrap: "wrap",
+    justifyContent: "flex-start",
+    alignContent: "flex-start",
+    alignItems: "flex-start",
+    columnGap: GAP,
+    rowGap: GAP,
+  };
+}
+
+/** Wrapper `<li>` — sztywny slot karty (bez rozciągania w wolną przestrzeń). */
 export function packingProductCardItemClass(): string {
-  return "h-auto w-auto shrink-0";
+  return "box-border max-w-full";
 }
 
-/** Style inline szerokości/wysokości karty (root element). */
-export function packingProductCardSizeStyle(mode: PackingProductDisplayMode): {
-  width: string;
-  height?: string;
-  maxWidth: string;
-} {
+export function packingProductCardItemStyle(mode: PackingProductDisplayMode): CSSProperties {
   if (mode === "grid") {
     return {
+      flexGrow: 0,
+      flexShrink: 0,
+      flexBasis: PACKING_PRODUCT_GRID_CARD_WIDTH,
       width: PACKING_PRODUCT_GRID_CARD_WIDTH,
       maxWidth: "100%",
       height: PACKING_PRODUCT_GRID_CARD_HEIGHT,
     };
   }
   return {
+    flexGrow: 0,
+    flexShrink: 0,
+    flexBasis: PACKING_PRODUCT_LIST_CARD_WIDTH,
     width: PACKING_PRODUCT_LIST_CARD_WIDTH,
     maxWidth: "100%",
     height: "auto",
   };
 }
 
-/** Klasy root karty zależne od trybu (bez w-full/h-full rozciągających do komórki). */
+/** Style root karty — te same wymiary co slot `<li>`. */
+export function packingProductCardSizeStyle(mode: PackingProductDisplayMode): CSSProperties {
+  if (mode === "grid") {
+    return {
+      width: PACKING_PRODUCT_GRID_CARD_WIDTH,
+      maxWidth: "100%",
+      height: PACKING_PRODUCT_GRID_CARD_HEIGHT,
+      boxSizing: "border-box",
+    };
+  }
+  return {
+    width: PACKING_PRODUCT_LIST_CARD_WIDTH,
+    maxWidth: "100%",
+    height: "auto",
+    boxSizing: "border-box",
+  };
+}
+
 export function packingProductCardRootSizeClass(mode: PackingProductDisplayMode): string {
-  return mode === "grid" ? "box-border shrink-0 overflow-hidden" : "box-border h-auto shrink-0";
+  return mode === "grid" ? "box-border overflow-hidden" : "box-border h-auto";
 }

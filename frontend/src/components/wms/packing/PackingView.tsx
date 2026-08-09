@@ -41,7 +41,9 @@ import {
 } from "./packingProductDisplay";
 import {
   packingProductCardItemClass,
+  packingProductCardItemStyle,
   packingProductCardsContainerClass,
+  packingProductCardsContainerStyle,
 } from "./packingProductCardLayout";
 
 const PRIMARY_GREEN = "#4caf50";
@@ -183,7 +185,9 @@ export function PackingView({
     : salesDocumentPreview;
 
   const productCardsClass = packingProductCardsContainerClass();
+  const productCardsStyle = packingProductCardsContainerStyle();
   const productCardItemClass = packingProductCardItemClass();
+  const productCardItemStyle = packingProductCardItemStyle(productDisplayMode);
 
   useEffect(() => {
     setScannerInputPlaceholder("Zeskanuj EAN");
@@ -326,13 +330,13 @@ export function PackingView({
               ) : null}
             </div>
           ) : null}
-          <ul className={productCardsClass}>
+          <ul className={productCardsClass} style={productCardsStyle}>
             {sortedLines.map((line) => {
               const done = line.quantity_packed >= lineQuantityRequired(line);
               const active = !done && activeProductId === line.order_item_id;
               const flash = flashItemId === line.order_item_id;
               return (
-                <li key={line.order_item_id} className={productCardItemClass}>
+                <li key={line.order_item_id} className={productCardItemClass} style={productCardItemStyle}>
                   {done ? (
                     <DoneCard
                       line={line}
@@ -528,13 +532,13 @@ export function PackingView({
               ) : null}
             </div>
           ) : null}
-          <ul className={productCardsClass}>
+          <ul className={productCardsClass} style={productCardsStyle}>
             {sortedLines.map((line) => {
               const done = line.quantity_packed >= lineQuantityRequired(line);
               const active = !done && activeProductId === line.order_item_id;
               const flash = flashItemId === line.order_item_id;
               return (
-                <li key={line.order_item_id} className={productCardItemClass}>
+                <li key={line.order_item_id} className={productCardItemClass} style={productCardItemStyle}>
                   {done ? (
                     <DoneCard
                       line={line}

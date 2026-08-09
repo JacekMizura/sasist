@@ -7,7 +7,9 @@ import {
 } from "./packingProductDisplay";
 import {
   packingProductCardItemClass,
+  packingProductCardItemStyle,
   packingProductCardsContainerClass,
+  packingProductCardsContainerStyle,
 } from "./packingProductCardLayout";
 
 const PREVIEW_IMG =
@@ -71,21 +73,22 @@ type Props = {
   fieldVisibility?: PackingProductFieldVisibility;
 };
 
-/** Podgląd Lista / Siatka — ten sam kontener i wymiary kart co w widoku pakowania. */
+/** Podgląd Lista / Siatka — ten sam kontener i sloty kart co w widoku pakowania. */
 export function ProductDisplayModePreview({
   mode,
   fieldVisibility = DEFAULT_PACKING_PRODUCT_FIELD_VISIBILITY,
 }: Props) {
   const label = mode === "grid" ? "Siatka" : "Lista";
+  const itemStyle = packingProductCardItemStyle(mode);
 
   return (
     <div className="mt-2 max-w-3xl rounded-lg border border-slate-200 bg-white p-3">
       <p className="mb-1 text-xs font-semibold text-slate-600">Podgląd układu</p>
       <p className="mb-2 text-sm font-bold text-slate-900">{label}</p>
       <div className="overflow-x-auto overflow-y-hidden rounded-md border border-slate-100 bg-white p-2">
-        <ul className={packingProductCardsContainerClass()}>
+        <ul className={packingProductCardsContainerClass()} style={packingProductCardsContainerStyle()}>
           {PREVIEW_LINES.map((line) => (
-            <li key={line.order_item_id} className={packingProductCardItemClass()}>
+            <li key={line.order_item_id} className={packingProductCardItemClass()} style={itemStyle}>
               <DefaultCard
                 line={line}
                 scanBusy={false}
