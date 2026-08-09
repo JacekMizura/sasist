@@ -1282,48 +1282,54 @@ function PickingConfiguratorEditor({
       ) : null}
 
       {byProducts ? (
-        <div className="space-y-3">
-          <div className="rounded-xl border border-slate-200 bg-white p-3.5">
-            <PickingRadioGroup
-              legend="Jak chcesz zbierać zamówienia wieloelementowe?"
-              name={`${fieldIdPrefix}-multi-where`}
-              value={multiContainers}
-              options={BY_PRODUCTS_MULTI_CONTAINER_OPTIONS}
-              onChange={(v) => {
-                patchBlock("multi_item", { containers: v });
-                if (v === "consolidation_rack") {
-                  onOrderSortChange(coerceConsolidationOrderSort(orderSort));
-                }
-              }}
-            />
-            {showConsolidationSort ? (
-              <PickingNestedOrderSort
-                legend="Wybierz sposób doboru zamówień wieloelementowych:"
-                name={`${fieldIdPrefix}-multi-order-sort`}
-                value={coerceConsolidationOrderSort(orderSort)}
-                options={ORDER_SORT_DATE_COURIER}
-                onChange={onOrderSortChange}
+        <div className="grid grid-cols-1 gap-5 min-[720px]:grid-cols-2">
+          <div className="min-w-0 rounded-xl border border-slate-200 bg-white p-3.5">
+            <p className="text-sm font-semibold text-slate-900">Zamówienia jednoelementowe</p>
+            <div className="mt-3">
+              <PickingRadioGroup
+                legend="Jak chcesz zbierać zamówienia jednoelementowe?"
+                name={`${fieldIdPrefix}-single-where`}
+                value={singleContainers}
+                options={BY_PRODUCTS_SINGLE_CONTAINER_OPTIONS}
+                onChange={(v) => patchBlock("single_item", { containers: v })}
               />
-            ) : null}
+              {showSingleSort ? (
+                <PickingNestedOrderSort
+                  legend="Wybierz sposób doboru zamówień jednoelementowych:"
+                  name={`${fieldIdPrefix}-single-order-sort`}
+                  value={orderSort}
+                  options={ORDER_SORT_LOCATION_DATE_COURIER}
+                  onChange={onOrderSortChange}
+                />
+              ) : null}
+            </div>
           </div>
 
-          <div className="rounded-xl border border-slate-200 bg-white p-3.5">
-            <PickingRadioGroup
-              legend="Jak chcesz zbierać zamówienia jednoelementowe?"
-              name={`${fieldIdPrefix}-single-where`}
-              value={singleContainers}
-              options={BY_PRODUCTS_SINGLE_CONTAINER_OPTIONS}
-              onChange={(v) => patchBlock("single_item", { containers: v })}
-            />
-            {showSingleSort ? (
-              <PickingNestedOrderSort
-                legend="Wybierz sposób doboru zamówień jednoelementowych:"
-                name={`${fieldIdPrefix}-single-order-sort`}
-                value={orderSort}
-                options={ORDER_SORT_LOCATION_DATE_COURIER}
-                onChange={onOrderSortChange}
+          <div className="min-w-0 rounded-xl border border-slate-200 bg-white p-3.5">
+            <p className="text-sm font-semibold text-slate-900">Zamówienia wieloelementowe</p>
+            <div className="mt-3">
+              <PickingRadioGroup
+                legend="Jak chcesz zbierać zamówienia wieloelementowe?"
+                name={`${fieldIdPrefix}-multi-where`}
+                value={multiContainers}
+                options={BY_PRODUCTS_MULTI_CONTAINER_OPTIONS}
+                onChange={(v) => {
+                  patchBlock("multi_item", { containers: v });
+                  if (v === "consolidation_rack") {
+                    onOrderSortChange(coerceConsolidationOrderSort(orderSort));
+                  }
+                }}
               />
-            ) : null}
+              {showConsolidationSort ? (
+                <PickingNestedOrderSort
+                  legend="Wybierz sposób doboru zamówień wieloelementowych:"
+                  name={`${fieldIdPrefix}-multi-order-sort`}
+                  value={coerceConsolidationOrderSort(orderSort)}
+                  options={ORDER_SORT_DATE_COURIER}
+                  onChange={onOrderSortChange}
+                />
+              ) : null}
+            </div>
           </div>
         </div>
       ) : null}
