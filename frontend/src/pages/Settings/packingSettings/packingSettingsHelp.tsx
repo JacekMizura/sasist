@@ -99,13 +99,60 @@ export const PACKING_SETTING_HELP: Record<string, PackingSettingHelpEntry> = {
       </ul>
     ),
   },
+  "packing.show_product_image_in_orders": {
+    description: (
+      <ul>
+        <li>Po włączeniu zdjęcia produktów są widoczne na liście zamówień.</li>
+        <li>
+          Dotyczy wyłącznie widoków <strong>Rozbudowany (Poziomy)</strong> i <strong>Rozbudowany (Pionowy)</strong>.
+        </li>
+        <li>W Standardowym zdjęcia nie są wyświetlane.</li>
+      </ul>
+    ),
+  },
+  "packing.show_sku_in_orders": {
+    description: (
+      <ul>
+        <li>Po włączeniu na liście wyświetlany jest symbol produktu.</li>
+        <li>Po wyłączeniu symbol nie jest wyświetlany.</li>
+      </ul>
+    ),
+  },
+  "packing.show_ean_in_orders": {
+    description: (
+      <ul>
+        <li>Po włączeniu na liście wyświetlany jest EAN produktu.</li>
+        <li>Po wyłączeniu EAN nie jest wyświetlany.</li>
+      </ul>
+    ),
+  },
+  "packing.show_catalog_number_in_orders": {
+    description: (
+      <ul>
+        <li>Po włączeniu na liście wyświetlany jest numer katalogowy produktu.</li>
+        <li>Po wyłączeniu numer katalogowy nie jest wyświetlany.</li>
+      </ul>
+    ),
+  },
+  "packing.truncate_names_in_orders": {
+    description: (
+      <ul>
+        <li>Po włączeniu nazwy produktów na liście są ograniczane do 25 znaków.</li>
+        <li>Dłuższe nazwy są skracane z „…”.</li>
+        <li>Wyłączenie pokazuje pełną nazwę produktu.</li>
+        <li>Nie zmienia to nazwy produktu w bazie.</li>
+      </ul>
+    ),
+  },
   "packing.show_packed_orders": {
     description: (
       <ul>
+        <li>Po włączeniu spakowane zamówienia są normalnie widoczne na liście.</li>
+        <li>Po wyłączeniu spakowane zamówienia są domyślnie ukryte.</li>
         <li>
-          Domyślnie, przy wyłączonym ustawieniu, spakowane zamówienia będą ukryte, ale będzie można je wyświetlić,
-          klikając przycisk „Wyświetl spakowane zamówienia”.
+          Można je wtedy tymczasowo wyświetlić przyciskiem „Wyświetl spakowane zamówienia”.
         </li>
+        <li>Ustawienie nie zmienia statusu zamówienia.</li>
       </ul>
     ),
   },

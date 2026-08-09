@@ -236,36 +236,42 @@ export function PackingViewSection({ extended, draft, patchExtended, toggleInter
             label="Wyświetlaj zdjęcie produktu na liście zamówień"
             checked={extended.showProductImageInOrders}
             onChange={(v) => patchExtended("showProductImageInOrders", v)}
+            infoKey="packing.show_product_image_in_orders"
           />
           <BoolRow
             settingId="packing.show_sku_in_orders"
             label="Wyświetlaj symbol produktu na liście zamówień"
             checked={extended.showSKUInOrders}
             onChange={(v) => patchExtended("showSKUInOrders", v)}
+            infoKey="packing.show_sku_in_orders"
           />
           <BoolRow
             settingId="packing.show_ean_in_orders"
             label="Wyświetlaj EAN produktu na liście zamówień"
             checked={extended.showEANInOrders}
             onChange={(v) => patchExtended("showEANInOrders", v)}
+            infoKey="packing.show_ean_in_orders"
           />
           <BoolRow
             settingId="packing.show_catalog_number_in_orders"
             label="Wyświetlaj numer katalogowy produktu na liście zamówień"
             checked={extended.showCatalogNumberInOrders}
             onChange={(v) => patchExtended("showCatalogNumberInOrders", v)}
+            infoKey="packing.show_catalog_number_in_orders"
           />
           <BoolRow
             settingId="packing.truncate_names_in_orders"
             label="Ograniczaj długość tytułu w produktach na liście zamówień"
             checked={extended.truncateNamesInOrders}
             onChange={(v) => patchExtended("truncateNamesInOrders", v)}
+            infoKey="packing.truncate_names_in_orders"
           />
           <BoolRow
             settingId="packing.show_packed_orders"
             label="Wyświetlaj spakowane zamówienia na liście zamówień"
             checked={extended.showPackedOrders}
             onChange={(v) => patchExtended("showPackedOrders", v)}
+            infoKey="packing.show_packed_orders"
           />
         </div>
       </Subsection>
