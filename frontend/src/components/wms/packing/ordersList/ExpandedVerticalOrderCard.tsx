@@ -5,6 +5,13 @@ import { ShippingMethodLogo } from "../../../../components/shipping/ShippingMeth
 import { shippingMethodLogoForDisplay } from "../../../../utils/shippingMethodLogoUrl";
 import { filterPackingOperationalNotes, packingNotesAlertTitle } from "../packingNotes";
 import { lineQuantityRequired } from "../packingHelpers";
+import {
+  DEFAULT_ORDERS_LIST_PRODUCT_FIELDS,
+  OrdersListProductMeta,
+  OrdersListProductThumb,
+  ordersListProductFieldsEqual,
+  type OrdersListProductFieldVisibility,
+} from "./ordersListProductFields";
 
 export type ExpandedVerticalOrderCardProps = {
   order: WmsPackingOrderCardApi;
@@ -12,6 +19,7 @@ export type ExpandedVerticalOrderCardProps = {
   showAllNotes?: boolean;
   onOpenOrder: (orderId: number) => void;
   onProductClick?: (orderItemId: number, orderId: number) => void;
+  productFields?: OrdersListProductFieldVisibility;
 };
 
 const THUMB = 56;
@@ -158,14 +166,15 @@ function ProductCell({
   line,
   onProductClick,
   withSeparator,
+  productFields,
 }: {
   line: WmsPackingOrderLineApi;
   onProductClick?: (orderItemId: number) => void;
   withSeparator: boolean;
+  productFields: OrdersListProductFieldVisibility;
 }) {
   const qtyReq = lineQuantityRequired(line);
   const packed = qtyReq > 0 && line.quantity_packed >= qtyReq;
-  const ean = (line.ean ?? "").trim() || "—";
   const colorRaw = (line.color_name ?? "").trim();
   const name = (line.product_name ?? "").trim() || "—";
 
@@ -198,16 +207,7 @@ function ProductCell({
         }
       }}
     >
-      <div
-        className="flex shrink-0 items-center justify-center overflow-hidden"
-        style={{ width: THUMB, height: THUMB }}
-      >
-        {line.image_url ? (
-          <img src={line.image_url} alt="" className="max-h-full max-w-full object-contain" loading="lazy" />
-        ) : (
-          <span className="text-xs text-slate-300">—</span>
-        )}
-      </div>
+      <OrdersListProductThumb line={line} size={THUMB} show={productFields.showImage} />
       <div className="min-w-0 flex-1">
         {packed ? (
           <div className="mb-1 flex items-center gap-1.5">
@@ -224,7 +224,7 @@ function ProductCell({
           <span className="font-extrabold tabular-nums">{line.quantity}x</span>{" "}
           <span className="font-medium">{name}</span>
         </p>
-        <p className="mt-0.5 text-[11px] leading-snug text-slate-500">EAN: {ean}</p>
+        <OrdersListProductMeta line={line} fields={productFields} />
         {colorRaw ? <p className="text-[11px] leading-snug text-slate-500">Kolor: {colorRaw}</p> : null}
       </div>
     </div>
@@ -237,6 +237,7 @@ function ExpandedVerticalOrderCardInner({
   showAllNotes = true,
   onOpenOrder,
   onProductClick,
+  productFields = DEFAULT_ORDERS_LIST_PRODUCT_FIELDS,
 }: ExpandedVerticalOrderCardProps) {
   const rawNum = order.number.replace(/^#/, "").trim();
   const pq = order.packed_quantity;
@@ -321,6 +322,7 @@ function ExpandedVerticalOrderCardInner({
                 line={line}
                 onProductClick={productHandler}
                 withSeparator={idx < visible.length - 1 || overflow > 0}
+                productFields={productFields}
               />
             ))}
             {overflow > 0 ? (
@@ -360,6 +362,9 @@ function orderEqual(a: WmsPackingOrderCardApi, b: WmsPackingOrderCardApi): boole
       x.quantity_packed !== y.quantity_packed ||
       x.product_name !== y.product_name ||
       x.ean !== y.ean ||
+      x.sku !== y.sku ||
+      x.product_symbol !== y.product_symbol ||
+      x.catalog_number !== y.catalog_number ||
       x.color_name !== y.color_name ||
       x.image_url !== y.image_url
     )
@@ -371,6 +376,7 @@ function orderEqual(a: WmsPackingOrderCardApi, b: WmsPackingOrderCardApi): boole
 function equal(a: ExpandedVerticalOrderCardProps, b: ExpandedVerticalOrderCardProps): boolean {
   return (
     orderEqual(a.order, b.order) &&
+    ordersListProductFieldsEqual(a.productFields, b.productFields) &&
     a.showBasketCode === b.showBasketCode &&
     a.showAllNotes === b.showAllNotes &&
     a.onOpenOrder === b.onOpenOrder &&

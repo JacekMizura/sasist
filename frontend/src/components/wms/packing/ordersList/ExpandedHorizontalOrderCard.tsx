@@ -3,6 +3,13 @@ import type { WmsPackingOrderCardApi, WmsPackingOrderLineApi } from "../../../..
 import { ShippingMethodLogo } from "../../../../components/shipping/ShippingMethodLogo";
 import { shippingMethodLogoForDisplay } from "../../../../utils/shippingMethodLogoUrl";
 import { lineQuantityRequired } from "../packingHelpers";
+import {
+  DEFAULT_ORDERS_LIST_PRODUCT_FIELDS,
+  OrdersListProductMeta,
+  OrdersListProductThumb,
+  ordersListProductFieldsEqual,
+  type OrdersListProductFieldVisibility,
+} from "./ordersListProductFields";
 
 export type ExpandedHorizontalOrderCardProps = {
   order: WmsPackingOrderCardApi;
@@ -10,6 +17,7 @@ export type ExpandedHorizontalOrderCardProps = {
   onProductClick?: (orderItemId: number, orderId: number) => void;
   /** Ile produktów pokazać przed „+N innych” (jak mock). */
   maxVisibleLines?: number;
+  productFields?: OrdersListProductFieldVisibility;
 };
 
 const CARD_WIDTH = "18.75rem"; // ~300px — proporcje jak na mocku
@@ -173,15 +181,16 @@ function ProductLineRow({
   line,
   mutedCard,
   onProductClick,
+  productFields,
 }: {
   line: WmsPackingOrderLineApi;
   mutedCard: boolean;
   onProductClick?: (orderItemId: number) => void;
+  productFields: OrdersListProductFieldVisibility;
 }) {
   const qtyReq = lineQuantityRequired(line);
   const packed = qtyReq > 0 && line.quantity_packed >= qtyReq;
   const shortage = lineShortageQty(line);
-  const ean = (line.ean ?? "").trim() || "—";
   const colorRaw = (line.color_name ?? "").trim();
   const name = (line.product_name ?? "").trim() || "—";
 
@@ -213,16 +222,7 @@ function ProductLineRow({
         }
       }}
     >
-      <div
-        className="flex shrink-0 items-center justify-center overflow-hidden"
-        style={{ width: THUMB, height: THUMB }}
-      >
-        {line.image_url ? (
-          <img src={line.image_url} alt="" className="max-h-full max-w-full object-contain" loading="lazy" />
-        ) : (
-          <span className="text-xs text-slate-300">—</span>
-        )}
-      </div>
+      <OrdersListProductThumb line={line} size={THUMB} show={productFields.showImage} />
       <div className="min-w-0 flex-1">
         {packed ? (
           <div className="mb-1 flex items-center justify-between gap-2">
@@ -241,7 +241,7 @@ function ProductLineRow({
           <span className="font-extrabold tabular-nums">{line.quantity}x</span>{" "}
           <span className="font-medium">{name}</span>
         </p>
-        <p className="mt-0.5 text-[11px] leading-snug text-slate-500">EAN: {ean}</p>
+        <OrdersListProductMeta line={line} fields={productFields} />
         {colorRaw ? <p className="text-[11px] leading-snug text-slate-500">Kolor: {colorRaw}</p> : null}
         {shortage > 0 && !packed ? (
           <span className="mt-1.5 inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-bold leading-none text-white bg-[#E53935]">
@@ -258,6 +258,7 @@ function ExpandedHorizontalOrderCardInner({
   onOpenOrder,
   onProductClick,
   maxVisibleLines = DEFAULT_VISIBLE,
+  productFields = DEFAULT_ORDERS_LIST_PRODUCT_FIELDS,
 }: ExpandedHorizontalOrderCardProps) {
   const done = isFullyPacked(order);
   const shortage = orderHasShortage(order);
@@ -332,6 +333,7 @@ function ExpandedHorizontalOrderCardInner({
             line={line}
             mutedCard={done}
             onProductClick={productHandler}
+            productFields={productFields}
           />
         ))}
         {overflow > 0 ? (
@@ -363,6 +365,9 @@ function orderEqual(a: WmsPackingOrderCardApi, b: WmsPackingOrderCardApi): boole
       x.quantity_packed !== y.quantity_packed ||
       x.product_name !== y.product_name ||
       x.ean !== y.ean ||
+      x.sku !== y.sku ||
+      x.product_symbol !== y.product_symbol ||
+      x.catalog_number !== y.catalog_number ||
       x.color_name !== y.color_name ||
       x.image_url !== y.image_url ||
       x.stock_quantity !== y.stock_quantity ||
@@ -376,6 +381,7 @@ function orderEqual(a: WmsPackingOrderCardApi, b: WmsPackingOrderCardApi): boole
 function equal(a: ExpandedHorizontalOrderCardProps, b: ExpandedHorizontalOrderCardProps): boolean {
   return (
     orderEqual(a.order, b.order) &&
+    ordersListProductFieldsEqual(a.productFields, b.productFields) &&
     a.onOpenOrder === b.onOpenOrder &&
     a.onProductClick === b.onProductClick &&
     (a.maxVisibleLines ?? DEFAULT_VISIBLE) === (b.maxVisibleLines ?? DEFAULT_VISIBLE)

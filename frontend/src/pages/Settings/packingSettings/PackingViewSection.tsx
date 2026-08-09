@@ -203,7 +203,15 @@ export function PackingViewSection({ extended, draft, patchExtended, toggleInter
             <option value="expanded_vertical">Rozbudowany (Pionowy)</option>
           </SelectField>
         </FieldGrid>
-        <OrdersListLayoutPreview layout={extended.ordersListLayout} />
+        <OrdersListLayoutPreview
+          layout={extended.ordersListLayout}
+          productFields={{
+            showImage: extended.showProductImageInOrders,
+            showSku: extended.showSKUInOrders,
+            showEan: extended.showEANInOrders,
+            showCatalogNumber: extended.showCatalogNumberInOrders,
+          }}
+        />
         <FieldGrid>
           <SelectField
             settingId="packing.initial_orders_count"
@@ -227,28 +235,24 @@ export function PackingViewSection({ extended, draft, patchExtended, toggleInter
             label="Wyświetlaj zdjęcie produktu na liście zamówień"
             checked={extended.showProductImageInOrders}
             onChange={(v) => patchExtended("showProductImageInOrders", v)}
-            capability={CAP_NONE}
           />
           <BoolRow
             settingId="packing.show_sku_in_orders"
             label="Wyświetlaj symbol produktu na liście zamówień"
             checked={extended.showSKUInOrders}
             onChange={(v) => patchExtended("showSKUInOrders", v)}
-            capability={CAP_NONE}
           />
           <BoolRow
             settingId="packing.show_ean_in_orders"
             label="Wyświetlaj EAN produktu na liście zamówień"
             checked={extended.showEANInOrders}
             onChange={(v) => patchExtended("showEANInOrders", v)}
-            capability={CAP_NONE}
           />
           <BoolRow
             settingId="packing.show_catalog_number_in_orders"
             label="Wyświetlaj numer katalogowy produktu na liście zamówień"
             checked={extended.showCatalogNumberInOrders}
             onChange={(v) => patchExtended("showCatalogNumberInOrders", v)}
-            capability={CAP_NONE}
           />
           <BoolRow
             settingId="packing.truncate_names_in_orders"

@@ -2,6 +2,10 @@ import { useEffect, useRef, type CSSProperties } from "react";
 import type { WmsPackingOrderCardApi } from "../../../../api/wmsPackingApi";
 import type { PackingOrdersListLayout } from "../../../../types/wmsPackingExtendedUi";
 import { computeOrdersListStats } from "./ordersListStats";
+import {
+  DEFAULT_ORDERS_LIST_PRODUCT_FIELDS,
+  type OrdersListProductFieldVisibility,
+} from "./ordersListProductFields";
 import { ExpandedHorizontalOrderCard } from "./ExpandedHorizontalOrderCard";
 import { ExpandedVerticalOrderCard } from "./ExpandedVerticalOrderCard";
 import { StandardOrderCard } from "./StandardOrderCard";
@@ -25,6 +29,8 @@ export type OrdersListViewProps = {
   showAllNotes?: boolean;
   /** `compact` | `cards` | `expanded_vertical`. */
   ordersListLayout?: PackingOrdersListLayout;
+  /** Pola produktu w kafelkach (układy rozbudowane). Standardowy ignoruje zdjęcie. */
+  productFields?: OrdersListProductFieldVisibility;
   onLoadMore?: () => void;
   onOpenOrder: (orderId: number) => void;
   onProductClick?: (orderItemId: number, orderId: number) => void;
@@ -87,6 +93,7 @@ export function OrdersListView({
   showBasketCode,
   showAllNotes = true,
   ordersListLayout = "compact",
+  productFields = DEFAULT_ORDERS_LIST_PRODUCT_FIELDS,
   onLoadMore,
   onOpenOrder,
   onProductClick,
@@ -180,6 +187,7 @@ export function OrdersListView({
                   order={o}
                   onOpenOrder={onOpenOrder}
                   onProductClick={onProductClick}
+                  productFields={productFields}
                 />
               </div>
             ))}
@@ -200,6 +208,7 @@ export function OrdersListView({
                   showAllNotes={showAllNotes}
                   onOpenOrder={onOpenOrder}
                   onProductClick={onProductClick}
+                  productFields={productFields}
                 />
               </div>
             ))}
