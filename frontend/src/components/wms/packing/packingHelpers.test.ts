@@ -9,6 +9,7 @@ import {
   isPackingPhysicallyComplete,
   isPackingSessionFinished,
   lineQuantityRequired,
+  scanErrorMessage,
 } from "./packingHelpers";
 
 function detail(partial: Partial<WmsPackingOrderDetailApi>): WmsPackingOrderDetailApi {
@@ -34,6 +35,20 @@ function detail(partial: Partial<WmsPackingOrderDetailApi>): WmsPackingOrderDeta
     ...partial,
   } as WmsPackingOrderDetailApi;
 }
+
+describe("packingHelpers finish operator copy", () => {
+  it("ORDER_NOT_IN_QUEUE is Polish business text without HTTP/codes", () => {
+    const msg = scanErrorMessage("ORDER_NOT_IN_QUEUE");
+    expect(msg.toLowerCase()).toContain("kolejce pakowania");
+    expect(msg).not.toMatch(/404|ORDER_NOT_IN_QUEUE|\/finish/i);
+  });
+
+  it("UNRESOLVED_SHORTAGES avoids technical dogrywka wording", () => {
+    const msg = scanErrorMessage("UNRESOLVED_SHORTAGES");
+    expect(msg.toLowerCase()).not.toContain("dogrywk");
+    expect(msg.toLowerCase()).toMatch(/zebrano|braki/);
+  });
+});
 
 describe("packingHelpers session finished gate", () => {
   it("CASE 5: packed 0/1 + packed_at alone must NOT be FINALIZED", () => {

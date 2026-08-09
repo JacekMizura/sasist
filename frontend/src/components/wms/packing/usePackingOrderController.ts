@@ -79,7 +79,12 @@ export function usePackingOrderController(
   const location = useLocation();
   const { warehouse } = useWarehouse();
   const warehouseId = warehouse?.id ?? null;
-  const { showScannerToast, refocusScannerInput, appendScanToHistory } = useWmsScanner();
+  const {
+    showScannerToast,
+    showScanFeedbackFromCode,
+    refocusScannerInput,
+    appendScanToHistory,
+  } = useWmsScanner();
 
   const [session, setSession] = useState<WmsPackingSessionState | null>(() => loadWmsPackingSession());
   const [detail, setDetail] = useState<WmsPackingOrderDetailApi | null>(null);
@@ -516,7 +521,15 @@ export function usePackingOrderController(
       } catch (e) {
         const code = wmsPackingApiErrorCode(e);
         const apiMsg = wmsPackingApiErrorMessage(e);
-        showScannerToast(apiMsg || scanErrorMessage(code));
+        const operatorMsg =
+          apiMsg ||
+          scanErrorMessage(code) ||
+          "Nie udało się sfinalizować pakowania. Sprawdź zamówienie i spróbuj ponownie.";
+        // Czerwony popup WMS (overlay) — bez wielkiego tekstu w panelu finalizacji.
+        showScanFeedbackFromCode(code || "PACKING_FINISH_FAILED", {
+          backendMessage: operatorMsg,
+          backendTitle: "Finalizacja pakowania",
+        });
         if (import.meta.env.DEV) console.error("DOCUMENT CREATE FAILED / finish packing", e);
         return "error";
       } finally {
@@ -534,6 +547,7 @@ export function usePackingOrderController(
     warehouseId,
     orderId,
     showScannerToast,
+    showScanFeedbackFromCode,
     navigate,
     finishWithoutCartonRef,
     askShipmentConfirm,

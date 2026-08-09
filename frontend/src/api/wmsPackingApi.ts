@@ -42,6 +42,9 @@ export type WmsPackingRecommendedCartonApi = {
   dimensions: string;
   image_url?: string | null;
   is_best: boolean;
+  /** Kod do skanu na bramce opakowań (EAN / SKU / id). */
+  barcode?: string | null;
+  ean?: string | null;
   usable_dimensions?: string | null;
   fill_percentage?: number | null;
   total_weight_kg?: number | null;

@@ -1,20 +1,21 @@
 import { useEffect } from "react";
 import { useWmsScanner } from "../../../context/WmsScannerContext";
 
-type Props = {
-  onScan: (ean: string) => void;
+/**
+ * Podpina globalny skaner WMS do handlera ekranu pakowania.
+ * Gdy ``enabled=false`` nie czyści handlera — bramka opakowań może go przejąć.
+ */
+export function ScannerHandler({
+  onScan,
+  enabled,
+}: {
+  onScan: (raw: string) => void;
   enabled: boolean;
-};
-
-/** Rejestruje globalny handler skanera WMS (scan-first). */
-export function ScannerHandler({ onScan, enabled }: Props) {
+}) {
   const { registerScanHandler } = useWmsScanner();
 
   useEffect(() => {
-    if (!enabled) {
-      registerScanHandler(null);
-      return;
-    }
+    if (!enabled) return;
     registerScanHandler((raw) => {
       onScan(raw);
     });

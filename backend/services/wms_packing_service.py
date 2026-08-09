@@ -148,19 +148,11 @@ def order_item_required_pack_qty(db: Session, order: Order, it: OrderItem) -> in
     missing = float(_order_item_operational_missing_qty(db, order, it))
     fulfillable = max(0.0, float(ordered) - removed - replaced)
 
-    rep_oid = getattr(it, "replaced_from_order_item_id", None)
-    ols_u = str(getattr(it, "oms_line_status", None) or "").strip().upper()
-    substitute = (rep_oid is not None and int(rep_oid) > 0) or ols_u == OMS_LINE_STATUS_TO_PICK
-
-    # Physical packing expectancy: never ask for units already declared as shortage.
-    # 4 picked + 4 shortage → pack 4; 0 picked + 8 shortage → pack 0 (not 8).
+    # Physical packing expectancy: only units actually picked (minus declared shortage).
+    # 4 picked + 4 shortage → pack 4; 0 picked + 8 shortage → pack 0;
+    # 0 picked without shortage (otwarte zbieranie) → pack 0 (nie udawaj kompletności).
     after_shortage = max(0.0, fulfillable - missing)
-
-    if substitute:
-        return max(0, int(round(min(after_shortage, picked if picked > 1e-9 else after_shortage))))
-    if picked > 1e-9:
-        return max(0, int(round(min(after_shortage, picked))))
-    return max(0, int(round(after_shortage)))
+    return max(0, int(round(min(after_shortage, picked))))
 
 
 def _packing_finish_validation_snapshot(db: Session, order: Order, *, log: bool = False) -> dict:
@@ -231,12 +223,19 @@ def _packing_finish_validation_snapshot(db: Session, order: Order, *, log: bool 
 
     rec_state = resolve_order_recovery_state(db, order, log=False)
     u_short, r_pend = rec_state.totals.oms_decision_lines, rec_state.totals.recovery_lines
-    # Kompletność wymaga realnych sztuk do spakowania — pusta lista unresolved przy required=0 ≠ complete.
-    lines_packed_complete = (
+    # Kompletność linii: realne sztuki do spakowania (required>0) i brak underpack.
+    # Otwarta dogrywka / OMS / rozlokowanie NIE może dać „fizycznie spakowane”.
+    lines_qty_complete = (
         active_lines > 0
         and total_required_qty > 0
         and len(unresolved_lines) == 0
     )
+    recovery_clear = (
+        int(u_short) == 0
+        and not bool(rec_state.has_recovery_work)
+        and not bool(rec_state.has_relocation_work)
+    )
+    lines_packed_complete = lines_qty_complete and recovery_clear
     packable = lines_packed_complete and can_order_be_packed(db, order, require_physical_pack=False)
 
     snap = {
@@ -288,17 +287,38 @@ def _assert_order_packable_for_finish(db: Session, order: Order) -> None:
 
     state = resolve_order_recovery_state(db, order, log=False)
     log_recovery_state_snapshot(state, tag="wms.packing.finish.validation")
+    snap = _packing_finish_validation_snapshot(db, order, log=True)
     if can_order_be_packed(db, order, require_physical_pack=True):
         return
-    if state.totals.oms_decision_lines > 0 or state.has_recovery_work:
+    recovery_reasons = [
+        ln.reason
+        for ln in (getattr(state, "lines", None) or [])
+        if getattr(ln, "visible_in_recovery_pick", False) or getattr(ln, "active_recovery", False)
+    ]
+    logger.info(
+        "[wms.packing.finish.packable_fail] order_id=%s oms_lines=%s recovery_work=%s "
+        "relocation=%s recovery_reasons=%s unresolved_lines=%s",
+        int(order.id),
+        int(state.totals.oms_decision_lines),
+        bool(state.has_recovery_work),
+        bool(state.has_relocation_work),
+        recovery_reasons[:8],
+        (snap.get("unresolved_lines") or [])[:8],
+    )
+    if int(state.totals.oms_decision_lines) > 0:
         raise PackingScanError(
             "UNRESOLVED_SHORTAGES",
-            message="Zamówienie nadal ma nierozwiązane braki lub dogrywkę zbierki",
+            message="Zamówienie ma nierozwiązane braki — wymagana decyzja przed finalizacją pakowania",
+        )
+    if state.has_recovery_work:
+        raise PackingScanError(
+            "UNRESOLVED_SHORTAGES",
+            message="Nie zebrano wszystkich pozycji — dokończ zbieranie przed finalizacją pakowania",
         )
     if state.has_relocation_work:
         raise PackingScanError(
             "UNRESOLVED_SHORTAGES",
-            message="Zamówienie wymaga dokończenia rozlokowania przed pakowaniem",
+            message="Zamówienie wymaga dokończenia rozlokowania przed finalizacją pakowania",
         )
     raise PackingScanError(
         "ORDER_NOT_FULLY_PACKED",
@@ -1074,7 +1094,9 @@ def _packing_line_from_item(
             elif float(picked_qty) > 1e-9:
                 picked_final = min(fulfillable, float(picked_qty))
             else:
-                picked_final = fulfillable
+                # Nie dopychaj 0 picków do fulfillable po finalize wózka —
+                # niezebrane linie (dogrywka) muszą zostać widoczne jako 0.
+                picked_final = float(picked_qty)
         elif float(picked_qty) > 1e-9:
             picked_final = min(fulfillable, float(picked_qty))
 
@@ -1447,8 +1469,21 @@ def packing_resolve_and_scan_ean(
                 cid = getattr(order_row, "cart_id", None) if order_row is not None else None
                 if cid is not None and int(cid) > 0:
                     cart_id = int(cid)
-            else:
+            elif hm == HANDOFF_CARTLESS:
                 scope = HANDOFF_CARTLESS
+            else:
+                # Legacy NULL handoff: pack in mode=all — never invent CARTLESS / no_cart.
+                return packing_scan_increment(
+                    db,
+                    tenant_id=tenant_id,
+                    warehouse_id=warehouse_id,
+                    status_id=status_id,
+                    mode="all",
+                    cart_id=None,
+                    order_id=int(oid_probe),
+                    ean_raw=ean_raw,
+                    operator_user_id=operator_user_id,
+                )
         else:
             raise PackingScanError("SCOPE_REQUIRED", message="handoff_scope required (CART|BASKET|CARTLESS)")
 
@@ -1516,6 +1551,11 @@ def packing_resolve_and_scan_ean(
 
 def _carton_row_to_recommended(row: Carton, *, is_best: bool) -> WmsPackingRecommendedCarton:
     img = getattr(row, "image_url", None)
+    ean_raw = getattr(row, "ean", None)
+    sku_raw = getattr(row, "sku", None)
+    ean = str(ean_raw).strip() if ean_raw is not None and str(ean_raw).strip() else None
+    sku = str(sku_raw).strip() if sku_raw is not None and str(sku_raw).strip() else None
+    barcode = ean or sku or str(row.id)
     return WmsPackingRecommendedCarton(
         id=str(row.id),
         name=str(row.name or "").strip(),
@@ -1526,6 +1566,8 @@ def _carton_row_to_recommended(row: Carton, *, is_best: bool) -> WmsPackingRecom
         ),
         image_url=(str(img).strip() if img else None) or None,
         is_best=is_best,
+        barcode=barcode,
+        ean=ean,
     )
 
 
@@ -1543,13 +1585,15 @@ def suggestions_to_recommended_cartons(
             warns.append("Dopasowanie szacunkowe.")
         if s.reject_reason_label:
             warns.append(s.reject_reason_label)
+        pid = str(s.suggested_package_id)
         out.append(
             WmsPackingRecommendedCarton(
-                id=str(s.suggested_package_id),
+                id=pid,
                 name=str(s.package_name or "").strip(),
                 dimensions=str(s.package_dimensions or "").strip(),
                 image_url=s.image_url,
                 is_best=bool(s.is_recommended) or (i == 0 and s.fit_status != "REJECTED"),
+                barcode=pid,
                 usable_dimensions=s.usable_dimensions,
                 fill_percentage=s.fill_percentage,
                 total_weight_kg=s.total_weight_kg,
@@ -2327,6 +2371,137 @@ def _load_order_for_packing_finish_retry(
     )
 
 
+def _finish_mode_compatible_with_order(
+    order: Order,
+    *,
+    mode: str,
+    cart_id: int | None,
+) -> bool:
+    """
+    Soft scope check for finish when order left the active packing queue mid-session
+    (e.g. status / fulfillment drift after lines are fully packed).
+    """
+    from .picking_handoff_service import HANDOFF_BASKET, HANDOFF_CART, HANDOFF_CARTLESS, normalize_handoff_mode
+
+    m = (mode or "").strip().lower()
+    if m == "all":
+        return True
+    hm = normalize_handoff_mode(getattr(order, "picking_handoff_mode", None))
+    ocid = getattr(order, "cart_id", None)
+    if m == "no_cart":
+        if ocid is not None and int(ocid) > 0:
+            return False
+        # CARTLESS + legacy NULL handoff without cart (list „all” often maps to no_cart in UI).
+        return hm in (HANDOFF_CARTLESS, None)
+    if m == "bulk":
+        if hm != HANDOFF_CART:
+            return False
+        if cart_id is not None and int(cart_id) > 0 and ocid is not None and int(ocid) > 0:
+            return int(cart_id) == int(ocid)
+        return True
+    if m == "baskets":
+        return hm == HANDOFF_BASKET
+    if m == "shelf":
+        return hm is None and (ocid is None or int(ocid) < 1)
+    return False
+
+
+def _load_order_for_packing_finish(
+    db: Session,
+    *,
+    tenant_id: int,
+    warehouse_id: int,
+    status_id: int,
+    mode: str,
+    cart_id: int | None,
+    order_id: int,
+) -> tuple[Order, bool]:
+    """
+    Load order for finish.
+
+    Returns ``(order, idempotent_replay)``.
+    Prefer active queue; if missing, allow finish for fully packed orders still in the
+    same warehouse when mode is compatible (detail can already open outside queue).
+    """
+    order = _load_order_for_packing_mutation(
+        db,
+        tenant_id=tenant_id,
+        warehouse_id=warehouse_id,
+        status_id=status_id,
+        mode=mode,
+        cart_id=cart_id,
+        order_id=order_id,
+    )
+    if order is not None:
+        return order, False
+
+    order = _load_order_for_packing_finish_retry(
+        db,
+        tenant_id=tenant_id,
+        warehouse_id=warehouse_id,
+        order_id=order_id,
+    )
+    if order is None:
+        raise PackingScanError(
+            "ORDER_NOT_IN_QUEUE",
+            message=(
+                "Nie można sfinalizować tego zamówienia. "
+                "Zamówienie nie zostało znalezione w tym magazynie."
+            ),
+        )
+    if getattr(order, "wms_packing_automation_finished_at", None):
+        return order, True
+
+    if not _is_order_fully_packed_db(db, int(order.id)):
+        _packing_finish_trace(
+            stage="scope_miss",
+            order=order,
+            tenant_id=tenant_id,
+            warehouse_id=warehouse_id,
+            mode=mode,
+            cart_id=cart_id,
+            failure_code="ORDER_NOT_IN_QUEUE",
+            failure_detail="order not in packing scope and not fully packed",
+        )
+        raise PackingScanError(
+            "ORDER_NOT_IN_QUEUE",
+            message=(
+                "Nie można sfinalizować tego zamówienia. "
+                "Zamówienie nie znajduje się już w kolejce pakowania."
+            ),
+        )
+
+    if not _finish_mode_compatible_with_order(order, mode=mode, cart_id=cart_id):
+        _packing_finish_trace(
+            stage="scope_miss",
+            order=order,
+            tenant_id=tenant_id,
+            warehouse_id=warehouse_id,
+            mode=mode,
+            cart_id=cart_id,
+            failure_code="ORDER_NOT_IN_QUEUE",
+            failure_detail="fully packed but finish mode incompatible",
+        )
+        raise PackingScanError(
+            "ORDER_NOT_IN_QUEUE",
+            message=(
+                "Nie można sfinalizować tego zamówienia w wybranym trybie pakowania. "
+                "Wróć do listy i otwórz zamówienie ponownie."
+            ),
+        )
+
+    _packing_finish_trace(
+        stage="scope_fallback_fully_packed",
+        order=order,
+        tenant_id=tenant_id,
+        warehouse_id=warehouse_id,
+        mode=mode,
+        cart_id=cart_id,
+        failure_detail="active queue miss; finish allowed for fully packed order",
+    )
+    return order, False
+
+
 def _packing_finish_trace(
     *,
     stage: str,
@@ -2519,7 +2694,7 @@ def packing_finish_order(
 
     Retry po udanym finish jest idempotentny (automation_finished_at).
     """
-    order = _load_order_for_packing_mutation(
+    order, idempotent_replay = _load_order_for_packing_finish(
         db,
         tenant_id=tenant_id,
         warehouse_id=warehouse_id,
@@ -2528,28 +2703,6 @@ def packing_finish_order(
         cart_id=cart_id,
         order_id=order_id,
     )
-    idempotent_replay = False
-    if order is None:
-        order = _load_order_for_packing_finish_retry(
-            db,
-            tenant_id=tenant_id,
-            warehouse_id=warehouse_id,
-            order_id=order_id,
-        )
-        if order is not None and getattr(order, "wms_packing_automation_finished_at", None):
-            idempotent_replay = True
-        else:
-            _packing_finish_trace(
-                stage="scope_miss",
-                order=order,
-                tenant_id=tenant_id,
-                warehouse_id=warehouse_id,
-                mode=mode,
-                cart_id=cart_id,
-                failure_code="ORDER_NOT_IN_QUEUE",
-                failure_detail="order not in packing scope and not already finalized",
-            )
-            raise PackingScanError("ORDER_NOT_IN_QUEUE")
 
     if not idempotent_replay:
         _apply_packing_carton_ids_to_order(order, packaging_carton_ids)

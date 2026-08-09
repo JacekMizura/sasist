@@ -369,6 +369,9 @@ class WmsPackingRecommendedCarton(BaseModel):
     dimensions: str = Field("", description="Np. 30×20×15 cm (zewnętrzne lub legacy)")
     image_url: Optional[str] = Field(default=None, description="Miniatura z panelu materiałów")
     is_best: bool = Field(default=False, description="Domyślna propozycja silnika")
+    #: Kod do skanu na bramce opakowań (EAN → SKU → id).
+    barcode: Optional[str] = Field(default=None, description="EAN / SKU / id kartonu — skan = wybór")
+    ean: Optional[str] = Field(default=None, description="EAN kartonu z słownika materiałów")
     usable_dimensions: Optional[str] = None
     fill_percentage: Optional[float] = None
     total_weight_kg: Optional[float] = None

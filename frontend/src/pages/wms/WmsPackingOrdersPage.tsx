@@ -42,8 +42,15 @@ function packingListCartId(s: WmsPackingSessionState): number | undefined {
   return undefined;
 }
 
-/** Po otwarciu zamówienia z listy „all” ustaw scope mutacji wg danych karty. */
-function patchSessionScopeFromOrderCard(order: WmsPackingOrderCardApi): void {
+/**
+ * Po otwarciu zamówienia z listy „all” ustaw scope mutacji wg danych karty.
+ * Bez koszyka/wózka NIE wymyślamy CARTLESS (`no_cart`) — zostawiamy `all`/`shelf`,
+ * żeby finish i skany były spójne z listą (backend nie traktuje NULL handoff jako CARTLESS).
+ */
+function patchSessionScopeFromOrderCard(
+  order: WmsPackingOrderCardApi,
+  previousMode?: string | null,
+): void {
   const basket = (order.basket_code ?? "").trim();
   const cartId = order.wms_cart_id;
   if (basket) {
@@ -64,8 +71,9 @@ function patchSessionScopeFromOrderCard(order: WmsPackingOrderCardApi): void {
     });
     return;
   }
+  const keep = previousMode === "shelf" ? "shelf" : "all";
   patchWmsPackingSession({
-    mode: "no_cart",
+    mode: keep,
     cartId: undefined,
     cartCode: undefined,
     cartType: undefined,
@@ -571,7 +579,7 @@ export default function WmsPackingOrdersPage() {
           }
           if (s.mode === "all") {
             const card = orders.find((o) => o.order_id === targetOrderId);
-            if (card) patchSessionScopeFromOrderCard(card);
+            if (card) patchSessionScopeFromOrderCard(card, s.mode);
             else {
               // Detail z mode=all działa; scope mutacji dociągnie się przy kolejnym skanie zamówienia
               // albo zostawiamy all (backend mapuje w packing_scan_increment).
@@ -719,7 +727,7 @@ export default function WmsPackingOrdersPage() {
           if (s.mode === "all") {
             const card = orders.find((o) => o.order_id === id);
             if (card) {
-              patchSessionScopeFromOrderCard(card);
+              patchSessionScopeFromOrderCard(card, s.mode);
               refreshSession();
             }
           }

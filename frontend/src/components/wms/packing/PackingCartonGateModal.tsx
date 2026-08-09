@@ -1,42 +1,88 @@
-import { useRef } from "react";
+import { useEffect, useRef } from "react";
+import JsBarcode from "jsbarcode";
 import type { PackagingSuggestionApi, WmsPackingRecommendedCartonApi } from "../../../api/wmsPackingApi";
-import { ShippingMethodLogo } from "../../shipping/ShippingMethodLogo";
+import { useWmsScanner } from "../../../context/WmsScannerContext";
+import { normalizeScanEan } from "../../../utils/wmsScanNormalize";
 import { AppOverlayPortal } from "../../overlay";
 
-function Thumb({ url, compact }: { url?: string | null; compact: boolean }) {
-  const box = compact
-    ? "h-16 w-full max-w-[100px] rounded-md text-2xl"
-    : "mx-auto h-24 w-full max-w-[120px] rounded-md text-3xl";
+function cartonScanCode(c: WmsPackingRecommendedCartonApi): string {
+  const barcode = (c.barcode ?? "").trim();
+  if (barcode) return barcode;
+  const ean = (c.ean ?? "").trim();
+  if (ean) return ean;
+  return String(c.id || "").trim();
+}
+
+function CartonBarcode({ value }: { value: string }) {
+  const svgRef = useRef<SVGSVGElement>(null);
+  useEffect(() => {
+    const el = svgRef.current;
+    const code = value.trim();
+    if (!el || !code) return;
+    try {
+      JsBarcode(el, code, {
+        format: "CODE128",
+        width: 1.1,
+        height: 28,
+        margin: 0,
+        displayValue: false,
+        background: "#ffffff",
+        lineColor: "#0f172a",
+      });
+    } catch {
+      /* invalid value for CODE128 — leave empty */
+    }
+  }, [value]);
+  if (!value.trim()) return null;
+  return (
+    <svg
+      ref={svgRef}
+      className="mx-auto h-7 w-full max-w-[9.5rem] text-slate-900"
+      role="img"
+      aria-label={`Kod ${value}`}
+    />
+  );
+}
+
+function CartonThumb({ url }: { url?: string | null }) {
   if (url?.trim()) {
-    return <img src={url.trim()} alt="" className={`${box} border border-slate-200 bg-white object-contain`} />;
+    return (
+      <img
+        src={url.trim()}
+        alt=""
+        className="h-[4.75rem] w-full bg-white object-contain sm:h-[5.25rem]"
+      />
+    );
   }
   return (
-    <div className={`flex ${box} shrink-0 items-center justify-center border border-slate-200 bg-white`} aria-hidden>
-      📦
+    <div
+      className="flex h-[4.75rem] w-full items-center justify-center bg-white text-2xl text-slate-300 sm:h-[5.25rem]"
+      aria-hidden
+    >
+      ▢
     </div>
   );
 }
 
-function suggestionMeta(
-  suggestions: PackagingSuggestionApi[] | undefined,
-  cartonId: string,
-): { fillPct: string | null; confPct: string | null } {
-  const s = suggestions?.find((x) => x.suggested_package_id === cartonId);
-  if (!s) return { fillPct: null, confPct: null };
-  const fillPct =
-    s.fill_percentage != null && Number.isFinite(s.fill_percentage)
-      ? `${Math.round(s.fill_percentage)}%`
-      : null;
-  const confPct =
-    s.confidence_score != null && Number.isFinite(s.confidence_score)
-      ? `${Math.round(Math.min(1, Math.max(0, s.confidence_score)) * 100)}%`
-      : null;
-  return { fillPct, confPct };
+function matchCartonByScan(
+  cartons: WmsPackingRecommendedCartonApi[],
+  raw: string,
+): WmsPackingRecommendedCartonApi | null {
+  const scan = normalizeScanEan(raw);
+  if (!scan) return null;
+  const norm = scan.toLowerCase();
+  for (const c of cartons) {
+    const candidates = [cartonScanCode(c), c.id, c.ean ?? "", c.barcode ?? ""]
+      .map((x) => normalizeScanEan(String(x)).toLowerCase())
+      .filter(Boolean);
+    if (candidates.includes(norm)) return c;
+  }
+  return null;
 }
 
 export type PackingCartonGateModalProps = {
   open: boolean;
-  /** Logo metody wysyłki (OMS / zamówienie). */
+  /** Logo metody wysyłki (OMS / zamówienie) — zachowane w API props; UI mockupu: tekst szablonu. */
   shippingMethodLogoUrl?: string | null;
   /** Nazwa szablonu / kuriera (jak na ekranie Sellasist). */
   shippingTemplateLabel: string;
@@ -47,8 +93,6 @@ export type PackingCartonGateModalProps = {
   selectedPackagingIds?: string[];
   busy: boolean;
   canContinueWithoutCarton: boolean;
-  /** Opcjonalnie — np. komunikat dla superadmina przy dodawaniu materiału. */
-  onAddOwnPackaging?: () => void;
   onSelectCarton: (cartonId: string) => void;
   /** Domknięcie wyboru → ekran finalizacji (bez POST …/finish). */
   onProceedToFinalization: () => void;
@@ -63,10 +107,8 @@ export type PackingCartonGateModalProps = {
  */
 export function PackingCartonGateModal({
   open,
-  shippingMethodLogoUrl,
   shippingTemplateLabel,
   compatible,
-  packagingSuggestions,
   selectedCartonId,
   selectedPackagingIds = [],
   busy,
@@ -78,7 +120,8 @@ export function PackingCartonGateModal({
   enableMultiParcel = false,
 }: PackingCartonGateModalProps) {
   const gridRef = useRef<HTMLUListElement>(null);
-  if (!open) return null;
+  const { registerScanHandler, setScannerInputPlaceholder, refocusScannerInput, showScannerToast } =
+    useWmsScanner();
 
   const sel = (selectedCartonId ?? "").trim();
   const pkgCount = selectedPackagingIds.length;
@@ -86,125 +129,171 @@ export function PackingCartonGateModal({
   const title = enableMultiParcel ? "Zarządzaj paczkami" : "Wybierz opakowanie";
   const proceedLabel = enableMultiParcel ? "Zakończ konfigurację paczek" : "Przejdź do finalizacji";
 
+  useEffect(() => {
+    if (!open) {
+      registerScanHandler(null);
+      return;
+    }
+    setScannerInputPlaceholder("Kod opakowania");
+    registerScanHandler((raw) => {
+      if (busy) return;
+      const hit = matchCartonByScan(compatible, raw);
+      if (!hit) {
+        showScannerToast("Nie rozpoznano opakowania.");
+        refocusScannerInput();
+        return;
+      }
+      onSelectCarton(hit.id);
+      refocusScannerInput();
+    });
+    refocusScannerInput();
+    return () => {
+      registerScanHandler(null);
+    };
+  }, [
+    open,
+    busy,
+    compatible,
+    onSelectCarton,
+    registerScanHandler,
+    setScannerInputPlaceholder,
+    refocusScannerInput,
+    showScannerToast,
+  ]);
+
+  if (!open) return null;
+
   const scrollToGrid = () => {
     gridRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
 
   const nameById = (id: string) => compatible.find((c) => c.id === id)?.name?.trim() || id;
+  const selectedNames =
+    pkgCount > 0
+      ? selectedPackagingIds.map(nameById)
+      : sel
+        ? [nameById(sel)]
+        : [];
+  const selectedCount = selectedNames.length;
 
   return (
     <AppOverlayPortal>
-    <div
-      className="fixed inset-0 z-[300] flex flex-col bg-[#eef2f6]"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="packing-post-carton-title"
-    >
-      <header className="shrink-0 border-b border-slate-200 bg-white px-4 py-3 shadow-sm sm:px-5">
-        <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-3 sm:gap-4">
-          <ShippingMethodLogo
-            logoUrl={shippingMethodLogoUrl}
-            methodName={shippingTemplateLabel}
-            size="md"
-            className="shrink-0"
-          />
-          <div className="min-w-0 flex-1">
-            <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Szablon wysyłki</p>
-            <p className="truncate text-base font-bold leading-snug text-slate-900">{shippingTemplateLabel}</p>
-          </div>
-        </div>
-        <h2 id="packing-post-carton-title" className="mx-auto mt-3 max-w-6xl text-lg font-black tracking-tight text-slate-900">
-          {title}
-        </h2>
-        {enableMultiParcel ? (
-          <p className="mx-auto mt-1 max-w-6xl text-sm text-slate-600">
-            Dodaj kolejne paczki i przypisz opakowanie. Po zakończeniu uruchomią się akcje automatyczne.
-          </p>
-        ) : null}
-        {pkgCount > 0 ? (
-          <div className="mx-auto mt-2 flex max-w-6xl flex-wrap gap-1.5">
-            <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-              {enableMultiParcel ? `Paczki (${pkgCount}):` : `Wybrane (${pkgCount}):`}
-            </span>
-            {selectedPackagingIds.map((id) => (
-              <span
-                key={id}
-                className="rounded-xl bg-slate-50 px-2 py-0.5 text-[11px] font-semibold text-slate-800 ring-1 ring-slate-200/80"
-                title={nameById(id)}
-              >
-                {nameById(id)}
-              </span>
-            ))}
-          </div>
-        ) : null}
-      </header>
-
-      <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4 sm:px-5">
-        <div className="mx-auto max-w-6xl">
-          {compatible.length === 0 ? (
-            <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-sm font-medium text-amber-950">
-              Brak materiałów przypisanych do tej metody wysyłki. Skonfiguruj powiązania w magazynie albo — jeśli masz
-              uprawnienie — użyj opcji poniżej.
-            </p>
-          ) : (
-            <ul
-              ref={gridRef}
-              className="m-0 grid list-none grid-cols-[repeat(auto-fill,minmax(180px,1fr))] gap-2 p-0 sm:gap-2.5"
+      <div
+        className="fixed inset-0 z-[300] flex flex-col bg-white"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="packing-post-carton-title"
+      >
+        <header className="shrink-0 border-b border-slate-200 bg-white px-4 py-2.5 sm:px-5">
+          <div className="mx-auto grid max-w-6xl grid-cols-1 items-center gap-2 sm:grid-cols-[1fr_auto_1fr] sm:gap-4">
+            <div className="min-w-0 sm:justify-self-start">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+                Szablon wysyłki
+              </p>
+              <p className="truncate text-lg font-black leading-tight text-slate-900 sm:text-xl">
+                {shippingTemplateLabel || "—"}
+              </p>
+            </div>
+            <h2
+              id="packing-post-carton-title"
+              className="text-center text-lg font-black tracking-tight text-slate-900 sm:text-xl"
             >
-              {compatible.map((c) => {
-                const meta = suggestionMeta(packagingSuggestions, c.id);
-                const isSel = sel !== "" && c.id === sel;
-                const inMulti = selectedPackagingIds.includes(c.id);
-                const recommended = Boolean(c.is_best);
-                return (
-                  <li key={c.id} className="min-w-0">
-                    <button
-                      type="button"
-                      disabled={busy}
-                      onClick={() => onSelectCarton(c.id)}
-                      className={[
-                        "flex h-full min-h-[220px] w-full flex-col rounded-lg border bg-white p-2.5 text-left shadow-sm transition-all",
-                        "hover:-translate-y-px hover:shadow disabled:cursor-not-allowed disabled:opacity-50",
-                        isSel || inMulti
-                          ? "border-blue-600 bg-blue-50/90 ring-1 ring-blue-500/25"
-                          : "border-slate-200 hover:border-slate-300",
-                      ].join(" ")}
-                    >
-                      <div className="relative flex flex-1 flex-col items-stretch gap-1.5">
+              {title}
+            </h2>
+            <div className="flex min-w-0 flex-wrap items-center gap-1.5 sm:justify-self-end sm:justify-end">
+              <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+                Wybrane ({selectedCount}):
+              </span>
+              {selectedNames.length === 0 ? (
+                <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-semibold text-slate-400">
+                  —
+                </span>
+              ) : (
+                selectedNames.map((n) => (
+                  <span
+                    key={n}
+                    className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-semibold text-slate-800"
+                    title={n}
+                  >
+                    {n}
+                  </span>
+                ))
+              )}
+            </div>
+          </div>
+          {enableMultiParcel ? (
+            <p className="mx-auto mt-1.5 max-w-6xl text-center text-xs text-slate-500">
+              Dodaj kolejne paczki i przypisz opakowanie. Po zakończeniu uruchomią się akcje automatyczne.
+            </p>
+          ) : null}
+        </header>
+
+        <div className="min-h-0 flex-1 overflow-y-auto bg-white px-3 py-3 sm:px-5 sm:py-4">
+          <div className="mx-auto max-w-6xl">
+            {compatible.length === 0 ? (
+              <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-sm font-medium text-amber-950">
+                Brak materiałów przypisanych do tej metody wysyłki. Skonfiguruj powiązania w magazynie albo — jeśli
+                masz uprawnienie — użyj opcji poniżej.
+              </p>
+            ) : (
+              <ul
+                ref={gridRef}
+                className="m-0 grid list-none grid-cols-2 gap-2 p-0 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 lg:gap-2.5"
+              >
+                {compatible.map((c) => {
+                  const isSel = sel !== "" && c.id === sel;
+                  const inMulti = selectedPackagingIds.includes(c.id);
+                  const selected = isSel || inMulti;
+                  const recommended = Boolean(c.is_best);
+                  const code = cartonScanCode(c);
+                  return (
+                    <li key={c.id} className="min-w-0">
+                      <button
+                        type="button"
+                        disabled={busy}
+                        onClick={() => onSelectCarton(c.id)}
+                        className={[
+                          "relative flex h-full w-full flex-col overflow-hidden rounded-lg border bg-white px-2 pb-2 pt-1.5 text-center transition-all",
+                          "hover:border-slate-300 disabled:cursor-not-allowed disabled:opacity-50",
+                          selected
+                            ? "border-blue-500 shadow-[0_0_0_2px_rgba(59,130,246,0.25)]"
+                            : "border-slate-200",
+                        ].join(" ")}
+                      >
                         {recommended ? (
-                          <span className="absolute right-0 top-0 rounded bg-emerald-100 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-emerald-900">
-                            Rekom.
+                          <span className="absolute right-1.5 top-1.5 z-10 rounded bg-emerald-100 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-emerald-900">
+                            REKOM.
                           </span>
                         ) : null}
-                        <Thumb url={c.image_url} compact />
+                        <CartonThumb url={c.image_url} />
                         <p
-                          className="line-clamp-2 text-xs font-bold leading-tight text-slate-900"
+                          className="mt-1.5 line-clamp-2 min-h-[2rem] text-sm font-bold leading-snug text-slate-900"
                           title={c.name?.trim() || undefined}
                         >
                           {c.name?.trim() || "—"}
                         </p>
-                        <p className="text-[11px] font-semibold tabular-nums text-slate-600">{c.dimensions || "—"}</p>
-                        {(meta.fillPct || meta.confPct) && (
-                          <div className="mt-auto flex flex-wrap gap-1 text-[9px] font-semibold text-slate-500">
-                            {meta.fillPct ? <span>Wyp. {meta.fillPct}</span> : null}
-                            {meta.confPct ? <span className="text-slate-400">•</span> : null}
-                            {meta.confPct ? <span>Dopas. {meta.confPct}</span> : null}
-                          </div>
-                        )}
-                      </div>
-                    </button>
-                  </li>
-                );
-              })}
-            </ul>
-          )}
+                        <p className="mt-0.5 text-xs font-medium tabular-nums text-slate-500">
+                          {c.dimensions || "—"}
+                        </p>
+                        <div className="mt-auto flex min-h-[2rem] items-end justify-center pt-1.5">
+                          <CartonBarcode value={code} />
+                        </div>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </div>
+        </div>
 
-          <div className="mx-auto mt-5 flex max-w-6xl flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-stretch">
+        <footer className="shrink-0 border-t border-slate-200 bg-white px-3 py-3 sm:px-5">
+          <div className="mx-auto flex max-w-6xl flex-col gap-2 sm:flex-row sm:items-stretch">
             <button
               type="button"
               disabled={busy || !hasSelection}
               onClick={onProceedToFinalization}
-              className="order-first w-full rounded-lg border-2 border-slate-900 bg-slate-900 px-4 py-3 text-center text-sm font-bold text-white shadow-sm transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-40 sm:order-none sm:min-w-[200px] sm:flex-1"
+              className="w-full rounded-lg bg-slate-900 px-4 py-3 text-center text-sm font-bold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-40 sm:flex-1"
             >
               {proceedLabel}
             </button>
@@ -217,7 +306,7 @@ export function PackingCartonGateModal({
                   onAddOwnPackaging?.();
                   scrollToGrid();
                 }}
-                className="w-full rounded-lg border-2 border-dashed border-slate-300 bg-white py-2.5 text-center text-xs font-bold text-slate-700 shadow-sm transition hover:border-slate-400 hover:bg-slate-50 disabled:opacity-50 sm:flex-1"
+                className="w-full rounded-lg border border-dashed border-slate-300 bg-white py-3 text-center text-sm font-bold text-slate-700 transition hover:border-slate-400 hover:bg-slate-50 disabled:opacity-50 sm:flex-1"
               >
                 + Dodaj kolejną paczkę
               </button>
@@ -228,15 +317,14 @@ export function PackingCartonGateModal({
                 type="button"
                 disabled={busy}
                 onClick={onContinueWithoutCarton}
-                className="w-full rounded-2xl border border-dashed border-slate-200 bg-white py-3 text-center text-xs font-bold text-slate-700 shadow-sm transition hover:border-indigo-200 hover:bg-indigo-50/50 disabled:opacity-50 sm:flex-1"
+                className="w-full rounded-lg border border-slate-300 bg-white py-3 text-center text-sm font-bold text-slate-800 transition hover:bg-slate-50 disabled:opacity-50 sm:flex-1"
               >
                 Kontynuuj bez opakowania
               </button>
             ) : null}
           </div>
-        </div>
+        </footer>
       </div>
-    </div>
     </AppOverlayPortal>
   );
 }

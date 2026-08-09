@@ -1,5 +1,13 @@
 ﻿## Active
 
+**Packing finish #1249 (2026-08-09):**
+- Partial pick without shortage → recovery_work blocks finish (validation kept)
+- SSOT: no fake physical-complete while recovery open; pick-capped required_pack_qty; clear PL message
+
+**Packing carton gate UI (2026-08-09):**
+- `PackingCartonGateModal`: white compact header + 5-col grid, JsBarcode from carton EAN/SKU/id, scan=select
+- API: `WmsPackingRecommendedCarton.barcode` / `ean`; `ScannerHandler` no longer clears handler when disabled (carton gate can own scan)
+
 **Bundle STOCK production order 500 (2026-08-09):**
 - Cause: `production_orders.recipe_id` NOT NULL vs composition-only MO (`recipe_id=NULL`)
 - Fix: schema ensure + migration; path remains `composition_id` from bundle manufacturing BOM

@@ -100,13 +100,11 @@ export function PackingFinalizationView({
     finishFailed: failed,
   });
 
+  // Błąd finish: komunikat idzie jako czerwony toast/popup WMS (controller) —
+  // nie zastępujemy panelu finalizacji wielkim czerwonym tekstem.
   let footerMessage: string | null = null;
-  let footerTone: "default" | "error" = "default";
   if (cancelled) {
     footerMessage = "Anulowano generowanie listu przewozowego. Możesz ponowić finalizację, gdy będziesz gotowy.";
-  } else if (failed) {
-    footerMessage = "Nie udało się dokończyć operacji. Sprawdź komunikat i spróbuj ponownie.";
-    footerTone = "error";
   }
 
   const footerExtra =
@@ -130,7 +128,7 @@ export function PackingFinalizationView({
       onBackToOrders={onBackToOrders}
       onBackToOrder={onBackToOrder}
       footerMessage={footerMessage}
-      footerTone={footerTone}
+      footerTone="default"
       footerExtra={footerExtra}
     />
   );

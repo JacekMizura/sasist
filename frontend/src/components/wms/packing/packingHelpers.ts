@@ -60,7 +60,7 @@ export function scanErrorMessage(code: string | null): string {
     case "INVALID_QUANTITY":
       return "Nieprawidłowa ilość";
     case "ORDER_NOT_IN_QUEUE":
-      return "Zamówienie poza kolejką";
+      return "Nie można sfinalizować tego zamówienia. Zamówienie nie znajduje się już w kolejce pakowania.";
     case "SCOPE_REQUIRED":
       return "Brak zakresu pakowania (wózek / koszyk / bez wózka)";
     case "AMBIGUOUS_BASKET_CODE":
@@ -79,7 +79,7 @@ export function scanErrorMessage(code: string | null): string {
     case "LINE_NOT_FULLY_PACKED":
       return "Nie można domknąć — zamówienie nie jest w pełni spakowane";
     case "UNRESOLVED_SHORTAGES":
-      return "Zamówienie ma nierozwiązane braki — domknięcie pakowania zablokowane";
+      return "Nie zebrano wszystkich pozycji lub są nierozwiązane braki — finalizacja zablokowana";
     case "PACKING_FINISH_FAILED":
     case "PACKING_FINISH_DATABASE_ERROR":
       return "Błąd domknięcia pakowania — spróbuj ponownie lub skontaktuj kierownika";

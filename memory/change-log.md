@@ -1,3 +1,16 @@
+## 2026-08-09 — Packing finish #1249: otwarte zbieranie vs fake complete
+
+- **Przyczyna 400:** 2× Cat x3 niezebrane → `has_recovery_work`; komunikat myląco o „dogrywce”; UI/`PACKING_FINISHED` mogły udawać komplet po samych pickach
+- **Fix:** `required_pack_qty` = min(after_shortage, picked); `lines_packed_complete` wymaga braku recovery/OMS/relocation; `picked_quantity_final` nie dopycha 0→fulfillable; czytelny komunikat PL
+- Test: `test_order_1249_partial_pick_recovery_blocks_finish_and_fake_complete`
+
+## 2026-08-09 — Pakowanie: kompaktowy wybór opakowania
+
+- Przebudowa `PackingCartonGateModal` (ten sam flow): białe tło, kompaktowy nagłówek (szablon / tytuł / wybrane), grid do 5 kolumn
+- Karty: zdjęcie, nazwa, wymiary, badge REKOM. (`is_best`), prawdziwy CODE128 (JsBarcode) z EAN/SKU/id
+- Skan kodu = ten sam `onSelectCarton` co klik; `ScannerHandler` nie czyści handlera przy `enabled=false`
+- Backend (minimal): `barcode`/`ean` w `WmsPackingRecommendedCarton` + mapowanie w `_carton_row_to_recommended`
+
 ## 2026-08-09 — Zestaw STOCK: HTTP 500 przy tworzeniu zlecenia produkcyjnego
 
 - **Przyczyna:** `production_orders.recipe_id` w DB = NOT NULL (legacy CREATE); BOM zestawu (`product_compositions`) nie ma `source_recipe_id` → INSERT z `recipe_id=NULL` → IntegrityError → 500

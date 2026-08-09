@@ -115,6 +115,7 @@ class TestPackingFinishShortageOrder(unittest.TestCase):
                     packing_allowed=False,
                     has_recovery_work=True,
                     has_relocation_work=False,
+                    lines=[],
                 ),
             ),
             patch(
@@ -127,6 +128,72 @@ class TestPackingFinishShortageOrder(unittest.TestCase):
             with self.assertRaises(PackingScanError) as ctx:
                 _assert_order_packable_for_finish(db, order)
             self.assertEqual(ctx.exception.code, "UNRESOLVED_SHORTAGES")
+            self.assertIn("Nie zebrano wszystkich pozycji", ctx.exception.message or "")
+            self.assertNotIn("dogrywk", (ctx.exception.message or "").lower())
+
+    def test_order_1249_partial_pick_recovery_blocks_finish_and_fake_complete(self):
+        """
+        #1249: 2/4 zebrane (reszta bez braku = otwarte zbieranie).
+        Spakowanie zebranych NIE może dać lines_packed_complete / finish.
+        """
+        order = _order(
+            id=1249,
+            items=[
+                _line(id=2096, product_id=354, quantity=1, packing_quantity_packed=1),
+                _line(id=2097, product_id=193, quantity=1, packing_quantity_packed=1),
+                _line(id=2098, product_id=354, quantity=1, packing_quantity_packed=0),
+                _line(id=2099, product_id=354, quantity=1, packing_quantity_packed=0),
+            ],
+        )
+        db = MagicMock()
+
+        def _picked(_db, oid, _order):
+            return 1.0 if int(oid) in (2096, 2097) else 0.0
+
+        recovery = SimpleNamespace(
+            totals=SimpleNamespace(oms_decision_lines=0, recovery_lines=2),
+            packing_allowed=False,
+            has_recovery_work=True,
+            has_relocation_work=False,
+            lines=[
+                SimpleNamespace(
+                    reason="recovery_pick_pending",
+                    visible_in_recovery_pick=True,
+                    active_recovery=True,
+                ),
+            ],
+        )
+        with (
+            patch(
+                "backend.services.fulfillment_event_service.line_picked_sum_for_order",
+                side_effect=_picked,
+            ),
+            patch(
+                "backend.services.wms_packing_service._order_item_operational_missing_qty",
+                return_value=0.0,
+            ),
+            patch(
+                "backend.services.recovery_workflow_service.resolve_order_recovery_state",
+                return_value=recovery,
+            ),
+            patch(
+                "backend.services.recovery_workflow_service.can_order_be_packed",
+                return_value=False,
+            ),
+        ):
+            self.assertEqual(order_item_required_pack_qty(db, order, order.items[0]), 1)
+            self.assertEqual(order_item_required_pack_qty(db, order, order.items[2]), 0)
+            snap = _packing_finish_validation_snapshot(db, order, log=False)
+            self.assertEqual(snap["total_required_qty"], 2)
+            self.assertFalse(snap["lines_packed_complete"])
+            self.assertFalse(snap["packable"])
+            with self.assertRaises(PackingScanError) as ctx:
+                _assert_order_packable_for_finish(db, order)
+            self.assertEqual(ctx.exception.code, "UNRESOLVED_SHORTAGES")
+            self.assertEqual(
+                ctx.exception.message,
+                "Nie zebrano wszystkich pozycji — dokończ zbieranie przed finalizacją pakowania",
+            )
 
     def test_removed_line_does_not_block(self):
         order = _order(
@@ -150,7 +217,13 @@ class TestPackingFinishShortageOrder(unittest.TestCase):
                 return_value=SimpleNamespace(
                     totals=SimpleNamespace(oms_decision_lines=0, recovery_lines=0),
                     packing_allowed=True,
+                    has_recovery_work=False,
+                    has_relocation_work=False,
                 ),
+            ),
+            patch(
+                "backend.services.recovery_workflow_service.can_order_be_packed",
+                return_value=True,
             ),
         ):
             snap = _packing_finish_validation_snapshot(db, order, log=False)
