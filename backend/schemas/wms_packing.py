@@ -407,7 +407,11 @@ class WmsPackingOrderDetailOut(WmsPackingOrderCard):
     """Szczegół zamówienia na ekranie pakowania (klient + pierwsza linia do spakowania)."""
 
     customer_name: str = Field("", description="Imię i nazwisko / firma z addresses_json")
-    shipping_address: str = Field("", description="Zarezerwowane; na ekranie pakowania puste")
+    shipping_address: str = Field(
+        "",
+        description="Adres wysyłki (blok tekstowy) — używany w widoku szczegółowym dokumentu",
+    )
+    customer_nip: Optional[str] = Field(None, description="NIP kupującego (jeśli znany)")
     customer_phone: Optional[str] = Field(None, description="Telefon z addresses_json (billing/shipping/customer)")
     shipping_method_name: Optional[str] = Field(
         None, description="Nazwa metody wysyłki (jak shipping_method na karcie)"

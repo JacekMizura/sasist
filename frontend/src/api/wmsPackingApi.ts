@@ -293,6 +293,7 @@ export type WmsPackingShelfOrderOutApi = {
 export type WmsPackingOrderDetailApi = WmsPackingOrderCardApi & {
   customer_name: string;
   shipping_address?: string;
+  customer_nip?: string | null;
   customer_phone?: string | null;
   shipping_method_name?: string | null;
   payment_label: string | null;

@@ -567,6 +567,14 @@ def _packing_customer_name_from_order(order: Order) -> str:
         return "—"
     if not isinstance(data, dict):
         return "—"
+    for section in ("billing", "shipping", "customer"):
+        block = data.get(section)
+        if not isinstance(block, dict):
+            continue
+        for key in ("Firma", "company", "company_name", "name", "Nazwa"):
+            v = block.get(key)
+            if v is not None and str(v).strip():
+                return str(v).strip()
     billing = data.get("billing")
     if isinstance(billing, dict):
         fn = billing.get("Imię") or billing.get("first_name")
@@ -584,6 +592,38 @@ def _packing_customer_name_from_order(order: Order) -> str:
         if parts:
             return " ".join(parts)
     return "—"
+
+
+def _packing_customer_nip_from_order(order: Order) -> Optional[str]:
+    raw = getattr(order, "addresses_json", None) or ""
+    if not str(raw).strip():
+        return None
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError:
+        return None
+    if not isinstance(data, dict):
+        return None
+
+    def _clean(v: object) -> Optional[str]:
+        if v is None:
+            return None
+        s = str(v).strip()
+        return s or None
+
+    for section in ("billing", "shipping", "customer", "invoice"):
+        block = data.get(section)
+        if not isinstance(block, dict):
+            continue
+        for key in ("NIP", "nip", "tax_id", "vat_id", "VatID"):
+            found = _clean(block.get(key))
+            if found:
+                return found
+    for key in ("NIP", "nip", "tax_id"):
+        found = _clean(data.get(key))
+        if found:
+            return found
+    return None
 
 
 def _packing_customer_phone_from_order(order: Order) -> Optional[str]:
@@ -1720,6 +1760,9 @@ def build_packing_order_detail_out(
     )
     customer_name = _packing_customer_name_from_order(order)
     customer_phone = _packing_customer_phone_from_order(order)
+    customer_nip = _packing_customer_nip_from_order(order)
+    shipping_address_raw = _format_shipping_address_block(order)
+    shipping_address = "" if shipping_address_raw in ("", "—") else shipping_address_raw
     ship_name, _, __ = order_shipping_display(order)
     payment_label: Optional[str] = None
     val = getattr(order, "value", None)
@@ -1794,7 +1837,8 @@ def build_packing_order_detail_out(
     return WmsPackingOrderDetailOut(
         **card.model_dump(),
         customer_name=customer_name,
-        shipping_address="",
+        shipping_address=shipping_address,
+        customer_nip=customer_nip,
         customer_phone=customer_phone,
         shipping_method_name=ship_name,
         payment_label=payment_label,

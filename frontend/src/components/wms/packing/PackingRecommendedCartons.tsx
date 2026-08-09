@@ -23,12 +23,13 @@ function CartonThumb({ url, name, size }: { url?: string | null; name: string; s
 
 /** Compact row for selectable cards (top-right). */
 function CartonCardBodyCompact({ c }: { c: WmsPackingRecommendedCartonApi }) {
+  const title = [c.name?.trim() || "—", c.dimensions?.trim()].filter(Boolean).join(" - ");
   return (
     <div className="flex min-w-0 items-start gap-2">
       <CartonThumb url={c.image_url} name={c.name} size="sm" />
       <div className="min-w-0 flex-1">
-        <p className="truncate text-xs font-bold leading-snug text-slate-900">{c.name || "—"}</p>
-        <p className="mt-0.5 text-[11px] font-medium tabular-nums text-slate-600">{c.dimensions || "—"}</p>
+        <p className="line-clamp-2 text-xs font-bold leading-snug text-slate-900">{title}</p>
+        <p className="mt-0.5 text-[10px] font-medium text-slate-500">Szablon nadania</p>
       </div>
     </div>
   );

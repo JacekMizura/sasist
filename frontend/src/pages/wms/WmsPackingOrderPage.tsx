@@ -434,7 +434,7 @@ export default function WmsPackingOrderPage() {
         packingActionsLocked={ctrl.awaitingPostPackCarton || ctrl.notesPopupOpen || shortageBusy}
         visibleOperationalNotes={ctrl.visiblePackingNotes}
         bundlePackScan={ctrl.bundlePackScan}
-        showHeaderCartonPicker={false}
+        showHeaderCartonPicker
         showProceedAfterLinesCompleteCta={ctrl.showProceedAfterLinesCompleteCta}
         onProceedAfterLinesComplete={ctrl.proceedAfterLinesComplete}
         onMarkLineShortage={(id) => void onMarkLineShortage(id)}
@@ -443,6 +443,8 @@ export default function WmsPackingOrderPage() {
         warehouseId={ctrl.warehouseId}
         onAutomationToast={showScannerToast}
         onAutomationStatusChanged={() => void ctrl.fetchDetail()}
+        customerCommentStyle={ctrl.packingExtendedUi.customerCommentStyle}
+        salesDocumentPreview={ctrl.packingExtendedUi.salesDocumentPreview}
       />
     </>
   );

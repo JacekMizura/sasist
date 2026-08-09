@@ -12,6 +12,8 @@ export type CourierBadgeProps = {
   methodNameForLogo?: string | null;
   variant: CourierBadgeVariant;
   className?: string;
+  /** Pokazuj „Nx List przewozowy” także przy 1 (sidebar mockup). */
+  showWaybillLine?: boolean;
 };
 
 /**
@@ -24,6 +26,7 @@ export function CourierBadge({
   methodNameForLogo,
   variant,
   className,
+  showWaybillLine = false,
 }: CourierBadgeProps) {
   const name = (courierName ?? "").trim() || null;
   const n = Math.max(0, Math.floor(Number.isFinite(labelCount) ? labelCount : 0));
@@ -32,31 +35,25 @@ export function CourierBadge({
 
   const size = variant === "sidebar" ? "packingSidebar" : "packingTile";
 
-  const showLabels = n > 1;
+  const showLabels = showWaybillLine ? n >= 1 : n > 1;
+  const labelsText = showWaybillLine
+    ? `${Math.max(1, n)}x List przewozowy`
+    : `Listów przewozowych: ${n}`;
   const inner = (
     <>
-      <div className={variant === "sidebar" ? "flex items-start gap-3" : "flex flex-col items-start gap-1"}>
+      <div className={variant === "sidebar" ? "flex flex-col items-start gap-2" : "flex flex-col items-start gap-1"}>
         <ShippingMethodLogo logoUrl={logoUrl} methodName={forLogo} size={size} />
         <div className="min-w-0 flex-1">
-          {name ? (
-            <p
-              className={
-                variant === "sidebar"
-                  ? "text-base font-semibold leading-snug text-slate-900"
-                  : "text-sm font-semibold leading-tight text-slate-900"
-              }
-            >
-              {name}
-            </p>
-          ) : null}
           {showLabels ? (
             <p
               className={
-                variant === "sidebar" ? "mt-0.5 text-xs font-medium text-slate-500" : "text-[11px] font-medium text-slate-500"
+                variant === "sidebar" ? "text-xs font-semibold text-slate-700" : "text-[11px] font-medium text-slate-500"
               }
             >
-              Listów przewozowych: {n}
+              {labelsText}
             </p>
+          ) : name && variant !== "sidebar" ? (
+            <p className="text-sm font-semibold leading-tight text-slate-900">{name}</p>
           ) : null}
         </div>
       </div>
