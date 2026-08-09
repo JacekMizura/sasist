@@ -48,6 +48,24 @@ def _order_snapshot(o: Order) -> dict[str, Any]:
     }
 
 
+def _load_picking_config(
+    db: Session,
+    *,
+    tenant_id: int,
+    warehouse_id: int,
+    source_status_id: int,
+) -> PickingConfig | None:
+    return (
+        db.query(PickingConfig)
+        .filter(
+            PickingConfig.tenant_id == int(tenant_id),
+            PickingConfig.warehouse_id == int(warehouse_id),
+            PickingConfig.source_status_id == int(source_status_id),
+        )
+        .first()
+    )
+
+
 def _resolve_bulk_limit(
     db: Session,
     *,
@@ -56,14 +74,11 @@ def _resolve_bulk_limit(
     source_status_id: int,
     order_type: str,
 ) -> int | None:
-    pc = (
-        db.query(PickingConfig)
-        .filter(
-            PickingConfig.tenant_id == int(tenant_id),
-            PickingConfig.warehouse_id == int(warehouse_id),
-            PickingConfig.source_status_id == int(source_status_id),
-        )
-        .first()
+    pc = _load_picking_config(
+        db,
+        tenant_id=tenant_id,
+        warehouse_id=warehouse_id,
+        source_status_id=source_status_id,
     )
     if pc is None:
         return None
@@ -83,6 +98,23 @@ def _resolve_bulk_limit(
     if not caps:
         return None
     return max(caps)
+
+
+def _sort_orders_for_picking_config(orders: list[Order], pc: PickingConfig | None) -> list[Order]:
+    """Apply ``picking_config.order_sort`` before capacity slice (date / courier≈date; location keeps id)."""
+    if not orders:
+        return orders
+    osrt = (getattr(pc, "order_sort", None) or "date").strip().lower() if pc is not None else "date"
+    if osrt == "location":
+        return sorted(orders, key=lambda o: int(o.id))
+    # date + courier (courier groups not yet modeled — oldest first, same as Sellasist default)
+    return sorted(
+        orders,
+        key=lambda o: (
+            getattr(o, "order_date", None) or getattr(o, "created_at", None) or datetime.min,
+            int(o.id),
+        ),
+    )
 
 
 def start_cartless_picking(
@@ -165,6 +197,14 @@ def start_cartless_picking(
     )
     if not orders:
         return None, OPERATOR_MSG_NO_ASSIGNABLE_AFTER_VALIDATION
+
+    pc = _load_picking_config(
+        db,
+        tenant_id=int(tenant_id),
+        warehouse_id=int(warehouse_id),
+        source_status_id=int(source_status_id),
+    )
+    orders = _sort_orders_for_picking_config(orders, pc)
 
     limit = _resolve_bulk_limit(
         db,

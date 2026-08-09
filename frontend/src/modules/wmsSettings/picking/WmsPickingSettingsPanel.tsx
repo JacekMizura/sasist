@@ -57,6 +57,19 @@ import {
 import { OrderUiStatusField } from "../../../components/orders/OrderUiStatusField";
 import { PickingSettingsModal } from "./PickingSettingsModal";
 import { WMS_PICKING_SETTINGS_NAV_SECTIONS } from "./pickingSettingsNavSections";
+import {
+  BY_PRODUCTS_MULTI_CONTAINER_OPTIONS,
+  BY_PRODUCTS_SINGLE_CONTAINER_OPTIONS,
+  PICKING_COLLECTION_MODE_OPTIONS,
+  ORDER_SORT_DATE_COURIER,
+  ORDER_SORT_LOCATION_DATE_COURIER,
+  coerceConsolidationOrderSort,
+  containerLabel,
+  ensureContainerInOptions,
+  showsByOrdersOrderSort,
+  showsConsolidationOrderSort,
+  showsSingleItemOrderSort,
+} from "./pickingConfiguratorOptions";
 import { brandPrimaryButtonClass } from "../../../design-system/brandUi";
 
 const PANEL_STATUS_GROUP_ORDER: OrderUiMainGroup[] = ["NEW", "IN_PROGRESS", "DONE"];
@@ -590,70 +603,9 @@ type PickingOrderStrategy = "locations" | "oldest_date";
 
 type PickingMode = "by_orders" | "by_products";
 type PickingOrderSort = PickingConfigOrderSortDb;
+type PickingOrderTypeKey = "single_item" | "multi_item";
 
-const PICKING_WHERE_OPTIONS: Array<{
-  value: PickingContainers;
-  label: string;
-  description: string;
-}> = [
-  {
-    value: "cart_scan",
-    label: "Wózek (wymagany skan)",
-    description: "Odłożenie na wózek wymaga skanu kodu wózka lub slotu — mniejsza szansa pomyłki.",
-  },
-  {
-    value: "cart_no_scan",
-    label: "Zbieranie bez identyfikacji wózka",
-    description:
-      "Zamówienia są przypisywane do operatora i sesji zbierania bez wskazywania konkretnego wózka. Limity zbioru wynikają z ustawień magazynu.",
-  },
-  {
-    value: "baskets",
-    label: "Do wózka z koszykami",
-    description: "Każde zamówienie w osobnym koszyku — typowe przy wielu zamówieniach naraz.",
-  },
-  {
-    value: "mobile_cart",
-    label: "Pick & Pack na wózku mobilnym",
-    description: "Zbieranie i pakowanie w jednym przejściu na wózku mobilnym.",
-  },
-  {
-    value: "consolidation_rack",
-    label: "Regał kompletacyjny (konsolidacja)",
-    description: "Pozycje odkładasz na przypisaną półkę regału (np. RK-01/A2).",
-  },
-];
-
-const PICKING_MODE_OPTIONS: Array<{ value: PickingMode; label: string; hint: string }> = [
-  {
-    value: "by_orders",
-    label: "Po zamówieniach",
-    hint: "Kompletujesz całe zamówienie naraz — kolejność kolejki ustawiasz osobno.",
-  },
-  {
-    value: "by_products",
-    label: "Po produktach",
-    hint: "Agregacja po SKU i trasa po lokalizacjach — szybsze zbieranie tych samych produktów.",
-  },
-];
-
-const PICKING_ORDER_SORT_OPTIONS: Array<{ value: PickingOrderSort; label: string; hint: string }> = [
-  {
-    value: "date",
-    label: "Po dacie zaczynając od najstarszych zamówień",
-    hint: "Kolejka FIFO — najpierw najstarsze zamówienia.",
-  },
-  {
-    value: "location",
-    label: "Po lokalizacjach",
-    hint: "Kolejka wg pierwszej lokalizacji na trasie zbierania.",
-  },
-  {
-    value: "courier",
-    label: "Po grupach kurierskich z priorytetem zbierania zamówień do wysłania na dziś",
-    hint: "Najpierw grupy kurierskie z wysyłką na dziś.",
-  },
-];
+const PICKING_MODE_OPTIONS = PICKING_COLLECTION_MODE_OPTIONS;
 
 type PickingBlockState = {
   collectionMethod: PickingCollectionMethod;
@@ -753,10 +705,28 @@ function normalizeBlocksForPickingMode(
   mode: PickingMode,
 ): Record<PickingOrderTypeKey, PickingBlockState> {
   const shape = blocksShapeForMode(mode);
-  const single: PickingBlockState = { ...blocks.single_item, ...shape };
+  let single: PickingBlockState = { ...blocks.single_item, ...shape };
   let multi: PickingBlockState = { ...blocks.multi_item, ...shape };
-  if (mode === "by_products" && multi.containers === "cart_no_scan") {
-    multi = { ...multi, containers: "baskets" };
+  if (mode === "by_products") {
+    single = {
+      ...single,
+      containers: ensureContainerInOptions(
+        single.containers,
+        BY_PRODUCTS_SINGLE_CONTAINER_OPTIONS,
+        "cart_scan",
+      ),
+    };
+    multi = {
+      ...multi,
+      containers: ensureContainerInOptions(
+        multi.containers,
+        BY_PRODUCTS_MULTI_CONTAINER_OPTIONS,
+        "baskets",
+      ),
+    };
+  }
+  if (single.containers === "consolidation_rack") {
+    single = { ...single, containers: "cart_scan" };
   }
   return { single_item: single, multi_item: multi };
 }
@@ -823,9 +793,6 @@ function validateSavedConfigForServer(cfg: SavedPickingConfiguration): string | 
   if (cfg.statusToPickId === cfg.statusAfterPickId) {
     return `Reguła „${cfg.statusToPickName}”: status do zbierania i po zebraniu muszą się różnić.`;
   }
-  if (cfg.pickingMode === "by_products" && cfg.blocks.multi_item.containers === "cart_no_scan") {
-    return `Reguła „${cfg.statusToPickName}”: przy zbieraniu po produktach (wieloelementowe) nie można użyć opcji „Do wózka bez wymuszenia skanowania kodu kreskowego” — wybierz koszyki, skan, wózek mobilny lub regał kompletacyjny.`;
-  }
   if (cfg.blocks.single_item.containers === "consolidation_rack") {
     return `Reguła „${cfg.statusToPickName}”: regał kompletacyjny jest dostępny tylko dla zamówień wieloelementowych.`;
   }
@@ -857,7 +824,13 @@ function savedConfigToReplaceItem(
   const singleMode = uiContainersToDbMode(cfg.blocks.single_item.containers);
   const multiMode = uiContainersToDbMode(cfg.blocks.multi_item.containers);
   const pick_unit = cfg.pickingMode === "by_products" ? "products" : "orders";
-  const order_sort: PickingConfigOrderSortDb = cfg.pickingMode === "by_products" ? "date" : cfg.orderSort;
+  let order_sort: PickingConfigOrderSortDb = cfg.orderSort;
+  if (
+    cfg.pickingMode === "by_products" &&
+    cfg.blocks.multi_item.containers === "consolidation_rack"
+  ) {
+    order_sort = coerceConsolidationOrderSort(cfg.orderSort);
+  }
   let max_single_orders: number | null;
   if (singleMode === "bulk") {
     const p = parseBulkOrderLimitInput(globalBulk.single, BULK_ORDER_LIMIT_MAX);
@@ -906,99 +879,50 @@ function savedConfigurationToDraft(cfg: SavedPickingConfiguration): PickingConfi
   };
 }
 
-function pickingWhereLabel(mode: PickingContainers): string {
-  return PICKING_WHERE_OPTIONS.find((o) => o.value === mode)?.label ?? mode;
+function pickingWhereLabel(mode: PickingContainers, orderType: PickingOrderTypeKey = "multi_item"): string {
+  if (orderType === "single_item") {
+    return containerLabel(mode, BY_PRODUCTS_SINGLE_CONTAINER_OPTIONS);
+  }
+  return containerLabel(mode, BY_PRODUCTS_MULTI_CONTAINER_OPTIONS);
 }
 
-function pickingFlowSummaryLine(config: SavedPickingConfiguration, orderTypeKey: PickingOrderTypeKey): string {
-  const block = config.blocks[orderTypeKey];
-  if (config.pickingMode === "by_orders") {
-    return `Kolejność zamówień: ${pickingOrderSortLabel(config.orderSort)}`;
-  }
-  if (orderTypeKey === "single_item") {
-    return "Trasa: kolejność lokalizacji (produkty)";
-  }
-  if (block.containers === "mobile_cart") {
-    return block.batchType === "multi"
-      ? "Trasa: lokalizacje · pick & pack (wiele zamówień — wg pojemności)"
-      : "Trasa: lokalizacje · jedno zamówienie na przejście · pick & pack";
-  }
-  if (block.containers === "consolidation_rack") {
-    return "Konsolidacja: lokalne pozycje odkładasz na przypisaną półkę regału (RK-xx/Ax)";
-  }
-  return block.batchType === "multi"
-    ? "Trasa: lokalizacje · zbiór wielu zamówień (wg koszyków / skanów / limitów)"
-    : "Trasa: lokalizacje · jedno zamówienie na przejście";
-}
-
-const PICKING_ORDER_TYPE_SECTIONS = [
-  { key: "single_item", label: "Zamówienia jednoelementowe", letter: "A" },
-  { key: "multi_item", label: "Zamówienia wieloelementowe", letter: "B" },
-] as const;
-
-type PickingOrderTypeKey = (typeof PICKING_ORDER_TYPE_SECTIONS)[number]["key"];
-
-type PickingWhereOptionView = {
-  value: PickingContainers;
-  label: string;
-  description: string;
-  disabled?: boolean;
-  disabledReason?: string;
-};
-
-function PickingWhereYouPickField({
-  fieldIdPrefix,
+function PickingRadioGroup<T extends string>({
+  legend,
+  name,
   value,
-  onPatch,
   options,
+  onChange,
 }: {
-  fieldIdPrefix: string;
-  value: PickingContainers;
-  onPatch: (patch: Partial<PickingBlockState>) => void;
-  options: PickingWhereOptionView[];
+  legend: string;
+  name: string;
+  value: T;
+  options: Array<{ value: T; label: string }>;
+  onChange: (v: T) => void;
 }) {
-  const groupId = `${fieldIdPrefix}-where`;
   return (
     <div>
-      <p id={`${groupId}-legend`} className="text-sm font-semibold tracking-tight text-slate-900">
-        Gdzie zbierasz
-      </p>
-      <div
-        className="mt-2 flex flex-col gap-1.5"
-        role="radiogroup"
-        aria-labelledby={`${groupId}-legend`}
-      >
+      <p className="text-sm font-semibold text-slate-900">{legend}</p>
+      <div className="mt-2 flex flex-col gap-1.5" role="radiogroup" aria-label={legend}>
         {options.map((opt) => {
-          const isDisabled = Boolean(opt.disabled);
-          const isSelected = value === opt.value;
+          const selected = value === opt.value;
           return (
             <label
               key={opt.value}
               className={[
-                "flex items-start gap-2.5 rounded-lg border px-3 py-2 transition-colors",
-                isDisabled ? "cursor-not-allowed opacity-60" : "cursor-pointer",
-                isSelected && !isDisabled
+                "flex cursor-pointer items-start gap-2.5 rounded-lg border px-3 py-2 transition-colors",
+                selected
                   ? "border-blue-500 bg-blue-50/40 ring-1 ring-blue-500/15"
-                  : isSelected && isDisabled
-                    ? "border-amber-300 bg-amber-50/40"
-                    : "border-slate-200 bg-white hover:border-slate-300",
+                  : "border-slate-200 bg-white hover:border-slate-300",
               ].join(" ")}
             >
               <input
                 type="radio"
-                name={`${fieldIdPrefix}-where`}
-                className={radioInputClass + " mt-0.5 disabled:cursor-not-allowed"}
-                checked={isSelected}
-                disabled={isDisabled}
-                onChange={() => onPatch({ containers: opt.value })}
+                name={name}
+                className={`${radioInputClass} mt-0.5`}
+                checked={selected}
+                onChange={() => onChange(opt.value)}
               />
-              <span className="min-w-0 flex-1">
-                <span className="block text-sm font-medium leading-snug text-slate-900">{opt.label}</span>
-                <span className="mt-0.5 block text-xs leading-relaxed text-slate-500">{opt.description}</span>
-                {isDisabled && opt.disabledReason ? (
-                  <span className="mt-1 block text-xs leading-relaxed text-amber-800">{opt.disabledReason}</span>
-                ) : null}
-              </span>
+              <span className="min-w-0 text-sm font-medium leading-snug text-slate-900">{opt.label}</span>
             </label>
           );
         })}
@@ -1007,191 +931,29 @@ function PickingWhereYouPickField({
   );
 }
 
-function PickingConfiguratorFields({
-  fieldIdPrefix,
-  orderTypeKey,
-  pickingMode,
+function PickingNestedOrderSort({
+  legend,
+  name,
   value,
-  onPatch,
+  options,
+  onChange,
 }: {
-  fieldIdPrefix: string;
-  orderTypeKey: PickingOrderTypeKey;
-  pickingMode: PickingMode;
-  value: PickingBlockState;
-  onPatch: (patch: Partial<PickingBlockState>) => void;
+  legend: string;
+  name: string;
+  value: PickingOrderSort;
+  options: Array<{ value: PickingOrderSort; label: string }>;
+  onChange: (v: PickingOrderSort) => void;
 }) {
-  const isSingleItem = orderTypeKey === "single_item";
-  const isMobile = value.containers === "mobile_cart";
-  const isBaskets = value.containers === "baskets";
-  const isConsolidationRack = value.containers === "consolidation_rack";
-  const byOrdersMode = pickingMode === "by_orders";
-  const byProductsMode = pickingMode === "by_products";
-
-  const containerChoices: PickingWhereOptionView[] = PICKING_WHERE_OPTIONS.map((o) => {
-    if (o.value === "consolidation_rack" && isSingleItem) {
-      return {
-        ...o,
-        disabled: true,
-        disabledReason: "Niedostępne dla zamówień jednoelementowych — konsolidacja dotyczy wielu pozycji.",
-      };
-    }
-    if (o.value === "cart_no_scan" && byProductsMode && !isSingleItem) {
-      return {
-        ...o,
-        disabled: true,
-        disabledReason:
-          "Przy zbieraniu po produktach zamówienia wielopozycyjne wymagają rozdzielenia (koszyki, skan, wózek mobilny lub regał).",
-      };
-    }
-    return { ...o };
-  });
-
-  const batchSectionDisabled =
-    byOrdersMode || isMobile || isConsolidationRack || isSingleItem;
-  let batchDisabledReason = "";
-  if (byOrdersMode) {
-    batchDisabledReason =
-      "Typ zbioru dotyczy trybu „Po produktach”. W trybie „Po zamówieniach” kolejność ustawiasz powyżej.";
-  } else if (isSingleItem) {
-    batchDisabledReason = "Dla zamówień jednoelementowych zbiór to zawsze jedno zamówienie na przejście.";
-  } else if (isMobile) {
-    batchDisabledReason = "Na wózku mobilnym (Pick & Pack) wielkość zbioru wynika z procesu pick & pack.";
-  } else if (isConsolidationRack) {
-    batchDisabledReason = "Przy regale kompletacyjnym wielkość zbioru wynika z planu konsolidacji.";
-  }
-
-  const routeSectionDisabled = byOrdersMode || isMobile || isConsolidationRack;
-  let routeDisabledReason = "";
-  if (byOrdersMode) {
-    routeDisabledReason =
-      "Trasa po lokalizacjach dotyczy trybu „Po produktach”. W trybie „Po zamówieniach” używasz kolejności zamówień powyżej.";
-  } else if (isMobile) {
-    routeDisabledReason = "Pick & Pack na wózku mobilnym prowadzi trasę po lokalizacjach automatycznie.";
-  } else if (isConsolidationRack) {
-    routeDisabledReason = "Przy regale kompletacyjnym nawigacja wynika z przypisanej półki konsolidacyjnej.";
-  }
-
-  const disabledSectionClass = "pointer-events-none opacity-55";
-
+  const safeValue = options.some((o) => o.value === value) ? value : options[0]!.value;
   return (
-    <div className="space-y-3">
-      <PickingWhereYouPickField
-        fieldIdPrefix={fieldIdPrefix}
-        value={value.containers}
-        onPatch={onPatch}
-        options={containerChoices}
+    <div className="mt-2 rounded-lg border border-slate-200 bg-slate-50/70 px-3 py-2.5">
+      <PickingRadioGroup
+        legend={legend}
+        name={name}
+        value={safeValue}
+        options={options}
+        onChange={onChange}
       />
-
-      {isMobile && orderTypeKey === "multi_item" ? (
-        <div className="rounded-lg border border-blue-100 bg-blue-50 px-3 py-2">
-          <p className="text-xs font-semibold text-blue-900">Pick & Pack na wózku mobilnym</p>
-          <p className="mt-0.5 text-xs leading-relaxed text-blue-800">
-            {byOrdersMode
-              ? "Zbieranie i pakowanie w jednym przejściu — kolejka zamówień wg wybranej kolejności."
-              : "Zbieranie i pakowanie w jednym przejściu — trasa po lokalizacjach."}
-          </p>
-        </div>
-      ) : null}
-
-      {isConsolidationRack && orderTypeKey === "multi_item" ? (
-        <div className="rounded-lg border border-violet-100 bg-violet-50 px-3 py-2">
-          <p className="text-xs font-semibold text-violet-900">Regał kompletacyjny (konsolidacja)</p>
-          <p className="mt-0.5 text-xs leading-relaxed text-violet-800">
-            Lokalne pozycje planów konsolidacyjnych odkładasz na przypisaną półkę (np. RK-01/A2).
-          </p>
-        </div>
-      ) : null}
-
-      <div className={["border-t border-slate-100 pt-3", batchSectionDisabled ? disabledSectionClass : ""].join(" ")}>
-        <p className={configBlockTitleClass}>Typ zbioru</p>
-        {batchSectionDisabled && batchDisabledReason ? (
-          <p className="mt-1.5 text-xs leading-relaxed text-amber-800">{batchDisabledReason}</p>
-        ) : null}
-        <div className="mt-2 flex flex-col gap-1" aria-disabled={batchSectionDisabled}>
-          <label className={[radioLabelClass, batchSectionDisabled ? "cursor-not-allowed" : ""].join(" ")}>
-            <input
-              type="radio"
-              name={`${fieldIdPrefix}-batch-type`}
-              className={radioInputClass + " disabled:cursor-not-allowed"}
-              checked={value.batchType === "single"}
-              disabled={batchSectionDisabled}
-              onChange={() => onPatch({ batchType: "single" })}
-            />
-            <span className="min-w-0">
-              <span className="block text-sm text-slate-900">Pojedyncze zamówienie na przejście</span>
-              <span className="mt-0.5 block text-xs text-slate-500">
-                Jedno zamówienie naraz — prostszy proces, mniej ryzyka pomieszania.
-              </span>
-            </span>
-          </label>
-          <label className={[radioLabelClass, batchSectionDisabled ? "cursor-not-allowed" : ""].join(" ")}>
-            <input
-              type="radio"
-              name={`${fieldIdPrefix}-batch-type`}
-              className={radioInputClass + " disabled:cursor-not-allowed"}
-              checked={value.batchType === "multi"}
-              disabled={batchSectionDisabled}
-              onChange={() => onPatch({ batchType: "multi" })}
-            />
-            <span className="min-w-0">
-              <span className="block text-sm text-slate-900">Wiele zamówień w jednym zbiorze</span>
-              <span className="mt-0.5 block text-xs text-slate-500">
-                Większa wydajność przy wielu zamówieniach w jednym przejściu.
-              </span>
-            </span>
-          </label>
-        </div>
-        {!batchSectionDisabled && value.batchType === "multi" ? (
-          <p className="mt-2 text-xs leading-relaxed text-slate-500">
-            {isBaskets
-              ? "Liczba zamówień w zbiorze wynika z koszyków — zwykle jedno zamówienie na koszyk."
-              : "Przy skanie slotów lub limitach zbioru bez skanu — liczba zamówień wynika z pojemności i reguł przypisania."}
-          </p>
-        ) : null}
-      </div>
-
-      <div className={["border-t border-slate-100 pt-3", routeSectionDisabled ? disabledSectionClass : ""].join(" ")}>
-        <p className={configBlockTitleClass}>Kolejność w magazynie</p>
-        {routeSectionDisabled && routeDisabledReason ? (
-          <p className="mt-1.5 text-xs leading-relaxed text-amber-800">{routeDisabledReason}</p>
-        ) : (
-          <p className="mt-2 text-sm leading-relaxed text-slate-600">
-            {isSingleItem ? (
-              <>
-                Pozycje z zamówienia jednoelementowego —{" "}
-                <span className="font-semibold text-slate-900">nawigacja po kolejności lokalizacji</span> na trasie
-                zbiórki.
-              </>
-            ) : (
-              <>
-                W zbiorze wielozamówieniowym kolejność lokalizacji jest ustalana{" "}
-                <span className="font-semibold text-slate-900">po pozycjach na trasie</span>.
-              </>
-            )}
-          </p>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function PickingOrderTypeConfiguratorSection({
-  title,
-  letter,
-  children,
-}: {
-  title: string;
-  letter: string;
-  children: ReactNode;
-}) {
-  return (
-    <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
-      <div className="border-b border-slate-100 bg-slate-50/60 px-3.5 py-2.5">
-        <span className="text-sm font-semibold text-slate-900">
-          <span className="mr-1 tabular-nums text-slate-400">{letter}.</span> {title}
-        </span>
-      </div>
-      <div className="px-3.5 py-3">{children}</div>
     </div>
   );
 }
@@ -1343,10 +1105,16 @@ function PickingConfiguratorEditor({
   const canPickStatus = !selectDisabled;
   const statusToPickRequired = canPickStatus && statusToPickShowError && statusToPick === "";
   const statusAfterPickRequired = canPickStatus && statusAfterPickShowError && statusAfterPick === "";
-  const orderSortDisabled = pickingMode === "by_products";
+
+  const multiContainers = blocks.multi_item.containers;
+  const singleContainers = blocks.single_item.containers;
+  const showByOrdersSort = showsByOrdersOrderSort(pickingMode);
+  const showConsolidationSort = showsConsolidationOrderSort(pickingMode, multiContainers);
+  const showSingleSort = showsSingleItemOrderSort(pickingMode, singleContainers, multiContainers);
+  const byProducts = pickingMode === "by_products";
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4" aria-label="Konfigurator trybu zbierania">
       {warehouseId == null ? (
         <p className="text-sm text-amber-800">Wybierz magazyn, aby wczytać statusy panelu zamówień.</p>
       ) : null}
@@ -1357,7 +1125,7 @@ function PickingConfiguratorEditor({
         </p>
       ) : null}
 
-      <div className={wmsSettingsRowsStackClass}>
+      <div className="rounded-xl border border-slate-200 bg-white p-3.5">
         <WmsControlSettingRow
           label={
             <>
@@ -1367,7 +1135,7 @@ function PickingConfiguratorEditor({
               </span>
             </>
           }
-          hint="Każdy status może mieć tylko jedną zapisaną konfigurację."
+          hint="Wybierz status zamówienia, z którego startuje zbieranie. Każdy status może mieć jedną konfigurację."
           footer={
             <>
               {statusToPickRequired ? (
@@ -1377,7 +1145,7 @@ function PickingConfiguratorEditor({
               ) : null}
               {statusPairConflict ? (
                 <p className="mt-1.5 text-xs font-medium text-red-700" role="alert">
-                  Status do zbierania nie może być taki sam jak status po zebraniu.
+                  Status do zbierania nie może być taki sam jak status do pakowania.
                 </p>
               ) : null}
             </>
@@ -1393,26 +1161,97 @@ function PickingConfiguratorEditor({
             }}
             allowClear
             clearLabel="— wybierz —"
-            placeholder="Wybierz status…"
+            placeholder="Wybierz status zamówienia…"
             disabled={selectDisabled}
           />
         </WmsControlSettingRow>
+      </div>
 
+      <div className="rounded-xl border border-slate-200 bg-white p-3.5">
+        <PickingRadioGroup
+          legend="W jaki sposób chcesz zbierać zamówienia?"
+          name={`${fieldIdPrefix}-picking-mode`}
+          value={pickingMode}
+          options={PICKING_MODE_OPTIONS}
+          onChange={onPickingModeChange}
+        />
+      </div>
+
+      {showByOrdersSort ? (
+        <div className="rounded-xl border border-slate-200 bg-white p-3.5">
+          <PickingRadioGroup
+            legend="Wybierz sposób doboru zamówień:"
+            name={`${fieldIdPrefix}-order-sort`}
+            value={orderSort}
+            options={ORDER_SORT_LOCATION_DATE_COURIER}
+            onChange={onOrderSortChange}
+          />
+        </div>
+      ) : null}
+
+      {byProducts ? (
+        <div className="space-y-3">
+          <div className="rounded-xl border border-slate-200 bg-white p-3.5">
+            <PickingRadioGroup
+              legend="Jak chcesz zbierać zamówienia wieloelementowe?"
+              name={`${fieldIdPrefix}-multi-where`}
+              value={multiContainers}
+              options={BY_PRODUCTS_MULTI_CONTAINER_OPTIONS}
+              onChange={(v) => {
+                patchBlock("multi_item", { containers: v });
+                if (v === "consolidation_rack") {
+                  onOrderSortChange(coerceConsolidationOrderSort(orderSort));
+                }
+              }}
+            />
+            {showConsolidationSort ? (
+              <PickingNestedOrderSort
+                legend="Wybierz sposób doboru zamówień wieloelementowych:"
+                name={`${fieldIdPrefix}-multi-order-sort`}
+                value={coerceConsolidationOrderSort(orderSort)}
+                options={ORDER_SORT_DATE_COURIER}
+                onChange={onOrderSortChange}
+              />
+            ) : null}
+          </div>
+
+          <div className="rounded-xl border border-slate-200 bg-white p-3.5">
+            <PickingRadioGroup
+              legend="Jak chcesz zbierać zamówienia jednoelementowe?"
+              name={`${fieldIdPrefix}-single-where`}
+              value={singleContainers}
+              options={BY_PRODUCTS_SINGLE_CONTAINER_OPTIONS}
+              onChange={(v) => patchBlock("single_item", { containers: v })}
+            />
+            {showSingleSort ? (
+              <PickingNestedOrderSort
+                legend="Wybierz sposób doboru zamówień jednoelementowych:"
+                name={`${fieldIdPrefix}-single-order-sort`}
+                value={orderSort}
+                options={ORDER_SORT_LOCATION_DATE_COURIER}
+                onChange={onOrderSortChange}
+              />
+            ) : null}
+          </div>
+        </div>
+      ) : null}
+
+      <div className="rounded-xl border border-slate-200 bg-white p-3.5">
         <WmsControlSettingRow
           label={
             <>
-              Status po zakończeniu zbierania
+              Wybierz status do pakowania zamówienia
               <span className="ml-1 text-red-600" aria-hidden>
                 *
               </span>
             </>
           }
-          hint="Po zakończeniu zbierania status zamówienia zostanie automatycznie zmieniony."
+          hint="Status, na który zamówienie przechodzi po zakończeniu zbierania."
           footer={
             <>
               {statusAfterPickRequired ? (
                 <p className="mt-1.5 text-xs font-medium text-red-700" role="alert">
-                  Wybierz status po zebraniu.
+                  Wybierz status do pakowania.
                 </p>
               ) : null}
               {statusPairConflict ? (
@@ -1438,99 +1277,6 @@ function PickingConfiguratorEditor({
           />
         </WmsControlSettingRow>
       </div>
-
-      <div className="grid gap-3 lg:grid-cols-2">
-        <div className="rounded-xl border border-slate-200 bg-white p-3.5">
-          <p className="text-sm font-semibold text-slate-900">Tryb zbierania</p>
-          <div className="mt-2.5 flex flex-col gap-1.5" role="radiogroup" aria-label="Tryb zbierania">
-            {PICKING_MODE_OPTIONS.map((opt) => (
-              <label
-                key={opt.value}
-                className={[
-                  "flex cursor-pointer flex-col gap-0.5 rounded-lg border px-3 py-2 transition-colors",
-                  pickingMode === opt.value
-                    ? "border-blue-500 bg-blue-50/40 ring-1 ring-blue-500/15"
-                    : "border-slate-200 bg-white hover:border-slate-300",
-                ].join(" ")}
-              >
-                <span className="flex items-center gap-2">
-                  <input
-                    type="radio"
-                    name={`${fieldIdPrefix}-picking-mode`}
-                    className={radioInputClass}
-                    checked={pickingMode === opt.value}
-                    onChange={() => onPickingModeChange(opt.value)}
-                  />
-                  <span className="text-sm font-medium text-slate-900">{opt.label}</span>
-                </span>
-                <span className="pl-7 text-xs leading-relaxed text-slate-500">{opt.hint}</span>
-              </label>
-            ))}
-          </div>
-        </div>
-
-        <div
-          className={[
-            "rounded-xl border border-slate-200 bg-white p-3.5",
-            orderSortDisabled ? "opacity-70" : "",
-          ].join(" ")}
-        >
-          <p className="text-sm font-semibold text-slate-900">Kolejność zamówień</p>
-          {orderSortDisabled ? (
-            <p className="mt-1.5 text-xs leading-relaxed text-amber-800">
-              Niedostępne w trybie „Po produktach” — kolejność wynika z agregacji SKU i trasy po lokalizacjach.
-            </p>
-          ) : null}
-          <div
-            className={["mt-2.5 flex flex-col gap-1.5", orderSortDisabled ? "pointer-events-none opacity-55" : ""].join(
-              " ",
-            )}
-            role="radiogroup"
-            aria-label="Kolejność zamówień"
-            aria-disabled={orderSortDisabled}
-          >
-            {PICKING_ORDER_SORT_OPTIONS.map((opt) => (
-              <label
-                key={opt.value}
-                className={[
-                  "flex flex-col gap-0.5 rounded-lg border px-3 py-2 transition-colors",
-                  orderSortDisabled ? "cursor-not-allowed" : "cursor-pointer",
-                  orderSort === opt.value && !orderSortDisabled
-                    ? "border-blue-500 bg-blue-50/40 ring-1 ring-blue-500/15"
-                    : "border-slate-200 hover:bg-slate-50",
-                ].join(" ")}
-              >
-                <span className="flex items-center gap-2">
-                  <input
-                    type="radio"
-                    name={`${fieldIdPrefix}-order-sort`}
-                    className={radioInputClass + " disabled:cursor-not-allowed"}
-                    checked={orderSort === opt.value}
-                    disabled={orderSortDisabled}
-                    onChange={() => onOrderSortChange(opt.value)}
-                  />
-                  <span className="text-sm font-medium leading-snug text-slate-900">{opt.label}</span>
-                </span>
-                <span className="pl-7 text-xs text-slate-500">{opt.hint}</span>
-              </label>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      <div className="grid gap-3 xl:grid-cols-2">
-        {PICKING_ORDER_TYPE_SECTIONS.map((def) => (
-          <PickingOrderTypeConfiguratorSection key={def.key} letter={def.letter} title={def.label}>
-            <PickingConfiguratorFields
-              fieldIdPrefix={`${fieldIdPrefix}-${def.key}`}
-              orderTypeKey={def.key}
-              pickingMode={pickingMode}
-              value={blocks[def.key]}
-              onPatch={(patch) => patchBlock(def.key, patch)}
-            />
-          </PickingOrderTypeConfiguratorSection>
-        ))}
-      </div>
     </div>
   );
 }
@@ -1550,10 +1296,10 @@ function SavedPickingConfigSummaryCard({
   isDefault?: boolean;
 }) {
   const modeLabel = pickingModeLabel(config.pickingMode);
-  const orderSortHint =
-    config.pickingMode === "by_orders" ? pickingOrderSortLabel(config.orderSort) : null;
-  const singleWhere = pickingWhereLabel(config.blocks.single_item.containers);
-  const multiWhere = pickingWhereLabel(config.blocks.multi_item.containers);
+  const orderSortHint = pickingOrderSortLabel(config.orderSort);
+  const singleWhere = pickingWhereLabel(config.blocks.single_item.containers, "single_item");
+  const multiWhere = pickingWhereLabel(config.blocks.multi_item.containers, "multi_item");
+  const byProducts = config.pickingMode === "by_products";
 
   return (
     <div
@@ -1579,25 +1325,29 @@ function SavedPickingConfigSummaryCard({
           <div className="min-w-0">
             <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Tryb zbierania</p>
             <p className="mt-0.5 text-sm font-medium leading-snug text-slate-900">{modeLabel}</p>
-            {orderSortHint ? (
-              <p className="mt-0.5 truncate text-xs leading-snug text-slate-500" title={orderSortHint}>
-                {orderSortHint}
-              </p>
-            ) : null}
+            <p className="mt-0.5 truncate text-xs leading-snug text-slate-500" title={orderSortHint}>
+              {orderSortHint}
+            </p>
           </div>
 
           <div className="min-w-0">
             <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Ustawienia</p>
-            <p className="mt-0.5 truncate text-xs leading-snug text-slate-700" title={singleWhere}>
-              <span className="font-medium text-slate-500">1-el:</span> {singleWhere}
-            </p>
-            <p className="mt-0.5 truncate text-xs leading-snug text-slate-700" title={multiWhere}>
-              <span className="font-medium text-slate-500">Multi:</span> {multiWhere}
-            </p>
+            {byProducts ? (
+              <>
+                <p className="mt-0.5 truncate text-xs leading-snug text-slate-700" title={multiWhere}>
+                  <span className="font-medium text-slate-500">Multi:</span> {multiWhere}
+                </p>
+                <p className="mt-0.5 truncate text-xs leading-snug text-slate-700" title={singleWhere}>
+                  <span className="font-medium text-slate-500">1-el:</span> {singleWhere}
+                </p>
+              </>
+            ) : (
+              <p className="mt-0.5 text-xs leading-snug text-slate-700">Dobór zamówień wg kolejności powyżej</p>
+            )}
           </div>
 
           <div className="min-w-0">
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Po zakończeniu</p>
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Do pakowania</p>
             <p className="mt-0.5 truncate text-sm font-medium leading-snug text-slate-900" title={config.statusAfterPickName}>
               {config.statusAfterPickName}
             </p>
@@ -2006,13 +1756,6 @@ export function WmsPickingSettingsSections({
       savedConfigs.some((c) => c.statusToPickId === pickId)
     ) {
       setSaveFormError("Ten status ma już zapisaną konfigurację — wybierz inny status do zbierania.");
-      return { ok: false };
-    }
-
-    if (d.pickingMode === "by_products" && d.blocks.multi_item.containers === "cart_no_scan") {
-      setSaveFormError(
-        "Przy zbieraniu po produktach (wieloelementowe) wybierz koszyki, skan, wózek mobilny lub regał — wymagane jest rozdzielenie zamówień.",
-      );
       return { ok: false };
     }
 
@@ -2650,7 +2393,7 @@ export function WmsPickingSettingsSections({
 
       <PickingSettingsModal
         open={draft != null}
-        title={editBackup ? "Edycja trybu zbierania" : "Nowy tryb zbierania"}
+        title={editBackup ? "Edycja konfiguracji zbierania" : "Konfigurator trybu zbierania"}
         subtitle="Zmiany w regule zatwierdzasz tutaj; zapis na serwer — paskiem na dole strony ustawień WMS."
         onClose={closeDraftEditor}
         onSave={() => {
