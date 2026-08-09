@@ -3,7 +3,6 @@ import { DAMAGE_TENANT_ID } from "../../../pages/damage/damageShared";
 import type { PackingAutomationButtonsPosition, PackingSalesDocPreview } from "../../../types/wmsPackingExtendedUi";
 import { CourierBadge } from "./CourierBadge";
 import { PackingAutomationActivators } from "./PackingAutomationActivators";
-import PackingFitRecommendationPanel from "./PackingFitRecommendationPanel";
 import { packingCourierLabelCount, packingCourierName } from "./packingHelpers";
 
 const NOTES_RED = "#d32f2f";
@@ -49,8 +48,6 @@ export type PackingOrderSidebarProps = {
   scanBusy: boolean;
   packingActionsLocked: boolean;
   visibleOperationalNotes: WmsOperationalNoteBriefApi[];
-  selectCartonBusy: boolean;
-  onSelectCarton: (cartonId: string, opts?: { confirmOverride?: boolean }) => void;
   packAll: () => void | Promise<void>;
   onInterrupt: () => void;
   showAutomationButtons?: boolean;
@@ -61,7 +58,7 @@ export type PackingOrderSidebarProps = {
 };
 
 /**
- * Lewy panel dokumentu / przesyłki — jeden komponent, warianty uproszczony vs szczegółowy.
+ * Lewy panel dokumentu / przesyłki — bez logistyki wózka i bez Smart Matching.
  */
 export function PackingOrderSidebar({
   detail,
@@ -74,8 +71,6 @@ export function PackingOrderSidebar({
   scanBusy,
   packingActionsLocked,
   visibleOperationalNotes,
-  selectCartonBusy,
-  onSelectCarton,
   packAll,
   onInterrupt,
   showAutomationButtons = false,
@@ -126,7 +121,6 @@ export function PackingOrderSidebar({
           <IconMenu />
         </button>
 
-        {/* Dokument */}
         <div className="min-w-0">
           {hasSalesDocument ? (
             <div className="flex flex-wrap items-center gap-2">
@@ -153,9 +147,8 @@ export function PackingOrderSidebar({
           )}
         </div>
 
-        {/* Kupujący — tylko dokument szczegółowy */}
         {detailed && (clientName || nip || showAddress) ? (
-          <div className="min-w-0 border-t border-slate-100 pt-3">
+          <div className="min-w-0">
             <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">Kupujący</p>
             {clientName && clientName !== "—" ? (
               <p className="mt-1 text-sm font-bold leading-snug text-slate-900">{clientName}</p>
@@ -167,7 +160,7 @@ export function PackingOrderSidebar({
           </div>
         ) : null}
 
-        <div className="min-w-0 border-t border-slate-100 pt-3">
+        <div className="min-w-0">
           <CourierBadge
             variant="sidebar"
             courierName={packingCourierName(detail)}
@@ -190,7 +183,7 @@ export function PackingOrderSidebar({
         </div>
 
         {paymentText || showPhone || showValue ? (
-          <div className="min-w-0 border-t border-slate-100 pt-3 space-y-1.5">
+          <div className="min-w-0 space-y-1.5">
             {paymentText ? (
               <p className="text-xs font-medium text-slate-700">
                 Płatność: <span className="font-semibold text-slate-900">{paymentText}</span>
@@ -217,37 +210,13 @@ export function PackingOrderSidebar({
         ) : null}
 
         {showSidebarComment ? (
-          <div className="min-w-0 border-t border-slate-100 pt-3">
+          <div className="min-w-0">
             <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">
               Uwagi klienta do zamówienia
             </p>
             <p className="mt-1 text-sm font-medium leading-snug text-slate-800">{uwagiKlienta}</p>
           </div>
         ) : null}
-
-        {detail.wms_operational_logistics_lines?.filter((x) => String(x).trim()).length ? (
-          <div className="min-w-0 border-t border-slate-100 pt-3">
-            <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">Logistyka</p>
-            <div className="mt-1 space-y-0.5">
-              {(detail.wms_operational_logistics_lines ?? [])
-                .map((x) => String(x).trim())
-                .filter(Boolean)
-                .map((ln) => (
-                  <p key={ln} className="text-xs font-medium leading-snug text-slate-700">
-                    {ln}
-                  </p>
-                ))}
-            </div>
-          </div>
-        ) : null}
-
-        <div className="min-w-0 border-t border-slate-100 pt-3">
-          <PackingFitRecommendationPanel
-            detail={detail}
-            busy={selectCartonBusy || packingActionsLocked}
-            onUseCarton={(id, opts) => void onSelectCarton(id, opts)}
-          />
-        </div>
 
         {notatkiMag ? (
           <div className="rounded-lg px-3 py-2.5 text-white shadow-sm" style={{ background: NOTES_RED }}>
@@ -271,7 +240,7 @@ export function PackingOrderSidebar({
         ) : null}
       </div>
 
-      <div className="mt-auto flex shrink-0 flex-col gap-2 border-t border-slate-100 p-3">
+      <div className="mt-auto flex shrink-0 flex-col gap-2 p-3">
         <div className="flex items-stretch gap-2">
           <button
             type="button"
@@ -301,7 +270,7 @@ export function PackingOrderSidebar({
         warehouseId != null &&
         warehouseId > 0 &&
         (automationButtonsPosition === "bottom" || automationButtonsPosition === "right") ? (
-          <div className="mt-2 border-t border-slate-100 pt-2">
+          <div className="mt-2">
             <PackingAutomationActivators
               tenantId={DAMAGE_TENANT_ID}
               warehouseId={warehouseId}

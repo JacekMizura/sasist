@@ -445,8 +445,6 @@ export function PackingView({
         scanBusy={scanBusy}
         packingActionsLocked={packingActionsLocked}
         visibleOperationalNotes={visibleOperationalNotes}
-        selectCartonBusy={selectCartonBusy}
-        onSelectCarton={onSelectCarton}
         packAll={packAll}
         onInterrupt={onInterrupt}
         showAutomationButtons={showAutomationButtons}
@@ -456,29 +454,29 @@ export function PackingView({
         onAutomationStatusChanged={onAutomationStatusChanged}
       />
 
-      {/* MAIN — układ ze sidebarem (bez zmian) */}
+      {/* MAIN — układ ze sidebarem */}
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-white">
-        <header className="shrink-0 border-b border-slate-200 bg-white">
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-2 px-3 py-2.5 sm:px-4">
-            <div className="flex min-w-0 flex-wrap items-center gap-2.5 sm:gap-3">
+        <header className="shrink-0 bg-white">
+          <div className="flex min-w-0 items-center gap-x-3 gap-y-1 px-3 py-2 sm:gap-x-4 sm:px-4">
+            <div className="flex min-w-0 shrink-0 items-center gap-2 sm:gap-2.5">
               <button
                 type="button"
-                className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-slate-300 bg-white text-slate-800 hover:bg-slate-50"
+                className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-slate-300 bg-white text-slate-800 hover:bg-slate-50 sm:h-10 sm:w-10"
                 onClick={() => navigate(WMS_ROUTES.packingOrders)}
                 aria-label="Wróć"
               >
                 <IconBack />
               </button>
-              <span className="text-lg font-bold text-slate-900 sm:text-xl">
+              <span className="whitespace-nowrap text-lg font-bold text-slate-900 sm:text-xl">
                 {orderNumberLabel(detail.number)}
               </span>
-              <span className="text-2xl font-black tabular-nums text-slate-900 sm:text-3xl">
+              <span className="whitespace-nowrap text-xl font-black tabular-nums text-slate-900 sm:text-2xl">
                 {qIdx}/{qTot}
               </span>
             </div>
 
-            <div className="min-w-0 flex-1 text-sm text-slate-600">
-              <p className="truncate">
+            <div className="min-w-0 flex-1 truncate text-sm text-slate-600">
+              <span className="font-medium">
                 Wózek: <span className="font-semibold text-slate-900">{cartLabel}</span>
                 {hasBasketLabel ? (
                   <>
@@ -486,19 +484,22 @@ export function PackingView({
                     Koszyk: <span className="font-semibold text-slate-900">{basketCodeRaw}</span>
                   </>
                 ) : null}
-              </p>
-              <p className="mt-0.5 truncate">
+                <span className="mx-1.5 text-slate-300" aria-hidden>
+                  ·
+                </span>
                 Osoba pakująca: <span className="font-semibold text-slate-900">{packerLabel}</span>
-              </p>
+              </span>
             </div>
 
             {showHeaderCartonPicker && headerCartons.length > 0 ? (
-              <PackingRecommendedCartonsPanel
-                items={headerCartons}
-                selectedId={selectedCartonId ?? detail.selected_carton_id}
-                busy={selectCartonBusy || packingActionsLocked}
-                onSelect={onSelectCarton}
-              />
+              <div className="ml-auto flex shrink-0 items-center self-center">
+                <PackingRecommendedCartonsPanel
+                  items={headerCartons}
+                  selectedId={selectedCartonId ?? detail.selected_carton_id}
+                  busy={selectCartonBusy || packingActionsLocked}
+                  onSelect={onSelectCarton}
+                />
+              </div>
             ) : null}
           </div>
         </header>
