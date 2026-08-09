@@ -59,7 +59,7 @@ from ..schemas.wms_packing_settings import (
     WmsPackingFallbackLabel,
 )
 from ..utils.ui_status_color import normalize_stored_color
-from ..utils.order_shipping_display import order_shipping_display
+from ..utils.order_shipping_display import resolve_order_shipping_display
 from .packaging_engine import build_packaging_suggestions_for_order
 from .receiving_scan_service import resolve_receiving_scan
 from .wms_sale_document_service import create_sale_document
@@ -1218,7 +1218,12 @@ def _build_packing_order_card(
     else:
         packed_by_label = None
     is_completed = total_q > 0 and packed_q >= total_q
-    ship_name, ship_logo, _ = order_shipping_display(order)
+    ship_name, ship_logo, _ = resolve_order_shipping_display(
+        order,
+        db,
+        tenant_id=int(tenant_id) if tenant_id else None,
+        warehouse_id=int(warehouse_id) if warehouse_id else None,
+    )
     raw_sid = getattr(order, "shipping_method_id", None)
     ship_id_out = str(raw_sid).strip() if raw_sid else None
     fs_raw = getattr(order, "fulfillment_state", None)
@@ -1826,7 +1831,12 @@ def build_packing_order_detail_out(
     customer_nip = _packing_customer_nip_from_order(order)
     shipping_address_raw = _format_shipping_address_block(order)
     shipping_address = "" if shipping_address_raw in ("", "—") else shipping_address_raw
-    ship_name, _, __ = order_shipping_display(order)
+    ship_name, _, __ = resolve_order_shipping_display(
+        order,
+        db,
+        tenant_id=int(tenant_id),
+        warehouse_id=int(warehouse_id),
+    )
     payment_label: Optional[str] = None
     val = getattr(order, "value", None)
     if val is not None:
