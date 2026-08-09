@@ -14,12 +14,38 @@ export function resolveShippingMethodLogoUrl(logoUrl: string | null | undefined)
   return u;
 }
 
+export type ShippingMethodLogoSource = "custom" | "heuristic" | "none";
+
+export type ShippingMethodLogoPick = {
+  src: string | null;
+  source: ShippingMethodLogoSource;
+};
+
+/**
+ * One-way pick: custom → heuristic → none.
+ * Once ``customFailed`` / ``heuristicFailed`` is set, never go back to that source
+ * (avoids onError loops that re-hit a broken ``/uploads/...``).
+ */
+export function pickShippingMethodLogoSrc(
+  logoUrl: string | null | undefined,
+  methodName: string | null | undefined,
+  opts?: { customFailed?: boolean; heuristicFailed?: boolean },
+): ShippingMethodLogoPick {
+  const custom = resolveShippingMethodLogoUrl(logoUrl);
+  const heuristic = packingCourierLogoSrc(methodName ?? "");
+  if (custom && !opts?.customFailed) {
+    return { src: custom, source: "custom" };
+  }
+  if (heuristic && !opts?.heuristicFailed) {
+    return { src: heuristic, source: "heuristic" };
+  }
+  return { src: null, source: "none" };
+}
+
 /** Prefer API logo; else heuristic from carrier name string. */
 export function shippingMethodLogoForDisplay(
   logoUrl: string | null | undefined,
   methodName: string | null | undefined,
 ): string | null {
-  const resolved = resolveShippingMethodLogoUrl(logoUrl);
-  if (resolved) return resolved;
-  return packingCourierLogoSrc(methodName ?? "");
+  return pickShippingMethodLogoSrc(logoUrl, methodName).src;
 }

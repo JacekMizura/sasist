@@ -1,7 +1,6 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Package, Truck } from "lucide-react";
-import { packingCourierLogoSrc } from "../../utils/packingCourierLogo";
-import { shippingMethodLogoForDisplay } from "../../utils/shippingMethodLogoUrl";
+import { pickShippingMethodLogoSrc } from "../../utils/shippingMethodLogoUrl";
 
 export type ShippingMethodLogoSize =
   | "lg"
@@ -61,25 +60,41 @@ export function ShippingMethodLogo({
   className,
   placeholder = "truck",
 }: ShippingMethodLogoProps) {
-  const [failedSrc, setFailedSrc] = useState<string | null>(null);
-  const preferred = shippingMethodLogoForDisplay(logoUrl, methodName);
-  // Stale /uploads paths must not blank the UI — fall back to carrier asset, then icon.
-  const displaySrc =
-    preferred && preferred === failedSrc ? packingCourierLogoSrc(methodName ?? "") : preferred;
+  const logoKey = (logoUrl ?? "").trim();
+  const [customFailed, setCustomFailed] = useState(false);
+  const [heuristicFailed, setHeuristicFailed] = useState(false);
+
+  // Real logo change only — parent rerenders must not reset and re-hit /uploads.
+  useEffect(() => {
+    setCustomFailed(false);
+    setHeuristicFailed(false);
+  }, [logoKey]);
+
+  const pick = pickShippingMethodLogoSrc(logoUrl, methodName, {
+    customFailed,
+    heuristicFailed,
+  });
   const wrap = ["inline-flex shrink-0 items-center justify-center self-center text-slate-400", className]
     .filter(Boolean)
     .join(" ");
 
-  if (displaySrc && displaySrc !== failedSrc) {
+  if (pick.src) {
     return (
       <span className={wrap}>
         <img
-          key={displaySrc}
-          src={displaySrc}
+          src={pick.src}
           alt=""
           className={IMG[size]}
           loading="lazy"
-          onError={() => setFailedSrc(displaySrc)}
+          onError={() => {
+            if (pick.source === "custom") {
+              setCustomFailed(true);
+              return;
+            }
+            if (pick.source === "heuristic") {
+              setHeuristicFailed(true);
+            }
+          }}
         />
       </span>
     );
