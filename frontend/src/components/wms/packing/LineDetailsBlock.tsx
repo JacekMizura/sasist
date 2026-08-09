@@ -40,7 +40,7 @@ export function LineDetailsBlock({ line, variant, fieldVisibility }: Props) {
   if (!hasAnyMeta) return null;
 
   return (
-    <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-1 text-[13px] leading-snug">
+    <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 text-[13px] leading-snug">
       {color ? (
         <p className={textCls}>
           <span className={labelCls}>Kolor:</span> {color}

@@ -1,4 +1,6 @@
 import { OrdersListLayoutPreview } from "../../../components/wms/packing/ordersList/OrdersListLayoutPreview";
+import { ProductDisplayModePreview } from "../../../components/wms/packing/ProductDisplayModePreview";
+import { buildPackingProductFieldVisibility } from "../../../components/wms/packing/packingProductDisplay";
 import type { WmsPackingExtendedUiSettings } from "../../../types/wmsPackingExtendedUi";
 import type { WmsPackingInterfaceDisplay, WmsPackingSettingsRead } from "../../../types/wmsPackingSettings";
 import {
@@ -19,6 +21,8 @@ type Props = {
 
 /** Grupa 2: Widok — wszystko wizualne. */
 export function PackingViewSection({ extended, draft, patchExtended, toggleInterfaceField }: Props) {
+  const productPreviewVisibility = buildPackingProductFieldVisibility(draft.interface_display, extended);
+
   return (
     <SectionCard id="wms-pack-view" title="Widok">
       <FieldGrid>
@@ -59,15 +63,18 @@ export function PackingViewSection({ extended, draft, patchExtended, toggleInter
         <SelectField
           settingId="packing.product_display_mode"
           label="Wygląd produktów na liście do spakowania"
-          capability={CAP_NONE}
           value={extended.productDisplayMode}
           onChange={(v) =>
             patchExtended("productDisplayMode", v as WmsPackingExtendedUiSettings["productDisplayMode"])
           }
+          infoKey="packing.product_display_mode"
         >
           <option value="list">Lista</option>
           <option value="grid">Siatka</option>
         </SelectField>
+      </FieldGrid>
+      <ProductDisplayModePreview mode={extended.productDisplayMode} fieldVisibility={productPreviewVisibility} />
+      <FieldGrid>
         <SelectField
           settingId="packing.location_badge_position"
           label="Umiejscowienie informacji o lokalizacji na produkcie"

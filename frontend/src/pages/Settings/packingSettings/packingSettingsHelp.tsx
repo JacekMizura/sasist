@@ -48,6 +48,20 @@ export const PACKING_SETTING_HELP: Record<string, PackingSettingHelpEntry> = {
   "packing.layout_mode": {
     description: "Określa sposób rozmieszczenia zawartości zamówienia na ekranie pakowania.",
   },
+  "packing.product_display_mode": {
+    description: (
+      <ul>
+        <li>
+          <strong>Lista</strong> — kompaktowe karty poziome: zdjęcie po lewej, dane produktu i status pakowania w jednym
+          rzędzie.
+        </li>
+        <li>
+          <strong>Siatka</strong> — pionowe karty z większym zdjęciem u góry i informacjami pod spodem; wiele kart obok
+          siebie.
+        </li>
+      </ul>
+    ),
+  },
   "packing.move_packed_to_bottom": {
     description: "Po włączeniu całkowicie spakowane produkty są automatycznie przenoszone na koniec listy.",
   },

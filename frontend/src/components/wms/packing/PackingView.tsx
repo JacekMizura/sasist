@@ -28,6 +28,7 @@ import type {
   PackingAutomationButtonsPosition,
   PackingCustomerCommentStyle,
   PackingLayoutMode,
+  PackingProductDisplayMode,
   PackingSalesDocPreview,
 } from "../../../types/wmsPackingExtendedUi";
 import { DAMAGE_TENANT_ID } from "../../../pages/damage/damageShared";
@@ -108,6 +109,8 @@ type PackingViewProps = {
   salesDocumentPreview?: PackingSalesDocPreview;
   /** `with_sidebar` = lewy panel; `full_width` = pas info + siatka na całą szerokość. */
   layoutMode?: PackingLayoutMode;
+  /** `list` = kompaktowe karty poziome; `grid` = pionowe z dużym zdjęciem. */
+  productDisplayMode?: PackingProductDisplayMode;
   showOrderPhone?: boolean;
   showOrderValue?: boolean;
   showShippingAddress?: boolean;
@@ -150,6 +153,7 @@ export function PackingView({
   customerCommentStyle = "normal",
   salesDocumentPreview = "simplified",
   layoutMode = "with_sidebar",
+  productDisplayMode = "list",
   showOrderPhone = true,
   showOrderValue = true,
   showShippingAddress = true,
@@ -166,6 +170,7 @@ export function PackingView({
   const packerLabel = (packerDisplayName ?? "").trim() || "—";
 
   const isFullWidth = layoutMode === "full_width";
+  const isProductGrid = productDisplayMode === "grid";
   const commentHighlighted = customerCommentStyle === "highlighted";
   /** Banner nad produktami tylko w układzie ze sidebarem (w full-width uwagi są w pasie info). */
   const showCommentBanner = !isFullWidth && commentHighlighted && !!uwagiKlienta;
@@ -199,10 +204,14 @@ export function PackingView({
         ? [detail.selected_carton]
         : [];
 
-  /** Full-width: auto-fit fills the row (no orphan empty columns). Sidebar: fixed 2–3 cols. */
-  const productGridClass = isFullWidth
+  /**
+   * Lista = szersze karty poziome (auto-fit ~28rem).
+   * Siatka = węższe karty pionowe (auto-fit ~15.5rem).
+   * Pełna szerokość / sidebar — ta sama reguła wypełniania szerokości.
+   */
+  const productGridClass = isProductGrid
     ? "m-0 grid w-full list-none gap-3 bg-white p-0 [grid-template-columns:repeat(auto-fit,minmax(min(100%,15.5rem),1fr))]"
-    : "grid list-none gap-3 [grid-template-columns:repeat(1,minmax(0,1fr))] bg-white p-0 lg:grid-cols-2 xl:grid-cols-3 lg:items-stretch";
+    : "m-0 grid w-full list-none gap-3 bg-white p-0 [grid-template-columns:repeat(auto-fit,minmax(min(100%,28rem),1fr))]";
 
   if (isFullWidth) {
     return (
@@ -328,7 +337,12 @@ export function PackingView({
               return (
                 <li key={line.order_item_id} className="flex min-h-0 min-w-0 w-full">
                   {done ? (
-                    <DoneCard line={line} flash={flash} fieldVisibility={productFieldVisibility} />
+                    <DoneCard
+                      line={line}
+                      flash={flash}
+                      fieldVisibility={productFieldVisibility}
+                      displayMode={productDisplayMode}
+                    />
                   ) : active ? (
                     <ActiveCard
                       line={line}
@@ -337,6 +351,7 @@ export function PackingView({
                       scanBusy={scanBusy || packingActionsLocked}
                       linePackBusy={linePackBusy}
                       fieldVisibility={productFieldVisibility}
+                      displayMode={productDisplayMode}
                       onPackQtyChange={onPackQtyChange}
                       onConfirmPack={handleConfirmPack}
                       onMarkShortage={
@@ -348,6 +363,7 @@ export function PackingView({
                       line={line}
                       scanBusy={scanBusy || packingActionsLocked}
                       fieldVisibility={productFieldVisibility}
+                      displayMode={productDisplayMode}
                       onActivate={activateProduct}
                       onMarkShortage={
                         packingActionsLocked || !onMarkLineShortage ? undefined : onMarkLineShortage
@@ -523,7 +539,12 @@ export function PackingView({
               return (
                 <li key={line.order_item_id} className="flex min-h-0 min-w-0">
                   {done ? (
-                    <DoneCard line={line} flash={flash} fieldVisibility={productFieldVisibility} />
+                    <DoneCard
+                      line={line}
+                      flash={flash}
+                      fieldVisibility={productFieldVisibility}
+                      displayMode={productDisplayMode}
+                    />
                   ) : active ? (
                     <ActiveCard
                       line={line}
@@ -532,6 +553,7 @@ export function PackingView({
                       scanBusy={scanBusy || packingActionsLocked}
                       linePackBusy={linePackBusy}
                       fieldVisibility={productFieldVisibility}
+                      displayMode={productDisplayMode}
                       onPackQtyChange={onPackQtyChange}
                       onConfirmPack={handleConfirmPack}
                       onMarkShortage={
@@ -543,6 +565,7 @@ export function PackingView({
                       line={line}
                       scanBusy={scanBusy || packingActionsLocked}
                       fieldVisibility={productFieldVisibility}
+                      displayMode={productDisplayMode}
                       onActivate={activateProduct}
                       onMarkShortage={
                         packingActionsLocked || !onMarkLineShortage ? undefined : onMarkLineShortage

@@ -447,6 +447,7 @@ export default function WmsPackingOrderPage() {
         customerCommentStyle={ctrl.packingExtendedUi.customerCommentStyle}
         salesDocumentPreview={ctrl.packingExtendedUi.salesDocumentPreview}
         layoutMode={ctrl.packingExtendedUi.layoutMode}
+        productDisplayMode={ctrl.packingExtendedUi.productDisplayMode}
         showOrderPhone={ctrl.packingExtendedUi.showOrderPhone}
         showOrderValue={ctrl.packingExtendedUi.showOrderValue}
         showShippingAddress={ctrl.packingExtendedUi.showShippingAddress}

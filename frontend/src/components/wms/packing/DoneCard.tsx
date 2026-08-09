@@ -1,5 +1,6 @@
 import { memo } from "react";
 import type { WmsPackingOrderLineApi } from "../../../api/wmsPackingApi";
+import type { PackingProductDisplayMode } from "../../../types/wmsPackingExtendedUi";
 import { LineDetailsBlock } from "./LineDetailsBlock";
 import {
   formatPackingProductName,
@@ -11,18 +12,25 @@ export type DoneCardProps = {
   line: WmsPackingOrderLineApi;
   flash: boolean;
   fieldVisibility: PackingProductFieldVisibility;
+  displayMode?: PackingProductDisplayMode;
 };
 
-function DoneCardInner({ line, flash, fieldVisibility }: DoneCardProps) {
+function locationBadge(line: WmsPackingOrderLineApi): string {
   const loc = (line.location_label ?? "").trim();
   const locQty = line.location_bin_qty;
-  const locBadge =
-    loc && locQty != null && locQty > 0 ? `${loc} (x${locQty})` : loc || "—";
+  return loc && locQty != null && locQty > 0 ? `${loc} (x${locQty})` : loc || "—";
+}
+
+function DoneCardInner({ line, flash, fieldVisibility, displayMode = "list" }: DoneCardProps) {
+  const locBadge = locationBadge(line);
   const title = formatPackingProductName(line.product_name, {
     showName: fieldVisibility.show_product_name,
     truncate: fieldVisibility.truncate_names,
     qty: line.quantity,
   });
+  const isGrid = displayMode === "grid";
+  const qtyPacked = line.quantity_packed;
+  const qtyReq = typeof line.quantity_required === "number" ? line.quantity_required : line.quantity;
 
   const flashStyle = flash
     ? { boxShadow: "0 0 0 3px rgba(52, 211, 153, 0.75)" }
@@ -44,41 +52,86 @@ function DoneCardInner({ line, flash, fieldVisibility }: DoneCardProps) {
       >
         SPAKOWANO
       </span>
-      <div className="relative z-[1] flex flex-1 gap-2.5">
-        {fieldVisibility.show_image ? (
-          <div className="flex h-[5.5rem] w-[5.5rem] shrink-0 items-center justify-center overflow-hidden rounded-md">
-            {line.image_url ? (
-              <img
-                src={line.image_url}
-                alt=""
-                className="max-h-full max-w-full object-contain grayscale"
-                loading="lazy"
-              />
-            ) : (
-              <span className="text-2xl text-slate-300">—</span>
-            )}
+
+      {isGrid ? (
+        <div className="relative z-[1] flex flex-col">
+          <div className="flex items-start justify-between gap-2">
+            <div className="min-w-0 text-left">
+              <span className="text-[10px] font-bold uppercase tracking-wide text-slate-400">SPAKOWANO</span>
+              <p className="mt-0.5 text-2xl font-black leading-none tabular-nums text-slate-500">
+                {qtyPacked}/{qtyReq}
+              </p>
+            </div>
+            {fieldVisibility.show_location ? (
+              <div className="flex shrink-0 flex-col items-end gap-1">
+                <span className="text-[9px] font-bold uppercase tracking-wide text-slate-400">LOKALIZACJA</span>
+                <span className="max-w-[9.5rem] rounded-full border-2 border-slate-400 px-2 py-0.5 text-center text-[11px] font-bold leading-tight text-slate-500">
+                  {locBadge}
+                </span>
+              </div>
+            ) : null}
           </div>
-        ) : null}
-
-        <div className="flex min-w-0 flex-1 flex-col items-center justify-center text-center" aria-hidden />
-
-        {fieldVisibility.show_location ? (
-          <div className="flex shrink-0 flex-col items-end gap-0.5">
-            <span className="text-[9px] font-bold uppercase tracking-wide text-slate-400">LOKALIZACJA</span>
-            <span className="max-w-[9.5rem] rounded-full border-2 border-slate-400 px-2 py-0.5 text-center text-[11px] font-bold leading-tight text-slate-500">
-              {locBadge}
-            </span>
+          {fieldVisibility.show_image ? (
+            <div className="mt-3 flex min-h-[9rem] w-full items-center justify-center overflow-hidden bg-transparent">
+              {line.image_url ? (
+                <img
+                  src={line.image_url}
+                  alt=""
+                  className="max-h-[11rem] max-w-full object-contain grayscale"
+                  loading="lazy"
+                />
+              ) : (
+                <span className="text-3xl text-slate-300">—</span>
+              )}
+            </div>
+          ) : null}
+          {title ? <p className="mt-3 text-[15px] font-bold leading-tight text-slate-500">{title}</p> : null}
+          <LineDetailsBlock line={line} variant="done" fieldVisibility={fieldVisibility} />
+        </div>
+      ) : (
+        <>
+          <div className="relative z-[1] flex min-h-0 w-full gap-3">
+            {fieldVisibility.show_image ? (
+              <div className="flex h-[4.75rem] w-[4.75rem] shrink-0 items-center justify-center overflow-hidden bg-transparent sm:h-[5.25rem] sm:w-[5.25rem]">
+                {line.image_url ? (
+                  <img
+                    src={line.image_url}
+                    alt=""
+                    className="max-h-full max-w-full object-contain grayscale"
+                    loading="lazy"
+                  />
+                ) : (
+                  <span className="text-2xl text-slate-300">—</span>
+                )}
+              </div>
+            ) : null}
+            <div className="flex min-w-0 flex-1 flex-col">
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0 flex-1">
+                  {title ? <p className="text-[15px] font-bold leading-tight text-slate-500">{title}</p> : null}
+                  <LineDetailsBlock line={line} variant="done" fieldVisibility={fieldVisibility} />
+                </div>
+                <div className="flex shrink-0 items-start gap-2 sm:gap-3">
+                  <div className="text-center">
+                    <span className="text-[10px] font-bold uppercase tracking-wide text-slate-400">SPAKOWANO</span>
+                    <p className="mt-0.5 text-xl font-black leading-none tabular-nums text-slate-500 sm:text-2xl">
+                      {qtyPacked}/{qtyReq}
+                    </p>
+                  </div>
+                  {fieldVisibility.show_location ? (
+                    <div className="flex flex-col items-end gap-1">
+                      <span className="text-[9px] font-bold uppercase tracking-wide text-slate-400">LOKALIZACJA</span>
+                      <span className="max-w-[9.5rem] rounded-full border-2 border-slate-400 px-2 py-0.5 text-center text-[11px] font-bold leading-tight text-slate-500">
+                        {locBadge}
+                      </span>
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+            </div>
           </div>
-        ) : null}
-      </div>
-
-      {title ? (
-        <p className="relative z-[1] mt-auto pt-3 text-[15px] font-bold leading-tight text-slate-500">{title}</p>
-      ) : null}
-
-      <div className="relative z-[1]">
-        <LineDetailsBlock line={line} variant="done" fieldVisibility={fieldVisibility} />
-      </div>
+        </>
+      )}
     </div>
   );
 }
@@ -102,6 +155,7 @@ function doneCardEqual(a: DoneCardProps, b: DoneCardProps): boolean {
     a.line.unit_price_display === b.line.unit_price_display &&
     a.line.bundle_name === b.line.bundle_name &&
     a.flash === b.flash &&
+    a.displayMode === b.displayMode &&
     packingProductFieldVisibilityEqual(a.fieldVisibility, b.fieldVisibility)
   );
 }
