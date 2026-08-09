@@ -176,6 +176,26 @@ const CATALOG: Record<
     title: "STAN NIESPÓJNY",
     message: "Stan oczekującego pobrania jest niespójny — odśwież produkt i spróbuj ponownie.",
   },
+  InvalidCartTransition: {
+    severity: "error",
+    title: "OPERACJA ZABLOKOWANA",
+    message: "Tej operacji nie można wykonać w obecnym stanie wózka.",
+  },
+  InvalidCartState: {
+    severity: "error",
+    title: "ZŁY STAN WÓZKA",
+    message: "Wózek jest w stanie, który nie pozwala na tę operację.",
+  },
+  CART_CLEAR_FAILED: {
+    severity: "error",
+    title: "NIE MOŻNA WYCZYŚCIĆ WÓZKA",
+    message: "Nie udało się wyczyścić wózka. Odśwież listę i spróbuj ponownie.",
+  },
+  cart_lifecycle_error: {
+    severity: "error",
+    title: "OPERACJA WÓZKA",
+    message: "Nie udało się wykonać operacji na wózku.",
+  },
 };
 
 export function mapWmsScanErrorCode(
@@ -214,6 +234,15 @@ export function extractWmsScanErrorDetail(err: unknown): {
     const msg = detail.trim();
     if (/nie należy do trasy/i.test(msg)) {
       return { code: "SOURCE_LOCATION_NOT_ON_ROUTE", message: msg, eligibleLabels: null };
+    }
+    if (/wyczyścić wózek|wyczyszczenie wózka|force_clear|cart_force_cleared/i.test(msg)) {
+      return { code: "CART_CLEAR_FAILED", message: msg, eligibleLabels: null };
+    }
+    if (/musi być w stanie PICKING|InvalidCartState|oczekiwano.*PICKING/i.test(msg)) {
+      return { code: "InvalidCartState", message: msg, eligibleLabels: null };
+    }
+    if (/w trakcie pakowania|oczekuje na pakowanie|InvalidCartTransition|Nie można wykonać/i.test(msg)) {
+      return { code: "InvalidCartTransition", message: msg, eligibleLabels: null };
     }
     return { code: null, message: msg || null, eligibleLabels: null };
   }

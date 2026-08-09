@@ -18,6 +18,7 @@ import type { CapacitySnapshot } from "../../../types/cartCapacity";
 import { basketSlotCode } from "./cartFleetTypes";
 import ActivityLogTable from "../../../components/activityLog/ActivityLogTable";
 import { AdminReleaseCartButton } from "../../../components/carts/AdminReleaseCartButton";
+import { useWmsMessage } from "../../../components/wms/WmsMessageProvider";
 import { AssignedOrdersSection, type AssignedOrderRow } from "./AssignedOrdersSection";
 import { CapacityAnalyticsSection } from "./CapacityAnalyticsSection";
 import { CartSummaryKpis } from "./CartSummaryKpis";
@@ -45,6 +46,7 @@ export function CartFleetDetailPanel({
   onClearSuccess,
 }: CartFleetDetailPanelProps) {
   const t = useTranslation();
+  const { showWmsError } = useWmsMessage();
   const [loading, setLoading] = useState(false);
   const [baskets, setBaskets] = useState<BasketDetail[]>([]);
   const [detailData, setDetailData] = useState<{
@@ -182,7 +184,7 @@ export function CartFleetDetailPanel({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- reloadCartSurfaces closes over cartId
   }, [open, cartId, lifecycleStatus]);
 
-  const handleClearCartConfirm = async () => {
+    const handleClearCartConfirm = async () => {
     if (cartId == null) return;
     setClearingCart(true);
     try {
@@ -192,6 +194,7 @@ export function CartFleetDetailPanel({
       onClose();
     } catch (e) {
       console.error("clear_cart failed:", e);
+      showWmsError(e);
     } finally {
       setClearingCart(false);
     }

@@ -1330,29 +1330,43 @@ class CartService:
 
     def clear_cart(self, cart_id: int) -> dict:
         """
-        Odepnij wszystkie zamówienia i zwolnij wózek — wyłącznie przez CartLifecycle
-        (``admin_release_cart``). Legacy API bez actora → System (admin_user_id=0).
+        Pełny reset wózka (UI „Wyczyść wózek”) — CartLifecycle.force_clear_cart.
+        Nie używa admin_release_cart (to osobna, bardziej restrykcyjna operacja panelu).
         """
         cart = self.db.query(Cart).filter(Cart.id == cart_id).first()
         if not cart:
             raise HTTPException(status_code=404, detail="Wózek nie istnieje")
-        from .cart_picking_lifecycle_service import admin_release_cart
+        from .cart_picking_lifecycle_service import CartLifecycleError, force_clear_cart
 
-        out = admin_release_cart(
-            self.db,
-            cart_id=int(cart_id),
-            tenant_id=int(cart.tenant_id),
-            warehouse_id=int(cart.warehouse_id),
-            admin_user_id=0,
-            acknowledge=True,
-        )
+        try:
+            out = force_clear_cart(
+                self.db,
+                cart_id=int(cart_id),
+                tenant_id=int(cart.tenant_id),
+                warehouse_id=int(cart.warehouse_id),
+                operator_user_id=0,
+            )
+        except CartLifecycleError as e:
+            self.db.rollback()
+            code = getattr(e, "code", None) or "CART_CLEAR_FAILED"
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "code": code,
+                    "severity": "ERROR",
+                    "title": "Nie można wyczyścić wózka",
+                    "message": str(getattr(e, "message", None) or e),
+                    "suggested_action": "Odśwież listę wózków i spróbuj ponownie. Jeśli problem się powtórzy, użyj „Zwolnij wózek” (admin) lub zgłoś przełożonemu.",
+                },
+            ) from e
         self.db.commit()
         return {
             "status": "OK",
             "orders_cleared": int(out.get("orders_detached") or 0),
             "cart_status": out.get("cart_status"),
             "picking_cancelled": bool(out.get("picking_cancelled")),
-            "via": "cart_lifecycle.admin_release_cart",
+            "from_status": out.get("from_status"),
+            "via": "cart_lifecycle.force_clear_cart",
         }
 
     def clear_basket(self, basket_id: int) -> dict:

@@ -824,6 +824,68 @@ def test_admin_release_still_blocks_packing_with_attached_order(db):
     assert "pakowania" in str(ei.value.message).lower() or "pakowanie" in str(ei.value.message).lower()
 
 
+def test_force_clear_cart_from_picking(db):
+    from backend.services.cart_picking_lifecycle_service import force_clear_cart
+
+    cart = _cart(db, code="CART-CLR-PICK")
+    o1 = _order(db, number="CLR-P1")
+    db.commit()
+    claim_cart(db, cart=cart, operator_user_id=1)
+    start_picking(db, cart=cart, orders=[o1], operator_user_id=1)
+    db.commit()
+    assert get_cart_status(cart) == CartStatus.PICKING
+
+    out = force_clear_cart(
+        db,
+        cart_id=int(cart.id),
+        tenant_id=1,
+        warehouse_id=1,
+        operator_user_id=7,
+    )
+    db.commit()
+    db.refresh(cart)
+    db.refresh(o1)
+    assert out["cart_status"] == CartStatus.AVAILABLE.value
+    assert out["picking_cancelled"] is True
+    assert get_cart_status(cart) == CartStatus.AVAILABLE
+    assert cart.assigned_user_id is None
+    assert cart.current_session_id is None
+    assert o1.cart_id is None
+
+
+def test_force_clear_cart_from_packing(db):
+    from backend.services.cart_picking_lifecycle_service import force_clear_cart
+
+    cart = _cart(db, code="CART-CLR-PACK")
+    o1 = _order(db, number="CLR-K1")
+    db.commit()
+    claim_cart(db, cart=cart, operator_user_id=1)
+    start_picking(db, cart=cart, orders=[o1], operator_user_id=1)
+    finish_picking(db, cart=cart, orders=[o1], operator_user_id=1)
+    start_packing(db, cart=cart, operator_user_id=2)
+    db.commit()
+    assert get_cart_status(cart) == CartStatus.PACKING
+    assert o1.cart_id == cart.id
+
+    out = force_clear_cart(
+        db,
+        cart_id=int(cart.id),
+        tenant_id=1,
+        warehouse_id=1,
+        operator_user_id=7,
+    )
+    db.commit()
+    db.refresh(cart)
+    db.refresh(o1)
+    assert out["cart_status"] == CartStatus.AVAILABLE.value
+    assert out["from_status"] == CartStatus.PACKING.value
+    assert out["orders_detached"] >= 1
+    assert get_cart_status(cart) == CartStatus.AVAILABLE
+    assert cart.packing_user_id is None
+    assert cart.assigned_user_id is None
+    assert o1.cart_id is None
+
+
 def test_release_empty_orphan_blocked_by_open_picking_session(db):
     from backend.services.cart_picking_lifecycle_service import release_empty_orphan_cart
 

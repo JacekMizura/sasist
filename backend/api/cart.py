@@ -287,7 +287,10 @@ def reset_cart(cart_id: int, db: Session = Depends(get_db)):
 
 @router.post("/{cart_id}/clear/")
 def clear_cart(cart_id: int, db: Session = Depends(get_db)):
-    """Wyczyść wózek: odepnij wszystkie zamówienia od tego wózka."""
+    """
+    Wyczyść wózek: pełny reset custody (zamówienia, koszyki, picks/tasks, sesja/operator)
+    → AVAILABLE. Działa też w PACKING / READY_FOR_PACKING (w przeciwieństwie do admin-release).
+    """
     service = CartService(db)
     return service.clear_cart(cart_id)
 

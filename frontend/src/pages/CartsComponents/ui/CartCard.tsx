@@ -232,6 +232,7 @@ export default function CartCard(props: CartCardProps) {
       onClearSuccess?.();
     } catch (e) {
       console.error("clear_cart failed:", e);
+      showWmsError(e);
     } finally {
       setClearingCart(false);
     }

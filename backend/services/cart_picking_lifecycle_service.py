@@ -2038,6 +2038,134 @@ def admin_release_cart(
         raise
 
 
+FORCE_CLEAR_CART_REASON = "force_clear_cart"
+
+
+def force_clear_cart(
+    db: Session,
+    *,
+    cart_id: int,
+    tenant_id: int,
+    warehouse_id: int,
+    operator_user_id: int | None = None,
+) -> dict[str, Any]:
+    """
+    Pełny reset wózka (UI „Wyczyść wózek”) → AVAILABLE.
+
+    Działa dla ASSIGNED / PICKING / READY_FOR_PACKING / PACKING (oraz brudnego AVAILABLE).
+    Nie mylić z ``admin_release_cart`` — awaryjne zwolnienie nadal blokuje custody w PACKING.
+
+    - ASSIGNED / PICKING: ``cancel_picking`` (rollback draftów / restore snapshotów zamówień)
+    - READY_FOR_PACKING / PACKING: odpięcie custody bez cofania spakowanych zamówień do NEW
+    - zawsze: opróżnienie koszyków, detach pick tasks / picks, czyszczenie operatora/sesji
+    """
+    cart = _lock_cart_by_keys(
+        db,
+        cart_id=int(cart_id),
+        tenant_id=int(tenant_id),
+        warehouse_id=int(warehouse_id),
+    )
+    st = get_cart_status(cart)
+    orders_before = _orders_on_cart(db, int(cart_id))
+    orders_n = len(orders_before)
+    has_operator = bool(
+        getattr(cart, "assigned_user_id", None) or getattr(cart, "packing_user_id", None)
+    )
+    has_session = bool(getattr(cart, "current_session_id", None)) or (
+        find_open_picking_session(db, cart=cart) is not None
+    )
+
+    if (
+        st == CartStatus.AVAILABLE
+        and not has_operator
+        and orders_n == 0
+        and not has_session
+        and _occupied_baskets_count(cart) == 0
+    ):
+        return {
+            "cart_id": int(cart_id),
+            "cart_status": CartStatus.AVAILABLE.value,
+            "idempotent": True,
+            "orders_detached": 0,
+            "picking_cancelled": False,
+            "from_status": st.value,
+        }
+
+    picking_cancelled = False
+    orders_detached = 0
+    from_status = st.value
+
+    if st in (CartStatus.ASSIGNED, CartStatus.PICKING):
+        out = cancel_picking(
+            db,
+            cart_id=int(cart_id),
+            tenant_id=int(tenant_id),
+            warehouse_id=int(warehouse_id),
+            operator_user_id=operator_user_id,
+            reason=FORCE_CLEAR_CART_REASON,
+        )
+        orders_detached = int(out.get("orders_restored") or 0)
+        picking_cancelled = st == CartStatus.PICKING
+        cart = _lock_cart_by_keys(
+            db,
+            cart_id=int(cart_id),
+            tenant_id=int(tenant_id),
+            warehouse_id=int(warehouse_id),
+        )
+    else:
+        for o in orders_before:
+            clear_order_picking_session_context(o)
+            o.picking_started_at = None
+            db.add(o)
+            orders_detached += 1
+        _close_open_picking_session(db, cart)
+        release_cart(db, cart=cart, reason=FORCE_CLEAR_CART_REASON, _already_locked=True)
+
+    artifacts = _detach_cart_pick_artifacts(db, int(cart_id))
+    db.refresh(cart)
+
+    from .cart_stats_service import activity_orders_meta
+    from .cart_display import cart_display_name_for_wms
+
+    meta = {
+        "reason": "Pełne wyczyszczenie wózka (Wyczyść wózek).",
+        "from_status": from_status,
+        "orders_detached": orders_detached,
+        "picking_cancelled": picking_cancelled,
+        "cart_label": cart_display_name_for_wms(cart),
+        "show_order_numbers": False,
+        **artifacts,
+    }
+    if orders_before:
+        meta.update(activity_orders_meta(orders_before, show_order_numbers=True))
+
+    _record_event(
+        db,
+        cart,
+        "cart_force_cleared",
+        operator_user_id=operator_user_id,
+        description="Wyczyszczono wózek (pełny reset).",
+        metadata=meta,
+    )
+    _after_mutation(db, cart)
+    logger.info(
+        "cart_lifecycle.force_clear cart_id=%s from=%s orders=%s picking_cancelled=%s",
+        int(cart_id),
+        from_status,
+        orders_detached,
+        picking_cancelled,
+    )
+    return {
+        "cart_id": int(cart_id),
+        "cart_status": CartStatus.AVAILABLE.value,
+        "idempotent": False,
+        "orders_detached": orders_detached,
+        "picking_cancelled": picking_cancelled,
+        "from_status": from_status,
+        **artifacts,
+    }
+
+
 ORDER_DETACH_BLOCKED_MSG = (
     "Nie można odłączyć zamówienia, ponieważ rozpoczęto już jego kompletację."
 )
@@ -2761,6 +2889,7 @@ startPacking = start_packing
 finishPacking = finish_packing
 releaseCart = release_cart
 adminReleaseCart = admin_release_cart
+forceClearCart = force_clear_cart
 releaseEmptyOrphanCart = release_empty_orphan_cart
 
 
