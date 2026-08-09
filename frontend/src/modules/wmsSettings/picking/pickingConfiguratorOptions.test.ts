@@ -3,7 +3,9 @@ import {
   BY_PRODUCTS_MULTI_CONTAINER_OPTIONS,
   BY_PRODUCTS_SINGLE_CONTAINER_OPTIONS,
   coerceConsolidationOrderSort,
+  containerListLabel,
   ensureContainerInOptions,
+  orderSortListLabel,
   showsByOrdersOrderSort,
   showsConsolidationOrderSort,
   showsSingleItemOrderSort,
@@ -52,5 +54,12 @@ describe("pickingConfiguratorOptions visibility", () => {
     expect(
       ensureContainerInOptions("baskets", BY_PRODUCTS_MULTI_CONTAINER_OPTIONS, "cart_scan"),
     ).toBe("baskets");
+  });
+
+  it("list labels avoid technical 1-el/Multi shortcuts", () => {
+    expect(containerListLabel("baskets", "multi_item")).toBe("Do wózka z koszykami");
+    expect(containerListLabel("cart_no_scan", "single_item")).toBe("Bez skanowania kodu kreskowego");
+    expect(orderSortListLabel("date")).toBe("Po dacie (najstarsze)");
+    expect(orderSortListLabel("location")).toBe("Po lokalizacjach");
   });
 });

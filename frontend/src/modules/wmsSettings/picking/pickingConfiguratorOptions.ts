@@ -121,3 +121,27 @@ export function containerLabel(
 ): string {
   return options.find((o) => o.value === value)?.label ?? value;
 }
+
+/** Zwarte etykiety kolejności na liście konfiguratora (makieta). */
+export function orderSortListLabel(sort: PickingOrderSortUi): string {
+  if (sort === "location") return "Po lokalizacjach";
+  if (sort === "courier") return "Po grupach kurierskich (priorytet na dziś)";
+  return "Po dacie (najstarsze)";
+}
+
+/** Zwarte etykiety kontenera na liście (bez technicznych skrótów). */
+export function containerListLabel(
+  value: PickingContainersUi,
+  orderType: "single_item" | "multi_item",
+): string {
+  if (value === "cart_no_scan") return "Bez skanowania kodu kreskowego";
+  if (value === "cart_scan") return "Wózek (wymagany skan)";
+  if (value === "mobile_cart") return "Wózek mobilny z pakowaniem";
+  if (value === "consolidation_rack") {
+    return "Skan + rozlokowanie na regał kompletacyjny";
+  }
+  if (value === "baskets") {
+    return orderType === "single_item" ? "Do wózków z koszykami" : "Do wózka z koszykami";
+  }
+  return value;
+}

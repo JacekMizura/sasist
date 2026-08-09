@@ -55,6 +55,11 @@ import {
   wmsSettingsRowsStackClass,
 } from "../../../pages/Settings/wmsSettingsUi";
 import { OrderUiStatusField } from "../../../components/orders/OrderUiStatusField";
+import { Boxes, Clock3, FileText, Pencil, Plus, Trash2 } from "lucide-react";
+import { OrderUiStatusBadge } from "../../../components/orders/OrderUiStatusBadge";
+import { IconButton } from "../../../design-system";
+import { brandPrimaryButtonClass } from "../../../design-system/brandUi";
+import type { PanelConfigurableUiStatusBrief } from "../../../utils/panelListStatusBriefMappers";
 import { PickingSettingsModal } from "./PickingSettingsModal";
 import { WMS_PICKING_SETTINGS_NAV_SECTIONS } from "./pickingSettingsNavSections";
 import {
@@ -65,12 +70,13 @@ import {
   ORDER_SORT_LOCATION_DATE_COURIER,
   coerceConsolidationOrderSort,
   containerLabel,
+  containerListLabel,
   ensureContainerInOptions,
+  orderSortListLabel,
   showsByOrdersOrderSort,
   showsConsolidationOrderSort,
   showsSingleItemOrderSort,
 } from "./pickingConfiguratorOptions";
-import { brandPrimaryButtonClass } from "../../../design-system/brandUi";
 
 const PANEL_STATUS_GROUP_ORDER: OrderUiMainGroup[] = ["NEW", "IN_PROGRESS", "DONE"];
 
@@ -142,19 +148,21 @@ function SectionCardPicking({
   children,
 }: {
   id: string;
-  title: string;
+  /** Gdy brak — nagłówek sekcji renderuje zawartość (np. lista konfiguratora). */
+  title?: string;
   summary?: string;
   children: ReactNode;
 }) {
   const meta = WMS_PICKING_SETTINGS_NAV_SECTIONS.find((s) => s.id === id);
+  const heading = (title ?? "").trim();
   return (
     <WmsSettingsSection
       id={id}
-      title={title}
+      title={heading || undefined}
       summary={summary}
-      icon={meta?.icon}
+      icon={heading ? meta?.icon : undefined}
       iconClassName={meta?.iconClassName}
-      searchText={meta?.searchText}
+      searchText={meta?.searchText ?? meta?.label}
     >
       {children}
     </WmsSettingsSection>
@@ -1281,98 +1289,125 @@ function PickingConfiguratorEditor({
   );
 }
 
+function resolvePanelStatusBrief(
+  summary: OrderUiStatusPanelSummary | null,
+  statusId: number,
+  fallbackName: string,
+): PanelConfigurableUiStatusBrief {
+  for (const block of summary?.groups ?? []) {
+    const hit = block.sub_statuses.find((s) => s.id === statusId);
+    if (hit) {
+      return {
+        name: hit.name,
+        color: hit.color,
+        main_group: hit.main_group,
+        badge_color: hit.badge_color ?? null,
+        background_color: hit.background_color ?? null,
+        text_color: hit.text_color ?? null,
+        image_url: hit.image_url ?? null,
+        is_active: hit.is_active,
+      };
+    }
+  }
+  return {
+    name: fallbackName.trim() || `Status #${statusId}`,
+    color: "#94a3b8",
+    main_group: "IN_PROGRESS",
+  };
+}
+
+function PickingConfigSettingsStack({ config }: { config: SavedPickingConfiguration }) {
+  const multiLabel = containerListLabel(config.blocks.multi_item.containers, "multi_item");
+  const singleLabel = containerListLabel(config.blocks.single_item.containers, "single_item");
+  const sortLabel = orderSortListLabel(config.orderSort);
+  return (
+    <div className="flex min-w-0 flex-col gap-2.5">
+      <div className="flex min-w-0 items-start gap-2.5">
+        <Boxes className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" strokeWidth={2} aria-hidden />
+        <div className="min-w-0">
+          <p className="text-sm font-semibold leading-snug text-slate-900">Zamówienia wieloelementowe</p>
+          <p className="mt-0.5 text-xs leading-snug text-slate-500">{multiLabel}</p>
+        </div>
+      </div>
+      <div className="flex min-w-0 items-start gap-2.5">
+        <FileText className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" strokeWidth={2} aria-hidden />
+        <div className="min-w-0">
+          <p className="text-sm font-semibold leading-snug text-slate-900">Zamówienia jednoelementowe</p>
+          <p className="mt-0.5 text-xs leading-snug text-slate-500">{singleLabel}</p>
+        </div>
+      </div>
+      <div className="flex min-w-0 items-start gap-2.5">
+        <Clock3 className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" strokeWidth={2} aria-hidden />
+        <div className="min-w-0">
+          <p className="text-sm font-semibold leading-snug text-slate-900">Kolejność doboru</p>
+          <p className="mt-0.5 text-xs leading-snug text-slate-500">{sortLabel}</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function SavedPickingConfigSummaryCard({
   config,
+  orderUiSummary,
   onEdit,
   onDelete,
   actionsDisabled,
-  isDefault,
 }: {
   config: SavedPickingConfiguration;
+  orderUiSummary: OrderUiStatusPanelSummary | null;
   onEdit: (config: SavedPickingConfiguration) => void;
   onDelete: (id: string) => void;
   actionsDisabled?: boolean;
-  /** Only when product has an explicit default-config concept. */
-  isDefault?: boolean;
 }) {
+  const sourceBrief = resolvePanelStatusBrief(
+    orderUiSummary,
+    config.statusToPickId,
+    config.statusToPickName,
+  );
+  const targetBrief = resolvePanelStatusBrief(
+    orderUiSummary,
+    config.statusAfterPickId,
+    config.statusAfterPickName,
+  );
   const modeLabel = pickingModeLabel(config.pickingMode);
-  const orderSortHint = pickingOrderSortLabel(config.orderSort);
-  const singleWhere = pickingWhereLabel(config.blocks.single_item.containers, "single_item");
-  const multiWhere = pickingWhereLabel(config.blocks.multi_item.containers, "multi_item");
-  const byProducts = config.pickingMode === "by_products";
 
   return (
     <div
-      className="rounded-lg border border-slate-200 bg-white px-3 py-2.5 transition-colors hover:border-slate-300"
-      aria-label={`Zapisana konfiguracja: ${config.statusToPickName}`}
+      className="grid grid-cols-1 items-center gap-4 border-b border-slate-100 px-4 py-4 last:border-b-0 sm:grid-cols-[minmax(10rem,1.1fr)_minmax(7rem,0.7fr)_minmax(14rem,1.8fr)_minmax(8rem,0.9fr)_auto] sm:gap-6"
+      aria-label={`Konfiguracja zbierania: ${config.statusToPickName}`}
     >
-      <div className="flex flex-col gap-2.5 lg:flex-row lg:items-center lg:gap-4">
-        <div className="grid min-w-0 flex-1 gap-x-4 gap-y-2 sm:grid-cols-2 xl:grid-cols-4">
-          <div className="min-w-0">
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Konfiguracja</p>
-            <div className="mt-0.5 flex min-w-0 items-center gap-1.5">
-              <h4 className="truncate text-sm font-semibold leading-snug text-slate-900">
-                {config.statusToPickName}
-              </h4>
-              {isDefault ? (
-                <span className="shrink-0 rounded bg-blue-600 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">
-                  Domyślny
-                </span>
-              ) : null}
-            </div>
-          </div>
-
-          <div className="min-w-0">
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Tryb zbierania</p>
-            <p className="mt-0.5 text-sm font-medium leading-snug text-slate-900">{modeLabel}</p>
-            <p className="mt-0.5 truncate text-xs leading-snug text-slate-500" title={orderSortHint}>
-              {orderSortHint}
-            </p>
-          </div>
-
-          <div className="min-w-0">
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Ustawienia</p>
-            {byProducts ? (
-              <>
-                <p className="mt-0.5 truncate text-xs leading-snug text-slate-700" title={multiWhere}>
-                  <span className="font-medium text-slate-500">Multi:</span> {multiWhere}
-                </p>
-                <p className="mt-0.5 truncate text-xs leading-snug text-slate-700" title={singleWhere}>
-                  <span className="font-medium text-slate-500">1-el:</span> {singleWhere}
-                </p>
-              </>
-            ) : (
-              <p className="mt-0.5 text-xs leading-snug text-slate-700">Dobór zamówień wg kolejności powyżej</p>
-            )}
-          </div>
-
-          <div className="min-w-0">
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Do pakowania</p>
-            <p className="mt-0.5 truncate text-sm font-medium leading-snug text-slate-900" title={config.statusAfterPickName}>
-              {config.statusAfterPickName}
-            </p>
-          </div>
-        </div>
-
-        <div className="flex shrink-0 items-center gap-1.5 self-stretch border-t border-slate-100 pt-2 lg:border-l lg:border-t-0 lg:pl-4 lg:pt-0">
-          <button
-            type="button"
-            className="inline-flex flex-1 items-center justify-center rounded-md border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50 lg:flex-none"
-            disabled={actionsDisabled}
-            onClick={() => onEdit(config)}
-          >
-            Edytuj
-          </button>
-          <button
-            type="button"
-            className="inline-flex items-center justify-center rounded-md border border-red-100 bg-white px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50 disabled:opacity-50"
-            disabled={actionsDisabled}
-            onClick={() => onDelete(config.id)}
-            aria-label="Usuń"
-          >
-            Usuń
-          </button>
-        </div>
+      <div className="min-w-0">
+        <OrderUiStatusBadge status={sourceBrief} />
+      </div>
+      <div className="min-w-0">
+        <p className="text-sm font-semibold text-slate-900">{modeLabel}</p>
+      </div>
+      <div className="min-w-0">
+        <PickingConfigSettingsStack config={config} />
+      </div>
+      <div className="min-w-0">
+        <OrderUiStatusBadge status={targetBrief} />
+      </div>
+      <div className="flex shrink-0 items-center justify-end gap-1.5">
+        <IconButton
+          tone="neutral"
+          title="Edytuj"
+          aria-label="Edytuj"
+          disabled={actionsDisabled}
+          onClick={() => onEdit(config)}
+        >
+          <Pencil className="h-4 w-4" strokeWidth={2} aria-hidden />
+        </IconButton>
+        <IconButton
+          tone="danger"
+          title="Usuń"
+          aria-label="Usuń"
+          disabled={actionsDisabled}
+          onClick={() => onDelete(config.id)}
+        >
+          <Trash2 className="h-4 w-4" strokeWidth={2} aria-hidden />
+        </IconButton>
       </div>
     </div>
   );
@@ -1383,6 +1418,7 @@ function WmsPickingStatusConfig({
   draft,
   pickingConfigsLoading,
   pickingPersisting,
+  orderUiSummary,
   setSaveFormError,
   setPickingPersistOk,
   setEditBackup,
@@ -1394,6 +1430,7 @@ function WmsPickingStatusConfig({
   draft: PickingConfigDraft | null;
   pickingConfigsLoading: boolean;
   pickingPersisting: boolean;
+  orderUiSummary: OrderUiStatusPanelSummary | null;
   setSaveFormError: Dispatch<SetStateAction<string | null>>;
   setPickingPersistOk: Dispatch<SetStateAction<string | null>>;
   setEditBackup: Dispatch<SetStateAction<SavedPickingConfiguration | null>>;
@@ -1402,8 +1439,9 @@ function WmsPickingStatusConfig({
   handleDeleteSavedConfig: (id: string) => void;
 }) {
   return (
-    <div className="space-y-3" aria-label="Konfigurator zbierania">
-      <div className="flex flex-wrap items-center justify-end gap-2">
+    <div className="space-y-4" aria-label="Konfigurator zbierania">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h2 className="text-xl font-bold tracking-tight text-slate-900">Konfigurator zbierania</h2>
         <button
           type="button"
           className={brandPrimaryButtonClass}
@@ -1415,35 +1453,48 @@ function WmsPickingStatusConfig({
           }}
           disabled={draft != null || pickingConfigsLoading || pickingPersisting}
         >
+          <Plus className="h-4 w-4" strokeWidth={2.25} aria-hidden />
           Dodaj konfigurację zbierania
         </button>
       </div>
 
       {savedConfigs.length === 0 && !draft && !pickingConfigsLoading ? (
-        <p className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-600">
+        <p className="rounded-xl border border-slate-100 bg-slate-50/80 px-4 py-3 text-sm text-slate-600">
           Brak konfiguracji zbierania — dodaj pierwszą powyżej.
         </p>
       ) : null}
 
       {savedConfigs.length > 0 ? (
-        <div className="flex flex-col gap-2">
-          {savedConfigs.map((cfg) => (
-            <SavedPickingConfigSummaryCard
-              key={cfg.id}
-              config={cfg}
-              actionsDisabled={pickingPersisting || draft != null}
-              onEdit={(c) => {
-                setSaveFormError(null);
-                setPickingPersistOk(null);
-                setEditBackup(c);
-                setSavedConfigs((prev) => prev.filter((x) => x.id !== c.id));
-                setDraft(savedConfigurationToDraft(c));
-              }}
-              onDelete={(id) => {
-                void handleDeleteSavedConfig(id);
-              }}
-            />
-          ))}
+        <div className="overflow-hidden rounded-xl border border-slate-100 bg-white">
+          <div className="hidden grid-cols-[minmax(10rem,1.1fr)_minmax(7rem,0.7fr)_minmax(14rem,1.8fr)_minmax(8rem,0.9fr)_auto] gap-6 border-b border-slate-100 px-4 py-3 sm:grid">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+              Status do rozpoczęcia zbierania
+            </p>
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Tryb zbierania</p>
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Ustawienia</p>
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Po zbieraniu</p>
+            <p className="text-right text-[11px] font-semibold uppercase tracking-wide text-slate-400">Akcje</p>
+          </div>
+          <div>
+            {savedConfigs.map((cfg) => (
+              <SavedPickingConfigSummaryCard
+                key={cfg.id}
+                config={cfg}
+                orderUiSummary={orderUiSummary}
+                actionsDisabled={pickingPersisting || draft != null}
+                onEdit={(c) => {
+                  setSaveFormError(null);
+                  setPickingPersistOk(null);
+                  setEditBackup(c);
+                  setSavedConfigs((prev) => prev.filter((x) => x.id !== c.id));
+                  setDraft(savedConfigurationToDraft(c));
+                }}
+                onDelete={(id) => {
+                  void handleDeleteSavedConfig(id);
+                }}
+              />
+            ))}
+          </div>
         </div>
       ) : null}
     </div>
@@ -2038,12 +2089,13 @@ export function WmsPickingSettingsSections({
           <p className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-800">{saveFormError}</p>
         ) : null}
 
-        <SectionCardPicking id="wms-pick-modes" title="Konfigurator zbierania">
+        <SectionCardPicking id="wms-pick-modes">
           <WmsPickingStatusConfig
             savedConfigs={savedConfigs}
             draft={draft}
             pickingConfigsLoading={pickingConfigsLoading}
             pickingPersisting={pickingPersisting}
+            orderUiSummary={orderUiSummary}
             setSaveFormError={setSaveFormError}
             setPickingPersistOk={setPickingPersistOk}
             setEditBackup={setEditBackup}
