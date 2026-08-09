@@ -2,8 +2,7 @@ import type { ReactNode } from "react";
 import type { WmsPackingOrderLineApi } from "../../../api/wmsPackingApi";
 import { PackingLineActionsMenu } from "./PackingLineActionsMenu";
 
-const LABEL =
-  "text-[9px] font-semibold uppercase tracking-[0.08em] text-slate-400";
+const LABEL = "text-[9px] font-semibold uppercase tracking-[0.08em] text-slate-400";
 
 export function packingLocationBadge(line: WmsPackingOrderLineApi): string {
   const loc = (line.location_label ?? "").trim();
@@ -12,7 +11,7 @@ export function packingLocationBadge(line: WmsPackingOrderLineApi): string {
 }
 
 export function PackingCardFieldLabel({ children, muted }: { children: string; muted?: boolean }) {
-  return <span className={[LABEL, muted ? "text-slate-300" : ""].join(" ")}>{children}</span>;
+  return <span className={[LABEL, muted ? "text-emerald-700/70" : ""].join(" ")}>{children}</span>;
 }
 
 export function PackingLocationPill({
@@ -27,8 +26,8 @@ export function PackingLocationPill({
       className={[
         "inline-flex w-full max-w-[7.25rem] items-center justify-center truncate rounded-full border px-2 py-0.5 text-center text-[11px] font-bold leading-tight",
         muted
-          ? "border-emerald-300/80 text-emerald-800"
-          : "border-slate-800 text-slate-900",
+          ? "border-emerald-400/90 bg-white/40 text-emerald-900"
+          : "border-slate-800 bg-white text-slate-900",
       ].join(" ")}
       title={text}
     >
@@ -37,7 +36,7 @@ export function PackingLocationPill({
   );
 }
 
-/** Nagłówek prawej strony kafelka (Siatka): stała kolumna lokalizacji + menu przy prawej krawędzi. */
+/** Nagłówek prawej strony kafelka (Siatka): lokalizacja + menu przy prawej krawędzi. */
 export function PackingGridLocationHeader({
   showLocation,
   locBadge,
@@ -50,18 +49,17 @@ export function PackingGridLocationHeader({
   muted?: boolean;
 }) {
   return (
-    <div className="flex shrink-0 items-start gap-0.5">
+    <div className="ml-auto flex shrink-0 items-start gap-1">
       {showLocation ? (
         <div className="flex w-[7.25rem] shrink-0 flex-col items-end gap-1">
           <PackingCardFieldLabel muted={muted}>LOKALIZACJA</PackingCardFieldLabel>
           <PackingLocationPill text={locBadge} muted={muted} />
         </div>
       ) : null}
-      <div className="-mr-1.5 -mt-0.5 shrink-0">{menu}</div>
+      <div className="-mr-1 -mt-0.5 shrink-0">{menu}</div>
     </div>
   );
 }
-
 
 export function PackingProductThumb({
   url,
@@ -74,14 +72,17 @@ export function PackingProductThumb({
 }) {
   return (
     <div
-      className="flex shrink-0 items-center justify-center overflow-hidden bg-white"
+      className="flex shrink-0 items-center justify-center overflow-hidden bg-transparent"
       style={{ width: size, height: size }}
     >
       {url ? (
         <img
           src={url}
           alt=""
-          className={["max-h-full max-w-full object-contain", muted ? "grayscale opacity-70" : ""].join(" ")}
+          className={[
+            "max-h-full max-w-full object-contain",
+            muted ? "opacity-55 grayscale" : "",
+          ].join(" ")}
           loading="lazy"
         />
       ) : (
@@ -118,12 +119,16 @@ export function PackingDoneCheckIcon() {
 export function PackingDoneCloseIcon() {
   return (
     <span
-      className="inline-flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full bg-[#E53935] text-white"
+      className="inline-flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-full bg-[#E53935] text-white shadow-sm"
       aria-hidden
     >
-      <svg width="9" height="9" viewBox="0 0 24 24" fill="none">
+      <svg width="10" height="10" viewBox="0 0 24 24" fill="none">
         <path d="M6 6l12 12M18 6L6 18" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
       </svg>
     </span>
   );
 }
+
+/** Wspólne klasy karty spakowanej — zielone tło na całej powierzchni, bez białych „łat”. */
+export const PACKING_DONE_CARD_CLASS =
+  "border border-emerald-300/90 bg-[rgba(232,245,233,0.72)] text-left";

@@ -1,6 +1,7 @@
 import type { WmsPackingOrderLineApi } from "../../../api/wmsPackingApi";
 import type { PackingProductDisplayMode } from "../../../types/wmsPackingExtendedUi";
 import { DefaultCard } from "./DefaultCard";
+import { DoneCard } from "./DoneCard";
 import {
   DEFAULT_PACKING_PRODUCT_FIELD_VISIBILITY,
   type PackingProductFieldVisibility,
@@ -59,7 +60,8 @@ const PREVIEW_LINES: WmsPackingOrderLineApi[] = [
   }),
   previewLine(3, {
     name: "Skarpety sport",
-    qty: 4,
+    qty: 1,
+    packed: 1,
     color: "czarny",
     sku: "SOCK-BLK",
     catalog: "S-220",
@@ -98,18 +100,27 @@ export function ProductDisplayModePreview({
             minWidth: 0,
           }}
         >
-          {PREVIEW_LINES.map((line) => (
-            <li key={line.order_item_id} className={packingProductCardItemClass()} style={itemStyle}>
-              <DefaultCard
-                line={line}
-                scanBusy={false}
-                fieldVisibility={fieldVisibility}
-                displayMode={mode}
-                lockCardSize
-                onActivate={noop}
-              />
-            </li>
-          ))}
+          {PREVIEW_LINES.map((line) => {
+            const done =
+              line.quantity_packed >=
+              (typeof line.quantity_required === "number" ? line.quantity_required : line.quantity);
+            return (
+              <li key={line.order_item_id} className={packingProductCardItemClass()} style={itemStyle}>
+                {done ? (
+                  <DoneCard line={line} flash={false} fieldVisibility={fieldVisibility} displayMode={mode} />
+                ) : (
+                  <DefaultCard
+                    line={line}
+                    scanBusy={false}
+                    fieldVisibility={fieldVisibility}
+                    displayMode={mode}
+                    lockCardSize
+                    onActivate={noop}
+                  />
+                )}
+              </li>
+            );
+          })}
         </ul>
       </div>
     </div>

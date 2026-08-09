@@ -15,4 +15,5 @@
 - Shared `packingProductDisplay.ts` merges `interface_display` + extended UI
 - Cards (Active/Default/Done) honor stock/EAN/SKU/catalog/signature/price/name/truncate/image/location
 - API: `product_signature`, `unit_price_display` on packing lines
-- Settings preview (`ProductDisplayModePreview`): fixed card widths, no shrink; list DefaultCard columns aligned for SPAKOWANO/LOKALIZACJA
+- Mockup layout: fixed grid 20×19.5rem; list full-width rows; EAN badge; done = translucent green whole-card + faded image/data
+- Settings preview (`ProductDisplayModePreview`): fixed card widths, includes Done sample

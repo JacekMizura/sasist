@@ -1,3 +1,10 @@
+## 2026-08-09 — Karty pakowania: mockup Siatka/Lista
+
+- Stałe wymiary: siatka 20×19.5rem; lista pełna szerokość + stała wysokość wiersza
+- Layout: zdjęcie | dane | SPAKOWANO | LOKALIZACJA | … (lista); nagłówek + ciało (siatka)
+- Done: półprzezroczyste zielone tło całej karty, grayscale zdjęcia/danych, czytelny status/X
+- EAN: delikatny badge; bez białego tła pod zdjęciem; bez „1x” w nazwie
+
 ## 2026-08-09 — Podgląd układu produktów (Lista/Siatka)
 
 - `ProductDisplayModePreview`: stała szerokość kart (`allowShrink: false` / `lockCardSize`), wrap zamiast ściskania

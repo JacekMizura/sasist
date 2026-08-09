@@ -9,11 +9,25 @@ type Props = {
   line: WmsPackingOrderLineApi;
   variant: "default" | "active" | "done";
   fieldVisibility?: PackingProductFieldVisibility;
-  /** `columns` = Lista (2 kolumny jak Figma); `stack` = Kafelki (jedna kolumna). */
+  /** `columns` = Lista / ciało siatki (2 kolumny); `stack` = jedna kolumna. */
   layout?: "columns" | "stack";
 };
 
 type MetaRow = { key: string; node: ReactNode };
+
+function EanBadge({ value, muted }: { value: string; muted?: boolean }) {
+  return (
+    <span
+      className={[
+        "inline-flex max-w-full items-center truncate rounded-md px-1.5 py-0.5 font-mono text-[11px] font-medium leading-none",
+        muted ? "bg-emerald-100/80 text-emerald-900/65" : "bg-[#eef0fb] text-[#3f4a8a]",
+      ].join(" ")}
+      title={value}
+    >
+      {value}
+    </span>
+  );
+}
 
 /** Wspólny blok metadanych produktu — tylko prezentacja wg ustawień widoczności. */
 export function LineDetailsBlock({ line, variant, fieldVisibility, layout = "columns" }: Props) {
@@ -28,9 +42,9 @@ export function LineDetailsBlock({ line, variant, fieldVisibility, layout = "col
   const bundle = (line.bundle_name ?? "").trim();
 
   const muted = variant === "done";
-  const labelCls = muted ? "text-emerald-800/70" : "text-slate-500";
-  const textCls = muted ? "text-slate-700" : "text-slate-700";
-  const stanCls = muted ? "text-slate-800" : "text-slate-900";
+  const labelCls = muted ? "text-slate-500/80" : "text-slate-500";
+  const textCls = muted ? "text-slate-600/85" : "text-slate-700";
+  const stanCls = muted ? "text-slate-700/85" : "text-slate-900";
 
   const byKey = new Map<string, MetaRow>();
 
@@ -38,7 +52,7 @@ export function LineDetailsBlock({ line, variant, fieldVisibility, layout = "col
     byKey.set("color", {
       key: "color",
       node: (
-        <p className={textCls}>
+        <p className={["truncate", textCls].join(" ")}>
           <span className={labelCls}>Kolor:</span> {color}
         </p>
       ),
@@ -48,7 +62,7 @@ export function LineDetailsBlock({ line, variant, fieldVisibility, layout = "col
     byKey.set("stock", {
       key: "stock",
       node: (
-        <p className={textCls}>
+        <p className={["truncate", textCls].join(" ")}>
           <span className={labelCls}>Stan:</span>{" "}
           <span className={["font-semibold tabular-nums", stanCls].join(" ")}>{stock != null ? stock : "—"}</span>
         </p>
@@ -59,8 +73,9 @@ export function LineDetailsBlock({ line, variant, fieldVisibility, layout = "col
     byKey.set("ean", {
       key: "ean",
       node: (
-        <p className={textCls}>
-          <span className={labelCls}>Ean:</span> <span className="font-mono text-[12px]">{ean}</span>
+        <p className={["flex min-w-0 items-center gap-1.5", textCls].join(" ")}>
+          <span className={["shrink-0", labelCls].join(" ")}>EAN:</span>
+          <EanBadge value={ean} muted={muted} />
         </p>
       ),
     });
@@ -69,7 +84,7 @@ export function LineDetailsBlock({ line, variant, fieldVisibility, layout = "col
     byKey.set("sym", {
       key: "sym",
       node: (
-        <p className={textCls}>
+        <p className={["truncate", textCls].join(" ")}>
           <span className={labelCls}>Symbol:</span> {sym}
         </p>
       ),
@@ -79,8 +94,8 @@ export function LineDetailsBlock({ line, variant, fieldVisibility, layout = "col
     byKey.set("cat", {
       key: "cat",
       node: (
-        <p className={textCls}>
-          <span className={labelCls}>Nr kat:</span> {nrKat}
+        <p className={["truncate", textCls].join(" ")}>
+          <span className={labelCls}>Nr kat.:</span> {nrKat}
         </p>
       ),
     });
@@ -89,7 +104,7 @@ export function LineDetailsBlock({ line, variant, fieldVisibility, layout = "col
     byKey.set("sig", {
       key: "sig",
       node: (
-        <p className={textCls}>
+        <p className={["truncate", textCls].join(" ")}>
           <span className={labelCls}>Sygnatura:</span> {signature}
         </p>
       ),
@@ -99,7 +114,7 @@ export function LineDetailsBlock({ line, variant, fieldVisibility, layout = "col
     byKey.set("price", {
       key: "price",
       node: (
-        <p className={textCls}>
+        <p className={["truncate", textCls].join(" ")}>
           <span className={labelCls}>Cena:</span>{" "}
           <span className="font-semibold tabular-nums">{price}</span>
         </p>
@@ -110,7 +125,7 @@ export function LineDetailsBlock({ line, variant, fieldVisibility, layout = "col
     byKey.set("bundle", {
       key: "bundle",
       node: (
-        <p className={textCls}>
+        <p className={["truncate", textCls].join(" ")}>
           <span className={labelCls}>Z zestawu:</span> {bundle}
         </p>
       ),
@@ -120,7 +135,7 @@ export function LineDetailsBlock({ line, variant, fieldVisibility, layout = "col
   if (byKey.size === 0) return null;
 
   if (layout === "stack") {
-    const order = ["color", "stock", "ean", "sym", "cat", "sig", "price", "bundle"];
+    const order = ["color", "ean", "sym", "stock", "cat", "sig", "price", "bundle"];
     return (
       <div className="mt-1.5 space-y-0.5 text-[12px] leading-snug">
         {order.map((k) => {
@@ -135,7 +150,7 @@ export function LineDetailsBlock({ line, variant, fieldVisibility, layout = "col
   const rightOrder = ["stock", "sym", "price", "bundle"];
 
   return (
-    <div className="mt-2 grid grid-cols-2 gap-x-5 gap-y-0.5 text-[12px] leading-snug">
+    <div className="mt-1.5 grid grid-cols-2 gap-x-4 gap-y-0.5 text-[12px] leading-snug">
       <div className="min-w-0 space-y-0.5">
         {leftOrder.map((k) => {
           const row = byKey.get(k);

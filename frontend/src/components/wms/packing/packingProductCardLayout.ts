@@ -2,18 +2,24 @@ import type { CSSProperties } from "react";
 import type { PackingProductDisplayMode } from "../../../types/wmsPackingExtendedUi";
 
 /**
- * Wymiary i rozmieszczenie kart — proporcje jak Figma „Sidebar lista” / „Sidebar kafelki”.
- * Kontener: flex-wrap + justify-content:flex-start + stały gap (bez space-between / 1fr).
+ * Wymiary kart produktów pakowania (mockup Siatka / Lista).
+ * Kontener: flex-wrap + justify-content:flex-start — stałe wymiary, mniej kart w rzędzie zamiast ściskania.
  */
 
-/** Lista (pozioma): ~360px — 3 karty obok sidebara jak na mocku. */
-export const PACKING_PRODUCT_LIST_CARD_WIDTH = "22.5rem";
+/** Lista: pełna szerokość wiersza, stała wysokość (Default/Done); Active może rosnąć. */
+export const PACKING_PRODUCT_LIST_CARD_HEIGHT = "9.25rem";
 
-/** Kafelki (pionowa): ~236px — zwarta kolumna jak na mocku. */
-export const PACKING_PRODUCT_GRID_CARD_WIDTH = "14.75rem";
+/** Kafelki: szersza stała karta — zawartość nie jest ściśnięta. */
+export const PACKING_PRODUCT_GRID_CARD_WIDTH = "20rem";
 
 /** Kafelki: stała wysokość (Default / Active / Done jednakowe). */
-export const PACKING_PRODUCT_GRID_CARD_HEIGHT = "23.5rem";
+export const PACKING_PRODUCT_GRID_CARD_HEIGHT = "19.5rem";
+
+/** Stały obszar zdjęcia w siatce (kwadrat). */
+export const PACKING_PRODUCT_GRID_IMAGE_SIZE = 128;
+
+/** Stały obszar zdjęcia na liście. */
+export const PACKING_PRODUCT_LIST_IMAGE_SIZE = 84;
 
 const GAP = "0.75rem";
 
@@ -50,7 +56,6 @@ export function packingProductCardItemStyle(
   options?: PackingProductCardSizeOptions,
 ): CSSProperties {
   const allowShrink = options?.allowShrink !== false;
-  const maxWidth = allowShrink ? "100%" : undefined;
 
   if (mode === "grid") {
     return {
@@ -59,18 +64,18 @@ export function packingProductCardItemStyle(
       flexBasis: PACKING_PRODUCT_GRID_CARD_WIDTH,
       width: PACKING_PRODUCT_GRID_CARD_WIDTH,
       minWidth: PACKING_PRODUCT_GRID_CARD_WIDTH,
-      ...(maxWidth ? { maxWidth } : {}),
+      ...(allowShrink ? { maxWidth: "100%" } : {}),
       height: PACKING_PRODUCT_GRID_CARD_HEIGHT,
     };
   }
+
   return {
     flexGrow: 0,
     flexShrink: 0,
-    flexBasis: PACKING_PRODUCT_LIST_CARD_WIDTH,
-    width: PACKING_PRODUCT_LIST_CARD_WIDTH,
-    minWidth: PACKING_PRODUCT_LIST_CARD_WIDTH,
-    ...(maxWidth ? { maxWidth } : {}),
-    height: "auto",
+    flexBasis: "100%",
+    width: "100%",
+    minWidth: 0,
+    minHeight: PACKING_PRODUCT_LIST_CARD_HEIGHT,
   };
 }
 
@@ -79,26 +84,25 @@ export function packingProductCardSizeStyle(
   options?: PackingProductCardSizeOptions,
 ): CSSProperties {
   const allowShrink = options?.allowShrink !== false;
-  const maxWidth = allowShrink ? "100%" : undefined;
 
   if (mode === "grid") {
     return {
       width: PACKING_PRODUCT_GRID_CARD_WIDTH,
       minWidth: PACKING_PRODUCT_GRID_CARD_WIDTH,
-      ...(maxWidth ? { maxWidth } : {}),
+      ...(allowShrink ? { maxWidth: "100%" } : {}),
       height: PACKING_PRODUCT_GRID_CARD_HEIGHT,
       boxSizing: "border-box",
     };
   }
+
   return {
-    width: PACKING_PRODUCT_LIST_CARD_WIDTH,
-    minWidth: PACKING_PRODUCT_LIST_CARD_WIDTH,
-    ...(maxWidth ? { maxWidth } : {}),
-    height: "auto",
+    width: "100%",
+    minWidth: 0,
+    height: PACKING_PRODUCT_LIST_CARD_HEIGHT,
     boxSizing: "border-box",
   };
 }
 
 export function packingProductCardRootSizeClass(mode: PackingProductDisplayMode): string {
-  return mode === "grid" ? "box-border overflow-hidden" : "box-border h-auto";
+  return mode === "grid" ? "box-border overflow-hidden" : "box-border overflow-hidden";
 }

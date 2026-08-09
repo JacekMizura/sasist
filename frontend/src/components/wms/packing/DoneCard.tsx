@@ -8,6 +8,8 @@ import {
   type PackingProductFieldVisibility,
 } from "./packingProductDisplay";
 import {
+  PACKING_PRODUCT_GRID_IMAGE_SIZE,
+  PACKING_PRODUCT_LIST_IMAGE_SIZE,
   packingProductCardRootSizeClass,
   packingProductCardSizeStyle,
 } from "./packingProductCardLayout";
@@ -18,6 +20,7 @@ import {
   PackingGridLocationHeader,
   PackingLocationPill,
   PackingProductThumb,
+  PACKING_DONE_CARD_CLASS,
   packingLocationBadge,
 } from "./packingProductCardParts";
 
@@ -50,26 +53,29 @@ function DoneCardInner({ line, flash, fieldVisibility, displayMode = "list" }: D
     </span>
   );
 
+  const packedStatus = (
+    <div className="flex items-center gap-1.5">
+      <PackingDoneCheckIcon />
+      <span className="text-sm font-bold text-[#2e7d32]">
+        Spakowano {qtyPacked}/{qtyReq}
+      </span>
+    </div>
+  );
+
   return (
     <div
       className={[
-        "pointer-events-none relative flex cursor-default flex-col overflow-hidden rounded-lg border border-emerald-200 bg-[#eef8ee] text-left",
+        "pointer-events-none relative flex h-full cursor-default flex-col overflow-hidden rounded-lg",
+        PACKING_DONE_CARD_CLASS,
         packingProductCardRootSizeClass(displayMode),
-        isGrid ? "p-3" : "px-3 pb-2.5 pt-2",
+        isGrid ? "p-3" : "px-3 py-2.5",
       ].join(" ")}
       style={{ ...packingProductCardSizeStyle(displayMode), ...flashStyle }}
     >
       {isGrid ? (
         <>
           <div className="flex items-start gap-2">
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-1.5">
-                <PackingDoneCheckIcon />
-                <span className="text-sm font-bold text-[#2e7d32]">
-                  Spakowano {qtyPacked}/{qtyReq}
-                </span>
-              </div>
-            </div>
+            <div className="min-w-0 shrink-0">{packedStatus}</div>
             <PackingGridLocationHeader
               showLocation={showLoc}
               locBadge={locBadge}
@@ -78,52 +84,42 @@ function DoneCardInner({ line, flash, fieldVisibility, displayMode = "list" }: D
             />
           </div>
 
+          <div className="mt-2 flex min-h-0 flex-1 items-start gap-3 overflow-hidden">
+            {showImg ? (
+              <PackingProductThumb url={line.image_url} size={PACKING_PRODUCT_GRID_IMAGE_SIZE} muted />
+            ) : null}
+            <div className="min-w-0 flex-1 overflow-hidden">
+              {title ? (
+                <p className="line-clamp-3 text-[13px] font-bold leading-snug text-slate-600/85">{title}</p>
+              ) : null}
+              <LineDetailsBlock line={line} variant="done" fieldVisibility={fieldVisibility} layout="columns" />
+            </div>
+          </div>
+        </>
+      ) : (
+        <div className="flex h-full items-stretch gap-3">
           {showImg ? (
-            <div className="mt-2 flex h-[8.75rem] w-full items-center justify-center overflow-hidden bg-transparent">
-              {line.image_url ? (
-                <img
-                  src={line.image_url}
-                  alt=""
-                  className="max-h-full max-w-full object-contain"
-                  loading="lazy"
-                />
-              ) : (
-                <span className="text-3xl text-slate-300">—</span>
-              )}
+            <PackingProductThumb url={line.image_url} size={PACKING_PRODUCT_LIST_IMAGE_SIZE} muted />
+          ) : null}
+
+          <div className="flex min-w-0 flex-1 flex-col justify-center overflow-hidden">
+            {title ? (
+              <p className="line-clamp-2 text-[13px] font-bold leading-snug text-slate-600/85">{title}</p>
+            ) : null}
+            <LineDetailsBlock line={line} variant="done" fieldVisibility={fieldVisibility} layout="columns" />
+          </div>
+
+          <div className="flex w-[7.5rem] shrink-0 flex-col justify-center">{packedStatus}</div>
+
+          {showLoc ? (
+            <div className="flex w-[7.25rem] shrink-0 flex-col items-end justify-center gap-1">
+              <PackingCardFieldLabel muted>LOKALIZACJA</PackingCardFieldLabel>
+              <PackingLocationPill text={locBadge} muted />
             </div>
           ) : null}
 
-          {title ? <p className="mt-2 text-[13px] font-bold leading-snug text-slate-800">{title}</p> : null}
-          <LineDetailsBlock line={line} variant="done" fieldVisibility={fieldVisibility} layout="stack" />
-        </>
-      ) : (
-        <>
-          <div className="flex items-start gap-2.5">
-            {showImg ? <PackingProductThumb url={line.image_url} size={76} /> : null}
-            <div className="min-w-0 flex-1">
-              <div className="flex items-start gap-2">
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-1.5">
-                    <PackingDoneCheckIcon />
-                    <span className="text-sm font-bold text-[#2e7d32]">
-                      Spakowano {qtyPacked}/{qtyReq}
-                    </span>
-                  </div>
-                </div>
-                <div className="flex shrink-0 flex-col items-end gap-1">
-                  <div className="flex items-start gap-1">
-                    {showLoc ? <PackingCardFieldLabel muted>LOKALIZACJA</PackingCardFieldLabel> : null}
-                    <PackingDoneCloseIcon />
-                  </div>
-                  {showLoc ? <PackingLocationPill text={locBadge} muted /> : null}
-                </div>
-              </div>
-              {title ? <p className="mt-1.5 text-[13px] font-bold leading-snug text-slate-800">{title}</p> : null}
-            </div>
-          </div>
-
-          <LineDetailsBlock line={line} variant="done" fieldVisibility={fieldVisibility} layout="columns" />
-        </>
+          <div className="-mr-1 flex shrink-0 items-start pt-0.5">{closeIcon}</div>
+        </div>
       )}
     </div>
   );

@@ -9,6 +9,8 @@ import {
   type PackingProductFieldVisibility,
 } from "./packingProductDisplay";
 import {
+  PACKING_PRODUCT_LIST_CARD_HEIGHT,
+  PACKING_PRODUCT_LIST_IMAGE_SIZE,
   packingProductCardRootSizeClass,
   packingProductCardSizeStyle,
 } from "./packingProductCardLayout";
@@ -82,25 +84,25 @@ function ActiveCardInner({
 
   const packControls = (
     <div
-      className={["flex flex-col items-stretch gap-2", isGrid ? "w-full" : "w-full max-w-[11.5rem]"].join(" ")}
+      className={["flex flex-col items-stretch gap-2", isGrid ? "w-full max-w-[10.5rem]" : "w-full"].join(" ")}
       onClick={(e) => e.stopPropagation()}
     >
       <div className="flex items-center justify-center gap-2">
         <button
           type="button"
-          className="flex h-10 w-10 items-center justify-center rounded-lg border-2 border-slate-400 bg-white text-xl font-bold text-slate-900 hover:bg-slate-50"
+          className="flex h-9 w-9 items-center justify-center rounded-lg border-2 border-slate-400 bg-white text-xl font-bold text-slate-900 hover:bg-slate-50"
           aria-label="Zmniejsz"
           onClick={() => bump(-1)}
         >
           −
         </button>
-        <span className="flex min-h-[2.25rem] min-w-[2.75rem] items-center justify-center text-center text-2xl font-black tabular-nums text-slate-900">
+        <span className="flex min-h-[2rem] min-w-[2.5rem] items-center justify-center text-center text-2xl font-black tabular-nums text-slate-900">
           {packQty}
         </span>
         <button
           type="button"
           disabled={atMax || linePackBusy || scanBusy}
-          className="flex h-10 w-10 items-center justify-center rounded-lg border-2 border-slate-400 bg-white text-xl font-bold text-slate-900 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+          className="flex h-9 w-9 items-center justify-center rounded-lg border-2 border-slate-400 bg-white text-xl font-bold text-slate-900 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
           aria-label="Zwiększ"
           onClick={() => bump(1)}
         >
@@ -110,7 +112,7 @@ function ActiveCardInner({
       <button
         type="button"
         disabled={scanBusy || linePackBusy || packQty <= 0}
-        className="w-full rounded-lg py-2.5 text-sm font-bold text-white shadow-sm disabled:cursor-not-allowed disabled:opacity-50"
+        className="w-full rounded-lg py-2 text-sm font-bold text-white shadow-sm disabled:cursor-not-allowed disabled:opacity-50"
         style={{ background: PRIMARY_GREEN }}
         onClick={() => onConfirmPack(line.order_item_id)}
       >
@@ -129,16 +131,20 @@ function ActiveCardInner({
   return (
     <div
       className={[
-        "relative flex cursor-default flex-col rounded-lg border-[3px] border-[#1b5e20] bg-white text-left",
+        "relative flex h-full cursor-default flex-col rounded-lg border-[3px] border-[#1b5e20] bg-white text-left",
         packingProductCardRootSizeClass(displayMode),
-        isGrid ? "p-3" : "px-3 pb-2.5 pt-2",
+        isGrid ? "p-3" : "px-3 py-2.5",
       ].join(" ")}
-      style={{ ...packingProductCardSizeStyle(displayMode), ...flashStyle }}
+      style={{
+        ...packingProductCardSizeStyle(displayMode),
+        ...(isGrid ? {} : { height: "auto", minHeight: PACKING_PRODUCT_LIST_CARD_HEIGHT }),
+        ...flashStyle,
+      }}
     >
       {isGrid ? (
         <>
           <div className="flex items-start gap-2">
-            <div className="min-w-0 flex-1">
+            <div className="min-w-0 shrink-0">
               <PackingCardFieldLabel>SPAKOWANO</PackingCardFieldLabel>
               <p className="mt-0.5 text-[1.65rem] font-black leading-none tabular-nums text-slate-900">
                 {line.quantity_packed}/{qtyReq}
@@ -147,48 +153,51 @@ function ActiveCardInner({
             <PackingGridLocationHeader showLocation={showLoc} locBadge={locBadge} menu={menu} />
           </div>
 
-          {/* Strefa obrazu / kontrolek — jak Figma kafelki active */}
-          <div className="relative mt-2 flex min-h-[8.75rem] w-full flex-col items-center justify-center gap-2 bg-white">
-            {showImg && line.image_url ? (
-              <img
-                src={line.image_url}
-                alt=""
-                className="pointer-events-none absolute inset-0 m-auto max-h-[7rem] max-w-[85%] object-contain opacity-20"
-                loading="lazy"
-              />
-            ) : null}
-            <div className="relative z-[1] w-full max-w-[12rem]">{packControls}</div>
-          </div>
-
-          <div className="mt-2 opacity-80">
-            {title ? <p className="text-[13px] font-bold leading-snug text-slate-900">{title}</p> : null}
-            <LineDetailsBlock line={line} variant="active" fieldVisibility={fieldVisibility} layout="stack" />
+          <div className="relative mt-2 flex min-h-0 flex-1 items-start gap-3 overflow-hidden">
+            <div className="relative flex w-[11rem] shrink-0 flex-col items-center justify-center bg-transparent">
+              {showImg && line.image_url ? (
+                <img
+                  src={line.image_url}
+                  alt=""
+                  className="pointer-events-none absolute inset-0 m-auto max-h-[6.5rem] max-w-[90%] object-contain opacity-20"
+                  loading="lazy"
+                />
+              ) : null}
+              <div className="relative z-[1] w-full">{packControls}</div>
+            </div>
+            <div className="min-w-0 flex-1 overflow-hidden opacity-80">
+              {title ? (
+                <p className="line-clamp-3 text-[13px] font-bold leading-snug text-slate-900">{title}</p>
+              ) : null}
+              <LineDetailsBlock line={line} variant="active" fieldVisibility={fieldVisibility} layout="columns" />
+            </div>
           </div>
         </>
       ) : (
-        <>
-          <div className="flex items-start gap-2.5">
-            {showImg ? <PackingProductThumb url={line.image_url} size={76} /> : null}
-            <div className="min-w-0 flex-1">
-              <div className="flex items-start gap-2">
-                <div className="min-w-0 flex-1">
-                  <PackingCardFieldLabel>SPAKOWANO</PackingCardFieldLabel>
-                  <div className="mt-1">{packControls}</div>
-                </div>
-                <div className="flex shrink-0 flex-col items-end gap-1">
-                  <div className="flex items-start gap-0.5">
-                    {showLoc ? <PackingCardFieldLabel>LOKALIZACJA</PackingCardFieldLabel> : null}
-                    {menu}
-                  </div>
-                  {showLoc ? <PackingLocationPill text={locBadge} /> : null}
-                </div>
-              </div>
-              {title ? <p className="mt-2 text-[13px] font-bold leading-snug text-slate-900">{title}</p> : null}
-            </div>
+        <div className="flex h-full items-stretch gap-3">
+          {showImg ? <PackingProductThumb url={line.image_url} size={PACKING_PRODUCT_LIST_IMAGE_SIZE} /> : null}
+
+          <div className="flex min-w-0 flex-1 flex-col justify-center overflow-hidden">
+            {title ? (
+              <p className="line-clamp-2 text-[13px] font-bold leading-snug text-slate-900">{title}</p>
+            ) : null}
+            <LineDetailsBlock line={line} variant="active" fieldVisibility={fieldVisibility} layout="columns" />
           </div>
 
-          <LineDetailsBlock line={line} variant="active" fieldVisibility={fieldVisibility} layout="columns" />
-        </>
+          <div className="flex w-[11rem] shrink-0 flex-col justify-center">
+            <PackingCardFieldLabel>SPAKOWANO</PackingCardFieldLabel>
+            <div className="mt-1">{packControls}</div>
+          </div>
+
+          {showLoc ? (
+            <div className="flex w-[7.25rem] shrink-0 flex-col items-end justify-center gap-1">
+              <PackingCardFieldLabel>LOKALIZACJA</PackingCardFieldLabel>
+              <PackingLocationPill text={locBadge} />
+            </div>
+          ) : null}
+
+          <div className="-mr-1 flex shrink-0 items-start pt-0.5">{menu}</div>
+        </div>
       )}
     </div>
   );

@@ -9,6 +9,8 @@ import {
   type PackingProductFieldVisibility,
 } from "./packingProductDisplay";
 import {
+  PACKING_PRODUCT_GRID_IMAGE_SIZE,
+  PACKING_PRODUCT_LIST_IMAGE_SIZE,
   packingProductCardRootSizeClass,
   packingProductCardSizeStyle,
 } from "./packingProductCardLayout";
@@ -73,10 +75,10 @@ function DefaultCardInner({
         }
       }}
       className={[
-        "flex cursor-pointer flex-col rounded-lg border border-slate-200 bg-white text-left outline-none transition-[box-shadow]",
+        "flex h-full cursor-pointer flex-col rounded-lg border border-slate-200 bg-white text-left outline-none transition-[box-shadow]",
         packingProductCardRootSizeClass(displayMode),
         "hover:shadow-md focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-1",
-        isGrid ? "p-3" : "px-3 pb-2.5 pt-2",
+        isGrid ? "p-3" : "px-3 py-2.5",
       ].join(" ")}
       style={{
         ...packingProductCardSizeStyle(displayMode, { allowShrink: !lockCardSize }),
@@ -86,7 +88,7 @@ function DefaultCardInner({
       {isGrid ? (
         <>
           <div className="flex items-start gap-2">
-            <div className="min-w-0 flex-1">
+            <div className="min-w-0 shrink-0">
               <PackingCardFieldLabel>SPAKOWANO</PackingCardFieldLabel>
               <p className="mt-0.5 text-[1.65rem] font-black leading-none tabular-nums text-slate-900">
                 {line.quantity_packed}/{qtyReq}
@@ -95,51 +97,45 @@ function DefaultCardInner({
             <PackingGridLocationHeader showLocation={showLoc} locBadge={locBadge} menu={menu} />
           </div>
 
-          {showImg ? (
-            <div className="mt-2 flex h-[8.75rem] w-full items-center justify-center overflow-hidden bg-white">
-              {line.image_url ? (
-                <img src={line.image_url} alt="" className="max-h-full max-w-full object-contain" loading="lazy" />
-              ) : (
-                <span className="text-3xl text-slate-300">—</span>
-              )}
-            </div>
-          ) : null}
-
-          {title ? <p className="mt-2 text-[13px] font-bold leading-snug text-slate-900">{title}</p> : null}
-          <LineDetailsBlock line={line} variant="default" fieldVisibility={fieldVisibility} layout="stack" />
-        </>
-      ) : (
-        <>
-          {/* Lista: [zdjęcie | nazwa+meta] [SPAKOWANO | LOKALIZACJA | …] — stałe kolumny */}
-          <div className="flex items-start gap-3">
-            {showImg ? <PackingProductThumb url={line.image_url} size={76} /> : null}
-            <div className="min-w-0 flex-1">
+          <div className="mt-2 flex min-h-0 flex-1 items-start gap-3 overflow-hidden">
+            {showImg ? (
+              <PackingProductThumb url={line.image_url} size={PACKING_PRODUCT_GRID_IMAGE_SIZE} />
+            ) : null}
+            <div className="min-w-0 flex-1 overflow-hidden">
               {title ? (
-                <p className="text-[13px] font-bold leading-snug text-slate-900 [overflow-wrap:anywhere]">
-                  {title}
-                </p>
+                <p className="line-clamp-3 text-[13px] font-bold leading-snug text-slate-900">{title}</p>
               ) : null}
               <LineDetailsBlock line={line} variant="default" fieldVisibility={fieldVisibility} layout="columns" />
             </div>
-            <div className="flex w-[7.75rem] shrink-0 flex-col items-end gap-1">
-              <div className="flex w-full items-start justify-end gap-0.5">
-                <div className="min-w-0 text-right">
-                  <PackingCardFieldLabel>SPAKOWANO</PackingCardFieldLabel>
-                  <p className="mt-0.5 text-[1.5rem] font-black leading-none tabular-nums text-slate-900">
-                    {line.quantity_packed}/{qtyReq}
-                  </p>
-                </div>
-                <div className="-mr-1.5 -mt-0.5 shrink-0">{menu}</div>
-              </div>
-              {showLoc ? (
-                <div className="flex w-full flex-col items-end gap-1">
-                  <PackingCardFieldLabel>LOKALIZACJA</PackingCardFieldLabel>
-                  <PackingLocationPill text={locBadge} />
-                </div>
-              ) : null}
-            </div>
           </div>
         </>
+      ) : (
+        <div className="flex h-full items-stretch gap-3">
+          {showImg ? <PackingProductThumb url={line.image_url} size={PACKING_PRODUCT_LIST_IMAGE_SIZE} /> : null}
+
+          <div className="flex min-w-0 flex-1 flex-col justify-center overflow-hidden">
+            {title ? (
+              <p className="line-clamp-2 text-[13px] font-bold leading-snug text-slate-900">{title}</p>
+            ) : null}
+            <LineDetailsBlock line={line} variant="default" fieldVisibility={fieldVisibility} layout="columns" />
+          </div>
+
+          <div className="flex w-[4.75rem] shrink-0 flex-col justify-center">
+            <PackingCardFieldLabel>SPAKOWANO</PackingCardFieldLabel>
+            <p className="mt-0.5 text-[1.5rem] font-black leading-none tabular-nums text-slate-900">
+              {line.quantity_packed}/{qtyReq}
+            </p>
+          </div>
+
+          {showLoc ? (
+            <div className="flex w-[7.25rem] shrink-0 flex-col items-end justify-center gap-1">
+              <PackingCardFieldLabel>LOKALIZACJA</PackingCardFieldLabel>
+              <PackingLocationPill text={locBadge} />
+            </div>
+          ) : null}
+
+          <div className="-mr-1 flex shrink-0 items-start pt-0.5">{menu}</div>
+        </div>
       )}
     </div>
   );
