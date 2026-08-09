@@ -8,7 +8,7 @@ export function packingLocationBadge(line: WmsPackingOrderLineApi): string {
   const loc = (line.location_label ?? "").trim();
   if (!loc) return "";
   const locQty = line.location_bin_qty;
-  return locQty != null && locQty > 0 ? `${loc} (x${locQty})` : loc;
+  return locQty != null && locQty > 0 ? `${loc} (${locQty})` : loc;
 }
 
 export function PackingCardFieldLabel({ children, muted }: { children: string; muted?: boolean }) {

@@ -4,9 +4,9 @@ import type { PackingAutomationButtonsPosition, PackingSalesDocPreview } from ".
 import { CourierBadge } from "./CourierBadge";
 import { PackingAutomationActivators } from "./PackingAutomationActivators";
 import { packingCourierLabelCount, packingCourierName } from "./packingHelpers";
+import { PackingPackAllIconButton } from "./PackingHeaderChrome";
 
 const NOTES_RED = "#d32f2f";
-const PRIMARY_GREEN = "#4caf50";
 const DOC_GREEN = "#2e7d32";
 
 function IconPhoneSmall() {
@@ -247,15 +247,11 @@ export function PackingOrderSidebar({
           >
             <IconDots />
           </button>
-          <button
-            type="button"
+          <PackingPackAllIconButton
+            size="lg"
             disabled={scanBusy || packingActionsLocked}
-            className="min-h-12 flex-1 rounded-lg px-4 text-base font-bold text-white shadow-sm disabled:cursor-not-allowed disabled:opacity-50"
-            style={{ background: PRIMARY_GREEN }}
             onClick={() => void packAll()}
-          >
-            Spakuj wszystko
-          </button>
+          />
         </div>
         <button
           type="button"

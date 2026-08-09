@@ -45,8 +45,7 @@ import {
   packingProductCardsContainerClass,
   packingProductCardsContainerStyle,
 } from "./packingProductCardLayout";
-
-const PRIMARY_GREEN = "#4caf50";
+import { PackingCartBasketBadges, PackingPackAllIconButton } from "./PackingHeaderChrome";
 
 function IconBack() {
   return (
@@ -168,11 +167,11 @@ export function PackingView({
   const wedgeRef = useRef<HTMLInputElement>(null);
 
   const basketCodeRaw = (detail.basket_code ?? "").trim();
-  const hasBasketLabel = Boolean(basketCodeRaw);
   const cartLabel = (detail.cart_display_code ?? "").trim() || "—";
   const uwagiKlienta = (detail.customer_comment ?? "").trim();
-  const qIdx = detail.queue_index ?? 1;
-  const qTot = detail.queue_total ?? 1;
+  /** Sztuki spakowane / do spakowania (nie pozycja w kolejce). */
+  const packedUnits = Math.max(0, Math.floor(Number(detail.packed_quantity) || 0));
+  const totalUnits = Math.max(0, Math.floor(Number(detail.total_quantity) || 0));
   const packerLabel = (packerDisplayName ?? "").trim() || "—";
 
   const isFullWidth = layoutMode === "full_width";
@@ -244,22 +243,17 @@ export function PackingView({
               <span className="text-lg font-bold text-slate-900 sm:text-xl">
                 {orderNumberLabel(detail.number)}
               </span>
-              <span className="text-2xl font-black tabular-nums text-slate-900 sm:text-3xl">
-                {qIdx}/{qTot}
+              <span
+                className="text-2xl font-black tabular-nums text-slate-900 sm:text-3xl"
+                title="Spakowane / do spakowania"
+              >
+                {packedUnits}/{totalUnits}
               </span>
             </div>
 
-            <div className="min-w-0 flex-1 text-sm text-slate-600">
+            <div className="min-w-0 flex-1 space-y-1 text-sm text-slate-600">
+              <PackingCartBasketBadges cartLabel={cartLabel} basketCode={basketCodeRaw} />
               <p className="truncate">
-                Wózek: <span className="font-semibold text-slate-900">{cartLabel}</span>
-                {hasBasketLabel ? (
-                  <>
-                    {", "}
-                    Koszyk: <span className="font-semibold text-slate-900">{basketCodeRaw}</span>
-                  </>
-                ) : null}
-              </p>
-              <p className="mt-0.5 truncate">
                 Osoba pakująca: <span className="font-semibold text-slate-900">{packerLabel}</span>
               </p>
             </div>
@@ -272,15 +266,10 @@ export function PackingView({
               >
                 <IconDots />
               </button>
-              <button
-                type="button"
+              <PackingPackAllIconButton
                 disabled={scanBusy || packingActionsLocked}
-                className="min-h-11 rounded-lg px-4 text-sm font-bold text-white shadow-sm disabled:cursor-not-allowed disabled:opacity-50 sm:px-5 sm:text-base"
-                style={{ background: PRIMARY_GREEN }}
                 onClick={() => void packAll()}
-              >
-                Spakuj wszystko
-              </button>
+              />
             </div>
           </div>
         </header>
@@ -469,23 +458,20 @@ export function PackingView({
               <span className="whitespace-nowrap text-lg font-bold text-slate-900 sm:text-xl">
                 {orderNumberLabel(detail.number)}
               </span>
-              <span className="whitespace-nowrap text-xl font-black tabular-nums text-slate-900 sm:text-2xl">
-                {qIdx}/{qTot}
+              <span
+                className="whitespace-nowrap text-xl font-black tabular-nums text-slate-900 sm:text-2xl"
+                title="Spakowane / do spakowania"
+              >
+                {packedUnits}/{totalUnits}
               </span>
             </div>
 
-            <div className="min-w-0 flex-1 truncate text-sm text-slate-600">
-              <span className="font-medium">
-                Wózek: <span className="font-semibold text-slate-900">{cartLabel}</span>
-                {hasBasketLabel ? (
-                  <>
-                    {", "}
-                    Koszyk: <span className="font-semibold text-slate-900">{basketCodeRaw}</span>
-                  </>
-                ) : null}
-                <span className="mx-1.5 text-slate-300" aria-hidden>
-                  ·
-                </span>
+            <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-1 text-sm text-slate-600">
+              <PackingCartBasketBadges cartLabel={cartLabel} basketCode={basketCodeRaw} />
+              <span className="hidden text-slate-300 sm:inline" aria-hidden>
+                ·
+              </span>
+              <span className="truncate font-medium">
                 Osoba pakująca: <span className="font-semibold text-slate-900">{packerLabel}</span>
               </span>
             </div>

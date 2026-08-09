@@ -19,8 +19,11 @@ function EanBadge({ value, muted }: { value: string; muted?: boolean }) {
   return (
     <span
       className={[
-        "inline-flex max-w-full items-center truncate rounded-md px-1.5 py-0.5 font-mono text-[11px] font-medium leading-none",
-        muted ? "bg-emerald-100/80 text-emerald-900/65" : "bg-[#eef0fb] text-[#3f4a8a]",
+        "inline-flex max-w-full items-center truncate rounded-md border px-1.5 py-0.5 font-mono text-[11px] font-semibold leading-none",
+        // Done cards: keep high-contrast on green wash (avoid pale emerald-on-emerald).
+        muted
+          ? "border-slate-300/90 bg-white text-slate-900"
+          : "border-transparent bg-[#eef0fb] text-[#2f3a7a]",
       ].join(" ")}
       title={value}
     >
