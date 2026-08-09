@@ -242,24 +242,24 @@ export function PackingOrderSidebar({
         <div className="flex items-stretch gap-2">
           <button
             type="button"
-            className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-lg border border-slate-300 bg-white text-slate-600 hover:bg-slate-50"
+            className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-slate-300 bg-white text-slate-600 hover:bg-slate-50"
             aria-label="Opcje"
           >
             <IconDots />
           </button>
-          <PackingPackAllIconButton
-            size="lg"
-            disabled={scanBusy || packingActionsLocked}
-            onClick={() => void packAll()}
-          />
+          <button
+            type="button"
+            className="min-h-11 flex-1 rounded-lg border-2 border-slate-400 bg-white px-4 text-sm font-bold text-slate-800 shadow-sm hover:bg-slate-50"
+            onClick={onInterrupt}
+          >
+            Przerwij
+          </button>
         </div>
-        <button
-          type="button"
-          className="min-h-11 w-full rounded-lg border-2 border-slate-400 bg-white px-4 text-sm font-bold text-slate-800 shadow-sm hover:bg-slate-50"
-          onClick={onInterrupt}
-        >
-          Przerwij
-        </button>
+        <PackingPackAllIconButton
+          size="xl"
+          disabled={scanBusy || packingActionsLocked}
+          onClick={() => void packAll()}
+        />
         {showAutomationButtons &&
         warehouseId != null &&
         warehouseId > 0 &&

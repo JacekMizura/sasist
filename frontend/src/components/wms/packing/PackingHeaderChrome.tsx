@@ -11,10 +11,11 @@ export function PackingPackAllIconButton({
   disabled?: boolean;
   onClick: () => void;
   className?: string;
-  size?: "md" | "lg";
+  size?: "md" | "lg" | "xl";
 }) {
-  const box = size === "lg" ? "h-12 w-12" : "h-11 w-11";
-  const icon = size === "lg" ? 26 : 24;
+  const box =
+    size === "xl" ? "h-16 w-full min-h-[4rem]" : size === "lg" ? "h-12 w-12" : "h-11 w-11";
+  const icon = size === "xl" ? 40 : size === "lg" ? 26 : 24;
   return (
     <button
       type="button"
@@ -23,19 +24,19 @@ export function PackingPackAllIconButton({
       title="Spakuj wszystko"
       aria-label="Spakuj wszystko"
       className={[
-        "inline-flex shrink-0 items-center justify-center rounded-lg border border-slate-300 bg-white text-slate-800 shadow-sm hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50",
+        "inline-flex shrink-0 items-center justify-center rounded-xl border-2 border-slate-300 bg-white text-slate-800 shadow-sm hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50",
         box,
         className ?? "",
       ]
         .filter(Boolean)
         .join(" ")}
     >
-      <PackageCheck size={icon} strokeWidth={2} className="text-slate-800" aria-hidden />
+      <PackageCheck size={icon} strokeWidth={2.25} className="text-slate-800" aria-hidden />
     </button>
   );
 }
 
-/** Badge wózka / koszyka — ikona + mono kod (jak w zbieraniu). */
+/** Badge wózka / koszyka — czytelniejszy chip z ikoną + mono kod. */
 export function PackingCartBasketBadges({
   cartLabel,
   basketCode,
@@ -44,16 +45,22 @@ export function PackingCartBasketBadges({
   basketCode?: string | null;
 }) {
   const basket = (basketCode ?? "").trim();
+  const chip =
+    "inline-flex max-w-full items-center gap-2 rounded-xl border border-slate-300 bg-white px-2.5 py-1.5 text-slate-800 shadow-sm";
   return (
-    <div className="flex min-w-0 flex-wrap items-center gap-1.5">
-      <span className="inline-flex max-w-full items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-2 py-1 text-slate-700">
-        <Icon name="cart" size={15} className="shrink-0 text-slate-600" />
-        <span className="truncate font-mono text-[11px] font-bold text-slate-900">{cartLabel}</span>
+    <div className="flex min-w-0 flex-wrap items-center gap-2">
+      <span className={chip}>
+        <Icon name="cart" size={20} className="shrink-0 text-slate-700" />
+        <span className="truncate font-mono text-sm font-extrabold tracking-tight text-slate-900">
+          {cartLabel}
+        </span>
       </span>
       {basket ? (
-        <span className="inline-flex max-w-full items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-2 py-1 text-slate-700">
-          <Icon name="basket" size={15} className="shrink-0 text-slate-600" />
-          <span className="truncate font-mono text-[11px] font-bold text-slate-900">{basket}</span>
+        <span className={chip}>
+          <Icon name="basket" size={20} className="shrink-0 text-slate-700" />
+          <span className="truncate font-mono text-sm font-extrabold tracking-tight text-slate-900">
+            {basket}
+          </span>
         </span>
       ) : null}
     </div>
