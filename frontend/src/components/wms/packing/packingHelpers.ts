@@ -68,7 +68,7 @@ export function scanErrorMessage(code: string | null): string {
     case "BASKET_NOT_FOUND":
       return "Nie rozpoznano koszyka";
     case "BASKET_EMPTY":
-      return "Koszyk jest pusty — brak przypisanego zamówienia";
+      return "Do tego koszyka nie przypisano żadnego zamówienia.";
     case "BASKET_ORDER_NOT_IN_QUEUE":
       return "Zamówienie z tego koszyka nie jest w kolejce pakowania";
     case "SHELF_ORDER_NOT_READY":

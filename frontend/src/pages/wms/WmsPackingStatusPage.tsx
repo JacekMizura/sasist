@@ -1,8 +1,13 @@
-import axios from "axios";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { getWmsPackingModes, getWmsPackingTargetStatuses } from "../../api/wmsPackingApi";
-import { getWmsPickingResolveCart } from "../../api/wmsPickingProductsApi";
+import {
+  applyPackingHandoffScanResult,
+  isPackingNamedStatus,
+  pickPreferredPackingStatus,
+} from "../../components/wms/packing/applyPackingHandoffScan";
 import { PackingModeSelectionView } from "../../components/wms/packing/PackingModeSelectionView";
+import { resolvePackingHandoffScan } from "../../components/wms/packing/resolvePackingHandoffScan";
 import { useWarehouse } from "../../context/WarehouseContext";
 import { useWmsScanner } from "../../context/WmsScannerContext";
 import type { OrderUiMainGroup } from "../../types/orderUiStatus";
@@ -15,8 +20,10 @@ import { loadWmsPackingSession, saveWmsPackingSession } from "./wmsPackingSessio
 import { consumePendingPackingWorkstation } from "./WmsPackingWorkstationGate";
 
 type FlowPhase = "pick_status" | "pick_mode";
+type StatusRow = Awaited<ReturnType<typeof getWmsPackingTargetStatuses>>[number];
 
 export default function WmsPackingStatusPage() {
+  const navigate = useNavigate();
   const { warehouse } = useWarehouse();
   const warehouseId = warehouse?.id ?? null;
   const {
@@ -26,9 +33,10 @@ export default function WmsPackingStatusPage() {
     showScannerError,
     setScannerInputPlaceholder,
     refocusScannerInput,
+    appendScanToHistory,
   } = useWmsScanner();
 
-  const [rows, setRows] = useState<Awaited<ReturnType<typeof getWmsPackingTargetStatuses>>>([]);
+  const [rows, setRows] = useState<StatusRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<number | null>(null);
@@ -42,6 +50,7 @@ export default function WmsPackingStatusPage() {
   } | null>(null);
   const [modesLoading, setModesLoading] = useState(false);
   const [modesErr, setModesErr] = useState<string | null>(null);
+  const [autoOpenHandoffScan, setAutoOpenHandoffScan] = useState(false);
   const scanBusyRef = useRef(false);
 
   const loadStatuses = useCallback(async () => {
@@ -67,29 +76,92 @@ export default function WmsPackingStatusPage() {
     void loadStatuses();
   }, [loadStatuses]);
 
-  const loadModesForStatus = useCallback(async (statusId: number) => {
-    if (warehouseId == null) return;
-    setModesLoading(true);
-    setModesErr(null);
-    try {
-      const d = await getWmsPackingModes(DAMAGE_TENANT_ID, warehouseId, statusId);
-      setModes(d);
-    } catch {
-      setModesErr("Nie udało się wczytać trybów pakowania.");
-      setModes(null);
-    } finally {
-      setModesLoading(false);
-    }
-  }, [warehouseId]);
+  const loadModesForStatus = useCallback(
+    async (statusId: number) => {
+      if (warehouseId == null) return;
+      setModesLoading(true);
+      setModesErr(null);
+      try {
+        const d = await getWmsPackingModes(DAMAGE_TENANT_ID, warehouseId, statusId);
+        setModes(d);
+      } catch {
+        setModesErr("Nie udało się wczytać trybów pakowania.");
+        setModes(null);
+      } finally {
+        setModesLoading(false);
+      }
+    },
+    [warehouseId],
+  );
 
   useEffect(() => {
     setActiveDocument({ kind: "custom", label: "Pakowanie — statusy" });
     return () => setActiveDocument(null);
   }, [setActiveDocument]);
 
+  const bindStatusSession = useCallback((r: StatusRow) => {
+    const pending = consumePendingPackingWorkstation();
+    const prev = loadWmsPackingSession();
+    const next = {
+      statusId: r.target_status_id,
+      statusName: r.status,
+      statusColor: r.color,
+      mainGroup: r.main_group as OrderUiMainGroup,
+      workstationId: pending.workstationId ?? prev?.workstationId,
+      workstationName: pending.workstationName ?? prev?.workstationName,
+    };
+    saveWmsPackingSession(next);
+    return next;
+  }, []);
+
+  const onChooseStatus = (r: StatusRow, opts?: { openHandoffScan?: boolean }) => {
+    if (warehouseId == null || busyId != null) return;
+    setBusyId(r.target_status_id);
+    setErr(null);
+    try {
+      bindStatusSession(r);
+      setAutoOpenHandoffScan(Boolean(opts?.openHandoffScan));
+      setFlowPhase("pick_mode");
+      void loadModesForStatus(r.target_status_id);
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const runHandoffScanWithStatus = useCallback(
+    async (raw: string, statusRow: StatusRow) => {
+      if (warehouseId == null || scanBusyRef.current) return;
+      scanBusyRef.current = true;
+      try {
+        const sessionBase = bindStatusSession(statusRow);
+        const result = await resolvePackingHandoffScan({
+          tenantId: DAMAGE_TENANT_ID,
+          warehouseId,
+          statusId: statusRow.target_status_id,
+          raw,
+        });
+        if (result.kind === "empty" || result.kind === "error") {
+          showScannerToast(result.message);
+          return;
+        }
+        setStatusPageHandoffOpen(false);
+        applyPackingHandoffScanResult({
+          result,
+          navigate,
+          appendScanToHistory,
+          sessionBase,
+        });
+      } finally {
+        scanBusyRef.current = false;
+        refocusScannerInput();
+      }
+    },
+    [warehouseId, bindStatusSession, showScannerToast, navigate, appendScanToHistory, refocusScannerInput],
+  );
+
   useEffect(() => {
     if (flowPhase === "pick_status") {
-      setScannerInputPlaceholder("Wybierz status lub zeskanuj wózek po wyborze statusu");
+      setScannerInputPlaceholder("Skanuj wózek / koszyk albo wybierz status");
       refocusScannerInput();
     }
   }, [flowPhase, setScannerInputPlaceholder, refocusScannerInput]);
@@ -99,47 +171,21 @@ export default function WmsPackingStatusPage() {
       const scan = normalizeScanEan(raw);
       if (!scan || warehouseId == null || scanBusyRef.current) return;
       const kind = classifyWmsScanCode(scan);
-      const session = loadWmsPackingSession();
 
-      scanBusyRef.current = true;
-      try {
-        let cartResult: Awaited<ReturnType<typeof getWmsPickingResolveCart>> | null = null;
-        try {
-          cartResult = await getWmsPickingResolveCart(DAMAGE_TENANT_ID, warehouseId, scan);
-        } catch (e) {
-          cartResult = null;
-          if (axios.isAxiosError(e) && e.response != null && e.response.status >= 500) {
-            showScannerToast("Błąd serwera przy rozpoznawaniu wózka.");
-            return;
-          }
-        }
-
-        if (cartResult != null) {
-          if (!session?.statusId) {
-            showScannerToast("Zeskanowano wózek — najpierw wybierz status kolejki (kafelek).");
-            return;
-          }
-          showScannerToast("Wybierz status, potem użyj „Zeskanuj wózek” na kolejnym ekranie.");
-          return;
-        }
-
-        if (kind === "ean_gtin") {
-          showScannerError(`Zeskanowano produkt ${scan}, najpierw wejdź w odpowiedni status`);
-          return;
-        }
-
-        if (kind === "cart_like") {
-          showScannerToast("Nie rozpoznano wózka — sprawdź kod.");
-          return;
-        }
-
+      if (kind === "ean_gtin") {
         showScannerError(`Zeskanowano produkt ${scan}, najpierw wejdź w odpowiedni status`);
-      } finally {
-        scanBusyRef.current = false;
-        refocusScannerInput();
+        return;
       }
+
+      const preferred = pickPreferredPackingStatus(rows);
+      if (!preferred) {
+        showScannerToast("Brak statusów kolejki pakowania — skonfiguruj status startowy w ustawieniach.");
+        return;
+      }
+
+      await runHandoffScanWithStatus(scan, preferred);
     },
-    [warehouseId, showScannerToast, showScannerError, refocusScannerInput],
+    [warehouseId, rows, showScannerError, showScannerToast, runHandoffScanWithStatus],
   );
 
   useEffect(() => {
@@ -152,28 +198,6 @@ export default function WmsPackingStatusPage() {
     });
     return () => registerScanHandler(null);
   }, [flowPhase, registerScanHandler, handleScanPickStatus]);
-
-  const onChooseStatus = (r: (typeof rows)[number]) => {
-    if (warehouseId == null || busyId != null) return;
-    setBusyId(r.target_status_id);
-    setErr(null);
-    try {
-      const pending = consumePendingPackingWorkstation();
-      const prev = loadWmsPackingSession();
-      saveWmsPackingSession({
-        statusId: r.target_status_id,
-        statusName: r.status,
-        statusColor: r.color,
-        mainGroup: r.main_group as OrderUiMainGroup,
-        workstationId: pending.workstationId ?? prev?.workstationId,
-        workstationName: pending.workstationName ?? prev?.workstationName,
-      });
-      setFlowPhase("pick_mode");
-      void loadModesForStatus(r.target_status_id);
-    } finally {
-      setBusyId(null);
-    }
-  };
 
   const session = loadWmsPackingSession();
   const showSingleMulti =
@@ -234,8 +258,22 @@ export default function WmsPackingStatusPage() {
                 modes={modes}
                 warehouseId={warehouseId}
                 showSingleMultiTiles={showSingleMulti}
+                autoOpenHandoffScan={autoOpenHandoffScan}
               />
             ) : null}
+            <div className="mt-6 flex justify-center">
+              <button
+                type="button"
+                className="rounded-xl px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+                onClick={() => {
+                  setFlowPhase("pick_status");
+                  setAutoOpenHandoffScan(false);
+                  setModes(null);
+                }}
+              >
+                ← Wróć do statusów
+              </button>
+            </div>
           </div>
         ) : null}
 
@@ -244,21 +282,34 @@ export default function WmsPackingStatusPage() {
             className="mt-6 grid list-none grid-cols-1 gap-5 p-0 sm:grid-cols-2 lg:grid-cols-3"
             aria-label="Statusy kolejki pakowania"
           >
-            {rows.map((r) => (
-              <li key={r.target_status_id} className="min-w-0">
-                <WmsFlowStatusTileButton
-                  variant="work"
-                  statusName={r.status}
-                  orderCount={r.order_count}
-                  color={r.color}
-                  mainGroup={r.main_group as OrderUiMainGroup}
-                  requireCart={false}
-                  cartType={null}
-                  disabled={warehouseId == null || busyId != null}
-                  onClick={() => onChooseStatus(r)}
-                />
-              </li>
-            ))}
+            {rows.map((r) => {
+              const packingNamed = isPackingNamedStatus(r.status);
+              return (
+                <li key={r.target_status_id} className="min-w-0 space-y-2">
+                  <WmsFlowStatusTileButton
+                    variant="work"
+                    statusName={r.status}
+                    orderCount={r.order_count}
+                    color={r.color}
+                    mainGroup={r.main_group as OrderUiMainGroup}
+                    requireCart={false}
+                    cartType={null}
+                    disabled={warehouseId == null || busyId != null}
+                    onClick={() => onChooseStatus(r)}
+                  />
+                  {packingNamed ? (
+                    <button
+                      type="button"
+                      disabled={warehouseId == null || busyId != null}
+                      className="flex w-full items-center justify-center gap-2 rounded-xl border-2 border-slate-900 bg-slate-900 px-4 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-slate-800 disabled:opacity-50"
+                      onClick={() => onChooseStatus(r, { openHandoffScan: true })}
+                    >
+                      Skanuj wózek / koszyk
+                    </button>
+                  ) : null}
+                </li>
+              );
+            })}
           </ul>
         ) : null}
       </div>
