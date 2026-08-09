@@ -1,5 +1,5 @@
 /** Shared spacing / typography for all WMS settings modules.
- * Form rows: LABEL (wrap) | CONTROL (first-line) via {@link ./wmsSettingRow} `SettingRow`.
+ * Form rows: TEXT | INFO „i” | CONTROL via {@link ./wmsSettingRow} `SettingRow`.
  */
 export const wmsSettingsTokens = {
   mainStack: "space-y-6",

@@ -15,7 +15,7 @@ type SettingInfoButtonProps = {
 const INFO_BLUE = "#3b82f6";
 
 /**
- * Niebieska ikona (i) w stylu Sellasist — w pierwszym wierszu tytułu opcji (obok nazwy).
+ * Niebieska ikona (i) w stylu Sellasist — stała kolumna info w {@link ./wmsSettingRow}.
  * Modal bez sekcji „czy artykuł był pomocny”.
  */
 export function SettingInfoButton({ title, description, tip, className }: SettingInfoButtonProps) {
