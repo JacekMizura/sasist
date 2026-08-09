@@ -57,7 +57,7 @@ import {
 import { OrderUiStatusField } from "../../../components/orders/OrderUiStatusField";
 import { buildOrderUiStatusNameById } from "../../../components/orders/automation/buildOrderUiStatusNameById";
 import { Boxes, Clock3, FileText, Pencil, Plus, Trash2 } from "lucide-react";
-import { OrderUiStatusBadge } from "../../../components/orders/OrderUiStatusBadge";
+import { OrderUiStatusConfigRowPresent } from "../../../components/orders/orderList/OrderUiStatusConfigRowPresent";
 import { IconButton } from "../../../design-system";
 import { brandPrimaryButtonClass } from "../../../design-system/brandUi";
 import type { PanelConfigurableUiStatusBrief } from "../../../utils/panelListStatusBriefMappers";
@@ -1430,6 +1430,77 @@ function resolvePanelStatusBrief(
   };
 }
 
+const PICKING_CONFIG_LIST_GRID =
+  "sm:grid-cols-[minmax(13rem,1.35fr)_minmax(7rem,0.65fr)_minmax(13rem,1.55fr)_minmax(12rem,1.2fr)_auto]";
+
+/** Duży badge statusu WMS (ten sam pipeline co ustawienia statusów panelu). */
+function PickingConfigStatusBadge({ status }: { status: PanelConfigurableUiStatusBrief }) {
+  return (
+    <OrderUiStatusConfigRowPresent
+      status={status}
+      variant="default"
+      className="w-fit max-w-full !px-3.5 !py-2.5 shadow-sm hover:translate-y-0 hover:shadow-sm"
+    />
+  );
+}
+
+function collectUniquePickingConfigStatuses(
+  configs: SavedPickingConfiguration[],
+  orderUiSummary: OrderUiStatusPanelSummary | null,
+): Array<{ id: number; brief: PanelConfigurableUiStatusBrief }> {
+  const seen = new Set<number>();
+  const out: Array<{ id: number; brief: PanelConfigurableUiStatusBrief }> = [];
+  const push = (id: number, fallbackName: string) => {
+    if (!Number.isFinite(id) || id <= 0 || seen.has(id)) return;
+    seen.add(id);
+    out.push({ id, brief: resolvePanelStatusBrief(orderUiSummary, id, fallbackName) });
+  };
+  for (const cfg of configs) {
+    push(cfg.statusToPickId, cfg.statusToPickName);
+    push(cfg.statusAfterPickId, cfg.statusAfterPickName);
+    if (cfg.statusOnShortageId != null) {
+      push(cfg.statusOnShortageId, cfg.statusOnShortageName ?? `Status #${cfg.statusOnShortageId}`);
+    }
+  }
+  return out;
+}
+
+function PickingUsedStatusesSummary({
+  configs,
+  orderUiSummary,
+}: {
+  configs: SavedPickingConfiguration[];
+  orderUiSummary: OrderUiStatusPanelSummary | null;
+}) {
+  const statuses = useMemo(
+    () => collectUniquePickingConfigStatuses(configs, orderUiSummary),
+    [configs, orderUiSummary],
+  );
+  if (statuses.length === 0) return null;
+  return (
+    <div
+      className="rounded-xl border border-slate-100 bg-white px-4 py-4"
+      aria-label="Wykorzystane statusy"
+    >
+      <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+        Wykorzystane statusy
+      </p>
+      <div className="mt-3 flex flex-wrap items-center gap-x-2 gap-y-2.5">
+        {statuses.map((st, index) => (
+          <div key={st.id} className="flex min-w-0 items-center gap-2">
+            {index > 0 ? (
+              <span className="shrink-0 text-sm font-medium text-slate-300" aria-hidden>
+                →
+              </span>
+            ) : null}
+            <PickingConfigStatusBadge status={st.brief} />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function PickingConfigSettingsStack({ config }: { config: SavedPickingConfiguration }) {
   const multiLabel = containerListLabel(config.blocks.multi_item.containers, "multi_item");
   const singleLabel = containerListLabel(config.blocks.single_item.containers, "single_item");
@@ -1488,11 +1559,11 @@ function SavedPickingConfigSummaryCard({
 
   return (
     <div
-      className="grid grid-cols-1 items-center gap-4 border-b border-slate-100 px-4 py-4 last:border-b-0 sm:grid-cols-[minmax(10rem,1.1fr)_minmax(7rem,0.7fr)_minmax(14rem,1.8fr)_minmax(8rem,0.9fr)_auto] sm:gap-6"
+      className={`grid grid-cols-1 items-center gap-4 border-b border-slate-100 px-4 py-4 last:border-b-0 ${PICKING_CONFIG_LIST_GRID} sm:gap-6`}
       aria-label={`Konfiguracja zbierania: ${config.statusToPickName}`}
     >
       <div className="min-w-0">
-        <OrderUiStatusBadge status={sourceBrief} />
+        <PickingConfigStatusBadge status={sourceBrief} />
       </div>
       <div className="min-w-0">
         <p className="text-sm font-semibold text-slate-900">{modeLabel}</p>
@@ -1501,7 +1572,7 @@ function SavedPickingConfigSummaryCard({
         <PickingConfigSettingsStack config={config} />
       </div>
       <div className="min-w-0">
-        <OrderUiStatusBadge status={targetBrief} />
+        <PickingConfigStatusBadge status={targetBrief} />
       </div>
       <div className="flex shrink-0 items-center justify-end gap-1.5">
         <IconButton
@@ -1579,37 +1650,42 @@ function WmsPickingStatusConfig({
       ) : null}
 
       {savedConfigs.length > 0 ? (
-        <div className="overflow-hidden rounded-xl border border-slate-100 bg-white">
-          <div className="hidden grid-cols-[minmax(10rem,1.1fr)_minmax(7rem,0.7fr)_minmax(14rem,1.8fr)_minmax(8rem,0.9fr)_auto] gap-6 border-b border-slate-100 px-4 py-3 sm:grid">
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
-              Status do rozpoczęcia zbierania
-            </p>
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Tryb zbierania</p>
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Ustawienia</p>
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Po zbieraniu</p>
-            <p className="text-right text-[11px] font-semibold uppercase tracking-wide text-slate-400">Akcje</p>
+        <>
+          <div className="overflow-hidden rounded-xl border border-slate-100 bg-white">
+            <div
+              className={`hidden gap-6 border-b border-slate-100 px-4 py-3 sm:grid ${PICKING_CONFIG_LIST_GRID}`}
+            >
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+                Status do rozpoczęcia zbierania
+              </p>
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Tryb zbierania</p>
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Ustawienia</p>
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Po zbieraniu</p>
+              <p className="text-right text-[11px] font-semibold uppercase tracking-wide text-slate-400">Akcje</p>
+            </div>
+            <div>
+              {savedConfigs.map((cfg) => (
+                <SavedPickingConfigSummaryCard
+                  key={cfg.id}
+                  config={cfg}
+                  orderUiSummary={orderUiSummary}
+                  actionsDisabled={pickingPersisting || draft != null}
+                  onEdit={(c) => {
+                    setSaveFormError(null);
+                    setPickingPersistOk(null);
+                    setEditBackup(c);
+                    setSavedConfigs((prev) => prev.filter((x) => x.id !== c.id));
+                    setDraft(savedConfigurationToDraft(c));
+                  }}
+                  onDelete={(id) => {
+                    void handleDeleteSavedConfig(id);
+                  }}
+                />
+              ))}
+            </div>
           </div>
-          <div>
-            {savedConfigs.map((cfg) => (
-              <SavedPickingConfigSummaryCard
-                key={cfg.id}
-                config={cfg}
-                orderUiSummary={orderUiSummary}
-                actionsDisabled={pickingPersisting || draft != null}
-                onEdit={(c) => {
-                  setSaveFormError(null);
-                  setPickingPersistOk(null);
-                  setEditBackup(c);
-                  setSavedConfigs((prev) => prev.filter((x) => x.id !== c.id));
-                  setDraft(savedConfigurationToDraft(c));
-                }}
-                onDelete={(id) => {
-                  void handleDeleteSavedConfig(id);
-                }}
-              />
-            ))}
-          </div>
-        </div>
+          <PickingUsedStatusesSummary configs={savedConfigs} orderUiSummary={orderUiSummary} />
+        </>
       ) : null}
     </div>
   );
