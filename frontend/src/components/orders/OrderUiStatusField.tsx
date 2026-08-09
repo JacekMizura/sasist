@@ -36,6 +36,11 @@ export type OrderUiStatusFieldProps = {
   disabled?: boolean;
   className?: string;
   listMaxHeightClass?: string;
+  /**
+   * Tailwind z-index for the floating list (default z-[130]).
+   * Raise above modal shells (e.g. z-[5100] when parent is z-[5000]).
+   */
+  floatingZIndexClass?: string;
 };
 
 /**
@@ -57,6 +62,7 @@ export function OrderUiStatusField({
   disabled = false,
   className = "",
   listMaxHeightClass = "max-h-64",
+  floatingZIndexClass = "z-[130]",
 }: OrderUiStatusFieldProps) {
   const multi = typeof onSelectedIdsChange === "function";
   const [open, setOpen] = useState(false);
@@ -194,7 +200,7 @@ export function OrderUiStatusField({
           <div
             ref={refs.setFloating}
             style={floatingStyles}
-            className="z-[130] flex min-h-0 flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl ring-1 ring-slate-900/10"
+            className={`${floatingZIndexClass} flex min-h-0 flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl ring-1 ring-slate-900/10`}
             {...getFloatingProps()}
           >
             <OrderUiStatusPicker

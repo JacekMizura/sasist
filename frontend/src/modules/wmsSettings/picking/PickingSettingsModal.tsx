@@ -35,11 +35,13 @@ export function PickingSettingsModal({
   useEffect(() => {
     if (!open) return;
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        e.preventDefault();
-        e.stopPropagation();
-        if (!saving) onClose();
-      }
+      if (e.key !== "Escape") return;
+      // Status picker portal opens above the modal — let it dismiss first.
+      const statusPortal = document.getElementById("floating-portal-order-ui-status-field");
+      if (statusPortal && statusPortal.childNodes.length > 0) return;
+      e.preventDefault();
+      e.stopPropagation();
+      if (!saving) onClose();
     };
     window.addEventListener("keydown", onKeyDown, true);
     const prevOverflow = document.body.style.overflow;

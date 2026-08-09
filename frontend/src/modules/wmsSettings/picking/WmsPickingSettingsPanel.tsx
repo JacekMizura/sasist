@@ -55,6 +55,7 @@ import {
   wmsSettingsRowsStackClass,
 } from "../../../pages/Settings/wmsSettingsUi";
 import { OrderUiStatusField } from "../../../components/orders/OrderUiStatusField";
+import { buildOrderUiStatusNameById } from "../../../components/orders/automation/buildOrderUiStatusNameById";
 import { Boxes, Clock3, FileText, Pencil, Plus, Trash2 } from "lucide-react";
 import { OrderUiStatusBadge } from "../../../components/orders/OrderUiStatusBadge";
 import { IconButton } from "../../../design-system";
@@ -62,6 +63,13 @@ import { brandPrimaryButtonClass } from "../../../design-system/brandUi";
 import type { PanelConfigurableUiStatusBrief } from "../../../utils/panelListStatusBriefMappers";
 import { PickingSettingsModal } from "./PickingSettingsModal";
 import { WMS_PICKING_SETTINGS_NAV_SECTIONS } from "./pickingSettingsNavSections";
+import {
+  allowedPickingSourceStatusIds,
+  allowedPickingTargetStatusIds,
+  filterPanelSummaryByStatusIds,
+  isStatusAllowedForPickingConfig,
+  packingStartStatusIdsFromSettings,
+} from "./pickingConfigStatusEligibility";
 import {
   BY_PRODUCTS_MULTI_CONTAINER_OPTIONS,
   BY_PRODUCTS_SINGLE_CONTAINER_OPTIONS,
@@ -797,9 +805,33 @@ function uiContainersToDbMode(c: PickingContainers): PickingConfigModeDb {
   return "mobile";
 }
 
-function validateSavedConfigForServer(cfg: SavedPickingConfiguration): string | null {
+function validateSavedConfigForServer(
+  cfg: SavedPickingConfiguration,
+  eligibility: {
+    summary: OrderUiStatusPanelSummary | null;
+    packingStartStatusIds: number[];
+    otherSourceIds: number[];
+  },
+): string | null {
   if (cfg.statusToPickId === cfg.statusAfterPickId) {
     return `Reguła „${cfg.statusToPickName}”: status do zbierania i po zebraniu muszą się różnić.`;
+  }
+  if (!eligibility.summary) {
+    return "Statusy panelu zamówień nie są jeszcze wczytane — odśwież stronę i spróbuj ponownie.";
+  }
+  const sourceAllowed = allowedPickingSourceStatusIds({
+    summary: eligibility.summary,
+    excludeSourceIds: eligibility.otherSourceIds,
+  });
+  const targetAllowed = allowedPickingTargetStatusIds({
+    summary: eligibility.summary,
+    packingStartStatusIds: eligibility.packingStartStatusIds,
+  });
+  if (!isStatusAllowedForPickingConfig(cfg.statusToPickId, sourceAllowed)) {
+    return `Reguła „${cfg.statusToPickName}”: status do zbierania nie jest dostępny dla procesu zbierania. Wybierz inny status.`;
+  }
+  if (!isStatusAllowedForPickingConfig(cfg.statusAfterPickId, targetAllowed)) {
+    return `Reguła „${cfg.statusToPickName}”: status po zbieraniu nie jest dostępny dla procesu zbierania. Wybierz inny status.`;
   }
   if (cfg.blocks.single_item.containers === "consolidation_rack") {
     return `Reguła „${cfg.statusToPickName}”: regał kompletacyjny jest dostępny tylko dla zamówień wieloelementowych.`;
@@ -1067,6 +1099,8 @@ function PickingConfiguratorEditor({
   panelSubgroups,
   orderUiLoading,
   orderUiErr,
+  excludeSourceStatusIds,
+  packingStartStatusIds,
   statusToPick,
   statusAfterPick,
   onStatusToPickChange,
@@ -1089,6 +1123,8 @@ function PickingConfiguratorEditor({
   panelSubgroups: OrderUiPanelSubgroupRead[];
   orderUiLoading: boolean;
   orderUiErr: string | null;
+  excludeSourceStatusIds: number[];
+  packingStartStatusIds: number[];
   statusToPick: string;
   statusAfterPick: string;
   onStatusToPickChange: (v: string) => void;
@@ -1105,14 +1141,54 @@ function PickingConfiguratorEditor({
   blocks: Record<PickingOrderTypeKey, PickingBlockState>;
   patchBlock: (key: PickingOrderTypeKey, patch: Partial<PickingBlockState>) => void;
 }) {
-  const allStatusOptions = useMemo(() => flattenOrderUiStatusOptions(orderUiSummary), [orderUiSummary]);
+  const statusNameById = useMemo(() => buildOrderUiStatusNameById(orderUiSummary), [orderUiSummary]);
+
+  const sourceAllowedIds = useMemo(
+    () =>
+      allowedPickingSourceStatusIds({
+        summary: orderUiSummary,
+        excludeSourceIds: excludeSourceStatusIds,
+      }),
+    [orderUiSummary, excludeSourceStatusIds],
+  );
+  const targetAllowedIds = useMemo(
+    () =>
+      allowedPickingTargetStatusIds({
+        summary: orderUiSummary,
+        packingStartStatusIds,
+      }),
+    [orderUiSummary, packingStartStatusIds],
+  );
+
+  const selectedSourceId = statusIdFromSettingValue(statusToPick);
+  const selectedTargetId = statusIdFromSettingValue(statusAfterPick);
+
+  const sourcePanelSummary = useMemo(
+    () => filterPanelSummaryByStatusIds(orderUiSummary, sourceAllowedIds),
+    [orderUiSummary, sourceAllowedIds],
+  );
+  const targetPanelSummary = useMemo(
+    () => filterPanelSummaryByStatusIds(orderUiSummary, targetAllowedIds),
+    [orderUiSummary, targetAllowedIds],
+  );
 
   const selectDisabled =
-    warehouseId == null || orderUiLoading || orderUiErr != null || allStatusOptions.length === 0;
+    warehouseId == null ||
+    orderUiLoading ||
+    orderUiErr != null ||
+    (sourceAllowedIds.size === 0 && targetAllowedIds.size === 0);
 
   const canPickStatus = !selectDisabled;
   const statusToPickRequired = canPickStatus && statusToPickShowError && statusToPick === "";
   const statusAfterPickRequired = canPickStatus && statusAfterPickShowError && statusAfterPick === "";
+  const statusToPickUnavailable =
+    canPickStatus &&
+    selectedSourceId != null &&
+    !isStatusAllowedForPickingConfig(selectedSourceId, sourceAllowedIds);
+  const statusAfterPickUnavailable =
+    canPickStatus &&
+    selectedTargetId != null &&
+    !isStatusAllowedForPickingConfig(selectedTargetId, targetAllowedIds);
 
   const multiContainers = blocks.multi_item.containers;
   const singleContainers = blocks.single_item.containers;
@@ -1127,9 +1203,10 @@ function PickingConfiguratorEditor({
         <p className="text-sm text-amber-800">Wybierz magazyn, aby wczytać statusy panelu zamówień.</p>
       ) : null}
       {orderUiErr ? <p className="text-sm text-red-700">{orderUiErr}</p> : null}
-      {!orderUiLoading && warehouseId != null && orderUiErr == null && allStatusOptions.length === 0 ? (
+      {!orderUiLoading && warehouseId != null && orderUiErr == null && sourceAllowedIds.size === 0 ? (
         <p className="text-sm text-slate-600">
-          Brak statusów panelu dla tego magazynu. Dodaj je w ustawieniach zamówień (statusy panelu).
+          Brak statusów, z których można rozpocząć zbieranie. Dodaj aktywne statusy w grupie NOWE / W TOKU
+          w ustawieniach zamówień (statusy panelu).
         </p>
       ) : null}
 
@@ -1151,6 +1228,11 @@ function PickingConfiguratorEditor({
                   To pole jest wymagane.
                 </p>
               ) : null}
+              {statusToPickUnavailable ? (
+                <p className="mt-1.5 text-xs font-medium text-red-700" role="alert">
+                  Wybrany status do zbierania nie jest już dostępny dla tej konfiguracji. Wybierz inny status.
+                </p>
+              ) : null}
               {statusPairConflict ? (
                 <p className="mt-1.5 text-xs font-medium text-red-700" role="alert">
                   Status do zbierania nie może być taki sam jak status do pakowania.
@@ -1160,9 +1242,10 @@ function PickingConfiguratorEditor({
           }
         >
           <OrderUiStatusField
-            panelSummary={orderUiSummary}
+            panelSummary={sourcePanelSummary}
             panelSubgroups={panelSubgroups}
-            selectedStatusId={statusIdFromSettingValue(statusToPick)}
+            statusNameById={statusNameById}
+            selectedStatusId={selectedSourceId}
             onPick={(id) => {
               onStatusToPickChange(id != null ? String(id) : "");
               onStatusToPickBlur();
@@ -1170,7 +1253,8 @@ function PickingConfiguratorEditor({
             allowClear
             clearLabel="— wybierz —"
             placeholder="Wybierz status zamówienia…"
-            disabled={selectDisabled}
+            disabled={selectDisabled || sourceAllowedIds.size === 0}
+            floatingZIndexClass="z-[5100]"
           />
         </WmsControlSettingRow>
       </div>
@@ -1262,6 +1346,11 @@ function PickingConfiguratorEditor({
                   Wybierz status do pakowania.
                 </p>
               ) : null}
+              {statusAfterPickUnavailable ? (
+                <p className="mt-1.5 text-xs font-medium text-red-700" role="alert">
+                  Wybrany status po zbieraniu nie jest już dostępny dla tej konfiguracji. Wybierz inny status.
+                </p>
+              ) : null}
               {statusPairConflict ? (
                 <p className="mt-1.5 text-xs font-medium text-red-700" role="alert">
                   Wybierz inny status niż „do zbierania”, aby uniknąć pętli w procesie.
@@ -1271,9 +1360,10 @@ function PickingConfiguratorEditor({
           }
         >
           <OrderUiStatusField
-            panelSummary={orderUiSummary}
+            panelSummary={targetPanelSummary}
             panelSubgroups={panelSubgroups}
-            selectedStatusId={statusIdFromSettingValue(statusAfterPick)}
+            statusNameById={statusNameById}
+            selectedStatusId={selectedTargetId}
             onPick={(id) => {
               onStatusAfterPickChange(id != null ? String(id) : "");
               onStatusAfterPickBlur();
@@ -1281,7 +1371,8 @@ function PickingConfiguratorEditor({
             allowClear
             clearLabel="— wybierz —"
             placeholder="Wybierz status…"
-            disabled={selectDisabled}
+            disabled={selectDisabled || targetAllowedIds.size === 0}
+            floatingZIndexClass="z-[5100]"
           />
         </WmsControlSettingRow>
       </div>
@@ -1535,8 +1626,32 @@ export function WmsPickingSettingsSections({
   const [panelSubgroups, setPanelSubgroups] = useState<OrderUiPanelSubgroupRead[]>([]);
   const [orderUiLoading, setOrderUiLoading] = useState(false);
   const [orderUiErr, setOrderUiErr] = useState<string | null>(null);
+  const [packingStartStatusIds, setPackingStartStatusIds] = useState<number[]>([]);
 
   const statusOptionsFlat = useMemo(() => flattenOrderUiStatusOptions(orderUiSummary), [orderUiSummary]);
+
+  /** Źródła zajęte przez inne reguły (przy edycji bieżąca reguła jest już wyjęta z listy). */
+  const excludeSourceStatusIds = useMemo(
+    () => savedConfigs.map((c) => c.statusToPickId).filter((id) => Number.isFinite(id) && id > 0),
+    [savedConfigs],
+  );
+
+  const sourceAllowedIds = useMemo(
+    () =>
+      allowedPickingSourceStatusIds({
+        summary: orderUiSummary,
+        excludeSourceIds: excludeSourceStatusIds,
+      }),
+    [orderUiSummary, excludeSourceStatusIds],
+  );
+  const targetAllowedIds = useMemo(
+    () =>
+      allowedPickingTargetStatusIds({
+        summary: orderUiSummary,
+        packingStartStatusIds,
+      }),
+    [orderUiSummary, packingStartStatusIds],
+  );
 
   const draftDirty = useMemo(() => {
     if (!draft) return false;
@@ -1585,22 +1700,26 @@ export function WmsPickingSettingsSections({
     if (warehouseId == null) {
       setOrderUiSummary(null);
       setPanelSubgroups([]);
+      setPackingStartStatusIds([]);
       setOrderUiErr(null);
       return;
     }
     setOrderUiLoading(true);
     setOrderUiErr(null);
     try {
-      const [data, subgroups] = await Promise.all([
+      const [data, subgroups, packing] = await Promise.all([
         getOrderUiStatusSummary(DAMAGE_TENANT_ID, warehouseId),
         getOrderPanelSubgroups(DAMAGE_TENANT_ID, warehouseId).catch(() => [] as OrderUiPanelSubgroupRead[]),
+        getWmsPackingSettings(DAMAGE_TENANT_ID, warehouseId).catch(() => null),
       ]);
       setOrderUiSummary(data);
       setPanelSubgroups(subgroups);
+      setPackingStartStatusIds(packingStartStatusIdsFromSettings(packing));
     } catch {
       setOrderUiErr("Nie udało się wczytać statusów panelu zamówień.");
       setOrderUiSummary(null);
       setPanelSubgroups([]);
+      setPackingStartStatusIds([]);
     } finally {
       setOrderUiLoading(false);
     }
@@ -1723,7 +1842,13 @@ export function WmsPickingSettingsSections({
         return { ok: false, message: "Musi pozostać co najmniej jedna reguła zbierania." };
       }
       for (const cfg of configs) {
-        const v = validateSavedConfigForServer(cfg);
+        const v = validateSavedConfigForServer(cfg, {
+          summary: orderUiSummary,
+          packingStartStatusIds,
+          otherSourceIds: configs
+            .filter((c) => c.id !== cfg.id)
+            .map((c) => c.statusToPickId),
+        });
         if (v) return { ok: false, message: v };
       }
       const gErr = validateGlobalBulkLimitsForWarehouse(configs, globalBulkSingle, globalBulkMulti);
@@ -1755,7 +1880,14 @@ export function WmsPickingSettingsSections({
         return { ok: false, message: "Zapis konfiguracji nie powiódł się. Spróbuj ponownie." };
       }
     },
-    [warehouseId, globalBulkSingle, globalBulkMulti, inferGlobalBulkLimitsFromRows],
+    [
+      warehouseId,
+      globalBulkSingle,
+      globalBulkMulti,
+      inferGlobalBulkLimitsFromRows,
+      orderUiSummary,
+      packingStartStatusIds,
+    ],
   );
 
   /**
@@ -1798,6 +1930,26 @@ export function WmsPickingSettingsSections({
     if (pickId === afterId) {
       setSaveFormError("Status do zbierania i po zebraniu muszą się różnić.");
       setDraft({ ...d, statusToPickBlurred: true, statusAfterPickBlurred: true });
+      return { ok: false };
+    }
+
+    if (!orderUiSummary) {
+      setSaveFormError("Statusy panelu zamówień nie są jeszcze wczytane — poczekaj chwilę i spróbuj ponownie.");
+      return { ok: false };
+    }
+
+    if (!isStatusAllowedForPickingConfig(pickId, sourceAllowedIds)) {
+      setSaveFormError(
+        "Wybrany status do zbierania nie jest dostępny dla tej konfiguracji. Wybierz status z listy dozwolonych.",
+      );
+      setDraft({ ...d, statusToPickBlurred: true });
+      return { ok: false };
+    }
+    if (!isStatusAllowedForPickingConfig(afterId, targetAllowedIds)) {
+      setSaveFormError(
+        "Wybrany status po zbieraniu nie jest dostępny dla tej konfiguracji. Wybierz status z listy dozwolonych.",
+      );
+      setDraft({ ...d, statusAfterPickBlurred: true });
       return { ok: false };
     }
 
@@ -1869,6 +2021,9 @@ export function WmsPickingSettingsSections({
     editBackup,
     globalBulkSingle,
     globalBulkMulti,
+    orderUiSummary,
+    sourceAllowedIds,
+    targetAllowedIds,
   ]);
 
   /** Modal Zapisz: validate + merge into page config list (no API). */
@@ -2463,6 +2618,8 @@ export function WmsPickingSettingsSections({
             panelSubgroups={panelSubgroups}
             orderUiLoading={orderUiLoading}
             orderUiErr={orderUiErr}
+            excludeSourceStatusIds={excludeSourceStatusIds}
+            packingStartStatusIds={packingStartStatusIds}
             statusToPick={draft.statusToPick}
             statusAfterPick={draft.statusAfterPick}
             onStatusToPickChange={(v) => setDraft((d) => (d ? { ...d, statusToPick: v } : d))}

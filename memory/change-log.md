@@ -1,3 +1,10 @@
+## 2026-08-09 — Konfigurator zbierania: wybór i filtr statusów
+
+- Przyczyna: `OrderUiStatusField` portal `z-[130]` pod modalem `z-[5000]` — lista nieklikalna
+- Fix: `floatingZIndexClass` + Escape nie zamyka modala gdy picker otwarty
+- Eligibility: źródło = aktywne NEW/IN_PROGRESS (bez zajętych źródeł); cel = aktywne IN_PROGRESS + starty pakowania z API
+- Walidacja zapisu/edycji z komunikatami PL; helper `pickingConfigStatusEligibility.ts` + testy
+
 ## 2026-08-09 — Packing „Akcja” activators execute real automation
 
 - Extracted `frontend/src/utils/orderAutomationRun.ts` (visibility + execute + exclusive gate)

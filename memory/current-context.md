@@ -1,5 +1,10 @@
 ﻿## Active
 
+**Picking configurator status pickers (2026-08-09):**
+- Modal uses shared `OrderUiStatusField` with raised portal z-index
+- Allowed statuses from WMS panel groups + packing start IDs (not hardcoded names)
+- Save blocked when source/target missing or outside allow-list
+
 **Packing automation activators wired (2026-08-09):**
 - Shared runner `orderAutomationRun.ts` → `change_status` via `PATCH …/ui-status`; other effect kinds fail with PL errors (no mocks)
 - `PackingAutomationActivators`: labels/icons from rule, loader + exclusive run gate, errors via `showScannerError`
