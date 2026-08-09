@@ -15,6 +15,9 @@ export type PickingOrderSortUi = "date" | "location" | "courier";
 export type PickingRadioOption<T extends string> = {
   value: T;
   label: string;
+  /** Opcja widoczna, ale niedostępna dla bieżącej metody zbierania. */
+  disabled?: boolean;
+  disabledReason?: string;
 };
 
 /** Top-level: „W jaki sposób chcesz zbierać zamówienia?” */
@@ -75,34 +78,61 @@ export const ORDER_SORT_LOCATION_DATE_COURIER: PickingRadioOption<PickingOrderSo
   },
 ];
 
-/** Nested order selection under consolidation rack (multi / by products). */
-export function showsConsolidationOrderSort(
-  pickingMode: PickingModeUi,
-  multiContainers: PickingContainersUi,
-): boolean {
-  return pickingMode === "by_products" && multiContainers === "consolidation_rack";
+/**
+ * Sposób doboru zamówień w kolumnach po produktach — zawsze widoczny
+ * (niezależnie od metody zbierania / kontenera).
+ */
+export function showsByProductsOrderSort(pickingMode: PickingModeUi): boolean {
+  return pickingMode === "by_products";
 }
 
-/** Nested order selection under single-item containers (by products), when multi is not consolidation. */
+/** @deprecated Prefer {@link showsByProductsOrderSort} — sekcja nie zależy od kontenera. */
+export function showsConsolidationOrderSort(
+  pickingMode: PickingModeUi,
+  _multiContainers?: PickingContainersUi,
+): boolean {
+  return showsByProductsOrderSort(pickingMode);
+}
+
+/** @deprecated Prefer {@link showsByProductsOrderSort} — sekcja nie zależy od kontenera. */
 export function showsSingleItemOrderSort(
   pickingMode: PickingModeUi,
-  singleContainers: PickingContainersUi,
-  multiContainers: PickingContainersUi,
+  _singleContainers?: PickingContainersUi,
+  _multiContainers?: PickingContainersUi,
 ): boolean {
-  if (pickingMode !== "by_products") return false;
-  if (multiContainers === "consolidation_rack") return false;
-  return (
-    singleContainers === "cart_scan" ||
-    singleContainers === "cart_no_scan" ||
-    singleContainers === "baskets"
-  );
+  return showsByProductsOrderSort(pickingMode);
 }
 
 export function showsByOrdersOrderSort(pickingMode: PickingModeUi): boolean {
   return pickingMode === "by_orders";
 }
 
-/** Coerce order_sort when nested UI only offers date|courier. */
+/**
+ * „Po lokalizacjach” nie jest dostępne przy regale kompletacyjnym
+ * (wspólne ``order_sort`` w konfiguracji magazynu).
+ */
+export function isLocationOrderSortDisabledForMultiContainer(
+  multiContainers: PickingContainersUi,
+): boolean {
+  return multiContainers === "consolidation_rack";
+}
+
+export const LOCATION_ORDER_SORT_DISABLED_REASON =
+  "Niedostępne przy zbieraniu na regał kompletacyjny (zamówienia wieloelementowe).";
+
+/** Opcje doboru dla jednoelementowych — z ewentualnym wyłączeniem lokalizacji. */
+export function singleItemOrderSortOptions(
+  multiContainers: PickingContainersUi,
+): PickingRadioOption<PickingOrderSortUi>[] {
+  const locationDisabled = isLocationOrderSortDisabledForMultiContainer(multiContainers);
+  return ORDER_SORT_LOCATION_DATE_COURIER.map((opt) =>
+    opt.value === "location" && locationDisabled
+      ? { ...opt, disabled: true, disabledReason: LOCATION_ORDER_SORT_DISABLED_REASON }
+      : opt,
+  );
+}
+
+/** Coerce order_sort when nested UI only offers date|courier (zapis przy regale). */
 export function coerceConsolidationOrderSort(sort: PickingOrderSortUi): PickingOrderSortUi {
   return sort === "courier" ? "courier" : "date";
 }

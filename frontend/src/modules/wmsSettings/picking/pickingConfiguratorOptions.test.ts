@@ -5,10 +5,13 @@ import {
   coerceConsolidationOrderSort,
   containerListLabel,
   ensureContainerInOptions,
+  isLocationOrderSortDisabledForMultiContainer,
   orderSortListLabel,
   showsByOrdersOrderSort,
+  showsByProductsOrderSort,
   showsConsolidationOrderSort,
   showsSingleItemOrderSort,
+  singleItemOrderSortOptions,
 } from "./pickingConfiguratorOptions";
 
 describe("pickingConfiguratorOptions visibility", () => {
@@ -17,18 +20,22 @@ describe("pickingConfiguratorOptions visibility", () => {
     expect(showsByOrdersOrderSort("by_products")).toBe(false);
   });
 
-  it("shows consolidation nested sort only for by_products + consolidation_rack", () => {
+  it("shows by-products order-sort sections for any container method", () => {
+    expect(showsByProductsOrderSort("by_products")).toBe(true);
+    expect(showsByProductsOrderSort("by_orders")).toBe(false);
+    expect(showsConsolidationOrderSort("by_products", "baskets")).toBe(true);
     expect(showsConsolidationOrderSort("by_products", "consolidation_rack")).toBe(true);
-    expect(showsConsolidationOrderSort("by_products", "baskets")).toBe(false);
-    expect(showsConsolidationOrderSort("by_orders", "consolidation_rack")).toBe(false);
+    expect(showsSingleItemOrderSort("by_products", "mobile_cart", "baskets")).toBe(true);
+    expect(showsSingleItemOrderSort("by_products", "cart_scan", "consolidation_rack")).toBe(true);
   });
 
-  it("shows single-item nested sort for cart/baskets when multi is not consolidation", () => {
-    expect(showsSingleItemOrderSort("by_products", "cart_scan", "baskets")).toBe(true);
-    expect(showsSingleItemOrderSort("by_products", "cart_no_scan", "cart_scan")).toBe(true);
-    expect(showsSingleItemOrderSort("by_products", "baskets", "cart_no_scan")).toBe(true);
-    expect(showsSingleItemOrderSort("by_products", "mobile_cart", "baskets")).toBe(false);
-    expect(showsSingleItemOrderSort("by_products", "cart_scan", "consolidation_rack")).toBe(false);
+  it("disables location sort only for consolidation rack multi container", () => {
+    expect(isLocationOrderSortDisabledForMultiContainer("consolidation_rack")).toBe(true);
+    expect(isLocationOrderSortDisabledForMultiContainer("baskets")).toBe(false);
+    const withRack = singleItemOrderSortOptions("consolidation_rack");
+    expect(withRack.find((o) => o.value === "location")?.disabled).toBe(true);
+    const withBaskets = singleItemOrderSortOptions("baskets");
+    expect(withBaskets.find((o) => o.value === "location")?.disabled).toBeFalsy();
   });
 
   it("Sellasist multi options include bulk and consolidation, not mobile", () => {

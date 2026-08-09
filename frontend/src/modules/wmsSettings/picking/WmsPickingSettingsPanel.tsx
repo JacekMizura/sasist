@@ -76,14 +76,17 @@ import {
   PICKING_COLLECTION_MODE_OPTIONS,
   ORDER_SORT_DATE_COURIER,
   ORDER_SORT_LOCATION_DATE_COURIER,
+  LOCATION_ORDER_SORT_DISABLED_REASON,
   coerceConsolidationOrderSort,
   containerLabel,
   containerListLabel,
   ensureContainerInOptions,
+  isLocationOrderSortDisabledForMultiContainer,
   orderSortListLabel,
   showsByOrdersOrderSort,
-  showsConsolidationOrderSort,
-  showsSingleItemOrderSort,
+  showsByProductsOrderSort,
+  singleItemOrderSortOptions,
+  type PickingRadioOption,
 } from "./pickingConfiguratorOptions";
 
 const PANEL_STATUS_GROUP_ORDER: OrderUiMainGroup[] = ["NEW", "IN_PROGRESS", "DONE"];
@@ -836,6 +839,13 @@ function validateSavedConfigForServer(
   if (cfg.blocks.single_item.containers === "consolidation_rack") {
     return `Reguła „${cfg.statusToPickName}”: regał kompletacyjny jest dostępny tylko dla zamówień wieloelementowych.`;
   }
+  if (
+    cfg.pickingMode === "by_products" &&
+    isLocationOrderSortDisabledForMultiContainer(cfg.blocks.multi_item.containers) &&
+    cfg.orderSort === "location"
+  ) {
+    return `Reguła „${cfg.statusToPickName}”: ${LOCATION_ORDER_SORT_DISABLED_REASON} Wybierz dobór po dacie lub grupach kurierskich.`;
+  }
   return null;
 }
 
@@ -936,7 +946,7 @@ function PickingRadioGroup<T extends string>({
   legend: string;
   name: string;
   value: T;
-  options: Array<{ value: T; label: string }>;
+  options: Array<PickingRadioOption<T>>;
   onChange: (v: T) => void;
 }) {
   return (
@@ -945,14 +955,17 @@ function PickingRadioGroup<T extends string>({
       <div className="mt-2 flex flex-col gap-1.5" role="radiogroup" aria-label={legend}>
         {options.map((opt) => {
           const selected = value === opt.value;
+          const disabled = Boolean(opt.disabled);
           return (
             <label
               key={opt.value}
               className={[
-                "flex cursor-pointer items-start gap-2.5 rounded-lg border px-3 py-2 transition-colors",
+                "flex items-start gap-2.5 rounded-lg border px-3 py-2 transition-colors",
+                disabled ? "cursor-not-allowed opacity-60" : "cursor-pointer",
                 selected
                   ? "border-blue-500 bg-blue-50/40 ring-1 ring-blue-500/15"
                   : "border-slate-200 bg-white hover:border-slate-300",
+                disabled && !selected ? "hover:border-slate-200" : "",
               ].join(" ")}
             >
               <input
@@ -960,9 +973,17 @@ function PickingRadioGroup<T extends string>({
                 name={name}
                 className={`${radioInputClass} mt-0.5`}
                 checked={selected}
-                onChange={() => onChange(opt.value)}
+                disabled={disabled}
+                onChange={() => {
+                  if (!disabled) onChange(opt.value);
+                }}
               />
-              <span className="min-w-0 text-sm font-medium leading-snug text-slate-900">{opt.label}</span>
+              <span className="min-w-0">
+                <span className="block text-sm font-medium leading-snug text-slate-900">{opt.label}</span>
+                {disabled && opt.disabledReason ? (
+                  <span className="mt-0.5 block text-xs font-normal text-slate-500">{opt.disabledReason}</span>
+                ) : null}
+              </span>
             </label>
           );
         })}
@@ -981,16 +1002,17 @@ function PickingNestedOrderSort({
   legend: string;
   name: string;
   value: PickingOrderSort;
-  options: Array<{ value: PickingOrderSort; label: string }>;
+  options: Array<PickingRadioOption<PickingOrderSort>>;
   onChange: (v: PickingOrderSort) => void;
 }) {
-  const safeValue = options.some((o) => o.value === value) ? value : options[0]!.value;
+  // Nie podstawiaj pierwszej opcji, gdy wartość jest poza listą / wyłączona —
+  // użytkownik ma widzieć stan zapisany i wybrać dozwoloną opcję.
   return (
-    <div className="mt-2 rounded-lg border border-slate-200 bg-slate-50/70 px-3 py-2.5">
+    <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50/70 px-3 py-2.5">
       <PickingRadioGroup
         legend={legend}
         name={name}
-        value={safeValue}
+        value={value}
         options={options}
         onChange={onChange}
       />
@@ -1193,9 +1215,9 @@ function PickingConfiguratorEditor({
   const multiContainers = blocks.multi_item.containers;
   const singleContainers = blocks.single_item.containers;
   const showByOrdersSort = showsByOrdersOrderSort(pickingMode);
-  const showConsolidationSort = showsConsolidationOrderSort(pickingMode, multiContainers);
-  const showSingleSort = showsSingleItemOrderSort(pickingMode, singleContainers, multiContainers);
+  const showByProductsOrderSort = showsByProductsOrderSort(pickingMode);
   const byProducts = pickingMode === "by_products";
+  const singleOrderSortOptions = singleItemOrderSortOptions(multiContainers);
 
   return (
     <div className="space-y-4" aria-label="Konfigurator trybu zbierania">
@@ -1293,12 +1315,12 @@ function PickingConfiguratorEditor({
                 options={BY_PRODUCTS_SINGLE_CONTAINER_OPTIONS}
                 onChange={(v) => patchBlock("single_item", { containers: v })}
               />
-              {showSingleSort ? (
+              {showByProductsOrderSort ? (
                 <PickingNestedOrderSort
                   legend="Wybierz sposób doboru zamówień jednoelementowych:"
                   name={`${fieldIdPrefix}-single-order-sort`}
                   value={orderSort}
-                  options={ORDER_SORT_LOCATION_DATE_COURIER}
+                  options={singleOrderSortOptions}
                   onChange={onOrderSortChange}
                 />
               ) : null}
@@ -1313,18 +1335,13 @@ function PickingConfiguratorEditor({
                 name={`${fieldIdPrefix}-multi-where`}
                 value={multiContainers}
                 options={BY_PRODUCTS_MULTI_CONTAINER_OPTIONS}
-                onChange={(v) => {
-                  patchBlock("multi_item", { containers: v });
-                  if (v === "consolidation_rack") {
-                    onOrderSortChange(coerceConsolidationOrderSort(orderSort));
-                  }
-                }}
+                onChange={(v) => patchBlock("multi_item", { containers: v })}
               />
-              {showConsolidationSort ? (
+              {showByProductsOrderSort ? (
                 <PickingNestedOrderSort
                   legend="Wybierz sposób doboru zamówień wieloelementowych:"
                   name={`${fieldIdPrefix}-multi-order-sort`}
-                  value={coerceConsolidationOrderSort(orderSort)}
+                  value={orderSort}
                   options={ORDER_SORT_DATE_COURIER}
                   onChange={onOrderSortChange}
                 />
@@ -1965,6 +1982,17 @@ export function WmsPickingSettingsSections({
       savedConfigs.some((c) => c.statusToPickId === pickId)
     ) {
       setSaveFormError("Ten status ma już zapisaną konfigurację — wybierz inny status do zbierania.");
+      return { ok: false };
+    }
+
+    if (
+      d.pickingMode === "by_products" &&
+      isLocationOrderSortDisabledForMultiContainer(d.blocks.multi_item.containers) &&
+      d.orderSort === "location"
+    ) {
+      setSaveFormError(
+        `${LOCATION_ORDER_SORT_DISABLED_REASON} Wybierz dobór po dacie lub grupach kurierskich.`,
+      );
       return { ok: false };
     }
 
