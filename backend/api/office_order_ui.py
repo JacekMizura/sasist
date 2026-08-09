@@ -392,8 +392,10 @@ def patch_order_ui_status(
             operator_user_id=uid,
         )
     except CartLifecycleError as e:
+        # Detach lifecycle failures other than soft-block (e.g. OrderNotOnCart race).
         raise HTTPException(status_code=409, detail=str(e)) from e
     db.commit()
+    db.expire_all()
     row = _load_order_for_panel(db, order_id, tenant_id, int(effective_wh) if effective_wh is not None else None)
     assert row is not None
     return build_order_read(db, row)

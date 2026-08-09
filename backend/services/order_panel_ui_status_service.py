@@ -1,7 +1,10 @@
 """
-Zmiana statusu panelu zamówienia — bez bezpośredniego czyszczenia cart_id.
+Zmiana statusu panelu zamówienia.
 
-Jeżeli zamówienie jest na wózku, odłączenie idzie wyłącznie przez CartLifecycle.
+Status panelu (`order_ui_status_id`) jest zawsze zapisywany.
+Jeśli zamówienie jest na wózku — przy możliwości odłączenia wykonywany jest
+kanoniczny detach przez CartLifecycle; gdy detach jest zablokowany (trwa kompletacja /
+są picki), status i tak zostaje zapisany (bez odłączania).
 """
 
 from __future__ import annotations
@@ -14,7 +17,6 @@ from sqlalchemy.orm import Session
 from ..models.cart import Cart
 from ..models.order import Order
 from .cart_picking_lifecycle_service import (
-    CartLifecycleError,
     can_detach_order_from_cart,
     detach_order_from_cart,
 )
@@ -50,13 +52,19 @@ def apply_order_panel_ui_status(
     operator_user_id: Optional[int] = None,
 ) -> dict[str, Any]:
     """
-    Ustawia ``order_ui_status_id``.
+    Ustawia ``order_ui_status_id`` (zawsze).
 
-    Semantyka historyczna: zmiana statusu panelu = opuszczenie kontekstu zbierania,
-    więc jeśli ``order.cart_id`` jest ustawione — kanoniczny detach.
-    Bez ``cart_id`` — tylko status, bez lifecycle eventów.
+    Gdy ``order.cart_id`` jest ustawione:
+    - jeśli detach dozwolony → CartLifecycle detach,
+    - jeśli zablokowany → status zostaje zapisany, zamówienie zostaje na wózku.
     """
-    order.order_ui_status_id = int(sub_status_id) if sub_status_id is not None else None
+    new_sid = int(sub_status_id) if sub_status_id is not None else None
+    order.order_ui_status_id = new_sid
+    # Unikaj stale relationship przy serializacji w tej samej sesji.
+    try:
+        db.expire(order, ["order_ui_status"])
+    except Exception:
+        pass
 
     cart_id = getattr(order, "cart_id", None)
     if cart_id is None or int(cart_id) <= 0:
@@ -80,7 +88,6 @@ def apply_order_panel_ui_status(
         .first()
     )
     if cart is None:
-        # Orphan pointer (wózek usunięty) — heal; nie ma CartLifecycle do wywołania.
         from .order_fulfillment_state import clear_order_picking_session_context
 
         logger.warning(
@@ -97,11 +104,22 @@ def apply_order_panel_ui_status(
 
     allowed, block_reason = can_detach_order_from_cart(db, cart=cart, order=order)
     if not allowed:
-        raise CartLifecycleError(
-            block_reason
-            or "Nie można odłączyć zamówienia od wózka (trwa zbieranie / są picki).",
-            code="OrderDetachBlocked",
+        db.add(order)
+        _run_smart_matching_status_hook(
+            db, order=order, sub_status_id=sub_status_id, operator_user_id=operator_user_id
         )
+        logger.info(
+            "[panel.ui_status] status saved without detach order_id=%s cart_id=%s reason=%s",
+            int(order.id),
+            cid,
+            block_reason,
+        )
+        return {
+            "status_updated": True,
+            "detached": False,
+            "detach_blocked": True,
+            "detach_reason": block_reason,
+        }
 
     detach_order_from_cart(
         db,
@@ -112,6 +130,13 @@ def apply_order_panel_ui_status(
         operator_user_id=operator_user_id,
         reason="Odłączenie po zmianie statusu panelu zamówienia.",
     )
+    # Detach nie przywraca UI status — upewnij się, że wybrany status zostaje.
+    order.order_ui_status_id = new_sid
+    try:
+        db.expire(order, ["order_ui_status"])
+    except Exception:
+        pass
+    db.add(order)
     _run_smart_matching_status_hook(
         db, order=order, sub_status_id=sub_status_id, operator_user_id=operator_user_id
     )

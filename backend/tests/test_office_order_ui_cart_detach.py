@@ -191,3 +191,55 @@ def test_panel_status_without_cart_no_lifecycle_detach_event(db):
         db.query(CartLifecycleEvent).filter(CartLifecycleEvent.event_code == "order_detached").count()
         == 0
     )
+
+
+def test_panel_status_saves_when_detach_blocked_by_picks(db):
+    """Status panelu musi się zapisać nawet gdy detach z wózka jest zablokowany (picki)."""
+    st = OrderUiStatus(
+        tenant_id=1, warehouse_id=1, main_group="PROBLEM", name="Wstrzymane", color="#ef4444"
+    )
+    db.add(st)
+    db.flush()
+
+    cart = _cart(db)
+    o1 = _order(db, "BLOCK-1")
+    o2 = _order(db, "BLOCK-2")
+    p = Product(tenant_id=1, name="P", sku="SKU-B1", volume=1.0)
+    db.add(p)
+    db.flush()
+    db.commit()
+
+    claim_cart(db, cart=cart, operator_user_id=5)
+    start_picking(db, cart=cart, orders=[o1, o2], operator_user_id=5)
+    db.commit()
+
+    db.execute(__import__("sqlalchemy").text("PRAGMA foreign_keys=OFF"))
+    db.add(
+        Pick(
+            tenant_id=1,
+            warehouse_id=1,
+            order_id=int(o1.id),
+            product_id=int(p.id),
+            location_id=1,
+            cart_id=int(cart.id),
+            quantity=1.0,
+        )
+    )
+    db.commit()
+    db.refresh(o1)
+
+    out = apply_order_panel_ui_status(
+        db, order=o1, sub_status_id=int(st.id), operator_user_id=99
+    )
+    db.commit()
+
+    assert out["status_updated"] is True
+    assert out["detached"] is False
+    assert out.get("detach_blocked") is True
+    db.refresh(o1)
+    assert o1.order_ui_status_id == int(st.id)
+    assert o1.cart_id == cart.id
+    assert (
+        db.query(CartLifecycleEvent).filter(CartLifecycleEvent.event_code == "order_detached").count()
+        == 0
+    )

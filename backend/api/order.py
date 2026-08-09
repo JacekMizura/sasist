@@ -1979,9 +1979,15 @@ def build_order_read(db: Session, order: Order) -> OrderRead:
     fn, ln = _customer_names_for_order_display(order)
     source_disp = _source_display_for_order(order)
 
-    ui_row = getattr(order, "order_ui_status", None)
-    if ui_row is None and getattr(order, "order_ui_status_id", None):
-        ui_row = db.query(OrderUiStatus).filter(OrderUiStatus.id == order.order_ui_status_id).first()
+    ui_id = getattr(order, "order_ui_status_id", None)
+    ui_row = None
+    if ui_id is not None and int(ui_id) > 0:
+        loaded = getattr(order, "order_ui_status", None)
+        # Prefer FK over possibly stale relationship from the same session.
+        if loaded is not None and int(getattr(loaded, "id", 0) or 0) == int(ui_id):
+            ui_row = loaded
+        else:
+            ui_row = db.query(OrderUiStatus).filter(OrderUiStatus.id == int(ui_id)).first()
 
     ship_name, ship_logo, ship_id = _shipping_display_for_order(order)
 

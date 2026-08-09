@@ -1,3 +1,28 @@
+## 2026-08-09 — Fix zmiany statusu zamówienia (panel UI)
+
+- Przyczyna: przy zamówieniu na wózku z zablokowanym detach (picki / READY_FOR_PACKING) `apply_order_panel_ui_status` rzucał 409 i rollbackował zapis statusu
+- Fix: `order_ui_status_id` zawsze zapisywany; detach tylko gdy dozwolony
+- UI: toast przy błędzie API; po sukcesie `reloadOrderById`; `build_order_read` czyta status z FK (nie stale relationship)
+- Test: `test_panel_status_saves_when_detach_blocked_by_picks`
+
+## 2026-08-09 — Wygląd produktów: Lista / Siatka
+
+- `productDisplayMode` podpięty do kart Active/Default/Done + siatki w PackingView
+- Lista = karty poziome; Siatka = pionowe z dużym zdjęciem; auto-fit na całą szerokość
+- Podgląd w ustawieniach Widok (jak lista zamówień); usunięte CAP_NONE
+
+## 2026-08-09 — Fix full-width packing layout
+
+- Osobna gałąź layoutu w `PackingView` (bez sidebara); pas info + opakowania na całą szerokość
+- Siatka produktów: `auto-fit minmax(15.5rem, 1fr)` — karty wypełniają rząd, bez pustej prawej kolumny
+- Info: dokument, logo, wysyłka, telefon/wartość/adres, uwagi; opakowania `align=start`
+
+## 2026-08-09 — Widok pakowania: telefon / wartość / adres
+
+- Extended UI: `showOrderPhone`, `showOrderValue`, `showShippingAddress` (domyślnie ON)
+- Sidebar + full-width: telefon i wartość; adres w bloku kupującego (dokument pełny)
+- Checkboxy + (i) w Widok; bez CAP_NONE
+
 ## 2026-08-09 — Widok pakowania: układ + kolejność spakowanych
 
 - Ustawienie układu: `Z sidebarem` / `Pełna szerokość` (zamiast Pełna szerokość / Wyśrodkowany)

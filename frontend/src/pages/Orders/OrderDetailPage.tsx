@@ -76,7 +76,7 @@ import { OrderHistoryTimeline } from "../../components/orders/OrderHistoryTimeli
 import { WmsOrderValidationPanel } from "../../components/orders/WmsOrderValidationPanel";
 import { buildOrderHistoryTimelineEvents } from "../../components/orders/orderHistoryTimelineModel";
 import { getShippingMethods } from "../../api/shippingMethodsApi";
-import { getOrderPanelSubgroups, getOrderUiStatusSummary, patchOrderUiStatus } from "../../api/orderUiStatusApi";
+import { getOrderPanelSubgroups, getOrderUiStatusSummary } from "../../api/orderUiStatusApi";
 import type { OrderUiPanelSubgroupRead, OrderUiStatusBrief, OrderUiStatusPanelSummary } from "../../types/orderUiStatus";
 import { DAMAGE_TENANT_ID } from "../damage/damageShared";
 import { tabsNavItemClassName } from "../../components/layout/TabsNav";
@@ -1276,6 +1276,7 @@ export default function OrderDetailPage() {
           panelSaving={panelSaving}
           setPanelSaving={setPanelSaving}
           loadPanelSummary={loadPanelSummary}
+          reloadOrderById={reloadOrderById}
           panelOrderStatusBrief={panelOrderStatusBrief}
           wmsDualWorkflow={wmsDualWorkflow}
           shippingLabel={shippingLabel}

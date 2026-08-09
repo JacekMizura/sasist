@@ -107,7 +107,7 @@ export function OrderDetailPrimaryStatusDropdown({
   const apply = (subStatusId: number | null) => {
     setOpen(false);
     void onSelectStatus(subStatusId).catch(() => {
-      /* błąd obsługuje rodzic */
+      /* błąd: toast w rodzicu; status UI bez optymistycznej zmiany */
     });
   };
 

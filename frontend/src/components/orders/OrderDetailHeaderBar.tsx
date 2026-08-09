@@ -7,7 +7,9 @@ import {
   Home,
   Pin,
 } from "lucide-react";
+import toast from "react-hot-toast";
 
+import { extractApiErrorMessage } from "../../api/apiErrorMessage";
 import { OrderHeaderActionsToolbar } from "./headerActions";
 import { OrderDirectSalesBadge } from "./orderList/OrderDirectSalesBadge";
 import { OrderPriorityFlamePicker } from "./OrderPriorityFlame";
@@ -60,6 +62,8 @@ type Props = {
   panelSaving: boolean;
   setPanelSaving: Dispatch<SetStateAction<boolean>>;
   loadPanelSummary: () => Promise<void>;
+  /** Po udanym PATCH — pełne odświeżenie zamówienia (unikaj stale merge). */
+  reloadOrderById?: (orderId: number) => Promise<void>;
   panelOrderStatusBrief: PanelConfigurableUiStatusBrief | null;
   wmsDualWorkflow: WmsDualWorkflow;
   shippingLabel: string;
@@ -92,6 +96,7 @@ export function OrderDetailHeaderBar({
   panelSaving,
   setPanelSaving,
   loadPanelSummary,
+  reloadOrderById,
   panelOrderStatusBrief,
   wmsDualWorkflow,
   shippingLabel,
@@ -197,10 +202,21 @@ export function OrderDetailHeaderBar({
                               orderFulfillmentWhId,
                               subStatusId,
                             );
-                            setOrder((prev) =>
-                              prev ? { ...prev, order_ui_status: updated.order_ui_status ?? null } : prev,
-                            );
+                            if (reloadOrderById) {
+                              await reloadOrderById(order.id);
+                            } else {
+                              setOrder((prev) =>
+                                prev
+                                  ? { ...prev, order_ui_status: updated.order_ui_status ?? null }
+                                  : prev,
+                              );
+                            }
                             await loadPanelSummary();
+                          } catch (e: unknown) {
+                            toast.error(
+                              extractApiErrorMessage(e, "Nie udało się zmienić statusu zamówienia."),
+                            );
+                            throw e;
                           } finally {
                             setPanelSaving(false);
                           }
