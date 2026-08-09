@@ -205,18 +205,19 @@ def apply_wms_validation_pass_revalidate(
 
     old_name = _status_name(db, int(old_sid) if old_sid is not None else None)
     new_name = _status_name(db, int(order.order_ui_status_id) if order.order_ui_status_id else None)
+    order_ref = str(getattr(order, "number", None) or "").strip() or str(int(order.id))
     if status_changed:
         msg = (
-            f"Zamówienie #{int(order.id)} przeszło ponowną Walidację WMS. "
+            f"Zamówienie #{order_ref} przeszło ponowną Walidację WMS. "
             f"Przywrócono status z „{old_name}” na „{new_name}”."
         )
     elif needs_manual:
         msg = (
-            f"Zamówienie #{int(order.id)} przeszło ponowną Walidację WMS. "
+            f"Zamówienie #{order_ref} przeszło ponowną Walidację WMS. "
             f"Brak zapisanego poprzedniego statusu — ustaw status ręcznie."
         )
     else:
-        msg = f"Zamówienie #{int(order.id)} przeszło ponowną Walidację WMS."
+        msg = f"Zamówienie #{order_ref} przeszło ponowną Walidację WMS."
 
     insert_wms_order_event(
         db,
@@ -261,14 +262,15 @@ def _emit_validation_failed_activity(
 
     old_name = _status_name(db, previous_status_id)
     new_name = _status_name(db, new_status_id)
+    order_ref = str(getattr(order, "number", None) or "").strip() or str(int(order.id))
     if status_changed:
         msg = (
-            f"Zamówienie #{int(order.id)} nie przeszło Walidacji WMS. "
+            f"Zamówienie #{order_ref} nie przeszło Walidacji WMS. "
             f"Zmieniono status z „{old_name}” na „{new_name}”."
         )
     else:
         msg = (
-            f"Zamówienie #{int(order.id)} nie przeszło Walidacji WMS "
+            f"Zamówienie #{order_ref} nie przeszło Walidacji WMS "
             f"(status błędu nie skonfigurowany — zamówienie nie trafia do Capacity)."
         )
 

@@ -491,6 +491,43 @@ export async function getWmsPackingOrders(
   return res.data;
 }
 
+export type WmsPackingCartHandoffOrderApi = {
+  order_id: number;
+  order_number: string;
+  packable: boolean;
+  block_reason?: string | null;
+};
+
+export type WmsPackingCartHandoffApi = {
+  cart_id: number;
+  cart_code: string;
+  cart_type: string;
+  cart_status: string;
+  packing_mode: "bulk" | "baskets";
+  custody_orders: WmsPackingCartHandoffOrderApi[];
+  packable_order_ids: number[];
+  operator_state: "READY" | "EMPTY" | "INCOMPLETE_PICKING" | "AWAITING_DECISION" | "RELOCATION";
+  operator_message: string;
+};
+
+/** Custody vs packable queue — skan wózka na pakowaniu (nie myli pustego wózka z niedokończonym zbieraniem). */
+export async function getWmsPackingCartHandoff(
+  tenantId: number,
+  warehouseId: number,
+  statusId: number,
+  cartId: number,
+): Promise<WmsPackingCartHandoffApi> {
+  const res = await api.get<WmsPackingCartHandoffApi>("/wms/packing/cart-handoff", {
+    params: {
+      tenant_id: tenantId,
+      warehouse_id: warehouseId,
+      status: statusId,
+      cart_id: cartId,
+    },
+  });
+  return res.data;
+}
+
 export async function postWmsPackingMarkShortage(
   tenantId: number,
   warehouseId: number,

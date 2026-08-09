@@ -393,6 +393,9 @@ export default function WmsPackingOrdersPage() {
           return true;
         }
       }
+      if (result.notice) {
+        showScannerToast(result.notice);
+      }
       applyPackingHandoffScanResult({
         result,
         navigate,

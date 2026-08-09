@@ -51,6 +51,35 @@ class WmsPackingModeDistribution(BaseModel):
     )
 
 
+class WmsPackingCartHandoffOrder(BaseModel):
+    """Zamówienie w custody wózka przy skanie handoff → pakowanie."""
+
+    order_id: int = Field(..., ge=1, description="Internal orders.id")
+    order_number: str = Field(..., description="Numer biznesowy (UI #number)")
+    packable: bool = False
+    block_reason: Optional[str] = Field(
+        default=None,
+        description="incomplete_picking | awaiting_decision | relocation | other",
+    )
+
+
+class WmsPackingCartHandoffOut(BaseModel):
+    """
+    SSOT skanu wózka na pakowaniu: custody (ekran wózka) vs kolejka packable.
+    Rozróżnia pusty wózek od zamówienia z niedokończonym zbieraniem.
+    """
+
+    cart_id: int
+    cart_code: str
+    cart_type: str
+    cart_status: str
+    packing_mode: Literal["bulk", "baskets"]
+    custody_orders: list[WmsPackingCartHandoffOrder] = Field(default_factory=list)
+    packable_order_ids: list[int] = Field(default_factory=list)
+    operator_state: Literal["READY", "EMPTY", "INCOMPLETE_PICKING", "AWAITING_DECISION", "RELOCATION"]
+    operator_message: str
+
+
 class WmsPackingMarkShortageBody(BaseModel):
     order_item_id: int = Field(..., ge=1)
 

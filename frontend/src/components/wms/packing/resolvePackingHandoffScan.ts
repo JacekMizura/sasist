@@ -1,12 +1,12 @@
 /**
  * Unified packing handoff scan: cart (BULK/MULTI) or basket → packing session.
- * Reuses resolve-cart, start-cart, baskets/{code}/order, packing/orders — no parallel assignment.
+ * Reuses resolve-cart, start-cart, cart-handoff, baskets/{code}/order — no parallel assignment.
  */
 import axios from "axios";
 
 import {
   getWmsBasketPackingOrder,
-  getWmsPackingOrders,
+  getWmsPackingCartHandoff,
   wmsPackingApiErrorCode,
   wmsPackingApiErrorMessage,
 } from "../../../api/wmsPackingApi";
@@ -24,11 +24,13 @@ export type PackingHandoffScanOk =
   | {
       kind: "open_order";
       orderId: number;
-      mode: "baskets";
+      mode: "baskets" | "bulk";
       cartId?: number;
       cartCode?: string;
       cartType?: string;
       scannedCode: string;
+      /** Toast po otwarciu (np. niedokończone zbieranie). */
+      notice?: string;
     }
   | {
       kind: "open_orders_list";
@@ -38,6 +40,7 @@ export type PackingHandoffScanOk =
       cartType: string;
       orderCount: number;
       scannedCode: string;
+      notice?: string;
     };
 
 export type PackingHandoffScanResult =
@@ -109,11 +112,11 @@ async function finishCart(
   scan: string,
   r: WmsPickingResolveCartResponseApi,
 ): Promise<PackingHandoffScanResult> {
-  const mode = cartModeFromType(r.cart_type);
-  if (mode == null) {
+  const modeFromType = cartModeFromType(r.cart_type);
+  if (modeFromType == null) {
     return {
       kind: "error",
-      message: "Ten wózek nie jest typu BULK ani MULTI — nie można rozpocząć pakowania ze skanu.",
+      message: "Ten wózek nie obsługuje pakowania ze skanu — użyj listy zamówień.",
     };
   }
   try {
@@ -122,21 +125,89 @@ async function finishCart(
     /* already PACKING / READY — continue with existing state */
   }
   const code = (r.code && r.code.trim()) || r.barcode?.trim() || scan;
-  const orders = await getWmsPackingOrders(tenantId, warehouseId, statusId, mode, r.cart_id, "all");
-  if (!orders.length) {
+
+  let handoff;
+  try {
+    handoff = await getWmsPackingCartHandoff(tenantId, warehouseId, statusId, r.cart_id);
+  } catch (e) {
     return {
-      kind: "empty",
-      message: "Do tego wózka nie przypisano żadnego zamówienia.",
+      kind: "error",
+      message:
+        wmsPackingApiErrorMessage(e) ||
+        "Nie udało się odczytać zamówień na wózku. Spróbuj ponownie.",
     };
   }
+
+  if (import.meta.env.DEV) {
+    console.info("[packing.cart_handoff]", {
+      cart_id: handoff.cart_id,
+      cart_code: handoff.cart_code,
+      cart_status: handoff.cart_status,
+      packing_mode: handoff.packing_mode,
+      operator_state: handoff.operator_state,
+      custody: handoff.custody_orders.map((o) => ({
+        order_id: o.order_id,
+        order_number: o.order_number,
+        packable: o.packable,
+        block_reason: o.block_reason,
+      })),
+      packable_order_ids: handoff.packable_order_ids,
+    });
+  }
+
+  const mode = handoff.packing_mode;
+  const cartType = (handoff.cart_type || r.cart_type || "").trim() || (mode === "bulk" ? "BULK" : "MULTI");
+
+  if (handoff.operator_state === "EMPTY") {
+    return {
+      kind: "empty",
+      message: handoff.operator_message || "Do tego wózka nie przypisano żadnego zamówienia.",
+    };
+  }
+
+  if (handoff.operator_state === "READY" && handoff.packable_order_ids.length > 0) {
+    if (handoff.packable_order_ids.length === 1) {
+      return {
+        kind: "open_order",
+        orderId: Math.floor(Number(handoff.packable_order_ids[0])),
+        mode,
+        cartId: Math.floor(Number(handoff.cart_id)),
+        cartCode: handoff.cart_code || code,
+        cartType,
+        scannedCode: scan,
+      };
+    }
+    return {
+      kind: "open_orders_list",
+      mode,
+      cartId: Math.floor(Number(handoff.cart_id)),
+      cartCode: handoff.cart_code || code,
+      cartType,
+      orderCount: handoff.packable_order_ids.length,
+      scannedCode: scan,
+    };
+  }
+
+  // Custody exists but not packable — open the order (internal id) with clear notice.
+  const first = handoff.custody_orders[0];
+  if (first?.order_id && Number.isFinite(first.order_id)) {
+    return {
+      kind: "open_order",
+      orderId: Math.floor(Number(first.order_id)),
+      mode,
+      cartId: Math.floor(Number(handoff.cart_id)),
+      cartCode: handoff.cart_code || code,
+      cartType,
+      scannedCode: scan,
+      notice:
+        handoff.operator_message ||
+        "Na wózku jest zamówienie, którego nie można jeszcze spakować.",
+    };
+  }
+
   return {
-    kind: "open_orders_list",
-    mode,
-    cartId: Math.floor(Number(r.cart_id)),
-    cartCode: code,
-    cartType: (r.cart_type ?? "").trim() || (mode === "bulk" ? "BULK" : "MULTI"),
-    orderCount: orders.length,
-    scannedCode: scan,
+    kind: "error",
+    message: handoff.operator_message || "Nie udało się otworzyć zamówienia z wózka.",
   };
 }
 

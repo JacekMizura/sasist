@@ -22,6 +22,7 @@ from ..database import get_db
 from ..models.app_user import AppUser
 from ..models.order import Order
 from ..schemas.wms_packing import (
+    WmsPackingCartHandoffOut,
     WmsPackingEntryOut,
     WmsPackingFinishBody,
     WmsPackingLinePackBody,
@@ -44,6 +45,7 @@ from ..services.wms_packing_service import (
     PackingScanError,
     acknowledge_packing_reopen,
     find_first_packing_order_id_for_ean,
+    inspect_packing_cart_handoff,
     resolve_packing_order_for_shelf_scan,
     get_packing_order_detail_for_queue,
     list_packing_orders,
@@ -152,6 +154,36 @@ def post_packing_start_cart(
     }
 
 
+@router.get("/packing/cart-handoff", response_model=WmsPackingCartHandoffOut)
+def get_packing_cart_handoff(
+    tenant_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_operable_warehouse),
+    status: int = Query(..., ge=1, description="order_ui_status_id kolejki pakowania"),
+    cart_id: int = Query(..., ge=1),
+    db: Session = Depends(get_db),
+):
+    """
+    Skan wózka → pakowanie: custody vs kolejka packable.
+
+    Nie myli pustego wózka z zamówieniem na wózku, które nie przeszło filtra
+    ``order_can_show_ready_pack`` (np. niedokończone zbieranie).
+    """
+    try:
+        return inspect_packing_cart_handoff(
+            db,
+            tenant_id=tenant_id,
+            warehouse_id=warehouse_id,
+            status_id=status,
+            cart_id=cart_id,
+        )
+    except PackingScanError as e:
+        raise _packing_scan_http_exception(e) from e
+    except SQLAlchemyError:
+        db.rollback()
+        logger.exception("get_packing_cart_handoff")
+        raise HTTPException(status_code=500, detail="Nie udało się odczytać stanu wózka.") from None
+
+
 @router.get("/packing/orders", response_model=list[WmsPackingOrderCard])
 def get_packing_orders(
     tenant_id: int = Query(..., ge=1),
@@ -217,7 +249,14 @@ def _packing_scan_http_exception(exc: PackingScanError) -> HTTPException:
         return HTTPException(status_code=404, detail=detail)
     if code == "ORDER_NOT_IN_QUEUE":
         return HTTPException(status_code=404, detail=detail)
-    if code in ("BASKET_NOT_FOUND", "BASKET_EMPTY", "BASKET_ORDER_NOT_IN_QUEUE", "SHELF_NOT_FOUND", "SHELF_ORDER_NOT_IN_QUEUE"):
+    if code in (
+        "BASKET_NOT_FOUND",
+        "BASKET_EMPTY",
+        "BASKET_ORDER_NOT_IN_QUEUE",
+        "SHELF_NOT_FOUND",
+        "SHELF_ORDER_NOT_IN_QUEUE",
+        "CART_NOT_FOUND",
+    ):
         return HTTPException(status_code=404, detail=detail)
     if code == "AMBIGUOUS_BASKET_CODE":
         return HTTPException(status_code=409, detail=detail)

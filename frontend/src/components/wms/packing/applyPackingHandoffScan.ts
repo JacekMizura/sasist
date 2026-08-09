@@ -30,7 +30,7 @@ export function applyPackingHandoffScanResult(opts: {
 
   if (result.kind === "open_order") {
     patchWmsPackingSession({
-      mode: "baskets",
+      mode: result.mode,
       orderTypeFilter: "all",
       cartId: result.cartId,
       cartCode: result.cartCode,

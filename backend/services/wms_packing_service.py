@@ -2521,8 +2521,12 @@ def _packing_finish_trace(
     packing_finished_at = None
     automation_finished_at = None
     selected_carton = None
+    order_number = None
+    order_ui_status = None
+    fulfillment_state = None
     if order is not None:
         oid = int(order.id)
+        order_number = _order_business_number(order)
         handoff = getattr(order, "picking_handoff_mode", None)
         order_cart_id = getattr(order, "cart_id", None)
         order_basket_id = getattr(order, "basket_id", None)
@@ -2530,9 +2534,15 @@ def _packing_finish_trace(
         automation_finished_at = getattr(order, "wms_packing_automation_finished_at", None)
         raw_c = getattr(order, "selected_carton_id", None)
         selected_carton = str(raw_c).strip() if raw_c else None
+        st = getattr(order, "order_ui_status", None)
+        order_ui_status = str(getattr(st, "name", None) or getattr(order, "order_ui_status_id", "") or "") or None
+        fulfillment_state = str(getattr(order, "fulfillment_state", None) or "") or None
     payload = {
         "stage": stage,
         "order_id": oid,
+        "order_number": order_number,
+        "order_ui_status": order_ui_status,
+        "fulfillment_state": fulfillment_state,
         "tenant_id": int(tenant_id),
         "warehouse_id": int(warehouse_id),
         "mode": mode,
@@ -3487,6 +3497,160 @@ def list_packing_target_statuses(
     gidx = {g: i for i, g in enumerate(_GROUP_ORDER)}
     out.sort(key=lambda x: (gidx.get(str(x.main_group), 0), x.status.lower(), x.target_status_id))
     return out
+
+
+def _order_business_number(order: Order) -> str:
+    """Numer widoczny operatorowi (#number) — nie mylić z orders.id."""
+    num = str(getattr(order, "number", None) or "").strip()
+    return num if num else str(int(order.id))
+
+
+def inspect_packing_cart_handoff(
+    db: Session,
+    *,
+    tenant_id: int,
+    warehouse_id: int,
+    status_id: int,
+    cart_id: int,
+) -> dict:
+    """
+    Diagnostyka skanu wózka → pakowanie.
+
+    Ekran wózka używa ``list_orders_on_cart`` (custody).
+    Kolejka pakowania filtruje dodatkowo ``order_can_show_ready_pack`` —
+    przy niedokończonym zbieraniu custody ≠ pusta kolejka (fałszywe „brak zamówienia”).
+    """
+    from ..models.cart import Cart
+    from .braki_order_state_service import order_can_show_ready_pack
+    from .cart_picking_lifecycle_service import get_cart_status
+    from .cart_stats_service import list_orders_on_cart
+    from .recovery_workflow_service import resolve_order_recovery_state
+
+    cart = (
+        db.query(Cart)
+        .filter(
+            Cart.id == int(cart_id),
+            Cart.tenant_id == int(tenant_id),
+            Cart.warehouse_id == int(warehouse_id),
+        )
+        .first()
+    )
+    if cart is None:
+        raise PackingScanError("CART_NOT_FOUND", message="Nie znaleziono wózka.")
+
+    raw_type = cart.type.value if hasattr(cart.type, "value") else str(cart.type)
+    cart_type = raw_type.split(".")[-1].upper()
+    packing_mode = "baskets" if cart_type in ("MULTI", "BASKETS") else "bulk"
+    cart_code = (
+        str(getattr(cart, "code", None) or getattr(cart, "barcode", None) or getattr(cart, "name", None) or "")
+        .strip()
+        or f"Wózek {int(cart.id)}"
+    )
+    cart_status = get_cart_status(cart).value
+
+    custody = list_orders_on_cart(db, cart, with_items=True)
+    packable_rows = list_packing_orders(
+        db,
+        tenant_id=tenant_id,
+        warehouse_id=warehouse_id,
+        status_id=status_id,
+        mode=packing_mode,
+        cart_id=int(cart_id),
+        order_type="all",
+        limit=500,
+        offset=0,
+    )
+    packable_ids = {int(c.order_id) for c in packable_rows}
+
+    custody_out: list[dict] = []
+    block_kinds: list[str] = []
+    for o in custody:
+        oid = int(o.id)
+        packable = oid in packable_ids or order_can_show_ready_pack(db, o)
+        block_reason: str | None = None
+        if not packable:
+            st = resolve_order_recovery_state(db, o, log=False)
+            if int(st.totals.oms_decision_lines) > 0:
+                block_reason = "awaiting_decision"
+            elif st.has_recovery_work:
+                block_reason = "incomplete_picking"
+            elif st.has_relocation_work:
+                block_reason = "relocation"
+            else:
+                block_reason = "other"
+            block_kinds.append(block_reason)
+        custody_out.append(
+            {
+                "order_id": oid,
+                "order_number": _order_business_number(o),
+                "packable": bool(packable),
+                "block_reason": block_reason,
+            }
+        )
+
+    if packable_ids:
+        operator_state = "READY"
+        operator_message = ""
+    elif not custody_out:
+        operator_state = "EMPTY"
+        operator_message = "Do tego wózka nie przypisano żadnego zamówienia."
+    elif "awaiting_decision" in block_kinds:
+        operator_state = "AWAITING_DECISION"
+        operator_message = (
+            "Na wózku jest zamówienie z nierozwiązanymi brakami — najpierw obsłuż braki, "
+            "potem wróć do pakowania."
+        )
+    elif "relocation" in block_kinds:
+        operator_state = "RELOCATION"
+        operator_message = (
+            "Na wózku jest zamówienie wymagające rozlokowania przed pakowaniem."
+        )
+    elif "incomplete_picking" in block_kinds:
+        operator_state = "INCOMPLETE_PICKING"
+        operator_message = (
+            "Na wózku jest zamówienie, ale zbieranie nie jest dokończone. "
+            "Dokończ zbieranie, a potem wróć do pakowania."
+        )
+    else:
+        operator_state = "INCOMPLETE_PICKING"
+        operator_message = (
+            "Na wózku jest zamówienie, którego nie można jeszcze spakować. "
+            "Sprawdź status zbierania i braków."
+        )
+
+    logger.info(
+        "[wms.packing.cart_handoff] cart_id=%s cart_code=%s cart_type=%s cart_status=%s "
+        "mode=%s status_id=%s custody=%s packable=%s operator_state=%s",
+        int(cart.id),
+        cart_code,
+        cart_type,
+        cart_status,
+        packing_mode,
+        int(status_id),
+        [
+            {
+                "order_id": x["order_id"],
+                "order_number": x["order_number"],
+                "packable": x["packable"],
+                "block_reason": x["block_reason"],
+            }
+            for x in custody_out
+        ],
+        sorted(packable_ids),
+        operator_state,
+    )
+
+    return {
+        "cart_id": int(cart.id),
+        "cart_code": cart_code,
+        "cart_type": cart_type,
+        "cart_status": cart_status,
+        "packing_mode": packing_mode,
+        "custody_orders": custody_out,
+        "packable_order_ids": sorted(packable_ids),
+        "operator_state": operator_state,
+        "operator_message": operator_message,
+    }
 
 
 def list_packing_orders(

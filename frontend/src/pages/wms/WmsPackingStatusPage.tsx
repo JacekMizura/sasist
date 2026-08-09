@@ -127,6 +127,9 @@ export default function WmsPackingStatusPage() {
           showScannerToast(result.message);
           return;
         }
+        if (result.notice) {
+          showScannerToast(result.notice);
+        }
         applyPackingHandoffScanResult({
           result,
           navigate,
