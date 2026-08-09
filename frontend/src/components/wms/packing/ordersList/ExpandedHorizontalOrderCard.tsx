@@ -7,6 +7,7 @@ import {
   DEFAULT_ORDERS_LIST_PRODUCT_FIELDS,
   OrdersListProductMeta,
   OrdersListProductThumb,
+  formatOrdersListProductName,
   ordersListProductFieldsEqual,
   type OrdersListProductFieldVisibility,
 } from "./ordersListProductFields";
@@ -192,7 +193,7 @@ function ProductLineRow({
   const packed = qtyReq > 0 && line.quantity_packed >= qtyReq;
   const shortage = lineShortageQty(line);
   const colorRaw = (line.color_name ?? "").trim();
-  const name = (line.product_name ?? "").trim() || "—";
+  const name = formatOrdersListProductName(line.product_name, productFields.truncateNames);
 
   const stopX = (e: MouseEvent) => {
     e.preventDefault();

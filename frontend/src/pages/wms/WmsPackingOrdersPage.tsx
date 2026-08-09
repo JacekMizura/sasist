@@ -145,9 +145,11 @@ export default function WmsPackingOrdersPage() {
       showSku: packingUi?.showSKUInOrders ?? true,
       showEan: packingUi?.showEANInOrders ?? true,
       showCatalogNumber: packingUi?.showCatalogNumberInOrders ?? false,
+      truncateNames: packingUi?.truncateNamesInOrders ?? true,
     }),
     [packingUi],
   );
+  const showPackedOrders = packingUi?.showPackedOrders ?? false;
 
   const resolvePageSize = useCallback(() => {
     if (warehouseId == null) return 25;
@@ -574,6 +576,7 @@ export default function WmsPackingOrdersPage() {
         showAllNotes={showAllNotes}
         ordersListLayout={ordersListLayout}
         productFields={productFields}
+        showPackedOrders={showPackedOrders}
         onLoadMore={() => void loadMoreOrders()}
         onOpenOrder={(id) => {
           if (activePriorityTask && assignedOrderIds.length > 0 && !assignedOrderSet.has(id)) {

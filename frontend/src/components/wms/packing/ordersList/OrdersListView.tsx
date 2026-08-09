@@ -1,7 +1,7 @@
-import { useEffect, useRef, type CSSProperties } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import type { WmsPackingOrderCardApi } from "../../../../api/wmsPackingApi";
 import type { PackingOrdersListLayout } from "../../../../types/wmsPackingExtendedUi";
-import { computeOrdersListStats } from "./ordersListStats";
+import { computeOrdersListStats, isPackingOrderCardPacked } from "./ordersListStats";
 import {
   DEFAULT_ORDERS_LIST_PRODUCT_FIELDS,
   type OrdersListProductFieldVisibility,
@@ -31,6 +31,8 @@ export type OrdersListViewProps = {
   ordersListLayout?: PackingOrdersListLayout;
   /** Pola produktu w kafelkach (układy rozbudowane). Standardowy ignoruje zdjęcie. */
   productFields?: OrdersListProductFieldVisibility;
+  /** Ustawienie WMS: czy spakowane są na liście na stałe. */
+  showPackedOrders?: boolean;
   onLoadMore?: () => void;
   onOpenOrder: (orderId: number) => void;
   onProductClick?: (orderItemId: number, orderId: number) => void;
@@ -94,6 +96,7 @@ export function OrdersListView({
   showAllNotes = true,
   ordersListLayout = "compact",
   productFields = DEFAULT_ORDERS_LIST_PRODUCT_FIELDS,
+  showPackedOrders = false,
   onLoadMore,
   onOpenOrder,
   onProductClick,
@@ -102,8 +105,22 @@ export function OrdersListView({
   statusLabelRight: _statusLabelRight,
   statusBadgeStyle: _statusBadgeStyle,
 }: OrdersListViewProps) {
-  const n = orders.length;
-  const stats = computeOrdersListStats(orders);
+  /** Tymczasowe odsłonięcie spakowanych — nie zapisuje ustawienia WMS. */
+  const [revealPackedOrders, setRevealPackedOrders] = useState(false);
+
+  useEffect(() => {
+    if (showPackedOrders) setRevealPackedOrders(false);
+  }, [showPackedOrders]);
+
+  const stats = useMemo(() => computeOrdersListStats(orders), [orders]);
+  const hidePacked = !showPackedOrders && !revealPackedOrders;
+  const displayedOrders = useMemo(
+    () => (hidePacked ? orders.filter((o) => !isPackingOrderCardPacked(o)) : orders),
+    [hidePacked, orders],
+  );
+  const showRevealPackedBtn = !showPackedOrders && stats.spakowane > 0;
+
+  const n = displayedOrders.length;
   const isStandard = ordersListLayout === "compact";
   const isHorizontal = ordersListLayout === "cards";
   const isVertical = ordersListLayout === "expanded_vertical";
@@ -140,6 +157,15 @@ export function OrdersListView({
               braki={isHorizontal || isVertical ? stats.braki : 0}
             />
           ) : null}
+          {showRevealPackedBtn ? (
+            <button
+              type="button"
+              className="shrink-0 rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-800 transition hover:bg-slate-50 sm:text-sm"
+              onClick={() => setRevealPackedOrders((v) => !v)}
+            >
+              {revealPackedOrders ? "Ukryj spakowane zamówienia" : "Wyświetl spakowane zamówienia"}
+            </button>
+          ) : null}
           {cartHint}
           {cartHint == null ? <span className="ml-auto" /> : null}
         </div>
@@ -165,9 +191,16 @@ export function OrdersListView({
           <p className="rounded-2xl border border-slate-200 bg-white px-6 py-10 text-center text-base leading-relaxed text-slate-500">
             Brak zamówień dla wybranego sposobu pakowania.
           </p>
+        ) : !error && displayedOrders.length === 0 ? (
+          <p className="rounded-2xl border border-slate-200 bg-white px-6 py-10 text-center text-base leading-relaxed text-slate-500">
+            Brak zamówień do spakowania.
+            {showRevealPackedBtn && !revealPackedOrders
+              ? " Spakowane zamówienia są ukryte — użyj przycisku powyżej, aby je pokazać."
+              : null}
+          </p>
         ) : isStandard ? (
           <div className="flex flex-wrap gap-3" role="list" aria-label="Lista zamówień do pakowania">
-            {orders.map((o) => (
+            {displayedOrders.map((o) => (
               <div key={o.order_id} role="listitem" className="shrink-0">
                 <StandardOrderCard order={o} onOpenOrder={onOpenOrder} />
               </div>
@@ -181,7 +214,7 @@ export function OrdersListView({
             role="list"
             aria-label="Lista zamówień do pakowania"
           >
-            {orders.map((o) => (
+            {displayedOrders.map((o) => (
               <div key={o.order_id} role="listitem" className="flex shrink-0 self-stretch">
                 <ExpandedHorizontalOrderCard
                   order={o}
@@ -200,7 +233,7 @@ export function OrdersListView({
           </div>
         ) : (
           <div className="flex flex-col gap-3 bg-white" role="list" aria-label="Lista zamówień do pakowania">
-            {orders.map((o) => (
+            {displayedOrders.map((o) => (
               <div key={o.order_id} role="listitem">
                 <ExpandedVerticalOrderCard
                   order={o}

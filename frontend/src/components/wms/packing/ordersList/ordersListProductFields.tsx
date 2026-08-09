@@ -1,11 +1,13 @@
 import type { WmsPackingOrderLineApi } from "../../../../api/wmsPackingApi";
 
-/** Widoczność pól produktu w kafelkach listy zamówień (pakowanie). */
+/** Widoczność / prezentacja pól produktu w kafelkach listy zamówień (pakowanie). */
 export type OrdersListProductFieldVisibility = {
   showImage: boolean;
   showSku: boolean;
   showEan: boolean;
   showCatalogNumber: boolean;
+  /** Ogranicz nazwę produktu do 25 znaków + „…” (tylko prezentacja). */
+  truncateNames: boolean;
 };
 
 export const DEFAULT_ORDERS_LIST_PRODUCT_FIELDS: OrdersListProductFieldVisibility = {
@@ -13,7 +15,21 @@ export const DEFAULT_ORDERS_LIST_PRODUCT_FIELDS: OrdersListProductFieldVisibilit
   showSku: true,
   showEan: true,
   showCatalogNumber: false,
+  truncateNames: true,
 };
+
+export const ORDERS_LIST_PRODUCT_NAME_MAX = 25;
+
+/** Prezentacja nazwy produktu — nie mutuje danych źródłowych. */
+export function formatOrdersListProductName(
+  raw: string | null | undefined,
+  truncate: boolean,
+  maxLen = ORDERS_LIST_PRODUCT_NAME_MAX,
+): string {
+  const name = (raw ?? "").trim() || "—";
+  if (!truncate || name === "—" || name.length <= maxLen) return name;
+  return `${name.slice(0, maxLen)}…`;
+}
 
 export function ordersListProductFieldsEqual(
   a: OrdersListProductFieldVisibility | undefined,
@@ -25,7 +41,8 @@ export function ordersListProductFieldsEqual(
     x.showImage === y.showImage &&
     x.showSku === y.showSku &&
     x.showEan === y.showEan &&
-    x.showCatalogNumber === y.showCatalogNumber
+    x.showCatalogNumber === y.showCatalogNumber &&
+    x.truncateNames === y.truncateNames
   );
 }
 

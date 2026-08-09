@@ -210,6 +210,7 @@ export function PackingViewSection({ extended, draft, patchExtended, toggleInter
             showSku: extended.showSKUInOrders,
             showEan: extended.showEANInOrders,
             showCatalogNumber: extended.showCatalogNumberInOrders,
+            truncateNames: extended.truncateNamesInOrders,
           }}
         />
         <FieldGrid>
@@ -259,15 +260,12 @@ export function PackingViewSection({ extended, draft, patchExtended, toggleInter
             label="Ograniczaj długość tytułu w produktach na liście zamówień"
             checked={extended.truncateNamesInOrders}
             onChange={(v) => patchExtended("truncateNamesInOrders", v)}
-            capability={CAP_NONE}
           />
           <BoolRow
             settingId="packing.show_packed_orders"
             label="Wyświetlaj spakowane zamówienia na liście zamówień"
             checked={extended.showPackedOrders}
             onChange={(v) => patchExtended("showPackedOrders", v)}
-            capability={CAP_NONE}
-            infoKey="packing.show_packed_orders"
           />
         </div>
       </Subsection>

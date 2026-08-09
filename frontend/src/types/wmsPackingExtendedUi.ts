@@ -162,7 +162,7 @@ export const DEFAULT_WMS_PACKING_EXTENDED_UI: WmsPackingExtendedUiSettings = {
   showEANInOrders: true,
   showCatalogNumberInOrders: false,
   truncateNamesInOrders: true,
-  showPackedOrders: true,
+  showPackedOrders: false,
 
   allowedStartStatusIds: [],
 

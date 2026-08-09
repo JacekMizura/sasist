@@ -1,5 +1,13 @@
 import type { WmsPackingOrderCardApi } from "../../../../api/wmsPackingApi";
 
+/** Spakowane wg stanu pakowania (API / ilości), nie wyglądu kafelka. */
+export function isPackingOrderCardPacked(order: WmsPackingOrderCardApi): boolean {
+  if (order.is_completed === true) return true;
+  const total = Number(order.total_quantity || 0);
+  const packed = Number(order.packed_quantity || 0);
+  return total > 0 && packed >= total;
+}
+
 /** Liczniki do badge'y nagłówka (rozłączne kategorie). */
 export function computeOrdersListStats(orders: WmsPackingOrderCardApi[]): {
   spakowane: number;
@@ -22,7 +30,7 @@ export function computeOrdersListStats(orders: WmsPackingOrderCardApi[]): {
     );
     if (hasShortage) braki++;
     if (total <= 0) continue;
-    if (packed >= total) {
+    if (packed >= total || o.is_completed === true) {
       spakowane++;
       continue;
     }

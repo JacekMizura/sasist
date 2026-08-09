@@ -82,7 +82,7 @@ const PREVIEW_ORDERS: WmsPackingOrderCardApi[] = [
     method: "DPD",
     lines: [
       previewLine(11, {
-        name: "Bawełniany T-shirt ETHAN",
+        name: "Elegancka listonoszka ze skóry ekologicznej",
         qty: 1,
         packed: 1,
         color: "zielony",
