@@ -26,6 +26,8 @@ from ..schemas.wms_packing import (
     WmsPackingEntryOut,
     WmsPackingFinishBody,
     WmsPackingLinePackBody,
+    WmsPackingManagerParcelApproveBody,
+    WmsPackingManagerParcelApproveOut,
     WmsPackingMarkShortageBody,
     WmsPackingMarkShortageOut,
     WmsPackingModeDistribution,
@@ -44,6 +46,7 @@ from ..services.wms_audit_service import emit_wms_packing_paused, emit_wms_packi
 from ..services.wms_packing_service import (
     PackingScanError,
     acknowledge_packing_reopen,
+    approve_packing_extra_parcels_for_order,
     find_first_packing_order_id_for_ean,
     inspect_packing_cart_handoff,
     resolve_packing_order_for_shelf_scan,
@@ -591,6 +594,72 @@ def post_packing_order_line_pack(
         raise HTTPException(status_code=500, detail="Database error") from e
 
 
+@router.post(
+    "/packing/orders/{order_id}/approve-extra-parcels",
+    response_model=WmsPackingManagerParcelApproveOut,
+)
+def post_packing_approve_extra_parcels(
+    order_id: int,
+    body: WmsPackingManagerParcelApproveBody,
+    tenant_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_operable_warehouse),
+    status: int = Query(..., ge=1),
+    mode: str = Query(...),
+    cart_id: int | None = Query(default=None, ge=1),
+    db: Session = Depends(get_db),
+    current_user: Optional[AppUser] = Depends(get_optional_current_user),
+):
+    """
+    Jednorazowa zgoda kierownika (skan ``barcode_login_code``) na przekroczenie
+    limitu paczek bez potwierdzenia — dotyczy wyłącznie tego zamówienia.
+    """
+    _ = current_user
+    try:
+        _order, manager = approve_packing_extra_parcels_for_order(
+            db,
+            tenant_id=int(tenant_id),
+            warehouse_id=int(warehouse_id),
+            status_id=int(status),
+            mode=mode,
+            cart_id=cart_id,
+            order_id=int(order_id),
+            barcode=body.barcode,
+        )
+        return WmsPackingManagerParcelApproveOut(
+            ok=True,
+            approved_by_user_id=int(manager.id),
+            message="Zgoda kierownika zapisana. Możesz dodać kolejne paczki.",
+        )
+    except ValueError as e:
+        db.rollback()
+        code = str(e)
+        if code == "ORDER_NOT_IN_QUEUE":
+            raise HTTPException(status_code=404, detail={"code": code}) from e
+        if code == "MULTI_PARCEL_DISABLED":
+            raise HTTPException(
+                status_code=400,
+                detail={"code": code, "message": "Wielopaczkowość jest wyłączona."},
+            ) from e
+        if code == "INVALID_MANAGER_CODE":
+            raise HTTPException(
+                status_code=400,
+                detail={"code": code, "message": "Nie rozpoznano kodu kierownika."},
+            ) from e
+        if code == "NOT_A_MANAGER":
+            raise HTTPException(
+                status_code=403,
+                detail={
+                    "code": code,
+                    "message": "Zeskanowany użytkownik nie ma uprawnienia „Kierownik”.",
+                },
+            ) from e
+        raise HTTPException(status_code=400, detail={"code": code, "message": code}) from e
+    except SQLAlchemyError:
+        db.rollback()
+        logger.exception("post_packing_approve_extra_parcels")
+        raise HTTPException(status_code=500, detail="Database error") from None
+
+
 @router.post("/packing/orders/{order_id}/finish", response_model=WmsPackingScanOut)
 def post_packing_order_finish(
     order_id: int,
@@ -632,6 +701,18 @@ def post_packing_order_finish(
     except ValueError as e:
         db.rollback()
         msg = str(e).strip()
+        if msg == "MANAGER_APPROVAL_REQUIRED":
+            raise HTTPException(
+                status_code=403,
+                detail={
+                    "code": "MANAGER_APPROVAL_REQUIRED",
+                    "error": "MANAGER_APPROVAL_REQUIRED",
+                    "message": (
+                        "Limit paczek bez potwierdzenia został przekroczony. "
+                        "Wymagana zgoda kierownika."
+                    ),
+                },
+            ) from e
         raise HTTPException(
             status_code=400,
             detail={"code": msg[:120] or "PACKING_FINISH_VALIDATION", "error": msg[:500]},

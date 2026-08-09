@@ -84,6 +84,11 @@ class Order(Base):
     basket_id = Column(Integer, ForeignKey("cart_baskets.id", ondelete="SET NULL"), nullable=True)
     #: Karton wybrany na stanowisku pakowania WMS (słownik cartons).
     selected_carton_id = Column(String(36), ForeignKey("cartons.id", ondelete="SET NULL"), nullable=True, index=True)
+    #: Jednorazowa zgoda kierownika na przekroczenie limitu paczek (umowa własna) — per zamówienie.
+    packing_multi_parcel_manager_approved_at = Column(DateTime, nullable=True)
+    packing_multi_parcel_manager_approved_by_user_id = Column(
+        Integer, ForeignKey("app_users.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     #: JSON list of extra packaging consumables: [{wm_kind, wm_id, qty, location_id?}].
     packing_consumables_json = Column(Text, nullable=True)
     #: RW document created on packing finish for packaging consumption (idempotency).

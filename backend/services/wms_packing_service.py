@@ -1610,6 +1610,46 @@ def suggestions_to_recommended_cartons(
 FINISH_WITHOUT_CARTON_PERM = "finish_without_carton"
 
 
+def approve_packing_extra_parcels_for_order(
+    db: Session,
+    *,
+    tenant_id: int,
+    warehouse_id: int,
+    status_id: int,
+    mode: str,
+    cart_id: int | None,
+    order_id: int,
+    barcode: str,
+) -> tuple[Order, AppUser]:
+    """Zgoda kierownika (skan kodu) na przekroczenie limitu paczek — jednorazowo na zamówienie."""
+    from .packing_multi_parcel_gate import approve_multi_parcel_by_manager_barcode, load_multi_parcel_settings
+
+    enabled, _limit = load_multi_parcel_settings(
+        db, tenant_id=int(tenant_id), warehouse_id=int(warehouse_id)
+    )
+    if not enabled:
+        raise ValueError("MULTI_PARCEL_DISABLED")
+
+    order = (
+        _packing_orders_base_query(
+            db,
+            tenant_id=int(tenant_id),
+            warehouse_id=int(warehouse_id),
+            status_id=int(status_id),
+            mode=str(mode).strip().lower(),
+            cart_id=int(cart_id) if cart_id is not None and int(cart_id) > 0 else None,
+        )
+        .filter(Order.id == int(order_id))
+        .first()
+    )
+    if order is None:
+        raise ValueError("ORDER_NOT_IN_QUEUE")
+    manager = approve_multi_parcel_by_manager_barcode(db, order=order, barcode=barcode)
+    db.commit()
+    db.refresh(order)
+    return order, manager
+
+
 def list_shipping_compatible_cartons_for_packing(
     db: Session,
     *,
@@ -1705,6 +1745,8 @@ def apply_order_selected_carton(
     cart_id: int | None = None,
     confirm_override: bool = False,
     recommended_carton_id: str | None = None,
+    intended_packaging_count: int | None = None,
+    current_user: Optional[AppUser] = None,
 ) -> OrderSelectCartonResponse:
     """
     Ustawia ``orders.selected_carton_id``.
@@ -1712,6 +1754,7 @@ def apply_order_selected_carton(
     WMS packing wymaga pełnego scope (warehouse + status + mode + cart_id) —
     ten sam kanoniczny filtr co scan/finish.
     Physical NO FIT → warning; block until confirm_override unless eligible.
+    Przy wielopaczkowości: ``intended_packaging_count`` > limit → zgoda kierownika.
     """
     cid = (carton_id or "").strip()
     if not cid:
@@ -1754,6 +1797,32 @@ def apply_order_selected_carton(
     if row is None:
         raise ValueError("INVALID_CARTON")
 
+    # Limit paczek / zgoda kierownika (przed mutacją)
+    if intended_packaging_count is not None and int(intended_packaging_count) > 0:
+        from .packing_multi_parcel_gate import evaluate_extra_parcel_gate
+
+        gate = evaluate_extra_parcel_gate(
+            db,
+            tenant_id=int(tenant_id),
+            warehouse_id=int(warehouse_id),
+            order=order,
+            current_user=current_user,
+            intended_packaging_count=int(intended_packaging_count),
+        )
+        if not gate["allowed"]:
+            return OrderSelectCartonResponse(
+                selected_carton_id=prev_s or None,
+                selected_carton=_selected_carton_summary_for_order(db, order),
+                recommended_carton_id=(recommended_carton_id or "").strip() or None,
+                was_overridden=False,
+                physical_fit_ok=True,
+                physical_fit_warning=None,
+                override_reason_code=None,
+                requires_override_confirmation=False,
+                requires_manager_approval=True,
+                manager_approval_message=gate.get("message"),
+            )
+
     # Physical fit check (gate warning — does not mutate until confirmed if rejected)
     physical_ok = True
     warning = None
@@ -1782,6 +1851,8 @@ def apply_order_selected_carton(
                     physical_fit_warning=warning,
                     override_reason_code=override_code,
                     requires_override_confirmation=True,
+                    requires_manager_approval=False,
+                    manager_approval_message=None,
                 )
     except Exception:
         logger.exception("physical fit check on select-carton order_id=%s", order_id)
@@ -1809,6 +1880,8 @@ def apply_order_selected_carton(
         physical_fit_warning=warning if not physical_ok else None,
         override_reason_code=override_code if not physical_ok else None,
         requires_override_confirmation=False,
+        requires_manager_approval=False,
+        manager_approval_message=None,
     )
 
 
@@ -2715,7 +2788,21 @@ def packing_finish_order(
     )
 
     if not idempotent_replay:
+        from .packing_multi_parcel_gate import (
+            assert_finish_packaging_count_allowed,
+            clear_multi_parcel_manager_approval,
+        )
+
+        assert_finish_packaging_count_allowed(
+            db,
+            tenant_id=int(tenant_id),
+            warehouse_id=int(warehouse_id),
+            order=order,
+            current_user=current_user,
+            packaging_carton_ids=packaging_carton_ids,
+        )
         _apply_packing_carton_ids_to_order(order, packaging_carton_ids)
+        clear_multi_parcel_manager_approval(order)
         db.flush()
 
     snap = _packing_finish_validation_snapshot(db, order, log=True)

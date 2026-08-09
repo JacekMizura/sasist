@@ -708,6 +708,31 @@ export async function postWmsPackingPackAll(
   return res.data;
 }
 
+/** Jednorazowa zgoda kierownika (skan kodu) na przekroczenie limitu paczek. */
+export async function postWmsPackingApproveExtraParcels(
+  tenantId: number,
+  warehouseId: number,
+  statusId: number,
+  mode: WmsPackingModeParam,
+  orderId: number,
+  barcode: string,
+  cartId?: number | null,
+): Promise<{ ok: boolean; approved_by_user_id: number; message: string }> {
+  const params: Record<string, string | number> = {
+    tenant_id: tenantId,
+    warehouse_id: warehouseId,
+    status: statusId,
+    mode,
+  };
+  if (cartId != null) params.cart_id = cartId;
+  const res = await api.post<{ ok: boolean; approved_by_user_id: number; message: string }>(
+    `/wms/packing/orders/${orderId}/approve-extra-parcels`,
+    { barcode },
+    { params },
+  );
+  return res.data;
+}
+
 /** Po pełnym spakowaniu — potok post-pack (dokument, status, …). Nie wywołuj przed ``fully_packed``. */
 export async function postWmsPackingOrderFinish(
   tenantId: number,

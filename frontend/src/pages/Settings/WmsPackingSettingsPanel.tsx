@@ -305,6 +305,12 @@ const WmsPackingSettingsPanel = forwardRef<
       allowedStartStatusIds: finalDraft.allowed_start_status_ids,
       // SSOT typu dokumentu = API preferred_document_type.
       salesDocumentType,
+      // SSOT wielopaczkowość + limit paczek = API ``multi_parcel`` (gdy dostępne).
+      enableMultiParcel: Boolean(finalDraft.multi_parcel?.enable_multi_parcel),
+      parcelLimitWithoutManagerConfirm: Math.min(
+        99,
+        Math.max(0, Math.floor(Number(finalDraft.multi_parcel?.parcel_limit_without_manager_confirm) || 5)),
+      ),
     };
     setExtended(ext);
     // Baseline = exactly what is shown — section switches / remounts must not look dirty.
@@ -438,6 +444,13 @@ const WmsPackingSettingsPanel = forwardRef<
         document_settings: docSettings,
         fallback_label: normalized.fallback_label,
         interface_display: normalized.interface_display,
+        multi_parcel: {
+          enable_multi_parcel: Boolean(extended.enableMultiParcel),
+          parcel_limit_without_manager_confirm: Math.min(
+            99,
+            Math.max(0, Math.floor(Number(extended.parcelLimitWithoutManagerConfirm) || 0)),
+          ),
+        },
       });
       await patchFulfillmentConfiguration(DAMAGE_TENANT_ID, {
         consolidation_warehouse_id: mainPackingWarehouseId,
@@ -457,6 +470,19 @@ const WmsPackingSettingsPanel = forwardRef<
         allowedStartStatusIds: savedNormalized.allowed_start_status_ids,
         salesDocumentType: normalizePackingSalesDocumentType(
           preferredFromUi === "INVOICE" ? "invoice" : preferredFromUi === "PARAGON" ? "receipt" : "from_order",
+        ),
+        enableMultiParcel: Boolean(savedNormalized.multi_parcel?.enable_multi_parcel ?? extended.enableMultiParcel),
+        parcelLimitWithoutManagerConfirm: Math.min(
+          99,
+          Math.max(
+            0,
+            Math.floor(
+              Number(
+                savedNormalized.multi_parcel?.parcel_limit_without_manager_confirm ??
+                  extended.parcelLimitWithoutManagerConfirm,
+              ) || 0,
+            ),
+          ),
         ),
       };
       setExtended(extAfterSave);

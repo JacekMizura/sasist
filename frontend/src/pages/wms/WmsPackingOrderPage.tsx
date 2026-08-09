@@ -15,6 +15,7 @@ import { AlreadyPackedOrderModal } from "../../components/wms/packing/AlreadyPac
 import { AutoActionsView } from "../../components/wms/packing/postComplete/AutoActionsView";
 import { PackingCartonGateModal } from "../../components/wms/packing/PackingCartonGateModal";
 import { PackingFinalizationView } from "../../components/wms/packing/PackingFinalizationView";
+import { PackingManagerParcelApprovalModal } from "../../components/wms/packing/PackingManagerParcelApprovalModal";
 import { PackingMarkShortageModal } from "../../components/wms/packing/PackingMarkShortageModal";
 import { PackingNotesPopupModal } from "../../components/wms/packing/PackingNotesPopupModal";
 import { PackingReplacementLabelModal } from "../../components/wms/packing/PackingReplacementLabelModal";
@@ -368,7 +369,7 @@ export default function WmsPackingOrderPage() {
         onClose={ctrl.acknowledgeNotesPopup}
       />
       <PackingCartonGateModal
-        open={ctrl.awaitingPostPackCarton}
+        open={ctrl.awaitingPostPackCarton && !ctrl.managerParcelApprovalOpen}
         shippingMethodLogoUrl={packingDetail.shipping_method_logo_url}
         shippingTemplateLabel={shippingTemplateLabel}
         compatible={packingDetail.shipping_compatible_cartons ?? []}
@@ -391,6 +392,13 @@ export default function WmsPackingOrderPage() {
                   )
               : undefined
         }
+      />
+      <PackingManagerParcelApprovalModal
+        open={ctrl.managerParcelApprovalOpen}
+        busy={ctrl.managerParcelApprovalBusy}
+        error={ctrl.managerParcelApprovalError}
+        onScanBarcode={(code) => void ctrl.submitManagerParcelApprovalScan(code)}
+        onCancel={ctrl.dismissManagerParcelApproval}
       />
       {ctrl.shipmentConfirmOpen ? (
         <ConfirmModal

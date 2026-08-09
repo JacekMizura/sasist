@@ -38,6 +38,13 @@ class WmsPackingInterfaceDisplay(BaseModel):
     show_catalog_number: bool = True
 
 
+class WmsPackingMultiParcelSettings(BaseModel):
+    """Wielopaczkowość + limit paczek bez zgody kierownika (umowa własna)."""
+
+    enable_multi_parcel: bool = False
+    parcel_limit_without_manager_confirm: int = Field(5, ge=0, le=99)
+
+
 class WmsPackingSettingsRead(BaseModel):
     tenant_id: int
     warehouse_id: int
@@ -51,6 +58,7 @@ class WmsPackingSettingsRead(BaseModel):
     document_settings: WmsPackingDocumentSettings = Field(default_factory=WmsPackingDocumentSettings)
     fallback_label: WmsPackingFallbackLabel = Field(default_factory=WmsPackingFallbackLabel)
     interface_display: WmsPackingInterfaceDisplay = Field(default_factory=WmsPackingInterfaceDisplay)
+    multi_parcel: WmsPackingMultiParcelSettings = Field(default_factory=WmsPackingMultiParcelSettings)
 
 
 class WmsPackingSettingsSave(BaseModel):
@@ -66,6 +74,7 @@ class WmsPackingSettingsSave(BaseModel):
     fallback_label: WmsPackingFallbackLabel = Field(default_factory=WmsPackingFallbackLabel)
     #: Opcjonalne w PATCH — brak = zachowaj istniejące w DB (patrz ``wms_settings._save_wms_packing_settings_impl``).
     interface_display: Optional[WmsPackingInterfaceDisplay] = None
+    multi_parcel: Optional[WmsPackingMultiParcelSettings] = None
 
 
 class OrderStatusOptionOut(BaseModel):

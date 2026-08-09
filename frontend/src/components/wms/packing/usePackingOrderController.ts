@@ -7,6 +7,7 @@ import { getWmsPackingSettings } from "../../../api/wmsPackingSettingsApi";
 import {
   getWmsPackingOrderDetail,
   postWmsPackingAcknowledgeReopen,
+  postWmsPackingApproveExtraParcels,
   postWmsPackingLinePack,
   postWmsPackingOrderFinish,
   postWmsPackingOrderScan,
@@ -121,6 +122,10 @@ export function usePackingOrderController(
   const [awaitingFinalizationRun, setAwaitingFinalizationRun] = useState(false);
   /** Kolejno wybrane kartony (wielopak); API zamówienia nadal trzyma jedno ``selected_carton_id`` (ostatnie). */
   const [selectedPackagingIds, setSelectedPackagingIds] = useState<string[]>([]);
+  const [managerParcelApprovalOpen, setManagerParcelApprovalOpen] = useState(false);
+  const [managerParcelApprovalBusy, setManagerParcelApprovalBusy] = useState(false);
+  const [managerParcelApprovalError, setManagerParcelApprovalError] = useState<string | null>(null);
+  const pendingManagerCartonIdRef = useRef<string | null>(null);
   const pendingFinishAfterCartonRef = useRef(false);
   const [postPackPipeline, setPostPackPipeline] = useState<WmsPackingPostPackStepApi[] | null>(null);
   const [shipmentConfirmOpen, setShipmentConfirmOpen] = useState(false);
@@ -163,6 +168,11 @@ export function usePackingOrderController(
     notesPendingActionRef.current = "none";
     notesInterruptedFullyPackedRef.current = false;
     resumeAutoAfterNotesRescanRef.current = false;
+    setManagerParcelApprovalOpen(false);
+    setManagerParcelApprovalError(null);
+    setManagerParcelApprovalBusy(false);
+    pendingManagerCartonIdRef.current = null;
+    setSelectedPackagingIds([]);
   }, [orderId]);
 
   const refreshSession = useCallback(() => {
@@ -315,6 +325,17 @@ export function usePackingOrderController(
           ...DEFAULT_WMS_PACKING_INTERFACE_DISPLAY,
           ...(s.interface_display ?? {}),
         });
+        const mp = s.multi_parcel;
+        if (mp) {
+          setPackingExtendedUi((prev) => ({
+            ...prev,
+            enableMultiParcel: Boolean(mp.enable_multi_parcel),
+            parcelLimitWithoutManagerConfirm: Math.min(
+              99,
+              Math.max(0, Math.floor(Number(mp.parcel_limit_without_manager_confirm) || 5)),
+            ),
+          }));
+        }
       } catch {
         if (!cancelled) setPackingInterfaceDisplay(DEFAULT_WMS_PACKING_INTERFACE_DISPLAY);
       }
@@ -997,10 +1018,20 @@ export function usePackingOrderController(
       if (!cid) return;
       setSelectCartonBusy(true);
       try {
+        let intended: number | undefined;
+        if (packingExtendedUi.enableMultiParcel) {
+          intended = selectedPackagingIds.includes(cid)
+            ? selectedPackagingIds.length
+            : selectedPackagingIds.length + 1;
+        }
         const res = await patchOrderSelectCarton(
           orderId,
           DAMAGE_TENANT_ID,
-          { carton_id: cid, confirm_override: Boolean(opts?.confirmOverride) },
+          {
+            carton_id: cid,
+            confirm_override: Boolean(opts?.confirmOverride),
+            ...(intended != null ? { intended_packaging_count: intended } : {}),
+          },
           {
             warehouseId,
             statusId: s.statusId,
@@ -1008,6 +1039,12 @@ export function usePackingOrderController(
             cartId: s.mode === "bulk" || s.mode === "baskets" ? s.cartId : undefined,
           },
         );
+        if (res.requires_manager_approval) {
+          pendingManagerCartonIdRef.current = cid;
+          setManagerParcelApprovalError(null);
+          setManagerParcelApprovalOpen(true);
+          return res;
+        }
         if (res.requires_override_confirmation) {
           showScannerToast(res.physical_fit_warning || "Opakowanie może być za małe — potwierdź override.");
           return res;
@@ -1032,7 +1069,62 @@ export function usePackingOrderController(
         setSelectCartonBusy(false);
       }
     },
-    [warehouseId, orderId, session, showScannerToast, packingExtendedUi.enableMultiParcel],
+    [
+      warehouseId,
+      orderId,
+      session,
+      showScannerToast,
+      packingExtendedUi.enableMultiParcel,
+      selectedPackagingIds,
+    ],
+  );
+
+  const dismissManagerParcelApproval = useCallback(() => {
+    if (managerParcelApprovalBusy) return;
+    setManagerParcelApprovalOpen(false);
+    setManagerParcelApprovalError(null);
+    pendingManagerCartonIdRef.current = null;
+  }, [managerParcelApprovalBusy]);
+
+  const submitManagerParcelApprovalScan = useCallback(
+    async (barcode: string) => {
+      const code = barcode.trim();
+      if (!code || warehouseId == null || !Number.isFinite(orderId) || orderId < 1) return;
+      const s = session;
+      if (!s?.mode) return;
+      setManagerParcelApprovalBusy(true);
+      setManagerParcelApprovalError(null);
+      try {
+        await postWmsPackingApproveExtraParcels(
+          DAMAGE_TENANT_ID,
+          warehouseId,
+          s.statusId,
+          s.mode,
+          orderId,
+          code,
+          s.mode === "bulk" || s.mode === "baskets" ? s.cartId : undefined,
+        );
+        const pendingCid = pendingManagerCartonIdRef.current;
+        setManagerParcelApprovalOpen(false);
+        pendingManagerCartonIdRef.current = null;
+        if (pendingCid) {
+          await selectCarton(pendingCid);
+        }
+      } catch (e: unknown) {
+        const ax = e as { response?: { data?: { detail?: { message?: string; code?: string } | string } } };
+        const detail = ax.response?.data?.detail;
+        const msg =
+          typeof detail === "object" && detail && "message" in detail
+            ? String(detail.message || "")
+            : typeof detail === "string"
+              ? detail
+              : "Nie udało się potwierdzić zgody kierownika.";
+        setManagerParcelApprovalError(msg || "Nie udało się potwierdzić zgody kierownika.");
+      } finally {
+        setManagerParcelApprovalBusy(false);
+      }
+    },
+    [warehouseId, orderId, session, selectCarton],
   );
 
   const proceedToFinalization = useCallback(() => {
@@ -1112,6 +1204,11 @@ export function usePackingOrderController(
     awaitingPostPackCarton,
     awaitingFinalizationRun,
     selectedPackagingIds,
+    managerParcelApprovalOpen,
+    managerParcelApprovalBusy,
+    managerParcelApprovalError,
+    dismissManagerParcelApproval,
+    submitManagerParcelApprovalScan,
     proceedToFinalization,
     dismissFinalizationView,
     continueWithoutCartonToFinalization,

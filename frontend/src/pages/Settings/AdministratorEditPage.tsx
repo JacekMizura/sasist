@@ -163,6 +163,7 @@ export default function AdministratorEditPage() {
   const [primaryWorkforceGroupId, setPrimaryWorkforceGroupId] = useState<number | "">("");
   const [workforceGroups, setWorkforceGroups] = useState<WorkforceUserGroupDto[]>([]);
   const [wmsOperationalModes, setWmsOperationalModes] = useState<string[]>([]);
+  const [packingPermissions, setPackingPermissions] = useState<string[]>([]);
   const [supervisorUserId, setSupervisorUserId] = useState<number | "">("");
   const [allUsers, setAllUsers] = useState<AppUserListItem[]>([]);
   const [employmentType, setEmploymentType] = useState("");
@@ -200,7 +201,7 @@ export default function AdministratorEditPage() {
       role, isActive, language, permissions,
       barcodeLoginCode, loginCodeTemplateId, wmsLanguage, timezone, requireScan, canEditPreview,
       pickerColor, warehouseIds, workstationIds, defaultWarehouseId,
-      primaryWorkforceGroupId, wmsOperationalModes, supervisorUserId,
+      primaryWorkforceGroupId, wmsOperationalModes, packingPermissions, supervisorUserId,
       employmentType, shiftType, jobPosition,
       warehouseZonesText, workforceColorTag,
       costNet, costGross, costEmployerTotal, costHoursMonth, costPpk, costNotes, costEmployerRateOverride,
@@ -208,7 +209,7 @@ export default function AdministratorEditPage() {
   }, [
     login, email, password, firstName, lastName, phone, avatarUrl, role, isActive, language, permissions,
     barcodeLoginCode, loginCodeTemplateId, wmsLanguage, timezone, requireScan, canEditPreview, pickerColor, warehouseIds, workstationIds, defaultWarehouseId,
-    primaryWorkforceGroupId, wmsOperationalModes, supervisorUserId, employmentType, shiftType, jobPosition,
+    primaryWorkforceGroupId, wmsOperationalModes, packingPermissions, supervisorUserId, employmentType, shiftType, jobPosition,
     warehouseZonesText, workforceColorTag, costNet, costGross, costEmployerTotal, costHoursMonth, costPpk, costNotes,
     costEmployerRateOverride,
   ]);
@@ -268,6 +269,7 @@ export default function AdministratorEditPage() {
         wp.wms_operational_modes ?? [],
       );
       setWmsOperationalModes(floorModes);
+      setPackingPermissions([...(wp.packing_permissions ?? [])].map(String).filter(Boolean));
       setPermissions(
         isSuperRole(u.role) ? [] : [...new Set([...explicit, ...fromLegacyModes])],
       );
@@ -280,6 +282,7 @@ export default function AdministratorEditPage() {
       setWorkforceColorTag(wp.workforce_color_tag ?? "");
     } else {
       setPermissions(explicit);
+      setPackingPermissions([]);
     }
     setPrimaryWorkforceGroupId(u.primary_workforce_group_id ?? "");
   }, []);
@@ -317,6 +320,7 @@ export default function AdministratorEditPage() {
       can_edit_products_preview: canEditPreview,
       picker_color: pickerColor.trim() || null,
       wms_operational_modes: wmsOperationalModes,
+      packing_permissions: packingPermissions,
       workforce_supervisor_user_id: supervisorUserId === "" ? null : Number(supervisorUserId),
       workforce_employment_type: employmentType.trim() || null,
       workforce_shift_type: shiftType.trim() || null,
@@ -336,6 +340,7 @@ export default function AdministratorEditPage() {
     canEditPreview,
     pickerColor,
     wmsOperationalModes,
+    packingPermissions,
     supervisorUserId,
     employmentType,
     shiftType,
@@ -1002,6 +1007,33 @@ export default function AdministratorEditPage() {
                               );
                             })}
                           </div>
+                        </div>
+
+                        <div className="space-y-3">
+                          <h3 className="text-sm font-black uppercase tracking-wider text-slate-500">
+                            Uprawnienia pakowania
+                          </h3>
+                          <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+                            <input
+                              type="checkbox"
+                              className="h-5 w-5 accent-orange-500"
+                              checked={packingPermissions.includes("kierownik")}
+                              onChange={(e) => {
+                                const on = e.target.checked;
+                                setPackingPermissions((prev) => {
+                                  const rest = prev.filter((x) => x !== "kierownik");
+                                  return on ? [...rest, "kierownik"] : rest;
+                                });
+                              }}
+                            />
+                            <span className="min-w-0">
+                              <span className="block text-sm font-bold text-slate-800">Kierownik</span>
+                              <span className="block text-xs text-slate-500">
+                                Może zatwierdzać przekroczenie limitu paczek (skan kodu logowania) oraz sam przekraczać
+                                limit bez zgody.
+                              </span>
+                            </span>
+                          </label>
                         </div>
 
                         <div className="grid gap-6 lg:grid-cols-2">

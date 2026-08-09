@@ -417,6 +417,13 @@ class OrderSelectCartonBody(BaseModel):
         default=False,
         description="Operator potwierdził użycie mimo physical NO FIT",
     )
+    #: Docelowa liczba paczek po tym wyborze (wielopaczkowość) — do limitu / zgody kierownika.
+    intended_packaging_count: Optional[int] = Field(
+        default=None,
+        ge=1,
+        le=99,
+        description="Liczba paczek po dodaniu tego kartonu (multi-parcel gate)",
+    )
 
 
 class OrderSelectCartonResponse(BaseModel):
@@ -428,6 +435,18 @@ class OrderSelectCartonResponse(BaseModel):
     physical_fit_warning: Optional[str] = None
     override_reason_code: Optional[str] = None
     requires_override_confirmation: bool = False
+    requires_manager_approval: bool = False
+    manager_approval_message: Optional[str] = None
+
+
+class WmsPackingManagerParcelApproveBody(BaseModel):
+    barcode: str = Field(..., min_length=1, max_length=128, description="Kod logowania kierownika (barcode_login_code)")
+
+
+class WmsPackingManagerParcelApproveOut(BaseModel):
+    ok: bool = True
+    approved_by_user_id: int
+    message: str = "Zgoda kierownika zapisana."
 
 
 class WmsPackingFinishBody(BaseModel):

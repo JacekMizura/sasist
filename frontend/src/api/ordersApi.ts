@@ -181,13 +181,19 @@ export type OrderSelectCartonResponseApi = {
   physical_fit_warning?: string | null;
   override_reason_code?: string | null;
   requires_override_confirmation?: boolean;
+  requires_manager_approval?: boolean;
+  manager_approval_message?: string | null;
 };
 
 /** PATCH /orders/{id}/select-carton — wybór kartonu na pakowaniu WMS (wymaga packing scope). */
 export async function patchOrderSelectCarton(
   orderId: number,
   tenantId: number,
-  body: { carton_id: string; confirm_override?: boolean },
+  body: {
+    carton_id: string;
+    confirm_override?: boolean;
+    intended_packaging_count?: number;
+  },
   scope: {
     warehouseId: number;
     statusId: number;

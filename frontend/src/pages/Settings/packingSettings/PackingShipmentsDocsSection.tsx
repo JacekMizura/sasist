@@ -3,7 +3,6 @@ import type { DocumentSeriesDto } from "../../../api/documentSeriesApi";
 import type { ShippingMethodDto } from "../../../api/shippingMethodsApi";
 import type { WmsPackingExtendedUiSettings } from "../../../types/wmsPackingExtendedUi";
 import type { WmsPackingSettingsRead } from "../../../types/wmsPackingSettings";
-import { PackingCapabilityBadge } from "../packingSettingCapability";
 import { WmsControlSettingRow, WmsSettingControlSlot } from "../wmsSettingRow";
 import {
   BoolRow,
@@ -269,16 +268,17 @@ export function PackingShipmentsDocsSection({
           <WmsControlSettingRow
             settingId="packing.parcel_limit_without_manager"
             label="Limit paczek bez potwierdzenia kierownika (umowa własna)"
-            footer={
-              <span className="mt-1 block">
-                <PackingCapabilityBadge kind={CAP_NONE} />
-              </span>
+            hint={
+              extended.enableMultiParcel
+                ? "Ile paczek pracownik może dodać bez skanu kierownika. Działa tylko przy włączonej wielopaczkowości."
+                : "Włącz najpierw wielopaczkowość — wtedy limit będzie egzekwowany przy dodawaniu kolejnych paczek."
             }
           >
             <input
               type="number"
               min={0}
               max={99}
+              disabled={!extended.enableMultiParcel}
               className={numberInputClass}
               value={extended.parcelLimitWithoutManagerConfirm}
               onChange={(e) => {

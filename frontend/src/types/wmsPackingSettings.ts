@@ -30,11 +30,21 @@ export type WmsPackingInterfaceDisplay = {
   show_catalog_number: boolean;
 };
 
+export type WmsPackingMultiParcelSettings = {
+  enable_multi_parcel: boolean;
+  parcel_limit_without_manager_confirm: number;
+};
+
 export const DEFAULT_WMS_PACKING_INTERFACE_DISPLAY: WmsPackingInterfaceDisplay = {
   show_stock: true,
   show_ean: true,
   show_symbol: true,
   show_catalog_number: true,
+};
+
+export const DEFAULT_WMS_PACKING_MULTI_PARCEL: WmsPackingMultiParcelSettings = {
+  enable_multi_parcel: false,
+  parcel_limit_without_manager_confirm: 5,
 };
 
 export const DEFAULT_WMS_PACKING_AUTO_ACTIONS: WmsPackingAutoActions = {
@@ -76,6 +86,7 @@ export function createDefaultWmsPackingSettingsRead(tenantId: number, warehouseI
     },
     fallback_label: { template_id: null, delay_seconds: 0 },
     interface_display: { ...DEFAULT_WMS_PACKING_INTERFACE_DISPLAY },
+    multi_parcel: { ...DEFAULT_WMS_PACKING_MULTI_PARCEL },
   };
 }
 
@@ -129,6 +140,18 @@ export function normalizeWmsPackingSettingsRead(
       ...d.interface_display,
       ...(raw.interface_display ?? {}),
     },
+    multi_parcel: (() => {
+      const mp = raw.multi_parcel ?? d.multi_parcel;
+      const limRaw = mp?.parcel_limit_without_manager_confirm;
+      const lim =
+        typeof limRaw === "number" && Number.isFinite(limRaw)
+          ? Math.min(99, Math.max(0, Math.floor(limRaw)))
+          : d.multi_parcel.parcel_limit_without_manager_confirm;
+      return {
+        enable_multi_parcel: Boolean(mp?.enable_multi_parcel),
+        parcel_limit_without_manager_confirm: lim,
+      };
+    })(),
   };
 }
 
@@ -185,13 +208,18 @@ export type WmsPackingSettingsRead = {
   document_settings: WmsPackingDocumentSettings;
   fallback_label: WmsPackingFallbackLabel;
   interface_display: WmsPackingInterfaceDisplay;
+  multi_parcel: WmsPackingMultiParcelSettings;
 };
 
-export type WmsPackingSettingsSave = Omit<WmsPackingSettingsRead, "tenant_id" | "warehouse_id" | "interface_display"> & {
+export type WmsPackingSettingsSave = Omit<
+  WmsPackingSettingsRead,
+  "tenant_id" | "warehouse_id" | "interface_display" | "multi_parcel"
+> & {
   tenant_id: number;
   warehouse_id?: number | null;
   /** Pominięte w PATCH → backend zostawia poprzedni JSON. */
   interface_display?: WmsPackingInterfaceDisplay;
+  multi_parcel?: WmsPackingMultiParcelSettings;
 };
 
 export type OrderStatusOption = {

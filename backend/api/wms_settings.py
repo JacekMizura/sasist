@@ -29,6 +29,7 @@ from ..schemas.wms_packing_settings import (
     WmsPackingDocumentSettings,
     WmsPackingFallbackLabel,
     WmsPackingInterfaceDisplay,
+    WmsPackingMultiParcelSettings,
     WmsPackingSettingsRead,
     WmsPackingSettingsSave,
 )
@@ -211,6 +212,7 @@ def _get_or_create_packing_settings(db: Session, tenant_id: int, warehouse_id: i
         document_settings_json="{}",
         fallback_label_json="{}",
         interface_display_json="{}",
+        multi_parcel_json="{}",
     )
     db.add(row)
     db.flush()
@@ -332,6 +334,10 @@ def _packing_row_to_read(row: WmsPackingSettings) -> WmsPackingSettingsRead:
     ui = WmsPackingInterfaceDisplay.model_validate(
         {**WmsPackingInterfaceDisplay().model_dump(), **_loads(raw_idisp if isinstance(raw_idisp, str) else "{}", {})}
     )
+    raw_mp = getattr(row, "multi_parcel_json", None)
+    mp = WmsPackingMultiParcelSettings.model_validate(
+        {**WmsPackingMultiParcelSettings().model_dump(), **_loads(raw_mp if isinstance(raw_mp, str) else "{}", {})}
+    )
     action = _normalize_packing_after_finish_action_read(getattr(row, "packing_after_finish_action", None))
     allowed_ids = _parse_allowed_start_status_ids(getattr(row, "allowed_start_status_ids_json", None))
     return WmsPackingSettingsRead(
@@ -346,6 +352,7 @@ def _packing_row_to_read(row: WmsPackingSettings) -> WmsPackingSettingsRead:
         document_settings=ds,
         fallback_label=fb,
         interface_display=ui,
+        multi_parcel=mp,
     )
 
 
@@ -445,6 +452,8 @@ def _save_wms_packing_settings_impl(body: WmsPackingSettingsSave, db: Session) -
     row.fallback_label_json = json.dumps(body.fallback_label.model_dump(), ensure_ascii=False)
     if body.interface_display is not None:
         row.interface_display_json = json.dumps(body.interface_display.model_dump(), ensure_ascii=False)
+    if body.multi_parcel is not None:
+        row.multi_parcel_json = json.dumps(body.multi_parcel.model_dump(), ensure_ascii=False)
     row.updated_at = datetime.utcnow()
     db.commit()
     db.refresh(row)

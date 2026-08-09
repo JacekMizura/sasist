@@ -2291,6 +2291,7 @@ def ensure_wms_packing_settings_table(engine: Engine) -> None:
                         document_settings_json TEXT NOT NULL DEFAULT '{}',
                         fallback_label_json TEXT NOT NULL DEFAULT '{}',
                         interface_display_json TEXT NOT NULL DEFAULT '{}',
+                        multi_parcel_json TEXT NOT NULL DEFAULT '{}',
                         packing_after_finish_action VARCHAR(24) NOT NULL DEFAULT 'STAY',
                         created_at DATETIME,
                         updated_at DATETIME,
@@ -2318,6 +2319,10 @@ def ensure_wms_packing_settings_table(engine: Engine) -> None:
                 conn.execute(
                     text("ALTER TABLE wms_packing_settings ADD COLUMN interface_display_json TEXT NOT NULL DEFAULT '{}'")
                 )
+            if "multi_parcel_json" not in cols:
+                conn.execute(
+                    text("ALTER TABLE wms_packing_settings ADD COLUMN multi_parcel_json TEXT NOT NULL DEFAULT '{}'")
+                )
             if "allowed_start_status_ids_json" not in cols:
                 conn.execute(
                     text(
@@ -2325,6 +2330,25 @@ def ensure_wms_packing_settings_table(engine: Engine) -> None:
                     )
                 )
         conn.commit()
+
+
+def ensure_orders_packing_multi_parcel_manager_approval_columns(engine: Engine) -> None:
+    """Jednorazowa zgoda kierownika na przekroczenie limitu paczek — per zamówienie."""
+    cols = _cols(engine, "orders")
+    if not cols:
+        return
+    with engine.begin() as conn:
+        if "packing_multi_parcel_manager_approved_at" not in cols:
+            conn.execute(
+                text(_timestamp_column_ddl(engine, "orders", "packing_multi_parcel_manager_approved_at"))
+            )
+        if "packing_multi_parcel_manager_approved_by_user_id" not in cols:
+            conn.execute(
+                text(
+                    "ALTER TABLE orders ADD COLUMN packing_multi_parcel_manager_approved_by_user_id INTEGER "
+                    "REFERENCES app_users(id) ON DELETE SET NULL"
+                )
+            )
 
 
 def ensure_manufacturers_table_and_product_manufacturer_id(engine: Engine) -> None:

@@ -219,6 +219,7 @@ from .db.schema_upgrade import (
     ensure_orders_discount_columns,
     ensure_orders_wms_timeline_columns,
     ensure_orders_wms_packing_automation_finished_at_column,
+    ensure_orders_packing_multi_parcel_manager_approval_columns,
     ensure_wms_packing_sessions_automation_finished_at_column,
     ensure_order_items_wms_picking_line_missing_qty,
     ensure_order_items_wms_picking_line_status,
@@ -785,6 +786,7 @@ _POSTGRES_SAFE_SCHEMA_FUNCS = frozenset({
     "ensure_wms_packing_sessions_automation_finished_at_column",
     "ensure_orders_wms_timeline_columns",
     "ensure_orders_wms_packing_automation_finished_at_column",
+    "ensure_orders_packing_multi_parcel_manager_approval_columns",
     "ensure_orders_picking_handoff_mode_column",
     "ensure_picks_cart_id_column",
     "ensure_pick_lot_columns",
@@ -1983,6 +1985,7 @@ try:
     ensure_orders_discount_columns(engine)
     ensure_orders_wms_timeline_columns(engine)
     ensure_orders_wms_packing_automation_finished_at_column(engine)
+    ensure_orders_packing_multi_parcel_manager_approval_columns(engine)
     ensure_wms_packing_sessions_automation_finished_at_column(engine)
     ensure_order_items_wms_picking_line_missing_qty(engine)
     ensure_order_items_wms_picking_line_status(engine)

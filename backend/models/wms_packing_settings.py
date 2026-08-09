@@ -28,6 +28,8 @@ class WmsPackingSettings(Base):
     fallback_label_json = Column(Text, nullable=False, default="{}")
     #: UI ekranu pakowania (checkboxy: stan, EAN, symbol, nr kat.) — JSON obiekt.
     interface_display_json = Column(Text, nullable=False, default="{}")
+    #: Wielopaczkowość: ``{enable_multi_parcel, parcel_limit_without_manager_confirm}``.
+    multi_parcel_json = Column(Text, nullable=False, default="{}")
 
     #: Po akcjach automatycznych: ``STAY`` | ``GO_TO_LIST`` | ``NEXT_ORDER``.
     packing_after_finish_action = Column(String(24), nullable=False, default="STAY")
