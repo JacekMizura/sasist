@@ -116,15 +116,16 @@ export function OrdersListView({
     if (showPackedOrders) setRevealPackedOrders(false);
   }, [showPackedOrders]);
 
+  /** Liczniki i „Zamówień” z tej samej listy źródłowej (odpowiedź API), nie z widoku po ukryciu spakowanych. */
   const stats = useMemo(() => computeOrdersListStats(orders), [orders]);
+  const sourceOrderCount =
+    stats.spakowane + stats.doSpakowania + stats.wTrakcie + stats.braki;
   const hidePacked = !showPackedOrders && !revealPackedOrders;
   const displayedOrders = useMemo(
     () => (hidePacked ? orders.filter((o) => !isPackingOrderCardPacked(o)) : orders),
     [hidePacked, orders],
   );
   const showRevealPackedBtn = !showPackedOrders && stats.spakowane > 0;
-
-  const n = displayedOrders.length;
   const isStandard = ordersListLayout === "compact";
   const isHorizontal = ordersListLayout === "cards";
   const isVertical = ordersListLayout === "expanded_vertical";
@@ -151,14 +152,14 @@ export function OrdersListView({
             <IconBack />
           </button>
           <h1 className="shrink-0 whitespace-nowrap text-base font-bold leading-none tracking-tight text-slate-900 sm:text-lg">
-            Zamówień: {loading ? "…" : n}
+            Zamówień: {loading ? "…" : sourceOrderCount}
           </h1>
           {!loading ? (
             <StatusBadges
               spakowane={stats.spakowane}
               doSpakowania={stats.doSpakowania}
               wTrakcie={stats.wTrakcie}
-              braki={isHorizontal || isVertical ? stats.braki : 0}
+              braki={stats.braki}
             />
           ) : null}
           {showRevealPackedBtn ? (

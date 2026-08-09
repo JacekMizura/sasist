@@ -1,5 +1,9 @@
 ﻿## Active
 
+**Packing list vs source status (2026-08-09):**
+- Queue SSOT: only selected packing `status_id` (no name heuristic); eligibility requires `order_ui_status_id`
+- FE counters exclusive from same API list; green translucent overlay on fully packed product cards
+
 **Packing finish #1249 (2026-08-09):**
 - Partial pick without shortage → recovery_work blocks finish (validation kept)
 - SSOT: no fake physical-complete while recovery open; pick-capped required_pack_qty; clear PL message

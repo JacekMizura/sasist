@@ -333,22 +333,15 @@ def _packing_queue_status_ids(
     warehouse_id: int,
     primary_status_id: int,
 ) -> List[int]:
-    """Kolejka „gotowe” (``primary_status_id``) + statusy IN_PROGRESS z nazwą sugerującą pakowanie."""
-    ids: set[int] = {int(primary_status_id)}
-    rows = (
-        db.query(OrderUiStatus)
-        .filter(
-            OrderUiStatus.tenant_id == int(tenant_id),
-            OrderUiStatus.warehouse_id == int(warehouse_id),
-            OrderUiStatus.main_group == "IN_PROGRESS",
-        )
-        .all()
-    )
-    for st in rows:
-        n = (st.name or "").strip().lower()
-        if "pak" in n or "pack" in n:
-            ids.add(int(st.id))
-    return list(ids)
+    """
+    Statusy UI kolejki pakowania dla żądanego ``primary_status_id``.
+
+    Tylko jawnie wybrany status sesji — bez heurystyki po nazwie („pak”/„pack”),
+    która wciągała zamówienia spoza konfiguracji procesu.
+    """
+    _ = (db, tenant_id, warehouse_id)
+    sid = int(primary_status_id)
+    return [sid] if sid > 0 else []
 
 
 def _active_packing_eligibility_clauses(
@@ -363,7 +356,8 @@ def _active_packing_eligibility_clauses(
 
     - deleted_at IS NULL
     - nie WMS-finalized (``wms_packing_automation_finished_at``)
-    - packing-ready state (fulfillment READY_TO_PACK/PACKING lub legacy NULL+UI status)
+    - ``order_ui_status_id`` ∈ skonfigurowanych / wybranych statusów kolejki
+    - packing-ready state (fulfillment READY_TO_PACK/PACKING lub legacy NULL)
     - eligibility consolidation / fulfillment_mode
     """
     from .wms_queue_eligibility import (
@@ -373,12 +367,18 @@ def _active_packing_eligibility_clauses(
         wms_queue_consolidation_packing_clauses,
     )
 
+    sids = [int(x) for x in status_ids if int(x) > 0]
+    if not sids:
+        # Brak statusu kolejki → pusta lista (nie „wszystkie PACKING”).
+        return [Order.id == -1]
+
     return [
         Order.deleted_at.is_(None),
         Order.wms_packing_automation_finished_at.is_(None),
+        Order.order_ui_status_id.in_(sids),
         or_(
             Order.fulfillment_state.in_(("READY_TO_PACK", "PACKING")),
-            and_(Order.fulfillment_state.is_(None), Order.order_ui_status_id.in_(list(status_ids))),
+            Order.fulfillment_state.is_(None),
         ),
         *wms_queue_fulfillment_mode_clauses(
             db=db,
@@ -3474,11 +3474,14 @@ def list_packing_target_statuses(
     target_ids = [int(x.target_status_id) for x in out]
     counts_map: dict[int, int] = {}
     if target_ids:
+        # Ten sam zakres co kolejka pakowania: UI status + packing-ready, bez finalized.
         cnt_rows = (
             db.query(Order.order_ui_status_id, func.count(Order.id))
             .filter(
                 Order.tenant_id == int(tenant_id),
                 Order.warehouse_id == int(warehouse_id),
+                Order.deleted_at.is_(None),
+                Order.wms_packing_automation_finished_at.is_(None),
                 Order.order_ui_status_id.in_(target_ids),
                 or_(
                     Order.fulfillment_state.in_(("READY_TO_PACK", "PACKING")),

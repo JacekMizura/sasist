@@ -22,9 +22,8 @@ function ProductInlineItemInner({ line, onProductClick }: ProductInlineItemProps
       role={onProductClick ? "button" : undefined}
       tabIndex={onProductClick ? 0 : undefined}
       className={[
-        "relative flex min-w-[12.5rem] max-w-[20rem] shrink-0 items-start gap-3 text-left sm:min-w-[14rem]",
-        packed ? "opacity-[0.72]" : "",
-        onProductClick ? "cursor-pointer rounded-md outline-none hover:bg-slate-50 focus-visible:ring-2 focus-visible:ring-slate-400" : "",
+        "relative flex min-w-[12.5rem] max-w-[20rem] shrink-0 items-start gap-3 overflow-hidden rounded-md text-left sm:min-w-[14rem]",
+        onProductClick ? "cursor-pointer outline-none hover:bg-slate-50 focus-visible:ring-2 focus-visible:ring-slate-400" : "",
       ].join(" ")}
       onClick={(e) => {
         if (!onProductClick) return;
@@ -40,37 +39,45 @@ function ProductInlineItemInner({ line, onProductClick }: ProductInlineItemProps
         }
       }}
     >
-      <div className="relative shrink-0" style={{ width: IMG, height: IMG }}>
-        {packed ? (
-          <span
-            className="absolute -top-1 left-1/2 z-[1] flex h-7 w-7 -translate-x-1/2 items-center justify-center rounded-full bg-[#4CAF50] text-sm font-bold text-white shadow-md ring-2 ring-white"
-            aria-hidden
-          >
-            ✓
-          </span>
-        ) : null}
+      {packed ? (
         <div
-          className="flex h-full w-full items-center justify-center overflow-hidden"
-          style={{ width: IMG, height: IMG }}
-        >
-          {line.image_url ? (
-            <img src={line.image_url} alt="" className="max-h-full max-w-full object-contain" loading="lazy" />
-          ) : (
-            <span className="text-sm text-slate-300">—</span>
-          )}
+          className="pointer-events-none absolute inset-0 z-[1] rounded-[inherit] bg-emerald-400/[0.18]"
+          aria-hidden
+        />
+      ) : null}
+      <div className="relative z-[2] flex min-w-0 flex-1 items-start gap-3">
+        <div className="relative shrink-0" style={{ width: IMG, height: IMG }}>
+          {packed ? (
+            <span
+              className="absolute -top-1 left-1/2 z-[1] flex h-7 w-7 -translate-x-1/2 items-center justify-center rounded-full bg-[#4CAF50] text-sm font-bold text-white shadow-md ring-2 ring-white"
+              aria-hidden
+            >
+              ✓
+            </span>
+          ) : null}
+          <div
+            className="flex h-full w-full items-center justify-center overflow-hidden"
+            style={{ width: IMG, height: IMG }}
+          >
+            {line.image_url ? (
+              <img src={line.image_url} alt="" className="max-h-full max-w-full object-contain" loading="lazy" />
+            ) : (
+              <span className="text-sm text-slate-300">—</span>
+            )}
+          </div>
         </div>
-      </div>
-      <div className="flex min-w-0 flex-1 flex-col gap-1 leading-snug">
-        {packed ? (
-          <span className="inline-flex w-fit max-w-full items-center rounded-md border-2 border-emerald-400 bg-emerald-100 px-3 py-1.5 text-sm font-bold leading-tight text-emerald-900 shadow-sm">
-            Spakowane {line.quantity_packed}/{qtyReq}
-          </span>
-        ) : null}
-        <p className="text-[15px] font-bold leading-snug text-[#1a1a1a] line-clamp-3 sm:text-base">{title}</p>
-        <p className="mt-1 text-[13px] leading-snug text-[#555]">EAN: {ean}</p>
-        {colorRaw ? (
-          <p className="mt-0.5 text-[13px] leading-snug text-[#555]">Kolor: {colorRaw}</p>
-        ) : null}
+        <div className="flex min-w-0 flex-1 flex-col gap-1 leading-snug">
+          {packed ? (
+            <span className="inline-flex w-fit max-w-full items-center rounded-md border-2 border-emerald-400 bg-emerald-100 px-3 py-1.5 text-sm font-bold leading-tight text-emerald-900 shadow-sm">
+              Spakowane {line.quantity_packed}/{qtyReq}
+            </span>
+          ) : null}
+          <p className="text-[15px] font-bold leading-snug text-[#1a1a1a] line-clamp-3 sm:text-base">{title}</p>
+          <p className="mt-1 text-[13px] leading-snug text-[#555]">EAN: {ean}</p>
+          {colorRaw ? (
+            <p className="mt-0.5 text-[13px] leading-snug text-[#555]">Kolor: {colorRaw}</p>
+          ) : null}
+        </div>
       </div>
     </div>
   );

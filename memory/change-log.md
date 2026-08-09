@@ -1,3 +1,9 @@
+## 2026-08-09 — Pakowanie: lista tylko ze skonfigurowanego statusu źródłowego
+
+- **Przyczyna:** `_packing_queue_status_ids` dokładło wszystkie IN_PROGRESS z „pak”/„pack” w nazwie; eligibility dopuszczało `READY_TO_PACK`/`PACKING` bez filtra `order_ui_status_id`
+- **Fix:** kolejka = wyłącznie wybrany `status_id`; zawsze `order_ui_status_id IN (status_ids)`; liczniki FE rozłączne z tej samej listy; overlay zielony na w pełni spakowanych kartach produktu
+- Test: `test_packing_queue_single_source_status.py` + `ordersListStats.test.ts`
+
 ## 2026-08-09 — Packing finish #1249: otwarte zbieranie vs fake complete
 
 - **Przyczyna 400:** 2× Cat x3 niezebrane → `has_recovery_work`; komunikat myląco o „dogrywce”; UI/`PACKING_FINISHED` mogły udawać komplet po samych pickach

@@ -189,9 +189,8 @@ function ProductCell({
       role={onProductClick ? "button" : undefined}
       tabIndex={onProductClick ? 0 : undefined}
       className={[
-        "relative flex min-w-[13rem] max-w-[18rem] shrink-0 items-start gap-3 py-1 pr-4",
+        "relative flex min-w-[13rem] max-w-[18rem] shrink-0 items-start gap-3 overflow-hidden rounded-md py-1 pr-4",
         withSeparator ? "border-r border-slate-200" : "",
-        packed ? "opacity-[0.55]" : "",
         onProductClick ? "cursor-pointer outline-none hover:bg-slate-50/70" : "",
       ].join(" ")}
       onClick={(e) => {
@@ -208,25 +207,33 @@ function ProductCell({
         }
       }}
     >
-      <OrdersListProductThumb line={line} size={THUMB} show={productFields.showImage} />
-      <div className="min-w-0 flex-1">
-        {packed ? (
-          <div className="mb-1 flex items-center gap-1.5">
-            <IconPackedCheck />
-            <span className="truncate text-xs font-semibold text-[#4CAF50]">
-              Spakowane {line.quantity_packed}/{qtyReq}
-            </span>
-            <button type="button" className="ml-auto shrink-0" aria-label="Zamknij" onClick={stopX}>
-              <IconPackedClose />
-            </button>
-          </div>
-        ) : null}
-        <p className="text-[13px] leading-snug text-slate-900 sm:text-sm">
-          <span className="font-extrabold tabular-nums">{line.quantity}x</span>{" "}
-          <span className="font-medium">{name}</span>
-        </p>
-        <OrdersListProductMeta line={line} fields={productFields} />
-        {colorRaw ? <p className="text-[11px] leading-snug text-slate-500">Kolor: {colorRaw}</p> : null}
+      {packed ? (
+        <div
+          className="pointer-events-none absolute inset-0 z-[1] rounded-[inherit] bg-emerald-400/[0.18]"
+          aria-hidden
+        />
+      ) : null}
+      <div className="relative z-[2] flex min-w-0 flex-1 items-start gap-3">
+        <OrdersListProductThumb line={line} size={THUMB} show={productFields.showImage} />
+        <div className="min-w-0 flex-1">
+          {packed ? (
+            <div className="mb-1 flex items-center gap-1.5">
+              <IconPackedCheck />
+              <span className="truncate text-xs font-semibold text-[#4CAF50]">
+                Spakowane {line.quantity_packed}/{qtyReq}
+              </span>
+              <button type="button" className="relative z-[3] ml-auto shrink-0" aria-label="Zamknij" onClick={stopX}>
+                <IconPackedClose />
+              </button>
+            </div>
+          ) : null}
+          <p className="text-[13px] leading-snug text-slate-900 sm:text-sm">
+            <span className="font-extrabold tabular-nums">{line.quantity}x</span>{" "}
+            <span className="font-medium">{name}</span>
+          </p>
+          <OrdersListProductMeta line={line} fields={productFields} />
+          {colorRaw ? <p className="text-[11px] leading-snug text-slate-500">Kolor: {colorRaw}</p> : null}
+        </div>
       </div>
     </div>
   );

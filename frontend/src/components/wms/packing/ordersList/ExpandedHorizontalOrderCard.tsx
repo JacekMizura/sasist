@@ -205,9 +205,9 @@ function ProductLineRow({
       role={onProductClick ? "button" : undefined}
       tabIndex={onProductClick ? 0 : undefined}
       className={[
-        "flex items-start gap-2.5 border-b border-slate-100 py-2.5 last:border-b-0",
-        !mutedCard && packed ? "opacity-55" : "",
+        "relative flex items-start gap-2.5 overflow-hidden border-b border-slate-100 py-2.5 last:border-b-0",
         onProductClick ? "cursor-pointer outline-none hover:bg-slate-50/80" : "",
+        mutedCard ? "opacity-90" : "",
       ].join(" ")}
       onClick={(e) => {
         if (!onProductClick) return;
@@ -223,17 +223,24 @@ function ProductLineRow({
         }
       }}
     >
+      {packed ? (
+        <div
+          className="pointer-events-none absolute inset-0 z-[1] bg-emerald-400/[0.18]"
+          aria-hidden
+        />
+      ) : null}
+      <div className="relative z-[2] flex min-w-0 flex-1 items-start gap-2.5">
       <OrdersListProductThumb line={line} size={THUMB} show={productFields.showImage} />
       <div className="min-w-0 flex-1">
         {packed ? (
           <div className="mb-1 flex items-center justify-between gap-2">
             <div className="flex min-w-0 items-center gap-1.5">
               <IconPackedCheck />
-              <span className="truncate text-xs font-semibold text-slate-500">
+              <span className="truncate text-xs font-semibold text-[#4CAF50]">
                 Spakowane {line.quantity_packed}/{qtyReq}
               </span>
             </div>
-            <button type="button" className="shrink-0" aria-label="Zamknij" onClick={stopX}>
+            <button type="button" className="relative z-[3] shrink-0" aria-label="Zamknij" onClick={stopX}>
               <IconPackedClose />
             </button>
           </div>
@@ -249,6 +256,7 @@ function ProductLineRow({
             Brak {shortage}/{qtyReq}
           </span>
         ) : null}
+      </div>
       </div>
     </div>
   );

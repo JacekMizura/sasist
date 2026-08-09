@@ -8,12 +8,22 @@ export function isPackingOrderCardPacked(order: WmsPackingOrderCardApi): boolean
   return total > 0 && packed >= total;
 }
 
-/** Liczniki do badge'y nagłówka (rozłączne kategorie). */
+function orderHasShortage(order: WmsPackingOrderCardApi): boolean {
+  return order.lines.some(
+    (l) =>
+      (typeof l.missing_quantity === "number" && l.missing_quantity > 0) ||
+      (l.stock_quantity != null && l.stock_quantity < l.quantity),
+  );
+}
+
+/**
+ * Liczniki nagłówka — rozłączne kategorie z tej samej listy zamówień.
+ * spakowane + doSpakowania + wTrakcie + braki === liczba kart z total_quantity > 0.
+ */
 export function computeOrdersListStats(orders: WmsPackingOrderCardApi[]): {
   spakowane: number;
   doSpakowania: number;
   wTrakcie: number;
-  /** Zamówienia z brakiem na którejkolwiek linii (do czerwonego badge). */
   braki: number;
 } {
   let spakowane = 0;
@@ -21,21 +31,15 @@ export function computeOrdersListStats(orders: WmsPackingOrderCardApi[]): {
   let wTrakcie = 0;
   let braki = 0;
   for (const o of orders) {
-    const total = o.total_quantity;
-    const packed = o.packed_quantity;
-    const hasShortage = o.lines.some(
-      (l) =>
-        (typeof l.missing_quantity === "number" && l.missing_quantity > 0) ||
-        (l.stock_quantity != null && l.stock_quantity < l.quantity),
-    );
-    if (hasShortage) braki++;
+    const total = Number(o.total_quantity || 0);
+    const packed = Number(o.packed_quantity || 0);
     if (total <= 0) continue;
     if (packed >= total || o.is_completed === true) {
       spakowane++;
       continue;
     }
-    if (hasShortage) {
-      doSpakowania++;
+    if (orderHasShortage(o)) {
+      braki++;
       continue;
     }
     if (packed === 0) doSpakowania++;
