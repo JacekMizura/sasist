@@ -10,6 +10,12 @@ import { CartsTabActionsProvider, useCartsTabActionsSlot } from "./CartsTabActio
 /** Pełnoekranowy widok szczegółu nośnika — bez zakładek modułu. Strefa sortująca zachowuje tabs. */
 const FULL_PAGE_CONTENT = /^\/carts\/carriers\/[^/]+$/;
 
+/**
+ * Tylko edytor/podgląd strefy sortującej potrzebuje łańcucha fillHeight (h-full + overflow-hidden).
+ * Lista wózków / flota musi rosnąć z treścią i scrollować w `<main>` — inaczej rozwinięty wózek jest ucinany.
+ */
+const FILL_HEIGHT_ROUTES = /^\/carts\/racks\/(?:new|[^/]+\/(?:edit|preview))$/;
+
 /** Aktywna zakładka z pathname — breadcrumb odzwierciedla bieżący widok. */
 function resolveActiveCartsTab(pathname: string) {
   for (const tab of CARTS_TABS) {
@@ -30,19 +36,21 @@ function resolveActiveCartsTab(pathname: string) {
 function CartsModuleChrome() {
   const { pathname } = useLocation();
   const fullPageContent = useMemo(() => FULL_PAGE_CONTENT.test(pathname), [pathname]);
+  const fillHeight = useMemo(() => FILL_HEIGHT_ROUTES.test(pathname), [pathname]);
   const activeTab = useMemo(() => resolveActiveCartsTab(pathname), [pathname]);
   const tabActions = useCartsTabActionsSlot();
+  const fillCardClass = fillHeight ? "flex min-h-0 flex-1 flex-col" : undefined;
 
   if (fullPageContent) {
     return (
-      <PageLayout fullBleed fillHeight cardClassName="flex min-h-0 flex-1 flex-col">
+      <PageLayout fullBleed fillHeight={false}>
         <Outlet />
       </PageLayout>
     );
   }
 
   return (
-    <PageLayout fullBleed fillHeight cardClassName="flex min-h-0 flex-1 flex-col">
+    <PageLayout fullBleed fillHeight={fillHeight} cardClassName={fillCardClass}>
       <SettingsModuleStack
         breadcrumbs={[{ label: "Magazyn", to: "/carts/bulk" }, { label: activeTab.label }]}
         hideTitle

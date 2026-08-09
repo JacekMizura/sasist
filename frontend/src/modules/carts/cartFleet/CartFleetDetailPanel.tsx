@@ -323,10 +323,11 @@ export function CartFleetDetailPanel({
     <>
       <div
         className="grid w-full max-w-none transition-[grid-template-rows] duration-200 ease-out"
-        style={{ gridTemplateRows: open ? "1fr" : "0fr" }}
+        /* open: max-content — nie 1fr (1fr w ograniczonym rodzicu ucina treść zamiast rosnąć ze scrolliem strony) */
+        style={{ gridTemplateRows: open ? "minmax(0, max-content)" : "0fr" }}
         aria-hidden={!open}
       >
-        <div className="min-h-0 overflow-hidden">
+        <div className={open ? "min-h-0 overflow-visible" : "min-h-0 overflow-hidden"}>
           <div className="w-full max-w-none border-t border-slate-200 bg-slate-50/40">
             <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 bg-white px-4 py-3 sm:px-5">
               <div className="min-w-0">
