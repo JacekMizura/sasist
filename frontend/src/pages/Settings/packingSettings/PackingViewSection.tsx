@@ -1,3 +1,4 @@
+import { OrdersListLayoutPreview } from "../../../components/wms/packing/ordersList/OrdersListLayoutPreview";
 import type { WmsPackingExtendedUiSettings } from "../../../types/wmsPackingExtendedUi";
 import type { WmsPackingInterfaceDisplay, WmsPackingSettingsRead } from "../../../types/wmsPackingSettings";
 import {
@@ -201,6 +202,9 @@ export function PackingViewSection({ extended, draft, patchExtended, toggleInter
             <option value="cards">Rozbudowany (Poziomy)</option>
             <option value="expanded_vertical">Rozbudowany (Pionowy)</option>
           </SelectField>
+        </FieldGrid>
+        <OrdersListLayoutPreview layout={extended.ordersListLayout} />
+        <FieldGrid>
           <SelectField
             settingId="packing.initial_orders_count"
             label="Ilość zamówień wczytywanych na start i przy przewijaniu"
