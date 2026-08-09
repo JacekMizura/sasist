@@ -47,6 +47,7 @@ import { loadCachedPickingConfigRows, saveCachedPickingConfigRows } from "../../
 import { WmsSettingsSection } from "../../../pages/Settings/WmsSettingsSection";
 import { SettingsSubsection } from "../../../pages/Settings/SettingsSubsection";
 import { WmsSettingsTabFrame } from "../../../pages/Settings/WmsSettingsTabFrame";
+import { SettingInfoButton } from "../../../pages/Settings/SettingInfoButton";
 import {
   WmsBoolSettingRow,
   WmsControlSettingRow,
@@ -1232,53 +1233,100 @@ function PickingConfiguratorEditor({
         </p>
       ) : null}
 
-      <div className="rounded-xl border border-slate-200 bg-white p-3.5">
-        <WmsControlSettingRow
-          label={
-            <>
+      <div className="grid grid-cols-1 gap-5 min-[720px]:grid-cols-2">
+        <div className="min-w-0 rounded-xl border border-slate-200 bg-white p-3.5">
+          <div className="flex min-w-0 items-center gap-1.5">
+            <p className="text-sm font-semibold text-slate-900">
               Status do zbierania
               <span className="ml-1 text-red-600" aria-hidden>
                 *
               </span>
-            </>
-          }
-          hint="Wybierz status zamówienia, z którego startuje zbieranie. Każdy status może mieć jedną konfigurację."
-          footer={
-            <>
-              {statusToPickRequired ? (
-                <p className="mt-1.5 text-xs font-medium text-red-700" role="alert">
-                  To pole jest wymagane.
-                </p>
-              ) : null}
-              {statusToPickUnavailable ? (
-                <p className="mt-1.5 text-xs font-medium text-red-700" role="alert">
-                  Wybrany status do zbierania nie jest już dostępny dla tej konfiguracji. Wybierz inny status.
-                </p>
-              ) : null}
-              {statusPairConflict ? (
-                <p className="mt-1.5 text-xs font-medium text-red-700" role="alert">
-                  Status do zbierania nie może być taki sam jak status do pakowania.
-                </p>
-              ) : null}
-            </>
-          }
-        >
-          <OrderUiStatusField
-            panelSummary={sourcePanelSummary}
-            panelSubgroups={panelSubgroups}
-            statusNameById={statusNameById}
-            selectedStatusId={selectedSourceId}
-            onPick={(id) => {
-              onStatusToPickChange(id != null ? String(id) : "");
-              onStatusToPickBlur();
-            }}
-            allowClear
-            clearLabel="— wybierz —"
-            placeholder="Wybierz status zamówienia…"
-            disabled={selectDisabled || sourceAllowedIds.size === 0}
-            floatingZIndexClass="z-[5100]"
-          />
-        </WmsControlSettingRow>
+            </p>
+            <SettingInfoButton
+              title="Status do zbierania"
+              description="Wybierz status zamówienia, z którego startuje zbieranie. Każdy status może mieć jedną konfigurację."
+            />
+          </div>
+          <div className="mt-3">
+            <OrderUiStatusField
+              panelSummary={sourcePanelSummary}
+              panelSubgroups={panelSubgroups}
+              statusNameById={statusNameById}
+              selectedStatusId={selectedSourceId}
+              onPick={(id) => {
+                onStatusToPickChange(id != null ? String(id) : "");
+                onStatusToPickBlur();
+              }}
+              allowClear
+              clearLabel="— wybierz —"
+              placeholder="Wybierz status zamówienia…"
+              disabled={selectDisabled || sourceAllowedIds.size === 0}
+              floatingZIndexClass="z-[5100]"
+            />
+            {statusToPickRequired ? (
+              <p className="mt-1.5 text-xs font-medium text-red-700" role="alert">
+                To pole jest wymagane.
+              </p>
+            ) : null}
+            {statusToPickUnavailable ? (
+              <p className="mt-1.5 text-xs font-medium text-red-700" role="alert">
+                Wybrany status do zbierania nie jest już dostępny dla tej konfiguracji. Wybierz inny status.
+              </p>
+            ) : null}
+            {statusPairConflict ? (
+              <p className="mt-1.5 text-xs font-medium text-red-700" role="alert">
+                Status do zbierania nie może być taki sam jak status do pakowania.
+              </p>
+            ) : null}
+          </div>
+        </div>
+
+        <div className="min-w-0 rounded-xl border border-slate-200 bg-white p-3.5">
+          <div className="flex min-w-0 items-center gap-1.5">
+            <p className="text-sm font-semibold text-slate-900">
+              Status do pakowania
+              <span className="ml-1 text-red-600" aria-hidden>
+                *
+              </span>
+            </p>
+            <SettingInfoButton
+              title="Status do pakowania"
+              description="Status, na który zamówienie przechodzi po zakończeniu zbierania."
+            />
+          </div>
+          <div className="mt-3">
+            <OrderUiStatusField
+              panelSummary={targetPanelSummary}
+              panelSubgroups={panelSubgroups}
+              statusNameById={statusNameById}
+              selectedStatusId={selectedTargetId}
+              onPick={(id) => {
+                onStatusAfterPickChange(id != null ? String(id) : "");
+                onStatusAfterPickBlur();
+              }}
+              allowClear
+              clearLabel="— wybierz —"
+              placeholder="Wybierz status…"
+              disabled={selectDisabled || targetAllowedIds.size === 0}
+              floatingZIndexClass="z-[5100]"
+            />
+            {statusAfterPickRequired ? (
+              <p className="mt-1.5 text-xs font-medium text-red-700" role="alert">
+                Wybierz status do pakowania.
+              </p>
+            ) : null}
+            {statusAfterPickUnavailable ? (
+              <p className="mt-1.5 text-xs font-medium text-red-700" role="alert">
+                Wybrany status po zbieraniu nie jest już dostępny dla tej konfiguracji. Wybierz inny status.
+              </p>
+            ) : null}
+            {statusPairConflict ? (
+              <p className="mt-1.5 text-xs font-medium text-red-700" role="alert">
+                Wybierz inny status niż „do zbierania”, aby uniknąć pętli w procesie.
+              </p>
+            ) : null}
+          </div>
+        </div>
       </div>
 
       <div className="rounded-xl border border-slate-200 bg-white p-3.5">
@@ -1350,55 +1398,6 @@ function PickingConfiguratorEditor({
           </div>
         </div>
       ) : null}
-
-      <div className="rounded-xl border border-slate-200 bg-white p-3.5">
-        <WmsControlSettingRow
-          label={
-            <>
-              Wybierz status do pakowania zamówienia
-              <span className="ml-1 text-red-600" aria-hidden>
-                *
-              </span>
-            </>
-          }
-          hint="Status, na który zamówienie przechodzi po zakończeniu zbierania."
-          footer={
-            <>
-              {statusAfterPickRequired ? (
-                <p className="mt-1.5 text-xs font-medium text-red-700" role="alert">
-                  Wybierz status do pakowania.
-                </p>
-              ) : null}
-              {statusAfterPickUnavailable ? (
-                <p className="mt-1.5 text-xs font-medium text-red-700" role="alert">
-                  Wybrany status po zbieraniu nie jest już dostępny dla tej konfiguracji. Wybierz inny status.
-                </p>
-              ) : null}
-              {statusPairConflict ? (
-                <p className="mt-1.5 text-xs font-medium text-red-700" role="alert">
-                  Wybierz inny status niż „do zbierania”, aby uniknąć pętli w procesie.
-                </p>
-              ) : null}
-            </>
-          }
-        >
-          <OrderUiStatusField
-            panelSummary={targetPanelSummary}
-            panelSubgroups={panelSubgroups}
-            statusNameById={statusNameById}
-            selectedStatusId={selectedTargetId}
-            onPick={(id) => {
-              onStatusAfterPickChange(id != null ? String(id) : "");
-              onStatusAfterPickBlur();
-            }}
-            allowClear
-            clearLabel="— wybierz —"
-            placeholder="Wybierz status…"
-            disabled={selectDisabled || targetAllowedIds.size === 0}
-            floatingZIndexClass="z-[5100]"
-          />
-        </WmsControlSettingRow>
-      </div>
     </div>
   );
 }
