@@ -700,8 +700,11 @@ export function usePackingOrderController(
   }, [detail, activeProductId]);
 
   const sortedLines = useMemo(
-    () => (detail?.lines ? sortLinesForPacking(detail.lines, flashItemId) : []),
-    [detail?.lines, flashItemId],
+    () =>
+      detail?.lines
+        ? sortLinesForPacking(detail.lines, flashItemId, packingExtendedUi.movePackedToBottom)
+        : [],
+    [detail?.lines, flashItemId, packingExtendedUi.movePackedToBottom],
   );
 
   const tryResumeAutoAfterNotesRescan = useCallback((): boolean => {

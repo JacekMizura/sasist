@@ -27,20 +27,34 @@ import { PackingAutomationActivators } from "./PackingAutomationActivators";
 import type {
   PackingAutomationButtonsPosition,
   PackingCustomerCommentStyle,
+  PackingLayoutMode,
   PackingSalesDocPreview,
 } from "../../../types/wmsPackingExtendedUi";
 import { DAMAGE_TENANT_ID } from "../../../pages/damage/damageShared";
 import { PackingCustomerCommentBanner } from "./PackingCustomerCommentBanner";
+import { PackingOrderFullWidthInfo } from "./PackingOrderFullWidthInfo";
 import { PackingOrderSidebar } from "./PackingOrderSidebar";
 import {
   DEFAULT_PACKING_PRODUCT_FIELD_VISIBILITY,
   type PackingProductFieldVisibility,
 } from "./packingProductDisplay";
 
+const PRIMARY_GREEN = "#4caf50";
+
 function IconBack() {
   return (
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" aria-hidden>
       <path d="M15 18l-6-6 6-6" />
+    </svg>
+  );
+}
+
+function IconDots() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+      <circle cx="12" cy="5" r="2" />
+      <circle cx="12" cy="12" r="2" />
+      <circle cx="12" cy="19" r="2" />
     </svg>
   );
 }
@@ -92,6 +106,8 @@ type PackingViewProps = {
   onAutomationStatusChanged?: () => void;
   customerCommentStyle?: PackingCustomerCommentStyle;
   salesDocumentPreview?: PackingSalesDocPreview;
+  /** `with_sidebar` = lewy panel; `full_width` = pas info + siatka na całą szerokość. */
+  layoutMode?: PackingLayoutMode;
 };
 
 export function PackingView({
@@ -130,6 +146,7 @@ export function PackingView({
   onAutomationStatusChanged,
   customerCommentStyle = "normal",
   salesDocumentPreview = "simplified",
+  layoutMode = "with_sidebar",
 }: PackingViewProps) {
   const { setScannerInputPlaceholder } = useWmsScanner();
   const wedgeRef = useRef<HTMLInputElement>(null);
@@ -142,8 +159,10 @@ export function PackingView({
   const qTot = detail.queue_total ?? 1;
   const packerLabel = (packerDisplayName ?? "").trim() || "—";
 
+  const isFullWidth = layoutMode === "full_width";
   const commentHighlighted = customerCommentStyle === "highlighted";
-  const showCommentBanner = commentHighlighted && !!uwagiKlienta;
+  /** Banner nad produktami tylko w układzie ze sidebarem (w full-width uwagi są w pasie info). */
+  const showCommentBanner = !isFullWidth && commentHighlighted && !!uwagiKlienta;
   /** Wyróżniony komentarz → zawsze dokument uproszczony (jak mockup); inaczej ustawienie widoku dokumentu. */
   const effectiveDocumentPreview: PackingSalesDocPreview = commentHighlighted
     ? "simplified"
@@ -174,8 +193,18 @@ export function PackingView({
         ? [detail.selected_carton]
         : [];
 
+  const productGridClass = isFullWidth
+    ? "grid list-none gap-3 bg-white p-0 [grid-template-columns:repeat(1,minmax(0,1fr))] sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 lg:items-stretch"
+    : "grid list-none gap-3 [grid-template-columns:repeat(1,minmax(0,1fr))] bg-white p-0 lg:grid-cols-2 xl:grid-cols-3 lg:items-stretch";
+
   return (
-    <div className="flex h-full min-h-0 w-full flex-col overflow-hidden bg-white lg:flex-row lg:gap-3 lg:p-3">
+    <div
+      className={
+        isFullWidth
+          ? "flex h-full min-h-0 w-full flex-col overflow-hidden bg-white"
+          : "flex h-full min-h-0 w-full flex-col overflow-hidden bg-white lg:flex-row lg:gap-3 lg:p-3"
+      }
+    >
       <input
         ref={wedgeRef}
         type="text"
@@ -190,24 +219,26 @@ export function PackingView({
         enabled={!wszystkoSpakowane && !scanBusy && !packingActionsLocked}
       />
 
-      <PackingOrderSidebar
-        detail={detail}
-        salesDocumentPreview={effectiveDocumentPreview}
-        commentInBanner={commentHighlighted}
-        wszystkoSpakowane={wszystkoSpakowane}
-        scanBusy={scanBusy}
-        packingActionsLocked={packingActionsLocked}
-        visibleOperationalNotes={visibleOperationalNotes}
-        selectCartonBusy={selectCartonBusy}
-        onSelectCarton={onSelectCarton}
-        packAll={packAll}
-        onInterrupt={onInterrupt}
-        showAutomationButtons={showAutomationButtons}
-        automationButtonsPosition={automationButtonsPosition}
-        warehouseId={warehouseId}
-        onAutomationToast={onAutomationToast}
-        onAutomationStatusChanged={onAutomationStatusChanged}
-      />
+      {!isFullWidth ? (
+        <PackingOrderSidebar
+          detail={detail}
+          salesDocumentPreview={effectiveDocumentPreview}
+          commentInBanner={commentHighlighted}
+          wszystkoSpakowane={wszystkoSpakowane}
+          scanBusy={scanBusy}
+          packingActionsLocked={packingActionsLocked}
+          visibleOperationalNotes={visibleOperationalNotes}
+          selectCartonBusy={selectCartonBusy}
+          onSelectCarton={onSelectCarton}
+          packAll={packAll}
+          onInterrupt={onInterrupt}
+          showAutomationButtons={showAutomationButtons}
+          automationButtonsPosition={automationButtonsPosition}
+          warehouseId={warehouseId}
+          onAutomationToast={onAutomationToast}
+          onAutomationStatusChanged={onAutomationStatusChanged}
+        />
+      ) : null}
 
       {/* MAIN */}
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-white">
@@ -245,7 +276,7 @@ export function PackingView({
               </p>
             </div>
 
-            {showHeaderCartonPicker && headerCartons.length > 0 ? (
+            {!isFullWidth && showHeaderCartonPicker && headerCartons.length > 0 ? (
               <PackingRecommendedCartonsPanel
                 items={headerCartons}
                 selectedId={selectedCartonId ?? detail.selected_carton_id}
@@ -253,8 +284,42 @@ export function PackingView({
                 onSelect={onSelectCarton}
               />
             ) : null}
+
+            {isFullWidth ? (
+              <div className="ml-auto flex shrink-0 items-center gap-2">
+                <button
+                  type="button"
+                  className="inline-flex h-11 w-11 items-center justify-center rounded-lg border border-slate-300 bg-white text-slate-600 hover:bg-slate-50"
+                  aria-label="Opcje"
+                >
+                  <IconDots />
+                </button>
+                <button
+                  type="button"
+                  disabled={wszystkoSpakowane || scanBusy || packingActionsLocked}
+                  className="min-h-11 rounded-lg px-4 text-sm font-bold text-white shadow-sm disabled:cursor-not-allowed disabled:opacity-50 sm:px-5 sm:text-base"
+                  style={{ background: PRIMARY_GREEN }}
+                  onClick={() => void packAll()}
+                >
+                  Spakuj wszystko
+                </button>
+              </div>
+            ) : null}
           </div>
         </header>
+
+        {isFullWidth ? (
+          <PackingOrderFullWidthInfo
+            detail={detail}
+            customerCommentStyle={customerCommentStyle}
+            visibleOperationalNotes={visibleOperationalNotes}
+            headerCartons={showHeaderCartonPicker ? headerCartons : []}
+            selectedCartonId={selectedCartonId}
+            selectCartonBusy={selectCartonBusy}
+            packingActionsLocked={packingActionsLocked}
+            onSelectCarton={onSelectCarton}
+          />
+        ) : null}
 
         {showCommentBanner ? <PackingCustomerCommentBanner comment={uwagiKlienta} /> : null}
 
@@ -285,7 +350,7 @@ export function PackingView({
               ) : null}
             </div>
           ) : null}
-          <ul className="grid list-none gap-3 [grid-template-columns:repeat(1,minmax(0,1fr))] bg-white p-0 lg:grid-cols-2 xl:grid-cols-3 lg:items-stretch">
+          <ul className={productGridClass}>
             {sortedLines.map((line) => {
               const done = line.quantity_packed >= lineQuantityRequired(line);
               const active = !done && activeProductId === line.order_item_id;
@@ -324,6 +389,17 @@ export function PackingView({
             })}
           </ul>
         </section>
+        {isFullWidth ? (
+          <div className="shrink-0 border-t border-slate-100 bg-white px-3 py-2 sm:px-4">
+            <button
+              type="button"
+              className="min-h-11 w-full rounded-lg border-2 border-slate-400 bg-white px-4 text-sm font-bold text-slate-800 shadow-sm hover:bg-slate-50 sm:w-auto"
+              onClick={onInterrupt}
+            >
+              Przerwij
+            </button>
+          </div>
+        ) : null}
         {showAutomationButtons &&
         warehouseId != null &&
         warehouseId > 0 &&
@@ -337,6 +413,23 @@ export function PackingView({
             onToast={onAutomationToast}
             onStatusChanged={onAutomationStatusChanged}
           />
+        ) : null}
+        {isFullWidth &&
+        showAutomationButtons &&
+        warehouseId != null &&
+        warehouseId > 0 &&
+        (automationButtonsPosition === "bottom" || automationButtonsPosition === "right") ? (
+          <div className="shrink-0 border-t border-slate-100 bg-white px-3 py-2 sm:px-4">
+            <PackingAutomationActivators
+              tenantId={DAMAGE_TENANT_ID}
+              warehouseId={warehouseId}
+              orderId={detail.order_id}
+              showAutomationButtons={showAutomationButtons}
+              position={automationButtonsPosition}
+              onToast={onAutomationToast}
+              onStatusChanged={onAutomationStatusChanged}
+            />
+          </div>
         ) : null}
       </div>
     </div>

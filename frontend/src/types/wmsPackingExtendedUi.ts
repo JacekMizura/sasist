@@ -3,8 +3,23 @@
  * Backend PATCH pozostaje przy {@link WmsPackingSettingsRead}.
  */
 
-export type PackingLayoutMode = "full_width" | "centered";
+/** Układ ekranu pakowania zamówienia — `with_sidebar` = lewy panel; `full_width` = bez sidebara. */
+export type PackingLayoutMode = "with_sidebar" | "full_width";
 export type PackingCustomerCommentStyle = "highlighted" | "normal";
+
+/**
+ * Normalizuje układ z localStorage.
+ * Legacy (niepodłączone) wartości `"centered"` oraz stare `"full_width"` → `with_sidebar`,
+ * o ile nie zapisano już schematu v2 (wtedy `"full_width"` oznacza nowy widok).
+ */
+export function normalizePackingLayoutMode(
+  raw: unknown,
+  schemaVersion: number | undefined,
+): PackingLayoutMode {
+  if (raw === "with_sidebar") return "with_sidebar";
+  if (raw === "full_width" && (schemaVersion ?? 0) >= 2) return "full_width";
+  return "with_sidebar";
+}
 export type PackingSalesDocPreview = "simplified" | "full";
 export type PackingProductDisplayMode = "list" | "grid";
 export type PackingLocationBadgePosition = "top_right" | "top_left" | "bottom_right" | "bottom_left";
@@ -53,6 +68,8 @@ export function normalizePackingPostDocumentAction(raw: unknown): PackingPostDoc
 }
 
 export type WmsPackingExtendedUiSettings = {
+  /** Wersja schematu układu (2 = Z sidebarem / Pełna szerokość). */
+  packingLayoutSchemaVersion?: number;
   layoutMode: PackingLayoutMode;
   customerCommentStyle: PackingCustomerCommentStyle;
   salesDocumentPreview: PackingSalesDocPreview;
@@ -138,7 +155,8 @@ export type WmsPackingExtendedUiSettings = {
 };
 
 export const DEFAULT_WMS_PACKING_EXTENDED_UI: WmsPackingExtendedUiSettings = {
-  layoutMode: "full_width",
+  packingLayoutSchemaVersion: 2,
+  layoutMode: "with_sidebar",
   customerCommentStyle: "normal",
   salesDocumentPreview: "simplified",
   packedProductsExtraList: false,
@@ -226,9 +244,15 @@ export function loadWmsPackingExtendedUi(warehouseId: number): WmsPackingExtende
     const legacyStrategy = parsed.packingSingleOrMultiItemStrategy;
     const enabledFromLegacy =
       legacyStrategy != null && legacyStrategy !== "auto" ? true : undefined;
+    const schemaVersion =
+      typeof parsed.packingLayoutSchemaVersion === "number" && Number.isFinite(parsed.packingLayoutSchemaVersion)
+        ? parsed.packingLayoutSchemaVersion
+        : 0;
     return {
       ...DEFAULT_WMS_PACKING_EXTENDED_UI,
       ...parsed,
+      packingLayoutSchemaVersion: 2,
+      layoutMode: normalizePackingLayoutMode(parsed.layoutMode, schemaVersion),
       packingBySingleOrMultiItemEnabled:
         typeof parsed.packingBySingleOrMultiItemEnabled === "boolean"
           ? parsed.packingBySingleOrMultiItemEnabled
@@ -253,7 +277,10 @@ export function loadWmsPackingExtendedUi(warehouseId: number): WmsPackingExtende
 
 export function saveWmsPackingExtendedUi(warehouseId: number, data: WmsPackingExtendedUiSettings): void {
   try {
-    localStorage.setItem(storageKeyWmsPackingExtendedUi(warehouseId), JSON.stringify(data));
+    localStorage.setItem(
+      storageKeyWmsPackingExtendedUi(warehouseId),
+      JSON.stringify({ ...data, packingLayoutSchemaVersion: 2 }),
+    );
   } catch {
     /* ignore */
   }

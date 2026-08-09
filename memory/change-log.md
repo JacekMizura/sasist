@@ -1,3 +1,30 @@
+## 2026-08-09 — Widok pakowania: układ + kolejność spakowanych
+
+- Ustawienie układu: `Z sidebarem` / `Pełna szerokość` (zamiast Pełna szerokość / Wyśrodkowany)
+- Full-width: ten sam `PackingView`, bez sidebara, pas info + siatka na całą szerokość
+- `movePackedToBottom` faktycznie sortuje linie; usunięte CAP_NONE + teksty „brak funkcjonalności”
+- Info (i) dla obu opcji; `npm run build` OK
+
+## 2026-08-09 — Lista zamówień: korekta layoutu (3 warianty)
+
+- Usunięte szare tło za zdjęciami produktów
+- Nagłówek karty zwarty (flex w-max): nr | SPAKOWANO | logo — bez space-between / 1fr
+- Standardowy: stała szerokość karty (~280px) + flex-wrap zamiast rozciąganego gridu
+- `npm run build` OK; bez commit/push
+
+## 2026-08-09 — Lista zamówień: Rozbudowany (Pionowy)
+
+- `expanded_vertical` → UI „Rozbudowany (Pionowy)”; białe tło; karty full-width jedna pod drugą
+- Nagłówek karty: NR | SPAKOWANO | logo; produkty w poziomie z separatorami; `+N innych`
+- Spakowane: wyszarzenie + ✓ + X; podgląd w ustawieniach; `npm run build` OK; bez commit/push
+
+## 2026-08-09 — Lista zamówień: Rozbudowany (Poziomy)
+
+- Opcja `cards` → UI „Rozbudowany (Poziomy)” (rename z Karty); wartość `cards` bez zmian
+- Poziomy scroll: karty ~300px z produktami (miniatura, qty×nazwa, EAN, kolor), logo po prawej SPAKOWANO
+- Stany: czerwona ramka + badge Brak; linia Spakowane ✓/X; karta zakończona opacity; +N innych
+- Pełny podgląd w ustawieniach Widok; `npm run build` OK; bez commit/push
+
 ## 2026-08-09 — Lista zamówień pakowania: układ Standardowy
 
 - `ordersListLayout: compact` → UI „Standardowy” (rename z Kompaktowy); wartość `compact` bez zmian

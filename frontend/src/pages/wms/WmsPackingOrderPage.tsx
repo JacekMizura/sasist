@@ -446,6 +446,7 @@ export default function WmsPackingOrderPage() {
         onAutomationStatusChanged={() => void ctrl.fetchDetail()}
         customerCommentStyle={ctrl.packingExtendedUi.customerCommentStyle}
         salesDocumentPreview={ctrl.packingExtendedUi.salesDocumentPreview}
+        layoutMode={ctrl.packingExtendedUi.layoutMode}
       />
     </>
   );

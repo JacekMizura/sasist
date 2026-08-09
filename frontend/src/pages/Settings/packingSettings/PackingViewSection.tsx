@@ -25,12 +25,12 @@ export function PackingViewSection({ extended, draft, patchExtended, toggleInter
         <SelectField
           settingId="packing.layout_mode"
           label="Wybierz układ"
-          capability={CAP_NONE}
           value={extended.layoutMode}
           onChange={(v) => patchExtended("layoutMode", v as WmsPackingExtendedUiSettings["layoutMode"])}
+          infoKey="packing.layout_mode"
         >
+          <option value="with_sidebar">Z sidebarem</option>
           <option value="full_width">Pełna szerokość</option>
-          <option value="centered">Wyśrodkowany</option>
         </SelectField>
         <SelectField
           settingId="packing.customer_comment_style"
@@ -127,7 +127,7 @@ export function PackingViewSection({ extended, draft, patchExtended, toggleInter
           label="Przesuwaj spakowane produkty na koniec listy"
           checked={extended.movePackedToBottom}
           onChange={(v) => patchExtended("movePackedToBottom", v)}
-          capability={CAP_NONE}
+          infoKey="packing.move_packed_to_bottom"
         />
         <BoolRow
           settingId="packing.show_stock"

@@ -45,6 +45,12 @@ export const PACKING_SETTING_HELP: Record<string, PackingSettingHelpEntry> = {
       </ul>
     ),
   },
+  "packing.layout_mode": {
+    description: "Określa sposób rozmieszczenia zawartości zamówienia na ekranie pakowania.",
+  },
+  "packing.move_packed_to_bottom": {
+    description: "Po włączeniu całkowicie spakowane produkty są automatycznie przenoszone na koniec listy.",
+  },
   "packing.customer_comment_style": {
     description: (
       <ul>

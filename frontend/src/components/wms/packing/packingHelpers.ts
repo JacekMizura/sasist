@@ -12,7 +12,11 @@ export function lineQuantityRequired(line: WmsPackingOrderLineApi): number {
 export function sortLinesForPacking(
   lines: WmsPackingOrderLineApi[],
   pinFlashToEndId: number | null,
+  movePackedToBottom = true,
 ): WmsPackingOrderLineApi[] {
+  if (!movePackedToBottom) {
+    return [...lines];
+  }
   return [...lines].sort((a, b) => {
     const da = a.quantity_packed >= lineQuantityRequired(a);
     const db = b.quantity_packed >= lineQuantityRequired(b);
