@@ -39,6 +39,10 @@ import {
   DEFAULT_PACKING_PRODUCT_FIELD_VISIBILITY,
   type PackingProductFieldVisibility,
 } from "./packingProductDisplay";
+import {
+  packingProductCardItemClass,
+  packingProductCardsContainerClass,
+} from "./packingProductCardLayout";
 
 const PRIMARY_GREEN = "#4caf50";
 
@@ -170,7 +174,6 @@ export function PackingView({
   const packerLabel = (packerDisplayName ?? "").trim() || "—";
 
   const isFullWidth = layoutMode === "full_width";
-  const isProductGrid = productDisplayMode === "grid";
   const commentHighlighted = customerCommentStyle === "highlighted";
   /** Banner nad produktami tylko w układzie ze sidebarem (w full-width uwagi są w pasie info). */
   const showCommentBanner = !isFullWidth && commentHighlighted && !!uwagiKlienta;
@@ -178,6 +181,9 @@ export function PackingView({
   const effectiveDocumentPreview: PackingSalesDocPreview = commentHighlighted
     ? "simplified"
     : salesDocumentPreview;
+
+  const productCardsClass = packingProductCardsContainerClass();
+  const productCardItemClass = packingProductCardItemClass();
 
   useEffect(() => {
     setScannerInputPlaceholder("Zeskanuj EAN");
@@ -203,15 +209,6 @@ export function PackingView({
       : detail.selected_carton
         ? [detail.selected_carton]
         : [];
-
-  /**
-   * Lista = szersze karty poziome (auto-fit ~28rem).
-   * Siatka = węższe karty pionowe (auto-fit ~15.5rem).
-   * Pełna szerokość / sidebar — ta sama reguła wypełniania szerokości.
-   */
-  const productGridClass = isProductGrid
-    ? "m-0 grid w-full list-none gap-3 bg-white p-0 [grid-template-columns:repeat(auto-fit,minmax(min(100%,15.5rem),1fr))]"
-    : "m-0 grid w-full list-none gap-3 bg-white p-0 [grid-template-columns:repeat(auto-fit,minmax(min(100%,28rem),1fr))]";
 
   if (isFullWidth) {
     return (
@@ -329,13 +326,13 @@ export function PackingView({
               ) : null}
             </div>
           ) : null}
-          <ul className={productGridClass}>
+          <ul className={productCardsClass}>
             {sortedLines.map((line) => {
               const done = line.quantity_packed >= lineQuantityRequired(line);
               const active = !done && activeProductId === line.order_item_id;
               const flash = flashItemId === line.order_item_id;
               return (
-                <li key={line.order_item_id} className="flex min-h-0 min-w-0 w-full">
+                <li key={line.order_item_id} className={productCardItemClass}>
                   {done ? (
                     <DoneCard
                       line={line}
@@ -531,13 +528,13 @@ export function PackingView({
               ) : null}
             </div>
           ) : null}
-          <ul className={productGridClass}>
+          <ul className={productCardsClass}>
             {sortedLines.map((line) => {
               const done = line.quantity_packed >= lineQuantityRequired(line);
               const active = !done && activeProductId === line.order_item_id;
               const flash = flashItemId === line.order_item_id;
               return (
-                <li key={line.order_item_id} className="flex min-h-0 min-w-0">
+                <li key={line.order_item_id} className={productCardItemClass}>
                   {done ? (
                     <DoneCard
                       line={line}

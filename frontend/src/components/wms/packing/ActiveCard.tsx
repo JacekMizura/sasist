@@ -9,6 +9,10 @@ import {
   packingProductFieldVisibilityEqual,
   type PackingProductFieldVisibility,
 } from "./packingProductDisplay";
+import {
+  packingProductCardRootSizeClass,
+  packingProductCardSizeStyle,
+} from "./packingProductCardLayout";
 
 const PRIMARY_GREEN = "#4caf50";
 
@@ -112,8 +116,12 @@ function ActiveCardInner({
 
   return (
     <div
-      className="relative flex h-full w-full cursor-default flex-col rounded-xl border-[3px] border-[#1b5e20] bg-white p-3 text-left shadow-md"
-      style={flashStyle}
+      className={[
+        "relative flex cursor-default flex-col rounded-xl border-[3px] border-[#1b5e20] bg-white p-3 text-left shadow-md",
+        packingProductCardRootSizeClass(displayMode),
+        isGrid ? "overflow-hidden" : "",
+      ].join(" ")}
+      style={{ ...packingProductCardSizeStyle(displayMode), ...flashStyle }}
     >
       {isGrid ? (
         <>

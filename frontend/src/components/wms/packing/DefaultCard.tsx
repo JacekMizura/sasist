@@ -9,6 +9,10 @@ import {
   packingProductFieldVisibilityEqual,
   type PackingProductFieldVisibility,
 } from "./packingProductDisplay";
+import {
+  packingProductCardRootSizeClass,
+  packingProductCardSizeStyle,
+} from "./packingProductCardLayout";
 
 export type DefaultCardProps = {
   line: WmsPackingOrderLineApi;
@@ -49,9 +53,10 @@ function DefaultCardInner({
   }, [scanBusy, onActivate, line.order_item_id]);
 
   const shellClass = [
-    "flex h-full w-full cursor-pointer flex-col rounded-lg border border-slate-200/95 bg-white text-left opacity-100 shadow-sm outline-none transition-[box-shadow]",
+    "flex cursor-pointer flex-col rounded-lg border border-slate-200/95 bg-white text-left opacity-100 shadow-sm outline-none transition-[box-shadow]",
+    packingProductCardRootSizeClass(displayMode),
     "hover:shadow-md focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-1",
-    isGrid ? "p-3" : "p-2.5 sm:p-3",
+    isGrid ? "overflow-hidden p-3" : "p-2.5 sm:p-3",
   ].join(" ");
 
   return (
@@ -66,7 +71,10 @@ function DefaultCardInner({
         }
       }}
       className={shellClass}
-      style={{ boxShadow: "0 1px 4px rgba(15, 23, 42, 0.06)" }}
+      style={{
+        ...packingProductCardSizeStyle(displayMode),
+        boxShadow: "0 1px 4px rgba(15, 23, 42, 0.06)",
+      }}
     >
       {isGrid ? (
         <>

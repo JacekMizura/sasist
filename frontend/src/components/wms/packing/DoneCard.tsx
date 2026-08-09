@@ -7,6 +7,10 @@ import {
   packingProductFieldVisibilityEqual,
   type PackingProductFieldVisibility,
 } from "./packingProductDisplay";
+import {
+  packingProductCardRootSizeClass,
+  packingProductCardSizeStyle,
+} from "./packingProductCardLayout";
 
 export type DoneCardProps = {
   line: WmsPackingOrderLineApi;
@@ -38,8 +42,11 @@ function DoneCardInner({ line, flash, fieldVisibility, displayMode = "list" }: D
 
   return (
     <div
-      className="pointer-events-none relative flex h-full w-full cursor-default flex-col overflow-hidden rounded-lg border border-emerald-200/70 bg-emerald-50/95 p-3 text-left [container-type:inline-size]"
-      style={flashStyle}
+      className={[
+        "pointer-events-none relative flex cursor-default flex-col overflow-hidden rounded-lg border border-emerald-200/70 bg-emerald-50/95 p-3 text-left [container-type:inline-size]",
+        packingProductCardRootSizeClass(displayMode),
+      ].join(" ")}
+      style={{ ...packingProductCardSizeStyle(displayMode), ...flashStyle }}
     >
       <span
         className="pointer-events-none absolute left-1/2 top-1/2 z-10 select-none font-black uppercase text-emerald-600/45"

@@ -5,6 +5,10 @@ import {
   DEFAULT_PACKING_PRODUCT_FIELD_VISIBILITY,
   type PackingProductFieldVisibility,
 } from "./packingProductDisplay";
+import {
+  packingProductCardItemClass,
+  packingProductCardsContainerClass,
+} from "./packingProductCardLayout";
 
 const PREVIEW_IMG =
   "data:image/svg+xml," +
@@ -51,6 +55,13 @@ const PREVIEW_LINES: WmsPackingOrderLineApi[] = [
     sku: "CASE-M",
     catalog: "W-220",
   }),
+  previewLine(3, {
+    name: "Skarpety sport",
+    qty: 4,
+    color: "czarny",
+    sku: "SOCK-BLK",
+    catalog: "S-220",
+  }),
 ];
 
 const noop = () => undefined;
@@ -60,37 +71,31 @@ type Props = {
   fieldVisibility?: PackingProductFieldVisibility;
 };
 
-/** Podgląd Lista / Siatka — te same karty co w widoku pakowania. */
+/** Podgląd Lista / Siatka — ten sam kontener i wymiary kart co w widoku pakowania. */
 export function ProductDisplayModePreview({
   mode,
   fieldVisibility = DEFAULT_PACKING_PRODUCT_FIELD_VISIBILITY,
 }: Props) {
   const label = mode === "grid" ? "Siatka" : "Lista";
-  const gridClass =
-    mode === "grid"
-      ? "grid gap-2 [grid-template-columns:repeat(auto-fit,minmax(9.5rem,1fr))]"
-      : "grid gap-2 [grid-template-columns:repeat(auto-fit,minmax(16rem,1fr))]";
 
   return (
-    <div className="mt-2 max-w-xl rounded-lg border border-slate-200 bg-white p-3">
+    <div className="mt-2 max-w-3xl rounded-lg border border-slate-200 bg-white p-3">
       <p className="mb-1 text-xs font-semibold text-slate-600">Podgląd układu</p>
       <p className="mb-2 text-sm font-bold text-slate-900">{label}</p>
-      <div className="overflow-hidden rounded-md border border-slate-100 bg-white p-2">
-        <div className="origin-top-left scale-[0.78]" style={{ width: "128.2%" }}>
-          <ul className={["m-0 list-none p-0", gridClass].join(" ")}>
-            {PREVIEW_LINES.map((line) => (
-              <li key={line.order_item_id} className="min-w-0">
-                <DefaultCard
-                  line={line}
-                  scanBusy={false}
-                  fieldVisibility={fieldVisibility}
-                  displayMode={mode}
-                  onActivate={noop}
-                />
-              </li>
-            ))}
-          </ul>
-        </div>
+      <div className="overflow-x-auto overflow-y-hidden rounded-md border border-slate-100 bg-white p-2">
+        <ul className={packingProductCardsContainerClass()}>
+          {PREVIEW_LINES.map((line) => (
+            <li key={line.order_item_id} className={packingProductCardItemClass()}>
+              <DefaultCard
+                line={line}
+                scanBusy={false}
+                fieldVisibility={fieldVisibility}
+                displayMode={mode}
+                onActivate={noop}
+              />
+            </li>
+          ))}
+        </ul>
       </div>
     </div>
   );
