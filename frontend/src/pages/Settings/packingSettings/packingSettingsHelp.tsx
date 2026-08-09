@@ -62,6 +62,34 @@ export const PACKING_SETTING_HELP: Record<string, PackingSettingHelpEntry> = {
       </ul>
     ),
   },
+  "packing.location_badge_position": {
+    description: (
+      <ul>
+        <li>
+          <strong>Prawy górny róg</strong> — lokalizacja magazynowa jest widoczna jako osobna etykieta w prawym górnym
+          obszarze karty produktu.
+        </li>
+        <li>
+          <strong>W szczegółach produktu</strong> — lokalizacja jest pokazywana razem z danymi produktu (EAN, symbol, nr
+          katalogowy itd.), zamiast w rogu karty.
+        </li>
+        <li>Działa tylko gdy włączone jest „Wyświetlaj lokalizację produktów”.</li>
+      </ul>
+    ),
+  },
+  "packing.automation_buttons_position": {
+    description: (
+      <ul>
+        <li>
+          <strong>Na górze</strong> — przyciski aktywatorów automatyzacji pojawiają się nad listą / siatką produktów.
+        </li>
+        <li>
+          <strong>Na dole</strong> — aktywatory są przypięte pod produktami jako belka na dole kolumny produktów.
+        </li>
+        <li>Widoczność samych przycisków steruje osobne ustawienie wyświetlania aktywatorów automatyzacji.</li>
+      </ul>
+    ),
+  },
   "packing.move_packed_to_bottom": {
     description: "Po włączeniu całkowicie spakowane produkty są automatycznie przenoszone na koniec listy.",
   },

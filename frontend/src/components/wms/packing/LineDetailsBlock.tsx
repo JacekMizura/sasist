@@ -4,6 +4,7 @@ import {
   DEFAULT_PACKING_PRODUCT_FIELD_VISIBILITY,
   type PackingProductFieldVisibility,
 } from "./packingProductDisplay";
+import { packingLocationBadge } from "./packingProductCardParts";
 
 type Props = {
   line: WmsPackingOrderLineApi;
@@ -138,11 +139,24 @@ export function LineDetailsBlock({ line, variant, fieldVisibility, layout = "col
       ),
     });
   }
+  const locInDetails =
+    vis.show_location && vis.location_placement === "in_details" ? packingLocationBadge(line) : "";
+  if (locInDetails) {
+    byKey.set("loc", {
+      key: "loc",
+      node: (
+        <p className={["truncate", textCls].join(" ")}>
+          <span className={labelCls}>Lokalizacja:</span>{" "}
+          <span className="font-semibold tabular-nums text-slate-900">{locInDetails}</span>
+        </p>
+      ),
+    });
+  }
 
   if (byKey.size === 0) return null;
 
   if (layout === "stack") {
-    const order = ["color", "ean", "sym", "stock", "cat", "sig", "price", "bundle"];
+    const order = ["color", "ean", "sym", "stock", "cat", "sig", "price", "bundle", "loc"];
     return (
       <div className="mt-1.5 space-y-0.5 text-[12px] leading-snug">
         {order.map((k) => {
@@ -153,7 +167,7 @@ export function LineDetailsBlock({ line, variant, fieldVisibility, layout = "col
     );
   }
 
-  const leftOrder = ["color", "ean", "cat", "sig"];
+  const leftOrder = ["color", "ean", "cat", "sig", "loc"];
   const rightOrder = ["stock", "sym", "price", "bundle"];
 
   return (

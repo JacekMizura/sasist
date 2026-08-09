@@ -51,7 +51,10 @@ function DefaultCardInner({
     truncate: fieldVisibility.truncate_names,
   });
   const isGrid = displayMode === "grid";
-  const showLoc = fieldVisibility.show_location && Boolean(locBadge);
+  const showLocCorner =
+    fieldVisibility.show_location &&
+    fieldVisibility.location_placement === "top_right" &&
+    Boolean(locBadge);
   const showImg = fieldVisibility.show_image;
 
   const handleActivate = useCallback(() => {
@@ -94,7 +97,7 @@ function DefaultCardInner({
                 {line.quantity_packed}/{qtyReq}
               </p>
             </div>
-            <PackingGridLocationHeader showLocation={showLoc} locBadge={locBadge} menu={menu} />
+            <PackingGridLocationHeader showLocation={showLocCorner} locBadge={locBadge} menu={menu} />
           </div>
 
           {showImg ? (
@@ -120,7 +123,7 @@ function DefaultCardInner({
           </div>
         </>
       ) : (
-        <div className="flex h-full items-stretch gap-3">
+        <div className="relative flex h-full items-stretch gap-3">
           {showImg ? <PackingProductThumb url={line.image_url} size={PACKING_PRODUCT_LIST_IMAGE_SIZE} /> : null}
 
           <div className="flex min-w-0 flex-1 flex-col justify-center overflow-hidden">
@@ -137,8 +140,8 @@ function DefaultCardInner({
             </p>
           </div>
 
-          {showLoc ? (
-            <div className="flex w-[7.25rem] shrink-0 flex-col items-end justify-center gap-1">
+          {showLocCorner ? (
+            <div className="flex w-[7.25rem] shrink-0 flex-col items-end justify-start gap-1 pt-0.5">
               <PackingCardFieldLabel>LOKALIZACJA</PackingCardFieldLabel>
               <PackingLocationPill text={locBadge} />
             </div>

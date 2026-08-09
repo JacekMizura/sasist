@@ -60,7 +60,10 @@ function ActiveCardInner({
   });
   const isGrid = displayMode === "grid";
   const atMax = maxPack > 0 && packQty >= maxPack;
-  const showLoc = fieldVisibility.show_location && Boolean(locBadge);
+  const showLocCorner =
+    fieldVisibility.show_location &&
+    fieldVisibility.location_placement === "top_right" &&
+    Boolean(locBadge);
   const showImg = fieldVisibility.show_image;
 
   const bump = useCallback(
@@ -151,7 +154,7 @@ function ActiveCardInner({
                 {line.quantity_packed}/{qtyReq}
               </p>
             </div>
-            <PackingGridLocationHeader showLocation={showLoc} locBadge={locBadge} menu={menu} />
+            <PackingGridLocationHeader showLocation={showLocCorner} locBadge={locBadge} menu={menu} />
           </div>
 
           <div
@@ -190,8 +193,8 @@ function ActiveCardInner({
             <div className="mt-1">{packControls}</div>
           </div>
 
-          {showLoc ? (
-            <div className="flex w-[7.25rem] shrink-0 flex-col items-end justify-center gap-1">
+          {showLocCorner ? (
+            <div className="flex w-[7.25rem] shrink-0 flex-col items-end justify-start gap-1 pt-0.5">
               <PackingCardFieldLabel>LOKALIZACJA</PackingCardFieldLabel>
               <PackingLocationPill text={locBadge} />
             </div>

@@ -28,6 +28,7 @@ export function ProductDisplayModePreview({
     show_product_name: true,
     show_image: fieldVisibility.show_image !== false,
     show_location: fieldVisibility.show_location !== false,
+    location_placement: fieldVisibility.location_placement ?? PACKING_SETTINGS_PREVIEW_VISIBILITY.location_placement,
   };
 
   return (

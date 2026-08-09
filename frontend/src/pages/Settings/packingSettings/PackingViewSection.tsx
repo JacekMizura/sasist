@@ -1,11 +1,14 @@
 import { OrdersListLayoutPreview } from "../../../components/wms/packing/ordersList/OrdersListLayoutPreview";
 import { ProductDisplayModePreview } from "../../../components/wms/packing/ProductDisplayModePreview";
 import { buildPackingProductFieldVisibility } from "../../../components/wms/packing/packingProductDisplay";
+import { PackingAutomationButtonsPositionPreview } from "../../../components/wms/packing/settingsPreviews/PackingAutomationButtonsPositionPreview";
 import { PackingCustomerCommentStylePreview } from "../../../components/wms/packing/settingsPreviews/PackingCustomerCommentStylePreview";
 import { PackingLayoutModePreview } from "../../../components/wms/packing/settingsPreviews/PackingLayoutModePreview";
+import { PackingLocationBadgePositionPreview } from "../../../components/wms/packing/settingsPreviews/PackingLocationBadgePositionPreview";
 import { PackingSalesDocumentPreview } from "../../../components/wms/packing/settingsPreviews/PackingSalesDocumentPreview";
 import {
   normalizePackingAutomationButtonsPosition,
+  normalizePackingLocationBadgePosition,
   type WmsPackingExtendedUiSettings,
 } from "../../../types/wmsPackingExtendedUi";
 import type { WmsPackingInterfaceDisplay, WmsPackingSettingsRead } from "../../../types/wmsPackingSettings";
@@ -96,35 +99,47 @@ export function PackingViewSection({ extended, draft, patchExtended, toggleInter
         </div>
       </FieldGrid>
       <FieldGrid>
-        <SelectField
-          settingId="packing.location_badge_position"
-          label="Umiejscowienie informacji o lokalizacji na produkcie"
-          capability={CAP_NONE}
-          value={extended.locationBadgePosition}
-          onChange={(v) =>
-            patchExtended("locationBadgePosition", v as WmsPackingExtendedUiSettings["locationBadgePosition"])
-          }
-        >
-          <option value="top_right">Góra prawo</option>
-          <option value="top_left">Góra lewo</option>
-          <option value="bottom_right">Dół prawo</option>
-          <option value="bottom_left">Dół lewo</option>
-        </SelectField>
-        <SelectField
-          settingId="packing.automation_buttons_position"
-          label="Położenie przycisków aktywatorów automatyzacji"
-          capability={CAP_NONE}
-          value={normalizePackingAutomationButtonsPosition(extended.automationButtonsPosition)}
-          onChange={(v) =>
-            patchExtended(
-              "automationButtonsPosition",
-              normalizePackingAutomationButtonsPosition(v),
-            )
-          }
-        >
-          <option value="top">Na górze</option>
-          <option value="bottom">Na dole</option>
-        </SelectField>
+        <div>
+          <SelectField
+            settingId="packing.location_badge_position"
+            label="Umiejscowienie informacji o lokalizacji na produkcie"
+            value={normalizePackingLocationBadgePosition(extended.locationBadgePosition)}
+            onChange={(v) =>
+              patchExtended("locationBadgePosition", normalizePackingLocationBadgePosition(v))
+            }
+            infoKey="packing.location_badge_position"
+          >
+            <option value="top_right">Prawy górny róg</option>
+            <option value="in_details">W szczegółach produktu</option>
+          </SelectField>
+          <PackingLocationBadgePositionPreview
+            position={normalizePackingLocationBadgePosition(extended.locationBadgePosition)}
+            productDisplayMode={extended.productDisplayMode}
+            fieldVisibility={productPreviewVisibility}
+          />
+        </div>
+        <div>
+          <SelectField
+            settingId="packing.automation_buttons_position"
+            label="Położenie przycisków aktywatorów automatyzacji"
+            value={normalizePackingAutomationButtonsPosition(extended.automationButtonsPosition)}
+            onChange={(v) =>
+              patchExtended(
+                "automationButtonsPosition",
+                normalizePackingAutomationButtonsPosition(v),
+              )
+            }
+            infoKey="packing.automation_buttons_position"
+          >
+            <option value="top">Na górze</option>
+            <option value="bottom">Na dole</option>
+          </SelectField>
+          <PackingAutomationButtonsPositionPreview
+            position={normalizePackingAutomationButtonsPosition(extended.automationButtonsPosition)}
+            productDisplayMode={extended.productDisplayMode}
+            fieldVisibility={productPreviewVisibility}
+          />
+        </div>
       </FieldGrid>
 
       <div className="mt-3 space-y-1">

@@ -105,6 +105,7 @@ export const PACKING_SETTINGS_PREVIEW_VISIBILITY: PackingProductFieldVisibility 
   show_product_name: true,
   show_image: true,
   show_location: true,
+  location_placement: "top_right",
   show_ean: true,
   show_symbol: true,
   show_catalog_number: true,

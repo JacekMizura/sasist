@@ -1,5 +1,21 @@
 ﻿## Active
 
+**AutoActions screen rebuild (2026-08-09):**
+- `AutoActionsView` + `PackingFinalizationView` share `AutoActionsShell` (mockup 1:1, white bg)
+- Steps filtered by API `auto_actions`; COD block only when payment is COD
+- States from `post_pack_pipeline` / finish progress; after-effect via `afterActionsBehavior` (scan / list / next — navigation still in controller)
+
+**Packing view settings: location + activators (2026-08-09):**
+- `locationBadgePosition`: only `top_right` | `in_details` („Prawy górny róg” / „W szczegółach produktu”); legacy corners → `top_right`
+- Wired into Default/Active/Done cards + `LineDetailsBlock` via `location_placement` in field visibility
+- Settings previews reuse real packing product cards; activators preview top strip / bottom pinned bar
+- Removed `CAP_NONE` / „BRAK FUNKCJONALNOŚCI” from both selects; info tooltips via `PACKING_SETTING_HELP`
+
+**Packing automation activator position (2026-08-09):**
+- Setting `automationButtonsPosition`: only `top` | `bottom` („Na górze” / „Na dole”)
+- Removed `floating` / `right` from UI + types; legacy → `bottom` via `normalizePackingAutomationButtonsPosition`
+- Placement in product column only (not sidebar): top = strip above list/grid; bottom = pinned footer under scroll area
+
 **Shipping method logos NS_BINDING_ABORTED (2026-08-09):**
 - Root cause (page lifecycle, not broken files): DEV `React.StrictMode` remounted list logos after first paint → browser aborted in-flight `GET /uploads/...`; abort `onError` + module failure cache flipped `src` (more aborts). Double fetch without effect cleanup could `setRows` twice.
 - Fix: drop StrictMode remount; cancellable single load by `warehouseId`; `mergeShippingMethodsRows`; mounted-only `onError`; no module fail-cache; memo list row + stable `key={id}`.

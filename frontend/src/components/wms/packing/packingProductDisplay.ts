@@ -1,4 +1,8 @@
-import type { WmsPackingExtendedUiSettings } from "../../../types/wmsPackingExtendedUi";
+import type {
+  PackingLocationBadgePosition,
+  WmsPackingExtendedUiSettings,
+} from "../../../types/wmsPackingExtendedUi";
+import { normalizePackingLocationBadgePosition } from "../../../types/wmsPackingExtendedUi";
 import type { WmsPackingInterfaceDisplay } from "../../../types/wmsPackingSettings";
 import { DEFAULT_WMS_PACKING_INTERFACE_DISPLAY } from "../../../types/wmsPackingSettings";
 
@@ -15,6 +19,8 @@ export type PackingProductFieldVisibility = {
   truncate_names: boolean;
   show_image: boolean;
   show_location: boolean;
+  /** Gdzie pokazać lokalizację, gdy ``show_location``. */
+  location_placement: PackingLocationBadgePosition;
 };
 
 export const DEFAULT_PACKING_PRODUCT_FIELD_VISIBILITY: PackingProductFieldVisibility = {
@@ -29,6 +35,7 @@ export const DEFAULT_PACKING_PRODUCT_FIELD_VISIBILITY: PackingProductFieldVisibi
   truncate_names: true,
   show_image: true,
   show_location: true,
+  location_placement: "top_right",
 };
 
 export const PACKING_PRODUCT_NAME_MAX = 25;
@@ -61,6 +68,7 @@ export function buildPackingProductFieldVisibility(
     | "truncateLongNames"
     | "showProductImage"
     | "showProductLocation"
+    | "locationBadgePosition"
   > | null | undefined,
 ): PackingProductFieldVisibility {
   const iface = { ...DEFAULT_WMS_PACKING_INTERFACE_DISPLAY, ...(interfaceDisplay ?? {}) };
@@ -76,6 +84,7 @@ export function buildPackingProductFieldVisibility(
     truncate_names: extended?.truncateLongNames !== false,
     show_image: extended?.showProductImage !== false,
     show_location: extended?.showProductLocation !== false,
+    location_placement: normalizePackingLocationBadgePosition(extended?.locationBadgePosition),
   };
 }
 
@@ -94,6 +103,7 @@ export function packingProductFieldVisibilityEqual(
     a.show_product_name === b.show_product_name &&
     a.truncate_names === b.truncate_names &&
     a.show_image === b.show_image &&
-    a.show_location === b.show_location
+    a.show_location === b.show_location &&
+    a.location_placement === b.location_placement
   );
 }
