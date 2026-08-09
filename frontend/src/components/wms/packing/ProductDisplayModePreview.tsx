@@ -12,6 +12,7 @@ import {
   packingProductCardsContainerClass,
   packingProductCardsContainerStyle,
 } from "./packingProductCardLayout";
+import { PackingSettingsPreviewCollapse } from "./settingsPreviews/PackingSettingsPreviewCollapse";
 
 const PREVIEW_IMG =
   "data:image/svg+xml," +
@@ -39,6 +40,8 @@ function previewLine(
     location_label: "R1-2-B",
     location_bin_qty: 10,
     bundle_name: "Zestaw startowy",
+    product_signature: `PRD-000${id}`,
+    unit_price_display: "4,49 PLN",
   };
 }
 
@@ -60,8 +63,7 @@ const PREVIEW_LINES: WmsPackingOrderLineApi[] = [
   }),
   previewLine(3, {
     name: "Skarpety sport",
-    qty: 1,
-    packed: 1,
+    qty: 4,
     color: "czarny",
     sku: "SOCK-BLK",
     catalog: "S-220",
@@ -70,14 +72,19 @@ const PREVIEW_LINES: WmsPackingOrderLineApi[] = [
 
 const noop = () => undefined;
 
+/** Podgląd ustawień: pokaż więcej pól niż domyślnie (jak na mockupu). */
+const PREVIEW_FIELD_OVERRIDES: Partial<PackingProductFieldVisibility> = {
+  show_signature: true,
+  show_price: true,
+};
+
 type Props = {
   mode: PackingProductDisplayMode;
   fieldVisibility?: PackingProductFieldVisibility;
 };
 
 /**
- * Podgląd Lista / Siatka — te same karty co w pakowaniu, ze stałą szerokością.
- * Wąski panel pokazuje mniej kart w rzędzie (wrap), bez ściskania kart.
+ * Podgląd Lista / Siatka — te same karty co w pakowaniu, zwijany, stałe wymiary.
  */
 export function ProductDisplayModePreview({
   mode,
@@ -85,17 +92,22 @@ export function ProductDisplayModePreview({
 }: Props) {
   const label = mode === "grid" ? "Siatka" : "Lista";
   const itemStyle = packingProductCardItemStyle(mode, { allowShrink: false });
+  const visibility: PackingProductFieldVisibility = {
+    ...fieldVisibility,
+    ...PREVIEW_FIELD_OVERRIDES,
+    show_product_name: true,
+    show_image: fieldVisibility.show_image,
+    show_location: fieldVisibility.show_location,
+  };
 
   return (
-    <div className="mt-2 max-w-3xl rounded-lg border border-slate-200 bg-white p-3">
-      <p className="mb-1 text-xs font-semibold text-slate-600">Podgląd układu</p>
+    <PackingSettingsPreviewCollapse>
       <p className="mb-2 text-sm font-bold text-slate-900">{label}</p>
       <div className="overflow-x-auto overflow-y-hidden rounded-md border border-slate-100 bg-white p-2">
         <ul
           className={packingProductCardsContainerClass()}
           style={{
             ...packingProductCardsContainerStyle(),
-            /* Nie rozciągaj wiersza — wrap zamiast ściskania kart */
             width: "100%",
             minWidth: 0,
           }}
@@ -107,12 +119,12 @@ export function ProductDisplayModePreview({
             return (
               <li key={line.order_item_id} className={packingProductCardItemClass()} style={itemStyle}>
                 {done ? (
-                  <DoneCard line={line} flash={false} fieldVisibility={fieldVisibility} displayMode={mode} />
+                  <DoneCard line={line} flash={false} fieldVisibility={visibility} displayMode={mode} />
                 ) : (
                   <DefaultCard
                     line={line}
                     scanBusy={false}
-                    fieldVisibility={fieldVisibility}
+                    fieldVisibility={visibility}
                     displayMode={mode}
                     lockCardSize
                     onActivate={noop}
@@ -123,6 +135,6 @@ export function ProductDisplayModePreview({
           })}
         </ul>
       </div>
-    </div>
+    </PackingSettingsPreviewCollapse>
   );
 }

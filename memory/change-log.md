@@ -1,3 +1,9 @@
+## 2026-08-09 — Ustawienia widoku: zwijane podglądy układu
+
+- Wspólny `PackingSettingsPreviewCollapse` (domyślnie zwinięty)
+- Podglądy: układ (sidebar/pełna), komentarze, dokument sprzedaży, produkty Lista/Siatka
+- Siatka kart: zdjęcie wyśrodkowane pod nagłówkiem (jak mockup)
+
 ## 2026-08-09 — Karty pakowania: mockup Siatka/Lista
 
 - Stałe wymiary: siatka 20×19.5rem; lista pełna szerokość + stała wysokość wiersza

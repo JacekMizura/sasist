@@ -3,6 +3,7 @@ import {
   packingOrdersListLayoutLabel,
   type PackingOrdersListLayout,
 } from "../../../../types/wmsPackingExtendedUi";
+import { PackingSettingsPreviewCollapse } from "../settingsPreviews/PackingSettingsPreviewCollapse";
 import { ExpandedHorizontalOrderCard } from "./ExpandedHorizontalOrderCard";
 import { ExpandedVerticalOrderCard } from "./ExpandedVerticalOrderCard";
 import {
@@ -173,15 +174,14 @@ export function OrdersListLayoutPreview({
     layout === "compact" ? { ...productFields, showImage: false } : productFields;
 
   return (
-    <div className="mt-2 max-w-xl rounded-lg border border-slate-200 bg-white p-3">
-      <p className="mb-1 text-xs font-semibold text-slate-600">Podgląd układu</p>
+    <PackingSettingsPreviewCollapse className="max-w-xl">
       <p className="mb-2 text-sm font-bold text-slate-900">{label}</p>
       <div className="overflow-hidden rounded-md border border-slate-100 bg-white p-2">
         {layout === "compact" ? <StandardPreview /> : null}
         {layout === "cards" ? <HorizontalPreview productFields={fieldsForLayout} /> : null}
         {layout === "expanded_vertical" ? <VerticalPreview productFields={fieldsForLayout} /> : null}
       </div>
-    </div>
+    </PackingSettingsPreviewCollapse>
   );
 }
 

@@ -9,6 +9,7 @@ import {
   type PackingProductFieldVisibility,
 } from "./packingProductDisplay";
 import {
+  PACKING_PRODUCT_GRID_IMAGE_HEIGHT,
   PACKING_PRODUCT_LIST_CARD_HEIGHT,
   PACKING_PRODUCT_LIST_IMAGE_SIZE,
   packingProductCardRootSizeClass,
@@ -84,7 +85,7 @@ function ActiveCardInner({
 
   const packControls = (
     <div
-      className={["flex flex-col items-stretch gap-2", isGrid ? "w-full max-w-[10.5rem]" : "w-full"].join(" ")}
+      className={["flex flex-col items-stretch gap-2", isGrid ? "w-full max-w-[11rem]" : "w-full"].join(" ")}
       onClick={(e) => e.stopPropagation()}
     >
       <div className="flex items-center justify-center gap-2">
@@ -153,24 +154,24 @@ function ActiveCardInner({
             <PackingGridLocationHeader showLocation={showLoc} locBadge={locBadge} menu={menu} />
           </div>
 
-          <div className="relative mt-2 flex min-h-0 flex-1 items-start gap-3 overflow-hidden">
-            <div className="relative flex w-[11rem] shrink-0 flex-col items-center justify-center bg-transparent">
-              {showImg && line.image_url ? (
-                <img
-                  src={line.image_url}
-                  alt=""
-                  className="pointer-events-none absolute inset-0 m-auto max-h-[6.5rem] max-w-[90%] object-contain opacity-20"
-                  loading="lazy"
-                />
-              ) : null}
-              <div className="relative z-[1] w-full">{packControls}</div>
-            </div>
-            <div className="min-w-0 flex-1 overflow-hidden opacity-80">
-              {title ? (
-                <p className="line-clamp-3 text-[13px] font-bold leading-snug text-slate-900">{title}</p>
-              ) : null}
-              <LineDetailsBlock line={line} variant="active" fieldVisibility={fieldVisibility} layout="columns" />
-            </div>
+          <div
+            className="relative mt-2 flex w-full flex-col items-center justify-center gap-2 bg-transparent"
+            style={{ minHeight: PACKING_PRODUCT_GRID_IMAGE_HEIGHT }}
+          >
+            {showImg && line.image_url ? (
+              <img
+                src={line.image_url}
+                alt=""
+                className="pointer-events-none absolute inset-0 m-auto max-h-[7rem] max-w-[85%] object-contain opacity-20"
+                loading="lazy"
+              />
+            ) : null}
+            <div className="relative z-[1] w-full max-w-[12rem]">{packControls}</div>
+          </div>
+
+          <div className="mt-2 min-h-0 min-w-0 flex-1 overflow-hidden opacity-80">
+            {title ? <p className="line-clamp-3 text-[13px] font-bold leading-snug text-slate-900">{title}</p> : null}
+            <LineDetailsBlock line={line} variant="active" fieldVisibility={fieldVisibility} layout="columns" />
           </div>
         </>
       ) : (

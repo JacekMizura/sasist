@@ -13,10 +13,11 @@ export const PACKING_PRODUCT_LIST_CARD_HEIGHT = "9.25rem";
 export const PACKING_PRODUCT_GRID_CARD_WIDTH = "20rem";
 
 /** Kafelki: stała wysokość (Default / Active / Done jednakowe). */
-export const PACKING_PRODUCT_GRID_CARD_HEIGHT = "19.5rem";
+export const PACKING_PRODUCT_GRID_CARD_HEIGHT = "24rem";
 
-/** Stały obszar zdjęcia w siatce (kwadrat). */
-export const PACKING_PRODUCT_GRID_IMAGE_SIZE = 128;
+/** Stały obszar zdjęcia w siatce (wysokość strefy — zdjęcie wyśrodkowane). */
+export const PACKING_PRODUCT_GRID_IMAGE_HEIGHT = "8.5rem";
+
 
 /** Stały obszar zdjęcia na liście. */
 export const PACKING_PRODUCT_LIST_IMAGE_SIZE = 84;

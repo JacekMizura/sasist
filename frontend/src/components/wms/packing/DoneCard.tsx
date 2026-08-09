@@ -8,7 +8,7 @@ import {
   type PackingProductFieldVisibility,
 } from "./packingProductDisplay";
 import {
-  PACKING_PRODUCT_GRID_IMAGE_SIZE,
+  PACKING_PRODUCT_GRID_IMAGE_HEIGHT,
   PACKING_PRODUCT_LIST_IMAGE_SIZE,
   packingProductCardRootSizeClass,
   packingProductCardSizeStyle,
@@ -84,16 +84,29 @@ function DoneCardInner({ line, flash, fieldVisibility, displayMode = "list" }: D
             />
           </div>
 
-          <div className="mt-2 flex min-h-0 flex-1 items-start gap-3 overflow-hidden">
-            {showImg ? (
-              <PackingProductThumb url={line.image_url} size={PACKING_PRODUCT_GRID_IMAGE_SIZE} muted />
-            ) : null}
-            <div className="min-w-0 flex-1 overflow-hidden">
-              {title ? (
-                <p className="line-clamp-3 text-[13px] font-bold leading-snug text-slate-600/85">{title}</p>
-              ) : null}
-              <LineDetailsBlock line={line} variant="done" fieldVisibility={fieldVisibility} layout="columns" />
+          {showImg ? (
+            <div
+              className="mt-2 flex w-full items-center justify-center overflow-hidden bg-transparent"
+              style={{ height: PACKING_PRODUCT_GRID_IMAGE_HEIGHT }}
+            >
+              {line.image_url ? (
+                <img
+                  src={line.image_url}
+                  alt=""
+                  className="max-h-full max-w-full object-contain opacity-55 grayscale"
+                  loading="lazy"
+                />
+              ) : (
+                <span className="text-3xl text-slate-300/80">—</span>
+              )}
             </div>
+          ) : null}
+
+          <div className="mt-2 min-h-0 min-w-0 flex-1 overflow-hidden">
+            {title ? (
+              <p className="line-clamp-3 text-[13px] font-bold leading-snug text-slate-600/85">{title}</p>
+            ) : null}
+            <LineDetailsBlock line={line} variant="done" fieldVisibility={fieldVisibility} layout="columns" />
           </div>
         </>
       ) : (

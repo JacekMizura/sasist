@@ -10,6 +10,7 @@
 - Full-width: no left sidebar; `PackingOrderFullWidthInfo` strip; denser product grid; Spakuj wszystko in header
 - `movePackedToBottom` wired in `sortLinesForPacking` / `sortedLines`
 - Order chrome toggles: `showOrderPhone`, `showOrderValue`, `showShippingAddress` (default ON)
+- View settings: collapsible `Podgląd układu` under layout / products / comments / sales doc (default collapsed)
 
 **Packing product appearance (2026-08-09):**
 - Shared `packingProductDisplay.ts` merges `interface_display` + extended UI

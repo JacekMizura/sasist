@@ -1,6 +1,9 @@
 import { OrdersListLayoutPreview } from "../../../components/wms/packing/ordersList/OrdersListLayoutPreview";
 import { ProductDisplayModePreview } from "../../../components/wms/packing/ProductDisplayModePreview";
 import { buildPackingProductFieldVisibility } from "../../../components/wms/packing/packingProductDisplay";
+import { PackingCustomerCommentStylePreview } from "../../../components/wms/packing/settingsPreviews/PackingCustomerCommentStylePreview";
+import { PackingLayoutModePreview } from "../../../components/wms/packing/settingsPreviews/PackingLayoutModePreview";
+import { PackingSalesDocumentPreview } from "../../../components/wms/packing/settingsPreviews/PackingSalesDocumentPreview";
 import type { WmsPackingExtendedUiSettings } from "../../../types/wmsPackingExtendedUi";
 import type { WmsPackingInterfaceDisplay, WmsPackingSettingsRead } from "../../../types/wmsPackingSettings";
 import {
@@ -26,54 +29,65 @@ export function PackingViewSection({ extended, draft, patchExtended, toggleInter
   return (
     <SectionCard id="wms-pack-view" title="Widok">
       <FieldGrid>
-        <SelectField
-          settingId="packing.layout_mode"
-          label="Wybierz układ"
-          value={extended.layoutMode}
-          onChange={(v) => patchExtended("layoutMode", v as WmsPackingExtendedUiSettings["layoutMode"])}
-          infoKey="packing.layout_mode"
-        >
-          <option value="with_sidebar">Z sidebarem</option>
-          <option value="full_width">Pełna szerokość</option>
-        </SelectField>
-        <SelectField
-          settingId="packing.customer_comment_style"
-          label="Wygląd komentarzy klienta"
-          value={extended.customerCommentStyle}
-          onChange={(v) =>
-            patchExtended("customerCommentStyle", v as WmsPackingExtendedUiSettings["customerCommentStyle"])
-          }
-          infoKey="packing.customer_comment_style"
-        >
-          <option value="highlighted">Wyróżniony</option>
-          <option value="normal">Zwykły</option>
-        </SelectField>
-        <SelectField
-          settingId="packing.sales_document_preview"
-          label="Widok dokumentu sprzedaży"
-          value={extended.salesDocumentPreview}
-          onChange={(v) =>
-            patchExtended("salesDocumentPreview", v as WmsPackingExtendedUiSettings["salesDocumentPreview"])
-          }
-          infoKey="packing.sales_document_preview"
-        >
-          <option value="simplified">Uproszczony</option>
-          <option value="full">Pełny</option>
-        </SelectField>
-        <SelectField
-          settingId="packing.product_display_mode"
-          label="Wygląd produktów na liście do spakowania"
-          value={extended.productDisplayMode}
-          onChange={(v) =>
-            patchExtended("productDisplayMode", v as WmsPackingExtendedUiSettings["productDisplayMode"])
-          }
-          infoKey="packing.product_display_mode"
-        >
-          <option value="list">Lista</option>
-          <option value="grid">Siatka</option>
-        </SelectField>
+        <div>
+          <SelectField
+            settingId="packing.layout_mode"
+            label="Wybierz układ"
+            value={extended.layoutMode}
+            onChange={(v) => patchExtended("layoutMode", v as WmsPackingExtendedUiSettings["layoutMode"])}
+            infoKey="packing.layout_mode"
+          >
+            <option value="with_sidebar">Z sidebarem</option>
+            <option value="full_width">Pełna szerokość</option>
+          </SelectField>
+          <PackingLayoutModePreview mode={extended.layoutMode} />
+        </div>
+        <div>
+          <SelectField
+            settingId="packing.customer_comment_style"
+            label="Wygląd komentarzy klienta"
+            value={extended.customerCommentStyle}
+            onChange={(v) =>
+              patchExtended("customerCommentStyle", v as WmsPackingExtendedUiSettings["customerCommentStyle"])
+            }
+            infoKey="packing.customer_comment_style"
+          >
+            <option value="highlighted">Wyróżniony</option>
+            <option value="normal">Zwykły</option>
+          </SelectField>
+          <PackingCustomerCommentStylePreview style={extended.customerCommentStyle} />
+        </div>
+        <div>
+          <SelectField
+            settingId="packing.sales_document_preview"
+            label="Widok dokumentu sprzedaży"
+            value={extended.salesDocumentPreview}
+            onChange={(v) =>
+              patchExtended("salesDocumentPreview", v as WmsPackingExtendedUiSettings["salesDocumentPreview"])
+            }
+            infoKey="packing.sales_document_preview"
+          >
+            <option value="simplified">Uproszczony</option>
+            <option value="full">Pełny</option>
+          </SelectField>
+          <PackingSalesDocumentPreview mode={extended.salesDocumentPreview} />
+        </div>
+        <div>
+          <SelectField
+            settingId="packing.product_display_mode"
+            label="Wygląd produktów na liście do spakowania"
+            value={extended.productDisplayMode}
+            onChange={(v) =>
+              patchExtended("productDisplayMode", v as WmsPackingExtendedUiSettings["productDisplayMode"])
+            }
+            infoKey="packing.product_display_mode"
+          >
+            <option value="list">Lista</option>
+            <option value="grid">Siatka</option>
+          </SelectField>
+          <ProductDisplayModePreview mode={extended.productDisplayMode} fieldVisibility={productPreviewVisibility} />
+        </div>
       </FieldGrid>
-      <ProductDisplayModePreview mode={extended.productDisplayMode} fieldVisibility={productPreviewVisibility} />
       <FieldGrid>
         <SelectField
           settingId="packing.location_badge_position"
