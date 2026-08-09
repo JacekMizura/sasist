@@ -1,6 +1,13 @@
-import type { WmsOperationalNoteBriefApi, WmsPackingOrderDetailApi, WmsPackingRecommendedCartonApi } from "../../../api/wmsPackingApi";
+import type {
+  WmsOperationalNoteBriefApi,
+  WmsPackingOrderDetailApi,
+  WmsPackingRecommendedCartonApi,
+} from "../../../api/wmsPackingApi";
 import { ShippingMethodLogo } from "../../shipping/ShippingMethodLogo";
-import type { PackingCustomerCommentStyle } from "../../../types/wmsPackingExtendedUi";
+import type {
+  PackingCustomerCommentStyle,
+  PackingSalesDocPreview,
+} from "../../../types/wmsPackingExtendedUi";
 import { PackingRecommendedCartonsPanel } from "./PackingRecommendedCartons";
 import { packingCourierLabelCount, packingCourierName } from "./packingHelpers";
 
@@ -8,6 +15,7 @@ const NOTES_RED = "#d32f2f";
 const COMMENT_BG = "#ffebee";
 const COMMENT_BORDER = "#ffcdd2";
 const COMMENT_TEXT = "#c62828";
+const DOC_GREEN = "#2e7d32";
 
 function IconPhoneSmall() {
   return (
@@ -20,8 +28,10 @@ function IconPhoneSmall() {
 export type PackingOrderFullWidthInfoProps = {
   detail: WmsPackingOrderDetailApi;
   customerCommentStyle: PackingCustomerCommentStyle;
+  salesDocumentPreview: PackingSalesDocPreview;
   showOrderPhone?: boolean;
   showOrderValue?: boolean;
+  showShippingAddress?: boolean;
   visibleOperationalNotes: WmsOperationalNoteBriefApi[];
   headerCartons: WmsPackingRecommendedCartonApi[];
   selectedCartonId: string | null | undefined;
@@ -31,13 +41,16 @@ export type PackingOrderFullWidthInfoProps = {
 };
 
 /**
- * Pas informacji zamówienia pod belką — układ „Pełna szerokość” (bez lewego sidebara).
+ * Pas informacji zamówienia pod belką — układ „Pełna szerokość” (specyfikacja mocka).
+ * Horyzontalny pasek na całą szerokość: dokument → logo → wysyłka → uwagi → opakowania.
  */
 export function PackingOrderFullWidthInfo({
   detail,
   customerCommentStyle,
+  salesDocumentPreview,
   showOrderPhone = true,
   showOrderValue = true,
+  showShippingAddress = true,
   visibleOperationalNotes,
   headerCartons,
   selectedCartonId,
@@ -45,8 +58,17 @@ export function PackingOrderFullWidthInfo({
   packingActionsLocked,
   onSelectCarton,
 }: PackingOrderFullWidthInfoProps) {
+  const detailed = salesDocumentPreview === "full";
+  const salesLabel = (detail.sales_document_label ?? "").trim();
+  const hasSalesDocument = !!salesLabel;
+  const docPrefixUpper = ((detail.document_prefix ?? "Pa") as string).trim().toUpperCase();
+  const documentTypeLabel = docPrefixUpper === "FA" ? "Faktura" : "Paragon";
   const uwagiKlienta = (detail.customer_comment ?? "").trim();
   const notatkiMag = (detail.staff_notes ?? "").trim();
+  const clientName = (detail.customer_name ?? "").trim();
+  const nip = (detail.customer_nip ?? "").trim();
+  const address = (detail.shipping_address ?? "").trim();
+  const showAddress = showShippingAddress && !!address;
   const telefon = (detail.customer_phone ?? "").trim() || "—";
   const telHref = telefon !== "—" ? telefon.replace(/\s/g, "") : "";
   const showPhone = showOrderPhone && telefon !== "—";
@@ -65,22 +87,61 @@ export function PackingOrderFullWidthInfo({
   const courierName = packingCourierName(detail);
   const forLogo = (detail.shipping_method_name ?? detail.shipping_method ?? courierName ?? "").trim() || null;
   const highlighted = customerCommentStyle === "highlighted";
+  const showBuyer = detailed && (clientName || nip || showAddress);
 
   return (
-    <div className="shrink-0 border-b border-slate-200 bg-white px-3 py-3 sm:px-4" aria-label="Informacje o zamówieniu">
-      <div className="flex flex-wrap items-start gap-x-6 gap-y-3">
-        <div className="flex min-w-0 flex-wrap items-start gap-4">
+    <div className="w-full shrink-0 border-b border-slate-200 bg-white" aria-label="Informacje o zamówieniu">
+      <div className="flex w-full flex-wrap items-stretch gap-x-5 gap-y-3 px-3 py-3 sm:px-4 lg:px-5">
+        {/* Dokument */}
+        <div className="flex min-w-0 shrink-0 flex-col justify-center gap-1">
+          {hasSalesDocument ? (
+            <div className="flex flex-wrap items-center gap-2">
+              <span
+                className="inline-flex h-7 min-w-[1.75rem] items-center justify-center rounded px-1.5 text-xs font-bold text-white"
+                style={{ background: DOC_GREEN }}
+              >
+                {docPrefixUpper === "FA" ? "Fa" : "Pa"}
+              </span>
+              <span className="text-sm font-bold tabular-nums text-slate-900">{salesLabel}</span>
+              <span className="text-xs font-semibold text-slate-500">{documentTypeLabel}</span>
+            </div>
+          ) : (
+            <div className="flex flex-wrap items-center gap-2">
+              <span
+                className="inline-flex h-7 min-w-[1.75rem] items-center justify-center rounded px-1.5 text-xs font-bold text-white"
+                style={{ background: DOC_GREEN }}
+              >
+                {docPrefixUpper === "FA" ? "Fa" : "Pa"}
+              </span>
+              <span className="text-sm font-bold text-slate-700">{documentTypeLabel}</span>
+              <span className="text-xs font-medium text-slate-400">nie wygenerowano</span>
+            </div>
+          )}
+          {showBuyer ? (
+            <div className="min-w-0 max-w-[14rem]">
+              {clientName && clientName !== "—" ? (
+                <p className="truncate text-xs font-bold text-slate-900">{clientName}</p>
+              ) : null}
+              {nip ? <p className="text-[11px] font-medium text-slate-600">NIP: {nip}</p> : null}
+            </div>
+          ) : null}
+        </div>
+
+        {/* Logo kuriera — bez tła / boxa */}
+        <div className="flex shrink-0 items-center self-center">
           <ShippingMethodLogo
             logoUrl={detail.shipping_method_logo_url}
             methodName={forLogo}
             size="packingSidebar"
-            className="self-start"
+            className="!self-center"
           />
-          <div className="min-w-0 space-y-1 text-xs font-medium text-slate-700 sm:text-sm">
+        </div>
+
+        {/* Wysyłka / kontakt / wartość — 2 kolumny tekstu */}
+        <div className="grid min-w-0 grid-cols-1 gap-x-8 gap-y-1 text-xs font-medium text-slate-700 sm:grid-cols-2 sm:text-sm">
+          <div className="space-y-1">
             {waybillN >= 1 ? (
-              <p className="font-semibold text-slate-800">
-                {Math.max(1, waybillN)}x List przewozowy
-              </p>
+              <p className="font-semibold text-slate-800">{Math.max(1, waybillN)}x List przewozowy</p>
             ) : null}
             <p>
               Wysyłka: <span className="font-semibold text-slate-900">{shipName}</span>
@@ -91,6 +152,11 @@ export function PackingOrderFullWidthInfo({
                 <span className="font-semibold text-slate-900">{detail.pickup_point ? "Tak" : "Nie"}</span>
               </p>
             ) : null}
+            {showAddress ? (
+              <p className="max-w-xs whitespace-pre-line text-xs leading-snug text-slate-600">{address}</p>
+            ) : null}
+          </div>
+          <div className="space-y-1">
             {showPhone ? (
               <p className="inline-flex flex-wrap items-center gap-1.5 text-sm font-bold tabular-nums text-slate-900">
                 <IconPhoneSmall />
@@ -116,10 +182,11 @@ export function PackingOrderFullWidthInfo({
           </div>
         </div>
 
-        <div className="flex min-w-0 flex-1 flex-wrap items-stretch justify-end gap-3">
+        {/* Notatki + uwagi klienta — rozciągają się na pozostałą szerokość */}
+        <div className="flex min-w-[16rem] flex-1 flex-wrap items-stretch gap-3">
           {notatkiMag ? (
             <div
-              className="min-w-[12rem] max-w-md flex-1 rounded-lg px-3 py-2.5 text-white shadow-sm"
+              className="min-w-[14rem] flex-1 rounded-lg px-3 py-2.5 text-white shadow-sm"
               style={{ background: NOTES_RED }}
             >
               <p className="text-xs font-bold uppercase tracking-wide">Notatki magazynu</p>
@@ -129,7 +196,7 @@ export function PackingOrderFullWidthInfo({
           {visibleOperationalNotes.map((n) => (
             <div
               key={n.id}
-              className="min-w-[12rem] max-w-md flex-1 rounded-lg px-3 py-2.5 text-white shadow-sm"
+              className="min-w-[14rem] flex-1 rounded-lg px-3 py-2.5 text-white shadow-sm"
               style={{ background: NOTES_RED }}
             >
               <p className="text-xs font-bold uppercase tracking-wide">Notatka</p>
@@ -139,7 +206,7 @@ export function PackingOrderFullWidthInfo({
           {uwagiKlienta ? (
             highlighted ? (
               <div
-                className="min-w-[12rem] max-w-lg flex-1 rounded-lg border px-3 py-2.5"
+                className="min-w-[14rem] flex-1 rounded-lg border px-3 py-2.5"
                 style={{ background: COMMENT_BG, borderColor: COMMENT_BORDER }}
                 role="status"
               >
@@ -149,7 +216,7 @@ export function PackingOrderFullWidthInfo({
                 <p className="mt-1 text-sm font-semibold leading-snug text-red-900">{uwagiKlienta}</p>
               </div>
             ) : (
-              <div className="min-w-[12rem] max-w-lg flex-1">
+              <div className="min-w-[14rem] flex-1">
                 <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">
                   Uwagi do zamówienia
                 </p>
@@ -161,12 +228,13 @@ export function PackingOrderFullWidthInfo({
       </div>
 
       {headerCartons.length > 0 ? (
-        <div className="mt-3">
+        <div className="w-full border-t border-slate-100 px-3 py-2.5 sm:px-4 lg:px-5">
           <PackingRecommendedCartonsPanel
             items={headerCartons}
             selectedId={selectedCartonId ?? detail.selected_carton_id}
             busy={selectCartonBusy || packingActionsLocked}
             onSelect={onSelectCarton}
+            align="start"
           />
         </div>
       ) : null}

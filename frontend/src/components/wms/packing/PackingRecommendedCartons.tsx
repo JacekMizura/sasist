@@ -90,17 +90,25 @@ export function PackingRecommendedCartonsPanel({
   selectedId,
   busy,
   onSelect,
+  align = "end",
 }: {
   items: WmsPackingRecommendedCartonApi[];
   selectedId: string | null | undefined;
   busy: boolean;
   onSelect: (cartonId: string) => void;
+  /** `start` = full-width strip (mock); `end` = sidebar/header (domyślnie). */
+  align?: "start" | "end";
 }) {
   if (!items.length) return null;
   const sel = (selectedId ?? "").trim();
   return (
-    <div className="min-w-0 shrink-0">
-      <ul className="m-0 flex list-none flex-wrap justify-end gap-2 p-0">
+    <div className="min-w-0 w-full">
+      <ul
+        className={[
+          "m-0 flex list-none flex-wrap gap-2 p-0",
+          align === "start" ? "w-full justify-start" : "justify-end",
+        ].join(" ")}
+      >
         {items.map((c) => {
           const isSel = sel !== "" && c.id === sel;
           return (

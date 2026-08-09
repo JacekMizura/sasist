@@ -199,18 +199,210 @@ export function PackingView({
         ? [detail.selected_carton]
         : [];
 
+  /** Full-width: auto-fit fills the row (no orphan empty columns). Sidebar: fixed 2–3 cols. */
   const productGridClass = isFullWidth
-    ? "grid list-none gap-3 bg-white p-0 [grid-template-columns:repeat(1,minmax(0,1fr))] sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 lg:items-stretch"
+    ? "m-0 grid w-full list-none gap-3 bg-white p-0 [grid-template-columns:repeat(auto-fit,minmax(min(100%,15.5rem),1fr))]"
     : "grid list-none gap-3 [grid-template-columns:repeat(1,minmax(0,1fr))] bg-white p-0 lg:grid-cols-2 xl:grid-cols-3 lg:items-stretch";
 
+  if (isFullWidth) {
+    return (
+      <div className="flex h-full min-h-0 w-full flex-col overflow-hidden bg-white">
+        <input
+          ref={wedgeRef}
+          type="text"
+          tabIndex={-1}
+          className="pointer-events-none fixed left-0 top-0 h-px w-px opacity-0"
+          aria-hidden
+          readOnly
+        />
+        <ScannerHandler
+          onScan={onScan}
+          enabled={!wszystkoSpakowane && !scanBusy && !packingActionsLocked}
+        />
+
+        <header className="w-full shrink-0 border-b border-slate-200 bg-white">
+          <div className="flex w-full flex-wrap items-center gap-x-3 gap-y-2 px-3 py-2 sm:px-4 lg:px-5">
+            <div className="flex min-w-0 flex-wrap items-center gap-2.5 sm:gap-3">
+              <button
+                type="button"
+                className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-slate-300 bg-white text-slate-800 hover:bg-slate-50"
+                onClick={() => navigate(WMS_ROUTES.packingOrders)}
+                aria-label="Wróć"
+              >
+                <IconBack />
+              </button>
+              <span className="text-lg font-bold text-slate-900 sm:text-xl">
+                {orderNumberLabel(detail.number)}
+              </span>
+              <span className="text-2xl font-black tabular-nums text-slate-900 sm:text-3xl">
+                {qIdx}/{qTot}
+              </span>
+            </div>
+
+            <div className="min-w-0 flex-1 text-sm text-slate-600">
+              <p className="truncate">
+                Wózek: <span className="font-semibold text-slate-900">{cartLabel}</span>
+                {hasBasketLabel ? (
+                  <>
+                    {", "}
+                    Koszyk: <span className="font-semibold text-slate-900">{basketCodeRaw}</span>
+                  </>
+                ) : null}
+              </p>
+              <p className="mt-0.5 truncate">
+                Osoba pakująca: <span className="font-semibold text-slate-900">{packerLabel}</span>
+              </p>
+            </div>
+
+            <div className="ml-auto flex shrink-0 items-center gap-2">
+              <button
+                type="button"
+                className="inline-flex h-11 w-11 items-center justify-center rounded-lg border border-slate-300 bg-white text-slate-600 hover:bg-slate-50"
+                aria-label="Opcje"
+              >
+                <IconDots />
+              </button>
+              <button
+                type="button"
+                disabled={wszystkoSpakowane || scanBusy || packingActionsLocked}
+                className="min-h-11 rounded-lg px-4 text-sm font-bold text-white shadow-sm disabled:cursor-not-allowed disabled:opacity-50 sm:px-5 sm:text-base"
+                style={{ background: PRIMARY_GREEN }}
+                onClick={() => void packAll()}
+              >
+                Spakuj wszystko
+              </button>
+            </div>
+          </div>
+        </header>
+
+        <PackingOrderFullWidthInfo
+          detail={detail}
+          customerCommentStyle={customerCommentStyle}
+          salesDocumentPreview={effectiveDocumentPreview}
+          showOrderPhone={showOrderPhone}
+          showOrderValue={showOrderValue}
+          showShippingAddress={showShippingAddress}
+          visibleOperationalNotes={visibleOperationalNotes}
+          headerCartons={showHeaderCartonPicker ? headerCartons : []}
+          selectedCartonId={selectedCartonId}
+          selectCartonBusy={selectCartonBusy}
+          packingActionsLocked={packingActionsLocked}
+          onSelectCarton={onSelectCarton}
+        />
+
+        <section
+          className="min-h-0 w-full flex-1 overflow-y-auto bg-white px-3 pb-4 pt-3 sm:px-4 lg:px-5"
+          aria-label="Produkty"
+        >
+          {detail.bundle_trees && detail.bundle_trees.length > 0 ? (
+            <div className="mb-4 w-full">
+              <p className="mb-2 text-[11px] font-bold uppercase tracking-wide text-slate-500">Zestawy</p>
+              <BundlePackingTree trees={detail.bundle_trees} />
+            </div>
+          ) : null}
+          {bundlePackScan && shouldShowBundleVerifiedBadge(bundlePackScan) ? (
+            <BundleVerifiedBadge bundleName={bundlePackScan.bundle_name} className="mb-4" />
+          ) : null}
+          {bundlePackScan?.traceability_links ? (
+            <BundleTraceabilityStrip links={bundlePackScan.traceability_links} className="mb-4" />
+          ) : null}
+          {wszystkoSpakowane ? (
+            <div className="mb-3 space-y-3 text-center">
+              <p className="text-base font-semibold text-emerald-800">Zamówienie spakowane.</p>
+              {showProceedAfterLinesCompleteCta && onProceedAfterLinesComplete ? (
+                <button
+                  type="button"
+                  onClick={onProceedAfterLinesComplete}
+                  className="rounded-xl bg-[#5a4fcf] px-5 py-3 text-xs font-black uppercase tracking-widest text-white shadow-sm transition hover:bg-[#4a40b2] active:scale-95"
+                >
+                  Wybierz opakowanie
+                </button>
+              ) : null}
+            </div>
+          ) : null}
+          <ul className={productGridClass}>
+            {sortedLines.map((line) => {
+              const done = line.quantity_packed >= lineQuantityRequired(line);
+              const active = !done && activeProductId === line.order_item_id;
+              const flash = flashItemId === line.order_item_id;
+              return (
+                <li key={line.order_item_id} className="flex min-h-0 min-w-0 w-full">
+                  {done ? (
+                    <DoneCard line={line} flash={flash} fieldVisibility={productFieldVisibility} />
+                  ) : active ? (
+                    <ActiveCard
+                      line={line}
+                      packQty={packQty}
+                      flash={flash}
+                      scanBusy={scanBusy || packingActionsLocked}
+                      linePackBusy={linePackBusy}
+                      fieldVisibility={productFieldVisibility}
+                      onPackQtyChange={onPackQtyChange}
+                      onConfirmPack={handleConfirmPack}
+                      onMarkShortage={
+                        packingActionsLocked || !onMarkLineShortage ? undefined : onMarkLineShortage
+                      }
+                    />
+                  ) : (
+                    <DefaultCard
+                      line={line}
+                      scanBusy={scanBusy || packingActionsLocked}
+                      fieldVisibility={productFieldVisibility}
+                      onActivate={activateProduct}
+                      onMarkShortage={
+                        packingActionsLocked || !onMarkLineShortage ? undefined : onMarkLineShortage
+                      }
+                    />
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+
+        <div className="flex w-full shrink-0 flex-wrap items-center gap-2 border-t border-slate-100 bg-white px-3 py-2 sm:px-4 lg:px-5">
+          <button
+            type="button"
+            className="min-h-11 rounded-lg border-2 border-slate-400 bg-white px-4 text-sm font-bold text-slate-800 shadow-sm hover:bg-slate-50"
+            onClick={onInterrupt}
+          >
+            Przerwij
+          </button>
+          {showAutomationButtons &&
+          warehouseId != null &&
+          warehouseId > 0 &&
+          (automationButtonsPosition === "bottom" || automationButtonsPosition === "right") ? (
+            <PackingAutomationActivators
+              tenantId={DAMAGE_TENANT_ID}
+              warehouseId={warehouseId}
+              orderId={detail.order_id}
+              showAutomationButtons={showAutomationButtons}
+              position={automationButtonsPosition}
+              onToast={onAutomationToast}
+              onStatusChanged={onAutomationStatusChanged}
+            />
+          ) : null}
+        </div>
+        {showAutomationButtons &&
+        warehouseId != null &&
+        warehouseId > 0 &&
+        automationButtonsPosition === "floating" ? (
+          <PackingAutomationActivators
+            tenantId={DAMAGE_TENANT_ID}
+            warehouseId={warehouseId}
+            orderId={detail.order_id}
+            showAutomationButtons={showAutomationButtons}
+            position="floating"
+            onToast={onAutomationToast}
+            onStatusChanged={onAutomationStatusChanged}
+          />
+        ) : null}
+      </div>
+    );
+  }
+
   return (
-    <div
-      className={
-        isFullWidth
-          ? "flex h-full min-h-0 w-full flex-col overflow-hidden bg-white"
-          : "flex h-full min-h-0 w-full flex-col overflow-hidden bg-white lg:flex-row lg:gap-3 lg:p-3"
-      }
-    >
+    <div className="flex h-full min-h-0 w-full flex-col overflow-hidden bg-white lg:flex-row lg:gap-3 lg:p-3">
       <input
         ref={wedgeRef}
         type="text"
@@ -225,31 +417,29 @@ export function PackingView({
         enabled={!wszystkoSpakowane && !scanBusy && !packingActionsLocked}
       />
 
-      {!isFullWidth ? (
-        <PackingOrderSidebar
-          detail={detail}
-          salesDocumentPreview={effectiveDocumentPreview}
-          commentInBanner={commentHighlighted}
-          showOrderPhone={showOrderPhone}
-          showOrderValue={showOrderValue}
-          showShippingAddress={showShippingAddress}
-          wszystkoSpakowane={wszystkoSpakowane}
-          scanBusy={scanBusy}
-          packingActionsLocked={packingActionsLocked}
-          visibleOperationalNotes={visibleOperationalNotes}
-          selectCartonBusy={selectCartonBusy}
-          onSelectCarton={onSelectCarton}
-          packAll={packAll}
-          onInterrupt={onInterrupt}
-          showAutomationButtons={showAutomationButtons}
-          automationButtonsPosition={automationButtonsPosition}
-          warehouseId={warehouseId}
-          onAutomationToast={onAutomationToast}
-          onAutomationStatusChanged={onAutomationStatusChanged}
-        />
-      ) : null}
+      <PackingOrderSidebar
+        detail={detail}
+        salesDocumentPreview={effectiveDocumentPreview}
+        commentInBanner={commentHighlighted}
+        showOrderPhone={showOrderPhone}
+        showOrderValue={showOrderValue}
+        showShippingAddress={showShippingAddress}
+        wszystkoSpakowane={wszystkoSpakowane}
+        scanBusy={scanBusy}
+        packingActionsLocked={packingActionsLocked}
+        visibleOperationalNotes={visibleOperationalNotes}
+        selectCartonBusy={selectCartonBusy}
+        onSelectCarton={onSelectCarton}
+        packAll={packAll}
+        onInterrupt={onInterrupt}
+        showAutomationButtons={showAutomationButtons}
+        automationButtonsPosition={automationButtonsPosition}
+        warehouseId={warehouseId}
+        onAutomationToast={onAutomationToast}
+        onAutomationStatusChanged={onAutomationStatusChanged}
+      />
 
-      {/* MAIN */}
+      {/* MAIN — układ ze sidebarem (bez zmian) */}
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-white">
         <header className="shrink-0 border-b border-slate-200 bg-white">
           <div className="flex flex-wrap items-center gap-x-4 gap-y-2 px-3 py-2.5 sm:px-4">
@@ -285,7 +475,7 @@ export function PackingView({
               </p>
             </div>
 
-            {!isFullWidth && showHeaderCartonPicker && headerCartons.length > 0 ? (
+            {showHeaderCartonPicker && headerCartons.length > 0 ? (
               <PackingRecommendedCartonsPanel
                 items={headerCartons}
                 selectedId={selectedCartonId ?? detail.selected_carton_id}
@@ -293,44 +483,8 @@ export function PackingView({
                 onSelect={onSelectCarton}
               />
             ) : null}
-
-            {isFullWidth ? (
-              <div className="ml-auto flex shrink-0 items-center gap-2">
-                <button
-                  type="button"
-                  className="inline-flex h-11 w-11 items-center justify-center rounded-lg border border-slate-300 bg-white text-slate-600 hover:bg-slate-50"
-                  aria-label="Opcje"
-                >
-                  <IconDots />
-                </button>
-                <button
-                  type="button"
-                  disabled={wszystkoSpakowane || scanBusy || packingActionsLocked}
-                  className="min-h-11 rounded-lg px-4 text-sm font-bold text-white shadow-sm disabled:cursor-not-allowed disabled:opacity-50 sm:px-5 sm:text-base"
-                  style={{ background: PRIMARY_GREEN }}
-                  onClick={() => void packAll()}
-                >
-                  Spakuj wszystko
-                </button>
-              </div>
-            ) : null}
           </div>
         </header>
-
-        {isFullWidth ? (
-          <PackingOrderFullWidthInfo
-            detail={detail}
-            customerCommentStyle={customerCommentStyle}
-            showOrderPhone={showOrderPhone}
-            showOrderValue={showOrderValue}
-            visibleOperationalNotes={visibleOperationalNotes}
-            headerCartons={showHeaderCartonPicker ? headerCartons : []}
-            selectedCartonId={selectedCartonId}
-            selectCartonBusy={selectCartonBusy}
-            packingActionsLocked={packingActionsLocked}
-            onSelectCarton={onSelectCarton}
-          />
-        ) : null}
 
         {showCommentBanner ? <PackingCustomerCommentBanner comment={uwagiKlienta} /> : null}
 
@@ -400,17 +554,6 @@ export function PackingView({
             })}
           </ul>
         </section>
-        {isFullWidth ? (
-          <div className="shrink-0 border-t border-slate-100 bg-white px-3 py-2 sm:px-4">
-            <button
-              type="button"
-              className="min-h-11 w-full rounded-lg border-2 border-slate-400 bg-white px-4 text-sm font-bold text-slate-800 shadow-sm hover:bg-slate-50 sm:w-auto"
-              onClick={onInterrupt}
-            >
-              Przerwij
-            </button>
-          </div>
-        ) : null}
         {showAutomationButtons &&
         warehouseId != null &&
         warehouseId > 0 &&
@@ -424,23 +567,6 @@ export function PackingView({
             onToast={onAutomationToast}
             onStatusChanged={onAutomationStatusChanged}
           />
-        ) : null}
-        {isFullWidth &&
-        showAutomationButtons &&
-        warehouseId != null &&
-        warehouseId > 0 &&
-        (automationButtonsPosition === "bottom" || automationButtonsPosition === "right") ? (
-          <div className="shrink-0 border-t border-slate-100 bg-white px-3 py-2 sm:px-4">
-            <PackingAutomationActivators
-              tenantId={DAMAGE_TENANT_ID}
-              warehouseId={warehouseId}
-              orderId={detail.order_id}
-              showAutomationButtons={showAutomationButtons}
-              position={automationButtonsPosition}
-              onToast={onAutomationToast}
-              onStatusChanged={onAutomationStatusChanged}
-            />
-          </div>
         ) : null}
       </div>
     </div>
