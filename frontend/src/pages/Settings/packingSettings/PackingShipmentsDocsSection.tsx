@@ -50,11 +50,7 @@ export function PackingShipmentsDocsSection({
     .map((m) => ({ id: m.id, name: (m.name || m.code || m.id).trim() || m.id }));
 
   return (
-    <SectionCard
-      id="wms-pack-shipments-docs"
-      title="Przesyłki i dokumenty"
-      summary="Przesyłki, dokumenty sprzedaży, drukowanie i etykiety."
-    >
+    <SectionCard id="wms-pack-shipments-docs" title="Przesyłki i dokumenty">
       <Subsection title="Dokument sprzedaży">
         <FieldGrid>
           <SelectField
@@ -102,10 +98,7 @@ export function PackingShipmentsDocsSection({
         </div>
       </Subsection>
 
-      <Subsection
-        title="Dokumenty sprzedaży (nowe)"
-        description="Podczas generowania faktury lub paragonu, jeśli nie zostanie wybrana seria z modułu [NOWE] dokumenty, system użyje odpowiedniej serii numeracji faktur i paragonów ze starego modułu."
-      >
+      <Subsection title="Dokumenty sprzedaży (nowe)">
         <FieldGrid>
           <SelectField
             settingId="packing.invoice_series"

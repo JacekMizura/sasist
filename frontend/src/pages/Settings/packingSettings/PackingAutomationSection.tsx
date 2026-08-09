@@ -19,11 +19,7 @@ type Props = {
 /** Grupa 4: Automatyzacja */
 export function PackingAutomationSection({ extended, draft, patchExtended, toggleAction }: Props) {
   return (
-    <SectionCard
-      id="wms-pack-automation"
-      title="Automatyzacja"
-      summary="Akcje automatyczne po spakowaniu oraz aktywatory."
-    >
+    <SectionCard id="wms-pack-automation" title="Automatyzacja">
       <Subsection
         title="Akcje automatyczne po spakowaniu zamówienia"
         description="Akcje wykonywane po zakończeniu pakowania."

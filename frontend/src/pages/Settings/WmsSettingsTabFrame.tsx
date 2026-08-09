@@ -8,7 +8,8 @@ import { WmsSettingsSearchContext } from "./WmsSettingsSearchContext";
 
 export type WmsSettingsTabFrameProps = {
   title: string;
-  description: string;
+  /** Optional blurb under the tab title — omit to avoid empty spacing. */
+  description?: string;
   sections: WmsSettingsSectionConfig[];
   asideLabel?: string;
   observeSections?: boolean;
@@ -42,6 +43,7 @@ export function WmsSettingsTabFrame({
   children,
 }: WmsSettingsTabFrameProps) {
   const searchValue = useMemo(() => ({ query: "" }), []);
+  const blurb = (description ?? "").trim();
 
   return (
     <WmsSettingsSearchContext.Provider value={searchValue}>
@@ -49,7 +51,7 @@ export function WmsSettingsTabFrame({
         <div className="flex flex-col gap-4 border-b border-slate-200/90 pb-4 lg:flex-row lg:items-start lg:justify-between">
           <div className="min-w-0">
             <h2 className="text-xl font-semibold tracking-tight text-slate-900 sm:text-2xl">{title}</h2>
-            <p className="mt-1 max-w-2xl text-sm text-slate-500">{description}</p>
+            {blurb ? <p className="mt-1 max-w-2xl text-sm text-slate-500">{blurb}</p> : null}
           </div>
           {(onRestoreDefaults || onSave) && (
             <div className="flex w-full flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center lg:w-auto lg:justify-end">

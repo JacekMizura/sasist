@@ -41,7 +41,7 @@ export function PackingGeneralSection({
   }, [warehouses, mainPackingWarehouseId]);
 
   return (
-    <SectionCard id="wms-pack-general" title="Ogólne" summary="Ogólne zachowanie procesu pakowania.">
+    <SectionCard id="wms-pack-general" title="Ogólne">
       <SettingsStack>
         <BoolRow
           settingId="packing.show_all_notes"

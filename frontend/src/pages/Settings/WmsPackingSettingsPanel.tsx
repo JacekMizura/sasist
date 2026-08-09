@@ -523,7 +523,6 @@ const WmsPackingSettingsPanel = forwardRef<
   return (
     <WmsSettingsTabFrame
       title="Pakowanie"
-      description="Konfiguracja procesu pakowania i wyglądu ekranu pakowania (lista kanoniczna Sellasist)."
       sections={WMS_PACKING_SETTINGS_NAV_SECTIONS}
       asideLabel="Sekcje ustawień pakowania"
       observeSections={sectionNavObserve && Boolean(effectiveDraft)}

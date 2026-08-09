@@ -57,7 +57,7 @@ export function PackingProcessSection({
     );
 
   return (
-    <SectionCard id="wms-pack-process" title="Proces pakowania" summary="Statusy, kolejność i przebieg pakowania.">
+    <SectionCard id="wms-pack-process" title="Proces pakowania">
       <SettingsStack>
         <WmsControlSettingRow
           settingId="packing.start_status_id"
