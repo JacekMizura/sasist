@@ -125,15 +125,14 @@ export function PackingAutomationActivators({
 
   if (!showAutomationButtons || rules.length === 0) return null;
 
-  const positionClass =
-    position === "right"
-      ? "flex flex-col items-stretch gap-2"
-      : position === "floating"
-        ? "fixed bottom-4 right-4 z-40 flex max-w-sm flex-wrap justify-end gap-2"
-        : "flex flex-wrap items-center gap-2";
-
+  // Położenie (top/bottom) ustawia wrapper w PackingView — tu tylko układ przycisków.
   return (
-    <div className={positionClass} data-testid="packing-automation-activators" aria-label="Aktywatory automatyzacji">
+    <div
+      className="flex flex-wrap items-center gap-2"
+      data-testid="packing-automation-activators"
+      aria-label="Aktywatory automatyzacji"
+      data-position={position}
+    >
       {rules.map((rule) => {
         const mt = migrateManualTrigger(rule.manualTrigger);
         const label = mt.label.trim() || rule.name || "Akcja";

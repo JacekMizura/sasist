@@ -213,6 +213,24 @@ export function PackingView({
         ? [detail.selected_carton]
         : [];
 
+  const showActivators = Boolean(
+    showAutomationButtons && warehouseId != null && warehouseId > 0,
+  );
+  const activatorsOnTop = showActivators && automationButtonsPosition === "top";
+  const activatorsOnBottom = showActivators && automationButtonsPosition === "bottom";
+
+  const automationStrip = showActivators ? (
+    <PackingAutomationActivators
+      tenantId={DAMAGE_TENANT_ID}
+      warehouseId={warehouseId!}
+      orderId={detail.order_id}
+      showAutomationButtons={showAutomationButtons}
+      position={automationButtonsPosition}
+      onToast={onAutomationToast}
+      onStatusChanged={onAutomationStatusChanged}
+    />
+  ) : null;
+
   if (isFullWidth) {
     return (
       <div className="flex h-full min-h-0 w-full flex-col overflow-hidden bg-white">
@@ -288,6 +306,15 @@ export function PackingView({
           packingActionsLocked={packingActionsLocked}
           onSelectCarton={onSelectCarton}
         />
+
+        {activatorsOnTop ? (
+          <div
+            className="w-full shrink-0 border-b border-slate-200 bg-white px-3 py-2 sm:px-4 lg:px-5"
+            data-packing-automation-slot="top"
+          >
+            {automationStrip}
+          </div>
+        ) : null}
 
         <section
           className="min-h-0 w-full flex-1 overflow-y-auto bg-white px-3 pb-4 pt-3 sm:px-4 lg:px-5"
@@ -374,34 +401,14 @@ export function PackingView({
           >
             Przerwij
           </button>
-          {showAutomationButtons &&
-          warehouseId != null &&
-          warehouseId > 0 &&
-          (automationButtonsPosition === "bottom" || automationButtonsPosition === "right") ? (
-            <PackingAutomationActivators
-              tenantId={DAMAGE_TENANT_ID}
-              warehouseId={warehouseId}
-              orderId={detail.order_id}
-              showAutomationButtons={showAutomationButtons}
-              position={automationButtonsPosition}
-              onToast={onAutomationToast}
-              onStatusChanged={onAutomationStatusChanged}
-            />
-          ) : null}
         </div>
-        {showAutomationButtons &&
-        warehouseId != null &&
-        warehouseId > 0 &&
-        automationButtonsPosition === "floating" ? (
-          <PackingAutomationActivators
-            tenantId={DAMAGE_TENANT_ID}
-            warehouseId={warehouseId}
-            orderId={detail.order_id}
-            showAutomationButtons={showAutomationButtons}
-            position="floating"
-            onToast={onAutomationToast}
-            onStatusChanged={onAutomationStatusChanged}
-          />
+        {activatorsOnBottom ? (
+          <div
+            className="sticky bottom-0 z-10 flex w-full shrink-0 flex-wrap items-center gap-2 border-t border-slate-200 bg-white px-3 py-2.5 sm:px-4 lg:px-5"
+            data-packing-automation-slot="bottom"
+          >
+            {automationStrip}
+          </div>
         ) : null}
       </div>
     );
@@ -435,11 +442,6 @@ export function PackingView({
         visibleOperationalNotes={visibleOperationalNotes}
         packAll={packAll}
         onInterrupt={onInterrupt}
-        showAutomationButtons={showAutomationButtons}
-        automationButtonsPosition={automationButtonsPosition}
-        warehouseId={warehouseId}
-        onAutomationToast={onAutomationToast}
-        onAutomationStatusChanged={onAutomationStatusChanged}
       />
 
       {/* MAIN — układ ze sidebarem */}
@@ -490,6 +492,15 @@ export function PackingView({
         </header>
 
         {showCommentBanner ? <PackingCustomerCommentBanner comment={uwagiKlienta} /> : null}
+
+        {activatorsOnTop ? (
+          <div
+            className="shrink-0 border-b border-slate-200 bg-white px-3 py-2"
+            data-packing-automation-slot="top"
+          >
+            {automationStrip}
+          </div>
+        ) : null}
 
         <section className="min-h-0 flex-1 overflow-y-auto bg-white px-3 pb-4 pt-2" aria-label="Produkty">
           {detail.bundle_trees && detail.bundle_trees.length > 0 ? (
@@ -564,19 +575,13 @@ export function PackingView({
             })}
           </ul>
         </section>
-        {showAutomationButtons &&
-        warehouseId != null &&
-        warehouseId > 0 &&
-        automationButtonsPosition === "floating" ? (
-          <PackingAutomationActivators
-            tenantId={DAMAGE_TENANT_ID}
-            warehouseId={warehouseId}
-            orderId={detail.order_id}
-            showAutomationButtons={showAutomationButtons}
-            position="floating"
-            onToast={onAutomationToast}
-            onStatusChanged={onAutomationStatusChanged}
-          />
+        {activatorsOnBottom ? (
+          <div
+            className="sticky bottom-0 z-10 shrink-0 border-t border-slate-200 bg-white px-3 py-2.5"
+            data-packing-automation-slot="bottom"
+          >
+            {automationStrip}
+          </div>
         ) : null}
       </div>
     </div>

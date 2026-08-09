@@ -1,8 +1,6 @@
 import type { WmsOperationalNoteBriefApi, WmsPackingOrderDetailApi } from "../../../api/wmsPackingApi";
-import { DAMAGE_TENANT_ID } from "../../../pages/damage/damageShared";
-import type { PackingAutomationButtonsPosition, PackingSalesDocPreview } from "../../../types/wmsPackingExtendedUi";
+import type { PackingSalesDocPreview } from "../../../types/wmsPackingExtendedUi";
 import { CourierBadge } from "./CourierBadge";
-import { PackingAutomationActivators } from "./PackingAutomationActivators";
 import { packingCourierLabelCount, packingCourierName } from "./packingHelpers";
 import { PackingPackAllIconButton } from "./PackingHeaderChrome";
 
@@ -41,15 +39,11 @@ export type PackingOrderSidebarProps = {
   visibleOperationalNotes: WmsOperationalNoteBriefApi[];
   packAll: () => void | Promise<void>;
   onInterrupt: () => void;
-  showAutomationButtons?: boolean;
-  automationButtonsPosition?: PackingAutomationButtonsPosition;
-  warehouseId?: number | null;
-  onAutomationToast?: (message: string) => void;
-  onAutomationStatusChanged?: () => void;
 };
 
 /**
  * Lewy panel dokumentu / przesyłki — bez logistyki wózka i bez Smart Matching.
+ * Aktywatory automatyzacji są w kolumnie produktów ({@link PackingView}), nie tutaj.
  */
 export function PackingOrderSidebar({
   detail,
@@ -63,11 +57,6 @@ export function PackingOrderSidebar({
   visibleOperationalNotes,
   packAll,
   onInterrupt,
-  showAutomationButtons = false,
-  automationButtonsPosition = "bottom",
-  warehouseId = null,
-  onAutomationToast,
-  onAutomationStatusChanged,
 }: PackingOrderSidebarProps) {
   const detailed = salesDocumentPreview === "full";
   const salesLabel = (detail.sales_document_label ?? "").trim();
@@ -244,22 +233,6 @@ export function PackingOrderSidebar({
           disabled={scanBusy || packingActionsLocked}
           onClick={() => void packAll()}
         />
-        {showAutomationButtons &&
-        warehouseId != null &&
-        warehouseId > 0 &&
-        (automationButtonsPosition === "bottom" || automationButtonsPosition === "right") ? (
-          <div className="mt-2">
-            <PackingAutomationActivators
-              tenantId={DAMAGE_TENANT_ID}
-              warehouseId={warehouseId}
-              orderId={detail.order_id}
-              showAutomationButtons={showAutomationButtons}
-              position={automationButtonsPosition}
-              onToast={onAutomationToast}
-              onStatusChanged={onAutomationStatusChanged}
-            />
-          </div>
-        ) : null}
       </div>
     </aside>
   );

@@ -23,7 +23,14 @@ export function normalizePackingLayoutMode(
 export type PackingSalesDocPreview = "simplified" | "full";
 export type PackingProductDisplayMode = "list" | "grid";
 export type PackingLocationBadgePosition = "top_right" | "top_left" | "bottom_right" | "bottom_left";
-export type PackingAutomationButtonsPosition = "bottom" | "right" | "floating";
+/** Położenie aktywatorów automatyzacji względem listy/kafelków produktów. */
+export type PackingAutomationButtonsPosition = "top" | "bottom";
+
+/** Legacy ``right`` / ``floating`` → ``bottom``. */
+export function normalizePackingAutomationButtonsPosition(raw: unknown): PackingAutomationButtonsPosition {
+  return raw === "top" ? "top" : "bottom";
+}
+
 export type PackingOrdersListLayout = "expanded_vertical" | "compact" | "cards";
 
 /** Etykieta UI dla `ordersListLayout`. */
@@ -276,6 +283,7 @@ export function loadWmsPackingExtendedUi(warehouseId: number): WmsPackingExtende
       afterSalesDocumentAction: normalizePackingPostDocumentAction(parsed.afterSalesDocumentAction),
       afterWaybillAction: normalizePackingPostDocumentAction(parsed.afterWaybillAction),
       salesDocumentType: normalizePackingSalesDocumentType(parsed.salesDocumentType),
+      automationButtonsPosition: normalizePackingAutomationButtonsPosition(parsed.automationButtonsPosition),
     };
   } catch {
     return { ...DEFAULT_WMS_PACKING_EXTENDED_UI };

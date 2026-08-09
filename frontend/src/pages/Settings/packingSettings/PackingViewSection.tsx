@@ -4,7 +4,10 @@ import { buildPackingProductFieldVisibility } from "../../../components/wms/pack
 import { PackingCustomerCommentStylePreview } from "../../../components/wms/packing/settingsPreviews/PackingCustomerCommentStylePreview";
 import { PackingLayoutModePreview } from "../../../components/wms/packing/settingsPreviews/PackingLayoutModePreview";
 import { PackingSalesDocumentPreview } from "../../../components/wms/packing/settingsPreviews/PackingSalesDocumentPreview";
-import type { WmsPackingExtendedUiSettings } from "../../../types/wmsPackingExtendedUi";
+import {
+  normalizePackingAutomationButtonsPosition,
+  type WmsPackingExtendedUiSettings,
+} from "../../../types/wmsPackingExtendedUi";
 import type { WmsPackingInterfaceDisplay, WmsPackingSettingsRead } from "../../../types/wmsPackingSettings";
 import {
   BoolRow,
@@ -111,17 +114,16 @@ export function PackingViewSection({ extended, draft, patchExtended, toggleInter
           settingId="packing.automation_buttons_position"
           label="Położenie przycisków aktywatorów automatyzacji"
           capability={CAP_NONE}
-          value={extended.automationButtonsPosition}
+          value={normalizePackingAutomationButtonsPosition(extended.automationButtonsPosition)}
           onChange={(v) =>
             patchExtended(
               "automationButtonsPosition",
-              v as WmsPackingExtendedUiSettings["automationButtonsPosition"],
+              normalizePackingAutomationButtonsPosition(v),
             )
           }
         >
-          <option value="bottom">Dół</option>
-          <option value="right">Prawa kolumna</option>
-          <option value="floating">Pływające</option>
+          <option value="top">Na górze</option>
+          <option value="bottom">Na dole</option>
         </SelectField>
       </FieldGrid>
 
