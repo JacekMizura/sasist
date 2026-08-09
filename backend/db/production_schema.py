@@ -29,9 +29,9 @@ from .schema_introspection import (
 
 logger = logging.getLogger(__name__)
 
-PRODUCTION_SCHEMA_VERSION = "2026.06.04.1"
+PRODUCTION_SCHEMA_VERSION = "2026.08.09.1"
 # Monotonic generation counter exposed in logs, /health/schema, and deploy verification.
-PRODUCTION_SCHEMA_GENERATION = 12
+PRODUCTION_SCHEMA_GENERATION = 13
 SCHEMA_METADATA_KEY = "production_schema_version"
 SCHEMA_METADATA_TABLE = "schema_metadata"
 
@@ -297,8 +297,20 @@ def _migration_batch_workflow_columns(engine: Engine) -> int:
     return added
 
 
+def _migration_production_orders_recipe_id_nullable(engine: Engine) -> int:
+    """Bundle STOCK BOM → composition_id only; recipe_id must be nullable."""
+    from .schema_upgrade import ensure_production_orders_recipe_id_nullable
+
+    return 1 if ensure_production_orders_recipe_id_nullable(engine) else 0
+
+
 PRODUCTION_SCHEMA_MIGRATIONS: list[ProductionSchemaMigration] = [
     ProductionSchemaMigration("2026.06.04.1", "batch_workflow_columns", _migration_batch_workflow_columns),
+    ProductionSchemaMigration(
+        "2026.08.09.1",
+        "production_orders_recipe_id_nullable",
+        _migration_production_orders_recipe_id_nullable,
+    ),
 ]
 
 

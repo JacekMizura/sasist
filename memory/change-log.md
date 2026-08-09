@@ -1,3 +1,23 @@
+## 2026-08-09 — Zestaw STOCK: HTTP 500 przy tworzeniu zlecenia produkcyjnego
+
+- **Przyczyna:** `production_orders.recipe_id` w DB = NOT NULL (legacy CREATE); BOM zestawu (`product_compositions`) nie ma `source_recipe_id` → INSERT z `recipe_id=NULL` → IntegrityError → 500
+- **Fix:** `ensure_production_orders_recipe_id_nullable` (PG DROP NOT NULL / SQLite rebuild); CREATE TABLE nullable; migracja schema `2026.08.09.1`
+- Test: `test_bundle_stock_production_order.py` (Dezodorant x3 × Coccine × 3, qty=1)
+
+## 2026-08-09 — Packing finish 404 (`mode=no_cart`) + błąd jako popup
+
+- **Przyczyna 404:** `POST …/finish` ładował zamówienie wyłącznie z aktywnej kolejki; po spakowaniu linii (detail poza kolejką / drift fulfillment / błędne `no_cart` z listy `all`) → `ORDER_NOT_IN_QUEUE` / HTTP 404.
+- **Backend:** `_load_order_for_packing_finish` — fallback dla w pełni spakowanych przy zgodnym trybie; polskie `message` w `PackingScanError`; skan EAN z `mode=all` + NULL handoff nie wymyśla CARTLESS.
+- **FE:** lista `all` nie forsowała `no_cart` bez wózka/koszyka; błąd finish → `WmsScanFeedbackOverlay` (czerwony popup); bez wielkiego czerwonego tekstu w panelu finalizacji; „Ponów finalizację” zostaje.
+- Testy: `test_packing_finish_no_cart.py` + `packingHelpers` copy.
+
+## 2026-08-09 — Pakowanie: lokalizacja + podgląd aktywatorów w ustawieniach
+
+- Lokalizacja na karcie: tylko „Prawy górny róg” (`top_right`) / „W szczegółach produktu” (`in_details`); legacy rogi → `top_right`
+- Działa w runtime (Default/Active/Done + `LineDetailsBlock`), nie tylko w config
+- Podglądy w ustawieniach Widok: prawdziwe karty produktów + belka aktywatorów góra/dół
+- Usunięto badge „BRAK FUNKCJONALNOŚCI”; dodano ⓘ help dla obu ustawień
+
 ## 2026-08-09 — Metody dostawy: NS_BINDING_ABORTED (prawdziwa przyczyna)
 
 - **Werdykt:** `ShippingMethodLogo` / wiersz listy był **odmontowywany** (nie „zepsute pliki”).

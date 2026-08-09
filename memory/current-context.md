@@ -1,5 +1,14 @@
 ﻿## Active
 
+**Bundle STOCK production order 500 (2026-08-09):**
+- Cause: `production_orders.recipe_id` NOT NULL vs composition-only MO (`recipe_id=NULL`)
+- Fix: schema ensure + migration; path remains `composition_id` from bundle manufacturing BOM
+
+**Packing finish 404 no_cart (2026-08-09):**
+- Finish loader: active queue OR fully-packed + mode-compatible fallback (Polish business messages)
+- FE: keep `mode=all` when opening cartless card from all list; finish errors via red scan feedback overlay
+- Regression: `backend/tests/test_packing_finish_no_cart.py`
+
 **AutoActions screen rebuild (2026-08-09):**
 - `AutoActionsView` + `PackingFinalizationView` share `AutoActionsShell` (mockup 1:1, white bg)
 - Steps filtered by API `auto_actions`; COD block only when payment is COD

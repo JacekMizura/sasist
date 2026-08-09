@@ -8955,7 +8955,7 @@ def ensure_production_tables(engine: Engine) -> None:
                         id SERIAL PRIMARY KEY,
                         tenant_id INTEGER NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
                         number VARCHAR(64) NOT NULL,
-                        recipe_id INTEGER NOT NULL REFERENCES production_recipes(id) ON DELETE RESTRICT,
+                        recipe_id INTEGER REFERENCES production_recipes(id) ON DELETE RESTRICT,
                         product_id INTEGER NOT NULL REFERENCES products(id) ON DELETE RESTRICT,
                         warehouse_id INTEGER NOT NULL REFERENCES warehouses(id) ON DELETE RESTRICT,
                         location_id INTEGER REFERENCES locations(id) ON DELETE SET NULL,
@@ -9017,6 +9017,7 @@ def ensure_production_tables(engine: Engine) -> None:
             conn.execute(
                 text("CREATE INDEX IF NOT EXISTS ix_stock_documents_production_order ON stock_documents(production_order_id)")
             )
+        ensure_production_orders_recipe_id_nullable(engine)
         return
     with engine.connect() as conn:
         if not _table_exists(conn, "production_recipes"):
@@ -9067,7 +9068,7 @@ def ensure_production_tables(engine: Engine) -> None:
                         id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
                         tenant_id INTEGER NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
                         number VARCHAR(64) NOT NULL,
-                        recipe_id INTEGER NOT NULL REFERENCES production_recipes(id),
+                        recipe_id INTEGER REFERENCES production_recipes(id),
                         product_id INTEGER NOT NULL REFERENCES products(id),
                         warehouse_id INTEGER NOT NULL REFERENCES warehouses(id),
                         location_id INTEGER REFERENCES locations(id),
@@ -9209,6 +9210,8 @@ def ensure_product_compositions_and_batches(engine: Engine) -> None:
             conn.execute(
                 text("ALTER TABLE production_orders ADD COLUMN IF NOT EXISTS composition_id INTEGER REFERENCES product_compositions(id)")
             )
+            # Composition-only MOs (STOCK bundle BOM) have no legacy production_recipes row.
+            conn.execute(text("ALTER TABLE production_orders ALTER COLUMN recipe_id DROP NOT NULL"))
             conn.execute(
                 text(
                     "ALTER TABLE stock_documents ADD COLUMN IF NOT EXISTS production_batch_id INTEGER "
@@ -9222,6 +9225,7 @@ def ensure_product_compositions_and_batches(engine: Engine) -> None:
                 )
             )
         _migrate_recipes_to_compositions(engine)
+        ensure_production_orders_recipe_id_nullable(engine)
         return
     with engine.connect() as conn:
         if not _table_exists(conn, "product_compositions"):
@@ -9316,6 +9320,109 @@ def ensure_product_compositions_and_batches(engine: Engine) -> None:
             conn.execute(text("ALTER TABLE stock_documents ADD COLUMN production_batch_line_id INTEGER REFERENCES production_batch_lines(id)"))
         conn.commit()
     _migrate_recipes_to_compositions(engine)
+    ensure_production_orders_recipe_id_nullable(engine)
+
+
+def ensure_production_orders_recipe_id_nullable(engine: Engine) -> bool:
+    """
+    Allow production_orders.recipe_id IS NULL when MO is driven by product_compositions
+    (STOCK_PRODUCTION bundle BOM has composition_id, no legacy production_recipes row).
+
+    Returns True when a schema change was applied.
+    """
+    from sqlalchemy import inspect as sa_inspect
+
+    dialect = engine.dialect.name
+    try:
+        insp = sa_inspect(engine)
+        if not insp.has_table("production_orders"):
+            return False
+        cols = {c["name"]: c for c in insp.get_columns("production_orders")}
+        recipe_col = cols.get("recipe_id")
+        if recipe_col is None:
+            return False
+        if bool(recipe_col.get("nullable", True)):
+            return False
+    except Exception:
+        logger.exception("ensure_production_orders_recipe_id_nullable: inspect failed")
+        return False
+
+    if dialect == "postgresql":
+        with engine.begin() as conn:
+            conn.execute(text("ALTER TABLE production_orders ALTER COLUMN recipe_id DROP NOT NULL"))
+        logger.info("[schema.production] production_orders.recipe_id DROP NOT NULL (postgresql)")
+        return True
+
+    if dialect == "sqlite":
+        return _sqlite_rebuild_production_orders_recipe_id_nullable(engine)
+
+    logger.warning(
+        "ensure_production_orders_recipe_id_nullable: unsupported dialect %r — apply DROP NOT NULL manually",
+        dialect,
+    )
+    return False
+
+
+def _sqlite_rebuild_production_orders_recipe_id_nullable(engine: Engine) -> bool:
+    """SQLite cannot DROP NOT NULL in place — rebuild production_orders with nullable recipe_id."""
+    from sqlalchemy import inspect as sa_inspect
+
+    insp = sa_inspect(engine)
+    col_defs = insp.get_columns("production_orders")
+    col_names = [c["name"] for c in col_defs]
+    if "recipe_id" not in col_names:
+        return False
+
+    # Preserve existing columns; only force recipe_id nullable in CREATE.
+    type_map = {
+        "INTEGER": "INTEGER",
+        "VARCHAR": "VARCHAR",
+        "TEXT": "TEXT",
+        "FLOAT": "REAL",
+        "REAL": "REAL",
+        "BOOLEAN": "BOOLEAN",
+        "DATETIME": "DATETIME",
+        "TIMESTAMP": "DATETIME",
+        "NUMERIC": "NUMERIC",
+        "DOUBLE_PRECISION": "REAL",
+    }
+
+    def _sql_type(col: dict) -> str:
+        t = col.get("type")
+        raw = str(t).upper() if t is not None else "TEXT"
+        for key, mapped in type_map.items():
+            if key in raw.replace(" ", "_"):
+                if "VARCHAR" in raw:
+                    length = getattr(t, "length", None) if t is not None else None
+                    return f"VARCHAR({int(length)})" if length else "VARCHAR(64)"
+                return mapped
+        return "TEXT"
+
+    parts: list[str] = []
+    for col in col_defs:
+        name = col["name"]
+        sql_t = _sql_type(col)
+        nullable = True if name == "recipe_id" else bool(col.get("nullable", True))
+        pk = " PRIMARY KEY" if col.get("primary_key") else ""
+        nn = "" if nullable or pk else " NOT NULL"
+        parts.append(f"{name} {sql_t}{nn}{pk}")
+
+    cols_csv = ", ".join(col_names)
+    create_sql = f"CREATE TABLE production_orders__recipe_null ({', '.join(parts)})"
+    with engine.begin() as conn:
+        conn.execute(text("PRAGMA foreign_keys=OFF"))
+        conn.execute(text(create_sql))
+        conn.execute(
+            text(
+                f"INSERT INTO production_orders__recipe_null ({cols_csv}) "
+                f"SELECT {cols_csv} FROM production_orders"
+            )
+        )
+        conn.execute(text("DROP TABLE production_orders"))
+        conn.execute(text("ALTER TABLE production_orders__recipe_null RENAME TO production_orders"))
+        conn.execute(text("PRAGMA foreign_keys=ON"))
+    logger.info("[schema.production] production_orders.recipe_id nullable via SQLite rebuild")
+    return True
 
 
 def ensure_production_batch_schema_sync(engine: Engine) -> int:
