@@ -1,32 +1,64 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { getWmsPackingTargetStatuses } from "../../api/wmsPackingApi";
+import { applyPackingHandoffScanResult, pickPreferredPackingStatus } from "../../components/wms/packing/applyPackingHandoffScan";
+import { resolvePackingHandoffScan } from "../../components/wms/packing/resolvePackingHandoffScan";
 import { useWarehouse } from "../../context/WarehouseContext";
 import { useWmsScanner } from "../../context/WmsScannerContext";
 import type { OrderUiMainGroup } from "../../types/orderUiStatus";
+import { normalizeScanEan } from "../../utils/wmsScanNormalize";
 import { DAMAGE_TENANT_ID } from "../damage/damageShared";
 import { WmsFlowStatusTileButton } from "./WmsFlowStatusTileButton";
-import { loadWmsPackingSession, saveWmsPackingSession } from "./wmsPackingSession";
+import { loadWmsPackingSession, saveWmsPackingSession, type WmsPackingSessionState } from "./wmsPackingSession";
 import { consumePendingPackingWorkstation } from "./WmsPackingWorkstationGate";
 import { WMS_ROUTES } from "./wmsRoutes";
 
 type StatusRow = Awaited<ReturnType<typeof getWmsPackingTargetStatuses>>[number];
 
+function buildSessionBase(r: StatusRow): WmsPackingSessionState {
+  const pending = consumePendingPackingWorkstation();
+  const prev = loadWmsPackingSession();
+  return {
+    statusId: r.target_status_id,
+    statusName: r.status,
+    statusColor: r.color,
+    mainGroup: r.main_group as OrderUiMainGroup,
+    mode: "all",
+    orderTypeFilter: "all",
+    cartId: undefined,
+    cartCode: undefined,
+    cartType: undefined,
+    workstationId: pending.workstationId ?? prev?.workstationId,
+    workstationName: pending.workstationName ?? prev?.workstationName,
+  };
+}
+
 /**
  * Pakowanie — wybór statusu kolejki.
- * Po wyborze od razu lista zamówień (mode=all). Skan wózka/koszyka = dodatkowy lookup na liście.
+ * Po wyborze od razu lista zamówień (mode=all).
+ * Globalny skaner: opcjonalny lookup wózek/koszyk → lista/zamówienie (bez forced scan UI).
  */
 export default function WmsPackingStatusPage() {
   const navigate = useNavigate();
   const { warehouse } = useWarehouse();
   const warehouseId = warehouse?.id ?? null;
-  const { setActiveDocument, setScannerInputPlaceholder, refocusScannerInput, registerScanHandler } =
-    useWmsScanner();
+  const {
+    setActiveDocument,
+    setScannerInputPlaceholder,
+    refocusScannerInput,
+    registerScanHandler,
+    showScannerToast,
+    appendScanToHistory,
+  } = useWmsScanner();
 
   const [rows, setRows] = useState<StatusRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<number | null>(null);
+  const rowsRef = useRef<StatusRow[]>([]);
+  const scanBusyRef = useRef(false);
+
+  rowsRef.current = rows;
 
   const loadStatuses = useCallback(async () => {
     if (warehouseId == null) {
@@ -56,38 +88,69 @@ export default function WmsPackingStatusPage() {
     return () => setActiveDocument(null);
   }, [setActiveDocument]);
 
-  useEffect(() => {
-    setScannerInputPlaceholder("Wybierz status kolejki pakowania");
-    refocusScannerInput();
-    registerScanHandler(null);
-    return () => registerScanHandler(null);
-  }, [setScannerInputPlaceholder, refocusScannerInput, registerScanHandler]);
+  const onChooseStatus = useCallback(
+    (r: StatusRow) => {
+      if (warehouseId == null || busyId != null) return;
+      setBusyId(r.target_status_id);
+      setErr(null);
+      try {
+        saveWmsPackingSession(buildSessionBase(r));
+        navigate(WMS_ROUTES.packingOrders, { replace: true });
+      } finally {
+        setBusyId(null);
+      }
+    },
+    [warehouseId, busyId, navigate],
+  );
 
-  const onChooseStatus = (r: StatusRow) => {
-    if (warehouseId == null || busyId != null) return;
-    setBusyId(r.target_status_id);
-    setErr(null);
-    try {
-      const pending = consumePendingPackingWorkstation();
-      const prev = loadWmsPackingSession();
-      saveWmsPackingSession({
-        statusId: r.target_status_id,
-        statusName: r.status,
-        statusColor: r.color,
-        mainGroup: r.main_group as OrderUiMainGroup,
-        mode: "all",
-        orderTypeFilter: "all",
-        cartId: undefined,
-        cartCode: undefined,
-        cartType: undefined,
-        workstationId: pending.workstationId ?? prev?.workstationId,
-        workstationName: pending.workstationName ?? prev?.workstationName,
-      });
-      navigate(WMS_ROUTES.packingOrders, { replace: true });
-    } finally {
-      setBusyId(null);
-    }
-  };
+  const handleStatusPageScan = useCallback(
+    async (raw: string) => {
+      if (warehouseId == null || scanBusyRef.current || busyId != null) return;
+      const scan = normalizeScanEan(raw);
+      if (!scan) return;
+
+      const preferred = pickPreferredPackingStatus(rowsRef.current);
+      if (!preferred) {
+        showScannerToast("Brak kolejek pakowania — nie można rozpoznać skanu.");
+        return;
+      }
+
+      scanBusyRef.current = true;
+      try {
+        const result = await resolvePackingHandoffScan({
+          tenantId: DAMAGE_TENANT_ID,
+          warehouseId,
+          statusId: preferred.target_status_id,
+          raw: scan,
+        });
+        if (result.kind === "empty" || result.kind === "error") {
+          showScannerToast(result.message);
+          return;
+        }
+        applyPackingHandoffScanResult({
+          result,
+          navigate,
+          appendScanToHistory,
+          sessionBase: buildSessionBase(preferred),
+        });
+      } catch {
+        showScannerToast("Nie udało się rozpoznać skanu wózka / koszyka.");
+      } finally {
+        scanBusyRef.current = false;
+        refocusScannerInput();
+      }
+    },
+    [warehouseId, busyId, navigate, appendScanToHistory, showScannerToast, refocusScannerInput],
+  );
+
+  useEffect(() => {
+    setScannerInputPlaceholder("Opcjonalnie zeskanuj wózek lub koszyk");
+    refocusScannerInput();
+    registerScanHandler((ean) => {
+      void handleStatusPageScan(ean);
+    });
+    return () => registerScanHandler(null);
+  }, [setScannerInputPlaceholder, refocusScannerInput, registerScanHandler, handleStatusPageScan]);
 
   return (
     <div className="flex h-full min-h-0 w-full flex-col bg-white">
