@@ -11,6 +11,14 @@ import {
   packingProductCardRootSizeClass,
   packingProductCardSizeStyle,
 } from "./packingProductCardLayout";
+import {
+  PackingCardFieldLabel,
+  PackingDoneCheckIcon,
+  PackingDoneCloseIcon,
+  PackingLocationPill,
+  PackingProductThumb,
+  packingLocationBadge,
+} from "./packingProductCardParts";
 
 export type DoneCardProps = {
   line: WmsPackingOrderLineApi;
@@ -19,14 +27,8 @@ export type DoneCardProps = {
   displayMode?: PackingProductDisplayMode;
 };
 
-function locationBadge(line: WmsPackingOrderLineApi): string {
-  const loc = (line.location_label ?? "").trim();
-  const locQty = line.location_bin_qty;
-  return loc && locQty != null && locQty > 0 ? `${loc} (x${locQty})` : loc || "—";
-}
-
 function DoneCardInner({ line, flash, fieldVisibility, displayMode = "list" }: DoneCardProps) {
-  const locBadge = locationBadge(line);
+  const locBadge = packingLocationBadge(line);
   const title = formatPackingProductName(line.product_name, {
     showName: fieldVisibility.show_product_name,
     truncate: fieldVisibility.truncate_names,
@@ -35,56 +37,49 @@ function DoneCardInner({ line, flash, fieldVisibility, displayMode = "list" }: D
   const isGrid = displayMode === "grid";
   const qtyPacked = line.quantity_packed;
   const qtyReq = typeof line.quantity_required === "number" ? line.quantity_required : line.quantity;
+  const showLoc = fieldVisibility.show_location;
+  const showImg = fieldVisibility.show_image;
 
   const flashStyle = flash
     ? { boxShadow: "0 0 0 3px rgba(52, 211, 153, 0.75)" }
-    : { boxShadow: "0 1px 4px rgba(15, 23, 42, 0.06)" };
+    : { boxShadow: "0 1px 3px rgba(15, 23, 42, 0.05)" };
 
   return (
     <div
       className={[
-        "pointer-events-none relative flex cursor-default flex-col overflow-hidden rounded-lg border border-emerald-200/70 bg-emerald-50/95 p-3 text-left [container-type:inline-size]",
+        "pointer-events-none relative flex cursor-default flex-col overflow-hidden rounded-lg border border-slate-200 bg-white text-left opacity-[0.55]",
         packingProductCardRootSizeClass(displayMode),
+        isGrid ? "p-3" : "px-3 pb-2.5 pt-2",
       ].join(" ")}
       style={{ ...packingProductCardSizeStyle(displayMode), ...flashStyle }}
     >
-      <span
-        className="pointer-events-none absolute left-1/2 top-1/2 z-10 select-none font-black uppercase text-emerald-600/45"
-        style={{
-          transform: "translate(-50%, -50%) rotate(-30deg)",
-          fontSize: "min(clamp(24px, 4vw, 48px), 14cqw)",
-          whiteSpace: "nowrap",
-        }}
-        aria-hidden
-      >
-        SPAKOWANO
-      </span>
-
       {isGrid ? (
-        <div className="relative z-[1] flex flex-col">
-          <div className="flex items-start justify-between gap-2">
-            <div className="min-w-0 text-left">
-              <span className="text-[10px] font-bold uppercase tracking-wide text-slate-400">SPAKOWANO</span>
-              <p className="mt-0.5 text-2xl font-black leading-none tabular-nums text-slate-500">
-                {qtyPacked}/{qtyReq}
-              </p>
-            </div>
-            {fieldVisibility.show_location ? (
-              <div className="flex shrink-0 flex-col items-end gap-1">
-                <span className="text-[9px] font-bold uppercase tracking-wide text-slate-400">LOKALIZACJA</span>
-                <span className="max-w-[9.5rem] rounded-full border-2 border-slate-400 px-2 py-0.5 text-center text-[11px] font-bold leading-tight text-slate-500">
-                  {locBadge}
+        <>
+          <div className="flex items-start gap-2">
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-1.5">
+                <PackingDoneCheckIcon />
+                <span className="text-xs font-semibold text-[#4CAF50]">
+                  Spakowane {qtyPacked}/{qtyReq}
                 </span>
               </div>
-            ) : null}
+            </div>
+            <div className="flex shrink-0 flex-col items-end gap-1">
+              <div className="flex items-start gap-1">
+                {showLoc ? <PackingCardFieldLabel muted>LOKALIZACJA</PackingCardFieldLabel> : null}
+                <PackingDoneCloseIcon />
+              </div>
+              {showLoc ? <PackingLocationPill text={locBadge} muted /> : null}
+            </div>
           </div>
-          {fieldVisibility.show_image ? (
-            <div className="mt-3 flex min-h-[9rem] w-full items-center justify-center overflow-hidden bg-transparent">
+
+          {showImg ? (
+            <div className="mt-2 flex h-[8.75rem] w-full items-center justify-center overflow-hidden bg-white">
               {line.image_url ? (
                 <img
                   src={line.image_url}
                   alt=""
-                  className="max-h-[11rem] max-w-full object-contain grayscale"
+                  className="max-h-full max-w-full object-contain grayscale"
                   loading="lazy"
                 />
               ) : (
@@ -92,51 +87,37 @@ function DoneCardInner({ line, flash, fieldVisibility, displayMode = "list" }: D
               )}
             </div>
           ) : null}
-          {title ? <p className="mt-3 text-[15px] font-bold leading-tight text-slate-500">{title}</p> : null}
-          <LineDetailsBlock line={line} variant="done" fieldVisibility={fieldVisibility} />
-        </div>
+
+          {title ? <p className="mt-2 text-[13px] font-bold leading-snug text-slate-500">{title}</p> : null}
+          <LineDetailsBlock line={line} variant="done" fieldVisibility={fieldVisibility} layout="stack" />
+        </>
       ) : (
         <>
-          <div className="relative z-[1] flex min-h-0 w-full gap-3">
-            {fieldVisibility.show_image ? (
-              <div className="flex h-[4.75rem] w-[4.75rem] shrink-0 items-center justify-center overflow-hidden bg-transparent sm:h-[5.25rem] sm:w-[5.25rem]">
-                {line.image_url ? (
-                  <img
-                    src={line.image_url}
-                    alt=""
-                    className="max-h-full max-w-full object-contain grayscale"
-                    loading="lazy"
-                  />
-                ) : (
-                  <span className="text-2xl text-slate-300">—</span>
-                )}
-              </div>
-            ) : null}
-            <div className="flex min-w-0 flex-1 flex-col">
-              <div className="flex items-start justify-between gap-2">
+          <div className="flex items-start gap-2.5">
+            {showImg ? <PackingProductThumb url={line.image_url} size={76} muted /> : null}
+            <div className="min-w-0 flex-1">
+              <div className="flex items-start gap-2">
                 <div className="min-w-0 flex-1">
-                  {title ? <p className="text-[15px] font-bold leading-tight text-slate-500">{title}</p> : null}
-                  <LineDetailsBlock line={line} variant="done" fieldVisibility={fieldVisibility} />
-                </div>
-                <div className="flex shrink-0 items-start gap-2 sm:gap-3">
-                  <div className="text-center">
-                    <span className="text-[10px] font-bold uppercase tracking-wide text-slate-400">SPAKOWANO</span>
-                    <p className="mt-0.5 text-xl font-black leading-none tabular-nums text-slate-500 sm:text-2xl">
-                      {qtyPacked}/{qtyReq}
-                    </p>
+                  <div className="flex items-center gap-1.5">
+                    <PackingDoneCheckIcon />
+                    <span className="text-xs font-semibold text-[#4CAF50]">
+                      Spakowane {qtyPacked}/{qtyReq}
+                    </span>
                   </div>
-                  {fieldVisibility.show_location ? (
-                    <div className="flex flex-col items-end gap-1">
-                      <span className="text-[9px] font-bold uppercase tracking-wide text-slate-400">LOKALIZACJA</span>
-                      <span className="max-w-[9.5rem] rounded-full border-2 border-slate-400 px-2 py-0.5 text-center text-[11px] font-bold leading-tight text-slate-500">
-                        {locBadge}
-                      </span>
-                    </div>
-                  ) : null}
+                </div>
+                <div className="flex shrink-0 flex-col items-end gap-1">
+                  <div className="flex items-start gap-1">
+                    {showLoc ? <PackingCardFieldLabel muted>LOKALIZACJA</PackingCardFieldLabel> : null}
+                    <PackingDoneCloseIcon />
+                  </div>
+                  {showLoc ? <PackingLocationPill text={locBadge} muted /> : null}
                 </div>
               </div>
+              {title ? <p className="mt-1.5 text-[13px] font-bold leading-snug text-slate-500">{title}</p> : null}
             </div>
           </div>
+
+          <LineDetailsBlock line={line} variant="done" fieldVisibility={fieldVisibility} layout="columns" />
         </>
       )}
     </div>

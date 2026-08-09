@@ -2,24 +2,21 @@ import type { CSSProperties } from "react";
 import type { PackingProductDisplayMode } from "../../../types/wmsPackingExtendedUi";
 
 /**
- * Wymiary i rozmieszczenie kart produktów (Lista / Siatka).
- *
- * Kontener: flex-wrap + justify-content:flex-start + stały gap.
- * Karty: stały flex-basis / width — bez grow, bez 1fr, bez space-between.
+ * Wymiary i rozmieszczenie kart — proporcje jak Figma „Sidebar lista” / „Sidebar kafelki”.
+ * Kontener: flex-wrap + justify-content:flex-start + stały gap (bez space-between / 1fr).
  */
 
-/** Lista: stała szerokość (~416px). */
-export const PACKING_PRODUCT_LIST_CARD_WIDTH = "26rem";
+/** Lista (pozioma): ~360px — 3 karty obok sidebara jak na mocku. */
+export const PACKING_PRODUCT_LIST_CARD_WIDTH = "22.5rem";
 
-/** Siatka: stała szerokość (~248px). */
-export const PACKING_PRODUCT_GRID_CARD_WIDTH = "15.5rem";
+/** Kafelki (pionowa): ~236px — zwarta kolumna jak na mocku. */
+export const PACKING_PRODUCT_GRID_CARD_WIDTH = "14.75rem";
 
-/** Siatka: stała wysokość — jednakowa dla wszystkich kart. */
-export const PACKING_PRODUCT_GRID_CARD_HEIGHT = "28rem";
+/** Kafelki: stała wysokość (Default / Active / Done jednakowe). */
+export const PACKING_PRODUCT_GRID_CARD_HEIGHT = "23.5rem";
 
 const GAP = "0.75rem";
 
-/** Kontener — karty od lewej, stały odstęp, wrap do kolejnego wiersza. */
 export function packingProductCardsContainerClass(): string {
   return "m-0 flex w-full list-none flex-wrap bg-white p-0";
 }
@@ -36,7 +33,6 @@ export function packingProductCardsContainerStyle(): CSSProperties {
   };
 }
 
-/** Wrapper `<li>` — sztywny slot karty (bez rozciągania w wolną przestrzeń). */
 export function packingProductCardItemClass(): string {
   return "box-border max-w-full";
 }
@@ -62,7 +58,6 @@ export function packingProductCardItemStyle(mode: PackingProductDisplayMode): CS
   };
 }
 
-/** Style root karty — te same wymiary co slot `<li>`. */
 export function packingProductCardSizeStyle(mode: PackingProductDisplayMode): CSSProperties {
   if (mode === "grid") {
     return {

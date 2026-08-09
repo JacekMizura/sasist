@@ -32,7 +32,7 @@ export function PackingLineActionsMenu({ disabled, onMarkShortage }: PackingLine
       <button
         type="button"
         disabled={disabled}
-        className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 shadow-sm hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+        className="inline-flex h-7 w-7 items-center justify-center rounded-md text-slate-500 hover:bg-slate-50 hover:text-slate-800 disabled:cursor-not-allowed disabled:opacity-40"
         aria-label="Akcje produktu"
         aria-haspopup="menu"
         aria-expanded={open}

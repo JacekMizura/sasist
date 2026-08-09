@@ -3,7 +3,6 @@ import type { WmsPackingOrderLineApi } from "../../../api/wmsPackingApi";
 import type { PackingProductDisplayMode } from "../../../types/wmsPackingExtendedUi";
 import { lineQuantityRequired } from "./packingHelpers";
 import { LineDetailsBlock } from "./LineDetailsBlock";
-import { PackingLineActionsMenu } from "./PackingLineActionsMenu";
 import {
   formatPackingProductName,
   packingProductFieldVisibilityEqual,
@@ -13,6 +12,13 @@ import {
   packingProductCardRootSizeClass,
   packingProductCardSizeStyle,
 } from "./packingProductCardLayout";
+import {
+  PackingCardFieldLabel,
+  PackingCardMenu,
+  PackingLocationPill,
+  PackingProductThumb,
+  packingLocationBadge,
+} from "./packingProductCardParts";
 
 export type DefaultCardProps = {
   line: WmsPackingOrderLineApi;
@@ -20,15 +26,9 @@ export type DefaultCardProps = {
   fieldVisibility: PackingProductFieldVisibility;
   onActivate: (orderItemId: number) => void;
   onMarkShortage?: (orderItemId: number) => void;
-  /** `list` = kompaktowa karta pozioma; `grid` = pionowa z dużym zdjęciem. */
+  /** `list` = Sidebar lista; `grid` = Sidebar kafelki. */
   displayMode?: PackingProductDisplayMode;
 };
-
-function locationBadge(line: WmsPackingOrderLineApi): string {
-  const loc = (line.location_label ?? "").trim();
-  const locQty = line.location_bin_qty;
-  return loc && locQty != null && locQty > 0 ? `${loc} (x${locQty})` : loc || "—";
-}
 
 function DefaultCardInner({
   line,
@@ -39,25 +39,24 @@ function DefaultCardInner({
   displayMode = "list",
 }: DefaultCardProps) {
   const qtyReq = lineQuantityRequired(line);
-  const locBadge = locationBadge(line);
+  const locBadge = packingLocationBadge(line);
   const title = formatPackingProductName(line.product_name, {
     showName: fieldVisibility.show_product_name,
     truncate: fieldVisibility.truncate_names,
     qty: line.quantity,
   });
   const isGrid = displayMode === "grid";
+  const showLoc = fieldVisibility.show_location;
+  const showImg = fieldVisibility.show_image;
 
   const handleActivate = useCallback(() => {
     if (scanBusy) return;
     onActivate(line.order_item_id);
   }, [scanBusy, onActivate, line.order_item_id]);
 
-  const shellClass = [
-    "flex cursor-pointer flex-col rounded-lg border border-slate-200/95 bg-white text-left opacity-100 shadow-sm outline-none transition-[box-shadow]",
-    packingProductCardRootSizeClass(displayMode),
-    "hover:shadow-md focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-1",
-    isGrid ? "overflow-hidden p-3" : "p-2.5 sm:p-3",
-  ].join(" ");
+  const menu = (
+    <PackingCardMenu disabled={scanBusy} onMarkShortage={onMarkShortage ? () => onMarkShortage(line.order_item_id) : undefined} />
+  );
 
   return (
     <div
@@ -70,109 +69,76 @@ function DefaultCardInner({
           handleActivate();
         }
       }}
-      className={shellClass}
+      className={[
+        "flex cursor-pointer flex-col rounded-lg border border-slate-200 bg-white text-left outline-none transition-[box-shadow]",
+        packingProductCardRootSizeClass(displayMode),
+        "hover:shadow-md focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-1",
+        isGrid ? "p-3" : "px-3 pb-2.5 pt-2",
+      ].join(" ")}
       style={{
         ...packingProductCardSizeStyle(displayMode),
-        boxShadow: "0 1px 4px rgba(15, 23, 42, 0.06)",
+        boxShadow: "0 1px 3px rgba(15, 23, 42, 0.05)",
       }}
     >
       {isGrid ? (
         <>
-          <div className="flex items-start justify-between gap-2">
-            <div className="min-w-0 text-left">
-              <span className="text-[10px] font-bold uppercase tracking-wide text-slate-500">SPAKOWANO</span>
-              <p className="mt-0.5 text-2xl font-black leading-none tabular-nums text-slate-900">
+          {/* Kafelki: SPAKOWANO | LOKALIZACJA + … */}
+          <div className="flex items-start gap-2">
+            <div className="min-w-0 flex-1">
+              <PackingCardFieldLabel>SPAKOWANO</PackingCardFieldLabel>
+              <p className="mt-0.5 text-[1.65rem] font-black leading-none tabular-nums text-slate-900">
                 {line.quantity_packed}/{qtyReq}
               </p>
             </div>
             <div className="flex shrink-0 flex-col items-end gap-1">
-              <div className="flex items-start gap-1">
-                {fieldVisibility.show_location ? (
-                  <span className="text-[9px] font-bold uppercase tracking-wide text-slate-500">LOKALIZACJA</span>
-                ) : null}
-                {onMarkShortage ? (
-                  <PackingLineActionsMenu
-                    disabled={scanBusy}
-                    onMarkShortage={() => onMarkShortage(line.order_item_id)}
-                  />
-                ) : null}
+              <div className="flex items-start gap-0.5">
+                {showLoc ? <PackingCardFieldLabel>LOKALIZACJA</PackingCardFieldLabel> : null}
+                {menu}
               </div>
-              {fieldVisibility.show_location ? (
-                <span className="max-w-[9.5rem] rounded-full border-2 border-slate-800 px-2 py-0.5 text-center text-[11px] font-bold leading-tight text-slate-900">
-                  {locBadge}
-                </span>
-              ) : null}
+              {showLoc ? <PackingLocationPill text={locBadge} /> : null}
             </div>
           </div>
 
-          {fieldVisibility.show_image ? (
-            <div className="mt-3 flex min-h-[9rem] w-full items-center justify-center overflow-hidden bg-white">
+          {showImg ? (
+            <div className="mt-2 flex h-[8.75rem] w-full items-center justify-center overflow-hidden bg-white">
               {line.image_url ? (
-                <img
-                  src={line.image_url}
-                  alt=""
-                  className="max-h-[11rem] max-w-full object-contain"
-                  loading="lazy"
-                />
+                <img src={line.image_url} alt="" className="max-h-full max-w-full object-contain" loading="lazy" />
               ) : (
                 <span className="text-3xl text-slate-300">—</span>
               )}
             </div>
           ) : null}
 
-          {title ? <p className="mt-3 text-[15px] font-bold leading-tight text-slate-900">{title}</p> : null}
-          <LineDetailsBlock line={line} variant="default" fieldVisibility={fieldVisibility} />
+          {title ? <p className="mt-2 text-[13px] font-bold leading-snug text-slate-900">{title}</p> : null}
+          <LineDetailsBlock line={line} variant="default" fieldVisibility={fieldVisibility} layout="stack" />
         </>
       ) : (
-        <div className="flex min-h-0 w-full gap-3">
-          {fieldVisibility.show_image ? (
-            <div className="flex h-[4.75rem] w-[4.75rem] shrink-0 items-center justify-center overflow-hidden bg-white sm:h-[5.25rem] sm:w-[5.25rem]">
-              {line.image_url ? (
-                <img src={line.image_url} alt="" className="max-h-full max-w-full object-contain" loading="lazy" />
-              ) : (
-                <span className="text-2xl text-slate-300">—</span>
-              )}
-            </div>
-          ) : null}
-
-          <div className="flex min-w-0 flex-1 flex-col">
-            <div className="flex items-start justify-between gap-2">
-              <div className="min-w-0 flex-1">
-                {title ? <p className="text-[15px] font-bold leading-tight text-slate-900">{title}</p> : null}
-                <LineDetailsBlock line={line} variant="default" fieldVisibility={fieldVisibility} />
-              </div>
-              <div className="flex shrink-0 items-start gap-2 sm:gap-3">
-                <div className="text-center">
-                  <span className="text-[10px] font-bold uppercase tracking-wide text-slate-500">SPAKOWANO</span>
-                  <p className="mt-0.5 text-xl font-black leading-none tabular-nums text-slate-900 sm:text-2xl">
+        <>
+          {/* Lista Figma: [zdjęcie] [SPAKOWANO/licznik + nazwa | LOKALIZACJA/pill/…] */}
+          <div className="flex items-start gap-2.5">
+            {showImg ? <PackingProductThumb url={line.image_url} size={76} /> : null}
+            <div className="min-w-0 flex-1">
+              <div className="flex items-start gap-2">
+                <div className="min-w-0 flex-1">
+                  <PackingCardFieldLabel>SPAKOWANO</PackingCardFieldLabel>
+                  <p className="mt-0.5 text-[1.65rem] font-black leading-none tabular-nums text-slate-900">
                     {line.quantity_packed}/{qtyReq}
                   </p>
                 </div>
-                {fieldVisibility.show_location ? (
-                  <div className="flex flex-col items-end gap-1">
-                    <div className="flex items-start gap-1">
-                      <span className="text-[9px] font-bold uppercase tracking-wide text-slate-500">LOKALIZACJA</span>
-                      {onMarkShortage ? (
-                        <PackingLineActionsMenu
-                          disabled={scanBusy}
-                          onMarkShortage={() => onMarkShortage(line.order_item_id)}
-                        />
-                      ) : null}
-                    </div>
-                    <span className="max-w-[9.5rem] rounded-full border-2 border-slate-800 px-2 py-0.5 text-center text-[11px] font-bold leading-tight text-slate-900">
-                      {locBadge}
-                    </span>
+                <div className="flex shrink-0 flex-col items-end gap-1">
+                  <div className="flex items-start gap-0.5">
+                    {showLoc ? <PackingCardFieldLabel>LOKALIZACJA</PackingCardFieldLabel> : null}
+                    {menu}
                   </div>
-                ) : onMarkShortage ? (
-                  <PackingLineActionsMenu
-                    disabled={scanBusy}
-                    onMarkShortage={() => onMarkShortage(line.order_item_id)}
-                  />
-                ) : null}
+                  {showLoc ? <PackingLocationPill text={locBadge} /> : null}
+                </div>
               </div>
+              {title ? <p className="mt-1.5 text-[13px] font-bold leading-snug text-slate-900">{title}</p> : null}
             </div>
           </div>
-        </div>
+
+          <LineDetailsBlock line={line} variant="default" fieldVisibility={fieldVisibility} layout="columns" />
+        </>
       )}
     </div>
   );

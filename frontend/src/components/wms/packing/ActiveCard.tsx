@@ -3,7 +3,6 @@ import type { WmsPackingOrderLineApi } from "../../../api/wmsPackingApi";
 import type { PackingProductDisplayMode } from "../../../types/wmsPackingExtendedUi";
 import { lineQuantityRequired } from "./packingHelpers";
 import { LineDetailsBlock } from "./LineDetailsBlock";
-import { PackingLineActionsMenu } from "./PackingLineActionsMenu";
 import {
   formatPackingProductName,
   packingProductFieldVisibilityEqual,
@@ -13,6 +12,13 @@ import {
   packingProductCardRootSizeClass,
   packingProductCardSizeStyle,
 } from "./packingProductCardLayout";
+import {
+  PackingCardFieldLabel,
+  PackingCardMenu,
+  PackingLocationPill,
+  PackingProductThumb,
+  packingLocationBadge,
+} from "./packingProductCardParts";
 
 const PRIMARY_GREEN = "#4caf50";
 
@@ -29,12 +35,6 @@ export type ActiveCardProps = {
   displayMode?: PackingProductDisplayMode;
 };
 
-function locationBadge(line: WmsPackingOrderLineApi): string {
-  const loc = (line.location_label ?? "").trim();
-  const locQty = line.location_bin_qty;
-  return loc && locQty != null && locQty > 0 ? `${loc} (x${locQty})` : loc || "—";
-}
-
 function ActiveCardInner({
   line,
   packQty,
@@ -49,7 +49,7 @@ function ActiveCardInner({
 }: ActiveCardProps) {
   const qtyReq = lineQuantityRequired(line);
   const maxPack = Math.max(0, qtyReq - line.quantity_packed);
-  const locBadge = locationBadge(line);
+  const locBadge = packingLocationBadge(line);
   const title = formatPackingProductName(line.product_name, {
     showName: fieldVisibility.show_product_name,
     truncate: fieldVisibility.truncate_names,
@@ -57,6 +57,8 @@ function ActiveCardInner({
   });
   const isGrid = displayMode === "grid";
   const atMax = maxPack > 0 && packQty >= maxPack;
+  const showLoc = fieldVisibility.show_location;
+  const showImg = fieldVisibility.show_image;
 
   const bump = useCallback(
     (delta: number) => {
@@ -75,27 +77,30 @@ function ActiveCardInner({
     ? { boxShadow: "0 0 0 4px rgba(52, 211, 153, 0.95), 0 8px 24px rgba(16, 185, 129, 0.4)" }
     : {
         boxShadow:
-          "0 0 0 4px #1b5e20, 0 0 0 1px rgba(27, 94, 32, 0.35), 0 14px 32px -6px rgba(27, 94, 32, 0.45), 0 6px 16px rgba(15, 23, 42, 0.12)",
+          "0 0 0 3px #1b5e20, 0 0 0 1px rgba(27, 94, 32, 0.35), 0 10px 24px -6px rgba(27, 94, 32, 0.35)",
       };
 
   const packControls = (
-    <div className="flex w-full max-w-[240px] flex-col items-stretch gap-2.5" onClick={(e) => e.stopPropagation()}>
-      <div className="flex items-center justify-center gap-2.5">
+    <div
+      className={["flex flex-col items-stretch gap-2", isGrid ? "w-full" : "w-full max-w-[11.5rem]"].join(" ")}
+      onClick={(e) => e.stopPropagation()}
+    >
+      <div className="flex items-center justify-center gap-2">
         <button
           type="button"
-          className="flex h-11 w-11 items-center justify-center rounded-lg border-2 border-slate-400 bg-white text-xl font-bold text-slate-900 shadow-sm hover:bg-slate-50"
+          className="flex h-10 w-10 items-center justify-center rounded-lg border-2 border-slate-400 bg-white text-xl font-bold text-slate-900 hover:bg-slate-50"
           aria-label="Zmniejsz"
           onClick={() => bump(-1)}
         >
           −
         </button>
-        <span className="flex min-h-[2.5rem] min-w-[3.25rem] items-center justify-center text-center text-2xl font-black tabular-nums text-slate-900">
+        <span className="flex min-h-[2.25rem] min-w-[2.75rem] items-center justify-center text-center text-2xl font-black tabular-nums text-slate-900">
           {packQty}
         </span>
         <button
           type="button"
           disabled={atMax || linePackBusy || scanBusy}
-          className="flex h-11 w-11 items-center justify-center rounded-lg border-2 border-slate-400 bg-white text-xl font-bold text-slate-900 shadow-sm hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+          className="flex h-10 w-10 items-center justify-center rounded-lg border-2 border-slate-400 bg-white text-xl font-bold text-slate-900 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
           aria-label="Zwiększ"
           onClick={() => bump(1)}
         >
@@ -105,7 +110,7 @@ function ActiveCardInner({
       <button
         type="button"
         disabled={scanBusy || linePackBusy || packQty <= 0}
-        className="w-full rounded-lg py-3 text-base font-bold text-white shadow-md disabled:cursor-not-allowed disabled:opacity-50"
+        className="w-full rounded-lg py-2.5 text-sm font-bold text-white shadow-sm disabled:cursor-not-allowed disabled:opacity-50"
         style={{ background: PRIMARY_GREEN }}
         onClick={() => onConfirmPack(line.order_item_id)}
       >
@@ -114,108 +119,81 @@ function ActiveCardInner({
     </div>
   );
 
+  const menu = (
+    <PackingCardMenu
+      disabled={scanBusy || linePackBusy}
+      onMarkShortage={onMarkShortage ? () => onMarkShortage(line.order_item_id) : undefined}
+    />
+  );
+
   return (
     <div
       className={[
-        "relative flex cursor-default flex-col rounded-xl border-[3px] border-[#1b5e20] bg-white p-3 text-left shadow-md",
+        "relative flex cursor-default flex-col rounded-lg border-[3px] border-[#1b5e20] bg-white text-left",
         packingProductCardRootSizeClass(displayMode),
-        isGrid ? "overflow-hidden" : "",
+        isGrid ? "p-3" : "px-3 pb-2.5 pt-2",
       ].join(" ")}
       style={{ ...packingProductCardSizeStyle(displayMode), ...flashStyle }}
     >
       {isGrid ? (
         <>
-          <div className="flex items-start justify-between gap-2">
-            <div className="min-w-0 text-left">
-              <span className="text-[10px] font-bold uppercase tracking-wide text-slate-500">SPAKOWANO</span>
-              <p className="mt-0.5 text-2xl font-black leading-none tabular-nums text-slate-900">
+          <div className="flex items-start gap-2">
+            <div className="min-w-0 flex-1">
+              <PackingCardFieldLabel>SPAKOWANO</PackingCardFieldLabel>
+              <p className="mt-0.5 text-[1.65rem] font-black leading-none tabular-nums text-slate-900">
                 {line.quantity_packed}/{qtyReq}
               </p>
             </div>
             <div className="flex shrink-0 flex-col items-end gap-1">
-              <div className="flex items-start gap-1">
-                {fieldVisibility.show_location ? (
-                  <span className="text-[9px] font-bold uppercase tracking-wide text-slate-500">LOKALIZACJA</span>
-                ) : null}
-                {onMarkShortage ? (
-                  <PackingLineActionsMenu
-                    disabled={scanBusy || linePackBusy}
-                    onMarkShortage={() => onMarkShortage(line.order_item_id)}
-                  />
-                ) : null}
+              <div className="flex items-start gap-0.5">
+                {showLoc ? <PackingCardFieldLabel>LOKALIZACJA</PackingCardFieldLabel> : null}
+                {menu}
               </div>
-              {fieldVisibility.show_location ? (
-                <span className="max-w-[9.5rem] rounded-full border-2 border-slate-800 px-2 py-0.5 text-center text-[11px] font-bold leading-tight text-slate-900">
-                  {locBadge}
-                </span>
-              ) : null}
+              {showLoc ? <PackingLocationPill text={locBadge} /> : null}
             </div>
           </div>
 
-          {fieldVisibility.show_image ? (
-            <div className="mt-3 flex min-h-[8rem] w-full items-center justify-center overflow-hidden bg-white">
-              {line.image_url ? (
-                <img
-                  src={line.image_url}
-                  alt=""
-                  className="max-h-[10rem] max-w-full object-contain"
-                  loading="lazy"
-                />
-              ) : (
-                <span className="text-3xl text-slate-300">—</span>
-              )}
-            </div>
-          ) : null}
+          {/* Strefa obrazu / kontrolek — jak Figma kafelki active */}
+          <div className="relative mt-2 flex min-h-[8.75rem] w-full flex-col items-center justify-center gap-2 bg-white">
+            {showImg && line.image_url ? (
+              <img
+                src={line.image_url}
+                alt=""
+                className="pointer-events-none absolute inset-0 m-auto max-h-[7rem] max-w-[85%] object-contain opacity-20"
+                loading="lazy"
+              />
+            ) : null}
+            <div className="relative z-[1] w-full max-w-[12rem]">{packControls}</div>
+          </div>
 
-          <div className="mt-3 flex justify-center">{packControls}</div>
-
-          {title ? <p className="mt-3 text-[15px] font-bold leading-tight text-slate-900">{title}</p> : null}
-          <LineDetailsBlock line={line} variant="active" fieldVisibility={fieldVisibility} />
+          <div className="mt-2 opacity-80">
+            {title ? <p className="text-[13px] font-bold leading-snug text-slate-900">{title}</p> : null}
+            <LineDetailsBlock line={line} variant="active" fieldVisibility={fieldVisibility} layout="stack" />
+          </div>
         </>
       ) : (
         <>
-          <div className="flex min-h-0 w-full gap-3">
-            {fieldVisibility.show_image ? (
-              <div className="flex h-[5rem] w-[5rem] shrink-0 items-center justify-center overflow-hidden bg-white sm:h-[5.5rem] sm:w-[5.5rem]">
-                {line.image_url ? (
-                  <img src={line.image_url} alt="" className="max-h-full max-w-full object-contain" loading="lazy" />
-                ) : (
-                  <span className="text-2xl text-slate-300">—</span>
-                )}
-              </div>
-            ) : null}
-
-            <div className="relative z-10 flex min-w-0 flex-1 flex-col items-center justify-center self-stretch">
-              {packControls}
-            </div>
-
-            {fieldVisibility.show_location ? (
-              <div className="flex shrink-0 flex-col items-end justify-between gap-0.5 self-stretch">
-                <div className="flex items-start gap-1">
-                  <span className="text-[9px] font-bold uppercase tracking-wide text-slate-500">LOKALIZACJA</span>
-                  {onMarkShortage ? (
-                    <PackingLineActionsMenu
-                      disabled={scanBusy || linePackBusy}
-                      onMarkShortage={() => onMarkShortage(line.order_item_id)}
-                    />
-                  ) : null}
+          <div className="flex items-start gap-2.5">
+            {showImg ? <PackingProductThumb url={line.image_url} size={76} /> : null}
+            <div className="min-w-0 flex-1">
+              <div className="flex items-start gap-2">
+                <div className="min-w-0 flex-1">
+                  <PackingCardFieldLabel>SPAKOWANO</PackingCardFieldLabel>
+                  <div className="mt-1">{packControls}</div>
                 </div>
-                <span className="max-w-[9.5rem] rounded-full border-2 border-slate-800 px-2 py-0.5 text-center text-[11px] font-bold leading-tight text-slate-900">
-                  {locBadge}
-                </span>
+                <div className="flex shrink-0 flex-col items-end gap-1">
+                  <div className="flex items-start gap-0.5">
+                    {showLoc ? <PackingCardFieldLabel>LOKALIZACJA</PackingCardFieldLabel> : null}
+                    {menu}
+                  </div>
+                  {showLoc ? <PackingLocationPill text={locBadge} /> : null}
+                </div>
               </div>
-            ) : onMarkShortage ? (
-              <div className="flex shrink-0 flex-col items-end self-stretch">
-                <PackingLineActionsMenu
-                  disabled={scanBusy || linePackBusy}
-                  onMarkShortage={() => onMarkShortage(line.order_item_id)}
-                />
-              </div>
-            ) : null}
+              {title ? <p className="mt-2 text-[13px] font-bold leading-snug text-slate-900">{title}</p> : null}
+            </div>
           </div>
 
-          {title ? <p className="mt-auto pt-3 text-[15px] font-bold leading-tight text-slate-900">{title}</p> : null}
-          <LineDetailsBlock line={line} variant="active" fieldVisibility={fieldVisibility} />
+          <LineDetailsBlock line={line} variant="active" fieldVisibility={fieldVisibility} layout="columns" />
         </>
       )}
     </div>
