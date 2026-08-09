@@ -1,4 +1,5 @@
 import { ExpandedHorizontalOrdersListLayoutPreview } from "../../../components/wms/packing/ordersList/ExpandedHorizontalOrdersListLayoutPreview";
+import { ExpandedVerticalOrdersListLayoutPreview } from "../../../components/wms/packing/ordersList/ExpandedVerticalOrdersListLayoutPreview";
 import { StandardOrdersListLayoutPreview } from "../../../components/wms/packing/ordersList/StandardOrdersListLayoutPreview";
 import type { WmsPackingExtendedUiSettings } from "../../../types/wmsPackingExtendedUi";
 import type { WmsPackingInterfaceDisplay, WmsPackingSettingsRead } from "../../../types/wmsPackingSettings";
@@ -207,9 +208,9 @@ export function PackingViewSection({ extended, draft, patchExtended, toggleInter
             value={extended.ordersListLayout}
             onChange={(v) => patchExtended("ordersListLayout", v as WmsPackingExtendedUiSettings["ordersListLayout"])}
           >
-            <option value="expanded_vertical">Rozbudowany (pionowo)</option>
             <option value="compact">Standardowy</option>
             <option value="cards">Rozbudowany (Poziomy)</option>
+            <option value="expanded_vertical">Rozbudowany (Pionowy)</option>
           </SelectField>
           <SelectField
             settingId="packing.initial_orders_count"
@@ -230,6 +231,7 @@ export function PackingViewSection({ extended, draft, patchExtended, toggleInter
         </FieldGrid>
         {extended.ordersListLayout === "compact" ? <StandardOrdersListLayoutPreview /> : null}
         {extended.ordersListLayout === "cards" ? <ExpandedHorizontalOrdersListLayoutPreview /> : null}
+        {extended.ordersListLayout === "expanded_vertical" ? <ExpandedVerticalOrdersListLayoutPreview /> : null}
         <div className="mt-2 space-y-1">
           <BoolRow
             settingId="packing.show_product_image_in_orders"

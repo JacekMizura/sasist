@@ -3,7 +3,7 @@ import type { WmsPackingOrderCardApi } from "../../../../api/wmsPackingApi";
 import type { PackingOrdersListLayout } from "../../../../types/wmsPackingExtendedUi";
 import { computeOrdersListStats } from "./ordersListStats";
 import { ExpandedHorizontalOrderCard } from "./ExpandedHorizontalOrderCard";
-import { OrderRow } from "./OrderRow";
+import { ExpandedVerticalOrderCard } from "./ExpandedVerticalOrderCard";
 import { StandardOrderCard } from "./StandardOrderCard";
 import { StatusBadges } from "./StatusBadges";
 
@@ -21,14 +21,13 @@ export type OrdersListViewProps = {
   error: string | null;
   showBasketCode?: boolean;
   showAllNotes?: boolean;
-  /** `compact` = Standardowy, `cards` = Rozbudowany (Poziomy). */
+  /** `compact` | `cards` | `expanded_vertical`. */
   ordersListLayout?: PackingOrdersListLayout;
   onOpenOrder: (orderId: number) => void;
   onProductClick?: (orderItemId: number, orderId: number) => void;
   onBack: () => void;
   cartLine?: { mode: "bulk" | "baskets"; code: string } | null;
   statusLabelRight: string;
-  /** Styl badge statusu (sesja) — prawa strona nagłówka. */
   statusBadgeStyle: CSSProperties;
 };
 
@@ -43,24 +42,18 @@ export function OrdersListView({
   onProductClick,
   onBack,
   cartLine,
-  statusLabelRight,
-  statusBadgeStyle,
+  statusLabelRight: _statusLabelRight,
+  statusBadgeStyle: _statusBadgeStyle,
 }: OrdersListViewProps) {
   const n = orders.length;
   const stats = computeOrdersListStats(orders);
   const isStandard = ordersListLayout === "compact";
   const isHorizontal = ordersListLayout === "cards";
-  const sellasistHeader = isStandard || isHorizontal;
+  const isVertical = ordersListLayout === "expanded_vertical";
 
   const cartHint =
     cartLine != null && cartLine.code.trim() !== "" ? (
-      <span
-        className={
-          sellasistHeader
-            ? "ml-auto min-w-0 max-w-[14rem] shrink truncate text-sm font-semibold text-slate-700"
-            : "hidden min-w-0 max-w-[10rem] shrink truncate text-xs font-semibold text-slate-600 md:inline lg:max-w-[14rem] lg:text-sm"
-        }
-      >
+      <span className="ml-auto min-w-0 max-w-[14rem] shrink truncate text-sm font-semibold text-slate-700">
         {cartLine.mode === "baskets" ? "Wózek z koszykami: " : "Wózek: "}
         <span className="font-bold text-slate-900">{cartLine.code}</span>
       </span>
@@ -68,33 +61,17 @@ export function OrdersListView({
 
   return (
     <div className="flex min-h-0 w-full flex-1 flex-col bg-white">
-      <div
-        className={
-          sellasistHeader
-            ? "sticky top-0 z-20 shrink-0 border-b border-slate-200 bg-white px-3 py-2.5 sm:px-4"
-            : "sticky top-0 z-20 shrink-0 border-b border-slate-200/90 bg-white/95 px-3 py-3 shadow-sm backdrop-blur-md sm:px-5"
-        }
-      >
+      <div className="sticky top-0 z-20 shrink-0 border-b border-slate-200 bg-white px-3 py-2.5 sm:px-4">
         <div className="flex min-w-0 flex-wrap items-center gap-2 overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           <button
             type="button"
-            className={
-              sellasistHeader
-                ? "inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-800 transition hover:bg-slate-50"
-                : "inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-slate-200/90 bg-white text-slate-800 shadow-sm transition hover:border-indigo-200 hover:bg-indigo-50 hover:text-indigo-950"
-            }
+            className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-800 transition hover:bg-slate-50"
             onClick={onBack}
             aria-label="Wstecz do wyboru statusu"
           >
             <IconBack />
           </button>
-          <h1
-            className={
-              sellasistHeader
-                ? "shrink-0 whitespace-nowrap text-base font-bold leading-none tracking-tight text-slate-900 sm:text-lg"
-                : "shrink-0 whitespace-nowrap text-lg font-black leading-none tracking-tight text-slate-900 sm:text-xl"
-            }
-          >
+          <h1 className="shrink-0 whitespace-nowrap text-base font-bold leading-none tracking-tight text-slate-900 sm:text-lg">
             Zamówień: {loading ? "…" : n}
           </h1>
           {!loading ? (
@@ -102,21 +79,11 @@ export function OrdersListView({
               spakowane={stats.spakowane}
               doSpakowania={stats.doSpakowania}
               wTrakcie={stats.wTrakcie}
-              braki={isHorizontal ? stats.braki : 0}
+              braki={isHorizontal || isVertical ? stats.braki : 0}
             />
           ) : null}
           {cartHint}
-          {!sellasistHeader ? (
-            <span
-              className="ml-auto inline-flex h-9 max-w-[min(40%,14rem)] min-w-[1.75rem] shrink-0 items-center justify-center truncate rounded-xl px-3 text-xs font-semibold leading-tight sm:max-w-[16rem] sm:px-4 sm:text-sm"
-              style={statusBadgeStyle}
-              title={statusLabelRight}
-            >
-              {statusLabelRight}
-            </span>
-          ) : cartHint == null ? (
-            <span className="ml-auto" />
-          ) : null}
+          {cartHint == null ? <span className="ml-auto" /> : null}
         </div>
       </div>
 
@@ -128,17 +95,17 @@ export function OrdersListView({
 
       <div
         className={
-          isHorizontal
-            ? "flex min-h-0 flex-1 flex-col bg-white px-3 pb-3 pt-3 sm:px-4"
-            : isStandard
-              ? "min-h-0 flex-1 px-3 pb-8 pt-3 sm:px-4"
-              : "min-h-0 flex-1 px-4 pb-8 pt-0 sm:px-6"
+          isVertical
+            ? "min-h-0 flex-1 overflow-y-auto bg-white px-3 pb-8 pt-3 sm:px-4"
+            : isHorizontal
+              ? "flex min-h-0 flex-1 flex-col bg-white px-3 pb-3 pt-3 sm:px-4"
+              : "min-h-0 flex-1 bg-white px-3 pb-8 pt-3 sm:px-4"
         }
       >
         {loading ? (
           <p className="py-14 text-center text-base font-medium text-slate-500">Ładowanie…</p>
         ) : !error && orders.length === 0 ? (
-          <p className="rounded-2xl border border-slate-200 bg-white px-6 py-10 text-center text-base leading-relaxed text-slate-500 shadow-sm">
+          <p className="rounded-2xl border border-slate-200 bg-white px-6 py-10 text-center text-base leading-relaxed text-slate-500">
             Brak zamówień dla wybranego sposobu pakowania.
           </p>
         ) : isStandard ? (
@@ -170,20 +137,17 @@ export function OrdersListView({
             ))}
           </div>
         ) : (
-          <div
-            className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm"
-            role="list"
-            aria-label="Lista zamówień do pakowania"
-          >
+          <div className="flex flex-col gap-3 bg-white" role="list" aria-label="Lista zamówień do pakowania">
             {orders.map((o) => (
-              <OrderRow
-                key={o.order_id}
-                order={o}
-                showBasketCode={showBasketCode}
-                showAllNotes={showAllNotes}
-                onOpenOrder={onOpenOrder}
-                onProductClick={onProductClick}
-              />
+              <div key={o.order_id} role="listitem">
+                <ExpandedVerticalOrderCard
+                  order={o}
+                  showBasketCode={showBasketCode}
+                  showAllNotes={showAllNotes}
+                  onOpenOrder={onOpenOrder}
+                  onProductClick={onProductClick}
+                />
+              </div>
             ))}
           </div>
         )}

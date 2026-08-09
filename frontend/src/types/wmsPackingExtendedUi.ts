@@ -11,9 +11,9 @@ export type PackingLocationBadgePosition = "top_right" | "top_left" | "bottom_ri
 export type PackingAutomationButtonsPosition = "bottom" | "right" | "floating";
 export type PackingOrdersListLayout = "expanded_vertical" | "compact" | "cards";
 
-/** Etykieta UI dla `ordersListLayout` — `compact` = „Standardowy”, `cards` = „Rozbudowany (Poziomy)”. */
+/** Etykieta UI dla `ordersListLayout`. */
 export function packingOrdersListLayoutLabel(layout: PackingOrdersListLayout): string {
-  if (layout === "expanded_vertical") return "Rozbudowany (pionowo)";
+  if (layout === "expanded_vertical") return "Rozbudowany (Pionowy)";
   if (layout === "cards") return "Rozbudowany (Poziomy)";
   return "Standardowy";
 }
