@@ -251,7 +251,7 @@ export function PackingOrderSidebar({
           </button>
           <button
             type="button"
-            disabled={wszystkoSpakowane || scanBusy || packingActionsLocked}
+            disabled={scanBusy || packingActionsLocked}
             className="min-h-12 flex-1 rounded-lg px-4 text-base font-bold text-white shadow-sm disabled:cursor-not-allowed disabled:opacity-50"
             style={{ background: PRIMARY_GREEN }}
             onClick={() => void packAll()}

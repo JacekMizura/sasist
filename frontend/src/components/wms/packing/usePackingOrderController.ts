@@ -919,7 +919,17 @@ export function usePackingOrderController(
       return;
     }
     if (warehouseId == null || actionBusyRef.current || !detail) return;
-    if (detail.packed_quantity >= detail.total_quantity) return;
+
+    // Już spakowane: nie wywołuj pack-all ponownie — wejdź w istniejący post-pack (karton / finish / list).
+    if (isPackingOrderCompleted(detail) || detail.packed_quantity >= detail.total_quantity) {
+      alreadyPackedOnLoadRef.current = false;
+      setSuppressPostPackForReopen(false);
+      beginPostPackAdvance(detail);
+      playScanBeep();
+      refocusScannerInput();
+      return;
+    }
+
     const s = loadWmsPackingSession();
     if (!s?.mode) return;
     actionBusyRef.current = true;
@@ -952,6 +962,7 @@ export function usePackingOrderController(
     refocusScannerInput,
     notesPopupOpen,
     tryResumeAutoAfterNotesRescan,
+    beginPostPackAdvance,
   ]);
 
   const activateProduct = useCallback((orderItemId: number) => {

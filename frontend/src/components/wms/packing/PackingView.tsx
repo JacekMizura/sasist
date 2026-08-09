@@ -274,7 +274,7 @@ export function PackingView({
               </button>
               <button
                 type="button"
-                disabled={wszystkoSpakowane || scanBusy || packingActionsLocked}
+                disabled={scanBusy || packingActionsLocked}
                 className="min-h-11 rounded-lg px-4 text-sm font-bold text-white shadow-sm disabled:cursor-not-allowed disabled:opacity-50 sm:px-5 sm:text-base"
                 style={{ background: PRIMARY_GREEN }}
                 onClick={() => void packAll()}
