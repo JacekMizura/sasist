@@ -1,3 +1,24 @@
+## 2026-08-09 — Metody dostawy: NS_BINDING_ABORTED (prawdziwa przyczyna)
+
+- **Werdykt:** `ShippingMethodLogo` / wiersz listy był **odmontowywany** (nie „zepsute pliki”).
+- **DEV:** `React.StrictMode` w `main.tsx` remountował każdy komponent przy pierwszym mountcie → `<img src="/uploads/...">` odłączany mid-flight → Firefox `NS_BINDING_ABORTED` (część zdążyła 200).
+- **Wtórne:** `onError` po abortcie + globalny `failedCustomLogoKeys` zmieniał `src` custom→heuristic (kolejne aborty); `useEffect([load])` bez cleanup → podwójny fetch/`setRows`.
+- **Fix:** bez StrictMode; load z `cancelled` cleanup; `mergeShippingMethodsRows` (bail-out ref); `onError` tylko gdy mounted; brak module cache fail; stabilne `key={id}` + memo row.
+- Test: `shippingMethodLogoUrl.test.ts` (lifecycle remount regression).
+
+## 2026-08-09 — Pakowanie: chrome UI (ikona pack-all, sztuki, badge)
+
+- „Spakuj wszystko” → `PackingPackAllIconButton` (PackageCheck)
+- Przy #order: `packed_quantity/total_quantity` (sztuki), nie queue_index
+- Wózek/Koszyk: `PackingCartBasketBadges` (Icon cart/basket + mono)
+- Lokalizacja: `(97)` zamiast `(x97)`; EAN done: biały badge + ciemny tekst
+
+## 2026-08-09 — Metody dostawy: pętla requestów logo
+
+- Przyczyna: `onError` ustawiał `failedSrc` na SVG; potem `preferred` (custom `/uploads`) ≠ `failedSrc` → znowu custom → nieskończona pętla + NS_BINDING_ABORTED/ORB
+- Fix: jednokierunkowy `pickShippingMethodLogoSrc` (custom → heuristic → none); flagi `customFailed`/`heuristicFailed`; bez `key={src}`
+- Test: `shippingMethodLogoUrl.test.ts` (5 passed)
+
 ## 2026-08-09 — Metody dostawy: znikające logo
 
 - Przyczyna (nie save wipe): `logo_url` w DB zostaje; pliki `/uploads` giną (efemeryczny dysk Railway) → 404/ORB; custom URL blokował heurystykę SVG

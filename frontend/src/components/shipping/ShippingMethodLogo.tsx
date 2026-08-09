@@ -1,9 +1,6 @@
-import { memo, useState } from "react";
+import { memo, useEffect, useRef, useState } from "react";
 import { Package, Truck } from "lucide-react";
-import {
-  markShippingMethodCustomLogoFailed,
-  pickShippingMethodLogoSrc,
-} from "../../utils/shippingMethodLogoUrl";
+import { pickShippingMethodLogoSrc } from "../../utils/shippingMethodLogoUrl";
 
 export type ShippingMethodLogoSize =
   | "lg"
@@ -53,6 +50,8 @@ export type ShippingMethodLogoProps = {
   className?: string;
   /** When no carrier image/heuristic: truck (default) or generic package. */
   placeholder?: "truck" | "package";
+  /** Stable identity for DEV diagnostics (method id). */
+  debugMethodId?: string | null;
 };
 
 function ShippingMethodLogoInner({
@@ -61,10 +60,13 @@ function ShippingMethodLogoInner({
   size = "md",
   className,
   placeholder = "truck",
+  debugMethodId,
 }: ShippingMethodLogoProps) {
   const [customFailed, setCustomFailed] = useState(false);
   const [heuristicFailed, setHeuristicFailed] = useState(false);
   const [seenLogoUrl, setSeenLogoUrl] = useState(() => (logoUrl ?? "").trim());
+  const mountedRef = useRef(true);
+  const lastSrcRef = useRef<string | null>(null);
 
   const logoKey = (logoUrl ?? "").trim();
   // Reset local failure only when the stored logo path actually changes (no useEffect remount churn).
@@ -82,6 +84,43 @@ function ShippingMethodLogoInner({
     .filter(Boolean)
     .join(" ");
 
+  useEffect(() => {
+    mountedRef.current = true;
+    if (import.meta.env.DEV) {
+      // Temporary lifecycle diagnostics — remove once NS_BINDING_ABORTED is confirmed fixed in prod.
+      console.debug("[ShippingMethodLogo] mount", {
+        methodId: debugMethodId ?? null,
+        logoUrl: logoKey || null,
+        src: pick.src,
+        source: pick.source,
+      });
+    }
+    return () => {
+      mountedRef.current = false;
+      if (import.meta.env.DEV) {
+        console.debug("[ShippingMethodLogo] unmount", {
+          methodId: debugMethodId ?? null,
+          logoUrl: logoKey || null,
+          lastSrc: lastSrcRef.current,
+        });
+      }
+    };
+    // Intentionally once per component instance (mount/unmount), not on every src change.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    if (!import.meta.env.DEV) return;
+    if (lastSrcRef.current === pick.src) return;
+    console.debug("[ShippingMethodLogo] src change", {
+      methodId: debugMethodId ?? null,
+      from: lastSrcRef.current,
+      to: pick.src,
+      source: pick.source,
+    });
+    lastSrcRef.current = pick.src;
+  }, [pick.src, pick.source, debugMethodId]);
+
   if (pick.src) {
     return (
       <span className={wrap}>
@@ -89,12 +128,13 @@ function ShippingMethodLogoInner({
           src={pick.src}
           alt=""
           className={IMG[size]}
-          // Eager: avoids lazy+remount races that abort the first GET (NS_BINDING_ABORTED).
+          // Eager: avoids lazy+viewport races. Remount (not lazy) was aborting GETs.
           loading="eager"
           decoding="async"
           onError={() => {
+            // Abort from unmount/StrictMode remount fires onError in Firefox — must not flip src.
+            if (!mountedRef.current) return;
             if (pick.source === "custom") {
-              markShippingMethodCustomLogoFailed(logoUrl);
               setCustomFailed(true);
               return;
             }

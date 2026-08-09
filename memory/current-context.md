@@ -1,9 +1,9 @@
 ﻿## Active
 
-**Shipping method logos (2026-08-09):**
-- Root cause: DB `logo_url` survives alias/active edits; visual “vanish” = missing `/uploads` files (Railway ephemeral disk / no volume) + custom URL blocking carrier SVG heuristics; DevTools NS_BINDING_ABORTED/ORB = cancelled/failed cross-origin GETs, not save wiping DB
-- Fix: PUT uses `model_fields_set` (omit=keep, null/""=clear); settings form omits `logo_url` unless dirty; `ShippingMethodLogo` onError → heuristic; tests `test_shipping_method_logo_persist.py`
-- Infra follow-up: persist `backend/uploads` (Railway volume / object storage) or logos will keep 404 after redeploy
+**Shipping method logos NS_BINDING_ABORTED (2026-08-09):**
+- Root cause (page lifecycle, not broken files): DEV `React.StrictMode` remounted list logos after first paint → browser aborted in-flight `GET /uploads/...`; abort `onError` + module failure cache flipped `src` (more aborts). Double fetch without effect cleanup could `setRows` twice.
+- Fix: drop StrictMode remount; cancellable single load by `warehouseId`; `mergeShippingMethodsRows`; mounted-only `onError`; no module fail-cache; memo list row + stable `key={id}`.
+- Do not “fix” with more logo fallbacks / Railway / S3.
 
 **Packing finish UUID series bug (2026-08-09):**
 - `create_packing_packaging_rw`: `document_series_id=str(series.id)` (UUID), not `int(series.id)`

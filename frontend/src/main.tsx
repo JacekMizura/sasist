@@ -1,4 +1,3 @@
-import React from "react";
 import ReactDOM from "react-dom/client";
 import { RouterProvider } from "react-router-dom";
 import { router } from "./App";
@@ -35,8 +34,10 @@ window.onunhandledrejection = (e: PromiseRejectionEvent) => {
   logError("[promise rejection]", e.reason);
 };
 
+// StrictMode intentionally omitted: in DEV it remounts every component on first mount,
+// which detaches <img src="/uploads/..."> mid-flight and shows as NS_BINDING_ABORTED in Firefox
+// (Metody dostawy / ShippingMethodLogo). Production builds already no-op StrictMode checks;
+// keeping the remount behaviour in DEV caused a false “broken uploads” signal.
 ReactDOM.createRoot(document.getElementById("root")!).render(
-  <React.StrictMode>
-    <RouterProvider router={router} />
-  </React.StrictMode>
+  <RouterProvider router={router} />
 );

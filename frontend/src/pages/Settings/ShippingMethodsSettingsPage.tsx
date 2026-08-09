@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { memo, useCallback, useEffect, useState } from "react";
 import { getShippingMethods, updateShippingMethod, type ShippingMethodDto } from "../../api/shippingMethodsApi";
 import api from "../../api/axios";
 import { useWarehouse } from "../../context/WarehouseContext";
@@ -6,6 +6,10 @@ import { ShippingMethodLogo } from "../../components/shipping/ShippingMethodLogo
 import { DAMAGE_TENANT_ID } from "../damage/damageShared";
 import { brandPrimaryButtonClass } from "../../design-system/brandUi";
 import { AppOverlayPortal } from "../../components/overlay";
+import {
+  mergeShippingMethodsRows,
+  shippingMethodsShouldUnmountList,
+} from "../../utils/shippingMethodsListLifecycle";
 
 /** Must match backend ``allowed_shipping_method_codes`` (fixed dictionary). */
 const DICTIONARY_CODES = new Set([
@@ -17,6 +21,74 @@ const DICTIONARY_CODES = new Set([
   "ALLEGRO_ONE",
   "TEMU",
 ]);
+
+type RowProps = {
+  row: ShippingMethodDto;
+  onEdit: (r: ShippingMethodDto) => void;
+};
+
+/** One delivery method = one stable row; memoized so page rerenders do not remount logos. */
+const ShippingMethodListRow = memo(function ShippingMethodListRow({ row, onEdit }: RowProps) {
+  useEffect(() => {
+    if (!import.meta.env.DEV) return;
+    console.debug("[ShippingMethodListRow] mount", {
+      methodId: row.id,
+      logoUrl: row.logo_url,
+      name: row.name,
+    });
+    return () => {
+      console.debug("[ShippingMethodListRow] unmount", { methodId: row.id });
+    };
+    // Instance lifetime only — logo_url changes must not look like remounts.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [row.id]);
+
+  return (
+    <li>
+      <div className="flex items-center gap-4 px-4 py-4 sm:gap-5 sm:px-5 sm:py-5">
+        <div className="flex w-20 shrink-0 justify-center">
+          <div className="flex h-16 w-16 shrink-0 items-center justify-center">
+            <ShippingMethodLogo
+              debugMethodId={row.id}
+              logoUrl={row.logo_url}
+              methodName={row.name}
+              size="listRow"
+            />
+          </div>
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="text-base font-extrabold text-slate-900 sm:text-lg">{row.name}</p>
+          <p className="mt-1 font-mono text-xs text-slate-600 sm:text-sm">
+            Kod: <span className="font-semibold text-slate-800">{row.code || "—"}</span>
+          </p>
+          {(row.aliases?.length ?? 0) > 0 ? (
+            <p className="mt-1 line-clamp-2 text-xs text-slate-600 sm:text-sm">
+              Aliasy: <span className="text-slate-800">{row.aliases!.join(", ")}</span>
+            </p>
+          ) : (
+            <p className="mt-1 text-xs text-slate-500">Brak aliasów importu.</p>
+          )}
+          <p className="mt-2 text-sm font-bold">
+            {row.is_active ? (
+              <span className="text-emerald-800">Aktywna</span>
+            ) : (
+              <span className="text-slate-600">Nieaktywna</span>
+            )}
+          </p>
+        </div>
+        <div className="flex w-[120px] shrink-0 justify-end sm:w-[140px]">
+          <button
+            type="button"
+            onClick={() => onEdit(row)}
+            className="border-2 border-slate-800 bg-white px-4 py-2.5 text-sm font-bold text-slate-900 hover:bg-slate-50"
+          >
+            Edytuj
+          </button>
+        </div>
+      </div>
+    </li>
+  );
+});
 
 export default function ShippingMethodsSettingsPage() {
   const { warehouse } = useWarehouse();
@@ -38,37 +110,69 @@ export default function ShippingMethodsSettingsPage() {
   const [saving, setSaving] = useState(false);
   const [uploadBusy, setUploadBusy] = useState(false);
 
-  const load = useCallback(async (opts?: { soft?: boolean }) => {
+  /**
+   * Single load pipeline keyed by warehouseId.
+   * Cleanup ignores stale responses so StrictMode/double-invoke cannot setRows twice
+   * while logo <img> requests are in flight (NS_BINDING_ABORTED).
+   */
+  useEffect(() => {
     if (warehouseId == null) {
       setRows([]);
       setLoading(false);
       return;
     }
-    // Soft refresh keeps the list mounted so logo <img> GETs are not aborted (NS_BINDING_ABORTED).
-    if (!opts?.soft) {
-      setLoading(true);
-    }
+
+    let cancelled = false;
+    setLoading(true);
     setErr(null);
+
+    if (import.meta.env.DEV) {
+      console.debug("[ShippingMethodsSettingsPage] fetch start", { warehouseId });
+    }
+
+    void (async () => {
+      try {
+        const data = await getShippingMethods({
+          tenant_id: DAMAGE_TENANT_ID,
+          warehouse_id: warehouseId,
+          active_only: false,
+        });
+        if (cancelled) {
+          if (import.meta.env.DEV) {
+            console.debug("[ShippingMethodsSettingsPage] fetch ignored (cancelled)", { warehouseId });
+          }
+          return;
+        }
+        setRows((prev) => mergeShippingMethodsRows(prev, data));
+      } catch {
+        if (cancelled) return;
+        setErr("Nie udało się wczytać metod dostawy.");
+        setRows((prev) => (prev.length > 0 ? prev : []));
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [warehouseId]);
+
+  const softReload = useCallback(async () => {
+    if (warehouseId == null) return;
     try {
       const data = await getShippingMethods({
         tenant_id: DAMAGE_TENANT_ID,
         warehouse_id: warehouseId,
         active_only: false,
       });
-      setRows(data);
+      setRows((prev) => mergeShippingMethodsRows(prev, data));
     } catch {
       setErr("Nie udało się wczytać metod dostawy.");
-      if (!opts?.soft) setRows([]);
-    } finally {
-      setLoading(false);
     }
   }, [warehouseId]);
 
-  useEffect(() => {
-    void load({ soft: false });
-  }, [load]);
-
-  const openEdit = (r: ShippingMethodDto) => {
+  const openEdit = useCallback((r: ShippingMethodDto) => {
     setEditing(r);
     setCode(r.code ?? "");
     setAliasesInput((r.aliases ?? []).join(", "));
@@ -78,7 +182,7 @@ export default function ShippingMethodsSettingsPage() {
     setInitialLogoUrl(existingLogo);
     setIsActive(r.is_active);
     setModalOpen(true);
-  };
+  }, []);
 
   const closeModal = () => {
     if (saving) return;
@@ -146,7 +250,7 @@ export default function ShippingMethodsSettingsPage() {
       }
       await updateShippingMethod(editing.id, { tenant_id: DAMAGE_TENANT_ID, warehouse_id: warehouseId }, payload);
       setModalOpen(false);
-      await load({ soft: true });
+      await softReload();
     } catch {
       setErr("Nie udało się zapisać metody dostawy.");
     } finally {
@@ -155,6 +259,8 @@ export default function ShippingMethodsSettingsPage() {
   };
 
   const fieldCls = "w-full border-2 border-slate-300 bg-white px-3 py-2.5 text-sm font-medium text-slate-900 outline-none focus:border-slate-800";
+  const showLoading = warehouseId != null && shippingMethodsShouldUnmountList(loading, rows.length);
+  const showList = warehouseId != null && (rows.length > 0 || !loading);
 
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-slate-100">
@@ -174,58 +280,19 @@ export default function ShippingMethodsSettingsPage() {
         </div>
       ) : null}
 
-      {warehouseId != null && loading && rows.length === 0 ? (
+      {showLoading ? (
         <p className="px-4 py-10 text-center text-sm font-medium text-slate-600">Ładowanie…</p>
       ) : null}
 
-      {warehouseId != null && (rows.length > 0 || !loading) ? (
+      {showList ? (
         <div className="min-h-0 flex-1">
           {rows.length === 0 ? (
             <p className="px-4 py-12 text-center text-sm font-medium text-slate-600">Brak metod.</p>
           ) : (
             <ul className="w-full divide-y divide-slate-200 border-y border-slate-300/80 bg-white">
-              {rows.map((r) => {
-                return (
-                  <li key={r.id}>
-                    <div className="flex items-center gap-4 px-4 py-4 sm:gap-5 sm:px-5 sm:py-5">
-                      <div className="flex w-20 shrink-0 justify-center">
-                        <div className="flex h-16 w-16 shrink-0 items-center justify-center">
-                          <ShippingMethodLogo logoUrl={r.logo_url} methodName={r.name} size="listRow" />
-                        </div>
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <p className="text-base font-extrabold text-slate-900 sm:text-lg">{r.name}</p>
-                        <p className="mt-1 font-mono text-xs text-slate-600 sm:text-sm">
-                          Kod: <span className="font-semibold text-slate-800">{r.code || "—"}</span>
-                        </p>
-                        {(r.aliases?.length ?? 0) > 0 ? (
-                          <p className="mt-1 line-clamp-2 text-xs text-slate-600 sm:text-sm">
-                            Aliasy: <span className="text-slate-800">{r.aliases!.join(", ")}</span>
-                          </p>
-                        ) : (
-                          <p className="mt-1 text-xs text-slate-500">Brak aliasów importu.</p>
-                        )}
-                        <p className="mt-2 text-sm font-bold">
-                          {r.is_active ? (
-                            <span className="text-emerald-800">Aktywna</span>
-                          ) : (
-                            <span className="text-slate-600">Nieaktywna</span>
-                          )}
-                        </p>
-                      </div>
-                      <div className="flex w-[120px] shrink-0 justify-end sm:w-[140px]">
-                        <button
-                          type="button"
-                          onClick={() => openEdit(r)}
-                          className="border-2 border-slate-800 bg-white px-4 py-2.5 text-sm font-bold text-slate-900 hover:bg-slate-50"
-                        >
-                          Edytuj
-                        </button>
-                      </div>
-                    </div>
-                  </li>
-                );
-              })}
+              {rows.map((r) => (
+                <ShippingMethodListRow key={r.id} row={r} onEdit={openEdit} />
+              ))}
             </ul>
           )}
         </div>
