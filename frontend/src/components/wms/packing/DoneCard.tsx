@@ -15,6 +15,7 @@ import {
   PackingCardFieldLabel,
   PackingDoneCheckIcon,
   PackingDoneCloseIcon,
+  PackingGridLocationHeader,
   PackingLocationPill,
   PackingProductThumb,
   packingLocationBadge,
@@ -32,7 +33,6 @@ function DoneCardInner({ line, flash, fieldVisibility, displayMode = "list" }: D
   const title = formatPackingProductName(line.product_name, {
     showName: fieldVisibility.show_product_name,
     truncate: fieldVisibility.truncate_names,
-    qty: line.quantity,
   });
   const isGrid = displayMode === "grid";
   const qtyPacked = line.quantity_packed;
@@ -41,13 +41,19 @@ function DoneCardInner({ line, flash, fieldVisibility, displayMode = "list" }: D
   const showImg = fieldVisibility.show_image;
 
   const flashStyle = flash
-    ? { boxShadow: "0 0 0 3px rgba(52, 211, 153, 0.75)" }
-    : { boxShadow: "0 1px 3px rgba(15, 23, 42, 0.05)" };
+    ? { boxShadow: "0 0 0 3px rgba(76, 175, 80, 0.45)" }
+    : { boxShadow: "0 1px 3px rgba(15, 23, 42, 0.04)" };
+
+  const closeIcon = (
+    <span className="inline-flex h-7 w-7 items-center justify-center" aria-hidden>
+      <PackingDoneCloseIcon />
+    </span>
+  );
 
   return (
     <div
       className={[
-        "pointer-events-none relative flex cursor-default flex-col overflow-hidden rounded-lg border border-slate-200 bg-white text-left opacity-[0.55]",
+        "pointer-events-none relative flex cursor-default flex-col overflow-hidden rounded-lg border border-emerald-200 bg-[#eef8ee] text-left",
         packingProductCardRootSizeClass(displayMode),
         isGrid ? "p-3" : "px-3 pb-2.5 pt-2",
       ].join(" ")}
@@ -59,27 +65,26 @@ function DoneCardInner({ line, flash, fieldVisibility, displayMode = "list" }: D
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-1.5">
                 <PackingDoneCheckIcon />
-                <span className="text-xs font-semibold text-[#4CAF50]">
-                  Spakowane {qtyPacked}/{qtyReq}
+                <span className="text-sm font-bold text-[#2e7d32]">
+                  Spakowano {qtyPacked}/{qtyReq}
                 </span>
               </div>
             </div>
-            <div className="flex shrink-0 flex-col items-end gap-1">
-              <div className="flex items-start gap-1">
-                {showLoc ? <PackingCardFieldLabel muted>LOKALIZACJA</PackingCardFieldLabel> : null}
-                <PackingDoneCloseIcon />
-              </div>
-              {showLoc ? <PackingLocationPill text={locBadge} muted /> : null}
-            </div>
+            <PackingGridLocationHeader
+              showLocation={showLoc}
+              locBadge={locBadge}
+              menu={closeIcon}
+              muted
+            />
           </div>
 
           {showImg ? (
-            <div className="mt-2 flex h-[8.75rem] w-full items-center justify-center overflow-hidden bg-white">
+            <div className="mt-2 flex h-[8.75rem] w-full items-center justify-center overflow-hidden bg-transparent">
               {line.image_url ? (
                 <img
                   src={line.image_url}
                   alt=""
-                  className="max-h-full max-w-full object-contain grayscale"
+                  className="max-h-full max-w-full object-contain"
                   loading="lazy"
                 />
               ) : (
@@ -88,20 +93,20 @@ function DoneCardInner({ line, flash, fieldVisibility, displayMode = "list" }: D
             </div>
           ) : null}
 
-          {title ? <p className="mt-2 text-[13px] font-bold leading-snug text-slate-500">{title}</p> : null}
+          {title ? <p className="mt-2 text-[13px] font-bold leading-snug text-slate-800">{title}</p> : null}
           <LineDetailsBlock line={line} variant="done" fieldVisibility={fieldVisibility} layout="stack" />
         </>
       ) : (
         <>
           <div className="flex items-start gap-2.5">
-            {showImg ? <PackingProductThumb url={line.image_url} size={76} muted /> : null}
+            {showImg ? <PackingProductThumb url={line.image_url} size={76} /> : null}
             <div className="min-w-0 flex-1">
               <div className="flex items-start gap-2">
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-1.5">
                     <PackingDoneCheckIcon />
-                    <span className="text-xs font-semibold text-[#4CAF50]">
-                      Spakowane {qtyPacked}/{qtyReq}
+                    <span className="text-sm font-bold text-[#2e7d32]">
+                      Spakowano {qtyPacked}/{qtyReq}
                     </span>
                   </div>
                 </div>
@@ -113,7 +118,7 @@ function DoneCardInner({ line, flash, fieldVisibility, displayMode = "list" }: D
                   {showLoc ? <PackingLocationPill text={locBadge} muted /> : null}
                 </div>
               </div>
-              {title ? <p className="mt-1.5 text-[13px] font-bold leading-snug text-slate-500">{title}</p> : null}
+              {title ? <p className="mt-1.5 text-[13px] font-bold leading-snug text-slate-800">{title}</p> : null}
             </div>
           </div>
 

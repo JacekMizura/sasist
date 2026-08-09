@@ -15,6 +15,7 @@ import {
 import {
   PackingCardFieldLabel,
   PackingCardMenu,
+  PackingGridLocationHeader,
   PackingLocationPill,
   PackingProductThumb,
   packingLocationBadge,
@@ -53,7 +54,6 @@ function ActiveCardInner({
   const title = formatPackingProductName(line.product_name, {
     showName: fieldVisibility.show_product_name,
     truncate: fieldVisibility.truncate_names,
-    qty: line.quantity,
   });
   const isGrid = displayMode === "grid";
   const atMax = maxPack > 0 && packQty >= maxPack;
@@ -144,13 +144,7 @@ function ActiveCardInner({
                 {line.quantity_packed}/{qtyReq}
               </p>
             </div>
-            <div className="flex shrink-0 flex-col items-end gap-1">
-              <div className="flex items-start gap-0.5">
-                {showLoc ? <PackingCardFieldLabel>LOKALIZACJA</PackingCardFieldLabel> : null}
-                {menu}
-              </div>
-              {showLoc ? <PackingLocationPill text={locBadge} /> : null}
-            </div>
+            <PackingGridLocationHeader showLocation={showLoc} locBadge={locBadge} menu={menu} />
           </div>
 
           {/* Strefa obrazu / kontrolek — jak Figma kafelki active */}

@@ -47,7 +47,6 @@ import {
 } from "./packingPostFinishClientActions";
 import {
   decideListScanBootstrapUi,
-  firstIncompleteOrderItemId,
   isPackingOrderLinesFullyPacked,
   isPackingPhysicallyComplete,
   isPackingSessionFinished,
@@ -515,16 +514,17 @@ export function usePackingOrderController(
   ]);
 
   const advanceActiveAfterPack = useCallback((d: WmsPackingOrderDetailApi, lastPackedOrderItemId: number | null) => {
+    // Po pełnym spakowaniu linii nie otwieraj kolejnego produktu — tylko skan lub ręczne kliknięcie.
     if (lastPackedOrderItemId == null) {
-      setActiveProductId(firstIncompleteOrderItemId(d.lines));
+      setActiveProductId(null);
       return;
     }
     const ln = d.lines.find((l) => l.order_item_id === lastPackedOrderItemId);
     if (ln != null && ln.quantity_packed >= lineQuantityRequired(ln)) {
-      setActiveProductId(firstIncompleteOrderItemId(d.lines));
-    } else {
-      setActiveProductId(lastPackedOrderItemId);
+      setActiveProductId(null);
+      return;
     }
+    setActiveProductId(lastPackedOrderItemId);
   }, []);
 
   const beginPostPackAdvance = useCallback(

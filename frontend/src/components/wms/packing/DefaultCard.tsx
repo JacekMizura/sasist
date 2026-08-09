@@ -15,6 +15,7 @@ import {
 import {
   PackingCardFieldLabel,
   PackingCardMenu,
+  PackingGridLocationHeader,
   PackingLocationPill,
   PackingProductThumb,
   packingLocationBadge,
@@ -43,7 +44,6 @@ function DefaultCardInner({
   const title = formatPackingProductName(line.product_name, {
     showName: fieldVisibility.show_product_name,
     truncate: fieldVisibility.truncate_names,
-    qty: line.quantity,
   });
   const isGrid = displayMode === "grid";
   const showLoc = fieldVisibility.show_location;
@@ -82,7 +82,6 @@ function DefaultCardInner({
     >
       {isGrid ? (
         <>
-          {/* Kafelki: SPAKOWANO | LOKALIZACJA + … */}
           <div className="flex items-start gap-2">
             <div className="min-w-0 flex-1">
               <PackingCardFieldLabel>SPAKOWANO</PackingCardFieldLabel>
@@ -90,13 +89,7 @@ function DefaultCardInner({
                 {line.quantity_packed}/{qtyReq}
               </p>
             </div>
-            <div className="flex shrink-0 flex-col items-end gap-1">
-              <div className="flex items-start gap-0.5">
-                {showLoc ? <PackingCardFieldLabel>LOKALIZACJA</PackingCardFieldLabel> : null}
-                {menu}
-              </div>
-              {showLoc ? <PackingLocationPill text={locBadge} /> : null}
-            </div>
+            <PackingGridLocationHeader showLocation={showLoc} locBadge={locBadge} menu={menu} />
           </div>
 
           {showImg ? (

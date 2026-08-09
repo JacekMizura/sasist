@@ -28,9 +28,9 @@ export function LineDetailsBlock({ line, variant, fieldVisibility, layout = "col
   const bundle = (line.bundle_name ?? "").trim();
 
   const muted = variant === "done";
-  const labelCls = muted ? "text-slate-400" : "text-slate-500";
-  const textCls = muted ? "text-slate-500" : "text-slate-700";
-  const stanCls = muted ? "text-slate-500" : "text-slate-900";
+  const labelCls = muted ? "text-emerald-800/70" : "text-slate-500";
+  const textCls = muted ? "text-slate-700" : "text-slate-700";
+  const stanCls = muted ? "text-slate-800" : "text-slate-900";
 
   const byKey = new Map<string, MetaRow>();
 

@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import type { WmsPackingOrderLineApi } from "../../../api/wmsPackingApi";
 import { PackingLineActionsMenu } from "./PackingLineActionsMenu";
 
@@ -24,16 +25,43 @@ export function PackingLocationPill({
   return (
     <span
       className={[
-        "inline-flex max-w-[9.5rem] items-center justify-center rounded-full border px-2 py-0.5 text-center text-[11px] font-bold leading-tight",
+        "inline-flex w-full max-w-[7.25rem] items-center justify-center truncate rounded-full border px-2 py-0.5 text-center text-[11px] font-bold leading-tight",
         muted
-          ? "border-slate-300 text-slate-400"
+          ? "border-emerald-300/80 text-emerald-800"
           : "border-slate-800 text-slate-900",
       ].join(" ")}
+      title={text}
     >
       {text}
     </span>
   );
 }
+
+/** Nagłówek prawej strony kafelka (Siatka): stała kolumna lokalizacji + menu przy prawej krawędzi. */
+export function PackingGridLocationHeader({
+  showLocation,
+  locBadge,
+  menu,
+  muted,
+}: {
+  showLocation: boolean;
+  locBadge: string;
+  menu: ReactNode;
+  muted?: boolean;
+}) {
+  return (
+    <div className="flex shrink-0 items-start gap-0.5">
+      {showLocation ? (
+        <div className="flex w-[7.25rem] shrink-0 flex-col items-end gap-1">
+          <PackingCardFieldLabel muted={muted}>LOKALIZACJA</PackingCardFieldLabel>
+          <PackingLocationPill text={locBadge} muted={muted} />
+        </div>
+      ) : null}
+      <div className="-mr-1.5 -mt-0.5 shrink-0">{menu}</div>
+    </div>
+  );
+}
+
 
 export function PackingProductThumb({
   url,
