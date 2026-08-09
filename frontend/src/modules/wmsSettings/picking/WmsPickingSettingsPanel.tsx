@@ -1429,8 +1429,12 @@ function resolvePanelStatusBrief(
   };
 }
 
+/** Pełna szerokość: status | tryb | 1-el | multi | po zbieraniu | akcje */
 const PICKING_CONFIG_LIST_GRID =
-  "sm:grid-cols-[minmax(13rem,1.35fr)_minmax(7rem,0.65fr)_minmax(13rem,1.55fr)_minmax(12rem,1.2fr)_auto]";
+  "sm:grid-cols-[minmax(10rem,1.15fr)_minmax(6rem,0.75fr)_minmax(0,1.35fr)_minmax(0,1.35fr)_minmax(10rem,1.1fr)_auto]";
+
+const pickingConfigListHeaderClass =
+  "text-center text-[11px] font-semibold uppercase tracking-wide text-slate-400";
 
 /** Duży badge statusu WMS (ten sam pipeline co ustawienia statusów panelu). */
 function PickingConfigStatusBadge({ status }: { status: PanelConfigurableUiStatusBrief }) {
@@ -1500,24 +1504,30 @@ function PickingUsedStatusesSummary({
   );
 }
 
-function PickingConfigSettingsStack({ config }: { config: SavedPickingConfiguration }) {
-  const multiLabel = containerListLabel(config.blocks.multi_item.containers, "multi_item");
-  const singleLabel = containerListLabel(config.blocks.single_item.containers, "single_item");
-  const sortLabel = orderSortListLabel(config.orderSort);
+function PickingConfigOrderTypeColumn({
+  orderType,
+  config,
+}: {
+  orderType: PickingOrderTypeKey;
+  config: SavedPickingConfiguration;
+}) {
+  const isSingle = orderType === "single_item";
+  const Icon = isSingle ? FileText : Boxes;
+  const title = isSingle ? "Zamówienia jednoelementowe" : "Zamówienia wieloelementowe";
+  const containerLabelText = containerListLabel(config.blocks[orderType].containers, orderType);
+  const sortForDisplay =
+    !isSingle && config.blocks.multi_item.containers === "consolidation_rack"
+      ? coerceConsolidationOrderSort(config.orderSort)
+      : config.orderSort;
+  const sortLabel = orderSortListLabel(sortForDisplay);
+
   return (
-    <div className="flex min-w-0 flex-col gap-2.5">
+    <div className="flex min-w-0 flex-col gap-2.5 text-left">
       <div className="flex min-w-0 items-start gap-2.5">
-        <Boxes className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" strokeWidth={2} aria-hidden />
+        <Icon className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" strokeWidth={2} aria-hidden />
         <div className="min-w-0">
-          <p className="text-sm font-semibold leading-snug text-slate-900">Zamówienia wieloelementowe</p>
-          <p className="mt-0.5 text-xs leading-snug text-slate-500">{multiLabel}</p>
-        </div>
-      </div>
-      <div className="flex min-w-0 items-start gap-2.5">
-        <FileText className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" strokeWidth={2} aria-hidden />
-        <div className="min-w-0">
-          <p className="text-sm font-semibold leading-snug text-slate-900">Zamówienia jednoelementowe</p>
-          <p className="mt-0.5 text-xs leading-snug text-slate-500">{singleLabel}</p>
+          <p className="text-sm font-semibold leading-snug text-slate-900">{title}</p>
+          <p className="mt-0.5 text-xs leading-snug text-slate-500">{containerLabelText}</p>
         </div>
       </div>
       <div className="flex min-w-0 items-start gap-2.5">
@@ -1558,19 +1568,22 @@ function SavedPickingConfigSummaryCard({
 
   return (
     <div
-      className={`grid grid-cols-1 items-center gap-4 border-b border-slate-100 px-4 py-4 last:border-b-0 ${PICKING_CONFIG_LIST_GRID} sm:gap-6`}
+      className={`grid grid-cols-1 items-center gap-4 border-b border-slate-100 px-3 py-4 last:border-b-0 sm:gap-4 sm:px-4 lg:gap-5 ${PICKING_CONFIG_LIST_GRID}`}
       aria-label={`Konfiguracja zbierania: ${config.statusToPickName}`}
     >
-      <div className="min-w-0">
+      <div className="flex min-w-0 justify-center sm:justify-start">
         <PickingConfigStatusBadge status={sourceBrief} />
       </div>
-      <div className="min-w-0">
-        <p className="text-sm font-semibold text-slate-900">{modeLabel}</p>
+      <div className="min-w-0 text-left sm:text-center">
+        <p className="text-sm font-semibold text-slate-900 sm:inline-block sm:text-left">{modeLabel}</p>
       </div>
       <div className="min-w-0">
-        <PickingConfigSettingsStack config={config} />
+        <PickingConfigOrderTypeColumn orderType="single_item" config={config} />
       </div>
       <div className="min-w-0">
+        <PickingConfigOrderTypeColumn orderType="multi_item" config={config} />
+      </div>
+      <div className="flex min-w-0 justify-center sm:justify-start">
         <PickingConfigStatusBadge status={targetBrief} />
       </div>
       <div className="flex shrink-0 items-center justify-end gap-1.5">
@@ -1652,15 +1665,14 @@ function WmsPickingStatusConfig({
         <>
           <div className="overflow-hidden rounded-xl border border-slate-100 bg-white">
             <div
-              className={`hidden gap-6 border-b border-slate-100 px-4 py-3 sm:grid ${PICKING_CONFIG_LIST_GRID}`}
+              className={`hidden gap-4 border-b border-slate-100 px-3 py-3 sm:grid sm:px-4 lg:gap-5 ${PICKING_CONFIG_LIST_GRID}`}
             >
-              <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
-                Status do rozpoczęcia zbierania
-              </p>
-              <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Tryb zbierania</p>
-              <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Ustawienia</p>
-              <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Po zbieraniu</p>
-              <p className="text-right text-[11px] font-semibold uppercase tracking-wide text-slate-400">Akcje</p>
+              <p className={pickingConfigListHeaderClass}>Status do rozpoczęcia zbierania</p>
+              <p className={pickingConfigListHeaderClass}>Tryb zbierania</p>
+              <p className={pickingConfigListHeaderClass}>Jednoelementowe</p>
+              <p className={pickingConfigListHeaderClass}>Wieloelementowe</p>
+              <p className={pickingConfigListHeaderClass}>Po zbieraniu</p>
+              <p className={`${pickingConfigListHeaderClass} text-right`}>Akcje</p>
             </div>
             <div>
               {savedConfigs.map((cfg) => (
