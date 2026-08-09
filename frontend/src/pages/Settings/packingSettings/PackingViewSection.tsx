@@ -1,3 +1,4 @@
+import { StandardOrdersListLayoutPreview } from "../../../components/wms/packing/ordersList/StandardOrdersListLayoutPreview";
 import type { WmsPackingExtendedUiSettings } from "../../../types/wmsPackingExtendedUi";
 import type { WmsPackingInterfaceDisplay, WmsPackingSettingsRead } from "../../../types/wmsPackingSettings";
 import {
@@ -206,7 +207,7 @@ export function PackingViewSection({ extended, draft, patchExtended, toggleInter
             onChange={(v) => patchExtended("ordersListLayout", v as WmsPackingExtendedUiSettings["ordersListLayout"])}
           >
             <option value="expanded_vertical">Rozbudowany (pionowo)</option>
-            <option value="compact">Kompaktowy</option>
+            <option value="compact">Standardowy</option>
             <option value="cards">Karty</option>
           </SelectField>
           <SelectField
@@ -226,6 +227,7 @@ export function PackingViewSection({ extended, draft, patchExtended, toggleInter
             ))}
           </SelectField>
         </FieldGrid>
+        {extended.ordersListLayout === "compact" ? <StandardOrdersListLayoutPreview /> : null}
         <div className="mt-2 space-y-1">
           <BoolRow
             settingId="packing.show_product_image_in_orders"

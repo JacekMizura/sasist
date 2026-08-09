@@ -1,3 +1,10 @@
+## 2026-08-09 — Lista zamówień pakowania: układ Standardowy
+
+- `ordersListLayout: compact` → UI „Standardowy” (rename z Kompaktowy); wartość `compact` bez zmian
+- Siatka 4 kart/rząd; karta 3 kolumny: nr+Fa+klient | SPAKOWANO | logo przewoźnika (bez wrap logo pod licznik)
+- Stan spakowany: ✓ + Spakowane n/n, czerwony X, wyszarzenie; nagłówek jak referencja Sellasist
+- Podgląd układu w ustawieniach Widok; `npm run build` OK; bez commit/push
+
 ## 2026-08-08 — Smart Matching (WMS settings + learning)
 
 - Trwałe ustawienia (enable, próg 2/3/5, status inicjujący, multi auto-label) zamiast localStorage

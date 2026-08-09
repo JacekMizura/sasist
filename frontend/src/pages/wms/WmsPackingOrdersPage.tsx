@@ -128,10 +128,13 @@ export default function WmsPackingOrdersPage() {
   const [rejectReason, setRejectReason] = useState("");
   const listScanBusyRef = useRef(false);
 
-  const showAllNotes = useMemo(() => {
-    if (warehouseId == null) return true;
-    return loadWmsPackingExtendedUi(warehouseId).showAllNotes;
+  const packingUi = useMemo(() => {
+    if (warehouseId == null) return null;
+    return loadWmsPackingExtendedUi(warehouseId);
   }, [warehouseId]);
+
+  const showAllNotes = packingUi?.showAllNotes ?? true;
+  const ordersListLayout = packingUi?.ordersListLayout ?? "compact";
 
   useEffect(() => {
     const sync = () => {
@@ -503,6 +506,7 @@ export default function WmsPackingOrdersPage() {
         error={err}
         showBasketCode={s.mode === "baskets"}
         showAllNotes={showAllNotes}
+        ordersListLayout={ordersListLayout}
         onOpenOrder={(id) => {
           if (activePriorityTask && assignedOrderIds.length > 0 && !assignedOrderSet.has(id)) {
             showScannerToast("To zamówienie jest poza aktywnym zadaniem kierownika.");
