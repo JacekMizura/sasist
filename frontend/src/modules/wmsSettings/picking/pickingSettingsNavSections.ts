@@ -19,10 +19,10 @@ import type { WmsSettingsSectionConfig } from "../../../pages/Settings/wmsSettin
 export const WMS_PICKING_SETTINGS_NAV_SECTIONS: WmsSettingsSectionConfig[] = [
   {
     id: "wms-pick-modes",
-    label: "Ogólne",
+    label: "Konfigurator zbierania",
     icon: Settings2,
     iconClassName: "bg-slate-100 text-slate-600",
-    searchText: "statusy konfiguracja trybów",
+    searchText: "konfigurator zbierania statusy tryby",
   },
   {
     id: "wms-pick-view",

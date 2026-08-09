@@ -1549,50 +1549,80 @@ function SavedPickingConfigSummaryCard({
   /** Only when product has an explicit default-config concept. */
   isDefault?: boolean;
 }) {
+  const modeLabel = pickingModeLabel(config.pickingMode);
+  const orderSortHint =
+    config.pickingMode === "by_orders" ? pickingOrderSortLabel(config.orderSort) : null;
+  const singleWhere = pickingWhereLabel(config.blocks.single_item.containers);
+  const multiWhere = pickingWhereLabel(config.blocks.multi_item.containers);
+
   return (
     <div
-      className="flex flex-col rounded-lg border border-slate-200 bg-white px-3 py-2.5 shadow-sm transition-colors hover:border-slate-300"
+      className="rounded-lg border border-slate-200 bg-white px-3 py-2.5 transition-colors hover:border-slate-300"
       aria-label={`Zapisana konfiguracja: ${config.statusToPickName}`}
     >
-      <div className="mb-1.5 flex items-start justify-between gap-2">
-        <h4 className="text-sm font-semibold leading-snug text-slate-900">{config.statusToPickName}</h4>
-        {isDefault ? (
-          <span className="shrink-0 rounded bg-blue-600 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">
-            Domyślny
-          </span>
-        ) : null}
-      </div>
+      <div className="flex flex-col gap-2.5 lg:flex-row lg:items-center lg:gap-4">
+        <div className="grid min-w-0 flex-1 gap-x-4 gap-y-2 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="min-w-0">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Konfiguracja</p>
+            <div className="mt-0.5 flex min-w-0 items-center gap-1.5">
+              <h4 className="truncate text-sm font-semibold leading-snug text-slate-900">
+                {config.statusToPickName}
+              </h4>
+              {isDefault ? (
+                <span className="shrink-0 rounded bg-blue-600 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">
+                  Domyślny
+                </span>
+              ) : null}
+            </div>
+          </div>
 
-      <div className="space-y-0.5 text-xs leading-snug text-slate-600">
-        <p>
-          {pickingModeLabel(config.pickingMode)}
-          {config.pickingMode === "by_orders" ? (
-            <span className="text-slate-500"> · {pickingOrderSortLabel(config.orderSort)}</span>
-          ) : null}
-        </p>
-        <p>1-el: {pickingWhereLabel(config.blocks.single_item.containers)}</p>
-        <p>Multi: {pickingWhereLabel(config.blocks.multi_item.containers)}</p>
-        <p className="font-medium text-slate-800">→ {config.statusAfterPickName}</p>
-      </div>
+          <div className="min-w-0">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Tryb zbierania</p>
+            <p className="mt-0.5 text-sm font-medium leading-snug text-slate-900">{modeLabel}</p>
+            {orderSortHint ? (
+              <p className="mt-0.5 truncate text-xs leading-snug text-slate-500" title={orderSortHint}>
+                {orderSortHint}
+              </p>
+            ) : null}
+          </div>
 
-      <div className="mt-2 flex gap-1.5 border-t border-slate-100 pt-2">
-        <button
-          type="button"
-          className="inline-flex flex-1 items-center justify-center rounded-md border border-slate-200 bg-white px-2 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
-          disabled={actionsDisabled}
-          onClick={() => onEdit(config)}
-        >
-          Edytuj
-        </button>
-        <button
-          type="button"
-          className="inline-flex items-center justify-center rounded-md border border-red-100 bg-white px-2 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50 disabled:opacity-50"
-          disabled={actionsDisabled}
-          onClick={() => onDelete(config.id)}
-          aria-label="Usuń"
-        >
-          Usuń
-        </button>
+          <div className="min-w-0">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Ustawienia</p>
+            <p className="mt-0.5 truncate text-xs leading-snug text-slate-700" title={singleWhere}>
+              <span className="font-medium text-slate-500">1-el:</span> {singleWhere}
+            </p>
+            <p className="mt-0.5 truncate text-xs leading-snug text-slate-700" title={multiWhere}>
+              <span className="font-medium text-slate-500">Multi:</span> {multiWhere}
+            </p>
+          </div>
+
+          <div className="min-w-0">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Po zakończeniu</p>
+            <p className="mt-0.5 truncate text-sm font-medium leading-snug text-slate-900" title={config.statusAfterPickName}>
+              {config.statusAfterPickName}
+            </p>
+          </div>
+        </div>
+
+        <div className="flex shrink-0 items-center gap-1.5 self-stretch border-t border-slate-100 pt-2 lg:border-l lg:border-t-0 lg:pl-4 lg:pt-0">
+          <button
+            type="button"
+            className="inline-flex flex-1 items-center justify-center rounded-md border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50 lg:flex-none"
+            disabled={actionsDisabled}
+            onClick={() => onEdit(config)}
+          >
+            Edytuj
+          </button>
+          <button
+            type="button"
+            className="inline-flex items-center justify-center rounded-md border border-red-100 bg-white px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50 disabled:opacity-50"
+            disabled={actionsDisabled}
+            onClick={() => onDelete(config.id)}
+            aria-label="Usuń"
+          >
+            Usuń
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -1622,8 +1652,8 @@ function WmsPickingStatusConfig({
   handleDeleteSavedConfig: (id: string) => void;
 }) {
   return (
-    <div className="space-y-3" aria-label="Konfiguracja trybu zbierania">
-      <div className="flex flex-wrap items-start justify-end gap-2">
+    <div className="space-y-3" aria-label="Konfigurator zbierania">
+      <div className="flex flex-wrap items-center justify-end gap-2">
         <button
           type="button"
           className={brandPrimaryButtonClass}
@@ -1635,18 +1665,18 @@ function WmsPickingStatusConfig({
           }}
           disabled={draft != null || pickingConfigsLoading || pickingPersisting}
         >
-          + Dodaj kolejny status zbierania zamówień do obsługi
+          Dodaj konfigurację zbierania
         </button>
       </div>
 
       {savedConfigs.length === 0 && !draft && !pickingConfigsLoading ? (
         <p className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-600">
-          Nie masz jeszcze reguł zbierania — dodaj pierwszą regułę powyżej.
+          Brak konfiguracji zbierania — dodaj pierwszą powyżej.
         </p>
       ) : null}
 
       {savedConfigs.length > 0 ? (
-        <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+        <div className="flex flex-col gap-2">
           {savedConfigs.map((cfg) => (
             <SavedPickingConfigSummaryCard
               key={cfg.id}
@@ -2265,11 +2295,7 @@ export function WmsPickingSettingsSections({
           <p className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-800">{saveFormError}</p>
         ) : null}
 
-        <SectionCardPicking
-          id="wms-pick-modes"
-          title="Ogólne"
-          summary="Tryby zbierania i mapowanie statusów panelu."
-        >
+        <SectionCardPicking id="wms-pick-modes" title="Konfigurator zbierania">
           <WmsPickingStatusConfig
             savedConfigs={savedConfigs}
             draft={draft}
