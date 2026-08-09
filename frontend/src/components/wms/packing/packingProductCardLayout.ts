@@ -17,6 +17,14 @@ export const PACKING_PRODUCT_GRID_CARD_HEIGHT = "23.5rem";
 
 const GAP = "0.75rem";
 
+export type PackingProductCardSizeOptions = {
+  /**
+   * Gdy false (np. podgląd ustawień), karta nie kurczy się poniżej stałej szerokości.
+   * W rzeczywistym widoku pakowania (true) `maxWidth: 100%` pozwala zmieścić kartę w wąskim oknie.
+   */
+  allowShrink?: boolean;
+};
+
 export function packingProductCardsContainerClass(): string {
   return "m-0 flex w-full list-none flex-wrap bg-white p-0";
 }
@@ -34,17 +42,24 @@ export function packingProductCardsContainerStyle(): CSSProperties {
 }
 
 export function packingProductCardItemClass(): string {
-  return "box-border max-w-full";
+  return "box-border";
 }
 
-export function packingProductCardItemStyle(mode: PackingProductDisplayMode): CSSProperties {
+export function packingProductCardItemStyle(
+  mode: PackingProductDisplayMode,
+  options?: PackingProductCardSizeOptions,
+): CSSProperties {
+  const allowShrink = options?.allowShrink !== false;
+  const maxWidth = allowShrink ? "100%" : undefined;
+
   if (mode === "grid") {
     return {
       flexGrow: 0,
       flexShrink: 0,
       flexBasis: PACKING_PRODUCT_GRID_CARD_WIDTH,
       width: PACKING_PRODUCT_GRID_CARD_WIDTH,
-      maxWidth: "100%",
+      minWidth: PACKING_PRODUCT_GRID_CARD_WIDTH,
+      ...(maxWidth ? { maxWidth } : {}),
       height: PACKING_PRODUCT_GRID_CARD_HEIGHT,
     };
   }
@@ -53,23 +68,32 @@ export function packingProductCardItemStyle(mode: PackingProductDisplayMode): CS
     flexShrink: 0,
     flexBasis: PACKING_PRODUCT_LIST_CARD_WIDTH,
     width: PACKING_PRODUCT_LIST_CARD_WIDTH,
-    maxWidth: "100%",
+    minWidth: PACKING_PRODUCT_LIST_CARD_WIDTH,
+    ...(maxWidth ? { maxWidth } : {}),
     height: "auto",
   };
 }
 
-export function packingProductCardSizeStyle(mode: PackingProductDisplayMode): CSSProperties {
+export function packingProductCardSizeStyle(
+  mode: PackingProductDisplayMode,
+  options?: PackingProductCardSizeOptions,
+): CSSProperties {
+  const allowShrink = options?.allowShrink !== false;
+  const maxWidth = allowShrink ? "100%" : undefined;
+
   if (mode === "grid") {
     return {
       width: PACKING_PRODUCT_GRID_CARD_WIDTH,
-      maxWidth: "100%",
+      minWidth: PACKING_PRODUCT_GRID_CARD_WIDTH,
+      ...(maxWidth ? { maxWidth } : {}),
       height: PACKING_PRODUCT_GRID_CARD_HEIGHT,
       boxSizing: "border-box",
     };
   }
   return {
     width: PACKING_PRODUCT_LIST_CARD_WIDTH,
-    maxWidth: "100%",
+    minWidth: PACKING_PRODUCT_LIST_CARD_WIDTH,
+    ...(maxWidth ? { maxWidth } : {}),
     height: "auto",
     boxSizing: "border-box",
   };

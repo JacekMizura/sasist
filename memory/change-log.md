@@ -1,3 +1,8 @@
+## 2026-08-09 — Podgląd układu produktów (Lista/Siatka)
+
+- `ProductDisplayModePreview`: stała szerokość kart (`allowShrink: false` / `lockCardSize`), wrap zamiast ściskania
+- `DefaultCard` lista: kolumny [zdjęcie|nazwa+meta] | [SPAKOWANO|LOKALIZACJA|…] — bez nachodzenia elementów
+
 ## 2026-08-09 — Fix zmiany statusu zamówienia (panel UI)
 
 - Przyczyna: przy zamówieniu na wózku z zablokowanym detach (picki / READY_FOR_PACKING) `apply_order_panel_ui_status` rzucał 409 i rollbackował zapis statusu

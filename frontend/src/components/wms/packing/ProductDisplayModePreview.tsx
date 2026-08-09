@@ -73,20 +73,31 @@ type Props = {
   fieldVisibility?: PackingProductFieldVisibility;
 };
 
-/** Podgląd Lista / Siatka — ten sam kontener i sloty kart co w widoku pakowania. */
+/**
+ * Podgląd Lista / Siatka — te same karty co w pakowaniu, ze stałą szerokością.
+ * Wąski panel pokazuje mniej kart w rzędzie (wrap), bez ściskania kart.
+ */
 export function ProductDisplayModePreview({
   mode,
   fieldVisibility = DEFAULT_PACKING_PRODUCT_FIELD_VISIBILITY,
 }: Props) {
   const label = mode === "grid" ? "Siatka" : "Lista";
-  const itemStyle = packingProductCardItemStyle(mode);
+  const itemStyle = packingProductCardItemStyle(mode, { allowShrink: false });
 
   return (
     <div className="mt-2 max-w-3xl rounded-lg border border-slate-200 bg-white p-3">
       <p className="mb-1 text-xs font-semibold text-slate-600">Podgląd układu</p>
       <p className="mb-2 text-sm font-bold text-slate-900">{label}</p>
       <div className="overflow-x-auto overflow-y-hidden rounded-md border border-slate-100 bg-white p-2">
-        <ul className={packingProductCardsContainerClass()} style={packingProductCardsContainerStyle()}>
+        <ul
+          className={packingProductCardsContainerClass()}
+          style={{
+            ...packingProductCardsContainerStyle(),
+            /* Nie rozciągaj wiersza — wrap zamiast ściskania kart */
+            width: "100%",
+            minWidth: 0,
+          }}
+        >
           {PREVIEW_LINES.map((line) => (
             <li key={line.order_item_id} className={packingProductCardItemClass()} style={itemStyle}>
               <DefaultCard
@@ -94,6 +105,7 @@ export function ProductDisplayModePreview({
                 scanBusy={false}
                 fieldVisibility={fieldVisibility}
                 displayMode={mode}
+                lockCardSize
                 onActivate={noop}
               />
             </li>

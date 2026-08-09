@@ -29,6 +29,8 @@ export type DefaultCardProps = {
   onMarkShortage?: (orderItemId: number) => void;
   /** `list` = Sidebar lista; `grid` = Sidebar kafelki. */
   displayMode?: PackingProductDisplayMode;
+  /** Podgląd ustawień: nie kurcz karty do szerokości kontenera. */
+  lockCardSize?: boolean;
 };
 
 function DefaultCardInner({
@@ -38,6 +40,7 @@ function DefaultCardInner({
   onActivate,
   onMarkShortage,
   displayMode = "list",
+  lockCardSize = false,
 }: DefaultCardProps) {
   const qtyReq = lineQuantityRequired(line);
   const locBadge = packingLocationBadge(line);
@@ -76,7 +79,7 @@ function DefaultCardInner({
         isGrid ? "p-3" : "px-3 pb-2.5 pt-2",
       ].join(" ")}
       style={{
-        ...packingProductCardSizeStyle(displayMode),
+        ...packingProductCardSizeStyle(displayMode, { allowShrink: !lockCardSize }),
         boxShadow: "0 1px 3px rgba(15, 23, 42, 0.05)",
       }}
     >
@@ -107,30 +110,35 @@ function DefaultCardInner({
         </>
       ) : (
         <>
-          {/* Lista Figma: [zdjęcie] [SPAKOWANO/licznik + nazwa | LOKALIZACJA/pill/…] */}
-          <div className="flex items-start gap-2.5">
+          {/* Lista: [zdjęcie | nazwa+meta] [SPAKOWANO | LOKALIZACJA | …] — stałe kolumny */}
+          <div className="flex items-start gap-3">
             {showImg ? <PackingProductThumb url={line.image_url} size={76} /> : null}
             <div className="min-w-0 flex-1">
-              <div className="flex items-start gap-2">
-                <div className="min-w-0 flex-1">
+              {title ? (
+                <p className="text-[13px] font-bold leading-snug text-slate-900 [overflow-wrap:anywhere]">
+                  {title}
+                </p>
+              ) : null}
+              <LineDetailsBlock line={line} variant="default" fieldVisibility={fieldVisibility} layout="columns" />
+            </div>
+            <div className="flex w-[7.75rem] shrink-0 flex-col items-end gap-1">
+              <div className="flex w-full items-start justify-end gap-0.5">
+                <div className="min-w-0 text-right">
                   <PackingCardFieldLabel>SPAKOWANO</PackingCardFieldLabel>
-                  <p className="mt-0.5 text-[1.65rem] font-black leading-none tabular-nums text-slate-900">
+                  <p className="mt-0.5 text-[1.5rem] font-black leading-none tabular-nums text-slate-900">
                     {line.quantity_packed}/{qtyReq}
                   </p>
                 </div>
-                <div className="flex shrink-0 flex-col items-end gap-1">
-                  <div className="flex items-start gap-0.5">
-                    {showLoc ? <PackingCardFieldLabel>LOKALIZACJA</PackingCardFieldLabel> : null}
-                    {menu}
-                  </div>
-                  {showLoc ? <PackingLocationPill text={locBadge} /> : null}
-                </div>
+                <div className="-mr-1.5 -mt-0.5 shrink-0">{menu}</div>
               </div>
-              {title ? <p className="mt-1.5 text-[13px] font-bold leading-snug text-slate-900">{title}</p> : null}
+              {showLoc ? (
+                <div className="flex w-full flex-col items-end gap-1">
+                  <PackingCardFieldLabel>LOKALIZACJA</PackingCardFieldLabel>
+                  <PackingLocationPill text={locBadge} />
+                </div>
+              ) : null}
             </div>
           </div>
-
-          <LineDetailsBlock line={line} variant="default" fieldVisibility={fieldVisibility} layout="columns" />
         </>
       )}
     </div>
@@ -157,6 +165,7 @@ function defaultCardEqual(a: DefaultCardProps, b: DefaultCardProps): boolean {
     a.line.bundle_name === b.line.bundle_name &&
     a.scanBusy === b.scanBusy &&
     a.displayMode === b.displayMode &&
+    a.lockCardSize === b.lockCardSize &&
     packingProductFieldVisibilityEqual(a.fieldVisibility, b.fieldVisibility) &&
     a.onActivate === b.onActivate &&
     a.onMarkShortage === b.onMarkShortage
