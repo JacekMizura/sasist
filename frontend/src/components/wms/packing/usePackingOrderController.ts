@@ -1033,6 +1033,10 @@ export function usePackingOrderController(
     setAwaitingFinalizationRun(true);
   }, [detail, selectedPackagingIds.length, showScannerToast, finishWithoutCartonRef]);
 
+  const dismissFinalizationView = useCallback(() => {
+    setAwaitingFinalizationRun(false);
+  }, []);
+
   const continueWithoutCartonToFinalization = useCallback(() => {
     if (!pendingFinishAfterCartonRef.current) return;
     finishWithoutCartonRef.current = true;
@@ -1095,6 +1099,7 @@ export function usePackingOrderController(
     awaitingFinalizationRun,
     selectedPackagingIds,
     proceedToFinalization,
+    dismissFinalizationView,
     continueWithoutCartonToFinalization,
     proceedAfterLinesComplete,
     showProceedAfterLinesCompleteCta,

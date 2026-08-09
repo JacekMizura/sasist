@@ -26,13 +26,21 @@ export type PackingFinalizationViewProps = {
   detail: WmsPackingOrderDetailApi;
   runPostPackFinish: () => Promise<PackingFinishRunResult>;
   postPackFinishBusy: boolean;
+  onBackToOrder: () => void;
+  onBackToOrders: () => void;
 };
 
 /**
  * Krok 3: wyłącznie tutaj uruchamiany jest POST …/finish (dokument, etykieta, status).
  * Do momentu sukcesu nie wracamy na ekran pakowania produktów.
  */
-export function PackingFinalizationView({ detail, runPostPackFinish, postPackFinishBusy }: PackingFinalizationViewProps) {
+export function PackingFinalizationView({
+  detail,
+  runPostPackFinish,
+  postPackFinishBusy,
+  onBackToOrder,
+  onBackToOrders,
+}: PackingFinalizationViewProps) {
   const [runId, setRunId] = useState(0);
   const [failed, setFailed] = useState(false);
   const [cancelled, setCancelled] = useState(false);
@@ -87,6 +95,22 @@ export function PackingFinalizationView({ detail, runPostPackFinish, postPackFin
 
   return (
     <div className="relative flex h-full min-h-0 w-full flex-col" style={{ background: PAGE_BG }}>
+      <header className="flex shrink-0 flex-wrap items-center gap-2 border-b border-slate-200/80 bg-white/90 px-4 py-3 sm:px-6 lg:px-8">
+        <button
+          type="button"
+          className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-900 hover:bg-slate-50"
+          onClick={onBackToOrder}
+        >
+          ← Powrót do zamówienia
+        </button>
+        <button
+          type="button"
+          className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-900 hover:bg-slate-50"
+          onClick={onBackToOrders}
+        >
+          ← Lista zamówień
+        </button>
+      </header>
       <div className="flex min-h-0 flex-1 flex-col gap-5 px-4 py-5 pb-36 sm:px-6 lg:flex-row lg:gap-8 lg:px-8 lg:py-6 lg:pb-40">
         <section
           className="flex min-h-0 min-w-0 flex-[1] flex-col rounded-2xl border border-slate-200/90 bg-white shadow-sm lg:max-w-xl"

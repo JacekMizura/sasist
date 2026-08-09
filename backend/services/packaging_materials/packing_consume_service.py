@@ -16,6 +16,7 @@ from ...services.document_number_service import require_warehouse_series
 from ...services.stock_document_factory import create_stock_document
 from ...services.stock_operation_issue_service import append_issue_operation
 from .inventory_apply import apply_packaging_inventory_issue
+from .inventory_qty import packaging_inventory_quantity
 from .stockable_bridge import (
     ensure_carton_stockable_product,
     ensure_packaging_stockable_product,
@@ -105,6 +106,9 @@ def create_packing_packaging_rw(
     """
     Create and post RW for packaging consumed at packing finish.
     Idempotent: if order.packing_packaging_rw_document_id is set, return existing doc.
+
+    ``allow_negative``: packing finish przekazuje True — brak stanu opakowań nie blokuje
+    spakowania (ostrzeżenie w logu); kontrola stanu pozostaje ostrzegawcza.
     """
     existing_id = getattr(order, "packing_packaging_rw_document_id", None)
     if existing_id is not None:
@@ -165,6 +169,26 @@ def create_packing_packaging_rw(
         )
         db.add(sdi)
         db.flush()
+
+        avail = packaging_inventory_quantity(
+            db,
+            tenant_id=int(tenant_id),
+            warehouse_id=int(warehouse_id),
+            product_id=int(product.id),
+            location_id=line.location_id,
+        )
+        if avail + _EPS < float(line.qty):
+            _logger.warning(
+                "PACKING_PACKAGING_RW_STOCK_SHORTAGE order_id=%s wm_kind=%s wm_id=%s product_id=%s "
+                "need=%s avail=%s allow_negative=%s",
+                order.id,
+                line.wm_kind,
+                line.wm_id,
+                product.id,
+                float(line.qty),
+                avail,
+                bool(allow_negative),
+            )
 
         from_loc = apply_packaging_inventory_issue(
             db,

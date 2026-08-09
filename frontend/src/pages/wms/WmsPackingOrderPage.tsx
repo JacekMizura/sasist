@@ -341,6 +341,8 @@ export default function WmsPackingOrderPage() {
         detail={packingDetail}
         runPostPackFinish={ctrl.runPostPackFinish}
         postPackFinishBusy={ctrl.postPackFinishBusy}
+        onBackToOrder={ctrl.dismissFinalizationView}
+        onBackToOrders={() => navigate(WMS_ROUTES.packingOrders)}
       />
     );
   }

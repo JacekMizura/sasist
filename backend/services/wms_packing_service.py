@@ -4172,6 +4172,7 @@ def _run_wms_packing_post_pack_pipeline(
         )
 
     # Packaging materials RW (carton + optional consumables) — shared Inventory engine.
+    # Brak stanu opakowań NIE może blokować finalizacji pakowania (ostrzeżenie, nie rollback).
     try:
         from .packaging_materials.packing_consume_service import create_packing_packaging_rw
 
@@ -4181,6 +4182,7 @@ def _run_wms_packing_post_pack_pipeline(
             tenant_id=int(tenant_id),
             warehouse_id=int(warehouse_id),
             operator_user_id=operator_user_id,
+            allow_negative=True,
         )
         out.append(
             WmsPackingPostPackStepResult(
@@ -4191,7 +4193,11 @@ def _run_wms_packing_post_pack_pipeline(
             )
         )
     except Exception as e:
-        logger.exception("PACKING_FINISH packaging_rw failed order_id=%s", getattr(order, "id", None))
+        logger.exception(
+            "PACKING_FINISH packaging_rw soft-fail order_id=%s err=%s",
+            getattr(order, "id", None),
+            str(e)[:300],
+        )
         out.append(
             WmsPackingPostPackStepResult(
                 step="packaging_rw",
@@ -4200,8 +4206,7 @@ def _run_wms_packing_post_pack_pipeline(
                 message=str(e)[:500],
             )
         )
-        raise
-
+        # Soft-fail: kontynuuj status / dokumenty / przesyłkę — RW nie abortuje finish.
     if actions.generate_shipment:
         try:
             out.append(_packing_step_generate_shipment(db, order))
