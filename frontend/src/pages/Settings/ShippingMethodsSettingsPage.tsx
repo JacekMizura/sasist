@@ -38,12 +38,16 @@ export default function ShippingMethodsSettingsPage() {
   const [saving, setSaving] = useState(false);
   const [uploadBusy, setUploadBusy] = useState(false);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (opts?: { soft?: boolean }) => {
     if (warehouseId == null) {
       setRows([]);
+      setLoading(false);
       return;
     }
-    setLoading(true);
+    // Soft refresh keeps the list mounted so logo <img> GETs are not aborted (NS_BINDING_ABORTED).
+    if (!opts?.soft) {
+      setLoading(true);
+    }
     setErr(null);
     try {
       const data = await getShippingMethods({
@@ -54,14 +58,14 @@ export default function ShippingMethodsSettingsPage() {
       setRows(data);
     } catch {
       setErr("Nie udało się wczytać metod dostawy.");
-      setRows([]);
+      if (!opts?.soft) setRows([]);
     } finally {
       setLoading(false);
     }
   }, [warehouseId]);
 
   useEffect(() => {
-    void load();
+    void load({ soft: false });
   }, [load]);
 
   const openEdit = (r: ShippingMethodDto) => {
@@ -142,7 +146,7 @@ export default function ShippingMethodsSettingsPage() {
       }
       await updateShippingMethod(editing.id, { tenant_id: DAMAGE_TENANT_ID, warehouse_id: warehouseId }, payload);
       setModalOpen(false);
-      await load();
+      await load({ soft: true });
     } catch {
       setErr("Nie udało się zapisać metody dostawy.");
     } finally {
@@ -170,11 +174,11 @@ export default function ShippingMethodsSettingsPage() {
         </div>
       ) : null}
 
-      {warehouseId != null && loading ? (
+      {warehouseId != null && loading && rows.length === 0 ? (
         <p className="px-4 py-10 text-center text-sm font-medium text-slate-600">Ładowanie…</p>
       ) : null}
 
-      {warehouseId != null && !loading ? (
+      {warehouseId != null && (rows.length > 0 || !loading) ? (
         <div className="min-h-0 flex-1">
           {rows.length === 0 ? (
             <p className="px-4 py-12 text-center text-sm font-medium text-slate-600">Brak metod.</p>

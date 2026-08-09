@@ -1,6 +1,9 @@
-import { useEffect, useState } from "react";
+import { memo, useState } from "react";
 import { Package, Truck } from "lucide-react";
-import { pickShippingMethodLogoSrc } from "../../utils/shippingMethodLogoUrl";
+import {
+  markShippingMethodCustomLogoFailed,
+  pickShippingMethodLogoSrc,
+} from "../../utils/shippingMethodLogoUrl";
 
 export type ShippingMethodLogoSize =
   | "lg"
@@ -52,23 +55,24 @@ export type ShippingMethodLogoProps = {
   placeholder?: "truck" | "package";
 };
 
-/** Carrier logo or placeholder icon — no box, aspect ratio preserved, max height by size. */
-export function ShippingMethodLogo({
+function ShippingMethodLogoInner({
   logoUrl,
   methodName,
   size = "md",
   className,
   placeholder = "truck",
 }: ShippingMethodLogoProps) {
-  const logoKey = (logoUrl ?? "").trim();
   const [customFailed, setCustomFailed] = useState(false);
   const [heuristicFailed, setHeuristicFailed] = useState(false);
+  const [seenLogoUrl, setSeenLogoUrl] = useState(() => (logoUrl ?? "").trim());
 
-  // Real logo change only — parent rerenders must not reset and re-hit /uploads.
-  useEffect(() => {
+  const logoKey = (logoUrl ?? "").trim();
+  // Reset local failure only when the stored logo path actually changes (no useEffect remount churn).
+  if (logoKey !== seenLogoUrl) {
+    setSeenLogoUrl(logoKey);
     setCustomFailed(false);
     setHeuristicFailed(false);
-  }, [logoKey]);
+  }
 
   const pick = pickShippingMethodLogoSrc(logoUrl, methodName, {
     customFailed,
@@ -85,9 +89,12 @@ export function ShippingMethodLogo({
           src={pick.src}
           alt=""
           className={IMG[size]}
-          loading="lazy"
+          // Eager: avoids lazy+remount races that abort the first GET (NS_BINDING_ABORTED).
+          loading="eager"
+          decoding="async"
           onError={() => {
             if (pick.source === "custom") {
+              markShippingMethodCustomLogoFailed(logoUrl);
               setCustomFailed(true);
               return;
             }
@@ -107,3 +114,6 @@ export function ShippingMethodLogo({
     </span>
   );
 }
+
+/** Carrier logo — memoized so parent list rerenders do not remount <img>. */
+export const ShippingMethodLogo = memo(ShippingMethodLogoInner);
