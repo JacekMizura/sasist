@@ -32,6 +32,8 @@ export default function ShippingMethodsSettingsPage() {
   const [aliasesInput, setAliasesInput] = useState("");
   const [name, setName] = useState("");
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
+  /** Logo at modal open — omit `logo_url` from PUT unless the operator changed/cleared it. */
+  const [initialLogoUrl, setInitialLogoUrl] = useState<string | null>(null);
   const [isActive, setIsActive] = useState(true);
   const [saving, setSaving] = useState(false);
   const [uploadBusy, setUploadBusy] = useState(false);
@@ -67,7 +69,9 @@ export default function ShippingMethodsSettingsPage() {
     setCode(r.code ?? "");
     setAliasesInput((r.aliases ?? []).join(", "));
     setName(r.name);
-    setLogoUrl(r.logo_url);
+    const existingLogo = r.logo_url?.trim() || null;
+    setLogoUrl(existingLogo);
+    setInitialLogoUrl(existingLogo);
     setIsActive(r.is_active);
     setModalOpen(true);
   };
@@ -120,12 +124,23 @@ export default function ShippingMethodsSettingsPage() {
     setSaving(true);
     setErr(null);
     try {
-      await updateShippingMethod(editing.id, { tenant_id: DAMAGE_TENANT_ID, warehouse_id: warehouseId }, {
+      const payload: {
+        name: string;
+        aliases: string[];
+        is_active: boolean;
+        logo_url?: string | null;
+      } = {
         name: nm,
         aliases: parseAliases(),
-        logo_url: logoUrl,
         is_active: isActive,
-      });
+      };
+      const nextLogo = logoUrl?.trim() || null;
+      const prevLogo = initialLogoUrl?.trim() || null;
+      if (nextLogo !== prevLogo) {
+        // Backend: field present + null/"" clears; non-empty sets. Omit when unchanged.
+        payload.logo_url = nextLogo ?? "";
+      }
+      await updateShippingMethod(editing.id, { tenant_id: DAMAGE_TENANT_ID, warehouse_id: warehouseId }, payload);
       setModalOpen(false);
       await load();
     } catch {

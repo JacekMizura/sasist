@@ -1,3 +1,36 @@
+## 2026-08-09 — Metody dostawy: znikające logo
+
+- Przyczyna (nie save wipe): `logo_url` w DB zostaje; pliki `/uploads` giną (efemeryczny dysk Railway) → 404/ORB; custom URL blokował heurystykę SVG
+- `NS_BINDING_ABORTED` = anulowane requesty przy rerenderze, nie root cause
+- Fix: PUT `model_fields_set` (omit=zachowaj); FE nie wysyła `logo_url` bez zmiany; `onError` → carrier SVG; testy `test_shipping_method_logo_persist.py`
+- Brak GC „nieużywanych” uploadów dla logo metod; `clear_dev_artifacts` czyści cały katalog uploads (dev)
+
+## 2026-08-09 — Packing finish 400: int(UUID) serii RW
+
+- Objaw: `POST …/finish` → 400 `invalid literal for int()… 'd26516c5-…'`
+- Przyczyna: `create_packing_packaging_rw` robiło `document_series_id=int(series.id)` przy `DocumentSeries.id` = UUID (`String(36)`)
+- Fix: `str(series.id)`; cart_id=3 nie był winny — UUID to seria dokumentów RW
+
+## 2026-08-09 — Finish pakowania: brak stanu opakowań nie blokuje
+
+- Pipeline: `create_packing_packaging_rw(..., allow_negative=True)` + soft-fail bez `raise`
+- Ostrzeżenie log `PACKING_PACKAGING_RW_STOCK_SHORTAGE`; status/dokumenty idą dalej
+- FE finalizacja: „← Powrót do zamówienia” + „← Lista zamówień”
+- Regresja: `test_packing_finish_packaging_stock.py`
+
+## 2026-08-09 — /wms/packing: GLOBAL_SCAN handler (wózek/koszyk)
+
+- Przyczyna: `WmsPackingStatusPage` rejestrował `registerScanHandler(null)` → `GLOBAL_SCAN_NO_HANDLER`
+- Fix: ten sam wzorzec co inne strony WMS — handler → `resolvePackingHandoffScan` + `applyPackingHandoffScanResult` (preferowany status Pakowanie)
+- Wejście bez skanu: kafelki statusów → lista `mode=all` (bez forced scan UI)
+
+## 2026-08-09 — Packing finish 400: UUID serii RW → int()
+
+- Przyczyna: `create_packing_packaging_rw` robiło `document_series_id=int(series.id)`; `document_series.id` i `stock_documents.document_series_id` to String(36) UUID
+- Objaw: HTTP 400 `invalid literal for int() with base 10: 'd26516c5-…'` przy `POST …/packing/orders/{id}/finish`
+- Fix: przekazywać `str(series.id)`; regresja `test_packing_packaging_rw_series_uuid.py`
+- `cart_id` (int) był poprawny — UUID to seria dokumentów RW magazynu, nie wózek
+
 ## 2026-08-09 — Pakowanie: skan wózka jako lookup na liście (nie osobny etap)
 
 - Wycofano forced UI „Skanuj wózek / koszyk” ze statusu / trybu

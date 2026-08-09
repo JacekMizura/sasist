@@ -1,4 +1,6 @@
+import { useState } from "react";
 import { Package, Truck } from "lucide-react";
+import { packingCourierLogoSrc } from "../../utils/packingCourierLogo";
 import { shippingMethodLogoForDisplay } from "../../utils/shippingMethodLogoUrl";
 
 export type ShippingMethodLogoSize =
@@ -59,13 +61,26 @@ export function ShippingMethodLogo({
   className,
   placeholder = "truck",
 }: ShippingMethodLogoProps) {
-  const src = shippingMethodLogoForDisplay(logoUrl, methodName);
-  const wrap = ["inline-flex shrink-0 items-center justify-center self-center text-slate-400", className].filter(Boolean).join(" ");
+  const [failedSrc, setFailedSrc] = useState<string | null>(null);
+  const preferred = shippingMethodLogoForDisplay(logoUrl, methodName);
+  // Stale /uploads paths must not blank the UI — fall back to carrier asset, then icon.
+  const displaySrc =
+    preferred && preferred === failedSrc ? packingCourierLogoSrc(methodName ?? "") : preferred;
+  const wrap = ["inline-flex shrink-0 items-center justify-center self-center text-slate-400", className]
+    .filter(Boolean)
+    .join(" ");
 
-  if (src) {
+  if (displaySrc && displaySrc !== failedSrc) {
     return (
       <span className={wrap}>
-        <img src={src} alt="" className={IMG[size]} loading="lazy" />
+        <img
+          key={displaySrc}
+          src={displaySrc}
+          alt=""
+          className={IMG[size]}
+          loading="lazy"
+          onError={() => setFailedSrc(displaySrc)}
+        />
       </span>
     );
   }

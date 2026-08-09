@@ -136,7 +136,9 @@ def update_shipping_method(
         row.name = nn[:256]
     if body.aliases is not None:
         row.aliases_json = dump_aliases_json(body.aliases)
-    if body.logo_url is not None:
+    # Partial update: omit logo_url → keep existing. Explicit null or "" → clear.
+    # (Previously null was ignored, so intentional clear from the UI could not persist.)
+    if "logo_url" in body.model_fields_set:
         row.logo_url = (body.logo_url or "").strip() or None
     if body.is_active is not None:
         row.is_active = bool(body.is_active)

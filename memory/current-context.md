@@ -1,5 +1,14 @@
 ﻿## Active
 
+**Shipping method logos (2026-08-09):**
+- Root cause: DB `logo_url` survives alias/active edits; visual “vanish” = missing `/uploads` files (Railway ephemeral disk / no volume) + custom URL blocking carrier SVG heuristics; DevTools NS_BINDING_ABORTED/ORB = cancelled/failed cross-origin GETs, not save wiping DB
+- Fix: PUT uses `model_fields_set` (omit=keep, null/""=clear); settings form omits `logo_url` unless dirty; `ShippingMethodLogo` onError → heuristic; tests `test_shipping_method_logo_persist.py`
+- Infra follow-up: persist `backend/uploads` (Railway volume / object storage) or logos will keep 404 after redeploy
+
+**Packing finish UUID series bug (2026-08-09):**
+- `create_packing_packaging_rw`: `document_series_id=str(series.id)` (UUID), not `int(series.id)`
+- Symptom was HTTP 400 on finish with carton selected (RW consume path)
+
 **Packing cart/basket scan as list lookup (2026-08-09):**
 - Status → session `mode=all` → orders list (no forced scan screen)
 - Global scanner on list: cart → filter orders; basket → open order; empty → toast
