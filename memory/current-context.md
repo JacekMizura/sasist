@@ -1,5 +1,10 @@
 ﻿## Active
 
+**Packing automation activators wired (2026-08-09):**
+- Shared runner `orderAutomationRun.ts` → `change_status` via `PATCH …/ui-status`; other effect kinds fail with PL errors (no mocks)
+- `PackingAutomationActivators`: labels/icons from rule, loader + exclusive run gate, errors via `showScannerError`
+- Help copy no longer says activators don’t affect packing; visibility from enabled WMS packing rules only
+
 **Packing list vs source status (2026-08-09):**
 - Queue SSOT: only selected packing `status_id` (no name heuristic); eligibility requires `order_ui_status_id`
 - FE counters exclusive from same API list; green translucent overlay on fully packed product cards

@@ -109,6 +109,7 @@ type PackingViewProps = {
   automationButtonsPosition?: PackingAutomationButtonsPosition;
   warehouseId?: number | null;
   onAutomationToast?: (message: string) => void;
+  onAutomationError?: (message: string) => void;
   onAutomationStatusChanged?: () => void;
   customerCommentStyle?: PackingCustomerCommentStyle;
   salesDocumentPreview?: PackingSalesDocPreview;
@@ -154,6 +155,7 @@ export function PackingView({
   automationButtonsPosition = "bottom",
   warehouseId = null,
   onAutomationToast,
+  onAutomationError,
   onAutomationStatusChanged,
   customerCommentStyle = "normal",
   salesDocumentPreview = "simplified",
@@ -227,6 +229,7 @@ export function PackingView({
       showAutomationButtons={showAutomationButtons}
       position={automationButtonsPosition}
       onToast={onAutomationToast}
+      onError={onAutomationError}
       onStatusChanged={onAutomationStatusChanged}
     />
   ) : null;

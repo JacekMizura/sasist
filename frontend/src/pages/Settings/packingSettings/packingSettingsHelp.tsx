@@ -265,8 +265,8 @@ export const PACKING_SETTING_HELP: Record<string, PackingSettingHelpEntry> = {
           W oknie pakowania pojawią się aktywatory automatyzacji (przyciski reguł z włączonym aktywatorem ręcznym).
         </li>
         <li>
-          Pokazywane są wyłącznie reguły z zaznaczoną opcją „Pakowanie WMS”. To ustawienie steruje tylko widocznością —
-          nie zmienia działania samych akcji automatycznych.
+          Pokazywane są wyłącznie włączone reguły z zaznaczoną opcją „Pakowanie WMS”. Kliknięcie przycisku wykonuje
+          skonfigurowane akcje reguły (np. zmianę statusu zamówienia).
         </li>
       </ul>
     ),

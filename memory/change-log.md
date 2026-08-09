@@ -1,3 +1,10 @@
+## 2026-08-09 — Packing „Akcja” activators execute real automation
+
+- Extracted `frontend/src/utils/orderAutomationRun.ts` (visibility + execute + exclusive gate)
+- Packing buttons call runner; success toast / red scanner error; busy spinner
+- Tests: `orderAutomationRun.test.ts`
+- Updated packing help for `show_automation_buttons`
+
 ## 2026-08-09 — Pakowanie: lista tylko ze skonfigurowanego statusu źródłowego
 
 - **Przyczyna:** `_packing_queue_status_ids` dokładło wszystkie IN_PROGRESS z „pak”/„pack” w nazwie; eligibility dopuszczało `READY_TO_PACK`/`PACKING` bez filtra `order_ui_status_id`

@@ -47,7 +47,13 @@ export default function WmsPackingOrderPage() {
   const { orderId: orderIdParam } = useParams<{ orderId: string }>();
   const orderId = Number(orderIdParam);
   const navigate = useNavigate();
-  const { setActiveDocument, showScannerToast, appendScanToHistory, refocusScannerInput } = useWmsScanner();
+  const {
+    setActiveDocument,
+    showScannerToast,
+    showScannerError,
+    appendScanToHistory,
+    refocusScannerInput,
+  } = useWmsScanner();
   const { user } = useAuth();
   const finishWithoutCartonRef = useRef(false);
 
@@ -481,6 +487,7 @@ export default function WmsPackingOrderPage() {
         automationButtonsPosition={ctrl.packingExtendedUi.automationButtonsPosition}
         warehouseId={ctrl.warehouseId}
         onAutomationToast={showScannerToast}
+        onAutomationError={showScannerError}
         onAutomationStatusChanged={() => void ctrl.fetchDetail()}
         customerCommentStyle={ctrl.packingExtendedUi.customerCommentStyle}
         salesDocumentPreview={ctrl.packingExtendedUi.salesDocumentPreview}
