@@ -129,7 +129,8 @@ def create_packing_packaging_rw(
         tenant_id=int(tenant_id),
         warehouse_id=int(warehouse_id),
         document_type="RW",
-        document_series_id=int(series.id) if series is not None else None,
+        # document_series.id is UUID string (String(36)), not an integer PK
+        document_series_id=str(series.id) if series is not None else None,
         status="DONE",
         created_by_user_id=operator_user_id,
         order_id=int(order.id),
