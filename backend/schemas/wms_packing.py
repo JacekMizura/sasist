@@ -182,6 +182,10 @@ class WmsPackingOrderLine(BaseModel):
     color_name: Optional[str] = None
     catalog_number: Optional[str] = None
     product_symbol: Optional[str] = Field(default=None, description="Symbol produktu (osobno od SKU)")
+    #: Sygnatura / kod wewnętrzny produktu (``products.barcode``).
+    product_signature: Optional[str] = Field(default=None, max_length=64)
+    #: Cena jednostkowa do prezentacji (z linii zamówienia lub ``products.sale_price``).
+    unit_price_display: Optional[str] = Field(default=None, max_length=64)
     bundle_name: Optional[str] = None
     bundle_id: Optional[int] = Field(default=None, description="Bundle catalog id (P4.15B)")
     bundle_mode: Optional[str] = None

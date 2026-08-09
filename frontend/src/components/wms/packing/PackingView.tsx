@@ -32,6 +32,10 @@ import type {
 import { DAMAGE_TENANT_ID } from "../../../pages/damage/damageShared";
 import { PackingCustomerCommentBanner } from "./PackingCustomerCommentBanner";
 import { PackingOrderSidebar } from "./PackingOrderSidebar";
+import {
+  DEFAULT_PACKING_PRODUCT_FIELD_VISIBILITY,
+  type PackingProductFieldVisibility,
+} from "./packingProductDisplay";
 
 function IconBack() {
   return (
@@ -61,7 +65,10 @@ type PackingViewProps = {
   selectedCartonId: string | null | undefined;
   onSelectCarton: (cartonId: string, opts?: { confirmOverride?: boolean }) => void;
   selectCartonBusy: boolean;
-  interfaceDisplay: WmsPackingInterfaceDisplay;
+  /** Widoczność pól produktu (ustawienia WMS → Pakowanie → Widok). */
+  productFieldVisibility?: PackingProductFieldVisibility;
+  /** @deprecated Prefer ``productFieldVisibility``. */
+  interfaceDisplay?: WmsPackingInterfaceDisplay;
   /** Z sesji JWT (`/auth/me`) — bez cache localStorage. */
   packerDisplayName?: string | null;
   /** Modal wyboru kartonu — blokuje skany i pakowanie do potwierdzenia opakowania. */
@@ -107,7 +114,7 @@ export function PackingView({
   selectedCartonId,
   onSelectCarton,
   selectCartonBusy,
-  interfaceDisplay,
+  productFieldVisibility = DEFAULT_PACKING_PRODUCT_FIELD_VISIBILITY,
   packerDisplayName,
   packingActionsLocked = false,
   visibleOperationalNotes = [],
@@ -286,7 +293,7 @@ export function PackingView({
               return (
                 <li key={line.order_item_id} className="flex min-h-0 min-w-0">
                   {done ? (
-                    <DoneCard line={line} flash={flash} fieldVisibility={interfaceDisplay} />
+                    <DoneCard line={line} flash={flash} fieldVisibility={productFieldVisibility} />
                   ) : active ? (
                     <ActiveCard
                       line={line}
@@ -294,7 +301,7 @@ export function PackingView({
                       flash={flash}
                       scanBusy={scanBusy || packingActionsLocked}
                       linePackBusy={linePackBusy}
-                      fieldVisibility={interfaceDisplay}
+                      fieldVisibility={productFieldVisibility}
                       onPackQtyChange={onPackQtyChange}
                       onConfirmPack={handleConfirmPack}
                       onMarkShortage={
@@ -305,7 +312,7 @@ export function PackingView({
                     <DefaultCard
                       line={line}
                       scanBusy={scanBusy || packingActionsLocked}
-                      fieldVisibility={interfaceDisplay}
+                      fieldVisibility={productFieldVisibility}
                       onActivate={activateProduct}
                       onMarkShortage={
                         packingActionsLocked || !onMarkLineShortage ? undefined : onMarkLineShortage

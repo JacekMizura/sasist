@@ -430,6 +430,7 @@ export default function WmsPackingOrderPage() {
         onSelectCarton={(id) => void ctrl.selectCarton(id)}
         selectCartonBusy={ctrl.selectCartonBusy}
         interfaceDisplay={ctrl.packingInterfaceDisplay}
+        productFieldVisibility={ctrl.packingProductFieldVisibility}
         packerDisplayName={packerDisplayName}
         packingActionsLocked={ctrl.awaitingPostPackCarton || ctrl.notesPopupOpen || shortageBusy}
         visibleOperationalNotes={ctrl.visiblePackingNotes}

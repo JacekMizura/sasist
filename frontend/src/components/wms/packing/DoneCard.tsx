@@ -1,12 +1,16 @@
 import { memo } from "react";
 import type { WmsPackingOrderLineApi } from "../../../api/wmsPackingApi";
-import type { WmsPackingInterfaceDisplay } from "../../../types/wmsPackingSettings";
 import { LineDetailsBlock } from "./LineDetailsBlock";
+import {
+  formatPackingProductName,
+  packingProductFieldVisibilityEqual,
+  type PackingProductFieldVisibility,
+} from "./packingProductDisplay";
 
 export type DoneCardProps = {
   line: WmsPackingOrderLineApi;
   flash: boolean;
-  fieldVisibility: WmsPackingInterfaceDisplay;
+  fieldVisibility: PackingProductFieldVisibility;
 };
 
 function DoneCardInner({ line, flash, fieldVisibility }: DoneCardProps) {
@@ -14,6 +18,11 @@ function DoneCardInner({ line, flash, fieldVisibility }: DoneCardProps) {
   const locQty = line.location_bin_qty;
   const locBadge =
     loc && locQty != null && locQty > 0 ? `${loc} (x${locQty})` : loc || "—";
+  const title = formatPackingProductName(line.product_name, {
+    showName: fieldVisibility.show_product_name,
+    truncate: fieldVisibility.truncate_names,
+    qty: line.quantity,
+  });
 
   const flashStyle = flash
     ? { boxShadow: "0 0 0 3px rgba(52, 211, 153, 0.75)" }
@@ -36,32 +45,36 @@ function DoneCardInner({ line, flash, fieldVisibility }: DoneCardProps) {
         SPAKOWANO
       </span>
       <div className="relative z-[1] flex flex-1 gap-2.5">
-        <div className="flex h-[5.5rem] w-[5.5rem] shrink-0 items-center justify-center overflow-hidden rounded-md">
-          {line.image_url ? (
-            <img
-              src={line.image_url}
-              alt=""
-              className="max-h-full max-w-full object-contain grayscale"
-              loading="lazy"
-            />
-          ) : (
-            <span className="text-2xl text-slate-300">—</span>
-          )}
-        </div>
+        {fieldVisibility.show_image ? (
+          <div className="flex h-[5.5rem] w-[5.5rem] shrink-0 items-center justify-center overflow-hidden rounded-md">
+            {line.image_url ? (
+              <img
+                src={line.image_url}
+                alt=""
+                className="max-h-full max-w-full object-contain grayscale"
+                loading="lazy"
+              />
+            ) : (
+              <span className="text-2xl text-slate-300">—</span>
+            )}
+          </div>
+        ) : null}
 
         <div className="flex min-w-0 flex-1 flex-col items-center justify-center text-center" aria-hidden />
 
-        <div className="flex shrink-0 flex-col items-end gap-0.5">
-          <span className="text-[9px] font-bold uppercase tracking-wide text-slate-400">LOKALIZACJA</span>
-          <span className="max-w-[9.5rem] rounded-full border-2 border-slate-400 px-2 py-0.5 text-center text-[11px] font-bold leading-tight text-slate-500">
-            {locBadge}
-          </span>
-        </div>
+        {fieldVisibility.show_location ? (
+          <div className="flex shrink-0 flex-col items-end gap-0.5">
+            <span className="text-[9px] font-bold uppercase tracking-wide text-slate-400">LOKALIZACJA</span>
+            <span className="max-w-[9.5rem] rounded-full border-2 border-slate-400 px-2 py-0.5 text-center text-[11px] font-bold leading-tight text-slate-500">
+              {locBadge}
+            </span>
+          </div>
+        ) : null}
       </div>
 
-      <p className="relative z-[1] mt-auto pt-3 text-[15px] font-bold leading-tight text-slate-500">
-        {line.quantity}x {line.product_name}
-      </p>
+      {title ? (
+        <p className="relative z-[1] mt-auto pt-3 text-[15px] font-bold leading-tight text-slate-500">{title}</p>
+      ) : null}
 
       <div className="relative z-[1]">
         <LineDetailsBlock line={line} variant="done" fieldVisibility={fieldVisibility} />
@@ -85,12 +98,11 @@ function doneCardEqual(a: DoneCardProps, b: DoneCardProps): boolean {
     a.line.color_name === b.line.color_name &&
     a.line.catalog_number === b.line.catalog_number &&
     a.line.product_symbol === b.line.product_symbol &&
+    a.line.product_signature === b.line.product_signature &&
+    a.line.unit_price_display === b.line.unit_price_display &&
     a.line.bundle_name === b.line.bundle_name &&
     a.flash === b.flash &&
-    a.fieldVisibility.show_stock === b.fieldVisibility.show_stock &&
-    a.fieldVisibility.show_ean === b.fieldVisibility.show_ean &&
-    a.fieldVisibility.show_symbol === b.fieldVisibility.show_symbol &&
-    a.fieldVisibility.show_catalog_number === b.fieldVisibility.show_catalog_number
+    packingProductFieldVisibilityEqual(a.fieldVisibility, b.fieldVisibility)
   );
 }
 

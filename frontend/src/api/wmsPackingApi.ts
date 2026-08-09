@@ -143,6 +143,10 @@ export type WmsPackingOrderLineApi = {
   color_name?: string | null;
   catalog_number?: string | null;
   product_symbol?: string | null;
+  /** Sygnatura / kod wewnętrzny (``products.barcode``). */
+  product_signature?: string | null;
+  /** Cena jednostkowa do UI (PLN). */
+  unit_price_display?: string | null;
   bundle_name?: string | null;
   bundle_id?: number | null;
   bundle_mode?: string | null;

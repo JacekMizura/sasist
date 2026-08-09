@@ -40,6 +40,7 @@ import {
   loadWmsPackingExtendedUi,
   type WmsPackingExtendedUiSettings,
 } from "../../../types/wmsPackingExtendedUi";
+import { buildPackingProductFieldVisibility } from "./packingProductDisplay";
 import {
   runPackingPostFinishClientActions,
   type WaybillPrintChoice,
@@ -987,6 +988,11 @@ export function usePackingOrderController(
     setAwaitingFinalizationRun(true);
   }, [finishWithoutCartonRef]);
 
+  const packingProductFieldVisibility = useMemo(
+    () => buildPackingProductFieldVisibility(packingInterfaceDisplay, packingExtendedUi),
+    [packingInterfaceDisplay, packingExtendedUi],
+  );
+
   return {
     session,
     warehouseId,
@@ -1010,6 +1016,7 @@ export function usePackingOrderController(
     selectCartonBusy,
     postPackFinishBusy,
     packingInterfaceDisplay,
+    packingProductFieldVisibility,
     awaitingPostPackCarton,
     awaitingFinalizationRun,
     selectedPackagingIds,

@@ -45,6 +45,121 @@ export const PACKING_SETTING_HELP: Record<string, PackingSettingHelpEntry> = {
       </ul>
     ),
   },
+  "packing.customer_comment_style": {
+    description: (
+      <ul>
+        <li>
+          <strong>Wyróżniony</strong> — uwagi klienta pojawiają się jako czerwony panel nad produktami; w sidebarze nie
+          są powtarzane, a dokument jest uproszczony.
+        </li>
+        <li>
+          <strong>Zwykły</strong> — uwagi klienta pozostają w lewym panelu dokumentu.
+        </li>
+      </ul>
+    ),
+  },
+  "packing.sales_document_preview": {
+    description: (
+      <ul>
+        <li>
+          <strong>Uproszczony</strong> — w sidebarze widać numer/typ dokumentu, przesyłkę, płatność i wartość (bez
+          danych kupującego).
+        </li>
+        <li>
+          <strong>Pełny</strong> — dodatkowo pokazuje nazwę kupującego, NIP i adres (gdy są dostępne).
+        </li>
+      </ul>
+    ),
+  },
+  "packing.show_stock": {
+    description: (
+      <ul>
+        <li>Po włączeniu przy produktach podczas pakowania wyświetlany jest ich stan magazynowy.</li>
+        <li>Po wyłączeniu stan magazynowy nie jest pokazywany.</li>
+      </ul>
+    ),
+  },
+  "packing.show_ean": {
+    description: (
+      <ul>
+        <li>Po włączeniu przy produktach podczas pakowania wyświetlany jest ich numer EAN.</li>
+        <li>Po wyłączeniu EAN nie jest pokazywany.</li>
+      </ul>
+    ),
+  },
+  "packing.show_symbol": {
+    description: (
+      <ul>
+        <li>Po włączeniu przy produktach podczas pakowania wyświetlany jest symbol/SKU produktu.</li>
+        <li>Po wyłączeniu symbol nie jest pokazywany.</li>
+      </ul>
+    ),
+  },
+  "packing.show_catalog_number": {
+    description: (
+      <ul>
+        <li>Po włączeniu przy produktach podczas pakowania wyświetlany jest numer katalogowy.</li>
+        <li>Po wyłączeniu numer katalogowy nie jest pokazywany.</li>
+      </ul>
+    ),
+  },
+  "packing.show_signature": {
+    description: (
+      <ul>
+        <li>Po włączeniu przy produktach podczas pakowania wyświetlana jest sygnatura produktu.</li>
+        <li>Po wyłączeniu sygnatura nie jest pokazywana.</li>
+      </ul>
+    ),
+  },
+  "packing.show_price": {
+    description: (
+      <ul>
+        <li>Po włączeniu przy produktach podczas pakowania wyświetlana jest cena produktu.</li>
+        <li>Po wyłączeniu cena nie jest pokazywana.</li>
+      </ul>
+    ),
+  },
+  "packing.show_bundle_info": {
+    description: (
+      <ul>
+        <li>Po włączeniu przy produktach z zestawu pokazywana jest informacja „Z zestawu”.</li>
+        <li>Po wyłączeniu ta informacja nie jest wyświetlana.</li>
+      </ul>
+    ),
+  },
+  "packing.show_product_name_during_packing": {
+    description: (
+      <ul>
+        <li>Po włączeniu na kafelku produktu podczas pakowania pokazywana jest nazwa produktu.</li>
+        <li>Po wyłączeniu nazwa produktu nie jest wyświetlana.</li>
+      </ul>
+    ),
+  },
+  "packing.truncate_long_names": {
+    description: (
+      <ul>
+        <li>Po włączeniu nazwy produktów są ograniczane do 25 znaków.</li>
+        <li>Dłuższe nazwy są skracane z „…”.</li>
+        <li>Po wyłączeniu pokazywana jest pełna nazwa produktu.</li>
+      </ul>
+    ),
+  },
+  "packing.show_product_image": {
+    description: (
+      <ul>
+        <li>Po włączeniu zdjęcia produktów są wyświetlane na liście produktów podczas pakowania.</li>
+        <li>Po wyłączeniu zdjęcie nie jest renderowane (bez szarego placeholdera).</li>
+      </ul>
+    ),
+  },
+  "packing.show_product_location": {
+    description: (
+      <ul>
+        <li>Po włączeniu przy produkcie podczas pakowania wyświetlana jest jego lokalizacja magazynowa.</li>
+        <li>Po wyłączeniu lokalizacja nie jest wyświetlana.</li>
+      </ul>
+    ),
+  },
   "packing.choose_waybill_print_count": {
     description: (
       <ul>

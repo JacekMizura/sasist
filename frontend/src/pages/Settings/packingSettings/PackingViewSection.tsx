@@ -35,11 +35,11 @@ export function PackingViewSection({ extended, draft, patchExtended, toggleInter
         <SelectField
           settingId="packing.customer_comment_style"
           label="Wygląd komentarzy klienta"
-          capability={CAP_NONE}
           value={extended.customerCommentStyle}
           onChange={(v) =>
             patchExtended("customerCommentStyle", v as WmsPackingExtendedUiSettings["customerCommentStyle"])
           }
+          infoKey="packing.customer_comment_style"
         >
           <option value="highlighted">Wyróżniony</option>
           <option value="normal">Zwykły</option>
@@ -47,11 +47,11 @@ export function PackingViewSection({ extended, draft, patchExtended, toggleInter
         <SelectField
           settingId="packing.sales_document_preview"
           label="Widok dokumentu sprzedaży"
-          capability={CAP_NONE}
           value={extended.salesDocumentPreview}
           onChange={(v) =>
             patchExtended("salesDocumentPreview", v as WmsPackingExtendedUiSettings["salesDocumentPreview"])
           }
+          infoKey="packing.sales_document_preview"
         >
           <option value="simplified">Uproszczony</option>
           <option value="full">Pełny</option>
@@ -113,14 +113,14 @@ export function PackingViewSection({ extended, draft, patchExtended, toggleInter
           label="Zdjęcie produktu na liście do spakowania"
           checked={extended.showProductImage}
           onChange={(v) => patchExtended("showProductImage", v)}
-          capability={CAP_NONE}
+          infoKey="packing.show_product_image"
         />
         <BoolRow
           settingId="packing.show_product_location"
           label="Wyświetlaj lokalizację produktów"
           checked={extended.showProductLocation}
           onChange={(v) => patchExtended("showProductLocation", v)}
-          capability={CAP_NONE}
+          infoKey="packing.show_product_location"
         />
         <BoolRow
           settingId="packing.move_packed_to_bottom"
@@ -134,59 +134,63 @@ export function PackingViewSection({ extended, draft, patchExtended, toggleInter
           label="Wyświetlaj stan magazynowy w produktach"
           checked={draft.interface_display.show_stock}
           onChange={() => toggleInterfaceField("show_stock")}
+          infoKey="packing.show_stock"
         />
         <BoolRow
           settingId="packing.show_ean"
           label="Wyświetlaj EAN w produktach"
           checked={draft.interface_display.show_ean}
           onChange={() => toggleInterfaceField("show_ean")}
+          infoKey="packing.show_ean"
         />
         <BoolRow
           settingId="packing.show_symbol"
           label="Wyświetlaj symbol w produkcie"
           checked={draft.interface_display.show_symbol}
           onChange={() => toggleInterfaceField("show_symbol")}
+          infoKey="packing.show_symbol"
         />
         <BoolRow
           settingId="packing.show_catalog_number"
           label="Wyświetlaj numer katalogowy w produktach"
           checked={draft.interface_display.show_catalog_number}
           onChange={() => toggleInterfaceField("show_catalog_number")}
+          infoKey="packing.show_catalog_number"
         />
         <BoolRow
           settingId="packing.show_signature"
           label="Wyświetlaj sygnaturę w produktach"
           checked={extended.showSignature}
           onChange={(v) => patchExtended("showSignature", v)}
-          capability={CAP_NONE}
+          infoKey="packing.show_signature"
         />
         <BoolRow
           settingId="packing.show_price"
           label="Wyświetlaj cenę w produktach"
           checked={extended.showPrice}
           onChange={(v) => patchExtended("showPrice", v)}
-          capability={CAP_NONE}
+          infoKey="packing.show_price"
         />
         <BoolRow
           settingId="packing.show_bundle_info"
           label="Wyświetlaj informację o produkcie z zestawu"
           checked={extended.showBundleInfo}
           onChange={(v) => patchExtended("showBundleInfo", v)}
-          capability={CAP_NONE}
+          infoKey="packing.show_bundle_info"
         />
         <BoolRow
           settingId="packing.show_product_name_during_packing"
           label="Wyświetlaj nazwę produktu podczas pakowania"
           checked={extended.showProductNameDuringPacking}
           onChange={(v) => patchExtended("showProductNameDuringPacking", v)}
-          capability={CAP_NONE}
+          infoKey="packing.show_product_name_during_packing"
         />
         <BoolRow
           settingId="packing.truncate_long_names"
           label="Ograniczaj długość tytułu w produktach"
           checked={extended.truncateLongNames}
           onChange={(v) => patchExtended("truncateLongNames", v)}
-          capability={CAP_NONE}
+          infoKey="packing.truncate_long_names"
         />
       </div>
 

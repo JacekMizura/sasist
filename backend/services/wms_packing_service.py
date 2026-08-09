@@ -1007,6 +1007,21 @@ def _packing_line_from_item(
             if legacy_loc is not None and str(legacy_loc).strip():
                 location_label = str(legacy_loc).strip()
 
+    product_signature: Optional[str] = None
+    unit_price_display: Optional[str] = None
+    if p is not None:
+        bc = getattr(p, "barcode", None)
+        if bc is not None and str(bc).strip():
+            product_signature = str(bc).strip()
+    raw_price = getattr(it, "unit_price", None)
+    if raw_price is None and p is not None:
+        raw_price = getattr(p, "sale_price", None)
+    if raw_price is not None:
+        try:
+            unit_price_display = _format_pln_amount(float(raw_price))
+        except (TypeError, ValueError):
+            unit_price_display = None
+
     b = getattr(it, "source_bundle", None)
     if b is not None:
         bn = (getattr(b, "name", None) or "").strip()
@@ -1117,6 +1132,8 @@ def _packing_line_from_item(
         color_name=color_name,
         catalog_number=catalog_number,
         product_symbol=product_symbol,
+        product_signature=product_signature,
+        unit_price_display=unit_price_display,
         bundle_name=bundle_name,
         bundle_id=bundle_id,
         bundle_mode=bundle_mode,
