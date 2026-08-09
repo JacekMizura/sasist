@@ -1,7 +1,11 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import type { WmsPackingOrderCardApi } from "../../../../api/wmsPackingApi";
 import type { PackingOrdersListLayout } from "../../../../types/wmsPackingExtendedUi";
-import { computeOrdersListStats, isPackingOrderCardPacked } from "./ordersListStats";
+import {
+  computeOrdersListStats,
+  isPackingOrderCardPacked,
+  sortPackingOrdersForList,
+} from "./ordersListStats";
 import {
   DEFAULT_ORDERS_LIST_PRODUCT_FIELDS,
   type OrdersListProductFieldVisibility,
@@ -121,10 +125,10 @@ export function OrdersListView({
   const sourceOrderCount =
     stats.spakowane + stats.doSpakowania + stats.wTrakcie + stats.braki;
   const hidePacked = !showPackedOrders && !revealPackedOrders;
-  const displayedOrders = useMemo(
-    () => (hidePacked ? orders.filter((o) => !isPackingOrderCardPacked(o)) : orders),
-    [hidePacked, orders],
-  );
+  const displayedOrders = useMemo(() => {
+    const scoped = hidePacked ? orders.filter((o) => !isPackingOrderCardPacked(o)) : orders;
+    return sortPackingOrdersForList(scoped);
+  }, [hidePacked, orders]);
   const showRevealPackedBtn = !showPackedOrders && stats.spakowane > 0;
   const isStandard = ordersListLayout === "compact";
   const isHorizontal = ordersListLayout === "cards";

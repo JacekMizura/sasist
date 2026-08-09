@@ -13,7 +13,7 @@ const IMG = 72;
 function ProductInlineItemInner({ line, onProductClick }: ProductInlineItemProps) {
   const qtyReq = lineQuantityRequired(line);
   const packed = qtyReq > 0 && line.quantity_packed >= qtyReq;
-  const ean = (line.ean ?? "").trim() || "—";
+  const ean = (line.ean ?? "").trim();
   const colorRaw = (line.color_name ?? "").trim();
   const title = `${line.quantity}x ${line.product_name}`;
 
@@ -73,7 +73,7 @@ function ProductInlineItemInner({ line, onProductClick }: ProductInlineItemProps
             </span>
           ) : null}
           <p className="text-[15px] font-bold leading-snug text-[#1a1a1a] line-clamp-3 sm:text-base">{title}</p>
-          <p className="mt-1 text-[13px] leading-snug text-[#555]">EAN: {ean}</p>
+          {ean ? <p className="mt-1 text-[13px] leading-snug text-[#555]">EAN: {ean}</p> : null}
           {colorRaw ? (
             <p className="mt-0.5 text-[13px] leading-snug text-[#555]">Kolor: {colorRaw}</p>
           ) : null}

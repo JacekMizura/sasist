@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import type { WmsPackingOrderCardApi } from "../../../../api/wmsPackingApi";
-import { computeOrdersListStats, isPackingOrderCardPacked } from "./ordersListStats";
+import {
+  computeOrdersListStats,
+  isPackingOrderCardPacked,
+  sortPackingOrdersForList,
+} from "./ordersListStats";
 
 function card(partial: Partial<WmsPackingOrderCardApi> & { order_id: number }): WmsPackingOrderCardApi {
   return {
@@ -40,5 +44,15 @@ describe("computeOrdersListStats", () => {
     expect(stats.spakowane + stats.doSpakowania + stats.wTrakcie + stats.braki).toBe(4);
     expect(isPackingOrderCardPacked(orders[0]!)).toBe(true);
     expect(isPackingOrderCardPacked(orders[2]!)).toBe(false);
+  });
+
+  it("sorts fully packed orders to the bottom", () => {
+    const orders = [
+      card({ order_id: 10, packed_quantity: 2, total_quantity: 2 }),
+      card({ order_id: 11, packed_quantity: 0, total_quantity: 3 }),
+      card({ order_id: 12, packed_quantity: 1, total_quantity: 3 }),
+      card({ order_id: 13, packed_quantity: 5, total_quantity: 5, is_completed: true }),
+    ];
+    expect(sortPackingOrdersForList(orders).map((o) => o.order_id)).toEqual([11, 12, 10, 13]);
   });
 });

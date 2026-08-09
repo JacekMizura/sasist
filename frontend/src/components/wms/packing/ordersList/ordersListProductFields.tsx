@@ -70,7 +70,7 @@ export function OrdersListProductThumb({
   );
 }
 
-/** Meta wiersze: Symbol / EAN / Nr kat — tylko włączone (bez pustych slotów po wyłączeniu). */
+/** Meta wiersze: Symbol / EAN / Nr kat — tylko włączone i tylko gdy jest wartość (bez „—”). */
 export function OrdersListProductMeta({
   line,
   fields,
@@ -80,17 +80,20 @@ export function OrdersListProductMeta({
   fields: OrdersListProductFieldVisibility;
   className?: string;
 }) {
-  const sym = (line.product_symbol ?? line.sku ?? "").trim() || "—";
-  const ean = (line.ean ?? "").trim() || "—";
-  const nrKat = (line.catalog_number ?? "").trim() || "—";
+  const sym = (line.product_symbol ?? line.sku ?? "").trim();
+  const ean = (line.ean ?? "").trim();
+  const nrKat = (line.catalog_number ?? "").trim();
 
-  if (!fields.showSku && !fields.showEan && !fields.showCatalogNumber) return null;
+  const showSym = fields.showSku && Boolean(sym);
+  const showEan = fields.showEan && Boolean(ean);
+  const showCat = fields.showCatalogNumber && Boolean(nrKat);
+  if (!showSym && !showEan && !showCat) return null;
 
   return (
     <>
-      {fields.showSku ? <p className={className}>Symbol: {sym}</p> : null}
-      {fields.showEan ? <p className={className}>EAN: {ean}</p> : null}
-      {fields.showCatalogNumber ? <p className={className}>Nr kat: {nrKat}</p> : null}
+      {showSym ? <p className={className}>Symbol: {sym}</p> : null}
+      {showEan ? <p className={className}>EAN: {ean}</p> : null}
+      {showCat ? <p className={className}>Nr kat: {nrKat}</p> : null}
     </>
   );
 }

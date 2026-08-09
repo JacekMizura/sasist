@@ -8,6 +8,30 @@ export function isPackingOrderCardPacked(order: WmsPackingOrderCardApi): boolean
   return total > 0 && packed >= total;
 }
 
+/**
+ * Kolejność prezentacji listy pakowania (niższy = wyżej):
+ * 0 niezaczęte / wymagające działania, 1 częściowo, 2 całkowicie spakowane.
+ */
+export function packingOrdersListSortRank(order: WmsPackingOrderCardApi): number {
+  if (isPackingOrderCardPacked(order)) return 2;
+  const packed = Number(order.packed_quantity || 0);
+  if (packed > 0) return 1;
+  return 0;
+}
+
+/** Stabilne sortowanie: nieukończone → częściowe → spakowane (bez mutacji danych). */
+export function sortPackingOrdersForList(
+  orders: WmsPackingOrderCardApi[],
+): WmsPackingOrderCardApi[] {
+  return orders
+    .map((order, index) => ({ order, index }))
+    .sort((a, b) => {
+      const rankDiff = packingOrdersListSortRank(a.order) - packingOrdersListSortRank(b.order);
+      return rankDiff !== 0 ? rankDiff : a.index - b.index;
+    })
+    .map(({ order }) => order);
+}
+
 function orderHasShortage(order: WmsPackingOrderCardApi): boolean {
   return order.lines.some(
     (l) =>
