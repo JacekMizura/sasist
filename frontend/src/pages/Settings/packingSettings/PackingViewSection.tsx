@@ -1,6 +1,3 @@
-import { ExpandedHorizontalOrdersListLayoutPreview } from "../../../components/wms/packing/ordersList/ExpandedHorizontalOrdersListLayoutPreview";
-import { ExpandedVerticalOrdersListLayoutPreview } from "../../../components/wms/packing/ordersList/ExpandedVerticalOrdersListLayoutPreview";
-import { StandardOrdersListLayoutPreview } from "../../../components/wms/packing/ordersList/StandardOrdersListLayoutPreview";
 import type { WmsPackingExtendedUiSettings } from "../../../types/wmsPackingExtendedUi";
 import type { WmsPackingInterfaceDisplay, WmsPackingSettingsRead } from "../../../types/wmsPackingSettings";
 import {
@@ -22,11 +19,7 @@ type Props = {
 /** Grupa 2: Widok — wszystko wizualne. */
 export function PackingViewSection({ extended, draft, patchExtended, toggleInterfaceField }: Props) {
   return (
-    <SectionCard
-      id="wms-pack-view"
-      title="Widok"
-      summary="Konfiguracja widoku Trybu Pakowania [Wersja Beta]"
-    >
+    <SectionCard id="wms-pack-view" title="Widok">
       <FieldGrid>
         <SelectField
           settingId="packing.layout_mode"
@@ -196,15 +189,11 @@ export function PackingViewSection({ extended, draft, patchExtended, toggleInter
         />
       </div>
 
-      <Subsection
-        title="Lista zamówień"
-        description="Poniższe ustawienia układu listy dotyczą trybu rozbudowanego."
-      >
+      <Subsection title="Lista zamówień">
         <FieldGrid>
           <SelectField
             settingId="packing.orders_list_layout"
             label="Wybierz układ listy zamówień w trybie pakowania"
-            capability={CAP_NONE}
             value={extended.ordersListLayout}
             onChange={(v) => patchExtended("ordersListLayout", v as WmsPackingExtendedUiSettings["ordersListLayout"])}
           >
@@ -229,9 +218,6 @@ export function PackingViewSection({ extended, draft, patchExtended, toggleInter
             ))}
           </SelectField>
         </FieldGrid>
-        {extended.ordersListLayout === "compact" ? <StandardOrdersListLayoutPreview /> : null}
-        {extended.ordersListLayout === "cards" ? <ExpandedHorizontalOrdersListLayoutPreview /> : null}
-        {extended.ordersListLayout === "expanded_vertical" ? <ExpandedVerticalOrdersListLayoutPreview /> : null}
         <div className="mt-2 space-y-1">
           <BoolRow
             settingId="packing.show_product_image_in_orders"
