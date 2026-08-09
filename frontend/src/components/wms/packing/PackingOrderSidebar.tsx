@@ -109,10 +109,10 @@ export function PackingOrderSidebar({
 
   return (
     <aside
-      className="flex w-full shrink-0 flex-col border border-slate-200 bg-white lg:h-full lg:min-h-0 lg:w-[280px] lg:min-w-[280px] lg:max-w-[280px] lg:overflow-y-auto lg:rounded-xl lg:border"
+      className="flex w-full shrink-0 flex-col border border-slate-200 bg-white lg:max-h-full lg:w-[280px] lg:min-w-[280px] lg:max-w-[280px] lg:self-start lg:overflow-y-auto lg:rounded-xl lg:border"
       aria-label="Dokument i przesyłka"
     >
-      <div className="flex flex-1 flex-col gap-3 p-3 pb-3">
+      <div className="flex flex-col gap-3 p-3 pb-3">
         <button
           type="button"
           className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
