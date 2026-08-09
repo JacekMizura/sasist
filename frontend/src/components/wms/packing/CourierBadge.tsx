@@ -41,9 +41,23 @@ export function CourierBadge({
     : `Listów przewozowych: ${n}`;
   const inner = (
     <>
-      <div className={variant === "sidebar" ? "flex flex-col items-start gap-2" : "flex flex-col items-start gap-1"}>
-        <ShippingMethodLogo logoUrl={logoUrl} methodName={forLogo} size={size} />
-        <div className="min-w-0 flex-1">
+      <div
+        className={
+          variant === "sidebar"
+            ? "flex w-full flex-col items-center gap-2"
+            : "flex flex-col items-start gap-1"
+        }
+      >
+        <div
+          className={
+            variant === "sidebar"
+              ? "flex w-full min-h-[clamp(5.5rem,18vw,8rem)] items-center justify-center"
+              : undefined
+          }
+        >
+          <ShippingMethodLogo logoUrl={logoUrl} methodName={forLogo} size={size} />
+        </div>
+        <div className={variant === "sidebar" ? "w-full min-w-0" : "min-w-0 flex-1"}>
           {showLabels ? (
             <p
               className={

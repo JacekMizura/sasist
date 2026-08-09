@@ -25,7 +25,9 @@ const IMG: Record<ShippingMethodLogoSize, string> = {
   listRow: "max-h-10 w-auto max-w-[64px] object-contain object-center",
   /** Orders list: ~56px logo cell, fast scan */
   orderList: "max-h-14 w-auto max-w-[120px] object-contain object-center",
-  packingSidebar: "h-auto w-full max-h-[80px] max-w-[80px] min-w-[64px] object-contain object-left",
+  /** Lewy panel pakowania — duże, wyśrodkowane, bez rozciągania */
+  packingSidebar:
+    "h-auto w-auto max-h-[clamp(5.5rem,18vw,8rem)] max-w-[min(100%,15rem)] object-contain object-center",
   packingTile: "h-auto w-full max-h-[64px] max-w-[72px] min-w-[56px] object-contain object-left",
   postPackHero:
     "h-auto max-h-[112px] w-auto max-w-[min(240px,28vw)] min-w-[72px] object-contain object-right",
@@ -38,7 +40,7 @@ const ICON: Record<ShippingMethodLogoSize, string> = {
   xs: "h-4 w-4",
   listRow: "h-10 w-10",
   orderList: "h-10 w-10",
-  packingSidebar: "h-20 w-20",
+  packingSidebar: "h-[clamp(5.5rem,18vw,8rem)] w-[clamp(5.5rem,18vw,8rem)]",
   packingTile: "h-[4.5rem] w-[4.5rem]",
   postPackHero: "h-24 w-24",
 };

@@ -1,7 +1,11 @@
 import { PackageCheck } from "lucide-react";
 import { Icon } from "../../ui/Icon";
 
-/** Ikona „Spakuj wszystko” — pudełko z checkiem (outline button). */
+/**
+ * „Spakuj wszystko” — outline button.
+ * - `xl` (sidebar): ikona nad tekstem, min. wysokość 56px (touch).
+ * - `md`/`lg` (header): kompaktowa ikona (ograniczone miejsce w belce).
+ */
 export function PackingPackAllIconButton({
   disabled,
   onClick,
@@ -13,9 +17,13 @@ export function PackingPackAllIconButton({
   className?: string;
   size?: "md" | "lg" | "xl";
 }) {
-  const box =
-    size === "xl" ? "h-16 w-full min-h-[4rem]" : size === "lg" ? "h-12 w-12" : "h-11 w-11";
-  const icon = size === "xl" ? 40 : size === "lg" ? 26 : 24;
+  const withLabel = size === "xl";
+  const box = withLabel
+    ? "min-h-[56px] w-full flex-col gap-1 px-3 py-2.5"
+    : size === "lg"
+      ? "h-12 w-12"
+      : "h-11 w-11";
+  const icon = withLabel ? 28 : size === "lg" ? 26 : 24;
   return (
     <button
       type="button"
@@ -31,7 +39,10 @@ export function PackingPackAllIconButton({
         .filter(Boolean)
         .join(" ")}
     >
-      <PackageCheck size={icon} strokeWidth={2.25} className="text-slate-800" aria-hidden />
+      <PackageCheck size={icon} strokeWidth={2.25} className="shrink-0 text-slate-800" aria-hidden />
+      {withLabel ? (
+        <span className="text-sm font-bold leading-tight text-slate-900">Spakuj wszystko</span>
+      ) : null}
     </button>
   );
 }
