@@ -51,7 +51,7 @@ function DefaultCardInner({
     truncate: fieldVisibility.truncate_names,
   });
   const isGrid = displayMode === "grid";
-  const showLoc = fieldVisibility.show_location;
+  const showLoc = fieldVisibility.show_location && Boolean(locBadge);
   const showImg = fieldVisibility.show_image;
 
   const handleActivate = useCallback(() => {
@@ -105,7 +105,9 @@ function DefaultCardInner({
               {line.image_url ? (
                 <img src={line.image_url} alt="" className="max-h-full max-w-full object-contain" loading="lazy" />
               ) : (
-                <span className="text-3xl text-slate-300">—</span>
+                <span className="text-3xl text-slate-200" aria-hidden>
+                  {"\u00A0"}
+                </span>
               )}
             </div>
           ) : null}

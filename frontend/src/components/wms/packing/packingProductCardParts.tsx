@@ -6,8 +6,9 @@ const LABEL = "text-[9px] font-semibold uppercase tracking-[0.08em] text-slate-4
 
 export function packingLocationBadge(line: WmsPackingOrderLineApi): string {
   const loc = (line.location_label ?? "").trim();
+  if (!loc) return "";
   const locQty = line.location_bin_qty;
-  return loc && locQty != null && locQty > 0 ? `${loc} (x${locQty})` : loc || "—";
+  return locQty != null && locQty > 0 ? `${loc} (x${locQty})` : loc;
 }
 
 export function PackingCardFieldLabel({ children, muted }: { children: string; muted?: boolean }) {
@@ -50,7 +51,7 @@ export function PackingGridLocationHeader({
 }) {
   return (
     <div className="ml-auto flex shrink-0 items-start gap-1">
-      {showLocation ? (
+      {showLocation && locBadge ? (
         <div className="flex w-[7.25rem] shrink-0 flex-col items-end gap-1">
           <PackingCardFieldLabel muted={muted}>LOKALIZACJA</PackingCardFieldLabel>
           <PackingLocationPill text={locBadge} muted={muted} />
@@ -86,7 +87,9 @@ export function PackingProductThumb({
           loading="lazy"
         />
       ) : (
-        <span className="text-2xl text-slate-300">—</span>
+        <span className="text-2xl text-slate-200" aria-hidden>
+          {"\u00A0"}
+        </span>
       )}
     </div>
   );

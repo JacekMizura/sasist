@@ -40,7 +40,11 @@ export function PackingViewSection({ extended, draft, patchExtended, toggleInter
             <option value="with_sidebar">Z sidebarem</option>
             <option value="full_width">Pełna szerokość</option>
           </SelectField>
-          <PackingLayoutModePreview mode={extended.layoutMode} />
+          <PackingLayoutModePreview
+            mode={extended.layoutMode}
+            productDisplayMode={extended.productDisplayMode}
+            fieldVisibility={productPreviewVisibility}
+          />
         </div>
         <div>
           <SelectField

@@ -60,7 +60,7 @@ function ActiveCardInner({
   });
   const isGrid = displayMode === "grid";
   const atMax = maxPack > 0 && packQty >= maxPack;
-  const showLoc = fieldVisibility.show_location;
+  const showLoc = fieldVisibility.show_location && Boolean(locBadge);
   const showImg = fieldVisibility.show_image;
 
   const bump = useCallback(

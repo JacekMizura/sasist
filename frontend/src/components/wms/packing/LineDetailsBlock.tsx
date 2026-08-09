@@ -29,16 +29,20 @@ function EanBadge({ value, muted }: { value: string; muted?: boolean }) {
   );
 }
 
-/** Wspólny blok metadanych produktu — tylko prezentacja wg ustawień widoczności. */
+function hasText(value: string | null | undefined): value is string {
+  return Boolean((value ?? "").trim());
+}
+
+/** Wspólny blok metadanych produktu — brak wartości = brak całego pola (bez „—”). */
 export function LineDetailsBlock({ line, variant, fieldVisibility, layout = "columns" }: Props) {
   const vis = fieldVisibility ?? DEFAULT_PACKING_PRODUCT_FIELD_VISIBILITY;
   const stock = line.stock_quantity;
   const color = (line.color_name ?? "").trim();
-  const ean = (line.ean ?? "").trim() || "—";
-  const nrKat = (line.catalog_number ?? "").trim() || "—";
-  const sym = (line.product_symbol ?? line.sku ?? "").trim() || "—";
-  const signature = (line.product_signature ?? "").trim() || "—";
-  const price = (line.unit_price_display ?? "").trim() || "—";
+  const ean = (line.ean ?? "").trim();
+  const nrKat = (line.catalog_number ?? "").trim();
+  const sym = (line.product_symbol ?? line.sku ?? "").trim();
+  const signature = (line.product_signature ?? "").trim();
+  const price = (line.unit_price_display ?? "").trim();
   const bundle = (line.bundle_name ?? "").trim();
 
   const muted = variant === "done";
@@ -58,18 +62,18 @@ export function LineDetailsBlock({ line, variant, fieldVisibility, layout = "col
       ),
     });
   }
-  if (vis.show_stock) {
+  if (vis.show_stock && stock != null) {
     byKey.set("stock", {
       key: "stock",
       node: (
         <p className={["truncate", textCls].join(" ")}>
           <span className={labelCls}>Stan:</span>{" "}
-          <span className={["font-semibold tabular-nums", stanCls].join(" ")}>{stock != null ? stock : "—"}</span>
+          <span className={["font-semibold tabular-nums", stanCls].join(" ")}>{stock}</span>
         </p>
       ),
     });
   }
-  if (vis.show_ean) {
+  if (vis.show_ean && hasText(ean)) {
     byKey.set("ean", {
       key: "ean",
       node: (
@@ -80,7 +84,7 @@ export function LineDetailsBlock({ line, variant, fieldVisibility, layout = "col
       ),
     });
   }
-  if (vis.show_symbol) {
+  if (vis.show_symbol && hasText(sym)) {
     byKey.set("sym", {
       key: "sym",
       node: (
@@ -90,7 +94,7 @@ export function LineDetailsBlock({ line, variant, fieldVisibility, layout = "col
       ),
     });
   }
-  if (vis.show_catalog_number) {
+  if (vis.show_catalog_number && hasText(nrKat)) {
     byKey.set("cat", {
       key: "cat",
       node: (
@@ -100,7 +104,7 @@ export function LineDetailsBlock({ line, variant, fieldVisibility, layout = "col
       ),
     });
   }
-  if (vis.show_signature) {
+  if (vis.show_signature && hasText(signature)) {
     byKey.set("sig", {
       key: "sig",
       node: (
@@ -110,7 +114,7 @@ export function LineDetailsBlock({ line, variant, fieldVisibility, layout = "col
       ),
     });
   }
-  if (vis.show_price) {
+  if (vis.show_price && hasText(price)) {
     byKey.set("price", {
       key: "price",
       node: (
@@ -121,7 +125,7 @@ export function LineDetailsBlock({ line, variant, fieldVisibility, layout = "col
       ),
     });
   }
-  if (vis.show_bundle_info && bundle) {
+  if (vis.show_bundle_info && hasText(bundle)) {
     byKey.set("bundle", {
       key: "bundle",
       node: (

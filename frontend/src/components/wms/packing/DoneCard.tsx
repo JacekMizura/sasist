@@ -40,7 +40,7 @@ function DoneCardInner({ line, flash, fieldVisibility, displayMode = "list" }: D
   const isGrid = displayMode === "grid";
   const qtyPacked = line.quantity_packed;
   const qtyReq = typeof line.quantity_required === "number" ? line.quantity_required : line.quantity;
-  const showLoc = fieldVisibility.show_location;
+  const showLoc = fieldVisibility.show_location && Boolean(locBadge);
   const showImg = fieldVisibility.show_image;
 
   const flashStyle = flash
@@ -97,7 +97,9 @@ function DoneCardInner({ line, flash, fieldVisibility, displayMode = "list" }: D
                   loading="lazy"
                 />
               ) : (
-                <span className="text-3xl text-slate-300/80">—</span>
+                <span className="text-3xl text-slate-200/80" aria-hidden>
+                  {"\u00A0"}
+                </span>
               )}
             </div>
           ) : null}
