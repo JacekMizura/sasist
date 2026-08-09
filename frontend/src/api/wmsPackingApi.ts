@@ -264,6 +264,8 @@ export type WmsPackingOrderCardApi = {
   wms_packing_finished_at?: string | null;
   /** ``orders.wms_packing_automation_finished_at`` — prawdziwy koniec POST …/finish. */
   wms_packing_automation_finished_at?: string | null;
+  /** Operator z audytu WMS (ostatnie domknięcie pakowania). */
+  packed_by_label?: string | null;
   /** Packaging Intelligence — PRIMARY + krótka lista alternatyw (nie „wszystkie kartony”). */
   packaging_suggestions?: PackagingSuggestionApi[];
   primary_packaging_suggestion?: PackagingSuggestionApi | null;
@@ -585,6 +587,20 @@ export async function getWmsPackingOrderDetail(
   };
   if (cartId != null) params.cart_id = cartId;
   const res = await api.get<WmsPackingOrderDetailApi>(`/wms/packing/orders/${orderId}/detail`, { params });
+  return res.data;
+}
+
+/** Świadome potwierdzenie ostrzeżenia o wcześniej spakowanym zamówieniu → log zamówienia. */
+export async function postWmsPackingAcknowledgeReopen(
+  tenantId: number,
+  warehouseId: number,
+  orderId: number,
+): Promise<{ ok: boolean }> {
+  const res = await api.post<{ ok: boolean }>(
+    `/wms/packing/orders/${orderId}/acknowledge-reopen`,
+    {},
+    { params: { tenant_id: tenantId, warehouse_id: warehouseId } },
+  );
   return res.data;
 }
 

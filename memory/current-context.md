@@ -1,5 +1,11 @@
 ﻿## Active
 
+**Packing reopen already-packed (2026-08-09):**
+- Click fully packed order → packing view (all Done, no active line) + `AlreadyPackedOrderModal`
+- Accept → `POST …/acknowledge-reopen` → `PACKING_REOPEN_ACKNOWLEDGED` (WmsOrderEvent + activity log)
+- X/Escape dismiss without log; back → lista; suppress AutoActions/finalization on reopen
+- Detail fallback outside active queue for packed/finalized/status PACKED|SHIPPED|…
+
 **Order panel status change (2026-08-09):**
 - Endpoint: `PATCH office/order-ui/orders/{id}/ui-status` → `apply_order_panel_ui_status`
 - Status always persists; cart detach only when `can_detach_order_from_cart` allows

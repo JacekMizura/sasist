@@ -6,6 +6,7 @@ import { patchOrderSelectCarton } from "../../../api/ordersApi";
 import { getWmsPackingSettings } from "../../../api/wmsPackingSettingsApi";
 import {
   getWmsPackingOrderDetail,
+  postWmsPackingAcknowledgeReopen,
   postWmsPackingLinePack,
   postWmsPackingOrderFinish,
   postWmsPackingOrderScan,
@@ -47,6 +48,7 @@ import {
 } from "./packingPostFinishClientActions";
 import {
   decideListScanBootstrapUi,
+  isPackingOrderCompleted,
   isPackingOrderLinesFullyPacked,
   isPackingPhysicallyComplete,
   isPackingSessionFinished,
@@ -98,6 +100,13 @@ export function usePackingOrderController(
   const [activeProductId, setActiveProductId] = useState<number | null>(null);
   const [packQty, setPackQty] = useState(0);
   const [linePackBusy, setLinePackBusy] = useState(false);
+  /** Zamówienie było już w pełni spakowane przy pierwszym wczytaniu — nie startuj finalizacji / AutoActions. */
+  const alreadyPackedOnLoadRef = useRef(false);
+  /** Gate tylko przy pierwszym udanym wczytaniu detail (nie po dokończeniu pakowania w tej sesji). */
+  const alreadyPackedGateCheckedRef = useRef(false);
+  const [suppressPostPackForReopen, setSuppressPostPackForReopen] = useState(false);
+  const [alreadyPackedModalOpen, setAlreadyPackedModalOpen] = useState(false);
+  const [alreadyPackedAckBusy, setAlreadyPackedAckBusy] = useState(false);
   const [selectCartonBusy, setSelectCartonBusy] = useState(false);
   /** True while POST …/finish runs — ukrywa AutoActionsView do czasu decyzji STAY vs nawigacja na listę. */
   const [postPackFinishBusy, setPostPackFinishBusy] = useState(false);
@@ -155,6 +164,20 @@ export function usePackingOrderController(
     setSession(loadWmsPackingSession());
   }, []);
 
+  const applyAlreadyPackedGate = useCallback((d: WmsPackingOrderDetailApi) => {
+    if (alreadyPackedGateCheckedRef.current) return;
+    alreadyPackedGateCheckedRef.current = true;
+    if (!isPackingOrderCompleted(d)) return;
+    alreadyPackedOnLoadRef.current = true;
+    setSuppressPostPackForReopen(true);
+    setActiveProductId(null);
+    setPackQty(0);
+    setAlreadyPackedModalOpen(true);
+    setShowProceedAfterLinesCompleteCta(false);
+    setAwaitingPostPackCarton(false);
+    setAwaitingFinalizationRun(false);
+  }, []);
+
   const fetchDetail = useCallback(async () => {
     const s = loadWmsPackingSession();
     if (!s?.mode || warehouseId == null || !Number.isFinite(orderId) || orderId < 1) return;
@@ -170,6 +193,7 @@ export function usePackingOrderController(
         s.mode === "bulk" || s.mode === "baskets" ? s.cartId : undefined,
       );
       setDetail(d);
+      applyAlreadyPackedGate(d);
     } catch (e) {
       const code = wmsPackingApiErrorCode(e);
       if (axios.isAxiosError(e) && e.response?.status === 404) {
@@ -179,7 +203,7 @@ export function usePackingOrderController(
       }
       setDetail(null);
     }
-  }, [warehouseId, orderId]);
+  }, [warehouseId, orderId, applyAlreadyPackedGate]);
 
   useEffect(() => {
     refreshSession();
@@ -214,6 +238,11 @@ export function usePackingOrderController(
   useEffect(() => {
     bootstrapConsumedRef.current = false;
     deferCartonFromListBootstrapRef.current = false;
+    alreadyPackedOnLoadRef.current = false;
+    alreadyPackedGateCheckedRef.current = false;
+    setSuppressPostPackForReopen(false);
+    setAlreadyPackedModalOpen(false);
+    setAlreadyPackedAckBusy(false);
     setShowProceedAfterLinesCompleteCta(false);
     setPostPackFinishBusy(false);
     finishWithoutCartonRef.current = false;
@@ -242,6 +271,7 @@ export function usePackingOrderController(
    */
   useEffect(() => {
     if (!detail) return;
+    if (alreadyPackedOnLoadRef.current) return;
     if (isPackingSessionFinished(detail)) return;
     if (detail.total_quantity > 0 && detail.packed_quantity < detail.total_quantity) return;
     if (!isPackingPhysicallyComplete(detail) && !isPackingOrderLinesFullyPacked(detail)) return;
@@ -556,6 +586,7 @@ export function usePackingOrderController(
   /** Wejście w zamówienie z notatkami — popup zanim operator kontynuuje. */
   useEffect(() => {
     if (!detail || notesAcknowledged || notesPopupOpen) return;
+    if (alreadyPackedOnLoadRef.current || alreadyPackedModalOpen) return;
     if (
       !shouldOpenPackingNotesPopup({
         requireNotesPopup: packingExtendedUi.requireNotesPopup,
@@ -570,6 +601,7 @@ export function usePackingOrderController(
     detail,
     notesAcknowledged,
     notesPopupOpen,
+    alreadyPackedModalOpen,
     packingExtendedUi.requireNotesPopup,
     visiblePackingNotes,
   ]);
@@ -608,6 +640,12 @@ export function usePackingOrderController(
   const applyPackingResult = useCallback(
     (out: WmsPackingScanOutApi, opts?: { fromListBootstrap?: boolean }) => {
       setDetail(out.detail);
+      applyAlreadyPackedGate(out.detail);
+      if (alreadyPackedOnLoadRef.current) {
+        setActiveProductId(null);
+        setShowProceedAfterLinesCompleteCta(false);
+        return;
+      }
       if (out.post_pack_pipeline != null) {
         setPostPackPipeline(out.post_pack_pipeline);
       }
@@ -668,6 +706,7 @@ export function usePackingOrderController(
       packingExtendedUi.showAllNotes,
       notesAcknowledged,
       beginPostPackAdvance,
+      applyAlreadyPackedGate,
     ],
   );
 
@@ -991,6 +1030,27 @@ export function usePackingOrderController(
     setAwaitingFinalizationRun(true);
   }, [finishWithoutCartonRef]);
 
+  const dismissAlreadyPackedModal = useCallback(() => {
+    setAlreadyPackedModalOpen(false);
+  }, []);
+
+  const acknowledgeAlreadyPackedAndStay = useCallback(async () => {
+    if (warehouseId == null || !Number.isFinite(orderId) || orderId < 1) {
+      setAlreadyPackedModalOpen(false);
+      return;
+    }
+    setAlreadyPackedAckBusy(true);
+    try {
+      await postWmsPackingAcknowledgeReopen(DAMAGE_TENANT_ID, warehouseId, orderId);
+      setAlreadyPackedModalOpen(false);
+    } catch {
+      showScannerToast("Nie udało się zapisać potwierdzenia — możesz kontynuować.");
+      setAlreadyPackedModalOpen(false);
+    } finally {
+      setAlreadyPackedAckBusy(false);
+    }
+  }, [warehouseId, orderId, showScannerToast]);
+
   const packingProductFieldVisibility = useMemo(
     () => buildPackingProductFieldVisibility(packingInterfaceDisplay, packingExtendedUi),
     [packingInterfaceDisplay, packingExtendedUi],
@@ -1037,6 +1097,11 @@ export function usePackingOrderController(
     shipmentConfirmOpen,
     resolveShipmentConfirm,
     waybillChoiceOpen,
+    alreadyPackedModalOpen,
+    alreadyPackedAckBusy,
+    dismissAlreadyPackedModal,
+    acknowledgeAlreadyPackedAndStay,
+    suppressPostPackForReopen,
     waybillChoiceCount,
     resolveWaybillPrintChoice,
     replacementModalOpen,

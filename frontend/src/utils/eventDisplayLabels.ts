@@ -20,6 +20,7 @@ export const EVENT_DISPLAY_LABELS: Record<string, string> = {
   PACKING_STARTED: "Rozpoczęto pakowanie",
   ORDER_PACKED: "Spakowano zamówienie",
   PACKING_FINISHED: "Zakończono pakowanie",
+  PACKING_REOPEN_ACKNOWLEDGED: "Ponowne wejście do spakowanego zamówienia",
   CART_RELEASED: "Zwolniono wózek",
   CART_AUTO_RELEASED_IDLE: "Automatycznie zwolniono nieaktywny wózek",
   PICKING_CANCELLED: "Anulowano zbieranie",

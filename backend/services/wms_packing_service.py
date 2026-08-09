@@ -69,9 +69,11 @@ from .wms_audit_service import (
     emit_wms_packed_item,
     emit_wms_packing_automation_finished,
     emit_wms_packing_finished,
+    emit_wms_packing_reopen_acknowledged,
     emit_wms_packing_started,
     last_pack_audit_summaries_for_order_lines,
     last_pick_audit_summaries_for_order_lines,
+    resolve_packing_finished_operator_label,
 )
 
 logger = logging.getLogger(__name__)
@@ -1208,6 +1210,9 @@ def _build_packing_order_card(
 
         wms_timeline, wms_operation_times = build_wms_timeline_and_operation_times(db, order)
         logistics_lines = _wms_operational_logistics_lines_for_order(order)
+        packed_by_label = resolve_packing_finished_operator_label(db, int(order.id))
+    else:
+        packed_by_label = None
     is_completed = total_q > 0 and packed_q >= total_q
     ship_name, ship_logo, _ = order_shipping_display(order)
     raw_sid = getattr(order, "shipping_method_id", None)
@@ -1348,6 +1353,7 @@ def _build_packing_order_card(
         wms_packing_started_at=pks,
         wms_packing_finished_at=pkf,
         wms_packing_automation_finished_at=pka,
+        packed_by_label=packed_by_label,
         packaging_suggestions=packaging_suggestions,
         primary_packaging_suggestion=primary_packaging_suggestion,
         packaging_alternatives=packaging_alternatives,
@@ -1908,6 +1914,23 @@ def find_first_packing_order_id_for_ean(
     return int(row.id) if row is not None else None
 
 
+def _order_allows_packing_detail_outside_queue(db: Session, order: Order) -> bool:
+    """Ponowne otwarcie już spakowanego / zfinalizowanego zamówienia z listy (poza aktywną kolejką)."""
+    if getattr(order, "deleted_at", None) is not None:
+        return False
+    if getattr(order, "wms_packing_automation_finished_at", None) is not None:
+        return True
+    if getattr(order, "packed_at", None) is not None:
+        return True
+    fs = str(getattr(order, "fulfillment_state", None) or "").strip().upper()
+    if fs in {"PACKED", "SHIPPED", "COMPLETED", "DONE"}:
+        return True
+    try:
+        return _is_order_fully_packed_db(db, int(order.id))
+    except Exception:
+        return False
+
+
 def get_packing_order_detail_for_queue(
     db: Session,
     *,
@@ -1926,18 +1949,28 @@ def get_packing_order_detail_for_queue(
         mode=mode,
         cart_id=cart_id,
     ).filter(Order.id == int(order_id))
-    order = (
-        q.options(
-            joinedload(Order.items).joinedload(OrderItem.product),
-            joinedload(Order.items).joinedload(OrderItem.source_bundle),
-            joinedload(Order.order_ui_status),
-            joinedload(Order.shipping_method_row),
-            joinedload(Order.basket),
-            joinedload(Order.cart),
-        ).first()
+    load_opts = (
+        joinedload(Order.items).joinedload(OrderItem.product),
+        joinedload(Order.items).joinedload(OrderItem.source_bundle),
+        joinedload(Order.order_ui_status),
+        joinedload(Order.shipping_method_row),
+        joinedload(Order.basket),
+        joinedload(Order.cart),
     )
+    order = q.options(*load_opts).first()
     if order is None:
-        return None
+        order = (
+            db.query(Order)
+            .filter(
+                Order.id == int(order_id),
+                Order.tenant_id == int(tenant_id),
+                Order.warehouse_id == int(warehouse_id),
+            )
+            .options(*load_opts)
+            .first()
+        )
+        if order is None or not _order_allows_packing_detail_outside_queue(db, order):
+            return None
     return build_packing_order_detail_out(
         db,
         order,
@@ -1947,6 +1980,36 @@ def get_packing_order_detail_for_queue(
         status_id=status_id,
         cart_id=cart_id,
     )
+
+
+def acknowledge_packing_reopen(
+    db: Session,
+    *,
+    tenant_id: int,
+    warehouse_id: int,
+    order_id: int,
+    operator_user_id: Optional[int],
+) -> None:
+    """Zapis logu po świadomym akceptowaniu ostrzeżenia o wcześniej spakowanym zamówieniu."""
+    order = (
+        db.query(Order)
+        .filter(
+            Order.id == int(order_id),
+            Order.tenant_id == int(tenant_id),
+            Order.warehouse_id == int(warehouse_id),
+        )
+        .first()
+    )
+    if order is None:
+        raise ValueError("ORDER_NOT_FOUND")
+    emit_wms_packing_reopen_acknowledged(
+        db,
+        tenant_id=int(tenant_id),
+        warehouse_id=int(warehouse_id),
+        order=order,
+        operator_user_id=operator_user_id,
+    )
+    db.commit()
 
 
 def resolve_packed_order_ui_status_id(db: Session, *, tenant_id: int, warehouse_id: int) -> Optional[int]:

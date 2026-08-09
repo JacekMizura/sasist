@@ -42,6 +42,7 @@ from ..schemas.wms_packing import (
 from ..services.wms_audit_service import emit_wms_packing_paused, emit_wms_packing_resumed, touch_wms_packing_session_activity
 from ..services.wms_packing_service import (
     PackingScanError,
+    acknowledge_packing_reopen,
     find_first_packing_order_id_for_ean,
     resolve_packing_order_for_shelf_scan,
     get_packing_order_detail_for_queue,
@@ -442,6 +443,36 @@ def get_packing_order_detail(
     if detail is None:
         raise HTTPException(status_code=404, detail={"code": "ORDER_NOT_IN_QUEUE"})
     return detail
+
+
+@router.post("/packing/orders/{order_id}/acknowledge-reopen")
+def post_packing_acknowledge_reopen(
+    order_id: int,
+    tenant_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_operable_warehouse),
+    db: Session = Depends(get_db),
+    current_user: AppUser = Depends(get_current_user),
+):
+    """Świadome potwierdzenie komunikatu o wcześniej spakowanym zamówieniu → log zamówienia."""
+    try:
+        acknowledge_packing_reopen(
+            db,
+            tenant_id=int(tenant_id),
+            warehouse_id=int(warehouse_id),
+            order_id=int(order_id),
+            operator_user_id=int(current_user.id) if current_user.id is not None else None,
+        )
+    except ValueError as e:
+        db.rollback()
+        code = str(e)
+        if code == "ORDER_NOT_FOUND":
+            raise HTTPException(status_code=404, detail={"code": "ORDER_NOT_FOUND"}) from e
+        raise HTTPException(status_code=400, detail=code) from e
+    except SQLAlchemyError as e:
+        db.rollback()
+        logger.exception("post_packing_acknowledge_reopen")
+        raise HTTPException(status_code=500, detail="Database error") from e
+    return {"ok": True}
 
 
 @router.post("/packing/orders/{order_id}/scan", response_model=WmsPackingScanOut)

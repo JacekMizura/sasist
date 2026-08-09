@@ -11,6 +11,7 @@ import {
 import { getWmsPackingSettings } from "../../api/wmsPackingSettingsApi";
 import { getOrderUiStatusSummary } from "../../api/orderUiStatusApi";
 import { buildOrderUiStatusNameById } from "../../components/orders/automation/buildOrderUiStatusNameById";
+import { AlreadyPackedOrderModal } from "../../components/wms/packing/AlreadyPackedOrderModal";
 import { AutoActionsView } from "../../components/wms/packing/postComplete/AutoActionsView";
 import { PackingCartonGateModal } from "../../components/wms/packing/PackingCartonGateModal";
 import { PackingFinalizationView } from "../../components/wms/packing/PackingFinalizationView";
@@ -295,9 +296,24 @@ export default function WmsPackingOrderPage() {
   const showAutoActions =
     packingSessionDone &&
     !dismissPostPacking &&
+    !ctrl.suppressPostPackForReopen &&
     !ctrl.postPackFinishBusy &&
     !ctrl.awaitingPostPackCarton &&
     !ctrl.awaitingFinalizationRun;
+
+  const packedAtLabel = (() => {
+    const raw = packingDetail.wms_packing_finished_at ?? packingDetail.wms_packing_automation_finished_at;
+    if (!raw?.trim()) return null;
+    const d = new Date(raw);
+    if (Number.isNaN(d.getTime())) return null;
+    const dd = String(d.getDate()).padStart(2, "0");
+    const mm = String(d.getMonth() + 1).padStart(2, "0");
+    const yy = String(d.getFullYear()).slice(-2);
+    const hh = String(d.getHours()).padStart(2, "0");
+    const mi = String(d.getMinutes()).padStart(2, "0");
+    return `${dd}.${mm}.${yy}, ${hh}:${mi}`;
+  })();
+  const packedByLabel = (packingDetail.packed_by_label ?? "").trim() || null;
 
   const shippingTemplateLabel = (() => {
     const m = (packingDetail.shipping_method_name ?? packingDetail.shipping_method ?? "").trim();
@@ -319,7 +335,7 @@ export default function WmsPackingOrderPage() {
     );
   }
 
-  if (ctrl.awaitingFinalizationRun) {
+  if (ctrl.awaitingFinalizationRun && !ctrl.suppressPostPackForReopen) {
     return (
       <PackingFinalizationView
         detail={packingDetail}
@@ -331,6 +347,15 @@ export default function WmsPackingOrderPage() {
 
   return (
     <>
+      <AlreadyPackedOrderModal
+        open={ctrl.alreadyPackedModalOpen}
+        packedAtLabel={packedAtLabel}
+        packedByLabel={packedByLabel}
+        busy={ctrl.alreadyPackedAckBusy}
+        onBackToList={leavePackingToList}
+        onAccept={ctrl.acknowledgeAlreadyPackedAndStay}
+        onDismiss={ctrl.dismissAlreadyPackedModal}
+      />
       <PackingNotesPopupModal
         open={ctrl.notesPopupOpen}
         notes={ctrl.visiblePackingNotes}

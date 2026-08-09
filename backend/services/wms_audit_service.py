@@ -32,6 +32,7 @@ from ..models.wms_order_event import (
     EVT_PACKING_AUTOMATION_FINISHED,
     EVT_PACKING_PAUSED,
     EVT_PACKING_RESUMED,
+    EVT_PACKING_REOPEN_ACKNOWLEDGED,
     EVT_PACKING_STARTED,
     EVT_PICKED_ITEM,
     EVT_PICK_UNDONE,
@@ -1756,7 +1757,69 @@ def emit_wms_packing_finished(
         message=f"Kompletacja fizyczna (czas skanów: {_format_duration_pl(dur_sec)})"
         if dur_sec is not None
         else "Kompletacja fizyczna — wszystkie pozycje spakowane",
+        operator_user_id=uid,
     )
+
+
+def emit_wms_packing_reopen_acknowledged(
+    db: Session,
+    *,
+    tenant_id: int,
+    warehouse_id: int,
+    order: Order,
+    operator_user_id: Optional[int],
+) -> None:
+    """Operator przeczytał ostrzeżenie o wcześniej spakowanym zamówieniu i został w widoku pakowania."""
+    uid = int(operator_user_id) if operator_user_id is not None and int(operator_user_id) > 0 else None
+    nm = operator_display_name(db, uid)
+    msg = (
+        "Użytkownik zapoznał się z komunikatem o wcześniej spakowanym zamówieniu "
+        "i ponownie przeszedł do pakowania."
+    )
+    insert_wms_order_event(
+        db,
+        tenant_id=tenant_id,
+        warehouse_id=warehouse_id,
+        order_id=int(order.id),
+        operator_user_id=uid,
+        event_type=EVT_PACKING_REOPEN_ACKNOWLEDGED,
+        metadata={
+            "acknowledged": True,
+            "operator_label": nm,
+            "packed_at": str(getattr(order, "packed_at", None) or "") or None,
+        },
+    )
+    append_order_activity_for_wms(
+        db,
+        order_id=int(order.id),
+        tenant_id=tenant_id,
+        warehouse_id=warehouse_id,
+        event_type=EVT_PACKING_REOPEN_ACKNOWLEDGED,
+        message=msg,
+        operator_user_id=uid,
+    )
+
+
+def resolve_packing_finished_operator_label(db: Session, order_id: int) -> Optional[str]:
+    """Kto domknął pakowanie — ostatni PACKING_FINISHED / AUTOMATION / PACKED_ITEM."""
+    for et in (EVT_PACKING_FINISHED, EVT_PACKING_AUTOMATION_FINISHED, EVT_PACKED_ITEM):
+        ev = (
+            db.query(WmsOrderEvent)
+            .filter(
+                WmsOrderEvent.order_id == int(order_id),
+                WmsOrderEvent.event_type == et,
+                WmsOrderEvent.operator_user_id.isnot(None),
+            )
+            .order_by(WmsOrderEvent.created_at.desc(), WmsOrderEvent.id.desc())
+            .first()
+        )
+        if ev is None:
+            continue
+        uid = getattr(ev, "operator_user_id", None)
+        label = operator_display_name(db, int(uid) if uid is not None else None)
+        if label:
+            return label
+    return None
 
 
 def emit_wms_packing_automation_finished(
@@ -2132,6 +2195,11 @@ def _timeline_event_from_row(db: Session, ev: WmsOrderEvent) -> WmsOrderTimeline
         title = "Kompletacja fizyczna — wszystkie pozycje spakowane"
         if meta.get("packing_duration_label"):
             body.append(f"czas (skany / kompletacja): {meta['packing_duration_label']}")
+    elif et == EVT_PACKING_REOPEN_ACKNOWLEDGED:
+        title = (
+            "Użytkownik zapoznał się z komunikatem o wcześniej spakowanym zamówieniu "
+            "i ponownie przeszedł do pakowania"
+        )
     elif et == EVT_PACKING_AUTOMATION_FINISHED:
         title = "Automatyka i synchronizacja zakończone"
         if meta.get("packing_duration_label"):

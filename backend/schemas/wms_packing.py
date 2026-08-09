@@ -302,6 +302,8 @@ class WmsPackingOrderCard(BaseModel):
         default=None,
         description="orders.wms_packing_automation_finished_at — POST …/finish zakończony",
     )
+    #: Operator, który ostatnio domknął pakowanie (z audytu WMS) — do popupu „już spakowane”.
+    packed_by_label: Optional[str] = Field(default=None, max_length=128)
     #: Packaging Intelligence — Smart Matching + 3D Matching (wspólny model propozycji).
     packaging_suggestions: list[PackagingSuggestionOut] = Field(
         default_factory=list,

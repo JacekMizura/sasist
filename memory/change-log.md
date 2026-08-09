@@ -1,3 +1,16 @@
+## 2026-08-09 — Ponowne wejście do spakowanego zamówienia (lista pakowania)
+
+- Gate przy pierwszym wczytaniu detail: modal „już spakowane”, linie Done, bez aktywnego produktu / AutoActions
+- `POST /wms/packing/orders/{id}/acknowledge-reopen` → `PACKING_REOPEN_ACKNOWLEDGED` (+ activity log)
+- X zamyka bez logu; Accept zapisuje log; Wróć → lista
+- Detail poza kolejką dla zamówień packed/finalized; `packed_by_label` w detail
+
+## 2026-08-09 — Podglądy układu/produktów: realne karty + bez „—”
+
+- `PackingLayoutModePreview`: prawdziwy sidebar + karty Default/Done (skala), nie szkielety
+- Wspólne sample lines; brak wartości = ukryte pole w `LineDetailsBlock`
+- Lokalizacja: ten sam `PackingLocationPill`; pusty badge niewidoczny
+
 ## 2026-08-09 — Ustawienia widoku: zwijane podglądy układu
 
 - Wspólny `PackingSettingsPreviewCollapse` (domyślnie zwinięty)
