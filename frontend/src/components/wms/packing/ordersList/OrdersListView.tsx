@@ -76,7 +76,7 @@ function LoadMoreSentinel({
       ref={ref}
       className={
         horizontal
-          ? "flex h-full min-w-[4rem] shrink-0 items-center justify-center self-center px-2"
+          ? "flex min-w-[4rem] shrink-0 items-center justify-center self-center px-2 py-4"
           : "flex w-full items-center justify-center py-4"
       }
       aria-hidden={!loadingMore}
@@ -85,6 +85,10 @@ function LoadMoreSentinel({
     </div>
   );
 }
+
+const SCROLL_AREA =
+  "min-h-0 flex-1 overflow-auto bg-white px-3 pb-8 pt-3 sm:px-4 [scrollbar-color:theme(colors.slate.300)_transparent] [scrollbar-width:thin] [&::-webkit-scrollbar]:h-2.5 [&::-webkit-scrollbar]:w-2.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-slate-300 [&::-webkit-scrollbar-track]:bg-slate-100";
+const HORIZONTAL_ROW = "flex w-max min-w-full items-start gap-4 pb-2";
 
 export function OrdersListView({
   orders,
@@ -177,14 +181,7 @@ export function OrdersListView({
         </p>
       ) : null}
 
-      <div
-        data-packing-orders-scroll
-        className={
-          isHorizontal
-            ? "flex min-h-0 flex-1 flex-col bg-white px-3 pb-3 pt-3 sm:px-4"
-            : "min-h-0 flex-1 overflow-y-auto bg-white px-3 pb-8 pt-3 sm:px-4"
-        }
-      >
+      <div data-packing-orders-scroll className={SCROLL_AREA}>
         {loading ? (
           <p className="py-14 text-center text-base font-medium text-slate-500">Ładowanie…</p>
         ) : !error && orders.length === 0 ? (
@@ -199,23 +196,18 @@ export function OrdersListView({
               : null}
           </p>
         ) : isStandard ? (
-          <div className="flex flex-wrap gap-3" role="list" aria-label="Lista zamówień do pakowania">
+          <div className="flex flex-wrap items-start gap-3" role="list" aria-label="Lista zamówień do pakowania">
             {displayedOrders.map((o) => (
-              <div key={o.order_id} role="listitem" className="shrink-0">
+              <div key={o.order_id} role="listitem" className="h-auto shrink-0">
                 <StandardOrderCard order={o} onOpenOrder={onOpenOrder} />
               </div>
             ))}
             <LoadMoreSentinel enabled={sentinelEnabled} loadingMore={loadingMore} onLoadMore={onLoadMore} />
           </div>
         ) : isHorizontal ? (
-          <div
-            data-packing-orders-scroll
-            className="flex min-h-0 flex-1 items-stretch gap-4 overflow-x-auto overflow-y-hidden pb-2 [scrollbar-color:theme(colors.slate.300)_transparent] [scrollbar-width:thin] [&::-webkit-scrollbar]:h-2.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-slate-300 [&::-webkit-scrollbar-track]:bg-slate-100"
-            role="list"
-            aria-label="Lista zamówień do pakowania"
-          >
+          <div className={HORIZONTAL_ROW} role="list" aria-label="Lista zamówień do pakowania">
             {displayedOrders.map((o) => (
-              <div key={o.order_id} role="listitem" className="flex shrink-0 self-stretch">
+              <div key={o.order_id} role="listitem" className="h-auto shrink-0 self-start">
                 <ExpandedHorizontalOrderCard
                   order={o}
                   onOpenOrder={onOpenOrder}
@@ -232,9 +224,9 @@ export function OrdersListView({
             />
           </div>
         ) : (
-          <div className="flex flex-col gap-3 bg-white" role="list" aria-label="Lista zamówień do pakowania">
+          <div className="flex flex-col items-stretch gap-3 bg-white" role="list" aria-label="Lista zamówień do pakowania">
             {displayedOrders.map((o) => (
-              <div key={o.order_id} role="listitem">
+              <div key={o.order_id} role="listitem" className="h-auto w-full shrink-0">
                 <ExpandedVerticalOrderCard
                   order={o}
                   showBasketCode={showBasketCode}

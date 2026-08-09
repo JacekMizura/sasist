@@ -281,7 +281,7 @@ function ExpandedHorizontalOrderCardInner({
       tabIndex={0}
       style={{ width: CARD_WIDTH, minWidth: CARD_WIDTH }}
       className={[
-        "flex h-full shrink-0 cursor-pointer flex-col rounded-lg bg-white px-5 py-4 outline-none transition-colors focus-visible:ring-2 focus-visible:ring-slate-400",
+        "flex h-auto shrink-0 cursor-pointer flex-col rounded-lg bg-white px-5 py-4 outline-none transition-colors focus-visible:ring-2 focus-visible:ring-slate-400",
         shortage && !done ? "border border-[#E53935]" : "border border-slate-200",
         done ? "opacity-[0.5]" : "hover:border-slate-300",
       ].join(" ")}
@@ -327,7 +327,7 @@ function ExpandedHorizontalOrderCardInner({
         </div>
       </div>
 
-      <div className="mt-2 min-h-0 flex-1 border-t border-slate-100">
+      <div className="mt-2 border-t border-slate-100">
         {visible.map((line) => (
           <ProductLineRow
             key={line.order_item_id}

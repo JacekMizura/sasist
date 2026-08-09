@@ -262,7 +262,7 @@ function ExpandedVerticalOrderCardInner({
   const labelCls = "text-[9px] font-semibold uppercase tracking-[0.06em] text-slate-400";
 
   return (
-    <div className="w-full rounded-lg border border-slate-200 bg-white">
+    <div className="h-auto w-full rounded-lg border border-slate-200 bg-white">
       {alertTitle ? (
         <div className="rounded-t-lg border-b border-amber-300/90 bg-amber-50 px-4 py-2 text-sm font-semibold text-amber-950" role="status">
           <span aria-hidden>⚠ </span>
@@ -273,7 +273,7 @@ function ExpandedVerticalOrderCardInner({
       <div
         role="button"
         tabIndex={0}
-        className="cursor-pointer px-5 py-4 outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-slate-400"
+        className="h-auto cursor-pointer px-5 py-4 outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-slate-400"
         onClick={() => onOpenOrder(order.order_id)}
         onKeyDown={(e) => {
           if (e.key === "Enter" || e.key === " ") {
