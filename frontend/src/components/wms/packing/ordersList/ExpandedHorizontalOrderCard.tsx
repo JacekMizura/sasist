@@ -130,7 +130,7 @@ function CarrierZone({ order, muted }: { order: WmsPackingOrderCardApi; muted?: 
   if (isPersonalPickup(order.shipping_method)) {
     return (
       <div
-        className={`flex min-w-0 flex-col items-end justify-center gap-0.5 text-right ${muted ? "opacity-50 grayscale" : ""}`}
+        className={`flex shrink-0 flex-col items-start justify-center gap-0.5 ${muted ? "opacity-50 grayscale" : ""}`}
       >
         <IconPersonalPickup muted={muted} />
         <span
@@ -148,17 +148,13 @@ function CarrierZone({ order, muted }: { order: WmsPackingOrderCardApi; muted?: 
   const brand = !src ? brandFallbackMark(order.shipping_method) : null;
 
   return (
-    <div
-      className={`flex h-9 w-full min-w-[3.5rem] max-w-[5.25rem] items-center justify-end ${
-        muted ? "opacity-50 grayscale" : ""
-      }`}
-    >
+    <div className={`flex h-9 shrink-0 items-center ${muted ? "opacity-50 grayscale" : ""}`}>
       {brand === "ups" ? (
         <span className="rounded bg-[#351C15] px-1.5 py-0.5 text-[10px] font-black tracking-wide text-[#FFB500]">
           UPS
         </span>
       ) : brand === "dachser" ? (
-        <span className="text-right text-[8px] font-extrabold uppercase leading-tight tracking-tight text-[#003399]">
+        <span className="text-[8px] font-extrabold uppercase leading-tight tracking-tight text-[#003399]">
           Dachser
         </span>
       ) : (
@@ -218,7 +214,7 @@ function ProductLineRow({
       }}
     >
       <div
-        className="flex shrink-0 items-center justify-center overflow-hidden rounded bg-slate-50"
+        className="flex shrink-0 items-center justify-center overflow-hidden"
         style={{ width: THUMB, height: THUMB }}
       >
         {line.image_url ? (
@@ -295,13 +291,10 @@ function ExpandedHorizontalOrderCardInner({
         }
       }}
     >
-      <div className="grid grid-cols-[minmax(0,1.15fr)_auto_minmax(3.5rem,5rem)] gap-x-2 gap-y-0.5">
-        <div className={labelCls}>Nr zamówienia</div>
-        <div className={`${labelCls} text-center`}>Spakowano</div>
-        <div aria-hidden />
-
+      <div className="flex w-max max-w-full flex-wrap items-start gap-x-3 gap-y-2">
         <div className="min-w-0">
-          <div className="flex min-w-0 items-center gap-1.5">
+          <div className={labelCls}>Nr zamówienia</div>
+          <div className="mt-0.5 flex min-w-0 items-center gap-1.5">
             <IconOrderBox muted={done} />
             <span className="truncate text-lg font-extrabold tabular-nums leading-none tracking-tight text-slate-900">
               {rawNum}
@@ -309,22 +302,25 @@ function ExpandedHorizontalOrderCardInner({
           </div>
         </div>
 
-        <div className="flex min-w-[3rem] flex-col items-center justify-start self-start">
-          {done ? (
-            <div className="flex items-center gap-1">
-              <IconPackedCheck />
-              <span className="text-xs font-semibold text-slate-500">
-                Spakowane {pq}/{tq}
-              </span>
-            </div>
-          ) : (
-            <div className="text-lg font-extrabold tabular-nums leading-none tracking-tight text-slate-900">
-              {pq}/{tq}
-            </div>
-          )}
+        <div className="shrink-0">
+          <div className={labelCls}>Spakowano</div>
+          <div className="mt-0.5">
+            {done ? (
+              <div className="flex items-center gap-1">
+                <IconPackedCheck />
+                <span className="text-xs font-semibold text-slate-500">
+                  Spakowane {pq}/{tq}
+                </span>
+              </div>
+            ) : (
+              <div className="text-lg font-extrabold tabular-nums leading-none tracking-tight text-slate-900">
+                {pq}/{tq}
+              </div>
+            )}
+          </div>
         </div>
 
-        <div className="flex items-start justify-end pt-0.5">
+        <div className="flex items-end self-end pb-0.5">
           <CarrierZone order={order} muted={done} />
         </div>
       </div>

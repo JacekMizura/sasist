@@ -50,7 +50,7 @@ function ProductInlineItemInner({ line, onProductClick }: ProductInlineItemProps
           </span>
         ) : null}
         <div
-          className="flex h-full w-full items-center justify-center overflow-hidden rounded-lg"
+          className="flex h-full w-full items-center justify-center overflow-hidden"
           style={{ width: IMG, height: IMG }}
         >
           {line.image_url ? (

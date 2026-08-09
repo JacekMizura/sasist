@@ -122,7 +122,7 @@ function IconPersonalPickup() {
 function CarrierZone({ order }: { order: WmsPackingOrderCardApi }) {
   if (isPersonalPickup(order.shipping_method)) {
     return (
-      <div className="flex min-w-0 flex-col items-end justify-center gap-0.5 text-right">
+      <div className="flex shrink-0 flex-col items-start justify-center gap-0.5">
         <IconPersonalPickup />
         <span className="max-w-[5.5rem] text-[9px] font-extrabold uppercase leading-tight tracking-wide text-slate-900">
           Odbiór osobisty
@@ -135,13 +135,13 @@ function CarrierZone({ order }: { order: WmsPackingOrderCardApi }) {
   const brand = !src ? brandFallbackMark(order.shipping_method) : null;
 
   return (
-    <div className="flex h-10 min-w-[4.5rem] max-w-[7rem] items-center justify-end">
+    <div className="flex h-10 shrink-0 items-center">
       {brand === "ups" ? (
         <span className="rounded bg-[#351C15] px-1.5 py-1 text-[11px] font-black tracking-wide text-[#FFB500]">
           UPS
         </span>
       ) : brand === "dachser" ? (
-        <span className="text-right text-[9px] font-extrabold uppercase leading-tight text-[#003399]">Dachser</span>
+        <span className="text-[9px] font-extrabold uppercase leading-tight text-[#003399]">Dachser</span>
       ) : (
         <ShippingMethodLogo
           logoUrl={order.shipping_method_logo_url}
@@ -199,7 +199,7 @@ function ProductCell({
       }}
     >
       <div
-        className="flex shrink-0 items-center justify-center overflow-hidden rounded bg-slate-50"
+        className="flex shrink-0 items-center justify-center overflow-hidden"
         style={{ width: THUMB, height: THUMB }}
       >
         {line.image_url ? (
@@ -280,13 +280,10 @@ function ExpandedVerticalOrderCardInner({
           }
         }}
       >
-        <div className="grid grid-cols-[minmax(0,1.4fr)_auto_minmax(5rem,7rem)] items-start gap-x-4 gap-y-0.5">
-          <div className={labelCls}>Nr zamówienia</div>
-          <div className={labelCls}>Spakowano</div>
-          <div aria-hidden />
-
+        <div className="flex w-max max-w-full flex-wrap items-start gap-x-5 gap-y-2">
           <div className="min-w-0">
-            <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+            <div className={labelCls}>Nr zamówienia</div>
+            <div className="mt-0.5 flex min-w-0 flex-wrap items-center gap-1.5">
               <IconDocument generated={docGenerated} />
               {showOps ? <IconPin /> : null}
               {showCustomerComm ? <Mail className="h-4 w-4 shrink-0 text-emerald-600" strokeWidth={2} aria-hidden /> : null}
@@ -304,11 +301,14 @@ function ExpandedVerticalOrderCardInner({
             </div>
           </div>
 
-          <div className="text-xl font-extrabold tabular-nums leading-none tracking-tight text-slate-900">
-            {pq}/{tq}
+          <div className="shrink-0">
+            <div className={labelCls}>Spakowano</div>
+            <div className="mt-0.5 text-xl font-extrabold tabular-nums leading-none tracking-tight text-slate-900">
+              {pq}/{tq}
+            </div>
           </div>
 
-          <div className="flex items-center justify-end self-center">
+          <div className="flex items-end self-end pb-0.5">
             <CarrierZone order={order} />
           </div>
         </div>

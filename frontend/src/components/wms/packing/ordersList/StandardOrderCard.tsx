@@ -126,7 +126,7 @@ function CarrierZone({
   if (isPersonalPickup(order.shipping_method)) {
     return (
       <div
-        className={`flex min-w-0 flex-col items-end justify-center gap-0.5 text-right ${muted ? "opacity-45 grayscale" : ""}`}
+        className={`flex shrink-0 flex-col items-start justify-center gap-0.5 ${muted ? "opacity-45 grayscale" : ""}`}
       >
         <IconPersonalPickup muted={muted} />
         <span
@@ -144,17 +144,13 @@ function CarrierZone({
   const brand = !src ? brandFallbackMark(order.shipping_method) : null;
 
   return (
-    <div
-      className={`flex h-11 w-full min-w-[4.5rem] max-w-[6.5rem] items-center justify-end ${
-        muted ? "opacity-45 grayscale" : ""
-      }`}
-    >
+    <div className={`flex h-11 shrink-0 items-center ${muted ? "opacity-45 grayscale" : ""}`}>
       {brand === "ups" ? (
         <span className="rounded bg-[#351C15] px-1.5 py-1 text-[11px] font-black tracking-wide text-[#FFB500]">
           UPS
         </span>
       ) : brand === "dachser" ? (
-        <span className="text-right text-[9px] font-extrabold uppercase leading-tight tracking-tight text-[#003399]">
+        <span className="text-[9px] font-extrabold uppercase leading-tight tracking-tight text-[#003399]">
           Dachser
         </span>
       ) : (
@@ -193,7 +189,7 @@ function StandardOrderCardInner({ order, onOpenOrder, customerName }: StandardOr
     <div
       role="button"
       tabIndex={0}
-      className="flex min-h-[5.75rem] cursor-pointer flex-col rounded-lg border border-slate-200 bg-white px-3 py-2.5 outline-none transition-colors hover:border-slate-300 focus-visible:ring-2 focus-visible:ring-slate-400"
+      className="flex w-[17.5rem] max-w-full min-h-[5.75rem] cursor-pointer flex-col rounded-lg border border-slate-200 bg-white px-3 py-2.5 outline-none transition-colors hover:border-slate-300 focus-visible:ring-2 focus-visible:ring-slate-400"
       onClick={() => onOpenOrder(order.order_id)}
       onKeyDown={(e) => {
         if (e.key === "Enter" || e.key === " ") {
@@ -221,14 +217,11 @@ function StandardOrderCardInner({ order, onOpenOrder, customerName }: StandardOr
         </div>
       ) : null}
 
-      {/* Stabilne 3 kolumny — logo nigdy nie spada pod licznik */}
-      <div className="grid min-w-0 grid-cols-[minmax(0,1.35fr)_auto_minmax(4.75rem,6.5rem)] gap-x-3 gap-y-0.5">
-        <div className={`${labelCls} ${mutedBody}`}>Nr zamówienia</div>
-        <div className={`${labelCls} ${mutedBody}`}>Spakowano</div>
-        <div aria-hidden className="min-h-[0.75rem]" />
-
+      {/* Zwarty blok: nr | spakowano | przewoźnik — bez rozciągania na szerokość karty */}
+      <div className="flex w-max max-w-full flex-wrap items-start gap-x-4 gap-y-2">
         <div className={`min-w-0 ${mutedBody}`}>
-          <div className="flex min-w-0 items-center gap-1.5">
+          <div className={labelCls}>Nr zamówienia</div>
+          <div className="mt-0.5 flex min-w-0 items-center gap-1.5">
             <IconOrderBox muted={packed} />
             <span className="truncate text-lg font-extrabold tabular-nums leading-none tracking-tight text-slate-900">
               {rawNum}
@@ -247,13 +240,14 @@ function StandardOrderCardInner({ order, onOpenOrder, customerName }: StandardOr
           ) : null}
         </div>
 
-        <div className={`min-w-[3.25rem] self-start ${mutedBody}`}>
-          <div className="text-xl font-extrabold tabular-nums leading-none tracking-tight text-slate-900">
+        <div className={`shrink-0 ${mutedBody}`}>
+          <div className={labelCls}>Spakowano</div>
+          <div className="mt-0.5 text-xl font-extrabold tabular-nums leading-none tracking-tight text-slate-900">
             {pq}/{tq}
           </div>
         </div>
 
-        <div className="flex items-center justify-end self-start pt-0.5">
+        <div className="flex items-end self-end pb-0.5">
           <CarrierZone order={order} muted={packed} />
         </div>
       </div>

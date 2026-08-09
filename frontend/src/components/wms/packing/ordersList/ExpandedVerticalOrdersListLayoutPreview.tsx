@@ -71,20 +71,23 @@ function PreviewCard({
   const labelCls = "text-[8px] font-semibold uppercase tracking-[0.06em] text-slate-400";
   return (
     <div className="rounded-lg border border-slate-200 bg-white px-3 py-3">
-      <div className="grid grid-cols-[minmax(0,1.3fr)_auto_minmax(3.5rem,5rem)] gap-x-3">
-        <div className={labelCls}>Nr zamówienia</div>
-        <div className={labelCls}>Spakowano</div>
-        <div />
-        <div className="flex items-center gap-1">
-          <span className="text-base font-extrabold tabular-nums text-slate-900">{number}</span>
-          {fa ? (
-            <span className="rounded bg-[#42A5F5] px-1 py-px text-[8px] font-bold text-white">Fa</span>
-          ) : null}
+      <div className="flex w-max max-w-full flex-wrap items-start gap-x-4 gap-y-1">
+        <div>
+          <div className={labelCls}>Nr zamówienia</div>
+          <div className="mt-0.5 flex items-center gap-1">
+            <span className="text-base font-extrabold tabular-nums text-slate-900">{number}</span>
+            {fa ? (
+              <span className="rounded bg-[#42A5F5] px-1 py-px text-[8px] font-bold text-white">Fa</span>
+            ) : null}
+          </div>
         </div>
-        <div className="text-base font-extrabold tabular-nums text-slate-900">
-          {packed}/{total}
+        <div>
+          <div className={labelCls}>Spakowano</div>
+          <div className="mt-0.5 text-base font-extrabold tabular-nums text-slate-900">
+            {packed}/{total}
+          </div>
         </div>
-        <div className="flex items-center justify-end">
+        <div className="flex items-end self-end pb-0.5">
           <img src="/assets/carriers/dpd.svg" alt="" className="max-h-5 w-auto max-w-[2.75rem] object-contain" />
         </div>
       </div>
@@ -98,7 +101,7 @@ function PreviewCard({
               p.packed ? "opacity-55" : "",
             ].join(" ")}
           >
-            <div className="h-10 w-10 shrink-0 rounded bg-slate-100" />
+            <div className="h-10 w-10 shrink-0" />
             <div className="min-w-0">
               {p.packed ? (
                 <div className="mb-0.5 flex items-center gap-1 text-[9px] font-semibold text-[#4CAF50]">

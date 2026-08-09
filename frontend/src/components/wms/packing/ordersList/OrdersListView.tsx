@@ -110,12 +110,12 @@ export function OrdersListView({
           </p>
         ) : isStandard ? (
           <div
-            className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4"
+            className="flex flex-wrap gap-3"
             role="list"
             aria-label="Lista zamówień do pakowania"
           >
             {orders.map((o) => (
-              <div key={o.order_id} role="listitem">
+              <div key={o.order_id} role="listitem" className="shrink-0">
                 <StandardOrderCard order={o} onOpenOrder={onOpenOrder} />
               </div>
             ))}

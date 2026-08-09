@@ -70,7 +70,7 @@ function PreviewCard({
           </span>
         </div>
       ) : null}
-      <div className="grid min-w-0 grid-cols-[minmax(0,1.2fr)_auto_minmax(3.25rem,4.5rem)] items-start gap-x-1.5">
+      <div className="flex w-max max-w-full flex-wrap items-start gap-x-1.5 gap-y-1">
         <div className={`min-w-0 ${muted}`}>
           <div className={labelCls}>Nr zamówienia</div>
           <div className="mt-0.5 flex items-center gap-1">
@@ -92,7 +92,7 @@ function PreviewCard({
             {packed}/{total}
           </div>
         </div>
-        <div className={`flex min-h-[2rem] items-center justify-end self-center ${muted}`}>
+        <div className={`flex items-end self-end ${muted}`}>
           <CarrierPreviewMark carrier={carrier} />
         </div>
       </div>
