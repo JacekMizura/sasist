@@ -118,6 +118,8 @@ export default function WmsPackingOrdersPage() {
   const [session, setSession] = useState<WmsPackingSessionState | null>(() => loadWmsPackingSession());
   const [orders, setOrders] = useState<WmsPackingOrderCardApi[]>([]);
   const [loading, setLoading] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
   const [err, setErr] = useState<string | null>(null);
   const [cartBusy, setCartBusy] = useState(false);
   const [activePriorityTask, setActivePriorityTask] = useState<ActivePriorityTask | null>(() => {
@@ -127,6 +129,8 @@ export default function WmsPackingOrdersPage() {
   const [rejectOpen, setRejectOpen] = useState(false);
   const [rejectReason, setRejectReason] = useState("");
   const listScanBusyRef = useRef(false);
+  const loadMoreBusyRef = useRef(false);
+  const nextOffsetRef = useRef(0);
 
   const packingUi = useMemo(() => {
     if (warehouseId == null) return null;
@@ -135,6 +139,12 @@ export default function WmsPackingOrdersPage() {
 
   const showAllNotes = packingUi?.showAllNotes ?? true;
   const ordersListLayout = packingUi?.ordersListLayout ?? "compact";
+
+  const resolvePageSize = useCallback(() => {
+    if (warehouseId == null) return 25;
+    const n = loadWmsPackingExtendedUi(warehouseId).initialOrdersCount;
+    return Math.min(200, Math.max(5, Number.isFinite(n) ? Math.floor(n) : 25));
+  }, [warehouseId]);
 
   useEffect(() => {
     const sync = () => {
@@ -157,8 +167,11 @@ export default function WmsPackingOrdersPage() {
     const s = loadWmsPackingSession();
     if (!s || warehouseId == null || !s.mode) return;
     if ((s.mode === "bulk" && (s.cartId == null || !Number.isFinite(s.cartId)))) return;
+    const pageSize = resolvePageSize();
     setLoading(true);
     setErr(null);
+    setHasMore(true);
+    nextOffsetRef.current = 0;
     try {
       const list = await getWmsPackingOrders(
         DAMAGE_TENANT_ID,
@@ -167,15 +180,57 @@ export default function WmsPackingOrdersPage() {
         s.mode,
         s.mode === "no_cart" ? undefined : s.cartId,
         s.orderTypeFilter ?? "all",
+        { limit: pageSize, offset: 0 },
       );
       setOrders(list);
+      nextOffsetRef.current = list.length;
+      setHasMore(list.length >= pageSize);
     } catch {
       setErr("Nie udało się wczytać zamówień.");
       setOrders([]);
+      setHasMore(false);
+      nextOffsetRef.current = 0;
     } finally {
       setLoading(false);
     }
-  }, [warehouseId]);
+  }, [warehouseId, resolvePageSize]);
+
+  const loadMoreOrders = useCallback(async () => {
+    if (!hasMore || loading || loadingMore || loadMoreBusyRef.current) return;
+    const s = loadWmsPackingSession();
+    if (!s || warehouseId == null || !s.mode) return;
+    if ((s.mode === "bulk" && (s.cartId == null || !Number.isFinite(s.cartId)))) return;
+    const pageSize = resolvePageSize();
+    loadMoreBusyRef.current = true;
+    setLoadingMore(true);
+    try {
+      const offset = nextOffsetRef.current;
+      const list = await getWmsPackingOrders(
+        DAMAGE_TENANT_ID,
+        warehouseId,
+        s.statusId,
+        s.mode,
+        s.mode === "no_cart" ? undefined : s.cartId,
+        s.orderTypeFilter ?? "all",
+        { limit: pageSize, offset },
+      );
+      setOrders((prev) => {
+        const seen = new Set(prev.map((o) => o.order_id));
+        const merged = [...prev];
+        for (const o of list) {
+          if (!seen.has(o.order_id)) merged.push(o);
+        }
+        return merged;
+      });
+      nextOffsetRef.current = offset + list.length;
+      setHasMore(list.length >= pageSize);
+    } catch {
+      showScannerToast("Nie udało się doczytać kolejnych zamówień.");
+    } finally {
+      setLoadingMore(false);
+      loadMoreBusyRef.current = false;
+    }
+  }, [hasMore, loading, loadingMore, warehouseId, resolvePageSize, showScannerToast]);
 
   const assignedOrderIds = useMemo(() => priorityTaskOrderIds(activePriorityTask), [activePriorityTask]);
   const assignedOrderSet = useMemo(() => new Set(assignedOrderIds), [assignedOrderIds]);
@@ -503,10 +558,13 @@ export default function WmsPackingOrdersPage() {
       <OrdersListView
         orders={visibleOrders}
         loading={loading}
+        loadingMore={loadingMore}
+        hasMore={hasMore && !(activePriorityTask && assignedOrderIds.length > 0)}
         error={err}
         showBasketCode={s.mode === "baskets"}
         showAllNotes={showAllNotes}
         ordersListLayout={ordersListLayout}
+        onLoadMore={() => void loadMoreOrders()}
         onOpenOrder={(id) => {
           if (activePriorityTask && assignedOrderIds.length > 0 && !assignedOrderSet.has(id)) {
             showScannerToast("To zamówienie jest poza aktywnym zadaniem kierownika.");

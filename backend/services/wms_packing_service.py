@@ -3172,7 +3172,13 @@ def list_packing_orders(
     cart_id: int | None = None,
     order_type: str = "all",
     limit: int = 500,
+    offset: int = 0,
 ) -> List[WmsPackingOrderCard]:
+    """Lista kart zamówień do pakowania.
+
+    ``limit`` / ``offset`` dotyczą już przefiltrowanej listy (po ``order_can_show_ready_pack``),
+    żeby paginacja UI dawała pełne partie o żądanej wielkości.
+    """
     q = _packing_orders_base_query(
         db,
         tenant_id=tenant_id,
@@ -3191,31 +3197,51 @@ def list_packing_orders(
     ]
     if m == "baskets":
         opts.append(joinedload(Order.basket))
-    orders: List[Order] = (
-        q.options(*opts)
-        .limit(min(max(limit, 1), 2000))
-        .all()
-    )
-    if not orders:
-        return []
+
+    lim = min(max(int(limit), 1), 2000)
+    off = max(int(offset), 0)
     from .braki_order_state_service import order_can_show_ready_pack
 
     out: List[WmsPackingOrderCard] = []
-    for o in orders:
-        if not order_can_show_ready_pack(db, o):
-            continue
-        bc = _basket_code_for_order(o) if m == "baskets" else None
-        out.append(
-            _build_packing_order_card(
-                o,
-                basket_code=bc,
-                db=db,
-                tenant_id=int(tenant_id),
-                warehouse_id=int(warehouse_id),
-                enrich=False,
-                pack_qty_from_required=True,
-            )
+    skipped = 0
+    db_offset = 0
+    # Pobieraj szersze okna z DB, aż zbierzemy ``lim`` kart po filtrze (lub skończą się wiersze).
+    window = max(lim * 2, 50)
+    max_scan = max(off + lim, lim) * 20  # twardy limit skanu — ochrona przed nieskończoną pętlą
+    scanned = 0
+    while len(out) < lim and scanned < max_scan:
+        batch: List[Order] = (
+            q.options(*opts)
+            .offset(db_offset)
+            .limit(window)
+            .all()
         )
+        if not batch:
+            break
+        db_offset += len(batch)
+        scanned += len(batch)
+        for o in batch:
+            if not order_can_show_ready_pack(db, o):
+                continue
+            if skipped < off:
+                skipped += 1
+                continue
+            bc = _basket_code_for_order(o) if m == "baskets" else None
+            out.append(
+                _build_packing_order_card(
+                    o,
+                    basket_code=bc,
+                    db=db,
+                    tenant_id=int(tenant_id),
+                    warehouse_id=int(warehouse_id),
+                    enrich=False,
+                    pack_qty_from_required=True,
+                )
+            )
+            if len(out) >= lim:
+                break
+        if len(batch) < window:
+            break
     return out
 
 

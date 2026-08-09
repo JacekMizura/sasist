@@ -204,7 +204,6 @@ export function PackingViewSection({ extended, draft, patchExtended, toggleInter
           <SelectField
             settingId="packing.initial_orders_count"
             label="Ilość zamówień wczytywanych na start i przy przewijaniu"
-            capability={CAP_NONE}
             value={String(extended.initialOrdersCount)}
             onChange={(v) => {
               const n = Number(v);

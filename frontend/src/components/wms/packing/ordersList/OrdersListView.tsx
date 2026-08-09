@@ -1,4 +1,4 @@
-import type { CSSProperties } from "react";
+import { useEffect, useRef, type CSSProperties } from "react";
 import type { WmsPackingOrderCardApi } from "../../../../api/wmsPackingApi";
 import type { PackingOrdersListLayout } from "../../../../types/wmsPackingExtendedUi";
 import { computeOrdersListStats } from "./ordersListStats";
@@ -18,11 +18,14 @@ function IconBack() {
 export type OrdersListViewProps = {
   orders: WmsPackingOrderCardApi[];
   loading: boolean;
+  loadingMore?: boolean;
+  hasMore?: boolean;
   error: string | null;
   showBasketCode?: boolean;
   showAllNotes?: boolean;
   /** `compact` | `cards` | `expanded_vertical`. */
   ordersListLayout?: PackingOrdersListLayout;
+  onLoadMore?: () => void;
   onOpenOrder: (orderId: number) => void;
   onProductClick?: (orderItemId: number, orderId: number) => void;
   onBack: () => void;
@@ -31,13 +34,60 @@ export type OrdersListViewProps = {
   statusBadgeStyle: CSSProperties;
 };
 
+function LoadMoreSentinel({
+  enabled,
+  loadingMore,
+  onLoadMore,
+  horizontal,
+}: {
+  enabled: boolean;
+  loadingMore: boolean;
+  onLoadMore?: () => void;
+  horizontal?: boolean;
+}) {
+  const ref = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!enabled || !onLoadMore) return;
+    const el = ref.current;
+    if (!el) return;
+    const root = el.closest("[data-packing-orders-scroll]") as HTMLElement | null;
+    const obs = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((e) => e.isIntersecting)) onLoadMore();
+      },
+      { root: root ?? null, rootMargin: horizontal ? "0px 160px 0px 0px" : "160px 0px", threshold: 0 },
+    );
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, [enabled, onLoadMore, horizontal]);
+
+  if (!enabled && !loadingMore) return null;
+  return (
+    <div
+      ref={ref}
+      className={
+        horizontal
+          ? "flex h-full min-w-[4rem] shrink-0 items-center justify-center self-center px-2"
+          : "flex w-full items-center justify-center py-4"
+      }
+      aria-hidden={!loadingMore}
+    >
+      {loadingMore ? <span className="text-sm font-medium text-slate-500">Doczytywanie…</span> : null}
+    </div>
+  );
+}
+
 export function OrdersListView({
   orders,
   loading,
+  loadingMore = false,
+  hasMore = false,
   error,
   showBasketCode,
   showAllNotes = true,
   ordersListLayout = "compact",
+  onLoadMore,
   onOpenOrder,
   onProductClick,
   onBack,
@@ -50,6 +100,7 @@ export function OrdersListView({
   const isStandard = ordersListLayout === "compact";
   const isHorizontal = ordersListLayout === "cards";
   const isVertical = ordersListLayout === "expanded_vertical";
+  const sentinelEnabled = Boolean(hasMore && onLoadMore && !loading && orders.length > 0);
 
   const cartHint =
     cartLine != null && cartLine.code.trim() !== "" ? (
@@ -94,12 +145,11 @@ export function OrdersListView({
       ) : null}
 
       <div
+        data-packing-orders-scroll
         className={
-          isVertical
-            ? "min-h-0 flex-1 overflow-y-auto bg-white px-3 pb-8 pt-3 sm:px-4"
-            : isHorizontal
-              ? "flex min-h-0 flex-1 flex-col bg-white px-3 pb-3 pt-3 sm:px-4"
-              : "min-h-0 flex-1 bg-white px-3 pb-8 pt-3 sm:px-4"
+          isHorizontal
+            ? "flex min-h-0 flex-1 flex-col bg-white px-3 pb-3 pt-3 sm:px-4"
+            : "min-h-0 flex-1 overflow-y-auto bg-white px-3 pb-8 pt-3 sm:px-4"
         }
       >
         {loading ? (
@@ -109,19 +159,17 @@ export function OrdersListView({
             Brak zamówień dla wybranego sposobu pakowania.
           </p>
         ) : isStandard ? (
-          <div
-            className="flex flex-wrap gap-3"
-            role="list"
-            aria-label="Lista zamówień do pakowania"
-          >
+          <div className="flex flex-wrap gap-3" role="list" aria-label="Lista zamówień do pakowania">
             {orders.map((o) => (
               <div key={o.order_id} role="listitem" className="shrink-0">
                 <StandardOrderCard order={o} onOpenOrder={onOpenOrder} />
               </div>
             ))}
+            <LoadMoreSentinel enabled={sentinelEnabled} loadingMore={loadingMore} onLoadMore={onLoadMore} />
           </div>
         ) : isHorizontal ? (
           <div
+            data-packing-orders-scroll
             className="flex min-h-0 flex-1 items-stretch gap-4 overflow-x-auto overflow-y-hidden pb-2 [scrollbar-color:theme(colors.slate.300)_transparent] [scrollbar-width:thin] [&::-webkit-scrollbar]:h-2.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-slate-300 [&::-webkit-scrollbar-track]:bg-slate-100"
             role="list"
             aria-label="Lista zamówień do pakowania"
@@ -135,6 +183,12 @@ export function OrdersListView({
                 />
               </div>
             ))}
+            <LoadMoreSentinel
+              enabled={sentinelEnabled}
+              loadingMore={loadingMore}
+              onLoadMore={onLoadMore}
+              horizontal
+            />
           </div>
         ) : (
           <div className="flex flex-col gap-3 bg-white" role="list" aria-label="Lista zamówień do pakowania">
@@ -149,6 +203,7 @@ export function OrdersListView({
                 />
               </div>
             ))}
+            <LoadMoreSentinel enabled={sentinelEnabled} loadingMore={loadingMore} onLoadMore={onLoadMore} />
           </div>
         )}
       </div>

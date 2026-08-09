@@ -165,6 +165,17 @@ def get_packing_orders(
         default="all",
         description="all | single | multi — filtr jedno-/wieloelementowe (jak w zbieraniu)",
     ),
+    limit: int = Query(
+        default=500,
+        ge=1,
+        le=2000,
+        description="Wielkość partii zamówień (paginacja / doczytywanie)",
+    ),
+    offset: int = Query(
+        default=0,
+        ge=0,
+        description="Offset w przefiltrowanej liście zamówień (kolejne partie)",
+    ),
     db: Session = Depends(get_db),
 ):
     """Zamówienia w statusie wg trybu: bez wózka albo na konkretnym wózku (typ zgodny z trybem)."""
@@ -177,6 +188,8 @@ def get_packing_orders(
             mode=mode,
             cart_id=cart_id,
             order_type=order_type,
+            limit=limit,
+            offset=offset,
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e

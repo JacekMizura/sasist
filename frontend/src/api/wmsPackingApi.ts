@@ -465,6 +465,7 @@ export async function getWmsPackingOrders(
   mode: WmsPackingModeParam,
   cartId?: number | null,
   orderType: WmsPackingOrderTypeParam = "all",
+  opts?: { limit?: number; offset?: number },
 ): Promise<WmsPackingOrderCardApi[]> {
   const params: Record<string, string | number> = {
     tenant_id: tenantId,
@@ -474,6 +475,8 @@ export async function getWmsPackingOrders(
     order_type: orderType,
   };
   if (cartId != null) params.cart_id = cartId;
+  if (opts?.limit != null && Number.isFinite(opts.limit)) params.limit = Math.min(2000, Math.max(1, Math.floor(opts.limit)));
+  if (opts?.offset != null && Number.isFinite(opts.offset)) params.offset = Math.max(0, Math.floor(opts.offset));
   const res = await api.get<WmsPackingOrderCardApi[]>("/wms/packing/orders", { params });
   return res.data;
 }
