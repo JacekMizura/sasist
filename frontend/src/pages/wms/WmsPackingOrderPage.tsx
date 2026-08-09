@@ -326,6 +326,8 @@ export default function WmsPackingOrderPage() {
       <AutoActionsView
         detail={packingDetail}
         postPackPipeline={ctrl.postPackPipeline}
+        warehouseId={ctrl.warehouseId}
+        afterActionsBehavior={ctrl.packingExtendedUi.afterActionsBehavior}
         onBackToOrders={() => navigate(WMS_ROUTES.packingOrders)}
         onBackToOrder={() => setDismissPostPacking(true)}
         onEditSellasist={() => navigate(`/orders/${packingDetail.order_id}`)}
@@ -339,6 +341,7 @@ export default function WmsPackingOrderPage() {
     return (
       <PackingFinalizationView
         detail={packingDetail}
+        warehouseId={ctrl.warehouseId}
         runPostPackFinish={ctrl.runPostPackFinish}
         postPackFinishBusy={ctrl.postPackFinishBusy}
         onBackToOrder={ctrl.dismissFinalizationView}

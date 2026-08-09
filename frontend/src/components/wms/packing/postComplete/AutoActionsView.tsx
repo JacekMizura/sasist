@@ -1,13 +1,23 @@
-import { MoreVertical } from "lucide-react";
+import { useEffect, useState } from "react";
 import type { WmsPackingOrderDetailApi, WmsPackingPostPackStepApi } from "../../../../api/wmsPackingApi";
-import { ShippingMethodLogo } from "../../../shipping/ShippingMethodLogo";
-import { packingCourierLabelCount, packingCourierName, orderNumberLabel } from "../packingHelpers";
+import { getWmsPackingSettings } from "../../../../api/wmsPackingSettingsApi";
+import type { PackingAfterActionsBehavior } from "../../../../types/wmsPackingExtendedUi";
+import type { WmsPackingAutoActions } from "../../../../types/wmsPackingSettings";
+import { DAMAGE_TENANT_ID } from "../../../../pages/damage/damageShared";
 import { ScannerHandler } from "../ScannerHandler";
+import { AutoActionsShell } from "./AutoActionsShell";
+import {
+  AUTO_ACTIONS_FINAL_SCAN,
+  buildAutoActionDisplaySteps,
+} from "./autoActionsModel";
 
 export type AutoActionsViewProps = {
   detail: WmsPackingOrderDetailApi;
   /** Wynik rzeczywistego potoku POST …/finish — bez fake ✓✓ z konfiguracji. */
   postPackPipeline?: WmsPackingPostPackStepApi[] | null;
+  warehouseId: number | null;
+  /** Efekt po akcjach — steruje komunikatem końcowym (nawigacja jest w kontrolerze). */
+  afterActionsBehavior?: PackingAfterActionsBehavior;
   onBackToOrders: () => void;
   onBackToOrder: () => void;
   onEditSellasist: () => void;
@@ -16,346 +26,67 @@ export type AutoActionsViewProps = {
   resumeScanBusy: boolean;
 };
 
-type StepUiState = "PENDING" | "RUNNING" | "SUCCESS" | "ERROR" | "SKIPPED";
-
-type DisplayStep = {
-  key: string;
-  label: string;
-  state: StepUiState;
-  message?: string | null;
-};
-
-const FINAL_SCAN_INSTRUCTION =
-  "Zeskanuj kolejny produkt, aby przejść do kolejnego zamówienia";
-
-const PAGE_BG = "#eef2f6";
-const ORANGE = "#e65100";
-
-function isCashOnDelivery(detail: WmsPackingOrderDetailApi): boolean {
-  const paymentMethodLower = (detail.payment_method_text ?? "").trim().toLowerCase();
-  return (
-    paymentMethodLower.includes("pobran") ||
-    paymentMethodLower.includes("cash on delivery") ||
-    paymentMethodLower.includes("cod")
-  );
-}
-
-function findStep(
-  pipeline: WmsPackingPostPackStepApi[] | null | undefined,
-  names: string[],
-): WmsPackingPostPackStepApi | undefined {
-  if (!pipeline?.length) return undefined;
-  const set = new Set(names);
-  return pipeline.find((s) => set.has(s.step));
-}
-
-function stepStateFromPipeline(step: WmsPackingPostPackStepApi | undefined, finalized: boolean): StepUiState {
-  if (!step) return finalized ? "PENDING" : "PENDING";
-  if (step.skipped) return "SKIPPED";
-  if (step.ok) return "SUCCESS";
-  return "ERROR";
-}
-
-function buildDisplaySteps(
-  detail: WmsPackingOrderDetailApi,
-  pipeline: WmsPackingPostPackStepApi[] | null | undefined,
-): DisplayStep[] {
-  const finalized = Boolean(detail.wms_packing_automation_finished_at);
-  const doc = findStep(pipeline, ["create_document"]);
-  const ship = findStep(pipeline, ["generate_shipment", "print_label"]);
-  const status = findStep(pipeline, ["change_order_status"]);
-
-  const inferDoc = (): StepUiState => {
-    if (doc) return stepStateFromPipeline(doc, finalized);
-    const label = (detail.sales_document_label ?? "").trim();
-    if (finalized && label) return "SUCCESS";
-    if (finalized) return "SKIPPED";
-    return "PENDING";
-  };
-
-  const inferShip = (): StepUiState => {
-    if (ship) return stepStateFromPipeline(ship, finalized);
-    const n = packingCourierLabelCount(detail);
-    if (finalized && n > 0) return "SUCCESS";
-    if (finalized) return "SKIPPED";
-    return "PENDING";
-  };
-
-  const inferStatus = (): StepUiState => {
-    if (status) return stepStateFromPipeline(status, finalized);
-    if (finalized) return "SUCCESS";
-    return "PENDING";
-  };
-
-  return [
-    { key: "create_document", label: "Wystawiam dokument sprzedaży", state: inferDoc(), message: doc?.message },
-    { key: "generate_shipment", label: "Generuję list przewozowy", state: inferShip(), message: ship?.message },
-    { key: "change_order_status", label: "Zmieniam status zamówienia", state: inferStatus(), message: status?.message },
-  ];
-}
-
-function StepMark({ state }: { state: StepUiState }) {
-  switch (state) {
-    case "SUCCESS":
-      return (
-        <span className="shrink-0 text-2xl font-bold leading-none text-emerald-600 sm:text-3xl" aria-label="Sukces">
-          ✓
-        </span>
-      );
-    case "ERROR":
-      return (
-        <span className="shrink-0 text-lg font-bold leading-none text-red-600 sm:text-xl" aria-label="Błąd">
-          BŁĄD
-        </span>
-      );
-    case "SKIPPED":
-      return (
-        <span className="shrink-0 text-sm font-semibold uppercase tracking-wide text-slate-400" aria-label="Pominięto">
-          pominięto
-        </span>
-      );
-    case "RUNNING":
-      return (
-        <span className="shrink-0 text-sm font-semibold uppercase tracking-wide text-slate-600" aria-label="W trakcie">
-          w trakcie
-        </span>
-      );
-    default:
-      return (
-        <span className="shrink-0 text-sm font-semibold uppercase tracking-wide text-slate-400" aria-label="Oczekuje">
-          oczekuje
-        </span>
-      );
-  }
-}
-
+/**
+ * Ekran „Akcje automatyczne” po POST …/finish (tryb STAY / skan).
+ * Kroki = włączone auto_actions; stany = rzeczywisty post_pack_pipeline.
+ */
 export function AutoActionsView({
   detail,
   postPackPipeline,
+  warehouseId,
+  afterActionsBehavior = "stay_here",
   onBackToOrders,
   onBackToOrder,
   onEditSellasist,
   onResumeProductScan,
   resumeScanBusy,
 }: AutoActionsViewProps) {
-  const customerComment = (detail.customer_comment ?? "").trim() || null;
-  const staffNotes = (detail.staff_notes ?? "").trim() || null;
-  const courierName = packingCourierName(detail);
-  const labelCount = packingCourierLabelCount(detail);
-  const methodForLogo = detail.shipping_method_name ?? detail.shipping_method ?? courierName;
-  const cod = isCashOnDelivery(detail);
-  const codAmountDisplay =
-    (detail.order_value_display ?? "").trim() ||
-    (detail.payment_method_text ?? "").trim() ||
-    "—";
+  const [autoActions, setAutoActions] = useState<WmsPackingAutoActions | null>(null);
 
-  const carton = detail.selected_carton ?? null;
-  const packageNameRaw = (carton?.name ?? "").trim() || "—";
-  const packageName = packageNameRaw !== "—" ? packageNameRaw.toUpperCase() : "—";
-  const packageDims = (carton?.dimensions ?? "").trim() || "—";
-  const packageImg = carton?.image_url?.trim();
+  useEffect(() => {
+    if (warehouseId == null || warehouseId < 1) return;
+    let cancelled = false;
+    void getWmsPackingSettings(DAMAGE_TENANT_ID, warehouseId)
+      .then((s) => {
+        if (!cancelled) setAutoActions(s.auto_actions);
+      })
+      .catch(() => {
+        if (!cancelled) setAutoActions(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [warehouseId]);
 
-  const showBothAlerts = Boolean(customerComment && staffNotes);
-  const steps = buildDisplaySteps(detail, postPackPipeline);
+  const steps = buildAutoActionDisplaySteps({
+    detail,
+    autoActions,
+    pipeline: postPackPipeline,
+  });
   const hasError = steps.some((s) => s.state === "ERROR");
+  const waitForScan = afterActionsBehavior === "stay_here";
+
+  let footerMessage: string | null = null;
+  let footerTone: "default" | "error" = "default";
+  if (hasError) {
+    footerMessage = "Część automatyzacji zakończyła się błędem — sprawdź status zamówienia.";
+    footerTone = "error";
+  } else if (waitForScan) {
+    footerMessage = AUTO_ACTIONS_FINAL_SCAN;
+  }
 
   return (
-    <div className="relative flex h-full min-h-0 w-full flex-col" style={{ background: PAGE_BG }}>
-      <ScannerHandler onScan={onResumeProductScan} enabled={!resumeScanBusy} />
-
-      <header className="flex shrink-0 flex-wrap items-center justify-end gap-2 px-4 py-3 sm:px-6 lg:px-10">
-        <button
-          type="button"
-          className="rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-900 hover:bg-slate-50"
-          onClick={onBackToOrders}
-        >
-          Lista zamówień
-        </button>
-        <button
-          type="button"
-          className="rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-900 hover:bg-slate-50"
-          onClick={onBackToOrder}
-        >
-          Wróć do zamówienia
-        </button>
-        <button
-          type="button"
-          className="rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-900 hover:bg-slate-50"
-          onClick={onEditSellasist}
-        >
-          Edytuj w Sellasist
-        </button>
-        <button
-          type="button"
-          className="inline-flex h-11 w-11 items-center justify-center rounded-lg border border-slate-300 bg-white text-slate-600 hover:bg-slate-50"
-          aria-label="Więcej opcji"
-        >
-          <MoreVertical className="h-5 w-5" />
-        </button>
-      </header>
-
-      {(customerComment || staffNotes) && (
-        <div
-          className={[
-            "grid shrink-0 gap-4 px-4 pb-2 pt-2 sm:px-6 lg:px-10",
-            showBothAlerts ? "lg:grid-cols-2 lg:gap-6" : "grid-cols-1",
-          ].join(" ")}
-        >
-          <div className="min-w-0">
-            {customerComment ? (
-              <div
-                className="rounded-xl border-2 border-red-300 bg-red-50 px-5 py-5 lg:px-6 lg:py-6"
-                role="status"
-              >
-                <p className="text-xs font-bold uppercase tracking-wider text-red-700">Uwagi klienta</p>
-                <p className="mt-3 text-xl font-semibold leading-snug text-red-950 sm:text-2xl lg:text-[1.65rem]">
-                  {customerComment}
-                </p>
-              </div>
-            ) : (
-              <div className="hidden min-h-0 lg:block" aria-hidden />
-            )}
-          </div>
-          <div className="min-w-0">
-            {staffNotes ? (
-              <div
-                className="rounded-xl px-5 py-5 shadow-none lg:px-6 lg:py-6"
-                style={{ background: "#c62828" }}
-                role="status"
-              >
-                <p className="text-xs font-bold uppercase tracking-wider text-white/95">Notatka</p>
-                <p className="mt-3 text-xl font-bold leading-snug text-white sm:text-2xl lg:text-[1.65rem]">{staffNotes}</p>
-              </div>
-            ) : (
-              <div className="hidden min-h-0 lg:block" aria-hidden />
-            )}
-          </div>
-        </div>
-      )}
-
-      <div className="flex min-h-0 flex-1 flex-col gap-6 px-4 py-5 pb-40 sm:px-6 lg:flex-row lg:gap-8 lg:px-8 lg:py-7 lg:pb-44">
-        <section
-          className="flex min-h-0 min-w-0 flex-[1.05] flex-col rounded-2xl border border-slate-200/90 bg-white lg:min-h-[min(68vh,600px)]"
-          aria-label="Przesyłka"
-        >
-          <div className="flex flex-wrap items-start justify-between gap-4 px-6 pb-2 pt-8 lg:px-10 lg:pt-10">
-            <p className="text-2xl font-semibold tabular-nums text-slate-500 sm:text-3xl">
-              {orderNumberLabel(detail.number)}
-            </p>
-            <div className="flex shrink-0 flex-col items-end gap-1">
-              <ShippingMethodLogo
-                logoUrl={detail.shipping_method_logo_url}
-                methodName={methodForLogo}
-                size="postPackHero"
-              />
-              {courierName && labelCount > 1 ? (
-                <p className="text-right text-sm font-medium text-slate-500">Listów: {labelCount}</p>
-              ) : null}
-            </div>
-          </div>
-
-          <div className="flex flex-1 flex-col items-center justify-center px-6 pb-8 pt-4 lg:px-10">
-            <div className="flex w-full max-w-xl flex-col items-center text-center lg:max-w-none lg:items-start lg:text-left">
-              <div className="mb-6 flex h-44 w-44 shrink-0 items-center justify-center sm:h-52 sm:w-52 lg:h-56 lg:w-56">
-                {packageImg ? (
-                  <img
-                    src={packageImg}
-                    alt=""
-                    className="max-h-full max-w-full object-contain"
-                    loading="lazy"
-                  />
-                ) : (
-                  <span className="text-8xl text-slate-200" aria-hidden>
-                    📦
-                  </span>
-                )}
-              </div>
-              <h2
-                className="max-w-full text-balance font-black uppercase leading-none tracking-tight"
-                style={{ color: ORANGE, fontSize: "clamp(2.25rem, 6vw, 4.25rem)" }}
-              >
-                {packageName}
-              </h2>
-              <p
-                className="mt-4 font-bold tabular-nums leading-none"
-                style={{ color: ORANGE, fontSize: "clamp(1.5rem, 4vw, 2.75rem)" }}
-              >
-                {packageDims}
-              </p>
-            </div>
-          </div>
-
-          <div className="mt-auto flex justify-end border-t border-slate-100 px-6 py-6 lg:px-10">
-            <div className="text-right">
-              <p className="text-sm font-semibold uppercase tracking-wide text-slate-500">
-                {cod ? "Kwota pobrania" : "Płatność"}
-              </p>
-              <p
-                className={[
-                  "mt-1 tabular-nums text-slate-900",
-                  cod ? "text-3xl font-black sm:text-4xl" : "text-2xl font-bold text-slate-700 sm:text-3xl",
-                ].join(" ")}
-              >
-                {cod ? codAmountDisplay : detail.payment_method_text?.trim() || "Przedpłata"}
-              </p>
-            </div>
-          </div>
-        </section>
-
-        <section
-          className="flex min-h-0 min-w-0 flex-1 flex-col rounded-2xl border border-slate-200/90 bg-white lg:min-h-[min(68vh,600px)]"
-          aria-label="Podsumowanie operacji"
-        >
-          <div className="flex flex-col gap-8 px-6 pt-8 sm:gap-10 lg:flex-row lg:items-start lg:justify-between lg:px-10 lg:pt-10">
-            <div
-              className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-slate-900 text-2xl font-black text-white lg:h-16 lg:w-16 lg:text-3xl"
-              aria-hidden
-            >
-              W
-            </div>
-            <ul className="min-w-0 flex-1 space-y-5 lg:ml-auto lg:max-w-xl lg:text-right">
-              {steps.map((step) => (
-                <li key={step.key} className="flex flex-wrap items-start gap-3 sm:gap-4 lg:justify-end">
-                  <span className="min-w-0 flex-1 text-lg font-semibold leading-snug text-slate-800 sm:text-xl lg:flex-none lg:text-right lg:text-2xl">
-                    {step.label}
-                  </span>
-                  <StepMark state={step.state} />
-                </li>
-              ))}
-            </ul>
-          </div>
-
-          <div className="flex flex-1 flex-col justify-center px-6 pb-12 pt-10 lg:px-10">
-            <div className="mx-auto w-full max-w-3xl border-t border-slate-200 pt-10">
-              {hasError ? (
-                <p
-                  className="text-balance text-center font-black leading-tight text-red-700"
-                  style={{ fontSize: "clamp(1.2rem, 2.8vw, 2rem)" }}
-                >
-                  Część automatyzacji zakończyła się błędem — sprawdź status zamówienia.
-                </p>
-              ) : (
-                <p
-                  className="text-balance text-center font-black leading-tight text-slate-900"
-                  style={{ fontSize: "clamp(1.35rem, 3.2vw, 2.35rem)" }}
-                >
-                  {FINAL_SCAN_INSTRUCTION}
-                </p>
-              )}
-            </div>
-          </div>
-        </section>
-      </div>
-
-      <div
-        className="pointer-events-none fixed bottom-6 right-6 z-20 flex h-36 w-56 items-end justify-end overflow-hidden rounded-xl border-2 border-slate-300 bg-gradient-to-br from-slate-700 to-slate-900 shadow-lg sm:h-40 sm:w-64"
-        aria-hidden
-      >
-        <span className="absolute left-3 top-3 rounded bg-red-600 px-2 py-1 text-xs font-bold uppercase tracking-wide text-white">
-          ● REC
-        </span>
-        <div className="h-full w-full bg-[linear-gradient(160deg,rgba(255,255,255,0.06)_0%,transparent_45%,rgba(0,0,0,0.35)_100%)]" />
-      </div>
-    </div>
+    <>
+      <ScannerHandler onScan={onResumeProductScan} enabled={waitForScan && !resumeScanBusy && !hasError} />
+      <AutoActionsShell
+        detail={detail}
+        steps={steps}
+        onBackToOrders={onBackToOrders}
+        onBackToOrder={onBackToOrder}
+        onEditSellasist={onEditSellasist}
+        footerMessage={footerMessage}
+        footerTone={footerTone}
+      />
+    </>
   );
 }

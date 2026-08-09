@@ -30,7 +30,7 @@ const IMG: Record<ShippingMethodLogoSize, string> = {
     "h-auto w-auto max-h-[clamp(5.5rem,18vw,8rem)] max-w-[min(100%,15rem)] object-contain object-center",
   packingTile: "h-auto w-full max-h-[64px] max-w-[72px] min-w-[56px] object-contain object-left",
   postPackHero:
-    "h-auto max-h-[112px] w-auto max-w-[min(240px,28vw)] min-w-[72px] object-contain object-right",
+    "h-auto max-h-[128px] w-auto max-w-[min(280px,32vw)] min-w-[88px] object-contain object-right",
 };
 
 const ICON: Record<ShippingMethodLogoSize, string> = {

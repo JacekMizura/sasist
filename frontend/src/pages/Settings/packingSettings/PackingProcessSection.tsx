@@ -131,7 +131,7 @@ export function PackingProcessSection({
               patchExtended("afterActionsBehavior", v as WmsPackingExtendedUiSettings["afterActionsBehavior"])
             }
           >
-            <option value="stay_here">Zostań przy bieżącym zamówieniu</option>
+            <option value="stay_here">Oczekuj na skan produktu z listy pakowania</option>
             <option value="return_to_list">Wróć na listę zamówień</option>
             <option value="next_order">Przejdź do następnego zamówienia</option>
           </SelectField>
