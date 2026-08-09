@@ -159,9 +159,9 @@ def get_packing_orders(
     status: int = Query(..., ge=1, description="order_ui_status_id — status „gotowe do pakowania”"),
     mode: str = Query(
         ...,
-        description="no_cart | bulk | baskets — zgodnie z wyborem na ekranie trybu pakowania",
+        description="all | no_cart | bulk | baskets — all = pełna kolejka statusu (domyślna lista)",
     ),
-    cart_id: int | None = Query(default=None, ge=1, description="Wymagane dla mode=bulk i mode=baskets"),
+    cart_id: int | None = Query(default=None, ge=1, description="Wymagane dla mode=bulk; opcjonalne dla baskets"),
     order_type: str = Query(
         default="all",
         description="all | single | multi — filtr jedno-/wieloelementowe (jak w zbieraniu)",

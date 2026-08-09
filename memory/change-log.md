@@ -1,3 +1,26 @@
+## 2026-08-09 — Pakowanie: skan wózka jako lookup na liście (nie osobny etap)
+
+- Wycofano forced UI „Skanuj wózek / koszyk” ze statusu / trybu
+- Wejście w status → `mode=all` → normalna lista zamówień (niezależnie od konfiguracji zbierania)
+- Globalny skaner na liście: `resolvePackingHandoffScan` (wózek / MULTI / koszyk) → filtr lub otwarcie zamówienia
+- Backend: `mode=all` w scope kolejki + inferencja handoff przy resolve-ean/scan
+- Usunięto `PackingHandoffScanModal`
+
+## 2026-08-09 — Pakowanie: skan wózka/koszyka ze statusu Pakowanie (WYCOFANE)
+
+- Pierwsza wersja z CTA / osobnym etapem skanu — błędny kierunek; zastąpione powyższym
+
+## 2026-08-09 — Wyczyść wózek: pełny reset także w PACKING
+
+- Przyczyna: `CartService.clear_cart` → `admin_release_cart` (celowo blokuje PACKING z custody) + 500 bez mapowania + FE `code=null` → „NIEZNANY KOD”
+- Fix: `force_clear_cart` (SSOT) dla ASSIGNED/PICKING/READY/PACKING; `admin_release` bez zmian; clear → 409 + WmsUserMessage; FE `showWmsError` + katalog kodów
+
+## 2026-08-09 — Magazyn → Wózki: scroll strony po rozwinięciu wózka
+
+- Przyczyna: `CartsModuleLayout` zawsze `fillHeight` → `PageContainer` `h-full` + `overflow-hidden` ucinał treść
+- Fix: `fillHeight` tylko dla edytora/podglądu `/carts/racks/...`; flota scrolluje w `<main>`
+- Accordion detail: `max-content` + `overflow-visible` gdy open (bez wewnętrznego scrollera)
+
 ## 2026-08-09 — Ponowne wejście do spakowanego zamówienia (lista pakowania)
 
 - Gate przy pierwszym wczytaniu detail: modal „już spakowane”, linie Done, bez aktywnego produktu / AutoActions

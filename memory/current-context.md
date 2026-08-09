@@ -1,5 +1,11 @@
 ﻿## Active
 
+**Packing cart/basket scan as list lookup (2026-08-09):**
+- Status → session `mode=all` → orders list (no forced scan screen)
+- Global scanner on list: cart → filter orders; basket → open order; empty → toast
+- Picking collection config does NOT gate packing cart scan
+- Helpers: `resolvePackingHandoffScan` + `applyPackingHandoffScanResult` (no PackingHandoffScanModal)
+
 **Packing reopen already-packed (2026-08-09):**
 - Click fully packed order → packing view (all Done, no active line) + `AlreadyPackedOrderModal`
 - Accept → `POST …/acknowledge-reopen` → `PACKING_REOPEN_ACKNOWLEDGED` (WmsOrderEvent + activity log)

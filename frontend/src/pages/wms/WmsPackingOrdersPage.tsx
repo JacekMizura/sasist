@@ -1,22 +1,22 @@
 import axios from "axios";
-import { extractApiErrorMessage } from "../../api/authApi";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { updateWarehousePriorityTask } from "../../api/warehouseOperationsApi";
-import type { WmsPackingOrderCardApi } from "../../api/wmsPackingApi";
 import {
   getWmsBasketPackingOrder,
-  getWmsCartPackingOrdersByCode,
   getWmsPackingOrders,
   getWmsPackingResolveShelf,
   postWmsPackingResolveEanScan,
   wmsPackingApiErrorCode,
   wmsPackingApiErrorMessage,
+  type WmsPackingOrderCardApi,
 } from "../../api/wmsPackingApi";
+import { applyPackingHandoffScanResult } from "../../components/wms/packing/applyPackingHandoffScan";
 import {
   handleReplacementLabelScan,
   isReplacementLabelBarcode,
 } from "../../components/wms/packing/packingReplacementLabelActions";
+import { resolvePackingHandoffScan } from "../../components/wms/packing/resolvePackingHandoffScan";
 import { getWmsPickingResolveCart } from "../../api/wmsPickingProductsApi";
 import { OrdersListView } from "../../components/wms/packing/ordersList/OrdersListView";
 import { AppOverlayPortal } from "../../components/overlay";
@@ -25,6 +25,7 @@ import { useWmsScanner } from "../../context/WmsScannerContext";
 import type { OrderUiMainGroup } from "../../types/orderUiStatus";
 import { panelSidebarSubCountBadgeStyle } from "../../utils/panelSidebarHierarchy";
 import { playScanBeep } from "../../utils/playScanBeep";
+import { classifyWmsScanCode } from "../../utils/wmsScanClassify";
 import { normalizeScanEan } from "../../utils/wmsScanNormalize";
 import { formatOperationalDurationSince } from "../../utils/formatOperationalDuration";
 import { DAMAGE_TENANT_ID } from "../damage/damageShared";
@@ -33,6 +34,43 @@ import { cartTypeMatchesPackingMode, loadWmsPackingSession, patchWmsPackingSessi
 import { scanErrorMessage } from "../../components/wms/packing/packingHelpers";
 import { loadWmsPackingExtendedUi } from "../../types/wmsPackingExtendedUi";
 import { WMS_ROUTES } from "./wmsRoutes";
+
+/** cart_id tylko gdy scope wymaga wózka (bulk / opcjonalnie baskets). */
+function packingListCartId(s: WmsPackingSessionState): number | undefined {
+  if (s.mode === "bulk" && s.cartId != null && Number.isFinite(s.cartId)) return s.cartId;
+  if (s.mode === "baskets" && s.cartId != null && Number.isFinite(s.cartId)) return s.cartId;
+  return undefined;
+}
+
+/** Po otwarciu zamówienia z listy „all” ustaw scope mutacji wg danych karty. */
+function patchSessionScopeFromOrderCard(order: WmsPackingOrderCardApi): void {
+  const basket = (order.basket_code ?? "").trim();
+  const cartId = order.wms_cart_id;
+  if (basket) {
+    patchWmsPackingSession({
+      mode: "baskets",
+      cartId: cartId != null && Number.isFinite(Number(cartId)) ? Number(cartId) : undefined,
+      cartCode: undefined,
+      cartType: "MULTI",
+    });
+    return;
+  }
+  if (cartId != null && Number.isFinite(Number(cartId)) && Number(cartId) > 0) {
+    patchWmsPackingSession({
+      mode: "bulk",
+      cartId: Number(cartId),
+      cartCode: (order.wms_vehicle_label ?? "").trim() || undefined,
+      cartType: "BULK",
+    });
+    return;
+  }
+  patchWmsPackingSession({
+    mode: "no_cart",
+    cartId: undefined,
+    cartCode: undefined,
+    cartType: undefined,
+  });
+}
 
 async function tryPackingShelfEntry(
   scan: string,
@@ -44,9 +82,9 @@ async function tryPackingShelfEntry(
       DAMAGE_TENANT_ID,
       warehouseId,
       session.statusId,
-      session.mode ?? "no_cart",
+      session.mode === "all" ? "no_cart" : (session.mode ?? "no_cart"),
       scan,
-      session.mode === "bulk" || session.mode === "baskets" ? session.cartId : undefined,
+      packingListCartId(session),
     );
     // Shelf packing is its own scope — switch session so mutations use mode=shelf.
     patchWmsPackingSession({
@@ -189,7 +227,7 @@ export default function WmsPackingOrdersPage() {
         warehouseId,
         s.statusId,
         s.mode,
-        s.mode === "no_cart" ? undefined : s.cartId,
+        packingListCartId(s),
         s.orderTypeFilter ?? "all",
         { limit: pageSize, offset: 0 },
       );
@@ -221,7 +259,7 @@ export default function WmsPackingOrdersPage() {
         warehouseId,
         s.statusId,
         s.mode,
-        s.mode === "no_cart" ? undefined : s.cartId,
+        packingListCartId(s),
         s.orderTypeFilter ?? "all",
         { limit: pageSize, offset },
       );
@@ -315,7 +353,9 @@ export default function WmsPackingOrdersPage() {
 
   const sMode = session?.mode;
   useEffect(() => {
-    if (sMode === "no_cart") {
+    if (sMode === "all") {
+      setScannerInputPlaceholder("Zeskanuj EAN, wózek, koszyk lub półkę kompletacyjną");
+    } else if (sMode === "no_cart") {
       setScannerInputPlaceholder("Zeskanuj EAN lub półkę kompletacyjną (np. RK-01/A2)");
     } else if (sMode === "baskets") {
       setScannerInputPlaceholder("EAN, półka (RK-01/A2), koszyk lub kod wózka");
@@ -325,13 +365,60 @@ export default function WmsPackingOrdersPage() {
     refocusScannerInput();
   }, [setScannerInputPlaceholder, refocusScannerInput, sMode]);
 
+  const applyHandoffLookup = useCallback(
+    async (scan: string): Promise<boolean> => {
+      const s = loadWmsPackingSession();
+      if (!s || warehouseId == null) return false;
+      const result = await resolvePackingHandoffScan({
+        tenantId: DAMAGE_TENANT_ID,
+        warehouseId,
+        statusId: s.statusId,
+        raw: scan,
+      });
+      if (result.kind === "empty" || result.kind === "error") {
+        showScannerToast(result.message);
+        return true;
+      }
+      if (result.kind === "open_order") {
+        if (activePriorityTask && assignedOrderIds.length > 0 && !assignedOrderSet.has(result.orderId)) {
+          showScannerToast("Ten koszyk jest poza aktywnym zadaniem kierownika.");
+          return true;
+        }
+      }
+      applyPackingHandoffScanResult({
+        result,
+        navigate,
+        appendScanToHistory,
+      });
+      refreshSession();
+      if (result.kind === "open_orders_list") {
+        // Już jesteśmy na liście — nawigacja replace może nie remountować; dociągnij zamówienia wózka.
+        await fetchOrders();
+      }
+      return true;
+    },
+    [
+      warehouseId,
+      showScannerToast,
+      activePriorityTask,
+      assignedOrderIds.length,
+      assignedOrderSet,
+      navigate,
+      appendScanToHistory,
+      refreshSession,
+      fetchOrders,
+    ],
+  );
+
   const applyCartScan = useCallback(
     async (raw: string) => {
       const scan = normalizeScanEan(raw);
       if (!scan || warehouseId == null) return;
       const s = loadWmsPackingSession();
-      if (!s || s.mode === "no_cart") {
-        showScannerToast("W tym trybie nie zmieniasz wózka.");
+      if (!s) return;
+      // Domyślna lista (all) oraz dodatkowy lookup — unified handoff (wózek / koszyk).
+      if (s.mode === "all" || s.mode === "no_cart" || s.mode === "shelf") {
+        await applyHandoffLookup(scan);
         return;
       }
       if (s.mode !== "bulk" && s.mode !== "baskets") return;
@@ -353,13 +440,23 @@ export default function WmsPackingOrdersPage() {
         refreshSession();
         await fetchOrders();
       } catch {
-        showScannerToast("Nie rozpoznano wózka.");
+        // Kod może być koszykiem — spróbuj unified lookup.
+        const handled = await applyHandoffLookup(scan);
+        if (!handled) showScannerToast("Nie rozpoznano wózka.");
       } finally {
         setCartBusy(false);
         refocusScannerInput();
       }
     },
-    [warehouseId, appendScanToHistory, showScannerToast, refreshSession, fetchOrders, refocusScannerInput],
+    [
+      warehouseId,
+      appendScanToHistory,
+      showScannerToast,
+      refreshSession,
+      fetchOrders,
+      refocusScannerInput,
+      applyHandoffLookup,
+    ],
   );
 
   const applyListScan = useCallback(
@@ -398,6 +495,13 @@ export default function WmsPackingOrdersPage() {
           return;
         }
 
+        const kind = classifyWmsScanCode(scan);
+        // Wózek / koszyk — dodatkowy lookup przez globalny skaner (nie osobny etap workflow).
+        if (kind === "cart_like" || kind === "basket_like") {
+          await applyHandoffLookup(scan);
+          return;
+        }
+
         // CASE B: baskets — najpierw warehouse-global skan koszyka → exact order
         if (s.mode === "baskets") {
           try {
@@ -431,7 +535,8 @@ export default function WmsPackingOrdersPage() {
               return;
             }
             if (bcode === "BASKET_NOT_FOUND") {
-              showScannerToast("Zeskanuj koszyk (np. S-1-1) — pakowanie koszykowe nie używa globalnego EAN.");
+              // Może to być kod wózka MULTI — unified lookup.
+              await applyHandoffLookup(scan);
               return;
             }
             showScannerToast(wmsPackingApiErrorMessage(be) || scanErrorMessage(bcode));
@@ -440,7 +545,8 @@ export default function WmsPackingOrdersPage() {
         }
 
         try {
-          const handoffScope = s.mode === "bulk" ? "CART" : "CARTLESS";
+          const handoffScope =
+            s.mode === "bulk" ? "CART" : s.mode === "baskets" ? "BASKET" : s.mode === "all" ? undefined : "CARTLESS";
           if (s.mode === "bulk" && (s.cartId == null || !Number.isFinite(s.cartId))) {
             showScannerToast("Najpierw zeskanuj wózek.");
             return;
@@ -452,7 +558,7 @@ export default function WmsPackingOrdersPage() {
             s.mode,
             scan,
             {
-              cartId: s.mode === "bulk" ? s.cartId : undefined,
+              cartId: packingListCartId(s),
               handoffScope,
             },
           );
@@ -463,6 +569,15 @@ export default function WmsPackingOrdersPage() {
             showScannerToast("To zamówienie jest poza aktywnym zadaniem kierownika.");
             return;
           }
+          if (s.mode === "all") {
+            const card = orders.find((o) => o.order_id === targetOrderId);
+            if (card) patchSessionScopeFromOrderCard(card);
+            else {
+              // Detail z mode=all działa; scope mutacji dociągnie się przy kolejnym skanie zamówienia
+              // albo zostawiamy all (backend mapuje w packing_scan_increment).
+            }
+            refreshSession();
+          }
           navigate(WMS_ROUTES.packingOrder(targetOrderId), {
             state: { packingScanBootstrap: out },
           });
@@ -471,26 +586,41 @@ export default function WmsPackingOrdersPage() {
           const code = wmsPackingApiErrorCode(e);
           const is404 = axios.isAxiosError(e) && e.response?.status === 404;
           if (is404 && code === "PRODUCT_NOT_FOUND") {
-            const shelfHit = await tryPackingShelfEntry(scan, warehouseId, s);
-            if (shelfHit.ok) {
-              playScanBeep();
-              appendScanToHistory(scan);
-              if (activePriorityTask && assignedOrderIds.length > 0 && !assignedOrderSet.has(shelfHit.order_id)) {
-                showScannerToast("To zamówienie jest poza aktywnym zadaniem kierownika.");
+            if (kind === "location_like" || kind === "generic") {
+              const shelfHit = await tryPackingShelfEntry(scan, warehouseId, s);
+              if (shelfHit.ok) {
+                playScanBeep();
+                appendScanToHistory(scan);
+                if (activePriorityTask && assignedOrderIds.length > 0 && !assignedOrderSet.has(shelfHit.order_id)) {
+                  showScannerToast("To zamówienie jest poza aktywnym zadaniem kierownika.");
+                  return;
+                }
+                navigate(WMS_ROUTES.packingOrder(shelfHit.order_id));
                 return;
               }
-              navigate(WMS_ROUTES.packingOrder(shelfHit.order_id));
-              return;
+              if (!("notFound" in shelfHit)) {
+                showScannerToast(shelfHit.message);
+                return;
+              }
+            } else {
+              const shelfHit = await tryPackingShelfEntry(scan, warehouseId, s);
+              if (shelfHit.ok) {
+                playScanBeep();
+                appendScanToHistory(scan);
+                if (activePriorityTask && assignedOrderIds.length > 0 && !assignedOrderSet.has(shelfHit.order_id)) {
+                  showScannerToast("To zamówienie jest poza aktywnym zadaniem kierownika.");
+                  return;
+                }
+                navigate(WMS_ROUTES.packingOrder(shelfHit.order_id));
+                return;
+              }
+              if (!("notFound" in shelfHit)) {
+                showScannerToast(shelfHit.message);
+                return;
+              }
             }
-            if (!("notFound" in shelfHit)) {
-              showScannerToast(shelfHit.message);
-              return;
-            }
-            tryCart = s.mode === "bulk";
-            if (!tryCart) {
-              showScannerToast("Nie znaleziono produktu w kolejce.");
-              return;
-            }
+            // Produkt nie znaleziony — spróbuj wózek/koszyk (kody bez typowego prefiksu).
+            tryCart = true;
           } else {
             if (axios.isAxiosError(e) && e.response != null && e.response.status >= 500) {
               showScannerToast("Błąd serwera.");
@@ -518,9 +648,12 @@ export default function WmsPackingOrdersPage() {
       showScannerToast,
       refocusScannerInput,
       applyCartScan,
+      applyHandoffLookup,
       activePriorityTask,
       assignedOrderIds.length,
       assignedOrderSet,
+      orders,
+      refreshSession,
     ],
   );
 
@@ -572,7 +705,7 @@ export default function WmsPackingOrdersPage() {
         loadingMore={loadingMore}
         hasMore={hasMore && !(activePriorityTask && assignedOrderIds.length > 0)}
         error={err}
-        showBasketCode={s.mode === "baskets"}
+        showBasketCode={s.mode === "baskets" || s.mode === "all"}
         showAllNotes={showAllNotes}
         ordersListLayout={ordersListLayout}
         productFields={productFields}
@@ -582,6 +715,13 @@ export default function WmsPackingOrdersPage() {
           if (activePriorityTask && assignedOrderIds.length > 0 && !assignedOrderSet.has(id)) {
             showScannerToast("To zamówienie jest poza aktywnym zadaniem kierownika.");
             return;
+          }
+          if (s.mode === "all") {
+            const card = orders.find((o) => o.order_id === id);
+            if (card) {
+              patchSessionScopeFromOrderCard(card);
+              refreshSession();
+            }
           }
           navigate(WMS_ROUTES.packingOrder(id));
         }}

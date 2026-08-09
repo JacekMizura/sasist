@@ -394,11 +394,14 @@ def _active_packing_scope_clauses(
     warehouse_id: int,
 ) -> list:
     """
-    Handoff provenance + live custody for CART / BASKET / CARTLESS / shelf.
+    Handoff provenance + live custody for CART / BASKET / CARTLESS / shelf / all.
+    ``all`` = pełna kolejka statusu (bez filtra handoff) — domyślna lista Pakowania.
     """
     from .picking_handoff_service import HANDOFF_BASKET, HANDOFF_CART, HANDOFF_CARTLESS
 
     m = (mode or "").strip().lower()
+    if m == "all":
+        return []
     if m == "bulk":
         if cart_id is None or int(cart_id) < 1:
             raise ValueError("cart_id required for CART packing scope")
@@ -527,6 +530,7 @@ def _packing_orders_base_query(
     Kolejka pakowania scoped po immutable handoff + live custody.
 
     mode (legacy UI labels):
+      all      → cała kolejka statusu (bez filtra handoff) — domyślna lista Pakowania
       bulk     → picking_handoff_mode=CART + order.cart_id == cart_id (wymagany)
       baskets  → picking_handoff_mode=BASKET + aktywne basket custody
       no_cart  → picking_handoff_mode=CARTLESS + cart_id IS NULL
@@ -535,8 +539,8 @@ def _packing_orders_base_query(
     Finalized (``wms_packing_automation_finished_at``) nigdy w aktywnej kolejce.
     """
     m = (mode or "").strip().lower()
-    if m not in ("no_cart", "bulk", "baskets", "shelf"):
-        raise ValueError("Parametr mode musi być: no_cart, bulk, baskets lub shelf.")
+    if m not in ("all", "no_cart", "bulk", "baskets", "shelf"):
+        raise ValueError("Parametr mode musi być: all, no_cart, bulk, baskets lub shelf.")
     status_ids = _packing_queue_status_ids(
         db, tenant_id=tenant_id, warehouse_id=warehouse_id, primary_status_id=status_id
     )
@@ -1404,6 +1408,42 @@ def packing_resolve_and_scan_ean(
             scope = HANDOFF_BASKET
         elif m == "no_cart":
             scope = HANDOFF_CARTLESS
+        elif m == "all":
+            # Pełna kolejka statusu: znajdź zamówienie, scope z handoff zamówienia.
+            oid_probe = find_first_packing_order_id_for_ean(
+                db,
+                tenant_id=tenant_id,
+                warehouse_id=warehouse_id,
+                status_id=status_id,
+                mode="all",
+                cart_id=None,
+                ean_raw=ean_raw,
+            )
+            if oid_probe is None:
+                raise PackingScanError("PRODUCT_NOT_FOUND")
+            order_row = db.query(Order).filter(Order.id == int(oid_probe)).first()
+            hm = (
+                normalize_handoff_mode(getattr(order_row, "picking_handoff_mode", None))
+                if order_row is not None
+                else None
+            )
+            if hm == HANDOFF_CART:
+                scope = HANDOFF_CART
+                cid = getattr(order_row, "cart_id", None) if order_row is not None else None
+                if cid is None or int(cid) < 1:
+                    raise PackingScanError(
+                        "SCOPE_REQUIRED",
+                        message="Zamówienie CART bez wózka — nie można spakować ze skanu listy.",
+                    )
+                cart_id = int(cid)
+            elif hm == HANDOFF_BASKET:
+                scope = HANDOFF_BASKET
+                order_id = int(oid_probe)
+                cid = getattr(order_row, "cart_id", None) if order_row is not None else None
+                if cid is not None and int(cid) > 0:
+                    cart_id = int(cid)
+            else:
+                scope = HANDOFF_CARTLESS
         else:
             raise PackingScanError("SCOPE_REQUIRED", message="handoff_scope required (CART|BASKET|CARTLESS)")
 
@@ -3319,7 +3359,7 @@ def list_packing_orders(
         joinedload(Order.order_ui_status),
         joinedload(Order.shipping_method_row),
     ]
-    if m == "baskets":
+    if m == "baskets" or m == "all":
         opts.append(joinedload(Order.basket))
 
     lim = min(max(int(limit), 1), 2000)
@@ -3350,7 +3390,7 @@ def list_packing_orders(
             if skipped < off:
                 skipped += 1
                 continue
-            bc = _basket_code_for_order(o) if m == "baskets" else None
+            bc = _basket_code_for_order(o) if m in ("baskets", "all") else None
             out.append(
                 _build_packing_order_card(
                     o,

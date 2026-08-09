@@ -66,7 +66,6 @@ export function PackingOrderSidebar({
   showOrderPhone = true,
   showOrderValue = true,
   showShippingAddress = true,
-  wszystkoSpakowane,
   scanBusy,
   packingActionsLocked,
   visibleOperationalNotes,

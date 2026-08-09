@@ -49,7 +49,7 @@ export function loadWmsPackingSession(): WmsPackingSessionState | null {
       mainGroup,
     };
     const m = rec.mode;
-    if (m === "no_cart" || m === "bulk" || m === "baskets" || m === "shelf") out.mode = m;
+    if (m === "all" || m === "no_cart" || m === "bulk" || m === "baskets" || m === "shelf") out.mode = m;
     const ot = rec.orderTypeFilter;
     if (ot === "all" || ot === "single" || ot === "multi") out.orderTypeFilter = ot;
     const cid = rec.cartId;
