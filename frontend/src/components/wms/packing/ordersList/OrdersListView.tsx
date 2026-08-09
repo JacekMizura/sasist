@@ -2,6 +2,7 @@ import type { CSSProperties } from "react";
 import type { WmsPackingOrderCardApi } from "../../../../api/wmsPackingApi";
 import type { PackingOrdersListLayout } from "../../../../types/wmsPackingExtendedUi";
 import { computeOrdersListStats } from "./ordersListStats";
+import { ExpandedHorizontalOrderCard } from "./ExpandedHorizontalOrderCard";
 import { OrderRow } from "./OrderRow";
 import { StandardOrderCard } from "./StandardOrderCard";
 import { StatusBadges } from "./StatusBadges";
@@ -20,7 +21,7 @@ export type OrdersListViewProps = {
   error: string | null;
   showBasketCode?: boolean;
   showAllNotes?: boolean;
-  /** Ustawienie „Wybierz układ listy zamówień…” — `compact` = Standardowy. */
+  /** `compact` = Standardowy, `cards` = Rozbudowany (Poziomy). */
   ordersListLayout?: PackingOrdersListLayout;
   onOpenOrder: (orderId: number) => void;
   onProductClick?: (orderItemId: number, orderId: number) => void;
@@ -48,12 +49,14 @@ export function OrdersListView({
   const n = orders.length;
   const stats = computeOrdersListStats(orders);
   const isStandard = ordersListLayout === "compact";
+  const isHorizontal = ordersListLayout === "cards";
+  const sellasistHeader = isStandard || isHorizontal;
 
   const cartHint =
     cartLine != null && cartLine.code.trim() !== "" ? (
       <span
         className={
-          isStandard
+          sellasistHeader
             ? "ml-auto min-w-0 max-w-[14rem] shrink truncate text-sm font-semibold text-slate-700"
             : "hidden min-w-0 max-w-[10rem] shrink truncate text-xs font-semibold text-slate-600 md:inline lg:max-w-[14rem] lg:text-sm"
         }
@@ -67,7 +70,7 @@ export function OrdersListView({
     <div className="flex min-h-0 w-full flex-1 flex-col bg-white">
       <div
         className={
-          isStandard
+          sellasistHeader
             ? "sticky top-0 z-20 shrink-0 border-b border-slate-200 bg-white px-3 py-2.5 sm:px-4"
             : "sticky top-0 z-20 shrink-0 border-b border-slate-200/90 bg-white/95 px-3 py-3 shadow-sm backdrop-blur-md sm:px-5"
         }
@@ -76,7 +79,7 @@ export function OrdersListView({
           <button
             type="button"
             className={
-              isStandard
+              sellasistHeader
                 ? "inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-800 transition hover:bg-slate-50"
                 : "inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-slate-200/90 bg-white text-slate-800 shadow-sm transition hover:border-indigo-200 hover:bg-indigo-50 hover:text-indigo-950"
             }
@@ -87,7 +90,7 @@ export function OrdersListView({
           </button>
           <h1
             className={
-              isStandard
+              sellasistHeader
                 ? "shrink-0 whitespace-nowrap text-base font-bold leading-none tracking-tight text-slate-900 sm:text-lg"
                 : "shrink-0 whitespace-nowrap text-lg font-black leading-none tracking-tight text-slate-900 sm:text-xl"
             }
@@ -95,10 +98,15 @@ export function OrdersListView({
             Zamówień: {loading ? "…" : n}
           </h1>
           {!loading ? (
-            <StatusBadges spakowane={stats.spakowane} doSpakowania={stats.doSpakowania} wTrakcie={stats.wTrakcie} />
+            <StatusBadges
+              spakowane={stats.spakowane}
+              doSpakowania={stats.doSpakowania}
+              wTrakcie={stats.wTrakcie}
+              braki={isHorizontal ? stats.braki : 0}
+            />
           ) : null}
           {cartHint}
-          {!isStandard ? (
+          {!sellasistHeader ? (
             <span
               className="ml-auto inline-flex h-9 max-w-[min(40%,14rem)] min-w-[1.75rem] shrink-0 items-center justify-center truncate rounded-xl px-3 text-xs font-semibold leading-tight sm:max-w-[16rem] sm:px-4 sm:text-sm"
               style={statusBadgeStyle}
@@ -106,7 +114,9 @@ export function OrdersListView({
             >
               {statusLabelRight}
             </span>
-          ) : cartHint == null ? <span className="ml-auto" /> : null}
+          ) : cartHint == null ? (
+            <span className="ml-auto" />
+          ) : null}
         </div>
       </div>
 
@@ -116,7 +126,15 @@ export function OrdersListView({
         </p>
       ) : null}
 
-      <div className={isStandard ? "min-h-0 flex-1 px-3 pb-8 pt-3 sm:px-4" : "min-h-0 flex-1 px-4 pb-8 pt-0 sm:px-6"}>
+      <div
+        className={
+          isHorizontal
+            ? "flex min-h-0 flex-1 flex-col bg-white px-3 pb-3 pt-3 sm:px-4"
+            : isStandard
+              ? "min-h-0 flex-1 px-3 pb-8 pt-3 sm:px-4"
+              : "min-h-0 flex-1 px-4 pb-8 pt-0 sm:px-6"
+        }
+      >
         {loading ? (
           <p className="py-14 text-center text-base font-medium text-slate-500">Ładowanie…</p>
         ) : !error && orders.length === 0 ? (
@@ -132,6 +150,22 @@ export function OrdersListView({
             {orders.map((o) => (
               <div key={o.order_id} role="listitem">
                 <StandardOrderCard order={o} onOpenOrder={onOpenOrder} />
+              </div>
+            ))}
+          </div>
+        ) : isHorizontal ? (
+          <div
+            className="flex min-h-0 flex-1 items-stretch gap-4 overflow-x-auto overflow-y-hidden pb-2 [scrollbar-color:theme(colors.slate.300)_transparent] [scrollbar-width:thin] [&::-webkit-scrollbar]:h-2.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-slate-300 [&::-webkit-scrollbar-track]:bg-slate-100"
+            role="list"
+            aria-label="Lista zamówień do pakowania"
+          >
+            {orders.map((o) => (
+              <div key={o.order_id} role="listitem" className="flex shrink-0 self-stretch">
+                <ExpandedHorizontalOrderCard
+                  order={o}
+                  onOpenOrder={onOpenOrder}
+                  onProductClick={onProductClick}
+                />
               </div>
             ))}
           </div>

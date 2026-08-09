@@ -11,10 +11,10 @@ export type PackingLocationBadgePosition = "top_right" | "top_left" | "bottom_ri
 export type PackingAutomationButtonsPosition = "bottom" | "right" | "floating";
 export type PackingOrdersListLayout = "expanded_vertical" | "compact" | "cards";
 
-/** Etykieta UI dla `ordersListLayout` — `compact` = „Standardowy”. */
+/** Etykieta UI dla `ordersListLayout` — `compact` = „Standardowy”, `cards` = „Rozbudowany (Poziomy)”. */
 export function packingOrdersListLayoutLabel(layout: PackingOrdersListLayout): string {
   if (layout === "expanded_vertical") return "Rozbudowany (pionowo)";
-  if (layout === "cards") return "Karty";
+  if (layout === "cards") return "Rozbudowany (Poziomy)";
   return "Standardowy";
 }
 export type PackingAfterActionsBehavior = "return_to_list" | "next_order" | "stay_here";
