@@ -902,10 +902,14 @@ export default function WmsPickingProductDetailPage() {
       if (extracted.code) {
         showScanFeedbackFromCode(extracted.code, {
           backendMessage: extracted.message,
+          backendTitle: extracted.title,
           contextHint: extracted.eligibleLabels,
         });
         setPickMsg(
-          mapWmsScanErrorCode(extracted.code, { backendMessage: extracted.message }).message,
+          mapWmsScanErrorCode(extracted.code, {
+            backendMessage: extracted.message,
+            backendTitle: extracted.title,
+          }).message,
         );
       } else {
         let msg = "Zatwierdzenie nie powiodło się.";

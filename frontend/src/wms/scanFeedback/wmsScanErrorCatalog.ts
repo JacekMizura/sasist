@@ -3,6 +3,8 @@
  * Do not parse free-text messages in page components.
  */
 
+import { isTechnicalWmsOperatorCopy } from "../../types/wmsUserMessage";
+
 export type WmsScanFeedbackSeverity = "error" | "warning" | "info" | "success";
 
 export type WmsScanFeedback = {
@@ -183,8 +185,13 @@ const CATALOG: Record<
   },
   InvalidCartState: {
     severity: "error",
-    title: "ZŁY STAN WÓZKA",
-    message: "Wózek jest w stanie, który nie pozwala na tę operację.",
+    title: "STAN WÓZKA",
+    message: "Wózek nie jest aktywny dla tego procesu. Zeskanuj wózek, aby rozpocząć zbieranie.",
+  },
+  WMS_INVALID_CART_STATE: {
+    severity: "error",
+    title: "STAN WÓZKA",
+    message: "Wózek nie jest aktywny dla tego procesu. Zeskanuj wózek, aby rozpocząć zbieranie.",
   },
   CART_CLEAR_FAILED: {
     severity: "error",
@@ -200,7 +207,7 @@ const CATALOG: Record<
 
 export function mapWmsScanErrorCode(
   code: string | null | undefined,
-  opts?: { backendMessage?: string | null; contextHint?: string | null },
+  opts?: { backendMessage?: string | null; contextHint?: string | null; backendTitle?: string | null },
 ): WmsScanFeedback {
   const key = (code || "UNKNOWN_SCAN_CODE").trim();
   const entry = CATALOG[key] ?? {
@@ -210,11 +217,15 @@ export function mapWmsScanErrorCode(
   };
   const backend = opts?.backendMessage?.trim();
   const hint = opts?.contextHint?.trim();
-  const body = backend || entry.message;
+  const safeBackend = backend && !isTechnicalWmsOperatorCopy(backend) ? backend : null;
+  const body = safeBackend || entry.message;
+  const titleRaw = opts?.backendTitle?.trim();
+  const title =
+    titleRaw && !isTechnicalWmsOperatorCopy(titleRaw) ? titleRaw.toUpperCase() : entry.title;
   return {
     code: key,
     severity: entry.severity,
-    title: entry.title,
+    title,
     message: hint ? `${body}\n\n${hint}` : body,
   };
 }
@@ -223,9 +234,10 @@ export function mapWmsScanErrorCode(
 export function extractWmsScanErrorDetail(err: unknown): {
   code: string | null;
   message: string | null;
+  title: string | null;
   eligibleLabels: string | null;
 } {
-  const empty = { code: null, message: null, eligibleLabels: null };
+  const empty = { code: null, message: null, title: null, eligibleLabels: null };
   if (!err || typeof err !== "object") return empty;
   const ax = err as { response?: { data?: { detail?: unknown } } };
   const detail = ax.response?.data?.detail;
@@ -233,23 +245,42 @@ export function extractWmsScanErrorDetail(err: unknown): {
   if (typeof detail === "string") {
     const msg = detail.trim();
     if (/nie należy do trasy/i.test(msg)) {
-      return { code: "SOURCE_LOCATION_NOT_ON_ROUTE", message: msg, eligibleLabels: null };
+      return { code: "SOURCE_LOCATION_NOT_ON_ROUTE", message: msg, title: null, eligibleLabels: null };
     }
     if (/wyczyścić wózek|wyczyszczenie wózka|force_clear|cart_force_cleared/i.test(msg)) {
-      return { code: "CART_CLEAR_FAILED", message: msg, eligibleLabels: null };
+      return { code: "CART_CLEAR_FAILED", message: msg, title: null, eligibleLabels: null };
     }
-    if (/musi być w stanie PICKING|InvalidCartState|oczekiwano.*PICKING/i.test(msg)) {
-      return { code: "InvalidCartState", message: msg, eligibleLabels: null };
+    if (
+      /musi być w stanie PICKING|InvalidCartState|oczekiwano.*PICKING|nie jest aktywny dla/i.test(msg)
+    ) {
+      // Never forward technical status names to the operator toast.
+      return {
+        code: "InvalidCartState",
+        message: isTechnicalWmsOperatorCopy(msg) ? null : msg,
+        title: null,
+        eligibleLabels: null,
+      };
     }
     if (/w trakcie pakowania|oczekuje na pakowanie|InvalidCartTransition|Nie można wykonać/i.test(msg)) {
-      return { code: "InvalidCartTransition", message: msg, eligibleLabels: null };
+      return {
+        code: "InvalidCartTransition",
+        message: isTechnicalWmsOperatorCopy(msg) ? null : msg,
+        title: null,
+        eligibleLabels: null,
+      };
     }
-    return { code: null, message: msg || null, eligibleLabels: null };
+    return {
+      code: null,
+      message: isTechnicalWmsOperatorCopy(msg) ? null : msg || null,
+      title: null,
+      eligibleLabels: null,
+    };
   }
   if (typeof detail !== "object") return empty;
   const d = detail as {
     code?: string;
     message?: string;
+    title?: string;
     eligible_baskets?: Array<{ basket_label?: string }>;
     scanned_basket?: string;
   };
@@ -261,9 +292,11 @@ export function extractWmsScanErrorDetail(err: unknown): {
   const hintParts: string[] = [];
   if (d.scanned_basket) hintParts.push(`Zeskanowano: ${d.scanned_basket}`);
   if (labels) hintParts.push(`Oczekiwane koszyki: ${labels}`);
+  const message = d.message ?? null;
   return {
     code: d.code ?? null,
-    message: d.message ?? null,
+    message: message && isTechnicalWmsOperatorCopy(message) ? null : message,
+    title: typeof d.title === "string" ? d.title : null,
     eligibleLabels: hintParts.length ? hintParts.join(" · ") : labels,
   };
 }

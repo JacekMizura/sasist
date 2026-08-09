@@ -62,6 +62,19 @@ class TestWmsUserMessages(unittest.TestCase):
         msg = from_cart_lifecycle_error(E())
         self.assertEqual(msg.code, WMS_CART_IN_USE)
 
+    def test_invalid_cart_state_packing_polish(self) -> None:
+        class E:
+            code = "InvalidCartState"
+            message = "Wózek nie jest aktywny dla zbierania."
+            cart_status = "PACKING"
+
+        msg = from_cart_lifecycle_error(E(), extra={"action": "confirm_remaining", "current": "PACKING"})
+        self.assertEqual(msg.code, "WMS_INVALID_CART_STATE")
+        self.assertIn("pakowan", msg.message.lower())
+        self.assertNotIn("PICKING", msg.message)
+        self.assertNotIn("PACKING", msg.message)
+        self.assertNotIn("startPicking", msg.message)
+
     def test_roundtrip_detail(self) -> None:
         msg = msg_cart_in_use(operator_name="A")
         parsed = parse_detail_as_wms_message(msg.to_detail())

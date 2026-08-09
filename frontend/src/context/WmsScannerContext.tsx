@@ -183,7 +183,11 @@ export type WmsScannerContextValue = {
   showScanFeedback: (feedback: WmsScanFeedback) => void;
   showScanFeedbackFromCode: (
     code: string,
-    opts?: { backendMessage?: string | null; contextHint?: string | null },
+    opts?: {
+      backendMessage?: string | null;
+      backendTitle?: string | null;
+      contextHint?: string | null;
+    },
   ) => void;
   clearScannerToast: () => void;
   clearScanFeedback: () => void;
@@ -281,7 +285,14 @@ export function WmsScannerProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const showScanFeedbackFromCode = useCallback(
-    (code: string, opts?: { backendMessage?: string | null; contextHint?: string | null }) => {
+    (
+      code: string,
+      opts?: {
+        backendMessage?: string | null;
+        backendTitle?: string | null;
+        contextHint?: string | null;
+      },
+    ) => {
       showScanFeedback(mapWmsScanErrorCode(code, opts));
     },
     [showScanFeedback],

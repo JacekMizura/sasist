@@ -540,6 +540,7 @@ def bootstrap_start_picking_if_needed(
     Po skanie wózka / wejściu na listę produktów:
     AVAILABLE|ASSIGNED → start_picking (jedyny writer order.cart_id).
     PICKING → no-op (zwraca istniejącą sesję).
+    READY_FOR_PACKING|PACKING|inne → InvalidCartStateError (bez cichego wejścia w picking).
 
     Gdy brak assignable orders: NIE claim → AVAILABLE (pusty wózek nie zostaje PRZYPISANY).
 
@@ -571,8 +572,21 @@ def bootstrap_start_picking_if_needed(
     st = get_cart_status(cart)
     if st == CartStatus.PICKING:
         return find_open_picking_session(db, cart=cart), None
+    if st in (CartStatus.READY_FOR_PACKING, CartStatus.PACKING):
+        # Never silently enter product picking on a packing-lifecycle cart.
+        from .cart_picking_lifecycle_service import InvalidCartStateError
+
+        raise InvalidCartStateError(
+            "Wózek nie jest aktywny dla zbierania.",
+            status=st.value,
+        )
     if st not in (CartStatus.AVAILABLE, CartStatus.ASSIGNED):
-        return None, None
+        from .cart_picking_lifecycle_service import InvalidCartStateError
+
+        raise InvalidCartStateError(
+            "Wózek nie jest aktywny dla zbierania.",
+            status=st.value,
+        )
 
     cart_code = getattr(cart, "code", None) or getattr(cart, "name", None)
 
@@ -1277,17 +1291,27 @@ def resolve_default_bulk_cart_for_warehouse(
     tenant_id: int,
     warehouse_id: int,
 ) -> Cart:
-    """Pierwszy wózek BULK w magazynie — tryb bez skanu (domyślna sesja)."""
+    """
+    Domyślny wózek BULK dla trybu bez skanu.
+
+    Preferuje wolny (AVAILABLE), żeby nie wchodzić w pobieranie na wózku
+    już w lifecycle pakowania / aktywnego zbierania.
+    """
+    from ..models.enums import CartStatus
+
+    base = db.query(Cart).filter(
+        Cart.tenant_id == int(tenant_id),
+        Cart.warehouse_id == int(warehouse_id),
+        Cart.type == CartType.BULK,
+    )
     cart = (
-        db.query(Cart)
-        .filter(
-            Cart.tenant_id == int(tenant_id),
-            Cart.warehouse_id == int(warehouse_id),
-            Cart.type == CartType.BULK,
-        )
+        base.filter(Cart.status == CartStatus.AVAILABLE.value)
         .order_by(Cart.id.asc())
         .first()
     )
+    if cart is None:
+        # Fallback: first BULK — bootstrap_start_picking_if_needed will reject packing states.
+        cart = base.order_by(Cart.id.asc()).first()
     if not cart:
         raise ValueError(
             "Brak wózka BULK w magazynie — dodaj wózek lub włącz skan wózka w konfiguracji zbierania."
@@ -2696,8 +2720,7 @@ def record_wms_quick_pick(
     st = get_cart_status(cart_row)
     if st != CartStatus.PICKING:
         raise InvalidCartStateError(
-            f"Wózek musi być w stanie PICKING (jest: {st.value}). "
-            "Najpierw zeskanuj wózek (startPicking).",
+            "Wózek nie jest aktywny dla zbierania.",
             status=st.value,
         )
 
@@ -2742,13 +2765,13 @@ def record_wms_quick_pick(
                     num = str(o.number or o.id)
                     raise ValueError(
                         f"Zamówienie #{num} nie jest na tym wózku. "
-                        "Przypisanie następuje wyłącznie przy skanie wózka (startPicking)."
+                        "Zeskanuj wózek, aby przypisać zamówienia do zbierania."
                     )
                 ps_before = getattr(o, "picking_started_at", None)
                 touch_picking_in_progress(o)
                 if getattr(o, "picking_session_id", None) is None:
                     raise SessionNotFoundError(
-                        "Brak picking_session_id na zamówieniu — wymagany startPicking (skan wózka)."
+                        "Brak aktywnej sesji zbierania na zamówieniu — zeskanuj wózek, aby rozpocząć zbieranie."
                     )
                 if ps_before is None and getattr(o, "picking_started_at", None) is not None:
                     emit_wms_picking_started(

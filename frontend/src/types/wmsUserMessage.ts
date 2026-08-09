@@ -47,16 +47,26 @@ export function extractWmsUserMessage(err: unknown): WmsUserMessage | null {
   };
 }
 
+/** True when copy leaks technical cart/API names operators must never see. */
+export function isTechnicalWmsOperatorCopy(msg: string): boolean {
+  const s = (msg || "").trim();
+  if (!s) return true;
+  return (
+    /^\d{3}$/.test(s) ||
+    /internal server error/i.test(s) ||
+    /capacity exceeded/i.test(s) ||
+    /cart already claimed/i.test(s) ||
+    /invalid state/i.test(s) ||
+    /\b(PICKING|PACKING|READY_FOR_PACKING|ASSIGNED|AVAILABLE)\b/.test(s) ||
+    /\b(startPicking|startPacking|confirm-remaining|quick_pick)\b/i.test(s) ||
+    /InvalidCartState|InvalidCartTransition|SessionNotFound/i.test(s)
+  );
+}
+
 /** Fallback when backend did not send WmsUserMessage — never expose HTTP codes. */
 export function fallbackWmsUserMessage(rawMessage?: string | null): WmsUserMessage {
   const msg = (rawMessage || "").trim();
-  const looksTechnical =
-    !msg ||
-    /^\d{3}$/.test(msg) ||
-    /internal server error/i.test(msg) ||
-    /capacity exceeded/i.test(msg) ||
-    /cart already claimed/i.test(msg) ||
-    /invalid state/i.test(msg);
+  const looksTechnical = isTechnicalWmsOperatorCopy(msg);
   return {
     code: "WMS_GENERIC_ERROR",
     severity: "ERROR",

@@ -217,9 +217,16 @@ def apply_cart_transition(
 def _require_status(cart: Cart, allowed: Sequence[CartStatus], *, action: str) -> CartStatus:
     cur = get_cart_status(cart)
     if cur not in allowed:
+        labels = {
+            "AVAILABLE": "Dostępny",
+            "ASSIGNED": "Przypisany",
+            "PICKING": "Zbieranie",
+            "READY_FOR_PACKING": "Gotowy do pakowania",
+            "PACKING": "Pakowanie",
+        }
+        cur_label = labels.get(cur.value, "nieznany")
         raise InvalidCartTransitionError(
-            f"Nie można wykonać {action}: status wózka to {cur.value}, "
-            f"oczekiwano {[s.value for s in allowed]}.",
+            f"Tej operacji nie można wykonać — wózek jest w stanie: {cur_label}.",
             from_status=cur.value,
         )
     return cur
@@ -2430,9 +2437,9 @@ def assert_cart_ready_for_quick_pick(db: Session, cart: Cart) -> WmsOperationSes
     """Quick-pick tylko gdy PICKING + otwarta sesja (bez tworzenia sesji)."""
     st = get_cart_status(cart)
     if st != CartStatus.PICKING:
+        # Operator copy is mapped in ``from_cart_lifecycle_error`` / msg_invalid_cart_state.
         raise InvalidCartStateError(
-            f"Wózek musi być w stanie PICKING (jest: {st.value}). "
-            "Najpierw zeskanuj wózek (startPicking).",
+            "Wózek nie jest aktywny dla zbierania.",
             status=st.value,
         )
     sess = find_open_picking_session(db, cart=cart)

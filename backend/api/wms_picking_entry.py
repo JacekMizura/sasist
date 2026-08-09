@@ -1543,15 +1543,31 @@ def post_picking_quick_pick(
         }
     except SessionNotFoundError as e:
         db.rollback()
-        _raise_409("SessionNotFound", e.message)
+        from ..services.wms_http_messages import raise_wms_from_lifecycle
+
+        raise_wms_from_lifecycle(e)
     except InvalidCartStateError as e:
         db.rollback()
-        if e.cart_status:
-            cart_status = e.cart_status
-        _raise_409("InvalidCartState", e.message)
+        from ..services.wms_http_messages import raise_wms_from_lifecycle
+
+        raise_wms_from_lifecycle(
+            e,
+            extra={
+                "action": "quick_pick",
+                "current": e.cart_status or cart_status,
+            },
+        )
     except CartLifecycleError as e:
         db.rollback()
-        _raise_409(str(e.code or "CartLifecycleError"), e.message)
+        from ..services.wms_http_messages import raise_wms_from_lifecycle
+
+        raise_wms_from_lifecycle(
+            e,
+            extra={
+                "action": "quick_pick",
+                "current": getattr(e, "cart_status", None) or getattr(e, "from_status", None),
+            },
+        )
     except ValueError as e:
         db.rollback()
         logger.exception("post_picking_quick_pick:ValueError %s", _log_ctx(error=str(e)))
@@ -1606,8 +1622,10 @@ def post_picking_confirm_remaining(
     Zatwierdź i wróć: pozostała ilość produktu z lokalizacji w kolejności routingu.
     Atomowo — przy braku stanu cała operacja jest wycofywana.
     """
+    from ..services.cart_picking_lifecycle_service import CartLifecycleError
     from ..services.tenant_default_warehouse import resolve_quick_pick_warehouse_for_tenant
     from ..services.warehouse_service import WarehouseService
+    from ..services.wms_http_messages import raise_wms_from_lifecycle
     from ..services.wms_picking_confirm_remaining_service import (
         ConfirmRemainingError,
         confirm_remaining_product_picks,
@@ -1660,6 +1678,15 @@ def post_picking_confirm_remaining(
             status_code=int(e.http_status),
             detail={"code": e.code, "message": e.message, "error": e.code},
         ) from e
+    except CartLifecycleError as e:
+        db.rollback()
+        raise_wms_from_lifecycle(
+            e,
+            extra={
+                "action": "confirm_remaining",
+                "current": getattr(e, "cart_status", None) or getattr(e, "from_status", None),
+            },
+        )
     except ValueError as e:
         db.rollback()
         raise HTTPException(status_code=400, detail=str(e)) from e

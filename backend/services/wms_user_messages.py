@@ -245,9 +245,44 @@ def msg_cart_not_found() -> WmsUserMessage:
 
 
 def msg_invalid_cart_state(*, action: str = "", current: str = "") -> WmsUserMessage:
-    details = None
-    if action or current:
-        details = f"Operacja: {action or '—'}\nAktualny stan: {current or '—'}"
+    cur = str(current or "").strip().upper()
+    act = str(action or "").strip().lower()
+    # Picking entry / quick-pick while cart is already in packing lifecycle.
+    if cur in ("PACKING", "READY_FOR_PACKING") or (
+        act in ("startpicking", "start_picking", "quick_pick", "confirm_remaining")
+        and cur in ("PACKING", "READY_FOR_PACKING")
+    ):
+        if cur == "PACKING":
+            return WmsUserMessage(
+                code=WMS_INVALID_CART_STATE,
+                severity=WmsMessageSeverity.WARNING,
+                title="Wózek w pakowaniu",
+                message="Ten wózek jest już w trakcie pakowania — nie można na nim zbierać produktów.",
+                details=None,
+                suggested_action="Zakończ pakowanie albo wybierz inny wózek do zbierania.",
+                context={"action": action, "current": current},
+            )
+        return WmsUserMessage(
+            code=WMS_INVALID_CART_STATE,
+            severity=WmsMessageSeverity.WARNING,
+            title="Wózek oczekuje na pakowanie",
+            message="Zbieranie na tym wózku zostało zakończone — wózek czeka na pakowanie.",
+            details=None,
+            suggested_action="Przejdź do pakowania albo wybierz inny wózek do zbierania.",
+            context={"action": action, "current": current},
+        )
+    if act in ("startpicking", "start_picking", "quick_pick", "confirm_remaining") and cur and cur != "PICKING":
+        return WmsUserMessage(
+            code=WMS_INVALID_CART_STATE,
+            severity=WmsMessageSeverity.WARNING,
+            title="Wózek nieaktywny dla zbierania",
+            message="Wózek nie jest aktywny dla tego procesu. Zeskanuj wózek, aby rozpocząć zbieranie.",
+            details=None,
+            suggested_action="Wróć do skanowania wózka i rozpocznij zbieranie ponownie.",
+            context={"action": action, "current": current},
+        )
+    label = _lifecycle_label_pl(current)
+    details = f"Aktualny stan wózka: {label}." if label else None
     return WmsUserMessage(
         code=WMS_INVALID_CART_STATE,
         severity=WmsMessageSeverity.WARNING,
@@ -326,10 +361,21 @@ def from_cart_lifecycle_error(exc: Any, *, extra: dict[str, Any] | None = None) 
         return msg_no_matching_orders()
     if code in ("CART_CAPACITY_EXCEEDED",):
         return msg_cart_capacity_reached()
-    if code in ("invalid_state", "InvalidCartState", "invalid_transition"):
+    if code in (
+        "invalid_state",
+        "InvalidCartState",
+        "invalid_transition",
+        "InvalidCartTransition",
+    ):
+        current = (
+            extra.get("current")
+            or getattr(exc, "cart_status", None)
+            or getattr(exc, "from_status", None)
+            or ""
+        )
         return msg_invalid_cart_state(
-            action=str(extra.get("action") or ""),
-            current=str(extra.get("current") or ""),
+            action=str(extra.get("action") or getattr(exc, "action", None) or ""),
+            current=str(current or ""),
         )
     if code in ("session_not_found", "SessionNotFound"):
         return msg_session_expired()
