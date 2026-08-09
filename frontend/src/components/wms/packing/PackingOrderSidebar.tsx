@@ -44,7 +44,6 @@ export type PackingOrderSidebarProps = {
   showOrderPhone?: boolean;
   showOrderValue?: boolean;
   showShippingAddress?: boolean;
-  wszystkoSpakowane: boolean;
   scanBusy: boolean;
   packingActionsLocked: boolean;
   visibleOperationalNotes: WmsOperationalNoteBriefApi[];

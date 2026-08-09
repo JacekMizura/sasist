@@ -441,7 +441,6 @@ export function PackingView({
         showOrderPhone={showOrderPhone}
         showOrderValue={showOrderValue}
         showShippingAddress={showShippingAddress}
-        wszystkoSpakowane={wszystkoSpakowane}
         scanBusy={scanBusy}
         packingActionsLocked={packingActionsLocked}
         visibleOperationalNotes={visibleOperationalNotes}
