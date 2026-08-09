@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { ChevronDown } from "lucide-react";
 
 import { PanelStatusHierarchyPicker } from "./PanelStatusHierarchyPicker";
@@ -9,6 +9,12 @@ import type {
   OrderUiStatusPanelSummary,
   OrderUiStatusWithCount,
 } from "../../types/orderUiStatus";
+
+export type PanelBulkStatusPickerTriggerArgs = {
+  open: boolean;
+  disabled: boolean;
+  toggle: () => void;
+};
 
 export type PanelBulkStatusPickerDropdownProps = {
   panelSummary: OrderUiStatusPanelSummary | null;
@@ -21,6 +27,10 @@ export type PanelBulkStatusPickerDropdownProps = {
   selectedStatusId?: number | null;
   /** `statusId` jako string (pusty = wyczyść etykietę). */
   onSelect: (statusId: string) => void;
+  /** Własny trigger (np. ikona flagi) — zamiast domyślnego pola z ChevronDown. */
+  renderTrigger?: (args: PanelBulkStatusPickerTriggerArgs) => ReactNode;
+  /** Pozycja menu względem triggera (domyślnie pod lewym brzegiem). */
+  menuAlign?: "left" | "right";
 };
 
 function findStatus(
@@ -47,6 +57,8 @@ export function PanelBulkStatusPickerDropdown({
   className = "",
   selectedStatusId = null,
   onSelect,
+  renderTrigger,
+  menuAlign = "left",
 }: PanelBulkStatusPickerDropdownProps) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -54,6 +66,7 @@ export function PanelBulkStatusPickerDropdown({
     () => findStatus(panelSummary, selectedStatusId),
     [panelSummary, selectedStatusId],
   );
+  const triggerDisabled = disabled || panelSummary == null;
 
   useEffect(() => {
     if (!open) return;
@@ -71,55 +84,68 @@ export function PanelBulkStatusPickerDropdown({
     };
   }, [open]);
 
+  useEffect(() => {
+    if (triggerDisabled && open) setOpen(false);
+  }, [triggerDisabled, open]);
+
   const handlePick = (statusId: number | null) => {
     setOpen(false);
     onSelect(statusId == null ? "" : String(statusId));
   };
 
+  const toggle = () => {
+    if (triggerDisabled) return;
+    setOpen((v) => !v);
+  };
+
   return (
     <div ref={rootRef} className={`relative ${className}`}>
-      <button
-        type="button"
-        disabled={disabled || panelSummary == null}
-        aria-expanded={open}
-        aria-haspopup="listbox"
-        aria-label={ariaLabel}
-        className="flex w-full min-w-0 items-center gap-2 rounded-lg text-left disabled:cursor-not-allowed disabled:opacity-40"
-        onClick={() => {
-          if (disabled || panelSummary == null) return;
-          setOpen((v) => !v);
-        }}
-      >
-        <span className="min-w-0 flex-1">
-          {selected ? (
-            <PanelTreeStatusItem
-              compact
-              name={selected.status.name}
-              mainGroup={selected.mainGroup}
-              colors={{
-                color: selected.status.color,
-                badge_color: selected.status.badge_color,
-                background_color: selected.status.background_color,
-                text_color: selected.status.text_color,
-              }}
-              imageUrl={selected.status.image_url}
-              active={open}
-            />
-          ) : (
-            <span className="inline-flex h-[34px] w-full max-w-full items-center rounded-lg border border-dashed border-slate-200 bg-white px-2.5 text-[12px] font-medium text-slate-400">
-              {placeholder}
-            </span>
-          )}
-        </span>
-        <ChevronDown
-          className={`h-4 w-4 shrink-0 text-slate-400 transition-transform ${open ? "rotate-180" : ""}`}
-          aria-hidden
-        />
-      </button>
+      {renderTrigger ? (
+        renderTrigger({ open, disabled: triggerDisabled, toggle })
+      ) : (
+        <button
+          type="button"
+          disabled={triggerDisabled}
+          aria-expanded={open}
+          aria-haspopup="listbox"
+          aria-label={ariaLabel}
+          className="flex w-full min-w-0 items-center gap-2 rounded-lg text-left disabled:cursor-not-allowed disabled:opacity-40"
+          onClick={toggle}
+        >
+          <span className="min-w-0 flex-1">
+            {selected ? (
+              <PanelTreeStatusItem
+                compact
+                name={selected.status.name}
+                mainGroup={selected.mainGroup}
+                colors={{
+                  color: selected.status.color,
+                  badge_color: selected.status.badge_color,
+                  background_color: selected.status.background_color,
+                  text_color: selected.status.text_color,
+                }}
+                imageUrl={selected.status.image_url}
+                active={open}
+              />
+            ) : (
+              <span className="inline-flex h-[34px] w-full max-w-full items-center rounded-lg border border-dashed border-slate-200 bg-white px-2.5 text-[12px] font-medium text-slate-400">
+                {placeholder}
+              </span>
+            )}
+          </span>
+          <ChevronDown
+            className={`h-4 w-4 shrink-0 text-slate-400 transition-transform ${open ? "rotate-180" : ""}`}
+            aria-hidden
+          />
+        </button>
+      )}
 
       {open && panelSummary != null ? (
         <div
-          className="absolute left-0 top-full z-[200] mt-1 w-[min(100vw-2rem,18rem)] overflow-hidden rounded-lg border border-slate-200/95 bg-white shadow-xl ring-1 ring-slate-200/60"
+          className={[
+            "absolute top-full z-[200] mt-1 w-[min(100vw-2rem,18rem)] overflow-hidden rounded-lg border border-slate-200/95 bg-white shadow-xl ring-1 ring-slate-200/60",
+            menuAlign === "right" ? "right-0" : "left-0",
+          ].join(" ")}
           role="listbox"
           aria-label={ariaLabel}
         >

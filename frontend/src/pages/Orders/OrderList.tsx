@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import api from "../../api/axios";
 import { getOrderPanelSubgroups, getOrderUiStatusSummary } from "../../api/orderUiStatusApi";
+import { useAuth } from "../../context/AuthContext";
 import { useWarehouse } from "../../context/WarehouseContext";
 import type { OrderUiPanelSubgroupRead, OrderUiStatusBrief, OrderUiStatusPanelSummary } from "../../types/orderUiStatus";
 import { usePanelListBulkSelection } from "../../hooks/usePanelListBulkSelection";
@@ -156,6 +157,8 @@ type SortKey =
 export default function OrderList() {
   const navigate = useNavigate();
   const location = useLocation();
+  const { hasPermission } = useAuth();
+  const canChangeOrderStatus = hasPermission("orders.edit");
   const { warehouses, warehouse } = useWarehouse();
 
   const listViewAdapter = useMemo(() => buildOrderListViewAdapter(DAMAGE_TENANT_ID), []);
@@ -557,8 +560,15 @@ export default function OrderList() {
 
   const handleQuickChangeStatus = async (statusId: string) => {
     if (effectiveSelectionCount === 0) return;
+    if (!canChangeOrderStatus) {
+      setFetchError("Brak uprawnień do zmiany statusu zamówień.");
+      return;
+    }
     const gate = resolveWarehouseForBulkAction("change_status");
-    if (!gate.ok) return;
+    if (!gate.ok) {
+      setFetchError("Nie można zmienić statusu zamówień. Sprawdź wybrane zamówienia i magazyn.");
+      return;
+    }
     setQuickBusy(true);
     setFetchError(null);
     try {
@@ -570,18 +580,31 @@ export default function OrderList() {
         config: { change_status: { statusId } },
       });
       if (errors.length) {
-        setFetchError(errors.slice(0, 5).join(" · "));
-        setToast(errors.length > 5 ? "Część operacji zakończona z błędami." : "Część operacji zakończona z błędami.");
-      } else {
-        setToast("Status zaktualizowany.");
-        setQuickModal(null);
-        clearSelection();
-        setBulkSelectMenuKey((k) => k + 1);
+        setFetchError(
+          errors.length === 1
+            ? errors[0]!
+            : `Nie udało się zmienić statusu części zamówień: ${errors.slice(0, 5).join(" · ")}`,
+        );
+        fetchOrders();
+        void loadPanelSummary();
+        return;
       }
+      setToast("Status zaktualizowany.");
+      setQuickModal(null);
+      clearSelection();
+      setBulkSelectMenuKey((k) => k + 1);
       fetchOrders();
       void loadPanelSummary();
-    } catch {
-      setFetchError("Operacja nie powiodła się.");
+    } catch (e: unknown) {
+      const ax = e as { response?: { data?: { detail?: string | { message?: string; detail?: string } } }; message?: string };
+      const detail = ax.response?.data?.detail;
+      const msg =
+        typeof detail === "string"
+          ? detail
+          : typeof detail === "object" && detail
+            ? String(detail.message || detail.detail || "")
+            : "";
+      setFetchError(msg.trim() || ax.message || "Nie udało się zmienić statusu zamówień.");
     } finally {
       setQuickBusy(false);
     }
@@ -946,7 +969,12 @@ export default function OrderList() {
           />
 
           {fetchError ? (
-            <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">{fetchError}</div>
+            <div
+              className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-800"
+              role="alert"
+            >
+              {fetchError}
+            </div>
           ) : null}
 
           <OrderListFiltersPanel
@@ -985,6 +1013,7 @@ export default function OrderList() {
                   bulkSelectMenuKey={bulkSelectMenuKey}
                   bulkBusy={bulkBusy}
                   bulkToolbarDisabled={bulkToolbarDisabled}
+                  statusChangeDisabled={!canChangeOrderStatus}
                   totalCount={totalCount}
                   effectiveSelectionCount={effectiveSelectionCount}
                   bulkSelectionMode={bulkSelectionMode}

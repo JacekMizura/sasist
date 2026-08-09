@@ -1,4 +1,4 @@
-import { Download, FileText, Mail, Printer, Zap } from "lucide-react";
+import { Download, FileText, Flag, Mail, Printer, Zap } from "lucide-react";
 
 import { PanelBulkStatusPickerDropdown } from "../../panel/PanelBulkStatusPickerDropdown";
 import type { PanelBulkSelectionMode } from "../../../hooks/usePanelListBulkSelection";
@@ -15,6 +15,8 @@ export type OrdersListBulkBarProps = {
   bulkSelectMenuKey: number;
   bulkBusy: boolean;
   bulkToolbarDisabled: boolean;
+  /** Brak uprawnienia do zmiany statusu — flaga i picker statusu nieaktywne. */
+  statusChangeDisabled?: boolean;
   totalCount: number;
   effectiveSelectionCount: number;
   bulkSelectionMode: PanelBulkSelectionMode;
@@ -37,6 +39,7 @@ export function OrdersListBulkBar({
   bulkSelectMenuKey,
   bulkBusy,
   bulkToolbarDisabled,
+  statusChangeDisabled = false,
   totalCount,
   effectiveSelectionCount,
   bulkSelectionMode,
@@ -54,6 +57,8 @@ export function OrdersListBulkBar({
   onPrint,
   onExport,
 }: OrdersListBulkBarProps) {
+  const statusPickerDisabled = bulkToolbarDisabled || statusChangeDisabled;
+
   return (
     <ModuleBulkActionsToolbar
       bulkSelectMenuKey={bulkSelectMenuKey}
@@ -75,11 +80,11 @@ export function OrdersListBulkBar({
             key={`${bulkSelectMenuKey}-st`}
             panelSummary={panelSummary}
             panelSubgroups={panelSubgroups}
-            disabled={bulkToolbarDisabled}
+            disabled={statusPickerDisabled}
             placeholder="Wybierz akcję"
             ariaLabel="Zmień status panelu dla zaznaczonych zamówień"
             onSelect={(v) => {
-              if (effectiveSelectionCount === 0) return;
+              if (effectiveSelectionCount === 0 || statusChangeDisabled) return;
               onBulkStatusSelect(v);
             }}
           />
@@ -108,6 +113,32 @@ export function OrdersListBulkBar({
           >
             <Printer className="h-4 w-4" strokeWidth={2} aria-hidden />
           </button>
+          <PanelBulkStatusPickerDropdown
+            key={`${bulkSelectMenuKey}-flag-st`}
+            panelSummary={panelSummary}
+            panelSubgroups={panelSubgroups}
+            disabled={statusPickerDisabled}
+            ariaLabel="Zmień status"
+            menuAlign="right"
+            onSelect={(v) => {
+              if (effectiveSelectionCount === 0 || statusChangeDisabled) return;
+              onBulkStatusSelect(v);
+            }}
+            renderTrigger={({ open, disabled, toggle }) => (
+              <button
+                type="button"
+                disabled={disabled}
+                className={moduleBulkIconBtnClass}
+                title="Zmień status"
+                aria-label="Zmień status"
+                aria-expanded={open}
+                aria-haspopup="listbox"
+                onClick={toggle}
+              >
+                <Flag className="h-4 w-4" strokeWidth={2} aria-hidden />
+              </button>
+            )}
+          />
           <button
             type="button"
             disabled={bulkToolbarDisabled}
