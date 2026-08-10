@@ -104,10 +104,36 @@ export function sessionWithPickingFlowConfig(
   };
 }
 
-/** Po kafelku statusu — zawsze ekran wyboru typu (konfiguracja decyduje o dostępnych opcjach). */
+/**
+ * Po kafelku statusu:
+ * - aktywna sesja z cart_id → od razu lista zbierania (bez „Wybierz” / skanu),
+ * - brak sesji → ekran wyboru typu (albo produkty gdy brak trybów).
+ */
 export function resolveAfterStatusWithConfig(session: WmsPickingSessionState): PickingFlowNavigateTarget {
   const sm = session.singleMode;
   const mm = session.multiMode;
+  const hasActiveCart = session.cartId != null && session.cartId > 0;
+
+  if (hasActiveCart) {
+    const ot =
+      session.orderTypeChoice === "single" ||
+      session.orderTypeChoice === "multi" ||
+      session.orderTypeChoice === "all"
+        ? session.orderTypeChoice
+        : "all";
+    return {
+      path: WMS_ROUTES.pickingProducts,
+      state: {
+        pickingSession: {
+          ...session,
+          orderTypeChoice: ot,
+          requireCart: true,
+          preCartBack: "status",
+        },
+      },
+    };
+  }
+
   if (sm == null && mm == null) {
     return {
       path: WMS_ROUTES.pickingProducts,
@@ -169,7 +195,22 @@ export function resolveAfterOrderTypeChoice(
     physicalCartType: needCart ? session.physicalCartType : null,
   };
   if (needCart) {
-    // Już przypisany wózek zgodny z trybem — bez ponownego skanu.
+    // Aktywna sesja już ma wózek — nigdy ponownie nie skanuj (nawet przy mismatch hintów UI).
+    if (session.cartId != null && session.cartId > 0) {
+      return {
+        path: WMS_ROUTES.pickingProducts,
+        state: {
+          pickingSession: {
+            ...next,
+            cartId: session.cartId,
+            cartCode: session.cartCode,
+            cartName: session.cartName,
+            physicalCartType: session.physicalCartType,
+            preCartBack: "order-type",
+          },
+        },
+      };
+    }
     if (sessionHasMatchingCart(next, cartType)) {
       return {
         path: WMS_ROUTES.pickingProducts,

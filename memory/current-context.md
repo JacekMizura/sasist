@@ -1,11 +1,16 @@
 ﻿## Active
 
+**Wznowienie sesji zbierania (2026-08-10):**
+- Jedna sesja = jeden wózek; skan tylko przy ROZPOCZĘCIU nowej sesji
+- BE: `bootstrap_start_picking_if_needed` — walidacja typu wózka NIE przy PICKING/ASSIGNED+sesja
+- FE: aktywna sesja → klik statusu → od razu produkty (bez Wybierz / skanu / potwierdzenia)
+- Cart-scan z cartId → redirect na produkty; brak „Potwierdź wózek”
+- Status CTA „Zeskanuj wózek” tylko gdy `active_cart_id` null
+
 **Sesja zbierania — SSOT wózek + produkty (2026-08-10):**
 - Projekcja: `wms_picking_session_projection.py` (ten sam `build_wms_picking_product_lines` co lista)
-- Statusy: `session_products_*` + `active_session_id`; CTA „Zeskanuj wózek” tylko bez sesji
+- Statusy: `session_products_*` + `active_session_id` + `active_order_type`
 - Hub „Wybierz”: produkty z sesji gdy aktywna; `order_count` nadal = wolne
-- Re-entry: hydrate cart z API, skip skanu; confirm mode = oczekiwany konkretny wózek
-- Anulowanie: istniejący `cancel_picking` + rollback lokalizacji (bez zmian silnika)
 
 **Przypisywanie wózków w zbieraniu — SSOT (2026-08-10):**
 - Typ wózka vs kafelek: BULK↔`CartType.BULK`, BASKETS↔`MULTI`; reject PL msg

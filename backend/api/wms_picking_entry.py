@@ -392,6 +392,11 @@ def get_picking_configured_statuses(
                     session_products_picked=int(proj.get("products_picked") or 0),
                     session_products_total=int(proj.get("products_total") or 0),
                     active_session_id=proj.get("session_id"),
+                    active_order_type=(
+                        proj.get("order_type")
+                        if proj.get("order_type") in ("single", "multi", "all")
+                        else None
+                    ),
                 )
             )
         gidx = {g: i for i, g in enumerate(_GROUP_ORDER)}

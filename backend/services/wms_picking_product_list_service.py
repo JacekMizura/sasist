@@ -912,7 +912,31 @@ def bootstrap_start_picking_if_needed(
     if cart is None:
         raise ValueError("Nie znaleziono wózka.")
 
-    # Typ wózka vs konfiguracja statusu (BULK ↔ scanned, MULTI ↔ baskets).
+    st = get_cart_status(cart)
+    # Wznowienie aktywnej sesji: NIE waliduj typu wózka ponownie — wózek już należy do sesji.
+    if st == CartStatus.PICKING:
+        return find_open_picking_session(db, cart=cart), None
+    if st == CartStatus.ASSIGNED:
+        existing = find_open_picking_session(db, cart=cart)
+        if existing is not None:
+            return existing, None
+    if st in (CartStatus.READY_FOR_PACKING, CartStatus.PACKING):
+        # Never silently enter product picking on a packing-lifecycle cart.
+        from .cart_picking_lifecycle_service import InvalidCartStateError
+
+        raise InvalidCartStateError(
+            "Wózek nie jest aktywny dla zbierania.",
+            status=st.value,
+        )
+    if st not in (CartStatus.AVAILABLE, CartStatus.ASSIGNED):
+        from .cart_picking_lifecycle_service import InvalidCartStateError
+
+        raise InvalidCartStateError(
+            "Wózek nie jest aktywny dla zbierania.",
+            status=st.value,
+        )
+
+    # Typ wózka vs konfiguracja — TYLKO przy rozpoczynaniu nowej sesji (AVAILABLE/ASSIGNED bez sesji).
     from ..models.picking_config import PickingConfig
     from .wms_status_tile_config import assert_cart_matches_tile_type, wms_tile_cart_config
 
@@ -931,25 +955,6 @@ def bootstrap_start_picking_if_needed(
         )
         if _req:
             assert_cart_matches_tile_type(cart, tile_ct)
-
-    st = get_cart_status(cart)
-    if st == CartStatus.PICKING:
-        return find_open_picking_session(db, cart=cart), None
-    if st in (CartStatus.READY_FOR_PACKING, CartStatus.PACKING):
-        # Never silently enter product picking on a packing-lifecycle cart.
-        from .cart_picking_lifecycle_service import InvalidCartStateError
-
-        raise InvalidCartStateError(
-            "Wózek nie jest aktywny dla zbierania.",
-            status=st.value,
-        )
-    if st not in (CartStatus.AVAILABLE, CartStatus.ASSIGNED):
-        from .cart_picking_lifecycle_service import InvalidCartStateError
-
-        raise InvalidCartStateError(
-            "Wózek nie jest aktywny dla zbierania.",
-            status=st.value,
-        )
 
     cart_code = getattr(cart, "code", None) or getattr(cart, "name", None)
 

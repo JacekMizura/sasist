@@ -59,6 +59,15 @@ export default function WmsPickingOrderTypePage() {
     }
     if (session.singleMode == null && session.multiMode == null) {
       navigate(WMS_ROUTES.picking, { replace: true });
+      return;
+    }
+    // Aktywna sesja z wózkiem — pomiń „Wybierz”, wznów zbieranie.
+    if (session.cartId != null && session.cartId > 0) {
+      const { path, state } = resolveAfterOrderTypeChoice(
+        session,
+        session.orderTypeChoice ?? "all",
+      );
+      navigate(path, { replace: true, state });
     }
   }, [session, navigate]);
 

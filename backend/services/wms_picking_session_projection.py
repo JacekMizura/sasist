@@ -69,10 +69,10 @@ def project_operator_active_picking_for_status(
     # Sesja z innym source_status — nie projekcja dla tej karty (chyba że zamówienia
     # nadal wiszą na tym statusie; wtedy i tak policzymy po order_ui_status_id).
     ot_meta = str(meta.get("order_type") or "").strip().lower()
-    ot = order_type if order_type in ("single", "multi", "all") else "all"
-    if ot == "all" and ot_meta in ("single", "multi", "all"):
-        # Preferuj order_type zapisany w sesji przy projekcji „all” na hubie.
-        pass
+    # Przy wznowieniu licz produkty w zakresie order_type sesji (nie „all” na siłę).
+    ot = ot_meta if ot_meta in ("single", "multi", "all") else (
+        order_type if order_type in ("single", "multi", "all") else "all"
+    )
 
     try:
         lines = build_wms_picking_product_lines(

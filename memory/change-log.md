@@ -1,3 +1,10 @@
+## 2026-08-10 — Uspójnij wznowienie sesji zbierania
+
+- Skan wózka = tylko start nowej sesji; aktywna sesja → od razu lista produktów
+- BE: nie waliduj typu wózka przy PICKING / ASSIGNED z otwartą sesją (źródło „Niewłaściwy wózek”)
+- FE: `resolveAfterStatusWithConfig` resume by `cartId`; cart-scan redirect; brak confirm-scan
+- Status: CTA skanu tylko bez `active_cart_id`; po skanie start → navigate products
+
 ## 2026-08-10 — Uspójnij sesję zbierania i przypisanie wózka
 
 - BE: `wms_picking_session_projection` — produkty sesji jak na liście produktów (nie wolna kolejka)

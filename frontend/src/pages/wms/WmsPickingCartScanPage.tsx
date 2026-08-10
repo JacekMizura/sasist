@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import {
   getWmsPickingProductLines,
@@ -20,15 +20,10 @@ import { PickingSimpleHeader } from "../../components/wms/picking/PickingSimpleH
 import { PickingProcessAlert } from "../../components/wms/picking/PickingProcessAlert";
 import { wmsTypoClass } from "../../wms/typography/wmsOperatorTypography";
 
-function cartDisplayLabel(code?: string | null, name?: string | null, cartId?: number | null): string {
-  const fromName = (name || "").trim();
-  if (fromName) return fromName;
-  const fromCode = (code || "").trim();
-  if (fromCode) return fromCode;
-  if (cartId != null && cartId > 0) return `CART-${cartId}`;
-  return "—";
-}
-
+/**
+ * Skan wózka = wyłącznie ROZPOCZĘCIE nowej sesji.
+ * Jeżeli sesja już ma cartId — natychmiast wracamy na listę produktów (zero potwierdzania).
+ */
 export default function WmsPickingCartScanPage() {
   const navigate = useNavigate();
   const routerLocation = useLocation();
@@ -50,16 +45,17 @@ export default function WmsPickingCartScanPage() {
   const [resolving, setResolving] = useState(false);
   const [cartAlert, setCartAlert] = useState<string | null>(null);
 
-  const expectedCartLabel = useMemo(
-    () => cartDisplayLabel(session?.cartCode, session?.cartName, session?.cartId),
-    [session?.cartCode, session?.cartName, session?.cartId],
-  );
-  /** Sesja już zna wózek — skan = potwierdzenie konkretnego ID, nie zgadywanie. */
-  const confirmMode = session?.cartId != null && session.cartId > 0;
-
   useEffect(() => {
     if (!session) {
       navigate(WMS_ROUTES.picking, { replace: true });
+      return;
+    }
+    // Sesja już zna wózek — skan nie jest częścią wznowienia.
+    if (session.cartId != null && session.cartId > 0) {
+      navigate(WMS_ROUTES.pickingProducts, {
+        replace: true,
+        state: { pickingSession: { ...session, preCartBack: "status" } },
+      });
     }
   }, [session, navigate]);
 
@@ -69,13 +65,15 @@ export default function WmsPickingCartScanPage() {
   }, [setActiveDocument]);
 
   useEffect(() => {
-    setScannerInputPlaceholder(confirmMode ? "Potwierdź przypisany wózek" : "Zeskanuj wózek");
+    if (session?.cartId != null && session.cartId > 0) return;
+    setScannerInputPlaceholder("Zeskanuj wózek");
     refocusScannerInput();
-  }, [setScannerInputPlaceholder, refocusScannerInput, confirmMode]);
+  }, [setScannerInputPlaceholder, refocusScannerInput, session?.cartId]);
 
   const goNext = useCallback(
     async (cartCode: string) => {
       if (!session || warehouseId == null) return;
+      if (session.cartId != null && session.cartId > 0) return;
       const code = cartCode.trim();
       if (!code) return;
       setResolving(true);
@@ -84,15 +82,6 @@ export default function WmsPickingCartScanPage() {
           expectedCartType: session.cartType ?? null,
           sourceStatusId: session.orderUiStatusId,
         });
-
-        if (confirmMode && session.cartId != null && intSafe(r.cart_id) !== intSafe(session.cartId)) {
-          const msg = `Zeskanowano inny wózek. Do tej sesji przypisany jest: ${expectedCartLabel}`;
-          setCartAlert(msg);
-          showScanFeedbackFromCode("INVALID_CART_SCAN");
-          refocusScannerInput();
-          return;
-        }
-
         const startResult = await postWmsPickingStart(
           DAMAGE_TENANT_ID,
           warehouseId,
@@ -110,7 +99,6 @@ export default function WmsPickingCartScanPage() {
             suggested_action: null,
           });
         }
-        // Refetch SSOT for THIS cart — invalidates stale hubPickStats from status selection.
         const linesResult = await getWmsPickingProductLines(
           DAMAGE_TENANT_ID,
           warehouseId,
@@ -168,18 +156,14 @@ export default function WmsPickingCartScanPage() {
               hubOrderCount,
               hubPickStats,
               assignEmptyMessage: startResult.operator_message ?? null,
+              pickingSessionId: startResult.session_id ?? session.pickingSessionId ?? null,
             },
           },
         });
       } catch (e) {
-        // resolve-cart returns plain 404 string; start returns structured WMS_* — both via showWmsError.
         showWmsError(e);
         showScanFeedbackFromCode("INVALID_CART_SCAN");
-        setCartAlert(
-          confirmMode
-            ? `Zeskanowano inny wózek. Do tej sesji przypisany jest: ${expectedCartLabel}`
-            : "Nieprawidłowy wózek. Zeskanuj właściwy wózek.",
-        );
+        setCartAlert("Nieprawidłowy wózek. Zeskanuj właściwy wózek.");
         refocusScannerInput();
       } finally {
         setResolving(false);
@@ -195,12 +179,14 @@ export default function WmsPickingCartScanPage() {
       showWmsMessage,
       refocusScannerInput,
       showScanFeedbackFromCode,
-      confirmMode,
-      expectedCartLabel,
     ],
   );
 
   useEffect(() => {
+    if (session?.cartId != null && session.cartId > 0) {
+      registerScanHandler(null);
+      return;
+    }
     const handler = (ean: string) => {
       const scan = normalizeScanEan(ean);
       if (!scan || resolving) return;
@@ -208,9 +194,9 @@ export default function WmsPickingCartScanPage() {
     };
     registerScanHandler(handler);
     return () => registerScanHandler(null);
-  }, [registerScanHandler, goNext, resolving]);
+  }, [registerScanHandler, goNext, resolving, session?.cartId]);
 
-  if (!session) {
+  if (!session || (session.cartId != null && session.cartId > 0)) {
     return (
       <div className="flex min-h-[50vh] flex-col items-center justify-center gap-2 bg-white px-6 text-center text-sm font-medium text-slate-500">
         Przekierowanie…
@@ -250,13 +236,7 @@ export default function WmsPickingCartScanPage() {
             ? "Wróć do wyboru rodzaju zamówień"
             : "Wróć do wyboru statusu"
         }
-        title={
-          confirmMode
-            ? "Potwierdź przypisany wózek"
-            : showBaskets
-              ? "Zeskanuj wózek z koszykami"
-              : "Zeskanuj wózek"
-        }
+        title={showBaskets ? "Zeskanuj wózek z koszykami" : "Zeskanuj wózek"}
       />
       <PickingProcessAlert
         open={cartAlert != null}
@@ -271,34 +251,20 @@ export default function WmsPickingCartScanPage() {
               <Loader2 className="h-12 w-12 animate-spin" strokeWidth={2.5} />
             </div>
           ) : null}
-          {confirmMode && !resolving ? (
-            <p className="mb-4 inline-flex items-center gap-2 rounded-full border border-slate-300 bg-slate-50 px-3 py-1.5 text-sm font-semibold text-slate-800">
-              Wózek: <span className="font-bold tabular-nums">{expectedCartLabel}</span>
-            </p>
-          ) : null}
           <p className={["font-semibold text-slate-900", wmsTypoClass.base].join(" ")}>
             {resolving
               ? "Weryfikacja wózka…"
-              : confirmMode
-                ? "Potwierdź przypisany wózek skanem."
-                : "Zeskanuj wózek. Rozpoczynasz nową turę zbierania."}
+              : "Zeskanuj wózek. Rozpoczynasz nową turę zbierania."}
           </p>
           {!resolving ? (
             <p className="mt-3 text-sm text-slate-500">
-              {confirmMode
-                ? `Oczekiwany wózek: ${expectedCartLabel}. Skan innego wózka zostanie odrzucony.`
-                : showBaskets
-                  ? "Zeskanuj wózek z koszykami, aby przejść do listy produktów."
-                  : "Zeskanuj wózek, aby przejść do listy produktów."}
+              {showBaskets
+                ? "Zeskanuj wózek z koszykami, aby przejść do listy produktów."
+                : "Zeskanuj wózek, aby przejść do listy produktów."}
             </p>
           ) : null}
         </div>
       </div>
     </div>
   );
-}
-
-function intSafe(v: unknown): number {
-  const n = typeof v === "number" ? v : Number(v);
-  return Number.isFinite(n) ? n : NaN;
 }

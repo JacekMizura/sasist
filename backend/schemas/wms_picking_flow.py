@@ -75,6 +75,10 @@ class WmsPickingConfiguredStatusItem(BaseModel):
         default=None,
         description="ID otwartej WmsOperationSession operatora (jeśli jest)",
     )
+    active_order_type: Optional[Literal["single", "multi", "all"]] = Field(
+        default=None,
+        description="order_type zapisany w aktywnej sesji (do wznowienia bez ekranu Wybierz)",
+    )
 
 
 class WmsPickingFlowLimits(BaseModel):

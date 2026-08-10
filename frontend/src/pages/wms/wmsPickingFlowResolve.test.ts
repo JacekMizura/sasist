@@ -34,12 +34,26 @@ describe("visibleOrderTypeChoices / canOfferAll", () => {
 });
 
 describe("resolveAfterStatusWithConfig", () => {
-  it("always routes to order-type when modes are configured", () => {
+  it("routes to order-type when modes configured and no active cart", () => {
     const s = baseSession();
     s.singleMode = "cart_scan";
     s.multiMode = "cart_scan";
     const t = resolveAfterStatusWithConfig(s);
     expect(t.path).toBe(WMS_ROUTES.pickingOrderType);
+  });
+
+  it("resumes directly to products when active cart is on session", () => {
+    const s = baseSession();
+    s.singleMode = "cart_scan";
+    s.multiMode = "cart_scan";
+    s.cartId = 123;
+    s.cartCode = "120X80";
+    s.physicalCartType = "bulk";
+    s.orderTypeChoice = "all";
+    const t = resolveAfterStatusWithConfig(s);
+    expect(t.path).toBe(WMS_ROUTES.pickingProducts);
+    expect(t.state.pickingSession.cartId).toBe(123);
+    expect(t.state.pickingSession.orderTypeChoice).toBe("all");
   });
 });
 
@@ -93,6 +107,8 @@ describe("resolveAfterOrderTypeChoice", () => {
     s.cartCode = "WK-07";
     s.physicalCartType = "multi";
     const t = resolveAfterOrderTypeChoice(s, "single");
-    expect(t.path).toBe(WMS_ROUTES.pickingCart);
+    // Aktywna sesja ma już cartId — zawsze wznów, bez ponownego skanu.
+    expect(t.path).toBe(WMS_ROUTES.pickingProducts);
+    expect(t.state.pickingSession.cartId).toBe(42);
   });
 });

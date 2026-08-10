@@ -29,6 +29,8 @@ export type WmsPickingConfiguredStatusItem = {
   session_products_picked?: number;
   session_products_total?: number;
   active_session_id?: number | null;
+  /** order_type z aktywnej sesji — do bezpośredniego wznowienia. */
+  active_order_type?: "single" | "multi" | "all" | null;
 };
 
 export type WmsPickingPickUnit = "orders" | "products";
