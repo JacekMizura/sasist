@@ -1,3 +1,16 @@
+## 2026-07-24 — 5 poziomów wielkości czcionki WMS (Ogólne)
+
+- Dozwolone: 12 / 14 / 16 / 18 / 20 px; domyślna 16 (było 16|18|21, domyślna 18)
+- BE + FE + panel „Przywróć domyślne”; nieprawidłowe (np. 21) → normalizacja do 16
+- Bez nowego systemu ustawień — ten sam SSOT `wms_general_settings`
+
+## 2026-08-10 — Zbieranie: czysty biały UI (Sellasist layout, Sasist badges)
+
+- Lista/detal: minimalistyczne karty, `Do zebrania: X/Y`, sticky „Zebrane” + menu ⋮ (Opcje)
+- Badge lokalizacji = istniejący `PackingLocationPill` (Sasist)
+- Order-type + cart-scan uproszczone wizualnie; logika skanu/finalize bez zmian
+- Kit UI: `frontend/src/components/wms/picking/Picking*`
+
 ## 2026-08-10 — Ustawienia WMS „Ogólne”: wielkość czcionki
 
 - Nowa zakładka „Ogólne” (współdzielone ustawienia trybów)

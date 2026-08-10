@@ -9,8 +9,8 @@ from sqlalchemy import Column, DateTime, ForeignKey, Integer, UniqueConstraint
 from ..database import Base
 
 # Allowed px sizes for operator typography (SSOT).
-WMS_FONT_SIZE_PX = (16, 18, 21)
-WMS_FONT_SIZE_DEFAULT_PX = 18
+WMS_FONT_SIZE_PX = (12, 14, 16, 18, 20)
+WMS_FONT_SIZE_DEFAULT_PX = 16
 
 
 class WmsGeneralSettings(Base):

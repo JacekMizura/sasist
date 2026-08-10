@@ -3,7 +3,7 @@
  */
 import api from "./axios";
 
-export type WmsFontSizePx = 16 | 18 | 21;
+export type WmsFontSizePx = 12 | 14 | 16 | 18 | 20;
 
 export type WmsGeneralSettingsApi = {
   tenant_id: number;

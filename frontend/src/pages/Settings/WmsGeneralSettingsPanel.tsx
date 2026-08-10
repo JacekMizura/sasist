@@ -206,10 +206,10 @@ export const WmsGeneralSettingsPanel = forwardRef<
             disabled={warehouseId == null || loading}
             onClick={restoreDefaults}
           >
-            Przywróć domyślne (18 px)
+            Przywróć domyślne (16 px)
           </button>
           <p className="mt-1 text-xs text-slate-500">
-            Ustawia wszystkie trzy wielkości na 18 px. Zapisz zmiany, aby utrwalić.
+            Ustawia wszystkie trzy wielkości na 16 px. Zapisz zmiany, aby utrwalić.
           </p>
         </div>
       </WmsSettingsSection>

@@ -27,7 +27,7 @@ export function WmsOperatorTypographyRoot({
     [WMS_TYPO_CSS_VARS.base]: `${typography.fontSizeBasePx}px`,
     [WMS_TYPO_CSS_VARS.location]: `${typography.fontSizeLocationPx}px`,
     [WMS_TYPO_CSS_VARS.quantity]: `${typography.fontSizeQuantityPx}px`,
-    fontSize: `var(${WMS_TYPO_CSS_VARS.base}, 18px)`,
+    fontSize: `var(${WMS_TYPO_CSS_VARS.base}, 16px)`,
   } as CSSProperties;
 
   return (

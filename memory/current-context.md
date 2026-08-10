@@ -1,10 +1,16 @@
 ﻿## Active
 
-**WMS Ogólne / typografia (2026-08-10):**
-- Tab Ustawienia WMS → „Ogólne”: base / location / qty font 16|18|21 px
+**Picking UI rebuild — Sellasist-clean (2026-08-10):**
+- White minimal list/detail; Sasist `PackingLocationPill` for locations; sticky „Zebrane” + ⋮ options sheet
+- Kit: `components/wms/picking/Picking*` (header, card, sticky, primitives)
+- Logic unchanged (scan/finalize/shortage/MULTI); typography via `wmsTypoClass`
+
+**WMS Ogólne / typografia (2026-07-24):**
+- Tab Ustawienia WMS → „Ogólne”: 5 poziomów 12|14|16|18|20 px (domyślna 16)
 - SSOT: `wms_general_settings` + GET/POST `/wms/settings/general`
 - FE: CSS vars on `WmsOperationalLayout` via `WmsOperatorTypographyProvider`; consume `wmsTypoClass`
 - No auto-downscale on collectors — layout wraps instead
+- Stare wartości (np. 21) normalizują się do 16 przy odczycie
 
 **Picking terminal settings (2026-08-10):**
 - DB/API: `WmsPickingTerminalSettings` → `/wms/settings/picking-terminal`

@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from ..models.wms_general_settings import (
     WMS_FONT_SIZE_DEFAULT_PX,
+    WMS_FONT_SIZE_PX,
     WmsGeneralSettings,
 )
 from .tenant_default_warehouse import assert_tenant_warehouse_scope
@@ -18,7 +19,7 @@ def normalize_wms_font_size_px(value: object, *, default: int = WMS_FONT_SIZE_DE
         iv = int(value)  # type: ignore[arg-type]
     except (TypeError, ValueError):
         return int(default)
-    if iv in (16, 18, 21):
+    if iv in WMS_FONT_SIZE_PX:
         return iv
     return int(default)
 

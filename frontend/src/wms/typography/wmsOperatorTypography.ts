@@ -3,15 +3,17 @@
  * Values come from warehouse „Ogólne” settings → CSS variables on the operator shell.
  */
 
-export type WmsFontSizePx = 16 | 18 | 21;
+export type WmsFontSizePx = 12 | 14 | 16 | 18 | 20;
 
 export const WMS_FONT_SIZE_OPTIONS: Array<{ value: WmsFontSizePx; label: string }> = [
-  { value: 16, label: "Mała — 16 px" },
-  { value: 18, label: "Średnia (domyślna) — 18 px" },
-  { value: 21, label: "Duża — 21 px" },
+  { value: 12, label: "Bardzo mała — 12 px" },
+  { value: 14, label: "Mała — 14 px" },
+  { value: 16, label: "Średnia (domyślna) — 16 px" },
+  { value: 18, label: "Duża — 18 px" },
+  { value: 20, label: "Bardzo duża — 20 px" },
 ];
 
-export const WMS_FONT_SIZE_DEFAULT_PX: WmsFontSizePx = 18;
+export const WMS_FONT_SIZE_DEFAULT_PX: WmsFontSizePx = 16;
 
 export type WmsOperatorTypography = {
   fontSizeBasePx: WmsFontSizePx;
@@ -36,7 +38,7 @@ export const WMS_GENERAL_SETTINGS_CHANGED_EVENT = "wms-general-settings-changed"
 
 export function normalizeWmsFontSizePx(value: unknown): WmsFontSizePx {
   const n = Number(value);
-  if (n === 16 || n === 18 || n === 21) return n;
+  if (n === 12 || n === 14 || n === 16 || n === 18 || n === 20) return n;
   return WMS_FONT_SIZE_DEFAULT_PX;
 }
 
@@ -68,10 +70,10 @@ export function applyWmsTypographyCssVars(
  */
 export const wmsTypoClass = {
   /** Base text in new mode views — inherits from shell font-size when possible. */
-  base: "text-[length:var(--wms-font-base,18px)]",
+  base: "text-[length:var(--wms-font-base,16px)]",
   location:
-    "text-[length:var(--wms-font-location,18px)] leading-snug break-words [overflow-wrap:anywhere]",
-  quantity: "text-[length:var(--wms-font-qty,18px)] tabular-nums leading-snug",
+    "text-[length:var(--wms-font-location,16px)] leading-snug break-words [overflow-wrap:anywhere]",
+  quantity: "text-[length:var(--wms-font-qty,16px)] tabular-nums leading-snug",
 } as const;
 
 export const WMS_GENERAL_SETTING_HINTS = {
