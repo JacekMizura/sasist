@@ -1,5 +1,37 @@
 ﻿## Active
 
+**Spójny przepływ zbierania (2026-08-10) — pełny SSOT:**
+- Statusy: karty bez CTA; centralny prompt skanu; merge `active-session` → wiersze (bez mieszania BULK/BASKETS)
+- BE: configured-statuses NIE dokleja sesji do pierwszego require_cart obcego typu
+- Skan własnego wózka: statusy → open session; products/detail → cichy accept (zero „masz już…”, zero resolve-cart)
+- 409 resolve-cart przy własnej sesji → otwórz istniejącą
+- Cancel: cart_id → cancel-session; cartless tylko bez wózka
+- UI: meta Wózek+Do zebrania; sticky ⋮|Zbierz; full width; lokalizacja na karcie
+
+**Prompt skanu wózka na statusach (2026-08-10):**
+- Usunięty czerwony banner „Zeskanuj wózek…”
+- Po kliknięciu statusu wymagającego wózka (bez sesji): subtelny komunikat na środku + przycisk Sasist
+- Karty bez CTA skanu; przy aktywnej sesji — badge, wejście bezpośrednio do zbierania
+
+**Layout zbierania produktów (2026-08-10):**
+- Pełna szerokość (`WmsOperationalPageBody wide`); sticky: ⋮ lewo / Zbierz prawo
+- Meta: Do zebrania + badge wózka; lokalizacja tylko na karcie (PackingLocationPill)
+- Detail: nazwa+EAN w headerze i na karcie; bez „Potwierdź”; bez max-w-3xl
+
+**Lista statusów zbierania — spójny SSOT (2026-08-10):**
+- Skan własnego CART → otwiera istniejącą sesję (products), zero resolve-cart / zero toastu „masz już wózek”
+- „Produkty do zebrania” tylko na karcie z moją sesją; obce karty bez progresu i bez CTA gdy mam aktywną sesję
+- Nazwa statusu ~19px / bold; CTA tylko przy braku sesji wózkowej
+- Helper: `wmsPickingStatusSession.ts`; active-session zwraca products_*
+
+**Sesje + skan wózków — spójna logika (2026-08-10):**
+- Root: status page rejestruje handler TYLKO przy CTA → `has_handler=false` → „nie obsługuje skanera”; products zwracał `consumed=false` dla CART; CTA vs badge rozjeżdżały się przy type-match
+- SSOT: `wmsPickingStatusSession.ts` + `GET /picking/active-session` równolegle z configured-statuses
+- Statusy: handler ZAWSZE; aktywny wózek → toast, zero resolve-cart; CTA tylko `statusRowShowScanCartCta`
+- Tile: `hasActiveSession` + absolutny zakaz CTA przy badge / inProgressByMe
+- Products: CART-* zawsze consumed
+- BE: bind sesji nawet gdy meta.source_status_id nie pasuje do konfiguracji
+
 **Aktywny wózek SSOT (2026-08-10) — definitywna naprawa 409 BASKETS:**
 - Root cause: skaner statusów fallbackował na `needsScanTiles[0]` (często BASKETS) przy sesji CART; CTA gdy `active_cart_type !== cart_type` kafelka; `session_source_status_id` nie było w schemacie Pydantic
 - FE: `WmsPickingStatusPage` — skan TYLKO przy jawnym `scanTargetStatusId` bez aktywnej sesji; zero fallbacku typu; CTA wyłącznie gdy `!rowHasOperatorActiveSession`

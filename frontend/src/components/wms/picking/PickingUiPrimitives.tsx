@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { Icon } from "../../ui/Icon";
 import { PackingLocationPill } from "../packing/packingProductCardParts";
 import { PICKING_FIELD_LABEL_CLASS } from "./pickingUiTokens";
 import { wmsTypoClass } from "../../../wms/typography/wmsOperatorTypography";
@@ -22,6 +23,23 @@ export function PickingLocationBadge({
     <div className={["min-w-0 max-w-full", className].filter(Boolean).join(" ")}>
       <PackingLocationPill text={text} muted={muted} />
     </div>
+  );
+}
+
+/** Sasist cart badge — same language as status tiles („Wózek: …”). */
+export function PickingCartBadge({ label }: { label: string }) {
+  const text = label.trim();
+  if (!text) return null;
+  return (
+    <span
+      className="inline-flex max-w-full items-center gap-1 rounded-full border border-slate-300 bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-800 shadow-sm"
+      title={`Wózek: ${text}`}
+    >
+      <Icon name="cart" size={12} className="shrink-0 text-slate-600" aria-hidden />
+      <span className="truncate">
+        Wózek: <span className="font-bold tabular-nums tracking-tight">{text}</span>
+      </span>
+    </span>
   );
 }
 

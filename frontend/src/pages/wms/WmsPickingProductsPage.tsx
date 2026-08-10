@@ -24,6 +24,10 @@ import {
 } from "../../api/wmsPickingProductsApi";
 import { modeRequiresCartScan, cartTypeHintForMode, cartTypeHintForOrderTypeChoice } from "./wmsPickingFlowResolve";
 import { isCartlessPickingSession } from "./wmsPickingSessionKind";
+import {
+  looksLikePickingCartCode,
+  scanMatchesAssignedCart,
+} from "./wmsPickingStatusSession";
 import type { PickingFlowMode } from "../../api/wmsPickingEntryApi";
 import { useMergedPickingSession, useWmsPickingCart } from "../../context/WmsPickingCartContext";
 import { useWarehouse } from "../../context/WarehouseContext";
@@ -68,10 +72,11 @@ import {
   preparePickingProductDetailNavigation,
   type PickingDetailNavSource,
 } from "../../utils/pickingProductDetailNav";
-import { PickingSimpleHeader } from "../../components/wms/picking/PickingSimpleHeader";
+import { PickingSimpleHeader, PickingSessionMetaBar } from "../../components/wms/picking/PickingSimpleHeader";
 import { PickingProductListCard } from "../../components/wms/picking/PickingProductListCard";
 import { PickingOptionsSheet, PickingStickyFooter } from "../../components/wms/picking/PickingStickyChrome";
 import { PickingProcessAlert } from "../../components/wms/picking/PickingProcessAlert";
+import { PickingCartBadge } from "../../components/wms/picking/PickingUiPrimitives";
 
 function fmtQty(n: number): string {
   return new Intl.NumberFormat("pl-PL", { maximumFractionDigits: 2 }).format(n);
@@ -722,23 +727,33 @@ export default function WmsPickingProductsPage() {
       if (!scan) {
         return SCAN_NOT_CONSUMED;
       }
-      // Skan wózka na liście produktów: zawsze consumed — nigdy resolve-cart / „nie obsługuje skanera”.
-      const earlyCartCode = (mergedSession?.cartCode || snapshot?.cartCode || "").trim().toUpperCase();
+      // Skan wózka na liście produktów: always consumed — nigdy resolve-cart / „nie obsługuje skanera”.
+      // Własny aktywny wózek = już jesteśmy w sesji → cichy accept (bez „masz już przypisany”).
+      const earlyCartCode = (mergedSession?.cartCode || snapshot?.cartCode || "").trim();
+      const earlyCartName = (mergedSession?.cartName || snapshot?.cartName || "").trim();
+      const earlyCartId = mergedSession?.cartId ?? snapshot?.cartId ?? null;
       const earlyLooksLikeCart =
-        /^CART[-_]?\d+/i.test(scan) ||
-        (earlyCartCode.length > 0 && scan.toUpperCase() === earlyCartCode);
+        looksLikePickingCartCode(scan) ||
+        (earlyCartCode.length > 0 && scan.toUpperCase() === earlyCartCode.toUpperCase()) ||
+        (earlyCartName.length > 0 && scan.toUpperCase() === earlyCartName.toUpperCase());
       if (earlyLooksLikeCart) {
-        const cartId = mergedSession?.cartId ?? snapshot?.cartId ?? null;
-        const label =
-          mergedSession?.cartName ||
-          snapshot?.cartName ||
-          earlyCartCode ||
-          (cartId != null ? `CART-${cartId}` : null);
         appendScanToHistory(scan);
+        const own =
+          earlyCartId != null &&
+          scanMatchesAssignedCart(scan, {
+            cartCode: earlyCartCode || null,
+            cartName: earlyCartName || null,
+            cartId: earlyCartId,
+          });
+        if (own) {
+          playScanBeep();
+          multiScanTrace("LIST_OWN_CART_SCAN", { raw_code: scan, cart_id: earlyCartId, consumed: true });
+          return SCAN_CONSUMED;
+        }
         showScannerToast(
-          label ? `Masz już przypisany wózek: ${label}` : "Na liście produktów skanuj EAN produktu, nie wózek.",
+          "Masz aktywną sesję zbierania. Kontynuuj skanowanie produktów albo anuluj zbieranie.",
         );
-        multiScanTrace("LIST_CART_SCAN_EARLY", { raw_code: scan, cart_id: cartId, consumed: true });
+        multiScanTrace("LIST_CART_SCAN_EARLY", { raw_code: scan, cart_id: earlyCartId, consumed: true });
         return SCAN_CONSUMED;
       }
       if (!mergedSession || warehouseId == null) {
@@ -1641,17 +1656,22 @@ export default function WmsPickingProductsPage() {
           setExitModalOpen(true);
         }}
         backAriaLabel={recoveryOrderId != null && recoveryOrderId > 0 ? "Wróć do kolejki braków" : "Wróć do wyboru statusu"}
-        title={`Do zebrania: ${totalPickedCount}/${totalToPickCount}`}
-        subtitle={
-          !isCartlessMode && (mergedSession?.cartName || mergedSession?.cartCode)
-            ? `Wózek: ${(mergedSession?.cartName || mergedSession?.cartCode || "").trim()}`
-            : undefined
+        title="Zbieranie"
+      />
+      <PickingSessionMetaBar
+        toCollectLabel={`Do zebrania: ${totalPickedCount}/${totalToPickCount}`}
+        cartBadge={
+          !isCartlessMode && (mergedSession?.cartName || mergedSession?.cartCode) ? (
+            <PickingCartBadge
+              label={(mergedSession?.cartName || mergedSession?.cartCode || "").trim()}
+            />
+          ) : null
         }
       />
 
       {basketPutPending && basketPutPending.product_id > 0 ? (
-        <div className="border-b border-amber-200 bg-amber-50 px-4 py-3">
-          <div className="mx-auto flex max-w-5xl flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="border-b border-amber-200 bg-amber-50 px-4 py-3 sm:px-6 lg:px-8">
+          <div className="flex w-full flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="min-w-0">
               <p className="text-xs font-semibold uppercase tracking-wide text-amber-800">
                 Masz {fmtQty(basketPutPending.quantity ?? 1)} szt. oczekującą na odłożenie do koszyka
@@ -1690,8 +1710,8 @@ export default function WmsPickingProductsPage() {
       ) : null}
 
       {activePriorityTask ? (
-        <div className="border-b border-orange-100 bg-orange-50/70 px-4 py-3">
-          <div className="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-3">
+        <div className="border-b border-orange-100 bg-orange-50/70 px-4 py-3 sm:px-6 lg:px-8">
+          <div className="flex w-full flex-wrap items-center justify-between gap-3">
             <div className="min-w-0">
               <div className="text-xs font-semibold uppercase tracking-wide text-orange-700">Tryb zadania kierownika</div>
               <div className="mt-0.5 truncate text-sm font-bold text-slate-900">{activePriorityTask.title}</div>
@@ -1721,7 +1741,7 @@ export default function WmsPickingProductsPage() {
         </div>
       ) : null}
 
-      <WmsOperationalPageBody className="flex flex-col gap-4 !py-4 pb-28 md:!py-5">
+      <WmsOperationalPageBody wide className="flex flex-col gap-4 !py-4 pb-28 md:!py-5">
         {cartBootstrapErr && (
           <p className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-center text-sm font-semibold text-red-900">{cartBootstrapErr}</p>
         )}
@@ -1783,7 +1803,7 @@ export default function WmsPickingProductsPage() {
           </div>
         ) : null}
 
-        <ul className="mx-auto grid w-full max-w-5xl list-none grid-cols-1 gap-3 p-0 md:grid-cols-2 xl:grid-cols-3" aria-label="Lista produktów do zebrania">
+        <ul className="grid w-full list-none grid-cols-1 gap-3 p-0 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4" aria-label="Lista produktów do zebrania">
           {sortedRows.map((r) => {
             const { pickedShown, total, miss } = wmsPickingDisplayProgressParts(r);
             const status = wmsPickingLineResolutionStatus(r);
@@ -1830,9 +1850,7 @@ export default function WmsPickingProductsPage() {
         zebraneLabel={
           recoveryOrderId != null && recoveryOrderId > 0
             ? "Zakończ dogrywkę"
-            : allPicked
-              ? "Zapisz"
-              : "Potwierdź"
+            : "Zapisz"
         }
       />
       <PickingOptionsSheet
@@ -2009,10 +2027,22 @@ export default function WmsPickingProductsPage() {
                     try {
                       const cartId = mergedSession?.cartId ?? snapshot?.cartId ?? null;
                       const sessionId = activePickingSessionId;
-                      // SSOT: cart_id → cancel-session; tylko czyste cartless → cancel-cartless.
+                      // SSOT: cart_id → cancel-session. Cartless TYLKO gdy brak cart_id.
+                      // Nigdy cancel-cartless gdy znamy wózek (nawet przy pickingSessionId).
                       if (cartId != null && cartId > 0) {
                         await postWmsPickingCancelSession(DAMAGE_TENANT_ID, warehouseId, cartId);
+                      } else if (
+                        isCartlessMode &&
+                        sessionId != null &&
+                        sessionId > 0
+                      ) {
+                        await postWmsPickingCancelCartlessSession(
+                          DAMAGE_TENANT_ID,
+                          warehouseId,
+                          sessionId,
+                        );
                       } else if (sessionId != null && sessionId > 0) {
+                        // Ostatnia deska: BE remapuje sesję wózkową na cancel_picking.
                         await postWmsPickingCancelCartlessSession(
                           DAMAGE_TENANT_ID,
                           warehouseId,

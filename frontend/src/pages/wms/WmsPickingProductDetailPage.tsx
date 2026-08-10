@@ -23,6 +23,10 @@ import { postStageConsolidationItem } from "../../api/wmsConsolidationApi";
 import { useMergedPickingSession, useWmsPickingCart } from "../../context/WmsPickingCartContext";
 import { useWarehouse } from "../../context/WarehouseContext";
 import { isCartlessPickingSession } from "./wmsPickingSessionKind";
+import {
+  looksLikePickingCartCode,
+  scanMatchesAssignedCart,
+} from "./wmsPickingStatusSession";
 import { BundlePickingOrderTree } from "../../components/wms/picking/BundlePickingOrderTree";
 import { BundlePickingScanCard } from "../../components/wms/bundle/BundlePickingScanCard";
 import { BundleConsolidationRackCard } from "../../components/wms/bundle/BundleConsolidationRackCard";
@@ -38,11 +42,17 @@ import type { BundleScanOut, ConsolidationRackBundleRowOut } from "../../api/bun
 import { getConsolidationRackBundleView } from "../../api/bundlesLogisticsApi";
 import { tryPickingBundleScan } from "../../services/bundleScannerIntegration";
 import { formatWmsPickingLocationPillLabel } from "./wmsPickingLocationPill";
-import { PickingSimpleHeader } from "../../components/wms/picking/PickingSimpleHeader";
-import { PickingFieldLabel, PickingLocationBadge, PickingQtyPair } from "../../components/wms/picking/PickingUiPrimitives";
+import { PickingSimpleHeader, PickingSessionMetaBar } from "../../components/wms/picking/PickingSimpleHeader";
+import {
+  PickingCartBadge,
+  PickingFieldLabel,
+  PickingLocationBadge,
+  PickingQtyPair,
+} from "../../components/wms/picking/PickingUiPrimitives";
 import { PickingOptionsSheet, PickingStickyFooter } from "../../components/wms/picking/PickingStickyChrome";
 import { PickingQtyPanel } from "../../components/wms/picking/PickingQtyPanel";
 import { PickingProcessAlert } from "../../components/wms/picking/PickingProcessAlert";
+import { PICKING_CARD_CLASS } from "../../components/wms/picking/pickingUiTokens";
 import { wmsTypoClass } from "../../wms/typography/wmsOperatorTypography";
 import {
   looksLikeProductBarcode,
@@ -739,6 +749,31 @@ export default function WmsPickingProductDetailPage() {
       if (!scan) return SCAN_CONSUMED;
       if (scanGateRef.current || pickBusy) {
         multiScanTrace("DETAIL_SCAN_BUSY", { raw_code: scan, consumed: true });
+        return SCAN_CONSUMED;
+      }
+
+      // Własny wózek na szczegółach = już w sesji — cichy accept, bez resolve-cart / „masz już…”.
+      if (
+        looksLikePickingCartCode(scan) ||
+        scanMatchesAssignedCart(scan, {
+          cartCode: pickingSession.cartCode,
+          cartName: pickingSession.cartName,
+          cartId: pickingSession.cartId,
+        })
+      ) {
+        appendScanToHistory(scan);
+        const own = scanMatchesAssignedCart(scan, {
+          cartCode: pickingSession.cartCode,
+          cartName: pickingSession.cartName,
+          cartId: pickingSession.cartId,
+        });
+        if (own) {
+          playScanBeep();
+          return SCAN_CONSUMED;
+        }
+        showScannerToast(
+          "Masz aktywną sesję zbierania. Kontynuuj skanowanie produktu albo anuluj zbieranie.",
+        );
         return SCAN_CONSUMED;
       }
 
@@ -1768,26 +1803,51 @@ export default function WmsPickingProductDetailPage() {
       <PickingSimpleHeader
         onBack={() => goBackToList(true)}
         backAriaLabel="Wróć do listy produktów"
-        subtitle="Zbierasz produkt"
         title={detail?.name ?? "…"}
+        subtitle={
+          detail ? (
+            <>
+              EAN:{" "}
+              <span className="font-mono font-semibold text-slate-800">{detail.ean ?? "—"}</span>
+            </>
+          ) : undefined
+        }
+      />
+      <PickingSessionMetaBar
+        toCollectLabel={
+          detail
+            ? `Do zebrania: ${fmtQty(displayPickedDetail)}/${fmtQty(detail.total_quantity)}`
+            : "Do zebrania: …"
+        }
+        cartBadge={
+          !isCartlessPickingSession(pickingSession) &&
+          (pickingSession?.cartName || pickingSession?.cartCode) ? (
+            <PickingCartBadge
+              label={(pickingSession?.cartName || pickingSession?.cartCode || "").trim()}
+            />
+          ) : null
+        }
       />
 
-      <WmsOperationalPageBody className="flex flex-col gap-5 !py-4 pb-28 md:!py-5">
+      <WmsOperationalPageBody wide className="flex flex-col gap-5 !py-4 pb-28 md:!py-5">
       {loading && !detail && <div className="py-24 text-center text-sm text-slate-500">Ładowanie produktu…</div>}
 
       {detail && (
-        <div className="mx-auto flex w-full max-w-3xl flex-col gap-6">
-          <div className="flex flex-col gap-4 border-b border-slate-100 pb-5 sm:flex-row sm:items-start sm:justify-between">
-            <div className="min-w-0">
-              <PickingFieldLabel>Zebrane</PickingFieldLabel>
-              <div className="mt-1">
-                <PickingQtyPair picked={fmtQty(displayPickedDetail)} total={fmtQty(detail.total_quantity)} />
+        <div className="flex w-full flex-col gap-5">
+          <div className={[PICKING_CARD_CLASS, "flex w-full flex-col gap-4 p-4 sm:p-5"].join(" ")}>
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <PickingFieldLabel>Zebrane</PickingFieldLabel>
+                <div className="mt-0.5">
+                  <PickingQtyPair
+                    picked={fmtQty(displayPickedDetail)}
+                    total={fmtQty(detail.total_quantity)}
+                  />
+                </div>
               </div>
-            </div>
-            {detail.locations[0] ? (
-              <div className="min-w-0 max-w-[14rem] sm:text-right">
-                <PickingFieldLabel>Lokalizacja</PickingFieldLabel>
-                <div className="mt-1 flex sm:justify-end">
+              {detail.locations[0] ? (
+                <div className="flex min-w-0 max-w-[55%] flex-col items-end gap-1">
+                  <PickingFieldLabel>Lokalizacja</PickingFieldLabel>
                   <PickingLocationBadge
                     text={formatWmsPickingLocationPillLabel(
                       detail.locations[0].location_code,
@@ -1795,37 +1855,46 @@ export default function WmsPickingProductDetailPage() {
                     )}
                   />
                 </div>
-              </div>
-            ) : null}
-          </div>
-
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
-            <div className="flex h-24 w-24 shrink-0 items-center justify-center bg-transparent sm:h-28 sm:w-28">
-              {detail.image_url ? (
-                <img src={detail.image_url} alt="" className="max-h-full max-w-full object-contain" />
-              ) : (
-                <div className="text-xs font-semibold text-slate-300">Brak zdjęcia</div>
-              )}
+              ) : null}
             </div>
-            <div className="min-w-0 flex-1">
-              {detail.consolidation_active ? (
-                <span className="mb-2 inline-flex rounded-md border border-slate-200 bg-slate-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-slate-700">
-                  Konsolidacja
-                </span>
-              ) : null}
-              <p className="break-words text-sm text-slate-700">
-                EAN: <span className="font-mono font-semibold text-slate-900">{detail.ean ?? "—"}</span>
-              </p>
-              {isShortageResolved ? (
-                <span className="mt-2 inline-flex rounded-full bg-red-600 px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-wide text-white">
-                  Brak {fmtQty(missingTotal)}/{fmtQty(detail.total_quantity)}
-                </span>
-              ) : null}
-              {detail.consolidation_active && detail.consolidation_shelf_label ? (
-                <div className="mt-3 w-fit rounded-lg border border-slate-300 bg-slate-50 px-4 py-2 text-sm font-bold text-slate-900">
-                  Odłóż na: {detail.consolidation_shelf_label}
-                </div>
-              ) : null}
+
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
+              <div className="flex h-24 w-24 shrink-0 items-center justify-center bg-transparent sm:h-28 sm:w-28">
+                {detail.image_url ? (
+                  <img src={detail.image_url} alt="" className="max-h-full max-w-full object-contain" />
+                ) : (
+                  <div className="text-xs font-semibold text-slate-300">Brak zdjęcia</div>
+                )}
+              </div>
+              <div className="min-w-0 flex-1">
+                {detail.consolidation_active ? (
+                  <span className="mb-2 inline-flex rounded-md border border-slate-200 bg-slate-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-slate-700">
+                    Konsolidacja
+                  </span>
+                ) : null}
+                <p
+                  className={[
+                    "break-words font-bold uppercase leading-snug text-slate-900",
+                    wmsTypoClass.base,
+                  ].join(" ")}
+                >
+                  {detail.name}
+                </p>
+                <p className="mt-1 break-words text-sm text-slate-600">
+                  EAN:{" "}
+                  <span className="font-mono font-semibold text-slate-800">{detail.ean ?? "—"}</span>
+                </p>
+                {isShortageResolved ? (
+                  <span className="mt-2 inline-flex rounded-full bg-red-600 px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-wide text-white">
+                    Brak {fmtQty(missingTotal)}/{fmtQty(detail.total_quantity)}
+                  </span>
+                ) : null}
+                {detail.consolidation_active && detail.consolidation_shelf_label ? (
+                  <div className="mt-3 w-fit rounded-lg border border-slate-300 bg-slate-50 px-4 py-2 text-sm font-bold text-slate-900">
+                    Odłóż na: {detail.consolidation_shelf_label}
+                  </div>
+                ) : null}
+              </div>
             </div>
           </div>
 
@@ -1993,7 +2062,7 @@ export default function WmsPickingProductDetailPage() {
         }}
         zebraneDisabled={pickBusy || pickBlockedByProductScan || !detail}
         zebraneBusy={pickBusy}
-        zebraneLabel={pickQueueDone || isShortageResolved ? "Zebrane" : "Zebrane"}
+        zebraneLabel={pickQueueDone || isShortageResolved ? "Zapisz" : "Zbierz"}
       />
       <PickingOptionsSheet
         open={optionsOpen}

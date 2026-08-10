@@ -21,11 +21,12 @@ import { resolveAfterStatusWithConfig, sessionWithPickingFlowConfig } from "./wm
 import {
   findActiveStatusRowForSession,
   looksLikePickingCartCode,
+  mergeActiveSessionIntoStatusRows,
   operatorHasActiveCartSession,
   scanMatchesAssignedCart,
   statusRowCartBadgeLabel,
   statusRowHasActiveSession,
-  statusRowShowScanCartCta,
+  statusRowNeedsCartScanToStart,
   statusRowShowSessionProgress,
 } from "./wmsPickingStatusSession";
 import { WMS_ROUTES } from "./wmsRoutes";
@@ -127,7 +128,7 @@ export default function WmsPickingStatusPage() {
         // Statusy mogą działać bez osobnego endpointu — sesja z wierszy.
         active = null;
       }
-      setRows(data);
+      setRows(mergeActiveSessionIntoStatusRows(data, active));
       setActiveSession(active);
       setLoadState("ready");
       syncCartFromActive(active, data);
@@ -351,6 +352,28 @@ export default function WmsPickingStatusPage() {
           state: { pickingSession: session },
         });
       } catch (e) {
+        // 409 „już masz sesję z tym wózkiem” → otwórz istniejącą (nie pokazuj błędu resolve).
+        const msg = String(
+          (e as { response?: { data?: { detail?: unknown } } })?.response?.data?.detail ?? "",
+        );
+        if (
+          (e as { response?: { status?: number } })?.response?.status === 409 &&
+          /aktywn/i.test(msg)
+        ) {
+          try {
+            const latest = await getPickingActiveSession(DAMAGE_TENANT_ID, warehouseId);
+            setActiveSession(latest);
+            activeSessionRef.current = latest;
+            const row = findActiveStatusRowForSession(rowsRef.current, latest);
+            if (row && latest.has_active_session) {
+              setScanTargetStatusId(null);
+              void openExistingSession(row, latest);
+              return SCAN_CONSUMED;
+            }
+          } catch {
+            /* fall through */
+          }
+        }
         showWmsError(e);
         showScanFeedbackFromCode("INVALID_CART_SCAN");
         refocusScannerInput();
@@ -442,26 +465,38 @@ export default function WmsPickingStatusPage() {
         return SCAN_CONSUMED;
       }
 
-      // 3) Start nowej sesji — tylko gdy jawnie wybrano status bez sesji.
+      // 3) Start nowej sesji — jawny target ALBO jeden status wymagający skanu.
       const sid = scanTargetRef.current;
-      if (sid != null) {
-        const t = latestRows.find((r) => r.source_status_id === sid);
-        if (
-          t &&
-          !statusRowHasActiveSession(t) &&
-          !operatorHasActiveCartSession(active, latestRows) &&
-          t.require_cart &&
-          t.cart_type
-        ) {
-          void startNewSessionFromScan(code, t);
-          return SCAN_CONSUMED;
+      let startTarget =
+        sid != null ? latestRows.find((r) => r.source_status_id === sid) ?? null : null;
+      if (
+        !startTarget &&
+        looksLikePickingCartCode(code) &&
+        !operatorHasActiveCartSession(active, latestRows)
+      ) {
+        const needScan = latestRows.filter((r) =>
+          statusRowNeedsCartScanToStart(r, { operatorHasActiveCartSession: false }),
+        );
+        if (needScan.length === 1) {
+          startTarget = needScan[0] ?? null;
         }
+      }
+      if (
+        startTarget &&
+        statusRowNeedsCartScanToStart(startTarget, {
+          operatorHasActiveCartSession: operatorHasActiveCartSession(active, latestRows),
+        })
+      ) {
+        void startNewSessionFromScan(code, startTarget);
+        return SCAN_CONSUMED;
+      }
+      if (sid != null) {
         setScanTargetStatusId(null);
       }
 
       if (looksLikePickingCartCode(code)) {
         appendScanToHistory(code);
-        showScannerToast("Wybierz status i kliknij „Zeskanuj wózek”, aby rozpocząć nową sesję.");
+        showScannerToast("Wybierz status (Wózki / Wózki z koszykami), a następnie zeskanuj wózek.");
         return SCAN_CONSUMED;
       }
 
@@ -504,7 +539,7 @@ export default function WmsPickingStatusPage() {
       return;
     }
 
-    // Start nowej sesji — skan (CTA / klik bez sesji).
+    // Start nowej sesji — skan (klik bez sesji). Bez czerwonego bannera.
     if (r.require_cart) {
       if (globalCart) {
         const own = findActiveStatusRowForSession(rows, activeSession);
@@ -513,12 +548,8 @@ export default function WmsPickingStatusPage() {
           return;
         }
       }
+      setErr(null);
       setScanTargetStatusId(r.source_status_id);
-      setErr(
-        r.cart_type === "BASKETS"
-          ? "Zeskanuj wózek z koszykami dla tego statusu."
-          : "Zeskanuj wózek dla tego statusu.",
-      );
       refocusScannerInput();
       return;
     }
@@ -551,10 +582,23 @@ export default function WmsPickingStatusPage() {
 
   const loading = loadState === "loading";
   const hasGlobalCartSession = operatorHasActiveCartSession(activeSession, rows);
+  const scanPromptTarget =
+    scanTargetStatusId != null
+      ? rows.find((r) => r.source_status_id === scanTargetStatusId) ?? null
+      : null;
+  const showCartScanPrompt =
+    !hasGlobalCartSession &&
+    scanPromptTarget != null &&
+    scanPromptTarget.require_cart === true &&
+    !statusRowHasActiveSession(scanPromptTarget);
+  const cartScanPromptText =
+    scanPromptTarget?.cart_type === "BASKETS"
+      ? "Zeskanuj wózek z koszykami, aby rozpocząć zbieranie"
+      : "Zeskanuj wózek, aby rozpocząć zbieranie";
 
   return (
     <div className="flex h-full min-h-0 w-full flex-col bg-white">
-      <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4 sm:px-6 lg:px-8">
+      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-4 py-4 sm:px-6 lg:px-8">
         {warehouseId == null ? (
           <p className="rounded-2xl border border-amber-200 bg-amber-50 px-6 py-5 text-center text-sm font-bold uppercase tracking-widest text-amber-700 shadow-sm">
             Wybierz magazyn w pasku u góry
@@ -562,7 +606,7 @@ export default function WmsPickingStatusPage() {
         ) : null}
 
         {err ? (
-          <p className="rounded-2xl border border-red-200 bg-red-50 px-6 py-5 text-center text-sm font-bold text-red-800 shadow-sm">
+          <p className="mb-4 rounded-2xl border border-red-200 bg-red-50 px-6 py-5 text-center text-sm font-bold text-red-800 shadow-sm">
             {err}
           </p>
         ) : null}
@@ -590,63 +634,69 @@ export default function WmsPickingStatusPage() {
         ) : null}
 
         {warehouseId != null && loadState === "ready" && rows.length > 0 ? (
-          <ul
-            className="grid w-full list-none grid-cols-1 gap-4 p-0 m-0 sm:grid-cols-2 lg:grid-cols-3"
-            aria-label="Statusy skonfigurowane do zbierania"
-          >
-            {rows.map((r) => {
-              const active = statusRowHasActiveSession(r);
-              const badge = statusRowCartBadgeLabel(r);
-              const needScanCta = statusRowShowScanCartCta(r, {
-                operatorHasActiveCartSession: hasGlobalCartSession,
-              });
-              const showProgress = statusRowShowSessionProgress(r);
-              return (
-                <li key={r.source_status_id} className="min-w-0">
-                  <WmsFlowStatusTileButton
-                    variant="work"
-                    showRealizationCounts
-                    statusName={r.status}
-                    orderCount={r.order_count}
-                    inProgressByOthers={r.in_progress_by_others ?? 0}
-                    inProgressByMe={r.in_progress_by_me ?? 0}
-                    color={r.color}
-                    mainGroup={r.main_group as OrderUiMainGroup}
-                    requireCart={r.require_cart}
-                    cartType={r.cart_type}
-                    activeCartLabel={badge}
-                    hasActiveSession={active}
-                    showSessionProgress={showProgress}
-                    sessionProductsPicked={
-                      showProgress ? Math.max(0, Number(r.session_products_picked) || 0) : 0
-                    }
-                    sessionProductsTotal={
-                      showProgress ? Math.max(0, Number(r.session_products_total) || 0) : 0
-                    }
-                    showScanCartCta={needScanCta}
-                    onScanCartClick={() => {
-                      if (!statusRowShowScanCartCta(r, { operatorHasActiveCartSession: hasGlobalCartSession })) {
-                        return;
+          <>
+            <ul
+              className="grid w-full list-none grid-cols-1 gap-4 p-0 m-0 sm:grid-cols-2 lg:grid-cols-3"
+              aria-label="Statusy skonfigurowane do zbierania"
+            >
+              {rows.map((r) => {
+                const active = statusRowHasActiveSession(r);
+                const badge = statusRowCartBadgeLabel(r);
+                const showProgress = statusRowShowSessionProgress(r);
+                return (
+                  <li key={r.source_status_id} className="min-w-0">
+                    <WmsFlowStatusTileButton
+                      variant="work"
+                      showRealizationCounts
+                      statusName={r.status}
+                      orderCount={r.order_count}
+                      inProgressByOthers={r.in_progress_by_others ?? 0}
+                      inProgressByMe={r.in_progress_by_me ?? 0}
+                      color={r.color}
+                      mainGroup={r.main_group as OrderUiMainGroup}
+                      requireCart={r.require_cart}
+                      cartType={r.cart_type}
+                      activeCartLabel={badge}
+                      hasActiveSession={active}
+                      showSessionProgress={showProgress}
+                      sessionProductsPicked={
+                        showProgress ? Math.max(0, Number(r.session_products_picked) || 0) : 0
                       }
-                      setScanTargetStatusId(r.source_status_id);
-                      setErr(
-                        r.cart_type === "BASKETS"
-                          ? "Zeskanuj wózek z koszykami dla tego statusu."
-                          : "Zeskanuj wózek dla tego statusu.",
-                      );
-                      refocusScannerInput();
-                    }}
-                    disabled={warehouseId == null || resolvingStatusId != null || scanBusy}
-                    loading={
-                      resolvingStatusId === r.source_status_id ||
-                      (scanBusy && scanTargetStatusId === r.source_status_id)
-                    }
-                    onClick={() => void resumeOrStart(r)}
-                  />
-                </li>
-              );
-            })}
-          </ul>
+                      sessionProductsTotal={
+                        showProgress ? Math.max(0, Number(r.session_products_total) || 0) : 0
+                      }
+                      showScanCartCta={false}
+                      disabled={warehouseId == null || resolvingStatusId != null || scanBusy}
+                      loading={
+                        resolvingStatusId === r.source_status_id ||
+                        (scanBusy && scanTargetStatusId === r.source_status_id)
+                      }
+                      onClick={() => void resumeOrStart(r)}
+                    />
+                  </li>
+                );
+              })}
+            </ul>
+
+            {showCartScanPrompt ? (
+              <div className="flex flex-1 flex-col items-center justify-center px-4 py-12 text-center">
+                <p className="max-w-md text-sm font-medium text-slate-600 sm:text-base">
+                  {cartScanPromptText}
+                </p>
+                <button
+                  type="button"
+                  className="mt-5 inline-flex h-11 items-center justify-center rounded-lg bg-[#e85d04] px-5 text-sm font-bold text-white shadow-sm transition hover:bg-[#d45303] active:scale-[0.99]"
+                  onClick={() => {
+                    refocusScannerInput();
+                  }}
+                >
+                  {scanPromptTarget?.cart_type === "BASKETS"
+                    ? "Zeskanuj wózek z koszykami"
+                    : "Zeskanuj wózek"}
+                </button>
+              </div>
+            ) : null}
+          </>
         ) : null}
       </div>
     </div>

@@ -19,10 +19,15 @@ export function WmsOperationalPageHeader({ children, className = "" }: ShellProp
   );
 }
 
-export function WmsOperationalPageBody({ children, className = "" }: ShellProps) {
+type BodyProps = ShellProps & {
+  /** Full viewport width (picking terminals) — no max-w-5xl centering. */
+  wide?: boolean;
+};
+
+export function WmsOperationalPageBody({ children, className = "", wide }: BodyProps) {
   return (
     <div className={`flex-1 py-3 md:py-4 ${className}`}>
-      <div className={WMS_OPERATIONAL_CONTAINER}>{children}</div>
+      <div className={wide ? "w-full px-4 sm:px-6 lg:px-8" : WMS_OPERATIONAL_CONTAINER}>{children}</div>
     </div>
   );
 }

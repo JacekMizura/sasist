@@ -357,6 +357,7 @@ def get_picking_configured_statuses(
             and active_sid_i is None
             and active_sess.get("cart_type") in ("BULK", "BASKETS")
         ):
+            # Tylko kafelek o ZGODNYM typie wózka — nigdy BASKETS↔BULK / pierwszy require_cart.
             for pc, st in valid:
                 req_i, ct_i = wms_tile_cart_config(
                     getattr(pc, "single_mode", None), getattr(pc, "multi_mode", None)
@@ -364,17 +365,8 @@ def get_picking_configured_statuses(
                 if req_i and ct_i == active_sess.get("cart_type"):
                     active_sid_i = int(st.id)
                     break
-        # Ostateczny fallback: pierwszy require_cart (lepiej pokazać sesję niż ukryć).
-        if bool(active_sess.get("has_active_session")) and active_sid_i is None:
-            for pc, st in valid:
-                req_i, _ct_i = wms_tile_cart_config(
-                    getattr(pc, "single_mode", None), getattr(pc, "multi_mode", None)
-                )
-                if req_i:
-                    active_sid_i = int(st.id)
-                    break
-            if active_sid_i is None and valid:
-                active_sid_i = int(valid[0][1].id)
+        # Brak dopasowania typu / meta → nie doklejaj sesji do obcego kafelka.
+        # FE nadal ma GET /picking/active-session (skan własnego wózka otwiera sesję).
         empty_cart = active_cart_tile_fields(None)
         out: List[WmsPickingConfiguredStatusItem] = []
         for pc, st in valid:

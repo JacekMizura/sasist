@@ -64,19 +64,30 @@ export function statusRowShowSessionProgress(r: PickingStatusSessionRow): boolea
 }
 
 /**
- * CTA „Zeskanuj wózek” — wyłącznie start nowej sesji.
- * Ukryte gdy ta karta ma sesję LUB operator ma już jakąkolwiek aktywną sesję wózkową.
+ * Czy start statusu wymaga skanu wózka (poza kartą — centralny prompt / skaner).
+ * Karty NIGDY nie pokazują CTA skanu — to tylko warunek logiki skanera.
  */
-export function statusRowShowScanCartCta(
+export function statusRowNeedsCartScanToStart(
   r: PickingStatusSessionRow,
   opts?: { operatorHasActiveCartSession?: boolean },
 ): boolean {
   if (!r.require_cart) return false;
+  if (!r.cart_type) return false;
   if (opts?.operatorHasActiveCartSession === true) return false;
   if (statusRowHasActiveSession(r)) return false;
   if (statusRowCartBadgeLabel(r)) return false;
   if ((r.in_progress_by_me ?? 0) > 0) return false;
   return true;
+}
+
+/** @deprecated In-card CTA usunięte — zawsze false. Użyj statusRowNeedsCartScanToStart. */
+export function statusRowShowScanCartCta(
+  r: PickingStatusSessionRow,
+  opts?: { operatorHasActiveCartSession?: boolean },
+): boolean {
+  void r;
+  void opts;
+  return false;
 }
 
 export function operatorHasActiveCartSession(
@@ -149,5 +160,75 @@ export function findActiveStatusRowForSession(
     const byCart = rows.find((r) => r.active_cart_id === active.cart_id);
     if (byCart) return byCart;
   }
+  // Typ wózka → kafelek (BULK / BASKETS), bez mieszania typów.
+  if (active.cart_type === "BULK" || active.cart_type === "BASKETS") {
+    const byType = rows.find(
+      (r) => r.require_cart && r.cart_type === active.cart_type && !statusRowHasActiveSession(r),
+    );
+    if (byType) return byType;
+  }
   return findActiveCartStatusRow(rows);
+}
+
+/**
+ * Uzupełnij wiersze statusów z GET /picking/active-session gdy configured-statuses
+ * nie dokleiło sesji (np. brak meta.source_status_id). Nie miesza typów wózków.
+ */
+export function mergeActiveSessionIntoStatusRows<T extends PickingStatusSessionRow>(
+  rows: T[],
+  active: OperatorActivePickingSession | null,
+): T[] {
+  if (!active?.has_active_session) return rows;
+  if (rows.some((r) => statusRowHasActiveSession(r) && (r.active_cart_id != null || r.active_session_id != null))) {
+    // Już spójnie sparowane z API statusów — ewentualnie tylko dopisz counts.
+    return rows.map((r) => {
+      if (!statusRowHasActiveSession(r)) return r;
+      if (r.active_session_id !== active.session_id && r.active_cart_id !== active.cart_id) return r;
+      const picked = r.session_products_picked ?? active.products_picked ?? 0;
+      const total = r.session_products_total ?? active.products_total ?? 0;
+      if (
+        (r.session_products_total ?? 0) > 0 ||
+        (active.products_total ?? 0) <= 0
+      ) {
+        return r;
+      }
+      return {
+        ...r,
+        session_products_picked: picked,
+        session_products_total: total,
+        has_operator_active_session: true,
+      };
+    });
+  }
+
+  const target = findActiveStatusRowForSession(rows, active);
+  if (!target) return rows;
+  // Nie przypisuj BULK sesji do kafelka BASKETS (i odwrotnie).
+  if (
+    active.has_cart &&
+    active.cart_type &&
+    target.require_cart &&
+    target.cart_type &&
+    target.cart_type !== active.cart_type
+  ) {
+    return rows;
+  }
+
+  return rows.map((r) => {
+    if (r.source_status_id !== target.source_status_id) return r;
+    return {
+      ...r,
+      has_operator_active_session: true,
+      active_session_id: active.session_id,
+      session_source_status_id: active.source_status_id ?? r.source_status_id,
+      active_cart_id: active.cart_id,
+      active_cart_code: active.cart_code,
+      active_cart_name: active.cart_name,
+      active_cart_type: active.cart_type,
+      active_order_type: active.order_type,
+      session_products_picked: active.products_picked ?? r.session_products_picked ?? 0,
+      session_products_total: active.products_total ?? r.session_products_total ?? 0,
+      in_progress_by_me: Math.max(r.in_progress_by_me ?? 0, active.has_cart ? 1 : 0),
+    };
+  });
 }

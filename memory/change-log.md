@@ -1,3 +1,29 @@
+## 2026-08-10 — Spójny przepływ zbierania (status → sesja → produkty → cancel)
+
+- Usunięty in-card CTA i czerwony banner; centralny prompt + skaner SSOT
+- Skan własnego wózka otwiera/kontynuuje sesję (bez „masz już…”, bez resolve-cart)
+- BE: brak fallbacku sesji na obcy typ kafelka; FE merge active-session po typie
+- Cancel: cart → cancel-session; products/detail cichy skan własnego wózka
+- Meta: badge wózka + Do zebrania; tile bez przycisku skanu
+
+## 2026-08-10 — Prezentacja „Zeskanuj wózek” na statusach
+
+- Usunięty czerwony banner pełnej szerokości
+- Po wyborze statusu wymagającego wózka: wyśrodkowany lekki komunikat + przycisk (BULK vs BASKETS)
+- Karty statusów bez CTA skanu; logika assign/scan bez zmian
+
+## 2026-08-10 — Uporządkuj obsługę aktywnych sesji zbierania
+
+- Skan własnego wózka na liście statusów → otwiera sesję (products), nie toast
+- Progres produktów tylko na karcie z moją sesją; CTA ukryte przy globalnej sesji wózkowej
+- Nazwa statusu 19px/bold; BE active-session + products_picked/total
+
+## 2026-08-10 — Napraw sesje i skanowanie wózków w zbieraniu
+
+- Statusy: always-on scan handler; active-session SSOT; CTA niemożliwe przy aktywnej sesji
+- Products: CART-* zawsze consumed (bez resolve-cart / consumed=false)
+- BE: fallback bind sesji gdy source_status_id meta nie pasuje do kafelków
+
 ## 2026-08-10 — Napraw obsługę aktywnego wózka w zbieraniu
 
 - FE statusy: brak fallbacku skanu na obcy `expected_cart_type`; CTA tylko bez aktywnej sesji

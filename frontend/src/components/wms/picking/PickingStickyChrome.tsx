@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { Eye, MapPinPlus, MoreVertical, NotebookPen, PackageX, ScanBarcode, X } from "lucide-react";
 import { AppOverlayPortal } from "../../overlay";
 import {
+  PICKING_PAGE_PAD_X,
   PICKING_PRIMARY_BTN_CLASS,
   PICKING_STICKY_FOOTER_CLASS,
 } from "./pickingUiTokens";
@@ -158,18 +159,22 @@ type StickyProps = {
   optionsDisabled?: boolean;
 };
 
-/** Sticky bottom bar: ⋮ + primary „Zebrane”. */
+/**
+ * Sticky bottom bar — full width:
+ * [ ⋮ ] ………………… [ Zbierz ]
+ * (opcje skrajnie lewo, akcja skrajnie prawo)
+ */
 export function PickingStickyFooter({
   onOpenOptions,
   onZebrane,
-  zebraneLabel = "Zebrane",
+  zebraneLabel = "Zbierz",
   zebraneDisabled,
   zebraneBusy,
   optionsDisabled,
 }: StickyProps) {
   return (
     <div className={PICKING_STICKY_FOOTER_CLASS}>
-      <div className="mx-auto flex w-full max-w-5xl items-center gap-3">
+      <div className={["flex w-full items-center justify-between gap-4", PICKING_PAGE_PAD_X].join(" ")}>
         <button
           type="button"
           disabled={optionsDisabled}

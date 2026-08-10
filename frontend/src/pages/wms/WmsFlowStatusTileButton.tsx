@@ -87,12 +87,9 @@ export function WmsFlowStatusTileButton({
     requireCart && activeCartLabel && activeCartLabel.trim()
       ? activeCartLabel.trim()
       : null;
-  const allowScanCta =
-    showScanCartCta &&
-    !hasActiveSession &&
-    !cartBadge &&
-    inProgressByMe <= 0 &&
-    Boolean(onScanCartClick);
+  // Karty statusów NIGDY nie pokazują CTA skanu — tylko badge / progres sesji.
+  void showScanCartCta;
+  void onScanCartClick;
   const showProgress = Boolean(showSessionProgress && (hasActiveSession || cartBadge));
   const modeHint = showBaskets ? " — koszyki" : showBulk ? " — wózek" : "";
   const cartHint = cartBadge ? `, wózek ${cartBadge}` : "";
@@ -176,27 +173,6 @@ export function WmsFlowStatusTileButton({
                   {Math.max(0, sessionProductsPicked)}/{Math.max(0, sessionProductsTotal)} szt.
                 </span>
               </p>
-            ) : null}
-            {allowScanCta ? (
-              <span
-                role="button"
-                tabIndex={0}
-                className="inline-flex w-fit items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-2.5 py-1 text-xs font-semibold text-slate-800 shadow-sm hover:border-slate-400"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onScanCartClick?.();
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" || e.key === " ") {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    onScanCartClick?.();
-                  }
-                }}
-              >
-                <Icon name="cart" size={14} className="shrink-0 text-slate-600" aria-hidden />
-                Zeskanuj wózek
-              </span>
             ) : null}
           </div>
         ) : null}
