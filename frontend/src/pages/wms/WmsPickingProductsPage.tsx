@@ -719,27 +719,30 @@ export default function WmsPickingProductsPage() {
   useEffect(() => {
     const handler = async (ean: string) => {
       const scan = normalizeScanEan(ean);
-      if (!scan || !mergedSession || warehouseId == null) {
+      if (!scan) {
         return SCAN_NOT_CONSUMED;
       }
-      // Aktywna sesja wózkowa: skan kodu wózka NIE tworzy nowej sesji / resolve-cart.
-      const activeCartCode = (mergedSession.cartCode || "").trim().toUpperCase();
-      const looksLikeCart =
+      // Skan wózka na liście produktów: zawsze consumed — nigdy resolve-cart / „nie obsługuje skanera”.
+      const earlyCartCode = (mergedSession?.cartCode || snapshot?.cartCode || "").trim().toUpperCase();
+      const earlyLooksLikeCart =
         /^CART[-_]?\d+/i.test(scan) ||
-        (activeCartCode.length > 0 && scan.toUpperCase() === activeCartCode);
-      if (!isCartlessMode && mergedSession.cartId != null && mergedSession.cartId > 0 && looksLikeCart) {
-        multiScanTrace("LIST_CART_SCAN_IGNORED", {
-          raw_code: scan,
-          cart_id: mergedSession.cartId,
-          consumed: true,
-        });
+        (earlyCartCode.length > 0 && scan.toUpperCase() === earlyCartCode);
+      if (earlyLooksLikeCart) {
+        const cartId = mergedSession?.cartId ?? snapshot?.cartId ?? null;
+        const label =
+          mergedSession?.cartName ||
+          snapshot?.cartName ||
+          earlyCartCode ||
+          (cartId != null ? `CART-${cartId}` : null);
         appendScanToHistory(scan);
         showScannerToast(
-          activeCartCode
-            ? `Wózek już przypisany do sesji: ${mergedSession.cartName || activeCartCode}`
-            : "Wózek jest już przypisany do tej sesji zbierania.",
+          label ? `Masz już przypisany wózek: ${label}` : "Na liście produktów skanuj EAN produktu, nie wózek.",
         );
+        multiScanTrace("LIST_CART_SCAN_EARLY", { raw_code: scan, cart_id: cartId, consumed: true });
         return SCAN_CONSUMED;
+      }
+      if (!mergedSession || warehouseId == null) {
+        return SCAN_NOT_CONSUMED;
       }
       if (rows.length === 0) {
         return SCAN_NOT_CONSUMED;
@@ -1196,6 +1199,8 @@ export default function WmsPickingProductsPage() {
     blockOtherProductLines,
     shortageProductIds,
     mergedSession,
+    snapshot,
+    isCartlessMode,
     warehouseId,
     orderType,
     recoveryOrderId,

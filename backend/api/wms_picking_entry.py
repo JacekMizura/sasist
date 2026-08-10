@@ -347,7 +347,11 @@ def get_picking_configured_statuses(
         )
         active_sid = active_sess.get("source_status_id")
         active_sid_i = int(active_sid) if active_sid is not None else None
-        # Brak meta.source_status_id → przypisz do pierwszego kafelka o tym samym typie wózka.
+        # Brak / nieznany meta.source_status_id → dopasuj kafelek po typie wózka sesji.
+        if bool(active_sess.get("has_active_session")) and active_sid_i is not None:
+            known = {int(st.id) for _, st in valid}
+            if active_sid_i not in known:
+                active_sid_i = None
         if (
             bool(active_sess.get("has_active_session"))
             and active_sid_i is None
@@ -360,7 +364,17 @@ def get_picking_configured_statuses(
                 if req_i and ct_i == active_sess.get("cart_type"):
                     active_sid_i = int(st.id)
                     break
-
+        # Ostateczny fallback: pierwszy require_cart (lepiej pokazać sesję niż ukryć).
+        if bool(active_sess.get("has_active_session")) and active_sid_i is None:
+            for pc, st in valid:
+                req_i, _ct_i = wms_tile_cart_config(
+                    getattr(pc, "single_mode", None), getattr(pc, "multi_mode", None)
+                )
+                if req_i:
+                    active_sid_i = int(st.id)
+                    break
+            if active_sid_i is None and valid:
+                active_sid_i = int(valid[0][1].id)
         empty_cart = active_cart_tile_fields(None)
         out: List[WmsPickingConfiguredStatusItem] = []
         for pc, st in valid:
@@ -376,14 +390,16 @@ def get_picking_configured_statuses(
 
             # Projekcja produktów TYLKO dla karty z aktywną sesją — nie doklejaj wózka do obcych statusów.
             if is_this_session:
+                # Projekcja po source_status z meta sesji (nie z obcego kafelka).
+                proj_sid = int(active_sid_i) if active_sid_i is not None else st_id
                 proj = project_operator_active_picking_for_status(
                     db,
                     tenant_id=int(tenant_id),
                     warehouse_id=int(warehouse_id),
-                    source_status_id=st_id,
+                    source_status_id=proj_sid,
                     operator_user_id=op_uid,
                     cart_type_hint=None,
-                    order_type="all",
+                    order_type=str(active_sess.get("order_type") or "all"),
                 )
                 cart_fields = {
                     "active_cart_id": active_sess.get("cart_id"),
@@ -395,8 +411,10 @@ def get_picking_configured_statuses(
                 order_type = active_sess.get("order_type")
                 products_picked = int(proj.get("products_picked") or 0)
                 products_total = int(proj.get("products_total") or 0)
-                # Co najmniej 1 gdy sesja wózkowa istnieje (nawet gdy filtr typu rozjechał counts).
+                # Co najmniej 1 gdy sesja istnieje — spójne z badge.
                 in_me = max(int(c.get("in_progress_by_me", 0)), 1)
+                # order_count: wolne + nie ukrywaj zamówień sesji jako 0 bez powodu —
+                # zachowaj wolne; in_me oddzielnie.
                 has_operator_active = True
                 sess_src = active_sid_i
             elif not req:

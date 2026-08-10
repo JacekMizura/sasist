@@ -40,6 +40,8 @@ type Props = {
   cartType: WmsFlowStatusTileCartType;
   /** Label wózka z aktywnej sesji — nigdy bez sesji. */
   activeCartLabel?: string | null;
+  /** SSOT: aktywna sesja na tej karcie — wymusza brak CTA niezależnie od innych props. */
+  hasActiveSession?: boolean;
   sessionProductsPicked?: number;
   sessionProductsTotal?: number;
   /** CTA tylko gdy brak aktywnej sesji/wózka. */
@@ -62,6 +64,7 @@ export function WmsFlowStatusTileButton({
   requireCart,
   cartType,
   activeCartLabel = null,
+  hasActiveSession = false,
   sessionProductsPicked = 0,
   sessionProductsTotal = 0,
   showScanCartCta = false,
@@ -81,6 +84,13 @@ export function WmsFlowStatusTileButton({
     requireCart && activeCartLabel && activeCartLabel.trim()
       ? activeCartLabel.trim()
       : null;
+  // Absolutny zakaz CTA przy aktywnej sesji / badge / „Realizowane przez Ciebie”.
+  const allowScanCta =
+    showScanCartCta &&
+    !hasActiveSession &&
+    !cartBadge &&
+    inProgressByMe <= 0 &&
+    Boolean(onScanCartClick);
   const modeHint = showBaskets ? " — koszyki" : showBulk ? " — wózek" : "";
   const cartHint = cartBadge ? `, wózek ${cartBadge}` : "";
   const countTooltip = showRealizationCounts
@@ -160,20 +170,20 @@ export function WmsFlowStatusTileButton({
                 {Math.max(0, sessionProductsPicked)}/{Math.max(0, sessionProductsTotal)} szt.
               </span>
             </p>
-            {showScanCartCta && !cartBadge && inProgressByMe <= 0 && onScanCartClick ? (
+            {allowScanCta ? (
               <span
                 role="button"
                 tabIndex={0}
                 className="inline-flex w-fit items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-2.5 py-1 text-xs font-semibold text-slate-800 shadow-sm hover:border-slate-400"
                 onClick={(e) => {
                   e.stopPropagation();
-                  onScanCartClick();
+                  onScanCartClick?.();
                 }}
                 onKeyDown={(e) => {
                   if (e.key === "Enter" || e.key === " ") {
                     e.preventDefault();
                     e.stopPropagation();
-                    onScanCartClick();
+                    onScanCartClick?.();
                   }
                 }}
               >

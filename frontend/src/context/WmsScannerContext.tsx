@@ -410,7 +410,14 @@ export function WmsScannerProvider({ children }: { children: ReactNode }) {
       const fn = scanHandlerRef.current;
       if (!fn) {
         multiScanTrace("GLOBAL_SCAN_NO_HANDLER", { raw_code: ean, path: location.pathname });
-        showScannerToast("Ta strona nie obsługuje jeszcze skanera.");
+        const pickingArea =
+          location.pathname === "/wms/picking" ||
+          location.pathname.startsWith("/wms/picking/");
+        showScannerToast(
+          pickingArea
+            ? "Skan nieobsłużony — odśwież ekran zbierania albo wybierz status."
+            : "Ta strona nie obsługuje jeszcze skanera.",
+        );
         return;
       }
       if (dispatchBusyRef.current) {

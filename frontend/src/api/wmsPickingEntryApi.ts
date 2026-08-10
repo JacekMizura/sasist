@@ -63,6 +63,30 @@ export async function getPickingConfiguredStatuses(
   return res.data;
 }
 
+/** SSOT aktywnej sesji operatora — ``GET /wms/picking/active-session``. */
+export type WmsPickingActiveSessionApi = {
+  has_active_session: boolean;
+  session_id: number | null;
+  source_status_id: number | null;
+  order_type: "single" | "multi" | "all" | null;
+  has_cart: boolean;
+  cart_id: number | null;
+  cart_code: string | null;
+  cart_name: string | null;
+  cart_type: "BULK" | "BASKETS" | null;
+  physical_cart_type?: "bulk" | "baskets" | null;
+};
+
+export async function getPickingActiveSession(
+  tenantId: number,
+  warehouseId: number,
+): Promise<WmsPickingActiveSessionApi> {
+  const res = await api.get<WmsPickingActiveSessionApi>("/wms/picking/active-session", {
+    params: { tenant_id: tenantId, warehouse_id: warehouseId },
+  });
+  return res.data;
+}
+
 /** ``status`` = ``source_status_id`` (ID statusu panelu). */
 export async function getWmsPickingFlowConfig(
   tenantId: number,
