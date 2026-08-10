@@ -45,6 +45,8 @@ def resolve_operator_active_picking_session(
         "cart_name": None,
         "cart_type": None,
         "physical_cart_type": None,
+        "products_picked": 0,
+        "products_total": 0,
     }
     if operator_user_id is None or int(operator_user_id) <= 0:
         return empty
@@ -96,6 +98,27 @@ def resolve_operator_active_picking_session(
     cart_fields = active_cart_tile_fields(cart)
     fam = cart_physical_family(cart)
 
+    products_picked = 0
+    products_total = 0
+    if cart is not None and meta_sid is not None:
+        try:
+            from .wms_picking_session_projection import project_operator_active_picking_for_status
+
+            proj = project_operator_active_picking_for_status(
+                db,
+                tenant_id=int(tenant_id),
+                warehouse_id=int(warehouse_id),
+                source_status_id=int(meta_sid),
+                operator_user_id=int(operator_user_id),
+                cart_type_hint=None,
+                order_type=ot if ot in ("single", "multi", "all") else "all",
+            )
+            products_picked = int(proj.get("products_picked") or 0)
+            products_total = int(proj.get("products_total") or 0)
+        except Exception:
+            products_picked = 0
+            products_total = 0
+
     return {
         "has_active_session": True,
         "session_id": int(sess.id) if sess is not None else None,
@@ -108,4 +131,6 @@ def resolve_operator_active_picking_session(
         or (cart_display_name_for_wms(cart) if cart is not None else None),
         "cart_type": cart_fields.get("active_cart_type"),
         "physical_cart_type": fam,
+        "products_picked": products_picked,
+        "products_total": products_total,
     }

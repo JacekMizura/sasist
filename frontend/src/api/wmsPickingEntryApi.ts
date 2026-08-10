@@ -75,6 +75,8 @@ export type WmsPickingActiveSessionApi = {
   cart_name: string | null;
   cart_type: "BULK" | "BASKETS" | null;
   physical_cart_type?: "bulk" | "baskets" | null;
+  products_picked?: number | null;
+  products_total?: number | null;
 };
 
 export async function getPickingActiveSession(

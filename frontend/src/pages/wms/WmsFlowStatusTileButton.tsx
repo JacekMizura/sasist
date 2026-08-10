@@ -40,8 +40,10 @@ type Props = {
   cartType: WmsFlowStatusTileCartType;
   /** Label wózka z aktywnej sesji — nigdy bez sesji. */
   activeCartLabel?: string | null;
-  /** SSOT: aktywna sesja na tej karcie — wymusza brak CTA niezależnie od innych props. */
+  /** SSOT: aktywna sesja na tej karcie — wymusza brak CTA. */
   hasActiveSession?: boolean;
+  /** Pokazuj „Produkty do zebrania” wyłącznie dla karty z moją sesją. */
+  showSessionProgress?: boolean;
   sessionProductsPicked?: number;
   sessionProductsTotal?: number;
   /** CTA tylko gdy brak aktywnej sesji/wózka. */
@@ -65,6 +67,7 @@ export function WmsFlowStatusTileButton({
   cartType,
   activeCartLabel = null,
   hasActiveSession = false,
+  showSessionProgress = false,
   sessionProductsPicked = 0,
   sessionProductsTotal = 0,
   showScanCartCta = false,
@@ -84,24 +87,26 @@ export function WmsFlowStatusTileButton({
     requireCart && activeCartLabel && activeCartLabel.trim()
       ? activeCartLabel.trim()
       : null;
-  // Absolutny zakaz CTA przy aktywnej sesji / badge / „Realizowane przez Ciebie”.
   const allowScanCta =
     showScanCartCta &&
     !hasActiveSession &&
     !cartBadge &&
     inProgressByMe <= 0 &&
     Boolean(onScanCartClick);
+  const showProgress = Boolean(showSessionProgress && (hasActiveSession || cartBadge));
   const modeHint = showBaskets ? " — koszyki" : showBulk ? " — wózek" : "";
   const cartHint = cartBadge ? `, wózek ${cartBadge}` : "";
   const countTooltip = showRealizationCounts
     ? "Zamówień = dostępne do rozpoczęcia. Realizowane = przypisane do aktywnej sesji. Produkty = stan tej sesji."
     : "Liczba zamówień wstępnie oczekujących w tym statusie.";
   const ariaLabel = showRealizationCounts
-    ? `${statusName}, zamówień ${orderCount}, realizowane przez innych ${inProgressByOthers}, realizowane przez Ciebie ${inProgressByMe}, produkty ${sessionProductsPicked}/${sessionProductsTotal}${modeHint}${cartHint}.`
+    ? `${statusName}, zamówień ${orderCount}, realizowane przez innych ${inProgressByOthers}, realizowane przez Ciebie ${inProgressByMe}${
+        showProgress ? `, produkty ${sessionProductsPicked}/${sessionProductsTotal}` : ""
+      }${modeHint}${cartHint}.`
     : `${statusName}, ${orderCount} zamówień oczekujących${modeHint}${cartHint}.`;
 
   if (variant === "work") {
-    const workIconSize = 24;
+    const workIconSize = 28;
     return (
       <button
         type="button"
@@ -121,15 +126,15 @@ export function WmsFlowStatusTileButton({
         ].join(" ")}
       >
         <div className="flex w-full items-center justify-between gap-4">
-          <div className="flex min-w-0 items-center gap-4">
-            <div className="shrink-0 text-slate-700 transition-transform duration-300 group-hover:scale-110">
+          <div className="flex min-w-0 items-center gap-3">
+            <div className="shrink-0 text-slate-800 transition-transform duration-300 group-hover:scale-110">
               {showBulk ? <Icon name="cart" size={workIconSize} /> : null}
               {showBaskets ? <Icon name="basket" size={workIconSize} /> : null}
               {!showBulk && !showBaskets ? (
                 <Icon name="picking" size={workIconSize} aria-hidden />
               ) : null}
             </div>
-            <span className={["min-w-0 break-words font-bold tracking-tight text-slate-900", wmsTypoClass.base].join(" ")}>
+            <span className="min-w-0 break-words text-[19px] font-bold leading-snug tracking-tight text-slate-900">
               {statusName}
             </span>
           </div>
@@ -139,7 +144,7 @@ export function WmsFlowStatusTileButton({
             ) : (
               <>
                 {showRealizationCounts ? (
-                  <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+                  <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">
                     Zamówień
                   </p>
                 ) : null}
@@ -164,12 +169,14 @@ export function WmsFlowStatusTileButton({
               </p>
               {cartBadge ? <ActiveCartBadge label={cartBadge} /> : null}
             </div>
-            <p className="text-sm text-slate-600">
-              Produkty do zebrania:{" "}
-              <span className={["font-semibold text-slate-900", wmsTypoClass.quantity].join(" ")}>
-                {Math.max(0, sessionProductsPicked)}/{Math.max(0, sessionProductsTotal)} szt.
-              </span>
-            </p>
+            {showProgress ? (
+              <p className="text-sm text-slate-600">
+                Produkty do zebrania:{" "}
+                <span className={["font-semibold text-slate-900", wmsTypoClass.quantity].join(" ")}>
+                  {Math.max(0, sessionProductsPicked)}/{Math.max(0, sessionProductsTotal)} szt.
+                </span>
+              </p>
+            ) : null}
             {allowScanCta ? (
               <span
                 role="button"

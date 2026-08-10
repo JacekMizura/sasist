@@ -1,6 +1,6 @@
 /**
  * SSOT: aktywna sesja zbierania na karcie statusu.
- * Nie zgaduj z typu kafelka — używaj flag i pól z configured-statuses / active-session.
+ * Progres / badge / CTA wynikają wyłącznie z sesji operatora — nie z „wolnej kolejki”.
  */
 
 export type PickingStatusSessionRow = {
@@ -30,6 +30,8 @@ export type OperatorActivePickingSession = {
   cart_code: string | null;
   cart_name: string | null;
   cart_type: "BULK" | "BASKETS" | null;
+  products_picked?: number | null;
+  products_total?: number | null;
 };
 
 /** Czy ta karta ma aktywną sesję operatora (źródło prawdy z API). */
@@ -38,11 +40,10 @@ export function statusRowHasActiveSession(r: PickingStatusSessionRow): boolean {
   if (r.active_session_id != null && r.active_session_id > 0) return true;
   if (r.active_cart_id != null && r.active_cart_id > 0) return true;
   if ((r.in_progress_by_me ?? 0) > 0) return true;
-  if ((r.session_products_total ?? 0) > 0) return true;
   return false;
 }
 
-/** Badge wózka — wyłącznie przy aktywnej sesji. */
+/** Badge wózka — wyłącznie przy aktywnej sesji z wózkiem. */
 export function statusRowCartBadgeLabel(r: PickingStatusSessionRow): string | null {
   if (!statusRowHasActiveSession(r)) return null;
   const name = (r.active_cart_name || "").trim();
@@ -54,15 +55,38 @@ export function statusRowCartBadgeLabel(r: PickingStatusSessionRow): string | nu
 }
 
 /**
- * CTA „Zeskanuj wózek” — wyłącznie start nowej sesji.
- * Nigdy równolegle z aktywną sesją / badge / Realizowane przez Ciebie > 0.
+ * „Produkty do zebrania” — TYLKO dla karty z moją aktywną sesją wózkową.
+ * Nigdy 0/0 na obcych statusach / bez wózka.
  */
-export function statusRowShowScanCartCta(r: PickingStatusSessionRow): boolean {
+export function statusRowShowSessionProgress(r: PickingStatusSessionRow): boolean {
+  if (!statusRowHasActiveSession(r)) return false;
+  return statusRowCartBadgeLabel(r) != null || (r.active_cart_id != null && r.active_cart_id > 0);
+}
+
+/**
+ * CTA „Zeskanuj wózek” — wyłącznie start nowej sesji.
+ * Ukryte gdy ta karta ma sesję LUB operator ma już jakąkolwiek aktywną sesję wózkową.
+ */
+export function statusRowShowScanCartCta(
+  r: PickingStatusSessionRow,
+  opts?: { operatorHasActiveCartSession?: boolean },
+): boolean {
   if (!r.require_cart) return false;
+  if (opts?.operatorHasActiveCartSession === true) return false;
   if (statusRowHasActiveSession(r)) return false;
   if (statusRowCartBadgeLabel(r)) return false;
   if ((r.in_progress_by_me ?? 0) > 0) return false;
   return true;
+}
+
+export function operatorHasActiveCartSession(
+  active: OperatorActivePickingSession | null | undefined,
+  rows: PickingStatusSessionRow[],
+): boolean {
+  if (active?.has_active_session && active.has_cart && active.cart_id != null && active.cart_id > 0) {
+    return true;
+  }
+  return findActiveCartStatusRow(rows) != null;
 }
 
 export function normalizeCartScanCode(raw: string): string {
@@ -120,6 +144,10 @@ export function findActiveStatusRowForSession(
   if (active.session_id != null) {
     const bySess = rows.find((r) => r.active_session_id === active.session_id);
     if (bySess) return bySess;
+  }
+  if (active.cart_id != null) {
+    const byCart = rows.find((r) => r.active_cart_id === active.cart_id);
+    if (byCart) return byCart;
   }
   return findActiveCartStatusRow(rows);
 }
