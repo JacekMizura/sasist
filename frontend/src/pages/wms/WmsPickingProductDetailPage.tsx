@@ -2062,7 +2062,6 @@ export default function WmsPickingProductDetailPage() {
           </button>
         </ModalShell>
       )}
-      </WmsOperationalPageBody>
 
       {quantityDraft ? (
         <BasketPutQuantityModal
