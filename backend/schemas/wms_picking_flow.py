@@ -52,6 +52,14 @@ class WmsPickingConfiguredStatusItem(BaseModel):
         default=None,
         description="Nazwa/identyfikator wózka operatora do badge na kafelku (tylko przy require_cart)",
     )
+    active_cart_id: Optional[int] = Field(
+        default=None,
+        description="ID wózka operatora pasującego do cart_type kafelka",
+    )
+    active_cart_type: Optional[Literal["BULK", "BASKETS"]] = Field(
+        default=None,
+        description="Rodzina przypisanego wózka (BULK / BASKETS)",
+    )
 
 
 class WmsPickingFlowLimits(BaseModel):

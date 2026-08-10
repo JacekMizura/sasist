@@ -70,7 +70,10 @@ export default function WmsPickingCartScanPage() {
       setResolving(true);
       setCartScopedStats(null);
       try {
-        const r = await getWmsPickingResolveCart(DAMAGE_TENANT_ID, warehouseId, code);
+        const r = await getWmsPickingResolveCart(DAMAGE_TENANT_ID, warehouseId, code, {
+          expectedCartType: session.cartType ?? null,
+          sourceStatusId: session.orderUiStatusId,
+        });
         const startResult = await postWmsPickingStart(
           DAMAGE_TENANT_ID,
           warehouseId,
@@ -134,6 +137,7 @@ export default function WmsPickingCartScanPage() {
           cartId: r.cart_id,
           cartCode: cartCodeResolved,
           cartName,
+          cartType: (r.cart_type || "").trim().toLowerCase() || undefined,
         });
         navigate(WMS_ROUTES.pickingProducts, {
           state: {
@@ -142,6 +146,7 @@ export default function WmsPickingCartScanPage() {
               cartCode: cartCodeResolved,
               cartName: cartName ?? null,
               cartId: r.cart_id,
+              physicalCartType: (r.cart_type || "").trim().toLowerCase() || null,
               hubOrderCount,
               hubPickStats,
               assignEmptyMessage: startResult.operator_message ?? null,

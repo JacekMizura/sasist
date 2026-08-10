@@ -5,6 +5,7 @@
 
 import type { PickingFlowMode, WmsPickingFlowConfig } from "../../api/wmsPickingEntryApi";
 import type { WmsPickingOrderTypeChoice, WmsPickingSessionState } from "./wmsPickingFlowTypes";
+import { cartTypeMatchesPickingTile } from "./wmsPickingCartTypeMatch";
 import { WMS_ROUTES } from "./wmsRoutes";
 
 /** Skan wózka: tryby wymagające fizycznego przypisania wózka (lub koszyków). */
@@ -128,6 +129,15 @@ export function resolveAfterStatusWithConfig(session: WmsPickingSessionState): P
   };
 }
 
+function sessionHasMatchingCart(
+  session: WmsPickingSessionState,
+  tileType: "BULK" | "BASKETS" | null,
+): boolean {
+  if (session.cartId == null || session.cartId <= 0) return false;
+  if (!tileType) return true;
+  return cartTypeMatchesPickingTile(tileType, session.physicalCartType);
+}
+
 export function resolveAfterOrderTypeChoice(
   session: WmsPickingSessionState,
   choice: WmsPickingOrderTypeChoice,
@@ -156,8 +166,16 @@ export function resolveAfterOrderTypeChoice(
     cartCode: needCart ? session.cartCode : null,
     cartName: needCart ? session.cartName : null,
     cartId: needCart ? session.cartId : null,
+    physicalCartType: needCart ? session.physicalCartType : null,
   };
   if (needCart) {
+    // Już przypisany wózek zgodny z trybem — bez ponownego skanu.
+    if (sessionHasMatchingCart(next, cartType)) {
+      return {
+        path: WMS_ROUTES.pickingProducts,
+        state: { pickingSession: { ...next, preCartBack: "order-type" } },
+      };
+    }
     return {
       path: WMS_ROUTES.pickingCart,
       state: { pickingSession: { ...next, preCartBack: "order-type" } },

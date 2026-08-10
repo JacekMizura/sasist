@@ -72,4 +72,27 @@ describe("resolveAfterOrderTypeChoice", () => {
     expect(cartTypeHintForOrderTypeChoice("cart_scan", "baskets", "all")).toBe("BASKETS");
     expect(modeRequiresCartScan("mobile")).toBe(false);
   });
+
+  it("skips cart scan when matching cart already on session", () => {
+    const s = baseSession();
+    s.singleMode = "cart_scan";
+    s.multiMode = "cart_scan";
+    s.cartId = 42;
+    s.cartCode = "WZ-03";
+    s.physicalCartType = "bulk";
+    const t = resolveAfterOrderTypeChoice(s, "single");
+    expect(t.path).toBe(WMS_ROUTES.pickingProducts);
+    expect(t.state.pickingSession.cartId).toBe(42);
+  });
+
+  it("still asks for cart when physical type mismatches tile", () => {
+    const s = baseSession();
+    s.singleMode = "cart_scan";
+    s.multiMode = "cart_scan";
+    s.cartId = 42;
+    s.cartCode = "WK-07";
+    s.physicalCartType = "multi";
+    const t = resolveAfterOrderTypeChoice(s, "single");
+    expect(t.path).toBe(WMS_ROUTES.pickingCart);
+  });
 });

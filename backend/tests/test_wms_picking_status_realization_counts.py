@@ -134,6 +134,48 @@ def test_realization_split_available_me_others(db):
     assert counts["in_progress_by_others"] == 2
 
 
+def test_realization_filters_by_status_cart_type(db):
+    """BULK vs MULTI — statusy nie dzielą się wzajemnie realizacją wózka."""
+    me = 10
+    bulk = _cart(db, code="BULK-1", assigned_user_id=me)
+    multi = Cart(
+        tenant_id=1,
+        warehouse_id=1,
+        name="MULTI-1",
+        code="MULTI-1",
+        type=CartType.MULTI,
+        status=CartStatus.PICKING.value,
+        assigned_user_id=me,
+        length=100,
+        width=60,
+        height=80,
+        total_volume=480.0,
+        used_volume=0.0,
+        capacity_strategy="BASKETS",
+    )
+    db.add(multi)
+    db.flush()
+    for i in range(2):
+        _order(db, number=f"B-{i}", status_id=6, cart_id=int(bulk.id))
+    for i in range(3):
+        _order(db, number=f"M-{i}", status_id=7, cart_id=int(multi.id))
+    db.commit()
+
+    counts = count_picking_status_realization_for_operator(
+        db,
+        tenant_id=1,
+        warehouse_id=1,
+        source_status_ids=[6, 7],
+        operator_user_id=me,
+        status_cart_types={6: "BULK", 7: "BASKETS"},
+    )
+    assert counts[6]["in_progress_by_me"] == 2
+    assert counts[7]["in_progress_by_me"] == 3
+    # Bez filtra typu — obie kohorty widoczne na „obcym” statusie nie powinny mieszać typów.
+    assert counts[6]["in_progress_by_others"] == 0
+    assert counts[7]["in_progress_by_others"] == 0
+
+
 def test_cartless_session_counts_as_in_progress_not_available(db):
     me = 10
     other = 20

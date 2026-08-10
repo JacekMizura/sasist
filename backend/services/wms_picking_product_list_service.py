@@ -507,6 +507,7 @@ def count_picking_status_realization_for_operator(
     warehouse_id: int,
     source_status_ids: list[int],
     operator_user_id: int | None,
+    status_cart_types: dict[int, str | None] | None = None,
 ) -> dict[int, dict[str, int]]:
     """
     Liczniki kafelka statusu zbierania (Sellasist-style):
@@ -517,11 +518,13 @@ def count_picking_status_realization_for_operator(
 
     Aktywne = wózek w ``PICKING`` (Order.cart_id → Cart.assigned_user_id)
     albo otwarta sesja cartless (Order.picking_session_id → WmsOperationSession).
-    Zakończone zbieranie (status panelu zmieniony / sesja zamknięta / wózek poza PICKING)
-    nie wchodzi do „Realizowane…”.
+
+    ``status_cart_types``: opcjonalny map ``source_status_id → BULK|BASKETS`` —
+    przy trybie wymagającym wózka licznik wózkowy uwzględnia tylko pasujący typ
+    (BULK vs MULTI), żeby „Wózki” i „Wózki z koszykami” nie mieszały realizacji.
     """
     from ..models.cart import Cart
-    from ..models.enums import CartStatus
+    from ..models.enums import CartStatus, CartType
     from ..models.wms_operation_session import WmsOperationSession
     from .cart_picking_lifecycle_service import SESSION_KIND_PICKING_ACTIVE
 
@@ -544,10 +547,11 @@ def count_picking_status_realization_for_operator(
     )
     uid = int(operator_user_id) if operator_user_id is not None and int(operator_user_id) > 0 else None
     picking_status = CartStatus.PICKING.value
+    type_map = {int(k): v for k, v in (status_cart_types or {}).items()}
 
     # Cart-based active picking: order still in source panel status + cart PICKING.
     cart_rows = (
-        db.query(Order.order_ui_status_id, Cart.assigned_user_id, func.count(Order.id))
+        db.query(Order.order_ui_status_id, Cart.assigned_user_id, Cart.type, func.count(Order.id))
         .join(Cart, Cart.id == Order.cart_id)
         .filter(
             Order.tenant_id == int(tenant_id),
@@ -559,12 +563,19 @@ def count_picking_status_realization_for_operator(
             Cart.status == picking_status,
             *eligible,
         )
-        .group_by(Order.order_ui_status_id, Cart.assigned_user_id)
+        .group_by(Order.order_ui_status_id, Cart.assigned_user_id, Cart.type)
         .all()
     )
-    for sid, assigned, n in cart_rows:
+    for sid, assigned, ctype, n in cart_rows:
         sid_i = int(sid)
         n_i = int(n)
+        hint = type_map.get(sid_i)
+        if hint in ("BULK", "BASKETS"):
+            ct_u = str(getattr(ctype, "value", ctype) or "").split(".")[-1].upper()
+            if hint == "BULK" and ct_u != CartType.BULK.value.upper() and ct_u != "BULK":
+                continue
+            if hint == "BASKETS" and ct_u != CartType.MULTI.value.upper() and ct_u != "MULTI":
+                continue
         assigned_i = int(assigned) if assigned is not None else None
         if uid is not None and assigned_i == uid:
             empty[sid_i]["in_progress_by_me"] += n_i
@@ -572,6 +583,7 @@ def count_picking_status_realization_for_operator(
             empty[sid_i]["in_progress_by_others"] += n_i
 
     # Cartless active picking: open session, no cart.
+    # Tylko statusy bez wymogu fizycznego wózka (lub gdy hint nie wymusza typu).
     open_kinds = (SESSION_KIND_PICKING_ACTIVE, "picking_recovery_active")
     cartless_rows = (
         db.query(
@@ -597,6 +609,10 @@ def count_picking_status_realization_for_operator(
     )
     for sid, op_uid, n in cartless_rows:
         sid_i = int(sid)
+        hint = type_map.get(sid_i)
+        # Status wymagający skanu wózka nie powinien liczyć cartless jako realizacji wózkowej.
+        if hint in ("BULK", "BASKETS"):
+            continue
         n_i = int(n)
         op_i = int(op_uid) if op_uid is not None else None
         if uid is not None and op_i == uid:
@@ -895,6 +911,26 @@ def bootstrap_start_picking_if_needed(
     if cart is None:
         raise ValueError("Nie znaleziono wózka.")
 
+    # Typ wózka vs konfiguracja statusu (BULK ↔ scanned, MULTI ↔ baskets).
+    from ..models.picking_config import PickingConfig
+    from .wms_status_tile_config import assert_cart_matches_tile_type, wms_tile_cart_config
+
+    pc = (
+        db.query(PickingConfig)
+        .filter(
+            PickingConfig.tenant_id == int(tenant_id),
+            PickingConfig.warehouse_id == int(warehouse_id),
+            PickingConfig.source_status_id == int(source_status_id),
+        )
+        .first()
+    )
+    if pc is not None:
+        _req, tile_ct = wms_tile_cart_config(
+            getattr(pc, "single_mode", None), getattr(pc, "multi_mode", None)
+        )
+        if _req:
+            assert_cart_matches_tile_type(cart, tile_ct)
+
     st = get_cart_status(cart)
     if st == CartStatus.PICKING:
         return find_open_picking_session(db, cart=cart), None
@@ -1143,7 +1179,39 @@ def resolve_wms_picking_order_ids(
             return []
         from .cart_stats_service import list_orders_on_cart
 
-        return [int(o.id) for o in list_orders_on_cart(db, cart)]
+        # SSOT occupancy = zamówienia na wózku, ale widok statusu / trybu
+        # ogranicza do bieżącego source_status_id (+ filtr single/multi).
+        on_cart = list_orders_on_cart(db, cart)
+        scoped = [
+            o
+            for o in on_cart
+            if int(getattr(o, "order_ui_status_id", 0) or 0) == int(source_status_id)
+        ]
+        if order_type == "all":
+            return [int(o.id) for o in scoped]
+        # Filtr jedno-/wieloelementowe jak w kohorcie statusu.
+        ids = [int(o.id) for o in scoped]
+        if not ids:
+            return []
+        line_counts = (
+            db.query(OrderItem.order_id, func.count(OrderItem.id).label("cnt"))
+            .filter(
+                OrderItem.order_id.in_(ids),
+                sqlalchemy_operational_picking_order_item_clause(OrderItem),
+                _order_item_not_replaced_clause(),
+            )
+            .group_by(OrderItem.order_id)
+            .all()
+        )
+        cnt_by = {int(oid): int(cnt) for oid, cnt in line_counts}
+        out: list[int] = []
+        for oid in ids:
+            c = cnt_by.get(int(oid), 0)
+            if order_type == "single" and c == 1:
+                out.append(int(oid))
+            elif order_type == "multi" and c > 1:
+                out.append(int(oid))
+        return out
 
     return _query_order_ids_for_status(
         db,

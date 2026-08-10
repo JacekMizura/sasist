@@ -384,12 +384,20 @@ export async function getWmsPickingResolveCart(
   tenantId: number,
   warehouseId: number,
   cartCode: string,
+  opts?: {
+    expectedCartType?: "BULK" | "BASKETS" | null;
+    sourceStatusId?: number | null;
+  },
 ): Promise<WmsPickingResolveCartResponseApi> {
   const res = await api.get<WmsPickingResolveCartResponseApi>("/wms/picking/resolve-cart", {
     params: {
       tenant_id: tenantId,
       warehouse_id: warehouseId,
       cart_code: cartCode.trim(),
+      ...(opts?.expectedCartType ? { expected_cart_type: opts.expectedCartType } : {}),
+      ...(opts?.sourceStatusId != null && opts.sourceStatusId > 0
+        ? { source_status_id: opts.sourceStatusId }
+        : {}),
     },
   });
   return res.data;

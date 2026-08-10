@@ -43,6 +43,9 @@ type Props = {
   cartType: WmsFlowStatusTileCartType;
   /** Nazwa/kod aktualnie używanego wózka — tylko gdy requireCart i wózek przypisany. */
   activeCartLabel?: string | null;
+  /** Gdy requireCart i brak wózka — CTA skanu na kafelku. */
+  showScanCartCta?: boolean;
+  onScanCartClick?: () => void;
   onClick: () => void;
   disabled?: boolean;
   loading?: boolean;
@@ -62,6 +65,8 @@ export function WmsFlowStatusTileButton({
   requireCart,
   cartType,
   activeCartLabel = null,
+  showScanCartCta = false,
+  onScanCartClick,
   onClick,
   disabled,
   loading,
@@ -119,12 +124,9 @@ export function WmsFlowStatusTileButton({
               ) : null}
             </div>
 
-            <div className="flex min-w-0 flex-col gap-1.5">
-              <span className={["min-w-0 break-words font-bold tracking-tight text-slate-900", wmsTypoClass.base].join(" ")}>
-                {statusName}
-              </span>
-              {cartBadge ? <ActiveCartBadge label={cartBadge} /> : null}
-            </div>
+            <span className={["min-w-0 break-words font-bold tracking-tight text-slate-900", wmsTypoClass.base].join(" ")}>
+              {statusName}
+            </span>
           </div>
 
           <div className="shrink-0 pl-2 text-right" title={countTooltip}>
@@ -146,15 +148,39 @@ export function WmsFlowStatusTileButton({
         </div>
 
         {showRealizationCounts && !loading ? (
-          <div className="space-y-0.5 text-sm text-slate-600">
+          <div className="space-y-1.5 text-sm text-slate-600">
             <p>
               Realizowane przez innych:{" "}
               <span className="font-semibold tabular-nums text-slate-800">{inProgressByOthers}</span>
             </p>
-            <p>
-              Realizowane przez Ciebie:{" "}
-              <span className="font-semibold tabular-nums text-slate-800">{inProgressByMe}</span>
-            </p>
+            <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+              <p className="min-w-0">
+                Realizowane przez Ciebie:{" "}
+                <span className="font-semibold tabular-nums text-slate-800">{inProgressByMe}</span>
+              </p>
+              {cartBadge ? <ActiveCartBadge label={cartBadge} /> : null}
+            </div>
+            {showScanCartCta && !cartBadge && onScanCartClick ? (
+              <span
+                role="button"
+                tabIndex={0}
+                className="inline-flex w-fit items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-2.5 py-1 text-xs font-semibold text-slate-800 shadow-sm hover:border-slate-400"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onScanCartClick();
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    onScanCartClick();
+                  }
+                }}
+              >
+                <Icon name="cart" size={14} className="shrink-0 text-slate-600" aria-hidden />
+                Zeskanuj wózek
+              </span>
+            ) : null}
           </div>
         ) : null}
       </button>

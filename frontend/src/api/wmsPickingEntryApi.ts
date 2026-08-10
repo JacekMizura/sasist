@@ -23,6 +23,8 @@ export type WmsPickingConfiguredStatusItem = {
   active_cart_code?: string | null;
   /** Nazwa/identyfikator wózka do badge na kafelku. */
   active_cart_name?: string | null;
+  active_cart_id?: number | null;
+  active_cart_type?: "BULK" | "BASKETS" | null;
 };
 
 export type WmsPickingPickUnit = "orders" | "products";

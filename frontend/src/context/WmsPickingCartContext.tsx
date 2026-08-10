@@ -20,6 +20,8 @@ export type WmsPickingCartSnapshot = {
   cartCode: string;
   /** Nazwa wózka (UI); opcjonalna. */
   cartName?: string;
+  /** Fizyczny typ z API: ``bulk`` | ``multi``. */
+  cartType?: string;
 };
 
 function readStoredCart(): WmsPickingCartSnapshot | null {
@@ -37,10 +39,13 @@ function readStoredCart(): WmsPickingCartSnapshot | null {
     const cartNameRaw = o.cartName;
     const cartName =
       cartNameRaw != null && String(cartNameRaw).trim() ? String(cartNameRaw).trim() : undefined;
+    const cartTypeRaw = o.cartType;
+    const cartType =
+      cartTypeRaw != null && String(cartTypeRaw).trim() ? String(cartTypeRaw).trim().toLowerCase() : undefined;
     if (!Number.isFinite(tenantId) || !Number.isFinite(warehouseId) || !Number.isFinite(cartId) || !cartCode) {
       return null;
     }
-    return { tenantId, warehouseId, cartId, cartCode, cartName };
+    return { tenantId, warehouseId, cartId, cartCode, cartName, cartType };
   } catch {
     return null;
   }
@@ -138,6 +143,9 @@ export function useMergedPickingSession(
     const cartId = ctxMatch ? snapshot.cartId : pickingSession.cartId ?? null;
     const cartCode = ctxMatch ? snapshot.cartCode : pickingSession.cartCode ?? null;
     const cartName = ctxMatch ? snapshot.cartName ?? null : pickingSession.cartName ?? null;
-    return { ...pickingSession, cartId, cartCode, cartName };
+    const physicalCartType = ctxMatch
+      ? snapshot.cartType ?? pickingSession.physicalCartType ?? null
+      : pickingSession.physicalCartType ?? null;
+    return { ...pickingSession, cartId, cartCode, cartName, physicalCartType };
   }, [pickingSession, tenantId, warehouseId, snapshot]);
 }

@@ -38,6 +38,8 @@ export type WmsPickingSessionState = {
   requireCart?: boolean;
   /** Hint UI skanu: BULK vs BASKETS. */
   cartType?: "BULK" | "BASKETS" | null;
+  /** Fizyczny typ wózka z API (``bulk`` | ``multi``). */
+  physicalCartType?: string | null;
   /** Snapshot z kafelka statusu — belka liczników przed wczytaniem listy produktów. */
   hubOrderCount?: number;
   hubPickStats?: { zebrane: number; doZebrania: number; wTrakcie: number; braki?: number };

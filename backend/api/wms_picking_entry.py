@@ -314,7 +314,12 @@ def get_picking_configured_statuses(
 
         status_ids = [int(st.id) for _, st in valid]
         op_uid = int(current_user.id) if current_user is not None else None
-        # PRELIMINARY SSOT: available + active realization split by operator.
+        # Hint typu wózka per status — do filtrów realizacji i badge.
+        status_cart_types: Dict[int, str | None] = {}
+        for pc, st in valid:
+            req, ct = wms_tile_cart_config(getattr(pc, "single_mode", None), getattr(pc, "multi_mode", None))
+            status_cart_types[int(st.id)] = ct if req else None
+
         counts_map: Dict[int, Dict[str, int]] = (
             count_picking_status_realization_for_operator(
                 db,
@@ -322,25 +327,28 @@ def get_picking_configured_statuses(
                 warehouse_id=int(warehouse_id),
                 source_status_ids=status_ids,
                 operator_user_id=op_uid,
+                status_cart_types=status_cart_types,
             )
             if status_ids
             else {}
         )
-        # Ten sam SSOT przypisania wózka co skan / start zbierania.
-        my_cart = resolve_operator_active_picking_cart(
-            db,
-            tenant_id=int(tenant_id),
-            warehouse_id=int(warehouse_id),
-            operator_user_id=op_uid,
-        )
-        my_cart_fields = active_cart_tile_fields(my_cart)
 
         out: List[WmsPickingConfiguredStatusItem] = []
         for pc, st in valid:
             gkey = _norm_group(st.main_group)
             req, ct = wms_tile_cart_config(getattr(pc, "single_mode", None), getattr(pc, "multi_mode", None))
             c = counts_map.get(int(st.id), {})
-            cart_fields = my_cart_fields if req else {"active_cart_code": None, "active_cart_name": None}
+            if req:
+                my_cart = resolve_operator_active_picking_cart(
+                    db,
+                    tenant_id=int(tenant_id),
+                    warehouse_id=int(warehouse_id),
+                    operator_user_id=op_uid,
+                    cart_type_hint=ct,
+                )
+                cart_fields = active_cart_tile_fields(my_cart)
+            else:
+                cart_fields = active_cart_tile_fields(None)
             out.append(
                 WmsPickingConfiguredStatusItem(
                     source_status_id=int(st.id),
@@ -352,8 +360,10 @@ def get_picking_configured_statuses(
                     in_progress_by_me=int(c.get("in_progress_by_me", 0)),
                     require_cart=req,
                     cart_type=ct,
+                    active_cart_id=cart_fields["active_cart_id"],
                     active_cart_code=cart_fields["active_cart_code"],
                     active_cart_name=cart_fields["active_cart_name"],
+                    active_cart_type=cart_fields["active_cart_type"],
                 )
             )
         gidx = {g: i for i, g in enumerate(_GROUP_ORDER)}
@@ -873,8 +883,12 @@ def post_picking_start(
     except ValueError as e:
         db.rollback()
         from ..services.wms_http_messages import raise_wms_cart_not_found, raise_wms_generic
+        from ..services.wms_status_tile_config import CART_TYPE_MISMATCH_MSG
 
-        if "nie znaleziono" in str(e).lower() or "not found" in str(e).lower():
+        msg = str(e)
+        if CART_TYPE_MISMATCH_MSG in msg or "nie jest przeznaczony" in msg.lower():
+            raise_wms_generic(detail=CART_TYPE_MISMATCH_MSG, status_code=409)
+        if "nie znaleziono" in msg.lower() or "not found" in msg.lower():
             raise_wms_cart_not_found()
         raise_wms_generic(detail=None, status_code=404)
     except Exception:
@@ -901,9 +915,24 @@ def get_picking_resolve_cart(
     tenant_id: int = Query(..., ge=1),
     warehouse_id: int = Depends(require_operable_warehouse),
     cart_code: str = Query(..., min_length=1, description="Kod zeskanowany lub nazwa wózka"),
+    expected_cart_type: str | None = Query(
+        None,
+        description="Oczekiwany typ kafelka: BULK (zwykły) lub BASKETS (z koszykami)",
+    ),
+    source_status_id: int | None = Query(
+        None,
+        ge=1,
+        description="Opcjonalnie — typ wózka z picking_config dla tego statusu",
+    ),
     db: Session = Depends(get_db),
 ):
     """Rozpoznanie wózka na początku sesji — zwraca ``cart_id`` do zapisu w stanie klienta."""
+    from ..services.wms_status_tile_config import (
+        CART_TYPE_MISMATCH_MSG,
+        assert_cart_matches_tile_type,
+        wms_tile_cart_config,
+    )
+
     try:
         cart = resolve_wms_picking_cart_row(
             db,
@@ -913,6 +942,30 @@ def get_picking_resolve_cart(
         )
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
+
+    tile_ct = (expected_cart_type or "").strip().upper() or None
+    if tile_ct not in ("BULK", "BASKETS"):
+        tile_ct = None
+    if tile_ct is None and source_status_id is not None:
+        pc = (
+            db.query(PickingConfig)
+            .filter(
+                PickingConfig.tenant_id == int(tenant_id),
+                PickingConfig.warehouse_id == int(warehouse_id),
+                PickingConfig.source_status_id == int(source_status_id),
+            )
+            .first()
+        )
+        if pc is not None:
+            req, ct = wms_tile_cart_config(getattr(pc, "single_mode", None), getattr(pc, "multi_mode", None))
+            if req:
+                tile_ct = ct
+    if tile_ct:
+        try:
+            assert_cart_matches_tile_type(cart, tile_ct)
+        except ValueError as e:
+            raise HTTPException(status_code=409, detail=str(e) or CART_TYPE_MISMATCH_MSG) from e
+
     code_str = str(getattr(cart, "code", None) or cart.barcode or "").strip() or str(cart.id)
     ct = getattr(cart, "type", None)
     cart_type_str = str(ct.value) if ct is not None and hasattr(ct, "value") else (str(ct) if ct is not None else None)
