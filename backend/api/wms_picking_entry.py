@@ -72,7 +72,11 @@ from ..services.picking_config_service import (
     picking_config_to_read,
     replace_all_picking_configs_for_warehouse,
 )
-from ..services.wms_status_tile_config import wms_tile_cart_config
+from ..services.wms_status_tile_config import (
+    active_cart_tile_fields,
+    resolve_operator_active_picking_cart,
+    wms_tile_cart_config,
+)
 from ..services.tenant_default_warehouse import resolve_quick_pick_warehouse_for_tenant
 from ..services.warehouse_service import WarehouseService
 from ..services.wms_picking_product_list_service import (
@@ -321,12 +325,21 @@ def get_picking_configured_statuses(
             if status_ids
             else {}
         )
+        # Ten sam SSOT przypisania wózka co skan / start zbierania.
+        my_cart = resolve_operator_active_picking_cart(
+            db,
+            tenant_id=int(tenant_id),
+            warehouse_id=int(warehouse_id),
+            operator_user_id=op_uid,
+        )
+        my_cart_fields = active_cart_tile_fields(my_cart)
 
         out: List[WmsPickingConfiguredStatusItem] = []
         for pc, st in valid:
             gkey = _norm_group(st.main_group)
             req, ct = wms_tile_cart_config(getattr(pc, "single_mode", None), getattr(pc, "multi_mode", None))
             c = counts_map.get(int(st.id), {})
+            cart_fields = my_cart_fields if req else {"active_cart_code": None, "active_cart_name": None}
             out.append(
                 WmsPickingConfiguredStatusItem(
                     source_status_id=int(st.id),
@@ -338,6 +351,8 @@ def get_picking_configured_statuses(
                     in_progress_by_me=int(c.get("in_progress_by_me", 0)),
                     require_cart=req,
                     cart_type=ct,
+                    active_cart_code=cart_fields["active_cart_code"],
+                    active_cart_name=cart_fields["active_cart_name"],
                 )
             )
         gidx = {g: i for i, g in enumerate(_GROUP_ORDER)}

@@ -1,3 +1,9 @@
+## 2026-08-10 — Badge używanego wózka na statusach zbierania
+
+- Kafelki z trybem skanu / koszyków: `Wózek: {nazwa|kod}` gdy operator ma przypisany wózek
+- API: `active_cart_code` / `active_cart_name` na `GET /wms/picking/configured-statuses`
+- FE: fallback do snapshotu skanu; bez pustego badge
+
 ## 2026-07-24 — 5 poziomów wielkości czcionki WMS (Ogólne)
 
 - Dozwolone: 12 / 14 / 16 / 18 / 20 px; domyślna 16 (było 16|18|21, domyślna 18)

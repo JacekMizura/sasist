@@ -15,6 +15,21 @@ function statusAccentStyles(color: string, group: OrderUiMainGroup): CSSProperti
 
 export type WmsFlowStatusTileCartType = "BULK" | "BASKETS" | null | undefined;
 
+/** Compact chip — same visual family as packing cart / location pills. */
+function ActiveCartBadge({ label }: { label: string }) {
+  return (
+    <span
+      className="inline-flex max-w-full items-center gap-1 rounded-full border border-slate-300 bg-white px-2 py-0.5 text-[11px] font-semibold text-slate-800 shadow-sm"
+      title={`Aktualnie używany wózek: ${label}`}
+    >
+      <Icon name="cart" size={12} className="shrink-0 text-slate-600" aria-hidden />
+      <span className="truncate">
+        Wózek: <span className="font-bold tabular-nums tracking-tight">{label}</span>
+      </span>
+    </span>
+  );
+}
+
 type Props = {
   statusName: string;
   orderCount: number;
@@ -26,6 +41,8 @@ type Props = {
   mainGroup: OrderUiMainGroup;
   requireCart: boolean;
   cartType: WmsFlowStatusTileCartType;
+  /** Nazwa/kod aktualnie używanego wózka — tylko gdy requireCart i wózek przypisany. */
+  activeCartLabel?: string | null;
   onClick: () => void;
   disabled?: boolean;
   loading?: boolean;
@@ -44,6 +61,7 @@ export function WmsFlowStatusTileButton({
   mainGroup,
   requireCart,
   cartType,
+  activeCartLabel = null,
   onClick,
   disabled,
   loading,
@@ -55,13 +73,18 @@ export function WmsFlowStatusTileButton({
     !requireCart ? null : cartType === "BASKETS" ? "BASKETS" : "BULK";
   const showBulk = effectiveType === "BULK";
   const showBaskets = effectiveType === "BASKETS";
+  const cartBadge =
+    requireCart && activeCartLabel && activeCartLabel.trim()
+      ? activeCartLabel.trim()
+      : null;
   const modeHint = showBaskets ? " — koszyki" : showBulk ? " — wózek" : "";
+  const cartHint = cartBadge ? `, wózek ${cartBadge}` : "";
   const countTooltip = showRealizationCounts
     ? "Zamówień = dostępne do rozpoczęcia. Realizowane = rozpoczęte i nadal w tym statusie (nie zakończone)."
     : "Liczba zamówień wstępnie oczekujących w tym statusie. Ostateczna kwalifikacja następuje podczas rozpoczęcia zbierania.";
   const ariaLabel = showRealizationCounts
-    ? `${statusName}, zamówień ${orderCount}, realizowane przez innych ${inProgressByOthers}, realizowane przez Ciebie ${inProgressByMe}${modeHint}.`
-    : `${statusName}, ${orderCount} zamówień oczekujących${modeHint}. ${countTooltip}`;
+    ? `${statusName}, zamówień ${orderCount}, realizowane przez innych ${inProgressByOthers}, realizowane przez Ciebie ${inProgressByMe}${modeHint}${cartHint}.`
+    : `${statusName}, ${orderCount} zamówień oczekujących${modeHint}${cartHint}. ${countTooltip}`;
 
   // ============================================================================
   // WARIANT OPERACYJNY ZBIERANIA ("work")
@@ -96,9 +119,12 @@ export function WmsFlowStatusTileButton({
               ) : null}
             </div>
 
-            <span className={["min-w-0 break-words font-bold tracking-tight text-slate-900", wmsTypoClass.base].join(" ")}>
-              {statusName}
-            </span>
+            <div className="flex min-w-0 flex-col gap-1.5">
+              <span className={["min-w-0 break-words font-bold tracking-tight text-slate-900", wmsTypoClass.base].join(" ")}>
+                {statusName}
+              </span>
+              {cartBadge ? <ActiveCartBadge label={cartBadge} /> : null}
+            </div>
           </div>
 
           <div className="shrink-0 pl-2 text-right" title={countTooltip}>
@@ -158,8 +184,9 @@ export function WmsFlowStatusTileButton({
       {showBaskets ? <Icon name="basket" size={20} className="shrink-0 text-slate-600" /> : null}
       {!showBulk && !showBaskets ? <Icon name="picking" size={20} aria-hidden /> : null}
 
-      <span className="min-w-0 flex-1 truncate text-sm font-semibold leading-snug text-slate-800">
-        {statusName}
+      <span className="flex min-w-0 flex-1 flex-col gap-1">
+        <span className="truncate text-sm font-semibold leading-snug text-slate-800">{statusName}</span>
+        {cartBadge ? <ActiveCartBadge label={cartBadge} /> : null}
       </span>
       <span className="font-semibold tabular-nums text-slate-500" title={countTooltip}>
         ({orderCount})

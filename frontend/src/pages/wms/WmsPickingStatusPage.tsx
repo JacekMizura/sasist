@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { getPickingConfiguredStatuses, getWmsPickingFlowConfig } from "../../api/wmsPickingEntryApi";
 import { getWmsPickingProductLines } from "../../api/wmsPickingProductsApi";
@@ -11,16 +11,37 @@ import { resolveAfterStatusWithConfig, sessionWithPickingFlowConfig } from "./wm
 import { computeWmsPickingProductLineSessionStats, wmsPickingDisplayPickedQuantity } from "./wmsPickingUiGates";
 import { Loader2, AlertTriangle } from "lucide-react";
 
+/** Badge label: API (SSOT przypisania) → fallback snapshot skanu w tej sesji przeglądarki. */
+function resolveStatusCartBadgeLabel(opts: {
+  requireCart: boolean;
+  apiName?: string | null;
+  apiCode?: string | null;
+  snapshotName?: string | null;
+  snapshotCode?: string | null;
+}): string | null {
+  if (!opts.requireCart) return null;
+  const fromApi = (opts.apiName || opts.apiCode || "").trim();
+  if (fromApi) return fromApi;
+  const fromSnap = (opts.snapshotName || opts.snapshotCode || "").trim();
+  return fromSnap || null;
+}
+
 export default function WmsPickingStatusPage() {
   const navigate = useNavigate();
   const { warehouse } = useWarehouse();
   const warehouseId = warehouse?.id ?? null;
-  const { clearPickingCart } = useWmsPickingCart();
+  const { clearPickingCart, snapshot } = useWmsPickingCart();
 
   const [rows, setRows] = useState<Awaited<ReturnType<typeof getPickingConfiguredStatuses>>>([]);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [resolvingStatusId, setResolvingStatusId] = useState<number | null>(null);
+
+  const sessionCart = useMemo(() => {
+    if (warehouseId == null || snapshot == null) return null;
+    if (snapshot.warehouseId !== warehouseId || snapshot.tenantId !== DAMAGE_TENANT_ID) return null;
+    return snapshot;
+  }, [snapshot, warehouseId]);
 
   const load = useCallback(async () => {
     if (warehouseId == null) {
@@ -158,6 +179,13 @@ export default function WmsPickingStatusPage() {
                   mainGroup={r.main_group as OrderUiMainGroup}
                   requireCart={r.require_cart}
                   cartType={r.cart_type}
+                  activeCartLabel={resolveStatusCartBadgeLabel({
+                    requireCart: r.require_cart,
+                    apiName: r.active_cart_name,
+                    apiCode: r.active_cart_code,
+                    snapshotName: sessionCart?.cartName,
+                    snapshotCode: sessionCart?.cartCode,
+                  })}
                   disabled={warehouseId == null || resolvingStatusId != null}
                   loading={resolvingStatusId === r.source_status_id}
                   onClick={() => void onChoose(r)}

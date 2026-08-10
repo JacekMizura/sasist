@@ -44,6 +44,14 @@ class WmsPickingConfiguredStatusItem(BaseModel):
         default=None,
         description="Przy require_cart: BULK = skan wózka zbiorczego; BASKETS = koszyki na wózku",
     )
+    active_cart_code: Optional[str] = Field(
+        default=None,
+        description="Kod wózka przypisanego do bieżącego operatora (tylko przy require_cart)",
+    )
+    active_cart_name: Optional[str] = Field(
+        default=None,
+        description="Nazwa/identyfikator wózka operatora do badge na kafelku (tylko przy require_cart)",
+    )
 
 
 class WmsPickingFlowLimits(BaseModel):

@@ -19,6 +19,10 @@ export type WmsPickingConfiguredStatusItem = {
   in_progress_by_me?: number;
   require_cart: boolean;
   cart_type: "BULK" | "BASKETS" | null;
+  /** Kod wózka operatora (tylko gdy require_cart i wózek przypisany). */
+  active_cart_code?: string | null;
+  /** Nazwa/identyfikator wózka do badge na kafelku. */
+  active_cart_name?: string | null;
 };
 
 export type WmsPickingPickUnit = "orders" | "products";

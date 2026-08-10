@@ -1,5 +1,10 @@
 ﻿## Active
 
+**Status zbierania — badge wózka (2026-08-10):**
+- Na kafelkach z `require_cart` (scanned/baskets): chip `Wózek: …` gdy operator ma ASSIGNED/PICKING
+- SSOT: `Cart.assigned_user_id` via `configured-statuses` (`active_cart_*`); fallback `WmsPickingCartContext`
+- Bez nowego mechanizmu przypisywania
+
 **Picking UI rebuild — Sellasist-clean (2026-08-10):**
 - White minimal list/detail; Sasist `PackingLocationPill` for locations; sticky „Zebrane” + ⋮ options sheet
 - Kit: `components/wms/picking/Picking*` (header, card, sticky, primitives)
