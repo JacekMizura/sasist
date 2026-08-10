@@ -634,6 +634,88 @@ def operator_message_when_cart_unassigned(
     return None
 
 
+def _assignable_order_ids_for_picking_type(
+    db: Session,
+    *,
+    tenant_id: int,
+    warehouse_id: int,
+    source_status_id: int,
+    order_type: OrderTypeFilter,
+) -> list[int]:
+    """Wolne zamówienia (bez wózka / sesji cartless) w statusie, filtrowane po single/multi/all."""
+    cohort = _query_order_ids_for_status(
+        db,
+        tenant_id=int(tenant_id),
+        warehouse_id=int(warehouse_id),
+        source_status_id=int(source_status_id),
+        order_type=order_type,
+    )
+    if not cohort:
+        return []
+    rows = (
+        db.query(Order.id)
+        .filter(
+            Order.id.in_(cohort),
+            Order.cart_id.is_(None),
+            Order.picking_session_id.is_(None),
+        )
+        .order_by(Order.id.asc())
+        .all()
+    )
+    return [int(r[0]) for r in rows]
+
+
+def build_picking_order_type_hub(
+    db: Session,
+    *,
+    tenant_id: int,
+    warehouse_id: int,
+    source_status_id: int,
+) -> dict[str, dict[str, int]]:
+    """
+    Ekran „Wybierz” — liczniki zamówień i produktów (SKU) per filtr typu.
+
+    Zakres = zamówienia **dostępne do startu** (wolne), nie aktywne tury innych.
+    ``products_picked`` / ``products_total`` z ``session_stats`` listy produktów.
+    """
+    from .cart_picking_lifecycle_service import compute_session_stats_from_product_lines
+
+    out: dict[str, dict[str, int]] = {}
+    for ot in ("single", "multi", "all"):
+        free_ids = _assignable_order_ids_for_picking_type(
+            db,
+            tenant_id=int(tenant_id),
+            warehouse_id=int(warehouse_id),
+            source_status_id=int(source_status_id),
+            order_type=ot,  # type: ignore[arg-type]
+        )
+        order_count = len(free_ids)
+        if order_count == 0:
+            out[ot] = {"order_count": 0, "products_picked": 0, "products_total": 0}
+            continue
+        lines = build_wms_picking_product_lines(
+            db,
+            tenant_id=int(tenant_id),
+            warehouse_id=int(warehouse_id),
+            source_status_id=int(source_status_id),
+            order_type=ot,  # type: ignore[arg-type]
+            cart_id=None,
+            fixed_order_ids=free_ids,
+            recovery_mode=False,
+        )
+        stats = compute_session_stats_from_product_lines(lines.products or [])
+        zebrane = int(stats.get("zebrane") or 0)
+        do_zebrania = int(stats.get("do_zebrania") or 0)
+        w_trakcie = int(stats.get("w_trakcie") or 0)
+        total = zebrane + do_zebrania + w_trakcie
+        out[ot] = {
+            "order_count": order_count,
+            "products_picked": zebrane,
+            "products_total": total,
+        }
+    return out
+
+
 def bootstrap_start_picking_if_needed(
     db: Session,
     *,

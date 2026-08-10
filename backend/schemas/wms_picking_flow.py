@@ -66,6 +66,21 @@ class WmsPickingFlowConfigRead(BaseModel):
     limits: WmsPickingFlowLimits
 
 
+class WmsPickingOrderTypeHubSlice(BaseModel):
+    """Liczniki dla jednego filtra typu zamówień na ekranie „Wybierz”."""
+
+    order_count: int = Field(0, ge=0, description="Dostępne (wolne) zamówienia tego typu")
+    products_picked: int = Field(0, ge=0, description="Produkty już zebrane (SKU)")
+    products_total: int = Field(0, ge=0, description="Produkty do zebrania łącznie (SKU)")
+
+
+class WmsPickingOrderTypeHubResponse(BaseModel):
+    source_status_id: int
+    single: WmsPickingOrderTypeHubSlice
+    multi: WmsPickingOrderTypeHubSlice
+    all: WmsPickingOrderTypeHubSlice
+
+
 class WmsPickingConfigReplaceItem(BaseModel):
     source_status_id: int = Field(..., ge=1, description="Status do zbierania (panel)")
     target_status_id: int = Field(..., ge=1, description="Status po zebraniu")

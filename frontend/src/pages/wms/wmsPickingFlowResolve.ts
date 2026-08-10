@@ -1,10 +1,36 @@
+/**
+ * Picking start flow navigation — STATUS → order type → cart (if needed) → products.
+ * Driven by warehouse picking_config modes (single_mode / multi_mode).
+ */
+
 import type { PickingFlowMode, WmsPickingFlowConfig } from "../../api/wmsPickingEntryApi";
 import type { WmsPickingOrderTypeChoice, WmsPickingSessionState } from "./wmsPickingFlowTypes";
 import { WMS_ROUTES } from "./wmsRoutes";
 
-/** Skan wózka: tryby wymagające przypisania wózka (lub koszyków na wózku). */
+/** Skan wózka: tryby wymagające fizycznego przypisania wózka (lub koszyków). */
 export function modeRequiresCartScan(mode: PickingFlowMode): boolean {
   return mode === "cart_scan" || mode === "baskets";
+}
+
+/** Hint ikony / copy na ekranie skanu — z trybu flow (nie z kafelka statusu). */
+export function cartTypeHintForMode(mode: PickingFlowMode): "BULK" | "BASKETS" | null {
+  if (mode === "baskets") return "BASKETS";
+  if (mode === "cart_scan") return "BULK";
+  return null;
+}
+
+export function cartTypeHintForOrderTypeChoice(
+  singleMode: PickingFlowMode,
+  multiMode: PickingFlowMode,
+  choice: WmsPickingOrderTypeChoice,
+): "BULK" | "BASKETS" | null {
+  if (choice === "single") return cartTypeHintForMode(singleMode);
+  if (choice === "multi") return cartTypeHintForMode(multiMode);
+  const a = cartTypeHintForMode(singleMode);
+  const b = cartTypeHintForMode(multiMode);
+  if (a === "BASKETS" || b === "BASKETS") return "BASKETS";
+  if (a === "BULK" || b === "BULK") return "BULK";
+  return null;
 }
 
 export function needsCartAfterOrderTypeChoice(
@@ -17,9 +43,28 @@ export function needsCartAfterOrderTypeChoice(
   return modeRequiresCartScan(singleMode) || modeRequiresCartScan(multiMode);
 }
 
-/** Gdy single === multi: czy pokazać ekran skanu wózka. */
-export function needsCartWhenModesEqual(mode: PickingFlowMode): boolean {
-  return modeRequiresCartScan(mode);
+/**
+ * „Wszystkie” tylko gdy obie ścieżki mają ten sam rodzaj bramki startu
+ * (obie wymagają skanu wózka albo obie go nie wymagają) — wspólna tura.
+ */
+export function canOfferAllOrderTypes(
+  singleMode: PickingFlowMode | null | undefined,
+  multiMode: PickingFlowMode | null | undefined,
+): boolean {
+  if (singleMode == null || multiMode == null) return false;
+  return modeRequiresCartScan(singleMode) === modeRequiresCartScan(multiMode);
+}
+
+/** Które kafelki pokazać na ekranie „Wybierz” — SSOT z konfiguracji trybów. */
+export function visibleOrderTypeChoices(
+  singleMode: PickingFlowMode | null | undefined,
+  multiMode: PickingFlowMode | null | undefined,
+): WmsPickingOrderTypeChoice[] {
+  const out: WmsPickingOrderTypeChoice[] = [];
+  if (singleMode != null) out.push("single");
+  if (multiMode != null) out.push("multi");
+  if (canOfferAllOrderTypes(singleMode, multiMode)) out.push("all");
+  return out;
 }
 
 export type PickingFlowNavigateTarget = {
@@ -40,6 +85,8 @@ export function sessionWithPickingFlowConfig(
     | "limitsMulti"
     | "orderTypeChoice"
     | "preCartBack"
+    | "requireCart"
+    | "cartType"
   >,
   cfg: WmsPickingFlowConfig,
 ): WmsPickingSessionState {
@@ -56,32 +103,28 @@ export function sessionWithPickingFlowConfig(
   };
 }
 
+/** Po kafelku statusu — zawsze ekran wyboru typu (konfiguracja decyduje o dostępnych opcjach). */
 export function resolveAfterStatusWithConfig(session: WmsPickingSessionState): PickingFlowNavigateTarget {
   const sm = session.singleMode;
   const mm = session.multiMode;
-  if (sm == null || mm == null) {
+  if (sm == null && mm == null) {
     return {
       path: WMS_ROUTES.pickingProducts,
       state: {
-        pickingSession: { ...session, cartCode: null, cartName: null, cartId: null, preCartBack: "status" },
+        pickingSession: {
+          ...session,
+          cartCode: null,
+          cartName: null,
+          cartId: null,
+          orderTypeChoice: "all",
+          preCartBack: "status",
+        },
       },
     };
   }
-  if (sm !== mm) {
-    return {
-      path: WMS_ROUTES.pickingOrderType,
-      state: { pickingSession: session },
-    };
-  }
-  if (needsCartWhenModesEqual(sm)) {
-    return {
-      path: WMS_ROUTES.pickingCart,
-      state: { pickingSession: { ...session, preCartBack: "status" } },
-    };
-  }
   return {
-    path: WMS_ROUTES.pickingProducts,
-    state: { pickingSession: { ...session, cartCode: null, cartName: null, cartId: null } },
+    path: WMS_ROUTES.pickingOrderType,
+    state: { pickingSession: session },
   };
 }
 
@@ -91,16 +134,25 @@ export function resolveAfterOrderTypeChoice(
 ): PickingFlowNavigateTarget {
   const sm = session.singleMode;
   const mm = session.multiMode;
-  if (sm == null || mm == null) {
-    return {
-      path: WMS_ROUTES.pickingProducts,
-      state: { pickingSession: { ...session, orderTypeChoice: choice } },
-    };
-  }
-  const needCart = needsCartAfterOrderTypeChoice(sm, mm, choice);
+  const modeForCartHint =
+    choice === "single" ? sm : choice === "multi" ? mm : sm ?? mm;
+  const needCart =
+    sm != null && mm != null
+      ? needsCartAfterOrderTypeChoice(sm, mm, choice)
+      : modeForCartHint != null
+        ? modeRequiresCartScan(modeForCartHint)
+        : false;
+  const cartType =
+    sm != null && mm != null
+      ? cartTypeHintForOrderTypeChoice(sm, mm, choice)
+      : modeForCartHint != null
+        ? cartTypeHintForMode(modeForCartHint)
+        : null;
   const next: WmsPickingSessionState = {
     ...session,
     orderTypeChoice: choice,
+    requireCart: needCart,
+    cartType,
     cartCode: needCart ? session.cartCode : null,
     cartName: needCart ? session.cartName : null,
     cartId: needCart ? session.cartId : null,

@@ -36,6 +36,8 @@ from ..schemas.wms_picking_flow import (
     WmsPickingConfigReplaceBody,
     WmsPickingFlowConfigRead,
     WmsPickingFlowLimits,
+    WmsPickingOrderTypeHubResponse,
+    WmsPickingOrderTypeHubSlice,
 )
 from ..schemas.wms_picking_products import (
     WmsPickingAcceptSourceLocationBody,
@@ -76,6 +78,7 @@ from ..services.warehouse_service import WarehouseService
 from ..services.wms_picking_product_list_service import (
     PickingFinalizeError,
     bootstrap_start_picking_if_needed,
+    build_picking_order_type_hub,
     build_wms_picking_product_detail,
     build_wms_picking_product_lines,
     count_assignable_orders_for_picking_statuses,
@@ -379,6 +382,49 @@ def get_picking_flow_config(
             multi=row.max_multi_orders,
         ),
     )
+
+
+@router.get("/picking/order-type-hub", response_model=WmsPickingOrderTypeHubResponse)
+def get_picking_order_type_hub(
+    tenant_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_operable_warehouse),
+    status: int = Query(..., ge=1, description="source_status_id — status panelu z konfiguracji zbierania"),
+    db: Session = Depends(get_db),
+):
+    """
+    Liczniki ekranu „Wybierz” (single / multi / all): wolne zamówienia + produkty zebrane/total.
+    """
+    try:
+        raw = build_picking_order_type_hub(
+            db,
+            tenant_id=int(tenant_id),
+            warehouse_id=int(warehouse_id),
+            source_status_id=int(status),
+        )
+
+        def _slice(key: str) -> WmsPickingOrderTypeHubSlice:
+            d = raw.get(key) or {}
+            return WmsPickingOrderTypeHubSlice(
+                order_count=int(d.get("order_count") or 0),
+                products_picked=int(d.get("products_picked") or 0),
+                products_total=int(d.get("products_total") or 0),
+            )
+
+        return WmsPickingOrderTypeHubResponse(
+            source_status_id=int(status),
+            single=_slice("single"),
+            multi=_slice("multi"),
+            all=_slice("all"),
+        )
+    except SQLAlchemyError:
+        logger.exception("get_picking_order_type_hub: database error")
+        empty = WmsPickingOrderTypeHubSlice()
+        return WmsPickingOrderTypeHubResponse(
+            source_status_id=int(status),
+            single=empty,
+            multi=empty,
+            all=empty,
+        )
 
 
 @router.get("/picking/status-workload", response_model=WmsPickingStatusWorkloadResponse)

@@ -66,3 +66,32 @@ export async function getWmsPickingFlowConfig(
     status_on_shortage_id: d.status_on_shortage_id ?? null,
   };
 }
+
+export type WmsPickingOrderTypeHubSlice = {
+  order_count: number;
+  products_picked: number;
+  products_total: number;
+};
+
+export type WmsPickingOrderTypeHub = {
+  source_status_id: number;
+  single: WmsPickingOrderTypeHubSlice;
+  multi: WmsPickingOrderTypeHubSlice;
+  all: WmsPickingOrderTypeHubSlice;
+};
+
+/** Liczniki ekranu „Wybierz” — single / multi / all. */
+export async function getWmsPickingOrderTypeHub(
+  tenantId: number,
+  warehouseId: number,
+  sourceStatusId: number,
+): Promise<WmsPickingOrderTypeHub> {
+  const res = await api.get<WmsPickingOrderTypeHub>("/wms/picking/order-type-hub", {
+    params: {
+      tenant_id: tenantId,
+      warehouse_id: warehouseId,
+      status: sourceStatusId,
+    },
+  });
+  return res.data;
+}

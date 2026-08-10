@@ -146,12 +146,14 @@ export default function WmsPickingCartScanPage() {
           },
         });
       } catch (e) {
+        // resolve-cart returns plain 404 string; start returns structured WMS_* — both via showWmsError.
         showWmsError(e);
+        refocusScannerInput();
       } finally {
         setResolving(false);
       }
     },
-    [session, warehouseId, navigate, appendScanToHistory, setPickingCart, showWmsError, showWmsMessage],
+    [session, warehouseId, navigate, appendScanToHistory, setPickingCart, showWmsError, showWmsMessage, refocusScannerInput],
   );
 
   useEffect(() => {
@@ -199,7 +201,10 @@ export default function WmsPickingCartScanPage() {
   };
 
   const showBaskets = session.cartType === "BASKETS";
-  const showBulk = session.cartType === "BULK" || (!showBaskets && session.requireCart);
+  const showBulk =
+    session.cartType === "BULK" ||
+    (Boolean(session.requireCart) && !showBaskets) ||
+    (!session.cartType && !showBaskets);
 
   return (
     <div className="flex min-h-screen flex-col bg-white select-none">
@@ -241,8 +246,24 @@ export default function WmsPickingCartScanPage() {
           </div>
 
           <h2 className="text-xl sm:text-2xl font-medium text-slate-400 tracking-wider uppercase text-center">
-            {resolving ? "Weryfikacja wózka..." : "Zeskanuj wózek"}
+            {resolving
+              ? "Weryfikacja wózka..."
+              : showBaskets
+                ? "Zeskanuj wózek z koszykami"
+                : "Zeskanuj wózek"}
           </h2>
+          {!resolving ? (
+            <div className="mt-4 max-w-md text-center space-y-2">
+              <p className="text-base font-semibold text-slate-800">
+                Rozpoczynasz nową turę zbierania.
+              </p>
+              <p className="text-sm text-slate-500">
+                {showBaskets
+                  ? "Zeskanuj wózek z koszykami, aby przejść do listy produktów."
+                  : "Zeskanuj wózek, aby przejść do listy produktów."}
+              </p>
+            </div>
+          ) : null}
         </div>
       </div>
     </div>

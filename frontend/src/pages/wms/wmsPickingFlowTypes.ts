@@ -34,6 +34,10 @@ export type WmsPickingSessionState = {
   recoveryOrderId?: number | null;
   /** Skąd wraca ekran skanu wózka. */
   preCartBack?: "status" | "order-type";
+  /** Czy wybrany typ wymaga skanu wózka (z single/multi mode). */
+  requireCart?: boolean;
+  /** Hint UI skanu: BULK vs BASKETS. */
+  cartType?: "BULK" | "BASKETS" | null;
   /** Snapshot z kafelka statusu — belka liczników przed wczytaniem listy produktów. */
   hubOrderCount?: number;
   hubPickStats?: { zebrane: number; doZebrania: number; wTrakcie: number; braki?: number };
