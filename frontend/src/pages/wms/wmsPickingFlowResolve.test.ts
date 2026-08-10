@@ -21,15 +21,18 @@ const baseSession = (): WmsPickingSessionState => ({
 });
 
 describe("visibleOrderTypeChoices / canOfferAll", () => {
-  it("shows single+multi+all when both modes share cart gate", () => {
-    expect(visibleOrderTypeChoices("cart_scan", "baskets")).toEqual(["single", "multi", "all"]);
-    expect(canOfferAllOrderTypes("cart_scan", "baskets")).toBe(true);
+  it("shows single+multi+all when both modes share cart gate AND cart type", () => {
+    expect(visibleOrderTypeChoices("cart_scan", "cart_scan")).toEqual(["single", "multi", "all"]);
+    expect(canOfferAllOrderTypes("cart_scan", "cart_scan")).toBe(true);
     expect(visibleOrderTypeChoices("cart_no_scan", "mobile")).toEqual(["single", "multi", "all"]);
   });
 
-  it("hides all when cart gates differ", () => {
+  it("hides all when cart gates or cart types differ", () => {
     expect(canOfferAllOrderTypes("cart_scan", "cart_no_scan")).toBe(false);
     expect(visibleOrderTypeChoices("cart_scan", "cart_no_scan")).toEqual(["single", "multi"]);
+    // cart_scan (BULK) + baskets (BASKETS) — nie mieszaj pod „Wszystkie”
+    expect(canOfferAllOrderTypes("cart_scan", "baskets")).toBe(false);
+    expect(visibleOrderTypeChoices("cart_scan", "baskets")).toEqual(["single", "multi"]);
   });
 });
 
@@ -81,10 +84,14 @@ describe("resolveAfterOrderTypeChoice", () => {
     expect(t.state.pickingSession.cartId).toBeNull();
   });
 
-  it("all with baskets+cart_scan → cart BASKETS", () => {
-    expect(needsCartAfterOrderTypeChoice("cart_scan", "baskets", "all")).toBe(true);
-    expect(cartTypeHintForOrderTypeChoice("cart_scan", "baskets", "all")).toBe("BASKETS");
+  it("all with same cart_scan → cart BULK", () => {
+    expect(needsCartAfterOrderTypeChoice("cart_scan", "cart_scan", "all")).toBe(true);
+    expect(cartTypeHintForOrderTypeChoice("cart_scan", "cart_scan", "all")).toBe("BULK");
     expect(modeRequiresCartScan("mobile")).toBe(false);
+  });
+
+  it("mixed baskets+cart_scan — all hint is null (all not offered)", () => {
+    expect(cartTypeHintForOrderTypeChoice("cart_scan", "baskets", "all")).toBeNull();
   });
 
   it("skips cart scan when matching cart already on session", () => {

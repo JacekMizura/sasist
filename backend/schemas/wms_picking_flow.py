@@ -81,8 +81,14 @@ class WmsPickingConfiguredStatusItem(BaseModel):
     )
     session_source_status_id: Optional[int] = Field(
         default=None,
-        description="source_status_id z meta aktywnej sesji — SSOT przy wznowieniu",
+        description="source_status_id z meta aktywnej sesji — używaj przy product-lines / wznowieniu",
     )
+    #: True gdy operator ma aktywną sesję na TYM statusie (nie wolno pokazywać skanu wózka).
+    has_operator_active_session: bool = Field(
+        False,
+        description="Operator ma otwartą sesję zbierania powiązaną z tym source_status_id",
+    )
+
 
 
 class WmsPickingFlowLimits(BaseModel):

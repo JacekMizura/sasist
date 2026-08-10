@@ -1,3 +1,10 @@
+## 2026-08-10 — Napraw obsługę aktywnego wózka w zbieraniu
+
+- FE statusy: brak fallbacku skanu na obcy `expected_cart_type`; CTA tylko bez aktywnej sesji
+- BE: SSOT `wms_picking_active_session` + pole `has_operator_active_session` / `session_source_status_id`
+- Sesja przypisana tylko do swojego `source_status_id` — nie doklejaj wózka do innych kafelków
+- resolve-cart odrzuca skan gdy wózek już w sesji operatora; mixed modes → BULK
+
 ## 2026-08-10 — Napraw spójność sesji zbierania
 
 - Root cause: sesja wózkowa ma `picking_session_id` + `cart_id`; FE traktował to jak cartless

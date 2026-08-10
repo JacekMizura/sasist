@@ -11,42 +11,37 @@ import { normalizeScanEan } from "../../utils/wmsScanNormalize";
 import { playScanBeep } from "../../utils/playScanBeep";
 import { DAMAGE_TENANT_ID } from "../damage/damageShared";
 import { WmsFlowStatusTileButton } from "./WmsFlowStatusTileButton";
-import { cartTypeMatchesPickingTile } from "./wmsPickingCartTypeMatch";
 import { resolveAfterStatusWithConfig, sessionWithPickingFlowConfig } from "./wmsPickingFlowResolve";
 import { WMS_ROUTES } from "./wmsRoutes";
 import { Loader2, AlertTriangle } from "lucide-react";
 
-/** Badge label: API (SSOT przypisania) → fallback snapshot skanu w tej sesji przeglądarki. */
-function resolveStatusCartBadgeLabel(opts: {
-  requireCart: boolean;
-  tileCartType: "BULK" | "BASKETS" | null;
-  apiName?: string | null;
-  apiCode?: string | null;
-  apiType?: "BULK" | "BASKETS" | null;
-  snapshotName?: string | null;
-  snapshotCode?: string | null;
-  snapshotPhysicalType?: string | null;
-}): string | null {
-  if (!opts.requireCart) return null;
-  const tile = opts.tileCartType;
-  if (opts.apiCode || opts.apiName) {
-    if (tile == null || opts.apiType == null || opts.apiType === tile) {
-      const fromApi = (opts.apiName || opts.apiCode || "").trim();
-      if (fromApi) return fromApi;
-    }
-  }
-  if (tile != null && !cartTypeMatchesPickingTile(tile, opts.snapshotPhysicalType)) {
-    return null;
-  }
-  const fromSnap = (opts.snapshotName || opts.snapshotCode || "").trim();
-  return fromSnap || null;
+type StatusRow = Awaited<ReturnType<typeof getPickingConfiguredStatuses>>[number];
+
+/** Aktywna praca operatora na tej karcie — SSOT z API, bez zgadywania typu wózka. */
+function rowHasOperatorActiveSession(r: StatusRow): boolean {
+  if (r.has_operator_active_session === true) return true;
+  if (r.active_cart_id != null && r.active_cart_id > 0) return true;
+  if (r.active_session_id != null && r.active_session_id > 0) return true;
+  if ((r.in_progress_by_me ?? 0) > 0) return true;
+  if ((r.session_products_total ?? 0) > 0) return true;
+  return false;
+}
+
+function cartBadgeFromRow(r: StatusRow): string | null {
+  if (!rowHasOperatorActiveSession(r)) return null;
+  const name = (r.active_cart_name || "").trim();
+  if (name) return name;
+  const code = (r.active_cart_code || "").trim();
+  if (code) return code;
+  if (r.active_cart_id != null) return `CART-${r.active_cart_id}`;
+  return null;
 }
 
 export default function WmsPickingStatusPage() {
   const navigate = useNavigate();
   const { warehouse } = useWarehouse();
   const warehouseId = warehouse?.id ?? null;
-  const { clearPickingCart, setPickingCart, snapshot } = useWmsPickingCart();
+  const { setPickingCart } = useWmsPickingCart();
   const { showWmsError, showWmsMessage } = useWmsMessage();
   const {
     registerScanHandler,
@@ -56,19 +51,16 @@ export default function WmsPickingStatusPage() {
     showScanFeedbackFromCode,
   } = useWmsScanner();
 
-  const [rows, setRows] = useState<Awaited<ReturnType<typeof getPickingConfiguredStatuses>>>([]);
+  const [rows, setRows] = useState<StatusRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [resolvingStatusId, setResolvingStatusId] = useState<number | null>(null);
+  /** Tylko status BEZ aktywnej sesji — jawny start skanu. Nigdy fallback na inny typ. */
   const [scanTargetStatusId, setScanTargetStatusId] = useState<number | null>(null);
   const [scanBusy, setScanBusy] = useState(false);
   const scanBusyRef = useRef(false);
-
-  const sessionCart = useMemo(() => {
-    if (warehouseId == null || snapshot == null) return null;
-    if (snapshot.warehouseId !== warehouseId || snapshot.tenantId !== DAMAGE_TENANT_ID) return null;
-    return snapshot;
-  }, [snapshot, warehouseId]);
+  const rowsRef = useRef(rows);
+  rowsRef.current = rows;
 
   const load = useCallback(async () => {
     if (warehouseId == null) {
@@ -81,12 +73,10 @@ export default function WmsPickingStatusPage() {
     try {
       const data = await getPickingConfiguredStatuses(DAMAGE_TENANT_ID, warehouseId);
       setRows(data);
-      // Hydrate snapshot z BE, gdy operator ma już wózek w cyklu.
       for (const r of data) {
-        if (!r.require_cart || r.active_cart_id == null) continue;
+        if (!rowHasOperatorActiveSession(r) || r.active_cart_id == null) continue;
         const phys =
           r.active_cart_type === "BASKETS" ? "multi" : r.active_cart_type === "BULK" ? "bulk" : undefined;
-        if (r.cart_type && phys && !cartTypeMatchesPickingTile(r.cart_type, phys)) continue;
         setPickingCart({
           tenantId: DAMAGE_TENANT_ID,
           warehouseId,
@@ -118,10 +108,14 @@ export default function WmsPickingStatusPage() {
   }, [load]);
 
   const assignCartFromScan = useCallback(
-    async (rawCode: string, target: (typeof rows)[number]) => {
+    async (rawCode: string, target: StatusRow) => {
       if (warehouseId == null || !target.require_cart || !target.cart_type) return;
-      // Aktywna sesja już ma wózek — skan na statusie jest tylko do ROZPOCZĘCIA.
-      if (target.active_cart_id != null) return;
+      // Absolutny zakaz resolve-cart przy aktywnej sesji tej karty.
+      if (rowHasOperatorActiveSession(target)) {
+        setErr("Masz już aktywną sesję zbierania. Wejdź w kartę, zamiast skanować wózek ponownie.");
+        setScanTargetStatusId(null);
+        return;
+      }
       const code = normalizeScanEan(rawCode);
       if (!code || scanBusyRef.current) return;
       scanBusyRef.current = true;
@@ -188,6 +182,7 @@ export default function WmsPickingStatusPage() {
           requireCart: true as const,
           cartType: target.cart_type,
           orderTypeChoice: "all" as const,
+          cartless: false as const,
           assignEmptyMessage: startResult.operator_message ?? null,
         };
         navigate(WMS_ROUTES.pickingProducts, {
@@ -214,36 +209,21 @@ export default function WmsPickingStatusPage() {
     ],
   );
 
-  // Skaner na ekranie statusów — tylko gdy brak aktywnej sesji/wózka.
+  // Skaner TYLKO gdy jawnie wybrano status BEZ aktywnej sesji.
+  // Nigdy nie fallbackuj na inny status (to powodowało expected_cart_type=BASKETS przy skanie CART).
   useEffect(() => {
-    const needsScanTiles = rows.filter((r) => {
-      if (!r.require_cart || !r.cart_type) return false;
-      if (r.active_cart_id != null) return false;
-      if (r.active_session_id != null && r.active_session_id > 0) return false;
-      if ((r.in_progress_by_me ?? 0) > 0) return false;
-      const label = resolveStatusCartBadgeLabel({
-        requireCart: true,
-        tileCartType: r.cart_type,
-        apiName: r.active_cart_name,
-        apiCode: r.active_cart_code,
-        apiType: r.active_cart_type ?? null,
-        snapshotName: sessionCart?.cartName,
-        snapshotCode: sessionCart?.cartCode,
-        snapshotPhysicalType: sessionCart?.cartType,
-      });
-      return !label;
-    });
-
-    if (warehouseId == null || needsScanTiles.length === 0) {
+    if (warehouseId == null || scanTargetStatusId == null) {
       registerScanHandler(null);
       setScannerInputPlaceholder("Wybierz status zbierania");
       return;
     }
-
-    const target =
-      scanTargetStatusId != null
-        ? needsScanTiles.find((r) => r.source_status_id === scanTargetStatusId) ?? needsScanTiles[0]
-        : needsScanTiles[0];
+    const target = rows.find((r) => r.source_status_id === scanTargetStatusId);
+    if (!target || !target.require_cart || !target.cart_type || rowHasOperatorActiveSession(target)) {
+      registerScanHandler(null);
+      setScanTargetStatusId(null);
+      setScannerInputPlaceholder("Wybierz status zbierania");
+      return;
+    }
 
     setScannerInputPlaceholder(
       target.cart_type === "BASKETS" ? "Zeskanuj wózek z koszykami" : "Zeskanuj wózek",
@@ -251,14 +231,18 @@ export default function WmsPickingStatusPage() {
     refocusScannerInput();
 
     const handler = (ean: string) => {
-      void assignCartFromScan(ean, target);
+      const latest = rowsRef.current.find((r) => r.source_status_id === scanTargetStatusId);
+      if (!latest || rowHasOperatorActiveSession(latest)) {
+        setScanTargetStatusId(null);
+        return;
+      }
+      void assignCartFromScan(ean, latest);
     };
     registerScanHandler(handler);
     return () => registerScanHandler(null);
   }, [
     rows,
     warehouseId,
-    sessionCart,
     scanTargetStatusId,
     assignCartFromScan,
     registerScanHandler,
@@ -266,23 +250,16 @@ export default function WmsPickingStatusPage() {
     refocusScannerInput,
   ]);
 
-  const onChoose = async (r: (typeof rows)[number]) => {
+  const resumeOrStart = async (r: StatusRow) => {
     if (warehouseId == null || resolvingStatusId != null || scanBusy) return;
 
-    const tileType = r.require_cart ? r.cart_type : null;
-    // SSOT: aktywna sesja = API (cart + opcjonalnie session_id / in_progress).
-    const hasActiveSession =
-      r.active_cart_id != null &&
-      (r.active_cart_type == null || tileType == null || r.active_cart_type === tileType);
+    const active = rowHasOperatorActiveSession(r);
 
-    if (r.require_cart && !hasActiveSession) {
-      if (sessionCart && !cartTypeMatchesPickingTile(tileType, sessionCart.cartType)) {
-        clearPickingCart();
-      }
-      // Brak sesji — skan wózka na tym ekranie (rozpoczęcie), nie „potwierdzenie”.
+    // BRAK sesji + require cart → tylko skan (bez resolve przez pomyłkę innego kafelka).
+    if (r.require_cart && !active) {
       setScanTargetStatusId(r.source_status_id);
       setErr(
-        tileType === "BASKETS"
+        r.cart_type === "BASKETS"
           ? "Zeskanuj wózek z koszykami dla tego statusu."
           : "Zeskanuj wózek dla tego statusu.",
       );
@@ -291,7 +268,7 @@ export default function WmsPickingStatusPage() {
     }
 
     const reused =
-      hasActiveSession && r.active_cart_id != null
+      active && r.active_cart_id != null
         ? {
             cartId: r.active_cart_id,
             cartCode: (r.active_cart_code || "").trim() || `CART-${r.active_cart_id}`,
@@ -323,53 +300,59 @@ export default function WmsPickingStatusPage() {
         ? r.active_order_type
         : ("all" as const);
 
-    // SSOT: source_status_id z meta sesji — nie z przypadkowo klikniętej innej karty.
     const resumeStatusId =
-      reused && r.session_source_status_id != null && r.session_source_status_id > 0
+      r.session_source_status_id != null && r.session_source_status_id > 0
         ? r.session_source_status_id
         : r.source_status_id;
 
-    const base = {
-      orderUiStatusId: resumeStatusId,
-      orderUiStatusName: r.status,
-      orderUiStatusColor: r.color,
-      mainGroup: r.main_group as OrderUiMainGroup,
-      pickingSessionId: r.active_session_id ?? null,
-      ...(reused
-        ? {
-            cartId: reused.cartId,
-            cartCode: reused.cartCode,
-            cartName: reused.cartName,
-            physicalCartType: reused.physicalCartType,
-          }
-        : {}),
-    };
+    // Typ wózka SESJI (nie kafelka) — przy wznowieniu.
+    const sessionCartType =
+      r.active_cart_type === "BASKETS" || r.active_cart_type === "BULK"
+        ? r.active_cart_type
+        : r.cart_type;
+
     setResolvingStatusId(r.source_status_id);
     setErr(null);
+    setScanTargetStatusId(null);
     try {
       const cfg = await getWmsPickingFlowConfig(DAMAGE_TENANT_ID, warehouseId, resumeStatusId);
-      const hubOrderCount = Number(r.order_count) || 0;
-      const hubPickStats = {
-        zebrane: Math.max(0, Number(r.session_products_picked) || 0),
-        doZebrania: Math.max(
-          0,
-          (Number(r.session_products_total) || 0) - (Number(r.session_products_picked) || 0),
-        ),
-        wTrakcie: 0,
-        braki: 0,
-      };
       const session = {
-        ...sessionWithPickingFlowConfig(base, cfg),
+        ...sessionWithPickingFlowConfig(
+          {
+            orderUiStatusId: resumeStatusId,
+            orderUiStatusName: r.status,
+            orderUiStatusColor: r.color,
+            mainGroup: r.main_group as OrderUiMainGroup,
+            pickingSessionId: r.active_session_id ?? null,
+            ...(reused
+              ? {
+                  cartId: reused.cartId,
+                  cartCode: reused.cartCode,
+                  cartName: reused.cartName,
+                  physicalCartType: reused.physicalCartType,
+                }
+              : {}),
+          },
+          cfg,
+        ),
         orderTypeChoice,
         ...(reused
           ? {
               requireCart: true as const,
-              cartType: tileType,
+              cartType: sessionCartType,
               cartless: false as const,
             }
           : {}),
-        hubOrderCount,
-        hubPickStats,
+        hubOrderCount: Number(r.order_count) || 0,
+        hubPickStats: {
+          zebrane: Math.max(0, Number(r.session_products_picked) || 0),
+          doZebrania: Math.max(
+            0,
+            (Number(r.session_products_total) || 0) - (Number(r.session_products_picked) || 0),
+          ),
+          wTrakcie: 0,
+          braki: 0,
+        },
       };
       const { path, state } = resolveAfterStatusWithConfig(session);
       navigate(path, { state });
@@ -379,6 +362,17 @@ export default function WmsPickingStatusPage() {
       setResolvingStatusId(null);
     }
   };
+
+  const anyNeedsNewCartScan = useMemo(
+    () => rows.some((r) => r.require_cart && !rowHasOperatorActiveSession(r)),
+    [rows],
+  );
+
+  useEffect(() => {
+    if (!anyNeedsNewCartScan && scanTargetStatusId != null) {
+      setScanTargetStatusId(null);
+    }
+  }, [anyNeedsNewCartScan, scanTargetStatusId]);
 
   return (
     <div className="flex h-full min-h-0 w-full flex-col bg-white">
@@ -417,25 +411,10 @@ export default function WmsPickingStatusPage() {
             aria-label="Statusy skonfigurowane do zbierania"
           >
             {rows.map((r) => {
-              const badge = resolveStatusCartBadgeLabel({
-                requireCart: r.require_cart,
-                tileCartType: r.cart_type,
-                apiName: r.active_cart_name,
-                apiCode: r.active_cart_code,
-                apiType: r.active_cart_type ?? null,
-                snapshotName: sessionCart?.cartName,
-                snapshotCode: sessionCart?.cartCode,
-                snapshotPhysicalType: sessionCart?.cartType,
-              });
-              const hasSessionCart =
-                r.active_cart_id != null &&
-                (r.active_cart_type == null ||
-                  r.cart_type == null ||
-                  r.active_cart_type === r.cart_type);
-              // CTA tylko przy starcie nowej sesji — nigdy przy wznowieniu.
-              const needScanCta = r.require_cart && !hasSessionCart;
-              const sessionPicked = Math.max(0, Number(r.session_products_picked) || 0);
-              const sessionTotal = Math.max(0, Number(r.session_products_total) || 0);
+              const active = rowHasOperatorActiveSession(r);
+              const badge = cartBadgeFromRow(r);
+              // CTA WYŁĄCZNIE gdy brak aktywnej sesji — nigdy równolegle z badge wózka.
+              const needScanCta = r.require_cart && !active;
               return (
                 <li key={r.source_status_id} className="min-w-0">
                   <WmsFlowStatusTileButton
@@ -449,11 +428,12 @@ export default function WmsPickingStatusPage() {
                     mainGroup={r.main_group as OrderUiMainGroup}
                     requireCart={r.require_cart}
                     cartType={r.cart_type}
-                    activeCartLabel={hasSessionCart ? badge : null}
-                    sessionProductsPicked={sessionPicked}
-                    sessionProductsTotal={sessionTotal}
+                    activeCartLabel={badge}
+                    sessionProductsPicked={Math.max(0, Number(r.session_products_picked) || 0)}
+                    sessionProductsTotal={Math.max(0, Number(r.session_products_total) || 0)}
                     showScanCartCta={needScanCta}
                     onScanCartClick={() => {
+                      if (rowHasOperatorActiveSession(r)) return;
                       setScanTargetStatusId(r.source_status_id);
                       setErr(
                         r.cart_type === "BASKETS"
@@ -463,8 +443,11 @@ export default function WmsPickingStatusPage() {
                       refocusScannerInput();
                     }}
                     disabled={warehouseId == null || resolvingStatusId != null || scanBusy}
-                    loading={resolvingStatusId === r.source_status_id || (scanBusy && scanTargetStatusId === r.source_status_id)}
-                    onClick={() => void onChoose(r)}
+                    loading={
+                      resolvingStatusId === r.source_status_id ||
+                      (scanBusy && scanTargetStatusId === r.source_status_id)
+                    }
+                    onClick={() => void resumeOrStart(r)}
                   />
                 </li>
               );

@@ -33,6 +33,8 @@ export type WmsPickingConfiguredStatusItem = {
   active_order_type?: "single" | "multi" | "all" | null;
   /** source_status_id z meta sesji — nie używaj innego statusu przy product-lines. */
   session_source_status_id?: number | null;
+  /** True = operator ma aktywną sesję na tej karcie — NIE pokazuj skanu wózka. */
+  has_operator_active_session?: boolean;
 };
 
 export type WmsPickingPickUnit = "orders" | "products";

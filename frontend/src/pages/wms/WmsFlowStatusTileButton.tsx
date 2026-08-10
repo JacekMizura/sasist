@@ -160,7 +160,7 @@ export function WmsFlowStatusTileButton({
                 {Math.max(0, sessionProductsPicked)}/{Math.max(0, sessionProductsTotal)} szt.
               </span>
             </p>
-            {showScanCartCta && !cartBadge && onScanCartClick ? (
+            {showScanCartCta && !cartBadge && inProgressByMe <= 0 && onScanCartClick ? (
               <span
                 role="button"
                 tabIndex={0}

@@ -29,7 +29,8 @@ def wms_tile_cart_config(single_mode: str | None, multi_mode: str | None) -> Tup
     mm = (multi_mode or "").strip().lower()
 
     def needs_cart(m: str) -> bool:
-        return m in ("scanned", "baskets")
+        # DB: scanned|baskets; toleruj aliasy UI (cart_scan) gdy zapisano błędnie.
+        return m in ("scanned", "baskets", "cart_scan")
 
     # consolidation_rack / bulk / mobile — bez skanu wózka na kafelku statusu
 
@@ -38,8 +39,8 @@ def wms_tile_cart_config(single_mode: str | None, multi_mode: str | None) -> Tup
         return False, None
     sm_baskets = sm == "baskets"
     mm_baskets = mm == "baskets"
-    sm_bulk = sm == "scanned"
-    mm_bulk = mm == "scanned"
+    sm_bulk = sm in ("scanned", "cart_scan")
+    mm_bulk = mm in ("scanned", "cart_scan")
     # Tylko koszyki → BASKETS. Tylko skan wózka → BULK.
     # Mieszanka na jednym statusie: NIE wymuszaj BASKETS (to psuło skan CART-0001).
     if (sm_baskets or mm_baskets) and not (sm_bulk or mm_bulk):
@@ -68,7 +69,8 @@ def merge_wms_tile_cart_configs(
                 has_bulk = True
     if not req:
         return False, None
-    if has_baskets:
+    # Mixed BULK+BASKETS across configs → BULK (nie wymuszaj BASKETS na zwykły wózek).
+    if has_baskets and not has_bulk:
         return True, "BASKETS"
     return True, "BULK"
 

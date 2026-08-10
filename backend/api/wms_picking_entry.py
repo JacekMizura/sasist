@@ -74,7 +74,6 @@ from ..services.picking_config_service import (
 )
 from ..services.wms_status_tile_config import (
     active_cart_tile_fields,
-    resolve_operator_active_picking_cart,
     wms_tile_cart_config,
 )
 from ..services.wms_picking_session_projection import (
@@ -337,71 +336,128 @@ def get_picking_configured_statuses(
             else {}
         )
 
+        # SSOT: jedna aktywna sesja operatora — przypisz do właściwego source_status_id z meta.
+        from ..services.wms_picking_active_session import resolve_operator_active_picking_session
+
+        active_sess = resolve_operator_active_picking_session(
+            db,
+            tenant_id=int(tenant_id),
+            warehouse_id=int(warehouse_id),
+            operator_user_id=op_uid,
+        )
+        active_sid = active_sess.get("source_status_id")
+        active_sid_i = int(active_sid) if active_sid is not None else None
+        # Brak meta.source_status_id → przypisz do pierwszego kafelka o tym samym typie wózka.
+        if (
+            bool(active_sess.get("has_active_session"))
+            and active_sid_i is None
+            and active_sess.get("cart_type") in ("BULK", "BASKETS")
+        ):
+            for pc, st in valid:
+                req_i, ct_i = wms_tile_cart_config(
+                    getattr(pc, "single_mode", None), getattr(pc, "multi_mode", None)
+                )
+                if req_i and ct_i == active_sess.get("cart_type"):
+                    active_sid_i = int(st.id)
+                    break
+
+        empty_cart = active_cart_tile_fields(None)
         out: List[WmsPickingConfiguredStatusItem] = []
         for pc, st in valid:
             gkey = _norm_group(st.main_group)
             req, ct = wms_tile_cart_config(getattr(pc, "single_mode", None), getattr(pc, "multi_mode", None))
             c = counts_map.get(int(st.id), {})
-            proj = project_operator_active_picking_for_status(
-                db,
-                tenant_id=int(tenant_id),
-                warehouse_id=int(warehouse_id),
-                source_status_id=int(st.id),
-                operator_user_id=op_uid,
-                cart_type_hint=ct if req else None,
-                order_type="all",
+            st_id = int(st.id)
+            is_this_session = (
+                bool(active_sess.get("has_active_session"))
+                and active_sid_i is not None
+                and active_sid_i == st_id
             )
-            # Cart badge: tylko gdy jest aktywna sesja / wózek w projekcji.
-            if req and proj.get("has_active_session"):
-                cart_fields = {
-                    "active_cart_id": proj.get("active_cart_id"),
-                    "active_cart_code": proj.get("active_cart_code"),
-                    "active_cart_name": proj.get("active_cart_name"),
-                    "active_cart_type": proj.get("active_cart_type"),
-                }
-            elif req:
-                # Wózek przypisany do operatora (ASSIGNED/PICKING) bez pozycji tego statusu —
-                # nadal pokaż badge, jeśli resolve znalazł pasujący typ.
-                my_cart = resolve_operator_active_picking_cart(
+
+            # Projekcja produktów TYLKO dla karty z aktywną sesją — nie doklejaj wózka do obcych statusów.
+            if is_this_session:
+                proj = project_operator_active_picking_for_status(
                     db,
                     tenant_id=int(tenant_id),
                     warehouse_id=int(warehouse_id),
+                    source_status_id=st_id,
                     operator_user_id=op_uid,
-                    cart_type_hint=ct,
+                    cart_type_hint=None,
+                    order_type="all",
                 )
-                cart_fields = active_cart_tile_fields(my_cart)
+                cart_fields = {
+                    "active_cart_id": active_sess.get("cart_id"),
+                    "active_cart_code": active_sess.get("cart_code"),
+                    "active_cart_name": active_sess.get("cart_name"),
+                    "active_cart_type": active_sess.get("cart_type"),
+                }
+                session_id = active_sess.get("session_id")
+                order_type = active_sess.get("order_type")
+                products_picked = int(proj.get("products_picked") or 0)
+                products_total = int(proj.get("products_total") or 0)
+                # Co najmniej 1 gdy sesja wózkowa istnieje (nawet gdy filtr typu rozjechał counts).
+                in_me = max(int(c.get("in_progress_by_me", 0)), 1)
+                has_operator_active = True
+                sess_src = active_sid_i
+            elif not req:
+                # Cartless / bez skanu — projekcja bez typu wózka.
+                proj = project_operator_active_picking_for_status(
+                    db,
+                    tenant_id=int(tenant_id),
+                    warehouse_id=int(warehouse_id),
+                    source_status_id=st_id,
+                    operator_user_id=op_uid,
+                    cart_type_hint=None,
+                    order_type="all",
+                )
+                cart_fields = empty_cart
+                session_id = proj.get("session_id") if proj.get("has_active_session") else None
+                order_type = proj.get("order_type")
+                products_picked = int(proj.get("products_picked") or 0)
+                products_total = int(proj.get("products_total") or 0)
+                in_me = int(c.get("in_progress_by_me", 0))
+                has_operator_active = bool(
+                    (session_id is not None and int(session_id) > 0)
+                    or in_me > 0
+                    or products_total > 0
+                )
+                sess_src = (
+                    int(proj["source_status_id"])
+                    if proj.get("source_status_id") is not None
+                    else None
+                )
             else:
-                cart_fields = active_cart_tile_fields(None)
+                # Inny status z require_cart: NIGDY nie pokazuj wózka z sesji innego statusu.
+                cart_fields = empty_cart
+                session_id = None
+                order_type = None
+                products_picked = 0
+                products_total = 0
+                in_me = 0
+                has_operator_active = False
+                sess_src = None
 
-            # in_progress_by_me z counts; produkty SESJI z projekcji (nie wolna kolejka).
             out.append(
                 WmsPickingConfiguredStatusItem(
-                    source_status_id=int(st.id),
+                    source_status_id=st_id,
                     status=str(st.name),
                     color=normalize_stored_color(st.color),
                     main_group=cast(OrderUiMainGroup, gkey),
                     order_count=int(c.get("order_count", 0)),
                     in_progress_by_others=int(c.get("in_progress_by_others", 0)),
-                    in_progress_by_me=int(c.get("in_progress_by_me", 0)),
+                    in_progress_by_me=in_me,
                     require_cart=req,
                     cart_type=ct,
                     active_cart_id=cart_fields["active_cart_id"],
                     active_cart_code=cart_fields["active_cart_code"],
                     active_cart_name=cart_fields["active_cart_name"],
                     active_cart_type=cart_fields["active_cart_type"],
-                    session_products_picked=int(proj.get("products_picked") or 0),
-                    session_products_total=int(proj.get("products_total") or 0),
-                    active_session_id=proj.get("session_id"),
-                    active_order_type=(
-                        proj.get("order_type")
-                        if proj.get("order_type") in ("single", "multi", "all")
-                        else None
-                    ),
-                    session_source_status_id=(
-                        int(proj["source_status_id"])
-                        if proj.get("source_status_id") is not None
-                        else None
-                    ),
+                    session_products_picked=products_picked,
+                    session_products_total=products_total,
+                    active_session_id=session_id,
+                    active_order_type=order_type if order_type in ("single", "multi", "all") else None,
+                    session_source_status_id=sess_src,
+                    has_operator_active_session=has_operator_active,
                 )
             )
         gidx = {g: i for i, g in enumerate(_GROUP_ORDER)}
@@ -410,6 +466,24 @@ def get_picking_configured_statuses(
     except SQLAlchemyError:
         logger.exception("get_picking_configured_statuses: database error")
         return []
+
+
+@router.get("/picking/active-session")
+def get_picking_active_session(
+    tenant_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_operable_warehouse),
+    db: Session = Depends(get_db),
+    current_user: AppUser = Depends(get_current_user),
+):
+    """SSOT aktywnej sesji zbierania zalogowanego operatora (wózek lub cartless)."""
+    from ..services.wms_picking_active_session import resolve_operator_active_picking_session
+
+    return resolve_operator_active_picking_session(
+        db,
+        tenant_id=int(tenant_id),
+        warehouse_id=int(warehouse_id),
+        operator_user_id=int(current_user.id),
+    )
 
 
 @router.get("/picking/config", response_model=WmsPickingFlowConfigRead)
@@ -1016,8 +1090,10 @@ def get_picking_resolve_cart(
         description="Opcjonalnie — typ wózka z picking_config dla tego statusu",
     ),
     db: Session = Depends(get_db),
+    current_user: AppUser = Depends(get_current_user),
 ):
-    """Rozpoznanie wózka na początku sesji — zwraca ``cart_id`` do zapisu w stanie klienta."""
+    """Rozpoznanie wózka przy STARCIE nowej sesji — nie do wznowienia istniejącej."""
+    from ..models.enums import CartStatus
     from ..services.wms_status_tile_config import (
         CART_TYPE_MISMATCH_MSG,
         assert_cart_matches_tile_type,
@@ -1034,6 +1110,19 @@ def get_picking_resolve_cart(
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
 
+    # Wózek już w aktywnej sesji tego operatora — resolve-cart NIE jest ścieżką wznowienia.
+    already_mine = (
+        getattr(cart, "assigned_user_id", None) is not None
+        and int(cart.assigned_user_id) == int(current_user.id)
+        and str(getattr(getattr(cart, "status", None), "value", cart.status) or "").upper()
+        in (CartStatus.PICKING.value, CartStatus.ASSIGNED.value, "PICKING", "ASSIGNED")
+    )
+    if already_mine:
+        raise HTTPException(
+            status_code=409,
+            detail="Masz już aktywną sesję zbierania z tym wózkiem. Wróć do listy statusów i otwórz istniejącą sesję.",
+        )
+
     tile_ct = (expected_cart_type or "").strip().upper() or None
     if tile_ct not in ("BULK", "BASKETS"):
         tile_ct = None
@@ -1048,7 +1137,9 @@ def get_picking_resolve_cart(
             .first()
         )
         if pc is not None:
-            req, ct = wms_tile_cart_config(getattr(pc, "single_mode", None), getattr(pc, "multi_mode", None))
+            req, ct = wms_tile_cart_config(
+                getattr(pc, "single_mode", None), getattr(pc, "multi_mode", None)
+            )
             if req:
                 tile_ct = ct
     if tile_ct:
@@ -1059,7 +1150,9 @@ def get_picking_resolve_cart(
 
     code_str = str(getattr(cart, "code", None) or cart.barcode or "").strip() or str(cart.id)
     ct = getattr(cart, "type", None)
-    cart_type_str = str(ct.value) if ct is not None and hasattr(ct, "value") else (str(ct) if ct is not None else None)
+    cart_type_str = (
+        str(ct.value) if ct is not None and hasattr(ct, "value") else (str(ct) if ct is not None else None)
+    )
     return WmsPickingResolveCartResponse(
         cart_id=int(cart.id),
         name=str(cart.name or ""),

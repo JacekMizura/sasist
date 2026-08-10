@@ -29,8 +29,8 @@ export function cartTypeHintForOrderTypeChoice(
   if (choice === "multi") return cartTypeHintForMode(multiMode);
   const a = cartTypeHintForMode(singleMode);
   const b = cartTypeHintForMode(multiMode);
-  if (a === "BASKETS" || b === "BASKETS") return "BASKETS";
-  if (a === "BULK" || b === "BULK") return "BULK";
+  if (a != null && a === b) return a;
+  // Mixed BULK+BASKETS — nie zgaduj; „all” nie powinno być oferowane.
   return null;
 }
 
@@ -45,15 +45,17 @@ export function needsCartAfterOrderTypeChoice(
 }
 
 /**
- * „Wszystkie” tylko gdy obie ścieżki mają ten sam rodzaj bramki startu
- * (obie wymagają skanu wózka albo obie go nie wymagają) — wspólna tura.
+ * „Wszystkie” tylko gdy obie ścieżki mają tę samą bramkę startu
+ * (obie wymagają skanu wózka albo obie go nie wymagają)
+ * ORAZ ten sam typ wózka (BULK vs BASKETS) — wspólna tura.
  */
 export function canOfferAllOrderTypes(
   singleMode: PickingFlowMode | null | undefined,
   multiMode: PickingFlowMode | null | undefined,
 ): boolean {
   if (singleMode == null || multiMode == null) return false;
-  return modeRequiresCartScan(singleMode) === modeRequiresCartScan(multiMode);
+  if (modeRequiresCartScan(singleMode) !== modeRequiresCartScan(multiMode)) return false;
+  return cartTypeHintForMode(singleMode) === cartTypeHintForMode(multiMode);
 }
 
 /** Które kafelki pokazać na ekranie „Wybierz” — SSOT z konfiguracji trybów. */

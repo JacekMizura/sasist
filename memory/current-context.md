@@ -1,5 +1,13 @@
 ﻿## Active
 
+**Aktywny wózek SSOT (2026-08-10) — definitywna naprawa 409 BASKETS:**
+- Root cause: skaner statusów fallbackował na `needsScanTiles[0]` (często BASKETS) przy sesji CART; CTA gdy `active_cart_type !== cart_type` kafelka; `session_source_status_id` nie było w schemacie Pydantic
+- FE: `WmsPickingStatusPage` — skan TYLKO przy jawnym `scanTargetStatusId` bez aktywnej sesji; zero fallbacku typu; CTA wyłącznie gdy `!rowHasOperatorActiveSession`
+- BE: `resolve_operator_active_picking_session` + `GET /picking/active-session`; configured-statuses wiąże sesję WYŁĄCZNIE do `meta.source_status_id`; obce kafle bez wózka/CTA mylącego
+- Schema: `has_operator_active_session`, `session_source_status_id`
+- resolve-cart: 409 gdy wózek już ASSIGNED/PICKING u operatora (nie start nowej sesji)
+- Mixed cart_scan+baskets → BULK; „Wszystkie” w order-type tylko przy tym samym typie wózka
+
 **Spójność sesji zbierania (2026-08-10):**
 - Bug: `pickingSessionId` na sesji WÓZKOWEJ mylony z cartless → czyścił cartId, product-lines 409, cancel-cartless 400
 - Fix: `isCartlessPickingSession` — cart_id wygrywa; merge nie wymusza cartless
