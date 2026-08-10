@@ -11,7 +11,12 @@ export type WmsPickingConfiguredStatusItem = {
   status: string;
   color: string;
   main_group: OrderUiMainGroup;
+  /** Zamówienia dostępne do rozpoczęcia zbierania. */
   order_count: number;
+  /** Aktywne zbieranie innych operatorów. */
+  in_progress_by_others?: number;
+  /** Aktywne zbieranie zalogowanego operatora. */
+  in_progress_by_me?: number;
   require_cart: boolean;
   cart_type: "BULK" | "BASKETS" | null;
 };

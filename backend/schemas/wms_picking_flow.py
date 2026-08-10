@@ -21,7 +21,21 @@ class WmsPickingConfiguredStatusItem(BaseModel):
     status: str = Field(..., description="Nazwa statusu (etykieta)")
     color: str
     main_group: OrderUiMainGroup
-    order_count: int = Field(..., ge=0, description="Liczba zamówień w magazynie z tym statusem panelu")
+    order_count: int = Field(
+        ...,
+        ge=0,
+        description="Zamówienia dostępne do rozpoczęcia zbierania w tym statusie (wolne, nie rozpoczęte)",
+    )
+    in_progress_by_others: int = Field(
+        0,
+        ge=0,
+        description="Zamówienia z tego statusu aktualnie realizowane przez innych operatorów",
+    )
+    in_progress_by_me: int = Field(
+        0,
+        ge=0,
+        description="Zamówienia z tego statusu aktualnie realizowane przez zalogowanego operatora",
+    )
     require_cart: bool = Field(
         ...,
         description="True gdy konfiguracja wymaga skanu wózka / trybu koszykowego (scanned|baskets)",

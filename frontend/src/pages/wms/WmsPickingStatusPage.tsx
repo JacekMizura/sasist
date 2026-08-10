@@ -45,6 +45,14 @@ export default function WmsPickingStatusPage() {
     void load();
   }, [load]);
 
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState === "visible") void load();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
+  }, [load]);
+
   const onChoose = async (r: (typeof rows)[number]) => {
     if (warehouseId == null || resolvingStatusId != null) return;
     clearPickingCart();
@@ -141,8 +149,11 @@ export default function WmsPickingStatusPage() {
               <li key={r.source_status_id} className="min-w-0">
                 <WmsFlowStatusTileButton
                   variant="work"
+                  showRealizationCounts
                   statusName={r.status}
                   orderCount={r.order_count}
+                  inProgressByOthers={r.in_progress_by_others ?? 0}
+                  inProgressByMe={r.in_progress_by_me ?? 0}
                   color={r.color}
                   mainGroup={r.main_group as OrderUiMainGroup}
                   requireCart={r.require_cart}

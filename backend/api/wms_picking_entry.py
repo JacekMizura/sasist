@@ -79,6 +79,7 @@ from ..services.wms_picking_product_list_service import (
     build_wms_picking_product_detail,
     build_wms_picking_product_lines,
     count_assignable_orders_for_picking_statuses,
+    count_picking_status_realization_for_operator,
     finalize_wms_picking_cart,
     finalize_wms_recovery_picking_cart,
     record_wms_quick_pick,
@@ -272,10 +273,13 @@ def get_picking_configured_statuses(
     tenant_id: int = Query(..., ge=1),
     warehouse_id: int = Depends(require_operable_warehouse),
     db: Session = Depends(get_db),
+    current_user: AppUser | None = Depends(get_optional_current_user),
 ):
     """
     Lista statusów **do zbierania** wyłącznie z ``picking_config.source_status_id``
     (etykiety z ``order_ui_statuses``). Bez rekordów konfiguracji lista jest pusta.
+
+    Liczniki: dostępne do startu + „Realizowane przez innych/Ciebie” dla zalogowanego operatora.
     """
     try:
         pc_rows: List[PickingConfig] = (
@@ -301,13 +305,15 @@ def get_picking_configured_statuses(
             valid.append((pc, st))
 
         status_ids = [int(st.id) for _, st in valid]
-        # PRELIMINARY SSOT: eligibility + wolne cart_id (nie raw status; nie WMS validation gate).
-        counts_map: Dict[int, int] = (
-            count_assignable_orders_for_picking_statuses(
+        op_uid = int(current_user.id) if current_user is not None else None
+        # PRELIMINARY SSOT: available + active realization split by operator.
+        counts_map: Dict[int, Dict[str, int]] = (
+            count_picking_status_realization_for_operator(
                 db,
                 tenant_id=int(tenant_id),
                 warehouse_id=int(warehouse_id),
                 source_status_ids=status_ids,
+                operator_user_id=op_uid,
             )
             if status_ids
             else {}
@@ -317,13 +323,16 @@ def get_picking_configured_statuses(
         for pc, st in valid:
             gkey = _norm_group(st.main_group)
             req, ct = wms_tile_cart_config(getattr(pc, "single_mode", None), getattr(pc, "multi_mode", None))
+            c = counts_map.get(int(st.id), {})
             out.append(
                 WmsPickingConfiguredStatusItem(
                     source_status_id=int(st.id),
                     status=str(st.name),
                     color=normalize_stored_color(st.color),
                     main_group=cast(OrderUiMainGroup, gkey),
-                    order_count=int(counts_map.get(int(st.id), 0)),
+                    order_count=int(c.get("order_count", 0)),
+                    in_progress_by_others=int(c.get("in_progress_by_others", 0)),
+                    in_progress_by_me=int(c.get("in_progress_by_me", 0)),
                     require_cart=req,
                     cart_type=ct,
                 )

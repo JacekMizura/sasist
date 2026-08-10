@@ -473,7 +473,8 @@ def count_assignable_orders_for_picking_statuses(
 ) -> dict[int, int]:
     """
     Licznik kafelka statusu (ikona wózka) — **PRELIMINARY** SSOT z kohortą
-    ``_query_order_ids_for_status`` + ``cart_id IS NULL``.
+    ``_query_order_ids_for_status`` + wolne do startu
+    (``cart_id IS NULL`` i ``picking_session_id IS NULL``).
 
     Świadomie BEZ ``gate_orders_before_capacity`` (stock/location) — pełny gate
     jest tylko przy skanie wózka. Dashboard może więc być > 0 przy final assignment = 0.
@@ -488,6 +489,7 @@ def count_assignable_orders_for_picking_statuses(
             Order.warehouse_id == int(warehouse_id),
             Order.order_ui_status_id.in_(ids),
             Order.cart_id.is_(None),
+            Order.picking_session_id.is_(None),
             *_picking_queue_eligibility_clauses(
                 db, tenant_id=int(tenant_id), warehouse_id=int(warehouse_id)
             ),
@@ -496,6 +498,113 @@ def count_assignable_orders_for_picking_statuses(
         .all()
     )
     return {int(sid): int(n) for sid, n in rows}
+
+
+def count_picking_status_realization_for_operator(
+    db: Session,
+    *,
+    tenant_id: int,
+    warehouse_id: int,
+    source_status_ids: list[int],
+    operator_user_id: int | None,
+) -> dict[int, dict[str, int]]:
+    """
+    Liczniki kafelka statusu zbierania (Sellasist-style):
+
+    - ``order_count`` / available — wolne do rozpoczęcia
+    - ``in_progress_by_me`` — aktywne zbieranie bieżącego operatora
+    - ``in_progress_by_others`` — aktywne zbieranie innych operatorów
+
+    Aktywne = wózek w ``PICKING`` (Order.cart_id → Cart.assigned_user_id)
+    albo otwarta sesja cartless (Order.picking_session_id → WmsOperationSession).
+    Zakończone zbieranie (status panelu zmieniony / sesja zamknięta / wózek poza PICKING)
+    nie wchodzi do „Realizowane…”.
+    """
+    from ..models.cart import Cart
+    from ..models.enums import CartStatus
+    from ..models.wms_operation_session import WmsOperationSession
+    from .cart_picking_lifecycle_service import SESSION_KIND_PICKING_ACTIVE
+
+    ids = [int(x) for x in source_status_ids if int(x) > 0]
+    empty = {sid: {"order_count": 0, "in_progress_by_me": 0, "in_progress_by_others": 0} for sid in ids}
+    if not ids:
+        return {}
+
+    available = count_assignable_orders_for_picking_statuses(
+        db,
+        tenant_id=int(tenant_id),
+        warehouse_id=int(warehouse_id),
+        source_status_ids=ids,
+    )
+    for sid, n in available.items():
+        empty[int(sid)]["order_count"] = int(n)
+
+    eligible = _picking_queue_eligibility_clauses(
+        db, tenant_id=int(tenant_id), warehouse_id=int(warehouse_id)
+    )
+    uid = int(operator_user_id) if operator_user_id is not None and int(operator_user_id) > 0 else None
+    picking_status = CartStatus.PICKING.value
+
+    # Cart-based active picking: order still in source panel status + cart PICKING.
+    cart_rows = (
+        db.query(Order.order_ui_status_id, Cart.assigned_user_id, func.count(Order.id))
+        .join(Cart, Cart.id == Order.cart_id)
+        .filter(
+            Order.tenant_id == int(tenant_id),
+            Order.warehouse_id == int(warehouse_id),
+            Order.order_ui_status_id.in_(ids),
+            Order.cart_id.isnot(None),
+            Cart.tenant_id == int(tenant_id),
+            Cart.warehouse_id == int(warehouse_id),
+            Cart.status == picking_status,
+            *eligible,
+        )
+        .group_by(Order.order_ui_status_id, Cart.assigned_user_id)
+        .all()
+    )
+    for sid, assigned, n in cart_rows:
+        sid_i = int(sid)
+        n_i = int(n)
+        assigned_i = int(assigned) if assigned is not None else None
+        if uid is not None and assigned_i == uid:
+            empty[sid_i]["in_progress_by_me"] += n_i
+        else:
+            empty[sid_i]["in_progress_by_others"] += n_i
+
+    # Cartless active picking: open session, no cart.
+    open_kinds = (SESSION_KIND_PICKING_ACTIVE, "picking_recovery_active")
+    cartless_rows = (
+        db.query(
+            Order.order_ui_status_id,
+            WmsOperationSession.operator_user_id,
+            func.count(Order.id),
+        )
+        .join(WmsOperationSession, WmsOperationSession.id == Order.picking_session_id)
+        .filter(
+            Order.tenant_id == int(tenant_id),
+            Order.warehouse_id == int(warehouse_id),
+            Order.order_ui_status_id.in_(ids),
+            Order.cart_id.is_(None),
+            Order.picking_session_id.isnot(None),
+            WmsOperationSession.tenant_id == int(tenant_id),
+            WmsOperationSession.warehouse_id == int(warehouse_id),
+            WmsOperationSession.completed_at.is_(None),
+            WmsOperationSession.session_kind.in_(open_kinds),
+            *eligible,
+        )
+        .group_by(Order.order_ui_status_id, WmsOperationSession.operator_user_id)
+        .all()
+    )
+    for sid, op_uid, n in cartless_rows:
+        sid_i = int(sid)
+        n_i = int(n)
+        op_i = int(op_uid) if op_uid is not None else None
+        if uid is not None and op_i == uid:
+            empty[sid_i]["in_progress_by_me"] += n_i
+        else:
+            empty[sid_i]["in_progress_by_others"] += n_i
+
+    return empty
 
 
 # Komunikat operatora gdy preliminary > 0, ale gate/start nie przypisał nic do wózka.
