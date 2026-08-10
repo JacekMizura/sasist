@@ -37,7 +37,6 @@ import { DAMAGE_TENANT_ID } from "../damage/damageShared";
 import type { WmsPickingProductsNavState } from "./wmsPickingFlowTypes";
 import { clearActivePriorityTask, loadActivePriorityTask, priorityTaskAppliesTo, priorityTaskOrderIds, type ActivePriorityTask } from "./activePriorityTask";
 import { formatWmsPickingLocationPillLabel } from "./wmsPickingLocationPill";
-import { wmsTypoClass } from "../../wms/typography/wmsOperatorTypography";
 import {
   pickingFinalizeHasShortageSignals,
   polishProductShortageModalSkuLine,
@@ -50,17 +49,10 @@ import {
   wmsPickingProductLineComplete,
   wmsPickingRowScanEligible,
 } from "./wmsPickingUiGates";
-import {
-  formatShortageQty,
-  shortageCompactOrderBasketLine,
-  shortageProductCardHeadline,
-  summarizeProductShortageAllocations,
-} from "./pickingShortagePresentation";
-import { WmsPickingSessionTopBar } from "./WmsPickingSessionTopBar";
 import { useWmsShortagesRefresh } from "../../hooks/useWmsShortagesRefresh";
 import { WMS_ROUTES } from "./wmsRoutes";
 import { dispatchWmsShortagesUpdated } from "../../utils/wmsRefresh";
-import { Image as ImageIcon, MapPin, AlertTriangle, Check, Loader2 } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import type { BundleScanOut } from "../../api/bundlesLogisticsApi";
 import { BundlePickingScanCard } from "../../components/wms/bundle/BundlePickingScanCard";
 import { tryPickingBundleScan } from "../../services/bundleScannerIntegration";
@@ -75,6 +67,9 @@ import {
   preparePickingProductDetailNavigation,
   type PickingDetailNavSource,
 } from "../../utils/pickingProductDetailNav";
+import { PickingSimpleHeader } from "../../components/wms/picking/PickingSimpleHeader";
+import { PickingProductListCard } from "../../components/wms/picking/PickingProductListCard";
+import { PickingOptionsSheet, PickingStickyFooter } from "../../components/wms/picking/PickingStickyChrome";
 
 function fmtQty(n: number): string {
   return new Intl.NumberFormat("pl-PL", { maximumFractionDigits: 2 }).format(n);
@@ -182,6 +177,7 @@ export default function WmsPickingProductsPage() {
   const [cohortOrderCount, setCohortOrderCount] = useState(0);
   const [sessionStats, setSessionStats] = useState<WmsPickingSessionStatsApi | null>(null);
   const [exitModalOpen, setExitModalOpen] = useState(false);
+  const [optionsOpen, setOptionsOpen] = useState(false);
   const [cancelBusy, setCancelBusy] = useState(false);
   const [cohortMissingLines, setCohortMissingLines] = useState<WmsPickingCohortMissingLineApi[]>([]);
   const [allowContinueAfterShortage, setAllowContinueAfterShortage] = useState(true);
@@ -1546,8 +1542,8 @@ export default function WmsPickingProductsPage() {
   }
 
   return (
-    <WmsOperationalPageShell className="bg-slate-50/50 font-sans text-slate-900 select-none">
-      <WmsPickingSessionTopBar
+    <WmsOperationalPageShell className="bg-white font-sans text-slate-900 select-none">
+      <PickingSimpleHeader
         onBack={() => {
           if (
             activePriorityTask &&
@@ -1562,27 +1558,20 @@ export default function WmsPickingProductsPage() {
           setExitModalOpen(true);
         }}
         backAriaLabel={recoveryOrderId != null && recoveryOrderId > 0 ? "Wróć do kolejki braków" : "Wróć do wyboru statusu"}
-        orderCount={orderCountForBar}
-        pickStats={pickStatsForBar}
-        statusName={statusTitleBar}
-        statusBadgeStyle={statusBadgeStyle}
-        cartCode={isCartlessMode ? null : mergedSession?.cartCode}
-        cartName={isCartlessMode ? null : mergedSession?.cartName}
-        cartless={isCartlessMode}
-        pickingSessionId={activePickingSessionId}
+        title={`Do zebrania: ${totalPickedCount}/${totalToPickCount}`}
       />
 
       {basketPutPending && basketPutPending.product_id > 0 ? (
-        <div className="sticky top-14 z-20 border-b border-amber-200 bg-amber-50 px-4 py-3 shadow-sm">
+        <div className="border-b border-amber-200 bg-amber-50 px-4 py-3">
           <div className="mx-auto flex max-w-5xl flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="min-w-0">
-              <p className="text-[11px] font-black uppercase tracking-widest text-amber-800">
+              <p className="text-xs font-semibold uppercase tracking-wide text-amber-800">
                 Masz {fmtQty(basketPutPending.quantity ?? 1)} szt. oczekującą na odłożenie do koszyka
               </p>
-              <p className="mt-1 truncate text-sm font-black text-slate-900">
+              <p className="mt-1 truncate text-sm font-bold text-slate-900">
                 {basketPutPending.product_name || `Produkt #${basketPutPending.product_id}`}
               </p>
-              <p className="mt-0.5 text-xs font-semibold text-slate-600">
+              <p className="mt-0.5 text-xs text-slate-600">
                 {basketPutPending.ean ? `EAN: ${basketPutPending.ean}` : null}
                 {basketPutPending.ean && basketPutPending.sku ? " · " : null}
                 {basketPutPending.sku ? `SKU: ${basketPutPending.sku}` : null}
@@ -1595,7 +1584,7 @@ export default function WmsPickingProductsPage() {
               <button
                 type="button"
                 onClick={resumePendingPut}
-                className="rounded-xl border-2 border-amber-600 bg-amber-600 px-4 py-2.5 text-xs font-black uppercase tracking-wider text-white shadow-sm hover:bg-amber-700 active:scale-95"
+                className="rounded-lg border border-amber-600 bg-amber-600 px-4 py-2.5 text-xs font-bold uppercase tracking-wider text-white hover:bg-amber-700"
               >
                 Odłóż do koszyka
               </button>
@@ -1603,7 +1592,7 @@ export default function WmsPickingProductsPage() {
                 type="button"
                 disabled={cancelPendingBusy}
                 onClick={() => void cancelPendingPut()}
-                className="rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-xs font-black uppercase tracking-wider text-slate-700 hover:bg-slate-50 disabled:opacity-50 active:scale-95"
+                className="rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-xs font-bold uppercase tracking-wider text-slate-700 hover:bg-slate-50 disabled:opacity-50"
               >
                 {cancelPendingBusy ? "Anulowanie…" : "Anuluj pobranie"}
               </button>
@@ -1613,12 +1602,12 @@ export default function WmsPickingProductsPage() {
       ) : null}
 
       {activePriorityTask ? (
-        <div className="sticky top-14 z-20 border-b border-orange-100 bg-orange-50/70 px-4 py-3">
-          <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-orange-200 bg-white px-4 py-3 shadow-sm">
+        <div className="border-b border-orange-100 bg-orange-50/70 px-4 py-3">
+          <div className="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-3">
             <div className="min-w-0">
-              <div className="text-[11px] font-black uppercase tracking-wide text-orange-700">Tryb zadania kierownika</div>
-              <div className="mt-0.5 truncate text-sm font-black text-slate-900">{activePriorityTask.title}</div>
-              <div className="mt-1 flex flex-wrap gap-2 text-xs font-semibold text-slate-500">
+              <div className="text-xs font-semibold uppercase tracking-wide text-orange-700">Tryb zadania kierownika</div>
+              <div className="mt-0.5 truncate text-sm font-bold text-slate-900">{activePriorityTask.title}</div>
+              <div className="mt-1 flex flex-wrap gap-2 text-xs text-slate-500">
                 <span>{activePriorityTask.assigned_by_name || "Kierownik"}</span>
                 <span>{activePriorityOrderIds.length || orderCountForBar || 0} zamówień</span>
                 <span>od {formatOperationalDurationSince(activePriorityTask.assigned_at)}</span>
@@ -1644,16 +1633,15 @@ export default function WmsPickingProductsPage() {
         </div>
       ) : null}
 
-      <WmsOperationalPageBody className="flex flex-col gap-6 animate-in fade-in duration-500 !py-4 md:!py-6">
-        
+      <WmsOperationalPageBody className="flex flex-col gap-4 !py-4 pb-28 md:!py-5">
         {cartBootstrapErr && (
-          <p className="rounded-2xl border border-red-200 bg-red-50 px-5 py-4 text-center text-sm font-bold text-red-900 shadow-sm">{cartBootstrapErr}</p>
+          <p className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-center text-sm font-semibold text-red-900">{cartBootstrapErr}</p>
         )}
         {err && (
-          <p className="rounded-2xl border border-red-200 bg-red-50 px-5 py-4 text-center text-sm font-bold text-red-900 shadow-sm">{err}</p>
+          <p className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-center text-sm font-semibold text-red-900">{err}</p>
         )}
         {blockOtherProductLines && (
-          <p className="rounded-2xl border border-red-200 bg-red-50 px-5 py-4 text-sm font-bold text-red-950 shadow-sm">
+          <p className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-950">
             Zgłoszono brak — dokończ tylko dotknięte linie (SKU z brakiem). Pozostałe produkty są zablokowane.
           </p>
         )}
@@ -1662,81 +1650,72 @@ export default function WmsPickingProductsPage() {
           return bundleDisplay ? <BundlePickingScanCard display={bundleDisplay} /> : null;
         })()}
         {warnings.length > 0 && rows.length > 0 && (
-          <ul className="list-disc space-y-1 pl-5 text-xs text-amber-900 bg-amber-50/60 p-4 rounded-xl border border-amber-200/50">
+          <ul className="list-disc space-y-1 rounded-lg border border-amber-200/60 bg-amber-50/50 p-3 pl-5 text-xs text-amber-900">
             {warnings.map((w) => <li key={w} className="font-semibold">{w}</li>)}
           </ul>
         )}
 
-        {!loading && !err && rows.length > 0 && (
-          <div className="flex items-center justify-between px-1">
-            <span className="text-xs font-black uppercase tracking-widest text-slate-400">
-              {recoveryOrderId != null && recoveryOrderId > 0 
-                ? `Dogrywka: Pozostało ${recoveryRemainSummary.lines} linii / ${fmtQty(recoveryRemainSummary.units)} szt.`
-                : `Produkty w sesji (${rows.length}) • ${orderTypeLine}`}
-            </span>
-            <span className="text-xs font-bold text-slate-500 bg-white border border-slate-200 px-3 py-1.5 rounded-xl shadow-sm">
-              Postęp: <strong className="text-slate-800 font-bold">{totalPickedCount}/{totalToPickCount} szt.</strong>
-              {shortageUnitsTotal > 1e-9 && (
-                <span className="text-rose-600 ml-1.5 font-bold">• Braki: {fmtQty(shortageUnitsTotal)} szt.</span>
-              )}
-            </span>
-          </div>
-        )}
-
         {loading || cartBootstrapping ? (
           <div className="flex flex-col items-center justify-center py-24 text-slate-400">
-            <Loader2 size={40} className="animate-spin mb-4 text-[#5a4fcf]" strokeWidth={2.5} />
-            <p className="font-black uppercase tracking-widest text-[11px]">{cartBootstrapping ? (isCartlessMode ? "Uruchamianie sesji zbierania…" : "Ustalanie wózka...") : "Wczytywanie pozycji..."}</p>
+            <Loader2 size={36} className="mb-3 animate-spin text-slate-400" strokeWidth={2.5} />
+            <p className="text-xs font-semibold uppercase tracking-wider">
+              {cartBootstrapping ? (isCartlessMode ? "Uruchamianie sesji zbierania…" : "Ustalanie wózka...") : "Wczytywanie pozycji..."}
+            </p>
           </div>
         ) : null}
 
         {!loading && !err && rows.length === 0 ? (
-          <p className="rounded-2xl border border-slate-200 bg-white px-5 py-12 text-center text-sm font-bold text-slate-600 shadow-sm">
+          <p className="rounded-lg border border-slate-200 px-5 py-12 text-center text-sm font-semibold text-slate-600">
             {pickingSession?.assignEmptyMessage ||
               warnings[0] ||
               "Brak pozycji do zbiórki dla tego statusu i filtra."}
           </p>
         ) : null}
 
-        <ul className="flex list-none flex-col p-0 m-0 border-t border-slate-200/60 bg-white rounded-2xl shadow-sm overflow-hidden" aria-label="ListaBox">
+        {finalizeErr ? (
+          <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-center text-sm font-semibold text-red-900 space-y-3">
+            <p className="whitespace-pre-line">{finalizeErr}</p>
+            {finalizeFailingPick?.product_id != null && pickingSession ? (
+              <button
+                type="button"
+                className="w-full rounded-lg border border-red-300 bg-white px-4 py-3 text-xs font-bold uppercase tracking-wider text-red-900 hover:bg-red-100"
+                onClick={() => {
+                  navigate(WMS_ROUTES.pickingProduct(Number(finalizeFailingPick.product_id)), {
+                    state: {
+                      pickingSession,
+                      navigationSource: "other",
+                      highlightPickId: finalizeFailingPick.pick_id ?? null,
+                    } satisfies WmsPickingProductsNavState,
+                  });
+                }}
+              >
+                Przejdź do pobrania
+              </button>
+            ) : null}
+          </div>
+        ) : null}
+
+        <ul className="mx-auto grid w-full max-w-5xl list-none grid-cols-1 gap-3 p-0 md:grid-cols-2 xl:grid-cols-3" aria-label="Lista produktów do zebrania">
           {sortedRows.map((r) => {
-            const { pickedShown, total, miss, remaining } = wmsPickingDisplayProgressParts(r);
-            const remainingToPick = remaining;
-            const resolution = wmsPickingLineResolutionStatus(r);
-            const isShortageResolved = resolution === "SHORTAGE";
-            const isCompletedPick = resolution === "COMPLETED_PICK";
-            const locCode = (r.primary_location_code ?? "").trim();
-            const hasLocation = locCode.length > 0;
-            const pStock = primaryStockDisplay(r);
-            const extra = typeof r.extra_locations_count === "number" && r.extra_locations_count > 0 ? r.extra_locations_count : 0;
+            const { pickedShown, total, miss } = wmsPickingDisplayProgressParts(r);
             const pickDone = wmsPickingProductLineComplete(r);
             const rowBlocked = blockOtherProductLines && !shortageProductIds.has(r.product_id) && !pickDone;
-            const hasShortage = miss > 1e-9;
-
-            const cardBgStyleClass = rowBlocked
-              ? "cursor-not-allowed bg-slate-50/50 opacity-40"
-              : isShortageResolved
-                ? "bg-red-50/80 border-b border-red-100"
-                : isCompletedPick
-                  ? "bg-emerald-50/40 border-b border-emerald-100"
-                  : "bg-white hover:bg-slate-50/60 border-b border-slate-200/60";
-
-            const hasEan = r.ean != null && r.ean.trim() !== "";
-            const titleTone = isShortageResolved
-              ? "text-red-900"
-              : isCompletedPick
-                ? "text-emerald-800"
-                : "text-slate-900";
-            const nameTone = isShortageResolved
-              ? "text-red-700/80"
-              : isCompletedPick
-                ? "text-emerald-600/75"
-                : "text-slate-400 group-hover:text-[#5a4fcf]";
+            const locCode = (r.primary_location_code ?? "").trim();
+            const pStock = primaryStockDisplay(r);
+            const locLabel = locCode
+              ? formatWmsPickingLocationPillLabel(locCode, pStock > 1e-9 ? pStock : undefined)
+              : "";
 
             return (
-              <li key={r.product_id} className="last:border-b-0">
-                <button
-                  type="button"
+              <li key={r.product_id} className="min-w-0">
+                <PickingProductListCard
+                  name={r.name}
+                  ean={r.ean}
+                  imageUrl={r.image_url}
+                  pickedLabel={fmtQty(pickedShown)}
+                  totalLabel={fmtQty(total)}
+                  locationLabel={locLabel}
+                  disabled={rowBlocked}
                   onClick={() =>
                     goDetail(r.product_id, {
                       source: "click",
@@ -1745,248 +1724,36 @@ export default function WmsPickingProductsPage() {
                       pendingCreated: false,
                     })
                   }
-                  disabled={rowBlocked}
-                  className={`group relative flex w-full flex-col sm:flex-row items-center justify-between p-6 gap-6 transition-all duration-150 outline-none ${cardBgStyleClass}`}
-                >
-                  <div className="flex items-center gap-6 min-w-0 w-full sm:w-auto flex-1 text-left">
-                    <div className="w-16 h-16 sm:w-20 sm:h-20 flex items-center justify-center shrink-0 bg-transparent">
-                      {r.image_url ? (
-                        <img
-                          src={r.image_url}
-                          alt=""
-                          className={`max-h-full max-w-full object-contain mix-blend-multiply drop-shadow-sm transition-all duration-300 ${
-                            pickDone ? "opacity-60 saturate-50" : "opacity-100"
-                          }`}
-                          loading="lazy"
-                        />
-                      ) : (
-                        <ImageIcon size={28} className="text-slate-200" strokeWidth={1.5} />
-                      )}
-                    </div>
-
-                    <div className="min-w-0 flex-1">
-                      {hasEan && (
-                        <p
-                          className={`text-lg font-black tracking-tight leading-none mb-1.5 transition-colors duration-300 ${titleTone}`}
-                        >
-                          EAN: <span className="font-mono">{(r.ean ?? "").trim()}</span>
-                        </p>
-                      )}
-
-                      <h3 className={`text-xs font-semibold leading-tight line-clamp-1 transition-colors duration-300 ${nameTone}`}>
-                        {r.name}
-                      </h3>
-                      {r.consolidation_pick && r.consolidation_shelf_label ? (
-                        <div className="mt-2 flex flex-wrap items-center gap-1.5">
-                          <span className="inline-flex rounded-md border border-violet-200 bg-violet-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-violet-900">
-                            Konsolidacja
-                          </span>
-                          <span className="font-mono text-[11px] font-semibold text-violet-800">
-                            {r.consolidation_shelf_label}
-                          </span>
-                        </div>
-                      ) : null}
-                      {r.bundle_breakdown && r.bundle_breakdown.length > 1 ? (
-                        <ul className="mt-2 space-y-0.5 border-l-2 border-indigo-200 pl-2">
-                          {r.bundle_breakdown.map((b) => (
-                            <li key={`${b.order_id}-${b.bundle_id ?? "x"}`} className="text-[10px] font-semibold text-slate-500 leading-snug">
-                              <span className="text-slate-700">#{b.order_number}</span>
-                              {b.bundle_name ? (
-                                <span className="text-indigo-700"> · {b.bundle_name}</span>
-                              ) : null}
-                              <span className="tabular-nums"> · ×{fmtQty(b.quantity)}</span>
-                            </li>
-                          ))}
-                        </ul>
-                      ) : null}
-                    </div>
-                  </div>
-
-                  <div className="shrink-0 flex items-center justify-center w-full sm:w-[18rem]">
-                    {isShortageResolved || hasShortage ? (
-                      (() => {
-                        const summary = summarizeProductShortageAllocations(r.allocations, miss);
-                        const head = shortageProductCardHeadline(summary);
-                        const primary = summary.affected[0];
-                        const multi = summary.ordersWithShortage > 1;
-                        return (
-                          <div className="flex flex-col items-stretch gap-1 w-full max-w-[260px] px-4 py-3 bg-red-50 border border-red-200 rounded-2xl text-red-900">
-                            <div className="flex items-center gap-2 text-sm font-black uppercase tracking-wider">
-                              <AlertTriangle size={16} strokeWidth={2.5} className="text-red-600 shrink-0" />
-                              {head.title}
-                            </div>
-                            {head.subtitle ? (
-                              <p className="text-[10px] font-bold uppercase tracking-wider text-red-800/90">
-                                {head.subtitle}
-                              </p>
-                            ) : null}
-                            {isShortageResolved && primary ? (
-                              <div className="border-t border-red-200/80 pt-1 space-y-0.5">
-                                <p className="text-[10px] font-bold text-red-900">
-                                  Zamówienie {primary.order_number?.startsWith("#") ? primary.order_number : `#${primary.order_number}`} niekompletne
-                                </p>
-                                {primary.basket_label ? (
-                                  <p className="text-[10px] font-semibold text-red-800/80">
-                                    Koszyk {primary.basket_label}
-                                  </p>
-                                ) : null}
-                              </div>
-                            ) : null}
-                            {multi ? (
-                              <ul className="mt-1 space-y-1 border-t border-red-200/80 pt-1">
-                                {summary.affected.map((a) => (
-                                  <li key={a.order_item_id} className="text-[10px] font-semibold text-red-900/90 leading-snug">
-                                    <span className="font-black">
-                                      {a.order_number?.startsWith("#") ? a.order_number : `#${a.order_number}`}
-                                      {a.basket_label ? ` · ${a.basket_label}` : ""}
-                                    </span>
-                                    <span className="tabular-nums">
-                                      {" "}
-                                      · brak {formatShortageQty(a.shortage_qty)}/{formatShortageQty(a.required_qty)}
-                                    </span>
-                                  </li>
-                                ))}
-                              </ul>
-                            ) : primary && !isShortageResolved ? (
-                              <p className="text-[10px] font-semibold text-red-800/80">
-                                {shortageCompactOrderBasketLine(primary)}
-                              </p>
-                            ) : null}
-                            {!isShortageResolved && remainingToPick > 1e-9 ? (
-                              <div className="flex items-center justify-between gap-2 border-t border-red-200/60 pt-1">
-                                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
-                                  Do pobrania
-                                </span>
-                                <span className="text-sm font-black text-[#5a4fcf] tabular-nums">
-                                  {fmtQty(remainingToPick)}
-                                </span>
-                              </div>
-                            ) : null}
-                          </div>
-                        );
-                      })()
-                    ) : isCompletedPick ? (
-                      <div className="flex items-center gap-2.5 px-5 py-3.5 bg-emerald-500/10 text-emerald-700 rounded-2xl border border-emerald-500/20 text-sm font-black uppercase tracking-wider">
-                        <Check size={16} strokeWidth={3} />
-                        Zebrano {fmtQty(pickedShown)} / {fmtQty(total)} szt.
-                      </div>
-                    ) : resolution === "PARTIAL" || pickedShown > 1e-9 ? (
-                      <div className="flex flex-col items-stretch gap-1 w-full max-w-[220px] px-5 py-3 bg-indigo-50 border border-indigo-100 rounded-2xl group-hover:border-indigo-200 transition-colors">
-                        <div className="flex items-center justify-between gap-2">
-                          <span className="text-[10px] font-black text-[#5a4fcf] uppercase tracking-widest">
-                            Zebrano
-                          </span>
-                          <span className="text-sm font-black text-[#5a4fcf] tabular-nums">
-                            {fmtQty(pickedShown)}/{fmtQty(total)}
-                          </span>
-                        </div>
-                        <div className="flex items-center justify-between gap-2 border-t border-indigo-100/80 pt-1">
-                          <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
-                            Do pobrania
-                          </span>
-                          <span className={["font-black text-[#5a4fcf] leading-none", wmsTypoClass.quantity].join(" ")}>
-                            {fmtQty(remainingToPick)}
-                          </span>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="flex items-center justify-between w-full max-w-[200px] px-5 py-3.5 bg-indigo-50 border border-indigo-100 rounded-2xl group-hover:border-indigo-200 transition-colors">
-                        <span className="text-[10px] font-black text-[#5a4fcf] uppercase tracking-widest">
-                          {total > 1 ? "Wielosztuki" : "Do pobrania"}
-                        </span>
-                        <div className="flex min-w-0 items-baseline gap-1">
-                          <span className={["font-black text-[#5a4fcf] leading-none", wmsTypoClass.quantity].join(" ")}>
-                            {fmtQty(remainingToPick)}
-                          </span>
-                          <span className="text-[10px] font-bold text-[#5a4fcf]/80">szt.</span>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="shrink-0 flex flex-col justify-center items-end self-start sm:self-center w-full sm:w-[14rem] text-right">
-                    {isShortageResolved ? (
-                      <div className="flex items-center justify-end gap-1.5 px-4 py-2 bg-red-50 border border-red-200 rounded-xl text-xs font-black text-red-800 uppercase tracking-wide">
-                        <AlertTriangle size={14} strokeWidth={2.5} className="text-red-600" />
-                        Brak produktu
-                      </div>
-                    ) : hasLocation ? (
-                      <div className="flex flex-col items-end gap-1 w-full">
-                        <div
-                          className={`flex min-w-0 max-w-full items-center justify-end gap-1.5 px-4 py-2 rounded-xl font-black uppercase tracking-wide border transition-colors duration-300 ${wmsTypoClass.location} ${
-                            isCompletedPick
-                              ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-700"
-                              : "bg-indigo-50 border-indigo-100 text-[#5a4fcf]"
-                          }`}
-                          title={locCode}
-                        >
-                          {isCompletedPick ? <Check size={14} strokeWidth={3} className="shrink-0" /> : <MapPin size={14} strokeWidth={2.5} className="shrink-0" />}
-                          <span className="min-w-0 text-right normal-case tracking-normal">
-                            {isCompletedPick
-                              ? `Pobrano z ${formatWmsPickingLocationPillLabel(locCode, undefined)}`
-                              : formatWmsPickingLocationPillLabel(locCode, pStock > 1e-9 ? pStock : undefined)}
-                          </span>
-                        </div>
-                        {extra > 0 && !pickDone ? (
-                          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                            {extraLocationsHint(extra)}
-                          </span>
-                        ) : null}
-                      </div>
-                    ) : isCompletedPick && pickedShown > 1e-9 ? (
-                      <div className="flex items-center justify-end gap-1.5 px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wide border bg-emerald-500/10 border-emerald-500/20 text-emerald-700">
-                        <Check size={14} strokeWidth={3} />
-                        Zebrano
-                      </div>
-                    ) : (
-                      <div className="flex items-center justify-end gap-1.5 px-4 py-2 bg-amber-50 border border-amber-200 rounded-xl text-xs font-black text-amber-700 uppercase tracking-wide">
-                        <AlertTriangle size={14} strokeWidth={2.5} className="text-amber-500" />
-                        Brak lokalizacji
-                      </div>
-                    )}
-                  </div>
-                </button>
+                />
+                {miss > 1e-9 ? (
+                  <p className="mt-1 px-1 text-xs font-semibold text-rose-700">
+                    Brak: {fmtQty(miss)} szt.
+                  </p>
+                ) : null}
               </li>
             );
           })}
         </ul>
-
-        {allPicked && rows.length > 0 && (
-          <section className="mt-4 space-y-3 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-            {finalizeErr ? (
-              <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-900 text-center shadow-inner space-y-3">
-                <p className="whitespace-pre-line">{finalizeErr}</p>
-                {finalizeFailingPick?.product_id != null && pickingSession ? (
-                  <button
-                    type="button"
-                    className="w-full rounded-xl border border-red-300 bg-white px-4 py-3 text-xs font-black uppercase tracking-wider text-red-900 hover:bg-red-100"
-                    onClick={() => {
-                      navigate(WMS_ROUTES.pickingProduct(Number(finalizeFailingPick.product_id)), {
-                        state: {
-                          pickingSession,
-                          navigationSource: "other",
-                          highlightPickId: finalizeFailingPick.pick_id ?? null,
-                        } satisfies WmsPickingProductsNavState,
-                      });
-                    }}
-                  >
-                    Przejdź do pobrania
-                  </button>
-                ) : null}
-              </div>
-            ) : null}
-            <button
-              type="button"
-              disabled={finalizeBusy || !canFinalizeSession}
-              onClick={() => void onFinalizeCart()}
-              className="flex min-h-[54px] w-full items-center justify-center gap-2 rounded-2xl bg-[#5a4fcf] hover:bg-[#4a40b2] px-6 text-base font-black uppercase tracking-widest text-white shadow-lg shadow-indigo-500/20 transition-all active:scale-95 disabled:cursor-not-allowed disabled:opacity-40 disabled:shadow-none"
-            >
-              {finalizeBusy ? "Zapisywanie…" : recoveryOrderId != null && recoveryOrderId > 0 ? "Zakończ dogrywkę" : "Zakończ zbieranie"}
-            </button>
-          </section>
-        )}
-
       </WmsOperationalPageBody>
+
+      <PickingStickyFooter
+        onOpenOptions={() => setOptionsOpen(true)}
+        onZebrane={() => void onFinalizeCart()}
+        zebraneDisabled={!allPicked || rows.length === 0 || !canFinalizeSession}
+        zebraneBusy={finalizeBusy}
+        zebraneLabel={
+          recoveryOrderId != null && recoveryOrderId > 0 ? "Zakończ dogrywkę" : "Zebrane"
+        }
+      />
+      <PickingOptionsSheet
+        open={optionsOpen}
+        onClose={() => setOptionsOpen(false)}
+        notesDisabled
+        previewDisabled
+        shortageDisabled
+        replenishmentDisabled
+        pickDisabled
+      />
 
       {finalizeShortageModal ? (
         <AppOverlayPortal>

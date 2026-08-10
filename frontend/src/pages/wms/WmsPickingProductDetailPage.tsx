@@ -36,6 +36,10 @@ import { MultiBulkShortageModal } from "./picking-detail/MultiBulkShortageModal"
 import type { BundleScanOut, ConsolidationRackBundleRowOut } from "../../api/bundlesLogisticsApi";
 import { getConsolidationRackBundleView } from "../../api/bundlesLogisticsApi";
 import { tryPickingBundleScan } from "../../services/bundleScannerIntegration";
+import { formatWmsPickingLocationPillLabel } from "./wmsPickingLocationPill";
+import { PickingSimpleHeader } from "../../components/wms/picking/PickingSimpleHeader";
+import { PickingFieldLabel, PickingLocationBadge, PickingQtyPair } from "../../components/wms/picking/PickingUiPrimitives";
+import { PickingOptionsSheet, PickingStickyFooter } from "../../components/wms/picking/PickingStickyChrome";
 import { wmsTypoClass } from "../../wms/typography/wmsOperatorTypography";
 import {
   looksLikeProductBarcode,
@@ -235,6 +239,7 @@ export default function WmsPickingProductDetailPage() {
   const sourceAcceptInFlightRef = useRef(false);
   const [locationHint, setLocationHint] = useState<string | null>(null);
   const [manualOpen, setManualOpen] = useState(false);
+  const [optionsOpen, setOptionsOpen] = useState(false);
   const [manualLocId, setManualLocId] = useState<number | null>(null);
   const [manualQty, setManualQty] = useState(1);
   const [taskOpen, setTaskOpen] = useState(false);
@@ -1717,464 +1722,231 @@ export default function WmsPickingProductDetailPage() {
   if (warehouseId == null || !pickingSession) return <div className="p-6 text-center text-sm font-medium text-slate-500">Przekierowanie…</div>;
 
   return (
-    <WmsOperationalPageShell className="bg-slate-50/50 font-sans text-slate-900 select-none">
-      <WmsOperationalPageBody className="flex flex-col gap-6 !py-3 md:!py-4">
-      <div className="flex items-center justify-between px-1">
-        <button type="button" onClick={() => goBackToList(true)} className="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-slate-500 bg-white border border-slate-200 px-4 py-2 rounded-xl shadow-sm hover:bg-slate-50 transition-all active:scale-95">
-          ← Wróć do listy produktów
-        </button>
-        <span className="text-[10px] font-black uppercase tracking-widest text-indigo-500 bg-indigo-50 px-3 py-1.5 rounded-xl border border-indigo-100/40">
-          Ekran szczegółowy (Detal)
-        </span>
-      </div>
+    <WmsOperationalPageShell className="bg-white font-sans text-slate-900 select-none">
+      <PickingSimpleHeader
+        onBack={() => goBackToList(true)}
+        backAriaLabel="Wróć do listy produktów"
+        subtitle="Zbierasz produkt"
+        title={detail?.name ?? "…"}
+      />
 
+      <WmsOperationalPageBody className="flex flex-col gap-5 !py-4 pb-28 md:!py-5">
       {loading && !detail && <div className="py-24 text-center text-sm text-slate-500">Ładowanie produktu…</div>}
 
       {detail && (
-        <div className="w-full bg-white border border-slate-200 rounded-[2.5rem] p-6 sm:p-10 shadow-sm flex flex-col gap-8">
-          
-          {/* SEKCJA GŁÓWNA PRODUKTU (Wizualne wyrównanie) */}
-          <div className="flex flex-col md:flex-row items-center gap-8 border-b border-slate-100 pb-8">
-            <div className="w-32 h-32 flex items-center justify-center bg-transparent shrink-0">
+        <div className="mx-auto flex w-full max-w-3xl flex-col gap-6">
+          <div className="flex flex-col gap-4 border-b border-slate-100 pb-5 sm:flex-row sm:items-start sm:justify-between">
+            <div className="min-w-0">
+              <PickingFieldLabel>Zebrane</PickingFieldLabel>
+              <div className="mt-1">
+                <PickingQtyPair picked={fmtQty(displayPickedDetail)} total={fmtQty(detail.total_quantity)} />
+              </div>
+            </div>
+            {detail.locations[0] ? (
+              <div className="min-w-0 max-w-[14rem] sm:text-right">
+                <PickingFieldLabel>Lokalizacja</PickingFieldLabel>
+                <div className="mt-1 flex sm:justify-end">
+                  <PickingLocationBadge
+                    text={formatWmsPickingLocationPillLabel(
+                      detail.locations[0].location_code,
+                      locStock(detail.locations[0]) > 1e-9 ? locStock(detail.locations[0]) : undefined,
+                    )}
+                  />
+                </div>
+              </div>
+            ) : null}
+          </div>
+
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
+            <div className="flex h-24 w-24 shrink-0 items-center justify-center bg-transparent sm:h-28 sm:w-28">
               {detail.image_url ? (
-                <img src={detail.image_url} alt="" className="max-h-full max-w-full object-contain mix-blend-multiply" />
+                <img src={detail.image_url} alt="" className="max-h-full max-w-full object-contain" />
               ) : (
-                <div className="text-xs font-bold text-slate-300">Brak zdjęcia</div>
+                <div className="text-xs font-semibold text-slate-300">Brak zdjęcia</div>
               )}
             </div>
-            <div className="text-center md:text-left flex-1 min-w-0">
+            <div className="min-w-0 flex-1">
               {detail.consolidation_active ? (
-                <span className="mb-3 inline-flex rounded-lg border border-violet-300 bg-violet-50 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-violet-800">
+                <span className="mb-2 inline-flex rounded-md border border-slate-200 bg-slate-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-slate-700">
                   Konsolidacja
                 </span>
               ) : null}
-              <p className="text-xl font-black text-slate-900 tracking-tight mb-1">EAN: <span className="font-mono">{detail.ean ?? "—"}</span></p>
-              <h3 className="text-sm font-semibold text-slate-400 mb-4 leading-tight">{detail.name}</h3>
-              
+              <p className="break-words text-sm text-slate-700">
+                EAN: <span className="font-mono font-semibold text-slate-900">{detail.ean ?? "—"}</span>
+              </p>
               {detail.consolidation_active && detail.consolidation_shelf_label ? (
-                <div className="w-fit px-5 py-3 rounded-2xl border-2 border-violet-500 bg-violet-100/95 font-black uppercase tracking-wider text-sm text-violet-950 ring-2 ring-violet-400/50">
+                <div className="mt-3 w-fit rounded-lg border border-slate-300 bg-slate-50 px-4 py-2 text-sm font-bold text-slate-900">
                   Odłóż na: {detail.consolidation_shelf_label}
                 </div>
-              ) : effectivePending ? (
-                <div className="w-full max-w-xl rounded-3xl border-4 border-amber-500 bg-amber-50 px-6 py-6 text-center shadow-lg ring-4 ring-amber-300/40">
-                  <p className="text-sm font-black uppercase tracking-[0.2em] text-amber-800">
-                    Produkt zeskanowany
-                  </p>
-                  <p className="mt-2 text-lg font-bold text-amber-950">
-                    {fmtQty(effectivePending.quantity ?? 1)} szt. — zeskanuj jeden z koszyków
-                  </p>
-                  {(effectivePending.eligible_baskets?.length ?? 0) > 0 ? (
-                    <ul className="mt-4 space-y-2 text-left">
-                      {effectivePending.eligible_baskets!.map((b) => (
-                        <li
-                          key={b.basket_id}
-                          className="flex items-center justify-between rounded-xl border border-amber-300/80 bg-white px-4 py-3"
-                        >
-                          <span className="text-2xl font-black tabular-nums text-amber-950">
-                            {b.basket_label}
-                          </span>
-                          <span className="text-sm font-bold text-amber-800">
-                            pozostało {fmtQty(b.line_remaining)}
-                          </span>
-                        </li>
-                      ))}
-                    </ul>
-                  ) : (detail.eligible_basket_destinations?.length ?? 0) > 0 ? (
-                    <ul className="mt-4 space-y-2 text-left">
-                      {detail.eligible_basket_destinations!.map((b) => (
-                        <li
-                          key={`${b.basket_id}-${b.order_item_id}`}
-                          className="flex items-center justify-between rounded-xl border border-amber-300/80 bg-white px-4 py-3"
-                        >
-                          <span className="min-w-0">
-                            <span className="text-2xl font-black tabular-nums text-amber-950">{b.basket_label}</span>
-                            {b.barcode ? (
-                              <span className="ml-2 text-xs font-semibold text-amber-800/80">{b.barcode}</span>
-                            ) : null}
-                          </span>
-                          <span className="text-sm font-bold text-amber-800">
-                            pozostało {fmtQty(b.line_remaining)}
-                          </span>
-                        </li>
-                      ))}
-                    </ul>
-                  ) : null}
-                </div>
-              ) : detail.basket_put_active_series?.basket_label && !detail.requires_basket_put_confirm ? (
-                <div className={`w-full max-w-md rounded-2xl border-2 px-5 py-4 ${BASKET_PUT_STYLE_RING[(detail.put_to_basket_color_index ?? 0) % BASKET_PUT_STYLE_RING.length]}`}>
-                  <p className="text-[10px] font-black uppercase tracking-widest opacity-80">Aktywny koszyk</p>
-                  <p className="mt-1 text-3xl font-black tabular-nums">{detail.basket_put_active_series.basket_label}</p>
-                  <p className="mt-1 text-sm font-semibold">
-                    Zeskanuj EAN produktu, aby dodać sztukę.
-                  </p>
-                  <p className="mt-1 text-sm font-semibold opacity-80">
-                    Pozostało:{" "}
-                    {fmtQty(
-                      typeof detail.basket_put_active_series.line_remaining === "number" &&
-                        Number.isFinite(detail.basket_put_active_series.line_remaining)
-                        ? Math.max(0, detail.basket_put_active_series.line_remaining)
-                        : 0,
-                    )}{" "}
-                    szt.
-                  </p>
-                </div>
-              ) : detail.requires_basket_put_confirm &&
-                (detail.eligible_basket_destinations?.length ?? 0) > 0 ? (
-                <div className="w-full max-w-md rounded-2xl border-2 border-indigo-300 bg-indigo-50 px-5 py-4 text-left">
-                  <p className="text-[10px] font-black uppercase tracking-widest text-indigo-700">
-                    Produkt zeskanowany — wybierz koszyk
-                  </p>
-                  <p className="mt-1 text-sm font-semibold text-indigo-950">
-                    Zeskanuj koszyk z listy (kod kreskowy lub etykieta), potem podaj ilość do odłożenia.
-                  </p>
-                  <ul className="mt-3 space-y-1.5">
-                    {detail.eligible_basket_destinations!.map((b) => (
-                      <li key={`${b.basket_id}-${b.order_item_id}`} className="flex justify-between gap-2 text-sm font-bold text-slate-800">
-                        <span className="min-w-0">
-                          <span className="tabular-nums">{b.basket_label}</span>
-                          {b.barcode ? (
-                            <span className="ml-2 text-[11px] font-semibold text-slate-500">{b.barcode}</span>
-                          ) : null}
-                        </span>
-                        <span className="shrink-0 text-slate-500">pozostało {fmtQty(b.line_remaining)}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
               ) : null}
             </div>
           </div>
 
-          {/* POTĘŻNY WIDGET POZOSTAŁYCH SZTUK DO ZEBRANIA */}
-          <div
-            className={`flex flex-col items-center justify-center p-8 border rounded-3xl text-center ${
-              isShortageResolved
-                ? "bg-red-50 border-red-200"
-                : "bg-slate-50 border-slate-200/60"
-            }`}
-          >
-            <p className="text-xs font-black uppercase tracking-widest text-slate-400 mb-3">
-              {isShortageResolved ? "Stan pozycji po zgłoszeniu braku" : "Postęp pobierania pozycji"}
-            </p>
-            {isShortageResolved ? (
-              <div className="w-full max-w-md space-y-4">
-                <div className="inline-flex items-center gap-2 px-5 py-3 rounded-2xl border border-red-300 bg-red-100 text-red-950 text-xs font-black uppercase tracking-wider">
-                  <AlertTriangle size={16} strokeWidth={2.5} className="text-red-700" />
-                  BRAK {fmtQty(missingTotal)} SZT.
-                  {ordersWithShortageCount === 1
-                    ? " · 1 ZAMÓWIENIE Z BRAKIEM"
-                    : ordersWithShortageCount > 1
-                      ? ` · ${ordersWithShortageCount} ${
-                          ordersWithShortageCount <= 4 ? "ZAMÓWIENIA" : "ZAMÓWIEŃ"
-                        } Z BRAKIEM`
-                      : ""}
-                </div>
-                <ul className="space-y-2 text-left">
-                  {detail.orders.map((o) => {
-                    const missLn = Number(o.missing_quantity ?? 0);
-                    const unresolved = Math.max(
-                      0,
-                      Number(o.quantity_to_pick ?? Math.max(0, Number(o.quantity) - Number(o.picked_quantity ?? 0) - missLn)),
-                    );
-                    const incomplete = missLn > 1e-9;
-                    const ready = !incomplete && unresolved <= 1e-9;
-                    return (
-                      <li
-                        key={o.order_item_id ?? `${o.order_id}-${o.basket_slot ?? ""}`}
-                        className={`rounded-xl border px-3 py-2 ${
-                          incomplete ? "border-red-200 bg-white" : "border-slate-200 bg-white"
-                        }`}
-                      >
-                        <div className="flex flex-wrap items-center justify-between gap-2">
-                          <p className="text-sm font-black text-slate-900">
-                            #{o.order_number}
-                            {o.basket_slot ? (
-                              <span className="ml-2 font-semibold text-[#5a4fcf]">· Koszyk {o.basket_slot}</span>
-                            ) : null}
-                          </p>
-                          <span
-                            className={`rounded-md px-2 py-0.5 text-[10px] font-black uppercase tracking-wider ${
-                              incomplete
-                                ? "bg-amber-50 text-amber-900 border border-amber-200"
-                                : ready
-                                  ? "bg-emerald-50 text-emerald-800 border border-emerald-200"
-                                  : "bg-indigo-50 text-indigo-900 border border-indigo-200"
-                            }`}
-                          >
-                            {incomplete ? (Number(o.picked_quantity) > 1e-9 ? "NIEKOMPLETNE" : "BRAK") : ready ? "GOTOWE" : "NIEROZLICZONE"}
-                          </span>
-                        </div>
-                        <p className="mt-1 text-xs font-semibold text-slate-600 tabular-nums">
-                          Wymagane: {fmtQty(o.quantity)} · Zebrano: {fmtQty(o.picked_quantity)} · Brak:{" "}
-                          {fmtQty(missLn)}
-                        </p>
-                      </li>
-                    );
-                  })}
+          {effectivePending ? (
+            <div className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-4">
+              <p className="text-xs font-bold uppercase tracking-wide text-amber-800">Produkt zeskanowany</p>
+              <p className="mt-1 text-sm font-semibold text-amber-950">
+                {fmtQty(effectivePending.quantity ?? 1)} szt. — zeskanuj jeden z koszyków
+              </p>
+              {(effectivePending.eligible_baskets?.length ?? 0) > 0 ? (
+                <ul className="mt-3 space-y-2">
+                  {effectivePending.eligible_baskets!.map((b) => (
+                    <li key={b.basket_id} className="flex items-center justify-between rounded-lg border border-amber-200 bg-white px-3 py-2">
+                      <span className="font-bold text-amber-950">{b.basket_label}</span>
+                      <span className="text-sm font-semibold text-amber-800">pozostało {fmtQty(b.line_remaining)}</span>
+                    </li>
+                  ))}
                 </ul>
-              </div>
-            ) : (
-              <>
-                {detail.requires_basket_put_confirm ? (
-                  <div className="mb-4 w-full max-w-md grid grid-cols-2 gap-2 text-left">
-                    <div className="rounded-xl border border-slate-200 bg-white px-3 py-2">
-                      <p className="text-[10px] font-bold uppercase text-slate-500">Potrzeba</p>
-                      <p className={["font-black", wmsTypoClass.quantity].join(" ")}>{fmtQty(detail.total_quantity)}</p>
-                    </div>
-                    <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2">
-                      <p className="text-[10px] font-bold uppercase text-emerald-700">Zebrano</p>
-                      <p className={["font-black text-emerald-900", wmsTypoClass.quantity].join(" ")}>
-                        {fmtQty(displayPickedDetail)}
-                      </p>
-                    </div>
-                    <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2">
-                      <p className="text-[10px] font-bold uppercase text-amber-800">Brak</p>
-                      <p className={["font-black text-amber-950", wmsTypoClass.quantity].join(" ")}>
-                        {fmtQty(missingTotal)}
-                      </p>
-                    </div>
-                    <div className="rounded-xl border border-indigo-200 bg-indigo-50 px-3 py-2">
-                      <p className="text-[10px] font-bold uppercase text-indigo-700">Nierozliczone</p>
-                      <p className={["font-black text-indigo-950", wmsTypoClass.quantity].join(" ")}>
-                        {fmtQty(remaining)}
-                      </p>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="mb-4 flex min-w-0 flex-wrap items-baseline gap-2">
-                    <span className={["font-black text-[#5a4fcf]", wmsTypoClass.quantity].join(" ")}>
-                      {displayPickedDetail}
-                    </span>
-                    <span className="font-bold text-slate-300">/</span>
-                    <span className={["font-black text-slate-500", wmsTypoClass.quantity].join(" ")}>
-                      {fmtQty(detail.total_quantity)}
-                    </span>
-                    <span className="ml-1 text-sm font-bold text-slate-400">szt.</span>
-                  </div>
-                )}
+              ) : (detail.eligible_basket_destinations?.length ?? 0) > 0 ? (
+                <ul className="mt-3 space-y-2">
+                  {detail.eligible_basket_destinations!.map((b) => (
+                    <li key={`${b.basket_id}-${b.order_item_id}`} className="flex items-center justify-between rounded-lg border border-amber-200 bg-white px-3 py-2">
+                      <span className="font-bold text-amber-950">{b.basket_label}</span>
+                      <span className="text-sm font-semibold text-amber-800">pozostało {fmtQty(b.line_remaining)}</span>
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+            </div>
+          ) : null}
 
-                {pickQueueDone ? (
-                  detail.pending_shelf_deposit ? (
-                    <button
-                      type="button"
-                      disabled={depositBusy}
-                      onClick={() => void confirmShelfDeposit()}
-                      className="flex items-center gap-2 px-6 py-3 bg-violet-600 text-white rounded-2xl font-black uppercase tracking-wider text-xs shadow-lg shadow-violet-500/10 disabled:opacity-50"
-                    >
-                      <Check size={14} strokeWidth={3} />
-                      Odłożono na półkę {detail.consolidation_shelf_label ?? ""}
-                    </button>
-                  ) : (
-                    <div className="flex flex-col items-center gap-3 w-full max-w-md">
-                      <div className="flex items-center gap-2 px-6 py-3 bg-emerald-500 text-white rounded-2xl font-black uppercase tracking-wider text-xs shadow-lg shadow-emerald-500/10">
-                        <Check size={14} strokeWidth={3} />{" "}
-                        {missingTotal > 1e-9
-                          ? `Rozliczono ${fmtQty(detail.total_quantity)}/${fmtQty(detail.total_quantity)}`
-                          : `Skompletowano ${fmtQty(displayPickedDetail)}/${fmtQty(detail.total_quantity)}`}
-                      </div>
-                      {missingTotal > 1e-9 ? (
-                        <p className="text-sm font-semibold text-slate-600">
-                          Zebrano {fmtQty(displayPickedDetail)} · Brak {fmtQty(missingTotal)}
-                        </p>
-                      ) : null}
-                      <div className="flex flex-wrap items-center justify-center gap-2">
-                        <button
-                          type="button"
-                          disabled={undoBusy || !canUndoPick}
-                          onClick={() => void submitUndoPick()}
-                          className="px-4 py-2.5 rounded-xl border border-slate-300 bg-white text-slate-700 text-[11px] font-bold uppercase tracking-wider hover:bg-slate-50 disabled:opacity-40"
-                        >
-                          {undoBusy ? "Cofanie…" : "Cofnij pobranie"}
-                        </button>
-                        <button
-                          type="button"
-                          disabled={reportShortageBlocked}
-                          onClick={openShortageModal}
-                          className="px-4 py-2.5 rounded-xl border border-amber-300 bg-amber-50 text-amber-900 text-[11px] font-bold uppercase tracking-wider hover:bg-amber-100 disabled:opacity-40"
-                        >
-                          Zgłoś problem / brak
-                        </button>
-                      </div>
-                    </div>
-                  )
-                ) : detail.requires_basket_put_confirm ? (
-                  <div className="text-[10px] font-black text-indigo-500 uppercase tracking-widest bg-indigo-50 border border-indigo-100 px-4 py-2 rounded-xl">
-                    Zeskanuj koszyk, do którego odkładasz produkt
-                  </div>
-                ) : (
-                  <div className="text-[10px] font-black text-indigo-500 uppercase tracking-widest bg-indigo-50 border border-indigo-100 px-4 py-2 rounded-xl">
-                    Zeskanuj kod EAN produktu, aby dodać kolejną sztukę
-                  </div>
-                )}
-              </>
-            )}
+          <div>
+            <PickingFieldLabel>Lokalizacje</PickingFieldLabel>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {detail.locations.map((loc) => {
+                const stock = locStock(loc);
+                const label = formatWmsPickingLocationPillLabel(
+                  loc.location_code,
+                  stock > 1e-9 ? stock : undefined,
+                );
+                const active = activeLocationId === loc.location_id;
+                return (
+                  <button
+                    key={loc.location_id}
+                    type="button"
+                    onClick={() => {
+                      if (stock <= 1e-9) {
+                        setActiveLocationId(null);
+                        explicitSourceSelectionRef.current = null;
+                        setLocationHint("Brak dostępnego stanu w tej lokalizacji (już pobrane w tej kompletacji).");
+                        return;
+                      }
+                      explicitSourceSelectionRef.current = loc.location_id;
+                      setActiveLocationId(loc.location_id);
+                      setLocationHint(null);
+                      if (detail.requires_basket_put_confirm) {
+                        void acceptSourceLocation(loc.location_id, "accept");
+                      }
+                    }}
+                    className={active ? "rounded-full ring-2 ring-slate-400 ring-offset-1" : ""}
+                    aria-pressed={active}
+                  >
+                    <PickingLocationBadge text={label} muted={stock <= 1e-9} />
+                  </button>
+                );
+              })}
+            </div>
+            {locationHint ? <p className="mt-2 text-xs font-semibold text-amber-800">{locationHint}</p> : null}
           </div>
 
-          {/* LOKALIZACJE ALOKACYJNE */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="border border-slate-100 rounded-2xl p-5 bg-slate-50/40">
-              <h4 className="text-xs font-black uppercase tracking-widest text-slate-400 mb-3">Lokalizacje półek</h4>
-              <ul className="space-y-2">
-                {detail.locations.map((loc) => (
-                  <li key={loc.location_id}>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const avail = locStock(loc);
-                        if (avail <= 1e-9) {
-                          setActiveLocationId(null);
-                          explicitSourceSelectionRef.current = null;
-                          setLocationHint("Brak dostępnego stanu w tej lokalizacji (już pobrane w tej kompletacji).");
-                          return;
-                        }
-                        explicitSourceSelectionRef.current = loc.location_id;
-                        setActiveLocationId(loc.location_id);
-                        setLocationHint(null);
-                        if (detail.requires_basket_put_confirm) {
-                          void acceptSourceLocation(loc.location_id, "accept");
-                        }
-                      }}
-                      className={`flex w-full min-w-0 flex-wrap items-center justify-between gap-2 p-3 rounded-xl border bg-white text-left ${
-                        activeLocationId === loc.location_id
-                          ? "border-indigo-400 ring-2 ring-indigo-100"
-                          : "border-slate-200 hover:border-indigo-200"
-                      }`}
-                    >
-                      <span className={["min-w-0 font-mono font-bold text-slate-900", wmsTypoClass.location].join(" ")}>
-                        {loc.location_code}
+          {detail.orders.length > 0 ? (
+            <div>
+              <PickingFieldLabel>Zamówienia</PickingFieldLabel>
+              <ul className="mt-2 divide-y divide-slate-100 border-t border-slate-100">
+                {detail.orders.map((o) => {
+                  const missLn = Number(o.missing_quantity ?? 0);
+                  const pickedLn = Number(o.picked_quantity ?? 0);
+                  const qtyLn = Number(o.quantity ?? 0);
+                  return (
+                    <li key={o.order_item_id ?? o.order_id} className="flex items-center justify-between gap-3 py-3">
+                      <span className="min-w-0 break-words font-semibold text-slate-900">
+                        #{o.order_number} ({fmtQty(pickedLn)}/{fmtQty(qtyLn)})
+                        {missLn > 1e-9 ? <span className="ml-2 text-rose-700">brak {fmtQty(missLn)}</span> : null}
                       </span>
-                      <span className={["shrink-0 font-bold text-slate-500", wmsTypoClass.quantity].join(" ")}>
-                        Dostępne: {fmtQty(locStock(loc))} szt.
-                      </span>
-                    </button>
-                  </li>
-                ))}
+                      {o.line_value != null ? (
+                        <span className="shrink-0 tabular-nums text-sm text-slate-600">
+                          {fmtQty(Number(o.line_value))} PLN
+                        </span>
+                      ) : null}
+                    </li>
+                  );
+                })}
               </ul>
             </div>
+          ) : null}
 
-            {/* KONTEKST BUNDLE + ZAMÓWIENIA / MULTI ALOKACJE */}
-            <div className="md:col-span-2 border border-slate-100 rounded-2xl p-5 bg-slate-50/40">
-              {detail.requires_basket_put_confirm ? (
-                <>
-                  <h4 className="text-xs font-black uppercase tracking-widest text-slate-400 mb-3">
-                    Rozliczenie per koszyk
-                  </h4>
-                  {postPutFollowUp ? (
-                    <div className="mb-4 rounded-2xl border-2 border-amber-400 bg-amber-50 px-4 py-4">
-                      <p className="text-sm font-black text-amber-950">
-                        {postPutFollowUp.basketLabel}: pozostało {fmtQty(postPutFollowUp.remaining)} szt.
-                      </p>
-                      <p className="mt-1 text-xs font-semibold text-amber-900/80">
-                        Możesz dalej zbierać do tego koszyka albo oznaczyć pozostałe jako brak.
-                      </p>
-                      <div className="mt-3 flex flex-wrap gap-2">
-                        <button
-                          type="button"
-                          onClick={() => setPostPutFollowUp(null)}
-                          className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-[11px] font-bold uppercase tracking-wider text-slate-700"
-                        >
-                          Kontynuuj zbieranie
-                        </button>
-                        <button
-                          type="button"
-                          disabled={shortageBusy}
-                          onClick={() =>
-                            openLineShortage(postPutFollowUp.orderItemId, postPutFollowUp.remaining)
-                          }
-                          className="rounded-xl border border-amber-400 bg-amber-600 px-3 py-2 text-[11px] font-bold uppercase tracking-wider text-white disabled:opacity-40"
-                        >
-                          Oznacz pozostałe jako brak
-                        </button>
-                      </div>
-                    </div>
-                  ) : null}
-                  <MultiBasketAllocationPanel
-                    orders={detail.orders}
-                    draftPicks={draftPicks}
-                    highlightPickId={highlightPickId}
-                    picksLoading={draftPicksLoading}
-                    undoBusyPickId={undoBusyPickId}
-                    onOpenBulkShortage={openBulkShortage}
-                    onReportLineShortage={openLineShortage}
-                    onUndoPick={(pickId) => {
-                      void submitUndoPickById(pickId);
-                    }}
-                    shortageBusy={shortageBusy}
-                  />
-                </>
-              ) : (
-                <>
-                  <h4 className="text-xs font-black uppercase tracking-widest text-slate-400 mb-3">Kontekst zestawów</h4>
-                  {detail.order_bundle_trees && detail.order_bundle_trees.length > 0 ? (
-                    <BundlePickingOrderTree trees={detail.order_bundle_trees} />
-                  ) : (
-                    <ul className="space-y-2">
-                      {detail.orders.map((o, idx) => (
-                        <li key={idx} className="p-3 bg-white rounded-xl border border-slate-200 flex flex-wrap justify-between items-center gap-2 text-xs">
-                          <span className="font-bold text-slate-900">#{o.order_number}</span>
-                          {o.bundle_name ? (
-                            <span className="font-semibold text-indigo-700">
-                              {o.bundle_name}
-                              {o.is_bundle_component && o.bundle_component_index != null && o.bundle_component_count != null
-                                ? ` (${o.bundle_component_index}/${o.bundle_component_count})`
-                                : null}
-                            </span>
-                          ) : null}
-                          {o.basket_slot ? (
-                            <span className="font-black text-[#5a4fcf] bg-indigo-50 border border-indigo-100 px-2 py-1 rounded-lg">
-                              Koszyk: {o.basket_slot}
-                            </span>
-                          ) : null}
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </>
-              )}
-              {(() => {
-                const bundleDisplay = bundlePickScan ? buildPickingBundleDisplay(bundlePickScan) : null;
-                return bundleDisplay ? <BundlePickingScanCard display={bundleDisplay} className="mt-4" /> : null;
-              })()}
-              {consolidationRackRows.length > 0 ? (
-                <BundleConsolidationRackCard
-                  rows={consolidationRackRows}
-                  shelfLabel={detail.consolidation_shelf_label}
-                  className="mt-4"
-                />
+          {detail.requires_basket_put_confirm ? (
+            <div className="space-y-3">
+              {postPutFollowUp ? (
+                <div className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-3">
+                  <p className="text-sm font-bold text-amber-950">
+                    {postPutFollowUp.basketLabel}: pozostało {fmtQty(postPutFollowUp.remaining)} szt.
+                  </p>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      disabled={shortageBusy}
+                      onClick={() =>
+                        openLineShortage(postPutFollowUp.orderItemId, postPutFollowUp.remaining)
+                      }
+                      className="rounded-lg border border-amber-400 bg-amber-600 px-3 py-2 text-xs font-bold uppercase tracking-wider text-white disabled:opacity-40"
+                    >
+                      Oznacz pozostałe jako brak
+                    </button>
+                  </div>
+                </div>
               ) : null}
+              <MultiBasketAllocationPanel
+                orders={detail.orders}
+                draftPicks={draftPicks}
+                highlightPickId={highlightPickId}
+                picksLoading={draftPicksLoading}
+                undoBusyPickId={undoBusyPickId}
+                onOpenBulkShortage={openBulkShortage}
+                onReportLineShortage={openLineShortage}
+                onUndoPick={(pickId) => {
+                  void submitUndoPickById(pickId);
+                }}
+                shortageBusy={shortageBusy}
+              />
             </div>
-          </div>
+          ) : detail.order_bundle_trees && detail.order_bundle_trees.length > 0 ? (
+            <BundlePickingOrderTree trees={detail.order_bundle_trees} />
+          ) : null}
+
+          {(() => {
+            const bundleDisplay = bundlePickScan ? buildPickingBundleDisplay(bundlePickScan) : null;
+            return bundleDisplay ? <BundlePickingScanCard display={bundleDisplay} /> : null;
+          })()}
+          {consolidationRackRows.length > 0 ? (
+            <BundleConsolidationRackCard
+              rows={consolidationRackRows}
+              shelfLabel={detail.consolidation_shelf_label}
+            />
+          ) : null}
+
+          {pickMsg ? <p className="text-sm font-semibold text-slate-700">{pickMsg}</p> : null}
         </div>
       )}
+      </WmsOperationalPageBody>
 
-      {/* PASEK DOLNYCH NARZĘDZI SYSTEMOWYCH */}
-      <div className="fixed bottom-0 left-0 right-0 z-50 border-t border-slate-200 bg-white/95 p-4 backdrop-blur-sm shadow-md">
-        <div className="max-w-4xl mx-auto flex items-center justify-between gap-3">
-          <div className="flex gap-2">
-            <button type="button" onClick={openManual} disabled={pickQueueDone || isShortageResolved || Boolean(detail?.requires_basket_put_confirm)} className="px-4 py-3 bg-white border border-slate-200 hover:bg-slate-50 text-slate-800 font-bold rounded-xl text-xs uppercase tracking-wider transition-colors active:scale-95 disabled:opacity-40">Ręczny wpis</button>
-            {canUndoPick ? (
-              <button
-                type="button"
-                disabled={undoBusy}
-                onClick={() => void submitUndoPick()}
-                className="px-4 py-3 bg-white border border-slate-300 text-slate-700 font-bold rounded-xl text-xs uppercase tracking-wider transition-colors active:scale-95 disabled:opacity-40"
-              >
-                {undoBusy ? "Cofanie…" : "Cofnij pobranie"}
-              </button>
-            ) : null}
-            <button type="button" onClick={openShortageModal} disabled={reportShortageBlocked || isShortageResolved} className="px-4 py-3 bg-amber-50 border border-amber-200 text-amber-800 font-bold rounded-xl text-xs uppercase tracking-wider transition-colors active:scale-95 disabled:opacity-40">Zgłoś brak</button>
-          </div>
-          
-          <button
-            type="button"
-            disabled={pickBusy || pickBlockedByProductScan || pickBlockedByLocation}
-            onClick={() => void confirmRemainingAndReturn()}
-            className="px-6 py-3.5 bg-[#5a4fcf] hover:bg-[#4a40b2] text-white font-black rounded-xl text-xs uppercase tracking-widest transition-all active:scale-95 disabled:opacity-40"
-          >
-            {pickBusy ? "Zatwierdzanie…" : "Zatwierdź i wróć"}
-          </button>
-        </div>
-      </div>
+      <PickingStickyFooter
+        onOpenOptions={() => setOptionsOpen(true)}
+        onZebrane={() => void confirmRemainingAndReturn()}
+        zebraneDisabled={pickBusy || pickBlockedByProductScan || pickBlockedByLocation || !detail}
+        zebraneBusy={pickBusy}
+      />
+      <PickingOptionsSheet
+        open={optionsOpen}
+        onClose={() => setOptionsOpen(false)}
+        onProductPreview={openPreview}
+        onMarkShortage={openShortageModal}
+        onPick={openManual}
+        notesDisabled
+        replenishmentDisabled
+        shortageDisabled={reportShortageBlocked || isShortageResolved}
+        pickDisabled={pickQueueDone || isShortageResolved || Boolean(detail?.requires_basket_put_confirm)}
+      />
 
       {/* MODAL WPISU RĘCZNEGO */}
       {manualOpen && detail && (
