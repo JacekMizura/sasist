@@ -1,5 +1,23 @@
 ﻿## Active
 
+**Sesja zbierania — SSOT wózek + produkty (2026-08-10):**
+- Projekcja: `wms_picking_session_projection.py` (ten sam `build_wms_picking_product_lines` co lista)
+- Statusy: `session_products_*` + `active_session_id`; CTA „Zeskanuj wózek” tylko bez sesji
+- Hub „Wybierz”: produkty z sesji gdy aktywna; `order_count` nadal = wolne
+- Re-entry: hydrate cart z API, skip skanu; confirm mode = oczekiwany konkretny wózek
+- Anulowanie: istniejący `cancel_picking` + rollback lokalizacji (bez zmian silnika)
+
+**Przypisywanie wózków w zbieraniu — SSOT (2026-08-10):**
+- Typ wózka vs kafelek: BULK↔`CartType.BULK`, BASKETS↔`MULTI`; reject PL msg
+- Badge / skan na statusach; skip re-scan gdy pasujący wózek; lista zamówień filtr `source_status_id` na wózku
+- `in_progress_by_me` filtruje typ wózka per status config (ASSIGNED|PICKING)
+
+**Ekran Wybierz — układ + AKTYWNE (2026-08-10):**
+- Kafelki single/multi/all w rzędzie (flex wrap: 3 / 2+1 / 1)
+- Tekst: `Produkty do zebrania: X/Y szt.`
+- Badge AKTYWNE z `active_order_type` hubu (otwarta sesja / inferencja zamówień)
+- `order_type` zapisywane w metadata przy `start_picking` (bez zmiany assign)
+
 **Status zbierania — badge wózka (2026-08-10):**
 - Na kafelkach z `require_cart` (scanned/baskets): chip `Wózek: …` gdy operator ma ASSIGNED/PICKING
 - SSOT: `Cart.assigned_user_id` via `configured-statuses` (`active_cart_*`); fallback `WmsPickingCartContext`

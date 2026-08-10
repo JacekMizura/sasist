@@ -22,7 +22,7 @@ import {
   type WmsPickingProductLineApi,
   type WmsPickingSessionStatsApi,
 } from "../../api/wmsPickingProductsApi";
-import { modeRequiresCartScan } from "./wmsPickingFlowResolve";
+import { cartTypeHintForMode, cartTypeHintForOrderTypeChoice, modeRequiresCartScan } from "./wmsPickingFlowResolve";
 import type { PickingFlowMode } from "../../api/wmsPickingEntryApi";
 import { useMergedPickingSession, useWmsPickingCart } from "../../context/WmsPickingCartContext";
 import { useWarehouse } from "../../context/WarehouseContext";
@@ -389,6 +389,44 @@ export default function WmsPickingProductsPage() {
       }
       return;
     }
+
+    // Tryb ze skanem wózka bez znanego cartId — wróć do skanu, NIE bierz domyślnego wózka.
+    const choice = pickingSession.orderTypeChoice ?? "all";
+    const single = pickingSession.singleMode as PickingFlowMode | undefined;
+    const multi = pickingSession.multiMode as PickingFlowMode | undefined;
+    const needsCartScan =
+      choice === "single"
+        ? modeRequiresCartScan(single ?? "cart_no_scan")
+        : choice === "multi"
+          ? modeRequiresCartScan(multi ?? "cart_no_scan")
+          : modeRequiresCartScan(single ?? "cart_no_scan") || modeRequiresCartScan(multi ?? "cart_no_scan");
+    if (needsCartScan || pickingSession.requireCart) {
+      setCartBootstrapping(false);
+      setCartBootstrapErr(null);
+      navigate(WMS_ROUTES.pickingCart, {
+        replace: true,
+        state: {
+          pickingSession: {
+            ...pickingSession,
+            preCartBack: "order-type",
+            requireCart: true,
+            cartType:
+              pickingSession.cartType ??
+              (choice === "single"
+                ? cartTypeHintForMode(single ?? "cart_no_scan")
+                : choice === "multi"
+                  ? cartTypeHintForMode(multi ?? "cart_no_scan")
+                  : cartTypeHintForOrderTypeChoice(
+                      single ?? "cart_no_scan",
+                      multi ?? "cart_no_scan",
+                      "all",
+                    )),
+          },
+        },
+      });
+      return;
+    }
+
     if (!sessionFingerprint) return;
     if (bootstrapAttemptedRef.current === sessionFingerprint) return;
     bootstrapAttemptedRef.current = sessionFingerprint;
@@ -1575,6 +1613,11 @@ export default function WmsPickingProductsPage() {
         }}
         backAriaLabel={recoveryOrderId != null && recoveryOrderId > 0 ? "Wróć do kolejki braków" : "Wróć do wyboru statusu"}
         title={`Do zebrania: ${totalPickedCount}/${totalToPickCount}`}
+        subtitle={
+          !isCartlessMode && (mergedSession?.cartName || mergedSession?.cartCode)
+            ? `Wózek: ${(mergedSession?.cartName || mergedSession?.cartCode || "").trim()}`
+            : undefined
+        }
       />
 
       {basketPutPending && basketPutPending.product_id > 0 ? (

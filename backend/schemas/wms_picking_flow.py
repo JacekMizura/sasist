@@ -60,6 +60,21 @@ class WmsPickingConfiguredStatusItem(BaseModel):
         default=None,
         description="Rodzina przypisanego wózka (BULK / BASKETS)",
     )
+    #: Produkty z AKTYWNEJ sesji operatora (ten sam SSOT co lista produktów wózka).
+    session_products_picked: int = Field(
+        0,
+        ge=0,
+        description="SKU już zebrane w aktywnej sesji operatora dla tego statusu",
+    )
+    session_products_total: int = Field(
+        0,
+        ge=0,
+        description="SKU łącznie w aktywnej sesji operatora dla tego statusu",
+    )
+    active_session_id: Optional[int] = Field(
+        default=None,
+        description="ID otwartej WmsOperationSession operatora (jeśli jest)",
+    )
 
 
 class WmsPickingFlowLimits(BaseModel):

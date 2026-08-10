@@ -77,6 +77,10 @@ from ..services.wms_status_tile_config import (
     resolve_operator_active_picking_cart,
     wms_tile_cart_config,
 )
+from ..services.wms_picking_session_projection import (
+    build_session_aware_order_type_hub,
+    project_operator_active_picking_for_status,
+)
 from ..services.tenant_default_warehouse import resolve_quick_pick_warehouse_for_tenant
 from ..services.warehouse_service import WarehouseService
 from ..services.wms_picking_product_list_service import (
@@ -338,7 +342,26 @@ def get_picking_configured_statuses(
             gkey = _norm_group(st.main_group)
             req, ct = wms_tile_cart_config(getattr(pc, "single_mode", None), getattr(pc, "multi_mode", None))
             c = counts_map.get(int(st.id), {})
-            if req:
+            proj = project_operator_active_picking_for_status(
+                db,
+                tenant_id=int(tenant_id),
+                warehouse_id=int(warehouse_id),
+                source_status_id=int(st.id),
+                operator_user_id=op_uid,
+                cart_type_hint=ct if req else None,
+                order_type="all",
+            )
+            # Cart badge: tylko gdy jest aktywna sesja / wózek w projekcji.
+            if req and proj.get("has_active_session"):
+                cart_fields = {
+                    "active_cart_id": proj.get("active_cart_id"),
+                    "active_cart_code": proj.get("active_cart_code"),
+                    "active_cart_name": proj.get("active_cart_name"),
+                    "active_cart_type": proj.get("active_cart_type"),
+                }
+            elif req:
+                # Wózek przypisany do operatora (ASSIGNED/PICKING) bez pozycji tego statusu —
+                # nadal pokaż badge, jeśli resolve znalazł pasujący typ.
                 my_cart = resolve_operator_active_picking_cart(
                     db,
                     tenant_id=int(tenant_id),
@@ -349,6 +372,8 @@ def get_picking_configured_statuses(
                 cart_fields = active_cart_tile_fields(my_cart)
             else:
                 cart_fields = active_cart_tile_fields(None)
+
+            # in_progress_by_me z counts; produkty SESJI z projekcji (nie wolna kolejka).
             out.append(
                 WmsPickingConfiguredStatusItem(
                     source_status_id=int(st.id),
@@ -364,6 +389,9 @@ def get_picking_configured_statuses(
                     active_cart_code=cart_fields["active_cart_code"],
                     active_cart_name=cart_fields["active_cart_name"],
                     active_cart_type=cart_fields["active_cart_type"],
+                    session_products_picked=int(proj.get("products_picked") or 0),
+                    session_products_total=int(proj.get("products_total") or 0),
+                    active_session_id=proj.get("session_id"),
                 )
             )
         gidx = {g: i for i, g in enumerate(_GROUP_ORDER)}
@@ -419,24 +447,45 @@ def get_picking_order_type_hub(
     current_user: AppUser | None = Depends(get_optional_current_user),
 ):
     """
-    Liczniki ekranu „Wybierz” (single / multi / all): wolne zamówienia + produkty zebrane/total.
-    ``active_order_type`` — tryb otwartej sesji zbierania zalogowanego operatora.
+    Liczniki ekranu „Wybierz”:
+    - ``order_count`` = wolne do startu,
+    - ``products_*`` = aktywna sesja operatora (jeśli jest), inaczej wolna kolejka.
     """
     try:
-        raw = build_picking_order_type_hub(
-            db,
-            tenant_id=int(tenant_id),
-            warehouse_id=int(warehouse_id),
-            source_status_id=int(status),
-        )
         op_uid = int(current_user.id) if current_user is not None else None
-        active_ot = resolve_operator_active_picking_order_type(
+        pc = (
+            db.query(PickingConfig)
+            .filter(
+                PickingConfig.tenant_id == int(tenant_id),
+                PickingConfig.warehouse_id == int(warehouse_id),
+                PickingConfig.source_status_id == int(status),
+            )
+            .first()
+        )
+        req, ct = (
+            wms_tile_cart_config(getattr(pc, "single_mode", None), getattr(pc, "multi_mode", None))
+            if pc is not None
+            else (False, None)
+        )
+        hub = build_session_aware_order_type_hub(
             db,
             tenant_id=int(tenant_id),
             warehouse_id=int(warehouse_id),
             source_status_id=int(status),
             operator_user_id=op_uid,
+            cart_type_hint=ct if req else None,
         )
+        raw = hub.get("slices") or {}
+        proj = hub.get("active_projection") or {}
+        active_ot = proj.get("order_type")
+        if active_ot not in ("single", "multi", "all"):
+            active_ot = resolve_operator_active_picking_order_type(
+                db,
+                tenant_id=int(tenant_id),
+                warehouse_id=int(warehouse_id),
+                source_status_id=int(status),
+                operator_user_id=op_uid,
+            )
         if active_ot not in ("single", "multi", "all"):
             active_ot = None
 

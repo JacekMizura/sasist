@@ -25,6 +25,10 @@ export type WmsPickingConfiguredStatusItem = {
   active_cart_name?: string | null;
   active_cart_id?: number | null;
   active_cart_type?: "BULK" | "BASKETS" | null;
+  /** Produkty z aktywnej sesji (SSOT jak lista produktów). */
+  session_products_picked?: number;
+  session_products_total?: number;
+  active_session_id?: number | null;
 };
 
 export type WmsPickingPickUnit = "orders" | "products";

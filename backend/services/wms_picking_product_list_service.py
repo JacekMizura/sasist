@@ -516,7 +516,7 @@ def count_picking_status_realization_for_operator(
     - ``in_progress_by_me`` — aktywne zbieranie bieżącego operatora
     - ``in_progress_by_others`` — aktywne zbieranie innych operatorów
 
-    Aktywne = wózek w ``PICKING`` (Order.cart_id → Cart.assigned_user_id)
+    Aktywne = wózek w ``ASSIGNED``/``PICKING`` (Order.cart_id → Cart.assigned_user_id)
     albo otwarta sesja cartless (Order.picking_session_id → WmsOperationSession).
 
     ``status_cart_types``: opcjonalny map ``source_status_id → BULK|BASKETS`` —
@@ -546,10 +546,11 @@ def count_picking_status_realization_for_operator(
         db, tenant_id=int(tenant_id), warehouse_id=int(warehouse_id)
     )
     uid = int(operator_user_id) if operator_user_id is not None and int(operator_user_id) > 0 else None
-    picking_status = CartStatus.PICKING.value
+    # Ten sam cykl co resolve_operator_active_picking_cart (ASSIGNED | PICKING).
+    active_cart_statuses = (CartStatus.PICKING.value, CartStatus.ASSIGNED.value)
     type_map = {int(k): v for k, v in (status_cart_types or {}).items()}
 
-    # Cart-based active picking: order still in source panel status + cart PICKING.
+    # Cart-based active picking: order still in source panel status + cart in cycle.
     cart_rows = (
         db.query(Order.order_ui_status_id, Cart.assigned_user_id, Cart.type, func.count(Order.id))
         .join(Cart, Cart.id == Order.cart_id)
@@ -560,7 +561,7 @@ def count_picking_status_realization_for_operator(
             Order.cart_id.isnot(None),
             Cart.tenant_id == int(tenant_id),
             Cart.warehouse_id == int(warehouse_id),
-            Cart.status == picking_status,
+            Cart.status.in_(active_cart_statuses),
             *eligible,
         )
         .group_by(Order.order_ui_status_id, Cart.assigned_user_id, Cart.type)

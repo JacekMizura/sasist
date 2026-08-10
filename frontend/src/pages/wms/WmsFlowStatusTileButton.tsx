@@ -15,12 +15,11 @@ function statusAccentStyles(color: string, group: OrderUiMainGroup): CSSProperti
 
 export type WmsFlowStatusTileCartType = "BULK" | "BASKETS" | null | undefined;
 
-/** Compact chip — same visual family as packing cart / location pills. */
 function ActiveCartBadge({ label }: { label: string }) {
   return (
     <span
       className="inline-flex max-w-full items-center gap-1 rounded-full border border-slate-300 bg-white px-2 py-0.5 text-[11px] font-semibold text-slate-800 shadow-sm"
-      title={`Aktualnie używany wózek: ${label}`}
+      title={`Wózek sesji zbierania: ${label}`}
     >
       <Icon name="cart" size={12} className="shrink-0 text-slate-600" aria-hidden />
       <span className="truncate">
@@ -33,25 +32,23 @@ function ActiveCartBadge({ label }: { label: string }) {
 type Props = {
   statusName: string;
   orderCount: number;
-  /** Aktywne zbieranie innych operatorów (tylko wariant work / zbieranie). */
   inProgressByOthers?: number;
-  /** Aktywne zbieranie zalogowanego operatora (tylko wariant work / zbieranie). */
   inProgressByMe?: number;
   color: string;
   mainGroup: OrderUiMainGroup;
   requireCart: boolean;
   cartType: WmsFlowStatusTileCartType;
-  /** Nazwa/kod aktualnie używanego wózka — tylko gdy requireCart i wózek przypisany. */
+  /** Label wózka z aktywnej sesji — nigdy bez sesji. */
   activeCartLabel?: string | null;
-  /** Gdy requireCart i brak wózka — CTA skanu na kafelku. */
+  sessionProductsPicked?: number;
+  sessionProductsTotal?: number;
+  /** CTA tylko gdy brak aktywnej sesji/wózka. */
   showScanCartCta?: boolean;
   onScanCartClick?: () => void;
   onClick: () => void;
   disabled?: boolean;
   loading?: boolean;
-  /** Duży kafel jak wybór trybu pracy (pakowanie); domyślnie kompaktowy układ zbierania. */
   variant?: "default" | "work";
-  /** Gdy true — pokazuje wiersze „Realizowane przez…”. */
   showRealizationCounts?: boolean;
 };
 
@@ -65,6 +62,8 @@ export function WmsFlowStatusTileButton({
   requireCart,
   cartType,
   activeCartLabel = null,
+  sessionProductsPicked = 0,
+  sessionProductsTotal = 0,
   showScanCartCta = false,
   onScanCartClick,
   onClick,
@@ -85,15 +84,12 @@ export function WmsFlowStatusTileButton({
   const modeHint = showBaskets ? " — koszyki" : showBulk ? " — wózek" : "";
   const cartHint = cartBadge ? `, wózek ${cartBadge}` : "";
   const countTooltip = showRealizationCounts
-    ? "Zamówień = dostępne do rozpoczęcia. Realizowane = rozpoczęte i nadal w tym statusie (nie zakończone)."
-    : "Liczba zamówień wstępnie oczekujących w tym statusie. Ostateczna kwalifikacja następuje podczas rozpoczęcia zbierania.";
+    ? "Zamówień = dostępne do rozpoczęcia. Realizowane = przypisane do aktywnej sesji. Produkty = stan tej sesji."
+    : "Liczba zamówień wstępnie oczekujących w tym statusie.";
   const ariaLabel = showRealizationCounts
-    ? `${statusName}, zamówień ${orderCount}, realizowane przez innych ${inProgressByOthers}, realizowane przez Ciebie ${inProgressByMe}${modeHint}${cartHint}.`
-    : `${statusName}, ${orderCount} zamówień oczekujących${modeHint}${cartHint}. ${countTooltip}`;
+    ? `${statusName}, zamówień ${orderCount}, realizowane przez innych ${inProgressByOthers}, realizowane przez Ciebie ${inProgressByMe}, produkty ${sessionProductsPicked}/${sessionProductsTotal}${modeHint}${cartHint}.`
+    : `${statusName}, ${orderCount} zamówień oczekujących${modeHint}${cartHint}.`;
 
-  // ============================================================================
-  // WARIANT OPERACYJNY ZBIERANIA ("work")
-  // ============================================================================
   if (variant === "work") {
     const workIconSize = 24;
     return (
@@ -106,7 +102,7 @@ export function WmsFlowStatusTileButton({
         onClick={onClick}
         className={[
           "group flex w-full flex-col justify-center text-left outline-none",
-          showRealizationCounts ? "min-h-[8.5rem] gap-3 py-4" : "h-[7.5rem]",
+          "min-h-[9.5rem] gap-3 py-4",
           "rounded-2xl border border-slate-200 border-l-[6px] px-6 sm:px-8 shadow-sm",
           "transition-[box-shadow,transform] duration-150",
           "hover:shadow-md hover:border-slate-300",
@@ -123,12 +119,10 @@ export function WmsFlowStatusTileButton({
                 <Icon name="picking" size={workIconSize} aria-hidden />
               ) : null}
             </div>
-
             <span className={["min-w-0 break-words font-bold tracking-tight text-slate-900", wmsTypoClass.base].join(" ")}>
               {statusName}
             </span>
           </div>
-
           <div className="shrink-0 pl-2 text-right" title={countTooltip}>
             {loading ? (
               <Loader2 size={32} className="ml-auto animate-spin text-slate-400" strokeWidth={2.5} />
@@ -160,6 +154,12 @@ export function WmsFlowStatusTileButton({
               </p>
               {cartBadge ? <ActiveCartBadge label={cartBadge} /> : null}
             </div>
+            <p className="text-sm text-slate-600">
+              Produkty do zebrania:{" "}
+              <span className={["font-semibold text-slate-900", wmsTypoClass.quantity].join(" ")}>
+                {Math.max(0, sessionProductsPicked)}/{Math.max(0, sessionProductsTotal)} szt.
+              </span>
+            </p>
             {showScanCartCta && !cartBadge && onScanCartClick ? (
               <span
                 role="button"
@@ -187,9 +187,6 @@ export function WmsFlowStatusTileButton({
     );
   }
 
-  // ============================================================================
-  // WARIANT KOMPAKTOWY ("default")
-  // ============================================================================
   return (
     <button
       type="button"
@@ -209,10 +206,8 @@ export function WmsFlowStatusTileButton({
       {showBulk ? <Icon name="cart" size={20} className="shrink-0 text-slate-600" /> : null}
       {showBaskets ? <Icon name="basket" size={20} className="shrink-0 text-slate-600" /> : null}
       {!showBulk && !showBaskets ? <Icon name="picking" size={20} aria-hidden /> : null}
-
-      <span className="flex min-w-0 flex-1 flex-col gap-1">
-        <span className="truncate text-sm font-semibold leading-snug text-slate-800">{statusName}</span>
-        {cartBadge ? <ActiveCartBadge label={cartBadge} /> : null}
+      <span className="min-w-0 flex-1 truncate text-sm font-semibold leading-snug text-slate-800">
+        {statusName}
       </span>
       <span className="font-semibold tabular-nums text-slate-500" title={countTooltip}>
         ({orderCount})

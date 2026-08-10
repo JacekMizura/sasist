@@ -1,3 +1,12 @@
+## 2026-08-10 — Uspójnij sesję zbierania i przypisanie wózka
+
+- BE: `wms_picking_session_projection` — produkty sesji jak na liście produktów (nie wolna kolejka)
+- API statusów: `session_products_picked/total`, `active_session_id`; hub order-type session-aware
+- FE: karta statusu pokazuje produkty sesji; CTA skanu tylko bez aktywnej sesji/wózka
+- Skan: „Potwierdź przypisany wózek” gdy sesja zna cartId; odrzut innego wózka z PL msg
+- Produkty: brak default-cart gdy tryb wymaga skanu; subtitle `Wózek: …`
+- Anulowanie: bez nowego silnika — `cancel_picking` + rollback Inventory lokalizacji
+
 ## 2026-08-10 — Badge używanego wózka na statusach zbierania
 
 - Kafelki z trybem skanu / koszyków: `Wózek: {nazwa|kod}` gdy operator ma przypisany wózek
