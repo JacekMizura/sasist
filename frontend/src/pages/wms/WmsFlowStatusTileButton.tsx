@@ -3,7 +3,6 @@ import { Loader2 } from "lucide-react";
 import { Icon } from "../../components/ui/Icon";
 import type { OrderUiMainGroup } from "../../types/orderUiStatus";
 import { sidebarSubStatusRgb } from "../../utils/panelSidebarHierarchy";
-import { wmsTypoClass } from "../../wms/typography/wmsOperatorTypography";
 
 function statusAccentStyles(color: string, group: OrderUiMainGroup): CSSProperties {
   const [r, g, b] = sidebarSubStatusRgb(color, group);
@@ -142,10 +141,10 @@ export function WmsFlowStatusTileButton({
               <>
                 {showRealizationCounts ? (
                   <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">
-                    Zamówień
+                    Zamówienia
                   </p>
                 ) : null}
-                <span className={["font-bold text-slate-900 tracking-tight leading-none", wmsTypoClass.quantity].join(" ")}>
+                <span className="block text-[2.35rem] font-bold leading-none tracking-tight tabular-nums text-slate-900 sm:text-[2.75rem]">
                   {orderCount}
                 </span>
               </>
@@ -154,22 +153,22 @@ export function WmsFlowStatusTileButton({
         </div>
 
         {showRealizationCounts && !loading ? (
-          <div className="space-y-1.5 text-sm text-slate-600">
+          <div className="space-y-1 text-[13px] leading-snug text-slate-500">
             <p>
               Realizowane przez innych:{" "}
-              <span className="font-semibold tabular-nums text-slate-800">{inProgressByOthers}</span>
+              <span className="font-semibold tabular-nums text-slate-700">{inProgressByOthers}</span>
             </p>
             <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
               <p className="min-w-0">
                 Realizowane przez Ciebie:{" "}
-                <span className="font-semibold tabular-nums text-slate-800">{inProgressByMe}</span>
+                <span className="font-semibold tabular-nums text-slate-700">{inProgressByMe}</span>
               </p>
               {cartBadge ? <ActiveCartBadge label={cartBadge} /> : null}
             </div>
             {showProgress ? (
-              <p className="text-sm text-slate-600">
+              <p className="pt-0.5 text-xs font-normal text-slate-400">
                 Produkty do zebrania:{" "}
-                <span className={["font-semibold text-slate-900", wmsTypoClass.quantity].join(" ")}>
+                <span className="tabular-nums text-slate-500">
                   {Math.max(0, sessionProductsPicked)}/{Math.max(0, sessionProductsTotal)} szt.
                 </span>
               </p>

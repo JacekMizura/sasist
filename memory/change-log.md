@@ -1,3 +1,9 @@
+## 2026-08-11 — UX statusów + naprawa 409 skanu wolnego wózka
+
+- Root: orphan ASSIGNED bez sesji → resolve-cart 409 + FE snapshot „masz sesję”
+- BE heal orphan; active-session tylko przy otwartej sesji; resolve-cart code ACTIVE_PICKING_SESSION
+- FE: skan backend-first; clearPickingCart bez sesji; empty state + hierarchia kart
+
 ## 2026-08-10 — Spójny przepływ zbierania (status → sesja → produkty → cancel)
 
 - Usunięty in-card CTA i czerwony banner; centralny prompt + skaner SSOT

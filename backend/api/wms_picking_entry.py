@@ -1104,6 +1104,8 @@ def get_picking_resolve_cart(
 ):
     """Rozpoznanie wózka przy STARCIE nowej sesji — nie do wznowienia istniejącej."""
     from ..models.enums import CartStatus
+    from ..services.cart_picking_lifecycle_service import find_open_picking_session
+    from ..services.wms_picking_active_session import heal_orphan_assigned_cart_if_needed
     from ..services.wms_status_tile_config import (
         CART_TYPE_MISMATCH_MSG,
         assert_cart_matches_tile_type,
@@ -1120,17 +1122,51 @@ def get_picking_resolve_cart(
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
 
-    # Wózek już w aktywnej sesji tego operatora — resolve-cart NIE jest ścieżką wznowienia.
-    already_mine = (
+    open_sess = find_open_picking_session(db, cart=cart)
+    cart_status = str(getattr(getattr(cart, "status", None), "value", cart.status) or "").upper()
+    assigned_to_me = (
         getattr(cart, "assigned_user_id", None) is not None
         and int(cart.assigned_user_id) == int(current_user.id)
-        and str(getattr(getattr(cart, "status", None), "value", cart.status) or "").upper()
-        in (CartStatus.PICKING.value, CartStatus.ASSIGNED.value, "PICKING", "ASSIGNED")
     )
-    if already_mine:
+
+    # Prawdziwa otwarta sesja tego operatora na tym wózku → nie startuj przez resolve-cart.
+    if (
+        open_sess is not None
+        and assigned_to_me
+        and cart_status in (CartStatus.PICKING.value, CartStatus.ASSIGNED.value, "PICKING", "ASSIGNED")
+    ):
         raise HTTPException(
             status_code=409,
-            detail="Masz już aktywną sesję zbierania z tym wózkiem. Wróć do listy statusów i otwórz istniejącą sesję.",
+            detail={
+                "code": "ACTIVE_PICKING_SESSION",
+                "message": "Masz już aktywną sesję zbierania z tym wózkiem.",
+                "session_id": int(open_sess.id),
+                "cart_id": int(cart.id),
+            },
+        )
+
+    # Orphan ASSIGNED/PICKING bez sesji → zwolnij, potem pozwól na nowy start.
+    if assigned_to_me and open_sess is None:
+        if heal_orphan_assigned_cart_if_needed(
+            db,
+            cart=cart,
+            operator_user_id=int(current_user.id),
+        ):
+            try:
+                db.commit()
+                db.refresh(cart)
+            except Exception:
+                db.rollback()
+
+    # Wózek zajęty przez kogoś innego.
+    if (
+        getattr(cart, "assigned_user_id", None) is not None
+        and int(cart.assigned_user_id) != int(current_user.id)
+        and cart_status in (CartStatus.PICKING.value, CartStatus.ASSIGNED.value, "PICKING", "ASSIGNED")
+    ):
+        raise HTTPException(
+            status_code=409,
+            detail="Ten wózek jest obecnie przypisany do innego operatora.",
         )
 
     tile_ct = (expected_cart_type or "").strip().upper() or None

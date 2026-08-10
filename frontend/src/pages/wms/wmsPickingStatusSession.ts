@@ -60,7 +60,11 @@ export function statusRowCartBadgeLabel(r: PickingStatusSessionRow): string | nu
  */
 export function statusRowShowSessionProgress(r: PickingStatusSessionRow): boolean {
   if (!statusRowHasActiveSession(r)) return false;
-  return statusRowCartBadgeLabel(r) != null || (r.active_cart_id != null && r.active_cart_id > 0);
+  // Tylko przy realnym wózku sesji — nigdy 0/0 bez przypisanego wózka.
+  if (!(statusRowCartBadgeLabel(r) != null || (r.active_cart_id != null && r.active_cart_id > 0))) {
+    return false;
+  }
+  return true;
 }
 
 /**

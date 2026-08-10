@@ -1,5 +1,12 @@
 ﻿## Active
 
+**Picking status UX + skan 409 (2026-08-11):**
+- Root 409: `already_mine` blokował resolve gdy cart ASSIGNED bez otwartej sesji (orphan) + FE ufał sessionStorage
+- BE: `has_active_session` tylko przy otwartej WmsOperationSession; heal orphan ASSIGNED→AVAILABLE
+- resolve-cart: 409 ACTIVE_PICKING_SESSION tylko przy realnej sesji; orphan → heal + allow
+- FE skan: zawsze refresh `active-session` przed decyzją; clear snapshot gdy BE=brak sesji
+- UX: duża liczba zamówień; lekkie „Produkty…”; empty state Gotowe do rozpoczęcia
+
 **Spójny przepływ zbierania (2026-08-10) — pełny SSOT:**
 - Statusy: karty bez CTA; centralny prompt skanu; merge `active-session` → wiersze (bez mieszania BULK/BASKETS)
 - BE: configured-statuses NIE dokleja sesji do pierwszego require_cart obcego typu
