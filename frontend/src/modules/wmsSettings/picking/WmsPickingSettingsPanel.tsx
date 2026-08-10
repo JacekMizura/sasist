@@ -1447,9 +1447,10 @@ function PickingConfigStatusBadge({ status }: { status: PanelConfigurableUiStatu
   );
 }
 
-function collectUniquePickingConfigStatuses(
+function collectUniqueStatusesByRole(
   configs: SavedPickingConfiguration[],
   orderUiSummary: OrderUiStatusPanelSummary | null,
+  role: "source" | "target",
 ): Array<{ id: number; brief: PanelConfigurableUiStatusBrief }> {
   const seen = new Set<number>();
   const out: Array<{ id: number; brief: PanelConfigurableUiStatusBrief }> = [];
@@ -1459,13 +1460,33 @@ function collectUniquePickingConfigStatuses(
     out.push({ id, brief: resolvePanelStatusBrief(orderUiSummary, id, fallbackName) });
   };
   for (const cfg of configs) {
-    push(cfg.statusToPickId, cfg.statusToPickName);
-    push(cfg.statusAfterPickId, cfg.statusAfterPickName);
-    if (cfg.statusOnShortageId != null) {
-      push(cfg.statusOnShortageId, cfg.statusOnShortageName ?? `Status #${cfg.statusOnShortageId}`);
+    if (role === "source") {
+      push(cfg.statusToPickId, cfg.statusToPickName);
+    } else {
+      push(cfg.statusAfterPickId, cfg.statusAfterPickName);
     }
   }
   return out;
+}
+
+function PickingUsedStatusGroup({
+  title,
+  statuses,
+}: {
+  title: string;
+  statuses: Array<{ id: number; brief: PanelConfigurableUiStatusBrief }>;
+}) {
+  if (statuses.length === 0) return null;
+  return (
+    <div>
+      <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">{title}</p>
+      <div className="mt-2.5 flex flex-wrap items-center gap-2.5">
+        {statuses.map((st) => (
+          <PickingConfigStatusBadge key={st.id} status={st.brief} />
+        ))}
+      </div>
+    </div>
+  );
 }
 
 function PickingUsedStatusesSummary({
@@ -1475,11 +1496,15 @@ function PickingUsedStatusesSummary({
   configs: SavedPickingConfiguration[];
   orderUiSummary: OrderUiStatusPanelSummary | null;
 }) {
-  const statuses = useMemo(
-    () => collectUniquePickingConfigStatuses(configs, orderUiSummary),
+  const sourceStatuses = useMemo(
+    () => collectUniqueStatusesByRole(configs, orderUiSummary, "source"),
     [configs, orderUiSummary],
   );
-  if (statuses.length === 0) return null;
+  const targetStatuses = useMemo(
+    () => collectUniqueStatusesByRole(configs, orderUiSummary, "target"),
+    [configs, orderUiSummary],
+  );
+  if (sourceStatuses.length === 0 && targetStatuses.length === 0) return null;
   return (
     <div
       className="rounded-xl border border-slate-100 bg-white px-4 py-4"
@@ -1488,17 +1513,15 @@ function PickingUsedStatusesSummary({
       <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
         Wykorzystane statusy
       </p>
-      <div className="mt-3 flex flex-wrap items-center gap-x-2 gap-y-2.5">
-        {statuses.map((st, index) => (
-          <div key={st.id} className="flex min-w-0 items-center gap-2">
-            {index > 0 ? (
-              <span className="shrink-0 text-sm font-medium text-slate-300" aria-hidden>
-                →
-              </span>
-            ) : null}
-            <PickingConfigStatusBadge status={st.brief} />
-          </div>
-        ))}
+      <div className="mt-3 space-y-4">
+        <PickingUsedStatusGroup
+          title="Statusy do rozpoczęcia zbierania"
+          statuses={sourceStatuses}
+        />
+        <PickingUsedStatusGroup
+          title="Statusy po zakończeniu zbierania"
+          statuses={targetStatuses}
+        />
       </div>
     </div>
   );
