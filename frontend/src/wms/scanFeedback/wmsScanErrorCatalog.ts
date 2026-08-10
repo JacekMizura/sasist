@@ -22,8 +22,8 @@ const CATALOG: Record<
 > = {
   PRODUCT_NOT_IN_PICKING: {
     severity: "error",
-    title: "BŁĘDNY SKAN",
-    message: "Ten produkt nie znajduje się na liście do zebrania.",
+    title: "BŁĘDNY PRODUKT",
+    message: "Nieprawidłowy produkt. Zeskanuj właściwy produkt.",
   },
   PRODUCT_ALREADY_COMPLETE: {
     severity: "warning",
@@ -32,8 +32,8 @@ const CATALOG: Record<
   },
   EXPECTED_PRODUCT_SCAN: {
     severity: "warning",
-    title: "WYBIERZ PRODUKT",
-    message: "Otwórz produkt na liście albo zeskanuj EAN — potem możesz wybrać koszyk.",
+    title: "ZESKANUJ PRODUKT",
+    message: "Zeskanuj produkt przed potwierdzeniem pobrania.",
   },
   UNKNOWN_SCAN_CODE: {
     severity: "error",
@@ -134,7 +134,27 @@ const CATALOG: Record<
   PICK_LOCATION_REQUIRED: {
     severity: "warning",
     title: "ZESKANUJ LOKALIZACJĘ",
-    message: "Najpierw zeskanuj lokalizację, z której pobierasz produkt.",
+    message: "Zeskanuj lokalizację przed pobraniem produktu.",
+  },
+  PRODUCT_SCAN_REQUIRED: {
+    severity: "warning",
+    title: "ZESKANUJ PRODUKT",
+    message: "Zeskanuj produkt przed potwierdzeniem pobrania.",
+  },
+  RESERVE_LOCATION_FORBIDDEN: {
+    severity: "error",
+    title: "LOKALIZACJA NIEDOSTĘPNA",
+    message: "Produkt nie może być pobrany z tej lokalizacji.",
+  },
+  WRONG_PRODUCT_SCAN: {
+    severity: "error",
+    title: "BŁĘDNY PRODUKT",
+    message: "Nieprawidłowy produkt. Zeskanuj właściwy produkt.",
+  },
+  WRONG_LOCATION_SCAN: {
+    severity: "error",
+    title: "BŁĘDNA LOKALIZACJA",
+    message: "Nieprawidłowa lokalizacja. Zeskanuj lokalizację wskazaną na ekranie.",
   },
   QUANTITY_EXCEEDS_LOCATION_STOCK: {
     severity: "warning",
@@ -144,8 +164,8 @@ const CATALOG: Record<
   },
   SOURCE_LOCATION_NOT_ON_ROUTE: {
     severity: "error",
-    title: "LOKALIZACJA ŹRÓDŁOWA",
-    message: "Wybrana lokalizacja źródłowa nie jest dostępna dla tego produktu w bieżącej zbiórce.",
+    title: "BŁĘDNA LOKALIZACJA",
+    message: "Nieprawidłowa lokalizacja. Zeskanuj lokalizację wskazaną na ekranie.",
   },
   SOURCE_LOCATION_STALE: {
     severity: "warning",
@@ -155,7 +175,7 @@ const CATALOG: Record<
   SOURCE_LOCATION_INVALID: {
     severity: "error",
     title: "BŁĘDNA LOKALIZACJA",
-    message: "Nieprawidłowa lokalizacja źródłowa dla tego pobrania.",
+    message: "Nieprawidłowa lokalizacja. Zeskanuj lokalizację wskazaną na ekranie.",
   },
   SOURCE_LOCATION_MISMATCH: {
     severity: "error",

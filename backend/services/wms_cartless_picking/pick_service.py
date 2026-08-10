@@ -37,6 +37,7 @@ def record_cartless_quick_pick(
     quantity: float,
     picking_session_id: int,
     operator_user_id: int | None = None,
+    product_scan_confirmed: bool = False,
 ) -> tuple[int, int]:
     """
     Draft Pick z cart_id=NULL w ramach sesji cartless.
@@ -44,6 +45,21 @@ def record_cartless_quick_pick(
     """
     if quantity <= 0:
         raise ValueError("Ilość musi być > 0.")
+
+    from ..wms_picking_terminal_settings_service import get_or_create_wms_picking_terminal_settings
+    from ..wms_basket_put.error_codes import (
+        PRODUCT_SCAN_REQUIRED,
+        RESERVE_LOCATION_FORBIDDEN,
+        WRONG_LOCATION_SCAN,
+        operator_message,
+    )
+    from ..wms_basket_put.scan_service import BasketPutError
+
+    terminal = get_or_create_wms_picking_terminal_settings(
+        db, tenant_id=int(tenant_id), warehouse_id=int(warehouse_id)
+    )
+    if bool(terminal.require_product_scan_at_least_once) and not product_scan_confirmed:
+        raise BasketPutError(PRODUCT_SCAN_REQUIRED, operator_message(PRODUCT_SCAN_REQUIRED))
 
     sess = get_cartless_session_or_raise(
         db,
@@ -67,13 +83,30 @@ def record_cartless_quick_pick(
     if not order_ids:
         raise ValueError("Brak zamówień w tej sesji zbierania.")
 
+    allow_reserve = bool(terminal.allow_reserve_location_picking)
     allowed = _allowed_pick_location_ids_for_product(
-        db, tenant_id=tenant_id, order_ids=order_ids, product_id=product_id
+        db,
+        tenant_id=tenant_id,
+        order_ids=order_ids,
+        product_id=product_id,
+        allow_reserve_location_picking=allow_reserve,
+        warehouse_id=warehouse_id,
     )
     if not allowed:
         raise ValueError("Brak lokalizacji do pobrania tego produktu (routing / alokacja).")
     if int(location_id) not in allowed:
-        raise ValueError("Lokalizacja nie należy do trasy zbiórki tego produktu.")
+        if not allow_reserve:
+            from ...models.location import Location
+            from ...storage_types import NON_PICKABLE_STORAGE_TYPE_ALIASES
+
+            loc = db.query(Location).filter(Location.id == int(location_id)).first()
+            loc_type = str(getattr(loc, "type", None) or "").strip().lower() if loc else ""
+            if loc_type in NON_PICKABLE_STORAGE_TYPE_ALIASES:
+                raise BasketPutError(
+                    RESERVE_LOCATION_FORBIDDEN,
+                    operator_message(RESERVE_LOCATION_FORBIDDEN),
+                )
+        raise BasketPutError(WRONG_LOCATION_SCAN, operator_message(WRONG_LOCATION_SCAN))
 
     q_remain = float(quantity)
     orders = (

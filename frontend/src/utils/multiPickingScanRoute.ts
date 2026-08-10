@@ -91,7 +91,7 @@ export function resolveMultiPickingDetailScan(
       return { kind: "product_ean_pick" };
     }
     if (looksLikeProductBarcode(scan)) {
-      return { kind: "reject", code: "FOREIGN_SKU_ON_SERIES", consumed: true };
+      return { kind: "reject", code: "WRONG_PRODUCT_SCAN", consumed: true };
     }
     if (looksLikeCartBasketScan(scan)) {
       return { kind: "confirm_basket", reason: "series_switch" };
@@ -118,7 +118,7 @@ export function resolveMultiPickingDetailScan(
     return { kind: "confirm_basket", reason: "select_destination" };
   }
   if (looksLikeProductBarcode(scan)) {
-    return { kind: "reject", code: "PRODUCT_NOT_IN_PICKING", consumed: true };
+    return { kind: "reject", code: "WRONG_PRODUCT_SCAN", consumed: true };
   }
   return { kind: "reject", code: "UNKNOWN_SCAN_CODE", consumed: true };
 }

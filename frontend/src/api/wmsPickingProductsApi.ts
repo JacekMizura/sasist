@@ -964,6 +964,8 @@ export type WmsPickingQuickPickBodyApi = {
   cart_id?: number | null;
   picking_session_id?: number | null;
   recovery_order_id?: number | null;
+  /** True when operator scanned product EAN before confirming. */
+  product_scan_confirmed?: boolean;
 };
 
 function assertPositiveInt(name: string, v: unknown): number {
@@ -1075,6 +1077,9 @@ export async function postWmsPickingQuickPick(
   if (rid != null && Number.isFinite(Number(rid)) && Number(rid) > 0) {
     payload.recovery_order_id = Math.floor(Number(rid));
   }
+  if (body.product_scan_confirmed) {
+    payload.product_scan_confirmed = true;
+  }
   const params: Record<string, number | string> = {
     tenant_id: tenantId,
     source_status_id: sourceStatusId,
@@ -1092,6 +1097,7 @@ export type WmsPickingConfirmRemainingBodyApi = {
   cart_id?: number;
   picking_session_id?: number;
   recovery_order_id?: number | null;
+  product_scan_confirmed?: boolean;
 };
 
 export type WmsPickingConfirmRemainingResultApi = {
@@ -1133,6 +1139,9 @@ export async function postWmsPickingConfirmRemaining(
   const rid = body.recovery_order_id;
   if (rid != null && Number.isFinite(Number(rid)) && Number(rid) > 0) {
     payload.recovery_order_id = Math.floor(Number(rid));
+  }
+  if (body.product_scan_confirmed) {
+    payload.product_scan_confirmed = true;
   }
   const params: Record<string, number | string> = {
     tenant_id: tenantId,

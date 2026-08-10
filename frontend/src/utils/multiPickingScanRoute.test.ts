@@ -129,7 +129,7 @@ describe("resolveMultiPickingDetailScan — strict states", () => {
         hasActiveSeries: true,
         productEan: ean,
       }),
-    ).toEqual({ kind: "reject", code: "FOREIGN_SKU_ON_SERIES", consumed: true });
+    ).toEqual({ kind: "reject", code: "WRONG_PRODUCT_SCAN", consumed: true });
     expect(
       resolveMultiPickingDetailScan(ean, {
         requiresBasketPut: true,
@@ -194,6 +194,7 @@ describe("popup exactly-once contract", () => {
     "BASKET_PRODUCT_ALREADY_COMPLETE",
     "OVERPICK_BLOCKED",
     "FOREIGN_SKU_ON_SERIES",
+    "WRONG_PRODUCT_SCAN",
     "BASKET_PUT_OWNED_BY_OTHER",
     "UNKNOWN_SCAN_CODE",
     "CART_NOT_ACTIVE",

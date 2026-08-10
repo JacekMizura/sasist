@@ -1,3 +1,10 @@
+## 2026-08-10 — Terminal zbierania end-to-end + kompaktowe „Wykorzystane statusy”
+
+- Badge’e wykorzystanych statusów: kompaktowe `h-9` / `w-fit` (bez rozciągania)
+- Ustawienia Terminal: SSOT `wms_picking_terminal_settings` + GET/POST `/wms/settings/picking-terminal`
+- Egzekwowanie w quick-pick / cartless / confirm-remaining: skan produktu, lokalizacji (FE policy), rezerwy
+- Tooltipy „i” przy opcjach; komunikaty operatora w katalogu skanów (PL)
+
 ## 2026-08-09 — Konfigurator zbierania: wybór i filtr statusów
 
 - Przyczyna: `OrderUiStatusField` portal `z-[130]` pod modalem `z-[5000]` — lista nieklikalna

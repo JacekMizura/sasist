@@ -95,6 +95,7 @@ def confirm_remaining_product_picks(
     picking_session_id: int | None = None,
     recovery_order_id: int | None = None,
     operator_user_id: int | None = None,
+    product_scan_confirmed: bool = False,
 ) -> dict[str, Any]:
     """
     Atomically pick the full remaining quantity for ``product_id`` across locations.
@@ -189,6 +190,29 @@ def confirm_remaining_product_picks(
             f"Brak lokalizacji ze stanem dla produktu — wymagane jeszcze {remaining:g} szt.",
         )
 
+    from .wms_picking_terminal_settings_service import get_or_create_wms_picking_terminal_settings
+
+    terminal = get_or_create_wms_picking_terminal_settings(
+        db, tenant_id=tid, warehouse_id=wid
+    )
+    if not bool(terminal.allow_reserve_location_picking):
+        from ..models.location import Location
+        from ..storage_types import NON_PICKABLE_STORAGE_TYPE_ALIASES
+
+        type_rows = db.query(Location.id, Location.type).filter(Location.id.in_(loc_ids)).all()
+        non_pickable = {
+            int(lid)
+            for lid, loc_type in type_rows
+            if str(loc_type or "").strip().lower() in NON_PICKABLE_STORAGE_TYPE_ALIASES
+        }
+        if non_pickable:
+            loc_ids = [lid for lid in loc_ids if lid not in non_pickable]
+        if not loc_ids:
+            raise ConfirmRemainingError(
+                "RESERVE_LOCATION_FORBIDDEN",
+                "Produkt nie może być pobrany z tej lokalizacji.",
+            )
+
     # Plan under Inventory locks (for_update) so concurrent puts serialize.
     plan: list[tuple[int, float]] = []
     need = float(remaining)
@@ -254,6 +278,7 @@ def confirm_remaining_product_picks(
                 cart_id=int(cid),
                 fixed_order_id=recovery,
                 operator_user_id=operator_user_id,
+                product_scan_confirmed=bool(product_scan_confirmed),
             )
         else:
             from .wms_cartless_picking.pick_service import record_cartless_quick_pick
@@ -269,6 +294,7 @@ def confirm_remaining_product_picks(
                 quantity=float(qty),
                 picking_session_id=int(sid),
                 operator_user_id=operator_user_id,
+                product_scan_confirmed=bool(product_scan_confirmed),
             )
         created.append({"location_id": int(lid), "quantity": float(qty)})
         put_total = round(put_total + float(qty), 6)

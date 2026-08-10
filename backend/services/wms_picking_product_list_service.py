@@ -1363,15 +1363,30 @@ def _allowed_pick_location_ids_for_product(
     tenant_id: int,
     order_ids: Sequence[int],
     product_id: int,
+    allow_reserve_location_picking: bool | None = None,
+    warehouse_id: int | None = None,
 ) -> set[int]:
     if not order_ids:
         return set()
     routing = PickingRoutingService(db).build_location_pick_list(list(order_ids), tenant_id=tenant_id)
-    return {
+    ids = {
         int(row.location_id)
         for row in routing.pick_list
         if int(row.product_id) == int(product_id)
     }
+    if allow_reserve_location_picking is False and ids:
+        from ..models.location import Location
+        from ..storage_types import NON_PICKABLE_STORAGE_TYPE_ALIASES
+
+        rows = db.query(Location.id, Location.type).filter(Location.id.in_(list(ids))).all()
+        non_pickable = {
+            int(lid)
+            for lid, loc_type in rows
+            if str(loc_type or "").strip().lower() in NON_PICKABLE_STORAGE_TYPE_ALIASES
+        }
+        ids -= non_pickable
+    _ = warehouse_id
+    return ids
 
 
 def _picked_by_product(
@@ -2197,6 +2212,25 @@ def build_wms_picking_product_detail(
 
     locations = [_location_row(lid) for lid in lids_sorted]
 
+    from .wms_picking_terminal_settings_service import get_or_create_wms_picking_terminal_settings
+
+    terminal = get_or_create_wms_picking_terminal_settings(
+        db, tenant_id=int(tenant_id), warehouse_id=int(warehouse_id)
+    )
+    if not bool(terminal.allow_reserve_location_picking) and locations:
+        from ..models.location import Location
+        from ..storage_types import NON_PICKABLE_STORAGE_TYPE_ALIASES
+
+        loc_ids = [int(r.location_id) for r in locations]
+        type_rows = db.query(Location.id, Location.type).filter(Location.id.in_(loc_ids)).all()
+        non_pickable = {
+            int(lid)
+            for lid, loc_type in type_rows
+            if str(loc_type or "").strip().lower() in NON_PICKABLE_STORAGE_TYPE_ALIASES
+        }
+        if non_pickable:
+            locations = [r for r in locations if int(r.location_id) not in non_pickable]
+
     # Zamówienia z tym produktem — tylko bieżący wózek (sesja): cart_id zgadza się lub zamówienie jeszcze bez wózka
     orders_q = (
         db.query(Order)
@@ -2594,6 +2628,7 @@ def record_wms_quick_pick(
     scope_order_id: int | None = None,
     operator_user_id: int | None = None,
     skip_route_location_check: bool = False,
+    product_scan_confirmed: bool = False,
 ) -> tuple[int, int]:
     """
     Zapis roboczy: rekord Pick z ``cart_id`` (sesja), ``picked_at`` = NULL do czasu finalizacji wózka.
@@ -2608,9 +2643,26 @@ def record_wms_quick_pick(
     via effective stock. Do NOT re-check greedy routing here: routing uses physical Inventory
     and ignores draft Picks, so it can exclude the operator's real source (e.g. A23) while
     still listing a drained A10 as the only candidate.
+
+    ``product_scan_confirmed`` — operator already scanned product EAN (terminal policy).
     """
     if quantity <= 0:
         raise ValueError("Ilość musi być > 0.")
+
+    from .wms_picking_terminal_settings_service import get_or_create_wms_picking_terminal_settings
+    from .wms_basket_put.error_codes import (
+        PRODUCT_SCAN_REQUIRED,
+        RESERVE_LOCATION_FORBIDDEN,
+        WRONG_LOCATION_SCAN,
+        operator_message,
+    )
+    from .wms_basket_put.scan_service import BasketPutError
+
+    terminal = get_or_create_wms_picking_terminal_settings(
+        db, tenant_id=int(tenant_id), warehouse_id=int(warehouse_id)
+    )
+    if bool(terminal.require_product_scan_at_least_once) and not product_scan_confirmed:
+        raise BasketPutError(PRODUCT_SCAN_REQUIRED, operator_message(PRODUCT_SCAN_REQUIRED))
 
     if fixed_order_id is not None:
         oid = int(fixed_order_id)
@@ -2673,13 +2725,31 @@ def record_wms_quick_pick(
     # Basket-put / trusted source provenance: stock already checked by confirm path.
     # Classic quick-pick still gates on routing candidates.
     if not skip_route_location_check:
+        allow_reserve = bool(terminal.allow_reserve_location_picking)
         allowed = _allowed_pick_location_ids_for_product(
-            db, tenant_id=tenant_id, order_ids=order_ids, product_id=product_id
+            db,
+            tenant_id=tenant_id,
+            order_ids=order_ids,
+            product_id=product_id,
+            allow_reserve_location_picking=allow_reserve,
+            warehouse_id=warehouse_id,
         )
         if not allowed:
             raise ValueError("Brak lokalizacji do pobrania tego produktu (routing / alokacja).")
         if int(location_id) not in allowed:
-            raise ValueError("Lokalizacja nie należy do trasy zbiórki tego produktu.")
+            # Distinguisz rezerwy vs zła lokalizacja na trasie.
+            if not allow_reserve:
+                from ..models.location import Location
+                from ..storage_types import NON_PICKABLE_STORAGE_TYPE_ALIASES
+
+                loc = db.query(Location).filter(Location.id == int(location_id)).first()
+                loc_type = str(getattr(loc, "type", None) or "").strip().lower() if loc else ""
+                if loc_type in NON_PICKABLE_STORAGE_TYPE_ALIASES:
+                    raise BasketPutError(
+                        RESERVE_LOCATION_FORBIDDEN,
+                        operator_message(RESERVE_LOCATION_FORBIDDEN),
+                    )
+            raise BasketPutError(WRONG_LOCATION_SCAN, operator_message(WRONG_LOCATION_SCAN))
 
     from .wms_basket_put.location_stock import effective_pickable_qty_at_location
 

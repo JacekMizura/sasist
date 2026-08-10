@@ -35,7 +35,19 @@ from ..schemas.wms_packing_settings import (
 )
 from ..schemas.wms_return import ReturnsMode, WmsSettingsRead, WmsSettingsSave, WmsSettingsUpsert
 from ..schemas.wms_picking_shortage_settings import WmsPickingShortageSettingsRead, WmsPickingShortageSettingsSave
+from ..schemas.wms_picking_terminal_settings import (
+    WmsPickingTerminalSettingsRead,
+    WmsPickingTerminalSettingsSave,
+)
 from ..services.tenant_default_warehouse import resolve_tenant_default_warehouse_id, assert_tenant_warehouse_scope
+from ..services.wms_picking_shortage_settings_service import (
+    get_or_create_wms_picking_shortage_settings,
+    touch_wms_picking_shortage_settings_row,
+)
+from ..services.wms_picking_terminal_settings_service import (
+    get_or_create_wms_picking_terminal_settings,
+    touch_wms_picking_terminal_settings_row,
+)
 from ..services.inventory_management_policy_service import (
     get_or_create_wms_settings_row,
     normalize_inventory_management_mode,
@@ -48,10 +60,6 @@ from ..schemas.direct_sales_settings import DirectSalesSettingsRead, DirectSales
 from ..services.direct_sales_settings_service import (
     resolve_direct_sales_settings,
     save_direct_sales_settings,
-)
-from ..services.wms_picking_shortage_settings_service import (
-    get_or_create_wms_picking_shortage_settings,
-    touch_wms_picking_shortage_settings_row,
 )
 
 router = APIRouter(prefix="/wms/settings", tags=["WMS Settings"])
@@ -560,6 +568,62 @@ def save_wms_picking_shortage_settings(
     db.commit()
     db.refresh(row)
     return _shortage_settings_row_to_read(row)
+
+
+def _terminal_settings_row_to_read(row) -> WmsPickingTerminalSettingsRead:
+    return WmsPickingTerminalSettingsRead(
+        tenant_id=int(row.tenant_id),
+        warehouse_id=int(row.warehouse_id),
+        require_product_scan_at_least_once=bool(row.require_product_scan_at_least_once),
+        require_location_scan=bool(row.require_location_scan),
+        disable_force_location_scan_when_many_locations=bool(
+            row.disable_force_location_scan_when_many_locations
+        ),
+        allow_reserve_location_picking=bool(row.allow_reserve_location_picking),
+    )
+
+
+@router.get("/picking-terminal", response_model=WmsPickingTerminalSettingsRead)
+def get_wms_picking_terminal_settings(
+    tenant_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_operable_warehouse),
+    db: Session = Depends(get_db),
+):
+    row = get_or_create_wms_picking_terminal_settings(
+        db, tenant_id=int(tenant_id), warehouse_id=int(warehouse_id)
+    )
+    db.commit()
+    db.refresh(row)
+    return _terminal_settings_row_to_read(row)
+
+
+@router.post("/picking-terminal", response_model=WmsPickingTerminalSettingsRead)
+def save_wms_picking_terminal_settings(
+    body: WmsPickingTerminalSettingsSave,
+    db: Session = Depends(get_db),
+):
+    try:
+        wh_id = (
+            body.warehouse_id
+            if body.warehouse_id is not None
+            else resolve_tenant_default_warehouse_id(db, body.tenant_id)
+        )
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Brak skonfigurowanego magazynu") from None
+
+    row = get_or_create_wms_picking_terminal_settings(
+        db, tenant_id=int(body.tenant_id), warehouse_id=int(wh_id)
+    )
+    row.require_product_scan_at_least_once = bool(body.require_product_scan_at_least_once)
+    row.require_location_scan = bool(body.require_location_scan)
+    row.disable_force_location_scan_when_many_locations = bool(
+        body.disable_force_location_scan_when_many_locations
+    )
+    row.allow_reserve_location_picking = bool(body.allow_reserve_location_picking)
+    touch_wms_picking_terminal_settings_row(row)
+    db.commit()
+    db.refresh(row)
+    return _terminal_settings_row_to_read(row)
 
 
 @router.get("/direct-sales", response_model=DirectSalesSettingsRead)

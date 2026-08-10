@@ -36,6 +36,10 @@ import {
   saveWmsPickingShortageSettings,
   type WmsShortageResolvePriorityApi,
 } from "../../../api/wmsPickingShortageSettingsApi";
+import {
+  getWmsPickingTerminalSettings,
+  saveWmsPickingTerminalSettings,
+} from "../../../api/wmsPickingTerminalSettingsApi";
 import { getWmsPackingSettings } from "../../../api/wmsPackingSettingsApi";
 import type { WmsPickingExtendedUiSettings } from "../../../types/wmsPickingExtendedUi";
 import {
@@ -71,6 +75,7 @@ import {
   isStatusAllowedForPickingConfig,
   packingStartStatusIdsFromSettings,
 } from "./pickingConfigStatusEligibility";
+import { PICKING_TERMINAL_SETTING_HINTS } from "./pickingTerminalScanPolicy";
 import {
   BY_PRODUCTS_MULTI_CONTAINER_OPTIONS,
   BY_PRODUCTS_SINGLE_CONTAINER_OPTIONS,
@@ -1436,13 +1441,13 @@ const PICKING_CONFIG_LIST_GRID =
 const pickingConfigListHeaderClass =
   "text-center text-[11px] font-semibold uppercase tracking-wide text-slate-400";
 
-/** Duży badge statusu WMS (ten sam pipeline co ustawienia statusów panelu). */
+/** Kompaktowy badge statusu WMS (~36px) — kolor i lewy pasek bez zmian. */
 function PickingConfigStatusBadge({ status }: { status: PanelConfigurableUiStatusBrief }) {
   return (
     <OrderUiStatusConfigRowPresent
       status={status}
-      variant="default"
-      className="w-fit max-w-full !px-3.5 !py-2.5 shadow-sm hover:translate-y-0 hover:shadow-sm"
+      variant="compact"
+      className="!inline-flex h-9 w-fit max-w-full shrink-0 items-center !px-4 !py-0 shadow-none hover:translate-y-0 hover:shadow-none"
     />
   );
 }
@@ -1807,9 +1812,33 @@ export function WmsPickingSettingsSections({
       setBaselineExtended(null);
       return;
     }
-    const e = { ...loadWmsPickingExtendedUi(warehouseId) };
-    setExtended(e);
-    setBaselineExtended(stableStringifyPicking(e));
+    let cancelled = false;
+    const local = { ...loadWmsPickingExtendedUi(warehouseId) };
+    setExtended(local);
+    setBaselineExtended(stableStringifyPicking(local));
+    void getWmsPickingTerminalSettings(DAMAGE_TENANT_ID, warehouseId)
+      .then((t) => {
+        if (cancelled) return;
+        setExtended((prev) => {
+          const next = {
+            ...prev,
+            requireProductScanAtLeastOnce: Boolean(t.require_product_scan_at_least_once),
+            requireLocationScan: Boolean(t.require_location_scan),
+            disableForceLocationScanWhenManyLocations: Boolean(
+              t.disable_force_location_scan_when_many_locations,
+            ),
+            allowReserveLocationPicking: Boolean(t.allow_reserve_location_picking),
+          };
+          setBaselineExtended(stableStringifyPicking(next));
+          return next;
+        });
+      })
+      .catch(() => {
+        /* keep local defaults when API unavailable */
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [warehouseId]);
 
   function patchExtended<K extends keyof WmsPickingExtendedUiSettings>(key: K, value: WmsPickingExtendedUiSettings[K]) {
@@ -1821,13 +1850,33 @@ export function WmsPickingSettingsSections({
     return stableStringifyPicking(extended) !== baselineExtended;
   }, [extended, baselineExtended]);
 
-  const saveExtendedOnly = useCallback(() => {
+  const persistTerminalSettings = useCallback(async () => {
+    if (warehouseId == null) return;
+    await saveWmsPickingTerminalSettings({
+      tenant_id: DAMAGE_TENANT_ID,
+      warehouse_id: warehouseId,
+      require_product_scan_at_least_once: Boolean(extended.requireProductScanAtLeastOnce),
+      require_location_scan: Boolean(extended.requireLocationScan),
+      disable_force_location_scan_when_many_locations: Boolean(
+        extended.disableForceLocationScanWhenManyLocations,
+      ),
+      allow_reserve_location_picking: Boolean(extended.allowReserveLocationPicking),
+    });
+  }, [warehouseId, extended]);
+
+  const saveExtendedOnly = useCallback(async () => {
     if (warehouseId == null) return;
     saveWmsPickingExtendedUi(warehouseId, extended);
+    try {
+      await persistTerminalSettings();
+    } catch {
+      toast.error("Nie udało się zapisać ustawień terminala zbierania.");
+      throw new Error("terminal_settings_save_failed");
+    }
     setBaselineExtended(stableStringifyPicking(extended));
     setExtendedOk("Zapisano preferencje widoku zbierania.");
     window.setTimeout(() => setExtendedOk(null), 4000);
-  }, [warehouseId, extended]);
+  }, [warehouseId, extended, persistTerminalSettings]);
 
   const loadOrderUiStatuses = useCallback(async () => {
     if (warehouseId == null) {
@@ -2208,13 +2257,24 @@ export function WmsPickingSettingsSections({
           if (!result.ok) throw new Error(result.message);
         }
         if (extendedDirty) {
-          saveExtendedOnly();
+          await saveExtendedOnly();
         }
       },
       discardUnsaved: async () => {
         if (shortageRef.current) await shortageRef.current.discard();
         if (warehouseId != null) {
           const e = { ...loadWmsPickingExtendedUi(warehouseId) };
+          try {
+            const t = await getWmsPickingTerminalSettings(DAMAGE_TENANT_ID, warehouseId);
+            e.requireProductScanAtLeastOnce = Boolean(t.require_product_scan_at_least_once);
+            e.requireLocationScan = Boolean(t.require_location_scan);
+            e.disableForceLocationScanWhenManyLocations = Boolean(
+              t.disable_force_location_scan_when_many_locations,
+            );
+            e.allowReserveLocationPicking = Boolean(t.allow_reserve_location_picking);
+          } catch {
+            /* keep local UI defaults for terminal flags */
+          }
           setExtended(e);
           setBaselineExtended(stableStringifyPicking(e));
         }
@@ -2349,7 +2409,7 @@ export function WmsPickingSettingsSections({
               if (!result.ok) throw new Error(result.message);
             }
             if (extendedDirty) {
-              saveExtendedOnly();
+              await saveExtendedOnly();
             }
           })()
         }
@@ -2564,22 +2624,28 @@ export function WmsPickingSettingsSections({
         <SectionCardPicking id="wms-pick-scan" title="Terminal" summary="Wymagania skanów i reguły walidacji podczas zbierania.">
           <FieldGridPicking>
             <CustomCheckbox
+              settingId="picking.require_product_scan"
               label="Wymagane skanowanie produktu przynajmniej jeden raz"
+              hint={PICKING_TERMINAL_SETTING_HINTS.requireProductScanAtLeastOnce}
               checked={extended.requireProductScanAtLeastOnce}
               onChange={(v) => patchExtended("requireProductScanAtLeastOnce", v)}
             />
             <CustomCheckbox
+              settingId="picking.require_location_scan"
               label="Wymagane skanowanie lokalizacji"
+              hint={PICKING_TERMINAL_SETTING_HINTS.requireLocationScan}
               checked={extended.requireLocationScan}
               onChange={(v) => patchExtended("requireLocationScan", v)}
             />
             <CustomCheckbox
               label="Wyłącz wymuszenie skanu lokalizacji przy wielu lokalizacjach"
+              hint={PICKING_TERMINAL_SETTING_HINTS.disableForceLocationScanWhenManyLocations}
               checked={extended.disableForceLocationScanWhenManyLocations}
               onChange={(v) => patchExtended("disableForceLocationScanWhenManyLocations", v)}
             />
             <CustomCheckbox
               label="Zezwól na zbieranie z lokalizacji rezerwowej"
+              hint={PICKING_TERMINAL_SETTING_HINTS.allowReserveLocationPicking}
               checked={extended.allowReserveLocationPicking}
               onChange={(v) => patchExtended("allowReserveLocationPicking", v)}
             />

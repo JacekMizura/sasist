@@ -4478,6 +4478,14 @@ def ensure_picking_shortage_support(engine: Engine) -> None:
     from .schema_introspection import ensure_wms_picking_shortage_settings_columns
 
     ensure_wms_picking_shortage_settings_columns(engine)
+    ensure_wms_picking_terminal_settings_table(engine)
+
+
+def ensure_wms_picking_terminal_settings_table(engine: Engine) -> None:
+    """Create ``wms_picking_terminal_settings`` when missing (ORM checkfirst)."""
+    from ..models.wms_picking_terminal_settings import WmsPickingTerminalSettings
+
+    WmsPickingTerminalSettings.__table__.create(bind=engine, checkfirst=True)
 
 
 def ensure_wms_picking_shortage_settings_columns(engine: Engine) -> None:

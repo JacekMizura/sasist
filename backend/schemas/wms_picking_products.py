@@ -504,6 +504,10 @@ class WmsPickingQuickPickBody(BaseModel):
         ge=1,
         description="Dogrywka recovery: tylko to zamówienie (bez kohorty statusu zbierania).",
     )
+    product_scan_confirmed: bool = Field(
+        default=False,
+        description="True gdy operator zeskanował EAN produktu przed potwierdzeniem pobrania.",
+    )
 
     @model_validator(mode="after")
     def _require_cart_or_session(self) -> "WmsPickingQuickPickBody":
@@ -532,6 +536,10 @@ class WmsPickingConfirmRemainingBody(BaseModel):
         default=None,
         ge=1,
         description="Dogrywka recovery: tylko to zamówienie.",
+    )
+    product_scan_confirmed: bool = Field(
+        default=False,
+        description="True gdy operator zeskanował EAN produktu przed zatwierdzeniem.",
     )
 
     @model_validator(mode="after")

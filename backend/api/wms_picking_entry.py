@@ -1413,6 +1413,7 @@ def post_picking_quick_pick(
                 quantity=body.quantity,
                 picking_session_id=int(picking_session_id),
                 operator_user_id=uid,
+                product_scan_confirmed=bool(getattr(body, "product_scan_confirmed", False)),
             )
             resp = build_wms_picking_product_lines(
                 db,
@@ -1481,6 +1482,7 @@ def post_picking_quick_pick(
                 fixed_order_id=fixed_order_id if fixed_order_id is not None else recovery_fixed,
                 scope_order_id=scope_order_id if recovery_fixed is None else None,
                 operator_user_id=uid,
+                product_scan_confirmed=bool(getattr(body, "product_scan_confirmed", False)),
             )
 
         if cart_requires_basket_put_gate(cart_for_gate) and recovery_fixed is None:
@@ -1594,6 +1596,11 @@ def post_picking_quick_pick(
     except HTTPException:
         raise
     except Exception as e:
+        from ..services.wms_basket_put import BasketPutError
+
+        if isinstance(e, BasketPutError):
+            db.rollback()
+            raise HTTPException(status_code=int(e.http_status or 409), detail=e.as_detail()) from e
         db.rollback()
         logger.exception("post_picking_quick_pick:unhandled %s", _log_ctx(error=str(e)))
         raise HTTPException(
@@ -1661,6 +1668,7 @@ def post_picking_confirm_remaining(
                 int(body.recovery_order_id) if body.recovery_order_id is not None else None
             ),
             operator_user_id=uid,
+            product_scan_confirmed=bool(getattr(body, "product_scan_confirmed", False)),
         )
         db.commit()
         return WmsPickingConfirmRemainingResponse(
@@ -1700,6 +1708,13 @@ def post_picking_confirm_remaining(
                 "message": "Zatwierdzenie pozostałej ilości nie powiodło się.",
             },
         ) from e
+    except Exception as e:
+        from ..services.wms_basket_put import BasketPutError
+
+        if isinstance(e, BasketPutError):
+            db.rollback()
+            raise HTTPException(status_code=int(e.http_status or 409), detail=e.as_detail()) from e
+        raise
 
 
 @router.post("/picking/accept-source-location")

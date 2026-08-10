@@ -28,6 +28,10 @@ QUANTITY_INVALID = "QUANTITY_INVALID"
 QUANTITY_EXCEEDS_REMAINING = "QUANTITY_EXCEEDS_REMAINING"
 QUANTITY_STALE = "QUANTITY_STALE"
 PICK_LOCATION_REQUIRED = "PICK_LOCATION_REQUIRED"
+PRODUCT_SCAN_REQUIRED = "PRODUCT_SCAN_REQUIRED"
+RESERVE_LOCATION_FORBIDDEN = "RESERVE_LOCATION_FORBIDDEN"
+WRONG_PRODUCT_SCAN = "WRONG_PRODUCT_SCAN"
+WRONG_LOCATION_SCAN = "WRONG_LOCATION_SCAN"
 QUANTITY_EXCEEDS_LOCATION_STOCK = "QUANTITY_EXCEEDS_LOCATION_STOCK"
 SOURCE_LOCATION_NOT_ON_ROUTE = "SOURCE_LOCATION_NOT_ON_ROUTE"
 SOURCE_LOCATION_STALE = "SOURCE_LOCATION_STALE"
@@ -41,9 +45,9 @@ PENDING_PICK_STATE_CONFLICT = "PENDING_PICK_STATE_CONFLICT"
 AWAITING_BASKET_CONFIRMATION = "AWAITING_BASKET_CONFIRMATION"
 
 OPERATOR_MESSAGES: dict[str, str] = {
-    PRODUCT_NOT_IN_PICKING: "Ten produkt nie znajduje się na liście do zebrania.",
+    PRODUCT_NOT_IN_PICKING: "Nieprawidłowy produkt. Zeskanuj właściwy produkt.",
     PRODUCT_ALREADY_COMPLETE: "Ten produkt został już zebrany w wymaganej ilości.",
-    EXPECTED_PRODUCT_SCAN: "Otwórz produkt na liście albo zeskanuj EAN — potem możesz wybrać koszyk.",
+    EXPECTED_PRODUCT_SCAN: "Zeskanuj produkt przed potwierdzeniem pobrania.",
     UNKNOWN_SCAN_CODE: "Nie rozpoznano zeskanowanego kodu.",
     CART_NOT_ACTIVE: "Ten wózek nie należy do aktywnego zbierania.",
     EXPECTED_BASKET_SCAN: (
@@ -62,18 +66,22 @@ OPERATOR_MESSAGES: dict[str, str] = {
     QUANTITY_INVALID: "Ilość musi być większa od zera.",
     QUANTITY_EXCEEDS_REMAINING: "Nie możesz odłożyć więcej niż pozostało w koszyku dla tego produktu.",
     QUANTITY_STALE: "Pozostała ilość zmieniła się. Odśwież i podaj ilość ponownie.",
-    PICK_LOCATION_REQUIRED: "Najpierw zeskanuj lokalizację, z której pobierasz produkt.",
+    PICK_LOCATION_REQUIRED: "Zeskanuj lokalizację przed pobraniem produktu.",
+    PRODUCT_SCAN_REQUIRED: "Zeskanuj produkt przed potwierdzeniem pobrania.",
+    RESERVE_LOCATION_FORBIDDEN: "Produkt nie może być pobrany z tej lokalizacji.",
+    WRONG_PRODUCT_SCAN: "Nieprawidłowy produkt. Zeskanuj właściwy produkt.",
+    WRONG_LOCATION_SCAN: "Nieprawidłowa lokalizacja. Zeskanuj lokalizację wskazaną na ekranie.",
     QUANTITY_EXCEEDS_LOCATION_STOCK: (
         "W wybranej lokalizacji nie ma wystarczającego stanu (uwzględniając już zebrane, "
         "ale jeszcze nie sfinalizowane sztuk)."
     ),
     SOURCE_LOCATION_NOT_ON_ROUTE: (
-        "Wybrana lokalizacja źródłowa nie jest dostępna dla tego produktu w bieżącej zbiórce."
+        "Nieprawidłowa lokalizacja. Zeskanuj lokalizację wskazaną na ekranie."
     ),
     SOURCE_LOCATION_STALE: (
         "Lokalizacja źródłowa zmieniła się lub stała się niedostępna. Zeskanuj lokalizację ponownie."
     ),
-    SOURCE_LOCATION_INVALID: "Nieprawidłowa lokalizacja źródłowa dla tego pobrania.",
+    SOURCE_LOCATION_INVALID: "Nieprawidłowa lokalizacja. Zeskanuj lokalizację wskazaną na ekranie.",
     SOURCE_LOCATION_MISMATCH: (
         "Lokalizacja źródłowa nie zgadza się z wcześniej zeskanowaną lokalizacją. "
         "Zeskanuj produkt ponownie."

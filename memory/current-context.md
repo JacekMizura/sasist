@@ -1,5 +1,10 @@
 ﻿## Active
 
+**Picking terminal settings (2026-08-10):**
+- DB/API: `WmsPickingTerminalSettings` → `/wms/settings/picking-terminal`
+- FE policy: `pickingTerminalScanPolicy.ts` (`computeNeedsLocationScan`)
+- Operator detail: gates + `product_scan_confirmed`; reserve filtered in product detail / pick paths
+
 **Picking configurator status pickers (2026-08-09):**
 - Modal uses shared `OrderUiStatusField` with raised portal z-index
 - Allowed statuses from WMS panel groups + packing start IDs (not hardcoded names)
