@@ -8,8 +8,9 @@ import { tabsNavItemClassName } from "../../components/layout/TabsNav";
 import { WmsSettingsGlobalSearch } from "./settingsSearch";
 import "./settingsSearch/settingFlash.css";
 
-/** Canonical WMS settings top tabs — process settings only (hub + Stanowiska). */
+/** Canonical WMS settings top tabs — shared „Ogólne” + process settings (hub + Stanowiska). */
 export const WMS_SETTINGS_TABS = [
+  { id: "general", label: "Ogólne" },
   { id: "packing", label: "Pakowanie" },
   { id: "picking", label: "Zbieranie" },
   { id: "direct_sales", label: "Sprzedaż bezpośrednia" },

@@ -15,6 +15,7 @@ import {
   packingProductCardRootSizeClass,
   packingProductCardSizeStyle,
 } from "./packingProductCardLayout";
+import { wmsTypoClass } from "../../../wms/typography/wmsOperatorTypography";
 import {
   PackingCardFieldLabel,
   PackingCardMenu,
@@ -100,7 +101,12 @@ function ActiveCardInner({
         >
           −
         </button>
-        <span className="flex min-h-[2rem] min-w-[2.5rem] items-center justify-center text-center text-2xl font-black tabular-nums text-slate-900">
+        <span
+          className={[
+            "flex min-h-[2rem] min-w-[2.5rem] items-center justify-center text-center font-black text-slate-900",
+            wmsTypoClass.quantity,
+          ].join(" ")}
+        >
           {packQty}
         </span>
         <button
@@ -150,7 +156,7 @@ function ActiveCardInner({
           <div className="flex items-start gap-2">
             <div className="min-w-0 shrink-0">
               <PackingCardFieldLabel>SPAKOWANO</PackingCardFieldLabel>
-              <p className="mt-0.5 text-[1.65rem] font-black leading-none tabular-nums text-slate-900">
+              <p className={["mt-0.5 font-black leading-none text-slate-900", wmsTypoClass.quantity].join(" ")}>
                 {line.quantity_packed}/{qtyReq}
               </p>
             </div>
@@ -194,7 +200,7 @@ function ActiveCardInner({
           </div>
 
           {showLocCorner ? (
-            <div className="flex w-[7.25rem] shrink-0 flex-col items-end justify-start gap-1 pt-0.5">
+            <div className="flex min-w-0 max-w-[min(100%,11rem)] shrink flex-col items-end justify-start gap-1 pt-0.5">
               <PackingCardFieldLabel>LOKALIZACJA</PackingCardFieldLabel>
               <PackingLocationPill text={locBadge} />
             </div>

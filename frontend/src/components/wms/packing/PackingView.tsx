@@ -35,6 +35,7 @@ import { DAMAGE_TENANT_ID } from "../../../pages/damage/damageShared";
 import { PackingCustomerCommentBanner } from "./PackingCustomerCommentBanner";
 import { PackingOrderFullWidthInfo } from "./PackingOrderFullWidthInfo";
 import { PackingOrderSidebar } from "./PackingOrderSidebar";
+import { wmsTypoClass } from "../../../wms/typography/wmsOperatorTypography";
 import {
   DEFAULT_PACKING_PRODUCT_FIELD_VISIBILITY,
   type PackingProductFieldVisibility,
@@ -261,11 +262,11 @@ export function PackingView({
               >
                 <IconBack />
               </button>
-              <span className="text-lg font-bold text-slate-900 sm:text-xl">
+              <span className={["font-bold text-slate-900", wmsTypoClass.base].join(" ")}>
                 {orderNumberLabel(detail.number)}
               </span>
               <span
-                className="text-2xl font-black tabular-nums text-slate-900 sm:text-3xl"
+                className={["font-black text-slate-900", wmsTypoClass.quantity].join(" ")}
                 title="Spakowane / do spakowania"
               >
                 {packedUnits}/{totalUnits}
@@ -460,11 +461,11 @@ export function PackingView({
               >
                 <IconBack />
               </button>
-              <span className="whitespace-nowrap text-lg font-bold text-slate-900 sm:text-xl">
+              <span className={["min-w-0 break-words font-bold text-slate-900", wmsTypoClass.base].join(" ")}>
                 {orderNumberLabel(detail.number)}
               </span>
               <span
-                className="whitespace-nowrap text-xl font-black tabular-nums text-slate-900 sm:text-2xl"
+                className={["font-black text-slate-900", wmsTypoClass.quantity].join(" ")}
                 title="Spakowane / do spakowania"
               >
                 {packedUnits}/{totalUnits}

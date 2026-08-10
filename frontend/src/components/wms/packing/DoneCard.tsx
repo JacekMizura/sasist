@@ -13,6 +13,7 @@ import {
   packingProductCardRootSizeClass,
   packingProductCardSizeStyle,
 } from "./packingProductCardLayout";
+import { wmsTypoClass } from "../../../wms/typography/wmsOperatorTypography";
 import {
   PackingCardFieldLabel,
   PackingDoneCheckIcon,
@@ -59,7 +60,7 @@ function DoneCardInner({ line, flash, fieldVisibility, displayMode = "list" }: D
   const packedStatus = (
     <div className="flex items-center gap-1.5">
       <PackingDoneCheckIcon />
-      <span className="text-sm font-bold text-[#2e7d32]">
+      <span className={["font-bold text-[#2e7d32]", wmsTypoClass.quantity].join(" ")}>
         Spakowano {qtyPacked}/{qtyReq}
       </span>
     </div>
@@ -137,7 +138,7 @@ function DoneCardInner({ line, flash, fieldVisibility, displayMode = "list" }: D
             <div className="flex w-[7.5rem] shrink-0 flex-col justify-center">{packedStatus}</div>
 
             {showLocCorner ? (
-              <div className="flex w-[7.25rem] shrink-0 flex-col items-end justify-start gap-1 pt-0.5">
+              <div className="flex min-w-0 max-w-[min(100%,11rem)] shrink flex-col items-end justify-start gap-1 pt-0.5">
                 <PackingCardFieldLabel muted>LOKALIZACJA</PackingCardFieldLabel>
                 <PackingLocationPill text={locBadge} muted />
               </div>

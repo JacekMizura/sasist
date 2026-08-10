@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import type { WmsPackingOrderLineApi } from "../../../api/wmsPackingApi";
+import { wmsTypoClass } from "../../../wms/typography/wmsOperatorTypography";
 import { PackingLineActionsMenu } from "./PackingLineActionsMenu";
 
 const LABEL = "text-[9px] font-semibold uppercase tracking-[0.08em] text-slate-400";
@@ -25,7 +26,8 @@ export function PackingLocationPill({
   return (
     <span
       className={[
-        "inline-flex w-full max-w-[7.25rem] items-center justify-center truncate rounded-full border px-2 py-0.5 text-center text-[11px] font-bold leading-tight",
+        "inline-flex w-full max-w-full min-w-0 items-center justify-center rounded-full border px-2 py-0.5 text-center font-bold",
+        wmsTypoClass.location,
         muted
           ? "border-emerald-400/90 bg-white/40 text-emerald-900"
           : "border-slate-800 bg-white text-slate-900",
@@ -50,9 +52,9 @@ export function PackingGridLocationHeader({
   muted?: boolean;
 }) {
   return (
-    <div className="ml-auto flex shrink-0 items-start gap-1">
+    <div className="ml-auto flex min-w-0 max-w-[min(100%,11rem)] shrink items-start gap-1">
       {showLocation && locBadge ? (
-        <div className="flex w-[7.25rem] shrink-0 flex-col items-end gap-1">
+        <div className="flex min-w-0 flex-1 flex-col items-end gap-1">
           <PackingCardFieldLabel muted={muted}>LOKALIZACJA</PackingCardFieldLabel>
           <PackingLocationPill text={locBadge} muted={muted} />
         </div>

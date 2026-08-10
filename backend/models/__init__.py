@@ -200,6 +200,7 @@ from .wms_smart_matching import (  # noqa: F401
 )
 from .wms_picking_shortage_settings import WmsPickingShortageSettings  # noqa: F401
 from .wms_picking_terminal_settings import WmsPickingTerminalSettings  # noqa: F401
+from .wms_general_settings import WmsGeneralSettings  # noqa: F401
 from .wms_recovery_pick_task import WmsRecoveryPickTask  # noqa: F401
 from .wms_recovery_batch_session import WmsRecoveryBatchSession  # noqa: F401
 from .wms_recovery_soft_reservation import WmsRecoverySoftReservation  # noqa: F401

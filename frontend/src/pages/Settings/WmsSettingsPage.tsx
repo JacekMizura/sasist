@@ -13,6 +13,10 @@ import WmsThreeDMatchingSettingsPanel from "./WmsThreeDMatchingSettingsPanel";
 import WmsProductValidationSettingsPanel from "./WmsProductValidationSettingsPanel";
 import WmsProductionSettingsPanel from "./WmsProductionSettingsPanel";
 import {
+  WmsGeneralSettingsPanel,
+  type WmsGeneralSettingsPanelHandle,
+} from "./WmsGeneralSettingsPanel";
+import {
   WmsPickingSettingsSections,
   type WmsPickingSettingsActions,
 } from "../../modules/wmsSettings/picking/WmsPickingSettingsPanel";
@@ -41,25 +45,27 @@ export default function WmsSettingsPage() {
   const activeTab: WmsSettingsTabId =
     isWmsSettingsTabId(rawTab) && rawTab !== "workstations" ? rawTab : "packing";
 
+  const generalRef = useRef<WmsGeneralSettingsPanelHandle>(null);
   const packingRef = useRef<WmsPackingSettingsPanelHandle>(null);
   const directSalesRef = useRef<DirectSalesSettingsPanelHandle>(null);
   const pickingActionsRef = useRef<WmsPickingSettingsActions | null>(null);
 
+  const [generalDirty, setGeneralDirty] = useState(false);
   const [packingDirty, setPackingDirty] = useState(false);
   const [directSalesDirty, setDirectSalesDirty] = useState(false);
   const [pickingDirty, setPickingDirty] = useState(false);
   const [globalSaving, setGlobalSaving] = useState(false);
 
-  const isDirty = packingDirty || directSalesDirty || pickingDirty;
+  const isDirty = generalDirty || packingDirty || directSalesDirty || pickingDirty;
 
   useEffect(() => {
     const onBeforeUnload = (e: BeforeUnloadEvent) => {
-      if (!packingDirty && !directSalesDirty && !pickingDirty) return;
+      if (!generalDirty && !packingDirty && !directSalesDirty && !pickingDirty) return;
       e.preventDefault();
     };
     window.addEventListener("beforeunload", onBeforeUnload);
     return () => window.removeEventListener("beforeunload", onBeforeUnload);
-  }, [packingDirty, directSalesDirty, pickingDirty]);
+  }, [generalDirty, packingDirty, directSalesDirty, pickingDirty]);
 
   const blocker = useBlocker(isDirty && !legacyInventoryRedirect);
 
@@ -75,6 +81,7 @@ export default function WmsSettingsPage() {
   const handleGlobalSave = useCallback(async () => {
     setGlobalSaving(true);
     try {
+      if (generalDirty && generalRef.current) await generalRef.current.saveAll();
       if (packingDirty && packingRef.current) await packingRef.current.saveAll();
       if (directSalesDirty && directSalesRef.current) await directSalesRef.current.saveAll();
       if (pickingDirty && pickingActionsRef.current) await pickingActionsRef.current.saveAll();
@@ -84,17 +91,18 @@ export default function WmsSettingsPage() {
     } finally {
       setGlobalSaving(false);
     }
-  }, [packingDirty, directSalesDirty, pickingDirty]);
+  }, [generalDirty, packingDirty, directSalesDirty, pickingDirty]);
 
   const handleGlobalDiscard = useCallback(async () => {
     try {
+      if (generalDirty && generalRef.current) await generalRef.current.discardUnsaved();
       if (packingDirty && packingRef.current) await packingRef.current.discardUnsaved();
       if (directSalesDirty && directSalesRef.current) await directSalesRef.current.discardUnsaved();
       if (pickingDirty && pickingActionsRef.current) await pickingActionsRef.current.discardUnsaved();
     } catch {
       toast.error("Nie udało się przywrócić zapisanych ustawień.");
     }
-  }, [packingDirty, directSalesDirty, pickingDirty]);
+  }, [generalDirty, packingDirty, directSalesDirty, pickingDirty]);
 
   /** Legacy bookmark: Stany magazynowe moved to Asortyment → Ustawienia. */
   if (legacyInventoryRedirect) {
@@ -111,6 +119,13 @@ export default function WmsSettingsPage() {
         role="tabpanel"
         aria-labelledby={`wms-settings-tab-${activeTab}`}
       >
+        <div className={activeTab === "general" ? "block" : "hidden"} aria-hidden={activeTab !== "general"}>
+          <WmsGeneralSettingsPanel
+            ref={generalRef}
+            onDirtyChange={setGeneralDirty}
+            sectionNavObserve={activeTab === "general"}
+          />
+        </div>
         <div className={activeTab === "picking" ? "block" : "hidden"} aria-hidden={activeTab !== "picking"}>
           <WmsPickingSettingsSections
             registerActions={(api) => {
@@ -151,7 +166,8 @@ export default function WmsSettingsPage() {
         <div className={activeTab === "production" ? "block" : "hidden"} aria-hidden={activeTab !== "production"}>
           <WmsProductionSettingsPanel warehouseId={warehouseIdTop} />
         </div>
-        {activeTab !== "picking" &&
+        {activeTab !== "general" &&
+        activeTab !== "picking" &&
         activeTab !== "packing" &&
         activeTab !== "direct_sales" &&
         activeTab !== "returns" &&

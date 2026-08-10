@@ -1,6 +1,7 @@
 import type { WmsSettingsSearchEntry } from "./types";
 
 const T = {
+  general: "Ogólne",
   packing: "Pakowanie",
   picking: "Zbieranie",
   direct_sales: "Sprzedaż bezpośrednia",
@@ -22,6 +23,30 @@ function e(
  * Keep `id` in sync with `data-wms-setting-id` on fields ({@link WmsSettingField}).
  */
 export const WMS_SETTINGS_SEARCH_CATALOG: WmsSettingsSearchEntry[] = [
+  e({
+    id: "general.font_size_base",
+    label: "Wielkość czcionki w nowych widokach trybów (ustawienie ogólne)",
+    tabId: "general",
+    sectionId: "wms-general-typography",
+    sectionLabel: "Wielkość czcionki",
+    keywords: ["czcionka", "font", "typografia", "ogólne"],
+  }),
+  e({
+    id: "general.font_size_location",
+    label: "Wielkość czcionki dla elementu wskazującego lokalizację",
+    tabId: "general",
+    sectionId: "wms-general-typography",
+    sectionLabel: "Wielkość czcionki",
+    keywords: ["lokalizacja", "czcionka", "font"],
+  }),
+  e({
+    id: "general.font_size_quantity",
+    label: "Wielkość czcionki dla elementu wskazującego ilości",
+    tabId: "general",
+    sectionId: "wms-general-typography",
+    sectionLabel: "Wielkość czcionki",
+    keywords: ["ilość", "czcionka", "font", "szt"],
+  }),
   // Packing — Sellasist canonical labels
   e({
     id: "packing.layout_mode",

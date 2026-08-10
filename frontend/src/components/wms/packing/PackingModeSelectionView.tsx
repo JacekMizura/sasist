@@ -22,6 +22,7 @@ import {
 } from "../../../pages/wms/wmsPackingSession";
 import { WMS_ROUTES } from "../../../pages/wms/wmsRoutes";
 import { wmsPackingApiErrorCode, wmsPackingApiErrorMessage } from "../../../api/wmsPackingApi";
+import { wmsTypoClass } from "../../../wms/typography/wmsOperatorTypography";
 
 export type PackingModeSelectionViewProps = {
   statusName: string;
@@ -265,11 +266,14 @@ export function PackingModeSelectionView({
           <li>
             <button
               type="button"
-              className="flex w-full min-h-[5.5rem] items-center justify-center rounded-xl border border-slate-200/95 bg-white px-6 py-5 text-center text-xl font-bold text-slate-900 shadow-sm transition-[box-shadow,background-color] hover:bg-slate-50 hover:shadow-md sm:min-h-[6rem] sm:text-2xl"
+              className={[
+                "flex w-full min-h-[5.5rem] flex-wrap items-center justify-center gap-x-3 gap-y-1 rounded-xl border border-slate-200/95 bg-white px-6 py-5 text-center font-bold text-slate-900 shadow-sm transition-[box-shadow,background-color] hover:bg-slate-50 hover:shadow-md sm:min-h-[6rem]",
+                wmsTypoClass.base,
+              ].join(" ")}
               onClick={() => setScanTarget("bulk")}
             >
               Zeskanuj wózek
-              <span className="ml-3 text-base font-semibold text-slate-500">({modes.bulk})</span>
+              <span className={["font-semibold text-slate-500", wmsTypoClass.quantity].join(" ")}>({modes.bulk})</span>
             </button>
           </li>
         ) : null}
@@ -277,11 +281,14 @@ export function PackingModeSelectionView({
           <li>
             <button
               type="button"
-              className="flex w-full min-h-[5.5rem] items-center justify-center rounded-xl border border-slate-200/95 bg-white px-6 py-5 text-center text-xl font-bold text-slate-900 shadow-sm transition-[box-shadow,background-color] hover:bg-slate-50 hover:shadow-md sm:min-h-[6rem] sm:text-2xl"
+              className={[
+                "flex w-full min-h-[5.5rem] flex-wrap items-center justify-center gap-x-3 gap-y-1 rounded-xl border border-slate-200/95 bg-white px-6 py-5 text-center font-bold text-slate-900 shadow-sm transition-[box-shadow,background-color] hover:bg-slate-50 hover:shadow-md sm:min-h-[6rem]",
+                wmsTypoClass.base,
+              ].join(" ")}
               onClick={goToBasketsEntry}
             >
               Zeskanuj koszyk
-              <span className="ml-3 text-base font-semibold text-slate-500">({modes.baskets})</span>
+              <span className={["font-semibold text-slate-500", wmsTypoClass.quantity].join(" ")}>({modes.baskets})</span>
             </button>
           </li>
         ) : null}
@@ -289,10 +296,14 @@ export function PackingModeSelectionView({
           <li>
             <button
               type="button"
-              className="flex w-full min-h-[5.5rem] items-center justify-center rounded-xl border border-slate-200/95 bg-white px-6 py-5 text-center text-xl font-bold text-slate-900 shadow-sm transition-[box-shadow,background-color] hover:bg-slate-50 hover:shadow-md sm:min-h-[6rem] sm:text-2xl"
+              className={[
+                "flex w-full min-h-[5.5rem] flex-wrap items-center justify-center gap-x-3 gap-y-1 rounded-xl border border-slate-200/95 bg-white px-6 py-5 text-center font-bold text-slate-900 shadow-sm transition-[box-shadow,background-color] hover:bg-slate-50 hover:shadow-md sm:min-h-[6rem]",
+                wmsTypoClass.base,
+              ].join(" ")}
               onClick={() => goToOrdersNoCart("all")}
             >
-              Bez wózka — {modes.no_cart} zamówień
+              Bez wózka —{" "}
+              <span className={["font-semibold", wmsTypoClass.quantity].join(" ")}>{modes.no_cart}</span> zamówień
             </button>
           </li>
         ) : null}
@@ -301,11 +312,14 @@ export function PackingModeSelectionView({
             <button
               type="button"
               disabled={singleCount <= 0}
-              className="flex w-full min-h-[5.5rem] items-center justify-center rounded-xl border border-slate-200/95 bg-white px-6 py-5 text-center text-xl font-bold text-slate-900 shadow-sm transition-[box-shadow,background-color] hover:bg-slate-50 hover:shadow-md disabled:cursor-not-allowed disabled:opacity-45 sm:min-h-[6rem] sm:text-2xl"
+              className={[
+                "flex w-full min-h-[5.5rem] flex-wrap items-center justify-center gap-x-3 gap-y-1 rounded-xl border border-slate-200/95 bg-white px-6 py-5 text-center font-bold text-slate-900 shadow-sm transition-[box-shadow,background-color] hover:bg-slate-50 hover:shadow-md disabled:cursor-not-allowed disabled:opacity-45 sm:min-h-[6rem]",
+                wmsTypoClass.base,
+              ].join(" ")}
               onClick={() => goToOrdersNoCart("single")}
             >
               Zamówienia jednoelementowe
-              <span className="ml-3 text-base font-semibold text-slate-500">({singleCount})</span>
+              <span className={["font-semibold text-slate-500", wmsTypoClass.quantity].join(" ")}>({singleCount})</span>
             </button>
           </li>
         ) : null}
@@ -314,11 +328,14 @@ export function PackingModeSelectionView({
             <button
               type="button"
               disabled={multiCount <= 0}
-              className="flex w-full min-h-[5.5rem] items-center justify-center rounded-xl border border-slate-200/95 bg-white px-6 py-5 text-center text-xl font-bold text-slate-900 shadow-sm transition-[box-shadow,background-color] hover:bg-slate-50 hover:shadow-md disabled:cursor-not-allowed disabled:opacity-45 sm:min-h-[6rem] sm:text-2xl"
+              className={[
+                "flex w-full min-h-[5.5rem] flex-wrap items-center justify-center gap-x-3 gap-y-1 rounded-xl border border-slate-200/95 bg-white px-6 py-5 text-center font-bold text-slate-900 shadow-sm transition-[box-shadow,background-color] hover:bg-slate-50 hover:shadow-md disabled:cursor-not-allowed disabled:opacity-45 sm:min-h-[6rem]",
+                wmsTypoClass.base,
+              ].join(" ")}
               onClick={() => goToOrdersNoCart("multi")}
             >
               Zamówienia wieloelementowe
-              <span className="ml-3 text-base font-semibold text-slate-500">({multiCount})</span>
+              <span className={["font-semibold text-slate-500", wmsTypoClass.quantity].join(" ")}>({multiCount})</span>
             </button>
           </li>
         ) : null}

@@ -3,6 +3,7 @@ import { Loader2 } from "lucide-react";
 import { Icon } from "../../components/ui/Icon";
 import type { OrderUiMainGroup } from "../../types/orderUiStatus";
 import { sidebarSubStatusRgb } from "../../utils/panelSidebarHierarchy";
+import { wmsTypoClass } from "../../wms/typography/wmsOperatorTypography";
 
 function statusAccentStyles(color: string, group: OrderUiMainGroup): CSSProperties {
   const [r, g, b] = sidebarSubStatusRgb(color, group);
@@ -95,7 +96,7 @@ export function WmsFlowStatusTileButton({
               ) : null}
             </div>
 
-            <span className="truncate text-xl font-bold tracking-tight text-slate-900">
+            <span className={["min-w-0 break-words font-bold tracking-tight text-slate-900", wmsTypoClass.base].join(" ")}>
               {statusName}
             </span>
           </div>
@@ -110,7 +111,7 @@ export function WmsFlowStatusTileButton({
                     Zamówień
                   </p>
                 ) : null}
-                <span className="text-4xl sm:text-5xl font-bold tabular-nums text-slate-900 tracking-tight leading-none">
+                <span className={["font-bold text-slate-900 tracking-tight leading-none", wmsTypoClass.quantity].join(" ")}>
                   {orderCount}
                 </span>
               </>

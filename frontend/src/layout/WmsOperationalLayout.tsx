@@ -10,6 +10,8 @@ import { WmsScannerProvider } from "../context/WmsScannerContext";
 import WmsTopBar from "./WmsTopBar";
 import WmsWarehouseAccessGate from "./WmsWarehouseAccessGate";
 import { WmsOperationalModeGate } from "../pages/wms/WmsOperationalModeGate";
+import { WmsOperatorTypographyProvider } from "../wms/typography/WmsOperatorTypographyProvider";
+import { WmsOperatorTypographyRoot } from "../wms/typography/WmsOperatorTypographyRoot";
 
 /**
  * Unified WMS shell — one top navigation for every mode (picking, recovery, braki, packing, …).
@@ -18,7 +20,7 @@ import { WmsOperationalModeGate } from "../pages/wms/WmsOperationalModeGate";
  */
 function WmsLayoutChrome() {
   return (
-    <div className="flex h-screen min-h-0 w-full flex-1 flex-col overflow-hidden bg-white">
+    <WmsOperatorTypographyRoot className="flex h-screen min-h-0 w-full flex-1 flex-col overflow-hidden bg-white">
       <div className="shrink-0" style={{ zIndex: WMS_Z.topNav }}>
         <WmsTopBar />
       </div>
@@ -30,7 +32,7 @@ function WmsLayoutChrome() {
           </WmsOperationalModeGate>
         </WmsWarehouseAccessGate>
       </main>
-    </div>
+    </WmsOperatorTypographyRoot>
   );
 }
 
@@ -40,8 +42,10 @@ export default function WmsOperationalLayout() {
       <WmsScannerProvider>
         <WmsPickingCartProvider>
           <WmsMessageProvider>
-            <DevScannerPanel />
-            <WmsLayoutChrome />
+            <WmsOperatorTypographyProvider>
+              <DevScannerPanel />
+              <WmsLayoutChrome />
+            </WmsOperatorTypographyProvider>
           </WmsMessageProvider>
         </WmsPickingCartProvider>
       </WmsScannerProvider>

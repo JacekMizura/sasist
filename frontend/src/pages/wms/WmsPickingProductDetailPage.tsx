@@ -36,6 +36,7 @@ import { MultiBulkShortageModal } from "./picking-detail/MultiBulkShortageModal"
 import type { BundleScanOut, ConsolidationRackBundleRowOut } from "../../api/bundlesLogisticsApi";
 import { getConsolidationRackBundleView } from "../../api/bundlesLogisticsApi";
 import { tryPickingBundleScan } from "../../services/bundleScannerIntegration";
+import { wmsTypoClass } from "../../wms/typography/wmsOperatorTypography";
 import {
   looksLikeProductBarcode,
   multiScanTrace,
@@ -1918,27 +1919,37 @@ export default function WmsPickingProductDetailPage() {
                   <div className="mb-4 w-full max-w-md grid grid-cols-2 gap-2 text-left">
                     <div className="rounded-xl border border-slate-200 bg-white px-3 py-2">
                       <p className="text-[10px] font-bold uppercase text-slate-500">Potrzeba</p>
-                      <p className="text-2xl font-black tabular-nums">{fmtQty(detail.total_quantity)}</p>
+                      <p className={["font-black", wmsTypoClass.quantity].join(" ")}>{fmtQty(detail.total_quantity)}</p>
                     </div>
                     <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2">
                       <p className="text-[10px] font-bold uppercase text-emerald-700">Zebrano</p>
-                      <p className="text-2xl font-black tabular-nums text-emerald-900">{fmtQty(displayPickedDetail)}</p>
+                      <p className={["font-black text-emerald-900", wmsTypoClass.quantity].join(" ")}>
+                        {fmtQty(displayPickedDetail)}
+                      </p>
                     </div>
                     <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2">
                       <p className="text-[10px] font-bold uppercase text-amber-800">Brak</p>
-                      <p className="text-2xl font-black tabular-nums text-amber-950">{fmtQty(missingTotal)}</p>
+                      <p className={["font-black text-amber-950", wmsTypoClass.quantity].join(" ")}>
+                        {fmtQty(missingTotal)}
+                      </p>
                     </div>
                     <div className="rounded-xl border border-indigo-200 bg-indigo-50 px-3 py-2">
                       <p className="text-[10px] font-bold uppercase text-indigo-700">Nierozliczone</p>
-                      <p className="text-2xl font-black tabular-nums text-indigo-950">{fmtQty(remaining)}</p>
+                      <p className={["font-black text-indigo-950", wmsTypoClass.quantity].join(" ")}>
+                        {fmtQty(remaining)}
+                      </p>
                     </div>
                   </div>
                 ) : (
-                  <div className="flex items-baseline gap-2 mb-4">
-                    <span className="text-6xl sm:text-7xl font-black text-[#5a4fcf] tabular-nums">{displayPickedDetail}</span>
-                    <span className="text-2xl font-bold text-slate-300">/</span>
-                    <span className="text-3xl font-black text-slate-500 tabular-nums">{fmtQty(detail.total_quantity)}</span>
-                    <span className="text-sm font-bold text-slate-400 ml-1">szt.</span>
+                  <div className="mb-4 flex min-w-0 flex-wrap items-baseline gap-2">
+                    <span className={["font-black text-[#5a4fcf]", wmsTypoClass.quantity].join(" ")}>
+                      {displayPickedDetail}
+                    </span>
+                    <span className="font-bold text-slate-300">/</span>
+                    <span className={["font-black text-slate-500", wmsTypoClass.quantity].join(" ")}>
+                      {fmtQty(detail.total_quantity)}
+                    </span>
+                    <span className="ml-1 text-sm font-bold text-slate-400">szt.</span>
                   </div>
                 )}
 
@@ -2023,14 +2034,16 @@ export default function WmsPickingProductDetailPage() {
                           void acceptSourceLocation(loc.location_id, "accept");
                         }
                       }}
-                      className={`flex w-full items-center justify-between p-3 rounded-xl border bg-white text-left ${
+                      className={`flex w-full min-w-0 flex-wrap items-center justify-between gap-2 p-3 rounded-xl border bg-white text-left ${
                         activeLocationId === loc.location_id
                           ? "border-indigo-400 ring-2 ring-indigo-100"
                           : "border-slate-200 hover:border-indigo-200"
                       }`}
                     >
-                      <span className="font-mono font-bold text-slate-900">{loc.location_code}</span>
-                      <span className="text-xs font-bold text-slate-500">
+                      <span className={["min-w-0 font-mono font-bold text-slate-900", wmsTypoClass.location].join(" ")}>
+                        {loc.location_code}
+                      </span>
+                      <span className={["shrink-0 font-bold text-slate-500", wmsTypoClass.quantity].join(" ")}>
                         Dostępne: {fmtQty(locStock(loc))} szt.
                       </span>
                     </button>

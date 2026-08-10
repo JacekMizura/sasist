@@ -182,6 +182,7 @@ from .db.schema_upgrade import (
     ensure_picking_shortage_support,
     ensure_wms_picking_shortage_settings_columns,
     ensure_wms_picking_terminal_settings_table,
+    ensure_wms_general_settings_table,
     ensure_carts_code_column,
     ensure_carts_picking_lifecycle_columns,
     ensure_cart_lifecycle_history_table,
@@ -215,6 +216,7 @@ from .db.schema_upgrade import (
     ensure_order_issue_task_items_table,
     ensure_wms_picking_shortage_settings_columns,
     ensure_wms_picking_terminal_settings_table,
+    ensure_wms_general_settings_table,
     ensure_wms_operational_tasks_table,
     ensure_orders_fulfillment_state_columns,
     ensure_orders_picking_handoff_mode_column,
@@ -773,6 +775,7 @@ _POSTGRES_SAFE_SCHEMA_FUNCS = frozenset({
     "ensure_order_issue_task_items_table",
     "ensure_wms_picking_shortage_settings_columns",
     "ensure_wms_picking_terminal_settings_table",
+    "ensure_wms_general_settings_table",
     # Production module — MUST run on PostgreSQL (not SQLite-only legacy helpers).
     "ensure_production_tables",
     "ensure_product_compositions_and_batches",
@@ -1853,6 +1856,7 @@ def _upgrade_schema_background() -> None:
         ensure_picking_shortage_support(engine)
         ensure_wms_picking_shortage_settings_columns(engine)
         ensure_wms_picking_terminal_settings_table(engine)
+        ensure_wms_general_settings_table(engine)
         ensure_order_items_packing_quantity_packed_column(engine)
         ensure_direct_sales_settings_table(engine)
         ensure_wms_packing_settings_table(engine)
@@ -1984,6 +1988,7 @@ try:
     ensure_order_issue_task_items_table(engine)
     ensure_wms_picking_shortage_settings_columns(engine)
     ensure_wms_picking_terminal_settings_table(engine)
+    ensure_wms_general_settings_table(engine)
     ensure_wms_operational_tasks_table(engine)
     ensure_orders_fulfillment_state_columns(engine)
     ensure_orders_picking_handoff_mode_column(engine)

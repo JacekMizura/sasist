@@ -12,6 +12,7 @@ import { resolveAfterOrderTypeChoice, visibleOrderTypeChoices } from "./wmsPicki
 import { WmsPickingSessionTopBar } from "./WmsPickingSessionTopBar";
 import { WMS_ROUTES } from "./wmsRoutes";
 import { Loader2 } from "lucide-react";
+import { wmsTypoClass } from "../../wms/typography/wmsOperatorTypography";
 
 const CHOICE_META: Record<
   WmsPickingOrderTypeChoice,
@@ -133,7 +134,7 @@ export default function WmsPickingOrderTypePage() {
       />
       <div className="min-h-0 flex-1 overflow-y-auto px-4 py-6 sm:px-6 sm:py-8">
         <div className="mx-auto w-full max-w-lg">
-          <h1 className="mb-5 text-center text-lg font-bold tracking-tight text-slate-900 sm:text-xl">
+          <h1 className={["mb-5 text-center font-bold tracking-tight text-slate-900", wmsTypoClass.base].join(" ")}>
             Wybierz
           </h1>
 
@@ -155,14 +156,14 @@ export default function WmsPickingOrderTypePage() {
                       onClick={() => onPick(id)}
                     >
                       <div className="flex items-start justify-between gap-3">
-                        <span className="text-base font-bold leading-snug text-slate-900 sm:text-lg">
+                        <span className={["min-w-0 font-bold leading-snug text-slate-900", wmsTypoClass.base].join(" ")}>
                           {meta.label}
                         </span>
                         <span className="shrink-0 text-right">
                           <span className="block text-[10px] font-semibold uppercase tracking-wide text-slate-400">
                             Zamówień
                           </span>
-                          <span className="text-2xl font-bold tabular-nums text-slate-900 leading-none">
+                          <span className={["font-bold text-slate-900 leading-none", wmsTypoClass.quantity].join(" ")}>
                             {slice.order_count}
                           </span>
                         </span>

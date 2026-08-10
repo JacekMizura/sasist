@@ -39,6 +39,10 @@ from ..schemas.wms_picking_terminal_settings import (
     WmsPickingTerminalSettingsRead,
     WmsPickingTerminalSettingsSave,
 )
+from ..schemas.wms_general_settings import (
+    WmsGeneralSettingsRead,
+    WmsGeneralSettingsSave,
+)
 from ..services.tenant_default_warehouse import resolve_tenant_default_warehouse_id, assert_tenant_warehouse_scope
 from ..services.wms_picking_shortage_settings_service import (
     get_or_create_wms_picking_shortage_settings,
@@ -47,6 +51,11 @@ from ..services.wms_picking_shortage_settings_service import (
 from ..services.wms_picking_terminal_settings_service import (
     get_or_create_wms_picking_terminal_settings,
     touch_wms_picking_terminal_settings_row,
+)
+from ..services.wms_general_settings_service import (
+    get_or_create_wms_general_settings,
+    normalize_wms_font_size_px,
+    touch_wms_general_settings_row,
 )
 from ..services.inventory_management_policy_service import (
     get_or_create_wms_settings_row,
@@ -624,6 +633,57 @@ def save_wms_picking_terminal_settings(
     db.commit()
     db.refresh(row)
     return _terminal_settings_row_to_read(row)
+
+
+def _general_settings_row_to_read(row) -> WmsGeneralSettingsRead:
+    return WmsGeneralSettingsRead(
+        tenant_id=int(row.tenant_id),
+        warehouse_id=int(row.warehouse_id),
+        font_size_base_px=normalize_wms_font_size_px(row.font_size_base_px),
+        font_size_location_px=normalize_wms_font_size_px(row.font_size_location_px),
+        font_size_quantity_px=normalize_wms_font_size_px(row.font_size_quantity_px),
+    )
+
+
+@router.get("/general", response_model=WmsGeneralSettingsRead)
+def get_wms_general_settings(
+    tenant_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_operable_warehouse),
+    db: Session = Depends(get_db),
+):
+    """Shared WMS settings for the warehouse (typography for new mode views)."""
+    row = get_or_create_wms_general_settings(
+        db, tenant_id=int(tenant_id), warehouse_id=int(warehouse_id)
+    )
+    db.commit()
+    db.refresh(row)
+    return _general_settings_row_to_read(row)
+
+
+@router.post("/general", response_model=WmsGeneralSettingsRead)
+def save_wms_general_settings(
+    body: WmsGeneralSettingsSave,
+    db: Session = Depends(get_db),
+):
+    try:
+        wh_id = (
+            body.warehouse_id
+            if body.warehouse_id is not None
+            else resolve_tenant_default_warehouse_id(db, body.tenant_id)
+        )
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Brak skonfigurowanego magazynu") from None
+
+    row = get_or_create_wms_general_settings(
+        db, tenant_id=int(body.tenant_id), warehouse_id=int(wh_id)
+    )
+    row.font_size_base_px = normalize_wms_font_size_px(body.font_size_base_px)
+    row.font_size_location_px = normalize_wms_font_size_px(body.font_size_location_px)
+    row.font_size_quantity_px = normalize_wms_font_size_px(body.font_size_quantity_px)
+    touch_wms_general_settings_row(row)
+    db.commit()
+    db.refresh(row)
+    return _general_settings_row_to_read(row)
 
 
 @router.get("/direct-sales", response_model=DirectSalesSettingsRead)

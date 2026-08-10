@@ -1,5 +1,11 @@
 ﻿## Active
 
+**WMS Ogólne / typografia (2026-08-10):**
+- Tab Ustawienia WMS → „Ogólne”: base / location / qty font 16|18|21 px
+- SSOT: `wms_general_settings` + GET/POST `/wms/settings/general`
+- FE: CSS vars on `WmsOperationalLayout` via `WmsOperatorTypographyProvider`; consume `wmsTypoClass`
+- No auto-downscale on collectors — layout wraps instead
+
 **Picking terminal settings (2026-08-10):**
 - DB/API: `WmsPickingTerminalSettings` → `/wms/settings/picking-terminal`
 - FE policy: `pickingTerminalScanPolicy.ts` (`computeNeedsLocationScan`)

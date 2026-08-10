@@ -1,3 +1,24 @@
+## 2026-08-10 — Ustawienia WMS „Ogólne”: wielkość czcionki
+
+- Nowa zakładka „Ogólne” (współdzielone ustawienia trybów)
+- Trzy selecty 16/18/21 px: bazowa, lokalizacja, ilość (domyślnie 18)
+- Persist: `wms_general_settings` + `/wms/settings/general`
+- Operator shell: CSS vars `--wms-font-*`; packing/picking nowe widoki przez `wmsTypoClass`
+- Bez osobnych ustawień mobile i bez auto-zmniejszania czcionki na kolektorze
+
+## 2026-08-10 — Start zbierania: ekran „Wybierz” + skan wg konfiguracji
+
+- Po statusie zawsze `/picking/order-type` (kafelki single/multi/all wg trybów konfiguracji)
+- „Wszystkie” tylko gdy obie ścieżki mają tę samą bramkę skanu wózka
+- `GET /wms/picking/order-type-hub` — zamówienia + produkty X/Y per typ
+- Po wyborze: skan wózka / cartless / default-cart wg `single_mode`/`multi_mode`
+
+## 2026-08-10 — Kafelki statusów zbierania: Realizowane przez innych/Ciebie
+
+- `GET /wms/picking/configured-statuses`: `order_count` + `in_progress_by_me` + `in_progress_by_others`
+- SSOT: wolne (`cart_id`+`picking_session_id` NULL); aktywne = wózek PICKING / otwarta sesja cartless
+- FE: `WmsFlowStatusTileButton` work + `showRealizationCounts` (zera widoczne)
+
 ## 2026-08-10 — Terminal zbierania end-to-end + kompaktowe „Wykorzystane statusy”
 
 - Badge’e wykorzystanych statusów: kompaktowe `h-9` / `w-fit` (bez rozciągania)

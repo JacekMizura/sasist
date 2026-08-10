@@ -37,6 +37,7 @@ import { DAMAGE_TENANT_ID } from "../damage/damageShared";
 import type { WmsPickingProductsNavState } from "./wmsPickingFlowTypes";
 import { clearActivePriorityTask, loadActivePriorityTask, priorityTaskAppliesTo, priorityTaskOrderIds, type ActivePriorityTask } from "./activePriorityTask";
 import { formatWmsPickingLocationPillLabel } from "./wmsPickingLocationPill";
+import { wmsTypoClass } from "../../wms/typography/wmsOperatorTypography";
 import {
   pickingFinalizeHasShortageSignals,
   polishProductShortageModalSkuLine,
@@ -1883,7 +1884,7 @@ export default function WmsPickingProductsPage() {
                           <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
                             Do pobrania
                           </span>
-                          <span className="text-lg font-black text-[#5a4fcf] leading-none tabular-nums">
+                          <span className={["font-black text-[#5a4fcf] leading-none", wmsTypoClass.quantity].join(" ")}>
                             {fmtQty(remainingToPick)}
                           </span>
                         </div>
@@ -1893,8 +1894,8 @@ export default function WmsPickingProductsPage() {
                         <span className="text-[10px] font-black text-[#5a4fcf] uppercase tracking-widest">
                           {total > 1 ? "Wielosztuki" : "Do pobrania"}
                         </span>
-                        <div className="flex items-baseline gap-1">
-                          <span className="text-2xl font-black text-[#5a4fcf] leading-none tabular-nums">
+                        <div className="flex min-w-0 items-baseline gap-1">
+                          <span className={["font-black text-[#5a4fcf] leading-none", wmsTypoClass.quantity].join(" ")}>
                             {fmtQty(remainingToPick)}
                           </span>
                           <span className="text-[10px] font-bold text-[#5a4fcf]/80">szt.</span>
@@ -1912,17 +1913,19 @@ export default function WmsPickingProductsPage() {
                     ) : hasLocation ? (
                       <div className="flex flex-col items-end gap-1 w-full">
                         <div
-                          className={`flex items-center justify-end gap-1.5 px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wide border transition-colors duration-300 ${
+                          className={`flex min-w-0 max-w-full items-center justify-end gap-1.5 px-4 py-2 rounded-xl font-black uppercase tracking-wide border transition-colors duration-300 ${wmsTypoClass.location} ${
                             isCompletedPick
                               ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-700"
                               : "bg-indigo-50 border-indigo-100 text-[#5a4fcf]"
                           }`}
                           title={locCode}
                         >
-                          {isCompletedPick ? <Check size={14} strokeWidth={3} /> : <MapPin size={14} strokeWidth={2.5} />}
-                          {isCompletedPick
-                            ? `Pobrano z ${formatWmsPickingLocationPillLabel(locCode, undefined)}`
-                            : formatWmsPickingLocationPillLabel(locCode, pStock > 1e-9 ? pStock : undefined)}
+                          {isCompletedPick ? <Check size={14} strokeWidth={3} className="shrink-0" /> : <MapPin size={14} strokeWidth={2.5} className="shrink-0" />}
+                          <span className="min-w-0 text-right normal-case tracking-normal">
+                            {isCompletedPick
+                              ? `Pobrano z ${formatWmsPickingLocationPillLabel(locCode, undefined)}`
+                              : formatWmsPickingLocationPillLabel(locCode, pStock > 1e-9 ? pStock : undefined)}
+                          </span>
                         </div>
                         {extra > 0 && !pickDone ? (
                           <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
