@@ -40,6 +40,8 @@ import { formatWmsPickingLocationPillLabel } from "./wmsPickingLocationPill";
 import { PickingSimpleHeader } from "../../components/wms/picking/PickingSimpleHeader";
 import { PickingFieldLabel, PickingLocationBadge, PickingQtyPair } from "../../components/wms/picking/PickingUiPrimitives";
 import { PickingOptionsSheet, PickingStickyFooter } from "../../components/wms/picking/PickingStickyChrome";
+import { PickingQtyPanel } from "../../components/wms/picking/PickingQtyPanel";
+import { PickingProcessAlert } from "../../components/wms/picking/PickingProcessAlert";
 import { wmsTypoClass } from "../../wms/typography/wmsOperatorTypography";
 import {
   looksLikeProductBarcode,
@@ -240,6 +242,10 @@ export default function WmsPickingProductDetailPage() {
   const [locationHint, setLocationHint] = useState<string | null>(null);
   const [manualOpen, setManualOpen] = useState(false);
   const [optionsOpen, setOptionsOpen] = useState(false);
+  const [qtyStepOpen, setQtyStepOpen] = useState(false);
+  const [qtyStepValue, setQtyStepValue] = useState(1);
+  const [multiLocAlertOpen, setMultiLocAlertOpen] = useState(false);
+  const [processAlert, setProcessAlert] = useState<string | null>(null);
   const [manualLocId, setManualLocId] = useState<number | null>(null);
   const [manualQty, setManualQty] = useState(1);
   const [taskOpen, setTaskOpen] = useState(false);
@@ -616,6 +622,27 @@ export default function WmsPickingProductDetailPage() {
   );
   const isShortageResolved = resolutionStatus === "SHORTAGE";
 
+  useEffect(() => {
+    if (!detail) return;
+    if (
+      needsLocationScan &&
+      activeLocationId == null &&
+      detail.locations.length > 1 &&
+      remaining > 1e-9 &&
+      resolutionStatus !== "SHORTAGE" &&
+      resolutionStatus !== "COMPLETED_PICK"
+    ) {
+      setMultiLocAlertOpen(true);
+    }
+  }, [
+    detail?.product_id,
+    detail?.locations.length,
+    needsLocationScan,
+    activeLocationId,
+    remaining,
+    resolutionStatus,
+  ]);
+
   const shortageLocationLabel = useMemo(() => {
     if (!detail?.locations?.length) return "—";
     const code = selectedLocation?.location_code ?? detail.locations[0]?.location_code;
@@ -742,6 +769,10 @@ export default function WmsPickingProductDetailPage() {
           showScannerToast(`Lokalizacja ${locHit.location_code}`);
           if (requiresBasketPut) {
             void acceptSourceLocation(locHit.location_id, "accept");
+          } else {
+            const rem = wmsPickingRemainingQty(detail);
+            setQtyStepValue(rem > 0 ? Math.min(rem, 1) : 0);
+            setQtyStepOpen(true);
           }
           return SCAN_CONSUMED;
         }
@@ -764,6 +795,7 @@ export default function WmsPickingProductDetailPage() {
           if (scan.length >= 2) {
             showScanFeedbackFromCode("WRONG_LOCATION_SCAN");
             setPickMsg(mapWmsScanErrorCode("WRONG_LOCATION_SCAN").message);
+            setProcessAlert("Zeskanuj właściwą lokalizację.");
             appendScanToHistory(scan);
             return SCAN_CONSUMED;
           }
@@ -1111,6 +1143,9 @@ export default function WmsPickingProductDetailPage() {
       }
       const putQty = result.quantity_put ?? Math.min(qty, remaining);
       const nextRem = remaining - putQty;
+      setQtyStepOpen(false);
+      setManualOpen(false);
+      showScannerToast("Produkt zebrany");
       if (nextRem <= 1e-9) {
         if (detail?.consolidation_active) {
           await load();
@@ -1119,7 +1154,6 @@ export default function WmsPickingProductDetailPage() {
         }
       } else {
         await load();
-        setManualOpen(false);
         setManualLocId(null);
         if (result.active_series?.basket_label) {
           const seriesRem = result.active_series.line_remaining;
@@ -1441,10 +1475,22 @@ export default function WmsPickingProductDetailPage() {
       showScannerToast("Zeskanuj koszyk i podaj ilość — ręczny wpis nie tworzy Pick na MULTI.");
       return;
     }
-    setManualLocId(detail.locations.length === 1 ? detail.locations[0].location_id : activeLocationId);
+    if (needsLocationScan && activeLocationId == null) {
+      showScanFeedbackFromCode("PICK_LOCATION_REQUIRED");
+      setProcessAlert("Zeskanuj lokalizację, aby kontynuować zbieranie.");
+      return;
+    }
+    const locId =
+      activeLocationId ??
+      (detail.locations.length === 1 ? detail.locations[0].location_id : null);
+    if (locId == null) {
+      showScanFeedbackFromCode("PICK_LOCATION_REQUIRED");
+      return;
+    }
+    setManualLocId(locId);
     const rem = wmsPickingRemainingQty(detail);
-    setManualQty(rem > 0 ? Math.min(rem, 1) : 0);
-    setManualOpen(true);
+    setQtyStepValue(rem > 0 ? Math.min(1, rem) : 0);
+    setQtyStepOpen(true);
   };
 
   const openShortageModal = useCallback(() => {
@@ -1774,6 +1820,11 @@ export default function WmsPickingProductDetailPage() {
               <p className="break-words text-sm text-slate-700">
                 EAN: <span className="font-mono font-semibold text-slate-900">{detail.ean ?? "—"}</span>
               </p>
+              {isShortageResolved ? (
+                <span className="mt-2 inline-flex rounded-full bg-red-600 px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-wide text-white">
+                  Brak {fmtQty(missingTotal)}/{fmtQty(detail.total_quantity)}
+                </span>
+              ) : null}
               {detail.consolidation_active && detail.consolidation_shelf_label ? (
                 <div className="mt-3 w-fit rounded-lg border border-slate-300 bg-slate-50 px-4 py-2 text-sm font-bold text-slate-900">
                   Odłóż na: {detail.consolidation_shelf_label}
@@ -1834,8 +1885,13 @@ export default function WmsPickingProductDetailPage() {
                       explicitSourceSelectionRef.current = loc.location_id;
                       setActiveLocationId(loc.location_id);
                       setLocationHint(null);
+                      setMultiLocAlertOpen(false);
                       if (detail.requires_basket_put_confirm) {
                         void acceptSourceLocation(loc.location_id, "accept");
+                      } else if (!pickQueueDone && !isShortageResolved) {
+                        setManualLocId(loc.location_id);
+                        setQtyStepValue(remaining > 0 ? Math.min(1, remaining) : 0);
+                        setQtyStepOpen(true);
                       }
                     }}
                     className={active ? "rounded-full ring-2 ring-slate-400 ring-offset-1" : ""}
@@ -1932,9 +1988,16 @@ export default function WmsPickingProductDetailPage() {
 
       <PickingStickyFooter
         onOpenOptions={() => setOptionsOpen(true)}
-        onZebrane={() => void confirmRemainingAndReturn()}
-        zebraneDisabled={pickBusy || pickBlockedByProductScan || pickBlockedByLocation || !detail}
+        onZebrane={() => {
+          if (pickQueueDone || isShortageResolved) {
+            void confirmRemainingAndReturn();
+            return;
+          }
+          openManual();
+        }}
+        zebraneDisabled={pickBusy || pickBlockedByProductScan || !detail}
         zebraneBusy={pickBusy}
+        zebraneLabel={pickQueueDone || isShortageResolved ? "Zebrane" : "Zebrane"}
       />
       <PickingOptionsSheet
         open={optionsOpen}
@@ -1946,6 +2009,50 @@ export default function WmsPickingProductDetailPage() {
         replenishmentDisabled
         shortageDisabled={reportShortageBlocked || isShortageResolved}
         pickDisabled={pickQueueDone || isShortageResolved || Boolean(detail?.requires_basket_put_confirm)}
+      />
+
+      {detail && qtyStepOpen ? (
+        <PickingQtyPanel
+          productName={detail.name}
+          ean={detail.ean}
+          imageUrl={detail.image_url}
+          locationLabel={
+            selectedLocation
+              ? formatWmsPickingLocationPillLabel(
+                  selectedLocation.location_code,
+                  locStock(selectedLocation) > 1e-9 ? locStock(selectedLocation) : undefined,
+                )
+              : ""
+          }
+          remainingLabel={fmtQty(remaining)}
+          qty={qtyStepValue}
+          maxQty={remaining}
+          busy={pickBusy}
+          onChangeQty={setQtyStepValue}
+          onBack={() => setQtyStepOpen(false)}
+          onConfirm={() => {
+            const locId = manualLocId ?? activeLocationId;
+            if (locId == null || locId <= 0) {
+              showScanFeedbackFromCode("PICK_LOCATION_REQUIRED");
+              setQtyStepOpen(false);
+              return;
+            }
+            if (qtyStepValue <= 0 || qtyStepValue > remaining + 1e-9) return;
+            void confirm_pick(qtyStepValue, locId);
+          }}
+        />
+      ) : null}
+
+      <PickingProcessAlert
+        open={multiLocAlertOpen}
+        tone="error"
+        message="Produkt znajduje się na więcej niż jednej półce. Zeskanuj półkę aby kontynuować zbieranie."
+        onClose={() => setMultiLocAlertOpen(false)}
+      />
+      <PickingProcessAlert
+        open={processAlert != null}
+        message={processAlert}
+        onClose={() => setProcessAlert(null)}
       />
 
       {/* MODAL WPISU RĘCZNEGO */}

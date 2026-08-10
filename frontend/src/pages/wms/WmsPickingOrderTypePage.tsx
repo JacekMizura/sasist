@@ -12,6 +12,7 @@ import { WMS_ROUTES } from "./wmsRoutes";
 import { Loader2 } from "lucide-react";
 import { wmsTypoClass } from "../../wms/typography/wmsOperatorTypography";
 import { PickingSimpleHeader } from "../../components/wms/picking/PickingSimpleHeader";
+import { PickingProcessAlert } from "../../components/wms/picking/PickingProcessAlert";
 
 const CHOICE_META: Record<
   WmsPickingOrderTypeChoice,
@@ -43,6 +44,12 @@ export default function WmsPickingOrderTypePage() {
   const { warehouse } = useWarehouse();
   const warehouseId = warehouse?.id ?? null;
   const session = (routerLocation.state as WmsPickingOrderTypeNavState | null)?.pickingSession;
+  const postTourMessage = (routerLocation.state as WmsPickingOrderTypeNavState | null)?.postTourMessage ?? null;
+  const [tourBanner, setTourBanner] = useState<string | null>(postTourMessage);
+
+  useEffect(() => {
+    if (postTourMessage) setTourBanner(postTourMessage);
+  }, [postTourMessage]);
 
   const [hubLoading, setHubLoading] = useState(false);
   const [hub, setHub] = useState<{
@@ -122,7 +129,13 @@ export default function WmsPickingOrderTypePage() {
       <PickingSimpleHeader
         onBack={() => navigate(WMS_ROUTES.picking)}
         backAriaLabel="Wróć do wyboru statusu"
-        title="Wybierz rodzaj zbierania"
+        title="Wybierz"
+      />
+      <PickingProcessAlert
+        open={tourBanner != null}
+        tone="info"
+        message={tourBanner}
+        onClose={() => setTourBanner(null)}
       />
       <div className="min-h-0 flex-1 overflow-y-auto px-4 py-6 sm:px-6 sm:py-8">
         <div className="mx-auto w-full max-w-lg">

@@ -62,6 +62,8 @@ export type WmsPickingCartNavState = {
 /** Router state dla `/wms/picking/order-type`. */
 export type WmsPickingOrderTypeNavState = {
   pickingSession: WmsPickingSessionState;
+  /** Toast after finishing a tour (e.g. shortages saved). */
+  postTourMessage?: string | null;
 };
 
 /** Skąd otwarto detail — jawne, nie zgadywane z obecności seed. */

@@ -23,7 +23,7 @@ const CATALOG: Record<
   PRODUCT_NOT_IN_PICKING: {
     severity: "error",
     title: "BŁĘDNY PRODUKT",
-    message: "Nieprawidłowy produkt. Zeskanuj właściwy produkt.",
+    message: "Produkt nie jest wymagany w tej turze zbierania.",
   },
   PRODUCT_ALREADY_COMPLETE: {
     severity: "warning",
@@ -134,7 +134,7 @@ const CATALOG: Record<
   PICK_LOCATION_REQUIRED: {
     severity: "warning",
     title: "ZESKANUJ LOKALIZACJĘ",
-    message: "Zeskanuj lokalizację przed pobraniem produktu.",
+    message: "Zeskanuj lokalizację, aby kontynuować zbieranie.",
   },
   PRODUCT_SCAN_REQUIRED: {
     severity: "warning",
@@ -154,7 +154,22 @@ const CATALOG: Record<
   WRONG_LOCATION_SCAN: {
     severity: "error",
     title: "BŁĘDNA LOKALIZACJA",
-    message: "Nieprawidłowa lokalizacja. Zeskanuj lokalizację wskazaną na ekranie.",
+    message: "Zeskanowana lokalizacja jest nieprawidłowa dla tego produktu.",
+  },
+  LOCATION_NOT_FOUND: {
+    severity: "error",
+    title: "LOKALIZACJA NIE ISTNIEJE",
+    message: "Lokalizacja nie istnieje.",
+  },
+  SCAN_CORRECT_LOCATION: {
+    severity: "warning",
+    title: "ZESKANUJ LOKALIZACJĘ",
+    message: "Zeskanuj właściwą lokalizację.",
+  },
+  INVALID_CART_SCAN: {
+    severity: "error",
+    title: "NIEPRAWIDŁOWY WÓZEK",
+    message: "Nieprawidłowy wózek. Zeskanuj właściwy wózek.",
   },
   QUANTITY_EXCEEDS_LOCATION_STOCK: {
     severity: "warning",

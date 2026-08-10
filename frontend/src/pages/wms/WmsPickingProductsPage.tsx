@@ -70,6 +70,7 @@ import {
 import { PickingSimpleHeader } from "../../components/wms/picking/PickingSimpleHeader";
 import { PickingProductListCard } from "../../components/wms/picking/PickingProductListCard";
 import { PickingOptionsSheet, PickingStickyFooter } from "../../components/wms/picking/PickingStickyChrome";
+import { PickingProcessAlert } from "../../components/wms/picking/PickingProcessAlert";
 
 function fmtQty(n: number): string {
   return new Intl.NumberFormat("pl-PL", { maximumFractionDigits: 2 }).format(n);
@@ -178,6 +179,7 @@ export default function WmsPickingProductsPage() {
   const [sessionStats, setSessionStats] = useState<WmsPickingSessionStatsApi | null>(null);
   const [exitModalOpen, setExitModalOpen] = useState(false);
   const [optionsOpen, setOptionsOpen] = useState(false);
+  const [listAlert, setListAlert] = useState<string | null>(null);
   const [cancelBusy, setCancelBusy] = useState(false);
   const [cohortMissingLines, setCohortMissingLines] = useState<WmsPickingCohortMissingLineApi[]>([]);
   const [allowContinueAfterShortage, setAllowContinueAfterShortage] = useState(true);
@@ -1116,7 +1118,9 @@ export default function WmsPickingProductsPage() {
         appendScanToHistory(scan);
         return SCAN_CONSUMED;
       }
-      return SCAN_NOT_CONSUMED;
+      setListAlert(`Kod EAN nie występuje na liście produktów: ${scan}`);
+      appendScanToHistory(scan);
+      return SCAN_CONSUMED;
     };
     registerScanHandler(handler);
     return () => registerScanHandler(null);
@@ -1351,9 +1355,21 @@ export default function WmsPickingProductsPage() {
         showScannerToast("Zbieranie zakończone");
         productLinesLoadKeyRef.current = "";
         dispatchWmsShortagesUpdated();
-        navigate(WMS_ROUTES.picking, {
+        const { cartCode, cartId, cartName, pickingSessionId, cartless, ...restSession } = pickingSession;
+        void cartCode;
+        void cartId;
+        void cartName;
+        void pickingSessionId;
+        void cartless;
+        navigate(WMS_ROUTES.pickingOrderType, {
           replace: true,
-          state: { pickingListRefreshAt: Date.now() } satisfies Pick<WmsPickingProductsNavState, "pickingListRefreshAt">,
+          state: {
+            pickingSession: {
+              ...restSession,
+              preCartBack: "order-type" as const,
+            },
+            postTourMessage: "Oznaczono część zamówień jako zebrane.",
+          },
         });
       }
     } catch (e: unknown) {
@@ -1698,6 +1714,7 @@ export default function WmsPickingProductsPage() {
         <ul className="mx-auto grid w-full max-w-5xl list-none grid-cols-1 gap-3 p-0 md:grid-cols-2 xl:grid-cols-3" aria-label="Lista produktów do zebrania">
           {sortedRows.map((r) => {
             const { pickedShown, total, miss } = wmsPickingDisplayProgressParts(r);
+            const status = wmsPickingLineResolutionStatus(r);
             const pickDone = wmsPickingProductLineComplete(r);
             const rowBlocked = blockOtherProductLines && !shortageProductIds.has(r.product_id) && !pickDone;
             const locCode = (r.primary_location_code ?? "").trim();
@@ -1715,6 +1732,8 @@ export default function WmsPickingProductsPage() {
                   pickedLabel={fmtQty(pickedShown)}
                   totalLabel={fmtQty(total)}
                   locationLabel={locLabel}
+                  shortageLabel={miss > 1e-9 ? fmtQty(miss) : null}
+                  status={status}
                   disabled={rowBlocked}
                   onClick={() =>
                     goDetail(r.product_id, {
@@ -1725,11 +1744,6 @@ export default function WmsPickingProductsPage() {
                     })
                   }
                 />
-                {miss > 1e-9 ? (
-                  <p className="mt-1 px-1 text-xs font-semibold text-rose-700">
-                    Brak: {fmtQty(miss)} szt.
-                  </p>
-                ) : null}
               </li>
             );
           })}
@@ -1742,7 +1756,11 @@ export default function WmsPickingProductsPage() {
         zebraneDisabled={!allPicked || rows.length === 0 || !canFinalizeSession}
         zebraneBusy={finalizeBusy}
         zebraneLabel={
-          recoveryOrderId != null && recoveryOrderId > 0 ? "Zakończ dogrywkę" : "Zebrane"
+          recoveryOrderId != null && recoveryOrderId > 0
+            ? "Zakończ dogrywkę"
+            : allPicked
+              ? "Zapisz"
+              : "Potwierdź"
         }
       />
       <PickingOptionsSheet
@@ -1755,6 +1773,8 @@ export default function WmsPickingProductsPage() {
         pickDisabled
       />
 
+      <PickingProcessAlert open={listAlert != null} message={listAlert} onClose={() => setListAlert(null)} />
+
       {finalizeShortageModal ? (
         <AppOverlayPortal>
         <div
@@ -1766,60 +1786,71 @@ export default function WmsPickingProductsPage() {
           <div className="max-h-[min(92vh,720px)] w-full max-w-lg overflow-y-auto rounded-t-2xl border border-slate-200 bg-white shadow-xl sm:rounded-2xl">
             <div className="border-b border-slate-100 px-4 py-3">
               <h2 id="wms-pick-finalize-shortage-title" className="text-base font-semibold text-slate-900">
-                Zamówienie zawiera braki
+                Zamówienia oznaczone jako BRAKI
               </h2>
             </div>
             <div className="space-y-3 px-4 py-4 text-sm text-slate-800">
               <p className="font-medium text-slate-900">
-                <span className="text-rose-800">{polishProductShortageModalSkuLine(finalizeShortageModal.products)}</span>
-              </p>
-              <p>
-                <span className="font-semibold tabular-nums text-rose-800">{fmtQty(finalizeShortageModal.units)}</span>{" "}
-                szt. łącznie
+                Zapisanie danych spowoduje blokadę możliwości dodania kolejnych produktów do zwrotu, kontynuować?
               </p>
               {finalizeShortageGroups.length > 0 ? (
                 <div className="rounded-lg border border-rose-100 bg-rose-50/50 px-3 py-3">
-                  <p className="text-xs font-bold uppercase tracking-wide text-rose-900">Produkty z brakami</p>
-                  <ul className="mt-2 list-none space-y-3 p-0">
+                  <ul className="mt-1 list-none space-y-2 p-0">
                     {finalizeShortageGroups.map((g) => (
                       <li key={g.lines[0]?.order_id ?? g.order_number}>
-                        <p className="font-semibold text-slate-900">Zamówienie {g.order_number}</p>
-                        <ul className="mt-1 list-disc space-y-0.5 pl-5 text-slate-800">
-                          {g.lines.map((ln) => (
-                            <li key={`${ln.order_id}-${ln.product_id}`}>
-                              {ln.product_name} — brak {fmtQty(ln.missing_quantity)} szt.
-                            </li>
-                          ))}
-                        </ul>
+                        {g.lines.map((ln) => (
+                          <p key={`${ln.order_id}-${ln.product_id}`} className="font-semibold text-slate-900">
+                            Zamówienie {g.order_number} — {ln.product_name}
+                          </p>
+                        ))}
                       </li>
                     ))}
                   </ul>
                 </div>
-              ) : null}
+              ) : (
+                <p>
+                  <span className="text-rose-800">{polishProductShortageModalSkuLine(finalizeShortageModal.products)}</span>
+                  {" · "}
+                  <span className="font-semibold tabular-nums text-rose-800">{fmtQty(finalizeShortageModal.units)}</span>{" "}
+                  szt. łącznie
+                </p>
+              )}
             </div>
             <div className="flex flex-col gap-2 border-t border-slate-100 px-4 py-4">
               <button
                 type="button"
-                className="min-h-[48px] w-full rounded-xl bg-rose-600 px-4 text-sm font-bold text-white shadow-sm hover:bg-rose-700"
-                onClick={() => {
-                  const ids = finalizeShortageModal?.orderIds ?? [];
-                  const first = ids.length > 0 ? ids[0] : null;
-                  setFinalizeShortageModal(null);
-                  navigate(first != null ? WMS_ROUTES.braki(first) : WMS_ROUTES.braki());
-                }}
+                className="min-h-[48px] w-full rounded-xl border border-rose-200 bg-rose-50 px-4 text-sm font-bold text-rose-900 hover:bg-rose-100"
+                onClick={() => setFinalizeShortageModal(null)}
               >
-                Przejdź do braków
+                Anuluj
               </button>
               <button
                 type="button"
-                className="min-h-[48px] w-full rounded-xl bg-indigo-600 px-4 text-sm font-bold text-white shadow-sm hover:bg-indigo-700"
+                className="min-h-[48px] w-full rounded-xl bg-slate-900 px-4 text-sm font-bold text-white shadow-sm hover:bg-slate-800"
                 onClick={() => {
                   setFinalizeShortageModal(null);
                   showScannerToast("Zbieranie zakończone");
-                  navigate(WMS_ROUTES.picking, { replace: true });
+                  const { cartCode, cartId, cartName, pickingSessionId, cartless, ...restSession } =
+                    pickingSession ?? ({} as NonNullable<typeof pickingSession>);
+                  void cartCode;
+                  void cartId;
+                  void cartName;
+                  void pickingSessionId;
+                  void cartless;
+                  if (pickingSession) {
+                    navigate(WMS_ROUTES.pickingOrderType, {
+                      replace: true,
+                      state: {
+                        pickingSession: { ...restSession, preCartBack: "order-type" as const },
+                        postTourMessage: "Oznaczono część zamówień jako zebrane.",
+                      },
+                    });
+                  } else {
+                    navigate(WMS_ROUTES.picking, { replace: true });
+                  }
                 }}
               >
-                Zakończ zbieranie
+                OK
               </button>
             </div>
           </div>

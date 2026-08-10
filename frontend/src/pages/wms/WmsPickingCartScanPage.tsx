@@ -17,6 +17,7 @@ import { computeWmsPickingProductLineSessionStats, wmsPickingDisplayPickedQuanti
 import { WMS_ROUTES } from "./wmsRoutes";
 import { Loader2 } from "lucide-react";
 import { PickingSimpleHeader } from "../../components/wms/picking/PickingSimpleHeader";
+import { PickingProcessAlert } from "../../components/wms/picking/PickingProcessAlert";
 import { wmsTypoClass } from "../../wms/typography/wmsOperatorTypography";
 
 export default function WmsPickingCartScanPage() {
@@ -32,11 +33,13 @@ export default function WmsPickingCartScanPage() {
     appendScanToHistory,
     refocusScannerInput,
     setScannerInputPlaceholder,
+    showScanFeedbackFromCode,
   } = useWmsScanner();
 
   const session = (routerLocation.state as WmsPickingCartNavState | null)?.pickingSession;
 
   const [resolving, setResolving] = useState(false);
+  const [cartAlert, setCartAlert] = useState<string | null>(null);
   /** SSOT counters for the scanned cart — never show status-level hub stats as cart truth. */
   const [cartScopedStats, setCartScopedStats] = useState<{
     hubOrderCount: number;
@@ -148,12 +151,14 @@ export default function WmsPickingCartScanPage() {
       } catch (e) {
         // resolve-cart returns plain 404 string; start returns structured WMS_* — both via showWmsError.
         showWmsError(e);
+        showScanFeedbackFromCode("INVALID_CART_SCAN");
+        setCartAlert("Nieprawidłowy wózek. Zeskanuj właściwy wózek.");
         refocusScannerInput();
       } finally {
         setResolving(false);
       }
     },
-    [session, warehouseId, navigate, appendScanToHistory, setPickingCart, showWmsError, showWmsMessage, refocusScannerInput],
+    [session, warehouseId, navigate, appendScanToHistory, setPickingCart, showWmsError, showWmsMessage, refocusScannerInput, showScanFeedbackFromCode],
   );
 
   useEffect(() => {
@@ -207,6 +212,11 @@ export default function WmsPickingCartScanPage() {
             : "Wróć do wyboru statusu"
         }
         title={showBaskets ? "Zeskanuj wózek z koszykami" : "Zeskanuj wózek"}
+      />
+      <PickingProcessAlert
+        open={cartAlert != null}
+        message={cartAlert}
+        onClose={() => setCartAlert(null)}
       />
 
       <div className="flex flex-1 flex-col items-center justify-center px-6 py-10">
