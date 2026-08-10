@@ -87,6 +87,10 @@ class WmsPickingOrderTypeHubResponse(BaseModel):
     single: WmsPickingOrderTypeHubSlice
     multi: WmsPickingOrderTypeHubSlice
     all: WmsPickingOrderTypeHubSlice
+    active_order_type: Optional[Literal["single", "multi", "all"]] = Field(
+        default=None,
+        description="Tryb aktualnie zbierany przez zalogowanego operatora (otwarta sesja)",
+    )
 
 
 class WmsPickingConfigReplaceItem(BaseModel):

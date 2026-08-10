@@ -716,6 +716,141 @@ def build_picking_order_type_hub(
     return out
 
 
+def resolve_operator_active_picking_order_type(
+    db: Session,
+    *,
+    tenant_id: int,
+    warehouse_id: int,
+    source_status_id: int,
+    operator_user_id: int | None,
+) -> str | None:
+    """
+    Aktywny filtr typu na ekranie „Wybierz” — z otwartej sesji zbierania operatora.
+
+    Źródło: ``metadata.order_type`` (cartless / nowe starty), inaczej inferencja
+    z linii zamówień przypisanych do sesji/wózka. Nie zmienia logiki przypisywania.
+    """
+    from ..models.enums import CartStatus
+    from ..models.wms_operation_session import WmsOperationSession
+    from .cart_picking_lifecycle_service import SESSION_KIND_PICKING_ACTIVE, _load_meta
+
+    if operator_user_id is None or int(operator_user_id) <= 0:
+        return None
+    uid = int(operator_user_id)
+    sid = int(source_status_id)
+    open_kinds = (SESSION_KIND_PICKING_ACTIVE, "picking_recovery_active")
+
+    def _normalize_ot(raw: object) -> str | None:
+        v = str(raw or "").strip().lower()
+        return v if v in ("single", "multi", "all") else None
+
+    def _infer_from_order_ids(order_ids: list[int]) -> str | None:
+        ids = [int(x) for x in order_ids if int(x) > 0]
+        if not ids:
+            return None
+        rows = (
+            db.query(OrderItem.order_id, func.count(OrderItem.id))
+            .filter(
+                OrderItem.order_id.in_(ids),
+                sqlalchemy_operational_picking_order_item_clause(OrderItem),
+                _order_item_not_replaced_clause(),
+            )
+            .group_by(OrderItem.order_id)
+            .all()
+        )
+        if not rows:
+            return None
+        singles = 0
+        multis = 0
+        for _oid, cnt in rows:
+            if int(cnt) <= 1:
+                singles += 1
+            else:
+                multis += 1
+        if singles and not multis:
+            return "single"
+        if multis and not singles:
+            return "multi"
+        return "all"
+
+    sess = (
+        db.query(WmsOperationSession)
+        .filter(
+            WmsOperationSession.tenant_id == int(tenant_id),
+            WmsOperationSession.warehouse_id == int(warehouse_id),
+            WmsOperationSession.operator_user_id == uid,
+            WmsOperationSession.completed_at.is_(None),
+            WmsOperationSession.session_kind.in_(open_kinds),
+        )
+        .order_by(WmsOperationSession.id.desc())
+        .first()
+    )
+    if sess is not None:
+        meta = _load_meta(getattr(sess, "metadata_json", None))
+        meta_sid = meta.get("source_status_id")
+        if meta_sid is not None and int(meta_sid) != sid:
+            pass
+        else:
+            ot = _normalize_ot(meta.get("order_type"))
+            if ot:
+                return ot
+            order_ids = [
+                int(r[0])
+                for r in db.query(Order.id)
+                .filter(
+                    Order.tenant_id == int(tenant_id),
+                    Order.warehouse_id == int(warehouse_id),
+                    Order.order_ui_status_id == sid,
+                    Order.deleted_at.is_(None),
+                    Order.picking_session_id == int(sess.id),
+                )
+                .all()
+            ]
+            if not order_ids and getattr(sess, "cart_id", None):
+                order_ids = [
+                    int(r[0])
+                    for r in db.query(Order.id)
+                    .filter(
+                        Order.tenant_id == int(tenant_id),
+                        Order.warehouse_id == int(warehouse_id),
+                        Order.order_ui_status_id == sid,
+                        Order.deleted_at.is_(None),
+                        Order.cart_id == int(sess.cart_id),
+                    )
+                    .all()
+                ]
+            inferred = _infer_from_order_ids(order_ids)
+            if inferred:
+                return inferred
+
+    cart = (
+        db.query(Cart)
+        .filter(
+            Cart.tenant_id == int(tenant_id),
+            Cart.warehouse_id == int(warehouse_id),
+            Cart.assigned_user_id == uid,
+            Cart.status == CartStatus.PICKING.value,
+        )
+        .order_by(Cart.id.desc())
+        .first()
+    )
+    if cart is None:
+        return None
+    order_ids = [
+        int(r[0])
+        for r in db.query(Order.id)
+        .filter(
+            Order.tenant_id == int(tenant_id),
+            Order.warehouse_id == int(warehouse_id),
+            Order.order_ui_status_id == sid,
+            Order.deleted_at.is_(None),
+            Order.cart_id == int(cart.id),
+        )
+        .all()
+    ]
+    return _infer_from_order_ids(order_ids)
+
+
 def bootstrap_start_picking_if_needed(
     db: Session,
     *,
@@ -857,6 +992,7 @@ def bootstrap_start_picking_if_needed(
             orders=orders,
             operator_user_id=int(operator_user_id),
             source_status_id=int(source_status_id),
+            order_type=str(order_type),
             on_capacity="truncate",
         )
     except Exception as exc:

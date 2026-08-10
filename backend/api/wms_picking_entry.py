@@ -92,6 +92,7 @@ from ..services.wms_picking_product_list_service import (
     record_wms_quick_pick,
     report_wms_picking_product_shortage,
     resolve_default_bulk_cart_for_warehouse,
+    resolve_operator_active_picking_order_type,
     resolve_wms_picking_cart_row,
 )
 from ..services.wms_recovery_pick_service import get_open_recovery_task_for_order, prepare_recovery_picking_for_order
@@ -405,9 +406,11 @@ def get_picking_order_type_hub(
     warehouse_id: int = Depends(require_operable_warehouse),
     status: int = Query(..., ge=1, description="source_status_id — status panelu z konfiguracji zbierania"),
     db: Session = Depends(get_db),
+    current_user: AppUser | None = Depends(get_optional_current_user),
 ):
     """
     Liczniki ekranu „Wybierz” (single / multi / all): wolne zamówienia + produkty zebrane/total.
+    ``active_order_type`` — tryb otwartej sesji zbierania zalogowanego operatora.
     """
     try:
         raw = build_picking_order_type_hub(
@@ -416,6 +419,16 @@ def get_picking_order_type_hub(
             warehouse_id=int(warehouse_id),
             source_status_id=int(status),
         )
+        op_uid = int(current_user.id) if current_user is not None else None
+        active_ot = resolve_operator_active_picking_order_type(
+            db,
+            tenant_id=int(tenant_id),
+            warehouse_id=int(warehouse_id),
+            source_status_id=int(status),
+            operator_user_id=op_uid,
+        )
+        if active_ot not in ("single", "multi", "all"):
+            active_ot = None
 
         def _slice(key: str) -> WmsPickingOrderTypeHubSlice:
             d = raw.get(key) or {}
@@ -430,6 +443,7 @@ def get_picking_order_type_hub(
             single=_slice("single"),
             multi=_slice("multi"),
             all=_slice("all"),
+            active_order_type=active_ot,  # type: ignore[arg-type]
         )
     except SQLAlchemyError:
         logger.exception("get_picking_order_type_hub: database error")
@@ -439,6 +453,7 @@ def get_picking_order_type_hub(
             single=empty,
             multi=empty,
             all=empty,
+            active_order_type=None,
         )
 
 

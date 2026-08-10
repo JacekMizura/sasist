@@ -636,6 +636,7 @@ def start_picking(
     orders: Sequence[Order],
     operator_user_id: int,
     source_status_id: int | None = None,
+    order_type: str | None = None,
     on_capacity: CapacityPolicy = "truncate",
 ) -> WmsOperationSession:
     """
@@ -752,6 +753,9 @@ def start_picking(
         "source_status_id": int(source_status_id) if source_status_id else None,
         "cart_id": cid,
     }
+    ot = (order_type or "").strip().lower()
+    if ot in ("single", "multi", "all"):
+        meta["order_type"] = ot
 
     try:
         sess = WmsOperationSession(

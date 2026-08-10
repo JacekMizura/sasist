@@ -14,22 +14,10 @@ import { wmsTypoClass } from "../../wms/typography/wmsOperatorTypography";
 import { PickingSimpleHeader } from "../../components/wms/picking/PickingSimpleHeader";
 import { PickingProcessAlert } from "../../components/wms/picking/PickingProcessAlert";
 
-const CHOICE_META: Record<
-  WmsPickingOrderTypeChoice,
-  { label: string; productsCaption: string }
-> = {
-  single: {
-    label: "Zamówienia jednoelementowe",
-    productsCaption: "Liczba produktów zebranych",
-  },
-  multi: {
-    label: "Zamówienia wieloelementowe",
-    productsCaption: "Liczba produktów zebranych",
-  },
-  all: {
-    label: "Wszystkie zamówienia",
-    productsCaption: "Liczba produktów zebranych",
-  },
+const CHOICE_META: Record<WmsPickingOrderTypeChoice, { label: string }> = {
+  single: { label: "Zamówienia jednoelementowe" },
+  multi: { label: "Zamówienia wieloelementowe" },
+  all: { label: "Wszystkie zamówienia" },
 };
 
 const EMPTY_SLICE: WmsPickingOrderTypeHubSlice = {
@@ -56,6 +44,7 @@ export default function WmsPickingOrderTypePage() {
     single: WmsPickingOrderTypeHubSlice;
     multi: WmsPickingOrderTypeHubSlice;
     all: WmsPickingOrderTypeHubSlice;
+    activeOrderType: WmsPickingOrderTypeChoice | null;
   } | null>(null);
 
   const choices = useMemo(
@@ -85,9 +74,25 @@ export default function WmsPickingOrderTypePage() {
         warehouseId,
         session.orderUiStatusId,
       );
-      setHub({ single: data.single, multi: data.multi, all: data.all });
+      const active =
+        data.active_order_type === "single" ||
+        data.active_order_type === "multi" ||
+        data.active_order_type === "all"
+          ? data.active_order_type
+          : null;
+      setHub({
+        single: data.single,
+        multi: data.multi,
+        all: data.all,
+        activeOrderType: active,
+      });
     } catch {
-      setHub({ single: EMPTY_SLICE, multi: EMPTY_SLICE, all: EMPTY_SLICE });
+      setHub({
+        single: EMPTY_SLICE,
+        multi: EMPTY_SLICE,
+        all: EMPTY_SLICE,
+        activeOrderType: null,
+      });
     } finally {
       setHubLoading(false);
     }
@@ -95,6 +100,14 @@ export default function WmsPickingOrderTypePage() {
 
   useEffect(() => {
     void loadHub();
+  }, [loadHub]);
+
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState === "visible") void loadHub();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
   }, [loadHub]);
 
   const onPick = (choice: WmsPickingOrderTypeChoice) => {
@@ -124,6 +137,8 @@ export default function WmsPickingOrderTypePage() {
   const sliceFor = (id: WmsPickingOrderTypeChoice): WmsPickingOrderTypeHubSlice =>
     hub?.[id] ?? EMPTY_SLICE;
 
+  const activeOrderType = hub?.activeOrderType ?? null;
+
   return (
     <div className="flex min-h-0 w-full flex-1 flex-col bg-white">
       <PickingSimpleHeader
@@ -138,40 +153,66 @@ export default function WmsPickingOrderTypePage() {
         onClose={() => setTourBanner(null)}
       />
       <div className="min-h-0 flex-1 overflow-y-auto px-4 py-6 sm:px-6 sm:py-8">
-        <div className="mx-auto w-full max-w-lg">
-          {hubLoading && hub == null ? (
-            <div className="flex flex-col items-center justify-center py-16 text-slate-400">
-              <Loader2 size={36} className="mb-3 animate-spin text-slate-400" strokeWidth={2.5} />
-              <p className="text-xs font-semibold uppercase tracking-wider">Ładowanie…</p>
-            </div>
-          ) : (
-            <ul className="flex list-none flex-col gap-3 p-0" aria-label="Typ zamówień do zbierania">
-              {choices.map((id) => {
-                const meta = CHOICE_META[id];
-                const slice = sliceFor(id);
-                return (
-                  <li key={id}>
-                    <button
-                      type="button"
-                      className="flex w-full flex-col gap-2 rounded-lg border border-slate-200 bg-white px-5 py-5 text-left transition hover:border-slate-300 active:scale-[0.99] focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-300"
-                      onClick={() => onPick(id)}
-                    >
-                      <span className={["min-w-0 font-bold leading-snug text-slate-900", wmsTypoClass.base].join(" ")}>
+        {hubLoading && hub == null ? (
+          <div className="flex flex-col items-center justify-center py-16 text-slate-400">
+            <Loader2 size={36} className="mb-3 animate-spin text-slate-400" strokeWidth={2.5} />
+            <p className="text-xs font-semibold uppercase tracking-wider">Ładowanie…</p>
+          </div>
+        ) : (
+          <ul
+            className="mx-auto flex w-full max-w-[1200px] list-none flex-wrap justify-center gap-4 p-0"
+            aria-label="Typ zamówień do zbierania"
+          >
+            {choices.map((id) => {
+              const meta = CHOICE_META[id];
+              const slice = sliceFor(id);
+              const isActive = activeOrderType === id;
+              return (
+                <li
+                  key={id}
+                  className="flex w-full min-w-0 max-w-[380px] basis-full sm:basis-[calc(50%-0.5rem)] lg:basis-[340px] lg:max-w-[360px]"
+                >
+                  <button
+                    type="button"
+                    aria-current={isActive ? "true" : undefined}
+                    className={[
+                      "flex h-full min-h-[8.5rem] w-full flex-col gap-2 rounded-xl border bg-white px-5 py-5 text-left shadow-sm transition",
+                      "hover:border-slate-300 hover:shadow-md active:scale-[0.99]",
+                      "focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-300",
+                      isActive
+                        ? "border-emerald-400/90 bg-emerald-50/40 ring-1 ring-emerald-200/80"
+                        : "border-slate-200",
+                    ].join(" ")}
+                    onClick={() => onPick(id)}
+                  >
+                    <div className="flex min-w-0 items-start justify-between gap-2">
+                      <span
+                        className={[
+                          "min-w-0 font-bold leading-snug text-slate-900",
+                          wmsTypoClass.base,
+                        ].join(" ")}
+                      >
                         {meta.label}
                       </span>
-                      <p className="text-sm text-slate-600">
-                        {meta.productsCaption}{" "}
-                        <span className={["font-semibold text-slate-900", wmsTypoClass.quantity].join(" ")}>
-                          {slice.products_picked}/{slice.products_total}
+                      {isActive ? (
+                        <span className="shrink-0 rounded-full border border-emerald-500/40 bg-white px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-emerald-800">
+                          Aktywne
                         </span>
-                      </p>
-                    </button>
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-        </div>
+                      ) : null}
+                    </div>
+                    <p className="mt-auto text-sm leading-snug text-slate-600">
+                      Produkty do zebrania:{" "}
+                      <span className={["font-semibold text-slate-900", wmsTypoClass.quantity].join(" ")}>
+                        {Math.max(0, Number(slice.products_picked) || 0)}/
+                        {Math.max(0, Number(slice.products_total) || 0)} szt.
+                      </span>
+                    </p>
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        )}
       </div>
     </div>
   );

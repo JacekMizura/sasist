@@ -82,6 +82,8 @@ export type WmsPickingOrderTypeHub = {
   single: WmsPickingOrderTypeHubSlice;
   multi: WmsPickingOrderTypeHubSlice;
   all: WmsPickingOrderTypeHubSlice;
+  /** Tryb aktualnie zbierany przez operatora (otwarta sesja). */
+  active_order_type?: "single" | "multi" | "all" | null;
 };
 
 /** Liczniki ekranu „Wybierz” — single / multi / all. */
