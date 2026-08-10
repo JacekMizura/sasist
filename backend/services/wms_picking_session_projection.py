@@ -92,11 +92,12 @@ def project_operator_active_picking_for_status(
             "has_active_session": True,
             "session_id": int(sess.id) if sess is not None else None,
             "order_type": ot_meta if ot_meta in ("single", "multi", "all") else None,
+            "source_status_id": int(meta_sid) if meta_sid is not None else int(source_status_id),
         }
 
     products = list(lines.products or [])
-    # Brak pozycji w tym statusie na wózku → sesja może należeć do innego statusu.
-    if not products and meta_sid is not None and int(meta_sid) != int(source_status_id):
+    # Sesja należy do konkretnego source_status_id — nie pokazuj na obcej karcie.
+    if meta_sid is not None and int(meta_sid) != int(source_status_id):
         return empty
 
     stats = compute_session_stats_from_product_lines(products)
@@ -105,11 +106,9 @@ def project_operator_active_picking_for_status(
     w_trakcie = int(stats.get("w_trakcie") or 0)
     total = zebrane + do_zebrania + w_trakcie
 
-    # Aktywna gdy jest wózek w cyklu i (są pozycje LUB zamówienia in_progress na tym statusie).
+    # Aktywna gdy jest wózek w cyklu i (są pozycje LUB meta wskazuje ten status).
     has_work = total > 0 or len(products) > 0
     if not has_work:
-        # Pusty wózek ASSIGNED/PICKING bez pozycji tego statusu — nadal pokaż wózek,
-        # jeśli meta sesji wskazuje ten status.
         if meta_sid is not None and int(meta_sid) == int(source_status_id):
             has_work = True
         elif sess is not None and meta_sid is None:
@@ -123,10 +122,10 @@ def project_operator_active_picking_for_status(
         "has_active_session": bool(has_work or cart_fields.get("active_cart_id")),
         "session_id": int(sess.id) if sess is not None else None,
         "order_type": ot_meta if ot_meta in ("single", "multi", "all") else None,
+        "source_status_id": int(meta_sid) if meta_sid is not None else int(source_status_id),
         "products_picked": zebrane,
         "products_total": total,
         **cart_fields,
-        # convenience for FE hydrate
         "physical_cart_type": cart_physical_family(cart),
         "cart_display": (cart_fields.get("active_cart_name") or cart_fields.get("active_cart_code")),
     }

@@ -118,6 +118,7 @@ export function useWmsPickingCart(): WmsPickingCartContextValue {
 
 /** Jedno źródło prawdy: snapshot kontekstu (tenant+magazyn), potem stan routera.
  * Cartless: nie nadpisuj cartId z leftover snapshotu fizycznego wózka.
+ * Sesja wózkowa ma zarówno cartId jak i pickingSessionId — NIE traktuj jej jako cartless.
  */
 export function useMergedPickingSession(
   pickingSession: WmsPickingSessionState | null,
@@ -127,7 +128,17 @@ export function useMergedPickingSession(
   const { snapshot } = useWmsPickingCart();
   return useMemo(() => {
     if (!pickingSession || warehouseId == null) return pickingSession;
-    if (pickingSession.cartless || (pickingSession.pickingSessionId != null && pickingSession.pickingSessionId > 0)) {
+
+    const hasCart =
+      (pickingSession.cartId != null && pickingSession.cartId > 0) ||
+      (snapshot != null &&
+        snapshot.tenantId === tenantId &&
+        snapshot.warehouseId === warehouseId &&
+        snapshot.cartId > 0 &&
+        pickingSession.cartless !== true);
+
+    // Cartless wyłącznie gdy NIE ma wózka.
+    if (pickingSession.cartless === true && !hasCart) {
       return {
         ...pickingSession,
         cartId: null,
@@ -136,6 +147,21 @@ export function useMergedPickingSession(
         cartless: true,
       };
     }
+    if (
+      !hasCart &&
+      pickingSession.pickingSessionId != null &&
+      pickingSession.pickingSessionId > 0 &&
+      (pickingSession.cartId == null || pickingSession.cartId <= 0)
+    ) {
+      return {
+        ...pickingSession,
+        cartId: null,
+        cartCode: null,
+        cartName: null,
+        cartless: true,
+      };
+    }
+
     const ctxMatch =
       snapshot != null &&
       snapshot.tenantId === tenantId &&
@@ -146,6 +172,13 @@ export function useMergedPickingSession(
     const physicalCartType = ctxMatch
       ? snapshot.cartType ?? pickingSession.physicalCartType ?? null
       : pickingSession.physicalCartType ?? null;
-    return { ...pickingSession, cartId, cartCode, cartName, physicalCartType };
+    return {
+      ...pickingSession,
+      cartId,
+      cartCode,
+      cartName,
+      physicalCartType,
+      cartless: false,
+    };
   }, [pickingSession, tenantId, warehouseId, snapshot]);
 }

@@ -31,6 +31,8 @@ export type WmsPickingConfiguredStatusItem = {
   active_session_id?: number | null;
   /** order_type z aktywnej sesji — do bezpośredniego wznowienia. */
   active_order_type?: "single" | "multi" | "all" | null;
+  /** source_status_id z meta sesji — nie używaj innego statusu przy product-lines. */
+  session_source_status_id?: number | null;
 };
 
 export type WmsPickingPickUnit = "orders" | "products";

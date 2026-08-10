@@ -79,6 +79,10 @@ class WmsPickingConfiguredStatusItem(BaseModel):
         default=None,
         description="order_type zapisany w aktywnej sesji (do wznowienia bez ekranu Wybierz)",
     )
+    session_source_status_id: Optional[int] = Field(
+        default=None,
+        description="source_status_id z meta aktywnej sesji — SSOT przy wznowieniu",
+    )
 
 
 class WmsPickingFlowLimits(BaseModel):

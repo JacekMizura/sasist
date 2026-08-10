@@ -22,6 +22,7 @@ import {
 import { postStageConsolidationItem } from "../../api/wmsConsolidationApi";
 import { useMergedPickingSession, useWmsPickingCart } from "../../context/WmsPickingCartContext";
 import { useWarehouse } from "../../context/WarehouseContext";
+import { isCartlessPickingSession } from "./wmsPickingSessionKind";
 import { BundlePickingOrderTree } from "../../components/wms/picking/BundlePickingOrderTree";
 import { BundlePickingScanCard } from "../../components/wms/bundle/BundlePickingScanCard";
 import { BundleConsolidationRackCard } from "../../components/wms/bundle/BundleConsolidationRackCard";
@@ -296,17 +297,14 @@ export default function WmsPickingProductDetailPage() {
       pickingSession.orderUiStatusId,
       orderType,
       productId,
-      pickingSession.cartless || (pickingSession.pickingSessionId != null && pickingSession.pickingSessionId > 0)
-        ? null
-        : pickingSession.cartId,
+      isCartlessPickingSession(pickingSession) ? null : pickingSession.cartId ?? null,
       recoveryOrderId,
       undefined,
       {
         force: opts?.force === true,
-        pickingSessionId:
-          pickingSession.cartless || (pickingSession.pickingSessionId != null && pickingSession.pickingSessionId > 0)
-            ? pickingSession.pickingSessionId ?? null
-            : null,
+        pickingSessionId: isCartlessPickingSession(pickingSession)
+          ? pickingSession.pickingSessionId ?? null
+          : null,
       },
     );
   }, [warehouseId, pickingSession, orderType, productId, pickingTenantId, recoveryOrderId]);
@@ -1013,8 +1011,7 @@ export default function WmsPickingProductDetailPage() {
     }
     const cartId = pickingSession.cartId;
     const pickingSessionId = pickingSession.pickingSessionId;
-    const cartless =
-      pickingSession.cartless || (pickingSessionId != null && pickingSessionId > 0);
+    const cartless = isCartlessPickingSession(pickingSession);
     if (!cartless && (cartId == null || !Number.isFinite(cartId) || cartId < 1)) {
       setPickMsg("Brak aktywnego wózka (cart_id).");
       return;
@@ -1103,8 +1100,7 @@ export default function WmsPickingProductDetailPage() {
     }
     const cartId = pickingSession.cartId;
     const pickingSessionId = pickingSession.pickingSessionId;
-    const cartless =
-      pickingSession.cartless || (pickingSessionId != null && pickingSessionId > 0);
+    const cartless = isCartlessPickingSession(pickingSession);
     if (!cartless && (cartId == null || !Number.isFinite(cartId) || cartId < 1)) {
       setPickMsg("Brak aktywnego wózka (cart_id).");
       scanGateRef.current = false;
@@ -1591,7 +1587,7 @@ export default function WmsPickingProductDetailPage() {
         product_id: productId,
         location_id: locId,
         missing_qty: shortageQty,
-        ...(pickingSession.cartless || (pickingSession.pickingSessionId != null && pickingSession.pickingSessionId > 0)
+        ...(isCartlessPickingSession(pickingSession)
           ? { picking_session_id: pickingSession.pickingSessionId! }
           : { cart_id: pickingSession.cartId! }),
         order_ids: detail.orders.map((o) => o.order_id),
@@ -1728,7 +1724,7 @@ export default function WmsPickingProductDetailPage() {
         product_id: productId,
         location_id: locId,
         missing_qty: shortageQtyInput,
-        ...(pickingSession.cartless || (pickingSession.pickingSessionId != null && pickingSession.pickingSessionId > 0)
+        ...(isCartlessPickingSession(pickingSession)
           ? { picking_session_id: pickingSession.pickingSessionId! }
           : { cart_id: pickingSession.cartId! }),
         order_ids: detail.orders.map((o) => o.order_id),

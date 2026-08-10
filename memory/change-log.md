@@ -1,3 +1,10 @@
+## 2026-08-10 — Napraw spójność sesji zbierania
+
+- Root cause: sesja wózkowa ma `picking_session_id` + `cart_id`; FE traktował to jak cartless
+- Fix FE: `isCartlessPickingSession` / merge; cancel po cart_id; skan wózka na products = consumed ignore
+- Fix BE: product-lines remap session→cart; cancel-cartless→cancel_picking; tile mixed→BULK
+- Projekcja ścisła po `source_status_id` z meta sesji
+
 ## 2026-08-10 — Uspójnij wznowienie sesji zbierania
 
 - Skan wózka = tylko start nowej sesji; aktywna sesja → od razu lista produktów

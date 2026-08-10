@@ -36,7 +36,17 @@ def wms_tile_cart_config(single_mode: str | None, multi_mode: str | None) -> Tup
     require = needs_cart(sm) or needs_cart(mm)
     if not require:
         return False, None
-    if "baskets" in (sm, mm):
+    sm_baskets = sm == "baskets"
+    mm_baskets = mm == "baskets"
+    sm_bulk = sm == "scanned"
+    mm_bulk = mm == "scanned"
+    # Tylko koszyki → BASKETS. Tylko skan wózka → BULK.
+    # Mieszanka na jednym statusie: NIE wymuszaj BASKETS (to psuło skan CART-0001).
+    if (sm_baskets or mm_baskets) and not (sm_bulk or mm_bulk):
+        return True, "BASKETS"
+    if (sm_bulk or mm_bulk) and not (sm_baskets or mm_baskets):
+        return True, "BULK"
+    if sm_baskets and mm_baskets:
         return True, "BASKETS"
     return True, "BULK"
 

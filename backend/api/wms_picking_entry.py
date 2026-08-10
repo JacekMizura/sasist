@@ -397,6 +397,11 @@ def get_picking_configured_statuses(
                         if proj.get("order_type") in ("single", "multi", "all")
                         else None
                     ),
+                    session_source_status_id=(
+                        int(proj["source_status_id"])
+                        if proj.get("source_status_id") is not None
+                        else None
+                    ),
                 )
             )
         gidx = {g: i for i, g in enumerate(_GROUP_ORDER)}
@@ -841,7 +846,39 @@ def post_picking_cancel_cartless_session(
     db: Session = Depends(get_db),
     current_user: AppUser = Depends(get_current_user),
 ):
+    """
+    Anuluj sesję cartless. Jeżeli ``picking_session_id`` wskazuje sesję WÓZKOWĄ
+    (``cart_id`` ustawione), przekieruj na ``cancel_picking`` — nie 400.
+    """
+    from ..models.wms_operation_session import WmsOperationSession
     from ..services.wms_cartless_picking import cancel_cartless_picking_session
+    from ..services.cart_picking_lifecycle_service import CartLifecycleError, cancel_picking_session
+
+    sess_row = (
+        db.query(WmsOperationSession)
+        .filter(
+            WmsOperationSession.id == int(picking_session_id),
+            WmsOperationSession.tenant_id == int(tenant_id),
+            WmsOperationSession.warehouse_id == int(warehouse_id),
+        )
+        .first()
+    )
+    if sess_row is not None and getattr(sess_row, "cart_id", None) is not None:
+        try:
+            out = cancel_picking_session(
+                db,
+                cart_id=int(sess_row.cart_id),
+                tenant_id=int(tenant_id),
+                warehouse_id=int(warehouse_id),
+                operator_user_id=int(current_user.id),
+            )
+            db.commit()
+            return {**out, "routed_from_cartless_endpoint": True}
+        except CartLifecycleError as e:
+            db.rollback()
+            from ..services.wms_http_messages import raise_wms_from_lifecycle
+
+            raise_wms_from_lifecycle(e)
 
     try:
         out = cancel_cartless_picking_session(
@@ -1168,8 +1205,35 @@ def get_picking_product_lines(
         if v.strip().isdigit() and int(v.strip()) > 0
     ]
     fixed_order_ids = ([int(v) for v in (order_ids or []) if int(v) > 0] + csv_ids) or None
+
+    # picking_session_id może wskazywać sesję WÓZKOWĄ (cart_id IS NOT NULL).
+    # Wtedy NIE wolno iść ścieżką cartless — użyj cart_id sesji + source_status z meta.
+    effective_cart_id = int(cart_id) if cart_id is not None else None
+    effective_picking_session_id = int(picking_session_id) if picking_session_id is not None else None
+    effective_source_status_id = int(source_status_id)
+    if effective_picking_session_id is not None and not recovery_mode:
+        from ..models.wms_operation_session import WmsOperationSession
+        from ..services.cart_picking_lifecycle_service import _load_meta
+
+        sess_row = (
+            db.query(WmsOperationSession)
+            .filter(
+                WmsOperationSession.id == int(effective_picking_session_id),
+                WmsOperationSession.tenant_id == int(tenant_id),
+                WmsOperationSession.warehouse_id == int(warehouse_id),
+            )
+            .first()
+        )
+        if sess_row is not None and getattr(sess_row, "cart_id", None) is not None:
+            effective_cart_id = int(sess_row.cart_id)
+            effective_picking_session_id = None
+            meta = _load_meta(getattr(sess_row, "metadata_json", None))
+            meta_sid = meta.get("source_status_id")
+            if meta_sid is not None and int(meta_sid) > 0:
+                effective_source_status_id = int(meta_sid)
+
     if (
-        picking_session_id is not None
+        effective_picking_session_id is not None
         and current_user is not None
         and current_user.id is not None
         and not recovery_mode
@@ -1181,7 +1245,7 @@ def get_picking_product_lines(
                 db,
                 tenant_id=int(tenant_id),
                 warehouse_id=int(warehouse_id),
-                session_id=int(picking_session_id),
+                session_id=int(effective_picking_session_id),
                 operator_user_id=int(current_user.id),
             )
         except (ValueError, PermissionError) as e:
@@ -1190,16 +1254,16 @@ def get_picking_product_lines(
             db,
             tenant_id=tenant_id,
             warehouse_id=warehouse_id,
-            source_status_id=source_status_id,
+            source_status_id=effective_source_status_id,
             order_type=order_type,
             cart_id=None,
-            picking_session_id=int(picking_session_id),
+            picking_session_id=int(effective_picking_session_id),
             fixed_order_ids=fixed_order_ids,
         )
         db.commit()
         return resp
     if (
-        cart_id is not None
+        effective_cart_id is not None
         and current_user is not None
         and current_user.id is not None
         and not recovery_mode
@@ -1212,8 +1276,8 @@ def get_picking_product_lines(
                 db,
                 tenant_id=int(tenant_id),
                 warehouse_id=int(warehouse_id),
-                cart_id=int(cart_id),
-                source_status_id=int(source_status_id),
+                cart_id=int(effective_cart_id),
+                source_status_id=int(effective_source_status_id),
                 order_type=order_type,
                 operator_user_id=int(current_user.id),
                 fixed_order_ids=fixed_order_ids,
@@ -1231,18 +1295,18 @@ def get_picking_product_lines(
         db,
         tenant_id=tenant_id,
         warehouse_id=warehouse_id,
-        source_status_id=source_status_id,
+        source_status_id=effective_source_status_id,
         order_type=order_type,
-        cart_id=cart_id,
-        picking_session_id=picking_session_id,
+        cart_id=effective_cart_id,
+        picking_session_id=effective_picking_session_id,
         fixed_order_ids=fixed_order_ids,
     )
-    if current_user is not None and current_user.id is not None and cart_id is not None:
+    if current_user is not None and current_user.id is not None and effective_cart_id is not None:
         from ..services.cart_picking_lifecycle_service import find_open_picking_session, get_cart_status
         from ..models.cart import Cart as CartModel
         from ..models.enums import CartStatus as _CS
 
-        cart_row = db.query(CartModel).filter(CartModel.id == int(cart_id)).first()
+        cart_row = db.query(CartModel).filter(CartModel.id == int(effective_cart_id)).first()
         if (
             cart_row is not None
             and get_cart_status(cart_row) == _CS.PICKING
@@ -1254,9 +1318,9 @@ def get_picking_product_lines(
                 warehouse_id=int(warehouse_id),
                 session_kind="picking_active",
                 operator_user_id=int(current_user.id),
-                cart_id=cart_id,
+                cart_id=effective_cart_id,
                 metadata=_picking_session_progress_metadata(
-                    resp, source_status_id=source_status_id, order_type=order_type
+                    resp, source_status_id=effective_source_status_id, order_type=order_type
                 ),
             )
         db.commit()
@@ -1265,7 +1329,7 @@ def get_picking_product_lines(
         resp,
         tenant_id=int(tenant_id),
         warehouse_id=int(warehouse_id),
-        cart_id=cart_id,
+        cart_id=effective_cart_id,
         operator_user_id=int(current_user.id) if current_user is not None and current_user.id else None,
     )
 

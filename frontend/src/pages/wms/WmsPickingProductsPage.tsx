@@ -22,7 +22,8 @@ import {
   type WmsPickingProductLineApi,
   type WmsPickingSessionStatsApi,
 } from "../../api/wmsPickingProductsApi";
-import { cartTypeHintForMode, cartTypeHintForOrderTypeChoice, modeRequiresCartScan } from "./wmsPickingFlowResolve";
+import { modeRequiresCartScan, cartTypeHintForMode, cartTypeHintForOrderTypeChoice } from "./wmsPickingFlowResolve";
+import { isCartlessPickingSession } from "./wmsPickingSessionKind";
 import type { PickingFlowMode } from "../../api/wmsPickingEntryApi";
 import { useMergedPickingSession, useWmsPickingCart } from "../../context/WmsPickingCartContext";
 import { useWarehouse } from "../../context/WarehouseContext";
@@ -221,20 +222,21 @@ export default function WmsPickingProductsPage() {
 
   const isCartlessMode = useMemo(() => {
     if (!pickingSession) return false;
-    if (pickingSession.cartless || (pickingSession.pickingSessionId != null && pickingSession.pickingSessionId > 0)) {
-      return true;
-    }
-    if (pickingSession.cartId != null && pickingSession.cartId > 0) return false;
+    const cartId = mergedSession?.cartId ?? pickingSession.cartId ?? null;
+    // Sesja wózkowa (cart_id) nigdy nie jest cartless — nawet z pickingSessionId.
+    if (cartId != null && cartId > 0) return false;
+    if (isCartlessPickingSession(mergedSession ?? pickingSession)) return true;
+    // Start nowej sesji cart_no_scan — jeszcze bez session_id.
     const choice = pickingSession.orderTypeChoice ?? "all";
     const single = pickingSession.singleMode as PickingFlowMode | undefined;
     const multi = pickingSession.multiMode as PickingFlowMode | undefined;
     if (choice === "single") return single === "cart_no_scan";
     if (choice === "multi") return multi === "cart_no_scan";
-    const needsScan = modeRequiresCartScan(single ?? "cart_no_scan") || modeRequiresCartScan(multi ?? "cart_no_scan");
+    const needsScan =
+      modeRequiresCartScan(single ?? "cart_no_scan") || modeRequiresCartScan(multi ?? "cart_no_scan");
     if (needsScan) return false;
     return single === "cart_no_scan" || multi === "cart_no_scan";
-  }, [pickingSession]);
-
+  }, [pickingSession, mergedSession]);
   const productLinesLoadKey = useMemo(() => {
     if (warehouseId == null || !pickingSession) return "";
     // Cartless: nie ładuj listy produktów zanim sesja nie wystartuje (unikaj kohorty statusu).
@@ -717,7 +719,29 @@ export default function WmsPickingProductsPage() {
   useEffect(() => {
     const handler = async (ean: string) => {
       const scan = normalizeScanEan(ean);
-      if (!scan || rows.length === 0 || !mergedSession || warehouseId == null) {
+      if (!scan || !mergedSession || warehouseId == null) {
+        return SCAN_NOT_CONSUMED;
+      }
+      // Aktywna sesja wózkowa: skan kodu wózka NIE tworzy nowej sesji / resolve-cart.
+      const activeCartCode = (mergedSession.cartCode || "").trim().toUpperCase();
+      const looksLikeCart =
+        /^CART[-_]?\d+/i.test(scan) ||
+        (activeCartCode.length > 0 && scan.toUpperCase() === activeCartCode);
+      if (!isCartlessMode && mergedSession.cartId != null && mergedSession.cartId > 0 && looksLikeCart) {
+        multiScanTrace("LIST_CART_SCAN_IGNORED", {
+          raw_code: scan,
+          cart_id: mergedSession.cartId,
+          consumed: true,
+        });
+        appendScanToHistory(scan);
+        showScannerToast(
+          activeCartCode
+            ? `Wózek już przypisany do sesji: ${mergedSession.cartName || activeCartCode}`
+            : "Wózek jest już przypisany do tej sesji zbierania.",
+        );
+        return SCAN_CONSUMED;
+      }
+      if (rows.length === 0) {
         return SCAN_NOT_CONSUMED;
       }
       if (listScanGateRef.current) {
@@ -1978,16 +2002,19 @@ export default function WmsPickingProductsPage() {
                     if (warehouseId == null) return;
                     setCancelBusy(true);
                     try {
-                      if (isCartlessMode && activePickingSessionId != null) {
+                      const cartId = mergedSession?.cartId ?? snapshot?.cartId ?? null;
+                      const sessionId = activePickingSessionId;
+                      // SSOT: cart_id → cancel-session; tylko czyste cartless → cancel-cartless.
+                      if (cartId != null && cartId > 0) {
+                        await postWmsPickingCancelSession(DAMAGE_TENANT_ID, warehouseId, cartId);
+                      } else if (sessionId != null && sessionId > 0) {
                         await postWmsPickingCancelCartlessSession(
                           DAMAGE_TENANT_ID,
                           warehouseId,
-                          activePickingSessionId,
+                          sessionId,
                         );
                       } else {
-                        const cartId = mergedSession?.cartId ?? snapshot?.cartId;
-                        if (cartId == null) return;
-                        await postWmsPickingCancelSession(DAMAGE_TENANT_ID, warehouseId, cartId);
+                        return;
                       }
                       clearPickingCart();
                       setExitModalOpen(false);

@@ -323,8 +323,14 @@ export default function WmsPickingStatusPage() {
         ? r.active_order_type
         : ("all" as const);
 
+    // SSOT: source_status_id z meta sesji — nie z przypadkowo klikniętej innej karty.
+    const resumeStatusId =
+      reused && r.session_source_status_id != null && r.session_source_status_id > 0
+        ? r.session_source_status_id
+        : r.source_status_id;
+
     const base = {
-      orderUiStatusId: r.source_status_id,
+      orderUiStatusId: resumeStatusId,
       orderUiStatusName: r.status,
       orderUiStatusColor: r.color,
       mainGroup: r.main_group as OrderUiMainGroup,
@@ -341,7 +347,7 @@ export default function WmsPickingStatusPage() {
     setResolvingStatusId(r.source_status_id);
     setErr(null);
     try {
-      const cfg = await getWmsPickingFlowConfig(DAMAGE_TENANT_ID, warehouseId, r.source_status_id);
+      const cfg = await getWmsPickingFlowConfig(DAMAGE_TENANT_ID, warehouseId, resumeStatusId);
       const hubOrderCount = Number(r.order_count) || 0;
       const hubPickStats = {
         zebrane: Math.max(0, Number(r.session_products_picked) || 0),
@@ -359,12 +365,12 @@ export default function WmsPickingStatusPage() {
           ? {
               requireCart: true as const,
               cartType: tileType,
+              cartless: false as const,
             }
           : {}),
         hubOrderCount,
         hubPickStats,
       };
-      // Aktywna sesja → resolveAfterStatus idzie prosto na produkty (bez Wybierz/skanu).
       const { path, state } = resolveAfterStatusWithConfig(session);
       navigate(path, { state });
     } catch {

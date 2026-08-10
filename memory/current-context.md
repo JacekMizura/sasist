@@ -1,11 +1,17 @@
 ﻿## Active
 
+**Spójność sesji zbierania (2026-08-10):**
+- Bug: `pickingSessionId` na sesji WÓZKOWEJ mylony z cartless → czyścił cartId, product-lines 409, cancel-cartless 400
+- Fix: `isCartlessPickingSession` — cart_id wygrywa; merge nie wymusza cartless
+- BE product-lines: session z cart_id → ścieżka wózkowa + source_status z meta
+- cancel-cartless z cart_id → `cancel_picking`; tile mixed scanned+baskets → BULK (nie BASKETS)
+- Projekcja: sesja tylko na swoim `source_status_id`; API `session_source_status_id`
+- Skan CART-* na liście produktów przy aktywnej sesji → consumed, bez resolve-cart
+
 **Wznowienie sesji zbierania (2026-08-10):**
 - Jedna sesja = jeden wózek; skan tylko przy ROZPOCZĘCIU nowej sesji
 - BE: `bootstrap_start_picking_if_needed` — walidacja typu wózka NIE przy PICKING/ASSIGNED+sesja
-- FE: aktywna sesja → klik statusu → od razu produkty (bez Wybierz / skanu / potwierdzenia)
-- Cart-scan z cartId → redirect na produkty; brak „Potwierdź wózek”
-- Status CTA „Zeskanuj wózek” tylko gdy `active_cart_id` null
+- FE: aktywna sesja → klik statusu → od razu produkty
 
 **Sesja zbierania — SSOT wózek + produkty (2026-08-10):**
 - Projekcja: `wms_picking_session_projection.py` (ten sam `build_wms_picking_product_lines` co lista)
