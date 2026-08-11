@@ -18,8 +18,10 @@ export type PickingQtyPanelProps = {
 };
 
 /**
- * WIDOK PRODUKTU / LICZENIA — location ONLY as header bar next to ←.
- * Vertical: image → name/EAN → ILOŚĆ → stepper → Zatwierdź (not sticky footer).
+ * Ekran ilości (po rozpoznaniu produktu i lokalizacji).
+ * Góra: [←] [belka aktualnej lokalizacji źródłowej na pełną pozostałą szerokość].
+ * Dalej: zdjęcie → nazwa → EAN → − / n / + → Zatwierdź.
+ * Lokalizacja NIE trafia do kafla produktu — tylko do belki w nagłówku.
  */
 export function PickingQtyPanel({
   productName,
@@ -38,6 +40,7 @@ export function PickingQtyPanel({
   const atMin = qty <= 1e-9;
   const atMax = qty >= maxQty - 1e-9;
   const canConfirm = qty > 1e-9 && qty <= maxQty + 1e-9 && !busy;
+  const sourceLocation = locationLabel.trim();
 
   return (
     <div className="fixed inset-0 z-[60] flex flex-col bg-white">
@@ -46,8 +49,10 @@ export function PickingQtyPanel({
         backAriaLabel="Wróć do szczegółów produktu"
         trailingFill
         trailing={
-          locationLabel ? (
-            <PickingLocationBadge text={locationLabel} variant="bar" />
+          sourceLocation ? (
+            <div className="flex min-h-10 min-w-0 flex-1 items-center">
+              <PickingLocationBadge text={sourceLocation} variant="bar" className="w-full" />
+            </div>
           ) : null
         }
       />

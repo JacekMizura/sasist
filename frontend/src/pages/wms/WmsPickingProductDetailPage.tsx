@@ -2121,14 +2121,17 @@ export default function WmsPickingProductDetailPage() {
           productName={detail.name}
           ean={detail.ean}
           imageUrl={detail.image_url}
-          locationLabel={
-            selectedLocation
-              ? formatWmsPickingLocationPillLabel(
-                  selectedLocation.location_code,
-                  locStock(selectedLocation) > 1e-9 ? locStock(selectedLocation) : undefined,
-                )
-              : ""
-          }
+          locationLabel={(() => {
+            // Aktualna lokalizacja pobrania tej tury (skan / jawny wybór), nie locations[0].
+            const sourceLocId = manualLocId ?? activeLocationId;
+            if (sourceLocId == null || sourceLocId <= 0) return "";
+            const loc = detail.locations.find((l) => l.location_id === sourceLocId);
+            if (!loc) return "";
+            return formatWmsPickingLocationPillLabel(
+              loc.location_code,
+              locStock(loc) > 1e-9 ? locStock(loc) : undefined,
+            );
+          })()}
           remainingLabel={fmtQty(remaining)}
           qty={qtyStepValue}
           maxQty={remaining}

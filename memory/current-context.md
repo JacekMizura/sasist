@@ -1,9 +1,28 @@
 ﻿## Active
 
+**Picking qty source location bar (2026-08-11):**
+- Ekran ilości: `[←]` + belka aktualnej lokalizacji pobrania (`manualLocId ?? activeLocationId`)
+- Nie zmienia listy ani detail poza wiringiem `locationLabel` do qty
+
+**Picking order-type first (2026-08-11):**
+- Nowa tura: status → ZAWSZE wybór single/multi/all → cart (jeśli trzeba) → produkty
+- Wznowienie tylko z zapisanym order_type + cart/cartless
+- Copy kart: „Produkty do zebrania” / „Produkty: zebrano X / Y”
+
+**Picking detail flow (2026-08-11):**
+- Detail obowiązkowy (bez auto-open qty); qty ← wraca do detail
+- CTA skan: lokalizacja/produkt → qty; 401 terminal/detail nie maskowane
+- GET `wms/settings/picking-terminal` + `wms/picking/product-lines/detail` przez shared axios
+
+**Kolejność dostaw (2026-08-11):**
+- SSOT = `GET /wms/delivery-work-queue` + `derive_warehouse_workflow_status` (istniejący flow PZ)
+- W kolejce: NEW / COUNTING / COUNTED / PUTAWAY_IN_PROGRESS
+- Poza kolejką: PUTAWAY_COMPLETED / CLOSED
+- CTA wg stanu; sort=`delivery_queue_sort`, priority=`delivery_queue_priority` (niezależne od statusu)
+
 **Picking flow 1:1 (2026-08-11):**
 - STATUS → RODZAJ → POPUP WÓZEK → LISTA → PRODUKT → ILOŚĆ → ZATWIERDŹ → LISTA
-- Status UI bez zmian; nowa tura → order-type (nie skan na statusach)
-- Cart = modal; lista `Do zebrania: X/Y`; qty tylko `[-][n][+]` + Zatwierdź
+- Lista: lokalizacja w kafelku; produkt: belka lokalizacji obok ←
 
 **Picking lista/detal UI hierarchy (2026-08-11):**
 - Lista: nagłówek ← + `Do zebrania: 0/2`

@@ -1,3 +1,38 @@
+## 2026-08-11 — Lokalizacja źródłowa w widoku ilości zbierania
+
+- Tylko `PickingQtyPanel`: belka `[←] [lokalizacja]` u góry (pełna szerokość)
+- Label z `manualLocId ?? activeLocationId` (kontekst pobrania), nie `locations[0]`
+- Lokalizacja nie w kafelku produktu; ← wraca do detail bez anulowania sesji
+
+## 2026-08-11 — Przywróć wybór rodzaju zamówień przed zbieraniem
+
+- Nowa tura zawsze: status → order-type → (cart) → products
+- Usunięte pomijanie order-type przez cartId / require_cart / domyślne `all`
+- Wznowienie tylko z jawnym order_type + cart/cartless
+- Karty: „Produkty do zebrania” / „Produkty: zebrano X / Y”
+
+## 2026-08-11 — Napraw flow szczegółów produktu i autoryzację zbierania
+
+- Usunięty auto-open qty (regresja z 97b1271f); detail obowiązkowy
+- Przywrócone: Zebrane, lokalizacja na kafelku, sekcja Zamówienia + BRAK badge
+- Qty ← wraca do detail; skan produktu/lokalizacji → qty (nie auto-confirm)
+- 401: shared axios paths; POST picking-terminal z auth; bez maskowania błędów auth
+
+## 2026-08-11 — Kolejność dostaw: CTA z rzeczywistego workflow PZ
+
+- Membership przez `derive_warehouse_workflow_status` (P2.5A), nie „≠ CLOSED”
+- W kolejce: NEW, COUNTING, COUNTED, PUTAWAY_IN_PROGRESS
+- Poza: PUTAWAY_COMPLETED, CLOSED (+ cancelled)
+- CTA: Rozpocznij/Kontynuuj przyjęcie | Rozpocznij/Kontynuuj rozlokowanie
+- Sort tylko `delivery_queue_sort` (+ created_at); priority niezależny od statusu/sortu
+
+## 2026-08-11 — Kolejność dostaw: kolejka z otwartych PZ (nie Supply Flow)
+
+- Root: ekran czytał `supply-flow/plan` / InboundDelivery; PZ NOWE nie były źródłem kolejki
+- Nowy SSOT: `GET /wms/delivery-work-queue` z PZ wymagających przyjęcia/rozlokowania
+- Persystencja: `stock_documents.delivery_queue_sort` + `delivery_queue_priority`
+- FE KolejnoscDostawPage: lista PZ, priorytet, ↑↓ kolejność, CTA do receiving/putaway
+
 ## 2026-08-11 — Hierarchia lista vs produkt (lokalizacja + ←)
 
 - Lista: lokalizacja tylko w kafelku (compact, prawy górny róg) — nie belka/nagłówek
