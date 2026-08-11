@@ -27,7 +27,7 @@ export function PickingLocationBadge({
   if (variant === "bar") {
     return (
       <div className={["min-w-0 w-full flex-1", className].filter(Boolean).join(" ")}>
-        <PackingLocationPill text={text} muted={muted} fullWidth />
+        <PackingLocationPill text={text} muted={muted} fullWidth size="bar" />
       </div>
     );
   }

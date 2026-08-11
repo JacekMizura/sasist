@@ -20,17 +20,26 @@ export function PackingLocationPill({
   text,
   muted,
   fullWidth = true,
+  size = "default",
 }: {
   text: string;
   muted?: boolean;
   /** Packing grid / product header bar. List tile corners should pass false. */
   fullWidth?: boolean;
+  /**
+   * `bar` — szeroka belka przy ← (ekran ilości zbierania): wyższa, wyśrodkowany tekst.
+   * `default` — kompaktowy pill na kafelkach.
+   */
+  size?: "default" | "bar";
 }) {
   return (
     <span
       className={[
-        "inline-flex max-w-full min-w-0 items-center justify-center rounded-full border px-2 py-0.5 text-center font-bold",
-        fullWidth ? "w-full" : "w-auto",
+        "inline-flex max-w-full min-w-0 items-center justify-center rounded-full border text-center font-bold",
+        size === "bar"
+          ? "h-12 w-full min-h-12 px-3 py-2 leading-none"
+          : "px-2 py-0.5",
+        fullWidth || size === "bar" ? "w-full" : "w-auto",
         wmsTypoClass.location,
         muted
           ? "border-emerald-400/90 bg-white/40 text-emerald-900"
