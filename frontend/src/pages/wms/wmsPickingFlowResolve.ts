@@ -5,7 +5,6 @@
 
 import type { PickingFlowMode, WmsPickingFlowConfig } from "../../api/wmsPickingEntryApi";
 import type { WmsPickingOrderTypeChoice, WmsPickingSessionState } from "./wmsPickingFlowTypes";
-import { cartTypeMatchesPickingTile } from "./wmsPickingCartTypeMatch";
 import { WMS_ROUTES } from "./wmsRoutes";
 
 /** Skan wózka: tryby wymagające fizycznego przypisania wózka (lub koszyków). */
@@ -106,30 +105,60 @@ export function sessionWithPickingFlowConfig(
   };
 }
 
+export function explicitOrderTypeChoice(
+  raw: string | null | undefined,
+): WmsPickingOrderTypeChoice | null {
+  if (raw === "single" || raw === "multi" || raw === "all") return raw;
+  return null;
+}
+
+/**
+ * Resume only when the operator already started a tour with a concrete order_type
+ * and a session identity (cart or cartless session id).
+ */
+export function canResumePickingSession(session: WmsPickingSessionState): boolean {
+  if (explicitOrderTypeChoice(session.orderTypeChoice) == null) return false;
+  const hasCart = session.cartId != null && session.cartId > 0;
+  const hasCartless =
+    session.cartless === true ||
+    (session.pickingSessionId != null && session.pickingSessionId > 0);
+  return hasCart || hasCartless;
+}
+
+/** Strip execution identity — used when starting a NEW tour at order-type. */
+export function clearPickingSessionExecution(session: WmsPickingSessionState): WmsPickingSessionState {
+  return {
+    ...session,
+    cartCode: null,
+    cartName: null,
+    cartId: null,
+    physicalCartType: null,
+    pickingSessionId: null,
+    cartless: undefined,
+    orderTypeChoice: undefined,
+    assignEmptyMessage: null,
+  };
+}
+
 /**
  * Po kafelku statusu:
- * - aktywna sesja z cart_id → od razu lista zbierania (bez „Wybierz” / skanu),
- * - brak sesji → ekran wyboru typu (albo produkty gdy brak trybów).
+ * - wznowienie aktywnej sesji (order_type + cart/cartless) → lista produktów,
+ * - nowa tura → ZAWSZE ekran wyboru rodzaju (gdy tryby skonfigurowane).
  */
 export function resolveAfterStatusWithConfig(session: WmsPickingSessionState): PickingFlowNavigateTarget {
   const sm = session.singleMode;
   const mm = session.multiMode;
-  const hasActiveCart = session.cartId != null && session.cartId > 0;
 
-  if (hasActiveCart) {
-    const ot =
-      session.orderTypeChoice === "single" ||
-      session.orderTypeChoice === "multi" ||
-      session.orderTypeChoice === "all"
-        ? session.orderTypeChoice
-        : "all";
+  if (canResumePickingSession(session)) {
+    const ot = explicitOrderTypeChoice(session.orderTypeChoice)!;
+    const hasCart = session.cartId != null && session.cartId > 0;
     return {
       path: WMS_ROUTES.pickingProducts,
       state: {
         pickingSession: {
           ...session,
           orderTypeChoice: ot,
-          requireCart: true,
+          requireCart: hasCart ? true : session.requireCart,
           preCartBack: "status",
         },
       },
@@ -141,31 +170,30 @@ export function resolveAfterStatusWithConfig(session: WmsPickingSessionState): P
       path: WMS_ROUTES.pickingProducts,
       state: {
         pickingSession: {
-          ...session,
-          cartCode: null,
-          cartName: null,
-          cartId: null,
-          orderTypeChoice: "all",
+          ...clearPickingSessionExecution(session),
           preCartBack: "status",
         },
       },
     };
   }
+
   return {
     path: WMS_ROUTES.pickingOrderType,
-    state: { pickingSession: session },
+    state: {
+      pickingSession: {
+        ...clearPickingSessionExecution(session),
+        singleMode: sm,
+        multiMode: mm,
+      },
+    },
   };
 }
 
-function sessionHasMatchingCart(
-  session: WmsPickingSessionState,
-  tileType: "BULK" | "BASKETS" | null,
-): boolean {
-  if (session.cartId == null || session.cartId <= 0) return false;
-  if (!tileType) return true;
-  return cartTypeMatchesPickingTile(tileType, session.physicalCartType);
-}
-
+/**
+ * Po wyborze rodzaju:
+ * - wymaga wózka → modal skanu (NIGDY nie pomijaj przez wolny/stary wózek),
+ * - bez wózka → lista produktów.
+ */
 export function resolveAfterOrderTypeChoice(
   session: WmsPickingSessionState,
   choice: WmsPickingOrderTypeChoice,
@@ -186,46 +214,30 @@ export function resolveAfterOrderTypeChoice(
       : modeForCartHint != null
         ? cartTypeHintForMode(modeForCartHint)
         : null;
+
   const next: WmsPickingSessionState = {
     ...session,
     orderTypeChoice: choice,
     requireCart: needCart,
     cartType,
-    cartCode: needCart ? session.cartCode : null,
-    cartName: needCart ? session.cartName : null,
-    cartId: needCart ? session.cartId : null,
-    physicalCartType: needCart ? session.physicalCartType : null,
+    // Order-type choice always starts clean execution for this tour.
+    cartCode: null,
+    cartName: null,
+    cartId: null,
+    physicalCartType: null,
+    pickingSessionId: null,
+    cartless: needCart ? false : true,
   };
+
   if (needCart) {
-    // Aktywna sesja już ma wózek — nigdy ponownie nie skanuj (nawet przy mismatch hintów UI).
-    if (session.cartId != null && session.cartId > 0) {
-      return {
-        path: WMS_ROUTES.pickingProducts,
-        state: {
-          pickingSession: {
-            ...next,
-            cartId: session.cartId,
-            cartCode: session.cartCode,
-            cartName: session.cartName,
-            physicalCartType: session.physicalCartType,
-            preCartBack: "order-type",
-          },
-        },
-      };
-    }
-    if (sessionHasMatchingCart(next, cartType)) {
-      return {
-        path: WMS_ROUTES.pickingProducts,
-        state: { pickingSession: { ...next, preCartBack: "order-type" } },
-      };
-    }
     return {
       path: WMS_ROUTES.pickingCart,
-      state: { pickingSession: { ...next, preCartBack: "order-type" } },
+      state: { pickingSession: { ...next, cartless: false, preCartBack: "order-type" } },
     };
   }
+
   return {
     path: WMS_ROUTES.pickingProducts,
-    state: { pickingSession: next },
+    state: { pickingSession: { ...next, cartless: true } },
   };
 }

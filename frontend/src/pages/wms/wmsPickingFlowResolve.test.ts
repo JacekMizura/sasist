@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   canOfferAllOrderTypes,
+  canResumePickingSession,
   cartTypeHintForOrderTypeChoice,
   modeRequiresCartScan,
   needsCartAfterOrderTypeChoice,
@@ -30,22 +31,36 @@ describe("visibleOrderTypeChoices / canOfferAll", () => {
   it("hides all when cart gates or cart types differ", () => {
     expect(canOfferAllOrderTypes("cart_scan", "cart_no_scan")).toBe(false);
     expect(visibleOrderTypeChoices("cart_scan", "cart_no_scan")).toEqual(["single", "multi"]);
-    // cart_scan (BULK) + baskets (BASKETS) — nie mieszaj pod „Wszystkie”
     expect(canOfferAllOrderTypes("cart_scan", "baskets")).toBe(false);
     expect(visibleOrderTypeChoices("cart_scan", "baskets")).toEqual(["single", "multi"]);
   });
 });
 
 describe("resolveAfterStatusWithConfig", () => {
-  it("routes to order-type when modes configured and no active cart", () => {
+  it("routes to order-type for new tour even when modes require cart", () => {
     const s = baseSession();
     s.singleMode = "cart_scan";
     s.multiMode = "cart_scan";
+    s.requireCart = true;
+    s.cartType = "BULK";
     const t = resolveAfterStatusWithConfig(s);
     expect(t.path).toBe(WMS_ROUTES.pickingOrderType);
+    expect(t.state.pickingSession.cartId).toBeNull();
+    expect(t.state.pickingSession.orderTypeChoice).toBeUndefined();
   });
 
-  it("resumes directly to products when active cart is on session", () => {
+  it("does not skip order-type because a free/stale cart id is present without order_type", () => {
+    const s = baseSession();
+    s.singleMode = "cart_scan";
+    s.multiMode = "cart_scan";
+    s.cartId = 99;
+    s.cartCode = "FREE";
+    const t = resolveAfterStatusWithConfig(s);
+    expect(t.path).toBe(WMS_ROUTES.pickingOrderType);
+    expect(t.state.pickingSession.cartId).toBeNull();
+  });
+
+  it("resumes directly to products when active cart + order_type are set", () => {
     const s = baseSession();
     s.singleMode = "cart_scan";
     s.multiMode = "cart_scan";
@@ -53,10 +68,23 @@ describe("resolveAfterStatusWithConfig", () => {
     s.cartCode = "120X80";
     s.physicalCartType = "bulk";
     s.orderTypeChoice = "all";
+    expect(canResumePickingSession(s)).toBe(true);
     const t = resolveAfterStatusWithConfig(s);
     expect(t.path).toBe(WMS_ROUTES.pickingProducts);
     expect(t.state.pickingSession.cartId).toBe(123);
     expect(t.state.pickingSession.orderTypeChoice).toBe("all");
+  });
+
+  it("resumes cartless session with order_type to products", () => {
+    const s = baseSession();
+    s.singleMode = "cart_no_scan";
+    s.multiMode = "cart_no_scan";
+    s.cartless = true;
+    s.pickingSessionId = 55;
+    s.orderTypeChoice = "single";
+    const t = resolveAfterStatusWithConfig(s);
+    expect(t.path).toBe(WMS_ROUTES.pickingProducts);
+    expect(t.state.pickingSession.orderTypeChoice).toBe("single");
   });
 });
 
@@ -71,6 +99,7 @@ describe("resolveAfterOrderTypeChoice", () => {
     expect(t.state.pickingSession.requireCart).toBe(true);
     expect(t.state.pickingSession.cartType).toBe("BULK");
     expect(t.state.pickingSession.preCartBack).toBe("order-type");
+    expect(t.state.pickingSession.cartId).toBeNull();
   });
 
   it("cart_no_scan multi → products without cart", () => {
@@ -94,7 +123,7 @@ describe("resolveAfterOrderTypeChoice", () => {
     expect(cartTypeHintForOrderTypeChoice("cart_scan", "baskets", "all")).toBeNull();
   });
 
-  it("skips cart scan when matching cart already on session", () => {
+  it("never skips cart scan just because a cart id was left on session", () => {
     const s = baseSession();
     s.singleMode = "cart_scan";
     s.multiMode = "cart_scan";
@@ -102,20 +131,17 @@ describe("resolveAfterOrderTypeChoice", () => {
     s.cartCode = "WZ-03";
     s.physicalCartType = "bulk";
     const t = resolveAfterOrderTypeChoice(s, "single");
-    expect(t.path).toBe(WMS_ROUTES.pickingProducts);
-    expect(t.state.pickingSession.cartId).toBe(42);
+    expect(t.path).toBe(WMS_ROUTES.pickingCart);
+    expect(t.state.pickingSession.cartId).toBeNull();
   });
 
-  it("still asks for cart when physical type mismatches tile", () => {
+  it("baskets multi → cart with BASKETS hint", () => {
     const s = baseSession();
-    s.singleMode = "cart_scan";
-    s.multiMode = "cart_scan";
-    s.cartId = 42;
-    s.cartCode = "WK-07";
-    s.physicalCartType = "multi";
-    const t = resolveAfterOrderTypeChoice(s, "single");
-    // Aktywna sesja ma już cartId — zawsze wznów, bez ponownego skanu.
-    expect(t.path).toBe(WMS_ROUTES.pickingProducts);
-    expect(t.state.pickingSession.cartId).toBe(42);
+    s.singleMode = "cart_no_scan";
+    s.multiMode = "baskets";
+    const t = resolveAfterOrderTypeChoice(s, "multi");
+    expect(t.path).toBe(WMS_ROUTES.pickingCart);
+    expect(t.state.pickingSession.cartType).toBe("BASKETS");
+    expect(t.state.pickingSession.orderTypeChoice).toBe("multi");
   });
 });

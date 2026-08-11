@@ -628,6 +628,19 @@ export default function WmsPickingProductsPage() {
       navigate(WMS_ROUTES.picking, { replace: true });
       return;
     }
+    // Lista produktów wymaga wyboru rodzaju (poza dogrywką recovery).
+    if (
+      (pickingSession.recoveryOrderId == null || pickingSession.recoveryOrderId <= 0) &&
+      pickingSession.orderTypeChoice !== "single" &&
+      pickingSession.orderTypeChoice !== "multi" &&
+      pickingSession.orderTypeChoice !== "all"
+    ) {
+      navigate(WMS_ROUTES.pickingOrderType, {
+        replace: true,
+        state: { pickingSession },
+      });
+      return;
+    }
     if (!productLinesLoadKey || productLinesLoadKeyRef.current === productLinesLoadKey) {
       return;
     }

@@ -26,6 +26,18 @@ const EMPTY_SLICE: WmsPickingOrderTypeHubSlice = {
   products_total: 0,
 };
 
+function orderTypeProgressLabel(picked: number, total: number): string {
+  if (picked > 1e-9) {
+    return `Produkty: zebrano ${picked} / ${total} szt.`;
+  }
+  return `Produkty do zebrania: ${total} szt.`;
+}
+
+/**
+ * Pierwszy krok NOWEJ tury zbierania — wybór single / multi / all.
+ * Nie pomijamy tego ekranu z powodu wózka, wolnego wózka ani domyślnego order_type.
+ * Wznowienie aktywnej sesji omija ten ekran wcześniej (status → products).
+ */
 export default function WmsPickingOrderTypePage() {
   const navigate = useNavigate();
   const routerLocation = useLocation();
@@ -44,7 +56,6 @@ export default function WmsPickingOrderTypePage() {
     single: WmsPickingOrderTypeHubSlice;
     multi: WmsPickingOrderTypeHubSlice;
     all: WmsPickingOrderTypeHubSlice;
-    activeOrderType: WmsPickingOrderTypeChoice | null;
   } | null>(null);
 
   const choices = useMemo(
@@ -59,15 +70,6 @@ export default function WmsPickingOrderTypePage() {
     }
     if (session.singleMode == null && session.multiMode == null) {
       navigate(WMS_ROUTES.picking, { replace: true });
-      return;
-    }
-    // Aktywna sesja z wózkiem — pomiń „Wybierz”, wznów zbieranie.
-    if (session.cartId != null && session.cartId > 0) {
-      const { path, state } = resolveAfterOrderTypeChoice(
-        session,
-        session.orderTypeChoice ?? "all",
-      );
-      navigate(path, { replace: true, state });
     }
   }, [session, navigate]);
 
@@ -83,24 +85,16 @@ export default function WmsPickingOrderTypePage() {
         warehouseId,
         session.orderUiStatusId,
       );
-      const active =
-        data.active_order_type === "single" ||
-        data.active_order_type === "multi" ||
-        data.active_order_type === "all"
-          ? data.active_order_type
-          : null;
       setHub({
         single: data.single,
         multi: data.multi,
         all: data.all,
-        activeOrderType: active,
       });
     } catch {
       setHub({
         single: EMPTY_SLICE,
         multi: EMPTY_SLICE,
         all: EMPTY_SLICE,
-        activeOrderType: null,
       });
     } finally {
       setHubLoading(false);
@@ -131,7 +125,6 @@ export default function WmsPickingOrderTypePage() {
         wTrakcie: 0,
       },
     };
-    // Po wyborze rodzaju → cart (popup skanu) albo produkty — nigdy pomijamy skanu gdy wymagany.
     const { path, state } = resolveAfterOrderTypeChoice(enriched, choice);
     navigate(path, { state });
   };
@@ -146,8 +139,6 @@ export default function WmsPickingOrderTypePage() {
 
   const sliceFor = (id: WmsPickingOrderTypeChoice): WmsPickingOrderTypeHubSlice =>
     hub?.[id] ?? EMPTY_SLICE;
-
-  const activeOrderType = hub?.activeOrderType ?? null;
 
   return (
     <div className="flex min-h-0 w-full flex-1 flex-col bg-white">
@@ -179,54 +170,41 @@ export default function WmsPickingOrderTypePage() {
           </div>
         ) : (
           <ul
-            className="mx-auto flex w-full max-w-[1200px] list-none flex-wrap justify-center gap-4 p-0"
+            className="mx-auto grid w-full max-w-[1100px] list-none grid-cols-1 gap-4 p-0 sm:grid-cols-2 lg:grid-cols-3"
             aria-label="Typ zamówień do zbierania"
           >
             {choices.map((id) => {
               const meta = CHOICE_META[id];
               const slice = sliceFor(id);
-              const isActive = activeOrderType === id;
               const picked = Math.max(0, Number(slice.products_picked) || 0);
               const total = Math.max(0, Number(slice.products_total) || 0);
               return (
-                <li
-                  key={id}
-                  className="flex w-full min-w-0 max-w-[420px] basis-full sm:basis-[calc(50%-0.5rem)] lg:basis-[340px] lg:max-w-[380px]"
-                >
+                <li key={id} className="min-w-0">
                   <button
                     type="button"
-                    aria-current={isActive ? "true" : undefined}
                     className={[
-                      "flex h-full min-h-[6.5rem] w-full items-center justify-between gap-4 rounded-xl border bg-white px-5 py-4 text-left shadow-sm transition",
+                      "flex h-full min-h-[7rem] w-full flex-col items-stretch justify-between gap-3 rounded-xl border border-slate-200 bg-white px-5 py-4 text-left shadow-sm transition",
                       "hover:border-slate-300 hover:shadow-md active:scale-[0.99]",
                       "focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-300",
-                      isActive
-                        ? "border-emerald-400/90 bg-emerald-50/40 ring-1 ring-emerald-200/80"
-                        : "border-slate-200",
                     ].join(" ")}
                     onClick={() => onPick(id)}
                   >
                     <span
                       className={[
-                        "min-w-0 flex-1 font-bold leading-snug text-slate-900",
+                        "font-bold leading-snug text-slate-900",
                         wmsTypoClass.base,
                       ].join(" ")}
                     >
                       {meta.label}
                     </span>
-                    <div className="shrink-0 text-right">
-                      <p className="text-[11px] font-medium leading-tight text-slate-500">
-                        Liczba produktów zebranych
-                      </p>
-                      <p
-                        className={[
-                          "mt-0.5 font-bold tabular-nums text-slate-900",
-                          wmsTypoClass.quantity,
-                        ].join(" ")}
-                      >
-                        {picked}/{total}
-                      </p>
-                    </div>
+                    <p
+                      className={[
+                        "font-semibold tabular-nums leading-snug text-slate-700",
+                        wmsTypoClass.quantity,
+                      ].join(" ")}
+                    >
+                      {orderTypeProgressLabel(picked, total)}
+                    </p>
                   </button>
                 </li>
               );

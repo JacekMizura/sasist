@@ -15,7 +15,7 @@ import { playScanBeep } from "../../utils/playScanBeep";
 import { SCAN_CONSUMED } from "../../utils/wmsScanDispatch";
 import { DAMAGE_TENANT_ID } from "../damage/damageShared";
 import { WmsFlowStatusTileButton } from "./WmsFlowStatusTileButton";
-import { resolveAfterStatusWithConfig, sessionWithPickingFlowConfig } from "./wmsPickingFlowResolve";
+import { resolveAfterStatusWithConfig, sessionWithPickingFlowConfig, explicitOrderTypeChoice } from "./wmsPickingFlowResolve";
 import {
   findActiveStatusRowForSession,
   looksLikePickingCartCode,
@@ -171,23 +171,46 @@ export default function WmsPickingStatusPage() {
         });
       }
 
-      const orderTypeChoice =
-        r.active_order_type === "single" ||
-        r.active_order_type === "multi" ||
-        r.active_order_type === "all"
-          ? r.active_order_type
-          : active?.order_type === "single" ||
-              active?.order_type === "multi" ||
-              active?.order_type === "all"
-            ? active.order_type
-            : ("all" as const);
-
       const resumeStatusId =
         r.session_source_status_id != null && r.session_source_status_id > 0
           ? r.session_source_status_id
           : active?.source_status_id != null && active.source_status_id > 0
             ? active.source_status_id
             : r.source_status_id;
+
+      const orderTypeChoice = explicitOrderTypeChoice(
+        r.active_order_type ?? active?.order_type ?? null,
+      );
+
+      // Bez konkretnego order_type nie wznawiaj — pokaż wybór rodzaju (nowa tura UI).
+      if (orderTypeChoice == null) {
+        setResolvingStatusId(r.source_status_id);
+        setErr(null);
+        try {
+          const cfg = await getWmsPickingFlowConfig(DAMAGE_TENANT_ID, warehouseId, resumeStatusId);
+          const session = {
+            ...sessionWithPickingFlowConfig(
+              {
+                orderUiStatusId: resumeStatusId,
+                orderUiStatusName: r.status,
+                orderUiStatusColor: r.color,
+                mainGroup: r.main_group as OrderUiMainGroup,
+              },
+              cfg,
+            ),
+            hubOrderCount: Number(r.order_count) || 0,
+            requireCart: r.require_cart === true,
+            cartType: r.cart_type ?? null,
+          };
+          const { path, state } = resolveAfterStatusWithConfig(session);
+          navigate(path, { state });
+        } catch {
+          setErr("Nie udało się otworzyć sesji zbierania.");
+        } finally {
+          setResolvingStatusId(null);
+        }
+        return;
+      }
 
       const sessionCartType =
         r.active_cart_type === "BASKETS" || r.active_cart_type === "BULK"
@@ -219,7 +242,9 @@ export default function WmsPickingStatusPage() {
                     cartName: reused.cartName,
                     physicalCartType: reused.physicalCartType,
                   }
-                : {}),
+                : {
+                    cartless: true as const,
+                  }),
             },
             cfg,
           ),
@@ -230,7 +255,10 @@ export default function WmsPickingStatusPage() {
                 cartType: sessionCartType,
                 cartless: false as const,
               }
-            : {}),
+            : {
+                requireCart: false as const,
+                cartless: true as const,
+              }),
           hubOrderCount: Number(r.order_count) || 0,
           hubPickStats: {
             zebrane: Math.max(0, Number(picked) || 0),
@@ -370,14 +398,8 @@ export default function WmsPickingStatusPage() {
       return;
     }
 
-    // Nowa tura: STATUS → rodzaj zamówień (→ popup wózka / produkty).
-    if (r.require_cart && globalCart) {
-      const own = findActiveStatusRowForSession(latestRows, latest);
-      if (own) {
-        await openExistingSession(own, latest);
-        return;
-      }
-    }
+    // Nowa tura: STATUS → ZAWSZE rodzaj zamówień (→ popup wózka / produkty).
+    clearPickingCart();
 
     setResolvingStatusId(r.source_status_id);
     setErr(null);
@@ -394,8 +416,6 @@ export default function WmsPickingStatusPage() {
           cfg,
         ),
         hubOrderCount: Number(r.order_count) || 0,
-        requireCart: r.require_cart === true,
-        cartType: r.cart_type ?? null,
       };
       const { path, state } = resolveAfterStatusWithConfig(session);
       navigate(path, { state });
