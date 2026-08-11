@@ -1,37 +1,33 @@
 /**
- * Kolejność dostaw — ekran roboczy SASIST (lista, statusy, filtry, akcje).
- * Dane z istniejącego planu zmiany — bez zmian API / silnika.
+ * Kolejność dostaw — kolejka operacyjna otwartych PZ wymagających pracy magazynu.
+ * Dane z /wms/delivery-work-queue (nie z planu Supply Flow).
  */
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { ArrowRight, ListOrdered, RefreshCw, Search } from "lucide-react";
+import {
+  ArrowDown,
+  ArrowRight,
+  ArrowUp,
+  ListOrdered,
+  RefreshCw,
+  Search,
+} from "lucide-react";
 import { ActiveWarehouseRequiredBanner } from "../../components/layout/ActiveWarehouseRequiredBanner";
 import { PageHeader } from "../../components/layout/PageHeader";
 import { AppEmptyState } from "../../components/app-shell";
 import { SecondaryButton, StatusBadge, typography } from "@/design-system";
 import { brandOutlineButtonClass } from "../../design-system/brandUi";
 import { useActiveWarehouseContext } from "../../hooks/useActiveWarehouseContext";
-import { useSupplyFlowPlan } from "../wms/supply-flow/hooks/useSupplyFlowPlan";
 import {
-  markLeavingForWork,
-  type UrgencyBand,
-} from "../wms/supply-flow/utils/shiftBoard";
+  getDeliveryWorkQueue,
+  reorderDeliveryWorkQueue,
+  setDeliveryWorkQueuePriority,
+  type DeliveryWorkQueueItem,
+  type DeliveryWorkQueuePriority,
+} from "../../api/deliveryWorkQueueApi";
+import { DAMAGE_TENANT_ID } from "../../constants/panelTenant";
 
-type PriorityFilter = "all" | UrgencyBand;
-
-type QueueRow = {
-  id: string | number;
-  title: string;
-  supplier: string | null;
-  documentLabel: string | null;
-  phaseLabel: string;
-  urgencyLabel: string;
-  urgencyBand: UrgencyBand;
-  effectLine: string | null;
-  ctaLabel: string;
-  ctaHref: string;
-  primary: boolean;
-};
+type PriorityFilter = "all" | DeliveryWorkQueuePriority;
 
 const PRIORITY_FILTERS: Array<{ id: PriorityFilter; label: string }> = [
   { id: "all", label: "Wszystkie" },
@@ -41,7 +37,14 @@ const PRIORITY_FILTERS: Array<{ id: PriorityFilter; label: string }> = [
   { id: "later", label: "Do wykonania" },
 ];
 
-function urgencyTone(band: UrgencyBand): "danger" | "warning" | "info" | "neutral" {
+const PRIORITY_OPTIONS: Array<{ id: DeliveryWorkQueuePriority; label: string }> = [
+  { id: "urgent", label: "Pilne" },
+  { id: "first", label: "Najpierw" },
+  { id: "next", label: "Następne" },
+  { id: "later", label: "Do wykonania" },
+];
+
+function urgencyTone(band: DeliveryWorkQueuePriority): "danger" | "warning" | "info" | "neutral" {
   switch (band) {
     case "urgent":
       return "danger";
@@ -54,66 +57,156 @@ function urgencyTone(band: UrgencyBand): "danger" | "warning" | "info" | "neutra
   }
 }
 
+function fmtQty(n: number): string {
+  return new Intl.NumberFormat("pl-PL", { maximumFractionDigits: 2 }).format(n);
+}
+
+function fmtDate(raw: string | null | undefined): string {
+  if (!raw) return "—";
+  const d = new Date(raw);
+  if (Number.isNaN(d.getTime())) return "—";
+  return d.toLocaleDateString("pl-PL");
+}
+
 export default function KolejnoscDostawPage() {
   const { hasActiveWarehouse, warehouseId } = useActiveWarehouseContext();
-  const { board, loading, refreshing, error, refresh } = useSupplyFlowPlan(
-    hasActiveWarehouse ? warehouseId : null,
-  );
+  const [items, setItems] = useState<DeliveryWorkQueueItem[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [busyId, setBusyId] = useState<number | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [priority, setPriority] = useState<PriorityFilter>("all");
 
-  const rows: QueueRow[] = useMemo(() => {
-    const focus: QueueRow[] = board.attention
-      ? [
-          {
-            id: board.attention.deliveryId ?? "focus",
-            title: board.attention.title,
-            supplier: null,
-            documentLabel: null,
-            phaseLabel: "Teraz",
-            urgencyLabel: "Decyzja",
-            urgencyBand: "urgent",
-            effectLine: board.attention.whyBullets[0] || null,
-            ctaLabel: board.attention.ctaLabel,
-            ctaHref: board.attention.ctaHref,
-            primary: true,
-          },
-        ]
-      : [];
+  const load = useCallback(async () => {
+    if (!hasActiveWarehouse || warehouseId == null) {
+      setItems([]);
+      return;
+    }
+    setLoading(true);
+    setError(null);
+    try {
+      const data = await getDeliveryWorkQueue(DAMAGE_TENANT_ID, warehouseId);
+      setItems(data.items ?? []);
+    } catch (e: unknown) {
+      const msg =
+        (e as { response?: { data?: { detail?: string } }; message?: string })?.response?.data
+          ?.detail ||
+        (e as { message?: string })?.message ||
+        "Nie udało się wczytać kolejki dostaw";
+      setError(String(msg));
+      setItems([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [hasActiveWarehouse, warehouseId]);
 
-    const queue: QueueRow[] = board.queue.map((q) => ({
-      id: q.deliveryId,
-      title: q.title,
-      supplier: q.supplier || null,
-      documentLabel: q.documentLabel || null,
-      phaseLabel: q.phaseLabel,
-      urgencyLabel: q.urgencyLabel,
-      urgencyBand: q.urgencyBand,
-      effectLine: q.effectLine || null,
-      ctaLabel: q.ctaLabel,
-      ctaHref: q.ctaHref,
-      primary: false,
-    }));
+  useEffect(() => {
+    void load();
+  }, [load]);
 
-    return [...focus, ...queue];
-  }, [board.attention, board.queue]);
+  const refresh = useCallback(async () => {
+    if (!hasActiveWarehouse || warehouseId == null) return;
+    setRefreshing(true);
+    setError(null);
+    try {
+      const data = await getDeliveryWorkQueue(DAMAGE_TENANT_ID, warehouseId);
+      setItems(data.items ?? []);
+    } catch (e: unknown) {
+      const msg =
+        (e as { response?: { data?: { detail?: string } }; message?: string })?.response?.data
+          ?.detail ||
+        (e as { message?: string })?.message ||
+        "Nie udało się odświeżyć kolejki";
+      setError(String(msg));
+    } finally {
+      setRefreshing(false);
+    }
+  }, [hasActiveWarehouse, warehouseId]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return rows.filter((row) => {
-      if (priority !== "all" && !row.primary && row.urgencyBand !== priority) return false;
-      if (priority !== "all" && row.primary && priority !== "urgent") return false;
+    return items.filter((row) => {
+      if (priority !== "all" && row.priority !== priority) return false;
       if (!q) return true;
-      const hay = `${row.title} ${row.supplier ?? ""} ${row.documentLabel ?? ""} ${row.phaseLabel}`.toLowerCase();
+      const hay = [
+        row.document_number,
+        row.supplier_name ?? "",
+        row.delivery_name ?? "",
+        row.status_label,
+        String(row.pz_id),
+      ]
+        .join(" ")
+        .toLowerCase();
       return hay.includes(q);
     });
-  }, [rows, query, priority]);
+  }, [items, query, priority]);
+
+  const moveRow = async (pzId: number, direction: -1 | 1) => {
+    if (warehouseId == null || busyId != null) return;
+    const idx = items.findIndex((x) => x.pz_id === pzId);
+    const swapIdx = idx + direction;
+    if (idx < 0 || swapIdx < 0 || swapIdx >= items.length) return;
+    const next = [...items];
+    const a = next[idx]!;
+    const b = next[swapIdx]!;
+    next[idx] = b;
+    next[swapIdx] = a;
+    const ordered = next.map((x) => x.pz_id);
+    setBusyId(pzId);
+    setError(null);
+    try {
+      const data = await reorderDeliveryWorkQueue(DAMAGE_TENANT_ID, warehouseId, ordered);
+      setItems(data.items ?? []);
+    } catch (e: unknown) {
+      const msg =
+        (e as { response?: { data?: { detail?: string } }; message?: string })?.response?.data
+          ?.detail ||
+        (e as { message?: string })?.message ||
+        "Nie udało się zapisać kolejności";
+      setError(String(msg));
+      void load();
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const changePriority = async (pzId: number, nextPriority: DeliveryWorkQueuePriority) => {
+    if (warehouseId == null || busyId != null) return;
+    setBusyId(pzId);
+    setError(null);
+    try {
+      const updated = await setDeliveryWorkQueuePriority(
+        DAMAGE_TENANT_ID,
+        warehouseId,
+        pzId,
+        nextPriority,
+      );
+      setItems((prev) =>
+        [...prev]
+          .map((x) => (x.pz_id === pzId ? { ...x, ...updated } : x))
+          .sort((a, b) => a.queue_sort - b.queue_sort),
+      );
+      // Reload to respect full sort (priority + queue_sort).
+      const data = await getDeliveryWorkQueue(DAMAGE_TENANT_ID, warehouseId);
+      setItems(data.items ?? []);
+    } catch (e: unknown) {
+      const msg =
+        (e as { response?: { data?: { detail?: string } }; message?: string })?.response?.data
+          ?.detail ||
+        (e as { message?: string })?.message ||
+        "Nie udało się zapisać priorytetu";
+      setError(String(msg));
+    } finally {
+      setBusyId(null);
+    }
+  };
 
   return (
     <div className="min-w-0 space-y-4">
       <PageHeader
         title="Kolejność dostaw"
-        subtitle="W jakiej kolejności prowadzić pracę przy dostawach na tej zmianie."
+        subtitle="Co przyjąć / rozlokować teraz i w jakiej kolejności — na podstawie otwartych PZ."
         breadcrumbs={[
           { label: "Zarządzanie", to: "/zarzadzanie-magazynem/pulpit" },
           { label: "Kolejność dostaw" },
@@ -154,7 +247,7 @@ export default function KolejnoscDostawPage() {
                 type="search"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                placeholder="Dostawa, dostawca, dokument…"
+                placeholder="PZ, dostawca…"
                 className="w-full rounded-lg border border-slate-200 bg-white py-2 pl-9 pr-3 text-sm text-slate-800 placeholder:text-slate-400 hover:border-slate-300 focus:border-orange-300 focus:outline-none focus:ring-2 focus:ring-orange-200"
               />
             </span>
@@ -181,7 +274,7 @@ export default function KolejnoscDostawPage() {
         </div>
       ) : null}
 
-      {loading && rows.length === 0 ? (
+      {loading && items.length === 0 ? (
         <p className={typography.bodyMuted}>Ładowanie kolejki…</p>
       ) : null}
 
@@ -190,8 +283,8 @@ export default function KolejnoscDostawPage() {
           icon={ListOrdered}
           title="Brak dostaw w kolejce"
           description={
-            rows.length === 0
-              ? "Na tej zmianie nie ma dostaw wymagających kolejności."
+            items.length === 0
+              ? "Wszystkie aktualne dostawy są zakończone albo nie wymagają obsługi przyjęcia / rozlokowania."
               : "Żadna pozycja nie pasuje do filtrów."
           }
         />
@@ -199,61 +292,122 @@ export default function KolejnoscDostawPage() {
 
       {filtered.length > 0 ? (
         <div className="min-w-0 overflow-x-auto">
-          <table className="w-full min-w-[720px] border-collapse text-left">
+          <table className="w-full min-w-[960px] border-collapse text-left">
             <thead>
               <tr className="border-b border-slate-100">
                 <th className={`px-3 py-3 ${typography.tableHead}`}>#</th>
-                <th className={`px-3 py-3 ${typography.tableHead}`}>Dostawa</th>
-                <th className={`px-3 py-3 ${typography.tableHead}`}>Faza</th>
+                <th className={`px-3 py-3 ${typography.tableHead}`}>Dokument</th>
+                <th className={`px-3 py-3 ${typography.tableHead}`}>Dostawca</th>
+                <th className={`px-3 py-3 ${typography.tableHead}`}>Status</th>
+                <th className={`px-3 py-3 ${typography.tableHead}`}>Pozycje / szt.</th>
+                <th className={`px-3 py-3 ${typography.tableHead}`}>Termin</th>
                 <th className={`px-3 py-3 ${typography.tableHead}`}>Priorytet</th>
-                <th className={`px-3 py-3 ${typography.tableHead}`}>Efekt / status</th>
+                <th className={`px-3 py-3 ${typography.tableHead}`}>Kolejność</th>
                 <th className={`px-3 py-3 text-right ${typography.tableHead}`}>Akcja</th>
               </tr>
             </thead>
             <tbody>
-              {filtered.map((row, idx) => (
-                <tr
-                  key={String(row.id)}
-                  className={`border-b border-slate-50 hover:bg-slate-50/50 ${
-                    row.primary ? "bg-orange-50/40" : ""
-                  }`}
-                >
-                  <td className={`px-3 py-3 tabular-nums ${typography.caption}`}>{idx + 1}</td>
-                  <td className="px-3 py-3">
-                    <p className={typography.bodyStrong}>{row.title}</p>
-                    {(row.supplier || row.documentLabel) && (
+              {filtered.map((row, idx) => {
+                const globalIdx = items.findIndex((x) => x.pz_id === row.pz_id);
+                const canUp = globalIdx > 0;
+                const canDown = globalIdx >= 0 && globalIdx < items.length - 1;
+                return (
+                  <tr
+                    key={row.pz_id}
+                    className={`border-b border-slate-50 hover:bg-slate-50/50 ${
+                      row.priority === "urgent" ? "bg-orange-50/40" : ""
+                    }`}
+                  >
+                    <td className={`px-3 py-3 tabular-nums ${typography.caption}`}>
+                      {row.queue_sort || idx + 1}
+                    </td>
+                    <td className="px-3 py-3">
+                      <p className={typography.bodyStrong}>{row.document_number}</p>
                       <p className={`mt-0.5 ${typography.caption}`}>
-                        {[row.supplier, row.documentLabel].filter(Boolean).join(" · ")}
+                        {row.started ? "W toku" : "Do rozpoczęcia"}
+                        {row.work_phase === "putaway" ? " · rozlokowanie" : " · przyjęcie"}
                       </p>
-                    )}
-                  </td>
-                  <td className={`px-3 py-3 ${typography.body}`}>{row.phaseLabel}</td>
-                  <td className="px-3 py-3">
-                    <StatusBadge tone={urgencyTone(row.urgencyBand)} density="compact">
-                      {row.urgencyLabel}
-                    </StatusBadge>
-                  </td>
-                  <td className={`max-w-xs px-3 py-3 ${typography.bodyMuted}`}>
-                    {row.effectLine || "—"}
-                  </td>
-                  <td className="px-3 py-3 text-right">
-                    <Link
-                      to={row.ctaHref}
-                      onClick={() =>
-                        markLeavingForWork({
-                          leftAt: Date.now(),
-                          title: row.title,
-                          deliveryId: typeof row.id === "number" ? row.id : null,
-                        })
-                      }
-                      className={`${brandOutlineButtonClass} gap-1 px-3 py-1.5 text-xs`}
-                    >
-                      {row.ctaLabel}
-                      <ArrowRight size={14} />
-                    </Link>
-                  </td>
-                </tr>
-              ))}
+                    </td>
+                    <td className={`px-3 py-3 ${typography.body}`}>
+                      {row.supplier_name || "—"}
+                    </td>
+                    <td className="px-3 py-3">
+                      <StatusBadge tone="neutral" density="compact">
+                        {row.status_label}
+                      </StatusBadge>
+                    </td>
+                    <td className={`px-3 py-3 tabular-nums ${typography.body}`}>
+                      {row.line_count} poz. · {fmtQty(row.quantity_ordered)} szt.
+                    </td>
+                    <td className={`px-3 py-3 ${typography.body}`}>
+                      {fmtDate(row.expected_date || row.created_at)}
+                    </td>
+                    <td className="px-3 py-3">
+                      <select
+                        className="rounded-md border border-slate-200 bg-white px-2 py-1 text-xs font-semibold text-slate-700"
+                        value={row.priority}
+                        disabled={busyId === row.pz_id}
+                        onChange={(e) =>
+                          void changePriority(row.pz_id, e.target.value as DeliveryWorkQueuePriority)
+                        }
+                        aria-label={`Priorytet ${row.document_number}`}
+                      >
+                        {PRIORITY_OPTIONS.map((o) => (
+                          <option key={o.id} value={o.id}>
+                            {o.label}
+                          </option>
+                        ))}
+                      </select>
+                      <div className="mt-1">
+                        <StatusBadge tone={urgencyTone(row.priority)} density="compact">
+                          {PRIORITY_OPTIONS.find((o) => o.id === row.priority)?.label ?? row.priority}
+                        </StatusBadge>
+                      </div>
+                    </td>
+                    <td className="px-3 py-3">
+                      <div className="flex items-center gap-1">
+                        <button
+                          type="button"
+                          className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 disabled:opacity-40"
+                          disabled={!canUp || busyId != null || priority !== "all" || !!query.trim()}
+                          onClick={() => void moveRow(row.pz_id, -1)}
+                          aria-label="Wyżej w kolejce"
+                          title={
+                            priority !== "all" || query.trim()
+                              ? "Wyczyść filtr, aby zmieniać kolejność"
+                              : "Wyżej"
+                          }
+                        >
+                          <ArrowUp size={14} />
+                        </button>
+                        <button
+                          type="button"
+                          className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 disabled:opacity-40"
+                          disabled={!canDown || busyId != null || priority !== "all" || !!query.trim()}
+                          onClick={() => void moveRow(row.pz_id, 1)}
+                          aria-label="Niżej w kolejce"
+                          title={
+                            priority !== "all" || query.trim()
+                              ? "Wyczyść filtr, aby zmieniać kolejność"
+                              : "Niżej"
+                          }
+                        >
+                          <ArrowDown size={14} />
+                        </button>
+                      </div>
+                    </td>
+                    <td className="px-3 py-3 text-right">
+                      <Link
+                        to={row.cta_path}
+                        className={`${brandOutlineButtonClass} gap-1 px-3 py-1.5 text-xs`}
+                      >
+                        {row.cta_label}
+                        <ArrowRight size={14} />
+                      </Link>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>

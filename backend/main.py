@@ -400,6 +400,7 @@ from .api.wms_packing_entry import router as wms_packing_entry_router
 from .api.wms_packing_basket_entry import router as wms_packing_basket_entry_router
 from .api.wms_dashboard import router as wms_dashboard_router
 from .api.warehouse_operations import router as warehouse_operations_router
+from .api.delivery_work_queue import router as delivery_work_queue_router
 from .api.packaging_intelligence import router as packaging_intelligence_router
 from .api.wms_smart_matching import router as wms_smart_matching_router
 from .api.wms_products import router as wms_products_router
@@ -2287,6 +2288,7 @@ _API_ROUTERS = (
     wms_packing_basket_entry_router,
     wms_dashboard_router,
     warehouse_operations_router,
+    delivery_work_queue_router,
     packaging_intelligence_router,
     wms_smart_matching_router,
     wms_products_router,

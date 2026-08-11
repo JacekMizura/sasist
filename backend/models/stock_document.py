@@ -67,6 +67,10 @@ class StockDocument(Base):
     receiving_status = Column(String(32), nullable=False, default="NEW", index=True)
     # WMS rozlokowanie: NOT_STARTED | IN_PROGRESS | DONE — derived from line putaway vs received.
     putaway_status = Column(String(32), nullable=False, default="NOT_STARTED", index=True)
+    #: Operator queue on „Kolejność dostaw” — lower = earlier (1 = first).
+    delivery_queue_sort = Column(Integer, nullable=True, index=True)
+    #: urgent | first | next | later — operator priority band for the work queue.
+    delivery_queue_priority = Column(String(16), nullable=False, default="later", server_default=text("'later'"), index=True)
     #: Default for new lines: True = standard warehouse putaway; False = bez rozlokowania (crossdock).
     default_requires_putaway = Column(Boolean, nullable=False, default=True, server_default=text("1"))
     # WMS „zamknięcie” rozlokowania (lista / proces) — OPEN | DONE; nie modyfikuje stanów magazynowych.
