@@ -353,7 +353,7 @@ export async function getWmsPickingProductDetail(
   return pickingProductDetailDeduper(
     key,
     async () => {
-      const res = await api.get<WmsPickingProductDetailApi>("/wms/picking/product-lines/detail", { params });
+      const res = await api.get<WmsPickingProductDetailApi>("wms/picking/product-lines/detail", { params });
       return res.data;
     },
     { force: options?.force === true },

@@ -7,6 +7,7 @@ from datetime import datetime
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from ..auth.deps import get_current_user
 from ..auth.warehouse_deps import (
     require_operable_warehouse,
     require_active_operable_warehouse,
@@ -17,6 +18,7 @@ from ..auth.warehouse_deps import (
 from sqlalchemy.orm import Session
 
 from ..database import get_db
+from ..models.app_user import AppUser
 from ..models.order_ui_status import OrderUiStatus
 from ..models.label_template import SavedLabelTemplate
 from ..models.document_series import DocumentSeries
@@ -598,6 +600,7 @@ def get_wms_picking_terminal_settings(
     warehouse_id: int = Depends(require_operable_warehouse),
     db: Session = Depends(get_db),
 ):
+    """Same auth gate as other operable WMS routes (Bearer via require_operable_warehouse)."""
     row = get_or_create_wms_picking_terminal_settings(
         db, tenant_id=int(tenant_id), warehouse_id=int(warehouse_id)
     )
@@ -610,15 +613,18 @@ def get_wms_picking_terminal_settings(
 def save_wms_picking_terminal_settings(
     body: WmsPickingTerminalSettingsSave,
     db: Session = Depends(get_db),
+    user: AppUser = Depends(get_current_user),
 ):
+    """Persist terminal scan policy — authenticated; warehouse access enforced like GET."""
     try:
         wh_id = (
-            body.warehouse_id
+            int(body.warehouse_id)
             if body.warehouse_id is not None
             else resolve_tenant_default_warehouse_id(db, body.tenant_id)
         )
-    except ValueError:
+    except (TypeError, ValueError):
         raise HTTPException(status_code=400, detail="Brak skonfigurowanego magazynu") from None
+    enforce_warehouse_access(db, user, int(wh_id))
 
     row = get_or_create_wms_picking_terminal_settings(
         db, tenant_id=int(body.tenant_id), warehouse_id=int(wh_id)

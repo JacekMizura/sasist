@@ -47,6 +47,7 @@ import {
   PickingEanBadge,
   PickingFieldLabel,
   PickingLocationBadge,
+  PickingQtyPair,
   PickingShortageBadge,
 } from "../../components/wms/picking/PickingUiPrimitives";
 import { PickingOptionsSheet, PickingStickyFooter } from "../../components/wms/picking/PickingStickyChrome";
@@ -54,6 +55,7 @@ import { PickingQtyPanel } from "../../components/wms/picking/PickingQtyPanel";
 import { PickingProcessAlert } from "../../components/wms/picking/PickingProcessAlert";
 import { PICKING_CARD_CLASS } from "../../components/wms/picking/pickingUiTokens";
 import { wmsTypoClass } from "../../wms/typography/wmsOperatorTypography";
+import { extractApiErrorMessage } from "../../api/apiErrorMessage";
 import {
   looksLikeProductBarcode,
   multiScanTrace,
@@ -198,6 +200,7 @@ export default function WmsPickingProductDetailPage() {
   const [terminalPolicy, setTerminalPolicy] = useState<PickingTerminalScanPolicy>(
     DEFAULT_PICKING_TERMINAL_SCAN_POLICY,
   );
+  const [terminalPolicyErr, setTerminalPolicyErr] = useState<string | null>(null);
 
   useEffect(() => {
     setProductScanSatisfied(enteredViaListProductScan);
@@ -206,12 +209,14 @@ export default function WmsPickingProductDetailPage() {
   useEffect(() => {
     if (warehouseId == null) {
       setTerminalPolicy(DEFAULT_PICKING_TERMINAL_SCAN_POLICY);
+      setTerminalPolicyErr(null);
       return;
     }
     let cancelled = false;
-    void getWmsPickingTerminalSettings(DAMAGE_TENANT_ID, warehouseId)
+    void getWmsPickingTerminalSettings(pickingTenantId, warehouseId)
       .then((t) => {
         if (cancelled) return;
+        setTerminalPolicyErr(null);
         setTerminalPolicy({
           requireProductScanAtLeastOnce: Boolean(t.require_product_scan_at_least_once),
           requireLocationScan: Boolean(t.require_location_scan),
@@ -221,13 +226,16 @@ export default function WmsPickingProductDetailPage() {
           allowReserveLocationPicking: Boolean(t.allow_reserve_location_picking),
         });
       })
-      .catch(() => {
-        if (!cancelled) setTerminalPolicy(DEFAULT_PICKING_TERMINAL_SCAN_POLICY);
+      .catch((e: unknown) => {
+        if (cancelled) return;
+        // Do not mask 401/auth failures with silent defaults — keep previous policy and surface error.
+        const msg = extractApiErrorMessage(e) || "Nie udało się wczytać ustawień terminala zbierania.";
+        setTerminalPolicyErr(msg);
       });
     return () => {
       cancelled = true;
     };
-  }, [warehouseId]);
+  }, [warehouseId, pickingTenantId]);
 
   /** Prefer explicit router source; fall back to seed/token heuristic for older navigations. */
   const navigationSource =
@@ -354,8 +362,8 @@ export default function WmsPickingProductDetailPage() {
     setLoading(true);
     setErr(null);
     try {
-      // After list PRODUCT_SCAN, always bypass caches so pending SSOT is visible.
-      const d = await fetchProductDetail({ force: enteredViaListProductScan || Boolean(pendingSeed) });
+      // Always force — detail must load live orders/locations (no stale dedupe after list).
+      const d = await fetchProductDetail({ force: true });
       if (seq !== detailLoadSeqRef.current) return null;
       if (!d) {
         setErr("Nie udało się wczytać szczegółów produktu.");
@@ -364,15 +372,15 @@ export default function WmsPickingProductDetailPage() {
       }
       applyDetailToState(d);
       return d;
-    } catch {
+    } catch (e: unknown) {
       if (seq !== detailLoadSeqRef.current) return null;
-      setErr("Nie udało się wczytać szczegółów produktu.");
+      setErr(extractApiErrorMessage(e) || "Nie udało się wczytać szczegółów produktu.");
       setDetail(null);
       return null;
     } finally {
       if (seq === detailLoadSeqRef.current) setLoading(false);
     }
-  }, [warehouseId, pickingSession, productId, fetchProductDetail, applyDetailToState, enteredViaListProductScan, pendingSeed]);
+  }, [warehouseId, pickingSession, productId, fetchProductDetail, applyDetailToState]);
 
   useEffect(() => {
     if (!pickingSessionRaw) {
@@ -630,37 +638,19 @@ export default function WmsPickingProductDetailPage() {
   );
   const isShortageResolved = resolutionStatus === "SHORTAGE";
 
-  const autoOpenedQtyForProductRef = useRef<number | null>(null);
-
-  // Jedna lokalizacja + brak wymogu skanu → od razu liczenie (ekran produktu = qty panel).
-  useEffect(() => {
-    if (!detail) return;
-    if (detail.requires_basket_put_confirm) return;
-    if (pickQueueDone || isShortageResolved) return;
-    if (qtyStepOpen) return;
-    if (needsLocationScan && activeLocationId == null) return;
-    const locId =
-      activeLocationId ??
-      (detail.locations.length === 1 ? detail.locations[0]?.location_id ?? null : null);
-    if (locId == null || locId <= 0) return;
-    if (autoOpenedQtyForProductRef.current === detail.product_id) return;
-    autoOpenedQtyForProductRef.current = detail.product_id;
-    setManualLocId(locId);
-    setQtyStepValue(remaining > 0 ? Math.min(1, remaining) : 0);
-    setQtyStepOpen(true);
-  }, [
-    detail,
-    needsLocationScan,
-    activeLocationId,
-    pickQueueDone,
-    isShortageResolved,
-    qtyStepOpen,
-    remaining,
-  ]);
-
-  useEffect(() => {
-    autoOpenedQtyForProductRef.current = null;
-  }, [productId]);
+  const openQtyStep = useCallback(
+    (locId: number) => {
+      if (!detail || locId <= 0) return;
+      if (detail.requires_basket_put_confirm) return;
+      if (pickQueueDone || isShortageResolved) return;
+      setManualLocId(locId);
+      setActiveLocationId(locId);
+      const rem = wmsPickingRemainingQty(detail);
+      setQtyStepValue(rem > 0 ? Math.min(1, rem) : 0);
+      setQtyStepOpen(true);
+    },
+    [detail, pickQueueDone, isShortageResolved],
+  );
 
   useEffect(() => {
     if (!detail) return;
@@ -835,9 +825,7 @@ export default function WmsPickingProductDetailPage() {
           if (requiresBasketPut) {
             void acceptSourceLocation(locHit.location_id, "accept");
           } else {
-            const rem = wmsPickingRemainingQty(detail);
-            setQtyStepValue(rem > 0 ? Math.min(rem, 1) : 0);
-            setQtyStepOpen(true);
+            openQtyStep(locHit.location_id);
           }
           return SCAN_CONSUMED;
         }
@@ -936,7 +924,6 @@ export default function WmsPickingProductDetailPage() {
             return SCAN_CONSUMED;
           }
           if (scanGateRef.current || pickBusy) return SCAN_CONSUMED;
-          scanGateRef.current = true;
           multiScanTrace("PRODUCT_SCAN_REQUEST_START", {
             product_id: productId,
             location_id: loc.location_id,
@@ -944,7 +931,16 @@ export default function WmsPickingProductDetailPage() {
             pending_before: Boolean(effectivePending),
           });
           if (selectedLocation == null) setActiveLocationId(loc.location_id);
-          void confirm_pick(1, loc.location_id);
+          // Detail is mandatory — validated product scan opens qty, never auto-confirm.
+          if (requiresBasketPut) {
+            if (scanGateRef.current || pickBusy) return SCAN_CONSUMED;
+            scanGateRef.current = true;
+            void confirm_pick(1, loc.location_id);
+          } else {
+            playScanBeep();
+            appendScanToHistory(scan);
+            openQtyStep(loc.location_id);
+          }
         } else if (!loc) {
           showScanFeedbackFromCode("PRODUCT_NOT_IN_PICKING", {
             backendMessage: "Brak lokalizacji magazynowej dla tego produktu na liście zbiórki.",
@@ -1022,7 +1018,13 @@ export default function WmsPickingProductDetailPage() {
           playScanBeep();
           return SCAN_CONSUMED;
         }
-        void confirm_pick(1, selectedLocation.location_id);
+        if (requiresBasketPut) {
+          void confirm_pick(1, selectedLocation.location_id);
+        } else {
+          playScanBeep();
+          appendScanToHistory(scan);
+          openQtyStep(selectedLocation.location_id);
+        }
         return SCAN_CONSUMED;
       }
       if (looksLikeProductBarcode(scan) && normalizeScanEan(detail.ean) !== scan) {
@@ -1035,7 +1037,7 @@ export default function WmsPickingProductDetailPage() {
     };
     registerScanHandler(handler);
     return () => registerScanHandler(null);
-  }, [detail, pickingSession, activeLocationId, registerScanHandler, appendScanToHistory, pickQueueDone, selectedLocation, pickingTenantId, orderType, showScannerToast, showScanFeedbackFromCode, load, productId, remaining, pickBusy, effectivePending, pendingSeed, enteredViaListProductScan, acceptSourceLocation, needsLocationScan, productScanRequired]);
+  }, [detail, pickingSession, activeLocationId, registerScanHandler, appendScanToHistory, pickQueueDone, selectedLocation, pickingTenantId, orderType, showScannerToast, showScanFeedbackFromCode, load, productId, remaining, pickBusy, effectivePending, pendingSeed, enteredViaListProductScan, acceptSourceLocation, needsLocationScan, productScanRequired, openQtyStep]);
 
   const goBackToList = useCallback(
     (refreshList = false) => {
@@ -1851,26 +1853,43 @@ export default function WmsPickingProductDetailPage() {
       <PickingSimpleHeader
         onBack={() => goBackToList(true)}
         backAriaLabel="Wróć do listy produktów"
-        trailingFill
-        trailing={
-          detail?.locations[0] ? (
-            <PickingLocationBadge
-              variant="bar"
-              text={formatWmsPickingLocationPillLabel(
-                detail.locations[0].location_code,
-                locStock(detail.locations[0]) > 1e-9 ? locStock(detail.locations[0]) : undefined,
-              )}
-            />
-          ) : null
-        }
       />
 
       <WmsOperationalPageBody wide className="flex flex-col gap-5 !py-4 pb-28 md:!py-5">
       {loading && !detail && <div className="py-24 text-center text-sm text-slate-500">Ładowanie produktu…</div>}
+      {(err || terminalPolicyErr) && (
+        <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-semibold text-rose-800">
+          {err || terminalPolicyErr}
+        </div>
+      )}
 
       {detail && (
         <div className="flex w-full flex-col gap-5">
-          <div className={[PICKING_CARD_CLASS, "flex w-full flex-col gap-4 p-4 sm:p-5"].join(" ")}>
+          <div className={[PICKING_CARD_CLASS, "relative flex w-full flex-col gap-4 p-4 sm:p-5"].join(" ")}>
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <PickingFieldLabel>Zebrane</PickingFieldLabel>
+                <div className="mt-0.5">
+                  <PickingQtyPair
+                    picked={fmtQty(displayPickedDetail)}
+                    total={fmtQty(detail.total_quantity)}
+                  />
+                </div>
+              </div>
+              {detail.locations[0] ? (
+                <div className="flex w-fit max-w-[55%] shrink-0 flex-col items-end gap-0.5">
+                  <PickingFieldLabel>Lokalizacja</PickingFieldLabel>
+                  <PickingLocationBadge
+                    variant="compact"
+                    text={formatWmsPickingLocationPillLabel(
+                      detail.locations[0].location_code,
+                      locStock(detail.locations[0]) > 1e-9 ? locStock(detail.locations[0]) : undefined,
+                    )}
+                  />
+                </div>
+              ) : null}
+            </div>
+
             <div className="flex w-full justify-center py-1">
               <div className="flex h-36 w-36 items-center justify-center bg-transparent sm:h-44 sm:w-44">
                 {detail.image_url ? (
@@ -1965,10 +1984,12 @@ export default function WmsPickingProductDetailPage() {
                       setMultiLocAlertOpen(false);
                       if (detail.requires_basket_put_confirm) {
                         void acceptSourceLocation(loc.location_id, "accept");
+                      } else if (needsLocationScan) {
+                        // Settings / multi-loc require a real location scan — tap only highlights.
+                        setScannerInputPlaceholder("Zeskanuj lokalizację");
+                        setPickMsg("Zeskanuj lokalizację, aby kontynuować zbieranie.");
                       } else if (!pickQueueDone && !isShortageResolved) {
-                        setManualLocId(loc.location_id);
-                        setQtyStepValue(remaining > 0 ? Math.min(1, remaining) : 0);
-                        setQtyStepOpen(true);
+                        openQtyStep(loc.location_id);
                       }
                     }}
                     className={active ? "rounded-full ring-2 ring-slate-400 ring-offset-1" : ""}
@@ -1981,6 +2002,39 @@ export default function WmsPickingProductDetailPage() {
             </div>
             {locationHint ? <p className="mt-2 text-xs font-semibold text-amber-800">{locationHint}</p> : null}
           </div>
+
+          {detail.orders.length > 0 ? (
+            <div>
+              <PickingFieldLabel>Zamówienia</PickingFieldLabel>
+              <ul className="mt-2 divide-y divide-slate-100 border-t border-slate-100">
+                {detail.orders.map((o) => {
+                  const missLn = Number(o.missing_quantity ?? 0);
+                  const pickedLn = Number(o.picked_quantity ?? 0);
+                  const qtyLn = Number(o.quantity ?? 0);
+                  return (
+                    <li
+                      key={o.order_item_id ?? o.order_id}
+                      className="flex items-center justify-between gap-3 py-3"
+                    >
+                      <span className="flex min-w-0 flex-wrap items-center gap-2 font-semibold text-slate-900">
+                        <span className="break-words">
+                          #{o.order_number} ({fmtQty(pickedLn)}/{fmtQty(qtyLn)})
+                        </span>
+                        {missLn > 1e-9 ? (
+                          <PickingShortageBadge missing={fmtQty(missLn)} total={fmtQty(qtyLn)} />
+                        ) : null}
+                      </span>
+                      {o.line_value != null ? (
+                        <span className="shrink-0 tabular-nums text-sm text-slate-600">
+                          {fmtQty(Number(o.line_value))} PLN
+                        </span>
+                      ) : null}
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          ) : null}
 
           {detail.requires_basket_put_confirm ? (
             <div className="space-y-3">
@@ -2080,7 +2134,7 @@ export default function WmsPickingProductDetailPage() {
           maxQty={remaining}
           busy={pickBusy}
           onChangeQty={setQtyStepValue}
-          onBack={() => goBackToList(true)}
+          onBack={() => setQtyStepOpen(false)}
           onConfirm={() => {
             const locId = manualLocId ?? activeLocationId;
             if (locId == null || locId <= 0) {

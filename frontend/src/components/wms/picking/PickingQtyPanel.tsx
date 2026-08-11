@@ -43,7 +43,7 @@ export function PickingQtyPanel({
     <div className="fixed inset-0 z-[60] flex flex-col bg-white">
       <PickingSimpleHeader
         onBack={onBack}
-        backAriaLabel="Wróć do listy produktów"
+        backAriaLabel="Wróć do szczegółów produktu"
         trailingFill
         trailing={
           locationLabel ? (

@@ -1,5 +1,6 @@
 /**
  * Warehouse picking terminal scan policy (SSOT: GET/POST /wms/settings/picking-terminal).
+ * Uses shared `./axios` (Bearer interceptor) — same client as other WMS APIs.
  */
 import api from "./axios";
 
@@ -25,7 +26,8 @@ export async function getWmsPickingTerminalSettings(
   tenantId: number,
   warehouseId: number,
 ): Promise<WmsPickingTerminalSettingsApi> {
-  const res = await api.get<WmsPickingTerminalSettingsApi>("/wms/settings/picking-terminal", {
+  // Relative path (no leading slash) joins with baseURL `/api/`.
+  const res = await api.get<WmsPickingTerminalSettingsApi>("wms/settings/picking-terminal", {
     params: { tenant_id: tenantId, warehouse_id: warehouseId },
   });
   return res.data;
@@ -34,6 +36,11 @@ export async function getWmsPickingTerminalSettings(
 export async function saveWmsPickingTerminalSettings(
   body: WmsPickingTerminalSettingsSaveApi,
 ): Promise<WmsPickingTerminalSettingsApi> {
-  const res = await api.post<WmsPickingTerminalSettingsApi>("/wms/settings/picking-terminal", body);
+  const res = await api.post<WmsPickingTerminalSettingsApi>("wms/settings/picking-terminal", body, {
+    params:
+      body.warehouse_id != null && body.warehouse_id > 0
+        ? { warehouse_id: body.warehouse_id }
+        : undefined,
+  });
   return res.data;
 }
