@@ -1,4 +1,4 @@
-import { api } from "./client";
+import api from "./axios";
 
 export type DeliveryWorkQueuePriority = "urgent" | "first" | "next" | "later";
 export type DeliveryWorkPhase = "receiving" | "putaway";

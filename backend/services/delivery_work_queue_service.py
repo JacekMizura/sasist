@@ -1,15 +1,15 @@
 """
 Delivery work queue SSOT — open inbound PZ that need operator action.
 
-Unlike Supply Flow living plan (InboundDelivery + computed phases), this queue is
-built from stock_documents the warehouse already works with (receiving / putaway).
+Uses existing PZ warehouse workflow (P2.5A) — does not invent a parallel status machine.
+Operator queue_sort / queue_priority are independent of status and persist on stock_documents.
 """
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
+from typing import Iterable
 
-from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from ..models.inbound_delivery import InboundDelivery
@@ -21,20 +21,42 @@ from ..schemas.delivery_work_queue import (
     QueuePriority,
     WorkPhase,
 )
+from .receiving_workflow_status_service import (
+    WH_CLOSED,
+    WH_COUNTED,
+    WH_COUNTING,
+    WH_NEW,
+    WH_PUTAWAY_COMPLETED,
+    WH_PUTAWAY_IN_PROGRESS,
+    derive_warehouse_workflow_status,
+    normalize_warehouse_workflow_status,
+)
+from .stock_document_service import is_stock_document_cancelled
 
 INBOUND_DOC_TYPES = ("PZ", "Z_PZ", "PZ_RT", "RETURN_RECEIPT")
-DONE_WORKFLOW = frozenset({"PUTAWAY_COMPLETED", "CLOSED"})
-CANCELLED_DOC_STATUS = frozenset({"cancelled", "canceled", "void", "anulowane"})
+
+# In queue (need operator work)
+QUEUE_WORKFLOW_STATUSES = frozenset(
+    {
+        WH_NEW,
+        WH_COUNTING,
+        WH_COUNTED,
+        WH_PUTAWAY_IN_PROGRESS,
+    }
+)
+
+# Leave queue
+EXIT_WORKFLOW_STATUSES = frozenset({WH_PUTAWAY_COMPLETED, WH_CLOSED})
+
 PRIORITY_VALUES = frozenset({"urgent", "first", "next", "later"})
-PRIORITY_RANK = {"urgent": 0, "first": 1, "next": 2, "later": 3}
 
 STATUS_LABEL_PL = {
-    "NEW": "Nowe",
-    "COUNTING": "W trakcie przyjęcia",
-    "COUNTED": "Oczekuje na rozlokowanie",
-    "PUTAWAY_IN_PROGRESS": "Rozlokowanie",
-    "PUTAWAY_COMPLETED": "Rozlokowane",
-    "CLOSED": "Zamknięte",
+    WH_NEW: "Nowe",
+    WH_COUNTING: "W trakcie przyjęcia",
+    WH_COUNTED: "Oczekuje na rozlokowanie",
+    WH_PUTAWAY_IN_PROGRESS: "Rozlokowanie",
+    WH_PUTAWAY_COMPLETED: "Rozlokowane",
+    WH_CLOSED: "Zamknięte",
 }
 
 
@@ -46,59 +68,73 @@ def _norm(raw: object | None) -> str:
     return str(raw or "").strip().upper().replace("-", "_")
 
 
-def resolve_warehouse_workflow(doc: StockDocument) -> str:
-    direct = _norm(getattr(doc, "warehouse_workflow_status", None))
-    if direct in {
-        "NEW",
-        "COUNTING",
-        "COUNTED",
-        "PUTAWAY_IN_PROGRESS",
-        "PUTAWAY_COMPLETED",
-        "CLOSED",
-    }:
-        return direct
-    st = _norm(getattr(doc, "status", None))
-    if st in {"ZAKONCZONE", "POSTED", "CLOSED"}:
-        return "CLOSED"
-    rs = _norm(getattr(doc, "receiving_status", None))
-    ps = _norm(getattr(doc, "putaway_status", None))
-    rls = _norm(getattr(doc, "relocation_status", None))
-    if rls == "DONE" or ps == "DONE":
-        return "PUTAWAY_COMPLETED"
-    if ps == "IN_PROGRESS":
-        return "PUTAWAY_IN_PROGRESS"
-    if rs == "DONE":
-        return "COUNTED"
-    if rs == "IN_PROGRESS":
-        return "COUNTING"
-    return "NEW"
+def _utcnow() -> datetime:
+    return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
-def pz_needs_operator_work(doc: StockDocument) -> bool:
-    """True when warehouse operator still has work on this inbound document."""
+def resolve_operational_workflow(
+    doc: StockDocument,
+    lines: Iterable[StockDocumentItem] | None = None,
+    db: Session | None = None,
+) -> str:
+    """
+    Real operational PZ state via existing derive_warehouse_workflow_status (P2.5A).
+    Does not invent a queue-specific status machine.
+    """
+    rows = list(lines) if lines is not None else []
+    return normalize_warehouse_workflow_status(
+        derive_warehouse_workflow_status(doc, rows, db)
+    )
+
+
+def pz_needs_operator_work(
+    doc: StockDocument,
+    lines: Iterable[StockDocumentItem] | None = None,
+    db: Session | None = None,
+) -> bool:
+    """True when warehouse operator still has receiving or putaway work."""
     dt = _norm(getattr(doc, "document_type", None))
     if dt not in INBOUND_DOC_TYPES:
         return False
-    if str(getattr(doc, "status", "") or "").strip().lower() in CANCELLED_DOC_STATUS:
+    if is_stock_document_cancelled(doc):
         return False
-    wf = resolve_warehouse_workflow(doc)
-    if wf in DONE_WORKFLOW:
+    wf = resolve_operational_workflow(doc, lines, db)
+    if wf in EXIT_WORKFLOW_STATUSES:
         return False
-    rs = _norm(getattr(doc, "receiving_status", None))
-    ps = _norm(getattr(doc, "putaway_status", None))
-    if rs == "DONE" and ps == "DONE":
-        return False
-    return True
+    return wf in QUEUE_WORKFLOW_STATUSES
 
 
-def work_phase_for(doc: StockDocument) -> WorkPhase:
-    wf = resolve_warehouse_workflow(doc)
-    if wf in {"COUNTED", "PUTAWAY_IN_PROGRESS"}:
-        return "putaway"
-    rs = _norm(getattr(doc, "receiving_status", None))
-    if rs == "DONE":
+def work_phase_for(
+    doc: StockDocument,
+    lines: Iterable[StockDocumentItem] | None = None,
+    db: Session | None = None,
+) -> WorkPhase:
+    wf = resolve_operational_workflow(doc, lines, db)
+    if wf in {WH_COUNTED, WH_PUTAWAY_IN_PROGRESS}:
         return "putaway"
     return "receiving"
+
+
+def cta_for_workflow(doc: StockDocument, wf: str) -> tuple[str, str, bool]:
+    """
+    Returns (label, path, started).
+
+    Transitions (existing PZ flow):
+    - NEW → Rozpocznij przyjęcie
+    - COUNTING → Kontynuuj przyjęcie
+    - COUNTED → Rozpocznij rozlokowanie
+    - PUTAWAY_IN_PROGRESS → Kontynuuj rozlokowanie
+    """
+    pz_id = int(doc.id)
+    key = normalize_warehouse_workflow_status(wf)
+    if key == WH_PUTAWAY_IN_PROGRESS:
+        return "Kontynuuj rozlokowanie", f"/wms/putaway/{pz_id}", True
+    if key == WH_COUNTED:
+        return "Rozpocznij rozlokowanie", f"/wms/putaway/{pz_id}", False
+    if key == WH_COUNTING:
+        return "Kontynuuj przyjęcie", f"/wms/receiving/pz/{pz_id}", True
+    # NEW (and any unexpected open state → start receiving)
+    return "Rozpocznij przyjęcie", f"/wms/receiving/pz/{pz_id}", False
 
 
 def _normalize_priority(raw: object | None) -> QueuePriority:
@@ -114,15 +150,6 @@ def _display_number(doc: StockDocument) -> str:
         return stored
     dt = _norm(getattr(doc, "document_type", None)) or "PZ"
     return f"{dt} #{int(doc.id)}"
-
-
-def _cta_for(doc: StockDocument, phase: WorkPhase) -> tuple[str, str]:
-    pz_id = int(doc.id)
-    if phase == "putaway":
-        return "Rozpocznij rozlokowanie", f"/wms/putaway/{pz_id}"
-    started = _norm(getattr(doc, "receiving_status", None)) == "IN_PROGRESS"
-    label = "Kontynuuj przyjęcie" if started else "Rozpocznij przyjęcie"
-    return label, f"/wms/receiving/pz/{pz_id}"
 
 
 def list_delivery_work_queue(
@@ -142,40 +169,37 @@ def list_delivery_work_queue(
         .limit(500)
         .all()
     )
-    open_docs = [d for d in docs if pz_needs_operator_work(d)]
+    doc_ids_all = [int(d.id) for d in docs]
+    lines_by_doc: dict[int, list[StockDocumentItem]] = {i: [] for i in doc_ids_all}
+    if doc_ids_all:
+        for ln in (
+            db.query(StockDocumentItem)
+            .filter(StockDocumentItem.document_id.in_(doc_ids_all))
+            .order_by(StockDocumentItem.id.asc())
+            .all()
+        ):
+            lines_by_doc.setdefault(int(ln.document_id), []).append(ln)
 
-    # Stable operator order: explicit sort first, then priority band, then created_at.
+    open_docs: list[tuple[StockDocument, str, list[StockDocumentItem]]] = []
+    for d in docs:
+        lines = lines_by_doc.get(int(d.id), [])
+        wf = resolve_operational_workflow(d, lines, db)
+        if not pz_needs_operator_work(d, lines, db):
+            continue
+        open_docs.append((d, wf, lines))
+
+    # Operator order only — priority is a badge/filter, not a sort key.
     open_docs.sort(
-        key=lambda d: (
-            int(d.delivery_queue_sort)
-            if getattr(d, "delivery_queue_sort", None) is not None
+        key=lambda row: (
+            int(row[0].delivery_queue_sort)
+            if getattr(row[0], "delivery_queue_sort", None) is not None
             else 10_000_000,
-            PRIORITY_RANK.get(_normalize_priority(getattr(d, "delivery_queue_priority", None)), 3),
-            getattr(d, "created_at", None) or datetime.min,
-            int(d.id),
+            getattr(row[0], "created_at", None) or datetime.min,
+            int(row[0].id),
         )
     )
 
-    doc_ids = [int(d.id) for d in open_docs]
-    item_rows = (
-        db.query(
-            StockDocumentItem.document_id,
-            func.count(StockDocumentItem.id),
-            func.coalesce(func.sum(StockDocumentItem.ordered_quantity), 0),
-            func.coalesce(func.sum(StockDocumentItem.received_quantity), 0),
-        )
-        .filter(StockDocumentItem.document_id.in_(doc_ids))
-        .group_by(StockDocumentItem.document_id)
-        .all()
-        if doc_ids
-        else []
-    )
-    item_map = {
-        int(did): (int(cnt or 0), float(ord_q or 0), float(rec_q or 0))
-        for did, cnt, ord_q, rec_q in item_rows
-    }
-
-    delivery_ids = {int(d.delivery_id) for d in open_docs if d.delivery_id}
+    delivery_ids = {int(d.delivery_id) for d, _, _ in open_docs if d.delivery_id}
     deliveries = (
         {
             int(x.id): x
@@ -184,7 +208,7 @@ def list_delivery_work_queue(
         if delivery_ids
         else {}
     )
-    supplier_ids = {int(d.supplier_id) for d in open_docs if d.supplier_id}
+    supplier_ids = {int(d.supplier_id) for d, _, _ in open_docs if d.supplier_id}
     supplier_ids.update(int(x.supplier_id) for x in deliveries.values() if x.supplier_id)
     suppliers = (
         {
@@ -196,20 +220,17 @@ def list_delivery_work_queue(
     )
 
     items: list[DeliveryWorkQueueItemOut] = []
-    for idx, doc in enumerate(open_docs, start=1):
-        phase = work_phase_for(doc)
-        wf = resolve_warehouse_workflow(doc)
-        lines, ordered, received = item_map.get(int(doc.id), (0, 0.0, 0.0))
+    for idx, (doc, wf, lines) in enumerate(open_docs, start=1):
+        phase = work_phase_for(doc, lines, db)
+        ordered = sum(float(x.ordered_quantity or 0) for x in lines)
+        received = sum(float(x.received_quantity or 0) for x in lines)
         delivery = deliveries.get(int(doc.delivery_id)) if doc.delivery_id else None
         supplier_name = None
         if doc.supplier_id:
             supplier_name = suppliers.get(int(doc.supplier_id))
         if not supplier_name and delivery is not None and delivery.supplier_id:
             supplier_name = suppliers.get(int(delivery.supplier_id))
-        cta_label, cta_path = _cta_for(doc, phase)
-        started = phase == "receiving" and _norm(doc.receiving_status) == "IN_PROGRESS"
-        if phase == "putaway" and _norm(doc.putaway_status) == "IN_PROGRESS":
-            started = True
+        cta_label, cta_path, started = cta_for_workflow(doc, wf)
         sort_val = (
             int(doc.delivery_queue_sort)
             if getattr(doc, "delivery_queue_sort", None) is not None
@@ -227,7 +248,7 @@ def list_delivery_work_queue(
                 warehouse_workflow_status=wf,
                 receiving_status=_norm(doc.receiving_status) or "NEW",
                 putaway_status=_norm(doc.putaway_status) or "NOT_STARTED",
-                line_count=lines,
+                line_count=len(lines),
                 quantity_ordered=ordered,
                 quantity_received=received,
                 expected_date=getattr(delivery, "expected_date", None) if delivery else None,
@@ -272,14 +293,21 @@ def reorder_delivery_work_queue(
     missing = [i for i in ids if i not in by_id]
     if missing:
         raise DeliveryWorkQueueError(f"Nie znaleziono PZ: {', '.join(str(x) for x in missing)}")
+
+    lines_by_doc: dict[int, list[StockDocumentItem]] = {i: [] for i in ids}
+    for ln in (
+        db.query(StockDocumentItem).filter(StockDocumentItem.document_id.in_(ids)).all()
+    ):
+        lines_by_doc.setdefault(int(ln.document_id), []).append(ln)
+
     for sort_idx, pz_id in enumerate(ids, start=1):
         doc = by_id[pz_id]
-        if not pz_needs_operator_work(doc):
+        if not pz_needs_operator_work(doc, lines_by_doc.get(pz_id, []), db):
             raise DeliveryWorkQueueError(
                 f"Dokument {_display_number(doc)} nie wymaga już pracy w kolejce."
             )
         doc.delivery_queue_sort = sort_idx
-        doc.updated_at = datetime.utcnow()
+        doc.updated_at = _utcnow()
     db.flush()
     return list_delivery_work_queue(db, tenant_id=tenant_id, warehouse_id=warehouse_id)
 
@@ -292,9 +320,9 @@ def set_delivery_work_queue_priority(
     pz_id: int,
     priority: str,
 ) -> DeliveryWorkQueueItemOut:
-    p = _normalize_priority(priority)
     if str(priority or "").strip().lower() not in PRIORITY_VALUES:
         raise DeliveryWorkQueueError("Nieprawidłowy priorytet (urgent|first|next|later).")
+    p = _normalize_priority(priority)
     doc = (
         db.query(StockDocument)
         .filter(
@@ -306,10 +334,16 @@ def set_delivery_work_queue_priority(
     )
     if doc is None:
         raise DeliveryWorkQueueError("Nie znaleziono dokumentu PZ.")
-    if not pz_needs_operator_work(doc):
+    lines = (
+        db.query(StockDocumentItem)
+        .filter(StockDocumentItem.document_id == int(pz_id))
+        .all()
+    )
+    if not pz_needs_operator_work(doc, lines, db):
         raise DeliveryWorkQueueError("Dokument nie wymaga już pracy w kolejce.")
+    # Priority is independent of status — only updates the band field.
     doc.delivery_queue_priority = p
-    doc.updated_at = datetime.utcnow()
+    doc.updated_at = _utcnow()
     db.flush()
     queue = list_delivery_work_queue(db, tenant_id=tenant_id, warehouse_id=warehouse_id)
     for item in queue.items:
