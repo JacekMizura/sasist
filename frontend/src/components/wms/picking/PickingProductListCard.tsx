@@ -17,6 +17,7 @@ export type PickingProductListCardVisibility = {
   showSKU?: boolean;
   showCatalogNumber?: boolean;
   showLocation?: boolean;
+  showWarehouseStock?: boolean;
 };
 
 export type PickingProductListCardProps = {
@@ -28,6 +29,8 @@ export type PickingProductListCardProps = {
   pickedLabel: string;
   totalLabel: string;
   locationLabel: string;
+  /** Łączny stan w magazynie — widoczny gdy visibility.showWarehouseStock */
+  warehouseStockLabel?: string | null;
   shortageLabel?: string | null;
   status?: PickingListCardStatus;
   disabled?: boolean;
@@ -50,6 +53,7 @@ export function PickingProductListCard({
   pickedLabel,
   totalLabel,
   locationLabel,
+  warehouseStockLabel,
   shortageLabel,
   status = "ACTIVE",
   disabled,
@@ -66,10 +70,12 @@ export function PickingProductListCard({
   const showSku = visibility?.showSKU === true;
   const showCatalog = visibility?.showCatalogNumber === true;
   const showLocation = visibility?.showLocation !== false;
+  const showWarehouseStock = visibility?.showWarehouseStock === true;
 
   const skuText = (sku ?? "").trim();
   const catalogText = (catalogNumber ?? "").trim();
   const locText = showLocation ? (locationLabel ?? "").trim() : "";
+  const warehouseText = showWarehouseStock ? (warehouseStockLabel ?? "").trim() : "";
 
   return (
     <div
@@ -174,6 +180,12 @@ export function PickingProductListCard({
             <p className={["mt-0.5 text-slate-500", wmsTypoClass.base].join(" ")}>
               Nr kat.:{" "}
               <span className={muted ? "text-slate-400" : "text-slate-700"}>{catalogText}</span>
+            </p>
+          ) : null}
+          {warehouseText ? (
+            <p className={["mt-1 text-slate-500", wmsTypoClass.base].join(" ")}>
+              Stan magazynowy:{" "}
+              <span className={muted ? "text-slate-400" : "text-slate-700"}>{warehouseText}</span>
             </p>
           ) : null}
           {showEan ? (

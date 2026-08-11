@@ -106,7 +106,18 @@ class WmsPickingProductLine(BaseModel):
     primary_location_stock: float = Field(
         0,
         ge=0,
-        description="Rzeczywisty stan magazynowy (Inventory) w lokalizacji głównej — nie ilość do pobrania z alokacji",
+        description=(
+            "Stan produktu NA lokalizacji głównej (Inventory dla primary location_id) — "
+            "do badge lokalizacji. Nie mylić z warehouse_stock."
+        ),
+    )
+    warehouse_stock: float = Field(
+        0,
+        ge=0,
+        description=(
+            "Łączny stan produktu w magazynie (suma Inventory w warehouse) — "
+            "ustawienie list_display.show_stock. Nie mylić z primary_location_stock."
+        ),
     )
     extra_locations_count: int = Field(
         0,
@@ -351,6 +362,11 @@ class WmsPickingProductDetailResponse(BaseModel):
         description="Suma braków na liniach tego produktu w kohortcie",
     )
     remaining_to_pick: float = Field(0, ge=0)
+    warehouse_stock: float = Field(
+        0,
+        ge=0,
+        description="Łączny stan produktu w magazynie (suma Inventory) — nie stan pojedynczej lokalizacji",
+    )
     resolution_status: WmsPickingLineResolutionStatus = Field(
         "ACTIVE",
         description="Jak na liście produktów — ACTIVE|PARTIAL|COMPLETED_PICK|SHORTAGE",

@@ -101,6 +101,11 @@ function primaryStockDisplay(row: WmsPickingProductLineApi): number {
   return typeof q === "number" && Number.isFinite(q) ? q : 0;
 }
 
+function warehouseStockDisplay(row: WmsPickingProductLineApi): number {
+  const q = row.warehouse_stock;
+  return typeof q === "number" && Number.isFinite(q) ? q : 0;
+}
+
 function rowScannerEligible(row: WmsPickingProductLineApi): boolean {
   return wmsPickingRowScanEligible(row);
 }
@@ -1840,12 +1845,14 @@ export default function WmsPickingProductsPage() {
             const rowBlocked = blockOtherProductLines && !shortageProductIds.has(r.product_id) && !pickDone;
             const locCode = (r.primary_location_code ?? "").trim();
             const pStock = primaryStockDisplay(r);
-            const stockForLabel =
-              listDisplay.show_stock && pStock > 1e-9 ? pStock : undefined;
+            const wStock = warehouseStockDisplay(r);
+            // Badge lokalizacji ZAWSZE ze stanem tej lokalizacji (nie zależy od show_stock).
             const locLabel =
               listDisplay.show_location && locCode
-                ? formatWmsPickingLocationPillLabel(locCode, stockForLabel)
+                ? formatWmsPickingLocationPillLabel(locCode, pStock > 1e-9 ? pStock : undefined)
                 : "";
+            const warehouseStockLabel =
+              listDisplay.show_stock && wStock > 1e-9 ? `${fmtQty(wStock)} szt.` : null;
 
             return (
               <li key={r.product_id} className="min-w-0">
@@ -1858,6 +1865,7 @@ export default function WmsPickingProductsPage() {
                   pickedLabel={fmtQty(pickedShown)}
                   totalLabel={fmtQty(total)}
                   locationLabel={locLabel}
+                  warehouseStockLabel={warehouseStockLabel}
                   shortageLabel={miss > 1e-9 ? fmtQty(miss) : null}
                   status={status}
                   disabled={rowBlocked}
@@ -1867,6 +1875,7 @@ export default function WmsPickingProductsPage() {
                     showSKU: listDisplay.show_sku,
                     showCatalogNumber: listDisplay.show_catalog_number,
                     showLocation: listDisplay.show_location,
+                    showWarehouseStock: listDisplay.show_stock,
                   }}
                   onClick={() =>
                     goDetail(r.product_id, {

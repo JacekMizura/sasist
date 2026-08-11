@@ -67,8 +67,10 @@ export type WmsPickingProductLineApi = {
   scanner_active?: boolean;
   primary_location_id?: number | null;
   primary_location_code: string;
-  /** Stan fizyczny (Inventory) w lokalizacji głównej — nie ilość do pobrania */
+  /** Stan fizyczny (Inventory) w lokalizacji głównej — do badge lokalizacji */
   primary_location_stock?: number;
+  /** Łączny stan produktu w magazynie — ustawienie list_display.show_stock */
+  warehouse_stock?: number;
   locations?: Array<{ location_id: number; location_code?: string | null }>;
   extra_locations_count?: number;
   route_sort_key: string;
@@ -208,6 +210,8 @@ export type WmsPickingProductDetailApi = {
   picked_quantity: number;
   missing_quantity?: number;
   remaining_to_pick?: number;
+  /** Łączny stan produktu w magazynie (nie stan lokalizacji) */
+  warehouse_stock?: number;
   resolution_status?: "ACTIVE" | "PARTIAL" | "COMPLETED_PICK" | "SHORTAGE";
   locations: WmsPickingProductLocationRowApi[];
   orders: WmsPickingProductOrderRowApi[];

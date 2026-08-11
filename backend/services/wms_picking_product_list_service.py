@@ -1686,6 +1686,37 @@ def _inventory_sums_by_product_location(
     return { (int(r[0]), int(r[1])): round(float(r[2] or 0.0), 6) for r in rows }
 
 
+def _warehouse_on_hand_by_product(
+    db: Session,
+    *,
+    tenant_id: int,
+    warehouse_id: int,
+    product_ids: Sequence[int],
+) -> dict[int, float]:
+    """Łączny stan fizyczny produktu w magazynie (suma Inventory; saleable disposition)."""
+    from .stock_disposition import DEFAULT_STOCK_DISPOSITION
+
+    ids = sorted({int(p) for p in product_ids if int(p) > 0})
+    if not ids:
+        return {}
+    rows = (
+        db.query(
+            Inventory.product_id,
+            func.coalesce(func.sum(Inventory.quantity), 0.0),
+        )
+        .filter(
+            Inventory.tenant_id == int(tenant_id),
+            Inventory.warehouse_id == int(warehouse_id),
+            Inventory.product_id.in_(ids),
+            Inventory.quantity > 0,
+            Inventory.stock_disposition == DEFAULT_STOCK_DISPOSITION,
+        )
+        .group_by(Inventory.product_id)
+        .all()
+    )
+    return {int(r[0]): round(float(r[1] or 0.0), 6) for r in rows}
+
+
 def resolve_default_bulk_cart_for_warehouse(
     db: Session,
     *,
@@ -2367,6 +2398,9 @@ def build_wms_picking_product_lines(
     inv_map = _inventory_sums_by_product_location(
         db, tenant_id=tenant_id, warehouse_id=warehouse_id, pairs=inv_pairs
     )
+    warehouse_stock_by_pid = _warehouse_on_hand_by_product(
+        db, tenant_id=tenant_id, warehouse_id=warehouse_id, product_ids=list(product_ids)
+    )
 
     scan_by_pid = _scanner_active_by_product_id(
         db, order_ids, list(product_ids), tenant_id=tenant_id, cart_id=cart_id
@@ -2448,6 +2482,7 @@ def build_wms_picking_product_lines(
                 resolution_status=resolution,
                 primary_location_code=loc,
                 primary_location_stock=primary_stock,
+                warehouse_stock=float(warehouse_stock_by_pid.get(int(pid), 0.0)),
                 extra_locations_count=extra_locs,
                 route_sort_key=route_key,
                 scanner_active=scanner_active,
@@ -2901,6 +2936,7 @@ def build_wms_picking_product_detail(
         picked_quantity=row.picked_quantity,
         missing_quantity=float(getattr(row, "missing_quantity", 0) or 0),
         remaining_to_pick=row.remaining_to_pick,
+        warehouse_stock=float(getattr(row, "warehouse_stock", 0) or 0),
         resolution_status=getattr(row, "resolution_status", None)
         or _picking_line_resolution_status(
             remaining_to_pick=float(row.remaining_to_pick or 0),
