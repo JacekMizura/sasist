@@ -1,5 +1,15 @@
 ﻿## Active
 
+**Picking validation (Walidacja zbierania) (2026-08-11):**
+- Sekcja Terminal → „Walidacja zbierania”; opcja „Produkty bez kodu EAN”
+- SSOT resolver: FE `resolvePickingValidationGates` + BE `resolve_picking_validation_gates`
+- Priorytet lokalizacji: require_location_scan > multi-force > auto source
+- BE egzekwuje product/location scan + rezerwę + brak EAN na quick-pick / cartless / confirm-remaining
+
+**Picking stock split (2026-08-11):**
+- `warehouse_stock` = suma Inventory w magazynie; checkbox „Stan magazynowy” tylko to
+- Badge lokalizacji zawsze z `primary_location_stock` / `stock_quantity` lokalizacji
+
 **Picking list view settings (2026-08-11):**
 - `list_display` w `wms/settings/picking-terminal` (per tenant+magazyn) steruje kafelkami listy zbierania
 - Checkboxy: zdjęcie / EAN / SKU / nr kat. / stan / lokalizacja — tylko lista, nie detail/qty

@@ -1814,6 +1814,7 @@ def post_picking_quick_pick(
                 picking_session_id=int(picking_session_id),
                 operator_user_id=uid,
                 product_scan_confirmed=bool(getattr(body, "product_scan_confirmed", False)),
+                location_scan_confirmed=bool(getattr(body, "location_scan_confirmed", False)),
             )
             resp = build_wms_picking_product_lines(
                 db,
@@ -1883,6 +1884,7 @@ def post_picking_quick_pick(
                 scope_order_id=scope_order_id if recovery_fixed is None else None,
                 operator_user_id=uid,
                 product_scan_confirmed=bool(getattr(body, "product_scan_confirmed", False)),
+                location_scan_confirmed=bool(getattr(body, "location_scan_confirmed", False)),
             )
 
         if cart_requires_basket_put_gate(cart_for_gate) and recovery_fixed is None:
@@ -2069,6 +2071,7 @@ def post_picking_confirm_remaining(
             ),
             operator_user_id=uid,
             product_scan_confirmed=bool(getattr(body, "product_scan_confirmed", False)),
+            location_scan_confirmed=bool(getattr(body, "location_scan_confirmed", False)),
         )
         db.commit()
         return WmsPickingConfirmRemainingResponse(

@@ -605,6 +605,7 @@ def _terminal_settings_row_to_read(row) -> WmsPickingTerminalSettingsRead:
             row.disable_force_location_scan_when_many_locations
         ),
         allow_reserve_location_picking=bool(row.allow_reserve_location_picking),
+        allow_products_without_ean=bool(getattr(row, "allow_products_without_ean", False)),
         list_display=_parse_picking_list_display(getattr(row, "list_display_json", None)),
     )
 
@@ -650,6 +651,7 @@ def save_wms_picking_terminal_settings(
         body.disable_force_location_scan_when_many_locations
     )
     row.allow_reserve_location_picking = bool(body.allow_reserve_location_picking)
+    row.allow_products_without_ean = bool(body.allow_products_without_ean)
     if body.list_display is not None:
         row.list_display_json = json.dumps(body.list_display.model_dump(), ensure_ascii=False)
     touch_wms_picking_terminal_settings_row(row)

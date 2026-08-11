@@ -96,8 +96,11 @@ import { pageContainerWidthAlignClass } from "../../components/layout/PageContai
 import { DAMAGE_TENANT_ID } from "../damage/damageShared";
 import { getWmsPickingTerminalSettings } from "../../api/wmsPickingTerminalSettingsApi";
 import {
-  computeNeedsLocationScan,
   DEFAULT_PICKING_TERMINAL_SCAN_POLICY,
+  productHasScannableCode,
+  productMatchesScanCode,
+  resolveAutoSourceLocationId,
+  resolvePickingValidationGates,
   type PickingTerminalScanPolicy,
 } from "../../modules/wmsSettings/picking/pickingTerminalScanPolicy";
 
@@ -198,6 +201,8 @@ export default function WmsPickingProductDetailPage() {
     (routerLocation.state as WmsPickingProductsNavState | null)?.highlightPickId ?? null;
   const enteredViaListProductScan = Boolean(listProductScanToken || basketPutPendingSeed);
   const [productScanSatisfied, setProductScanSatisfied] = useState(enteredViaListProductScan);
+  /** True only after explicit location scan when policy requires it (not auto single-loc). */
+  const [locationScanSatisfied, setLocationScanSatisfied] = useState(false);
   const [terminalPolicy, setTerminalPolicy] = useState<PickingTerminalScanPolicy>(
     DEFAULT_PICKING_TERMINAL_SCAN_POLICY,
   );
@@ -205,6 +210,7 @@ export default function WmsPickingProductDetailPage() {
 
   useEffect(() => {
     setProductScanSatisfied(enteredViaListProductScan);
+    setLocationScanSatisfied(false);
   }, [enteredViaListProductScan, productIdParam]);
 
   useEffect(() => {
@@ -225,6 +231,7 @@ export default function WmsPickingProductDetailPage() {
             t.disable_force_location_scan_when_many_locations,
           ),
           allowReserveLocationPicking: Boolean(t.allow_reserve_location_picking),
+          allowProductsWithoutEan: Boolean(t.allow_products_without_ean),
         });
       })
       .catch((e: unknown) => {
@@ -603,17 +610,75 @@ export default function WmsPickingProductDetailPage() {
     acceptSourceLocation,
   ]);
 
-  const needsLocationScan = computeNeedsLocationScan({
-    locationCount: detail?.locations.length ?? 0,
-    requireLocationScan: terminalPolicy.requireLocationScan,
-    disableForceLocationScanWhenManyLocations: terminalPolicy.disableForceLocationScanWhenManyLocations,
-  });
+  const validationGates = useMemo(() => {
+    const hasCode = productHasScannableCode({
+      ean: detail?.ean,
+      sku: detail?.sku,
+      barcode: detail?.barcode,
+    });
+    return resolvePickingValidationGates({
+      locationCount: detail?.locations.length ?? 0,
+      policy: terminalPolicy,
+      hasScannableProductCode: hasCode,
+    });
+  }, [detail?.ean, detail?.sku, detail?.barcode, detail?.locations.length, terminalPolicy]);
+
+  const needsLocationScan = validationGates.needsLocationScan;
   const productScanRequired =
-    terminalPolicy.requireProductScanAtLeastOnce && !productScanSatisfied;
+    validationGates.needsProductScan && !productScanSatisfied;
+  const locationScanRequired =
+    needsLocationScan && !locationScanSatisfied;
+  const productBlockedWithoutCode = validationGates.productBlockedWithoutCode;
+
+  // When location scan is not required, auto-select concrete source (routing order).
+  useEffect(() => {
+    if (!detail || needsLocationScan) return;
+    if (activeLocationId != null) {
+      setLocationScanSatisfied(true);
+      return;
+    }
+    const autoId = resolveAutoSourceLocationId({
+      needsLocationScan: false,
+      locations: detail.locations,
+    });
+    if (autoId != null) {
+      setActiveLocationId(autoId);
+      setLocationScanSatisfied(true);
+      explicitSourceSelectionRef.current = autoId;
+    }
+  }, [detail, needsLocationScan, activeLocationId]);
+
   const selectedLocation = useMemo(() => {
     if (!detail || activeLocationId == null) return undefined;
     return detail.locations.find((l) => l.location_id === activeLocationId);
   }, [detail, activeLocationId]);
+
+  const expectedLocationBadge = useMemo(() => {
+    if (!detail) return "";
+    const loc =
+      selectedLocation ??
+      (detail.locations.length === 1 ? detail.locations[0] : undefined);
+    if (!loc) return "";
+    return formatWmsPickingLocationPillLabel(
+      loc.location_code,
+      locStock(loc) > 1e-9 ? locStock(loc) : undefined,
+    );
+  }, [detail, selectedLocation]);
+
+  const productMatchesScan = useCallback(
+    (scan: string) =>
+      productMatchesScanCode(
+        scan,
+        {
+          ean: detail?.ean,
+          sku: detail?.sku,
+          barcode: detail?.barcode,
+          productId: detail?.product_id,
+        },
+        normalizeScanEan,
+      ),
+    [detail],
+  );
 
   const missingTotal = useMemo(() => {
     if (!detail) return 0;
@@ -666,13 +731,38 @@ export default function WmsPickingProductDetailPage() {
       if (!detail || locId <= 0) return;
       if (detail.requires_basket_put_confirm) return;
       if (pickQueueDone || isShortageResolved) return;
+      if (productBlockedWithoutCode) {
+        showScanFeedbackFromCode("PRODUCT_WITHOUT_SCAN_CODE_BLOCKED");
+        setPickMsg(mapWmsScanErrorCode("PRODUCT_WITHOUT_SCAN_CODE_BLOCKED").message);
+        return;
+      }
+      if (productScanRequired) {
+        showScanFeedbackFromCode("PRODUCT_SCAN_REQUIRED");
+        setPickMsg(mapWmsScanErrorCode("PRODUCT_SCAN_REQUIRED").message);
+        setScannerInputPlaceholder("Zeskanuj produkt");
+        return;
+      }
+      if (needsLocationScan && !locationScanSatisfied && explicitSourceSelectionRef.current !== locId) {
+        showScanFeedbackFromCode("PICK_LOCATION_REQUIRED");
+        setPickMsg(mapWmsScanErrorCode("PICK_LOCATION_REQUIRED").message);
+        return;
+      }
       setManualLocId(locId);
       setActiveLocationId(locId);
       const rem = wmsPickingRemainingQty(detail);
       setQtyStepValue(rem > 0 ? Math.min(1, rem) : 0);
       setQtyStepOpen(true);
     },
-    [detail, pickQueueDone, isShortageResolved],
+    [
+      detail,
+      pickQueueDone,
+      isShortageResolved,
+      productBlockedWithoutCode,
+      productScanRequired,
+      needsLocationScan,
+      locationScanSatisfied,
+      showScanFeedbackFromCode,
+    ],
   );
 
   useEffect(() => {
@@ -843,6 +933,7 @@ export default function WmsPickingProductDetailPage() {
           appendScanToHistory(scan);
           explicitSourceSelectionRef.current = locHit.location_id;
           setActiveLocationId(locHit.location_id);
+          setLocationScanSatisfied(true);
           setLocationHint(null);
           showScannerToast(`Lokalizacja ${locHit.location_code}`);
           if (requiresBasketPut) {
@@ -852,13 +943,12 @@ export default function WmsPickingProductDetailPage() {
           }
           return SCAN_CONSUMED;
         }
-        if (activeLocationId == null) {
+        if (activeLocationId == null || !locationScanSatisfied) {
           // Waiting for source location.
           if (looksLikeProductBarcode(scan)) {
-            const code =
-              normalizeScanEan(detail.ean) === scan
-                ? "PICK_LOCATION_REQUIRED"
-                : "WRONG_PRODUCT_SCAN";
+            const code = productMatchesScan(scan)
+              ? "PICK_LOCATION_REQUIRED"
+              : "WRONG_PRODUCT_SCAN";
             if (code === "PICK_LOCATION_REQUIRED") {
               setProductScanSatisfied(true);
               setScannerInputPlaceholder("Zeskanuj lokalizację");
@@ -869,9 +959,11 @@ export default function WmsPickingProductDetailPage() {
             return SCAN_CONSUMED;
           }
           if (scan.length >= 2) {
-            showScanFeedbackFromCode("WRONG_LOCATION_SCAN");
-            setPickMsg(mapWmsScanErrorCode("WRONG_LOCATION_SCAN").message);
-            setProcessAlert("Zeskanuj właściwą lokalizację.");
+            const expected = expectedLocationBadge || "wskazaną lokalizację";
+            const msg = `Nieprawidłowa lokalizacja. Zeskanuj: ${expected}.`;
+            showScanFeedbackFromCode("WRONG_LOCATION_SCAN", { backendMessage: msg });
+            setPickMsg(msg);
+            setProcessAlert(msg);
             appendScanToHistory(scan);
             return SCAN_CONSUMED;
           }
@@ -885,11 +977,11 @@ export default function WmsPickingProductDetailPage() {
           Boolean(detail?.basket_put_active_series?.basket_label) &&
           !effectivePending &&
           !Boolean(detail?.requires_basket_put_confirm),
-        productEan: detail?.ean ?? null,
+        productEan: detail?.ean ?? detail?.sku ?? detail?.barcode ?? null,
         productRemaining: remaining,
         pendingEligibleLabels: pendingLabels,
         quantityMode: Boolean(detail?.requires_basket_put_confirm ?? requiresBasketPut),
-        hasSourceLocation: !(needsLocationScan && activeLocationId == null),
+        hasSourceLocation: !(needsLocationScan && !locationScanSatisfied),
         // Basket may be offered when UI has a location; confirmBasketScan awaits server accept/re-accept.
       });
 
@@ -938,7 +1030,7 @@ export default function WmsPickingProductDetailPage() {
         setProductScanSatisfied(true);
         const loc = selectedLocation ?? detail.locations[0];
         if (!pickQueueDone && loc) {
-          if (needsLocationScan && activeLocationId == null) {
+          if (needsLocationScan && !locationScanSatisfied) {
             showScanFeedbackFromCode("PICK_LOCATION_REQUIRED");
             setPickMsg(mapWmsScanErrorCode("PICK_LOCATION_REQUIRED").message);
             setScannerInputPlaceholder("Zeskanuj lokalizację");
@@ -1023,6 +1115,7 @@ export default function WmsPickingProductDetailPage() {
           appendScanToHistory(scan);
           explicitSourceSelectionRef.current = hit.location_id;
           setActiveLocationId(hit.location_id);
+          setLocationScanSatisfied(true);
           setLocationHint(null);
           if (requiresBasketPut) {
             void acceptSourceLocation(hit.location_id, "accept");
@@ -1031,9 +1124,9 @@ export default function WmsPickingProductDetailPage() {
         }
       }
 
-      if (normalizeScanEan(detail.ean) === scan && !pickQueueDone && selectedLocation) {
+      if (productMatchesScan(scan) && !pickQueueDone && selectedLocation) {
         setProductScanSatisfied(true);
-        if (needsLocationScan && activeLocationId == null) {
+        if (needsLocationScan && !locationScanSatisfied) {
           showScanFeedbackFromCode("PICK_LOCATION_REQUIRED");
           setPickMsg(mapWmsScanErrorCode("PICK_LOCATION_REQUIRED").message);
           setScannerInputPlaceholder("Zeskanuj lokalizację");
@@ -1050,7 +1143,7 @@ export default function WmsPickingProductDetailPage() {
         }
         return SCAN_CONSUMED;
       }
-      if (looksLikeProductBarcode(scan) && normalizeScanEan(detail.ean) !== scan) {
+      if (looksLikeProductBarcode(scan) && !productMatchesScan(scan)) {
         showScanFeedbackFromCode("WRONG_PRODUCT_SCAN");
         setPickMsg(mapWmsScanErrorCode("WRONG_PRODUCT_SCAN").message);
         appendScanToHistory(scan);
@@ -1060,7 +1153,7 @@ export default function WmsPickingProductDetailPage() {
     };
     registerScanHandler(handler);
     return () => registerScanHandler(null);
-  }, [detail, pickingSession, activeLocationId, registerScanHandler, appendScanToHistory, pickQueueDone, selectedLocation, pickingTenantId, orderType, showScannerToast, showScanFeedbackFromCode, load, productId, remaining, pickBusy, effectivePending, pendingSeed, enteredViaListProductScan, acceptSourceLocation, needsLocationScan, productScanRequired, openQtyStep]);
+  }, [detail, pickingSession, activeLocationId, registerScanHandler, appendScanToHistory, pickQueueDone, selectedLocation, pickingTenantId, orderType, showScannerToast, showScanFeedbackFromCode, load, productId, remaining, pickBusy, effectivePending, pendingSeed, enteredViaListProductScan, acceptSourceLocation, needsLocationScan, productScanRequired, openQtyStep, locationScanSatisfied, productMatchesScan, expectedLocationBadge]);
 
   const goBackToList = useCallback(
     (refreshList = false) => {
@@ -1105,13 +1198,18 @@ export default function WmsPickingProductDetailPage() {
       goBackToList(true);
       return;
     }
+    if (productBlockedWithoutCode) {
+      showScanFeedbackFromCode("PRODUCT_WITHOUT_SCAN_CODE_BLOCKED");
+      setPickMsg(mapWmsScanErrorCode("PRODUCT_WITHOUT_SCAN_CODE_BLOCKED").message);
+      return;
+    }
     if (productScanRequired) {
       showScanFeedbackFromCode("PRODUCT_SCAN_REQUIRED");
       setPickMsg(mapWmsScanErrorCode("PRODUCT_SCAN_REQUIRED").message);
       setScannerInputPlaceholder("Zeskanuj produkt");
       return;
     }
-    if (needsLocationScan && activeLocationId == null) {
+    if (locationScanRequired) {
       showScanFeedbackFromCode("PICK_LOCATION_REQUIRED");
       setPickMsg(mapWmsScanErrorCode("PICK_LOCATION_REQUIRED").message);
       setScannerInputPlaceholder("Zeskanuj lokalizację");
@@ -1142,7 +1240,11 @@ export default function WmsPickingProductDetailPage() {
           ...(recoveryOrderId != null && recoveryOrderId > 0
             ? { recovery_order_id: recoveryOrderId }
             : {}),
-          product_scan_confirmed: productScanSatisfied || !terminalPolicy.requireProductScanAtLeastOnce,
+          product_scan_confirmed:
+            productScanSatisfied ||
+            !validationGates.needsProductScan ||
+            validationGates.allowManualProductConfirm,
+          location_scan_confirmed: locationScanSatisfied || !needsLocationScan,
         },
       );
       playScanBeep();
@@ -1192,6 +1294,12 @@ export default function WmsPickingProductDetailPage() {
       scanGateRef.current = false;
       return;
     }
+    if (productBlockedWithoutCode) {
+      scanGateRef.current = false;
+      showScanFeedbackFromCode("PRODUCT_WITHOUT_SCAN_CODE_BLOCKED");
+      setPickMsg(mapWmsScanErrorCode("PRODUCT_WITHOUT_SCAN_CODE_BLOCKED").message);
+      return;
+    }
     if (productScanRequired) {
       scanGateRef.current = false;
       showScanFeedbackFromCode("PRODUCT_SCAN_REQUIRED");
@@ -1199,7 +1307,7 @@ export default function WmsPickingProductDetailPage() {
       setScannerInputPlaceholder("Zeskanuj produkt");
       return;
     }
-    if (needsLocationScan && (locationId == null || locationId <= 0 || activeLocationId == null)) {
+    if (locationScanRequired || locationId == null || locationId <= 0) {
       scanGateRef.current = false;
       showScanFeedbackFromCode("PICK_LOCATION_REQUIRED");
       setPickMsg(mapWmsScanErrorCode("PICK_LOCATION_REQUIRED").message);
@@ -1229,7 +1337,11 @@ export default function WmsPickingProductDetailPage() {
         quantity: Math.min(qty, remaining),
         ...(cartless ? { picking_session_id: pickingSessionId! } : { cart_id: cartId! }),
         ...(recoveryOrderId != null && recoveryOrderId > 0 ? { recovery_order_id: recoveryOrderId } : {}),
-        product_scan_confirmed: productScanSatisfied || !terminalPolicy.requireProductScanAtLeastOnce,
+        product_scan_confirmed:
+          productScanSatisfied ||
+          !validationGates.needsProductScan ||
+          validationGates.allowManualProductConfirm,
+        location_scan_confirmed: locationScanSatisfied || !needsLocationScan,
       });
       playScanBeep();
       if (result.phase === "AWAITING_BASKET_CONFIRMATION" || result.picked === false) {
@@ -1564,8 +1676,8 @@ export default function WmsPickingProductDetailPage() {
     }
   }
 
-  const pickBlockedByLocation = needsLocationScan && activeLocationId == null;
-  const pickBlockedByProductScan = productScanRequired;
+  const pickBlockedByLocation = locationScanRequired;
+  const pickBlockedByProductScan = productScanRequired || productBlockedWithoutCode;
   const openPreview = () => {
     if (!pickingSession) return;
     navigate(WMS_ROUTES.productPreview(productId), {
@@ -1575,11 +1687,21 @@ export default function WmsPickingProductDetailPage() {
 
   const openManual = () => {
     if (!detail || detail.locations.length === 0) return;
+    if (productBlockedWithoutCode) {
+      showScanFeedbackFromCode("PRODUCT_WITHOUT_SCAN_CODE_BLOCKED");
+      setProcessAlert(mapWmsScanErrorCode("PRODUCT_WITHOUT_SCAN_CODE_BLOCKED").message);
+      return;
+    }
     if (detail.requires_basket_put_confirm) {
       showScannerToast("Zeskanuj koszyk i podaj ilość — ręczny wpis nie tworzy Pick na MULTI.");
       return;
     }
-    if (needsLocationScan && activeLocationId == null) {
+    if (productScanRequired) {
+      showScanFeedbackFromCode("PRODUCT_SCAN_REQUIRED");
+      setProcessAlert("Zeskanuj produkt, aby kontynuować zbieranie.");
+      return;
+    }
+    if (locationScanRequired) {
       showScanFeedbackFromCode("PICK_LOCATION_REQUIRED");
       setProcessAlert("Zeskanuj lokalizację, aby kontynuować zbieranie.");
       return;
@@ -1590,6 +1712,9 @@ export default function WmsPickingProductDetailPage() {
     if (locId == null) {
       showScanFeedbackFromCode("PICK_LOCATION_REQUIRED");
       return;
+    }
+    if (validationGates.allowManualProductConfirm) {
+      setProductScanSatisfied(true);
     }
     setManualLocId(locId);
     const rem = wmsPickingRemainingQty(detail);
@@ -1938,6 +2063,19 @@ export default function WmsPickingProductDetailPage() {
                 {detail.name}
               </p>
               <PickingEanBadge value={detail.ean} className="justify-center" />
+              {!validationGates.hasScannableProductCode ? (
+                <p className="text-center text-xs font-medium text-amber-800">
+                  Produkt bez kodu EAN
+                  {validationGates.allowManualProductConfirm
+                    ? " — potwierdź ręcznie ilość."
+                    : " — zbieranie zablokowane (włącz opcję w ustawieniach)."}
+                </p>
+              ) : null}
+              {productBlockedWithoutCode ? (
+                <p className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-center text-sm text-rose-900">
+                  {mapWmsScanErrorCode("PRODUCT_WITHOUT_SCAN_CODE_BLOCKED").message}
+                </p>
+              ) : null}
               {isShortageResolved ? (
                 <PickingShortageBadge
                   missing={fmtQty(missingTotal)}

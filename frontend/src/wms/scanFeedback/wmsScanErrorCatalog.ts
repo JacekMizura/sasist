@@ -149,12 +149,24 @@ const CATALOG: Record<
   WRONG_PRODUCT_SCAN: {
     severity: "error",
     title: "BŁĘDNY PRODUKT",
-    message: "Nieprawidłowy produkt. Zeskanuj właściwy produkt.",
+    message: "Zeskanowano inny produkt. Zeskanuj kod produktu wskazanego na ekranie.",
   },
   WRONG_LOCATION_SCAN: {
     severity: "error",
     title: "BŁĘDNA LOKALIZACJA",
-    message: "Zeskanowana lokalizacja jest nieprawidłowa dla tego produktu.",
+    message: "Nieprawidłowa lokalizacja. Zeskanuj lokalizację wskazaną na ekranie.",
+  },
+  PRODUCT_WITHOUT_SCAN_CODE_BLOCKED: {
+    severity: "error",
+    title: "BRAK KODU EAN",
+    message:
+      "Produkt nie ma kodu EAN. Włącz „Produkty bez kodu EAN” w ustawieniach albo uzupełnij kod produktu.",
+  },
+  NO_ALLOWED_PICK_LOCATION_STOCK: {
+    severity: "error",
+    title: "BRAK ZAPASU",
+    message:
+      "Brak dostępnego zapasu na dozwolonych lokalizacjach. Zapas może być tylko na lokalizacji rezerwowej.",
   },
   LOCATION_NOT_FOUND: {
     severity: "error",

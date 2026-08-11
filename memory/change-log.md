@@ -1,3 +1,9 @@
+## 2026-08-11 — Walidacja zbierania (skany / lokalizacje / EAN)
+
+- UI: Terminal → „Walidacja zbierania”; „Produkty bez kodu EAN” + tooltips
+- Wspólny resolver FE/BE; `location_scan_confirmed` + `allow_products_without_ean`
+- Egzekwowanie na quick-pick / cartless / confirm-remaining; rezerwa bez auto-poboru
+
 ## 2026-08-11 — Widok listy zbierania (ustawienia → kafelki)
 
 - `list_display_json` na `wms_picking_terminal_settings` + API `list_display`

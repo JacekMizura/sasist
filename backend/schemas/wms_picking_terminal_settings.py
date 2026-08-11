@@ -25,6 +25,7 @@ class WmsPickingTerminalSettingsRead(BaseModel):
     require_location_scan: bool = False
     disable_force_location_scan_when_many_locations: bool = False
     allow_reserve_location_picking: bool = False
+    allow_products_without_ean: bool = False
     list_display: WmsPickingListDisplay = Field(default_factory=WmsPickingListDisplay)
 
 
@@ -35,5 +36,6 @@ class WmsPickingTerminalSettingsSave(BaseModel):
     require_location_scan: bool = False
     disable_force_location_scan_when_many_locations: bool = False
     allow_reserve_location_picking: bool = False
+    allow_products_without_ean: bool = False
     #: Opcjonalne w PATCH — brak = zachowaj istniejące w DB.
     list_display: Optional[WmsPickingListDisplay] = None

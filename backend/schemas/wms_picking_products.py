@@ -358,6 +358,8 @@ class WmsPickingProductDetailResponse(BaseModel):
     product_id: int
     name: str
     ean: Optional[str] = None
+    sku: Optional[str] = None
+    barcode: Optional[str] = None
     image_url: Optional[str] = None
     total_quantity: float = Field(..., ge=0)
     picked_quantity: float = Field(0, ge=0)
@@ -529,7 +531,11 @@ class WmsPickingQuickPickBody(BaseModel):
     )
     product_scan_confirmed: bool = Field(
         default=False,
-        description="True gdy operator zeskanował EAN produktu przed potwierdzeniem pobrania.",
+        description="True gdy operator zeskanował kod produktu przed potwierdzeniem pobrania.",
+    )
+    location_scan_confirmed: bool = Field(
+        default=False,
+        description="True gdy operator zeskanował/wybrał lokalizację zgodnie z polityką walidacji.",
     )
 
     @model_validator(mode="after")
@@ -562,7 +568,11 @@ class WmsPickingConfirmRemainingBody(BaseModel):
     )
     product_scan_confirmed: bool = Field(
         default=False,
-        description="True gdy operator zeskanował EAN produktu przed zatwierdzeniem.",
+        description="True gdy operator zeskanował kod produktu przed zatwierdzeniem.",
+    )
+    location_scan_confirmed: bool = Field(
+        default=False,
+        description="True gdy operator zeskanował lokalizację zgodnie z polityką walidacji.",
     )
 
     @model_validator(mode="after")

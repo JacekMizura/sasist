@@ -38,6 +38,7 @@ def record_cartless_quick_pick(
     picking_session_id: int,
     operator_user_id: int | None = None,
     product_scan_confirmed: bool = False,
+    location_scan_confirmed: bool = False,
 ) -> tuple[int, int]:
     """
     Draft Pick z cart_id=NULL w ramach sesji cartless.
@@ -46,20 +47,29 @@ def record_cartless_quick_pick(
     if quantity <= 0:
         raise ValueError("Ilość musi być > 0.")
 
-    from ..wms_picking_terminal_settings_service import get_or_create_wms_picking_terminal_settings
+    from ..wms_picking_terminal_settings_service import (
+        get_or_create_wms_picking_terminal_settings,
+        product_has_scannable_code,
+        resolve_gates_from_terminal_row,
+        assert_pick_terminal_gates,
+    )
     from ..wms_basket_put.error_codes import (
-        PRODUCT_SCAN_REQUIRED,
+        NO_ALLOWED_PICK_LOCATION_STOCK,
         RESERVE_LOCATION_FORBIDDEN,
         WRONG_LOCATION_SCAN,
         operator_message,
     )
     from ..wms_basket_put.scan_service import BasketPutError
+    from ...models.product import Product
 
     terminal = get_or_create_wms_picking_terminal_settings(
         db, tenant_id=int(tenant_id), warehouse_id=int(warehouse_id)
     )
-    if bool(terminal.require_product_scan_at_least_once) and not product_scan_confirmed:
-        raise BasketPutError(PRODUCT_SCAN_REQUIRED, operator_message(PRODUCT_SCAN_REQUIRED))
+    product_row = (
+        db.query(Product)
+        .filter(Product.id == int(product_id), Product.tenant_id == int(tenant_id))
+        .first()
+    )
 
     sess = get_cartless_session_or_raise(
         db,
@@ -93,7 +103,33 @@ def record_cartless_quick_pick(
         warehouse_id=warehouse_id,
     )
     if not allowed:
+        if not allow_reserve:
+            all_locs = _allowed_pick_location_ids_for_product(
+                db,
+                tenant_id=tenant_id,
+                order_ids=order_ids,
+                product_id=product_id,
+                allow_reserve_location_picking=True,
+                warehouse_id=warehouse_id,
+            )
+            if all_locs:
+                raise BasketPutError(
+                    NO_ALLOWED_PICK_LOCATION_STOCK,
+                    operator_message(NO_ALLOWED_PICK_LOCATION_STOCK),
+                )
         raise ValueError("Brak lokalizacji do pobrania tego produktu (routing / alokacja).")
+
+    gates = resolve_gates_from_terminal_row(
+        terminal,
+        location_count=len(allowed),
+        has_scannable_product_code=product_has_scannable_code(product_row),
+    )
+    assert_pick_terminal_gates(
+        gates,
+        product_scan_confirmed=bool(product_scan_confirmed),
+        location_scan_confirmed=bool(location_scan_confirmed),
+    )
+
     if int(location_id) not in allowed:
         if not allow_reserve:
             from ...models.location import Location

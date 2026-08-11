@@ -4518,6 +4518,13 @@ def ensure_wms_picking_terminal_settings_table(engine: Engine) -> None:
                     "ADD COLUMN list_display_json TEXT NOT NULL DEFAULT '{}'"
                 )
             )
+        if "allow_products_without_ean" not in cols:
+            conn.execute(
+                text(
+                    "ALTER TABLE wms_picking_terminal_settings "
+                    "ADD COLUMN allow_products_without_ean BOOLEAN NOT NULL DEFAULT false"
+                )
+            )
 
 
 def ensure_wms_general_settings_table(engine: Engine) -> None:

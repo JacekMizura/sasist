@@ -25,6 +25,8 @@ class WmsPickingTerminalSettings(Base):
     disable_force_location_scan_when_many_locations = Column(Boolean, nullable=False, default=False)
     #: When false, reserve/buffer locations are excluded from pick candidates.
     allow_reserve_location_picking = Column(Boolean, nullable=False, default=False)
+    #: When true, products without any scannable code (EAN / barcode / SKU) may still be picked.
+    allow_products_without_ean = Column(Boolean, nullable=False, default=False)
     #: Lista zbierania — widoczność pól na kafelkach (JSON: show_product_image, show_ean, …).
     list_display_json = Column(Text, nullable=False, default="{}")
 

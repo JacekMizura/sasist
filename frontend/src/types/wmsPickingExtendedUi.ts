@@ -27,7 +27,7 @@ export type WmsPickingExtendedUiSettings = {
   requireLocationScan: boolean;
   disableForceLocationScanWhenManyLocations: boolean;
   allowReserveLocationPicking: boolean;
-  allowProductsWithoutLabelsToBaskets: boolean;
+  allowProductsWithoutEan: boolean;
   disableAutoDetachMissingOrdersFromCarts: boolean;
 
   multiItemBatchOrdersCount: number;
@@ -85,7 +85,7 @@ export const DEFAULT_WMS_PICKING_EXTENDED_UI: WmsPickingExtendedUiSettings = {
   requireLocationScan: false,
   disableForceLocationScanWhenManyLocations: false,
   allowReserveLocationPicking: false,
-  allowProductsWithoutLabelsToBaskets: false,
+  allowProductsWithoutEan: false,
   disableAutoDetachMissingOrdersFromCarts: false,
 
   multiItemBatchOrdersCount: 10,
@@ -133,8 +133,15 @@ export function loadWmsPickingExtendedUi(warehouseId: number): WmsPickingExtende
   try {
     const raw = localStorage.getItem(storageKeyWmsPickingExtendedUi(warehouseId));
     if (!raw) return { ...DEFAULT_WMS_PICKING_EXTENDED_UI };
-    const parsed = JSON.parse(raw) as Partial<WmsPickingExtendedUiSettings>;
-    return { ...DEFAULT_WMS_PICKING_EXTENDED_UI, ...parsed };
+    const parsed = JSON.parse(raw) as Partial<WmsPickingExtendedUiSettings> & {
+      allowProductsWithoutLabelsToBaskets?: boolean;
+    };
+    const migrated: Partial<WmsPickingExtendedUiSettings> = { ...parsed };
+    if (migrated.allowProductsWithoutEan == null && parsed.allowProductsWithoutLabelsToBaskets != null) {
+      migrated.allowProductsWithoutEan = Boolean(parsed.allowProductsWithoutLabelsToBaskets);
+    }
+    delete (migrated as { allowProductsWithoutLabelsToBaskets?: boolean }).allowProductsWithoutLabelsToBaskets;
+    return { ...DEFAULT_WMS_PICKING_EXTENDED_UI, ...migrated };
   } catch {
     return { ...DEFAULT_WMS_PICKING_EXTENDED_UI };
   }

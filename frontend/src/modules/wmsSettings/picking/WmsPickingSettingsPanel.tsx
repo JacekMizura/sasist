@@ -1987,6 +1987,7 @@ export function WmsPickingSettingsSections({
               t.disable_force_location_scan_when_many_locations,
             ),
             allowReserveLocationPicking: Boolean(t.allow_reserve_location_picking),
+            allowProductsWithoutEan: Boolean(t.allow_products_without_ean),
             showProductImage: Boolean(ld.show_product_image),
             showEAN: Boolean(ld.show_ean),
             showSKU: Boolean(ld.show_sku),
@@ -2026,6 +2027,7 @@ export function WmsPickingSettingsSections({
         extended.disableForceLocationScanWhenManyLocations,
       ),
       allow_reserve_location_picking: Boolean(extended.allowReserveLocationPicking),
+      allow_products_without_ean: Boolean(extended.allowProductsWithoutEan),
       list_display: {
         show_product_image: Boolean(extended.showProductImage),
         show_ean: Boolean(extended.showEAN),
@@ -2470,6 +2472,7 @@ export function WmsPickingSettingsSections({
               t.disable_force_location_scan_when_many_locations,
             );
             e.allowReserveLocationPicking = Boolean(t.allow_reserve_location_picking);
+            e.allowProductsWithoutEan = Boolean(t.allow_products_without_ean);
             e.showProductImage = Boolean(t.list_display.show_product_image);
             e.showEAN = Boolean(t.list_display.show_ean);
             e.showSKU = Boolean(t.list_display.show_sku);
@@ -2644,6 +2647,7 @@ export function WmsPickingSettingsSections({
                   e.disableForceLocationScanWhenManyLocations,
                 ),
                 allow_reserve_location_picking: Boolean(e.allowReserveLocationPicking),
+                allow_products_without_ean: Boolean(e.allowProductsWithoutEan),
                 list_display: {
                   show_product_image: Boolean(e.showProductImage),
                   show_ean: Boolean(e.showEAN),
@@ -2865,7 +2869,7 @@ export function WmsPickingSettingsSections({
           />
         </SectionCardPicking>
 
-        <SectionCardPicking id="wms-pick-scan" title="Terminal" summary="Wymagania skanów i reguły walidacji podczas zbierania.">
+        <SectionCardPicking id="wms-pick-scan" title="Walidacja zbierania">
           <FieldGridPicking>
             <CustomCheckbox
               settingId="picking.require_product_scan"
@@ -2894,9 +2898,11 @@ export function WmsPickingSettingsSections({
               onChange={(v) => patchExtended("allowReserveLocationPicking", v)}
             />
             <CustomCheckbox
-              label="Produkty bez etykiet do koszyków"
-              checked={extended.allowProductsWithoutLabelsToBaskets}
-              onChange={(v) => patchExtended("allowProductsWithoutLabelsToBaskets", v)}
+              settingId="picking.allow_products_without_ean"
+              label="Produkty bez kodu EAN"
+              hint={PICKING_TERMINAL_SETTING_HINTS.allowProductsWithoutEan}
+              checked={extended.allowProductsWithoutEan}
+              onChange={(v) => patchExtended("allowProductsWithoutEan", v)}
             />
           </FieldGridPicking>
         </SectionCardPicking>

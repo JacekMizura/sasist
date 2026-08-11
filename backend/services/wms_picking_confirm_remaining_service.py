@@ -96,6 +96,7 @@ def confirm_remaining_product_picks(
     recovery_order_id: int | None = None,
     operator_user_id: int | None = None,
     product_scan_confirmed: bool = False,
+    location_scan_confirmed: bool = False,
 ) -> dict[str, Any]:
     """
     Atomically pick the full remaining quantity for ``product_id`` across locations.
@@ -107,7 +108,17 @@ def confirm_remaining_product_picks(
         record_wms_quick_pick,
         resolve_wms_picking_order_ids,
         _order_type_filter,
+        _allowed_pick_location_ids_for_product,
     )
+    from .wms_picking_terminal_settings_service import (
+        get_or_create_wms_picking_terminal_settings,
+        product_has_scannable_code,
+        resolve_gates_from_terminal_row,
+        assert_pick_terminal_gates,
+    )
+    from ..models.product import Product
+    from .wms_basket_put.scan_service import BasketPutError
+    from .wms_basket_put.error_codes import NO_ALLOWED_PICK_LOCATION_STOCK, operator_message
 
     tid = int(tenant_id)
     wid = int(warehouse_id)
@@ -190,8 +201,6 @@ def confirm_remaining_product_picks(
             f"Brak lokalizacji ze stanem dla produktu — wymagane jeszcze {remaining:g} szt.",
         )
 
-    from .wms_picking_terminal_settings_service import get_or_create_wms_picking_terminal_settings
-
     terminal = get_or_create_wms_picking_terminal_settings(
         db, tenant_id=tid, warehouse_id=wid
     )
@@ -208,10 +217,39 @@ def confirm_remaining_product_picks(
         if non_pickable:
             loc_ids = [lid for lid in loc_ids if lid not in non_pickable]
         if not loc_ids:
-            raise ConfirmRemainingError(
-                "RESERVE_LOCATION_FORBIDDEN",
-                "Produkt nie może być pobrany z tej lokalizacji.",
+            raise BasketPutError(
+                NO_ALLOWED_PICK_LOCATION_STOCK,
+                operator_message(NO_ALLOWED_PICK_LOCATION_STOCK),
             )
+
+    product_row = (
+        db.query(Product)
+        .filter(Product.id == int(pid), Product.tenant_id == int(tid))
+        .first()
+    )
+    # Prefer routing-allowed count when available (same SSOT as quick-pick).
+    allowed_route = _allowed_pick_location_ids_for_product(
+        db,
+        tenant_id=tid,
+        order_ids=order_ids,
+        product_id=pid,
+        allow_reserve_location_picking=bool(terminal.allow_reserve_location_picking),
+        warehouse_id=wid,
+    )
+    loc_count = len(allowed_route) if allowed_route else len(loc_ids)
+    gates = resolve_gates_from_terminal_row(
+        terminal,
+        location_count=loc_count,
+        has_scannable_product_code=product_has_scannable_code(product_row),
+    )
+    try:
+        assert_pick_terminal_gates(
+            gates,
+            product_scan_confirmed=bool(product_scan_confirmed),
+            location_scan_confirmed=bool(location_scan_confirmed),
+        )
+    except BasketPutError:
+        raise
 
     # Plan under Inventory locks (for_update) so concurrent puts serialize.
     plan: list[tuple[int, float]] = []
@@ -279,6 +317,7 @@ def confirm_remaining_product_picks(
                 fixed_order_id=recovery,
                 operator_user_id=operator_user_id,
                 product_scan_confirmed=bool(product_scan_confirmed),
+                location_scan_confirmed=bool(location_scan_confirmed),
             )
         else:
             from .wms_cartless_picking.pick_service import record_cartless_quick_pick
@@ -295,6 +334,7 @@ def confirm_remaining_product_picks(
                 picking_session_id=int(sid),
                 operator_user_id=operator_user_id,
                 product_scan_confirmed=bool(product_scan_confirmed),
+                location_scan_confirmed=bool(location_scan_confirmed),
             )
         created.append({"location_id": int(lid), "quantity": float(qty)})
         put_total = round(put_total + float(qty), 6)

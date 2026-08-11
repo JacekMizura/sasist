@@ -315,14 +315,21 @@ export const WMS_SETTINGS_SEARCH_CATALOG: WmsSettingsSearchEntry[] = [
     label: "Wymagane skanowanie produktu przynajmniej jeden raz",
     tabId: "picking",
     sectionId: "wms-pick-scan",
-    sectionLabel: "Terminal",
+    sectionLabel: "Walidacja zbierania",
   }),
   e({
     id: "picking.require_location_scan",
     label: "Wymagane skanowanie lokalizacji",
     tabId: "picking",
     sectionId: "wms-pick-scan",
-    sectionLabel: "Terminal",
+    sectionLabel: "Walidacja zbierania",
+  }),
+  e({
+    id: "picking.allow_products_without_ean",
+    label: "Produkty bez kodu EAN",
+    tabId: "picking",
+    sectionId: "wms-pick-scan",
+    sectionLabel: "Walidacja zbierania",
   }),
   e({
     id: "picking.default_container_type",

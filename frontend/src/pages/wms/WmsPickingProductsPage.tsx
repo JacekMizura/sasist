@@ -44,6 +44,13 @@ import {
   getWmsPickingTerminalSettings,
   type WmsPickingListDisplayApi,
 } from "../../api/wmsPickingTerminalSettingsApi";
+import {
+  DEFAULT_PICKING_TERMINAL_SCAN_POLICY,
+  productHasScannableCode,
+  resolvePickingValidationGates,
+  type PickingTerminalScanPolicy,
+} from "../../modules/wmsSettings/picking/pickingTerminalScanPolicy";
+import { mapWmsScanErrorCode } from "../../wms/scanFeedback/wmsScanErrorCatalog";
 import type { WmsPickingProductsNavState } from "./wmsPickingFlowTypes";
 import { clearActivePriorityTask, loadActivePriorityTask, priorityTaskAppliesTo, priorityTaskOrderIds, type ActivePriorityTask } from "./activePriorityTask";
 import { formatWmsPickingLocationPillLabel } from "./wmsPickingLocationPill";
@@ -89,7 +96,7 @@ function fmtQty(n: number): string {
 function productLineMatchesScan(row: WmsPickingProductLineApi, scan: string): boolean {
   const b = normalizeScanEan(scan).toUpperCase();
   if (!b) return false;
-  const cands = [row.ean, String(row.product_id)]
+  const cands = [row.ean, row.sku, String(row.product_id)]
     .filter(Boolean)
     .map((x) => normalizeScanEan(String(x)).toUpperCase())
     .filter((x) => x.length > 0);
@@ -233,20 +240,36 @@ export default function WmsPickingProductsPage() {
   const [rejectOpen, setRejectOpen] = useState(false);
   const [rejectReason, setRejectReason] = useState("");
   const [listDisplay, setListDisplay] = useState<WmsPickingListDisplayApi>(DEFAULT_WMS_PICKING_LIST_DISPLAY);
+  const [terminalPolicy, setTerminalPolicy] = useState<PickingTerminalScanPolicy>(
+    DEFAULT_PICKING_TERMINAL_SCAN_POLICY,
+  );
   const activePriorityOrderIds = useMemo(() => priorityTaskOrderIds(activePriorityTask), [activePriorityTask]);
 
   useEffect(() => {
     if (warehouseId == null) {
       setListDisplay(DEFAULT_WMS_PICKING_LIST_DISPLAY);
+      setTerminalPolicy(DEFAULT_PICKING_TERMINAL_SCAN_POLICY);
       return;
     }
     let cancelled = false;
     void getWmsPickingTerminalSettings(DAMAGE_TENANT_ID, warehouseId)
       .then((t) => {
-        if (!cancelled) setListDisplay(t.list_display);
+        if (cancelled) return;
+        setListDisplay(t.list_display);
+        setTerminalPolicy({
+          requireProductScanAtLeastOnce: Boolean(t.require_product_scan_at_least_once),
+          requireLocationScan: Boolean(t.require_location_scan),
+          disableForceLocationScanWhenManyLocations: Boolean(
+            t.disable_force_location_scan_when_many_locations,
+          ),
+          allowReserveLocationPicking: Boolean(t.allow_reserve_location_picking),
+          allowProductsWithoutEan: Boolean(t.allow_products_without_ean),
+        });
       })
       .catch(() => {
-        if (!cancelled) setListDisplay(DEFAULT_WMS_PICKING_LIST_DISPLAY);
+        if (cancelled) return;
+        setListDisplay(DEFAULT_WMS_PICKING_LIST_DISPLAY);
+        setTerminalPolicy(DEFAULT_PICKING_TERMINAL_SCAN_POLICY);
       });
     return () => {
       cancelled = true;
@@ -1022,6 +1045,33 @@ export default function WmsPickingProductsPage() {
 
         const { total } = wmsPickingDisplayProgressParts(hit);
         const locId = hit.primary_location_id ?? hit.locations?.[0]?.location_id ?? null;
+        const locCount = Math.max(1, hit.locations?.length ?? (locId != null ? 1 : 0));
+        const hasCode = productHasScannableCode({ ean: hit.ean, sku: hit.sku });
+        const gates = resolvePickingValidationGates({
+          locationCount: locCount,
+          policy: terminalPolicy,
+          hasScannableProductCode: hasCode,
+        });
+        if (gates.productBlockedWithoutCode) {
+          showScanFeedbackFromCode("PRODUCT_WITHOUT_SCAN_CODE_BLOCKED");
+          showScannerToast(mapWmsScanErrorCode("PRODUCT_WITHOUT_SCAN_CODE_BLOCKED").message);
+          appendScanToHistory(scan);
+          return SCAN_CONSUMED;
+        }
+        // Location / multi-loc validation: finish on detail, not list auto-pick.
+        if (gates.needsLocationScan) {
+          playScanBeep();
+          appendScanToHistory(scan);
+          goDetail(hit.product_id, {
+            source: "physical_scan",
+            caller: "list_ean_location_required",
+            rawCode: scan,
+            quickPickCalled: false,
+            pendingCreated: false,
+            listProductScanToken: `locreq-${hit.product_id}-${Date.now()}`,
+          });
+          return SCAN_CONSUMED;
+        }
         const canQuickPick =
           locId != null &&
           (mergedSession.cartId != null ||
@@ -1052,6 +1102,8 @@ export default function WmsPickingProductsPage() {
                 ...(recoveryOrderId != null && recoveryOrderId > 0
                   ? { recovery_order_id: recoveryOrderId }
                   : {}),
+                product_scan_confirmed: true,
+                location_scan_confirmed: !gates.needsLocationScan,
               },
             );
             multiScanTrace("PRODUCT_SCAN_RESPONSE", {
@@ -1266,6 +1318,7 @@ export default function WmsPickingProductsPage() {
     load,
     basketPutPending,
     requiresBasketPutConfirm,
+    terminalPolicy,
   ]);
 
   const resumePendingPut = useCallback(() => {

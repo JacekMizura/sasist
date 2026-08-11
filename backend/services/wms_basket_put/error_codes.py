@@ -29,6 +29,8 @@ QUANTITY_EXCEEDS_REMAINING = "QUANTITY_EXCEEDS_REMAINING"
 QUANTITY_STALE = "QUANTITY_STALE"
 PICK_LOCATION_REQUIRED = "PICK_LOCATION_REQUIRED"
 PRODUCT_SCAN_REQUIRED = "PRODUCT_SCAN_REQUIRED"
+PRODUCT_WITHOUT_SCAN_CODE_BLOCKED = "PRODUCT_WITHOUT_SCAN_CODE_BLOCKED"
+NO_ALLOWED_PICK_LOCATION_STOCK = "NO_ALLOWED_PICK_LOCATION_STOCK"
 RESERVE_LOCATION_FORBIDDEN = "RESERVE_LOCATION_FORBIDDEN"
 WRONG_PRODUCT_SCAN = "WRONG_PRODUCT_SCAN"
 WRONG_LOCATION_SCAN = "WRONG_LOCATION_SCAN"
@@ -68,8 +70,16 @@ OPERATOR_MESSAGES: dict[str, str] = {
     QUANTITY_STALE: "Pozostała ilość zmieniła się. Odśwież i podaj ilość ponownie.",
     PICK_LOCATION_REQUIRED: "Zeskanuj lokalizację przed pobraniem produktu.",
     PRODUCT_SCAN_REQUIRED: "Zeskanuj produkt przed potwierdzeniem pobrania.",
+    PRODUCT_WITHOUT_SCAN_CODE_BLOCKED: (
+        "Produkt nie ma kodu EAN (ani innego kodu skanowalnego). "
+        "Włącz „Produkty bez kodu EAN” w ustawieniach zbierania albo uzupełnij kod produktu."
+    ),
+    NO_ALLOWED_PICK_LOCATION_STOCK: (
+        "Brak dostępnego zapasu na dozwolonych lokalizacjach. "
+        "Zapas może być tylko na lokalizacji rezerwowej — włącz zbieranie z rezerwy albo uzupełnij stan."
+    ),
     RESERVE_LOCATION_FORBIDDEN: "Produkt nie może być pobrany z tej lokalizacji.",
-    WRONG_PRODUCT_SCAN: "Nieprawidłowy produkt. Zeskanuj właściwy produkt.",
+    WRONG_PRODUCT_SCAN: "Zeskanowano inny produkt. Zeskanuj kod produktu wskazanego na ekranie.",
     WRONG_LOCATION_SCAN: "Nieprawidłowa lokalizacja. Zeskanuj lokalizację wskazaną na ekranie.",
     QUANTITY_EXCEEDS_LOCATION_STOCK: (
         "W wybranej lokalizacji nie ma wystarczającego stanu (uwzględniając już zebrane, "

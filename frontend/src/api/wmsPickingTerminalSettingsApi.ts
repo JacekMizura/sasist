@@ -30,6 +30,7 @@ export type WmsPickingTerminalSettingsApi = {
   require_location_scan: boolean;
   disable_force_location_scan_when_many_locations: boolean;
   allow_reserve_location_picking: boolean;
+  allow_products_without_ean: boolean;
   list_display: WmsPickingListDisplayApi;
 };
 
@@ -40,6 +41,7 @@ export type WmsPickingTerminalSettingsSaveApi = {
   require_location_scan: boolean;
   disable_force_location_scan_when_many_locations: boolean;
   allow_reserve_location_picking: boolean;
+  allow_products_without_ean: boolean;
   list_display?: WmsPickingListDisplayApi | null;
 };
 

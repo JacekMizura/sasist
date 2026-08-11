@@ -207,6 +207,8 @@ export type WmsPickingProductDetailApi = {
   product_id: number;
   name: string;
   ean: string | null;
+  sku?: string | null;
+  barcode?: string | null;
   image_url: string | null;
   total_quantity: number;
   picked_quantity: number;
@@ -980,8 +982,10 @@ export type WmsPickingQuickPickBodyApi = {
   cart_id?: number | null;
   picking_session_id?: number | null;
   recovery_order_id?: number | null;
-  /** True when operator scanned product EAN before confirming. */
+  /** True when operator scanned product code before confirming. */
   product_scan_confirmed?: boolean;
+  /** True when operator scanned/selected location per terminal policy. */
+  location_scan_confirmed?: boolean;
 };
 
 function assertPositiveInt(name: string, v: unknown): number {
@@ -1096,6 +1100,9 @@ export async function postWmsPickingQuickPick(
   if (body.product_scan_confirmed) {
     payload.product_scan_confirmed = true;
   }
+  if (body.location_scan_confirmed) {
+    payload.location_scan_confirmed = true;
+  }
   const params: Record<string, number | string> = {
     tenant_id: tenantId,
     source_status_id: sourceStatusId,
@@ -1114,6 +1121,7 @@ export type WmsPickingConfirmRemainingBodyApi = {
   picking_session_id?: number;
   recovery_order_id?: number | null;
   product_scan_confirmed?: boolean;
+  location_scan_confirmed?: boolean;
 };
 
 export type WmsPickingConfirmRemainingResultApi = {
@@ -1158,6 +1166,9 @@ export async function postWmsPickingConfirmRemaining(
   }
   if (body.product_scan_confirmed) {
     payload.product_scan_confirmed = true;
+  }
+  if (body.location_scan_confirmed) {
+    payload.location_scan_confirmed = true;
   }
   const params: Record<string, number | string> = {
     tenant_id: tenantId,

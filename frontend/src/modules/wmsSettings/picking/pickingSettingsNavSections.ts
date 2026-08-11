@@ -40,10 +40,10 @@ export const WMS_PICKING_SETTINGS_NAV_SECTIONS: WmsSettingsSectionConfig[] = [
   },
   {
     id: "wms-pick-scan",
-    label: "Terminal",
+    label: "Walidacja zbierania",
     icon: ScanLine,
     iconClassName: "bg-cyan-50 text-cyan-700",
-    searchText: "skan walidacja",
+    searchText: "skan walidacja ean lokalizacja",
   },
   {
     id: "wms-pick-carts",

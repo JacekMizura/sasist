@@ -2946,6 +2946,10 @@ def build_wms_picking_product_detail(
         product_id=int(product_id),
         name=pr.name if pr and pr.name else row.name,
         ean=pr.ean if pr else row.ean,
+        sku=(str(pr.sku).strip() if pr and getattr(pr, "sku", None) else None)
+        or (str(getattr(pr, "symbol", None) or "").strip() or None if pr else None)
+        or getattr(row, "sku", None),
+        barcode=(str(pr.barcode).strip() if pr and getattr(pr, "barcode", None) else None),
         image_url=pr.image_url if pr else row.image_url,
         total_quantity=row.total_quantity,
         picked_quantity=row.picked_quantity,
@@ -3087,6 +3091,7 @@ def record_wms_quick_pick(
     operator_user_id: int | None = None,
     skip_route_location_check: bool = False,
     product_scan_confirmed: bool = False,
+    location_scan_confirmed: bool = False,
 ) -> tuple[int, int]:
     """
     Zapis roboczy: rekord Pick z ``cart_id`` (sesja), ``picked_at`` = NULL do czasu finalizacji wózka.
@@ -3102,25 +3107,34 @@ def record_wms_quick_pick(
     and ignores draft Picks, so it can exclude the operator's real source (e.g. A23) while
     still listing a drained A10 as the only candidate.
 
-    ``product_scan_confirmed`` — operator already scanned product EAN (terminal policy).
+    ``product_scan_confirmed`` / ``location_scan_confirmed`` — terminal validation policy.
     """
     if quantity <= 0:
         raise ValueError("Ilość musi być > 0.")
 
-    from .wms_picking_terminal_settings_service import get_or_create_wms_picking_terminal_settings
+    from .wms_picking_terminal_settings_service import (
+        get_or_create_wms_picking_terminal_settings,
+        product_has_scannable_code,
+        resolve_gates_from_terminal_row,
+        assert_pick_terminal_gates,
+    )
     from .wms_basket_put.error_codes import (
-        PRODUCT_SCAN_REQUIRED,
+        NO_ALLOWED_PICK_LOCATION_STOCK,
         RESERVE_LOCATION_FORBIDDEN,
         WRONG_LOCATION_SCAN,
         operator_message,
     )
     from .wms_basket_put.scan_service import BasketPutError
+    from ..models.product import Product
 
     terminal = get_or_create_wms_picking_terminal_settings(
         db, tenant_id=int(tenant_id), warehouse_id=int(warehouse_id)
     )
-    if bool(terminal.require_product_scan_at_least_once) and not product_scan_confirmed:
-        raise BasketPutError(PRODUCT_SCAN_REQUIRED, operator_message(PRODUCT_SCAN_REQUIRED))
+    product_row = (
+        db.query(Product)
+        .filter(Product.id == int(product_id), Product.tenant_id == int(tenant_id))
+        .first()
+    )
 
     if fixed_order_id is not None:
         oid = int(fixed_order_id)
@@ -3180,10 +3194,9 @@ def record_wms_quick_pick(
         if not order_ids:
             raise ValueError("Brak zamówień przypisanych do tego wózka.")
 
-    # Basket-put / trusted source provenance: stock already checked by confirm path.
-    # Classic quick-pick still gates on routing candidates.
+    allow_reserve = bool(terminal.allow_reserve_location_picking)
+    allowed: set[int] = set()
     if not skip_route_location_check:
-        allow_reserve = bool(terminal.allow_reserve_location_picking)
         allowed = _allowed_pick_location_ids_for_product(
             db,
             tenant_id=tenant_id,
@@ -3193,7 +3206,42 @@ def record_wms_quick_pick(
             warehouse_id=warehouse_id,
         )
         if not allowed:
+            # Distinguish: stock only on reserve vs no stock at all.
+            if not allow_reserve:
+                all_locs = _allowed_pick_location_ids_for_product(
+                    db,
+                    tenant_id=tenant_id,
+                    order_ids=order_ids,
+                    product_id=product_id,
+                    allow_reserve_location_picking=True,
+                    warehouse_id=warehouse_id,
+                )
+                if all_locs:
+                    raise BasketPutError(
+                        NO_ALLOWED_PICK_LOCATION_STOCK,
+                        operator_message(NO_ALLOWED_PICK_LOCATION_STOCK),
+                    )
             raise ValueError("Brak lokalizacji do pobrania tego produktu (routing / alokacja).")
+        loc_count = len(allowed)
+    else:
+        loc_count = 1
+
+    gates = resolve_gates_from_terminal_row(
+        terminal,
+        location_count=loc_count,
+        has_scannable_product_code=product_has_scannable_code(product_row),
+    )
+    # Basket-put confirm already validated source → treat location scan as satisfied.
+    loc_confirmed = bool(location_scan_confirmed) or bool(skip_route_location_check)
+    assert_pick_terminal_gates(
+        gates,
+        product_scan_confirmed=bool(product_scan_confirmed),
+        location_scan_confirmed=loc_confirmed,
+    )
+
+    # Basket-put / trusted source provenance: stock already checked by confirm path.
+    # Classic quick-pick still gates on routing candidates.
+    if not skip_route_location_check:
         if int(location_id) not in allowed:
             # Distinguisz rezerwy vs zła lokalizacja na trasie.
             if not allow_reserve:
