@@ -1027,6 +1027,13 @@ def bootstrap_start_picking_if_needed(
             OPERATOR_MSG_NO_ASSIGNABLE_AFTER_VALIDATION if had_preliminary_free > 0 else None
         )
 
+    from .picking_config_service import resolve_order_sort_for_flow, sort_orders_for_picking_batch
+
+    orders = sort_orders_for_picking_batch(
+        orders,
+        order_sort=resolve_order_sort_for_flow(pc, str(order_type)),
+    )
+
     try:
         sess = start_picking(
             db,
@@ -2733,6 +2740,7 @@ def build_wms_picking_product_detail(
                             order_id=int(o.id),
                             order_item_id=int(oi.id),
                             order_number=str(o.number or f"#{o.id}"),
+                            priority_color=(getattr(o, "priority_color", None) or "").strip().lower() or None,
                             quantity=qty,
                             picked_quantity=round(picked_row, 6),
                             missing_quantity=round(miss_ln, 6),
@@ -2749,6 +2757,12 @@ def build_wms_picking_product_detail(
                         order_item_id=int(oi.id),
                     )
                 )
+
+    from .picking_config_service import priority_color_rank
+
+    order_rows.sort(
+        key=lambda r: (priority_color_rank(getattr(r, "priority_color", None)), int(r.order_id), int(r.order_item_id or 0))
+    )
 
     active_fifo_order_id: Optional[int] = None
     for orow in order_rows:
@@ -2805,6 +2819,7 @@ def build_wms_picking_product_detail(
                             order_id=orow.order_id,
                             order_item_id=orow.order_item_id,
                             order_number=orow.order_number,
+                            priority_color=getattr(orow, "priority_color", None),
                             quantity=orow.quantity,
                             picked_quantity=orow.picked_quantity,
                             missing_quantity=orow.missing_quantity,

@@ -206,6 +206,11 @@ class WmsPickingProductOrderRow(BaseModel):
         ge=0,
         description="max(0, wymagane − zebrano − brak) — bez kasowania rekordów Pick",
     )
+    #: SSOT z ``Order.priority_color`` (OMS flame) — null gdy brak priorytetu.
+    priority_color: Optional[str] = Field(
+        None,
+        description="gray|blue|green|yellow|orange|red — wizualny priorytet zamówienia",
+    )
     line_value: Optional[float] = None
     shipping_method_name: Optional[str] = Field(None, description="Metoda dostawy (słownik lub legacy)")
     shipping_method_logo_url: Optional[str] = Field(None, description="Logo metody dostawy")

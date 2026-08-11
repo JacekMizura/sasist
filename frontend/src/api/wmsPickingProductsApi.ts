@@ -159,6 +159,8 @@ export type WmsPickingProductOrderRowApi = {
   picked_quantity: number;
   missing_quantity?: number;
   quantity_to_pick?: number;
+  /** SSOT z Order.priority_color (OMS flame) */
+  priority_color?: string | null;
   line_value: number | null;
   shipping_method_name?: string | null;
   shipping_method_logo_url?: string | null;

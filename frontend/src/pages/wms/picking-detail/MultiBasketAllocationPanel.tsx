@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { OrderPriorityFlameIcon } from "../../../components/orders/OrderPriorityFlame";
 import {
   allocationLineStatus,
   allocationStatusLabel,
@@ -116,7 +117,10 @@ export function MultiBasketAllocationPanel({
                     <p className="text-sm font-black text-slate-900">
                       <span className="tabular-nums text-[#5a4fcf]">{o.basket_slot?.trim() || "—"}</span>
                       <span className="mx-2 text-slate-300">|</span>
-                      <span>#{o.order_number}</span>
+                      <span className="inline-flex items-center gap-1.5">
+                        <OrderPriorityFlameIcon priorityColor={o.priority_color} />
+                        <span>#{o.order_number}</span>
+                      </span>
                     </p>
                     <p className="mt-1 text-xs font-semibold text-slate-600 tabular-nums">
                       Potrzeba {fmtQty(o.quantity)} · Zebrano {fmtQty(o.picked_quantity)} · Brak{" "}

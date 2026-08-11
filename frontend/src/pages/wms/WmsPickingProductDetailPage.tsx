@@ -35,6 +35,7 @@ import {
   type BasketPutQuantityDraft,
 } from "../../components/wms/picking/BasketPutQuantityModal";
 import { AppOverlayPortal } from "../../components/overlay";
+import { OrderPriorityFlameIcon } from "../../components/orders/OrderPriorityFlame";
 import { MultiBasketAllocationPanel } from "./picking-detail/MultiBasketAllocationPanel";
 import { MultiAllocationShortageModal } from "./picking-detail/MultiAllocationShortageModal";
 import { MultiBulkShortageModal } from "./picking-detail/MultiBulkShortageModal";
@@ -2039,6 +2040,7 @@ export default function WmsPickingProductDetailPage() {
                       className="flex items-center justify-between gap-3 py-3"
                     >
                       <span className="flex min-w-0 flex-wrap items-center gap-2 font-semibold text-slate-900">
+                        <OrderPriorityFlameIcon priorityColor={o.priority_color} />
                         <span className="break-words">
                           #{o.order_number} ({fmtQty(pickedLn)}/{fmtQty(qtyLn)})
                         </span>

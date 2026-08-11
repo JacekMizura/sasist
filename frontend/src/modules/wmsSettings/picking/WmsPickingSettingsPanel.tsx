@@ -3015,27 +3015,6 @@ export function WmsPickingSettingsSections({
               <CustomCheckbox label="Lokalizacja" checked={extended.showLocation} onChange={(v) => patchExtended("showLocation", v)} />
             </FieldGridPicking>
           </SubsectionPicking>
-          <SubsectionPicking title="Układ listy">
-            <FieldGridPicking>
-              <CustomCheckbox
-                settingId="picking.compact_mode"
-                label="Tryb kompaktowy"
-                checked={extended.compactMode}
-                onChange={(v) => patchExtended("compactMode", v)}
-              />
-              <CustomCheckbox label="Plakietka priorytetu" checked={extended.showPriorityBadge} onChange={(v) => patchExtended("showPriorityBadge", v)} />
-              <WmsControlSettingRow asLabel settingId="picking.list_density" label="Gęstość listy">
-                <select
-                  className={selectClass}
-                  value={extended.listDensity}
-                  onChange={(e) => patchExtended("listDensity", e.target.value as WmsPickingExtendedUiSettings["listDensity"])}
-                >
-                  <option value="comfortable">Komfortowa</option>
-                  <option value="compact">Kompaktowa</option>
-                </select>
-              </WmsControlSettingRow>
-            </FieldGridPicking>
-          </SubsectionPicking>
         </SectionCardPicking>
 
         <SectionCardPicking id="wms-pick-advanced" title="Zaawansowane" summary="Diagnostyka, legacy i routing.">

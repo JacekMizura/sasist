@@ -13,6 +13,7 @@ export type MultiBasketOrderAllocation = {
   missing_quantity: number;
   quantity_to_pick?: number;
   shortage_declarable_qty?: number;
+  priority_color?: string | null;
 };
 
 export type MultiBasketLineStatus =

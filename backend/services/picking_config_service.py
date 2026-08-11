@@ -6,7 +6,8 @@ Bez integracji z przypisaniami zamówień, stanem magazynowym ani MM.
 
 from __future__ import annotations
 
-from typing import Tuple
+from datetime import datetime
+from typing import Any, Sequence, Tuple
 
 from sqlalchemy.orm import Session, joinedload
 
@@ -25,6 +26,57 @@ from ..schemas.wms_picking_flow import WmsPickingConfigReplaceItem
 ALL_ORDER_COMPATIBLE_MODES: frozenset[str] = frozenset({"bulk", "scanned", "baskets"})
 #: Runtime default when ``all_mode`` is NULL (not a copy of single/multi).
 ALL_MODE_RUNTIME_DEFAULT = "bulk"
+
+#: SSOT wizualnego priorytetu zamówienia: ``Order.priority_color`` (OMS flame).
+#: Niższa wartość = wyższy priorytet przy doborze zbioru zbierania.
+_ORDER_PRIORITY_RANK: dict[str, int] = {
+    "red": 0,
+    "orange": 1,
+    "yellow": 2,
+    "green": 3,
+    "blue": 4,
+    "gray": 5,
+}
+
+
+def order_priority_rank(order: Any) -> int:
+    """Rank z ``Order.priority_color`` — brak koloru = najniższy priorytet (na końcu)."""
+    pc = (getattr(order, "priority_color", None) or "").strip().lower()
+    return priority_color_rank(pc)
+
+
+def priority_color_rank(priority_color: str | None) -> int:
+    """Rank z surowego tokenu ``priority_color`` (np. z API order row)."""
+    pc = (priority_color or "").strip().lower()
+    if not pc:
+        return 99
+    return int(_ORDER_PRIORITY_RANK.get(pc, 50))
+
+
+def sort_orders_for_picking_batch(
+    orders: Sequence[Any],
+    *,
+    order_sort: str = "date",
+) -> list[Any]:
+    """
+    Kolejność kandydatów do zbioru zbierania:
+    1) priorytet zamówienia (``priority_color``) — zawsze pierwszy klucz,
+    2) skonfigurowany ``order_sort`` (date / location / courier).
+    """
+    if not orders:
+        return []
+    osrt = (order_sort or "date").strip().lower()
+    if osrt not in ("date", "location", "courier"):
+        osrt = "date"
+
+    def _secondary(o: Any) -> tuple:
+        if osrt == "location":
+            return (int(getattr(o, "id", 0) or 0),)
+        # date + courier (grupy kurierskie — ten sam fallback co dotychczas: najstarsze pierwsze)
+        dt = getattr(o, "order_date", None) or getattr(o, "created_at", None) or datetime.min
+        return (dt, int(getattr(o, "id", 0) or 0))
+
+    return sorted(list(orders), key=lambda o: (order_priority_rank(o), *_secondary(o)))
 
 
 def derive_storage_strategy(pick_unit: str, order_sort: str) -> str:

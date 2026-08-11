@@ -102,22 +102,14 @@ def _sort_orders_for_picking_config(
     *,
     order_type: str = "all",
 ) -> list[Order]:
-    """Apply picking_config order_sort (lub all_order_sort) before capacity slice."""
+    """Priority (Order.priority_color) first, then picking_config order_sort / all_order_sort."""
     if not orders:
         return orders
-    from ..services.picking_config_service import resolve_order_sort_for_tour
+    from ..picking_config_service import resolve_order_sort_for_flow, sort_orders_for_picking_batch
 
-    osrt = resolve_order_sort_for_tour(pc, order_type)
-    if osrt == "location":
-        return sorted(orders, key=lambda o: int(o.id))
-    # date + courier (courier groups not yet modeled — oldest first, same as Sellasist default)
-    return sorted(
-        orders,
-        key=lambda o: (
-            getattr(o, "order_date", None) or getattr(o, "created_at", None) or datetime.min,
-            int(o.id),
-        ),
-    )
+    osrt = resolve_order_sort_for_flow(pc, order_type)
+    return sort_orders_for_picking_batch(orders, order_sort=osrt)
+
 
 
 def start_cartless_picking(

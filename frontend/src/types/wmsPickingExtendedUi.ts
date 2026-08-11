@@ -5,7 +5,6 @@
  * localStorage pełni rolę cache / pozostałych preferencji UI.
  */
 
-export type PickingListDensity = "comfortable" | "compact";
 export type AfterBatchCompleteAction = "assign_new_batch" | "back_to_list" | "stay_here";
 export type BatchManagementMode = "manual" | "auto_assign_picker" | "full_auto";
 export type DefaultPickingContainerType = "cart" | "cart_with_baskets" | "basket";
@@ -17,10 +16,7 @@ export type WmsPickingExtendedUiSettings = {
   showCatalogNumber: boolean;
   showStock: boolean;
   showLocation: boolean;
-  compactMode: boolean;
-  listDensity: PickingListDensity;
   showCourierBadge: boolean;
-  showPriorityBadge: boolean;
 
   shortageOrderStatusId: number | null;
   afterBatchCompleteAction: AfterBatchCompleteAction;
@@ -78,10 +74,7 @@ export const DEFAULT_WMS_PICKING_EXTENDED_UI: WmsPickingExtendedUiSettings = {
   showCatalogNumber: false,
   showStock: true,
   showLocation: true,
-  compactMode: false,
-  listDensity: "comfortable",
   showCourierBadge: true,
-  showPriorityBadge: true,
 
   shortageOrderStatusId: null,
   afterBatchCompleteAction: "stay_here",

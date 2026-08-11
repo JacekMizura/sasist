@@ -301,22 +301,6 @@ export const WMS_SETTINGS_SEARCH_CATALOG: WmsSettingsSearchEntry[] = [
 
   // Picking
   e({
-    id: "picking.compact_mode",
-    label: "Tryb kompaktowy",
-    tabId: "picking",
-    sectionId: "wms-pick-view",
-    sectionLabel: "Widok",
-    groupLabel: "Układ listy",
-    keywords: ["tryb", "widok"],
-  }),
-  e({
-    id: "picking.list_density",
-    label: "Gęstość listy",
-    tabId: "picking",
-    sectionId: "wms-pick-view",
-    sectionLabel: "Widok",
-  }),
-  e({
     id: "picking.batch_management_mode",
     label: "Zarządzanie zbiorami",
     description: "Tryb kompletacji / zbiorów",

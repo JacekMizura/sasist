@@ -721,6 +721,24 @@ def start_picking(
         logger.exception("START_PICKING validation gate failed cart_id=%s", int(cart.id))
         raise
 
+    # Safety net: priority_color first, then configured order_sort when available.
+    from .picking_config_service import resolve_order_sort_for_flow, sort_orders_for_picking_batch
+    from ..models.picking_config import PickingConfig
+
+    osrt = "date"
+    if source_status_id is not None and int(source_status_id) > 0:
+        pc_row = (
+            db.query(PickingConfig)
+            .filter(
+                PickingConfig.tenant_id == int(cart.tenant_id),
+                PickingConfig.warehouse_id == int(cart.warehouse_id),
+                PickingConfig.source_status_id == int(source_status_id),
+            )
+            .first()
+        )
+        osrt = resolve_order_sort_for_flow(pc_row, str(order_type or "all"))
+    free_candidates = sort_orders_for_picking_batch(free_candidates, order_sort=osrt)
+
     selected, basket_assignments, engine_rejected = _apply_capacity_slice(
         db, cart, free_candidates, on_capacity=on_capacity
     )
