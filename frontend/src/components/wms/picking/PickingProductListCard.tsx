@@ -26,10 +26,13 @@ export type PickingProductListCardProps = {
   onUndoComplete?: () => void;
 };
 
+/**
+ * LISTA „Do zebrania” tile — location stays INSIDE the card (top-right).
+ * Never use location bar / page header for location here.
+ */
 export function PickingProductListCard({
   name,
   ean,
-  catalogNumber,
   imageUrl,
   pickedLabel,
   totalLabel,
@@ -40,7 +43,6 @@ export function PickingProductListCard({
   onClick,
   onUndoComplete,
 }: PickingProductListCardProps) {
-  const catalog = (catalogNumber ?? "").trim();
   const completed = status === "COMPLETED_PICK";
   const shortage = status === "SHORTAGE" || (shortageLabel != null && String(shortageLabel).length > 0);
   const muted = completed;
@@ -50,7 +52,7 @@ export function PickingProductListCard({
       className={[
         PICKING_CARD_CLASS,
         "relative flex w-full flex-col gap-3 p-4 transition",
-        muted ? "opacity-45" : "hover:border-slate-300",
+        muted ? "opacity-55" : "hover:border-slate-300",
         disabled ? "pointer-events-none opacity-40" : "",
       ].join(" ")}
     >
@@ -67,19 +69,19 @@ export function PickingProductListCard({
             </div>
           ) : (
             <>
-              <PickingFieldLabel>Zebrano</PickingFieldLabel>
+              <PickingFieldLabel>Zebrane</PickingFieldLabel>
               <div className="mt-0.5">
                 <PickingQtyPair picked={pickedLabel} total={totalLabel} />
               </div>
             </>
           )}
         </div>
-        <div className="flex min-w-0 max-w-[55%] flex-col items-end gap-1">
+        <div className="flex w-fit max-w-[55%] shrink-0 flex-col items-end gap-1">
           {locationLabel ? (
-            <>
+            <div className="flex flex-col items-end gap-0.5">
               <PickingFieldLabel>Lokalizacja</PickingFieldLabel>
               <div className="flex items-center gap-1">
-                <PickingLocationBadge text={locationLabel} muted={muted} />
+                <PickingLocationBadge text={locationLabel} muted={muted} variant="compact" />
                 {completed && onUndoComplete ? (
                   <button
                     type="button"
@@ -94,7 +96,7 @@ export function PickingProductListCard({
                   </button>
                 ) : null}
               </div>
-            </>
+            </div>
           ) : null}
           {shortage && shortageLabel ? (
             <PickingShortageBadge missing={shortageLabel} total={totalLabel} />
@@ -128,11 +130,6 @@ export function PickingProductListCard({
           <div className="mt-1.5">
             <PickingEanBadge value={ean} muted={muted} />
           </div>
-          {catalog ? (
-            <p className="mt-1 break-words text-sm text-slate-600">
-              Numer katalogowy: <span className="font-semibold text-slate-800">{catalog}</span>
-            </p>
-          ) : null}
         </div>
       </button>
     </div>

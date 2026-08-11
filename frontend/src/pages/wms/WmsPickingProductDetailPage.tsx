@@ -47,7 +47,6 @@ import {
   PickingEanBadge,
   PickingFieldLabel,
   PickingLocationBadge,
-  PickingQtyPair,
   PickingShortageBadge,
 } from "../../components/wms/picking/PickingUiPrimitives";
 import { PickingOptionsSheet, PickingStickyFooter } from "../../components/wms/picking/PickingStickyChrome";
@@ -631,6 +630,38 @@ export default function WmsPickingProductDetailPage() {
   );
   const isShortageResolved = resolutionStatus === "SHORTAGE";
 
+  const autoOpenedQtyForProductRef = useRef<number | null>(null);
+
+  // Jedna lokalizacja + brak wymogu skanu → od razu liczenie (ekran produktu = qty panel).
+  useEffect(() => {
+    if (!detail) return;
+    if (detail.requires_basket_put_confirm) return;
+    if (pickQueueDone || isShortageResolved) return;
+    if (qtyStepOpen) return;
+    if (needsLocationScan && activeLocationId == null) return;
+    const locId =
+      activeLocationId ??
+      (detail.locations.length === 1 ? detail.locations[0]?.location_id ?? null : null);
+    if (locId == null || locId <= 0) return;
+    if (autoOpenedQtyForProductRef.current === detail.product_id) return;
+    autoOpenedQtyForProductRef.current = detail.product_id;
+    setManualLocId(locId);
+    setQtyStepValue(remaining > 0 ? Math.min(1, remaining) : 0);
+    setQtyStepOpen(true);
+  }, [
+    detail,
+    needsLocationScan,
+    activeLocationId,
+    pickQueueDone,
+    isShortageResolved,
+    qtyStepOpen,
+    remaining,
+  ]);
+
+  useEffect(() => {
+    autoOpenedQtyForProductRef.current = null;
+  }, [productId]);
+
   useEffect(() => {
     if (!detail) return;
     if (
@@ -1009,17 +1040,33 @@ export default function WmsPickingProductDetailPage() {
   const goBackToList = useCallback(
     (refreshList = false) => {
       if (!pickingSession) return;
+      // Zachowaj cartId ze snapshotu — bez tego lista może wrócić na skan wózka / order-type.
+      const sessionForList = {
+        ...pickingSession,
+        cartId:
+          pickingSession.cartId != null && pickingSession.cartId > 0
+            ? pickingSession.cartId
+            : pickingCartSnapshot?.cartId != null && pickingCartSnapshot.cartId > 0
+              ? pickingCartSnapshot.cartId
+              : pickingSession.cartId,
+        cartCode:
+          (pickingSession.cartCode || pickingCartSnapshot?.cartCode || "").trim() ||
+          pickingSession.cartCode,
+        cartName:
+          (pickingSession.cartName || pickingCartSnapshot?.cartName || "").trim() ||
+          pickingSession.cartName,
+      };
       const state: WmsPickingProductsNavState = refreshList
-        ? { pickingSession, pickingListRefreshAt: Date.now() }
-        : { pickingSession };
-      const rid = pickingSession.recoveryOrderId;
+        ? { pickingSession: sessionForList, pickingListRefreshAt: Date.now() }
+        : { pickingSession: sessionForList };
+      const rid = sessionForList.recoveryOrderId;
       if (rid != null && rid > 0) {
         navigate(WMS_ROUTES.pickingRecovery(rid), { state });
         return;
       }
       navigate(WMS_ROUTES.pickingProducts, { state });
     },
-    [navigate, pickingSession],
+    [navigate, pickingSession, pickingCartSnapshot],
   );
 
   async function confirmRemainingAndReturn() {
@@ -1808,7 +1855,7 @@ export default function WmsPickingProductDetailPage() {
         trailing={
           detail?.locations[0] ? (
             <PickingLocationBadge
-              className="w-full"
+              variant="bar"
               text={formatWmsPickingLocationPillLabel(
                 detail.locations[0].location_code,
                 locStock(detail.locations[0]) > 1e-9 ? locStock(detail.locations[0]) : undefined,
@@ -1824,16 +1871,6 @@ export default function WmsPickingProductDetailPage() {
       {detail && (
         <div className="flex w-full flex-col gap-5">
           <div className={[PICKING_CARD_CLASS, "flex w-full flex-col gap-4 p-4 sm:p-5"].join(" ")}>
-            <div className="min-w-0">
-              <PickingFieldLabel>Zebrane</PickingFieldLabel>
-              <div className="mt-0.5">
-                <PickingQtyPair
-                  picked={fmtQty(displayPickedDetail)}
-                  total={fmtQty(detail.total_quantity)}
-                />
-              </div>
-            </div>
-
             <div className="flex w-full justify-center py-1">
               <div className="flex h-36 w-36 items-center justify-center bg-transparent sm:h-44 sm:w-44">
                 {detail.image_url ? (
@@ -1937,39 +1974,13 @@ export default function WmsPickingProductDetailPage() {
                     className={active ? "rounded-full ring-2 ring-slate-400 ring-offset-1" : ""}
                     aria-pressed={active}
                   >
-                    <PickingLocationBadge text={label} muted={stock <= 1e-9} />
+                    <PickingLocationBadge text={label} muted={stock <= 1e-9} variant="compact" />
                   </button>
                 );
               })}
             </div>
             {locationHint ? <p className="mt-2 text-xs font-semibold text-amber-800">{locationHint}</p> : null}
           </div>
-
-          {detail.orders.length > 0 ? (
-            <div>
-              <PickingFieldLabel>Zamówienia</PickingFieldLabel>
-              <ul className="mt-2 divide-y divide-slate-100 border-t border-slate-100">
-                {detail.orders.map((o) => {
-                  const missLn = Number(o.missing_quantity ?? 0);
-                  const pickedLn = Number(o.picked_quantity ?? 0);
-                  const qtyLn = Number(o.quantity ?? 0);
-                  return (
-                    <li key={o.order_item_id ?? o.order_id} className="flex items-center justify-between gap-3 py-3">
-                      <span className="min-w-0 break-words font-semibold text-slate-900">
-                        #{o.order_number} ({fmtQty(pickedLn)}/{fmtQty(qtyLn)})
-                        {missLn > 1e-9 ? <span className="ml-2 text-rose-700">brak {fmtQty(missLn)}</span> : null}
-                      </span>
-                      {o.line_value != null ? (
-                        <span className="shrink-0 tabular-nums text-sm text-slate-600">
-                          {fmtQty(Number(o.line_value))} PLN
-                        </span>
-                      ) : null}
-                    </li>
-                  );
-                })}
-              </ul>
-            </div>
-          ) : null}
 
           {detail.requires_basket_put_confirm ? (
             <div className="space-y-3">
@@ -2069,7 +2080,7 @@ export default function WmsPickingProductDetailPage() {
           maxQty={remaining}
           busy={pickBusy}
           onChangeQty={setQtyStepValue}
-          onBack={() => setQtyStepOpen(false)}
+          onBack={() => goBackToList(true)}
           onConfirm={() => {
             const locId = manualLocId ?? activeLocationId;
             if (locId == null || locId <= 0) {

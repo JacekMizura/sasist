@@ -1,3 +1,18 @@
+## 2026-08-11 — Hierarchia lista vs produkt (lokalizacja + ←)
+
+- Lista: lokalizacja tylko w kafelku (compact, prawy górny róg) — nie belka/nagłówek
+- Produkt/liczenie: lokalizacja tylko jako belka obok ← (`variant="bar"`)
+- `PackingLocationPill.fullWidth` — lista bez `w-full` (nie rozciąga badge’a jak belka)
+- ← z produktu/qty → zawsze lista produktów (z zachowaniem cartId)
+
+## 2026-08-11 — Flow zbierania 1:1 (status → rodzaj → popup wózka → lista → produkt)
+
+- Status (UI bez zmian): klik bez sesji → zawsze order-type (nie skan na statusach)
+- Order-type: kafelki „Liczba produktów zebranych” + `0/8`; po kliku → cart lub produkty
+- Cart: modal „Zeskanuj wózek…”; wolny wózek startuje sesję (backend-first, bez fałszywego ACTIVE)
+- Lista: `← Do zebrania: X/Y`; EAN badge; lokalizacja; Zebrano/BRAK
+- Produkt: belka lokalizacji + qty panel `[-][n][+]` + Zatwierdź; auto-open gdy 1 loc
+
 ## 2026-08-11 — UX statusów + naprawa 409 skanu wolnego wózka
 
 - Root: orphan ASSIGNED bez sesji → resolve-cart 409 + FE snapshot „masz sesję”

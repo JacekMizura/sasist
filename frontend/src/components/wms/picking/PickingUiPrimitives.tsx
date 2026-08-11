@@ -8,20 +8,32 @@ export function PickingFieldLabel({ children }: { children: ReactNode }) {
   return <span className={PICKING_FIELD_LABEL_CLASS}>{children}</span>;
 }
 
-/** Sasist location badge — same look as packing (`PackingLocationPill`). */
+/** Sasist location badge — same look as packing (`PackingLocationPill`).
+ * Placement is view-specific: compact (list tile corner) vs bar (product header).
+ */
 export function PickingLocationBadge({
   text,
   muted,
   className,
+  variant = "compact",
 }: {
   text: string;
   muted?: boolean;
   className?: string;
+  /** compact = list tile top-right; bar = full-width next to ← on product/qty */
+  variant?: "compact" | "bar";
 }) {
   if (!text.trim()) return null;
+  if (variant === "bar") {
+    return (
+      <div className={["min-w-0 w-full flex-1", className].filter(Boolean).join(" ")}>
+        <PackingLocationPill text={text} muted={muted} fullWidth />
+      </div>
+    );
+  }
   return (
-    <div className={["min-w-0 max-w-full", className].filter(Boolean).join(" ")}>
-      <PackingLocationPill text={text} muted={muted} />
+    <div className={["inline-flex w-fit max-w-full shrink-0", className].filter(Boolean).join(" ")}>
+      <PackingLocationPill text={text} muted={muted} fullWidth={false} />
     </div>
   );
 }

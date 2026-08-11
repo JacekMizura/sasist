@@ -19,14 +19,18 @@ export function PackingCardFieldLabel({ children, muted }: { children: string; m
 export function PackingLocationPill({
   text,
   muted,
+  fullWidth = true,
 }: {
   text: string;
   muted?: boolean;
+  /** Packing grid / product header bar. List tile corners should pass false. */
+  fullWidth?: boolean;
 }) {
   return (
     <span
       className={[
-        "inline-flex w-full max-w-full min-w-0 items-center justify-center rounded-full border px-2 py-0.5 text-center font-bold",
+        "inline-flex max-w-full min-w-0 items-center justify-center rounded-full border px-2 py-0.5 text-center font-bold",
+        fullWidth ? "w-full" : "w-auto",
         wmsTypoClass.location,
         muted
           ? "border-emerald-400/90 bg-white/40 text-emerald-900"

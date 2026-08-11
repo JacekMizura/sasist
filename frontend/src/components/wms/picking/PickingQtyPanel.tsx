@@ -18,8 +18,8 @@ export type PickingQtyPanelProps = {
 };
 
 /**
- * Full-screen quantity step — vertical hierarchy only:
- * location bar → image → name/EAN → ILOŚĆ → full-width stepper → Zatwierdź.
+ * WIDOK PRODUKTU / LICZENIA — location ONLY as header bar next to ←.
+ * Vertical: image → name/EAN → ILOŚĆ → stepper → Zatwierdź (not sticky footer).
  */
 export function PickingQtyPanel({
   productName,
@@ -43,11 +43,11 @@ export function PickingQtyPanel({
     <div className="fixed inset-0 z-[60] flex flex-col bg-white">
       <PickingSimpleHeader
         onBack={onBack}
-        backAriaLabel="Wróć"
+        backAriaLabel="Wróć do listy produktów"
         trailingFill
         trailing={
           locationLabel ? (
-            <PickingLocationBadge text={locationLabel} className="w-full" />
+            <PickingLocationBadge text={locationLabel} variant="bar" />
           ) : null
         }
       />

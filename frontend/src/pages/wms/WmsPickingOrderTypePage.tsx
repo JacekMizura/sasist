@@ -131,6 +131,7 @@ export default function WmsPickingOrderTypePage() {
         wTrakcie: 0,
       },
     };
+    // Po wyborze rodzaju → cart (popup skanu) albo produkty — nigdy pomijamy skanu gdy wymagany.
     const { path, state } = resolveAfterOrderTypeChoice(enriched, choice);
     navigate(path, { state });
   };
@@ -154,6 +155,15 @@ export default function WmsPickingOrderTypePage() {
         onBack={() => navigate(WMS_ROUTES.picking)}
         backAriaLabel="Wróć do wyboru statusu"
         title="Wybierz"
+        trailing={
+          <button
+            type="button"
+            className="inline-flex h-9 items-center justify-center rounded-lg bg-rose-600 px-4 text-xs font-bold text-white shadow-sm transition hover:bg-rose-500 active:scale-[0.99]"
+            onClick={() => navigate(WMS_ROUTES.picking)}
+          >
+            Anuluj
+          </button>
+        }
       />
       <PickingProcessAlert
         open={tourBanner != null}
@@ -176,16 +186,18 @@ export default function WmsPickingOrderTypePage() {
               const meta = CHOICE_META[id];
               const slice = sliceFor(id);
               const isActive = activeOrderType === id;
+              const picked = Math.max(0, Number(slice.products_picked) || 0);
+              const total = Math.max(0, Number(slice.products_total) || 0);
               return (
                 <li
                   key={id}
-                  className="flex w-full min-w-0 max-w-[380px] basis-full sm:basis-[calc(50%-0.5rem)] lg:basis-[340px] lg:max-w-[360px]"
+                  className="flex w-full min-w-0 max-w-[420px] basis-full sm:basis-[calc(50%-0.5rem)] lg:basis-[340px] lg:max-w-[380px]"
                 >
                   <button
                     type="button"
                     aria-current={isActive ? "true" : undefined}
                     className={[
-                      "flex h-full min-h-[8.5rem] w-full flex-col gap-2 rounded-xl border bg-white px-5 py-5 text-left shadow-sm transition",
+                      "flex h-full min-h-[6.5rem] w-full items-center justify-between gap-4 rounded-xl border bg-white px-5 py-4 text-left shadow-sm transition",
                       "hover:border-slate-300 hover:shadow-md active:scale-[0.99]",
                       "focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-300",
                       isActive
@@ -194,28 +206,27 @@ export default function WmsPickingOrderTypePage() {
                     ].join(" ")}
                     onClick={() => onPick(id)}
                   >
-                    <div className="flex min-w-0 items-start justify-between gap-2">
-                      <span
+                    <span
+                      className={[
+                        "min-w-0 flex-1 font-bold leading-snug text-slate-900",
+                        wmsTypoClass.base,
+                      ].join(" ")}
+                    >
+                      {meta.label}
+                    </span>
+                    <div className="shrink-0 text-right">
+                      <p className="text-[11px] font-medium leading-tight text-slate-500">
+                        Liczba produktów zebranych
+                      </p>
+                      <p
                         className={[
-                          "min-w-0 font-bold leading-snug text-slate-900",
-                          wmsTypoClass.base,
+                          "mt-0.5 font-bold tabular-nums text-slate-900",
+                          wmsTypoClass.quantity,
                         ].join(" ")}
                       >
-                        {meta.label}
-                      </span>
-                      {isActive ? (
-                        <span className="shrink-0 rounded-full border border-emerald-500/40 bg-white px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-emerald-800">
-                          Aktywne
-                        </span>
-                      ) : null}
+                        {picked}/{total}
+                      </p>
                     </div>
-                    <p className="mt-auto text-sm leading-snug text-slate-600">
-                      Produkty do zebrania:{" "}
-                      <span className={["font-semibold text-slate-900", wmsTypoClass.quantity].join(" ")}>
-                        {Math.max(0, Number(slice.products_picked) || 0)}/
-                        {Math.max(0, Number(slice.products_total) || 0)} szt.
-                      </span>
-                    </p>
                   </button>
                 </li>
               );

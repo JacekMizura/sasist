@@ -76,7 +76,6 @@ import { PickingSimpleHeader } from "../../components/wms/picking/PickingSimpleH
 import { PickingProductListCard } from "../../components/wms/picking/PickingProductListCard";
 import { PickingOptionsSheet, PickingStickyFooter } from "../../components/wms/picking/PickingStickyChrome";
 import { PickingProcessAlert } from "../../components/wms/picking/PickingProcessAlert";
-import { PickingCartBadge } from "../../components/wms/picking/PickingUiPrimitives";
 
 function fmtQty(n: number): string {
   return new Intl.NumberFormat("pl-PL", { maximumFractionDigits: 2 }).format(n);
@@ -1656,18 +1655,7 @@ export default function WmsPickingProductsPage() {
           setExitModalOpen(true);
         }}
         backAriaLabel={recoveryOrderId != null && recoveryOrderId > 0 ? "Wróć do kolejki braków" : "Wróć do wyboru statusu"}
-        trailing={
-          <>
-            {!isCartlessMode && (mergedSession?.cartName || mergedSession?.cartCode) ? (
-              <PickingCartBadge
-                label={(mergedSession?.cartName || mergedSession?.cartCode || "").trim()}
-              />
-            ) : null}
-            <span className="text-sm font-semibold tabular-nums text-slate-800 sm:text-base">
-              {totalPickedCount}/{totalToPickCount}
-            </span>
-          </>
-        }
+        title={`Do zebrania: ${totalPickedCount}/${totalToPickCount}`}
       />
 
       {basketPutPending && basketPutPending.product_id > 0 ? (

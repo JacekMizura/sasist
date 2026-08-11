@@ -1,5 +1,15 @@
 ﻿## Active
 
+**Picking flow 1:1 (2026-08-11):**
+- STATUS → RODZAJ → POPUP WÓZEK → LISTA → PRODUKT → ILOŚĆ → ZATWIERDŹ → LISTA
+- Status UI bez zmian; nowa tura → order-type (nie skan na statusach)
+- Cart = modal; lista `Do zebrania: X/Y`; qty tylko `[-][n][+]` + Zatwierdź
+
+**Picking lista/detal UI hierarchy (2026-08-11):**
+- Lista: nagłówek ← + `Do zebrania: 0/2`
+- EAN = `PackingEanBadge` (wspólny z pakowaniem); lokalizacja = `PackingLocationPill`
+- Detal: ← + belka lokalizacji; qty panel bez samotnej liczby nad kontrolką
+
 **Picking status UX + skan 409 (2026-08-11):**
 - Root 409: `already_mine` blokował resolve gdy cart ASSIGNED bez otwartej sesji (orphan) + FE ufał sessionStorage
 - BE: `has_active_session` tylko przy otwartej WmsOperationSession; heal orphan ASSIGNED→AVAILABLE
