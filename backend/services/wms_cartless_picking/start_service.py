@@ -89,22 +89,25 @@ def _resolve_bulk_limit(
     if ot == "multi":
         v = getattr(pc, "max_multi_orders", None)
         return int(v) if v is not None and int(v) > 0 else None
-    # all → mniejszy z ustawionych limitów single/multi (jeśli są), inaczej max(single, multi)
-    caps: list[int] = []
-    for attr in ("max_single_orders", "max_multi_orders"):
-        raw = getattr(pc, attr, None)
-        if raw is not None and int(raw) > 0:
-            caps.append(int(raw))
-    if not caps:
-        return None
-    return max(caps)
+    # all → wyłącznie limit z konfiguracji all (nie max single/multi)
+    v = getattr(pc, "max_all_orders", None)
+    if v is not None and int(v) > 0:
+        return int(v)
+    return None
 
 
-def _sort_orders_for_picking_config(orders: list[Order], pc: PickingConfig | None) -> list[Order]:
-    """Apply ``picking_config.order_sort`` before capacity slice (date / courier≈date; location keeps id)."""
+def _sort_orders_for_picking_config(
+    orders: list[Order],
+    pc: PickingConfig | None,
+    *,
+    order_type: str = "all",
+) -> list[Order]:
+    """Apply picking_config order_sort (lub all_order_sort) before capacity slice."""
     if not orders:
         return orders
-    osrt = (getattr(pc, "order_sort", None) or "date").strip().lower() if pc is not None else "date"
+    from ..services.picking_config_service import resolve_order_sort_for_tour
+
+    osrt = resolve_order_sort_for_tour(pc, order_type)
     if osrt == "location":
         return sorted(orders, key=lambda o: int(o.id))
     # date + courier (courier groups not yet modeled — oldest first, same as Sellasist default)
@@ -204,7 +207,7 @@ def start_cartless_picking(
         warehouse_id=int(warehouse_id),
         source_status_id=int(source_status_id),
     )
-    orders = _sort_orders_for_picking_config(orders, pc)
+    orders = _sort_orders_for_picking_config(orders, pc, order_type=str(ot))
 
     limit = _resolve_bulk_limit(
         db,

@@ -61,7 +61,7 @@ import {
 } from "../../../pages/Settings/wmsSettingsUi";
 import { OrderUiStatusField } from "../../../components/orders/OrderUiStatusField";
 import { buildOrderUiStatusNameById } from "../../../components/orders/automation/buildOrderUiStatusNameById";
-import { Boxes, Clock3, FileText, Pencil, Plus, Trash2 } from "lucide-react";
+import { Boxes, Clock3, FileText, Layers, Pencil, Plus, Trash2 } from "lucide-react";
 import { OrderUiStatusConfigRowPresent } from "../../../components/orders/orderList/OrderUiStatusConfigRowPresent";
 import { IconButton } from "../../../design-system";
 import { brandPrimaryButtonClass } from "../../../design-system/brandUi";
@@ -77,6 +77,7 @@ import {
 } from "./pickingConfigStatusEligibility";
 import { PICKING_TERMINAL_SETTING_HINTS } from "./pickingTerminalScanPolicy";
 import {
+  BY_PRODUCTS_ALL_CONTAINER_OPTIONS,
   BY_PRODUCTS_MULTI_CONTAINER_OPTIONS,
   BY_PRODUCTS_SINGLE_CONTAINER_OPTIONS,
   PICKING_COLLECTION_MODE_OPTIONS,
@@ -123,6 +124,7 @@ function statusIdFromSettingValue(value: string): number | null {
 const BULK_ORDER_LIMIT_MAX = 100;
 const BULK_ORDER_LIMIT_DEFAULT_SINGLE = "20";
 const BULK_ORDER_LIMIT_DEFAULT_MULTI = "10";
+const BULK_ORDER_LIMIT_DEFAULT_ALL = "30";
 
 function parseBulkOrderLimitInput(
   raw: string,
@@ -628,7 +630,7 @@ type PickingOrderStrategy = "locations" | "oldest_date";
 
 type PickingMode = "by_orders" | "by_products";
 type PickingOrderSort = PickingConfigOrderSortDb;
-type PickingOrderTypeKey = "single_item" | "multi_item";
+type PickingOrderTypeKey = "single_item" | "multi_item" | "all_item";
 
 const PICKING_MODE_OPTIONS = PICKING_COLLECTION_MODE_OPTIONS;
 
@@ -654,6 +656,7 @@ function createInitialPickingBlocks(): Record<PickingOrderTypeKey, PickingBlockS
   return {
     single_item: createInitialPickingBlock(),
     multi_item: createInitialPickingBlock(),
+    all_item: { ...createInitialPickingBlock(), containers: "cart_scan" },
   };
 }
 
@@ -667,6 +670,8 @@ type SavedPickingConfiguration = {
   statusOnShortageName: string | null;
   pickingMode: PickingMode;
   orderSort: PickingOrderSort;
+  /** Osobna kolejność doboru dla „Wszystkie zamówienia”. */
+  allOrderSort: PickingOrderSort;
   blocks: Record<PickingOrderTypeKey, PickingBlockState>;
 };
 
@@ -674,11 +679,12 @@ function fingerprintPickingConfigsWarehouseState(
   configs: SavedPickingConfiguration[],
   globalBulkSingle: string,
   globalBulkMulti: string,
+  globalBulkAll: string,
 ): string {
   const sorted = [...configs].sort(
     (a, b) => a.statusToPickId - b.statusToPickId || String(a.id).localeCompare(String(b.id)),
   );
-  return stableStringifyPicking({ cfgs: sorted, globalBulkSingle, globalBulkMulti });
+  return stableStringifyPicking({ cfgs: sorted, globalBulkSingle, globalBulkMulti, globalBulkAll });
 }
 
 type PickingConfigDraft = {
@@ -689,6 +695,7 @@ type PickingConfigDraft = {
   statusAfterPickBlurred: boolean;
   pickingMode: PickingMode;
   orderSort: PickingOrderSort;
+  allOrderSort: PickingOrderSort;
   blocks: Record<PickingOrderTypeKey, PickingBlockState>;
 };
 
@@ -698,6 +705,7 @@ function fingerprintDraftForm(d: PickingConfigDraft): string {
     statusAfterPick: d.statusAfterPick.trim(),
     pickingMode: d.pickingMode,
     orderSort: d.orderSort,
+    allOrderSort: d.allOrderSort,
     blocks: d.blocks,
   });
 }
@@ -712,6 +720,7 @@ function createEmptyDraft(): PickingConfigDraft {
     statusAfterPickBlurred: false,
     pickingMode: pickingModeDefault,
     orderSort: "date",
+    allOrderSort: "date",
     blocks: normalizeBlocksForPickingMode(createInitialPickingBlocks(), pickingModeDefault),
   };
 }
@@ -732,6 +741,10 @@ function normalizeBlocksForPickingMode(
   const shape = blocksShapeForMode(mode);
   let single: PickingBlockState = { ...blocks.single_item, ...shape };
   let multi: PickingBlockState = { ...blocks.multi_item, ...shape };
+  let allBlock: PickingBlockState = {
+    ...(blocks.all_item ?? createInitialPickingBlock()),
+    ...shape,
+  };
   if (mode === "by_products") {
     single = {
       ...single,
@@ -749,11 +762,25 @@ function normalizeBlocksForPickingMode(
         "baskets",
       ),
     };
+    allBlock = {
+      ...allBlock,
+      containers: ensureContainerInOptions(
+        allBlock.containers,
+        BY_PRODUCTS_ALL_CONTAINER_OPTIONS,
+        "cart_scan",
+      ),
+    };
   }
   if (single.containers === "consolidation_rack") {
     single = { ...single, containers: "cart_scan" };
   }
-  return { single_item: single, multi_item: multi };
+  if (
+    allBlock.containers === "consolidation_rack" ||
+    allBlock.containers === "mobile_cart"
+  ) {
+    allBlock = { ...allBlock, containers: "cart_scan" };
+  }
+  return { single_item: single, multi_item: multi, all_item: allBlock };
 }
 
 function pickingModeLabel(mode: PickingMode): string {
@@ -761,7 +788,7 @@ function pickingModeLabel(mode: PickingMode): string {
 }
 
 function pickingOrderSortLabel(sort: PickingOrderSort): string {
-  return PICKING_ORDER_SORT_OPTIONS.find((o) => o.value === sort)?.label ?? sort;
+  return ORDER_SORT_LOCATION_DATE_COURIER.find((o) => o.value === sort)?.label ?? sort;
 }
 
 function dbModeToContainers(m: PickingConfigModeDb): PickingContainers {
@@ -782,16 +809,27 @@ function mapApiPickingRowToSaved(row: WmsPickingConfigReadApi): SavedPickingConf
     containers: dbModeToContainers(mode),
     orderStrategy: strategyShape.orderStrategy,
   });
+  const rawAllMode = row.all_mode;
+  const allModeDb: PickingConfigModeDb =
+    rawAllMode === "bulk" || rawAllMode === "scanned" || rawAllMode === "baskets"
+      ? rawAllMode
+      : "bulk";
   const blocks = normalizeBlocksForPickingMode(
     {
       single_item: mk(row.single_mode),
       multi_item: mk(row.multi_mode),
+      all_item: mk(allModeDb),
     },
     pickingMode,
   );
   const rawSort = row.order_sort;
   const orderSort: PickingOrderSort =
     rawSort === "location" || rawSort === "courier" || rawSort === "date" ? rawSort : "date";
+  const rawAllSort = row.all_order_sort;
+  const allOrderSort: PickingOrderSort =
+    rawAllSort === "location" || rawAllSort === "courier" || rawAllSort === "date"
+      ? rawAllSort
+      : orderSort;
   return {
     id: String(row.id),
     statusToPickId: row.source_status_id,
@@ -802,6 +840,7 @@ function mapApiPickingRowToSaved(row: WmsPickingConfigReadApi): SavedPickingConf
     statusOnShortageName: null,
     pickingMode,
     orderSort,
+    allOrderSort,
     blocks,
   };
 }
@@ -845,12 +884,27 @@ function validateSavedConfigForServer(
   if (cfg.blocks.single_item.containers === "consolidation_rack") {
     return `Reguła „${cfg.statusToPickName}”: regał kompletacyjny jest dostępny tylko dla zamówień wieloelementowych.`;
   }
+  const allContainers = cfg.blocks.all_item?.containers;
+  if (allContainers === "mobile_cart" || allContainers === "consolidation_rack") {
+    return `Reguła „${cfg.statusToPickName}”: „Wszystkie zamówienia” nie obsługuje wybranej metody zbierania.`;
+  }
+  if (cfg.pickingMode === "by_products" && !allContainers) {
+    return `Reguła „${cfg.statusToPickName}”: uzupełnij konfigurację „Wszystkie zamówienia”.`;
+  }
   if (
     cfg.pickingMode === "by_products" &&
     isLocationOrderSortDisabledForMultiContainer(cfg.blocks.multi_item.containers) &&
     cfg.orderSort === "location"
   ) {
     return `Reguła „${cfg.statusToPickName}”: ${LOCATION_ORDER_SORT_DISABLED_REASON} Wybierz dobór po dacie lub grupach kurierskich.`;
+  }
+  if (
+    cfg.pickingMode === "by_products" &&
+    (cfg.allOrderSort !== "date" &&
+      cfg.allOrderSort !== "location" &&
+      cfg.allOrderSort !== "courier")
+  ) {
+    return `Reguła „${cfg.statusToPickName}”: wybierz sposób doboru dla „Wszystkie zamówienia”.`;
   }
   return null;
 }
@@ -859,9 +913,11 @@ function validateGlobalBulkLimitsForWarehouse(
   configs: SavedPickingConfiguration[],
   globalBulkSingle: string,
   globalBulkMulti: string,
+  globalBulkAll: string,
 ): string | null {
   const needsSingle = configs.some((c) => c.blocks.single_item.containers === "cart_no_scan");
   const needsMulti = configs.some((c) => c.blocks.multi_item.containers === "cart_no_scan");
+  const needsAll = configs.some((c) => c.blocks.all_item?.containers === "cart_no_scan");
   if (needsSingle) {
     const p = parseBulkOrderLimitInput(globalBulkSingle, BULK_ORDER_LIMIT_MAX);
     if (!p.ok) return `Limity zbioru (magazyn) — jednoelementowe: ${p.message}`;
@@ -870,15 +926,26 @@ function validateGlobalBulkLimitsForWarehouse(
     const p = parseBulkOrderLimitInput(globalBulkMulti, BULK_ORDER_LIMIT_MAX);
     if (!p.ok) return `Limity zbioru (magazyn) — wieloelementowe: ${p.message}`;
   }
+  if (needsAll) {
+    const p = parseBulkOrderLimitInput(globalBulkAll, BULK_ORDER_LIMIT_MAX);
+    if (!p.ok) return `Limity zbioru (magazyn) — wszystkie zamówienia: ${p.message}`;
+  }
   return null;
 }
 
 function savedConfigToReplaceItem(
   cfg: SavedPickingConfiguration,
-  globalBulk: { single: string; multi: string },
+  globalBulk: { single: string; multi: string; all: string },
 ): WmsPickingConfigReplaceItem {
   const singleMode = uiContainersToDbMode(cfg.blocks.single_item.containers);
   const multiMode = uiContainersToDbMode(cfg.blocks.multi_item.containers);
+  const allMode = uiContainersToDbMode(
+    ensureContainerInOptions(
+      cfg.blocks.all_item?.containers ?? "cart_scan",
+      BY_PRODUCTS_ALL_CONTAINER_OPTIONS,
+      "cart_scan",
+    ),
+  );
   const pick_unit = cfg.pickingMode === "by_products" ? "products" : "orders";
   let order_sort: PickingConfigOrderSortDb = cfg.orderSort;
   if (
@@ -887,6 +954,10 @@ function savedConfigToReplaceItem(
   ) {
     order_sort = coerceConsolidationOrderSort(cfg.orderSort);
   }
+  const all_order_sort: PickingConfigOrderSortDb =
+    cfg.allOrderSort === "location" || cfg.allOrderSort === "courier" || cfg.allOrderSort === "date"
+      ? cfg.allOrderSort
+      : order_sort;
   let max_single_orders: number | null;
   if (singleMode === "bulk") {
     const p = parseBulkOrderLimitInput(globalBulk.single, BULK_ORDER_LIMIT_MAX);
@@ -903,16 +974,27 @@ function savedConfigToReplaceItem(
   } else {
     max_multi_orders = null;
   }
+  let max_all_orders: number | null;
+  if (allMode === "bulk") {
+    const p = parseBulkOrderLimitInput(globalBulk.all, BULK_ORDER_LIMIT_MAX);
+    if (!p.ok) throw new Error(p.message);
+    max_all_orders = p.value;
+  } else {
+    max_all_orders = null;
+  }
   return {
     source_status_id: cfg.statusToPickId,
     target_status_id: cfg.statusAfterPickId,
     status_on_shortage_id: null,
     single_mode: singleMode,
     multi_mode: multiMode,
+    all_mode: allMode,
     pick_unit,
     order_sort,
+    all_order_sort,
     max_single_orders,
     max_multi_orders,
+    max_all_orders,
   };
 }
 
@@ -925,10 +1007,12 @@ function savedConfigurationToDraft(cfg: SavedPickingConfiguration): PickingConfi
     statusAfterPickBlurred: false,
     pickingMode: cfg.pickingMode,
     orderSort: cfg.orderSort,
+    allOrderSort: cfg.allOrderSort,
     blocks: normalizeBlocksForPickingMode(
       {
         single_item: { ...cfg.blocks.single_item },
         multi_item: { ...cfg.blocks.multi_item },
+        all_item: { ...(cfg.blocks.all_item ?? createInitialPickingBlock()) },
       },
       cfg.pickingMode,
     ),
@@ -1030,26 +1114,36 @@ function WmsPickingLogisticsBulkLimitsSection({
   visible,
   showSingleField,
   showMultiField,
+  showAllField,
   maxSingleItemOrders,
   maxMultiItemOrders,
+  maxAllOrders,
   onChangeMaxSingle,
   onChangeMaxMulti,
+  onChangeMaxAll,
   onBlurMaxSingle,
   onBlurMaxMulti,
+  onBlurMaxAll,
   errorSingle,
   errorMulti,
+  errorAll,
 }: {
   visible: boolean;
   showSingleField: boolean;
   showMultiField: boolean;
+  showAllField: boolean;
   maxSingleItemOrders: string;
   maxMultiItemOrders: string;
+  maxAllOrders: string;
   onChangeMaxSingle: (v: string) => void;
   onChangeMaxMulti: (v: string) => void;
+  onChangeMaxAll: (v: string) => void;
   onBlurMaxSingle: () => void;
   onBlurMaxMulti: () => void;
+  onBlurMaxAll: () => void;
   errorSingle: string | null;
   errorMulti: string | null;
+  errorAll: string | null;
 }) {
   if (!visible) return null;
 
@@ -1115,6 +1209,31 @@ function WmsPickingLogisticsBulkLimitsSection({
             />
           </WmsControlSettingRow>
         ) : null}
+        {showAllField ? (
+          <WmsControlSettingRow
+            asLabel
+            label="Maksymalna liczba zamówień (wszystkie)"
+            footer={
+              errorAll ? (
+                <p className="mt-1 text-xs font-medium text-red-700" role="alert">
+                  {errorAll}
+                </p>
+              ) : null
+            }
+          >
+            <input
+              type="number"
+              min={1}
+              max={BULK_ORDER_LIMIT_MAX}
+              step={1}
+              className={[numberInputClass, errorAll ? inputErr : ""].join(" ")}
+              value={maxAllOrders}
+              onChange={(e) => onChangeMaxAll(e.target.value)}
+              onBlur={onBlurMaxAll}
+              aria-invalid={Boolean(errorAll)}
+            />
+          </WmsControlSettingRow>
+        ) : null}
       </div>
     </div>
   );
@@ -1142,6 +1261,8 @@ function PickingConfiguratorEditor({
   onPickingModeChange,
   orderSort,
   onOrderSortChange,
+  allOrderSort,
+  onAllOrderSortChange,
   blocks,
   patchBlock,
 }: {
@@ -1166,6 +1287,8 @@ function PickingConfiguratorEditor({
   onPickingModeChange: (mode: PickingMode) => void;
   orderSort: PickingOrderSort;
   onOrderSortChange: (sort: PickingOrderSort) => void;
+  allOrderSort: PickingOrderSort;
+  onAllOrderSortChange: (sort: PickingOrderSort) => void;
   blocks: Record<PickingOrderTypeKey, PickingBlockState>;
   patchBlock: (key: PickingOrderTypeKey, patch: Partial<PickingBlockState>) => void;
 }) {
@@ -1220,6 +1343,7 @@ function PickingConfiguratorEditor({
 
   const multiContainers = blocks.multi_item.containers;
   const singleContainers = blocks.single_item.containers;
+  const allContainers = blocks.all_item.containers;
   const showByOrdersSort = showsByOrdersOrderSort(pickingMode);
   const showByProductsOrderSort = showsByProductsOrderSort(pickingMode);
   const byProducts = pickingMode === "by_products";
@@ -1357,46 +1481,70 @@ function PickingConfiguratorEditor({
       ) : null}
 
       {byProducts ? (
-        <div className="grid grid-cols-1 gap-5 min-[720px]:grid-cols-2">
-          <div className="min-w-0 rounded-xl border border-slate-200 bg-white p-3.5">
-            <p className="text-sm font-semibold text-slate-900">Zamówienia jednoelementowe</p>
-            <div className="mt-3">
-              <PickingRadioGroup
-                legend="Jak chcesz zbierać zamówienia jednoelementowe?"
-                name={`${fieldIdPrefix}-single-where`}
-                value={singleContainers}
-                options={BY_PRODUCTS_SINGLE_CONTAINER_OPTIONS}
-                onChange={(v) => patchBlock("single_item", { containers: v })}
-              />
-              {showByProductsOrderSort ? (
-                <PickingNestedOrderSort
-                  legend="Wybierz sposób doboru zamówień jednoelementowych:"
-                  name={`${fieldIdPrefix}-single-order-sort`}
-                  value={orderSort}
-                  options={singleOrderSortOptions}
-                  onChange={onOrderSortChange}
+        <div className="space-y-5">
+          <div className="grid grid-cols-1 gap-5 min-[720px]:grid-cols-2">
+            <div className="min-w-0 rounded-xl border border-slate-200 bg-white p-3.5">
+              <p className="text-sm font-semibold text-slate-900">Zamówienia jednoelementowe</p>
+              <div className="mt-3">
+                <PickingRadioGroup
+                  legend="Jak chcesz zbierać zamówienia jednoelementowe?"
+                  name={`${fieldIdPrefix}-single-where`}
+                  value={singleContainers}
+                  options={BY_PRODUCTS_SINGLE_CONTAINER_OPTIONS}
+                  onChange={(v) => patchBlock("single_item", { containers: v })}
                 />
-              ) : null}
+                {showByProductsOrderSort ? (
+                  <PickingNestedOrderSort
+                    legend="Wybierz sposób doboru zamówień jednoelementowych:"
+                    name={`${fieldIdPrefix}-single-order-sort`}
+                    value={orderSort}
+                    options={singleOrderSortOptions}
+                    onChange={onOrderSortChange}
+                  />
+                ) : null}
+              </div>
+            </div>
+
+            <div className="min-w-0 rounded-xl border border-slate-200 bg-white p-3.5">
+              <p className="text-sm font-semibold text-slate-900">Zamówienia wieloelementowe</p>
+              <div className="mt-3">
+                <PickingRadioGroup
+                  legend="Jak chcesz zbierać zamówienia wieloelementowe?"
+                  name={`${fieldIdPrefix}-multi-where`}
+                  value={multiContainers}
+                  options={BY_PRODUCTS_MULTI_CONTAINER_OPTIONS}
+                  onChange={(v) => patchBlock("multi_item", { containers: v })}
+                />
+                {showByProductsOrderSort ? (
+                  <PickingNestedOrderSort
+                    legend="Wybierz sposób doboru zamówień wieloelementowych:"
+                    name={`${fieldIdPrefix}-multi-order-sort`}
+                    value={orderSort}
+                    options={ORDER_SORT_DATE_COURIER}
+                    onChange={onOrderSortChange}
+                  />
+                ) : null}
+              </div>
             </div>
           </div>
 
           <div className="min-w-0 rounded-xl border border-slate-200 bg-white p-3.5">
-            <p className="text-sm font-semibold text-slate-900">Zamówienia wieloelementowe</p>
+            <p className="text-sm font-semibold text-slate-900">Wszystkie zamówienia</p>
             <div className="mt-3">
               <PickingRadioGroup
-                legend="Jak chcesz zbierać zamówienia wieloelementowe?"
-                name={`${fieldIdPrefix}-multi-where`}
-                value={multiContainers}
-                options={BY_PRODUCTS_MULTI_CONTAINER_OPTIONS}
-                onChange={(v) => patchBlock("multi_item", { containers: v })}
+                legend="Jak chcesz zbierać wszystkie zamówienia?"
+                name={`${fieldIdPrefix}-all-where`}
+                value={allContainers}
+                options={BY_PRODUCTS_ALL_CONTAINER_OPTIONS}
+                onChange={(v) => patchBlock("all_item", { containers: v })}
               />
               {showByProductsOrderSort ? (
                 <PickingNestedOrderSort
-                  legend="Wybierz sposób doboru zamówień wieloelementowych:"
-                  name={`${fieldIdPrefix}-multi-order-sort`}
-                  value={orderSort}
-                  options={ORDER_SORT_DATE_COURIER}
-                  onChange={onOrderSortChange}
+                  legend="Wybierz sposób doboru wszystkich zamówień:"
+                  name={`${fieldIdPrefix}-all-order-sort`}
+                  value={allOrderSort}
+                  options={ORDER_SORT_LOCATION_DATE_COURIER}
+                  onChange={onAllOrderSortChange}
                 />
               ) : null}
             </div>
@@ -1434,9 +1582,9 @@ function resolvePanelStatusBrief(
   };
 }
 
-/** Pełna szerokość: status | tryb | 1-el | multi | po zbieraniu | akcje */
+/** Pełna szerokość: status | tryb | 1-el | multi | wszystkie | po zbieraniu | akcje */
 const PICKING_CONFIG_LIST_GRID =
-  "sm:grid-cols-[minmax(10rem,1.15fr)_minmax(6rem,0.75fr)_minmax(0,1.35fr)_minmax(0,1.35fr)_minmax(10rem,1.1fr)_auto]";
+  "sm:grid-cols-[minmax(9rem,1fr)_minmax(5.5rem,0.7fr)_minmax(0,1.15fr)_minmax(0,1.15fr)_minmax(0,1.15fr)_minmax(9rem,1fr)_auto]";
 
 const pickingConfigListHeaderClass =
   "text-center text-[11px] font-semibold uppercase tracking-wide text-slate-400";
@@ -1540,11 +1688,17 @@ function PickingConfigOrderTypeColumn({
   config: SavedPickingConfiguration;
 }) {
   const isSingle = orderType === "single_item";
-  const Icon = isSingle ? FileText : Boxes;
-  const title = isSingle ? "Zamówienia jednoelementowe" : "Zamówienia wieloelementowe";
+  const isAll = orderType === "all_item";
+  const Icon = isAll ? Layers : isSingle ? FileText : Boxes;
+  const title = isAll
+    ? "Wszystkie zamówienia"
+    : isSingle
+      ? "Zamówienia jednoelementowe"
+      : "Zamówienia wieloelementowe";
   const containerLabelText = containerListLabel(config.blocks[orderType].containers, orderType);
-  const sortForDisplay =
-    !isSingle && config.blocks.multi_item.containers === "consolidation_rack"
+  const sortForDisplay = isAll
+    ? config.allOrderSort
+    : !isSingle && config.blocks.multi_item.containers === "consolidation_rack"
       ? coerceConsolidationOrderSort(config.orderSort)
       : config.orderSort;
   const sortLabel = orderSortListLabel(sortForDisplay);
@@ -1610,6 +1764,9 @@ function SavedPickingConfigSummaryCard({
       </div>
       <div className="min-w-0">
         <PickingConfigOrderTypeColumn orderType="multi_item" config={config} />
+      </div>
+      <div className="min-w-0">
+        <PickingConfigOrderTypeColumn orderType="all_item" config={config} />
       </div>
       <div className="flex min-w-0 justify-center sm:justify-start">
         <PickingConfigStatusBadge status={targetBrief} />
@@ -1699,6 +1856,7 @@ function WmsPickingStatusConfig({
               <p className={pickingConfigListHeaderClass}>Tryb zbierania</p>
               <p className={pickingConfigListHeaderClass}>Jednoelementowe</p>
               <p className={pickingConfigListHeaderClass}>Wieloelementowe</p>
+              <p className={pickingConfigListHeaderClass}>Wszystkie</p>
               <p className={pickingConfigListHeaderClass}>Po zbieraniu</p>
               <p className={`${pickingConfigListHeaderClass} text-right`}>Akcje</p>
             </div>
@@ -1927,12 +2085,14 @@ export function WmsPickingSettingsSections({
 
   const [globalBulkSingle, setGlobalBulkSingle] = useState(BULK_ORDER_LIMIT_DEFAULT_SINGLE);
   const [globalBulkMulti, setGlobalBulkMulti] = useState(BULK_ORDER_LIMIT_DEFAULT_MULTI);
+  const [globalBulkAll, setGlobalBulkAll] = useState(BULK_ORDER_LIMIT_DEFAULT_ALL);
   const [globalBulkSingleBlurred, setGlobalBulkSingleBlurred] = useState(false);
   const [globalBulkMultiBlurred, setGlobalBulkMultiBlurred] = useState(false);
+  const [globalBulkAllBlurred, setGlobalBulkAllBlurred] = useState(false);
 
   const configsBulkDirty =
     baselineConfigsFp != null &&
-    fingerprintPickingConfigsWarehouseState(savedConfigs, globalBulkSingle, globalBulkMulti) !== baselineConfigsFp;
+    fingerprintPickingConfigsWarehouseState(savedConfigs, globalBulkSingle, globalBulkMulti, globalBulkAll) !== baselineConfigsFp;
 
   const pickingDirty =
     warehouseId != null &&
@@ -1945,9 +2105,11 @@ export function WmsPickingSettingsSections({
   const inferGlobalBulkLimitsFromRows = useCallback((rows: WmsPickingConfigReadApi[]) => {
     const s = rows.map((r) => r.max_single_orders).find((x) => x != null);
     const m = rows.map((r) => r.max_multi_orders).find((x) => x != null);
+    const a = rows.map((r) => r.max_all_orders).find((x) => x != null);
     return {
       single: String(s ?? BULK_ORDER_LIMIT_DEFAULT_SINGLE),
       multi: String(m ?? BULK_ORDER_LIMIT_DEFAULT_MULTI),
+      all: String(a ?? BULK_ORDER_LIMIT_DEFAULT_ALL),
     };
   }, []);
 
@@ -1966,6 +2128,7 @@ export function WmsPickingSettingsSections({
       const g0 = inferGlobalBulkLimitsFromRows(cached);
       setGlobalBulkSingle(g0.single);
       setGlobalBulkMulti(g0.multi);
+      setGlobalBulkAll(g0.all);
     }
     let settingsSource: "api" | "local" | "default" = "default";
     try {
@@ -1976,9 +2139,11 @@ export function WmsPickingSettingsSections({
       const g = inferGlobalBulkLimitsFromRows(rows);
       setGlobalBulkSingle(g.single);
       setGlobalBulkMulti(g.multi);
-      setBaselineConfigsFp(fingerprintPickingConfigsWarehouseState(savedRows, g.single, g.multi));
+      setGlobalBulkAll(g.all);
+      setBaselineConfigsFp(fingerprintPickingConfigsWarehouseState(savedRows, g.single, g.multi, g.all));
       setGlobalBulkSingleBlurred(false);
       setGlobalBulkMultiBlurred(false);
+      setGlobalBulkAllBlurred(false);
       settingsSource = "api";
       setPickingConfigsLoadErr(null);
     } catch (err) {
@@ -1990,7 +2155,8 @@ export function WmsPickingSettingsSections({
         const g = inferGlobalBulkLimitsFromRows(cached);
         setGlobalBulkSingle(g.single);
         setGlobalBulkMulti(g.multi);
-        setBaselineConfigsFp(fingerprintPickingConfigsWarehouseState(mapped, g.single, g.multi));
+        setGlobalBulkAll(g.all);
+        setBaselineConfigsFp(fingerprintPickingConfigsWarehouseState(mapped, g.single, g.multi, g.all));
       } else {
         setSavedConfigs([]);
         setBaselineConfigsFp(
@@ -1998,6 +2164,7 @@ export function WmsPickingSettingsSections({
             [],
             BULK_ORDER_LIMIT_DEFAULT_SINGLE,
             BULK_ORDER_LIMIT_DEFAULT_MULTI,
+            BULK_ORDER_LIMIT_DEFAULT_ALL,
           ),
         );
         settingsSource = "default";
@@ -2033,15 +2200,16 @@ export function WmsPickingSettingsSections({
         });
         if (v) return { ok: false, message: v };
       }
-      const gErr = validateGlobalBulkLimitsForWarehouse(configs, globalBulkSingle, globalBulkMulti);
+      const gErr = validateGlobalBulkLimitsForWarehouse(configs, globalBulkSingle, globalBulkMulti, globalBulkAll);
       if (gErr) {
         setGlobalBulkSingleBlurred(true);
         setGlobalBulkMultiBlurred(true);
+        setGlobalBulkAllBlurred(true);
         return { ok: false, message: gErr };
       }
       let items: WmsPickingConfigReplaceItem[];
       try {
-        items = configs.map((c) => savedConfigToReplaceItem(c, { single: globalBulkSingle, multi: globalBulkMulti }));
+        items = configs.map((c) => savedConfigToReplaceItem(c, { single: globalBulkSingle, multi: globalBulkMulti, all: globalBulkAll }));
       } catch (e) {
         return {
           ok: false,
@@ -2056,7 +2224,8 @@ export function WmsPickingSettingsSections({
         const g = inferGlobalBulkLimitsFromRows(rows);
         setGlobalBulkSingle(g.single);
         setGlobalBulkMulti(g.multi);
-        setBaselineConfigsFp(fingerprintPickingConfigsWarehouseState(saved, g.single, g.multi));
+      setGlobalBulkAll(g.all);
+        setBaselineConfigsFp(fingerprintPickingConfigsWarehouseState(saved, g.single, g.multi, g.all));
         return { ok: true, saved };
       } catch {
         return { ok: false, message: "Zapis konfiguracji nie powiódł się. Spróbuj ponownie." };
@@ -2066,6 +2235,7 @@ export function WmsPickingSettingsSections({
       warehouseId,
       globalBulkSingle,
       globalBulkMulti,
+      globalBulkAll,
       inferGlobalBulkLimitsFromRows,
       orderUiSummary,
       packingStartStatusIds,
@@ -2177,6 +2347,17 @@ export function WmsPickingSettingsSections({
         return { ok: false };
       }
     }
+    const nextUsesBulkAll =
+      d.blocks.all_item?.containers === "cart_no_scan" ||
+      savedConfigs.some((c) => c.blocks.all_item?.containers === "cart_no_scan");
+    if (nextUsesBulkAll) {
+      const p = parseBulkOrderLimitInput(globalBulkAll, BULK_ORDER_LIMIT_MAX);
+      if (!p.ok) {
+        setSaveFormError(`Limity zbioru (magazyn) — wszystkie zamówienia: ${p.message}`);
+        setGlobalBulkAllBlurred(true);
+        return { ok: false };
+      }
+    }
 
     const namePick = statusOptionsFlat.find((o) => o.id === pickId)?.name ?? `Status #${pickId}`;
     const nameAfter = statusOptionsFlat.find((o) => o.id === afterId)?.name ?? `Status #${afterId}`;
@@ -2192,6 +2373,7 @@ export function WmsPickingSettingsSections({
       statusOnShortageName: null,
       pickingMode: d.pickingMode,
       orderSort: d.orderSort,
+      allOrderSort: d.allOrderSort,
       blocks: normalizedBlocks,
     };
 
@@ -2214,6 +2396,7 @@ export function WmsPickingSettingsSections({
     editBackup,
     globalBulkSingle,
     globalBulkMulti,
+    globalBulkAll,
     orderUiSummary,
     sourceAllowedIds,
     targetAllowedIds,
@@ -2250,7 +2433,7 @@ export function WmsPickingSettingsSections({
         }
         const configsNeedPersist =
           baselineConfigsFp == null ||
-          fingerprintPickingConfigsWarehouseState(configsToPersist, globalBulkSingle, globalBulkMulti) !==
+          fingerprintPickingConfigsWarehouseState(configsToPersist, globalBulkSingle, globalBulkMulti, globalBulkAll) !==
             baselineConfigsFp;
         if (configsNeedPersist) {
           const result = await persistPickingConfigList(configsToPersist);
@@ -2329,11 +2512,16 @@ export function WmsPickingSettingsSections({
 
   const warehouseUsesBulkLimits = useMemo(() => {
     const fromSaved = savedConfigs.some(
-      (c) => c.blocks.single_item.containers === "cart_no_scan" || c.blocks.multi_item.containers === "cart_no_scan",
+      (c) =>
+        c.blocks.single_item.containers === "cart_no_scan" ||
+        c.blocks.multi_item.containers === "cart_no_scan" ||
+        c.blocks.all_item?.containers === "cart_no_scan",
     );
     const fromDraft =
       draft != null &&
-      (draft.blocks.single_item.containers === "cart_no_scan" || draft.blocks.multi_item.containers === "cart_no_scan");
+      (draft.blocks.single_item.containers === "cart_no_scan" ||
+        draft.blocks.multi_item.containers === "cart_no_scan" ||
+        draft.blocks.all_item?.containers === "cart_no_scan");
     return fromSaved || fromDraft;
   }, [savedConfigs, draft]);
 
@@ -2343,13 +2531,19 @@ export function WmsPickingSettingsSections({
   const showGlobalBulkMultiField =
     savedConfigs.some((c) => c.blocks.multi_item.containers === "cart_no_scan") ||
     (draft != null && draft.blocks.multi_item.containers === "cart_no_scan");
+  const showGlobalBulkAllField =
+    savedConfigs.some((c) => c.blocks.all_item?.containers === "cart_no_scan") ||
+    (draft != null && draft.blocks.all_item?.containers === "cart_no_scan");
 
   const globalSingleParsed = parseBulkOrderLimitInput(globalBulkSingle, BULK_ORDER_LIMIT_MAX);
   const globalMultiParsed = parseBulkOrderLimitInput(globalBulkMulti, BULK_ORDER_LIMIT_MAX);
+  const globalAllParsed = parseBulkOrderLimitInput(globalBulkAll, BULK_ORDER_LIMIT_MAX);
   const globalBulkSingleErr =
     warehouseUsesBulkLimits && globalBulkSingleBlurred && !globalSingleParsed.ok ? globalSingleParsed.message : null;
   const globalBulkMultiErr =
     warehouseUsesBulkLimits && globalBulkMultiBlurred && !globalMultiParsed.ok ? globalMultiParsed.message : null;
+  const globalBulkAllErr =
+    warehouseUsesBulkLimits && globalBulkAllBlurred && !globalAllParsed.ok ? globalAllParsed.message : null;
 
   const statusPairConflictDraft =
     draft && draft.statusToPick !== "" && draft.statusAfterPick !== "" && draft.statusToPick === draft.statusAfterPick;
@@ -2402,7 +2596,7 @@ export function WmsPickingSettingsSections({
             }
             const configsNeedPersist =
               baselineConfigsFp == null ||
-              fingerprintPickingConfigsWarehouseState(configsToPersist, globalBulkSingle, globalBulkMulti) !==
+              fingerprintPickingConfigsWarehouseState(configsToPersist, globalBulkSingle, globalBulkMulti, globalBulkAll) !==
                 baselineConfigsFp;
             if (configsNeedPersist) {
               const result = await persistPickingConfigList(configsToPersist);
@@ -2586,8 +2780,10 @@ export function WmsPickingSettingsSections({
                 visible
                 showSingleField={showGlobalBulkSingleField}
                 showMultiField={showGlobalBulkMultiField}
+                showAllField={showGlobalBulkAllField}
                 maxSingleItemOrders={globalBulkSingle}
                 maxMultiItemOrders={globalBulkMulti}
+                maxAllOrders={globalBulkAll}
                 onChangeMaxSingle={(v) => {
                   setGlobalBulkSingle(v);
                   setSaveFormError(null);
@@ -2596,10 +2792,16 @@ export function WmsPickingSettingsSections({
                   setGlobalBulkMulti(v);
                   setSaveFormError(null);
                 }}
+                onChangeMaxAll={(v) => {
+                  setGlobalBulkAll(v);
+                  setSaveFormError(null);
+                }}
                 onBlurMaxSingle={() => setGlobalBulkSingleBlurred(true)}
                 onBlurMaxMulti={() => setGlobalBulkMultiBlurred(true)}
+                onBlurMaxAll={() => setGlobalBulkAllBlurred(true)}
                 errorSingle={globalBulkSingleErr}
                 errorMulti={globalBulkMultiErr}
+                errorAll={globalBulkAllErr}
               />
             </SubsectionPicking>
           ) : (
@@ -2845,6 +3047,8 @@ export function WmsPickingSettingsSections({
             }
             orderSort={draft.orderSort}
             onOrderSortChange={(sort) => setDraft((d) => (d ? { ...d, orderSort: sort } : d))}
+            allOrderSort={draft.allOrderSort}
+            onAllOrderSortChange={(sort) => setDraft((d) => (d ? { ...d, allOrderSort: sort } : d))}
             blocks={draft.blocks}
             patchBlock={patchDraftBlock}
           />

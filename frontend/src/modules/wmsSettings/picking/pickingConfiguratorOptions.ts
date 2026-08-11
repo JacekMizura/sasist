@@ -44,6 +44,22 @@ export const BY_PRODUCTS_MULTI_CONTAINER_OPTIONS: PickingRadioOption<PickingCont
   },
 ];
 
+/**
+ * „Wszystkie zamówienia” — intersection metod single∩multi
+ * (bez mobile_cart i bez consolidation_rack).
+ */
+export const BY_PRODUCTS_ALL_CONTAINER_OPTIONS: PickingRadioOption<PickingContainersUi>[] = [
+  {
+    value: "cart_scan",
+    label: "Do wózka z wymuszaniem skanowania kodu kreskowego",
+  },
+  {
+    value: "cart_no_scan",
+    label: "Do wózka bez wymuszania skanowania kodu kreskowego",
+  },
+  { value: "baskets", label: "Do wózka z koszykami" },
+];
+
 /** Single-item options when pick_unit = products */
 export const BY_PRODUCTS_SINGLE_CONTAINER_OPTIONS: PickingRadioOption<PickingContainersUi>[] = [
   {
@@ -162,7 +178,7 @@ export function orderSortListLabel(sort: PickingOrderSortUi): string {
 /** Zwarte etykiety kontenera na liście (bez technicznych skrótów). */
 export function containerListLabel(
   value: PickingContainersUi,
-  orderType: "single_item" | "multi_item",
+  orderType: "single_item" | "multi_item" | "all_item",
 ): string {
   if (value === "cart_no_scan") return "Bez skanowania kodu kreskowego";
   if (value === "cart_scan") return "Wózek (wymagany skan)";

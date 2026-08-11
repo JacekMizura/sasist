@@ -1,3 +1,9 @@
+## 2026-08-11 — Konfiguracja „Wszystkie zamówienia” w zbieraniu
+
+- Osobne `all_mode` / `all_order_sort` / `max_all_orders` (nullable; runtime default bez kopii single/multi)
+- UI: trzeci blok + kolumna „Wszystkie”; metody = intersection (bulk/scanned/baskets)
+- Flow: wybór `all` używa wyłącznie configu `all` (cart + sort)
+
 ## 2026-08-11 — Ekran ilości zbierania 1:1 (belka + bez ILOŚĆ)
 
 - `PickingQtyPanel`: [←]+belka lokalizacji (h-10), zdjęcie→nazwa→EAN→−/+→Zatwierdź

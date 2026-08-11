@@ -19,20 +19,30 @@ const baseSession = (): WmsPickingSessionState => ({
   mainGroup: "IN_PROGRESS",
   singleMode: "cart_scan",
   multiMode: "baskets",
+  allMode: "cart_scan",
+  allOrderSort: "location",
 });
 
 describe("visibleOrderTypeChoices / canOfferAll", () => {
-  it("shows single+multi+all when both modes share cart gate AND cart type", () => {
-    expect(visibleOrderTypeChoices("cart_scan", "cart_scan")).toEqual(["single", "multi", "all"]);
+  it("always shows single+multi+all when both modes are configured", () => {
+    expect(visibleOrderTypeChoices("cart_scan", "cart_scan", "cart_scan")).toEqual([
+      "single",
+      "multi",
+      "all",
+    ]);
     expect(canOfferAllOrderTypes("cart_scan", "cart_scan")).toBe(true);
-    expect(visibleOrderTypeChoices("cart_no_scan", "mobile")).toEqual(["single", "multi", "all"]);
-  });
-
-  it("hides all when cart gates or cart types differ", () => {
-    expect(canOfferAllOrderTypes("cart_scan", "cart_no_scan")).toBe(false);
-    expect(visibleOrderTypeChoices("cart_scan", "cart_no_scan")).toEqual(["single", "multi"]);
-    expect(canOfferAllOrderTypes("cart_scan", "baskets")).toBe(false);
-    expect(visibleOrderTypeChoices("cart_scan", "baskets")).toEqual(["single", "multi"]);
+    expect(visibleOrderTypeChoices("cart_no_scan", "mobile", "cart_no_scan")).toEqual([
+      "single",
+      "multi",
+      "all",
+    ]);
+    // Mixed cart families — all still offered; uses dedicated allMode
+    expect(visibleOrderTypeChoices("cart_scan", "baskets", "baskets")).toEqual([
+      "single",
+      "multi",
+      "all",
+    ]);
+    expect(visibleOrderTypeChoices("cart_scan", "cart_no_scan")).toEqual(["single", "multi", "all"]);
   });
 });
 
@@ -113,14 +123,22 @@ describe("resolveAfterOrderTypeChoice", () => {
     expect(t.state.pickingSession.cartId).toBeNull();
   });
 
-  it("all with same cart_scan → cart BULK", () => {
-    expect(needsCartAfterOrderTypeChoice("cart_scan", "cart_scan", "all")).toBe(true);
-    expect(cartTypeHintForOrderTypeChoice("cart_scan", "cart_scan", "all")).toBe("BULK");
+  it("all uses dedicated allMode for cart gate and allOrderSort", () => {
+    const s = baseSession();
+    s.singleMode = "cart_no_scan";
+    s.multiMode = "cart_no_scan";
+    s.allMode = "baskets";
+    s.orderSort = "date";
+    s.allOrderSort = "location";
+    expect(needsCartAfterOrderTypeChoice("cart_no_scan", "cart_no_scan", "all", "baskets")).toBe(true);
+    expect(cartTypeHintForOrderTypeChoice("cart_no_scan", "cart_no_scan", "all", "baskets")).toBe(
+      "BASKETS",
+    );
+    const t = resolveAfterOrderTypeChoice(s, "all");
+    expect(t.path).toBe(WMS_ROUTES.pickingCart);
+    expect(t.state.pickingSession.cartType).toBe("BASKETS");
+    expect(t.state.pickingSession.orderSort).toBe("location");
     expect(modeRequiresCartScan("mobile")).toBe(false);
-  });
-
-  it("mixed baskets+cart_scan — all hint is null (all not offered)", () => {
-    expect(cartTypeHintForOrderTypeChoice("cart_scan", "baskets", "all")).toBeNull();
   });
 
   it("never skips cart scan just because a cart id was left on session", () => {

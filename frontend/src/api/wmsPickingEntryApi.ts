@@ -47,10 +47,14 @@ export type WmsPickingFlowConfig = {
   status_on_shortage_id: number | null;
   single_mode: PickingFlowMode;
   multi_mode: PickingFlowMode;
+  /** Efektywny tryb „Wszystkie zamówienia” — osobna konfiguracja. */
+  all_mode: PickingFlowMode;
   strategy: PickingFlowStrategy;
   pick_unit: WmsPickingPickUnit;
   order_sort: WmsPickingOrderSort;
-  limits: { single: number | null; multi: number | null };
+  /** Efektywna kolejność doboru dla „Wszystkie”. */
+  all_order_sort: WmsPickingOrderSort;
+  limits: { single: number | null; multi: number | null; all: number | null };
 };
 
 export async function getPickingConfiguredStatuses(

@@ -516,18 +516,23 @@ def get_picking_flow_config(
     if row is None:
         raise HTTPException(status_code=404, detail="Brak konfiguracji zbierania dla tego statusu.")
     sid_short = getattr(row, "status_on_shortage_id", None)
+    from ..services.picking_config_service import effective_all_mode, effective_all_order_sort
+
     return WmsPickingFlowConfigRead(
         source_status_id=int(row.source_status_id),
         target_status_id=int(row.target_status_id),
         status_on_shortage_id=int(sid_short) if sid_short is not None else None,
         single_mode=_db_mode_to_flow_mode(row.single_mode),
         multi_mode=_db_mode_to_flow_mode(row.multi_mode),
+        all_mode=_db_mode_to_flow_mode(effective_all_mode(row)),
         strategy=_flow_strategy_from_picking_row(row),
         pick_unit=cast(PickingConfigPickUnit, _norm_pick_unit_for_api(row)),
         order_sort=cast(PickingConfigOrderSort, _norm_order_sort_for_api(row)),
+        all_order_sort=cast(PickingConfigOrderSort, effective_all_order_sort(row)),
         limits=WmsPickingFlowLimits(
             single=row.max_single_orders,
             multi=row.max_multi_orders,
+            all=getattr(row, "max_all_orders", None),
         ),
     )
 

@@ -4437,6 +4437,26 @@ def ensure_picking_config_workflow_columns(engine: Engine) -> None:
         conn.commit()
 
 
+def ensure_picking_config_all_order_columns(engine: Engine) -> None:
+    """Osobna konfiguracja „Wszystkie zamówienia”: ``all_mode``, ``all_order_sort``, ``max_all_orders``.
+
+    Kolumny nullable — stare rekordy bez wartości nie dostają automatycznej kopii single/multi.
+    Runtime API stosuje bezpieczny default dopiero przy odczycie.
+    """
+    with engine.connect() as conn:
+        if not _table_exists(conn, "picking_config"):
+            conn.commit()
+            return
+        cols = _table_column_names(conn, "picking_config")
+        if "all_mode" not in cols:
+            conn.execute(text("ALTER TABLE picking_config ADD COLUMN all_mode VARCHAR(32)"))
+        if "all_order_sort" not in cols:
+            conn.execute(text("ALTER TABLE picking_config ADD COLUMN all_order_sort VARCHAR(32)"))
+        if "max_all_orders" not in cols:
+            conn.execute(text("ALTER TABLE picking_config ADD COLUMN max_all_orders INTEGER"))
+        conn.commit()
+
+
 def ensure_picking_shortage_support(engine: Engine) -> None:
     """Kolumna ``status_on_shortage_id`` w ``picking_config`` + tabela audytu braków WMS."""
     with engine.connect() as conn:

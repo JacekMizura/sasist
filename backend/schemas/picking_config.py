@@ -9,6 +9,8 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 PickingConfigStrategy = Literal["locations", "orders"]
 PickingConfigMode = Literal["bulk", "scanned", "baskets", "mobile", "consolidation_rack"]
+#: Tryby dopuszczalne dla wariantu „Wszystkie zamówienia” (intersection single∩multi).
+PickingConfigAllMode = Literal["bulk", "scanned", "baskets"]
 PickingConfigPickUnit = Literal["orders", "products"]
 PickingConfigOrderSort = Literal["date", "location", "courier"]
 
@@ -25,8 +27,17 @@ class PickingConfigRead(BaseModel):
     order_sort: PickingConfigOrderSort
     single_mode: PickingConfigMode
     multi_mode: PickingConfigMode
+    all_mode: Optional[PickingConfigAllMode] = Field(
+        default=None,
+        description="Osobny tryb dla „Wszystkie zamówienia”; null = brak trwałej wartości",
+    )
+    all_order_sort: Optional[PickingConfigOrderSort] = Field(
+        default=None,
+        description="Osobna kolejność doboru dla all; null = fallback na order_sort przy odczycie",
+    )
     max_single_orders: Optional[int] = Field(default=None, ge=1)
     max_multi_orders: Optional[int] = Field(default=None, ge=1)
+    max_all_orders: Optional[int] = Field(default=None, ge=1)
     created_at: datetime
     source_status_name: Optional[str] = None
     target_status_name: Optional[str] = None
@@ -46,8 +57,11 @@ class PickingConfigCreate(BaseModel):
     order_sort: Optional[PickingConfigOrderSort] = None
     single_mode: PickingConfigMode
     multi_mode: PickingConfigMode
+    all_mode: Optional[PickingConfigAllMode] = None
+    all_order_sort: Optional[PickingConfigOrderSort] = None
     max_single_orders: Optional[int] = Field(default=None, ge=1)
     max_multi_orders: Optional[int] = Field(default=None, ge=1)
+    max_all_orders: Optional[int] = Field(default=None, ge=1)
 
     @model_validator(mode="after")
     def source_not_target(self) -> "PickingConfigCreate":
@@ -66,8 +80,11 @@ class PickingConfigUpdate(BaseModel):
     order_sort: Optional[PickingConfigOrderSort] = None
     single_mode: PickingConfigMode
     multi_mode: PickingConfigMode
+    all_mode: Optional[PickingConfigAllMode] = None
+    all_order_sort: Optional[PickingConfigOrderSort] = None
     max_single_orders: Optional[int] = Field(default=None, ge=1)
     max_multi_orders: Optional[int] = Field(default=None, ge=1)
+    max_all_orders: Optional[int] = Field(default=None, ge=1)
 
 
 class PickingConfigListResponse(BaseModel):

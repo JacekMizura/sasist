@@ -94,6 +94,7 @@ class WmsPickingConfiguredStatusItem(BaseModel):
 class WmsPickingFlowLimits(BaseModel):
     single: int | None = None
     multi: int | None = None
+    all: int | None = None
 
 
 class WmsPickingFlowConfigRead(BaseModel):
@@ -105,9 +106,13 @@ class WmsPickingFlowConfigRead(BaseModel):
     )
     single_mode: PickingFlowMode
     multi_mode: PickingFlowMode
+    #: Efektywny tryb „Wszystkie” (z ``all_mode`` lub bezpieczny default — nie kopia single/multi).
+    all_mode: PickingFlowMode
     strategy: PickingFlowStrategy
     pick_unit: PickingConfigPickUnit
     order_sort: PickingConfigOrderSort
+    #: Efektywna kolejność dla „Wszystkie” (``all_order_sort`` lub fallback na ``order_sort``).
+    all_order_sort: PickingConfigOrderSort
     limits: WmsPickingFlowLimits
 
 
@@ -135,13 +140,22 @@ class WmsPickingConfigReplaceItem(BaseModel):
     target_status_id: int = Field(..., ge=1, description="Status po zebraniu")
     single_mode: PickingConfigMode
     multi_mode: PickingConfigMode
+    all_mode: Optional[PickingConfigMode] = Field(
+        default=None,
+        description="Tryb „Wszystkie zamówienia” (bulk|scanned|baskets); wymagany przy pełnym zapisie z UI",
+    )
     pick_unit: PickingConfigPickUnit = Field(..., description="orders = zamówienie po zamówieniu; products = agregat produktów")
     order_sort: PickingConfigOrderSort = Field(
         default="date",
         description="Przy pick_unit=orders: kolejność kolejki zamówień; courier — placeholder (jak data)",
     )
+    all_order_sort: Optional[PickingConfigOrderSort] = Field(
+        default=None,
+        description="Osobna kolejność doboru dla „Wszystkie zamówienia”",
+    )
     max_single_orders: Optional[int] = Field(default=None, ge=1)
     max_multi_orders: Optional[int] = Field(default=None, ge=1)
+    max_all_orders: Optional[int] = Field(default=None, ge=1)
     status_on_shortage_id: Optional[int] = Field(
         default=None,
         ge=1,

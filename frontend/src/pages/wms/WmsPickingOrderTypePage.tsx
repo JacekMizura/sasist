@@ -59,8 +59,8 @@ export default function WmsPickingOrderTypePage() {
   } | null>(null);
 
   const choices = useMemo(
-    () => visibleOrderTypeChoices(session?.singleMode, session?.multiMode),
-    [session?.singleMode, session?.multiMode],
+    () => visibleOrderTypeChoices(session?.singleMode, session?.multiMode, session?.allMode),
+    [session?.singleMode, session?.multiMode, session?.allMode],
   );
 
   useEffect(() => {

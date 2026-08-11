@@ -1,5 +1,8 @@
 ﻿## Active
 
+**Picking all-order config (2026-08-11):**
+- `all_mode` + `all_order_sort` + `max_all_orders`; flow `all` nie dziedziczy single/multi
+
 **Picking qty screen 1:1 (2026-08-11):**
 - `PickingQtyPanel`: belka lokalizacji + kafel bez labela ILOŚĆ; logika pick bez zmian
 

@@ -15,10 +15,16 @@ from ..models.picking_config import PickingConfig
 from ..schemas.picking_config import (
     PickingConfigCreate,
     PickingConfigMode,
+    PickingConfigOrderSort,
     PickingConfigRead,
     PickingConfigUpdate,
 )
 from ..schemas.wms_picking_flow import WmsPickingConfigReplaceItem
+
+#: Intersection of single∩multi container modes — only these may be stored as ``all_mode``.
+ALL_ORDER_COMPATIBLE_MODES: frozenset[str] = frozenset({"bulk", "scanned", "baskets"})
+#: Runtime default when ``all_mode`` is NULL (not a copy of single/multi).
+ALL_MODE_RUNTIME_DEFAULT = "bulk"
 
 
 def derive_storage_strategy(pick_unit: str, order_sort: str) -> str:
@@ -57,11 +63,87 @@ def normalize_bulk_max_fields(
     multi_mode: PickingConfigMode,
     max_single_orders: int | None,
     max_multi_orders: int | None,
-) -> Tuple[int | None, int | None]:
-    """Przy trybach innnych niż ``bulk`` ignoruj limity (zapis ``NULL``)."""
+    *,
+    all_mode: str | None = None,
+    max_all_orders: int | None = None,
+) -> Tuple[int | None, int | None, int | None]:
+    """Przy trybach innych niż ``bulk`` ignoruj limity (zapis ``NULL``)."""
     ms = max_single_orders if single_mode == "bulk" else None
     mm = max_multi_orders if multi_mode == "bulk" else None
-    return ms, mm
+    am = (all_mode or "").strip().lower() if all_mode is not None else ""
+    ma = max_all_orders if am == "bulk" else None
+    return ms, mm, ma
+
+
+def normalize_all_mode_for_storage(all_mode: str | None, *, required: bool = False) -> str | None:
+    """Waliduje / normalizuje ``all_mode`` do zapisu. ``None`` = brak trwałej wartości."""
+    if all_mode is None or str(all_mode).strip() == "":
+        if required:
+            raise ValueError(
+                "Konfiguracja „Wszystkie zamówienia” wymaga metody zbierania "
+                "(bulk / scanned / baskets)."
+            )
+        return None
+    m = str(all_mode).strip().lower()
+    if m not in ALL_ORDER_COMPATIBLE_MODES:
+        raise ValueError(
+            "„Wszystkie zamówienia” obsługuje tylko: zbieranie bez skanu wózka, "
+            "ze skanem wózka lub do wózka z koszykami "
+            "(bez wózka mobilnego i bez regału kompletacyjnego)."
+        )
+    return m
+
+
+def normalize_all_order_sort_for_storage(
+    all_order_sort: str | None,
+    *,
+    required: bool = False,
+) -> str | None:
+    if all_order_sort is None or str(all_order_sort).strip() == "":
+        if required:
+            raise ValueError("Konfiguracja „Wszystkie zamówienia” wymaga sposobu doboru zamówień.")
+        return None
+    s = str(all_order_sort).strip().lower()
+    if s not in ("date", "location", "courier"):
+        raise ValueError("Nieprawidłowy sposób doboru dla „Wszystkie zamówienia”.")
+    return s
+
+
+def effective_all_mode(row: PickingConfig | None) -> str:
+    """Efektywny tryb all przy odczycie — bez zapisu. Nie kopiuje single/multi."""
+    if row is None:
+        return ALL_MODE_RUNTIME_DEFAULT
+    raw = getattr(row, "all_mode", None)
+    if raw is not None and str(raw).strip():
+        m = str(raw).strip().lower()
+        if m in ALL_ORDER_COMPATIBLE_MODES:
+            return m
+    return ALL_MODE_RUNTIME_DEFAULT
+
+
+def effective_all_order_sort(row: PickingConfig | None) -> str:
+    """Efektywna kolejność all — ``all_order_sort`` lub fallback na wspólny ``order_sort``."""
+    if row is None:
+        return "date"
+    raw = getattr(row, "all_order_sort", None)
+    if raw is not None and str(raw).strip():
+        s = str(raw).strip().lower()
+        if s in ("date", "location", "courier"):
+            return s
+    shared = (getattr(row, "order_sort", None) or "date").strip().lower()
+    if shared in ("date", "location", "courier"):
+        return shared
+    return "date"
+
+
+def resolve_order_sort_for_tour(pc: PickingConfig | None, order_type: str) -> str:
+    ot = (order_type or "all").strip().lower()
+    if ot == "all":
+        return effective_all_order_sort(pc)
+    if pc is None:
+        return "date"
+    shared = (getattr(pc, "order_sort", None) or "date").strip().lower()
+    return shared if shared in ("date", "location", "courier") else "date"
 
 
 def warehouse_has_consolidation_racks(db: Session, *, tenant_id: int, warehouse_id: int) -> bool:
@@ -154,11 +236,23 @@ def create_picking_config(db: Session, body: PickingConfigCreate) -> PickingConf
         multi_mode=body.multi_mode,
     )
 
-    ms, mm = normalize_bulk_max_fields(
+    all_mode = normalize_all_mode_for_storage(getattr(body, "all_mode", None), required=False)
+    all_order_sort = normalize_all_order_sort_for_storage(
+        getattr(body, "all_order_sort", None), required=False
+    )
+    if all_mode is not None and all_order_sort is None:
+        # Gdy świadomie zapisano all_mode — wymagaj sortu (albo użyj wspólnego order_sort).
+        all_order_sort = normalize_all_order_sort_for_storage(
+            body.order_sort or "date", required=True
+        )
+
+    ms, mm, ma = normalize_bulk_max_fields(
         body.single_mode,
         body.multi_mode,
         body.max_single_orders,
         body.max_multi_orders,
+        all_mode=all_mode,
+        max_all_orders=getattr(body, "max_all_orders", None),
     )
     pu, os, strat = coalesce_pick_fields(body.strategy, body.pick_unit, body.order_sort)
 
@@ -172,8 +266,11 @@ def create_picking_config(db: Session, body: PickingConfigCreate) -> PickingConf
         order_sort=os,
         single_mode=str(body.single_mode),
         multi_mode=str(body.multi_mode),
+        all_mode=all_mode,
+        all_order_sort=all_order_sort,
         max_single_orders=ms,
         max_multi_orders=mm,
+        max_all_orders=ma,
         status_on_shortage_id=int(shortage_id) if shortage_id is not None else None,
     )
     db.add(row)
@@ -205,11 +302,22 @@ def update_picking_config(
         multi_mode=body.multi_mode,
     )
 
-    ms, mm = normalize_bulk_max_fields(
+    all_mode = normalize_all_mode_for_storage(getattr(body, "all_mode", None), required=False)
+    all_order_sort = normalize_all_order_sort_for_storage(
+        getattr(body, "all_order_sort", None), required=False
+    )
+    if all_mode is not None and all_order_sort is None:
+        all_order_sort = normalize_all_order_sort_for_storage(
+            body.order_sort or "date", required=True
+        )
+
+    ms, mm, ma = normalize_bulk_max_fields(
         body.single_mode,
         body.multi_mode,
         body.max_single_orders,
         body.max_multi_orders,
+        all_mode=all_mode,
+        max_all_orders=getattr(body, "max_all_orders", None),
     )
     pu, os, strat = coalesce_pick_fields(body.strategy, body.pick_unit, body.order_sort)
 
@@ -220,8 +328,11 @@ def update_picking_config(
     existing.order_sort = os
     existing.single_mode = str(body.single_mode)
     existing.multi_mode = str(body.multi_mode)
+    existing.all_mode = all_mode
+    existing.all_order_sort = all_order_sort
     existing.max_single_orders = ms
     existing.max_multi_orders = mm
+    existing.max_all_orders = ma
     db.add(existing)
     db.flush()
     return existing
@@ -232,12 +343,25 @@ def picking_config_to_read(row: PickingConfig) -> PickingConfigRead:
     src = getattr(row, "source_status", None)
     tgt = getattr(row, "target_status", None)
     sh = getattr(row, "shortage_status", None)
+    raw_all = getattr(row, "all_mode", None)
+    all_mode_out: str | None = None
+    if raw_all is not None and str(raw_all).strip():
+        m = str(raw_all).strip().lower()
+        if m in ALL_ORDER_COMPATIBLE_MODES:
+            all_mode_out = m
+    raw_aos = getattr(row, "all_order_sort", None)
+    aos_out: PickingConfigOrderSort | None = None
+    if raw_aos is not None and str(raw_aos).strip().lower() in ("date", "location", "courier"):
+        aos_out = str(raw_aos).strip().lower()  # type: ignore[assignment]
     return base.model_copy(
         update={
             "source_status_name": str(src.name) if src is not None else None,
             "target_status_name": str(tgt.name) if tgt is not None else None,
             "status_on_shortage_id": getattr(row, "status_on_shortage_id", None),
             "status_on_shortage_name": str(sh.name) if sh is not None else None,
+            "all_mode": all_mode_out,
+            "all_order_sort": aos_out,
+            "max_all_orders": getattr(row, "max_all_orders", None),
         }
     )
 
@@ -253,6 +377,7 @@ def replace_all_picking_configs_for_warehouse(
     if not items:
         raise ValueError("Wymagana jest co najmniej jedna konfiguracja (status do zbierania).")
     seen: set[int] = set()
+    prepared: list[tuple[WmsPickingConfigReplaceItem, str, str]] = []
     for i in items:
         sid = int(i.source_status_id)
         if sid in seen:
@@ -274,6 +399,15 @@ def replace_all_picking_configs_for_warehouse(
             single_mode=i.single_mode,
             multi_mode=i.multi_mode,
         )
+        # Pełny zapis z UI: all_mode + all_order_sort wymagane.
+        all_mode = normalize_all_mode_for_storage(getattr(i, "all_mode", None), required=True)
+        assert all_mode is not None
+        all_order_sort = normalize_all_order_sort_for_storage(
+            getattr(i, "all_order_sort", None) or i.order_sort,
+            required=True,
+        )
+        assert all_order_sort is not None
+        prepared.append((i, all_mode, all_order_sort))
 
     db.query(PickingConfig).filter(
         PickingConfig.tenant_id == int(tenant_id),
@@ -281,12 +415,14 @@ def replace_all_picking_configs_for_warehouse(
     ).delete(synchronize_session=False)
 
     out: list[PickingConfig] = []
-    for i in items:
-        ms, mm = normalize_bulk_max_fields(
+    for i, all_mode, all_order_sort in prepared:
+        ms, mm, ma = normalize_bulk_max_fields(
             i.single_mode,
             i.multi_mode,
             i.max_single_orders,
             i.max_multi_orders,
+            all_mode=all_mode,
+            max_all_orders=getattr(i, "max_all_orders", None),
         )
         strat = derive_storage_strategy(str(i.pick_unit), str(i.order_sort))
         sid_short = getattr(i, "status_on_shortage_id", None)
@@ -301,8 +437,11 @@ def replace_all_picking_configs_for_warehouse(
             order_sort=str(i.order_sort),
             single_mode=str(i.single_mode),
             multi_mode=str(i.multi_mode),
+            all_mode=all_mode,
+            all_order_sort=all_order_sort,
             max_single_orders=ms,
             max_multi_orders=mm,
+            max_all_orders=ma,
         )
         db.add(row)
         out.append(row)

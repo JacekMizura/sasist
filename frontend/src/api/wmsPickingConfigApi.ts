@@ -20,8 +20,11 @@ export type WmsPickingConfigReadApi = {
   order_sort: PickingConfigOrderSortDb;
   single_mode: PickingConfigModeDb;
   multi_mode: PickingConfigModeDb;
+  all_mode?: PickingConfigModeDb | null;
+  all_order_sort?: PickingConfigOrderSortDb | null;
   max_single_orders: number | null;
   max_multi_orders: number | null;
+  max_all_orders?: number | null;
   created_at: string;
   source_status_name?: string | null;
   target_status_name?: string | null;
@@ -33,10 +36,13 @@ export type WmsPickingConfigReplaceItem = {
   status_on_shortage_id?: number | null;
   single_mode: PickingConfigModeDb;
   multi_mode: PickingConfigModeDb;
+  all_mode: PickingConfigModeDb;
   pick_unit: PickingConfigPickUnitDb;
   order_sort: PickingConfigOrderSortDb;
+  all_order_sort: PickingConfigOrderSortDb;
   max_single_orders?: number | null;
   max_multi_orders?: number | null;
+  max_all_orders?: number | null;
 };
 
 export async function listPickingConfigs(

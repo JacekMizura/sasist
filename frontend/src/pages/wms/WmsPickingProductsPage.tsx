@@ -234,8 +234,10 @@ export default function WmsPickingProductsPage() {
     const choice = pickingSession.orderTypeChoice ?? "all";
     const single = pickingSession.singleMode as PickingFlowMode | undefined;
     const multi = pickingSession.multiMode as PickingFlowMode | undefined;
+    const all = pickingSession.allMode as PickingFlowMode | undefined;
     if (choice === "single") return single === "cart_no_scan";
     if (choice === "multi") return multi === "cart_no_scan";
+    if (all != null) return all === "cart_no_scan" || all === "mobile";
     const needsScan =
       modeRequiresCartScan(single ?? "cart_no_scan") || modeRequiresCartScan(multi ?? "cart_no_scan");
     if (needsScan) return false;
@@ -400,12 +402,13 @@ export default function WmsPickingProductsPage() {
     const choice = pickingSession.orderTypeChoice ?? "all";
     const single = pickingSession.singleMode as PickingFlowMode | undefined;
     const multi = pickingSession.multiMode as PickingFlowMode | undefined;
+    const all = pickingSession.allMode as PickingFlowMode | undefined;
     const needsCartScan =
       choice === "single"
         ? modeRequiresCartScan(single ?? "cart_no_scan")
         : choice === "multi"
           ? modeRequiresCartScan(multi ?? "cart_no_scan")
-          : modeRequiresCartScan(single ?? "cart_no_scan") || modeRequiresCartScan(multi ?? "cart_no_scan");
+          : modeRequiresCartScan(all ?? single ?? multi ?? "cart_no_scan");
     if (needsCartScan || pickingSession.requireCart) {
       setCartBootstrapping(false);
       setCartBootstrapErr(null);

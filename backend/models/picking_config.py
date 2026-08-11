@@ -53,12 +53,18 @@ class PickingConfig(Base):
     pick_unit = Column(String(32), nullable=False, default="products")
     #: Przy ``pick_unit=orders``: ``date`` | ``location`` | ``courier`` (courier — placeholder API)
     order_sort = Column(String(32), nullable=False, default="date")
-    #: ``bulk`` | ``scanned`` | ``baskets`` | ``mobile``
+    #: ``bulk`` | ``scanned`` | ``baskets`` | ``mobile`` | ``consolidation_rack``
     single_mode = Column(String(32), nullable=False)
     multi_mode = Column(String(32), nullable=False)
+    #: Osobny wariant „Wszystkie zamówienia” — tylko tryby kompatybilne z single+multi:
+    #: ``bulk`` | ``scanned`` | ``baskets``. NULL = brak trwałej wartości (runtime default).
+    all_mode = Column(String(32), nullable=True)
+    #: Osobna kolejność doboru dla ``all`` (date|location|courier). NULL → fallback na ``order_sort``.
+    all_order_sort = Column(String(32), nullable=True)
 
     max_single_orders = Column(Integer, nullable=True)
     max_multi_orders = Column(Integer, nullable=True)
+    max_all_orders = Column(Integer, nullable=True)
 
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  BY_PRODUCTS_ALL_CONTAINER_OPTIONS,
   BY_PRODUCTS_MULTI_CONTAINER_OPTIONS,
   BY_PRODUCTS_SINGLE_CONTAINER_OPTIONS,
   coerceConsolidationOrderSort,
@@ -36,6 +37,11 @@ describe("pickingConfiguratorOptions visibility", () => {
     expect(withRack.find((o) => o.value === "location")?.disabled).toBe(true);
     const withBaskets = singleItemOrderSortOptions("baskets");
     expect(withBaskets.find((o) => o.value === "location")?.disabled).toBeFalsy();
+  });
+
+  it("Sellasist all options are intersection of single∩multi (no mobile, no consolidation)", () => {
+    const values = BY_PRODUCTS_ALL_CONTAINER_OPTIONS.map((o) => o.value);
+    expect(values).toEqual(["cart_scan", "cart_no_scan", "baskets"]);
   });
 
   it("Sellasist multi options include bulk and consolidation, not mobile", () => {

@@ -213,8 +213,10 @@ def test_replace_all_validates_racks():
         target_status_id=11,
         single_mode="bulk",
         multi_mode="consolidation_rack",
+        all_mode="bulk",
         pick_unit="products",
         order_sort="date",
+        all_order_sort="date",
     )
     with pytest.raises(ValueError, match="Brak skonfigurowanych regałów"):
         replace_all_picking_configs_for_warehouse(db, tenant_id=1, warehouse_id=2, items=[item])

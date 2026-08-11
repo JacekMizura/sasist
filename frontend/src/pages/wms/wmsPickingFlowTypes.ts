@@ -25,10 +25,15 @@ export type WmsPickingSessionState = {
   strategy?: PickingFlowStrategy;
   pickUnit?: WmsPickingPickUnit;
   orderSort?: WmsPickingOrderSort;
+  /** Osobna kolejność dla „Wszystkie” (z config all). */
+  allOrderSort?: WmsPickingOrderSort;
   singleMode?: PickingFlowMode;
   multiMode?: PickingFlowMode;
+  /** Osobny tryb kontenera dla „Wszystkie zamówienia”. */
+  allMode?: PickingFlowMode;
   limitsSingle?: number | null;
   limitsMulti?: number | null;
+  limitsAll?: number | null;
   orderTypeChoice?: WmsPickingOrderTypeChoice;
   /** Dogrywka recovery — jedno zamówienie; URL ``/wms/picking/recovery/:id`` lub stan nawigacji. */
   recoveryOrderId?: number | null;
