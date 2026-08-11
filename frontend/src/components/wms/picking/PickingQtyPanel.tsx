@@ -1,6 +1,8 @@
 import { PackingEanBadge } from "../packing/packingProductCardParts";
+import { APP_OVERLAY_Z } from "../../overlay";
 import { PICKING_CARD_CLASS, PICKING_PAGE_PAD_X } from "./pickingUiTokens";
 import { wmsTypoClass } from "../../../wms/typography/wmsOperatorTypography";
+import { PickingLocationBadge } from "./PickingUiPrimitives";
 import { PickingSimpleHeader } from "./PickingSimpleHeader";
 
 export type PickingQtyPanelProps = {
@@ -19,8 +21,8 @@ export type PickingQtyPanelProps = {
 
 /**
  * Ekran końcowego podania ilości (produkt + lokalizacja już znane).
- * Układ 1:1 ze screenem: [←][belka lokalizacji] → zdjęcie → nazwa → EAN → −/n/+ → Zatwierdź.
- * Lokalizacja tylko w belce nagłówka — nie w kafelku produktu.
+ * Układ: [←][belka lokalizacji Sasist] → zdjęcie → nazwa → EAN → −/n/+ → Zatwierdź.
+ * Musi być montowany przez AppOverlayPortal (body) — fixed w ErpShell overflow ucina belkę.
  */
 export function PickingQtyPanel({
   productName,
@@ -43,22 +45,20 @@ export function PickingQtyPanel({
   const eanText = (ean ?? "").trim();
 
   return (
-    <div className="fixed inset-0 z-[60] flex flex-col bg-white">
+    <div
+      className="fixed inset-0 flex flex-col bg-white"
+      style={{ zIndex: APP_OVERLAY_Z.drawer }}
+      role="dialog"
+      aria-modal="true"
+      aria-label="Podaj ilość zbierania"
+    >
       <PickingSimpleHeader
         onBack={onBack}
         backAriaLabel="Wróć do poprzedniego kroku zbierania"
         trailingFill
         trailing={
           sourceLocation ? (
-            <span
-              className={[
-                "inline-flex h-10 w-full min-w-0 flex-1 items-center justify-center rounded-full border border-slate-800 bg-white px-3 text-center font-bold text-slate-900",
-                wmsTypoClass.location,
-              ].join(" ")}
-              title={sourceLocation}
-            >
-              {sourceLocation}
-            </span>
+            <PickingLocationBadge text={sourceLocation} variant="bar" />
           ) : null
         }
       />

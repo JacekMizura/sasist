@@ -638,6 +638,28 @@ export default function WmsPickingProductDetailPage() {
   );
   const isShortageResolved = resolutionStatus === "SHORTAGE";
 
+  /** Bieżąca lokalizacja pobrania na ekranie ilości: skan / wybór / jedyna lokalizacja. */
+  const qtySourceLocationId = useMemo(() => {
+    if (!detail) return null;
+    const fromState = manualLocId ?? activeLocationId;
+    if (fromState != null && fromState > 0) return fromState;
+    if (detail.locations.length === 1) {
+      const only = detail.locations[0]?.location_id;
+      return only != null && only > 0 ? only : null;
+    }
+    return null;
+  }, [detail, manualLocId, activeLocationId]);
+
+  const qtySourceLocationLabel = useMemo(() => {
+    if (!detail || qtySourceLocationId == null) return "";
+    const loc = detail.locations.find((l) => l.location_id === qtySourceLocationId);
+    if (!loc) return "";
+    return formatWmsPickingLocationPillLabel(
+      loc.location_code,
+      locStock(loc) > 1e-9 ? locStock(loc) : undefined,
+    );
+  }, [detail, qtySourceLocationId]);
+
   const openQtyStep = useCallback(
     (locId: number) => {
       if (!detail || locId <= 0) return;
@@ -2117,41 +2139,30 @@ export default function WmsPickingProductDetailPage() {
       />
 
       {detail && qtyStepOpen ? (
-        <PickingQtyPanel
-          productName={detail.name}
-          ean={detail.ean}
-          imageUrl={detail.image_url}
-          locationLabel={(() => {
-            // Bieżąca lokalizacja pobrania (skan / auto single-loc / wybór) — nie losowe locations[0] przy multi.
-            const sourceLocId =
-              manualLocId ??
-              activeLocationId ??
-              (detail.locations.length === 1 ? detail.locations[0]?.location_id ?? null : null);
-            if (sourceLocId == null || sourceLocId <= 0) return "";
-            const loc = detail.locations.find((l) => l.location_id === sourceLocId);
-            if (!loc) return "";
-            return formatWmsPickingLocationPillLabel(
-              loc.location_code,
-              locStock(loc) > 1e-9 ? locStock(loc) : undefined,
-            );
-          })()}
-          remainingLabel={fmtQty(remaining)}
-          qty={qtyStepValue}
-          maxQty={remaining}
-          busy={pickBusy}
-          onChangeQty={setQtyStepValue}
-          onBack={() => setQtyStepOpen(false)}
-          onConfirm={() => {
-            const locId = manualLocId ?? activeLocationId;
-            if (locId == null || locId <= 0) {
-              showScanFeedbackFromCode("PICK_LOCATION_REQUIRED");
-              setQtyStepOpen(false);
-              return;
-            }
-            if (qtyStepValue <= 0 || qtyStepValue > remaining + 1e-9) return;
-            void confirm_pick(qtyStepValue, locId);
-          }}
-        />
+        <AppOverlayPortal open lockBodyScroll>
+          <PickingQtyPanel
+            productName={detail.name}
+            ean={detail.ean}
+            imageUrl={detail.image_url}
+            locationLabel={qtySourceLocationLabel}
+            remainingLabel={fmtQty(remaining)}
+            qty={qtyStepValue}
+            maxQty={remaining}
+            busy={pickBusy}
+            onChangeQty={setQtyStepValue}
+            onBack={() => setQtyStepOpen(false)}
+            onConfirm={() => {
+              const locId = qtySourceLocationId;
+              if (locId == null || locId <= 0) {
+                showScanFeedbackFromCode("PICK_LOCATION_REQUIRED");
+                setQtyStepOpen(false);
+                return;
+              }
+              if (qtyStepValue <= 0 || qtyStepValue > remaining + 1e-9) return;
+              void confirm_pick(qtyStepValue, locId);
+            }}
+          />
+        </AppOverlayPortal>
       ) : null}
 
       <PickingProcessAlert
