@@ -1,5 +1,8 @@
 ﻿## Active
 
+**Picking qty screen 1:1 (2026-08-11):**
+- `PickingQtyPanel`: belka lokalizacji + kafel bez labela ILOŚĆ; logika pick bez zmian
+
 **Inter font self-hosted (2026-08-11):**
 - `@fontsource/inter` 400/500/600/700 w `main.tsx`; brak Google Fonts / gstatic
 

@@ -2122,8 +2122,11 @@ export default function WmsPickingProductDetailPage() {
           ean={detail.ean}
           imageUrl={detail.image_url}
           locationLabel={(() => {
-            // Aktualna lokalizacja pobrania tej tury (skan / jawny wybór), nie locations[0].
-            const sourceLocId = manualLocId ?? activeLocationId;
+            // Bieżąca lokalizacja pobrania (skan / auto single-loc / wybór) — nie losowe locations[0] przy multi.
+            const sourceLocId =
+              manualLocId ??
+              activeLocationId ??
+              (detail.locations.length === 1 ? detail.locations[0]?.location_id ?? null : null);
             if (sourceLocId == null || sourceLocId <= 0) return "";
             const loc = detail.locations.find((l) => l.location_id === sourceLocId);
             if (!loc) return "";

@@ -1,3 +1,9 @@
+## 2026-08-11 — Ekran ilości zbierania 1:1 (belka + bez ILOŚĆ)
+
+- `PickingQtyPanel`: [←]+belka lokalizacji (h-10), zdjęcie→nazwa→EAN→−/+→Zatwierdź
+- Usunięty label „ILOŚĆ”; EAN bez prefiksu „EAN:”; lokalizacja tylko w belce
+- Label lokalizacji: `manualLocId ?? activeLocationId ??` single-loc auto
+
 ## 2026-08-11 — Napraw ładowanie fontu Inter
 
 - Usunięty `@import` Google Fonts z `index.css` (404 na fonts.gstatic.com/*.woff2)

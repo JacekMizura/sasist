@@ -1,4 +1,4 @@
-import { PickingEanBadge, PickingFieldLabel, PickingLocationBadge } from "./PickingUiPrimitives";
+import { PackingEanBadge } from "../packing/packingProductCardParts";
 import { PICKING_CARD_CLASS, PICKING_PAGE_PAD_X } from "./pickingUiTokens";
 import { wmsTypoClass } from "../../../wms/typography/wmsOperatorTypography";
 import { PickingSimpleHeader } from "./PickingSimpleHeader";
@@ -18,10 +18,9 @@ export type PickingQtyPanelProps = {
 };
 
 /**
- * Ekran ilości (po rozpoznaniu produktu i lokalizacji).
- * Góra: [←] [belka aktualnej lokalizacji źródłowej na pełną pozostałą szerokość].
- * Dalej: zdjęcie → nazwa → EAN → − / n / + → Zatwierdź.
- * Lokalizacja NIE trafia do kafla produktu — tylko do belki w nagłówku.
+ * Ekran końcowego podania ilości (produkt + lokalizacja już znane).
+ * Układ 1:1 ze screenem: [←][belka lokalizacji] → zdjęcie → nazwa → EAN → −/n/+ → Zatwierdź.
+ * Lokalizacja tylko w belce nagłówka — nie w kafelku produktu.
  */
 export function PickingQtyPanel({
   productName,
@@ -41,25 +40,33 @@ export function PickingQtyPanel({
   const atMax = qty >= maxQty - 1e-9;
   const canConfirm = qty > 1e-9 && qty <= maxQty + 1e-9 && !busy;
   const sourceLocation = locationLabel.trim();
+  const eanText = (ean ?? "").trim();
 
   return (
     <div className="fixed inset-0 z-[60] flex flex-col bg-white">
       <PickingSimpleHeader
         onBack={onBack}
-        backAriaLabel="Wróć do szczegółów produktu"
+        backAriaLabel="Wróć do poprzedniego kroku zbierania"
         trailingFill
         trailing={
           sourceLocation ? (
-            <div className="flex min-h-10 min-w-0 flex-1 items-center">
-              <PickingLocationBadge text={sourceLocation} variant="bar" className="w-full" />
-            </div>
+            <span
+              className={[
+                "inline-flex h-10 w-full min-w-0 flex-1 items-center justify-center rounded-full border border-slate-800 bg-white px-3 text-center font-bold text-slate-900",
+                wmsTypoClass.location,
+              ].join(" ")}
+              title={sourceLocation}
+            >
+              {sourceLocation}
+            </span>
           ) : null
         }
       />
+
       <div className={["min-h-0 flex-1 overflow-y-auto py-5", PICKING_PAGE_PAD_X].join(" ")}>
-        <div className={[PICKING_CARD_CLASS, "flex w-full flex-col gap-5 p-4 sm:p-5"].join(" ")}>
-          <div className="flex w-full justify-center py-2">
-            <div className="flex h-40 w-40 items-center justify-center overflow-hidden bg-transparent sm:h-48 sm:w-48">
+        <div className={[PICKING_CARD_CLASS, "flex w-full flex-col p-5 sm:p-6"].join(" ")}>
+          <div className="flex w-full justify-center pb-5 pt-3">
+            <div className="flex h-44 w-44 items-center justify-center overflow-hidden bg-transparent sm:h-52 sm:w-52">
               {imageUrl ? (
                 <img src={imageUrl} alt="" className="max-h-full max-w-full object-contain" />
               ) : (
@@ -68,21 +75,19 @@ export function PickingQtyPanel({
             </div>
           </div>
 
-          <div className="flex flex-col items-center gap-2 text-center">
+          <div className="flex flex-col items-center gap-2.5 text-center">
             <p
               className={[
-                "break-words font-bold uppercase leading-snug text-slate-900",
+                "break-words font-bold uppercase leading-snug tracking-wide text-slate-900",
                 wmsTypoClass.base,
               ].join(" ")}
             >
               {productName}
             </p>
-            <PickingEanBadge value={ean} className="justify-center" />
+            {eanText ? <PackingEanBadge value={eanText} /> : null}
           </div>
 
-          <div className="flex w-full flex-col gap-3 border-t border-slate-100 pt-5">
-            <PickingFieldLabel>Ilość</PickingFieldLabel>
-
+          <div className="mt-5 flex w-full flex-col gap-3 border-t border-slate-200 pt-5">
             <div className="flex w-full items-stretch overflow-hidden rounded-lg border border-slate-300 bg-white">
               <button
                 type="button"
