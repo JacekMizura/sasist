@@ -1,5 +1,8 @@
 ﻿## Active
 
+**Inter font self-hosted (2026-08-11):**
+- `@fontsource/inter` 400/500/600/700 w `main.tsx`; brak Google Fonts / gstatic
+
 **Picking qty source location bar (2026-08-11):**
 - Ekran ilości: `[←]` + belka aktualnej lokalizacji pobrania (`manualLocId ?? activeLocationId`)
 - Nie zmienia listy ani detail poza wiringiem `locationLabel` do qty

@@ -1,3 +1,9 @@
+## 2026-08-11 — Napraw ładowanie fontu Inter
+
+- Usunięty `@import` Google Fonts z `index.css` (404 na fonts.gstatic.com/*.woff2)
+- Inter 400/500/600/700 z `@fontsource/inter` (self-hosted w bundle)
+- `font-family: Inter` + Tailwind `sans` bez zmian rozmiarów WMS
+
 ## 2026-08-11 — Lokalizacja źródłowa w widoku ilości zbierania
 
 - Tylko `PickingQtyPanel`: belka `[←] [lokalizacja]` u góry (pełna szerokość)
