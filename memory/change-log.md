@@ -1,3 +1,9 @@
+## 2026-08-11 — Widok listy zbierania (ustawienia → kafelki)
+
+- `list_display_json` na `wms_picking_terminal_settings` + API `list_display`
+- Lista produktów czyta flagi i ukrywa zdjęcie/EAN/SKU/nr kat./stan/lokalizację
+- Copy Ustawienia WMS → Zbieranie → Widok: „Lista zbierania” bez zbędnych opisów
+
 ## 2026-08-11 — Konfiguracja „Wszystkie zamówienia” w zbieraniu
 
 - Osobne `all_mode` / `all_order_sort` / `max_all_orders` (nullable; runtime default bez kopii single/multi)

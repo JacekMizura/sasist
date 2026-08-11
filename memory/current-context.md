@@ -1,5 +1,10 @@
 ﻿## Active
 
+**Picking list view settings (2026-08-11):**
+- `list_display` w `wms/settings/picking-terminal` (per tenant+magazyn) steruje kafelkami listy zbierania
+- Checkboxy: zdjęcie / EAN / SKU / nr kat. / stan / lokalizacja — tylko lista, nie detail/qty
+- Copy Widok: „Lista zbierania”; usunięte zbędne opisy sekcji
+
 **Picking all-order config (2026-08-11):**
 - `all_mode` + `all_order_sort` + `max_all_orders`; flow `all` nie dziedziczy single/multi
 

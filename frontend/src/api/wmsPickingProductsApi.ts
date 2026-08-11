@@ -47,6 +47,8 @@ export type WmsPickingProductLineApi = {
   product_id: number;
   name: string;
   ean: string | null;
+  sku?: string | null;
+  catalog_number?: string | null;
   image_url: string | null;
   total_quantity: number;
   picked_quantity: number;

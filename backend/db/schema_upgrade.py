@@ -4507,6 +4507,17 @@ def ensure_wms_picking_terminal_settings_table(engine: Engine) -> None:
     from ..models.wms_picking_terminal_settings import WmsPickingTerminalSettings
 
     WmsPickingTerminalSettings.__table__.create(bind=engine, checkfirst=True)
+    with engine.begin() as conn:
+        if not _table_exists(conn, "wms_picking_terminal_settings"):
+            return
+        cols = _table_column_names(conn, "wms_picking_terminal_settings")
+        if "list_display_json" not in cols:
+            conn.execute(
+                text(
+                    "ALTER TABLE wms_picking_terminal_settings "
+                    "ADD COLUMN list_display_json TEXT NOT NULL DEFAULT '{}'"
+                )
+            )
 
 
 def ensure_wms_general_settings_table(engine: Engine) -> None:

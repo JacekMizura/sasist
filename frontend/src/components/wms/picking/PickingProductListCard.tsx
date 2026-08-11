@@ -11,9 +11,18 @@ import { wmsTypoClass } from "../../../wms/typography/wmsOperatorTypography";
 
 export type PickingListCardStatus = "ACTIVE" | "PARTIAL" | "COMPLETED_PICK" | "SHORTAGE";
 
+export type PickingProductListCardVisibility = {
+  showProductImage?: boolean;
+  showEAN?: boolean;
+  showSKU?: boolean;
+  showCatalogNumber?: boolean;
+  showLocation?: boolean;
+};
+
 export type PickingProductListCardProps = {
   name: string;
   ean: string | null;
+  sku?: string | null;
   catalogNumber?: string | null;
   imageUrl: string | null;
   pickedLabel: string;
@@ -22,6 +31,7 @@ export type PickingProductListCardProps = {
   shortageLabel?: string | null;
   status?: PickingListCardStatus;
   disabled?: boolean;
+  visibility?: PickingProductListCardVisibility;
   onClick: () => void;
   onUndoComplete?: () => void;
 };
@@ -29,10 +39,13 @@ export type PickingProductListCardProps = {
 /**
  * LISTA „Do zebrania” tile — location stays INSIDE the card (top-right).
  * Never use location bar / page header for location here.
+ * Visibility flags come from WMS picking terminal `list_display` (tenant+warehouse).
  */
 export function PickingProductListCard({
   name,
   ean,
+  sku,
+  catalogNumber,
   imageUrl,
   pickedLabel,
   totalLabel,
@@ -40,12 +53,23 @@ export function PickingProductListCard({
   shortageLabel,
   status = "ACTIVE",
   disabled,
+  visibility,
   onClick,
   onUndoComplete,
 }: PickingProductListCardProps) {
   const completed = status === "COMPLETED_PICK";
   const shortage = status === "SHORTAGE" || (shortageLabel != null && String(shortageLabel).length > 0);
   const muted = completed;
+
+  const showImage = visibility?.showProductImage !== false;
+  const showEan = visibility?.showEAN !== false;
+  const showSku = visibility?.showSKU === true;
+  const showCatalog = visibility?.showCatalogNumber === true;
+  const showLocation = visibility?.showLocation !== false;
+
+  const skuText = (sku ?? "").trim();
+  const catalogText = (catalogNumber ?? "").trim();
+  const locText = showLocation ? (locationLabel ?? "").trim() : "";
 
   return (
     <div
@@ -77,11 +101,11 @@ export function PickingProductListCard({
           )}
         </div>
         <div className="flex w-fit max-w-[55%] shrink-0 flex-col items-end gap-1">
-          {locationLabel ? (
+          {locText ? (
             <div className="flex flex-col items-end gap-0.5">
               <PickingFieldLabel>Lokalizacja</PickingFieldLabel>
               <div className="flex items-center gap-1">
-                <PickingLocationBadge text={locationLabel} muted={muted} variant="compact" />
+                <PickingLocationBadge text={locText} muted={muted} variant="compact" />
                 {completed && onUndoComplete ? (
                   <button
                     type="button"
@@ -97,6 +121,18 @@ export function PickingProductListCard({
                 ) : null}
               </div>
             </div>
+          ) : completed && onUndoComplete ? (
+            <button
+              type="button"
+              className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-red-500 text-white"
+              aria-label="Cofnij"
+              onClick={(e) => {
+                e.stopPropagation();
+                onUndoComplete();
+              }}
+            >
+              <X size={12} strokeWidth={3} />
+            </button>
           ) : null}
           {shortage && shortageLabel ? (
             <PickingShortageBadge missing={shortageLabel} total={totalLabel} />
@@ -110,13 +146,15 @@ export function PickingProductListCard({
         onClick={onClick}
         className="flex w-full min-w-0 items-start gap-3 text-left outline-none"
       >
-        <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden bg-transparent sm:h-20 sm:w-20">
-          {imageUrl ? (
-            <img src={imageUrl} alt="" className="max-h-full max-w-full object-contain" loading="lazy" />
-          ) : (
-            <ImageIcon size={28} className="text-slate-200" strokeWidth={1.5} />
-          )}
-        </div>
+        {showImage ? (
+          <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden bg-transparent sm:h-20 sm:w-20">
+            {imageUrl ? (
+              <img src={imageUrl} alt="" className="max-h-full max-w-full object-contain" loading="lazy" />
+            ) : (
+              <ImageIcon size={28} className="text-slate-200" strokeWidth={1.5} />
+            )}
+          </div>
+        ) : null}
         <div className="min-w-0 flex-1">
           <p
             className={[
@@ -127,9 +165,22 @@ export function PickingProductListCard({
           >
             {name}
           </p>
-          <div className="mt-1.5">
-            <PickingEanBadge value={ean} muted={muted} />
-          </div>
+          {showSku && skuText ? (
+            <p className={["mt-1 text-slate-500", wmsTypoClass.base].join(" ")}>
+              SKU: <span className={muted ? "text-slate-400" : "text-slate-700"}>{skuText}</span>
+            </p>
+          ) : null}
+          {showCatalog && catalogText ? (
+            <p className={["mt-0.5 text-slate-500", wmsTypoClass.base].join(" ")}>
+              Nr kat.:{" "}
+              <span className={muted ? "text-slate-400" : "text-slate-700"}>{catalogText}</span>
+            </p>
+          ) : null}
+          {showEan ? (
+            <div className="mt-1.5">
+              <PickingEanBadge value={ean} muted={muted} />
+            </div>
+          ) : null}
         </div>
       </button>
     </div>

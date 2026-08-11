@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, UniqueConstraint
+from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, Text, UniqueConstraint
 
 from ..database import Base
 
@@ -25,6 +25,8 @@ class WmsPickingTerminalSettings(Base):
     disable_force_location_scan_when_many_locations = Column(Boolean, nullable=False, default=False)
     #: When false, reserve/buffer locations are excluded from pick candidates.
     allow_reserve_location_picking = Column(Boolean, nullable=False, default=False)
+    #: Lista zbierania — widoczność pól na kafelkach (JSON: show_product_image, show_ean, …).
+    list_display_json = Column(Text, nullable=False, default="{}")
 
     created_at = Column(DateTime, nullable=True, default=datetime.utcnow)
     updated_at = Column(DateTime, nullable=True, default=datetime.utcnow, onupdate=datetime.utcnow)

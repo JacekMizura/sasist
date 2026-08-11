@@ -72,6 +72,8 @@ class WmsPickingProductLine(BaseModel):
     product_id: int
     name: str
     ean: Optional[str] = None
+    sku: Optional[str] = None
+    catalog_number: Optional[str] = None
     image_url: Optional[str] = None
     total_quantity: float = Field(..., ge=0)
     picked_quantity: float = Field(

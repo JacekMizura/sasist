@@ -1,6 +1,8 @@
 /**
- * Rozszerzone ustawienia UI zbierania WMS — wyłącznie frontend (localStorage).
- * Konfiguracja statusów (picking_config) pozostaje przez API jak dotychczas.
+ * Rozszerzone ustawienia UI zbierania WMS.
+ * Pola listy zbierania (showProductImage / showEAN / …) są SSOT w API
+ * ``wms/settings/picking-terminal`` → ``list_display`` (per tenant+magazyn);
+ * localStorage pełni rolę cache / pozostałych preferencji UI.
  */
 
 export type PickingListDensity = "comfortable" | "compact";

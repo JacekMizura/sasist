@@ -38,6 +38,7 @@ from ..schemas.wms_packing_settings import (
 from ..schemas.wms_return import ReturnsMode, WmsSettingsRead, WmsSettingsSave, WmsSettingsUpsert
 from ..schemas.wms_picking_shortage_settings import WmsPickingShortageSettingsRead, WmsPickingShortageSettingsSave
 from ..schemas.wms_picking_terminal_settings import (
+    WmsPickingListDisplay,
     WmsPickingTerminalSettingsRead,
     WmsPickingTerminalSettingsSave,
 )
@@ -581,6 +582,19 @@ def save_wms_picking_shortage_settings(
     return _shortage_settings_row_to_read(row)
 
 
+def _parse_picking_list_display(raw: object | None) -> WmsPickingListDisplay:
+    defaults = WmsPickingListDisplay().model_dump()
+    if not isinstance(raw, str) or not raw.strip():
+        return WmsPickingListDisplay()
+    try:
+        parsed = json.loads(raw)
+    except json.JSONDecodeError:
+        return WmsPickingListDisplay()
+    if not isinstance(parsed, dict):
+        return WmsPickingListDisplay()
+    return WmsPickingListDisplay.model_validate({**defaults, **parsed})
+
+
 def _terminal_settings_row_to_read(row) -> WmsPickingTerminalSettingsRead:
     return WmsPickingTerminalSettingsRead(
         tenant_id=int(row.tenant_id),
@@ -591,6 +605,7 @@ def _terminal_settings_row_to_read(row) -> WmsPickingTerminalSettingsRead:
             row.disable_force_location_scan_when_many_locations
         ),
         allow_reserve_location_picking=bool(row.allow_reserve_location_picking),
+        list_display=_parse_picking_list_display(getattr(row, "list_display_json", None)),
     )
 
 
@@ -635,6 +650,8 @@ def save_wms_picking_terminal_settings(
         body.disable_force_location_scan_when_many_locations
     )
     row.allow_reserve_location_picking = bool(body.allow_reserve_location_picking)
+    if body.list_display is not None:
+        row.list_display_json = json.dumps(body.list_display.model_dump(), ensure_ascii=False)
     touch_wms_picking_terminal_settings_row(row)
     db.commit()
     db.refresh(row)

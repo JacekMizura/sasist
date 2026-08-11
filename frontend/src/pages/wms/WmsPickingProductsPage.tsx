@@ -39,6 +39,11 @@ import { normalizeScanEan } from "../../utils/wmsScanNormalize";
 import { panelSidebarSubCountBadgeStyle } from "../../utils/panelSidebarHierarchy";
 import { formatOperationalDurationSince } from "../../utils/formatOperationalDuration";
 import { DAMAGE_TENANT_ID } from "../damage/damageShared";
+import {
+  DEFAULT_WMS_PICKING_LIST_DISPLAY,
+  getWmsPickingTerminalSettings,
+  type WmsPickingListDisplayApi,
+} from "../../api/wmsPickingTerminalSettingsApi";
 import type { WmsPickingProductsNavState } from "./wmsPickingFlowTypes";
 import { clearActivePriorityTask, loadActivePriorityTask, priorityTaskAppliesTo, priorityTaskOrderIds, type ActivePriorityTask } from "./activePriorityTask";
 import { formatWmsPickingLocationPillLabel } from "./wmsPickingLocationPill";
@@ -222,7 +227,26 @@ export default function WmsPickingProductsPage() {
   });
   const [rejectOpen, setRejectOpen] = useState(false);
   const [rejectReason, setRejectReason] = useState("");
+  const [listDisplay, setListDisplay] = useState<WmsPickingListDisplayApi>(DEFAULT_WMS_PICKING_LIST_DISPLAY);
   const activePriorityOrderIds = useMemo(() => priorityTaskOrderIds(activePriorityTask), [activePriorityTask]);
+
+  useEffect(() => {
+    if (warehouseId == null) {
+      setListDisplay(DEFAULT_WMS_PICKING_LIST_DISPLAY);
+      return;
+    }
+    let cancelled = false;
+    void getWmsPickingTerminalSettings(DAMAGE_TENANT_ID, warehouseId)
+      .then((t) => {
+        if (!cancelled) setListDisplay(t.list_display);
+      })
+      .catch(() => {
+        if (!cancelled) setListDisplay(DEFAULT_WMS_PICKING_LIST_DISPLAY);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [warehouseId]);
 
   const isCartlessMode = useMemo(() => {
     if (!pickingSession) return false;
@@ -1816,15 +1840,20 @@ export default function WmsPickingProductsPage() {
             const rowBlocked = blockOtherProductLines && !shortageProductIds.has(r.product_id) && !pickDone;
             const locCode = (r.primary_location_code ?? "").trim();
             const pStock = primaryStockDisplay(r);
-            const locLabel = locCode
-              ? formatWmsPickingLocationPillLabel(locCode, pStock > 1e-9 ? pStock : undefined)
-              : "";
+            const stockForLabel =
+              listDisplay.show_stock && pStock > 1e-9 ? pStock : undefined;
+            const locLabel =
+              listDisplay.show_location && locCode
+                ? formatWmsPickingLocationPillLabel(locCode, stockForLabel)
+                : "";
 
             return (
               <li key={r.product_id} className="min-w-0">
                 <PickingProductListCard
                   name={r.name}
                   ean={r.ean}
+                  sku={r.sku}
+                  catalogNumber={r.catalog_number}
                   imageUrl={r.image_url}
                   pickedLabel={fmtQty(pickedShown)}
                   totalLabel={fmtQty(total)}
@@ -1832,6 +1861,13 @@ export default function WmsPickingProductsPage() {
                   shortageLabel={miss > 1e-9 ? fmtQty(miss) : null}
                   status={status}
                   disabled={rowBlocked}
+                  visibility={{
+                    showProductImage: listDisplay.show_product_image,
+                    showEAN: listDisplay.show_ean,
+                    showSKU: listDisplay.show_sku,
+                    showCatalogNumber: listDisplay.show_catalog_number,
+                    showLocation: listDisplay.show_location,
+                  }}
                   onClick={() =>
                     goDetail(r.product_id, {
                       source: "click",

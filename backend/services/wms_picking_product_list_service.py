@@ -2392,6 +2392,10 @@ def build_wms_picking_product_lines(
         pr = pmap.get(pid)
         name = pr.name if pr and pr.name else f"Produkt #{pid}"
         ean = pr.ean if pr else None
+        sku_raw = (getattr(pr, "sku", None) or getattr(pr, "symbol", None)) if pr else None
+        sku = str(sku_raw).strip() if sku_raw else None
+        cat_raw = getattr(pr, "catalog_number", None) if pr else None
+        catalog_number = str(cat_raw).strip() if cat_raw else None
         img = pr.image_url if pr else None
         loc = by_product_first_loc.get(pid, "")
         primary_lid = by_product_first_lid.get(pid)
@@ -2433,6 +2437,8 @@ def build_wms_picking_product_lines(
                 product_id=pid,
                 name=name,
                 ean=ean,
+                sku=sku,
+                catalog_number=catalog_number,
                 image_url=img,
                 total_quantity=tq,
                 picked_quantity=round(picked_eff, 6),

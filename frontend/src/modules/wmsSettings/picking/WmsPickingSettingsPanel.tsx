@@ -1977,6 +1977,7 @@ export function WmsPickingSettingsSections({
     void getWmsPickingTerminalSettings(DAMAGE_TENANT_ID, warehouseId)
       .then((t) => {
         if (cancelled) return;
+        const ld = t.list_display;
         setExtended((prev) => {
           const next = {
             ...prev,
@@ -1986,6 +1987,12 @@ export function WmsPickingSettingsSections({
               t.disable_force_location_scan_when_many_locations,
             ),
             allowReserveLocationPicking: Boolean(t.allow_reserve_location_picking),
+            showProductImage: Boolean(ld.show_product_image),
+            showEAN: Boolean(ld.show_ean),
+            showSKU: Boolean(ld.show_sku),
+            showCatalogNumber: Boolean(ld.show_catalog_number),
+            showStock: Boolean(ld.show_stock),
+            showLocation: Boolean(ld.show_location),
           };
           setBaselineExtended(stableStringifyPicking(next));
           return next;
@@ -2019,6 +2026,14 @@ export function WmsPickingSettingsSections({
         extended.disableForceLocationScanWhenManyLocations,
       ),
       allow_reserve_location_picking: Boolean(extended.allowReserveLocationPicking),
+      list_display: {
+        show_product_image: Boolean(extended.showProductImage),
+        show_ean: Boolean(extended.showEAN),
+        show_sku: Boolean(extended.showSKU),
+        show_catalog_number: Boolean(extended.showCatalogNumber),
+        show_stock: Boolean(extended.showStock),
+        show_location: Boolean(extended.showLocation),
+      },
     });
   }, [warehouseId, extended]);
 
@@ -2455,6 +2470,12 @@ export function WmsPickingSettingsSections({
               t.disable_force_location_scan_when_many_locations,
             );
             e.allowReserveLocationPicking = Boolean(t.allow_reserve_location_picking);
+            e.showProductImage = Boolean(t.list_display.show_product_image);
+            e.showEAN = Boolean(t.list_display.show_ean);
+            e.showSKU = Boolean(t.list_display.show_sku);
+            e.showCatalogNumber = Boolean(t.list_display.show_catalog_number);
+            e.showStock = Boolean(t.list_display.show_stock);
+            e.showLocation = Boolean(t.list_display.show_location);
           } catch {
             /* keep local UI defaults for terminal flags */
           }
@@ -2571,7 +2592,6 @@ export function WmsPickingSettingsSections({
     <>
       <WmsSettingsTabFrame
         title="Zbieranie"
-        description="Konfiguracja procesu zbierania, kolejki zleceń i terminala magazyniera."
         sections={WMS_PICKING_SETTINGS_NAV_SECTIONS}
         asideLabel="Sekcje ustawień zbierania"
         observeSections={sectionNavObserve}
@@ -2614,6 +2634,28 @@ export function WmsPickingSettingsSections({
             setExtended(e);
             setBaselineExtended(stableStringifyPicking(e));
             saveWmsPickingExtendedUi(warehouseId, e);
+            try {
+              await saveWmsPickingTerminalSettings({
+                tenant_id: DAMAGE_TENANT_ID,
+                warehouse_id: warehouseId,
+                require_product_scan_at_least_once: Boolean(e.requireProductScanAtLeastOnce),
+                require_location_scan: Boolean(e.requireLocationScan),
+                disable_force_location_scan_when_many_locations: Boolean(
+                  e.disableForceLocationScanWhenManyLocations,
+                ),
+                allow_reserve_location_picking: Boolean(e.allowReserveLocationPicking),
+                list_display: {
+                  show_product_image: Boolean(e.showProductImage),
+                  show_ean: Boolean(e.showEAN),
+                  show_sku: Boolean(e.showSKU),
+                  show_catalog_number: Boolean(e.showCatalogNumber),
+                  show_stock: Boolean(e.showStock),
+                  show_location: Boolean(e.showLocation),
+                },
+              });
+            } catch {
+              toast.error("Nie udało się zapisać domyślnych ustawień terminala zbierania.");
+            }
             await loadPickingConfigsFromServer();
             setEditBackup(null);
             setDraft(null);
@@ -2962,8 +3004,8 @@ export function WmsPickingSettingsSections({
           </FieldGridPicking>
         </SectionCardPicking>
 
-        <SectionCardPicking id="wms-pick-view" title="Widok" summary="Kolumny listy, gęstość i tryb kompaktowy.">
-          <SubsectionPicking title="Kolumny produktu (lista zbierania)" description="Wybór informacji widocznych na liście zbierania.">
+        <SectionCardPicking id="wms-pick-view" title="Widok">
+          <SubsectionPicking title="Lista zbierania">
             <FieldGridPicking>
               <CustomCheckbox label="Zdjęcie produktu" checked={extended.showProductImage} onChange={(v) => patchExtended("showProductImage", v)} />
               <CustomCheckbox label="EAN" checked={extended.showEAN} onChange={(v) => patchExtended("showEAN", v)} />

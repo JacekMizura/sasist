@@ -27,6 +27,7 @@ def get_or_create_wms_picking_terminal_settings(
     row = WmsPickingTerminalSettings(
         tenant_id=int(tenant_id),
         warehouse_id=int(warehouse_id),
+        list_display_json="{}",
     )
     db.add(row)
     db.flush()

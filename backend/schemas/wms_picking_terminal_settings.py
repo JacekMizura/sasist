@@ -2,7 +2,20 @@
 
 from __future__ import annotations
 
+from typing import Optional
+
 from pydantic import BaseModel, Field
+
+
+class WmsPickingListDisplay(BaseModel):
+    """Lista zbierania — widoczność pól na kafelkach produktów (Settings → WMS → Zbieranie → Widok)."""
+
+    show_product_image: bool = True
+    show_ean: bool = True
+    show_sku: bool = True
+    show_catalog_number: bool = False
+    show_stock: bool = True
+    show_location: bool = True
 
 
 class WmsPickingTerminalSettingsRead(BaseModel):
@@ -12,6 +25,7 @@ class WmsPickingTerminalSettingsRead(BaseModel):
     require_location_scan: bool = False
     disable_force_location_scan_when_many_locations: bool = False
     allow_reserve_location_picking: bool = False
+    list_display: WmsPickingListDisplay = Field(default_factory=WmsPickingListDisplay)
 
 
 class WmsPickingTerminalSettingsSave(BaseModel):
@@ -21,3 +35,5 @@ class WmsPickingTerminalSettingsSave(BaseModel):
     require_location_scan: bool = False
     disable_force_location_scan_when_many_locations: bool = False
     allow_reserve_location_picking: bool = False
+    #: Opcjonalne w PATCH — brak = zachowaj istniejące w DB.
+    list_display: Optional[WmsPickingListDisplay] = None
