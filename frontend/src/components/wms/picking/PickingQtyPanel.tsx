@@ -1,5 +1,5 @@
 import { PickingEanBadge, PickingFieldLabel, PickingLocationBadge } from "./PickingUiPrimitives";
-import { PICKING_PRIMARY_BTN_CLASS } from "./pickingUiTokens";
+import { PICKING_CARD_CLASS, PICKING_PAGE_PAD_X } from "./pickingUiTokens";
 import { wmsTypoClass } from "../../../wms/typography/wmsOperatorTypography";
 import { PickingSimpleHeader } from "./PickingSimpleHeader";
 
@@ -18,7 +18,8 @@ export type PickingQtyPanelProps = {
 };
 
 /**
- * Full-screen quantity step — product identity + compact qty controls + Zatwierdź under controls.
+ * Full-screen quantity step — vertical hierarchy only:
+ * location bar → image → name/EAN → ILOŚĆ → full-width stepper → Zatwierdź.
  */
 export function PickingQtyPanel({
   productName,
@@ -33,74 +34,73 @@ export function PickingQtyPanel({
   onConfirm,
   onBack,
 }: PickingQtyPanelProps) {
+  void remainingLabel;
   const atMin = qty <= 1e-9;
   const atMax = qty >= maxQty - 1e-9;
   const canConfirm = qty > 1e-9 && qty <= maxQty + 1e-9 && !busy;
 
   return (
     <div className="fixed inset-0 z-[60] flex flex-col bg-white">
-      <PickingSimpleHeader onBack={onBack} backAriaLabel="Wróć" />
-      <div className="min-h-0 flex-1 overflow-y-auto px-4 py-5 sm:px-6">
-        <div className="mx-auto flex w-full max-w-lg flex-col gap-6">
-          {locationLabel ? (
-            <div className="flex flex-col items-center gap-1.5 border-b border-slate-100 pb-4">
-              <PickingFieldLabel>Lokalizacja</PickingFieldLabel>
-              <div className="w-full max-w-sm">
-                <PickingLocationBadge text={locationLabel} />
-              </div>
-            </div>
-          ) : null}
-
-          <div className="flex flex-col items-center gap-3 text-center sm:flex-row sm:items-start sm:text-left">
-            <div className="flex h-24 w-24 shrink-0 items-center justify-center overflow-hidden bg-transparent">
+      <PickingSimpleHeader
+        onBack={onBack}
+        backAriaLabel="Wróć"
+        trailingFill
+        trailing={
+          locationLabel ? (
+            <PickingLocationBadge text={locationLabel} className="w-full" />
+          ) : null
+        }
+      />
+      <div className={["min-h-0 flex-1 overflow-y-auto py-5", PICKING_PAGE_PAD_X].join(" ")}>
+        <div className={[PICKING_CARD_CLASS, "flex w-full flex-col gap-5 p-4 sm:p-5"].join(" ")}>
+          <div className="flex w-full justify-center py-2">
+            <div className="flex h-40 w-40 items-center justify-center overflow-hidden bg-transparent sm:h-48 sm:w-48">
               {imageUrl ? (
                 <img src={imageUrl} alt="" className="max-h-full max-w-full object-contain" />
-              ) : null}
-            </div>
-            <div className="min-w-0 flex-1">
-              <p
-                className={[
-                  "break-words font-bold uppercase leading-snug text-slate-900",
-                  wmsTypoClass.base,
-                ].join(" ")}
-              >
-                {productName}
-              </p>
-              <div className="mt-2 flex justify-center sm:justify-start">
-                <PickingEanBadge value={ean} />
-              </div>
+              ) : (
+                <div className="text-xs font-semibold text-slate-300">Brak zdjęcia</div>
+              )}
             </div>
           </div>
 
-          <div className="flex flex-col items-center gap-4">
+          <div className="flex flex-col items-center gap-2 text-center">
             <p
               className={[
-                "font-bold tabular-nums leading-none text-slate-900",
-                "text-[2.5rem]",
+                "break-words font-bold uppercase leading-snug text-slate-900",
+                wmsTypoClass.base,
               ].join(" ")}
-              aria-label={`Do zebrania ${remainingLabel}`}
             >
-              {remainingLabel}
+              {productName}
             </p>
+            <PickingEanBadge value={ean} className="justify-center" />
+          </div>
 
-            <div className="flex items-center gap-2.5">
+          <div className="flex w-full flex-col gap-3 border-t border-slate-100 pt-5">
+            <PickingFieldLabel>Ilość</PickingFieldLabel>
+
+            <div className="flex w-full items-stretch overflow-hidden rounded-lg border border-slate-300 bg-white">
               <button
                 type="button"
                 aria-label="Zmniejsz"
                 disabled={atMin || busy}
-                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-slate-300 bg-white text-xl font-bold text-slate-900 disabled:opacity-40"
+                className="flex h-12 w-14 shrink-0 items-center justify-center border-r border-slate-300 text-xl font-bold text-slate-900 disabled:opacity-40"
                 onClick={() => onChangeQty(Math.max(0, Math.round((qty - 1) * 100) / 100))}
               >
                 −
               </button>
-              <div className="flex h-11 min-w-[3.5rem] items-center justify-center rounded-lg border border-slate-300 bg-white px-3 text-lg font-bold tabular-nums text-slate-900">
+              <div
+                className={[
+                  "flex min-h-12 min-w-0 flex-1 items-center justify-center font-bold text-slate-900",
+                  wmsTypoClass.quantity,
+                ].join(" ")}
+              >
                 {qty}
               </div>
               <button
                 type="button"
                 aria-label="Zwiększ"
                 disabled={atMax || busy}
-                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-slate-300 bg-white text-xl font-bold text-slate-900 disabled:opacity-40"
+                className="flex h-12 w-14 shrink-0 items-center justify-center border-l border-slate-300 text-xl font-bold text-slate-900 disabled:opacity-40"
                 onClick={() => onChangeQty(Math.min(maxQty, Math.round((qty + 1) * 100) / 100))}
               >
                 +
@@ -109,7 +109,7 @@ export function PickingQtyPanel({
 
             <button
               type="button"
-              className={PICKING_PRIMARY_BTN_CLASS}
+              className="inline-flex h-12 w-full items-center justify-center rounded-lg bg-[#e85d04] px-5 text-sm font-bold text-white shadow-sm transition hover:bg-[#d45303] active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-45"
               disabled={!canConfirm}
               onClick={onConfirm}
             >

@@ -26,7 +26,7 @@ export function PickingLocationBadge({
   );
 }
 
-/** Sasist EAN badge — reuses packing `PackingEanBadge` (EAN: + chip). */
+/** Sasist EAN badge — reuses packing `PackingEanBadge` (scales with WMS base font). */
 export function PickingEanBadge({
   value,
   muted,
@@ -42,6 +42,7 @@ export function PickingEanBadge({
     <p
       className={[
         "flex min-w-0 flex-wrap items-center gap-1.5 text-slate-500",
+        wmsTypoClass.base,
         className,
       ]
         .filter(Boolean)
@@ -50,6 +51,21 @@ export function PickingEanBadge({
       <span className="shrink-0 text-slate-500">EAN:</span>
       <PackingEanBadge value={text} muted={muted} />
     </p>
+  );
+}
+
+/** Red shortage pill — same language as packing order cards (`BRAK X/Y`). */
+export function PickingShortageBadge({
+  missing,
+  total,
+}: {
+  missing: string | number;
+  total: string | number;
+}) {
+  return (
+    <span className="inline-flex rounded-full bg-red-600 px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-wide text-white">
+      BRAK {missing}/{total}
+    </span>
   );
 }
 

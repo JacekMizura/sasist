@@ -48,6 +48,7 @@ import {
   PickingFieldLabel,
   PickingLocationBadge,
   PickingQtyPair,
+  PickingShortageBadge,
 } from "../../components/wms/picking/PickingUiPrimitives";
 import { PickingOptionsSheet, PickingStickyFooter } from "../../components/wms/picking/PickingStickyChrome";
 import { PickingQtyPanel } from "../../components/wms/picking/PickingQtyPanel";
@@ -1803,6 +1804,18 @@ export default function WmsPickingProductDetailPage() {
       <PickingSimpleHeader
         onBack={() => goBackToList(true)}
         backAriaLabel="Wróć do listy produktów"
+        trailingFill
+        trailing={
+          detail?.locations[0] ? (
+            <PickingLocationBadge
+              className="w-full"
+              text={formatWmsPickingLocationPillLabel(
+                detail.locations[0].location_code,
+                locStock(detail.locations[0]) > 1e-9 ? locStock(detail.locations[0]) : undefined,
+              )}
+            />
+          ) : null
+        }
       />
 
       <WmsOperationalPageBody wide className="flex flex-col gap-5 !py-4 pb-28 md:!py-5">
@@ -1810,20 +1823,6 @@ export default function WmsPickingProductDetailPage() {
 
       {detail && (
         <div className="flex w-full flex-col gap-5">
-          {detail.locations[0] ? (
-            <div className="flex w-full flex-col items-center gap-1.5 border-b border-slate-100 pb-4">
-              <PickingFieldLabel>Lokalizacja</PickingFieldLabel>
-              <div className="w-full max-w-md">
-                <PickingLocationBadge
-                  text={formatWmsPickingLocationPillLabel(
-                    detail.locations[0].location_code,
-                    locStock(detail.locations[0]) > 1e-9 ? locStock(detail.locations[0]) : undefined,
-                  )}
-                />
-              </div>
-            </div>
-          ) : null}
-
           <div className={[PICKING_CARD_CLASS, "flex w-full flex-col gap-4 p-4 sm:p-5"].join(" ")}>
             <div className="min-w-0">
               <PickingFieldLabel>Zebrane</PickingFieldLabel>
@@ -1835,42 +1834,42 @@ export default function WmsPickingProductDetailPage() {
               </div>
             </div>
 
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
-              <div className="flex h-24 w-24 shrink-0 items-center justify-center bg-transparent sm:h-28 sm:w-28">
+            <div className="flex w-full justify-center py-1">
+              <div className="flex h-36 w-36 items-center justify-center bg-transparent sm:h-44 sm:w-44">
                 {detail.image_url ? (
                   <img src={detail.image_url} alt="" className="max-h-full max-w-full object-contain" />
                 ) : (
                   <div className="text-xs font-semibold text-slate-300">Brak zdjęcia</div>
                 )}
               </div>
-              <div className="min-w-0 flex-1">
-                {detail.consolidation_active ? (
-                  <span className="mb-2 inline-flex rounded-md border border-slate-200 bg-slate-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-slate-700">
-                    Konsolidacja
-                  </span>
-                ) : null}
-                <p
-                  className={[
-                    "break-words font-bold uppercase leading-snug text-slate-900",
-                    wmsTypoClass.base,
-                  ].join(" ")}
-                >
-                  {detail.name}
-                </p>
-                <div className="mt-2">
-                  <PickingEanBadge value={detail.ean} />
+            </div>
+
+            <div className="flex flex-col items-center gap-2 text-center">
+              {detail.consolidation_active ? (
+                <span className="inline-flex rounded-md border border-slate-200 bg-slate-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-slate-700">
+                  Konsolidacja
+                </span>
+              ) : null}
+              <p
+                className={[
+                  "break-words font-bold uppercase leading-snug text-slate-900",
+                  wmsTypoClass.base,
+                ].join(" ")}
+              >
+                {detail.name}
+              </p>
+              <PickingEanBadge value={detail.ean} className="justify-center" />
+              {isShortageResolved ? (
+                <PickingShortageBadge
+                  missing={fmtQty(missingTotal)}
+                  total={fmtQty(detail.total_quantity)}
+                />
+              ) : null}
+              {detail.consolidation_active && detail.consolidation_shelf_label ? (
+                <div className="mt-1 w-fit rounded-lg border border-slate-300 bg-slate-50 px-4 py-2 text-sm font-bold text-slate-900">
+                  Odłóż na: {detail.consolidation_shelf_label}
                 </div>
-                {isShortageResolved ? (
-                  <span className="mt-2 inline-flex rounded-full bg-red-600 px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-wide text-white">
-                    Brak {fmtQty(missingTotal)}/{fmtQty(detail.total_quantity)}
-                  </span>
-                ) : null}
-                {detail.consolidation_active && detail.consolidation_shelf_label ? (
-                  <div className="mt-3 w-fit rounded-lg border border-slate-300 bg-slate-50 px-4 py-2 text-sm font-bold text-slate-900">
-                    Odłóż na: {detail.consolidation_shelf_label}
-                  </div>
-                ) : null}
-              </div>
+              ) : null}
             </div>
           </div>
 

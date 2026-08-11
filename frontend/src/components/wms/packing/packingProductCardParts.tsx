@@ -39,14 +39,17 @@ export function PackingLocationPill({
   );
 }
 
-/** Sasist EAN chip — shared by packing + picking (do not duplicate). */
+/** Sasist EAN chip — shared by packing + picking (do not duplicate).
+ * Font size follows WMS base typography (`--wms-font-base`), not a fixed px.
+ */
 export function PackingEanBadge({ value, muted }: { value: string; muted?: boolean }) {
   const text = value.trim();
   if (!text) return null;
   return (
     <span
       className={[
-        "inline-flex max-w-full items-center truncate rounded-md border px-2 py-1 font-mono text-[13px] font-bold leading-none",
+        "inline-flex max-w-full items-center truncate rounded-md border px-2 py-1 font-mono font-bold leading-none",
+        wmsTypoClass.base,
         muted
           ? "border-blue-300 bg-white text-blue-950"
           : "border-blue-200 bg-[#dbeafe] text-[#1e3a8a]",

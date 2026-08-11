@@ -1,5 +1,11 @@
-import { Check, ImageIcon, X } from "lucide-react";
-import { PickingEanBadge, PickingFieldLabel, PickingLocationBadge, PickingQtyPair } from "./PickingUiPrimitives";
+﻿import { Check, ImageIcon, X } from "lucide-react";
+import {
+  PickingEanBadge,
+  PickingFieldLabel,
+  PickingLocationBadge,
+  PickingQtyPair,
+  PickingShortageBadge,
+} from "./PickingUiPrimitives";
 import { PICKING_CARD_CLASS } from "./pickingUiTokens";
 import { wmsTypoClass } from "../../../wms/typography/wmsOperatorTypography";
 
@@ -13,7 +19,6 @@ export type PickingProductListCardProps = {
   pickedLabel: string;
   totalLabel: string;
   locationLabel: string;
-  /** Missing qty for BRAK badge (e.g. 1) — with totalLabel forms BRAK X/Y */
   shortageLabel?: string | null;
   status?: PickingListCardStatus;
   disabled?: boolean;
@@ -21,9 +26,6 @@ export type PickingProductListCardProps = {
   onUndoComplete?: () => void;
 };
 
-/**
- * Clean product card for the picking list (Sellasist layout, Sasist location + EAN badges).
- */
 export function PickingProductListCard({
   name,
   ean,
@@ -95,9 +97,7 @@ export function PickingProductListCard({
             </>
           ) : null}
           {shortage && shortageLabel ? (
-            <span className="inline-flex rounded-full bg-red-600 px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-wide text-white">
-              Brak {shortageLabel}/{totalLabel}
-            </span>
+            <PickingShortageBadge missing={shortageLabel} total={totalLabel} />
           ) : null}
         </div>
       </div>

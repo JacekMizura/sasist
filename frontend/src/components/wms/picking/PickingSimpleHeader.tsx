@@ -11,8 +11,8 @@ function IconBack() {
 }
 
 /**
- * Full-width picking header (Sasist): ← + optional title + trailing (np. badge wózka + 0/2).
- * Title may be empty — then only back + trailing (product detail).
+ * Full-width picking header (Sasist): ← + optional title + trailing.
+ * `trailingFill` — trailing fills remaining width (location bar next to back).
  */
 export function PickingSimpleHeader({
   onBack,
@@ -20,13 +20,15 @@ export function PickingSimpleHeader({
   title,
   subtitle,
   trailing,
+  trailingFill = false,
 }: {
   onBack: () => void;
   backAriaLabel: string;
   title?: ReactNode;
   subtitle?: ReactNode;
-  /** Right side of the header row (e.g. cart badge + progress). */
   trailing?: ReactNode;
+  /** When true, trailing stretches (e.g. location bar beside ←). */
+  trailingFill?: boolean;
 }) {
   const hasTitle =
     title != null && title !== false && title !== "" && !(typeof title === "string" && !title.trim());
@@ -42,23 +44,32 @@ export function PickingSimpleHeader({
         >
           <IconBack />
         </button>
-        <div className="flex min-w-0 flex-1 items-center justify-between gap-3">
-          {hasTitle || subtitle ? (
-            <div className="min-w-0 flex-1">
-              {subtitle ? <div className="mb-0.5 text-xs text-slate-500">{subtitle}</div> : null}
-              {hasTitle ? (
-                <div className={["min-w-0 break-words font-bold text-slate-900", wmsTypoClass.base].join(" ")}>
-                  {title}
-                </div>
-              ) : null}
-            </div>
-          ) : (
-            <div className="min-w-0 flex-1" />
-          )}
-          {trailing ? (
-            <div className="flex shrink-0 items-center gap-3">{trailing}</div>
-          ) : null}
-        </div>
+        {hasTitle || subtitle ? (
+          <div className="min-w-0 flex-1">
+            {subtitle ? <div className="mb-0.5 text-xs text-slate-500">{subtitle}</div> : null}
+            {hasTitle ? (
+              <div className={["min-w-0 break-words font-bold text-slate-900", wmsTypoClass.base].join(" ")}>
+                {title}
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+        {trailing ? (
+          <div
+            className={[
+              "flex min-w-0 items-center gap-3",
+              trailingFill
+                ? "flex-1"
+                : hasTitle
+                  ? "ml-auto shrink-0"
+                  : "flex-1 justify-end",
+            ].join(" ")}
+          >
+            {trailing}
+          </div>
+        ) : !hasTitle ? (
+          <div className="min-w-0 flex-1" />
+        ) : null}
       </div>
     </header>
   );
