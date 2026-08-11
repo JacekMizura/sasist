@@ -4,7 +4,7 @@ import {
   DEFAULT_PACKING_PRODUCT_FIELD_VISIBILITY,
   type PackingProductFieldVisibility,
 } from "./packingProductDisplay";
-import { packingLocationBadge } from "./packingProductCardParts";
+import { packingLocationBadge, PackingEanBadge } from "./packingProductCardParts";
 
 type Props = {
   line: WmsPackingOrderLineApi;
@@ -15,23 +15,6 @@ type Props = {
 };
 
 type MetaRow = { key: string; node: ReactNode };
-
-function EanBadge({ value, muted }: { value: string; muted?: boolean }) {
-  return (
-    <span
-      className={[
-        // Larger than neighboring meta (12px) — blue chip for scan readability.
-        "inline-flex max-w-full items-center truncate rounded-md border px-2 py-1 font-mono text-[13px] font-bold leading-none",
-        muted
-          ? "border-blue-300 bg-white text-blue-950"
-          : "border-blue-200 bg-[#dbeafe] text-[#1e3a8a]",
-      ].join(" ")}
-      title={value}
-    >
-      {value}
-    </span>
-  );
-}
 
 function hasText(value: string | null | undefined): value is string {
   return Boolean((value ?? "").trim());
@@ -83,7 +66,7 @@ export function LineDetailsBlock({ line, variant, fieldVisibility, layout = "col
       node: (
         <p className={["flex min-w-0 items-center gap-1.5", textCls].join(" ")}>
           <span className={["shrink-0", labelCls].join(" ")}>EAN:</span>
-          <EanBadge value={ean} muted={muted} />
+          <PackingEanBadge value={ean} muted={muted} />
         </p>
       ),
     });

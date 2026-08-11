@@ -1,5 +1,5 @@
 import { Check, ImageIcon, X } from "lucide-react";
-import { PickingFieldLabel, PickingLocationBadge, PickingQtyPair } from "./PickingUiPrimitives";
+import { PickingEanBadge, PickingFieldLabel, PickingLocationBadge, PickingQtyPair } from "./PickingUiPrimitives";
 import { PICKING_CARD_CLASS } from "./pickingUiTokens";
 import { wmsTypoClass } from "../../../wms/typography/wmsOperatorTypography";
 
@@ -22,7 +22,7 @@ export type PickingProductListCardProps = {
 };
 
 /**
- * Clean product card for the picking list (Sellasist layout, Sasist location badge).
+ * Clean product card for the picking list (Sellasist layout, Sasist location + EAN badges).
  */
 export function PickingProductListCard({
   name,
@@ -39,7 +39,6 @@ export function PickingProductListCard({
   onUndoComplete,
 }: PickingProductListCardProps) {
   const catalog = (catalogNumber ?? "").trim();
-  const hasEan = Boolean((ean ?? "").trim());
   const completed = status === "COMPLETED_PICK";
   const shortage = status === "SHORTAGE" || (shortageLabel != null && String(shortageLabel).length > 0);
   const muted = completed;
@@ -126,13 +125,11 @@ export function PickingProductListCard({
           >
             {name}
           </p>
-          {hasEan ? (
-            <p className="mt-1 break-words text-sm text-slate-600">
-              EAN: <span className="font-mono font-semibold text-slate-800">{(ean ?? "").trim()}</span>
-            </p>
-          ) : null}
+          <div className="mt-1.5">
+            <PickingEanBadge value={ean} muted={muted} />
+          </div>
           {catalog ? (
-            <p className="mt-0.5 break-words text-sm text-slate-600">
+            <p className="mt-1 break-words text-sm text-slate-600">
               Numer katalogowy: <span className="font-semibold text-slate-800">{catalog}</span>
             </p>
           ) : null}

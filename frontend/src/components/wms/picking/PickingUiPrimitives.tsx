@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { Icon } from "../../ui/Icon";
-import { PackingLocationPill } from "../packing/packingProductCardParts";
+import { PackingEanBadge, PackingLocationPill } from "../packing/packingProductCardParts";
 import { PICKING_FIELD_LABEL_CLASS } from "./pickingUiTokens";
 import { wmsTypoClass } from "../../../wms/typography/wmsOperatorTypography";
 
@@ -23,6 +23,33 @@ export function PickingLocationBadge({
     <div className={["min-w-0 max-w-full", className].filter(Boolean).join(" ")}>
       <PackingLocationPill text={text} muted={muted} />
     </div>
+  );
+}
+
+/** Sasist EAN badge — reuses packing `PackingEanBadge` (EAN: + chip). */
+export function PickingEanBadge({
+  value,
+  muted,
+  className,
+}: {
+  value: string | null | undefined;
+  muted?: boolean;
+  className?: string;
+}) {
+  const text = (value ?? "").trim();
+  if (!text) return null;
+  return (
+    <p
+      className={[
+        "flex min-w-0 flex-wrap items-center gap-1.5 text-slate-500",
+        className,
+      ]
+        .filter(Boolean)
+        .join(" ")}
+    >
+      <span className="shrink-0 text-slate-500">EAN:</span>
+      <PackingEanBadge value={text} muted={muted} />
+    </p>
   );
 }
 

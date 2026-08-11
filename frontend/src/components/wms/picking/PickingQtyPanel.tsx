@@ -1,4 +1,4 @@
-import { PickingFieldLabel, PickingLocationBadge } from "./PickingUiPrimitives";
+import { PickingEanBadge, PickingFieldLabel, PickingLocationBadge } from "./PickingUiPrimitives";
 import { PICKING_PRIMARY_BTN_CLASS } from "./pickingUiTokens";
 import { wmsTypoClass } from "../../../wms/typography/wmsOperatorTypography";
 import { PickingSimpleHeader } from "./PickingSimpleHeader";
@@ -18,7 +18,7 @@ export type PickingQtyPanelProps = {
 };
 
 /**
- * Full-screen quantity step (Sellasist layout, white / Sasist orange CTA).
+ * Full-screen quantity step — product identity + compact qty controls + Zatwierdź under controls.
  */
 export function PickingQtyPanel({
   productName,
@@ -39,82 +39,84 @@ export function PickingQtyPanel({
 
   return (
     <div className="fixed inset-0 z-[60] flex flex-col bg-white">
-      <PickingSimpleHeader onBack={onBack} backAriaLabel="Wróć" title="Podaj ilość" />
+      <PickingSimpleHeader onBack={onBack} backAriaLabel="Wróć" />
       <div className="min-h-0 flex-1 overflow-y-auto px-4 py-5 sm:px-6">
-        <div className="mx-auto flex w-full max-w-lg flex-col gap-5">
-          <div className="flex items-start gap-3">
-            <div className="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden bg-transparent">
-              {imageUrl ? (
-                <img src={imageUrl} alt="" className="max-h-full max-w-full object-contain" />
-              ) : null}
-            </div>
-            <div className="min-w-0 flex-1">
-              <p className={["break-words font-bold text-slate-900", wmsTypoClass.base].join(" ")}>
-                {productName}
-              </p>
-              {ean ? (
-                <p className="mt-1 break-words text-sm text-slate-600">
-                  EAN: <span className="font-mono font-semibold">{ean}</span>
-                </p>
-              ) : null}
-            </div>
-          </div>
-
+        <div className="mx-auto flex w-full max-w-lg flex-col gap-6">
           {locationLabel ? (
-            <div>
+            <div className="flex flex-col items-center gap-1.5 border-b border-slate-100 pb-4">
               <PickingFieldLabel>Lokalizacja</PickingFieldLabel>
-              <div className="mt-1 max-w-[14rem]">
+              <div className="w-full max-w-sm">
                 <PickingLocationBadge text={locationLabel} />
               </div>
             </div>
           ) : null}
 
-          <div>
-            <PickingFieldLabel>Do zebrania</PickingFieldLabel>
-            <p className={["mt-0.5 font-bold text-slate-900", wmsTypoClass.quantity].join(" ")}>
-              {remainingLabel}
-            </p>
+          <div className="flex flex-col items-center gap-3 text-center sm:flex-row sm:items-start sm:text-left">
+            <div className="flex h-24 w-24 shrink-0 items-center justify-center overflow-hidden bg-transparent">
+              {imageUrl ? (
+                <img src={imageUrl} alt="" className="max-h-full max-w-full object-contain" />
+              ) : null}
+            </div>
+            <div className="min-w-0 flex-1">
+              <p
+                className={[
+                  "break-words font-bold uppercase leading-snug text-slate-900",
+                  wmsTypoClass.base,
+                ].join(" ")}
+              >
+                {productName}
+              </p>
+              <div className="mt-2 flex justify-center sm:justify-start">
+                <PickingEanBadge value={ean} />
+              </div>
+            </div>
           </div>
 
-          <div className="flex items-stretch gap-3">
-            <button
-              type="button"
-              aria-label="Zmniejsz"
-              disabled={atMin || busy}
-              className="flex h-16 w-16 shrink-0 items-center justify-center rounded-lg border-2 border-slate-300 bg-white text-3xl font-bold text-slate-900 disabled:opacity-40"
-              onClick={() => onChangeQty(Math.max(0, Math.round((qty - 1) * 100) / 100))}
-            >
-              −
-            </button>
-            <div
+          <div className="flex flex-col items-center gap-4">
+            <p
               className={[
-                "flex min-h-[4rem] min-w-0 flex-1 items-center justify-center rounded-lg border-2 border-slate-300 bg-white font-black text-slate-900",
-                wmsTypoClass.quantity,
+                "font-bold tabular-nums leading-none text-slate-900",
+                "text-[2.5rem]",
               ].join(" ")}
+              aria-label={`Do zebrania ${remainingLabel}`}
             >
-              {qty}
+              {remainingLabel}
+            </p>
+
+            <div className="flex items-center gap-2.5">
+              <button
+                type="button"
+                aria-label="Zmniejsz"
+                disabled={atMin || busy}
+                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-slate-300 bg-white text-xl font-bold text-slate-900 disabled:opacity-40"
+                onClick={() => onChangeQty(Math.max(0, Math.round((qty - 1) * 100) / 100))}
+              >
+                −
+              </button>
+              <div className="flex h-11 min-w-[3.5rem] items-center justify-center rounded-lg border border-slate-300 bg-white px-3 text-lg font-bold tabular-nums text-slate-900">
+                {qty}
+              </div>
+              <button
+                type="button"
+                aria-label="Zwiększ"
+                disabled={atMax || busy}
+                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-slate-300 bg-white text-xl font-bold text-slate-900 disabled:opacity-40"
+                onClick={() => onChangeQty(Math.min(maxQty, Math.round((qty + 1) * 100) / 100))}
+              >
+                +
+              </button>
             </div>
+
             <button
               type="button"
-              aria-label="Zwiększ"
-              disabled={atMax || busy}
-              className="flex h-16 w-16 shrink-0 items-center justify-center rounded-lg border-2 border-slate-300 bg-white text-3xl font-bold text-slate-900 disabled:opacity-40"
-              onClick={() => onChangeQty(Math.min(maxQty, Math.round((qty + 1) * 100) / 100))}
+              className={PICKING_PRIMARY_BTN_CLASS}
+              disabled={!canConfirm}
+              onClick={onConfirm}
             >
-              +
+              {busy ? "…" : "Zatwierdź"}
             </button>
           </div>
         </div>
-      </div>
-      <div className="border-t border-slate-200 px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
-        <button
-          type="button"
-          className={`${PICKING_PRIMARY_BTN_CLASS} w-full`}
-          disabled={!canConfirm}
-          onClick={onConfirm}
-        >
-          {busy ? "…" : "Zatwierdź"}
-        </button>
       </div>
     </div>
   );

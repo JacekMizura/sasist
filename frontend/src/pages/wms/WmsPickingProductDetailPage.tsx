@@ -42,9 +42,9 @@ import type { BundleScanOut, ConsolidationRackBundleRowOut } from "../../api/bun
 import { getConsolidationRackBundleView } from "../../api/bundlesLogisticsApi";
 import { tryPickingBundleScan } from "../../services/bundleScannerIntegration";
 import { formatWmsPickingLocationPillLabel } from "./wmsPickingLocationPill";
-import { PickingSimpleHeader, PickingSessionMetaBar } from "../../components/wms/picking/PickingSimpleHeader";
+import { PickingSimpleHeader } from "../../components/wms/picking/PickingSimpleHeader";
 import {
-  PickingCartBadge,
+  PickingEanBadge,
   PickingFieldLabel,
   PickingLocationBadge,
   PickingQtyPair,
@@ -1803,30 +1803,6 @@ export default function WmsPickingProductDetailPage() {
       <PickingSimpleHeader
         onBack={() => goBackToList(true)}
         backAriaLabel="Wróć do listy produktów"
-        title={detail?.name ?? "…"}
-        subtitle={
-          detail ? (
-            <>
-              EAN:{" "}
-              <span className="font-mono font-semibold text-slate-800">{detail.ean ?? "—"}</span>
-            </>
-          ) : undefined
-        }
-      />
-      <PickingSessionMetaBar
-        toCollectLabel={
-          detail
-            ? `Do zebrania: ${fmtQty(displayPickedDetail)}/${fmtQty(detail.total_quantity)}`
-            : "Do zebrania: …"
-        }
-        cartBadge={
-          !isCartlessPickingSession(pickingSession) &&
-          (pickingSession?.cartName || pickingSession?.cartCode) ? (
-            <PickingCartBadge
-              label={(pickingSession?.cartName || pickingSession?.cartCode || "").trim()}
-            />
-          ) : null
-        }
       />
 
       <WmsOperationalPageBody wide className="flex flex-col gap-5 !py-4 pb-28 md:!py-5">
@@ -1834,28 +1810,29 @@ export default function WmsPickingProductDetailPage() {
 
       {detail && (
         <div className="flex w-full flex-col gap-5">
-          <div className={[PICKING_CARD_CLASS, "flex w-full flex-col gap-4 p-4 sm:p-5"].join(" ")}>
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0">
-                <PickingFieldLabel>Zebrane</PickingFieldLabel>
-                <div className="mt-0.5">
-                  <PickingQtyPair
-                    picked={fmtQty(displayPickedDetail)}
-                    total={fmtQty(detail.total_quantity)}
-                  />
-                </div>
+          {detail.locations[0] ? (
+            <div className="flex w-full flex-col items-center gap-1.5 border-b border-slate-100 pb-4">
+              <PickingFieldLabel>Lokalizacja</PickingFieldLabel>
+              <div className="w-full max-w-md">
+                <PickingLocationBadge
+                  text={formatWmsPickingLocationPillLabel(
+                    detail.locations[0].location_code,
+                    locStock(detail.locations[0]) > 1e-9 ? locStock(detail.locations[0]) : undefined,
+                  )}
+                />
               </div>
-              {detail.locations[0] ? (
-                <div className="flex min-w-0 max-w-[55%] flex-col items-end gap-1">
-                  <PickingFieldLabel>Lokalizacja</PickingFieldLabel>
-                  <PickingLocationBadge
-                    text={formatWmsPickingLocationPillLabel(
-                      detail.locations[0].location_code,
-                      locStock(detail.locations[0]) > 1e-9 ? locStock(detail.locations[0]) : undefined,
-                    )}
-                  />
-                </div>
-              ) : null}
+            </div>
+          ) : null}
+
+          <div className={[PICKING_CARD_CLASS, "flex w-full flex-col gap-4 p-4 sm:p-5"].join(" ")}>
+            <div className="min-w-0">
+              <PickingFieldLabel>Zebrane</PickingFieldLabel>
+              <div className="mt-0.5">
+                <PickingQtyPair
+                  picked={fmtQty(displayPickedDetail)}
+                  total={fmtQty(detail.total_quantity)}
+                />
+              </div>
             </div>
 
             <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
@@ -1880,10 +1857,9 @@ export default function WmsPickingProductDetailPage() {
                 >
                   {detail.name}
                 </p>
-                <p className="mt-1 break-words text-sm text-slate-600">
-                  EAN:{" "}
-                  <span className="font-mono font-semibold text-slate-800">{detail.ean ?? "—"}</span>
-                </p>
+                <div className="mt-2">
+                  <PickingEanBadge value={detail.ean} />
+                </div>
                 {isShortageResolved ? (
                   <span className="mt-2 inline-flex rounded-full bg-red-600 px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-wide text-white">
                     Brak {fmtQty(missingTotal)}/{fmtQty(detail.total_quantity)}
