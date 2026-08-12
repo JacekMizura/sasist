@@ -237,10 +237,18 @@ def _batch_card_context(db: Session, *, tenant_id: int, batch_id: int) -> dict[s
         "header_barcode_value": header_bc_value,
         "header_barcode_image_url": code128_png_data_uri(header_bc_value),
         "components": components,
+        "source_orders": [],
+        "show_source_orders": False,
+        "header_status_label": str(batch.status or ""),
+        "header_config_label": None,
     }
 
 
 def _order_card_context(db: Session, *, tenant_id: int, order_id: int) -> dict[str, Any]:
+    from ...models.order import Order
+    from ...models.production import PRODUCTION_ORDER_SOURCE_ORDERS, ProductionOrderSourceItem
+    from ..reservations.reservation_service import list_material_reservations
+
     order = (
         db.query(ProductionOrder)
         .filter(ProductionOrder.id == int(order_id), ProductionOrder.tenant_id == int(tenant_id))
@@ -253,12 +261,85 @@ def _order_card_context(db: Session, *, tenant_id: int, order_id: int) -> dict[s
     comp = None
     if order.composition_id:
         comp = db.query(ProductComposition).filter(ProductComposition.id == int(order.composition_id)).first()
-    plan = build_production_pick_plan(db, tenant_id=int(tenant_id), order_id=int(order_id))
+
+    status_label = str(order.status or "")
+    config_label = None
+    if getattr(order, "picking_config_id", None):
+        from ...models.picking_config import PickingConfig
+        from ...models.order_ui_status import OrderUiStatus
+
+        cfg = db.query(PickingConfig).filter(PickingConfig.id == int(order.picking_config_id)).first()
+        if cfg is not None:
+            st = db.query(OrderUiStatus).filter(OrderUiStatus.id == int(cfg.source_status_id)).first()
+            if st is not None:
+                config_label = str(st.name)
+                status_label = str(st.name)
+
+    reservations = (
+        list_material_reservations(
+            db, tenant_id=int(tenant_id), production_order_id=int(order_id), active_only=True
+        )
+        if getattr(order, "materials_reserved", False)
+        else []
+    )
+    res_by_pid: dict[int, list[dict[str, Any]]] = {}
+    for r in reservations:
+        res_by_pid.setdefault(int(r["product_id"]), []).append(r)
+
     components: list[dict[str, Any]] = []
-    for line in plan.lines:
-        pref = {int(s.location_id) for s in line.suggested_locations if int(s.location_id) > 0}
-        components.append(
-            _component_row(
+    if res_by_pid:
+        # Group by component: total + per-location allocations (never global stock as pick qty).
+        plan = build_production_pick_plan(db, tenant_id=int(tenant_id), order_id=int(order_id))
+        plan_by_pid = {int(ln.component_product_id): ln for ln in plan.lines}
+        for pid, rows in res_by_pid.items():
+            line = plan_by_pid.get(pid)
+            prod = db.query(Product).filter(Product.id == int(pid)).first()
+            name = str(
+                (line.product_name if line else None)
+                or getattr(prod, "name", None)
+                or f"Produkt #{pid}"
+            )
+            sku = (line.product_sku if line else None) or (
+                getattr(prod, "sku", None) or getattr(prod, "symbol", None)
+            )
+            image_url = (line.product_image_url if line else None) or (
+                (getattr(prod, "image_url", None) or "").strip() or None
+            )
+            total_qty = sum(float(rr.get("quantity") or 0) for rr in rows)
+            allocations = [
+                {
+                    "location_code": str(rr.get("location_code") or "—"),
+                    "quantity": _fmt_qty(float(rr.get("quantity") or 0)),
+                    "batch_number": rr.get("batch_number") or "—",
+                }
+                for rr in rows
+            ]
+            loc_summary = "; ".join(
+                f"{a['location_code']} — {a['quantity']}" for a in allocations
+            )
+            bc = _barcode_fields(prod)
+            components.append(
+                {
+                    "name": name,
+                    "sku": sku,
+                    "ean": (getattr(prod, "ean", None) or "").strip() or None,
+                    "image_url": image_url,
+                    "required_qty": _fmt_qty(total_qty),
+                    "unit": (getattr(prod, "unit", None) or "").strip() or "szt.",
+                    "suggested_location": loc_summary or "—",
+                    "available_qty": _fmt_qty(total_qty),
+                    "batch_number": allocations[0]["batch_number"] if allocations else "—",
+                    "lot": "—",
+                    "expiry_date": "—",
+                    "location_allocations": allocations,
+                    **bc,
+                }
+            )
+    else:
+        plan = build_production_pick_plan(db, tenant_id=int(tenant_id), order_id=int(order_id))
+        for line in plan.lines:
+            pref = {int(s.location_id) for s in line.suggested_locations if int(s.location_id) > 0}
+            row = _component_row(
                 db,
                 tenant_id=int(tenant_id),
                 warehouse_id=int(order.warehouse_id),
@@ -269,8 +350,42 @@ def _order_card_context(db: Session, *, tenant_id: int, order_id: int) -> dict[s
                 required=float(line.required),
                 suggested_location_ids=pref or None,
             )
+            row["location_allocations"] = (
+                [{"location_code": row["suggested_location"], "quantity": row["required_qty"], "batch_number": row.get("batch_number") or "—"}]
+                if row.get("suggested_location") and row["suggested_location"] != "—"
+                else []
+            )
+            components.append(row)
+
+    source_orders: list[dict[str, Any]] = []
+    if str(getattr(order, "source_type", "") or "") == PRODUCTION_ORDER_SOURCE_ORDERS:
+        src_rows = (
+            db.query(ProductionOrderSourceItem)
+            .filter(
+                ProductionOrderSourceItem.production_order_id == int(order.id),
+                ProductionOrderSourceItem.status != "cancelled",
+            )
+            .order_by(ProductionOrderSourceItem.id.asc())
+            .all()
         )
-    header_bc = product_barcode_value(p) or str(order.number or "").strip() or None
+        order_ids = {int(s.order_id) for s in src_rows if s.order_id}
+        orders_map = (
+            {o.id: o for o in db.query(Order).filter(Order.id.in_(order_ids)).all()} if order_ids else {}
+        )
+        for s in src_rows:
+            so = orders_map.get(int(s.order_id)) if s.order_id else None
+            pc = (getattr(so, "priority_color", None) or "").strip().lower() if so else ""
+            is_priority = pc in ("red", "orange", "yellow")
+            source_orders.append(
+                {
+                    "order_number": str(getattr(so, "number", None) or f"#{s.order_id}"),
+                    "quantity": _fmt_qty(float(getattr(s, "requested_quantity", None) or 0)),
+                    "is_priority": is_priority,
+                }
+            )
+
+    # MO barcode for scan-open (not product EAN).
+    header_bc = str(order.number or "").strip() or None
     return {
         "job_number": str(order.number or ""),
         "job_kind_label": "Zlecenie produkcyjne (MO)",
@@ -281,6 +396,8 @@ def _order_card_context(db: Session, *, tenant_id: int, order_id: int) -> dict[s
         "header_ean": (getattr(p, "ean", None) or "").strip() or None,
         "header_planned_qty": _fmt_qty(float(order.planned_quantity or 0)),
         "header_date": datetime.utcnow().strftime("%d.%m.%Y"),
+        "header_status_label": status_label or "—",
+        "header_config_label": config_label,
         "operator_name": _operator_name(db, getattr(order, "created_by_user_id", None)),
         "warehouse_name": wh.name if wh else None,
         "recipe_version": f"{getattr(comp, 'name', '—')} v{getattr(comp, 'version', '1')}" if comp else "—",
@@ -289,6 +406,8 @@ def _order_card_context(db: Session, *, tenant_id: int, order_id: int) -> dict[s
         "header_barcode_value": header_bc,
         "header_barcode_image_url": code128_png_data_uri(header_bc),
         "components": components,
+        "source_orders": source_orders,
+        "show_source_orders": bool(source_orders),
     }
 
 

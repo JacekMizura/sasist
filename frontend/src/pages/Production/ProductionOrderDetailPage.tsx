@@ -9,15 +9,14 @@ import toast from "react-hot-toast";
 import { useWarehouse } from "../../context/WarehouseContext";
 
 import {
-
   cancelProductionOrder,
   downloadOrderProductionCardPdf,
   getProductionOrder,
   printOrderProductionCardBrowser,
   releaseOrderToWms,
   startErpExecutionOrder,
+  startPrintExecutionOrder,
   type ProductionOrderRead,
-
 } from "../../api/productionApi";
 
 import { PrintFlowModals, usePrintMethodFlow } from "../../components/printing";
@@ -57,6 +56,7 @@ export default function ProductionOrderDetailPage() {
   const [loading, setLoading] = useState(true);
 
   const [busy, setBusy] = useState(false);
+  const [printStartOpen, setPrintStartOpen] = useState(false);
   const { queueProductionOrderCard } = useQueuePrint({ tenantId, warehouseId });
   const printFlow = usePrintMethodFlow({ tenantId, warehouseId, printerKind: "a4" });
 
@@ -158,6 +158,35 @@ export default function ProductionOrderDetailPage() {
       onDownloadPdf: () => downloadOrderProductionCardPdf(tenantId, order.id, warehouseId),
     });
   };
+
+  const startPrintAndPrint = async () => {
+    if (!order || warehouseId == null) return;
+    if (order.has_shortages || !order.materials_reserved) {
+      toast.error("Brak komponentów — nie można rozpocząć produkcji z wydruku.");
+      return;
+    }
+    setBusy(true);
+    try {
+      const updated = await startPrintExecutionOrder(tenantId, order.id, warehouseId, {
+        consumeMaterials: true,
+      });
+      setOrder(updated);
+      setPrintStartOpen(false);
+      if (updated.rw_stock_document_id) {
+        toast.success("Produkcja rozpoczęta. Komponenty pobrane (RW).");
+      } else {
+        toast.success("Produkcja już była rozpoczęta.");
+      }
+      await printOrderProductionCardBrowser(tenantId, order.id, warehouseId);
+    } catch (e: unknown) {
+      toast.error(formatStartCollectingError(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const isPrintMethod =
+    order?.source_type === "ORDERS" && order.production_execution_method === "PRINT";
 
   const openErp = () => {
     if (!orderId) return;
@@ -290,6 +319,16 @@ export default function ProductionOrderDetailPage() {
                 Z zamówień
               </span>
             ) : null}
+            {order.source_type === "ORDERS" ? (
+              <span className="mt-2 ml-2 inline-block rounded-full bg-slate-50 px-2.5 py-0.5 text-xs font-semibold text-slate-700 ring-1 ring-slate-200">
+                {isPrintMethod ? "Wydruk" : "Terminal WMS"}
+              </span>
+            ) : null}
+            {isPrintMethod ? (
+              <p className="mt-2 text-sm text-slate-600">
+                Sposób realizacji: <span className="font-medium text-slate-900">Wydruk zlecenia</span>
+              </p>
+            ) : null}
 
           </div>
           </div>
@@ -395,18 +434,21 @@ export default function ProductionOrderDetailPage() {
 
             actions={{
 
-              onReleaseToWms: () => void releaseToWms(),
-              onStartErpExecution: () => void startErp(),
+              onReleaseToWms: isPrintMethod ? undefined : () => void releaseToWms(),
+              onStartErpExecution: isPrintMethod ? undefined : () => void startErp(),
               onPrintProductionCard: printCard,
-              onOpenErpExecution: order.is_erp_interface ? openErp : undefined,
+              onStartPrintExecution: isPrintMethod ? () => setPrintStartOpen(true) : undefined,
+              onOpenErpExecution: order.is_erp_interface || order.is_print_interface ? openErp : undefined,
 
               onCancel: () => void cancel(),
 
               releaseDisabled: shortagesBlocked,
               erpDisabled: shortagesBlocked,
+              printStartDisabled: shortagesBlocked || !order.materials_reserved,
 
               releaseDisabledReason: START_COLLECTING_BLOCKED_TOOLTIP,
               erpDisabledReason: START_COLLECTING_BLOCKED_TOOLTIP,
+              printStartDisabledReason: "Brak komponentów",
 
               busy,
 
@@ -501,6 +543,42 @@ export default function ProductionOrderDetailPage() {
       ) : null}
 
       <PrintFlowModals flow={printFlow} />
+
+      {printStartOpen ? (
+        <div className="fixed inset-0 z-[12000] flex items-center justify-center bg-slate-900/40 p-4">
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="print-start-title"
+            className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-5 shadow-xl"
+          >
+            <h2 id="print-start-title" className="text-lg font-semibold text-slate-900">
+              Rozpocząć produkcję?
+            </h2>
+            <p className="mt-2 text-sm text-slate-600">
+              Komponenty zostaną pobrane ze wskazanych lokalizacji i zostanie utworzony dokument RW.
+            </p>
+            <div className="mt-5 flex flex-wrap justify-end gap-2">
+              <button
+                type="button"
+                className="rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                disabled={busy}
+                onClick={() => setPrintStartOpen(false)}
+              >
+                Anuluj
+              </button>
+              <button
+                type="button"
+                className="rounded-lg bg-violet-700 px-3 py-2 text-sm font-semibold text-white hover:bg-violet-800 disabled:opacity-50"
+                disabled={busy || shortagesBlocked || !order.materials_reserved}
+                onClick={() => void startPrintAndPrint()}
+              >
+                Rozpocznij i drukuj
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
     </div>
 

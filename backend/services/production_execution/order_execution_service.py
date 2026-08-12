@@ -18,7 +18,7 @@ from ...schemas.production_execution import OrderCollectionStateRead, OrderProdu
 from ..inventory_carrier_ops import upsert_dock_inventory_for_loose_receipt
 from ..inventory_lot_keys import NO_EXPIRY_SENTINEL
 from ..order_item_pick_allocation_service import consume_inventory_fifo_slices
-from .execution_interface import ERP_INTERFACE, WMS_INTERFACE, is_erp_interface, normalized_execution_interface
+from .execution_interface import WMS_INTERFACE, is_non_wms_execution
 from .material_consume_service import consume_production_material_slices
 from ..product_cost_service import get_product_current_cost
 from ..production_order_service import (
@@ -103,10 +103,10 @@ def release_order_to_wms(
         )
     if getattr(order, "released_to_wms_at", None) is not None:
         return serialize_order(db, order, with_availability=True)
-    if is_erp_interface(order):
+    if is_non_wms_execution(order):
         raise ProductionOrderError(
-            "Zlecenie jest w interfejsie ERP. Użyj realizacji w ERP.",
-            code="erp_interface",
+            "Zlecenie jest w interfejsie poza terminalem WMS.",
+            code="non_wms_interface",
         )
     shortages = validate_stock_shortages(db, order)
     if shortages:
@@ -132,7 +132,7 @@ def start_order_collecting(db: Session, *, tenant_id: int, order_id: int):
         return serialize_order(db, order, with_availability=True)
     if str(order.status) not in ("draft", "planned"):
         raise ProductionOrderError("Nie można rozpocząć zbierania w tym statusie.", code="invalid_status")
-    if not is_erp_interface(order) and getattr(order, "released_to_wms_at", None) is None:
+    if not is_non_wms_execution(order) and getattr(order, "released_to_wms_at", None) is None:
         raise ProductionOrderError(
             "Zlecenie nie zostało wydane do WMS. Użyj akcji „Wydaj do WMS” w ERP.",
             code="not_released",
@@ -245,7 +245,7 @@ def update_order_collection_task(
         raise ProductionOrderError("Zadanie zbierania nie istnieje.", code="task_not_found")
     order.collection_state_json = json.dumps(data, ensure_ascii=False)
     order.updated_at = datetime.utcnow()
-    if getattr(order, "materials_reserved", False) and is_erp_interface(order):
+    if getattr(order, "materials_reserved", False) and is_non_wms_execution(order):
         from ..reservations.reservation_service import (
             ReservationError,
             sync_production_reservation_from_collection_task,

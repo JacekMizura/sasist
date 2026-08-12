@@ -32,12 +32,15 @@
     .notes h3 { margin: 0 0 28px; font-size: 10px; font-weight: 600; }
     .page-break { page-break-before: always; break-before: page; height: 0; }
     .card-block { margin-bottom: 4px; }
+    .loc-list { margin: 2px 0 0; padding-left: 14px; }
+    .loc-list li { margin: 0; }
+    .flame { color: #c2410c; font-weight: 700; }
   </style>
 </head>
 <body>
   <div class="card-block">
     <h1>Karta produkcyjna</h1>
-    <p class="muted">{{ job_kind_label }} · {{ job_number }} · wydruk: {{ printed_at }}</p>
+    <p class="muted">{{ job_kind_label }} · {{ job_number }} · wydruk: {{ printed_at }}{% if header_status_label %} · {{ header_status_label }}{% endif %}</p>
 
     <div class="header">
       {% if header_image_url %}
@@ -48,23 +51,26 @@
         <div class="grid-2">
           <div><span class="muted">SKU:</span> {{ header_sku or "—" }}</div>
           <div><span class="muted">EAN:</span> {{ header_ean or "—" }}</div>
-          <div><span class="muted">Ilość planowana:</span> <strong>{{ header_planned_qty }}</strong></div>
+          <div><span class="muted">Ilość do wyprodukowania:</span> <strong>{{ header_planned_qty }}</strong></div>
           <div><span class="muted">Wersja receptury:</span> {{ recipe_version or "—" }}</div>
           <div><span class="muted">Magazyn:</span> {{ warehouse_name or "—" }}</div>
+          <div><span class="muted">Status / konfiguracja:</span> {{ header_config_label or header_status_label or "—" }}</div>
           <div><span class="muted">Operator:</span> {{ operator_name or "—" }}</div>
+          <div><span class="muted">Data:</span> {{ header_date or "—" }}</div>
           <div><span class="muted">Rozpoczęcie:</span> {{ started_at_display }}</div>
           <div><span class="muted">Zakończenie:</span> {{ completed_at_display }}</div>
         </div>
       </div>
       {% if header_barcode_image_url %}
       <div class="header-barcode">
-        <img src="{{ header_barcode_image_url }}" alt="Kod produktu" />
+        <img src="{{ header_barcode_image_url }}" alt="Kod MO" />
         {% if header_barcode_value %}<div class="code-text">{{ header_barcode_value }}</div>{% endif %}
+        <div class="muted" style="margin-top:4px;">Skan = otwórz zlecenie</div>
       </div>
       {% endif %}
     </div>
 
-    <h2>Półprodukty / składniki</h2>
+    <h2>Komponenty</h2>
     <table>
       <thead>
         <tr>
@@ -74,7 +80,7 @@
           <th>Wymagana</th>
           <th>Rzeczywiście pobrana</th>
           <th>J.m.</th>
-          <th>Lokalizacja</th>
+          <th>Lokalizacje pobrania</th>
           <th>Partia / LOT</th>
           <th>Ważność</th>
         </tr>
@@ -85,7 +91,8 @@
           <td>{% if row.image_url %}<img class="thumb" src="{{ row.image_url }}" alt="" />{% endif %}</td>
           <td>
             <strong>{{ row.name }}</strong>
-            {% if row.sku %}<br /><span class="muted">{{ row.sku }}</span>{% endif %}
+            {% if row.sku %}<br /><span class="muted">SKU: {{ row.sku }}</span>{% endif %}
+            {% if row.ean %}<br /><span class="muted">EAN: {{ row.ean }}</span>{% endif %}
           </td>
           <td class="barcode-cell">
             {% if row.barcode_image_url %}
@@ -96,13 +103,45 @@
           <td><strong>{{ row.required_qty }}</strong></td>
           <td style="min-width:72px;">&nbsp;</td>
           <td>{{ row.unit or "szt." }}</td>
-          <td>{{ row.suggested_location or "—" }}</td>
+          <td>
+            {% if row.location_allocations %}
+            <ul class="loc-list">
+              {% for loc in row.location_allocations %}
+              <li>{{ loc.location_code }} — {{ loc.quantity }}</li>
+              {% endfor %}
+            </ul>
+            {% else %}
+            {{ row.suggested_location or "—" }}
+            {% endif %}
+          </td>
           <td>{{ row.batch_number or "—" }}{% if row.lot and row.lot != row.batch_number %} / {{ row.lot }}{% endif %}</td>
           <td>{{ row.expiry_date or "—" }}</td>
         </tr>
         {% endfor %}
       </tbody>
     </table>
+
+    {% if show_source_orders and source_orders %}
+    <h2>Zamówienia</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>Numer zamówienia</th>
+          <th>Ilość produktu gotowego</th>
+          <th style="width:48px;">Priorytet</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for so in source_orders %}
+        <tr>
+          <td>{{ so.order_number }}</td>
+          <td><strong>{{ so.quantity }}</strong></td>
+          <td>{% if so.is_priority %}<span class="flame" title="Priorytet">🔥</span>{% else %}—{% endif %}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% endif %}
 
     <div class="write-field"><label>Rzeczywiście wyprodukowana ilość (szt.):</label></div>
 

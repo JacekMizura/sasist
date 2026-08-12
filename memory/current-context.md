@@ -1,5 +1,13 @@
 ﻿## Active
 
+**Order-driven production print execution (2026-08-12) — Phase 5:**
+- `picking_config.production_execution_method` = `WMS` | `PRINT` (per production status; default WMS)
+- PRINT = alternate *interface* for ORDERS MO (same lifecycle); PDF preview side-effect free
+- `POST .../start-print-execution` → lock reservations + existing RW consume path; idempotent restart
+- PDF: components with per-location allocations, source orders + flame, MO barcode scan
+- `GET .../orders/resolve-scan` + WMS production terminal scan → open existing execution UI
+- FE: badge Wydruk/Terminal WMS; Podgląd vs Wydrukuj i rozpocznij + confirm modal
+
 **Order-driven production → packing (2026-08-12) — Phase 4:**
 - Progress +N: allocate to sources (same priority sort as Phase 3) → `fulfilled` → `status_after_production_id` via SSOT (`skip_production_trigger`)
 - ORDERS PW lands on `finished_goods_buffer_location_id` with putaway/relocation DONE (no Rozlokowanie queue); MO finishes as `completed`

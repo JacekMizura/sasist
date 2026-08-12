@@ -13,6 +13,9 @@ from sqlalchemy.orm import Session, joinedload
 
 from ..models.order_ui_status import OrderUiStatus
 from ..models.picking_config import (
+    PRODUCTION_EXECUTION_METHOD_PRINT,
+    PRODUCTION_EXECUTION_METHOD_WMS,
+    PRODUCTION_EXECUTION_METHODS,
     PRODUCTION_ORDER_TRIGGER_SCOPE_SINGLE_ELEMENT,
     PRODUCTION_ORDER_TRIGGER_SCOPES,
     PickingConfig,
@@ -285,9 +288,10 @@ def _normalize_production_fields(
     finished_goods_buffer_location_id: int | None,
     production_order_trigger_scope: str | None,
     source_status_id: int,
-) -> tuple[bool, int | None, int | None, int | None, str | None]:
+    production_execution_method: str | None = None,
+) -> tuple[bool, int | None, int | None, int | None, str | None, str | None]:
     if not is_production_mode:
-        return False, None, None, None, None
+        return False, None, None, None, None, None
 
     after_id = int(status_after_production_id) if status_after_production_id is not None else None
     shortage_id = (
@@ -313,7 +317,10 @@ def _normalize_production_fields(
             "Trigger produkcji z zamówień obsługuje obecnie wyłącznie zamówienia jednoelementowe "
             "(SINGLE_ELEMENT)."
         )
-    return True, after_id, shortage_id, buffer_id, scope_raw
+    method_raw = (production_execution_method or PRODUCTION_EXECUTION_METHOD_WMS).strip().upper()
+    if method_raw not in PRODUCTION_EXECUTION_METHODS:
+        raise ValueError("Sposób realizacji produkcji musi być Terminal WMS albo Wydruk zlecenia.")
+    return True, after_id, shortage_id, buffer_id, scope_raw, method_raw
 
 
 def validate_production_mode_batch(
@@ -390,12 +397,13 @@ def create_picking_config(db: Session, body: PickingConfigCreate) -> PickingConf
     if shortage_id is not None:
         assert_ui_status_belongs(db, tenant_id=body.tenant_id, warehouse_id=body.warehouse_id, status_id=int(shortage_id))
 
-    is_prod, after_prod_id, comp_shortage_id, buffer_id, trigger_scope = _normalize_production_fields(
+    is_prod, after_prod_id, comp_shortage_id, buffer_id, trigger_scope, exec_method = _normalize_production_fields(
         is_production_mode=bool(getattr(body, "is_production_mode", False)),
         status_after_production_id=getattr(body, "status_after_production_id", None),
         status_on_component_shortage_id=getattr(body, "status_on_component_shortage_id", None),
         finished_goods_buffer_location_id=getattr(body, "finished_goods_buffer_location_id", None),
         production_order_trigger_scope=getattr(body, "production_order_trigger_scope", None),
+        production_execution_method=getattr(body, "production_execution_method", None),
         source_status_id=int(body.source_status_id),
     )
     if is_prod:
@@ -493,6 +501,7 @@ def create_picking_config(db: Session, body: PickingConfigCreate) -> PickingConf
         status_on_component_shortage_id=comp_shortage_id,
         finished_goods_buffer_location_id=buffer_id,
         production_order_trigger_scope=trigger_scope,
+        production_execution_method=exec_method or PRODUCTION_EXECUTION_METHOD_WMS,
     )
     db.add(row)
     db.flush()
@@ -515,12 +524,13 @@ def update_picking_config(
     if shortage_id is not None:
         assert_ui_status_belongs(db, tenant_id=tenant_id, warehouse_id=warehouse_id, status_id=int(shortage_id))
 
-    is_prod, after_prod_id, comp_shortage_id, buffer_id, trigger_scope = _normalize_production_fields(
+    is_prod, after_prod_id, comp_shortage_id, buffer_id, trigger_scope, exec_method = _normalize_production_fields(
         is_production_mode=bool(getattr(body, "is_production_mode", False)),
         status_after_production_id=getattr(body, "status_after_production_id", None),
         status_on_component_shortage_id=getattr(body, "status_on_component_shortage_id", None),
         finished_goods_buffer_location_id=getattr(body, "finished_goods_buffer_location_id", None),
         production_order_trigger_scope=getattr(body, "production_order_trigger_scope", None),
+        production_execution_method=getattr(body, "production_execution_method", None),
         source_status_id=int(existing.source_status_id),
     )
     if is_prod:
@@ -611,6 +621,7 @@ def update_picking_config(
     existing.status_on_component_shortage_id = comp_shortage_id
     existing.finished_goods_buffer_location_id = buffer_id
     existing.production_order_trigger_scope = trigger_scope
+    existing.production_execution_method = exec_method or PRODUCTION_EXECUTION_METHOD_WMS
     db.add(existing)
     db.flush()
     return existing
@@ -636,6 +647,8 @@ def picking_config_to_read(row: PickingConfig) -> PickingConfigRead:
         aos_out = str(raw_aos).strip().lower()  # type: ignore[assignment]
     scope = getattr(row, "production_order_trigger_scope", None)
     scope_out = str(scope).strip() if scope and str(scope).strip() in PRODUCTION_ORDER_TRIGGER_SCOPES else None
+    method_raw = str(getattr(row, "production_execution_method", None) or PRODUCTION_EXECUTION_METHOD_WMS).strip().upper()
+    method_out = method_raw if method_raw in PRODUCTION_EXECUTION_METHODS else PRODUCTION_EXECUTION_METHOD_WMS
     return base.model_copy(
         update={
             "source_status_name": str(src.name) if src is not None else None,
@@ -650,6 +663,7 @@ def picking_config_to_read(row: PickingConfig) -> PickingConfigRead:
             "status_on_component_shortage_id": getattr(row, "status_on_component_shortage_id", None),
             "finished_goods_buffer_location_id": getattr(row, "finished_goods_buffer_location_id", None),
             "production_order_trigger_scope": scope_out,
+            "production_execution_method": method_out,
             "status_after_production_name": str(after_prod.name) if after_prod is not None else None,
             "status_on_component_shortage_name": str(comp_sh.name) if comp_sh is not None else None,
             "finished_goods_buffer_location_name": str(buf.name) if buf is not None else None,
@@ -683,12 +697,13 @@ def replace_all_picking_configs_for_warehouse(
             assert_ui_status_belongs(
                 db, tenant_id=tenant_id, warehouse_id=warehouse_id, status_id=int(sid_short)
             )
-        is_prod, after_prod_id, comp_shortage_id, buffer_id, trigger_scope = _normalize_production_fields(
+        is_prod, after_prod_id, comp_shortage_id, buffer_id, trigger_scope, exec_method = _normalize_production_fields(
             is_production_mode=bool(getattr(i, "is_production_mode", False)),
             status_after_production_id=getattr(i, "status_after_production_id", None),
             status_on_component_shortage_id=getattr(i, "status_on_component_shortage_id", None),
             finished_goods_buffer_location_id=getattr(i, "finished_goods_buffer_location_id", None),
             production_order_trigger_scope=getattr(i, "production_order_trigger_scope", None),
+            production_execution_method=getattr(i, "production_execution_method", None),
             source_status_id=sid,
         )
         if is_prod:
@@ -711,6 +726,7 @@ def replace_all_picking_configs_for_warehouse(
                     "status_on_component_shortage_id": comp_shortage_id,
                     "finished_goods_buffer_location_id": buffer_id,
                     "production_order_trigger_scope": trigger_scope,
+                    "production_execution_method": exec_method,
                     "is_production_mode": True,
                 }
             )
@@ -734,7 +750,7 @@ def replace_all_picking_configs_for_warehouse(
                 i,
                 all_mode,
                 all_order_sort,
-                (is_prod, after_prod_id, comp_shortage_id, buffer_id, trigger_scope),
+                (is_prod, after_prod_id, comp_shortage_id, buffer_id, trigger_scope, exec_method),
             )
         )
 
@@ -747,7 +763,7 @@ def replace_all_picking_configs_for_warehouse(
 
     out: list[PickingConfig] = []
     for i, all_mode, all_order_sort, prod_tuple in prepared:
-        is_prod, after_prod_id, comp_shortage_id, buffer_id, trigger_scope = prod_tuple
+        is_prod, after_prod_id, comp_shortage_id, buffer_id, trigger_scope, exec_method = prod_tuple
         ms, mm, ma = normalize_bulk_max_fields(
             i.single_mode,
             i.multi_mode,
@@ -779,6 +795,7 @@ def replace_all_picking_configs_for_warehouse(
             status_on_component_shortage_id=comp_shortage_id,
             finished_goods_buffer_location_id=buffer_id,
             production_order_trigger_scope=trigger_scope,
+            production_execution_method=exec_method or PRODUCTION_EXECUTION_METHOD_WMS,
         )
         db.add(row)
         out.append(row)

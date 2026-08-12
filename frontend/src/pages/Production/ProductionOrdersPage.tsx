@@ -12,6 +12,7 @@ import {
 import {
   listProductionBatches,
   listProductionOrders,
+  printOrderProductionCardBrowser,
   releaseBatchToWms,
   releaseOrderToWms,
   type ProductionBatchRead,
@@ -83,26 +84,43 @@ function OrderWorkCard({
   selected,
   onOpen,
   onReleaseToWms,
+  onPrintOrder,
 }: {
   row: ProductionOrderRow;
   selected?: boolean;
   onOpen: () => void;
   onReleaseToWms: () => void;
+  onPrintOrder?: () => void;
 }) {
   const level = resolveProductionPriority(row.priority, row.hasShortages, row.numericPriority);
   const pct = row.progressPercent;
   const showProgress = typeof pct === "number" && Number.isFinite(pct);
   const clamped = showProgress ? Math.max(0, Math.min(100, pct)) : 0;
   const barTone = productionProgressTone(clamped, row.status);
+  const isPrintMethod =
+    row.kind === "order" &&
+    row.sourceType === "ORDERS" &&
+    row.productionExecutionMethod === "PRINT";
 
   const wmsActions =
-    (row.status === "planned" || row.status === "draft")
+    !isPrintMethod && (row.status === "planned" || row.status === "draft")
       ? [
           {
             id: "wms",
             label: row.isReleasedToWms ? "Otwórz WMS" : "Wydaj do WMS",
             onClick: onReleaseToWms,
             disabled: row.hasShortages,
+          },
+        ]
+      : [];
+
+  const printActions =
+    isPrintMethod && onPrintOrder
+      ? [
+          {
+            id: "print-mo",
+            label: "Wydrukuj zlecenie produkcyjne",
+            onClick: onPrintOrder,
           },
         ]
       : [];
@@ -120,6 +138,11 @@ function OrderWorkCard({
               {row.kind === "order" && row.sourceType === "ORDERS" ? (
                 <StatusBadge tone="info" density="compact">
                   Z zamówień
+                </StatusBadge>
+              ) : null}
+              {row.kind === "order" && row.sourceType === "ORDERS" ? (
+                <StatusBadge tone="neutral" density="compact">
+                  {isPrintMethod ? "Wydruk" : "Terminal WMS"}
                 </StatusBadge>
               ) : null}
               {row.kind === "order" && row.sourceType === "ORDERS" && (row.sourceOrderCount ?? 0) > 0 ? (
@@ -177,6 +200,7 @@ function OrderWorkCard({
             actions={[
               { id: "open", label: "Otwórz", onClick: onOpen },
               { id: "edit", label: "Edytuj", onClick: onOpen },
+              ...printActions,
               ...wmsActions,
             ]}
           />
@@ -439,6 +463,15 @@ export default function ProductionOrdersPage() {
                     navigate(r.kind === "batch" ? erpProductionPaths.batch(r.id) : erpProductionPaths.order(r.id))
                   }
                   onReleaseToWms={() => void releaseToWms(r)}
+                  onPrintOrder={
+                    r.kind === "order" && warehouseId != null
+                      ? () => {
+                          void printOrderProductionCardBrowser(tenantId, r.id, warehouseId).catch(() => {
+                            toast.error("Nie udało się wygenerować PDF zlecenia.");
+                          });
+                        }
+                      : undefined
+                  }
                 />
               </li>
             );

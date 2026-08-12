@@ -16,6 +16,13 @@ from ..database import Base
 PRODUCTION_ORDER_TRIGGER_SCOPE_SINGLE_ELEMENT = "SINGLE_ELEMENT"
 PRODUCTION_ORDER_TRIGGER_SCOPES = frozenset({PRODUCTION_ORDER_TRIGGER_SCOPE_SINGLE_ELEMENT})
 
+#: How ORDERS MOs from this config are executed (interface, not a separate lifecycle).
+PRODUCTION_EXECUTION_METHOD_WMS = "WMS"
+PRODUCTION_EXECUTION_METHOD_PRINT = "PRINT"
+PRODUCTION_EXECUTION_METHODS = frozenset(
+    {PRODUCTION_EXECUTION_METHOD_WMS, PRODUCTION_EXECUTION_METHOD_PRINT}
+)
+
 
 class PickingConfig(Base):
     __tablename__ = "picking_config"
@@ -105,6 +112,13 @@ class PickingConfig(Base):
         String(32),
         nullable=True,
         default=None,
+    )
+    #: Sposób realizacji MO z zamówień: WMS (terminal) | PRINT (wydruk zlecenia).
+    production_execution_method = Column(
+        String(16),
+        nullable=False,
+        default="WMS",
+        server_default=text("'WMS'"),
     )
 
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)

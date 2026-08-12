@@ -57,6 +57,8 @@ export type ProductionOrderRow =
       sourceType?: "MANUAL" | "PLANNING" | "ORDERS" | null;
       sourceOrderCount?: number;
       sourceFulfilledOrderCount?: number;
+      productionExecutionMethod?: "WMS" | "PRINT" | null;
+      isPrintInterface?: boolean;
     };
 
 export function productionBatchToRow(b: ProductionBatchRead): ProductionOrderRow {
@@ -95,6 +97,8 @@ export function productionOrderToRow(o: ProductionOrderRead): ProductionOrderRow
     sourceType: o.source_type ?? "MANUAL",
     sourceOrderCount: o.source_order_count ?? 0,
     sourceFulfilledOrderCount: o.source_fulfilled_order_count ?? 0,
+    productionExecutionMethod: o.production_execution_method ?? null,
+    isPrintInterface: Boolean(o.is_print_interface),
   };
 }
 

@@ -110,7 +110,7 @@ export type RecipeUsageRead = {
   quantity: number;
 };
 
-export type ProductionExecutionInterface = "WMS" | "ERP";
+export type ProductionExecutionInterface = "WMS" | "ERP" | "PRINT";
 /** @deprecated use ProductionExecutionInterface */
 export type ProductionExecutionMode = ProductionExecutionInterface;
 
@@ -182,6 +182,8 @@ export type ProductionOrderRead = {
   is_released_to_wms?: boolean;
   execution_interface?: ProductionExecutionInterface | null;
   is_erp_interface?: boolean;
+  is_print_interface?: boolean;
+  production_execution_method?: "WMS" | "PRINT" | null;
   materials_reserved?: boolean;
   reservations_locked?: boolean;
   collection_progress_percent?: number;
@@ -1303,6 +1305,36 @@ export async function startErpExecutionOrder(
 
 /** @deprecated use startErpExecutionOrder */
 export const startPaperExecutionOrder = startErpExecutionOrder;
+
+export async function startPrintExecutionOrder(
+  tenantId: number,
+  orderId: number,
+  warehouseId?: number,
+  opts?: { consumeMaterials?: boolean },
+): Promise<ProductionOrderRead> {
+  const res = await api.post<ProductionOrderRead>(
+    `/production/orders/${orderId}/start-print-execution`,
+    null,
+    {
+      params: {
+        ...productionQueryParams(tenantId, warehouseId),
+        consume_materials: opts?.consumeMaterials !== false,
+      },
+    },
+  );
+  return res.data;
+}
+
+export async function resolveProductionOrderByScan(
+  tenantId: number,
+  code: string,
+  warehouseId?: number,
+): Promise<ProductionOrderRead> {
+  const res = await api.get<ProductionOrderRead>("/production/orders/resolve-scan", {
+    params: { ...productionQueryParams(tenantId, warehouseId), code },
+  });
+  return res.data;
+}
 
 export async function fetchOrderProductionCardPdf(
   tenantId: number,

@@ -184,6 +184,10 @@ class WmsPickingConfigReplaceItem(BaseModel):
         default=None,
         description="Zakres triggera produkcji z zamówień; obecnie tylko SINGLE_ELEMENT",
     )
+    production_execution_method: Optional[Literal["WMS", "PRINT"]] = Field(
+        default=None,
+        description="Sposób realizacji MO z zamówień: Terminal WMS | Wydruk zlecenia",
+    )
 
     @model_validator(mode="after")
     def _source_ne_target(self) -> "WmsPickingConfigReplaceItem":

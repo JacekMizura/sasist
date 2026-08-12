@@ -28,12 +28,15 @@ export type ProductionMonitoringActions = {
   onReleaseToWms?: () => void;
   onStartErpExecution?: () => void;
   onPrintProductionCard?: () => void;
+  onStartPrintExecution?: () => void;
   onOpenErpExecution?: () => void;
   onCancel?: () => void;
   releaseDisabled?: boolean;
   releaseDisabledReason?: string;
   erpDisabled?: boolean;
   erpDisabledReason?: string;
+  printStartDisabled?: boolean;
+  printStartDisabledReason?: string;
   busy?: boolean;
 };
 
@@ -106,11 +109,12 @@ function batchPwFromLines(batch: ProductionBatchRead): Pick<
 
 function interfaceLabel(source: MonitoringSource): string {
   if (source.is_erp_interface) return "Tryb papierowy";
+  const raw = String(source.execution_interface || "").trim().toUpperCase();
+  if (raw === "PRINT") return "Wydruk";
   if (source.is_released_to_wms) return "WMS";
-  const raw = String(source.execution_interface || "").trim().toLowerCase();
-  if (!raw || raw === "none") return "—";
-  if (raw.includes("erp") || raw.includes("paper")) return "Tryb papierowy";
-  if (raw.includes("wms")) return "WMS";
+  if (!raw || raw === "NONE") return "—";
+  if (raw.includes("ERP") || raw.includes("PAPER")) return "Tryb papierowy";
+  if (raw.includes("WMS")) return "WMS";
   return source.execution_interface ?? "—";
 }
 
@@ -130,12 +134,14 @@ export function ProductionMonitoringPanel({ kind, source, actions, showActions =
     !source.is_erp_interface &&
     actions?.onStartErpExecution;
   const canPrintCard = Boolean(actions?.onPrintProductionCard);
+  const canStartPrint = Boolean(actions?.onStartPrintExecution);
   const canOpenWms =
     !source.is_erp_interface &&
+    String(source.execution_interface || "").toUpperCase() !== "PRINT" &&
     (source.is_released_to_wms ||
       ["collecting", "in_progress", "awaiting_putaway", "putaway"].includes(status));
   const canOpenErp =
-    source.is_erp_interface &&
+    (source.is_erp_interface || String(source.execution_interface || "").toUpperCase() === "PRINT") &&
     (actions?.onOpenErpExecution || ["collecting", "in_progress", "awaiting_putaway", "putaway"].includes(status));
   const canCancel =
     actions?.onCancel &&
@@ -163,8 +169,18 @@ export function ProductionMonitoringPanel({ kind, source, actions, showActions =
               className="inline-flex items-center gap-1.5"
             >
               <FileText className="h-4 w-4" aria-hidden />
-              Drukuj kartę
+              {canStartPrint ? "Podgląd / Drukuj" : "Drukuj kartę"}
             </SecondaryButton>
+          ) : null}
+          {canStartPrint ? (
+            <PrimaryButton
+              type="button"
+              disabled={actions?.busy || actions?.printStartDisabled}
+              title={actions?.printStartDisabled ? actions.printStartDisabledReason : undefined}
+              onClick={actions?.onStartPrintExecution}
+            >
+              Wydrukuj i rozpocznij
+            </PrimaryButton>
           ) : null}
           {canRelease ? (
             <SecondaryButton

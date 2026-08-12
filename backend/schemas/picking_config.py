@@ -14,6 +14,7 @@ PickingConfigAllMode = Literal["bulk", "scanned", "baskets"]
 PickingConfigPickUnit = Literal["orders", "products"]
 PickingConfigOrderSort = Literal["date", "location", "courier"]
 ProductionOrderTriggerScope = Literal["SINGLE_ELEMENT"]
+ProductionExecutionMethod = Literal["WMS", "PRINT"]
 
 
 class PickingConfigRead(BaseModel):
@@ -44,6 +45,7 @@ class PickingConfigRead(BaseModel):
     status_on_component_shortage_id: Optional[int] = None
     finished_goods_buffer_location_id: Optional[int] = None
     production_order_trigger_scope: Optional[ProductionOrderTriggerScope] = None
+    production_execution_method: ProductionExecutionMethod = "WMS"
     created_at: datetime
     source_status_name: Optional[str] = None
     target_status_name: Optional[str] = None
@@ -76,6 +78,7 @@ class PickingConfigCreate(BaseModel):
     status_on_component_shortage_id: Optional[int] = Field(default=None, ge=1)
     finished_goods_buffer_location_id: Optional[int] = Field(default=None, ge=1)
     production_order_trigger_scope: Optional[ProductionOrderTriggerScope] = None
+    production_execution_method: Optional[ProductionExecutionMethod] = None
 
     @model_validator(mode="after")
     def source_not_target(self) -> "PickingConfigCreate":
@@ -104,6 +107,7 @@ class PickingConfigUpdate(BaseModel):
     status_on_component_shortage_id: Optional[int] = Field(default=None, ge=1)
     finished_goods_buffer_location_id: Optional[int] = Field(default=None, ge=1)
     production_order_trigger_scope: Optional[ProductionOrderTriggerScope] = None
+    production_execution_method: Optional[ProductionExecutionMethod] = None
 
 
 class PickingConfigListResponse(BaseModel):

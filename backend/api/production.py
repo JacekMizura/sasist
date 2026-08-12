@@ -82,6 +82,10 @@ from ..services.production_execution.erp_execution_service import (
     start_paper_execution_batch,
     start_paper_execution_order,
 )
+from ..services.production_execution.print_execution_service import (
+    resolve_production_order_by_scan,
+    start_print_execution_order,
+)
 from ..services.production_execution.production_card_pdf_service import (
     generate_batch_production_card_pdf_bytes,
     generate_bulk_batch_production_cards_pdf_bytes,
@@ -375,6 +379,27 @@ def api_list_orders(
     db: Session = Depends(get_db),
 ):
     return list_production_orders(db, tenant_id=tenant_id, status=status, warehouse_id=warehouse_id)
+
+
+@router.get("/orders/resolve-scan", response_model=ProductionOrderRead)
+def api_resolve_production_order_scan(
+    code: str = Query(..., min_length=1),
+    tenant_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_active_or_query_operable_warehouse),
+    db: Session = Depends(get_db),
+    user: AppUser = Depends(get_current_user),
+):
+    """Resolve MO barcode / number from printed card into existing production order."""
+    _ = user
+    try:
+        return resolve_production_order_by_scan(
+            db,
+            tenant_id=tenant_id,
+            warehouse_id=warehouse_id,
+            code=code,
+        )
+    except ProductionOrderError as exc:
+        raise _order_err(exc) from exc
 
 
 @router.get("/orders/{order_id}", response_model=ProductionOrderRead)
@@ -1212,6 +1237,38 @@ def api_start_paper_execution_order(
             tenant_id=tenant_id,
             order_id=order_id,
             started_by_user_id=uid,
+        )
+        db.commit()
+        return row
+    except ProductionOrderError as exc:
+        db.rollback()
+        raise _order_err(exc) from exc
+
+
+@router.post("/orders/{order_id}/start-print-execution", response_model=ProductionOrderRead)
+def api_start_print_execution_order(
+    order_id: int,
+    tenant_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_active_or_query_operable_warehouse),
+    consume_materials: bool = Query(
+        True,
+        description="Po starcie: zablokuj rezerwacje i utwórz RW (finish collecting). False = tylko start zbierania.",
+    ),
+    db: Session = Depends(get_db),
+    user: AppUser = Depends(get_current_user),
+):
+    """Conscious start via printed card — not PDF preview. Default creates RW once."""
+    _gate_production_order(
+        db, user, tenant_id=tenant_id, order_id=order_id, warehouse_id=warehouse_id
+    )
+    try:
+        uid = int(user.id) if user is not None else None
+        row = start_print_execution_order(
+            db,
+            tenant_id=tenant_id,
+            order_id=order_id,
+            started_by_user_id=uid,
+            consume_materials=bool(consume_materials),
         )
         db.commit()
         return row

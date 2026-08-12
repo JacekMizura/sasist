@@ -4499,6 +4499,13 @@ def ensure_picking_config_production_mode_columns(engine: Engine) -> None:
             )
         if "production_order_trigger_scope" not in cols:
             conn.execute(text("ALTER TABLE picking_config ADD COLUMN production_order_trigger_scope VARCHAR(32)"))
+        if "production_execution_method" not in cols:
+            conn.execute(
+                text(
+                    "ALTER TABLE picking_config ADD COLUMN production_execution_method VARCHAR(16) "
+                    "NOT NULL DEFAULT 'WMS'"
+                )
+            )
         conn.execute(
             text(
                 "CREATE INDEX IF NOT EXISTS ix_picking_config_is_production_mode "

@@ -37,7 +37,11 @@ from ..schemas.production import (
     StockShortageRead,
 )
 from .document_number_service import assign_series_number_to_stock_document, require_warehouse_series
-from .production_execution.execution_interface import is_erp_interface, normalized_execution_interface
+from .production_execution.execution_interface import (
+    is_erp_interface,
+    is_print_interface,
+    normalized_execution_interface,
+)
 from .inventory_carrier_ops import upsert_dock_inventory_for_loose_receipt
 from .inventory_lot_keys import NO_EXPIRY_SENTINEL
 from .order_item_pick_allocation_service import consume_inventory_fifo_slices
@@ -433,6 +437,12 @@ def serialize_order(
     if raw_source not in ("MANUAL", "PLANNING", "ORDERS"):
         raw_source = PRODUCTION_ORDER_SOURCE_MANUAL
 
+    production_execution_method = None
+    if raw_source == "ORDERS" and getattr(order, "picking_config_id", None) is not None:
+        from .production_execution.print_execution_service import resolve_configured_execution_method
+
+        production_execution_method = resolve_configured_execution_method(db, order)
+
     return ProductionOrderRead(
         id=int(order.id),
         tenant_id=int(order.tenant_id),
@@ -491,6 +501,8 @@ def serialize_order(
         is_released_to_wms=getattr(order, "released_to_wms_at", None) is not None,
         execution_interface=normalized_execution_interface(order),  # type: ignore[arg-type]
         is_erp_interface=is_erp_interface(order),
+        is_print_interface=is_print_interface(order),
+        production_execution_method=production_execution_method,  # type: ignore[arg-type]
         materials_reserved=bool(getattr(order, "materials_reserved", False)),
         reservations_locked=getattr(order, "reservations_locked_at", None) is not None,
         collection_progress_percent=coll_pct,

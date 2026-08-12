@@ -1,3 +1,10 @@
+## 2026-08-12 — Realizacja produkcji przez wydruk zlecenia (faza 5)
+
+- `picking_config.production_execution_method` WMS|PRINT (per status produkcyjny)
+- Preview PDF bez skutków magazynowych; `start-print-execution` → lock + RW (idempotent)
+- PDF: alokacje lokalizacji, zamówienia źródłowe + płomień, kod MO; resolve-scan + skaner terminala
+- UI: badge Wydruk / Terminal WMS; Podgląd vs Wydrukuj i rozpocznij + modal RW
+
 ## 2026-08-12 — Produkcja z buforem i pakowaniem (faza 4)
 
 - Progress: alokacja sztuk do source (priority) + status_after przez SSOT; ORDERS PW na lokalizację buforową (putaway DONE)

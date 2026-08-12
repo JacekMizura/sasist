@@ -679,6 +679,7 @@ type SavedPickingConfiguration = {
   statusOnComponentShortageName: string | null;
   finishedGoodsBufferLocationId: number | null;
   finishedGoodsBufferLocationName: string | null;
+  productionExecutionMethod: "WMS" | "PRINT";
 };
 
 function fingerprintPickingConfigsWarehouseState(
@@ -706,6 +707,7 @@ type PickingConfigDraft = {
   isProductionMode: boolean;
   statusOnComponentShortage: string;
   finishedGoodsBufferLocationId: string;
+  productionExecutionMethod: "WMS" | "PRINT";
 };
 
 function fingerprintDraftForm(d: PickingConfigDraft): string {
@@ -719,6 +721,7 @@ function fingerprintDraftForm(d: PickingConfigDraft): string {
     isProductionMode: d.isProductionMode,
     statusOnComponentShortage: d.statusOnComponentShortage.trim(),
     finishedGoodsBufferLocationId: d.finishedGoodsBufferLocationId.trim(),
+    productionExecutionMethod: d.productionExecutionMethod,
   });
 }
 
@@ -737,6 +740,7 @@ function createEmptyDraft(): PickingConfigDraft {
     isProductionMode: false,
     statusOnComponentShortage: "",
     finishedGoodsBufferLocationId: "",
+    productionExecutionMethod: "WMS",
   };
 }
 
@@ -868,6 +872,7 @@ function mapApiPickingRowToSaved(row: WmsPickingConfigReadApi): SavedPickingConf
     statusOnComponentShortageName: row.status_on_component_shortage_name?.trim() || null,
     finishedGoodsBufferLocationId: row.finished_goods_buffer_location_id ?? null,
     finishedGoodsBufferLocationName: row.finished_goods_buffer_location_name?.trim() || null,
+    productionExecutionMethod: row.production_execution_method === "PRINT" ? "PRINT" : "WMS",
   };
 }
 
@@ -1075,6 +1080,7 @@ function savedConfigToReplaceItem(
       ? cfg.finishedGoodsBufferLocationId
       : null,
     production_order_trigger_scope: cfg.isProductionMode ? "SINGLE_ELEMENT" : null,
+    production_execution_method: cfg.isProductionMode ? cfg.productionExecutionMethod : null,
   };
 }
 
@@ -1101,6 +1107,7 @@ function savedConfigurationToDraft(cfg: SavedPickingConfiguration): PickingConfi
       cfg.statusOnComponentShortageId != null ? String(cfg.statusOnComponentShortageId) : "",
     finishedGoodsBufferLocationId:
       cfg.finishedGoodsBufferLocationId != null ? String(cfg.finishedGoodsBufferLocationId) : "",
+    productionExecutionMethod: cfg.productionExecutionMethod === "PRINT" ? "PRINT" : "WMS",
   };
 }
 
@@ -1356,6 +1363,8 @@ function PickingConfiguratorEditor({
   onStatusOnComponentShortageChange,
   finishedGoodsBufferLocationId,
   onFinishedGoodsBufferLocationIdChange,
+  productionExecutionMethod,
+  onProductionExecutionMethodChange,
   bufferLocations,
 }: {
   fieldIdPrefix: string;
@@ -1389,6 +1398,8 @@ function PickingConfiguratorEditor({
   onStatusOnComponentShortageChange: (v: string) => void;
   finishedGoodsBufferLocationId: string;
   onFinishedGoodsBufferLocationIdChange: (v: string) => void;
+  productionExecutionMethod: "WMS" | "PRINT";
+  onProductionExecutionMethodChange: (v: "WMS" | "PRINT") => void;
   bufferLocations: WarehouseLocationItem[];
 }) {
   const statusNameById = useMemo(() => buildOrderUiStatusNameById(orderUiSummary), [orderUiSummary]);
@@ -1635,6 +1646,18 @@ function PickingConfiguratorEditor({
                 Trigger produkcji z zamówień obsługuje obecnie tylko zamówienia jednoelementowe.
               </p>
             </div>
+          </div>
+          <div className="min-w-0 rounded-xl border border-slate-200 bg-white p-3.5 min-[720px]:col-span-2">
+            <PickingRadioGroup
+              legend="Sposób realizacji produkcji"
+              name={`${fieldIdPrefix}-production-execution-method`}
+              value={productionExecutionMethod}
+              options={[
+                { value: "WMS", label: "Terminal WMS" },
+                { value: "PRINT", label: "Wydruk zlecenia" },
+              ]}
+              onChange={onProductionExecutionMethodChange}
+            />
           </div>
         </div>
       ) : (
@@ -1940,7 +1963,10 @@ function SavedPickingConfigSummaryCard({
         <div className="space-y-1">
           <PickingConfigStatusBadge status={sourceBrief} />
           {config.isProductionMode ? (
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-sky-700">Produkcja</p>
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-sky-700">
+              Produkcja
+              {config.productionExecutionMethod === "PRINT" ? " · Wydruk" : " · Terminal WMS"}
+            </p>
           ) : null}
         </div>
       </div>
@@ -2635,6 +2661,11 @@ export function WmsPickingSettingsSections({
       statusOnComponentShortageName: d.isProductionMode ? nameShortage : null,
       finishedGoodsBufferLocationId: d.isProductionMode ? bufferId : null,
       finishedGoodsBufferLocationName: null,
+      productionExecutionMethod: d.isProductionMode
+        ? d.productionExecutionMethod === "PRINT"
+          ? "PRINT"
+          : "WMS"
+        : "WMS",
     };
 
     let nextList: SavedPickingConfiguration[];
@@ -3330,6 +3361,10 @@ export function WmsPickingSettingsSections({
             finishedGoodsBufferLocationId={draft.finishedGoodsBufferLocationId}
             onFinishedGoodsBufferLocationIdChange={(v) =>
               setDraft((d) => (d ? { ...d, finishedGoodsBufferLocationId: v } : d))
+            }
+            productionExecutionMethod={draft.productionExecutionMethod}
+            onProductionExecutionMethodChange={(v) =>
+              setDraft((d) => (d ? { ...d, productionExecutionMethod: v } : d))
             }
             bufferLocations={bufferLocations}
           />

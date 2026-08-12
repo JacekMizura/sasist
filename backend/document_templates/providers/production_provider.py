@@ -255,55 +255,45 @@ class ProductionProvider:
         )
 
     def _order_card_dto(self, db: Session, *, tenant_id: int, order_id: int) -> ProductionPrintContext:
-        order = (
-            db.query(ProductionOrder)
-            .filter(ProductionOrder.id == int(order_id), ProductionOrder.tenant_id == int(tenant_id))
-            .first()
-        )
-        if order is None:
-            raise ProductionOrderError("Zlecenie produkcyjne nie istnieje.", code="not_found")
-        wh = db.query(Warehouse).filter(Warehouse.id == int(order.warehouse_id)).first()
-        p = db.query(Product).filter(Product.id == int(order.product_id)).first()
-        comp = None
-        if order.composition_id:
-            comp = db.query(ProductComposition).filter(ProductComposition.id == int(order.composition_id)).first()
-        plan = build_production_pick_plan(db, tenant_id=int(tenant_id), order_id=int(order_id))
+        from ...services.production_execution.production_card_pdf_service import _order_card_context
+
+        ctx = _order_card_context(db, tenant_id=tenant_id, order_id=order_id)
         components: list[ProductionComponentRow] = []
-        for line in plan.lines:
-            pref = {int(s.location_id) for s in line.suggested_locations if int(s.location_id) > 0}
+        for row in ctx.get("components") or []:
             components.append(
-                _component_row(
-                    db,
-                    tenant_id=int(tenant_id),
-                    warehouse_id=int(order.warehouse_id),
-                    component_product_id=int(line.component_product_id),
-                    product_name=str(line.product_name),
-                    product_sku=line.product_sku,
-                    product_image_url=line.product_image_url,
-                    required=float(line.required),
-                    suggested_location_ids=pref or None,
+                ProductionComponentRow(
+                    name=str(row.get("name") or ""),
+                    sku=row.get("sku"),
+                    ean=row.get("ean"),
+                    image_url=row.get("image_url"),
+                    required_qty=str(row.get("required_qty") or "0"),
+                    unit=str(row.get("unit") or "szt."),
+                    suggested_location=str(row.get("suggested_location") or "—"),
+                    available_qty=str(row.get("available_qty") or "0"),
+                    batch_number=str(row.get("batch_number") or "—"),
+                    lot=str(row.get("lot") or "—"),
+                    expiry_date=str(row.get("expiry_date") or "—"),
+                    barcode_value=row.get("barcode_value"),
+                    barcode_image_url=row.get("barcode_image_url"),
                 )
             )
-        header_bc = str(order.number or "").strip() or None
         return ProductionPrintContext(
-            job_number=str(order.number or ""),
-            job_kind_label="Zlecenie produkcyjne (MO)",
-            printed_at=datetime.utcnow().strftime("%d.%m.%Y %H:%M"),
-            header_image_url=(getattr(p, "image_url", None) or "").strip() or None,
-            header_product_line=str(getattr(p, "name", None) or f"Produkt #{order.product_id}"),
-            header_sku=(getattr(p, "sku", None) or getattr(p, "symbol", None)),
-            header_ean=(getattr(p, "ean", None) or "").strip() or None,
-            header_planned_qty=_fmt_qty(float(order.planned_quantity or 0)),
-            header_date=datetime.utcnow().strftime("%d.%m.%Y"),
-            operator_name=_operator_name(db, getattr(order, "created_by_user_id", None)),
-            warehouse_name=wh.name if wh else None,
-            recipe_version=f"{getattr(comp, 'name', '—')} v{getattr(comp, 'version', '1')}" if comp else "—",
-            started_at_display=_fmt_ts(getattr(order, "started_at", None)),
-            completed_at_display=_fmt_ts(
-                getattr(order, "completed_at", None) or getattr(order, "production_completed_at", None)
-            ),
-            header_barcode_value=header_bc,
-            header_barcode_image_url=code128_png_data_uri(header_bc),
+            job_number=str(ctx.get("job_number") or ""),
+            job_kind_label=str(ctx.get("job_kind_label") or ""),
+            printed_at=str(ctx.get("printed_at") or ""),
+            header_image_url=ctx.get("header_image_url"),
+            header_product_line=str(ctx.get("header_product_line") or ""),
+            header_sku=ctx.get("header_sku"),
+            header_ean=ctx.get("header_ean"),
+            header_planned_qty=str(ctx.get("header_planned_qty") or "0"),
+            header_date=str(ctx.get("header_date") or ""),
+            operator_name=ctx.get("operator_name"),
+            warehouse_name=ctx.get("warehouse_name"),
+            recipe_version=str(ctx.get("recipe_version") or "—"),
+            started_at_display=str(ctx.get("started_at_display") or "________________"),
+            completed_at_display=str(ctx.get("completed_at_display") or "________________"),
+            header_barcode_value=ctx.get("header_barcode_value"),
+            header_barcode_image_url=ctx.get("header_barcode_image_url"),
             components=components,
         )
 

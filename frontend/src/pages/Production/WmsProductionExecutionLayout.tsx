@@ -8,12 +8,15 @@ import {
   WMS_TERMINAL_STACK,
 } from "../../components/wms/execution/wmsLayoutTokens";
 import { WMS_PRODUCTION_TABS } from "../../modules/production/wmsProductionTabs";
+import { useProductionMoScanResolve } from "./hooks/useProductionMoScanResolve";
 
 /**
  * WMS production execution — workflow tabs only, inside shared terminal shell (WmsTopBar).
  * No duplicate mode header; mode label lives in global top navigation.
  */
 export default function WmsProductionExecutionLayout() {
+  useProductionMoScanResolve(true);
+
   return (
     <div className="flex min-h-full flex-col bg-white">
       <div className={`${WMS_TERMINAL_SHELL} shrink-0 border-b border-slate-100`}>
@@ -26,7 +29,7 @@ export default function WmsProductionExecutionLayout() {
           />
           <p className="flex items-center gap-2 text-xs text-slate-500">
             <ScanLine className="h-3.5 w-3.5 shrink-0 text-amber-600" aria-hidden />
-            Planowanie partii i receptury — w module ERP → Produkcja
+            Zeskanuj kod MO z wydruku, aby otworzyć zlecenie · planowanie w ERP → Produkcja
           </p>
         </div>
       </div>

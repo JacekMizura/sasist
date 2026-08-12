@@ -259,6 +259,8 @@ class ProductionOrderRead(BaseModel):
     is_released_to_wms: bool = False
     execution_interface: Optional[ProductionExecutionInterface] = None
     is_erp_interface: bool = False
+    is_print_interface: bool = False
+    production_execution_method: Optional[Literal["WMS", "PRINT"]] = None
     materials_reserved: bool = False
     reservations_locked: bool = False
     collection_progress_percent: float = 0.0
@@ -290,7 +292,7 @@ class ProductionOrderCreateBody(BaseModel):
         return self
 
 
-ProductionExecutionInterface = Literal["WMS", "ERP"]
+ProductionExecutionInterface = Literal["WMS", "ERP", "PRINT"]
 # Deprecated alias
 ProductionExecutionMode = ProductionExecutionInterface
 
