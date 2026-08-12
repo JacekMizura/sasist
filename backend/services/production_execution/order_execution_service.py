@@ -402,20 +402,54 @@ def update_order_production_progress(
     tenant_id: int,
     order_id: int,
     body: OrderProductionProgressBody,
+    performed_by_user_id: int | None = None,
 ):
+    from ...models.production import PRODUCTION_ORDER_SOURCE_ORDERS
+    from .orders_fg_fulfillment_service import (
+        allocate_produced_delta_to_order_sources,
+        receive_orders_mo_fg_to_buffer,
+        resolve_orders_mo_buffer_location_id,
+    )
+
     order = _load_order(db, tenant_id=tenant_id, order_id=order_id)
     if str(order.status) != "in_progress":
         raise ProductionOrderError("Zlecenie nie jest w produkcji.", code="invalid_status")
-    new_qty = float(order.produced_quantity or 0) + float(body.add_quantity)
+    add_qty = float(body.add_quantity)
+    new_qty = float(order.produced_quantity or 0) + add_qty
     if new_qty > float(order.planned_quantity) + 1e-6:
         raise ProductionOrderError("Przekroczono planowaną ilość.", code="over_production")
     order.produced_quantity = round(new_qty, 4)
     order.updated_at = datetime.utcnow()
     db.flush()
-    return serialize_order(db, order, with_availability=False)
+
+    if str(getattr(order, "source_type", "") or "") == PRODUCTION_ORDER_SOURCE_ORDERS:
+        buffer_id = resolve_orders_mo_buffer_location_id(db, order)
+        receive_orders_mo_fg_to_buffer(
+            db,
+            mo=order,
+            add_quantity=add_qty,
+            performed_by_user_id=performed_by_user_id,
+        )
+        allocate_produced_delta_to_order_sources(
+            db,
+            mo=order,
+            delta_qty=add_qty,
+            operator_user_id=performed_by_user_id,
+            buffer_location_id=buffer_id,
+        )
+
+    return serialize_order(db, order, with_availability=False, with_order_sources=True)
 
 
-def finish_order_production(db: Session, *, tenant_id: int, order_id: int):
+def finish_order_production(
+    db: Session,
+    *,
+    tenant_id: int,
+    order_id: int,
+    performed_by_user_id: int | None = None,
+):
+    from ...models.production import PRODUCTION_ORDER_SOURCE_ORDERS
+    from .orders_fg_fulfillment_service import complete_orders_mo_without_putaway
     from .pw_putaway_handoff import create_order_pw_document_for_putaway
 
     order = _load_order(db, tenant_id=tenant_id, order_id=order_id)
@@ -423,7 +457,22 @@ def finish_order_production(db: Session, *, tenant_id: int, order_id: int):
         raise ProductionOrderError("Zlecenie nie jest w produkcji.", code="invalid_status")
     if float(order.produced_quantity or 0) < float(order.planned_quantity) - 1e-6:
         raise ProductionOrderError("Nie wyprodukowano planowanej ilości.", code="production_incomplete")
-    create_order_pw_document_for_putaway(db, order=order, performed_by_user_id=None)
+
+    if str(getattr(order, "source_type", "") or "") == PRODUCTION_ORDER_SOURCE_ORDERS:
+        # Progressive buffer PW already created on progress — ensure present, then complete.
+        if not getattr(order, "pw_stock_document_id", None):
+            from .orders_fg_fulfillment_service import receive_orders_mo_fg_to_buffer
+
+            receive_orders_mo_fg_to_buffer(
+                db,
+                mo=order,
+                add_quantity=float(order.produced_quantity or 0),
+                performed_by_user_id=performed_by_user_id,
+            )
+        complete_orders_mo_without_putaway(db, mo=order)
+        return serialize_order(db, order, with_availability=False, with_order_sources=True)
+
+    create_order_pw_document_for_putaway(db, order=order, performed_by_user_id=performed_by_user_id)
     order.status = "awaiting_putaway"
     order.production_completed_at = datetime.utcnow()
     order.updated_at = datetime.utcnow()

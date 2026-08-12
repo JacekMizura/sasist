@@ -158,6 +158,34 @@ def create_order_pw_document_for_putaway(
     order: ProductionOrder,
     performed_by_user_id: int | None = None,
 ) -> int:
+    from ...models.production import PRODUCTION_ORDER_SOURCE_ORDERS
+
+    if str(getattr(order, "source_type", "") or "") == PRODUCTION_ORDER_SOURCE_ORDERS:
+        from .orders_fg_fulfillment_service import receive_orders_mo_fg_to_buffer
+
+        # ORDERS never enter standard putaway — buffer receipt path only.
+        qty = float(order.produced_quantity or order.planned_quantity or 0)
+        existing = float(0)
+        if order.pw_stock_document_id:
+            line = (
+                db.query(StockDocumentItem)
+                .filter(StockDocumentItem.document_id == int(order.pw_stock_document_id))
+                .order_by(StockDocumentItem.id.asc())
+                .first()
+            )
+            existing = float(line.received_quantity or 0) if line else 0.0
+        remaining = max(0.0, qty - existing)
+        if remaining > 1e-9:
+            receive_orders_mo_fg_to_buffer(
+                db,
+                mo=order,
+                add_quantity=remaining,
+                performed_by_user_id=performed_by_user_id,
+            )
+        if not order.pw_stock_document_id:
+            raise ValueError("Nie utworzono PW buforowego dla zlecenia ORDERS.")
+        return int(order.pw_stock_document_id)
+
     rw_doc = (
         db.query(StockDocument).filter(StockDocument.id == int(order.rw_stock_document_id)).first()
         if order.rw_stock_document_id

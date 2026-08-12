@@ -55,6 +55,8 @@ export type ProductionOrderRow =
       numericPriority?: number;
       progressPercent?: number | null;
       sourceType?: "MANUAL" | "PLANNING" | "ORDERS" | null;
+      sourceOrderCount?: number;
+      sourceFulfilledOrderCount?: number;
     };
 
 export function productionBatchToRow(b: ProductionBatchRead): ProductionOrderRow {
@@ -91,6 +93,8 @@ export function productionOrderToRow(o: ProductionOrderRead): ProductionOrderRow
     numericPriority: o.priority,
     progressPercent: typeof o.progress_percent === "number" ? o.progress_percent : null,
     sourceType: o.source_type ?? "MANUAL",
+    sourceOrderCount: o.source_order_count ?? 0,
+    sourceFulfilledOrderCount: o.source_fulfilled_order_count ?? 0,
   };
 }
 

@@ -317,17 +317,21 @@ export default function ProductionOrderDetailPage() {
           <div className="mt-6 rounded-xl border border-slate-200 bg-slate-50/60 p-4">
             <h3 className="text-sm font-semibold text-slate-900">Zamówienia źródłowe</h3>
             <p className="mt-1 text-xs text-slate-600">
-              Zamówienia: {order.source_order_count ?? order.order_sources!.length}
+              Wyprodukowano: {order.produced_quantity}/{order.planned_quantity}
               {" · "}
-              Zarezerwowane: {order.source_reserved_count ?? 0}
+              Zamówienia gotowe: {order.source_fulfilled_order_count ?? 0}/
+              {order.source_order_count ?? order.order_sources!.length}
               {" · "}
-              Brak materiałów: {order.source_shortage_count ?? 0}
+              Oczekujące: {order.source_pending_order_count ?? 0}
+              {" · "}
+              Brak komponentów: {order.source_shortage_count ?? 0}
             </p>
             <ul className="mt-3 divide-y divide-slate-200">
               {order.order_sources!.map((src) => {
                 const st = String(src.status || "").toLowerCase();
                 const ready = st === "reserved" || st === "open" || st === "partial";
                 const shortage = st === "shortage";
+                const fulfilled = st === "fulfilled";
                 return (
                   <li key={src.id} className="flex flex-wrap items-baseline justify-between gap-2 py-2 text-sm">
                     <div className="min-w-0">
@@ -343,6 +347,12 @@ export default function ProductionOrderDetailPage() {
                       <p className="tabular-nums text-slate-700">
                         {src.fulfilled_quantity}/{src.requested_quantity}
                       </p>
+                      <p className="text-[11px] uppercase tracking-wide text-slate-500">{st}</p>
+                      {fulfilled ? (
+                        <span className="rounded-full bg-sky-50 px-2 py-0.5 text-[11px] font-medium text-sky-800 ring-1 ring-sky-200">
+                          Gotowe / do pakowania
+                        </span>
+                      ) : null}
                       {ready ? (
                         <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-800 ring-1 ring-emerald-200">
                           Gotowe do produkcji

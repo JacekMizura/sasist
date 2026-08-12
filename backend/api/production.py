@@ -1358,7 +1358,11 @@ def api_order_production_progress(
     )
     try:
         row = update_order_production_progress(
-            db, tenant_id=tenant_id, order_id=order_id, body=body
+            db,
+            tenant_id=tenant_id,
+            order_id=order_id,
+            body=body,
+            performed_by_user_id=int(user.id) if getattr(user, "id", None) else None,
         )
         db.commit()
         return row
@@ -1379,7 +1383,12 @@ def api_finish_order_production(
         db, user, tenant_id=tenant_id, order_id=order_id, warehouse_id=warehouse_id
     )
     try:
-        row = finish_order_production(db, tenant_id=tenant_id, order_id=order_id)
+        row = finish_order_production(
+            db,
+            tenant_id=tenant_id,
+            order_id=order_id,
+            performed_by_user_id=int(user.id) if getattr(user, "id", None) else None,
+        )
         db.commit()
         return row
     except ProductionOrderError as exc:

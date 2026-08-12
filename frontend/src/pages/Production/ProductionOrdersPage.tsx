@@ -122,6 +122,13 @@ function OrderWorkCard({
                   Z zamówień
                 </StatusBadge>
               ) : null}
+              {row.kind === "order" && row.sourceType === "ORDERS" && (row.sourceOrderCount ?? 0) > 0 ? (
+                <span className="text-xs text-slate-500">
+                  Zamówienia: {row.sourceOrderCount}
+                  {" · "}
+                  Gotowe: {row.sourceFulfilledOrderCount ?? 0}/{row.sourceOrderCount}
+                </span>
+              ) : null}
             </div>
             <p className="mt-1 line-clamp-2 text-sm text-slate-600">{row.product}</p>
           </div>

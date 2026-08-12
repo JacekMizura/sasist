@@ -145,14 +145,22 @@ def order_item_required_pack_qty(db: Session, order: Order, it: OrderItem) -> in
     removed = float(getattr(it, "oms_removed_qty", None) or 0.0)
     replaced = float(getattr(it, "oms_replaced_qty", None) or 0.0)
     picked = float(line_picked_sum_for_order(db, int(it.id), order))
+    try:
+        from .production_execution.orders_fg_fulfillment_service import (
+            production_fulfilled_qty_for_order_item,
+        )
+
+        prod_ful = float(production_fulfilled_qty_for_order_item(db, int(it.id)))
+    except Exception:
+        prod_ful = 0.0
+    effective_picked = max(picked, prod_ful)
     missing = float(_order_item_operational_missing_qty(db, order, it))
     fulfillable = max(0.0, float(ordered) - removed - replaced)
 
     # Physical packing expectancy: only units actually picked (minus declared shortage).
-    # 4 picked + 4 shortage → pack 4; 0 picked + 8 shortage → pack 0;
-    # 0 picked without shortage (otwarte zbieranie) → pack 0 (nie udawaj kompletności).
+    # Production-fulfilled lines count as picked (FG buffer path).
     after_shortage = max(0.0, fulfillable - missing)
-    return max(0, int(round(min(after_shortage, picked))))
+    return max(0, int(round(min(after_shortage, effective_picked))))
 
 
 def _packing_finish_validation_snapshot(db: Session, order: Order, *, log: bool = False) -> dict:

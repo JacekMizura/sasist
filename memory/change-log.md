@@ -1,3 +1,9 @@
+## 2026-08-12 — Produkcja z buforem i pakowaniem (faza 4)
+
+- Progress: alokacja sztuk do source (priority) + status_after przez SSOT; ORDERS PW na lokalizację buforową (putaway DONE)
+- Finish ORDERS → `completed` bez kolejki Rozlokowanie; packing widzi stock bufora + production fulfilled qty
+- UI detail/lista: wyprodukowano / gotowe / oczekujące / braki
+
 ## 2026-08-12 — Rezerwacje i braki w produkcji z zamówień (faza 3)
 
 - Walidacja materiałowa po attach: `analyze_composition_quantity` → max producible + podział source (priority/oldest)

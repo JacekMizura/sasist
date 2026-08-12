@@ -1,10 +1,15 @@
 ﻿## Active
 
+**Order-driven production → packing (2026-08-12) — Phase 4:**
+- Progress +N: allocate to sources (same priority sort as Phase 3) → `fulfilled` → `status_after_production_id` via SSOT (`skip_production_trigger`)
+- ORDERS PW lands on `finished_goods_buffer_location_id` with putaway/relocation DONE (no Rozlokowanie queue); MO finishes as `completed`
+- Packing: FE_PICK finalized + pick allocation on buffer; `order_item_required_pack_qty` counts production fulfilled
+- UI: produced X/Y, ready/pending/shortage counts on MO detail + list snippet
+
 **Order-driven production materials (2026-08-12) — Phase 3:**
 - After attach: `apply_material_validation_to_orders_mo` → `producible_now_qty` + StockReservation SSOT
 - Partial cover: priority/oldest sources stay `reserved`; rest `shortage` → `status_on_component_shortage_id`
 - `planned_quantity` / BOM snapshots / reservations sync to producible qty; `retry_order_driven_production_shortages`
-- UI MO detail: reserved/shortage counts + badges; no status-after-production / buffer PW yet
 
 **Order-driven production auto-MO (2026-08-12) — Phase 2:**
 - Hook: `apply_order_panel_ui_status` → `on_order_panel_status_changed_production` (also bulk-status)
