@@ -29,7 +29,8 @@ type Props = {
   onCustomCoverageInputChange: (v: string) => void;
   onApplyCustomCoverage: () => void;
   onCreateBatch: (lines: DemandBatchLineDraft[], label: string) => void;
-  onRunStockReplenishment?: () => void;
+  onRecalculateDemand?: () => void;
+  onCreateReplenishmentOrders?: () => void;
   replenishmentRunning?: boolean;
 };
 
@@ -75,7 +76,8 @@ export function ProductionDemandPlanningPanel({
   onCustomCoverageInputChange,
   onApplyCustomCoverage,
   onCreateBatch,
-  onRunStockReplenishment,
+  onRecalculateDemand,
+  onCreateReplenishmentOrders,
   replenishmentRunning = false,
 }: Props) {
   const dash = data?.dashboard;
@@ -138,14 +140,24 @@ export function ProductionDemandPlanningPanel({
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            {autoReplenish && onRunStockReplenishment ? (
+            {onRecalculateDemand ? (
+              <SecondaryButton
+                type="button"
+                density="comfortable"
+                disabled={loading || replenishmentRunning}
+                onClick={onRecalculateDemand}
+              >
+                Przelicz zapotrzebowanie
+              </SecondaryButton>
+            ) : null}
+            {autoReplenish && onCreateReplenishmentOrders ? (
               <PrimaryButton
                 type="button"
                 density="comfortable"
                 disabled={replenishmentRunning || replenishRecommendations.length === 0}
-                onClick={onRunStockReplenishment}
+                onClick={onCreateReplenishmentOrders}
               >
-                {replenishmentRunning ? "Przeliczanie…" : "Przelicz i utwórz zlecenia"}
+                {replenishmentRunning ? "Tworzenie…" : "Utwórz zlecenia"}
               </PrimaryButton>
             ) : null}
             <CoveragePicker
@@ -163,7 +175,7 @@ export function ProductionDemandPlanningPanel({
           <p className="text-sm text-slate-500">Wczytywanie rekomendacji…</p>
         ) : recommendations.length === 0 ? (
           <p className="rounded-lg border border-dashed border-slate-200 px-3 py-4 text-center text-sm text-slate-500">
-            Brak produktów do produkcji w bieżącym horyzoncie.
+            Brak produktów wymagających uzupełnienia zapasu.
           </p>
         ) : (
           <div className="grid max-h-[13.5rem] gap-2 overflow-y-auto sm:grid-cols-2 xl:grid-cols-3">
@@ -324,12 +336,15 @@ function RecommendationCard({
   replenishCoverageDays: number;
   onCreateBatch: (lines: DemandBatchLineDraft[], label: string) => void;
 }) {
-  const reason =
-    row.recommendation_reasons.length > 0 ? row.recommendation_reasons.join(" · ") : "Rekomendacja MRP";
   const orderNeed = row.order_production_needed ?? 0;
   const stockNeed = row.stock_replenishment_needed ?? row.forecast_production_needed ?? 0;
   const showOrder = Boolean(row.has_order_demand) || orderNeed > 0 || row.order_demand > 0;
   const showStock = Boolean(row.has_stock_replenishment) || stockNeed > 0;
+  const target = row.forecast_demand;
+  const materialCapped =
+    row.max_producible >= 0 &&
+    row.recommended_quantity > 0 &&
+    row.max_producible + 1e-6 < row.recommended_quantity;
 
   return (
     <Card variant="section" density="compact" className="flex flex-col gap-2 !p-3">
@@ -348,31 +363,48 @@ function RecommendationCard({
             ) : null}
             {showStock ? (
               <StatusBadge tone="info" density="compact">
-                Uzupełnienie zapasu
+                Uzupełnienie magazynu
               </StatusBadge>
             ) : null}
           </div>
         </div>
         <p className="shrink-0 text-right">
           <span className="block text-lg font-bold tabular-nums text-slate-900">{fmtQty(row.recommended_quantity)}</span>
-          <span className={typography.caption}>do produkcji</span>
+          <span className={typography.caption}>razem</span>
         </p>
       </div>
-      <dl className="grid grid-cols-2 gap-x-2 gap-y-0.5 text-xs text-slate-600">
-        <dt>Zamówienia</dt>
-        <dd className="text-right tabular-nums">{fmtQty(orderNeed)}</dd>
-        <dt>Pokrycie {replenishCoverageDays} dni</dt>
-        <dd className="text-right tabular-nums">{fmtQty(stockNeed)}</dd>
-        <dt>W pipeline</dt>
-        <dd className="text-right tabular-nums">{fmtQty(row.in_pipeline)}</dd>
-        <dt>Rekomendacja</dt>
-        <dd className="text-right font-semibold tabular-nums text-slate-900">{fmtQty(row.recommended_quantity)}</dd>
+
+      <dl className="grid grid-cols-2 gap-x-3 gap-y-1 text-xs text-slate-600">
+        <dt>Stan</dt>
+        <dd className="text-right tabular-nums">{fmtQty(row.on_hand)} szt.</dd>
+        <dt>Sprzedaż</dt>
+        <dd className="text-right tabular-nums">{fmtQty(row.avg_daily_sales)} /dzień</dd>
+        <dt>Pokrycie</dt>
+        <dd className={`text-right tabular-nums font-medium ${COVERAGE_CLASS[row.coverage_color] ?? ""}`}>
+          {row.coverage_days != null ? `${row.coverage_days.toFixed(0)} dni` : "—"}
+        </dd>
+        <dt>Cel ({replenishCoverageDays} dni)</dt>
+        <dd className="text-right tabular-nums">{fmtQty(target)} szt.</dd>
+        <dt>W produkcji</dt>
+        <dd className="text-right tabular-nums">{fmtQty(row.in_pipeline)} szt.</dd>
+        <dt className="font-semibold text-amber-800">Zamówienia</dt>
+        <dd className="text-right font-semibold tabular-nums text-amber-900">{fmtQty(orderNeed)} szt.</dd>
+        <dt className="font-semibold text-sky-800">Uzupełnienie magazynu</dt>
+        <dd className="text-right font-semibold tabular-nums text-sky-900">{fmtQty(stockNeed)} szt.</dd>
+        <dt className="font-bold text-slate-900">Razem</dt>
+        <dd className="text-right font-bold tabular-nums text-slate-900">{fmtQty(row.recommended_quantity)} szt.</dd>
       </dl>
-      <p className="line-clamp-2 text-xs leading-snug text-slate-600">{reason}</p>
-      <p className={`text-xs font-medium ${COVERAGE_CLASS[row.coverage_color] ?? "text-slate-600"}`}>
-        Przewidywane pokrycie:{" "}
-        {row.coverage_days != null ? `${row.coverage_days.toFixed(0)} dni` : "—"}
+
+      {materialCapped ? (
+        <p className="rounded-md bg-amber-50 px-2 py-1 text-xs text-amber-900">
+          Materiały pozwalają obecnie wyprodukować maks. {fmtQty(row.max_producible)} szt.
+        </p>
+      ) : null}
+
+      <p className="text-[11px] leading-snug text-slate-500" title="Pierwszeństwo zamówień">
+        (i) Produkcja dla istniejących zamówień ma pierwszeństwo przed uzupełnianiem zapasu.
       </p>
+
       <PrimaryButton
         type="button"
         density="comfortable"

@@ -35,13 +35,20 @@ import {
   BATCH_STATUS_LABEL,
   PRODUCTION_STATUS_LABEL,
   executionStatusTone,
+  materialReadinessLabel,
+  materialReadinessTone,
+  productionExecutionMethodLabel,
   productionProgressTone,
+  productionSourceTypeLabel,
+  productionSourceTypeTone,
+  resolveMaterialReadiness,
   resolveProductionPriority,
   type ProductionPriorityLevel,
 } from "./productionUi";
 import { erpProductionPaths, wmsProductionPaths } from "./productionPaths";
 import { ProductionOrdersFiltersPanel } from "./components/ProductionOrdersFiltersPanel";
 import { ProductionRowActionsMenu } from "./components/ProductionRowActionsMenu";
+import { ProductThumb } from "./components/ProductThumb";
 import { productionPageStackClass, productionPageTitleClass } from "./productionLayoutTokens";
 import {
   ListTile,
@@ -97,10 +104,28 @@ function OrderWorkCard({
   const showProgress = typeof pct === "number" && Number.isFinite(pct);
   const clamped = showProgress ? Math.max(0, Math.min(100, pct)) : 0;
   const barTone = productionProgressTone(clamped, row.status);
+  const isOrder = row.kind === "order";
+  const producedQty = isOrder ? row.producedQty : 0;
+  const plannedQty = row.qty;
   const isPrintMethod =
-    row.kind === "order" &&
-    row.sourceType === "ORDERS" &&
-    row.productionExecutionMethod === "PRINT";
+    isOrder && row.sourceType === "ORDERS" && row.productionExecutionMethod === "PRINT";
+  const readiness = isOrder
+    ? resolveMaterialReadiness({
+        hasShortages: row.hasShortages,
+        materialsReserved: row.materialsReserved,
+        sourceShortageCount: row.sourceShortageCount,
+        sourceReservedCount: row.sourceReservedCount,
+        producedQuantity: row.producedQty,
+        plannedQuantity: row.qty,
+      })
+    : row.hasShortages
+      ? "shortage"
+      : "unknown";
+  const readyCount = isOrder ? row.sourceReservedCount ?? 0 : 0;
+  const shortageCount = isOrder ? row.sourceShortageCount ?? 0 : 0;
+  const sourceCount = isOrder ? row.sourceOrderCount ?? 0 : 0;
+  const producibleHint =
+    readiness === "partial" && plannedQty > 0 ? Math.max(0, plannedQty - shortageCount) : undefined;
 
   const wmsActions =
     !isPrintMethod && (row.status === "planned" || row.status === "draft")
@@ -127,37 +152,71 @@ function OrderWorkCard({
 
   return (
     <ListTile density="comfortable" selected={selected} className="w-full">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:gap-5">
-        <div className="min-w-0 flex-1 space-y-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:gap-4">
+        {isOrder ? <ProductThumb imageUrl={row.productImageUrl} name={row.product} size="md" /> : null}
+        <div className="min-w-0 flex-1 space-y-2.5">
           <div className="min-w-0">
             <div className="flex flex-wrap items-baseline gap-2">
               <p className="font-mono text-sm font-semibold text-slate-900">{row.number}</p>
-              <span className="text-xs font-bold uppercase tracking-wide text-slate-500">
-                {row.kind === "batch" ? "partia" : "MO"}
-              </span>
-              {row.kind === "order" && row.sourceType === "ORDERS" ? (
-                <StatusBadge tone="info" density="compact">
-                  Z zamówień
+              {isOrder && row.sourceType ? (
+                <StatusBadge tone={productionSourceTypeTone(row.sourceType)} density="compact">
+                  {productionSourceTypeLabel(row.sourceType)}
                 </StatusBadge>
-              ) : null}
-              {row.kind === "order" && row.sourceType === "ORDERS" ? (
+              ) : (
+                <span className="text-xs font-bold uppercase tracking-wide text-slate-500">partia</span>
+              )}
+              {isOrder && (row.sourceType === "ORDERS" || row.productionExecutionMethod) ? (
                 <StatusBadge tone="neutral" density="compact">
-                  {isPrintMethod ? "Wydruk" : "Terminal WMS"}
+                  {productionExecutionMethodLabel(row.productionExecutionMethod)}
                 </StatusBadge>
-              ) : null}
-              {row.kind === "order" && row.sourceType === "ORDERS" && (row.sourceOrderCount ?? 0) > 0 ? (
-                <span className="text-xs text-slate-500">
-                  Zamówienia: {row.sourceOrderCount}
-                  {" · "}
-                  Gotowe: {row.sourceFulfilledOrderCount ?? 0}/{row.sourceOrderCount}
-                </span>
               ) : null}
             </div>
-            <p className="mt-1 line-clamp-2 text-sm text-slate-600">{row.product}</p>
+            <p className="mt-1 line-clamp-2 text-sm font-medium text-slate-900">{row.product}</p>
+            <p className="mt-0.5 text-sm tabular-nums text-slate-700">
+              <span className="font-semibold text-slate-900">
+                {isOrder ? `${formatQty(producedQty)} / ${formatQty(plannedQty)}` : formatQty(plannedQty)}
+              </span>{" "}
+              <span className="text-slate-500">szt.</span>
+            </p>
           </div>
 
+          <div className="flex flex-wrap items-center gap-1.5">
+            <StatusBadge tone={executionStatusTone(row.status)} density="compact">
+              {statusLabel(row)}
+            </StatusBadge>
+            <StatusBadge tone={materialReadinessTone(readiness)} density="compact">
+              {materialReadinessLabel(readiness, {
+                producible: producibleHint,
+                planned: plannedQty,
+              })}
+            </StatusBadge>
+            <span className="text-xs text-slate-500">
+              Priorytet: <span className="font-medium text-slate-700">{PRIORITY_DISPLAY[level]}</span>
+            </span>
+          </div>
+
+          {isOrder && row.sourceType === "ORDERS" && sourceCount > 0 ? (
+            <p className="text-xs text-slate-600">
+              Zamówienia: <span className="font-semibold tabular-nums text-slate-900">{sourceCount}</span>
+              {readyCount > 0 ? (
+                <>
+                  {" · "}
+                  Gotowe do produkcji:{" "}
+                  <span className="font-semibold tabular-nums text-slate-900">{readyCount}</span>
+                </>
+              ) : null}
+              {shortageCount > 0 ? (
+                <>
+                  {" · "}
+                  Brak komponentów:{" "}
+                  <span className="font-semibold tabular-nums text-amber-800">{shortageCount}</span>
+                </>
+              ) : null}
+            </p>
+          ) : null}
+
           {showProgress ? (
-            <div className="max-w-xl space-y-1.5">
+            <div className="max-w-xl space-y-1">
               <div className="flex items-center justify-between gap-2 text-xs text-slate-500">
                 <span>Postęp</span>
                 <span className={`tabular-nums font-semibold ${toneTextClass[barTone]}`}>{clamped}%</span>
@@ -165,32 +224,6 @@ function OrderWorkCard({
               <ProgressBar value={clamped} tone={barTone} />
             </div>
           ) : null}
-
-          <div className="flex flex-wrap items-center gap-x-5 gap-y-2.5 text-xs text-slate-500">
-            <span className="inline-flex items-center gap-1.5">
-              <span className="text-slate-400">Status</span>
-              <StatusBadge tone={executionStatusTone(row.status)} density="compact">
-                {statusLabel(row)}
-              </StatusBadge>
-              {row.hasShortages ? (
-                <StatusBadge tone="warning" density="compact">
-                  Braki
-                </StatusBadge>
-              ) : null}
-            </span>
-            <span>
-              <span className="text-slate-400">Priorytet:</span>{" "}
-              <span className="font-medium text-slate-700">{PRIORITY_DISPLAY[level]}</span>
-            </span>
-            <span>
-              <span className="text-slate-400">Termin:</span>{" "}
-              <span className="tabular-nums font-medium text-slate-700">{formatPlannedDate(row.date)}</span>
-            </span>
-            <span>
-              <span className="text-slate-400">Ilość:</span>{" "}
-              <span className="tabular-nums font-medium text-slate-700">{row.qty}</span>
-            </span>
-          </div>
         </div>
 
         <div className="flex shrink-0 justify-end sm:pt-1" onClick={(e) => e.stopPropagation()}>
@@ -208,6 +241,10 @@ function OrderWorkCard({
       </div>
     </ListTile>
   );
+}
+
+function formatQty(n: number): string {
+  return Number.isInteger(n) ? String(n) : n.toFixed(1);
 }
 
 export default function ProductionOrdersPage() {
@@ -441,8 +478,8 @@ export default function ProductionOrdersPage() {
       ) : rows.length === 0 ? (
         <AppEmptyState
           icon={ClipboardList}
-          title="Brak zleceń"
-          description="Utwórz zlecenie lub partię w planowaniu produkcji."
+          title="Brak zleceń do produkcji."
+          description="Utwórz zlecenie ręcznie albo w planowaniu produkcji."
           action={
             <Link to={erpProductionPaths.createOrder} className="text-sm font-semibold text-slate-700 hover:underline">
               Przejdź do tworzenia zlecenia

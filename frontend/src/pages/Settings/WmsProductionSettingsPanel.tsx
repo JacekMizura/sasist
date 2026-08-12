@@ -280,27 +280,51 @@ export default function WmsProductionSettingsPanel({ warehouseId }: Props) {
             }
           />
           {draftForecast.auto_stock_replenishment ? (
-            <WmsControlSettingRow label="Docelowe pokrycie sprzedaży">
-              <select
-                className={wmsSettingControlSelectClass}
-                value={draftForecast.stock_replenishment_coverage_days ?? 7}
-                onChange={(e) =>
-                  setDraftForecast((prev) =>
-                    prev
-                      ? {
-                          ...prev,
-                          stock_replenishment_coverage_days: Number(e.target.value) as 1 | 3 | 7 | 14,
-                        }
-                      : prev,
-                  )
-                }
-              >
-                <option value={1}>1 dzień</option>
-                <option value={3}>3 dni</option>
-                <option value={7}>7 dni</option>
-                <option value={14}>14 dni</option>
-              </select>
-            </WmsControlSettingRow>
+            <div className="space-y-2">
+              <div className="flex items-center gap-1.5">
+                <p className="text-sm font-medium text-slate-800">Docelowe pokrycie sprzedaży</p>
+                <span
+                  className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-slate-100 text-xs font-bold text-slate-500"
+                  title="System oblicza zapas docelowy na podstawie średniej sprzedaży i wybranego okresu. Uwzględnia obecny stan oraz produkty będące już w produkcji."
+                >
+                  i
+                </span>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {(
+                  [
+                    { days: 1 as const, label: "1 dzień" },
+                    { days: 3 as const, label: "3 dni" },
+                    { days: 7 as const, label: "7 dni" },
+                    { days: 14 as const, label: "14 dni" },
+                  ] as const
+                ).map((opt) => {
+                  const active = (draftForecast.stock_replenishment_coverage_days ?? 7) === opt.days;
+                  return (
+                    <button
+                      key={opt.days}
+                      type="button"
+                      onClick={() =>
+                        setDraftForecast((prev) =>
+                          prev ? { ...prev, stock_replenishment_coverage_days: opt.days } : prev,
+                        )
+                      }
+                      className={`rounded-lg px-3 py-2 text-sm font-semibold transition ${
+                        active
+                          ? "bg-orange-500 text-white shadow-sm"
+                          : "bg-slate-100 text-slate-700 hover:bg-slate-200"
+                      }`}
+                    >
+                      {opt.label}
+                    </button>
+                  );
+                })}
+              </div>
+              <p className="text-xs text-slate-500">
+                System oblicza zapas docelowy na podstawie średniej sprzedaży i wybranego okresu.
+                Uwzględnia obecny stan oraz produkty będące już w produkcji.
+              </p>
+            </div>
           ) : null}
         </div>
       </SectionCard>

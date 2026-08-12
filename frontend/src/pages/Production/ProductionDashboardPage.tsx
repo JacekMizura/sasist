@@ -195,7 +195,21 @@ export default function ProductionDashboardPage() {
         <p className="text-sm text-slate-500">Wczytywanie danych…</p>
       ) : data ? (
         <>
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <MetricCard
+              density="comfortable"
+              className="min-w-0"
+              label={
+                <span className="flex flex-col gap-1">
+                  <KpiIcon className="bg-slate-100 text-slate-600">
+                    <ClipboardList className="h-4 w-4" />
+                  </KpiIcon>
+                  <span>Do produkcji</span>
+                </span>
+              }
+              value={data.ready_to_produce?.length ?? ready.length}
+              hint="zaplanowane / gotowe"
+            />
             <MetricCard
               density="comfortable"
               className="min-w-0"
@@ -208,21 +222,7 @@ export default function ProductionDashboardPage() {
                 </span>
               }
               value={data.active_batches}
-              hint="partie aktywne"
-            />
-            <MetricCard
-              density="comfortable"
-              className="min-w-0"
-              label={
-                <span className="flex flex-col gap-1">
-                  <KpiIcon className="bg-amber-50 text-amber-700">
-                    <PackageCheck className="h-4 w-4" />
-                  </KpiIcon>
-                  <span>Do rozlokowania</span>
-                </span>
-              }
-              value={awaitingCount}
-              hint="partie gotowe"
+              hint="aktywne zlecenia"
             />
             <MetricCard
               density="comfortable"
@@ -232,11 +232,11 @@ export default function ProductionDashboardPage() {
                   <KpiIcon className="bg-rose-50 text-rose-600">
                     <AlertTriangle className="h-4 w-4" />
                   </KpiIcon>
-                  <span>Braki materiałów</span>
+                  <span>Brak komponentów</span>
                 </span>
               }
               value={shortageCount}
-              hint="partii z brakami"
+              hint="wymaga uzupełnienia"
             />
             <MetricCard
               density="comfortable"
@@ -246,25 +246,11 @@ export default function ProductionDashboardPage() {
                   <KpiIcon className="bg-emerald-50 text-emerald-600">
                     <CheckCircle2 className="h-4 w-4" />
                   </KpiIcon>
-                  <span>Gotowe do WMS</span>
+                  <span>Gotowe dzisiaj</span>
                 </span>
               }
-              value={data.ready_to_produce?.length ?? ready.length}
-              hint="do przekazania"
-            />
-            <MetricCard
-              density="comfortable"
-              className="min-w-0"
-              label={
-                <span className="flex flex-col gap-1">
-                  <KpiIcon className="bg-slate-100 text-slate-600">
-                    <ClipboardList className="h-4 w-4" />
-                  </KpiIcon>
-                  <span>Wartość w toku</span>
-                </span>
-              }
-              value="—"
-              hint="wycena po kosztach receptur"
+              value={awaitingCount}
+              hint="do rozlokowania / pakowania"
             />
           </div>
 

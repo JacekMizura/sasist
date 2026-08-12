@@ -29,7 +29,7 @@ export default function WmsProductionExecutionLayout() {
           />
           <p className="flex items-center gap-2 text-xs text-slate-500">
             <ScanLine className="h-3.5 w-3.5 shrink-0 text-amber-600" aria-hidden />
-            Zeskanuj kod MO z wydruku, aby otworzyć zlecenie · planowanie w ERP → Produkcja
+            Zeskanuj kod zlecenia z wydruku, aby je otworzyć · planowanie w ERP → Produkcja
           </p>
         </div>
       </div>

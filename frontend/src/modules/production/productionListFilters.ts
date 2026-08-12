@@ -45,7 +45,9 @@ export type ProductionOrderRow =
       id: number;
       number: string;
       product: string;
+      productImageUrl?: string | null;
       qty: number;
+      producedQty: number;
       status: string;
       date: string;
       operator: string;
@@ -57,6 +59,9 @@ export type ProductionOrderRow =
       sourceType?: "MANUAL" | "PLANNING" | "ORDERS" | null;
       sourceOrderCount?: number;
       sourceFulfilledOrderCount?: number;
+      sourceShortageCount?: number;
+      sourceReservedCount?: number;
+      materialsReserved?: boolean;
       productionExecutionMethod?: "WMS" | "PRINT" | null;
       isPrintInterface?: boolean;
     };
@@ -85,7 +90,9 @@ export function productionOrderToRow(o: ProductionOrderRead): ProductionOrderRow
     id: o.id,
     number: o.number,
     product: o.product_name ?? `Produkt #${o.product_id}`,
+    productImageUrl: o.product_image_url ?? null,
     qty: o.planned_quantity,
+    producedQty: o.produced_quantity ?? 0,
     status: o.status,
     date: (o.created_at ?? "").slice(0, 10) || "—",
     operator: o.operator_name ?? "—",
@@ -97,6 +104,9 @@ export function productionOrderToRow(o: ProductionOrderRead): ProductionOrderRow
     sourceType: o.source_type ?? "MANUAL",
     sourceOrderCount: o.source_order_count ?? 0,
     sourceFulfilledOrderCount: o.source_fulfilled_order_count ?? 0,
+    sourceShortageCount: o.source_shortage_count ?? 0,
+    sourceReservedCount: o.source_reserved_count ?? 0,
+    materialsReserved: Boolean(o.materials_reserved),
     productionExecutionMethod: o.production_execution_method ?? null,
     isPrintInterface: Boolean(o.is_print_interface),
   };
@@ -152,14 +162,14 @@ export function filterProductionOrderRows(rows: ProductionOrderRow[], f: Product
 
 export const PRODUCTION_ORDER_STATUS_OPTIONS = [
   { value: "", label: "Wszystkie statusy" },
-  { value: "draft", label: "Robocza" },
-  { value: "planned", label: "Zaplanowana" },
-  { value: "collecting", label: "Zbieranie" },
-  { value: "in_progress", label: "W realizacji" },
-  { value: "awaiting_putaway", label: "Oczekuje na rozlokowanie" },
+  { value: "draft", label: "Nowe" },
+  { value: "planned", label: "Zaplanowane" },
+  { value: "collecting", label: "Pobieranie komponentów" },
+  { value: "in_progress", label: "W produkcji" },
+  { value: "awaiting_putaway", label: "Do rozlokowania" },
   { value: "putaway", label: "Rozlokowanie w toku" },
-  { value: "completed", label: "Ukończona" },
-  { value: "cancelled", label: "Anulowana" },
+  { value: "completed", label: "Zakończone" },
+  { value: "cancelled", label: "Anulowane" },
 ] as const;
 
 export const PRODUCTION_PRIORITY_OPTIONS = [

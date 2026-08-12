@@ -1504,11 +1504,20 @@ function PickingConfiguratorEditor({
       <div className="rounded-xl border border-slate-200 bg-white p-3.5">
         <CustomCheckbox
           label="Tryb produkcji"
-          hint="Nie jest zwykłym pickingiem — konfiguracja statusów i bufora dla produkcji z zamówień (tylko zamówienia jednoelementowe)."
+          hint="Zamiast zwykłego zbierania — statusy, bufor produktu gotowego i sposób realizacji produkcji z zamówień."
           checked={isProductionMode}
           onChange={onIsProductionModeChange}
         />
       </div>
+
+      {isProductionMode ? (
+        <div className="rounded-xl border border-orange-200 bg-orange-50/40 p-3.5">
+          <p className="text-xs font-bold uppercase tracking-wide text-orange-800">Tryb produkcji</p>
+          <p className="mt-1 text-xs text-orange-900/80">
+            Ustawienia poniżej dotyczą wyłącznie produkcji z zamówień — nie konfiguracji zbierania.
+          </p>
+        </div>
+      ) : null}
 
       {!orderUiLoading &&
       warehouseId != null &&
@@ -1647,12 +1656,18 @@ function PickingConfiguratorEditor({
             </div>
           </div>
           <div className="min-w-0 rounded-xl border border-slate-200 bg-white p-3.5">
-            <p className="text-sm font-semibold text-slate-900">
-              Lokalizacja buforowa produktu gotowego
-              <span className="ml-1 text-red-600" aria-hidden>
-                *
-              </span>
-            </p>
+            <div className="flex min-w-0 items-center gap-1.5">
+              <p className="text-sm font-semibold text-slate-900">
+                Lokalizacja buforowa produktu gotowego
+                <span className="ml-1 text-red-600" aria-hidden>
+                  *
+                </span>
+              </p>
+              <SettingInfoButton
+                title="Lokalizacja buforowa"
+                description="Tu trafia produkt gotowy z produkcji z zamówień — od razu dostępny do pakowania, bez kolejki rozlokowania."
+              />
+            </div>
             <div className="mt-3">
               <select
                 className={numberInputClass}
@@ -1668,24 +1683,40 @@ function PickingConfiguratorEditor({
                   </option>
                 ))}
               </select>
-              <p className="mt-1.5 text-xs text-slate-500">
-                Trigger produkcji z zamówień obsługuje obecnie tylko zamówienia jednoelementowe.
-              </p>
+              {!finishedGoodsBufferLocationId ? (
+                <p className="mt-1.5 text-xs font-medium text-red-700" role="alert">
+                  Wybierz lokalizację buforową produktu gotowego.
+                </p>
+              ) : null}
             </div>
           </div>
           <div className="min-w-0 rounded-xl border border-slate-200 bg-white p-3.5 min-[720px]:col-span-2">
+            <div className="mb-2 flex items-center gap-1.5">
+              <p className="text-sm font-semibold text-slate-900">Sposób realizacji</p>
+              <SettingInfoButton
+                title="Sposób realizacji"
+                description="Terminal WMS — kompletacja i raportowanie na kolektorze. Wydruk — karta produkcyjna PDF z pobraniem komponentów."
+              />
+            </div>
             <PickingRadioGroup
               legend="Sposób realizacji produkcji"
               name={`${fieldIdPrefix}-production-execution-method`}
               value={productionExecutionMethod}
               options={[
                 { value: "WMS", label: "Terminal WMS" },
-                { value: "PRINT", label: "Wydruk zlecenia" },
+                { value: "PRINT", label: "Wydruk" },
               ]}
               onChange={onProductionExecutionMethodChange}
             />
           </div>
           <div className="min-w-0 rounded-xl border border-slate-200 bg-white p-3.5 min-[720px]:col-span-2">
+            <div className="mb-2 flex items-center gap-1.5">
+              <p className="text-sm font-semibold text-slate-900">Po wyprodukowaniu</p>
+              <SettingInfoButton
+                title="Po wyprodukowaniu"
+                description="Tylko zmień status — zamówienie przechodzi na status po produkcji. Otwórz pakowanie — dodatkowo otwiera ekran pakowania dla operatora raportującego."
+              />
+            </div>
             <PickingRadioGroup
               legend="Po wyprodukowaniu"
               name={`${fieldIdPrefix}-after-production-action`}
@@ -1696,10 +1727,6 @@ function PickingConfiguratorEditor({
               ]}
               onChange={onAfterProductionActionChange}
             />
-            <p className="mt-1.5 text-xs text-slate-500">
-              „Otwórz pakowanie” dotyczy tylko operatora raportującego produkcję w tej sesji — nie jest
-              globalnym przekierowaniem.
-            </p>
           </div>
         </div>
       ) : (

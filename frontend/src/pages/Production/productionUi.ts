@@ -12,14 +12,14 @@ import { formatApiError } from "../../utils/apiErrorMessage";
 
 /** Single status label map — batch + MO share backend EXECUTION_STATUS_LABELS. */
 export const EXECUTION_STATUS_LABEL: Record<ProductionExecutionStatus, string> = {
-  draft: "Robocza",
-  planned: "Zaplanowana",
-  collecting: "Zbieranie",
-  in_progress: "W realizacji",
-  awaiting_putaway: "Oczekuje na rozlokowanie",
+  draft: "Nowe",
+  planned: "Zaplanowane",
+  collecting: "Pobieranie komponentów",
+  in_progress: "W produkcji",
+  awaiting_putaway: "Do rozlokowania",
   putaway: "Rozlokowanie w toku",
-  completed: "Ukończona",
-  cancelled: "Anulowana",
+  completed: "Zakończone",
+  cancelled: "Anulowane",
 };
 
 /** @deprecated use EXECUTION_STATUS_LABEL */
@@ -251,3 +251,121 @@ export function formatStartCollectingError(e: unknown): string {
   }
   return formatApiError(e);
 }
+
+/** Business labels — never show raw ORDERS / PLANNING / MANUAL enums. */
+export type ProductionSourceType = "MANUAL" | "PLANNING" | "ORDERS";
+
+export function productionSourceTypeLabel(sourceType?: string | null): string {
+  switch (String(sourceType || "").toUpperCase()) {
+    case "ORDERS":
+      return "Z zamówień";
+    case "PLANNING":
+      return "Na magazyn";
+    case "MANUAL":
+      return "Ręczne";
+    default:
+      return "Zlecenie";
+  }
+}
+
+export function productionSourceTypeTone(sourceType?: string | null): StatusTone {
+  switch (String(sourceType || "").toUpperCase()) {
+    case "ORDERS":
+      return "warning";
+    case "PLANNING":
+      return "info";
+    default:
+      return "neutral";
+  }
+}
+
+export function productionExecutionMethodLabel(method?: string | null): string {
+  return String(method || "").toUpperCase() === "PRINT" ? "Wydruk" : "WMS";
+}
+
+/** Source-item status on ORDERS MO — business language only. */
+export function productionSourceItemStatusLabel(status?: string | null): string {
+  switch (String(status || "").trim().toLowerCase()) {
+    case "fulfilled":
+      return "Wyprodukowano";
+    case "reserved":
+    case "open":
+    case "partial":
+      return "Gotowe do produkcji";
+    case "shortage":
+      return "Brak komponentów";
+    case "cancelled":
+      return "Anulowane";
+    default:
+      return "W toku";
+  }
+}
+
+export function productionSourceItemStatusTone(status?: string | null): StatusTone {
+  switch (String(status || "").trim().toLowerCase()) {
+    case "fulfilled":
+      return "success";
+    case "shortage":
+      return "warning";
+    case "cancelled":
+      return "danger";
+    case "reserved":
+    case "open":
+    case "partial":
+      return "info";
+    default:
+      return "neutral";
+  }
+}
+
+export type MaterialReadinessKind = "ok" | "partial" | "shortage" | "unknown";
+
+export function materialReadinessLabel(
+  kind: MaterialReadinessKind,
+  opts?: { producible?: number; planned?: number },
+): string {
+  if (kind === "ok") return "Komponenty dostępne";
+  if (kind === "shortage") return "Brakuje komponentów";
+  if (kind === "partial") {
+    const p = opts?.producible;
+    const pl = opts?.planned;
+    if (p != null && pl != null && pl > 0) {
+      return `Można wyprodukować ${fmtQtyUi(p)} z ${fmtQtyUi(pl)} szt.`;
+    }
+    return "Częściowo dostępne";
+  }
+  return "Gotowość materiałów";
+}
+
+export function materialReadinessTone(kind: MaterialReadinessKind): StatusTone {
+  if (kind === "ok") return "success";
+  if (kind === "partial") return "warning";
+  if (kind === "shortage") return "danger";
+  return "neutral";
+}
+
+function fmtQtyUi(n: number): string {
+  return Number.isInteger(n) ? String(n) : n.toFixed(1);
+}
+
+/** Infer material readiness from order list/detail fields (no extra API). */
+export function resolveMaterialReadiness(input: {
+  hasShortages?: boolean;
+  materialsReserved?: boolean;
+  sourceShortageCount?: number;
+  sourceReservedCount?: number;
+  producedQuantity?: number;
+  plannedQuantity?: number;
+}): MaterialReadinessKind {
+  const planned = Number(input.plannedQuantity ?? 0);
+  const shortageN = Number(input.sourceShortageCount ?? 0);
+  const reservedN = Number(input.sourceReservedCount ?? 0);
+  if (input.hasShortages || shortageN > 0) {
+    if (reservedN > 0 || (input.materialsReserved && planned > 0)) return "partial";
+    return "shortage";
+  }
+  if (input.materialsReserved) return "ok";
+  if (planned > 0 && Number(input.producedQuantity ?? 0) >= planned - 1e-6) return "ok";
+  return "unknown";
+}
+

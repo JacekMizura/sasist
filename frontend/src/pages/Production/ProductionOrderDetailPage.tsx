@@ -1,13 +1,9 @@
-import { useCallback, useEffect, useState } from "react";
-
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-
-import { ArrowLeft } from "lucide-react";
-
+import { ArrowLeft, Flame } from "lucide-react";
 import toast from "react-hot-toast";
 
 import { useWarehouse } from "../../context/WarehouseContext";
-
 import {
   cancelProductionOrder,
   downloadOrderProductionCardPdf,
@@ -18,117 +14,85 @@ import {
   startPrintExecutionOrder,
   type ProductionOrderRead,
 } from "../../api/productionApi";
-
 import { PrintFlowModals, usePrintMethodFlow } from "../../components/printing";
 import { useQueuePrint } from "../../hooks/useQueuePrint";
-
 import { DocumentMaterialReservationsPanel } from "./components/DocumentMaterialReservationsPanel";
-
 import {
   orderMonitoringSource,
   ProductionMonitoringPanel,
 } from "./components/ProductionMonitoringPanel";
-
 import { erpProductionPaths } from "./productionPaths";
 import { ProductThumb } from "./components/ProductThumb";
-
-import { PRODUCTION_STATUS_LABEL, START_COLLECTING_BLOCKED_TOOLTIP, formatStartCollectingError, productionStatusBadgeClass } from "./productionUi";
-
-
+import {
+  EXECUTION_STATUS_LABEL,
+  START_COLLECTING_BLOCKED_TOOLTIP,
+  formatStartCollectingError,
+  materialReadinessLabel,
+  materialReadinessTone,
+  productionExecutionMethodLabel,
+  productionSourceItemStatusLabel,
+  productionSourceItemStatusTone,
+  productionSourceTypeLabel,
+  productionSourceTypeTone,
+  resolveMaterialReadiness,
+} from "./productionUi";
+import { Card, ProgressBar, StatusBadge, primaryButtonClassName, typography } from "@/design-system";
 
 const DEFAULT_TENANT = 1;
 
-
+function fmtQty(n: number): string {
+  return Number.isInteger(n) ? String(n) : Number(n).toFixed(1);
+}
 
 export default function ProductionOrderDetailPage() {
-
   const { orderId } = useParams();
   const navigate = useNavigate();
-
   const { warehouse } = useWarehouse();
-
   const tenantId = warehouse?.tenant_id ?? DEFAULT_TENANT;
-
   const warehouseId = warehouse?.id;
 
   const [order, setOrder] = useState<ProductionOrderRead | null>(null);
-
   const [loading, setLoading] = useState(true);
-
   const [busy, setBusy] = useState(false);
   const [printStartOpen, setPrintStartOpen] = useState(false);
+  const [componentsOpen, setComponentsOpen] = useState(true);
+
   const { queueProductionOrderCard } = useQueuePrint({ tenantId, warehouseId });
   const printFlow = usePrintMethodFlow({ tenantId, warehouseId, printerKind: "a4" });
 
   const load = useCallback(async () => {
-
     if (!orderId || warehouseId == null) {
-
       setOrder(null);
-
       setLoading(false);
-
       return;
-
     }
-
     setLoading(true);
-
     try {
-
       setOrder(await getProductionOrder(tenantId, Number(orderId), warehouseId));
-
     } catch {
-
       setOrder(null);
-
       toast.error("Nie udało się wczytać zlecenia produkcyjnego.");
-
     } finally {
-
       setLoading(false);
-
     }
-
   }, [tenantId, orderId, warehouseId]);
 
-
-
   useEffect(() => {
-
     void load();
-
   }, [load]);
 
-
-
   const releaseToWms = async () => {
-
     if (!order || warehouseId == null) return;
-
     setBusy(true);
-
     try {
-
       setOrder(await releaseOrderToWms(tenantId, order.id, warehouseId));
-
       toast.success("Zlecenie wydane do terminalu WMS.");
-
     } catch (e: unknown) {
-
-      const msg = e instanceof Error ? e.message : "Wydanie do WMS nie powiodło się.";
-
-      toast.error(msg);
-
+      toast.error(e instanceof Error ? e.message : "Wydanie do WMS nie powiodło się.");
     } finally {
-
       setBusy(false);
-
     }
-
   };
-
-
 
   const startErp = async () => {
     if (!order || warehouseId == null || orderId == null) return;
@@ -185,362 +149,387 @@ export default function ProductionOrderDetailPage() {
     }
   };
 
+  const cancel = async () => {
+    if (!order || warehouseId == null || !confirm("Anulować zlecenie produkcyjne?")) return;
+    setBusy(true);
+    try {
+      setOrder(await cancelProductionOrder(tenantId, order.id, warehouseId));
+      toast.success("Zlecenie anulowane.");
+    } catch {
+      toast.error("Anulowanie nie powiodło się.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const isPrintMethod =
     order?.source_type === "ORDERS" && order.production_execution_method === "PRINT";
+  const printStarted = Boolean(
+    order &&
+      (order.is_print_interface ||
+        ["collecting", "in_progress", "awaiting_putaway", "putaway", "completed"].includes(
+          String(order.status),
+        )),
+  );
 
-  const openErp = () => {
-    if (!orderId) return;
-    navigate(erpProductionPaths.erpExecution("order", orderId));
-  };
-
-
-
-  const cancel = async () => {
-
-    if (!order || warehouseId == null || !confirm("Anulować zlecenie produkcyjne?")) return;
-
-    setBusy(true);
-
-    try {
-
-      setOrder(await cancelProductionOrder(tenantId, order.id, warehouseId));
-
-      toast.success("Zlecenie anulowane.");
-
-    } catch {
-
-      toast.error("Anulowanie nie powiodło się.");
-
-    } finally {
-
-      setBusy(false);
-
-    }
-
-  };
-
-
+  const readiness = useMemo(() => {
+    if (!order) return "unknown" as const;
+    return resolveMaterialReadiness({
+      hasShortages: order.has_shortages,
+      materialsReserved: order.materials_reserved,
+      sourceShortageCount: order.source_shortage_count,
+      sourceReservedCount: order.source_reserved_count,
+      producedQuantity: order.produced_quantity,
+      plannedQuantity: order.planned_quantity,
+    });
+  }, [order]);
 
   if (warehouseId == null) {
-
     return <p className="px-4 py-6 text-sm text-slate-500">Wybierz magazyn, aby otworzyć zlecenie.</p>;
-
   }
-
-
-
   if (loading) {
-
     return <p className="px-4 py-6 text-sm text-slate-500">Wczytywanie zlecenia…</p>;
-
   }
-
-
-
   if (!order) {
-
     return (
-
-      <div className="px-4 py-6 space-y-4">
-
+      <div className="space-y-4 px-4 py-6">
         <p className="text-sm text-rose-600">Zlecenie nie istnieje lub nie masz do niego dostępu.</p>
-
-        <Link to={erpProductionPaths.orders} className="text-sm font-medium text-violet-700 hover:underline">
-
+        <Link to={erpProductionPaths.orders} className="text-sm font-medium text-orange-700 hover:underline">
           ← Lista zleceń
-
         </Link>
-
       </div>
-
     );
-
   }
-
-
 
   const shortagesBlocked = Boolean(order.has_shortages);
-
-
+  const progressPct =
+    order.planned_quantity > 0
+      ? Math.min(100, Math.round((order.produced_quantity / order.planned_quantity) * 100))
+      : 0;
+  const remaining = Math.max(0, order.planned_quantity - order.produced_quantity);
+  const readyToPack = order.source_fulfilled_order_count ?? 0;
 
   return (
-
-    <div className="px-4 py-6 lg:px-6 space-y-8 max-w-6xl">
-
+    <div className="mx-auto max-w-6xl space-y-5 px-4 py-6 lg:px-6">
       <Link
-
         to={erpProductionPaths.orders}
-
-        className="inline-flex items-center gap-2 text-sm text-violet-600 hover:underline"
-
+        className="inline-flex items-center gap-2 text-sm text-slate-600 hover:text-orange-700"
       >
-
         <ArrowLeft className="h-4 w-4" aria-hidden />
-
         Zlecenia produkcyjne
-
       </Link>
 
-
-
-      <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-
-        <div className="flex flex-wrap items-start justify-between gap-4 border-b border-slate-100 pb-4">
-
-          <div className="flex flex-wrap items-start gap-4">
-            <ProductThumb imageUrl={order.product_image_url} name={order.product_name ?? undefined} size="lg" />
-            <div>
-            <p className="font-mono text-2xl font-bold text-slate-900">{order.number}</p>
-
-            <p className="mt-1 text-sm text-slate-600">
-
-              {order.product_name}
-
-              {order.product_sku ? ` · ${order.product_sku}` : ""}
-
-            </p>
-
-            <p className="mt-1 text-xs text-slate-500">
-
+      {/* Header */}
+      <Card variant="section" density="comfortable" className="space-y-4">
+        <div className="flex flex-wrap items-start gap-4">
+          <ProductThumb imageUrl={order.product_image_url} name={order.product_name ?? undefined} size="lg" />
+          <div className="min-w-0 flex-1">
+            <p className="font-mono text-xl font-bold text-slate-900 sm:text-2xl">{order.number}</p>
+            <p className="mt-1 text-base font-semibold text-slate-900">{order.product_name}</p>
+            <p className="mt-0.5 text-xs text-slate-500">
+              {order.product_sku ? `${order.product_sku} · ` : ""}
               {order.warehouse_name}
-
               {order.recipe_name ? ` · Receptura: ${order.recipe_name}` : ""}
-
             </p>
-
-            <span className={`mt-2 inline-block ${productionStatusBadgeClass(order.status)}`}>
-
-              {PRODUCTION_STATUS_LABEL[order.status]}
-
-            </span>
-
-            {order.source_type === "ORDERS" ? (
-              <span className="mt-2 ml-2 inline-block rounded-full bg-sky-50 px-2.5 py-0.5 text-xs font-semibold text-sky-800 ring-1 ring-sky-200">
-                Z zamówień
-              </span>
-            ) : null}
-            {order.source_type === "ORDERS" ? (
-              <span className="mt-2 ml-2 inline-block rounded-full bg-slate-50 px-2.5 py-0.5 text-xs font-semibold text-slate-700 ring-1 ring-slate-200">
-                {isPrintMethod ? "Wydruk" : "Terminal WMS"}
-              </span>
-            ) : null}
-            {isPrintMethod ? (
-              <p className="mt-2 text-sm text-slate-600">
-                Sposób realizacji: <span className="font-medium text-slate-900">Wydruk zlecenia</span>
-              </p>
-            ) : null}
-
-          </div>
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              <StatusBadge tone={productionSourceTypeTone(order.source_type)} density="compact">
+                {productionSourceTypeLabel(order.source_type)}
+              </StatusBadge>
+              {(order.source_type === "ORDERS" || order.production_execution_method) && (
+                <StatusBadge tone="neutral" density="compact">
+                  {productionExecutionMethodLabel(order.production_execution_method)}
+                </StatusBadge>
+              )}
+              <StatusBadge
+                tone={
+                  order.status === "completed"
+                    ? "success"
+                    : order.status === "in_progress" || order.status === "collecting"
+                      ? "primary"
+                      : "neutral"
+                }
+                density="compact"
+              >
+                {EXECUTION_STATUS_LABEL[order.status] ?? order.status}
+              </StatusBadge>
+              <StatusBadge tone={materialReadinessTone(readiness)} density="compact">
+                {materialReadinessLabel(readiness, {
+                  producible: Math.max(0, order.planned_quantity - (order.source_shortage_count ?? 0)),
+                  planned: order.planned_quantity,
+                })}
+              </StatusBadge>
+            </div>
           </div>
         </div>
 
-
-
-        {order.composition_id ? (
-
-          <p className="mt-3 text-xs text-slate-500">
-
-            Receptura (BOM):{" "}
-
-            <Link to={erpProductionPaths.recipe(order.composition_id)} className="font-medium text-slate-700 underline">
-
-              otwórz w module Receptury
-
-            </Link>
-
-          </p>
-
-        ) : null}
-
-        {order.source_type === "ORDERS" && (order.order_sources?.length ?? 0) > 0 ? (
-          <div className="mt-6 rounded-xl border border-slate-200 bg-slate-50/60 p-4">
-            <h3 className="text-sm font-semibold text-slate-900">Zamówienia źródłowe</h3>
-            <p className="mt-1 text-xs text-slate-600">
-              Wyprodukowano: {order.produced_quantity}/{order.planned_quantity}
+        <div className="rounded-xl border border-slate-100 bg-slate-50/80 px-4 py-3">
+          <div className="flex flex-wrap items-end justify-between gap-2">
+            <div>
+              <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Wyprodukowano</p>
+              <p className="mt-0.5 text-2xl font-bold tabular-nums text-slate-900">
+                {fmtQty(order.produced_quantity)}{" "}
+                <span className="text-base font-semibold text-slate-500">/ {fmtQty(order.planned_quantity)} szt.</span>
+              </p>
+            </div>
+            <p className="text-sm tabular-nums text-slate-600">{progressPct}%</p>
+          </div>
+          <ProgressBar value={progressPct} tone={progressPct >= 100 ? "success" : "info"} className="mt-2" />
+          {order.source_type === "ORDERS" ? (
+            <p className="mt-2 text-xs text-slate-600">
+              Gotowe do pakowania: <strong className="tabular-nums">{readyToPack}</strong>
               {" · "}
-              Zamówienia gotowe: {order.source_fulfilled_order_count ?? 0}/
-              {order.source_order_count ?? order.order_sources!.length}
-              {" · "}
-              Oczekujące: {order.source_pending_order_count ?? 0}
-              {" · "}
-              Brak komponentów: {order.source_shortage_count ?? 0}
+              Pozostało: <strong className="tabular-nums">{fmtQty(remaining)}</strong>
+              {(order.source_shortage_count ?? 0) > 0 ? (
+                <>
+                  {" · "}
+                  Brak komponentów:{" "}
+                  <strong className="tabular-nums text-amber-800">{order.source_shortage_count}</strong>
+                </>
+              ) : null}
             </p>
-            <ul className="mt-3 divide-y divide-slate-200">
-              {order.order_sources!.map((src) => {
-                const st = String(src.status || "").toLowerCase();
-                const ready = st === "reserved" || st === "open" || st === "partial";
-                const shortage = st === "shortage";
-                const fulfilled = st === "fulfilled";
-                return (
-                  <li key={src.id} className="flex flex-wrap items-baseline justify-between gap-2 py-2 text-sm">
-                    <div className="min-w-0">
-                      <p className="font-mono font-medium text-slate-900">
-                        {src.order_number ?? `#${src.order_id}`}
-                      </p>
-                      <p className="text-xs text-slate-500">
-                        {src.product_name ?? `Produkt #${src.product_id}`}
-                        {src.product_sku ? ` · ${src.product_sku}` : ""}
-                      </p>
-                    </div>
-                    <div className="flex flex-col items-end gap-1">
-                      <p className="tabular-nums text-slate-700">
-                        {src.fulfilled_quantity}/{src.requested_quantity}
-                      </p>
-                      <p className="text-[11px] uppercase tracking-wide text-slate-500">{st}</p>
-                      {fulfilled ? (
-                        <span className="rounded-full bg-sky-50 px-2 py-0.5 text-[11px] font-medium text-sky-800 ring-1 ring-sky-200">
-                          Gotowe / do pakowania
-                        </span>
-                      ) : null}
-                      {ready ? (
-                        <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-800 ring-1 ring-emerald-200">
-                          Gotowe do produkcji
-                        </span>
-                      ) : null}
-                      {shortage ? (
-                        <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-900 ring-1 ring-amber-200">
-                          Brak komponentów
-                        </span>
-                      ) : null}
-                    </div>
-                  </li>
-                );
-              })}
-            </ul>
+          ) : null}
+        </div>
+
+        {isPrintMethod && printStarted ? (
+          <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-900">
+            <span className="font-medium">Produkcja rozpoczęta</span>
+            <button type="button" className={primaryButtonClassName("", "compact")} onClick={printCard}>
+              Drukuj ponownie
+            </button>
           </div>
         ) : null}
-
-
 
         {shortagesBlocked ? (
-
-          <p className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-
-            Braki materiałów — uzupełnij stan magazynowy przed wydaniem do WMS.
-
+          <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+            Brakuje komponentów — uzupełnij stan przed startem produkcji.
           </p>
-
         ) : null}
 
-
-
-        <div className="mt-6">
-
-          <ProductionMonitoringPanel
-
-            kind="order"
-
-            source={orderMonitoringSource(order)}
-
-            actions={{
-
-              onReleaseToWms: isPrintMethod ? undefined : () => void releaseToWms(),
-              onStartErpExecution: isPrintMethod ? undefined : () => void startErp(),
-              onPrintProductionCard: printCard,
-              onStartPrintExecution: isPrintMethod ? () => setPrintStartOpen(true) : undefined,
-              onOpenErpExecution: order.is_erp_interface || order.is_print_interface ? openErp : undefined,
-
-              onCancel: () => void cancel(),
-
-              releaseDisabled: shortagesBlocked,
-              erpDisabled: shortagesBlocked,
-              printStartDisabled: shortagesBlocked || !order.materials_reserved,
-
-              releaseDisabledReason: START_COLLECTING_BLOCKED_TOOLTIP,
-              erpDisabledReason: START_COLLECTING_BLOCKED_TOOLTIP,
-              printStartDisabledReason: "Brak komponentów",
-
-              busy,
-
-            }}
-
-          />
-
-        </div>
-
-      </div>
-
-
-
-      {order.lines.length > 0 ? (
-
-        <section>
-
-          <h2 className="text-lg font-bold text-slate-900 mb-3">Snapshot składników (BOM)</h2>
-
-          <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
-
-            <table className="min-w-full text-sm">
-
-              <thead className="bg-slate-50 text-left text-xs uppercase text-slate-500">
-
-                <tr>
-
-                  <th className="px-4 py-2">Składnik</th>
-
-                  <th className="px-4 py-2 text-right">Na szt.</th>
-
-                  <th className="px-4 py-2 text-right">Wymagane</th>
-
-                  <th className="px-4 py-2 text-right">Dostępne</th>
-
-                  <th className="px-4 py-2 text-right">Brak</th>
-
-                </tr>
-
-              </thead>
-
-              <tbody>
-
-                {order.lines.map((ln) => (
-
-                  <tr key={ln.id} className="border-t border-slate-100">
-
-                    <td className="px-4 py-2">
-                      <div className="flex items-center gap-3">
-                        <ProductThumb imageUrl={ln.product_image_url} name={ln.product_name_snapshot} size="sm" />
-                        <span>
-                          <span className="font-medium text-slate-900">{ln.product_name_snapshot}</span>
-                          {ln.product_sku_snapshot ? (
-                            <span className="ml-2 text-xs text-slate-500">{ln.product_sku_snapshot}</span>
-                          ) : null}
-                        </span>
-                      </div>
-                    </td>
-
-                    <td className="px-4 py-2 text-right tabular-nums">{ln.quantity_per_unit}</td>
-
-                    <td className="px-4 py-2 text-right tabular-nums">{ln.total_required_quantity}</td>
-
-                    <td className="px-4 py-2 text-right tabular-nums">{ln.available ?? "—"}</td>
-
-                    <td className="px-4 py-2 text-right tabular-nums text-amber-800">{ln.missing ?? "—"}</td>
-
-                  </tr>
-
-                ))}
-
-              </tbody>
-
-            </table>
-
-          </div>
-
-        </section>
-
-      ) : null}
-
-      {warehouseId != null && orderId ? (
-        <DocumentMaterialReservationsPanel
-          tenantId={tenantId}
-          warehouseId={warehouseId}
-          orderId={Number(orderId)}
-          materialsReserved={order.materials_reserved}
-          reservationsLocked={order.reservations_locked}
-          status={order.status}
-          onChanged={() => void load()}
+        <ProductionMonitoringPanel
+          kind="order"
+          source={orderMonitoringSource(order)}
+          actions={{
+            onReleaseToWms: isPrintMethod ? undefined : () => void releaseToWms(),
+            onStartErpExecution: isPrintMethod ? undefined : () => void startErp(),
+            onPrintProductionCard: printCard,
+            onStartPrintExecution:
+              isPrintMethod && !printStarted ? () => setPrintStartOpen(true) : undefined,
+            onOpenErpExecution:
+              order.is_erp_interface || order.is_print_interface
+                ? () => navigate(erpProductionPaths.erpExecution("order", String(order.id)))
+                : undefined,
+            onCancel: () => void cancel(),
+            releaseDisabled: shortagesBlocked,
+            erpDisabled: shortagesBlocked,
+            printStartDisabled: shortagesBlocked || !order.materials_reserved,
+            releaseDisabledReason: START_COLLECTING_BLOCKED_TOOLTIP,
+            erpDisabledReason: START_COLLECTING_BLOCKED_TOOLTIP,
+            printStartDisabledReason: "Brak komponentów",
+            busy,
+          }}
         />
+      </Card>
+
+      {/* A. Produkt */}
+      <section className="space-y-2">
+        <h2 className={typography.h2}>Produkt</h2>
+        <Card variant="section" density="compact" className="flex items-center gap-3">
+          <ProductThumb imageUrl={order.product_image_url} name={order.product_name ?? undefined} size="md" />
+          <div className="min-w-0">
+            <p className="font-semibold text-slate-900">{order.product_name}</p>
+            {order.product_sku ? <p className="font-mono text-xs text-slate-500">{order.product_sku}</p> : null}
+            {order.composition_id ? (
+              <Link
+                to={erpProductionPaths.recipe(order.composition_id)}
+                className="mt-1 inline-block text-xs font-medium text-orange-700 hover:underline"
+              >
+                Otwórz recepturę
+              </Link>
+            ) : null}
+          </div>
+        </Card>
+      </section>
+
+      {/* B. Komponenty */}
+      <section className="space-y-2">
+        <div className="flex items-center justify-between gap-2">
+          <h2 className={typography.h2}>Komponenty</h2>
+          <button
+            type="button"
+            className="text-xs font-medium text-slate-600 hover:text-slate-900"
+            onClick={() => setComponentsOpen((v) => !v)}
+          >
+            {componentsOpen ? "Zwiń" : "Rozwiń"}
+          </button>
+        </div>
+        {componentsOpen ? (
+          order.lines.length === 0 ? (
+            <p className="rounded-xl border border-dashed border-slate-200 px-3 py-4 text-center text-sm text-slate-500">
+              Brak listy komponentów dla tego zlecenia.
+            </p>
+          ) : (
+            <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
+              <table className="min-w-full text-sm">
+                <thead className="bg-slate-50 text-left text-xs font-bold uppercase tracking-wide text-slate-500">
+                  <tr>
+                    <th className="px-3 py-2">Komponent</th>
+                    <th className="px-3 py-2 text-right">Potrzeba</th>
+                    <th className="px-3 py-2 text-right">Zarezerwowano</th>
+                    <th className="px-3 py-2 text-right">Pobrano</th>
+                    <th className="px-3 py-2 text-right">Brakuje</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {order.lines.map((ln) => {
+                    const missing = Number(ln.missing ?? 0);
+                    return (
+                      <tr key={ln.id} className="align-middle">
+                        <td className="px-3 py-2">
+                          <div className="flex items-center gap-2">
+                            <ProductThumb
+                              imageUrl={ln.product_image_url}
+                              name={ln.product_name_snapshot}
+                              size="sm"
+                            />
+                            <div>
+                              <p className="font-medium text-slate-900">{ln.product_name_snapshot}</p>
+                              {ln.product_sku_snapshot ? (
+                                <p className="font-mono text-xs text-slate-500">{ln.product_sku_snapshot}</p>
+                              ) : null}
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-3 py-2 text-right tabular-nums">{fmtQty(ln.total_required_quantity)}</td>
+                        <td className="px-3 py-2 text-right tabular-nums">
+                          {ln.reserved != null ? fmtQty(ln.reserved) : "—"}
+                        </td>
+                        <td className="px-3 py-2 text-right tabular-nums">{fmtQty(ln.consumed_quantity)}</td>
+                        <td
+                          className={`px-3 py-2 text-right tabular-nums ${
+                            missing > 0 ? "font-semibold text-amber-800" : "text-slate-700"
+                          }`}
+                        >
+                          {ln.missing != null ? fmtQty(missing) : "—"}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )
+        ) : null}
+        {warehouseId != null && orderId ? (
+          <DocumentMaterialReservationsPanel
+            tenantId={tenantId}
+            warehouseId={warehouseId}
+            orderId={Number(orderId)}
+            materialsReserved={order.materials_reserved}
+            reservationsLocked={order.reservations_locked}
+            status={order.status}
+            onChanged={() => void load()}
+          />
+        ) : null}
+      </section>
+
+      {/* C. Zamówienia */}
+      {order.source_type === "ORDERS" ? (
+        <section className="space-y-2">
+          <h2 className={typography.h2}>Zamówienia</h2>
+          {(order.order_sources?.length ?? 0) === 0 ? (
+            <p className="rounded-xl border border-dashed border-slate-200 px-3 py-4 text-center text-sm text-slate-500">
+              Brak powiązanych zamówień.
+            </p>
+          ) : (
+            <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
+              <table className="min-w-full text-sm">
+                <thead className="bg-slate-50 text-left text-xs font-bold uppercase tracking-wide text-slate-500">
+                  <tr>
+                    <th className="px-3 py-2">Nr zamówienia</th>
+                    <th className="px-3 py-2 text-right">Ilość</th>
+                    <th className="px-3 py-2 text-right">Wyprodukowano</th>
+                    <th className="px-3 py-2">Status produkcji</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {order.order_sources!.map((src) => (
+                    <tr key={src.id}>
+                      <td className="px-3 py-2">
+                        <Link
+                          to={`/orders/${src.order_id}`}
+                          className="inline-flex items-center gap-1.5 font-mono font-medium text-orange-700 hover:underline"
+                        >
+                          <Flame className="h-3.5 w-3.5 text-orange-500" aria-hidden />
+                          {src.order_number ?? `#${src.order_id}`}
+                        </Link>
+                      </td>
+                      <td className="px-3 py-2 text-right tabular-nums">{fmtQty(src.requested_quantity)}</td>
+                      <td className="px-3 py-2 text-right tabular-nums">
+                        {fmtQty(src.fulfilled_quantity)}/{fmtQty(src.requested_quantity)}
+                      </td>
+                      <td className="px-3 py-2">
+                        <StatusBadge tone={productionSourceItemStatusTone(src.status)} density="compact">
+                          {productionSourceItemStatusLabel(src.status)}
+                        </StatusBadge>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
       ) : null}
+
+      {/* D. Dokumenty */}
+      <section className="space-y-2">
+        <h2 className={typography.h2}>Dokumenty</h2>
+        <Card variant="section" density="compact" className="space-y-1 text-sm text-slate-700">
+          <p>
+            RW:{" "}
+            <span className="font-mono font-medium">
+              {order.rw_document_number ?? (order.rw_stock_document_id ? `#${order.rw_stock_document_id}` : "—")}
+            </span>
+          </p>
+          <p>
+            PW:{" "}
+            <span className="font-mono font-medium">
+              {order.pw_document_number ?? (order.pw_stock_document_id ? `#${order.pw_stock_document_id}` : "—")}
+            </span>
+            {order.pw_putaway_status ? (
+              <span className="ml-2 text-xs text-slate-500">({order.pw_putaway_status})</span>
+            ) : null}
+          </p>
+        </Card>
+      </section>
+
+      {/* E. Historia — monitoring already covers actions; keep light meta */}
+      <section className="space-y-2">
+        <h2 className={typography.h2}>Historia</h2>
+        <Card variant="section" density="compact" className="grid gap-1 text-sm text-slate-600 sm:grid-cols-2">
+          <p>
+            Utworzono:{" "}
+            <span className="font-medium text-slate-800">
+              {order.created_at ? new Date(order.created_at).toLocaleString("pl-PL") : "—"}
+            </span>
+          </p>
+          <p>
+            Start:{" "}
+            <span className="font-medium text-slate-800">
+              {order.started_at ? new Date(order.started_at).toLocaleString("pl-PL") : "—"}
+            </span>
+          </p>
+          <p>
+            Zakończenie:{" "}
+            <span className="font-medium text-slate-800">
+              {order.completed_at ? new Date(order.completed_at).toLocaleString("pl-PL") : "—"}
+            </span>
+          </p>
+          <p>
+            Operator: <span className="font-medium text-slate-800">{order.operator_name ?? "—"}</span>
+          </p>
+        </Card>
+      </section>
 
       <PrintFlowModals flow={printFlow} />
 
@@ -569,7 +558,7 @@ export default function ProductionOrderDetailPage() {
               </button>
               <button
                 type="button"
-                className="rounded-lg bg-violet-700 px-3 py-2 text-sm font-semibold text-white hover:bg-violet-800 disabled:opacity-50"
+                className={primaryButtonClassName()}
                 disabled={busy || shortagesBlocked || !order.materials_reserved}
                 onClick={() => void startPrintAndPrint()}
               >
@@ -579,11 +568,6 @@ export default function ProductionOrderDetailPage() {
           </div>
         </div>
       ) : null}
-
     </div>
-
   );
-
 }
-
-

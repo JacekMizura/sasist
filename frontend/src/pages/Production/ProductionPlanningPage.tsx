@@ -73,7 +73,7 @@ export default function ProductionPlanningPage() {
         toast.success("Brak nowych zleceń uzupełnienia zapasu.");
       } else {
         toast.success(
-          `Uzupełnienie zapasu: utworzono ${result.created_count}, zagregowano ${result.aggregated_count} (łącznie ${result.total_quantity} szt.).`,
+          `Utworzono ${made} zlecenia produkcyjne na łącznie ${result.total_quantity} szt.`,
         );
       }
       await planning.reload();
@@ -215,7 +215,8 @@ export default function ProductionPlanningPage() {
               onCustomCoverageInputChange={planning.setCustomCoverageInput}
               onApplyCustomCoverage={planning.applyCustomCoverage}
               onCreateBatch={openBatchModal}
-              onRunStockReplenishment={() => void runReplenishment()}
+              onRecalculateDemand={() => void planning.reload()}
+              onCreateReplenishmentOrders={() => void runReplenishment()}
               replenishmentRunning={replenishmentRunning}
             />
           ) : null}
