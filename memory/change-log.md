@@ -1,3 +1,17 @@
+## 2026-08-12 — Automatyczne zlecenia produkcji z zamówień (faza 2)
+
+- Trigger SSOT po zmianie statusu panelu → create/aggregate MO `ORDERS` (idempotent source items)
+- Agregacja tylko `draft`/`planned` + ta sama composition i `picking_config_id`; wycofanie przed startem
+- Partial unique indexes + advisory lock; testy `test_production_order_trigger.py`
+- Bez rezerwacji materiałów / statusu po produkcji (faza 3)
+
+## 2026-08-12 — Fundament produkcji z zamówień (faza 1)
+
+- `ProductionOrder.source_type` (MANUAL|PLANNING|ORDERS) + tabela `production_order_source_items`
+- Konfigurator zbierania: `is_production_mode` + statusy po produkcji / brakach + lokalizacja buforowa
+- Helper aktywnej composition manufacturing; UI badge „Z zamówień” + sekcja źródeł w detail MO
+- Bez auto-MO, bez zmian lifecycle RW/PW/collecting
+
 ## 2026-08-11 — Walidacja zbierania (skany / lokalizacje / EAN)
 
 - UI: Terminal → „Walidacja zbierania”; „Produkty bez kodu EAN” + tooltips

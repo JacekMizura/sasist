@@ -29,9 +29,9 @@ from .schema_introspection import (
 
 logger = logging.getLogger(__name__)
 
-PRODUCTION_SCHEMA_VERSION = "2026.08.12.1"
+PRODUCTION_SCHEMA_VERSION = "2026.08.12.2"
 # Monotonic generation counter exposed in logs, /health/schema, and deploy verification.
-PRODUCTION_SCHEMA_GENERATION = 14
+PRODUCTION_SCHEMA_GENERATION = 15
 SCHEMA_METADATA_KEY = "production_schema_version"
 SCHEMA_METADATA_TABLE = "schema_metadata"
 
@@ -310,12 +310,60 @@ def _migration_production_orders_recipe_id_nullable(engine: Engine) -> int:
     return 1 if ensure_production_orders_recipe_id_nullable(engine) else 0
 
 
+def _migration_order_driven_production_indexes(engine: Engine) -> int:
+    """
+    Phase 2 concurrency / idempotency indexes for order-driven MOs.
+
+    - At most one open aggregable ORDERS MO per (tenant, wh, product, composition, config)
+    - At most one active source link per order_item (open|partial)
+    """
+    from ..models.production import ProductionOrder
+
+    added = 0
+    if has_table(engine, "production_orders"):
+        added += ensure_model_schema_sync(
+            engine, ProductionOrder, log_prefix="production.schema.migration.order_driven"
+        )
+    with engine.begin() as conn:
+        # Partial unique: one draft/planned ORDERS MO per aggregation key.
+        conn.execute(
+            text(
+                """
+                CREATE UNIQUE INDEX IF NOT EXISTS uq_prod_order_orders_open_agg
+                ON production_orders (
+                    tenant_id, warehouse_id, product_id, composition_id, picking_config_id
+                )
+                WHERE source_type = 'ORDERS' AND status IN ('draft', 'planned')
+                """
+            )
+        )
+        # Partial unique: one active source per order line (idempotency).
+        if has_table(engine, "production_order_source_items"):
+            conn.execute(
+                text(
+                    """
+                    CREATE UNIQUE INDEX IF NOT EXISTS uq_prod_source_active_order_item
+                    ON production_order_source_items (tenant_id, order_item_id)
+                    WHERE status IN ('open', 'partial')
+                    """
+                )
+            )
+            added += 1
+        added += 1
+    return added
+
+
 PRODUCTION_SCHEMA_MIGRATIONS: list[ProductionSchemaMigration] = [
     ProductionSchemaMigration("2026.06.04.1", "batch_workflow_columns", _migration_batch_workflow_columns),
     ProductionSchemaMigration(
         "2026.08.09.1",
         "production_orders_recipe_id_nullable",
         _migration_production_orders_recipe_id_nullable,
+    ),
+    ProductionSchemaMigration(
+        "2026.08.12.2",
+        "order_driven_production_indexes",
+        _migration_order_driven_production_indexes,
     ),
 ]
 

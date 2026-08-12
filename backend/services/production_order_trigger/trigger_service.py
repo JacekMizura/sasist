@@ -1,0 +1,713 @@
+"""Order-driven production trigger — STATUS → ProductionOrderSourceItem → MO.
+
+Phase 2: create / aggregate / withdraw demand when panel status changes.
+Does not change RW/PW/collecting lifecycle or material reservations.
+"""
+
+from __future__ import annotations
+
+import logging
+from datetime import datetime
+from typing import Any, Optional
+
+from sqlalchemy import text
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import Session, joinedload
+
+from ...models.order import Order
+from ...models.order_item import OrderItem, order_item_is_replaced_line
+from ...models.picking_config import (
+    PRODUCTION_ORDER_TRIGGER_SCOPE_SINGLE_ELEMENT,
+    PickingConfig,
+)
+from ...models.product_composition import ProductComposition
+from ...models.production import (
+    PRODUCTION_ORDER_SOURCE_ITEM_CANCELLED,
+    PRODUCTION_ORDER_SOURCE_ITEM_OPEN,
+    PRODUCTION_ORDER_SOURCE_ITEM_PARTIAL,
+    PRODUCTION_ORDER_SOURCE_ORDERS,
+    ProductionOrder,
+    ProductionOrderSourceItem,
+)
+from ..picking_config_query import get_picking_config
+from ..production_manufacturing_composition import get_active_manufacturing_composition
+from ..production_order_service import (
+    _next_order_number,
+    _snapshot_composition_lines,
+    cancel_production_order,
+)
+from ..wms_audit_service import append_order_activity_for_wms
+
+logger = logging.getLogger(__name__)
+
+AGGREGABLE_MO_STATUSES = frozenset({"draft", "planned"})
+ACTIVE_SOURCE_STATUSES = frozenset(
+    {PRODUCTION_ORDER_SOURCE_ITEM_OPEN, PRODUCTION_ORDER_SOURCE_ITEM_PARTIAL}
+)
+
+RESULT_SKIPPED = "SKIPPED"
+RESULT_IDEMPOTENT = "IDEMPOTENT"
+RESULT_CREATED = "CREATED"
+RESULT_AGGREGATED = "AGGREGATED"
+RESULT_REACTIVATED = "REACTIVATED"
+RESULT_WITHDRAWN = "WITHDRAWN"
+RESULT_WITHDRAWAL_BLOCKED = "WITHDRAWAL_BLOCKED"
+RESULT_UNSUPPORTED_MULTI_ITEM = "UNSUPPORTED_MULTI_ITEM"
+RESULT_NO_ACTIVE_MANUFACTURING_COMPOSITION = "NO_ACTIVE_MANUFACTURING_COMPOSITION"
+RESULT_NO_WAREHOUSE = "NO_WAREHOUSE"
+RESULT_ERROR = "ERROR"
+
+
+def _active_order_items(db: Session, order: Order) -> list[OrderItem]:
+    items = list(getattr(order, "items", None) or [])
+    if not items and getattr(order, "id", None) is not None:
+        items = (
+            db.query(OrderItem)
+            .filter(OrderItem.order_id == int(order.id))
+            .order_by(OrderItem.id.asc())
+            .all()
+        )
+    return [it for it in items if not order_item_is_replaced_line(it)]
+
+
+def _qty_label(qty: float) -> int | float:
+    return int(qty) if float(qty).is_integer() else qty
+
+
+def _log_order(
+    db: Session,
+    *,
+    order: Order,
+    event_type: str,
+    message: str,
+    operator_user_id: Optional[int],
+    metadata: Optional[dict[str, Any]] = None,
+) -> None:
+    wid = int(getattr(order, "warehouse_id", 0) or 0)
+    if wid <= 0:
+        return
+    try:
+        append_order_activity_for_wms(
+            db,
+            order_id=int(order.id),
+            tenant_id=int(order.tenant_id),
+            warehouse_id=wid,
+            event_type=event_type,
+            message=message,
+            operator_user_id=operator_user_id,
+            metadata=metadata,
+        )
+    except Exception:
+        logger.exception(
+            "production trigger activity log failed order_id=%s", getattr(order, "id", None)
+        )
+
+
+def _move_order_to_shortage_status(db: Session, *, order: Order, pc: PickingConfig) -> None:
+    sid = getattr(pc, "status_on_component_shortage_id", None)
+    if sid is None:
+        return
+    order.order_ui_status_id = int(sid)
+    try:
+        db.expire(order, ["order_ui_status"])
+    except Exception:
+        pass
+    db.add(order)
+
+
+def _rescale_snapshots(order: ProductionOrder, planned_quantity: float) -> None:
+    pq = float(planned_quantity)
+    for snap in list(order.line_snapshots or []):
+        snap.total_required_quantity = float(snap.quantity_per_unit or 0) * pq
+
+
+def _find_active_source_for_item(
+    db: Session, *, tenant_id: int, order_item_id: int
+) -> ProductionOrderSourceItem | None:
+    return (
+        db.query(ProductionOrderSourceItem)
+        .filter(
+            ProductionOrderSourceItem.tenant_id == int(tenant_id),
+            ProductionOrderSourceItem.order_item_id == int(order_item_id),
+            ProductionOrderSourceItem.status.in_(tuple(ACTIVE_SOURCE_STATUSES)),
+        )
+        .first()
+    )
+
+
+def _advisory_lock(db: Session, *, key: int) -> None:
+    bind = db.get_bind()
+    if bind is None or bind.dialect.name != "postgresql":
+        return
+    k = int(key) & 0x7FFFFFFF
+    try:
+        db.execute(text("SELECT pg_advisory_xact_lock(:k)"), {"k": k})
+    except Exception:
+        logger.exception("pg_advisory_xact_lock failed key=%s", k)
+
+
+def _aggregation_lock_key(
+    *,
+    tenant_id: int,
+    warehouse_id: int,
+    product_id: int,
+    composition_id: int,
+    picking_config_id: int,
+) -> int:
+    return hash(
+        (
+            int(tenant_id),
+            int(warehouse_id),
+            int(product_id),
+            int(composition_id),
+            int(picking_config_id),
+        )
+    )
+
+
+def _find_aggregable_mo(
+    db: Session,
+    *,
+    tenant_id: int,
+    warehouse_id: int,
+    product_id: int,
+    composition_id: int,
+    picking_config_id: int,
+    for_update: bool = True,
+) -> ProductionOrder | None:
+    q = (
+        db.query(ProductionOrder)
+        .options(
+            joinedload(ProductionOrder.line_snapshots),
+            joinedload(ProductionOrder.order_sources),
+        )
+        .filter(
+            ProductionOrder.tenant_id == int(tenant_id),
+            ProductionOrder.warehouse_id == int(warehouse_id),
+            ProductionOrder.product_id == int(product_id),
+            ProductionOrder.composition_id == int(composition_id),
+            ProductionOrder.picking_config_id == int(picking_config_id),
+            ProductionOrder.source_type == PRODUCTION_ORDER_SOURCE_ORDERS,
+            ProductionOrder.status.in_(tuple(AGGREGABLE_MO_STATUSES)),
+        )
+        .order_by(ProductionOrder.id.asc())
+    )
+    if for_update:
+        try:
+            q = q.with_for_update()
+        except Exception:
+            pass
+    return q.first()
+
+
+def _create_orders_mo(
+    db: Session,
+    *,
+    tenant_id: int,
+    warehouse_id: int,
+    composition: ProductComposition,
+    planned_quantity: float,
+    picking_config: PickingConfig,
+) -> ProductionOrder:
+    legacy_recipe_id = int(composition.source_recipe_id) if composition.source_recipe_id else None
+    buffer_loc = getattr(picking_config, "finished_goods_buffer_location_id", None)
+    order = ProductionOrder(
+        tenant_id=int(tenant_id),
+        number=_next_order_number(db, tenant_id=tenant_id),
+        recipe_id=legacy_recipe_id,
+        composition_id=int(composition.id),
+        product_id=int(composition.product_id),
+        warehouse_id=int(warehouse_id),
+        location_id=int(buffer_loc) if buffer_loc else None,
+        planned_quantity=float(planned_quantity),
+        produced_quantity=0.0,
+        status="planned",
+        source_type=PRODUCTION_ORDER_SOURCE_ORDERS,
+        picking_config_id=int(picking_config.id),
+        production_source_status_id=int(picking_config.source_status_id),
+    )
+    db.add(order)
+    db.flush()
+    _snapshot_composition_lines(db, order, composition, planned_quantity=float(planned_quantity))
+    db.flush()
+    return order
+
+
+def _attach_or_reactivate_source(
+    db: Session,
+    *,
+    tenant_id: int,
+    mo: ProductionOrder,
+    order: Order,
+    item: OrderItem,
+    requested_quantity: float,
+) -> tuple[ProductionOrderSourceItem, str]:
+    """Returns (row, action) where action is active|created|reactivated."""
+    existing = (
+        db.query(ProductionOrderSourceItem)
+        .filter(
+            ProductionOrderSourceItem.tenant_id == int(tenant_id),
+            ProductionOrderSourceItem.production_order_id == int(mo.id),
+            ProductionOrderSourceItem.order_item_id == int(item.id),
+        )
+        .first()
+    )
+    if existing is not None:
+        if str(existing.status or "") in ACTIVE_SOURCE_STATUSES:
+            return existing, "active"
+        existing.status = PRODUCTION_ORDER_SOURCE_ITEM_OPEN
+        existing.requested_quantity = float(requested_quantity)
+        existing.fulfilled_quantity = float(existing.fulfilled_quantity or 0)
+        existing.updated_at = datetime.utcnow()
+        db.add(existing)
+        db.flush()
+        return existing, "reactivated"
+
+    row = ProductionOrderSourceItem(
+        tenant_id=int(tenant_id),
+        production_order_id=int(mo.id),
+        order_id=int(order.id),
+        order_item_id=int(item.id),
+        product_id=int(item.product_id),
+        requested_quantity=float(requested_quantity),
+        fulfilled_quantity=0.0,
+        status=PRODUCTION_ORDER_SOURCE_ITEM_OPEN,
+    )
+    db.add(row)
+    db.flush()
+    return row, "created"
+
+
+def _enter_production(
+    db: Session,
+    *,
+    order: Order,
+    pc: PickingConfig,
+    operator_user_id: Optional[int],
+) -> dict[str, Any]:
+    tid = int(order.tenant_id)
+    wid = int(getattr(order, "warehouse_id", 0) or 0)
+    if wid <= 0:
+        return {"result": RESULT_NO_WAREHOUSE}
+
+    scope = (
+        getattr(pc, "production_order_trigger_scope", None)
+        or PRODUCTION_ORDER_TRIGGER_SCOPE_SINGLE_ELEMENT
+    ).strip()
+    items = _active_order_items(db, order)
+    if scope == PRODUCTION_ORDER_TRIGGER_SCOPE_SINGLE_ELEMENT and len(items) != 1:
+        logger.info(
+            "production trigger UNSUPPORTED_MULTI_ITEM order_id=%s lines=%s config_id=%s",
+            order.id,
+            len(items),
+            pc.id,
+        )
+        _move_order_to_shortage_status(db, order=order, pc=pc)
+        _log_order(
+            db,
+            order=order,
+            event_type="PRODUCTION_TRIGGER_UNSUPPORTED_MULTI",
+            message=(
+                "Zamówienie wieloelementowe nie może zostać automatycznie przekazane do produkcji "
+                "(obsługiwane są tylko zamówienia jednoelementowe)."
+            ),
+            operator_user_id=operator_user_id,
+            metadata={"reason": RESULT_UNSUPPORTED_MULTI_ITEM, "line_count": len(items)},
+        )
+        return {"result": RESULT_UNSUPPORTED_MULTI_ITEM, "line_count": len(items)}
+
+    if not items:
+        return {"result": RESULT_SKIPPED, "reason": "no_items"}
+
+    item = items[0]
+    qty = float(item.quantity or 0)
+    if qty <= 0:
+        return {"result": RESULT_SKIPPED, "reason": "zero_qty"}
+
+    active = _find_active_source_for_item(db, tenant_id=tid, order_item_id=int(item.id))
+    if active is not None:
+        return {
+            "result": RESULT_IDEMPOTENT,
+            "production_order_id": int(active.production_order_id),
+            "source_item_id": int(active.id),
+        }
+
+    composition = get_active_manufacturing_composition(
+        db, tenant_id=tid, product_id=int(item.product_id)
+    )
+    if composition is None:
+        logger.info(
+            "production trigger NO_ACTIVE_MANUFACTURING_COMPOSITION order_id=%s product_id=%s",
+            order.id,
+            item.product_id,
+        )
+        _move_order_to_shortage_status(db, order=order, pc=pc)
+        _log_order(
+            db,
+            order=order,
+            event_type="PRODUCTION_TRIGGER_NO_BOM",
+            message=(
+                "Brak aktywnej receptury produkcyjnej dla produktu — "
+                "zamówienie nie zostało przekazane do produkcji."
+            ),
+            operator_user_id=operator_user_id,
+            metadata={
+                "reason": RESULT_NO_ACTIVE_MANUFACTURING_COMPOSITION,
+                "product_id": int(item.product_id),
+            },
+        )
+        return {
+            "result": RESULT_NO_ACTIVE_MANUFACTURING_COMPOSITION,
+            "product_id": int(item.product_id),
+        }
+
+    _advisory_lock(
+        db,
+        key=_aggregation_lock_key(
+            tenant_id=tid,
+            warehouse_id=wid,
+            product_id=int(item.product_id),
+            composition_id=int(composition.id),
+            picking_config_id=int(pc.id),
+        ),
+    )
+
+    created_new_mo = False
+    mo = _find_aggregable_mo(
+        db,
+        tenant_id=tid,
+        warehouse_id=wid,
+        product_id=int(item.product_id),
+        composition_id=int(composition.id),
+        picking_config_id=int(pc.id),
+        for_update=True,
+    )
+
+    if mo is None:
+        try:
+            nested = db.begin_nested()
+            try:
+                mo = _create_orders_mo(
+                    db,
+                    tenant_id=tid,
+                    warehouse_id=wid,
+                    composition=composition,
+                    planned_quantity=qty,
+                    picking_config=pc,
+                )
+                nested.commit()
+                created_new_mo = True
+            except IntegrityError:
+                nested.rollback()
+                mo = _find_aggregable_mo(
+                    db,
+                    tenant_id=tid,
+                    warehouse_id=wid,
+                    product_id=int(item.product_id),
+                    composition_id=int(composition.id),
+                    picking_config_id=int(pc.id),
+                    for_update=True,
+                )
+                if mo is None:
+                    raise
+        except IntegrityError:
+            mo = _find_aggregable_mo(
+                db,
+                tenant_id=tid,
+                warehouse_id=wid,
+                product_id=int(item.product_id),
+                composition_id=int(composition.id),
+                picking_config_id=int(pc.id),
+                for_update=True,
+            )
+            if mo is None:
+                logger.exception(
+                    "production trigger failed to create/find MO order_id=%s", order.id
+                )
+                return {"result": RESULT_ERROR, "reason": "mo_create_race"}
+
+    assert mo is not None
+
+    if int(mo.composition_id or 0) != int(composition.id):
+        mo = _create_orders_mo(
+            db,
+            tenant_id=tid,
+            warehouse_id=wid,
+            composition=composition,
+            planned_quantity=qty,
+            picking_config=pc,
+        )
+        created_new_mo = True
+
+    try:
+        source, action = _attach_or_reactivate_source(
+            db,
+            tenant_id=tid,
+            mo=mo,
+            order=order,
+            item=item,
+            requested_quantity=qty,
+        )
+    except IntegrityError:
+        # Concurrent attach of same order_item — treat as idempotent.
+        active2 = _find_active_source_for_item(db, tenant_id=tid, order_item_id=int(item.id))
+        if active2 is not None:
+            return {
+                "result": RESULT_IDEMPOTENT,
+                "production_order_id": int(active2.production_order_id),
+                "source_item_id": int(active2.id),
+            }
+        raise
+
+    if action == "active":
+        return {
+            "result": RESULT_IDEMPOTENT,
+            "production_order_id": int(mo.id),
+            "source_item_id": int(source.id),
+        }
+
+    if not created_new_mo:
+        mo.planned_quantity = float(mo.planned_quantity or 0) + float(qty)
+        mo.updated_at = datetime.utcnow()
+        _rescale_snapshots(mo, float(mo.planned_quantity))
+        db.add(mo)
+        db.flush()
+
+    if created_new_mo:
+        result_code = RESULT_CREATED
+        msg = (
+            f"Zamówienie przekazano do produkcji. Zlecenie: {mo.number}, "
+            f"ilość: {_qty_label(qty)} szt."
+        )
+    elif action == "reactivated":
+        result_code = RESULT_REACTIVATED
+        msg = (
+            f"Zapotrzebowanie produkcyjne przywrócono w zleceniu {mo.number} "
+            f"(+{_qty_label(qty)} szt.)."
+        )
+    else:
+        result_code = RESULT_AGGREGATED
+        msg = (
+            f"Zapotrzebowanie produkcyjne dodano do zlecenia {mo.number} "
+            f"(+{_qty_label(qty)} szt.)."
+        )
+
+    _log_order(
+        db,
+        order=order,
+        event_type="PRODUCTION_ORDER_LINKED",
+        message=msg,
+        operator_user_id=operator_user_id,
+        metadata={
+            "production_order_id": int(mo.id),
+            "production_order_number": str(mo.number),
+            "requested_quantity": qty,
+            "result": result_code,
+        },
+    )
+    return {
+        "result": result_code,
+        "production_order_id": int(mo.id),
+        "production_order_number": str(mo.number),
+        "planned_quantity": float(mo.planned_quantity),
+        "source_item_id": int(source.id),
+        "requested_quantity": qty,
+    }
+
+
+def _withdraw_production(
+    db: Session,
+    *,
+    order: Order,
+    previous_pc: PickingConfig,
+    operator_user_id: Optional[int],
+) -> dict[str, Any]:
+    tid = int(order.tenant_id)
+    items = _active_order_items(db, order)
+    if not items:
+        sources = (
+            db.query(ProductionOrderSourceItem)
+            .filter(
+                ProductionOrderSourceItem.tenant_id == tid,
+                ProductionOrderSourceItem.order_id == int(order.id),
+                ProductionOrderSourceItem.status.in_(tuple(ACTIVE_SOURCE_STATUSES)),
+            )
+            .all()
+        )
+    else:
+        item_ids = [int(it.id) for it in items]
+        sources = (
+            db.query(ProductionOrderSourceItem)
+            .filter(
+                ProductionOrderSourceItem.tenant_id == tid,
+                ProductionOrderSourceItem.order_item_id.in_(item_ids),
+                ProductionOrderSourceItem.status.in_(tuple(ACTIVE_SOURCE_STATUSES)),
+            )
+            .all()
+        )
+
+    if not sources:
+        return {"result": RESULT_SKIPPED, "reason": "no_active_sources"}
+
+    results: list[dict[str, Any]] = []
+    for src in sources:
+        mo = (
+            db.query(ProductionOrder)
+            .options(joinedload(ProductionOrder.line_snapshots))
+            .filter(ProductionOrder.id == int(src.production_order_id))
+            .with_for_update()
+            .first()
+        )
+        if mo is None:
+            continue
+        if (
+            getattr(mo, "picking_config_id", None) is not None
+            and int(mo.picking_config_id) != int(previous_pc.id)
+        ):
+            continue
+
+        status = str(mo.status or "")
+        if status in AGGREGABLE_MO_STATUSES:
+            qty = max(0.0, float(src.requested_quantity or 0) - float(src.fulfilled_quantity or 0))
+            src.status = PRODUCTION_ORDER_SOURCE_ITEM_CANCELLED
+            src.updated_at = datetime.utcnow()
+            db.add(src)
+            mo.planned_quantity = max(0.0, float(mo.planned_quantity or 0) - qty)
+            mo.updated_at = datetime.utcnow()
+            if mo.planned_quantity <= 1e-9:
+                mo.planned_quantity = 0.0
+                _rescale_snapshots(mo, 0.0)
+                db.add(mo)
+                db.flush()
+                try:
+                    cancel_production_order(db, tenant_id=tid, order_id=int(mo.id))
+                except Exception:
+                    mo.status = "cancelled"
+                    db.add(mo)
+                    db.flush()
+                _log_order(
+                    db,
+                    order=order,
+                    event_type="PRODUCTION_ORDER_WITHDRAWN",
+                    message=(
+                        f"Zamówienie wycofano z produkcji. Zlecenie {mo.number} anulowano "
+                        "(brak pozostałego zapotrzebowania)."
+                    ),
+                    operator_user_id=operator_user_id,
+                    metadata={"production_order_id": int(mo.id), "result": RESULT_WITHDRAWN},
+                )
+                results.append(
+                    {
+                        "result": RESULT_WITHDRAWN,
+                        "production_order_id": int(mo.id),
+                        "cancelled_mo": True,
+                    }
+                )
+            else:
+                _rescale_snapshots(mo, float(mo.planned_quantity))
+                db.add(mo)
+                db.flush()
+                _log_order(
+                    db,
+                    order=order,
+                    event_type="PRODUCTION_ORDER_WITHDRAWN",
+                    message=(
+                        f"Zamówienie wycofano z produkcji. Zapotrzebowanie usunięto ze zlecenia "
+                        f"{mo.number} (−{_qty_label(qty)} szt.)."
+                    ),
+                    operator_user_id=operator_user_id,
+                    metadata={
+                        "production_order_id": int(mo.id),
+                        "result": RESULT_WITHDRAWN,
+                        "reduced_qty": qty,
+                    },
+                )
+                results.append(
+                    {
+                        "result": RESULT_WITHDRAWN,
+                        "production_order_id": int(mo.id),
+                        "reduced_qty": qty,
+                    }
+                )
+        else:
+            _log_order(
+                db,
+                order=order,
+                event_type="PRODUCTION_ORDER_WITHDRAWAL_BLOCKED",
+                message=(
+                    f"Zamówienie opuściło status produkcji, ale zlecenie {mo.number} jest już w toku "
+                    f"({status}) — ilości produkcji nie zostały zmienione."
+                ),
+                operator_user_id=operator_user_id,
+                metadata={
+                    "production_order_id": int(mo.id),
+                    "mo_status": status,
+                    "result": RESULT_WITHDRAWAL_BLOCKED,
+                },
+            )
+            results.append(
+                {
+                    "result": RESULT_WITHDRAWAL_BLOCKED,
+                    "production_order_id": int(mo.id),
+                    "mo_status": status,
+                }
+            )
+
+    if not results:
+        return {"result": RESULT_SKIPPED}
+    return {"result": results[0]["result"], "details": results}
+
+
+def on_order_panel_status_changed_production(
+    db: Session,
+    *,
+    order: Order,
+    previous_status_id: Optional[int],
+    new_status_id: Optional[int],
+    operator_user_id: Optional[int] = None,
+) -> dict[str, Any]:
+    """
+    Hook after durable panel status mutation (same transaction).
+
+    Soft-fails: never raises to the status writer.
+    """
+    try:
+        prev = int(previous_status_id) if previous_status_id is not None else None
+        new = int(new_status_id) if new_status_id is not None else None
+        if prev == new:
+            return {"result": RESULT_SKIPPED, "reason": "unchanged"}
+
+        wid = int(getattr(order, "warehouse_id", 0) or 0)
+        tid = int(order.tenant_id)
+        if wid <= 0:
+            return {"result": RESULT_NO_WAREHOUSE}
+
+        prev_pc = get_picking_config(db, tid, wid, prev) if prev is not None else None
+        new_pc = get_picking_config(db, tid, wid, new) if new is not None else None
+
+        prev_prod = bool(prev_pc and getattr(prev_pc, "is_production_mode", False))
+        new_prod = bool(new_pc and getattr(new_pc, "is_production_mode", False))
+
+        out: dict[str, Any] = {"previous_production": prev_prod, "new_production": new_prod}
+
+        if prev_prod and not new_prod and prev_pc is not None:
+            out["withdraw"] = _withdraw_production(
+                db, order=order, previous_pc=prev_pc, operator_user_id=operator_user_id
+            )
+
+        if new_prod and new_pc is not None:
+            out["enter"] = _enter_production(
+                db, order=order, pc=new_pc, operator_user_id=operator_user_id
+            )
+
+        if not prev_prod and not new_prod:
+            out["result"] = RESULT_SKIPPED
+        return out
+    except Exception:
+        logger.exception(
+            "production trigger failed order_id=%s prev=%s new=%s",
+            getattr(order, "id", None),
+            previous_status_id,
+            new_status_id,
+        )
+        return {"result": RESULT_ERROR}

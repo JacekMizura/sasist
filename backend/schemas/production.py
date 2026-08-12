@@ -241,6 +241,8 @@ class ProductionOrderRead(BaseModel):
     recipe_name: Optional[str] = None
     lines: List[ProductionOrderLineSnapshotRead] = Field(default_factory=list)
     source_type: ProductionOrderSourceType = "MANUAL"
+    picking_config_id: Optional[int] = None
+    production_source_status_id: Optional[int] = None
     source_order_count: int = 0
     source_requested_quantity_total: float = 0.0
     source_fulfilled_quantity_total: float = 0.0

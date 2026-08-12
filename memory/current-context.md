@@ -1,5 +1,17 @@
 ﻿## Active
 
+**Order-driven production auto-MO (2026-08-12) — Phase 2:**
+- Hook: `apply_order_panel_ui_status` → `on_order_panel_status_changed_production` (also bulk-status)
+- Enter production status → create/aggregate `ProductionOrder` `source_type=ORDERS` via `ProductionOrderSourceItem`
+- Aggregation key: tenant+warehouse+product+composition+picking_config, only `draft`/`planned`
+- Concurrency: PG advisory lock + partial unique indexes; idempotency via active source on `order_item_id`
+- Withdraw before start reduces planned; after collecting+ blocked; reentry reactivates/creates cleanly
+- Phase 3 still pending: reservations, shortage-by-stock, buffer PW, status-after-production
+
+**Order-driven production foundation (2026-08-12) — Phase 1:**
+- Data: `ProductionOrder.source_type`, `production_order_source_items` (MO ↔ OrderItem)
+- Config: `picking_config.is_production_mode` + after/shortage statuses + FG buffer location; trigger scope `SINGLE_ELEMENT`
+
 **Picking validation (Walidacja zbierania) (2026-08-11):**
 - Sekcja Terminal → „Walidacja zbierania”; opcja „Produkty bez kodu EAN”
 - SSOT resolver: FE `resolvePickingValidationGates` + BE `resolve_picking_validation_gates`

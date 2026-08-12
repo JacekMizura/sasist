@@ -1069,6 +1069,8 @@ def orders_bulk_panel_status(
 
     updated = 0
     skipped = 0
+    from ..services.order_panel_ui_status_service import apply_order_panel_ui_status
+
     for row in rows:
         if sid is not None:
             row_wh = getattr(row, "warehouse_id", None)
@@ -1095,7 +1097,7 @@ def orders_bulk_panel_status(
             if not us:
                 skipped += 1
                 continue
-        row.order_ui_status_id = sid
+        apply_order_panel_ui_status(db, order=row, sub_status_id=sid, operator_user_id=None)
         updated += 1
     db.commit()
     return {"updated": updated, "skipped": skipped}

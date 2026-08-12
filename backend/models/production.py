@@ -115,6 +115,20 @@ class ProductionOrder(Base):
         server_default=text("'MANUAL'"),
         index=True,
     )
+    #: PickingConfig that triggered this ORDERS MO (aggregation / finish context).
+    picking_config_id = Column(
+        Integer,
+        ForeignKey("picking_config.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    #: Snapshot of production entry status at MO create (stable even if config later changes).
+    production_source_status_id = Column(
+        Integer,
+        ForeignKey("order_ui_statuses.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
     updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -122,6 +136,8 @@ class ProductionOrder(Base):
     product = relationship("Product", foreign_keys=[product_id])
     warehouse = relationship("Warehouse", foreign_keys=[warehouse_id])
     location = relationship("Location", foreign_keys=[location_id])
+    picking_config = relationship("PickingConfig", foreign_keys=[picking_config_id])
+    production_source_status = relationship("OrderUiStatus", foreign_keys=[production_source_status_id])
     line_snapshots = relationship(
         "ProductionOrderLineSnapshot",
         back_populates="production_order",

@@ -1,0 +1,25 @@
+"""Order-driven production trigger (Phase 2)."""
+
+from .trigger_service import (
+    RESULT_AGGREGATED,
+    RESULT_CREATED,
+    RESULT_IDEMPOTENT,
+    RESULT_NO_ACTIVE_MANUFACTURING_COMPOSITION,
+    RESULT_REACTIVATED,
+    RESULT_UNSUPPORTED_MULTI_ITEM,
+    RESULT_WITHDRAWAL_BLOCKED,
+    RESULT_WITHDRAWN,
+    on_order_panel_status_changed_production,
+)
+
+__all__ = [
+    "on_order_panel_status_changed_production",
+    "RESULT_CREATED",
+    "RESULT_AGGREGATED",
+    "RESULT_IDEMPOTENT",
+    "RESULT_REACTIVATED",
+    "RESULT_WITHDRAWN",
+    "RESULT_WITHDRAWAL_BLOCKED",
+    "RESULT_UNSUPPORTED_MULTI_ITEM",
+    "RESULT_NO_ACTIVE_MANUFACTURING_COMPOSITION",
+]

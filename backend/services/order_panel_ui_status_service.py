@@ -5,6 +5,8 @@ Status panelu (`order_ui_status_id`) jest zawsze zapisywany.
 Jeśli zamówienie jest na wózku — przy możliwości odłączenia wykonywany jest
 kanoniczny detach przez CartLifecycle; gdy detach jest zablokowany (trwa kompletacja /
 są picki), status i tak zostaje zapisany (bez odłączania).
+
+Po trwałej mutacji statusu uruchamiane są soft-fail hooki (smart matching, produkcja z zamówień).
 """
 
 from __future__ import annotations
@@ -44,12 +46,57 @@ def _run_smart_matching_status_hook(
         logger.exception("smart_matching trigger after status order_id=%s", getattr(order, "id", None))
 
 
+def _run_production_status_hook(
+    db: Session,
+    *,
+    order: Order,
+    previous_status_id: Optional[int],
+    new_status_id: Optional[int],
+    operator_user_id: Optional[int],
+) -> None:
+    try:
+        from .production_order_trigger import on_order_panel_status_changed_production
+
+        on_order_panel_status_changed_production(
+            db,
+            order=order,
+            previous_status_id=previous_status_id,
+            new_status_id=new_status_id,
+            operator_user_id=operator_user_id,
+        )
+    except Exception:
+        logger.exception(
+            "production trigger after status order_id=%s", getattr(order, "id", None)
+        )
+
+
+def _run_post_status_hooks(
+    db: Session,
+    *,
+    order: Order,
+    previous_status_id: Optional[int],
+    new_status_id: Optional[int],
+    operator_user_id: Optional[int],
+) -> None:
+    _run_smart_matching_status_hook(
+        db, order=order, sub_status_id=new_status_id, operator_user_id=operator_user_id
+    )
+    _run_production_status_hook(
+        db,
+        order=order,
+        previous_status_id=previous_status_id,
+        new_status_id=new_status_id,
+        operator_user_id=operator_user_id,
+    )
+
+
 def apply_order_panel_ui_status(
     db: Session,
     *,
     order: Order,
     sub_status_id: Optional[int],
     operator_user_id: Optional[int] = None,
+    skip_production_trigger: bool = False,
 ) -> dict[str, Any]:
     """
     Ustawia ``order_ui_status_id`` (zawsze).
@@ -58,6 +105,9 @@ def apply_order_panel_ui_status(
     - jeśli detach dozwolony → CartLifecycle detach,
     - jeśli zablokowany → status zostaje zapisany, zamówienie zostaje na wózku.
     """
+    previous_sid = (
+        int(order.order_ui_status_id) if getattr(order, "order_ui_status_id", None) is not None else None
+    )
     new_sid = int(sub_status_id) if sub_status_id is not None else None
     order.order_ui_status_id = new_sid
     # Unikaj stale relationship przy serializacji w tej samej sesji.
@@ -66,12 +116,24 @@ def apply_order_panel_ui_status(
     except Exception:
         pass
 
+    def _hooks() -> None:
+        if skip_production_trigger:
+            _run_smart_matching_status_hook(
+                db, order=order, sub_status_id=sub_status_id, operator_user_id=operator_user_id
+            )
+            return
+        _run_post_status_hooks(
+            db,
+            order=order,
+            previous_status_id=previous_sid,
+            new_status_id=new_sid,
+            operator_user_id=operator_user_id,
+        )
+
     cart_id = getattr(order, "cart_id", None)
     if cart_id is None or int(cart_id) <= 0:
         db.add(order)
-        _run_smart_matching_status_hook(
-            db, order=order, sub_status_id=sub_status_id, operator_user_id=operator_user_id
-        )
+        _hooks()
         return {"status_updated": True, "detached": False}
 
     tid = int(order.tenant_id)
@@ -97,17 +159,13 @@ def apply_order_panel_ui_status(
         )
         clear_order_picking_session_context(order)
         db.add(order)
-        _run_smart_matching_status_hook(
-            db, order=order, sub_status_id=sub_status_id, operator_user_id=operator_user_id
-        )
+        _hooks()
         return {"status_updated": True, "detached": False, "healed_orphan_cart": True}
 
     allowed, block_reason = can_detach_order_from_cart(db, cart=cart, order=order)
     if not allowed:
         db.add(order)
-        _run_smart_matching_status_hook(
-            db, order=order, sub_status_id=sub_status_id, operator_user_id=operator_user_id
-        )
+        _hooks()
         logger.info(
             "[panel.ui_status] status saved without detach order_id=%s cart_id=%s reason=%s",
             int(order.id),
@@ -137,7 +195,5 @@ def apply_order_panel_ui_status(
     except Exception:
         pass
     db.add(order)
-    _run_smart_matching_status_hook(
-        db, order=order, sub_status_id=sub_status_id, operator_user_id=operator_user_id
-    )
+    _hooks()
     return {"status_updated": True, "detached": True, "cart_id": cid}

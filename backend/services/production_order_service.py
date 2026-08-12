@@ -451,6 +451,14 @@ def serialize_order(
         recipe_name=recipe_name,
         lines=lines_out,
         source_type=raw_source,  # type: ignore[arg-type]
+        picking_config_id=(
+            int(order.picking_config_id) if getattr(order, "picking_config_id", None) is not None else None
+        ),
+        production_source_status_id=(
+            int(order.production_source_status_id)
+            if getattr(order, "production_source_status_id", None) is not None
+            else None
+        ),
         source_order_count=int(src_order_count),
         source_requested_quantity_total=float(src_req_total),
         source_fulfilled_quantity_total=float(src_ful_total),
