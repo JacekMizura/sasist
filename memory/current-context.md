@@ -1,12 +1,17 @@
 ﻿## Active
 
+**Order-driven production materials (2026-08-12) — Phase 3:**
+- After attach: `apply_material_validation_to_orders_mo` → `producible_now_qty` + StockReservation SSOT
+- Partial cover: priority/oldest sources stay `reserved`; rest `shortage` → `status_on_component_shortage_id`
+- `planned_quantity` / BOM snapshots / reservations sync to producible qty; `retry_order_driven_production_shortages`
+- UI MO detail: reserved/shortage counts + badges; no status-after-production / buffer PW yet
+
 **Order-driven production auto-MO (2026-08-12) — Phase 2:**
 - Hook: `apply_order_panel_ui_status` → `on_order_panel_status_changed_production` (also bulk-status)
 - Enter production status → create/aggregate `ProductionOrder` `source_type=ORDERS` via `ProductionOrderSourceItem`
 - Aggregation key: tenant+warehouse+product+composition+picking_config, only `draft`/`planned`
 - Concurrency: PG advisory lock + partial unique indexes; idempotency via active source on `order_item_id`
 - Withdraw before start reduces planned; after collecting+ blocked; reentry reactivates/creates cleanly
-- Phase 3 still pending: reservations, shortage-by-stock, buffer PW, status-after-production
 
 **Order-driven production foundation (2026-08-12) — Phase 1:**
 - Data: `ProductionOrder.source_type`, `production_order_source_items` (MO ↔ OrderItem)

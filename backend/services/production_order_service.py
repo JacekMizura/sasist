@@ -383,6 +383,10 @@ def serialize_order(
             .all()
         )
     src_order_count, src_req_total, src_ful_total = aggregate_order_source_quantities(source_rows)
+    src_reserved_count = sum(
+        1 for s in source_rows if str(s.status or "") in ("reserved", "open", "partial")
+    )
+    src_shortage_count = sum(1 for s in source_rows if str(s.status or "") == "shortage")
     order_sources_out: list[ProductionOrderSourceItemRead] = []
     if with_order_sources and source_rows:
         order_ids = {int(s.order_id) for s in source_rows}
@@ -462,6 +466,8 @@ def serialize_order(
         source_order_count=int(src_order_count),
         source_requested_quantity_total=float(src_req_total),
         source_fulfilled_quantity_total=float(src_ful_total),
+        source_reserved_count=int(src_reserved_count),
+        source_shortage_count=int(src_shortage_count),
         order_sources=order_sources_out,
         started_at=order.started_at,
         collecting_completed_at=getattr(order, "collecting_completed_at", None),

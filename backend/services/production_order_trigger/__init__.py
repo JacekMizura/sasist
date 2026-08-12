@@ -1,7 +1,12 @@
-"""Order-driven production trigger (Phase 2)."""
+"""Order-driven production trigger (Phase 2) + material validation (Phase 3)."""
 
+from .material_validation_service import (
+    apply_material_validation_to_orders_mo,
+    retry_order_driven_production_shortages,
+)
 from .trigger_service import (
     RESULT_AGGREGATED,
+    RESULT_COMPONENT_SHORTAGE,
     RESULT_CREATED,
     RESULT_IDEMPOTENT,
     RESULT_NO_ACTIVE_MANUFACTURING_COMPOSITION,
@@ -14,6 +19,8 @@ from .trigger_service import (
 
 __all__ = [
     "on_order_panel_status_changed_production",
+    "apply_material_validation_to_orders_mo",
+    "retry_order_driven_production_shortages",
     "RESULT_CREATED",
     "RESULT_AGGREGATED",
     "RESULT_IDEMPOTENT",
@@ -22,4 +29,5 @@ __all__ = [
     "RESULT_WITHDRAWAL_BLOCKED",
     "RESULT_UNSUPPORTED_MULTI_ITEM",
     "RESULT_NO_ACTIVE_MANUFACTURING_COMPOSITION",
+    "RESULT_COMPONENT_SHORTAGE",
 ]

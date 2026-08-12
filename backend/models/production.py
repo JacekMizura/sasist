@@ -32,9 +32,19 @@ PRODUCTION_ORDER_SOURCE_TYPES = frozenset(
 
 #: Source-item row status (order line link under an MO).
 PRODUCTION_ORDER_SOURCE_ITEM_OPEN = "open"
+PRODUCTION_ORDER_SOURCE_ITEM_RESERVED = "reserved"
 PRODUCTION_ORDER_SOURCE_ITEM_PARTIAL = "partial"
+PRODUCTION_ORDER_SOURCE_ITEM_SHORTAGE = "shortage"
 PRODUCTION_ORDER_SOURCE_ITEM_FULFILLED = "fulfilled"
 PRODUCTION_ORDER_SOURCE_ITEM_CANCELLED = "cancelled"
+#: Demand currently covered / pending on an open MO (idempotency unique index).
+PRODUCTION_ORDER_SOURCE_ITEM_ACTIVE_STATUSES = frozenset(
+    {
+        PRODUCTION_ORDER_SOURCE_ITEM_OPEN,
+        PRODUCTION_ORDER_SOURCE_ITEM_RESERVED,
+        PRODUCTION_ORDER_SOURCE_ITEM_PARTIAL,
+    }
+)
 
 
 class ProductionRecipe(Base):

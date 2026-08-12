@@ -171,6 +171,8 @@ export type ProductionOrderRead = {
   source_order_count?: number;
   source_requested_quantity_total?: number;
   source_fulfilled_quantity_total?: number;
+  source_reserved_count?: number;
+  source_shortage_count?: number;
   order_sources?: ProductionOrderSourceItemRead[];
   started_at?: string | null;
   completed_at?: string | null;

@@ -246,6 +246,8 @@ class ProductionOrderRead(BaseModel):
     source_order_count: int = 0
     source_requested_quantity_total: float = 0.0
     source_fulfilled_quantity_total: float = 0.0
+    source_reserved_count: int = 0
+    source_shortage_count: int = 0
     order_sources: List[ProductionOrderSourceItemRead] = Field(default_factory=list)
     started_at: Optional[datetime] = None
     collecting_completed_at: Optional[datetime] = None

@@ -316,23 +316,47 @@ export default function ProductionOrderDetailPage() {
         {order.source_type === "ORDERS" && (order.order_sources?.length ?? 0) > 0 ? (
           <div className="mt-6 rounded-xl border border-slate-200 bg-slate-50/60 p-4">
             <h3 className="text-sm font-semibold text-slate-900">Zamówienia źródłowe</h3>
+            <p className="mt-1 text-xs text-slate-600">
+              Zamówienia: {order.source_order_count ?? order.order_sources!.length}
+              {" · "}
+              Zarezerwowane: {order.source_reserved_count ?? 0}
+              {" · "}
+              Brak materiałów: {order.source_shortage_count ?? 0}
+            </p>
             <ul className="mt-3 divide-y divide-slate-200">
-              {order.order_sources!.map((src) => (
-                <li key={src.id} className="flex flex-wrap items-baseline justify-between gap-2 py-2 text-sm">
-                  <div className="min-w-0">
-                    <p className="font-mono font-medium text-slate-900">
-                      {src.order_number ?? `#${src.order_id}`}
-                    </p>
-                    <p className="text-xs text-slate-500">
-                      {src.product_name ?? `Produkt #${src.product_id}`}
-                      {src.product_sku ? ` · ${src.product_sku}` : ""}
-                    </p>
-                  </div>
-                  <p className="tabular-nums text-slate-700">
-                    {src.fulfilled_quantity}/{src.requested_quantity}
-                  </p>
-                </li>
-              ))}
+              {order.order_sources!.map((src) => {
+                const st = String(src.status || "").toLowerCase();
+                const ready = st === "reserved" || st === "open" || st === "partial";
+                const shortage = st === "shortage";
+                return (
+                  <li key={src.id} className="flex flex-wrap items-baseline justify-between gap-2 py-2 text-sm">
+                    <div className="min-w-0">
+                      <p className="font-mono font-medium text-slate-900">
+                        {src.order_number ?? `#${src.order_id}`}
+                      </p>
+                      <p className="text-xs text-slate-500">
+                        {src.product_name ?? `Produkt #${src.product_id}`}
+                        {src.product_sku ? ` · ${src.product_sku}` : ""}
+                      </p>
+                    </div>
+                    <div className="flex flex-col items-end gap-1">
+                      <p className="tabular-nums text-slate-700">
+                        {src.fulfilled_quantity}/{src.requested_quantity}
+                      </p>
+                      {ready ? (
+                        <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-800 ring-1 ring-emerald-200">
+                          Gotowe do produkcji
+                        </span>
+                      ) : null}
+                      {shortage ? (
+                        <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-900 ring-1 ring-amber-200">
+                          Brak komponentów
+                        </span>
+                      ) : null}
+                    </div>
+                  </li>
+                );
+              })}
             </ul>
           </div>
         ) : null}

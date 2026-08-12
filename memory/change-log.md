@@ -1,3 +1,10 @@
+## 2026-08-12 — Rezerwacje i braki w produkcji z zamówień (faza 3)
+
+- Walidacja materiałowa po attach: `analyze_composition_quantity` → max producible + podział source (priority/oldest)
+- Rezerwacje przez istniejący `create_production_order_reservations`; shortage → status braków
+- `retry_order_driven_production_shortages`; UI counts reserved/shortage w detail MO
+- Bez statusu po produkcji / PW bufora / pakowania (kolejna faza)
+
 ## 2026-08-12 — Automatyczne zlecenia produkcji z zamówień (faza 2)
 
 - Trigger SSOT po zmianie statusu panelu → create/aggregate MO `ORDERS` (idempotent source items)

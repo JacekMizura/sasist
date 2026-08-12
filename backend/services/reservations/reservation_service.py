@@ -46,11 +46,30 @@ def _load_production_reservation_config(
 ) -> ProductionReservationConfig:
     from ...models.wms_settings import WmsSettings
 
-    row = (
-        db.query(WmsSettings)
-        .filter(WmsSettings.tenant_id == int(tenant_id), WmsSettings.warehouse_id == int(warehouse_id))
-        .first()
-    )
+    try:
+        nested = db.begin_nested()
+        try:
+            row = (
+                db.query(WmsSettings)
+                .filter(
+                    WmsSettings.tenant_id == int(tenant_id),
+                    WmsSettings.warehouse_id == int(warehouse_id),
+                )
+                .first()
+            )
+            nested.commit()
+        except Exception:
+            nested.rollback()
+            raise
+    except Exception:
+        logger.debug(
+            "wms_settings unavailable — using default production reservation config",
+            exc_info=True,
+        )
+        return ProductionReservationConfig(
+            allocation_strategy=DEFAULT_ALLOCATION_STRATEGY,
+            allow_sales_locations=False,
+        )
     if row is None:
         return ProductionReservationConfig(
             allocation_strategy=DEFAULT_ALLOCATION_STRATEGY,

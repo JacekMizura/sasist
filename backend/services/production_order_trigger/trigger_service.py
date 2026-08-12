@@ -22,9 +22,10 @@ from ...models.picking_config import (
 )
 from ...models.product_composition import ProductComposition
 from ...models.production import (
+    PRODUCTION_ORDER_SOURCE_ITEM_ACTIVE_STATUSES,
     PRODUCTION_ORDER_SOURCE_ITEM_CANCELLED,
     PRODUCTION_ORDER_SOURCE_ITEM_OPEN,
-    PRODUCTION_ORDER_SOURCE_ITEM_PARTIAL,
+    PRODUCTION_ORDER_SOURCE_ITEM_SHORTAGE,
     PRODUCTION_ORDER_SOURCE_ORDERS,
     ProductionOrder,
     ProductionOrderSourceItem,
@@ -37,13 +38,15 @@ from ..production_order_service import (
     cancel_production_order,
 )
 from ..wms_audit_service import append_order_activity_for_wms
+from .material_validation_service import (
+    apply_material_validation_to_orders_mo,
+    refresh_orders_mo_material_reservations,
+)
 
 logger = logging.getLogger(__name__)
 
 AGGREGABLE_MO_STATUSES = frozenset({"draft", "planned"})
-ACTIVE_SOURCE_STATUSES = frozenset(
-    {PRODUCTION_ORDER_SOURCE_ITEM_OPEN, PRODUCTION_ORDER_SOURCE_ITEM_PARTIAL}
-)
+ACTIVE_SOURCE_STATUSES = PRODUCTION_ORDER_SOURCE_ITEM_ACTIVE_STATUSES
 
 RESULT_SKIPPED = "SKIPPED"
 RESULT_IDEMPOTENT = "IDEMPOTENT"
@@ -54,6 +57,7 @@ RESULT_WITHDRAWN = "WITHDRAWN"
 RESULT_WITHDRAWAL_BLOCKED = "WITHDRAWAL_BLOCKED"
 RESULT_UNSUPPORTED_MULTI_ITEM = "UNSUPPORTED_MULTI_ITEM"
 RESULT_NO_ACTIVE_MANUFACTURING_COMPOSITION = "NO_ACTIVE_MANUFACTURING_COMPOSITION"
+RESULT_COMPONENT_SHORTAGE = "COMPONENT_SHORTAGE"
 RESULT_NO_WAREHOUSE = "NO_WAREHOUSE"
 RESULT_ERROR = "ERROR"
 
@@ -87,16 +91,22 @@ def _log_order(
     if wid <= 0:
         return
     try:
-        append_order_activity_for_wms(
-            db,
-            order_id=int(order.id),
-            tenant_id=int(order.tenant_id),
-            warehouse_id=wid,
-            event_type=event_type,
-            message=message,
-            operator_user_id=operator_user_id,
-            metadata=metadata,
-        )
+        nested = db.begin_nested()
+        try:
+            append_order_activity_for_wms(
+                db,
+                order_id=int(order.id),
+                tenant_id=int(order.tenant_id),
+                warehouse_id=wid,
+                event_type=event_type,
+                message=message,
+                operator_user_id=operator_user_id,
+                metadata=metadata,
+            )
+            nested.commit()
+        except Exception:
+            nested.rollback()
+            raise
     except Exception:
         logger.exception(
             "production trigger activity log failed order_id=%s", getattr(order, "id", None)
@@ -473,6 +483,30 @@ def _enter_production(
         db.add(mo)
         db.flush()
 
+    material = apply_material_validation_to_orders_mo(
+        db,
+        mo=mo,
+        picking_config=pc,
+        operator_user_id=operator_user_id,
+    )
+    try:
+        db.refresh(source)
+    except Exception:
+        source = (
+            db.query(ProductionOrderSourceItem)
+            .filter(ProductionOrderSourceItem.id == int(source.id))
+            .first()
+        )
+    if source is not None and str(source.status or "") == PRODUCTION_ORDER_SOURCE_ITEM_SHORTAGE:
+        return {
+            "result": RESULT_COMPONENT_SHORTAGE,
+            "production_order_id": int(mo.id),
+            "production_order_number": str(mo.number),
+            "source_item_id": int(source.id),
+            "requested_quantity": qty,
+            "material": material,
+        }
+
     if created_new_mo:
         result_code = RESULT_CREATED
         msg = (
@@ -503,6 +537,9 @@ def _enter_production(
             "production_order_number": str(mo.number),
             "requested_quantity": qty,
             "result": result_code,
+            "source_status": str(source.status or ""),
+            "planned_quantity": float(mo.planned_quantity or 0),
+            "max_producible_quantity": material.get("max_producible_quantity"),
         },
     )
     return {
@@ -512,6 +549,7 @@ def _enter_production(
         "planned_quantity": float(mo.planned_quantity),
         "source_item_id": int(source.id),
         "requested_quantity": qty,
+        "material": material,
     }
 
 
@@ -585,6 +623,14 @@ def _withdraw_production(
                     mo.status = "cancelled"
                     db.add(mo)
                     db.flush()
+                    try:
+                        refresh_orders_mo_material_reservations(
+                            db, mo=mo, created_by_user_id=operator_user_id
+                        )
+                    except Exception:
+                        logger.exception(
+                            "release reservations on cancel fallback mo_id=%s", mo.id
+                        )
                 _log_order(
                     db,
                     order=order,
@@ -607,6 +653,9 @@ def _withdraw_production(
                 _rescale_snapshots(mo, float(mo.planned_quantity))
                 db.add(mo)
                 db.flush()
+                refresh_orders_mo_material_reservations(
+                    db, mo=mo, created_by_user_id=operator_user_id
+                )
                 _log_order(
                     db,
                     order=order,

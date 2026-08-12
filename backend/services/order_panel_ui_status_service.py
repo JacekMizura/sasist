@@ -34,14 +34,20 @@ def _run_smart_matching_status_hook(
     operator_user_id: Optional[int],
 ) -> None:
     try:
-        from .packaging_engine.smart_matching_triggers import on_order_status_changed_smart_matching
+        nested = db.begin_nested()
+        try:
+            from .packaging_engine.smart_matching_triggers import on_order_status_changed_smart_matching
 
-        on_order_status_changed_smart_matching(
-            db,
-            order=order,
-            new_status_id=int(sub_status_id) if sub_status_id is not None else None,
-            operator_user_id=operator_user_id,
-        )
+            on_order_status_changed_smart_matching(
+                db,
+                order=order,
+                new_status_id=int(sub_status_id) if sub_status_id is not None else None,
+                operator_user_id=operator_user_id,
+            )
+            nested.commit()
+        except Exception:
+            nested.rollback()
+            raise
     except Exception:
         logger.exception("smart_matching trigger after status order_id=%s", getattr(order, "id", None))
 

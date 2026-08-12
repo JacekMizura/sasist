@@ -7,11 +7,13 @@ Phase 2 — automatic ORDERS MO create/aggregate/withdraw on panel status change
 from __future__ import annotations
 
 import threading
+from datetime import date
 
 import pytest
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
 
+from backend.models.inventory import Inventory
 from backend.models.location import Location
 from backend.models.order import Order
 from backend.models.order_item import OrderItem
@@ -21,12 +23,14 @@ from backend.models.product import Product
 from backend.models.product_composition import ProductComposition, ProductCompositionLine
 from backend.models.production import (
     PRODUCTION_ORDER_SOURCE_ITEM_CANCELLED,
+    PRODUCTION_ORDER_SOURCE_ITEM_RESERVED,
     PRODUCTION_ORDER_SOURCE_MANUAL,
     PRODUCTION_ORDER_SOURCE_ORDERS,
     ProductionOrder,
     ProductionOrderLineSnapshot,
     ProductionOrderSourceItem,
 )
+from backend.models.stock_reservation import StockReservation
 from backend.models.tenant import Tenant
 from backend.models.warehouse import Warehouse
 from backend.services.order_panel_ui_status_service import apply_order_panel_ui_status
@@ -41,6 +45,7 @@ from backend.services.production_order_trigger import (
     on_order_panel_status_changed_production,
 )
 from backend.services.production_order_trigger.trigger_service import _enter_production
+from backend.services.stock_disposition import STOCK_DISPOSITION_SALEABLE
 
 
 def _engine():
@@ -53,6 +58,50 @@ def _engine():
         cur.close()
 
     return eng
+
+
+@pytest.fixture(autouse=True)
+def _patch_reservation_side_effects(monkeypatch):
+    monkeypatch.setattr(
+        "backend.services.reservations.reservation_service.record_inventory_movement",
+        lambda *_a, **_k: None,
+    )
+    monkeypatch.setattr(
+        "backend.services.reservations.lifecycle_service.record_inventory_movement",
+        lambda *_a, **_k: None,
+    )
+    monkeypatch.setattr(
+        "backend.services.commercial_availability_service._total_saleable_issued_by_product",
+        lambda *_a, **_k: {},
+    )
+    monkeypatch.setattr(
+        "backend.services.production_shortages.analysis_service.expected_availability_date",
+        lambda *_a, **_k: None,
+    )
+    monkeypatch.setattr(
+        "backend.services.production_shortages.analysis_service._substitute_proposals",
+        lambda *_a, **_k: [],
+    )
+    monkeypatch.setattr(
+        "backend.services.production_order_trigger.trigger_service.append_order_activity_for_wms",
+        lambda *_a, **_k: None,
+    )
+    monkeypatch.setattr(
+        "backend.services.production_order_trigger.material_validation_service.append_order_activity_for_wms",
+        lambda *_a, **_k: None,
+    )
+    monkeypatch.setattr(
+        "backend.services.reservations.lifecycle_service.emit_operational_sales_event",
+        lambda *_a, **_k: None,
+    )
+    monkeypatch.setattr(
+        "backend.services.reservations.lifecycle_service.log_reservation_lifecycle",
+        lambda *_a, **_k: None,
+    )
+    monkeypatch.setattr(
+        "backend.services.order_panel_ui_status_service._run_smart_matching_status_hook",
+        lambda *_a, **_k: None,
+    )
 
 
 def _bootstrap(db_session_factory):
@@ -71,6 +120,8 @@ def _bootstrap(db_session_factory):
         ProductionOrder,
         ProductionOrderLineSnapshot,
         ProductionOrderSourceItem,
+        Inventory,
+        StockReservation,
     ):
         model.__table__.create(engine, checkfirst=True)
 
@@ -94,7 +145,7 @@ def _bootstrap(db_session_factory):
                 """
                 CREATE UNIQUE INDEX IF NOT EXISTS uq_prod_source_active_order_item
                 ON production_order_source_items (tenant_id, order_item_id)
-                WHERE status IN ('open', 'partial')
+                WHERE status IN ('open', 'partial', 'reserved')
                 """
             )
         )
@@ -102,8 +153,18 @@ def _bootstrap(db_session_factory):
     Session = sessionmaker(bind=engine)
     db = Session()
     db.add(Tenant(id=1, name="T", default_warehouse_id=1))
-    db.add(Warehouse(id=1, tenant_id=1, name="WH"))
-    db.add(Location(id=50, warehouse_id=1, name="BUF", is_active=True))
+    db.add(Warehouse(id=1, tenant_id=1, name="WH", requires_putaway=False))
+    db.add(
+        Location(
+            id=1,
+            warehouse_id=1,
+            name="PICK-1",
+            type="pick",
+            location_type="NORMAL",
+            is_active=True,
+        )
+    )
+    db.add(Location(id=50, warehouse_id=1, name="BUF", is_active=True, location_type="NORMAL"))
     for sid, name in (
         (10, "Produkcja A"),
         (11, "Po produkcji"),
@@ -181,6 +242,21 @@ def _bootstrap(db_session_factory):
         )
     )
 
+    # Generous component stock so Phase-2 aggregation tests stay green under Phase-3 validation.
+    db.add(
+        Inventory(
+            id=9001,
+            tenant_id=1,
+            warehouse_id=1,
+            location_id=1,
+            product_id=101,
+            quantity=10_000.0,
+            stock_disposition=STOCK_DISPOSITION_SALEABLE,
+            batch_number="",
+            expiry_date=date(9999, 12, 31),
+        )
+    )
+
     pc_a = PickingConfig(
         id=1,
         tenant_id=1,
@@ -250,6 +326,9 @@ def test_single_order_creates_orders_mo():
     sources = db.query(ProductionOrderSourceItem).all()
     assert len(sources) == 1
     assert sources[0].requested_quantity == pytest.approx(1.0)
+    assert sources[0].status == PRODUCTION_ORDER_SOURCE_ITEM_RESERVED
+    assert mos[0].materials_reserved is True
+    assert db.query(StockReservation).filter(StockReservation.status == "reserved").count() >= 1
 
 
 def test_qty_three_sets_planned_three():
@@ -433,7 +512,7 @@ def test_withdraw_after_collecting_does_not_reduce():
     mo = db.query(ProductionOrder).one()
     assert mo.planned_quantity == pytest.approx(2.0)
     src = db.query(ProductionOrderSourceItem).one()
-    assert src.status == "open"  # still active — withdrawal blocked
+    assert src.status == PRODUCTION_ORDER_SOURCE_ITEM_RESERVED  # still active — withdrawal blocked
 
 
 def test_reentry_after_withdraw():
@@ -455,7 +534,7 @@ def test_reentry_after_withdraw():
     assert open_mos[0].planned_quantity == pytest.approx(2.0)
     active_sources = (
         db.query(ProductionOrderSourceItem)
-        .filter(ProductionOrderSourceItem.status == "open")
+        .filter(ProductionOrderSourceItem.status == PRODUCTION_ORDER_SOURCE_ITEM_RESERVED)
         .all()
     )
     assert len(active_sources) == 1

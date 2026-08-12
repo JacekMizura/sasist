@@ -29,9 +29,9 @@ from .schema_introspection import (
 
 logger = logging.getLogger(__name__)
 
-PRODUCTION_SCHEMA_VERSION = "2026.08.12.2"
+PRODUCTION_SCHEMA_VERSION = "2026.08.12.3"
 # Monotonic generation counter exposed in logs, /health/schema, and deploy verification.
-PRODUCTION_SCHEMA_GENERATION = 15
+PRODUCTION_SCHEMA_GENERATION = 16
 SCHEMA_METADATA_KEY = "production_schema_version"
 SCHEMA_METADATA_TABLE = "schema_metadata"
 
@@ -353,6 +353,26 @@ def _migration_order_driven_production_indexes(engine: Engine) -> int:
     return added
 
 
+def _migration_order_driven_source_reserved_index(engine: Engine) -> int:
+    """Include ``reserved`` in active source idempotency unique index."""
+    added = 0
+    if not has_table(engine, "production_order_source_items"):
+        return 0
+    with engine.begin() as conn:
+        conn.execute(text("DROP INDEX IF EXISTS uq_prod_source_active_order_item"))
+        conn.execute(
+            text(
+                """
+                CREATE UNIQUE INDEX IF NOT EXISTS uq_prod_source_active_order_item
+                ON production_order_source_items (tenant_id, order_item_id)
+                WHERE status IN ('open', 'partial', 'reserved')
+                """
+            )
+        )
+        added += 1
+    return added
+
+
 PRODUCTION_SCHEMA_MIGRATIONS: list[ProductionSchemaMigration] = [
     ProductionSchemaMigration("2026.06.04.1", "batch_workflow_columns", _migration_batch_workflow_columns),
     ProductionSchemaMigration(
@@ -364,6 +384,11 @@ PRODUCTION_SCHEMA_MIGRATIONS: list[ProductionSchemaMigration] = [
         "2026.08.12.2",
         "order_driven_production_indexes",
         _migration_order_driven_production_indexes,
+    ),
+    ProductionSchemaMigration(
+        "2026.08.12.3",
+        "order_driven_source_reserved_index",
+        _migration_order_driven_source_reserved_index,
     ),
 ]
 
