@@ -1,5 +1,11 @@
 ﻿## Active
 
+**Stock replenishment / nadprodukcja (2026-08-12) — Phase 7:**
+- Settings in `production_forecast_json`: `auto_stock_replenishment`, `stock_replenishment_coverage_days` (1|3|7|14)
+- `run_production_stock_replenishment` creates/aggregates `ProductionOrder` `source_type=PLANNING` only
+- ORDERS material reservations + soft-hold before PLANNING; no FG buffer copy; standard PW/putaway
+- Manual API `POST /production/planning/stock-replenishment/run`; no cron yet
+
 **Order-driven production → packing handoff (2026-08-12) — Phase 6:**
 - `after_production_action` = `STATUS_ONLY` (default) | `OPEN_PACKING` on picking_config
 - Stronger `status_after` validation: ≠ source, ≠ other production source, ≠ standard picking entry, unique among production afters; target forced = after (packing queue)

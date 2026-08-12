@@ -16,6 +16,7 @@ from backend.services.production_planning.priority_engine import compute_priorit
 from backend.services.production_planning.production_recommendation_service import (
     apply_moq_and_multiple,
     combined_production_need,
+    forecast_stock_need,
     forecast_target_stock,
 )
 
@@ -62,6 +63,21 @@ class TestCombinedGap(unittest.TestCase):
             order_demand=120, forecast_need=forecast_need, on_hand=80, in_pipeline=30
         )
         self.assertEqual(combined, 110.0)
+
+    def test_planning_without_auto_replenishment_math_unchanged(self):
+        """Regression: existing demand math still holds when coverage=21."""
+        target = forecast_target_stock(daily_rate=10, coverage_days=21, min_stock=None, max_stock=None)
+        self.assertEqual(target, 210)
+        need = forecast_stock_need(
+            daily_rate=10,
+            coverage_days=21,
+            min_stock=None,
+            max_stock=None,
+            on_hand=80,
+            in_pipeline=30,
+        )
+        self.assertEqual(need, 100)
+
 
 
 class TestLeadTimePriority(unittest.TestCase):

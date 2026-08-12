@@ -1,4 +1,11 @@
-﻿## 2026-08-12 — Produkcja → pakowanie (faza 6)
+﻿## 2026-08-12 — Nadprodukcja / uzupełnianie zapasu (faza 7)
+
+- Ustawienia: `auto_stock_replenishment` + `stock_replenishment_coverage_days` ∈ {1,3,7,14} w `production_forecast_json`
+- `run_production_stock_replenishment` → MO `source_type=PLANNING` (agregacja draft/planned; bez FG buffer ORDERS)
+- ORDERS materials first (rezerwacje + soft-hold); min/max stock respektowane; UI badge Zamówienia / Uzupełnienie
+- Endpoint `POST /production/planning/stock-replenishment/run`; testy `test_stock_replenishment.py`
+
+## 2026-08-12 — Produkcja → pakowanie (faza 6)
 
 - fter_production_action STATUS_ONLY|OPEN_PACKING; walidacja status_after (unikalność, ≠ source/picking)
 - Fulfill: READY_TO_PACK + CARTLESS; packing_handoff w progress; FE toast/auto-open; badge Z produkcji

@@ -56,6 +56,9 @@ export type ProductionDemandProductRow = {
   limiting_component_name?: string | null;
   recommended_quantity: number;
   combined_production_needed: number;
+  stock_replenishment_needed?: number;
+  has_order_demand?: boolean;
+  has_stock_replenishment?: boolean;
   priority: ProductionPlanningPriority;
   recommendation_reasons: string[];
   timeline: TimelinePoint[];
@@ -70,6 +73,9 @@ export type ProductionDemandPlanning = {
   forecast_strategy_label: string;
   coverage_day_presets: number[];
   forecast_strategies: { key: string; label: string }[];
+  auto_stock_replenishment?: boolean;
+  stock_replenishment_coverage_days?: number | null;
+  stock_replenishment_coverage_presets?: number[];
   dashboard: ProductionPlanningDashboard;
   products: ProductionDemandProductRow[];
 };
@@ -168,5 +174,37 @@ export async function createBatchesFromSimulation(body: {
   coverage_days: number;
 }): Promise<{ batch_ids: number[] }> {
   const res = await api.post<{ batch_ids: number[] }>("/production/planning/simulate/create-batches", body);
+  return res.data;
+}
+
+export type StockReplenishmentRunResult = {
+  tenant_id: number;
+  warehouse_id: number;
+  enabled: boolean;
+  coverage_days: number;
+  created_count: number;
+  aggregated_count: number;
+  skipped_count: number;
+  total_quantity: number;
+  actions: Array<{
+    product_id: number;
+    product_name?: string;
+    composition_id?: number | null;
+    quantity?: number;
+    production_order_id?: number | null;
+    production_order_number?: string | null;
+    action: "created" | "aggregated" | "skipped" | "capped";
+    reason?: string | null;
+  }>;
+};
+
+export async function runStockReplenishment(body: {
+  tenant_id: number;
+  warehouse_id: number;
+}): Promise<StockReplenishmentRunResult> {
+  const res = await api.post<StockReplenishmentRunResult>(
+    "/production/planning/stock-replenishment/run",
+    body,
+  );
   return res.data;
 }

@@ -33,6 +33,8 @@ export type ProductionForecastSettings = {
     | "MAX_DAILY"
     | "AI_SMART";
   sales_lookback_days: number;
+  auto_stock_replenishment?: boolean;
+  stock_replenishment_coverage_days?: 1 | 3 | 7 | 14;
 };
 
 export type ProductionReservationSettings = {

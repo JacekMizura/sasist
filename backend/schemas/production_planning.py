@@ -56,6 +56,10 @@ class ProductionDemandProductRowRead(BaseModel):
     recommended_quantity: float = 0.0
     order_production_needed: float = 0.0
     combined_production_needed: float = 0.0
+    #: Net need for stock replenishment only (PLANNING) — excludes ORDERS gap.
+    stock_replenishment_needed: float = 0.0
+    has_order_demand: bool = False
+    has_stock_replenishment: bool = False
     priority: ProductionPlanningPriority = "LOW"
     recommendation_reasons: List[str] = Field(default_factory=list)
     timeline: List[dict[str, Any]] = Field(default_factory=list)
@@ -70,8 +74,39 @@ class ProductionDemandPlanningRead(BaseModel):
     forecast_strategy_label: str = ""
     coverage_day_presets: List[int] = Field(default_factory=list)
     forecast_strategies: List[dict[str, str]] = Field(default_factory=list)
+    auto_stock_replenishment: bool = False
+    stock_replenishment_coverage_days: Optional[int] = None
+    stock_replenishment_coverage_presets: List[int] = Field(default_factory=list)
     dashboard: ProductionPlanningDashboardRead = Field(default_factory=ProductionPlanningDashboardRead)
     products: List[ProductionDemandProductRowRead] = Field(default_factory=list)
+
+
+class ProductionStockReplenishmentRunBody(BaseModel):
+    tenant_id: int = Field(..., ge=1)
+    warehouse_id: int = Field(..., ge=1)
+
+
+class ProductionStockReplenishmentActionRead(BaseModel):
+    product_id: int
+    product_name: str = ""
+    composition_id: Optional[int] = None
+    quantity: float = 0.0
+    production_order_id: Optional[int] = None
+    production_order_number: Optional[str] = None
+    action: Literal["created", "aggregated", "skipped", "capped"] = "skipped"
+    reason: Optional[str] = None
+
+
+class ProductionStockReplenishmentRunRead(BaseModel):
+    tenant_id: int
+    warehouse_id: int
+    enabled: bool
+    coverage_days: int
+    created_count: int = 0
+    aggregated_count: int = 0
+    skipped_count: int = 0
+    total_quantity: float = 0.0
+    actions: List[ProductionStockReplenishmentActionRead] = Field(default_factory=list)
 
 
 class ProductionPlanSimulationMaterialRead(BaseModel):

@@ -29,6 +29,8 @@ type Props = {
   onCustomCoverageInputChange: (v: string) => void;
   onApplyCustomCoverage: () => void;
   onCreateBatch: (lines: DemandBatchLineDraft[], label: string) => void;
+  onRunStockReplenishment?: () => void;
+  replenishmentRunning?: boolean;
 };
 
 function fmtQty(n: number): string {
@@ -73,15 +75,23 @@ export function ProductionDemandPlanningPanel({
   onCustomCoverageInputChange,
   onApplyCustomCoverage,
   onCreateBatch,
+  onRunStockReplenishment,
+  replenishmentRunning = false,
 }: Props) {
   const dash = data?.dashboard;
   const products = data?.products ?? [];
   const presets = data?.coverage_day_presets ?? [7, 14, 21, 30, 45, 60, 90];
+  const autoReplenish = Boolean(data?.auto_stock_replenishment);
+  const replenishCoverage = data?.stock_replenishment_coverage_days ?? null;
 
   const recommendations = products
     .filter((r) => r.recommended_quantity > 0 && r.composition_id != null)
     .slice()
     .sort((a, b) => PRIORITY_RANK[a.priority] - PRIORITY_RANK[b.priority] || b.recommended_quantity - a.recommended_quantity);
+
+  const replenishRecommendations = products.filter(
+    (r) => (r.stock_replenishment_needed ?? 0) > 0 && r.composition_id != null,
+  );
 
   return (
     <section className="space-y-4">
@@ -122,16 +132,31 @@ export function ProductionDemandPlanningPanel({
             <p className={`mt-0.5 ${typography.caption}`}>
               Horyzont {coverageDays} dni
               {data?.forecast_strategy_label ? ` · ${data.forecast_strategy_label}` : ""}
+              {autoReplenish && replenishCoverage != null
+                ? ` · uzupełnienie zapasu: ${replenishCoverage} dni`
+                : ""}
             </p>
           </div>
-          <CoveragePicker
-            presets={presets}
-            coverageDays={coverageDays}
-            customCoverageInput={customCoverageInput}
-            onCoverageDaysChange={onCoverageDaysChange}
-            onCustomCoverageInputChange={onCustomCoverageInputChange}
-            onApplyCustomCoverage={onApplyCustomCoverage}
-          />
+          <div className="flex flex-wrap items-center gap-2">
+            {autoReplenish && onRunStockReplenishment ? (
+              <PrimaryButton
+                type="button"
+                density="comfortable"
+                disabled={replenishmentRunning || replenishRecommendations.length === 0}
+                onClick={onRunStockReplenishment}
+              >
+                {replenishmentRunning ? "Przeliczanie…" : "Przelicz i utwórz zlecenia"}
+              </PrimaryButton>
+            ) : null}
+            <CoveragePicker
+              presets={presets}
+              coverageDays={coverageDays}
+              customCoverageInput={customCoverageInput}
+              onCoverageDaysChange={onCoverageDaysChange}
+              onCustomCoverageInputChange={onCustomCoverageInputChange}
+              onApplyCustomCoverage={onApplyCustomCoverage}
+            />
+          </div>
         </div>
 
         {loading && recommendations.length === 0 ? (
@@ -143,7 +168,12 @@ export function ProductionDemandPlanningPanel({
         ) : (
           <div className="grid max-h-[13.5rem] gap-2 overflow-y-auto sm:grid-cols-2 xl:grid-cols-3">
             {recommendations.map((row) => (
-              <RecommendationCard key={row.product_id} row={row} onCreateBatch={onCreateBatch} />
+              <RecommendationCard
+                key={row.product_id}
+                row={row}
+                replenishCoverageDays={replenishCoverage ?? coverageDays}
+                onCreateBatch={onCreateBatch}
+              />
             ))}
           </div>
         )}
@@ -173,6 +203,7 @@ export function ProductionDemandProductsTable({
               <th className="px-3 py-2 text-right">Stan</th>
               <th className="px-3 py-2 text-right">W produkcji</th>
               <th className="px-3 py-2 text-right">Zamówienia</th>
+              <th className="px-3 py-2 text-right">Uzupełnienie</th>
               <th className="px-3 py-2 text-right">Prognoza</th>
               <th className="px-3 py-2 text-right">Pokrycie</th>
               <th className="px-3 py-2">Priorytet</th>
@@ -183,13 +214,13 @@ export function ProductionDemandProductsTable({
           <tbody className="divide-y divide-slate-100">
             {loading && products.length === 0 ? (
               <tr>
-                <td colSpan={9} className="px-3 py-5 text-center text-slate-500">
+                <td colSpan={10} className="px-3 py-5 text-center text-slate-500">
                   Wczytywanie…
                 </td>
               </tr>
             ) : products.length === 0 ? (
               <tr>
-                <td colSpan={9} className="px-3 py-5 text-center text-slate-500">
+                <td colSpan={10} className="px-3 py-5 text-center text-slate-500">
                   Brak aktywnych receptur produkcyjnych.
                 </td>
               </tr>
@@ -201,6 +232,18 @@ export function ProductionDemandProductsTable({
                       <ProductThumb imageUrl={row.product_image_url} name={row.product_name} size="sm" />
                       <div className="min-w-0">
                         <p className="truncate font-semibold text-slate-900">{row.product_name}</p>
+                        <div className="mt-0.5 flex flex-wrap gap-1">
+                          {row.has_order_demand || row.order_demand > 0 ? (
+                            <StatusBadge tone="warning" density="compact">
+                              Zamówienia
+                            </StatusBadge>
+                          ) : null}
+                          {row.has_stock_replenishment || (row.stock_replenishment_needed ?? 0) > 0 ? (
+                            <StatusBadge tone="info" density="compact">
+                              Uzupełnienie zapasu
+                            </StatusBadge>
+                          ) : null}
+                        </div>
                         {row.product_sku ? (
                           <p className="truncate font-mono text-xs text-slate-500">{row.product_sku}</p>
                         ) : null}
@@ -210,6 +253,9 @@ export function ProductionDemandProductsTable({
                   <td className="px-3 py-2 text-right tabular-nums">{fmtQty(row.on_hand)}</td>
                   <td className="px-3 py-2 text-right tabular-nums">{fmtQty(row.in_pipeline)}</td>
                   <td className="px-3 py-2 text-right tabular-nums">{fmtQty(row.order_demand)}</td>
+                  <td className="px-3 py-2 text-right tabular-nums">
+                    {fmtQty(row.stock_replenishment_needed ?? 0)}
+                  </td>
                   <td className="px-3 py-2 text-right tabular-nums">{fmtQty(row.forecast_demand)}</td>
                   <td
                     className={`px-3 py-2 text-right font-semibold tabular-nums ${COVERAGE_CLASS[row.coverage_color] ?? ""}`}
@@ -271,13 +317,19 @@ export function ProductionDemandProductsTable({
 
 function RecommendationCard({
   row,
+  replenishCoverageDays,
   onCreateBatch,
 }: {
   row: ProductionDemandProductRow;
+  replenishCoverageDays: number;
   onCreateBatch: (lines: DemandBatchLineDraft[], label: string) => void;
 }) {
   const reason =
     row.recommendation_reasons.length > 0 ? row.recommendation_reasons.join(" · ") : "Rekomendacja MRP";
+  const orderNeed = row.order_production_needed ?? 0;
+  const stockNeed = row.stock_replenishment_needed ?? row.forecast_production_needed ?? 0;
+  const showOrder = Boolean(row.has_order_demand) || orderNeed > 0 || row.order_demand > 0;
+  const showStock = Boolean(row.has_stock_replenishment) || stockNeed > 0;
 
   return (
     <Card variant="section" density="compact" className="flex flex-col gap-2 !p-3">
@@ -285,15 +337,37 @@ function RecommendationCard({
         <ProductThumb imageUrl={row.product_image_url} name={row.product_name} size="sm" />
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-semibold text-slate-900">{row.product_name}</p>
-          <StatusBadge tone={PRIORITY_TONE[row.priority]} density="compact" className="mt-1">
-            {PRIORITY_LABEL[row.priority]}
-          </StatusBadge>
+          <div className="mt-1 flex flex-wrap gap-1">
+            <StatusBadge tone={PRIORITY_TONE[row.priority]} density="compact">
+              {PRIORITY_LABEL[row.priority]}
+            </StatusBadge>
+            {showOrder ? (
+              <StatusBadge tone="warning" density="compact">
+                Zamówienia
+              </StatusBadge>
+            ) : null}
+            {showStock ? (
+              <StatusBadge tone="info" density="compact">
+                Uzupełnienie zapasu
+              </StatusBadge>
+            ) : null}
+          </div>
         </div>
         <p className="shrink-0 text-right">
           <span className="block text-lg font-bold tabular-nums text-slate-900">{fmtQty(row.recommended_quantity)}</span>
           <span className={typography.caption}>do produkcji</span>
         </p>
       </div>
+      <dl className="grid grid-cols-2 gap-x-2 gap-y-0.5 text-xs text-slate-600">
+        <dt>Zamówienia</dt>
+        <dd className="text-right tabular-nums">{fmtQty(orderNeed)}</dd>
+        <dt>Pokrycie {replenishCoverageDays} dni</dt>
+        <dd className="text-right tabular-nums">{fmtQty(stockNeed)}</dd>
+        <dt>W pipeline</dt>
+        <dd className="text-right tabular-nums">{fmtQty(row.in_pipeline)}</dd>
+        <dt>Rekomendacja</dt>
+        <dd className="text-right font-semibold tabular-nums text-slate-900">{fmtQty(row.recommended_quantity)}</dd>
+      </dl>
       <p className="line-clamp-2 text-xs leading-snug text-slate-600">{reason}</p>
       <p className={`text-xs font-medium ${COVERAGE_CLASS[row.coverage_color] ?? "text-slate-600"}`}>
         Przewidywane pokrycie:{" "}

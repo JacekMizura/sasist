@@ -3,7 +3,12 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
-from ..services.production_planning.constants import DEFAULT_FORECAST_STRATEGY, DEFAULT_SALES_LOOKBACK_DAYS
+from ..services.production_planning.constants import (
+    DEFAULT_FORECAST_STRATEGY,
+    DEFAULT_SALES_LOOKBACK_DAYS,
+    DEFAULT_STOCK_REPLENISHMENT_COVERAGE_DAYS,
+    STOCK_REPLENISHMENT_COVERAGE_PRESETS,
+)
 
 DEFAULT_PRODUCTION_TERMINAL_DISPLAY: dict[str, bool] = {
     "show_product_image": True,
@@ -61,9 +66,24 @@ class ProductionTerminalRequiredSettings(BaseModel):
     require_quality_control: bool = False
 
 
+StockReplenishmentCoverageDays = Literal[1, 3, 7, 14]
+
+
 class ProductionForecastSettings(BaseModel):
     strategy: ForecastStrategyKey = DEFAULT_FORECAST_STRATEGY  # type: ignore[assignment]
     sales_lookback_days: int = Field(DEFAULT_SALES_LOOKBACK_DAYS, ge=7, le=365)
+    #: Automatyczne uzupełnianie zapasu (nadprodukcja) na podstawie rotacji.
+    auto_stock_replenishment: bool = False
+    #: Docelowe pokrycie sprzedaży — tylko 1 / 3 / 7 / 14 dni.
+    stock_replenishment_coverage_days: StockReplenishmentCoverageDays = (
+        DEFAULT_STOCK_REPLENISHMENT_COVERAGE_DAYS  # type: ignore[assignment]
+    )
+
+    def normalized_replenishment_coverage_days(self) -> int:
+        days = int(self.stock_replenishment_coverage_days or DEFAULT_STOCK_REPLENISHMENT_COVERAGE_DAYS)
+        if days not in STOCK_REPLENISHMENT_COVERAGE_PRESETS:
+            return int(DEFAULT_STOCK_REPLENISHMENT_COVERAGE_DAYS)
+        return days
 
 
 AllocationStrategyKey = Literal["FIFO", "FEFO", "LIFO"]

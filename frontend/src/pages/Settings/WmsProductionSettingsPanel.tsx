@@ -135,7 +135,14 @@ export default function WmsProductionSettingsPanel({ warehouseId }: Props) {
       setSaved(data);
       setDraftDisplay(data.terminal_display);
       setDraftRequired(data.terminal_required);
-      setDraftForecast(data.forecast ?? { strategy: "PERIOD_AVERAGE", sales_lookback_days: 30 });
+      setDraftForecast(
+        data.forecast ?? {
+          strategy: "PERIOD_AVERAGE",
+          sales_lookback_days: 30,
+          auto_stock_replenishment: false,
+          stock_replenishment_coverage_days: 7,
+        },
+      );
       setDraftReservation(data.reservation ?? { allocation_strategy: "FEFO", allow_sales_locations: false });
       setResolvedWh(data.warehouse_id);
     } catch {
@@ -257,6 +264,44 @@ export default function WmsProductionSettingsPanel({ warehouseId }: Props) {
               }
             />
           </WmsControlSettingRow>
+          <WmsBoolSettingRow
+            label="Automatyczne uzupełnianie zapasu"
+            checked={Boolean(draftForecast.auto_stock_replenishment)}
+            onChange={(v) =>
+              setDraftForecast((prev) =>
+                prev
+                  ? {
+                      ...prev,
+                      auto_stock_replenishment: v,
+                      stock_replenishment_coverage_days: prev.stock_replenishment_coverage_days ?? 7,
+                    }
+                  : prev,
+              )
+            }
+          />
+          {draftForecast.auto_stock_replenishment ? (
+            <WmsControlSettingRow label="Docelowe pokrycie sprzedaży">
+              <select
+                className={wmsSettingControlSelectClass}
+                value={draftForecast.stock_replenishment_coverage_days ?? 7}
+                onChange={(e) =>
+                  setDraftForecast((prev) =>
+                    prev
+                      ? {
+                          ...prev,
+                          stock_replenishment_coverage_days: Number(e.target.value) as 1 | 3 | 7 | 14,
+                        }
+                      : prev,
+                  )
+                }
+              >
+                <option value={1}>1 dzień</option>
+                <option value={3}>3 dni</option>
+                <option value={7}>7 dni</option>
+                <option value={14}>14 dni</option>
+              </select>
+            </WmsControlSettingRow>
+          ) : null}
         </div>
       </SectionCard>
 

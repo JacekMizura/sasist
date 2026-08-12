@@ -5,6 +5,7 @@ import toast from "react-hot-toast";
 
 import {
   createBatchesFromSimulation,
+  runStockReplenishment,
   simulateProductionPlan,
   type DemandBatchLineDraft,
   type ProductionPlanSimulation,
@@ -41,6 +42,7 @@ export default function ProductionPlanningPage() {
   const [simLoading, setSimLoading] = useState(false);
   const [simCreating, setSimCreating] = useState(false);
   const [simulation, setSimulation] = useState<ProductionPlanSimulation | null>(null);
+  const [replenishmentRunning, setReplenishmentRunning] = useState(false);
 
   const planning = useProductionDemandPlanning(tenantId, warehouseId);
 
@@ -53,6 +55,34 @@ export default function ProductionPlanningPage() {
     setModalOpen(true);
     toast.success(`Przygotowano partię (${label}): ${lines.length} produkt(ów).`);
   }, []);
+
+  const runReplenishment = useCallback(async () => {
+    if (warehouseId == null) return;
+    setReplenishmentRunning(true);
+    try {
+      const result = await runStockReplenishment({
+        tenant_id: tenantId,
+        warehouse_id: warehouseId,
+      });
+      if (!result.enabled) {
+        toast.error("Włącz „Automatyczne uzupełnianie zapasu” w ustawieniach produkcji.");
+        return;
+      }
+      const made = result.created_count + result.aggregated_count;
+      if (made === 0) {
+        toast.success("Brak nowych zleceń uzupełnienia zapasu.");
+      } else {
+        toast.success(
+          `Uzupełnienie zapasu: utworzono ${result.created_count}, zagregowano ${result.aggregated_count} (łącznie ${result.total_quantity} szt.).`,
+        );
+      }
+      await planning.reload();
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : "Nie udało się utworzyć zleceń uzupełnienia.");
+    } finally {
+      setReplenishmentRunning(false);
+    }
+  }, [warehouseId, tenantId, planning]);
 
   const runSimulation = useCallback(async () => {
     if (warehouseId == null) return;
@@ -185,6 +215,8 @@ export default function ProductionPlanningPage() {
               onCustomCoverageInputChange={planning.setCustomCoverageInput}
               onApplyCustomCoverage={planning.applyCustomCoverage}
               onCreateBatch={openBatchModal}
+              onRunStockReplenishment={() => void runReplenishment()}
+              replenishmentRunning={replenishmentRunning}
             />
           ) : null}
 

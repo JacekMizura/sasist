@@ -20,7 +20,9 @@ from .constants import (
     DEFAULT_COVERAGE_DAYS,
     MAX_COVERAGE_DAYS,
     MIN_COVERAGE_DAYS,
+    STOCK_REPLENISHMENT_COVERAGE_PRESETS,
 )
+from .forecast_settings_service import load_forecast_settings
 from .demand_rate_service import resolve_demand_forecast_context
 from .forecast_strategies import list_forecast_strategies
 from .inventory_coverage_service import coverage_color, coverage_days
@@ -66,6 +68,11 @@ def _round_qty(v: float) -> float:
 
 def build_planning_snapshot(db: Session, ctx: PlanningContext) -> ProductionDemandPlanningRead:
     coverage_days_val = _clamp_coverage(ctx.coverage_days)
+    forecast_settings = load_forecast_settings(
+        db, tenant_id=ctx.tenant_id, warehouse_id=ctx.warehouse_id
+    )
+    auto_replenish = bool(forecast_settings.auto_stock_replenishment)
+    replenish_coverage = forecast_settings.normalized_replenishment_coverage_days()
     fc_ctx = resolve_demand_forecast_context(
         db,
         tenant_id=ctx.tenant_id,
@@ -90,6 +97,9 @@ def build_planning_snapshot(db: Session, ctx: PlanningContext) -> ProductionDema
             forecast_strategy_label=strategy.label,
             coverage_day_presets=list(COVERAGE_DAY_PRESETS),
             forecast_strategies=list_forecast_strategies(),
+            auto_stock_replenishment=auto_replenish,
+            stock_replenishment_coverage_days=replenish_coverage if auto_replenish else None,
+            stock_replenishment_coverage_presets=list(STOCK_REPLENISHMENT_COVERAGE_PRESETS),
             dashboard=ProductionPlanningDashboardRead(),
             products=[],
         )
@@ -171,6 +181,17 @@ def build_planning_snapshot(db: Session, ctx: PlanningContext) -> ProductionDema
             on_hand=on_hand,
             in_pipeline=in_pipeline,
         )
+        # Stock replenishment uses dedicated coverage when auto-replenish is on;
+        # otherwise same horizon as the planning snapshot (analysis only).
+        replenish_horizon = replenish_coverage if auto_replenish else coverage_days_val
+        replenish_raw = forecast_stock_need(
+            daily_rate=daily_rate,
+            coverage_days=replenish_horizon,
+            min_stock=min_s,
+            max_stock=max_s,
+            on_hand=on_hand,
+            in_pipeline=in_pipeline,
+        )
         order_need = max(0.0, order_demand - on_hand - in_pipeline)
         combined_raw = combined_production_need(
             order_demand=order_demand,
@@ -180,6 +201,8 @@ def build_planning_snapshot(db: Session, ctx: PlanningContext) -> ProductionDema
         )
         recommended = apply_moq_and_multiple(combined_raw, moq, mult)
         recommended = cap_by_materials(recommended, max_prod)
+        stock_replenish_qty = apply_moq_and_multiple(replenish_raw, moq, mult)
+        stock_replenish_qty = cap_by_materials(stock_replenish_qty, max_prod)
 
         cov = coverage_days(on_hand=on_hand, avg_daily=daily_rate)
         if cov is not None:
@@ -275,6 +298,9 @@ def build_planning_snapshot(db: Session, ctx: PlanningContext) -> ProductionDema
                 limiting_component_name=limiting_name,
                 recommended_quantity=_round_qty(recommended),
                 combined_production_needed=_round_qty(recommended),
+                stock_replenishment_needed=_round_qty(stock_replenish_qty),
+                has_order_demand=order_demand > 1e-6 or order_need > 1e-6,
+                has_stock_replenishment=stock_replenish_qty > 1e-6,
                 priority=priority,
                 recommendation_reasons=reasons,
                 timeline=timeline,
@@ -304,6 +330,9 @@ def build_planning_snapshot(db: Session, ctx: PlanningContext) -> ProductionDema
         forecast_strategy_label=strategy.label,
         coverage_day_presets=list(COVERAGE_DAY_PRESETS),
         forecast_strategies=list_forecast_strategies(),
+        auto_stock_replenishment=auto_replenish,
+        stock_replenishment_coverage_days=replenish_coverage if auto_replenish else None,
+        stock_replenishment_coverage_presets=list(STOCK_REPLENISHMENT_COVERAGE_PRESETS),
         dashboard=dashboard,
         products=rows,
     )
