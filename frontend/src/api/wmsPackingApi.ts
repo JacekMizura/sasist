@@ -269,6 +269,8 @@ export type WmsPackingOrderCardApi = {
   wms_packing_automation_finished_at?: string | null;
   /** Operator z audytu WMS (ostatnie domknięcie pakowania). */
   packed_by_label?: string | null;
+  /** Zamówienie z produkcji z zamówień. */
+  from_production?: boolean;
   /** Packaging Intelligence — PRIMARY + krótka lista alternatyw (nie „wszystkie kartony”). */
   packaging_suggestions?: PackagingSuggestionApi[];
   primary_packaging_suggestion?: PackagingSuggestionApi | null;

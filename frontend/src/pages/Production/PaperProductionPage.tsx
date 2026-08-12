@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { ArrowLeft } from "lucide-react";
 import toast from "react-hot-toast";
 
@@ -32,6 +32,7 @@ import { PaperCollectTaskCard } from "./components/PaperCollectTaskCard";
 import { PaperProduceLineCard } from "./components/PaperProduceLineCard";
 import { erpProductionPaths, wmsProductionPaths } from "./productionPaths";
 import { executionStatusLabel, executionStatusTone, formatStartCollectingError, productionProgressTone } from "./productionUi";
+import { handleProductionPackingHandoff } from "./hooks/handleProductionPackingHandoff";
 import {
   ProductionDocumentsSection,
   pwDocumentsFromBatchLines,
@@ -49,6 +50,7 @@ function isTaskDone(required: number, collected: number): boolean {
 
 export default function PaperProductionPage() {
   const { kind, id } = useParams<{ kind: string; id: string }>();
+  const navigate = useNavigate();
   const { warehouse } = useWarehouse();
   const tenantId = warehouse?.tenant_id ?? DEFAULT_TENANT;
   const warehouseId = warehouse?.id;
@@ -216,7 +218,8 @@ export default function PaperProductionPage() {
       if (jobKind === "batch") {
         await updateProductionProgress(tenantId, jobId, { line_id: Number(lineKey), add_quantity: qty }, warehouseId);
       } else {
-        await updateOrderProductionProgress(tenantId, jobId, { add_quantity: qty }, warehouseId);
+        const updated = await updateOrderProductionProgress(tenantId, jobId, { add_quantity: qty }, warehouseId);
+        handleProductionPackingHandoff(updated, navigate);
       }
       await load();
     } catch {

@@ -325,6 +325,9 @@ def allocate_produced_delta_to_order_sources(
             operator_user_id=operator_user_id,
             skip_production_trigger=True,
         )
+        from .production_packing_handoff_service import mark_order_ready_for_packing_after_production
+
+        mark_order_ready_for_packing_after_production(db, order)
         msg = (
             f"Produkt został wyprodukowany w zleceniu {mo.number}. "
             "Zamówienie przekazano do pakowania."
@@ -341,7 +344,13 @@ def allocate_produced_delta_to_order_sources(
                 "status_after_production_id": int(after_status_id),
             },
         )
-        status_moves.append({"order_id": oid, "status_id": int(after_status_id)})
+        status_moves.append(
+            {
+                "order_id": oid,
+                "order_number": str(order.number or "").strip() or str(oid),
+                "status_id": int(after_status_id),
+            }
+        )
 
     return {
         "result": "OK",

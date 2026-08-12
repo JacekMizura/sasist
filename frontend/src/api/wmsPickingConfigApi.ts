@@ -9,6 +9,7 @@ export type PickingConfigPickUnitDb = "orders" | "products";
 export type PickingConfigOrderSortDb = "date" | "location" | "courier";
 export type ProductionOrderTriggerScopeDb = "SINGLE_ELEMENT";
 export type ProductionExecutionMethodDb = "WMS" | "PRINT";
+export type AfterProductionActionDb = "STATUS_ONLY" | "OPEN_PACKING";
 
 export type WmsPickingConfigReadApi = {
   id: number;
@@ -33,6 +34,7 @@ export type WmsPickingConfigReadApi = {
   finished_goods_buffer_location_id?: number | null;
   production_order_trigger_scope?: ProductionOrderTriggerScopeDb | null;
   production_execution_method?: ProductionExecutionMethodDb;
+  after_production_action?: AfterProductionActionDb;
   created_at: string;
   source_status_name?: string | null;
   target_status_name?: string | null;
@@ -60,6 +62,7 @@ export type WmsPickingConfigReplaceItem = {
   finished_goods_buffer_location_id?: number | null;
   production_order_trigger_scope?: ProductionOrderTriggerScopeDb | null;
   production_execution_method?: ProductionExecutionMethodDb | null;
+  after_production_action?: AfterProductionActionDb | null;
 };
 
 export async function listPickingConfigs(

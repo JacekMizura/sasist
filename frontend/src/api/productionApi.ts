@@ -193,6 +193,17 @@ export type ProductionOrderRead = {
   production_completed_at?: string | null;
   created_at?: string | null;
   updated_at?: string | null;
+  packing_handoff?: ProductionPackingHandoffHint | null;
+};
+
+export type ProductionPackingHandoffOrder = {
+  order_id: number;
+  order_number: string;
+};
+
+export type ProductionPackingHandoffHint = {
+  after_production_action: "STATUS_ONLY" | "OPEN_PACKING";
+  newly_ready_orders: ProductionPackingHandoffOrder[];
 };
 
 export type ProductionOrderSourceItemRead = {

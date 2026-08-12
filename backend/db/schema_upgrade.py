@@ -4506,6 +4506,13 @@ def ensure_picking_config_production_mode_columns(engine: Engine) -> None:
                     "NOT NULL DEFAULT 'WMS'"
                 )
             )
+        if "after_production_action" not in cols:
+            conn.execute(
+                text(
+                    "ALTER TABLE picking_config ADD COLUMN after_production_action VARCHAR(32) "
+                    "NOT NULL DEFAULT 'STATUS_ONLY'"
+                )
+            )
         conn.execute(
             text(
                 "CREATE INDEX IF NOT EXISTS ix_picking_config_is_production_mode "

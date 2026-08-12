@@ -359,6 +359,8 @@ class WmsPackingOrderCard(BaseModel):
     operational_notes_packing: list[WmsOperationalNoteBrief] = Field(default_factory=list)
     #: Krótki nagłówek ostrzeżenia (np. baner na stanowisku pakowania).
     wms_operational_alert_title: Optional[str] = Field(default=None, max_length=120)
+    #: Zamówienie przekazane z produkcji z zamówień (mały badge UI).
+    from_production: bool = Field(default=False)
 
 
 class WmsPackingCartOrdersOut(BaseModel):

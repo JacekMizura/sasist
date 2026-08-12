@@ -31,6 +31,7 @@ import {
 } from "@/modules/production/productionExecutionTypes";
 import { wmsProductionPaths } from "../productionPaths";
 import { START_COLLECTING_BLOCKED_TOOLTIP, formatStartCollectingError } from "../productionUi";
+import { handleProductionPackingHandoff } from "./handleProductionPackingHandoff";
 
 const DEFAULT_TENANT = 1;
 
@@ -357,14 +358,20 @@ export function useProductionExecutionJob(phase: ProductionExecutionPhase, activ
           const lineId = Number(lineKey);
           await updateProductionProgress(tenantId, activeRef.id, { line_id: lineId, add_quantity: add }, warehouseId);
         } else {
-          await updateOrderProductionProgress(tenantId, activeRef.id, { add_quantity: add }, warehouseId);
+          const updated = await updateOrderProductionProgress(
+            tenantId,
+            activeRef.id,
+            { add_quantity: add },
+            warehouseId,
+          );
+          handleProductionPackingHandoff(updated, navigate);
         }
         setExecutionDetail(await loadExecutionDetail(tenantId, warehouseId, activeRef));
       } finally {
         setBusy(false);
       }
     },
-    [activeRef, warehouseId, tenantId],
+    [activeRef, warehouseId, tenantId, navigate],
   );
 
   const finishProduction = useCallback(async () => {

@@ -430,13 +430,33 @@ def update_order_production_progress(
             add_quantity=add_qty,
             performed_by_user_id=performed_by_user_id,
         )
-        allocate_produced_delta_to_order_sources(
+        alloc = allocate_produced_delta_to_order_sources(
             db,
             mo=order,
             delta_qty=add_qty,
             operator_user_id=performed_by_user_id,
             buffer_location_id=buffer_id,
         )
+        from .production_packing_handoff_service import resolve_after_production_action
+        from ...schemas.production import ProductionPackingHandoffHint, ProductionPackingHandoffOrder
+
+        after_action = resolve_after_production_action(db, order)
+        moves = list(alloc.get("status_moves") or [])
+        out = serialize_order(db, order, with_availability=False, with_order_sources=True)
+        hint = ProductionPackingHandoffHint(
+            after_production_action=after_action,  # type: ignore[arg-type]
+            newly_ready_orders=[
+                ProductionPackingHandoffOrder(
+                    order_id=int(m["order_id"]),
+                    order_number=str(m.get("order_number") or m["order_id"]),
+                )
+                for m in moves
+            ],
+        )
+        if hasattr(out, "model_copy"):
+            return out.model_copy(update={"packing_handoff": hint})
+        # Lean tests may stub serialize_order → ORM entity; packing_handoff is FE-only.
+        return out
 
     return serialize_order(db, order, with_availability=False, with_order_sources=True)
 

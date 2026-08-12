@@ -268,6 +268,19 @@ class ProductionOrderRead(BaseModel):
     has_shortages: Optional[bool] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
+    packing_handoff: Optional["ProductionPackingHandoffHint"] = None
+
+
+class ProductionPackingHandoffOrder(BaseModel):
+    order_id: int
+    order_number: str
+
+
+class ProductionPackingHandoffHint(BaseModel):
+    """Operator FE hint after source fulfillment — not a global redirect."""
+
+    after_production_action: Literal["STATUS_ONLY", "OPEN_PACKING"] = "STATUS_ONLY"
+    newly_ready_orders: List[ProductionPackingHandoffOrder] = Field(default_factory=list)
 
 
 class ProductionOrderCreateBody(BaseModel):

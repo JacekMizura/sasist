@@ -188,6 +188,10 @@ class WmsPickingConfigReplaceItem(BaseModel):
         default=None,
         description="Sposób realizacji MO z zamówień: Terminal WMS | Wydruk zlecenia",
     )
+    after_production_action: Optional[Literal["STATUS_ONLY", "OPEN_PACKING"]] = Field(
+        default=None,
+        description="Po wyprodukowaniu: tylko status | otwórz pakowanie (hint UI)",
+    )
 
     @model_validator(mode="after")
     def _source_ne_target(self) -> "WmsPickingConfigReplaceItem":

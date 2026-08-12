@@ -226,6 +226,11 @@ function StandardOrderCardInner({ order, onOpenOrder, customerName }: StandardOr
             <span className="truncate text-lg font-extrabold tabular-nums leading-none tracking-tight text-slate-900">
               {rawNum}
             </span>
+            {order.from_production ? (
+              <span className="inline-flex shrink-0 items-center rounded border border-amber-200 bg-amber-50 px-1 py-0.5 text-[9px] font-semibold uppercase leading-none text-amber-800">
+                Z produkcji
+              </span>
+            ) : null}
             {fa ? (
               <span className="inline-flex shrink-0 items-center rounded px-1 py-0.5 text-[10px] font-bold leading-none text-white bg-[#4CAF50]">
                 {fa}

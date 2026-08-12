@@ -23,6 +23,13 @@ PRODUCTION_EXECUTION_METHODS = frozenset(
     {PRODUCTION_EXECUTION_METHOD_WMS, PRODUCTION_EXECUTION_METHOD_PRINT}
 )
 
+#: Operator UI hint after source fulfillment (backend stores preference; redirect is FE-only).
+AFTER_PRODUCTION_ACTION_STATUS_ONLY = "STATUS_ONLY"
+AFTER_PRODUCTION_ACTION_OPEN_PACKING = "OPEN_PACKING"
+AFTER_PRODUCTION_ACTIONS = frozenset(
+    {AFTER_PRODUCTION_ACTION_STATUS_ONLY, AFTER_PRODUCTION_ACTION_OPEN_PACKING}
+)
+
 
 class PickingConfig(Base):
     __tablename__ = "picking_config"
@@ -119,6 +126,13 @@ class PickingConfig(Base):
         nullable=False,
         default="WMS",
         server_default=text("'WMS'"),
+    )
+    #: Po wyprodukowaniu (hint UI): STATUS_ONLY | OPEN_PACKING.
+    after_production_action = Column(
+        String(32),
+        nullable=False,
+        default="STATUS_ONLY",
+        server_default=text("'STATUS_ONLY'"),
     )
 
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)

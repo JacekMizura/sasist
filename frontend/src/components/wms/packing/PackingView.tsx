@@ -265,6 +265,11 @@ export function PackingView({
               <span className={["font-bold text-slate-900", wmsTypoClass.base].join(" ")}>
                 {orderNumberLabel(detail.number)}
               </span>
+              {detail.from_production ? (
+                <span className="rounded border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-800">
+                  Z produkcji
+                </span>
+              ) : null}
               <span
                 className={["font-black text-slate-900", wmsTypoClass.quantity].join(" ")}
                 title="Spakowane / do spakowania"
@@ -464,6 +469,11 @@ export function PackingView({
               <span className={["min-w-0 break-words font-bold text-slate-900", wmsTypoClass.base].join(" ")}>
                 {orderNumberLabel(detail.number)}
               </span>
+              {detail.from_production ? (
+                <span className="rounded border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-800">
+                  Z produkcji
+                </span>
+              ) : null}
               <span
                 className={["font-black text-slate-900", wmsTypoClass.quantity].join(" ")}
                 title="Spakowane / do spakowania"

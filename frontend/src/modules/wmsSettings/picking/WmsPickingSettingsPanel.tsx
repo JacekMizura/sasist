@@ -680,6 +680,7 @@ type SavedPickingConfiguration = {
   finishedGoodsBufferLocationId: number | null;
   finishedGoodsBufferLocationName: string | null;
   productionExecutionMethod: "WMS" | "PRINT";
+  afterProductionAction: "STATUS_ONLY" | "OPEN_PACKING";
 };
 
 function fingerprintPickingConfigsWarehouseState(
@@ -708,6 +709,7 @@ type PickingConfigDraft = {
   statusOnComponentShortage: string;
   finishedGoodsBufferLocationId: string;
   productionExecutionMethod: "WMS" | "PRINT";
+  afterProductionAction: "STATUS_ONLY" | "OPEN_PACKING";
 };
 
 function fingerprintDraftForm(d: PickingConfigDraft): string {
@@ -722,6 +724,7 @@ function fingerprintDraftForm(d: PickingConfigDraft): string {
     statusOnComponentShortage: d.statusOnComponentShortage.trim(),
     finishedGoodsBufferLocationId: d.finishedGoodsBufferLocationId.trim(),
     productionExecutionMethod: d.productionExecutionMethod,
+    afterProductionAction: d.afterProductionAction,
   });
 }
 
@@ -741,6 +744,7 @@ function createEmptyDraft(): PickingConfigDraft {
     statusOnComponentShortage: "",
     finishedGoodsBufferLocationId: "",
     productionExecutionMethod: "WMS",
+    afterProductionAction: "STATUS_ONLY",
   };
 }
 
@@ -873,6 +877,7 @@ function mapApiPickingRowToSaved(row: WmsPickingConfigReadApi): SavedPickingConf
     finishedGoodsBufferLocationId: row.finished_goods_buffer_location_id ?? null,
     finishedGoodsBufferLocationName: row.finished_goods_buffer_location_name?.trim() || null,
     productionExecutionMethod: row.production_execution_method === "PRINT" ? "PRINT" : "WMS",
+    afterProductionAction: row.after_production_action === "OPEN_PACKING" ? "OPEN_PACKING" : "STATUS_ONLY",
   };
 }
 
@@ -929,6 +934,21 @@ function validateSavedConfigForServer(
     );
     if (afterAsStandardSource) {
       return `Status po wyprodukowaniu nie może być statusem wejściowym standardowego zbierania.`;
+    }
+    const afterAsProdSource = allConfigs.some(
+      (c) => c.isProductionMode && c.statusToPickId === cfg.statusAfterPickId,
+    );
+    if (afterAsProdSource) {
+      return `Status po wyprodukowaniu nie może być statusem wejściowym innego trybu produkcji.`;
+    }
+    const afterDup = allConfigs.filter(
+      (c) =>
+        c.isProductionMode &&
+        c.statusAfterPickId === cfg.statusAfterPickId &&
+        c.id !== cfg.id,
+    );
+    if (afterDup.length > 0) {
+      return `Status po wyprodukowaniu może być przypisany tylko do jednej konfiguracji produkcyjnej.`;
     }
     return null;
   }
@@ -1081,6 +1101,7 @@ function savedConfigToReplaceItem(
       : null,
     production_order_trigger_scope: cfg.isProductionMode ? "SINGLE_ELEMENT" : null,
     production_execution_method: cfg.isProductionMode ? cfg.productionExecutionMethod : null,
+    after_production_action: cfg.isProductionMode ? cfg.afterProductionAction : null,
   };
 }
 
@@ -1108,6 +1129,7 @@ function savedConfigurationToDraft(cfg: SavedPickingConfiguration): PickingConfi
     finishedGoodsBufferLocationId:
       cfg.finishedGoodsBufferLocationId != null ? String(cfg.finishedGoodsBufferLocationId) : "",
     productionExecutionMethod: cfg.productionExecutionMethod === "PRINT" ? "PRINT" : "WMS",
+    afterProductionAction: cfg.afterProductionAction === "OPEN_PACKING" ? "OPEN_PACKING" : "STATUS_ONLY",
   };
 }
 
@@ -1365,6 +1387,8 @@ function PickingConfiguratorEditor({
   onFinishedGoodsBufferLocationIdChange,
   productionExecutionMethod,
   onProductionExecutionMethodChange,
+  afterProductionAction,
+  onAfterProductionActionChange,
   bufferLocations,
 }: {
   fieldIdPrefix: string;
@@ -1400,6 +1424,8 @@ function PickingConfiguratorEditor({
   onFinishedGoodsBufferLocationIdChange: (v: string) => void;
   productionExecutionMethod: "WMS" | "PRINT";
   onProductionExecutionMethodChange: (v: "WMS" | "PRINT") => void;
+  afterProductionAction: "STATUS_ONLY" | "OPEN_PACKING";
+  onAfterProductionActionChange: (v: "STATUS_ONLY" | "OPEN_PACKING") => void;
   bufferLocations: WarehouseLocationItem[];
 }) {
   const statusNameById = useMemo(() => buildOrderUiStatusNameById(orderUiSummary), [orderUiSummary]);
@@ -1658,6 +1684,22 @@ function PickingConfiguratorEditor({
               ]}
               onChange={onProductionExecutionMethodChange}
             />
+          </div>
+          <div className="min-w-0 rounded-xl border border-slate-200 bg-white p-3.5 min-[720px]:col-span-2">
+            <PickingRadioGroup
+              legend="Po wyprodukowaniu"
+              name={`${fieldIdPrefix}-after-production-action`}
+              value={afterProductionAction}
+              options={[
+                { value: "STATUS_ONLY", label: "Tylko zmień status" },
+                { value: "OPEN_PACKING", label: "Otwórz pakowanie" },
+              ]}
+              onChange={onAfterProductionActionChange}
+            />
+            <p className="mt-1.5 text-xs text-slate-500">
+              „Otwórz pakowanie” dotyczy tylko operatora raportującego produkcję w tej sesji — nie jest
+              globalnym przekierowaniem.
+            </p>
           </div>
         </div>
       ) : (
@@ -2666,6 +2708,11 @@ export function WmsPickingSettingsSections({
           ? "PRINT"
           : "WMS"
         : "WMS",
+      afterProductionAction: d.isProductionMode
+        ? d.afterProductionAction === "OPEN_PACKING"
+          ? "OPEN_PACKING"
+          : "STATUS_ONLY"
+        : "STATUS_ONLY",
     };
 
     let nextList: SavedPickingConfiguration[];
@@ -3365,6 +3412,10 @@ export function WmsPickingSettingsSections({
             productionExecutionMethod={draft.productionExecutionMethod}
             onProductionExecutionMethodChange={(v) =>
               setDraft((d) => (d ? { ...d, productionExecutionMethod: v } : d))
+            }
+            afterProductionAction={draft.afterProductionAction}
+            onAfterProductionActionChange={(v) =>
+              setDraft((d) => (d ? { ...d, afterProductionAction: v } : d))
             }
             bufferLocations={bufferLocations}
           />

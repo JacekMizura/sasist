@@ -67,6 +67,7 @@ def _prod_item(**overrides):
         status_on_component_shortage_id=12,
         finished_goods_buffer_location_id=100,
         production_order_trigger_scope="SINGLE_ELEMENT",
+        after_production_action="STATUS_ONLY",
     )
     base.update(overrides)
     return WmsPickingConfigReplaceItem(**base)
@@ -102,6 +103,20 @@ def test_production_mode_persists_fields():
     assert read.finished_goods_buffer_location_id == 100
     assert read.production_order_trigger_scope == "SINGLE_ELEMENT"
     assert read.source_status_id == 10
+    assert read.after_production_action == "STATUS_ONLY"
+
+
+def test_after_production_action_open_packing_persists():
+    db = _make_db()
+    rows = replace_all_picking_configs_for_warehouse(
+        db,
+        tenant_id=1,
+        warehouse_id=2,
+        items=[_prod_item(after_production_action="OPEN_PACKING")],
+    )
+    db.commit()
+    read = picking_config_to_read(rows[0])
+    assert read.after_production_action == "OPEN_PACKING"
 
 
 def test_duplicate_production_entry_status_rejected():

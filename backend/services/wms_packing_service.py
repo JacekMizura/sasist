@@ -1274,6 +1274,14 @@ def _build_packing_order_card(
     pks = getattr(order, "packing_started_at", None)
     pkf = getattr(order, "packed_at", None)
     pka = getattr(order, "wms_packing_automation_finished_at", None)
+    from_production = False
+    if db is not None and (enrich or pack_qty_from_required):
+        try:
+            from .production_execution.production_packing_handoff_service import order_is_from_production
+
+            from_production = bool(order_is_from_production(db, order))
+        except Exception:
+            from_production = False
     packaging_suggestions: List[PackagingSuggestionOut] = []
     primary_packaging_suggestion: PackagingSuggestionOut | None = None
     packaging_alternatives: List[PackagingSuggestionOut] = []
@@ -1402,6 +1410,7 @@ def _build_packing_order_card(
         selected_carton=selected_carton,
         operational_notes_packing=operational_notes_brief,
         wms_operational_alert_title=alert_title,
+        from_production=from_production,
         **list_extras,
     )
 
@@ -2969,6 +2978,21 @@ def packing_finish_order(
     finish_action = _normalize_packing_after_finish_action(
         getattr(ps_row, "packing_after_finish_action", None)
     )
+
+    try:
+        from .production_execution.production_packing_handoff_service import (
+            consume_production_buffer_stock_on_packing_finish,
+        )
+
+        consume_production_buffer_stock_on_packing_finish(
+            db, order=order, operator_user_id=operator_user_id
+        )
+    except Exception:
+        logger.exception(
+            "PACKING_FINISH production buffer consume failed order_id=%s",
+            getattr(order, "id", None),
+        )
+        raise
 
     post_pack_pipeline = _run_wms_packing_post_pack_pipeline(
         db,

@@ -1,5 +1,12 @@
 ﻿## Active
 
+**Order-driven production → packing handoff (2026-08-12) — Phase 6:**
+- `after_production_action` = `STATUS_ONLY` (default) | `OPEN_PACKING` on picking_config
+- Stronger `status_after` validation: ≠ source, ≠ other production source, ≠ standard picking entry, unique among production afters; target forced = after (packing queue)
+- On source fulfill: `READY_TO_PACK` + `CARTLESS` + status_after; progress returns `packing_handoff` for operator FE toast/navigate
+- Packing finish consumes FG buffer inventory (idempotent); optional badge `from_production` / „Z produkcji”
+- No new packing module / courier / overproduction
+
 **Order-driven production print execution (2026-08-12) — Phase 5:**
 - `picking_config.production_execution_method` = `WMS` | `PRINT` (per production status; default WMS)
 - PRINT = alternate *interface* for ORDERS MO (same lifecycle); PDF preview side-effect free
