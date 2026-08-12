@@ -195,6 +195,22 @@ class ProductionOrderLineSnapshotRead(BaseModel):
     reserved: Optional[float] = None
 
 
+ProductionOrderSourceType = Literal["MANUAL", "PLANNING", "ORDERS"]
+
+
+class ProductionOrderSourceItemRead(BaseModel):
+    id: int
+    order_id: int
+    order_item_id: int
+    order_number: Optional[str] = None
+    product_id: int
+    product_name: Optional[str] = None
+    product_sku: Optional[str] = None
+    requested_quantity: float
+    fulfilled_quantity: float
+    status: str
+
+
 class ProductionOrderRead(BaseModel):
     id: int
     tenant_id: int
@@ -224,6 +240,11 @@ class ProductionOrderRead(BaseModel):
     location_name: Optional[str] = None
     recipe_name: Optional[str] = None
     lines: List[ProductionOrderLineSnapshotRead] = Field(default_factory=list)
+    source_type: ProductionOrderSourceType = "MANUAL"
+    source_order_count: int = 0
+    source_requested_quantity_total: float = 0.0
+    source_fulfilled_quantity_total: float = 0.0
+    order_sources: List[ProductionOrderSourceItemRead] = Field(default_factory=list)
     started_at: Optional[datetime] = None
     collecting_completed_at: Optional[datetime] = None
     production_completed_at: Optional[datetime] = None

@@ -4457,6 +4457,75 @@ def ensure_picking_config_all_order_columns(engine: Engine) -> None:
         conn.commit()
 
 
+def ensure_picking_config_production_mode_columns(engine: Engine) -> None:
+    """Tryb produkcji na ``picking_config``: statusy po produkcji / brakach + lokalizacja buforowa.
+
+    Tylko konfiguracja — bez automatycznego triggera MO ani zmian statusów zamówień.
+    """
+    with engine.connect() as conn:
+        if not _table_exists(conn, "picking_config"):
+            conn.commit()
+            return
+        cols = _table_column_names(conn, "picking_config")
+        dialect = conn.dialect.name
+        bool_false = "false" if dialect == "postgresql" else "0"
+        if "is_production_mode" not in cols:
+            conn.execute(
+                text(
+                    f"ALTER TABLE picking_config ADD COLUMN is_production_mode BOOLEAN "
+                    f"NOT NULL DEFAULT {bool_false}"
+                )
+            )
+        if "status_after_production_id" not in cols:
+            conn.execute(
+                text(
+                    "ALTER TABLE picking_config ADD COLUMN status_after_production_id INTEGER "
+                    "REFERENCES order_ui_statuses(id) ON DELETE SET NULL"
+                )
+            )
+        if "status_on_component_shortage_id" not in cols:
+            conn.execute(
+                text(
+                    "ALTER TABLE picking_config ADD COLUMN status_on_component_shortage_id INTEGER "
+                    "REFERENCES order_ui_statuses(id) ON DELETE SET NULL"
+                )
+            )
+        if "finished_goods_buffer_location_id" not in cols:
+            conn.execute(
+                text(
+                    "ALTER TABLE picking_config ADD COLUMN finished_goods_buffer_location_id INTEGER "
+                    "REFERENCES locations(id) ON DELETE SET NULL"
+                )
+            )
+        if "production_order_trigger_scope" not in cols:
+            conn.execute(text("ALTER TABLE picking_config ADD COLUMN production_order_trigger_scope VARCHAR(32)"))
+        conn.execute(
+            text(
+                "CREATE INDEX IF NOT EXISTS ix_picking_config_is_production_mode "
+                "ON picking_config (is_production_mode)"
+            )
+        )
+        conn.execute(
+            text(
+                "CREATE INDEX IF NOT EXISTS ix_picking_config_status_after_production_id "
+                "ON picking_config (status_after_production_id)"
+            )
+        )
+        conn.execute(
+            text(
+                "CREATE INDEX IF NOT EXISTS ix_picking_config_status_on_component_shortage_id "
+                "ON picking_config (status_on_component_shortage_id)"
+            )
+        )
+        conn.execute(
+            text(
+                "CREATE INDEX IF NOT EXISTS ix_picking_config_finished_goods_buffer_location_id "
+                "ON picking_config (finished_goods_buffer_location_id)"
+            )
+        )
+        conn.commit()
+
+
 def ensure_picking_shortage_support(engine: Engine) -> None:
     """Kolumna ``status_on_shortage_id`` w ``picking_config`` + tabela audytu braków WMS."""
     with engine.connect() as conn:

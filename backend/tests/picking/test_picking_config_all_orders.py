@@ -6,6 +6,7 @@ import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
+from backend.models.location import Location
 from backend.models.order_ui_status import OrderUiStatus
 from backend.models.picking_config import PickingConfig
 from backend.models.tenant import Tenant
@@ -24,7 +25,7 @@ from backend.services.picking_config_service import (
 
 def _make_db():
     engine = create_engine("sqlite:///:memory:")
-    for model in (Tenant, Warehouse, OrderUiStatus, PickingConfig):
+    for model in (Tenant, Warehouse, OrderUiStatus, Location, PickingConfig):
         model.__table__.create(engine, checkfirst=True)
     Session = sessionmaker(bind=engine)
     db = Session()

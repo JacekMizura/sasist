@@ -180,6 +180,7 @@ from .db.schema_upgrade import (
     ensure_picks_cart_id_column,
     ensure_picking_config_workflow_columns,
     ensure_picking_config_all_order_columns,
+    ensure_picking_config_production_mode_columns,
     ensure_picking_shortage_support,
     ensure_wms_picking_shortage_settings_columns,
     ensure_wms_picking_terminal_settings_table,
@@ -1856,6 +1857,7 @@ def _upgrade_schema_background() -> None:
         ensure_esp_scan_code_columns(engine)
         ensure_picking_config_workflow_columns(engine)
         ensure_picking_config_all_order_columns(engine)
+        ensure_picking_config_production_mode_columns(engine)
         ensure_picking_shortage_support(engine)
         ensure_wms_picking_shortage_settings_columns(engine)
         ensure_wms_picking_terminal_settings_table(engine)

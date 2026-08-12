@@ -2,10 +2,39 @@
 
 from datetime import datetime
 
-from sqlalchemy import Boolean, Column, DateTime, Float, ForeignKey, Integer, String, Text, text
+from sqlalchemy import (
+    Boolean,
+    Column,
+    DateTime,
+    Float,
+    ForeignKey,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+    text,
+)
 from sqlalchemy.orm import relationship
 
 from ..database import Base
+
+#: Demand origin of a manufacturing order (MO).
+PRODUCTION_ORDER_SOURCE_MANUAL = "MANUAL"
+PRODUCTION_ORDER_SOURCE_PLANNING = "PLANNING"
+PRODUCTION_ORDER_SOURCE_ORDERS = "ORDERS"
+PRODUCTION_ORDER_SOURCE_TYPES = frozenset(
+    {
+        PRODUCTION_ORDER_SOURCE_MANUAL,
+        PRODUCTION_ORDER_SOURCE_PLANNING,
+        PRODUCTION_ORDER_SOURCE_ORDERS,
+    }
+)
+
+#: Source-item row status (order line link under an MO).
+PRODUCTION_ORDER_SOURCE_ITEM_OPEN = "open"
+PRODUCTION_ORDER_SOURCE_ITEM_PARTIAL = "partial"
+PRODUCTION_ORDER_SOURCE_ITEM_FULFILLED = "fulfilled"
+PRODUCTION_ORDER_SOURCE_ITEM_CANCELLED = "cancelled"
 
 
 class ProductionRecipe(Base):
@@ -78,6 +107,14 @@ class ProductionOrder(Base):
     production_completed_at = Column(DateTime, nullable=True)
     started_at = Column(DateTime, nullable=True)
     completed_at = Column(DateTime, nullable=True)
+    #: MANUAL | PLANNING | ORDERS — demand origin (not a separate lifecycle).
+    source_type = Column(
+        String(16),
+        nullable=False,
+        default=PRODUCTION_ORDER_SOURCE_MANUAL,
+        server_default=text("'MANUAL'"),
+        index=True,
+    )
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
     updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -90,6 +127,12 @@ class ProductionOrder(Base):
         back_populates="production_order",
         cascade="all, delete-orphan",
         order_by="ProductionOrderLineSnapshot.id",
+    )
+    order_sources = relationship(
+        "ProductionOrderSourceItem",
+        back_populates="production_order",
+        cascade="all, delete-orphan",
+        order_by="ProductionOrderSourceItem.id",
     )
 
 
@@ -114,3 +157,54 @@ class ProductionOrderLineSnapshot(Base):
 
     production_order = relationship("ProductionOrder", back_populates="line_snapshots")
     component_product = relationship("Product", foreign_keys=[component_product_id])
+
+
+class ProductionOrderSourceItem(Base):
+    """
+    Relacja źródeł zapotrzebowania istniejącego MO (order lines → ProductionOrder).
+
+    Nie jest osobnym modułem biznesowym — tylko precyzyjne powiązanie ilości.
+    """
+
+    __tablename__ = "production_order_source_items"
+    __table_args__ = (
+        UniqueConstraint(
+            "tenant_id",
+            "production_order_id",
+            "order_item_id",
+            name="uq_prod_order_source_mo_order_item",
+        ),
+    )
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    tenant_id = Column(Integer, ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
+    production_order_id = Column(
+        Integer,
+        ForeignKey("production_orders.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    order_id = Column(Integer, ForeignKey("orders.id", ondelete="RESTRICT"), nullable=False, index=True)
+    order_item_id = Column(
+        Integer,
+        ForeignKey("order_items.id", ondelete="RESTRICT"),
+        nullable=False,
+        index=True,
+    )
+    product_id = Column(Integer, ForeignKey("products.id", ondelete="RESTRICT"), nullable=False, index=True)
+    requested_quantity = Column(Float, nullable=False)
+    fulfilled_quantity = Column(Float, nullable=False, default=0.0, server_default=text("0"))
+    status = Column(
+        String(32),
+        nullable=False,
+        default=PRODUCTION_ORDER_SOURCE_ITEM_OPEN,
+        server_default=text("'open'"),
+        index=True,
+    )
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    production_order = relationship("ProductionOrder", back_populates="order_sources")
+    order = relationship("Order", foreign_keys=[order_id])
+    order_item = relationship("OrderItem", foreign_keys=[order_item_id])
+    product = relationship("Product", foreign_keys=[product_id])

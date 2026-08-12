@@ -7,6 +7,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from backend.models.consolidation_rack import ConsolidationRack, ConsolidationRackLevel, RackSegment
+from backend.models.location import Location
 from backend.models.order import Order
 from backend.models.order_consolidation_plan import OrderConsolidationPlan, OrderConsolidationPlanItem
 from backend.models.order_ui_status import OrderUiStatus
@@ -37,6 +38,7 @@ def _make_db():
         Tenant,
         Warehouse,
         OrderUiStatus,
+        Location,
         PickingConfig,
         Order,
         OrderConsolidationPlan,

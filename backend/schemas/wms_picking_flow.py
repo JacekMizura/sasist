@@ -161,6 +161,29 @@ class WmsPickingConfigReplaceItem(BaseModel):
         ge=1,
         description="Opcjonalny status po zgłoszeniu braku na magazynie",
     )
+    is_production_mode: bool = Field(
+        default=False,
+        description="Tryb produkcji — nie jest standardowym zbieraniem",
+    )
+    status_after_production_id: Optional[int] = Field(
+        default=None,
+        ge=1,
+        description="Status zamówienia po wyprodukowaniu (tylko tryb produkcji)",
+    )
+    status_on_component_shortage_id: Optional[int] = Field(
+        default=None,
+        ge=1,
+        description="Status przy braku komponentów (tylko tryb produkcji)",
+    )
+    finished_goods_buffer_location_id: Optional[int] = Field(
+        default=None,
+        ge=1,
+        description="Lokalizacja buforowa wyrobu gotowego (tylko tryb produkcji)",
+    )
+    production_order_trigger_scope: Optional[Literal["SINGLE_ELEMENT"]] = Field(
+        default=None,
+        description="Zakres triggera produkcji z zamówień; obecnie tylko SINGLE_ELEMENT",
+    )
 
     @model_validator(mode="after")
     def _source_ne_target(self) -> "WmsPickingConfigReplaceItem":

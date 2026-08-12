@@ -80,6 +80,7 @@ from .bundle import Bundle, BundleItem  # noqa: F401 - register for relationship
 from .production import (  # noqa: F401 - manufacturing recipes & orders
     ProductionOrder,
     ProductionOrderLineSnapshot,
+    ProductionOrderSourceItem,
     ProductionRecipe,
     ProductionRecipeLine,
 )

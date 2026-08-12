@@ -23,6 +23,7 @@ import {
   type WmsPickingConfigReadApi,
   type WmsPickingConfigReplaceItem,
 } from "../../../api/wmsPickingConfigApi";
+import { getWarehouseLocations, type WarehouseLocationItem } from "../../../api/warehouseGraphApi";
 import { useWarehouse } from "../../../context/WarehouseContext";
 import type {
   OrderUiMainGroup,
@@ -673,6 +674,11 @@ type SavedPickingConfiguration = {
   /** Osobna kolejność doboru dla „Wszystkie zamówienia”. */
   allOrderSort: PickingOrderSort;
   blocks: Record<PickingOrderTypeKey, PickingBlockState>;
+  isProductionMode: boolean;
+  statusOnComponentShortageId: number | null;
+  statusOnComponentShortageName: string | null;
+  finishedGoodsBufferLocationId: number | null;
+  finishedGoodsBufferLocationName: string | null;
 };
 
 function fingerprintPickingConfigsWarehouseState(
@@ -697,6 +703,9 @@ type PickingConfigDraft = {
   orderSort: PickingOrderSort;
   allOrderSort: PickingOrderSort;
   blocks: Record<PickingOrderTypeKey, PickingBlockState>;
+  isProductionMode: boolean;
+  statusOnComponentShortage: string;
+  finishedGoodsBufferLocationId: string;
 };
 
 function fingerprintDraftForm(d: PickingConfigDraft): string {
@@ -707,6 +716,9 @@ function fingerprintDraftForm(d: PickingConfigDraft): string {
     orderSort: d.orderSort,
     allOrderSort: d.allOrderSort,
     blocks: d.blocks,
+    isProductionMode: d.isProductionMode,
+    statusOnComponentShortage: d.statusOnComponentShortage.trim(),
+    finishedGoodsBufferLocationId: d.finishedGoodsBufferLocationId.trim(),
   });
 }
 
@@ -722,6 +734,9 @@ function createEmptyDraft(): PickingConfigDraft {
     orderSort: "date",
     allOrderSort: "date",
     blocks: normalizeBlocksForPickingMode(createInitialPickingBlocks(), pickingModeDefault),
+    isProductionMode: false,
+    statusOnComponentShortage: "",
+    finishedGoodsBufferLocationId: "",
   };
 }
 
@@ -834,14 +849,25 @@ function mapApiPickingRowToSaved(row: WmsPickingConfigReadApi): SavedPickingConf
     id: String(row.id),
     statusToPickId: row.source_status_id,
     statusToPickName: row.source_status_name?.trim() || `Status #${row.source_status_id}`,
-    statusAfterPickId: row.target_status_id,
-    statusAfterPickName: row.target_status_name?.trim() || `Status #${row.target_status_id}`,
+    statusAfterPickId: row.is_production_mode
+      ? Number(row.status_after_production_id ?? row.target_status_id)
+      : row.target_status_id,
+    statusAfterPickName: row.is_production_mode
+      ? row.status_after_production_name?.trim() ||
+        row.target_status_name?.trim() ||
+        `Status #${row.status_after_production_id ?? row.target_status_id}`
+      : row.target_status_name?.trim() || `Status #${row.target_status_id}`,
     statusOnShortageId: null,
     statusOnShortageName: null,
     pickingMode,
     orderSort,
     allOrderSort,
     blocks,
+    isProductionMode: Boolean(row.is_production_mode),
+    statusOnComponentShortageId: row.status_on_component_shortage_id ?? null,
+    statusOnComponentShortageName: row.status_on_component_shortage_name?.trim() || null,
+    finishedGoodsBufferLocationId: row.finished_goods_buffer_location_id ?? null,
+    finishedGoodsBufferLocationName: row.finished_goods_buffer_location_name?.trim() || null,
   };
 }
 
@@ -860,13 +886,48 @@ function validateSavedConfigForServer(
     packingStartStatusIds: number[];
     otherSourceIds: number[];
   },
+  allConfigs: SavedPickingConfiguration[],
 ): string | null {
   if (cfg.statusToPickId === cfg.statusAfterPickId) {
-    return `Reguła „${cfg.statusToPickName}”: status do zbierania i po zebraniu muszą się różnić.`;
+    return cfg.isProductionMode
+      ? `Reguła „${cfg.statusToPickName}”: status wejściowy produkcji i status po wyprodukowaniu muszą się różnić.`
+      : `Reguła „${cfg.statusToPickName}”: status do zbierania i po zebraniu muszą się różnić.`;
   }
   if (!eligibility.summary) {
     return "Statusy panelu zamówień nie są jeszcze wczytane — odśwież stronę i spróbuj ponownie.";
   }
+
+  if (cfg.isProductionMode) {
+    if (cfg.statusOnComponentShortageId == null) {
+      return `Reguła „${cfg.statusToPickName}”: wybierz status przy braku komponentów.`;
+    }
+    if (cfg.statusOnComponentShortageId === cfg.statusToPickId) {
+      return `Reguła „${cfg.statusToPickName}”: status przy braku komponentów musi być inny niż status wejściowy.`;
+    }
+    if (cfg.finishedGoodsBufferLocationId == null) {
+      return `Reguła „${cfg.statusToPickName}”: wybierz lokalizację buforową produktu gotowego.`;
+    }
+    const prodDup = allConfigs.filter(
+      (c) => c.isProductionMode && c.statusToPickId === cfg.statusToPickId && c.id !== cfg.id,
+    );
+    if (prodDup.length > 0) {
+      return `Status wejściowy produkcji „${cfg.statusToPickName}” może wystąpić tylko w jednej konfiguracji produkcyjnej.`;
+    }
+    const asStandard = allConfigs.some(
+      (c) => !c.isProductionMode && c.statusToPickId === cfg.statusToPickId && c.id !== cfg.id,
+    );
+    if (asStandard) {
+      return `Status produkcyjny „${cfg.statusToPickName}” nie może jednocześnie być statusem standardowego zbierania.`;
+    }
+    const afterAsStandardSource = allConfigs.some(
+      (c) => !c.isProductionMode && c.statusToPickId === cfg.statusAfterPickId,
+    );
+    if (afterAsStandardSource) {
+      return `Status po wyprodukowaniu nie może być statusem wejściowym standardowego zbierania.`;
+    }
+    return null;
+  }
+
   const sourceAllowed = allowedPickingSourceStatusIds({
     summary: eligibility.summary,
     excludeSourceIds: eligibility.otherSourceIds,
@@ -880,6 +941,18 @@ function validateSavedConfigForServer(
   }
   if (!isStatusAllowedForPickingConfig(cfg.statusAfterPickId, targetAllowed)) {
     return `Reguła „${cfg.statusToPickName}”: status po zbieraniu nie jest dostępny dla procesu zbierania. Wybierz inny status.`;
+  }
+  const asProduction = allConfigs.some(
+    (c) => c.isProductionMode && c.statusToPickId === cfg.statusToPickId && c.id !== cfg.id,
+  );
+  if (asProduction) {
+    return `Status „${cfg.statusToPickName}” jest już używany jako wejście produkcji — nie może być standardowym zbieraniem.`;
+  }
+  const afterFromProduction = allConfigs.some(
+    (c) => c.isProductionMode && c.statusAfterPickId === cfg.statusToPickId,
+  );
+  if (afterFromProduction) {
+    return `Status „${cfg.statusToPickName}” jest statusem po wyprodukowaniu — nie może być wejściem standardowego zbierania.`;
   }
   if (cfg.blocks.single_item.containers === "consolidation_rack") {
     return `Reguła „${cfg.statusToPickName}”: regał kompletacyjny jest dostępny tylko dla zamówień wieloelementowych.`;
@@ -995,6 +1068,13 @@ function savedConfigToReplaceItem(
     max_single_orders,
     max_multi_orders,
     max_all_orders,
+    is_production_mode: cfg.isProductionMode,
+    status_after_production_id: cfg.isProductionMode ? cfg.statusAfterPickId : null,
+    status_on_component_shortage_id: cfg.isProductionMode ? cfg.statusOnComponentShortageId : null,
+    finished_goods_buffer_location_id: cfg.isProductionMode
+      ? cfg.finishedGoodsBufferLocationId
+      : null,
+    production_order_trigger_scope: cfg.isProductionMode ? "SINGLE_ELEMENT" : null,
   };
 }
 
@@ -1016,6 +1096,11 @@ function savedConfigurationToDraft(cfg: SavedPickingConfiguration): PickingConfi
       },
       cfg.pickingMode,
     ),
+    isProductionMode: cfg.isProductionMode,
+    statusOnComponentShortage:
+      cfg.statusOnComponentShortageId != null ? String(cfg.statusOnComponentShortageId) : "",
+    finishedGoodsBufferLocationId:
+      cfg.finishedGoodsBufferLocationId != null ? String(cfg.finishedGoodsBufferLocationId) : "",
   };
 }
 
@@ -1265,6 +1350,13 @@ function PickingConfiguratorEditor({
   onAllOrderSortChange,
   blocks,
   patchBlock,
+  isProductionMode,
+  onIsProductionModeChange,
+  statusOnComponentShortage,
+  onStatusOnComponentShortageChange,
+  finishedGoodsBufferLocationId,
+  onFinishedGoodsBufferLocationIdChange,
+  bufferLocations,
 }: {
   fieldIdPrefix: string;
   warehouseId: number | null;
@@ -1291,6 +1383,13 @@ function PickingConfiguratorEditor({
   onAllOrderSortChange: (sort: PickingOrderSort) => void;
   blocks: Record<PickingOrderTypeKey, PickingBlockState>;
   patchBlock: (key: PickingOrderTypeKey, patch: Partial<PickingBlockState>) => void;
+  isProductionMode: boolean;
+  onIsProductionModeChange: (v: boolean) => void;
+  statusOnComponentShortage: string;
+  onStatusOnComponentShortageChange: (v: string) => void;
+  finishedGoodsBufferLocationId: string;
+  onFinishedGoodsBufferLocationIdChange: (v: string) => void;
+  bufferLocations: WarehouseLocationItem[];
 }) {
   const statusNameById = useMemo(() => buildOrderUiStatusNameById(orderUiSummary), [orderUiSummary]);
 
@@ -1313,30 +1412,39 @@ function PickingConfiguratorEditor({
 
   const selectedSourceId = statusIdFromSettingValue(statusToPick);
   const selectedTargetId = statusIdFromSettingValue(statusAfterPick);
+  const selectedShortageId = statusIdFromSettingValue(statusOnComponentShortage);
 
   const sourcePanelSummary = useMemo(
-    () => filterPanelSummaryByStatusIds(orderUiSummary, sourceAllowedIds),
-    [orderUiSummary, sourceAllowedIds],
+    () =>
+      isProductionMode
+        ? orderUiSummary
+        : filterPanelSummaryByStatusIds(orderUiSummary, sourceAllowedIds),
+    [orderUiSummary, sourceAllowedIds, isProductionMode],
   );
   const targetPanelSummary = useMemo(
-    () => filterPanelSummaryByStatusIds(orderUiSummary, targetAllowedIds),
-    [orderUiSummary, targetAllowedIds],
+    () =>
+      isProductionMode
+        ? orderUiSummary
+        : filterPanelSummaryByStatusIds(orderUiSummary, targetAllowedIds),
+    [orderUiSummary, targetAllowedIds, isProductionMode],
   );
 
   const selectDisabled =
     warehouseId == null ||
     orderUiLoading ||
     orderUiErr != null ||
-    (sourceAllowedIds.size === 0 && targetAllowedIds.size === 0);
+    (!isProductionMode && sourceAllowedIds.size === 0 && targetAllowedIds.size === 0);
 
   const canPickStatus = !selectDisabled;
   const statusToPickRequired = canPickStatus && statusToPickShowError && statusToPick === "";
   const statusAfterPickRequired = canPickStatus && statusAfterPickShowError && statusAfterPick === "";
   const statusToPickUnavailable =
+    !isProductionMode &&
     canPickStatus &&
     selectedSourceId != null &&
     !isStatusAllowedForPickingConfig(selectedSourceId, sourceAllowedIds);
   const statusAfterPickUnavailable =
+    !isProductionMode &&
     canPickStatus &&
     selectedTargetId != null &&
     !isStatusAllowedForPickingConfig(selectedTargetId, targetAllowedIds);
@@ -1355,7 +1463,21 @@ function PickingConfiguratorEditor({
         <p className="text-sm text-amber-800">Wybierz magazyn, aby wczytać statusy panelu zamówień.</p>
       ) : null}
       {orderUiErr ? <p className="text-sm text-red-700">{orderUiErr}</p> : null}
-      {!orderUiLoading && warehouseId != null && orderUiErr == null && sourceAllowedIds.size === 0 ? (
+
+      <div className="rounded-xl border border-slate-200 bg-white p-3.5">
+        <CustomCheckbox
+          label="Tryb produkcji"
+          hint="Nie jest zwykłym pickingiem — konfiguracja statusów i bufora dla produkcji z zamówień (tylko zamówienia jednoelementowe)."
+          checked={isProductionMode}
+          onChange={onIsProductionModeChange}
+        />
+      </div>
+
+      {!orderUiLoading &&
+      warehouseId != null &&
+      orderUiErr == null &&
+      !isProductionMode &&
+      sourceAllowedIds.size === 0 ? (
         <p className="text-sm text-slate-600">
           Brak statusów, z których można rozpocząć zbieranie. Dodaj aktywne statusy w grupie NOWE / W TOKU
           w ustawieniach zamówień (statusy panelu).
@@ -1366,14 +1488,18 @@ function PickingConfiguratorEditor({
         <div className="min-w-0 rounded-xl border border-slate-200 bg-white p-3.5">
           <div className="flex min-w-0 items-center gap-1.5">
             <p className="text-sm font-semibold text-slate-900">
-              Status do zbierania
+              {isProductionMode ? "Status do rozpoczęcia produkcji" : "Status do zbierania"}
               <span className="ml-1 text-red-600" aria-hidden>
                 *
               </span>
             </p>
             <SettingInfoButton
-              title="Status do zbierania"
-              description="Wybierz status zamówienia, z którego startuje zbieranie. Każdy status może mieć jedną konfigurację."
+              title={isProductionMode ? "Status do rozpoczęcia produkcji" : "Status do zbierania"}
+              description={
+                isProductionMode
+                  ? "Status zamówienia, z którego startuje produkcja z zamówień."
+                  : "Wybierz status zamówienia, z którego startuje zbieranie. Każdy status może mieć jedną konfigurację."
+              }
             />
           </div>
           <div className="mt-3">
@@ -1389,7 +1515,7 @@ function PickingConfiguratorEditor({
               allowClear
               clearLabel="— wybierz —"
               placeholder="Wybierz status zamówienia…"
-              disabled={selectDisabled || sourceAllowedIds.size === 0}
+              disabled={selectDisabled || (!isProductionMode && sourceAllowedIds.size === 0)}
               floatingZIndexClass="z-[5100]"
             />
             {statusToPickRequired ? (
@@ -1404,7 +1530,9 @@ function PickingConfiguratorEditor({
             ) : null}
             {statusPairConflict ? (
               <p className="mt-1.5 text-xs font-medium text-red-700" role="alert">
-                Status do zbierania nie może być taki sam jak status do pakowania.
+                {isProductionMode
+                  ? "Status wejściowy produkcji nie może być taki sam jak status po wyprodukowaniu."
+                  : "Status do zbierania nie może być taki sam jak status do pakowania."}
               </p>
             ) : null}
           </div>
@@ -1413,14 +1541,18 @@ function PickingConfiguratorEditor({
         <div className="min-w-0 rounded-xl border border-slate-200 bg-white p-3.5">
           <div className="flex min-w-0 items-center gap-1.5">
             <p className="text-sm font-semibold text-slate-900">
-              Status do pakowania
+              {isProductionMode ? "Status po wyprodukowaniu" : "Status do pakowania"}
               <span className="ml-1 text-red-600" aria-hidden>
                 *
               </span>
             </p>
             <SettingInfoButton
-              title="Status do pakowania"
-              description="Status, na który zamówienie przechodzi po zakończeniu zbierania."
+              title={isProductionMode ? "Status po wyprodukowaniu" : "Status do pakowania"}
+              description={
+                isProductionMode
+                  ? "Status, na który zamówienie trafi po wykonaniu przypisanej ilości produkcji."
+                  : "Status, na który zamówienie przechodzi po zakończeniu zbierania."
+              }
             />
           </div>
           <div className="mt-3">
@@ -1436,12 +1568,12 @@ function PickingConfiguratorEditor({
               allowClear
               clearLabel="— wybierz —"
               placeholder="Wybierz status…"
-              disabled={selectDisabled || targetAllowedIds.size === 0}
+              disabled={selectDisabled || (!isProductionMode && targetAllowedIds.size === 0)}
               floatingZIndexClass="z-[5100]"
             />
             {statusAfterPickRequired ? (
               <p className="mt-1.5 text-xs font-medium text-red-700" role="alert">
-                Wybierz status do pakowania.
+                To pole jest wymagane.
               </p>
             ) : null}
             {statusAfterPickUnavailable ? (
@@ -1449,15 +1581,64 @@ function PickingConfiguratorEditor({
                 Wybrany status po zbieraniu nie jest już dostępny dla tej konfiguracji. Wybierz inny status.
               </p>
             ) : null}
-            {statusPairConflict ? (
-              <p className="mt-1.5 text-xs font-medium text-red-700" role="alert">
-                Wybierz inny status niż „do zbierania”, aby uniknąć pętli w procesie.
-              </p>
-            ) : null}
           </div>
         </div>
       </div>
 
+      {isProductionMode ? (
+        <div className="grid grid-cols-1 gap-5 min-[720px]:grid-cols-2">
+          <div className="min-w-0 rounded-xl border border-slate-200 bg-white p-3.5">
+            <p className="text-sm font-semibold text-slate-900">
+              Status przy braku komponentów
+              <span className="ml-1 text-red-600" aria-hidden>
+                *
+              </span>
+            </p>
+            <div className="mt-3">
+              <OrderUiStatusField
+                panelSummary={orderUiSummary}
+                panelSubgroups={panelSubgroups}
+                statusNameById={statusNameById}
+                selectedStatusId={selectedShortageId}
+                onPick={(id) => onStatusOnComponentShortageChange(id != null ? String(id) : "")}
+                allowClear
+                clearLabel="— wybierz —"
+                placeholder="Wybierz status…"
+                disabled={selectDisabled}
+                floatingZIndexClass="z-[5100]"
+              />
+            </div>
+          </div>
+          <div className="min-w-0 rounded-xl border border-slate-200 bg-white p-3.5">
+            <p className="text-sm font-semibold text-slate-900">
+              Lokalizacja buforowa produktu gotowego
+              <span className="ml-1 text-red-600" aria-hidden>
+                *
+              </span>
+            </p>
+            <div className="mt-3">
+              <select
+                className={numberInputClass}
+                value={finishedGoodsBufferLocationId}
+                onChange={(e) => onFinishedGoodsBufferLocationIdChange(e.target.value)}
+                disabled={warehouseId == null}
+                aria-label="Lokalizacja buforowa produktu gotowego"
+              >
+                <option value="">— wybierz lokalizację —</option>
+                {bufferLocations.map((loc) => (
+                  <option key={loc.id} value={String(loc.id)}>
+                    {loc.name}
+                  </option>
+                ))}
+              </select>
+              <p className="mt-1.5 text-xs text-slate-500">
+                Trigger produkcji z zamówień obsługuje obecnie tylko zamówienia jednoelementowe.
+              </p>
+            </div>
+          </div>
+        </div>
+      ) : (
+        <>
       <div className="rounded-xl border border-slate-200 bg-white p-3.5">
         <PickingRadioGroup
           legend="W jaki sposób chcesz zbierać zamówienia?"
@@ -1551,6 +1732,8 @@ function PickingConfiguratorEditor({
           </div>
         </div>
       ) : null}
+        </>
+      )}
     </div>
   );
 }
@@ -1754,7 +1937,12 @@ function SavedPickingConfigSummaryCard({
       aria-label={`Konfiguracja zbierania: ${config.statusToPickName}`}
     >
       <div className="flex min-w-0 justify-center sm:justify-start">
-        <PickingConfigStatusBadge status={sourceBrief} />
+        <div className="space-y-1">
+          <PickingConfigStatusBadge status={sourceBrief} />
+          {config.isProductionMode ? (
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-sky-700">Produkcja</p>
+          ) : null}
+        </div>
       </div>
       <div className="min-w-0 text-left sm:text-center">
         <p className="text-sm font-semibold text-slate-900 sm:inline-block sm:text-left">{modeLabel}</p>
@@ -1913,6 +2101,7 @@ export function WmsPickingSettingsSections({
   const [editBackup, setEditBackup] = useState<SavedPickingConfiguration | null>(null);
   const [shortagePanelDirty, setShortagePanelDirty] = useState(false);
   const [baselineConfigsFp, setBaselineConfigsFp] = useState<string | null>(null);
+  const [bufferLocations, setBufferLocations] = useState<WarehouseLocationItem[]>([]);
 
   const [extended, setExtended] = useState<WmsPickingExtendedUiSettings>(() => ({ ...DEFAULT_WMS_PICKING_EXTENDED_UI }));
   const [baselineExtended, setBaselineExtended] = useState<string | null>(null);
@@ -2197,6 +2386,27 @@ export function WmsPickingSettingsSections({
     void loadPickingConfigsFromServer();
   }, [loadPickingConfigsFromServer]);
 
+  useEffect(() => {
+    if (warehouseId == null) {
+      setBufferLocations([]);
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      try {
+        const rows = await getWarehouseLocations(warehouseId);
+        if (!cancelled) {
+          setBufferLocations(rows.filter((r) => (r as { is_active?: boolean }).is_active !== false));
+        }
+      } catch {
+        if (!cancelled) setBufferLocations([]);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [warehouseId]);
+
   const persistPickingConfigList = useCallback(
     async (
       configs: SavedPickingConfiguration[],
@@ -2208,13 +2418,15 @@ export function WmsPickingSettingsSections({
         return { ok: false, message: "Musi pozostać co najmniej jedna reguła zbierania." };
       }
       for (const cfg of configs) {
-        const v = validateSavedConfigForServer(cfg, {
-          summary: orderUiSummary,
-          packingStartStatusIds,
-          otherSourceIds: configs
-            .filter((c) => c.id !== cfg.id)
-            .map((c) => c.statusToPickId),
-        });
+        const v = validateSavedConfigForServer(
+          cfg,
+          {
+            summary: orderUiSummary,
+            packingStartStatusIds,
+            otherSourceIds: configs.filter((c) => c.id !== cfg.id).map((c) => c.statusToPickId),
+          },
+          configs,
+        );
         if (v) return { ok: false, message: v };
       }
       const gErr = validateGlobalBulkLimitsForWarehouse(configs, globalBulkSingle, globalBulkMulti, globalBulkAll);
@@ -2297,7 +2509,11 @@ export function WmsPickingSettingsSections({
       return { ok: false };
     }
     if (pickId === afterId) {
-      setSaveFormError("Status do zbierania i po zebraniu muszą się różnić.");
+      setSaveFormError(
+        d.isProductionMode
+          ? "Status wejściowy produkcji i status po wyprodukowaniu muszą się różnić."
+          : "Status do zbierania i po zebraniu muszą się różnić.",
+      );
       setDraft({ ...d, statusToPickBlurred: true, statusAfterPickBlurred: true });
       return { ok: false };
     }
@@ -2307,19 +2523,36 @@ export function WmsPickingSettingsSections({
       return { ok: false };
     }
 
-    if (!isStatusAllowedForPickingConfig(pickId, sourceAllowedIds)) {
-      setSaveFormError(
-        "Wybrany status do zbierania nie jest dostępny dla tej konfiguracji. Wybierz status z listy dozwolonych.",
-      );
-      setDraft({ ...d, statusToPickBlurred: true });
-      return { ok: false };
-    }
-    if (!isStatusAllowedForPickingConfig(afterId, targetAllowedIds)) {
-      setSaveFormError(
-        "Wybrany status po zbieraniu nie jest dostępny dla tej konfiguracji. Wybierz status z listy dozwolonych.",
-      );
-      setDraft({ ...d, statusAfterPickBlurred: true });
-      return { ok: false };
+    const shortageId = d.isProductionMode ? Number(d.statusOnComponentShortage) : null;
+    const bufferId = d.isProductionMode ? Number(d.finishedGoodsBufferLocationId) : null;
+    if (d.isProductionMode) {
+      if (!Number.isFinite(shortageId) || shortageId == null || shortageId < 1) {
+        setSaveFormError("Wybierz status przy braku komponentów.");
+        return { ok: false };
+      }
+      if (shortageId === pickId) {
+        setSaveFormError("Status przy braku komponentów musi być inny niż status wejściowy produkcji.");
+        return { ok: false };
+      }
+      if (!Number.isFinite(bufferId) || bufferId == null || bufferId < 1) {
+        setSaveFormError("Wybierz lokalizację buforową produktu gotowego.");
+        return { ok: false };
+      }
+    } else {
+      if (!isStatusAllowedForPickingConfig(pickId, sourceAllowedIds)) {
+        setSaveFormError(
+          "Wybrany status do zbierania nie jest dostępny dla tej konfiguracji. Wybierz status z listy dozwolonych.",
+        );
+        setDraft({ ...d, statusToPickBlurred: true });
+        return { ok: false };
+      }
+      if (!isStatusAllowedForPickingConfig(afterId, targetAllowedIds)) {
+        setSaveFormError(
+          "Wybrany status po zbieraniu nie jest dostępny dla tej konfiguracji. Wybierz status z listy dozwolonych.",
+        );
+        setDraft({ ...d, statusAfterPickBlurred: true });
+        return { ok: false };
+      }
     }
 
     if (
@@ -2332,6 +2565,7 @@ export function WmsPickingSettingsSections({
     }
 
     if (
+      !d.isProductionMode &&
       d.pickingMode === "by_products" &&
       isLocationOrderSortDisabledForMultiContainer(d.blocks.multi_item.containers) &&
       d.orderSort === "location"
@@ -2378,6 +2612,10 @@ export function WmsPickingSettingsSections({
 
     const namePick = statusOptionsFlat.find((o) => o.id === pickId)?.name ?? `Status #${pickId}`;
     const nameAfter = statusOptionsFlat.find((o) => o.id === afterId)?.name ?? `Status #${afterId}`;
+    const nameShortage =
+      shortageId != null
+        ? statusOptionsFlat.find((o) => o.id === shortageId)?.name ?? `Status #${shortageId}`
+        : null;
 
     const normalizedBlocks = normalizeBlocksForPickingMode(d.blocks, d.pickingMode);
     const snapshot: SavedPickingConfiguration = {
@@ -2392,6 +2630,11 @@ export function WmsPickingSettingsSections({
       orderSort: d.orderSort,
       allOrderSort: d.allOrderSort,
       blocks: normalizedBlocks,
+      isProductionMode: d.isProductionMode,
+      statusOnComponentShortageId: d.isProductionMode ? shortageId : null,
+      statusOnComponentShortageName: d.isProductionMode ? nameShortage : null,
+      finishedGoodsBufferLocationId: d.isProductionMode ? bufferId : null,
+      finishedGoodsBufferLocationName: null,
     };
 
     let nextList: SavedPickingConfiguration[];
@@ -3078,6 +3321,17 @@ export function WmsPickingSettingsSections({
             onAllOrderSortChange={(sort) => setDraft((d) => (d ? { ...d, allOrderSort: sort } : d))}
             blocks={draft.blocks}
             patchBlock={patchDraftBlock}
+            isProductionMode={draft.isProductionMode}
+            onIsProductionModeChange={(v) => setDraft((d) => (d ? { ...d, isProductionMode: v } : d))}
+            statusOnComponentShortage={draft.statusOnComponentShortage}
+            onStatusOnComponentShortageChange={(v) =>
+              setDraft((d) => (d ? { ...d, statusOnComponentShortage: v } : d))
+            }
+            finishedGoodsBufferLocationId={draft.finishedGoodsBufferLocationId}
+            onFinishedGoodsBufferLocationIdChange={(v) =>
+              setDraft((d) => (d ? { ...d, finishedGoodsBufferLocationId: v } : d))
+            }
+            bufferLocations={bufferLocations}
           />
         ) : null}
       </PickingSettingsModal>

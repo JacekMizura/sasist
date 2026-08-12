@@ -117,6 +117,11 @@ function OrderWorkCard({
               <span className="text-xs font-bold uppercase tracking-wide text-slate-500">
                 {row.kind === "batch" ? "partia" : "MO"}
               </span>
+              {row.kind === "order" && row.sourceType === "ORDERS" ? (
+                <StatusBadge tone="info" density="compact">
+                  Z zamówień
+                </StatusBadge>
+              ) : null}
             </div>
             <p className="mt-1 line-clamp-2 text-sm text-slate-600">{row.product}</p>
           </div>

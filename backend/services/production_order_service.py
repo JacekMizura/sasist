@@ -16,8 +16,13 @@ from ..models.inventory import Inventory
 from ..models.location import Location
 from ..models.product import Product
 from ..models.product_composition import ProductComposition, ProductionBatch, ProductionBatchLine
-from ..models.production import ProductionOrder, ProductionOrderLineSnapshot
+from ..models.production import (
+    PRODUCTION_ORDER_SOURCE_MANUAL,
+    ProductionOrder,
+    ProductionOrderLineSnapshot,
+)
 from ..models.app_user import AppUser
+from ..models.order import Order
 from ..models.stock_document import StockDocument, StockDocumentItem
 from ..models.warehouse import Warehouse
 from ..schemas.production import (
@@ -27,6 +32,7 @@ from ..schemas.production import (
     ProductionOrderCreateBody,
     ProductionOrderLineSnapshotRead,
     ProductionOrderRead,
+    ProductionOrderSourceItemRead,
     ProductionOrderSummaryRead,
     StockShortageRead,
 )
@@ -38,6 +44,7 @@ from .order_item_pick_allocation_service import consume_inventory_fifo_slices
 from .product_cost_service import get_product_current_cost
 from .composition_engine_service import calculate_required_components as calculate_composition_components
 from .composition_engine_service import resolve_composition_entity
+from .production_order_source_service import aggregate_order_source_quantities
 from .stock_disposition import STOCK_DISPOSITION_SALEABLE
 from .stock_operation_issue_service import append_issue_operation
 from .stock_operation_receipt_service import append_receipt_operation
@@ -297,7 +304,13 @@ def _order_collection_progress_percent(order: ProductionOrder) -> float:
     return round(100.0 * done / len(tasks), 1)
 
 
-def serialize_order(db: Session, order: ProductionOrder, *, with_availability: bool = False) -> ProductionOrderRead:
+def serialize_order(
+    db: Session,
+    order: ProductionOrder,
+    *,
+    with_availability: bool = False,
+    with_order_sources: bool = False,
+) -> ProductionOrderRead:
     p = db.query(Product).filter(Product.id == int(order.product_id)).first()
     wh = db.query(Warehouse).filter(Warehouse.id == int(order.warehouse_id)).first()
     loc = (
@@ -358,6 +371,52 @@ def serialize_order(db: Session, order: ProductionOrder, *, with_availability: b
         progress = 100.0
     else:
         progress = 0.0
+
+    source_rows = list(getattr(order, "order_sources", None) or [])
+    if not source_rows and getattr(order, "id", None) is not None:
+        from ..models.production import ProductionOrderSourceItem
+
+        source_rows = (
+            db.query(ProductionOrderSourceItem)
+            .filter(ProductionOrderSourceItem.production_order_id == int(order.id))
+            .order_by(ProductionOrderSourceItem.id.asc())
+            .all()
+        )
+    src_order_count, src_req_total, src_ful_total = aggregate_order_source_quantities(source_rows)
+    order_sources_out: list[ProductionOrderSourceItemRead] = []
+    if with_order_sources and source_rows:
+        order_ids = {int(s.order_id) for s in source_rows}
+        product_ids = {int(s.product_id) for s in source_rows}
+        orders_by_id = {
+            int(o.id): o
+            for o in db.query(Order).filter(Order.id.in_(order_ids)).all()
+        } if order_ids else {}
+        products_by_id = {
+            int(pr.id): pr
+            for pr in db.query(Product).filter(Product.id.in_(product_ids)).all()
+        } if product_ids else {}
+        for s in source_rows:
+            ord_row = orders_by_id.get(int(s.order_id))
+            prod_row = products_by_id.get(int(s.product_id))
+            order_sources_out.append(
+                ProductionOrderSourceItemRead(
+                    id=int(s.id),
+                    order_id=int(s.order_id),
+                    order_item_id=int(s.order_item_id),
+                    order_number=(str(ord_row.number) if ord_row and ord_row.number else None),
+                    product_id=int(s.product_id),
+                    product_name=(str(prod_row.name) if prod_row else None),
+                    product_sku=((prod_row.sku or prod_row.symbol) if prod_row else None),
+                    requested_quantity=float(s.requested_quantity or 0),
+                    fulfilled_quantity=float(s.fulfilled_quantity or 0),
+                    status=str(s.status or "open"),
+                )
+            )
+
+    raw_source = str(getattr(order, "source_type", None) or PRODUCTION_ORDER_SOURCE_MANUAL).strip().upper()
+    if raw_source not in ("MANUAL", "PLANNING", "ORDERS"):
+        raw_source = PRODUCTION_ORDER_SOURCE_MANUAL
+
     return ProductionOrderRead(
         id=int(order.id),
         tenant_id=int(order.tenant_id),
@@ -391,6 +450,11 @@ def serialize_order(db: Session, order: ProductionOrder, *, with_availability: b
         location_name=(loc.name if loc else None),
         recipe_name=recipe_name,
         lines=lines_out,
+        source_type=raw_source,  # type: ignore[arg-type]
+        source_order_count=int(src_order_count),
+        source_requested_quantity_total=float(src_req_total),
+        source_fulfilled_quantity_total=float(src_ful_total),
+        order_sources=order_sources_out,
         started_at=order.started_at,
         collecting_completed_at=getattr(order, "collecting_completed_at", None),
         production_completed_at=getattr(order, "production_completed_at", None),
@@ -480,6 +544,7 @@ def create_production_order(
         priority=int(body.priority or 0),
         notes=(body.notes or "").strip() or None,
         created_by_user_id=int(created_by_user_id) if created_by_user_id else None,
+        source_type=PRODUCTION_ORDER_SOURCE_MANUAL,
     )
     db.add(order)
     db.flush()
@@ -799,10 +864,18 @@ def list_production_orders_for_product(
 def get_production_order(db: Session, *, tenant_id: int, order_id: int) -> ProductionOrderRead | None:
     order = (
         db.query(ProductionOrder)
-        .options(joinedload(ProductionOrder.line_snapshots))
+        .options(
+            joinedload(ProductionOrder.line_snapshots),
+            joinedload(ProductionOrder.order_sources),
+        )
         .filter(ProductionOrder.id == int(order_id), ProductionOrder.tenant_id == int(tenant_id))
         .first()
     )
     if order is None:
         return None
-    return serialize_order(db, order, with_availability=str(order.status) not in TERMINAL_STATUSES)
+    return serialize_order(
+        db,
+        order,
+        with_availability=str(order.status) not in TERMINAL_STATUSES,
+        with_order_sources=True,
+    )

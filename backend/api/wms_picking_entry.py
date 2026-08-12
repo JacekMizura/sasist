@@ -305,6 +305,9 @@ def get_picking_configured_statuses(
         )
         valid: List[tuple[PickingConfig, OrderUiStatus]] = []
         for pc in pc_rows:
+            if bool(getattr(pc, "is_production_mode", False)):
+                # Tryb produkcji — nie jest statusem standardowego zbierania.
+                continue
             st = _resolve_source_order_ui_status(db, tenant_id, warehouse_id, pc)
             if st is None:
                 logger.warning(

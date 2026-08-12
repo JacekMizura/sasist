@@ -285,6 +285,12 @@ export default function ProductionOrderDetailPage() {
 
             </span>
 
+            {order.source_type === "ORDERS" ? (
+              <span className="mt-2 ml-2 inline-block rounded-full bg-sky-50 px-2.5 py-0.5 text-xs font-semibold text-sky-800 ring-1 ring-sky-200">
+                Z zamówień
+              </span>
+            ) : null}
+
           </div>
           </div>
         </div>
@@ -305,6 +311,30 @@ export default function ProductionOrderDetailPage() {
 
           </p>
 
+        ) : null}
+
+        {order.source_type === "ORDERS" && (order.order_sources?.length ?? 0) > 0 ? (
+          <div className="mt-6 rounded-xl border border-slate-200 bg-slate-50/60 p-4">
+            <h3 className="text-sm font-semibold text-slate-900">Zamówienia źródłowe</h3>
+            <ul className="mt-3 divide-y divide-slate-200">
+              {order.order_sources!.map((src) => (
+                <li key={src.id} className="flex flex-wrap items-baseline justify-between gap-2 py-2 text-sm">
+                  <div className="min-w-0">
+                    <p className="font-mono font-medium text-slate-900">
+                      {src.order_number ?? `#${src.order_id}`}
+                    </p>
+                    <p className="text-xs text-slate-500">
+                      {src.product_name ?? `Produkt #${src.product_id}`}
+                      {src.product_sku ? ` · ${src.product_sku}` : ""}
+                    </p>
+                  </div>
+                  <p className="tabular-nums text-slate-700">
+                    {src.fulfilled_quantity}/{src.requested_quantity}
+                  </p>
+                </li>
+              ))}
+            </ul>
+          </div>
         ) : null}
 
 

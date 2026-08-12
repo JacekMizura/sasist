@@ -167,6 +167,11 @@ export type ProductionOrderRead = {
   location_name?: string | null;
   recipe_name?: string | null;
   lines: ProductionOrderLineSnapshotRead[];
+  source_type?: "MANUAL" | "PLANNING" | "ORDERS";
+  source_order_count?: number;
+  source_requested_quantity_total?: number;
+  source_fulfilled_quantity_total?: number;
+  order_sources?: ProductionOrderSourceItemRead[];
   started_at?: string | null;
   completed_at?: string | null;
   released_to_wms_at?: string | null;
@@ -182,6 +187,19 @@ export type ProductionOrderRead = {
   production_completed_at?: string | null;
   created_at?: string | null;
   updated_at?: string | null;
+};
+
+export type ProductionOrderSourceItemRead = {
+  id: number;
+  order_id: number;
+  order_item_id: number;
+  order_number?: string | null;
+  product_id: number;
+  product_name?: string | null;
+  product_sku?: string | null;
+  requested_quantity: number;
+  fulfilled_quantity: number;
+  status: string;
 };
 
 export type ProductionOrderCreateBody = {

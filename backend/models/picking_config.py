@@ -2,14 +2,19 @@
 Reguły zbierania per status panelu zamówień (Order UI status) dla magazynu.
 
 Izolowany moduł — nie wpływa na istniejące przypisania zamówień ani MM.
+Opcjonalnie: tryb produkcji (nie jest zwykłym pickingiem) — te same wiersze ``picking_config``.
 """
 
 from datetime import datetime
 
-from sqlalchemy import Column, DateTime, ForeignKey, Integer, String, UniqueConstraint
+from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String, UniqueConstraint, text
 from sqlalchemy.orm import relationship
 
 from ..database import Base
+
+#: Order-driven production trigger scope (extensible later; only SINGLE_ELEMENT for now).
+PRODUCTION_ORDER_TRIGGER_SCOPE_SINGLE_ELEMENT = "SINGLE_ELEMENT"
+PRODUCTION_ORDER_TRIGGER_SCOPES = frozenset({PRODUCTION_ORDER_TRIGGER_SCOPE_SINGLE_ELEMENT})
 
 
 class PickingConfig(Base):
@@ -66,6 +71,42 @@ class PickingConfig(Base):
     max_multi_orders = Column(Integer, nullable=True)
     max_all_orders = Column(Integer, nullable=True)
 
+    #: Gdy True — konfiguracja produkcyjna (nie standardowe zbieranie).
+    is_production_mode = Column(
+        Boolean,
+        nullable=False,
+        default=False,
+        server_default=text("false"),
+        index=True,
+    )
+    #: Status zamówienia po wykonaniu przypisanej ilości produkcji (tylko production mode).
+    status_after_production_id = Column(
+        Integer,
+        ForeignKey("order_ui_statuses.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    #: Status przy braku komponentów do produkcji (tylko production mode).
+    status_on_component_shortage_id = Column(
+        Integer,
+        ForeignKey("order_ui_statuses.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    #: Lokalizacja buforowa wyrobu gotowego (tylko production mode; przyjęcie później).
+    finished_goods_buffer_location_id = Column(
+        Integer,
+        ForeignKey("locations.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    #: Zakres triggera produkcji z zamówień: obecnie tylko SINGLE_ELEMENT.
+    production_order_trigger_scope = Column(
+        String(32),
+        nullable=True,
+        default=None,
+    )
+
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
     tenant = relationship("Tenant")
@@ -73,3 +114,10 @@ class PickingConfig(Base):
     source_status = relationship("OrderUiStatus", foreign_keys=[source_status_id])
     target_status = relationship("OrderUiStatus", foreign_keys=[target_status_id])
     shortage_status = relationship("OrderUiStatus", foreign_keys=[status_on_shortage_id])
+    status_after_production = relationship("OrderUiStatus", foreign_keys=[status_after_production_id])
+    status_on_component_shortage = relationship(
+        "OrderUiStatus", foreign_keys=[status_on_component_shortage_id]
+    )
+    finished_goods_buffer_location = relationship(
+        "Location", foreign_keys=[finished_goods_buffer_location_id]
+    )

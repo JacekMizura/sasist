@@ -13,6 +13,7 @@ PickingConfigMode = Literal["bulk", "scanned", "baskets", "mobile", "consolidati
 PickingConfigAllMode = Literal["bulk", "scanned", "baskets"]
 PickingConfigPickUnit = Literal["orders", "products"]
 PickingConfigOrderSort = Literal["date", "location", "courier"]
+ProductionOrderTriggerScope = Literal["SINGLE_ELEMENT"]
 
 
 class PickingConfigRead(BaseModel):
@@ -38,10 +39,18 @@ class PickingConfigRead(BaseModel):
     max_single_orders: Optional[int] = Field(default=None, ge=1)
     max_multi_orders: Optional[int] = Field(default=None, ge=1)
     max_all_orders: Optional[int] = Field(default=None, ge=1)
+    is_production_mode: bool = False
+    status_after_production_id: Optional[int] = None
+    status_on_component_shortage_id: Optional[int] = None
+    finished_goods_buffer_location_id: Optional[int] = None
+    production_order_trigger_scope: Optional[ProductionOrderTriggerScope] = None
     created_at: datetime
     source_status_name: Optional[str] = None
     target_status_name: Optional[str] = None
     status_on_shortage_name: Optional[str] = None
+    status_after_production_name: Optional[str] = None
+    status_on_component_shortage_name: Optional[str] = None
+    finished_goods_buffer_location_name: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -62,6 +71,11 @@ class PickingConfigCreate(BaseModel):
     max_single_orders: Optional[int] = Field(default=None, ge=1)
     max_multi_orders: Optional[int] = Field(default=None, ge=1)
     max_all_orders: Optional[int] = Field(default=None, ge=1)
+    is_production_mode: bool = False
+    status_after_production_id: Optional[int] = Field(default=None, ge=1)
+    status_on_component_shortage_id: Optional[int] = Field(default=None, ge=1)
+    finished_goods_buffer_location_id: Optional[int] = Field(default=None, ge=1)
+    production_order_trigger_scope: Optional[ProductionOrderTriggerScope] = None
 
     @model_validator(mode="after")
     def source_not_target(self) -> "PickingConfigCreate":
@@ -85,6 +99,11 @@ class PickingConfigUpdate(BaseModel):
     max_single_orders: Optional[int] = Field(default=None, ge=1)
     max_multi_orders: Optional[int] = Field(default=None, ge=1)
     max_all_orders: Optional[int] = Field(default=None, ge=1)
+    is_production_mode: bool = False
+    status_after_production_id: Optional[int] = Field(default=None, ge=1)
+    status_on_component_shortage_id: Optional[int] = Field(default=None, ge=1)
+    finished_goods_buffer_location_id: Optional[int] = Field(default=None, ge=1)
+    production_order_trigger_scope: Optional[ProductionOrderTriggerScope] = None
 
 
 class PickingConfigListResponse(BaseModel):

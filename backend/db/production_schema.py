@@ -29,9 +29,9 @@ from .schema_introspection import (
 
 logger = logging.getLogger(__name__)
 
-PRODUCTION_SCHEMA_VERSION = "2026.08.09.1"
+PRODUCTION_SCHEMA_VERSION = "2026.08.12.1"
 # Monotonic generation counter exposed in logs, /health/schema, and deploy verification.
-PRODUCTION_SCHEMA_GENERATION = 13
+PRODUCTION_SCHEMA_GENERATION = 14
 SCHEMA_METADATA_KEY = "production_schema_version"
 SCHEMA_METADATA_TABLE = "schema_metadata"
 
@@ -177,6 +177,7 @@ def _production_entity_registry() -> list[ProductionEntitySpec]:
     from ..models.production import (
         ProductionOrder,
         ProductionOrderLineSnapshot,
+        ProductionOrderSourceItem,
         ProductionRecipe,
         ProductionRecipeLine,
     )
@@ -193,6 +194,11 @@ def _production_entity_registry() -> list[ProductionEntitySpec]:
             "production_order_lines_snapshot",
             ProductionOrderLineSnapshot,
             label="order_line_snapshot",
+        ),
+        ProductionEntitySpec(
+            "production_order_source_items",
+            ProductionOrderSourceItem,
+            label="order_source_item",
         ),
         # Future MES-lite entities — audit only, not required yet
         ProductionEntitySpec("production_batch_materials", required=False, sync_columns=False, label="future"),

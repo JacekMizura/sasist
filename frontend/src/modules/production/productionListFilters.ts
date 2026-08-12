@@ -54,6 +54,7 @@ export type ProductionOrderRow =
       isReleasedToWms?: boolean;
       numericPriority?: number;
       progressPercent?: number | null;
+      sourceType?: "MANUAL" | "PLANNING" | "ORDERS" | null;
     };
 
 export function productionBatchToRow(b: ProductionBatchRead): ProductionOrderRow {
@@ -89,6 +90,7 @@ export function productionOrderToRow(o: ProductionOrderRead): ProductionOrderRow
     isReleasedToWms: o.is_released_to_wms ?? false,
     numericPriority: o.priority,
     progressPercent: typeof o.progress_percent === "number" ? o.progress_percent : null,
+    sourceType: o.source_type ?? "MANUAL",
   };
 }
 
