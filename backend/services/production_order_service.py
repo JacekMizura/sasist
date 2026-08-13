@@ -17,6 +17,9 @@ from ..models.location import Location
 from ..models.product import Product
 from ..models.product_composition import ProductComposition, ProductionBatch, ProductionBatchLine
 from ..models.production import (
+    PRODUCTION_ORDER_SOURCE_ITEM_ACTIVE_STATUSES,
+    PRODUCTION_ORDER_SOURCE_ITEM_CANCELLED,
+    PRODUCTION_ORDER_SOURCE_ITEM_SHORTAGE,
     PRODUCTION_ORDER_SOURCE_MANUAL,
     ProductionOrder,
     ProductionOrderLineSnapshot,
@@ -682,10 +685,19 @@ def start_production_order(
     return serialize_order(db, order, with_availability=True)
 
 
-def cancel_production_order(db: Session, *, tenant_id: int, order_id: int) -> ProductionOrderRead:
+def cancel_production_order(
+    db: Session,
+    *,
+    tenant_id: int,
+    order_id: int,
+    emit_availability: bool = True,
+) -> ProductionOrderRead:
     order = (
         db.query(ProductionOrder)
-        .options(joinedload(ProductionOrder.line_snapshots))
+        .options(
+            joinedload(ProductionOrder.line_snapshots),
+            joinedload(ProductionOrder.order_sources),
+        )
         .filter(ProductionOrder.id == int(order_id), ProductionOrder.tenant_id == int(tenant_id))
         .first()
     )
@@ -694,13 +706,52 @@ def cancel_production_order(db: Session, *, tenant_id: int, order_id: int) -> Pr
     if str(order.status) == "completed":
         raise ProductionOrderError("Nie można anulować ukończonego zlecenia.", code="completed")
     from .reservations.reservation_service import release_production_reservations
+    from .production_order_trigger.availability_retry_service import (
+        notify_component_availability_increased,
+    )
 
+    # Collect component ids from snapshots before release (availability after cancel).
+    component_ids = {
+        int(s.component_product_id)
+        for s in (order.line_snapshots or [])
+        if getattr(s, "component_product_id", None)
+    }
+    wid = int(order.warehouse_id)
+
+    # Defer shortage retry until MO is cancelled — otherwise sibling reserved sources
+    # on the same open MO still consume materials during re-analysis.
+    # suppress_component_availability_notify inside emit_availability=False.
     release_production_reservations(
-        db, tenant_id=int(tenant_id), production_order_id=int(order_id), reason="cancelled"
+        db,
+        tenant_id=int(tenant_id),
+        production_order_id=int(order_id),
+        reason="cancelled",
+        emit_availability=False,
     )
     order.status = "cancelled"
     order.updated_at = datetime.utcnow()
+
+    # Drop active demand on this MO (keep shortage rows for Phase-8 auto-retry).
+    now = datetime.utcnow()
+    for src in list(order.order_sources or []):
+        st = str(src.status or "")
+        if st in PRODUCTION_ORDER_SOURCE_ITEM_ACTIVE_STATUSES:
+            src.status = PRODUCTION_ORDER_SOURCE_ITEM_CANCELLED
+            src.updated_at = now
+            db.add(src)
+        elif st == PRODUCTION_ORDER_SOURCE_ITEM_SHORTAGE:
+            # Keep shortage; MO link preserved for BOM → component candidate index.
+            pass
     db.flush()
+
+    if emit_availability and component_ids:
+        notify_component_availability_increased(
+            db,
+            tenant_id=int(tenant_id),
+            warehouse_id=wid,
+            component_product_ids=component_ids,
+            reason="mo_cancelled",
+        )
     return serialize_order(db, order)
 
 

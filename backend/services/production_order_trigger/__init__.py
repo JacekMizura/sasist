@@ -1,5 +1,9 @@
 """Order-driven production trigger (Phase 2) + material validation (Phase 3)."""
 
+from .availability_retry_service import (
+    notify_component_availability_increased,
+    on_component_availability_increased,
+)
 from .material_validation_service import (
     apply_material_validation_to_orders_mo,
     retry_order_driven_production_shortages,
@@ -22,6 +26,8 @@ __all__ = [
     "on_order_panel_status_changed_production",
     "apply_material_validation_to_orders_mo",
     "retry_order_driven_production_shortages",
+    "on_component_availability_increased",
+    "notify_component_availability_increased",
     "RESULT_CREATED",
     "RESULT_AGGREGATED",
     "RESULT_IDEMPOTENT",

@@ -303,27 +303,49 @@ def release_production_reservations(
     production_order_id: int | None = None,
     reason: str = "cancelled",
     performed_by_user_id: int | None = None,
+    emit_availability: bool = True,
 ) -> int:
+    from ..production_order_trigger.availability_retry_service import (
+        coalesce_component_availability_events,
+        should_emit_availability_on_reservation_release,
+    )
+
     rows = _active_production_reservations_q(
         db,
         tenant_id=tenant_id,
         production_batch_id=production_batch_id,
         production_order_id=production_order_id,
     ).all()
-    for r in rows:
-        release_reservation(db, r, reason=reason, performed_by_user_id=performed_by_user_id)
-    if production_batch_id:
-        batch = db.query(ProductionBatch).filter(ProductionBatch.id == int(production_batch_id)).first()
-        if batch:
-            batch.materials_reserved = False
-            batch.updated_at = datetime.utcnow()
-    if production_order_id:
-        order = db.query(ProductionOrder).filter(ProductionOrder.id == int(production_order_id)).first()
-        if order:
-            order.materials_reserved = False
-            order.updated_at = datetime.utcnow()
-    db.flush()
-    return len(rows)
+
+    def _do_release() -> int:
+        for r in rows:
+            release_reservation(db, r, reason=reason, performed_by_user_id=performed_by_user_id)
+        if production_batch_id:
+            batch = db.query(ProductionBatch).filter(ProductionBatch.id == int(production_batch_id)).first()
+            if batch:
+                batch.materials_reserved = False
+                batch.updated_at = datetime.utcnow()
+        if production_order_id:
+            order = db.query(ProductionOrder).filter(ProductionOrder.id == int(production_order_id)).first()
+            if order:
+                order.materials_reserved = False
+                order.updated_at = datetime.utcnow()
+        db.flush()
+        return len(rows)
+
+    if emit_availability and should_emit_availability_on_reservation_release(reason):
+        with coalesce_component_availability_events(
+            db, reason=f"reservation_release:{reason}"
+        ):
+            return _do_release()
+    if not emit_availability:
+        from ..production_order_trigger.availability_retry_service import (
+            suppress_component_availability_notify,
+        )
+
+        with suppress_component_availability_notify():
+            return _do_release()
+    return _do_release()
 
 
 def lock_production_reservations(

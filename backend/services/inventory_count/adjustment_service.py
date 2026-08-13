@@ -300,6 +300,7 @@ def post_inventory_adjustments(
             rw_lines = 0
             pw_lines = 0
             adjustments_created = 0
+            increased_product_ids: set[int] = set()
 
             _log_post_inventory(
                 "transaction start",
@@ -415,6 +416,7 @@ def post_inventory_adjustments(
                         pw_lines += 1
                         direction = "PW"
                         stock_doc_id = int(pw_doc.id)
+                        increased_product_ids.add(int(plan.product_id))
 
                     adj = InventoryAdjustment(
                         inventory_document_id=int(doc.id),
@@ -518,6 +520,25 @@ def post_inventory_adjustments(
                     .all()
                 )
                 persist_stock_document_financial_totals(posted_doc, posted_items)
+            if increased_product_ids:
+                try:
+                    from ..production_order_trigger.availability_retry_service import (
+                        notify_component_availability_increased,
+                    )
+
+                    notify_component_availability_increased(
+                        db,
+                        tenant_id=int(doc.tenant_id),
+                        warehouse_id=int(doc.warehouse_id),
+                        component_product_ids=increased_product_ids,
+                        reason="inventory_adjustment_increase",
+                        operator_user_id=user_id,
+                    )
+                except Exception:
+                    logger.exception(
+                        "shortage availability notify after inventory adjustment failed doc=%s",
+                        document_id_int,
+                    )
             db.commit()
             lock_acquired = False
             db.refresh(doc)

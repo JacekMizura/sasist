@@ -1,4 +1,17 @@
-﻿## 2026-08-13 — Krytyczne regresje UX produkcji (audyt B.1/B.2/C.1)
+﻿## 2026-08-13 — Faza 8: automatyczne wznawianie shortage po dostępności komponentów
+
+- `availability_retry_service.on_component_availability_increased` + wspólny `retry_order_driven_production_shortages(component_product_ids=…)`
+- Eventy: release reservation (coalesce), PZ dock ATP, putaway, korekta +, cancel MO (po `cancelled`, bez pętli ALL_SHORTAGE)
+- Kandydaci przez BOM snapshot; partial/priority bez nowego sortu; status przez SSOT `apply_order_panel_ui_status`
+- Testy: `test_production_shortage_availability_retry.py`
+
+## 2026-08-13 — Pipeline free-stock + fulfilled re-entry + soft-hold
+
+- `pipeline_service`: order-driven vs free-stock; `stock_replenishment_needed` używa tylko free-stock pipeline
+- Trigger: `RESULT_ALREADY_FULFILLED`; outstanding = qty − sum(fulfilled); cancelled/shortage bez regresji
+- Soft-hold: `component_soft_hold_qty(need − reserved)`; PLANNING nie zjada hold mapy
+
+## 2026-08-13 — Krytyczne regresje UX produkcji (audyt B.1/B.2/C.1)
 
 - Terminal: `formatProductionMutationError` + `withMutationLock` (ref); catch na progress/finish collecting/finish
 - ORDERS finish: `ordersMoSkipsPutaway(source_type)` → toast bufora, bez `/putaway`

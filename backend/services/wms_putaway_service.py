@@ -1303,6 +1303,25 @@ def _patch_wms_putaway_mm_line(
         import logging
 
         logging.getLogger(__name__).exception("occupancy recalc failed location_id=%s", body.location_id)
+    try:
+        from .production_order_trigger.availability_retry_service import (
+            notify_component_availability_increased,
+        )
+
+        notify_component_availability_increased(
+            db,
+            tenant_id=int(tenant_id),
+            warehouse_id=wh_mm if wh_mm > 0 else None,
+            component_product_ids=[int(row.product_id)],
+            reason="mm_putaway",
+            operator_user_id=int(getattr(performed_by, "id", 0) or 0) or None,
+        )
+    except Exception:
+        import logging
+
+        logging.getLogger(__name__).exception(
+            "shortage availability notify after MM putaway failed item_id=%s", getattr(row, "id", None)
+        )
     db.commit()
     db.refresh(doc)
     db.refresh(row)
@@ -1608,6 +1627,25 @@ def patch_wms_putaway_item(
         import logging
 
         logging.getLogger(__name__).exception("occupancy recalc failed location_id=%s", body.location_id)
+    try:
+        from .production_order_trigger.availability_retry_service import (
+            notify_component_availability_increased,
+        )
+
+        notify_component_availability_increased(
+            db,
+            tenant_id=int(tenant_id),
+            warehouse_id=int(doc.warehouse_id or 0) or None,
+            component_product_ids=[int(row.product_id)],
+            reason="pz_putaway",
+            operator_user_id=int(getattr(performed_by, "id", 0) or 0) or None,
+        )
+    except Exception:
+        import logging
+
+        logging.getLogger(__name__).exception(
+            "shortage availability notify after putaway failed item_id=%s", getattr(row, "id", None)
+        )
     db.commit()
     db.refresh(doc)
     db.refresh(row)

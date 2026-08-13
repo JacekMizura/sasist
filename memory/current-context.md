@@ -1,5 +1,17 @@
 ﻿## Active
 
+**Phase 8 — auto shortage retry on component availability (2026-08-13):**
+- Central: `on_component_availability_increased` → same `retry_order_driven_production_shortages` as manual
+- Candidates narrowed via BOM `ProductionOrderLineSnapshot.component_product_id` (no new table)
+- Hooks: reservation release (coalesced), PZ dock (when ATP), putaway, inventory PW+, MO cancel (after status=cancelled)
+- Partial + priority via existing material allocation; restore via `apply_order_panel_ui_status` to MO’s `production_source_status_id`
+- Suppress notify during mid-refresh / ALL_SHORTAGE MO collapse; advisory lock + source idempotency
+
+**Pipeline + soft-hold + fulfilled re-entry (2026-08-13):**
+- Free-stock pipeline (PLANNING/MANUAL/batches) vs order-driven (ORDERS) — nadprodukcja używa tylko free-stock
+- Trigger: `ALREADY_FULFILLED` + outstanding = order_qty − historical fulfilled (delta przy wzroście qty)
+- Soft-hold: `max(0, ORDERS component need − active reservations)` per komponent; bez double-count
+
 **Krytyczne regresje UX produkcji (2026-08-13) — audyt B.1/B.2/C.1:**
 - Terminal WMS: catch + PL toast; sync mutation lock (ref) na +1 / finish collecting / finish production
 - ORDERS finish: brak navigate do putaway; toast bufora; MANUAL/PLANNING bez zmian

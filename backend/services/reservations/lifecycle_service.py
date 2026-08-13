@@ -88,12 +88,13 @@ def release_reservation(
     if reservation_lifecycle_state(res) not in (RESERVATION_STATUS_ACTIVE, RESERVATION_STATUS_EXPIRED):
         return
     res.status = lifecycle_to_legacy_status(RESERVATION_STATUS_RELEASED)
+    wid = _warehouse_for_reservation(db, res)
     if reason != "cancelled":
         record_inventory_movement(
             db,
             tenant_id=int(res.tenant_id),
             product_id=int(res.product_id),
-            warehouse_id=_warehouse_for_reservation(db, res),
+            warehouse_id=wid,
             movement_type=MOVEMENT_UNRESERVATION,
             quantity=float(res.quantity or 0),
             inventory_bucket=BUCKET_SELLABLE,
@@ -124,6 +125,25 @@ def release_reservation(
         qty=float(res.quantity or 0),
         reason=reason,
     )
+    # Phase 8: freed materials may unblock ORDERS shortages (skip mid-refresh releases).
+    try:
+        from ..production_order_trigger.availability_retry_service import (
+            notify_component_availability_increased,
+            should_emit_availability_on_reservation_release,
+        )
+
+        if should_emit_availability_on_reservation_release(reason) and float(res.quantity or 0) > 1e-9:
+            wh = int(getattr(res, "warehouse_id", 0) or 0) or int(wid or 0)
+            notify_component_availability_increased(
+                db,
+                tenant_id=int(res.tenant_id),
+                warehouse_id=wh if wh > 0 else None,
+                component_product_ids=[int(res.product_id)],
+                reason=f"reservation_release:{reason}",
+                operator_user_id=performed_by_user_id,
+            )
+    except Exception:
+        logger.exception("shortage availability notify after reservation release failed")
 
 
 def mark_reservation_consumed(db: Session, res: StockReservation) -> None:

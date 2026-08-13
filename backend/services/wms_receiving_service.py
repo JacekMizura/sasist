@@ -226,6 +226,26 @@ def _apply_dock_inventory_for_receipt(
             expiry_date=ed,
             stock_disposition=sd,
         )
+    if float(add_qty) > 1e-9:
+        try:
+            from .production_order_trigger.availability_retry_service import (
+                notify_component_availability_increased,
+            )
+
+            notify_component_availability_increased(
+                db,
+                tenant_id=int(tenant_id),
+                warehouse_id=wh_id,
+                component_product_ids=[int(line.product_id)],
+                reason="pz_dock_receipt",
+                operator_user_id=int(getattr(performed_by, "id", 0) or 0) or None,
+            )
+        except Exception:
+            import logging
+
+            logging.getLogger(__name__).exception(
+                "shortage availability notify after PZ dock receipt failed"
+            )
 
 
 def _sync_po_from_pz(db: Session, tenant_id: int, pz_document_id: int) -> None:

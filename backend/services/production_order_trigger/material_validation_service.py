@@ -373,7 +373,13 @@ def apply_material_validation_to_orders_mo(
     if planned <= 1e-9:
         refresh_orders_mo_material_reservations(db, mo=mo, created_by_user_id=operator_user_id)
         try:
-            cancel_production_order(db, tenant_id=int(mo.tenant_id), order_id=int(mo.id))
+            # Collapse empty MO only — no availability event (would re-enter the same shortages).
+            cancel_production_order(
+                db,
+                tenant_id=int(mo.tenant_id),
+                order_id=int(mo.id),
+                emit_availability=False,
+            )
         except Exception:
             mo.status = "cancelled"
             db.add(mo)
@@ -413,22 +419,16 @@ def apply_material_validation_to_orders_mo(
     }
 
 
-def retry_order_driven_production_shortages(
+def _shortage_rows_for_components(
     db: Session,
     *,
     tenant_id: int,
-    warehouse_id: Optional[int] = None,
-    production_order_id: Optional[int] = None,
-    order_ids: Optional[list[int]] = None,
-    operator_user_id: Optional[int] = None,
-) -> dict[str, Any]:
-    """
-    Re-check shortage source items and restore them into production when materials allow.
-
-    Callable for a later PZ watcher — not auto-triggered in this phase.
-    """
-    from ..order_panel_ui_status_service import apply_order_panel_ui_status
-
+    warehouse_id: Optional[int],
+    production_order_id: Optional[int],
+    order_ids: Optional[list[int]],
+    component_product_ids: Optional[list[int]],
+) -> list[ProductionOrderSourceItem]:
+    """Load shortage sources, optionally narrowed to MOs whose BOM uses given components."""
     q = (
         db.query(ProductionOrderSourceItem)
         .options(joinedload(ProductionOrderSourceItem.production_order))
@@ -436,28 +436,156 @@ def retry_order_driven_production_shortages(
             ProductionOrderSourceItem.tenant_id == int(tenant_id),
             ProductionOrderSourceItem.status == PRODUCTION_ORDER_SOURCE_ITEM_SHORTAGE,
         )
-        .order_by(ProductionOrderSourceItem.id.asc())
     )
     if production_order_id is not None:
         q = q.filter(ProductionOrderSourceItem.production_order_id == int(production_order_id))
     if order_ids:
         q = q.filter(ProductionOrderSourceItem.order_id.in_([int(x) for x in order_ids]))
 
+    if component_product_ids:
+        from ...models.production import ProductionOrderLineSnapshot
+
+        pids = [int(x) for x in component_product_ids if int(x) > 0]
+        if not pids:
+            return []
+        q = (
+            q.join(
+                ProductionOrder,
+                ProductionOrder.id == ProductionOrderSourceItem.production_order_id,
+            )
+            .join(
+                ProductionOrderLineSnapshot,
+                ProductionOrderLineSnapshot.production_order_id == ProductionOrder.id,
+            )
+            .filter(
+                ProductionOrder.source_type == PRODUCTION_ORDER_SOURCE_ORDERS,
+                ProductionOrderLineSnapshot.component_product_id.in_(tuple(pids)),
+            )
+            .distinct()
+        )
+        if warehouse_id is not None:
+            q = q.filter(ProductionOrder.warehouse_id == int(warehouse_id))
+
     rows = q.all()
-    if warehouse_id is not None:
+    if warehouse_id is not None and not component_product_ids:
         rows = [
             r
             for r in rows
             if r.production_order is not None
             and int(r.production_order.warehouse_id) == int(warehouse_id)
         ]
+    return list(rows)
+
+
+def retry_order_driven_production_shortages(
+    db: Session,
+    *,
+    tenant_id: int,
+    warehouse_id: Optional[int] = None,
+    production_order_id: Optional[int] = None,
+    order_ids: Optional[list[int]] = None,
+    component_product_ids: Optional[list[int]] = None,
+    operator_user_id: Optional[int] = None,
+    trigger_reason: Optional[str] = None,
+) -> dict[str, Any]:
+    """
+    Re-check shortage source items and restore them into production when materials allow.
+
+    Shared core for manual retry and Phase-8 availability events.
+    When ``component_product_ids`` is set, only shortages whose MO BOM uses those
+    components are considered (priority / oldest ordering preserved).
+    """
+    from ..order_panel_ui_status_service import apply_order_panel_ui_status
+    from .trigger_service import historical_fulfilled_production_qty
+
+    rows = _shortage_rows_for_components(
+        db,
+        tenant_id=tenant_id,
+        warehouse_id=warehouse_id,
+        production_order_id=production_order_id,
+        order_ids=order_ids,
+        component_product_ids=component_product_ids,
+    )
+
+    # Priority sort across candidates (same key as material allocation).
+    order_ids_set = {int(r.order_id) for r in rows}
+    orders_by_id = {
+        int(o.id): o
+        for o in db.query(Order).filter(Order.id.in_(order_ids_set)).all()
+    } if order_ids_set else {}
+    rows = sort_source_items_for_material_allocation(rows, orders_by_id)
 
     results: list[dict[str, Any]] = []
     for src in rows:
         mo = src.production_order
-        order = db.query(Order).filter(Order.id == int(src.order_id)).first()
+        order = orders_by_id.get(int(src.order_id))
+        if order is None:
+            order = db.query(Order).filter(Order.id == int(src.order_id)).first()
         if order is None or mo is None:
             results.append({"source_item_id": int(src.id), "result": "SKIPPED", "reason": "missing"})
+            continue
+
+        # Negative / terminal guards
+        o_status = str(getattr(order, "status", "") or "").upper()
+        if o_status in ("CANCELLED", "CANCELED", "COMPLETED", "SHIPPED", "DELIVERED", "ARCHIVED"):
+            results.append(
+                {
+                    "source_item_id": int(src.id),
+                    "order_id": int(order.id),
+                    "result": "SKIPPED",
+                    "reason": "order_terminal",
+                }
+            )
+            continue
+
+        hist_ful = historical_fulfilled_production_qty(
+            db, tenant_id=int(tenant_id), order_item_id=int(src.order_item_id)
+        )
+        need = max(0.0, float(src.requested_quantity or 0) - hist_ful)
+        if need <= 1e-9 and hist_ful > 1e-9:
+            results.append(
+                {
+                    "source_item_id": int(src.id),
+                    "order_id": int(order.id),
+                    "result": "SKIPPED",
+                    "reason": "already_fulfilled",
+                }
+            )
+            continue
+
+        # Already covered by an active source (idempotent / prior restore).
+        active_existing = (
+            db.query(ProductionOrderSourceItem)
+            .filter(
+                ProductionOrderSourceItem.tenant_id == int(tenant_id),
+                ProductionOrderSourceItem.order_item_id == int(src.order_item_id),
+                ProductionOrderSourceItem.status.in_(tuple(PRODUCTION_ORDER_SOURCE_ITEM_ACTIVE_STATUSES)),
+            )
+            .first()
+        )
+        if active_existing is not None:
+            results.append(
+                {
+                    "source_item_id": int(src.id),
+                    "order_id": int(order.id),
+                    "result": "SKIPPED",
+                    "reason": "already_active",
+                    "active_production_order_id": int(active_existing.production_order_id),
+                }
+            )
+            continue
+
+        # Re-read shortage status under concurrent retries.
+        db.refresh(src)
+        if str(src.status or "") != PRODUCTION_ORDER_SOURCE_ITEM_SHORTAGE:
+            results.append(
+                {
+                    "source_item_id": int(src.id),
+                    "order_id": int(order.id),
+                    "result": "SKIPPED",
+                    "reason": "no_longer_shortage",
+                }
+            )
             continue
 
         target_status = getattr(mo, "production_source_status_id", None)
@@ -468,7 +596,7 @@ def retry_order_driven_production_shortages(
             results.append({"source_item_id": int(src.id), "result": "SKIPPED", "reason": "no_target_status"})
             continue
 
-        # Move back to production entry status — SSOT trigger re-attaches / validates.
+        # Move back to *this* MO's production entry status — SSOT trigger re-attaches / validates.
         apply_order_panel_ui_status(
             db,
             order=order,
@@ -480,7 +608,6 @@ def retry_order_driven_production_shortages(
             .filter(ProductionOrderSourceItem.id == int(src.id))
             .first()
         )
-        # Also check for a newer active source on same order_item (new MO path).
         active = (
             db.query(ProductionOrderSourceItem)
             .filter(
@@ -492,22 +619,46 @@ def retry_order_driven_production_shortages(
             )
             .first()
         )
+        restored = active is not None
+        if restored:
+            _log_order(
+                db,
+                order=order,
+                event_type="PRODUCTION_SHORTAGE_AUTO_RESUMED",
+                message=(
+                    "Wznowiono produkcję automatycznie — komponenty ponownie dostępne."
+                    if trigger_reason
+                    else "Wznowiono produkcję po ponownej analizie dostępności komponentów."
+                ),
+                operator_user_id=operator_user_id,
+                metadata={
+                    "source_item_id": int(src.id),
+                    "production_order_id": int(active.production_order_id) if active else None,
+                    "target_status_id": int(target_status),
+                    "trigger_reason": trigger_reason,
+                    "picking_config_id": getattr(mo, "picking_config_id", None),
+                    "production_source_status_id": getattr(mo, "production_source_status_id", None),
+                },
+            )
         results.append(
             {
                 "source_item_id": int(src.id),
                 "order_id": int(order.id),
-                "result": "RESTORED" if active is not None else "STILL_SHORTAGE",
+                "result": "RESTORED" if restored else "STILL_SHORTAGE",
                 "active_source_status": (str(active.status) if active else None),
                 "active_production_order_id": (
                     int(active.production_order_id) if active else None
                 ),
                 "legacy_status": (str(refreshed.status) if refreshed else None),
+                "target_status_id": int(target_status),
             }
         )
 
     return {
         "result": "OK",
         "tenant_id": int(tenant_id),
+        "warehouse_id": int(warehouse_id) if warehouse_id is not None else None,
+        "trigger_reason": trigger_reason,
         "processed": len(results),
         "restored": sum(1 for r in results if r.get("result") == "RESTORED"),
         "items": results,
