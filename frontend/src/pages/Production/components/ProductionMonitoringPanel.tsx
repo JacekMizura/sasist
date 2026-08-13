@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import { useLocation } from "react-router-dom";
 
 import type { ProductionBatchRead, ProductionOrderRead } from "@/api/productionApi";
 import type { TimelinePwDocument } from "@/modules/production/productionExecutionTimeline";
@@ -8,6 +9,7 @@ import { Card, StatusBadge, typography } from "@/design-system";
 import { wmsProductionPaths } from "../productionPaths";
 import {
   getProductionOperationalState,
+  productionEntityDetailHref,
   resolveProductionSecondaryActions,
   shortageHintFromOrderLines,
   type ProductionOperationalStateInput,
@@ -173,6 +175,7 @@ export function ProductionMonitoringPanel({
   showActions = true,
   showContextBanner = true,
 }: Props) {
+  const location = useLocation();
   const status = String(source.status || "draft");
   const pwDocs =
     source.pw_document_rows ??
@@ -185,7 +188,16 @@ export function ProductionMonitoringPanel({
       : []);
   const unitCost = source.display_unit_cost ?? source.calculated_unit_cost;
 
-  const nextInput = useMemo(() => toNextInput(kind, source), [kind, source]);
+  const isOnEntityDetailPage = useMemo(() => {
+    const target = productionEntityDetailHref({ executionKind: kind, id: source.id }).replace(/\/$/, "");
+    const here = String(location.pathname || "").replace(/\/$/, "");
+    return here === target;
+  }, [kind, source.id, location.pathname]);
+
+  const nextInput = useMemo(
+    () => ({ ...toNextInput(kind, source), isOnEntityDetailPage }),
+    [kind, source, isOnEntityDetailPage],
+  );
   const operational = useMemo(() => getProductionOperationalState(nextInput), [nextInput]);
   const primary = operational.primaryAction;
   const secondary = useMemo(
@@ -245,6 +257,17 @@ export function ProductionMonitoringPanel({
   };
 
   const showBar = showActions && !actions?.hideActionBar;
+  const secondaryForBar = secondary.filter((s) => {
+    if (s.id === "print_card" || s.id === "preview_print") {
+      return Boolean(actions?.onPrintProductionCard);
+    }
+    if (s.id === "start_paper") return Boolean(actions?.onStartErpExecution);
+    if (s.id === "open_erp") return Boolean(actions?.onOpenErpExecution);
+    if (s.id === "cancel") return Boolean(actions?.onCancel);
+    return true;
+  });
+  const showPrimaryCta = primary.kind !== "none";
+  const showActionControls = showBar && (showPrimaryCta || secondaryForBar.length > 0);
 
   return (
     <div className="space-y-4">
@@ -253,7 +276,7 @@ export function ProductionMonitoringPanel({
           message={operational.description}
           tone={operational.tone}
           action={
-            showBar ? (
+            showActionControls ? (
               <ProductionPrimaryActionBar
                 primary={{
                   kind: primary.kind,
@@ -265,15 +288,7 @@ export function ProductionMonitoringPanel({
                   href: primary.href,
                   openInNewTab: primary.openInNewTab,
                 }}
-                secondary={secondary.filter((s) => {
-                  if (s.id === "print_card" || s.id === "preview_print") {
-                    return Boolean(actions?.onPrintProductionCard);
-                  }
-                  if (s.id === "start_paper") return Boolean(actions?.onStartErpExecution);
-                  if (s.id === "open_erp") return Boolean(actions?.onOpenErpExecution);
-                  if (s.id === "cancel") return Boolean(actions?.onCancel);
-                  return true;
-                })}
+                secondary={secondaryForBar}
                 busy={actions?.busy}
                 onPrimaryClick={needsPrimaryHandler ? handlePrimary : undefined}
                 onSecondary={handleSecondary}

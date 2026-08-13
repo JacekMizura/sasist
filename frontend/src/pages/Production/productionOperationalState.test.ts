@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   formatShortageDescription,
   getProductionOperationalState,
+  productionEntityDetailHref,
   productionOrdersSourceSummary,
   shouldShowProductionOrderOnActiveList,
   shortageHintFromOrderLines,
@@ -105,6 +106,8 @@ describe("getProductionOperationalState", () => {
     expect(s.currentStep).toBe("COMPLETED");
     expect(s.dashboardBucket).toBe("done");
     expect(s.primaryAction.kind).not.toBe("go_packing");
+    expect(s.primaryAction.kind).toBe("view_details");
+    expect(s.primaryAction.href).toBe("/production/orders/9");
   });
 
   it("PLANNING completed is COMPLETED / done — not packing", () => {
@@ -118,6 +121,62 @@ describe("getProductionOperationalState", () => {
     });
     expect(s.currentStep).toBe("COMPLETED");
     expect(s.dashboardBucket).toBe("done");
+    expect(s.primaryAction.kind).toBe("view_details");
+    expect(s.primaryAction.href).toBe("/production/orders/10");
+  });
+
+  it("completed batch links to BAT detail, never MO path", () => {
+    const s = getProductionOperationalState({
+      executionKind: "batch",
+      id: 16,
+      status: "completed",
+      producedQuantity: 26,
+      plannedQuantity: 26,
+    });
+    expect(s.currentStep).toBe("COMPLETED");
+    expect(s.description).toMatch(/Partia produkcyjna/i);
+    expect(s.primaryAction.kind).toBe("view_details");
+    expect(s.primaryAction.label).toBe("Zobacz szczegóły");
+    expect(s.primaryAction.href).toBe("/production/batch/16");
+    expect(s.primaryAction.href).not.toMatch(/\/orders\//);
+  });
+
+  it("completed batch on detail page has no dead Zobacz szczegóły CTA", () => {
+    const s = getProductionOperationalState({
+      executionKind: "batch",
+      id: 16,
+      status: "completed",
+      isOnEntityDetailPage: true,
+    });
+    expect(s.primaryAction.kind).toBe("none");
+    expect(s.primaryAction.href).toBeUndefined();
+  });
+
+  it("completed MANUAL/PLANNING on detail page suppress view_details; ORDERS packing stays", () => {
+    expect(
+      getProductionOperationalState({
+        executionKind: "order",
+        id: 9,
+        status: "completed",
+        sourceType: "MANUAL",
+        isOnEntityDetailPage: true,
+      }).primaryAction.kind,
+    ).toBe("none");
+    expect(
+      getProductionOperationalState({
+        executionKind: "order",
+        id: 4,
+        status: "completed",
+        sourceType: "ORDERS",
+        sourceFulfilledOrderCount: 2,
+        isOnEntityDetailPage: true,
+      }).primaryAction.kind,
+    ).toBe("go_packing");
+  });
+
+  it("productionEntityDetailHref separates batch vs order", () => {
+    expect(productionEntityDetailHref({ executionKind: "batch", id: 16 })).toBe("/production/batch/16");
+    expect(productionEntityDetailHref({ executionKind: "order", id: 4 })).toBe("/production/orders/4");
   });
 
   it("MANUAL/PLANNING after production wait for putaway", () => {

@@ -72,6 +72,11 @@ export type ProductionOperationalStateInput = {
   /** Ile innych pozycji komponentów ma braki (>0). */
   shortageAdditionalCount?: number | null;
   plannedDate?: string | null;
+  /**
+   * True on entity detail pages (BAT/MO detail).
+   * Suppresses dead „Zobacz szczegóły” when there is no deeper screen.
+   */
+  isOnEntityDetailPage?: boolean;
 };
 
 export type ShortageLineLike = {
@@ -205,10 +210,37 @@ function wmsHref(
   return wmsProductionPaths[phase](input.executionKind, input.id);
 }
 
-function detailHref(input: ProductionOperationalStateInput): string {
+/** Canonical ERP detail path for BAT vs MO (never cross-link). */
+export function productionEntityDetailHref(input: Pick<ProductionOperationalStateInput, "executionKind" | "id">): string {
   return input.executionKind === "order"
     ? erpProductionPaths.order(input.id)
     : erpProductionPaths.batch(input.id);
+}
+
+function detailHref(input: ProductionOperationalStateInput): string {
+  return productionEntityDetailHref(input);
+}
+
+/** „Zobacz szczegóły” only when not already on that entity's detail page. */
+function viewDetailsAction(input: ProductionOperationalStateInput): {
+  kind: ProductionPrimaryActionKind;
+  label: string;
+  href?: string;
+} {
+  if (input.isOnEntityDetailPage) {
+    return { kind: "none", label: "" };
+  }
+  return {
+    kind: "view_details",
+    label: "Zobacz szczegóły",
+    href: detailHref(input),
+  };
+}
+
+function completedDescription(input: ProductionOperationalStateInput): string {
+  return input.executionKind === "batch"
+    ? "Partia produkcyjna jest zakończona."
+    : "Zlecenie produkcyjne jest zakończone.";
 }
 
 function packingHref(): string {
@@ -286,11 +318,7 @@ export function getProductionOperationalState(
       currentStep: "CANCELLED",
       businessLabel: "Anulowane",
       description: "Zlecenie zostało anulowane.",
-      primaryAction: {
-        kind: "view_details",
-        label: "Zobacz szczegóły",
-        href: detailHref(input),
-      },
+      primaryAction: viewDetailsAction(input),
       severity: "danger",
       tone: "danger",
       progressMeaning: productionProgress,
@@ -323,12 +351,8 @@ export function getProductionOperationalState(
     return {
       currentStep: "COMPLETED",
       businessLabel: "Zakończone",
-      description: "Zlecenie produkcyjne jest zakończone.",
-      primaryAction: {
-        kind: "view_details",
-        label: "Zobacz szczegóły",
-        href: detailHref(input),
-      },
+      description: completedDescription(input),
+      primaryAction: viewDetailsAction(input),
       severity: "success",
       tone: "success",
       progressMeaning: buildProgress("Produkcja", planned || produced, planned || produced),
