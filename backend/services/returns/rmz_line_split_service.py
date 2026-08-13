@@ -269,6 +269,38 @@ def apply_rmz_line_split(
         rmz_line.final_disposition = None
         rmz_line.processed_at = None
 
+    # Manufacturing component recovery — independent of commercial REJECTED.
+    # Bundle parent / existing bundle component returns take precedence (skip mfg recovery).
+    from ...models.order_item import OrderItem
+    from ..bundles.bundle_return_service import bundle_component_returns_for_line
+    from .manufactured_component_recovery_service import apply_manufacturing_recovery_to_line
+
+    oi = db.query(OrderItem).filter(OrderItem.id == int(rmz_line.order_item_id)).first()
+    is_bundle = bool(oi and getattr(oi, "is_bundle_parent", False))
+    if not is_bundle:
+        is_bundle = bool(bundle_component_returns_for_line(db, int(rmz_line.id)))
+    recovery_payload = [
+        {
+            "composition_line_id": int(r.composition_line_id),
+            "component_product_id": getattr(r, "component_product_id", None),
+            "accepted_qty": float(r.accepted_qty),
+            "scrap_qty": float(r.scrap_qty),
+        }
+        for r in (body.component_recoveries or [])
+    ]
+    apply_manufacturing_recovery_to_line(
+        db,
+        tenant_id=int(row.tenant_id),
+        rmz_line=rmz_line,
+        settings=settings,
+        is_bundle_line=is_bundle,
+        stock_intake_mode=getattr(body, "stock_intake_mode", None),
+        fg_intake_qty=getattr(body, "fg_intake_qty", None),
+        disassembly_qty=getattr(body, "disassembly_qty", None),
+        component_recoveries=recovery_payload if recovery_payload else None,
+        require_decision=bool(complete_line),
+    )
+
     db.flush()
 
 

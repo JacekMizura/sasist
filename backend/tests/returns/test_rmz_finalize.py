@@ -65,7 +65,7 @@ class TestFinalizeRollback(unittest.TestCase):
 class TestCollectiveIntegrityRecovery(unittest.TestCase):
     """Unique index collision → retry find (race between two operators)."""
 
-    @patch("backend.services.returns.collective_z_pz_service.create_collective_z_pz_shell")
+    @patch("backend.services.returns.collective_z_pz_service.create_collective_z_pz_shell_for_warehouse")
     @patch("backend.services.returns.collective_z_pz_service.find_active_collective_z_pz")
     @patch("backend.services.returns.collective_z_pz_service.acquire_collective_z_pz_lock")
     def test_integrity_error_falls_back_to_existing_doc(

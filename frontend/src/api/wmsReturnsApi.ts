@@ -323,6 +323,9 @@ export async function setWmsReturnsModeSettings(payload: {
   returns_mode: string;
   z_pz_print_label_on_close?: boolean;
   z_pz_label_template_id?: number | null;
+  manufactured_component_recovery_mode?: string | null;
+  manufactured_recovery_receipt_mode?: string | null;
+  manufactured_recovery_location_id?: number | null;
 }): Promise<WmsSettingsRead> {
   const body: Record<string, unknown> = { returns_mode: payload.returns_mode };
   if (payload.z_pz_print_label_on_close != null) {
@@ -330,6 +333,15 @@ export async function setWmsReturnsModeSettings(payload: {
   }
   if (payload.z_pz_label_template_id !== undefined) {
     body.z_pz_label_template_id = payload.z_pz_label_template_id;
+  }
+  if (payload.manufactured_component_recovery_mode != null) {
+    body.manufactured_component_recovery_mode = payload.manufactured_component_recovery_mode;
+  }
+  if (payload.manufactured_recovery_receipt_mode != null) {
+    body.manufactured_recovery_receipt_mode = payload.manufactured_recovery_receipt_mode;
+  }
+  if (payload.manufactured_recovery_location_id !== undefined) {
+    body.manufactured_recovery_location_id = payload.manufactured_recovery_location_id;
   }
   if (payload.tenant_id != null && Number.isFinite(Number(payload.tenant_id)) && Number(payload.tenant_id) > 0) {
     body.tenant_id = Math.floor(Number(payload.tenant_id));

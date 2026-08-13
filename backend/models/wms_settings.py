@@ -29,6 +29,17 @@ class WmsSettings(Base):
     z_pz_print_label_on_close = Column(Boolean, nullable=False, default=False)
     z_pz_label_template_id = Column(Integer, nullable=True)
 
+    #: OFF | OPTIONAL | REQUIRED — manufactured FG component recovery on RMZ
+    manufactured_component_recovery_mode = Column(String(24), nullable=False, default="OFF")
+    #: STANDARD_PUTAWAY | DEFAULT_LOCATION
+    manufactured_recovery_receipt_mode = Column(String(32), nullable=False, default="STANDARD_PUTAWAY")
+    manufactured_recovery_location_id = Column(
+        Integer,
+        ForeignKey("locations.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+
     # DOCUMENTS_ONLY | HYBRID | EXTERNAL_INVENTORY (reserved — not active in UI)
     inventory_management_mode = Column(String(32), nullable=False, default="HYBRID")
 
@@ -53,4 +64,3 @@ class WmsSettings(Base):
 
     created_at = Column(DateTime, nullable=True, default=datetime.utcnow)
     updated_at = Column(DateTime, nullable=True, default=datetime.utcnow)
-

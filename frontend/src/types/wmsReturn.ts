@@ -165,6 +165,55 @@ export type WmsReturnLineRead = {
   bundle_return_status?: string | null;
   bundle_components?: WmsReturnBundleComponentRead[];
   refund_amount_snapshot?: number | null;
+  stock_intake_mode?: StockIntakeMode | null;
+  fg_intake_qty?: number | null;
+  disassembly_qty?: number | null;
+  component_recoveries?: WmsReturnComponentRecoveryRead[];
+  has_active_manufacturing_bom?: boolean;
+  manufactured_recovery_eligible?: boolean;
+  manufactured_recovery_locked_reason?: string | null;
+  bom_preview?: WmsBomPreviewRead | null;
+};
+
+export type StockIntakeMode = "FG" | "DISASSEMBLE" | "MIXED";
+export type ManufacturedComponentRecoveryMode = "OFF" | "OPTIONAL" | "REQUIRED";
+export type ManufacturedRecoveryReceiptMode = "STANDARD_PUTAWAY" | "DEFAULT_LOCATION";
+
+export type WmsBomPreviewComponentRead = {
+  composition_id: number;
+  composition_line_id: number;
+  component_product_id: number;
+  expected_qty: number;
+  quantity_per_unit?: number;
+  component_name?: string | null;
+  component_sku?: string | null;
+};
+
+export type WmsBomPreviewRead = {
+  composition_id: number;
+  composition_name?: string;
+  disassembly_qty?: number;
+  components: WmsBomPreviewComponentRead[];
+};
+
+export type WmsReturnComponentRecoveryRead = {
+  id?: number | null;
+  composition_id: number;
+  composition_line_id: number;
+  component_product_id: number;
+  expected_qty: number;
+  accepted_qty?: number;
+  scrap_qty?: number;
+  posted_at?: string | null;
+  stock_document_item_id?: number | null;
+};
+
+export type WmsReturnComponentRecoveryIn = {
+  composition_line_id: number;
+  component_product_id?: number | null;
+  accepted_qty: number;
+  scrap_qty: number;
+  expected_qty?: number | null;
 };
 
 export type WmsReturnBundleComponentRead = {
@@ -250,6 +299,7 @@ export type WmsReturnRead = {
   warehouse_document_id?: number | null;
   warehouse_document_type?: string | null;
   warehouse_document_number?: string | null;
+  manufactured_component_recovery_mode?: ManufacturedComponentRecoveryMode | null;
 };
 
 export type WmsReturnCreate = {
@@ -355,6 +405,9 @@ export type WmsSettingsRead = {
   enable_refund: boolean;
   z_pz_print_label_on_close?: boolean;
   z_pz_label_template_id?: number | null;
+  manufactured_component_recovery_mode?: ManufacturedComponentRecoveryMode;
+  manufactured_recovery_receipt_mode?: ManufacturedRecoveryReceiptMode;
+  manufactured_recovery_location_id?: number | null;
 };
 
 /** POST /wms/settings body — warehouse_id optional (server uses tenant default). */
@@ -381,6 +434,10 @@ export type WmsReturnLineSplitProcess = {
   damage_type?: string | null;
   /** Gdy niepusta przy uszkodzeniach — serwer zapisuje jako niezależne wpisy (priorytet nad zagregowanym damaged_*). */
   damage_entries?: WmsReturnLineDamageEntryPayload[];
+  stock_intake_mode?: StockIntakeMode | null;
+  fg_intake_qty?: number | null;
+  disassembly_qty?: number | null;
+  component_recoveries?: WmsReturnComponentRecoveryIn[];
 };
 
 export type WmsReturnFinalizeLineIn = WmsReturnLineSplitProcess & {

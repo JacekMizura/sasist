@@ -121,6 +121,11 @@ def _get_or_create(db: Session, tenant_id: int, warehouse_id: int) -> WmsSetting
 
 
 def _row_to_read(row: WmsSettings) -> WmsSettingsRead:
+    from ..services.returns.manufactured_component_recovery_service import (
+        normalize_receipt_mode,
+        normalize_recovery_mode,
+    )
+
     return WmsSettingsRead(
         tenant_id=row.tenant_id,
         warehouse_id=row.warehouse_id,
@@ -133,6 +138,13 @@ def _row_to_read(row: WmsSettings) -> WmsSettingsRead:
         inventory_management_mode=normalize_inventory_management_mode(
             getattr(row, "inventory_management_mode", None)
         ),
+        manufactured_component_recovery_mode=normalize_recovery_mode(  # type: ignore[arg-type]
+            getattr(row, "manufactured_component_recovery_mode", None)
+        ),
+        manufactured_recovery_receipt_mode=normalize_receipt_mode(  # type: ignore[arg-type]
+            getattr(row, "manufactured_recovery_receipt_mode", None)
+        ),
+        manufactured_recovery_location_id=getattr(row, "manufactured_recovery_location_id", None),
     )
 
 
@@ -206,6 +218,49 @@ def set_returns_mode(
     if body.z_pz_label_template_id is not None:
         tpl = int(body.z_pz_label_template_id)
         row.z_pz_label_template_id = tpl if tpl > 0 else None
+    if body.manufactured_component_recovery_mode is not None:
+        from ..services.returns.manufactured_component_recovery_service import (
+            RECEIPT_DEFAULT_LOCATION,
+            assert_recovery_location_in_warehouse,
+            normalize_receipt_mode,
+            normalize_recovery_mode,
+        )
+
+        row.manufactured_component_recovery_mode = normalize_recovery_mode(
+            body.manufactured_component_recovery_mode
+        )
+    if body.manufactured_recovery_receipt_mode is not None:
+        from ..services.returns.manufactured_component_recovery_service import (
+            RECEIPT_DEFAULT_LOCATION,
+            assert_recovery_location_in_warehouse,
+            normalize_receipt_mode,
+        )
+
+        row.manufactured_recovery_receipt_mode = normalize_receipt_mode(
+            body.manufactured_recovery_receipt_mode
+        )
+    if body.manufactured_recovery_location_id is not None:
+        lid = int(body.manufactured_recovery_location_id)
+        row.manufactured_recovery_location_id = lid if lid > 0 else None
+    # Clear location when not using default-location mode
+    receipt_mode = str(getattr(row, "manufactured_recovery_receipt_mode", "") or "")
+    if receipt_mode != "DEFAULT_LOCATION":
+        if body.manufactured_recovery_receipt_mode is not None:
+            row.manufactured_recovery_location_id = None
+    elif str(getattr(row, "manufactured_recovery_receipt_mode", "") or "") == "DEFAULT_LOCATION":
+        from ..services.returns.manufactured_component_recovery_service import (
+            assert_recovery_location_in_warehouse,
+        )
+
+        loc_id = getattr(row, "manufactured_recovery_location_id", None)
+        if loc_id is None or int(loc_id) <= 0:
+            raise HTTPException(status_code=400, detail="Wybierz lokalizację odzysków")
+        try:
+            assert_recovery_location_in_warehouse(
+                db, warehouse_id=wh_id, location_id=int(loc_id), tenant_id=int(tid)
+            )
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e)) from e
     db.commit()
     db.refresh(row)
 

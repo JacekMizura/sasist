@@ -1973,6 +1973,63 @@ def ensure_rmz_line_bundle_return_columns(engine: Engine) -> None:
             conn.execute(text("ALTER TABLE rmz_lines ADD COLUMN bundle_return_status VARCHAR(32)"))
 
 
+def ensure_manufactured_component_recovery_schema(engine: Engine) -> None:
+    """WMS returns: manufactured FG → component recovery settings + RMZ line fields + snapshot table."""
+    if _table_exists(engine, "wms_settings"):
+        cols = _cols(engine, "wms_settings")
+        with engine.begin() as conn:
+            if "manufactured_component_recovery_mode" not in cols:
+                conn.execute(
+                    text(
+                        "ALTER TABLE wms_settings ADD COLUMN manufactured_component_recovery_mode "
+                        "VARCHAR(24) NOT NULL DEFAULT 'OFF'"
+                    )
+                )
+            if "manufactured_recovery_receipt_mode" not in cols:
+                conn.execute(
+                    text(
+                        "ALTER TABLE wms_settings ADD COLUMN manufactured_recovery_receipt_mode "
+                        "VARCHAR(32) NOT NULL DEFAULT 'STANDARD_PUTAWAY'"
+                    )
+                )
+            if "manufactured_recovery_location_id" not in cols:
+                conn.execute(
+                    text(
+                        "ALTER TABLE wms_settings ADD COLUMN manufactured_recovery_location_id INTEGER"
+                    )
+                )
+
+    if _table_exists(engine, "rmz_lines"):
+        cols = _cols(engine, "rmz_lines")
+        with engine.begin() as conn:
+            if "stock_intake_mode" not in cols:
+                conn.execute(text("ALTER TABLE rmz_lines ADD COLUMN stock_intake_mode VARCHAR(24)"))
+            if "fg_intake_qty" not in cols:
+                conn.execute(text("ALTER TABLE rmz_lines ADD COLUMN fg_intake_qty INTEGER"))
+            if "disassembly_qty" not in cols:
+                conn.execute(text("ALTER TABLE rmz_lines ADD COLUMN disassembly_qty INTEGER"))
+
+    if not _table_exists(engine, "rmz_line_component_recoveries"):
+        from ..models.rmz_line_component_recovery import RmzLineComponentRecovery
+        from sqlalchemy.schema import CreateTable
+
+        ddl = str(CreateTable(RmzLineComponentRecovery.__table__).compile(dialect=engine.dialect))
+        with engine.begin() as conn:
+            conn.execute(text(ddl))
+            conn.execute(
+                text(
+                    "CREATE INDEX IF NOT EXISTS ix_rmz_line_comp_rec_rmz_line "
+                    "ON rmz_line_component_recoveries(rmz_line_id)"
+                )
+            )
+            conn.execute(
+                text(
+                    "CREATE INDEX IF NOT EXISTS ix_rmz_line_comp_rec_posted "
+                    "ON rmz_line_component_recoveries(posted_at)"
+                )
+            )
+
+
 def ensure_order_line_bundle_component_lots_table(engine: Engine) -> None:
     """P4.16 — lot traceability snapshots for bundle components (pick/issue time)."""
     with engine.connect() as conn:
@@ -2830,6 +2887,109 @@ def ensure_rmz_line_damage_entries_json(engine: Engine) -> None:
         cols = _table_column_names(conn, "rmz_lines")
         if "damage_entries_json" not in cols:
             conn.execute(text("ALTER TABLE rmz_lines ADD COLUMN damage_entries_json TEXT"))
+        conn.commit()
+
+
+def ensure_manufactured_component_recovery_schema(engine: Engine) -> None:
+    """WMS returns: manufactured FG → component recovery settings, RMZ line fields, recoveries table."""
+    with engine.connect() as conn:
+        if _table_exists(conn, "wms_settings"):
+            cols = _table_column_names(conn, "wms_settings")
+            if "manufactured_component_recovery_mode" not in cols:
+                conn.execute(
+                    text(
+                        "ALTER TABLE wms_settings ADD COLUMN manufactured_component_recovery_mode "
+                        "VARCHAR(24) NOT NULL DEFAULT 'OFF'"
+                    )
+                )
+            if "manufactured_recovery_receipt_mode" not in cols:
+                conn.execute(
+                    text(
+                        "ALTER TABLE wms_settings ADD COLUMN manufactured_recovery_receipt_mode "
+                        "VARCHAR(32) NOT NULL DEFAULT 'STANDARD_PUTAWAY'"
+                    )
+                )
+            if "manufactured_recovery_location_id" not in cols:
+                conn.execute(
+                    text(
+                        "ALTER TABLE wms_settings ADD COLUMN manufactured_recovery_location_id INTEGER "
+                        "REFERENCES locations(id) ON DELETE SET NULL"
+                    )
+                )
+                conn.execute(
+                    text(
+                        "CREATE INDEX IF NOT EXISTS ix_wms_settings_mfg_recovery_location "
+                        "ON wms_settings(manufactured_recovery_location_id)"
+                    )
+                )
+
+        if _table_exists(conn, "rmz_lines"):
+            cols = _table_column_names(conn, "rmz_lines")
+            if "stock_intake_mode" not in cols:
+                conn.execute(text("ALTER TABLE rmz_lines ADD COLUMN stock_intake_mode VARCHAR(24)"))
+            if "fg_intake_qty" not in cols:
+                conn.execute(text("ALTER TABLE rmz_lines ADD COLUMN fg_intake_qty INTEGER"))
+            if "disassembly_qty" not in cols:
+                conn.execute(text("ALTER TABLE rmz_lines ADD COLUMN disassembly_qty INTEGER"))
+
+        if not _table_exists(conn, "rmz_line_component_recoveries"):
+            conn.execute(
+                text(
+                    """
+                    CREATE TABLE rmz_line_component_recoveries (
+                        id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+                        tenant_id INTEGER NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+                        rmz_line_id INTEGER NOT NULL REFERENCES rmz_lines(id) ON DELETE CASCADE,
+                        composition_id INTEGER NOT NULL REFERENCES product_compositions(id) ON DELETE RESTRICT,
+                        composition_line_id INTEGER NOT NULL REFERENCES product_composition_lines(id) ON DELETE RESTRICT,
+                        component_product_id INTEGER NOT NULL REFERENCES products(id) ON DELETE RESTRICT,
+                        expected_qty FLOAT NOT NULL DEFAULT 0,
+                        accepted_qty FLOAT NOT NULL DEFAULT 0,
+                        scrap_qty FLOAT NOT NULL DEFAULT 0,
+                        created_at DATETIME,
+                        updated_at DATETIME,
+                        posted_at DATETIME,
+                        stock_document_item_id INTEGER REFERENCES stock_document_items(id) ON DELETE SET NULL
+                    )
+                    """
+                )
+            )
+            conn.execute(
+                text(
+                    "CREATE INDEX IF NOT EXISTS ix_rmz_line_comp_rec_tenant "
+                    "ON rmz_line_component_recoveries(tenant_id)"
+                )
+            )
+            conn.execute(
+                text(
+                    "CREATE INDEX IF NOT EXISTS ix_rmz_line_comp_rec_rmz_line "
+                    "ON rmz_line_component_recoveries(rmz_line_id)"
+                )
+            )
+            conn.execute(
+                text(
+                    "CREATE INDEX IF NOT EXISTS ix_rmz_line_comp_rec_composition "
+                    "ON rmz_line_component_recoveries(composition_id)"
+                )
+            )
+            conn.execute(
+                text(
+                    "CREATE INDEX IF NOT EXISTS ix_rmz_line_comp_rec_comp_line "
+                    "ON rmz_line_component_recoveries(composition_line_id)"
+                )
+            )
+            conn.execute(
+                text(
+                    "CREATE INDEX IF NOT EXISTS ix_rmz_line_comp_rec_product "
+                    "ON rmz_line_component_recoveries(component_product_id)"
+                )
+            )
+            conn.execute(
+                text(
+                    "CREATE INDEX IF NOT EXISTS ix_rmz_line_comp_rec_sdi "
+                    "ON rmz_line_component_recoveries(stock_document_item_id)"
+                )
+            )
         conn.commit()
 
 

@@ -1204,6 +1204,22 @@ def _bundle_component_reads_for_rmz_line(db: Session, ln: RMZLine, order_id: int
 
 
 def _rmz_line_to_read(db: Session, ln: RMZLine, order_id: int) -> WmsReturnLineRead:
+    from ..models.rmz_line_component_recovery import RmzLineComponentRecovery
+    from ..models.wms_order_return import WmsOrderReturn
+    from ..schemas.wms_return import (
+        WmsBomPreviewComponentRead,
+        WmsBomPreviewRead,
+        WmsReturnComponentRecoveryRead,
+    )
+    from ..services.inventory_management_policy_service import get_or_create_wms_settings_row
+    from ..services.production_manufacturing_composition import get_active_manufacturing_composition
+    from ..services.returns.manufactured_component_recovery_service import (
+        bom_preview_for_product,
+        manufactured_recovery_locked_reason,
+        product_qualifies_for_manufacturing_recovery,
+        recovery_mode_from_settings,
+    )
+
     aq, dq, dbq, dcq, rq = _wms_return_line_qty_fields_from_rmz_row(ln)
     oi = db.query(OrderItem).filter(OrderItem.id == int(ln.order_item_id)).first()
     is_parent = bool(oi and getattr(oi, "is_bundle_parent", False))
@@ -1212,7 +1228,88 @@ def _rmz_line_to_read(db: Session, ln: RMZLine, order_id: int) -> WmsReturnLineR
         ctx = bundle_line_resolver.resolve_parent_line(db, int(ln.order_item_id))
         bundle_name = str(ctx.bundle_name) if ctx else None
     comp_reads = _bundle_component_reads_for_rmz_line(db, ln, order_id) if is_parent else []
+    # Bundle component returns (even without is_bundle_parent) take precedence over mfg recovery.
+    has_bundle_component_returns = bool(comp_reads) or bool(
+        getattr(ln, "bundle_component_returns", None)
+    )
+    if not has_bundle_component_returns and not is_parent:
+        try:
+            has_bundle_component_returns = bool(bundle_component_returns_for_line(db, int(ln.id)))
+        except Exception:
+            has_bundle_component_returns = False
+    is_bundle_line = bool(is_parent or has_bundle_component_returns)
     refund_snap = compute_rmz_line_refund_from_snapshot(db, ln) if is_parent else None
+
+    rmz = db.query(WmsOrderReturn).filter(WmsOrderReturn.id == int(ln.rmz_id)).first()
+    tenant_id = int(rmz.tenant_id) if rmz else 0
+    warehouse_id = int(rmz.warehouse_id) if rmz else 0
+    settings = (
+        get_or_create_wms_settings_row(db, tenant_id=tenant_id, warehouse_id=warehouse_id)
+        if tenant_id and warehouse_id
+        else None
+    )
+    mode = recovery_mode_from_settings(settings)
+    has_bom = False
+    eligible = False
+    if tenant_id and mode != "OFF":
+        has_bom = (
+            get_active_manufacturing_composition(
+                db, tenant_id=tenant_id, product_id=int(ln.product_id)
+            )
+            is not None
+        )
+        eligible = product_qualifies_for_manufacturing_recovery(
+            db, tenant_id, int(ln.product_id), is_bundle_line=is_bundle_line
+        )
+
+    recovery_rows = (
+        db.query(RmzLineComponentRecovery)
+        .filter(RmzLineComponentRecovery.rmz_line_id == int(ln.id))
+        .order_by(RmzLineComponentRecovery.id.asc())
+        .all()
+    )
+    recovery_reads = [
+        WmsReturnComponentRecoveryRead(
+            id=int(r.id),
+            composition_id=int(r.composition_id),
+            composition_line_id=int(r.composition_line_id),
+            component_product_id=int(r.component_product_id),
+            expected_qty=float(r.expected_qty or 0),
+            accepted_qty=float(r.accepted_qty or 0),
+            scrap_qty=float(r.scrap_qty or 0),
+            posted_at=r.posted_at,
+            stock_document_item_id=int(r.stock_document_item_id) if r.stock_document_item_id else None,
+        )
+        for r in recovery_rows
+    ]
+    preview = None
+    if eligible and has_bom:
+        dq_prev = int(getattr(ln, "disassembly_qty", None) or 1)
+        raw_preview = bom_preview_for_product(
+            db, tenant_id=tenant_id, product_id=int(ln.product_id), disassembly_qty=max(1, dq_prev)
+        )
+        if raw_preview:
+            preview = WmsBomPreviewRead(
+                composition_id=int(raw_preview["composition_id"]),
+                composition_name=str(raw_preview.get("composition_name") or ""),
+                disassembly_qty=int(raw_preview.get("disassembly_qty") or 1),
+                components=[
+                    WmsBomPreviewComponentRead(
+                        composition_id=int(c["composition_id"]),
+                        composition_line_id=int(c["composition_line_id"]),
+                        component_product_id=int(c["component_product_id"]),
+                        expected_qty=float(c["expected_qty"]),
+                        quantity_per_unit=float(c.get("quantity_per_unit") or 0),
+                    )
+                    for c in (raw_preview.get("components") or [])
+                ],
+            )
+
+    intake_mode = getattr(ln, "stock_intake_mode", None)
+    intake_out = str(intake_mode).strip().upper() if intake_mode else None
+    if intake_out not in ("FG", "DISASSEMBLE", "MIXED"):
+        intake_out = None
+
     return WmsReturnLineRead(
         id=int(ln.id),
         order_item_id=int(ln.order_item_id),
@@ -1236,6 +1333,14 @@ def _rmz_line_to_read(db: Session, ln: RMZLine, order_id: int) -> WmsReturnLineR
         bundle_return_status=getattr(ln, "bundle_return_status", None),
         bundle_components=comp_reads,
         refund_amount_snapshot=refund_snap,
+        stock_intake_mode=intake_out,  # type: ignore[arg-type]
+        fg_intake_qty=getattr(ln, "fg_intake_qty", None),
+        disassembly_qty=getattr(ln, "disassembly_qty", None),
+        component_recoveries=recovery_reads,
+        has_active_manufacturing_bom=bool(has_bom),
+        manufactured_recovery_eligible=bool(eligible and mode != "OFF"),
+        manufactured_recovery_locked_reason=manufactured_recovery_locked_reason(db, ln),
+        bom_preview=preview,
     )
 
 
@@ -1274,6 +1379,13 @@ def _serialize_return_read(db: Session, row: WmsOrderReturn) -> WmsReturnRead:
     if ui_row is None and getattr(row, "ui_status_id", None):
         ui_row = db.query(ReturnUiStatus).filter(ReturnUiStatus.id == row.ui_status_id).first()
     terminal = _is_terminal(rs)
+    from ..services.inventory_management_policy_service import get_or_create_wms_settings_row
+    from ..services.returns.manufactured_component_recovery_service import recovery_mode_from_settings
+
+    wh_settings = get_or_create_wms_settings_row(
+        db, tenant_id=int(row.tenant_id), warehouse_id=int(row.warehouse_id)
+    )
+    recovery_mode = recovery_mode_from_settings(wh_settings)
     return WmsReturnRead(
         id=row.id,
         rmz_number=row.rmz_number,
@@ -1298,6 +1410,7 @@ def _serialize_return_read(db: Session, row: WmsOrderReturn) -> WmsReturnRead:
         ui_status=_brief_ui_status(ui_row),
         workflow_finished=terminal,
         workflow_editable=not terminal,
+        manufactured_component_recovery_mode=recovery_mode,  # type: ignore[arg-type]
         **_rmz_document_fields(db, row),
     )
 

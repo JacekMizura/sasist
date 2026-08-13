@@ -78,6 +78,7 @@ from .db.schema_upgrade import (
     ensure_wms_order_returns_columns,
     ensure_rmz_line_split_columns,
     ensure_rmz_line_damage_entries_json,
+    ensure_manufactured_component_recovery_schema,
     ensure_wms_refunds_columns,
     ensure_return_statuses_and_rmz,
     ensure_return_ui_statuses_and_column,
@@ -1001,6 +1002,10 @@ ensure_wms_order_returns_deleted_at_column(engine)
 ensure_orders_deleted_at_column(engine)
 ensure_rmz_line_split_columns(engine)
 ensure_rmz_line_damage_entries_json(engine)
+try:
+    ensure_manufactured_component_recovery_schema(engine)
+except Exception:
+    logging.getLogger(__name__).exception("ensure_manufactured_component_recovery_schema failed at import")
 ensure_wms_refunds_columns(engine)
 # Panel return UI statuses: run at import so first request works even before startup hook.
 try:
@@ -1442,6 +1447,10 @@ def _upgrade_schema_background() -> None:
     ensure_order_line_bundle_components_p414_columns(engine)
     ensure_return_line_bundle_components_table(engine)
     ensure_rmz_line_bundle_return_columns(engine)
+    try:
+        ensure_manufactured_component_recovery_schema(engine)
+    except Exception:
+        logging.getLogger(__name__).exception("ensure_manufactured_component_recovery_schema failed")
     ensure_order_line_bundle_component_lots_table(engine)
     ensure_bundle_logistic_units_table(engine)
     ensure_damage_report_columns(engine)

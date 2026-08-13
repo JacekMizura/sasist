@@ -278,9 +278,20 @@ def _planned_stock_counts_for_line(
 
 
 def _any_planned_lines(db: Session, tenant_id: int, warehouse_id: int, lines: Sequence[RMZLine]) -> bool:
+    from .returns.manufactured_component_recovery_service import (
+        line_has_pending_component_receipt,
+        saleable_fg_qty_for_receipt,
+    )
+
     for ln in lines:
-        aq, dmg, _rj = _planned_stock_counts_for_line(db, tenant_id, warehouse_id, ln, include_rejected=False)
-        if aq > 0 or dmg:
+        aq_legacy, dmg, _rj = _planned_stock_counts_for_line(
+            db, tenant_id, warehouse_id, ln, include_rejected=False
+        )
+        fg_aq = saleable_fg_qty_for_receipt(ln)
+        # When recovery fields active, fg may be 0 while components still need posting
+        if fg_aq > 0 or dmg or line_has_pending_component_receipt(ln):
+            return True
+        if aq_legacy > 0 and getattr(ln, "stock_intake_mode", None) is None and not getattr(ln, "disassembly_qty", None):
             return True
     return False
 
@@ -486,6 +497,26 @@ def _append_rmz_lines_to_document(
     wh_id = int(rmz.warehouse_id)
     item_rows: List[StockDocumentItem] = []
 
+    from ..models.rmz_line_component_recovery import RmzLineComponentRecovery
+    from ..models.wms_settings import WmsSettings
+    from .inventory_carrier_ops import upsert_dock_inventory_for_loose_receipt
+    from .inventory_lot_keys import NO_EXPIRY_SENTINEL
+    from .returns.manufactured_component_recovery_service import (
+        RECEIPT_MODE_DEFAULT_LOCATION,
+        line_has_pending_component_receipt,
+        receipt_mode_from_settings,
+        saleable_fg_qty_for_receipt,
+    )
+    from .stock_disposition import STOCK_DISPOSITION_SALEABLE
+
+    settings = (
+        db.query(WmsSettings)
+        .filter(WmsSettings.tenant_id == tenant_id, WmsSettings.warehouse_id == wh_id)
+        .first()
+    )
+    mfg_receipt_mode = receipt_mode_from_settings(settings)
+    recovery_location_id = getattr(settings, "manufactured_recovery_location_id", None) if settings else None
+
     def add_line(
         *,
         product_id: int,
@@ -495,7 +526,8 @@ def _append_rmz_lines_to_document(
         rmz_damage_entry_id: Optional[str],
         purchase_price_net: Optional[float],
         vat_rate: float,
-    ) -> None:
+        direct_location_id: Optional[int] = None,
+    ) -> StockDocumentItem:
         row = StockDocumentItem(
             document_id=doc.id,
             delivery_item_id=None,
@@ -515,37 +547,56 @@ def _append_rmz_lines_to_document(
             source_rmz_id=int(rmz.id),
             return_decision=str(return_decision)[:24],
         )
+        if direct_location_id is not None:
+            # Mark line fully put away — inventory lands on recovery location (no queue).
+            row.quantity_putaway = float(qty)
         db.add(row)
         db.flush()
         append_receipt_operation(db, doc, row, float(qty))
-        from .wms_putaway_service import sync_dock_inventory_from_document_line
 
-        sync_dock_inventory_from_document_line(
-            db,
-            tenant_id=tenant_id,
-            doc=doc,
-            line=row,
-            quantity=float(qty),
-        )
-        if doc.location_id is not None:
-            bn, ed = dock_lot_keys_for_pz_line(row)
-            materialize_damage_trace_on_dock_inventory(
+        if direct_location_id is not None:
+            upsert_dock_inventory_for_loose_receipt(
                 db,
                 tenant_id=tenant_id,
-                row=row,
-                doc=doc,
-                dock_id=int(doc.location_id),
-                bn=bn,
-                ed_store=ed,
-                sd=stock_disposition_for_document_line(row),
-                from_carrier_id=None,
+                warehouse_id=wh_id,
+                location_id=int(direct_location_id),
+                product_id=int(product_id),
+                add_qty=float(qty),
+                batch_number="",
+                expiry_date=NO_EXPIRY_SENTINEL,
+                stock_disposition=STOCK_DISPOSITION_SALEABLE,
             )
+        else:
+            from .wms_putaway_service import sync_dock_inventory_from_document_line
+
+            sync_dock_inventory_from_document_line(
+                db,
+                tenant_id=tenant_id,
+                doc=doc,
+                line=row,
+                quantity=float(qty),
+            )
+            if doc.location_id is not None:
+                bn, ed = dock_lot_keys_for_pz_line(row)
+                materialize_damage_trace_on_dock_inventory(
+                    db,
+                    tenant_id=tenant_id,
+                    row=row,
+                    doc=doc,
+                    dock_id=int(doc.location_id),
+                    bn=bn,
+                    ed_store=ed,
+                    sd=stock_disposition_for_document_line(row),
+                    from_carrier_id=None,
+                )
         item_rows.append(row)
+        return row
 
     for ln in lines:
         from .bundles.bundle_rmz_receipt_integration import effective_receipt_rows_for_rmz_line
         from .bundles.bundle_return_service import bundle_component_returns_for_line
 
+        # Bundle flow takes precedence over manufacturing recovery.
         bundle_receipt_rows = effective_receipt_rows_for_rmz_line(db, ln)
         has_component_returns = bool(bundle_component_returns_for_line(db, int(ln.id)))
 
@@ -597,9 +648,11 @@ def _append_rmz_lines_to_document(
             raise ValueError(f"Z-PZ: produkt {pid} nie znaleziony dla tenant_id={tenant_id}")
         unit_price, vat = _order_item_pricing(db, int(ln.order_item_id))
 
-        aq, damaged_pairs, _rej = _planned_stock_counts_for_line(
+        _, damaged_pairs, _rej = _planned_stock_counts_for_line(
             db, tenant_id, wh_id, ln, include_rejected=False
         )
+        # SALEABLE FG: fg_intake_qty when manufacturing recovery active, else accepted_qty
+        aq = saleable_fg_qty_for_receipt(ln)
         if aq > 0:
             add_line(
                 product_id=pid,
@@ -622,6 +675,40 @@ def _append_rmz_lines_to_document(
                 purchase_price_net=unit_price,
                 vat_rate=vat,
             )
+
+        # Component recoveries → Z-PZ lines (accepted only; scrap = audit only, no stock)
+        recoveries = (
+            db.query(RmzLineComponentRecovery)
+            .filter(RmzLineComponentRecovery.rmz_line_id == int(ln.id))
+            .order_by(RmzLineComponentRecovery.id.asc())
+            .all()
+        )
+        direct_loc = None
+        if mfg_receipt_mode == RECEIPT_MODE_DEFAULT_LOCATION and recovery_location_id:
+            direct_loc = int(recovery_location_id)
+        now = datetime.utcnow()
+        for rec in recoveries:
+            if getattr(rec, "posted_at", None) is not None or getattr(rec, "stock_document_item_id", None):
+                continue
+            acc = float(getattr(rec, "accepted_qty", 0) or 0)
+            if acc <= 1e-9:
+                # scrap-only: mark posted without Z-PZ line (idempotency)
+                rec.posted_at = now
+                rec.updated_at = now
+                continue
+            sdi = add_line(
+                product_id=int(rec.component_product_id),
+                qty=float(acc),
+                disposition=DISPOSITION_SALEABLE,
+                return_decision="ACCEPTED",
+                rmz_damage_entry_id=f"mfg-rec-{int(rec.id)}",
+                purchase_price_net=None,
+                vat_rate=23.0,
+                direct_location_id=direct_loc,
+            )
+            rec.posted_at = now
+            rec.updated_at = now
+            rec.stock_document_item_id = int(sdi.id)
 
     return item_rows
 

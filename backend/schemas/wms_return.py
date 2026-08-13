@@ -298,6 +298,14 @@ class WmsReturnLineRead(BaseModel):
     bundle_return_status: Optional[str] = None
     bundle_components: List["WmsReturnBundleComponentRead"] = Field(default_factory=list)
     refund_amount_snapshot: Optional[float] = None
+    stock_intake_mode: Optional[StockIntakeMode] = None
+    fg_intake_qty: Optional[int] = None
+    disassembly_qty: Optional[int] = None
+    component_recoveries: List[WmsReturnComponentRecoveryRead] = Field(default_factory=list)
+    has_active_manufacturing_bom: bool = False
+    manufactured_recovery_eligible: bool = False
+    manufactured_recovery_locked_reason: Optional[str] = None
+    bom_preview: Optional[WmsBomPreviewRead] = None
 
 
 class WmsReturnBundleComponentRead(BaseModel):
@@ -443,6 +451,10 @@ class WmsReturnRead(BaseModel):
         default=None,
         description="Numer dokumentu Z-PZ (np. Z-PZ-2026-1).",
     )
+    manufactured_component_recovery_mode: Optional[ManufacturedComponentRecoveryMode] = Field(
+        default=None,
+        description="Tryb odzysku komponentów z ustawień WMS magazynu (OFF/OPTIONAL/REQUIRED).",
+    )
 
 
 class OrderLookupHit(BaseModel):
@@ -482,6 +494,46 @@ class ActiveZPzCloseRead(BaseModel):
 
 ReturnsMode = Literal["simple", "two_step", "advanced"]
 InventoryManagementMode = Literal["DOCUMENTS_ONLY", "HYBRID", "EXTERNAL_INVENTORY"]
+ManufacturedComponentRecoveryMode = Literal["OFF", "OPTIONAL", "REQUIRED"]
+ManufacturedRecoveryReceiptMode = Literal["STANDARD_PUTAWAY", "DEFAULT_LOCATION"]
+StockIntakeMode = Literal["FG", "DISASSEMBLE", "MIXED"]
+
+
+class WmsBomPreviewComponentRead(BaseModel):
+    composition_id: int
+    composition_line_id: int
+    component_product_id: int
+    expected_qty: float
+    quantity_per_unit: float = 0.0
+    component_name: Optional[str] = None
+    component_sku: Optional[str] = None
+
+
+class WmsBomPreviewRead(BaseModel):
+    composition_id: int
+    composition_name: str = ""
+    disassembly_qty: int = 1
+    components: List[WmsBomPreviewComponentRead] = Field(default_factory=list)
+
+
+class WmsReturnComponentRecoveryRead(BaseModel):
+    id: Optional[int] = None
+    composition_id: int
+    composition_line_id: int
+    component_product_id: int
+    expected_qty: float
+    accepted_qty: float = 0.0
+    scrap_qty: float = 0.0
+    posted_at: Optional[datetime] = None
+    stock_document_item_id: Optional[int] = None
+
+
+class WmsReturnComponentRecoveryIn(BaseModel):
+    composition_line_id: int = Field(ge=1)
+    component_product_id: Optional[int] = Field(default=None, ge=1)
+    accepted_qty: float = Field(ge=0)
+    scrap_qty: float = Field(ge=0)
+    expected_qty: Optional[float] = Field(default=None, ge=0)
 
 
 class WmsSettingsRead(BaseModel):
@@ -494,6 +546,9 @@ class WmsSettingsRead(BaseModel):
     z_pz_print_label_on_close: bool = False
     z_pz_label_template_id: Optional[int] = None
     inventory_management_mode: InventoryManagementMode = "HYBRID"
+    manufactured_component_recovery_mode: ManufacturedComponentRecoveryMode = "OFF"
+    manufactured_recovery_receipt_mode: ManufacturedRecoveryReceiptMode = "STANDARD_PUTAWAY"
+    manufactured_recovery_location_id: Optional[int] = None
 
 
 class WmsSettingsUpsert(BaseModel):
@@ -504,6 +559,9 @@ class WmsSettingsUpsert(BaseModel):
     returns_mode: ReturnsMode
     z_pz_print_label_on_close: Optional[bool] = None
     z_pz_label_template_id: Optional[int] = None
+    manufactured_component_recovery_mode: Optional[ManufacturedComponentRecoveryMode] = None
+    manufactured_recovery_receipt_mode: Optional[ManufacturedRecoveryReceiptMode] = None
+    manufactured_recovery_location_id: Optional[int] = None
 
 
 class WmsSettingsSave(BaseModel):
@@ -540,6 +598,10 @@ class WmsReturnLineSplitProcess(BaseModel):
     damage_type: Optional[str] = None
     """Gdy niepusta — nadpisuje zagregowane damaged_*; każdy wpis ma własną ilość i dowody."""
     damage_entries: List[WmsReturnLineDamageEntryIn] = Field(default_factory=list)
+    stock_intake_mode: Optional[StockIntakeMode] = None
+    fg_intake_qty: Optional[int] = Field(default=None, ge=0)
+    disassembly_qty: Optional[int] = Field(default=None, ge=0)
+    component_recoveries: List[WmsReturnComponentRecoveryIn] = Field(default_factory=list)
 
 
 class WmsReturnFinalizeLineIn(WmsReturnLineSplitProcess):

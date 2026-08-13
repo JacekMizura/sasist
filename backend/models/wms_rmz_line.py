@@ -44,9 +44,21 @@ class RMZLine(Base):
     #: PARTIAL_BUNDLE_RETURN when accepted qty < expected snapshot qty across components
     bundle_return_status = Column(String(32), nullable=True)
 
+    #: Manufacturing recovery intake: FG | DISASSEMBLE | MIXED | null (null = legacy FG-only path)
+    stock_intake_mode = Column(String(24), nullable=True)
+    #: Units of finished good restocked as FG on Z-PZ (split with disassembly_qty).
+    fg_intake_qty = Column(Integer, nullable=True)
+    #: Units of finished good disassembled into BOM components.
+    disassembly_qty = Column(Integer, nullable=True)
+
     bundle_component_returns = relationship(
         "ReturnLineBundleComponent",
         back_populates="return_line",
+        cascade="all, delete-orphan",
+    )
+    component_recoveries = relationship(
+        "RmzLineComponentRecovery",
+        back_populates="rmz_line",
         cascade="all, delete-orphan",
     )
 

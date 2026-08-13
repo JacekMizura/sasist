@@ -35,6 +35,7 @@ import type {
   WmsReturnListItem,
   WmsReturnRead,
   WmsSettingsRead,
+  type ManufacturedComponentRecoveryMode,
 } from "../../types/wmsReturn";
 import type { WmsReturnModuleConfigDto } from "../../types/returnModuleConfig";
 import { panelStatusRichPreviewStyle } from "../../utils/panelStatusColor";
@@ -139,6 +140,11 @@ import {
 import { WMS_REJECT_OTHER_ID, wmsRejectReasonSelectOptions } from "./wmsRejectReasons";
 import { RmzProcessLineSidebar } from "./rmzProcessLineSidebar";
 import { BundleReturnLinePanel } from "../../components/returns/BundleReturnLinePanel";
+import {
+  draftFromLine,
+  ManufacturedRecoveryIntakePanel,
+  type ManufacturedRecoveryDraft,
+} from "../../components/returns/ManufacturedRecoveryIntakePanel";
 import { RmzPendingItemsPanel, type RmzPendingAddItem } from "./rmzPendingItemsPanel";
 import { resolveRmzLineSidebarStatus } from "./rmzLineSidebarStatus";
 
@@ -992,6 +998,7 @@ export default function WmsReturnsPage() {
   const selectOrderItemAfterAddRef = useRef<number | null>(null);
   const [orderDetailsModalOpen, setOrderDetailsModalOpen] = useState(false);
   const [wmsSettings, setWmsSettings] = useState<WmsSettingsRead | null>(null);
+  const [mfgRecoveryByLineId, setMfgRecoveryByLineId] = useState<Record<string, ManufacturedRecoveryDraft>>({});
 
   /** Return = order lines only; locations are chosen when recording damage (not here). */
   const [lineSeeds, setLineSeeds] = useState<LineSeedRecord[]>([]);
@@ -1549,6 +1556,24 @@ export default function WmsReturnsPage() {
           })),
         );
         setLineSeeds(seeds);
+        const recoveryModeRaw = String(
+          wmsReturn.manufactured_component_recovery_mode ||
+            wmsSettings?.manufactured_component_recovery_mode ||
+            "OFF",
+        ).toUpperCase();
+        const recoveryMode: ManufacturedComponentRecoveryMode =
+          recoveryModeRaw === "OPTIONAL" || recoveryModeRaw === "REQUIRED" ? recoveryModeRaw : "OFF";
+        setMfgRecoveryByLineId((prev) => {
+          const next: Record<string, ManufacturedRecoveryDraft> = {};
+          for (let i = 0; i < wmsReturn.lines.length; i += 1) {
+            const line = wmsReturn.lines[i]!;
+            const lineId = wmsReturnGridLineIdFromApiLine(line, i);
+            if (line.manufactured_recovery_eligible && recoveryMode !== "OFF") {
+              next[lineId] = prev[lineId] ?? draftFromLine(line, recoveryMode);
+            }
+          }
+          return next;
+        });
         const pickOi = selectOrderItemAfterAddRef.current;
         if (pickOi != null) {
           const idx = wmsReturn.lines.findIndex((ln) => ln.order_item_id === pickOi);
@@ -2684,7 +2709,45 @@ export default function WmsReturnsPage() {
           aggregated.accepted === total &&
           total > 0;
 
-        if (allRejectedLine) {
+        const apiLine =
+          wmsReturn?.lines.find((l) => Number(l.order_item_id) === Number(seed.orderItemId)) ??
+          wmsReturn?.lines.find((l) => Number(l.product_id) === Number(seed.candidate.productId));
+        const recoveryModeRaw = String(
+          wmsReturn?.manufactured_component_recovery_mode ||
+            wmsSettings?.manufactured_component_recovery_mode ||
+            "OFF",
+        ).toUpperCase();
+        const recoveryMode: ManufacturedComponentRecoveryMode =
+          recoveryModeRaw === "OPTIONAL" || recoveryModeRaw === "REQUIRED" ? recoveryModeRaw : "OFF";
+        const recoveryDraft = mfgRecoveryByLineId[lineId];
+        const useMfgRecovery =
+          recoveryMode !== "OFF" &&
+          Boolean(apiLine?.manufactured_recovery_eligible) &&
+          recoveryDraft != null;
+        const recoveryPayloadFields = useMfgRecovery
+          ? {
+              stock_intake_mode: recoveryDraft.stock_intake_mode,
+              fg_intake_qty: recoveryDraft.fg_intake_qty,
+              disassembly_qty: recoveryDraft.disassembly_qty,
+              component_recoveries: recoveryDraft.component_recoveries,
+            }
+          : null;
+        if (useMfgRecovery && recoveryDraft.disassembly_qty > 0) {
+          const unbalanced = recoveryDraft.component_recoveries.some((r) => {
+            const expected = Number(r.expected_qty ?? 0);
+            return Math.abs(Number(r.accepted_qty) + Number(r.scrap_qty) - expected) > 1e-6;
+          });
+          if (unbalanced || recoveryDraft.component_recoveries.length < 1) {
+            setDamageSaveError("Uzupełnij rozliczenie komponentów (przyjęcie + odrzut = do odzysku).");
+            return false;
+          }
+        }
+        if (useMfgRecovery && recoveryMode === "REQUIRED" && recoveryDraft.disassembly_qty < 1) {
+          setDamageSaveError("Wymagane rozmontowanie produktu produkowanego.");
+          return false;
+        }
+
+        if (allRejectedLine && !useMfgRecovery) {
           const fromOpts = opts?.fullLineRejectReason?.reasonId?.trim()
             ? opts.fullLineRejectReason
             : opts?.rejectReasonForSplit?.reasonId?.trim()
@@ -2724,7 +2787,7 @@ export default function WmsReturnsPage() {
             },
             { commitWorkflow, warehouseId: Number(whId) },
           );
-        } else if (allOkLine) {
+        } else if (allOkLine && !useMfgRecovery) {
           ret = await processWmsReturnLine(
             effectiveReturnDbId,
             seed.orderItemId,
@@ -2779,6 +2842,7 @@ export default function WmsReturnsPage() {
             photo_urls: allDamagePhotoUrls,
             damage_type: splitDamageType,
             ...(damage_entries.length > 0 ? { damage_entries } : {}),
+            ...(recoveryPayloadFields ?? {}),
           };
           if (aggregated.damaged > 0 && damage_entries.length < 1) {
             setDamageSaveError("Brak damage_entries dla uszkodzonych sztuk — zapis został zablokowany.");
@@ -2854,6 +2918,10 @@ export default function WmsReturnsPage() {
       rid,
       lineOverrides,
       dmgReasons,
+      mfgRecoveryByLineId,
+      wmsSettings?.manufactured_component_recovery_mode,
+      wmsReturn?.manufactured_component_recovery_mode,
+      wmsReturn?.lines,
     ]
   );
   saveSplitForLineRef.current = saveSplitForLine;
@@ -3526,6 +3594,36 @@ export default function WmsReturnsPage() {
       if (aggregated.damaged > 0 && damage_entries.length < 1) {
         return { ok: false, message: "Brak damage_entries dla uszkodzonych sztuk — zapis został zablokowany." };
       }
+      const apiLine =
+        wmsReturn?.lines.find((l) => Number(l.order_item_id) === Number(seed.orderItemId)) ??
+        wmsReturn?.lines.find((l) => Number(l.product_id) === Number(seed.candidate.productId));
+      const recoveryModeRaw = String(
+        wmsReturn?.manufactured_component_recovery_mode ||
+          wmsSettings?.manufactured_component_recovery_mode ||
+          "OFF",
+      ).toUpperCase();
+      const recoveryMode: ManufacturedComponentRecoveryMode =
+        recoveryModeRaw === "OPTIONAL" || recoveryModeRaw === "REQUIRED" ? recoveryModeRaw : "OFF";
+      const recoveryDraft = mfgRecoveryByLineId[lineId];
+      const useMfgRecovery =
+        recoveryMode !== "OFF" &&
+        Boolean(apiLine?.manufactured_recovery_eligible) &&
+        recoveryDraft != null;
+      if (useMfgRecovery && recoveryMode === "REQUIRED" && recoveryDraft.disassembly_qty < 1) {
+        return { ok: false, message: "Wymagane rozmontowanie produktu produkowanego." };
+      }
+      if (useMfgRecovery && recoveryDraft.disassembly_qty > 0) {
+        const unbalanced = recoveryDraft.component_recoveries.some((r) => {
+          const expected = Number(r.expected_qty ?? 0);
+          return Math.abs(Number(r.accepted_qty) + Number(r.scrap_qty) - expected) > 1e-6;
+        });
+        if (unbalanced || recoveryDraft.component_recoveries.length < 1) {
+          return {
+            ok: false,
+            message: "Uzupełnij rozliczenie komponentów (przyjęcie + odrzut = do odzysku).",
+          };
+        }
+      }
       return {
         ok: true,
         line: {
@@ -3540,10 +3638,27 @@ export default function WmsReturnsPage() {
           photo_urls: allDamagePhotoUrls,
           damage_type: splitDamageType,
           ...(damage_entries.length > 0 ? { damage_entries } : {}),
+          ...(useMfgRecovery
+            ? {
+                stock_intake_mode: recoveryDraft.stock_intake_mode,
+                fg_intake_qty: recoveryDraft.fg_intake_qty,
+                disassembly_qty: recoveryDraft.disassembly_qty,
+                component_recoveries: recoveryDraft.component_recoveries,
+              }
+            : {}),
         },
       };
     },
-    [lineSeedByLineId, unitRowsByLineId, lineOverrides, dmgReasons],
+    [
+      lineSeedByLineId,
+      unitRowsByLineId,
+      lineOverrides,
+      dmgReasons,
+      mfgRecoveryByLineId,
+      wmsReturn?.lines,
+      wmsReturn?.manufactured_component_recovery_mode,
+      wmsSettings?.manufactured_component_recovery_mode,
+    ],
   );
 
   const handleSaveDirtyLines = useCallback(async () => {
@@ -4635,6 +4750,36 @@ export default function WmsReturnsPage() {
                                       onSaved={() => {
                                         if (selectedReturnDbId == null) return;
                                         void getWmsReturn(selectedReturnDbId, DAMAGE_TENANT_ID).then(setWmsReturn);
+                                      }}
+                                    />
+                                  );
+                                })()}
+                                {(() => {
+                                  const rmzLn = wmsReturn?.lines.find(
+                                    (l) => l.id != null && l.id === returnLineIdForPrint,
+                                  );
+                                  if (!rmzLn?.manufactured_recovery_eligible) return null;
+                                  const recoveryModeRaw = String(
+                                    wmsReturn?.manufactured_component_recovery_mode ||
+                                      wmsSettings?.manufactured_component_recovery_mode ||
+                                      "OFF",
+                                  ).toUpperCase();
+                                  const recoveryMode: ManufacturedComponentRecoveryMode =
+                                    recoveryModeRaw === "OPTIONAL" || recoveryModeRaw === "REQUIRED"
+                                      ? recoveryModeRaw
+                                      : "OFF";
+                                  if (recoveryMode === "OFF") return null;
+                                  const draft =
+                                    mfgRecoveryByLineId[ln.lineId] ?? draftFromLine(rmzLn, recoveryMode);
+                                  return (
+                                    <ManufacturedRecoveryIntakePanel
+                                      line={rmzLn}
+                                      mode={recoveryMode}
+                                      value={draft}
+                                      disabled={isFinished}
+                                      onChange={(next) => {
+                                        setMfgRecoveryByLineId((prev) => ({ ...prev, [ln.lineId]: next }));
+                                        setDirtyLineIds((prev) => ({ ...prev, [ln.lineId]: true }));
                                       }}
                                     />
                                   );
