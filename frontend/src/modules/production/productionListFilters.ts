@@ -60,6 +60,7 @@ export type ProductionOrderRow =
       sourceType?: "MANUAL" | "PLANNING" | "ORDERS" | null;
       sourceOrderCount?: number;
       sourceFulfilledOrderCount?: number;
+      sourceAwaitingPackingOrderCount?: number;
       sourceShortageCount?: number;
       sourceReservedCount?: number;
       sourceRequestedQuantityTotal?: number;
@@ -113,6 +114,7 @@ export function productionOrderToRow(o: ProductionOrderRead): ProductionOrderRow
     sourceType: o.source_type ?? "MANUAL",
     sourceOrderCount: o.source_order_count ?? 0,
     sourceFulfilledOrderCount: o.source_fulfilled_order_count ?? 0,
+    sourceAwaitingPackingOrderCount: o.source_awaiting_packing_order_count ?? 0,
     sourceShortageCount: o.source_shortage_count ?? 0,
     sourceReservedCount: o.source_reserved_count ?? 0,
     sourceRequestedQuantityTotal: o.source_requested_quantity_total ?? 0,

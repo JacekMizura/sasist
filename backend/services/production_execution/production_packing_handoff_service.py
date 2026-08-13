@@ -71,6 +71,29 @@ def mark_order_ready_for_packing_after_production(db: Session, order: Order) -> 
     db.add(order)
 
 
+def order_awaits_packing_after_orders_production(order: Order) -> bool:
+    """
+    True when a sales order (already FG-fulfilled by ORDERS MO) still needs packing.
+
+    Production source ``fulfilled`` means FG allocated — not packing done.
+    Finished packing / shipped / DONE panel group → False.
+    """
+    st = getattr(order, "order_ui_status", None)
+    main = str(getattr(st, "main_group", None) or "").strip().upper() if st is not None else ""
+    if main == "DONE":
+        return False
+    name = str(getattr(st, "name", None) or "").strip().lower() if st is not None else ""
+    if name and any(p in name for p in ("spakow", "packed", "wysł", "wysl", "shipped")):
+        return False
+    phase = str(getattr(order, "fulfillment_assignment_phase", None) or "").strip().upper()
+    if phase == "SHIPPED":
+        return False
+    fs = str(getattr(order, "fulfillment_state", None) or "").strip().upper()
+    if fs in ("PACKED", "SHIPPED", "COMPLETED", "DONE"):
+        return False
+    return True
+
+
 def order_is_from_production(db: Session, order: Order) -> bool:
     """True when packing artifacts were credited from ORDERS production."""
     oid = int(order.id)

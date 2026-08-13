@@ -65,6 +65,11 @@ export type ProductionOperationalStateInput = {
   sourceShortageQuantityTotal?: number;
   sourceShortageCount?: number;
   sourceFulfilledOrderCount?: number;
+  /**
+   * Distinct source orders still awaiting packing after ORDERS FG fulfillment.
+   * Do not use sourceFulfilledOrderCount alone — that is production allocation, not packing.
+   */
+  sourceAwaitingPackingOrderCount?: number;
   /** Nazwa najważniejszego brakującego komponentu (z lines[].product_name_snapshot). */
   shortageComponentHint?: string | null;
   /** Ilość braków dla tego komponentu (lines[].missing). */
@@ -109,17 +114,19 @@ export function shortageHintFromOrderLines(lines?: ShortageLineLike[] | null): {
 
 /**
  * Aktywna lista Zleceń: ukryj cancelled oraz completed MANUAL/PLANNING.
- * completed ORDERS z fulfilled > 0 zostaje (READY_TO_PACK).
+ * completed ORDERS zostaje tylko gdy nadal są źródła czekające na pakowanie.
  */
 export function shouldShowProductionOrderOnActiveList(order: {
   status?: string | null;
   source_type?: string | null;
   source_fulfilled_order_count?: number | null;
+  source_awaiting_packing_order_count?: number | null;
 }): boolean {
   const s = statusKey(order.status);
   if (s === "cancelled") return false;
   if (s === "completed") {
-    return isOrders(order.source_type) && Number(order.source_fulfilled_order_count ?? 0) > 0;
+    if (!isOrders(order.source_type)) return false;
+    return Number(order.source_awaiting_packing_order_count ?? 0) > 0;
   }
   return true;
 }
@@ -297,7 +304,7 @@ export function getProductionOperationalState(
   const skipsPutaway = orders;
   const shortageQty = Number(input.sourceShortageQuantityTotal ?? 0);
   const shortageCount = Number(input.sourceShortageCount ?? 0);
-  const fulfilledOrders = Number(input.sourceFulfilledOrderCount ?? 0);
+  const awaitingPackingOrders = Number(input.sourceAwaitingPackingOrderCount ?? 0);
   const print = isPrintMethod(input);
   const erp = Boolean(input.isErpInterface);
   const delayed = isPastPlannedDate(input.plannedDate) && !["completed", "cancelled"].includes(status);
@@ -329,7 +336,7 @@ export function getProductionOperationalState(
   }
 
   if (status === "completed") {
-    if (orders && fulfilledOrders > 0) {
+    if (orders && awaitingPackingOrders > 0) {
       return {
         currentStep: "READY_TO_PACK",
         businessLabel: "Gotowe do pakowania",

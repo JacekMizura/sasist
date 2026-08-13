@@ -216,7 +216,7 @@ export default function ProductionOrderDetailPage() {
 
   const shortagesBlocked = Boolean(order.has_shortages);
   const remaining = Math.max(0, order.planned_quantity - order.produced_quantity);
-  const readyToPack = order.source_fulfilled_order_count ?? 0;
+  const readyToPack = order.source_awaiting_packing_order_count ?? 0;
   const reservedQty = order.source_reserved_quantity_total ?? 0;
   const shortageQty = order.source_shortage_quantity_total ?? 0;
   const requestedQty = order.source_requested_quantity_total ?? 0;
@@ -249,6 +249,7 @@ export default function ProductionOrderDetailPage() {
     sourceShortageQuantityTotal: order.source_shortage_quantity_total,
     sourceShortageCount: order.source_shortage_count,
     sourceFulfilledOrderCount: order.source_fulfilled_order_count,
+    sourceAwaitingPackingOrderCount: order.source_awaiting_packing_order_count,
     shortageComponentHint: shortage.hint,
     shortagePrimaryMissingQty: shortage.primaryMissingQty || undefined,
     shortageAdditionalCount: shortage.additionalCount || undefined,

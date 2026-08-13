@@ -115,6 +115,7 @@ function OrderWorkCard({
     sourceShortageQuantityTotal: isOrder ? row.sourceShortageQuantityTotal : undefined,
     sourceShortageCount: isOrder ? row.sourceShortageCount : undefined,
     sourceFulfilledOrderCount: isOrder ? row.sourceFulfilledOrderCount : undefined,
+    sourceAwaitingPackingOrderCount: isOrder ? row.sourceAwaitingPackingOrderCount : undefined,
     shortageComponentHint: isOrder ? row.shortageComponentHint : undefined,
     shortagePrimaryMissingQty: isOrder ? row.shortagePrimaryMissingQty : undefined,
     shortageAdditionalCount: isOrder ? row.shortageAdditionalCount : undefined,

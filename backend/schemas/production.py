@@ -252,6 +252,8 @@ class ProductionOrderRead(BaseModel):
     source_shortage_quantity_total: float = 0.0
     source_fulfilled_order_count: int = 0
     source_pending_order_count: int = 0
+    #: Distinct source orders (FG-fulfilled) whose panel/packing state still needs packing.
+    source_awaiting_packing_order_count: int = 0
     order_sources: List[ProductionOrderSourceItemRead] = Field(default_factory=list)
     started_at: Optional[datetime] = None
     collecting_completed_at: Optional[datetime] = None

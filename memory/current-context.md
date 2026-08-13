@@ -1,5 +1,10 @@
 ﻿## Active
 
+**FIX: MO ORDERS READY_TO_PACK vs packing (2026-08-13):**
+- BE: `source_awaiting_packing_order_count` (projekcja z fulfilled sources + `order_awaits_packing_after_orders_production`)
+- FE: READY_TO_PACK / aktywna lista / CTA packing tylko gdy awaiting > 0; fulfilled ≠ packing
+- MO lifecycle `completed` bez zmian; po Spakowane/DONE/SHIPPED → COMPLETED / bucket done / brak CTA
+
 **UAT 3 ORDERS — FOR UPDATE fix (2026-08-13):**
 - `_find_aggregable_mo`: lock bez joinedload; selectinload po FOR UPDATE
 - Po deploy: wznowić KROK 1 na czystym Nowe ST-001 (np. #1022) albo wycofać #1092 z Produkcja→Nowe i ponownie →Produkcja

@@ -1,4 +1,18 @@
-﻿## 2026-08-13 — Fix UAT3: production status hook savepoint + orphan shipping FK
+﻿## 2026-08-13 — Fix: completed MO ORDERS nie wiszą jako „Gotowe do pakowania”
+
+- Root cause: FE traktował `completed` + `source_fulfilled_order_count>0` jako READY_TO_PACK (fulfilled = FG, nie packing)
+- BE: `source_awaiting_packing_order_count` w serialize MO; helper `order_awaits_packing_after_orders_production` (DONE/Spakowane/SHIPPED/PACKED → false)
+- FE: operational state + aktywna lista + CTA packing tylko przy awaiting > 0
+- Testy A–D w `productionOperationalState.test.ts` + `test_orders_mo_awaiting_packing_projection.py`; FE build OK
+
+## 2026-08-13 — Fix: FOR UPDATE + joinedload blokuje MO ORDERS (UAT #1092)
+
+- Root cause: `_find_aggregable_mo` / withdraw / `_find_aggregable_planning_mo` — `joinedload` + `with_for_update` → PG `FeatureNotSupported` (LEFT OUTER JOIN)
+- Fix: SELECT MO z `FOR UPDATE` bez eager join; `line_snapshots` / `order_sources` przez `selectinload` po locku
+- Soft-fail savepoint zostawiał status Produkcja bez MO — po deploy re-entry Nowe→Produkcja lub ponowny trigger na #1092
+- Testy: `test_find_aggregable_mo_for_update_without_outer_join`, `test_uat_qty1_status_production_creates_exactly_one_orders_mo`; 69 passed (trigger + material + sources + replenishment)
+
+## 2026-08-13 — Fix UAT3: production status hook savepoint + orphan shipping FK
 
 - Root cause PATCH ui-status 500: NO_BOM → shortage status UPDATE hit orphan `orders.shipping_method_id` FK → session PendingRollbackError (hook bez savepoint)
 - Soft-fail: `_run_production_status_hook` = `begin_nested` jak smart-matching; trigger re-raise po logu (savepoint rollback)

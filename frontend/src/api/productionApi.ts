@@ -179,6 +179,8 @@ export type ProductionOrderRead = {
   source_shortage_quantity_total?: number;
   source_fulfilled_order_count?: number;
   source_pending_order_count?: number;
+  /** Distinct FG-fulfilled source orders still awaiting packing (not Spakowane/DONE). */
+  source_awaiting_packing_order_count?: number;
   order_sources?: ProductionOrderSourceItemRead[];
   started_at?: string | null;
   completed_at?: string | null;

@@ -416,13 +416,34 @@ def serialize_order(
     }
     src_fulfilled_order_count = len(fulfilled_order_ids)
     src_pending_order_count = len(pending_order_ids)
+
+    # Distinct sales orders still awaiting packing after ORDERS FG fulfillment.
+    src_awaiting_packing_order_count = 0
+    if fulfilled_order_ids:
+        from .production_execution.production_packing_handoff_service import (
+            order_awaits_packing_after_orders_production,
+        )
+
+        fulfilled_orders = (
+            db.query(Order)
+            .options(joinedload(Order.order_ui_status))
+            .filter(Order.id.in_(list(fulfilled_order_ids)))
+            .all()
+        )
+        src_awaiting_packing_order_count = sum(
+            1 for o in fulfilled_orders if order_awaits_packing_after_orders_production(o)
+        )
+
     order_sources_out: list[ProductionOrderSourceItemRead] = []
     if with_order_sources and source_rows:
         order_ids = {int(s.order_id) for s in source_rows}
         product_ids = {int(s.product_id) for s in source_rows}
         orders_by_id = {
             int(o.id): o
-            for o in db.query(Order).filter(Order.id.in_(order_ids)).all()
+            for o in db.query(Order)
+            .options(joinedload(Order.order_ui_status))
+            .filter(Order.id.in_(order_ids))
+            .all()
         } if order_ids else {}
         products_by_id = {
             int(pr.id): pr
@@ -507,6 +528,7 @@ def serialize_order(
         source_shortage_quantity_total=float(src_shortage_qty_total),
         source_fulfilled_order_count=int(src_fulfilled_order_count),
         source_pending_order_count=int(src_pending_order_count),
+        source_awaiting_packing_order_count=int(src_awaiting_packing_order_count),
         order_sources=order_sources_out,
         started_at=order.started_at,
         collecting_completed_at=getattr(order, "collecting_completed_at", None),

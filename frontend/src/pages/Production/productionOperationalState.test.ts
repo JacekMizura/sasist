@@ -75,13 +75,14 @@ describe("getProductionOperationalState", () => {
     ).toBe("in_progress");
   });
 
-  it("ORDERS completed with fulfilled → READY_TO_PACK and skipsPutaway", () => {
+  it("ORDERS completed + awaiting packing → READY_TO_PACK and skipsPutaway", () => {
     const s = getProductionOperationalState({
       executionKind: "order",
       id: 4,
       status: "completed",
       sourceType: "ORDERS",
       sourceFulfilledOrderCount: 2,
+      sourceAwaitingPackingOrderCount: 2,
       plannedQuantity: 5,
       producedQuantity: 5,
     });
@@ -91,6 +92,39 @@ describe("getProductionOperationalState", () => {
     expect(s.businessLabel).toBe("Gotowe do pakowania");
     expect(s.primaryAction.kind).toBe("go_packing");
     expect(s.primaryAction.label).toBe("Przejdź do pakowania");
+  });
+
+  it("ORDERS completed + fulfilled but all packed/shipped → COMPLETED, no packing CTA", () => {
+    const s = getProductionOperationalState({
+      executionKind: "order",
+      id: 3,
+      status: "completed",
+      sourceType: "ORDERS",
+      sourceFulfilledOrderCount: 1,
+      sourceAwaitingPackingOrderCount: 0,
+      plannedQuantity: 20,
+      producedQuantity: 20,
+    });
+    expect(s.currentStep).toBe("COMPLETED");
+    expect(s.dashboardBucket).toBe("done");
+    expect(s.primaryAction.kind).not.toBe("go_packing");
+    expect(s.businessLabel).toBe("Zakończone");
+  });
+
+  it("ORDERS completed mixed sources: one DONE + one awaiting → READY_TO_PACK", () => {
+    const s = getProductionOperationalState({
+      executionKind: "order",
+      id: 5,
+      status: "completed",
+      sourceType: "ORDERS",
+      sourceFulfilledOrderCount: 2,
+      sourceAwaitingPackingOrderCount: 1,
+      plannedQuantity: 10,
+      producedQuantity: 10,
+    });
+    expect(s.currentStep).toBe("READY_TO_PACK");
+    expect(s.dashboardBucket).toBe("todo");
+    expect(s.primaryAction.kind).toBe("go_packing");
   });
 
   it("MANUAL completed is COMPLETED / done — not packing", () => {
@@ -169,9 +203,21 @@ describe("getProductionOperationalState", () => {
         status: "completed",
         sourceType: "ORDERS",
         sourceFulfilledOrderCount: 2,
+        sourceAwaitingPackingOrderCount: 2,
         isOnEntityDetailPage: true,
       }).primaryAction.kind,
     ).toBe("go_packing");
+    expect(
+      getProductionOperationalState({
+        executionKind: "order",
+        id: 3,
+        status: "completed",
+        sourceType: "ORDERS",
+        sourceFulfilledOrderCount: 1,
+        sourceAwaitingPackingOrderCount: 0,
+        isOnEntityDetailPage: true,
+      }).primaryAction.kind,
+    ).not.toBe("go_packing");
   });
 
   it("productionEntityDetailHref separates batch vs order", () => {
@@ -255,14 +301,48 @@ describe("getProductionOperationalState", () => {
 });
 
 describe("shouldShowProductionOrderOnActiveList", () => {
-  it("keeps completed ORDERS with fulfilled sources (READY_TO_PACK)", () => {
+  it("A: completed ORDERS + fulfilled + awaiting packing → active", () => {
+    expect(
+      shouldShowProductionOrderOnActiveList({
+        status: "completed",
+        source_type: "ORDERS",
+        source_fulfilled_order_count: 1,
+        source_awaiting_packing_order_count: 1,
+      }),
+    ).toBe(true);
+  });
+
+  it("B: completed ORDERS + fulfilled + all DONE/SHIPPED → hidden", () => {
+    expect(
+      shouldShowProductionOrderOnActiveList({
+        status: "completed",
+        source_type: "ORDERS",
+        source_fulfilled_order_count: 1,
+        source_awaiting_packing_order_count: 0,
+      }),
+    ).toBe(false);
+  });
+
+  it("C: mixed sources — one DONE + one awaiting → still active", () => {
     expect(
       shouldShowProductionOrderOnActiveList({
         status: "completed",
         source_type: "ORDERS",
         source_fulfilled_order_count: 2,
+        source_awaiting_packing_order_count: 1,
       }),
     ).toBe(true);
+  });
+
+  it("D: all source orders DONE → card disappears", () => {
+    expect(
+      shouldShowProductionOrderOnActiveList({
+        status: "completed",
+        source_type: "ORDERS",
+        source_fulfilled_order_count: 2,
+        source_awaiting_packing_order_count: 0,
+      }),
+    ).toBe(false);
   });
 
   it("hides completed MANUAL / PLANNING", () => {
@@ -281,12 +361,13 @@ describe("shouldShowProductionOrderOnActiveList", () => {
     ).toBe(false);
   });
 
-  it("hides completed ORDERS without fulfilled sources", () => {
+  it("fulfilled alone is not enough for active ORDERS card", () => {
     expect(
       shouldShowProductionOrderOnActiveList({
         status: "completed",
         source_type: "ORDERS",
-        source_fulfilled_order_count: 0,
+        source_fulfilled_order_count: 2,
+        source_awaiting_packing_order_count: 0,
       }),
     ).toBe(false);
   });

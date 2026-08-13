@@ -68,6 +68,7 @@ type MonitoringSource = {
   source_shortage_quantity_total?: number;
   source_shortage_count?: number;
   source_fulfilled_order_count?: number;
+  source_awaiting_packing_order_count?: number;
   shortage_component_hint?: string | null;
   shortage_primary_missing_qty?: number | null;
   shortage_additional_count?: number | null;
@@ -162,6 +163,7 @@ function toNextInput(kind: ProductionExecutionKind, source: MonitoringSource): P
     sourceShortageQuantityTotal: source.source_shortage_quantity_total,
     sourceShortageCount: source.source_shortage_count,
     sourceFulfilledOrderCount: source.source_fulfilled_order_count,
+    sourceAwaitingPackingOrderCount: source.source_awaiting_packing_order_count,
     shortageComponentHint: source.shortage_component_hint,
     shortagePrimaryMissingQty: source.shortage_primary_missing_qty,
     shortageAdditionalCount: source.shortage_additional_count,
@@ -407,6 +409,7 @@ export function orderMonitoringSource(order: ProductionOrderRead): MonitoringSou
     source_shortage_quantity_total: order.source_shortage_quantity_total,
     source_shortage_count: order.source_shortage_count,
     source_fulfilled_order_count: order.source_fulfilled_order_count,
+    source_awaiting_packing_order_count: order.source_awaiting_packing_order_count,
     shortage_component_hint: shortage.hint,
     shortage_primary_missing_qty: shortage.primaryMissingQty || null,
     shortage_additional_count: shortage.additionalCount || null,

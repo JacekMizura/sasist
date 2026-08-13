@@ -85,6 +85,7 @@ function orderToWorkItem(o: ProductionOrderRead): ProductionWorkItem {
     sourceShortageQuantityTotal: o.source_shortage_quantity_total,
     sourceShortageCount: o.source_shortage_count,
     sourceFulfilledOrderCount: o.source_fulfilled_order_count,
+    sourceAwaitingPackingOrderCount: o.source_awaiting_packing_order_count,
     shortageComponentHint: shortage.hint,
     shortagePrimaryMissingQty: shortage.primaryMissingQty || undefined,
     shortageAdditionalCount: shortage.additionalCount || undefined,
