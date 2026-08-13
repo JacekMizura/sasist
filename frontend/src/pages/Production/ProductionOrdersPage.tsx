@@ -40,6 +40,7 @@ import {
 import {
   getProductionOperationalState,
   productionOrdersSourceSummary,
+  shouldShowProductionOrderOnActiveList,
 } from "./productionOperationalState";
 import { erpProductionPaths, wmsProductionPaths } from "./productionPaths";
 import { ProductionOrdersFiltersPanel } from "./components/ProductionOrdersFiltersPanel";
@@ -114,6 +115,9 @@ function OrderWorkCard({
     sourceShortageQuantityTotal: isOrder ? row.sourceShortageQuantityTotal : undefined,
     sourceShortageCount: isOrder ? row.sourceShortageCount : undefined,
     sourceFulfilledOrderCount: isOrder ? row.sourceFulfilledOrderCount : undefined,
+    shortageComponentHint: isOrder ? row.shortageComponentHint : undefined,
+    shortagePrimaryMissingQty: isOrder ? row.shortagePrimaryMissingQty : undefined,
+    shortageAdditionalCount: isOrder ? row.shortageAdditionalCount : undefined,
   });
   const next = state.primaryAction;
 
@@ -239,7 +243,7 @@ export default function ProductionOrdersPage() {
         listProductionOrders(tenantId, { warehouse_id: warehouseId }),
       ]);
       setBatches(b.filter((x) => x.status !== "completed" && x.status !== "cancelled"));
-      setOrders(o.filter((x) => x.status !== "completed" && x.status !== "cancelled"));
+      setOrders(o.filter(shouldShowProductionOrderOnActiveList));
     } catch {
       setBatches([]);
       setOrders([]);

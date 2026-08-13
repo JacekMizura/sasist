@@ -38,7 +38,7 @@ import {
   resolveMaterialReadiness,
 } from "./productionUi";
 import { productionOrdersSourceSummary } from "./productionNextAction";
-import { getProductionOperationalState } from "./productionOperationalState";
+import { getProductionOperationalState, shortageHintFromOrderLines } from "./productionOperationalState";
 import { Card, ProgressBar, StatusBadge, primaryButtonClassName, typography } from "@/design-system";
 
 const DEFAULT_TENANT = 1;
@@ -228,6 +228,7 @@ export default function ProductionOrderDetailPage() {
     sourceRequestedQuantityTotal: requestedQty,
     plannedQuantity: order.planned_quantity,
   });
+  const shortage = shortageHintFromOrderLines(order.lines);
   const operational = getProductionOperationalState({
     executionKind: "order",
     id: order.id,
@@ -248,6 +249,9 @@ export default function ProductionOrderDetailPage() {
     sourceShortageQuantityTotal: order.source_shortage_quantity_total,
     sourceShortageCount: order.source_shortage_count,
     sourceFulfilledOrderCount: order.source_fulfilled_order_count,
+    shortageComponentHint: shortage.hint,
+    shortagePrimaryMissingQty: shortage.primaryMissingQty || undefined,
+    shortageAdditionalCount: shortage.additionalCount || undefined,
   });
   const progressPct = operational.progressMeaning.percent;
 

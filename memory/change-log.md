@@ -1,4 +1,12 @@
-﻿## 2026-08-13 — UX pass Produkcja: jedna główna akcja „Co dalej?”
+﻿## 2026-08-13 — UAT Produkcja: ryzyka A/C/D (lista packing, braki, release copy)
+
+- Lista: completed ORDERS z fulfilled > 0 zostaje jako READY_TO_PACK; MANUAL/PLANNING completed ukryte
+- Braki: `shortageHintFromOrderLines` → „Brakuje N szt. — Nazwa + M kolejnych” (lines API, bez nowego BE)
+- Planned: przed release „Przekaż do realizacji” / po release „Pobierz komponenty”; collecting bez zmian
+- E zweryfikowane (bez fix): brak FK BAT↔MO; UI merge dashboard batches + list MO może pokazać obie niezależne encje
+- Testy: `productionOperationalState.test.ts` (18); FE build OK
+
+## 2026-08-13 — UX pass Produkcja: jedna główna akcja „Co dalej?”
 
 - SSOT `productionNextAction.ts`: status → komunikat + jedno CTA; druk/anuluj/papier w menu „…”
 - Pulpit: „Wymaga Twojej uwagi” + „Produkcja w toku” na górze; KPI/aktywność niżej

@@ -9,6 +9,7 @@ import { wmsProductionPaths } from "../productionPaths";
 import {
   getProductionOperationalState,
   resolveProductionSecondaryActions,
+  shortageHintFromOrderLines,
   type ProductionOperationalStateInput,
   type ProductionSecondaryActionId,
 } from "../productionOperationalState";
@@ -66,6 +67,8 @@ type MonitoringSource = {
   source_shortage_count?: number;
   source_fulfilled_order_count?: number;
   shortage_component_hint?: string | null;
+  shortage_primary_missing_qty?: number | null;
+  shortage_additional_count?: number | null;
   execution_interface?: string | null;
   released_to_wms_at?: string | null;
   started_at?: string | null;
@@ -154,6 +157,8 @@ function toNextInput(kind: ProductionExecutionKind, source: MonitoringSource): P
     sourceShortageCount: source.source_shortage_count,
     sourceFulfilledOrderCount: source.source_fulfilled_order_count,
     shortageComponentHint: source.shortage_component_hint,
+    shortagePrimaryMissingQty: source.shortage_primary_missing_qty,
+    shortageAdditionalCount: source.shortage_additional_count,
   };
 }
 
@@ -361,7 +366,7 @@ function formatTs(iso: string): string {
 }
 
 export function orderMonitoringSource(order: ProductionOrderRead): MonitoringSource {
-  const shortageLine = (order.lines ?? []).find((ln) => Number(ln.missing ?? 0) > 0);
+  const shortage = shortageHintFromOrderLines(order.lines);
   return {
     id: order.id,
     number: order.number,
@@ -383,7 +388,9 @@ export function orderMonitoringSource(order: ProductionOrderRead): MonitoringSou
     source_shortage_quantity_total: order.source_shortage_quantity_total,
     source_shortage_count: order.source_shortage_count,
     source_fulfilled_order_count: order.source_fulfilled_order_count,
-    shortage_component_hint: shortageLine?.product_name_snapshot ?? null,
+    shortage_component_hint: shortage.hint,
+    shortage_primary_missing_qty: shortage.primaryMissingQty || null,
+    shortage_additional_count: shortage.additionalCount || null,
     execution_interface: order.execution_interface,
     released_to_wms_at: order.released_to_wms_at,
     started_at: order.started_at,

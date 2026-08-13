@@ -1,5 +1,18 @@
 ﻿## Active
 
+**UAT Produkcja — ryzyka A/C/D (2026-08-13):**
+- A: lista Zleceń zostawia completed ORDERS z `source_fulfilled_order_count > 0` jako READY_TO_PACK
+- C: copy braków z `lines[].missing` + nazwa (`Brakuje N szt. — … + M kolejnych`)
+- D: planned przed release = „Przekaż do realizacji”; po release = „Pobierz komponenty” / „Rozpocznij zbieranie”
+- E (bez naprawy): BAT i MO to osobne encje bez wspólnego FK — UI może pokazać obie przy równoległym utworzeniu; brak jednoznacznego klucza procesu
+
+**UX Produkcja — kolejka pracy + getProductionOperationalState (2026-08-13):**
+- FE SSOT: `productionOperationalState.ts` → currentStep / description / CTA / progressMeaning / exclusive dashboardBucket
+- Pulpit: Wymaga reakcji | Do wykonania | W toku (bez dublowania pozycji)
+- Planowanie: usunięto „Aktywne partie”; zostaje rekomendacja „co wyprodukować”
+- Putaway terminal: „Rozlokuj produkt”, bez raw NOT_STARTED / „dokument PW” jako główny komunikat
+- ORDERS nadal omija Rozlokowanie (BE `complete_orders_mo_without_putaway` + FE `ordersMoSkipsPutaway`)
+
 **UX pass Produkcja — jedna akcja „Co dalej?” (2026-08-13):**
 - SSOT: `frontend/src/pages/Production/productionNextAction.ts` (+ `ProductionPrimaryActionBar` / `ProductionContextBanner`)
 - Pulpit: attention + in-progress first; lista/detail bez równorzędnych CTA etapów

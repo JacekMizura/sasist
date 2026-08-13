@@ -1,4 +1,5 @@
 import type { ProductionBatchRead, ProductionOrderRead } from "@/api/productionApi";
+import { shortageHintFromOrderLines } from "../../pages/Production/productionOperationalState";
 import { BATCH_STATUS_LABEL, PRODUCTION_STATUS_LABEL, resolveProductionPriority } from "../../pages/Production/productionUi";
 
 export type ProductionOrdersListFilters = {
@@ -68,6 +69,9 @@ export type ProductionOrderRow =
       materialsReserved?: boolean;
       productionExecutionMethod?: "WMS" | "PRINT" | null;
       isPrintInterface?: boolean;
+      shortageComponentHint?: string | null;
+      shortagePrimaryMissingQty?: number;
+      shortageAdditionalCount?: number;
     };
 
 export function productionBatchToRow(b: ProductionBatchRead): ProductionOrderRow {
@@ -89,6 +93,7 @@ export function productionBatchToRow(b: ProductionBatchRead): ProductionOrderRow
 }
 
 export function productionOrderToRow(o: ProductionOrderRead): ProductionOrderRow {
+  const shortage = shortageHintFromOrderLines(o.lines);
   return {
     kind: "order",
     id: o.id,
@@ -117,6 +122,9 @@ export function productionOrderToRow(o: ProductionOrderRead): ProductionOrderRow
     materialsReserved: Boolean(o.materials_reserved),
     productionExecutionMethod: o.production_execution_method ?? null,
     isPrintInterface: Boolean(o.is_print_interface),
+    shortageComponentHint: shortage.hint,
+    shortagePrimaryMissingQty: shortage.primaryMissingQty || undefined,
+    shortageAdditionalCount: shortage.additionalCount || undefined,
   };
 }
 

@@ -65,9 +65,77 @@ export type ProductionOperationalStateInput = {
   sourceShortageQuantityTotal?: number;
   sourceShortageCount?: number;
   sourceFulfilledOrderCount?: number;
+  /** Nazwa najważniejszego brakującego komponentu (z lines[].product_name_snapshot). */
   shortageComponentHint?: string | null;
+  /** Ilość braków dla tego komponentu (lines[].missing). */
+  shortagePrimaryMissingQty?: number | null;
+  /** Ile innych pozycji komponentów ma braki (>0). */
+  shortageAdditionalCount?: number | null;
   plannedDate?: string | null;
 };
+
+export type ShortageLineLike = {
+  product_name_snapshot?: string | null;
+  missing?: number | null;
+};
+
+/** Pierwszy (największy) brak komponentu + liczba pozostałych — z lines API. */
+export function shortageHintFromOrderLines(lines?: ShortageLineLike[] | null): {
+  hint: string | null;
+  primaryMissingQty: number;
+  additionalCount: number;
+} {
+  const rows = (lines ?? [])
+    .map((ln) => ({
+      name: String(ln.product_name_snapshot || "").trim(),
+      missing: Number(ln.missing ?? 0),
+    }))
+    .filter((r) => Number.isFinite(r.missing) && r.missing > 0)
+    .sort((a, b) => b.missing - a.missing);
+  if (rows.length === 0) {
+    return { hint: null, primaryMissingQty: 0, additionalCount: 0 };
+  }
+  return {
+    hint: rows[0].name || null,
+    primaryMissingQty: rows[0].missing,
+    additionalCount: Math.max(0, rows.length - 1),
+  };
+}
+
+/**
+ * Aktywna lista Zleceń: ukryj cancelled oraz completed MANUAL/PLANNING.
+ * completed ORDERS z fulfilled > 0 zostaje (READY_TO_PACK).
+ */
+export function shouldShowProductionOrderOnActiveList(order: {
+  status?: string | null;
+  source_type?: string | null;
+  source_fulfilled_order_count?: number | null;
+}): boolean {
+  const s = statusKey(order.status);
+  if (s === "cancelled") return false;
+  if (s === "completed") {
+    return isOrders(order.source_type) && Number(order.source_fulfilled_order_count ?? 0) > 0;
+  }
+  return true;
+}
+
+export function formatShortageDescription(input: {
+  shortageComponentHint?: string | null;
+  shortagePrimaryMissingQty?: number | null;
+  shortageAdditionalCount?: number | null;
+  sourceShortageQuantityTotal?: number | null;
+}): string {
+  const hint = input.shortageComponentHint?.trim() || null;
+  const primaryQty = Number(input.shortagePrimaryMissingQty ?? 0);
+  const sourceQty = Number(input.sourceShortageQuantityTotal ?? 0);
+  const qty = primaryQty > 0 ? primaryQty : sourceQty;
+  const extra = Math.max(0, Math.floor(Number(input.shortageAdditionalCount ?? 0)));
+  const more = extra > 0 ? ` + ${extra} kolejnych` : "";
+  if (qty > 0 && hint) return `Brakuje ${fmtQty(qty)} szt. — ${hint}${more}`;
+  if (qty > 0) return `Brakuje ${fmtQty(qty)} szt. komponentów${more}`;
+  if (hint) return `Brakuje — ${hint}${more}`;
+  return "Brakuje komponentów potrzebnych do startu";
+}
 
 export type ProductionOperationalState = {
   currentStep: ProductionOperationalStep;
@@ -344,19 +412,15 @@ export function getProductionOperationalState(
 
   // draft / planned
   if (blocked) {
-    const hint = input.shortageComponentHint?.trim();
-    const description =
-      shortageQty > 0
-        ? hint
-          ? `Brakuje ${fmtQty(shortageQty)} szt. komponentu ${hint}`
-          : `Brakuje ${fmtQty(shortageQty)} szt. komponentów`
-        : hint
-          ? `Brakuje komponentu ${hint}`
-          : "Brakuje komponentów potrzebnych do startu";
     return {
       currentStep: "WAITING_MATERIALS",
       businessLabel: "Brakuje materiałów",
-      description,
+      description: formatShortageDescription({
+        shortageComponentHint: input.shortageComponentHint,
+        shortagePrimaryMissingQty: input.shortagePrimaryMissingQty,
+        shortageAdditionalCount: input.shortageAdditionalCount,
+        sourceShortageQuantityTotal: shortageQty,
+      }),
       primaryAction: {
         kind: "view_shortages",
         label: "Zobacz braki",
@@ -435,7 +499,7 @@ export function getProductionOperationalState(
     return {
       currentStep: "READY_TO_START",
       businessLabel: "Pobierz komponenty",
-      description: "Rozpocznij pobieranie komponentów.",
+      description: "Zlecenie czeka na pobranie komponentów.",
       primaryAction: {
         kind: "start_collecting",
         label: "Rozpocznij zbieranie",
@@ -472,10 +536,11 @@ export function getProductionOperationalState(
     };
   }
 
+  // planned / draft — jeszcze niewydane do WMS
   return {
     currentStep: "READY_TO_START",
-    businessLabel: "Pobierz komponenty",
-    description: "Wyślij zlecenie do realizacji.",
+    businessLabel: "Przekaż do realizacji",
+    description: "Materiały są dostępne. Zlecenie może zostać przekazane do realizacji.",
     primaryAction: {
       kind: "send_to_execution",
       label: "Wyślij do realizacji",

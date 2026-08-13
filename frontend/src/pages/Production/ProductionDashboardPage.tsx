@@ -24,7 +24,7 @@ import { useActiveWarehouseContext } from "../../hooks/useActiveWarehouseContext
 import { ProductionWorkQueueSection, type ProductionWorkItem } from "./components/ProductionWorkQueueSection";
 import { productionPageStackClass, productionPageTitleClass } from "./productionLayoutTokens";
 import { erpProductionPaths } from "./productionPaths";
-import { getProductionOperationalState } from "./productionOperationalState";
+import { getProductionOperationalState, shortageHintFromOrderLines } from "./productionOperationalState";
 
 const DEFAULT_TENANT = 1;
 const SECTION_LIMIT = 8;
@@ -64,6 +64,7 @@ function batchToWorkItem(b: ProductionBatchSummaryRead): ProductionWorkItem {
 }
 
 function orderToWorkItem(o: ProductionOrderRead): ProductionWorkItem {
+  const shortage = shortageHintFromOrderLines(o.lines);
   const state = getProductionOperationalState({
     executionKind: "order",
     id: o.id,
@@ -84,6 +85,9 @@ function orderToWorkItem(o: ProductionOrderRead): ProductionWorkItem {
     sourceShortageQuantityTotal: o.source_shortage_quantity_total,
     sourceShortageCount: o.source_shortage_count,
     sourceFulfilledOrderCount: o.source_fulfilled_order_count,
+    shortageComponentHint: shortage.hint,
+    shortagePrimaryMissingQty: shortage.primaryMissingQty || undefined,
+    shortageAdditionalCount: shortage.additionalCount || undefined,
   });
   const sourceLabel =
     o.source_type === "ORDERS"
@@ -226,9 +230,7 @@ export default function ProductionDashboardPage() {
           i.state.businessLabel === "Pobierz komponenty"),
     );
     const start = todo.filter(
-      (i) =>
-        i.state.currentStep === "READY_TO_START" &&
-        !collect.includes(i),
+      (i) => i.state.currentStep === "READY_TO_START" && !collect.includes(i),
     );
     const putaway = todo.filter((i) => i.state.currentStep === "WAITING_PUTAWAY");
     const pack = todo.filter((i) => i.state.currentStep === "READY_TO_PACK");

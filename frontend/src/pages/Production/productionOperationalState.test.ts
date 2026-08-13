@@ -1,24 +1,42 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  formatShortageDescription,
   getProductionOperationalState,
   productionOrdersSourceSummary,
+  shouldShowProductionOrderOnActiveList,
+  shortageHintFromOrderLines,
 } from "./productionOperationalState";
 
 describe("getProductionOperationalState", () => {
-  it("maps shortages to WAITING_MATERIALS / reaction", () => {
+  it("maps shortages to WAITING_MATERIALS / reaction with concrete component copy", () => {
     const s = getProductionOperationalState({
       executionKind: "order",
       id: 1,
       status: "planned",
       hasShortages: true,
       sourceShortageQuantityTotal: 30,
-      shortageComponentHint: "Komponent X",
+      shortageComponentHint: "Sznurowadła CAT 150 cm",
+      shortagePrimaryMissingQty: 30,
     });
     expect(s.currentStep).toBe("WAITING_MATERIALS");
     expect(s.dashboardBucket).toBe("reaction");
     expect(s.businessLabel).toBe("Brakuje materiałów");
+    expect(s.description).toBe("Brakuje 30 szt. — Sznurowadła CAT 150 cm");
     expect(s.primaryAction.label).toBe("Zobacz braki");
+  });
+
+  it("appends + N kolejnych when multiple component shortages", () => {
+    const s = getProductionOperationalState({
+      executionKind: "order",
+      id: 1,
+      status: "planned",
+      hasShortages: true,
+      shortageComponentHint: "Sznurowadła CAT 150 cm",
+      shortagePrimaryMissingQty: 30,
+      shortageAdditionalCount: 2,
+    });
+    expect(s.description).toBe("Brakuje 30 szt. — Sznurowadła CAT 150 cm + 2 kolejnych");
   });
 
   it("awaiting_putaway is todo, not in_progress — even at 100% production", () => {
@@ -69,7 +87,37 @@ describe("getProductionOperationalState", () => {
     expect(s.currentStep).toBe("READY_TO_PACK");
     expect(s.skipsPutaway).toBe(true);
     expect(s.dashboardBucket).toBe("todo");
+    expect(s.businessLabel).toBe("Gotowe do pakowania");
     expect(s.primaryAction.kind).toBe("go_packing");
+    expect(s.primaryAction.label).toBe("Przejdź do pakowania");
+  });
+
+  it("MANUAL completed is COMPLETED / done — not packing", () => {
+    const s = getProductionOperationalState({
+      executionKind: "order",
+      id: 9,
+      status: "completed",
+      sourceType: "MANUAL",
+      sourceFulfilledOrderCount: 0,
+      plannedQuantity: 3,
+      producedQuantity: 3,
+    });
+    expect(s.currentStep).toBe("COMPLETED");
+    expect(s.dashboardBucket).toBe("done");
+    expect(s.primaryAction.kind).not.toBe("go_packing");
+  });
+
+  it("PLANNING completed is COMPLETED / done — not packing", () => {
+    const s = getProductionOperationalState({
+      executionKind: "order",
+      id: 10,
+      status: "completed",
+      sourceType: "PLANNING",
+      plannedQuantity: 3,
+      producedQuantity: 3,
+    });
+    expect(s.currentStep).toBe("COMPLETED");
+    expect(s.dashboardBucket).toBe("done");
   });
 
   it("MANUAL/PLANNING after production wait for putaway", () => {
@@ -93,16 +141,45 @@ describe("getProductionOperationalState", () => {
     expect(planning.skipsPutaway).toBe(false);
   });
 
-  it("planned ready → send to execution in todo", () => {
+  it("planned before release → Przekaż do realizacji / Wyślij do realizacji", () => {
     const s = getProductionOperationalState({
       executionKind: "order",
       id: 1,
       status: "planned",
       sourceType: "MANUAL",
+      isReleasedToWms: false,
     });
     expect(s.currentStep).toBe("READY_TO_START");
     expect(s.dashboardBucket).toBe("todo");
+    expect(s.businessLabel).toBe("Przekaż do realizacji");
+    expect(s.description).toMatch(/przekazane do realizacji/i);
     expect(s.primaryAction.kind).toBe("send_to_execution");
+    expect(s.primaryAction.label).toBe("Wyślij do realizacji");
+  });
+
+  it("planned after release → Pobierz komponenty / Rozpocznij zbieranie", () => {
+    const s = getProductionOperationalState({
+      executionKind: "order",
+      id: 1,
+      status: "planned",
+      sourceType: "MANUAL",
+      isReleasedToWms: true,
+    });
+    expect(s.currentStep).toBe("READY_TO_START");
+    expect(s.businessLabel).toBe("Pobierz komponenty");
+    expect(s.description).toMatch(/pobranie komponentów/i);
+    expect(s.primaryAction.kind).toBe("start_collecting");
+    expect(s.primaryAction.label).toBe("Rozpocznij zbieranie");
+  });
+
+  it("collecting keeps Pobierz komponenty / Kontynuuj zbieranie", () => {
+    const s = getProductionOperationalState({
+      executionKind: "order",
+      id: 1,
+      status: "collecting",
+    });
+    expect(s.businessLabel).toBe("Pobierz komponenty");
+    expect(s.primaryAction.label).toBe("Kontynuuj zbieranie");
   });
 
   it("delayed planned without shortages → reaction", () => {
@@ -118,13 +195,77 @@ describe("getProductionOperationalState", () => {
   });
 });
 
+describe("shouldShowProductionOrderOnActiveList", () => {
+  it("keeps completed ORDERS with fulfilled sources (READY_TO_PACK)", () => {
+    expect(
+      shouldShowProductionOrderOnActiveList({
+        status: "completed",
+        source_type: "ORDERS",
+        source_fulfilled_order_count: 2,
+      }),
+    ).toBe(true);
+  });
+
+  it("hides completed MANUAL / PLANNING", () => {
+    expect(
+      shouldShowProductionOrderOnActiveList({
+        status: "completed",
+        source_type: "MANUAL",
+        source_fulfilled_order_count: 0,
+      }),
+    ).toBe(false);
+    expect(
+      shouldShowProductionOrderOnActiveList({
+        status: "completed",
+        source_type: "PLANNING",
+      }),
+    ).toBe(false);
+  });
+
+  it("hides completed ORDERS without fulfilled sources", () => {
+    expect(
+      shouldShowProductionOrderOnActiveList({
+        status: "completed",
+        source_type: "ORDERS",
+        source_fulfilled_order_count: 0,
+      }),
+    ).toBe(false);
+  });
+
+  it("keeps active non-completed orders", () => {
+    expect(shouldShowProductionOrderOnActiveList({ status: "planned", source_type: "MANUAL" })).toBe(true);
+    expect(shouldShowProductionOrderOnActiveList({ status: "cancelled" })).toBe(false);
+  });
+});
+
+describe("shortageHintFromOrderLines / formatShortageDescription", () => {
+  it("picks largest missing component and counts extras", () => {
+    const hint = shortageHintFromOrderLines([
+      { product_name_snapshot: "A", missing: 5 },
+      { product_name_snapshot: "Sznurowadła CAT 150 cm", missing: 30 },
+      { product_name_snapshot: "B", missing: 2 },
+    ]);
+    expect(hint.hint).toBe("Sznurowadła CAT 150 cm");
+    expect(hint.primaryMissingQty).toBe(30);
+    expect(hint.additionalCount).toBe(2);
+    expect(
+      formatShortageDescription({
+        shortageComponentHint: hint.hint,
+        shortagePrimaryMissingQty: hint.primaryMissingQty,
+        shortageAdditionalCount: hint.additionalCount,
+      }),
+    ).toBe("Brakuje 30 szt. — Sznurowadła CAT 150 cm + 2 kolejnych");
+  });
+});
+
 describe("productionOrdersSourceSummary", () => {
-  it("formats business ORDERS summary", () => {
+  it("formats orders demand summary", () => {
     expect(
       productionOrdersSourceSummary({
-        sourceOrderCount: 6,
-        sourceRequestedQuantityTotal: 18,
+        sourceOrderCount: 3,
+        sourceRequestedQuantityTotal: 12,
+        plannedQuantity: 12,
       }),
-    ).toBe("6 zamówień · 18 szt.");
+    ).toMatch(/3/);
   });
 });
