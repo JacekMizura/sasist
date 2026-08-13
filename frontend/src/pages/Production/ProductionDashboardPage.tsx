@@ -1,27 +1,17 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
-import {
-  AlertTriangle,
-  ArrowRight,
-  CheckCircle2,
-  ClipboardList,
-  Factory,
-  History,
-  PackageCheck,
-  Plus,
-} from "lucide-react";
+import { ClipboardList, MapPin, Package, Plus } from "lucide-react";
 
 import {
   fetchProductionDashboard,
+  listProductionOrders,
   type ProductionBatchSummaryRead,
   type ProductionDashboardRead,
+  type ProductionOrderRead,
 } from "../../api/productionApi";
 import { ActiveWarehouseRequiredBanner } from "../../components/layout/ActiveWarehouseRequiredBanner";
-import { AppEmptyState } from "../../components/app-shell";
 import {
   Card,
-  ListTile,
-  MetricCard,
   PageHeader,
   SearchInput,
   SecondaryButton,
@@ -31,67 +21,127 @@ import {
   typography,
 } from "@/design-system";
 import { useActiveWarehouseContext } from "../../hooks/useActiveWarehouseContext";
-import { ProductionDashboardBatchGrid } from "./components/ProductionDashboardBatchGrid";
+import { ProductionWorkQueueSection, type ProductionWorkItem } from "./components/ProductionWorkQueueSection";
 import { productionPageStackClass, productionPageTitleClass } from "./productionLayoutTokens";
 import { erpProductionPaths } from "./productionPaths";
+import { getProductionOperationalState } from "./productionOperationalState";
 
 const DEFAULT_TENANT = 1;
-const SECTION_LIMIT = 6;
+const SECTION_LIMIT = 8;
 
-function productLabel(batch: ProductionBatchSummaryRead): string {
-  return batch.product_labels?.slice(0, 2).join(", ") || "—";
-}
-
-function formatPlannedDate(raw?: string | null): string {
-  if (!raw) return "—";
-  const d = raw.slice(0, 10);
-  const [y, m, day] = d.split("-");
-  if (!y || !m || !day) return d;
-  return `${day}.${m}.${y}`;
-}
-
-function plannedSortKey(raw?: string | null): number {
-  if (!raw) return Number.POSITIVE_INFINITY;
-  const t = Date.parse(raw.slice(0, 10));
-  return Number.isFinite(t) ? t : Number.POSITIVE_INFINITY;
-}
-
-function matchesQuery(batch: ProductionBatchSummaryRead, q: string): boolean {
+function matchesQuery(item: ProductionWorkItem, q: string): boolean {
   if (!q) return true;
-  const hay = `${batch.number} ${productLabel(batch)} ${batch.operator_name ?? ""}`.toLowerCase();
+  const hay = `${item.number} ${item.productLabel} ${item.sourceLabel ?? ""}`.toLowerCase();
   return hay.includes(q);
 }
 
-type WorkSectionProps = {
+function batchToWorkItem(b: ProductionBatchSummaryRead): ProductionWorkItem {
+  const produced =
+    b.total_planned_units > 0
+      ? Math.round((b.progress_percent / 100) * b.total_planned_units * 1000) / 1000
+      : 0;
+  const state = getProductionOperationalState({
+    executionKind: "batch",
+    id: b.id,
+    status: b.status,
+    hasShortages: b.has_shortages,
+    isReleasedToWms: b.is_released_to_wms,
+    plannedQuantity: b.total_planned_units,
+    producedQuantity: produced,
+    plannedDate: b.planned_date,
+  });
+  return {
+    key: `batch-${b.id}`,
+    kind: "batch",
+    id: b.id,
+    number: b.number,
+    productLabel: b.product_labels?.slice(0, 2).join(", ") || "—",
+    productImageUrl: b.product_image_urls?.[0] ?? null,
+    qtyLabel: `${b.total_planned_units} szt.`,
+    plannedDate: b.planned_date,
+    state,
+  };
+}
+
+function orderToWorkItem(o: ProductionOrderRead): ProductionWorkItem {
+  const state = getProductionOperationalState({
+    executionKind: "order",
+    id: o.id,
+    status: o.status,
+    sourceType: o.source_type,
+    hasShortages: o.has_shortages,
+    materialsReserved: o.materials_reserved,
+    isReleasedToWms: o.is_released_to_wms,
+    isErpInterface: o.is_erp_interface,
+    isPrintInterface: o.is_print_interface,
+    productionExecutionMethod: o.production_execution_method,
+    producedQuantity: o.produced_quantity,
+    plannedQuantity: o.planned_quantity,
+    collectionProgressPercent: o.collection_progress_percent,
+    progressPercent: o.progress_percent,
+    sourceOrderCount: o.source_order_count,
+    sourceRequestedQuantityTotal: o.source_requested_quantity_total,
+    sourceShortageQuantityTotal: o.source_shortage_quantity_total,
+    sourceShortageCount: o.source_shortage_count,
+    sourceFulfilledOrderCount: o.source_fulfilled_order_count,
+  });
+  const sourceLabel =
+    o.source_type === "ORDERS"
+      ? "Na zamówienia"
+      : o.source_type === "PLANNING"
+        ? "Na magazyn"
+        : o.source_type === "MANUAL"
+          ? "Ręczne"
+          : null;
+  return {
+    key: `order-${o.id}`,
+    kind: "order",
+    id: o.id,
+    number: o.number,
+    productLabel: o.product_name ?? `Produkt #${o.product_id}`,
+    productImageUrl: o.product_image_url,
+    qtyLabel: `${o.produced_quantity}/${o.planned_quantity} szt.`,
+    sourceLabel,
+    state,
+  };
+}
+
+type SectionProps = {
   title: string;
   subtitle?: string;
   count: number;
   countTone?: "neutral" | "info" | "success" | "warning" | "danger";
+  emphasize?: boolean;
   children: ReactNode;
 };
 
-function WorkSection({ title, subtitle, count, countTone = "neutral", children }: WorkSectionProps) {
+function WorkSection({
+  title,
+  subtitle,
+  count,
+  countTone = "neutral",
+  emphasize = false,
+  children,
+}: SectionProps) {
   return (
-    <Card variant="section" density="comfortable" className="flex min-h-0 flex-col gap-3">
-      <div className="min-w-0 space-y-1">
+    <Card
+      variant="section"
+      density={emphasize ? "comfortable" : "compact"}
+      className={`flex min-h-0 flex-col gap-2 ${
+        emphasize ? "border-rose-200/80 bg-rose-50/30 ring-1 ring-rose-100" : ""
+      }`}
+    >
+      <div className="min-w-0 space-y-0.5">
         <div className="flex min-w-0 items-center gap-2">
-          <h2 className={typography.h2}>{title}</h2>
+          <h2 className={emphasize ? `${typography.h2} text-rose-950` : typography.h2}>{title}</h2>
           <StatusBadge tone={countTone} density="compact">
             {count}
           </StatusBadge>
         </div>
-        {subtitle ? <p className="text-sm text-slate-600">{subtitle}</p> : null}
+        {subtitle && count > 0 ? <p className="text-sm text-slate-600">{subtitle}</p> : null}
       </div>
       <div className="min-w-0 flex-1">{children}</div>
     </Card>
-  );
-}
-
-function KpiIcon({ children, className }: { children: ReactNode; className: string }) {
-  return (
-    <span className={`mb-1 inline-flex h-8 w-8 items-center justify-center rounded-lg ${className}`} aria-hidden>
-      {children}
-    </span>
   );
 }
 
@@ -99,15 +149,24 @@ export default function ProductionDashboardPage() {
   const { warehouseId, hasActiveWarehouse } = useActiveWarehouseContext();
   const tenantId = DEFAULT_TENANT;
   const [data, setData] = useState<ProductionDashboardRead | null>(null);
+  const [orders, setOrders] = useState<ProductionOrderRead[]>([]);
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState("");
 
   const reload = useCallback(async () => {
     setLoading(true);
     try {
-      setData(await fetchProductionDashboard(tenantId, warehouseId));
+      const [dash, orderList] = await Promise.all([
+        fetchProductionDashboard(tenantId, warehouseId),
+        warehouseId != null
+          ? listProductionOrders(tenantId, { warehouse_id: warehouseId })
+          : Promise.resolve([] as ProductionOrderRead[]),
+      ]);
+      setData(dash);
+      setOrders(orderList);
     } catch {
       setData(null);
+      setOrders([]);
     } finally {
       setLoading(false);
     }
@@ -119,58 +178,66 @@ export default function ProductionDashboardPage() {
 
   const q = query.trim().toLowerCase();
 
-  const ready = useMemo(
-    () => (data?.ready_to_produce ?? []).filter((b) => matchesQuery(b, q)),
-    [data?.ready_to_produce, q],
-  );
-  const blocked = useMemo(
-    () => (data?.waiting_materials ?? []).filter((b) => matchesQuery(b, q)),
-    [data?.waiting_materials, q],
-  );
-  const active = useMemo(
-    () => (data?.active ?? data?.in_progress ?? []).filter((b) => matchesQuery(b, q)),
-    [data?.active, data?.in_progress, q],
-  );
-  const awaitingPutaway = useMemo(
-    () => (data?.awaiting_putaway ?? []).filter((b) => matchesQuery(b, q)),
-    [data?.awaiting_putaway, q],
-  );
-  const recentlyCompleted = useMemo(
-    () => (data?.recently_completed ?? []).filter((b) => matchesQuery(b, q)),
-    [data?.recently_completed, q],
-  );
-
-  const attention = useMemo(() => {
-    const seen = new Set<number>();
-    const out: ProductionBatchSummaryRead[] = [];
-    for (const b of [...blocked, ...awaitingPutaway]) {
-      if (seen.has(b.id)) continue;
-      seen.add(b.id);
-      out.push(b);
+  const workItems = useMemo(() => {
+    const fromBatches = [
+      ...(data?.waiting_materials ?? []),
+      ...(data?.ready_to_produce ?? []),
+      ...(data?.in_progress ?? data?.active ?? []),
+      ...(data?.awaiting_putaway ?? []),
+    ];
+    const seenBatch = new Set<number>();
+    const batchItems: ProductionWorkItem[] = [];
+    for (const b of fromBatches) {
+      if (seenBatch.has(b.id)) continue;
+      seenBatch.add(b.id);
+      batchItems.push(batchToWorkItem(b));
     }
-    return out;
-  }, [blocked, awaitingPutaway]);
 
-  const upcomingCompletions = useMemo(() => {
-    const pool = [...active, ...awaitingPutaway, ...ready];
-    const seen = new Set<number>();
-    const unique = pool.filter((b) => {
-      if (seen.has(b.id)) return false;
-      seen.add(b.id);
-      return true;
-    });
-    return unique
-      .slice()
-      .sort((a, b) => plannedSortKey(a.planned_date) - plannedSortKey(b.planned_date))
-      .slice(0, 8);
-  }, [active, awaitingPutaway, ready]);
+    // ORDERS + MANUAL/PLANNING MO — pełniejszy obraz niż same partie z pulpitu API
+    const orderItems = orders
+      .filter((o) => o.status !== "cancelled")
+      .map(orderToWorkItem)
+      .filter((item) => item.state.dashboardBucket !== "hidden" && item.state.dashboardBucket !== "done");
+
+    // Unikalność: partie i zlecenia to osobne encje.
+    return [...orderItems, ...batchItems]
+      .filter((item) => item.state.dashboardBucket !== "done")
+      .filter((item) => matchesQuery(item, q));
+  }, [data, orders, q]);
+
+  const reaction = useMemo(
+    () => workItems.filter((i) => i.state.dashboardBucket === "reaction"),
+    [workItems],
+  );
+  const todo = useMemo(
+    () => workItems.filter((i) => i.state.dashboardBucket === "todo"),
+    [workItems],
+  );
+  const inProgress = useMemo(
+    () => workItems.filter((i) => i.state.dashboardBucket === "in_progress"),
+    [workItems],
+  );
+
+  const todoByStep = useMemo(() => {
+    const collect = todo.filter(
+      (i) =>
+        i.state.currentStep === "READY_TO_START" &&
+        (i.state.primaryAction.kind === "start_collecting" ||
+          i.state.businessLabel === "Pobierz komponenty"),
+    );
+    const start = todo.filter(
+      (i) =>
+        i.state.currentStep === "READY_TO_START" &&
+        !collect.includes(i),
+    );
+    const putaway = todo.filter((i) => i.state.currentStep === "WAITING_PUTAWAY");
+    const pack = todo.filter((i) => i.state.currentStep === "READY_TO_PACK");
+    return { start, collect, putaway, pack };
+  }, [todo]);
 
   if (!hasActiveWarehouse || warehouseId == null) {
     return <ActiveWarehouseRequiredBanner hint="Zlecenia RW/PW i partie produkcyjne są tworzone w aktywnym magazynie." />;
   }
-
-  const awaitingCount = data?.awaiting_putaway_batches ?? awaitingPutaway.length;
-  const shortageCount = data?.batches_with_shortages ?? blocked.length;
 
   return (
     <div className={productionPageStackClass}>
@@ -180,7 +247,7 @@ export default function ProductionDashboardPage() {
           <Link to={erpProductionPaths.createOrder} className={primaryButtonClassName()}>
             <span className="inline-flex items-center gap-1.5">
               <Plus className="h-4 w-4" aria-hidden />
-              Nowe zlecenie produkcyjne
+              Nowe zlecenie
             </span>
           </Link>
         }
@@ -191,9 +258,9 @@ export default function ProductionDashboardPage() {
                 density="comfortable"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                placeholder="Szukaj partii, produktu, operatora…"
+                placeholder="Szukaj zlecenia, produktu…"
                 className="w-full min-w-[16rem] max-w-md"
-                aria-label="Filtruj pulpit produkcji"
+                aria-label="Filtruj kolejkę pracy"
               />
             }
             end={
@@ -206,220 +273,114 @@ export default function ProductionDashboardPage() {
       >
         <div className="space-y-4">
           {loading ? (
-            <p className="text-sm text-slate-500">Wczytywanie danych…</p>
-          ) : data ? (
+            <p className="text-sm text-slate-500">Wczytywanie kolejki…</p>
+          ) : (
             <>
               <p className="text-sm text-slate-600">
-                Co się dzieje teraz i co wymaga Twojej decyzji — reszta poniżej.
+                Kolejka pracy: każda pozycja ma dokładnie jeden aktualny etap. Kliknij, aby wykonać następną akcję.
               </p>
 
-              <div className="grid gap-4 xl:grid-cols-2">
-                <WorkSection
-                  title="Wymaga Twojej uwagi"
-                  subtitle="Braki materiałów, problemy i pozycje do rozlokowania."
-                  count={attention.length}
-                  countTone={attention.length > 0 ? "danger" : "neutral"}
-                >
-                  <ProductionDashboardBatchGrid
-                    batches={attention}
-                    emptyIcon={AlertTriangle}
-                    emptyTitle="Nic nie wymaga uwagi"
-                    emptyDescription="Braki i rozlokowanie pojawią się tutaj, gdy będą potrzebne."
-                    limit={SECTION_LIMIT}
-                    seeAllTo={`${erpProductionPaths.orders}?shortages=1`}
-                    preferNextAction
-                  />
-                </WorkSection>
-
-                <WorkSection
-                  title="Produkcja w toku"
-                  subtitle="Aktualnie realizowane zlecenia — kontynuuj tam, gdzie jesteś."
-                  count={active.length}
-                  countTone="info"
-                >
-                  <ProductionDashboardBatchGrid
-                    batches={active}
-                    emptyIcon={Factory}
-                    emptyTitle="Brak produkcji w toku"
-                    emptyDescription="Gdy rozpoczniesz zbieranie lub produkcję, zlecenia pojawią się tutaj."
-                    limit={SECTION_LIMIT}
-                    seeAllTo={erpProductionPaths.orders}
-                    preferNextAction
-                  />
-                </WorkSection>
-              </div>
-
-              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                <MetricCard
-                  density="comfortable"
-                  className="min-w-0"
-                  label={
-                    <span className="flex flex-col gap-1">
-                      <KpiIcon className="bg-slate-100 text-slate-600">
-                        <ClipboardList className="h-4 w-4" />
-                      </KpiIcon>
-                      <span>Gotowe do startu</span>
-                    </span>
-                  }
-                  value={data.ready_to_produce?.length ?? ready.length}
-                  hint="zaplanowane bez braków"
-                />
-                <MetricCard
-                  density="comfortable"
-                  className="min-w-0"
-                  label={
-                    <span className="flex flex-col gap-1">
-                      <KpiIcon className="bg-sky-50 text-sky-600">
-                        <Factory className="h-4 w-4" />
-                      </KpiIcon>
-                      <span>W produkcji</span>
-                    </span>
-                  }
-                  value={data.active_batches}
-                  hint="aktywne zlecenia"
-                />
-                <MetricCard
-                  density="comfortable"
-                  className="min-w-0"
-                  label={
-                    <span className="flex flex-col gap-1">
-                      <KpiIcon className="bg-rose-50 text-rose-600">
-                        <AlertTriangle className="h-4 w-4" />
-                      </KpiIcon>
-                      <span>Brak materiałów</span>
-                    </span>
-                  }
-                  value={shortageCount}
-                  hint="wymaga uzupełnienia"
-                />
-                <MetricCard
-                  density="comfortable"
-                  className="min-w-0"
-                  label={
-                    <span className="flex flex-col gap-1">
-                      <KpiIcon className="bg-emerald-50 text-emerald-600">
-                        <CheckCircle2 className="h-4 w-4" />
-                      </KpiIcon>
-                      <span>Do rozlokowania</span>
-                    </span>
-                  }
-                  value={awaitingCount}
-                  hint="gotowy produkt"
-                />
-              </div>
-
               <WorkSection
-                title="Gotowe do realizacji"
-                subtitle="Zaplanowane zlecenia bez blokad materiałowych."
-                count={ready.length}
-                countTone="success"
+                title="Wymaga reakcji"
+                subtitle="Braki materiałów, blokady i opóźnienia."
+                count={reaction.length}
+                countTone={reaction.length > 0 ? "danger" : "neutral"}
+                emphasize={reaction.length > 0}
               >
-                <ProductionDashboardBatchGrid
-                  batches={ready}
-                  emptyIcon={ClipboardList}
-                  emptyTitle="Brak zleceń gotowych do startu"
-                  emptyDescription="Gdy materiały będą dostępne, pojawią się tutaj."
+                <ProductionWorkQueueSection
+                  items={reaction}
+                  emptyTitle="Nic nie wymaga reakcji"
+                  compactEmpty
                   limit={SECTION_LIMIT}
-                  seeAllTo={erpProductionPaths.orders}
-                  preferNextAction
+                  seeAllTo={reaction.length > 0 ? `${erpProductionPaths.orders}?shortages=1` : undefined}
                 />
               </WorkSection>
 
-              <div className="grid gap-4 lg:grid-cols-2">
-                <Card variant="section" density="comfortable" className="flex flex-col gap-3">
-                  <Toolbar
-                    start={<h2 className={typography.h2}>Ostatnia aktywność</h2>}
-                    end={
-                      recentlyCompleted.length > 0 ? (
-                        <Link
-                          to={erpProductionPaths.history}
-                          className="text-sm font-semibold text-slate-600 hover:text-slate-900"
-                        >
-                          Pokaż wszystkie
-                        </Link>
-                      ) : null
-                    }
-                  />
-                  {recentlyCompleted.length === 0 ? (
-                    <AppEmptyState
-                      icon={History}
-                      title="Brak ostatniej aktywności"
-                      description="Zamknięte partie pojawią się tutaj po zakończeniu produkcji."
-                      density="inline"
-                    />
-                  ) : (
-                    <ul className="space-y-2">
-                      {recentlyCompleted.slice(0, 6).map((b) => (
-                        <li key={b.id}>
-                          <Link to={erpProductionPaths.batch(b.id)} className="block">
-                            <ListTile density="compact" className="transition hover:border-slate-300">
-                              <div className="flex items-start gap-3">
-                                <span className="mt-0.5 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-emerald-50 text-emerald-600">
-                                  <CheckCircle2 className="h-3.5 w-3.5" aria-hidden />
-                                </span>
-                                <div className="min-w-0 flex-1">
-                                  <p className="font-mono text-sm font-semibold text-slate-900">{b.number}</p>
-                                  <p className="truncate text-xs text-slate-500">{productLabel(b)}</p>
-                                  <p className="mt-0.5 text-xs text-slate-500">
-                                    Zakończono · plan {formatPlannedDate(b.planned_date)}
-                                  </p>
-                                </div>
-                                <ArrowRight className="mt-1 h-3.5 w-3.5 shrink-0 text-slate-300" aria-hidden />
-                              </div>
-                            </ListTile>
-                          </Link>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                  {data.finished_today > 0 ? (
-                    <p className="text-xs text-slate-500">
-                      Ukończone dziś: <span className="font-semibold text-slate-700">{data.finished_today}</span>
-                    </p>
-                  ) : null}
-                </Card>
+              <WorkSection
+                title="Do wykonania"
+                subtitle="Praca czekająca na start lub kolejny etap."
+                count={todo.length}
+                countTone={todo.length > 0 ? "warning" : "neutral"}
+              >
+                {todo.length === 0 ? (
+                  <p className="py-1 text-sm text-slate-500">Brak pozycji do wykonania</p>
+                ) : (
+                  <div className="space-y-4">
+                    {todoByStep.start.length > 0 ? (
+                      <div className="space-y-2">
+                        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                          Wyślij do realizacji
+                        </p>
+                        <ProductionWorkQueueSection items={todoByStep.start} limit={SECTION_LIMIT} />
+                      </div>
+                    ) : null}
+                    {todoByStep.collect.length > 0 ? (
+                      <div className="space-y-2">
+                        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                          Pobierz komponenty
+                        </p>
+                        <ProductionWorkQueueSection items={todoByStep.collect} limit={SECTION_LIMIT} />
+                      </div>
+                    ) : null}
+                    {todoByStep.putaway.length > 0 ? (
+                      <div className="space-y-2">
+                        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                          Rozlokuj
+                        </p>
+                        <ProductionWorkQueueSection items={todoByStep.putaway} limit={SECTION_LIMIT} />
+                      </div>
+                    ) : null}
+                    {todoByStep.pack.length > 0 ? (
+                      <div className="space-y-2">
+                        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                          Gotowe do pakowania
+                        </p>
+                        <ProductionWorkQueueSection items={todoByStep.pack} limit={SECTION_LIMIT} />
+                      </div>
+                    ) : null}
+                  </div>
+                )}
+              </WorkSection>
 
-                <Card variant="section" density="comfortable" className="flex flex-col gap-3">
-                  <Toolbar start={<h2 className={typography.h2}>Najbliższe terminy</h2>} />
-                  {upcomingCompletions.length === 0 ? (
-                    <AppEmptyState
-                      icon={PackageCheck}
-                      title="Brak zaplanowanych terminów"
-                      description="Partie z datą planu zakończenia pojawią się na tej liście."
-                      density="inline"
-                    />
-                  ) : (
-                    <ul className="space-y-2">
-                      {upcomingCompletions.map((b) => {
-                        const pct = Math.max(0, Math.min(100, b.progress_percent ?? 0));
-                        return (
-                          <li key={b.id}>
-                            <Link to={erpProductionPaths.batch(b.id)} className="block">
-                              <ListTile density="compact" className="transition hover:border-slate-300">
-                                <div className="flex items-center justify-between gap-3">
-                                  <div className="min-w-0">
-                                    <p className="font-mono text-sm font-semibold text-slate-900">{b.number}</p>
-                                    <p className="truncate text-xs text-slate-500">{productLabel(b)}</p>
-                                  </div>
-                                  <div className="shrink-0 text-right">
-                                    <p className="tabular-nums text-xs font-medium text-slate-700">
-                                      {formatPlannedDate(b.planned_date)}
-                                    </p>
-                                    <p className="tabular-nums text-xs text-slate-500">{pct}%</p>
-                                  </div>
-                                </div>
-                              </ListTile>
-                            </Link>
-                          </li>
-                        );
-                      })}
-                    </ul>
-                  )}
-                </Card>
+              <WorkSection
+                title="W toku"
+                subtitle="Operacje już rozpoczęte."
+                count={inProgress.length}
+                countTone="info"
+              >
+                <ProductionWorkQueueSection
+                  items={inProgress}
+                  emptyTitle="Brak pracy w toku"
+                  compactEmpty
+                  limit={SECTION_LIMIT}
+                  seeAllTo={inProgress.length > 0 ? erpProductionPaths.orders : undefined}
+                />
+              </WorkSection>
+
+              <div className="flex flex-wrap gap-2 text-sm">
+                <Link
+                  to={erpProductionPaths.orders}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 font-medium text-slate-700 hover:bg-slate-50"
+                >
+                  <ClipboardList className="h-4 w-4" aria-hidden />
+                  Wszystkie zlecenia
+                </Link>
+                <Link
+                  to={erpProductionPaths.materialsShortages}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 font-medium text-slate-700 hover:bg-slate-50"
+                >
+                  <Package className="h-4 w-4" aria-hidden />
+                  Materiały
+                </Link>
+                <Link
+                  to={erpProductionPaths.planning}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 font-medium text-slate-700 hover:bg-slate-50"
+                >
+                  <MapPin className="h-4 w-4" aria-hidden />
+                  Planowanie
+                </Link>
               </div>
             </>
-          ) : (
-            <p className="text-sm text-rose-600">Nie udało się wczytać pulpitu produkcji.</p>
           )}
         </div>
       </PageHeader>

@@ -32,41 +32,28 @@ import {
   type ProductionOrdersListFilters,
 } from "../../modules/production/productionListFilters";
 import {
-  BATCH_STATUS_LABEL,
-  PRODUCTION_STATUS_LABEL,
-  executionStatusTone,
-  materialReadinessLabel,
-  materialReadinessTone,
-  producibleQuantityHint,
   productionExecutionMethodLabel,
-  productionProgressTone,
   productionSourceTypeLabel,
-  productionSourceTypeTone,
-  resolveMaterialReadiness,
   resolveProductionPriority,
   type ProductionPriorityLevel,
 } from "./productionUi";
 import {
+  getProductionOperationalState,
   productionOrdersSourceSummary,
-  productionStageLabel,
-  resolveProductionNextAction,
-} from "./productionNextAction";
+} from "./productionOperationalState";
 import { erpProductionPaths, wmsProductionPaths } from "./productionPaths";
 import { ProductionOrdersFiltersPanel } from "./components/ProductionOrdersFiltersPanel";
+import { ProductionOperatorTaskCard } from "./components/ProductionOperatorTaskCard";
 import { ProductionRowActionsMenu } from "./components/ProductionRowActionsMenu";
-import { ProductThumb } from "./components/ProductThumb";
 import { productionPageStackClass, productionPageTitleClass } from "./productionLayoutTokens";
 import {
-  ListTile,
   PageHeader,
-  ProgressBar,
   SearchInput,
   SecondaryButton,
   Select,
   StatusBadge,
   Toolbar,
   primaryButtonClassName,
-  toneTextClass,
 } from "@/design-system";
 
 const DEFAULT_TENANT = 1;
@@ -78,10 +65,12 @@ const PRIORITY_DISPLAY: Record<ProductionPriorityLevel, string> = {
   critical: "Krytyczny",
 };
 
-function statusLabel(row: ProductionOrderRow): string {
-  return row.kind === "batch"
-    ? BATCH_STATUS_LABEL[row.status as keyof typeof BATCH_STATUS_LABEL] ?? row.status
-    : PRODUCTION_STATUS_LABEL[row.status as keyof typeof PRODUCTION_STATUS_LABEL] ?? row.status;
+function formatPlannedDate(raw: string): string | null {
+  if (!raw || raw === "—") return null;
+  const d = raw.slice(0, 10);
+  const [y, m, day] = d.split("-");
+  if (!y || !m || !day) return null;
+  return `Termin ${day}.${m}.${y}`;
 }
 
 function OrderWorkCard({
@@ -100,41 +89,14 @@ function OrderWorkCard({
   onNavigate: (to: string) => void;
 }) {
   const level = resolveProductionPriority(row.priority, row.hasShortages, row.numericPriority);
-  const pct = row.progressPercent;
-  const showProgress = typeof pct === "number" && Number.isFinite(pct);
-  const clamped = showProgress ? Math.max(0, Math.min(100, pct)) : 0;
-  const barTone = productionProgressTone(clamped, row.status);
   const isOrder = row.kind === "order";
   const producedQty = isOrder ? row.producedQty : 0;
   const plannedQty = row.qty;
   const isPrintMethod =
     isOrder && row.sourceType === "ORDERS" && row.productionExecutionMethod === "PRINT";
-  const readiness = isOrder
-    ? resolveMaterialReadiness({
-        hasShortages: row.hasShortages,
-        materialsReserved: row.materialsReserved,
-        sourceShortageCount: row.sourceShortageCount,
-        sourceReservedCount: row.sourceReservedCount,
-        producedQuantity: row.producedQty,
-        plannedQuantity: row.qty,
-      })
-    : row.hasShortages
-      ? "shortage"
-      : "unknown";
-  const reservedQty = isOrder ? row.sourceReservedQuantityTotal ?? 0 : 0;
   const requestedQty = isOrder ? row.sourceRequestedQuantityTotal ?? 0 : 0;
-  const qtyHint = producibleQuantityHint({
-    sourceReservedQuantityTotal: reservedQty,
-    sourceRequestedQuantityTotal: requestedQty,
-    plannedQuantity: plannedQty,
-    readiness,
-  });
-  const producedDenom =
-    isOrder && row.sourceType === "ORDERS" && reservedQty > 0
-      ? reservedQty
-      : plannedQty;
 
-  const next = resolveProductionNextAction({
+  const state = getProductionOperationalState({
     executionKind: row.kind === "batch" ? "batch" : "order",
     id: row.id,
     status: row.status,
@@ -146,12 +108,14 @@ function OrderWorkCard({
     productionExecutionMethod: isOrder ? row.productionExecutionMethod : null,
     producedQuantity: producedQty,
     plannedQuantity: plannedQty,
+    progressPercent: row.progressPercent,
     sourceOrderCount: isOrder ? row.sourceOrderCount : undefined,
     sourceRequestedQuantityTotal: requestedQty,
     sourceShortageQuantityTotal: isOrder ? row.sourceShortageQuantityTotal : undefined,
     sourceShortageCount: isOrder ? row.sourceShortageCount : undefined,
     sourceFulfilledOrderCount: isOrder ? row.sourceFulfilledOrderCount : undefined,
   });
+  const next = state.primaryAction;
 
   const ordersSummary =
     isOrder && row.sourceType === "ORDERS"
@@ -161,6 +125,16 @@ function OrderWorkCard({
           plannedQuantity: plannedQty,
         })
       : null;
+
+  const secondaryBits = [
+    row.number,
+    isOrder && row.sourceType ? productionSourceTypeLabel(row.sourceType) : null,
+    isPrintMethod ? productionExecutionMethodLabel(row.productionExecutionMethod) : null,
+  ].filter(Boolean);
+  const scheduleBits = [
+    formatPlannedDate(row.date),
+    `Priorytet ${PRIORITY_DISPLAY[level]}`,
+  ].filter(Boolean);
 
   const handlePrimary = () => {
     if (next.kind === "send_to_execution") {
@@ -187,107 +161,30 @@ function OrderWorkCard({
     ...(isPrintMethod && onPrintOrder
       ? [{ id: "print-mo", label: "Drukuj kartę", onClick: onPrintOrder }]
       : []),
-    ...(next.kind !== "send_to_execution" &&
-    !isPrintMethod &&
-    (row.status === "planned" || row.status === "draft") &&
-    !row.isReleasedToWms
-      ? [
-          {
-            id: "wms",
-            label: "Wyślij do realizacji",
-            onClick: onReleaseToWms,
-            disabled: row.hasShortages,
-          },
-        ]
-      : []),
   ];
 
   return (
-    <ListTile density="comfortable" selected={selected} className="w-full">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:gap-4">
-        {isOrder ? <ProductThumb imageUrl={row.productImageUrl} name={row.product} size="md" /> : null}
-        <div className="min-w-0 flex-1 space-y-2.5">
-          <div className="min-w-0">
-            <div className="flex flex-wrap items-baseline gap-2">
-              <p className="font-mono text-sm font-semibold text-slate-900">{row.number}</p>
-              {isOrder && row.sourceType ? (
-                <StatusBadge tone={productionSourceTypeTone(row.sourceType)} density="compact">
-                  {productionSourceTypeLabel(row.sourceType)}
-                </StatusBadge>
-              ) : (
-                <span className="text-xs font-bold uppercase tracking-wide text-slate-500">partia</span>
-              )}
-              {isOrder && (row.sourceType === "ORDERS" || row.productionExecutionMethod) ? (
-                <StatusBadge tone="neutral" density="compact">
-                  {productionExecutionMethodLabel(row.productionExecutionMethod)}
-                </StatusBadge>
-              ) : null}
-            </div>
-            <p className="mt-1 line-clamp-2 text-sm font-medium text-slate-900">{row.product}</p>
-            <p className="mt-0.5 text-sm tabular-nums text-slate-700">
-              <span className="font-semibold text-slate-900">
-                {isOrder
-                  ? `${formatQty(producedQty)} / ${formatQty(producedDenom)}`
-                  : formatQty(plannedQty)}
-              </span>{" "}
-              <span className="text-slate-500">szt.</span>
-            </p>
-            {ordersSummary ? <p className="mt-0.5 text-xs text-slate-600">{ordersSummary}</p> : null}
-          </div>
-
-          <div className="flex flex-wrap items-center gap-1.5">
-            <StatusBadge tone={executionStatusTone(row.status)} density="compact">
-              {productionStageLabel(row.status)}
-            </StatusBadge>
-            <StatusBadge tone={materialReadinessTone(readiness)} density="compact">
-              {materialReadinessLabel(readiness, {
-                producible: qtyHint?.producible,
-                planned: qtyHint?.planned,
-              })}
-            </StatusBadge>
-            <span className="text-xs text-slate-500">
-              Priorytet: <span className="font-medium text-slate-700">{PRIORITY_DISPLAY[level]}</span>
-            </span>
-          </div>
-
-          <p className="text-xs text-slate-600">
-            Etap: <span className="font-medium text-slate-800">{statusLabel(row)}</span>
-            {" · "}
-            <span className="font-medium text-slate-800">{next.contextMessage}</span>
-          </p>
-
-          {showProgress ? (
-            <div className="max-w-xl space-y-1">
-              <div className="flex items-center justify-between gap-2 text-xs text-slate-500">
-                <span>Postęp</span>
-                <span className={`tabular-nums font-semibold ${toneTextClass[barTone]}`}>{clamped}%</span>
-              </div>
-              <ProgressBar value={clamped} tone={barTone} />
-            </div>
-          ) : null}
-        </div>
-
-        <div
-          className="flex shrink-0 flex-wrap items-center justify-end gap-2 sm:pt-1"
-          onClick={(e) => e.stopPropagation()}
-        >
-          <button
-            type="button"
-            className={primaryButtonClassName("", "compact")}
-            disabled={Boolean(next.disabled)}
-            title={next.disabled ? next.disabledReason : undefined}
-            onClick={handlePrimary}
-          >
-            {next.label}
-          </button>
-          <ProductionRowActionsMenu
-            align="end"
-            ariaLabel={`Więcej akcji ${row.number}`}
-            actions={menuActions}
-          />
-        </div>
-      </div>
-    </ListTile>
+    <ProductionOperatorTaskCard
+      state={state}
+      productLabel={row.product}
+      productImageUrl={isOrder ? row.productImageUrl : null}
+      qtyLabel={`${formatQty(plannedQty)} szt.`}
+      productMeta={ordersSummary}
+      secondaryMeta={secondaryBits.join(" · ")}
+      scheduleMeta={scheduleBits.join(" · ")}
+      selected={selected}
+      showThumb={isOrder}
+      onCtaClick={handlePrimary}
+      ctaDisabled={Boolean(next.disabled)}
+      ctaTitle={next.disabledReason}
+      overflow={
+        <ProductionRowActionsMenu
+          align="end"
+          ariaLabel={`Więcej akcji ${row.number}`}
+          actions={menuActions}
+        />
+      }
+    />
   );
 }
 
