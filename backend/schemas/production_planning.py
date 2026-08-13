@@ -77,6 +77,9 @@ class ProductionDemandPlanningRead(BaseModel):
     auto_stock_replenishment: bool = False
     stock_replenishment_coverage_days: Optional[int] = None
     stock_replenishment_coverage_presets: List[int] = Field(default_factory=list)
+    stock_replenishment_interval: Optional[str] = None
+    stock_replenishment_interval_presets: List[str] = Field(default_factory=list)
+    last_replenishment_run_at: Optional[str] = None
     dashboard: ProductionPlanningDashboardRead = Field(default_factory=ProductionPlanningDashboardRead)
     products: List[ProductionDemandProductRowRead] = Field(default_factory=list)
 

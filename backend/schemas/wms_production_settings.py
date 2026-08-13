@@ -7,7 +7,9 @@ from ..services.production_planning.constants import (
     DEFAULT_FORECAST_STRATEGY,
     DEFAULT_SALES_LOOKBACK_DAYS,
     DEFAULT_STOCK_REPLENISHMENT_COVERAGE_DAYS,
+    DEFAULT_STOCK_REPLENISHMENT_INTERVAL,
     STOCK_REPLENISHMENT_COVERAGE_PRESETS,
+    STOCK_REPLENISHMENT_INTERVAL_PRESETS,
 )
 
 DEFAULT_PRODUCTION_TERMINAL_DISPLAY: dict[str, bool] = {
@@ -67,6 +69,7 @@ class ProductionTerminalRequiredSettings(BaseModel):
 
 
 StockReplenishmentCoverageDays = Literal[1, 3, 7, 14]
+StockReplenishmentInterval = Literal["hourly", "every_3_hours", "every_6_hours", "daily"]
 
 
 class ProductionForecastSettings(BaseModel):
@@ -78,12 +81,26 @@ class ProductionForecastSettings(BaseModel):
     stock_replenishment_coverage_days: StockReplenishmentCoverageDays = (
         DEFAULT_STOCK_REPLENISHMENT_COVERAGE_DAYS  # type: ignore[assignment]
     )
+    #: Jak często uruchamiać automatyczne przeliczanie (gdy auto ON).
+    stock_replenishment_interval: StockReplenishmentInterval = (
+        DEFAULT_STOCK_REPLENISHMENT_INTERVAL  # type: ignore[assignment]
+    )
+    #: ISO timestamp ostatniego udanego runu (manual lub scheduler).
+    last_replenishment_run_at: str | None = None
+    #: Krótki wynik ostatniego runu (bez historii jobów).
+    last_replenishment_run_summary: dict[str, Any] | None = None
 
     def normalized_replenishment_coverage_days(self) -> int:
         days = int(self.stock_replenishment_coverage_days or DEFAULT_STOCK_REPLENISHMENT_COVERAGE_DAYS)
         if days not in STOCK_REPLENISHMENT_COVERAGE_PRESETS:
             return int(DEFAULT_STOCK_REPLENISHMENT_COVERAGE_DAYS)
         return days
+
+    def normalized_replenishment_interval(self) -> str:
+        raw = str(self.stock_replenishment_interval or DEFAULT_STOCK_REPLENISHMENT_INTERVAL)
+        if raw not in STOCK_REPLENISHMENT_INTERVAL_PRESETS:
+            return str(DEFAULT_STOCK_REPLENISHMENT_INTERVAL)
+        return raw
 
 
 AllocationStrategyKey = Literal["FIFO", "FEFO", "LIFO"]

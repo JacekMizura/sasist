@@ -85,6 +85,44 @@ export function ProductionDemandPlanningPanel({
   const presets = data?.coverage_day_presets ?? [7, 14, 21, 30, 45, 60, 90];
   const autoReplenish = Boolean(data?.auto_stock_replenishment);
   const replenishCoverage = data?.stock_replenishment_coverage_days ?? null;
+  const replenishInterval = data?.stock_replenishment_interval ?? null;
+  const lastReplenishAt = data?.last_replenishment_run_at ?? null;
+
+  const intervalLabel =
+    replenishInterval === "hourly"
+      ? "co godzinę"
+      : replenishInterval === "every_3_hours"
+        ? "co 3 godziny"
+        : replenishInterval === "every_6_hours"
+          ? "co 6 godzin"
+          : replenishInterval === "daily"
+            ? "raz dziennie"
+            : null;
+
+  function formatLastRun(iso: string | null): string | null {
+    if (!iso) return null;
+    try {
+      const d = new Date(iso);
+      if (Number.isNaN(d.getTime())) return null;
+      const today = new Date();
+      const sameDay =
+        d.getFullYear() === today.getFullYear() &&
+        d.getMonth() === today.getMonth() &&
+        d.getDate() === today.getDate();
+      const time = d.toLocaleTimeString("pl-PL", { hour: "2-digit", minute: "2-digit" });
+      if (sameDay) return `dzisiaj ${time}`;
+      return d.toLocaleString("pl-PL", {
+        day: "2-digit",
+        month: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+      });
+    } catch {
+      return null;
+    }
+  }
+
+  const lastRunLabel = formatLastRun(lastReplenishAt);
 
   const recommendations = products
     .filter((r) => r.recommended_quantity > 0 && r.composition_id != null)
@@ -138,6 +176,14 @@ export function ProductionDemandPlanningPanel({
                 ? ` · uzupełnienie zapasu: ${replenishCoverage} dni`
                 : ""}
             </p>
+            {autoReplenish ? (
+              <p className={`mt-1 ${typography.caption} text-slate-500`}>
+                Automatyczne uzupełnianie: aktywne
+                {replenishCoverage != null ? ` · Pokrycie: ${replenishCoverage} dni` : ""}
+                {intervalLabel ? ` · Przeliczanie: ${intervalLabel}` : ""}
+                {lastRunLabel ? ` · Ostatnie przeliczenie: ${lastRunLabel}` : ""}
+              </p>
+            ) : null}
           </div>
           <div className="flex flex-wrap items-center gap-2">
             {onRecalculateDemand ? (

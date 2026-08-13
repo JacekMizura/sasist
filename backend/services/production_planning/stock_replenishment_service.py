@@ -7,10 +7,13 @@ and ProductionOrder aggregation rules analogous to ORDERS (never mixed).
 from __future__ import annotations
 
 import logging
+import time
 from collections import defaultdict
 from dataclasses import dataclass
 from datetime import datetime
 
+from sqlalchemy import text
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload
 
 from ...models.product_composition import ProductComposition
@@ -32,7 +35,7 @@ from ..reservations.reservation_service import (
     release_production_reservations,
 )
 from .constants import STOCK_REPLENISHMENT_COVERAGE_PRESETS
-from .forecast_settings_service import load_forecast_settings
+from .forecast_settings_service import load_forecast_settings, record_replenishment_run
 from .material_availability_service import cap_by_materials
 from .planning_service import PlanningContext, build_planning_snapshot
 
@@ -322,6 +325,50 @@ def _consume_soft_hold_for_qty(
     _ = (soft_hold, composition, qty)
 
 
+def _advisory_lock_replenishment(db: Session, *, tenant_id: int, warehouse_id: int) -> None:
+    """Serialize manual + scheduler replenishment for the same warehouse (PG)."""
+    bind = db.get_bind()
+    if bind is None or bind.dialect.name != "postgresql":
+        return
+    key = hash(("prod_stock_replenish", int(tenant_id), int(warehouse_id))) & 0x7FFFFFFF
+    try:
+        db.execute(text("SELECT pg_advisory_xact_lock(:k)"), {"k": key})
+    except Exception:
+        logger.exception(
+            "pg_advisory_xact_lock replenishment failed tenant_id=%s warehouse_id=%s",
+            tenant_id,
+            warehouse_id,
+        )
+
+
+def _wake_orders_shortages_before_planning(
+    db: Session,
+    *,
+    tenant_id: int,
+    warehouse_id: int,
+    operator_user_id: int | None,
+) -> None:
+    """Phase 8: ORDERS shortage retry before PLANNING may consume free materials."""
+    try:
+        from ..production_order_trigger.material_validation_service import (
+            retry_order_driven_production_shortages,
+        )
+
+        retry_order_driven_production_shortages(
+            db,
+            tenant_id=int(tenant_id),
+            warehouse_id=int(warehouse_id),
+            operator_user_id=operator_user_id,
+            trigger_reason="pre_planning_replenishment",
+        )
+    except Exception:
+        logger.exception(
+            "ORDERS shortage retry before planning replenishment failed tenant=%s wh=%s",
+            tenant_id,
+            warehouse_id,
+        )
+
+
 def run_production_stock_replenishment(
     db: Session,
     *,
@@ -336,6 +383,10 @@ def run_production_stock_replenishment(
     Idempotent: pipeline already counted in recommendations; re-run with full coverage
     yields no extra qty. Never aggregates with ORDERS MOs.
     """
+    started = time.perf_counter()
+    started_at = datetime.utcnow()
+    _advisory_lock_replenishment(db, tenant_id=int(tenant_id), warehouse_id=int(warehouse_id))
+
     settings = load_forecast_settings(db, tenant_id=int(tenant_id), warehouse_id=int(warehouse_id))
     enabled = bool(settings.auto_stock_replenishment)
     coverage_days = settings.normalized_replenishment_coverage_days()
@@ -347,6 +398,7 @@ def run_production_stock_replenishment(
     aggregated_count = 0
     skipped_count = 0
     total_qty = 0.0
+    products_checked = 0
 
     if not enabled and not force:
         return ProductionStockReplenishmentRunRead(
@@ -367,6 +419,14 @@ def run_production_stock_replenishment(
             ],
         )
 
+    # ORDERS shortages first — free stock must not be claimed by PLANNING ahead of customers.
+    _wake_orders_shortages_before_planning(
+        db,
+        tenant_id=int(tenant_id),
+        warehouse_id=int(warehouse_id),
+        operator_user_id=performed_by_user_id,
+    )
+
     snap = build_planning_snapshot(
         db,
         PlanningContext(
@@ -382,6 +442,7 @@ def run_production_stock_replenishment(
         for p in snap.products
         if float(p.stock_replenishment_needed or 0) > 1e-6 and p.composition_id is not None
     ]
+    products_checked = len(snap.products)
 
     # ORDERS first: attempt real reservations, then soft-hold any remaining unmet need.
     ensure_orders_material_priority(
@@ -484,14 +545,55 @@ def run_production_stock_replenishment(
                 )
             )
         else:
-            mo = _create_planning_mo(
-                db,
-                tenant_id=int(tenant_id),
-                warehouse_id=int(warehouse_id),
-                composition=composition,
-                planned_quantity=float(qty),
-                created_by_user_id=performed_by_user_id,
-            )
+            try:
+                with db.begin_nested():
+                    mo = _create_planning_mo(
+                        db,
+                        tenant_id=int(tenant_id),
+                        warehouse_id=int(warehouse_id),
+                        composition=composition,
+                        planned_quantity=float(qty),
+                        created_by_user_id=performed_by_user_id,
+                    )
+            except IntegrityError:
+                # Concurrent create (manual + scheduler) — aggregate into winner.
+                mo = _find_aggregable_planning_mo(
+                    db,
+                    tenant_id=int(tenant_id),
+                    warehouse_id=int(warehouse_id),
+                    product_id=int(row.product_id),
+                    composition_id=cid,
+                    for_update=True,
+                )
+                if mo is None:
+                    raise
+                mo.planned_quantity = float(mo.planned_quantity or 0) + float(qty)
+                mo.updated_at = datetime.utcnow()
+                _rescale_snapshots(mo, float(mo.planned_quantity))
+                db.add(mo)
+                db.flush()
+                _reserve_planning_materials(
+                    db,
+                    tenant_id=int(tenant_id),
+                    order=mo,
+                    created_by_user_id=performed_by_user_id,
+                )
+                aggregated_count += 1
+                total_qty += qty
+                actions.append(
+                    ProductionStockReplenishmentActionRead(
+                        product_id=int(row.product_id),
+                        product_name=str(row.product_name or ""),
+                        composition_id=cid,
+                        quantity=_round_qty(qty),
+                        production_order_id=int(mo.id),
+                        production_order_number=str(mo.number),
+                        action="aggregated",
+                    )
+                )
+                _consume_soft_hold_for_qty(soft_hold, composition, qty)
+                continue
+
             _reserve_planning_materials(
                 db,
                 tenant_id=int(tenant_id),
@@ -514,7 +616,7 @@ def run_production_stock_replenishment(
 
         _consume_soft_hold_for_qty(soft_hold, composition, qty)
 
-    return ProductionStockReplenishmentRunRead(
+    out = ProductionStockReplenishmentRunRead(
         tenant_id=int(tenant_id),
         warehouse_id=int(warehouse_id),
         enabled=True,
@@ -525,6 +627,41 @@ def run_production_stock_replenishment(
         total_quantity=_round_qty(total_qty),
         actions=actions,
     )
+
+    duration_ms = int((time.perf_counter() - started) * 1000)
+    orders_created = created_count + aggregated_count
+    logger.info(
+        "PRODUCTION_REPLENISHMENT_RUN tenant=%s warehouse=%s started_at=%s "
+        "products_checked=%s orders_created=%s quantity_created=%s skipped=%s duration_ms=%s",
+        tenant_id,
+        warehouse_id,
+        started_at.isoformat(timespec="seconds"),
+        products_checked,
+        orders_created,
+        _round_qty(total_qty),
+        skipped_count,
+        duration_ms,
+    )
+    try:
+        record_replenishment_run(
+            db,
+            tenant_id=int(tenant_id),
+            warehouse_id=int(warehouse_id),
+            ran_at=started_at,
+            summary={
+                "created_count": created_count,
+                "aggregated_count": aggregated_count,
+                "skipped_count": skipped_count,
+                "total_quantity": _round_qty(total_qty),
+                "products_checked": products_checked,
+            },
+        )
+    except Exception:
+        logger.exception(
+            "record_replenishment_run failed tenant=%s warehouse=%s", tenant_id, warehouse_id
+        )
+
+    return out
 
 
 def compute_stock_replenishment_target(

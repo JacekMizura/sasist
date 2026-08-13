@@ -76,6 +76,9 @@ export type ProductionDemandPlanning = {
   auto_stock_replenishment?: boolean;
   stock_replenishment_coverage_days?: number | null;
   stock_replenishment_coverage_presets?: number[];
+  stock_replenishment_interval?: string | null;
+  stock_replenishment_interval_presets?: string[];
+  last_replenishment_run_at?: string | null;
   dashboard: ProductionPlanningDashboard;
   products: ProductionDemandProductRow[];
 };

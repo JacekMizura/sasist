@@ -21,6 +21,7 @@ from .constants import (
     MAX_COVERAGE_DAYS,
     MIN_COVERAGE_DAYS,
     STOCK_REPLENISHMENT_COVERAGE_PRESETS,
+    STOCK_REPLENISHMENT_INTERVAL_PRESETS,
 )
 from .forecast_settings_service import load_forecast_settings
 from .demand_rate_service import resolve_demand_forecast_context
@@ -73,6 +74,8 @@ def build_planning_snapshot(db: Session, ctx: PlanningContext) -> ProductionDema
     )
     auto_replenish = bool(forecast_settings.auto_stock_replenishment)
     replenish_coverage = forecast_settings.normalized_replenishment_coverage_days()
+    replenish_interval = forecast_settings.normalized_replenishment_interval()
+    last_run_at = forecast_settings.last_replenishment_run_at if auto_replenish else None
     fc_ctx = resolve_demand_forecast_context(
         db,
         tenant_id=ctx.tenant_id,
@@ -100,6 +103,9 @@ def build_planning_snapshot(db: Session, ctx: PlanningContext) -> ProductionDema
             auto_stock_replenishment=auto_replenish,
             stock_replenishment_coverage_days=replenish_coverage if auto_replenish else None,
             stock_replenishment_coverage_presets=list(STOCK_REPLENISHMENT_COVERAGE_PRESETS),
+            stock_replenishment_interval=replenish_interval if auto_replenish else None,
+            stock_replenishment_interval_presets=list(STOCK_REPLENISHMENT_INTERVAL_PRESETS),
+            last_replenishment_run_at=last_run_at,
             dashboard=ProductionPlanningDashboardRead(),
             products=[],
         )
@@ -339,6 +345,9 @@ def build_planning_snapshot(db: Session, ctx: PlanningContext) -> ProductionDema
         auto_stock_replenishment=auto_replenish,
         stock_replenishment_coverage_days=replenish_coverage if auto_replenish else None,
         stock_replenishment_coverage_presets=list(STOCK_REPLENISHMENT_COVERAGE_PRESETS),
+        stock_replenishment_interval=replenish_interval if auto_replenish else None,
+        stock_replenishment_interval_presets=list(STOCK_REPLENISHMENT_INTERVAL_PRESETS),
+        last_replenishment_run_at=last_run_at,
         dashboard=dashboard,
         products=rows,
     )

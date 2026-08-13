@@ -35,6 +35,9 @@ export type ProductionForecastSettings = {
   sales_lookback_days: number;
   auto_stock_replenishment?: boolean;
   stock_replenishment_coverage_days?: 1 | 3 | 7 | 14;
+  stock_replenishment_interval?: "hourly" | "every_3_hours" | "every_6_hours" | "daily";
+  last_replenishment_run_at?: string | null;
+  last_replenishment_run_summary?: Record<string, unknown> | null;
 };
 
 export type ProductionReservationSettings = {

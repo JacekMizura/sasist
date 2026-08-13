@@ -1969,6 +1969,14 @@ def _upgrade_schema_background() -> None:
             _ops_db.commit()
         finally:
             _ops_db.close()
+
+        # Shared periodic loop (Railway single process) — includes production stock replenishment.
+        try:
+            from .workers.operational_loop import start_operational_workers_loop
+
+            start_operational_workers_loop()
+        except Exception:
+            logging.getLogger(__name__).exception("start_operational_workers_loop failed")
     except Exception:
         logging.getLogger(__name__).exception("operational_commerce_workers startup failed")
 

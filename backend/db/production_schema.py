@@ -373,6 +373,25 @@ def _migration_order_driven_source_reserved_index(engine: Engine) -> int:
     return added
 
 
+def _migration_planning_open_agg_index(engine: Engine) -> int:
+    """Phase 9: at most one open aggregable PLANNING MO per (tenant, wh, product, composition)."""
+    if not has_table(engine, "production_orders"):
+        return 0
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                """
+                CREATE UNIQUE INDEX IF NOT EXISTS uq_prod_order_planning_open_agg
+                ON production_orders (
+                    tenant_id, warehouse_id, product_id, composition_id
+                )
+                WHERE source_type = 'PLANNING' AND status IN ('draft', 'planned')
+                """
+            )
+        )
+    return 1
+
+
 PRODUCTION_SCHEMA_MIGRATIONS: list[ProductionSchemaMigration] = [
     ProductionSchemaMigration("2026.06.04.1", "batch_workflow_columns", _migration_batch_workflow_columns),
     ProductionSchemaMigration(
@@ -389,6 +408,11 @@ PRODUCTION_SCHEMA_MIGRATIONS: list[ProductionSchemaMigration] = [
         "2026.08.12.3",
         "order_driven_source_reserved_index",
         _migration_order_driven_source_reserved_index,
+    ),
+    ProductionSchemaMigration(
+        "2026.08.13.1",
+        "planning_open_agg_index",
+        _migration_planning_open_agg_index,
     ),
 ]
 
