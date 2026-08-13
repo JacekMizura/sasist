@@ -14,7 +14,7 @@ from datetime import datetime
 
 from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.orm import Session, joinedload, selectinload
 
 from ...models.product_composition import ProductComposition
 from ...models.production import (
@@ -213,9 +213,14 @@ def _find_aggregable_planning_mo(
     composition_id: int,
     for_update: bool = True,
 ) -> ProductionOrder | None:
+    """
+    Find draft/planned PLANNING MO for aggregation.
+
+    Lock the MO row without joinedload — PostgreSQL rejects FOR UPDATE on the
+    nullable side of LEFT OUTER JOIN from ``joinedload(line_snapshots)``.
+    """
     q = (
         db.query(ProductionOrder)
-        .options(joinedload(ProductionOrder.line_snapshots))
         .filter(
             ProductionOrder.tenant_id == int(tenant_id),
             ProductionOrder.warehouse_id == int(warehouse_id),
@@ -231,7 +236,15 @@ def _find_aggregable_planning_mo(
             q = q.with_for_update()
         except Exception:
             pass
-    return q.first()
+    mo = q.first()
+    if mo is None:
+        return None
+    return (
+        db.query(ProductionOrder)
+        .options(selectinload(ProductionOrder.line_snapshots))
+        .filter(ProductionOrder.id == int(mo.id))
+        .first()
+    )
 
 
 def _create_planning_mo(

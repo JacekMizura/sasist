@@ -482,6 +482,101 @@ def test_no_composition_no_mo():
     assert int(o.order_ui_status_id) == 12
 
 
+def test_find_aggregable_mo_for_update_without_outer_join():
+    """PostgreSQL rejects joinedload + FOR UPDATE (UAT #1092). Lock SQL must stay join-free."""
+    from sqlalchemy.dialects import postgresql
+    from sqlalchemy import select
+
+    from backend.services.production_order_trigger.trigger_service import _find_aggregable_mo
+
+    db, engine = _bootstrap(None)
+    o, _ = _make_order(db, order_id=910, number="AGG-LOCK", product_id=100, qty=1)
+    apply_order_panel_ui_status(db, order=o, sub_status_id=10)
+    db.commit()
+    existing = db.query(ProductionOrder).one()
+    assert db.query(ProductionOrderLineSnapshot).filter_by(production_order_id=existing.id).count() >= 1
+
+    statements: list[str] = []
+
+    def _capture(_conn, _cursor, statement, _parameters, _context, _executemany):
+        statements.append(str(statement))
+
+    event.listen(engine, "before_cursor_execute", _capture)
+    try:
+        mo = _find_aggregable_mo(
+            db,
+            tenant_id=1,
+            warehouse_id=1,
+            product_id=100,
+            composition_id=1,
+            picking_config_id=1,
+            for_update=True,
+        )
+    finally:
+        event.remove(engine, "before_cursor_execute", _capture)
+
+    assert mo is not None
+    assert int(mo.id) == int(existing.id)
+    assert len(list(mo.line_snapshots or [])) >= 1
+
+    # Primary lookup: production_orders only (no OUTER JOIN / snapshots).
+    primary = [
+        s
+        for s in statements
+        if "from production_orders" in s.lower()
+        and "tenant_id" in s.lower()
+        and "picking_config_id" in s.lower()
+    ]
+    assert primary, f"missing primary MO lookup SQL: {statements}"
+    for s in primary:
+        assert "left outer join" not in s.lower(), s
+        assert "production_order_lines_snapshot" not in s.lower(), s
+
+    # Collections loaded via separate selectinload (not locked with outer join).
+    snap_sql = [s for s in statements if "production_order_lines_snapshot" in s.lower()]
+    assert snap_sql
+    for s in snap_sql:
+        assert "for update" not in s.lower(), s
+
+    # On PostgreSQL dialect, FOR UPDATE is emitted for the locked primary row.
+    pg_sql = str(
+        select(ProductionOrder)
+        .where(ProductionOrder.id == int(existing.id))
+        .with_for_update()
+        .compile(dialect=postgresql.dialect())
+    )
+    assert "FOR UPDATE" in pg_sql.upper()
+    assert "LEFT OUTER JOIN" not in pg_sql.upper()
+
+
+def test_uat_qty1_status_production_creates_exactly_one_orders_mo():
+    """UAT 3 happy path: single-line order qty=1 → Produkcja → 1 MO ORDERS + source item."""
+    db, _ = _bootstrap(None)
+    o, it = _make_order(db, order_id=1092, number="1092", product_id=100, qty=1)
+    assert o.order_ui_status_id is None or int(o.order_ui_status_id) != 10
+
+    apply_order_panel_ui_status(db, order=o, sub_status_id=10)
+    db.commit()
+    db.refresh(o)
+
+    assert int(o.order_ui_status_id) == 10
+    mos = (
+        db.query(ProductionOrder)
+        .filter(ProductionOrder.source_type == PRODUCTION_ORDER_SOURCE_ORDERS)
+        .all()
+    )
+    assert len(mos) == 1
+    mo = mos[0]
+    assert mo.planned_quantity == pytest.approx(1.0)
+    assert int(mo.composition_id) == 1
+    assert int(mo.product_id) == 100
+    src = db.query(ProductionOrderSourceItem).one()
+    assert int(src.order_id) == 1092
+    assert int(src.order_item_id) == int(it.id)
+    assert int(src.production_order_id) == int(mo.id)
+    assert float(src.requested_quantity) == pytest.approx(1.0)
+
+
 def test_production_hook_integrity_error_savepoint_keeps_status_commit(monkeypatch):
     """IntegrityError inside production hook must not poison outer status commit (UAT #1158)."""
     from sqlalchemy.exc import IntegrityError, PendingRollbackError

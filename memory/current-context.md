@@ -1,5 +1,16 @@
 ﻿## Active
 
+**UAT 3 ORDERS — FOR UPDATE fix (2026-08-13):**
+- `_find_aggregable_mo`: lock bez joinedload; selectinload po FOR UPDATE
+- Po deploy: wznowić KROK 1 na czystym Nowe ST-001 (np. #1022) albo wycofać #1092 z Produkcja→Nowe i ponownie →Produkcja
+
+**UAT 3 ORDERS — KROK 1 wynik (2026-08-13):**
+- Kandydat: **#1092** (Nowe→Produkcja), product **193** ST-001, composition **5**, qty **1**, komponent 192 ST-003 avail 12 / need 2, max_producible=6
+- Config Produkcja id=12 / picking_config id=9: is_production_mode=true, buffer DOCK-IN, after=OPEN_PACKING, shortage→BRAKI(4), scope=SINGLE_ELEMENT — OK
+- PATCH ui-status → **200**, status zostaje **Produkcja**, brak BAT, brak 500
+- **MO NIE powstało** — soft-fail savepoint: `FeatureNotSupported: FOR UPDATE cannot be applied to the nullable side of an outer join` przy `_find_aggregable_mo` (FOR UPDATE + LEFT JOIN line_snapshots)
+- Kolejne czyste Nowe ST-001 qty1: 1022, 917, 862, 832… (po naprawie FOR UPDATE)
+
 **UAT 3 ORDERS — FIX deployed path (2026-08-13):**
 - Production hook: SAVEPOINT soft-fail (nie truuje PATCH statusu)
 - #1158: `shipping_method_id=NULL` (OK); label DHL zachowany

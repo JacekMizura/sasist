@@ -12,7 +12,7 @@ from typing import Any, Optional
 
 from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.orm import Session, selectinload
 
 from ...models.order import Order
 from ...models.order_item import OrderItem, order_item_is_replaced_line
@@ -239,12 +239,15 @@ def _find_aggregable_mo(
     picking_config_id: int,
     for_update: bool = True,
 ) -> ProductionOrder | None:
+    """
+    Find draft/planned ORDERS MO for aggregation.
+
+    IMPORTANT: never ``joinedload`` + ``with_for_update()`` — PostgreSQL rejects
+    FOR UPDATE on the nullable side of a LEFT OUTER JOIN. Lock the MO row first,
+    then ``selectinload`` collections in a separate SELECT.
+    """
     q = (
         db.query(ProductionOrder)
-        .options(
-            joinedload(ProductionOrder.line_snapshots),
-            joinedload(ProductionOrder.order_sources),
-        )
         .filter(
             ProductionOrder.tenant_id == int(tenant_id),
             ProductionOrder.warehouse_id == int(warehouse_id),
@@ -261,7 +264,19 @@ def _find_aggregable_mo(
             q = q.with_for_update()
         except Exception:
             pass
-    return q.first()
+    mo = q.first()
+    if mo is None:
+        return None
+    # Separate SELECT — keeps FOR UPDATE free of outer joins.
+    return (
+        db.query(ProductionOrder)
+        .options(
+            selectinload(ProductionOrder.line_snapshots),
+            selectinload(ProductionOrder.order_sources),
+        )
+        .filter(ProductionOrder.id == int(mo.id))
+        .first()
+    )
 
 
 def _create_orders_mo(
@@ -682,11 +697,19 @@ def _withdraw_production(
 
     results: list[dict[str, Any]] = []
     for src in sources:
+        # Lock MO row alone — joinedload + FOR UPDATE breaks on PostgreSQL.
         mo = (
             db.query(ProductionOrder)
-            .options(joinedload(ProductionOrder.line_snapshots))
             .filter(ProductionOrder.id == int(src.production_order_id))
             .with_for_update()
+            .first()
+        )
+        if mo is None:
+            continue
+        mo = (
+            db.query(ProductionOrder)
+            .options(selectinload(ProductionOrder.line_snapshots))
+            .filter(ProductionOrder.id == int(mo.id))
             .first()
         )
         if mo is None:
