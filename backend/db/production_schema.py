@@ -23,15 +23,16 @@ from sqlalchemy.schema import CreateColumn
 from .schema_introspection import (
     audit_model_schema,
     ensure_model_schema_sync,
+    ensure_model_table_from_orm,
     get_table_column_names,
     has_table,
 )
 
 logger = logging.getLogger(__name__)
 
-PRODUCTION_SCHEMA_VERSION = "2026.08.12.3"
+PRODUCTION_SCHEMA_VERSION = "2026.08.13.1"
 # Monotonic generation counter exposed in logs, /health/schema, and deploy verification.
-PRODUCTION_SCHEMA_GENERATION = 16
+PRODUCTION_SCHEMA_GENERATION = 17
 SCHEMA_METADATA_KEY = "production_schema_version"
 SCHEMA_METADATA_TABLE = "schema_metadata"
 
@@ -264,25 +265,105 @@ def _sorted_table_columns(engine: Engine, table: str) -> list[str]:
 
 
 def sync_production_registered_models(engine: Engine, *, strict: bool = False) -> int:
-    """Isolated per-column sync for all registered ORM models."""
+    """
+    Create missing required production tables, then ADD COLUMN / indexes.
+
+    Required tables must never be skipped — startup gate treats missing_tables as fatal.
+    Works for PostgreSQL and SQLite (ORM CreateTable via dialect compiler).
+    """
     added = 0
     for spec in _production_entity_registry():
         if spec.model is None or not spec.sync_columns:
             continue
         if not has_table(engine, spec.table_name):
-            logger.info(
-                "[production.schema.sync] skip table missing table=%s label=%s",
-                spec.table_name,
-                spec.label,
+            if not spec.required:
+                logger.info(
+                    "[production.schema.sync] skip optional missing table=%s label=%s",
+                    spec.table_name,
+                    spec.label,
+                )
+                continue
+            created = ensure_model_table_from_orm(
+                engine,
+                spec.model,
+                log_prefix="production.schema.sync",
             )
-            continue
+            if created:
+                logger.info(
+                    "[production.schema.sync] created_table table=%s label=%s dialect=%s",
+                    spec.table_name,
+                    spec.label,
+                    engine.dialect.name,
+                )
+            if not has_table(engine, spec.table_name):
+                msg = (
+                    f"required production table missing and create failed: {spec.table_name} "
+                    f"(label={spec.label}, dialect={engine.dialect.name})"
+                )
+                logger.error("[production.schema.sync] %s", msg)
+                if strict:
+                    raise RuntimeError(msg)
+                continue
         added += ensure_model_schema_sync(
             engine,
             spec.model,
             log_prefix="production.schema.sync",
+            sync_indexes=True,
+            sync_foreign_keys=False,
             strict=strict,
         )
+    ensure_production_concurrency_indexes(engine)
     return added
+
+
+def ensure_production_concurrency_indexes(engine: Engine) -> int:
+    """
+    Idempotent Phase 2/8/9 concurrency indexes.
+
+    Must run every startup after tables exist — versioned migrations alone are not enough
+    when a prior deploy recorded the migration while the table was still missing.
+    """
+    created = 0
+    with engine.begin() as conn:
+        if has_table(engine, "production_orders"):
+            conn.execute(
+                text(
+                    """
+                    CREATE UNIQUE INDEX IF NOT EXISTS uq_prod_order_orders_open_agg
+                    ON production_orders (
+                        tenant_id, warehouse_id, product_id, composition_id, picking_config_id
+                    )
+                    WHERE source_type = 'ORDERS' AND status IN ('draft', 'planned')
+                    """
+                )
+            )
+            created += 1
+            conn.execute(
+                text(
+                    """
+                    CREATE UNIQUE INDEX IF NOT EXISTS uq_prod_order_planning_open_agg
+                    ON production_orders (
+                        tenant_id, warehouse_id, product_id, composition_id
+                    )
+                    WHERE source_type = 'PLANNING' AND status IN ('draft', 'planned')
+                    """
+                )
+            )
+            created += 1
+        if has_table(engine, "production_order_source_items"):
+            # Prefer the Phase-3 definition (includes reserved). Drop legacy narrower index first.
+            conn.execute(text("DROP INDEX IF EXISTS uq_prod_source_active_order_item"))
+            conn.execute(
+                text(
+                    """
+                    CREATE UNIQUE INDEX IF NOT EXISTS uq_prod_source_active_order_item
+                    ON production_order_source_items (tenant_id, order_item_id)
+                    WHERE status IN ('open', 'partial', 'reserved')
+                    """
+                )
+            )
+            created += 1
+    return created
 
 
 @dataclass(frozen=True)
@@ -324,32 +405,30 @@ def _migration_order_driven_production_indexes(engine: Engine) -> int:
         added += ensure_model_schema_sync(
             engine, ProductionOrder, log_prefix="production.schema.migration.order_driven"
         )
-    with engine.begin() as conn:
-        # Partial unique: one draft/planned ORDERS MO per aggregation key.
-        conn.execute(
-            text(
-                """
-                CREATE UNIQUE INDEX IF NOT EXISTS uq_prod_order_orders_open_agg
-                ON production_orders (
-                    tenant_id, warehouse_id, product_id, composition_id, picking_config_id
-                )
-                WHERE source_type = 'ORDERS' AND status IN ('draft', 'planned')
-                """
-            )
-        )
-        # Partial unique: one active source per order line (idempotency).
-        if has_table(engine, "production_order_source_items"):
+        with engine.begin() as conn:
             conn.execute(
                 text(
                     """
-                    CREATE UNIQUE INDEX IF NOT EXISTS uq_prod_source_active_order_item
-                    ON production_order_source_items (tenant_id, order_item_id)
-                    WHERE status IN ('open', 'partial')
+                    CREATE UNIQUE INDEX IF NOT EXISTS uq_prod_order_orders_open_agg
+                    ON production_orders (
+                        tenant_id, warehouse_id, product_id, composition_id, picking_config_id
+                    )
+                    WHERE source_type = 'ORDERS' AND status IN ('draft', 'planned')
                     """
                 )
             )
             added += 1
-        added += 1
+            if has_table(engine, "production_order_source_items"):
+                conn.execute(
+                    text(
+                        """
+                        CREATE UNIQUE INDEX IF NOT EXISTS uq_prod_source_active_order_item
+                        ON production_order_source_items (tenant_id, order_item_id)
+                        WHERE status IN ('open', 'partial')
+                        """
+                    )
+                )
+                added += 1
     return added
 
 
@@ -582,8 +661,11 @@ def run_production_schema_startup_gate(engine: Engine, *, phase: str = "startup"
 
             ensure_product_compositions_and_batches(engine)
 
+        # Create any missing required tables BEFORE versioned index migrations.
+        sync_cols_pre = sync_production_registered_models(engine, strict=True)
         migration_cols = apply_pending_production_migrations(engine)
         sync_cols = sync_production_registered_models(engine, strict=True)
+        sync_cols = int(sync_cols_pre) + int(sync_cols)
 
         after_cols = _sorted_table_columns(engine, "production_batches")
         print(f"PRODUCTION_SCHEMA_AFTER table=production_batches columns={after_cols}", flush=True)
@@ -644,7 +726,7 @@ def run_production_schema_startup_gate(engine: Engine, *, phase: str = "startup"
             phase,
             engine.dialect.name,
         )
-        raise RuntimeError("production_batches schema sync failed") from exc
+        raise RuntimeError("production schema sync failed") from exc
 
 
 def ensure_production_schema_evolution(engine: Engine) -> dict[str, Any]:
@@ -660,8 +742,11 @@ def ensure_production_schema_evolution(engine: Engine) -> dict[str, Any]:
     ensure_schema_metadata_table(engine)
     before_version = get_production_schema_version(engine)
 
+    # Tables first (so versioned index migrations see them), then migrations, then re-sync.
+    sync_cols_pre = sync_production_registered_models(engine, strict=False)
     migration_cols = apply_pending_production_migrations(engine)
     sync_cols = sync_production_registered_models(engine, strict=False)
+    sync_cols = int(sync_cols_pre) + int(sync_cols)
 
     report = run_production_schema_audit(engine)
     log_production_schema_audit_summary(engine, report)
