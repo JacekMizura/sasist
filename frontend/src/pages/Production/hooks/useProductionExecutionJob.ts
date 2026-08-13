@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
 
@@ -32,6 +32,11 @@ import {
 import { wmsProductionPaths } from "../productionPaths";
 import { START_COLLECTING_BLOCKED_TOOLTIP, formatStartCollectingError } from "../productionUi";
 import { handleProductionPackingHandoff } from "./handleProductionPackingHandoff";
+import {
+  formatProductionMutationError,
+  ordersMoSkipsPutaway,
+  withMutationLock,
+} from "./productionExecutionGuards";
 
 const DEFAULT_TENANT = 1;
 
@@ -190,6 +195,8 @@ export function useProductionExecutionJob(phase: ProductionExecutionPhase, activ
   const [putawayDetail, setPutawayDetail] = useState<PutawayDetail | null>(null);
   const [busy, setBusy] = useState(false);
   const [detailLoading, setDetailLoading] = useState(false);
+  /** Synchronous anti-double-submit (state `busy` alone races on rapid click/scan). */
+  const mutationLockRef = useRef(false);
 
   const reloadQueue = useCallback(async () => {
     if (warehouseId == null) {
@@ -316,22 +323,23 @@ export function useProductionExecutionJob(phase: ProductionExecutionPhase, activ
   const confirmCollectionTask = useCallback(
     async (taskKey: string, collectedQty: number, locationId?: number) => {
       if (activeRef == null || warehouseId == null) return;
-      setBusy(true);
       try {
-        const body = {
-          task_key: taskKey,
-          collected_qty: collectedQty,
-          ...(locationId != null && locationId > 0 ? { location_id: locationId } : {}),
-        };
-        if (activeRef.kind === "batch") {
-          const next = await updateCollectionTask(tenantId, activeRef.id, body, warehouseId);
-          setCollectionState(normalizeBatchCollection(activeRef, next));
-        } else {
-          const next = await updateOrderCollectionTask(tenantId, activeRef.id, body, warehouseId);
-          setCollectionState(normalizeOrderCollection(activeRef, next));
-        }
-      } finally {
-        setBusy(false);
+        await withMutationLock(mutationLockRef, setBusy, async () => {
+          const body = {
+            task_key: taskKey,
+            collected_qty: collectedQty,
+            ...(locationId != null && locationId > 0 ? { location_id: locationId } : {}),
+          };
+          if (activeRef.kind === "batch") {
+            const next = await updateCollectionTask(tenantId, activeRef.id, body, warehouseId);
+            setCollectionState(normalizeBatchCollection(activeRef, next));
+          } else {
+            const next = await updateOrderCollectionTask(tenantId, activeRef.id, body, warehouseId);
+            setCollectionState(normalizeOrderCollection(activeRef, next));
+          }
+        });
+      } catch (e: unknown) {
+        toast.error(formatProductionMutationError(e, "Nie udało się zapisać pobrania komponentu."));
       }
     },
     [activeRef, warehouseId, tenantId],
@@ -339,36 +347,43 @@ export function useProductionExecutionJob(phase: ProductionExecutionPhase, activ
 
   const finishCollecting = useCallback(async () => {
     if (activeRef == null || warehouseId == null) return;
-    setBusy(true);
     try {
-      if (activeRef.kind === "batch") await finishCollectingBatch(tenantId, activeRef.id, warehouseId);
-      else await finishCollectingOrder(tenantId, activeRef.id, warehouseId);
-      navigate(wmsProductionPaths.execute(activeRef.kind, activeRef.id));
-    } finally {
-      setBusy(false);
+      await withMutationLock(mutationLockRef, setBusy, async () => {
+        if (activeRef.kind === "batch") await finishCollectingBatch(tenantId, activeRef.id, warehouseId);
+        else await finishCollectingOrder(tenantId, activeRef.id, warehouseId);
+        navigate(wmsProductionPaths.execute(activeRef.kind, activeRef.id));
+      });
+    } catch (e: unknown) {
+      toast.error(formatProductionMutationError(e, "Nie można zakończyć pobierania komponentów."));
     }
   }, [activeRef, warehouseId, tenantId, navigate]);
 
   const addProductionQty = useCallback(
     async (lineKey: string, add: number) => {
       if (activeRef == null || warehouseId == null) return;
-      setBusy(true);
       try {
-        if (activeRef.kind === "batch") {
-          const lineId = Number(lineKey);
-          await updateProductionProgress(tenantId, activeRef.id, { line_id: lineId, add_quantity: add }, warehouseId);
-        } else {
-          const updated = await updateOrderProductionProgress(
-            tenantId,
-            activeRef.id,
-            { add_quantity: add },
-            warehouseId,
-          );
-          handleProductionPackingHandoff(updated, navigate);
-        }
-        setExecutionDetail(await loadExecutionDetail(tenantId, warehouseId, activeRef));
-      } finally {
-        setBusy(false);
+        await withMutationLock(mutationLockRef, setBusy, async () => {
+          if (activeRef.kind === "batch") {
+            const lineId = Number(lineKey);
+            await updateProductionProgress(
+              tenantId,
+              activeRef.id,
+              { line_id: lineId, add_quantity: add },
+              warehouseId,
+            );
+          } else {
+            const updated = await updateOrderProductionProgress(
+              tenantId,
+              activeRef.id,
+              { add_quantity: add },
+              warehouseId,
+            );
+            handleProductionPackingHandoff(updated, navigate);
+          }
+          setExecutionDetail(await loadExecutionDetail(tenantId, warehouseId, activeRef));
+        });
+      } catch (e: unknown) {
+        toast.error(formatProductionMutationError(e, "Nie udało się zapisać wyprodukowanej ilości."));
       }
     },
     [activeRef, warehouseId, tenantId, navigate],
@@ -376,28 +391,45 @@ export function useProductionExecutionJob(phase: ProductionExecutionPhase, activ
 
   const finishProduction = useCallback(async () => {
     if (activeRef == null || warehouseId == null) return;
-    setBusy(true);
     try {
-      if (activeRef.kind === "batch") {
-        await finishProductionPhase(tenantId, activeRef.id, warehouseId);
-      } else {
-        await finishOrderProduction(tenantId, activeRef.id, warehouseId);
-      }
-      const detail = await loadPutawayDetail(tenantId, warehouseId, activeRef);
-      const pwIds = collectPwDocumentIds(detail);
-      toast.success(
-        pwIds.length > 1
-          ? `Produkcja zakończona. ${pwIds.length} dokumenty PW oczekują na rozlokowanie.`
-          : pwIds.length === 1
-            ? `Produkcja zakończona. Dokument PW #${pwIds[0]} oczekuje na rozlokowanie.`
-            : "Produkcja zakończona. Wyroby trafiły do kolejki rozlokowania.",
-        { duration: 6000 },
-      );
-      navigate(wmsProductionPaths.putaway(activeRef.kind, activeRef.id));
-      await loadPutawayDetailForRef(activeRef);
-      await reloadQueue();
-    } finally {
-      setBusy(false);
+      await withMutationLock(mutationLockRef, setBusy, async () => {
+        if (activeRef.kind === "batch") {
+          await finishProductionPhase(tenantId, activeRef.id, warehouseId);
+        } else {
+          const finished = await finishOrderProduction(tenantId, activeRef.id, warehouseId);
+          handleProductionPackingHandoff(finished, navigate);
+          if (ordersMoSkipsPutaway(finished.source_type)) {
+            const handoff = finished.packing_handoff;
+            const navigatedToPacking =
+              handoff?.after_production_action === "OPEN_PACKING" &&
+              (handoff.newly_ready_orders?.length ?? 0) > 0;
+            toast.success(
+              "Produkcja zakończona. Produkty są dostępne na lokalizacji buforowej.",
+              { duration: 6000 },
+            );
+            if (!navigatedToPacking) {
+              navigate(wmsProductionPaths.execute());
+            }
+            await reloadQueue();
+            return;
+          }
+        }
+        const detail = await loadPutawayDetail(tenantId, warehouseId, activeRef);
+        const pwIds = collectPwDocumentIds(detail);
+        toast.success(
+          pwIds.length > 1
+            ? `Produkcja zakończona. ${pwIds.length} dokumenty PW oczekują na rozlokowanie.`
+            : pwIds.length === 1
+              ? `Produkcja zakończona. Dokument PW #${pwIds[0]} oczekuje na rozlokowanie.`
+              : "Produkcja zakończona. Wyroby trafiły do kolejki rozlokowania.",
+          { duration: 6000 },
+        );
+        navigate(wmsProductionPaths.putaway(activeRef.kind, activeRef.id));
+        await loadPutawayDetailForRef(activeRef);
+        await reloadQueue();
+      });
+    } catch (e: unknown) {
+      toast.error(formatProductionMutationError(e, "Nie można zakończyć produkcji."));
     }
   }, [activeRef, warehouseId, tenantId, navigate, reloadQueue, loadPutawayDetailForRef]);
 

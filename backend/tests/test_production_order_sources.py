@@ -164,3 +164,35 @@ def test_requested_fulfilled_aggregates():
         assert read.source_fulfilled_quantity_total == pytest.approx(3.5)
     finally:
         db.close()
+
+
+def test_reserved_shortage_count_vs_quantity_totals():
+    """Counts = source rows; quantities = sum requested — never mix units."""
+    engine = _base_engine()
+    db = _seed_orders_db(engine)
+    try:
+        mo = db.query(ProductionOrder).filter(ProductionOrder.id == 50).one()
+        a = attach_order_source_item(
+            db, tenant_id=1, production_order=mo, order_item_id=1001, requested_quantity=5.0
+        )
+        b = attach_order_source_item(
+            db, tenant_id=1, production_order=mo, order_item_id=1002, requested_quantity=2.0
+        )
+        c = attach_order_source_item(
+            db, tenant_id=1, production_order=mo, order_item_id=1003, requested_quantity=3.0
+        )
+        a.status = "reserved"
+        b.status = "reserved"
+        c.status = "shortage"
+        db.flush()
+        read = serialize_order(db, mo)
+        assert read.source_order_count == 3
+        assert read.source_requested_quantity_total == pytest.approx(10.0)
+        assert read.source_reserved_count == 2
+        assert read.source_shortage_count == 1
+        assert read.source_reserved_quantity_total == pytest.approx(7.0)
+        assert read.source_shortage_quantity_total == pytest.approx(3.0)
+        # Regression: must not equal reserved_count as if it were pieces
+        assert read.source_reserved_quantity_total != float(read.source_reserved_count)
+    finally:
+        db.close()

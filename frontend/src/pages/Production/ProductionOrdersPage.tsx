@@ -37,6 +37,7 @@ import {
   executionStatusTone,
   materialReadinessLabel,
   materialReadinessTone,
+  producibleQuantityHint,
   productionExecutionMethodLabel,
   productionProgressTone,
   productionSourceTypeLabel,
@@ -124,8 +125,18 @@ function OrderWorkCard({
   const readyCount = isOrder ? row.sourceReservedCount ?? 0 : 0;
   const shortageCount = isOrder ? row.sourceShortageCount ?? 0 : 0;
   const sourceCount = isOrder ? row.sourceOrderCount ?? 0 : 0;
-  const producibleHint =
-    readiness === "partial" && plannedQty > 0 ? Math.max(0, plannedQty - shortageCount) : undefined;
+  const reservedQty = isOrder ? row.sourceReservedQuantityTotal ?? 0 : 0;
+  const requestedQty = isOrder ? row.sourceRequestedQuantityTotal ?? 0 : 0;
+  const qtyHint = producibleQuantityHint({
+    sourceReservedQuantityTotal: reservedQty,
+    sourceRequestedQuantityTotal: requestedQty,
+    plannedQuantity: plannedQty,
+    readiness,
+  });
+  const producedDenom =
+    isOrder && row.sourceType === "ORDERS" && reservedQty > 0
+      ? reservedQty
+      : plannedQty;
 
   const wmsActions =
     !isPrintMethod && (row.status === "planned" || row.status === "draft")
@@ -174,7 +185,9 @@ function OrderWorkCard({
             <p className="mt-1 line-clamp-2 text-sm font-medium text-slate-900">{row.product}</p>
             <p className="mt-0.5 text-sm tabular-nums text-slate-700">
               <span className="font-semibold text-slate-900">
-                {isOrder ? `${formatQty(producedQty)} / ${formatQty(plannedQty)}` : formatQty(plannedQty)}
+                {isOrder
+                  ? `${formatQty(producedQty)} / ${formatQty(producedDenom)}`
+                  : formatQty(plannedQty)}
               </span>{" "}
               <span className="text-slate-500">szt.</span>
             </p>
@@ -186,8 +199,8 @@ function OrderWorkCard({
             </StatusBadge>
             <StatusBadge tone={materialReadinessTone(readiness)} density="compact">
               {materialReadinessLabel(readiness, {
-                producible: producibleHint,
-                planned: plannedQty,
+                producible: qtyHint?.producible,
+                planned: qtyHint?.planned,
               })}
             </StatusBadge>
             <span className="text-xs text-slate-500">
@@ -210,6 +223,12 @@ function OrderWorkCard({
                   {" · "}
                   Brak komponentów:{" "}
                   <span className="font-semibold tabular-nums text-amber-800">{shortageCount}</span>
+                </>
+              ) : null}
+              {requestedQty > 0 && Math.abs(requestedQty - producedDenom) > 1e-6 ? (
+                <>
+                  {" · "}
+                  Plan: <span className="font-semibold tabular-nums text-slate-900">{formatQty(requestedQty)} szt.</span>
                 </>
               ) : null}
             </p>

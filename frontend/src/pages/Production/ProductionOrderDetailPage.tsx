@@ -29,6 +29,7 @@ import {
   formatStartCollectingError,
   materialReadinessLabel,
   materialReadinessTone,
+  producibleQuantityHint,
   productionExecutionMethodLabel,
   productionSourceItemStatusLabel,
   productionSourceItemStatusTone,
@@ -184,6 +185,16 @@ export default function ProductionOrderDetailPage() {
     });
   }, [order]);
 
+  const qtyHint = useMemo(() => {
+    if (!order) return null;
+    return producibleQuantityHint({
+      sourceReservedQuantityTotal: order.source_reserved_quantity_total,
+      sourceRequestedQuantityTotal: order.source_requested_quantity_total,
+      plannedQuantity: order.planned_quantity,
+      readiness,
+    });
+  }, [order, readiness]);
+
   if (warehouseId == null) {
     return <p className="px-4 py-6 text-sm text-slate-500">Wybierz magazyn, aby otworzyć zlecenie.</p>;
   }
@@ -208,6 +219,14 @@ export default function ProductionOrderDetailPage() {
       : 0;
   const remaining = Math.max(0, order.planned_quantity - order.produced_quantity);
   const readyToPack = order.source_fulfilled_order_count ?? 0;
+  const reservedQty = order.source_reserved_quantity_total ?? 0;
+  const shortageQty = order.source_shortage_quantity_total ?? 0;
+  const requestedQty = order.source_requested_quantity_total ?? 0;
+  const producedDenom =
+    order.source_type === "ORDERS" && reservedQty > 0 ? reservedQty : order.planned_quantity;
+  const orderCount = order.source_order_count ?? 0;
+  const readyOrderCount = order.source_reserved_count ?? 0;
+  const shortageOrderCount = order.source_shortage_count ?? 0;
 
   return (
     <div className="mx-auto max-w-6xl space-y-5 px-4 py-6 lg:px-6">
@@ -254,8 +273,8 @@ export default function ProductionOrderDetailPage() {
               </StatusBadge>
               <StatusBadge tone={materialReadinessTone(readiness)} density="compact">
                 {materialReadinessLabel(readiness, {
-                  producible: Math.max(0, order.planned_quantity - (order.source_shortage_count ?? 0)),
-                  planned: order.planned_quantity,
+                  producible: qtyHint?.producible,
+                  planned: qtyHint?.planned,
                 })}
               </StatusBadge>
             </div>
@@ -268,25 +287,53 @@ export default function ProductionOrderDetailPage() {
               <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Wyprodukowano</p>
               <p className="mt-0.5 text-2xl font-bold tabular-nums text-slate-900">
                 {fmtQty(order.produced_quantity)}{" "}
-                <span className="text-base font-semibold text-slate-500">/ {fmtQty(order.planned_quantity)} szt.</span>
+                <span className="text-base font-semibold text-slate-500">/ {fmtQty(producedDenom)} szt.</span>
               </p>
             </div>
             <p className="text-sm tabular-nums text-slate-600">{progressPct}%</p>
           </div>
           <ProgressBar value={progressPct} tone={progressPct >= 100 ? "success" : "info"} className="mt-2" />
           {order.source_type === "ORDERS" ? (
-            <p className="mt-2 text-xs text-slate-600">
-              Gotowe do pakowania: <strong className="tabular-nums">{readyToPack}</strong>
-              {" · "}
-              Pozostało: <strong className="tabular-nums">{fmtQty(remaining)}</strong>
-              {(order.source_shortage_count ?? 0) > 0 ? (
-                <>
-                  {" · "}
-                  Brak komponentów:{" "}
-                  <strong className="tabular-nums text-amber-800">{order.source_shortage_count}</strong>
-                </>
+            <div className="mt-2 space-y-1 text-xs text-slate-600">
+              <p>
+                Gotowe do pakowania: <strong className="tabular-nums">{readyToPack}</strong>
+                {" · "}
+                Pozostało: <strong className="tabular-nums">{fmtQty(remaining)}</strong> szt.
+              </p>
+              {orderCount > 0 ? (
+                <p>
+                  Zamówienia: <strong className="tabular-nums">{orderCount}</strong>
+                  {readyOrderCount > 0 ? (
+                    <>
+                      {" · "}
+                      Gotowe do produkcji:{" "}
+                      <strong className="tabular-nums">{readyOrderCount}</strong>{" "}
+                      {readyOrderCount === 1 ? "zamówienie" : "zamówień"}
+                    </>
+                  ) : null}
+                  {shortageOrderCount > 0 ? (
+                    <>
+                      {" · "}
+                      Brak komponentów:{" "}
+                      <strong className="tabular-nums text-amber-800">{shortageOrderCount}</strong>{" "}
+                      {shortageOrderCount === 1 ? "zamówienie" : "zamówienia"}
+                      {shortageQty > 0 ? (
+                        <>
+                          {" "}
+                          / <strong className="tabular-nums text-amber-800">{fmtQty(shortageQty)}</strong> szt.
+                        </>
+                      ) : null}
+                    </>
+                  ) : null}
+                </p>
               ) : null}
-            </p>
+              {requestedQty > 0 ? (
+                <p className="tabular-nums text-slate-500">
+                  Plan: {fmtQty(requestedQty)} szt.
+                  {reservedQty > 0 ? <> · Można wyprodukować: {fmtQty(reservedQty)} szt.</> : null}
+                </p>
+              ) : null}
+            </div>
           ) : null}
         </div>
 

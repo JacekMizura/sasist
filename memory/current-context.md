@@ -1,5 +1,15 @@
 ﻿## Active
 
+**Krytyczne regresje UX produkcji (2026-08-13) — audyt B.1/B.2/C.1:**
+- Terminal WMS: catch + PL toast; sync mutation lock (ref) na +1 / finish collecting / finish production
+- ORDERS finish: brak navigate do putaway; toast bufora; MANUAL/PLANNING bez zmian
+- Count ≠ qty: API `source_reserved_quantity_total` / `source_shortage_quantity_total`; lista/detail rozdzielone
+
+**UX produkcji i planowania (2026-08-12):**
+- Lista/detail MO: język biznesowy (Z zamówień / Na magazyn, statusy PL, gotowość materiałów)
+- Planowanie: rozbicie Zamówienia vs Uzupełnienie; Przelicz vs Utwórz zlecenia; coverage tiles
+- Konfigurator: sekcja Tryb produkcji + walidacje pól; terminal: Pobierz komponenty
+
 **Stock replenishment / nadprodukcja (2026-08-12) — Phase 7:**
 - Settings in `production_forecast_json`: `auto_stock_replenishment`, `stock_replenishment_coverage_days` (1|3|7|14)
 - `run_production_stock_replenishment` creates/aggregates `ProductionOrder` `source_type=PLANNING` only

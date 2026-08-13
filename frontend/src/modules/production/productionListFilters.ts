@@ -61,6 +61,10 @@ export type ProductionOrderRow =
       sourceFulfilledOrderCount?: number;
       sourceShortageCount?: number;
       sourceReservedCount?: number;
+      sourceRequestedQuantityTotal?: number;
+      sourceReservedQuantityTotal?: number;
+      sourceShortageQuantityTotal?: number;
+      sourceFulfilledQuantityTotal?: number;
       materialsReserved?: boolean;
       productionExecutionMethod?: "WMS" | "PRINT" | null;
       isPrintInterface?: boolean;
@@ -106,6 +110,10 @@ export function productionOrderToRow(o: ProductionOrderRead): ProductionOrderRow
     sourceFulfilledOrderCount: o.source_fulfilled_order_count ?? 0,
     sourceShortageCount: o.source_shortage_count ?? 0,
     sourceReservedCount: o.source_reserved_count ?? 0,
+    sourceRequestedQuantityTotal: o.source_requested_quantity_total ?? 0,
+    sourceReservedQuantityTotal: o.source_reserved_quantity_total ?? 0,
+    sourceShortageQuantityTotal: o.source_shortage_quantity_total ?? 0,
+    sourceFulfilledQuantityTotal: o.source_fulfilled_quantity_total ?? 0,
     materialsReserved: Boolean(o.materials_reserved),
     productionExecutionMethod: o.production_execution_method ?? null,
     isPrintInterface: Boolean(o.is_print_interface),

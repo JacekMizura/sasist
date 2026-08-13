@@ -1,4 +1,17 @@
-﻿## 2026-08-12 — Nadprodukcja / uzupełnianie zapasu (faza 7)
+﻿## 2026-08-13 — Krytyczne regresje UX produkcji (audyt B.1/B.2/C.1)
+
+- Terminal: `formatProductionMutationError` + `withMutationLock` (ref); catch na progress/finish collecting/finish
+- ORDERS finish: `ordersMoSkipsPutaway(source_type)` → toast bufora, bez `/putaway`
+- API: `source_reserved_quantity_total` / `source_shortage_quantity_total`; UI nie miesza count zamówień ze sztukami
+
+## 2026-08-12 — UX produkcji i planowania
+
+- Lista MO: źródło / WMS|Wydruk / gotowość materiałów / progress X/Y; bez enumów ORDERS/PLANNING
+- Detail MO: sekcje Produkt, Komponenty, Zamówienia, Dokumenty, Historia; PRINT „Produkcja rozpoczęta”
+- Planowanie: Stan/Sprzedaż/Cel/pipeline; Przelicz zapotrzebowanie vs Utwórz zlecenia; coverage kafelki
+- Konfigurator zbierania: sekcja Tryb produkcji + (i) + walidacja bufora; terminal tabs Pobierz komponenty
+
+## 2026-08-12 — Nadprodukcja / uzupełnianie zapasu (faza 7)
 
 - Ustawienia: `auto_stock_replenishment` + `stock_replenishment_coverage_days` ∈ {1,3,7,14} w `production_forecast_json`
 - `run_production_stock_replenishment` → MO `source_type=PLANNING` (agregacja draft/planned; bez FG buffer ORDERS)

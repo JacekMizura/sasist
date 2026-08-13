@@ -391,6 +391,16 @@ def serialize_order(
         1 for s in source_rows if str(s.status or "") in ("reserved", "open", "partial")
     )
     src_shortage_count = sum(1 for s in source_rows if str(s.status or "") == "shortage")
+    src_reserved_qty_total = sum(
+        float(s.requested_quantity or 0)
+        for s in source_rows
+        if str(s.status or "") in ("reserved", "open", "partial")
+    )
+    src_shortage_qty_total = sum(
+        float(s.requested_quantity or 0)
+        for s in source_rows
+        if str(s.status or "") == "shortage"
+    )
     fulfilled_order_ids = {
         int(s.order_id)
         for s in source_rows
@@ -490,6 +500,8 @@ def serialize_order(
         source_fulfilled_quantity_total=float(src_ful_total),
         source_reserved_count=int(src_reserved_count),
         source_shortage_count=int(src_shortage_count),
+        source_reserved_quantity_total=float(src_reserved_qty_total),
+        source_shortage_quantity_total=float(src_shortage_qty_total),
         source_fulfilled_order_count=int(src_fulfilled_order_count),
         source_pending_order_count=int(src_pending_order_count),
         order_sources=order_sources_out,

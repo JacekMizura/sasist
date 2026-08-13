@@ -173,6 +173,10 @@ export type ProductionOrderRead = {
   source_fulfilled_quantity_total?: number;
   source_reserved_count?: number;
   source_shortage_count?: number;
+  /** Sum of requested qty for reserved/open/partial source rows (pieces, not order count). */
+  source_reserved_quantity_total?: number;
+  /** Sum of requested qty for shortage source rows (pieces, not order count). */
+  source_shortage_quantity_total?: number;
   source_fulfilled_order_count?: number;
   source_pending_order_count?: number;
   order_sources?: ProductionOrderSourceItemRead[];

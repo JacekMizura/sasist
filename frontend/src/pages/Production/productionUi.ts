@@ -369,3 +369,27 @@ export function resolveMaterialReadiness(input: {
   return "unknown";
 }
 
+/**
+ * Pieces producible now vs plan — never mix with source/order counts.
+ * Prefer reserved qty total; fall back to planned when no ORDERS qty metrics.
+ */
+export function producibleQuantityHint(input: {
+  sourceReservedQuantityTotal?: number | null;
+  sourceRequestedQuantityTotal?: number | null;
+  plannedQuantity?: number | null;
+  readiness?: MaterialReadinessKind;
+}): { producible: number; planned: number } | null {
+  const planned =
+    Number(input.sourceRequestedQuantityTotal ?? 0) > 0
+      ? Number(input.sourceRequestedQuantityTotal)
+      : Number(input.plannedQuantity ?? 0);
+  const reservedQty = Number(input.sourceReservedQuantityTotal ?? 0);
+  if (input.readiness === "partial" && planned > 0) {
+    return { producible: Math.max(0, reservedQty), planned };
+  }
+  if (input.readiness === "ok" && planned > 0) {
+    return { producible: planned, planned };
+  }
+  return null;
+}
+
