@@ -80,13 +80,13 @@ export function buildProductionTimeline(src: TimelineSource): ProductionTimeline
     },
     {
       key: "wms",
-      label: "Wydano do WMS",
+      label: "Wysłano do realizacji",
       status: wmsDone ? "done" : "pending",
       at: src.released_to_wms_at,
     },
     {
       key: "collecting",
-      label: "Zbieranie",
+      label: "Zbieranie komponentów",
       status: collectingDone ? "done" : wmsDone ? "active" : "pending",
       at: collectingDone ? src.collecting_completed_at ?? src.started_at : src.started_at,
       detail: src.rw_document_number ? `RW ${src.rw_document_number}` : null,
@@ -123,6 +123,26 @@ export function buildProductionTimeline(src: TimelineSource): ProductionTimeline
     return steps.map((s) =>
       s.key === "created" ? s : { ...s, status: "skipped" as const, detail: "Anulowano" },
     );
+  }
+
+  // Mark the first pending step after the active one as the explicit “next” cue.
+  const activeIdx = steps.findIndex((s) => s.status === "active");
+  if (activeIdx >= 0) {
+    for (let i = activeIdx + 1; i < steps.length; i += 1) {
+      if (steps[i].status === "pending") {
+        steps[i] = { ...steps[i], detail: steps[i].detail ?? "Następny krok" };
+        break;
+      }
+    }
+  } else {
+    const firstPending = steps.findIndex((s) => s.status === "pending");
+    if (firstPending >= 0) {
+      steps[firstPending] = {
+        ...steps[firstPending],
+        status: "active",
+        detail: steps[firstPending].detail ?? "Następny krok",
+      };
+    }
   }
 
   return steps;

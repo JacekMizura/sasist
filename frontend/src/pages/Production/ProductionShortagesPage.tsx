@@ -133,7 +133,7 @@ export default function ProductionShortagesPage() {
   return (
     <div className={productionPageStackClass}>
       <PageHeader
-        title={<h1 className={productionPageTitleClass}>Braki produkcyjne</h1>}
+        title={<h1 className={productionPageTitleClass}>Braki materiałów</h1>}
         actions={
           <SecondaryButton
             type="button"

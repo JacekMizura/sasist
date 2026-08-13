@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft, FileText, Monitor, XCircle } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 import toast from "react-hot-toast";
 
 import { useWarehouse } from "../../context/WarehouseContext";
@@ -20,10 +20,7 @@ import { useQueuePrint } from "../../hooks/useQueuePrint";
 import {
   Card,
   PageHeader,
-  PrimaryButton,
-  SecondaryButton,
   StatusBadge,
-  primaryButtonClassName,
   secondaryButtonClassName,
   typography,
 } from "@/design-system";
@@ -42,18 +39,10 @@ import {
   formatStartCollectingError,
 } from "./productionUi";
 import { ProductThumb } from "./components/ProductThumb";
-import { erpProductionPaths, wmsProductionPaths } from "./productionPaths";
+import { erpProductionPaths } from "./productionPaths";
 import { productionPageStackClass, productionPageTitleClass } from "./productionLayoutTokens";
 
 const DEFAULT_TENANT = 1;
-
-function wmsTerminalHref(id: number, status: string): string {
-  const s = status.toLowerCase();
-  if (s === "collecting") return wmsProductionPaths.collecting("batch", id);
-  if (s === "in_progress") return wmsProductionPaths.execute("batch", id);
-  if (s === "awaiting_putaway" || s === "putaway") return wmsProductionPaths.putaway("batch", id);
-  return wmsProductionPaths.collecting();
-}
 
 export default function BatchDetailPage() {
   const { batchId } = useParams();
@@ -160,19 +149,6 @@ export default function BatchDetailPage() {
   if (!batch) return <p className="px-4 py-6 text-sm text-slate-500">Wczytywanie…</p>;
 
   const collectingBlocked = batchHasMaterialShortages(batch, plan);
-  const status = String(batch.status || "draft");
-  const canRelease =
-    (status === "draft" || status === "planned") && !batch.is_released_to_wms && !batch.is_erp_interface;
-  const canStartErp =
-    (status === "draft" || status === "planned") && !batch.is_released_to_wms && !batch.is_erp_interface;
-  const canOpenWms =
-    !batch.is_erp_interface &&
-    (Boolean(batch.is_released_to_wms) ||
-      ["collecting", "in_progress", "awaiting_putaway", "putaway"].includes(status));
-  const canOpenErp =
-    Boolean(batch.is_erp_interface) &&
-    ["collecting", "in_progress", "awaiting_putaway", "putaway", "draft", "planned"].includes(status);
-  const canCancel = !["completed", "cancelled", "awaiting_putaway", "putaway"].includes(status);
 
   return (
     <div className={`${productionPageStackClass} max-w-6xl`}>
@@ -213,78 +189,13 @@ export default function BatchDetailPage() {
             ) : null}
           </div>
         }
-        actions={
-          <>
-            <SecondaryButton
-              type="button"
-              disabled={busy}
-              onClick={() => void printCard()}
-              className="inline-flex items-center gap-1.5"
-            >
-              <FileText className="h-4 w-4" aria-hidden />
-              Drukuj kartę
-            </SecondaryButton>
-            {canRelease ? (
-              <SecondaryButton
-                type="button"
-                disabled={busy || collectingBlocked}
-                title={collectingBlocked ? START_COLLECTING_BLOCKED_TOOLTIP : undefined}
-                onClick={() => void releaseToWms()}
-              >
-                Wydaj do WMS
-              </SecondaryButton>
-            ) : null}
-            {canStartErp ? (
-              <PrimaryButton
-                type="button"
-                disabled={busy || collectingBlocked}
-                title={collectingBlocked ? START_COLLECTING_BLOCKED_TOOLTIP : undefined}
-                onClick={() => void startErp()}
-              >
-                Rozpocznij produkcję
-              </PrimaryButton>
-            ) : null}
-            {canOpenWms ? (
-              <Link
-                to={wmsTerminalHref(batch.id, status)}
-                target="_blank"
-                rel="noopener noreferrer"
-                className={primaryButtonClassName("inline-flex items-center gap-1.5")}
-              >
-                <Monitor className="h-4 w-4" aria-hidden />
-                Przejdź do realizacji
-              </Link>
-            ) : null}
-            {canOpenErp && batch.is_erp_interface ? (
-              <PrimaryButton type="button" disabled={busy} onClick={openErp}>
-                Przejdź do realizacji
-              </PrimaryButton>
-            ) : null}
-            {canCancel ? (
-              <SecondaryButton
-                type="button"
-                disabled={busy}
-                onClick={() => void cancel()}
-                className="inline-flex items-center gap-1.5"
-              >
-                <XCircle className="h-4 w-4" aria-hidden />
-                Anuluj
-              </SecondaryButton>
-            ) : null}
-          </>
-        }
+        actions={undefined}
       >
         <div className="space-y-4">
-          {collectingBlocked ? (
-            <p className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-              Braki materiałów — uzupełnij stan magazynowy przed wydaniem do WMS.
-            </p>
-          ) : null}
-
           <ProductionMonitoringPanel
             kind="batch"
             source={batchMonitoringSource(batch)}
-            showActions={false}
+            showActions
             actions={{
               onReleaseToWms: () => void releaseToWms(),
               onStartErpExecution: () => void startErp(),

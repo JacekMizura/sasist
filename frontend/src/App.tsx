@@ -205,6 +205,7 @@ import RecipeDetailPage from "./pages/Production/RecipeDetailPage"
 import BatchesListPage from "./pages/Production/BatchesListPage"
 import BatchDetailPage from "./pages/Production/BatchDetailPage"
 import MaterialReservationsPage from "./pages/Production/MaterialReservationsPage"
+import ProductionMaterialsLayout from "./pages/Production/ProductionMaterialsLayout"
 import ProductionShortagesPage from "./pages/Production/ProductionShortagesPage"
 import MaterialAnalysisPage from "./pages/Production/MaterialAnalysisPage"
 import PaperProductionPage from "./pages/Production/PaperProductionPage"
@@ -725,9 +726,21 @@ export const router = createBrowserRouter(
                   <Route path="planning" element={<ProductionPlanningPage />} />
                   <Route path="history" element={<ProductionHistoryPage />} />
                   <Route path="analytics" element={<ProductionAnalyticsPage />} />
-                  <Route path="material-reservations" element={<MaterialReservationsPage />} />
-                  <Route path="shortages" element={<ProductionShortagesPage />} />
-                  <Route path="material-analysis" element={<MaterialAnalysisPage />} />
+                  <Route path="materials" element={<ProductionMaterialsLayout />}>
+                    <Route index element={<Navigate to="shortages" replace />} />
+                    <Route path="shortages" element={<ProductionShortagesPage />} />
+                    <Route path="reservations" element={<MaterialReservationsPage />} />
+                    <Route path="analysis" element={<MaterialAnalysisPage />} />
+                  </Route>
+                  <Route
+                    path="material-reservations"
+                    element={<Navigate to="/production/materials/reservations" replace />}
+                  />
+                  <Route path="shortages" element={<Navigate to="/production/materials/shortages" replace />} />
+                  <Route
+                    path="material-analysis"
+                    element={<Navigate to="/production/materials/analysis" replace />}
+                  />
                   <Route path="batches" element={<Navigate to="/production/planning" replace />} />
                   <Route path="batch/:batchId" element={<BatchDetailPage />} />
                   <Route path="erp/:kind/:id" element={<PaperProductionPage />} />

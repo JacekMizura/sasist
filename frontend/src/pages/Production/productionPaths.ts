@@ -20,9 +20,17 @@ export const erpProductionPaths = {
   /** @deprecated use erpExecution */
   paperExecution: (kind: "batch" | "order", id: number | string) =>
     `${ERP_PRODUCTION_BASE}/erp/${kind}/${id}`,
-  materialReservations: `${ERP_PRODUCTION_BASE}/material-reservations`,
-  shortages: `${ERP_PRODUCTION_BASE}/shortages`,
-  materialAnalysis: `${ERP_PRODUCTION_BASE}/material-analysis`,
+  /** Hub „Materiały” — braki / rezerwacje / analiza jako podwidoki. */
+  materials: `${ERP_PRODUCTION_BASE}/materials`,
+  materialsShortages: `${ERP_PRODUCTION_BASE}/materials/shortages`,
+  materialsReservations: `${ERP_PRODUCTION_BASE}/materials/reservations`,
+  materialsAnalysis: `${ERP_PRODUCTION_BASE}/materials/analysis`,
+  /** @deprecated Use materialsReservations */
+  materialReservations: `${ERP_PRODUCTION_BASE}/materials/reservations`,
+  /** @deprecated Use materialsShortages */
+  shortages: `${ERP_PRODUCTION_BASE}/materials/shortages`,
+  /** @deprecated Use materialsAnalysis */
+  materialAnalysis: `${ERP_PRODUCTION_BASE}/materials/analysis`,
   materialSubstitutes: `${ERP_PRODUCTION_BASE}/material-substitutes`,
 } as const;
 

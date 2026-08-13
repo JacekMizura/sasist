@@ -41,7 +41,7 @@ export default function MaterialAnalysisPage() {
   return (
     <div className={productionPageStackClass}>
       <PageHeader
-        title={<h1 className={productionPageTitleClass}>Analiza materiałowa</h1>}
+        title={<h1 className={productionPageTitleClass}>Analiza</h1>}
         actions={
           <SecondaryButton type="button" onClick={() => void load()} className="inline-flex items-center gap-1.5">
             <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} aria-hidden />

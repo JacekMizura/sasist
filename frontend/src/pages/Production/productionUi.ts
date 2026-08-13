@@ -258,7 +258,7 @@ export type ProductionSourceType = "MANUAL" | "PLANNING" | "ORDERS";
 export function productionSourceTypeLabel(sourceType?: string | null): string {
   switch (String(sourceType || "").toUpperCase()) {
     case "ORDERS":
-      return "Z zamówień";
+      return "Na zamówienia";
     case "PLANNING":
       return "Na magazyn";
     case "MANUAL":
@@ -280,7 +280,7 @@ export function productionSourceTypeTone(sourceType?: string | null): StatusTone
 }
 
 export function productionExecutionMethodLabel(method?: string | null): string {
-  return String(method || "").toUpperCase() === "PRINT" ? "Wydruk" : "WMS";
+  return String(method || "").toUpperCase() === "PRINT" ? "Wydruk" : "Terminal WMS";
 }
 
 /** Source-item status on ORDERS MO — business language only. */

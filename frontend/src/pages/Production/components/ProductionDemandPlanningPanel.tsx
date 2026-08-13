@@ -404,12 +404,12 @@ function RecommendationCard({
             </StatusBadge>
             {showOrder ? (
               <StatusBadge tone="warning" density="compact">
-                Zamówienia
+                Na zamówienia
               </StatusBadge>
             ) : null}
             {showStock ? (
               <StatusBadge tone="info" density="compact">
-                Uzupełnienie magazynu
+                Na magazyn
               </StatusBadge>
             ) : null}
           </div>
@@ -433,9 +433,9 @@ function RecommendationCard({
         <dd className="text-right tabular-nums">{fmtQty(target)} szt.</dd>
         <dt>W produkcji</dt>
         <dd className="text-right tabular-nums">{fmtQty(row.in_pipeline)} szt.</dd>
-        <dt className="font-semibold text-amber-800">Zamówienia</dt>
+        <dt className="font-semibold text-amber-800">Na zamówienia</dt>
         <dd className="text-right font-semibold tabular-nums text-amber-900">{fmtQty(orderNeed)} szt.</dd>
-        <dt className="font-semibold text-sky-800">Uzupełnienie magazynu</dt>
+        <dt className="font-semibold text-sky-800">Na magazyn</dt>
         <dd className="text-right font-semibold tabular-nums text-sky-900">{fmtQty(stockNeed)} szt.</dd>
         <dt className="font-bold text-slate-900">Razem</dt>
         <dd className="text-right font-bold tabular-nums text-slate-900">{fmtQty(row.recommended_quantity)} szt.</dd>

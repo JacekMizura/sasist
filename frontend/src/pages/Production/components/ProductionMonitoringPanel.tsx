@@ -1,22 +1,22 @@
-import { Link } from "react-router-dom";
-import { FileText, Monitor, XCircle } from "lucide-react";
+import { useMemo } from "react";
 
 import type { ProductionBatchRead, ProductionOrderRead } from "@/api/productionApi";
 import type { TimelinePwDocument } from "@/modules/production/productionExecutionTimeline";
 import { currentExecutionPhaseLabel } from "@/modules/production/productionExecutionTimeline";
 import { PRODUCTION_KIND_LABEL, type ProductionExecutionKind } from "@/modules/production/productionExecutionTypes";
-import {
-  Card,
-  PrimaryButton,
-  SecondaryButton,
-  StatusBadge,
-  primaryButtonClassName,
-  typography,
-} from "@/design-system";
+import { Card, StatusBadge, typography } from "@/design-system";
 import { wmsProductionPaths } from "../productionPaths";
-import { ProgressBar } from "./ProgressBar";
-import { ProductionExecutionTimeline } from "./ProductionExecutionTimeline";
+import {
+  resolveProductionNextAction,
+  resolveProductionSecondaryActions,
+  type ProductionNextActionInput,
+  type ProductionSecondaryActionId,
+} from "../productionNextAction";
 import { formatProductionMoney } from "../productionUi";
+import { ProgressBar } from "./ProgressBar";
+import { ProductionContextBanner } from "./ProductionContextBanner";
+import { ProductionExecutionTimeline } from "./ProductionExecutionTimeline";
+import { ProductionPrimaryActionBar } from "./ProductionPrimaryActionBar";
 import {
   ProductionDocumentsSection,
   pwDocumentsFromBatchLines,
@@ -38,6 +38,8 @@ export type ProductionMonitoringActions = {
   printStartDisabled?: boolean;
   printStartDisabledReason?: string;
   busy?: boolean;
+  /** When true, hide primary/secondary CTA bar (actions already in parent header). */
+  hideActionBar?: boolean;
 };
 
 type MonitoringSource = {
@@ -52,8 +54,18 @@ type MonitoringSource = {
   collection_progress_percent?: number;
   operator_name?: string | null;
   has_shortages?: boolean;
+  materials_reserved?: boolean;
   is_released_to_wms?: boolean;
   is_erp_interface?: boolean;
+  is_print_interface?: boolean;
+  production_execution_method?: "WMS" | "PRINT" | null;
+  source_type?: string | null;
+  source_order_count?: number;
+  source_requested_quantity_total?: number;
+  source_shortage_quantity_total?: number;
+  source_shortage_count?: number;
+  source_fulfilled_order_count?: number;
+  shortage_component_hint?: string | null;
   execution_interface?: string | null;
   released_to_wms_at?: string | null;
   started_at?: string | null;
@@ -77,6 +89,8 @@ type Props = {
   actions?: ProductionMonitoringActions;
   /** When false, omit action toolbar (e.g. actions already in PageHeader). Default true. */
   showActions?: boolean;
+  /** Show contextual “Co dalej?” banner above actions. Default true. */
+  showContextBanner?: boolean;
 };
 
 function wmsTerminalHref(kind: ProductionExecutionKind, id: number, status: string): string {
@@ -84,7 +98,7 @@ function wmsTerminalHref(kind: ProductionExecutionKind, id: number, status: stri
   if (s === "collecting") return wmsProductionPaths.collecting(kind, id);
   if (s === "in_progress") return wmsProductionPaths.execute(kind, id);
   if (s === "awaiting_putaway" || s === "putaway") return wmsProductionPaths.putaway(kind, id);
-  return wmsProductionPaths.collecting();
+  return wmsProductionPaths.collecting(kind, id);
 }
 
 function batchPwFromLines(batch: ProductionBatchRead): Pick<
@@ -111,41 +125,47 @@ function interfaceLabel(source: MonitoringSource): string {
   if (source.is_erp_interface) return "Tryb papierowy";
   const raw = String(source.execution_interface || "").trim().toUpperCase();
   if (raw === "PRINT") return "Wydruk";
-  if (source.is_released_to_wms) return "WMS";
+  if (source.is_released_to_wms) return "Terminal WMS";
   if (!raw || raw === "NONE") return "—";
   if (raw.includes("ERP") || raw.includes("PAPER")) return "Tryb papierowy";
-  if (raw.includes("WMS")) return "WMS";
+  if (raw.includes("WMS")) return "Terminal WMS";
   return source.execution_interface ?? "—";
 }
 
-export function ProductionMonitoringPanel({ kind, source, actions, showActions = true }: Props) {
+function toNextInput(kind: ProductionExecutionKind, source: MonitoringSource): ProductionNextActionInput {
+  return {
+    executionKind: kind,
+    id: source.id,
+    status: source.status,
+    sourceType: source.source_type,
+    hasShortages: source.has_shortages,
+    materialsReserved: source.materials_reserved,
+    isReleasedToWms: source.is_released_to_wms,
+    isErpInterface: source.is_erp_interface,
+    isPrintInterface: source.is_print_interface,
+    productionExecutionMethod: source.production_execution_method,
+    producedQuantity: source.produced_quantity ?? source.total_completed_units,
+    plannedQuantity: source.planned_quantity ?? source.total_planned_units,
+    sourceOrderCount: source.source_order_count,
+    sourceRequestedQuantityTotal: source.source_requested_quantity_total,
+    sourceShortageQuantityTotal: source.source_shortage_quantity_total,
+    sourceShortageCount: source.source_shortage_count,
+    sourceFulfilledOrderCount: source.source_fulfilled_order_count,
+    shortageComponentHint: source.shortage_component_hint,
+  };
+}
+
+export function ProductionMonitoringPanel({
+  kind,
+  source,
+  actions,
+  showActions = true,
+  showContextBanner = true,
+}: Props) {
   const status = String(source.status || "draft");
   const planned = source.planned_quantity ?? source.total_planned_units ?? 0;
   const completed = source.produced_quantity ?? source.total_completed_units ?? 0;
   const progress = source.progress_percent ?? (planned > 0 ? (completed / planned) * 100 : 0);
-  const canRelease =
-    (status === "draft" || status === "planned") &&
-    !source.is_released_to_wms &&
-    !source.is_erp_interface &&
-    actions?.onReleaseToWms;
-  const canStartErp =
-    (status === "draft" || status === "planned") &&
-    !source.is_released_to_wms &&
-    !source.is_erp_interface &&
-    actions?.onStartErpExecution;
-  const canPrintCard = Boolean(actions?.onPrintProductionCard);
-  const canStartPrint = Boolean(actions?.onStartPrintExecution);
-  const canOpenWms =
-    !source.is_erp_interface &&
-    String(source.execution_interface || "").toUpperCase() !== "PRINT" &&
-    (source.is_released_to_wms ||
-      ["collecting", "in_progress", "awaiting_putaway", "putaway"].includes(status));
-  const canOpenErp =
-    (source.is_erp_interface || String(source.execution_interface || "").toUpperCase() === "PRINT") &&
-    (actions?.onOpenErpExecution || ["collecting", "in_progress", "awaiting_putaway", "putaway"].includes(status));
-  const canCancel =
-    actions?.onCancel &&
-    !["completed", "cancelled", "awaiting_putaway", "putaway"].includes(status);
   const pwDocs =
     source.pw_document_rows ??
     source.pw_documents?.map((pw) => ({
@@ -157,79 +177,92 @@ export function ProductionMonitoringPanel({ kind, source, actions, showActions =
       : []);
   const unitCost = source.display_unit_cost ?? source.calculated_unit_cost;
 
+  const nextInput = useMemo(() => toNextInput(kind, source), [kind, source]);
+  const primary = useMemo(() => resolveProductionNextAction(nextInput), [nextInput]);
+  const secondary = useMemo(
+    () => resolveProductionSecondaryActions(nextInput, primary),
+    [nextInput, primary],
+  );
+
+  const handlePrimary = () => {
+    switch (primary.kind) {
+      case "send_to_execution":
+        actions?.onReleaseToWms?.();
+        break;
+      case "start_print_execution":
+        actions?.onStartPrintExecution?.();
+        break;
+      case "continue_collecting":
+      case "continue_production":
+      case "start_collecting":
+      case "putaway":
+        if (source.is_erp_interface || String(source.execution_interface || "").toUpperCase() === "PRINT") {
+          actions?.onOpenErpExecution?.();
+        }
+        break;
+      default:
+        break;
+    }
+  };
+
+  const needsPrimaryHandler =
+    primary.kind === "send_to_execution" ||
+    primary.kind === "start_print_execution" ||
+    ((primary.kind === "continue_collecting" ||
+      primary.kind === "continue_production" ||
+      primary.kind === "start_collecting" ||
+      primary.kind === "putaway") &&
+      (source.is_erp_interface || String(source.execution_interface || "").toUpperCase() === "PRINT"));
+
+  const handleSecondary = (id: ProductionSecondaryActionId) => {
+    switch (id) {
+      case "print_card":
+      case "preview_print":
+        actions?.onPrintProductionCard?.();
+        break;
+      case "start_paper":
+        actions?.onStartErpExecution?.();
+        break;
+      case "open_erp":
+        actions?.onOpenErpExecution?.();
+        break;
+      case "open_wms":
+        window.open(wmsTerminalHref(kind, source.id, status), "_blank", "noopener,noreferrer");
+        break;
+      case "cancel":
+        actions?.onCancel?.();
+        break;
+    }
+  };
+
+  const showBar = showActions && !actions?.hideActionBar;
+
   return (
     <div className="space-y-4">
-      {showActions ? (
-        <div className="flex flex-wrap gap-2">
-          {canPrintCard ? (
-            <SecondaryButton
-              type="button"
-              disabled={actions?.busy}
-              onClick={actions?.onPrintProductionCard}
-              className="inline-flex items-center gap-1.5"
-            >
-              <FileText className="h-4 w-4" aria-hidden />
-              {canStartPrint ? "Podgląd / Drukuj" : "Drukuj kartę"}
-            </SecondaryButton>
-          ) : null}
-          {canStartPrint ? (
-            <PrimaryButton
-              type="button"
-              disabled={actions?.busy || actions?.printStartDisabled}
-              title={actions?.printStartDisabled ? actions.printStartDisabledReason : undefined}
-              onClick={actions?.onStartPrintExecution}
-            >
-              Wydrukuj i rozpocznij
-            </PrimaryButton>
-          ) : null}
-          {canRelease ? (
-            <SecondaryButton
-              type="button"
-              disabled={actions?.busy || actions?.releaseDisabled}
-              title={actions?.releaseDisabled ? actions.releaseDisabledReason : undefined}
-              onClick={actions?.onReleaseToWms}
-            >
-              Wydaj do WMS
-            </SecondaryButton>
-          ) : null}
-          {canStartErp ? (
-            <PrimaryButton
-              type="button"
-              disabled={actions?.busy || actions?.erpDisabled}
-              title={actions?.erpDisabled ? actions.erpDisabledReason : undefined}
-              onClick={actions?.onStartErpExecution}
-            >
-              Rozpocznij produkcję
-            </PrimaryButton>
-          ) : null}
-          {canOpenWms ? (
-            <Link
-              to={wmsTerminalHref(kind, source.id, status)}
-              target="_blank"
-              rel="noopener noreferrer"
-              className={primaryButtonClassName("inline-flex items-center gap-1.5")}
-            >
-              <Monitor className="h-4 w-4" aria-hidden />
-              Przejdź do realizacji
-            </Link>
-          ) : null}
-          {canOpenErp && actions?.onOpenErpExecution ? (
-            <PrimaryButton type="button" disabled={actions?.busy} onClick={actions.onOpenErpExecution}>
-              Przejdź do realizacji
-            </PrimaryButton>
-          ) : null}
-          {canCancel ? (
-            <SecondaryButton
-              type="button"
-              disabled={actions?.busy}
-              onClick={actions?.onCancel}
-              className="inline-flex items-center gap-1.5"
-            >
-              <XCircle className="h-4 w-4" aria-hidden />
-              Anuluj
-            </SecondaryButton>
-          ) : null}
-        </div>
+      {showContextBanner || showBar ? (
+        <ProductionContextBanner
+          message={primary.contextMessage}
+          tone={primary.tone}
+          action={
+            showBar ? (
+              <ProductionPrimaryActionBar
+                primary={primary}
+                secondary={secondary.filter((s) => {
+                  if (s.id === "print_card" || s.id === "preview_print") {
+                    return Boolean(actions?.onPrintProductionCard);
+                  }
+                  if (s.id === "start_paper") return Boolean(actions?.onStartErpExecution);
+                  if (s.id === "open_erp") return Boolean(actions?.onOpenErpExecution);
+                  if (s.id === "cancel") return Boolean(actions?.onCancel);
+                  return true;
+                })}
+                busy={actions?.busy}
+                onPrimaryClick={needsPrimaryHandler ? handlePrimary : undefined}
+                onSecondary={handleSecondary}
+              />
+            ) : undefined
+          }
+        />
       ) : null}
 
       <Card variant="section" density="comfortable" className="space-y-3">
@@ -239,7 +272,6 @@ export function ProductionMonitoringPanel({ kind, source, actions, showActions =
           <InfoRow label="Typ" value={PRODUCTION_KIND_LABEL[kind]} />
           <InfoRow label="Operator" value={source.operator_name ?? "—"} />
           <InfoRow label="Rozpoczęcie" value={source.started_at ? formatTs(source.started_at) : "—"} />
-          <InfoRow label="Plan zakończenia" value="—" />
           <InfoRow label="Interfejs" value={interfaceLabel(source)} />
           {source.production_completed_at ? (
             <InfoRow label="Koniec produkcji" value={formatTs(source.production_completed_at)} />
@@ -284,7 +316,12 @@ export function ProductionMonitoringPanel({ kind, source, actions, showActions =
       )}
 
       <Card variant="section" density="comfortable" className="space-y-2">
-        <h3 className={typography.section}>Przebieg produkcji</h3>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h3 className={typography.section}>Przebieg produkcji</h3>
+          <StatusBadge tone="primary" density="compact">
+            Aktualny: {currentExecutionPhaseLabel(status)}
+          </StatusBadge>
+        </div>
         <ProductionExecutionTimeline source={source} />
       </Card>
     </div>
@@ -313,6 +350,7 @@ function formatTs(iso: string): string {
 }
 
 export function orderMonitoringSource(order: ProductionOrderRead): MonitoringSource {
+  const shortageLine = (order.lines ?? []).find((ln) => Number(ln.missing ?? 0) > 0);
   return {
     id: order.id,
     number: order.number,
@@ -323,8 +361,18 @@ export function orderMonitoringSource(order: ProductionOrderRead): MonitoringSou
     collection_progress_percent: order.collection_progress_percent,
     operator_name: order.operator_name,
     has_shortages: order.has_shortages,
+    materials_reserved: order.materials_reserved,
     is_released_to_wms: order.is_released_to_wms,
     is_erp_interface: order.is_erp_interface,
+    is_print_interface: order.is_print_interface,
+    production_execution_method: order.production_execution_method,
+    source_type: order.source_type,
+    source_order_count: order.source_order_count,
+    source_requested_quantity_total: order.source_requested_quantity_total,
+    source_shortage_quantity_total: order.source_shortage_quantity_total,
+    source_shortage_count: order.source_shortage_count,
+    source_fulfilled_order_count: order.source_fulfilled_order_count,
+    shortage_component_hint: shortageLine?.product_name_snapshot ?? null,
     execution_interface: order.execution_interface,
     released_to_wms_at: order.released_to_wms_at,
     started_at: order.started_at,

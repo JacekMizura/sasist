@@ -1,4 +1,20 @@
-﻿## 2026-08-13 — Faza 8: automatyczne wznawianie shortage po dostępności komponentów
+﻿## 2026-08-13 — UX pass Produkcja: jedna główna akcja „Co dalej?”
+
+- SSOT `productionNextAction.ts`: status → komunikat + jedno CTA; druk/anuluj/papier w menu „…”
+- Pulpit: „Wymaga Twojej uwagi” + „Produkcja w toku” na górze; KPI/aktywność niżej
+- Lista/detail MO + batch: bez konkurujących „Wydaj do WMS” / „Rozpocznij produkcję”
+- Nawigacja: Materiały = Braki | Rezerwacje | Analiza (`/production/materials/*` + redirecty)
+- Język: Na zamówienia / Na magazyn / Terminal WMS; timeline z Wykonane / Aktualny / Następny
+- Testy: `productionNextAction.test.ts`; FE build OK
+
+## 2026-08-13 — Faza 9: realne automatyczne uzupełnianie zapasu
+
+- Wspólna pętla `operational_workers_loop` (daemon thread w procesie Railway) + worker produkcji
+- `stock_replenishment_interval` + `last_replenishment_run_at` w `production_forecast_json`
+- Job → `run_production_stock_replenishment` (ORDERS retry/soft-hold przed PLANNING); unique index PLANNING
+- UI: kafelki przeliczania; info na planowaniu; testy `test_auto_stock_replenishment.py`
+
+## 2026-08-13 — Faza 8: automatyczne wznawianie shortage po dostępności komponentów
 
 - `availability_retry_service.on_component_availability_increased` + wspólny `retry_order_driven_production_shortages(component_product_ids=…)`
 - Eventy: release reservation (coalesce), PZ dock ATP, putaway, korekta +, cancel MO (po `cancelled`, bez pętli ALL_SHORTAGE)

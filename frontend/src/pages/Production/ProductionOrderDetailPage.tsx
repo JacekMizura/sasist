@@ -37,6 +37,7 @@ import {
   productionSourceTypeTone,
   resolveMaterialReadiness,
 } from "./productionUi";
+import { productionOrdersSourceSummary } from "./productionNextAction";
 import { Card, ProgressBar, StatusBadge, primaryButtonClassName, typography } from "@/design-system";
 
 const DEFAULT_TENANT = 1;
@@ -227,6 +228,11 @@ export default function ProductionOrderDetailPage() {
   const orderCount = order.source_order_count ?? 0;
   const readyOrderCount = order.source_reserved_count ?? 0;
   const shortageOrderCount = order.source_shortage_count ?? 0;
+  const ordersSummary = productionOrdersSourceSummary({
+    sourceOrderCount: orderCount,
+    sourceRequestedQuantityTotal: requestedQty,
+    plannedQuantity: order.planned_quantity,
+  });
 
   return (
     <div className="mx-auto max-w-6xl space-y-5 px-4 py-6 lg:px-6">
@@ -293,8 +299,9 @@ export default function ProductionOrderDetailPage() {
             <p className="text-sm tabular-nums text-slate-600">{progressPct}%</p>
           </div>
           <ProgressBar value={progressPct} tone={progressPct >= 100 ? "success" : "info"} className="mt-2" />
-          {order.source_type === "ORDERS" ? (
+              {order.source_type === "ORDERS" ? (
             <div className="mt-2 space-y-1 text-xs text-slate-600">
+              {ordersSummary ? <p className="font-medium text-slate-800">{ordersSummary}</p> : null}
               <p>
                 Gotowe do pakowania: <strong className="tabular-nums">{readyToPack}</strong>
                 {" · "}
@@ -336,21 +343,6 @@ export default function ProductionOrderDetailPage() {
             </div>
           ) : null}
         </div>
-
-        {isPrintMethod && printStarted ? (
-          <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-900">
-            <span className="font-medium">Produkcja rozpoczęta</span>
-            <button type="button" className={primaryButtonClassName("", "compact")} onClick={printCard}>
-              Drukuj ponownie
-            </button>
-          </div>
-        ) : null}
-
-        {shortagesBlocked ? (
-          <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
-            Brakuje komponentów — uzupełnij stan przed startem produkcji.
-          </p>
-        ) : null}
 
         <ProductionMonitoringPanel
           kind="order"

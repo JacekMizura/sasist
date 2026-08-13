@@ -43,7 +43,7 @@ export default function MaterialReservationsPage() {
   return (
     <div className={productionPageStackClass}>
       <PageHeader
-        title={<h1 className={productionPageTitleClass}>Rezerwacje materiałów</h1>}
+        title={<h1 className={productionPageTitleClass}>Rezerwacje</h1>}
         actions={
           <SecondaryButton type="button" onClick={() => void load()}>
             Odśwież

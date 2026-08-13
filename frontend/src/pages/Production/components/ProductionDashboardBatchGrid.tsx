@@ -8,11 +8,16 @@ import {
   ListTile,
   ProgressBar,
   StatusBadge,
+  primaryButtonClassName,
   secondaryButtonClassName,
   toneTextClass,
 } from "@/design-system";
 
 import { erpProductionPaths } from "../productionPaths";
+import {
+  resolveProductionNextAction,
+  productionStageLabel,
+} from "../productionNextAction";
 import { BATCH_STATUS_LABEL, executionStatusTone, productionProgressTone } from "../productionUi";
 
 type Props = {
@@ -25,6 +30,8 @@ type Props = {
   limit?: number;
   seeAllTo?: string;
   seeAllLabel?: string;
+  /** Show SSOT primary CTA instead of generic „Otwórz”. */
+  preferNextAction?: boolean;
 };
 
 function productLabel(batch: ProductionBatchSummaryRead): string {
@@ -49,6 +56,7 @@ export function ProductionDashboardBatchGrid({
   limit = 5,
   seeAllTo = erpProductionPaths.orders,
   seeAllLabel = "Pokaż wszystkie",
+  preferNextAction = false,
 }: Props) {
   if (batches.length === 0) {
     if (plainEmpty) {
@@ -76,6 +84,20 @@ export function ProductionDashboardBatchGrid({
           const pct = Math.max(0, Math.min(100, b.progress_percent ?? 0));
           const href = erpProductionPaths.batch(b.id);
           const barTone = productionProgressTone(pct, b.status);
+          const next = preferNextAction
+            ? resolveProductionNextAction({
+                executionKind: "batch",
+                id: b.id,
+                status: b.status,
+                hasShortages: b.has_shortages,
+                isReleasedToWms: b.is_released_to_wms,
+                plannedQuantity: b.total_planned_units,
+                producedQuantity: b.total_completed_units,
+              })
+            : null;
+          const ctaHref = next?.href ?? href;
+          const ctaLabel = next?.label ?? "Otwórz";
+          const ctaExternal = Boolean(next?.openInNewTab);
           return (
             <li key={b.id} className="w-full">
               <ListTile density="comfortable" className="w-full">
@@ -83,15 +105,18 @@ export function ProductionDashboardBatchGrid({
                   <div className="min-w-0 flex-1">
                     <p className="font-mono text-sm font-semibold text-slate-900">{b.number}</p>
                     <p className="mt-0.5 line-clamp-1 text-sm text-slate-600">{productLabel(b)}</p>
+                    {next ? (
+                      <p className="mt-1 line-clamp-2 text-xs text-slate-500">{next.contextMessage}</p>
+                    ) : null}
                   </div>
 
                   <div className="flex shrink-0 flex-wrap items-center gap-2">
                     <StatusBadge tone={executionStatusTone(b.status)} density="compact">
-                      {BATCH_STATUS_LABEL[b.status]}
+                      {preferNextAction ? productionStageLabel(b.status) : BATCH_STATUS_LABEL[b.status]}
                     </StatusBadge>
                     {b.has_shortages ? (
                       <StatusBadge tone="warning" density="compact">
-                        Braki
+                        Brak materiałów
                         {b.shortage_count != null && b.shortage_count > 0 ? ` (${b.shortage_count})` : ""}
                       </StatusBadge>
                     ) : null}
@@ -115,9 +140,20 @@ export function ProductionDashboardBatchGrid({
                   </div>
 
                   <div className="shrink-0 lg:ml-auto">
-                    <Link to={href} className={secondaryButtonClassName("", "compact")}>
-                      Otwórz
-                    </Link>
+                    {preferNextAction ? (
+                      <Link
+                        to={ctaHref}
+                        target={ctaExternal ? "_blank" : undefined}
+                        rel={ctaExternal ? "noopener noreferrer" : undefined}
+                        className={primaryButtonClassName("", "compact")}
+                      >
+                        {ctaLabel}
+                      </Link>
+                    ) : (
+                      <Link to={href} className={secondaryButtonClassName("", "compact")}>
+                        Otwórz
+                      </Link>
+                    )}
                   </div>
                 </div>
               </ListTile>

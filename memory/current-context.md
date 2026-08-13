@@ -1,5 +1,17 @@
 ﻿## Active
 
+**UX pass Produkcja — jedna akcja „Co dalej?” (2026-08-13):**
+- SSOT: `frontend/src/pages/Production/productionNextAction.ts` (+ `ProductionPrimaryActionBar` / `ProductionContextBanner`)
+- Pulpit: attention + in-progress first; lista/detail bez równorzędnych CTA etapów
+- Materiały hub: `/production/materials/{shortages|reservations|analysis}`
+- Bez zmian backendu Faz 1–9
+
+**Phase 9 — real auto stock replenishment scheduler (2026-08-13):**
+- Shared `operational_workers_loop` daemon (Railway single process; no Celery) ticks existing workers + production replenishment
+- Settings in `production_forecast_json`: `stock_replenishment_interval` (hourly/3h/6h/daily), `last_replenishment_run_at`
+- Job calls existing `run_production_stock_replenishment`; ORDERS shortage retry + soft-hold before PLANNING
+- Concurrency: PG advisory lock + `uq_prod_order_planning_open_agg`; pipeline idempotency
+
 **Phase 8 — auto shortage retry on component availability (2026-08-13):**
 - Central: `on_component_availability_increased` → same `retry_order_driven_production_shortages` as manual
 - Candidates narrowed via BOM `ProductionOrderLineSnapshot.component_product_id` (no new table)

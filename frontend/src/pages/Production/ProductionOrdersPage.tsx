@@ -46,6 +46,11 @@ import {
   resolveProductionPriority,
   type ProductionPriorityLevel,
 } from "./productionUi";
+import {
+  productionOrdersSourceSummary,
+  productionStageLabel,
+  resolveProductionNextAction,
+} from "./productionNextAction";
 import { erpProductionPaths, wmsProductionPaths } from "./productionPaths";
 import { ProductionOrdersFiltersPanel } from "./components/ProductionOrdersFiltersPanel";
 import { ProductionRowActionsMenu } from "./components/ProductionRowActionsMenu";
@@ -73,14 +78,6 @@ const PRIORITY_DISPLAY: Record<ProductionPriorityLevel, string> = {
   critical: "Krytyczny",
 };
 
-function formatPlannedDate(raw: string): string {
-  if (!raw || raw === "—") return "—";
-  const d = raw.slice(0, 10);
-  const [y, m, day] = d.split("-");
-  if (!y || !m || !day) return d;
-  return `${day}.${m}.${y}`;
-}
-
 function statusLabel(row: ProductionOrderRow): string {
   return row.kind === "batch"
     ? BATCH_STATUS_LABEL[row.status as keyof typeof BATCH_STATUS_LABEL] ?? row.status
@@ -93,12 +90,14 @@ function OrderWorkCard({
   onOpen,
   onReleaseToWms,
   onPrintOrder,
+  onNavigate,
 }: {
   row: ProductionOrderRow;
   selected?: boolean;
   onOpen: () => void;
   onReleaseToWms: () => void;
   onPrintOrder?: () => void;
+  onNavigate: (to: string) => void;
 }) {
   const level = resolveProductionPriority(row.priority, row.hasShortages, row.numericPriority);
   const pct = row.progressPercent;
@@ -122,9 +121,6 @@ function OrderWorkCard({
     : row.hasShortages
       ? "shortage"
       : "unknown";
-  const readyCount = isOrder ? row.sourceReservedCount ?? 0 : 0;
-  const shortageCount = isOrder ? row.sourceShortageCount ?? 0 : 0;
-  const sourceCount = isOrder ? row.sourceOrderCount ?? 0 : 0;
   const reservedQty = isOrder ? row.sourceReservedQuantityTotal ?? 0 : 0;
   const requestedQty = isOrder ? row.sourceRequestedQuantityTotal ?? 0 : 0;
   const qtyHint = producibleQuantityHint({
@@ -138,28 +134,73 @@ function OrderWorkCard({
       ? reservedQty
       : plannedQty;
 
-  const wmsActions =
-    !isPrintMethod && (row.status === "planned" || row.status === "draft")
+  const next = resolveProductionNextAction({
+    executionKind: row.kind === "batch" ? "batch" : "order",
+    id: row.id,
+    status: row.status,
+    sourceType: isOrder ? row.sourceType : "MANUAL",
+    hasShortages: row.hasShortages,
+    materialsReserved: isOrder ? row.materialsReserved : undefined,
+    isReleasedToWms: row.isReleasedToWms,
+    isPrintInterface: isOrder ? row.isPrintInterface : false,
+    productionExecutionMethod: isOrder ? row.productionExecutionMethod : null,
+    producedQuantity: producedQty,
+    plannedQuantity: plannedQty,
+    sourceOrderCount: isOrder ? row.sourceOrderCount : undefined,
+    sourceRequestedQuantityTotal: requestedQty,
+    sourceShortageQuantityTotal: isOrder ? row.sourceShortageQuantityTotal : undefined,
+    sourceShortageCount: isOrder ? row.sourceShortageCount : undefined,
+    sourceFulfilledOrderCount: isOrder ? row.sourceFulfilledOrderCount : undefined,
+  });
+
+  const ordersSummary =
+    isOrder && row.sourceType === "ORDERS"
+      ? productionOrdersSourceSummary({
+          sourceOrderCount: row.sourceOrderCount,
+          sourceRequestedQuantityTotal: requestedQty,
+          plannedQuantity: plannedQty,
+        })
+      : null;
+
+  const handlePrimary = () => {
+    if (next.kind === "send_to_execution") {
+      onReleaseToWms();
+      return;
+    }
+    if (next.kind === "start_print_execution") {
+      onOpen();
+      return;
+    }
+    if (next.href) {
+      if (next.openInNewTab) {
+        window.open(next.href, "_blank", "noopener,noreferrer");
+      } else {
+        onNavigate(next.href);
+      }
+      return;
+    }
+    onOpen();
+  };
+
+  const menuActions = [
+    { id: "open", label: "Otwórz szczegóły", onClick: onOpen },
+    ...(isPrintMethod && onPrintOrder
+      ? [{ id: "print-mo", label: "Drukuj kartę", onClick: onPrintOrder }]
+      : []),
+    ...(next.kind !== "send_to_execution" &&
+    !isPrintMethod &&
+    (row.status === "planned" || row.status === "draft") &&
+    !row.isReleasedToWms
       ? [
           {
             id: "wms",
-            label: row.isReleasedToWms ? "Otwórz WMS" : "Wydaj do WMS",
+            label: "Wyślij do realizacji",
             onClick: onReleaseToWms,
             disabled: row.hasShortages,
           },
         ]
-      : [];
-
-  const printActions =
-    isPrintMethod && onPrintOrder
-      ? [
-          {
-            id: "print-mo",
-            label: "Wydrukuj zlecenie produkcyjne",
-            onClick: onPrintOrder,
-          },
-        ]
-      : [];
+      : []),
+  ];
 
   return (
     <ListTile density="comfortable" selected={selected} className="w-full">
@@ -191,11 +232,12 @@ function OrderWorkCard({
               </span>{" "}
               <span className="text-slate-500">szt.</span>
             </p>
+            {ordersSummary ? <p className="mt-0.5 text-xs text-slate-600">{ordersSummary}</p> : null}
           </div>
 
           <div className="flex flex-wrap items-center gap-1.5">
             <StatusBadge tone={executionStatusTone(row.status)} density="compact">
-              {statusLabel(row)}
+              {productionStageLabel(row.status)}
             </StatusBadge>
             <StatusBadge tone={materialReadinessTone(readiness)} density="compact">
               {materialReadinessLabel(readiness, {
@@ -208,31 +250,11 @@ function OrderWorkCard({
             </span>
           </div>
 
-          {isOrder && row.sourceType === "ORDERS" && sourceCount > 0 ? (
-            <p className="text-xs text-slate-600">
-              Zamówienia: <span className="font-semibold tabular-nums text-slate-900">{sourceCount}</span>
-              {readyCount > 0 ? (
-                <>
-                  {" · "}
-                  Gotowe do produkcji:{" "}
-                  <span className="font-semibold tabular-nums text-slate-900">{readyCount}</span>
-                </>
-              ) : null}
-              {shortageCount > 0 ? (
-                <>
-                  {" · "}
-                  Brak komponentów:{" "}
-                  <span className="font-semibold tabular-nums text-amber-800">{shortageCount}</span>
-                </>
-              ) : null}
-              {requestedQty > 0 && Math.abs(requestedQty - producedDenom) > 1e-6 ? (
-                <>
-                  {" · "}
-                  Plan: <span className="font-semibold tabular-nums text-slate-900">{formatQty(requestedQty)} szt.</span>
-                </>
-              ) : null}
-            </p>
-          ) : null}
+          <p className="text-xs text-slate-600">
+            Etap: <span className="font-medium text-slate-800">{statusLabel(row)}</span>
+            {" · "}
+            <span className="font-medium text-slate-800">{next.contextMessage}</span>
+          </p>
 
           {showProgress ? (
             <div className="max-w-xl space-y-1">
@@ -245,16 +267,23 @@ function OrderWorkCard({
           ) : null}
         </div>
 
-        <div className="flex shrink-0 justify-end sm:pt-1" onClick={(e) => e.stopPropagation()}>
+        <div
+          className="flex shrink-0 flex-wrap items-center justify-end gap-2 sm:pt-1"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <button
+            type="button"
+            className={primaryButtonClassName("", "compact")}
+            disabled={Boolean(next.disabled)}
+            title={next.disabled ? next.disabledReason : undefined}
+            onClick={handlePrimary}
+          >
+            {next.label}
+          </button>
           <ProductionRowActionsMenu
             align="end"
-            ariaLabel={`Akcje ${row.number}`}
-            actions={[
-              { id: "open", label: "Otwórz", onClick: onOpen },
-              { id: "edit", label: "Edytuj", onClick: onOpen },
-              ...printActions,
-              ...wmsActions,
-            ]}
+            ariaLabel={`Więcej akcji ${row.number}`}
+            actions={menuActions}
           />
         </div>
       </div>
@@ -518,6 +547,7 @@ export default function ProductionOrdersPage() {
                   onOpen={() =>
                     navigate(r.kind === "batch" ? erpProductionPaths.batch(r.id) : erpProductionPaths.order(r.id))
                   }
+                  onNavigate={(to) => navigate(to)}
                   onReleaseToWms={() => void releaseToWms(r)}
                   onPrintOrder={
                     r.kind === "order" && warehouseId != null

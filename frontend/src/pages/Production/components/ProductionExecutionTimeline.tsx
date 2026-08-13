@@ -54,10 +54,16 @@ export function ProductionExecutionTimeline({ source, className = "" }: Props) {
               ) : step.status === "pending" ? (
                 <p className="text-xs text-slate-400">Oczekuje</p>
               ) : step.status === "active" ? (
-                <p className="text-xs font-medium text-orange-600">W trakcie</p>
+                <p className="text-xs font-semibold text-orange-700">
+                  {step.detail === "Następny krok" ? "Następny" : "Aktualny"}
+                </p>
+              ) : step.status === "done" ? (
+                <p className="text-xs font-medium text-emerald-700">Wykonane</p>
               ) : null}
             </div>
-            {step.detail ? <p className="text-xs text-slate-600">{step.detail}</p> : null}
+            {step.detail && step.detail !== "Następny krok" ? (
+              <p className="text-xs text-slate-600">{step.detail}</p>
+            ) : null}
           </li>
         );
       })}
