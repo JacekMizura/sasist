@@ -847,6 +847,8 @@ export type ProductionBatchSummaryRead = {
   priority?: string;
   planned_date?: string | null;
   created_at?: string | null;
+  released_to_wms_at?: string | null;
+  is_released_to_wms?: boolean;
   product_labels: string[];
   product_image_urls?: string[];
   shortage_count?: number;

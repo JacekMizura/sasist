@@ -20,7 +20,7 @@ type Props = {
 export function putawayStatusLabel(status?: string | null): string {
   const s = String(status || "").trim().toUpperCase();
   if (s === "DONE") return "Zakończone";
-  if (!s || s === "OPEN") return "Oczekuje na rozlokowanie";
+  if (s === "NOT_STARTED" || s === "OPEN" || !s) return "Oczekuje na rozlokowanie";
   if (s === "IN_PROGRESS") return "Rozlokowanie w toku";
   return status ?? "—";
 }

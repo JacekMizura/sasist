@@ -82,12 +82,13 @@ export default function PutawayPage() {
 
           {pendingPwCount > 0 ? (
             <p className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
-              Pozostało do rozlokowania: <strong>{pendingPwCount}</strong>{" "}
-              {pendingPwCount === 1 ? "dokument PW" : "dokumenty PW"}.
+              Do rozlokowania pozostał{pendingPwCount === 1 ? "" : "o"}{" "}
+              <strong>{pendingPwCount}</strong>{" "}
+              {pendingPwCount === 1 ? "produkt" : pendingPwCount < 5 ? "produkty" : "produktów"}.
             </p>
           ) : pwDocuments.length > 0 ? (
             <p className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
-              Wszystkie dokumenty PW zostały rozlokowane.
+              Wszystkie produkty zostały rozlokowane.
             </p>
           ) : null}
 
@@ -108,27 +109,33 @@ export default function PutawayPage() {
                           <p className={WMS_TERMINAL_LABEL}>Produkt</p>
                           <p className="text-xl font-bold text-slate-900">{ln.productName}</p>
                           <p className="mt-1 text-3xl font-black tabular-nums text-slate-900">{ln.quantity}</p>
+                          <p className="mt-2 text-xs text-slate-500">
+                            Status: {putawayStatusLabel(ln.putawayStatus)}
+                          </p>
+                          {ln.pwDocumentId ? (
+                            <p className="mt-1 font-mono text-xs text-slate-500">
+                              Dokument PW {ln.pwDocumentNumber ?? ln.pwDocumentId}
+                            </p>
+                          ) : null}
                         </div>
                       </div>
                       {ln.pwDocumentId ? (
                         <div className="space-y-2 sm:text-right">
-                          <p className="font-mono text-sm font-semibold text-slate-800">
-                            PW {ln.pwDocumentNumber ?? ln.pwDocumentId}
-                          </p>
-                          <span
-                            className={`inline-flex rounded-full px-2 py-0.5 text-xs font-semibold ring-1 ${putawayStatusBadgeClass(ln.putawayStatus)}`}
-                          >
-                            {putawayStatusLabel(ln.putawayStatus)}
-                          </span>
                           {!done ? (
                             <Link
                               to={WMS_ROUTES.putawayPz(ln.pwDocumentId)}
                               className="mt-2 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-emerald-700 sm:w-auto"
                             >
                               <MapPin className="h-4 w-4" aria-hidden />
-                              Rozlokuj w WMS
+                              Rozlokuj produkt
                             </Link>
-                          ) : null}
+                          ) : (
+                            <span
+                              className={`inline-flex rounded-full px-2 py-0.5 text-xs font-semibold ring-1 ${putawayStatusBadgeClass(ln.putawayStatus)}`}
+                            >
+                              {putawayStatusLabel(ln.putawayStatus)}
+                            </span>
+                          )}
                         </div>
                       ) : (
                         <p className="text-sm text-slate-500">Brak dokumentu PW dla tej pozycji.</p>

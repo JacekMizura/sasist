@@ -7,11 +7,11 @@ import { PRODUCTION_KIND_LABEL, type ProductionExecutionKind } from "@/modules/p
 import { Card, StatusBadge, typography } from "@/design-system";
 import { wmsProductionPaths } from "../productionPaths";
 import {
-  resolveProductionNextAction,
+  getProductionOperationalState,
   resolveProductionSecondaryActions,
-  type ProductionNextActionInput,
+  type ProductionOperationalStateInput,
   type ProductionSecondaryActionId,
-} from "../productionNextAction";
+} from "../productionOperationalState";
 import { formatProductionMoney } from "../productionUi";
 import { ProgressBar } from "./ProgressBar";
 import { ProductionContextBanner } from "./ProductionContextBanner";
@@ -132,7 +132,7 @@ function interfaceLabel(source: MonitoringSource): string {
   return source.execution_interface ?? "—";
 }
 
-function toNextInput(kind: ProductionExecutionKind, source: MonitoringSource): ProductionNextActionInput {
+function toNextInput(kind: ProductionExecutionKind, source: MonitoringSource): ProductionOperationalStateInput {
   return {
     executionKind: kind,
     id: source.id,
@@ -146,6 +146,8 @@ function toNextInput(kind: ProductionExecutionKind, source: MonitoringSource): P
     productionExecutionMethod: source.production_execution_method,
     producedQuantity: source.produced_quantity ?? source.total_completed_units,
     plannedQuantity: source.planned_quantity ?? source.total_planned_units,
+    collectionProgressPercent: source.collection_progress_percent,
+    progressPercent: source.progress_percent,
     sourceOrderCount: source.source_order_count,
     sourceRequestedQuantityTotal: source.source_requested_quantity_total,
     sourceShortageQuantityTotal: source.source_shortage_quantity_total,
@@ -163,9 +165,6 @@ export function ProductionMonitoringPanel({
   showContextBanner = true,
 }: Props) {
   const status = String(source.status || "draft");
-  const planned = source.planned_quantity ?? source.total_planned_units ?? 0;
-  const completed = source.produced_quantity ?? source.total_completed_units ?? 0;
-  const progress = source.progress_percent ?? (planned > 0 ? (completed / planned) * 100 : 0);
   const pwDocs =
     source.pw_document_rows ??
     source.pw_documents?.map((pw) => ({
@@ -178,10 +177,11 @@ export function ProductionMonitoringPanel({
   const unitCost = source.display_unit_cost ?? source.calculated_unit_cost;
 
   const nextInput = useMemo(() => toNextInput(kind, source), [kind, source]);
-  const primary = useMemo(() => resolveProductionNextAction(nextInput), [nextInput]);
+  const operational = useMemo(() => getProductionOperationalState(nextInput), [nextInput]);
+  const primary = operational.primaryAction;
   const secondary = useMemo(
-    () => resolveProductionSecondaryActions(nextInput, primary),
-    [nextInput, primary],
+    () => resolveProductionSecondaryActions(nextInput, operational),
+    [nextInput, operational],
   );
 
   const handlePrimary = () => {
@@ -241,12 +241,21 @@ export function ProductionMonitoringPanel({
     <div className="space-y-4">
       {showContextBanner || showBar ? (
         <ProductionContextBanner
-          message={primary.contextMessage}
-          tone={primary.tone}
+          message={operational.description}
+          tone={operational.tone}
           action={
             showBar ? (
               <ProductionPrimaryActionBar
-                primary={primary}
+                primary={{
+                  kind: primary.kind,
+                  label: primary.label,
+                  contextMessage: operational.description,
+                  tone: operational.tone,
+                  disabled: primary.disabled,
+                  disabledReason: primary.disabledReason,
+                  href: primary.href,
+                  openInNewTab: primary.openInNewTab,
+                }}
                 secondary={secondary.filter((s) => {
                   if (s.id === "print_card" || s.id === "preview_print") {
                     return Boolean(actions?.onPrintProductionCard);
@@ -286,16 +295,18 @@ export function ProductionMonitoringPanel({
         <div className="flex flex-wrap items-end justify-between gap-2">
           <div>
             <h3 className={typography.section}>Postęp</h3>
-            <p className="mt-1 text-sm text-slate-600">
-              <span className="text-lg font-semibold tabular-nums text-slate-900">{completed}</span>
-              {" / "}
-              <span className="text-lg font-semibold tabular-nums text-slate-900">{planned}</span>
-              {" szt."}
-            </p>
+            <p className="mt-1 text-sm text-slate-600">{operational.progressMeaning.displayLine}</p>
+            {operational.progressMeaning.nextStepHint ? (
+              <p className="mt-1 text-xs font-medium text-orange-800">
+                {operational.progressMeaning.nextStepHint}
+              </p>
+            ) : null}
           </div>
-          <p className="text-2xl font-semibold tabular-nums text-slate-900">{Math.round(progress)}%</p>
+          <p className="text-2xl font-semibold tabular-nums text-slate-900">
+            {operational.progressMeaning.percent}%
+          </p>
         </div>
-        <ProgressBar value={progress} tone="orange" size="lg" />
+        <ProgressBar value={operational.progressMeaning.percent} tone="orange" size="lg" />
         {source.collection_progress_percent != null && status === "collecting" ? (
           <ProgressBar
             value={source.collection_progress_percent}

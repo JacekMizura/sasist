@@ -12,7 +12,6 @@ import {
 } from "@/api/productionPlanningApi";
 import { useActiveWarehouseContext } from "../../hooks/useActiveWarehouseContext";
 import { ActiveWarehouseRequiredBanner } from "../../components/layout/ActiveWarehouseRequiredBanner";
-import BatchesListPage from "./BatchesListPage";
 import { CreateBatchModal } from "./components/CreateBatchModal";
 import { ProductionDemandPlanningPanel, ProductionDemandProductsTable } from "./components/ProductionDemandPlanningPanel";
 import { ProductionSimulationModal } from "./components/ProductionSimulationModal";
@@ -222,10 +221,11 @@ export default function ProductionPlanningPage() {
           ) : null}
 
           <div>
-            <h3 className={productionSectionLabelClass}>Aktywne partie</h3>
-            <div className="mt-2">
-              <BatchesListPage embedded />
-            </div>
+            <h3 className={productionSectionLabelClass}>Co wyprodukować</h3>
+            <p className="mt-1 text-sm text-slate-600">
+              Rekomendacje na podstawie stanu, sprzedaży i zamówień. Aktywne zlecenia znajdziesz w zakładce
+              Zlecenia.
+            </p>
           </div>
 
           {warehouseId != null ? (

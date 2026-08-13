@@ -38,6 +38,7 @@ import {
   resolveMaterialReadiness,
 } from "./productionUi";
 import { productionOrdersSourceSummary } from "./productionNextAction";
+import { getProductionOperationalState } from "./productionOperationalState";
 import { Card, ProgressBar, StatusBadge, primaryButtonClassName, typography } from "@/design-system";
 
 const DEFAULT_TENANT = 1;
@@ -214,17 +215,11 @@ export default function ProductionOrderDetailPage() {
   }
 
   const shortagesBlocked = Boolean(order.has_shortages);
-  const progressPct =
-    order.planned_quantity > 0
-      ? Math.min(100, Math.round((order.produced_quantity / order.planned_quantity) * 100))
-      : 0;
   const remaining = Math.max(0, order.planned_quantity - order.produced_quantity);
   const readyToPack = order.source_fulfilled_order_count ?? 0;
   const reservedQty = order.source_reserved_quantity_total ?? 0;
   const shortageQty = order.source_shortage_quantity_total ?? 0;
   const requestedQty = order.source_requested_quantity_total ?? 0;
-  const producedDenom =
-    order.source_type === "ORDERS" && reservedQty > 0 ? reservedQty : order.planned_quantity;
   const orderCount = order.source_order_count ?? 0;
   const readyOrderCount = order.source_reserved_count ?? 0;
   const shortageOrderCount = order.source_shortage_count ?? 0;
@@ -233,6 +228,28 @@ export default function ProductionOrderDetailPage() {
     sourceRequestedQuantityTotal: requestedQty,
     plannedQuantity: order.planned_quantity,
   });
+  const operational = getProductionOperationalState({
+    executionKind: "order",
+    id: order.id,
+    status: order.status,
+    sourceType: order.source_type,
+    hasShortages: order.has_shortages,
+    materialsReserved: order.materials_reserved,
+    isReleasedToWms: order.is_released_to_wms,
+    isErpInterface: order.is_erp_interface,
+    isPrintInterface: order.is_print_interface,
+    productionExecutionMethod: order.production_execution_method,
+    producedQuantity: order.produced_quantity,
+    plannedQuantity: order.planned_quantity,
+    collectionProgressPercent: order.collection_progress_percent,
+    progressPercent: order.progress_percent,
+    sourceOrderCount: order.source_order_count,
+    sourceRequestedQuantityTotal: order.source_requested_quantity_total,
+    sourceShortageQuantityTotal: order.source_shortage_quantity_total,
+    sourceShortageCount: order.source_shortage_count,
+    sourceFulfilledOrderCount: order.source_fulfilled_order_count,
+  });
+  const progressPct = operational.progressMeaning.percent;
 
   return (
     <div className="mx-auto max-w-6xl space-y-5 px-4 py-6 lg:px-6">
@@ -290,16 +307,23 @@ export default function ProductionOrderDetailPage() {
         <div className="rounded-xl border border-slate-100 bg-slate-50/80 px-4 py-3">
           <div className="flex flex-wrap items-end justify-between gap-2">
             <div>
-              <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Wyprodukowano</p>
+              <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
+                {operational.progressMeaning.label}
+              </p>
               <p className="mt-0.5 text-2xl font-bold tabular-nums text-slate-900">
-                {fmtQty(order.produced_quantity)}{" "}
-                <span className="text-base font-semibold text-slate-500">/ {fmtQty(producedDenom)} szt.</span>
+                {fmtQty(operational.progressMeaning.current)}{" "}
+                <span className="text-base font-semibold text-slate-500">
+                  / {fmtQty(operational.progressMeaning.total)} szt.
+                </span>
               </p>
             </div>
             <p className="text-sm tabular-nums text-slate-600">{progressPct}%</p>
           </div>
           <ProgressBar value={progressPct} tone={progressPct >= 100 ? "success" : "info"} className="mt-2" />
-              {order.source_type === "ORDERS" ? (
+          {operational.progressMeaning.nextStepHint ? (
+            <p className="mt-2 text-sm font-medium text-orange-800">{operational.progressMeaning.nextStepHint}</p>
+          ) : null}
+          {order.source_type === "ORDERS" ? (
             <div className="mt-2 space-y-1 text-xs text-slate-600">
               {ordersSummary ? <p className="font-medium text-slate-800">{ordersSummary}</p> : null}
               <p>
