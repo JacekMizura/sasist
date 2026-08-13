@@ -201,14 +201,15 @@ def _aggregation_lock_key(
     composition_id: int,
     picking_config_id: int,
 ) -> int:
-    return hash(
-        (
-            int(tenant_id),
-            int(warehouse_id),
-            int(product_id),
-            int(composition_id),
-            int(picking_config_id),
-        )
+    from ..pg_advisory_lock import stable_advisory_lock_key
+
+    return stable_advisory_lock_key(
+        "prod_orders_agg",
+        int(tenant_id),
+        int(warehouse_id),
+        int(product_id),
+        int(composition_id),
+        int(picking_config_id),
     )
 
 

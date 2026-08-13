@@ -330,7 +330,9 @@ def _advisory_lock_replenishment(db: Session, *, tenant_id: int, warehouse_id: i
     bind = db.get_bind()
     if bind is None or bind.dialect.name != "postgresql":
         return
-    key = hash(("prod_stock_replenish", int(tenant_id), int(warehouse_id))) & 0x7FFFFFFF
+    from ..pg_advisory_lock import stable_advisory_lock_key
+
+    key = stable_advisory_lock_key("prod_stock_replenish", int(tenant_id), int(warehouse_id))
     try:
         db.execute(text("SELECT pg_advisory_xact_lock(:k)"), {"k": key})
     except Exception:
