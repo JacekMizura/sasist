@@ -29,7 +29,7 @@ from .inventory_coverage_service import coverage_color, coverage_days
 from .lead_time_service import lead_time_days
 from .material_availability_service import cap_by_materials, max_producible_by_product
 from .order_demand_service import order_demand_by_product
-from .pipeline_service import total_pipeline_qty_by_product
+from .pipeline_service import free_stock_pipeline_qty_by_product, total_pipeline_qty_by_product
 from .priority_engine import compute_priority
 from .production_recommendation_service import (
     apply_moq_and_multiple,
@@ -117,6 +117,10 @@ def build_planning_snapshot(db: Session, ctx: PlanningContext) -> ProductionDema
     pipeline_map = total_pipeline_qty_by_product(
         db, tenant_id=ctx.tenant_id, warehouse_id=ctx.warehouse_id, product_ids=product_ids
     )
+    # Nadprodukcja: only pipeline that increases *free* warehouse stock (excludes ORDERS).
+    free_stock_pipeline_map = free_stock_pipeline_qty_by_product(
+        db, tenant_id=ctx.tenant_id, warehouse_id=ctx.warehouse_id, product_ids=product_ids
+    )
     inv_map = inventory_snapshots_for_products(
         db, tenant_id=ctx.tenant_id, warehouse_id=ctx.warehouse_id, product_ids=product_ids
     )
@@ -160,6 +164,7 @@ def build_planning_snapshot(db: Session, ctx: PlanningContext) -> ProductionDema
         daily_rate = strategy.daily_rate(history)
         on_hand = float(inv_map.get(pid, {}).get("on_hand", 0.0) or 0.0)
         in_pipeline = float(pipeline_map.get(pid, 0.0))
+        free_stock_pipeline = float(free_stock_pipeline_map.get(pid, 0.0))
         min_s = product_min_stock(p) if p else None
         max_s = product_max_stock(p) if p else None
         moq = product_moq(p) if p else None
@@ -183,6 +188,7 @@ def build_planning_snapshot(db: Session, ctx: PlanningContext) -> ProductionDema
         )
         # Stock replenishment uses dedicated coverage when auto-replenish is on;
         # otherwise same horizon as the planning snapshot (analysis only).
+        # Free-stock pipeline only — ORDERS MO must not cover nadprodukcja target.
         replenish_horizon = replenish_coverage if auto_replenish else coverage_days_val
         replenish_raw = forecast_stock_need(
             daily_rate=daily_rate,
@@ -190,7 +196,7 @@ def build_planning_snapshot(db: Session, ctx: PlanningContext) -> ProductionDema
             min_stock=min_s,
             max_stock=max_s,
             on_hand=on_hand,
-            in_pipeline=in_pipeline,
+            in_pipeline=free_stock_pipeline,
         )
         order_need = max(0.0, order_demand - on_hand - in_pipeline)
         combined_raw = combined_production_need(

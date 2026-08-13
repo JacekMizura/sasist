@@ -23,7 +23,9 @@ from backend.models.product import Product
 from backend.models.product_composition import ProductComposition, ProductCompositionLine
 from backend.models.production import (
     PRODUCTION_ORDER_SOURCE_ITEM_CANCELLED,
+    PRODUCTION_ORDER_SOURCE_ITEM_FULFILLED,
     PRODUCTION_ORDER_SOURCE_ITEM_RESERVED,
+    PRODUCTION_ORDER_SOURCE_ITEM_SHORTAGE,
     PRODUCTION_ORDER_SOURCE_MANUAL,
     PRODUCTION_ORDER_SOURCE_ORDERS,
     ProductionOrder,
@@ -36,6 +38,7 @@ from backend.models.warehouse import Warehouse
 from backend.services.order_panel_ui_status_service import apply_order_panel_ui_status
 from backend.services.production_order_trigger import (
     RESULT_AGGREGATED,
+    RESULT_ALREADY_FULFILLED,
     RESULT_CREATED,
     RESULT_IDEMPOTENT,
     RESULT_NO_ACTIVE_MANUFACTURING_COMPOSITION,
@@ -602,3 +605,108 @@ def test_e2e_scenario_a_b_collecting_c():
         .order_id
         == 202
     )
+
+
+def test_fulfilled_reentry_returns_already_fulfilled_no_new_mo():
+    db, _ = _bootstrap(None)
+    o, it = _make_order(db, order_id=300, number="F", product_id=100, qty=1)
+    apply_order_panel_ui_status(db, order=o, sub_status_id=10)
+    db.commit()
+    mo = db.query(ProductionOrder).one()
+    src = db.query(ProductionOrderSourceItem).one()
+    src.status = PRODUCTION_ORDER_SOURCE_ITEM_FULFILLED
+    src.fulfilled_quantity = 1.0
+    mo.status = "completed"
+    mo.planned_quantity = 1.0
+    mo.produced_quantity = 1.0
+    db.commit()
+
+    o.order_ui_status_id = 13
+    db.commit()
+    enter = on_order_panel_status_changed_production(
+        db, order=o, previous_status_id=13, new_status_id=10
+    )
+    assert enter.get("enter", {}).get("result") == RESULT_ALREADY_FULFILLED
+    assert db.query(ProductionOrder).filter(ProductionOrder.status.in_(("draft", "planned"))).count() == 0
+    assert db.query(ProductionOrderSourceItem).filter(
+        ProductionOrderSourceItem.status.in_(("open", "reserved", "partial"))
+    ).count() == 0
+    assert float(db.query(ProductionOrder).one().planned_quantity) == pytest.approx(1.0)
+
+
+def test_fulfilled_retry_same_status_no_duplicate():
+    db, _ = _bootstrap(None)
+    o, it = _make_order(db, order_id=301, number="F2", product_id=100, qty=1)
+    apply_order_panel_ui_status(db, order=o, sub_status_id=10)
+    db.commit()
+    src = db.query(ProductionOrderSourceItem).one()
+    src.status = PRODUCTION_ORDER_SOURCE_ITEM_FULFILLED
+    src.fulfilled_quantity = 1.0
+    db.query(ProductionOrder).one().status = "completed"
+    db.commit()
+
+    r1 = on_order_panel_status_changed_production(
+        db, order=o, previous_status_id=13, new_status_id=10
+    )
+    r2 = on_order_panel_status_changed_production(
+        db, order=o, previous_status_id=13, new_status_id=10
+    )
+    assert r1.get("enter", {}).get("result") == RESULT_ALREADY_FULFILLED
+    assert r2.get("enter", {}).get("result") == RESULT_ALREADY_FULFILLED
+    assert db.query(ProductionOrderSourceItem).count() == 1
+
+
+def test_cancelled_source_can_reenter():
+    db, _ = _bootstrap(None)
+    o, _ = _make_order(db, order_id=302, number="C1", product_id=100, qty=2)
+    apply_order_panel_ui_status(db, order=o, sub_status_id=10)
+    db.commit()
+    apply_order_panel_ui_status(db, order=o, sub_status_id=13)
+    db.commit()
+    assert db.query(ProductionOrderSourceItem).one().status == PRODUCTION_ORDER_SOURCE_ITEM_CANCELLED
+    apply_order_panel_ui_status(db, order=o, sub_status_id=10)
+    db.commit()
+    active = (
+        db.query(ProductionOrderSourceItem)
+        .filter(ProductionOrderSourceItem.status == PRODUCTION_ORDER_SOURCE_ITEM_RESERVED)
+        .all()
+    )
+    assert len(active) == 1
+    assert active[0].requested_quantity == pytest.approx(2.0)
+
+
+def test_fulfilled_qty_increase_creates_only_delta():
+    """If OrderItem.quantity grows after fulfillment, only the missing delta is requested."""
+    db, _ = _bootstrap(None)
+    o, it = _make_order(db, order_id=303, number="Q", product_id=100, qty=1)
+    apply_order_panel_ui_status(db, order=o, sub_status_id=10)
+    db.commit()
+    mo = db.query(ProductionOrder).one()
+    src = db.query(ProductionOrderSourceItem).one()
+    src.status = PRODUCTION_ORDER_SOURCE_ITEM_FULFILLED
+    src.fulfilled_quantity = 1.0
+    mo.status = "completed"
+    mo.produced_quantity = 1.0
+    it.quantity = 2.0
+    db.commit()
+
+    o.order_ui_status_id = 13
+    db.commit()
+    enter = on_order_panel_status_changed_production(
+        db, order=o, previous_status_id=13, new_status_id=10
+    )
+    assert enter.get("enter", {}).get("result") in (RESULT_CREATED, RESULT_AGGREGATED)
+    open_mos = (
+        db.query(ProductionOrder)
+        .filter(ProductionOrder.status.in_(("draft", "planned")))
+        .all()
+    )
+    assert len(open_mos) == 1
+    assert open_mos[0].planned_quantity == pytest.approx(1.0)
+    new_src = (
+        db.query(ProductionOrderSourceItem)
+        .filter(ProductionOrderSourceItem.production_order_id == open_mos[0].id)
+        .one()
+    )
+    assert new_src.requested_quantity == pytest.approx(1.0)
+    assert float(new_src.fulfilled_quantity or 0) == pytest.approx(0.0)

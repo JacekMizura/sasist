@@ -49,6 +49,17 @@ class _SoftHoldState:
     by_component: dict[int, float]
 
 
+def component_soft_hold_qty(*, outstanding_order_need: float, active_order_reserved: float) -> float:
+    """
+    Soft-hold protects only the unreserved slice of ORDERS component demand.
+
+    soft_hold = max(0, outstanding_order_component_need − active_order_reservations)
+
+    Must NOT double-count: when reservations already cover need, soft-hold is 0.
+    """
+    return max(0.0, float(outstanding_order_need or 0) - float(active_order_reserved or 0))
+
+
 def _round_qty(v: float) -> float:
     return round(max(0.0, float(v)), 2)
 
@@ -112,8 +123,15 @@ def soft_hold_components_for_orders(
     warehouse_id: int,
 ) -> _SoftHoldState:
     """
-    Materials needed by open ORDERS MOs that are not yet covered by active reservations
-    must stay unavailable for PLANNING replenishment.
+    Per-component soft-hold for open ORDERS MOs.
+
+    Priority remains: (1) real ORDERS StockReservation rows, (2) this soft-hold for the
+    uncovered remainder, (3) PLANNING may consume what's left.
+
+    Formula per component on each open ORDERS MO:
+      soft_hold += max(0, snapshot_required − active_reservations_for_mo)
+
+    Soft-hold is computational only (no durable reservation rows).
     """
     holds: dict[int, float] = defaultdict(float)
     mos = (
@@ -149,9 +167,12 @@ def soft_hold_components_for_orders(
         for snap in list(mo.line_snapshots or []):
             pid = int(snap.component_product_id)
             need = float(snap.total_required_quantity or 0)
-            remaining = max(0.0, need - float(reserved_by_component.get(pid, 0.0)))
-            if remaining > 1e-9:
-                holds[pid] += remaining
+            hold = component_soft_hold_qty(
+                outstanding_order_need=need,
+                active_order_reserved=float(reserved_by_component.get(pid, 0.0)),
+            )
+            if hold > 1e-9:
+                holds[pid] += hold
     return _SoftHoldState(by_component=dict(holds))
 
 
@@ -288,18 +309,17 @@ def _consume_soft_hold_for_qty(
     composition: ProductComposition,
     qty: float,
 ) -> None:
-    """After creating PLANNING reservations, reduce remaining soft-hold pool for subsequent products."""
+    """
+    After a PLANNING MO is reserved, subsequent products see lower ``warehouse_net_available``
+    via real StockReservation rows — ORDERS soft-hold map must stay unchanged.
+
+    Soft-hold is ORDERS-only protection; PLANNING must not "eat" the ORDERS hold pool.
+    This hook remains for call-site clarity / future diagnostics (intentionally no-op on map).
+    """
     if qty <= 1e-9:
         return
-    yld = float(composition.yield_quantity or 1) or 1.0
-    for ln in composition.lines or []:
-        per = effective_line_qty(ln, yield_qty=yld)
-        if per <= 1e-9:
-            continue
-        cid = int(ln.component_product_id)
-        # Soft-hold is ORDERS-only; PLANNING reservations reduce warehouse_net_available
-        # for later products. No change to ORDERS soft-hold map here.
-        _ = (cid, per, soft_hold)
+    # Touch args so callers/tests keep a stable signature without mutating ORDERS hold.
+    _ = (soft_hold, composition, qty)
 
 
 def run_production_stock_replenishment(

@@ -24,6 +24,7 @@ from ...models.product_composition import ProductComposition
 from ...models.production import (
     PRODUCTION_ORDER_SOURCE_ITEM_ACTIVE_STATUSES,
     PRODUCTION_ORDER_SOURCE_ITEM_CANCELLED,
+    PRODUCTION_ORDER_SOURCE_ITEM_FULFILLED,
     PRODUCTION_ORDER_SOURCE_ITEM_OPEN,
     PRODUCTION_ORDER_SOURCE_ITEM_SHORTAGE,
     PRODUCTION_ORDER_SOURCE_ORDERS,
@@ -58,6 +59,7 @@ RESULT_WITHDRAWAL_BLOCKED = "WITHDRAWAL_BLOCKED"
 RESULT_UNSUPPORTED_MULTI_ITEM = "UNSUPPORTED_MULTI_ITEM"
 RESULT_NO_ACTIVE_MANUFACTURING_COMPOSITION = "NO_ACTIVE_MANUFACTURING_COMPOSITION"
 RESULT_COMPONENT_SHORTAGE = "COMPONENT_SHORTAGE"
+RESULT_ALREADY_FULFILLED = "ALREADY_FULFILLED"
 RESULT_NO_WAREHOUSE = "NO_WAREHOUSE"
 RESULT_ERROR = "ERROR"
 
@@ -143,6 +145,41 @@ def _find_active_source_for_item(
         )
         .first()
     )
+
+
+def historical_fulfilled_production_qty(
+    db: Session, *, tenant_id: int, order_item_id: int
+) -> float:
+    """
+    Sum of production already delivered for this order line across all source rows.
+
+    Explicit historical check — ``fulfilled`` is intentionally NOT in ACTIVE_SOURCE_STATUSES
+    (withdrawal / shortage retry must keep working). Re-entry uses this helper instead.
+    """
+    rows = (
+        db.query(ProductionOrderSourceItem)
+        .filter(
+            ProductionOrderSourceItem.tenant_id == int(tenant_id),
+            ProductionOrderSourceItem.order_item_id == int(order_item_id),
+        )
+        .all()
+    )
+    return sum(float(s.fulfilled_quantity or 0) for s in rows)
+
+
+def outstanding_production_need_qty(
+    *,
+    order_item_quantity: float,
+    historical_fulfilled_qty: float,
+) -> float:
+    """
+    Remaining FG still needed for this order line after historical production fulfillment.
+
+    Supports a later OrderItem.quantity increase (extra demand = delta only).
+    When qty cannot grow after fulfillment, historical == order qty → need 0 → ALREADY_FULFILLED.
+    """
+    return max(0.0, float(order_item_quantity or 0) - float(historical_fulfilled_qty or 0))
+
 
 
 def _advisory_lock(db: Session, *, key: int) -> None:
@@ -252,7 +289,7 @@ def _attach_or_reactivate_source(
     item: OrderItem,
     requested_quantity: float,
 ) -> tuple[ProductionOrderSourceItem, str]:
-    """Returns (row, action) where action is active|created|reactivated."""
+    """Returns (row, action) where action is active|created|reactivated|already_fulfilled."""
     existing = (
         db.query(ProductionOrderSourceItem)
         .filter(
@@ -265,6 +302,19 @@ def _attach_or_reactivate_source(
     if existing is not None:
         if str(existing.status or "") in ACTIVE_SOURCE_STATUSES:
             return existing, "active"
+        if str(existing.status or "") == PRODUCTION_ORDER_SOURCE_ITEM_FULFILLED:
+            already = float(existing.fulfilled_quantity or 0)
+            # requested_quantity is outstanding need from enter; reopen only for true delta.
+            if float(requested_quantity) <= 1e-9:
+                return existing, "already_fulfilled"
+            existing.status = PRODUCTION_ORDER_SOURCE_ITEM_OPEN
+            existing.requested_quantity = already + float(requested_quantity)
+            existing.fulfilled_quantity = already
+            existing.updated_at = datetime.utcnow()
+            db.add(existing)
+            db.flush()
+            return existing, "reactivated"
+        # cancelled / shortage — clean reopen for remaining need
         existing.status = PRODUCTION_ORDER_SOURCE_ITEM_OPEN
         existing.requested_quantity = float(requested_quantity)
         existing.fulfilled_quantity = float(existing.fulfilled_quantity or 0)
@@ -341,6 +391,23 @@ def _enter_production(
             "production_order_id": int(active.production_order_id),
             "source_item_id": int(active.id),
         }
+
+    # Historical fulfillment gate (fulfilled ∉ ACTIVE — separate from idempotent active path).
+    hist_fulfilled = historical_fulfilled_production_qty(
+        db, tenant_id=tid, order_item_id=int(item.id)
+    )
+    outstanding = outstanding_production_need_qty(
+        order_item_quantity=qty, historical_fulfilled_qty=hist_fulfilled
+    )
+    if outstanding <= 1e-9:
+        return {
+            "result": RESULT_ALREADY_FULFILLED,
+            "order_item_id": int(item.id),
+            "order_item_quantity": qty,
+            "historical_fulfilled_quantity": hist_fulfilled,
+        }
+    # Only request the unfulfilled delta (supports OrderItem.quantity increase after fulfillment).
+    qty = outstanding
 
     composition = get_active_manufacturing_composition(
         db, tenant_id=tid, product_id=int(item.product_id)
@@ -474,6 +541,15 @@ def _enter_production(
             "result": RESULT_IDEMPOTENT,
             "production_order_id": int(mo.id),
             "source_item_id": int(source.id),
+        }
+
+    if action == "already_fulfilled":
+        return {
+            "result": RESULT_ALREADY_FULFILLED,
+            "production_order_id": int(mo.id),
+            "source_item_id": int(source.id),
+            "order_item_id": int(item.id),
+            "historical_fulfilled_quantity": float(source.fulfilled_quantity or 0),
         }
 
     if not created_new_mo:
