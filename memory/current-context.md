@@ -1,5 +1,30 @@
 ﻿## Active
 
+**FIX: bom_preview null name/sku na RMZ (2026-08-13):**
+- Root cause: `bom_preview_for_product` enrichował name/sku, `_rmz_line_to_read` nie przekazywał do `WmsBomPreviewComponentRead`
+- FE panel pokazuje nazwę + SKU; fallback `#id` tylko gdy brak danych
+- returns tests 53 passed; FE build OK
+
+**UX PLAN (no impl): Moduł Produkcja — przegląd widoków (2026-08-13):**
+- Role ekranów: Pulpit=attention, Zlecenia=in progress, Planowanie=what to make, Receptury=BOM, Materiały=blockers, Historia=done, Analiza=costs
+- Kluczowe luki: Pulpit ≈ Zlecenia; Materiały `missing_qty=0` nadal w kolejce + agregacja `max` zamiast sumy; Analiza „Koszt materiałów”=Σ(koszt receptury×stan FG), „Efektywność”=finished_today/workload; Historia bez czasu realizacji w API summary
+- Szczegóły planu w rozmowie — bez FE/BE implementacji
+
+**IMPL: Odzysk komponentów przy zwrocie FG (2026-08-13):**
+- Settings: `manufactured_component_recovery_mode` OFF|OPTIONAL|REQUIRED; receipt STANDARD_PUTAWAY|DEFAULT_LOCATION + location_id
+- RMZLine: `stock_intake_mode` FG|DISASSEMBLE|MIXED; `fg_intake_qty` + `disassembly_qty`
+- Table `rmz_line_component_recoveries` (BOM snapshot); expected = line.qty × disassembly (no waste)
+- Z-PZ: FG via fg_intake_qty; components accepted_qty>0; scrap audit-only
+- Bundle flow precedence; commercial REJECTED ≠ block recovery; FG posted locks later disassemble
+- Service: `returns/manufactured_component_recovery_service.py`; FE: settings + `ManufacturedRecoveryIntakePanel`
+- Tests returns/ 52 passed; FE build OK
+
+**DESIGN (no impl): Odzysk komponentów przy zwrocie FG (2026-08-13):**
+- Settings: WMS→Zwroty sekcja „Produkty produkowane”; mode OFF|OPTIONAL|REQUIRED; receipt STANDARD_PUTAWAY|DEFAULT_LOCATION; scrap = NO_STOCK_HISTORY_ONLY (MVP)
+- SSOT BOM: `get_active_manufacturing_composition` + `calculate_required_components` (qty+waste/yield)
+- Stock: Z-PZ multi-line komponentów (nie PW); reuse receipt/putaway/return-link; wzorzec jak bundle components, osobna tabela recovery
+- Handel ≠ magazyn; po poście FG disassemble zabronione (MVP)
+
 **FIX: MO ORDERS READY_TO_PACK vs packing (2026-08-13):**
 - BE: `source_awaiting_packing_order_count` (projekcja z fulfilled sources + `order_awaits_packing_after_orders_production`)
 - FE: READY_TO_PACK / aktywna lista / CTA packing tylko gdy awaiting > 0; fulfilled ≠ packing

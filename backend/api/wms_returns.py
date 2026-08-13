@@ -1300,6 +1300,8 @@ def _rmz_line_to_read(db: Session, ln: RMZLine, order_id: int) -> WmsReturnLineR
                         component_product_id=int(c["component_product_id"]),
                         expected_qty=float(c["expected_qty"]),
                         quantity_per_unit=float(c.get("quantity_per_unit") or 0),
+                        component_name=(str(c["component_name"]).strip() or None) if c.get("component_name") else None,
+                        component_sku=(str(c["component_sku"]).strip() or None) if c.get("component_sku") else None,
                     )
                     for c in (raw_preview.get("components") or [])
                 ],

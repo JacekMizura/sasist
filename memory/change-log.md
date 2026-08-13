@@ -1,4 +1,24 @@
-﻿## 2026-08-13 — Fix: completed MO ORDERS nie wiszą jako „Gotowe do pakowania”
+﻿## 2026-08-13 — Fix: bom_preview name/sku w RMZ (odzysk komponentów KROK 3)
+
+- `_rmz_line_to_read` przekazuje `component_name` / `component_sku` z `bom_preview_for_product` (wcześniej drop)
+- FE: nazwa + SKU meta; fallback „Komponent #ID” tylko awaryjnie
+- Test: `test_bom_preview_includes_component_name_and_sku`; returns 53 passed
+
+## 2026-08-13 — FE+API wiring: manufactured component recovery
+
+- API serialize + split/finalize apply; bundle precedence; return-level recovery mode
+- Settings panel „Produkty produkowane”; WmsReturns intake panel + payload
+- Tests returns/ 52 passed
+
+## 2026-08-13 — Backend: odzysk komponentów z FG przy zwrocie (Z-PZ)
+
+- Settings: `manufactured_component_recovery_mode` / `manufactured_recovery_receipt_mode` / `manufactured_recovery_location_id`
+- RMZLine: `stock_intake_mode`, `fg_intake_qty`, `disassembly_qty` + tabela `rmz_line_component_recoveries`
+- Service `manufactured_component_recovery_service` + wiring Z-PZ (`rmz_return_receipt_service`); scrap = audit only
+- API: returns-mode PUT + line read/split-process/finalize payload
+- Testy: `backend/tests/returns/test_manufactured_component_recovery.py` (24 passed)
+
+## 2026-08-13 — Fix: completed MO ORDERS nie wiszą jako „Gotowe do pakowania”
 
 - Root cause: FE traktował `completed` + `source_fulfilled_order_count>0` jako READY_TO_PACK (fulfilled = FG, nie packing)
 - BE: `source_awaiting_packing_order_count` w serialize MO; helper `order_awaits_packing_after_orders_production` (DONE/Spakowane/SHIPPED/PACKED → false)

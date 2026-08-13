@@ -372,5 +372,53 @@ class TestUpsertPostedGuard(unittest.TestCase):
             )
 
 
+class TestBomPreviewComponentLabels(unittest.TestCase):
+    def test_bom_preview_includes_component_name_and_sku(self) -> None:
+        """BOM component Product exists → preview exposes name + sku (RMZ KROK 3)."""
+        from backend.schemas.wms_return import WmsBomPreviewComponentRead
+        from backend.services.returns.manufactured_component_recovery_service import (
+            bom_preview_for_product,
+        )
+
+        prod = SimpleNamespace(name="Sznurowadła CAT 150 cm", sku="ST-003", symbol=None)
+        cl = _CompLine(5, 192, 2.0)
+        cl.component_product = prod
+        composition = _Composition(id=9, name="BOM ST-001", lines=[cl])
+
+        db = MagicMock()
+        q = MagicMock()
+        db.query.return_value = q
+        q.options.return_value = q
+        q.filter.return_value = q
+        q.order_by.return_value = q
+        q.first.return_value = composition
+
+        preview = bom_preview_for_product(db, tenant_id=1, product_id=193, disassembly_qty=1)
+        self.assertIsNotNone(preview)
+        assert preview is not None
+        c0 = preview["components"][0]
+        self.assertEqual(c0["component_product_id"], 192)
+        self.assertEqual(c0["composition_line_id"], 5)
+        self.assertEqual(c0["expected_qty"], 2.0)
+        self.assertEqual(c0["quantity_per_unit"], 2.0)
+        self.assertIsNotNone(c0["component_name"])
+        self.assertIsNotNone(c0["component_sku"])
+        self.assertEqual(c0["component_name"], "Sznurowadła CAT 150 cm")
+        self.assertEqual(c0["component_sku"], "ST-003")
+
+        # API projection must forward labels (regression: fields were dropped in _rmz_line_to_read).
+        read = WmsBomPreviewComponentRead(
+            composition_id=int(c0["composition_id"]),
+            composition_line_id=int(c0["composition_line_id"]),
+            component_product_id=int(c0["component_product_id"]),
+            expected_qty=float(c0["expected_qty"]),
+            quantity_per_unit=float(c0.get("quantity_per_unit") or 0),
+            component_name=(str(c0["component_name"]).strip() or None) if c0.get("component_name") else None,
+            component_sku=(str(c0["component_sku"]).strip() or None) if c0.get("component_sku") else None,
+        )
+        self.assertEqual(read.component_name, "Sznurowadła CAT 150 cm")
+        self.assertEqual(read.component_sku, "ST-003")
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -150,10 +150,13 @@ export function ManufacturedRecoveryIntakePanel({ line, mode, value, onChange, d
     });
   };
 
-  const nameByLine = new Map(
+  const labelByLine = new Map(
     (line.bom_preview?.components ?? []).map((c) => [
       c.composition_line_id,
-      c.component_name?.trim() || `Komponent #${c.component_product_id}`,
+      {
+        name: c.component_name?.trim() || `Komponent #${c.component_product_id}`,
+        sku: c.component_sku?.trim() || null,
+      },
     ]),
   );
 
@@ -207,10 +210,13 @@ export function ManufacturedRecoveryIntakePanel({ line, mode, value, onChange, d
             const expected = Number(r.expected_qty ?? 0);
             const accepted = Number(r.accepted_qty ?? 0);
             const scrap = Number(r.scrap_qty ?? 0);
-            const label = nameByLine.get(r.composition_line_id) ?? `Komponent #${r.component_product_id}`;
+            const meta = labelByLine.get(r.composition_line_id);
+            const label = meta?.name ?? `Komponent #${r.component_product_id}`;
+            const sku = meta?.sku ?? null;
             return (
               <div key={r.composition_line_id} className="rounded-md border border-slate-200 bg-white px-2.5 py-2">
                 <div className="text-xs font-semibold text-slate-800">{label}</div>
+                {sku ? <div className="mt-0.5 font-mono text-[11px] text-slate-500">{sku}</div> : null}
                 <div className="mt-0.5 text-[11px] text-slate-500">
                   Do odzysku: <span className="font-semibold tabular-nums text-slate-700">{expected}</span> szt.
                 </div>
