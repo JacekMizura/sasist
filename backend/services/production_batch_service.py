@@ -9,14 +9,18 @@ from typing import Any
 
 from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.orm import Session, joinedload, selectinload
 
 from ..db.schema_introspection import get_table_column_names, has_table
 from ..models.app_user import AppUser
 from ..models.inventory import Inventory
 from ..models.location import Location
 from ..models.product import Product
-from ..models.product_composition import ProductionBatch, ProductionBatchLine, ProductComposition
+from ..models.product_composition import (
+    ProductionBatch,
+    ProductionBatchLine,
+    ProductComposition,
+)
 from ..models.stock_document import StockDocument, StockDocumentItem
 from ..models.warehouse import Warehouse
 from ..schemas.production import ComponentAllocationWrite, StockShortageRead
@@ -963,13 +967,22 @@ def complete_batch(
 def _load_batch_entity(db: Session, *, tenant_id: int, batch_id: int) -> ProductionBatch:
     batch = (
         db.query(ProductionBatch)
-        .options(joinedload(ProductionBatch.lines).joinedload(ProductionBatchLine.composition))
+        .options(
+            joinedload(ProductionBatch.lines)
+            .joinedload(ProductionBatchLine.composition)
+            .selectinload(ProductComposition.lines)
+        )
         .filter(ProductionBatch.id == int(batch_id), ProductionBatch.tenant_id == int(tenant_id))
         .first()
     )
     if batch is None:
         raise ProductionBatchError("Partia nie istnieje.", code="not_found")
     return batch
+
+
+def _sanitize_lot_token(raw: str | None) -> str | None:
+    token = str(raw or "").strip()
+    return token or None
 
 
 def _init_collection_tasks(db: Session, batch: ProductionBatch) -> dict[str, Any]:
@@ -1043,7 +1056,14 @@ def get_collection_state(db: Session, *, tenant_id: int, batch_id: int) -> Batch
             pref = pref_by_product.setdefault(pid, set())
             for r in rows:
                 pref.add(int(r["location_id"]))
-    tasks = [CollectionTaskRead(**t) for t in tasks_raw]
+    try:
+        tasks = [CollectionTaskRead(**t) for t in tasks_raw]
+    except Exception as exc:
+        logger.exception("get_collection_state task validation failed batch_id=%s", batch_id)
+        raise ProductionBatchError(
+            f"Niepoprawny stan zbierania: {exc}",
+            code="invalid_collection_state",
+        ) from exc
     done = sum(1 for t in tasks if t.collected_qty >= t.required_qty - 1e-6)
     total = len(tasks)
     pct = round(100.0 * done / total, 1) if total else 0.0
@@ -1204,22 +1224,66 @@ def finish_collecting(
     state = get_collection_state(db, tenant_id=tenant_id, batch_id=batch_id)
     if state.collected_count < state.total_count:
         raise ProductionBatchError("Nie zebrano wszystkich materiałów.", code="collection_incomplete")
-    totals = _aggregate_batch_components(batch)
+    # SSOT po zbieraniu: wymagane ilości z tasków (już zagregowane przy starcie),
+    # nie ponowny BOM — unika driftu multi-FG / partial line load.
+    totals = {
+        int(t.component_product_id): float(t.required_qty)
+        for t in state.tasks
+        if int(t.component_product_id or 0) > 0 and float(t.required_qty or 0) > 1e-9
+    }
     allocs: list[ComponentAllocationWrite] = []
-    for t in state.tasks:
-        loc_id = int(t.selected_location_id or t.location_id or 0)
-        if loc_id > 0 and t.collected_qty > 0:
-            allocs.append(
-                ComponentAllocationWrite(
-                    line_snapshot_id=int(t.component_product_id),
-                    location_id=loc_id,
-                    quantity=float(t.collected_qty),
-                    batch_number=getattr(t, "selected_batch_number", None),
-                    lot=getattr(t, "selected_lot", None),
-                    serial_number=getattr(t, "selected_serial_number", None),
+    try:
+        for t in state.tasks:
+            loc_id = int(t.selected_location_id or t.location_id or 0)
+            if loc_id > 0 and t.collected_qty > 0:
+                allocs.append(
+                    ComponentAllocationWrite(
+                        line_snapshot_id=int(t.component_product_id),
+                        location_id=loc_id,
+                        quantity=float(t.collected_qty),
+                        batch_number=_sanitize_lot_token(getattr(t, "selected_batch_number", None)),
+                        lot=_sanitize_lot_token(getattr(t, "selected_lot", None)),
+                        serial_number=_sanitize_lot_token(getattr(t, "selected_serial_number", None)),
+                    )
                 )
-            )
-    _consume_batch_materials(db, batch, totals=totals, component_allocations=allocs, performed_by_user_id=performed_by_user_id)
+    except Exception as exc:
+        # Pydantic ValidationError etc. — never raw 500 for bad collection payload
+        raise ProductionBatchError(
+            f"Niepoprawne dane zbierania komponentów: {exc}",
+            code="invalid_collection_allocation",
+        ) from exc
+    if not allocs:
+        raise ProductionBatchError(
+            "Brak lokalizacji / ilości do zużycia materiałów — dokończ skan lokalizacji.",
+            code="collection_locations_missing",
+        )
+    try:
+        _consume_batch_materials(
+            db,
+            batch,
+            totals=totals,
+            component_allocations=allocs,
+            performed_by_user_id=performed_by_user_id,
+        )
+    except ProductionBatchError:
+        raise
+    except ValueError as exc:
+        logger.exception(
+            "finish_collecting consume ValueError batch_id=%s tenant_id=%s",
+            batch_id,
+            tenant_id,
+        )
+        raise ProductionBatchError(str(exc), code="insufficient_stock") from exc
+    except IntegrityError as exc:
+        logger.exception(
+            "finish_collecting IntegrityError batch_id=%s tenant_id=%s",
+            batch_id,
+            tenant_id,
+        )
+        raise ProductionBatchError(
+            "Nie udało się utworzyć dokumentu RW — konflikt zapisu.",
+            code="rw_integrity_error",
+        ) from exc
     from .reservations.reservation_service import consume_production_reservations
 
     consume_production_reservations(db, tenant_id=int(tenant_id), production_batch_id=int(batch_id))
