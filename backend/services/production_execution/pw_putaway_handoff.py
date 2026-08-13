@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from datetime import date, datetime
-from typing import Iterable
 
 from sqlalchemy.orm import Session
 
@@ -22,14 +21,11 @@ from ..inventory_carrier_ops import upsert_dock_inventory_for_loose_receipt
 from ..stock_disposition import STOCK_DISPOSITION_SALEABLE
 
 
-def _create_pw_for_putaway(
+def _new_pw_header(
     db: Session,
     *,
     tenant_id: int,
     warehouse_id: int,
-    product_id: int,
-    quantity: float,
-    unit_cost: float,
     created_by_user_id: int | None,
     production_batch_id: int | None = None,
     production_batch_line_id: int | None = None,
@@ -55,7 +51,9 @@ def _create_pw_for_putaway(
     db.flush()
     ensure_default_pz_receiving_location_if_missing(db, doc)
     try:
-        pw_series = require_warehouse_series(db, tenant_id=int(tenant_id), warehouse_id=int(warehouse_id), subtype="PW")
+        pw_series = require_warehouse_series(
+            db, tenant_id=int(tenant_id), warehouse_id=int(warehouse_id), subtype="PW"
+        )
     except Exception:
         pw_series = None
     if pw_series is not None:
@@ -63,6 +61,21 @@ def _create_pw_for_putaway(
         assign_series_number_to_stock_document(
             db, doc, pw_series, warehouse_code=str(getattr(wh, "code", None) or "") or None
         )
+    staging_loc = int(doc.location_id or 0)
+    if staging_loc < 1:
+        raise ValueError("Brak lokalizacji staging dla PW produkcyjnego.")
+    return doc
+
+
+def _append_pw_line_with_staging(
+    db: Session,
+    *,
+    doc: StockDocument,
+    product_id: int,
+    quantity: float,
+    unit_cost: float,
+    performed_by_user_id: int | None,
+) -> StockDocumentItem:
     staging_loc = int(doc.location_id or 0)
     if staging_loc < 1:
         raise ValueError("Brak lokalizacji staging dla PW produkcyjnego.")
@@ -80,8 +93,8 @@ def _create_pw_for_putaway(
     db.flush()
     upsert_dock_inventory_for_loose_receipt(
         db,
-        tenant_id=int(tenant_id),
-        warehouse_id=int(warehouse_id),
+        tenant_id=int(doc.tenant_id),
+        warehouse_id=int(doc.warehouse_id),
         location_id=staging_loc,
         product_id=int(product_id),
         add_qty=float(quantity),
@@ -98,11 +111,50 @@ def _create_pw_for_putaway(
         product_id=int(product_id),
         quantity=float(quantity),
         staging_location_id=staging_loc,
+        performed_by_user_id=performed_by_user_id,
+    )
+    return line
+
+
+def _create_pw_for_putaway(
+    db: Session,
+    *,
+    tenant_id: int,
+    warehouse_id: int,
+    product_id: int,
+    quantity: float,
+    unit_cost: float,
+    created_by_user_id: int | None,
+    production_batch_id: int | None = None,
+    production_batch_line_id: int | None = None,
+    production_order_id: int | None = None,
+) -> StockDocument:
+    """Single-product PW (MO / legacy). Batch multi-FG uses create_batch_pw_documents_for_putaway."""
+    doc = _new_pw_header(
+        db,
+        tenant_id=tenant_id,
+        warehouse_id=warehouse_id,
+        created_by_user_id=created_by_user_id,
+        production_batch_id=production_batch_id,
+        production_batch_line_id=production_batch_line_id,
+        production_order_id=production_order_id,
+    )
+    _append_pw_line_with_staging(
+        db,
+        doc=doc,
+        product_id=product_id,
+        quantity=quantity,
+        unit_cost=unit_cost,
         performed_by_user_id=created_by_user_id,
     )
     from ..stock_document_service import recompute_putaway_status_for_document
 
-    recompute_putaway_status_for_document(doc, [line], db=db)
+    items = (
+        db.query(StockDocumentItem)
+        .filter(StockDocumentItem.document_id == int(doc.id))
+        .all()
+    )
+    recompute_putaway_status_for_document(doc, items, db=db)
     doc.updated_at = datetime.utcnow()
     db.flush()
     return doc
@@ -114,33 +166,114 @@ def create_batch_pw_documents_for_putaway(
     batch: ProductionBatch,
     performed_by_user_id: int | None = None,
 ) -> list[int]:
-    """Create one PW per batch line; inventory at receiving staging — Rozlokowanie handles bins."""
+    """Create exactly one multi-line PW for the whole ProductionBatch (idempotent).
+
+    All batch lines share the same ``pw_stock_document_id``. Standard WMS putaway
+    relocates each line independently; document/batch complete when the whole PW is DONE.
+    """
+    lines = list(batch.lines or [])
+    if not lines:
+        return []
+
+    existing_ids = [
+        int(bl.pw_stock_document_id)
+        for bl in lines
+        if getattr(bl, "pw_stock_document_id", None)
+    ]
+    if existing_ids:
+        unique = sorted(set(existing_ids))
+        # Already linked (single or legacy multi) — do not create another PW.
+        if len(unique) == 1 and len(existing_ids) == len(lines):
+            return unique
+        if len(unique) == 1:
+            # Partial link — attach remaining lines to the same PW header without duplicating items.
+            pw_id = unique[0]
+            pw_doc = db.query(StockDocument).filter(StockDocument.id == pw_id).first()
+            if pw_doc is None:
+                raise ValueError("Istniejący dokument PW partii nie został znaleziony.")
+            existing_pids = {
+                int(it.product_id)
+                for it in db.query(StockDocumentItem)
+                .filter(StockDocumentItem.document_id == pw_id)
+                .all()
+            }
+            rw_doc = (
+                db.query(StockDocument).filter(StockDocument.id == int(batch.rw_stock_document_id)).first()
+                if batch.rw_stock_document_id
+                else None
+            )
+            total_planned = sum(float(bl.planned_quantity) for bl in lines) or 1.0
+            from .cost_service import compute_batch_line_unit_cost
+
+            for bl in lines:
+                if getattr(bl, "pw_stock_document_id", None):
+                    continue
+                produced = float(bl.completed_quantity or bl.planned_quantity)
+                unit_cost = compute_batch_line_unit_cost(
+                    rw_doc,
+                    produced_quantity=produced,
+                    total_planned_quantity=total_planned,
+                )
+                if int(bl.product_id) not in existing_pids:
+                    _append_pw_line_with_staging(
+                        db,
+                        doc=pw_doc,
+                        product_id=int(bl.product_id),
+                        quantity=produced,
+                        unit_cost=unit_cost,
+                        performed_by_user_id=performed_by_user_id,
+                    )
+                    existing_pids.add(int(bl.product_id))
+                bl.calculated_unit_cost = round(unit_cost, 4)
+                bl.pw_stock_document_id = pw_id
+                bl.status = "completed"
+                prod = db.query(Product).filter(Product.id == int(bl.product_id)).first()
+                if prod is not None and unit_cost > 0:
+                    prod.purchase_price = float(unit_cost)
+            items = (
+                db.query(StockDocumentItem)
+                .filter(StockDocumentItem.document_id == pw_id)
+                .all()
+            )
+            from ..stock_document_service import recompute_putaway_status_for_document
+
+            recompute_putaway_status_for_document(pw_doc, items, db=db)
+            pw_doc.updated_at = datetime.utcnow()
+            db.flush()
+            return [pw_id]
+        # Legacy multi-PW already created for this batch — leave as-is (no migration).
+        return unique
+
     rw_doc = (
         db.query(StockDocument).filter(StockDocument.id == int(batch.rw_stock_document_id)).first()
         if batch.rw_stock_document_id
         else None
     )
-    total_planned = sum(float(bl.planned_quantity) for bl in batch.lines or []) or 1.0
-    pw_ids: list[int] = []
+    total_planned = sum(float(bl.planned_quantity) for bl in lines) or 1.0
     from .cost_service import compute_batch_line_unit_cost
 
-    for bl in batch.lines or []:
+    pw_doc = _new_pw_header(
+        db,
+        tenant_id=int(batch.tenant_id),
+        warehouse_id=int(batch.warehouse_id),
+        created_by_user_id=performed_by_user_id,
+        production_batch_id=int(batch.id),
+        production_batch_line_id=None,
+    )
+    for bl in lines:
         produced = float(bl.completed_quantity or bl.planned_quantity)
         unit_cost = compute_batch_line_unit_cost(
             rw_doc,
             produced_quantity=produced,
             total_planned_quantity=total_planned,
         )
-        pw_doc = _create_pw_for_putaway(
+        _append_pw_line_with_staging(
             db,
-            tenant_id=int(batch.tenant_id),
-            warehouse_id=int(batch.warehouse_id),
+            doc=pw_doc,
             product_id=int(bl.product_id),
             quantity=produced,
             unit_cost=unit_cost,
-            created_by_user_id=performed_by_user_id,
-            production_batch_id=int(batch.id),
-            production_batch_line_id=int(bl.id),
+            performed_by_user_id=performed_by_user_id,
         )
         bl.calculated_unit_cost = round(unit_cost, 4)
         bl.pw_stock_document_id = int(pw_doc.id)
@@ -148,8 +281,18 @@ def create_batch_pw_documents_for_putaway(
         prod = db.query(Product).filter(Product.id == int(bl.product_id)).first()
         if prod is not None and unit_cost > 0:
             prod.purchase_price = float(unit_cost)
-        pw_ids.append(int(pw_doc.id))
-    return pw_ids
+
+    items = (
+        db.query(StockDocumentItem)
+        .filter(StockDocumentItem.document_id == int(pw_doc.id))
+        .all()
+    )
+    from ..stock_document_service import recompute_putaway_status_for_document
+
+    recompute_putaway_status_for_document(pw_doc, items, db=db)
+    pw_doc.updated_at = datetime.utcnow()
+    db.flush()
+    return [int(pw_doc.id)]
 
 
 def create_order_pw_document_for_putaway(
@@ -184,6 +327,9 @@ def create_order_pw_document_for_putaway(
             )
         if not order.pw_stock_document_id:
             raise ValueError("Nie utworzono PW buforowego dla zlecenia ORDERS.")
+        return int(order.pw_stock_document_id)
+
+    if order.pw_stock_document_id:
         return int(order.pw_stock_document_id)
 
     rw_doc = (

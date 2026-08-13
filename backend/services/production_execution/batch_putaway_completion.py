@@ -43,17 +43,19 @@ def try_complete_production_batch_from_pw_document(db: Session, doc: StockDocume
     if str(batch.status) not in ("awaiting_putaway", "putaway"):
         return False
 
-    pw_ids = [
-        int(ln.pw_stock_document_id)
-        for ln in (batch.lines or [])
-        if getattr(ln, "pw_stock_document_id", None)
-    ]
+    pw_ids = sorted(
+        {
+            int(ln.pw_stock_document_id)
+            for ln in (batch.lines or [])
+            if getattr(ln, "pw_stock_document_id", None)
+        }
+    )
     if not pw_ids:
         return False
 
     pw_docs = db.query(StockDocument).filter(StockDocument.id.in_(pw_ids)).all()
     by_id = {int(d.id): d for d in pw_docs}
-    if len(by_id) != len(set(pw_ids)):
+    if len(by_id) != len(pw_ids):
         return False
     if not all(_pw_putaway_done(by_id[pid]) for pid in pw_ids):
         return False

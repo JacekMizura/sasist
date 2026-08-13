@@ -201,7 +201,30 @@ def serialize_batch_line(db: Session, line: ProductionBatchLine) -> ProductionBa
         if pw_doc is not None:
             ps = str(getattr(pw_doc, "putaway_status", "") or "").strip().upper()
             rs = str(getattr(pw_doc, "relocation_status", "") or "").strip().upper()
-            if ps == "DONE" or rs == "DONE":
+            # Per-product status on multi-line PW (quantity_putaway vs received).
+            item = (
+                db.query(StockDocumentItem)
+                .filter(
+                    StockDocumentItem.document_id == int(pw_doc.id),
+                    StockDocumentItem.product_id == int(line.product_id),
+                )
+                .order_by(StockDocumentItem.id.asc())
+                .first()
+            )
+            if item is not None:
+                from .stock_document_service import effective_putaway_quantity_for_line
+
+                received = float(item.received_quantity or 0)
+                put = float(effective_putaway_quantity_for_line(db, item) or 0)
+                if received > 1e-6 and put + 1e-5 >= received:
+                    pw_putaway_status = "DONE"
+                elif put > 1e-6:
+                    pw_putaway_status = "IN_PROGRESS"
+                elif ps == "DONE" or rs == "DONE":
+                    pw_putaway_status = "DONE"
+                else:
+                    pw_putaway_status = ps or rs or "NOT_STARTED"
+            elif ps == "DONE" or rs == "DONE":
                 pw_putaway_status = "DONE"
             else:
                 pw_putaway_status = ps or rs or "OPEN"

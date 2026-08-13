@@ -11,7 +11,12 @@ from sqlalchemy.orm import sessionmaker
 from backend.models.inventory import Inventory
 from backend.models.location import Location
 from backend.models.product import Product
-from backend.models.product_composition import ProductionBatch, ProductionBatchLine, ProductComposition
+from backend.models.product_composition import (
+    ProductionBatch,
+    ProductionBatchLine,
+    ProductComposition,
+    ProductCompositionLine,
+)
 from backend.models.stock_document import StockDocument, StockDocumentItem
 from backend.models.stock_operation import StockOperation
 from backend.models.stock_reservation import StockReservation
@@ -42,6 +47,7 @@ def reservation_db(monkeypatch):
         Inventory,
         StockReservation,
         ProductComposition,
+        ProductCompositionLine,
         ProductionBatch,
         ProductionBatchLine,
         StockDocument,

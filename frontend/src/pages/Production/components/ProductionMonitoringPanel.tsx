@@ -112,10 +112,14 @@ function batchPwFromLines(batch: ProductionBatchRead): Pick<
   if (linesWithPw.length === 0) {
     return { pw_stock_document_id: undefined, pw_document_number: undefined, pw_documents: [] };
   }
-  const pw_documents: TimelinePwDocument[] = linesWithPw.map((ln) => ({
-    id: ln.pw_stock_document_id!,
-    number: ln.pw_document_number,
-  }));
+  const seen = new Set<number>();
+  const pw_documents: TimelinePwDocument[] = [];
+  for (const ln of linesWithPw) {
+    const id = ln.pw_stock_document_id!;
+    if (seen.has(id)) continue;
+    seen.add(id);
+    pw_documents.push({ id, number: ln.pw_document_number });
+  }
   const first = linesWithPw[0];
   return {
     pw_stock_document_id: first.pw_stock_document_id ?? undefined,

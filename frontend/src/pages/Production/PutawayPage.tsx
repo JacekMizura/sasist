@@ -27,17 +27,36 @@ export default function PutawayPage() {
   const { queue, reloadQueue, putawayDetail, busy, detailLoading, openJob, refreshPutawayDetail } =
     useProductionExecutionJob("putaway", activeRef);
 
-  const pwDocuments =
-    putawayDetail?.lines
-      .filter((ln) => ln.pwDocumentId != null && ln.pwDocumentId > 0)
-      .map((ln) => ({
-        id: ln.pwDocumentId!,
-        number: ln.pwDocumentNumber,
-        putawayStatus: ln.putawayStatus,
-        productName: ln.productName,
-      })) ?? [];
+  const productLines = putawayDetail?.lines ?? [];
+  const pendingProductCount = productLines.filter(
+    (ln) => String(ln.putawayStatus || "").toUpperCase() !== "DONE",
+  ).length;
 
-  const pendingPwCount = pwDocuments.filter((pw) => String(pw.putawayStatus || "").toUpperCase() !== "DONE").length;
+  const pwDocuments = (() => {
+    const byId = new Map<number, { id: number; number?: string | null; putawayStatus?: string | null }>();
+    for (const ln of productLines) {
+      if (ln.pwDocumentId == null || ln.pwDocumentId <= 0) continue;
+      const prev = byId.get(ln.pwDocumentId);
+      if (!prev) {
+        byId.set(ln.pwDocumentId, {
+          id: ln.pwDocumentId,
+          number: ln.pwDocumentNumber,
+          putawayStatus: ln.putawayStatus,
+        });
+        continue;
+      }
+      // Document-level: DONE only if every product line on this PW is DONE.
+      const prevDone = String(prev.putawayStatus || "").toUpperCase() === "DONE";
+      const lnDone = String(ln.putawayStatus || "").toUpperCase() === "DONE";
+      if (!(prevDone && lnDone)) {
+        prev.putawayStatus =
+          prevDone || lnDone || String(prev.putawayStatus || "").toUpperCase() === "IN_PROGRESS"
+            ? "IN_PROGRESS"
+            : ln.putawayStatus ?? prev.putawayStatus;
+      }
+    }
+    return Array.from(byId.values());
+  })();
 
   return (
     <div className="w-full space-y-5">
@@ -80,11 +99,11 @@ export default function PutawayPage() {
             accent="emerald"
           />
 
-          {pendingPwCount > 0 ? (
+          {pendingProductCount > 0 ? (
             <p className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
-              Do rozlokowania pozostał{pendingPwCount === 1 ? "" : "o"}{" "}
-              <strong>{pendingPwCount}</strong>{" "}
-              {pendingPwCount === 1 ? "produkt" : pendingPwCount < 5 ? "produkty" : "produktów"}.
+              Do rozlokowania pozostał{pendingProductCount === 1 ? "" : "o"}{" "}
+              <strong>{pendingProductCount}</strong>{" "}
+              {pendingProductCount === 1 ? "produkt" : pendingProductCount < 5 ? "produkty" : "produktów"}.
             </p>
           ) : pwDocuments.length > 0 ? (
             <p className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">

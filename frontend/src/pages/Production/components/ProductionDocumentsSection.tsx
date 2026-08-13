@@ -101,14 +101,27 @@ export function pwDocumentsFromBatchLines(
     product_name?: string | null;
   }>,
 ): ProductionPwDocumentRow[] {
-  return (lines ?? [])
-    .filter((ln) => ln.pw_stock_document_id != null && ln.pw_stock_document_id > 0)
-    .map((ln) => ({
-      id: ln.pw_stock_document_id!,
-      number: ln.pw_document_number,
-      putawayStatus: ln.pw_putaway_status,
-      productName: ln.product_name,
-    }));
+  const byId = new Map<number, ProductionPwDocumentRow>();
+  for (const ln of lines ?? []) {
+    const id = ln.pw_stock_document_id;
+    if (id == null || id <= 0) continue;
+    const prev = byId.get(id);
+    if (!prev) {
+      byId.set(id, {
+        id,
+        number: ln.pw_document_number,
+        putawayStatus: ln.pw_putaway_status,
+        productName: ln.product_name,
+      });
+      continue;
+    }
+    const prevDone = String(prev.putawayStatus || "").toUpperCase() === "DONE";
+    const lnDone = String(ln.pw_putaway_status || "").toUpperCase() === "DONE";
+    if (!(prevDone && lnDone)) {
+      prev.putawayStatus = "IN_PROGRESS";
+    }
+  }
+  return Array.from(byId.values());
 }
 
 export function pwDocumentsFromOrder(order: {
