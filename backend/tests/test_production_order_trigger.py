@@ -482,6 +482,85 @@ def test_no_composition_no_mo():
     assert int(o.order_ui_status_id) == 12
 
 
+def test_production_hook_integrity_error_savepoint_keeps_status_commit(monkeypatch):
+    """IntegrityError inside production hook must not poison outer status commit (UAT #1158)."""
+    from sqlalchemy.exc import IntegrityError, PendingRollbackError
+
+    db, _ = _bootstrap(None)
+    o, _ = _make_order(db, order_id=900, number="POISON", product_id=100, qty=1)
+    db.commit()
+
+    def _boom(*_a, **_k):
+        raise IntegrityError(
+            "UPDATE orders",
+            {"order_ui_status_id": 12},
+            Exception(
+                'insert or update on table "orders" violates foreign key constraint '
+                '"orders_shipping_method_id_fkey"'
+            ),
+        )
+
+    monkeypatch.setattr(
+        "backend.services.production_order_trigger.trigger_service._enter_production",
+        _boom,
+    )
+    out = apply_order_panel_ui_status(db, order=o, sub_status_id=10)
+    assert out.get("status_updated") is True
+    try:
+        db.commit()
+    except PendingRollbackError as exc:  # pragma: no cover - failure mode under test
+        pytest.fail(f"session poisoned after production soft-fail: {exc}")
+    db.refresh(o)
+    assert int(o.order_ui_status_id) == 10
+    assert db.query(ProductionOrder).count() == 0
+    # Outer session remains usable for further writes.
+    o.number = "POISON-OK"
+    db.add(o)
+    db.commit()
+    db.refresh(o)
+    assert o.number == "POISON-OK"
+
+
+def test_no_composition_moves_to_shortage_status_without_500():
+    """NO_ACTIVE_MANUFACTURING_COMPOSITION + valid order row → shortage status, commit OK."""
+    db, _ = _bootstrap(None)
+    db.add(Product(id=998, tenant_id=1, name="Bez BOM 2", sku="X2"))
+    db.commit()
+    o, _ = _make_order(db, order_id=81, number="NOBOM2", product_id=998, qty=1)
+    # Explicit null shipping FK (field optional).
+    o.shipping_method_id = None
+    db.commit()
+
+    enter = on_order_panel_status_changed_production(
+        db, order=o, previous_status_id=13, new_status_id=10
+    )
+    assert enter.get("enter", {}).get("result") == RESULT_NO_ACTIVE_MANUFACTURING_COMPOSITION
+    db.commit()
+    db.refresh(o)
+    assert int(o.order_ui_status_id) == 12
+    assert db.query(ProductionOrder).count() == 0
+
+
+def test_apply_status_sanitizes_orphan_shipping_method_id(monkeypatch):
+    db, _ = _bootstrap(None)
+    o, _ = _make_order(db, order_id=82, number="ORPHAN-SM", product_id=100, qty=1)
+    o.shipping_method_id = "59379f8b-a865-4c6a-a4fb-13324a73e9ac"
+    o.shipping_method = "InPost"
+    db.commit()
+
+    monkeypatch.setattr(
+        "backend.services.order_shipping_fk_service.shipping_method_id_exists",
+        lambda *_a, **_k: False,
+    )
+    apply_order_panel_ui_status(db, order=o, sub_status_id=10)
+    db.commit()
+    db.refresh(o)
+    assert o.shipping_method_id is None
+    assert o.shipping_method == "InPost"
+    assert int(o.order_ui_status_id) == 10
+    assert db.query(ProductionOrder).count() == 1
+
+
 def test_withdraw_before_start_reduces_planned():
     db, _ = _bootstrap(None)
     a, _ = _make_order(db, order_id=90, number="A", product_id=100, qty=1)

@@ -1,4 +1,35 @@
-﻿## 2026-08-13 — Fix: WMS collection confirm commits stock; finish-collecting no re-pick
+﻿## 2026-08-13 — Fix UAT3: production status hook savepoint + orphan shipping FK
+
+- Root cause PATCH ui-status 500: NO_BOM → shortage status UPDATE hit orphan `orders.shipping_method_id` FK → session PendingRollbackError (hook bez savepoint)
+- Soft-fail: `_run_production_status_hook` = `begin_nested` jak smart-matching; trigger re-raise po logu (savepoint rollback)
+- Sanitize orphan shipping FK przed mutacją statusu + przed move-to-shortage; `_log_order` nie czyta expired attrs po flush fail
+- Testy: IntegrityError w hooku nie truuje commit; NO_BOM → shortage bez 500; sanitize orphan
+- UAT #1158: `shipping_method_id` już NULL (label DHL); produkt 350 **bez** aktywnego manufacturing BOM → osobny blocker UAT
+
+## 2026-08-13 — Fix: martwy „Zobacz szczegóły” na zakończonym BAT/MO
+
+- Przyczyna: na detailu completed CTA `view_details` wskazywało ten sam URL → Link noop
+- Fix: `isOnEntityDetailPage` (pathname === detail href) → `primaryAction.kind=none`; poza detailem href BAT vs MO poprawny
+- ORDERS READY_TO_PACK bez zmian; testy `productionOperationalState.test.ts` (22)
+
+## 2026-08-13 — ProductionBatch: jedno PW dla całej partii (multi-FG)
+
+- Root cause: `create_batch_pw_documents_for_putaway` tworzył osobny PW w pętli po produktach końcowych
+- Fix: jeden nagłówek PW (`production_batch_id`) + N pozycji; wszystkie `ProductionBatchLine.pw_stock_document_id` → ten sam dokument
+- Idempotencja: ponowne wywołanie nie tworzy drugiego PW / nie duplikuje pozycji; legacy multi-PW bez migracji
+- Putaway standardowy (per pozycja); BAT `completed` dopiero gdy PW DONE
+- FE: Dokumenty deduplikują PW; „Do rozlokowania pozostało N produktów” liczy produkty
+- Testy: `test_production_batch_single_pw.py` (1 PW, 2 linie, partial putaway, idempotencja)
+
+## 2026-08-13 — WMS collection multi-location + discrepancy
+
+- Pobranie per lokalizacja (`pick_events`); `collected_qty` = suma; GOTOWE dopiero przy sumie ≥ required
+- Ilość edytowalna: default min(remaining, stan lokalizacji); discrepancy = suggested − confirmed (+ write-down ghost stock)
+- Brak pokrycia remaining → `pending_shortage` + modal WMS (inna lokalizacja / zgłoś brak / wróć)
+- finish-collecting: RW z sumy lokalizacji / slices; brak double-consume
+- Testy: `test_production_collection_multi_location.py` A–E + report shortage
+
+## 2026-08-13 — Fix: WMS collection confirm commits stock; finish-collecting no re-pick
 
 - Root cause: confirm only wrote `collection_state_json`; finish re-validated/consumed against live inventory → 409 „wymagane 28 / dostępne 24” after UI GOTOWE
 - WMS confirm → `collection_pick_commit_service` consumes inventory + stores `picked_slices`; finish posts RW from slices (no second consume)

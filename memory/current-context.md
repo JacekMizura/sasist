@@ -1,5 +1,34 @@
 ﻿## Active
 
+**UAT 3 ORDERS — FIX deployed path (2026-08-13):**
+- Production hook: SAVEPOINT soft-fail (nie truuje PATCH statusu)
+- #1158: `shipping_method_id=NULL` (OK); label DHL zachowany
+- Produkt 350 (ST-002): **brak** aktywnej manufacturing composition → blocker UAT przed happy-path MO (nie tworzyć BOM bez polecenia)
+- Po deploy: można wznowić Nowe→Produkcja tylko po zapewnieniu BOM; bez BOM oczekiwane przejście do `status_on_component_shortage` (nie 500)
+
+**UAT 3 ORDERS — STOP KROK 1 (2026-08-13):**
+- Config OK: status Produkcja (id=12) ma `is_production_mode=true`, buffer DOCK-IN, after=`OPEN_PACKING` (nie STATUS_ONLY)
+- PATCH #1158 → Produkcja: HTTP 500 `request_id=5216823b20b84514b4f8b9c7f731c09b` @ 19:38:08 GMT+2
+- **DIAG confirmed (Railway):** `PendingRollbackError` po `IntegrityError` / `ForeignKeyViolation` `orders_shipping_method_id_fkey` — order 1158 ma `shipping_method_id=59379f8b-…` nieobecny w `shipping_methods`
+- Ścieżka: `_enter_production` → **NO BOM** → `_move_order_to_shortage_status` (`order_ui_status_id=4`) → `_log_order` `begin_nested` flush → UPDATE orders pada na orphan FK → sesja failed → soft-fail trigger zostawia poison → `db.commit()` w `patch_order_ui_status` = 500
+- Nie: material validation / reservation / create MO / commit logic per se — **schema/constraint + brak savepoint + NO_BOM mutuje order**
+- Kandydaci UAT: #1158 (ST-002), #1152 (ST-003) — nadal Nowe; naprawa dopiero na życzenie
+
+**Completed CTA „Zobacz szczegóły” (2026-08-13):**
+- Na detailu BAT/MO completed: brak martwego CTA (`primaryAction.kind=none`) — użytkownik już jest na końcowym detailu
+- Z listy/pulpitu: `view_details` → `/production/batch/:id` lub `/production/orders/:id` (bez mieszania BAT/MO)
+- ORDERS completed+fulfilled: nadal „Przejdź do pakowania” także na detailu
+
+**ProductionBatch → jedno PW (2026-08-13):**
+- finish-production tworzy 1 dokument PW z N pozycjami FG (nie PW per produkt)
+- Link: `StockDocument.production_batch_id` + wszystkie linie `pw_stock_document_id` → ten sam PW
+- Rozlokowanie: standardowy multi-line putaway; BAT completed dopiero po DONE całego PW
+- Bez migracji historycznych multi-PW (np. PW/6 + PW/7 dla BAT/0016)
+
+**WMS collection multi-location (2026-08-13):**
+- `pick_events[]` per lokalizacja; qty edytowalna; discrepancy + inventory write-down; modal braku
+- finish RW z historii lokalizacji; shortage_reported zamyka komponent niepełny
+
 **WMS BAT finish-collecting / confirm pick (2026-08-13):**
 - Confirm WMS = inventory commit (`picked_slices`); finish-collecting = RW only (no re-pick / no double-consume)
 - Legacy JSON-only GOTOWE cleared on GET `/collection` until re-confirm

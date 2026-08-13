@@ -89,16 +89,20 @@ def _log_order(
     operator_user_id: Optional[int],
     metadata: Optional[dict[str, Any]] = None,
 ) -> None:
+    # Capture scalars before nested work — after flush failure getattr(order, ...) can
+    # raise PendingRollbackError while logging the original IntegrityError.
+    order_id = getattr(order, "id", None)
     wid = int(getattr(order, "warehouse_id", 0) or 0)
     if wid <= 0:
         return
+    tid = int(getattr(order, "tenant_id", 0) or 0)
     try:
         nested = db.begin_nested()
         try:
             append_order_activity_for_wms(
                 db,
-                order_id=int(order.id),
-                tenant_id=int(order.tenant_id),
+                order_id=int(order_id),
+                tenant_id=tid,
                 warehouse_id=wid,
                 event_type=event_type,
                 message=message,
@@ -111,7 +115,9 @@ def _log_order(
             raise
     except Exception:
         logger.exception(
-            "production trigger activity log failed order_id=%s", getattr(order, "id", None)
+            "production trigger activity log failed order_id=%s event_type=%s",
+            order_id,
+            event_type,
         )
 
 
@@ -119,6 +125,16 @@ def _move_order_to_shortage_status(db: Session, *, order: Order, pc: PickingConf
     sid = getattr(pc, "status_on_component_shortage_id", None)
     if sid is None:
         return
+    # Any UPDATE of orders re-validates shipping_method_id FK on Postgres.
+    try:
+        from ..order_shipping_fk_service import sanitize_order_orphan_shipping_method_id
+
+        sanitize_order_orphan_shipping_method_id(db, order)
+    except Exception:
+        logger.exception(
+            "production trigger orphan shipping sanitize failed order_id=%s",
+            getattr(order, "id", None),
+        )
     order.order_ui_status_id = int(sid)
     try:
         db.expire(order, ["order_ui_status"])
@@ -793,10 +809,13 @@ def on_order_panel_status_changed_production(
     operator_user_id: Optional[int] = None,
 ) -> dict[str, Any]:
     """
-    Hook after durable panel status mutation (same transaction).
+    Hook after panel status mutation (same outer transaction).
 
-    Soft-fails: never raises to the status writer.
+    Unexpected exceptions are logged and re-raised so the status-service SAVEPOINT
+    can roll back only trigger side-effects (soft-fail at ``_run_production_status_hook``).
+    Controlled domain outcomes return result codes without raising.
     """
+    order_id = getattr(order, "id", None)
     try:
         prev = int(previous_status_id) if previous_status_id is not None else None
         new = int(new_status_id) if new_status_id is not None else None
@@ -832,8 +851,8 @@ def on_order_panel_status_changed_production(
     except Exception:
         logger.exception(
             "production trigger failed order_id=%s prev=%s new=%s",
-            getattr(order, "id", None),
+            order_id,
             previous_status_id,
             new_status_id,
         )
-        return {"result": RESULT_ERROR}
+        raise

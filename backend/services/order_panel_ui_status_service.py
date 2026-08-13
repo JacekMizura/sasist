@@ -60,19 +60,35 @@ def _run_production_status_hook(
     new_status_id: Optional[int],
     operator_user_id: Optional[int],
 ) -> None:
-    try:
-        from .production_order_trigger import on_order_panel_status_changed_production
+    """
+    Soft-fail boundary for order-driven production trigger.
 
-        on_order_panel_status_changed_production(
-            db,
-            order=order,
-            previous_status_id=previous_status_id,
-            new_status_id=new_status_id,
-            operator_user_id=operator_user_id,
-        )
+    Runs inside a SAVEPOINT so IntegrityError / flush failures inside the trigger
+    roll back only hook side-effects and leave the outer status-change transaction usable.
+    """
+    order_id = getattr(order, "id", None)
+    try:
+        nested = db.begin_nested()
+        try:
+            from .production_order_trigger import on_order_panel_status_changed_production
+
+            on_order_panel_status_changed_production(
+                db,
+                order=order,
+                previous_status_id=previous_status_id,
+                new_status_id=new_status_id,
+                operator_user_id=operator_user_id,
+            )
+            nested.commit()
+        except Exception:
+            nested.rollback()
+            raise
     except Exception:
         logger.exception(
-            "production trigger after status order_id=%s", getattr(order, "id", None)
+            "production trigger after status order_id=%s prev=%s new=%s",
+            order_id,
+            previous_status_id,
+            new_status_id,
         )
 
 
@@ -111,6 +127,18 @@ def apply_order_panel_ui_status(
     - jeśli detach dozwolony → CartLifecycle detach,
     - jeśli zablokowany → status zostaje zapisany, zamówienie zostaje na wózku.
     """
+    # Orphan shipping_method_id makes ANY UPDATE of the order row fail FK check on Postgres.
+    # Clear before status mutation / production hook flush (keeps free-text label).
+    try:
+        from .order_shipping_fk_service import sanitize_order_orphan_shipping_method_id
+
+        sanitize_order_orphan_shipping_method_id(db, order)
+    except Exception:
+        logger.exception(
+            "[panel.ui_status] orphan shipping_method_id sanitize failed order_id=%s",
+            getattr(order, "id", None),
+        )
+
     previous_sid = (
         int(order.order_ui_status_id) if getattr(order, "order_ui_status_id", None) is not None else None
     )
