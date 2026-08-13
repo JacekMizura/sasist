@@ -1056,6 +1056,27 @@ def get_collection_state(db: Session, *, tenant_id: int, batch_id: int) -> Batch
             pref = pref_by_product.setdefault(pid, set())
             for r in rows:
                 pref.add(int(r["location_id"]))
+    # WMS: never show GOTOWE for picks that were never inventory-committed (legacy JSON-only).
+    if not is_erp_interface(batch):
+        from .production_execution.collection_pick_commit_service import (
+            parse_picked_slices,
+            picked_slices_total_qty,
+        )
+
+        healed = False
+        for t in tasks_raw:
+            qty = float(t.get("collected_qty") or 0)
+            if qty <= 1e-9:
+                continue
+            slices = parse_picked_slices(t.get("picked_slices"))
+            if abs(picked_slices_total_qty(slices) - qty) > 1e-2 or not slices:
+                t["collected_qty"] = 0.0
+                t["picked_slices"] = []
+                healed = True
+        if healed:
+            batch.collection_state_json = json.dumps({"tasks": tasks_raw}, ensure_ascii=False)
+            batch.updated_at = datetime.utcnow()
+            db.flush()
     try:
         tasks = [CollectionTaskRead(**t) for t in tasks_raw]
     except Exception as exc:
@@ -1164,22 +1185,46 @@ def update_collection_task(
     except json.JSONDecodeError:
         data = {"tasks": []}
     found = False
+    target_task: dict[str, Any] | None = None
     for t in data.get("tasks") or []:
         if str(t.get("task_key")) == str(body.task_key) or str(t.get("component_product_id")) == str(body.task_key):
-            t["collected_qty"] = round(float(body.collected_qty), 4)
-            if body.location_id is not None and int(body.location_id) > 0:
-                t["selected_location_id"] = int(body.location_id)
-                t["location_id"] = int(body.location_id)
-            if body.batch_number is not None:
-                t["selected_batch_number"] = str(body.batch_number).strip()
-            if body.lot is not None:
-                t["selected_lot"] = str(body.lot).strip()
-            if body.serial_number is not None:
-                t["selected_serial_number"] = str(body.serial_number).strip()
+            target_task = t
             found = True
             break
-    if not found:
+    if not found or target_task is None:
         raise ProductionBatchError("Zadanie zbierania nie istnieje.", code="task_not_found")
+
+    # WMS: confirm pick = operational fact → consume inventory now; finish only posts RW.
+    # ERP paper: keep reservation sync + legacy consume-on-finish (no physical pick commit).
+    if not is_erp_interface(batch):
+        from .production_execution.collection_pick_commit_service import commit_collection_task_pick
+
+        try:
+            commit_collection_task_pick(
+                db,
+                tenant_id=int(tenant_id),
+                warehouse_id=int(batch.warehouse_id),
+                task=target_task,
+                collected_qty=float(body.collected_qty),
+                location_id=int(body.location_id) if body.location_id else None,
+                batch_number=body.batch_number,
+                lot=body.lot,
+                serial_number=body.serial_number,
+            )
+        except ValueError as exc:
+            raise ProductionBatchError(str(exc), code="insufficient_stock") from exc
+    else:
+        target_task["collected_qty"] = round(float(body.collected_qty), 4)
+        if body.location_id is not None and int(body.location_id) > 0:
+            target_task["selected_location_id"] = int(body.location_id)
+            target_task["location_id"] = int(body.location_id)
+        if body.batch_number is not None:
+            target_task["selected_batch_number"] = str(body.batch_number).strip()
+        if body.lot is not None:
+            target_task["selected_lot"] = str(body.lot).strip()
+        if body.serial_number is not None:
+            target_task["selected_serial_number"] = str(body.serial_number).strip()
+
     batch.collection_state_json = json.dumps(data, ensure_ascii=False)
     batch.updated_at = datetime.utcnow()
     if getattr(batch, "materials_reserved", False) and is_erp_interface(batch):
@@ -1189,24 +1234,21 @@ def update_collection_task(
         )
 
         task_pid = int(body.task_key) if str(body.task_key).isdigit() else 0
-        for t in data.get("tasks") or []:
-            if str(t.get("task_key")) == str(body.task_key) or str(t.get("component_product_id")) == str(body.task_key):
-                task_pid = int(t.get("component_product_id") or task_pid)
-                try:
-                    sync_production_reservation_from_collection_task(
-                        db,
-                        tenant_id=tenant_id,
-                        production_batch_id=int(batch_id),
-                        component_product_id=task_pid,
-                        location_id=int(body.location_id) if body.location_id else None,
-                        batch_number=body.batch_number,
-                        serial_number=body.serial_number,
-                        quantity=float(body.collected_qty),
-                        ignore_locked=True,
-                    )
-                except ReservationError as exc:
-                    raise ProductionBatchError(str(exc), code=getattr(exc, "code", "reservation_error")) from exc
-                break
+        task_pid = int(target_task.get("component_product_id") or task_pid)
+        try:
+            sync_production_reservation_from_collection_task(
+                db,
+                tenant_id=tenant_id,
+                production_batch_id=int(batch_id),
+                component_product_id=task_pid,
+                location_id=int(body.location_id) if body.location_id else None,
+                batch_number=body.batch_number,
+                serial_number=body.serial_number,
+                quantity=float(body.collected_qty),
+                ignore_locked=True,
+            )
+        except ReservationError as exc:
+            raise ProductionBatchError(str(exc), code=getattr(exc, "code", "reservation_error")) from exc
     db.flush()
     return get_collection_state(db, tenant_id=tenant_id, batch_id=batch_id)
 
@@ -1257,6 +1299,18 @@ def finish_collecting(
             "Brak lokalizacji / ilości do zużycia materiałów — dokończ skan lokalizacji.",
             code="collection_locations_missing",
         )
+    raw_state = getattr(batch, "collection_state_json", None) or "{}"
+    try:
+        raw_data = json.loads(str(raw_state))
+    except json.JSONDecodeError:
+        raw_data = {"tasks": []}
+    raw_tasks = list(raw_data.get("tasks") or [])
+    from .production_execution.collection_pick_commit_service import (
+        collection_tasks_have_committed_picks,
+        slices_from_committed_tasks,
+    )
+
+    use_committed = collection_tasks_have_committed_picks(raw_tasks)
     try:
         _consume_batch_materials(
             db,
@@ -1264,6 +1318,9 @@ def finish_collecting(
             totals=totals,
             component_allocations=allocs,
             performed_by_user_id=performed_by_user_id,
+            committed_slices_by_product=(
+                slices_from_committed_tasks(raw_tasks) if use_committed else None
+            ),
         )
     except ProductionBatchError:
         raise
@@ -1301,6 +1358,7 @@ def _consume_batch_materials(
     totals: dict[int, float],
     component_allocations: list[ComponentAllocationWrite],
     performed_by_user_id: int | None,
+    committed_slices_by_product: dict[int, list[dict[str, Any]]] | None = None,
 ) -> StockDocument:
     if batch.rw_stock_document_id:
         doc = db.query(StockDocument).filter(StockDocument.id == int(batch.rw_stock_document_id)).first()
@@ -1348,6 +1406,37 @@ def _consume_batch_materials(
         alloc_meta = {
             (int(a.line_snapshot_id), int(a.location_id)): a for a in (component_allocations or [])
         }
+        committed = (committed_slices_by_product or {}).get(int(pid))
+        if committed:
+            # Inventory already decremented at WMS confirm — post RW lines only.
+            committed_total = sum(float(s.get("quantity") or 0) for s in committed)
+            if abs(committed_total - float(qty_sum)) > 1e-2:
+                raise ProductionBatchError(
+                    f"Zatwierdzone pobranie składnika #{pid} ({committed_total}) ≠ wymagane ({qty_sum}).",
+                    code="allocation_mismatch",
+                )
+            for s in committed:
+                loc_id = int(s.get("location_id") or 0)
+                if loc_id <= 0:
+                    continue
+                exp_raw = s.get("expiry_date")
+                try:
+                    exp = date.fromisoformat(str(exp_raw)) if exp_raw else date(9999, 12, 31)
+                except ValueError:
+                    exp = date(9999, 12, 31)
+                _append_rw_issue_with_product_audit(
+                    db,
+                    rw_doc=rw_doc,
+                    line=line,
+                    slice_qty=float(s.get("quantity") or 0),
+                    from_location_id=loc_id,
+                    batch_number=str(s.get("batch_number") or ""),
+                    expiry_date=exp if exp < NO_EXPIRY_SENTINEL else None,
+                    performed_by_user_id=performed_by_user_id,
+                    production_batch_id=int(batch.id),
+                    product_id=int(pid),
+                )
+            continue
         for loc_id, qty in allocs:
             meta = alloc_meta.get((int(pid), int(loc_id)))
             slices = consume_production_material_slices(

@@ -21,6 +21,7 @@ import {
   type ProductionExecutionJobRead,
   type ProductionExecutionPhase,
 } from "@/api/productionApi";
+import { useWmsMessage } from "@/components/wms/WmsMessageProvider";
 import { useWarehouse } from "@/context/WarehouseContext";
 import {
   isCollectingQueueBlocked,
@@ -37,6 +38,7 @@ import {
   ordersMoSkipsPutaway,
   withMutationLock,
 } from "./productionExecutionGuards";
+import { extractWmsUserMessage } from "@/types/wmsUserMessage";
 
 const DEFAULT_TENANT = 1;
 
@@ -186,6 +188,7 @@ function collectPwDocumentIds(detail: PutawayDetail | null): number[] {
 export function useProductionExecutionJob(phase: ProductionExecutionPhase, activeRef: ProductionExecutionRef | null) {
   const navigate = useNavigate();
   const { warehouse } = useWarehouse();
+  const { showWmsMessage } = useWmsMessage();
   const tenantId = warehouse?.tenant_id ?? DEFAULT_TENANT;
   const warehouseId = warehouse?.id;
 
@@ -197,6 +200,24 @@ export function useProductionExecutionJob(phase: ProductionExecutionPhase, activ
   const [detailLoading, setDetailLoading] = useState(false);
   /** Synchronous anti-double-submit (state `busy` alone races on rapid click/scan). */
   const mutationLockRef = useRef(false);
+
+  const showBusinessError = useCallback(
+    (e: unknown, title: string, fallback: string) => {
+      const structured = extractWmsUserMessage(e);
+      if (structured) {
+        showWmsMessage(structured);
+        return;
+      }
+      showWmsMessage({
+        code: "PRODUCTION_BUSINESS_ERROR",
+        severity: "ERROR",
+        title,
+        message: formatProductionMutationError(e, fallback),
+        suggested_action: "Spróbuj ponownie. Jeśli problem się powtórzy, zgłoś to przełożonemu.",
+      });
+    },
+    [showWmsMessage],
+  );
 
   const reloadQueue = useCallback(async () => {
     if (warehouseId == null) {
@@ -298,7 +319,12 @@ export function useProductionExecutionJob(phase: ProductionExecutionPhase, activ
       const ref = jobRef(job);
       if (phase === "collecting") {
         if (isCollectingQueueBlocked(job)) {
-          toast.error(START_COLLECTING_BLOCKED_TOOLTIP);
+          showWmsMessage({
+            code: "COLLECTING_BLOCKED",
+            severity: "ERROR",
+            title: "Nie można rozpocząć zbierania",
+            message: START_COLLECTING_BLOCKED_TOOLTIP,
+          });
           return;
         }
         if (job.status === "planned") {
@@ -306,7 +332,7 @@ export function useProductionExecutionJob(phase: ProductionExecutionPhase, activ
             if (ref.kind === "batch") await startCollectingBatch(tenantId, ref.id, warehouseId);
             else await startCollectingOrder(tenantId, ref.id, warehouseId);
           } catch (e: unknown) {
-            toast.error(formatStartCollectingError(e));
+            showBusinessError(e, "Nie można rozpocząć zbierania", formatStartCollectingError(e));
             return;
           }
         }
@@ -317,7 +343,7 @@ export function useProductionExecutionJob(phase: ProductionExecutionPhase, activ
       navigate(pathForPhase(phase, ref));
       if (phase === "putaway") await loadPutawayDetailForRef(ref);
     },
-    [warehouseId, phase, tenantId, navigate, loadCollectionDetail, loadPutawayDetailForRef],
+    [warehouseId, phase, tenantId, navigate, loadCollectionDetail, loadPutawayDetailForRef, showBusinessError, showWmsMessage],
   );
 
   const confirmCollectionTask = useCallback(
@@ -339,10 +365,10 @@ export function useProductionExecutionJob(phase: ProductionExecutionPhase, activ
           }
         });
       } catch (e: unknown) {
-        toast.error(formatProductionMutationError(e, "Nie udało się zapisać pobrania komponentu."));
+        showBusinessError(e, "Nie udało się zapisać pobrania", "Nie udało się zapisać pobrania komponentu.");
       }
     },
-    [activeRef, warehouseId, tenantId],
+    [activeRef, warehouseId, tenantId, showBusinessError],
   );
 
   const finishCollecting = useCallback(async () => {
@@ -354,9 +380,9 @@ export function useProductionExecutionJob(phase: ProductionExecutionPhase, activ
         navigate(wmsProductionPaths.execute(activeRef.kind, activeRef.id));
       });
     } catch (e: unknown) {
-      toast.error(formatProductionMutationError(e, "Nie można zakończyć pobierania komponentów."));
+      showBusinessError(e, "Nie można zakończyć pobierania", "Nie można zakończyć pobierania komponentów.");
     }
-  }, [activeRef, warehouseId, tenantId, navigate]);
+  }, [activeRef, warehouseId, tenantId, navigate, showBusinessError]);
 
   const addProductionQty = useCallback(
     async (lineKey: string, add: number) => {
@@ -383,10 +409,10 @@ export function useProductionExecutionJob(phase: ProductionExecutionPhase, activ
           setExecutionDetail(await loadExecutionDetail(tenantId, warehouseId, activeRef));
         });
       } catch (e: unknown) {
-        toast.error(formatProductionMutationError(e, "Nie udało się zapisać wyprodukowanej ilości."));
+        showBusinessError(e, "Nie udało się zapisać produkcji", "Nie udało się zapisać wyprodukowanej ilości.");
       }
     },
-    [activeRef, warehouseId, tenantId, navigate],
+    [activeRef, warehouseId, tenantId, navigate, showBusinessError],
   );
 
   const finishProduction = useCallback(async () => {
@@ -429,9 +455,9 @@ export function useProductionExecutionJob(phase: ProductionExecutionPhase, activ
         await reloadQueue();
       });
     } catch (e: unknown) {
-      toast.error(formatProductionMutationError(e, "Nie można zakończyć produkcji."));
+      showBusinessError(e, "Nie można zakończyć produkcji", "Nie można zakończyć produkcji.");
     }
-  }, [activeRef, warehouseId, tenantId, navigate, reloadQueue, loadPutawayDetailForRef]);
+  }, [activeRef, warehouseId, tenantId, navigate, reloadQueue, loadPutawayDetailForRef, showBusinessError]);
 
   const refreshPutawayDetail = useCallback(async () => {
     if (activeRef == null) return;

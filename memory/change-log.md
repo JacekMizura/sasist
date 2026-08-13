@@ -1,4 +1,12 @@
-﻿## 2026-08-13 — UAT Produkcja: ryzyka A/C/D (lista packing, braki, release copy)
+﻿## 2026-08-13 — Fix: WMS collection confirm commits stock; finish-collecting no re-pick
+
+- Root cause: confirm only wrote `collection_state_json`; finish re-validated/consumed against live inventory → 409 „wymagane 28 / dostępne 24” after UI GOTOWE
+- WMS confirm → `collection_pick_commit_service` consumes inventory + stores `picked_slices`; finish posts RW from slices (no second consume)
+- Legacy JSON-only GOTOWE healed on GET collection (not shown as done); ERP paper path unchanged (reserve + consume on finish)
+- FE: production mutation 4xx → WmsMessageModal (not toast); toast kept for successes
+- Tests: `test_production_batch_finish_collecting_multi_fg.py` (committed pick + inventory drift; reject insufficient on confirm)
+
+## 2026-08-13 — UAT Produkcja: ryzyka A/C/D (lista packing, braki, release copy)
 
 - Lista: completed ORDERS z fulfilled > 0 zostaje jako READY_TO_PACK; MANUAL/PLANNING completed ukryte
 - Braki: `shortageHintFromOrderLines` → „Brakuje N szt. — Nazwa + M kolejnych” (lines API, bez nowego BE)

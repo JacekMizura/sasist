@@ -544,18 +544,50 @@ def api_list_recipe_cards(
 
 
 def _batch_err(exc: ProductionBatchError) -> HTTPException:
-    """Propagate exact business error text to the client (Network tab reads detail string)."""
+    """Propagate business errors as WMS modal payload (title + message + OK)."""
     message = str(exc.message or exc).strip() or "Production batch error"
-    if exc.code == "not_found":
-        return HTTPException(status_code=404, detail=message)
-    if exc.code == "insufficient_stock":
-        return HTTPException(
-            status_code=409,
-            detail={"message": message, "code": exc.code, "shortages": exc.shortages},
-        )
-    if exc.code == "schema_unavailable":
-        return HTTPException(status_code=503, detail=message)
-    return HTTPException(status_code=400, detail=message)
+    code = str(exc.code or "batch_error")
+    titles = {
+        "insufficient_stock": "Brak stanu magazynowego",
+        "collection_incomplete": "Pobranie niekompletne",
+        "collection_locations_missing": "Brak lokalizacji pobrania",
+        "invalid_status": "Konflikt operacji",
+        "allocation_mismatch": "Niespójna alokacja komponentów",
+        "task_not_found": "Nie znaleziono zadania",
+        "rw_integrity_error": "Konflikt zapisu dokumentu",
+        "not_found": "Nie znaleziono",
+        "schema_unavailable": "Schemat niedostępny",
+    }
+    title = titles.get(code, "Operacja nie powiodła się")
+    suggested = {
+        "insufficient_stock": "Sprawdź stan w lokalizacji i potwierdź pobranie ponownie.",
+        "collection_incomplete": "Dokończ pobranie wszystkich komponentów, potem zakończ etap.",
+        "invalid_status": "Odśwież ekran — status partii mógł się zmienić.",
+    }.get(code, "Spróbuj ponownie. Jeśli problem się powtórzy, zgłoś to przełożonemu.")
+    detail = {
+        "code": code,
+        "severity": "ERROR",
+        "title": title,
+        "message": message,
+        "suggested_action": suggested,
+    }
+    if code == "insufficient_stock" and exc.shortages is not None:
+        detail["shortages"] = exc.shortages
+        detail["context"] = {"shortages": exc.shortages}
+    if code == "not_found":
+        return HTTPException(status_code=404, detail=detail)
+    if code in {
+        "insufficient_stock",
+        "collection_incomplete",
+        "invalid_status",
+        "allocation_mismatch",
+        "rw_integrity_error",
+        "collection_locations_missing",
+    }:
+        return HTTPException(status_code=409, detail=detail)
+    if code == "schema_unavailable":
+        return HTTPException(status_code=503, detail=detail)
+    return HTTPException(status_code=400, detail=detail)
 
 
 @router.get("/batches", response_model=List[ProductionBatchRead])

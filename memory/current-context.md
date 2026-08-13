@@ -1,5 +1,10 @@
 ﻿## Active
 
+**WMS BAT finish-collecting / confirm pick (2026-08-13):**
+- Confirm WMS = inventory commit (`picked_slices`); finish-collecting = RW only (no re-pick / no double-consume)
+- Legacy JSON-only GOTOWE cleared on GET `/collection` until re-confirm
+- Business 409 → WmsMessageModal on production terminal
+
 **UAT Produkcja — ryzyka A/C/D (2026-08-13):**
 - A: lista Zleceń zostawia completed ORDERS z `source_fulfilled_order_count > 0` jako READY_TO_PACK
 - C: copy braków z `lines[].missing` + nazwa (`Brakuje N szt. — … + M kolejnych`)

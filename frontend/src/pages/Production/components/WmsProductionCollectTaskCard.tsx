@@ -49,6 +49,9 @@ export function WmsProductionCollectTaskCard({
 
   const locAvailable = selectedOption?.available_qty ?? task.available_qty;
   const whTotal = task.warehouse_total_available;
+  const canConfirm =
+    selectedLocId != null &&
+    (locAvailable == null || Number(locAvailable) + 1e-6 >= Number(task.required_qty));
 
   const summary = (
     <>
@@ -205,10 +208,10 @@ export function WmsProductionCollectTaskCard({
         <div className="mt-5 grid grid-cols-2 gap-3">
           <button
             type="button"
-            disabled={busy || selectedLocId == null}
+            disabled={busy || !canConfirm}
             data-wms-card-no-nav=""
             onClick={() => {
-              if (selectedLocId != null) onConfirm(selectedLocId, task.required_qty);
+              if (canConfirm && selectedLocId != null) onConfirm(selectedLocId, task.required_qty);
             }}
             className="col-span-2 inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 py-4 text-base font-bold text-white hover:bg-emerald-700 disabled:opacity-50"
           >
@@ -217,16 +220,21 @@ export function WmsProductionCollectTaskCard({
           </button>
           <button
             type="button"
-            disabled={busy || selectedLocId == null}
+            disabled={busy || !canConfirm}
             data-wms-card-no-nav=""
             onClick={() => {
-              if (selectedLocId != null) onConfirm(selectedLocId, task.required_qty);
+              if (canConfirm && selectedLocId != null) onConfirm(selectedLocId, task.required_qty);
             }}
             className="col-span-2 inline-flex items-center justify-center gap-2 rounded-xl border border-amber-300 bg-amber-50 py-3 text-sm font-bold text-amber-900 hover:bg-amber-100 disabled:opacity-50"
           >
             <ScanLine className="h-4 w-4" aria-hidden />
             Skanuj
           </button>
+          {!canConfirm && selectedLocId != null && locAvailable != null ? (
+            <p className="col-span-2 text-sm font-semibold text-rose-700">
+              Za mało stanu w lokalizacji: {fmtQty(locAvailable)} / {fmtQty(task.required_qty)} {unit}
+            </p>
+          ) : null}
         </div>
       </div>
     ) : done ? (

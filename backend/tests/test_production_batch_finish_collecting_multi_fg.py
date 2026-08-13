@@ -221,7 +221,7 @@ class _FakePickPlan:
     aggregated_components = []
 
 
-def test_finish_collecting_multi_fg_two_components_succeeds(multi_fg_batch_db):
+def test_finish_collecting_multi_fg_two_components_succeeds(multi_fg_batch_db, monkeypatch):
     db = multi_fg_batch_db
     # Avoid hydrate/location option side paths — stub collection state read pieces
     from backend.schemas.production_batch import (
@@ -272,7 +272,7 @@ def test_finish_collecting_multi_fg_two_components_succeeds(multi_fg_batch_db):
 
     import backend.services.production_batch_service as pbs
 
-    pbs.get_collection_state = _fake_state  # type: ignore[assignment]
+    monkeypatch.setattr(pbs, "get_collection_state", _fake_state)
 
     result = finish_collecting(db, tenant_id=1, batch_id=16, performed_by_user_id=1)
     db.commit()
@@ -355,7 +355,7 @@ def test_finish_collecting_maps_stock_value_error_to_batch_error(multi_fg_batch_
             progress_percent=100.0,
         )
 
-    pbs.get_collection_state = _fake_state  # type: ignore[assignment]
+    monkeypatch.setattr(pbs, "get_collection_state", _fake_state)
     monkeypatch.setattr(
         "backend.services.production_batch_service.consume_production_material_slices",
         lambda *_a, **_k: (_ for _ in ()).throw(ValueError("Brak stanu w lokalizacji dla produktu #301")),
@@ -365,3 +365,236 @@ def test_finish_collecting_maps_stock_value_error_to_batch_error(multi_fg_batch_
         finish_collecting(db, tenant_id=1, batch_id=16, performed_by_user_id=1)
     assert exc.value.code == "insufficient_stock"
     assert "Brak stanu" in str(exc.value.message)
+
+
+def test_finish_collecting_uses_committed_pick_ignores_later_inventory_drop(multi_fg_batch_db, monkeypatch):
+    """After WMS confirm, finish must not re-pick against live inventory (no double-consume)."""
+    db = multi_fg_batch_db
+    from backend.schemas.production_batch import BatchCollectionUpdateBody
+    from backend.services.production_batch_service import finish_collecting, update_collection_task
+
+    monkeypatch.setattr(
+        "backend.services.reservations.reservation_service.consume_production_reservations",
+        lambda *_a, **_k: None,
+    )
+    monkeypatch.setattr(
+        "backend.services.reservations.reservation_service.lock_production_reservations",
+        lambda *_a, **_k: None,
+    )
+    # Real get_collection_state — pick plan already stubbed empty in fixture; tasks come from JSON.
+    monkeypatch.setattr(
+        "backend.services.production_execution.collection_job_header.build_batch_collection_header",
+        lambda *_a, **_k: __import__(
+            "backend.schemas.production_batch", fromlist=["CollectionJobHeaderRead"]
+        ).CollectionJobHeaderRead(
+            job_number="BAT/2026/0016",
+            job_kind="batch",
+            outputs=[],
+        ),
+    )
+
+    # Reset tasks to uncollected so confirm path runs.
+    batch = db.query(ProductionBatch).filter(ProductionBatch.id == 16).one()
+    batch.collection_state_json = json.dumps(
+        {
+            "tasks": [
+                {
+                    "task_key": "301",
+                    "component_product_id": 301,
+                    "product_name": "Komponent A",
+                    "required_qty": 14.0,
+                    "collected_qty": 0.0,
+                    "selected_location_id": None,
+                    "location_id": 0,
+                    "location_code": "",
+                },
+                {
+                    "task_key": "302",
+                    "component_product_id": 302,
+                    "product_name": "Komponent B",
+                    "required_qty": 28.0,
+                    "collected_qty": 0.0,
+                    "selected_location_id": None,
+                    "location_id": 0,
+                    "location_code": "",
+                },
+            ]
+        }
+    )
+    # Multi-FG batch lines must match collection required qtys (BOM×planned).
+    for line in db.query(ProductionBatchLine).filter(ProductionBatchLine.batch_id == 16).all():
+        if int(line.product_id) == 201:
+            line.planned_quantity = 14.0
+        elif int(line.product_id) == 202:
+            line.planned_quantity = 28.0
+    inv_b = (
+        db.query(Inventory)
+        .filter(Inventory.product_id == 302, Inventory.location_id == 1)
+        .one()
+    )
+    inv_b.quantity = 28.0
+    inv_a = (
+        db.query(Inventory)
+        .filter(Inventory.product_id == 301, Inventory.location_id == 1)
+        .one()
+    )
+    inv_a.quantity = 14.0
+    db.commit()
+
+    update_collection_task(
+        db,
+        tenant_id=1,
+        batch_id=16,
+        body=BatchCollectionUpdateBody(task_key="301", collected_qty=14.0, location_id=1),
+    )
+    update_collection_task(
+        db,
+        tenant_id=1,
+        batch_id=16,
+        body=BatchCollectionUpdateBody(task_key="302", collected_qty=28.0, location_id=1),
+    )
+    db.commit()
+
+    # Ensure JSON still has committed slices (and required 28) before finish.
+    batch = db.query(ProductionBatch).filter(ProductionBatch.id == 16).one()
+    raw_tasks = json.loads(str(batch.collection_state_json)).get("tasks") or []
+    by_pid = {int(t["component_product_id"]): t for t in raw_tasks}
+    assert float(by_pid[302]["required_qty"]) == pytest.approx(28.0)
+    assert float(by_pid[302]["collected_qty"]) == pytest.approx(28.0)
+    assert by_pid[302].get("picked_slices")
+
+    inv_a = (
+        db.query(Inventory)
+        .filter(Inventory.product_id == 301, Inventory.location_id == 1)
+        .one()
+    )
+    inv_b = (
+        db.query(Inventory)
+        .filter(Inventory.product_id == 302, Inventory.location_id == 1)
+        .one()
+    )
+    assert float(inv_a.quantity) == pytest.approx(0.0)
+    assert float(inv_b.quantity) == pytest.approx(0.0)
+
+    # Simulate later inventory drift on the pick location (another issue / correction).
+    # Finish must still succeed from committed slices — must NOT require live 28 again.
+    inv_b.quantity = 4.0  # would fail legacy finish (need 28, avail 4)
+    db.commit()
+
+    # finish_collecting uses get_collection_state — stub required qtys from committed JSON
+    # (pick-plan stub is empty; do not let hydrate/heal drop committed facts).
+    from backend.schemas.production_batch import (
+        BatchCollectionStateRead,
+        CollectionJobHeaderRead,
+        CollectionTaskRead,
+    )
+
+    def _state_from_json(*_a, **_k):
+        b = db.query(ProductionBatch).filter(ProductionBatch.id == 16).one()
+        tasks_raw = json.loads(str(b.collection_state_json)).get("tasks") or []
+        tasks = []
+        for t in tasks_raw:
+            tasks.append(
+                CollectionTaskRead(
+                    task_key=str(t.get("task_key") or t["component_product_id"]),
+                    component_product_id=int(t["component_product_id"]),
+                    product_name=str(t.get("product_name") or ""),
+                    required_qty=float(t["required_qty"]),
+                    collected_qty=float(t["collected_qty"]),
+                    selected_location_id=int(t.get("selected_location_id") or t.get("location_id") or 0) or None,
+                    location_id=int(t.get("location_id") or t.get("selected_location_id") or 0),
+                    location_code=str(t.get("location_code") or "PICK-1"),
+                )
+            )
+        done = sum(1 for t in tasks if t.collected_qty >= t.required_qty - 1e-6)
+        return BatchCollectionStateRead(
+            batch_id=16,
+            status="collecting",
+            header=CollectionJobHeaderRead(job_number="BAT/2026/0016", job_kind="batch", outputs=[]),
+            tasks=tasks,
+            collected_count=done,
+            total_count=len(tasks),
+            progress_percent=100.0 if done == len(tasks) else 0.0,
+        )
+
+    import backend.services.production_batch_service as pbs
+
+    monkeypatch.setattr(pbs, "get_collection_state", _state_from_json)
+
+    result = finish_collecting(db, tenant_id=1, batch_id=16, performed_by_user_id=1)
+    db.commit()
+
+    assert result.status == "in_progress"
+    assert result.rw_stock_document_id is not None
+    inv_b_after = (
+        db.query(Inventory)
+        .filter(Inventory.product_id == 302, Inventory.location_id == 1)
+        .one()
+    )
+    # No second consume — the post-confirm leftover 4 stays.
+    assert float(inv_b_after.quantity) == pytest.approx(4.0)
+    items = (
+        db.query(StockDocumentItem)
+        .filter(StockDocumentItem.document_id == int(result.rw_stock_document_id))
+        .all()
+    )
+    by_pid = {int(i.product_id): float(i.quantity) for i in items}
+    assert by_pid[301] == pytest.approx(14.0)
+    assert by_pid[302] == pytest.approx(28.0)
+
+
+def test_wms_confirm_rejects_insufficient_stock_no_gotowe(multi_fg_batch_db, monkeypatch):
+    db = multi_fg_batch_db
+    from backend.schemas.production_batch import BatchCollectionUpdateBody
+    from backend.services.production_batch_service import ProductionBatchError, update_collection_task
+
+    monkeypatch.setattr(
+        "backend.services.production_execution.collection_job_header.build_batch_collection_header",
+        lambda *_a, **_k: __import__(
+            "backend.schemas.production_batch", fromlist=["CollectionJobHeaderRead"]
+        ).CollectionJobHeaderRead(
+            job_number="BAT/2026/0016",
+            job_kind="batch",
+            outputs=[],
+        ),
+    )
+
+    batch = db.query(ProductionBatch).filter(ProductionBatch.id == 16).one()
+    batch.collection_state_json = json.dumps(
+        {
+            "tasks": [
+                {
+                    "task_key": "302",
+                    "component_product_id": 302,
+                    "product_name": "Komponent B",
+                    "required_qty": 28.0,
+                    "collected_qty": 0.0,
+                    "location_id": 0,
+                    "location_code": "",
+                }
+            ]
+        }
+    )
+    inv = (
+        db.query(Inventory)
+        .filter(Inventory.product_id == 302, Inventory.location_id == 1)
+        .one()
+    )
+    inv.quantity = 24.0
+    db.commit()
+
+    with pytest.raises(ProductionBatchError) as exc:
+        update_collection_task(
+            db,
+            tenant_id=1,
+            batch_id=16,
+            body=BatchCollectionUpdateBody(task_key="302", collected_qty=28.0, location_id=1),
+        )
+    assert exc.value.code == "insufficient_stock"
+    assert "24" in str(exc.value.message)
+    db.rollback()
+    batch = db.query(ProductionBatch).filter(ProductionBatch.id == 16).one()
+    state = json.loads(str(batch.collection_state_json))
+    assert float(state["tasks"][0].get("collected_qty") or 0) == pytest.approx(0.0)
+    assert not state["tasks"][0].get("picked_slices")
+
