@@ -67,6 +67,10 @@ def multi_fg_batch_db(monkeypatch):
         "backend.services.production_batch_service.build_batch_pick_plan",
         lambda *_a, **_k: _FakePickPlan(),
     )
+    monkeypatch.setattr(
+        "backend.services.production_execution.collection_task_builder.hydrate_collection_tasks",
+        lambda *_a, tasks_raw=None, **_k: list(tasks_raw or []),
+    )
 
     engine = _engine()
     for model in (

@@ -15,7 +15,8 @@ type Props = {
   done: boolean;
   busy: boolean;
   onToggle: () => void;
-  onConfirm: (locationId: number, collectedQty: number) => void;
+  /** Qty is for THIS location pick only (appended on backend). */
+  onConfirm: (locationId: number, pickQty: number) => void;
 };
 
 function fmtQty(n: number | null | undefined): string {
@@ -35,12 +36,25 @@ export function WmsProductionCollectTaskCard({
 }: Props) {
   const unit = (task.product_unit ?? "szt.").trim() || "szt.";
   const barcode = (task.product_ean ?? task.product_sku ?? "").trim();
-  const initialLoc = task.selected_location_id ?? (task.location_id > 0 ? task.location_id : null);
+  const remaining =
+    task.remaining_qty != null
+      ? Number(task.remaining_qty)
+      : Math.max(0, Number(task.required_qty) - Number(task.collected_qty));
+
+  const initialLoc =
+    task.next_location_id ??
+    task.selected_location_id ??
+    (task.location_id > 0 ? task.location_id : null);
   const [selectedLocId, setSelectedLocId] = useState<number | null>(initialLoc);
+  const [pickQty, setPickQty] = useState<number>(0);
 
   useEffect(() => {
-    setSelectedLocId(task.selected_location_id ?? (task.location_id > 0 ? task.location_id : null));
-  }, [task.task_key, task.selected_location_id, task.location_id]);
+    setSelectedLocId(
+      task.next_location_id ??
+        task.selected_location_id ??
+        (task.location_id > 0 ? task.location_id : null),
+    );
+  }, [task.task_key, task.next_location_id, task.selected_location_id, task.location_id, task.collected_qty]);
 
   const selectedOption = useMemo(
     () => task.location_options.find((o) => o.location_id === selectedLocId) ?? null,
@@ -49,14 +63,28 @@ export function WmsProductionCollectTaskCard({
 
   const locAvailable = selectedOption?.available_qty ?? task.available_qty;
   const whTotal = task.warehouse_total_available;
+  const suggested = useMemo(() => {
+    const avail = locAvailable == null ? remaining : Number(locAvailable);
+    return Math.max(0, Math.min(remaining, avail));
+  }, [locAvailable, remaining]);
+
+  useEffect(() => {
+    setPickQty(suggested);
+  }, [suggested, selectedLocId, task.collected_qty]);
+
+  const maxAllowed = locAvailable == null ? remaining : Math.min(remaining, Number(locAvailable));
   const canConfirm =
     selectedLocId != null &&
-    (locAvailable == null || Number(locAvailable) + 1e-6 >= Number(task.required_qty));
+    pickQty > 1e-9 &&
+    pickQty <= maxAllowed + 1e-6 &&
+    remaining > 1e-9;
+
+  const pickEvents = task.pick_events ?? [];
 
   const summary = (
     <>
       {fmtQty(task.collected_qty)} / {fmtQty(task.required_qty)} {unit}
-      {task.location_code ? ` · ${task.location_code}` : ""}
+      {task.shortage_reported ? " · BRAK" : task.location_code ? ` · ${task.location_code}` : ""}
     </>
   );
 
@@ -101,7 +129,7 @@ export function WmsProductionCollectTaskCard({
         </div>
         {display.show_stock_level ? (
           <div>
-            <p className={WMS_TERMINAL_LABEL}>Dostępne</p>
+            <p className={WMS_TERMINAL_LABEL}>Dostępne tu</p>
             <p className="mt-1 text-xl font-black tabular-nums text-slate-800">{fmtQty(locAvailable)}</p>
             {whTotal != null ? (
               <p className="mt-0.5 text-xs text-slate-500">({fmtQty(whTotal)} {unit} w magazynie)</p>
@@ -109,13 +137,35 @@ export function WmsProductionCollectTaskCard({
           </div>
         ) : null}
         <div>
-          <p className={WMS_TERMINAL_LABEL}>Pobrano</p>
+          <p className={WMS_TERMINAL_LABEL}>Pobrano / zostało</p>
           <p className="mt-1 text-xl font-black tabular-nums text-emerald-700">
             {fmtQty(task.collected_qty)}
             <span className="text-base font-bold text-slate-400"> / {fmtQty(task.required_qty)}</span>
           </p>
+          <p className="mt-0.5 text-xs font-semibold text-amber-800">Zostało: {fmtQty(remaining)} {unit}</p>
         </div>
       </div>
+
+      {pickEvents.length > 0 ? (
+        <div className="mt-4 rounded-xl border border-slate-100 bg-slate-50 px-3 py-2">
+          <p className={`${WMS_TERMINAL_LABEL} mb-1`}>Historia pobrań</p>
+          <ul className="space-y-1 text-sm text-slate-700">
+            {pickEvents.map((ev) => (
+              <li key={ev.event_id} className="flex flex-wrap justify-between gap-2 tabular-nums">
+                <span className="font-mono font-semibold">{ev.location_code || `#${ev.location_id}`}</span>
+                <span>
+                  {fmtQty(ev.quantity)} {unit}
+                  {ev.discrepancy && ev.discrepancy > 1e-6 ? (
+                    <span className="ml-2 text-xs font-semibold text-rose-600">
+                      (różnica {fmtQty(ev.discrepancy)})
+                    </span>
+                  ) : null}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
     </>
   );
 
@@ -127,17 +177,20 @@ export function WmsProductionCollectTaskCard({
           {(task.location_options ?? []).map((opt) => {
             const active = selectedLocId === opt.location_id;
             const lot = opt.lots?.[0];
+            const depleted = Number(opt.available_qty) <= 1e-9;
             return (
               <button
                 key={opt.location_id}
                 type="button"
-                disabled={busy}
+                disabled={busy || depleted}
                 data-wms-card-no-nav=""
                 onClick={() => setSelectedLocId(opt.location_id)}
                 className={`w-full rounded-xl border p-3 text-left transition ${
                   active
                     ? "border-amber-400 bg-amber-50 ring-2 ring-amber-200"
-                    : "border-slate-200 bg-white hover:border-slate-300"
+                    : depleted
+                      ? "border-slate-100 bg-slate-50 opacity-60"
+                      : "border-slate-200 bg-white hover:border-slate-300"
                 }`}
               >
                 <div className="flex flex-wrap items-center gap-2">
@@ -173,24 +226,6 @@ export function WmsProductionCollectTaskCard({
                         {lot.lot}
                       </div>
                     ) : null}
-                    {lot.expiry_date ? (
-                      <div>
-                        <span className="text-slate-400">Ważność: </span>
-                        {lot.expiry_date}
-                      </div>
-                    ) : null}
-                    {lot.production_date ? (
-                      <div>
-                        <span className="text-slate-400">Prod.: </span>
-                        {lot.production_date}
-                      </div>
-                    ) : null}
-                    {lot.serial_number ? (
-                      <div className="sm:col-span-2">
-                        <span className="text-slate-400">S/N: </span>
-                        {lot.serial_number}
-                      </div>
-                    ) : null}
                   </dl>
                 ) : null}
               </button>
@@ -205,42 +240,68 @@ export function WmsProductionCollectTaskCard({
           </p>
         ) : null}
 
+        <div className="mt-4">
+          <label className={WMS_TERMINAL_LABEL} htmlFor={`pick-qty-${task.task_key}`}>
+            Ilość z tej lokalizacji
+          </label>
+          <div className="mt-1 flex items-center gap-2">
+            <input
+              id={`pick-qty-${task.task_key}`}
+              type="number"
+              min={0}
+              max={maxAllowed}
+              step="any"
+              disabled={busy || selectedLocId == null}
+              value={pickQty}
+              data-wms-card-no-nav=""
+              onChange={(e) => {
+                const v = Number(e.target.value);
+                if (Number.isNaN(v)) return;
+                setPickQty(Math.max(0, Math.min(maxAllowed, v)));
+              }}
+              className="w-full rounded-xl border border-slate-200 px-3 py-3 text-lg font-bold tabular-nums text-slate-900"
+            />
+            <span className="shrink-0 text-sm font-semibold text-slate-500">{unit}</span>
+          </div>
+          <p className="mt-1 text-xs text-slate-500">
+            Podpowiedź: {fmtQty(suggested)} {unit} (min. z pozostało / stan lokalizacji). Możesz zmniejszyć,
+            jeśli fizycznie jest mniej.
+          </p>
+        </div>
+
         <div className="mt-5 grid grid-cols-2 gap-3">
           <button
             type="button"
             disabled={busy || !canConfirm}
             data-wms-card-no-nav=""
             onClick={() => {
-              if (canConfirm && selectedLocId != null) onConfirm(selectedLocId, task.required_qty);
+              if (canConfirm && selectedLocId != null) onConfirm(selectedLocId, pickQty);
             }}
             className="col-span-2 inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 py-4 text-base font-bold text-white hover:bg-emerald-700 disabled:opacity-50"
           >
             <Check className="h-5 w-5" aria-hidden />
-            Potwierdź pobranie
+            Potwierdź pobranie ({fmtQty(pickQty)} {unit})
           </button>
           <button
             type="button"
             disabled={busy || !canConfirm}
             data-wms-card-no-nav=""
             onClick={() => {
-              if (canConfirm && selectedLocId != null) onConfirm(selectedLocId, task.required_qty);
+              if (canConfirm && selectedLocId != null) onConfirm(selectedLocId, pickQty);
             }}
             className="col-span-2 inline-flex items-center justify-center gap-2 rounded-xl border border-amber-300 bg-amber-50 py-3 text-sm font-bold text-amber-900 hover:bg-amber-100 disabled:opacity-50"
           >
             <ScanLine className="h-4 w-4" aria-hidden />
             Skanuj
           </button>
-          {!canConfirm && selectedLocId != null && locAvailable != null ? (
-            <p className="col-span-2 text-sm font-semibold text-rose-700">
-              Za mało stanu w lokalizacji: {fmtQty(locAvailable)} / {fmtQty(task.required_qty)} {unit}
-            </p>
-          ) : null}
         </div>
       </div>
     ) : done ? (
       <p className="mt-4 inline-flex items-center gap-2 border-t border-slate-100 pt-4 text-sm font-bold text-emerald-700">
         <Check className="h-4 w-4" aria-hidden />
-        Pobrano z {task.location_code || "lokalizacji"}
+        {task.shortage_reported
+          ? `Zgłoszono brak — pobrano ${fmtQty(task.collected_qty)} / ${fmtQty(task.required_qty)}`
+          : `Pobrano ${fmtQty(task.collected_qty)} ${unit} (${pickEvents.length || 1} lokalizacji)`}
       </p>
     ) : null;
 
@@ -255,7 +316,7 @@ export function WmsProductionCollectTaskCard({
       expanded={expanded}
       done={done}
       busy={busy}
-      accent={done ? "emerald" : "amber"}
+      accent={done ? (task.shortage_reported ? "amber" : "emerald") : "amber"}
       onToggle={onToggle}
     />
   );

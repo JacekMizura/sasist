@@ -354,6 +354,7 @@ export function useProductionExecutionJob(phase: ProductionExecutionPhase, activ
           const body = {
             task_key: taskKey,
             collected_qty: collectedQty,
+            action: "confirm_pick" as const,
             ...(locationId != null && locationId > 0 ? { location_id: locationId } : {}),
           };
           if (activeRef.kind === "batch") {
@@ -366,6 +367,31 @@ export function useProductionExecutionJob(phase: ProductionExecutionPhase, activ
         });
       } catch (e: unknown) {
         showBusinessError(e, "Nie udało się zapisać pobrania", "Nie udało się zapisać pobrania komponentu.");
+      }
+    },
+    [activeRef, warehouseId, tenantId, showBusinessError],
+  );
+
+  const reportCollectionShortage = useCallback(
+    async (taskKey: string) => {
+      if (activeRef == null || warehouseId == null) return;
+      try {
+        await withMutationLock(mutationLockRef, setBusy, async () => {
+          const body = {
+            task_key: taskKey,
+            collected_qty: 0,
+            action: "report_shortage" as const,
+          };
+          if (activeRef.kind === "batch") {
+            const next = await updateCollectionTask(tenantId, activeRef.id, body, warehouseId);
+            setCollectionState(normalizeBatchCollection(activeRef, next));
+          } else {
+            const next = await updateOrderCollectionTask(tenantId, activeRef.id, body, warehouseId);
+            setCollectionState(normalizeOrderCollection(activeRef, next));
+          }
+        });
+      } catch (e: unknown) {
+        showBusinessError(e, "Nie udało się zgłosić braku", "Nie udało się zgłosić braku komponentu.");
       }
     },
     [activeRef, warehouseId, tenantId, showBusinessError],
@@ -477,6 +503,7 @@ export function useProductionExecutionJob(phase: ProductionExecutionPhase, activ
     detailLoading,
     openJob,
     confirmCollectionTask,
+    reportCollectionShortage,
     finishCollecting,
     addProductionQty,
     finishProduction,

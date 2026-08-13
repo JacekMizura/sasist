@@ -156,6 +156,28 @@ class CollectionJobHeaderRead(BaseModel):
     outputs: List[CollectionOutputProductRead] = Field(default_factory=list)
 
 
+class CollectionPickEventRead(BaseModel):
+    event_id: str
+    location_id: int
+    location_code: str = ""
+    quantity: float
+    system_available_qty: Optional[float] = None
+    suggested_qty: Optional[float] = None
+    discrepancy: float = 0.0
+    picked_at: Optional[str] = None
+
+
+class CollectionPendingShortageRead(BaseModel):
+    missing_qty: float
+    required_qty: float
+    collected_qty: float
+    product_id: int
+    product_name: str
+    location_id: Optional[int] = None
+    location_code: Optional[str] = None
+    discrepancy: float = 0.0
+
+
 class CollectionTaskRead(BaseModel):
     task_key: str
     component_product_id: int
@@ -167,9 +189,14 @@ class CollectionTaskRead(BaseModel):
     product_unit: Optional[str] = None
     required_qty: float
     collected_qty: float = 0.0
+    remaining_qty: Optional[float] = None
     selected_location_id: Optional[int] = None
+    next_location_id: Optional[int] = None
     warehouse_total_available: Optional[float] = None
     location_options: List[CollectionLocationOptionRead] = Field(default_factory=list)
+    pick_events: List[CollectionPickEventRead] = Field(default_factory=list)
+    pending_shortage: Optional[CollectionPendingShortageRead] = None
+    shortage_reported: bool = False
     # Flat mirror for legacy clients / finish_collecting
     location_id: int = 0
     location_code: str = ""
@@ -192,12 +219,16 @@ class BatchCollectionStateRead(BaseModel):
 
 class BatchCollectionUpdateBody(BaseModel):
     task_key: str
-    collected_qty: float = Field(..., ge=0)
+    collected_qty: float = Field(
+        ...,
+        ge=0,
+        description="Qty for this location pick (appended), not the component total.",
+    )
     location_id: Optional[int] = Field(None, ge=1)
     batch_number: Optional[str] = None
     lot: Optional[str] = None
     serial_number: Optional[str] = None
-
+    action: Literal["confirm_pick", "report_shortage"] = "confirm_pick"
 
 class BatchProductionProgressBody(BaseModel):
     line_id: int = Field(..., ge=1)

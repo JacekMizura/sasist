@@ -1059,33 +1059,69 @@ def get_collection_state(db: Session, *, tenant_id: int, batch_id: int) -> Batch
     # WMS: never show GOTOWE for picks that were never inventory-committed (legacy JSON-only).
     if not is_erp_interface(batch):
         from .production_execution.collection_pick_commit_service import (
+            sync_collected_from_events,
             parse_picked_slices,
             picked_slices_total_qty,
         )
 
         healed = False
         for t in tasks_raw:
+            sync_collected_from_events(t)
             qty = float(t.get("collected_qty") or 0)
             if qty <= 1e-9:
                 continue
             slices = parse_picked_slices(t.get("picked_slices"))
             if abs(picked_slices_total_qty(slices) - qty) > 1e-2 or not slices:
+                # Keep pick_events only when slices cover them; otherwise reset inconsistent legacy.
                 t["collected_qty"] = 0.0
                 t["picked_slices"] = []
+                t["pick_events"] = []
                 healed = True
+            req = float(t.get("required_qty") or 0)
+            t["remaining_qty"] = round(max(0.0, req - float(t.get("collected_qty") or 0)), 4)
         if healed:
             batch.collection_state_json = json.dumps({"tasks": tasks_raw}, ensure_ascii=False)
             batch.updated_at = datetime.utcnow()
             db.flush()
+    else:
+        for t in tasks_raw:
+            req = float(t.get("required_qty") or 0)
+            t["remaining_qty"] = round(max(0.0, req - float(t.get("collected_qty") or 0)), 4)
     try:
-        tasks = [CollectionTaskRead(**t) for t in tasks_raw]
+        # Strip internal keys that are not on CollectionTaskRead / nested models
+        safe_tasks: list[dict[str, Any]] = []
+        for t in tasks_raw:
+            row = dict(t)
+            # pick_events may include picked_slices — CollectionPickEventRead ignores extras
+            events = []
+            for ev in row.get("pick_events") or []:
+                if not isinstance(ev, dict):
+                    continue
+                events.append(
+                    {
+                        "event_id": str(ev.get("event_id") or ""),
+                        "location_id": int(ev.get("location_id") or 0),
+                        "location_code": str(ev.get("location_code") or ""),
+                        "quantity": float(ev.get("quantity") or 0),
+                        "system_available_qty": ev.get("system_available_qty"),
+                        "suggested_qty": ev.get("suggested_qty"),
+                        "discrepancy": float(ev.get("discrepancy") or 0),
+                        "picked_at": ev.get("picked_at"),
+                    }
+                )
+            row["pick_events"] = events
+            row.pop("picked_slices", None)
+            safe_tasks.append(row)
+        tasks = [CollectionTaskRead(**t) for t in safe_tasks]
     except Exception as exc:
         logger.exception("get_collection_state task validation failed batch_id=%s", batch_id)
         raise ProductionBatchError(
             f"Niepoprawny stan zbierania: {exc}",
             code="invalid_collection_state",
         ) from exc
-    done = sum(1 for t in tasks if t.collected_qty >= t.required_qty - 1e-6)
+    from .production_execution.collection_pick_commit_service import task_is_collection_complete
+
+    done = sum(1 for t in tasks if task_is_collection_complete(t))
     total = len(tasks)
     pct = round(100.0 * done / total, 1) if total else 0.0
     from .production_execution.collection_job_header import build_batch_collection_header
@@ -1194,6 +1230,16 @@ def update_collection_task(
     if not found or target_task is None:
         raise ProductionBatchError("Zadanie zbierania nie istnieje.", code="task_not_found")
 
+    action = str(getattr(body, "action", None) or "confirm_pick").strip().lower()
+    if action == "report_shortage":
+        from .production_execution.collection_pick_commit_service import report_collection_shortage
+
+        report_collection_shortage(target_task)
+        batch.collection_state_json = json.dumps(data, ensure_ascii=False)
+        batch.updated_at = datetime.utcnow()
+        db.flush()
+        return get_collection_state(db, tenant_id=tenant_id, batch_id=batch_id)
+
     # WMS: confirm pick = operational fact → consume inventory now; finish only posts RW.
     # ERP paper: keep reservation sync + legacy consume-on-finish (no physical pick commit).
     if not is_erp_interface(batch):
@@ -1214,6 +1260,7 @@ def update_collection_task(
         except ValueError as exc:
             raise ProductionBatchError(str(exc), code="insufficient_stock") from exc
     else:
+        # ERP: treat collected_qty as running total (legacy single-location UX)
         target_task["collected_qty"] = round(float(body.collected_qty), 4)
         if body.location_id is not None and int(body.location_id) > 0:
             target_task["selected_location_id"] = int(body.location_id)
@@ -1266,39 +1313,7 @@ def finish_collecting(
     state = get_collection_state(db, tenant_id=tenant_id, batch_id=batch_id)
     if state.collected_count < state.total_count:
         raise ProductionBatchError("Nie zebrano wszystkich materiałów.", code="collection_incomplete")
-    # SSOT po zbieraniu: wymagane ilości z tasków (już zagregowane przy starcie),
-    # nie ponowny BOM — unika driftu multi-FG / partial line load.
-    totals = {
-        int(t.component_product_id): float(t.required_qty)
-        for t in state.tasks
-        if int(t.component_product_id or 0) > 0 and float(t.required_qty or 0) > 1e-9
-    }
-    allocs: list[ComponentAllocationWrite] = []
-    try:
-        for t in state.tasks:
-            loc_id = int(t.selected_location_id or t.location_id or 0)
-            if loc_id > 0 and t.collected_qty > 0:
-                allocs.append(
-                    ComponentAllocationWrite(
-                        line_snapshot_id=int(t.component_product_id),
-                        location_id=loc_id,
-                        quantity=float(t.collected_qty),
-                        batch_number=_sanitize_lot_token(getattr(t, "selected_batch_number", None)),
-                        lot=_sanitize_lot_token(getattr(t, "selected_lot", None)),
-                        serial_number=_sanitize_lot_token(getattr(t, "selected_serial_number", None)),
-                    )
-                )
-    except Exception as exc:
-        # Pydantic ValidationError etc. — never raw 500 for bad collection payload
-        raise ProductionBatchError(
-            f"Niepoprawne dane zbierania komponentów: {exc}",
-            code="invalid_collection_allocation",
-        ) from exc
-    if not allocs:
-        raise ProductionBatchError(
-            "Brak lokalizacji / ilości do zużycia materiałów — dokończ skan lokalizacji.",
-            code="collection_locations_missing",
-        )
+
     raw_state = getattr(batch, "collection_state_json", None) or "{}"
     try:
         raw_data = json.loads(str(raw_state))
@@ -1306,11 +1321,76 @@ def finish_collecting(
         raw_data = {"tasks": []}
     raw_tasks = list(raw_data.get("tasks") or [])
     from .production_execution.collection_pick_commit_service import (
+        sync_collected_from_events,
         collection_tasks_have_committed_picks,
+        parse_pick_events,
         slices_from_committed_tasks,
+        task_is_collection_complete,
     )
 
+    for t in raw_tasks:
+        sync_collected_from_events(t)
+
+    # Allocations from per-location pick history (not a single selected_location_id).
+    totals: dict[int, float] = {}
+    allocs: list[ComponentAllocationWrite] = []
+    try:
+        for t in raw_tasks:
+            if not task_is_collection_complete(t):
+                continue
+            pid = int(t.get("component_product_id") or 0)
+            if pid <= 0:
+                continue
+            events = parse_pick_events(t.get("pick_events"))
+            by_loc: dict[int, float] = {}
+            if events:
+                for ev in events:
+                    loc_id = int(ev.get("location_id") or 0)
+                    qty = float(ev.get("quantity") or 0)
+                    if loc_id > 0 and qty > 1e-9:
+                        by_loc[loc_id] = by_loc.get(loc_id, 0.0) + qty
+            else:
+                # Legacy single-location mark
+                loc_id = int(t.get("selected_location_id") or t.get("location_id") or 0)
+                qty = float(t.get("collected_qty") or 0)
+                if loc_id > 0 and qty > 1e-9:
+                    by_loc[loc_id] = qty
+            if not by_loc:
+                continue
+            totals[pid] = round(sum(by_loc.values()), 4)
+            for loc_id, qty in by_loc.items():
+                allocs.append(
+                    ComponentAllocationWrite(
+                        line_snapshot_id=pid,
+                        location_id=int(loc_id),
+                        quantity=float(qty),
+                        batch_number=_sanitize_lot_token(t.get("selected_batch_number")),
+                        lot=_sanitize_lot_token(t.get("selected_lot")),
+                        serial_number=_sanitize_lot_token(t.get("selected_serial_number")),
+                    )
+                )
+    except Exception as exc:
+        raise ProductionBatchError(
+            f"Niepoprawne dane zbierania komponentów: {exc}",
+            code="invalid_collection_allocation",
+        ) from exc
+
     use_committed = collection_tasks_have_committed_picks(raw_tasks)
+    if not allocs:
+        # All components shortage-reported with zero picks — advance without RW.
+        if all(task_is_collection_complete(t) for t in raw_tasks):
+            from .reservations.reservation_service import consume_production_reservations
+
+            consume_production_reservations(db, tenant_id=int(tenant_id), production_batch_id=int(batch_id))
+            batch.status = "in_progress"
+            batch.collecting_completed_at = datetime.utcnow()
+            batch.updated_at = datetime.utcnow()
+            db.flush()
+            return serialize_batch(db, batch)
+        raise ProductionBatchError(
+            "Brak lokalizacji / ilości do zużycia materiałów — dokończ skan lokalizacji.",
+            code="collection_locations_missing",
+        )
     try:
         _consume_batch_materials(
             db,

@@ -194,8 +194,35 @@ def get_order_collection_state(db: Session, *, tenant_id: int, order_id: int) ->
             pref = pref_by_product.setdefault(pid, set())
             for r in rows:
                 pref.add(int(r["location_id"]))
-    tasks = [CollectionTaskRead(**t) for t in tasks_raw]
-    done = sum(1 for t in tasks if t.collected_qty >= t.required_qty - 1e-6)
+    from .collection_pick_commit_service import sync_collected_from_events, task_is_collection_complete
+
+    safe_tasks: list[dict[str, Any]] = []
+    for t in tasks_raw:
+        sync_collected_from_events(t)
+        req = float(t.get("required_qty") or 0)
+        t["remaining_qty"] = round(max(0.0, req - float(t.get("collected_qty") or 0)), 4)
+        row = dict(t)
+        events = []
+        for ev in row.get("pick_events") or []:
+            if not isinstance(ev, dict):
+                continue
+            events.append(
+                {
+                    "event_id": str(ev.get("event_id") or ""),
+                    "location_id": int(ev.get("location_id") or 0),
+                    "location_code": str(ev.get("location_code") or ""),
+                    "quantity": float(ev.get("quantity") or 0),
+                    "system_available_qty": ev.get("system_available_qty"),
+                    "suggested_qty": ev.get("suggested_qty"),
+                    "discrepancy": float(ev.get("discrepancy") or 0),
+                    "picked_at": ev.get("picked_at"),
+                }
+            )
+        row["pick_events"] = events
+        row.pop("picked_slices", None)
+        safe_tasks.append(row)
+    tasks = [CollectionTaskRead(**t) for t in safe_tasks]
+    done = sum(1 for t in tasks if task_is_collection_complete(t))
     total = len(tasks)
     pct = round(100.0 * done / total, 1) if total else 0.0
     from .collection_job_header import build_order_collection_header
@@ -226,23 +253,53 @@ def update_order_collection_task(
         data = json.loads(str(raw))
     except json.JSONDecodeError:
         data = {"tasks": []}
-    found = False
+    target_task: dict[str, Any] | None = None
     for t in data.get("tasks") or []:
         if str(t.get("task_key")) == str(body.task_key) or str(t.get("component_product_id")) == str(body.task_key):
-            t["collected_qty"] = round(float(body.collected_qty), 4)
-            if body.location_id is not None and int(body.location_id) > 0:
-                t["selected_location_id"] = int(body.location_id)
-                t["location_id"] = int(body.location_id)
-            if body.batch_number is not None:
-                t["selected_batch_number"] = str(body.batch_number).strip()
-            if body.lot is not None:
-                t["selected_lot"] = str(body.lot).strip()
-            if body.serial_number is not None:
-                t["selected_serial_number"] = str(body.serial_number).strip()
-            found = True
+            target_task = t
             break
-    if not found:
+    if target_task is None:
         raise ProductionOrderError("Zadanie zbierania nie istnieje.", code="task_not_found")
+
+    action = str(getattr(body, "action", None) or "confirm_pick").strip().lower()
+    if action == "report_shortage":
+        from .collection_pick_commit_service import report_collection_shortage
+
+        report_collection_shortage(target_task)
+        order.collection_state_json = json.dumps(data, ensure_ascii=False)
+        order.updated_at = datetime.utcnow()
+        db.flush()
+        return get_order_collection_state(db, tenant_id=tenant_id, order_id=order_id)
+
+    if not is_non_wms_execution(order):
+        from .collection_pick_commit_service import commit_collection_task_pick
+
+        try:
+            commit_collection_task_pick(
+                db,
+                tenant_id=int(tenant_id),
+                warehouse_id=int(order.warehouse_id),
+                task=target_task,
+                collected_qty=float(body.collected_qty),
+                location_id=int(body.location_id) if body.location_id else None,
+                batch_number=body.batch_number,
+                lot=body.lot,
+                serial_number=body.serial_number,
+            )
+        except ValueError as exc:
+            raise ProductionOrderError(str(exc), code="insufficient_stock") from exc
+    else:
+        target_task["collected_qty"] = round(float(body.collected_qty), 4)
+        if body.location_id is not None and int(body.location_id) > 0:
+            target_task["selected_location_id"] = int(body.location_id)
+            target_task["location_id"] = int(body.location_id)
+        if body.batch_number is not None:
+            target_task["selected_batch_number"] = str(body.batch_number).strip()
+        if body.lot is not None:
+            target_task["selected_lot"] = str(body.lot).strip()
+        if body.serial_number is not None:
+            target_task["selected_serial_number"] = str(body.serial_number).strip()
+
     order.collection_state_json = json.dumps(data, ensure_ascii=False)
     order.updated_at = datetime.utcnow()
     if getattr(order, "materials_reserved", False) and is_non_wms_execution(order):
@@ -252,24 +309,21 @@ def update_order_collection_task(
         )
 
         task_pid = int(body.task_key) if str(body.task_key).isdigit() else 0
-        for t in data.get("tasks") or []:
-            if str(t.get("task_key")) == str(body.task_key) or str(t.get("component_product_id")) == str(body.task_key):
-                task_pid = int(t.get("component_product_id") or task_pid)
-                try:
-                    sync_production_reservation_from_collection_task(
-                        db,
-                        tenant_id=tenant_id,
-                        production_order_id=int(order_id),
-                        component_product_id=task_pid,
-                        location_id=int(body.location_id) if body.location_id else None,
-                        batch_number=body.batch_number,
-                        serial_number=body.serial_number,
-                        quantity=float(body.collected_qty),
-                        ignore_locked=True,
-                    )
-                except ReservationError as exc:
-                    raise ProductionOrderError(str(exc), code=getattr(exc, "code", "reservation_error")) from exc
-                break
+        task_pid = int(target_task.get("component_product_id") or task_pid)
+        try:
+            sync_production_reservation_from_collection_task(
+                db,
+                tenant_id=tenant_id,
+                production_order_id=int(order_id),
+                component_product_id=task_pid,
+                location_id=int(body.location_id) if body.location_id else None,
+                batch_number=body.batch_number,
+                serial_number=body.serial_number,
+                quantity=float(body.collected_qty),
+                ignore_locked=True,
+            )
+        except ReservationError as exc:
+            raise ProductionOrderError(str(exc), code=getattr(exc, "code", "reservation_error")) from exc
     db.flush()
     return get_order_collection_state(db, tenant_id=tenant_id, order_id=order_id)
 

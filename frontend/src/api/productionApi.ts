@@ -950,6 +950,28 @@ export type CollectionJobHeaderRead = {
   outputs: CollectionOutputProductRead[];
 };
 
+export type CollectionPickEventRead = {
+  event_id: string;
+  location_id: number;
+  location_code?: string;
+  quantity: number;
+  system_available_qty?: number | null;
+  suggested_qty?: number | null;
+  discrepancy?: number;
+  picked_at?: string | null;
+};
+
+export type CollectionPendingShortageRead = {
+  missing_qty: number;
+  required_qty: number;
+  collected_qty: number;
+  product_id: number;
+  product_name: string;
+  location_id?: number | null;
+  location_code?: string | null;
+  discrepancy?: number;
+};
+
 export type CollectionTaskRead = {
   task_key: string;
   component_product_id: number;
@@ -961,9 +983,14 @@ export type CollectionTaskRead = {
   product_unit?: string | null;
   required_qty: number;
   collected_qty: number;
+  remaining_qty?: number | null;
   selected_location_id?: number | null;
+  next_location_id?: number | null;
   warehouse_total_available?: number | null;
   location_options: CollectionLocationOptionRead[];
+  pick_events?: CollectionPickEventRead[];
+  pending_shortage?: CollectionPendingShortageRead | null;
+  shortage_reported?: boolean;
   location_id: number;
   location_code: string;
   available_qty?: number | null;
@@ -1203,6 +1230,7 @@ export async function updateCollectionTask(
     batch_number?: string | null;
     lot?: string | null;
     serial_number?: string | null;
+    action?: "confirm_pick" | "report_shortage";
   },
   warehouseId?: number,
 ) {
@@ -1433,6 +1461,7 @@ export async function updateOrderCollectionTask(
     batch_number?: string | null;
     lot?: string | null;
     serial_number?: string | null;
+    action?: "confirm_pick" | "report_shortage";
   },
   warehouseId?: number,
 ): Promise<OrderCollectionStateRead> {
