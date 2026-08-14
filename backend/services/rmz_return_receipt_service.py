@@ -593,54 +593,55 @@ def _append_rmz_lines_to_document(
         return row
 
     for ln in lines:
-        from .bundles.bundle_rmz_receipt_integration import effective_receipt_rows_for_rmz_line
         from .bundles.bundle_return_service import bundle_component_returns_for_line
 
         # Bundle flow takes precedence over manufacturing recovery.
-        bundle_receipt_rows = effective_receipt_rows_for_rmz_line(db, ln)
-        has_component_returns = bool(bundle_component_returns_for_line(db, int(ln.id)))
+        from .returns.component_return_recovery_service import (
+            adapt_manufacturing_recoveries_to_recovery_lines,
+            append_accepted_component_lines,
+            bundle_component_recovery_lines_for_rmz_line,
+            mark_manufacturing_recoveries_posted,
+        )
 
-        if has_component_returns and bundle_receipt_rows:
-            for rr in bundle_receipt_rows:
-                if rr.quantity <= 0:
-                    continue
-                p = db.query(Product).filter(Product.id == int(rr.product_id), Product.tenant_id == tenant_id).first()
-                if not p:
-                    raise ValueError(f"Z-PZ: produkt {rr.product_id} nie znaleziony dla tenant_id={tenant_id}")
-                unit_price = rr.unit_price_snapshot
-                if unit_price is None:
-                    unit_price, vat = _order_item_pricing(db, int(rr.order_item_id))
-                else:
-                    _, vat = _order_item_pricing(db, int(rr.order_item_id))
-                add_line(
-                    product_id=int(rr.product_id),
-                    qty=float(rr.quantity),
-                    disposition=DISPOSITION_SALEABLE,
-                    return_decision="ACCEPTED",
-                    rmz_damage_entry_id=None,
-                    purchase_price_net=unit_price,
-                    vat_rate=vat,
-                )
-            _, damaged_pairs, _rej = _planned_stock_counts_for_line(
-                db, tenant_id, wh_id, ln, include_rejected=False
+        has_component_returns = bool(bundle_component_returns_for_line(db, int(ln.id)))
+        if has_component_returns:
+            bundle_lines = bundle_component_recovery_lines_for_rmz_line(
+                db,
+                ln,
+                vat_rate_by_order_item=lambda oid: _order_item_pricing(db, oid),
             )
-            pid = int(ln.product_id)
-            p = db.query(Product).filter(Product.id == pid, Product.tenant_id == tenant_id).first()
-            if not p:
-                raise ValueError(f"Z-PZ: produkt {pid} nie znaleziony dla tenant_id={tenant_id}")
-            unit_price, vat = _order_item_pricing(db, int(ln.order_item_id))
-            for entry_key, cond in damaged_pairs:
-                disp = DISPOSITION_OUTLET_B if cond == "B" else DISPOSITION_SERVICE_C
-                add_line(
-                    product_id=pid,
-                    qty=1.0,
-                    disposition=disp,
-                    return_decision="DAMAGED_B" if cond == "B" else "DAMAGED_C",
-                    rmz_damage_entry_id=entry_key,
-                    purchase_price_net=unit_price,
-                    vat_rate=vat,
+            if bundle_lines:
+                for bl in bundle_lines:
+                    p = (
+                        db.query(Product)
+                        .filter(Product.id == int(bl.component_product_id), Product.tenant_id == tenant_id)
+                        .first()
+                    )
+                    if not p:
+                        raise ValueError(
+                            f"Z-PZ: produkt {bl.component_product_id} nie znaleziony dla tenant_id={tenant_id}"
+                        )
+                append_accepted_component_lines(lines=bundle_lines, add_line=add_line)
+                _, damaged_pairs, _rej = _planned_stock_counts_for_line(
+                    db, tenant_id, wh_id, ln, include_rejected=False
                 )
-            continue
+                pid = int(ln.product_id)
+                p = db.query(Product).filter(Product.id == pid, Product.tenant_id == tenant_id).first()
+                if not p:
+                    raise ValueError(f"Z-PZ: produkt {pid} nie znaleziony dla tenant_id={tenant_id}")
+                unit_price, vat = _order_item_pricing(db, int(ln.order_item_id))
+                for entry_key, cond in damaged_pairs:
+                    disp = DISPOSITION_OUTLET_B if cond == "B" else DISPOSITION_SERVICE_C
+                    add_line(
+                        product_id=pid,
+                        qty=1.0,
+                        disposition=disp,
+                        return_decision="DAMAGED_B" if cond == "B" else "DAMAGED_C",
+                        rmz_damage_entry_id=entry_key,
+                        purchase_price_net=unit_price,
+                        vat_rate=vat,
+                    )
+                continue
 
         pid = int(ln.product_id)
         p = db.query(Product).filter(Product.id == pid, Product.tenant_id == tenant_id).first()
@@ -686,29 +687,25 @@ def _append_rmz_lines_to_document(
         direct_loc = None
         if mfg_receipt_mode == RECEIPT_MODE_DEFAULT_LOCATION and recovery_location_id:
             direct_loc = int(recovery_location_id)
-        now = datetime.utcnow()
-        for rec in recoveries:
-            if getattr(rec, "posted_at", None) is not None or getattr(rec, "stock_document_item_id", None):
-                continue
-            acc = float(getattr(rec, "accepted_qty", 0) or 0)
-            if acc <= 1e-9:
-                # scrap-only: mark posted without Z-PZ line (idempotency)
-                rec.posted_at = now
-                rec.updated_at = now
-                continue
-            sdi = add_line(
-                product_id=int(rec.component_product_id),
-                qty=float(acc),
-                disposition=DISPOSITION_SALEABLE,
-                return_decision="ACCEPTED",
-                rmz_damage_entry_id=f"mfg-rec-{int(rec.id)}",
-                purchase_price_net=None,
-                vat_rate=23.0,
-                direct_location_id=direct_loc,
+        mfg_lines, scrap_only = adapt_manufacturing_recoveries_to_recovery_lines(
+            recoveries, target_location_id=direct_loc
+        )
+        for ml in mfg_lines:
+            p_comp = (
+                db.query(Product)
+                .filter(Product.id == int(ml.component_product_id), Product.tenant_id == tenant_id)
+                .first()
             )
-            rec.posted_at = now
-            rec.updated_at = now
-            rec.stock_document_item_id = int(sdi.id)
+            if not p_comp:
+                raise ValueError(
+                    f"Z-PZ: produkt {ml.component_product_id} nie znaleziony dla tenant_id={tenant_id}"
+                )
+        created = append_accepted_component_lines(lines=mfg_lines, add_line=add_line)
+        mark_manufacturing_recoveries_posted(
+            created=created,
+            scrap_only=scrap_only,
+            recoveries_by_id={int(r.id): r for r in recoveries},
+        )
 
     return item_rows
 
