@@ -41,10 +41,17 @@ def consume_inventory_fifo_slices(
     quantity: float,
     batch_number: str | None = None,
     stock_disposition: str = DEFAULT_STOCK_DISPOSITION,
+    exclude_order_id: int | None = None,
 ) -> list[PickLotSlice]:
-    """FIFO by expiry then id — returns slices actually consumed."""
+    """
+    FIFO by expiry then id — returns slices actually consumed.
+
+    When ``exclude_order_id`` is set, foreign reservations at the lot reduce
+    consumable qty (own sales-order holds remain pickable for that order).
+    """
     from ..models.inventory import Inventory
     from .inventory_lot_keys import normalize_batch_number
+    from .wms_picking_atp import reserved_qty_at_lot_excluding_sales_order
 
     qty = float(quantity or 0)
     if qty <= 1e-12:
@@ -67,7 +74,25 @@ def consume_inventory_fifo_slices(
     )
     if batch_filter is not None:
         rows = [r for r in rows if normalize_batch_number(getattr(r, "batch_number", None)) == batch_filter]
-    total_avail = sum(float(r.quantity or 0) for r in rows)
+    # Net available after foreign reservations (own order credited via exclude).
+    net_by_id: dict[int, float] = {}
+    total_avail = 0.0
+    for r in rows:
+        bn = normalize_batch_number(getattr(r, "batch_number", None))
+        ed = getattr(r, "expiry_date", None) or SENTINEL_EXPIRY
+        foreign = reserved_qty_at_lot_excluding_sales_order(
+            db,
+            tenant_id=int(tenant_id),
+            product_id=int(product_id),
+            location_id=int(location_id),
+            batch_number=bn,
+            expiry_date=ed,
+            stock_disposition=sd,
+            exclude_order_id=exclude_order_id,
+        )
+        net = max(0.0, float(r.quantity or 0) - float(foreign))
+        net_by_id[int(r.id)] = net
+        total_avail += net
     if total_avail + 1e-9 < qty:
         raise ValueError(
             f"Brak stanu w lokalizacji dla produktu #{product_id}: wymagane {qty}, dostępne {round(total_avail, 4)}."
@@ -78,9 +103,10 @@ def consume_inventory_fifo_slices(
         if remaining <= 1e-12:
             break
         cur = float(inv.quantity or 0)
-        if cur <= 1e-12:
+        net = float(net_by_id.get(int(inv.id), 0.0))
+        if cur <= 1e-12 or net <= 1e-12:
             continue
-        take = min(cur, remaining)
+        take = min(cur, net, remaining)
         inv.quantity = cur - take
         remaining -= take
         batch, exp = lot_key_from_inventory(inv)

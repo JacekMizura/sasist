@@ -11,7 +11,6 @@ from sqlalchemy.orm import Session
 
 from ..models.inventory import Inventory
 from ..models.location import Location
-from ..models.stock_reservation import StockReservation
 from ..models.warehouse import Bin
 from ..storage_types import NON_PICKABLE_STORAGE_TYPE_ALIASES, get_storage_priority
 from .inventory_lot_keys import NO_EXPIRY_SENTINEL
@@ -37,22 +36,22 @@ def reserved_qty_at_lot(
     batch_number: str,
     expiry_date,
     stock_disposition: str,
+    *,
+    exclude_order_id: int | None = None,
 ) -> float:
-    sd = normalize_stock_disposition(stock_disposition)
-    r = (
-        db.query(func.coalesce(func.sum(StockReservation.quantity), 0))
-        .filter(
-            StockReservation.tenant_id == int(tenant_id),
-            StockReservation.product_id == int(product_id),
-            StockReservation.location_id == int(location_id),
-            StockReservation.batch_number == batch_number,
-            StockReservation.expiry_date == expiry_date,
-            StockReservation.stock_disposition == sd,
-            StockReservation.status == "reserved",
-        )
-        .scalar()
+    """Foreign reserved at lot; own sales order excluded when ``exclude_order_id`` set."""
+    from .wms_picking_atp import reserved_qty_at_lot_excluding_sales_order
+
+    return reserved_qty_at_lot_excluding_sales_order(
+        db,
+        tenant_id=int(tenant_id),
+        product_id=int(product_id),
+        location_id=int(location_id),
+        batch_number=batch_number,
+        expiry_date=expiry_date,
+        stock_disposition=stock_disposition,
+        exclude_order_id=exclude_order_id,
     )
-    return float(r or 0)
 
 
 def allocate_inventory_slices_fefo_pick_path(
@@ -63,10 +62,11 @@ def allocate_inventory_slices_fefo_pick_path(
     need: float,
     *,
     stock_disposition: str = DEFAULT_STOCK_DISPOSITION,
+    exclude_order_id: int | None = None,
 ) -> list[tuple[Inventory, float]]:
     """
     Allocate ``need`` across inventory rows: FEFO + storage priority + graph visit order.
-    Filtered by ``stock_disposition``.
+    Filtered by ``stock_disposition``. Respects foreign reservations (SSOT with picking ATP).
     """
     if need <= 0:
         return []
@@ -97,7 +97,14 @@ def allocate_inventory_slices_fefo_pick_path(
         bn = getattr(inv, "batch_number", "") or ""
         ed = getattr(inv, "expiry_date", None) or NO_EXPIRY_SENTINEL
         reserved = reserved_qty_at_lot(
-            db, tenant_id, product_id, inv.location_id, bn, ed, sd
+            db,
+            tenant_id,
+            product_id,
+            inv.location_id,
+            bn,
+            ed,
+            sd,
+            exclude_order_id=exclude_order_id,
         )
         if float(inv.quantity) - reserved <= 0:
             continue
@@ -129,7 +136,14 @@ def allocate_inventory_slices_fefo_pick_path(
         bn = getattr(row, "batch_number", "") or ""
         ed = getattr(row, "expiry_date", None) or NO_EXPIRY_SENTINEL
         reserved = reserved_qty_at_lot(
-            db, tenant_id, product_id, row.location_id, bn, ed, sd
+            db,
+            tenant_id,
+            product_id,
+            row.location_id,
+            bn,
+            ed,
+            sd,
+            exclude_order_id=exclude_order_id,
         )
         avail = float(row.quantity) - reserved
         if avail <= 0:

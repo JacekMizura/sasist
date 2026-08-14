@@ -402,6 +402,7 @@ def _decrement_inventory_for_wms_pick(
     if wid <= 0:
         raise ValueError("Brak warehouse_id na rekordzie Pick — nie można zaktualizować stanu.")
     req_disp = required_disposition_for_order_item(db, getattr(pick, "order_item_id", None))
+    oid = int(pick.order_id) if getattr(pick, "order_id", None) is not None else None
     slices = consume_inventory_fifo_slices(
         db,
         tenant_id=tid,
@@ -410,7 +411,28 @@ def _decrement_inventory_for_wms_pick(
         location_id=int(pick.location_id),
         quantity=qty,
         stock_disposition=req_disp,
+        exclude_order_id=oid,
     )
+    if oid is not None:
+        try:
+            from .sales_order_fg_reservation_service import (
+                consume_sales_order_reservations_for_pick,
+            )
+
+            consume_sales_order_reservations_for_pick(
+                db,
+                tenant_id=tid,
+                order_id=oid,
+                product_id=int(pick.product_id),
+                location_id=int(pick.location_id),
+                quantity=qty,
+            )
+        except Exception:
+            logger.exception(
+                "sales_order_fg consume after pick failed pick_id=%s order_id=%s",
+                getattr(pick, "id", None),
+                oid,
+            )
     return _apply_pick_lot_slices(db, pick, slices, performed_by=performed_by, picked_at=picked_at)
 
 
