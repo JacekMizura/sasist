@@ -23,6 +23,11 @@ PRODUCTION_PW_CREATED = "PRODUCTION_PW_CREATED"
 PRODUCTION_PUTAWAY_COMPLETED = "PRODUCTION_PUTAWAY_COMPLETED"
 PRODUCTION_COMPLETED = "PRODUCTION_COMPLETED"
 
+# Picking-entry readiness gate (Phase 2)
+PICKING_ENTRY_GATE_READY = "PICKING_ENTRY_GATE_READY"
+PICKING_ENTRY_GATE_BLOCKED = "PICKING_ENTRY_GATE_BLOCKED"
+PICKING_ENTRY_MO_DEMAND = "PICKING_ENTRY_MO_DEMAND"
+
 DOMAIN_EVENT_TITLES_PL: dict[str, str] = {
     RETURN_CREATED: "Utworzono zwrot",
     RETURN_LINE_DECISION: "Zapisano decyzję pozycji zwrotu",
@@ -41,6 +46,9 @@ DOMAIN_EVENT_TITLES_PL: dict[str, str] = {
     PRODUCTION_PW_CREATED: "Utworzono dokument PW produkcji",
     PRODUCTION_PUTAWAY_COMPLETED: "Rozlokowano produkt gotowy z produkcji",
     PRODUCTION_COMPLETED: "Zakończono produkcję",
+    PICKING_ENTRY_GATE_READY: "Zamówienie gotowe do zbierania",
+    PICKING_ENTRY_GATE_BLOCKED: "Blokada wejścia do zbierania",
+    PICKING_ENTRY_MO_DEMAND: "Zapotrzebowanie produkcyjne z gate zbierania",
 }
 
 INTAKE_LABEL_PL: dict[str, str] = {

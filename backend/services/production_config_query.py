@@ -21,6 +21,7 @@ def _production_base_query(db: Session):
             joinedload(PickingConfig.source_status),
             joinedload(PickingConfig.status_after_production),
             joinedload(PickingConfig.status_on_component_shortage),
+            joinedload(PickingConfig.status_awaiting_production),
             joinedload(PickingConfig.finished_goods_buffer_location),
         )
         .filter(PickingConfig.is_production_mode.is_(True))

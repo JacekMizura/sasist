@@ -47,10 +47,12 @@ def _make_db():
         (10, "Produkcja A", "NEW"),
         (11, "Po produkcji", "IN_PROGRESS"),
         (12, "Brak komponentów", "IN_PROGRESS"),
+        (15, "Oczekuje na produkcję", "IN_PROGRESS"),
         (13, "Do zbierania", "NEW"),
         (14, "Zebrane", "IN_PROGRESS"),
         (20, "Produkcja B", "NEW"),
         (21, "Po produkcji B", "IN_PROGRESS"),
+        (22, "Oczekuje B", "IN_PROGRESS"),
     ):
         db.add(
             OrderUiStatus(
@@ -83,6 +85,7 @@ def _legacy_production_row(**overrides):
         is_production_mode=True,
         status_after_production_id=11,
         status_on_component_shortage_id=12,
+        status_awaiting_production_id=15,
         finished_goods_buffer_location_id=100,
         production_order_trigger_scope="SINGLE_ELEMENT",
         production_execution_method="WMS",
@@ -196,6 +199,7 @@ def test_create_update_multi_hall_and_status_conflicts():
             source_status_id=10,
             status_after_production_id=11,
             status_on_component_shortage_id=12,
+            status_awaiting_production_id=15,
             finished_goods_buffer_location_id=100,
             production_execution_method="WMS",
             after_production_action="OPEN_PACKING",
@@ -210,6 +214,7 @@ def test_create_update_multi_hall_and_status_conflicts():
             source_status_id=20,
             status_after_production_id=21,
             status_on_component_shortage_id=12,
+            status_awaiting_production_id=22,
             finished_goods_buffer_location_id=101,
             production_execution_method="PRINT",
             after_production_action="STATUS_ONLY",
@@ -229,6 +234,7 @@ def test_create_update_multi_hall_and_status_conflicts():
                 source_status_id=10,
                 status_after_production_id=21,
                 status_on_component_shortage_id=12,
+                status_awaiting_production_id=15,
                 finished_goods_buffer_location_id=100,
             ),
         )
@@ -245,6 +251,7 @@ def test_create_update_multi_hall_and_status_conflicts():
                 is_active=True,
                 status_after_production_id=10,
                 status_on_component_shortage_id=12,
+                status_awaiting_production_id=22,
                 finished_goods_buffer_location_id=101,
             ),
         )
@@ -267,6 +274,7 @@ def test_disable_keeps_row_for_historical_mo_lookup():
             source_status_id=10,
             status_after_production_id=11,
             status_on_component_shortage_id=12,
+            status_awaiting_production_id=15,
             finished_goods_buffer_location_id=100,
         ),
     )
@@ -295,6 +303,7 @@ def test_disable_keeps_row_for_historical_mo_lookup():
                 source_status_id=10,
                 status_after_production_id=11,
                 status_on_component_shortage_id=12,
+                status_awaiting_production_id=15,
                 finished_goods_buffer_location_id=100,
             ),
         )
@@ -317,6 +326,7 @@ def test_trigger_lookup_reads_production_ssot():
             source_status_id=10,
             status_after_production_id=11,
             status_on_component_shortage_id=12,
+            status_awaiting_production_id=15,
             finished_goods_buffer_location_id=100,
             production_execution_method="PRINT",
             after_production_action="STATUS_ONLY",
@@ -327,6 +337,7 @@ def test_trigger_lookup_reads_production_ssot():
     assert pc is not None
     assert pc.production_execution_method == "PRINT"
     assert pc.status_on_component_shortage_id == 12
+    assert pc.status_awaiting_production_id == 15
     assert pc.finished_goods_buffer_location_id == 100
     # Standard picking path must not see it
     assert get_picking_config(db, 1, 2, 10) is None

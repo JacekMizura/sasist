@@ -115,6 +115,7 @@ def _run_post_status_hooks(
         order=order,
         previous_status_id=previous_status_id,
         new_status_id=new_status_id,
+        operator_user_id=operator_user_id,
     )
 
 
@@ -124,18 +125,20 @@ def _run_picking_entry_readiness_dry_run_hook(
     order: Order,
     previous_status_id: Optional[int],
     new_status_id: Optional[int],
+    operator_user_id: Optional[int] = None,
 ) -> None:
-    """Phase 1: diagnose readiness on picking source_status — soft-fail, no lifecycle change."""
+    """Phase 1–2: picking-entry readiness gate (dry_run|active) — soft-fail."""
     try:
         nested = db.begin_nested()
         try:
-            from .picking_entry_readiness_service import maybe_run_picking_entry_readiness_dry_run
+            from .picking_entry_gate_service import maybe_run_picking_entry_gate
 
-            maybe_run_picking_entry_readiness_dry_run(
+            maybe_run_picking_entry_gate(
                 db,
                 order=order,
                 previous_status_id=previous_status_id,
                 new_status_id=new_status_id,
+                operator_user_id=operator_user_id,
             )
             nested.commit()
         except Exception:
@@ -143,7 +146,7 @@ def _run_picking_entry_readiness_dry_run_hook(
             raise
     except Exception:
         logger.exception(
-            "picking_entry_readiness dry-run after status order_id=%s",
+            "picking_entry_gate after status order_id=%s",
             getattr(order, "id", None),
         )
 
@@ -196,6 +199,7 @@ def apply_order_panel_ui_status(
                 order=order,
                 previous_status_id=previous_sid,
                 new_status_id=new_sid,
+                operator_user_id=operator_user_id,
             )
             return
         _run_post_status_hooks(

@@ -21,6 +21,7 @@ class ProductionConfigRead(BaseModel):
     source_status_id: int
     status_after_production_id: int
     status_on_component_shortage_id: int
+    status_awaiting_production_id: Optional[int] = None
     finished_goods_buffer_location_id: int
     production_order_trigger_scope: ProductionOrderTriggerScope = "SINGLE_ELEMENT"
     production_execution_method: ProductionExecutionMethod = "WMS"
@@ -29,6 +30,7 @@ class ProductionConfigRead(BaseModel):
     source_status_name: Optional[str] = None
     status_after_production_name: Optional[str] = None
     status_on_component_shortage_name: Optional[str] = None
+    status_awaiting_production_name: Optional[str] = None
     finished_goods_buffer_location_name: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)
@@ -42,6 +44,7 @@ class ProductionConfigCreate(BaseModel):
     source_status_id: int = Field(..., ge=1)
     status_after_production_id: int = Field(..., ge=1)
     status_on_component_shortage_id: int = Field(..., ge=1)
+    status_awaiting_production_id: int = Field(..., ge=1)
     finished_goods_buffer_location_id: int = Field(..., ge=1)
     production_order_trigger_scope: Optional[ProductionOrderTriggerScope] = "SINGLE_ELEMENT"
     production_execution_method: Optional[ProductionExecutionMethod] = "WMS"
@@ -51,6 +54,12 @@ class ProductionConfigCreate(BaseModel):
     def _source_ne_after(self) -> "ProductionConfigCreate":
         if int(self.source_status_id) == int(self.status_after_production_id):
             raise ValueError("status_after_production_id musi być inny niż source_status_id.")
+        if int(self.source_status_id) == int(self.status_awaiting_production_id):
+            raise ValueError("status_awaiting_production_id musi być inny niż source_status_id.")
+        if int(self.status_awaiting_production_id) == int(self.status_on_component_shortage_id):
+            raise ValueError(
+                "status_awaiting_production_id musi być inny niż status_on_component_shortage_id."
+            )
         return self
 
 
@@ -61,6 +70,7 @@ class ProductionConfigUpdate(BaseModel):
     is_active: bool = True
     status_after_production_id: int = Field(..., ge=1)
     status_on_component_shortage_id: int = Field(..., ge=1)
+    status_awaiting_production_id: int = Field(..., ge=1)
     finished_goods_buffer_location_id: int = Field(..., ge=1)
     production_order_trigger_scope: Optional[ProductionOrderTriggerScope] = "SINGLE_ELEMENT"
     production_execution_method: Optional[ProductionExecutionMethod] = "WMS"

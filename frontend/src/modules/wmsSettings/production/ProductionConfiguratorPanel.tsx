@@ -54,11 +54,13 @@ type ProductionConfigDraft = {
   sourceStatusId: string;
   statusAfterProductionId: string;
   statusOnComponentShortageId: string;
+  statusAwaitingProductionId: string;
   finishedGoodsBufferLocationId: string;
   productionExecutionMethod: ProductionExecutionMethod;
   afterProductionAction: AfterProductionAction;
   sourceStatusBlurred: boolean;
   statusAfterBlurred: boolean;
+  statusAwaitingBlurred: boolean;
 };
 
 function statusIdFromValue(value: string): number | null {
@@ -111,11 +113,13 @@ function createEmptyDraft(): ProductionConfigDraft {
     sourceStatusId: "",
     statusAfterProductionId: "",
     statusOnComponentShortageId: "",
+    statusAwaitingProductionId: "",
     finishedGoodsBufferLocationId: "",
     productionExecutionMethod: "WMS",
     afterProductionAction: "STATUS_ONLY",
     sourceStatusBlurred: false,
     statusAfterBlurred: false,
+    statusAwaitingBlurred: false,
   };
 }
 
@@ -127,11 +131,15 @@ function draftFromConfig(row: ProductionConfigRead): ProductionConfigDraft {
     sourceStatusId: String(row.source_status_id),
     statusAfterProductionId: String(row.status_after_production_id),
     statusOnComponentShortageId: String(row.status_on_component_shortage_id),
+    statusAwaitingProductionId: row.status_awaiting_production_id
+      ? String(row.status_awaiting_production_id)
+      : "",
     finishedGoodsBufferLocationId: String(row.finished_goods_buffer_location_id),
     productionExecutionMethod: row.production_execution_method === "PRINT" ? "PRINT" : "WMS",
     afterProductionAction: row.after_production_action === "OPEN_PACKING" ? "OPEN_PACKING" : "STATUS_ONLY",
     sourceStatusBlurred: false,
     statusAfterBlurred: false,
+    statusAwaitingBlurred: false,
   };
 }
 
@@ -143,6 +151,7 @@ function fingerprintDraft(d: ProductionConfigDraft): string {
     sourceStatusId: d.sourceStatusId.trim(),
     statusAfterProductionId: d.statusAfterProductionId.trim(),
     statusOnComponentShortageId: d.statusOnComponentShortageId.trim(),
+    statusAwaitingProductionId: d.statusAwaitingProductionId.trim(),
     finishedGoodsBufferLocationId: d.finishedGoodsBufferLocationId.trim(),
     productionExecutionMethod: d.productionExecutionMethod,
     afterProductionAction: d.afterProductionAction,
@@ -340,6 +349,50 @@ function ProductionConfigForm({
               floatingZIndexClass="z-[5100]"
             />
             {draft.statusAfterBlurred && !draft.statusAfterProductionId ? (
+              <p className="mt-1.5 text-xs font-medium text-red-700" role="alert">
+                To pole jest wymagane.
+              </p>
+            ) : null}
+          </div>
+        </div>
+
+        <div className="min-w-0 rounded-xl border border-slate-200 bg-white p-3.5">
+          <div className="flex min-w-0 items-center gap-1.5">
+            <p className="text-sm font-semibold text-slate-900">
+              Status oczekiwania na produkcję
+              <span className="ml-1 text-red-600" aria-hidden>
+                *
+              </span>
+            </p>
+            <SettingInfoButton
+              title="Status oczekiwania na produkcję"
+              description="Status, na który trafi zamówienie wieloelementowe, gdy gate zbierania wykryje brak gotowego produktu do produkcji."
+            />
+          </div>
+          <div className="mt-3">
+            <OrderUiStatusField
+              panelSummary={orderUiSummary}
+              panelSubgroups={panelSubgroups}
+              statusNameById={statusNameById}
+              selectedStatusId={statusIdFromValue(draft.statusAwaitingProductionId)}
+              onPick={(id) =>
+                setDraft((d) =>
+                  d
+                    ? {
+                        ...d,
+                        statusAwaitingProductionId: id != null ? String(id) : "",
+                        statusAwaitingBlurred: true,
+                      }
+                    : d,
+                )
+              }
+              allowClear
+              clearLabel="— wybierz —"
+              placeholder="Wybierz status…"
+              disabled={selectDisabled}
+              floatingZIndexClass="z-[5100]"
+            />
+            {draft.statusAwaitingBlurred && !draft.statusAwaitingProductionId ? (
               <p className="mt-1.5 text-xs font-medium text-red-700" role="alert">
                 To pole jest wymagane.
               </p>
@@ -680,6 +733,7 @@ export function ProductionConfiguratorPanel({ warehouseId }: Props) {
     if (!d.name.trim()) return "Podaj nazwę konfiguracji.";
     const sourceId = statusIdFromValue(d.sourceStatusId);
     const afterId = statusIdFromValue(d.statusAfterProductionId);
+    const awaitingId = statusIdFromValue(d.statusAwaitingProductionId);
     const shortageId = statusIdFromValue(d.statusOnComponentShortageId);
     const bufferId = statusIdFromValue(d.finishedGoodsBufferLocationId);
 
@@ -691,12 +745,25 @@ export function ProductionConfiguratorPanel({ warehouseId }: Props) {
       setDraft({ ...d, statusAfterBlurred: true });
       return "Wybierz status po wyprodukowaniu.";
     }
+    if (awaitingId == null || awaitingId < 1) {
+      setDraft({ ...d, statusAwaitingBlurred: true });
+      return "Wybierz status oczekiwania na produkcję.";
+    }
     if (sourceId != null && afterId === sourceId) {
       return "Status wejściowy i status po wyprodukowaniu muszą się różnić.";
+    }
+    if (sourceId != null && awaitingId === sourceId) {
+      return "Status oczekiwania na produkcję musi być inny niż status wejściowy.";
+    }
+    if (awaitingId === afterId) {
+      return "Status oczekiwania na produkcję musi być inny niż status po wyprodukowaniu.";
     }
     if (shortageId == null || shortageId < 1) return "Wybierz status przy braku komponentów.";
     if (shortageId === sourceId) {
       return "Status przy braku komponentów musi być inny niż status wejściowy.";
+    }
+    if (awaitingId === shortageId) {
+      return "Status oczekiwania na produkcję musi być inny niż status przy braku komponentów.";
     }
     if (bufferId == null || bufferId < 1) return "Wybierz lokalizację buforową.";
     return null;
@@ -718,6 +785,7 @@ export function ProductionConfiguratorPanel({ warehouseId }: Props) {
           is_active: draft.isActive,
           status_after_production_id: Number(draft.statusAfterProductionId),
           status_on_component_shortage_id: Number(draft.statusOnComponentShortageId),
+          status_awaiting_production_id: Number(draft.statusAwaitingProductionId),
           finished_goods_buffer_location_id: Number(draft.finishedGoodsBufferLocationId),
           production_order_trigger_scope: "SINGLE_ELEMENT",
           production_execution_method: draft.productionExecutionMethod,
@@ -733,6 +801,7 @@ export function ProductionConfiguratorPanel({ warehouseId }: Props) {
           source_status_id: Number(draft.sourceStatusId),
           status_after_production_id: Number(draft.statusAfterProductionId),
           status_on_component_shortage_id: Number(draft.statusOnComponentShortageId),
+          status_awaiting_production_id: Number(draft.statusAwaitingProductionId),
           finished_goods_buffer_location_id: Number(draft.finishedGoodsBufferLocationId),
           production_order_trigger_scope: "SINGLE_ELEMENT",
           production_execution_method: draft.productionExecutionMethod,

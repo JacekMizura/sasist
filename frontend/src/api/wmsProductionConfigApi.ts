@@ -16,6 +16,7 @@ export type ProductionConfigRead = {
   source_status_id: number;
   status_after_production_id: number;
   status_on_component_shortage_id: number;
+  status_awaiting_production_id?: number | null;
   finished_goods_buffer_location_id: number;
   production_order_trigger_scope: ProductionOrderTriggerScope;
   production_execution_method: ProductionExecutionMethod;
@@ -24,6 +25,7 @@ export type ProductionConfigRead = {
   source_status_name?: string | null;
   status_after_production_name?: string | null;
   status_on_component_shortage_name?: string | null;
+  status_awaiting_production_name?: string | null;
   finished_goods_buffer_location_name?: string | null;
 };
 
@@ -35,6 +37,7 @@ export type ProductionConfigCreate = {
   source_status_id: number;
   status_after_production_id: number;
   status_on_component_shortage_id: number;
+  status_awaiting_production_id: number;
   finished_goods_buffer_location_id: number;
   production_order_trigger_scope?: ProductionOrderTriggerScope;
   production_execution_method?: ProductionExecutionMethod;
@@ -46,6 +49,7 @@ export type ProductionConfigUpdate = {
   is_active: boolean;
   status_after_production_id: number;
   status_on_component_shortage_id: number;
+  status_awaiting_production_id: number;
   finished_goods_buffer_location_id: number;
   production_order_trigger_scope?: ProductionOrderTriggerScope;
   production_execution_method?: ProductionExecutionMethod;

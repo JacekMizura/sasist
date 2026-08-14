@@ -43,15 +43,19 @@ def _normalize_production_payload(
     source_status_id: int,
     status_after_production_id: int | None,
     status_on_component_shortage_id: int | None,
+    status_awaiting_production_id: int | None,
     finished_goods_buffer_location_id: int | None,
     production_order_trigger_scope: str | None,
     production_execution_method: str | None,
     after_production_action: str | None,
     name: str | None,
-) -> tuple[str, int, int, int, str, str, str]:
+) -> tuple[str, int, int, int, int, str, str, str]:
     after_id = int(status_after_production_id) if status_after_production_id is not None else None
     shortage_id = (
         int(status_on_component_shortage_id) if status_on_component_shortage_id is not None else None
+    )
+    awaiting_id = (
+        int(status_awaiting_production_id) if status_awaiting_production_id is not None else None
     )
     buffer_id = (
         int(finished_goods_buffer_location_id) if finished_goods_buffer_location_id is not None else None
@@ -60,12 +64,24 @@ def _normalize_production_payload(
         raise ValueError("Konfiguracja produkcji wymaga statusu po wyprodukowaniu.")
     if shortage_id is None:
         raise ValueError("Konfiguracja produkcji wymaga statusu przy braku komponentów.")
+    if awaiting_id is None:
+        raise ValueError("Konfiguracja produkcji wymaga statusu oczekiwania na produkcję.")
     if buffer_id is None:
         raise ValueError("Konfiguracja produkcji wymaga lokalizacji buforowej produktu gotowego.")
     if after_id == int(source_status_id):
         raise ValueError("Status po wyprodukowaniu musi być inny niż status wejściowy produkcji.")
     if shortage_id == int(source_status_id):
         raise ValueError("Status przy braku komponentów musi być inny niż status wejściowy produkcji.")
+    if awaiting_id == int(source_status_id):
+        raise ValueError("Status oczekiwania na produkcję musi być inny niż status wejściowy produkcji.")
+    if awaiting_id == shortage_id:
+        raise ValueError(
+            "Status oczekiwania na produkcję musi być inny niż status przy braku komponentów."
+        )
+    if awaiting_id == after_id:
+        raise ValueError(
+            "Status oczekiwania na produkcję musi być inny niż status po wyprodukowaniu."
+        )
 
     scope_raw = (production_order_trigger_scope or PRODUCTION_ORDER_TRIGGER_SCOPE_SINGLE_ELEMENT).strip()
     if scope_raw not in PRODUCTION_ORDER_TRIGGER_SCOPES:
@@ -86,7 +102,7 @@ def _normalize_production_payload(
         raise ValueError("Nazwa konfiguracji produkcji jest wymagana.")
     if len(nm) > 128:
         raise ValueError("Nazwa konfiguracji produkcji może mieć max. 128 znaków.")
-    return nm, after_id, shortage_id, buffer_id, scope_raw, method_raw, action_raw
+    return nm, after_id, shortage_id, awaiting_id, buffer_id, scope_raw, method_raw, action_raw
 
 
 def validate_production_config_conflicts(
@@ -101,9 +117,12 @@ def validate_production_config_conflicts(
     - status_after ≠ standard picking entry
     - status_after ≠ any production entry
     - production entry ≠ standard picking entry
+    - awaiting ≠ standard picking entry / production entry / after / shortage
     """
     production_sources: set[int] = set()
     after_production: set[int] = set()
+    awaiting_statuses: set[int] = set()
+    shortage_statuses: set[int] = set()
     standard_sources = set(standard_source_status_ids or ())
 
     for i in items:
@@ -123,6 +142,12 @@ def validate_production_config_conflicts(
                     "jednej konfiguracji produkcyjnej."
                 )
             after_production.add(aid)
+        awaiting_id = getattr(i, "status_awaiting_production_id", None)
+        if awaiting_id is not None:
+            awaiting_statuses.add(int(awaiting_id))
+        shortage_id = getattr(i, "status_on_component_shortage_id", None)
+        if shortage_id is not None:
+            shortage_statuses.add(int(shortage_id))
 
     overlap = production_sources & standard_sources
     if overlap:
@@ -141,6 +166,23 @@ def validate_production_config_conflicts(
     if after_as_prod_source:
         raise ValueError(
             "Status po wyprodukowaniu nie może być statusem wejściowym innego trybu produkcji."
+        )
+
+    if awaiting_statuses & standard_sources:
+        raise ValueError(
+            "Status oczekiwania na produkcję nie może być statusem wejściowym standardowego zbierania."
+        )
+    if awaiting_statuses & production_sources:
+        raise ValueError(
+            "Status oczekiwania na produkcję nie może być statusem wejściowym produkcji."
+        )
+    if awaiting_statuses & after_production:
+        raise ValueError(
+            "Status oczekiwania na produkcję nie może być statusem po wyprodukowaniu."
+        )
+    if awaiting_statuses & shortage_statuses:
+        raise ValueError(
+            "Status oczekiwania na produkcję nie może być statusem przy braku komponentów."
         )
 
 
@@ -182,6 +224,7 @@ def production_config_to_read(row: PickingConfig) -> ProductionConfigRead:
     src = getattr(row, "source_status", None)
     after = getattr(row, "status_after_production", None)
     shortage = getattr(row, "status_on_component_shortage", None)
+    awaiting = getattr(row, "status_awaiting_production", None)
     buf = getattr(row, "finished_goods_buffer_location", None)
     name = (getattr(row, "name", None) or "").strip()
     if not name and src is not None:
@@ -190,6 +233,7 @@ def production_config_to_read(row: PickingConfig) -> ProductionConfigRead:
         name = f"Produkcja #{row.id}"
     after_id = getattr(row, "status_after_production_id", None) or getattr(row, "target_status_id", None)
     shortage_id = getattr(row, "status_on_component_shortage_id", None)
+    awaiting_id = getattr(row, "status_awaiting_production_id", None)
     buffer_id = getattr(row, "finished_goods_buffer_location_id", None)
     scope = getattr(row, "production_order_trigger_scope", None) or PRODUCTION_ORDER_TRIGGER_SCOPE_SINGLE_ELEMENT
     method = getattr(row, "production_execution_method", None) or PRODUCTION_EXECUTION_METHOD_WMS
@@ -204,6 +248,7 @@ def production_config_to_read(row: PickingConfig) -> ProductionConfigRead:
             "source_status_id": int(row.source_status_id),
             "status_after_production_id": int(after_id),
             "status_on_component_shortage_id": int(shortage_id),
+            "status_awaiting_production_id": int(awaiting_id) if awaiting_id is not None else None,
             "finished_goods_buffer_location_id": int(buffer_id),
             "production_order_trigger_scope": scope,
             "production_execution_method": str(method).upper(),
@@ -212,6 +257,7 @@ def production_config_to_read(row: PickingConfig) -> ProductionConfigRead:
             "source_status_name": str(src.name) if src is not None else None,
             "status_after_production_name": str(after.name) if after is not None else None,
             "status_on_component_shortage_name": str(shortage.name) if shortage is not None else None,
+            "status_awaiting_production_name": str(awaiting.name) if awaiting is not None else None,
             "finished_goods_buffer_location_name": str(buf.name) if buf is not None else None,
         }
     )
@@ -223,10 +269,11 @@ def create_production_config(db: Session, body: ProductionConfigCreate) -> Picki
         assert_ui_status_belongs,
     )
 
-    nm, after_id, shortage_id, buffer_id, scope, method, action = _normalize_production_payload(
+    nm, after_id, shortage_id, awaiting_id, buffer_id, scope, method, action = _normalize_production_payload(
         source_status_id=int(body.source_status_id),
         status_after_production_id=body.status_after_production_id,
         status_on_component_shortage_id=body.status_on_component_shortage_id,
+        status_awaiting_production_id=body.status_awaiting_production_id,
         finished_goods_buffer_location_id=body.finished_goods_buffer_location_id,
         production_order_trigger_scope=body.production_order_trigger_scope,
         production_execution_method=body.production_execution_method,
@@ -241,6 +288,9 @@ def create_production_config(db: Session, body: ProductionConfigCreate) -> Picki
     )
     assert_ui_status_belongs(
         db, tenant_id=body.tenant_id, warehouse_id=body.warehouse_id, status_id=shortage_id
+    )
+    assert_ui_status_belongs(
+        db, tenant_id=body.tenant_id, warehouse_id=body.warehouse_id, status_id=awaiting_id
     )
     assert_finished_goods_buffer_location(
         db,
@@ -266,6 +316,8 @@ def create_production_config(db: Session, body: ProductionConfigCreate) -> Picki
     class _Cand:
         source_status_id = int(body.source_status_id)
         status_after_production_id = after_id
+        status_awaiting_production_id = awaiting_id
+        status_on_component_shortage_id = shortage_id
         is_active = bool(body.is_active)
 
     validate_production_config_conflicts(
@@ -302,6 +354,7 @@ def create_production_config(db: Session, body: ProductionConfigCreate) -> Picki
         is_production_mode=True,
         status_after_production_id=after_id,
         status_on_component_shortage_id=shortage_id,
+        status_awaiting_production_id=awaiting_id,
         finished_goods_buffer_location_id=buffer_id,
         production_order_trigger_scope=scope,
         production_execution_method=method,
@@ -330,10 +383,11 @@ def update_production_config(
     if int(existing.tenant_id) != int(tenant_id) or int(existing.warehouse_id) != int(warehouse_id):
         raise ValueError("Konfiguracja nie należy do wskazanego magazynu.")
 
-    nm, after_id, shortage_id, buffer_id, scope, method, action = _normalize_production_payload(
+    nm, after_id, shortage_id, awaiting_id, buffer_id, scope, method, action = _normalize_production_payload(
         source_status_id=int(existing.source_status_id),
         status_after_production_id=body.status_after_production_id,
         status_on_component_shortage_id=body.status_on_component_shortage_id,
+        status_awaiting_production_id=body.status_awaiting_production_id,
         finished_goods_buffer_location_id=body.finished_goods_buffer_location_id,
         production_order_trigger_scope=body.production_order_trigger_scope,
         production_execution_method=body.production_execution_method,
@@ -342,6 +396,7 @@ def update_production_config(
     )
     assert_ui_status_belongs(db, tenant_id=tenant_id, warehouse_id=warehouse_id, status_id=after_id)
     assert_ui_status_belongs(db, tenant_id=tenant_id, warehouse_id=warehouse_id, status_id=shortage_id)
+    assert_ui_status_belongs(db, tenant_id=tenant_id, warehouse_id=warehouse_id, status_id=awaiting_id)
     assert_finished_goods_buffer_location(
         db, tenant_id=int(tenant_id), warehouse_id=int(warehouse_id), location_id=buffer_id
     )
@@ -349,6 +404,8 @@ def update_production_config(
     class _Cand:
         source_status_id = int(existing.source_status_id)
         status_after_production_id = after_id
+        status_awaiting_production_id = awaiting_id
+        status_on_component_shortage_id = shortage_id
         is_active = bool(body.is_active)
 
     validate_production_config_conflicts(
@@ -369,6 +426,7 @@ def update_production_config(
     existing.target_status_id = after_id
     existing.status_after_production_id = after_id
     existing.status_on_component_shortage_id = shortage_id
+    existing.status_awaiting_production_id = awaiting_id
     existing.finished_goods_buffer_location_id = buffer_id
     existing.production_order_trigger_scope = scope
     existing.production_execution_method = method

@@ -4657,6 +4657,13 @@ def ensure_picking_config_production_mode_columns(engine: Engine) -> None:
                     "REFERENCES locations(id) ON DELETE SET NULL"
                 )
             )
+        if "status_awaiting_production_id" not in cols:
+            conn.execute(
+                text(
+                    "ALTER TABLE picking_config ADD COLUMN status_awaiting_production_id INTEGER "
+                    "REFERENCES order_ui_statuses(id) ON DELETE SET NULL"
+                )
+            )
         if "production_order_trigger_scope" not in cols:
             conn.execute(text("ALTER TABLE picking_config ADD COLUMN production_order_trigger_scope VARCHAR(32)"))
         if "production_execution_method" not in cols:
@@ -4695,6 +4702,12 @@ def ensure_picking_config_production_mode_columns(engine: Engine) -> None:
             text(
                 "CREATE INDEX IF NOT EXISTS ix_picking_config_finished_goods_buffer_location_id "
                 "ON picking_config (finished_goods_buffer_location_id)"
+            )
+        )
+        conn.execute(
+            text(
+                "CREATE INDEX IF NOT EXISTS ix_picking_config_status_awaiting_production_id "
+                "ON picking_config (status_awaiting_production_id)"
             )
         )
         if "name" not in cols:

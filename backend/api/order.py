@@ -3032,6 +3032,22 @@ def patch_order_item_line(
         if tp is not None and orig_qty > 0:
             item.total_price = round(float(tp) * (float(new_qty) / float(orig_qty)), 2)
         item.quantity = new_qty
+        try:
+            from ..services.picking_entry_gate_service import sync_picking_entry_on_qty_decrease
+
+            sync_picking_entry_on_qty_decrease(
+                db,
+                order=order,
+                order_item=item,
+                new_qty=float(new_qty),
+                operator_user_id=getattr(current_user, "id", None) if current_user else None,
+            )
+        except Exception:
+            logging.getLogger(__name__).exception(
+                "picking_entry qty sync failed order_id=%s item_id=%s",
+                getattr(order, "id", None),
+                getattr(item, "id", None),
+            )
         rm_sku = ""
         rm_ean = ""
         if item.product is not None:

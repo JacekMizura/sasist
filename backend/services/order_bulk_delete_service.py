@@ -147,6 +147,21 @@ def bulk_delete_orders_transaction(
     archive_ids = sorted(need_archive)
     hard_ids = [oid for oid in scoped_ints if oid not in need_archive]
 
+    # Phase 2: release SALES_ORDER FG + withdraw draft/planned production demand
+    try:
+        from .picking_entry_gate_service import cleanup_picking_entry_on_order_cancel
+
+        for oid in scoped_ints:
+            order = db.query(Order).filter(Order.id == int(oid)).first()
+            if order is None:
+                continue
+            try:
+                cleanup_picking_entry_on_order_cancel(db, order=order)
+            except Exception:
+                logger.exception("picking_entry cleanup on delete failed order_id=%s", oid)
+    except Exception:
+        logger.exception("picking_entry cleanup batch failed")
+
     soft_deleted_count = 0
     deleted_n = 0
 

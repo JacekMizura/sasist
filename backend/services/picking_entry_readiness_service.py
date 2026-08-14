@@ -9,7 +9,6 @@ unless a future Phase-2 flag enables allocation.
 from __future__ import annotations
 
 import logging
-import os
 from dataclasses import asdict, dataclass, field
 from typing import Any
 
@@ -49,14 +48,15 @@ _CONFIG_LINE = frozenset({LINE_INVALID_MANUFACTURING_CONFIG})
 
 
 def picking_entry_readiness_dry_run_enabled() -> bool:
-    raw = (os.getenv("FEATURE_PICKING_ENTRY_READINESS_DRY_RUN") or "").strip().lower()
-    return raw in ("1", "true", "yes", "on")
+    from .picking_entry_gate_service import MODE_DRY_RUN, picking_entry_readiness_mode
+
+    return picking_entry_readiness_mode() == MODE_DRY_RUN
 
 
 def picking_entry_readiness_allocate_enabled() -> bool:
-    """Phase 2 flag — must stay off in Phase 1."""
-    raw = (os.getenv("FEATURE_PICKING_ENTRY_READINESS_ALLOCATE") or "").strip().lower()
-    return raw in ("1", "true", "yes", "on")
+    from .picking_entry_gate_service import MODE_ACTIVE, picking_entry_readiness_mode
+
+    return picking_entry_readiness_mode() == MODE_ACTIVE
 
 
 @dataclass

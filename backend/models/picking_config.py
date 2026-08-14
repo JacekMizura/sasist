@@ -128,6 +128,13 @@ class PickingConfig(Base):
         nullable=True,
         index=True,
     )
+    #: Status panelu „Oczekuje na produkcję” (gate full-order / multi-element).
+    status_awaiting_production_id = Column(
+        Integer,
+        ForeignKey("order_ui_statuses.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
     #: Zakres triggera produkcji z zamówień: obecnie tylko SINGLE_ELEMENT.
     production_order_trigger_scope = Column(
         String(32),
@@ -159,6 +166,9 @@ class PickingConfig(Base):
     status_after_production = relationship("OrderUiStatus", foreign_keys=[status_after_production_id])
     status_on_component_shortage = relationship(
         "OrderUiStatus", foreign_keys=[status_on_component_shortage_id]
+    )
+    status_awaiting_production = relationship(
+        "OrderUiStatus", foreign_keys=[status_awaiting_production_id]
     )
     finished_goods_buffer_location = relationship(
         "Location", foreign_keys=[finished_goods_buffer_location_id]
