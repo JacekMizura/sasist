@@ -1195,6 +1195,21 @@ def release_batch_to_wms(
     batch.released_by_user_id = int(released_by_user_id) if released_by_user_id else None
     batch.updated_at = datetime.utcnow()
     db.flush()
+    try:
+        from .production_execution.production_domain_activity import emit_production_released
+
+        num = getattr(batch, "number", None) or getattr(batch, "batch_number", None)
+        lbl = str(num).strip() if num else f"BAT-{int(batch.id)}"
+        emit_production_released(
+            db,
+            tenant_id=int(tenant_id),
+            warehouse_id=int(batch.warehouse_id) if batch.warehouse_id else None,
+            batch_id=int(batch.id),
+            actor_user_id=int(released_by_user_id) if released_by_user_id else None,
+            label=lbl,
+        )
+    except Exception:
+        logger.exception("production activity RELEASED failed batch_id=%s", batch.id)
     logger.info(
         "[production.release_wms] batch_id=%s released_by=%s",
         batch.id,
@@ -1225,6 +1240,20 @@ def start_collecting(db: Session, *, tenant_id: int, batch_id: int) -> Productio
     lock_production_reservations(db, tenant_id=int(tenant_id), production_batch_id=int(batch_id))
     batch.updated_at = datetime.utcnow()
     db.flush()
+    try:
+        from .production_execution.production_domain_activity import emit_production_collection_started
+
+        num = getattr(batch, "number", None) or getattr(batch, "batch_number", None)
+        lbl = str(num).strip() if num else f"BAT-{int(batch.id)}"
+        emit_production_collection_started(
+            db,
+            tenant_id=int(tenant_id),
+            warehouse_id=int(batch.warehouse_id) if batch.warehouse_id else None,
+            batch_id=int(batch.id),
+            label=lbl,
+        )
+    except Exception:
+        logger.exception("production activity COLLECTION_STARTED failed batch_id=%s", batch.id)
     return serialize_batch(db, batch)
 
 
@@ -1451,6 +1480,45 @@ def finish_collecting(
     batch.collecting_completed_at = datetime.utcnow()
     batch.updated_at = datetime.utcnow()
     db.flush()
+    try:
+        from .production_execution.production_domain_activity import (
+            emit_production_collection_completed,
+            emit_production_rw_created,
+            emit_production_started,
+        )
+
+        num = getattr(batch, "number", None) or getattr(batch, "batch_number", None)
+        lbl = str(num).strip() if num else f"BAT-{int(batch.id)}"
+        emit_production_collection_completed(
+            db,
+            tenant_id=int(tenant_id),
+            warehouse_id=int(batch.warehouse_id) if batch.warehouse_id else None,
+            batch_id=int(batch.id),
+            actor_user_id=performed_by_user_id,
+            label=lbl,
+        )
+        if batch.rw_stock_document_id:
+            rw = db.query(StockDocument).filter(StockDocument.id == int(batch.rw_stock_document_id)).first()
+            emit_production_rw_created(
+                db,
+                tenant_id=int(tenant_id),
+                warehouse_id=int(batch.warehouse_id) if batch.warehouse_id else None,
+                stock_document_id=int(batch.rw_stock_document_id),
+                document_number=str(getattr(rw, "document_number", None) or "") or None,
+                batch_id=int(batch.id),
+                actor_user_id=performed_by_user_id,
+                label=lbl,
+            )
+        emit_production_started(
+            db,
+            tenant_id=int(tenant_id),
+            warehouse_id=int(batch.warehouse_id) if batch.warehouse_id else None,
+            batch_id=int(batch.id),
+            actor_user_id=performed_by_user_id,
+            label=lbl,
+        )
+    except Exception:
+        logger.exception("production activity after collecting failed batch_id=%s", batch.id)
     return serialize_batch(db, batch)
 
 
@@ -1610,6 +1678,31 @@ def finish_production(db: Session, *, tenant_id: int, batch_id: int) -> Producti
     batch.production_completed_at = datetime.utcnow()
     batch.updated_at = datetime.utcnow()
     db.flush()
+    try:
+        from .production_execution.production_domain_activity import emit_production_pw_created
+
+        num = getattr(batch, "number", None) or getattr(batch, "batch_number", None)
+        lbl = str(num).strip() if num else f"BAT-{int(batch.id)}"
+        # Prefer shared PW id from any line
+        pw_id = None
+        for ln in batch.lines or []:
+            if getattr(ln, "pw_stock_document_id", None):
+                pw_id = int(ln.pw_stock_document_id)
+                break
+        if pw_id:
+            pw = db.query(StockDocument).filter(StockDocument.id == pw_id).first()
+            emit_production_pw_created(
+                db,
+                tenant_id=int(tenant_id),
+                warehouse_id=int(batch.warehouse_id) if batch.warehouse_id else None,
+                stock_document_id=pw_id,
+                document_number=str(getattr(pw, "document_number", None) or "") or None,
+                batch_id=int(batch.id),
+                actor_user_id=None,
+                label=lbl,
+            )
+    except Exception:
+        logger.exception("production activity PW_CREATED failed batch_id=%s", batch.id)
     return serialize_batch(db, batch)
 
 

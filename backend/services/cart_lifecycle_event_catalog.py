@@ -168,6 +168,14 @@ def title_pl(event_code: str) -> str:
     code = normalize_event_code(event_code)
     if code in EVENT_TITLES_PL:
         return EVENT_TITLES_PL[code]
+    try:
+        from backend.services.activity_log.domain_event_codes import DOMAIN_EVENT_TITLES_PL
+
+        for k, label in DOMAIN_EVENT_TITLES_PL.items():
+            if normalize_event_code(k) == code:
+                return label
+    except Exception:
+        pass
     recv = _receiving_titles()
     # receiving catalog keys are snake_case; normalize maps to underscore lower already
     for k, label in recv.items():

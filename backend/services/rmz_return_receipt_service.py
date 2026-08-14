@@ -326,10 +326,10 @@ def assert_rmz_stock_receipt_satisfied(
 
 
 def ensure_required_rmz_return_receipt_document(
-    db: Session, rmz: WmsOrderReturn
+    db: Session, rmz: WmsOrderReturn, *, actor_user_id: Optional[int] = None
 ) -> Optional[StockDocument]:
     """Ensure Z-PZ and assert consistency when stock intake is required."""
-    pz_doc = ensure_rmz_return_receipt_document(db, rmz)
+    pz_doc = ensure_rmz_return_receipt_document(db, rmz, actor_user_id=actor_user_id)
     assert_rmz_stock_receipt_satisfied(db, rmz, pz_doc)
     return pz_doc
 
@@ -808,7 +808,12 @@ def _patch_damage_entries_with_stock_links(db: Session, lines: Sequence[RMZLine]
             ln.damage_entries_json = json.dumps(raw_list, ensure_ascii=False)
 
 
-def ensure_rmz_return_receipt_document(db: Session, rmz: WmsOrderReturn) -> Optional[StockDocument]:
+def ensure_rmz_return_receipt_document(
+    db: Session,
+    rmz: WmsOrderReturn,
+    *,
+    actor_user_id: Optional[int] = None,
+) -> Optional[StockDocument]:
     """
     Tworzy lub dopisuje do Z-PZ (PZ zwrotna) przy finalizacji RMZ.
     REJECTED nie generuje ruchów magazynowych.
@@ -860,6 +865,19 @@ def ensure_rmz_return_receipt_document(db: Session, rmz: WmsOrderReturn) -> Opti
     _patch_damage_entries_with_stock_links(db, lines, int(doc.id))
     db.flush()
     logger.info("[Z-PZ] posted rmz_id=%s doc_id=%s new_lines=%s", rid, doc.id, len(item_rows))
+    if item_rows:
+        try:
+            from .returns.return_domain_activity import emit_return_receipt_created
+
+            emit_return_receipt_created(
+                db,
+                rmz=rmz,
+                doc=doc,
+                actor_user_id=actor_user_id,
+                new_line_count=len(item_rows),
+            )
+        except Exception:
+            logger.exception("RETURN_RECEIPT_CREATED activity failed rmz_id=%s", rid)
     return doc
 
 

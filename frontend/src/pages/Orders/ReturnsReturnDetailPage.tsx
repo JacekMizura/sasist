@@ -720,23 +720,6 @@ export default function ReturnsReturnDetailPage() {
     return bankTransfer.address;
   }, [orderLite?.addresses_json, bankTransfer.address]);
 
-  const activityEntries = useMemo(() => {
-    if (!data) return [];
-    const rows: { at: string; msg: string }[] = [];
-    if (data.created_at) {
-      rows.push({ at: data.created_at, msg: "Utworzono dokument RMZ" });
-    }
-    for (const ln of data.lines) {
-      if (ln.processed_at) {
-        rows.push({
-          at: ln.processed_at,
-          msg: `Pozycja #${ln.order_item_id}: ${decisionLabelPl(ln.decision)}`,
-        });
-      }
-    }
-    return rows.sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime());
-  }, [data]);
-
   const panelCorrectionFileRaw = useMemo(() => {
     try {
       const v = localStorage.getItem(`panel.rmz.correctionFile.${rid}`);
@@ -965,7 +948,6 @@ export default function ReturnsReturnDetailPage() {
     fi,
     bankRecipient,
     bankTransfer,
-    activityEntries,
     panelCorrectionFileRaw,
     panelSummary,
     panelSubgroups: panelSubgroups as unknown as OrderUiPanelSubgroupRead[] | null,

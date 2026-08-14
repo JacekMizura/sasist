@@ -1,0 +1,50 @@
+"""Domain activity event codes — returns + production milestones."""
+
+from __future__ import annotations
+
+# Returns
+RETURN_CREATED = "RETURN_CREATED"
+RETURN_LINE_DECISION = "RETURN_LINE_DECISION"
+RETURN_STOCK_INTAKE_SELECTED = "RETURN_STOCK_INTAKE_SELECTED"
+RETURN_COMPONENT_RECOVERY = "RETURN_COMPONENT_RECOVERY"
+RETURN_COMPONENT_SCRAP = "RETURN_COMPONENT_SCRAP"
+RETURN_RECEIPT_CREATED = "RETURN_RECEIPT_CREATED"
+RETURN_PUTAWAY_COMPLETED = "RETURN_PUTAWAY_COMPLETED"
+RETURN_FINALIZED = "RETURN_FINALIZED"
+
+# Production milestones (do not duplicate existing PRODUCTION_ORDER_* order-activity codes)
+PRODUCTION_RELEASED = "PRODUCTION_RELEASED"
+PRODUCTION_COLLECTION_STARTED = "PRODUCTION_COLLECTION_STARTED"
+PRODUCTION_COLLECTION_COMPLETED = "PRODUCTION_COLLECTION_COMPLETED"
+PRODUCTION_RW_CREATED = "PRODUCTION_RW_CREATED"
+PRODUCTION_STARTED = "PRODUCTION_STARTED"
+PRODUCTION_PROGRESS_REPORTED = "PRODUCTION_PROGRESS_REPORTED"
+PRODUCTION_PW_CREATED = "PRODUCTION_PW_CREATED"
+PRODUCTION_PUTAWAY_COMPLETED = "PRODUCTION_PUTAWAY_COMPLETED"
+PRODUCTION_COMPLETED = "PRODUCTION_COMPLETED"
+
+DOMAIN_EVENT_TITLES_PL: dict[str, str] = {
+    RETURN_CREATED: "Utworzono zwrot",
+    RETURN_LINE_DECISION: "Zapisano decyzję pozycji zwrotu",
+    RETURN_STOCK_INTAKE_SELECTED: "Wybrano sposób przyjęcia magazynowego",
+    RETURN_COMPONENT_RECOVERY: "Odzyskano komponent ze zwrotu",
+    RETURN_COMPONENT_SCRAP: "Odrzucono komponent jako scrap",
+    RETURN_RECEIPT_CREATED: "Utworzono dokument Z-PZ",
+    RETURN_PUTAWAY_COMPLETED: "Rozlokowano przyjęcie zwrotu",
+    RETURN_FINALIZED: "Zwrot zakończony",
+    PRODUCTION_RELEASED: "Wydano zlecenie produkcji do WMS",
+    PRODUCTION_COLLECTION_STARTED: "Rozpoczęto pobieranie komponentów",
+    PRODUCTION_COLLECTION_COMPLETED: "Zakończono pobieranie komponentów",
+    PRODUCTION_RW_CREATED: "Utworzono dokument RW produkcji",
+    PRODUCTION_STARTED: "Rozpoczęto produkcję",
+    PRODUCTION_PROGRESS_REPORTED: "Zraportowano postęp produkcji",
+    PRODUCTION_PW_CREATED: "Utworzono dokument PW produkcji",
+    PRODUCTION_PUTAWAY_COMPLETED: "Rozlokowano produkt gotowy z produkcji",
+    PRODUCTION_COMPLETED: "Zakończono produkcję",
+}
+
+INTAKE_LABEL_PL: dict[str, str] = {
+    "FG": "gotowy produkt",
+    "DISASSEMBLE": "rozmontowanie",
+    "MIXED": "mixed (gotowy + rozmontowanie)",
+}

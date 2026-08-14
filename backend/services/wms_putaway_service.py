@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 import math
 from datetime import datetime
-from typing import List, Tuple
+from typing import List, Optional, Tuple
 
 from sqlalchemy import func
 from sqlalchemy.orm import Session
@@ -1783,7 +1783,106 @@ def patch_wms_putaway_carrier_bulk(
     )
 
 
-def finalize_wms_relocation_pz(db: Session, tenant_id: int, document_id: int) -> StockDocumentRead:
+def _emit_putaway_domain_activity(
+    db: Session,
+    *,
+    doc: StockDocument,
+    rows: List[StockDocumentItem],
+    actor_user_id: Optional[int] = None,
+    production_completed: bool = False,
+) -> None:
+    """Business milestones for Z-PZ return putaway and production PW putaway."""
+    dt = str(doc.document_type or "").strip().upper()
+    product_ids = sorted(
+        {
+            int(r.product_id)
+            for r in rows
+            if getattr(r, "product_id", None) is not None and int(r.product_id) > 0
+        }
+    )
+    wh_id = int(doc.warehouse_id) if getattr(doc, "warehouse_id", None) else None
+    tid = int(doc.tenant_id)
+
+    if dt in ("Z_PZ", "RETURN_RECEIPT", "PZ_RT"):
+        rmz_ids: set[int] = set()
+        legacy = getattr(doc, "rmz_id", None)
+        if legacy is not None and int(legacy) > 0:
+            rmz_ids.add(int(legacy))
+        raw_json = getattr(doc, "source_rmz_ids_json", None)
+        if raw_json:
+            try:
+                import json as _json
+
+                parsed = _json.loads(str(raw_json))
+                if isinstance(parsed, list):
+                    for x in parsed:
+                        try:
+                            if int(x) > 0:
+                                rmz_ids.add(int(x))
+                        except (TypeError, ValueError):
+                            pass
+            except Exception:
+                pass
+        for r in rows:
+            sid = getattr(r, "source_rmz_id", None)
+            if sid is not None and int(sid) > 0:
+                rmz_ids.add(int(sid))
+        if not rmz_ids:
+            return
+        from .returns.return_domain_activity import emit_return_putaway_completed
+        from ..models.wms_order_return import WmsOrderReturn
+
+        for rid in sorted(rmz_ids):
+            rmz = db.query(WmsOrderReturn).filter(WmsOrderReturn.id == rid).first()
+            emit_return_putaway_completed(
+                db,
+                tenant_id=tid,
+                warehouse_id=wh_id,
+                rmz_id=rid,
+                order_id=int(rmz.order_id) if rmz and rmz.order_id else None,
+                doc=doc,
+                actor_user_id=actor_user_id,
+                product_ids=product_ids,
+            )
+        return
+
+    if dt == "PW" and str(getattr(doc, "creation_source", "") or "").strip().upper() == "PRODUCTION":
+        from .production_execution.production_domain_activity import (
+            emit_production_completed,
+            emit_production_putaway_completed,
+        )
+
+        mo_id = getattr(doc, "production_order_id", None)
+        bat_id = getattr(doc, "production_batch_id", None)
+        emit_production_putaway_completed(
+            db,
+            tenant_id=tid,
+            warehouse_id=wh_id,
+            stock_document_id=int(doc.id),
+            document_number=str(getattr(doc, "document_number", None) or "") or None,
+            production_order_id=int(mo_id) if mo_id else None,
+            batch_id=int(bat_id) if bat_id else None,
+            product_id=product_ids[0] if product_ids else None,
+            actor_user_id=actor_user_id,
+        )
+        if production_completed:
+            emit_production_completed(
+                db,
+                tenant_id=tid,
+                warehouse_id=wh_id,
+                production_order_id=int(mo_id) if mo_id else None,
+                batch_id=int(bat_id) if bat_id else None,
+                actor_user_id=None,  # system completion after putaway
+            )
+
+
+def finalize_wms_relocation_pz(
+    db: Session,
+    tenant_id: int,
+    document_id: int,
+    *,
+    actor_user_id: Optional[int] = None,
+) -> StockDocumentRead:
     """
     Zamknięcie procesu rozlokowania w WMS: ustawia relocation_status=DONE; opcjonalnie status=zakonczone.
     Nie modyfikuje inventory ani stock_operations.
@@ -1871,7 +1970,17 @@ def finalize_wms_relocation_pz(db: Session, tenant_id: int, document_id: int) ->
     _sync_po_from_pz(db, tenant_id, document_id)
     from .production_execution.batch_putaway_completion import try_complete_production_execution_from_pw_document
 
-    try_complete_production_execution_from_pw_document(db, doc)
+    completed_prod = try_complete_production_execution_from_pw_document(db, doc)
+    try:
+        _emit_putaway_domain_activity(
+            db,
+            doc=doc,
+            rows=rows,
+            actor_user_id=actor_user_id,
+            production_completed=bool(completed_prod),
+        )
+    except Exception:
+        logger.exception("domain activity on putaway finalize failed doc=%s", document_id)
     # Supply Flow — publish event only (Engine solely via Event Dispatcher).
     try:
         from .supply_flow.events import EVENT_PUTAWAY_FINISHED, publish_supply_flow_event

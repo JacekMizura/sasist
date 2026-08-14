@@ -38,6 +38,11 @@ from .constants import TERMINAL_EXECUTION_STATUSES
 logger = logging.getLogger(__name__)
 
 
+def _mo_activity_label(order: ProductionOrder) -> str:
+    num = getattr(order, "number", None) or getattr(order, "document_number", None)
+    return str(num).strip() if num else f"MO-{int(order.id)}"
+
+
 def _load_order(db: Session, *, tenant_id: int, order_id: int) -> ProductionOrder:
     order = (
         db.query(ProductionOrder)
@@ -120,6 +125,19 @@ def release_order_to_wms(
     order.released_by_user_id = int(released_by_user_id) if released_by_user_id else None
     order.updated_at = datetime.utcnow()
     db.flush()
+    try:
+        from .production_domain_activity import emit_production_released
+
+        emit_production_released(
+            db,
+            tenant_id=int(tenant_id),
+            warehouse_id=int(order.warehouse_id) if order.warehouse_id else None,
+            production_order_id=int(order.id),
+            actor_user_id=int(released_by_user_id) if released_by_user_id else None,
+            label=_mo_activity_label(order),
+        )
+    except Exception:
+        logger.exception("production activity RELEASED failed order_id=%s", order.id)
     logger.info("[production.release_wms] order_id=%s released_by=%s", order.id, released_by_user_id)
     return serialize_order(db, order, with_availability=True)
 
@@ -146,6 +164,18 @@ def start_order_collecting(db: Session, *, tenant_id: int, order_id: int):
     lock_production_reservations(db, tenant_id=int(order.tenant_id), production_order_id=int(order.id))
     order.updated_at = datetime.utcnow()
     db.flush()
+    try:
+        from .production_domain_activity import emit_production_collection_started
+
+        emit_production_collection_started(
+            db,
+            tenant_id=int(tenant_id),
+            warehouse_id=int(order.warehouse_id) if order.warehouse_id else None,
+            production_order_id=int(order.id),
+            label=_mo_activity_label(order),
+        )
+    except Exception:
+        logger.exception("production activity COLLECTION_STARTED failed order_id=%s", order.id)
     return serialize_order(db, order, with_availability=True)
 
 
@@ -447,6 +477,45 @@ def finish_order_collecting(
     order.collecting_completed_at = datetime.utcnow()
     order.updated_at = datetime.utcnow()
     db.flush()
+    try:
+        from .production_domain_activity import (
+            emit_production_collection_completed,
+            emit_production_rw_created,
+            emit_production_started,
+        )
+
+        lbl = _mo_activity_label(order)
+        emit_production_collection_completed(
+            db,
+            tenant_id=int(tenant_id),
+            warehouse_id=int(order.warehouse_id) if order.warehouse_id else None,
+            production_order_id=int(order.id),
+            actor_user_id=performed_by_user_id,
+            label=lbl,
+        )
+        if order.rw_stock_document_id:
+            rw = db.query(StockDocument).filter(StockDocument.id == int(order.rw_stock_document_id)).first()
+            emit_production_rw_created(
+                db,
+                tenant_id=int(tenant_id),
+                warehouse_id=int(order.warehouse_id) if order.warehouse_id else None,
+                stock_document_id=int(order.rw_stock_document_id),
+                document_number=str(getattr(rw, "document_number", None) or "") or None,
+                production_order_id=int(order.id),
+                product_id=int(order.product_id) if order.product_id else None,
+                actor_user_id=performed_by_user_id,
+                label=lbl,
+            )
+        emit_production_started(
+            db,
+            tenant_id=int(tenant_id),
+            warehouse_id=int(order.warehouse_id) if order.warehouse_id else None,
+            production_order_id=int(order.id),
+            actor_user_id=performed_by_user_id,
+            label=lbl,
+        )
+    except Exception:
+        logger.exception("production activity after collecting failed order_id=%s", order.id)
     return serialize_order(db, order, with_availability=False)
 
 
@@ -475,6 +544,22 @@ def update_order_production_progress(
     order.produced_quantity = round(new_qty, 4)
     order.updated_at = datetime.utcnow()
     db.flush()
+    try:
+        from .production_domain_activity import emit_production_progress_reported
+
+        emit_production_progress_reported(
+            db,
+            tenant_id=int(tenant_id),
+            warehouse_id=int(order.warehouse_id) if order.warehouse_id else None,
+            production_order_id=int(order.id),
+            product_id=int(order.product_id) if order.product_id else None,
+            qty=add_qty,
+            actor_user_id=performed_by_user_id,
+            label=_mo_activity_label(order),
+            correlation_suffix=f"produced:{round(new_qty, 4)}",
+        )
+    except Exception:
+        logger.exception("production activity PROGRESS failed order_id=%s", order.id)
 
     if str(getattr(order, "source_type", "") or "") == PRODUCTION_ORDER_SOURCE_ORDERS:
         buffer_id = resolve_orders_mo_buffer_location_id(db, order)
@@ -544,6 +629,19 @@ def finish_order_production(
                 performed_by_user_id=performed_by_user_id,
             )
         complete_orders_mo_without_putaway(db, mo=order)
+        try:
+            from .production_domain_activity import emit_production_completed
+
+            emit_production_completed(
+                db,
+                tenant_id=int(tenant_id),
+                warehouse_id=int(order.warehouse_id) if order.warehouse_id else None,
+                production_order_id=int(order.id),
+                actor_user_id=performed_by_user_id,
+                label=_mo_activity_label(order),
+            )
+        except Exception:
+            logger.exception("production activity COMPLETED (orders) failed order_id=%s", order.id)
         return serialize_order(db, order, with_availability=False, with_order_sources=True)
 
     create_order_pw_document_for_putaway(db, order=order, performed_by_user_id=performed_by_user_id)
@@ -551,6 +649,28 @@ def finish_order_production(
     order.production_completed_at = datetime.utcnow()
     order.updated_at = datetime.utcnow()
     db.flush()
+    try:
+        from .production_domain_activity import emit_production_pw_created
+
+        pw = (
+            db.query(StockDocument).filter(StockDocument.id == int(order.pw_stock_document_id)).first()
+            if order.pw_stock_document_id
+            else None
+        )
+        if order.pw_stock_document_id:
+            emit_production_pw_created(
+                db,
+                tenant_id=int(tenant_id),
+                warehouse_id=int(order.warehouse_id) if order.warehouse_id else None,
+                stock_document_id=int(order.pw_stock_document_id),
+                document_number=str(getattr(pw, "document_number", None) or "") or None,
+                production_order_id=int(order.id),
+                product_id=int(order.product_id) if order.product_id else None,
+                actor_user_id=performed_by_user_id,
+                label=_mo_activity_label(order),
+            )
+    except Exception:
+        logger.exception("production activity PW_CREATED failed order_id=%s", order.id)
     return serialize_order(db, order, with_availability=False)
 
 

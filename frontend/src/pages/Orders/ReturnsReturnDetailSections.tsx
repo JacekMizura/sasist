@@ -16,7 +16,7 @@ import { RETURN_DETAIL_SECTION_LABELS_PL } from "../../constants/returnModuleDet
 import { getReturnUiStatusSummary, patchReturnRmzUiStatus } from "../../api/returnUiStatusApi";
 import { DAMAGE_TENANT_ID } from "../damage/damageShared";
 import { PrimaryButton, primaryButtonClassName } from "../../design-system/PrimaryButton";
-import { OrderHistoryTimeline } from "../../components/orders/OrderHistoryTimeline";
+import ActivityLogPanel from "../../components/activityLog/ActivityLogPanel";
 import { PanelBulkStatusPickerDropdown } from "../../components/panel/PanelBulkStatusPickerDropdown";
 import type { OrderUiPanelSubgroupRead, OrderUiStatusPanelSummary } from "../../types/orderUiStatus";
 import {
@@ -25,7 +25,6 @@ import {
   ReturnDetailWidgetShell,
   RETURN_WIDGET_TEXTAREA_CLASS,
 } from "../../components/returns/detailWidgets/ReturnDetailWidgetShell";
-import { buildReturnDetailTimelineEvents } from "../../components/returns/detailWidgets/returnDetailWidgetUtils";
 
 type FiBreakdown = {
   total: number;
@@ -46,7 +45,6 @@ export type RmzDetailSectionRenderCtx = {
   fi: FiBreakdown | null;
   bankRecipient: string;
   bankTransfer: { recipientName: string | null; bankAccount: string | null; address: string | null };
-  activityEntries: { at: string; msg: string }[];
   panelCorrectionFileRaw: string | null;
   panelSummary: ReturnUiStatusPanelSummary | null;
   panelSubgroups?: OrderUiPanelSubgroupRead[] | null;
@@ -93,7 +91,6 @@ export function renderRmzDetailSection(id: ReturnDetailSectionId, ctx: RmzDetail
     fi,
     bankRecipient,
     bankTransfer,
-    activityEntries,
     panelCorrectionFileRaw,
     panelSummary,
     patchingUi,
@@ -202,21 +199,13 @@ export function renderRmzDetailSection(id: ReturnDetailSectionId, ctx: RmzDetail
     case "decision_history":
       return (
         <ReturnDetailWidgetShell title={label}>
-          {activityEntries.length === 0 ? (
-            <ReturnDetailEmptyState
-              title="Brak wpisów w dzienniku"
-              description="Pełna historia operacyjna jest też dostępna w WMS."
-            />
-          ) : (
-            <OrderHistoryTimeline
-              compact
-              hideHeader
-              bare
-              events={buildReturnDetailTimelineEvents(activityEntries)}
-              formatDate={formatWhen}
-              title="Dziennik"
-            />
-          )}
+          <ActivityLogPanel
+            objectType="return"
+            objectId={rid}
+            title="Dziennik"
+            defaultCollapsed={false}
+            className="mt-0 border-0 p-0 shadow-none"
+          />
         </ReturnDetailWidgetShell>
       );
 

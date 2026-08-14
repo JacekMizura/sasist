@@ -17,6 +17,8 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session, joinedload
 
 from ..database import get_db
+from ..auth.deps import get_optional_current_user
+from ..models.app_user import AppUser
 from ..models.customer import Customer
 from ..models.order import Order
 from ..models.order_item import OrderItem
@@ -2446,7 +2448,11 @@ def _ordered_qty_for_return_line(db: Session, oi: OrderItem) -> int:
 
 @router.post("", response_model=WmsReturnRead)
 @router.post("/", response_model=WmsReturnRead)
-def create_wms_return(body: WmsReturnCreate, db: Session = Depends(get_db)):
+def create_wms_return(
+    body: WmsReturnCreate,
+    db: Session = Depends(get_db),
+    current_user: Optional[AppUser] = Depends(get_optional_current_user),
+):
     # Resolve warehouse from the order row (same as GET .../orders/{id}/returns), not tenant default —
     # otherwise numeric lookup can load a non-default-warehouse order and POST here returns 404.
     order = (
@@ -2541,6 +2547,15 @@ def create_wms_return(body: WmsReturnCreate, db: Session = Depends(get_db)):
     row = _load_rmz(db, row.id, body.tenant_id, wh_id)
     if not row:
         raise HTTPException(status_code=500, detail="Failed to load created return")
+    try:
+        from ..services.returns.return_domain_activity import emit_return_created
+
+        emit_return_created(db, rmz=row, actor_user_id=getattr(current_user, "id", None) if current_user else None)
+        db.commit()
+    except Exception:
+        db.rollback()
+        logger.exception("return activity RETURN_CREATED failed rmz_id=%s", getattr(row, "id", None))
+        row = _load_rmz(db, row.id, body.tenant_id, wh_id) or row
     return _serialize_return_read(db, row)
 
 
@@ -2755,6 +2770,7 @@ def process_rmz_line_split(
         description="When true, advance RMZ workflow (OMS sync). Default false — draft line persist only.",
     ),
     db: Session = Depends(get_db),
+    current_user: Optional[AppUser] = Depends(get_optional_current_user),
 ):
     wh_id = _warehouse_id_for_return_mutation(db, return_id, tenant_id, warehouse_id)
     row = _load_rmz(db, return_id, tenant_id, wh_id)
@@ -2809,6 +2825,19 @@ def process_rmz_line_split(
                 tenant_id,
                 next_key,
             )
+    try:
+        from ..services.returns.return_domain_activity import (
+            emit_component_recoveries_from_line_state,
+            emit_return_line_decision,
+            emit_return_stock_intake_selected,
+        )
+
+        actor_id = int(current_user.id) if current_user and getattr(current_user, "id", None) else None
+        emit_return_line_decision(db, rmz=row, line=rmz_line, actor_user_id=actor_id)
+        emit_return_stock_intake_selected(db, rmz=row, line=rmz_line, actor_user_id=actor_id)
+        emit_component_recoveries_from_line_state(db, rmz=row, line=rmz_line, actor_user_id=actor_id)
+    except Exception:
+        logger.exception("return activity on split-process failed")
     db.commit()
 
     row = _load_rmz(db, return_id, tenant_id, wh_id)
@@ -2848,6 +2877,7 @@ def process_rmz_line(
         description="When true, advance RMZ workflow (OMS sync). Default false — draft line persist only.",
     ),
     db: Session = Depends(get_db),
+    current_user: Optional[AppUser] = Depends(get_optional_current_user),
 ):
     wh_id = _warehouse_id_for_return_mutation(db, return_id, tenant_id, warehouse_id)
     row = _load_rmz(db, return_id, tenant_id, wh_id)
@@ -2949,6 +2979,14 @@ def process_rmz_line(
                 next_key,
             )
 
+    try:
+        from ..services.returns.return_domain_activity import emit_return_line_decision
+
+        actor_id = int(current_user.id) if current_user and getattr(current_user, "id", None) else None
+        emit_return_line_decision(db, rmz=row, line=rmz_line, actor_user_id=actor_id)
+    except Exception:
+        logger.exception("return activity on process failed")
+
     db.commit()
 
     row = _load_rmz(db, return_id, tenant_id, wh_id)
@@ -2968,6 +3006,7 @@ def finalize_wms_return(
         description="Opcjonalny magazyn; musi zgadzać się z magazynem dokumentu RMZ (jak GET /wms/returns/id/{id}).",
     ),
     db: Session = Depends(get_db),
+    current_user: Optional[AppUser] = Depends(get_optional_current_user),
 ):
     """Atomowy finalize RMZ: linie → Z-PZ → status → refund (jedna transakcja)."""
     wh_id = _warehouse_id_for_return_mutation(db, return_id, tenant_id, warehouse_id)
@@ -2992,6 +3031,7 @@ def finalize_wms_return(
             settings=settings,
             refund=body.refund,
             process_refund=bool(body.process_refund),
+            actor_user_id=int(current_user.id) if current_user and getattr(current_user, "id", None) else None,
         )
         db.commit()
     except HTTPException:
@@ -3022,9 +3062,10 @@ def finalize_wms_return_short_path(
         description="Opcjonalny magazyn; musi zgadzać się z magazynem dokumentu RMZ.",
     ),
     db: Session = Depends(get_db),
+    current_user: Optional[AppUser] = Depends(get_optional_current_user),
 ):
     """Alias bez segmentu /id/ — ten sam atomowy finalize co /wms/returns/id/{id}/finalize."""
-    return finalize_wms_return(return_id, body, tenant_id, warehouse_id, db)
+    return finalize_wms_return(return_id, body, tenant_id, warehouse_id, db, current_user)
 
 
 @returns_id_router.post("/{return_id:int}/commit-wms", response_model=WmsReturnRead)
@@ -3314,6 +3355,7 @@ def update_wms_return_bundle_components(
     tenant_id: int = Query(...),
     warehouse_id: Optional[int] = Query(None, ge=1),
     db: Session = Depends(get_db),
+    current_user: Optional[AppUser] = Depends(get_optional_current_user),
 ) -> WmsReturnRead:
     """Zapis wyboru składników bundle na linii RMZ (snapshot-only refund + STOCK FG/DISASSEMBLE)."""
     from ..services.bundles.bundle_stock_return_intake import apply_stock_bundle_intake
@@ -3353,6 +3395,17 @@ def update_wms_return_bundle_components(
         )
     except RmzFinalizeError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
+    try:
+        from ..services.returns.return_domain_activity import (
+            emit_component_recoveries_from_line_state,
+            emit_return_stock_intake_selected,
+        )
+
+        actor_id = int(current_user.id) if current_user and getattr(current_user, "id", None) else None
+        emit_return_stock_intake_selected(db, rmz=row, line=ln, actor_user_id=actor_id)
+        emit_component_recoveries_from_line_state(db, rmz=row, line=ln, actor_user_id=actor_id)
+    except Exception:
+        logger.exception("return activity on bundle-components failed")
     db.commit()
     return _serialize_return_read(db, row)
 

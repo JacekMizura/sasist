@@ -189,7 +189,12 @@ def patch_finalize_wms_relocation_pz(
     Does not modify inventory (quantities were saved during putaway).
     """
     try:
-        doc = finalize_wms_relocation_pz(db, tenant_id, document_id)
+        doc = finalize_wms_relocation_pz(
+            db,
+            tenant_id,
+            document_id,
+            actor_user_id=int(user.id) if user and getattr(user, "id", None) else None,
+        )
         log_wms_workforce_activity(
             db,
             user=user,

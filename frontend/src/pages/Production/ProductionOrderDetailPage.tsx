@@ -40,6 +40,7 @@ import {
 import { productionOrdersSourceSummary } from "./productionNextAction";
 import { getProductionOperationalState, shortageHintFromOrderLines } from "./productionOperationalState";
 import { Card, ProgressBar, StatusBadge, primaryButtonClassName, typography } from "@/design-system";
+import ActivityLogPanel from "../../components/activityLog/ActivityLogPanel";
 
 const DEFAULT_TENANT = 1;
 
@@ -600,6 +601,17 @@ export default function ProductionOrderDetailPage() {
       </section>
 
       <PrintFlowModals flow={printFlow} />
+
+      {order?.id != null ? (
+        <section className="mt-6">
+          <ActivityLogPanel
+            objectType="production"
+            objectId={Number(order.id)}
+            title="Historia produkcji"
+            defaultCollapsed={false}
+          />
+        </section>
+      ) : null}
 
       {printStartOpen ? (
         <div className="fixed inset-0 z-[12000] flex items-center justify-center bg-slate-900/40 p-4">

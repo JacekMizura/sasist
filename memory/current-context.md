@@ -1,8 +1,15 @@
 ﻿## Active
 
+**Ujednolicona historia Activity Log — Zwroty + Produkcja (2026-08-14):**
+- Helper `record_domain_activity` + correlation_id idempotency (jeden event, wiele linków)
+- Zwroty: CREATE/DECISION/INTAKE/RECOVERY/SCRAP/Z-PZ/PUTAWAY/FINALIZED z actor
+- Produkcja milestones: RELEASED…COMPLETED (+ RW/PW); bez duplikacji PRODUCTION_ORDER_*
+- FE: RMZ Dziennik → ActivityLogPanel `return`; Order/Product istniejące panele; MO detail timeline
+
 **FIX UAT blocker STOCK DISASSEMBLE Z-PZ (2026-08-14):** `_any_planned_lines` nie widziało accepted `ReturnLineBundleComponent` przy FG=0 → ensure skip → finalize zamykał RMZ bez dokumentu. Gate + `ensure_required_*` + assert przed transition.
 
 **STOCK bundle disassemble on return (2026-08-14):** FG vs Rozmontuj; snapshot `OrderLineBundleComponent`; MIXED fg+dq; shared Z-PZ emission untouched.
+
 
 **Wspólna emisja Z-PZ odzysku komponentów (2026-08-14):** commit `8157f91e` — `ComponentReturnRecoveryLine` + adapters + `append_accepted_component_lines`; bez migracji modeli.
 

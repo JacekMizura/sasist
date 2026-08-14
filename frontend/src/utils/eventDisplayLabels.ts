@@ -116,6 +116,27 @@ export const EVENT_DISPLAY_LABELS: Record<string, string> = {
   PZ_PRODUCT_REMOVED: "Usunięto produkt",
   PZ_RECEIVING_FINISHED: "Zakończono przyjęcie",
   PZ_PUTAWAY: "Rozlokowano towar",
+
+  // --- Returns / RMZ ---
+  RETURN_CREATED: "Utworzono zwrot",
+  RETURN_LINE_DECISION: "Zapisano decyzję pozycji zwrotu",
+  RETURN_STOCK_INTAKE_SELECTED: "Wybrano sposób przyjęcia magazynowego",
+  RETURN_COMPONENT_RECOVERY: "Odzyskano komponent ze zwrotu",
+  RETURN_COMPONENT_SCRAP: "Odrzucono komponent jako scrap",
+  RETURN_RECEIPT_CREATED: "Utworzono dokument Z-PZ",
+  RETURN_PUTAWAY_COMPLETED: "Rozlokowano przyjęcie zwrotu",
+  RETURN_FINALIZED: "Zwrot zakończony",
+
+  // --- Production milestones ---
+  PRODUCTION_RELEASED: "Wydano zlecenie produkcji do WMS",
+  PRODUCTION_COLLECTION_STARTED: "Rozpoczęto pobieranie komponentów",
+  PRODUCTION_COLLECTION_COMPLETED: "Zakończono pobieranie komponentów",
+  PRODUCTION_RW_CREATED: "Utworzono dokument RW produkcji",
+  PRODUCTION_STARTED: "Rozpoczęto produkcję",
+  PRODUCTION_PROGRESS_REPORTED: "Zraportowano postęp produkcji",
+  PRODUCTION_PW_CREATED: "Utworzono dokument PW produkcji",
+  PRODUCTION_PUTAWAY_COMPLETED: "Rozlokowano produkt gotowy z produkcji",
+  PRODUCTION_COMPLETED: "Zakończono produkcję",
 };
 
 /** Normalize any stored form: cart_released | CART_RELEASED | "cart released" → CART_RELEASED */

@@ -161,7 +161,7 @@ def finalize_rmz_return(
     validate_rmz_lines_ready_for_finalize(rmz_lines, require_photos=bool(settings.require_photos))
 
     try:
-        pz_doc = ensure_required_rmz_return_receipt_document(db, row)
+        pz_doc = ensure_required_rmz_return_receipt_document(db, row, actor_user_id=actor_user_id)
     except ValueError as exc:
         raise RmzFinalizeError(str(exc)) from exc
 
@@ -191,6 +191,33 @@ def finalize_rmz_return(
             "process_refund": process_refund,
         },
     )
+
+    try:
+        from .return_domain_activity import emit_return_finalized
+
+        for ln in rmz_lines:
+            from .return_domain_activity import (
+                emit_return_line_decision,
+                emit_return_stock_intake_selected,
+                emit_component_recoveries_from_line_state,
+            )
+
+            if getattr(ln, "decision", None):
+                emit_return_line_decision(db, rmz=row, line=ln, actor_user_id=actor_user_id)
+            if getattr(ln, "stock_intake_mode", None):
+                emit_return_stock_intake_selected(db, rmz=row, line=ln, actor_user_id=actor_user_id)
+            emit_component_recoveries_from_line_state(
+                db, rmz=row, line=ln, actor_user_id=actor_user_id
+            )
+        emit_return_finalized(
+            db,
+            rmz=row,
+            actor_user_id=actor_user_id,
+            transition=transition_key,
+            z_pz_document_id=getattr(pz_doc, "id", None) if pz_doc is not None else None,
+        )
+    except Exception:
+        logger.exception("return domain activity on finalize failed rmz_id=%s", row.id)
 
     logger.info(
         "[returns.finalize.done] return_id=%s transition=%s z_pz_id=%s",
