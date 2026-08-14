@@ -33,6 +33,7 @@ import {
 } from "../../modules/production/productionListFilters";
 import {
   productionExecutionMethodLabel,
+  productionSourceBadgeLabel,
   productionSourceTypeLabel,
   resolveProductionPriority,
   type ProductionPriorityLevel,
@@ -132,7 +133,6 @@ function OrderWorkCard({
       : null;
 
   const secondaryBits = [
-    row.number,
     isOrder && row.sourceType ? productionSourceTypeLabel(row.sourceType) : null,
     isPrintMethod ? productionExecutionMethodLabel(row.productionExecutionMethod) : null,
   ].filter(Boolean);
@@ -175,9 +175,15 @@ function OrderWorkCard({
       productImageUrl={isOrder ? row.productImageUrl : null}
       qtyLabel={`${formatQty(plannedQty)} szt.`}
       productMeta={ordersSummary}
-      secondaryMeta={secondaryBits.join(" · ")}
+      documentNumber={row.number}
+      sourceBadge={productionSourceBadgeLabel({
+        kind: row.kind,
+        sourceType: isOrder ? row.sourceType : null,
+      })}
+      secondaryMeta={secondaryBits.join(" · ") || null}
       scheduleMeta={scheduleBits.join(" · ")}
       selected={selected}
+      compact
       showThumb={isOrder}
       onCtaClick={handlePrimary}
       ctaDisabled={Boolean(next.disabled)}
@@ -235,6 +241,8 @@ export default function ProductionOrdersPage() {
     }
   }, [isHydrated, searchParams, setAppliedFilters, setDraftFilters]);
 
+  const dashboardBucket = searchParams.get("bucket");
+
   const reload = useCallback(async () => {
     if (warehouseId == null || !isHydrated) return;
     setLoading(true);
@@ -259,8 +267,38 @@ export default function ProductionOrdersPage() {
 
   const rows = useMemo(() => {
     const all = [...batches.map(productionBatchToRow), ...orders.map(productionOrderToRow)];
-    return filterProductionOrderRows(all, appliedFilters);
-  }, [batches, orders, appliedFilters]);
+    let filtered = filterProductionOrderRows(all, appliedFilters);
+    if (dashboardBucket === "reaction" || dashboardBucket === "todo" || dashboardBucket === "in_progress") {
+      filtered = filtered.filter((row) => {
+        const isOrder = row.kind === "order";
+        const state = getProductionOperationalState({
+          executionKind: row.kind === "batch" ? "batch" : "order",
+          id: row.id,
+          status: row.status,
+          sourceType: isOrder ? row.sourceType : "MANUAL",
+          hasShortages: row.hasShortages,
+          materialsReserved: isOrder ? row.materialsReserved : undefined,
+          isReleasedToWms: row.isReleasedToWms,
+          isPrintInterface: isOrder ? row.isPrintInterface : false,
+          productionExecutionMethod: isOrder ? row.productionExecutionMethod : null,
+          producedQuantity: isOrder ? row.producedQty : 0,
+          plannedQuantity: row.qty,
+          progressPercent: row.progressPercent,
+          sourceOrderCount: isOrder ? row.sourceOrderCount : undefined,
+          sourceRequestedQuantityTotal: isOrder ? row.sourceRequestedQuantityTotal : undefined,
+          sourceShortageQuantityTotal: isOrder ? row.sourceShortageQuantityTotal : undefined,
+          sourceShortageCount: isOrder ? row.sourceShortageCount : undefined,
+          sourceFulfilledOrderCount: isOrder ? row.sourceFulfilledOrderCount : undefined,
+          sourceAwaitingPackingOrderCount: isOrder ? row.sourceAwaitingPackingOrderCount : undefined,
+          shortageComponentHint: isOrder ? row.shortageComponentHint : undefined,
+          shortagePrimaryMissingQty: isOrder ? row.shortagePrimaryMissingQty : undefined,
+          shortageAdditionalCount: isOrder ? row.shortageAdditionalCount : undefined,
+        });
+        return state.dashboardBucket === dashboardBucket;
+      });
+    }
+    return filtered;
+  }, [batches, orders, appliedFilters, dashboardBucket]);
 
   const activeFilterCount = countActiveProductionOrdersFilters(appliedFilters);
   const highlightKey = searchParams.get("highlight");

@@ -108,7 +108,21 @@ class FinishedProductShortageRead(BaseModel):
     product_image_url: Optional[str] = None
     batch_id: Optional[int] = None
     order_id: Optional[int] = None
+    batch_number: Optional[str] = None
+    order_number: Optional[str] = None
     kind: Optional[str] = None
+
+
+class ShortageDemandSourceRead(BaseModel):
+    kind: Literal["batch", "order"]
+    id: int
+    number: str
+    status: str = ""
+    product_id: Optional[int] = None
+    product_name: str = ""
+    product_sku: Optional[str] = None
+    product_image_url: Optional[str] = None
+    required_qty: float = 0.0
 
 
 class ProductionShortageQueueRowRead(BaseModel):
@@ -121,11 +135,13 @@ class ProductionShortageQueueRowRead(BaseModel):
     reserved_qty: Optional[float] = None
     available_qty: Optional[float] = None
     missing_qty: float
+    covered_qty: Optional[float] = None
     blocked_batches_count: int
     blocked_orders_count: int
     blocked_batch_ids: list[int] = Field(default_factory=list)
     blocked_order_ids: list[int] = Field(default_factory=list)
     finished_products: list[FinishedProductShortageRead] = Field(default_factory=list)
+    demand_sources: list[ShortageDemandSourceRead] = Field(default_factory=list)
     priority: ShortagePriority
     locations: list[MaterialLotHintRead] = Field(default_factory=list)
     expected_availability_date: Optional[str] = None

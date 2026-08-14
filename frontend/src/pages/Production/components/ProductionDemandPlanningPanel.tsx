@@ -1,4 +1,5 @@
-import { Factory } from "lucide-react";
+import { useState, Fragment } from "react";
+import { ChevronDown, Factory } from "lucide-react";
 
 import type {
   DemandBatchLineDraft,
@@ -18,6 +19,7 @@ import {
 import { ProductThumb } from "./ProductThumb";
 import { MaterialProductionStatusBadge } from "./MaterialProductionStatusBadge";
 import { productionSectionLabelClass } from "../productionLayoutTokens";
+import { buildPlanningQtyBreakdown } from "../productionPlanningBreakdown";
 
 type Props = {
   data: ProductionDemandPlanning | null;
@@ -158,9 +160,8 @@ export function ProductionDemandPlanningPanel({
         />
         <MetricCard
           density="compact"
-          label="Średnie pokrycie"
-          value={dash?.average_coverage_days != null ? dash.average_coverage_days.toFixed(0) : "—"}
-          unit={dash?.average_coverage_days != null ? "dni" : undefined}
+          label="Łącznie rekomendowane"
+          value={dash?.total_recommended_quantity ?? 0}
           className="!py-2.5"
         />
       </div>
@@ -250,19 +251,22 @@ export function ProductionDemandProductsTable({
   loading: boolean;
   onCreateBatch: (lines: DemandBatchLineDraft[], label: string) => void;
 }) {
+  const [expandedId, setExpandedId] = useState<number | null>(null);
+
   return (
     <div className="space-y-2">
       <h3 className={productionSectionLabelClass}>Zapotrzebowanie produktów</h3>
-      <div className="max-h-[18rem] overflow-auto rounded-xl border border-slate-200 bg-white">
+      <div className="max-h-[22rem] overflow-auto rounded-xl border border-slate-200 bg-white">
         <table className="min-w-full text-left text-sm">
           <thead className="sticky top-0 border-b border-slate-100 bg-slate-50 text-xs font-bold uppercase tracking-wide text-slate-500">
             <tr>
+              <th className="px-2 py-2" />
               <th className="px-3 py-2">Produkt</th>
               <th className="px-3 py-2 text-right">Stan</th>
               <th className="px-3 py-2 text-right">W produkcji</th>
               <th className="px-3 py-2 text-right">Zamówienia</th>
               <th className="px-3 py-2 text-right">Uzupełnienie</th>
-              <th className="px-3 py-2 text-right">Prognoza</th>
+              <th className="px-3 py-2 text-right">Cel zapasu</th>
               <th className="px-3 py-2 text-right">Pokrycie</th>
               <th className="px-3 py-2">Priorytet</th>
               <th className="px-3 py-2">Materiały</th>
@@ -272,99 +276,144 @@ export function ProductionDemandProductsTable({
           <tbody className="divide-y divide-slate-100">
             {loading && products.length === 0 ? (
               <tr>
-                <td colSpan={10} className="px-3 py-5 text-center text-slate-500">
+                <td colSpan={11} className="px-3 py-5 text-center text-slate-500">
                   Wczytywanie…
                 </td>
               </tr>
             ) : products.length === 0 ? (
               <tr>
-                <td colSpan={10} className="px-3 py-5 text-center text-slate-500">
+                <td colSpan={11} className="px-3 py-5 text-center text-slate-500">
                   Brak aktywnych receptur produkcyjnych.
                 </td>
               </tr>
             ) : (
-              products.map((row) => (
-                <tr key={row.product_id} className="align-middle hover:bg-slate-50/80">
-                  <td className="px-3 py-2">
-                    <div className="flex min-w-0 items-center gap-2">
-                      <ProductThumb imageUrl={row.product_image_url} name={row.product_name} size="sm" />
-                      <div className="min-w-0">
-                        <p className="truncate font-semibold text-slate-900">{row.product_name}</p>
-                        <div className="mt-0.5 flex flex-wrap gap-1">
-                          {row.has_order_demand || row.order_demand > 0 ? (
-                            <StatusBadge tone="warning" density="compact">
-                              Zamówienia
-                            </StatusBadge>
-                          ) : null}
-                          {row.has_stock_replenishment || (row.stock_replenishment_needed ?? 0) > 0 ? (
-                            <StatusBadge tone="info" density="compact">
-                              Uzupełnienie zapasu
-                            </StatusBadge>
-                          ) : null}
+              products.map((row) => {
+                const expanded = expandedId === row.product_id;
+                const breakdown = buildPlanningQtyBreakdown(row);
+                return (
+                  <Fragment key={row.product_id}>
+                    <tr className="align-middle hover:bg-slate-50/80">
+                      <td className="px-2 py-2">
+                        <button
+                          type="button"
+                          className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 text-slate-600 hover:bg-slate-50"
+                          aria-expanded={expanded}
+                          aria-label="Dlaczego taka ilość?"
+                          onClick={() => setExpandedId(expanded ? null : row.product_id)}
+                        >
+                          <ChevronDown
+                            className={`h-3.5 w-3.5 transition-transform ${expanded ? "rotate-180" : ""}`}
+                            aria-hidden
+                          />
+                        </button>
+                      </td>
+                      <td className="px-3 py-2">
+                        <div className="flex min-w-0 items-center gap-2">
+                          <ProductThumb imageUrl={row.product_image_url} name={row.product_name} size="sm" />
+                          <div className="min-w-0">
+                            <p className="truncate font-semibold text-slate-900">{row.product_name}</p>
+                            <div className="mt-0.5 flex flex-wrap gap-1">
+                              {row.has_order_demand || row.order_demand > 0 ? (
+                                <StatusBadge tone="warning" density="compact">
+                                  Zamówienia
+                                </StatusBadge>
+                              ) : null}
+                              {row.has_stock_replenishment || (row.stock_replenishment_needed ?? 0) > 0 ? (
+                                <StatusBadge tone="info" density="compact">
+                                  Uzupełnienie zapasu
+                                </StatusBadge>
+                              ) : null}
+                            </div>
+                            {row.product_sku ? (
+                              <p className="truncate font-mono text-xs text-slate-500">{row.product_sku}</p>
+                            ) : null}
+                          </div>
                         </div>
-                        {row.product_sku ? (
-                          <p className="truncate font-mono text-xs text-slate-500">{row.product_sku}</p>
-                        ) : null}
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-3 py-2 text-right tabular-nums">{fmtQty(row.on_hand)}</td>
-                  <td className="px-3 py-2 text-right tabular-nums">{fmtQty(row.in_pipeline)}</td>
-                  <td className="px-3 py-2 text-right tabular-nums">{fmtQty(row.order_demand)}</td>
-                  <td className="px-3 py-2 text-right tabular-nums">
-                    {fmtQty(row.stock_replenishment_needed ?? 0)}
-                  </td>
-                  <td className="px-3 py-2 text-right tabular-nums">{fmtQty(row.forecast_demand)}</td>
-                  <td
-                    className={`px-3 py-2 text-right font-semibold tabular-nums ${COVERAGE_CLASS[row.coverage_color] ?? ""}`}
-                  >
-                    {row.coverage_days != null ? `${row.coverage_days.toFixed(0)} d` : "—"}
-                  </td>
-                  <td className="px-3 py-2">
-                    <StatusBadge tone={PRIORITY_TONE[row.priority]} density="compact">
-                      {PRIORITY_LABEL[row.priority]}
-                    </StatusBadge>
-                  </td>
-                  <td className="px-3 py-2">
-                    {row.recommended_quantity > 0 ? (
-                      <MaterialProductionStatusBadge
-                        status={row.material_status ?? "OK"}
-                        description={row.material_status_description}
-                        producibleNow={row.producible_now_qty}
-                        waitingQty={row.waiting_qty}
-                        limitingComponentName={row.limiting_component_name}
-                      />
-                    ) : (
-                      "—"
-                    )}
-                  </td>
-                  <td className="px-3 py-2">
-                    {row.composition_id && row.recommended_quantity > 0 ? (
-                      <PrimaryButton
-                        type="button"
-                        density="compact"
-                        onClick={() =>
-                          onCreateBatch(
-                            [
-                              {
-                                product_id: row.product_id,
-                                composition_id: row.composition_id!,
-                                planned_quantity: row.recommended_quantity,
-                              },
-                            ],
-                            row.product_name,
-                          )
-                        }
+                      </td>
+                      <td className="px-3 py-2 text-right tabular-nums">{fmtQty(row.on_hand)}</td>
+                      <td className="px-3 py-2 text-right tabular-nums">{fmtQty(row.in_pipeline)}</td>
+                      <td className="px-3 py-2 text-right tabular-nums">{fmtQty(row.order_demand)}</td>
+                      <td className="px-3 py-2 text-right tabular-nums">
+                        {fmtQty(row.stock_replenishment_needed ?? 0)}
+                      </td>
+                      <td className="px-3 py-2 text-right tabular-nums">{fmtQty(row.forecast_demand)}</td>
+                      <td
+                        className={`px-3 py-2 text-right font-semibold tabular-nums ${COVERAGE_CLASS[row.coverage_color] ?? ""}`}
                       >
-                        <Factory className="h-3.5 w-3.5" aria-hidden />
-                        Utwórz partię
-                      </PrimaryButton>
-                    ) : (
-                      "—"
-                    )}
-                  </td>
-                </tr>
-              ))
+                        {row.coverage_days != null ? `${row.coverage_days.toFixed(0)} d` : "—"}
+                      </td>
+                      <td className="px-3 py-2">
+                        <StatusBadge tone={PRIORITY_TONE[row.priority]} density="compact">
+                          {PRIORITY_LABEL[row.priority]}
+                        </StatusBadge>
+                      </td>
+                      <td className="px-3 py-2">
+                        {row.recommended_quantity > 0 ? (
+                          <MaterialProductionStatusBadge
+                            status={row.material_status ?? "OK"}
+                            description={row.material_status_description}
+                            producibleNow={row.producible_now_qty}
+                            waitingQty={row.waiting_qty}
+                            limitingComponentName={row.limiting_component_name}
+                          />
+                        ) : (
+                          "—"
+                        )}
+                      </td>
+                      <td className="px-3 py-2">
+                        {row.composition_id && row.recommended_quantity > 0 ? (
+                          <PrimaryButton
+                            type="button"
+                            density="compact"
+                            onClick={() =>
+                              onCreateBatch(
+                                [
+                                  {
+                                    product_id: row.product_id,
+                                    composition_id: row.composition_id!,
+                                    planned_quantity: row.recommended_quantity,
+                                  },
+                                ],
+                                row.product_name,
+                              )
+                            }
+                          >
+                            <Factory className="h-3.5 w-3.5" aria-hidden />
+                            Utwórz partię
+                          </PrimaryButton>
+                        ) : (
+                          "—"
+                        )}
+                      </td>
+                    </tr>
+                    {expanded ? (
+                      <tr className="bg-slate-50/80">
+                        <td colSpan={11} className="px-3 py-3">
+                          <p className="mb-1.5 text-[10px] font-bold uppercase tracking-wide text-slate-500">
+                            Dlaczego taka ilość?
+                          </p>
+                          <dl className="grid max-w-lg grid-cols-[1fr_auto] gap-x-6 gap-y-1 text-xs text-slate-700">
+                            {breakdown.map((line) => (
+                              <Fragment key={line.key}>
+                                <dt className={line.key === "recommended" ? "font-bold text-slate-900" : ""}>
+                                  {line.label}
+                                </dt>
+                                <dd
+                                  className={`text-right tabular-nums ${
+                                    line.key === "recommended" ? "font-bold text-slate-900" : ""
+                                  }`}
+                                >
+                                  {typeof line.value === "number" ? fmtQty(line.value) : line.value}
+                                </dd>
+                              </Fragment>
+                            ))}
+                          </dl>
+                        </td>
+                      </tr>
+                    ) : null}
+                  </Fragment>
+                );
+              })
             )}
           </tbody>
         </table>

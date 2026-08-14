@@ -92,7 +92,21 @@ export type FinishedProductShortage = {
   product_image_url?: string | null;
   batch_id?: number;
   order_id?: number;
+  batch_number?: string | null;
+  order_number?: string | null;
   kind?: string;
+};
+
+export type ShortageDemandSource = {
+  kind: "batch" | "order";
+  id: number;
+  number: string;
+  status?: string;
+  product_id?: number | null;
+  product_name?: string;
+  product_sku?: string | null;
+  product_image_url?: string | null;
+  required_qty: number;
 };
 
 export type ProductionShortageQueueRow = {
@@ -105,11 +119,13 @@ export type ProductionShortageQueueRow = {
   reserved_qty?: number | null;
   available_qty?: number | null;
   missing_qty: number;
+  covered_qty?: number | null;
   blocked_batches_count: number;
   blocked_orders_count: number;
   blocked_batch_ids: number[];
   blocked_order_ids: number[];
   finished_products: FinishedProductShortage[];
+  demand_sources?: ShortageDemandSource[];
   priority: ShortagePriority;
   locations: MaterialLotHint[];
   expected_availability_date?: string | null;

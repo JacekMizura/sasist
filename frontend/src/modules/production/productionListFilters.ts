@@ -223,7 +223,7 @@ export type ProductionRecipeListFilters = {
 
 export const DEFAULT_PRODUCTION_RECIPE_FILTERS: ProductionRecipeListFilters = {
   query: "",
-  status: "",
+  status: "active",
 };
 
 export type ProductionAnalyticsFilters = {

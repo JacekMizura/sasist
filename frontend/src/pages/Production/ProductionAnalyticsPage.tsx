@@ -178,9 +178,9 @@ export default function ProductionAnalyticsPage() {
                 icon={<AlertTriangle aria-hidden />}
               />
               <ProductionKpiCard
-                title="Koszt materiałów"
+                title="Koszt materiałów (stan WG)"
                 value={kpi.material_cost_sum > 0 ? formatProductionMoney(kpi.material_cost_sum) : "—"}
-                subtitle="Szacunek na stanie WG"
+                subtitle="Wycena bieżącego stanu wyrobów gotowych × koszt BOM — nie zużycie rzeczywiste"
                 tone="default"
                 icon={<Banknote aria-hidden />}
               />
@@ -198,9 +198,13 @@ export default function ProductionAnalyticsPage() {
               />
               <ProductionKpiCard title="Średnia marża" value="—" subtitle="Wymaga danych cen sprzedaży" tone="purple" icon={<Percent aria-hidden />} />
               <ProductionKpiCard
-                title="Efektywność produkcji"
+                title="Udział ukończeń dziś"
                 value={efficiency != null ? `${efficiency}%` : "—"}
-                subtitle={efficiency != null ? "Z pulpitu produkcji" : "Brak danych w API"}
+                subtitle={
+                  efficiency != null
+                    ? "finished_today / (ukończone + aktywne + zaplanowane) — nie efektywność kosztowa"
+                    : "Brak danych w API"
+                }
                 tone="blue"
                 icon={<Percent aria-hidden />}
               />

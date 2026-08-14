@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
-import { ClipboardList, MapPin, Package, Plus } from "lucide-react";
+import { AlertTriangle, ClipboardList, Factory, MapPin, Package, Plus } from "lucide-react";
 
 import {
   fetchProductionDashboard,
@@ -22,12 +22,20 @@ import {
 } from "@/design-system";
 import { useActiveWarehouseContext } from "../../hooks/useActiveWarehouseContext";
 import { ProductionWorkQueueSection, type ProductionWorkItem } from "./components/ProductionWorkQueueSection";
+import { ProductionKpiCard } from "./components/ProductionKpiCard";
+import { ProductionKpiGrid } from "./components/ProductionKpiGrid";
 import { productionPageStackClass, productionPageTitleClass } from "./productionLayoutTokens";
 import { erpProductionPaths } from "./productionPaths";
 import { getProductionOperationalState, shortageHintFromOrderLines } from "./productionOperationalState";
+import {
+  PRODUCTION_DASHBOARD_SECTION_LIMIT,
+  countDueTodayFromPlannedDates,
+  countOverdueFromPlannedDates,
+  dashboardSeeAllHref,
+} from "./productionDashboardHelpers";
 
 const DEFAULT_TENANT = 1;
-const SECTION_LIMIT = 8;
+const SECTION_LIMIT = PRODUCTION_DASHBOARD_SECTION_LIMIT;
 
 function matchesQuery(item: ProductionWorkItem, q: string): boolean {
   if (!q) return true;
@@ -107,6 +115,8 @@ function orderToWorkItem(o: ProductionOrderRead): ProductionWorkItem {
     productImageUrl: o.product_image_url,
     qtyLabel: `${o.produced_quantity}/${o.planned_quantity} szt.`,
     sourceLabel,
+    sourceType: o.source_type ?? null,
+    plannedDate: null,
     state,
   };
 }
@@ -238,9 +248,28 @@ export default function ProductionDashboardPage() {
     return { start, collect, putaway, pack };
   }, [todo]);
 
+  const todayIso = useMemo(() => new Date().toISOString().slice(0, 10), []);
+  const plannedDatesForKpi = useMemo(
+    () => workItems.map((i) => i.plannedDate),
+    [workItems],
+  );
+  const overdueCount = useMemo(
+    () => countOverdueFromPlannedDates(plannedDatesForKpi, todayIso),
+    [plannedDatesForKpi, todayIso],
+  );
+  const dueTodayCount = useMemo(
+    () => countDueTodayFromPlannedDates(plannedDatesForKpi, todayIso),
+    [plannedDatesForKpi, todayIso],
+  );
+
   if (!hasActiveWarehouse || warehouseId == null) {
     return <ActiveWarehouseRequiredBanner hint="Zlecenia RW/PW i partie produkcyjne są tworzone w aktywnym magazynie." />;
   }
+
+  const shortagesKpi = data?.batches_with_shortages ?? 0;
+  const inProductionKpi = data?.units_in_production ?? data?.active_batches ?? 0;
+  const putawayKpi = data?.awaiting_putaway_batches ?? data?.putaway_batches ?? 0;
+  const plannedKpi = data?.planned_batches ?? data?.waiting_batches ?? 0;
 
   return (
     <div className={productionPageStackClass}>
@@ -261,9 +290,9 @@ export default function ProductionDashboardPage() {
                 density="comfortable"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                placeholder="Szukaj zlecenia, produktu…"
+                placeholder="Szukaj w kolejce uwagi…"
                 className="w-full min-w-[16rem] max-w-md"
-                aria-label="Filtruj kolejkę pracy"
+                aria-label="Filtruj kolejkę uwagi"
               />
             }
             end={
@@ -275,12 +304,59 @@ export default function ProductionDashboardPage() {
         }
       >
         <div className="space-y-4">
+          <ProductionKpiGrid className="!gap-2">
+            <ProductionKpiCard
+              title="Braki materiałów"
+              value={loading ? "—" : shortagesKpi}
+              tone={shortagesKpi > 0 ? "amber" : "emerald"}
+              icon={<AlertTriangle aria-hidden />}
+              to={erpProductionPaths.materialsShortages}
+            />
+            <ProductionKpiCard
+              title="W produkcji"
+              value={loading ? "—" : inProductionKpi}
+              subtitle="Jednostki / aktywne"
+              tone="blue"
+              icon={<Factory aria-hidden />}
+            />
+            <ProductionKpiCard
+              title="Do rozlokowania"
+              value={loading ? "—" : putawayKpi}
+              tone={putawayKpi > 0 ? "amber" : "default"}
+              icon={<MapPin aria-hidden />}
+            />
+            <ProductionKpiCard
+              title="Oczekujące / zaplanowane"
+              value={loading ? "—" : plannedKpi}
+              tone="indigo"
+              icon={<ClipboardList aria-hidden />}
+            />
+            <ProductionKpiCard
+              title="Opóźnione"
+              value={loading ? "—" : overdueCount}
+              subtitle="Z planned_date na liście uwagi"
+              tone={overdueCount > 0 ? "amber" : "default"}
+              icon={<AlertTriangle aria-hidden />}
+            />
+            <ProductionKpiCard
+              title="Do zrobienia dziś"
+              value={loading ? "—" : dueTodayCount}
+              subtitle="Termin = dziś (planned_date)"
+              tone="blue"
+              icon={<Package aria-hidden />}
+            />
+          </ProductionKpiGrid>
+
           {loading ? (
             <p className="text-sm text-slate-500">Wczytywanie kolejki…</p>
           ) : (
             <>
               <p className="text-sm text-slate-600">
-                Kolejka pracy: każda pozycja ma dokładnie jeden aktualny etap. Kliknij, aby wykonać następną akcję.
+                Tylko to, co wymaga uwagi teraz. Pełna lista realizacji:{" "}
+                <Link to={erpProductionPaths.orders} className="font-semibold text-violet-700 hover:underline">
+                  Zlecenia
+                </Link>
+                .
               </p>
 
               <WorkSection
@@ -295,7 +371,12 @@ export default function ProductionDashboardPage() {
                   emptyTitle="Nic nie wymaga reakcji"
                   compactEmpty
                   limit={SECTION_LIMIT}
-                  seeAllTo={reaction.length > 0 ? `${erpProductionPaths.orders}?shortages=1` : undefined}
+                  seeAllLabel="Zobacz wszystkie"
+                  seeAllTo={
+                    reaction.length > 0
+                      ? dashboardSeeAllHref(erpProductionPaths.orders, "reaction")
+                      : undefined
+                  }
                 />
               </WorkSection>
 
@@ -308,40 +389,17 @@ export default function ProductionDashboardPage() {
                 {todo.length === 0 ? (
                   <p className="py-1 text-sm text-slate-500">Brak pozycji do wykonania</p>
                 ) : (
-                  <div className="space-y-4">
-                    {todoByStep.start.length > 0 ? (
-                      <div className="space-y-2">
-                        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                          Wyślij do realizacji
-                        </p>
-                        <ProductionWorkQueueSection items={todoByStep.start} limit={SECTION_LIMIT} />
-                      </div>
-                    ) : null}
-                    {todoByStep.collect.length > 0 ? (
-                      <div className="space-y-2">
-                        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                          Pobierz komponenty
-                        </p>
-                        <ProductionWorkQueueSection items={todoByStep.collect} limit={SECTION_LIMIT} />
-                      </div>
-                    ) : null}
-                    {todoByStep.putaway.length > 0 ? (
-                      <div className="space-y-2">
-                        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                          Rozlokuj
-                        </p>
-                        <ProductionWorkQueueSection items={todoByStep.putaway} limit={SECTION_LIMIT} />
-                      </div>
-                    ) : null}
-                    {todoByStep.pack.length > 0 ? (
-                      <div className="space-y-2">
-                        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                          Gotowe do pakowania
-                        </p>
-                        <ProductionWorkQueueSection items={todoByStep.pack} limit={SECTION_LIMIT} />
-                      </div>
-                    ) : null}
-                  </div>
+                  <ProductionWorkQueueSection
+                    items={[
+                      ...todoByStep.start,
+                      ...todoByStep.collect,
+                      ...todoByStep.putaway,
+                      ...todoByStep.pack,
+                    ]}
+                    limit={SECTION_LIMIT}
+                    seeAllLabel="Zobacz wszystkie"
+                    seeAllTo={dashboardSeeAllHref(erpProductionPaths.orders, "todo")}
+                  />
                 )}
               </WorkSection>
 
@@ -351,13 +409,27 @@ export default function ProductionDashboardPage() {
                 count={inProgress.length}
                 countTone="info"
               >
-                <ProductionWorkQueueSection
-                  items={inProgress}
-                  emptyTitle="Brak pracy w toku"
-                  compactEmpty
-                  limit={SECTION_LIMIT}
-                  seeAllTo={inProgress.length > 0 ? erpProductionPaths.orders : undefined}
-                />
+                {inProgress.length === 0 ? (
+                  <p className="py-1 text-sm text-slate-500">Brak pracy w toku</p>
+                ) : (
+                  <div className="space-y-2">
+                    <p className="text-sm text-slate-600">
+                      {inProgress.length} pozycji w realizacji.{" "}
+                      <Link
+                        to={dashboardSeeAllHref(erpProductionPaths.orders, "in_progress")}
+                        className="font-semibold text-violet-700 hover:underline"
+                      >
+                        Zobacz wszystkie
+                      </Link>
+                    </p>
+                    <ProductionWorkQueueSection
+                      items={inProgress}
+                      limit={SECTION_LIMIT}
+                      seeAllLabel="Zobacz wszystkie"
+                      seeAllTo={dashboardSeeAllHref(erpProductionPaths.orders, "in_progress")}
+                    />
+                  </div>
+                )}
               </WorkSection>
 
               <div className="flex flex-wrap gap-2 text-sm">

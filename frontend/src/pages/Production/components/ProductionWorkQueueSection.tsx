@@ -6,6 +6,8 @@ import { EmptyState } from "@/design-system";
 import { erpProductionPaths } from "../productionPaths";
 import type { ProductionOperationalState } from "../productionOperationalState";
 import { ProductionOperatorTaskCard } from "./ProductionOperatorTaskCard";
+import { productionSourceBadgeLabel } from "../productionUi";
+import { PRODUCTION_DASHBOARD_SECTION_LIMIT } from "../productionDashboardHelpers";
 
 export type ProductionWorkItem = {
   key: string;
@@ -16,6 +18,7 @@ export type ProductionWorkItem = {
   productImageUrl?: string | null;
   qtyLabel: string;
   sourceLabel?: string | null;
+  sourceType?: string | null;
   plannedDate?: string | null;
   priorityLabel?: string | null;
   state: ProductionOperationalState;
@@ -26,7 +29,6 @@ type Props = {
   emptyIcon?: LucideIcon;
   emptyTitle?: string;
   emptyDescription?: string;
-  /** Compact one-line empty (dashboard empty sections). */
   compactEmpty?: boolean;
   limit?: number;
   seeAllTo?: string;
@@ -47,16 +49,16 @@ function formatPlannedDate(raw?: string | null): string | null {
   return `Termin ${day}.${m}.${y}`;
 }
 
-/** Exclusive work-queue rows — operator task cards. */
+/** Exclusive work-queue rows — compact operator task cards. */
 export function ProductionWorkQueueSection({
   items,
   emptyIcon,
   emptyTitle = "Brak pozycji",
   emptyDescription,
   compactEmpty = false,
-  limit = 8,
+  limit = PRODUCTION_DASHBOARD_SECTION_LIMIT,
   seeAllTo,
-  seeAllLabel = "Pokaż wszystkie",
+  seeAllLabel = "Zobacz wszystkie",
 }: Props) {
   if (items.length === 0) {
     if (compactEmpty) {
@@ -78,14 +80,13 @@ export function ProductionWorkQueueSection({
   const visible = items.slice(0, limit);
 
   return (
-    <div className="flex w-full flex-col gap-2">
-      <ul className="flex w-full flex-col gap-2">
+    <div className="flex w-full flex-col gap-1.5">
+      <ul className="flex w-full flex-col gap-1.5">
         {visible.map((item) => {
           const href = itemHref(item);
           const schedule = [formatPlannedDate(item.plannedDate), item.priorityLabel]
             .filter(Boolean)
             .join(" · ");
-          const secondary = [item.number, item.sourceLabel].filter(Boolean).join(" · ");
           return (
             <li key={item.key} className="w-full">
               <ProductionOperatorTaskCard
@@ -93,9 +94,14 @@ export function ProductionWorkQueueSection({
                 productLabel={item.productLabel}
                 productImageUrl={item.productImageUrl}
                 qtyLabel={item.qtyLabel}
-                secondaryMeta={secondary}
+                documentNumber={item.number}
+                sourceBadge={productionSourceBadgeLabel({
+                  kind: item.kind,
+                  sourceType: item.sourceType,
+                })}
                 scheduleMeta={schedule || null}
                 showThumb={item.kind === "order"}
+                compact
                 ctaHref={href}
                 ctaOpenInNewTab={item.state.primaryAction.openInNewTab}
                 ctaDisabled={item.state.primaryAction.disabled}
@@ -109,6 +115,7 @@ export function ProductionWorkQueueSection({
         <div className="pt-1 text-right">
           <Link to={seeAllTo} className="text-sm font-semibold text-slate-600 hover:text-slate-900">
             {seeAllLabel}
+            {items.length > limit ? ` (${items.length})` : ""}
           </Link>
         </div>
       ) : null}
