@@ -1,4 +1,24 @@
-﻿## 2026-08-14 — Konfigurator produkcji w Ustawieniach WMS
+﻿## 2026-08-14 — Faza 2: aktywny gate produkcji przy wejściu do zbierania
+
+- `FEATURE_PICKING_ENTRY_READINESS_MODE=off|dry_run|active`
+- Active gate: full-order readiness → SALES_ORDER reserve → MO missing-only → awaiting status
+- `status_awaiting_production_id` na ProductionConfig + UI Konfigurator produkcji
+- Snapshot `return_picking_status_id` w `import_metadata_json`
+- Activity: red BLOCKED + INFO MO demand; correlation_id idempotency
+- Cancel/qty: release + withdraw / partial sync
+- Testy: `test_picking_entry_gate_phase2.py`
+
+## 2026-08-14 — Faza 1: readiness + most SALES_ORDER ↔ picking
+
+- SSOT ATP: `wms_picking_atp.py` — pickable on_hand − obce rezerwacje (exclude own `order_id`)
+- Bridge: `sales_order_fg_reservation_service` (reserve/release/partial/consume, bez TTL)
+- `PickingRoutingService` + `validate_orders_for_picking` + FEFO + FIFO consume respektują rezerwacje
+- Pick finalize: consume reservation przy decrement inventory (bez double decrement)
+- Readiness dry-run: `picking_entry_readiness_service` + flag `FEATURE_PICKING_ENTRY_READINESS_DRY_RUN`
+- Hook po wejściu na `PickingConfig.source_status` (nie production) — tylko log, bez MO/status
+- Testy: `test_picking_entry_readiness_phase1.py` (14 scenariuszy; PG concurrency opcjonalnie)
+
+## 2026-08-14 — Konfigurator produkcji w Ustawieniach WMS
 
 - SSOT: `production_config_query` / `production_config_service` + API `/wms/settings/production-configs`
 - Storage nadal `picking_config` (`is_production_mode=True`) — FK MO bez migracji; `name` + `is_active`

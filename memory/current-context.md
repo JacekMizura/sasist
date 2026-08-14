@@ -1,5 +1,17 @@
 ﻿## Active
 
+**Faza 2 picking-entry gate (2026-08-14):**
+- `FEATURE_PICKING_ENTRY_READINESS_MODE=off|dry_run|active` (domyślnie off; legacy DRY_RUN=1 → dry_run)
+- Active: reserve FG + MO missing-only + `status_awaiting_production_id`
+- Snapshot powrotu: `import_metadata_json.return_picking_status_id`
+- **Nie** wdrażać Fazy 3 (auto retry / powrót awaiting→picking / shrink MO)
+
+**Faza 1 readiness + SALES_ORDER↔picking (2026-08-14):**
+- SSOT: `backend/services/wms_picking_atp.py`
+- Reserve API: `sales_order_fg_reservation_service` (jeszcze bez auto z gate)
+- Dry-run: `FEATURE_PICKING_ENTRY_READINESS_DRY_RUN=1` → log `[picking_entry_readiness]`
+- **Nie** wdrażać jeszcze Fazy 2 (MO / awaiting / allocate flag)
+
 **Konfigurator produkcji WMS (2026-08-14):**
 - SSOT odczytu/zapisu: `production_config_query` / `production_config_service`
 - API: `/wms/settings/production-configs`
