@@ -28,11 +28,8 @@ export type ProductionOperatorTaskCardProps = {
   productImageUrl?: string | null;
   qtyLabel: string;
   productMeta?: string | null;
-  /** Document number e.g. BAT/0012 or MO-… */
   documentNumber?: string | null;
-  /** Source badge: PARTIA / ORDERS / PLANNING / MANUAL */
   sourceBadge?: string | null;
-  /** Tiny secondary identifiers — kept for backward compat. */
   secondaryMeta?: string | null;
   scheduleMeta?: string | null;
   selected?: boolean;
@@ -47,8 +44,9 @@ export type ProductionOperatorTaskCardProps = {
 };
 
 /**
- * Operator task card — compact by default for Zlecenia / Pulpit lists.
- * SSOT for step/CTA remains ``state`` from getProductionOperationalState.
+ * Operator task card — compact list layout.
+ * SSOT for step/CTA: ``state`` from getProductionOperationalState.
+ * ``isDelayed`` is a flag badge — never replaces the stage label.
  */
 export function ProductionOperatorTaskCard({
   state,
@@ -111,13 +109,13 @@ export function ProductionOperatorTaskCard({
   const numberLabel = documentNumber ?? (secondaryMeta ? secondaryMeta.split(" · ")[0] : null);
 
   return (
-    <ListTile density={compact ? "compact" : "comfortable"} selected={selected} className="w-full">
-      <div className={`flex flex-col gap-2 sm:flex-row sm:items-center ${compact ? "sm:gap-3" : "sm:gap-4"}`}>
-        <div className="flex min-w-0 flex-1 gap-2.5">
+    <ListTile density="compact" selected={selected} className="w-full !py-2">
+      <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:gap-3">
+        <div className="flex min-w-0 flex-1 gap-2">
           {showThumb ? (
-            <ProductThumb imageUrl={productImageUrl} name={productLabel} size={compact ? "sm" : "md"} />
+            <ProductThumb imageUrl={productImageUrl} name={productLabel} size="sm" />
           ) : null}
-          <div className="min-w-0 flex-1 space-y-1">
+          <div className="min-w-0 flex-1 space-y-0.5">
             <div className="flex min-w-0 flex-wrap items-center gap-1.5">
               {numberLabel ? (
                 <span className="font-mono text-xs font-semibold text-slate-700">{numberLabel}</span>
@@ -125,6 +123,11 @@ export function ProductionOperatorTaskCard({
               {sourceBadge ? (
                 <StatusBadge tone="neutral" density="compact">
                   {sourceBadge}
+                </StatusBadge>
+              ) : null}
+              {state.isDelayed ? (
+                <StatusBadge tone="warning" density="compact">
+                  Opóźnione
                 </StatusBadge>
               ) : null}
               <span className={`text-sm font-bold leading-tight ${STEP_TITLE_TONE[state.tone]}`}>
@@ -137,7 +140,7 @@ export function ProductionOperatorTaskCard({
                 {productLabel}
                 <span className="ml-2 font-normal tabular-nums text-slate-600">{qtyLabel}</span>
               </p>
-              {productMeta ? <p className="truncate text-xs text-slate-500">{productMeta}</p> : null}
+              {productMeta ? <p className="truncate text-[11px] text-slate-500">{productMeta}</p> : null}
             </div>
 
             {showProgress ? (
@@ -152,7 +155,7 @@ export function ProductionOperatorTaskCard({
               </div>
             ) : null}
 
-            {scheduleMeta ? <p className="text-[11px] text-slate-500">{scheduleMeta}</p> : null}
+            {scheduleMeta ? <p className="text-[11px] leading-tight text-slate-500">{scheduleMeta}</p> : null}
           </div>
         </div>
 

@@ -176,21 +176,18 @@ export default function ProductionShortagesPage() {
               description="Wszystkie partie i zlecenia mają wystarczające materiały."
             />
           ) : (
-            <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
-              <table className="min-w-full text-sm">
+            <div className="rounded-xl border border-slate-200 bg-white">
+              <table className="w-full table-fixed text-sm">
                 <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
                   <tr>
-                    <th className={productionModuleListThClass} />
-                    <th className={productionModuleListThClass}>Produkt końcowy</th>
+                    <th className={`${productionModuleListThClass} w-9`} />
                     <th className={productionModuleListThClass}>Składnik</th>
-                    <th className={`${productionModuleListThClass} text-right`}>Potrzebne</th>
-                    <th className={`${productionModuleListThClass} text-right`}>Dostępne</th>
-                    <th className={`${productionModuleListThClass} text-right`}>Zarezerwowane</th>
-                    <th className={`${productionModuleListThClass} text-right`}>Brak</th>
-                    <th className={`${productionModuleListThClass} text-right`}>Po pokryciu</th>
-                    <th className={productionModuleListThClass}>Źródła zapotrzebowania</th>
-                    <th className={productionModuleListThClass}>Lokalizacje</th>
-                    <th className={productionModuleListThClass}>Zakupy</th>
+                    <th className={`${productionModuleListThClass} w-[4.5rem] text-right`}>Potrzebne</th>
+                    <th className={`${productionModuleListThClass} w-[4.5rem] text-right`}>Dostępne</th>
+                    <th className={`${productionModuleListThClass} w-[3.5rem] text-right`}>Brak</th>
+                    <th className={`${productionModuleListThClass} w-[5rem] text-right`}>Po pokryciu</th>
+                    <th className={`${productionModuleListThClass} w-[7rem]`}>Źródła</th>
+                    <th className={`${productionModuleListThClass} w-[8.5rem]`}>Akcja</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -205,10 +202,15 @@ export default function ProductionShortagesPage() {
                     const sources = r.demand_sources?.length
                       ? r.demand_sources
                       : [];
-                    const sourceSummary =
+                    const sourcePreview =
                       sources.length > 0
-                        ? `${sources.length} ${sources.length === 1 ? "źródło" : "źródeł"}`
+                        ? sources
+                            .slice(0, 2)
+                            .map((s) => s.number)
+                            .join(", ")
                         : `${r.blocked_batches_count} BAT · ${r.blocked_orders_count} MO`;
+                    const sourceMore =
+                      sources.length > 2 ? ` +${sources.length - 2}` : sources.length > 0 ? "" : "";
                     return (
                       <Fragment key={r.component_product_id}>
                         <tr className="border-t border-slate-100 align-top">
@@ -217,7 +219,7 @@ export default function ProductionShortagesPage() {
                               type="button"
                               className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-slate-200 text-slate-600 hover:bg-slate-50"
                               aria-expanded={expanded}
-                              aria-label={expanded ? "Zwiń źródła" : "Rozwiń źródła"}
+                              aria-label={expanded ? "Zwiń szczegóły" : "Rozwiń szczegóły"}
                               onClick={() =>
                                 setExpandedId(expanded ? null : r.component_product_id)
                               }
@@ -228,24 +230,13 @@ export default function ProductionShortagesPage() {
                               />
                             </button>
                           </td>
-                          <td className={`${productionModuleListTdClass} text-xs`}>
-                            {(r.finished_products ?? []).slice(0, 2).map((fp, i) => (
-                              <div key={i} className="flex items-center gap-1 py-0.5">
-                                <ProductThumb imageUrl={fp.product_image_url} name={fp.product_name} size="sm" />
-                                <span>{fp.product_name}</span>
-                              </div>
-                            ))}
-                            {(r.finished_products?.length ?? 0) > 2 ? (
-                              <span className="text-slate-400">+{(r.finished_products?.length ?? 0) - 2}</span>
-                            ) : null}
-                          </td>
                           <td className={productionModuleListTdClass}>
-                            <div className="flex items-center gap-2">
+                            <div className="flex min-w-0 items-center gap-2">
                               <ProductThumb imageUrl={r.product_image_url} name={r.product_name} size="sm" />
-                              <div>
-                                <p className="font-medium text-slate-900">{r.product_name}</p>
+                              <div className="min-w-0">
+                                <p className="truncate font-medium text-slate-900">{r.product_name}</p>
                                 {r.product_sku ? (
-                                  <p className="font-mono text-xs text-slate-500">{r.product_sku}</p>
+                                  <p className="truncate font-mono text-xs text-slate-500">{r.product_sku}</p>
                                 ) : null}
                               </div>
                             </div>
@@ -255,9 +246,6 @@ export default function ProductionShortagesPage() {
                           </td>
                           <td className={`${productionModuleListTdClass} text-right tabular-nums`}>
                             {fmtQty(r.available_qty)}
-                          </td>
-                          <td className={`${productionModuleListTdClass} text-right tabular-nums`}>
-                            {fmtQty(r.reserved_qty)}
                           </td>
                           <td
                             className={`${productionModuleListTdClass} text-right tabular-nums font-bold ${
@@ -270,32 +258,21 @@ export default function ProductionShortagesPage() {
                             {fmtQty(covered)}
                           </td>
                           <td className={`${productionModuleListTdClass} text-xs text-slate-600`}>
-                            {sourceSummary}
+                            <span className="line-clamp-2" title={`${sourcePreview}${sourceMore}`}>
+                              {sourcePreview}
+                              {sourceMore}
+                            </span>
                           </td>
                           <td className={productionModuleListTdClass}>
-                            <div className="flex flex-wrap gap-1">
-                              {r.locations.length ? (
-                                r.locations.map((loc) => (
-                                  <span key={loc.location_id} className="inline-flex items-center gap-1 text-xs">
-                                    <LocationBadge code={loc.location_code} type="PICK" />
-                                    <span className="tabular-nums text-slate-600">{loc.available_qty}</span>
-                                  </span>
-                                ))
-                              ) : (
-                                <span className="text-xs text-slate-500">—</span>
-                              )}
-                            </div>
-                          </td>
-                          <td className={productionModuleListTdClass}>
-                            <div className="flex flex-col gap-1.5">
-                              <PrimaryButton type="button" onClick={() => void createRequisition(r)}>
+                            <div className="flex flex-col gap-1">
+                              <PrimaryButton type="button" density="compact" onClick={() => void createRequisition(r)}>
                                 <ShoppingCart className="h-3.5 w-3.5" aria-hidden />
                                 Zapotrzebowanie
                               </PrimaryButton>
                               <button
                                 type="button"
                                 onClick={() => void openPoPicker(r)}
-                                className="rounded-lg border border-slate-200 px-2 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                                className="rounded-lg border border-slate-200 px-2 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50"
                               >
                                 Dodaj do PO
                               </button>
@@ -304,7 +281,54 @@ export default function ProductionShortagesPage() {
                         </tr>
                         {expanded ? (
                           <tr className="border-t border-slate-100 bg-slate-50/70">
-                            <td colSpan={11} className="px-3 py-3">
+                            <td colSpan={8} className="px-3 py-3">
+                              <div className="mb-3 grid gap-3 sm:grid-cols-2">
+                                <div>
+                                  <p className="mb-1 text-[10px] font-bold uppercase tracking-wide text-slate-500">
+                                    Produkt końcowy
+                                  </p>
+                                  {(r.finished_products ?? []).length === 0 ? (
+                                    <p className="text-xs text-slate-500">—</p>
+                                  ) : (
+                                    <ul className="space-y-1">
+                                      {(r.finished_products ?? []).map((fp, i) => (
+                                        <li key={i} className="flex items-center gap-1.5 text-xs text-slate-800">
+                                          <ProductThumb
+                                            imageUrl={fp.product_image_url}
+                                            name={fp.product_name}
+                                            size="sm"
+                                          />
+                                          <span>{fp.product_name}</span>
+                                        </li>
+                                      ))}
+                                    </ul>
+                                  )}
+                                </div>
+                                <div>
+                                  <p className="mb-1 text-[10px] font-bold uppercase tracking-wide text-slate-500">
+                                    Zapas i lokalizacje
+                                  </p>
+                                  <p className="text-xs text-slate-700">
+                                    Zarezerwowane:{" "}
+                                    <span className="tabular-nums font-semibold">{fmtQty(r.reserved_qty)}</span>
+                                  </p>
+                                  <div className="mt-1.5 flex flex-wrap gap-1">
+                                    {r.locations.length ? (
+                                      r.locations.map((loc) => (
+                                        <span
+                                          key={loc.location_id}
+                                          className="inline-flex items-center gap-1 text-xs"
+                                        >
+                                          <LocationBadge code={loc.location_code} type="PICK" />
+                                          <span className="tabular-nums text-slate-600">{loc.available_qty}</span>
+                                        </span>
+                                      ))
+                                    ) : (
+                                      <span className="text-xs text-slate-500">Brak lokalizacji</span>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
                               <p className="mb-2 text-[10px] font-bold uppercase tracking-wide text-slate-500">
                                 Źródła zapotrzebowania
                               </p>

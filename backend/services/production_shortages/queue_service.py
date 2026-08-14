@@ -19,6 +19,31 @@ def _priority_rank(label: str) -> int:
     return {"CRITICAL": 0, "HIGH": 1, "MEDIUM": 2, "LOW": 3}.get(str(label or "").upper(), 9)
 
 
+def count_jobs_with_material_shortages(
+    db: Session,
+    *,
+    tenant_id: int,
+    warehouse_id: int,
+) -> int:
+    """Count distinct open BAT/MO that generate a real material shortage.
+
+    SSOT: same queue as Materiały → Braki (``build_production_shortages_queue``).
+    """
+    queue = build_production_shortages_queue(db, tenant_id=tenant_id, warehouse_id=warehouse_id)
+    jobs: set[tuple[str, int]] = set()
+    for row in queue:
+        for src in row.get("demand_sources") or []:
+            kind = str(src.get("kind") or "")
+            sid = src.get("id")
+            if kind in ("batch", "order") and sid is not None:
+                jobs.add((kind, int(sid)))
+        for bid in row.get("blocked_batch_ids") or []:
+            jobs.add(("batch", int(bid)))
+        for oid in row.get("blocked_order_ids") or []:
+            jobs.add(("order", int(oid)))
+    return len(jobs)
+
+
 def _empty_slot(component_product_id: int) -> dict[str, Any]:
     return {
         "component_product_id": int(component_product_id),

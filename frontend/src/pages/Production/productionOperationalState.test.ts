@@ -287,7 +287,7 @@ describe("getProductionOperationalState", () => {
     expect(s.primaryAction.label).toBe("Kontynuuj zbieranie");
   });
 
-  it("delayed planned without shortages → reaction", () => {
+  it("delayed planned without shortages → same stage + Opóźnione flag", () => {
     const s = getProductionOperationalState({
       executionKind: "batch",
       id: 1,
@@ -296,7 +296,23 @@ describe("getProductionOperationalState", () => {
     });
     expect(s.isDelayed).toBe(true);
     expect(s.dashboardBucket).toBe("reaction");
-    expect(s.businessLabel).toBe("Opóźnione");
+    expect(s.businessLabel).toBe("Przekaż do realizacji");
+    expect(s.primaryAction.label).toBe("Wyślij do realizacji");
+  });
+
+  it("same plannedDate yields identical stage on pulp and orders path", () => {
+    const input = {
+      executionKind: "batch" as const,
+      id: 10,
+      status: "planned",
+      plannedDate: "2020-01-01",
+      hasShortages: false,
+    };
+    const a = getProductionOperationalState(input);
+    const b = getProductionOperationalState(input);
+    expect(a.businessLabel).toBe(b.businessLabel);
+    expect(a.businessLabel).toBe("Przekaż do realizacji");
+    expect(a.isDelayed).toBe(true);
   });
 });
 

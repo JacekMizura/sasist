@@ -111,11 +111,10 @@ export function ProductionWorkQueueSection({
           );
         })}
       </ul>
-      {seeAllTo && items.length > 0 ? (
+      {seeAllTo && items.length > limit ? (
         <div className="pt-1 text-right">
           <Link to={seeAllTo} className="text-sm font-semibold text-slate-600 hover:text-slate-900">
-            {seeAllLabel}
-            {items.length > limit ? ` (${items.length})` : ""}
+            {seeAllLabel} ({items.length})
           </Link>
         </div>
       ) : null}

@@ -7,12 +7,16 @@ import {
   dashboardSeeAllHref,
   limitDashboardSectionItems,
 } from "./productionDashboardHelpers";
-import { buildPlanningQtyBreakdown } from "./productionPlanningBreakdown";
+import {
+  buildPlanningQtyBreakdown,
+  formatRecommendationFormula,
+} from "./productionPlanningBreakdown";
 import {
   coveredQtyFromStock,
   filterShortageQueueRows,
   isTrueMaterialShortage,
 } from "./productionShortageDisplay";
+import { getProductionOperationalState } from "./productionOperationalState";
 import { DEFAULT_PRODUCTION_RECIPE_FILTERS } from "../../modules/production/productionListFilters";
 
 describe("productionShortageDisplay", () => {
@@ -56,23 +60,63 @@ describe("productionDashboardHelpers", () => {
 });
 
 describe("productionPlanningBreakdown", () => {
-  it("exposes stock / pipeline / orders / target / recommended", () => {
+  it("separates order_demand (brutto) from order_production_needed", () => {
     const lines = buildPlanningQtyBreakdown({
-      on_hand: 2,
-      in_pipeline: 1,
-      order_demand: 5,
-      forecast_demand: 12,
-      stock_replenishment_needed: 9,
+      on_hand: 20,
+      in_pipeline: 4,
+      order_demand: 367,
+      forecast_demand: 100,
+      stock_replenishment_needed: 58,
+      order_production_needed: 182,
       production_moq: 10,
       production_batch_multiple: 5,
-      recommended_quantity: 15,
+      recommended_quantity: 216,
+      max_producible: 500,
     });
     const byKey = Object.fromEntries(lines.map((l) => [l.key, l]));
+    expect(byKey.order_demand.value).toBe(367);
+    expect(byKey.order_need.value).toBe(182);
+    expect(byKey.covering.value).toBe(185);
+    expect(byKey.stock_replenishment.value).toBe(58);
     expect(byKey.forecast_demand.label).toBe("Cel zapasu");
-    expect(byKey.forecast_demand.value).toBe(12);
-    expect(byKey.moq.value).toBe(10);
-    expect(byKey.multiple.value).toBe(5);
-    expect(byKey.recommended.value).toBe(15);
+    expect(String(byKey.formula.value)).toContain("Zamówienia do pokrycia: 182");
+    expect(String(byKey.formula.value)).toContain("uzupełnienie zapasu: 58");
+    expect(String(byKey.formula.value)).toContain("rekomendacja: 216");
+    expect(byKey.recommended.value).toBe(216);
+  });
+
+  it("formatRecommendationFormula follows engine parts", () => {
+    expect(
+      formatRecommendationFormula({
+        orderNeed: 182,
+        stockNeed: 58,
+        sumParts: 240,
+        recommended: 216,
+      }),
+    ).toMatch(/Zamówienia do pokrycia: 182 \+ uzupełnienie zapasu: 58 = 240/);
+  });
+});
+
+describe("pulpit vs zlecenia stage parity", () => {
+  it("BAT planned+delayed keeps stage and Opóźnione flag together", () => {
+    const pulp = getProductionOperationalState({
+      executionKind: "batch",
+      id: 10,
+      status: "planned",
+      plannedDate: "2020-01-01",
+      hasShortages: false,
+    });
+    const orders = getProductionOperationalState({
+      executionKind: "batch",
+      id: 10,
+      status: "planned",
+      plannedDate: "2020-01-01",
+      hasShortages: false,
+    });
+    expect(pulp.businessLabel).toBe(orders.businessLabel);
+    expect(pulp.businessLabel).toBe("Przekaż do realizacji");
+    expect(pulp.isDelayed).toBe(true);
+    expect(orders.isDelayed).toBe(true);
   });
 });
 

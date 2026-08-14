@@ -329,8 +329,6 @@ def get_production_dashboard(
                 completed_rows.append(_batch_summary(db, b))
             continue
         summary = _batch_summary(db, b)
-        if status in PLANNED_BATCH_STATUSES and summary.has_shortages:
-            shortage_count += 1
         if status in EXECUTING_BATCH_STATUSES:
             executing_rows.append(summary)
             remaining = sum(
@@ -347,6 +345,16 @@ def get_production_dashboard(
                 waiting_rows.append(summary)
             elif not summary.is_released_to_wms:
                 ready_rows.append(summary)
+
+    # Same semantics as Materiały → Braki (real missing > 0 across draft/planned/collecting).
+    from .production_shortages.queue_service import count_jobs_with_material_shortages
+
+    if warehouse_id:
+        shortage_count = count_jobs_with_material_shortages(
+            db, tenant_id=int(tenant_id), warehouse_id=int(warehouse_id)
+        )
+    else:
+        shortage_count = 0
 
     workload = finished_today + len(executing_rows) + len(awaiting_putaway_rows) + planned_count
     efficiency = round(100.0 * finished_today / workload, 1) if workload else 0.0

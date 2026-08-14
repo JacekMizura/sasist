@@ -1,4 +1,12 @@
-﻿## 2026-08-13 — Fix: bom_preview name/sku w RMZ (odzysk komponentów KROK 3)
+﻿## 2026-08-14 — Domknięcie P1 produkcji (przegląd)
+
+- KPI Pulpit `batches_with_shortages` → SSOT `count_jobs_with_material_shortages` (ta sama kolejka co Materiały→Braki); label „Zlecenia z brakami”
+- Etap vs flaga: delayed nie nadpisuje etapu („Przekaż do realizacji” + `isDelayed`); Zlecenia przekazują `plannedDate`
+- Planowanie: expand rozróżnia order_demand (brutto) vs order_production_needed + linia wyliczenia z silnika
+- Materiały: węższa tabela (reszta w expand); Pulpit: kompaktowa pusta „Do wykonania”, see-all tylko przy overflow
+- Testy: BE shortages 5; FE production P1 + operational 38; npm build OK
+
+## 2026-08-13 — Fix: bom_preview name/sku w RMZ (odzysk komponentów KROK 3)
 
 - `_rmz_line_to_read` przekazuje `component_name` / `component_sku` z `bom_preview_for_product` (wcześniej drop)
 - FE: nazwa + SKU meta; fallback „Komponent #ID” tylko awaryjnie

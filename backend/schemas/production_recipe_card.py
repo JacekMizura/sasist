@@ -62,7 +62,10 @@ class ProductionDashboardRead(BaseModel):
     active_batches: int = 0
     awaiting_putaway_batches: int = 0
     waiting_batches: int = 0
-    batches_with_shortages: int = 0
+    batches_with_shortages: int = Field(
+        0,
+        description="Liczba otwartych BAT/MO z realnym brakiem materiałów (SSOT: kolejka Materiały→Braki)",
+    )
     finished_today: int = 0
     production_efficiency_percent: float = 0.0
     units_in_production: float = Field(

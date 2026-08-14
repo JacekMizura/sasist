@@ -141,8 +141,8 @@ function WorkSection({
   return (
     <Card
       variant="section"
-      density={emphasize ? "comfortable" : "compact"}
-      className={`flex min-h-0 flex-col gap-2 ${
+      density="compact"
+      className={`flex min-h-0 flex-col gap-1.5 ${
         emphasize ? "border-rose-200/80 bg-rose-50/30 ring-1 ring-rose-100" : ""
       }`}
     >
@@ -306,8 +306,9 @@ export default function ProductionDashboardPage() {
         <div className="space-y-4">
           <ProductionKpiGrid className="!gap-2">
             <ProductionKpiCard
-              title="Braki materiałów"
+              title="Zlecenia z brakami"
               value={loading ? "—" : shortagesKpi}
+              subtitle="BAT/MO z realnym brakiem (jak Materiały)"
               tone={shortagesKpi > 0 ? "amber" : "emerald"}
               icon={<AlertTriangle aria-hidden />}
               to={erpProductionPaths.materialsShortages}
@@ -387,7 +388,7 @@ export default function ProductionDashboardPage() {
                 countTone={todo.length > 0 ? "warning" : "neutral"}
               >
                 {todo.length === 0 ? (
-                  <p className="py-1 text-sm text-slate-500">Brak pozycji do wykonania</p>
+                  <p className="py-0.5 text-sm text-slate-500">Brak pozycji do wykonania</p>
                 ) : (
                   <ProductionWorkQueueSection
                     items={[
@@ -410,25 +411,14 @@ export default function ProductionDashboardPage() {
                 countTone="info"
               >
                 {inProgress.length === 0 ? (
-                  <p className="py-1 text-sm text-slate-500">Brak pracy w toku</p>
+                  <p className="py-0.5 text-sm text-slate-500">Brak pracy w toku</p>
                 ) : (
-                  <div className="space-y-2">
-                    <p className="text-sm text-slate-600">
-                      {inProgress.length} pozycji w realizacji.{" "}
-                      <Link
-                        to={dashboardSeeAllHref(erpProductionPaths.orders, "in_progress")}
-                        className="font-semibold text-violet-700 hover:underline"
-                      >
-                        Zobacz wszystkie
-                      </Link>
-                    </p>
-                    <ProductionWorkQueueSection
-                      items={inProgress}
-                      limit={SECTION_LIMIT}
-                      seeAllLabel="Zobacz wszystkie"
-                      seeAllTo={dashboardSeeAllHref(erpProductionPaths.orders, "in_progress")}
-                    />
-                  </div>
+                  <ProductionWorkQueueSection
+                    items={inProgress}
+                    limit={SECTION_LIMIT}
+                    seeAllLabel="Zobacz wszystkie"
+                    seeAllTo={dashboardSeeAllHref(erpProductionPaths.orders, "in_progress")}
+                  />
                 )}
               </WorkSection>
 

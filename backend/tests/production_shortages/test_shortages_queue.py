@@ -193,5 +193,90 @@ class TestProductionShortagesQueueAggregation(unittest.TestCase):
         self.assertEqual(rows, [])
 
 
+class TestCountJobsWithMaterialShortages(unittest.TestCase):
+    def test_counts_distinct_bat_mo_from_queue_sources(self) -> None:
+        from backend.services.production_shortages.queue_service import count_jobs_with_material_shortages
+
+        with patch(
+            "backend.services.production_shortages.queue_service.build_production_shortages_queue",
+            return_value=[
+                {
+                    "component_product_id": 1,
+                    "missing_qty": 10.0,
+                    "demand_sources": [
+                        {"kind": "batch", "id": 11, "number": "BAT/2026/0011"},
+                        {"kind": "batch", "id": 11, "number": "BAT/2026/0011"},
+                    ],
+                    "blocked_batch_ids": [11],
+                    "blocked_order_ids": [],
+                },
+                {
+                    "component_product_id": 2,
+                    "missing_qty": 3.0,
+                    "demand_sources": [
+                        {"kind": "order", "id": 5, "number": "MO/1"},
+                    ],
+                    "blocked_batch_ids": [],
+                    "blocked_order_ids": [5],
+                },
+            ],
+        ):
+            n = count_jobs_with_material_shortages(MagicMock(), tenant_id=1, warehouse_id=1)
+        self.assertEqual(n, 2)
+
+    def test_real_queue_shortage_means_kpi_not_zero(self) -> None:
+        """Regression: collecting BAT with missing>0 must count (not only planned+has_shortages)."""
+        from backend.services.production_shortages.queue_service import count_jobs_with_material_shortages
+
+        batch = SimpleNamespace(
+            id=11,
+            number="BAT/2026/0011",
+            status="collecting",
+            tenant_id=1,
+            warehouse_id=1,
+            lines=[
+                SimpleNamespace(
+                    product_id=10,
+                    product=SimpleNamespace(name="FG", sku="FG", image_url=None),
+                )
+            ],
+        )
+        db = MagicMock()
+        batch_q = MagicMock()
+        batch_q.options.return_value = batch_q
+        batch_q.filter.return_value = batch_q
+        batch_q.all.return_value = [batch]
+        order_q = MagicMock()
+        order_q.options.return_value = order_q
+        order_q.filter.return_value = order_q
+        order_q.all.return_value = []
+        db.query.side_effect = [batch_q, order_q]
+
+        with patch(
+            "backend.services.production_shortages.queue_service._aggregate_batch_components",
+            return_value={100: 10.0},
+        ), patch(
+            "backend.services.production_shortages.queue_service.analyze_component_requirements",
+            return_value=[
+                {
+                    "component_product_id": 100,
+                    "product_name": "ST-002",
+                    "product_sku": "ST-002",
+                    "product_image_url": None,
+                    "required_qty": 10.0,
+                    "on_hand_qty": 0.0,
+                    "reserved_qty": 0.0,
+                    "available_qty": 0.0,
+                    "missing_qty": 10.0,
+                    "locations": [],
+                    "expected_availability_date": None,
+                    "substitute_proposals": [],
+                }
+            ],
+        ):
+            n = count_jobs_with_material_shortages(db, tenant_id=1, warehouse_id=1)
+        self.assertGreaterEqual(n, 1)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -111,6 +111,7 @@ function OrderWorkCard({
     producedQuantity: producedQty,
     plannedQuantity: plannedQty,
     progressPercent: row.progressPercent,
+    plannedDate: row.date !== "—" ? row.date : null,
     sourceOrderCount: isOrder ? row.sourceOrderCount : undefined,
     sourceRequestedQuantityTotal: requestedQty,
     sourceShortageQuantityTotal: isOrder ? row.sourceShortageQuantityTotal : undefined,
@@ -475,7 +476,7 @@ export default function ProductionOrdersPage() {
           }
         />
       ) : (
-        <ul className="flex w-full flex-col gap-3">
+        <ul className="flex w-full flex-col gap-1.5">
           {rows.map((r) => {
             const key = `${r.kind}-${r.id}`;
             const selected = highlightKey === key;

@@ -546,11 +546,11 @@ export function getProductionOperationalState(
     };
   }
 
-  // Opóźnione zaplanowane bez braków → nadal REACTION (wymaga reakcji), nie dublujemy w TODO
+  // Opóźnione zaplanowane bez braków → REACTION, ale etap pozostaje „Przekaż do realizacji”
   if (delayed) {
     return {
       currentStep: "READY_TO_START",
-      businessLabel: "Opóźnione",
+      businessLabel: "Przekaż do realizacji",
       description: "Termin minął — wyślij do realizacji.",
       primaryAction: {
         kind: "send_to_execution",

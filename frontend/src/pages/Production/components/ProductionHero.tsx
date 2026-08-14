@@ -96,7 +96,7 @@ export function ProductionHero({ data, warehouseName, loading, onCreateBatch }: 
           <div className="grid min-w-[280px] flex-1 grid-cols-2 gap-2 sm:max-w-md">
             <KpiPill label="Zaplanowane" value={loading ? "—" : (data?.planned_batches ?? 0)} tone="" />
             <KpiPill label="Aktywne" value={loading ? "—" : (data?.active_batches ?? 0)} tone="" />
-            <KpiPill label="Braki" value={loading ? "—" : shortages} tone="" />
+            <KpiPill label="Zlecenia z brakami" value={loading ? "—" : shortages} tone="" />
             <KpiPill
               label="Efektywność"
               value={loading ? "—" : (data?.production_efficiency_percent ?? 0)}

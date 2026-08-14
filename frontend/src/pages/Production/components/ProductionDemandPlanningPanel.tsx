@@ -264,7 +264,9 @@ export function ProductionDemandProductsTable({
               <th className="px-3 py-2">Produkt</th>
               <th className="px-3 py-2 text-right">Stan</th>
               <th className="px-3 py-2 text-right">W produkcji</th>
-              <th className="px-3 py-2 text-right">Zamówienia</th>
+              <th className="px-3 py-2 text-right" title="Suma sztuk z otwartych zamówień (brutto)">
+                Zamówienia (brutto)
+              </th>
               <th className="px-3 py-2 text-right">Uzupełnienie</th>
               <th className="px-3 py-2 text-right">Cel zapasu</th>
               <th className="px-3 py-2 text-right">Pokrycie</th>
@@ -289,7 +291,18 @@ export function ProductionDemandProductsTable({
             ) : (
               products.map((row) => {
                 const expanded = expandedId === row.product_id;
-                const breakdown = buildPlanningQtyBreakdown(row);
+                const breakdown = buildPlanningQtyBreakdown({
+                  on_hand: row.on_hand,
+                  in_pipeline: row.in_pipeline,
+                  order_demand: row.order_demand,
+                  forecast_demand: row.forecast_demand,
+                  stock_replenishment_needed: row.stock_replenishment_needed,
+                  order_production_needed: row.order_production_needed,
+                  production_moq: row.production_moq,
+                  production_batch_multiple: row.production_batch_multiple,
+                  recommended_quantity: row.recommended_quantity,
+                  max_producible: row.max_producible,
+                });
                 return (
                   <Fragment key={row.product_id}>
                     <tr className="align-middle hover:bg-slate-50/80">
@@ -392,16 +405,29 @@ export function ProductionDemandProductsTable({
                           <p className="mb-1.5 text-[10px] font-bold uppercase tracking-wide text-slate-500">
                             Dlaczego taka ilość?
                           </p>
-                          <dl className="grid max-w-lg grid-cols-[1fr_auto] gap-x-6 gap-y-1 text-xs text-slate-700">
+                          <dl className="grid max-w-xl grid-cols-[1fr_auto] gap-x-6 gap-y-1.5 text-xs text-slate-700">
                             {breakdown.map((line) => (
                               <Fragment key={line.key}>
-                                <dt className={line.key === "recommended" ? "font-bold text-slate-900" : ""}>
-                                  {line.label}
+                                <dt
+                                  className={
+                                    line.key === "recommended" || line.key === "formula"
+                                      ? "font-bold text-slate-900"
+                                      : ""
+                                  }
+                                >
+                                  <span>{line.label}</span>
+                                  {line.hint ? (
+                                    <span className="mt-0.5 block text-[10px] font-normal text-slate-500">
+                                      {line.hint}
+                                    </span>
+                                  ) : null}
                                 </dt>
                                 <dd
                                   className={`text-right tabular-nums ${
-                                    line.key === "recommended" ? "font-bold text-slate-900" : ""
-                                  }`}
+                                    line.key === "recommended" || line.key === "formula"
+                                      ? "font-bold text-slate-900"
+                                      : ""
+                                  } ${line.key === "formula" ? "max-w-[14rem] whitespace-normal text-left sm:text-right" : ""}`}
                                 >
                                   {typeof line.value === "number" ? fmtQty(line.value) : line.value}
                                 </dd>
