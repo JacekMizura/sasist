@@ -333,6 +333,10 @@ def apply_manufacturing_recovery_to_line(
     )
 
     if mode == RECOVERY_MODE_OFF or not eligible:
+        # Bundle STOCK disassemble reuses stock_intake_mode / fg / disassembly columns —
+        # never clear them when this line is a bundle parent / bundle component return.
+        if is_bundle_line:
+            return
         # Clear recovery only when mode off / not eligible and nothing posted
         if getattr(rmz_line, "disassembly_qty", None) or getattr(rmz_line, "stock_intake_mode", None):
             existing = (

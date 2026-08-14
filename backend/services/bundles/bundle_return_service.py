@@ -40,6 +40,7 @@ class BundleReturnComponentNode:
     max_returnable_qty: int
     line_role: str
     lots: tuple[dict, ...] = ()
+    quantity_per_bundle: int = 0
 
 
 @dataclass(frozen=True)
@@ -52,6 +53,12 @@ class BundleReturnTreeNode:
     unit_price_net: float
     components: tuple[BundleReturnComponentNode, ...]
     is_stock_sku: bool
+    #: STOCK + recipe snapshot present → operator may disassemble
+    can_stock_disassemble: bool = False
+    #: Recipe components from OrderLineBundleComponent (STOCK disassemble UI)
+    snapshot_components: tuple[BundleReturnComponentNode, ...] = ()
+    #: Legacy-safe physical set qty (may exceed OrderItem.quantity=0)
+    physical_bundle_qty: int = 0
 
 
 @dataclass
@@ -127,6 +134,12 @@ def _projection_to_component_node(
 
 def build_bundle_return_tree(db: Session, order_id: int) -> list[BundleReturnTreeNode]:
     """Drzewo zwrotu bundle dla zamówienia — wyłącznie snapshot (resolver)."""
+    from .bundle_stock_return_intake import (
+        physical_bundle_qty_for_parent,
+        snapshot_nodes_for_tree,
+        stock_can_disassemble,
+    )
+
     already = _returned_qty_by_snapshot(db, order_id)
     nodes: list[BundleReturnTreeNode] = []
     for ctx in bundle_line_resolver.resolve_for_order(db, order_id):
@@ -158,16 +171,22 @@ def build_bundle_return_tree(db: Session, order_id: int) -> list[BundleReturnTre
                     lots=_lots_dicts_for_snapshot(db, snap_id) if snap_id else (),
                 )
             )
+        can_dis = stock_can_disassemble(ctx)
+        snap_nodes = snapshot_nodes_for_tree(ctx, already_by_snap=already) if can_dis else ()
+        phys = physical_bundle_qty_for_parent(db, ctx.parent_order_item)
         nodes.append(
             BundleReturnTreeNode(
                 order_line_id=int(ctx.order_line_id),
                 bundle_id=int(ctx.bundle_id),
                 bundle_name=str(ctx.bundle_name),
                 fulfillment_mode=str(ctx.fulfillment_mode),
-                bundle_qty=int(ctx.bundle_qty),
+                bundle_qty=int(phys if phys > 0 else ctx.bundle_qty),
                 unit_price_net=float(header.unit_price_net),
                 components=tuple(children),
                 is_stock_sku=ctx.fulfillment_mode == STOCK_PRODUCTION,
+                can_stock_disassemble=can_dis,
+                snapshot_components=snap_nodes,
+                physical_bundle_qty=int(phys),
             )
         )
     return nodes
@@ -288,7 +307,16 @@ def apply_bundle_return_metadata(
         return "PARTIAL_BUNDLE", "OK"
     tree = build_bundle_return_tree(db, order_id)
     node = next((n for n in tree if n.order_line_id == int(rmz_line.order_item_id)), None)
+    # STOCK disassemble selections target recipe snapshot ids — use snapshot_components as expected.
     expected = list(node.components) if node else []
+    if (
+        node is not None
+        and node.is_stock_sku
+        and node.snapshot_components
+        and selections
+        and any(int(s.snapshot_id or 0) > 0 for s in selections)
+    ):
+        expected = list(node.snapshot_components)
     scenario = classify_bundle_return_scenario(
         fulfillment_mode=str(ctx.fulfillment_mode),
         components=selections,

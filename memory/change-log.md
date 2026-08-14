@@ -1,4 +1,20 @@
-﻿## 2026-08-14 — Domknięcie P1 produkcji (przegląd)
+﻿## 2026-08-14 — STOCK bundle disassemble on return
+
+- Tree: `can_stock_disassemble` + `snapshot_components` (OrderLineBundleComponent SSOT)
+- Intake FG | DISASSEMBLE | MIXED on existing RMZ columns; Z-PZ via existing `append_accepted_component_lines`
+- Legacy parent qty=0: `physical_bundle_qty_for_parent` for RMZ create/add
+- Mfg must not clear bundle intake columns; precedence unchanged
+- FE: BundleReturnLinePanel intake choice
+- Tests: `test_stock_bundle_disassemble_return.py`; returns 77 passed; FE build OK
+
+## 2026-08-14 — Wspólna emisja Z-PZ dla odzysku komponentów (bundle + mfg)
+
+- Kontrakt `ComponentReturnRecoveryLine` + `component_return_recovery_service`
+- Adaptery bundle / manufacturing → wspólne `append_accepted_component_lines`
+- Precedencja bundle bez zmian; modele/refund/API bez migracji
+- Testy: returns suite 104 passed
+
+## 2026-08-14 — Domknięcie P1 produkcji (przegląd)
 
 - KPI Pulpit `batches_with_shortages` → SSOT `count_jobs_with_material_shortages` (ta sama kolejka co Materiały→Braki); label „Zlecenia z brakami”
 - Etap vs flaga: delayed nie nadpisuje etapu („Przekaż do realizacji” + `isDelayed`); Zlecenia przekazują `plannedDate`

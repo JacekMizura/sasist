@@ -4746,6 +4746,7 @@ export default function WmsReturnsPage() {
                                       orderLineId={rmzLn.order_item_id}
                                       bundleName={rmzLn.bundle_name}
                                       initialComponents={rmzLn.bundle_components}
+                                      line={rmzLn}
                                       disabled={isFinished}
                                       onSaved={() => {
                                         if (selectedReturnDbId == null) return;

@@ -1,5 +1,11 @@
 ﻿## Active
 
+**STOCK bundle disassemble on return (2026-08-14):** FG vs Rozmontuj; snapshot `OrderLineBundleComponent`; MIXED fg+dq; shared Z-PZ emission untouched.
+
+**Wspólna emisja Z-PZ odzysku komponentów (2026-08-14):** commit `8157f91e` — `ComponentReturnRecoveryLine` + adapters + `append_accepted_component_lines`; bez migracji modeli.
+
+**P1 produkcji domknięte (2026-08-14):** commit `e96b749d` — KPI braków = SSOT kolejki Materiałów; etap ≠ Opóźnione; planowanie formula; polish Materiały/Zlecenia/Pulpit.
+
 **FIX: bom_preview null name/sku na RMZ (2026-08-13):**
 - Root cause: `bom_preview_for_product` enrichował name/sku, `_rmz_line_to_read` nie przekazywał do `WmsBomPreviewComponentRead`
 - FE panel pokazuje nazwę + SKU; fallback `#id` tylko gdy brak danych

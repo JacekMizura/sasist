@@ -242,6 +242,9 @@ export type WmsReturnBundleComponentIn = {
 export type WmsReturnBundleComponentsUpdate = {
   components: WmsReturnBundleComponentIn[];
   has_damage?: boolean;
+  stock_intake_mode?: StockIntakeMode | null;
+  fg_intake_qty?: number | null;
+  disassembly_qty?: number | null;
 };
 
 export type WmsReturnBundleTreeComponentRead = {
@@ -256,6 +259,7 @@ export type WmsReturnBundleTreeComponentRead = {
   max_returnable_qty: number;
   line_role: string;
   lots?: Array<{ lot_number: string; lot_id?: number | null; expiry_date?: string | null; picked_qty?: number }>;
+  quantity_per_bundle?: number | null;
 };
 
 export type WmsReturnBundleTreeNodeRead = {
@@ -267,6 +271,9 @@ export type WmsReturnBundleTreeNodeRead = {
   unit_price_net: number;
   is_stock_sku: boolean;
   components: WmsReturnBundleTreeComponentRead[];
+  can_stock_disassemble?: boolean;
+  snapshot_components?: WmsReturnBundleTreeComponentRead[];
+  physical_bundle_qty?: number;
 };
 
 export type WmsReturnRead = {

@@ -10,6 +10,7 @@ from pydantic import AliasChoices, BaseModel, ConfigDict, Field, field_validator
 from ..utils.ui_status_color import DEFAULT_PANEL_STATUS_HEX, parse_hex_color_strict
 
 ReturnStatusType = Literal["in_progress", "done_success", "done_rejected"]
+StockIntakeMode = Literal["FG", "DISASSEMBLE", "MIXED"]
 
 
 class ReturnStatusBrief(BaseModel):
@@ -334,6 +335,10 @@ class WmsReturnBundleComponentIn(BaseModel):
 class WmsReturnBundleComponentsUpdate(BaseModel):
     components: List[WmsReturnBundleComponentIn] = Field(default_factory=list)
     has_damage: bool = False
+    #: STOCK intake: FG | DISASSEMBLE | MIXED (null = infer / default FG for STOCK)
+    stock_intake_mode: Optional[StockIntakeMode] = None
+    fg_intake_qty: Optional[int] = Field(default=None, ge=0)
+    disassembly_qty: Optional[int] = Field(default=None, ge=0)
 
 
 class WmsReturnBundleTreeComponentRead(BaseModel):
@@ -348,6 +353,7 @@ class WmsReturnBundleTreeComponentRead(BaseModel):
     max_returnable_qty: int
     line_role: str
     lots: List[dict] = Field(default_factory=list, description="P4.16 — znane partie wydane przy pick/issue")
+    quantity_per_bundle: Optional[int] = None
 
 
 class WmsReturnBundleTreeNodeRead(BaseModel):
@@ -359,6 +365,9 @@ class WmsReturnBundleTreeNodeRead(BaseModel):
     unit_price_net: float
     is_stock_sku: bool
     components: List[WmsReturnBundleTreeComponentRead] = Field(default_factory=list)
+    can_stock_disassemble: bool = False
+    snapshot_components: List[WmsReturnBundleTreeComponentRead] = Field(default_factory=list)
+    physical_bundle_qty: int = 0
 
 
 class WmsReturnLineListPreview(BaseModel):
@@ -496,7 +505,6 @@ ReturnsMode = Literal["simple", "two_step", "advanced"]
 InventoryManagementMode = Literal["DOCUMENTS_ONLY", "HYBRID", "EXTERNAL_INVENTORY"]
 ManufacturedComponentRecoveryMode = Literal["OFF", "OPTIONAL", "REQUIRED"]
 ManufacturedRecoveryReceiptMode = Literal["STANDARD_PUTAWAY", "DEFAULT_LOCATION"]
-StockIntakeMode = Literal["FG", "DISASSEMBLE", "MIXED"]
 
 
 class WmsBomPreviewComponentRead(BaseModel):

@@ -2434,6 +2434,15 @@ def list_wms_returns(
         return []
 
 
+def _ordered_qty_for_return_line(db: Session, oi: OrderItem) -> int:
+    """Physical returnable qty; bundle parent may use snapshot when OrderItem.quantity=0."""
+    from ..services.bundles.bundle_stock_return_intake import physical_bundle_qty_for_parent
+
+    if bool(getattr(oi, "is_bundle_parent", False)):
+        return physical_bundle_qty_for_parent(db, oi)
+    return max(0, int(float(oi.quantity or 0)))
+
+
 @router.post("", response_model=WmsReturnRead)
 @router.post("/", response_model=WmsReturnRead)
 def create_wms_return(body: WmsReturnCreate, db: Session = Depends(get_db)):
@@ -2479,10 +2488,11 @@ def create_wms_return(body: WmsReturnCreate, db: Session = Depends(get_db)):
                 status_code=400,
                 detail=f"Product mismatch for order_item {line.order_item_id}",
             )
-        if line.quantity > (oi.quantity or 0):
+        ordered = _ordered_qty_for_return_line(db, oi)
+        if line.quantity > ordered:
             raise HTTPException(
                 status_code=400,
-                detail=f"Quantity {line.quantity} exceeds order line {oi.quantity}",
+                detail=f"Quantity {line.quantity} exceeds order line {ordered}",
             )
         lines_out.append(
             {
@@ -2597,7 +2607,7 @@ def add_wms_return_line(
     if int(oi.product_id) != int(body.product_id):
         raise HTTPException(status_code=400, detail=f"Product mismatch for order_item {body.order_item_id}")
 
-    ordered = max(0, int(float(oi.quantity or 0)))
+    ordered = _ordered_qty_for_return_line(db, oi)
     already = _sum_returned_qty_for_order_item(
         db,
         tenant_id,
@@ -3304,7 +3314,10 @@ def update_wms_return_bundle_components(
     warehouse_id: Optional[int] = Query(None, ge=1),
     db: Session = Depends(get_db),
 ) -> WmsReturnRead:
-    """Zapis wyboru składników bundle na linii RMZ (snapshot-only refund)."""
+    """Zapis wyboru składników bundle na linii RMZ (snapshot-only refund + STOCK FG/DISASSEMBLE)."""
+    from ..services.bundles.bundle_stock_return_intake import apply_stock_bundle_intake
+    from ..services.returns.errors import RmzFinalizeError
+
     wh_id = _warehouse_id_for_return_mutation(db, return_id, tenant_id, warehouse_id)
     row = _load_rmz(db, return_id, tenant_id, wh_id)
     if not row:
@@ -3326,13 +3339,19 @@ def update_wms_return_bundle_components(
         )
         for c in body.components
     ]
-    apply_bundle_return_metadata(
-        db,
-        rmz_line=ln,
-        order_id=int(row.order_id),
-        selections=selections,
-        has_damage=bool(body.has_damage),
-    )
+    try:
+        apply_stock_bundle_intake(
+            db,
+            rmz_line=ln,
+            order_id=int(row.order_id),
+            selections=selections,
+            has_damage=bool(body.has_damage),
+            stock_intake_mode=body.stock_intake_mode,
+            fg_intake_qty=body.fg_intake_qty,
+            disassembly_qty=body.disassembly_qty,
+        )
+    except RmzFinalizeError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
     db.commit()
     return _serialize_return_read(db, row)
 
@@ -3352,6 +3371,23 @@ def get_order_bundle_return_tree(
     if order is None:
         raise HTTPException(status_code=404, detail="Order not found")
     tree = build_bundle_return_tree(db, int(order_id))
+
+    def _comp(c) -> WmsReturnBundleTreeComponentRead:
+        return WmsReturnBundleTreeComponentRead(
+            snapshot_id=c.snapshot_id,
+            order_line_id=c.order_line_id,
+            component_product_id=c.component_product_id,
+            component_name=c.component_name,
+            sku=c.sku,
+            sold_qty=c.sold_qty,
+            unit_price_snapshot=c.unit_price_snapshot,
+            already_returned_qty=c.already_returned_qty,
+            max_returnable_qty=c.max_returnable_qty,
+            line_role=c.line_role,
+            lots=list(c.lots),
+            quantity_per_bundle=int(getattr(c, "quantity_per_bundle", 0) or 0) or None,
+        )
+
     return [
         WmsReturnBundleTreeNodeRead(
             order_line_id=n.order_line_id,
@@ -3361,22 +3397,10 @@ def get_order_bundle_return_tree(
             bundle_qty=n.bundle_qty,
             unit_price_net=n.unit_price_net,
             is_stock_sku=n.is_stock_sku,
-            components=[
-                WmsReturnBundleTreeComponentRead(
-                    snapshot_id=c.snapshot_id,
-                    order_line_id=c.order_line_id,
-                    component_product_id=c.component_product_id,
-                    component_name=c.component_name,
-                    sku=c.sku,
-                    sold_qty=c.sold_qty,
-                    unit_price_snapshot=c.unit_price_snapshot,
-                    already_returned_qty=c.already_returned_qty,
-                    max_returnable_qty=c.max_returnable_qty,
-                    line_role=c.line_role,
-                    lots=list(c.lots),
-                )
-                for c in n.components
-            ],
+            components=[_comp(c) for c in n.components],
+            can_stock_disassemble=bool(n.can_stock_disassemble),
+            snapshot_components=[_comp(c) for c in n.snapshot_components],
+            physical_bundle_qty=int(n.physical_bundle_qty or n.bundle_qty or 0),
         )
         for n in tree
     ]
