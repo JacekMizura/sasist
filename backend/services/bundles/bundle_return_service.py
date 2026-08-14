@@ -372,6 +372,20 @@ def bundle_component_returns_for_line(db: Session, rmz_line_id: int) -> list[Ret
     )
 
 
+def line_has_pending_bundle_component_receipt(db: Session, rmz_line: RMZLine) -> bool:
+    """True when ReturnLineBundleComponent has accepted_qty > 0 (STOCK DISASSEMBLE / ON_DEMAND)."""
+    loaded = list(getattr(rmz_line, "bundle_component_returns", None) or [])
+    if loaded:
+        return any(float(getattr(cr, "accepted_qty", 0) or 0) > 1e-9 for cr in loaded)
+    rid = getattr(rmz_line, "id", None)
+    if rid is None or db is None:
+        return False
+    for cr in bundle_component_returns_for_line(db, int(rid)):
+        if float(getattr(cr, "accepted_qty", 0) or 0) > 1e-9:
+            return True
+    return False
+
+
 def is_bundle_parent_rmz_line(db: Session, rmz_line: RMZLine) -> bool:
     oi = db.query(OrderItem).filter(OrderItem.id == int(rmz_line.order_item_id)).first()
     return oi is not None and bool(getattr(oi, "is_bundle_parent", False))

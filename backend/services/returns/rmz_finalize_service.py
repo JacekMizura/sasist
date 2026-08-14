@@ -15,7 +15,7 @@ from ...models.wms_settings import WmsSettings
 from ...schemas.wms_return import ReturnsMode, WmsRefundCreate, WmsReturnFinalizeLineIn
 from ..audit_service import log_audit_entry
 from ..return_status_service import get_by_transition_key, seed_default_statuses_session
-from ..rmz_return_receipt_service import ensure_rmz_return_receipt_document
+from ..rmz_return_receipt_service import ensure_required_rmz_return_receipt_document
 from .errors import RmzFinalizeError
 from .rmz_line_split_service import (
     apply_rmz_line_split,
@@ -160,7 +160,10 @@ def finalize_rmz_return(
     rmz_lines = list(lines_by_oi.values())
     validate_rmz_lines_ready_for_finalize(rmz_lines, require_photos=bool(settings.require_photos))
 
-    pz_doc = ensure_rmz_return_receipt_document(db, row)
+    try:
+        pz_doc = ensure_required_rmz_return_receipt_document(db, row)
+    except ValueError as exc:
+        raise RmzFinalizeError(str(exc)) from exc
 
     refund_applied = bool(process_refund and settings.enable_refund and refund is not None)
     if refund_applied:

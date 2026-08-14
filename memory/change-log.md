@@ -1,4 +1,12 @@
-﻿## 2026-08-14 — STOCK bundle disassemble on return
+﻿## 2026-08-14 — FIX: Z-PZ dla STOCK bundle DISASSEMBLE (FG=0)
+
+- Root cause: `_any_planned_lines` nie uwzględniało accepted `ReturnLineBundleComponent` → `ensure` zwracał None
+- Finalize / commit-wms / refund zamykały RMZ mimo braku wymaganego Z-PZ
+- Fix: `line_has_pending_bundle_component_receipt` w gate; `ensure_required_rmz_return_receipt_document` + assert pozycji
+- Refund: receipt przed transition success
+- Testy: `test_stock_bundle_disassemble_z_pz.py` A–E; returns 125 passed
+
+## 2026-08-14 — STOCK bundle disassemble on return
 
 - Tree: `can_stock_disassemble` + `snapshot_components` (OrderLineBundleComponent SSOT)
 - Intake FG | DISASSEMBLE | MIXED on existing RMZ columns; Z-PZ via existing `append_accepted_component_lines`

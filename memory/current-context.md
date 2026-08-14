@@ -1,5 +1,7 @@
 ﻿## Active
 
+**FIX UAT blocker STOCK DISASSEMBLE Z-PZ (2026-08-14):** `_any_planned_lines` nie widziało accepted `ReturnLineBundleComponent` przy FG=0 → ensure skip → finalize zamykał RMZ bez dokumentu. Gate + `ensure_required_*` + assert przed transition.
+
 **STOCK bundle disassemble on return (2026-08-14):** FG vs Rozmontuj; snapshot `OrderLineBundleComponent`; MIXED fg+dq; shared Z-PZ emission untouched.
 
 **Wspólna emisja Z-PZ odzysku komponentów (2026-08-14):** commit `8157f91e` — `ComponentReturnRecoveryLine` + adapters + `append_accepted_component_lines`; bez migracji modeli.

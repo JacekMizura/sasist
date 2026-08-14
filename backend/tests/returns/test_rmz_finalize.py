@@ -21,7 +21,7 @@ class TestRmzEditableGuard(unittest.TestCase):
 
 
 class TestFinalizeRollback(unittest.TestCase):
-    @patch("backend.services.returns.rmz_finalize_service.ensure_rmz_return_receipt_document")
+    @patch("backend.services.returns.rmz_finalize_service.ensure_required_rmz_return_receipt_document")
     @patch("backend.services.returns.rmz_finalize_service.apply_rmz_line_split")
     def test_z_pz_failure_propagates(self, mock_apply, mock_z_pz) -> None:
         from backend.services.returns.rmz_finalize_service import finalize_rmz_return
@@ -47,7 +47,7 @@ class TestFinalizeRollback(unittest.TestCase):
 
         mock_z_pz.side_effect = ValueError("Z-PZ failed")
 
-        with self.assertRaises(ValueError):
+        with self.assertRaises(RmzFinalizeError):
             finalize_rmz_return(
                 db,
                 row,
@@ -56,6 +56,10 @@ class TestFinalizeRollback(unittest.TestCase):
                         order_item_id=10,
                         product_id=1,
                         accepted_qty=1,
+                        damaged_qty=0,
+                        damaged_b_qty=0,
+                        damaged_c_qty=0,
+                        rejected_qty=0,
                     )
                 ],
                 settings=settings,

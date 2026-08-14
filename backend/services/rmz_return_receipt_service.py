@@ -60,6 +60,8 @@ __all__ = [
     "RETURN_RECEIPT",
     "RETURN_RECEIPT_DOCUMENT_TYPES",
     "ensure_rmz_return_receipt_document",
+    "ensure_required_rmz_return_receipt_document",
+    "assert_rmz_stock_receipt_satisfied",
     "ensure_rmz_return_receipt_after_refund",
     "parse_reject_reason_id_from_damage_type",
     "rejection_creates_stock_document",
@@ -278,6 +280,7 @@ def _planned_stock_counts_for_line(
 
 
 def _any_planned_lines(db: Session, tenant_id: int, warehouse_id: int, lines: Sequence[RMZLine]) -> bool:
+    from .bundles.bundle_return_service import line_has_pending_bundle_component_receipt
     from .returns.manufactured_component_recovery_service import (
         line_has_pending_component_receipt,
         saleable_fg_qty_for_receipt,
@@ -288,12 +291,47 @@ def _any_planned_lines(db: Session, tenant_id: int, warehouse_id: int, lines: Se
             db, tenant_id, warehouse_id, ln, include_rejected=False
         )
         fg_aq = saleable_fg_qty_for_receipt(ln)
-        # When recovery fields active, fg may be 0 while components still need posting
-        if fg_aq > 0 or dmg or line_has_pending_component_receipt(ln):
+        # FG=0 + DISASSEMBLE with accepted bundle components must still plan a Z-PZ
+        if (
+            fg_aq > 0
+            or dmg
+            or line_has_pending_component_receipt(ln)
+            or line_has_pending_bundle_component_receipt(db, ln)
+        ):
             return True
         if aq_legacy > 0 and getattr(ln, "stock_intake_mode", None) is None and not getattr(ln, "disassembly_qty", None):
             return True
     return False
+
+
+def assert_rmz_stock_receipt_satisfied(
+    db: Session,
+    rmz: WmsOrderReturn,
+    pz_doc: Optional[StockDocument],
+) -> None:
+    """Fail when accepted stock intake exists but no Z-PZ items were posted for this RMZ."""
+    rid = int(rmz.id)
+    lines = db.query(RMZLine).filter(RMZLine.rmz_id == rid).order_by(RMZLine.id.asc()).all()
+    if not lines or not _any_planned_lines(db, int(rmz.tenant_id), int(rmz.warehouse_id), lines):
+        return
+    if pz_doc is None:
+        raise ValueError(
+            "Nie utworzono wymaganego dokumentu Z-PZ dla przyjęcia magazynowego "
+            "(accepted FG lub komponenty bez dokumentu)."
+        )
+    if not _rmz_lines_already_posted(db, int(pz_doc.id), rid):
+        raise ValueError(
+            "Dokument Z-PZ nie zawiera pozycji przyjęcia dla tego RMZ — finalizacja przerwana."
+        )
+
+
+def ensure_required_rmz_return_receipt_document(
+    db: Session, rmz: WmsOrderReturn
+) -> Optional[StockDocument]:
+    """Ensure Z-PZ and assert consistency when stock intake is required."""
+    pz_doc = ensure_rmz_return_receipt_document(db, rmz)
+    assert_rmz_stock_receipt_satisfied(db, rmz, pz_doc)
+    return pz_doc
 
 
 def _resolve_z_pz_series(db: Session, tenant_id: int, warehouse_id: int) -> DocumentSeries:
@@ -827,4 +865,4 @@ def ensure_rmz_return_receipt_document(db: Session, rmz: WmsOrderReturn) -> Opti
 
 def ensure_rmz_return_receipt_after_refund(db: Session, rmz: WmsOrderReturn) -> None:
     """Wywołaj po udanym zapisie refundu / zamknięciu RMZ (ta sama sesja, przed commit)."""
-    ensure_rmz_return_receipt_document(db, rmz)
+    ensure_required_rmz_return_receipt_document(db, rmz)

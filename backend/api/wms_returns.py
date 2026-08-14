@@ -65,6 +65,7 @@ from ..services.returns.collective_z_pz_service import (
 )
 from ..services.rmz_return_receipt_service import (
     _resolve_z_pz_series,
+    ensure_required_rmz_return_receipt_document,
     ensure_rmz_return_receipt_after_refund,
     ensure_rmz_return_receipt_document,
     stock_document_ids_for_rmz,
@@ -3064,7 +3065,7 @@ def commit_wms_return_workflow(
         )
 
         try:
-            pz_doc = ensure_rmz_return_receipt_document(db, row)
+            pz_doc = ensure_required_rmz_return_receipt_document(db, row)
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -3205,11 +3206,11 @@ def process_rmz_refund(
         refund.decided_by = body.decided_by
         refund.decided_at = datetime.utcnow()
 
-    _apply_transition(db, row, "success")
     try:
         ensure_rmz_return_receipt_after_refund(db, row)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    _apply_transition(db, row, "success")
     db.commit()
 
     row = _load_rmz(db, return_id, tenant_id, wh_id)
