@@ -265,10 +265,10 @@ def _order_card_context(db: Session, *, tenant_id: int, order_id: int) -> dict[s
     status_label = str(order.status or "")
     config_label = None
     if getattr(order, "picking_config_id", None):
-        from ...models.picking_config import PickingConfig
         from ...models.order_ui_status import OrderUiStatus
+        from ..production_config_query import get_production_config_by_id
 
-        cfg = db.query(PickingConfig).filter(PickingConfig.id == int(order.picking_config_id)).first()
+        cfg = get_production_config_by_id(db, int(order.picking_config_id), require_active=False)
         if cfg is not None:
             st = db.query(OrderUiStatus).filter(OrderUiStatus.id == int(cfg.source_status_id)).first()
             if st is not None:

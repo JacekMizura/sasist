@@ -237,8 +237,10 @@ def apply_material_validation_to_orders_mo(
         return {"result": "SKIPPED", "reason": "mo_not_aggregable", "status": status}
 
     if picking_config is None and getattr(mo, "picking_config_id", None):
-        picking_config = (
-            db.query(PickingConfig).filter(PickingConfig.id == int(mo.picking_config_id)).first()
+        from ..production_config_query import get_production_config_by_id
+
+        picking_config = get_production_config_by_id(
+            db, int(mo.picking_config_id), require_active=False
         )
 
     composition: ProductComposition | None = None
@@ -590,7 +592,9 @@ def retry_order_driven_production_shortages(
 
         target_status = getattr(mo, "production_source_status_id", None)
         if target_status is None and getattr(mo, "picking_config_id", None):
-            pc = db.query(PickingConfig).filter(PickingConfig.id == int(mo.picking_config_id)).first()
+            from ..production_config_query import get_production_config_by_id
+
+            pc = get_production_config_by_id(db, int(mo.picking_config_id), require_active=False)
             target_status = getattr(pc, "source_status_id", None) if pc else None
         if target_status is None:
             results.append({"source_item_id": int(src.id), "result": "SKIPPED", "reason": "no_target_status"})

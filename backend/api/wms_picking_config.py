@@ -134,5 +134,10 @@ def delete_picking_config(
     )
     if not row:
         raise HTTPException(status_code=404, detail="Konfiguracja nie znaleziona.")
+    if bool(getattr(row, "is_production_mode", False)):
+        raise HTTPException(
+            status_code=400,
+            detail="Konfiguracje produkcji usuwaj w Ustawienia WMS → Produkcja.",
+        )
     db.delete(row)
     db.commit()

@@ -15,7 +15,6 @@ from ...models.fulfillment_event import FE_PICK
 from ...models.location import Location
 from ...models.order import Order
 from ...models.order_item_pick_allocation import OrderItemPickAllocation
-from ...models.picking_config import PickingConfig
 from ...models.product import Product
 from ...models.production import (
     PRODUCTION_ORDER_SOURCE_ITEM_CANCELLED,
@@ -35,6 +34,7 @@ from ..fulfillment_event_service import append_event
 from ..inventory_carrier_ops import upsert_dock_inventory_for_loose_receipt
 from ..inventory_lot_keys import NO_EXPIRY_SENTINEL
 from ..order_panel_ui_status_service import apply_order_panel_ui_status
+from ..production_config_query import get_production_config_by_id
 from ..production_order_service import ProductionOrderError
 from ..production_order_trigger.material_validation_service import (
     sort_source_items_for_material_allocation,
@@ -106,7 +106,7 @@ def resolve_orders_mo_buffer_location_id(db: Session, mo: ProductionOrder) -> in
             "Brak lokalizacji buforowej produktu gotowego dla zlecenia z zamówień.",
             code="missing_buffer_location",
         )
-    pc = db.query(PickingConfig).filter(PickingConfig.id == int(pc_id)).first()
+    pc = get_production_config_by_id(db, int(pc_id), require_active=False)
     if pc is None or getattr(pc, "finished_goods_buffer_location_id", None) is None:
         raise ProductionOrderError(
             "Brak lokalizacji buforowej produktu gotowego w konfiguracji produkcji.",
@@ -129,7 +129,7 @@ def resolve_status_after_production_id(db: Session, mo: ProductionOrder) -> int:
             "Brak konfiguracji produkcyjnej na zleceniu.",
             code="missing_picking_config",
         )
-    pc = db.query(PickingConfig).filter(PickingConfig.id == int(pc_id)).first()
+    pc = get_production_config_by_id(db, int(pc_id), require_active=False)
     if pc is None:
         raise ProductionOrderError(
             "Konfiguracja produkcyjna zlecenia nie istnieje.",

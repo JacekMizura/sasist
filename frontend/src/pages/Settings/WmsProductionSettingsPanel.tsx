@@ -1,4 +1,4 @@
-import { Boxes, ClipboardList, FileText, LayoutTemplate, Settings2 } from "lucide-react";
+import { Boxes, ClipboardList, Factory, FileText, LayoutTemplate, Settings2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import toast from "react-hot-toast";
 
@@ -17,6 +17,7 @@ import { WmsSettingsSection } from "./WmsSettingsSection";
 import type { WmsSettingsSectionConfig } from "./wmsSettingsSectionConfig";
 import { DocumentTemplateScopeSection } from "./document-templates/components/DocumentTemplateScopeSection";
 import { PRODUCTION_SCOPE_KINDS } from "./document-templates/documentTemplateScopeKinds";
+import { ProductionConfiguratorPanel } from "../../modules/wmsSettings/production/ProductionConfiguratorPanel";
 import {
   WmsBoolSettingRow,
   WmsControlSettingRow,
@@ -25,6 +26,7 @@ import {
   wmsSettingsRowsStackClass,
 } from "./wmsSettingsUi";
 
+const SECTION_CONFIGURATOR = "wms-production-configurator";
 const SECTION_FORECAST = "wms-production-forecast";
 const SECTION_RESERVATION = "wms-production-reservation";
 
@@ -56,15 +58,16 @@ function SectionCard({
   children,
 }: {
   sectionId: string;
-  title: string;
+  title?: string;
   summary?: string;
   children: ReactNode;
 }) {
   const meta = [
+    { id: SECTION_CONFIGURATOR, icon: Factory, iconClassName: "bg-orange-50 text-orange-600" },
     { id: SECTION_FORECAST, icon: Settings2, iconClassName: "bg-slate-100 text-slate-600" },
     { id: SECTION_RESERVATION, icon: Boxes, iconClassName: "bg-amber-50 text-amber-600" },
-    { id: SECTION_DISPLAY, icon: LayoutTemplate, iconClassName: "bg-sky-50 text-sky-600" },
     { id: SECTION_REQUIRED, icon: ClipboardList, iconClassName: "bg-violet-50 text-violet-600" },
+    { id: SECTION_DISPLAY, icon: LayoutTemplate, iconClassName: "bg-sky-50 text-sky-600" },
     { id: "wms-production-document-templates", icon: FileText, iconClassName: "bg-indigo-50 text-indigo-600" },
   ].find((s) => s.id === sectionId);
   return (
@@ -193,10 +196,26 @@ export default function WmsProductionSettingsPanel({ warehouseId }: Props) {
   };
 
   const sections: WmsSettingsSectionConfig[] = [
-    { id: SECTION_FORECAST, label: "Ogólne", icon: Settings2, iconClassName: "bg-slate-100 text-slate-600" },
+    {
+      id: SECTION_CONFIGURATOR,
+      label: "Konfigurator produkcji",
+      icon: Factory,
+      iconClassName: "bg-orange-50 text-orange-600",
+    },
+    { id: SECTION_FORECAST, label: "Ogólne / prognoza", icon: Settings2, iconClassName: "bg-slate-100 text-slate-600" },
     { id: SECTION_RESERVATION, label: "Rezerwacje", icon: Boxes, iconClassName: "bg-amber-50 text-amber-600" },
-    { id: SECTION_DISPLAY, label: "Widok", icon: LayoutTemplate, iconClassName: "bg-sky-50 text-sky-600" },
-    { id: SECTION_REQUIRED, label: "Terminal", icon: ClipboardList, iconClassName: "bg-violet-50 text-violet-600" },
+    {
+      id: SECTION_REQUIRED,
+      label: "Terminal / sposób pracy",
+      icon: ClipboardList,
+      iconClassName: "bg-violet-50 text-violet-600",
+    },
+    {
+      id: SECTION_DISPLAY,
+      label: "Wygląd terminala",
+      icon: LayoutTemplate,
+      iconClassName: "bg-sky-50 text-sky-600",
+    },
     {
       id: "wms-production-document-templates",
       label: "Dokumenty",
@@ -212,7 +231,7 @@ export default function WmsProductionSettingsPanel({ warehouseId }: Props) {
   return (
     <WmsSettingsTabFrame
       title="Produkcja"
-      description="Prognozowanie, rezerwacje materiałów i widok terminala produkcyjnego."
+      description="Konfiguracja produkcji z zamówień, prognozowanie, rezerwacje i terminal WMS."
       sections={sections}
       asideLabel="Produkcja — nawigacja"
       dirty={dirty}
@@ -229,9 +248,17 @@ export default function WmsProductionSettingsPanel({ warehouseId }: Props) {
       restoreDisabled={!dirty}
     >
       <SectionCard
+        sectionId={SECTION_CONFIGURATOR}
+        title="Konfigurator produkcji"
+        summary="Statusy wejściowe, bufor produktu gotowego i sposób realizacji produkcji z zamówień."
+      >
+        <ProductionConfiguratorPanel warehouseId={warehouseId ?? resolvedWh} />
+      </SectionCard>
+
+      <SectionCard
         sectionId={SECTION_FORECAST}
-        title="Ogólne"
-        summary="Strategia wyliczania dziennej sprzedaży dla planowania zapotrzebowania MRP."
+        title="Ogólne / prognoza"
+        summary="Strategia wyliczania dziennej sprzedaży i automatyczne uzupełnianie zapasu."
       >
         <div className={wmsSettingsRowsStackClass}>
           <WmsControlSettingRow label="Strategia prognozy">
@@ -415,8 +442,8 @@ export default function WmsProductionSettingsPanel({ warehouseId }: Props) {
 
       <SectionCard
         sectionId={SECTION_DISPLAY}
-        title="Widok"
-        summary="Elementy widoczne operatorowi w terminalu zbierania i produkcji."
+        title="Wygląd terminala"
+        summary="Elementy widoczne operatorowi w terminalu produkcyjnym WMS."
       >
         <div className={wmsSettingsRowsStackClass}>
           {DISPLAY_FIELDS.map(({ key, label }) => (
@@ -432,8 +459,8 @@ export default function WmsProductionSettingsPanel({ warehouseId }: Props) {
 
       <SectionCard
         sectionId={SECTION_REQUIRED}
-        title="Terminal"
-        summary="Pola wymagane przy zakończeniu produkcji w terminalu WMS."
+        title="Terminal / sposób pracy"
+        summary="Walidacja i pola wymagane przy zakończeniu produkcji w terminalu WMS."
       >
         <div className={wmsSettingsRowsStackClass}>
           {REQUIRED_FIELDS.map(({ key, label }) => (

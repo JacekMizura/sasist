@@ -31,7 +31,7 @@ from ...models.production import (
     ProductionOrder,
     ProductionOrderSourceItem,
 )
-from ..picking_config_query import get_picking_config
+from ..production_config_query import get_production_config_by_source_status
 from ..production_manufacturing_composition import get_active_manufacturing_composition
 from ..production_order_service import (
     _next_order_number,
@@ -850,11 +850,19 @@ def on_order_panel_status_changed_production(
         if wid <= 0:
             return {"result": RESULT_NO_WAREHOUSE}
 
-        prev_pc = get_picking_config(db, tid, wid, prev) if prev is not None else None
-        new_pc = get_picking_config(db, tid, wid, new) if new is not None else None
+        prev_pc = (
+            get_production_config_by_source_status(db, tid, wid, prev, require_active=False)
+            if prev is not None
+            else None
+        )
+        new_pc = (
+            get_production_config_by_source_status(db, tid, wid, new, require_active=True)
+            if new is not None
+            else None
+        )
 
-        prev_prod = bool(prev_pc and getattr(prev_pc, "is_production_mode", False))
-        new_prod = bool(new_pc and getattr(new_pc, "is_production_mode", False))
+        prev_prod = prev_pc is not None
+        new_prod = new_pc is not None
 
         out: dict[str, Any] = {"previous_production": prev_prod, "new_production": new_prod}
 

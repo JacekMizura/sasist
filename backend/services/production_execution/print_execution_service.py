@@ -16,10 +16,10 @@ from sqlalchemy.orm import Session
 from ...models.picking_config import (
     PRODUCTION_EXECUTION_METHOD_PRINT,
     PRODUCTION_EXECUTION_METHOD_WMS,
-    PickingConfig,
 )
 from ...models.production import PRODUCTION_ORDER_SOURCE_ORDERS, ProductionOrder
 from ...schemas.production import ComponentAllocationWrite
+from ..production_config_query import get_production_config_by_id
 from ..production_order_service import ProductionOrderError, serialize_order, validate_stock_shortages
 from .execution_interface import PRINT_INTERFACE, is_print_interface, is_wms_interface, normalized_execution_interface
 from .order_execution_service import (
@@ -32,12 +32,12 @@ logger = logging.getLogger(__name__)
 
 
 def resolve_configured_execution_method(db: Session, order: ProductionOrder) -> str:
-    """Configured method from picking_config (per production status). Default WMS."""
+    """Configured method from production config (per production status). Default WMS."""
     cfg_id = getattr(order, "picking_config_id", None)
     if cfg_id is None:
         return PRODUCTION_EXECUTION_METHOD_WMS
-    cfg = db.query(PickingConfig).filter(PickingConfig.id == int(cfg_id)).first()
-    if cfg is None or not bool(getattr(cfg, "is_production_mode", False)):
+    cfg = get_production_config_by_id(db, int(cfg_id), require_active=False)
+    if cfg is None:
         return PRODUCTION_EXECUTION_METHOD_WMS
     raw = str(getattr(cfg, "production_execution_method", None) or PRODUCTION_EXECUTION_METHOD_WMS).strip().upper()
     if raw == PRODUCTION_EXECUTION_METHOD_PRINT:

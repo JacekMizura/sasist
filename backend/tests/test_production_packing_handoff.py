@@ -36,8 +36,9 @@ from backend.models.stock_operation import StockOperation
 from backend.models.tenant import Tenant
 from backend.models.warehouse import Warehouse
 from backend.schemas.production_execution import OrderProductionProgressBody
-from backend.schemas.wms_picking_flow import WmsPickingConfigReplaceItem
-from backend.services.picking_config_service import replace_all_picking_configs_for_warehouse
+from backend.schemas.production_config import ProductionConfigCreate
+from backend.services.production_config_service import create_production_config
+from backend.services.picking_config_service import validate_production_mode_batch
 from backend.services.production_execution.order_execution_service import update_order_production_progress
 from backend.services.production_execution.production_packing_handoff_service import (
     consume_production_buffer_stock_on_packing_finish,
@@ -220,17 +221,12 @@ def _make_session():
     return db
 
 
-def _prod_cfg(**overrides):
+def _prod_create(**overrides) -> ProductionConfigCreate:
     base = dict(
+        tenant_id=1,
+        warehouse_id=2,
+        name="Produkcja test",
         source_status_id=10,
-        target_status_id=11,
-        single_mode="bulk",
-        multi_mode="bulk",
-        all_mode="bulk",
-        pick_unit="products",
-        order_sort="date",
-        all_order_sort="date",
-        is_production_mode=True,
         status_after_production_id=11,
         status_on_component_shortage_id=12,
         finished_goods_buffer_location_id=50,
@@ -239,18 +235,15 @@ def _prod_cfg(**overrides):
         after_production_action="STATUS_ONLY",
     )
     base.update(overrides)
-    return WmsPickingConfigReplaceItem(**base)
+    return ProductionConfigCreate(**base)
 
 
 def _seed_orders_mo(db, *, after_action="STATUS_ONLY", order_number="123"):
-    rows = replace_all_picking_configs_for_warehouse(
+    pc = create_production_config(
         db,
-        tenant_id=1,
-        warehouse_id=2,
-        items=[_prod_cfg(after_production_action=after_action)],
+        _prod_create(after_production_action=after_action, name=f"Produkcja {order_number}"),
     )
     db.commit()
-    pc = rows[0]
     order = Order(
         id=1001,
         tenant_id=1,
@@ -298,39 +291,43 @@ def _seed_orders_mo(db, *, after_action="STATUS_ONLY", order_number="123"):
 
 def test_status_after_unique_among_production_configs():
     db = _make_session()
+    create_production_config(db, _prod_create(source_status_id=10, status_after_production_id=11))
     with pytest.raises(ValueError, match="po wyprodukowaniu"):
-        replace_all_picking_configs_for_warehouse(
+        create_production_config(
             db,
-            tenant_id=1,
-            warehouse_id=2,
-            items=[
-                _prod_cfg(source_status_id=10, status_after_production_id=11),
-                _prod_cfg(
-                    source_status_id=20,
-                    status_after_production_id=11,
-                    status_on_component_shortage_id=22,
-                    target_status_id=11,
-                ),
-            ],
+            _prod_create(
+                name="Hala B",
+                source_status_id=20,
+                status_after_production_id=11,
+                status_on_component_shortage_id=22,
+            ),
         )
 
 
 def test_status_after_cannot_be_other_production_source():
     db = _make_session()
     with pytest.raises(ValueError, match="wejściowym innego trybu produkcji|po wyprodukowaniu"):
-        replace_all_picking_configs_for_warehouse(
-            db,
-            tenant_id=1,
-            warehouse_id=2,
-            items=[
-                _prod_cfg(source_status_id=10, status_after_production_id=20, target_status_id=20),
-                _prod_cfg(
-                    source_status_id=20,
-                    status_after_production_id=21,
-                    status_on_component_shortage_id=22,
-                    target_status_id=21,
-                ),
-            ],
+        validate_production_mode_batch(
+            [
+                type(
+                    "C",
+                    (),
+                    {
+                        "is_production_mode": True,
+                        "source_status_id": 10,
+                        "status_after_production_id": 20,
+                    },
+                )(),
+                type(
+                    "C",
+                    (),
+                    {
+                        "is_production_mode": True,
+                        "source_status_id": 20,
+                        "status_after_production_id": 21,
+                    },
+                )(),
+            ]
         )
 
 
@@ -392,10 +389,10 @@ def test_open_packing_hint_on_progress():
 
 def test_multi_source_one_delta_lists_multiple_ready_orders():
     db = _make_session()
-    rows = replace_all_picking_configs_for_warehouse(
-        db, tenant_id=1, warehouse_id=2, items=[_prod_cfg(after_production_action="OPEN_PACKING")]
+    pc = create_production_config(
+        db, _prod_create(after_production_action="OPEN_PACKING", name="Multi")
     )
-    pc = rows[0]
+    db.commit()
     for oid, oiid, num in ((1001, 2001, "A"), (1002, 2002, "B")):
         db.add(
             Order(

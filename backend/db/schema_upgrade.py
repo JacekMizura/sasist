@@ -4697,6 +4697,44 @@ def ensure_picking_config_production_mode_columns(engine: Engine) -> None:
                 "ON picking_config (finished_goods_buffer_location_id)"
             )
         )
+        if "name" not in cols:
+            conn.execute(text("ALTER TABLE picking_config ADD COLUMN name VARCHAR(128)"))
+        if "is_active" not in cols:
+            bool_true = "true" if dialect == "postgresql" else "1"
+            conn.execute(
+                text(
+                    f"ALTER TABLE picking_config ADD COLUMN is_active BOOLEAN "
+                    f"NOT NULL DEFAULT {bool_true}"
+                )
+            )
+        conn.execute(
+            text(
+                "CREATE INDEX IF NOT EXISTS ix_picking_config_is_active "
+                "ON picking_config (is_active)"
+            )
+        )
+        # Migracja UX: nazwy dla istniejących production-mode configs.
+        try:
+            conn.execute(
+                text(
+                    """
+                    UPDATE picking_config
+                    SET name = COALESCE(
+                        NULLIF(TRIM(name), ''),
+                        'Produkcja — ' || COALESCE(
+                            (SELECT ous.name FROM order_ui_statuses ous
+                             WHERE ous.id = picking_config.source_status_id),
+                            'status #' || CAST(picking_config.source_status_id AS VARCHAR)
+                        )
+                    )
+                    WHERE is_production_mode = true
+                      AND (name IS NULL OR TRIM(name) = '')
+                    """
+                )
+            )
+        except Exception:
+            # SQLite CONCAT / dialect differences — fallback per-row in app startup if needed.
+            pass
         conn.commit()
 
 

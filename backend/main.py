@@ -381,6 +381,7 @@ from .api.order_statuses import router as order_statuses_router
 from .api.document_series import router as document_series_router
 from .api.document_templates import router as document_templates_router
 from .api.wms_picking_config import router as wms_picking_config_router
+from .api.wms_production_config import router as wms_production_config_router
 from .api.wms_picking_entry import router as wms_picking_entry_router
 from .api.wms_order_validation import router as wms_order_validation_router
 from .api.wms_carts import router as wms_carts_router
@@ -2287,6 +2288,7 @@ _API_ROUTERS = (
     document_series_router,
     document_templates_router,
     wms_picking_config_router,
+    wms_production_config_router,
     wms_picking_entry_router,
     wms_order_validation_router,
     wms_carts_router,

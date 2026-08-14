@@ -2,7 +2,11 @@
 Reguły zbierania per status panelu zamówień (Order UI status) dla magazynu.
 
 Izolowany moduł — nie wpływa na istniejące przypisania zamówień ani MM.
-Opcjonalnie: tryb produkcji (nie jest zwykłym pickingiem) — te same wiersze ``picking_config``.
+
+Konfiguracje produkcji (``is_production_mode=True``) dzielą tę samą tabelę storage
+ze zbieraniem ze względu na FK ``production_orders.picking_config_id``.
+SSOT odczytu/zapisu produkcji: ``production_config_query`` / ``production_config_service``
+oraz API ``/wms/settings/production-configs`` — nie Konfigurator zbierania.
 """
 
 from datetime import datetime
@@ -91,6 +95,16 @@ class PickingConfig(Base):
         nullable=False,
         default=False,
         server_default=text("false"),
+        index=True,
+    )
+    #: Nazwa wyświetlana (głównie konfiguracje produkcji).
+    name = Column(String(128), nullable=True)
+    #: Soft-disable (produkcja); zbieranie zwykle kasuje wiersz.
+    is_active = Column(
+        Boolean,
+        nullable=False,
+        default=True,
+        server_default=text("true"),
         index=True,
     )
     #: Status zamówienia po wykonaniu przypisanej ilości produkcji (tylko production mode).

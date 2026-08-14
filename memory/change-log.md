@@ -1,4 +1,28 @@
-﻿## 2026-08-14 — FIX: Z-PZ dla STOCK bundle DISASSEMBLE (FG=0)
+﻿## 2026-08-14 — Konfigurator produkcji w Ustawieniach WMS
+
+- SSOT: `production_config_query` / `production_config_service` + API `/wms/settings/production-configs`
+- Storage nadal `picking_config` (`is_production_mode=True`) — FK MO bez migracji; `name` + `is_active`
+- Zbieranie: replace nie kasuje produkcji; UI bez „Tryb produkcji”
+- FE: Ustawienia WMS → Produkcja → Konfigurator produkcji
+- Testy: `test_production_config_ssot.py` + zaktualizowane packing/production mode
+
+## 2026-08-14 — FE: Konfigurator produkcji WMS
+
+- `frontend/src/api/wmsProductionConfigApi.ts` — list/create/update/disable/delete
+- `frontend/src/modules/wmsSettings/production/` — panel + modal (reuse PickingSettingsModal)
+- `WmsProductionSettingsPanel` — sekcja „Konfigurator produkcji” pierwsza; przeorganizowana nawigacja
+- `WmsPickingSettingsPanel` — usunięto tryb produkcji; filtrowanie `is_production_mode` przy mapowaniu API
+- FE build OK
+
+## 2026-08-14 — Ujednolicona historia produkcji i zwrotów (Activity Log)
+
+- Helper `record_domain_activity` (1 event + linki order/return/product/document/production)
+- Idempotencja `correlation_id`; actor z requestu / SYSTEM
+- Zwroty: CREATE…FINALIZED; Produkcja milestones RELEASED…COMPLETED
+- FE: RMZ Dziennik → Activity Log; MO detail timeline
+- Testy: `test_domain_activity_returns_production.py` + returns suite; FE build OK
+
+## 2026-08-14 — FIX: Z-PZ dla STOCK bundle DISASSEMBLE (FG=0)
 
 - Root cause: `_any_planned_lines` nie uwzględniało accepted `ReturnLineBundleComponent` → `ensure` zwracał None
 - Finalize / commit-wms / refund zamykały RMZ mimo braku wymaganego Z-PZ

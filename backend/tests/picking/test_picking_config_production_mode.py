@@ -1,4 +1,4 @@
-"""Production mode on picking_config — save + validation."""
+"""Production mode moved off picking replace — legacy validation helpers still work."""
 
 from __future__ import annotations
 
@@ -12,10 +12,15 @@ from backend.models.order_ui_status import OrderUiStatus
 from backend.models.picking_config import PickingConfig
 from backend.models.tenant import Tenant
 from backend.models.warehouse import Warehouse
+from backend.schemas.production_config import ProductionConfigCreate
 from backend.schemas.wms_picking_flow import WmsPickingConfigReplaceItem
 from backend.services.picking_config_service import (
-    picking_config_to_read,
     replace_all_picking_configs_for_warehouse,
+    validate_production_mode_batch,
+)
+from backend.services.production_config_service import (
+    create_production_config,
+    production_config_to_read,
 )
 
 
@@ -52,35 +57,14 @@ def _make_db():
     return db
 
 
-def _prod_item(**overrides):
-    base = dict(
-        source_status_id=10,
-        target_status_id=11,
-        single_mode="bulk",
-        multi_mode="bulk",
-        all_mode="bulk",
-        pick_unit="products",
-        order_sort="date",
-        all_order_sort="date",
-        is_production_mode=True,
-        status_after_production_id=11,
-        status_on_component_shortage_id=12,
-        finished_goods_buffer_location_id=100,
-        production_order_trigger_scope="SINGLE_ELEMENT",
-        after_production_action="STATUS_ONLY",
-    )
-    base.update(overrides)
-    return WmsPickingConfigReplaceItem(**base)
-
-
 def _std_item(**overrides):
     base = dict(
         source_status_id=13,
         target_status_id=14,
         single_mode="bulk",
-        multi_mode="scanned",
-        all_mode="baskets",
-        pick_unit="products",
+        multi_mode="bulk",
+        all_mode="bulk",
+        pick_unit="orders",
         order_sort="date",
         all_order_sort="date",
         is_production_mode=False,
@@ -89,103 +73,132 @@ def _std_item(**overrides):
     return WmsPickingConfigReplaceItem(**base)
 
 
-def test_production_mode_persists_fields():
+def test_production_config_create_persists_fields():
     db = _make_db()
-    rows = replace_all_picking_configs_for_warehouse(
-        db, tenant_id=1, warehouse_id=2, items=[_prod_item()]
+    row = create_production_config(
+        db,
+        ProductionConfigCreate(
+            tenant_id=1,
+            warehouse_id=2,
+            name="Produkcja test",
+            source_status_id=10,
+            status_after_production_id=11,
+            status_on_component_shortage_id=12,
+            finished_goods_buffer_location_id=100,
+            production_order_trigger_scope="SINGLE_ELEMENT",
+            after_production_action="STATUS_ONLY",
+            production_execution_method="WMS",
+        ),
     )
     db.commit()
-    assert len(rows) == 1
-    read = picking_config_to_read(rows[0])
-    assert read.is_production_mode is True
-    assert read.status_after_production_id == 11
+    read = production_config_to_read(row)
+    assert read.is_active is True
     assert read.status_on_component_shortage_id == 12
     assert read.finished_goods_buffer_location_id == 100
     assert read.production_order_trigger_scope == "SINGLE_ELEMENT"
-    assert read.source_status_id == 10
     assert read.after_production_action == "STATUS_ONLY"
+    assert read.production_execution_method == "WMS"
 
 
 def test_after_production_action_open_packing_persists():
     db = _make_db()
-    rows = replace_all_picking_configs_for_warehouse(
+    row = create_production_config(
         db,
-        tenant_id=1,
-        warehouse_id=2,
-        items=[_prod_item(after_production_action="OPEN_PACKING")],
+        ProductionConfigCreate(
+            tenant_id=1,
+            warehouse_id=2,
+            name="Open packing",
+            source_status_id=10,
+            status_after_production_id=11,
+            status_on_component_shortage_id=12,
+            finished_goods_buffer_location_id=100,
+            after_production_action="OPEN_PACKING",
+        ),
     )
     db.commit()
-    read = picking_config_to_read(rows[0])
-    assert read.after_production_action == "OPEN_PACKING"
+    assert production_config_to_read(row).after_production_action == "OPEN_PACKING"
 
 
-def test_duplicate_production_entry_status_rejected():
+def test_picking_replace_rejects_production_flag():
     db = _make_db()
-    with pytest.raises(ValueError, match="tylko raz|wejściowy produkcji|status"):
+    with pytest.raises(ValueError, match="Produkcja"):
         replace_all_picking_configs_for_warehouse(
             db,
             tenant_id=1,
             warehouse_id=2,
             items=[
-                _prod_item(source_status_id=10, status_after_production_id=11),
-                _prod_item(
+                WmsPickingConfigReplaceItem(
                     source_status_id=10,
-                    status_after_production_id=12,
-                    status_on_component_shortage_id=11,
-                    target_status_id=12,
-                ),
+                    target_status_id=11,
+                    single_mode="bulk",
+                    multi_mode="bulk",
+                    all_mode="bulk",
+                    pick_unit="orders",
+                    order_sort="date",
+                    all_order_sort="date",
+                    is_production_mode=True,
+                    status_after_production_id=11,
+                    status_on_component_shortage_id=12,
+                    finished_goods_buffer_location_id=100,
+                )
             ],
         )
 
 
-def test_standard_and_production_same_source_rejected():
+def test_validate_batch_rejects_shared_entry_status():
+    with pytest.raises(ValueError, match="standardowego zbierania"):
+        validate_production_mode_batch(
+            [
+                type("C", (), {"is_production_mode": True, "source_status_id": 10, "status_after_production_id": 11})(),
+                type("C", (), {"is_production_mode": False, "source_status_id": 10, "status_after_production_id": None})(),
+            ]
+        )
+
+
+def test_validate_batch_rejects_after_as_picking_entry():
+    with pytest.raises(ValueError, match="standardowego zbierania"):
+        validate_production_mode_batch(
+            [
+                type("C", (), {"is_production_mode": True, "source_status_id": 10, "status_after_production_id": 13})(),
+                type("C", (), {"is_production_mode": False, "source_status_id": 13, "status_after_production_id": None})(),
+            ]
+        )
+
+
+def test_buffer_location_must_belong_to_warehouse():
     db = _make_db()
-    with pytest.raises(ValueError, match="standardowego zbierania|tylko raz"):
-        replace_all_picking_configs_for_warehouse(
+    with pytest.raises(ValueError, match="aktywna|nie istnieje"):
+        create_production_config(
             db,
-            tenant_id=1,
-            warehouse_id=2,
-            items=[
-                _prod_item(source_status_id=10),
-                _std_item(source_status_id=10, target_status_id=14),
-            ],
+            ProductionConfigCreate(
+                tenant_id=1,
+                warehouse_id=2,
+                name="Inactive buf",
+                source_status_id=10,
+                status_after_production_id=11,
+                status_on_component_shortage_id=12,
+                finished_goods_buffer_location_id=101,
+            ),
+        )
+    with pytest.raises(ValueError, match="magazynu|nie istnieje"):
+        create_production_config(
+            db,
+            ProductionConfigCreate(
+                tenant_id=1,
+                warehouse_id=2,
+                name="Other WH",
+                source_status_id=10,
+                status_after_production_id=11,
+                status_on_component_shortage_id=12,
+                finished_goods_buffer_location_id=200,
+            ),
         )
 
 
-def test_after_production_cannot_be_standard_picking_entry():
+def test_standard_picking_replace_still_works():
     db = _make_db()
-    with pytest.raises(ValueError, match="po wyprodukowaniu"):
-        replace_all_picking_configs_for_warehouse(
-            db,
-            tenant_id=1,
-            warehouse_id=2,
-            items=[
-                _prod_item(source_status_id=10, status_after_production_id=13, target_status_id=13),
-                _std_item(source_status_id=13, target_status_id=14),
-            ],
-        )
-
-
-def test_invalid_buffer_location_rejected():
-    db = _make_db()
-    with pytest.raises(ValueError, match="buforowa"):
-        replace_all_picking_configs_for_warehouse(
-            db,
-            tenant_id=1,
-            warehouse_id=2,
-            items=[_prod_item(finished_goods_buffer_location_id=101)],
-        )
-    with pytest.raises(ValueError, match="buforowa"):
-        replace_all_picking_configs_for_warehouse(
-            db,
-            tenant_id=1,
-            warehouse_id=2,
-            items=[_prod_item(finished_goods_buffer_location_id=200)],
-        )
-    with pytest.raises(ValueError, match="buforowa"):
-        replace_all_picking_configs_for_warehouse(
-            db,
-            tenant_id=1,
-            warehouse_id=2,
-            items=[_prod_item(finished_goods_buffer_location_id=999)],
-        )
+    rows = replace_all_picking_configs_for_warehouse(
+        db, tenant_id=1, warehouse_id=2, items=[_std_item()]
+    )
+    assert len(rows) == 1
+    assert rows[0].is_production_mode is False

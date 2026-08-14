@@ -21,12 +21,12 @@ from ...models.order_item_pick_allocation import OrderItemPickAllocation
 from ...models.picking_config import (
     AFTER_PRODUCTION_ACTION_STATUS_ONLY,
     AFTER_PRODUCTION_ACTIONS,
-    PickingConfig,
 )
 from ...models.production import ProductionOrder
 from ..order_fulfillment_state import READY_TO_PACK
 from ..order_item_pick_allocation_service import consume_inventory_fifo_slices
 from ..picking_handoff_service import apply_cartless_picking_handoff
+from ..production_config_query import get_production_config_by_id
 from ..stock_disposition import STOCK_DISPOSITION_SALEABLE
 
 logger = logging.getLogger(__name__)
@@ -52,7 +52,7 @@ def resolve_after_production_action(db: Session, mo: ProductionOrder) -> str:
     pc_id = getattr(mo, "picking_config_id", None)
     if pc_id is None:
         return AFTER_PRODUCTION_ACTION_STATUS_ONLY
-    pc = db.query(PickingConfig).filter(PickingConfig.id == int(pc_id)).first()
+    pc = get_production_config_by_id(db, int(pc_id), require_active=False)
     if pc is None:
         return AFTER_PRODUCTION_ACTION_STATUS_ONLY
     raw = str(getattr(pc, "after_production_action", None) or AFTER_PRODUCTION_ACTION_STATUS_ONLY).strip().upper()

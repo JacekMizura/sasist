@@ -16,13 +16,14 @@ from ..models.picking_config import PickingConfig
 
 
 def get_picking_config(db: Session, tenant_id: int, warehouse_id: int, status_id: int) -> Optional[PickingConfig]:
-    """Zwraca ``PickingConfig`` dla ``source_status_id == status_id`` lub ``None``."""
+    """Zwraca standardową ``PickingConfig`` dla ``source_status_id`` (bez trybu produkcji)."""
     return (
         db.query(PickingConfig)
         .filter(
             PickingConfig.tenant_id == int(tenant_id),
             PickingConfig.warehouse_id == int(warehouse_id),
             PickingConfig.source_status_id == int(status_id),
+            PickingConfig.is_production_mode.is_(False),
         )
         .first()
     )
@@ -34,6 +35,7 @@ def _first_warehouse_picking_config(db: Session, tenant_id: int, warehouse_id: i
         .filter(
             PickingConfig.tenant_id == int(tenant_id),
             PickingConfig.warehouse_id == int(warehouse_id),
+            PickingConfig.is_production_mode.is_(False),
         )
         .order_by(PickingConfig.id.asc())
         .first()

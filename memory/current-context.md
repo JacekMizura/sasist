@@ -1,5 +1,11 @@
 ﻿## Active
 
+**Konfigurator produkcji WMS (2026-08-14):**
+- SSOT odczytu/zapisu: `production_config_query` / `production_config_service`
+- API: `/wms/settings/production-configs`
+- Storage: `picking_config` + `is_production_mode` (bez osobnej tabeli — FK MO)
+- UI: Ustawienia WMS → Produkcja → Konfigurator produkcji; zbieranie bez trybu produkcji
+
 **Ujednolicona historia Activity Log — Zwroty + Produkcja (2026-08-14):**
 - Helper `record_domain_activity` + correlation_id idempotency (jeden event, wiele linków)
 - Zwroty: CREATE/DECISION/INTAKE/RECOVERY/SCRAP/Z-PZ/PUTAWAY/FINALIZED z actor
