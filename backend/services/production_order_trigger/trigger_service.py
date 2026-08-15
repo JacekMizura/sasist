@@ -23,6 +23,7 @@ from ...models.picking_config import (
 from ...models.product_composition import ProductComposition
 from ...models.production import (
     PRODUCTION_ORDER_SOURCE_ITEM_ACTIVE_STATUSES,
+    PRODUCTION_ORDER_SOURCE_ITEM_RECONCILABLE_DEMAND_STATUSES,
     PRODUCTION_ORDER_SOURCE_ITEM_CANCELLED,
     PRODUCTION_ORDER_SOURCE_ITEM_FULFILLED,
     PRODUCTION_ORDER_SOURCE_ITEM_OPEN,
@@ -48,6 +49,8 @@ logger = logging.getLogger(__name__)
 
 AGGREGABLE_MO_STATUSES = frozenset({"draft", "planned"})
 ACTIVE_SOURCE_STATUSES = PRODUCTION_ORDER_SOURCE_ITEM_ACTIVE_STATUSES
+RECONCILABLE_DEMAND_STATUSES = PRODUCTION_ORDER_SOURCE_ITEM_RECONCILABLE_DEMAND_STATUSES
+
 
 RESULT_SKIPPED = "SKIPPED"
 RESULT_IDEMPOTENT = "IDEMPOTENT"
@@ -158,6 +161,27 @@ def _find_active_source_for_item(
             ProductionOrderSourceItem.tenant_id == int(tenant_id),
             ProductionOrderSourceItem.order_item_id == int(order_item_id),
             ProductionOrderSourceItem.status.in_(tuple(ACTIVE_SOURCE_STATUSES)),
+        )
+        .first()
+    )
+
+
+def _find_reconcilable_demand_source_for_item(
+    db: Session, *, tenant_id: int, order_item_id: int
+) -> ProductionOrderSourceItem | None:
+    """
+    Outstanding production demand for FG reconciliation (Phase 3 / qty sync).
+
+    Includes ``shortage`` — still a live demand blocked by components, not historical.
+    Does **not** replace ``_find_active_source_for_item`` for trigger idempotency /
+    material allocation uniqueness.
+    """
+    return (
+        db.query(ProductionOrderSourceItem)
+        .filter(
+            ProductionOrderSourceItem.tenant_id == int(tenant_id),
+            ProductionOrderSourceItem.order_item_id == int(order_item_id),
+            ProductionOrderSourceItem.status.in_(tuple(RECONCILABLE_DEMAND_STATUSES)),
         )
         .first()
     )

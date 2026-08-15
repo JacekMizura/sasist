@@ -1,14 +1,41 @@
 ﻿## Active
 
-**UAT Faza 2 — wznowienie od KROKU 4/5 (logi + idempotencja):**
-- KROK 0–3 PASS; STOP był na prezentacji logów (`details=[]`)
-- Fix prezentacji: wspólny formatter `picking_entry_activity_format` w `enrich_activity_item`
-- Po deploy: wrócić do UAT od KROKU 4/5 (#1245 Logi / Historia); **nie** Faza 3
+**Fix Phase 3 shortage shrink (2026-08-15):**
+- Root: `shortage` poza ACTIVE → reduce nie znajdował SourceItem (#1248 UAT)
+- `PRODUCTION_ORDER_SOURCE_ITEM_RECONCILABLE_DEMAND_STATUSES` (+shortage) tylko dla Phase 3 / reduce
+- ACTIVE bez zmian (trigger idempotency / material allocation)
+- Partial shrink: requested 2→1, status zostaje shortage; planned tylko z ACTIVE
+
+**UAT Faza 3 edge — STOP (2026-08-15):**
+- A BLOCKED_MIXED #1246: A-only PASS; full READY PASS
+- B FG3 #1247/#1248: alloc 2+1 PASS, no overbook PASS, priority PASS
+- **FAIL PARTIAL SHRINK:** #1248 SourceItem status=`shortage` → `requested_quantity` zostało **2** (oczekiwane 1); brak DEMAND_REDUCED. Root: ACTIVE_STATUSES bez `shortage`.
+- C STARTED MO: **nie uruchomione** (STOP)
+
+**UAT Faza 3 podstawowy — PASS (2026-08-15) na #1245/id=1258:**
+- Event: MM putaway DOCK-IN→B3-B-1 (+1 ST-001), reason `mm_putaway` (nie kończono MO)
+- Auto: reservation #43 qty1; source #9 cancelled; MO planned 4→3; status → Wózki#6; GATE_READY; w kolejce picking multi
+- Brak kradzieży: sales193 #37=7, #39=3; B #41=1
+- Activity: DEMAND_CANCELLED + RETURNED_TO_PICKING (PL, bez enumów)
+- Idempotencja: ponowny mm_putaway (buffer B3-A-5) → #1245 bez zmian / bez duplikatów
+- **STOP** — bez production fulfillment / started MO / BLOCKED_MIXED / multi-order FG3
+
+**Faza 3 FG availability retry (2026-08-15):**
+- Notify Phase 8 → także `on_fg_availability_increased`
+- Awaiting orders: full-order re-gate → reserve FG → reduce/cancel draft MO → `return_picking_status_id`
+- Started MO (collecting/in_progress) bez shrink; BLOCKED_MIXED bez return
+- SALES_ORDER release emituje availability notify
+- Testy: `test_picking_entry_availability_retry_phase3.py`
+
+**UAT Faza 2 — KROK 4/5 PASS (2026-08-15):**
+- #1245 Logi: czerwony blocker z ST-001 qty + MO/2026/0004; bez enumów
+- Idempotencja: re-entry status→Wózki#6 → z powrotem awaiting; planned=4; 1 SourceItem; sales193 nadal 7+3; brak duplikatów eventów 473/474
+- **Faza 2 UAT = PASS** — wolno startować Fazę 3
 
 **UAT Faza 2 — środowisko (2026-08-15):**
-- Status panelowy **Oczekuje na produkcję** id=13; ProductionConfig #9 awaiting=13
+- Status **Oczekuje na produkcję** id=13; ProductionConfig #9 awaiting=13
 - Railway: `FEATURE_PICKING_ENTRY_READINESS_MODE=active`
-- Zamówienia: #1243/#1244/#1245; ST-001 ATP=10; MO `MO/2026/0004`
+- Zamówienia: #1243/#1244/#1245; ST-001 ATP B3-C-1 reserved=10; MO `MO/2026/0004` planned=4
 
 **Faza 2 picking-entry gate (2026-08-14):**
 - `FEATURE_PICKING_ENTRY_READINESS_MODE=off|dry_run|active` (domyślnie off; legacy DRY_RUN=1 → dry_run)

@@ -429,6 +429,20 @@ class Phase3FgAvailabilityRetryTests(unittest.TestCase):
         self.db.commit()
         self._gate(o1)
         self._gate(o2)
+        # Mirror UAT: second source demoted to shortage (component block).
+        src2 = (
+            self.db.query(ProductionOrderSourceItem)
+            .filter(ProductionOrderSourceItem.order_id == 18)
+            .one()
+        )
+        src2.status = "shortage"
+        mo = self.db.query(ProductionOrder).one()
+        # planned = ACTIVE only (o1 reserved ×2); shortage excluded like material validation
+        mo.planned_quantity = 2.0
+        self.db.add(src2)
+        self.db.add(mo)
+        self.db.flush()
+
         self._inv(100, 3, 1)
         self.db.flush()
         self._retry([100])
@@ -438,11 +452,20 @@ class Phase3FgAvailabilityRetryTests(unittest.TestCase):
         self.assertAlmostEqual(r1 + r2, 3.0, places=4)
         self.assertAlmostEqual(r1, 2.0, places=4)
         self.assertAlmostEqual(r2, 1.0, places=4)
-        # lower id first → order 17 returns; 18 still awaiting with remaining demand 1
         o1 = self.db.query(Order).filter(Order.id == 17).one()
         o2 = self.db.query(Order).filter(Order.id == 18).one()
         self.assertEqual(int(o1.order_ui_status_id), 1)
         self.assertEqual(int(o2.order_ui_status_id), 2)
+        src2 = (
+            self.db.query(ProductionOrderSourceItem)
+            .filter(ProductionOrderSourceItem.order_id == 18)
+            .one()
+        )
+        self.assertEqual(str(src2.status), "shortage")
+        self.assertAlmostEqual(float(src2.requested_quantity), 1.0, places=4)
+        mo = self.db.query(ProductionOrder).one()
+        # o1 source cancelled → planned from ACTIVE = 0; shortage remaining not in planned
+        self.assertAlmostEqual(float(mo.planned_quantity), 0.0, places=4)
 
     def test_09_repeated_notify_idempotent(self):
         self._bom(100)
@@ -490,6 +513,245 @@ class Phase3FgAvailabilityRetryTests(unittest.TestCase):
         )
         mo = self.db.query(ProductionOrder).one()
         self.assertAlmostEqual(float(mo.planned_quantity), 1.0, places=4)
+
+    def _force_shortage_source(self, order_id: int, *, planned: float | None = 0.0):
+        src = (
+            self.db.query(ProductionOrderSourceItem)
+            .filter(ProductionOrderSourceItem.order_id == int(order_id))
+            .one()
+        )
+        src.status = "shortage"
+        self.db.add(src)
+        mo = self.db.query(ProductionOrder).filter(
+            ProductionOrder.id == int(src.production_order_id)
+        ).one()
+        if planned is not None:
+            mo.planned_quantity = float(planned)
+            self.db.add(mo)
+        self.db.flush()
+        return src, mo
+
+    def test_11_shortage_source_partial_shrink(self):
+        """A: shortage requested=2 +1 FG → requested=1, status stays shortage."""
+        self._bom(100)
+        order = self._order(21, [(100, 2)])
+        self.db.commit()
+        self._gate(order)
+        src, mo = self._force_shortage_source(21, planned=0.0)
+        self.assertAlmostEqual(float(src.requested_quantity), 2.0, places=4)
+        planned_before = float(mo.planned_quantity)
+
+        self._inv(100, 1, 1)
+        self.db.flush()
+        self._retry([100])
+        self.db.flush()
+
+        src = self.db.query(ProductionOrderSourceItem).filter(
+            ProductionOrderSourceItem.order_id == 21
+        ).one()
+        self.assertEqual(str(src.status), "shortage")
+        self.assertAlmostEqual(float(src.requested_quantity), 1.0, places=4)
+        self.assertAlmostEqual(
+            reserved_qty_for_order_product(self.db, tenant_id=1, order_id=21, product_id=100),
+            1.0,
+            places=4,
+        )
+        mo = self.db.query(ProductionOrder).one()
+        # shortage not in ACTIVE planned — planned unchanged
+        self.assertAlmostEqual(float(mo.planned_quantity), planned_before, places=4)
+        order = self.db.query(Order).filter(Order.id == 21).one()
+        self.assertEqual(int(order.order_ui_status_id), 2)
+
+    def test_12_shortage_source_full_cover_cancels(self):
+        """B: shortage requested=2 +2 FG → source cancelled, empty MO cancelled."""
+        self._bom(100)
+        order = self._order(22, [(100, 2)])
+        self.db.commit()
+        self._gate(order)
+        self._force_shortage_source(22, planned=0.0)
+
+        self._inv(100, 2, 1)
+        self.db.flush()
+        self._retry([100])
+        self.db.flush()
+
+        src = self.db.query(ProductionOrderSourceItem).filter(
+            ProductionOrderSourceItem.order_id == 22
+        ).one()
+        self.assertEqual(str(src.status), "cancelled")
+        self.assertAlmostEqual(float(src.requested_quantity), 0.0, places=4)
+        order = self.db.query(Order).filter(Order.id == 22).one()
+        self.assertEqual(int(order.order_ui_status_id), 1)
+        # cancel_production_order is mocked in _retry; demand fully cleared is the SSOT check
+        self.assertEqual(str(src.status), "cancelled")
+
+    def test_13_shortage_shrink_rescales_snapshots_via_refresh(self):
+        """C: after shortage shrink, material refresh runs for current planned."""
+        self._bom(100)
+        order = self._order(23, [(100, 2)])
+        self.db.commit()
+        self._gate(order)
+        src, mo = self._force_shortage_source(23, planned=0.0)
+        # Snapshot as if MO had been planned for 2 before demotion
+        self.db.add(
+            ProductionOrderLineSnapshot(
+                production_order_id=int(mo.id),
+                component_product_id=300,
+                quantity_per_unit=1.0,
+                total_required_quantity=2.0,
+            )
+        )
+        self.db.flush()
+
+        refresh_calls: list[dict] = []
+
+        def _capture_refresh(db, *, mo, created_by_user_id=None):
+            refresh_calls.append(
+                {
+                    "mo_id": int(mo.id),
+                    "planned": float(mo.planned_quantity or 0),
+                }
+            )
+            return {"result": "REFRESHED"}
+
+        self._inv(100, 1, 1)
+        self.db.flush()
+        with patch.dict(os.environ, {"FEATURE_PICKING_ENTRY_READINESS_MODE": MODE_ACTIVE}):
+            with patch(
+                "backend.services.picking_entry_availability_retry_service.record_domain_activity",
+                return_value=None,
+            ), patch(
+                "backend.services.order_panel_ui_status_service.apply_order_panel_ui_status",
+                side_effect=_fake_apply,
+            ), patch(
+                "backend.services.production_order_service.cancel_production_order",
+                return_value=None,
+            ), patch(
+                "backend.services.production_order_trigger.material_validation_service.refresh_orders_mo_material_reservations",
+                side_effect=_capture_refresh,
+            ):
+                on_fg_availability_increased(
+                    self.db,
+                    tenant_id=1,
+                    warehouse_id=1,
+                    product_ids=[100],
+                    reason="pz_receipt",
+                )
+        self.db.flush()
+        self.assertTrue(refresh_calls)
+        src = self.db.query(ProductionOrderSourceItem).filter(
+            ProductionOrderSourceItem.order_id == 23
+        ).one()
+        self.assertAlmostEqual(float(src.requested_quantity), 1.0, places=4)
+
+    def test_14_shortage_partial_shrink_retry_idempotent(self):
+        """D: second availability notify does not shrink again."""
+        self._bom(100)
+        order = self._order(24, [(100, 2)])
+        self.db.commit()
+        self._gate(order)
+        self._force_shortage_source(24, planned=0.0)
+        self._inv(100, 1, 1)
+        self.db.flush()
+        self._retry([100])
+        self.db.flush()
+        src = self.db.query(ProductionOrderSourceItem).filter(
+            ProductionOrderSourceItem.order_id == 24
+        ).one()
+        self.assertAlmostEqual(float(src.requested_quantity), 1.0, places=4)
+        out2 = self._retry([100])
+        self.db.flush()
+        src2 = self.db.query(ProductionOrderSourceItem).filter(
+            ProductionOrderSourceItem.order_id == 24
+        ).one()
+        self.assertAlmostEqual(float(src2.requested_quantity), 1.0, places=4)
+        self.assertAlmostEqual(
+            reserved_qty_for_order_product(self.db, tenant_id=1, order_id=24, product_id=100),
+            1.0,
+            places=4,
+        )
+        # still awaiting; second pass must not change demand
+        order = self.db.query(Order).filter(Order.id == 24).one()
+        self.assertEqual(int(order.order_ui_status_id), 2)
+
+    def test_15_shortage_and_reserved_sibling_only_shortage_shrinks(self):
+        """E: same MO — reserved source untouched; shortage shrinks only."""
+        self._bom(100)
+        o1 = self._order(25, [(100, 2)])
+        o2 = self._order(26, [(100, 2)])
+        self.db.commit()
+        self._gate(o1)
+        self._gate(o2)
+        src_r = (
+            self.db.query(ProductionOrderSourceItem)
+            .filter(ProductionOrderSourceItem.order_id == 25)
+            .one()
+        )
+        src_s = (
+            self.db.query(ProductionOrderSourceItem)
+            .filter(ProductionOrderSourceItem.order_id == 26)
+            .one()
+        )
+        src_r.status = "reserved"
+        src_s.status = "shortage"
+        mo = self.db.query(ProductionOrder).one()
+        mo.planned_quantity = 2.0  # only reserved
+        self.db.add_all([src_r, src_s, mo])
+        self.db.flush()
+
+        # Only enough FG for the awaiting shortage order partial cover (o2 first by id? 
+        # sort: both awaiting; lower id 25 first — give stock 1 so 25 gets 1 if both need…
+        # Put o1 back to picking status so only o2 is awaiting.
+        o1 = self.db.query(Order).filter(Order.id == 25).one()
+        o1.order_ui_status_id = 1
+        self.db.add(o1)
+        self.db.flush()
+
+        self._inv(100, 1, 1)
+        self.db.flush()
+        self._retry([100])
+        self.db.flush()
+
+        src_r = (
+            self.db.query(ProductionOrderSourceItem)
+            .filter(ProductionOrderSourceItem.order_id == 25)
+            .one()
+        )
+        src_s = (
+            self.db.query(ProductionOrderSourceItem)
+            .filter(ProductionOrderSourceItem.order_id == 26)
+            .one()
+        )
+        self.assertEqual(str(src_r.status), "reserved")
+        self.assertAlmostEqual(float(src_r.requested_quantity), 2.0, places=4)
+        self.assertEqual(str(src_s.status), "shortage")
+        self.assertAlmostEqual(float(src_s.requested_quantity), 1.0, places=4)
+        mo = self.db.query(ProductionOrder).one()
+        self.assertAlmostEqual(float(mo.planned_quantity), 2.0, places=4)
+
+    def test_16_started_mo_shortage_source_no_shrink(self):
+        """F: collecting MO — shortage source not shrunk."""
+        self._bom(100)
+        order = self._order(27, [(100, 2)])
+        self.db.commit()
+        self._gate(order)
+        src, mo = self._force_shortage_source(27, planned=0.0)
+        mo.status = "collecting"
+        self.db.add(mo)
+        self.db.flush()
+
+        self._inv(100, 2, 1)
+        self.db.flush()
+        self._retry([100])
+        self.db.flush()
+
+        src = self.db.query(ProductionOrderSourceItem).filter(
+            ProductionOrderSourceItem.order_id == 27
+        ).one()
+        self.assertEqual(str(src.status), "shortage")
+        self.assertAlmostEqual(float(src.requested_quantity), 2.0, places=4)
+        mo = self.db.query(ProductionOrder).one()
+        self.assertEqual(str(mo.status), "collecting")
 
 
 if __name__ == "__main__":

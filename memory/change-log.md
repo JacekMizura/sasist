@@ -1,4 +1,16 @@
-﻿## 2026-08-15 — Logi: szczegóły blokady produkcyjnej (Faza 2 UAT)
+﻿## 2026-08-15 — UAT Faza 3 podstawowy PASS (#1245)
+
+- Observation-only: MM putaway +1 ST-001 (nie z MO) → auto retry → Wózki → picking multi.
+- MO/2026/0004 planned 4→3; SourceItem #1245 cancelled; reservation ST-001 ×1 (id 43).
+- Idempotent re-notify; reservations #1243/#1244 (7+3) nietknięte.
+
+## 2026-08-15 — UAT Faza 3 podstawowy PASS (#1245)
+
+- Observation-only: MM putaway +1 ST-001 (nie z MO) → auto retry → Wózki → picking multi.
+- MO/2026/0004 planned 4→3; SourceItem #1245 cancelled; reservation ST-001 ×1 (id 43).
+- Idempotent re-notify; reservations #1243/#1244 (7+3) nietknięte.
+
+## 2026-08-15 — Logi: szczegóły blokady produkcyjnej (Faza 2 UAT)
 
 - Root cause: `enrich_activity_item` zostawiał `action` = sam nagłówek; FE bez `whitespace-pre-line`
 - SSOT: `picking_entry_activity_format.py` → `enrich_activity_item` (Logi + Historia)

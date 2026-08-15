@@ -60,6 +60,7 @@ from .production_order_trigger.trigger_service import (
     _create_orders_mo,
     _find_active_source_for_item,
     _find_aggregable_mo,
+    _find_reconcilable_demand_source_for_item,
     _qty_label,
     _rescale_snapshots,
     _withdraw_production,
@@ -923,11 +924,18 @@ def reduce_missing_production_demand(
     """
     Shrink draft/planned SourceItem + MO planned_quantity down to ``desired_outstanding``.
 
+    Finds reconcilable demand (open / reserved / partial / **shortage**).
     Started MO (collecting / in_progress / …) → no change (``mo_started_blocked``).
     When outstanding drops to 0 → cancel source; empty MO → cancel MO.
+
+    ``planned_quantity`` decreases only when the source was counted in planned
+    (ACTIVE statuses). Shortage rows are excluded from material planned totals, so
+    shrinking them updates ``requested_quantity`` without double-subtracting planned.
     """
     from ..models.production import (
+        PRODUCTION_ORDER_SOURCE_ITEM_ACTIVE_STATUSES,
         PRODUCTION_ORDER_SOURCE_ITEM_CANCELLED,
+        PRODUCTION_ORDER_SOURCE_ITEM_SHORTAGE,
         ProductionOrder,
     )
     from .production_order_service import cancel_production_order
@@ -936,7 +944,9 @@ def reduce_missing_production_demand(
     )
 
     tid = int(order.tenant_id)
-    active = _find_active_source_for_item(db, tenant_id=tid, order_item_id=int(order_item.id))
+    active = _find_reconcilable_demand_source_for_item(
+        db, tenant_id=tid, order_item_id=int(order_item.id)
+    )
     if active is None:
         return {"result": "NO_SOURCE", "reduced": 0.0}
 
@@ -959,6 +969,9 @@ def reduce_missing_production_demand(
             "mo_number": str(mo.number),
         }
 
+    source_status_before = str(active.status or "")
+    counted_in_planned = source_status_before in PRODUCTION_ORDER_SOURCE_ITEM_ACTIVE_STATUSES
+
     fulfilled = float(active.fulfilled_quantity or 0)
     current_out = max(0.0, float(active.requested_quantity or 0) - fulfilled)
     target_out = max(0.0, float(desired_outstanding or 0))
@@ -975,8 +988,17 @@ def reduce_missing_production_demand(
     new_req = fulfilled + target_out
     active.requested_quantity = new_req
     active.updated_at = datetime.utcnow()
-    mo.planned_quantity = max(0.0, float(mo.planned_quantity or 0) - delta)
-    mo.updated_at = datetime.utcnow()
+    # Keep shortage as shortage after partial shrink (components may still be missing).
+    # Do not auto-promote to reserved — material validation owns that.
+    if (
+        target_out > 1e-9
+        and source_status_before == PRODUCTION_ORDER_SOURCE_ITEM_SHORTAGE
+    ):
+        active.status = PRODUCTION_ORDER_SOURCE_ITEM_SHORTAGE
+
+    if counted_in_planned:
+        mo.planned_quantity = max(0.0, float(mo.planned_quantity or 0) - delta)
+        mo.updated_at = datetime.utcnow()
 
     cancelled_source = False
     cancelled_mo = False
@@ -985,26 +1007,57 @@ def reduce_missing_production_demand(
         cancelled_source = True
 
     db.add(active)
-    if mo.planned_quantity <= 1e-9:
+    if counted_in_planned and mo.planned_quantity <= 1e-9:
         mo.planned_quantity = 0.0
         _rescale_snapshots(mo, 0.0)
         db.add(mo)
         db.flush()
-        try:
-            cancel_production_order(db, tenant_id=tid, order_id=int(mo.id))
-            cancelled_mo = True
-        except Exception:
-            mo.status = "cancelled"
-            db.add(mo)
-            db.flush()
-            cancelled_mo = True
+        from ..models.production import (
+            PRODUCTION_ORDER_SOURCE_ITEM_RECONCILABLE_DEMAND_STATUSES,
+            ProductionOrderSourceItem,
+        )
+
+        siblings = (
+            db.query(ProductionOrderSourceItem)
+            .filter(
+                ProductionOrderSourceItem.production_order_id == int(mo.id),
+                ProductionOrderSourceItem.status.in_(
+                    tuple(PRODUCTION_ORDER_SOURCE_ITEM_RECONCILABLE_DEMAND_STATUSES)
+                ),
+            )
+            .all()
+        )
+        still_out = sum(
+            max(
+                0.0,
+                float(s.requested_quantity or 0) - float(s.fulfilled_quantity or 0),
+            )
+            for s in siblings
+        )
+        if still_out <= 1e-9:
+            try:
+                cancel_production_order(db, tenant_id=tid, order_id=int(mo.id))
+                cancelled_mo = True
+            except Exception:
+                mo.status = "cancelled"
+                db.add(mo)
+                db.flush()
+                cancelled_mo = True
+                try:
+                    refresh_orders_mo_material_reservations(
+                        db, mo=mo, created_by_user_id=operator_user_id
+                    )
+                except Exception:
+                    logger.exception("refresh after empty MO cancel mo_id=%s", mo.id)
+        else:
+            # ACTIVE planned empty but shortage (etc.) demand remains — keep MO.
             try:
                 refresh_orders_mo_material_reservations(
                     db, mo=mo, created_by_user_id=operator_user_id
                 )
             except Exception:
-                logger.exception("refresh after empty MO cancel mo_id=%s", mo.id)
-    else:
+                logger.exception("refresh after planned-empty with shortage mo_id=%s", mo.id)
+    elif counted_in_planned:
         _rescale_snapshots(mo, float(mo.planned_quantity))
         db.add(mo)
         db.flush()
@@ -1014,6 +1067,47 @@ def reduce_missing_production_demand(
             )
         except Exception:
             logger.exception("refresh after demand reduce mo_id=%s", mo.id)
+    else:
+        # Shortage (not in planned): update qty; cancel MO if no outstanding demand left.
+        db.flush()
+        if cancelled_source:
+            from ..models.production import (
+                PRODUCTION_ORDER_SOURCE_ITEM_RECONCILABLE_DEMAND_STATUSES,
+                ProductionOrderSourceItem,
+            )
+
+            siblings = (
+                db.query(ProductionOrderSourceItem)
+                .filter(
+                    ProductionOrderSourceItem.production_order_id == int(mo.id),
+                    ProductionOrderSourceItem.status.in_(
+                        tuple(PRODUCTION_ORDER_SOURCE_ITEM_RECONCILABLE_DEMAND_STATUSES)
+                    ),
+                )
+                .all()
+            )
+            still_out = sum(
+                max(
+                    0.0,
+                    float(s.requested_quantity or 0) - float(s.fulfilled_quantity or 0),
+                )
+                for s in siblings
+            )
+            if still_out <= 1e-9 and float(mo.planned_quantity or 0) <= 1e-9:
+                try:
+                    cancel_production_order(db, tenant_id=tid, order_id=int(mo.id))
+                    cancelled_mo = True
+                except Exception:
+                    mo.status = "cancelled"
+                    db.add(mo)
+                    db.flush()
+                    cancelled_mo = True
+        try:
+            refresh_orders_mo_material_reservations(
+                db, mo=mo, created_by_user_id=operator_user_id
+            )
+        except Exception:
+            logger.exception("refresh after shortage demand reduce mo_id=%s", mo.id)
 
     return {
         "result": "REDUCED" if not cancelled_source else "CANCELLED_SOURCE",
@@ -1024,6 +1118,8 @@ def reduce_missing_production_demand(
         "cancelled_source": cancelled_source,
         "cancelled_mo": cancelled_mo,
         "product_id": int(order_item.product_id),
+        "source_status": str(active.status or ""),
+        "planned_adjusted": bool(counted_in_planned),
     }
 
 
@@ -1049,8 +1145,10 @@ def sync_picking_entry_on_qty_decrease(
     own_res = reserved_qty_for_order_product(
         db, tenant_id=tid, order_id=int(order.id), product_id=pid
     )
-    active = _find_active_source_for_item(db, tenant_id=tid, order_item_id=int(order_item.id))
-    fulfilled = float(active.fulfilled_quantity or 0) if active is not None else 0.0
+    src = _find_reconcilable_demand_source_for_item(
+        db, tenant_id=tid, order_item_id=int(order_item.id)
+    )
+    fulfilled = float(src.fulfilled_quantity or 0) if src is not None else 0.0
     desired_outstanding = max(0.0, float(new_qty) - own_res - fulfilled)
     reduced_out = reduce_missing_production_demand(
         db,

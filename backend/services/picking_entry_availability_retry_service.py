@@ -20,7 +20,7 @@ from sqlalchemy.orm import Session, joinedload
 from ..models.order import Order
 from ..models.order_item import OrderItem, order_item_is_replaced_line
 from ..models.production import (
-    PRODUCTION_ORDER_SOURCE_ITEM_ACTIVE_STATUSES,
+    PRODUCTION_ORDER_SOURCE_ITEM_RECONCILABLE_DEMAND_STATUSES,
     ProductionOrderSourceItem,
 )
 from .activity_log.domain_activity import record_domain_activity
@@ -51,7 +51,9 @@ from .picking_entry_readiness_service import (
     evaluate_order_picking_entry_readiness,
 )
 from .production_config_query import list_production_configs
-from .production_order_trigger.trigger_service import _find_active_source_for_item
+from .production_order_trigger.trigger_service import (
+    _find_reconcilable_demand_source_for_item,
+)
 from .sales_order_fg_reservation_service import (
     SalesOrderReservationError,
     reserve_sales_order_fg,
@@ -163,7 +165,7 @@ def find_awaiting_orders_for_fg_products(
                 ProductionOrderSourceItem.tenant_id == tid,
                 ProductionOrderSourceItem.product_id.in_(pids),
                 ProductionOrderSourceItem.status.in_(
-                    tuple(PRODUCTION_ORDER_SOURCE_ITEM_ACTIVE_STATUSES)
+                    tuple(PRODUCTION_ORDER_SOURCE_ITEM_RECONCILABLE_DEMAND_STATUSES)
                 ),
             )
             .join(Order, Order.id == ProductionOrderSourceItem.order_id)
@@ -344,7 +346,9 @@ def revalidate_awaiting_order_after_fg_increase(
         # Remaining FG still owed by production (picked already excluded from need).
         desired_out = max(0.0, round(need - stock_cover, 6))
 
-        active = _find_active_source_for_item(db, tenant_id=tid, order_item_id=int(oi.id))
+        active = _find_reconcilable_demand_source_for_item(
+            db, tenant_id=tid, order_item_id=int(oi.id)
+        )
         if active is not None:
             before_out = max(
                 0.0, float(active.requested_quantity or 0) - float(active.fulfilled_quantity or 0)

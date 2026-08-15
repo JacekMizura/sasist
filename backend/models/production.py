@@ -38,11 +38,23 @@ PRODUCTION_ORDER_SOURCE_ITEM_SHORTAGE = "shortage"
 PRODUCTION_ORDER_SOURCE_ITEM_FULFILLED = "fulfilled"
 PRODUCTION_ORDER_SOURCE_ITEM_CANCELLED = "cancelled"
 #: Demand currently covered / pending on an open MO (idempotency unique index).
+#: Intentionally excludes ``shortage`` — material allocation / trigger uniqueness.
 PRODUCTION_ORDER_SOURCE_ITEM_ACTIVE_STATUSES = frozenset(
     {
         PRODUCTION_ORDER_SOURCE_ITEM_OPEN,
         PRODUCTION_ORDER_SOURCE_ITEM_RESERVED,
         PRODUCTION_ORDER_SOURCE_ITEM_PARTIAL,
+    }
+)
+#: Outstanding production demand that Phase 3 / qty reconciliation may shrink
+#: when FG arrives from outside the MO (PZ, return, correction, release, …).
+#: Includes ``shortage``: still a live demand, blocked only by components.
+PRODUCTION_ORDER_SOURCE_ITEM_RECONCILABLE_DEMAND_STATUSES = frozenset(
+    {
+        PRODUCTION_ORDER_SOURCE_ITEM_OPEN,
+        PRODUCTION_ORDER_SOURCE_ITEM_RESERVED,
+        PRODUCTION_ORDER_SOURCE_ITEM_PARTIAL,
+        PRODUCTION_ORDER_SOURCE_ITEM_SHORTAGE,
     }
 )
 
