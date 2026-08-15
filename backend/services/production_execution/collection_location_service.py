@@ -35,6 +35,7 @@ def build_collection_location_options(
     warehouse_id: int,
     product_id: int,
     preferred_location_ids: set[int] | None = None,
+    exclude_production_order_id: int | None = None,
 ) -> tuple[list[dict[str, Any]], float]:
     """Return (location_options, warehouse_total_available)."""
     pref = preferred_location_ids or set()
@@ -45,6 +46,7 @@ def build_collection_location_options(
         product_id=int(product_id),
         available_only=True,
         pick_eligible_only=True,
+        exclude_production_order_id=exclude_production_order_id,
     )
     warehouse_total = float((snap.get("summary") or {}).get("available") or 0)
 

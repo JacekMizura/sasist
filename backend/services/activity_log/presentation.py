@@ -196,6 +196,7 @@ def enrich_activity_item(item: dict[str, Any]) -> dict[str, Any]:
         PICKING_ENTRY_AVAILABILITY_DEMAND_CANCELLED,
         PICKING_ENTRY_AVAILABILITY_DEMAND_REDUCED,
         PICKING_ENTRY_AVAILABILITY_RETURNED_TO_PICKING,
+        PICKING_ENTRY_AVAILABILITY_SOURCE_DETACHED_STARTED_MO,
         PICKING_ENTRY_GATE_BLOCKED,
         PICKING_ENTRY_MO_DEMAND,
     )
@@ -237,6 +238,7 @@ def enrich_activity_item(item: dict[str, Any]) -> dict[str, Any]:
         PICKING_ENTRY_AVAILABILITY_DEMAND_REDUCED,
         PICKING_ENTRY_AVAILABILITY_DEMAND_CANCELLED,
         PICKING_ENTRY_AVAILABILITY_RETURNED_TO_PICKING,
+        PICKING_ENTRY_AVAILABILITY_SOURCE_DETACHED_STARTED_MO,
     ):
         action = format_picking_entry_availability_message(
             event_code=code_norm,

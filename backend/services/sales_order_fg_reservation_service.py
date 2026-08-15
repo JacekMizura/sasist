@@ -23,8 +23,8 @@ from .reservations.constants import (
 from .stock_disposition import DEFAULT_STOCK_DISPOSITION, normalize_stock_disposition
 from .wms_picking_atp import (
     advisory_lock_sales_order_product,
-    pickable_available_by_location,
-    pickable_available_qty,
+    pickable_free_capacity_by_location,
+    pickable_free_capacity_qty,
 )
 
 logger = logging.getLogger(__name__)
@@ -138,26 +138,25 @@ def reserve_sales_order_fg(
         .all()
     )
 
-    atp = pickable_available_qty(
+    # Free capacity for *new* holds: subtract all active reservations (incl. own).
+    free = pickable_free_capacity_qty(
         db,
         tenant_id=tid,
         warehouse_id=wid,
         product_id=pid,
-        exclude_order_id=oid,
         stock_disposition=sd,
     )
-    if atp + 1e-9 < need:
+    if free + 1e-9 < need:
         raise SalesOrderReservationError(
-            f"Brak ATP do rezerwacji SALES_ORDER: potrzeba {need}, dostępne {atp}.",
+            f"Brak wolnej pojemności do rezerwacji SALES_ORDER: potrzeba {need}, wolne {free}.",
             code="insufficient_atp",
         )
 
-    loc_rows = pickable_available_by_location(
+    loc_rows = pickable_free_capacity_by_location(
         db,
         tenant_id=tid,
         warehouse_id=wid,
         product_id=pid,
-        exclude_order_id=oid,
         stock_disposition=sd,
     )
     created: list[StockReservation] = []

@@ -961,6 +961,33 @@ def reduce_missing_production_demand(
 
     status = str(mo.status or "")
     if status not in AGGREGABLE_MO_STATUSES:
+        # Started MO: never shrink planned / materials / RW.
+        # Full external cover → detach source from further order fulfillment only.
+        target_out = max(0.0, float(desired_outstanding or 0))
+        if target_out <= 1e-9:
+            from ..models.production import PRODUCTION_ORDER_SOURCE_ITEM_CANCELLED
+
+            before_out = max(
+                0.0,
+                float(active.requested_quantity or 0) - float(active.fulfilled_quantity or 0),
+            )
+            active.status = PRODUCTION_ORDER_SOURCE_ITEM_CANCELLED
+            active.updated_at = datetime.utcnow()
+            db.add(active)
+            db.flush()
+            return {
+                "result": "SOURCE_DETACHED_STARTED_MO",
+                "reduced": 0.0,
+                "outstanding": 0.0,
+                "production_order_id": int(mo.id),
+                "mo_number": str(mo.number),
+                "cancelled_source": True,
+                "cancelled_mo": False,
+                "mo_planned_unchanged": True,
+                "mo_status": status,
+                "was_outstanding": before_out,
+                "source_detached": True,
+            }
         return {
             "result": "MO_STARTED_BLOCKED",
             "reduced": 0.0,

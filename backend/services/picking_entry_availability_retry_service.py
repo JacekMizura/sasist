@@ -28,6 +28,7 @@ from .activity_log.domain_event_codes import (
     PICKING_ENTRY_AVAILABILITY_DEMAND_CANCELLED,
     PICKING_ENTRY_AVAILABILITY_DEMAND_REDUCED,
     PICKING_ENTRY_AVAILABILITY_RETURNED_TO_PICKING,
+    PICKING_ENTRY_AVAILABILITY_SOURCE_DETACHED_STARTED_MO,
 )
 from .bundle_order_item_ops import order_item_skip_bundle_commercial_header_for_ops
 from .picking_config_service import order_priority_rank
@@ -378,7 +379,30 @@ def revalidate_awaiting_order_after_fg_increase(
                         "trigger_product_ids": trigger_pids,
                     }
                     demand_changes.append({**red, **meta})
-                    if desired_out <= 1e-9 or red.get("cancelled_source"):
+                    if red.get("result") == "SOURCE_DETACHED_STARTED_MO" or red.get(
+                        "source_detached"
+                    ):
+                        _emit_demand_activity(
+                            db,
+                            order=order,
+                            event_type=PICKING_ENTRY_AVAILABILITY_SOURCE_DETACHED_STARTED_MO,
+                            description=(
+                                "Zamówienie zostało pokryte z dostępnego magazynu. "
+                                "Rozpoczęta produkcja będzie kontynuowana jako uzupełnienie zapasu."
+                            ),
+                            correlation_id=(
+                                f"peg-av-detach-{oid}-{oi.product_id}-"
+                                f"{_qty_label(before_out)}-{red.get('production_order_id')}"
+                            ),
+                            metadata={
+                                **meta,
+                                "external_fg_allocated": round(before_out, 6),
+                                "source_detached": True,
+                                "mo_planned_unchanged": True,
+                                "severity": "info",
+                            },
+                        )
+                    elif desired_out <= 1e-9 or red.get("cancelled_source"):
                         _emit_demand_activity(
                             db,
                             order=order,

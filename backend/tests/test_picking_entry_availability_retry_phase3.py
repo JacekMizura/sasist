@@ -730,7 +730,7 @@ class Phase3FgAvailabilityRetryTests(unittest.TestCase):
         self.assertAlmostEqual(float(mo.planned_quantity), 2.0, places=4)
 
     def test_16_started_mo_shortage_source_no_shrink(self):
-        """F: collecting MO — shortage source not shrunk."""
+        """F: collecting MO — partial external cover does not shrink planned/source qty."""
         self._bom(100)
         order = self._order(27, [(100, 2)])
         self.db.commit()
@@ -740,7 +740,8 @@ class Phase3FgAvailabilityRetryTests(unittest.TestCase):
         self.db.add(mo)
         self.db.flush()
 
-        self._inv(100, 2, 1)
+        # Partial cover only (+1 of need 2) → source stays active, MO qty unchanged.
+        self._inv(100, 1, 1)
         self.db.flush()
         self._retry([100])
         self.db.flush()
@@ -752,7 +753,39 @@ class Phase3FgAvailabilityRetryTests(unittest.TestCase):
         self.assertAlmostEqual(float(src.requested_quantity), 2.0, places=4)
         mo = self.db.query(ProductionOrder).one()
         self.assertEqual(str(mo.status), "collecting")
+        self.assertAlmostEqual(float(mo.planned_quantity), 0.0, places=4)
 
+    def test_17_started_mo_full_cover_detaches_source(self):
+        """Started MO + full external FG → detach source, planned unchanged."""
+        self._bom(100)
+        order = self._order(28, [(100, 1)])
+        self.db.commit()
+        self._gate(order)
+        src, mo = self._force_shortage_source(28, planned=5.0)
+        mo.status = "collecting"
+        mo.planned_quantity = 5.0
+        self.db.add(mo)
+        self.db.flush()
+
+        self._inv(100, 1, 1)
+        self.db.flush()
+        self._retry([100])
+        self.db.flush()
+
+        src = self.db.query(ProductionOrderSourceItem).filter(
+            ProductionOrderSourceItem.order_id == 28
+        ).one()
+        self.assertEqual(str(src.status), "cancelled")
+        mo = self.db.query(ProductionOrder).one()
+        self.assertEqual(str(mo.status), "collecting")
+        self.assertAlmostEqual(float(mo.planned_quantity), 5.0, places=4)
+        self.assertAlmostEqual(
+            reserved_qty_for_order_product(
+                self.db, tenant_id=1, order_id=28, product_id=100
+            ),
+            1.0,
+            places=4,
+        )
 
 if __name__ == "__main__":
     unittest.main()

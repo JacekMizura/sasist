@@ -34,6 +34,7 @@ from backend.models.production import (
 )
 from backend.models.stock_document import StockDocument, StockDocumentItem
 from backend.models.stock_operation import StockOperation
+from backend.models.stock_reservation import StockReservation
 from backend.models.tenant import Tenant
 from backend.models.warehouse import Warehouse
 from backend.schemas.production_execution import OrderProductionProgressBody
@@ -134,6 +135,7 @@ def _bootstrap(*, with_buffer: bool = True):
         StockDocument,
         StockDocumentItem,
         StockOperation,
+        StockReservation,
         FulfillmentEvent,
         OrderItemPickAllocation,
     ):

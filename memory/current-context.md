@@ -1,5 +1,30 @@
 ﻿## Active
 
+**Fix P0/P1 UAT Fazy 3 (2026-08-15) — wdrożone, czeka deploy:**
+1. `exclude_production_order_id` — własna PRODUCTION_ORDER nie blokuje collecting/consume/pick-plan
+2. `pickable_free_capacity_*` — nowe SALES_ORDER nie overbookują lokalizacji (own holds odejmowane)
+3. Started MO + full external FG → SourceItem `cancelled` (detach) bez shrink planned/RW/mats
+4. `allocate_produced_delta` — remaining order demand (SALES hold / pick / after_status) → free FG
+5. MO finish collecting używa committed slices (bez double-consume), jak BAT
+
+**UAT resume po deploy:** started MO → external FG → finish collecting → production → finish → brak double fulfillment (nie pełny UAT od zera).
+
+**UAT started MO — PARTIAL (przed fixem):**
+- Finish MO BLOCKED: własna res MO traktowana jak obca (P0.1)
+- Overbook B3-C-2 (P0.2); ryzyko double fulfill (P1)
+
+**UAT partial shrink 2→1 PASS (#1249 / id=1262) — 2026-08-15:**
+- PRE: awaiting, source#13 shortage req=2, SALES=0, freeATP=0, MO/4 planned/draft
+- EVENT: putaway +1 ST-001 → B3-C-2 (nie BUFFER)
+- POST: res #62=1, req=1, status=shortage, awaiting, DEMAND_REDUCED #505, planned=5 (ACTIVE-only SSOT)
+- #1248 = FULL COVER PASS (nie dowód fail partial)
+- **Next:** UAT started MO (w toku / blocked finish)
+
+**UAT Faza 3 resume po 51549091 — #1248 FULL COVER (2026-08-15):**
+- Deploy Active: *Napraw redukcję… przy shortage*
+- #1248 miał już res=1; +1 pickable → full cover → cancelled / Wózki / DEMAND_CANCELLED
+- Przeklasyfikowane: FULL COVER RECONCILIATION PASS (nie fail partial 2→1)
+
 **Fix Phase 3 shortage shrink (2026-08-15):**
 - Root: `shortage` poza ACTIVE → reduce nie znajdował SourceItem (#1248 UAT)
 - `PRODUCTION_ORDER_SOURCE_ITEM_RECONCILABLE_DEMAND_STATUSES` (+shortage) tylko dla Phase 3 / reduce

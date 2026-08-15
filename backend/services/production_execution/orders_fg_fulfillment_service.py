@@ -231,12 +231,18 @@ def allocate_produced_delta_to_order_sources(
     """
     Assign newly produced units to sources (priority / oldest). Whole units per source step.
     Moves fully fulfilled sales orders to status_after_production_id (skip production trigger).
+
+    Safety: do not fulfill an order already covered by SALES_ORDER holds / picks /
+    packing handoff — leftover production stays free FG stock.
     """
     if str(getattr(mo, "source_type", "") or "") != PRODUCTION_ORDER_SOURCE_ORDERS:
         return {"result": "SKIPPED", "reason": "not_orders"}
     delta = float(delta_qty or 0)
     if delta <= 1e-9:
         return {"result": "SKIPPED", "reason": "zero_delta"}
+
+    from ..picking_entry_gate_service import _picked_qty
+    from ..sales_order_fg_reservation_service import reserved_qty_for_order_product
 
     sources = (
         db.query(ProductionOrderSourceItem)
@@ -250,10 +256,18 @@ def allocate_produced_delta_to_order_sources(
         int(o.id): o for o in db.query(Order).filter(Order.id.in_(order_ids)).all()
     } if order_ids else {}
 
+    oi_ids = {int(s.order_item_id) for s in candidates if getattr(s, "order_item_id", None)}
+    from ...models.order_item import OrderItem
+
+    oi_by_id = {
+        int(oi.id): oi for oi in db.query(OrderItem).filter(OrderItem.id.in_(oi_ids)).all()
+    } if oi_ids else {}
+
     ordered = sort_source_items_for_material_allocation(candidates, orders_by_id)
     remaining = delta
     newly_fulfilled_order_ids: list[int] = []
     allocations: list[dict[str, Any]] = []
+    skipped_covered: list[dict[str, Any]] = []
     now = datetime.utcnow()
 
     # Resolve once — required before any full fulfillment can move orders.
@@ -267,7 +281,42 @@ def allocate_produced_delta_to_order_sources(
         need = max(0.0, requested - fulfilled)
         if need <= 1e-9:
             continue
-        take = min(need, remaining)
+
+        order = orders_by_id.get(int(src.order_id))
+        oi = oi_by_id.get(int(src.order_item_id)) if getattr(src, "order_item_id", None) else None
+        # Real remaining order demand (not only SourceItem outstanding).
+        remaining_order_demand = need
+        if order is not None and oi is not None:
+            line_need = max(0.0, float(oi.quantity or 0) - _picked_qty(oi))
+            own_res = reserved_qty_for_order_product(
+                db,
+                tenant_id=int(order.tenant_id),
+                order_id=int(order.id),
+                product_id=int(oi.product_id),
+            )
+            remaining_order_demand = max(0.0, round(line_need - own_res, 6))
+            # Already moved past production / packing — do not double-fulfill.
+            cur_status = int(getattr(order, "order_ui_status_id", 0) or 0)
+            if cur_status > 0 and cur_status == int(after_status_id):
+                remaining_order_demand = 0.0
+            # Soft packing / shipped markers when present on order.
+            for attr in ("packing_status", "shipment_status", "fulfillment_status"):
+                raw = str(getattr(order, attr, "") or "").strip().upper()
+                if raw in {"PACKED", "SHIPPED", "DONE", "COMPLETED", "CLOSED"}:
+                    remaining_order_demand = 0.0
+                    break
+
+        if remaining_order_demand <= 1e-9:
+            skipped_covered.append(
+                {
+                    "source_item_id": int(src.id),
+                    "order_id": int(src.order_id),
+                    "reason": "order_already_covered",
+                }
+            )
+            continue
+
+        take = min(need, remaining, remaining_order_demand)
         # Whole-unit assignment: do not split a fractional remainder across sources when
         # reporting integer production steps — floor take when both sides are whole-ish.
         if abs(take - round(take)) < 1e-9 and abs(remaining - round(remaining)) < 1e-9:
@@ -357,6 +406,7 @@ def allocate_produced_delta_to_order_sources(
         "delta_allocated": float(delta - remaining),
         "delta_remaining": float(remaining),
         "allocations": allocations,
+        "skipped_covered": skipped_covered,
         "status_moves": status_moves,
     }
 

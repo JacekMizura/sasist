@@ -77,6 +77,7 @@ def build_location_stock(
     operational_zone_type: str | None = None,
     available_only: bool = False,
     pick_eligible_only: bool = False,
+    exclude_production_order_id: int | None = None,
 ) -> dict:
     pid = int(product_id)
     wid = int(warehouse_id)
@@ -125,6 +126,11 @@ def build_location_stock(
     if hasattr(StockReservation, "warehouse_id"):
         res_q = res_q.filter(
             (StockReservation.warehouse_id.is_(None)) | (StockReservation.warehouse_id == wid)
+        )
+    if exclude_production_order_id is not None:
+        res_q = res_q.filter(
+            (StockReservation.production_order_id.is_(None))
+            | (StockReservation.production_order_id != int(exclude_production_order_id))
         )
     res_rows = res_q.group_by(StockReservation.location_id).all()
     for lid, qty in res_rows:

@@ -93,6 +93,7 @@ def hydrate_collection_tasks(
     warehouse_id: int,
     tasks_raw: list[dict[str, Any]],
     preferred_by_product: dict[int, set[int]] | None = None,
+    exclude_production_order_id: int | None = None,
 ) -> list[dict[str, Any]]:
     """Attach live location options, warehouse totals, and product display fields."""
     normalized = normalize_collection_tasks(tasks_raw)
@@ -120,6 +121,7 @@ def hydrate_collection_tasks(
             warehouse_id=warehouse_id,
             product_id=pid,
             preferred_location_ids=pref_map.get(pid),
+            exclude_production_order_id=exclude_production_order_id,
         )
         row["location_options"] = options
         row["warehouse_total_available"] = round(wh_total, 4)

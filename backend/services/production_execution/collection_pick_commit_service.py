@@ -174,6 +174,7 @@ def append_collection_location_pick(
     batch_number: str | None = None,
     lot: str | None = None,
     serial_number: str | None = None,
+    exclude_production_order_id: int | None = None,
 ) -> dict[str, Any]:
     """Append one location pick. Mutates ``task``. Returns shortage/next hints."""
     product_id = int(task.get("component_product_id") or 0)
@@ -217,6 +218,7 @@ def append_collection_location_pick(
     bn = batch_number if batch_number is not None else task.get("selected_batch_number")
     lt = lot if lot is not None else task.get("selected_lot")
     sn = serial_number if serial_number is not None else task.get("selected_serial_number")
+    exclude_mo = int(exclude_production_order_id) if exclude_production_order_id else None
 
     slices = consume_production_material_slices(
         db,
@@ -228,6 +230,7 @@ def append_collection_location_pick(
         batch_number=str(bn).strip() if bn else None,
         lot=str(lt).strip() if lt else None,
         serial_number=str(sn).strip() if sn else None,
+        exclude_production_order_id=exclude_mo,
     )
     loc_code = _location_code(db, loc_id)
     event_slices = [
@@ -245,6 +248,7 @@ def append_collection_location_pick(
                 product_id=product_id,
                 location_id=loc_id,
                 quantity=discrepancy,
+                exclude_production_order_id=exclude_mo,
             )
             discrepancy_slices = [
                 serialize_picked_slice(sl, product_id=product_id, location_id=loc_id) for sl in adj
@@ -426,6 +430,7 @@ def commit_collection_task_pick(
     batch_number: str | None = None,
     lot: str | None = None,
     serial_number: str | None = None,
+    exclude_production_order_id: int | None = None,
 ) -> dict[str, Any]:
     """Alias: ``collected_qty`` means qty for this location pick (append), not total."""
     return append_collection_location_pick(
@@ -438,6 +443,7 @@ def commit_collection_task_pick(
         batch_number=batch_number,
         lot=lot,
         serial_number=serial_number,
+        exclude_production_order_id=exclude_production_order_id,
     )
 
 

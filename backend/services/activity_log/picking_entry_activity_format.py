@@ -228,6 +228,24 @@ def format_picking_entry_availability_message(
             extras.append(f"Pozostało do produkcji: {_qty_label(rem)}")
         return "\n".join(extras)[:2000]
 
+    if code.endswith("SOURCE_DETACHED_STARTED_MO") or "SOURCE_DETACHED_STARTED_MO" in code:
+        if not stored:
+            stored = (
+                "Zamówienie zostało pokryte z dostępnego magazynu. "
+                "Rozpoczęta produkcja będzie kontynuowana jako uzupełnienie zapasu."
+            )
+        extras = [stored]
+        name = str(meta.get("product_name") or "").strip()
+        sku = str(meta.get("sku") or "").strip()
+        if name:
+            extras.append(name)
+        if sku:
+            extras.append(sku)
+        mo = str(meta.get("mo_number") or "").strip()
+        if mo:
+            extras.append(mo)
+        return "\n".join(extras)[:2000]
+
     if code.endswith("DEMAND_CANCELLED") or "DEMAND_CANCELLED" in code:
         if not stored:
             stored = (

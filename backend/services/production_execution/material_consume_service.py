@@ -21,6 +21,7 @@ def consume_production_material_slices(
     lot: str | None = None,
     serial_number: str | None = None,
     stock_disposition: str = "SALEABLE",
+    exclude_production_order_id: int | None = None,
 ) -> list[PickLotSlice]:
     """Consume inventory for production RW — optional lot/serial targeting (paper mode)."""
     qty = float(quantity or 0)
@@ -29,6 +30,7 @@ def consume_production_material_slices(
 
     lot_key = normalize_batch_number(lot or batch_number or None)
     sn = (serial_number or "").strip()
+    exclude_mo = int(exclude_production_order_id) if exclude_production_order_id else None
 
     if sn:
         ser = (
@@ -57,6 +59,7 @@ def consume_production_material_slices(
             quantity=take_qty,
             batch_number=lot_key or None,
             stock_disposition=stock_disposition,
+            exclude_production_order_id=exclude_mo,
         )
         ser.status = SERIAL_STATUS_PICKED
         return slices
@@ -70,4 +73,5 @@ def consume_production_material_slices(
         quantity=qty,
         batch_number=lot_key or None,
         stock_disposition=stock_disposition,
+        exclude_production_order_id=exclude_mo,
     )

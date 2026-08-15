@@ -1,8 +1,11 @@
 """
 SSOT pickable ATP for WMS picking — on-hand minus active reservations.
 
-Own ``order_id`` SALES_ORDER (and any) reservations do not block that order.
+Own ``order_id`` SALES_ORDER reservations do not block that order's ATP/cover view.
+Own ``production_order_id`` PRODUCTION_ORDER reservations do not block that MO's consume/collect.
 Foreign reservations (any kind, status=reserved) reduce ATP seen by others.
+
+For *new* SALES_ORDER placement use ``pickable_free_capacity_*`` (all holds subtract).
 """
 
 from __future__ import annotations
@@ -54,9 +57,10 @@ def reserved_qty_at_location(
     product_id: int,
     location_id: int,
     exclude_order_id: int | None = None,
+    exclude_production_order_id: int | None = None,
     stock_disposition: str = DEFAULT_STOCK_DISPOSITION,
 ) -> float:
-    """Sum of active reservations at location; optionally ignore one sales order's holds."""
+    """Sum of active reservations at location; optionally ignore own sales/MO holds."""
     sd = normalize_stock_disposition(stock_disposition)
     q = db.query(func.coalesce(func.sum(StockReservation.quantity), 0.0)).filter(
         StockReservation.tenant_id == int(tenant_id),
@@ -79,6 +83,13 @@ def reserved_qty_at_location(
                 StockReservation.order_id != int(exclude_order_id),
             )
         )
+    if exclude_production_order_id is not None:
+        q = q.filter(
+            or_(
+                StockReservation.production_order_id.is_(None),
+                StockReservation.production_order_id != int(exclude_production_order_id),
+            )
+        )
     return float(q.scalar() or 0.0)
 
 
@@ -92,8 +103,14 @@ def reserved_qty_at_lot_excluding_sales_order(
     expiry_date,
     stock_disposition: str,
     exclude_order_id: int | None = None,
+    exclude_production_order_id: int | None = None,
 ) -> float:
-    """Lot-level reserved qty; own sales order reservations excluded when ``exclude_order_id`` set."""
+    """
+    Lot-level reserved qty.
+
+    Own sales-order holds excluded when ``exclude_order_id`` set.
+    Own MO holds excluded when ``exclude_production_order_id`` set.
+    """
     sd = normalize_stock_disposition(stock_disposition)
     bn = normalize_batch_number(batch_number)
     ed = expiry_date or NO_EXPIRY_SENTINEL
@@ -111,6 +128,13 @@ def reserved_qty_at_lot_excluding_sales_order(
             or_(
                 StockReservation.order_id.is_(None),
                 StockReservation.order_id != int(exclude_order_id),
+            )
+        )
+    if exclude_production_order_id is not None:
+        q = q.filter(
+            or_(
+                StockReservation.production_order_id.is_(None),
+                StockReservation.production_order_id != int(exclude_production_order_id),
             )
         )
     return float(q.scalar() or 0.0)
@@ -198,10 +222,11 @@ def pickable_available_by_location(
     warehouse_id: int,
     product_id: int,
     exclude_order_id: int | None = None,
+    exclude_production_order_id: int | None = None,
     stock_disposition: str = DEFAULT_STOCK_DISPOSITION,
 ) -> list[tuple[int, float, str]]:
     """
-    Pickable ATP per location for ``exclude_order_id`` (own reservations credited).
+    Pickable ATP per location (own sales/MO reservations credited when excludes set).
 
     ``available = pickable_on_hand − foreign_reserved``.
     """
@@ -221,6 +246,7 @@ def pickable_available_by_location(
             product_id=product_id,
             location_id=lid,
             exclude_order_id=exclude_order_id,
+            exclude_production_order_id=exclude_production_order_id,
             stock_disposition=stock_disposition,
         )
         avail = max(0.0, float(on_hand) - float(foreign))
@@ -236,6 +262,7 @@ def pickable_available_qty(
     warehouse_id: int,
     product_id: int,
     exclude_order_id: int | None = None,
+    exclude_production_order_id: int | None = None,
     stock_disposition: str = DEFAULT_STOCK_DISPOSITION,
 ) -> float:
     rows = pickable_available_by_location(
@@ -244,6 +271,49 @@ def pickable_available_qty(
         warehouse_id=warehouse_id,
         product_id=product_id,
         exclude_order_id=exclude_order_id,
+        exclude_production_order_id=exclude_production_order_id,
+        stock_disposition=stock_disposition,
+    )
+    return round(sum(q for _, q, _ in rows), 6)
+
+
+def pickable_free_capacity_by_location(
+    db: Session,
+    *,
+    tenant_id: int,
+    warehouse_id: int,
+    product_id: int,
+    stock_disposition: str = DEFAULT_STOCK_DISPOSITION,
+) -> list[tuple[int, float, str]]:
+    """
+    Free capacity for placing a *new* reservation.
+
+    ``free = on_hand − all active reservations`` (own holds already claim stock).
+    """
+    return pickable_available_by_location(
+        db,
+        tenant_id=tenant_id,
+        warehouse_id=warehouse_id,
+        product_id=product_id,
+        exclude_order_id=None,
+        exclude_production_order_id=None,
+        stock_disposition=stock_disposition,
+    )
+
+
+def pickable_free_capacity_qty(
+    db: Session,
+    *,
+    tenant_id: int,
+    warehouse_id: int,
+    product_id: int,
+    stock_disposition: str = DEFAULT_STOCK_DISPOSITION,
+) -> float:
+    rows = pickable_free_capacity_by_location(
+        db,
+        tenant_id=tenant_id,
+        warehouse_id=warehouse_id,
+        product_id=product_id,
         stock_disposition=stock_disposition,
     )
     return round(sum(q for _, q, _ in rows), 6)

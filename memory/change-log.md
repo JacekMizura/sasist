@@ -1,8 +1,26 @@
-﻿## 2026-08-15 — UAT Faza 3 podstawowy PASS (#1245)
+﻿## 2026-08-15 — Fix P0/P1 rezerwacje WMS + detach started MO
 
-- Observation-only: MM putaway +1 ST-001 (nie z MO) → auto retry → Wózki → picking multi.
-- MO/2026/0004 planned 4→3; SourceItem #1245 cancelled; reservation ST-001 ×1 (id 43).
-- Idempotent re-notify; reservations #1243/#1244 (7+3) nietknięte.
+- P0.1: `exclude_production_order_id` w ATP/consume/pick-plan/collection UI
+- P0.2: free capacity (all holds) dla nowej SALES_ORDER; ATP order nadal z exclude
+- P1: full external cover na started MO → SourceItem cancelled (bez shrink planned/mats)
+- allocate_produced_delta: remaining order demand + skip covered/packed
+- MO finish collecting: committed slices (jak BAT)
+- Testy: `test_wms_reservation_uat_phase3_fixes.py` + phase1/3/fulfillment/collection
+
+## 2026-08-15 — UAT started MO (partial)
+
+- #1251 + MO/4 `collecting`: external FG putaway → **no shrink** (planned/src/mats locked).
+- Order → Wózki (external FG); source shortage remains on started MO.
+- Finish MO BLOCKED (ST-003 serial / collection available=0).
+- Idempotency: ponowny putaway → MO/source/mats unchanged; excess free @ B3-A-4.
+- Note: B3-C-2 qty=1 res=2 (overbook side-effect przy multi awaiting).
+
+## 2026-08-15 — UAT partial shrink 2→1 PASS (#1249)
+
+- Clean case (nie #1248): source shortage req=2, res=0, freeATP=0, awaiting.
+- Event: putaway +1 ST-001 DOCK→B3-C-2 → SALES_ORDER #62 qty1; req 2→1; status stays shortage.
+- planned MO=5 bez zmian (ACTIVE only; shortage poza planned); DEMAND_REDUCED (activity #505).
+- #1248 reclass: FULL COVER RECONCILIATION PASS (nie fail partial).
 
 ## 2026-08-15 — UAT Faza 3 podstawowy PASS (#1245)
 

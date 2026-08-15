@@ -42,12 +42,13 @@ def consume_inventory_fifo_slices(
     batch_number: str | None = None,
     stock_disposition: str = DEFAULT_STOCK_DISPOSITION,
     exclude_order_id: int | None = None,
+    exclude_production_order_id: int | None = None,
 ) -> list[PickLotSlice]:
     """
     FIFO by expiry then id — returns slices actually consumed.
 
-    When ``exclude_order_id`` is set, foreign reservations at the lot reduce
-    consumable qty (own sales-order holds remain pickable for that order).
+    When ``exclude_order_id`` / ``exclude_production_order_id`` is set, foreign
+    reservations at the lot reduce consumable qty (own holds remain consumable).
     """
     from ..models.inventory import Inventory
     from .inventory_lot_keys import normalize_batch_number
@@ -74,7 +75,7 @@ def consume_inventory_fifo_slices(
     )
     if batch_filter is not None:
         rows = [r for r in rows if normalize_batch_number(getattr(r, "batch_number", None)) == batch_filter]
-    # Net available after foreign reservations (own order credited via exclude).
+    # Net available after foreign reservations (own order/MO credited via exclude).
     net_by_id: dict[int, float] = {}
     total_avail = 0.0
     for r in rows:
@@ -89,6 +90,7 @@ def consume_inventory_fifo_slices(
             expiry_date=ed,
             stock_disposition=sd,
             exclude_order_id=exclude_order_id,
+            exclude_production_order_id=exclude_production_order_id,
         )
         net = max(0.0, float(r.quantity or 0) - float(foreign))
         net_by_id[int(r.id)] = net

@@ -201,6 +201,7 @@ def get_order_collection_state(db: Session, *, tenant_id: int, order_id: int) ->
         warehouse_id=int(order.warehouse_id),
         tasks_raw=tasks_raw,
         preferred_by_product=pref_by_product,
+        exclude_production_order_id=int(order.id),
     )
     if getattr(order, "materials_reserved", False):
         from ..reservations.reservation_service import reservations_to_collection_hints
@@ -315,6 +316,7 @@ def update_order_collection_task(
                 batch_number=body.batch_number,
                 lot=body.lot,
                 serial_number=body.serial_number,
+                exclude_production_order_id=int(order.id),
             )
         except ValueError as exc:
             raise ProductionOrderError(str(exc), code="insufficient_stock") from exc
@@ -364,6 +366,7 @@ def _consume_order_materials(
     *,
     component_allocations: list[ComponentAllocationWrite],
     performed_by_user_id: int | None,
+    committed_slices_by_product: dict[int, list[dict[str, Any]]] | None = None,
 ) -> StockDocument:
     if order.rw_stock_document_id:
         doc = db.query(StockDocument).filter(StockDocument.id == int(order.rw_stock_document_id)).first()
@@ -397,18 +400,63 @@ def _consume_order_materials(
         line.purchase_price_net = unit_net
         consumed_total = 0.0
         alloc_meta = {(int(a.line_snapshot_id), int(a.location_id)): a for a in component_allocations}
+        pid = int(snap.component_product_id)
+        committed = (committed_slices_by_product or {}).get(pid)
+        if committed:
+            # Inventory already decremented at WMS confirm — post RW lines only.
+            qty_sum = sum(q for _, q in allocs)
+            committed_total = sum(float(s.get("quantity") or 0) for s in committed)
+            if abs(committed_total - float(qty_sum)) > 1e-2:
+                raise ProductionOrderError(
+                    f"Zatwierdzone pobranie składnika #{pid} ({committed_total}) ≠ wymagane ({qty_sum}).",
+                    code="allocation_mismatch",
+                )
+            for s in committed:
+                loc_id = int(s.get("location_id") or 0)
+                if loc_id <= 0:
+                    continue
+                exp_raw = s.get("expiry_date")
+                try:
+                    exp = date.fromisoformat(str(exp_raw)) if exp_raw else date(9999, 12, 31)
+                except ValueError:
+                    exp = date(9999, 12, 31)
+                append_issue_operation(
+                    db,
+                    rw_doc,
+                    line,
+                    float(s.get("quantity") or 0),
+                    from_location_id=loc_id,
+                    batch_number=str(s.get("batch_number") or ""),
+                    expiry_date=exp if exp < NO_EXPIRY_SENTINEL else None,
+                    operator_admin_id=performed_by_user_id,
+                    metadata={"production_order_id": int(order.id), "source_document_type": "RW"},
+                )
+                from .production_warehouse_audit import record_production_rw_issue_audit
+
+                record_production_rw_issue_audit(
+                    db,
+                    rw_doc=rw_doc,
+                    product_id=pid,
+                    quantity=float(s.get("quantity") or 0),
+                    from_location_id=loc_id,
+                    performed_by_user_id=performed_by_user_id,
+                )
+                consumed_total += float(s.get("quantity") or 0)
+            snap.consumed_quantity = float(consumed_total)
+            continue
         for loc_id, qty in allocs:
             meta = alloc_meta.get((snap_id, int(loc_id)))
             slices = consume_production_material_slices(
                 db,
                 tenant_id=int(order.tenant_id),
                 warehouse_id=int(order.warehouse_id),
-                product_id=int(snap.component_product_id),
+                product_id=pid,
                 location_id=int(loc_id),
                 quantity=float(qty),
                 batch_number=(meta.batch_number or meta.lot) if meta else None,
                 lot=meta.lot if meta else None,
                 serial_number=meta.serial_number if meta else None,
+                exclude_production_order_id=int(order.id),
             )
             for sl in slices:
                 append_issue_operation(
@@ -427,7 +475,7 @@ def _consume_order_materials(
                 record_production_rw_issue_audit(
                     db,
                     rw_doc=rw_doc,
-                    product_id=int(snap.component_product_id),
+                    product_id=pid,
                     quantity=float(sl.quantity),
                     from_location_id=int(loc_id),
                     performed_by_user_id=performed_by_user_id,
@@ -451,25 +499,67 @@ def finish_order_collecting(
     state = get_order_collection_state(db, tenant_id=tenant_id, order_id=order_id)
     if state.collected_count < state.total_count:
         raise ProductionOrderError("Nie zebrano wszystkich materiałów.", code="collection_incomplete")
+
+    raw = getattr(order, "collection_state_json", None) or "{}"
+    try:
+        raw_data = json.loads(str(raw))
+    except json.JSONDecodeError:
+        raw_data = {"tasks": []}
+    raw_tasks = list(raw_data.get("tasks") or [])
+    from .collection_pick_commit_service import (
+        collection_tasks_have_committed_picks,
+        parse_pick_events,
+        slices_from_committed_tasks,
+        sync_collected_from_events,
+        task_is_collection_complete,
+    )
+
+    for t in raw_tasks:
+        sync_collected_from_events(t)
+
     snap_by_product = {int(s.component_product_id): int(s.id) for s in order.line_snapshots or []}
     allocs: list[ComponentAllocationWrite] = []
-    for t in state.tasks:
-        loc_id = int(t.selected_location_id or t.location_id or 0)
-        if loc_id > 0 and t.collected_qty > 0:
-            snap_id = snap_by_product.get(int(t.component_product_id))
-            if snap_id is None:
-                continue
+    for t in raw_tasks:
+        if not task_is_collection_complete(t):
+            continue
+        pid = int(t.get("component_product_id") or 0)
+        snap_id = snap_by_product.get(pid)
+        if snap_id is None:
+            continue
+        events = parse_pick_events(t.get("pick_events"))
+        by_loc: dict[int, float] = {}
+        if events:
+            for ev in events:
+                loc_id = int(ev.get("location_id") or 0)
+                qty = float(ev.get("quantity") or 0)
+                if loc_id > 0 and qty > 1e-9:
+                    by_loc[loc_id] = by_loc.get(loc_id, 0.0) + qty
+        else:
+            loc_id = int(t.get("selected_location_id") or t.get("location_id") or 0)
+            qty = float(t.get("collected_qty") or 0)
+            if loc_id > 0 and qty > 1e-9:
+                by_loc[loc_id] = qty
+        for loc_id, qty in by_loc.items():
             allocs.append(
                 ComponentAllocationWrite(
                     line_snapshot_id=snap_id,
-                    location_id=loc_id,
-                    quantity=float(t.collected_qty),
-                    batch_number=getattr(t, "selected_batch_number", None),
-                    lot=getattr(t, "selected_lot", None),
-                    serial_number=getattr(t, "selected_serial_number", None),
+                    location_id=int(loc_id),
+                    quantity=float(qty),
+                    batch_number=t.get("selected_batch_number"),
+                    lot=t.get("selected_lot"),
+                    serial_number=t.get("selected_serial_number"),
                 )
             )
-    _consume_order_materials(db, order, component_allocations=allocs, performed_by_user_id=performed_by_user_id)
+    use_committed = collection_tasks_have_committed_picks(raw_tasks)
+    _consume_order_materials(
+        db,
+        order,
+        component_allocations=allocs,
+        performed_by_user_id=performed_by_user_id,
+        committed_slices_by_product=(
+            slices_from_committed_tasks(raw_tasks) if use_committed else None
+        ),
+    )
     from ..reservations.reservation_service import consume_production_reservations
 
     consume_production_reservations(db, tenant_id=int(tenant_id), production_order_id=int(order_id))
