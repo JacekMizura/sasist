@@ -345,7 +345,12 @@ def _attach_or_reactivate_source(
     item: OrderItem,
     requested_quantity: float,
 ) -> tuple[ProductionOrderSourceItem, str]:
-    """Returns (row, action) where action is active|created|reactivated|already_fulfilled."""
+    """Returns (row, action) where action is active|created|reactivated|already_fulfilled.
+
+    One logical outstanding demand per order_item: prefer reactivating the same
+    SourceItem (same MO or reattach from a cancelled MO that left a ``shortage``
+    row) instead of creating a second source for the same outstanding qty.
+    """
     existing = (
         db.query(ProductionOrderSourceItem)
         .filter(
@@ -378,6 +383,30 @@ def _attach_or_reactivate_source(
         db.add(existing)
         db.flush()
         return existing, "reactivated"
+
+    # Phase 8 / ALL_SHORTAGE: shortage left on a cancelled MO — reattach to aggregable MO.
+    if _find_active_source_for_item(db, tenant_id=int(tenant_id), order_item_id=int(item.id)) is None:
+        reusable = (
+            db.query(ProductionOrderSourceItem)
+            .filter(
+                ProductionOrderSourceItem.tenant_id == int(tenant_id),
+                ProductionOrderSourceItem.order_item_id == int(item.id),
+                ProductionOrderSourceItem.status == PRODUCTION_ORDER_SOURCE_ITEM_SHORTAGE,
+            )
+            .order_by(ProductionOrderSourceItem.id.asc())
+            .first()
+        )
+        if reusable is not None:
+            reusable.production_order_id = int(mo.id)
+            reusable.order_id = int(order.id)
+            reusable.product_id = int(item.product_id)
+            reusable.status = PRODUCTION_ORDER_SOURCE_ITEM_OPEN
+            reusable.requested_quantity = float(requested_quantity)
+            reusable.fulfilled_quantity = float(reusable.fulfilled_quantity or 0)
+            reusable.updated_at = datetime.utcnow()
+            db.add(reusable)
+            db.flush()
+            return reusable, "reactivated"
 
     row = ProductionOrderSourceItem(
         tenant_id=int(tenant_id),

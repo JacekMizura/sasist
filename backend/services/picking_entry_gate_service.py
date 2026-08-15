@@ -788,17 +788,33 @@ def run_picking_entry_gate(
                 f"mo:{plan.readiness.product_id}:{plan.production_action}:{plan.production_demand}"
             )
 
-    # Status decision
-    move_to_awaiting = readiness.code in (
-        ORDER_BLOCKED_MANUFACTURING,
-        ORDER_BLOCKED_MIXED,
-    ) and prod_cfg is not None and getattr(prod_cfg, "status_awaiting_production_id", None)
+    # Status decision.
+    # Component shortage (BRAKI) from material validation wins over FG awaiting:
+    # awaiting = missing FG but production demand can wait/run;
+    # BRAKI = production demand exists but components block execution.
+    shortage_sid = (
+        getattr(prod_cfg, "status_on_component_shortage_id", None) if prod_cfg is not None else None
+    )
+    on_component_shortage = (
+        shortage_sid is not None
+        and order.order_ui_status_id is not None
+        and int(order.order_ui_status_id) == int(shortage_sid)
+    )
 
-    if move_to_awaiting:
-        awaiting_id = int(prod_cfg.status_awaiting_production_id)
+    move_to_awaiting = (
+        readiness.code
+        in (
+            ORDER_BLOCKED_MANUFACTURING,
+            ORDER_BLOCKED_MIXED,
+        )
+        and prod_cfg is not None
+        and getattr(prod_cfg, "status_awaiting_production_id", None)
+        and not on_component_shortage
+    )
+
+    def _store_return_picking_snapshot() -> None:
         meta[META_RETURN_PICKING_STATUS_ID] = int(new_status_id)
         meta[META_RETURN_PICKING_CONFIG_ID] = None
-        # resolve picking config id for this source status
         pc_row = (
             db.query(PickingConfig)
             .filter(
@@ -813,6 +829,10 @@ def run_picking_entry_gate(
             meta[META_RETURN_PICKING_CONFIG_ID] = int(pc_row.id)
         meta[META_RETURN_WAREHOUSE_ID] = wid
         meta[META_READINESS_SNAPSHOT] = readiness.to_dict()
+
+    if move_to_awaiting:
+        awaiting_id = int(prod_cfg.status_awaiting_production_id)
+        _store_return_picking_snapshot()
 
         try:
             from .order_shipping_fk_service import sanitize_order_orphan_shipping_method_id
@@ -829,6 +849,14 @@ def run_picking_entry_gate(
         db.add(order)
         result.status_changed_to = awaiting_id
         result.side_effects.append(f"status_awaiting:{awaiting_id}")
+    elif on_component_shortage and readiness.code in (
+        ORDER_BLOCKED_MANUFACTURING,
+        ORDER_BLOCKED_MIXED,
+    ):
+        # Keep BRAKI; still remember picking entry for later FG return paths.
+        _store_return_picking_snapshot()
+        result.status_changed_to = int(shortage_sid)
+        result.side_effects.append(f"status_component_shortage:{int(shortage_sid)}")
 
     fp = _blocker_fingerprint(readiness, plans)
     if readiness.code == ORDER_READY_FOR_PICKING:

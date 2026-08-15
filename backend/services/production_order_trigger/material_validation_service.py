@@ -18,6 +18,7 @@ from ...models.picking_config import PickingConfig
 from ...models.product_composition import ProductComposition
 from ...models.production import (
     PRODUCTION_ORDER_SOURCE_ITEM_ACTIVE_STATUSES,
+    PRODUCTION_ORDER_SOURCE_ITEM_CANCELLED,
     PRODUCTION_ORDER_SOURCE_ITEM_RESERVED,
     PRODUCTION_ORDER_SOURCE_ITEM_SHORTAGE,
     PRODUCTION_ORDER_SOURCE_ORDERS,
@@ -348,15 +349,28 @@ def apply_material_validation_to_orders_mo(
             str(c.get("product_name") or c.get("product_sku") or f"#{c.get('component_product_id')}")
             for c in shortage_meta[:5]
         ]
-        missing_txt = (", ".join(missing_names) + ".") if missing_names else ""
+        detail_parts: list[str] = []
+        for c in shortage_meta[:5]:
+            label = str(c.get("product_name") or c.get("product_sku") or f"#{c.get('component_product_id')}")
+            req = c.get("required_qty", c.get("required", c.get("qty_required")))
+            avail = c.get("available_qty", c.get("available", c.get("qty_available")))
+            line = label
+            if req is not None:
+                line += f" — wymagane {req}"
+            if avail is not None:
+                line += f", dostępne {avail}"
+            detail_parts.append(line)
+        detail_txt = ("; ".join(detail_parts) + ".") if detail_parts else (
+            (f" Brakuje: {', '.join(missing_names)}.") if missing_names else ""
+        )
         _log_order(
             db,
             order=order,
             event_type="PRODUCTION_COMPONENT_SHORTAGE",
             message=(
-                f"Brak komponentów do produkcji. Zamówienie przeniesiono do statusu "
-                f"„{shortage_status_name}”."
-                + (f" Brakuje: {missing_txt}" if missing_txt else "")
+                f"Nie można rozpocząć produkcji — brak komponentów. "
+                f"Zamówienie przeniesiono do statusu „{shortage_status_name}”."
+                + (f" {detail_txt}" if detail_txt else "")
             ),
             operator_user_id=operator_user_id,
             metadata={
@@ -566,6 +580,11 @@ def retry_order_driven_production_shortages(
             .first()
         )
         if active_existing is not None:
+            # Close leftover shortage rows for the same outstanding demand (no dual active+shortage).
+            if int(src.id) != int(active_existing.id) and str(src.status or "") == PRODUCTION_ORDER_SOURCE_ITEM_SHORTAGE:
+                src.status = PRODUCTION_ORDER_SOURCE_ITEM_CANCELLED
+                src.updated_at = datetime.utcnow()
+                db.add(src)
             results.append(
                 {
                     "source_item_id": int(src.id),
@@ -573,6 +592,7 @@ def retry_order_driven_production_shortages(
                     "result": "SKIPPED",
                     "reason": "already_active",
                     "active_production_order_id": int(active_existing.production_order_id),
+                    "superseded_shortage": int(src.id) != int(active_existing.id),
                 }
             )
             continue
@@ -601,6 +621,7 @@ def retry_order_driven_production_shortages(
             continue
 
         # Move back to *this* MO's production entry status — SSOT trigger re-attaches / validates.
+        # Reattach prefers the same shortage SourceItem when the prior MO was cancelled.
         apply_order_panel_ui_status(
             db,
             order=order,
@@ -625,23 +646,41 @@ def retry_order_driven_production_shortages(
         )
         restored = active is not None
         if restored:
+            # If trigger created a different row (legacy path), close the shortage we retried.
+            if refreshed is not None and int(refreshed.id) != int(active.id):
+                if str(refreshed.status or "") == PRODUCTION_ORDER_SOURCE_ITEM_SHORTAGE:
+                    refreshed.status = PRODUCTION_ORDER_SOURCE_ITEM_CANCELLED
+                    refreshed.updated_at = datetime.utcnow()
+                    db.add(refreshed)
+            mo_label = ""
+            active_mo = active.production_order
+            if active_mo is None:
+                active_mo = (
+                    db.query(ProductionOrder)
+                    .filter(ProductionOrder.id == int(active.production_order_id))
+                    .first()
+                )
+            if active_mo is not None:
+                mo_label = str(getattr(active_mo, "number", None) or "")
+            resume_msg = "Komponenty są dostępne — produkcja została automatycznie wznowiona."
+            if mo_label:
+                resume_msg = f"{resume_msg} {mo_label}."
             _log_order(
                 db,
                 order=order,
                 event_type="PRODUCTION_SHORTAGE_AUTO_RESUMED",
-                message=(
-                    "Wznowiono produkcję automatycznie — komponenty ponownie dostępne."
-                    if trigger_reason
-                    else "Wznowiono produkcję po ponownej analizie dostępności komponentów."
-                ),
+                message=resume_msg,
                 operator_user_id=operator_user_id,
                 metadata={
-                    "source_item_id": int(src.id),
+                    "source_item_id": int(active.id),
+                    "legacy_source_item_id": int(src.id),
                     "production_order_id": int(active.production_order_id) if active else None,
+                    "production_order_number": mo_label or None,
                     "target_status_id": int(target_status),
                     "trigger_reason": trigger_reason,
                     "picking_config_id": getattr(mo, "picking_config_id", None),
                     "production_source_status_id": getattr(mo, "production_source_status_id", None),
+                    "reattached": int(active.id) == int(src.id),
                 },
             )
         results.append(
@@ -650,11 +689,13 @@ def retry_order_driven_production_shortages(
                 "order_id": int(order.id),
                 "result": "RESTORED" if restored else "STILL_SHORTAGE",
                 "active_source_status": (str(active.status) if active else None),
+                "active_source_item_id": int(active.id) if active else None,
                 "active_production_order_id": (
                     int(active.production_order_id) if active else None
                 ),
                 "legacy_status": (str(refreshed.status) if refreshed else None),
                 "target_status_id": int(target_status),
+                "reattached": bool(restored and active is not None and int(active.id) == int(src.id)),
             }
         )
 
