@@ -176,6 +176,17 @@ export function formatProductionMoney(v: number | null | undefined): string {
   return `${Number(v).toFixed(2)} zł`;
 }
 
+/**
+ * Presentation-only integer quantity for ERP Production.
+ * Does not mutate API payloads — floor non-negative values for display.
+ */
+export function formatProductionQuantity(n: number | null | undefined): string {
+  const v = Number(n);
+  if (!Number.isFinite(v)) return "0";
+  if (v >= 0) return String(Math.floor(v + 1e-9));
+  return String(Math.ceil(v - 1e-9));
+}
+
 const RECENT_LOC_KEY = "production.recentTargetLocations";
 
 export function loadRecentTargetLocations(warehouseId: number): number[] {
@@ -267,7 +278,7 @@ export function productionSourceBadgeLabel(opts: {
 export function productionSourceTypeLabel(sourceType?: string | null): string {
   switch (String(sourceType || "").toUpperCase()) {
     case "ORDERS":
-      return "Na zamówienia";
+      return "Do zamówień";
     case "PLANNING":
       return "Na magazyn";
     case "MANUAL":
@@ -354,7 +365,7 @@ export function materialReadinessTone(kind: MaterialReadinessKind): StatusTone {
 }
 
 function fmtQtyUi(n: number): string {
-  return Number.isInteger(n) ? String(n) : n.toFixed(1);
+  return formatProductionQuantity(n);
 }
 
 /** Infer material readiness from order list/detail fields (no extra API). */

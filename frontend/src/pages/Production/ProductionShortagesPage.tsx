@@ -40,14 +40,12 @@ import {
 } from "./productionLayoutTokens";
 import { ProductionEmptyState } from "./components/ProductionEmptyState";
 import { AppOverlayPortal } from "../../components/overlay";
-import { BATCH_STATUS_LABEL, PRODUCTION_STATUS_LABEL } from "./productionUi";
+import { BATCH_STATUS_LABEL, PRODUCTION_STATUS_LABEL, formatProductionQuantity } from "./productionUi";
 
 const DEFAULT_TENANT = 1;
 
 function fmtQty(n: number | null | undefined): string {
-  if (n == null || !Number.isFinite(Number(n))) return "—";
-  const v = Number(n);
-  return Number.isInteger(v) ? String(v) : v.toFixed(1);
+  return formatProductionQuantity(n);
 }
 
 function sourceStatusLabel(src: ShortageDemandSource): string {
@@ -332,7 +330,7 @@ export default function ProductionShortagesPage() {
                                       r.locations.map((loc) => (
                                         <span key={loc.location_id} className="inline-flex items-center gap-1 text-xs">
                                           <LocationBadge code={loc.location_code} type="PICK" />
-                                          <span className="tabular-nums text-slate-600">{loc.available_qty}</span>
+                                          <span className="tabular-nums text-slate-600">{fmtQty(loc.available_qty)}</span>
                                         </span>
                                       ))
                                     ) : (
@@ -447,7 +445,7 @@ export default function ProductionShortagesPage() {
                 Dodaj do zamówienia zakupu
               </h3>
               <p className="mt-2 text-sm text-slate-600">
-                {poPickerFor.product_name} · brak {poPickerFor.missing_qty}
+                {poPickerFor.product_name} · brak {fmtQty(poPickerFor.missing_qty)}
               </p>
               {poLoading ? (
                 <p className="mt-4 text-sm text-slate-500">Wczytywanie zamówień…</p>

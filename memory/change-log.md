@@ -1,4 +1,21 @@
-﻿## 2026-08-15 — Production language/UX polish (frontend only, no commit)
+﻿## 2026-08-15 — Production qty display → formatProductionQuantity (no commit)
+
+- Frontend-only: stock/qty displays floor via `formatProductionQuantity` (presentation only)
+- Local fmtQty/formatQty/toFixed(2) qty helpers delegated; money/forecast/API inputs untouched
+
+## 2026-08-15 — Production create wizard + integer qty (no commit)
+
+- Operator assign: brak API — UI „Dowolny operator” + SettingInfoButton (bez fake select)
+- `formatProductionQuantity` SSOT display; kreator: skład live, rekomendacje bez pustych kart
+- Backend untouched; tsc + build OK
+
+## 2026-08-15 — Production UX: SettingInfoButton + Do zamówień (no commit)
+
+- Reuse `SettingInfoButton` (WMS Settings) na Pulpicie i Planowaniu — bez lokalnych tooltipów
+- Karty Pulpitu: ukryte instructional businessLabel dublujące CTA
+- ORDERS label: `Do zamówień`; `tsc` + build OK; backend untouched
+
+## 2026-08-15 — Production language/UX polish (frontend only, no commit)
 
 - Enumy w UI → etykiety biznesowe (`Na zamówienia` / `Na magazyn` / `Ręczne` / `Partia`)
 - Receptura: usunięte fikcyjne warianty + Marża (hint); BOM → „Struktura receptury”; ikony akcji Sasist

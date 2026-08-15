@@ -1,5 +1,6 @@
 import { AppOverlayPortal } from "@/components/overlay";
 import type { CollectionPendingShortageRead } from "@/api/productionApi";
+import { formatProductionQuantity } from "../productionUi";
 
 type Props = {
   open: boolean;
@@ -12,8 +13,7 @@ type Props = {
 };
 
 function fmtQty(n: number | null | undefined): string {
-  if (n == null || Number.isNaN(n)) return "—";
-  return Number.isInteger(n) ? String(n) : n.toFixed(2);
+  return formatProductionQuantity(n);
 }
 
 /** Blocking WMS modal when remaining component qty cannot be covered. */

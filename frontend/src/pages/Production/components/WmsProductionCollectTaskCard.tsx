@@ -6,6 +6,7 @@ import type { ProductionTerminalDisplaySettings } from "@/api/wmsProductionSetti
 import { LocationBadge } from "@/components/warehouse/LocationBadge";
 import { WmsProductTaskCard } from "@/components/wms/WmsProductTaskCard";
 import { WMS_TERMINAL_LABEL } from "@/components/wms/execution/wmsLayoutTokens";
+import { formatProductionQuantity } from "../productionUi";
 
 type Props = {
   index: number;
@@ -20,8 +21,7 @@ type Props = {
 };
 
 function fmtQty(n: number | null | undefined): string {
-  if (n == null || Number.isNaN(n)) return "—";
-  return Number.isInteger(n) ? String(n) : n.toFixed(2);
+  return formatProductionQuantity(n);
 }
 
 export function WmsProductionCollectTaskCard({

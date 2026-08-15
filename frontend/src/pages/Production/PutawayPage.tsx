@@ -15,6 +15,7 @@ import { WmsProductionJobQueueCard } from "./components/WmsProductionJobQueueCar
 import { WmsProductionActiveBatchBar } from "./components/WmsProductionActiveBatchBar";
 import { WMS_TASK_GRID, WMS_TERMINAL_LABEL } from "../../components/wms/execution/wmsLayoutTokens";
 import { wmsProductionPaths } from "./productionPaths";
+import { formatProductionQuantity } from "./productionUi";
 import { useProductionExecutionJob } from "./hooks/useProductionExecutionJob";
 
 export default function PutawayPage() {
@@ -127,7 +128,9 @@ export default function PutawayPage() {
                         <div>
                           <p className={WMS_TERMINAL_LABEL}>Produkt</p>
                           <p className="text-xl font-bold text-slate-900">{ln.productName}</p>
-                          <p className="mt-1 text-3xl font-black tabular-nums text-slate-900">{ln.quantity}</p>
+                          <p className="mt-1 text-3xl font-black tabular-nums text-slate-900">
+                            {formatProductionQuantity(ln.quantity)}
+                          </p>
                           <p className="mt-2 text-xs text-slate-500">
                             Status: {putawayStatusLabel(ln.putawayStatus)}
                           </p>

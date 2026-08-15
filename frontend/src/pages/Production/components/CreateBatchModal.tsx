@@ -26,7 +26,7 @@ import {
   Stepper,
   typography,
 } from "@/design-system";
-import { formatProductionMoney, stockTone, STOCK_TONE_CLASS } from "../productionUi";
+import { formatProductionMoney, formatProductionQuantity, stockTone, STOCK_TONE_CLASS } from "../productionUi";
 import { ProductThumb } from "./ProductThumb";
 
 type LineDraft = {
@@ -246,7 +246,7 @@ export function CreateBatchModal({ open, tenantId, warehouseId, initialLines, on
                             <p className="truncate text-sm font-semibold text-slate-900">{r.product_name}</p>
                             <p className="truncate font-mono text-xs text-slate-500">{r.product_sku ?? "—"}</p>
                             <p className={`mt-0.5 ${typography.caption}`}>
-                              {formatProductionMoney(r.unit_cost_net)}/szt. · max {Math.floor(r.max_producible)}
+                              {formatProductionMoney(r.unit_cost_net)}/szt. · max {formatProductionQuantity(r.max_producible)}
                             </p>
                           </div>
                           {added ? (
@@ -362,9 +362,13 @@ export function CreateBatchModal({ open, tenantId, warehouseId, initialLines, on
                             >
                               <p className="font-semibold text-slate-800">{c.product_name}</p>
                               <p className="text-slate-600">
-                                Wymagane: <strong>{c.required}</strong> · Dostępne: {c.available}
+                                Wymagane: <strong>{formatProductionQuantity(c.required)}</strong> · Dostępne:{" "}
+                                {formatProductionQuantity(c.available)}
                                 {c.missing > 0 ? (
-                                  <span className="font-bold text-red-700"> · Brak: {c.missing}</span>
+                                  <span className="font-bold text-red-700">
+                                    {" "}
+                                    · Brak: {formatProductionQuantity(c.missing)}
+                                  </span>
                                 ) : null}
                               </p>
                             </li>

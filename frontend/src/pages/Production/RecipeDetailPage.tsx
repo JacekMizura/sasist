@@ -12,7 +12,7 @@ import {
   type RecipeDetailRead,
 } from "../../api/productionApi";
 import { PrimaryButton, primaryButtonClassName } from "../../design-system/PrimaryButton";
-import { formatProductionMoney, stockTone, STOCK_TONE_CLASS, PRODUCTION_NUMBER_INPUT } from "./productionUi";
+import { formatProductionMoney, formatProductionQuantity, stockTone, STOCK_TONE_CLASS, PRODUCTION_NUMBER_INPUT } from "./productionUi";
 import { erpProductionPaths } from "./productionPaths";
 import { ProductThumb } from "./components/ProductThumb";
 import { BomTreeVisualization } from "./components/BomTreeVisualization";
@@ -130,10 +130,10 @@ export default function RecipeDetailPage() {
                 Koszt/szt.: <strong>{formatProductionMoney(recipe.unit_cost_net)}</strong>
               </span>
               <span>
-                Stan: <strong>{recipe.current_stock}</strong>
+                Stan: <strong>{formatProductionQuantity(recipe.current_stock)}</strong>
               </span>
               <span>
-                Można wyprodukować: <strong className="text-slate-800">{Math.floor(recipe.max_producible)}</strong>
+                Można wyprodukować: <strong className="text-slate-800">{formatProductionQuantity(recipe.max_producible)}</strong>
               </span>
             </div>
             <div className="mt-4 flex flex-wrap items-end gap-3">
@@ -193,8 +193,11 @@ export default function RecipeDetailPage() {
                     <p className="font-medium text-slate-900">{c.product_name}</p>
                     <p className="text-xs text-slate-500">{c.product_sku}</p>
                     <p className="mt-2 text-sm">
-                      Wymagane: <strong>{c.required_per_unit}</strong> · Dostępne: <strong>{c.available}</strong>
-                      {c.shortage > 0 ? <span className="text-red-700"> · Brakuje {c.shortage}</span> : null}
+                      Wymagane: <strong>{formatProductionQuantity(c.required_per_unit)}</strong> · Dostępne:{" "}
+                      <strong>{formatProductionQuantity(c.available)}</strong>
+                      {c.shortage > 0 ? (
+                        <span className="text-red-700"> · Brakuje {formatProductionQuantity(c.shortage)}</span>
+                      ) : null}
                     </p>
                     {c.suggested_locations.length > 0 ? (
                       <p className="mt-1 text-xs text-slate-500">Lokacje: {c.suggested_locations.join(", ")}</p>

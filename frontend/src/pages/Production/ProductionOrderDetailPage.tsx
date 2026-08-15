@@ -26,6 +26,7 @@ import { ProductThumb } from "./components/ProductThumb";
 import {
   EXECUTION_STATUS_LABEL,
   START_COLLECTING_BLOCKED_TOOLTIP,
+  formatProductionQuantity,
   formatStartCollectingError,
   materialReadinessLabel,
   materialReadinessTone,
@@ -45,7 +46,7 @@ import ActivityLogPanel from "../../components/activityLog/ActivityLogPanel";
 const DEFAULT_TENANT = 1;
 
 function fmtQty(n: number): string {
-  return Number.isInteger(n) ? String(n) : Number(n).toFixed(1);
+  return formatProductionQuantity(n);
 }
 
 export default function ProductionOrderDetailPage() {

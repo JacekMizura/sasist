@@ -12,6 +12,7 @@ import {
   productionPageStackClass,
   productionPageTitleClass,
 } from "./productionLayoutTokens";
+import { formatProductionQuantity } from "./productionUi";
 
 const DEFAULT_TENANT = 1;
 
@@ -84,7 +85,9 @@ export default function MaterialReservationsPage() {
                   <td className={productionModuleListTdClass}>
                     <LocationBadge code={r.location_code} type="PICK" />
                   </td>
-                  <td className={`${productionModuleListTdClass} tabular-nums font-semibold`}>{r.quantity}</td>
+                  <td className={`${productionModuleListTdClass} tabular-nums font-semibold`}>
+                    {formatProductionQuantity(r.quantity)}
+                  </td>
                   <td className={`${productionModuleListTdClass} text-xs text-slate-600`}>
                     {r.batch_number || "—"}
                     {r.expiry_date ? ` · ${r.expiry_date}` : ""}

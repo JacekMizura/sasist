@@ -34,6 +34,7 @@ import {
   START_COLLECTING_BLOCKED_TOOLTIP,
   BATCH_STATUS_LABEL,
   executionStatusTone,
+  formatProductionQuantity,
   stockTone,
   STOCK_TONE_CLASS,
   formatStartCollectingError,
@@ -223,9 +224,9 @@ export default function BatchDetailPage() {
                     <p className="truncate font-medium text-slate-900">{ln.product_name}</p>
                     <p className="text-xs text-slate-500">{ln.composition_name}</p>
                     <p className="mt-0.5 text-sm text-slate-700">
-                      Plan: <strong className="tabular-nums">{ln.planned_quantity}</strong>
+                      Plan: <strong className="tabular-nums">{formatProductionQuantity(ln.planned_quantity)}</strong>
                       {" · "}
-                      Wykonano: <strong className="tabular-nums">{ln.completed_quantity}</strong>
+                      Wykonano: <strong className="tabular-nums">{formatProductionQuantity(ln.completed_quantity)}</strong>
                     </p>
                   </div>
                 </li>
@@ -248,11 +249,11 @@ export default function BatchDetailPage() {
                       <div className="min-w-0 flex-1">
                         <p className="font-medium text-slate-900">{c.product_name}</p>
                         <p className="mt-0.5 text-sm">
-                          <strong className="tabular-nums">{c.required}</strong>
+                          <strong className="tabular-nums">{formatProductionQuantity(c.required)}</strong>
                           <span className="text-slate-400"> / </span>
-                          <span className="tabular-nums">{c.available}</span> dostępne
+                          <span className="tabular-nums">{formatProductionQuantity(c.available)}</span> dostępne
                           {c.missing > 0 ? (
-                            <span className="text-red-700"> · brakuje {c.missing}</span>
+                            <span className="text-red-700"> · brakuje {formatProductionQuantity(c.missing)}</span>
                           ) : null}
                         </p>
                       </div>

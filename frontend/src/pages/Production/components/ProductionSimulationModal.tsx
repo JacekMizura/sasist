@@ -5,6 +5,7 @@ import type { ProductionPlanSimulation } from "@/api/productionPlanningApi";
 import { EmptyState, PrimaryButton, SecondaryButton } from "@/design-system";
 import { AppOverlayPortal } from "../../../components/overlay";
 import { erpProductionPaths } from "../productionPaths";
+import { formatProductionQuantity } from "../productionUi";
 
 type Props = {
   open: boolean;
@@ -65,7 +66,7 @@ function resolveEmptyCopy(code: string | null | undefined): EmptyCopy {
 }
 
 function fmt(n: number): string {
-  return Number.isInteger(n) ? String(n) : n.toFixed(1);
+  return formatProductionQuantity(n);
 }
 
 export function ProductionSimulationModal({

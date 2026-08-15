@@ -23,6 +23,7 @@ import {
 import { ProductionWarehouseLocationSearch } from "./ProductionWarehouseLocationSearch";
 import {
   formatProductionMoney,
+  formatProductionQuantity,
   loadRecentTargetLocations,
   PRODUCTION_STATUS_LABEL,
   productionStatusBadgeClass,
@@ -260,7 +261,7 @@ export function ProductionOrderExecutionPanel({
         <p className="font-mono text-xs text-slate-500">{order.number}</p>
         <h3 className="text-lg font-bold text-slate-900">{order.product_name}</h3>
         <p className="text-sm text-slate-600">
-          {order.recipe_name} · plan {order.planned_quantity} szt.
+          {order.recipe_name} · plan {formatProductionQuantity(order.planned_quantity)} szt.
         </p>
         <span className={`mt-2 inline-block ${productionStatusBadgeClass(order.status)}`}>
           {PRODUCTION_STATUS_LABEL[order.status]}
@@ -281,7 +282,8 @@ export function ProductionOrderExecutionPanel({
             <strong>{formatProductionMoney(order.component_total_cost)}</strong>
           </p>
           <p>
-            <span className="text-slate-500">Wyprodukowano:</span> <strong>{order.produced_quantity} szt.</strong>
+            <span className="text-slate-500">Wyprodukowano:</span>{" "}
+            <strong>{formatProductionQuantity(order.produced_quantity)} szt.</strong>
           </p>
           <p>
             <span className="text-slate-500">Koszt jednostkowy:</span>{" "}
@@ -327,8 +329,8 @@ export function ProductionOrderExecutionPanel({
               <li key={s.component_product_id} className="flex justify-between gap-2">
                 <span>{s.product_name}</span>
                 <span className="shrink-0 font-mono text-xs">
-                  wym. {s.required} · dost. {s.available} ·{" "}
-                  <span className="font-bold">brak {s.missing}</span>
+                  wym. {formatProductionQuantity(s.required)} · dost. {formatProductionQuantity(s.available)} ·{" "}
+                  <span className="font-bold">brak {formatProductionQuantity(s.missing)}</span>
                 </span>
               </li>
             ))}
@@ -359,11 +361,18 @@ export function ProductionOrderExecutionPanel({
                         <div>
                           <p className="font-medium text-slate-900">{line.product_name}</p>
                           <p className="text-xs text-slate-500">
-                            Potrzeba: <strong>{line.required}</strong> · Dostępne: {line.available}
+                            Potrzeba: <strong>{formatProductionQuantity(line.required)}</strong> · Dostępne:{" "}
+                            {formatProductionQuantity(line.available)}
+                            {lineShort ? (
+                              <span className="font-semibold text-amber-800">
+                                {" "}
+                                · brak {formatProductionQuantity(line.missing)}
+                              </span>
+                            ) : null}
                             {lineShort ? (
                               <span className="ml-2 inline-flex items-center gap-1 rounded bg-red-100 px-1.5 py-0.5 text-red-800 font-medium">
                                 <AlertTriangle className="h-3 w-3" aria-hidden />
-                                brak {line.missing}
+                                brak {formatProductionQuantity(line.missing)}
                               </span>
                             ) : null}
                           </p>
@@ -402,7 +411,7 @@ export function ProductionOrderExecutionPanel({
                               >
                                 [{loc.code}]
                               </button>
-                              <span className="text-slate-500">{loc.available} szt.</span>
+                              <span className="text-slate-500">{formatProductionQuantity(loc.available)} szt.</span>
                               {loc.is_suggested ? (
                                 <span className="text-xs uppercase text-emerald-600">sugerowane</span>
                               ) : null}
@@ -428,7 +437,8 @@ export function ProductionOrderExecutionPanel({
                         })}
                       </ul>
                       <p className="mt-2 text-xs text-slate-500">
-                        Wybrane: <strong>{pickedTotal}</strong> / {line.required}
+                        Wybrane: <strong>{formatProductionQuantity(pickedTotal)}</strong> /{" "}
+                        {formatProductionQuantity(line.required)}
                       </p>
                     </div>
                   );
@@ -522,7 +532,7 @@ export function ProductionOrderExecutionPanel({
             Koszt komponentów: <strong>{formatProductionMoney(completeResult.component_total_cost)}</strong>
           </p>
           <p>
-            Wyprodukowano: <strong>{completeResult.order.produced_quantity} szt.</strong> · koszt jdn.{" "}
+            Wyprodukowano: <strong>{formatProductionQuantity(completeResult.order.produced_quantity)} szt.</strong> · koszt jdn.{" "}
             <strong>{formatProductionMoney(completeResult.calculated_unit_cost)}</strong>
           </p>
           <ul className="space-y-1 text-emerald-900">

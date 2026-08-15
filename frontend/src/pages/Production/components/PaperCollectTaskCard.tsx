@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 
 import type { CollectionTaskRead } from "@/api/productionApi";
 import { PrimaryButton } from "@/design-system";
+import { formatProductionQuantity } from "../productionUi";
 import { ProductThumb } from "./ProductThumb";
 
 type ConfirmPayload = {
@@ -22,8 +23,7 @@ type Props = {
 };
 
 function fmtQty(n: number | null | undefined): string {
-  if (n == null || Number.isNaN(n)) return "—";
-  return Number.isInteger(n) ? String(n) : n.toFixed(2);
+  return formatProductionQuantity(n);
 }
 
 function formatExpiry(raw?: string | null): string {

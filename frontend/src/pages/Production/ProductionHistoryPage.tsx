@@ -37,6 +37,7 @@ import {
   PRODUCTION_STATUS_LABEL,
   batchStatusBadgeClass,
   formatProductionMoney,
+  formatProductionQuantity,
   productionStatusBadgeClass,
 } from "./productionUi";
 import { erpProductionPaths } from "./productionPaths";
@@ -307,7 +308,9 @@ export default function ProductionHistoryPage() {
                       </span>
                     </td>
                     <td className={`${productionModuleListTdClass} truncate text-slate-700`}>{r.product}</td>
-                    <td className={`${productionModuleListTdClass} text-right tabular-nums`}>{r.qty}</td>
+                    <td className={`${productionModuleListTdClass} text-right tabular-nums`}>
+                      {formatProductionQuantity(r.qty)}
+                    </td>
                     <td className={productionModuleListTdClass}>
                       <span className={r.kind === "batch" ? batchStatusBadgeClass(r.status as never) : productionStatusBadgeClass(r.status as never)}>
                         {r.kind === "batch"

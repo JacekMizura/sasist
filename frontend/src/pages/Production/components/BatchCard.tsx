@@ -1,7 +1,7 @@
 import { Link } from "react-router-dom";
 import { AlertTriangle, ArrowRight, Calendar, Monitor, Play } from "lucide-react";
 import type { ProductionBatchRead, ProductionBatchSummaryRead } from "../../../api/productionApi";
-import { BATCH_STATUS_LABEL, START_COLLECTING_BLOCKED_TOOLTIP, batchStatusBadgeClass } from "../productionUi";
+import { BATCH_STATUS_LABEL, START_COLLECTING_BLOCKED_TOOLTIP, batchStatusBadgeClass, formatProductionQuantity } from "../productionUi";
 import { priorityLabel, priorityStripe } from "../productionTheme";
 import { erpProductionPaths, wmsProductionPaths } from "../productionPaths";
 import { OperatorAvatar } from "./OperatorAvatar";
@@ -113,12 +113,14 @@ export function BatchCard({ batch, showActions = true }: Props) {
             lines.map((ln) => (
               <li key={ln.name} className="flex justify-between gap-2 text-sm">
                 <span className="truncate font-medium text-slate-800">{ln.name}</span>
-                <span className="shrink-0 tabular-nums text-slate-500">×{ln.qty || "—"}</span>
+                <span className="shrink-0 tabular-nums text-slate-500">
+                  ×{ln.qty ? formatProductionQuantity(ln.qty) : "—"}
+                </span>
               </li>
             ))
           ) : (
             <li className="text-sm text-slate-600">
-              {batch.products_count ?? 0} produktów · {batch.total_planned_units ?? 0} szt.
+              {batch.products_count ?? 0} produktów · {formatProductionQuantity(batch.total_planned_units ?? 0)} szt.
             </li>
           )}
         </ul>

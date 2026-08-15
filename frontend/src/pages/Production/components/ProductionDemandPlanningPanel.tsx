@@ -1,5 +1,5 @@
 import { useState, Fragment } from "react";
-import { ChevronDown, CircleHelp, Factory } from "lucide-react";
+import { ChevronDown, Factory } from "lucide-react";
 
 import type {
   DemandBatchLineDraft,
@@ -7,20 +7,20 @@ import type {
   ProductionDemandProductRow,
   ProductionPlanningPriority,
 } from "@/api/productionPlanningApi";
-import { MATERIAL_STATUS_DESCRIPTION } from "@/api/productionShortageApi";
 import {
   Card,
   PrimaryButton,
   SecondaryButton,
   StatusBadge,
-  Tooltip,
   typography,
   type StatusTone,
 } from "@/design-system";
+import { SettingInfoButton } from "../../Settings/SettingInfoButton";
 import { ProductThumb } from "./ProductThumb";
 import { MaterialProductionStatusBadge } from "./MaterialProductionStatusBadge";
 import { productionSectionLabelClass } from "../productionLayoutTokens";
 import { buildPlanningQtyBreakdown } from "../productionPlanningBreakdown";
+import { formatProductionQuantity } from "../productionUi";
 
 type Props = {
   data: ProductionDemandPlanning | null;
@@ -38,7 +38,7 @@ type Props = {
 };
 
 function fmtQty(n: number): string {
-  return Number.isInteger(n) ? String(n) : n.toFixed(1);
+  return formatProductionQuantity(n);
 }
 
 const PRIORITY_LABEL: Record<ProductionPlanningPriority, string> = {
@@ -142,7 +142,29 @@ export function ProductionDemandPlanningPanel({
 
       <div className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-white px-3 py-3 lg:flex-row lg:items-end lg:justify-between">
         <div className="min-w-0 space-y-1">
-          <p className={productionSectionLabelClass}>Parametry planowania</p>
+          <div className="flex items-center gap-2">
+            <p className={productionSectionLabelClass}>Parametry planowania</p>
+            <SettingInfoButton
+              title="Parametry planowania"
+              description={
+                <ul>
+                  <li>Okres planowania określa, na ile dni do przodu system analizuje zapotrzebowanie.</li>
+                  <li>Sprzedaż z ostatnich X dni służy do wyliczenia średniego tempa sprzedaży.</li>
+                  <li>Pokrycie zapasu określa, jaki zapas system próbuje utrzymać.</li>
+                  <li>
+                    Automatyczne uzupełnianie może cyklicznie tworzyć zapotrzebowanie produkcyjne zgodnie z
+                    aktualnymi ustawieniami.
+                  </li>
+                </ul>
+              }
+              tip={
+                <p>
+                  Zmiana parametrów wpływa na rekomendowane ilości, ale nie zmienia istniejących zleceń
+                  produkcyjnych.
+                </p>
+              }
+            />
+          </div>
           <p className="text-sm text-slate-700">
             Okres planowania: <span className="font-semibold tabular-nums">{coverageDays} dni</span>
             {data?.sales_lookback_days != null ? (
@@ -206,7 +228,29 @@ export function ProductionDemandPlanningPanel({
       <div className="space-y-2">
         <div className="flex flex-wrap items-end justify-between gap-2">
           <div>
-            <h3 className={productionSectionLabelClass}>Rekomendacje</h3>
+            <div className="flex items-center gap-2">
+              <h3 className={productionSectionLabelClass}>Rekomendacje</h3>
+              <SettingInfoButton
+                title="Rekomendacje produkcji"
+                description={
+                  <ul>
+                    <li>
+                      System porównuje zapotrzebowanie, aktualny stan i ilości już będące w produkcji.
+                    </li>
+                    <li>Na tej podstawie wylicza rekomendowaną ilość do wyprodukowania.</li>
+                    <li>
+                      Dostępność materiałów może ograniczyć możliwość wykonania pełnej rekomendacji.
+                    </li>
+                  </ul>
+                }
+                tip={
+                  <p>
+                    Szczegółowe wartości wykorzystane do wyliczenia znajdziesz w tabeli zapotrzebowania
+                    poniżej.
+                  </p>
+                }
+              />
+            </div>
             <p className={`mt-0.5 ${typography.caption}`}>
               Zapotrzebowanie → Stan → W produkcji → Rekomendacja
             </p>
@@ -465,10 +509,6 @@ function RecommendationCard({
     row.max_producible >= 0 &&
     row.recommended_quantity > 0 &&
     row.max_producible + 1e-6 < row.recommended_quantity;
-  const materialHint =
-    row.material_status_description?.trim() ||
-    MATERIAL_STATUS_DESCRIPTION[row.material_status] ||
-    "Brak kluczowych składników. Pełna rekomendowana produkcja nie jest obecnie możliwa. Sprawdź zamienniki lub uzupełnij materiały.";
 
   return (
     <Card variant="section" density="compact" className="flex flex-col gap-2.5 !p-3">
@@ -483,20 +523,26 @@ function RecommendationCard({
             {row.material_status !== "OK" ? (
               <span className="inline-flex items-center gap-1">
                 <MaterialProductionStatusBadge status={row.material_status} compact />
-                <Tooltip
-                  content={
-                    <span className="block max-w-xs whitespace-normal text-left leading-snug">{materialHint}</span>
+                <SettingInfoButton
+                  title="Brak materiałów"
+                  description={
+                    <ul>
+                      <li>
+                        Brakuje jednego lub kilku komponentów potrzebnych do wykonania pełnej rekomendowanej
+                        ilości.
+                      </li>
+                      <li>
+                        Produkcja może być ograniczona do ilości możliwej przy aktualnie dostępnych
+                        materiałach.
+                      </li>
+                    </ul>
                   }
-                >
-                  <button
-                    type="button"
-                    className="inline-flex rounded p-0.5 text-slate-400 hover:text-slate-700"
-                    aria-label="Szczegóły statusu materiałów"
-                    title={materialHint}
-                  >
-                    <CircleHelp className="h-3.5 w-3.5" aria-hidden />
-                  </button>
-                </Tooltip>
+                  tip={
+                    <p>
+                      Sprawdź zakładkę Materiały, aby zobaczyć konkretne niedobory i źródła zapotrzebowania.
+                    </p>
+                  }
+                />
               </span>
             ) : (
               <MaterialProductionStatusBadge status={row.material_status} compact />

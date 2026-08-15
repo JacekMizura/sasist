@@ -2,6 +2,7 @@ import { AlertTriangle, CheckCircle2, XCircle } from "lucide-react";
 
 import type { MaterialProductionStatus } from "@/api/productionPlanningApi";
 import { MATERIAL_STATUS_DESCRIPTION } from "@/api/productionShortageApi";
+import { formatProductionQuantity } from "../productionUi";
 
 const CONFIG: Record<
   MaterialProductionStatus,
@@ -58,7 +59,8 @@ export function MaterialProductionStatusBadge({
           <p className="text-xs leading-snug text-slate-600">{desc}</p>
           {status === "PARTIAL" && producibleNow != null && waitingQty != null ? (
             <p className="text-xs font-semibold text-amber-800">
-              Teraz: {producibleNow} szt. · oczekuje: {waitingQty} szt.
+              Teraz: {formatProductionQuantity(producibleNow)} szt. · oczekuje:{" "}
+              {formatProductionQuantity(waitingQty)} szt.
             </p>
           ) : null}
           {limitingComponentName && status !== "OK" ? (

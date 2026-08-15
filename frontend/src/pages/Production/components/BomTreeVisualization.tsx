@@ -3,6 +3,7 @@ import { AlertTriangle, CheckCircle2, ChevronDown, ChevronRight, XCircle } from 
 
 import { fetchBomTree, type BomTreeNode } from "@/api/productionShortageApi";
 import { LocationBadge } from "@/components/warehouse/LocationBadge";
+import { formatProductionQuantity } from "../productionUi";
 import { ProductThumb } from "./ProductThumb";
 
 type Props = {
@@ -77,7 +78,8 @@ function TreeNodeRow({
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-semibold text-slate-900">{node.product_name}</p>
           <p className="text-xs text-slate-500">
-            {node.product_sku || "—"} · {node.required_qty ?? node.quantity_per_root} {node.unit || "szt."}
+            {node.product_sku || "—"} · {formatProductionQuantity(node.required_qty ?? node.quantity_per_root)}{" "}
+            {node.unit || "szt."}
             {node.is_manufactured ? " · półprodukt" : ""}
           </p>
         </div>
@@ -120,19 +122,27 @@ function NodeDetailPanel({ node }: { node: BomTreeNode | null }) {
       <div className="grid grid-cols-2 gap-2 text-xs">
         <div className="rounded-lg bg-slate-50 p-2">
           <p className="text-slate-500">Wymagane</p>
-          <p className="font-bold tabular-nums">{node.required_qty ?? node.quantity_per_root}</p>
+          <p className="font-bold tabular-nums">
+            {formatProductionQuantity(node.required_qty ?? node.quantity_per_root)}
+          </p>
         </div>
         <div className="rounded-lg bg-slate-50 p-2">
           <p className="text-slate-500">Dostępne</p>
-          <p className="font-bold tabular-nums">{node.available_qty ?? "—"}</p>
+          <p className="font-bold tabular-nums">
+            {node.available_qty != null ? formatProductionQuantity(node.available_qty) : "—"}
+          </p>
         </div>
         <div className="rounded-lg bg-slate-50 p-2">
           <p className="text-slate-500">Stan</p>
-          <p className="font-bold tabular-nums">{node.on_hand_qty ?? "—"}</p>
+          <p className="font-bold tabular-nums">
+            {node.on_hand_qty != null ? formatProductionQuantity(node.on_hand_qty) : "—"}
+          </p>
         </div>
         <div className="rounded-lg bg-slate-50 p-2">
           <p className="text-slate-500">Rezerwacje</p>
-          <p className="font-bold tabular-nums">{node.reserved_qty ?? "—"}</p>
+          <p className="font-bold tabular-nums">
+            {node.reserved_qty != null ? formatProductionQuantity(node.reserved_qty) : "—"}
+          </p>
         </div>
       </div>
       {node.expected_availability_date ? (
@@ -145,7 +155,7 @@ function NodeDetailPanel({ node }: { node: BomTreeNode | null }) {
             {node.locations.map((loc, i) => (
               <li key={i} className="flex flex-wrap items-center gap-2 rounded border border-slate-100 px-2 py-1">
                 <LocationBadge code={loc.location_code} type="PICK" />
-                <span className="tabular-nums">{loc.available_qty} dost.</span>
+                <span className="tabular-nums">{formatProductionQuantity(loc.available_qty)} dost.</span>
                 {loc.batch_number ? <span className="text-slate-500">Partia: {loc.batch_number}</span> : null}
                 {loc.expiry_date ? <span className="text-slate-500">Ważn.: {loc.expiry_date}</span> : null}
               </li>

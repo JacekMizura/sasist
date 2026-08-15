@@ -38,6 +38,7 @@ import {
   type ProductionOrdersListFilters,
 } from "../../modules/production/productionListFilters";
 import {
+  formatProductionQuantity,
   productionExecutionMethodLabel,
   resolveProductionPriority,
   type ProductionPriorityLevel,
@@ -96,7 +97,7 @@ function formatPlannedDateCell(raw: string): string {
 }
 
 function formatQty(n: number): string {
-  return Number.isInteger(n) ? String(n) : n.toFixed(1);
+  return formatProductionQuantity(n);
 }
 
 function OrderRegisterRow({

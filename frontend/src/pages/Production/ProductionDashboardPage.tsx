@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
-import { AlertTriangle, CircleHelp, ClipboardList, Factory, MapPin, Package, Plus } from "lucide-react";
+import { AlertTriangle, ClipboardList, Factory, MapPin, Package, Plus } from "lucide-react";
+
+import { SettingInfoButton } from "../Settings/SettingInfoButton";
 
 import {
   fetchProductionDashboard,
@@ -31,7 +33,7 @@ import { ProductionKpiGrid } from "./components/ProductionKpiGrid";
 import { productionPageStackClass, productionPageTitleClass } from "./productionLayoutTokens";
 import { erpProductionPaths } from "./productionPaths";
 import { getProductionOperationalState, shortageHintFromOrderLines } from "./productionOperationalState";
-import { productionSourceTypeLabel } from "./productionUi";
+import { formatProductionQuantity, productionSourceTypeLabel } from "./productionUi";
 import {
   PRODUCTION_DASHBOARD_SECTION_LIMIT,
   countDueTodayFromPlannedDates,
@@ -111,7 +113,7 @@ function orderToWorkItem(o: ProductionOrderRead): ProductionWorkItem {
     number: o.number,
     productLabel: o.product_name ?? `Produkt #${o.product_id}`,
     productImageUrl: o.product_image_url,
-    qtyLabel: `${o.produced_quantity}/${o.planned_quantity} szt.`,
+    qtyLabel: `${formatProductionQuantity(o.produced_quantity)}/${formatProductionQuantity(o.planned_quantity)} szt.`,
     sourceLabel,
     sourceType: o.source_type ?? null,
     plannedDate: null,
@@ -119,9 +121,14 @@ function orderToWorkItem(o: ProductionOrderRead): ProductionWorkItem {
   };
 }
 
+type SectionInfo = {
+  description: ReactNode;
+  tip?: ReactNode;
+};
+
 type SectionProps = {
   title: string;
-  info?: string;
+  info?: SectionInfo;
   count: number;
   countTone?: "neutral" | "info" | "success" | "warning" | "danger";
   emphasize?: boolean;
@@ -148,14 +155,7 @@ function WorkSection({
         <div className="flex min-w-0 items-center gap-2">
           <h2 className={emphasize ? `${typography.h2} text-rose-950` : typography.h2}>{title}</h2>
           {info ? (
-            <button
-              type="button"
-              className="inline-flex rounded p-0.5 text-slate-400 hover:text-slate-700"
-              aria-label={`Informacja: ${title}`}
-              title={info}
-            >
-              <CircleHelp className="h-3.5 w-3.5" aria-hidden />
-            </button>
+            <SettingInfoButton title={title} description={info.description} tip={info.tip} />
           ) : null}
           <StatusBadge tone={countTone} density="compact">
             {count}
@@ -167,9 +167,51 @@ function WorkSection({
   );
 }
 
+const SECTION_INFO = {
+  reaction: {
+    description: (
+      <ul>
+        <li>Pokazuje zlecenia produkcyjne, które nie mogą przejść dalej bez działania operatora.</li>
+        <li>Trafiają tu m.in. zlecenia z brakami materiałów, blokadami lub opóźnieniami.</li>
+      </ul>
+    ),
+    tip: (
+      <p>
+        Najpierw obsługuj pozycje oznaczone jako wymagające reakcji, ponieważ mogą blokować realizację
+        kolejnych zleceń.
+      </p>
+    ),
+  },
+  todo: {
+    description: (
+      <ul>
+        <li>Pokazuje zlecenia gotowe do rozpoczęcia lub wykonania kolejnego etapu.</li>
+        <li>Nie wymagają obecnie rozwiązania blokady.</li>
+      </ul>
+    ),
+  },
+  inProgress: {
+    description: (
+      <ul>
+        <li>Pokazuje zlecenia, których realizacja została już rozpoczęta.</li>
+        <li>Mogą znajdować się na etapie zbierania materiałów, produkcji lub rozlokowania.</li>
+      </ul>
+    ),
+  },
+  criticalMaterials: {
+    description: (
+      <ul>
+        <li>Pokazuje komponenty, których niedobór ogranicza bieżącą lub planowaną produkcję.</li>
+        <li>Ilości wynikają z aktualnego zapotrzebowania produkcyjnego.</li>
+      </ul>
+    ),
+    tip: <p>Pełną analizę braków znajdziesz w zakładce Materiały.</p>,
+  },
+} as const satisfies Record<string, SectionInfo>;
+
+
 function formatMissingQty(n: number): string {
-  if (!Number.isFinite(n)) return "0";
-  return Number.isInteger(n) ? String(n) : String(Math.round(n * 100) / 100);
+  return formatProductionQuantity(n);
 }
 
 export default function ProductionDashboardPage() {
@@ -371,7 +413,7 @@ export default function ProductionDashboardPage() {
             <div className="grid gap-3 lg:grid-cols-2 xl:grid-cols-2 2xl:grid-cols-4">
               <WorkSection
                 title="Wymaga reakcji"
-                info="Zlecenia z brakami materiałów, blokadami lub innymi problemami wymagającymi działania."
+                info={SECTION_INFO.reaction}
                 count={reaction.length}
                 countTone={reaction.length > 0 ? "danger" : "neutral"}
                 emphasize={reaction.length > 0}
@@ -392,7 +434,7 @@ export default function ProductionDashboardPage() {
 
               <WorkSection
                 title="Do wykonania"
-                info="Zlecenia gotowe do rozpoczęcia lub przejścia do kolejnego etapu."
+                info={SECTION_INFO.todo}
                 count={todo.length}
                 countTone={todo.length > 0 ? "warning" : "neutral"}
               >
@@ -415,7 +457,7 @@ export default function ProductionDashboardPage() {
 
               <WorkSection
                 title="W toku"
-                info="Zlecenia, których realizacja została już rozpoczęta."
+                info={SECTION_INFO.inProgress}
                 count={inProgress.length}
                 countTone="info"
               >
@@ -433,7 +475,7 @@ export default function ProductionDashboardPage() {
 
               <WorkSection
                 title="Materiały krytyczne"
-                info="Materiały, których brak ogranicza aktualne lub planowane zlecenia produkcyjne."
+                info={SECTION_INFO.criticalMaterials}
                 count={criticalMaterials.length}
                 countTone={criticalMaterials.length > 0 ? "danger" : "neutral"}
                 emphasize={criticalMaterials.length > 0}

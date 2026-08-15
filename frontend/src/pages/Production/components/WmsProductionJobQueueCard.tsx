@@ -8,6 +8,7 @@ import {
   type ProductionExecutionKind,
 } from "@/modules/production/productionExecutionTypes";
 import { operationalBadgeBase, operationalBadgeNeutralClass } from "@/components/operational/operationalSemanticBadges";
+import { formatProductionQuantity } from "../productionUi";
 import { ProductThumb } from "./ProductThumb";
 
 type Accent = "amber" | "blue" | "emerald";
@@ -79,7 +80,7 @@ export function WmsProductionJobQueueCard({
           ) : null}
           {quantity != null ? (
             <p className="mt-2 text-2xl font-black tabular-nums text-slate-900">
-              {quantity}
+              {typeof quantity === "number" ? formatProductionQuantity(quantity) : quantity}
               <span className="ml-1 text-sm font-semibold text-slate-500">szt.</span>
             </p>
           ) : null}

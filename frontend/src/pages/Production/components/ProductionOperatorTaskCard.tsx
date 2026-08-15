@@ -21,6 +21,15 @@ const STEP_TITLE_TONE: Record<StatusTone, string> = {
   neutral: "text-slate-900",
 };
 
+/** Labels that restate the CTA — do not show beside the action button on dense queues. */
+const INSTRUCTIONAL_BUSINESS_LABELS = new Set([
+  "Produkuj",
+  "Pobierz komponenty",
+  "Rozlokuj produkt",
+  "Gotowe do pakowania",
+  "Przekaż do realizacji",
+]);
+
 export type ProductionOperatorTaskCardProps = {
   state: ProductionOperationalState;
   productLabel: string;
@@ -39,6 +48,11 @@ export type ProductionOperatorTaskCardProps = {
   compact?: boolean;
   /** Dashboard density: max 1 source badge + stage text (no delayed badge clutter). */
   hideDelayedBadge?: boolean;
+  /**
+   * Hide instructional `businessLabel` that duplicates the primary CTA
+   * (e.g. „Produkuj” next to „Kontynuuj produkcję”). Keep problem/status labels.
+   */
+  hideInstructionLabel?: boolean;
   ctaHref?: string;
   ctaOpenInNewTab?: boolean;
   onCtaClick?: () => void;
@@ -68,6 +82,7 @@ export function ProductionOperatorTaskCard({
   showThumb = true,
   compact = true,
   hideDelayedBadge = false,
+  hideInstructionLabel = false,
   ctaHref,
   ctaOpenInNewTab,
   onCtaClick,
@@ -113,6 +128,9 @@ export function ProductionOperatorTaskCard({
   );
 
   const numberLabel = documentNumber ?? (secondaryMeta ? secondaryMeta.split(" · ")[0] : null);
+  const hideBusinessAsInstruction =
+    hideInstructionLabel && INSTRUCTIONAL_BUSINESS_LABELS.has(state.businessLabel);
+  const showBusinessLabel = Boolean(state.businessLabel) && !hideBusinessAsInstruction;
 
   return (
     <ListTile density="compact" selected={selected} className="w-full !py-2">
@@ -138,9 +156,17 @@ export function ProductionOperatorTaskCard({
                   Opóźnione
                 </StatusBadge>
               ) : null}
-              <span className={`text-sm font-bold leading-tight ${STEP_TITLE_TONE[state.tone]}`}>
-                {state.businessLabel}
-              </span>
+              {showBusinessLabel ? (
+                hideInstructionLabel ? (
+                  <StatusBadge tone={state.tone} density="compact">
+                    {state.businessLabel}
+                  </StatusBadge>
+                ) : (
+                  <span className={`text-sm font-bold leading-tight ${STEP_TITLE_TONE[state.tone]}`}>
+                    {state.businessLabel}
+                  </span>
+                )
+              ) : null}
             </div>
 
             <div className="min-w-0">

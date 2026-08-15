@@ -1,5 +1,5 @@
 import { PrimaryButton, ProgressBar, toneTextClass } from "@/design-system";
-import { productionProgressTone } from "../productionUi";
+import { formatProductionQuantity, productionProgressTone } from "../productionUi";
 import { ProductThumb } from "./ProductThumb";
 
 type Props = {
@@ -15,7 +15,7 @@ type Props = {
 };
 
 function fmtQty(n: number): string {
-  return Number.isInteger(n) ? String(n) : n.toFixed(1);
+  return formatProductionQuantity(n);
 }
 
 /** Production-stage line card — increment produce, then finish → PW. */

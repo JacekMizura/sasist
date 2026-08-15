@@ -25,6 +25,7 @@ import {
   BATCH_STATUS_LABEL,
   batchStatusBadgeClass,
   formatProductionMoney,
+  formatProductionQuantity,
   loadRecentTargetLocations,
   rememberTargetLocation,
 } from "./productionUi";
@@ -206,8 +207,9 @@ export function ProductionBatchExecutionPanel({ tenantId, warehouseId, batch, on
           <ul className="mt-2 space-y-1 text-sm text-amber-800">
             {pickPlan.shortages.map((s) => (
               <li key={s.component_product_id}>
-                {s.product_name}: wymagane {s.required}, dostępne {s.available}, brakuje{" "}
-                <strong>{s.missing}</strong>
+                {s.product_name}: wymagane {formatProductionQuantity(s.required)}, dostępne{" "}
+                {formatProductionQuantity(s.available)}, brakuje{" "}
+                <strong>{formatProductionQuantity(s.missing)}</strong>
               </li>
             ))}
           </ul>
@@ -221,7 +223,9 @@ export function ProductionBatchExecutionPanel({ tenantId, warehouseId, batch, on
             <div key={ln.id} className="rounded-lg border border-slate-100 bg-slate-50 px-3 py-2">
               <p className="font-medium text-slate-900">{ln.product_name ?? `#${ln.product_id}`}</p>
               <p className="text-xs text-slate-500">{ln.product_sku ?? ""}</p>
-              <p className="mt-1 text-sm font-semibold text-violet-700">× {ln.planned_quantity}</p>
+              <p className="mt-1 text-sm font-semibold text-violet-700">
+                × {formatProductionQuantity(ln.planned_quantity)}
+              </p>
             </div>
           ))}
         </div>
@@ -324,9 +328,11 @@ export function ProductionBatchExecutionPanel({ tenantId, warehouseId, batch, on
                   <span className="text-xs text-slate-500">{comp.product_sku}</span>
                 </div>
                 <p className="mt-1 text-sm">
-                  <span className="font-semibold text-slate-800">{comp.required}</span>
+                  <span className="font-semibold text-slate-800">{formatProductionQuantity(comp.required)}</span>
                   <span className="text-slate-400"> / </span>
-                  <span className={comp.missing > 0 ? "text-amber-700" : "text-emerald-700"}>{comp.available}</span>
+                  <span className={comp.missing > 0 ? "text-amber-700" : "text-emerald-700"}>
+                    {formatProductionQuantity(comp.available)}
+                  </span>
                 </p>
                 <div className="mt-1 h-1.5 rounded-full bg-slate-200 overflow-hidden">
                   <div
@@ -341,7 +347,7 @@ export function ProductionBatchExecutionPanel({ tenantId, warehouseId, batch, on
                         key={`${p.locationId}-${pi}`}
                         className="inline-flex rounded-full bg-white border border-slate-200 px-2 py-0.5 text-xs text-slate-600 mr-1"
                       >
-                        {p.code}: {p.quantity}
+                        {p.code}: {formatProductionQuantity(p.quantity)}
                       </span>
                     ))}
                   </div>

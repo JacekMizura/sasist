@@ -4,6 +4,7 @@ import {
   type ProductionExecutionKind,
 } from "@/modules/production/productionExecutionTypes";
 import { operationalBadgeBase, operationalBadgeNeutralClass } from "@/components/operational/operationalSemanticBadges";
+import { formatProductionQuantity } from "../productionUi";
 import { ProductThumb } from "./ProductThumb";
 
 type Accent = "amber" | "blue" | "emerald";
@@ -52,7 +53,7 @@ export function WmsProductionActiveBatchBar({
         {productLine ? <p className="mt-2 text-base font-semibold text-slate-800">{productLine}</p> : null}
         {quantity != null ? (
           <p className="mt-1 text-3xl font-black tabular-nums text-slate-900">
-            {quantity}
+            {typeof quantity === "number" ? formatProductionQuantity(quantity) : quantity}
             <span className="ml-1.5 text-sm font-semibold text-slate-500">{quantitySuffix}</span>
           </p>
         ) : null}

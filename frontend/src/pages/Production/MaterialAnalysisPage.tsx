@@ -7,6 +7,7 @@ import { extractApiErrorMessage } from "@/api/apiErrorMessage";
 import { useWarehouse } from "@/context/WarehouseContext";
 import { PageHeader, SecondaryButton } from "@/design-system";
 import { ProductThumb } from "./components/ProductThumb";
+import { formatProductionQuantity } from "./productionUi";
 import { productionPageStackClass, productionPageTitleClass } from "./productionLayoutTokens";
 
 const DEFAULT_TENANT = 1;
@@ -87,9 +88,11 @@ export default function MaterialAnalysisPage() {
                   <td className="px-4 py-3 text-right tabular-nums font-semibold text-amber-800">
                     {r.blocked_productions_count || "—"}
                   </td>
-                  <td className="px-4 py-3 text-right tabular-nums">{r.on_hand_qty}</td>
+                  <td className="px-4 py-3 text-right tabular-nums">{formatProductionQuantity(r.on_hand_qty)}</td>
                   <td className="px-4 py-3 text-right tabular-nums text-violet-700">{r.reserved_qty}</td>
-                  <td className="px-4 py-3 text-right tabular-nums font-semibold">{r.available_qty}</td>
+                  <td className="px-4 py-3 text-right tabular-nums font-semibold">
+                    {formatProductionQuantity(r.available_qty)}
+                  </td>
                   <td className="px-4 py-3 text-right tabular-nums">{r.forecast_daily_usage.toFixed(2)}</td>
                   <td className="px-4 py-3 text-xs text-slate-600">{r.forecast_depletion_date ?? "—"}</td>
                 </tr>

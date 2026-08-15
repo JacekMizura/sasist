@@ -14,6 +14,7 @@ import { PrimaryButton } from "@/design-system/PrimaryButton";
 import { Card, SecondaryButton, typography } from "@/design-system";
 import { erpProductionPaths } from "../productionPaths";
 import { productionModuleListTdClass, productionModuleListThClass } from "../productionLayoutTokens";
+import { formatProductionQuantity } from "../productionUi";
 import { ProductionEmptyState } from "./ProductionEmptyState";
 
 type Props = {
@@ -143,7 +144,9 @@ export function DocumentMaterialReservationsPanel({
                     <td className={productionModuleListTdClass}>
                       <LocationBadge code={r.location_code} type="PICK" />
                     </td>
-                    <td className={`${productionModuleListTdClass} tabular-nums font-semibold`}>{r.quantity}</td>
+                    <td className={`${productionModuleListTdClass} tabular-nums font-semibold`}>
+                      {formatProductionQuantity(r.quantity)}
+                    </td>
                     <td className={`${productionModuleListTdClass} text-xs text-slate-600`}>
                       {r.batch_number || "—"}
                       {r.lot ? ` · ${r.lot}` : ""}

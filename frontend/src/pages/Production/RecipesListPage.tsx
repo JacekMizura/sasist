@@ -31,7 +31,7 @@ import {
   DEFAULT_PRODUCTION_RECIPE_FILTERS,
   type ProductionRecipeListFilters,
 } from "../../modules/production/productionListFilters";
-import { formatProductionMoney, recipeStatusBadgeClass, recipeStatusLabel } from "./productionUi";
+import { formatProductionMoney, formatProductionQuantity, recipeStatusBadgeClass, recipeStatusLabel } from "./productionUi";
 import { erpProductionPaths } from "./productionPaths";
 import { ProductThumb } from "./components/ProductThumb";
 import { ProductionRowIconActions } from "./components/ProductionRowIconActions";
@@ -250,7 +250,7 @@ export default function RecipesListPage() {
                           {formatProductionMoney(r.unit_cost_net)}
                         </td>
                         <td className={`${productionModuleListTdClass} text-right tabular-nums text-slate-700`}>
-                          {Math.floor(r.max_producible)}
+                          {formatProductionQuantity(r.max_producible)}
                         </td>
                         <td className={productionModuleListTdClass}>
                           <span className={recipeStatusBadgeClass(r)}>{recipeStatusLabel(r)}</span>

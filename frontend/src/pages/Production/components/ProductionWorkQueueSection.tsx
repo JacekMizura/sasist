@@ -100,6 +100,7 @@ export function ProductionWorkQueueSection({
                 showThumb={item.kind === "order"}
                 compact
                 hideDelayedBadge
+                hideInstructionLabel
                 ctaHref={href}
                 ctaOpenInNewTab={item.state.primaryAction.openInNewTab}
                 ctaDisabled={item.state.primaryAction.disabled}

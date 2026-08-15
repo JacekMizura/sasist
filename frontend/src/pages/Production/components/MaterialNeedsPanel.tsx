@@ -2,6 +2,7 @@ import { useState } from "react";
 import { CheckCircle2, ChevronDown, ChevronRight, Clock, XCircle } from "lucide-react";
 
 import type { ProductionMaterialNeed } from "@/api/productionShortageApi";
+import { formatProductionQuantity } from "../productionUi";
 import { ProductThumb } from "./ProductThumb";
 
 const STATUS_LABEL: Record<string, { label: string; className: string }> = {
@@ -43,8 +44,11 @@ function NeedRow({ row }: { row: ProductionMaterialNeed }) {
           {row.product_sku ? <p className="font-mono text-xs text-slate-500">{row.product_sku}</p> : null}
         </div>
         <div className="text-xs tabular-nums text-slate-600">
-          Potrzeba: <strong>{row.shortage_qty}</strong> · Pokryto: <strong>{row.covered_qty}</strong>
-          {remaining > 0 ? <span className="text-rose-700"> · Brakuje {remaining.toFixed(2)}</span> : null}
+          Potrzeba: <strong>{formatProductionQuantity(row.shortage_qty)}</strong> · Pokryto:{" "}
+          <strong>{formatProductionQuantity(row.covered_qty)}</strong>
+          {remaining > 0 ? (
+            <span className="text-rose-700"> · Brakuje {formatProductionQuantity(remaining)}</span>
+          ) : null}
         </div>
         <span className={`rounded-md px-2 py-0.5 text-xs font-bold uppercase ${cfg.className}`}>{cfg.label}</span>
       </button>
@@ -68,7 +72,7 @@ function NeedRow({ row }: { row: ProductionMaterialNeed }) {
                   <p className="text-slate-500">
                     {new Date(ev.at).toLocaleString("pl-PL")} · status:{" "}
                     {(STATUS_LABEL[ev.status] ?? STATUS_LABEL.open).label}
-                    {ev.covered_qty > 0 ? ` · pokryto ${ev.covered_qty}` : ""}
+                    {ev.covered_qty > 0 ? ` · pokryto ${formatProductionQuantity(ev.covered_qty)}` : ""}
                   </p>
                 </div>
               </li>

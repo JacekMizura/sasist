@@ -4,7 +4,7 @@
  */
 import type { StatusTone } from "@/design-system";
 import { erpProductionPaths, wmsProductionPaths } from "./productionPaths";
-import { START_COLLECTING_BLOCKED_TOOLTIP } from "./productionUi";
+import { START_COLLECTING_BLOCKED_TOOLTIP, formatProductionQuantity } from "./productionUi";
 
 export type ProductionOperationalStep =
   | "WAITING_MATERIALS"
@@ -186,8 +186,7 @@ export type ProductionSecondaryAction = {
 };
 
 function fmtQty(n: number): string {
-  if (!Number.isFinite(n)) return "0";
-  return Number.isInteger(n) ? String(n) : n.toFixed(1);
+  return formatProductionQuantity(n);
 }
 
 function statusKey(status: string | null | undefined): string {
@@ -660,15 +659,4 @@ export function productionOrdersSourceSummary(input: {
   return `${orders} ${orderWord}${qty > 0 ? ` · ${fmtQty(qty)} szt.` : ""}`;
 }
 
-export function productionSourceTypeLabel(sourceType?: string | null): string {
-  switch (String(sourceType || "").toUpperCase()) {
-    case "ORDERS":
-      return "Na zamówienia";
-    case "PLANNING":
-      return "Na magazyn";
-    case "MANUAL":
-      return "Ręczne";
-    default:
-      return "Zlecenie";
-  }
-}
+export { productionSourceTypeLabel } from "./productionUi";

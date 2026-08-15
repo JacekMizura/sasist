@@ -1,4 +1,5 @@
 import type { BundleComponentRow, ProductSummary } from "../../Assortment/bundleEditTypes";
+import { formatProductionQuantity } from "../productionUi";
 
 type Props = {
   rows: BundleComponentRow[];
@@ -25,7 +26,9 @@ export function AssemblyComponentsTable({
       {showMaxSummary && maxBundles != null ? (
         <p className="text-sm text-slate-700">
           Maksymalnie można skompletować:{" "}
-          <span className="text-lg font-bold tabular-nums text-slate-900">{maxBundles} zestawów</span>
+          <span className="text-lg font-bold tabular-nums text-slate-900">
+            {formatProductionQuantity(maxBundles)} zestawów
+          </span>
         </p>
       ) : null}
       <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
@@ -47,9 +50,11 @@ export function AssemblyComponentsTable({
               return (
                 <tr key={r.rowKey}>
                   <td className="px-5 py-3.5 font-medium text-slate-900">{c?.name ?? `#${r.productId}`}</td>
-                  <td className="px-5 py-3.5 text-right tabular-nums">{stock}</td>
-                  <td className="px-5 py-3.5 text-right tabular-nums">{qty}</td>
-                  <td className="px-5 py-3.5 text-right tabular-nums font-semibold text-slate-900">{per}</td>
+                  <td className="px-5 py-3.5 text-right tabular-nums">{formatProductionQuantity(stock)}</td>
+                  <td className="px-5 py-3.5 text-right tabular-nums">{formatProductionQuantity(qty)}</td>
+                  <td className="px-5 py-3.5 text-right tabular-nums font-semibold text-slate-900">
+                    {formatProductionQuantity(per)}
+                  </td>
                 </tr>
               );
             })}

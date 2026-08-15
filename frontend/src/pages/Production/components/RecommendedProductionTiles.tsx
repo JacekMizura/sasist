@@ -1,3 +1,4 @@
+import { formatProductionQuantity } from "../productionUi";
 import type { HorizonKey, HorizonTile } from "../hooks/useProductMrpRecommendations";
 
 type Props = {
@@ -10,45 +11,51 @@ type Props = {
 function formatQty(qty: number | null, loading: boolean): string {
   if (loading) return "…";
   if (qty == null) return "—";
-  return `${qty} szt.`;
+  return `${formatProductionQuantity(qty)} szt.`;
 }
 
-/** Compact MRP horizon chips — label + suggested qty only. */
+/** Compact MRP horizon chips — only horizons with a real recommendation. */
 export function RecommendedProductionTiles({ tiles, loading, activeKey, onSelect }: Props) {
-  if (tiles.length === 0 && !loading) return null;
+  const withQty = tiles.filter((t) => t.quantity != null && t.quantity > 0);
 
-  const list =
-    tiles.length > 0
-      ? tiles
-      : ([
-          { key: "today", label: "Dzisiaj", quantity: null },
-          { key: "3", label: "3 dni", quantity: null },
-          { key: "7", label: "7 dni", quantity: null },
-          { key: "14", label: "14 dni", quantity: null },
-          { key: "21", label: "21 dni", quantity: null },
-          { key: "30", label: "30 dni", quantity: null },
-          { key: "max", label: "Maksimum", quantity: null },
-        ] as HorizonTile[]);
+  if (loading && tiles.length === 0) {
+    return (
+      <div className="space-y-2">
+        <h3 className="text-sm font-semibold text-slate-900">Rekomendowana ilość produkcji</h3>
+        <p className="text-sm text-slate-500">Liczenie rekomendacji…</p>
+      </div>
+    );
+  }
+
+  if (!loading && withQty.length === 0) {
+    return (
+      <div className="space-y-2">
+        <h3 className="text-sm font-semibold text-slate-900">Rekomendowana ilość produkcji</h3>
+        <p className="rounded-lg border border-dashed border-slate-200 px-3 py-3 text-sm text-slate-500">
+          Brak rekomendacji produkcyjnej dla wybranego produktu.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-2">
       <h3 className="text-sm font-semibold text-slate-900">Rekomendowana ilość produkcji</h3>
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 xl:grid-cols-7">
-        {list.map((tile) => {
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
+        {withQty.map((tile) => {
           const active = activeKey === tile.key;
-          const disabled = loading || tile.quantity == null;
           return (
             <button
               key={tile.key}
               type="button"
-              disabled={disabled}
+              disabled={loading}
               onClick={() => onSelect(tile)}
               className={[
-                "flex min-h-[4.25rem] flex-col items-center justify-center rounded-xl border px-2 py-2.5 text-center transition",
+                "flex min-h-[3.75rem] flex-col items-center justify-center rounded-xl border px-2 py-2 text-center transition",
                 active
                   ? "border-orange-500 bg-orange-50 shadow-sm"
                   : "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50",
-                disabled && !active ? "cursor-not-allowed opacity-60" : "",
+                loading ? "cursor-not-allowed opacity-60" : "",
               ]
                 .filter(Boolean)
                 .join(" ")}

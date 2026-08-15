@@ -1,6 +1,6 @@
 import { ProgressBar, toneTextClass } from "@/design-system";
 
-import { productionProgressTone } from "../productionUi";
+import { formatProductionQuantity, productionProgressTone } from "../productionUi";
 
 type Props = {
   current: number;
@@ -32,7 +32,7 @@ export function ProductionProgressCell({
   const tone = productionProgressTone(pct);
   const line =
     displayLine?.trim() ||
-    (total > 0 ? `${formatQty(current)} / ${formatQty(total)}` : null);
+    (total > 0 ? `${formatProductionQuantity(current)} / ${formatProductionQuantity(total)}` : null);
 
   return (
     <div className={`min-w-0 space-y-0.5 ${className}`.trim()}>
@@ -45,9 +45,4 @@ export function ProductionProgressCell({
       <ProgressBar value={pct} tone={tone} size="sm" />
     </div>
   );
-}
-
-function formatQty(n: number): string {
-  if (!Number.isFinite(n)) return "0";
-  return Number.isInteger(n) ? String(n) : String(Math.round(n * 1000) / 1000);
 }

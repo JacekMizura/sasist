@@ -5,6 +5,7 @@ import { Link } from "react-router-dom";
 import { getRecipeDetail, type RecipeCardRead, type RecipeDetailRead } from "../../../api/productionApi";
 import { AppOverlayPortal } from "../../../components/overlay";
 import { getProductDetailsPath } from "../../Products/productPaths";
+import { formatProductionQuantity } from "../productionUi";
 import { ProductThumb } from "./ProductThumb";
 
 type Props = {
@@ -116,7 +117,7 @@ export function RecipeIngredientsDrawer({ open, recipe, tenantId, warehouseId, o
                       <p className="mt-1 text-xs text-slate-600">
                         Ilość:{" "}
                         <span className="font-semibold tabular-nums text-slate-800">
-                          {c.required_per_unit.toLocaleString("pl-PL", { maximumFractionDigits: 4 })} szt.
+                          {formatProductionQuantity(c.required_per_unit)} szt.
                         </span>
                       </p>
                     </div>

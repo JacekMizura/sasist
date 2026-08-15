@@ -4,6 +4,7 @@ import {
   type ProductionExecutionKind,
 } from "@/modules/production/productionExecutionTypes";
 import { WMS_TERMINAL_LABEL } from "@/components/wms/execution/wmsLayoutTokens";
+import { formatProductionQuantity } from "../productionUi";
 import { ProductThumb } from "./ProductThumb";
 import { ProgressBar } from "./ProgressBar";
 
@@ -15,7 +16,7 @@ type Props = {
 };
 
 function fmtQty(n: number): string {
-  return Number.isInteger(n) ? String(n) : n.toFixed(2);
+  return formatProductionQuantity(n);
 }
 
 /** Finished-good context for single-screen raw-material collecting. */

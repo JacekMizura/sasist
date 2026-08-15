@@ -1,4 +1,14 @@
-﻿**Produkcja — language/UX polish gotowy do review (2026-08-15), bez commit.** Frontend-only: etykiety źródeł, receptura bez wariantów/marży, Planowanie/Pulpit tooltips. Backend/lifecycle untouched.
+﻿**Produkcja — formatProductionQuantity (2026-08-15), bez commit.** Display qty/stock floored via shared helper; money/forecast/API inputs untouched. Backend untouched.
+
+**Produkcja — kreator zlecenia + qty integer (2026-08-15), bez commit.**
+- Operator assign: BRAK API (`assigned_user_id`) — UI pokazuje „Dowolny operator” + SettingInfoButton; nie fake select
+- `formatProductionQuantity` (floor display) w ERP Produkcji
+- Kreator: skład receptury live, rekomendacje bez pustych kart, materiały komplet/braki
+- Backend untouched
+
+**Produkcja — SettingInfoButton + Do zamówień (2026-08-15), bez commit.** Pulpit/Planowanie reuse `SettingInfoButton`; karty bez dublowania CTA; ORDERS label → Do zamówień. Backend untouched.
+
+**Produkcja — language/UX polish gotowy do review (2026-08-15), bez commit.** Frontend-only: etykiety źródeł, receptura bez wariantów/marży, Planowanie/Pulpit tooltips. Backend/lifecycle untouched.
 
 **Produkcja v1 = PASS E2E (zamknięta 2026-08-15).** Nie ruszać lifecycle bez osobnego powodu.
 

@@ -1,5 +1,7 @@
 /** Planning demand row breakdown — „Dlaczego taka ilość?” */
 
+import { formatProductionQuantity } from "./productionUi";
+
 export type PlanningQtyBreakdownInput = {
   on_hand: number;
   in_pipeline: number;
@@ -55,7 +57,7 @@ export function buildPlanningQtyBreakdown(row: PlanningQtyBreakdownInput): Plann
       key: "order_need",
       label: "Zamówienia do pokrycia",
       value: orderNeed,
-      hint: "Brutto − stan − w produkcji (to pokazuje „Na zamówienia”)",
+      hint: "Brutto − stan − w produkcji (to pokazuje „Do zamówień”)",
     },
     {
       key: "stock_replenishment",
@@ -113,7 +115,5 @@ export function formatRecommendationFormula(opts: {
 }
 
 function roundDisp(n: number): string {
-  if (!Number.isFinite(n)) return "0";
-  if (Math.abs(n - Math.round(n)) < 0.05) return String(Math.round(n));
-  return (Math.round(n * 10) / 10).toFixed(1);
+  return formatProductionQuantity(n);
 }
