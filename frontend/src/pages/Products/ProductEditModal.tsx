@@ -2313,6 +2313,7 @@ export function ProductEditModal({
                     tenantId={tenantId}
                     productId={Number(product.id)}
                     productName={name.trim() || `Produkt #${product.id}`}
+                    productImageUrl={sidebarPreviewUrl || image_url || product?.image_url || null}
                     onChanged={() => {
                       setProductionTabVisible(true);
                       setActiveTab("production");

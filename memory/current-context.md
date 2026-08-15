@@ -1,4 +1,56 @@
-﻿**Production traceability MVP frontend (2026-08-15), bez commit/push.**
+﻿**Konfiguracja produkcji UX (2026-08-16), bez commit/push.**
+- Uproszczony UI: Status wejściowy | Realizacja; bez Nazwy/Aktywnej/opisów
+- Status wejściowy edytowalny (OrderUiStatusField); PUT wysyła `source_status_id`
+- Labelki: WMS / Zmień status / Przejdź do pakowania; `is_active` ukryte, zawsze true przy zapisie
+- Backend: `ProductionConfigUpdate.source_status_id` (bez migracji); testy SSOT + FE build PASS
+
+**Karta produktu → Produkcja/Receptura UX (2026-08-16), bez commit/push.**
+- Widok prezentacyjny 1:1: hero FG + stats, tabela składu, flow INPUT→Produkcja→OUTPUT, prawa kolumna
+- Domyślnie bez formularza; Edytuj / Utwórz / Dodaj składnik → CompositionVisualEditor
+- Tło białe; header/taby/Historia czynności nietknięte; tsc + build PASS
+
+**Produkcja — spójny Activity Log + WMS audit (2026-08-16), bez commit/push.**
+- 3 warstwy: Historia (`activity_events` + `record_domain_activity`), Logi WMS (reuse ops), bez nowego debug SSOT
+- Nowe `PRODUCTION_*` + formatter `production_activity_format`; OUTPUT_REGISTERED per delta (`mo:{id}:output:{output_id}`)
+- Writers: create/cancel/planning/batch/reserve/shortage/Phase8/output/PW/putaway/demand detach
+- WMS audit RW/PW: LOT + expiry; FE: BAT detail Historia; link MO/BAT w ActivityLogTable
+- Testy: `test_production_activity_log` + domain activity + FG register; tsc/build PASS
+
+**Partial FG + multi-LOT per delta (2026-08-15/16), bez commit/push.**
+- SSOT: `production_fg_outputs` + PW-per-delta; `register_produced_quantity` dla BAT/MO
+- BAT/PLANNING/MANUAL: każda rejestracja → real FG/PW → putaway; LOT/SN per delta
+- ORDERS: buffer bez zmian semantycznych; multi-LOT = nowa linia PW
+- `fg_traceability_json` v2: genealogia SN, bez lock LOT na całe zlecenie
+- FE: usunięto blokadę partial-only-ORDERS; `supportsPartialFgStock=true`
+- Testy: `test_production_fg_output_register` A–I + regresje finish PW
+
+**Planowanie → Rekomendacje → tworzenie + partia masowa UX (2026-08-15), bez commit/push.**
+- CTA: „Utwórz zlecenie”; focused entry z rekomendacji (1 produkt, bez katalogu); „Zmień produkt”
+- Partia masowa: status materiałów przy każdej pozycji z SSOT preview + BOM; shared components OK
+- Create nie blokowane na brakach; tsc/build + unit tests PASS
+
+**WMS Produkcja UX — 2 kolejki + Zarejestruj produkcję (2026-08-15), bez commit/push.**
+- Usunięto tab Rozlokowanie z WMS Produkcji (`/wms/production/putaway` → `/wms/putaway`).
+- Tabs: Pobieranie komponentów | Produkcja; CTA modal z domyślną pozostałą ilością.
+- GAP: częściowy FG stock tylko ORDERS; BAT/PLANNING wymaga pełnej pozostałej ilości (finish→PW).
+- Multi-LOT na jednej MO/BAT: zablokowane przez `fg_traceability` lock — GAP.
+- tsc + build + testy traceability: PASS.
+
+**UAT Production traceability MVP — STOP na LOT RW (2026-08-15), bez kodu/commit.**
+- Pre: migracje OK (API `traceability`), UI Identyfikowalność dostępna, default OFF, PZ niezależne (smoke PZ#103/104 + putaway).
+- UAT A partial: BAT/2026/0019; collect bez LOT → 409 wymagany; z LOT → OK; inventory LOT skonsumowany.
+- **STOP LOT RW:** RW/2026/08/20 — `StockDocumentItem.batch_number=""`, movements `batch_number=null` mimo selected LOT i spadku stocku LOT.
+- Settings przywrócone: production TRACE=OFF; track_batch produktów UAT cofnięte.
+- UAT B–E nie startowane.
+
+**Produkcja ERP — polskie URL-e i kompaktowe akcje (2026-08-15), bez commit/push.**
+- Kanoniczne FE: `/produkcja/{zlecenia,planowanie,receptury,materialy/braki,serie/:id,historia,analiza-kosztow,realizacja}`; `/production/*` → redirect.
+- Detail: ← IconButton; Printer/FileText/XCircle; CTA `Kontynuuj` + Play; banner = businessLabel (status tylko w badge).
+- Braki: kolumna „Zlecenia”, chevron expand, `Utwórz zapotrzebowanie` + PackagePlus „Dodaj do zamówienia towaru”.
+- `ProductionErpModuleLayout` FULL_PAGE_DETAIL = `/produkcja/serie|receptury`.
+- `tsc --noEmit` + `npm run build`: PASS. Bez commit (równoległa traceability).
+
+**Production traceability MVP frontend (2026-08-15), bez commit/push.**
 - Ustawienia WMS: osobna sekcja Identyfikowalność, OFF/CONFIGURED + LOT/SN/expiry; legacy TRACE ukryte z terminal required.
 - Karta produktu: capability track_* + produkcyjne override INHERIT/REQUIRE/OFF, zapis z ochroną REQUIRE bez capability.
 - Collection WMS/PAPER wymusza wymagane LOT/SN (SN qty 1); aktywne ekrany wykonania przekazują FG batch/expiry/serials.

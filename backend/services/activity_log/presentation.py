@@ -206,6 +206,11 @@ def enrich_activity_item(item: dict[str, Any]) -> dict[str, Any]:
         format_picking_entry_gate_blocked_message,
         format_picking_entry_mo_demand_message,
     )
+    from backend.services.activity_log.production_activity_format import (
+        PRODUCTION_EVENT_CODES,
+        build_production_detail_rows,
+        format_production_activity_message,
+    )
     from backend.services.cart_lifecycle_event_catalog import (
         compose_informative_message,
         title_pl,
@@ -246,6 +251,13 @@ def enrich_activity_item(item: dict[str, Any]) -> dict[str, Any]:
             metadata=meta,
         )
         details = build_picking_entry_detail_rows(meta)
+    elif code_norm in PRODUCTION_EVENT_CODES:
+        action = format_production_activity_message(
+            event_code=code_norm,
+            stored_description=stored_desc,
+            metadata=meta,
+        )
+        details = build_production_detail_rows(meta)
     else:
         action = compose_informative_message(
             event_code,

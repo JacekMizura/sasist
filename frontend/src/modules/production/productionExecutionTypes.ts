@@ -32,6 +32,8 @@ export type UnifiedExecutionLine = {
   productName: string;
   productImageUrl?: string | null;
   productSku?: string | null;
+  productEan?: string | null;
+  productCatalogNumber?: string | null;
   plannedQuantity: number;
   completedQuantity: number;
 };
@@ -41,6 +43,13 @@ export type UnifiedExecutionDetail = {
   number: string;
   productLabel: string;
   warehouseId: number;
+  /** MO source_type (ORDERS / PLANNING / MANUAL); undefined for BAT. */
+  sourceType?: string | null;
+  /**
+   * True when production-progress materializes FG stock (ORDERS buffer path).
+   * BAT / non-ORDERS only create PW+stock on finish-production.
+   */
+  supportsPartialFgStock: boolean;
   lines: UnifiedExecutionLine[];
 };
 

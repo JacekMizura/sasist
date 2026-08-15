@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { Link } from "react-router-dom";
 import { AlertTriangle, ChevronDown, ChevronRight, Filter, Search } from "lucide-react";
 
 import { fetchActivityLog } from "../../api/activityLogApi";
 import type { ActivityEventItem, ActivityObjectType } from "../../types/activityLog";
 import { resolveEventDisplayLabel } from "../../utils/eventDisplayLabels";
+import { erpProductionPaths } from "../../pages/Production/productionPaths";
 import {
   ActivityLogOperatorCell,
   ActivityLogPaginationBar,
@@ -25,6 +27,9 @@ export type ActivityLogTableRow = {
   severity?: string;
   /** ISO timestamp for reliable sorting. */
   occurredAt?: string | null;
+  /** Optional link to MO/BAT detail when event is production-related. */
+  productionHref?: string | null;
+  productionLabel?: string | null;
 };
 
 type ActivityLogTableProps = {
@@ -49,6 +54,20 @@ function mapApiItem(item: ActivityEventItem): ActivityLogTableRow {
     fallbackDescription: item.action || item.description,
   });
   const message = (item.action || item.description || "").trim() || "—";
+  const meta = item.metadata || {};
+  const prodLink = (item.links || []).find((l) => String(l.object_type) === "production");
+  const moNumber = String(meta.mo_number || meta.production_number || "").trim();
+  const batNumber = String(meta.production_batch_number || "").trim();
+  let productionHref: string | null = null;
+  let productionLabel: string | null = null;
+  if (prodLink && Number(prodLink.object_id) > 0) {
+    productionLabel = (prodLink.object_label || moNumber || batNumber || "").trim() || null;
+    if (batNumber || String(productionLabel || "").startsWith("BAT")) {
+      productionHref = erpProductionPaths.batch(prodLink.object_id);
+    } else {
+      productionHref = erpProductionPaths.order(prodLink.object_id);
+    }
+  }
   return {
     id: `${item.source_module || "act"}-${item.id}`,
     date: when,
@@ -57,6 +76,8 @@ function mapApiItem(item: ActivityEventItem): ActivityLogTableRow {
     message,
     severity: item.severity,
     occurredAt: item.occurred_at,
+    productionHref,
+    productionLabel,
   };
 }
 
@@ -393,6 +414,17 @@ export default function ActivityLogTable({
                         {msg}
                       </span>
                     );
+                    const productionLinkNode =
+                      row.productionHref && row.productionLabel ? (
+                        <div className="mt-1">
+                          <Link
+                            to={row.productionHref}
+                            className="text-[12px] font-semibold text-sky-700 hover:underline"
+                          >
+                            {row.productionLabel}
+                          </Link>
+                        </div>
+                      ) : null;
 
                     return (
                       <tr
@@ -417,7 +449,10 @@ export default function ActivityLogTable({
                         <td className={tdClass}>
                           <p className="text-[13px] font-semibold leading-snug text-slate-900">{eventTitle}</p>
                         </td>
-                        <td className={tdClass}>{effectNode}</td>
+                        <td className={tdClass}>
+                          {effectNode}
+                          {productionLinkNode}
+                        </td>
                       </tr>
                     );
                   })}

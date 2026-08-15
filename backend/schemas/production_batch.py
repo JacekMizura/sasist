@@ -61,6 +61,8 @@ class ProductionBatchCreateBody(BaseModel):
     notes: Optional[str] = None
     status: ProductionBatchStatus = "planned"
     reserve_materials: bool = False
+    #: null / omitted = any eligible operator („Dowolny operator”).
+    assigned_user_id: Optional[int] = Field(None, ge=1)
     lines: List[ProductionBatchLineWrite] = Field(default_factory=list)
 
     @model_validator(mode="after")
@@ -99,6 +101,7 @@ class ProductionBatchRead(BaseModel):
     notes: Optional[str] = None
     rw_stock_document_id: Optional[int] = None
     rw_document_number: Optional[str] = None
+    assigned_user_id: Optional[int] = None
     operator_name: Optional[str] = None
     lines: List[ProductionBatchLineRead] = Field(default_factory=list)
     products_count: int = 0
@@ -239,6 +242,7 @@ class BatchProductionProgressBody(BaseModel):
     fg_batch_number: Optional[str] = None
     fg_expiry_date: Optional[date] = None
     fg_serial_numbers: List[str] = Field(default_factory=list)
+    idempotency_key: Optional[str] = Field(None, max_length=191)
 
 
 class BatchProductionFinishBody(BaseModel):

@@ -106,7 +106,7 @@ function BoolRow({
 }
 
 const DISPLAY_FIELDS: { key: keyof ProductionTerminalDisplaySettings; label: string }[] = [
-  { key: "show_product_image", label: "Zdjęcie produktu" },
+  { key: "show_product_image", label: "Zdjęcie" },
   { key: "show_name", label: "Nazwa" },
   { key: "show_sku", label: "SKU" },
   { key: "show_ean", label: "EAN" },
@@ -259,11 +259,7 @@ export default function WmsProductionSettingsPanel({ warehouseId }: Props) {
       }}
       restoreDisabled={!dirty}
     >
-      <SectionCard
-        sectionId={SECTION_CONFIGURATOR}
-        title="Konfigurator produkcji"
-        summary="Statusy wejściowe, bufor produktu gotowego i sposób realizacji produkcji z zamówień."
-      >
+      <SectionCard sectionId={SECTION_CONFIGURATOR} title="Konfigurator produkcji">
         <ProductionConfiguratorPanel warehouseId={warehouseId ?? resolvedWh} />
       </SectionCard>
 
@@ -505,8 +501,8 @@ export default function WmsProductionSettingsPanel({ warehouseId }: Props) {
 
       <SectionCard
         sectionId={SECTION_DISPLAY}
-        title="Wygląd terminala"
-        summary="Elementy widoczne operatorowi w terminalu produkcyjnym WMS."
+        title="Wygląd"
+        summary="Informacje o produkcie w kreatorze zleceń i terminalu produkcyjnym (SKU / EAN / nr katalogowy)."
       >
         <div className={wmsSettingsRowsStackClass}>
           {DISPLAY_FIELDS.map(({ key, label }) => (

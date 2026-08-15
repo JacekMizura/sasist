@@ -118,6 +118,13 @@ def list_recipe_cards(
                 product_id=int(comp.product_id),
                 product_name=str(p.name if p else f"Produkt #{comp.product_id}"),
                 product_sku=((p.sku or p.symbol) if p else None),
+                product_ean=(
+                    (str(p.ean).strip() if p and getattr(p, "ean", None) else None)
+                    or (str(p.barcode).strip() if p and getattr(p, "barcode", None) else None)
+                ),
+                product_catalog_number=(
+                    str(p.catalog_number).strip() if p and getattr(p, "catalog_number", None) else None
+                ),
                 product_image_url=(p.image_url if p else None),
                 recipe_name=str(comp.name or ""),
                 version=str(comp.version or "1"),

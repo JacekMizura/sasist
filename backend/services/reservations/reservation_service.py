@@ -232,6 +232,19 @@ def create_production_batch_reservations(
     batch.updated_at = datetime.utcnow()
     db.flush()
     logger.info("[reservation.create] batch_id=%s rows=%s", batch.id, len(created))
+    try:
+        from ..production_execution.production_domain_activity import emit_production_materials_reserved
+
+        emit_production_materials_reserved(
+            db,
+            tenant_id=int(tenant_id),
+            warehouse_id=int(batch.warehouse_id) if batch.warehouse_id else None,
+            batch_id=int(batch.id),
+            actor_user_id=created_by_user_id,
+            label=str(getattr(batch, "number", None) or "") or None,
+        )
+    except Exception:
+        pass
     return created
 
 
@@ -292,6 +305,20 @@ def create_production_order_reservations(
     order.updated_at = datetime.utcnow()
     db.flush()
     logger.info("[reservation.create] order_id=%s rows=%s", order.id, len(created))
+    try:
+        from ..production_execution.production_domain_activity import emit_production_materials_reserved
+
+        emit_production_materials_reserved(
+            db,
+            tenant_id=int(tenant_id),
+            warehouse_id=int(order.warehouse_id) if order.warehouse_id else None,
+            production_order_id=int(order.id),
+            product_id=int(order.product_id) if order.product_id else None,
+            actor_user_id=created_by_user_id,
+            label=str(getattr(order, "number", None) or "") or None,
+        )
+    except Exception:
+        pass
     return created
 
 

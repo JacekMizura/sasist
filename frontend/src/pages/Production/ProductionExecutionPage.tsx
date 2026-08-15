@@ -31,8 +31,7 @@ export default function ProductionExecutionPage() {
     busy,
     detailLoading,
     openJob,
-    addProductionQty,
-    finishProduction,
+    registerProductionQty,
   } = useProductionExecutionJob("execute", activeRef);
 
   const [expandedLineKey, setExpandedLineKey] = useState<string | null>(null);
@@ -46,19 +45,15 @@ export default function ProductionExecutionPage() {
     setExpandedLineKey(firstIncompleteKey);
   }, [activeRef?.kind, activeRef?.id, firstIncompleteKey]);
 
-  const allDone = executionDetail?.lines.every((ln) =>
-    isLineDone(ln.plannedQuantity, ln.completedQuantity),
-  );
-
   return (
     <div className="w-full space-y-5">
       {!activeRef ? (
         <div className="w-full space-y-4">
-          <p className={WMS_TERMINAL_LABEL}>W produkcji</p>
+          <p className={WMS_TERMINAL_LABEL}>Produkcja</p>
           {queue.length === 0 ? (
             <WmsProductionTerminalEmptyState
               title="Brak zadań w produkcji"
-              description="Zlecenia i partie w realizacji pojawią się tutaj do rejestracji postępu."
+              description="Po zakończeniu pobierania komponentów zlecenia pojawią się tutaj do rejestracji produkcji."
               icon={<Factory size={22} strokeWidth={2} />}
               onRefresh={() => void reloadQueue()}
             />
@@ -103,30 +98,19 @@ export default function ProductionExecutionPage() {
                   index={idx + 1}
                   line={ln}
                   display={display}
+                  traceability={traceability}
                   expanded={expanded}
                   done={done}
                   busy={busy}
-                  traceabilityEnabled={traceability.mode === "CONFIGURED"}
                   onToggle={() => setExpandedLineKey((k) => (k === ln.lineKey ? null : ln.lineKey))}
-                  onAddQty={(add, identity) => void addProductionQty(ln.lineKey, add, identity)}
+                  onRegister={(qty, identity) => void registerProductionQty(ln.lineKey, qty, identity)}
                 />
               );
             })}
           </div>
 
-          {allDone ? (
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() => void finishProduction()}
-              className="w-full max-w-xl rounded-xl bg-emerald-600 py-4 text-lg font-bold text-white hover:bg-emerald-700 disabled:opacity-40"
-            >
-              Zakończ produkcję → rozlokowanie (PW)
-            </button>
-          ) : null}
-
           <Link to={wmsProductionPaths.collecting()} className="block text-sm text-slate-500 underline">
-            Kolejka zbierania
+            Kolejka pobierania komponentów
           </Link>
         </>
       ) : (

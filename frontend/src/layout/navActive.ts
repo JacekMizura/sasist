@@ -75,8 +75,8 @@ export function isNavPathActive(pathname: string, path: string): boolean {
   if (path === "/bundles") {
     return pathname === "/bundles" || pathname.startsWith("/bundles/");
   }
-  if (path === "/production") {
-    return pathname === "/production" || pathname.startsWith("/production/");
+  if (path === "/produkcja") {
+    return pathname === "/produkcja" || pathname.startsWith("/produkcja/");
   }
   if (path === "/wms/production") {
     return pathname === "/wms/production" || pathname.startsWith("/wms/production/");

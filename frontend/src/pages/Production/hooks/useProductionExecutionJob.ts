@@ -32,6 +32,7 @@ import {
   type UnifiedExecutionDetail,
 } from "@/modules/production/productionExecutionTypes";
 import { wmsProductionPaths } from "../productionPaths";
+import { WMS_ROUTES } from "../../wms/wmsRoutes";
 import { START_COLLECTING_BLOCKED_TOOLTIP, formatStartCollectingError } from "../productionUi";
 import { handleProductionPackingHandoff } from "./handleProductionPackingHandoff";
 import {
@@ -99,12 +100,16 @@ async function loadExecutionDetail(
       number: batch.number,
       productLabel,
       warehouseId: batch.warehouse_id,
+      sourceType: null,
+      supportsPartialFgStock: true,
       lines: batch.lines.map((ln) => ({
         lineKey: String(ln.id),
         lineId: ln.id,
         productName: ln.product_name ?? `Produkt #${ln.product_id}`,
         productImageUrl: ln.product_image_url ?? null,
         productSku: ln.product_sku ?? null,
+        productEan: ln.product_ean ?? null,
+        productCatalogNumber: ln.product_catalog_number ?? null,
         plannedQuantity: ln.planned_quantity,
         completedQuantity: ln.completed_quantity,
       })),
@@ -116,12 +121,16 @@ async function loadExecutionDetail(
     number: order.number,
     productLabel: order.product_name ?? `Produkt #${order.product_id}`,
     warehouseId: order.warehouse_id,
+    sourceType: order.source_type ?? null,
+    supportsPartialFgStock: true,
     lines: [
       {
         lineKey: "main",
         productName: order.product_name ?? `Produkt #${order.product_id}`,
         productImageUrl: order.product_image_url ?? null,
         productSku: order.product_sku ?? null,
+        productEan: order.product_ean ?? null,
+        productCatalogNumber: order.product_catalog_number ?? null,
         plannedQuantity: order.planned_quantity,
         completedQuantity: order.produced_quantity,
       },
@@ -310,7 +319,7 @@ export function useProductionExecutionJob(phase: ProductionExecutionPhase, activ
 
   const pathForPhase = (p: ProductionExecutionPhase, ref: ProductionExecutionRef) => {
     if (p === "collecting") return wmsProductionPaths.collecting(ref.kind, ref.id);
-    if (p === "putaway") return wmsProductionPaths.putaway(ref.kind, ref.id);
+    if (p === "putaway") return WMS_ROUTES.putaway;
     return wmsProductionPaths.execute(ref.kind, ref.id);
   };
 
@@ -450,6 +459,106 @@ export function useProductionExecutionJob(phase: ProductionExecutionPhase, activ
     [activeRef, warehouseId, tenantId, navigate, showBusinessError],
   );
 
+  /**
+   * Operator „Zarejestruj produkcję”.
+   * Każda delta materializuje FG (ORDERS → bufor; BAT/PLANNING/MANUAL → PW → putaway).
+   * Przy pełnym planie backend auto-finish; FE dopina finish idempotentnie i nawiguje.
+   */
+  const registerProductionQty = useCallback(
+    async (lineKey: string, qty: number, identity: FinishedGoodsIdentityBody = {}) => {
+      if (activeRef == null || warehouseId == null) return;
+      const add = Math.max(0, Number(qty) || 0);
+      if (add <= 0) return;
+
+      const detail = executionDetail ?? (await loadExecutionDetail(tenantId, warehouseId, activeRef));
+      if (!detail) return;
+      const line = detail.lines.find((ln) => ln.lineKey === lineKey);
+      if (!line) return;
+      const remaining = Math.max(0, line.plannedQuantity - line.completedQuantity);
+      if (add > remaining + 1e-9) {
+        toast.error(`Można zarejestrować co najwyżej ${remaining} szt.`);
+        return;
+      }
+
+      try {
+        await withMutationLock(mutationLockRef, setBusy, async () => {
+          if (activeRef.kind === "batch") {
+            const lineId = Number(lineKey);
+            await updateProductionProgress(
+              tenantId,
+              activeRef.id,
+              { line_id: lineId, add_quantity: add, ...identity },
+              warehouseId,
+            );
+          } else {
+            const updated = await updateOrderProductionProgress(
+              tenantId,
+              activeRef.id,
+              { add_quantity: add, ...identity },
+              warehouseId,
+            );
+            handleProductionPackingHandoff(updated, navigate);
+          }
+
+          const next = await loadExecutionDetail(tenantId, warehouseId, activeRef);
+          setExecutionDetail(next);
+          const nextLine = next?.lines.find((ln) => ln.lineKey === lineKey);
+          const complete =
+            nextLine != null && nextLine.completedQuantity >= nextLine.plannedQuantity - 1e-6;
+          const allComplete = next?.lines.every(
+            (ln) => ln.completedQuantity >= ln.plannedQuantity - 1e-6,
+          );
+
+          if (complete && allComplete) {
+            // Auto finish — lifecycle requires explicit finish after counters reach plan.
+            if (activeRef.kind === "batch") {
+              await finishProductionPhase(tenantId, activeRef.id, warehouseId, identity);
+            } else {
+              const finished = await finishOrderProduction(tenantId, activeRef.id, warehouseId, identity);
+              handleProductionPackingHandoff(finished, navigate);
+              if (ordersMoSkipsPutaway(finished.source_type)) {
+                toast.success(
+                  "Produkcja zakończona. Produkty są dostępne na lokalizacji buforowej.",
+                  { duration: 6000 },
+                );
+                navigate(wmsProductionPaths.execute());
+                await reloadQueue();
+                return;
+              }
+            }
+            const putaway = await loadPutawayDetail(tenantId, warehouseId, activeRef);
+            const pwIds = collectPwDocumentIds(putaway);
+            toast.success(
+              pwIds.length === 1
+                ? `Produkcja zakończona. Wyroby czekają na rozlokowanie (dokument PW).`
+                : "Produkcja zakończona. Wyroby czekają na rozlokowanie.",
+              { duration: 6000 },
+            );
+            navigate(pwIds.length === 1 ? WMS_ROUTES.putawayPz(pwIds[0]) : WMS_ROUTES.putaway);
+            await reloadQueue();
+            return;
+          }
+
+          toast.success(
+            `Zarejestrowano ${add} szt. (${nextLine ? `${nextLine.completedQuantity}/${nextLine.plannedQuantity}` : ""})`,
+          );
+          await reloadQueue();
+        });
+      } catch (e: unknown) {
+        showBusinessError(e, "Nie udało się zapisać produkcji", "Nie udało się zapisać wyprodukowanej ilości.");
+      }
+    },
+    [
+      activeRef,
+      warehouseId,
+      tenantId,
+      navigate,
+      showBusinessError,
+      executionDetail,
+      reloadQueue,
+    ],
+  );
+
   const finishProduction = useCallback(async () => {
     if (activeRef == null || warehouseId == null) return;
     try {
@@ -481,18 +590,17 @@ export function useProductionExecutionJob(phase: ProductionExecutionPhase, activ
           pwIds.length > 1
             ? `Produkcja zakończona. ${pwIds.length} dokumenty PW oczekują na rozlokowanie.`
             : pwIds.length === 1
-              ? `Produkcja zakończona. Dokument PW #${pwIds[0]} oczekuje na rozlokowanie.`
+              ? "Produkcja zakończona. Wyroby czekają na rozlokowanie."
               : "Produkcja zakończona. Wyroby trafiły do kolejki rozlokowania.",
           { duration: 6000 },
         );
-        navigate(wmsProductionPaths.putaway(activeRef.kind, activeRef.id));
-        await loadPutawayDetailForRef(activeRef);
+        navigate(pwIds.length === 1 ? WMS_ROUTES.putawayPz(pwIds[0]) : WMS_ROUTES.putaway);
         await reloadQueue();
       });
     } catch (e: unknown) {
       showBusinessError(e, "Nie można zakończyć produkcji", "Nie można zakończyć produkcji.");
     }
-  }, [activeRef, warehouseId, tenantId, navigate, reloadQueue, loadPutawayDetailForRef, showBusinessError]);
+  }, [activeRef, warehouseId, tenantId, navigate, reloadQueue, showBusinessError]);
 
   const refreshPutawayDetail = useCallback(async () => {
     if (activeRef == null) return;
@@ -515,6 +623,7 @@ export function useProductionExecutionJob(phase: ProductionExecutionPhase, activ
     reportCollectionShortage,
     finishCollecting,
     addProductionQty,
+    registerProductionQty,
     finishProduction,
     refreshPutawayDetail,
   };

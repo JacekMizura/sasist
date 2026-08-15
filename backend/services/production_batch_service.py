@@ -132,7 +132,25 @@ def _operator_name(db: Session, user_id: int | None) -> str | None:
     if u is None:
         return None
     parts = [str(getattr(u, "first_name", None) or "").strip(), str(getattr(u, "last_name", None) or "").strip()]
-    return " ".join(p for p in parts if p).strip() or None
+    full = " ".join(p for p in parts if p).strip()
+    if full:
+        return full
+    login = str(getattr(u, "login", None) or "").strip()
+    return login or None
+
+
+def _resolve_assigned_user_id(
+    db: Session, *, tenant_id: int, assigned_user_id: int | None
+) -> int | None:
+    if assigned_user_id is None:
+        return None
+    uid = int(assigned_user_id)
+    if uid < 1:
+        return None
+    u = db.query(AppUser).filter(AppUser.id == uid).first()
+    if u is None or not bool(getattr(u, "is_active", True)):
+        raise ProductionBatchError("Wybrany operator nie istnieje lub jest nieaktywny.", code="invalid_operator")
+    return uid
 
 
 def _doc_number(db: Session, doc_id: int | None) -> str | None:
@@ -177,6 +195,8 @@ def _append_rw_issue_with_product_audit(
         quantity=float(slice_qty),
         from_location_id=int(from_location_id),
         performed_by_user_id=performed_by_user_id,
+        batch_number=batch_number or None,
+        expiry_date=expiry_date,
     )
 
 
@@ -313,7 +333,10 @@ def serialize_batch(db: Session, batch: ProductionBatch, *, check_shortages: boo
         notes=batch.notes,
         rw_stock_document_id=batch.rw_stock_document_id,
         rw_document_number=_doc_number(db, batch.rw_stock_document_id),
-        operator_name=_operator_name(db, batch.created_by_user_id),
+        assigned_user_id=(
+            int(batch.assigned_user_id) if getattr(batch, "assigned_user_id", None) else None
+        ),
+        operator_name=_operator_name(db, getattr(batch, "assigned_user_id", None)),
         lines=[serialize_batch_line(db, ln) for ln in lines],
         products_count=len(lines),
         total_planned_units=round(total_planned, 4),
@@ -658,6 +681,9 @@ def create_batch(
         logger.warning("CREATE_BATCH_STEP_FAIL step=status reason=%s", msg)
         raise ProductionBatchError(msg, code="invalid_status")
     try:
+        assignee_id = _resolve_assigned_user_id(
+            db, tenant_id=int(tenant_id), assigned_user_id=getattr(body, "assigned_user_id", None)
+        )
         batch_number = _next_batch_number(db, tenant_id=tenant_id)
         logger.info("CREATE_BATCH_STEP insert_batch number=%s status=%s", batch_number, status)
         batch = ProductionBatch(
@@ -667,6 +693,7 @@ def create_batch(
             status=status,
             notes=(body.notes or "").strip() or None,
             created_by_user_id=int(created_by_user_id) if created_by_user_id else None,
+            assigned_user_id=assignee_id,
         )
         db.add(batch)
         db.flush()
@@ -711,6 +738,49 @@ def create_batch(
                 raise ProductionBatchError(str(exc), code=getattr(exc, "code", "reservation_failed")) from exc
 
         logger.info("CREATE_BATCH_STEP serialize_batch batch_id=%s", batch.id)
+        try:
+            from .production_execution.production_domain_activity import (
+                emit_production_batch_created,
+                emit_production_materials_reserved,
+                emit_production_operator_assigned,
+            )
+
+            total_planned = sum(float(ln.planned_quantity or 0) for ln in (batch.lines or []))
+            first_pid = int(batch.lines[0].product_id) if batch.lines else None
+            emit_production_batch_created(
+                db,
+                tenant_id=int(tenant_id),
+                warehouse_id=int(batch.warehouse_id) if batch.warehouse_id else None,
+                batch_id=int(batch.id),
+                product_id=first_pid,
+                planned_quantity=total_planned,
+                actor_user_id=created_by_user_id,
+                label=str(batch.number or "") or None,
+            )
+            if assignee_id:
+                oname = _operator_name(db, assignee_id)
+                if oname:
+                    emit_production_operator_assigned(
+                        db,
+                        tenant_id=int(tenant_id),
+                        warehouse_id=int(batch.warehouse_id) if batch.warehouse_id else None,
+                        batch_id=int(batch.id),
+                        operator_name=oname,
+                        actor_user_id=created_by_user_id,
+                        label=str(batch.number or "") or None,
+                    )
+            if getattr(body, "reserve_materials", False) and bool(getattr(batch, "materials_reserved", False)):
+                emit_production_materials_reserved(
+                    db,
+                    tenant_id=int(tenant_id),
+                    warehouse_id=int(batch.warehouse_id) if batch.warehouse_id else None,
+                    batch_id=int(batch.id),
+                    product_id=first_pid,
+                    actor_user_id=created_by_user_id,
+                    label=str(batch.number or "") or None,
+                )
+        except Exception:
+            logger.exception("batch activity create failed batch_id=%s", getattr(batch, "id", None))
         result = serialize_batch(db, batch)
         logger.info("CREATE_BATCH_STEP serialize_batch_ok batch_id=%s number=%s", batch.id, batch.number)
         return result
@@ -1649,6 +1719,7 @@ def update_production_progress(
     tenant_id: int,
     batch_id: int,
     body: BatchProductionProgressBody,
+    performed_by_user_id: int | None = None,
 ) -> ProductionBatchRead:
     batch = _load_batch_entity(db, tenant_id=tenant_id, batch_id=batch_id)
     if str(batch.status) != "in_progress":
@@ -1656,40 +1727,31 @@ def update_production_progress(
     line = next((ln for ln in batch.lines or [] if int(ln.id) == int(body.line_id)), None)
     if line is None:
         raise ProductionBatchError("Linia partii nie istnieje.", code="line_not_found")
-    new_qty = float(line.completed_quantity or 0) + float(body.add_quantity)
-    if new_qty > float(line.planned_quantity) + 1e-6:
-        raise ProductionBatchError("Przekroczono planowaną ilość.", code="over_production")
-    product = db.query(Product).filter(Product.id == int(line.product_id)).first()
-    if product is None:
-        raise ProductionBatchError("Produkt wyrobu gotowego nie istnieje.", code="product_missing")
     try:
-        from .production_execution.production_fg_traceability import (
-            append_fg_serials,
-            lock_fg_traceability_snapshot,
+        from .production_execution.fg_output_register_service import (
+            register_produced_quantity_for_batch_line,
         )
 
-        lock_fg_traceability_snapshot(
+        register_produced_quantity_for_batch_line(
             db,
-            entity=line,
-            tenant_id=int(batch.tenant_id),
-            warehouse_id=int(batch.warehouse_id),
-            product=product,
-            batch_number=body.fg_batch_number,
-            expiry_date=body.fg_expiry_date,
-        )
-        append_fg_serials(
-            db,
-            entity=line,
-            tenant_id=int(batch.tenant_id),
-            product_id=int(line.product_id),
-            delta_quantity=float(body.add_quantity),
-            serial_numbers=body.fg_serial_numbers,
+            batch=batch,
+            line=line,
+            add_quantity=float(body.add_quantity),
+            fg_batch_number=body.fg_batch_number,
+            fg_expiry_date=body.fg_expiry_date,
+            fg_serial_numbers=body.fg_serial_numbers,
+            idempotency_key=getattr(body, "idempotency_key", None),
+            performed_by_user_id=performed_by_user_id,
+            auto_finish=True,
         )
     except ValueError as exc:
-        raise ProductionBatchError(str(exc), code="fg_traceability_invalid") from exc
-    line.completed_quantity = round(new_qty, 4)
-    line.status = "in_progress" if new_qty < float(line.planned_quantity) - 1e-6 else "produced"
-    batch.updated_at = datetime.utcnow()
+        msg = str(exc)
+        code = "over_production" if "Przekroczono" in msg else "fg_traceability_invalid"
+        if "Przekroczono" in msg:
+            code = "over_production"
+        elif "PW" in msg or "staging" in msg.lower():
+            code = "pw_creation_failed"
+        raise ProductionBatchError(msg, code=code) from exc
     db.flush()
     return serialize_batch(db, batch)
 
@@ -1701,9 +1763,9 @@ def finish_production(
     batch_id: int,
     body: BatchProductionFinishBody | None = None,
 ) -> ProductionBatchRead:
-    from .production_execution.pw_putaway_handoff import create_batch_pw_documents_for_putaway
-
     batch = _load_batch_entity(db, tenant_id=tenant_id, batch_id=batch_id)
+    if str(batch.status) in ("awaiting_putaway", "putaway", "completed"):
+        return serialize_batch(db, batch)
     if str(batch.status) != "in_progress":
         raise ProductionBatchError("Partia nie jest w produkcji.", code="invalid_status")
     for ln in batch.lines or []:
@@ -1719,6 +1781,10 @@ def finish_production(
             code="fg_traceability_invalid",
         )
     try:
+        from .production_execution.fg_output_register_service import (
+            sum_output_qty_for_line,
+            transition_batch_after_full_production_idempotent,
+        )
         from .production_execution.production_fg_traceability import (
             append_fg_serials,
             assert_fg_traceability_ready,
@@ -1726,7 +1792,10 @@ def finish_production(
             read_fg_traceability_snapshot,
         )
 
+        # Legacy one-shot finish: lock identity when no progressive outputs yet.
         for ln in batch.lines or []:
+            if sum_output_qty_for_line(db, batch_line_id=int(ln.id)) > 1e-9:
+                continue
             product = db.query(Product).filter(Product.id == int(ln.product_id)).first()
             if product is None:
                 raise ValueError("Produkt wyrobu gotowego nie istnieje.")
@@ -1752,22 +1821,18 @@ def finish_production(
             assert_fg_traceability_ready(
                 ln, expected_quantity=float(ln.completed_quantity or 0)
             )
+        transition_batch_after_full_production_idempotent(db, batch=batch)
     except ValueError as exc:
-        raise ProductionBatchError(str(exc), code="fg_traceability_invalid") from exc
-    try:
-        create_batch_pw_documents_for_putaway(db, batch=batch, performed_by_user_id=None)
-    except ValueError as exc:
-        raise ProductionBatchError(str(exc), code="pw_creation_failed") from exc
-    batch.status = "awaiting_putaway"
-    batch.production_completed_at = datetime.utcnow()
-    batch.updated_at = datetime.utcnow()
-    db.flush()
+        msg = str(exc)
+        code = "fg_traceability_invalid"
+        if "PW" in msg or "staging" in msg.lower():
+            code = "pw_creation_failed"
+        raise ProductionBatchError(msg, code=code) from exc
     try:
         from .production_execution.production_domain_activity import emit_production_pw_created
 
         num = getattr(batch, "number", None) or getattr(batch, "batch_number", None)
         lbl = str(num).strip() if num else f"BAT-{int(batch.id)}"
-        # Prefer shared PW id from any line
         pw_id = None
         for ln in batch.lines or []:
             if getattr(ln, "pw_stock_document_id", None):

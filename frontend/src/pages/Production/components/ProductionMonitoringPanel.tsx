@@ -3,9 +3,8 @@ import { useLocation } from "react-router-dom";
 
 import type { ProductionBatchRead, ProductionOrderRead } from "@/api/productionApi";
 import type { TimelinePwDocument } from "@/modules/production/productionExecutionTimeline";
-import { currentExecutionPhaseLabel } from "@/modules/production/productionExecutionTimeline";
 import { PRODUCTION_KIND_LABEL, type ProductionExecutionKind } from "@/modules/production/productionExecutionTypes";
-import { Card, StatusBadge, typography } from "@/design-system";
+import { Card, typography } from "@/design-system";
 import { wmsProductionPaths } from "../productionPaths";
 import {
   getProductionOperationalState,
@@ -270,12 +269,14 @@ export function ProductionMonitoringPanel({
   });
   const showPrimaryCta = primary.kind !== "none";
   const showActionControls = showBar && (showPrimaryCta || secondaryForBar.length > 0);
+  // Status lives in PageHeader badge; “Co dalej?” shows the next business step (not a second status line).
+  const bannerMessage = operational.businessLabel || operational.description;
 
   return (
     <div className="space-y-4">
       {showContextBanner || showBar ? (
         <ProductionContextBanner
-          message={operational.description}
+          message={bannerMessage}
           tone={operational.tone}
           action={
             showActionControls ? (
@@ -303,7 +304,6 @@ export function ProductionMonitoringPanel({
       <Card variant="section" density="comfortable" className="space-y-3">
         <h3 className={typography.section}>Informacje</h3>
         <dl className="grid gap-x-6 gap-y-3 sm:grid-cols-2">
-          <InfoRow label="Status" value={currentExecutionPhaseLabel(status)} />
           <InfoRow label="Typ" value={PRODUCTION_KIND_LABEL[kind]} />
           <InfoRow label="Operator" value={source.operator_name ?? "—"} />
           <InfoRow label="Rozpoczęcie" value={source.started_at ? formatTs(source.started_at) : "—"} />
@@ -353,12 +353,7 @@ export function ProductionMonitoringPanel({
       )}
 
       <Card variant="section" density="comfortable" className="space-y-2">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <h3 className={typography.section}>Przebieg produkcji</h3>
-          <StatusBadge tone="primary" density="compact">
-            Aktualny: {currentExecutionPhaseLabel(status)}
-          </StatusBadge>
-        </div>
+        <h3 className={typography.section}>Przebieg produkcji</h3>
         <ProductionExecutionTimeline source={source} />
       </Card>
     </div>

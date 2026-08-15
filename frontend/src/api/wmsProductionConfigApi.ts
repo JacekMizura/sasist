@@ -47,6 +47,7 @@ export type ProductionConfigCreate = {
 export type ProductionConfigUpdate = {
   name: string;
   is_active: boolean;
+  source_status_id: number;
   status_after_production_id: number;
   status_on_component_shortage_id: number;
   status_awaiting_production_id: number;

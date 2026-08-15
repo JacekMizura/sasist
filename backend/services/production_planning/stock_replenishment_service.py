@@ -276,6 +276,22 @@ def _create_planning_mo(
     db.flush()
     _snapshot_composition_lines(db, order, composition, planned_quantity=float(planned_quantity))
     db.flush()
+    try:
+        from ..production_execution.production_domain_activity import emit_production_order_created
+
+        emit_production_order_created(
+            db,
+            tenant_id=int(tenant_id),
+            warehouse_id=int(warehouse_id),
+            production_order_id=int(order.id),
+            product_id=int(order.product_id) if order.product_id else None,
+            planned_quantity=float(planned_quantity),
+            actor_user_id=None,  # System / scheduler
+            label=str(order.number or "") or None,
+            from_planning=True,
+        )
+    except Exception:
+        logger.exception("planning MO activity create failed order_id=%s", order.id)
     return order
 
 

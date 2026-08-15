@@ -12,6 +12,8 @@ class RecipeCardRead(BaseModel):
     product_id: int
     product_name: str
     product_sku: Optional[str] = None
+    product_ean: Optional[str] = None
+    product_catalog_number: Optional[str] = None
     product_image_url: Optional[str] = None
     recipe_name: str
     version: str

@@ -7,8 +7,8 @@ import { flatSectionDividerClass } from "@/components/layout/flatSectionTokens";
 import { ModuleListBreadcrumb } from "@/components/listPage/moduleList";
 import { ERP_PRODUCTION_TABS } from "../../modules/production/erpProductionTabs";
 
-/** Szczegóły partii / receptury — bez zakładek modułu. */
-const FULL_PAGE_DETAIL = /^\/production\/(?:batch\/[^/]+|recipes\/[^/]+)$/;
+/** Szczegóły serii / receptury — bez zakładek modułu. */
+const FULL_PAGE_DETAIL = /^\/produkcja\/(?:serie\/[^/]+|receptury\/[^/]+)$/;
 
 /** ERP production — breadcrumb → zakładki → treść (bez pośredniego h1). */
 export default function ProductionErpModuleLayout() {

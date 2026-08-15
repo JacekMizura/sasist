@@ -91,11 +91,11 @@ def _normalize_production_payload(
         )
     method_raw = (production_execution_method or PRODUCTION_EXECUTION_METHOD_WMS).strip().upper()
     if method_raw not in PRODUCTION_EXECUTION_METHODS:
-        raise ValueError("Sposób realizacji produkcji musi być Terminal WMS albo Wydruk zlecenia.")
+        raise ValueError("Sposób realizacji produkcji musi być WMS albo Wydruk zlecenia.")
     action_raw = (after_production_action or AFTER_PRODUCTION_ACTION_STATUS_ONLY).strip().upper()
     if action_raw not in AFTER_PRODUCTION_ACTIONS:
         raise ValueError(
-            "Opcja „Po wyprodukowaniu” musi być „Tylko zmień status” albo „Otwórz pakowanie”."
+            "Opcja „Po wyprodukowaniu” musi być „Zmień status” albo „Przejdź do pakowania”."
         )
     nm = (name or "").strip()
     if not nm:
@@ -384,7 +384,7 @@ def update_production_config(
         raise ValueError("Konfiguracja nie należy do wskazanego magazynu.")
 
     nm, after_id, shortage_id, awaiting_id, buffer_id, scope, method, action = _normalize_production_payload(
-        source_status_id=int(existing.source_status_id),
+        source_status_id=int(body.source_status_id),
         status_after_production_id=body.status_after_production_id,
         status_on_component_shortage_id=body.status_on_component_shortage_id,
         status_awaiting_production_id=body.status_awaiting_production_id,
@@ -394,6 +394,10 @@ def update_production_config(
         after_production_action=body.after_production_action,
         name=body.name,
     )
+    new_source_id = int(body.source_status_id)
+    assert_ui_status_belongs(
+        db, tenant_id=tenant_id, warehouse_id=warehouse_id, status_id=new_source_id
+    )
     assert_ui_status_belongs(db, tenant_id=tenant_id, warehouse_id=warehouse_id, status_id=after_id)
     assert_ui_status_belongs(db, tenant_id=tenant_id, warehouse_id=warehouse_id, status_id=shortage_id)
     assert_ui_status_belongs(db, tenant_id=tenant_id, warehouse_id=warehouse_id, status_id=awaiting_id)
@@ -401,8 +405,24 @@ def update_production_config(
         db, tenant_id=int(tenant_id), warehouse_id=int(warehouse_id), location_id=buffer_id
     )
 
+    if new_source_id != int(existing.source_status_id):
+        clash = (
+            db.query(PickingConfig)
+            .filter(
+                PickingConfig.tenant_id == int(tenant_id),
+                PickingConfig.warehouse_id == int(warehouse_id),
+                PickingConfig.source_status_id == new_source_id,
+                PickingConfig.id != int(existing.id),
+            )
+            .first()
+        )
+        if clash is not None:
+            raise ValueError(
+                "Ten status wejściowy jest już używany w konfiguracji zbierania lub produkcji."
+            )
+
     class _Cand:
-        source_status_id = int(existing.source_status_id)
+        source_status_id = new_source_id
         status_after_production_id = after_id
         status_awaiting_production_id = awaiting_id
         status_on_component_shortage_id = shortage_id
@@ -423,6 +443,7 @@ def update_production_config(
 
     existing.name = nm
     existing.is_active = bool(body.is_active)
+    existing.source_status_id = new_source_id
     existing.target_status_id = after_id
     existing.status_after_production_id = after_id
     existing.status_on_component_shortage_id = shortage_id

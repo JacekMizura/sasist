@@ -1,37 +1,37 @@
 /** ERP production management (planners, supervisors). */
-export const ERP_PRODUCTION_BASE = "/production";
+export const ERP_PRODUCTION_BASE = "/produkcja";
 
 export const erpProductionPaths = {
   home: ERP_PRODUCTION_BASE,
-  recipes: `${ERP_PRODUCTION_BASE}/recipes`,
-  recipe: (id: number | string) => `${ERP_PRODUCTION_BASE}/recipes/${id}`,
-  orders: `${ERP_PRODUCTION_BASE}/orders`,
-  order: (id: number | string) => `${ERP_PRODUCTION_BASE}/orders/${id}`,
-  planning: `${ERP_PRODUCTION_BASE}/planning`,
+  recipes: `${ERP_PRODUCTION_BASE}/receptury`,
+  recipe: (id: number | string) => `${ERP_PRODUCTION_BASE}/receptury/${id}`,
+  orders: `${ERP_PRODUCTION_BASE}/zlecenia`,
+  order: (id: number | string) => `${ERP_PRODUCTION_BASE}/zlecenia/${id}`,
   /** Kreator pojedynczego zlecenia / partii (UX create). */
-  createOrder: `${ERP_PRODUCTION_BASE}/orders/new`,
-  history: `${ERP_PRODUCTION_BASE}/history`,
-  analytics: `${ERP_PRODUCTION_BASE}/analytics`,
+  createOrder: `${ERP_PRODUCTION_BASE}/zlecenia/new`,
+  planning: `${ERP_PRODUCTION_BASE}/planowanie`,
+  history: `${ERP_PRODUCTION_BASE}/historia`,
+  analytics: `${ERP_PRODUCTION_BASE}/analiza-kosztow`,
   /** @deprecated Use planning or orders */
-  batches: `${ERP_PRODUCTION_BASE}/planning`,
-  batch: (id: number | string) => `${ERP_PRODUCTION_BASE}/batch/${id}`,
+  batches: `${ERP_PRODUCTION_BASE}/planowanie`,
+  batch: (id: number | string) => `${ERP_PRODUCTION_BASE}/serie/${id}`,
   erpExecution: (kind: "batch" | "order", id: number | string) =>
-    `${ERP_PRODUCTION_BASE}/erp/${kind}/${id}`,
+    `${ERP_PRODUCTION_BASE}/realizacja/${kind}/${id}`,
   /** @deprecated use erpExecution */
   paperExecution: (kind: "batch" | "order", id: number | string) =>
-    `${ERP_PRODUCTION_BASE}/erp/${kind}/${id}`,
+    `${ERP_PRODUCTION_BASE}/realizacja/${kind}/${id}`,
   /** Hub „Materiały” — braki / rezerwacje / analiza jako podwidoki. */
-  materials: `${ERP_PRODUCTION_BASE}/materials`,
-  materialsShortages: `${ERP_PRODUCTION_BASE}/materials/shortages`,
-  materialsReservations: `${ERP_PRODUCTION_BASE}/materials/reservations`,
-  materialsAnalysis: `${ERP_PRODUCTION_BASE}/materials/analysis`,
+  materials: `${ERP_PRODUCTION_BASE}/materialy`,
+  materialsShortages: `${ERP_PRODUCTION_BASE}/materialy/braki`,
+  materialsReservations: `${ERP_PRODUCTION_BASE}/materialy/rezerwacje`,
+  materialsAnalysis: `${ERP_PRODUCTION_BASE}/materialy/analiza`,
   /** @deprecated Use materialsReservations */
-  materialReservations: `${ERP_PRODUCTION_BASE}/materials/reservations`,
+  materialReservations: `${ERP_PRODUCTION_BASE}/materialy/rezerwacje`,
   /** @deprecated Use materialsShortages */
-  shortages: `${ERP_PRODUCTION_BASE}/materials/shortages`,
+  shortages: `${ERP_PRODUCTION_BASE}/materialy/braki`,
   /** @deprecated Use materialsAnalysis */
-  materialAnalysis: `${ERP_PRODUCTION_BASE}/materials/analysis`,
-  materialSubstitutes: `${ERP_PRODUCTION_BASE}/material-substitutes`,
+  materialAnalysis: `${ERP_PRODUCTION_BASE}/materialy/analiza`,
+  materialSubstitutes: `${ERP_PRODUCTION_BASE}/zastepniki-materialow`,
 } as const;
 
 /** WMS terminal — operator execution only (collect → produce → standard putaway). */

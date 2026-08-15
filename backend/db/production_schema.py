@@ -30,9 +30,9 @@ from .schema_introspection import (
 
 logger = logging.getLogger(__name__)
 
-PRODUCTION_SCHEMA_VERSION = "2026.08.15.1"
+PRODUCTION_SCHEMA_VERSION = "2026.08.16.1"
 # Monotonic generation counter exposed in logs, /health/schema, and deploy verification.
-PRODUCTION_SCHEMA_GENERATION = 18
+PRODUCTION_SCHEMA_GENERATION = 20
 SCHEMA_METADATA_KEY = "production_schema_version"
 SCHEMA_METADATA_TABLE = "schema_metadata"
 
@@ -182,6 +182,7 @@ def _production_entity_registry() -> list[ProductionEntitySpec]:
         ProductionRecipe,
         ProductionRecipeLine,
     )
+    from ..models.production_fg_output import ProductionFgOutput
 
     return [
         ProductionEntitySpec("production_batches", ProductionBatch, label="batch_header"),
@@ -201,6 +202,7 @@ def _production_entity_registry() -> list[ProductionEntitySpec]:
             ProductionOrderSourceItem,
             label="order_source_item",
         ),
+        ProductionEntitySpec("production_fg_outputs", ProductionFgOutput, label="fg_output_delta"),
         # Future MES-lite entities — audit only, not required yet
         ProductionEntitySpec("production_batch_materials", required=False, sync_columns=False, label="future"),
         ProductionEntitySpec("production_batch_execution", required=False, sync_columns=False, label="future"),
@@ -484,6 +486,15 @@ def _migration_fg_traceability_columns(engine: Engine) -> int:
     return added
 
 
+def _migration_production_fg_outputs(engine: Engine) -> int:
+    from ..models.production_fg_output import ProductionFgOutput
+
+    created = ensure_model_table_from_orm(
+        engine, ProductionFgOutput, log_prefix="production.schema.fg_outputs"
+    )
+    return 1 if created else 0
+
+
 PRODUCTION_SCHEMA_MIGRATIONS: list[ProductionSchemaMigration] = [
     ProductionSchemaMigration("2026.06.04.1", "batch_workflow_columns", _migration_batch_workflow_columns),
     ProductionSchemaMigration(
@@ -510,6 +521,11 @@ PRODUCTION_SCHEMA_MIGRATIONS: list[ProductionSchemaMigration] = [
         "2026.08.15.1",
         "finished_goods_traceability",
         _migration_fg_traceability_columns,
+    ),
+    ProductionSchemaMigration(
+        "2026.08.16.1",
+        "production_fg_outputs",
+        _migration_production_fg_outputs,
     ),
 ]
 

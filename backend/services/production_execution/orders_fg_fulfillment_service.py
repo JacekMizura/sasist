@@ -393,6 +393,22 @@ def allocate_produced_delta_to_order_sources(
                 "status_after_production_id": int(after_status_id),
             },
         )
+        try:
+            from .production_domain_activity import emit_production_order_demand_fulfilled
+
+            emit_production_order_demand_fulfilled(
+                db,
+                tenant_id=int(mo.tenant_id),
+                warehouse_id=int(mo.warehouse_id) if mo.warehouse_id else None,
+                production_order_id=int(mo.id),
+                order_id=int(oid),
+                product_id=int(mo.product_id) if mo.product_id else None,
+                actor_user_id=operator_user_id,
+                label=str(mo.number or "") or None,
+                order_number=str(order.number or "").strip() or str(oid),
+            )
+        except Exception:
+            logger.exception("domain activity demand fulfilled failed mo=%s order=%s", mo.id, oid)
         status_moves.append(
             {
                 "order_id": oid,
@@ -506,6 +522,8 @@ def _create_orders_buffer_pw_document(
             quantity=float(quantity),
             staging_location_id=int(buffer_location_id),
             performed_by_user_id=created_by_user_id,
+            batch_number=batch_number or None,
+            expiry_date=expiry_date,
         )
     except Exception:
         logger.exception("buffer PW audit failed mo_id=%s", mo.id)
@@ -520,8 +538,13 @@ def receive_orders_mo_fg_to_buffer(
     mo: ProductionOrder,
     add_quantity: float,
     performed_by_user_id: Optional[int] = None,
+    delta_snapshot: Optional[dict[str, Any]] = None,
 ) -> dict[str, Any]:
-    """Create/extend ORDERS PW on finished-goods buffer; inventory lands immediately (no putaway queue)."""
+    """Create/extend ORDERS PW on finished-goods buffer; inventory lands immediately (no putaway queue).
+
+    When ``delta_snapshot`` is provided (register_produced_quantity), LOT/SN apply to this
+    delta only — a new StockDocumentItem is created when LOT/expiry differs from existing lines.
+    """
     add_qty = float(add_quantity or 0)
     if add_qty <= 1e-9:
         return {"result": "SKIPPED", "reason": "zero_qty"}
@@ -534,25 +557,29 @@ def receive_orders_mo_fg_to_buffer(
         snapshot_lot_values,
     )
 
-    trace_snapshot = read_fg_traceability_snapshot(mo)
-    if trace_snapshot is None:
-        product = db.query(Product).filter(Product.id == int(mo.product_id)).first()
-        if product is None:
-            raise ProductionOrderError("Produkt wyrobu gotowego nie istnieje.", code="product_missing")
-        try:
-            trace_snapshot = lock_fg_traceability_snapshot(
-                db,
-                entity=mo,
-                tenant_id=int(mo.tenant_id),
-                warehouse_id=int(mo.warehouse_id),
-                product=product,
-            )
-        except ValueError as exc:
-            raise ProductionOrderError(
-                str(exc), code="fg_traceability_missing"
-            ) from exc
-    assert_fg_traceability_ready(mo)
-    trace_serials = list(trace_snapshot.get("serial_numbers") or [])
+    if delta_snapshot is not None:
+        trace_snapshot = delta_snapshot
+        receipt_serials = list(delta_snapshot.get("serial_numbers") or [])
+    else:
+        trace_snapshot = read_fg_traceability_snapshot(mo)
+        if trace_snapshot is None:
+            product = db.query(Product).filter(Product.id == int(mo.product_id)).first()
+            if product is None:
+                raise ProductionOrderError("Produkt wyrobu gotowego nie istnieje.", code="product_missing")
+            try:
+                trace_snapshot = lock_fg_traceability_snapshot(
+                    db,
+                    entity=mo,
+                    tenant_id=int(mo.tenant_id),
+                    warehouse_id=int(mo.warehouse_id),
+                    product=product,
+                )
+            except ValueError as exc:
+                raise ProductionOrderError(
+                    str(exc), code="fg_traceability_missing"
+                ) from exc
+        assert_fg_traceability_ready(mo)
+        receipt_serials = list(trace_snapshot.get("serial_numbers") or [])
     batch_number, expiry_date = snapshot_lot_values(trace_snapshot)
 
     rw_doc = (
@@ -564,19 +591,42 @@ def receive_orders_mo_fg_to_buffer(
 
     produced_total = float(mo.produced_quantity or 0)
     unit_cost = compute_order_unit_cost(rw_doc, produced_quantity=max(produced_total, add_qty))
+    item_id: Optional[int] = None
 
     if mo.pw_stock_document_id:
         doc = db.query(StockDocument).filter(StockDocument.id == int(mo.pw_stock_document_id)).first()
         if doc is None:
             raise ProductionOrderError("Dokument PW zlecenia nie istnieje.", code="pw_missing")
-        line = (
+        lines = (
             db.query(StockDocumentItem)
             .filter(StockDocumentItem.document_id == int(doc.id))
             .order_by(StockDocumentItem.id.asc())
-            .first()
+            .all()
         )
+        line = None
+        for cand in lines:
+            cand_batch = str(getattr(cand, "batch_number", None) or "")
+            cand_exp = getattr(cand, "expiry_date", None)
+            if cand_batch == (batch_number or "") and cand_exp == expiry_date:
+                line = cand
+                break
+        if line is None and lines and delta_snapshot is None:
+            # Legacy single-line append (same LOT lock).
+            line = lines[0]
         if line is None:
-            raise ProductionOrderError("Pozycja PW zlecenia nie istnieje.", code="pw_line_missing")
+            line = StockDocumentItem(
+                document_id=int(doc.id),
+                product_id=int(mo.product_id),
+                ordered_quantity=0.0,
+                received_quantity=0.0,
+                quantity=0.0,
+                purchase_price_net=float(unit_cost),
+                batch_number=batch_number,
+                expiry_date=expiry_date,
+            )
+            db.add(line)
+            db.flush()
+        previous_qty = float(line.received_quantity or 0)
         line.ordered_quantity = float(line.ordered_quantity or 0) + add_qty
         line.received_quantity = float(line.received_quantity or 0) + add_qty
         line.quantity = float(line.quantity or 0) + add_qty
@@ -584,10 +634,11 @@ def receive_orders_mo_fg_to_buffer(
         line.batch_number = batch_number
         line.expiry_date = expiry_date
         db.add(line)
-        previous_qty = float(line.received_quantity or 0) - add_qty
-        serial_start = int(round(previous_qty))
-        serial_count = int(round(add_qty))
-        receipt_serials = trace_serials[serial_start : serial_start + serial_count]
+        if delta_snapshot is None:
+            serial_start = int(round(previous_qty))
+            serial_count = int(round(add_qty))
+            all_serials = list(trace_snapshot.get("serial_numbers") or [])
+            receipt_serials = all_serials[serial_start : serial_start + serial_count]
         upsert_dock_inventory_for_loose_receipt(
             db,
             tenant_id=int(mo.tenant_id),
@@ -629,6 +680,7 @@ def receive_orders_mo_fg_to_buffer(
         db.add(doc)
         db.flush()
         pw_id = int(doc.id)
+        item_id = int(line.id)
     else:
         doc = _create_orders_buffer_pw_document(
             db,
@@ -638,10 +690,17 @@ def receive_orders_mo_fg_to_buffer(
             unit_cost=unit_cost,
             created_by_user_id=performed_by_user_id,
             trace_snapshot=trace_snapshot,
-            receipt_serials=trace_serials[: int(round(add_qty))],
+            receipt_serials=receipt_serials[: int(round(add_qty))] if receipt_serials else [],
         )
         mo.pw_stock_document_id = int(doc.id)
         pw_id = int(doc.id)
+        first_item = (
+            db.query(StockDocumentItem)
+            .filter(StockDocumentItem.document_id == int(doc.id))
+            .order_by(StockDocumentItem.id.asc())
+            .first()
+        )
+        item_id = int(first_item.id) if first_item is not None else None
 
     mo.calculated_unit_cost = round(unit_cost, 4)
     mo.location_id = int(buffer_id)
@@ -656,6 +715,7 @@ def receive_orders_mo_fg_to_buffer(
     return {
         "result": "OK",
         "pw_stock_document_id": pw_id,
+        "stock_document_item_id": item_id,
         "buffer_location_id": int(buffer_id),
         "quantity": add_qty,
         "unit_cost": unit_cost,

@@ -1,4 +1,52 @@
-﻿## 2026-08-15 — Production traceability MVP frontend (no commit)
+﻿## 2026-08-16 — Konfiguracja produkcji UX (no commit)
+
+- Lista: Status wejściowy | Realizacja; usunięto Nazwę, badge Aktywna, opisy i przełącznik aktywności
+- Status wejściowy edytowalny przez `OrderUiStatusField`; PUT z `source_status_id`
+- Labelki flow: WMS / Zmień status / Przejdź do pakowania (enumy bez zmian: `WMS`, `STATUS_ONLY`, `OPEN_PACKING`)
+- Backend: `ProductionConfigUpdate.source_status_id` + update service; bez migracji `is_active`
+- Testy: `test_production_config_ssot` 5 passed; `npm run build` PASS
+
+## 2026-08-16 — Produkcja Activity Log + WMS audit LOT (no commit)
+
+- Reuse `activity_events` / links / `record_domain_activity` — bez trzeciego systemu logów
+- Nowe eventy `PRODUCTION_*` (create, shortage, output delta, putaway, cancel, Phase 8, …)
+- Formatter BE `production_activity_format` + enrich path; FE labels + link MO/BAT
+- Writers w create/cancel/planning/batch/reservations/material_validation/fg_output/putaway/picking-entry
+- WMS: `record_production_rw/pw_*_audit` przekazuje `batch_number` + `expiry_date`
+- Testy: `test_production_activity_log` PASS; FG register PASS; `npm run build` PASS
+
+## 2026-08-16 — Partial FG + multi-LOT per delta (no commit)
+
+- Domain: `register_produced_quantity` (`fg_output_register_service`) for BAT lines + MO
+- Ledger: `production_fg_outputs`; PW-per-delta for BAT/PLANNING/MANUAL; ORDERS buffer kept
+- Traceability: per-delta LOT/SN; `fg_traceability_json` v2 genealogy (no permanent LOT lock)
+- Putaway: early delta can be putaway while MO/BAT still producing; complete when plan+all PWs DONE
+- FE: removed ORDERS-only partial gate; modal works for all sources
+- Tests: `test_production_fg_output_register` + regressions; FE build PASS
+
+## 2026-08-15 — Planowanie: rekomendacja → zlecenie + partia materiały per linia (no commit)
+
+- CTA rekomendacji: „Utwórz zlecenie”; backend MO/BAT bez zmian (nadal CreateBatchModal / preview)
+- Wejście z 1 produktu: focused kreator (bez katalogu), qty + skład + „Zmień produkt”
+- Per-line „Materiały: Dostępne / Brak X” z jednego SSOT `preview.aggregated_components` + BOM structure
+- Wspólne komponenty: proporcjonalna atrybucja `missing`; create nadal dozwolone przy brakach
+- Testy: `batchLineMaterialStatus`, `createBatchModalEntry`; `npm run build` PASS
+
+## 2026-08-15 — WMS Produkcja: 2 kolejki + rejestracja (no commit)
+
+- FE: tabs collecting/execute only; putaway redirects to `/wms/putaway`
+- Execute: `RegisterProductionModal` (default remaining qty); auto-finish when plan met
+- GAP closed by 2026-08-16 partial FG / multi-LOT work (above)
+- Backend lifecycle untouched in WMS-tab change; tsc + build + traceability tests PASS
+
+## 2026-08-15 — Produkcja: polskie URL + detail/braki UX (no commit)
+
+- FE routes: `/produkcja/...`; legacy `/production/...` redirects; API `/production` unchanged
+- Detail actions: Printer / FileText / XCircle; compact Kontynuuj; back ArrowLeft only
+- Braki: Zlecenia wymagające materiału; PackagePlus → zamówienie towaru; Utwórz zapotrzebowanie
+- Layout FULL_PAGE_DETAIL fixed for `/produkcja/serie|receptury`; tsc + build PASS
+
+## 2026-08-15 — Production traceability MVP frontend (no commit)
 
 - Added independent production traceability settings and product-level INHERIT/REQUIRE/OFF overrides.
 - Collection terminals consume backend LOT/SN requirement flags; serial picks are quantity 1.

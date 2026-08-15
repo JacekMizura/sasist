@@ -644,6 +644,34 @@ def create_production_order(
             )
         except ReservationError as exc:
             raise ProductionOrderError(str(exc), code=getattr(exc, "code", "reservation_failed")) from exc
+    try:
+        from .production_execution.production_domain_activity import (
+            emit_production_materials_reserved,
+            emit_production_order_created,
+        )
+
+        emit_production_order_created(
+            db,
+            tenant_id=int(tenant_id),
+            warehouse_id=int(order.warehouse_id) if order.warehouse_id else None,
+            production_order_id=int(order.id),
+            product_id=int(order.product_id) if order.product_id else None,
+            planned_quantity=float(order.planned_quantity or 0),
+            actor_user_id=created_by_user_id,
+            label=str(order.number or "") or None,
+        )
+        if getattr(body, "reserve_materials", False) and bool(getattr(order, "materials_reserved", False)):
+            emit_production_materials_reserved(
+                db,
+                tenant_id=int(tenant_id),
+                warehouse_id=int(order.warehouse_id) if order.warehouse_id else None,
+                production_order_id=int(order.id),
+                product_id=int(order.product_id) if order.product_id else None,
+                actor_user_id=created_by_user_id,
+                label=str(order.number or "") or None,
+            )
+    except Exception:
+        pass
     return serialize_order(db, order, with_availability=True)
 
 
@@ -774,6 +802,33 @@ def cancel_production_order(
             component_product_ids=component_ids,
             reason="mo_cancelled",
         )
+    try:
+        from .production_execution.production_domain_activity import (
+            emit_production_cancelled,
+            emit_production_material_reservations_released,
+        )
+
+        emit_production_material_reservations_released(
+            db,
+            tenant_id=int(tenant_id),
+            warehouse_id=wid,
+            production_order_id=int(order.id),
+            product_id=int(order.product_id) if order.product_id else None,
+            actor_user_id=None,
+            label=str(order.number or "") or None,
+            reason="cancelled",
+        )
+        emit_production_cancelled(
+            db,
+            tenant_id=int(tenant_id),
+            warehouse_id=wid,
+            production_order_id=int(order.id),
+            product_id=int(order.product_id) if order.product_id else None,
+            actor_user_id=None,
+            label=str(order.number or "") or None,
+        )
+    except Exception:
+        pass
     return serialize_order(db, order)
 
 

@@ -17,6 +17,7 @@ from backend.models.product_composition import (
 )
 from backend.models.stock_document import StockDocument, StockDocumentItem
 from backend.models.stock_operation import StockOperation
+from backend.models.production_fg_output import ProductionFgOutput
 from backend.models.tenant import Tenant
 from backend.models.warehouse import Warehouse
 from backend.models.warehouse_inventory_movement import WarehouseInventoryMovement
@@ -72,6 +73,8 @@ def multi_fg_finish_db(monkeypatch):
     )
 
     engine = _engine()
+    with engine.begin() as conn:
+        conn.exec_driver_sql("CREATE TABLE IF NOT EXISTS app_users (id INTEGER PRIMARY KEY)")
     for model in (
         Tenant,
         Warehouse,
@@ -85,6 +88,7 @@ def multi_fg_finish_db(monkeypatch):
         StockDocument,
         StockDocumentItem,
         StockOperation,
+        ProductionFgOutput,
         WarehouseInventoryMovement,
         WmsProductWarehouseOperation,
     ):

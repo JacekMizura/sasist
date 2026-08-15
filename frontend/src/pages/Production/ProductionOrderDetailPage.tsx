@@ -40,7 +40,7 @@ import {
 } from "./productionUi";
 import { productionOrdersSourceSummary } from "./productionNextAction";
 import { getProductionOperationalState, shortageHintFromOrderLines } from "./productionOperationalState";
-import { Card, ProgressBar, StatusBadge, primaryButtonClassName, typography } from "@/design-system";
+import { Card, IconButton, ProgressBar, StatusBadge, primaryButtonClassName, typography } from "@/design-system";
 import ActivityLogPanel from "../../components/activityLog/ActivityLogPanel";
 
 const DEFAULT_TENANT = 1;
@@ -260,17 +260,17 @@ export default function ProductionOrderDetailPage() {
 
   return (
     <div className="mx-auto max-w-6xl space-y-5 px-4 py-6 lg:px-6">
-      <Link
-        to={erpProductionPaths.orders}
-        className="inline-flex items-center gap-2 text-sm text-slate-600 hover:text-orange-700"
-      >
-        <ArrowLeft className="h-4 w-4" aria-hidden />
-        Zlecenia produkcyjne
-      </Link>
-
       {/* Header */}
       <Card variant="section" density="comfortable" className="space-y-4">
         <div className="flex flex-wrap items-start gap-4">
+          <IconButton
+            type="button"
+            aria-label="Wróć do zleceń"
+            title="Wróć do zleceń"
+            onClick={() => navigate(erpProductionPaths.orders)}
+          >
+            <ArrowLeft className="h-5 w-5" aria-hidden />
+          </IconButton>
           <ProductThumb imageUrl={order.product_image_url} name={order.product_name ?? undefined} size="lg" />
           <div className="min-w-0 flex-1">
             <p className="font-mono text-xl font-bold text-slate-900 sm:text-2xl">{order.number}</p>

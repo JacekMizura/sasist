@@ -59,6 +59,7 @@ class OrderProductionProgressBody(BaseModel):
     fg_batch_number: Optional[str] = None
     fg_expiry_date: Optional[date] = None
     fg_serial_numbers: List[str] = Field(default_factory=list)
+    idempotency_key: Optional[str] = Field(None, max_length=191)
 
 
 class OrderProductionFinishBody(BaseModel):

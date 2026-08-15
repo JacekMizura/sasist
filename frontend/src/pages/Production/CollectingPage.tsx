@@ -89,11 +89,11 @@ export default function CollectingPage() {
     <div className="w-full space-y-5">
       {!activeRef ? (
         <div className="w-full space-y-4">
-          <p className={WMS_TERMINAL_LABEL}>Kolejka — pobieranie półproduktów</p>
+          <p className={WMS_TERMINAL_LABEL}>Pobieranie komponentów</p>
           {queue.length === 0 ? (
             <WmsProductionTerminalEmptyState
               title="Brak zadań do pobrania"
-              description="Gdy partia lub zlecenie przejdzie do etapu zbierania, zadania pobrania z lokalizacji pojawią się tutaj."
+              description="Gdy zlecenie lub partia wymaga pobrania materiałów, pojawią się tutaj."
               icon={<ClipboardList size={22} strokeWidth={2} />}
               onRefresh={() => void reloadQueue()}
             />

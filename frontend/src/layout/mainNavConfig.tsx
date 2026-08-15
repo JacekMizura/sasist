@@ -283,7 +283,7 @@ export function buildNavFlyoutCategories(): NavCategoryConfig[] {
             Icon: BarChart3,
           },
           {
-            path: "/production",
+            path: "/produkcja",
             label: "Produkcja",
             Icon: ClipboardList,
           },
@@ -487,7 +487,7 @@ export function isCategoryActive(category: NavCategoryConfig, pathname: string):
     if (pathname.startsWith("/suppliers")) return true;
     if (pathname.startsWith("/goods-orders")) return true;
     if (pathname.startsWith("/warehouse-materials")) return true;
-    if (pathname === "/production" || pathname.startsWith("/production/")) return true;
+    if (pathname === "/produkcja" || pathname.startsWith("/produkcja/")) return true;
     if (pathname === "/assortment" || pathname.startsWith("/assortment/")) return true;
   }
   if (category.id === "settings") {

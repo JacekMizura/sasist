@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import { ArrowLeft } from "lucide-react";
 import toast from "react-hot-toast";
 
@@ -19,12 +19,13 @@ import { PrintFlowModals, usePrintMethodFlow } from "../../components/printing";
 import { useQueuePrint } from "../../hooks/useQueuePrint";
 import {
   Card,
+  IconButton,
   PageHeader,
   StatusBadge,
-  secondaryButtonClassName,
   typography,
 } from "@/design-system";
 import { DocumentMaterialReservationsPanel } from "./components/DocumentMaterialReservationsPanel";
+import ActivityLogPanel from "../../components/activityLog/ActivityLogPanel";
 import {
   batchMonitoringSource,
   ProductionMonitoringPanel,
@@ -153,29 +154,30 @@ export default function BatchDetailPage() {
 
   return (
     <div className={`${productionPageStackClass} max-w-6xl`}>
-      <Link
-        to={erpProductionPaths.orders}
-        className={secondaryButtonClassName("inline-flex w-fit items-center gap-1.5")}
-      >
-        <ArrowLeft className="h-4 w-4" aria-hidden />
-        Wróć do zleceń
-      </Link>
-
       <PageHeader
         title={
-          <div className="min-w-0 space-y-1">
-            <h1 className={`${productionPageTitleClass} font-mono`}>{batch.number}</h1>
-            <p className="text-sm font-medium text-slate-800">{headerMeta.productLabel}</p>
-            <p className="text-sm text-slate-600">
-              Planowana ilość:{" "}
-              <span className="font-semibold tabular-nums text-slate-900">{headerMeta.planned}</span> szt.
-              {batch.operator_name ? (
-                <>
-                  {" · "}
-                  Operator: <span className="font-medium text-slate-800">{batch.operator_name}</span>
-                </>
-              ) : null}
-            </p>
+          <div className="flex min-w-0 items-start gap-2">
+            <IconButton
+              type="button"
+              aria-label="Wróć do zleceń"
+              title="Wróć do zleceń"
+              onClick={() => navigate(erpProductionPaths.orders)}
+            >
+              <ArrowLeft className="h-5 w-5" aria-hidden />
+            </IconButton>
+            <div className="min-w-0 space-y-1">
+              <h1 className={`${productionPageTitleClass} font-mono`}>{batch.number}</h1>
+              <p className="text-sm font-medium text-slate-800">{headerMeta.productLabel}</p>
+              <p className="text-sm text-slate-600">
+                Planowana ilość:{" "}
+                <span className="font-semibold tabular-nums text-slate-900">{headerMeta.planned}</span> szt.
+                {" · "}
+                Operator:{" "}
+                <span className="font-medium text-slate-800">
+                  {batch.operator_name?.trim() || "Dowolny operator"}
+                </span>
+              </p>
+            </div>
           </div>
         }
         status={
@@ -277,6 +279,16 @@ export default function BatchDetailPage() {
           ) : null}
         </div>
       </PageHeader>
+      {batch?.id != null ? (
+        <section className="mt-6 px-4 pb-8 sm:px-6">
+          <ActivityLogPanel
+            objectType="production"
+            objectId={Number(batch.id)}
+            title="Historia produkcji"
+            defaultCollapsed={false}
+          />
+        </section>
+      ) : null}
       <PrintFlowModals flow={printFlow} />
     </div>
   );

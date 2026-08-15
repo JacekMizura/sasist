@@ -202,7 +202,6 @@ import WmsProductionExecutionLayout from "./pages/Production/WmsProductionExecut
 import ProductionDashboardPage from "./pages/Production/ProductionDashboardPage"
 import RecipesListPage from "./pages/Production/RecipesListPage"
 import RecipeDetailPage from "./pages/Production/RecipeDetailPage"
-import BatchesListPage from "./pages/Production/BatchesListPage"
 import BatchDetailPage from "./pages/Production/BatchDetailPage"
 import MaterialReservationsPage from "./pages/Production/MaterialReservationsPage"
 import ProductionMaterialsLayout from "./pages/Production/ProductionMaterialsLayout"
@@ -217,7 +216,7 @@ import ProductionHistoryPage from "./pages/Production/ProductionHistoryPage"
 import ProductionAnalyticsPage from "./pages/Production/ProductionAnalyticsPage"
 import CollectingPage from "./pages/Production/CollectingPage"
 import ProductionExecutionPage from "./pages/Production/ProductionExecutionPage"
-import PutawayPage from "./pages/Production/PutawayPage"
+import { erpProductionPaths } from "./pages/Production/productionPaths"
 import ManufacturersPage from "./pages/Assortment/ManufacturersPage"
 import ManufacturerEditPage from "./pages/Assortment/ManufacturerEditPage"
 import SuppliersPage from "./pages/Assortment/SuppliersPage"
@@ -320,10 +319,25 @@ function WmsProductionLegacyPhaseRedirect({ phase }: { phase: WmsProductionPhase
   return <Navigate to={`/wms/production/${phase}/batch/${batchId ?? ""}`} replace />;
 }
 
-/** Legacy /production/paper/:kind/:id → /production/erp/:kind/:id */
-function ProductionPaperLegacyRedirect() {
+function LegacyProductionOrderRedirect() {
+  const { orderId } = useParams();
+  return <Navigate to={orderId ? erpProductionPaths.order(orderId) : erpProductionPaths.orders} replace />;
+}
+
+function LegacyProductionRecipeRedirect() {
+  const { id } = useParams();
+  return <Navigate to={id ? erpProductionPaths.recipe(id) : erpProductionPaths.recipes} replace />;
+}
+
+function LegacyProductionBatchRedirect() {
+  const { batchId } = useParams();
+  return <Navigate to={batchId ? erpProductionPaths.batch(batchId) : erpProductionPaths.planning} replace />;
+}
+
+function LegacyProductionExecutionRedirect() {
   const { kind, id } = useParams();
-  return <Navigate to={`/production/erp/${kind ?? "batch"}/${id ?? ""}`} replace />;
+  const executionKind = kind === "order" ? "order" : "batch";
+  return <Navigate to={erpProductionPaths.erpExecution(executionKind, id ?? "")} replace />;
 }
 
 /** Legacy production putaway tab → standard WMS Rozlokowanie. */
@@ -568,9 +582,10 @@ export const router = createBrowserRouter(
           <Route path="execute/:kind/:id" element={<ProductionExecutionPage />} />
           <Route path="execute/:batchId" element={<WmsProductionLegacyPhaseRedirect phase="execute" />} />
           <Route path="execute" element={<ProductionExecutionPage />} />
-          <Route path="putaway/:kind/:id" element={<PutawayPage />} />
-          <Route path="putaway/:batchId" element={<WmsProductionLegacyPhaseRedirect phase="putaway" />} />
-          <Route path="putaway" element={<PutawayPage />} />
+          {/* Legacy production putaway tab → standard WMS Rozlokowanie (PW SSOT). */}
+          <Route path="putaway/:kind/:id" element={<WmsProductionPutawayRedirect />} />
+          <Route path="putaway/:batchId" element={<WmsProductionPutawayRedirect />} />
+          <Route path="putaway" element={<WmsProductionPutawayRedirect />} />
           <Route path="batch/:batchId" element={<WmsProductionBatchRedirect />} />
         </Route>
         <Route
@@ -710,7 +725,7 @@ export const router = createBrowserRouter(
                 <Route path="product-custom-fields/:fieldId/edit" element={<ProductCustomFieldEditPage />} />
                 <Route path="assortment/settings" element={<AssortmentSettingsPage />} />
                 <Route
-                  path="production"
+                  path="produkcja"
                   element={
                     <ErrorBoundary>
                       <ProductionErpModuleLayout />
@@ -718,33 +733,44 @@ export const router = createBrowserRouter(
                   }
                 >
                   <Route index element={<ProductionDashboardPage />} />
-                  <Route path="recipes" element={<RecipesListPage />} />
-                  <Route path="recipes/:compositionId" element={<RecipeDetailPage />} />
-                  <Route path="orders" element={<ProductionOrdersPage />} />
-                  <Route path="orders/new" element={<CreateProductionOrderPage />} />
-                  <Route path="orders/:orderId" element={<ProductionOrderDetailPage />} />
-                  <Route path="planning" element={<ProductionPlanningPage />} />
-                  <Route path="history" element={<ProductionHistoryPage />} />
-                  <Route path="analytics" element={<ProductionAnalyticsPage />} />
-                  <Route path="materials" element={<ProductionMaterialsLayout />}>
-                    <Route index element={<Navigate to="shortages" replace />} />
-                    <Route path="shortages" element={<ProductionShortagesPage />} />
-                    <Route path="reservations" element={<MaterialReservationsPage />} />
-                    <Route path="analysis" element={<MaterialAnalysisPage />} />
+                  <Route path="receptury" element={<RecipesListPage />} />
+                  <Route path="receptury/:compositionId" element={<RecipeDetailPage />} />
+                  <Route path="zlecenia" element={<ProductionOrdersPage />} />
+                  <Route path="zlecenia/new" element={<CreateProductionOrderPage />} />
+                  <Route path="zlecenia/:orderId" element={<ProductionOrderDetailPage />} />
+                  <Route path="planowanie" element={<ProductionPlanningPage />} />
+                  <Route path="historia" element={<ProductionHistoryPage />} />
+                  <Route path="analiza-kosztow" element={<ProductionAnalyticsPage />} />
+                  <Route path="materialy" element={<ProductionMaterialsLayout />}>
+                    <Route index element={<Navigate to="braki" replace />} />
+                    <Route path="braki" element={<ProductionShortagesPage />} />
+                    <Route path="rezerwacje" element={<MaterialReservationsPage />} />
+                    <Route path="analiza" element={<MaterialAnalysisPage />} />
                   </Route>
-                  <Route
-                    path="material-reservations"
-                    element={<Navigate to="/production/materials/reservations" replace />}
-                  />
-                  <Route path="shortages" element={<Navigate to="/production/materials/shortages" replace />} />
-                  <Route
-                    path="material-analysis"
-                    element={<Navigate to="/production/materials/analysis" replace />}
-                  />
-                  <Route path="batches" element={<Navigate to="/production/planning" replace />} />
-                  <Route path="batch/:batchId" element={<BatchDetailPage />} />
-                  <Route path="erp/:kind/:id" element={<PaperProductionPage />} />
-                  <Route path="paper/:kind/:id" element={<ProductionPaperLegacyRedirect />} />
+                  <Route path="serie/:batchId" element={<BatchDetailPage />} />
+                  <Route path="realizacja/:kind/:id" element={<PaperProductionPage />} />
+                </Route>
+                <Route path="production">
+                  <Route index element={<Navigate to={erpProductionPaths.home} replace />} />
+                  <Route path="orders" element={<Navigate to={erpProductionPaths.orders} replace />} />
+                  <Route path="orders/new" element={<Navigate to={erpProductionPaths.createOrder} replace />} />
+                  <Route path="orders/:orderId" element={<LegacyProductionOrderRedirect />} />
+                  <Route path="batch/:batchId" element={<LegacyProductionBatchRedirect />} />
+                  <Route path="batches" element={<Navigate to={erpProductionPaths.planning} replace />} />
+                  <Route path="planning" element={<Navigate to={erpProductionPaths.planning} replace />} />
+                  <Route path="recipes" element={<Navigate to={erpProductionPaths.recipes} replace />} />
+                  <Route path="recipes/:id" element={<LegacyProductionRecipeRedirect />} />
+                  <Route path="materials" element={<Navigate to={erpProductionPaths.materials} replace />} />
+                  <Route path="materials/shortages" element={<Navigate to={erpProductionPaths.materialsShortages} replace />} />
+                  <Route path="materials/reservations" element={<Navigate to={erpProductionPaths.materialsReservations} replace />} />
+                  <Route path="materials/analysis" element={<Navigate to={erpProductionPaths.materialsAnalysis} replace />} />
+                  <Route path="shortages" element={<Navigate to={erpProductionPaths.materialsShortages} replace />} />
+                  <Route path="material-reservations" element={<Navigate to={erpProductionPaths.materialsReservations} replace />} />
+                  <Route path="material-analysis" element={<Navigate to={erpProductionPaths.materialsAnalysis} replace />} />
+                  <Route path="history" element={<Navigate to={erpProductionPaths.history} replace />} />
+                  <Route path="analytics" element={<Navigate to={erpProductionPaths.analytics} replace />} />
+                  <Route path="erp/:kind/:id" element={<LegacyProductionExecutionRedirect />} />
+                  <Route path="paper/:kind/:id" element={<LegacyProductionExecutionRedirect />} />
                 </Route>
                 <Route
                   path="inventory-count"

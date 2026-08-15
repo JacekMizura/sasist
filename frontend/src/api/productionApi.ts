@@ -579,6 +579,7 @@ export type ProductionBatchRead = {
   notes?: string | null;
   rw_stock_document_id?: number | null;
   rw_document_number?: string | null;
+  assigned_user_id?: number | null;
   operator_name?: string | null;
   lines: ProductionBatchLineRead[];
   products_count?: number;
@@ -615,6 +616,8 @@ export type ProductionBatchCreateBody = {
   notes?: string | null;
   status?: ProductionBatchStatus;
   reserve_materials?: boolean;
+  /** null / omit = Dowolny operator */
+  assigned_user_id?: number | null;
   lines: ProductionBatchLineWrite[];
 };
 
@@ -626,7 +629,7 @@ export type ProductionBatchPayloadValidation =
 export function validateProductionBatchCreateBody(
   warehouseId: number | null | undefined,
   lines: { product_id: number; composition_id: number; planned_quantity: number }[],
-  opts?: { reserve_materials?: boolean },
+  opts?: { reserve_materials?: boolean; assigned_user_id?: number | null },
 ): ProductionBatchPayloadValidation {
   if (warehouseId == null || !Number.isFinite(warehouseId) || warehouseId < 1) {
     return { ok: false, message: "warehouse_id is required" };
@@ -652,12 +655,17 @@ export function validateProductionBatchCreateBody(
       planned_quantity: ln.planned_quantity,
     });
   }
+  const assigned =
+    opts?.assigned_user_id != null && Number.isFinite(opts.assigned_user_id) && opts.assigned_user_id > 0
+      ? Math.floor(opts.assigned_user_id)
+      : null;
   return {
     ok: true,
     body: {
       warehouse_id: warehouseId,
       status: "planned",
       reserve_materials: Boolean(opts?.reserve_materials),
+      ...(assigned != null ? { assigned_user_id: assigned } : {}),
       lines: mapped,
     },
   };
@@ -792,6 +800,8 @@ export type RecipeCardRead = {
   product_id: number;
   product_name: string;
   product_sku?: string | null;
+  product_ean?: string | null;
+  product_catalog_number?: string | null;
   product_image_url?: string | null;
   recipe_name: string;
   version: string;

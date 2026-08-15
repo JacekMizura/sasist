@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, Fragment } from "react";
-import { AlertTriangle, ChevronDown, RefreshCw, ShoppingCart } from "lucide-react";
+import { AlertTriangle, ChevronDown, PackagePlus, RefreshCw, ShoppingCart } from "lucide-react";
 import toast from "react-hot-toast";
 import { Link } from "react-router-dom";
 
@@ -19,11 +19,10 @@ import { extractApiErrorMessage } from "@/api/apiErrorMessage";
 import { LocationBadge } from "@/components/warehouse/LocationBadge";
 import { useWarehouse } from "@/context/WarehouseContext";
 import { PrimaryButton } from "@/design-system/PrimaryButton";
-import { PageHeader, SecondaryButton } from "@/design-system";
+import { IconButton, PageHeader, SecondaryButton } from "@/design-system";
 import { ProductThumb } from "./components/ProductThumb";
 import { MaterialSubstitutesFormPanel } from "./components/MaterialSubstitutesFormPanel";
 import { MaterialNeedsPanel } from "./components/MaterialNeedsPanel";
-import { ProductionRowActionsMenu } from "./components/ProductionRowActionsMenu";
 import { ProductionSourceTypeBadge } from "./components/ProductionSourceTypeBadge";
 import { erpProductionPaths } from "./productionPaths";
 import {
@@ -193,7 +192,7 @@ export default function ProductionShortagesPage() {
                     <th className={`${productionModuleListThClass} w-[5.5rem] text-right`}>Potrzebne</th>
                     <th className={`${productionModuleListThClass} w-[5.5rem] text-right`}>Dostępne</th>
                     <th className={`${productionModuleListThClass} w-[4.5rem] text-right`}>Brak</th>
-                    <th className={`${productionModuleListThClass} w-[10rem]`}>Źródła</th>
+                    <th className={`${productionModuleListThClass} w-[10rem]`}>Zlecenia</th>
                     <th className={`${productionModuleListThClass} w-[12rem] text-right`}>Akcja</th>
                   </tr>
                 </thead>
@@ -213,7 +212,7 @@ export default function ProductionShortagesPage() {
                             .slice(0, 2)
                             .map((s) => s.number)
                             .join(", ")
-                        : `${r.blocked_batches_count} BAT · ${r.blocked_orders_count} MO`;
+                        : `${r.blocked_batches_count} serii · ${r.blocked_orders_count} zleceń`;
                     const sourceMore =
                       sources.length > 2 ? ` +${sources.length - 2}` : sources.length > 0 ? "" : "";
                     return (
@@ -224,7 +223,7 @@ export default function ProductionShortagesPage() {
                               type="button"
                               className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-slate-200 text-slate-600 hover:bg-slate-50"
                               aria-expanded={expanded}
-                              aria-label={expanded ? "Zwiń szczegóły" : "Rozwiń źródła"}
+                              aria-label={expanded ? "Ukryj zlecenia" : "Pokaż zlecenia"}
                               onClick={() => setExpandedId(expanded ? null : r.component_product_id)}
                             >
                               <ChevronDown
@@ -272,24 +271,17 @@ export default function ProductionShortagesPage() {
                             <div className="inline-flex items-center justify-end gap-1.5">
                               <PrimaryButton type="button" density="compact" onClick={() => void createRequisition(r)}>
                                 <ShoppingCart className="h-3.5 w-3.5" aria-hidden />
-                                Zapotrzebowanie
+                                Utwórz zapotrzebowanie
                               </PrimaryButton>
-                              <ProductionRowActionsMenu
-                                ariaLabel={`Akcje ${r.product_name}`}
-                                align="end"
-                                actions={[
-                                  {
-                                    id: "po",
-                                    label: "Dodaj do PO",
-                                    onClick: () => void openPoPicker(r),
-                                  },
-                                  {
-                                    id: "expand",
-                                    label: expanded ? "Zwiń źródła" : "Pokaż źródła",
-                                    onClick: () => setExpandedId(expanded ? null : r.component_product_id),
-                                  },
-                                ]}
-                              />
+                              <IconButton
+                                type="button"
+                                density="compact"
+                                aria-label="Dodaj do zamówienia towaru"
+                                title="Dodaj do zamówienia towaru"
+                                onClick={() => void openPoPicker(r)}
+                              >
+                                <PackagePlus className="h-4 w-4" aria-hidden />
+                              </IconButton>
                             </div>
                           </td>
                         </tr>
@@ -339,7 +331,9 @@ export default function ProductionShortagesPage() {
                                   </div>
                                 </div>
                               </div>
-                              <p className={`${productionSectionLabelClass} mb-2`}>Źródła zapotrzebowania</p>
+                              <p className={`${productionSectionLabelClass} mb-2`}>
+                                Zlecenia wymagające materiału
+                              </p>
                               {sources.length === 0 ? (
                                 <p className="text-xs text-slate-500">Brak szczegółów źródeł w API.</p>
                               ) : (
@@ -350,7 +344,7 @@ export default function ProductionShortagesPage() {
                                         <th className="px-2 py-1.5">Typ</th>
                                         <th className="px-2 py-1.5">Numer</th>
                                         <th className="px-2 py-1.5">Produkt końcowy</th>
-                                        <th className="px-2 py-1.5 text-right">Zapotrzebowanie</th>
+                                        <th className="px-2 py-1.5 text-right">Potrzebne</th>
                                         <th className="px-2 py-1.5">Status</th>
                                       </tr>
                                     </thead>
@@ -441,33 +435,52 @@ export default function ProductionShortagesPage() {
           <div className="fixed inset-0 z-[280] flex items-center justify-center bg-slate-950/40 p-4">
             <div className="w-full max-w-md rounded-2xl bg-white p-5 shadow-xl">
               <h3 className="flex items-center gap-2 text-base font-bold text-slate-900">
-                <AlertTriangle className="h-5 w-5 text-amber-600" aria-hidden />
-                Dodaj do zamówienia zakupu
+                <PackagePlus className="h-5 w-5 text-slate-700" aria-hidden />
+                Dodaj do zamówienia towaru
               </h3>
-              <p className="mt-2 text-sm text-slate-600">
-                {poPickerFor.product_name} · brak {fmtQty(poPickerFor.missing_qty)}
-              </p>
+              <dl className="mt-3 space-y-1.5 text-sm">
+                <div className="flex gap-2">
+                  <dt className="shrink-0 text-slate-500">Produkt:</dt>
+                  <dd className="font-medium text-slate-900">{poPickerFor.product_name}</dd>
+                </div>
+                <div className="flex gap-2">
+                  <dt className="shrink-0 text-slate-500">Brakuje:</dt>
+                  <dd className="font-semibold tabular-nums text-rose-700">
+                    {fmtQty(poPickerFor.missing_qty)} szt.
+                  </dd>
+                </div>
+              </dl>
               {poLoading ? (
                 <p className="mt-4 text-sm text-slate-500">Wczytywanie zamówień…</p>
               ) : openPos.length === 0 ? (
                 <p className="mt-4 text-sm text-slate-500">
-                  Brak otwartych zamówień (Draft). Utwórz zapotrzebowanie.
+                  Brak otwartych zamówień towaru w statusie roboczym. Utwórz zapotrzebowanie.
                 </p>
               ) : (
-                <ul className="mt-4 max-h-60 space-y-2 overflow-y-auto">
-                  {openPos.map((po) => (
-                    <li key={po.id}>
-                      <button
-                        type="button"
-                        onClick={() => void addToPo(po.id)}
-                        className="w-full rounded-lg border border-slate-200 px-3 py-2 text-left text-sm hover:border-violet-300 hover:bg-violet-50"
-                      >
-                        <span className="font-mono font-semibold">{po.order_number}</span>
-                        <span className="ml-2 text-slate-500">{po.supplier_name}</span>
-                      </button>
-                    </li>
-                  ))}
-                </ul>
+                <div className="mt-4">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                    Wybierz otwarte zamówienie
+                  </p>
+                  <p className="mt-1 text-xs text-slate-500">
+                    Pozycja materiału zostanie dopisana do wybranego zamówienia towaru.
+                  </p>
+                  <ul className="mt-3 max-h-60 space-y-2 overflow-y-auto">
+                    {openPos.map((po) => (
+                      <li key={po.id}>
+                        <button
+                          type="button"
+                          onClick={() => void addToPo(po.id)}
+                          className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-left text-sm transition hover:border-slate-300 hover:bg-slate-50"
+                        >
+                          <span className="font-mono font-semibold text-slate-900">{po.order_number}</span>
+                          {po.supplier_name ? (
+                            <span className="mt-0.5 block text-slate-500">{po.supplier_name}</span>
+                          ) : null}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
               )}
               <button
                 type="button"

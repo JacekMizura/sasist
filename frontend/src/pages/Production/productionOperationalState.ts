@@ -398,7 +398,7 @@ export function getProductionOperationalState(
       description: "Zbieranie komponentów rozpoczęte",
       primaryAction: {
         kind: "continue_collecting",
-        label: "Kontynuuj zbieranie",
+        label: "Kontynuuj",
         href: erp ? undefined : wmsHref(input, "collecting"),
         openInNewTab: !erp,
       },
@@ -422,7 +422,7 @@ export function getProductionOperationalState(
         planned > 0 ? `Wyprodukowano ${fmtQty(produced)}/${fmtQty(planned)} szt.` : "Produkcja w toku.",
       primaryAction: {
         kind: "continue_production",
-        label: "Kontynuuj produkcję",
+        label: "Kontynuuj",
         href: erp ? undefined : wmsHref(input, "execute"),
         openInNewTab: !erp,
       },
@@ -496,7 +496,7 @@ export function getProductionOperationalState(
         planned > 0 ? `Wyprodukowano ${fmtQty(produced)}/${fmtQty(planned)} szt.` : "Produkcja w toku.",
       primaryAction: {
         kind: "continue_production",
-        label: "Kontynuuj produkcję",
+        label: "Kontynuuj",
       },
       severity: "primary",
       tone: "primary",
@@ -532,7 +532,7 @@ export function getProductionOperationalState(
       description: "Zlecenie czeka na pobranie komponentów.",
       primaryAction: {
         kind: "start_collecting",
-        label: "Rozpocznij zbieranie",
+        label: "Zbieraj",
         href: wmsHref(input, "collecting"),
         openInNewTab: true,
       },

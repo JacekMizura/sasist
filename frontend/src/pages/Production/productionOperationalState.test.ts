@@ -141,7 +141,7 @@ describe("getProductionOperationalState", () => {
     expect(s.dashboardBucket).toBe("done");
     expect(s.primaryAction.kind).not.toBe("go_packing");
     expect(s.primaryAction.kind).toBe("view_details");
-    expect(s.primaryAction.href).toBe("/production/orders/9");
+    expect(s.primaryAction.href).toBe("/produkcja/zlecenia/9");
   });
 
   it("PLANNING completed is COMPLETED / done — not packing", () => {
@@ -156,7 +156,7 @@ describe("getProductionOperationalState", () => {
     expect(s.currentStep).toBe("COMPLETED");
     expect(s.dashboardBucket).toBe("done");
     expect(s.primaryAction.kind).toBe("view_details");
-    expect(s.primaryAction.href).toBe("/production/orders/10");
+    expect(s.primaryAction.href).toBe("/produkcja/zlecenia/10");
   });
 
   it("completed batch links to BAT detail, never MO path", () => {
@@ -171,8 +171,8 @@ describe("getProductionOperationalState", () => {
     expect(s.description).toMatch(/Partia produkcyjna/i);
     expect(s.primaryAction.kind).toBe("view_details");
     expect(s.primaryAction.label).toBe("Zobacz szczegóły");
-    expect(s.primaryAction.href).toBe("/production/batch/16");
-    expect(s.primaryAction.href).not.toMatch(/\/orders\//);
+    expect(s.primaryAction.href).toBe("/produkcja/serie/16");
+    expect(s.primaryAction.href).not.toMatch(/\/zlecenia\//);
   });
 
   it("completed batch on detail page has no dead Zobacz szczegóły CTA", () => {
@@ -221,8 +221,8 @@ describe("getProductionOperationalState", () => {
   });
 
   it("productionEntityDetailHref separates batch vs order", () => {
-    expect(productionEntityDetailHref({ executionKind: "batch", id: 16 })).toBe("/production/batch/16");
-    expect(productionEntityDetailHref({ executionKind: "order", id: 4 })).toBe("/production/orders/4");
+    expect(productionEntityDetailHref({ executionKind: "batch", id: 16 })).toBe("/produkcja/serie/16");
+    expect(productionEntityDetailHref({ executionKind: "order", id: 4 })).toBe("/produkcja/zlecenia/4");
   });
 
   it("MANUAL/PLANNING after production wait for putaway", () => {
@@ -262,7 +262,7 @@ describe("getProductionOperationalState", () => {
     expect(s.primaryAction.label).toBe("Wyślij do realizacji");
   });
 
-  it("planned after release → Pobierz komponenty / Rozpocznij zbieranie", () => {
+  it("planned after release → Pobierz komponenty / Zbieraj", () => {
     const s = getProductionOperationalState({
       executionKind: "order",
       id: 1,
@@ -274,17 +274,17 @@ describe("getProductionOperationalState", () => {
     expect(s.businessLabel).toBe("Pobierz komponenty");
     expect(s.description).toMatch(/pobranie komponentów/i);
     expect(s.primaryAction.kind).toBe("start_collecting");
-    expect(s.primaryAction.label).toBe("Rozpocznij zbieranie");
+    expect(s.primaryAction.label).toBe("Zbieraj");
   });
 
-  it("collecting keeps Pobierz komponenty / Kontynuuj zbieranie", () => {
+  it("collecting keeps Pobierz komponenty / Kontynuuj", () => {
     const s = getProductionOperationalState({
       executionKind: "order",
       id: 1,
       status: "collecting",
     });
     expect(s.businessLabel).toBe("Pobierz komponenty");
-    expect(s.primaryAction.label).toBe("Kontynuuj zbieranie");
+    expect(s.primaryAction.label).toBe("Kontynuuj");
   });
 
   it("delayed planned without shortages → same stage + Opóźnione flag", () => {

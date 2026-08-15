@@ -64,10 +64,11 @@ class ProductionConfigCreate(BaseModel):
 
 
 class ProductionConfigUpdate(BaseModel):
-    """PUT — bez zmiany tenant/warehouse/source_status (stabilne ID dla MO)."""
+    """PUT — tenant/warehouse immutable; source_status_id may change (unique per warehouse)."""
 
     name: str = Field(..., min_length=1, max_length=128)
     is_active: bool = True
+    source_status_id: int = Field(..., ge=1)
     status_after_production_id: int = Field(..., ge=1)
     status_on_component_shortage_id: int = Field(..., ge=1)
     status_awaiting_production_id: int = Field(..., ge=1)
@@ -75,6 +76,18 @@ class ProductionConfigUpdate(BaseModel):
     production_order_trigger_scope: Optional[ProductionOrderTriggerScope] = "SINGLE_ELEMENT"
     production_execution_method: Optional[ProductionExecutionMethod] = "WMS"
     after_production_action: Optional[AfterProductionAction] = "STATUS_ONLY"
+
+    @model_validator(mode="after")
+    def _source_ne_after(self) -> "ProductionConfigUpdate":
+        if int(self.source_status_id) == int(self.status_after_production_id):
+            raise ValueError("status_after_production_id musi być inny niż source_status_id.")
+        if int(self.source_status_id) == int(self.status_awaiting_production_id):
+            raise ValueError("status_awaiting_production_id musi być inny niż source_status_id.")
+        if int(self.status_awaiting_production_id) == int(self.status_on_component_shortage_id):
+            raise ValueError(
+                "status_awaiting_production_id musi być inny niż status_on_component_shortage_id."
+            )
+        return self
 
 
 class ProductionConfigListResponse(BaseModel):

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from datetime import date
+
 from sqlalchemy.orm import Session
 
 from ...models.app_user import AppUser
@@ -36,6 +38,8 @@ def record_production_rw_issue_audit(
     quantity: float,
     from_location_id: int,
     performed_by_user_id: int | None = None,
+    batch_number: str | None = None,
+    expiry_date: date | None = None,
 ) -> None:
     user = _resolve_audit_user(db, performed_by_user_id or getattr(rw_doc, "created_by_user_id", None))
     if user is None:
@@ -53,6 +57,8 @@ def record_production_rw_issue_audit(
         reference_document=_document_reference(rw_doc),
         stock_document_id=int(rw_doc.id),
         wms_mode="RW",
+        batch_number=(str(batch_number).strip() or None) if batch_number else None,
+        expiry_date=expiry_date,
     )
 
 
@@ -64,6 +70,8 @@ def record_production_pw_receipt_audit(
     quantity: float,
     staging_location_id: int,
     performed_by_user_id: int | None = None,
+    batch_number: str | None = None,
+    expiry_date: date | None = None,
 ) -> None:
     user = _resolve_audit_user(db, performed_by_user_id or getattr(pw_doc, "created_by_user_id", None))
     if user is None:
@@ -81,4 +89,6 @@ def record_production_pw_receipt_audit(
         reference_document=_document_reference(pw_doc),
         stock_document_id=int(pw_doc.id),
         wms_mode="PW",
+        batch_number=(str(batch_number).strip() or None) if batch_number else None,
+        expiry_date=expiry_date,
     )

@@ -17,6 +17,7 @@ from backend.models.product_composition import (
     ProductComposition,
     ProductCompositionLine,
 )
+from backend.models.production_fg_output import ProductionFgOutput
 from backend.models.stock_document import StockDocument, StockDocumentItem
 from backend.models.stock_operation import StockOperation
 from backend.models.stock_reservation import StockReservation
@@ -53,6 +54,7 @@ def reservation_db(monkeypatch):
         StockDocument,
         StockDocumentItem,
         StockOperation,
+        ProductionFgOutput,
     ):
         model.__table__.create(engine, checkfirst=True)
 

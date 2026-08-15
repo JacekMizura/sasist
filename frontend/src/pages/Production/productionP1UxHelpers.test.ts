@@ -17,6 +17,7 @@ import {
   isTrueMaterialShortage,
 } from "./productionShortageDisplay";
 import { getProductionOperationalState } from "./productionOperationalState";
+import { erpProductionPaths } from "./productionPaths";
 import { DEFAULT_PRODUCTION_RECIPE_FILTERS } from "../../modules/production/productionListFilters";
 
 describe("productionShortageDisplay", () => {
@@ -54,8 +55,8 @@ describe("productionDashboardHelpers", () => {
   });
 
   it("builds see-all href with bucket", () => {
-    expect(dashboardSeeAllHref("/production/orders", "reaction")).toContain("shortages=1");
-    expect(dashboardSeeAllHref("/production/orders", "todo")).toContain("bucket=todo");
+    expect(dashboardSeeAllHref(erpProductionPaths.orders, "reaction")).toContain("shortages=1");
+    expect(dashboardSeeAllHref(erpProductionPaths.orders, "todo")).toContain("bucket=todo");
   });
 });
 

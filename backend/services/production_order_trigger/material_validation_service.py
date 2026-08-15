@@ -274,6 +274,46 @@ def _demote_sources_to_shortage(
                 "missing_components": shortage_meta,
             },
         )
+        try:
+            from ..production_execution.production_domain_activity import (
+                emit_production_component_shortage,
+                emit_production_status_auto_changed,
+            )
+
+            first = shortage_meta[0] if shortage_meta else {}
+            sku = str(first.get("product_sku") or first.get("product_name") or "").strip() or None
+            missing = first.get("missing_qty") or first.get("missing") or first.get("required_qty")
+            emit_production_component_shortage(
+                db,
+                tenant_id=int(mo.tenant_id),
+                warehouse_id=int(mo.warehouse_id) if mo.warehouse_id else None,
+                production_order_id=int(mo.id),
+                product_id=int(mo.product_id) if mo.product_id else None,
+                order_id=int(src.order_id),
+                actor_user_id=operator_user_id,
+                label=str(mo.number or "") or None,
+                shortage_sku=sku,
+                shortage_qty=float(missing) if missing is not None else None,
+                component_product_id=int(first["component_product_id"])
+                if first.get("component_product_id")
+                else None,
+                correlation_suffix=f"order:{int(src.order_id)}",
+            )
+            if shortage_status_name:
+                emit_production_status_auto_changed(
+                    db,
+                    tenant_id=int(mo.tenant_id),
+                    warehouse_id=int(mo.warehouse_id) if mo.warehouse_id else None,
+                    production_order_id=int(mo.id),
+                    product_id=int(mo.product_id) if mo.product_id else None,
+                    order_id=int(src.order_id),
+                    from_status_label="Produkcja",
+                    to_status_label=str(shortage_status_name),
+                    label=str(mo.number or "") or None,
+                    correlation_suffix=f"shortage-order:{int(src.order_id)}",
+                )
+        except Exception:
+            pass
 
 
 def apply_material_validation_to_orders_mo(
@@ -786,6 +826,45 @@ def retry_order_driven_production_shortages(
                     "materials_reserved": True,
                 },
             )
+            try:
+                from ..production_execution.production_domain_activity import (
+                    emit_production_resumed,
+                    emit_production_shortage_auto_resumed,
+                    emit_production_shortage_resolved,
+                )
+
+                emit_production_shortage_resolved(
+                    db,
+                    tenant_id=int(active_mo.tenant_id),
+                    warehouse_id=int(active_mo.warehouse_id) if active_mo.warehouse_id else None,
+                    production_order_id=int(active_mo.id),
+                    product_id=int(active_mo.product_id) if active_mo.product_id else None,
+                    order_id=int(order.id),
+                    actor_user_id=None,
+                    label=mo_label or None,
+                )
+                emit_production_shortage_auto_resumed(
+                    db,
+                    tenant_id=int(active_mo.tenant_id),
+                    warehouse_id=int(active_mo.warehouse_id) if active_mo.warehouse_id else None,
+                    production_order_id=int(active_mo.id),
+                    product_id=int(active_mo.product_id) if active_mo.product_id else None,
+                    order_id=int(order.id),
+                    label=mo_label or None,
+                    correlation_suffix=f"order:{int(order.id)}:src:{int(active.id)}",
+                )
+                emit_production_resumed(
+                    db,
+                    tenant_id=int(active_mo.tenant_id),
+                    warehouse_id=int(active_mo.warehouse_id) if active_mo.warehouse_id else None,
+                    production_order_id=int(active_mo.id),
+                    product_id=int(active_mo.product_id) if active_mo.product_id else None,
+                    order_id=int(order.id),
+                    actor_user_id=None,
+                    label=mo_label or None,
+                )
+            except Exception:
+                pass
         results.append(
             {
                 "source_item_id": int(src.id),

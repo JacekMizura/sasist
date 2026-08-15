@@ -4046,6 +4046,94 @@ def ensure_fg_traceability_columns(engine: Engine) -> None:
         conn.commit()
 
 
+def ensure_production_fg_outputs_table(engine: Engine) -> None:
+    """Immutable FG registration deltas (register_produced_quantity ledger)."""
+    with engine.connect() as conn:
+        if not _table_exists(conn, "production_fg_outputs"):
+            dialect = conn.dialect.name
+            pk = (
+                "id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT"
+                if dialect == "sqlite"
+                else "id SERIAL PRIMARY KEY"
+            )
+            conn.execute(
+                text(
+                    f"""
+                    CREATE TABLE production_fg_outputs (
+                        {pk},
+                        tenant_id INTEGER NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+                        warehouse_id INTEGER NOT NULL REFERENCES warehouses(id) ON DELETE CASCADE,
+                        production_order_id INTEGER REFERENCES production_orders(id) ON DELETE CASCADE,
+                        production_batch_id INTEGER REFERENCES production_batches(id) ON DELETE CASCADE,
+                        production_batch_line_id INTEGER REFERENCES production_batch_lines(id) ON DELETE CASCADE,
+                        product_id INTEGER NOT NULL REFERENCES products(id) ON DELETE RESTRICT,
+                        quantity FLOAT NOT NULL,
+                        produced_quantity_after FLOAT NOT NULL,
+                        batch_number VARCHAR(128) NOT NULL DEFAULT '',
+                        expiry_date DATE,
+                        serial_numbers_json TEXT,
+                        stock_document_id INTEGER REFERENCES stock_documents(id) ON DELETE SET NULL,
+                        stock_document_item_id INTEGER REFERENCES stock_document_items(id) ON DELETE SET NULL,
+                        idempotency_key VARCHAR(191) NOT NULL,
+                        actor_user_id INTEGER REFERENCES app_users(id) ON DELETE SET NULL,
+                        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                        CONSTRAINT uq_production_fg_outputs_idem UNIQUE (tenant_id, idempotency_key)
+                    )
+                    """
+                )
+            )
+            conn.execute(
+                text(
+                    "CREATE INDEX IF NOT EXISTS ix_production_fg_outputs_tenant "
+                    "ON production_fg_outputs(tenant_id)"
+                )
+            )
+            conn.execute(
+                text(
+                    "CREATE INDEX IF NOT EXISTS ix_production_fg_outputs_order "
+                    "ON production_fg_outputs(production_order_id)"
+                )
+            )
+            conn.execute(
+                text(
+                    "CREATE INDEX IF NOT EXISTS ix_production_fg_outputs_batch "
+                    "ON production_fg_outputs(production_batch_id)"
+                )
+            )
+            conn.execute(
+                text(
+                    "CREATE INDEX IF NOT EXISTS ix_production_fg_outputs_batch_line "
+                    "ON production_fg_outputs(production_batch_line_id)"
+                )
+            )
+        conn.commit()
+
+
+def ensure_production_batch_assigned_user_id(engine: Engine) -> None:
+    with engine.connect() as conn:
+        if not _table_exists(conn, "production_batches"):
+            conn.commit()
+            return
+        cols = _table_column_names(conn, "production_batches")
+        if "assigned_user_id" not in cols:
+            conn.execute(
+                text(
+                    "ALTER TABLE production_batches ADD COLUMN assigned_user_id INTEGER "
+                    "REFERENCES app_users(id) ON DELETE SET NULL"
+                )
+            )
+            try:
+                conn.execute(
+                    text(
+                        "CREATE INDEX IF NOT EXISTS ix_production_batches_assigned_user_id "
+                        "ON production_batches(assigned_user_id)"
+                    )
+                )
+            except Exception:
+                pass
+        conn.commit()
+
+
 def ensure_inventory_serials_table(engine: Engine) -> None:
     """Per-unit serial registry + extended scan/operation columns."""
     with engine.connect() as conn:

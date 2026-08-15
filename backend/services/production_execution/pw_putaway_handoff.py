@@ -142,6 +142,8 @@ def _append_pw_line_with_staging(
         quantity=float(quantity),
         staging_location_id=staging_loc,
         performed_by_user_id=performed_by_user_id,
+        batch_number=batch_number or None,
+        expiry_date=expiry_date,
     )
     return line
 
@@ -190,6 +192,120 @@ def _create_pw_for_putaway(
     doc.updated_at = datetime.utcnow()
     db.flush()
     return doc
+
+
+def create_batch_line_delta_pw_for_putaway(
+    db: Session,
+    *,
+    batch: ProductionBatch,
+    line: ProductionBatchLine,
+    quantity: float,
+    delta_snapshot: dict,
+    performed_by_user_id: int | None = None,
+) -> tuple[StockDocument, StockDocumentItem]:
+    """One PW document per FG registration delta (multi-LOT + independent putaway)."""
+    qty = float(quantity)
+    if qty <= 1e-9:
+        raise ValueError("Ilość PW delty musi być większa od zera.")
+    rw_doc = (
+        db.query(StockDocument).filter(StockDocument.id == int(batch.rw_stock_document_id)).first()
+        if batch.rw_stock_document_id
+        else None
+    )
+    total_planned = sum(float(bl.planned_quantity) for bl in (batch.lines or [])) or 1.0
+    from .cost_service import compute_batch_line_unit_cost
+
+    unit_cost = compute_batch_line_unit_cost(
+        rw_doc,
+        produced_quantity=qty,
+        total_planned_quantity=total_planned,
+    )
+    pw_doc = _new_pw_header(
+        db,
+        tenant_id=int(batch.tenant_id),
+        warehouse_id=int(batch.warehouse_id),
+        created_by_user_id=performed_by_user_id,
+        production_batch_id=int(batch.id),
+        production_batch_line_id=int(line.id),
+    )
+    item = _append_pw_line_with_staging(
+        db,
+        doc=pw_doc,
+        product_id=int(line.product_id),
+        quantity=qty,
+        unit_cost=unit_cost,
+        performed_by_user_id=performed_by_user_id,
+        trace_snapshot=delta_snapshot,
+    )
+    line.calculated_unit_cost = round(unit_cost, 4)
+    prod = db.query(Product).filter(Product.id == int(line.product_id)).first()
+    if prod is not None and unit_cost > 0:
+        prod.purchase_price = float(unit_cost)
+    from ..stock_document_service import recompute_putaway_status_for_document
+
+    items = (
+        db.query(StockDocumentItem)
+        .filter(StockDocumentItem.document_id == int(pw_doc.id))
+        .all()
+    )
+    recompute_putaway_status_for_document(pw_doc, items, db=db)
+    pw_doc.updated_at = datetime.utcnow()
+    db.flush()
+    return pw_doc, item
+
+
+def create_order_delta_pw_for_putaway(
+    db: Session,
+    *,
+    order: ProductionOrder,
+    quantity: float,
+    delta_snapshot: dict,
+    performed_by_user_id: int | None = None,
+) -> tuple[StockDocument, StockDocumentItem]:
+    """PW-per-delta for PLANNING / MANUAL MO (Rozlokowanie). ORDERS uses buffer path instead."""
+    qty = float(quantity)
+    if qty <= 1e-9:
+        raise ValueError("Ilość PW delty musi być większa od zera.")
+    rw_doc = (
+        db.query(StockDocument).filter(StockDocument.id == int(order.rw_stock_document_id)).first()
+        if order.rw_stock_document_id
+        else None
+    )
+    from .cost_service import compute_order_unit_cost
+
+    unit_cost = compute_order_unit_cost(rw_doc, produced_quantity=max(float(order.produced_quantity or 0), qty))
+    pw_doc = _new_pw_header(
+        db,
+        tenant_id=int(order.tenant_id),
+        warehouse_id=int(order.warehouse_id),
+        created_by_user_id=performed_by_user_id,
+        production_order_id=int(order.id),
+    )
+    item = _append_pw_line_with_staging(
+        db,
+        doc=pw_doc,
+        product_id=int(order.product_id),
+        quantity=qty,
+        unit_cost=unit_cost,
+        performed_by_user_id=performed_by_user_id,
+        trace_snapshot=delta_snapshot,
+    )
+    order.calculated_unit_cost = round(unit_cost, 4)
+    prod = db.query(Product).filter(Product.id == int(order.product_id)).first()
+    if prod is not None and unit_cost > 0:
+        prod.purchase_price = float(unit_cost)
+        prod.updated_at = datetime.utcnow()
+    from ..stock_document_service import recompute_putaway_status_for_document
+
+    items = (
+        db.query(StockDocumentItem)
+        .filter(StockDocumentItem.document_id == int(pw_doc.id))
+        .all()
+    )
+    recompute_putaway_status_for_document(pw_doc, items, db=db)
+    pw_doc.updated_at = datetime.utcnow()
+    db.flush()
+    return pw_doc, item
 
 
 def create_batch_pw_documents_for_putaway(

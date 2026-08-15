@@ -1,11 +1,10 @@
-import { Pencil, Plus, Power, Trash2 } from "lucide-react";
+import { Pencil, Plus, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import toast from "react-hot-toast";
 
 import {
   createProductionConfig,
   deleteProductionConfig,
-  disableProductionConfig,
   listProductionConfigs,
   updateProductionConfig,
   type AfterProductionAction,
@@ -22,10 +21,7 @@ import { brandPrimaryButtonClass } from "../../../design-system/brandUi";
 import { DAMAGE_TENANT_ID } from "../../../pages/damage/damageShared";
 import { SettingInfoButton } from "../../../pages/Settings/SettingInfoButton";
 import {
-  WmsBoolSettingRow,
-  wmsSettingControlInputClass,
   wmsSettingControlSelectClass,
-  wmsSettingsRowsStackClass,
 } from "../../../pages/Settings/wmsSettingsUi";
 import type {
   OrderUiPanelSubgroupRead,
@@ -34,12 +30,12 @@ import type {
 import type { PanelConfigurableUiStatusBrief } from "../../../utils/panelListStatusBriefMappers";
 import { PickingSettingsModal } from "../picking/PickingSettingsModal";
 import {
+  afterProductionActionLabel,
   productionExecutionMethodLabel,
-  PRODUCTION_TRIGGER_SCOPE_NOTE,
 } from "./productionConfigLabels";
 
 const LIST_GRID =
-  "sm:grid-cols-[minmax(8rem,1.1fr)_minmax(9rem,1fr)_minmax(7rem,0.85fr)_minmax(7rem,0.85fr)_minmax(9rem,1fr)_auto]";
+  "sm:grid-cols-[minmax(10rem,1.2fr)_minmax(10rem,1fr)_auto]";
 
 const listHeaderClass = "text-center text-[11px] font-semibold uppercase tracking-wide text-slate-400";
 
@@ -62,6 +58,19 @@ type ProductionConfigDraft = {
   statusAfterBlurred: boolean;
   statusAwaitingBlurred: boolean;
 };
+
+
+function statusNameByIdFromSummary(
+  summary: OrderUiStatusPanelSummary | null,
+  statusId: number,
+): string {
+  if (!summary) return "";
+  for (const block of summary.groups ?? []) {
+    const hit = block.sub_statuses.find((s) => s.id === statusId);
+    if (hit?.name) return String(hit.name).trim();
+  }
+  return "";
+}
 
 function statusIdFromValue(value: string): number | null {
   const n = Number(value);
@@ -127,7 +136,7 @@ function draftFromConfig(row: ProductionConfigRead): ProductionConfigDraft {
   return {
     editId: row.id,
     name: row.name,
-    isActive: row.is_active,
+    isActive: true,
     sourceStatusId: String(row.source_status_id),
     statusAfterProductionId: String(row.status_after_production_id),
     statusOnComponentShortageId: String(row.status_on_component_shortage_id),
@@ -216,7 +225,6 @@ function ProductionConfigForm({
   usedSourceStatusIds: number[];
 }) {
   const statusNameById = useMemo(() => buildOrderUiStatusNameById(orderUiSummary), [orderUiSummary]);
-  const isEdit = draft.editId != null;
   const selectDisabled = warehouseId == null || orderUiLoading || orderUiErr != null;
 
   const sourceId = statusIdFromValue(draft.sourceStatusId);
@@ -234,34 +242,6 @@ function ProductionConfigForm({
       ) : null}
       {orderUiErr ? <p className="text-sm text-red-700">{orderUiErr}</p> : null}
 
-      <div className={wmsSettingsRowsStackClass}>
-        <div className="rounded-xl border border-slate-200 bg-white p-3.5">
-          <label className="block text-sm font-semibold text-slate-900">
-            Nazwa
-            <span className="ml-1 text-red-600" aria-hidden>
-              *
-            </span>
-          </label>
-          <input
-            type="text"
-            className={`${wmsSettingControlInputClass} mt-3`}
-            value={draft.name}
-            onChange={(e) => setDraft((d) => (d ? { ...d, name: e.target.value } : d))}
-            placeholder="Np. Produkcja z zamówień ST"
-            maxLength={128}
-          />
-        </div>
-
-        <div className="rounded-xl border border-slate-200 bg-white p-3.5">
-          <WmsBoolSettingRow
-            label="Aktywna"
-            checked={draft.isActive}
-            onChange={(v) => setDraft((d) => (d ? { ...d, isActive: v } : d))}
-            hint="Nieaktywne konfiguracje nie uruchamiają produkcji z zamówień."
-          />
-        </div>
-      </div>
-
       <div className="grid grid-cols-1 gap-5 min-[720px]:grid-cols-2">
         <div className="min-w-0 rounded-xl border border-slate-200 bg-white p-3.5">
           <div className="flex min-w-0 items-center gap-1.5">
@@ -277,35 +257,37 @@ function ProductionConfigForm({
             />
           </div>
           <div className="mt-3">
-            {isEdit ? (
-              <p className="text-sm text-slate-600">
-                {orderUiSummary
-                  ? statusNameById.get(sourceId ?? 0) ?? `Status #${draft.sourceStatusId}`
-                  : `Status #${draft.sourceStatusId}`}
-              </p>
-            ) : (
-              <OrderUiStatusField
-                panelSummary={orderUiSummary}
-                panelSubgroups={panelSubgroups}
-                statusNameById={statusNameById}
-                selectedStatusId={sourceId}
-                onPick={(id) => {
-                  if (excludeSourceIds.includes(id ?? -1)) {
-                    toast.error("Ten status ma już przypisaną konfigurację produkcji.");
-                    return;
-                  }
-                  setDraft((d) =>
-                    d ? { ...d, sourceStatusId: id != null ? String(id) : "", sourceStatusBlurred: true } : d,
-                  );
-                }}
-                allowClear
-                clearLabel="— wybierz —"
-                placeholder="Wybierz status zamówienia…"
-                disabled={selectDisabled}
-                floatingZIndexClass="z-[5100]"
-              />
-            )}
-            {!isEdit && draft.sourceStatusBlurred && !draft.sourceStatusId ? (
+            <OrderUiStatusField
+              panelSummary={orderUiSummary}
+              panelSubgroups={panelSubgroups}
+              statusNameById={statusNameById}
+              selectedStatusId={sourceId}
+              onPick={(id) => {
+                if (excludeSourceIds.includes(id ?? -1)) {
+                  toast.error("Ten status ma już przypisaną konfigurację produkcji.");
+                  return;
+                }
+                const nextId = id != null ? String(id) : "";
+                setDraft((d) => {
+                  if (!d) return d;
+                  const statusLabel =
+                    id != null ? statusNameById.get(id)?.trim() || `Status #${id}` : "";
+                  const autoName = statusLabel ? `Produkcja — ${statusLabel}` : d.name;
+                  return {
+                    ...d,
+                    sourceStatusId: nextId,
+                    sourceStatusBlurred: true,
+                    name: d.editId != null && d.name.trim() ? d.name : autoName,
+                  };
+                });
+              }}
+              allowClear
+              clearLabel="— wybierz —"
+              placeholder="Wybierz status zamówienia…"
+              disabled={selectDisabled}
+              floatingZIndexClass="z-[5100]"
+            />
+            {draft.sourceStatusBlurred && !draft.sourceStatusId ? (
               <p className="mt-1.5 text-xs font-medium text-red-700" role="alert">
                 To pole jest wymagane.
               </p>
@@ -472,19 +454,13 @@ function ProductionConfigForm({
       </div>
 
       <div className="min-w-0 rounded-xl border border-slate-200 bg-white p-3.5">
-        <div className="mb-2 flex items-center gap-1.5">
-          <p className="text-sm font-semibold text-slate-900">Sposób realizacji</p>
-          <SettingInfoButton
-            title="Sposób realizacji"
-            description="Terminal WMS — kompletacja na kolektorze. Wydruk zlecenia — karta produkcyjna PDF."
-          />
-        </div>
+        <p className="mb-2 text-sm font-semibold text-slate-900">Sposób realizacji</p>
         <ProductionRadioGroup
           legend="Sposób realizacji"
           name="production-execution-method"
           value={draft.productionExecutionMethod}
           options={[
-            { value: "WMS", label: "Terminal WMS" },
+            { value: "WMS", label: "WMS" },
             { value: "PRINT", label: "Wydruk zlecenia" },
           ]}
           onChange={(v) => setDraft((d) => (d ? { ...d, productionExecutionMethod: v } : d))}
@@ -492,28 +468,19 @@ function ProductionConfigForm({
       </div>
 
       <div className="min-w-0 rounded-xl border border-slate-200 bg-white p-3.5">
-        <div className="mb-2 flex items-center gap-1.5">
-          <p className="text-sm font-semibold text-slate-900">Po wyprodukowaniu</p>
-          <SettingInfoButton
-            title="Po wyprodukowaniu"
-            description="Tylko zmień status — zamówienie przechodzi na status po produkcji. Otwórz pakowanie — dodatkowo otwiera ekran pakowania."
-          />
-        </div>
+        <p className="mb-2 text-sm font-semibold text-slate-900">Po wyprodukowaniu</p>
         <ProductionRadioGroup
           legend="Po wyprodukowaniu"
           name="after-production-action"
           value={draft.afterProductionAction}
           options={[
-            { value: "STATUS_ONLY", label: "Tylko zmień status" },
-            { value: "OPEN_PACKING", label: "Otwórz pakowanie" },
+            { value: "STATUS_ONLY", label: "Zmień status" },
+            { value: "OPEN_PACKING", label: "Przejdź do pakowania" },
           ]}
           onChange={(v) => setDraft((d) => (d ? { ...d, afterProductionAction: v } : d))}
         />
       </div>
 
-      <p className="rounded-lg border border-slate-100 bg-slate-50/80 px-3 py-2 text-xs text-slate-600">
-        {PRODUCTION_TRIGGER_SCOPE_NOTE}
-      </p>
     </div>
   );
 }
@@ -522,14 +489,12 @@ function ProductionConfigListRow({
   config,
   orderUiSummary,
   onEdit,
-  onDisable,
   onDelete,
   busy,
 }: {
   config: ProductionConfigRead;
   orderUiSummary: OrderUiStatusPanelSummary | null;
   onEdit: (row: ProductionConfigRead) => void;
-  onDisable: (row: ProductionConfigRead) => void;
   onDelete: (row: ProductionConfigRead) => void;
   busy: boolean;
 }) {
@@ -538,43 +503,21 @@ function ProductionConfigListRow({
     config.source_status_id,
     config.source_status_name ?? `Status #${config.source_status_id}`,
   );
-  const afterBrief = resolvePanelStatusBrief(
-    orderUiSummary,
-    config.status_after_production_id,
-    config.status_after_production_name ?? `Status #${config.status_after_production_id}`,
-  );
 
   return (
     <div
       className={`grid grid-cols-1 items-center gap-4 border-b border-slate-100 px-3 py-4 last:border-b-0 sm:gap-4 sm:px-4 lg:gap-5 ${LIST_GRID}`}
-      aria-label={`Konfiguracja produkcji: ${config.name}`}
+      aria-label={`Konfiguracja produkcji: ${config.source_status_name || config.name}`}
     >
-      <div className="min-w-0">
-        <p className="text-sm font-semibold text-slate-900">{config.name}</p>
-        <span
-          className={`mt-1 inline-flex rounded-full px-2 py-0.5 text-[11px] font-semibold ${
-            config.is_active ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-500"
-          }`}
-        >
-          {config.is_active ? "Aktywna" : "Wyłączona"}
-        </span>
-      </div>
       <div className="flex min-w-0 justify-center sm:justify-start">
         <ProductionConfigStatusBadge status={sourceBrief} />
       </div>
       <div className="min-w-0 text-center sm:text-left">
         <p className="text-sm font-medium text-slate-800">
           {productionExecutionMethodLabel(config.production_execution_method)}
+          <span className="text-slate-400"> · </span>
+          {afterProductionActionLabel(config.after_production_action)}
         </p>
-      </div>
-      <div className="min-w-0 text-center sm:text-left">
-        <p className="text-sm text-slate-700">
-          {config.finished_goods_buffer_location_name?.trim() ||
-            `#${config.finished_goods_buffer_location_id}`}
-        </p>
-      </div>
-      <div className="flex min-w-0 justify-center sm:justify-start">
-        <ProductionConfigStatusBadge status={afterBrief} />
       </div>
       <div className="flex shrink-0 items-center justify-end gap-1.5">
         <IconButton
@@ -586,17 +529,6 @@ function ProductionConfigListRow({
         >
           <Pencil className="h-4 w-4" strokeWidth={2} aria-hidden />
         </IconButton>
-        {config.is_active ? (
-          <IconButton
-            tone="neutral"
-            title="Wyłącz"
-            aria-label="Wyłącz"
-            disabled={busy}
-            onClick={() => onDisable(config)}
-          >
-            <Power className="h-4 w-4" strokeWidth={2} aria-hidden />
-          </IconButton>
-        ) : null}
         <IconButton
           tone="danger"
           title="Usuń"
@@ -730,14 +662,13 @@ export function ProductionConfiguratorPanel({ warehouseId }: Props) {
   };
 
   const validateDraft = (d: ProductionConfigDraft): string | null => {
-    if (!d.name.trim()) return "Podaj nazwę konfiguracji.";
     const sourceId = statusIdFromValue(d.sourceStatusId);
     const afterId = statusIdFromValue(d.statusAfterProductionId);
     const awaitingId = statusIdFromValue(d.statusAwaitingProductionId);
     const shortageId = statusIdFromValue(d.statusOnComponentShortageId);
     const bufferId = statusIdFromValue(d.finishedGoodsBufferLocationId);
 
-    if (d.editId == null && (sourceId == null || sourceId < 1)) {
+    if (sourceId == null || sourceId < 1) {
       setDraft({ ...d, sourceStatusBlurred: true });
       return "Wybierz status wejściowy.";
     }
@@ -779,10 +710,16 @@ export function ProductionConfiguratorPanel({ warehouseId }: Props) {
     setSaving(true);
     setSaveError(null);
     try {
+      const sourceId = Number(draft.sourceStatusId);
+      const statusLabel = statusNameByIdFromSummary(orderUiSummary, sourceId);
+      const resolvedName =
+        draft.name.trim() ||
+        (statusLabel ? `Produkcja — ${statusLabel}` : "Produkcja");
       if (draft.editId != null) {
         await updateProductionConfig(DAMAGE_TENANT_ID, warehouseId, draft.editId, {
-          name: draft.name.trim(),
-          is_active: draft.isActive,
+          name: resolvedName,
+          is_active: true,
+          source_status_id: sourceId,
           status_after_production_id: Number(draft.statusAfterProductionId),
           status_on_component_shortage_id: Number(draft.statusOnComponentShortageId),
           status_awaiting_production_id: Number(draft.statusAwaitingProductionId),
@@ -796,9 +733,9 @@ export function ProductionConfiguratorPanel({ warehouseId }: Props) {
         await createProductionConfig({
           tenant_id: DAMAGE_TENANT_ID,
           warehouse_id: warehouseId,
-          name: draft.name.trim(),
-          is_active: draft.isActive,
-          source_status_id: Number(draft.sourceStatusId),
+          name: resolvedName,
+          is_active: true,
+          source_status_id: sourceId,
           status_after_production_id: Number(draft.statusAfterProductionId),
           status_on_component_shortage_id: Number(draft.statusOnComponentShortageId),
           status_awaiting_production_id: Number(draft.statusAwaitingProductionId),
@@ -818,21 +755,6 @@ export function ProductionConfiguratorPanel({ warehouseId }: Props) {
       setSaveError(typeof msg === "string" ? msg : "Zapis konfiguracji nie powiódł się.");
     } finally {
       setSaving(false);
-    }
-  };
-
-  const handleDisable = async (row: ProductionConfigRead) => {
-    if (warehouseId == null) return;
-    if (!window.confirm(`Wyłączyć konfigurację „${row.name}"?`)) return;
-    setActionBusy(true);
-    try {
-      await disableProductionConfig(DAMAGE_TENANT_ID, warehouseId, row.id);
-      toast.success("Konfiguracja wyłączona.");
-      await loadConfigs();
-    } catch {
-      toast.error("Nie udało się wyłączyć konfiguracji.");
-    } finally {
-      setActionBusy(false);
     }
   };
 
@@ -888,11 +810,8 @@ export function ProductionConfiguratorPanel({ warehouseId }: Props) {
           <div
             className={`hidden gap-4 border-b border-slate-100 px-3 py-3 sm:grid sm:px-4 lg:gap-5 ${LIST_GRID}`}
           >
-            <p className={listHeaderClass}>Nazwa</p>
             <p className={listHeaderClass}>Status wejściowy</p>
             <p className={listHeaderClass}>Realizacja</p>
-            <p className={listHeaderClass}>Bufor</p>
-            <p className={listHeaderClass}>Po produkcji</p>
             <span className="sr-only">Akcje</span>
           </div>
           {configs.map((row) => (
@@ -901,7 +820,6 @@ export function ProductionConfiguratorPanel({ warehouseId }: Props) {
               config={row}
               orderUiSummary={orderUiSummary}
               onEdit={openEdit}
-              onDisable={handleDisable}
               onDelete={handleDelete}
               busy={busy}
             />
@@ -912,7 +830,6 @@ export function ProductionConfiguratorPanel({ warehouseId }: Props) {
       <PickingSettingsModal
         open={draft != null}
         title={draft?.editId != null ? "Edycja konfiguracji produkcji" : "Nowa konfiguracja produkcji"}
-        subtitle="Zmiany zapisujesz tutaj — niezależnie od pozostałych ustawień produkcji."
         onClose={closeDraft}
         onSave={() => void saveDraft()}
         dirty={draftDirty}

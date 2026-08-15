@@ -249,6 +249,7 @@ def test_create_update_multi_hall_and_status_conflicts():
             body=ProductionConfigUpdate(
                 name="Produkcja — hala B",
                 is_active=True,
+                source_status_id=20,
                 status_after_production_id=10,
                 status_on_component_shortage_id=12,
                 status_awaiting_production_id=22,

@@ -81,6 +81,10 @@ type Props = {
   onEditCompositionHandled?: () => void;
   /** Live cost estimate while editing (for external info panel). */
   onCostEstimateChange?: (estimate: CompositionCostEstimateRead | null) => void;
+  /** Called when user cancels the editor (presentation parent can close edit mode). */
+  onCancelEdit?: () => void;
+  /** Hide the section title + create CTA (parent already shows chrome). */
+  hideSectionChrome?: boolean;
 };
 
 function modeCopy(mode: CompositionMode) {
@@ -123,10 +127,14 @@ export function CompositionVisualEditor({
   editCompositionId,
   onEditCompositionHandled,
   onCostEstimateChange,
+  onCancelEdit,
+  hideSectionChrome = false,
 }: Props) {
   const copy = modeCopy(mode);
   const [err, setErr] = useState<string | null>(null);
-  const [editorOpen, setEditorOpen] = useState(false);
+  const [editorOpen, setEditorOpen] = useState(
+    () => Boolean(requestNewEditor || (editCompositionId != null && editCompositionId > 0)),
+  );
   const [editingId, setEditingId] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -316,22 +324,20 @@ export function CompositionVisualEditor({
   return (
     <section className="space-y-6">
       {/* Nagłówek sekcji — mock */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-lg font-bold text-gray-900">{sectionTitle}</h2>
-          {sectionHint?.trim() ? (
-            <p className="mt-0.5 text-xs text-gray-500">{sectionHint}</p>
-          ) : null}
+      {!hideSectionChrome ? (
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-lg font-bold text-gray-900">{sectionTitle}</h2>
+            {sectionHint?.trim() ? (
+              <p className="mt-0.5 text-xs text-gray-500">{sectionHint}</p>
+            ) : null}
+          </div>
+          <PrimaryButton type="button" density="compact" onClick={openNew}>
+            <Plus className="mr-2 h-4 w-4" strokeWidth={2.5} aria-hidden />
+            {copy.addLabel}
+          </PrimaryButton>
         </div>
-        <PrimaryButton
-          type="button"
-          density="compact"
-          onClick={openNew}
-        >
-          <Plus className="mr-2 h-4 w-4" strokeWidth={2.5} aria-hidden />
-          {copy.addLabel}
-        </PrimaryButton>
-      </div>
+      ) : null}
 
       {err ? (
         <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">{err}</div>
@@ -560,10 +566,13 @@ export function CompositionVisualEditor({
             </div>
 
             <div className="mt-4 flex flex-col items-center border-t border-gray-100 pt-6">
+              <h4 className="mb-4 text-[10px] font-bold uppercase tracking-wider text-gray-400">
+                Przepływ produkcji
+              </h4>
               {previewLines.map((ln) => (
                 <div
                   key={ln.id}
-                  className="w-full max-w-sm rounded-lg border border-gray-200 bg-gray-50 p-3 text-center shadow-sm"
+                  className="mb-2 w-full max-w-sm rounded-lg border border-gray-200 bg-gray-50 p-3 text-center shadow-sm"
                 >
                   <div className="text-sm font-medium text-gray-800">{ln.name}</div>
                   <div className="mt-1 text-xs text-gray-500">
@@ -575,16 +584,37 @@ export function CompositionVisualEditor({
                 <p className="text-sm text-gray-500">Dodaj składniki…</p>
               ) : null}
 
-              <div className="relative h-6 w-px bg-gray-300">
-                <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 transform text-[10px] text-gray-400">
-                  <ArrowDown className="h-3 w-3" aria-hidden />
-                </div>
-              </div>
+              {previewLines.length > 0 ? (
+                <>
+                  <div className="relative my-1 h-6 w-px bg-gray-300">
+                    <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 transform text-[10px] text-gray-400">
+                      <ArrowDown className="h-3 w-3" aria-hidden />
+                    </div>
+                  </div>
+                  <div className="w-full max-w-sm rounded-lg border border-slate-300 bg-white p-3 text-center shadow-sm">
+                    <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                      Produkcja
+                    </div>
+                    <div className="mt-0.5 text-sm font-semibold text-slate-800">
+                      {name.trim() || copy.defaultName}
+                    </div>
+                  </div>
+                  <div className="relative my-1 h-6 w-px bg-gray-300">
+                    <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 transform text-[10px] text-gray-400">
+                      <ArrowDown className="h-3 w-3" aria-hidden />
+                    </div>
+                  </div>
+                </>
+              ) : null}
 
               <div
                 className={`mt-1 w-full max-w-sm rounded-lg border p-3 text-center shadow-sm ${copy.outputBorder}`}
               >
-                <div className="text-sm font-bold">{productName}</div>
+                <div className="text-[10px] font-bold uppercase tracking-wider opacity-80">
+                  Produkt końcowy
+                </div>
+                <div className="mt-0.5 text-sm font-bold">{productName}</div>
+                <div className="mt-0.5 text-xs opacity-80">{yieldQty} szt.</div>
               </div>
             </div>
 
@@ -599,7 +629,10 @@ export function CompositionVisualEditor({
             <GhostButton
               type="button"
               density="compact"
-              onClick={() => setEditorOpen(false)}
+              onClick={() => {
+                setEditorOpen(false);
+                onCancelEdit?.();
+              }}
               className="!px-4 !py-2 !text-sm !font-medium !text-gray-600 hover:!bg-transparent hover:!text-gray-800"
             >
               Anuluj

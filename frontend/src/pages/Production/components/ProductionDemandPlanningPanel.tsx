@@ -539,7 +539,7 @@ function RecommendationCard({
                   }
                   tip={
                     <p>
-                      Sprawdź zakładkę Materiały, aby zobaczyć konkretne niedobory i źródła zapotrzebowania.
+                      Sprawdź zakładkę Materiały, aby zobaczyć konkretne niedobory i zlecenia wymagające materiału.
                     </p>
                   }
                 />
@@ -593,7 +593,7 @@ function RecommendationCard({
           )
         }
       >
-        Utwórz zlecenie / partię
+        Utwórz zlecenie
       </PrimaryButton>
     </Card>
   );

@@ -1864,15 +1864,28 @@ def _emit_putaway_domain_activity(
             batch_id=int(bat_id) if bat_id else None,
             product_id=product_ids[0] if product_ids else None,
             actor_user_id=actor_user_id,
+            quantity=None,
         )
         if production_completed:
+            produced = None
+            planned = None
+            if mo_id:
+                from ..models.production import ProductionOrder
+
+                mo = db.query(ProductionOrder).filter(ProductionOrder.id == int(mo_id)).first()
+                if mo is not None:
+                    produced = float(mo.produced_quantity or 0)
+                    planned = float(mo.planned_quantity or 0)
             emit_production_completed(
                 db,
                 tenant_id=tid,
                 warehouse_id=wh_id,
                 production_order_id=int(mo_id) if mo_id else None,
                 batch_id=int(bat_id) if bat_id else None,
+                product_id=product_ids[0] if product_ids else None,
                 actor_user_id=None,  # system completion after putaway
+                produced_total=produced,
+                planned_quantity=planned,
             )
 
 

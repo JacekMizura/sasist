@@ -402,6 +402,37 @@ def revalidate_awaiting_order_after_fg_increase(
                                 "severity": "info",
                             },
                         )
+                        try:
+                            from .production_execution.production_domain_activity import (
+                                emit_production_external_stock_covered_order,
+                                emit_production_source_detached,
+                            )
+
+                            mo_id = red.get("production_order_id")
+                            emit_production_source_detached(
+                                db,
+                                tenant_id=int(order.tenant_id),
+                                warehouse_id=int(order.warehouse_id) if getattr(order, "warehouse_id", None) else None,
+                                production_order_id=int(mo_id) if mo_id else None,
+                                order_id=int(oid),
+                                product_id=int(oi.product_id),
+                                actor_user_id=None,
+                                label=str(mo_number or "") or None,
+                                correlation_suffix=f"{oi.product_id}:{_qty_label(before_out)}",
+                            )
+                            emit_production_external_stock_covered_order(
+                                db,
+                                tenant_id=int(order.tenant_id),
+                                warehouse_id=int(order.warehouse_id) if getattr(order, "warehouse_id", None) else None,
+                                production_order_id=int(mo_id) if mo_id else None,
+                                order_id=int(oid),
+                                product_id=int(oi.product_id),
+                                actor_user_id=None,
+                                label=str(mo_number or "") or None,
+                                correlation_suffix=f"{oi.product_id}:{_qty_label(before_out)}",
+                            )
+                        except Exception:
+                            pass
                     elif desired_out <= 1e-9 or red.get("cancelled_source"):
                         _emit_demand_activity(
                             db,
@@ -445,6 +476,28 @@ def revalidate_awaiting_order_after_fg_increase(
                                 ],
                             },
                         )
+                        try:
+                            from .production_execution.production_domain_activity import (
+                                emit_production_demand_reduced,
+                            )
+
+                            mo_id = red.get("production_order_id")
+                            emit_production_demand_reduced(
+                                db,
+                                tenant_id=int(order.tenant_id),
+                                warehouse_id=int(order.warehouse_id)
+                                if getattr(order, "warehouse_id", None)
+                                else None,
+                                production_order_id=int(mo_id) if mo_id else None,
+                                order_id=int(oid),
+                                product_id=int(oi.product_id),
+                                old_quantity=float(before_out),
+                                new_quantity=float(desired_out),
+                                actor_user_id=None,
+                                label=str(mo_number or "") or None,
+                            )
+                        except Exception:
+                            pass
 
     # Final full-order readiness after mutations
     readiness_final = evaluate_order_picking_entry_readiness(db, order=order, dry_run=False)
