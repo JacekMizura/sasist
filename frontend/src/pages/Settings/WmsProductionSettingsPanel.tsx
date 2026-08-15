@@ -21,10 +21,14 @@ import { DocumentTemplateScopeSection } from "./document-templates/components/Do
 import { PRODUCTION_SCOPE_KINDS } from "./document-templates/documentTemplateScopeKinds";
 import { ProductionConfiguratorPanel } from "../../modules/wmsSettings/production/ProductionConfiguratorPanel";
 import {
+  AllocationStrategySelect,
+  ForecastStrategySelect,
+} from "../../modules/wmsSettings/production/HelpfulStrategySelect";
+import { productionSettingsHelp } from "../../modules/wmsSettings/production/productionSettingsHelp";
+import {
   WmsBoolSettingRow,
   WmsControlSettingRow,
   wmsSettingControlInputClass,
-  wmsSettingControlSelectClass,
   wmsSettingsRowsStackClass,
 } from "./wmsSettingsUi";
 
@@ -39,20 +43,6 @@ const DEFAULT_TRACEABILITY: ProductionTraceabilitySettings = {
   require_expiry: false,
 };
 
-const ALLOCATION_STRATEGIES: { key: ProductionReservationSettings["allocation_strategy"]; label: string }[] = [
-  { key: "FIFO", label: "FIFO — najstarsze partie pierwsze" },
-  { key: "FEFO", label: "FEFO — najkrótsza data ważności" },
-  { key: "LIFO", label: "LIFO — najnowsze partie pierwsze" },
-];
-
-const FORECAST_STRATEGIES: { key: ProductionForecastSettings["strategy"]; label: string }[] = [
-  { key: "PERIOD_AVERAGE", label: "Średnia z okresu" },
-  { key: "WEIGHTED_AVERAGE", label: "Średnia ważona" },
-  { key: "WEEKDAY_AVERAGE", label: "Średnia z tego samego dnia tygodnia" },
-  { key: "MEDIAN", label: "Mediana sprzedaży" },
-  { key: "MAX_DAILY", label: "Maksymalna sprzedaż dzienna" },
-  { key: "AI_SMART", label: "Inteligentna (AI — w przygotowaniu)" },
-];
 const SECTION_DISPLAY = "wms-production-terminal-display";
 const SECTION_REQUIRED = "wms-production-terminal-required";
 
@@ -63,12 +53,10 @@ type Props = {
 function SectionCard({
   sectionId,
   title,
-  summary,
   children,
 }: {
   sectionId: string;
   title?: string;
-  summary?: string;
   children: ReactNode;
 }) {
   const meta = [
@@ -81,47 +69,79 @@ function SectionCard({
     { id: "wms-production-document-templates", icon: FileText, iconClassName: "bg-indigo-50 text-indigo-600" },
   ].find((s) => s.id === sectionId);
   return (
-    <WmsSettingsSection
-      id={sectionId}
-      title={title}
-      summary={summary}
-      icon={meta?.icon}
-      iconClassName={meta?.iconClassName}
-    >
+    <WmsSettingsSection id={sectionId} title={title} icon={meta?.icon} iconClassName={meta?.iconClassName}>
       {children}
     </WmsSettingsSection>
   );
 }
 
-function BoolRow({
-  label,
-  checked,
+const DISPLAY_FIELDS: {
+  key: keyof ProductionTerminalDisplaySettings;
+  label: string;
+  helpKey: keyof typeof productionSettingsHelp;
+}[] = [
+  { key: "show_product_image", label: "Zdjęcie", helpKey: "show_product_image" },
+  { key: "show_name", label: "Nazwa", helpKey: "show_name" },
+  { key: "show_sku", label: "SKU", helpKey: "show_sku" },
+  { key: "show_ean", label: "EAN", helpKey: "show_ean" },
+  { key: "show_catalog_number", label: "Numer katalogowy", helpKey: "show_catalog_number" },
+  { key: "show_source_location", label: "Lokalizacja źródłowa", helpKey: "show_source_location" },
+  { key: "show_target_location", label: "Lokalizacja docelowa", helpKey: "show_target_location" },
+  { key: "show_stock_level", label: "Stan magazynowy", helpKey: "show_stock_level" },
+  { key: "show_unit", label: "Jednostka", helpKey: "show_unit" },
+  { key: "show_barcode", label: "Kod kreskowy", helpKey: "show_barcode" },
+];
+
+const REQUIRED_FIELDS: {
+  key: keyof ProductionTerminalRequiredSettings;
+  label: string;
+  help: (typeof productionSettingsHelp)["requireOperator"];
+}[] = [
+  { key: "require_operator", label: "Operator", help: productionSettingsHelp.requireOperator },
+  {
+    key: "require_quality_control",
+    label: "Kontrola jakości",
+    help: productionSettingsHelp.requireQualityControl,
+  },
+];
+
+const PRODUCTION_DOCUMENT_KINDS = PRODUCTION_SCOPE_KINDS.map((k) => ({
+  ...k,
+  info:
+    k.kindCode === "production_card"
+      ? productionSettingsHelp.productionCardTemplate
+      : productionSettingsHelp.materialPickListTemplate,
+}));
+
+function ChipGroup<T extends string | number>({
+  options,
+  value,
   onChange,
 }: {
-  label: string;
-  checked: boolean;
-  onChange: (v: boolean) => void;
+  options: { value: T; label: string }[];
+  value: T;
+  onChange: (v: T) => void;
 }) {
-  return <WmsBoolSettingRow label={label} checked={checked} onChange={onChange} />;
+  return (
+    <div className="flex flex-wrap gap-2">
+      {options.map((opt) => {
+        const active = value === opt.value;
+        return (
+          <button
+            key={String(opt.value)}
+            type="button"
+            onClick={() => onChange(opt.value)}
+            className={`rounded-lg px-3 py-2 text-sm font-semibold transition ${
+              active ? "bg-orange-500 text-white shadow-sm" : "bg-slate-100 text-slate-700 hover:bg-slate-200"
+            }`}
+          >
+            {opt.label}
+          </button>
+        );
+      })}
+    </div>
+  );
 }
-
-const DISPLAY_FIELDS: { key: keyof ProductionTerminalDisplaySettings; label: string }[] = [
-  { key: "show_product_image", label: "Zdjęcie" },
-  { key: "show_name", label: "Nazwa" },
-  { key: "show_sku", label: "SKU" },
-  { key: "show_ean", label: "EAN" },
-  { key: "show_catalog_number", label: "Numer katalogowy" },
-  { key: "show_source_location", label: "Lokalizacja źródłowa" },
-  { key: "show_target_location", label: "Lokalizacja docelowa" },
-  { key: "show_stock_level", label: "Stan magazynowy" },
-  { key: "show_unit", label: "Jednostka" },
-  { key: "show_barcode", label: "Kod kreskowy" },
-];
-
-const REQUIRED_FIELDS: { key: keyof ProductionTerminalRequiredSettings; label: string }[] = [
-  { key: "require_operator", label: "Operator" },
-  { key: "require_quality_control", label: "Kontrola jakości" },
-];
 
 export default function WmsProductionSettingsPanel({ warehouseId }: Props) {
   const [loading, setLoading] = useState(true);
@@ -168,18 +188,23 @@ export default function WmsProductionSettingsPanel({ warehouseId }: Props) {
   }, [load]);
 
   const dirty = useMemo(() => {
-    if (!saved || !draftDisplay || !draftRequired || !draftForecast || !draftReservation || !draftTraceability) return false;
+    if (!saved || !draftDisplay || !draftRequired || !draftForecast || !draftReservation || !draftTraceability) {
+      return false;
+    }
     return (
       JSON.stringify(saved.terminal_display) !== JSON.stringify(draftDisplay) ||
       JSON.stringify(saved.terminal_required) !== JSON.stringify(draftRequired) ||
       JSON.stringify(saved.forecast) !== JSON.stringify(draftForecast) ||
-      JSON.stringify(saved.reservation ?? { allocation_strategy: "FEFO", allow_sales_locations: false }) !== JSON.stringify(draftReservation) ||
+      JSON.stringify(saved.reservation ?? { allocation_strategy: "FEFO", allow_sales_locations: false }) !==
+        JSON.stringify(draftReservation) ||
       JSON.stringify(saved.traceability ?? DEFAULT_TRACEABILITY) !== JSON.stringify(draftTraceability)
     );
   }, [saved, draftDisplay, draftRequired, draftForecast, draftReservation, draftTraceability]);
 
   const save = async () => {
-    if (!draftDisplay || !draftRequired || !draftForecast || !draftReservation || !draftTraceability || !dirty) return;
+    if (!draftDisplay || !draftRequired || !draftForecast || !draftReservation || !draftTraceability || !dirty) {
+      return;
+    }
     setSaving(true);
     try {
       const data = await saveWmsProductionSettings({
@@ -242,7 +267,6 @@ export default function WmsProductionSettingsPanel({ warehouseId }: Props) {
   return (
     <WmsSettingsTabFrame
       title="Produkcja"
-      description="Konfiguracja produkcji z zamówień, prognozowanie, rezerwacje i terminal WMS."
       sections={sections}
       asideLabel="Produkcja — nawigacja"
       dirty={dirty}
@@ -263,30 +287,23 @@ export default function WmsProductionSettingsPanel({ warehouseId }: Props) {
         <ProductionConfiguratorPanel warehouseId={warehouseId ?? resolvedWh} />
       </SectionCard>
 
-      <SectionCard
-        sectionId={SECTION_FORECAST}
-        title="Ogólne / prognoza"
-        summary="Strategia wyliczania dziennej sprzedaży i automatyczne uzupełnianie zapasu."
-      >
+      <SectionCard sectionId={SECTION_FORECAST} title="Ogólne / prognoza">
         <div className={wmsSettingsRowsStackClass}>
-          <WmsControlSettingRow label="Strategia prognozy">
-            <select
-              className={wmsSettingControlSelectClass}
+          <WmsControlSettingRow
+            label="Strategia prognozy"
+            hint={productionSettingsHelp.forecastStrategy.description}
+            infoTitle={productionSettingsHelp.forecastStrategy.title}
+          >
+            <ForecastStrategySelect
               value={draftForecast.strategy}
-              onChange={(e) =>
-                setDraftForecast((prev) =>
-                  prev ? { ...prev, strategy: e.target.value as ProductionForecastSettings["strategy"] } : prev,
-                )
-              }
-            >
-              {FORECAST_STRATEGIES.map((s) => (
-                <option key={s.key} value={s.key}>
-                  {s.label}
-                </option>
-              ))}
-            </select>
+              onChange={(strategy) => setDraftForecast((prev) => (prev ? { ...prev, strategy } : prev))}
+            />
           </WmsControlSettingRow>
-          <WmsControlSettingRow label="Okres historii sprzedaży (dni)">
+          <WmsControlSettingRow
+            label="Okres historii sprzedaży"
+            hint={productionSettingsHelp.salesLookbackDays.description}
+            infoTitle={productionSettingsHelp.salesLookbackDays.title}
+          >
             <input
               type="number"
               min={7}
@@ -303,6 +320,14 @@ export default function WmsProductionSettingsPanel({ warehouseId }: Props) {
           <WmsBoolSettingRow
             label="Automatyczne uzupełnianie zapasu"
             checked={Boolean(draftForecast.auto_stock_replenishment)}
+            hint={productionSettingsHelp.autoStockReplenishment.description}
+            info={
+              <SettingInfoButton
+                title={productionSettingsHelp.autoStockReplenishment.title}
+                description={productionSettingsHelp.autoStockReplenishment.description}
+                tip={productionSettingsHelp.autoStockReplenishment.tip}
+              />
+            }
             onChange={(v) =>
               setDraftForecast((prev) =>
                 prev
@@ -317,126 +342,84 @@ export default function WmsProductionSettingsPanel({ warehouseId }: Props) {
             }
           />
           {draftForecast.auto_stock_replenishment ? (
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <div className="flex items-center gap-1.5">
-                  <p className="text-sm font-medium text-slate-800">Docelowe pokrycie sprzedaży</p>
-                  <span
-                    className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-slate-100 text-xs font-bold text-slate-500"
-                    title="System oblicza zapas docelowy na podstawie średniej sprzedaży i wybranego okresu. Uwzględnia obecny stan oraz produkty będące już w produkcji."
-                  >
-                    i
-                  </span>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  {(
-                    [
-                      { days: 1 as const, label: "1 dzień" },
-                      { days: 3 as const, label: "3 dni" },
-                      { days: 7 as const, label: "7 dni" },
-                      { days: 14 as const, label: "14 dni" },
-                    ] as const
-                  ).map((opt) => {
-                    const active = (draftForecast.stock_replenishment_coverage_days ?? 7) === opt.days;
-                    return (
-                      <button
-                        key={opt.days}
-                        type="button"
-                        onClick={() =>
-                          setDraftForecast((prev) =>
-                            prev ? { ...prev, stock_replenishment_coverage_days: opt.days } : prev,
-                          )
-                        }
-                        className={`rounded-lg px-3 py-2 text-sm font-semibold transition ${
-                          active
-                            ? "bg-orange-500 text-white shadow-sm"
-                            : "bg-slate-100 text-slate-700 hover:bg-slate-200"
-                        }`}
-                      >
-                        {opt.label}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-              <div className="space-y-2">
-                <div className="flex items-center gap-1.5">
-                  <p className="text-sm font-medium text-slate-800">Automatyczne przeliczanie</p>
-                  <span
-                    className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-slate-100 text-xs font-bold text-slate-500"
-                    title="System okresowo analizuje sprzedaż, aktualny stan oraz produkcję w toku i automatycznie tworzy zlecenia uzupełniające. Produkcja wynikająca z zamówień klientów ma zawsze pierwszeństwo."
-                  >
-                    i
-                  </span>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  {(
-                    [
-                      { value: "hourly" as const, label: "Co godzinę" },
-                      { value: "every_3_hours" as const, label: "Co 3 godziny" },
-                      { value: "every_6_hours" as const, label: "Co 6 godzin" },
-                      { value: "daily" as const, label: "Raz dziennie" },
-                    ] as const
-                  ).map((opt) => {
-                    const active = (draftForecast.stock_replenishment_interval ?? "daily") === opt.value;
-                    return (
-                      <button
-                        key={opt.value}
-                        type="button"
-                        onClick={() =>
-                          setDraftForecast((prev) =>
-                            prev ? { ...prev, stock_replenishment_interval: opt.value } : prev,
-                          )
-                        }
-                        className={`rounded-lg px-3 py-2 text-sm font-semibold transition ${
-                          active
-                            ? "bg-orange-500 text-white shadow-sm"
-                            : "bg-slate-100 text-slate-700 hover:bg-slate-200"
-                        }`}
-                      >
-                        {opt.label}
-                      </button>
-                    );
-                  })}
-                </div>
-                <p className="text-xs text-slate-500">
-                  System okresowo analizuje sprzedaż, aktualny stan oraz produkcję w toku i automatycznie
-                  tworzy zlecenia uzupełniające. Produkcja wynikająca z zamówień klientów ma zawsze
-                  pierwszeństwo.
-                </p>
-              </div>
-            </div>
+            <>
+              <WmsControlSettingRow
+                label="Docelowe pokrycie"
+                hint={productionSettingsHelp.coverageDays.description}
+                infoTitle={productionSettingsHelp.coverageDays.title}
+              >
+                <ChipGroup
+                  value={(draftForecast.stock_replenishment_coverage_days ?? 7) as 1 | 3 | 7 | 14}
+                  onChange={(days) =>
+                    setDraftForecast((prev) =>
+                      prev ? { ...prev, stock_replenishment_coverage_days: days } : prev,
+                    )
+                  }
+                  options={[
+                    { value: 1 as const, label: "1 dzień" },
+                    { value: 3 as const, label: "3 dni" },
+                    { value: 7 as const, label: "7 dni" },
+                    { value: 14 as const, label: "14 dni" },
+                  ]}
+                />
+              </WmsControlSettingRow>
+              <WmsControlSettingRow
+                label="Automatyczne przeliczanie"
+                hint={productionSettingsHelp.replenishmentInterval.description}
+                infoTitle={productionSettingsHelp.replenishmentInterval.title}
+              >
+                <ChipGroup
+                  value={(draftForecast.stock_replenishment_interval ?? "daily") as NonNullable<
+                    ProductionForecastSettings["stock_replenishment_interval"]
+                  >}
+                  onChange={(interval) =>
+                    setDraftForecast((prev) =>
+                      prev ? { ...prev, stock_replenishment_interval: interval } : prev,
+                    )
+                  }
+                  options={[
+                    { value: "hourly" as const, label: "Co godzinę" },
+                    { value: "every_3_hours" as const, label: "Co 3 godziny" },
+                    { value: "every_6_hours" as const, label: "Co 6 godzin" },
+                    { value: "daily" as const, label: "Raz dziennie" },
+                  ]}
+                />
+              </WmsControlSettingRow>
+            </>
           ) : null}
         </div>
       </SectionCard>
 
-      <SectionCard
-        sectionId={SECTION_TRACEABILITY}
-        title="Identyfikowalność"
-        summary="Niezależne wymagania identyfikacji materiałów i wyrobów w procesie produkcji."
-      >
+      <SectionCard sectionId={SECTION_TRACEABILITY} title="Identyfikowalność">
         <div className={wmsSettingsRowsStackClass}>
-          <WmsControlSettingRow label="Tryb identyfikowalności">
+          <WmsControlSettingRow
+            label="Identyfikowalność"
+            info={
+              <SettingInfoButton
+                title={productionSettingsHelp.traceabilityMode.title}
+                description={productionSettingsHelp.traceabilityMode.description}
+                tip={productionSettingsHelp.traceabilityMode.tip}
+              />
+            }
+          >
             <div className="flex flex-wrap items-center gap-5">
-              {([
-                ["OFF", "Wyłączona"],
-                ["CONFIGURED", "Włączona"],
-              ] as const).map(([value, label]) => (
+              {(
+                [
+                  ["OFF", "Wyłączona"],
+                  ["CONFIGURED", "Włączona"],
+                ] as const
+              ).map(([value, label]) => (
                 <label key={value} className="inline-flex items-center gap-2 text-sm font-medium text-slate-800">
                   <input
                     type="radio"
                     name="production-traceability-mode"
                     checked={draftTraceability.mode === value}
-                    onChange={() => setDraftTraceability((prev) => prev ? { ...prev, mode: value } : prev)}
+                    onChange={() => setDraftTraceability((prev) => (prev ? { ...prev, mode: value } : prev))}
                     className="text-orange-600 focus:ring-orange-500"
                   />
                   {label}
                 </label>
               ))}
-              <SettingInfoButton
-                title="Identyfikowalność produkcji"
-                description="Te wymagania dotyczą wyłącznie produkcji i są niezależne od ustawień Przyjęcia. Partia (dokument) ≠ Numer partii (LOT)."
-              />
             </div>
           </WmsControlSettingRow>
           {draftTraceability.mode === "CONFIGURED" ? (
@@ -444,54 +427,48 @@ export default function WmsProductionSettingsPanel({ warehouseId }: Props) {
               <WmsBoolSettingRow
                 label="Numer partii (LOT)"
                 checked={draftTraceability.require_batch}
-                onChange={(v) => setDraftTraceability((prev) => prev ? { ...prev, require_batch: v } : prev)}
+                hint={productionSettingsHelp.requireBatch.description}
+                infoTitle={productionSettingsHelp.requireBatch.title}
+                onChange={(v) => setDraftTraceability((prev) => (prev ? { ...prev, require_batch: v } : prev))}
               />
               <WmsBoolSettingRow
                 label="Numer seryjny (SN)"
                 checked={draftTraceability.require_serial}
-                onChange={(v) => setDraftTraceability((prev) => prev ? { ...prev, require_serial: v } : prev)}
+                hint={productionSettingsHelp.requireSerial.description}
+                infoTitle={productionSettingsHelp.requireSerial.title}
+                onChange={(v) => setDraftTraceability((prev) => (prev ? { ...prev, require_serial: v } : prev))}
               />
               <WmsBoolSettingRow
                 label="Data ważności"
                 checked={draftTraceability.require_expiry}
-                onChange={(v) => setDraftTraceability((prev) => prev ? { ...prev, require_expiry: v } : prev)}
+                hint={productionSettingsHelp.requireExpiry.description}
+                infoTitle={productionSettingsHelp.requireExpiry.title}
+                onChange={(v) => setDraftTraceability((prev) => (prev ? { ...prev, require_expiry: v } : prev))}
               />
             </>
           ) : null}
         </div>
       </SectionCard>
 
-      <SectionCard
-        sectionId={SECTION_RESERVATION}
-        title="Rezerwacje"
-        summary="Strategia automatycznej alokacji lokalizacji przy rezerwacji surowców produkcji."
-      >
+      <SectionCard sectionId={SECTION_RESERVATION} title="Rezerwacje">
         <div className={wmsSettingsRowsStackClass}>
-          <WmsControlSettingRow label="Strategia alokacji">
-            <select
-              className={wmsSettingControlSelectClass}
+          <WmsControlSettingRow
+            label="Strategia alokacji"
+            hint={productionSettingsHelp.allocationStrategy.description}
+            infoTitle={productionSettingsHelp.allocationStrategy.title}
+          >
+            <AllocationStrategySelect
               value={draftReservation.allocation_strategy}
-              onChange={(e) =>
-                setDraftReservation((prev) =>
-                  prev
-                    ? {
-                        ...prev,
-                        allocation_strategy: e.target.value as ProductionReservationSettings["allocation_strategy"],
-                      }
-                    : prev,
-                )
+              onChange={(allocation_strategy) =>
+                setDraftReservation((prev) => (prev ? { ...prev, allocation_strategy } : prev))
               }
-            >
-              {ALLOCATION_STRATEGIES.map((s) => (
-                <option key={s.key} value={s.key}>
-                  {s.label}
-                </option>
-              ))}
-            </select>
+            />
           </WmsControlSettingRow>
           <WmsBoolSettingRow
-            label="Dopuszczaj lokalizacje sprzedażowe (sklep, ekspozycja, POS) przy rezerwacji materiałów."
+            label="Uwzględniaj lokalizacje sprzedażowe"
             checked={draftReservation.allow_sales_locations}
+            hint={productionSettingsHelp.allowSalesLocations.description}
+            infoTitle={productionSettingsHelp.allowSalesLocations.title}
             onChange={(v) =>
               setDraftReservation((prev) => (prev ? { ...prev, allow_sales_locations: v } : prev))
             }
@@ -499,51 +476,50 @@ export default function WmsProductionSettingsPanel({ warehouseId }: Props) {
         </div>
       </SectionCard>
 
-      <SectionCard
-        sectionId={SECTION_DISPLAY}
-        title="Wygląd"
-        summary="Informacje o produkcie w kreatorze zleceń i terminalu produkcyjnym (SKU / EAN / nr katalogowy)."
-      >
+      <SectionCard sectionId={SECTION_DISPLAY} title="Wygląd terminala">
         <div className={wmsSettingsRowsStackClass}>
-          {DISPLAY_FIELDS.map(({ key, label }) => (
-            <BoolRow
-              key={key}
-              label={label}
-              checked={draftDisplay[key]}
-              onChange={(v) => setDraftDisplay((prev) => (prev ? { ...prev, [key]: v } : prev))}
-            />
-          ))}
+          {DISPLAY_FIELDS.map(({ key, label, helpKey }) => {
+            const help = productionSettingsHelp[helpKey] as {
+              title: string;
+              description: ReactNode;
+            };
+            return (
+              <WmsBoolSettingRow
+                key={key}
+                label={label}
+                checked={draftDisplay[key]}
+                hint={help.description}
+                infoTitle={help.title}
+                onChange={(v) => setDraftDisplay((prev) => (prev ? { ...prev, [key]: v } : prev))}
+              />
+            );
+          })}
         </div>
       </SectionCard>
 
-      <SectionCard
-        sectionId={SECTION_REQUIRED}
-        title="Terminal / sposób pracy"
-        summary="Walidacja i pola wymagane przy zakończeniu produkcji w terminalu WMS."
-      >
+      <SectionCard sectionId={SECTION_REQUIRED} title="Terminal / sposób pracy">
         <div className={wmsSettingsRowsStackClass}>
-          {REQUIRED_FIELDS.map(({ key, label }) => (
-            <BoolRow
+          {REQUIRED_FIELDS.map(({ key, label, help }) => (
+            <WmsBoolSettingRow
               key={key}
               label={label}
               checked={draftRequired[key]}
+              hint={help.description}
+              infoTitle={help.title}
               onChange={(v) => setDraftRequired((prev) => (prev ? { ...prev, [key]: v } : prev))}
             />
           ))}
         </div>
       </SectionCard>
 
-      <SectionCard
-        sectionId="wms-production-document-templates"
-        title="Dokumenty"
-        summary="Szablony wydruków powiązane z produkcją."
-      >
+      <SectionCard sectionId="wms-production-document-templates" title="Dokumenty">
         <DocumentTemplateScopeSection
           tenantId={DAMAGE_TENANT_ID}
           scopeType="PRODUCTION"
           scopeId={warehouseId ?? DAMAGE_TENANT_ID}
-          title="Szablony wydruków produkcji"
-          kinds={PRODUCTION_SCOPE_KINDS}
+          title=""
+          description={null}
+          kinds={PRODUCTION_DOCUMENT_KINDS}
         />
       </SectionCard>
     </WmsSettingsTabFrame>

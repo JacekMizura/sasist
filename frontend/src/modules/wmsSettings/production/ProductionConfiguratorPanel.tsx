@@ -33,6 +33,7 @@ import {
   afterProductionActionLabel,
   productionExecutionMethodLabel,
 } from "./productionConfigLabels";
+import { productionSettingsHelp } from "./productionSettingsHelp";
 
 const LIST_GRID =
   "sm:grid-cols-[minmax(10rem,1.2fr)_minmax(10rem,1fr)_auto]";
@@ -252,8 +253,8 @@ function ProductionConfigForm({
               </span>
             </p>
             <SettingInfoButton
-              title="Status wejściowy"
-              description="Status zamówienia, z którego startuje produkcja z zamówień. Każdy status może mieć jedną konfigurację."
+              title={productionSettingsHelp.sourceStatus.title}
+              description={productionSettingsHelp.sourceStatus.description}
             />
           </div>
           <div className="mt-3">
@@ -309,8 +310,8 @@ function ProductionConfigForm({
               </span>
             </p>
             <SettingInfoButton
-              title="Status po wyprodukowaniu"
-              description="Status, na który zamówienie trafi po wykonaniu przypisanej ilości produkcji."
+              title={productionSettingsHelp.statusAfterProduction.title}
+              description={productionSettingsHelp.statusAfterProduction.description}
             />
           </div>
           <div className="mt-3">
@@ -347,8 +348,8 @@ function ProductionConfigForm({
               </span>
             </p>
             <SettingInfoButton
-              title="Status oczekiwania na produkcję"
-              description="Status, na który trafi zamówienie wieloelementowe, gdy gate zbierania wykryje brak gotowego produktu do produkcji."
+              title={productionSettingsHelp.statusAwaitingProduction.title}
+              description={productionSettingsHelp.statusAwaitingProduction.description}
             />
           </div>
           <div className="mt-3">
@@ -383,12 +384,18 @@ function ProductionConfigForm({
         </div>
 
         <div className="min-w-0 rounded-xl border border-slate-200 bg-white p-3.5">
-          <p className="text-sm font-semibold text-slate-900">
-            Status przy braku komponentów
-            <span className="ml-1 text-red-600" aria-hidden>
-              *
-            </span>
-          </p>
+          <div className="flex min-w-0 items-center gap-1.5">
+            <p className="text-sm font-semibold text-slate-900">
+              Status przy braku komponentów
+              <span className="ml-1 text-red-600" aria-hidden>
+                *
+              </span>
+            </p>
+            <SettingInfoButton
+              title={productionSettingsHelp.statusOnComponentShortage.title}
+              description={productionSettingsHelp.statusOnComponentShortage.description}
+            />
+          </div>
           <div className="mt-3">
             <OrderUiStatusField
               panelSummary={orderUiSummary}
@@ -423,8 +430,8 @@ function ProductionConfigForm({
               </span>
             </p>
             <SettingInfoButton
-              title="Lokalizacja buforowa"
-              description="Tu trafia produkt gotowy z produkcji — dostępny do pakowania bez kolejki rozlokowania."
+              title={productionSettingsHelp.bufferLocation.title}
+              description={productionSettingsHelp.bufferLocation.description}
             />
           </div>
           <div className="mt-3">
@@ -454,7 +461,13 @@ function ProductionConfigForm({
       </div>
 
       <div className="min-w-0 rounded-xl border border-slate-200 bg-white p-3.5">
-        <p className="mb-2 text-sm font-semibold text-slate-900">Sposób realizacji</p>
+        <div className="mb-2 flex items-center gap-1.5">
+          <p className="text-sm font-semibold text-slate-900">Sposób realizacji</p>
+          <SettingInfoButton
+            title={productionSettingsHelp.executionMethod.title}
+            description={productionSettingsHelp.executionMethod.description}
+          />
+        </div>
         <ProductionRadioGroup
           legend="Sposób realizacji"
           name="production-execution-method"
@@ -468,7 +481,13 @@ function ProductionConfigForm({
       </div>
 
       <div className="min-w-0 rounded-xl border border-slate-200 bg-white p-3.5">
-        <p className="mb-2 text-sm font-semibold text-slate-900">Po wyprodukowaniu</p>
+        <div className="mb-2 flex items-center gap-1.5">
+          <p className="text-sm font-semibold text-slate-900">Po wyprodukowaniu</p>
+          <SettingInfoButton
+            title={productionSettingsHelp.afterProductionAction.title}
+            description={productionSettingsHelp.afterProductionAction.description}
+          />
+        </div>
         <ProductionRadioGroup
           legend="Po wyprodukowaniu"
           name="after-production-action"
