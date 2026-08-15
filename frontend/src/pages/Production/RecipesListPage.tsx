@@ -34,7 +34,7 @@ import {
 import { formatProductionMoney, recipeStatusBadgeClass, recipeStatusLabel } from "./productionUi";
 import { erpProductionPaths } from "./productionPaths";
 import { ProductThumb } from "./components/ProductThumb";
-import { ProductionRowActionsMenu } from "./components/ProductionRowActionsMenu";
+import { ProductionRowIconActions } from "./components/ProductionRowIconActions";
 import { RecipeIngredientsDrawer } from "./components/RecipeIngredientsDrawer";
 import {
   productionModuleListTdClass,
@@ -256,43 +256,41 @@ export default function RecipesListPage() {
                           <span className={recipeStatusBadgeClass(r)}>{recipeStatusLabel(r)}</span>
                         </td>
                         <td className={`${productionModuleListTdClass} text-right`} onClick={(e) => e.stopPropagation()}>
-                          <div className="inline-flex items-center justify-end gap-1.5">
-                            <SecondaryButton
-                              type="button"
-                              density="compact"
-                              onClick={() => navigate(erpProductionPaths.recipe(r.composition_id))}
-                            >
-                              Podgląd
-                            </SecondaryButton>
-                            <ProductionRowActionsMenu
-                              ariaLabel={`Akcje ${r.recipe_name}`}
-                              align="end"
-                              actions={[
-                                {
-                                  id: "edit",
-                                  label: "Edycja",
-                                  onClick: () => navigate(erpProductionPaths.recipe(r.composition_id)),
-                                },
-                                {
-                                  id: "dup",
-                                  label: "Duplikuj",
-                                  onClick: () => void handleDuplicate(r),
-                                  disabled: busyId === r.composition_id,
-                                },
-                                ...(r.is_active
-                                  ? [
-                                      {
-                                        id: "arch",
-                                        label: "Archiwizuj",
-                                        onClick: () => void handleArchive(r),
-                                        disabled: busyId === r.composition_id,
-                                        danger: true,
-                                      },
-                                    ]
-                                  : []),
-                              ]}
-                            />
-                          </div>
+                          <ProductionRowIconActions
+                            actions={[
+                              {
+                                id: "view",
+                                label: "Podgląd",
+                                icon: "view",
+                                onClick: () => navigate(erpProductionPaths.recipe(r.composition_id)),
+                              },
+                              {
+                                id: "edit",
+                                label: "Edycja",
+                                icon: "edit",
+                                onClick: () => navigate(erpProductionPaths.recipe(r.composition_id)),
+                              },
+                              {
+                                id: "dup",
+                                label: "Duplikuj",
+                                icon: "duplicate",
+                                onClick: () => void handleDuplicate(r),
+                                disabled: busyId === r.composition_id,
+                              },
+                              ...(r.is_active
+                                ? [
+                                    {
+                                      id: "arch",
+                                      label: "Archiwizuj",
+                                      icon: "archive" as const,
+                                      onClick: () => void handleArchive(r),
+                                      disabled: busyId === r.composition_id,
+                                      danger: true,
+                                    },
+                                  ]
+                                : []),
+                            ]}
+                          />
                         </td>
                       </tr>
                     ))}

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
-import { AlertTriangle, ClipboardList, Factory, MapPin, Package, Plus } from "lucide-react";
+import { AlertTriangle, CircleHelp, ClipboardList, Factory, MapPin, Package, Plus } from "lucide-react";
 
 import {
   fetchProductionDashboard,
@@ -31,6 +31,7 @@ import { ProductionKpiGrid } from "./components/ProductionKpiGrid";
 import { productionPageStackClass, productionPageTitleClass } from "./productionLayoutTokens";
 import { erpProductionPaths } from "./productionPaths";
 import { getProductionOperationalState, shortageHintFromOrderLines } from "./productionOperationalState";
+import { productionSourceTypeLabel } from "./productionUi";
 import {
   PRODUCTION_DASHBOARD_SECTION_LIMIT,
   countDueTodayFromPlannedDates,
@@ -102,14 +103,7 @@ function orderToWorkItem(o: ProductionOrderRead): ProductionWorkItem {
     shortagePrimaryMissingQty: shortage.primaryMissingQty || undefined,
     shortageAdditionalCount: shortage.additionalCount || undefined,
   });
-  const sourceLabel =
-    o.source_type === "ORDERS"
-      ? "Na zamówienia"
-      : o.source_type === "PLANNING"
-        ? "Na magazyn"
-        : o.source_type === "MANUAL"
-          ? "Ręczne"
-          : null;
+  const sourceLabel = productionSourceTypeLabel(o.source_type);
   return {
     key: `order-${o.id}`,
     kind: "order",
@@ -127,7 +121,7 @@ function orderToWorkItem(o: ProductionOrderRead): ProductionWorkItem {
 
 type SectionProps = {
   title: string;
-  subtitle?: string;
+  info?: string;
   count: number;
   countTone?: "neutral" | "info" | "success" | "warning" | "danger";
   emphasize?: boolean;
@@ -136,7 +130,7 @@ type SectionProps = {
 
 function WorkSection({
   title,
-  subtitle,
+  info,
   count,
   countTone = "neutral",
   emphasize = false,
@@ -153,11 +147,20 @@ function WorkSection({
       <div className="min-w-0 space-y-0.5">
         <div className="flex min-w-0 items-center gap-2">
           <h2 className={emphasize ? `${typography.h2} text-rose-950` : typography.h2}>{title}</h2>
+          {info ? (
+            <button
+              type="button"
+              className="inline-flex rounded p-0.5 text-slate-400 hover:text-slate-700"
+              aria-label={`Informacja: ${title}`}
+              title={info}
+            >
+              <CircleHelp className="h-3.5 w-3.5" aria-hidden />
+            </button>
+          ) : null}
           <StatusBadge tone={countTone} density="compact">
             {count}
           </StatusBadge>
         </div>
-        {subtitle && count > 0 ? <p className="text-xs text-slate-600">{subtitle}</p> : null}
       </div>
       <div className="min-w-0 flex-1">{children}</div>
     </Card>
@@ -323,13 +326,6 @@ export default function ProductionDashboardPage() {
         }
       >
         <div className="space-y-4">
-          <p className="text-sm text-slate-600">
-            Co wymaga działania teraz — pełny rejestr realizacji w{" "}
-            <Link to={erpProductionPaths.orders} className="font-semibold text-orange-700 hover:underline">
-              Zleceniach
-            </Link>
-            .
-          </p>
           <ProductionKpiGrid columns={5}>
             <ProductionKpiCard
               title="Z brakami"
@@ -375,7 +371,7 @@ export default function ProductionDashboardPage() {
             <div className="grid gap-3 lg:grid-cols-2 xl:grid-cols-2 2xl:grid-cols-4">
               <WorkSection
                 title="Wymaga reakcji"
-                subtitle="Braki materiałów i blokady."
+                info="Zlecenia z brakami materiałów, blokadami lub innymi problemami wymagającymi działania."
                 count={reaction.length}
                 countTone={reaction.length > 0 ? "danger" : "neutral"}
                 emphasize={reaction.length > 0}
@@ -396,7 +392,7 @@ export default function ProductionDashboardPage() {
 
               <WorkSection
                 title="Do wykonania"
-                subtitle="Start lub kolejny etap."
+                info="Zlecenia gotowe do rozpoczęcia lub przejścia do kolejnego etapu."
                 count={todo.length}
                 countTone={todo.length > 0 ? "warning" : "neutral"}
               >
@@ -419,7 +415,7 @@ export default function ProductionDashboardPage() {
 
               <WorkSection
                 title="W toku"
-                subtitle="Operacje już rozpoczęte."
+                info="Zlecenia, których realizacja została już rozpoczęta."
                 count={inProgress.length}
                 countTone="info"
               >
@@ -437,7 +433,7 @@ export default function ProductionDashboardPage() {
 
               <WorkSection
                 title="Materiały krytyczne"
-                subtitle="Największe braki komponentów."
+                info="Materiały, których brak ogranicza aktualne lub planowane zlecenia produkcyjne."
                 count={criticalMaterials.length}
                 countTone={criticalMaterials.length > 0 ? "danger" : "neutral"}
                 emphasize={criticalMaterials.length > 0}

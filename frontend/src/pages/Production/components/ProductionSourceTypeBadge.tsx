@@ -17,8 +17,8 @@ function badgeTone(kind: "batch" | "order" | undefined, sourceType?: string | nu
 }
 
 /**
- * Compact source/type badge — labels from productionUi SSOT (PARTIA / ORDERS / PLANNING / MANUAL).
- * Do not invent parallel status enums here.
+ * Compact source/type badge — labels from productionUi SSOT
+ * (Partia / Na zamówienia / Na magazyn / Ręczne).
  */
 export function ProductionSourceTypeBadge({ kind, sourceType, className = "" }: Props) {
   const label = productionSourceBadgeLabel({ kind, sourceType });

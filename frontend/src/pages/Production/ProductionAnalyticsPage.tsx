@@ -126,7 +126,7 @@ export default function ProductionAnalyticsPage() {
           key: "material",
           title: "Koszt materiałów (stan WG)",
           value: formatProductionMoney(kpi.material_cost_sum) as string | number,
-          subtitle: "Wycena stanu × koszt BOM",
+          subtitle: "Wycena stanu × koszt receptury",
           tone: "default" as const,
           icon: <Banknote aria-hidden />,
         }

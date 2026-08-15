@@ -1,4 +1,12 @@
-﻿## 2026-08-15 — Production ERP UX rebuild (frontend only)
+﻿## 2026-08-15 — Production language/UX polish (frontend only, no commit)
+
+- Enumy w UI → etykiety biznesowe (`Na zamówienia` / `Na magazyn` / `Ręczne` / `Partia`)
+- Receptura: usunięte fikcyjne warianty + Marża (hint); BOM → „Struktura receptury”; ikony akcji Sasist
+- Planowanie: polskie parametry, 1 rząd CTA, rekomendacje bez alarmowego bloku
+- Pulpit: ⓘ tooltips sekcji; bez `planned_date` w UI
+- `tsc` + `npm run build` OK; backend untouched; bez commit/push
+
+## 2026-08-15 — Production ERP UX rebuild (frontend only)
 
 - Ekrany: Pulpit, Zlecenia (rejestr), Planowanie (compact), Receptury, Materiały/braki, Historia, Analiza kosztów
 - Shared: `ProductionProgressCell`, `ProductionSourceTypeBadge`; dense KPI/queue variants

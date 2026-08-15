@@ -1,4 +1,6 @@
-﻿**Produkcja v1 = PASS E2E (zamknięta 2026-08-15).** Nie ruszać lifecycle bez osobnego powodu.
+﻿**Produkcja — language/UX polish gotowy do review (2026-08-15), bez commit.** Frontend-only: etykiety źródeł, receptura bez wariantów/marży, Planowanie/Pulpit tooltips. Backend/lifecycle untouched.
+
+**Produkcja v1 = PASS E2E (zamknięta 2026-08-15).** Nie ruszać lifecycle bez osobnego powodu.
 
 **v1.1 follow-upy (tylko zapis, bez implementacji):** `memory/production-v1.1-followups.md`
 1. BAT CTA „Rozpocznij zbieranie” — deep-link bez `start-collecting` (vs `openJob`)

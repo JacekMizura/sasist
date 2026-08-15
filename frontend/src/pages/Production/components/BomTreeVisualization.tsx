@@ -104,7 +104,7 @@ function TreeNodeRow({
 
 function NodeDetailPanel({ node }: { node: BomTreeNode | null }) {
   if (!node) {
-    return <p className="text-sm text-slate-500">Kliknij element drzewa BOM, aby zobaczyć stany i zamienniki.</p>;
+    return <p className="text-sm text-slate-500">Kliknij element struktury, aby zobaczyć stany i zamienniki.</p>;
   }
 
   return (
@@ -202,8 +202,8 @@ export function BomTreeVisualization({ tenantId, warehouseId, compositionId, pla
     });
   };
 
-  if (loading) return <p className="text-sm text-slate-500">Wczytywanie drzewa BOM…</p>;
-  if (!tree) return <p className="text-sm text-slate-500">Brak danych BOM.</p>;
+  if (loading) return <p className="text-sm text-slate-500">Wczytywanie struktury receptury…</p>;
+  if (!tree) return <p className="text-sm text-slate-500">Brak danych o strukturze receptury.</p>;
 
   return (
     <div className="grid gap-4 lg:grid-cols-5">

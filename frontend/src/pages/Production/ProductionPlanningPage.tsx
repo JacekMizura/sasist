@@ -21,7 +21,6 @@ import { productionPageStackClass, productionPageTitleClass } from "./production
 import {
   PageHeader,
   SecondaryButton,
-  Toolbar,
   primaryButtonClassName,
 } from "@/design-system";
 
@@ -169,33 +168,25 @@ export default function ProductionPlanningPage() {
             >
               Partia masowa
             </SecondaryButton>
+            <SecondaryButton
+              type="button"
+              disabled={warehouseId == null || planning.loading || simLoading}
+              onClick={() => void runSimulation()}
+              className="inline-flex items-center gap-1.5"
+            >
+              <FlaskConical className="h-4 w-4" aria-hidden />
+              Symuluj plan produkcji
+            </SecondaryButton>
+            <SecondaryButton
+              type="button"
+              disabled={warehouseId == null || planning.loading}
+              onClick={() => void planning.reload()}
+              className="inline-flex items-center gap-1.5"
+            >
+              <RefreshCw className={`h-4 w-4 ${planning.loading ? "animate-spin" : ""}`} aria-hidden />
+              Odśwież
+            </SecondaryButton>
           </>
-        }
-        toolbar={
-          <Toolbar
-            end={
-              <>
-                <SecondaryButton
-                  type="button"
-                  disabled={warehouseId == null || planning.loading || simLoading}
-                  onClick={() => void runSimulation()}
-                  className="inline-flex items-center gap-1.5"
-                >
-                  <FlaskConical className="h-4 w-4" aria-hidden />
-                  Symuluj plan produkcji
-                </SecondaryButton>
-                <SecondaryButton
-                  type="button"
-                  disabled={warehouseId == null || planning.loading}
-                  onClick={() => void planning.reload()}
-                  className="inline-flex items-center gap-1.5"
-                >
-                  <RefreshCw className={`h-4 w-4 ${planning.loading ? "animate-spin" : ""}`} aria-hidden />
-                  Odśwież
-                </SecondaryButton>
-              </>
-            }
-          />
         }
       >
         <div className="space-y-4">

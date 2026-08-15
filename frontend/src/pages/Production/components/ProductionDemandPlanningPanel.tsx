@@ -1,5 +1,5 @@
 import { useState, Fragment } from "react";
-import { ChevronDown, Factory } from "lucide-react";
+import { ChevronDown, CircleHelp, Factory } from "lucide-react";
 
 import type {
   DemandBatchLineDraft,
@@ -7,11 +7,13 @@ import type {
   ProductionDemandProductRow,
   ProductionPlanningPriority,
 } from "@/api/productionPlanningApi";
+import { MATERIAL_STATUS_DESCRIPTION } from "@/api/productionShortageApi";
 import {
   Card,
   PrimaryButton,
   SecondaryButton,
   StatusBadge,
+  Tooltip,
   typography,
   type StatusTone,
 } from "@/design-system";
@@ -141,39 +143,40 @@ export function ProductionDemandPlanningPanel({
       <div className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-white px-3 py-3 lg:flex-row lg:items-end lg:justify-between">
         <div className="min-w-0 space-y-1">
           <p className={productionSectionLabelClass}>Parametry planowania</p>
-          <p className={`text-sm text-slate-700`}>
-            Horyzont <span className="font-semibold tabular-nums">{coverageDays} dni</span>
+          <p className="text-sm text-slate-700">
+            Okres planowania: <span className="font-semibold tabular-nums">{coverageDays} dni</span>
             {data?.sales_lookback_days != null ? (
               <>
                 {" "}
-                · Średnia sprzedaży{" "}
+                · Sprzedaż z ostatnich{" "}
                 <span className="font-semibold tabular-nums">{data.sales_lookback_days} dni</span>
               </>
             ) : null}
             {data?.forecast_strategy_label ? (
               <>
                 {" "}
-                · <span className="font-medium">{data.forecast_strategy_label}</span>
+                · Metoda: <span className="font-medium">{data.forecast_strategy_label}</span>
               </>
             ) : null}
           </p>
           <p className="text-xs text-slate-500">
             {autoReplenish ? (
               <>
-                Uzupełnianie auto: włączone
-                {replenishCoverage != null ? ` · pokrycie ${replenishCoverage} dni` : ""}
-                {intervalLabel ? ` · ${intervalLabel}` : ""}
-                {lastRunLabel ? ` · ostatnio ${lastRunLabel}` : ""}
+                Automatyczne uzupełnianie: włączone
+                {replenishCoverage != null ? ` · Pokrycie zapasu: ${replenishCoverage} ${replenishCoverage === 1 ? "dzień" : "dni"}` : ""}
+                {intervalLabel ? ` · Przeliczanie: ${intervalLabel}` : ""}
+                {lastRunLabel ? ` · Ostatnio: ${lastRunLabel}` : ""}
               </>
             ) : (
-              "Uzupełnianie auto: wyłączone (ustawienia produkcji WMS)"
+              "Automatyczne uzupełnianie: wyłączone (ustawienia produkcji WMS)"
             )}
             {dash != null ? (
               <>
                 {" "}
                 · Krytyczne: <span className="font-semibold tabular-nums">{dash.critical_products}</span>
                 {" · "}
-                Braki mat.: <span className="font-semibold tabular-nums">{dash.material_shortage_products}</span>
+                Braki materiałów:{" "}
+                <span className="font-semibold tabular-nums">{dash.material_shortage_products}</span>
               </>
             ) : null}
           </p>
@@ -197,6 +200,17 @@ export function ProductionDemandPlanningPanel({
               Przelicz
             </SecondaryButton>
           ) : null}
+        </div>
+      </div>
+
+      <div className="space-y-2">
+        <div className="flex flex-wrap items-end justify-between gap-2">
+          <div>
+            <h3 className={productionSectionLabelClass}>Rekomendacje</h3>
+            <p className={`mt-0.5 ${typography.caption}`}>
+              Zapotrzebowanie → Stan → W produkcji → Rekomendacja
+            </p>
+          </div>
           {autoReplenish && onCreateReplenishmentOrders ? (
             <PrimaryButton
               type="button"
@@ -204,18 +218,9 @@ export function ProductionDemandPlanningPanel({
               disabled={replenishmentRunning || replenishRecommendations.length === 0}
               onClick={onCreateReplenishmentOrders}
             >
-              {replenishmentRunning ? "Tworzenie…" : "Utwórz zlecenia PLANNING"}
+              {replenishmentRunning ? "Tworzenie…" : "Utwórz zlecenia z planu"}
             </PrimaryButton>
           ) : null}
-        </div>
-      </div>
-
-      <div className="space-y-2">
-        <div>
-          <h3 className={productionSectionLabelClass}>Rekomendacje</h3>
-          <p className={`mt-0.5 ${typography.caption}`}>
-            Zapotrzebowanie → Stan → W produkcji → Rekomendacja
-          </p>
         </div>
 
         {loading && recommendations.length === 0 ? (
@@ -367,6 +372,7 @@ export function ProductionDemandProductsTable({
                             producibleNow={row.producible_now_qty}
                             waitingQty={row.waiting_qty}
                             limitingComponentName={row.limiting_component_name}
+                            compact
                           />
                         ) : (
                           "—"
@@ -459,28 +465,49 @@ function RecommendationCard({
     row.max_producible >= 0 &&
     row.recommended_quantity > 0 &&
     row.max_producible + 1e-6 < row.recommended_quantity;
+  const materialHint =
+    row.material_status_description?.trim() ||
+    MATERIAL_STATUS_DESCRIPTION[row.material_status] ||
+    "Brak kluczowych składników. Pełna rekomendowana produkcja nie jest obecnie możliwa. Sprawdź zamienniki lub uzupełnij materiały.";
 
   return (
-    <Card variant="section" density="compact" className="flex flex-col gap-2 !p-3">
-      <div className="flex items-start gap-2">
+    <Card variant="section" density="compact" className="flex flex-col gap-2.5 !p-3">
+      <div className="flex items-center gap-3">
         <ProductThumb imageUrl={row.product_image_url} name={row.product_name} size="sm" />
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-semibold text-slate-900">{row.product_name}</p>
-          <div className="mt-1 flex flex-wrap gap-1">
+          <div className="mt-1 flex flex-wrap items-center gap-1.5">
             <StatusBadge tone={PRIORITY_TONE[row.priority]} density="compact">
               {PRIORITY_LABEL[row.priority]}
             </StatusBadge>
-            <MaterialProductionStatusBadge
-              status={row.material_status}
-              description={row.material_status_description}
-            />
+            {row.material_status !== "OK" ? (
+              <span className="inline-flex items-center gap-1">
+                <MaterialProductionStatusBadge status={row.material_status} compact />
+                <Tooltip
+                  content={
+                    <span className="block max-w-xs whitespace-normal text-left leading-snug">{materialHint}</span>
+                  }
+                >
+                  <button
+                    type="button"
+                    className="inline-flex rounded p-0.5 text-slate-400 hover:text-slate-700"
+                    aria-label="Szczegóły statusu materiałów"
+                    title={materialHint}
+                  >
+                    <CircleHelp className="h-3.5 w-3.5" aria-hidden />
+                  </button>
+                </Tooltip>
+              </span>
+            ) : (
+              <MaterialProductionStatusBadge status={row.material_status} compact />
+            )}
           </div>
         </div>
       </div>
 
       <div className="grid grid-cols-4 gap-1 rounded-lg bg-slate-50 px-2 py-2 text-center text-[11px]">
         <div>
-          <p className="font-bold uppercase tracking-wide text-slate-400">Zapotrz.</p>
+          <p className="font-bold uppercase tracking-wide text-slate-400">Zapotrzebowanie</p>
           <p className="mt-0.5 font-semibold tabular-nums text-slate-900">{fmtQty(demand)}</p>
         </div>
         <div>
@@ -488,11 +515,11 @@ function RecommendationCard({
           <p className="mt-0.5 font-semibold tabular-nums text-slate-900">{fmtQty(row.on_hand)}</p>
         </div>
         <div>
-          <p className="font-bold uppercase tracking-wide text-slate-400">W prod.</p>
+          <p className="font-bold uppercase tracking-wide text-slate-400">W produkcji</p>
           <p className="mt-0.5 font-semibold tabular-nums text-slate-900">{fmtQty(row.in_pipeline)}</p>
         </div>
         <div>
-          <p className="font-bold uppercase tracking-wide text-orange-500">Rekom.</p>
+          <p className="font-bold uppercase tracking-wide text-orange-500">Rekomendacja</p>
           <p className="mt-0.5 text-base font-bold tabular-nums text-orange-800">
             {fmtQty(row.recommended_quantity)}
           </p>
@@ -500,9 +527,7 @@ function RecommendationCard({
       </div>
 
       {materialCapped ? (
-        <p className="rounded-md bg-amber-50 px-2 py-1 text-xs text-amber-900">
-          Materiały: maks. {fmtQty(row.max_producible)} szt.
-        </p>
+        <p className="text-xs text-slate-600">Przy obecnych materiałach maks. {fmtQty(row.max_producible)} szt.</p>
       ) : null}
 
       <PrimaryButton

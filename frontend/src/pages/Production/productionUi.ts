@@ -252,25 +252,16 @@ export function formatStartCollectingError(e: unknown): string {
   return formatApiError(e);
 }
 
-/** Business labels — never show raw ORDERS / PLANNING / MANUAL enums in prose. */
+/** Business labels — never show raw ORDERS / PLANNING / MANUAL enums in UI. */
 export type ProductionSourceType = "MANUAL" | "PLANNING" | "ORDERS";
 
-/** Compact list badge — PARTIA for batches; source enum for MOs. */
+/** Compact list badge — Partia for batches; business source label for MOs. */
 export function productionSourceBadgeLabel(opts: {
   kind?: "batch" | "order";
   sourceType?: string | null;
 }): string {
-  if (opts.kind === "batch") return "PARTIA";
-  switch (String(opts.sourceType || "").toUpperCase()) {
-    case "ORDERS":
-      return "ORDERS";
-    case "PLANNING":
-      return "PLANNING";
-    case "MANUAL":
-      return "MANUAL";
-    default:
-      return "MANUAL";
-  }
+  if (opts.kind === "batch") return "Partia";
+  return productionSourceTypeLabel(opts.sourceType);
 }
 
 export function productionSourceTypeLabel(sourceType?: string | null): string {
