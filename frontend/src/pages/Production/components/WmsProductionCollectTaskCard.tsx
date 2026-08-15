@@ -17,7 +17,11 @@ type Props = {
   busy: boolean;
   onToggle: () => void;
   /** Qty is for THIS location pick only (appended on backend). */
-  onConfirm: (locationId: number, pickQty: number) => void;
+  onConfirm: (
+    locationId: number,
+    pickQty: number,
+    identity: { batchNumber?: string | null; lot?: string | null; serialNumber?: string | null },
+  ) => void;
 };
 
 function fmtQty(n: number | null | undefined): string {
@@ -47,6 +51,8 @@ export function WmsProductionCollectTaskCard({
     (task.location_id > 0 ? task.location_id : null);
   const [selectedLocId, setSelectedLocId] = useState<number | null>(initialLoc);
   const [pickQty, setPickQty] = useState<number>(0);
+  const [batchNumber, setBatchNumber] = useState(task.selected_batch_number ?? task.selected_lot ?? "");
+  const [serialNumber, setSerialNumber] = useState(task.selected_serial_number ?? "");
 
   useEffect(() => {
     setSelectedLocId(
@@ -54,12 +60,21 @@ export function WmsProductionCollectTaskCard({
         task.selected_location_id ??
         (task.location_id > 0 ? task.location_id : null),
     );
+    setBatchNumber(task.selected_batch_number ?? task.selected_lot ?? "");
+    setSerialNumber(task.selected_serial_number ?? "");
   }, [task.task_key, task.next_location_id, task.selected_location_id, task.location_id, task.collected_qty]);
 
   const selectedOption = useMemo(
     () => task.location_options.find((o) => o.location_id === selectedLocId) ?? null,
     [task.location_options, selectedLocId],
   );
+  const identityOptions = selectedOption?.lots ?? [];
+  const serialOptions = identityOptions.map((lot) => lot.serial_number).filter((v): v is string => Boolean(v));
+  const requiresBatch = Boolean(task.production_trace_require_batch);
+  const requiresSerial = Boolean(task.production_trace_require_serial);
+  const effectiveBatchNumber =
+    batchNumber || (identityOptions.length === 1 ? identityOptions[0].batch_number || identityOptions[0].lot || "" : "");
+  const effectiveSerialNumber = serialNumber || (serialOptions.length === 1 ? serialOptions[0] : "");
 
   const locAvailable = selectedOption?.available_qty ?? task.available_qty;
   const whTotal = task.warehouse_total_available;
@@ -69,14 +84,17 @@ export function WmsProductionCollectTaskCard({
   }, [locAvailable, remaining]);
 
   useEffect(() => {
-    setPickQty(suggested);
-  }, [suggested, selectedLocId, task.collected_qty]);
+    setPickQty(requiresSerial ? Math.min(1, suggested) : suggested);
+  }, [suggested, selectedLocId, task.collected_qty, requiresSerial]);
 
   const maxAllowed = locAvailable == null ? remaining : Math.min(remaining, Number(locAvailable));
   const canConfirm =
     selectedLocId != null &&
     pickQty > 1e-9 &&
     pickQty <= maxAllowed + 1e-6 &&
+    (!requiresSerial || Math.abs(pickQty - 1) <= 1e-6) &&
+    (!requiresBatch || effectiveBatchNumber.trim().length > 0) &&
+    (!requiresSerial || effectiveSerialNumber.trim().length > 0) &&
     remaining > 1e-9;
 
   const pickEvents = task.pick_events ?? [];
@@ -269,13 +287,67 @@ export function WmsProductionCollectTaskCard({
           </p>
         </div>
 
+        {requiresBatch ? (
+          <div className="mt-4">
+            <label className={WMS_TERMINAL_LABEL}>Numer partii (LOT)</label>
+            {identityOptions.length > 0 ? (
+              <select
+                value={effectiveBatchNumber}
+                onChange={(e) => setBatchNumber(e.target.value)}
+                className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm"
+              >
+                <option value="">— wybierz —</option>
+                {identityOptions.map((lot, idx) => {
+                  const value = lot.batch_number || lot.lot || "";
+                  return <option key={`${value}-${idx}`} value={value}>{value || "—"}</option>;
+                })}
+              </select>
+            ) : (
+              <input
+                value={batchNumber}
+                onChange={(e) => setBatchNumber(e.target.value)}
+                className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-3 text-sm"
+              />
+            )}
+          </div>
+        ) : null}
+
+        {requiresSerial ? (
+          <div className="mt-4">
+            <label className={WMS_TERMINAL_LABEL}>Numer seryjny (SN)</label>
+            {serialOptions.length > 0 ? (
+              <select
+                value={effectiveSerialNumber}
+                onChange={(e) => setSerialNumber(e.target.value)}
+                className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm"
+              >
+                <option value="">— wybierz —</option>
+                {serialOptions.map((serial) => <option key={serial} value={serial}>{serial}</option>)}
+              </select>
+            ) : (
+              <input
+                value={serialNumber}
+                onChange={(e) => setSerialNumber(e.target.value)}
+                className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-3 text-sm"
+              />
+            )}
+            <p className="mt-1 text-xs text-slate-500">Dla numeru seryjnego ilość pobrania wynosi 1 szt.</p>
+          </div>
+        ) : null}
+
         <div className="mt-5 grid grid-cols-2 gap-3">
           <button
             type="button"
             disabled={busy || !canConfirm}
             data-wms-card-no-nav=""
             onClick={() => {
-              if (canConfirm && selectedLocId != null) onConfirm(selectedLocId, pickQty);
+              if (canConfirm && selectedLocId != null) {
+                onConfirm(selectedLocId, pickQty, {
+                  batchNumber: effectiveBatchNumber || null,
+                  lot: effectiveBatchNumber || null,
+                  serialNumber: effectiveSerialNumber || null,
+                });
+              }
             }}
             className="col-span-2 inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 py-4 text-base font-bold text-white hover:bg-emerald-700 disabled:opacity-50"
           >
@@ -287,7 +359,13 @@ export function WmsProductionCollectTaskCard({
             disabled={busy || !canConfirm}
             data-wms-card-no-nav=""
             onClick={() => {
-              if (canConfirm && selectedLocId != null) onConfirm(selectedLocId, pickQty);
+              if (canConfirm && selectedLocId != null) {
+                onConfirm(selectedLocId, pickQty, {
+                  batchNumber: effectiveBatchNumber || null,
+                  lot: effectiveBatchNumber || null,
+                  serialNumber: effectiveSerialNumber || null,
+                });
+              }
             }}
             className="col-span-2 inline-flex items-center justify-center gap-2 rounded-xl border border-amber-300 bg-amber-50 py-3 text-sm font-bold text-amber-900 hover:bg-amber-100 disabled:opacity-50"
           >

@@ -153,7 +153,9 @@ export default function CollectingPage() {
                   done={done}
                   busy={busy}
                   onToggle={() => setExpandedTaskKey(t.task_key)}
-                  onConfirm={(locationId, qty) => void confirmCollectionTask(t.task_key, qty, locationId)}
+                  onConfirm={(locationId, qty, identity) =>
+                    void confirmCollectionTask(t.task_key, qty, locationId, identity)
+                  }
                 />
               );
             })}

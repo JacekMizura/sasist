@@ -144,6 +144,8 @@ from .db.schema_upgrade import (
     migrate_orders_sales_document_misassigned_number,
     ensure_product_barcodes_table,
     ensure_product_track_batch_expiry_columns,
+    ensure_product_production_trace_modes,
+    ensure_fg_traceability_columns,
     ensure_inventory_serials_table,
     ensure_stock_document_item_lot_columns,
     ensure_stock_document_item_quantity_putaway_column,
@@ -1774,6 +1776,8 @@ def _upgrade_schema_background() -> None:
         pass
     try:
         ensure_product_track_batch_expiry_columns(engine)
+        ensure_product_production_trace_modes(engine)
+        ensure_fg_traceability_columns(engine)
         ensure_inventory_serials_table(engine)
         ensure_stock_document_item_lot_columns(engine)
         migrate_inventory_lot_unique_sqlite(engine)

@@ -1000,6 +1000,15 @@ export type CollectionTaskRead = {
   selected_lot?: string | null;
   selected_serial_number?: string | null;
   track_serial?: boolean;
+  production_trace_require_batch?: boolean;
+  production_trace_require_serial?: boolean;
+  production_trace_require_expiry?: boolean;
+};
+
+export type FinishedGoodsIdentityBody = {
+  fg_batch_number?: string | null;
+  fg_expiry_date?: string | null;
+  fg_serial_numbers?: string[];
 };
 
 export type BatchCollectionStateRead = {
@@ -1258,7 +1267,7 @@ export async function finishCollectingBatch(
 export async function updateProductionProgress(
   tenantId: number,
   batchId: number,
-  body: { line_id: number; add_quantity: number },
+  body: { line_id: number; add_quantity: number } & FinishedGoodsIdentityBody,
   warehouseId?: number,
 ) {
   const res = await api.post<ProductionBatchRead>(`/production/batches/${batchId}/production-progress`, body, {
@@ -1271,8 +1280,9 @@ export async function finishProductionPhase(
   tenantId: number,
   batchId: number,
   warehouseId?: number,
+  body?: FinishedGoodsIdentityBody,
 ) {
-  const res = await api.post<ProductionBatchRead>(`/production/batches/${batchId}/finish-production`, null, {
+  const res = await api.post<ProductionBatchRead>(`/production/batches/${batchId}/finish-production`, body ?? {}, {
     params: productionQueryParams(tenantId, warehouseId),
   });
   return res.data;
@@ -1487,7 +1497,7 @@ export async function finishCollectingOrder(
 export async function updateOrderProductionProgress(
   tenantId: number,
   orderId: number,
-  body: { add_quantity: number },
+  body: { add_quantity: number } & FinishedGoodsIdentityBody,
   warehouseId?: number,
 ): Promise<ProductionOrderRead> {
   const res = await api.post<ProductionOrderRead>(`/production/orders/${orderId}/production-progress`, body, {
@@ -1500,8 +1510,9 @@ export async function finishOrderProduction(
   tenantId: number,
   orderId: number,
   warehouseId?: number,
+  body?: FinishedGoodsIdentityBody,
 ): Promise<ProductionOrderRead> {
-  const res = await api.post<ProductionOrderRead>(`/production/orders/${orderId}/finish-production`, null, {
+  const res = await api.post<ProductionOrderRead>(`/production/orders/${orderId}/finish-production`, body ?? {}, {
     params: productionQueryParams(tenantId, warehouseId),
   });
   return res.data;

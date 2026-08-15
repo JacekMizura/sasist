@@ -32,6 +32,7 @@ def append_issue_operation(
     from_location_id: int,
     batch_number: str = "",
     expiry_date=None,
+    serial_number: str | None = None,
     performed_by: Optional["AppUser"] = None,
     operator_admin_id: int | None = None,
     metadata: dict | None = None,
@@ -59,6 +60,7 @@ def append_issue_operation(
         type=STOCK_OP_ISSUE,
         batch=bn_op,
         expiry_date=exp_op,
+        serial_number=(serial_number or "").strip() or None,
         stock_disposition=stock_disposition_for_document_line(line),
     )
     db.add(op)

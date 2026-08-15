@@ -1,4 +1,16 @@
-﻿**Produkcja — formatProductionQuantity (2026-08-15), bez commit.** Display qty/stock floored via shared helper; money/forecast/API inputs untouched. Backend untouched.
+﻿**Production traceability MVP frontend (2026-08-15), bez commit/push.**
+- Ustawienia WMS: osobna sekcja Identyfikowalność, OFF/CONFIGURED + LOT/SN/expiry; legacy TRACE ukryte z terminal required.
+- Karta produktu: capability track_* + produkcyjne override INHERIT/REQUIRE/OFF, zapis z ochroną REQUIRE bez capability.
+- Collection WMS/PAPER wymusza wymagane LOT/SN (SN qty 1); aktywne ekrany wykonania przekazują FG batch/expiry/serials.
+- `npm run build` + `git diff --check` OK; globalny typecheck nadal FAIL na licznych zastanych błędach, bez nowych błędów traceability.
+
+**Production traceability MVP backend core (2026-08-15), bez commit/push.**
+- Niezależny resolver produkcji (`production_traceability_policy`), global settings + product overrides; receiving SSOT bez zmian.
+- FG identity snapshots dla MO/BAT, progressive serials, batch/expiry w PW/inventory, serial registry oraz RW `StockOperation.serial_number`.
+- Migracje/startup + schema generation 18; API settings/product/progress/finish rozszerzone.
+- Testy traceability + production execution/schema/FG regressions: PASS.
+
+**Produkcja — formatProductionQuantity (2026-08-15), bez commit.** Display qty/stock floored via shared helper; money/forecast/API inputs untouched. Backend untouched.
 
 **Produkcja — kreator zlecenia + qty integer (2026-08-15), bez commit.**
 - Operator assign: BRAK API (`assigned_user_id`) — UI pokazuje „Dowolny operator” + SettingInfoButton; nie fake select

@@ -20,6 +20,7 @@ import {
   updateProductionProgress,
   type ProductionExecutionJobRead,
   type ProductionExecutionPhase,
+  type FinishedGoodsIdentityBody,
 } from "@/api/productionApi";
 import { useWmsMessage } from "@/components/wms/WmsMessageProvider";
 import { useWarehouse } from "@/context/WarehouseContext";
@@ -347,7 +348,12 @@ export function useProductionExecutionJob(phase: ProductionExecutionPhase, activ
   );
 
   const confirmCollectionTask = useCallback(
-    async (taskKey: string, collectedQty: number, locationId?: number) => {
+    async (
+      taskKey: string,
+      collectedQty: number,
+      locationId?: number,
+      identity?: { batchNumber?: string | null; lot?: string | null; serialNumber?: string | null },
+    ) => {
       if (activeRef == null || warehouseId == null) return;
       try {
         await withMutationLock(mutationLockRef, setBusy, async () => {
@@ -356,6 +362,9 @@ export function useProductionExecutionJob(phase: ProductionExecutionPhase, activ
             collected_qty: collectedQty,
             action: "confirm_pick" as const,
             ...(locationId != null && locationId > 0 ? { location_id: locationId } : {}),
+            batch_number: identity?.batchNumber ?? null,
+            lot: identity?.lot ?? null,
+            serial_number: identity?.serialNumber ?? null,
           };
           if (activeRef.kind === "batch") {
             const next = await updateCollectionTask(tenantId, activeRef.id, body, warehouseId);
@@ -411,7 +420,7 @@ export function useProductionExecutionJob(phase: ProductionExecutionPhase, activ
   }, [activeRef, warehouseId, tenantId, navigate, showBusinessError]);
 
   const addProductionQty = useCallback(
-    async (lineKey: string, add: number) => {
+    async (lineKey: string, add: number, identity: FinishedGoodsIdentityBody = {}) => {
       if (activeRef == null || warehouseId == null) return;
       try {
         await withMutationLock(mutationLockRef, setBusy, async () => {
@@ -420,14 +429,14 @@ export function useProductionExecutionJob(phase: ProductionExecutionPhase, activ
             await updateProductionProgress(
               tenantId,
               activeRef.id,
-              { line_id: lineId, add_quantity: add },
+              { line_id: lineId, add_quantity: add, ...identity },
               warehouseId,
             );
           } else {
             const updated = await updateOrderProductionProgress(
               tenantId,
               activeRef.id,
-              { add_quantity: add },
+              { add_quantity: add, ...identity },
               warehouseId,
             );
             handleProductionPackingHandoff(updated, navigate);

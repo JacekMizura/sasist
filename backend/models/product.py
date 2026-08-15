@@ -143,6 +143,10 @@ class Product(Base):
     track_batch = Column(Boolean, nullable=False, default=False)
     track_expiry = Column(Boolean, nullable=False, default=False)
     track_serial = Column(Boolean, nullable=False, default=False)
+    # Production-only policy overrides. They never alter receiving validation.
+    production_trace_batch_mode = Column(String(16), nullable=False, default="INHERIT", server_default=text("'INHERIT'"))
+    production_trace_serial_mode = Column(String(16), nullable=False, default="INHERIT", server_default=text("'INHERIT'"))
+    production_trace_expiry_mode = Column(String(16), nullable=False, default="INHERIT", server_default=text("'INHERIT'"))
 
     # WMS: wymagane pola master-data przy przyjęciu (konfiguracja per produkt)
     require_recv_height = Column(Boolean, nullable=False, default=False, server_default=text("false"))

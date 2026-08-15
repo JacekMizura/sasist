@@ -1,4 +1,11 @@
-﻿## 2026-08-15 — Production qty display → formatProductionQuantity (no commit)
+﻿## 2026-08-15 — Production traceability MVP frontend (no commit)
+
+- Added independent production traceability settings and product-level INHERIT/REQUIRE/OFF overrides.
+- Collection terminals consume backend LOT/SN requirement flags; serial picks are quantity 1.
+- Active WMS/PAPER production flows send FG batch, expiry, and serial identity payloads.
+- Backend unchanged; build and `git diff --check` passed. Repository-wide typecheck remains blocked by pre-existing errors.
+
+## 2026-08-15 — Production qty display → formatProductionQuantity (no commit)
 
 - Frontend-only: stock/qty displays floor via `formatProductionQuantity` (presentation only)
 - Local fmtQty/formatQty/toFixed(2) qty helpers delegated; money/forecast/API inputs untouched

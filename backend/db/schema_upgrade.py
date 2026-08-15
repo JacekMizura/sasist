@@ -4014,6 +4014,38 @@ def ensure_product_track_batch_expiry_columns(engine: Engine) -> None:
         conn.commit()
 
 
+def ensure_product_production_trace_modes(engine: Engine) -> None:
+    with engine.connect() as conn:
+        if not _table_exists(conn, "products"):
+            conn.commit()
+            return
+        cols = _table_column_names(conn, "products")
+        for name in (
+            "production_trace_batch_mode",
+            "production_trace_serial_mode",
+            "production_trace_expiry_mode",
+        ):
+            if name not in cols:
+                conn.execute(
+                    text(
+                        f"ALTER TABLE products ADD COLUMN {name} "
+                        "VARCHAR(16) NOT NULL DEFAULT 'INHERIT'"
+                    )
+                )
+        conn.commit()
+
+
+def ensure_fg_traceability_columns(engine: Engine) -> None:
+    with engine.connect() as conn:
+        for table in ("production_orders", "production_batch_lines"):
+            if not _table_exists(conn, table):
+                continue
+            cols = _table_column_names(conn, table)
+            if "fg_traceability_json" not in cols:
+                conn.execute(text(f"ALTER TABLE {table} ADD COLUMN fg_traceability_json TEXT"))
+        conn.commit()
+
+
 def ensure_inventory_serials_table(engine: Engine) -> None:
     """Per-unit serial registry + extended scan/operation columns."""
     with engine.connect() as conn:

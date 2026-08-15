@@ -12,6 +12,9 @@ import { DocumentTemplateScopeSection } from "@/pages/Settings/document-template
 import { generateFakeEan13 } from "../../utils/ean13";
 import { ProductLabelPrintModal } from "./ProductLabelPrintModal";
 import { ProductCodeGenerateControl } from "./ProductCodeGenerateControl";
+import { SettingInfoButton } from "../Settings/SettingInfoButton";
+
+type ProductionTraceMode = "INHERIT" | "REQUIRE" | "OFF";
 
 export type ProductEditBasicTabProps = {
   isNew: boolean;
@@ -68,6 +71,18 @@ export type ProductEditBasicTabProps = {
   globalValidation: ProductValidationGlobalSettings | null;
   validationSkips: ProductValidationSkips;
   setValidationSkips: React.Dispatch<React.SetStateAction<ProductValidationSkips>>;
+  trackBatch: boolean;
+  setTrackBatch: (v: boolean) => void;
+  trackSerial: boolean;
+  setTrackSerial: (v: boolean) => void;
+  trackExpiry: boolean;
+  setTrackExpiry: (v: boolean) => void;
+  productionTraceBatchMode: ProductionTraceMode;
+  setProductionTraceBatchMode: (v: ProductionTraceMode) => void;
+  productionTraceSerialMode: ProductionTraceMode;
+  setProductionTraceSerialMode: (v: ProductionTraceMode) => void;
+  productionTraceExpiryMode: ProductionTraceMode;
+  setProductionTraceExpiryMode: (v: ProductionTraceMode) => void;
 };
 
 /** Mock `.form-label` */
@@ -119,6 +134,44 @@ function SkipCheck({
       />
       <span className="text-gray-700">{label}</span>
     </label>
+  );
+}
+
+function TraceModeField({
+  label,
+  capability,
+  value,
+  onChange,
+}: {
+  label: string;
+  capability: boolean;
+  value: ProductionTraceMode;
+  onChange: (value: ProductionTraceMode) => void;
+}) {
+  const safeValue = !capability && value === "REQUIRE" ? "INHERIT" : value;
+  return (
+    <div>
+      <div className="mb-1 flex items-center gap-1.5">
+        <label className={`${labelClass} mb-0`}>{label}</label>
+        {!capability ? (
+          <SettingInfoButton
+            title={label}
+            description="Aby produkcja mogła wymagać tej wartości, produkt musi najpierw obsługiwać odpowiednią zdolność track_*."
+          />
+        ) : null}
+      </div>
+      <Select
+        value={safeValue}
+        onChange={(e) => onChange(e.target.value as ProductionTraceMode)}
+        density="compact"
+        focusTone="brand"
+        className="bg-white text-xs"
+      >
+        <option value="INHERIT">Zgodnie z ustawieniami produkcji</option>
+        <option value="REQUIRE" disabled={!capability}>Wymagany</option>
+        <option value="OFF">Wyłączony</option>
+      </Select>
+    </div>
   );
 }
 
@@ -180,6 +233,18 @@ export function ProductEditBasicTab({
   globalValidation,
   validationSkips,
   setValidationSkips,
+  trackBatch,
+  setTrackBatch,
+  trackSerial,
+  setTrackSerial,
+  trackExpiry,
+  setTrackExpiry,
+  productionTraceBatchMode,
+  setProductionTraceBatchMode,
+  productionTraceSerialMode,
+  setProductionTraceSerialMode,
+  productionTraceExpiryMode,
+  setProductionTraceExpiryMode,
 }: ProductEditBasicTabProps) {
   const [templateMode, setTemplateMode] = useState<"pick" | "custom">("pick");
   const [labelPrint, setLabelPrint] = useState<{ ean: string; title: string } | null>(null);
@@ -757,6 +822,57 @@ export function ProductEditBasicTab({
               density="compact"
               focusTone="brand"
               className="text-xs placeholder:text-gray-400"
+            />
+          </div>
+        </section>
+
+        <section className="space-y-4 rounded-lg border border-teal-200 bg-teal-50/20 p-4">
+          <div className="flex items-center gap-2">
+            <h2 className="text-sm font-bold text-gray-900">Identyfikowalność w produkcji</h2>
+            <SettingInfoButton
+              title="Identyfikowalność w produkcji"
+              description="Ustawienia produkcji są niezależne od Przyjęcia. Partia (dokument) ≠ Numer partii (LOT)."
+            />
+          </div>
+          <div>
+            <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-gray-500">
+              Obsługa identyfikowalności
+            </p>
+            <div className="grid gap-2 text-xs sm:grid-cols-3">
+              {([
+                ["Numer partii (LOT)", trackBatch, setTrackBatch],
+                ["Numer seryjny (SN)", trackSerial, setTrackSerial],
+                ["Data ważności", trackExpiry, setTrackExpiry],
+              ] as const).map(([label, checked, setChecked]) => (
+                <label key={label} className="flex items-center gap-2 rounded border border-gray-200 bg-white p-2">
+                  <Checkbox
+                    checked={checked}
+                    onChange={(e) => setChecked(e.target.checked)}
+                    className="rounded border-gray-300 text-teal-600 focus:ring-teal-500"
+                  />
+                  <span className="text-gray-700">{label}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-3">
+            <TraceModeField
+              label="Numer partii (LOT)"
+              capability={trackBatch}
+              value={productionTraceBatchMode}
+              onChange={setProductionTraceBatchMode}
+            />
+            <TraceModeField
+              label="Numer seryjny (SN)"
+              capability={trackSerial}
+              value={productionTraceSerialMode}
+              onChange={setProductionTraceSerialMode}
+            />
+            <TraceModeField
+              label="Data ważności"
+              capability={trackExpiry}
+              value={productionTraceExpiryMode}
+              onChange={setProductionTraceExpiryMode}
             />
           </div>
         </section>

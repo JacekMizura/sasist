@@ -40,6 +40,8 @@ function lotLabel(l: { lot?: string | null; batch_number?: string | null }): str
 
 export function PaperCollectTaskCard({ task, expanded, done, busy, onToggle, onConfirm }: Props) {
   const unit = (task.product_unit ?? "szt.").trim() || "szt.";
+  const requiresBatch = Boolean(task.production_trace_require_batch);
+  const requiresSerial = Boolean(task.production_trace_require_serial);
   const [selectedLocId, setSelectedLocId] = useState<number | null>(
     task.selected_location_id ?? (task.location_id > 0 ? task.location_id : null),
   );
@@ -180,16 +182,16 @@ export function PaperCollectTaskCard({ task, expanded, done, busy, onToggle, onC
             </div>
           </div>
 
-          {lotOptions.length === 1 ? (
+          {(requiresBatch || lotOptions.length > 0) && lotOptions.length === 1 ? (
             <div>
-              <p className="text-xs font-medium text-slate-500">Partia</p>
+              <p className="text-xs font-medium text-slate-500">Numer partii (LOT)</p>
               <p className="mt-0.5 text-sm font-semibold text-slate-900">{lotLabel(lotOptions[0]) || "—"}</p>
             </div>
           ) : null}
 
-          {lotOptions.length > 1 ? (
+          {(requiresBatch || lotOptions.length > 0) && lotOptions.length > 1 ? (
             <div>
-              <label className="text-xs font-medium text-slate-500">Partia</label>
+              <label className="text-xs font-medium text-slate-500">Numer partii (LOT)</label>
               <select
                 value={lot || batchNumber}
                 onChange={(e) => applyLot(e.target.value)}
@@ -210,9 +212,20 @@ export function PaperCollectTaskCard({ task, expanded, done, busy, onToggle, onC
             </div>
           ) : null}
 
-          {task.track_serial && serialOptions.length > 1 ? (
+          {requiresBatch && lotOptions.length === 0 ? (
             <div>
-              <label className="text-xs font-medium text-slate-500">Numer seryjny</label>
+              <label className="text-xs font-medium text-slate-500">Numer partii (LOT)</label>
+              <input
+                value={batchNumber}
+                onChange={(e) => setBatchNumber(e.target.value)}
+                className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm"
+              />
+            </div>
+          ) : null}
+
+          {requiresSerial && serialOptions.length > 1 ? (
+            <div>
+              <label className="text-xs font-medium text-slate-500">Numer seryjny (SN)</label>
               <select
                 value={serialNumber}
                 onChange={(e) => setSerialNumber(e.target.value)}
@@ -226,10 +239,19 @@ export function PaperCollectTaskCard({ task, expanded, done, busy, onToggle, onC
                 ))}
               </select>
             </div>
-          ) : task.track_serial && serialOptions.length === 1 ? (
+          ) : requiresSerial && serialOptions.length === 1 ? (
             <div>
-              <p className="text-xs font-medium text-slate-500">Numer seryjny</p>
+              <p className="text-xs font-medium text-slate-500">Numer seryjny (SN)</p>
               <p className="mt-0.5 text-sm font-semibold text-slate-900">{serialOptions[0].serial}</p>
+            </div>
+          ) : requiresSerial ? (
+            <div>
+              <label className="text-xs font-medium text-slate-500">Numer seryjny (SN)</label>
+              <input
+                value={serialNumber}
+                onChange={(e) => setSerialNumber(e.target.value)}
+                className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm"
+              />
             </div>
           ) : null}
 
@@ -237,22 +259,28 @@ export function PaperCollectTaskCard({ task, expanded, done, busy, onToggle, onC
             type="button"
             density="comfortable"
             className="w-full py-3.5 text-base"
-            disabled={busy || !selectedLocId || selectedLocId < 1}
+            disabled={
+              busy ||
+              !selectedLocId ||
+              selectedLocId < 1 ||
+              (requiresBatch && !(batchNumber || lot).trim()) ||
+              (requiresSerial && !(serialOptions.length === 1 ? serialOptions[0].serial : serialNumber).trim())
+            }
             onClick={() => {
               const sn =
-                task.track_serial && serialOptions.length === 1
+                requiresSerial && serialOptions.length === 1
                   ? serialOptions[0].serial
                   : serialNumber || null;
               onConfirm({
                 locationId: selectedLocId!,
-                collectedQty: task.required_qty,
+                collectedQty: requiresSerial ? 1 : task.required_qty,
                 batchNumber: batchNumber || null,
                 lot: lot || null,
                 serialNumber: sn,
               });
             }}
           >
-            Potwierdź pobranie ({fmtQty(task.required_qty)} {unit})
+            Potwierdź pobranie ({fmtQty(requiresSerial ? 1 : task.required_qty)} {unit})
           </PrimaryButton>
         </div>
       ) : null}

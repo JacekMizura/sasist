@@ -105,6 +105,8 @@ class ProductionBatchLine(Base):
     status = Column(String(32), nullable=False, default="planned")
     calculated_unit_cost = Column(Float, nullable=True)
     pw_stock_document_id = Column(Integer, ForeignKey("stock_documents.id", ondelete="SET NULL"), nullable=True)
+    #: Immutable FG identity + production policy snapshot for this output line.
+    fg_traceability_json = Column(Text, nullable=True)
     notes = Column(Text, nullable=True)
 
     batch = relationship("ProductionBatch", back_populates="lines")

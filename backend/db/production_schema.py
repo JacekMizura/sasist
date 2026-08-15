@@ -30,9 +30,9 @@ from .schema_introspection import (
 
 logger = logging.getLogger(__name__)
 
-PRODUCTION_SCHEMA_VERSION = "2026.08.13.1"
+PRODUCTION_SCHEMA_VERSION = "2026.08.15.1"
 # Monotonic generation counter exposed in logs, /health/schema, and deploy verification.
-PRODUCTION_SCHEMA_GENERATION = 17
+PRODUCTION_SCHEMA_GENERATION = 18
 SCHEMA_METADATA_KEY = "production_schema_version"
 SCHEMA_METADATA_TABLE = "schema_metadata"
 
@@ -471,6 +471,19 @@ def _migration_planning_open_agg_index(engine: Engine) -> int:
     return 1
 
 
+def _migration_fg_traceability_columns(engine: Engine) -> int:
+    from ..models.product_composition import ProductionBatchLine
+    from ..models.production import ProductionOrder
+
+    added = ensure_model_schema_sync(
+        engine, ProductionOrder, log_prefix="production.schema.traceability"
+    )
+    added += ensure_model_schema_sync(
+        engine, ProductionBatchLine, log_prefix="production.schema.traceability"
+    )
+    return added
+
+
 PRODUCTION_SCHEMA_MIGRATIONS: list[ProductionSchemaMigration] = [
     ProductionSchemaMigration("2026.06.04.1", "batch_workflow_columns", _migration_batch_workflow_columns),
     ProductionSchemaMigration(
@@ -492,6 +505,11 @@ PRODUCTION_SCHEMA_MIGRATIONS: list[ProductionSchemaMigration] = [
         "2026.08.13.1",
         "planning_open_agg_index",
         _migration_planning_open_agg_index,
+    ),
+    ProductionSchemaMigration(
+        "2026.08.15.1",
+        "finished_goods_traceability",
+        _migration_fg_traceability_columns,
     ),
 ]
 

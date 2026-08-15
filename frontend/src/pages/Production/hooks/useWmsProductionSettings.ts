@@ -4,6 +4,7 @@ import {
   getWmsProductionSettings,
   type ProductionTerminalDisplaySettings,
   type ProductionTerminalRequiredSettings,
+  type ProductionTraceabilitySettings,
   type WmsProductionSettings,
 } from "@/api/wmsProductionSettingsApi";
 import { useWarehouse } from "@/context/WarehouseContext";
@@ -32,6 +33,13 @@ const DEFAULT_REQUIRED: ProductionTerminalRequiredSettings = {
   require_quality_control: false,
 };
 
+const DEFAULT_TRACEABILITY: ProductionTraceabilitySettings = {
+  mode: "OFF",
+  require_batch: false,
+  require_serial: false,
+  require_expiry: false,
+};
+
 export function useWmsProductionSettings() {
   const { warehouse } = useWarehouse();
   const tenantId = warehouse?.tenant_id ?? DAMAGE_TENANT_ID;
@@ -55,6 +63,15 @@ export function useWmsProductionSettings() {
         warehouse_id: warehouseId,
         terminal_display: DEFAULT_DISPLAY,
         terminal_required: DEFAULT_REQUIRED,
+        traceability: DEFAULT_TRACEABILITY,
+        forecast: {
+          strategy: "PERIOD_AVERAGE",
+          sales_lookback_days: 30,
+        },
+        reservation: {
+          allocation_strategy: "FEFO",
+          allow_sales_locations: false,
+        },
       });
     } finally {
       setLoading(false);
@@ -69,6 +86,7 @@ export function useWmsProductionSettings() {
     loading,
     display: settings?.terminal_display ?? DEFAULT_DISPLAY,
     required: settings?.terminal_required ?? DEFAULT_REQUIRED,
+    traceability: settings?.traceability ?? DEFAULT_TRACEABILITY,
     reload,
   };
 }

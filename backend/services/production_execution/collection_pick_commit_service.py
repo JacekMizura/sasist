@@ -17,6 +17,7 @@ from sqlalchemy.orm import Session
 
 from ...models.inventory import Inventory
 from ...models.location import Location
+from ...models.product import Product
 from ..order_item_pick_allocation_service import PickLotSlice, SENTINEL_EXPIRY
 from ..stock_disposition import STOCK_DISPOSITION_SALEABLE, normalize_stock_disposition
 from .material_consume_service import consume_production_material_slices
@@ -180,6 +181,21 @@ def append_collection_location_pick(
     product_id = int(task.get("component_product_id") or 0)
     if product_id <= 0:
         raise ValueError("Brak product_id komponentu w zadaniu zbierania.")
+    product = db.query(Product).filter(Product.id == product_id).first()
+    if product is not None:
+        from .production_traceability_policy import (
+            resolve_effective_production_traceability_for_product,
+        )
+
+        trace = resolve_effective_production_traceability_for_product(
+            db,
+            tenant_id=int(tenant_id),
+            warehouse_id=int(warehouse_id),
+            product=product,
+        )
+        task["production_trace_require_batch"] = trace.require_batch
+        task["production_trace_require_serial"] = trace.require_serial
+        task["production_trace_require_expiry"] = trace.require_expiry
 
     required = float(task.get("required_qty") or 0)
     sync_collected_from_events(task)
@@ -218,6 +234,13 @@ def append_collection_location_pick(
     bn = batch_number if batch_number is not None else task.get("selected_batch_number")
     lt = lot if lot is not None else task.get("selected_lot")
     sn = serial_number if serial_number is not None else task.get("selected_serial_number")
+    if bool(task.get("production_trace_require_batch")) and not str(bn or lt or "").strip():
+        raise ValueError("Numer partii komponentu jest wymagany przez politykę produkcji.")
+    if bool(task.get("production_trace_require_serial")):
+        if not str(sn or "").strip():
+            raise ValueError("Numer seryjny komponentu jest wymagany przez politykę produkcji.")
+        if abs(qty - 1.0) > 1e-6:
+            raise ValueError("Komponent śledzony seryjnie należy pobierać po jednej sztuce.")
     exclude_mo = int(exclude_production_order_id) if exclude_production_order_id else None
 
     slices = consume_production_material_slices(
@@ -232,10 +255,17 @@ def append_collection_location_pick(
         serial_number=str(sn).strip() if sn else None,
         exclude_production_order_id=exclude_mo,
     )
+    if bool(task.get("production_trace_require_expiry")) and any(
+        sl.expiry_date is None or sl.expiry_date >= SENTINEL_EXPIRY for sl in slices
+    ):
+        raise ValueError("Data ważności komponentu jest wymagana przez politykę produkcji.")
     loc_code = _location_code(db, loc_id)
     event_slices = [
         serialize_picked_slice(sl, product_id=product_id, location_id=loc_id) for sl in slices
     ]
+    if sn:
+        for item in event_slices:
+            item["serial_number"] = str(sn).strip()
     discrepancy_slices: list[dict[str, Any]] = []
     if discrepancy > 1e-9:
         # Physical short vs system suggested pick — write down ghost stock so it is not

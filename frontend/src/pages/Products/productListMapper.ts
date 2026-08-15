@@ -238,6 +238,18 @@ export function mapProductListRow(p: Record<string, unknown>): ProductListRow {
     track_batch: Boolean(p.track_batch),
     track_expiry: Boolean(p.track_expiry),
     track_serial: Boolean(p.track_serial),
+    production_trace_batch_mode:
+      p.production_trace_batch_mode === "REQUIRE" || p.production_trace_batch_mode === "OFF"
+        ? p.production_trace_batch_mode
+        : "INHERIT",
+    production_trace_serial_mode:
+      p.production_trace_serial_mode === "REQUIRE" || p.production_trace_serial_mode === "OFF"
+        ? p.production_trace_serial_mode
+        : "INHERIT",
+    production_trace_expiry_mode:
+      p.production_trace_expiry_mode === "REQUIRE" || p.production_trace_expiry_mode === "OFF"
+        ? p.production_trace_expiry_mode
+        : "INHERIT",
     require_recv_height: Boolean(p.require_recv_height),
     require_recv_width: Boolean(p.require_recv_width),
     require_recv_length: Boolean(p.require_recv_length),

@@ -41,6 +41,8 @@ import {
 } from "./components/ProductionDocumentsSection";
 import type { ProductionBatchRead, ProductionOrderRead } from "@/api/productionApi";
 import { WMS_ROUTES } from "../wms/wmsRoutes";
+import { useWmsProductionSettings } from "./hooks/useWmsProductionSettings";
+import type { FinishedGoodsIdentityBody } from "@/api/productionApi";
 
 const DEFAULT_TENANT = 1;
 
@@ -54,6 +56,7 @@ export default function PaperProductionPage() {
   const { warehouse } = useWarehouse();
   const tenantId = warehouse?.tenant_id ?? DEFAULT_TENANT;
   const warehouseId = warehouse?.id;
+  const { traceability } = useWmsProductionSettings();
   const jobKind = kind === "order" ? "order" : "batch";
   const jobId = Number(id);
 
@@ -211,14 +214,24 @@ export default function PaperProductionPage() {
     }
   };
 
-  const addProductionQty = async (lineKey: string, qty: number) => {
+  const addProductionQty = async (lineKey: string, qty: number, identity: FinishedGoodsIdentityBody = {}) => {
     if (warehouseId == null || qty <= 0) return;
     setBusy(true);
     try {
       if (jobKind === "batch") {
-        await updateProductionProgress(tenantId, jobId, { line_id: Number(lineKey), add_quantity: qty }, warehouseId);
+        await updateProductionProgress(
+          tenantId,
+          jobId,
+          { line_id: Number(lineKey), add_quantity: qty, ...identity },
+          warehouseId,
+        );
       } else {
-        const updated = await updateOrderProductionProgress(tenantId, jobId, { add_quantity: qty }, warehouseId);
+        const updated = await updateOrderProductionProgress(
+          tenantId,
+          jobId,
+          { add_quantity: qty, ...identity },
+          warehouseId,
+        );
         handleProductionPackingHandoff(updated, navigate);
       }
       await load();
@@ -370,8 +383,9 @@ export default function PaperProductionPage() {
               plannedQuantity={ln.plannedQuantity}
               completedQuantity={ln.completedQuantity}
               busy={busy}
+              traceabilityEnabled={traceability.mode === "CONFIGURED"}
               canFinishJob={allProduced}
-              onProduce={(qty) => void addProductionQty(ln.lineKey, qty)}
+              onProduce={(qty, identity) => void addProductionQty(ln.lineKey, qty, identity)}
               onFinish={() => void finishProduction()}
             />
           ))}

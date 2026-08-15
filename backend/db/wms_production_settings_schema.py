@@ -11,6 +11,7 @@ COLUMNS: tuple[tuple[str, str], ...] = (
     ("production_terminal_display_json", "TEXT"),
     ("production_terminal_required_json", "TEXT"),
     ("production_reservation_json", "TEXT"),
+    ("production_traceability_json", "TEXT"),
 )
 
 

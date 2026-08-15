@@ -75,10 +75,19 @@ def _append_pw_line_with_staging(
     quantity: float,
     unit_cost: float,
     performed_by_user_id: int | None,
+    trace_snapshot: dict | None = None,
 ) -> StockDocumentItem:
     staging_loc = int(doc.location_id or 0)
     if staging_loc < 1:
         raise ValueError("Brak lokalizacji staging dla PW produkcyjnego.")
+    batch_number = ""
+    expiry_date = NO_EXPIRY_SENTINEL
+    serials: list[str] = []
+    if trace_snapshot is not None:
+        from .production_fg_traceability import snapshot_lot_values
+
+        batch_number, expiry_date = snapshot_lot_values(trace_snapshot)
+        serials = list(trace_snapshot.get("serial_numbers") or [])
     line = StockDocumentItem(
         document_id=int(doc.id),
         product_id=int(product_id),
@@ -86,8 +95,8 @@ def _append_pw_line_with_staging(
         received_quantity=float(quantity),
         quantity=float(quantity),
         purchase_price_net=float(unit_cost),
-        batch_number="",
-        expiry_date=date(9999, 12, 31),
+        batch_number=batch_number,
+        expiry_date=expiry_date,
     )
     db.add(line)
     db.flush()
@@ -98,11 +107,32 @@ def _append_pw_line_with_staging(
         location_id=staging_loc,
         product_id=int(product_id),
         add_qty=float(quantity),
-        batch_number="",
-        expiry_date=NO_EXPIRY_SENTINEL,
+        batch_number=batch_number,
+        expiry_date=expiry_date,
         stock_disposition=STOCK_DISPOSITION_SALEABLE,
     )
-    append_receipt_operation(db, doc, line, float(quantity))
+    if serials:
+        for serial in serials:
+            append_receipt_operation(db, doc, line, 1.0, serial_number=serial)
+        from ..inventory_serial_service import register_serial_on_hand
+
+        for serial in serials:
+            register_serial_on_hand(
+                db,
+                tenant_id=int(doc.tenant_id),
+                product_id=int(product_id),
+                serial_number=serial,
+                batch_number=batch_number,
+                expiry_date=expiry_date,
+                warehouse_id=int(doc.warehouse_id),
+                location_id=staging_loc,
+                carrier_id=None,
+                stock_disposition=STOCK_DISPOSITION_SALEABLE,
+                source_document_id=int(doc.id),
+                document_line_id=int(line.id),
+            )
+    else:
+        append_receipt_operation(db, doc, line, float(quantity))
     from .production_warehouse_audit import record_production_pw_receipt_audit
 
     record_production_pw_receipt_audit(
@@ -128,6 +158,7 @@ def _create_pw_for_putaway(
     production_batch_id: int | None = None,
     production_batch_line_id: int | None = None,
     production_order_id: int | None = None,
+    trace_snapshot: dict | None = None,
 ) -> StockDocument:
     """Single-product PW (MO / legacy). Batch multi-FG uses create_batch_pw_documents_for_putaway."""
     doc = _new_pw_header(
@@ -146,6 +177,7 @@ def _create_pw_for_putaway(
         quantity=quantity,
         unit_cost=unit_cost,
         performed_by_user_id=created_by_user_id,
+        trace_snapshot=trace_snapshot,
     )
     from ..stock_document_service import recompute_putaway_status_for_document
 
@@ -174,6 +206,24 @@ def create_batch_pw_documents_for_putaway(
     lines = list(batch.lines or [])
     if not lines:
         return []
+    from .production_fg_traceability import (
+        lock_fg_traceability_snapshot,
+        read_fg_traceability_snapshot,
+    )
+
+    for bl in lines:
+        if read_fg_traceability_snapshot(bl) is not None:
+            continue
+        product = db.query(Product).filter(Product.id == int(bl.product_id)).first()
+        if product is None:
+            raise ValueError("Produkt wyrobu gotowego nie istnieje.")
+        lock_fg_traceability_snapshot(
+            db,
+            entity=bl,
+            tenant_id=int(batch.tenant_id),
+            warehouse_id=int(batch.warehouse_id),
+            product=product,
+        )
 
     existing_ids = [
         int(bl.pw_stock_document_id)
@@ -215,6 +265,11 @@ def create_batch_pw_documents_for_putaway(
                     total_planned_quantity=total_planned,
                 )
                 if int(bl.product_id) not in existing_pids:
+                    from .production_fg_traceability import assert_fg_traceability_ready
+
+                    trace_snapshot = assert_fg_traceability_ready(
+                        bl, expected_quantity=produced
+                    )
                     _append_pw_line_with_staging(
                         db,
                         doc=pw_doc,
@@ -222,6 +277,7 @@ def create_batch_pw_documents_for_putaway(
                         quantity=produced,
                         unit_cost=unit_cost,
                         performed_by_user_id=performed_by_user_id,
+                        trace_snapshot=trace_snapshot,
                     )
                     existing_pids.add(int(bl.product_id))
                 bl.calculated_unit_cost = round(unit_cost, 4)
@@ -262,6 +318,9 @@ def create_batch_pw_documents_for_putaway(
     )
     for bl in lines:
         produced = float(bl.completed_quantity or bl.planned_quantity)
+        from .production_fg_traceability import assert_fg_traceability_ready
+
+        trace_snapshot = assert_fg_traceability_ready(bl, expected_quantity=produced)
         unit_cost = compute_batch_line_unit_cost(
             rw_doc,
             produced_quantity=produced,
@@ -274,6 +333,7 @@ def create_batch_pw_documents_for_putaway(
             quantity=produced,
             unit_cost=unit_cost,
             performed_by_user_id=performed_by_user_id,
+            trace_snapshot=trace_snapshot,
         )
         bl.calculated_unit_cost = round(unit_cost, 4)
         bl.pw_stock_document_id = int(pw_doc.id)
@@ -341,6 +401,24 @@ def create_order_pw_document_for_putaway(
     from .cost_service import compute_order_unit_cost
 
     unit_cost = compute_order_unit_cost(rw_doc, produced_quantity=produced)
+    from .production_fg_traceability import (
+        assert_fg_traceability_ready,
+        lock_fg_traceability_snapshot,
+        read_fg_traceability_snapshot,
+    )
+
+    if read_fg_traceability_snapshot(order) is None:
+        product = db.query(Product).filter(Product.id == int(order.product_id)).first()
+        if product is None:
+            raise ValueError("Produkt wyrobu gotowego nie istnieje.")
+        lock_fg_traceability_snapshot(
+            db,
+            entity=order,
+            tenant_id=int(order.tenant_id),
+            warehouse_id=int(order.warehouse_id),
+            product=product,
+        )
+    trace_snapshot = assert_fg_traceability_ready(order, expected_quantity=produced)
     pw_doc = _create_pw_for_putaway(
         db,
         tenant_id=int(order.tenant_id),
@@ -350,6 +428,7 @@ def create_order_pw_document_for_putaway(
         unit_cost=unit_cost,
         created_by_user_id=performed_by_user_id,
         production_order_id=int(order.id),
+        trace_snapshot=trace_snapshot,
     )
     order.calculated_unit_cost = round(unit_cost, 4)
     order.pw_stock_document_id = int(pw_doc.id)

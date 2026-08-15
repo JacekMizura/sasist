@@ -21,7 +21,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func, and_, or_, case
 from sqlalchemy.sql import select
 from pydantic import BaseModel, Field, field_validator, model_validator
-from typing import List, Optional, Any, Tuple
+from typing import List, Literal, Optional, Any, Tuple
 from collections import defaultdict
 
 from ..auth.deps import get_optional_current_user
@@ -546,6 +546,9 @@ class ProductBody(BaseModel):
     track_batch: Optional[bool] = None
     track_expiry: Optional[bool] = None
     track_serial: Optional[bool] = None
+    production_trace_batch_mode: Optional[Literal["INHERIT", "REQUIRE", "OFF"]] = None
+    production_trace_serial_mode: Optional[Literal["INHERIT", "REQUIRE", "OFF"]] = None
+    production_trace_expiry_mode: Optional[Literal["INHERIT", "REQUIRE", "OFF"]] = None
     require_recv_height: Optional[bool] = None
     require_recv_width: Optional[bool] = None
     require_recv_length: Optional[bool] = None
@@ -1685,6 +1688,9 @@ def _product_to_dict(p: Product) -> dict:
         "track_batch": bool(getattr(p, "track_batch", False)),
         "track_expiry": bool(getattr(p, "track_expiry", False)),
         "track_serial": bool(getattr(p, "track_serial", False)),
+        "production_trace_batch_mode": str(getattr(p, "production_trace_batch_mode", "INHERIT") or "INHERIT"),
+        "production_trace_serial_mode": str(getattr(p, "production_trace_serial_mode", "INHERIT") or "INHERIT"),
+        "production_trace_expiry_mode": str(getattr(p, "production_trace_expiry_mode", "INHERIT") or "INHERIT"),
         "require_recv_height": bool(getattr(p, "require_recv_height", False)),
         "require_recv_width": bool(getattr(p, "require_recv_width", False)),
         "require_recv_length": bool(getattr(p, "require_recv_length", False)),
@@ -2992,7 +2998,17 @@ def create_product(
         track_batch=bool(body.track_batch) if body.track_batch is not None else False,
         track_expiry=bool(body.track_expiry) if body.track_expiry is not None else False,
         track_serial=bool(body.track_serial) if body.track_serial is not None else False,
+        production_trace_batch_mode=body.production_trace_batch_mode or "INHERIT",
+        production_trace_serial_mode=body.production_trace_serial_mode or "INHERIT",
+        production_trace_expiry_mode=body.production_trace_expiry_mode or "INHERIT",
     )
+    from ..services.production_execution.production_traceability_policy import (
+        validate_product_production_trace_modes,
+    )
+    try:
+        validate_product_production_trace_modes(product)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     db.add(product)
     db.flush()
     from ..services.barcode_generation import next_product_barcode
@@ -3987,6 +4003,13 @@ def update_product(
         product.track_expiry = bool(body.track_expiry)
     if "track_serial" in fields_set:
         product.track_serial = bool(body.track_serial)
+    for _mode_field in (
+        "production_trace_batch_mode",
+        "production_trace_serial_mode",
+        "production_trace_expiry_mode",
+    ):
+        if _mode_field in fields_set:
+            setattr(product, _mode_field, getattr(body, _mode_field) or "INHERIT")
     for _rf in (
         "require_recv_height",
         "require_recv_width",
@@ -4093,6 +4116,14 @@ def update_product(
                 stock_disposition=DEFAULT_STOCK_DISPOSITION,
             )
             db.add(inv)
+
+    from ..services.production_execution.production_traceability_policy import (
+        validate_product_production_trace_modes,
+    )
+    try:
+        validate_product_production_trace_modes(product)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     pname = (product.name or "").strip() or f"#{product.id}"
     record_product_card_activity(

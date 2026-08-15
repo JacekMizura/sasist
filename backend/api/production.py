@@ -23,6 +23,7 @@ from ..schemas.production_batch import (
     BatchCollectionUpdateBody,
     BatchPutawayBody,
     BatchProductionProgressBody,
+    BatchProductionFinishBody,
     ProductionBatchCompleteBody,
     ProductionBatchCompleteResultRead,
     ProductionBatchCreateBody,
@@ -57,6 +58,7 @@ from ..schemas.production import (
 from ..schemas.production_execution import (
     OrderCollectionStateRead,
     OrderProductionProgressBody,
+    OrderProductionFinishBody,
     OrderPutawayBody,
     ProductionExecutionJobRead,
 )
@@ -1099,6 +1101,7 @@ def api_production_progress(
 @router.post("/batches/{batch_id}/finish-production", response_model=ProductionBatchRead)
 def api_finish_production(
     batch_id: int,
+    body: BatchProductionFinishBody | None = None,
     tenant_id: int = Query(..., ge=1),
     warehouse_id: int = Depends(require_active_or_query_operable_warehouse),
     db: Session = Depends(get_db),
@@ -1108,7 +1111,7 @@ def api_finish_production(
         db, user, tenant_id=tenant_id, batch_id=batch_id, warehouse_id=warehouse_id
     )
     try:
-        row = finish_production(db, tenant_id=tenant_id, batch_id=batch_id)
+        row = finish_production(db, tenant_id=tenant_id, batch_id=batch_id, body=body)
         db.commit()
         return row
     except ProductionBatchError as exc:
@@ -1463,6 +1466,7 @@ def api_order_production_progress(
 @router.post("/orders/{order_id}/finish-production", response_model=ProductionOrderRead)
 def api_finish_order_production(
     order_id: int,
+    body: OrderProductionFinishBody | None = None,
     tenant_id: int = Query(..., ge=1),
     warehouse_id: int = Depends(require_active_or_query_operable_warehouse),
     db: Session = Depends(get_db),
@@ -1477,6 +1481,7 @@ def api_finish_order_production(
             tenant_id=tenant_id,
             order_id=order_id,
             performed_by_user_id=int(user.id) if getattr(user, "id", None) else None,
+            body=body,
         )
         db.commit()
         return row

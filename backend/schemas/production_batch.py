@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 from typing import List, Literal, Optional
 
 from pydantic import BaseModel, Field, model_validator
@@ -205,6 +205,9 @@ class CollectionTaskRead(BaseModel):
     selected_lot: Optional[str] = None
     selected_serial_number: Optional[str] = None
     track_serial: bool = False
+    production_trace_require_batch: bool = False
+    production_trace_require_serial: bool = False
+    production_trace_require_expiry: bool = False
 
 
 class BatchCollectionStateRead(BaseModel):
@@ -233,6 +236,15 @@ class BatchCollectionUpdateBody(BaseModel):
 class BatchProductionProgressBody(BaseModel):
     line_id: int = Field(..., ge=1)
     add_quantity: float = Field(..., gt=0)
+    fg_batch_number: Optional[str] = None
+    fg_expiry_date: Optional[date] = None
+    fg_serial_numbers: List[str] = Field(default_factory=list)
+
+
+class BatchProductionFinishBody(BaseModel):
+    fg_batch_number: Optional[str] = None
+    fg_expiry_date: Optional[date] = None
+    fg_serial_numbers: List[str] = Field(default_factory=list)
 
 
 class BatchPutawayLineBody(BaseModel):

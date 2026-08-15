@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 from typing import List, Literal, Optional
 
 from pydantic import BaseModel, Field
@@ -56,6 +56,15 @@ class OrderCollectionStateRead(BaseModel):
 
 class OrderProductionProgressBody(BaseModel):
     add_quantity: float = Field(..., gt=0)
+    fg_batch_number: Optional[str] = None
+    fg_expiry_date: Optional[date] = None
+    fg_serial_numbers: List[str] = Field(default_factory=list)
+
+
+class OrderProductionFinishBody(BaseModel):
+    fg_batch_number: Optional[str] = None
+    fg_expiry_date: Optional[date] = None
+    fg_serial_numbers: List[str] = Field(default_factory=list)
 
 
 class OrderPutawayBody(BaseModel):

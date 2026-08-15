@@ -419,6 +419,8 @@ def _create_orders_buffer_pw_document(
     quantity: float,
     unit_cost: float,
     created_by_user_id: Optional[int],
+    trace_snapshot: dict[str, Any],
+    receipt_serials: list[str],
 ) -> StockDocument:
     doc = StockDocument(
         tenant_id=int(mo.tenant_id),
@@ -446,6 +448,9 @@ def _create_orders_buffer_pw_document(
         assign_series_number_to_stock_document(
             db, doc, pw_series, warehouse_code=str(getattr(wh, "code", None) or "") or None
         )
+    from .production_fg_traceability import snapshot_lot_values
+
+    batch_number, expiry_date = snapshot_lot_values(trace_snapshot)
     line = StockDocumentItem(
         document_id=int(doc.id),
         product_id=int(mo.product_id),
@@ -453,8 +458,8 @@ def _create_orders_buffer_pw_document(
         received_quantity=float(quantity),
         quantity=float(quantity),
         purchase_price_net=float(unit_cost),
-        batch_number="",
-        expiry_date=date(9999, 12, 31),
+        batch_number=batch_number,
+        expiry_date=expiry_date,
     )
     db.add(line)
     db.flush()
@@ -465,11 +470,32 @@ def _create_orders_buffer_pw_document(
         location_id=int(buffer_location_id),
         product_id=int(mo.product_id),
         add_qty=float(quantity),
-        batch_number="",
-        expiry_date=NO_EXPIRY_SENTINEL,
+        batch_number=batch_number,
+        expiry_date=expiry_date,
         stock_disposition=STOCK_DISPOSITION_SALEABLE,
     )
-    append_receipt_operation(db, doc, line, float(quantity))
+    if receipt_serials:
+        for serial in receipt_serials:
+            append_receipt_operation(db, doc, line, 1.0, serial_number=serial)
+    else:
+        append_receipt_operation(db, doc, line, float(quantity))
+    from ..inventory_serial_service import register_serial_on_hand
+
+    for serial in receipt_serials:
+        register_serial_on_hand(
+            db,
+            tenant_id=int(mo.tenant_id),
+            product_id=int(mo.product_id),
+            serial_number=serial,
+            batch_number=batch_number,
+            expiry_date=expiry_date,
+            warehouse_id=int(mo.warehouse_id),
+            location_id=int(buffer_location_id),
+            carrier_id=None,
+            stock_disposition=STOCK_DISPOSITION_SALEABLE,
+            source_document_id=int(doc.id),
+            document_line_id=int(line.id),
+        )
     try:
         from .production_warehouse_audit import record_production_pw_receipt_audit
 
@@ -501,6 +527,33 @@ def receive_orders_mo_fg_to_buffer(
         return {"result": "SKIPPED", "reason": "zero_qty"}
 
     buffer_id = resolve_orders_mo_buffer_location_id(db, mo)
+    from .production_fg_traceability import (
+        assert_fg_traceability_ready,
+        lock_fg_traceability_snapshot,
+        read_fg_traceability_snapshot,
+        snapshot_lot_values,
+    )
+
+    trace_snapshot = read_fg_traceability_snapshot(mo)
+    if trace_snapshot is None:
+        product = db.query(Product).filter(Product.id == int(mo.product_id)).first()
+        if product is None:
+            raise ProductionOrderError("Produkt wyrobu gotowego nie istnieje.", code="product_missing")
+        try:
+            trace_snapshot = lock_fg_traceability_snapshot(
+                db,
+                entity=mo,
+                tenant_id=int(mo.tenant_id),
+                warehouse_id=int(mo.warehouse_id),
+                product=product,
+            )
+        except ValueError as exc:
+            raise ProductionOrderError(
+                str(exc), code="fg_traceability_missing"
+            ) from exc
+    assert_fg_traceability_ready(mo)
+    trace_serials = list(trace_snapshot.get("serial_numbers") or [])
+    batch_number, expiry_date = snapshot_lot_values(trace_snapshot)
 
     rw_doc = (
         db.query(StockDocument).filter(StockDocument.id == int(mo.rw_stock_document_id)).first()
@@ -528,7 +581,13 @@ def receive_orders_mo_fg_to_buffer(
         line.received_quantity = float(line.received_quantity or 0) + add_qty
         line.quantity = float(line.quantity or 0) + add_qty
         line.purchase_price_net = float(unit_cost)
+        line.batch_number = batch_number
+        line.expiry_date = expiry_date
         db.add(line)
+        previous_qty = float(line.received_quantity or 0) - add_qty
+        serial_start = int(round(previous_qty))
+        serial_count = int(round(add_qty))
+        receipt_serials = trace_serials[serial_start : serial_start + serial_count]
         upsert_dock_inventory_for_loose_receipt(
             db,
             tenant_id=int(mo.tenant_id),
@@ -536,11 +595,32 @@ def receive_orders_mo_fg_to_buffer(
             location_id=int(buffer_id),
             product_id=int(mo.product_id),
             add_qty=add_qty,
-            batch_number="",
-            expiry_date=NO_EXPIRY_SENTINEL,
+            batch_number=batch_number,
+            expiry_date=expiry_date,
             stock_disposition=STOCK_DISPOSITION_SALEABLE,
         )
-        append_receipt_operation(db, doc, line, add_qty)
+        if receipt_serials:
+            for serial in receipt_serials:
+                append_receipt_operation(db, doc, line, 1.0, serial_number=serial)
+            from ..inventory_serial_service import register_serial_on_hand
+
+            for serial in receipt_serials:
+                register_serial_on_hand(
+                    db,
+                    tenant_id=int(mo.tenant_id),
+                    product_id=int(mo.product_id),
+                    serial_number=serial,
+                    batch_number=batch_number,
+                    expiry_date=expiry_date,
+                    warehouse_id=int(mo.warehouse_id),
+                    location_id=int(buffer_id),
+                    carrier_id=None,
+                    stock_disposition=STOCK_DISPOSITION_SALEABLE,
+                    source_document_id=int(doc.id),
+                    document_line_id=int(line.id),
+                )
+        else:
+            append_receipt_operation(db, doc, line, add_qty)
         doc.putaway_status = "DONE"
         doc.relocation_status = "DONE"
         doc.receiving_status = "DONE"
@@ -557,6 +637,8 @@ def receive_orders_mo_fg_to_buffer(
             quantity=add_qty,
             unit_cost=unit_cost,
             created_by_user_id=performed_by_user_id,
+            trace_snapshot=trace_snapshot,
+            receipt_serials=trace_serials[: int(round(add_qty))],
         )
         mo.pw_stock_document_id = int(doc.id)
         pw_id = int(doc.id)

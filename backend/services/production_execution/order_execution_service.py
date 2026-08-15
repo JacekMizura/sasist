@@ -14,7 +14,12 @@ from ...models.production import ProductionOrder
 from ...models.stock_document import StockDocument, StockDocumentItem
 from ...schemas.production import ComponentAllocationWrite
 from ...schemas.production_batch import BatchCollectionUpdateBody, CollectionTaskRead
-from ...schemas.production_execution import OrderCollectionStateRead, OrderProductionProgressBody, OrderPutawayBody
+from ...schemas.production_execution import (
+    OrderCollectionStateRead,
+    OrderProductionFinishBody,
+    OrderProductionProgressBody,
+    OrderPutawayBody,
+)
 from ..inventory_carrier_ops import upsert_dock_inventory_for_loose_receipt
 from ..inventory_lot_keys import NO_EXPIRY_SENTINEL
 from ..order_item_pick_allocation_service import consume_inventory_fifo_slices
@@ -428,6 +433,7 @@ def _consume_order_materials(
                     from_location_id=loc_id,
                     batch_number=str(s.get("batch_number") or ""),
                     expiry_date=exp if exp < NO_EXPIRY_SENTINEL else None,
+                    serial_number=str(s.get("serial_number") or "") or None,
                     operator_admin_id=performed_by_user_id,
                     metadata={"production_order_id": int(order.id), "source_document_type": "RW"},
                 )
@@ -467,6 +473,7 @@ def _consume_order_materials(
                     from_location_id=int(loc_id),
                     batch_number=sl.batch_number or "",
                     expiry_date=sl.expiry_date if sl.expiry_date < NO_EXPIRY_SENTINEL else None,
+                    serial_number=(meta.serial_number if meta else None),
                     operator_admin_id=performed_by_user_id,
                     metadata={"production_order_id": int(order.id), "source_document_type": "RW"},
                 )
@@ -631,6 +638,31 @@ def update_order_production_progress(
     new_qty = float(order.produced_quantity or 0) + add_qty
     if new_qty > float(order.planned_quantity) + 1e-6:
         raise ProductionOrderError("Przekroczono planowaną ilość.", code="over_production")
+    product = db.query(Product).filter(Product.id == int(order.product_id)).first()
+    if product is None:
+        raise ProductionOrderError("Produkt wyrobu gotowego nie istnieje.", code="product_missing")
+    try:
+        from .production_fg_traceability import append_fg_serials, lock_fg_traceability_snapshot
+
+        lock_fg_traceability_snapshot(
+            db,
+            entity=order,
+            tenant_id=int(order.tenant_id),
+            warehouse_id=int(order.warehouse_id),
+            product=product,
+            batch_number=body.fg_batch_number,
+            expiry_date=body.fg_expiry_date,
+        )
+        append_fg_serials(
+            db,
+            entity=order,
+            tenant_id=int(order.tenant_id),
+            product_id=int(order.product_id),
+            delta_quantity=add_qty,
+            serial_numbers=body.fg_serial_numbers,
+        )
+    except ValueError as exc:
+        raise ProductionOrderError(str(exc), code="fg_traceability_invalid") from exc
     order.produced_quantity = round(new_qty, 4)
     order.updated_at = datetime.utcnow()
     db.flush()
@@ -696,6 +728,7 @@ def finish_order_production(
     tenant_id: int,
     order_id: int,
     performed_by_user_id: int | None = None,
+    body: OrderProductionFinishBody | None = None,
 ):
     from ...models.production import PRODUCTION_ORDER_SOURCE_ORDERS
     from .orders_fg_fulfillment_service import complete_orders_mo_without_putaway
@@ -706,6 +739,42 @@ def finish_order_production(
         raise ProductionOrderError("Zlecenie nie jest w produkcji.", code="invalid_status")
     if float(order.produced_quantity or 0) < float(order.planned_quantity) - 1e-6:
         raise ProductionOrderError("Nie wyprodukowano planowanej ilości.", code="production_incomplete")
+    product = db.query(Product).filter(Product.id == int(order.product_id)).first()
+    if product is None:
+        raise ProductionOrderError("Produkt wyrobu gotowego nie istnieje.", code="product_missing")
+    try:
+        from .production_fg_traceability import (
+            append_fg_serials,
+            assert_fg_traceability_ready,
+            lock_fg_traceability_snapshot,
+            read_fg_traceability_snapshot,
+        )
+
+        was_missing = read_fg_traceability_snapshot(order) is None
+        payload = body or OrderProductionFinishBody()
+        lock_fg_traceability_snapshot(
+            db,
+            entity=order,
+            tenant_id=int(order.tenant_id),
+            warehouse_id=int(order.warehouse_id),
+            product=product,
+            batch_number=payload.fg_batch_number,
+            expiry_date=payload.fg_expiry_date,
+        )
+        if was_missing:
+            append_fg_serials(
+                db,
+                entity=order,
+                tenant_id=int(order.tenant_id),
+                product_id=int(order.product_id),
+                delta_quantity=float(order.produced_quantity or 0),
+                serial_numbers=payload.fg_serial_numbers,
+            )
+        elif payload.fg_serial_numbers:
+            raise ValueError("Numery seryjne należy przekazywać z każdym raportem postępu.")
+        assert_fg_traceability_ready(order, expected_quantity=float(order.produced_quantity or 0))
+    except ValueError as exc:
+        raise ProductionOrderError(str(exc), code="fg_traceability_invalid") from exc
 
     if str(getattr(order, "source_type", "") or "") == PRODUCTION_ORDER_SOURCE_ORDERS:
         # Progressive buffer PW already created on progress — ensure present, then complete.

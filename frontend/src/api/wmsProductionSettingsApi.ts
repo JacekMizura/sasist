@@ -45,6 +45,13 @@ export type ProductionReservationSettings = {
   allow_sales_locations: boolean;
 };
 
+export type ProductionTraceabilitySettings = {
+  mode: "OFF" | "CONFIGURED";
+  require_batch: boolean;
+  require_serial: boolean;
+  require_expiry: boolean;
+};
+
 export type WmsProductionSettings = {
   tenant_id: number;
   warehouse_id: number;
@@ -52,6 +59,7 @@ export type WmsProductionSettings = {
   terminal_required: ProductionTerminalRequiredSettings;
   forecast: ProductionForecastSettings;
   reservation: ProductionReservationSettings;
+  traceability?: ProductionTraceabilitySettings;
 };
 
 export type WmsProductionSettingsSave = {
@@ -61,6 +69,7 @@ export type WmsProductionSettingsSave = {
   terminal_required: ProductionTerminalRequiredSettings;
   forecast?: ProductionForecastSettings;
   reservation?: ProductionReservationSettings;
+  traceability?: ProductionTraceabilitySettings;
 };
 
 export async function getWmsProductionSettings(params?: {

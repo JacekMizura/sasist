@@ -22,7 +22,7 @@ export default function ProductionExecutionPage() {
     () => parseWmsProductionRouteParams({ kind, id, batchId }),
     [kind, id, batchId],
   );
-  const { display } = useWmsProductionSettings();
+  const { display, traceability } = useWmsProductionSettings();
 
   const {
     queue,
@@ -106,8 +106,9 @@ export default function ProductionExecutionPage() {
                   expanded={expanded}
                   done={done}
                   busy={busy}
+                  traceabilityEnabled={traceability.mode === "CONFIGURED"}
                   onToggle={() => setExpandedLineKey((k) => (k === ln.lineKey ? null : ln.lineKey))}
-                  onAddQty={(add) => void addProductionQty(ln.lineKey, add)}
+                  onAddQty={(add, identity) => void addProductionQty(ln.lineKey, add, identity)}
                 />
               );
             })}

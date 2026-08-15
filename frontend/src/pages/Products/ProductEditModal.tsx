@@ -215,6 +215,9 @@ export type ProductForm = {
   track_batch?: boolean;
   track_expiry?: boolean;
   track_serial?: boolean;
+  production_trace_batch_mode?: "INHERIT" | "REQUIRE" | "OFF";
+  production_trace_serial_mode?: "INHERIT" | "REQUIRE" | "OFF";
+  production_trace_expiry_mode?: "INHERIT" | "REQUIRE" | "OFF";
   require_recv_height?: boolean;
   require_recv_width?: boolean;
   require_recv_length?: boolean;
@@ -612,6 +615,18 @@ export function ProductEditModal({
     validation_skip_master_carton_weight: Boolean(product?.validation_skip_master_carton_weight),
   });
   const [globalValidation, setGlobalValidation] = useState<ProductValidationGlobalSettings | null>(null);
+  const [trackBatch, setTrackBatch] = useState(Boolean(product?.track_batch));
+  const [trackExpiry, setTrackExpiry] = useState(Boolean(product?.track_expiry));
+  const [trackSerial, setTrackSerial] = useState(Boolean(product?.track_serial));
+  const [productionTraceBatchMode, setProductionTraceBatchMode] = useState<"INHERIT" | "REQUIRE" | "OFF">(
+    product?.production_trace_batch_mode ?? "INHERIT",
+  );
+  const [productionTraceSerialMode, setProductionTraceSerialMode] = useState<"INHERIT" | "REQUIRE" | "OFF">(
+    product?.production_trace_serial_mode ?? "INHERIT",
+  );
+  const [productionTraceExpiryMode, setProductionTraceExpiryMode] = useState<"INHERIT" | "REQUIRE" | "OFF">(
+    product?.production_trace_expiry_mode ?? "INHERIT",
+  );
 
   useEffect(() => {
     void getWmsProductValidationSettings()
@@ -945,6 +960,24 @@ export function ProductEditModal({
         validation_skip_master_carton_dims: Boolean(product.validation_skip_master_carton_dims),
         validation_skip_master_carton_weight: Boolean(product.validation_skip_master_carton_weight),
       });
+      setTrackBatch(Boolean(product.track_batch));
+      setTrackExpiry(Boolean(product.track_expiry));
+      setTrackSerial(Boolean(product.track_serial));
+      setProductionTraceBatchMode(
+        product.track_batch === false && product.production_trace_batch_mode === "REQUIRE"
+          ? "INHERIT"
+          : product.production_trace_batch_mode ?? "INHERIT",
+      );
+      setProductionTraceSerialMode(
+        product.track_serial === false && product.production_trace_serial_mode === "REQUIRE"
+          ? "INHERIT"
+          : product.production_trace_serial_mode ?? "INHERIT",
+      );
+      setProductionTraceExpiryMode(
+        product.track_expiry === false && product.production_trace_expiry_mode === "REQUIRE"
+          ? "INHERIT"
+          : product.production_trace_expiry_mode ?? "INHERIT",
+      );
     } else {
       setCatalogNumber("");
       setSymbol("");
@@ -983,6 +1016,10 @@ export function ProductEditModal({
       setMinTotalStock("");
       setTrackBatch(false);
       setTrackExpiry(false);
+      setTrackSerial(false);
+      setProductionTraceBatchMode("INHERIT");
+      setProductionTraceSerialMode("INHERIT");
+      setProductionTraceExpiryMode("INHERIT");
       setOrientationType("any");
       setShapeType("box");
       setStackBehavior("stackable");
@@ -1354,6 +1391,15 @@ export function ProductEditModal({
         enable_stock_alert: enableStockAlert,
         ...(enableStockAlert && minTotalVal != null ? { min_total_stock: minTotalVal } : {}),
         ...validationSkips,
+        track_batch: trackBatch,
+        track_expiry: trackExpiry,
+        track_serial: trackSerial,
+        production_trace_batch_mode:
+          !trackBatch && productionTraceBatchMode === "REQUIRE" ? "INHERIT" : productionTraceBatchMode,
+        production_trace_serial_mode:
+          !trackSerial && productionTraceSerialMode === "REQUIRE" ? "INHERIT" : productionTraceSerialMode,
+        production_trace_expiry_mode:
+          !trackExpiry && productionTraceExpiryMode === "REQUIRE" ? "INHERIT" : productionTraceExpiryMode,
         bulk_ean: bulkEan.trim() || null,
         units_per_carton: unitsPerCarton === "" ? null : parseNumber(unitsPerCarton),
         carton_length_cm: cartonLength === "" ? undefined : typeof cartonLength === "number" ? round2(cartonLength) : parseDecimal(String(cartonLength)),
@@ -1407,6 +1453,15 @@ export function ProductEditModal({
         max_reserve_quantity: maxReserveVal ?? undefined,
         enable_stock_alert: enableStockAlert,
         ...validationSkips,
+        track_batch: trackBatch,
+        track_expiry: trackExpiry,
+        track_serial: trackSerial,
+        production_trace_batch_mode:
+          !trackBatch && productionTraceBatchMode === "REQUIRE" ? "INHERIT" : productionTraceBatchMode,
+        production_trace_serial_mode:
+          !trackSerial && productionTraceSerialMode === "REQUIRE" ? "INHERIT" : productionTraceSerialMode,
+        production_trace_expiry_mode:
+          !trackExpiry && productionTraceExpiryMode === "REQUIRE" ? "INHERIT" : productionTraceExpiryMode,
       };
       if (enableStockAlert) {
         body.min_total_stock = minTotalVal;
@@ -2092,6 +2147,18 @@ export function ProductEditModal({
                     globalValidation={globalValidation}
                     validationSkips={validationSkips}
                     setValidationSkips={setValidationSkips}
+                    trackBatch={trackBatch}
+                    setTrackBatch={setTrackBatch}
+                    trackSerial={trackSerial}
+                    setTrackSerial={setTrackSerial}
+                    trackExpiry={trackExpiry}
+                    setTrackExpiry={setTrackExpiry}
+                    productionTraceBatchMode={productionTraceBatchMode}
+                    setProductionTraceBatchMode={setProductionTraceBatchMode}
+                    productionTraceSerialMode={productionTraceSerialMode}
+                    setProductionTraceSerialMode={setProductionTraceSerialMode}
+                    productionTraceExpiryMode={productionTraceExpiryMode}
+                    setProductionTraceExpiryMode={setProductionTraceExpiryMode}
                   />
                 )}
 

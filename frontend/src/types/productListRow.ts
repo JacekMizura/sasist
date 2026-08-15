@@ -134,6 +134,9 @@ export type ProductListRow = {
   track_batch?: boolean;
   track_expiry?: boolean;
   track_serial?: boolean;
+  production_trace_batch_mode?: "INHERIT" | "REQUIRE" | "OFF";
+  production_trace_serial_mode?: "INHERIT" | "REQUIRE" | "OFF";
+  production_trace_expiry_mode?: "INHERIT" | "REQUIRE" | "OFF";
   require_recv_height?: boolean;
   require_recv_width?: boolean;
   require_recv_length?: boolean;

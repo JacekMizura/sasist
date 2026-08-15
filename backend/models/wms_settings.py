@@ -6,7 +6,7 @@ Controls which return workflow operator should follow.
 
 from datetime import datetime
 
-from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String, UniqueConstraint
+from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
 
 from ..database import Base
 
@@ -61,6 +61,7 @@ class WmsSettings(Base):
     production_forecast_json = Column(String, nullable=True)
 
     production_reservation_json = Column(String, nullable=True)
+    production_traceability_json = Column(Text, nullable=True)
 
     created_at = Column(DateTime, nullable=True, default=datetime.utcnow)
     updated_at = Column(DateTime, nullable=True, default=datetime.utcnow)

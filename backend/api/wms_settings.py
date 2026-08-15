@@ -855,6 +855,7 @@ from ..schemas.wms_production_settings import (
     forecast_settings_from_row,
     production_settings_from_row,
     reservation_settings_from_row,
+    traceability_settings_from_row,
 )
 
 
@@ -867,6 +868,7 @@ def _production_row_to_read(row) -> WmsProductionSettingsRead:
         terminal_required=req,
         forecast=forecast_settings_from_row(row),
         reservation=reservation_settings_from_row(row),
+        traceability=traceability_settings_from_row(row),
     )
 
 
@@ -898,6 +900,7 @@ def save_wms_production_settings(
     row.production_terminal_required_json = json.dumps(body.terminal_required.model_dump())
     row.production_forecast_json = json.dumps(body.forecast.model_dump())
     row.production_reservation_json = json.dumps(body.reservation.model_dump())
+    row.production_traceability_json = json.dumps(body.traceability.model_dump())
     row.updated_at = datetime.utcnow()
     db.commit()
     db.refresh(row)

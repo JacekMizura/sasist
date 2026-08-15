@@ -1,4 +1,4 @@
-import { Boxes, ClipboardList, Factory, FileText, LayoutTemplate, Settings2 } from "lucide-react";
+import { Boxes, ClipboardList, Factory, FileText, Fingerprint, LayoutTemplate, Settings2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import toast from "react-hot-toast";
 
@@ -7,10 +7,12 @@ import {
   saveWmsProductionSettings,
   type ProductionForecastSettings,
   type ProductionReservationSettings,
+  type ProductionTraceabilitySettings,
   type ProductionTerminalDisplaySettings,
   type ProductionTerminalRequiredSettings,
   type WmsProductionSettings,
 } from "../../api/wmsProductionSettingsApi";
+import { SettingInfoButton } from "./SettingInfoButton";
 import { DAMAGE_TENANT_ID } from "../damage/damageShared";
 import { WmsSettingsTabFrame } from "./WmsSettingsTabFrame";
 import { WmsSettingsSection } from "./WmsSettingsSection";
@@ -29,6 +31,13 @@ import {
 const SECTION_CONFIGURATOR = "wms-production-configurator";
 const SECTION_FORECAST = "wms-production-forecast";
 const SECTION_RESERVATION = "wms-production-reservation";
+const SECTION_TRACEABILITY = "wms-production-traceability";
+const DEFAULT_TRACEABILITY: ProductionTraceabilitySettings = {
+  mode: "OFF",
+  require_batch: false,
+  require_serial: false,
+  require_expiry: false,
+};
 
 const ALLOCATION_STRATEGIES: { key: ProductionReservationSettings["allocation_strategy"]; label: string }[] = [
   { key: "FIFO", label: "FIFO — najstarsze partie pierwsze" },
@@ -66,6 +75,7 @@ function SectionCard({
     { id: SECTION_CONFIGURATOR, icon: Factory, iconClassName: "bg-orange-50 text-orange-600" },
     { id: SECTION_FORECAST, icon: Settings2, iconClassName: "bg-slate-100 text-slate-600" },
     { id: SECTION_RESERVATION, icon: Boxes, iconClassName: "bg-amber-50 text-amber-600" },
+    { id: SECTION_TRACEABILITY, icon: Fingerprint, iconClassName: "bg-teal-50 text-teal-700" },
     { id: SECTION_REQUIRED, icon: ClipboardList, iconClassName: "bg-violet-50 text-violet-600" },
     { id: SECTION_DISPLAY, icon: LayoutTemplate, iconClassName: "bg-sky-50 text-sky-600" },
     { id: "wms-production-document-templates", icon: FileText, iconClassName: "bg-indigo-50 text-indigo-600" },
@@ -109,11 +119,6 @@ const DISPLAY_FIELDS: { key: keyof ProductionTerminalDisplaySettings; label: str
 ];
 
 const REQUIRED_FIELDS: { key: keyof ProductionTerminalRequiredSettings; label: string }[] = [
-  { key: "require_batch_number", label: "Numer partii" },
-  { key: "require_serial", label: "Numer seryjny" },
-  { key: "require_lot", label: "LOT" },
-  { key: "require_production_date", label: "Data produkcji" },
-  { key: "require_expiry_date", label: "Data ważności" },
   { key: "require_operator", label: "Operator" },
   { key: "require_quality_control", label: "Kontrola jakości" },
 ];
@@ -126,6 +131,7 @@ export default function WmsProductionSettingsPanel({ warehouseId }: Props) {
   const [draftRequired, setDraftRequired] = useState<ProductionTerminalRequiredSettings | null>(null);
   const [draftForecast, setDraftForecast] = useState<ProductionForecastSettings | null>(null);
   const [draftReservation, setDraftReservation] = useState<ProductionReservationSettings | null>(null);
+  const [draftTraceability, setDraftTraceability] = useState<ProductionTraceabilitySettings | null>(null);
   const [resolvedWh, setResolvedWh] = useState<number | null>(null);
 
   const load = useCallback(async () => {
@@ -148,6 +154,7 @@ export default function WmsProductionSettingsPanel({ warehouseId }: Props) {
         },
       );
       setDraftReservation(data.reservation ?? { allocation_strategy: "FEFO", allow_sales_locations: false });
+      setDraftTraceability(data.traceability ?? DEFAULT_TRACEABILITY);
       setResolvedWh(data.warehouse_id);
     } catch {
       toast.error("Nie udało się wczytać ustawień produkcji WMS.");
@@ -161,17 +168,18 @@ export default function WmsProductionSettingsPanel({ warehouseId }: Props) {
   }, [load]);
 
   const dirty = useMemo(() => {
-    if (!saved || !draftDisplay || !draftRequired || !draftForecast || !draftReservation) return false;
+    if (!saved || !draftDisplay || !draftRequired || !draftForecast || !draftReservation || !draftTraceability) return false;
     return (
       JSON.stringify(saved.terminal_display) !== JSON.stringify(draftDisplay) ||
       JSON.stringify(saved.terminal_required) !== JSON.stringify(draftRequired) ||
       JSON.stringify(saved.forecast) !== JSON.stringify(draftForecast) ||
-      JSON.stringify(saved.reservation ?? { allocation_strategy: "FEFO", allow_sales_locations: false }) !== JSON.stringify(draftReservation)
+      JSON.stringify(saved.reservation ?? { allocation_strategy: "FEFO", allow_sales_locations: false }) !== JSON.stringify(draftReservation) ||
+      JSON.stringify(saved.traceability ?? DEFAULT_TRACEABILITY) !== JSON.stringify(draftTraceability)
     );
-  }, [saved, draftDisplay, draftRequired, draftForecast, draftReservation]);
+  }, [saved, draftDisplay, draftRequired, draftForecast, draftReservation, draftTraceability]);
 
   const save = async () => {
-    if (!draftDisplay || !draftRequired || !draftForecast || !draftReservation || !dirty) return;
+    if (!draftDisplay || !draftRequired || !draftForecast || !draftReservation || !draftTraceability || !dirty) return;
     setSaving(true);
     try {
       const data = await saveWmsProductionSettings({
@@ -181,12 +189,14 @@ export default function WmsProductionSettingsPanel({ warehouseId }: Props) {
         terminal_required: draftRequired,
         forecast: draftForecast,
         reservation: draftReservation,
+        traceability: draftTraceability,
       });
       setSaved(data);
       setDraftDisplay(data.terminal_display);
       setDraftRequired(data.terminal_required);
       setDraftForecast(data.forecast);
       setDraftReservation(data.reservation ?? { allocation_strategy: "FEFO", allow_sales_locations: false });
+      setDraftTraceability(data.traceability ?? DEFAULT_TRACEABILITY);
       toast.success("Zapisano ustawienia produkcji.");
     } catch {
       toast.error("Zapis ustawień nie powiódł się.");
@@ -204,6 +214,7 @@ export default function WmsProductionSettingsPanel({ warehouseId }: Props) {
     },
     { id: SECTION_FORECAST, label: "Ogólne / prognoza", icon: Settings2, iconClassName: "bg-slate-100 text-slate-600" },
     { id: SECTION_RESERVATION, label: "Rezerwacje", icon: Boxes, iconClassName: "bg-amber-50 text-amber-600" },
+    { id: SECTION_TRACEABILITY, label: "Identyfikowalność", icon: Fingerprint, iconClassName: "bg-teal-50 text-teal-700" },
     {
       id: SECTION_REQUIRED,
       label: "Terminal / sposób pracy",
@@ -224,7 +235,7 @@ export default function WmsProductionSettingsPanel({ warehouseId }: Props) {
     },
   ];
 
-  if (loading || !draftDisplay || !draftRequired || !draftForecast || !draftReservation) {
+  if (loading || !draftDisplay || !draftRequired || !draftForecast || !draftReservation || !draftTraceability) {
     return <p className="text-sm text-slate-500">Wczytywanie ustawień produkcji…</p>;
   }
 
@@ -242,7 +253,8 @@ export default function WmsProductionSettingsPanel({ warehouseId }: Props) {
           setDraftDisplay(saved.terminal_display);
           setDraftRequired(saved.terminal_required);
           setDraftForecast(saved.forecast);
-          setDraftReservation(saved.reservation ?? { allocation_strategy: "FEFO" });
+          setDraftReservation(saved.reservation ?? { allocation_strategy: "FEFO", allow_sales_locations: false });
+          setDraftTraceability(saved.traceability ?? DEFAULT_TRACEABILITY);
         }
       }}
       restoreDisabled={!dirty}
@@ -398,6 +410,57 @@ export default function WmsProductionSettingsPanel({ warehouseId }: Props) {
                 </p>
               </div>
             </div>
+          ) : null}
+        </div>
+      </SectionCard>
+
+      <SectionCard
+        sectionId={SECTION_TRACEABILITY}
+        title="Identyfikowalność"
+        summary="Niezależne wymagania identyfikacji materiałów i wyrobów w procesie produkcji."
+      >
+        <div className={wmsSettingsRowsStackClass}>
+          <WmsControlSettingRow label="Tryb identyfikowalności">
+            <div className="flex flex-wrap items-center gap-5">
+              {([
+                ["OFF", "Wyłączona"],
+                ["CONFIGURED", "Włączona"],
+              ] as const).map(([value, label]) => (
+                <label key={value} className="inline-flex items-center gap-2 text-sm font-medium text-slate-800">
+                  <input
+                    type="radio"
+                    name="production-traceability-mode"
+                    checked={draftTraceability.mode === value}
+                    onChange={() => setDraftTraceability((prev) => prev ? { ...prev, mode: value } : prev)}
+                    className="text-orange-600 focus:ring-orange-500"
+                  />
+                  {label}
+                </label>
+              ))}
+              <SettingInfoButton
+                title="Identyfikowalność produkcji"
+                description="Te wymagania dotyczą wyłącznie produkcji i są niezależne od ustawień Przyjęcia. Partia (dokument) ≠ Numer partii (LOT)."
+              />
+            </div>
+          </WmsControlSettingRow>
+          {draftTraceability.mode === "CONFIGURED" ? (
+            <>
+              <WmsBoolSettingRow
+                label="Numer partii (LOT)"
+                checked={draftTraceability.require_batch}
+                onChange={(v) => setDraftTraceability((prev) => prev ? { ...prev, require_batch: v } : prev)}
+              />
+              <WmsBoolSettingRow
+                label="Numer seryjny (SN)"
+                checked={draftTraceability.require_serial}
+                onChange={(v) => setDraftTraceability((prev) => prev ? { ...prev, require_serial: v } : prev)}
+              />
+              <WmsBoolSettingRow
+                label="Data ważności"
+                checked={draftTraceability.require_expiry}
+                onChange={(v) => setDraftTraceability((prev) => prev ? { ...prev, require_expiry: v } : prev)}
+              />
+            </>
           ) : null}
         </div>
       </SectionCard>

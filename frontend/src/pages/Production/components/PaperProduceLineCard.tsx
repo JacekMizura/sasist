@@ -1,3 +1,5 @@
+import { useState } from "react";
+import type { FinishedGoodsIdentityBody } from "@/api/productionApi";
 import { PrimaryButton, ProgressBar, toneTextClass } from "@/design-system";
 import { formatProductionQuantity, productionProgressTone } from "../productionUi";
 import { ProductThumb } from "./ProductThumb";
@@ -8,9 +10,10 @@ type Props = {
   plannedQuantity: number;
   completedQuantity: number;
   busy: boolean;
+  traceabilityEnabled: boolean;
   /** True when every line of the job is complete — show finish CTA. */
   canFinishJob: boolean;
-  onProduce: (qty: number) => void;
+  onProduce: (qty: number, identity: FinishedGoodsIdentityBody) => void;
   onFinish: () => void;
 };
 
@@ -25,6 +28,7 @@ export function PaperProduceLineCard({
   plannedQuantity,
   completedQuantity,
   busy,
+  traceabilityEnabled,
   canFinishJob,
   onProduce,
   onFinish,
@@ -35,6 +39,14 @@ export function PaperProduceLineCard({
     plannedQuantity > 0 ? Math.round(Math.min(100, (completedQuantity / plannedQuantity) * 100)) : 0;
   const tone = productionProgressTone(pct, lineDone ? "completed" : "in_progress");
   const showPlusFive = plannedQuantity > 5 && remaining > 1;
+  const [fgBatchNumber, setFgBatchNumber] = useState("");
+  const [fgExpiryDate, setFgExpiryDate] = useState("");
+  const [fgSerials, setFgSerials] = useState("");
+  const identity = (): FinishedGoodsIdentityBody => ({
+    fg_batch_number: fgBatchNumber.trim() || null,
+    fg_expiry_date: fgExpiryDate || null,
+    fg_serial_numbers: fgSerials.split(/[\n,;]+/).map((value) => value.trim()).filter(Boolean),
+  });
 
   return (
     <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
@@ -59,6 +71,25 @@ export function PaperProduceLineCard({
       </div>
 
       <div className="mt-5 space-y-2">
+        {traceabilityEnabled && !lineDone ? (
+          <details className="mb-4 rounded-xl border border-teal-200 bg-teal-50/40 p-3">
+            <summary className="cursor-pointer text-sm font-bold text-teal-900">Identyfikowalność wyrobu</summary>
+            <div className="mt-3 grid gap-3">
+              <label className="text-xs font-semibold text-slate-600">
+                Numer partii (LOT)
+                <input value={fgBatchNumber} onChange={(e) => setFgBatchNumber(e.target.value)} className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm" />
+              </label>
+              <label className="text-xs font-semibold text-slate-600">
+                Data ważności
+                <input type="date" value={fgExpiryDate} onChange={(e) => setFgExpiryDate(e.target.value)} className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm" />
+              </label>
+              <label className="text-xs font-semibold text-slate-600">
+                Numery seryjne (SN)
+                <textarea value={fgSerials} onChange={(e) => setFgSerials(e.target.value)} rows={3} placeholder="Jeden numer w wierszu" className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm" />
+              </label>
+            </div>
+          </details>
+        ) : null}
         {lineDone && canFinishJob ? (
           <PrimaryButton
             type="button"
@@ -79,7 +110,7 @@ export function PaperProduceLineCard({
               type="button"
               density="comfortable"
               disabled={busy || remaining <= 0}
-              onClick={() => onProduce(1)}
+              onClick={() => onProduce(1, identity())}
               className="w-full py-3.5 text-base"
             >
               Produkuj +1
@@ -89,7 +120,7 @@ export function PaperProduceLineCard({
                 type="button"
                 density="comfortable"
                 disabled={busy || remaining <= 0}
-                onClick={() => onProduce(Math.min(5, remaining))}
+              onClick={() => onProduce(Math.min(5, remaining), identity())}
                 className="w-full py-3.5 text-base"
               >
                 Produkuj +5

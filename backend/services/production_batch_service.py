@@ -30,6 +30,7 @@ from ..schemas.production_batch import (
     BatchCollectionUpdateBody,
     BatchPutawayBody,
     BatchProductionProgressBody,
+    BatchProductionFinishBody,
     CollectionTaskRead,
     ProductionBatchCompleteBody,
     ProductionBatchCompleteResultRead,
@@ -150,6 +151,7 @@ def _append_rw_issue_with_product_audit(
     from_location_id: int,
     batch_number: str,
     expiry_date,
+    serial_number: str | None,
     performed_by_user_id: int | None,
     production_batch_id: int,
     product_id: int,
@@ -162,6 +164,7 @@ def _append_rw_issue_with_product_audit(
         from_location_id=int(from_location_id),
         batch_number=batch_number,
         expiry_date=expiry_date,
+        serial_number=serial_number,
         operator_admin_id=performed_by_user_id,
         metadata={"production_batch_id": int(production_batch_id), "source_document_type": "RW"},
     )
@@ -1603,6 +1606,7 @@ def _consume_batch_materials(
                     from_location_id=loc_id,
                     batch_number=str(s.get("batch_number") or ""),
                     expiry_date=exp if exp < NO_EXPIRY_SENTINEL else None,
+                    serial_number=str(s.get("serial_number") or "") or None,
                     performed_by_user_id=performed_by_user_id,
                     production_batch_id=int(batch.id),
                     product_id=int(pid),
@@ -1630,6 +1634,7 @@ def _consume_batch_materials(
                     from_location_id=int(loc_id),
                     batch_number=sl.batch_number or "",
                     expiry_date=sl.expiry_date if sl.expiry_date < NO_EXPIRY_SENTINEL else None,
+                    serial_number=(meta.serial_number if meta else None),
                     performed_by_user_id=performed_by_user_id,
                     production_batch_id=int(batch.id),
                     product_id=int(pid),
@@ -1654,6 +1659,34 @@ def update_production_progress(
     new_qty = float(line.completed_quantity or 0) + float(body.add_quantity)
     if new_qty > float(line.planned_quantity) + 1e-6:
         raise ProductionBatchError("Przekroczono planowaną ilość.", code="over_production")
+    product = db.query(Product).filter(Product.id == int(line.product_id)).first()
+    if product is None:
+        raise ProductionBatchError("Produkt wyrobu gotowego nie istnieje.", code="product_missing")
+    try:
+        from .production_execution.production_fg_traceability import (
+            append_fg_serials,
+            lock_fg_traceability_snapshot,
+        )
+
+        lock_fg_traceability_snapshot(
+            db,
+            entity=line,
+            tenant_id=int(batch.tenant_id),
+            warehouse_id=int(batch.warehouse_id),
+            product=product,
+            batch_number=body.fg_batch_number,
+            expiry_date=body.fg_expiry_date,
+        )
+        append_fg_serials(
+            db,
+            entity=line,
+            tenant_id=int(batch.tenant_id),
+            product_id=int(line.product_id),
+            delta_quantity=float(body.add_quantity),
+            serial_numbers=body.fg_serial_numbers,
+        )
+    except ValueError as exc:
+        raise ProductionBatchError(str(exc), code="fg_traceability_invalid") from exc
     line.completed_quantity = round(new_qty, 4)
     line.status = "in_progress" if new_qty < float(line.planned_quantity) - 1e-6 else "produced"
     batch.updated_at = datetime.utcnow()
@@ -1661,7 +1694,13 @@ def update_production_progress(
     return serialize_batch(db, batch)
 
 
-def finish_production(db: Session, *, tenant_id: int, batch_id: int) -> ProductionBatchRead:
+def finish_production(
+    db: Session,
+    *,
+    tenant_id: int,
+    batch_id: int,
+    body: BatchProductionFinishBody | None = None,
+) -> ProductionBatchRead:
     from .production_execution.pw_putaway_handoff import create_batch_pw_documents_for_putaway
 
     batch = _load_batch_entity(db, tenant_id=tenant_id, batch_id=batch_id)
@@ -1670,6 +1709,51 @@ def finish_production(db: Session, *, tenant_id: int, batch_id: int) -> Producti
     for ln in batch.lines or []:
         if float(ln.completed_quantity or 0) < float(ln.planned_quantity) - 1e-6:
             raise ProductionBatchError("Nie wszystkie produkty są wyprodukowane.", code="production_incomplete")
+    payload = body or BatchProductionFinishBody()
+    supplied_identity = bool(
+        payload.fg_batch_number or payload.fg_expiry_date or payload.fg_serial_numbers
+    )
+    if supplied_identity and len(batch.lines or []) != 1:
+        raise ProductionBatchError(
+            "Tożsamość wyrobów partii wielopozycyjnej podawaj w raportach postępu linii.",
+            code="fg_traceability_invalid",
+        )
+    try:
+        from .production_execution.production_fg_traceability import (
+            append_fg_serials,
+            assert_fg_traceability_ready,
+            lock_fg_traceability_snapshot,
+            read_fg_traceability_snapshot,
+        )
+
+        for ln in batch.lines or []:
+            product = db.query(Product).filter(Product.id == int(ln.product_id)).first()
+            if product is None:
+                raise ValueError("Produkt wyrobu gotowego nie istnieje.")
+            was_missing = read_fg_traceability_snapshot(ln) is None
+            lock_fg_traceability_snapshot(
+                db,
+                entity=ln,
+                tenant_id=int(batch.tenant_id),
+                warehouse_id=int(batch.warehouse_id),
+                product=product,
+                batch_number=payload.fg_batch_number if len(batch.lines or []) == 1 else None,
+                expiry_date=payload.fg_expiry_date if len(batch.lines or []) == 1 else None,
+            )
+            if was_missing:
+                append_fg_serials(
+                    db,
+                    entity=ln,
+                    tenant_id=int(batch.tenant_id),
+                    product_id=int(ln.product_id),
+                    delta_quantity=float(ln.completed_quantity or 0),
+                    serial_numbers=payload.fg_serial_numbers if len(batch.lines or []) == 1 else [],
+                )
+            assert_fg_traceability_ready(
+                ln, expected_quantity=float(ln.completed_quantity or 0)
+            )
+    except ValueError as exc:
+        raise ProductionBatchError(str(exc), code="fg_traceability_invalid") from exc
     try:
         create_batch_pw_documents_for_putaway(db, batch=batch, performed_by_user_id=None)
     except ValueError as exc:

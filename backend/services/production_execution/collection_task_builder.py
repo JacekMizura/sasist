@@ -114,6 +114,20 @@ def hydrate_collection_tasks(
             if not row.get(key):
                 row[key] = val
         row["track_serial"] = bool(getattr(p, "track_serial", False)) if p is not None else False
+        if p is not None:
+            from .production_traceability_policy import (
+                resolve_effective_production_traceability_for_product,
+            )
+
+            trace = resolve_effective_production_traceability_for_product(
+                db,
+                tenant_id=int(tenant_id),
+                warehouse_id=int(warehouse_id),
+                product=p,
+            )
+            row["production_trace_require_batch"] = trace.require_batch
+            row["production_trace_require_serial"] = trace.require_serial
+            row["production_trace_require_expiry"] = trace.require_expiry
 
         options, wh_total = build_collection_location_options(
             db,

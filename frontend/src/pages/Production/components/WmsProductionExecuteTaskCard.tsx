@@ -1,5 +1,7 @@
+import { useState } from "react";
 import { Check } from "lucide-react";
 
+import type { FinishedGoodsIdentityBody } from "@/api/productionApi";
 import type { ProductionTerminalDisplaySettings } from "@/api/wmsProductionSettingsApi";
 import type { UnifiedExecutionLine } from "@/modules/production/productionExecutionTypes";
 import { WmsProductTaskCard } from "@/components/wms/WmsProductTaskCard";
@@ -13,8 +15,9 @@ type Props = {
   expanded: boolean;
   done: boolean;
   busy: boolean;
+  traceabilityEnabled: boolean;
   onToggle: () => void;
-  onAddQty: (add: number) => void;
+  onAddQty: (add: number, identity: FinishedGoodsIdentityBody) => void;
 };
 
 function fmtQty(n: number): string {
@@ -28,10 +31,19 @@ export function WmsProductionExecuteTaskCard({
   expanded,
   done,
   busy,
+  traceabilityEnabled,
   onToggle,
   onAddQty,
 }: Props) {
   const remaining = Math.max(0, line.plannedQuantity - line.completedQuantity);
+  const [fgBatchNumber, setFgBatchNumber] = useState("");
+  const [fgExpiryDate, setFgExpiryDate] = useState("");
+  const [fgSerials, setFgSerials] = useState("");
+  const identity = (): FinishedGoodsIdentityBody => ({
+    fg_batch_number: fgBatchNumber.trim() || null,
+    fg_expiry_date: fgExpiryDate || null,
+    fg_serial_numbers: fgSerials.split(/[\n,;]+/).map((v) => v.trim()).filter(Boolean),
+  });
 
   const summary = (
     <>
@@ -58,12 +70,31 @@ export function WmsProductionExecuteTaskCard({
   const actionFooter =
     !done && expanded ? (
       <div className="mt-4 border-t border-slate-100 pt-4">
+        {traceabilityEnabled ? (
+          <details className="mb-4 rounded-xl border border-teal-200 bg-teal-50/40 p-3">
+            <summary className="cursor-pointer text-sm font-bold text-teal-900">Identyfikowalność wyrobu</summary>
+            <div className="mt-3 grid gap-3">
+              <label className="text-xs font-semibold text-slate-600">
+                Numer partii (LOT)
+                <input value={fgBatchNumber} onChange={(e) => setFgBatchNumber(e.target.value)} className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm" />
+              </label>
+              <label className="text-xs font-semibold text-slate-600">
+                Data ważności
+                <input type="date" value={fgExpiryDate} onChange={(e) => setFgExpiryDate(e.target.value)} className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm" />
+              </label>
+              <label className="text-xs font-semibold text-slate-600">
+                Numery seryjne (SN)
+                <textarea value={fgSerials} onChange={(e) => setFgSerials(e.target.value)} rows={3} placeholder="Jeden numer w wierszu" className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm" />
+              </label>
+            </div>
+          </details>
+        ) : null}
         <div className="grid grid-cols-3 gap-3">
           <button
             type="button"
             disabled={busy || remaining <= 0}
             data-wms-card-no-nav=""
-            onClick={() => onAddQty(1)}
+            onClick={() => onAddQty(1, identity())}
             className="rounded-xl bg-slate-900 py-4 text-xl font-black text-white hover:bg-slate-800 disabled:opacity-40"
           >
             +1
@@ -72,7 +103,7 @@ export function WmsProductionExecuteTaskCard({
             type="button"
             disabled={busy || remaining <= 0}
             data-wms-card-no-nav=""
-            onClick={() => onAddQty(5)}
+            onClick={() => onAddQty(Math.min(5, remaining), identity())}
             className="rounded-xl bg-slate-700 py-4 text-xl font-black text-white hover:bg-slate-600 disabled:opacity-40"
           >
             +5
@@ -81,7 +112,7 @@ export function WmsProductionExecuteTaskCard({
             type="button"
             disabled={busy || remaining <= 0}
             data-wms-card-no-nav=""
-            onClick={() => onAddQty(remaining)}
+            onClick={() => onAddQty(remaining, identity())}
             className="rounded-xl border border-emerald-300 bg-emerald-50 py-3 text-sm font-bold text-emerald-900 hover:bg-emerald-100 disabled:opacity-40"
           >
             Zakończ krok

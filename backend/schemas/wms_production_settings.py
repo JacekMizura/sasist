@@ -68,6 +68,13 @@ class ProductionTerminalRequiredSettings(BaseModel):
     require_quality_control: bool = False
 
 
+class ProductionTraceabilitySettings(BaseModel):
+    mode: Literal["OFF", "CONFIGURED"] = "OFF"
+    require_batch: bool = False
+    require_serial: bool = False
+    require_expiry: bool = False
+
+
 StockReplenishmentCoverageDays = Literal[1, 3, 7, 14]
 StockReplenishmentInterval = Literal["hourly", "every_3_hours", "every_6_hours", "daily"]
 
@@ -118,6 +125,7 @@ class WmsProductionSettingsRead(BaseModel):
     terminal_required: ProductionTerminalRequiredSettings = Field(default_factory=ProductionTerminalRequiredSettings)
     forecast: ProductionForecastSettings = Field(default_factory=ProductionForecastSettings)
     reservation: ProductionReservationSettings = Field(default_factory=ProductionReservationSettings)
+    traceability: ProductionTraceabilitySettings = Field(default_factory=ProductionTraceabilitySettings)
 
 
 class WmsProductionSettingsSave(BaseModel):
@@ -127,6 +135,7 @@ class WmsProductionSettingsSave(BaseModel):
     terminal_required: ProductionTerminalRequiredSettings
     forecast: ProductionForecastSettings = Field(default_factory=ProductionForecastSettings)
     reservation: ProductionReservationSettings = Field(default_factory=ProductionReservationSettings)
+    traceability: ProductionTraceabilitySettings = Field(default_factory=ProductionTraceabilitySettings)
 
 
 def parse_production_settings_json(raw: str | None, defaults: dict[str, bool]) -> dict[str, bool]:
@@ -178,3 +187,15 @@ def reservation_settings_from_row(row: Any) -> ProductionReservationSettings:
         return ProductionReservationSettings(allocation_strategy=strat, allow_sales_locations=allow_sales)  # type: ignore[arg-type]
     except (TypeError, ValueError, json.JSONDecodeError):
         return ProductionReservationSettings()
+
+
+def traceability_settings_from_row(row: Any) -> ProductionTraceabilitySettings:
+    from ..services.production_execution.production_traceability_policy import (
+        parse_production_traceability_settings,
+    )
+
+    return ProductionTraceabilitySettings(
+        **parse_production_traceability_settings(
+            getattr(row, "production_traceability_json", None)
+        )
+    )
