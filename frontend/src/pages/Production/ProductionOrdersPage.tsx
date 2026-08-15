@@ -20,6 +20,12 @@ import {
 } from "../../api/productionApi";
 import { AppEmptyState } from "../../components/app-shell";
 import {
+  moduleListTableClass,
+  moduleListTableScrollClass,
+  moduleListTheadClass,
+  moduleTableCardClass,
+} from "../../components/listPage/moduleList";
+import {
   DEFAULT_PRODUCTION_ORDERS_FILTERS,
   PRODUCTION_ORDER_STATUS_OPTIONS,
   PRODUCTION_PRIORITY_OPTIONS,
@@ -33,21 +39,25 @@ import {
 } from "../../modules/production/productionListFilters";
 import {
   productionExecutionMethodLabel,
-  productionSourceBadgeLabel,
-  productionSourceTypeLabel,
   resolveProductionPriority,
   type ProductionPriorityLevel,
 } from "./productionUi";
 import {
   getProductionOperationalState,
-  productionOrdersSourceSummary,
   shouldShowProductionOrderOnActiveList,
 } from "./productionOperationalState";
 import { erpProductionPaths, wmsProductionPaths } from "./productionPaths";
 import { ProductionOrdersFiltersPanel } from "./components/ProductionOrdersFiltersPanel";
-import { ProductionOperatorTaskCard } from "./components/ProductionOperatorTaskCard";
+import { ProductionProgressCell } from "./components/ProductionProgressCell";
 import { ProductionRowActionsMenu } from "./components/ProductionRowActionsMenu";
-import { productionPageStackClass, productionPageTitleClass } from "./productionLayoutTokens";
+import { ProductionSourceTypeBadge } from "./components/ProductionSourceTypeBadge";
+import { ProductThumb } from "./components/ProductThumb";
+import {
+  productionModuleListTdClass,
+  productionModuleListThClass,
+  productionPageStackClass,
+  productionPageTitleClass,
+} from "./productionLayoutTokens";
 import {
   PageHeader,
   SearchInput,
@@ -56,6 +66,7 @@ import {
   StatusBadge,
   Toolbar,
   primaryButtonClassName,
+  type StatusTone,
 } from "@/design-system";
 
 const DEFAULT_TENANT = 1;
@@ -67,15 +78,28 @@ const PRIORITY_DISPLAY: Record<ProductionPriorityLevel, string> = {
   critical: "Krytyczny",
 };
 
-function formatPlannedDate(raw: string): string | null {
-  if (!raw || raw === "—") return null;
+const STEP_TONE_TEXT: Record<StatusTone, string> = {
+  danger: "text-rose-800",
+  warning: "text-amber-900",
+  info: "text-sky-900",
+  primary: "text-orange-900",
+  success: "text-emerald-900",
+  neutral: "text-slate-800",
+};
+
+function formatPlannedDateCell(raw: string): string {
+  if (!raw || raw === "—") return "—";
   const d = raw.slice(0, 10);
   const [y, m, day] = d.split("-");
-  if (!y || !m || !day) return null;
-  return `Termin ${day}.${m}.${y}`;
+  if (!y || !m || !day) return "—";
+  return `${day}.${m}.${y}`;
 }
 
-function OrderWorkCard({
+function formatQty(n: number): string {
+  return Number.isInteger(n) ? String(n) : n.toFixed(1);
+}
+
+function OrderRegisterRow({
   row,
   selected,
   onOpen,
@@ -92,11 +116,10 @@ function OrderWorkCard({
 }) {
   const level = resolveProductionPriority(row.priority, row.hasShortages, row.numericPriority);
   const isOrder = row.kind === "order";
-  const producedQty = isOrder ? row.producedQty : 0;
+  const producedQty = isOrder ? row.producedQty : Math.round(((row.progressPercent || 0) / 100) * row.qty * 1000) / 1000;
   const plannedQty = row.qty;
   const isPrintMethod =
     isOrder && row.sourceType === "ORDERS" && row.productionExecutionMethod === "PRINT";
-  const requestedQty = isOrder ? row.sourceRequestedQuantityTotal ?? 0 : 0;
 
   const state = getProductionOperationalState({
     executionKind: row.kind === "batch" ? "batch" : "order",
@@ -113,7 +136,7 @@ function OrderWorkCard({
     progressPercent: row.progressPercent,
     plannedDate: row.date !== "—" ? row.date : null,
     sourceOrderCount: isOrder ? row.sourceOrderCount : undefined,
-    sourceRequestedQuantityTotal: requestedQty,
+    sourceRequestedQuantityTotal: isOrder ? row.sourceRequestedQuantityTotal : undefined,
     sourceShortageQuantityTotal: isOrder ? row.sourceShortageQuantityTotal : undefined,
     sourceShortageCount: isOrder ? row.sourceShortageCount : undefined,
     sourceFulfilledOrderCount: isOrder ? row.sourceFulfilledOrderCount : undefined,
@@ -123,24 +146,7 @@ function OrderWorkCard({
     shortageAdditionalCount: isOrder ? row.shortageAdditionalCount : undefined,
   });
   const next = state.primaryAction;
-
-  const ordersSummary =
-    isOrder && row.sourceType === "ORDERS"
-      ? productionOrdersSourceSummary({
-          sourceOrderCount: row.sourceOrderCount,
-          sourceRequestedQuantityTotal: requestedQty,
-          plannedQuantity: plannedQty,
-        })
-      : null;
-
-  const secondaryBits = [
-    isOrder && row.sourceType ? productionSourceTypeLabel(row.sourceType) : null,
-    isPrintMethod ? productionExecutionMethodLabel(row.productionExecutionMethod) : null,
-  ].filter(Boolean);
-  const scheduleBits = [
-    formatPlannedDate(row.date),
-    `Priorytet ${PRIORITY_DISPLAY[level]}`,
-  ].filter(Boolean);
+  const progress = state.progressMeaning;
 
   const handlePrimary = () => {
     if (next.kind === "send_to_execution") {
@@ -170,38 +176,81 @@ function OrderWorkCard({
   ];
 
   return (
-    <ProductionOperatorTaskCard
-      state={state}
-      productLabel={row.product}
-      productImageUrl={isOrder ? row.productImageUrl : null}
-      qtyLabel={`${formatQty(plannedQty)} szt.`}
-      productMeta={ordersSummary}
-      documentNumber={row.number}
-      sourceBadge={productionSourceBadgeLabel({
-        kind: row.kind,
-        sourceType: isOrder ? row.sourceType : null,
-      })}
-      secondaryMeta={secondaryBits.join(" · ") || null}
-      scheduleMeta={scheduleBits.join(" · ")}
-      selected={selected}
-      compact
-      showThumb={isOrder}
-      onCtaClick={handlePrimary}
-      ctaDisabled={Boolean(next.disabled)}
-      ctaTitle={next.disabledReason}
-      overflow={
-        <ProductionRowActionsMenu
-          align="end"
-          ariaLabel={`Więcej akcji ${row.number}`}
-          actions={menuActions}
+    <tr
+      className={`border-b border-slate-100 hover:bg-slate-50/80 ${selected ? "bg-orange-50/50" : ""}`}
+      id={selected ? "production-order-highlight" : undefined}
+    >
+      <td className={`${productionModuleListTdClass} whitespace-nowrap`}>
+        <button
+          type="button"
+          onClick={onOpen}
+          className="font-mono text-xs font-semibold text-slate-800 hover:text-orange-700 hover:underline"
+        >
+          {row.number}
+        </button>
+      </td>
+      <td className={productionModuleListTdClass}>
+        <div className="flex min-w-0 max-w-[16rem] items-center gap-2 lg:max-w-[22rem]">
+          {isOrder ? <ProductThumb imageUrl={row.productImageUrl} name={row.product} size="sm" /> : null}
+          <span className="truncate text-sm font-medium text-slate-900" title={row.product}>
+            {row.product}
+          </span>
+        </div>
+      </td>
+      <td className={`${productionModuleListTdClass} whitespace-nowrap`}>
+        <ProductionSourceTypeBadge
+          kind={row.kind === "batch" ? "batch" : "order"}
+          sourceType={isOrder ? row.sourceType : null}
         />
-      }
-    />
+      </td>
+      <td className={productionModuleListTdClass}>
+        <span className={`text-sm font-semibold leading-snug ${STEP_TONE_TEXT[state.tone]}`}>
+          {state.businessLabel}
+        </span>
+        {isPrintMethod ? (
+          <p className="mt-0.5 text-[11px] text-slate-500">
+            {productionExecutionMethodLabel(row.productionExecutionMethod)}
+          </p>
+        ) : null}
+      </td>
+      <td className={`${productionModuleListTdClass} w-[9rem]`}>
+        <ProductionProgressCell
+          current={progress.current}
+          total={progress.total}
+          percent={progress.percent}
+          displayLine={progress.displayLine}
+        />
+      </td>
+      <td className={`${productionModuleListTdClass} whitespace-nowrap tabular-nums text-slate-700`}>
+        {formatQty(plannedQty)} szt.
+      </td>
+      <td className={`${productionModuleListTdClass} whitespace-nowrap text-slate-600`}>
+        <div>{formatPlannedDateCell(row.date)}</div>
+        <div className="text-[11px] text-slate-500">Priorytet {PRIORITY_DISPLAY[level]}</div>
+      </td>
+      <td className={`${productionModuleListTdClass} text-right`}>
+        <div className="inline-flex items-center justify-end gap-1.5">
+          <button
+            type="button"
+            className={primaryButtonClassName(
+              next.disabled ? "pointer-events-none opacity-50" : "",
+              "compact",
+            )}
+            disabled={Boolean(next.disabled)}
+            title={next.disabledReason}
+            onClick={handlePrimary}
+          >
+            {next.label}
+          </button>
+          <ProductionRowActionsMenu
+            align="end"
+            ariaLabel={`Więcej akcji ${row.number}`}
+            actions={menuActions}
+          />
+        </div>
+      </td>
+    </tr>
   );
-}
-
-function formatQty(n: number): string {
-  return Number.isInteger(n) ? String(n) : n.toFixed(1);
 }
 
 export default function ProductionOrdersPage() {
@@ -310,7 +359,7 @@ export default function ProductionOrdersPage() {
       setDraftFilters(next);
       setAppliedFilters(next);
     },
-    [draftFilters, setAppliedFilters, setDraftFilters]
+    [draftFilters, setAppliedFilters, setDraftFilters],
   );
 
   useEffect(() => {
@@ -453,58 +502,83 @@ export default function ProductionOrdersPage() {
         }
       >
         <div className="space-y-4">
-      <ProductionOrdersFiltersPanel
-        expanded={filtersExpanded}
-        draft={draftFilters}
-        onChange={setDraftFilters}
-        onApply={applyFilters}
-        onClear={clearFilters}
-        listView={listViewActions}
-      />
+          <ProductionOrdersFiltersPanel
+            expanded={filtersExpanded}
+            draft={draftFilters}
+            onChange={setDraftFilters}
+            onApply={applyFilters}
+            onClear={clearFilters}
+            listView={listViewActions}
+          />
 
-      {loading ? (
-        <p className="text-sm text-slate-500">Wczytywanie…</p>
-      ) : rows.length === 0 ? (
-        <AppEmptyState
-          icon={ClipboardList}
-          title="Brak zleceń do produkcji."
-          description="Utwórz zlecenie ręcznie albo w planowaniu produkcji."
-          action={
-            <Link to={erpProductionPaths.createOrder} className="text-sm font-semibold text-slate-700 hover:underline">
-              Przejdź do tworzenia zlecenia
-            </Link>
-          }
-        />
-      ) : (
-        <ul className="flex w-full flex-col gap-1.5">
-          {rows.map((r) => {
-            const key = `${r.kind}-${r.id}`;
-            const selected = highlightKey === key;
-            return (
-              <li key={key} className="w-full" id={selected ? "production-order-highlight" : undefined}>
-                <OrderWorkCard
-                  row={r}
-                  selected={selected}
-                  onOpen={() =>
-                    navigate(r.kind === "batch" ? erpProductionPaths.batch(r.id) : erpProductionPaths.order(r.id))
-                  }
-                  onNavigate={(to) => navigate(to)}
-                  onReleaseToWms={() => void releaseToWms(r)}
-                  onPrintOrder={
-                    r.kind === "order" && warehouseId != null
-                      ? () => {
-                          void printOrderProductionCardBrowser(tenantId, r.id, warehouseId).catch(() => {
-                            toast.error("Nie udało się wygenerować PDF zlecenia.");
-                          });
-                        }
-                      : undefined
-                  }
-                />
-              </li>
-            );
-          })}
-        </ul>
-      )}
+          {loading ? (
+            <p className="text-sm text-slate-500">Wczytywanie…</p>
+          ) : rows.length === 0 ? (
+            <AppEmptyState
+              icon={ClipboardList}
+              title="Brak zleceń do produkcji."
+              description="Utwórz zlecenie ręcznie albo w planowaniu produkcji."
+              action={
+                <Link
+                  to={erpProductionPaths.createOrder}
+                  className="text-sm font-semibold text-slate-700 hover:underline"
+                >
+                  Przejdź do tworzenia zlecenia
+                </Link>
+              }
+            />
+          ) : (
+            <div className={moduleTableCardClass}>
+              <div className={`${moduleListTableScrollClass} overflow-x-auto`}>
+                <table className={`${moduleListTableClass} min-w-0 w-full table-fixed lg:table-auto`}>
+                  <thead className={moduleListTheadClass}>
+                    <tr>
+                      <th className={`${productionModuleListThClass} w-[8.5rem]`}>Numer</th>
+                      <th className={productionModuleListThClass}>Produkt</th>
+                      <th className={`${productionModuleListThClass} w-[6.5rem]`}>Typ</th>
+                      <th className={`${productionModuleListThClass} w-[11rem]`}>Status</th>
+                      <th className={`${productionModuleListThClass} w-[9.5rem]`}>Postęp</th>
+                      <th className={`${productionModuleListThClass} w-[5.5rem]`}>Ilość</th>
+                      <th className={`${productionModuleListThClass} w-[7rem]`}>Termin</th>
+                      <th className={`${productionModuleListThClass} w-[12rem] text-right`}>Akcje</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {rows.map((r) => {
+                      const key = `${r.kind}-${r.id}`;
+                      return (
+                        <OrderRegisterRow
+                          key={key}
+                          row={r}
+                          selected={highlightKey === key}
+                          onOpen={() =>
+                            navigate(
+                              r.kind === "batch"
+                                ? erpProductionPaths.batch(r.id)
+                                : erpProductionPaths.order(r.id),
+                            )
+                          }
+                          onNavigate={(to) => navigate(to)}
+                          onReleaseToWms={() => void releaseToWms(r)}
+                          onPrintOrder={
+                            r.kind === "order" && warehouseId != null
+                              ? () => {
+                                  void printOrderProductionCardBrowser(tenantId, r.id, warehouseId).catch(
+                                    () => {
+                                      toast.error("Nie udało się wygenerować PDF zlecenia.");
+                                    },
+                                  );
+                                }
+                              : undefined
+                          }
+                        />
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
         </div>
       </PageHeader>
     </div>

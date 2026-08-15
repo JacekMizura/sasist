@@ -17,11 +17,7 @@ import { ProductionDemandPlanningPanel, ProductionDemandProductsTable } from "./
 import { ProductionSimulationModal } from "./components/ProductionSimulationModal";
 import { useProductionDemandPlanning } from "./hooks/useProductionDemandPlanning";
 import { erpProductionPaths } from "./productionPaths";
-import {
-  productionPageStackClass,
-  productionPageTitleClass,
-  productionSectionLabelClass,
-} from "./productionLayoutTokens";
+import { productionPageStackClass, productionPageTitleClass } from "./productionLayoutTokens";
 import {
   PageHeader,
   SecondaryButton,
@@ -219,14 +215,6 @@ export default function ProductionPlanningPage() {
               replenishmentRunning={replenishmentRunning}
             />
           ) : null}
-
-          <div>
-            <h3 className={productionSectionLabelClass}>Co wyprodukować</h3>
-            <p className="mt-1 text-sm text-slate-600">
-              Rekomendacje na podstawie stanu, sprzedaży i zamówień. Aktywne zlecenia znajdziesz w zakładce
-              Zlecenia.
-            </p>
-          </div>
 
           {warehouseId != null ? (
             <ProductionDemandProductsTable

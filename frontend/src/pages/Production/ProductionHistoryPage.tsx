@@ -21,11 +21,6 @@ import {
   filterSelectClass,
 } from "../../components/filters";
 import {
-  productsListActionsCellClass,
-  productsListActionsInnerClass,
-  productsListActionsThClass,
-} from "../../components/products/productList/productsListTableTokens";
-import {
   moduleListTableClass,
   moduleListTableScrollClass,
   moduleListTheadClass,
@@ -45,7 +40,6 @@ import {
   productionStatusBadgeClass,
 } from "./productionUi";
 import { erpProductionPaths } from "./productionPaths";
-import { ProductionRowActionsMenu } from "./components/ProductionRowActionsMenu";
 import {
   productionModuleListTdClass,
   productionModuleListThClass,
@@ -272,13 +266,14 @@ export default function ProductionHistoryPage() {
         <ProductionKpiGrid className="!gap-2">
           <ProductionKpiCard title="Ukończone partie" value={kpis.completed_batches} tone="emerald" icon={<Package aria-hidden />} />
           <ProductionKpiCard title="Wyprodukowane sztuki" value={kpis.units} tone="blue" icon={<TrendingUp aria-hidden />} />
-          <ProductionKpiCard
-            title="Średni koszt"
-            value={kpis.avg_unit_cost != null ? formatProductionMoney(kpis.avg_unit_cost) : "—"}
-            tone="indigo"
-            icon={<TrendingUp aria-hidden />}
-          />
-          <ProductionKpiCard title="Średni czas realizacji" value="—" subtitle="Brak danych czasowych w API" tone="default" icon={<Clock aria-hidden />} />
+          {kpis.avg_unit_cost != null ? (
+            <ProductionKpiCard
+              title="Średni koszt"
+              value={formatProductionMoney(kpis.avg_unit_cost)}
+              tone="indigo"
+              icon={<TrendingUp aria-hidden />}
+            />
+          ) : null}
         </ProductionKpiGrid>
       ) : null}
 
@@ -289,27 +284,29 @@ export default function ProductionHistoryPage() {
       ) : (
         <div className={moduleTableCardClass}>
           <div className={moduleListTableScrollClass}>
-            <table className={moduleListTableClass} style={{ minWidth: 900 }}>
+            <table className={`${moduleListTableClass} min-w-0 w-full table-fixed lg:table-auto`}>
               <thead className={moduleListTheadClass}>
                 <tr>
-                  <th className={productionModuleListThClass}>Dokument</th>
+                  <th className={`${productionModuleListThClass} w-[9rem]`}>Dokument</th>
                   <th className={productionModuleListThClass}>Produkt</th>
-                  <th className={`${productionModuleListThClass} text-right`}>Ilość</th>
-                  <th className={productionModuleListThClass}>Status</th>
-                  <th className={productionModuleListThClass}>Data zakończenia</th>
-                  <th className={productionModuleListThClass}>Operator</th>
-                  <th className={productionModuleListThClass}>Koszt jdn.</th>
-                  <th className={productsListActionsThClass}>Akcje</th>
+                  <th className={`${productionModuleListThClass} w-[5rem] text-right`}>Ilość</th>
+                  <th className={`${productionModuleListThClass} w-[7rem]`}>Status</th>
+                  <th className={`${productionModuleListThClass} w-[7rem]`}>Zakończono</th>
+                  <th className={`${productionModuleListThClass} w-[7rem]`}>Operator</th>
+                  <th className={`${productionModuleListThClass} w-[6.5rem]`}>Koszt jdn.</th>
+                  <th className={`${productionModuleListThClass} w-[5.5rem] text-right`}>Akcje</th>
                 </tr>
               </thead>
               <tbody>
                 {filtered.map((r) => (
                   <tr key={r.key} className="group border-b border-slate-100 hover:bg-slate-50/70">
                     <td className={`${productionModuleListTdClass} font-mono font-medium text-slate-900`}>
-                      {r.number}
-                      <span className="ml-2 text-xs font-semibold uppercase text-slate-500">{r.kind === "batch" ? "partia" : "MO"}</span>
+                      <span className="block truncate">{r.number}</span>
+                      <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+                        {r.kind === "batch" ? "Partia" : "MO"}
+                      </span>
                     </td>
-                    <td className={`${productionModuleListTdClass} max-w-[220px] truncate text-slate-700`}>{r.product}</td>
+                    <td className={`${productionModuleListTdClass} truncate text-slate-700`}>{r.product}</td>
                     <td className={`${productionModuleListTdClass} text-right tabular-nums`}>{r.qty}</td>
                     <td className={productionModuleListTdClass}>
                       <span className={r.kind === "batch" ? batchStatusBadgeClass(r.status as never) : productionStatusBadgeClass(r.status as never)}>
@@ -318,16 +315,13 @@ export default function ProductionHistoryPage() {
                           : PRODUCTION_STATUS_LABEL[r.status as keyof typeof PRODUCTION_STATUS_LABEL]}
                       </span>
                     </td>
-                    <td className={`${productionModuleListTdClass} text-slate-600`}>{r.completedAt}</td>
-                    <td className={`${productionModuleListTdClass} text-slate-600`}>{r.operator}</td>
+                    <td className={`${productionModuleListTdClass} tabular-nums text-slate-600`}>{r.completedAt}</td>
+                    <td className={`${productionModuleListTdClass} truncate text-slate-600`}>{r.operator}</td>
                     <td className={`${productionModuleListTdClass} tabular-nums text-slate-700`}>{r.unitCost}</td>
-                    <td className={productsListActionsCellClass} onClick={(e) => e.stopPropagation()}>
-                      <div className={productsListActionsInnerClass}>
-                        <ProductionRowActionsMenu
-                          ariaLabel={`Akcje ${r.number}`}
-                          actions={[{ id: "open", label: "Otwórz", onClick: () => navigate(r.linkTo) }]}
-                        />
-                      </div>
+                    <td className={`${productionModuleListTdClass} text-right`} onClick={(e) => e.stopPropagation()}>
+                      <SecondaryButton type="button" density="compact" onClick={() => navigate(r.linkTo)}>
+                        Otwórz
+                      </SecondaryButton>
                     </td>
                   </tr>
                 ))}

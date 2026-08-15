@@ -6,12 +6,11 @@ import {
   ChevronDown,
   Filter,
   Package,
-  Percent,
   TrendingUp,
 } from "lucide-react";
 
 import { useWarehouse } from "../../context/WarehouseContext";
-import { fetchProductionDashboard, fetchProductionAnalyticsSummary, listRecipeCards, type RecipeCardRead, type ProductionAnalyticsSummaryRead } from "../../api/productionApi";
+import { fetchProductionAnalyticsSummary, listRecipeCards, type RecipeCardRead, type ProductionAnalyticsSummaryRead } from "../../api/productionApi";
 import { AppEmptyState } from "../../components/app-shell";
 import {
   FilterActionsBar,
@@ -21,11 +20,6 @@ import {
   filterLabelClass,
   filterSelectClass,
 } from "../../components/filters";
-import {
-  productsListActionsCellClass,
-  productsListActionsInnerClass,
-  productsListActionsThClass,
-} from "../../components/products/productList/productsListTableTokens";
 import {
   moduleListTableClass,
   moduleListTableScrollClass,
@@ -47,7 +41,6 @@ import {
   productionModuleListThClass,
   productionPageStackClass,
   productionPageTitleClass,
-  productionSectionLabelClass,
 } from "./productionLayoutTokens";
 import { PageHeader, SecondaryButton } from "@/design-system";
 
@@ -59,7 +52,6 @@ export default function ProductionAnalyticsPage() {
   const tenantId = warehouse?.tenant_id ?? DEFAULT_TENANT;
   const warehouseId = warehouse?.id;
   const [recipes, setRecipes] = useState<RecipeCardRead[]>([]);
-  const [efficiency, setEfficiency] = useState<number | null>(null);
   const [summary, setSummary] = useState<ProductionAnalyticsSummaryRead | null>(null);
   const [loading, setLoading] = useState(true);
   const [filtersExpanded, setFiltersExpanded] = useState(false);
@@ -70,17 +62,14 @@ export default function ProductionAnalyticsPage() {
     if (warehouseId == null) return;
     setLoading(true);
     try {
-      const [cards, dash, analyticsSummary] = await Promise.all([
+      const [cards, analyticsSummary] = await Promise.all([
         listRecipeCards(tenantId, warehouseId),
-        fetchProductionDashboard(tenantId, warehouseId),
         fetchProductionAnalyticsSummary(tenantId, warehouseId),
       ]);
       setRecipes(cards);
-      setEfficiency(dash.production_efficiency_percent);
       setSummary(analyticsSummary);
     } catch {
       setRecipes([]);
-      setEfficiency(null);
       setSummary(null);
     } finally {
       setLoading(false);
@@ -121,6 +110,47 @@ export default function ProductionAnalyticsPage() {
     material_cost_sum: 0,
   };
 
+  const costKpis = [
+    kpi.avg_unit_cost > 0
+      ? {
+          key: "avg",
+          title: "Średni koszt produktu",
+          value: formatProductionMoney(kpi.avg_unit_cost) as string | number,
+          subtitle: undefined as string | undefined,
+          tone: "blue" as const,
+          icon: <Banknote aria-hidden />,
+        }
+      : null,
+    kpi.material_cost_sum > 0
+      ? {
+          key: "material",
+          title: "Koszt materiałów (stan WG)",
+          value: formatProductionMoney(kpi.material_cost_sum) as string | number,
+          subtitle: "Wycena stanu × koszt BOM",
+          tone: "default" as const,
+          icon: <Banknote aria-hidden />,
+        }
+      : null,
+    {
+      key: "active",
+      title: "Aktywne receptury",
+      value: kpi.active_count as string | number,
+      subtitle: undefined as string | undefined,
+      tone: "indigo" as const,
+      icon: <Package aria-hidden />,
+    },
+    kpi.low_stock_count > 0
+      ? {
+          key: "low",
+          title: "Receptury z brakami",
+          value: kpi.low_stock_count as string | number,
+          subtitle: undefined as string | undefined,
+          tone: "amber" as const,
+          icon: <AlertTriangle aria-hidden />,
+        }
+      : null,
+  ].filter((c): c is NonNullable<typeof c> => c != null);
+
   const toggleSort = (key: ProductionAnalyticsFilters["sortKey"]) => {
     setDraftFilters((prev) => ({
       ...prev,
@@ -159,58 +189,19 @@ export default function ProductionAnalyticsPage() {
         }
       >
         <div className="space-y-4">
-      {!loading ? (
-        <div className="space-y-3">
-          <div>
-            <p className={productionSectionLabelClass}>Receptury i koszty jednostkowe</p>
-            <ProductionKpiGrid className="mt-2">
-              <ProductionKpiCard title="Aktywne receptury" value={kpi.active_count} tone="indigo" icon={<Package aria-hidden />} />
-              <ProductionKpiCard
-                title="Średni koszt produktu"
-                value={kpi.avg_unit_cost > 0 ? formatProductionMoney(kpi.avg_unit_cost) : "—"}
-                tone="blue"
-                icon={<Banknote aria-hidden />}
-              />
-              <ProductionKpiCard
-                title="Receptury z brakami"
-                value={kpi.low_stock_count}
-                tone={kpi.low_stock_count > 0 ? "amber" : "emerald"}
-                icon={<AlertTriangle aria-hidden />}
-              />
-              <ProductionKpiCard
-                title="Koszt materiałów (stan WG)"
-                value={kpi.material_cost_sum > 0 ? formatProductionMoney(kpi.material_cost_sum) : "—"}
-                subtitle="Wycena bieżącego stanu wyrobów gotowych × koszt BOM — nie zużycie rzeczywiste"
-                tone="default"
-                icon={<Banknote aria-hidden />}
-              />
-            </ProductionKpiGrid>
-          </div>
-          <div>
-            <p className={productionSectionLabelClass}>Wydajność i możliwa produkcja</p>
-            <ProductionKpiGrid className="mt-2">
-              <ProductionKpiCard
-                title="Możliwa produkcja"
-                value={kpi.total_producible}
-                subtitle="Σ max. wyprodukowalność"
-                tone="emerald"
-                icon={<TrendingUp aria-hidden />}
-              />
-              <ProductionKpiCard title="Średnia marża" value="—" subtitle="Wymaga danych cen sprzedaży" tone="purple" icon={<Percent aria-hidden />} />
-              <ProductionKpiCard
-                title="Udział ukończeń dziś"
-                value={efficiency != null ? `${efficiency}%` : "—"}
-                subtitle={
-                  efficiency != null
-                    ? "finished_today / (ukończone + aktywne + zaplanowane) — nie efektywność kosztowa"
-                    : "Brak danych w API"
-                }
-                tone="blue"
-                icon={<Percent aria-hidden />}
-              />
-            </ProductionKpiGrid>
-          </div>
-        </div>
+      {!loading && costKpis.length > 0 ? (
+        <ProductionKpiGrid className="!gap-2">
+          {costKpis.map((card) => (
+            <ProductionKpiCard
+              key={card.key}
+              title={card.title}
+              value={card.value}
+              subtitle={card.subtitle}
+              tone={card.tone}
+              icon={card.icon}
+            />
+          ))}
+        </ProductionKpiGrid>
       ) : null}
 
       <ListFilterEmbeddedShell expanded={filtersExpanded}>
@@ -255,59 +246,70 @@ export default function ProductionAnalyticsPage() {
         <AppEmptyState icon={TrendingUp} title="Brak danych" description="Brak receptur do analizy kosztów." />
       ) : (
         <div className={moduleTableCardClass}>
-          <div className={moduleListTableScrollClass}>
-            <table className={moduleListTableClass} style={{ minWidth: 980 }}>
+          <div className={`${moduleListTableScrollClass} overflow-x-auto`}>
+            <table className={`${moduleListTableClass} min-w-0 w-full`}>
               <thead className={moduleListTheadClass}>
                 <tr>
-                  <th className={productionModuleListThClass}>
+                  <th className={`${productionModuleListThClass} min-w-[14rem]`}>
                     <button type="button" className="font-semibold hover:text-amber-700" onClick={() => toggleSort("product")}>
                       Produkt
                     </button>
                   </th>
-                  <th className={productionModuleListThClass}>Receptura</th>
-                  <th className={productionModuleListThClass}>
+                  <th className={`${productionModuleListThClass} min-w-[10rem]`}>Receptura</th>
+                  <th className={`${productionModuleListThClass} w-[7.5rem]`}>
                     <button type="button" className="font-semibold hover:text-amber-700" onClick={() => toggleSort("cost")}>
-                      Koszt jednostkowy
+                      Koszt / szt.
                     </button>
                   </th>
-                  <th className={productionModuleListThClass}>Dostępność materiałów</th>
-                  <th className={productionModuleListThClass}>
+                  <th className={`${productionModuleListThClass} w-[6.5rem] text-right`}>
                     <button type="button" className="font-semibold hover:text-amber-700" onClick={() => toggleSort("producible")}>
-                      Możliwa produkcja
+                      Możliwe
                     </button>
                   </th>
-                  <th className={productionModuleListThClass}>Status</th>
-                  <th className={productsListActionsThClass}>Akcje</th>
+                  <th className={`${productionModuleListThClass} w-[9.5rem]`}>Status</th>
+                  <th className={`${productionModuleListThClass} w-[9rem] text-right`}>Akcje</th>
                 </tr>
               </thead>
               <tbody>
                 {filtered.map((r) => (
                   <tr key={r.composition_id} className="group border-b border-slate-100 hover:bg-slate-50/70">
                     <td className={productionModuleListTdClass}>
-                      <div className="flex items-center gap-2">
+                      <div className="flex min-w-0 items-center gap-2">
                         <ProductThumb imageUrl={r.product_image_url} name={r.product_name} size="sm" />
-                        <div>
-                          <p className="font-medium text-slate-900">{r.product_name}</p>
-                          {r.product_sku ? <p className="text-xs text-slate-500">{r.product_sku}</p> : null}
+                        <div className="min-w-0">
+                          <p className="truncate font-medium text-slate-900">{r.product_name}</p>
+                          {r.product_sku ? <p className="truncate text-xs text-slate-500">{r.product_sku}</p> : null}
                         </div>
                       </div>
                     </td>
-                    <td className={`${productionModuleListTdClass} text-slate-700`}>{r.recipe_name}</td>
+                    <td className={`${productionModuleListTdClass} truncate text-slate-700`}>{r.recipe_name}</td>
                     <td className={`${productionModuleListTdClass} tabular-nums font-medium text-slate-900`}>
                       {formatProductionMoney(r.unit_cost_net)}
                     </td>
-                    <td className={`${productionModuleListTdClass} tabular-nums text-slate-600`}>{r.current_stock} szt. WG</td>
-                    <td className={`${productionModuleListTdClass} tabular-nums font-medium text-slate-800`}>{Math.floor(r.max_producible)}</td>
+                    <td className={`${productionModuleListTdClass} text-right tabular-nums font-medium text-slate-800`}>
+                      {Math.floor(r.max_producible)}
+                    </td>
                     <td className={productionModuleListTdClass}>
                       <span className={recipeStatusBadgeClass(r)}>{recipeStatusLabel(r)}</span>
                     </td>
-                    <td className={productsListActionsCellClass} onClick={(e) => e.stopPropagation()}>
-                      <div className={productsListActionsInnerClass}>
+                    <td className={`${productionModuleListTdClass} text-right`} onClick={(e) => e.stopPropagation()}>
+                      <div className="inline-flex items-center justify-end gap-1.5">
+                        <SecondaryButton
+                          type="button"
+                          density="compact"
+                          onClick={() => navigate(erpProductionPaths.recipe(r.composition_id))}
+                        >
+                          Podgląd
+                        </SecondaryButton>
                         <ProductionRowActionsMenu
                           ariaLabel={`Akcje ${r.product_name}`}
+                          align="end"
                           actions={[
-                            { id: "view", label: "Podgląd", onClick: () => navigate(erpProductionPaths.recipe(r.composition_id)) },
-                            { id: "edit", label: "Edytuj", onClick: () => navigate(erpProductionPaths.recipe(r.composition_id)) },
+                            {
+                              id: "edit",
+                              label: "Edytuj",
+                              onClick: () => navigate(erpProductionPaths.recipe(r.composition_id)),
+                            },
                           ]}
                         />
                       </div>

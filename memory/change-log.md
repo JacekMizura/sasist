@@ -1,4 +1,47 @@
-﻿## 2026-08-15 — Ujednolić dostępność materiałów i retry produkcji
+﻿## 2026-08-15 — Production ERP UX rebuild (frontend only)
+
+- Ekrany: Pulpit, Zlecenia (rejestr), Planowanie (compact), Receptury, Materiały/braki, Historia, Analiza kosztów
+- Shared: `ProductionProgressCell`, `ProductionSourceTypeBadge`; dense KPI/queue variants
+- Bez backendu / lifecycle / commit / push; fake KPI usunięte; 1 primary CTA + `…` w wierszach
+- Build: `tsc --noEmit` OK, `npm run build` OK
+
+## 2026-08-15 — Produkcja v1 zamknięta PASS E2E + follow-upy v1.1
+
+- Lifecycle Produkcji nie ruszać bez osobnego powodu
+- Follow-upy (bez implementacji): `memory/production-v1.1-followups.md`
+  1. BAT CTA deep-link vs `start-collecting` / `openJob`
+  2. BAT completed — copy „Materiały nie są jeszcze zarezerwowane”
+
+## 2026-08-15 — UAT BAT control PASS E2E / Produkcja v1 PASS E2E
+
+- BAT/2026/0017: create→release→collect→RW#98→produce→PW#99→WMS putaway→completed/history
+- Bez packing/duplikatów; bez kodu/commit
+
+## 2026-08-15 — UAT PLANNING auto-replenishment PASS E2E
+
+- Auto ON + coverage 1d + hourly; scheduler → MO/2026/0022 PLANNING×0.03 (75894)
+- Idempotencja 2./3. run; RW#96 / PW#97; standard WMS putaway A1-A-1; completed; no packing/BAT
+- Bez kodu / commit / push; forecast auto zostaje ON
+
+## 2026-08-15 — UAT PRINT PASS E2E
+
+- MO/2026/0021 ORDERS: preview/start/RW×1/reprint/progress/finish/buffer DOCK-IN/Pakowanie/scan/idempotencja
+- Config #9 PRINT tylko na czas UAT → restored WMS
+- Bez kodu / commit / PLANNING / BAT
+
+## 2026-08-15 — UAT A clean Phase 8 PASS E2E (po 97321395)
+
+- Cleanup leftovers 1266/1267/1269 via status withdraw; fresh #1256/1270 source#22
+- DOCK-only PASS; putaway A1-A-1×2 → reserved + PRODUCTION_ORDER#82×2 + AUTO_RESUMED×1
+- Idempotencja PASS; #1255 sklasyfikowany ENV CONTAMINATED (nie FAIL kodu)
+
+## 2026-08-15 — UAT A po 97321395 STOP (KROK 2)
+
+- #1255/1269 + PZ#89: DOCK-only PASS; putaway×2 → available=2 vs MO demand 4 (leftover sources #19/#20)
+- res PRODUCTION_ORDER #76×2 zjadła ATP; order nadal BRAKI; brak AUTO_RESUMED
+- Bez kodu / commit / PRINT — wynik KROK2 = NOT VALID / ENV CONTAMINATED
+
+## 2026-08-15 — Ujednolić dostępność materiałów i retry produkcji
 
 - `production_allocatable_qty` SSOT z allocate (DOCK out przy putaway)
 - source `reserved` dopiero po sukcesie PRODUCTION_ORDER reservation

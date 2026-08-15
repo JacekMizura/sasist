@@ -60,18 +60,18 @@ export default function MaterialReservationsPage() {
           description="Rezerwacje materiałów pojawią się po zarezerwowaniu surowców dla partii lub zlecenia."
         />
       ) : (
-        <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
-          <table className="min-w-full text-sm">
+        <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+          <table className="w-full min-w-0 table-fixed text-sm">
             <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
               <tr>
                 <th className={productionModuleListThClass}>Produkt</th>
-                <th className={productionModuleListThClass}>Lokalizacja</th>
-                <th className={productionModuleListThClass}>Ilość</th>
-                <th className={productionModuleListThClass}>Partia / LOT</th>
-                <th className={productionModuleListThClass}>SN</th>
-                <th className={productionModuleListThClass}>Dokument</th>
-                <th className={productionModuleListThClass}>Operator</th>
-                <th className={productionModuleListThClass}>Data</th>
+                <th className={`${productionModuleListThClass} w-[7rem]`}>Lokalizacja</th>
+                <th className={`${productionModuleListThClass} w-[5rem]`}>Ilość</th>
+                <th className={`${productionModuleListThClass} w-[8rem]`}>Partia / LOT</th>
+                <th className={`${productionModuleListThClass} w-[5rem]`}>SN</th>
+                <th className={`${productionModuleListThClass} w-[8rem]`}>Dokument</th>
+                <th className={`${productionModuleListThClass} w-[6rem]`}>Operator</th>
+                <th className={`${productionModuleListThClass} w-[8rem]`}>Data</th>
               </tr>
             </thead>
             <tbody>

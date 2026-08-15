@@ -3,15 +3,14 @@ import { Link } from "react-router-dom";
 
 import {
   ListTile,
-  ProgressBar,
   StatusBadge,
   primaryButtonClassName,
-  toneTextClass,
   type StatusTone,
 } from "@/design-system";
 import { ProductThumb } from "./ProductThumb";
+import { ProductionProgressCell } from "./ProductionProgressCell";
+import { ProductionSourceTypeBadge } from "./ProductionSourceTypeBadge";
 import type { ProductionOperationalState } from "../productionOperationalState";
-import { productionProgressTone } from "../productionUi";
 
 const STEP_TITLE_TONE: Record<StatusTone, string> = {
   danger: "text-rose-800",
@@ -30,11 +29,16 @@ export type ProductionOperatorTaskCardProps = {
   productMeta?: string | null;
   documentNumber?: string | null;
   sourceBadge?: string | null;
+  /** Prefer typed source badge over free-text `sourceBadge` when set. */
+  sourceKind?: "batch" | "order";
+  sourceType?: string | null;
   secondaryMeta?: string | null;
   scheduleMeta?: string | null;
   selected?: boolean;
   showThumb?: boolean;
   compact?: boolean;
+  /** Dashboard density: max 1 source badge + stage text (no delayed badge clutter). */
+  hideDelayedBadge?: boolean;
   ctaHref?: string;
   ctaOpenInNewTab?: boolean;
   onCtaClick?: () => void;
@@ -56,11 +60,14 @@ export function ProductionOperatorTaskCard({
   productMeta,
   documentNumber,
   sourceBadge,
+  sourceKind,
+  sourceType,
   secondaryMeta,
   scheduleMeta,
   selected,
   showThumb = true,
   compact = true,
+  hideDelayedBadge = false,
   ctaHref,
   ctaOpenInNewTab,
   onCtaClick,
@@ -69,7 +76,6 @@ export function ProductionOperatorTaskCard({
   overflow,
 }: ProductionOperatorTaskCardProps) {
   const progress = state.progressMeaning;
-  const barTone = productionProgressTone(progress.percent);
   const showProgress =
     state.currentStep === "COLLECTING" ||
     state.currentStep === "PRODUCING" ||
@@ -120,12 +126,14 @@ export function ProductionOperatorTaskCard({
               {numberLabel ? (
                 <span className="font-mono text-xs font-semibold text-slate-700">{numberLabel}</span>
               ) : null}
-              {sourceBadge ? (
+              {sourceKind ? (
+                <ProductionSourceTypeBadge kind={sourceKind} sourceType={sourceType} />
+              ) : sourceBadge ? (
                 <StatusBadge tone="neutral" density="compact">
                   {sourceBadge}
                 </StatusBadge>
               ) : null}
-              {state.isDelayed ? (
+              {!hideDelayedBadge && state.isDelayed ? (
                 <StatusBadge tone="warning" density="compact">
                   Opóźnione
                 </StatusBadge>
@@ -144,15 +152,13 @@ export function ProductionOperatorTaskCard({
             </div>
 
             {showProgress ? (
-              <div className="max-w-sm space-y-0.5">
-                <div className="flex items-center justify-between gap-2 text-[11px] text-slate-500">
-                  <span className="truncate">{progress.displayLine}</span>
-                  <span className={`tabular-nums font-semibold ${toneTextClass[barTone]}`}>
-                    {progress.percent}%
-                  </span>
-                </div>
-                <ProgressBar value={progress.percent} tone={barTone} />
-              </div>
+              <ProductionProgressCell
+                className="max-w-sm"
+                current={progress.current}
+                total={progress.total}
+                percent={progress.percent}
+                displayLine={progress.displayLine}
+              />
             ) : null}
 
             {scheduleMeta ? <p className="text-[11px] leading-tight text-slate-500">{scheduleMeta}</p> : null}

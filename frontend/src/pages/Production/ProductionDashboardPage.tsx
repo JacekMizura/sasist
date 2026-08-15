@@ -9,6 +9,10 @@ import {
   type ProductionDashboardRead,
   type ProductionOrderRead,
 } from "../../api/productionApi";
+import {
+  fetchProductionShortagesQueue,
+  type ProductionShortageQueueRow,
+} from "../../api/productionShortageApi";
 import { ActiveWarehouseRequiredBanner } from "../../components/layout/ActiveWarehouseRequiredBanner";
 import {
   Card,
@@ -30,12 +34,12 @@ import { getProductionOperationalState, shortageHintFromOrderLines } from "./pro
 import {
   PRODUCTION_DASHBOARD_SECTION_LIMIT,
   countDueTodayFromPlannedDates,
-  countOverdueFromPlannedDates,
   dashboardSeeAllHref,
 } from "./productionDashboardHelpers";
 
 const DEFAULT_TENANT = 1;
 const SECTION_LIMIT = PRODUCTION_DASHBOARD_SECTION_LIMIT;
+const CRITICAL_MATERIALS_LIMIT = 5;
 
 function matchesQuery(item: ProductionWorkItem, q: string): boolean {
   if (!q) return true;
@@ -153,11 +157,16 @@ function WorkSection({
             {count}
           </StatusBadge>
         </div>
-        {subtitle && count > 0 ? <p className="text-sm text-slate-600">{subtitle}</p> : null}
+        {subtitle && count > 0 ? <p className="text-xs text-slate-600">{subtitle}</p> : null}
       </div>
       <div className="min-w-0 flex-1">{children}</div>
     </Card>
   );
+}
+
+function formatMissingQty(n: number): string {
+  if (!Number.isFinite(n)) return "0";
+  return Number.isInteger(n) ? String(n) : String(Math.round(n * 100) / 100);
 }
 
 export default function ProductionDashboardPage() {
@@ -165,23 +174,29 @@ export default function ProductionDashboardPage() {
   const tenantId = DEFAULT_TENANT;
   const [data, setData] = useState<ProductionDashboardRead | null>(null);
   const [orders, setOrders] = useState<ProductionOrderRead[]>([]);
+  const [shortages, setShortages] = useState<ProductionShortageQueueRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState("");
 
   const reload = useCallback(async () => {
     setLoading(true);
     try {
-      const [dash, orderList] = await Promise.all([
+      const [dash, orderList, shortageList] = await Promise.all([
         fetchProductionDashboard(tenantId, warehouseId),
         warehouseId != null
           ? listProductionOrders(tenantId, { warehouse_id: warehouseId })
           : Promise.resolve([] as ProductionOrderRead[]),
+        warehouseId != null
+          ? fetchProductionShortagesQueue(tenantId, warehouseId).catch(() => [] as ProductionShortageQueueRow[])
+          : Promise.resolve([] as ProductionShortageQueueRow[]),
       ]);
       setData(dash);
       setOrders(orderList);
+      setShortages(shortageList);
     } catch {
       setData(null);
       setOrders([]);
+      setShortages([]);
     } finally {
       setLoading(false);
     }
@@ -208,13 +223,11 @@ export default function ProductionDashboardPage() {
       batchItems.push(batchToWorkItem(b));
     }
 
-    // ORDERS + MANUAL/PLANNING MO — pełniejszy obraz niż same partie z pulpitu API
     const orderItems = orders
       .filter((o) => o.status !== "cancelled")
       .map(orderToWorkItem)
       .filter((item) => item.state.dashboardBucket !== "hidden" && item.state.dashboardBucket !== "done");
 
-    // Unikalność: partie i zlecenia to osobne encje.
     return [...orderItems, ...batchItems]
       .filter((item) => item.state.dashboardBucket !== "done")
       .filter((item) => matchesQuery(item, q));
@@ -253,23 +266,29 @@ export default function ProductionDashboardPage() {
     () => workItems.map((i) => i.plannedDate),
     [workItems],
   );
-  const overdueCount = useMemo(
-    () => countOverdueFromPlannedDates(plannedDatesForKpi, todayIso),
-    [plannedDatesForKpi, todayIso],
-  );
   const dueTodayCount = useMemo(
     () => countDueTodayFromPlannedDates(plannedDatesForKpi, todayIso),
     [plannedDatesForKpi, todayIso],
   );
 
+  const criticalMaterials = useMemo(() => {
+    return [...shortages]
+      .filter((r) => Number(r.missing_qty) > 0)
+      .sort((a, b) => Number(b.missing_qty) - Number(a.missing_qty))
+      .slice(0, CRITICAL_MATERIALS_LIMIT);
+  }, [shortages]);
+
   if (!hasActiveWarehouse || warehouseId == null) {
-    return <ActiveWarehouseRequiredBanner hint="Zlecenia RW/PW i partie produkcyjne są tworzone w aktywnym magazynie." />;
+    return (
+      <ActiveWarehouseRequiredBanner hint="Zlecenia RW/PW i partie produkcyjne są tworzone w aktywnym magazynie." />
+    );
   }
 
   const shortagesKpi = data?.batches_with_shortages ?? 0;
   const inProductionKpi = data?.units_in_production ?? data?.active_batches ?? 0;
   const putawayKpi = data?.awaiting_putaway_batches ?? data?.putaway_batches ?? 0;
   const plannedKpi = data?.planned_batches ?? data?.waiting_batches ?? 0;
+  const kpiValue = (n: number) => (loading ? "" : n);
 
   return (
     <div className={productionPageStackClass}>
@@ -304,45 +323,47 @@ export default function ProductionDashboardPage() {
         }
       >
         <div className="space-y-4">
-          <ProductionKpiGrid className="!gap-2">
+          <p className="text-sm text-slate-600">
+            Co wymaga działania teraz — pełny rejestr realizacji w{" "}
+            <Link to={erpProductionPaths.orders} className="font-semibold text-orange-700 hover:underline">
+              Zleceniach
+            </Link>
+            .
+          </p>
+          <ProductionKpiGrid columns={5}>
             <ProductionKpiCard
-              title="Zlecenia z brakami"
-              value={loading ? "—" : shortagesKpi}
-              subtitle="BAT/MO z realnym brakiem (jak Materiały)"
+              title="Z brakami"
+              value={kpiValue(shortagesKpi)}
+              subtitle="Wymaga uwagi"
               tone={shortagesKpi > 0 ? "amber" : "emerald"}
               icon={<AlertTriangle aria-hidden />}
               to={erpProductionPaths.materialsShortages}
             />
             <ProductionKpiCard
               title="W produkcji"
-              value={loading ? "—" : inProductionKpi}
-              subtitle="Jednostki / aktywne"
+              value={kpiValue(inProductionKpi)}
+              subtitle="Aktywne zlecenia"
               tone="blue"
               icon={<Factory aria-hidden />}
             />
             <ProductionKpiCard
               title="Do rozlokowania"
-              value={loading ? "—" : putawayKpi}
+              value={kpiValue(putawayKpi)}
+              subtitle="Gotowe do rozlokowania"
               tone={putawayKpi > 0 ? "amber" : "default"}
               icon={<MapPin aria-hidden />}
             />
             <ProductionKpiCard
               title="Oczekujące / zaplanowane"
-              value={loading ? "—" : plannedKpi}
+              value={kpiValue(plannedKpi)}
+              subtitle="W kolejce"
               tone="indigo"
               icon={<ClipboardList aria-hidden />}
             />
             <ProductionKpiCard
-              title="Opóźnione"
-              value={loading ? "—" : overdueCount}
-              subtitle="Z planned_date na liście uwagi"
-              tone={overdueCount > 0 ? "amber" : "default"}
-              icon={<AlertTriangle aria-hidden />}
-            />
-            <ProductionKpiCard
               title="Do zrobienia dziś"
-              value={loading ? "—" : dueTodayCount}
-              subtitle="Termin = dziś (planned_date)"
+              value={kpiValue(dueTodayCount)}
+              subtitle="Termin: dzisiaj"
               tone="blue"
               icon={<Package aria-hidden />}
             />
@@ -351,18 +372,10 @@ export default function ProductionDashboardPage() {
           {loading ? (
             <p className="text-sm text-slate-500">Wczytywanie kolejki…</p>
           ) : (
-            <>
-              <p className="text-sm text-slate-600">
-                Tylko to, co wymaga uwagi teraz. Pełna lista realizacji:{" "}
-                <Link to={erpProductionPaths.orders} className="font-semibold text-violet-700 hover:underline">
-                  Zlecenia
-                </Link>
-                .
-              </p>
-
+            <div className="grid gap-3 lg:grid-cols-2 xl:grid-cols-2 2xl:grid-cols-4">
               <WorkSection
                 title="Wymaga reakcji"
-                subtitle="Braki materiałów, blokady i opóźnienia."
+                subtitle="Braki materiałów i blokady."
                 count={reaction.length}
                 countTone={reaction.length > 0 ? "danger" : "neutral"}
                 emphasize={reaction.length > 0}
@@ -383,7 +396,7 @@ export default function ProductionDashboardPage() {
 
               <WorkSection
                 title="Do wykonania"
-                subtitle="Praca czekająca na start lub kolejny etap."
+                subtitle="Start lub kolejny etap."
                 count={todo.length}
                 countTone={todo.length > 0 ? "warning" : "neutral"}
               >
@@ -422,30 +435,47 @@ export default function ProductionDashboardPage() {
                 )}
               </WorkSection>
 
-              <div className="flex flex-wrap gap-2 text-sm">
-                <Link
-                  to={erpProductionPaths.orders}
-                  className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 font-medium text-slate-700 hover:bg-slate-50"
-                >
-                  <ClipboardList className="h-4 w-4" aria-hidden />
-                  Wszystkie zlecenia
-                </Link>
-                <Link
-                  to={erpProductionPaths.materialsShortages}
-                  className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 font-medium text-slate-700 hover:bg-slate-50"
-                >
-                  <Package className="h-4 w-4" aria-hidden />
-                  Materiały
-                </Link>
-                <Link
-                  to={erpProductionPaths.planning}
-                  className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 font-medium text-slate-700 hover:bg-slate-50"
-                >
-                  <MapPin className="h-4 w-4" aria-hidden />
-                  Planowanie
-                </Link>
-              </div>
-            </>
+              <WorkSection
+                title="Materiały krytyczne"
+                subtitle="Największe braki komponentów."
+                count={criticalMaterials.length}
+                countTone={criticalMaterials.length > 0 ? "danger" : "neutral"}
+                emphasize={criticalMaterials.length > 0}
+              >
+                {criticalMaterials.length === 0 ? (
+                  <p className="py-0.5 text-sm text-slate-500">Brak krytycznych braków</p>
+                ) : (
+                  <ul className="flex flex-col gap-1.5">
+                    {criticalMaterials.map((row) => (
+                      <li
+                        key={row.component_product_id}
+                        className="flex items-center justify-between gap-2 rounded-lg border border-slate-200 bg-white px-2.5 py-2"
+                      >
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-semibold text-slate-900">
+                            {row.product_name}
+                          </p>
+                          {row.product_sku ? (
+                            <p className="truncate text-[11px] text-slate-500">{row.product_sku}</p>
+                          ) : null}
+                        </div>
+                        <StatusBadge tone="danger" density="compact">
+                          Brakuje: {formatMissingQty(Number(row.missing_qty))} szt.
+                        </StatusBadge>
+                      </li>
+                    ))}
+                    <li className="pt-0.5 text-right">
+                      <Link
+                        to={erpProductionPaths.materialsShortages}
+                        className="text-sm font-semibold text-slate-600 hover:text-slate-900"
+                      >
+                        Materiały ({shortages.length})
+                      </Link>
+                    </li>
+                  </ul>
+                )}
+              </WorkSection>
+            </div>
           )}
         </div>
       </PageHeader>

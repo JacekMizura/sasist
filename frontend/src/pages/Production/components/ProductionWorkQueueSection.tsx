@@ -6,7 +6,6 @@ import { EmptyState } from "@/design-system";
 import { erpProductionPaths } from "../productionPaths";
 import type { ProductionOperationalState } from "../productionOperationalState";
 import { ProductionOperatorTaskCard } from "./ProductionOperatorTaskCard";
-import { productionSourceBadgeLabel } from "../productionUi";
 import { PRODUCTION_DASHBOARD_SECTION_LIMIT } from "../productionDashboardHelpers";
 
 export type ProductionWorkItem = {
@@ -95,13 +94,12 @@ export function ProductionWorkQueueSection({
                 productImageUrl={item.productImageUrl}
                 qtyLabel={item.qtyLabel}
                 documentNumber={item.number}
-                sourceBadge={productionSourceBadgeLabel({
-                  kind: item.kind,
-                  sourceType: item.sourceType,
-                })}
+                sourceKind={item.kind}
+                sourceType={item.sourceType}
                 scheduleMeta={schedule || null}
                 showThumb={item.kind === "order"}
                 compact
+                hideDelayedBadge
                 ctaHref={href}
                 ctaOpenInNewTab={item.state.primaryAction.openInNewTab}
                 ctaDisabled={item.state.primaryAction.disabled}

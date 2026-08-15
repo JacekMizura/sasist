@@ -23,6 +23,8 @@ import { PageHeader, SecondaryButton } from "@/design-system";
 import { ProductThumb } from "./components/ProductThumb";
 import { MaterialSubstitutesFormPanel } from "./components/MaterialSubstitutesFormPanel";
 import { MaterialNeedsPanel } from "./components/MaterialNeedsPanel";
+import { ProductionRowActionsMenu } from "./components/ProductionRowActionsMenu";
+import { ProductionSourceTypeBadge } from "./components/ProductionSourceTypeBadge";
 import { erpProductionPaths } from "./productionPaths";
 import {
   coveredQtyFromStock,
@@ -34,6 +36,7 @@ import {
   productionModuleListThClass,
   productionPageStackClass,
   productionPageTitleClass,
+  productionSectionLabelClass,
 } from "./productionLayoutTokens";
 import { ProductionEmptyState } from "./components/ProductionEmptyState";
 import { AppOverlayPortal } from "../../components/overlay";
@@ -154,7 +157,14 @@ export default function ProductionShortagesPage() {
   return (
     <div className={productionPageStackClass}>
       <PageHeader
-        title={<h1 className={productionPageTitleClass}>Braki materiałów</h1>}
+        title={
+          <h1 className={productionPageTitleClass}>
+            Braki materiałów
+            {!loading ? (
+              <span className="ml-2 text-base font-normal text-slate-500">{visibleRows.length}</span>
+            ) : null}
+          </h1>
+        }
         actions={
           <SecondaryButton
             type="button"
@@ -176,18 +186,17 @@ export default function ProductionShortagesPage() {
               description="Wszystkie partie i zlecenia mają wystarczające materiały."
             />
           ) : (
-            <div className="rounded-xl border border-slate-200 bg-white">
-              <table className="w-full table-fixed text-sm">
+            <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
+              <table className="w-full min-w-[920px] text-sm">
                 <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
                   <tr>
-                    <th className={`${productionModuleListThClass} w-9`} />
-                    <th className={productionModuleListThClass}>Składnik</th>
-                    <th className={`${productionModuleListThClass} w-[4.5rem] text-right`}>Potrzebne</th>
-                    <th className={`${productionModuleListThClass} w-[4.5rem] text-right`}>Dostępne</th>
-                    <th className={`${productionModuleListThClass} w-[3.5rem] text-right`}>Brak</th>
-                    <th className={`${productionModuleListThClass} w-[5rem] text-right`}>Po pokryciu</th>
-                    <th className={`${productionModuleListThClass} w-[7rem]`}>Źródła</th>
-                    <th className={`${productionModuleListThClass} w-[8.5rem]`}>Akcja</th>
+                    <th className={`${productionModuleListThClass} w-10`} />
+                    <th className={`${productionModuleListThClass} w-[22rem] max-w-[28rem]`}>Składnik</th>
+                    <th className={`${productionModuleListThClass} w-[5.5rem] text-right`}>Potrzebne</th>
+                    <th className={`${productionModuleListThClass} w-[5.5rem] text-right`}>Dostępne</th>
+                    <th className={`${productionModuleListThClass} w-[4.5rem] text-right`}>Brak</th>
+                    <th className={`${productionModuleListThClass} w-[10rem]`}>Źródła</th>
+                    <th className={`${productionModuleListThClass} w-[12rem] text-right`}>Akcja</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -199,9 +208,7 @@ export default function ProductionShortagesPage() {
                         : coveredQtyFromStock(r.required_qty, r.available_qty);
                     const missing = Number(r.missing_qty ?? 0);
                     const showShortageTone = isTrueMaterialShortage(missing);
-                    const sources = r.demand_sources?.length
-                      ? r.demand_sources
-                      : [];
+                    const sources = r.demand_sources?.length ? r.demand_sources : [];
                     const sourcePreview =
                       sources.length > 0
                         ? sources
@@ -213,16 +220,14 @@ export default function ProductionShortagesPage() {
                       sources.length > 2 ? ` +${sources.length - 2}` : sources.length > 0 ? "" : "";
                     return (
                       <Fragment key={r.component_product_id}>
-                        <tr className="border-t border-slate-100 align-top">
+                        <tr className="border-t border-slate-100 align-top hover:bg-slate-50/60">
                           <td className={productionModuleListTdClass}>
                             <button
                               type="button"
                               className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-slate-200 text-slate-600 hover:bg-slate-50"
                               aria-expanded={expanded}
-                              aria-label={expanded ? "Zwiń szczegóły" : "Rozwiń szczegóły"}
-                              onClick={() =>
-                                setExpandedId(expanded ? null : r.component_product_id)
-                              }
+                              aria-label={expanded ? "Zwiń szczegóły" : "Rozwiń źródła"}
+                              onClick={() => setExpandedId(expanded ? null : r.component_product_id)}
                             >
                               <ChevronDown
                                 className={`h-4 w-4 transition-transform ${expanded ? "rotate-180" : ""}`}
@@ -254,43 +259,52 @@ export default function ProductionShortagesPage() {
                           >
                             {fmtQty(missing)}
                           </td>
-                          <td className={`${productionModuleListTdClass} text-right tabular-nums text-emerald-800`}>
-                            {fmtQty(covered)}
-                          </td>
                           <td className={`${productionModuleListTdClass} text-xs text-slate-600`}>
-                            <span className="line-clamp-2" title={`${sourcePreview}${sourceMore}`}>
+                            <button
+                              type="button"
+                              className="line-clamp-2 text-left hover:text-slate-900 hover:underline"
+                              title={`${sourcePreview}${sourceMore}`}
+                              onClick={() => setExpandedId(expanded ? null : r.component_product_id)}
+                            >
                               {sourcePreview}
                               {sourceMore}
-                            </span>
+                            </button>
                           </td>
-                          <td className={productionModuleListTdClass}>
-                            <div className="flex flex-col gap-1">
+                          <td className={`${productionModuleListTdClass} text-right`} onClick={(e) => e.stopPropagation()}>
+                            <div className="inline-flex items-center justify-end gap-1.5">
                               <PrimaryButton type="button" density="compact" onClick={() => void createRequisition(r)}>
                                 <ShoppingCart className="h-3.5 w-3.5" aria-hidden />
                                 Zapotrzebowanie
                               </PrimaryButton>
-                              <button
-                                type="button"
-                                onClick={() => void openPoPicker(r)}
-                                className="rounded-lg border border-slate-200 px-2 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50"
-                              >
-                                Dodaj do PO
-                              </button>
+                              <ProductionRowActionsMenu
+                                ariaLabel={`Akcje ${r.product_name}`}
+                                align="end"
+                                actions={[
+                                  {
+                                    id: "po",
+                                    label: "Dodaj do PO",
+                                    onClick: () => void openPoPicker(r),
+                                  },
+                                  {
+                                    id: "expand",
+                                    label: expanded ? "Zwiń źródła" : "Pokaż źródła",
+                                    onClick: () => setExpandedId(expanded ? null : r.component_product_id),
+                                  },
+                                ]}
+                              />
                             </div>
                           </td>
                         </tr>
                         {expanded ? (
                           <tr className="border-t border-slate-100 bg-slate-50/70">
-                            <td colSpan={8} className="px-3 py-3">
+                            <td colSpan={7} className="px-3 py-3">
                               <div className="mb-3 grid gap-3 sm:grid-cols-2">
                                 <div>
-                                  <p className="mb-1 text-[10px] font-bold uppercase tracking-wide text-slate-500">
-                                    Produkt końcowy
-                                  </p>
+                                  <p className={productionSectionLabelClass}>Produkt końcowy</p>
                                   {(r.finished_products ?? []).length === 0 ? (
-                                    <p className="text-xs text-slate-500">—</p>
+                                    <p className="mt-1 text-xs text-slate-500">—</p>
                                   ) : (
-                                    <ul className="space-y-1">
+                                    <ul className="mt-1 space-y-1">
                                       {(r.finished_products ?? []).map((fp, i) => (
                                         <li key={i} className="flex items-center gap-1.5 text-xs text-slate-800">
                                           <ProductThumb
@@ -305,20 +319,18 @@ export default function ProductionShortagesPage() {
                                   )}
                                 </div>
                                 <div>
-                                  <p className="mb-1 text-[10px] font-bold uppercase tracking-wide text-slate-500">
-                                    Zapas i lokalizacje
-                                  </p>
-                                  <p className="text-xs text-slate-700">
+                                  <p className={productionSectionLabelClass}>Zapas i lokalizacje</p>
+                                  <p className="mt-1 text-xs text-slate-700">
+                                    Pokryte:{" "}
+                                    <span className="tabular-nums font-semibold text-emerald-800">{fmtQty(covered)}</span>
+                                    {" · "}
                                     Zarezerwowane:{" "}
                                     <span className="tabular-nums font-semibold">{fmtQty(r.reserved_qty)}</span>
                                   </p>
                                   <div className="mt-1.5 flex flex-wrap gap-1">
                                     {r.locations.length ? (
                                       r.locations.map((loc) => (
-                                        <span
-                                          key={loc.location_id}
-                                          className="inline-flex items-center gap-1 text-xs"
-                                        >
+                                        <span key={loc.location_id} className="inline-flex items-center gap-1 text-xs">
                                           <LocationBadge code={loc.location_code} type="PICK" />
                                           <span className="tabular-nums text-slate-600">{loc.available_qty}</span>
                                         </span>
@@ -329,9 +341,7 @@ export default function ProductionShortagesPage() {
                                   </div>
                                 </div>
                               </div>
-                              <p className="mb-2 text-[10px] font-bold uppercase tracking-wide text-slate-500">
-                                Źródła zapotrzebowania
-                              </p>
+                              <p className={`${productionSectionLabelClass} mb-2`}>Źródła zapotrzebowania</p>
                               {sources.length === 0 ? (
                                 <p className="text-xs text-slate-500">Brak szczegółów źródeł w API.</p>
                               ) : (
@@ -349,8 +359,10 @@ export default function ProductionShortagesPage() {
                                     <tbody>
                                       {sources.map((s) => (
                                         <tr key={`${s.kind}-${s.id}`} className="border-t border-slate-100">
-                                          <td className="px-2 py-1.5 font-semibold text-slate-700">
-                                            {s.kind === "batch" ? "BAT" : "MO"}
+                                          <td className="px-2 py-1.5">
+                                            <ProductionSourceTypeBadge
+                                              kind={s.kind === "batch" ? "batch" : "order"}
+                                            />
                                           </td>
                                           <td className="px-2 py-1.5">
                                             <Link
@@ -382,68 +394,47 @@ export default function ProductionShortagesPage() {
             </div>
           )}
 
-          <section className="rounded-xl border border-slate-200 bg-white p-5">
+          <section className="rounded-xl border border-slate-200 bg-white px-4 py-3">
             <div className="flex items-center justify-between gap-3">
               <div>
-                <h2 className="text-base font-bold text-slate-900">Zapotrzebowania materiałowe</h2>
-                <p className="text-sm text-slate-500">
-                  Status po przyjęciu na magazyn — otwarte, częściowo pokryte lub zamknięte.
-                </p>
+                <h2 className="text-sm font-semibold text-slate-900">Zapotrzebowania materiałowe</h2>
+                {!showNeeds && materialNeeds.length > 0 ? (
+                  <p className="mt-0.5 text-xs text-slate-500">
+                    {materialNeeds.filter((n) => n.status === "fulfilled").length} zamkniętych ·{" "}
+                    {materialNeeds.filter((n) => n.status === "partial").length} częściowo ·{" "}
+                    {materialNeeds.filter((n) => ["open", "linked"].includes(n.status)).length} otwartych
+                  </p>
+                ) : null}
               </div>
-              <button
-                type="button"
-                onClick={() => setShowNeeds((v) => !v)}
-                className="rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
-              >
+              <SecondaryButton type="button" density="compact" onClick={() => setShowNeeds((v) => !v)}>
                 {showNeeds ? "Ukryj" : "Pokaż"}
-              </button>
+              </SecondaryButton>
             </div>
             {showNeeds ? (
-              <div className="mt-4">
+              <div className="mt-3">
                 <MaterialNeedsPanel rows={materialNeeds} />
               </div>
-            ) : materialNeeds.length > 0 ? (
-              <p className="mt-3 text-sm text-slate-600">
-                {materialNeeds.filter((n) => n.status === "fulfilled").length} zamkniętych ·{" "}
-                {materialNeeds.filter((n) => n.status === "partial").length} częściowo pokrytych ·{" "}
-                {materialNeeds.filter((n) => ["open", "linked"].includes(n.status)).length} otwartych
-              </p>
             ) : null}
           </section>
 
-          <section className="rounded-xl border border-slate-200 bg-white p-5">
+          <section className="rounded-xl border border-slate-200 bg-white px-4 py-3">
             <div className="flex items-center justify-between gap-3">
               <div>
-                <h2 className="text-base font-bold text-slate-900">Zamienniki materiałów</h2>
-                <p className="text-sm text-slate-500">
-                  Priorytet, współczynnik zamiany i aktywność — propozycje w planowaniu.
-                </p>
+                <h2 className="text-sm font-semibold text-slate-900">Zamienniki materiałów</h2>
+                {!showSubstitutes && substitutes.length > 0 ? (
+                  <p className="mt-0.5 text-xs text-slate-500">Zdefiniowano {substitutes.length}</p>
+                ) : null}
               </div>
-              <button
-                type="button"
-                onClick={() => setShowSubstitutes((v) => !v)}
-                className="rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
-              >
+              <SecondaryButton type="button" density="compact" onClick={() => setShowSubstitutes((v) => !v)}>
                 {showSubstitutes ? "Ukryj" : "Zarządzaj"}
-              </button>
+              </SecondaryButton>
             </div>
             {showSubstitutes ? (
-              <MaterialSubstitutesFormPanel tenantId={tenantId} rows={substitutes} onChanged={() => void load()} />
-            ) : substitutes.length > 0 ? (
-              <p className="mt-3 text-sm text-slate-600">Zdefiniowano {substitutes.length} zamienników.</p>
+              <div className="mt-3">
+                <MaterialSubstitutesFormPanel tenantId={tenantId} rows={substitutes} onChanged={() => void load()} />
+              </div>
             ) : null}
           </section>
-
-          <p className="text-xs text-slate-500">
-            Powiązane partie:{" "}
-            <Link to={erpProductionPaths.planning} className="font-semibold text-violet-700 hover:underline">
-              Planowanie
-            </Link>
-            {" · "}
-            <Link to={erpProductionPaths.orders} className="font-semibold text-violet-700 hover:underline">
-              Zlecenia
-            </Link>
-          </p>
         </div>
       </PageHeader>
 

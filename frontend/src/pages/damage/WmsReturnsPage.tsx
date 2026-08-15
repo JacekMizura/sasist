@@ -35,7 +35,7 @@ import type {
   WmsReturnListItem,
   WmsReturnRead,
   WmsSettingsRead,
-  type ManufacturedComponentRecoveryMode,
+  ManufacturedComponentRecoveryMode,
 } from "../../types/wmsReturn";
 import type { WmsReturnModuleConfigDto } from "../../types/returnModuleConfig";
 import { panelStatusRichPreviewStyle } from "../../utils/panelStatusColor";

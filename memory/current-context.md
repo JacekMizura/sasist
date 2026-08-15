@@ -1,4 +1,42 @@
-﻿**Fix materials ATP + Phase 8 reserved semantics (2026-08-15):**
+﻿**Produkcja v1 = PASS E2E (zamknięta 2026-08-15).** Nie ruszać lifecycle bez osobnego powodu.
+
+**v1.1 follow-upy (tylko zapis, bez implementacji):** `memory/production-v1.1-followups.md`
+1. BAT CTA „Rozpocznij zbieranie” — deep-link bez `start-collecting` (vs `openJob`)
+2. BAT completed — nie pokazuj „Materiały nie są jeszcze zarezerwowane” po RW
+
+**UAT BAT control PASS E2E — Produkcja v1 PASS E2E (2026-08-15):**
+- Fresh **BAT/2026/0017** id=17 / 75894×1 / BOM#8; release→collecting→RW **#98** (−3 comp)→prod 1/1→PW **#99**→WMS putaway A1-A-1→**completed**
+- Brak packing; 1×RW/1×PW; znika z Zleceń; w Historii PARTIA; szczegóły OK
+
+**UAT PLANNING auto-replenishment PASS E2E (2026-08-15):**
+- Config: auto ON, coverage=1d, interval=hourly; scheduler tick utworzył MO
+- Produkt **75894** / id=383 / BOM#8 (comp 182×3); need = 0.0333→**0.03** (target−on_hand−free_pipeline); ORDERS pipeline nie obniża need
+- **MO/2026/0022** id=24 `source_type=PLANNING` qty=0.03; 2./3. run → created=0, brak bump/duplikatu
+- Soft-hold ORDERS: brak open ORDERS MO dla SKU (order_demand=1 bez MO) — path nieadversarial; PLANNING bez order_sources
+- Lifecycle: planned→release→collecting→RW **#96**→production→`awaiting_putaway`→PW **#97**→WMS putaway A1-A-1→finalize→**completed**; packing_handoff=null; brak BAT
+- Config zostawiony ON (hourly / 1d) na prod tenant1/wh1
+
+**UAT PRINT PASS E2E (2026-08-15):**
+- Config #9 chwilowo PRINT (potem restored WMS); MO **MO/2026/0021** / id=23 / ORDERS #1256
+- Preview PDF side-effect free; start → `execution_interface=PRINT`, RW **#94** once, ST-003 A1 −2; double-start idempotent
+- Reprint PDF bez RW/consume; progress 0.5→1 in_progress; finish → completed; FG buffer DOCK-IN (+1); PW#95 putaway/relocation DONE, **nie** w kolejce rozlokowania; source#22 fulfilled; order → **Pakowanie#8**
+- resolve-scan number/id OK; finish retry 400; config restored WMS
+
+**UAT A clean retest po 97321395 — PASS E2E (2026-08-15):**
+- Cleanup: withdraw UAT leftovers 1266/1267/1269 (Produkcja→Nowe); MO cancel cascade; MM free B1→DOCK; brak PRODUCTION_ORDER ST-003; pickableFree=0
+- Fresh **#1256 / id=1270** / SourceItem **#22** / PZ **#91**
+- DOCK-only ST-003×2: BRAKI, shortage, allocatable=0, brak AUTO_RESUMED
+- Putaway ×2 → A1-A-1: reattach #22 reserved, PRODUCTION_ORDER **#82×2**, materials_reserved=true, Produkcja#12, AUTO_RESUMED×1 (MO/2026/0021)
+- Idempotencja (MM notify roundtrip): nadal 1× AUTO_RESUMED, ta sama res #82, planned=1
+- Poprzedni #1255: DOCK REGRESSION PASS / PUTAWAY RETRY NOT VALID (ENV CONTAMINATED) — nie FAIL kodu
+
+**UAT A po 97321395 — STOP KROK 2 (2026-08-15) — ENV CONTAMINATED (nie FAIL kodu):**
+- Order **#1255 / id=1269** / SourceItem **#21**; PZ **#89** ST-003×2
+- KROK1 DOCK-only: PASS — BRAKI, shortage, allocatable≈0, brak AUTO_RESUMED, brak PRODUCTION_ORDER
+- KROK2 putaway: analysis available=2 vs MO demand 4 (leftover sources #19/#20) → NOT VALID
+- STOP — bez PRINT/PLANNING/BAT; bez kodu
+
+**Fix materials ATP + Phase 8 reserved semantics (2026-08-15) — 97321395:**
 - SSOT: `production_allocatable_qty` (= allocate eligibility; DOCK wykluczony przy putaway)
 - `component_stock_breakdown.available_qty` z allocatable, nie warehouse_on_hand
 - material validation: reserved dopiero po `REFRESHED`+`materials_reserved`; fail → shortage/BRAKI
@@ -40,7 +78,14 @@
 
 ## Active
 
-**UAT started-MO fresh case PASS (2026-08-15) — po fa704be5:**
+**Production ERP UX rebuild (frontend only, 2026-08-15) — DONE lokalnie, bez commit/push:**
+- Pulpit / Zlecenia / Planowanie / Receptury / Materiały / Historia / Analiza kosztów
+- SSOT CTA/statusów bez zmian (`productionOperationalState`); backend lifecycle nietknięty
+- Nowe thin: `ProductionProgressCell`, `ProductionSourceTypeBadge`
+- Usunięte fake KPI („—”, marża, średni czas, efficiency na Analizie)
+- `tsc` + `npm run build` OK; widoczne po deploy FE / local Vite
+
+**Produkcja v1 = PASS E2E (zamknięta 2026-08-15).** Nie ruszać lifecycle bez osobnego powodu.
 - Legacy #1251 = stary stan sprzed fixa (nie regresja detacha); allocator SAFE (source#15 `shortage` poza fulfillable)
 - Historical SO overbook: B3-C-2 (#65), B3-B-3 (#54) released via reservation service; po cleanup true SO overbook=0
 - Fresh #1252 / MO/6: collecting → external +1 B3-A-4 → SOURCE_DETACHED_STARTED_MO; UI→Wózki#6; SALES#68; planned=1; finish MO → free FG @ DOCK-IN; brak FE_PICK/pick alloc

@@ -22,10 +22,11 @@ import {
   filterSelectClass,
 } from "../../components/filters";
 import {
-  PurchasingTableHeader,
-  PurchasingTableSection,
-  purchasingTableTdClass,
-} from "../../modules/purchasing/ui";
+  moduleListTableClass,
+  moduleListTableScrollClass,
+  moduleListTheadClass,
+  moduleTableCardClass,
+} from "../../components/listPage/moduleList";
 import {
   DEFAULT_PRODUCTION_RECIPE_FILTERS,
   type ProductionRecipeListFilters,
@@ -33,12 +34,14 @@ import {
 import { formatProductionMoney, recipeStatusBadgeClass, recipeStatusLabel } from "./productionUi";
 import { erpProductionPaths } from "./productionPaths";
 import { ProductThumb } from "./components/ProductThumb";
-import { ProductionRowIconActions } from "./components/ProductionRowIconActions";
+import { ProductionRowActionsMenu } from "./components/ProductionRowActionsMenu";
 import { RecipeIngredientsDrawer } from "./components/RecipeIngredientsDrawer";
 import {
-  productionListActionsCellClass,
-} from "./productionRowActionTokens";
-import { productionPageStackClass, productionPageTitleClass } from "./productionLayoutTokens";
+  productionModuleListTdClass,
+  productionModuleListThClass,
+  productionPageStackClass,
+  productionPageTitleClass,
+} from "./productionLayoutTokens";
 import { PageHeader, SecondaryButton, primaryButtonClassName } from "@/design-system";
 
 const DEFAULT_TENANT = 1;
@@ -153,147 +156,151 @@ export default function RecipesListPage() {
         }
       >
         <div className="space-y-4">
-      <ListFilterEmbeddedShell expanded={filtersExpanded}>
-        <div className={filterGridColsClass}>
-          <label className="block min-w-0 sm:col-span-2">
-            <span className={filterLabelClass}>Szukaj</span>
-            <input
-              type="search"
-              className={filterInputClass}
-              placeholder="Produkt, receptura, SKU…"
-              value={draftFilters.query}
-              onChange={(e) => setDraftFilters({ ...draftFilters, query: e.target.value })}
+          <ListFilterEmbeddedShell expanded={filtersExpanded}>
+            <div className={filterGridColsClass}>
+              <label className="block min-w-0 sm:col-span-2">
+                <span className={filterLabelClass}>Szukaj</span>
+                <input
+                  type="search"
+                  className={filterInputClass}
+                  placeholder="Produkt, receptura, SKU…"
+                  value={draftFilters.query}
+                  onChange={(e) => setDraftFilters({ ...draftFilters, query: e.target.value })}
+                />
+              </label>
+              <label className="block min-w-0">
+                <span className={filterLabelClass}>Status</span>
+                <select
+                  className={filterSelectClass}
+                  value={draftFilters.status}
+                  onChange={(e) =>
+                    setDraftFilters({ ...draftFilters, status: e.target.value as ProductionRecipeListFilters["status"] })
+                  }
+                >
+                  <option value="">Wszystkie</option>
+                  <option value="active">Aktywne</option>
+                  <option value="archived">Archiwum</option>
+                  <option value="shortages">Z brakami</option>
+                </select>
+              </label>
+            </div>
+            <FilterActionsBar
+              applyLabel="Filtruj"
+              onApply={() => setAppliedFilters({ ...draftFilters })}
+              onClear={() => {
+                setDraftFilters(DEFAULT_PRODUCTION_RECIPE_FILTERS);
+                setAppliedFilters(DEFAULT_PRODUCTION_RECIPE_FILTERS);
+              }}
             />
-          </label>
-          <label className="block min-w-0">
-            <span className={filterLabelClass}>Status</span>
-            <select
-              className={filterSelectClass}
-              value={draftFilters.status}
-              onChange={(e) =>
-                setDraftFilters({ ...draftFilters, status: e.target.value as ProductionRecipeListFilters["status"] })
-              }
-            >
-              <option value="">Wszystkie</option>
-              <option value="active">Aktywne</option>
-              <option value="archived">Archiwum</option>
-              <option value="shortages">Z brakami</option>
-            </select>
-          </label>
-        </div>
-        <FilterActionsBar
-          applyLabel="Filtruj"
-          onApply={() => setAppliedFilters({ ...draftFilters })}
-          onClear={() => {
-            setDraftFilters(DEFAULT_PRODUCTION_RECIPE_FILTERS);
-            setAppliedFilters(DEFAULT_PRODUCTION_RECIPE_FILTERS);
-          }}
-        />
-      </ListFilterEmbeddedShell>
+          </ListFilterEmbeddedShell>
 
-      {loading ? (
-        <p className="text-sm text-slate-500">Wczytywanie receptur…</p>
-      ) : filtered.length === 0 ? (
-        <AppEmptyState
-          icon={BookOpen}
-          title="Brak receptur"
-          description="Utwórz recepturę na karcie produktu (zakładka Produkcja) lub użyj przycisku „Dodaj recepturę”."
-        />
-      ) : (
-        <PurchasingTableSection title="Receptury produkcyjne">
-          <table className="w-full min-w-[960px] text-sm">
-            <PurchasingTableHeader
-              headers={[
-                "Produkt",
-                "Receptura",
-                "Wersja",
-                "Składniki",
-                "Koszt/szt.",
-                "Możliwa produkcja",
-                "Status",
-                "Akcje",
-              ]}
-              align={["left", "left", "left", "left", "right", "right", "left", "center"]}
+          {loading ? (
+            <p className="text-sm text-slate-500">Wczytywanie receptur…</p>
+          ) : filtered.length === 0 ? (
+            <AppEmptyState
+              icon={BookOpen}
+              title="Brak receptur"
+              description="Utwórz recepturę na karcie produktu (zakładka Produkcja) lub użyj przycisku „Dodaj recepturę”."
             />
-            <tbody>
-              {filtered.map((r) => (
-                <tr key={r.composition_id} className="group border-t border-slate-100 transition-colors hover:bg-slate-50/80">
-                  <td className={purchasingTableTdClass}>
-                    <div className="flex items-center gap-3">
-                      <ProductThumb imageUrl={r.product_image_url} name={r.product_name} size="sm" />
-                      <div className="min-w-0">
-                        <p className="font-medium text-slate-900">{r.product_name}</p>
-                        {r.product_sku ? <p className="text-xs text-slate-500">{r.product_sku}</p> : null}
-                      </div>
-                    </div>
-                  </td>
-                  <td className={`${purchasingTableTdClass} text-slate-700`}>{r.recipe_name}</td>
-                  <td className={purchasingTableTdClass}>
-                    <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 font-mono text-xs text-slate-600">
-                      v{r.version}
-                    </span>
-                  </td>
-                  <td className={purchasingTableTdClass}>
-                    <button
-                      type="button"
-                      className="font-semibold tabular-nums text-blue-600 hover:text-blue-700 hover:underline"
-                      title="Pokaż składniki receptury"
-                      onClick={() => setIngredientsDrawerRecipe(r)}
-                    >
-                      {r.component_count}
-                    </button>
-                  </td>
-                  <td className={`${purchasingTableTdClass} text-right tabular-nums font-medium text-slate-900`}>
-                    {formatProductionMoney(r.unit_cost_net)}
-                  </td>
-                  <td className={`${purchasingTableTdClass} text-right tabular-nums text-slate-700`}>
-                    {Math.floor(r.max_producible)}
-                  </td>
-                  <td className={purchasingTableTdClass}>
-                    <span className={recipeStatusBadgeClass(r)}>{recipeStatusLabel(r)}</span>
-                  </td>
-                  <td className={productionListActionsCellClass} onClick={(e) => e.stopPropagation()}>
-                    <ProductionRowIconActions
-                      actions={[
-                        {
-                          id: "view",
-                          label: "Podgląd",
-                          icon: "view",
-                          onClick: () => navigate(erpProductionPaths.recipe(r.composition_id)),
-                        },
-                        {
-                          id: "edit",
-                          label: "Edycja",
-                          icon: "edit",
-                          onClick: () => navigate(erpProductionPaths.recipe(r.composition_id)),
-                        },
-                        {
-                          id: "dup",
-                          label: "Duplikuj",
-                          icon: "duplicate",
-                          onClick: () => void handleDuplicate(r),
-                          disabled: busyId === r.composition_id,
-                        },
-                        ...(r.is_active
-                          ? [
-                              {
-                                id: "arch",
-                                label: "Archiwizuj",
-                                icon: "archive" as const,
-                                onClick: () => void handleArchive(r),
-                                disabled: busyId === r.composition_id,
-                              },
-                            ]
-                          : []),
-                      ]}
-                    />
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </PurchasingTableSection>
-      )}
+          ) : (
+            <div className={moduleTableCardClass}>
+              <div className={`${moduleListTableScrollClass} overflow-x-auto`}>
+                <table className={`${moduleListTableClass} min-w-0 w-full table-fixed lg:table-auto`}>
+                  <thead className={moduleListTheadClass}>
+                    <tr>
+                      <th className={productionModuleListThClass}>Produkt</th>
+                      <th className={`${productionModuleListThClass} w-[10rem]`}>Receptura</th>
+                      <th className={`${productionModuleListThClass} w-[4.5rem]`}>Wersja</th>
+                      <th className={`${productionModuleListThClass} w-[5rem] text-right`}>Składniki</th>
+                      <th className={`${productionModuleListThClass} w-[6.5rem] text-right`}>Koszt/szt.</th>
+                      <th className={`${productionModuleListThClass} w-[6rem] text-right`}>Możliwe</th>
+                      <th className={`${productionModuleListThClass} w-[7rem]`}>Status</th>
+                      <th className={`${productionModuleListThClass} w-[9rem] text-right`}>Akcje</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filtered.map((r) => (
+                      <tr key={r.composition_id} className="group border-b border-slate-100 hover:bg-slate-50/70">
+                        <td className={productionModuleListTdClass}>
+                          <div className="flex min-w-0 items-center gap-2.5">
+                            <ProductThumb imageUrl={r.product_image_url} name={r.product_name} size="sm" />
+                            <div className="min-w-0">
+                              <p className="truncate font-medium text-slate-900">{r.product_name}</p>
+                              {r.product_sku ? (
+                                <p className="truncate font-mono text-xs text-slate-500">{r.product_sku}</p>
+                              ) : null}
+                            </div>
+                          </div>
+                        </td>
+                        <td className={`${productionModuleListTdClass} truncate text-slate-700`}>{r.recipe_name}</td>
+                        <td className={productionModuleListTdClass}>
+                          <span className="font-mono text-xs text-slate-600">v{r.version}</span>
+                        </td>
+                        <td className={`${productionModuleListTdClass} text-right`}>
+                          <button
+                            type="button"
+                            className="font-semibold tabular-nums text-blue-600 hover:underline"
+                            title="Pokaż składniki receptury"
+                            onClick={() => setIngredientsDrawerRecipe(r)}
+                          >
+                            {r.component_count}
+                          </button>
+                        </td>
+                        <td className={`${productionModuleListTdClass} text-right tabular-nums font-medium text-slate-900`}>
+                          {formatProductionMoney(r.unit_cost_net)}
+                        </td>
+                        <td className={`${productionModuleListTdClass} text-right tabular-nums text-slate-700`}>
+                          {Math.floor(r.max_producible)}
+                        </td>
+                        <td className={productionModuleListTdClass}>
+                          <span className={recipeStatusBadgeClass(r)}>{recipeStatusLabel(r)}</span>
+                        </td>
+                        <td className={`${productionModuleListTdClass} text-right`} onClick={(e) => e.stopPropagation()}>
+                          <div className="inline-flex items-center justify-end gap-1.5">
+                            <SecondaryButton
+                              type="button"
+                              density="compact"
+                              onClick={() => navigate(erpProductionPaths.recipe(r.composition_id))}
+                            >
+                              Podgląd
+                            </SecondaryButton>
+                            <ProductionRowActionsMenu
+                              ariaLabel={`Akcje ${r.recipe_name}`}
+                              align="end"
+                              actions={[
+                                {
+                                  id: "edit",
+                                  label: "Edycja",
+                                  onClick: () => navigate(erpProductionPaths.recipe(r.composition_id)),
+                                },
+                                {
+                                  id: "dup",
+                                  label: "Duplikuj",
+                                  onClick: () => void handleDuplicate(r),
+                                  disabled: busyId === r.composition_id,
+                                },
+                                ...(r.is_active
+                                  ? [
+                                      {
+                                        id: "arch",
+                                        label: "Archiwizuj",
+                                        onClick: () => void handleArchive(r),
+                                        disabled: busyId === r.composition_id,
+                                        danger: true,
+                                      },
+                                    ]
+                                  : []),
+                              ]}
+                            />
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
         </div>
       </PageHeader>
 

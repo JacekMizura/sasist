@@ -9,7 +9,6 @@ import type {
 } from "@/api/productionPlanningApi";
 import {
   Card,
-  MetricCard,
   PrimaryButton,
   SecondaryButton,
   StatusBadge,
@@ -139,98 +138,98 @@ export function ProductionDemandPlanningPanel({
     <section className="space-y-4">
       {error ? <p className="rounded-lg bg-rose-50 px-2.5 py-1.5 text-sm text-rose-800">{error}</p> : null}
 
-      <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
-        <MetricCard
-          density="compact"
-          label="Produkty krytyczne"
-          value={dash?.critical_products ?? 0}
-          className="!py-2.5"
-        />
-        <MetricCard
-          density="compact"
-          label="Do produkcji dzisiaj"
-          value={dash?.production_needed_today ?? 0}
-          className="!py-2.5"
-        />
-        <MetricCard
-          density="compact"
-          label="Brak surowców"
-          value={dash?.material_shortage_products ?? 0}
-          className="!py-2.5"
-        />
-        <MetricCard
-          density="compact"
-          label="Łącznie rekomendowane"
-          value={dash?.total_recommended_quantity ?? 0}
-          className="!py-2.5"
-        />
+      <div className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-white px-3 py-3 lg:flex-row lg:items-end lg:justify-between">
+        <div className="min-w-0 space-y-1">
+          <p className={productionSectionLabelClass}>Parametry planowania</p>
+          <p className={`text-sm text-slate-700`}>
+            Horyzont <span className="font-semibold tabular-nums">{coverageDays} dni</span>
+            {data?.sales_lookback_days != null ? (
+              <>
+                {" "}
+                · Średnia sprzedaży{" "}
+                <span className="font-semibold tabular-nums">{data.sales_lookback_days} dni</span>
+              </>
+            ) : null}
+            {data?.forecast_strategy_label ? (
+              <>
+                {" "}
+                · <span className="font-medium">{data.forecast_strategy_label}</span>
+              </>
+            ) : null}
+          </p>
+          <p className="text-xs text-slate-500">
+            {autoReplenish ? (
+              <>
+                Uzupełnianie auto: włączone
+                {replenishCoverage != null ? ` · pokrycie ${replenishCoverage} dni` : ""}
+                {intervalLabel ? ` · ${intervalLabel}` : ""}
+                {lastRunLabel ? ` · ostatnio ${lastRunLabel}` : ""}
+              </>
+            ) : (
+              "Uzupełnianie auto: wyłączone (ustawienia produkcji WMS)"
+            )}
+            {dash != null ? (
+              <>
+                {" "}
+                · Krytyczne: <span className="font-semibold tabular-nums">{dash.critical_products}</span>
+                {" · "}
+                Braki mat.: <span className="font-semibold tabular-nums">{dash.material_shortage_products}</span>
+              </>
+            ) : null}
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <CoveragePicker
+            presets={presets}
+            coverageDays={coverageDays}
+            customCoverageInput={customCoverageInput}
+            onCoverageDaysChange={onCoverageDaysChange}
+            onCustomCoverageInputChange={onCustomCoverageInputChange}
+            onApplyCustomCoverage={onApplyCustomCoverage}
+          />
+          {onRecalculateDemand ? (
+            <SecondaryButton
+              type="button"
+              density="comfortable"
+              disabled={loading || replenishmentRunning}
+              onClick={onRecalculateDemand}
+            >
+              Przelicz
+            </SecondaryButton>
+          ) : null}
+          {autoReplenish && onCreateReplenishmentOrders ? (
+            <PrimaryButton
+              type="button"
+              density="comfortable"
+              disabled={replenishmentRunning || replenishRecommendations.length === 0}
+              onClick={onCreateReplenishmentOrders}
+            >
+              {replenishmentRunning ? "Tworzenie…" : "Utwórz zlecenia PLANNING"}
+            </PrimaryButton>
+          ) : null}
+        </div>
       </div>
 
       <div className="space-y-2">
-        <div className="flex flex-wrap items-end justify-between gap-2">
-          <div>
-            <h3 className={productionSectionLabelClass}>Rekomendacje produkcji</h3>
-            <p className={`mt-0.5 ${typography.caption}`}>
-              Horyzont {coverageDays} dni
-              {data?.forecast_strategy_label ? ` · ${data.forecast_strategy_label}` : ""}
-              {autoReplenish && replenishCoverage != null
-                ? ` · uzupełnienie zapasu: ${replenishCoverage} dni`
-                : ""}
-            </p>
-            {autoReplenish ? (
-              <p className={`mt-1 ${typography.caption} text-slate-500`}>
-                Automatyczne uzupełnianie: aktywne
-                {replenishCoverage != null ? ` · Pokrycie: ${replenishCoverage} dni` : ""}
-                {intervalLabel ? ` · Przeliczanie: ${intervalLabel}` : ""}
-                {lastRunLabel ? ` · Ostatnie przeliczenie: ${lastRunLabel}` : ""}
-              </p>
-            ) : null}
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            {onRecalculateDemand ? (
-              <SecondaryButton
-                type="button"
-                density="comfortable"
-                disabled={loading || replenishmentRunning}
-                onClick={onRecalculateDemand}
-              >
-                Przelicz zapotrzebowanie
-              </SecondaryButton>
-            ) : null}
-            {autoReplenish && onCreateReplenishmentOrders ? (
-              <PrimaryButton
-                type="button"
-                density="comfortable"
-                disabled={replenishmentRunning || replenishRecommendations.length === 0}
-                onClick={onCreateReplenishmentOrders}
-              >
-                {replenishmentRunning ? "Tworzenie…" : "Utwórz zlecenia"}
-              </PrimaryButton>
-            ) : null}
-            <CoveragePicker
-              presets={presets}
-              coverageDays={coverageDays}
-              customCoverageInput={customCoverageInput}
-              onCoverageDaysChange={onCoverageDaysChange}
-              onCustomCoverageInputChange={onCustomCoverageInputChange}
-              onApplyCustomCoverage={onApplyCustomCoverage}
-            />
-          </div>
+        <div>
+          <h3 className={productionSectionLabelClass}>Rekomendacje</h3>
+          <p className={`mt-0.5 ${typography.caption}`}>
+            Zapotrzebowanie → Stan → W produkcji → Rekomendacja
+          </p>
         </div>
 
         {loading && recommendations.length === 0 ? (
           <p className="text-sm text-slate-500">Wczytywanie rekomendacji…</p>
         ) : recommendations.length === 0 ? (
           <p className="rounded-lg border border-dashed border-slate-200 px-3 py-4 text-center text-sm text-slate-500">
-            Brak produktów wymagających uzupełnienia zapasu.
+            Brak produktów wymagających produkcji.
           </p>
         ) : (
-          <div className="grid max-h-[13.5rem] gap-2 overflow-y-auto sm:grid-cols-2 xl:grid-cols-3">
+          <div className="grid max-h-[16rem] gap-2 overflow-y-auto sm:grid-cols-2 xl:grid-cols-3">
             {recommendations.map((row) => (
               <RecommendationCard
                 key={row.product_id}
                 row={row}
-                replenishCoverageDays={replenishCoverage ?? coverageDays}
                 onCreateBatch={onCreateBatch}
               />
             ))}
@@ -255,7 +254,7 @@ export function ProductionDemandProductsTable({
 
   return (
     <div className="space-y-2">
-      <h3 className={productionSectionLabelClass}>Zapotrzebowanie produktów</h3>
+      <h3 className={productionSectionLabelClass}>Zapotrzebowanie szczegółowe</h3>
       <div className="max-h-[22rem] overflow-auto rounded-xl border border-slate-200 bg-white">
         <table className="min-w-full text-left text-sm">
           <thead className="sticky top-0 border-b border-slate-100 bg-slate-50 text-xs font-bold uppercase tracking-wide text-slate-500">
@@ -450,18 +449,12 @@ export function ProductionDemandProductsTable({
 
 function RecommendationCard({
   row,
-  replenishCoverageDays,
   onCreateBatch,
 }: {
   row: ProductionDemandProductRow;
-  replenishCoverageDays: number;
   onCreateBatch: (lines: DemandBatchLineDraft[], label: string) => void;
 }) {
-  const orderNeed = row.order_production_needed ?? 0;
-  const stockNeed = row.stock_replenishment_needed ?? row.forecast_production_needed ?? 0;
-  const showOrder = Boolean(row.has_order_demand) || orderNeed > 0 || row.order_demand > 0;
-  const showStock = Boolean(row.has_stock_replenishment) || stockNeed > 0;
-  const target = row.forecast_demand;
+  const demand = Math.max(row.order_demand || 0, row.forecast_demand || 0);
   const materialCapped =
     row.max_producible >= 0 &&
     row.recommended_quantity > 0 &&
@@ -477,54 +470,40 @@ function RecommendationCard({
             <StatusBadge tone={PRIORITY_TONE[row.priority]} density="compact">
               {PRIORITY_LABEL[row.priority]}
             </StatusBadge>
-            {showOrder ? (
-              <StatusBadge tone="warning" density="compact">
-                Na zamówienia
-              </StatusBadge>
-            ) : null}
-            {showStock ? (
-              <StatusBadge tone="info" density="compact">
-                Na magazyn
-              </StatusBadge>
-            ) : null}
+            <MaterialProductionStatusBadge
+              status={row.material_status}
+              description={row.material_status_description}
+            />
           </div>
         </div>
-        <p className="shrink-0 text-right">
-          <span className="block text-lg font-bold tabular-nums text-slate-900">{fmtQty(row.recommended_quantity)}</span>
-          <span className={typography.caption}>razem</span>
-        </p>
       </div>
 
-      <dl className="grid grid-cols-2 gap-x-3 gap-y-1 text-xs text-slate-600">
-        <dt>Stan</dt>
-        <dd className="text-right tabular-nums">{fmtQty(row.on_hand)} szt.</dd>
-        <dt>Sprzedaż</dt>
-        <dd className="text-right tabular-nums">{fmtQty(row.avg_daily_sales)} /dzień</dd>
-        <dt>Pokrycie</dt>
-        <dd className={`text-right tabular-nums font-medium ${COVERAGE_CLASS[row.coverage_color] ?? ""}`}>
-          {row.coverage_days != null ? `${row.coverage_days.toFixed(0)} dni` : "—"}
-        </dd>
-        <dt>Cel ({replenishCoverageDays} dni)</dt>
-        <dd className="text-right tabular-nums">{fmtQty(target)} szt.</dd>
-        <dt>W produkcji</dt>
-        <dd className="text-right tabular-nums">{fmtQty(row.in_pipeline)} szt.</dd>
-        <dt className="font-semibold text-amber-800">Na zamówienia</dt>
-        <dd className="text-right font-semibold tabular-nums text-amber-900">{fmtQty(orderNeed)} szt.</dd>
-        <dt className="font-semibold text-sky-800">Na magazyn</dt>
-        <dd className="text-right font-semibold tabular-nums text-sky-900">{fmtQty(stockNeed)} szt.</dd>
-        <dt className="font-bold text-slate-900">Razem</dt>
-        <dd className="text-right font-bold tabular-nums text-slate-900">{fmtQty(row.recommended_quantity)} szt.</dd>
-      </dl>
+      <div className="grid grid-cols-4 gap-1 rounded-lg bg-slate-50 px-2 py-2 text-center text-[11px]">
+        <div>
+          <p className="font-bold uppercase tracking-wide text-slate-400">Zapotrz.</p>
+          <p className="mt-0.5 font-semibold tabular-nums text-slate-900">{fmtQty(demand)}</p>
+        </div>
+        <div>
+          <p className="font-bold uppercase tracking-wide text-slate-400">Stan</p>
+          <p className="mt-0.5 font-semibold tabular-nums text-slate-900">{fmtQty(row.on_hand)}</p>
+        </div>
+        <div>
+          <p className="font-bold uppercase tracking-wide text-slate-400">W prod.</p>
+          <p className="mt-0.5 font-semibold tabular-nums text-slate-900">{fmtQty(row.in_pipeline)}</p>
+        </div>
+        <div>
+          <p className="font-bold uppercase tracking-wide text-orange-500">Rekom.</p>
+          <p className="mt-0.5 text-base font-bold tabular-nums text-orange-800">
+            {fmtQty(row.recommended_quantity)}
+          </p>
+        </div>
+      </div>
 
       {materialCapped ? (
         <p className="rounded-md bg-amber-50 px-2 py-1 text-xs text-amber-900">
-          Materiały pozwalają obecnie wyprodukować maks. {fmtQty(row.max_producible)} szt.
+          Materiały: maks. {fmtQty(row.max_producible)} szt.
         </p>
       ) : null}
-
-      <p className="text-[11px] leading-snug text-slate-500" title="Pierwszeństwo zamówień">
-        (i) Produkcja dla istniejących zamówień ma pierwszeństwo przed uzupełnianiem zapasu.
-      </p>
 
       <PrimaryButton
         type="button"
@@ -543,7 +522,7 @@ function RecommendationCard({
           )
         }
       >
-        Utwórz partię
+        Utwórz zlecenie / partię
       </PrimaryButton>
     </Card>
   );

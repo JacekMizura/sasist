@@ -57,18 +57,18 @@ export default function MaterialAnalysisPage() {
           Brak składników w aktywnych recepturach produkcyjnych.
         </p>
       ) : (
-        <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
-          <table className="min-w-full text-sm">
+        <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+          <table className="w-full min-w-0 table-fixed text-sm">
             <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
               <tr>
-                <th className="px-4 py-3">Materiał</th>
-                <th className="px-4 py-3 text-right">Receptury</th>
-                <th className="px-4 py-3 text-right">Blokady</th>
-                <th className="px-4 py-3 text-right">Stan</th>
-                <th className="px-4 py-3 text-right">Rezerw.</th>
-                <th className="px-4 py-3 text-right">Dostępne</th>
-                <th className="px-4 py-3 text-right">Zużycie/d</th>
-                <th className="px-4 py-3">Wyczerpanie</th>
+                <th className="px-4 py-2">Materiał</th>
+                <th className="px-4 py-2 text-right w-[5rem]">Receptury</th>
+                <th className="px-4 py-2 text-right w-[5rem]">Blokady</th>
+                <th className="px-4 py-2 text-right w-[5rem]">Stan</th>
+                <th className="px-4 py-2 text-right w-[5rem]">Rezerw.</th>
+                <th className="px-4 py-2 text-right w-[5.5rem]">Dostępne</th>
+                <th className="px-4 py-2 text-right w-[5.5rem]">Zużycie/d</th>
+                <th className="px-4 py-2 w-[7rem]">Wyczerpanie</th>
               </tr>
             </thead>
             <tbody>

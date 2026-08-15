@@ -5,15 +5,16 @@ import { PurchasingKpiGrid } from "../../../modules/purchasing/ui";
 type Props = {
   children: ReactNode;
   className?: string;
+  /** Desktop columns — Pulpit uses 5; other screens typically 4. */
+  columns?: 4 | 5;
 };
 
 /**
- * Kanoniczna siatka KPI modułu Produkcja — zawsze 4 kolumny na desktopie.
- * Nie używa grid-cols-3 (marnuje przestrzeń przy prostych metrykach).
+ * Kanoniczna siatka KPI modułu Produkcja — gęsta, pełna szerokość pulpitu.
  */
-function ProductionKpiGridInner({ children, className = "" }: Props) {
+function ProductionKpiGridInner({ children, className = "", columns = 4 }: Props) {
   return (
-    <PurchasingKpiGrid columns={4} className={`items-stretch gap-2.5 ${className}`.trim()}>
+    <PurchasingKpiGrid columns={columns} className={`items-stretch gap-2 ${className}`.trim()}>
       {children}
     </PurchasingKpiGrid>
   );
