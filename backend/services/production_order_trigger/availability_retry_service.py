@@ -164,6 +164,29 @@ def on_component_availability_increased(
             out.get("restored", 0),
             max(0, int(out.get("processed", 0)) - int(out.get("restored", 0))),
         )
+
+        # Phase 3: same notify also revalidates picking-entry awaiting orders for FG.
+        fg_out: dict[str, Any] = {}
+        try:
+            from ..picking_entry_availability_retry_service import on_fg_availability_increased
+
+            fg_out = on_fg_availability_increased(
+                db,
+                tenant_id=int(tenant_id),
+                warehouse_id=int(warehouse_id),
+                product_ids=pids,
+                reason=str(reason or "availability_increased"),
+                operator_user_id=operator_user_id,
+            ) or {}
+        except Exception:
+            logger.exception(
+                "on_fg_availability_increased failed reason=%s tenant_id=%s warehouse_id=%s",
+                reason,
+                tenant_id,
+                warehouse_id,
+            )
+            fg_out = {"result": "ERROR"}
+
         return {
             "result": out.get("result", "OK"),
             "reason": reason,
@@ -173,6 +196,7 @@ def on_component_availability_increased(
             "processed": int(out.get("processed", 0)),
             "restored": int(out.get("restored", 0)),
             "items": out.get("items") or [],
+            "fg_retry": fg_out,
         }
 
 

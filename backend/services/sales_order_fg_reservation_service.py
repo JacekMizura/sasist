@@ -232,8 +232,37 @@ def release_sales_order_reservations_for_order(
     rows = active_sales_order_reservations(
         db, tenant_id=tenant_id, order_id=order_id, product_id=product_id
     )
+    by_wh: dict[int, set[int]] = {}
     for r in rows:
+        wid = int(getattr(r, "warehouse_id", 0) or 0)
+        pid = int(getattr(r, "product_id", 0) or 0)
+        if wid > 0 and pid > 0:
+            by_wh.setdefault(wid, set()).add(pid)
         _release_row_quiet(r, reason=reason)
+    if by_wh:
+        try:
+            from .production_order_trigger.availability_retry_service import (
+                coalesce_component_availability_events,
+                notify_component_availability_increased,
+            )
+
+            with coalesce_component_availability_events(
+                db, reason=f"sales_order_release:{reason}"
+            ):
+                for wid, pids in by_wh.items():
+                    notify_component_availability_increased(
+                        db,
+                        tenant_id=int(tenant_id),
+                        warehouse_id=wid,
+                        component_product_ids=pids,
+                        reason=f"sales_order_release:{reason}",
+                        operator_user_id=performed_by_user_id,
+                    )
+        except Exception:
+            logger.exception(
+                "availability notify after SALES_ORDER release failed order_id=%s",
+                order_id,
+            )
     return len(rows)
 
 
@@ -261,12 +290,17 @@ def partial_release_sales_order_qty(
     rows = list(reversed(rows))
     released = 0.0
     remain = want
+    notify_wh: int | None = None
     for r in rows:
         if remain <= 1e-9:
             break
         cur = float(r.quantity or 0)
         if cur <= 1e-9:
             continue
+        if notify_wh is None:
+            w = int(getattr(r, "warehouse_id", 0) or 0)
+            if w > 0:
+                notify_wh = w
         if cur <= remain + 1e-9:
             _release_row_quiet(r, reason=reason)
             released += cur
@@ -290,6 +324,25 @@ def partial_release_sales_order_qty(
         product_id,
         released,
     )
+    if released > 1e-9 and notify_wh is not None:
+        try:
+            from .production_order_trigger.availability_retry_service import (
+                notify_component_availability_increased,
+            )
+
+            notify_component_availability_increased(
+                db,
+                tenant_id=int(tenant_id),
+                warehouse_id=int(notify_wh),
+                component_product_ids=[int(product_id)],
+                reason=f"sales_order_release:{reason}",
+                operator_user_id=performed_by_user_id,
+            )
+        except Exception:
+            logger.exception(
+                "availability notify after SALES_ORDER partial release failed order_id=%s",
+                order_id,
+            )
     return round(released, 6)
 
 

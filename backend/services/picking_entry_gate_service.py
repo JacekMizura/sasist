@@ -912,6 +912,121 @@ def cleanup_picking_entry_on_order_cancel(
     return {"released_reservations": released, "withdrawn": withdrawn}
 
 
+def reduce_missing_production_demand(
+    db: Session,
+    *,
+    order: Order,
+    order_item: OrderItem,
+    desired_outstanding: float,
+    operator_user_id: int | None = None,
+) -> dict[str, Any]:
+    """
+    Shrink draft/planned SourceItem + MO planned_quantity down to ``desired_outstanding``.
+
+    Started MO (collecting / in_progress / …) → no change (``mo_started_blocked``).
+    When outstanding drops to 0 → cancel source; empty MO → cancel MO.
+    """
+    from ..models.production import (
+        PRODUCTION_ORDER_SOURCE_ITEM_CANCELLED,
+        ProductionOrder,
+    )
+    from .production_order_service import cancel_production_order
+    from .production_order_trigger.material_validation_service import (
+        refresh_orders_mo_material_reservations,
+    )
+
+    tid = int(order.tenant_id)
+    active = _find_active_source_for_item(db, tenant_id=tid, order_item_id=int(order_item.id))
+    if active is None:
+        return {"result": "NO_SOURCE", "reduced": 0.0}
+
+    mo = (
+        db.query(ProductionOrder)
+        .filter(ProductionOrder.id == int(active.production_order_id))
+        .with_for_update()
+        .first()
+    )
+    if mo is None:
+        return {"result": "NO_MO", "reduced": 0.0}
+
+    status = str(mo.status or "")
+    if status not in AGGREGABLE_MO_STATUSES:
+        return {
+            "result": "MO_STARTED_BLOCKED",
+            "reduced": 0.0,
+            "mo_status": status,
+            "production_order_id": int(mo.id),
+            "mo_number": str(mo.number),
+        }
+
+    fulfilled = float(active.fulfilled_quantity or 0)
+    current_out = max(0.0, float(active.requested_quantity or 0) - fulfilled)
+    target_out = max(0.0, float(desired_outstanding or 0))
+    if current_out <= target_out + 1e-9:
+        return {
+            "result": RESULT_IDEMPOTENT,
+            "reduced": 0.0,
+            "production_order_id": int(mo.id),
+            "mo_number": str(mo.number),
+            "outstanding": current_out,
+        }
+
+    delta = round(current_out - target_out, 6)
+    new_req = fulfilled + target_out
+    active.requested_quantity = new_req
+    active.updated_at = datetime.utcnow()
+    mo.planned_quantity = max(0.0, float(mo.planned_quantity or 0) - delta)
+    mo.updated_at = datetime.utcnow()
+
+    cancelled_source = False
+    cancelled_mo = False
+    if target_out <= 1e-9:
+        active.status = PRODUCTION_ORDER_SOURCE_ITEM_CANCELLED
+        cancelled_source = True
+
+    db.add(active)
+    if mo.planned_quantity <= 1e-9:
+        mo.planned_quantity = 0.0
+        _rescale_snapshots(mo, 0.0)
+        db.add(mo)
+        db.flush()
+        try:
+            cancel_production_order(db, tenant_id=tid, order_id=int(mo.id))
+            cancelled_mo = True
+        except Exception:
+            mo.status = "cancelled"
+            db.add(mo)
+            db.flush()
+            cancelled_mo = True
+            try:
+                refresh_orders_mo_material_reservations(
+                    db, mo=mo, created_by_user_id=operator_user_id
+                )
+            except Exception:
+                logger.exception("refresh after empty MO cancel mo_id=%s", mo.id)
+    else:
+        _rescale_snapshots(mo, float(mo.planned_quantity))
+        db.add(mo)
+        db.flush()
+        try:
+            refresh_orders_mo_material_reservations(
+                db, mo=mo, created_by_user_id=operator_user_id
+            )
+        except Exception:
+            logger.exception("refresh after demand reduce mo_id=%s", mo.id)
+
+    return {
+        "result": "REDUCED" if not cancelled_source else "CANCELLED_SOURCE",
+        "reduced": delta,
+        "outstanding": target_out,
+        "production_order_id": int(mo.id),
+        "mo_number": str(mo.number),
+        "cancelled_source": cancelled_source,
+        "cancelled_mo": cancelled_mo,
+        "product_id": int(order_item.product_id),
+    }
+
+
 def sync_picking_entry_on_qty_decrease(
     db: Session,
     *,
@@ -931,35 +1046,21 @@ def sync_picking_entry_on_qty_decrease(
         target_qty=float(new_qty),
         performed_by_user_id=operator_user_id,
     )
-    reduced = 0.0
+    own_res = reserved_qty_for_order_product(
+        db, tenant_id=tid, order_id=int(order.id), product_id=pid
+    )
     active = _find_active_source_for_item(db, tenant_id=tid, order_item_id=int(order_item.id))
-    if active is not None:
-        from ..models.production import ProductionOrder
-
-        mo = (
-            db.query(ProductionOrder)
-            .filter(ProductionOrder.id == int(active.production_order_id))
-            .with_for_update()
-            .first()
-        )
-        if mo is not None and str(mo.status or "") in AGGREGABLE_MO_STATUSES:
-            fulfilled = float(active.fulfilled_quantity or 0)
-            # Remaining FG still needed from production after stock cover
-            own_res = reserved_qty_for_order_product(
-                db, tenant_id=tid, order_id=int(order.id), product_id=pid
-            )
-            target_prod = max(0.0, float(new_qty) - own_res - fulfilled)
-            current_req = float(active.requested_quantity or 0)
-            new_req = fulfilled + target_prod
-            if new_req + 1e-9 < current_req:
-                delta = current_req - new_req
-                active.requested_quantity = new_req
-                active.updated_at = datetime.utcnow()
-                mo.planned_quantity = max(0.0, float(mo.planned_quantity or 0) - delta)
-                mo.updated_at = datetime.utcnow()
-                _rescale_snapshots(mo, float(mo.planned_quantity))
-                db.add(active)
-                db.add(mo)
-                db.flush()
-                reduced = delta
-    return {"reservation_released": released, "production_reduced": reduced}
+    fulfilled = float(active.fulfilled_quantity or 0) if active is not None else 0.0
+    desired_outstanding = max(0.0, float(new_qty) - own_res - fulfilled)
+    reduced_out = reduce_missing_production_demand(
+        db,
+        order=order,
+        order_item=order_item,
+        desired_outstanding=desired_outstanding,
+        operator_user_id=operator_user_id,
+    )
+    return {
+        "reservation_released": released,
+        "production_reduced": float(reduced_out.get("reduced") or 0),
+        "demand": reduced_out,
+    }

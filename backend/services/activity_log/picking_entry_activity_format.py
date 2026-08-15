@@ -174,6 +174,86 @@ def format_picking_entry_mo_demand_message(
     return body[:2000]
 
 
+def format_picking_entry_availability_message(
+    *,
+    event_code: str,
+    stored_description: str | None,
+    metadata: dict[str, Any] | None,
+) -> str:
+    """Body for Phase 3 availability reduce / cancel / return events."""
+    meta = metadata if isinstance(metadata, dict) else {}
+    stored = (stored_description or "").strip()
+    code = (event_code or "").upper().replace("-", "_")
+
+    if code.endswith("DEMAND_REDUCED") or "DEMAND_REDUCED" in code:
+        if not stored:
+            stored = (
+                "Dostępność produktu wzrosła — zmniejszono zapotrzebowanie produkcyjne."
+            )
+        lines = meta.get("lines")
+        if isinstance(lines, list) and lines:
+            chunks = [stored]
+            for ln in lines:
+                if not isinstance(ln, dict):
+                    continue
+                name, sku = _product_heading(ln)
+                chunks.append(name if not sku else f"{name}\n{sku}")
+                was = _qty_label(ln.get("was_production", ln.get("was_outstanding", 0)))
+                gain = _qty_label(ln.get("warehouse_gain", 0))
+                rem = _qty_label(
+                    ln.get("remaining_production", ln.get("remaining_outstanding", 0))
+                )
+                chunks.append(f"W produkcji było: {was}")
+                chunks.append(f"Dostępne z magazynu: +{gain}")
+                chunks.append(f"Pozostało do produkcji: {rem}")
+                mo = str(ln.get("mo_number") or "").strip()
+                if mo:
+                    chunks.append(mo)
+            return "\n".join(chunks)[:2000]
+        name = str(meta.get("product_name") or "").strip()
+        sku = str(meta.get("sku") or "").strip()
+        extras = [stored]
+        if name:
+            extras.append(name)
+        if sku:
+            extras.append(sku)
+        was = meta.get("was_outstanding")
+        if was is not None:
+            extras.append(f"W produkcji było: {_qty_label(was)}")
+        gain = meta.get("warehouse_gain")
+        if gain is not None:
+            extras.append(f"Dostępne z magazynu: +{_qty_label(gain)}")
+        rem = meta.get("remaining_outstanding")
+        if rem is not None:
+            extras.append(f"Pozostało do produkcji: {_qty_label(rem)}")
+        return "\n".join(extras)[:2000]
+
+    if code.endswith("DEMAND_CANCELLED") or "DEMAND_CANCELLED" in code:
+        if not stored:
+            stored = (
+                "Produkt jest już dostępny na magazynie — anulowano nierozpoczęte "
+                "zapotrzebowanie produkcyjne."
+            )
+        extras = [stored]
+        name = str(meta.get("product_name") or "").strip()
+        sku = str(meta.get("sku") or "").strip()
+        if name:
+            extras.append(name)
+        if sku:
+            extras.append(sku)
+        mo = str(meta.get("mo_number") or "").strip()
+        if mo:
+            extras.append(mo)
+        return "\n".join(extras)[:2000]
+
+    # RETURNED_TO_PICKING
+    if not stored:
+        stored = (
+            "Brakujące produkty są dostępne — zamówienie ponownie przekazano do zbierania."
+        )
+    return stored[:2000]
+
+
 def build_picking_entry_detail_rows(metadata: dict[str, Any] | None) -> list[dict[str, str]]:
     """Optional structured detail rows (same facts as the action body)."""
     meta = metadata if isinstance(metadata, dict) else {}

@@ -193,11 +193,15 @@ def build_detail_rows(
 def enrich_activity_item(item: dict[str, Any]) -> dict[str, Any]:
     """Attach ready-to-display fields onto a list_activity item dict."""
     from backend.services.activity_log.domain_event_codes import (
+        PICKING_ENTRY_AVAILABILITY_DEMAND_CANCELLED,
+        PICKING_ENTRY_AVAILABILITY_DEMAND_REDUCED,
+        PICKING_ENTRY_AVAILABILITY_RETURNED_TO_PICKING,
         PICKING_ENTRY_GATE_BLOCKED,
         PICKING_ENTRY_MO_DEMAND,
     )
     from backend.services.activity_log.picking_entry_activity_format import (
         build_picking_entry_detail_rows,
+        format_picking_entry_availability_message,
         format_picking_entry_gate_blocked_message,
         format_picking_entry_mo_demand_message,
     )
@@ -225,6 +229,17 @@ def enrich_activity_item(item: dict[str, Any]) -> dict[str, Any]:
         details = build_picking_entry_detail_rows(meta)
     elif code_norm == PICKING_ENTRY_MO_DEMAND:
         action = format_picking_entry_mo_demand_message(
+            stored_description=stored_desc,
+            metadata=meta,
+        )
+        details = build_picking_entry_detail_rows(meta)
+    elif code_norm in (
+        PICKING_ENTRY_AVAILABILITY_DEMAND_REDUCED,
+        PICKING_ENTRY_AVAILABILITY_DEMAND_CANCELLED,
+        PICKING_ENTRY_AVAILABILITY_RETURNED_TO_PICKING,
+    ):
+        action = format_picking_entry_availability_message(
+            event_code=code_norm,
             stored_description=stored_desc,
             metadata=meta,
         )
