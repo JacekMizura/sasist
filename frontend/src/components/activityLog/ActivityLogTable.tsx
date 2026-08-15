@@ -370,29 +370,29 @@ export default function ActivityLogTable({
                     const isWarn = tone === "warning";
                     const msg = (row.message || "").trim();
                     const eventTitle = (row.event || "").trim() || "—";
-                    const showSubtitle =
-                      Boolean(msg) &&
-                      msg !== "—" &&
-                      msg.toLowerCase() !== eventTitle.toLowerCase() &&
-                      !isError &&
-                      !isWarn;
-                    const effectNode: ReactNode =
-                      isError || isWarn ? (
-                        <span
-                          className={`inline-flex items-start gap-1.5 text-[13px] font-semibold leading-snug ${
-                            isError ? "text-red-700" : "text-amber-800"
-                          }`}
-                        >
-                          <AlertTriangle
-                            className={`mt-0.5 h-3.5 w-3.5 shrink-0 ${isError ? "text-red-600" : "text-amber-600"}`}
-                            strokeWidth={2}
-                            aria-hidden
-                          />
-                          <span>{msg && msg !== "—" ? msg : eventTitle}</span>
-                        </span>
-                      ) : (
-                        <span className="text-slate-400">—</span>
-                      );
+                    const hasMessage =
+                      Boolean(msg) && msg !== "—" && msg.toLowerCase() !== eventTitle.toLowerCase();
+                    // Effect column carries the business body (incl. multiline picking-entry details).
+                    const effectNode: ReactNode = !hasMessage ? (
+                      <span className="text-slate-400">—</span>
+                    ) : isError || isWarn ? (
+                      <span
+                        className={`inline-flex items-start gap-1.5 text-[13px] font-semibold leading-snug ${
+                          isError ? "text-red-700" : "text-amber-800"
+                        }`}
+                      >
+                        <AlertTriangle
+                          className={`mt-0.5 h-3.5 w-3.5 shrink-0 ${isError ? "text-red-600" : "text-amber-600"}`}
+                          strokeWidth={2}
+                          aria-hidden
+                        />
+                        <span className="whitespace-pre-line">{msg}</span>
+                      </span>
+                    ) : (
+                      <span className="whitespace-pre-line text-[13px] leading-snug text-slate-700">
+                        {msg}
+                      </span>
+                    );
 
                     return (
                       <tr
@@ -416,9 +416,6 @@ export default function ActivityLogTable({
                         </td>
                         <td className={tdClass}>
                           <p className="text-[13px] font-semibold leading-snug text-slate-900">{eventTitle}</p>
-                          {showSubtitle ? (
-                            <p className="mt-0.5 text-[12px] leading-snug text-slate-500">{msg}</p>
-                          ) : null}
                         </td>
                         <td className={tdClass}>{effectNode}</td>
                       </tr>

@@ -620,6 +620,7 @@ def _emit_gate_activity(
 
     for ln in plans:
         if ln.mo_id and ln.production_action in (RESULT_CREATED, RESULT_AGGREGATED, RESULT_REACTIVATED):
+            pname, sku = _product_labels(db, ln.readiness.product_id)
             record_domain_activity(
                 db,
                 tenant_id=tid,
@@ -639,6 +640,8 @@ def _emit_gate_activity(
                     "mo_number": ln.mo_number,
                     "requested_quantity": ln.production_demand,
                     "product_id": ln.readiness.product_id,
+                    "product_name": pname,
+                    "sku": sku,
                     "action": ln.production_action,
                 },
                 actor_user_id=None,

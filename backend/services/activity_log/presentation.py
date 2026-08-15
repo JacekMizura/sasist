@@ -192,6 +192,15 @@ def build_detail_rows(
 
 def enrich_activity_item(item: dict[str, Any]) -> dict[str, Any]:
     """Attach ready-to-display fields onto a list_activity item dict."""
+    from backend.services.activity_log.domain_event_codes import (
+        PICKING_ENTRY_GATE_BLOCKED,
+        PICKING_ENTRY_MO_DEMAND,
+    )
+    from backend.services.activity_log.picking_entry_activity_format import (
+        build_picking_entry_detail_rows,
+        format_picking_entry_gate_blocked_message,
+        format_picking_entry_mo_demand_message,
+    )
     from backend.services.cart_lifecycle_event_catalog import (
         compose_informative_message,
         title_pl,
@@ -207,11 +216,27 @@ def enrich_activity_item(item: dict[str, Any]) -> dict[str, Any]:
     )
     event_code = str(item.get("event_code") or "").strip()
     stored_desc = str(item.get("description") or "").strip()
-    action = compose_informative_message(
-        event_code,
-        stored_description=stored_desc,
-        metadata=meta,
-    )
+    code_norm = event_code.upper().replace("-", "_")
+    if code_norm == PICKING_ENTRY_GATE_BLOCKED:
+        action = format_picking_entry_gate_blocked_message(
+            stored_description=stored_desc,
+            metadata=meta,
+        )
+        details = build_picking_entry_detail_rows(meta)
+    elif code_norm == PICKING_ENTRY_MO_DEMAND:
+        action = format_picking_entry_mo_demand_message(
+            stored_description=stored_desc,
+            metadata=meta,
+        )
+        details = build_picking_entry_detail_rows(meta)
+    else:
+        action = compose_informative_message(
+            event_code,
+            stored_description=stored_desc,
+            metadata=meta,
+        )
+        # Default: no expandable metadata dump (raw keys). Picking-entry uses structured rows.
+        details = []
     event_display_label = title_pl(event_code)
     # Order # list only when writer opted in (assign / detach) — never for start/stop session noise.
     show_nums = bool(meta.get("show_order_numbers"))
@@ -221,6 +246,6 @@ def enrich_activity_item(item: dict[str, Any]) -> dict[str, Any]:
     out["operator_display"] = operator
     out["action"] = action
     out["event_display_label"] = event_display_label
-    out["details"] = []  # UI standard: no expandable metadata
+    out["details"] = details
     out["order_numbers"] = order_nums
     return out

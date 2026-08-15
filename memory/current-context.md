@@ -1,5 +1,15 @@
 ﻿## Active
 
+**UAT Faza 2 — wznowienie od KROKU 4/5 (logi + idempotencja):**
+- KROK 0–3 PASS; STOP był na prezentacji logów (`details=[]`)
+- Fix prezentacji: wspólny formatter `picking_entry_activity_format` w `enrich_activity_item`
+- Po deploy: wrócić do UAT od KROKU 4/5 (#1245 Logi / Historia); **nie** Faza 3
+
+**UAT Faza 2 — środowisko (2026-08-15):**
+- Status panelowy **Oczekuje na produkcję** id=13; ProductionConfig #9 awaiting=13
+- Railway: `FEATURE_PICKING_ENTRY_READINESS_MODE=active`
+- Zamówienia: #1243/#1244/#1245; ST-001 ATP=10; MO `MO/2026/0004`
+
 **Faza 2 picking-entry gate (2026-08-14):**
 - `FEATURE_PICKING_ENTRY_READINESS_MODE=off|dry_run|active` (domyślnie off; legacy DRY_RUN=1 → dry_run)
 - Active: reserve FG + MO missing-only + `status_awaiting_production_id`

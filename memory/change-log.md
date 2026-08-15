@@ -1,4 +1,11 @@
-﻿## 2026-08-14 — Faza 2: aktywny gate produkcji przy wejściu do zbierania
+﻿## 2026-08-15 — Logi: szczegóły blokady produkcyjnej (Faza 2 UAT)
+
+- Root cause: `enrich_activity_item` zostawiał `action` = sam nagłówek; FE bez `whitespace-pre-line`
+- SSOT: `picking_entry_activity_format.py` → `enrich_activity_item` (Logi + Historia)
+- MO demand: minimalne `product_name`/`sku` w metadata; FE pokazuje body INFO w kolumnie efektu
+- Testy: `test_picking_entry_activity_format.py`; FE build OK; bez zmian gate/rezerwacji/MO
+
+## 2026-08-14 — Faza 2: aktywny gate produkcji przy wejściu do zbierania
 
 - `FEATURE_PICKING_ENTRY_READINESS_MODE=off|dry_run|active`
 - Active gate: full-order readiness → SALES_ORDER reserve → MO missing-only → awaiting status
